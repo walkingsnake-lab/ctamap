@@ -43,6 +43,9 @@
     const trains = realTrains || dummyTrains || [];
     const layer = svg.select('.trains-layer');
 
+    // Cancel any running transitions to prevent conflicts with stale animations
+    layer.selectAll('.train-group').interrupt();
+
     const groups = layer.selectAll('.train-group')
       .data(trains, d => d.rn);
 
@@ -72,14 +75,11 @@
     });
     enter.transition().duration(animate ? 800 : 0).style('opacity', 1);
 
-    // Exit
-    groups.exit()
-      .transition().duration(500)
-      .style('opacity', 0)
-      .remove();
+    // Exit — remove immediately so they can't receive stale position updates
+    groups.exit().remove();
 
-    // Update existing positions
-    const merged = layer.selectAll('.train-group');
+    // Update existing positions (enter + update only, excludes exited elements)
+    const merged = enter.merge(groups);
     if (animate) {
       merged.each(function (d) {
         const pt = projection([d.lon, d.lat]);
@@ -104,8 +104,11 @@
   let lastTime = performance.now();
 
   function animate(now) {
-    const dt = now - lastTime;
+    let dt = now - lastTime;
     lastTime = now;
+
+    // Cap dt to prevent huge jumps when tab returns from background
+    if (dt > 100) dt = 16;
 
     if (dummyTrains) {
       advanceDummyTrains(dummyTrains, geojson, dt);
@@ -124,6 +127,16 @@
 
   requestAnimationFrame(animate);
 
+  // ---- Handle background tab ----
+  // When the tab comes back from being hidden, cancel stale transitions
+  // and snap all train positions immediately instead of animating.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      svg.select('.trains-layer').selectAll('.train-group').interrupt();
+      renderTrains(false);
+    }
+  });
+
   // ---- Periodic refresh for real API data ----
   if (API_KEY) {
     setInterval(async () => {
@@ -133,7 +146,8 @@
         realTrains = fetched;
         dummyTrains = null;
         console.log(`[CTA] Refreshed REAL train data (${realTrains.length} trains)`);
-        renderTrains(!wasDummy);
+        // Skip animation if page is hidden — transitions won't run properly
+        renderTrains(!wasDummy && !document.hidden);
       } else if (!realTrains && !dummyTrains) {
         dummyTrains = generateDummyTrains(geojson);
         console.log(`[CTA] Refresh failed, falling back to DUMMY data (${dummyTrains.length} trains)`);
