@@ -70,6 +70,21 @@ async function fetchAllTrains() {
 const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
 
+  // Serve bundled CTA line geometry GeoJSON
+  if (parsed.pathname === '/api/geojson') {
+    const geojsonPath = path.join(__dirname, 'data', 'cta-lines.geojson');
+    fs.readFile(geojsonPath, (err, content) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to read GeoJSON file' }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(content);
+    });
+    return;
+  }
+
   // API proxy endpoint
   if (parsed.pathname === '/api/trains') {
     try {
