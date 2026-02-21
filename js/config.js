@@ -34,9 +34,9 @@ const API_ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 // Data source for line geometry (no auth required)
 const GEOJSON_URL = 'https://data.cityofchicago.org/resource/xbyr-jnvx.geojson?$limit=5000';
 
-// CTA Train Tracker API
-const API_BASE = 'https://lapi.transitchicago.com/api/1.0/ttpositions.aspx';
-const API_KEY = null; // Set your CTA API key here when available
+// CTA Train Tracker API (proxied through server.js to avoid CORS issues)
+const API_BASE = '/api/trains';
+const API_KEY = true; // Key is stored server-side in server.js
 
 // How often to refresh train positions (ms)
 const REFRESH_INTERVAL = 30000;

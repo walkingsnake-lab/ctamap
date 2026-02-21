@@ -125,54 +125,32 @@ function advanceDummyTrains(trains, geojson, dt) {
 }
 
 /**
- * Fetches real train positions from the CTA API.
+ * Fetches real train positions from the CTA API via the server-side proxy.
+ * The proxy fetches all routes in parallel and returns a combined response.
  * Falls back to dummy data when API_KEY is not set.
  */
-async function fetchTrains(geojson) {
+async function fetchTrains() {
   if (!API_KEY) {
     return null; // Caller should use dummy trains
   }
 
-  const allTrains = [];
+  try {
+    const data = await d3.json(API_BASE);
+    if (!data.trains || data.trains.length === 0) return null;
 
-  for (const route of API_ROUTES) {
-    try {
-      const url = `${API_BASE}?key=${API_KEY}&rt=${route}&outputType=JSON`;
-      const data = await d3.json(url);
-      const ctatt = data.ctatt;
-
-      if (ctatt.errCd !== '0' && ctatt.errCd !== 0) continue;
-
-      const routeData = ctatt.route;
-      if (!routeData) continue;
-
-      // routeData may be an array or single object
-      const routes = Array.isArray(routeData) ? routeData : [routeData];
-
-      for (const r of routes) {
-        let trainList = r.train;
-        if (!trainList) continue;
-        if (!Array.isArray(trainList)) trainList = [trainList];
-
-        const legend = ROUTE_TO_LEGEND[route];
-        for (const t of trainList) {
-          allTrains.push({
-            route,
-            legend,
-            lat: parseFloat(t.lat),
-            lon: parseFloat(t.lon),
-            heading: parseInt(t.heading, 10),
-            rn: t.rn,
-            destNm: t.destNm,
-            isApp: t.isApp,
-            isDly: t.isDly,
-          });
-        }
-      }
-    } catch (e) {
-      console.warn(`Failed to fetch trains for route ${route}:`, e);
-    }
+    return data.trains.map((t) => ({
+      route: t.rt,
+      legend: ROUTE_TO_LEGEND[t.rt],
+      lat: parseFloat(t.lat),
+      lon: parseFloat(t.lon),
+      heading: parseInt(t.heading, 10),
+      rn: t.rn,
+      destNm: t.destNm,
+      isApp: t.isApp,
+      isDly: t.isDly,
+    }));
+  } catch (e) {
+    console.warn('Failed to fetch trains:', e);
+    return null;
   }
-
-  return allTrains;
 }

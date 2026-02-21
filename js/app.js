@@ -29,7 +29,7 @@
   let dummyTrains = null;
   let realTrains = null;
 
-  const fetched = await fetchTrains(geojson);
+  const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
   } else {
@@ -106,7 +106,7 @@
   // ---- Periodic refresh for real API data ----
   if (API_KEY) {
     setInterval(async () => {
-      const fetched = await fetchTrains(geojson);
+      const fetched = await fetchTrains();
       if (fetched && fetched.length > 0) {
         realTrains = fetched;
         dummyTrains = null;
