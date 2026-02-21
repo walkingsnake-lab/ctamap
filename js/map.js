@@ -3,8 +3,11 @@
  * Returns { projection, geojson } for use by other modules.
  */
 
-// Lines that traverse the Loop and should include ML (shared) segments
-const LOOP_LINES = new Set(['BR', 'OR', 'PK', 'PR', 'GR']);
+// Map human-readable line names (from GeoJSON "lines" property) → legend codes
+const LINE_NAME_TO_LEGEND = {
+  'Brown': 'BR', 'Green': 'GR', 'Orange': 'OR',
+  'Pink': 'PK', 'Purple': 'PR'
+};
 
 /**
  * Creates the SVG glow filter in the given defs element.
@@ -32,15 +35,25 @@ function createGlowFilter(defs) {
  * Lines that use the Loop include ML segments in their own color.
  */
 function renderLines(linesGroup, path, geojson) {
-  const mlFeatures = geojson.features.filter(f => f.properties.legend === 'ML');
+  // Build a map: legend code → ML features that belong to that line
+  const mlByLegend = {};
+  for (const f of geojson.features) {
+    if (f.properties.legend !== 'ML') continue;
+    const linesProp = f.properties.lines || '';
+    for (const [name, code] of Object.entries(LINE_NAME_TO_LEGEND)) {
+      if (linesProp.includes(name)) {
+        (mlByLegend[code] ??= []).push(f);
+      }
+    }
+  }
 
   const lineOrder = ['GR', 'PK', 'OR', 'BR', 'PR', 'YL', 'BL', 'RD'];
   for (const legend of lineOrder) {
     let features = geojson.features.filter(f => f.properties.legend === legend);
 
-    // For lines that traverse the Loop, include the shared ML segments
-    if (LOOP_LINES.has(legend)) {
-      features = features.concat(mlFeatures);
+    // Include only the ML segments that actually serve this line
+    if (mlByLegend[legend]) {
+      features = features.concat(mlByLegend[legend]);
     }
 
     if (features.length === 0) continue;
