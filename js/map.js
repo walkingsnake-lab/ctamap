@@ -26,7 +26,7 @@ async function loadMap(svg, width, height) {
 
   glowFilter.append('feGaussianBlur')
     .attr('in', 'SourceGraphic')
-    .attr('stdDeviation', '2.5')
+    .attr('stdDeviation', '1.5')
     .attr('result', 'blur');
 
   glowFilter.append('feMerge')
@@ -96,7 +96,7 @@ function redrawMap(svg, width, height, geojson) {
 
   glowFilter.append('feGaussianBlur')
     .attr('in', 'SourceGraphic')
-    .attr('stdDeviation', '2.5')
+    .attr('stdDeviation', '1.5')
     .attr('result', 'blur');
 
   glowFilter.append('feMerge')
