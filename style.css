@@ -1,0 +1,50 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+}
+
+#map {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+/* --- Track lines --- */
+.line-path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- Train dots --- */
+.train-dot {
+  pointer-events: none;
+}
+
+.train-glow {
+  pointer-events: none;
+  opacity: 0;
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%   { opacity: 0; transform: scale(1); }
+  50%  { opacity: 0.4; transform: scale(1.6); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+/* Stagger animations so dots don't all pulse in sync */
+.train-group:nth-child(2n)  .train-glow { animation-delay: 0.3s; }
+.train-group:nth-child(3n)  .train-glow { animation-delay: 0.7s; }
+.train-group:nth-child(5n)  .train-glow { animation-delay: 1.1s; }
+.train-group:nth-child(7n)  .train-glow { animation-delay: 1.5s; }
