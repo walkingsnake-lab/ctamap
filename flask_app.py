@@ -1,7 +1,7 @@
 import os
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, Response, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -60,11 +60,13 @@ def api_geojson():
         resp = requests.get(
             'https://data.cityofchicago.org/resource/xbyr-jnvx.geojson',
             params={'$limit': '5000'},
-            timeout=15,
+            timeout=30,
         )
-        return resp.json()
-    except Exception:
-        return jsonify({'type': 'FeatureCollection', 'features': []}), 502
+        resp.raise_for_status()
+        return Response(resp.content, content_type='application/json')
+    except Exception as e:
+        app.logger.error('GeoJSON proxy failed: %s', e)
+        return jsonify({'error': str(e)}), 502
 
 
 @app.route('/')
