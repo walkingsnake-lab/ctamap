@@ -32,12 +32,14 @@
   const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
+    console.log(`[CTA] Using REAL train data (${realTrains.length} trains)`);
   } else {
     dummyTrains = generateDummyTrains(geojson);
+    console.log(`[CTA] Using DUMMY train data (${dummyTrains.length} trains)`);
   }
 
   // ---- Render trains ----
-  function renderTrains() {
+  function renderTrains(animate) {
     const trains = realTrains || dummyTrains || [];
     const layer = svg.select('.trains-layer');
 
@@ -47,7 +49,8 @@
     // Enter
     const enter = groups.enter()
       .append('g')
-      .attr('class', 'train-group');
+      .attr('class', 'train-group')
+      .style('opacity', 0);
 
     // Outer glow circle
     enter.append('circle')
@@ -61,20 +64,38 @@
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
+    // Position new trains immediately, then fade in
+    enter.each(function (d) {
+      const pt = projection([d.lon, d.lat]);
+      if (!pt) return;
+      d3.select(this).attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+    });
+    enter.transition().duration(animate ? 800 : 0).style('opacity', 1);
+
     // Exit
     groups.exit()
       .transition().duration(500)
       .style('opacity', 0)
       .remove();
 
-    // Update all positions
-    const all = layer.selectAll('.train-group');
-    all.each(function (d) {
-      const pt = projection([d.lon, d.lat]);
-      if (!pt) return;
-      d3.select(this)
-        .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
-    });
+    // Update existing positions
+    const merged = layer.selectAll('.train-group');
+    if (animate) {
+      merged.each(function (d) {
+        const pt = projection([d.lon, d.lat]);
+        if (!pt) return;
+        d3.select(this)
+          .transition().duration(2000).ease(d3.easeCubicInOut)
+          .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+      });
+    } else {
+      merged.each(function (d) {
+        const pt = projection([d.lon, d.lat]);
+        if (!pt) return;
+        d3.select(this)
+          .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+      });
+    }
   }
 
   renderTrains();
@@ -108,8 +129,14 @@
     setInterval(async () => {
       const fetched = await fetchTrains();
       if (fetched && fetched.length > 0) {
+        const wasDummy = !realTrains;
         realTrains = fetched;
         dummyTrains = null;
+        console.log(`[CTA] Refreshed REAL train data (${realTrains.length} trains)`);
+        renderTrains(!wasDummy);
+      } else if (!realTrains && !dummyTrains) {
+        dummyTrains = generateDummyTrains(geojson);
+        console.log(`[CTA] Refresh failed, falling back to DUMMY data (${dummyTrains.length} trains)`);
         renderTrains();
       }
     }, REFRESH_INTERVAL);
