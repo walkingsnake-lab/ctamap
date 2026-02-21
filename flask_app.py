@@ -1,7 +1,7 @@
 import os
 import requests
 from concurrent.futures import ThreadPoolExecutor
-from flask import Flask, Response, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder='.', static_url_path='')
 
@@ -55,18 +55,8 @@ def api_trains():
 
 @app.route('/api/geojson')
 def api_geojson():
-    """Proxy CTA line geometry GeoJSON to avoid CORS issues."""
-    try:
-        resp = requests.get(
-            'https://data.cityofchicago.org/resource/xbyr-jnvx.geojson',
-            params={'$limit': '5000'},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        return Response(resp.content, content_type='application/json')
-    except Exception as e:
-        app.logger.error('GeoJSON proxy failed: %s', e)
-        return jsonify({'error': str(e)}), 502
+    """Serve bundled CTA line geometry GeoJSON."""
+    return send_from_directory('data', 'cta-lines.geojson', mimetype='application/json')
 
 
 @app.route('/')
