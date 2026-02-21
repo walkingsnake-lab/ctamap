@@ -53,6 +53,20 @@ def api_trains():
     return jsonify({'trains': trains})
 
 
+@app.route('/api/geojson')
+def api_geojson():
+    """Proxy CTA line geometry GeoJSON to avoid CORS issues."""
+    try:
+        resp = requests.get(
+            'https://data.cityofchicago.org/resource/xbyr-jnvx.geojson',
+            params={'$limit': '5000'},
+            timeout=15,
+        )
+        return resp.json()
+    except Exception:
+        return jsonify({'type': 'FeatureCollection', 'features': []}), 502
+
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')

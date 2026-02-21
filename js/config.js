@@ -32,7 +32,7 @@ const LEGEND_TO_ROUTE = Object.fromEntries(
 const API_ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 
 // Data source for line geometry (no auth required)
-const GEOJSON_URL = 'https://data.cityofchicago.org/resource/xbyr-jnvx.geojson?$limit=5000';
+const GEOJSON_URL = '/api/geojson';
 
 // CTA Train Tracker API (proxied through server.js to avoid CORS issues)
 const API_BASE = '/api/trains';
