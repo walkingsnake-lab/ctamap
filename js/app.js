@@ -44,9 +44,10 @@
     const layer = svg.select('.trains-layer');
 
     // Cancel any running transitions to prevent conflicts with stale animations
-    layer.selectAll('.train-group').interrupt();
+    // Exclude .train-exiting elements so their delayed fade-out isn't disrupted
+    layer.selectAll('.train-group:not(.train-exiting)').interrupt();
 
-    const groups = layer.selectAll('.train-group')
+    const groups = layer.selectAll('.train-group:not(.train-exiting)')
       .data(trains, d => d.rn);
 
     // Enter
@@ -75,8 +76,14 @@
     });
     enter.transition().duration(animate ? 800 : 0).style('opacity', 1);
 
-    // Exit — remove immediately so they can't receive stale position updates
-    groups.exit().remove();
+    // Exit — hold at last position, then fade out
+    groups.exit()
+      .classed('train-exiting', true)
+      .transition()
+      .delay(TERMINUS_HOLD_MS)
+      .duration(2000)
+      .style('opacity', 0)
+      .remove();
 
     // Update existing positions (enter + update only, excludes exited elements)
     const merged = enter.merge(groups);
