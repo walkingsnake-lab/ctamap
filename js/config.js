@@ -39,11 +39,11 @@ const API_BASE = '/api/trains';
 const API_KEY = true; // Key is stored server-side in server.js
 
 // How often to refresh train positions (ms)
-const REFRESH_INTERVAL = 10000;
+const REFRESH_INTERVAL = 15000;
 
 // Visual constants
 const LINE_WIDTH = 1.5;
-const TRAIN_RADIUS = 2;
-const TRAIN_GLOW_RADIUS = 5;
+const TRAIN_RADIUS = 2.5;
+const TRAIN_GLOW_RADIUS = 7;
 const TERMINUS_HOLD_MS = 60000; // Hold train at terminus before fade-out
 const MAP_PADDING = 0.05; // 5% padding around the map
