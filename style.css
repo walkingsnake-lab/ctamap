@@ -11,6 +11,10 @@ body {
   height: 100vh;
 }
 
+.lines-layer {
+  opacity: .2;
+}
+
 #map {
   width: 100vw;
   height: 100vh;
