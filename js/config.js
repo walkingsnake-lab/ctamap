@@ -45,4 +45,5 @@ const REFRESH_INTERVAL = 30000;
 const LINE_WIDTH = 2.5;
 const TRAIN_RADIUS = 4;
 const TRAIN_GLOW_RADIUS = 10;
+const TERMINUS_HOLD_MS = 30000; // Hold train at terminus before fade-out
 const MAP_PADDING = 0.05; // 5% padding around the map
