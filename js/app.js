@@ -76,14 +76,34 @@
     });
     enter.transition().duration(animate ? 800 : 0).style('opacity', 1);
 
-    // Exit — hold at last position, then fade out
-    groups.exit()
-      .classed('train-exiting', true)
-      .transition()
-      .delay(TERMINUS_HOLD_MS)
-      .duration(2000)
-      .style('opacity', 0)
-      .remove();
+    // Exit — animate toward terminus, then fade out
+    groups.exit().each(function (d) {
+      const el = d3.select(this).classed('train-exiting', true);
+      const key = d.legend + ':' + d.destNm;
+      const dest = TERMINUS_COORDS[key];
+
+      if (dest) {
+        const destPt = projection(dest);
+        if (destPt) {
+          // Glide toward the terminus station
+          el.transition()
+            .duration(TERMINUS_TRAVEL_MS)
+            .ease(d3.easeLinear)
+            .attr('transform', `translate(${destPt[0]}, ${destPt[1]})`)
+            .transition()
+            .duration(TERMINUS_FADE_MS)
+            .style('opacity', 0)
+            .remove();
+          return;
+        }
+      }
+
+      // No terminus data — just fade out quickly
+      el.transition()
+        .duration(TERMINUS_FADE_MS)
+        .style('opacity', 0)
+        .remove();
+    });
 
     // Update existing positions (enter + update only, excludes exited elements)
     const merged = enter.merge(groups);

@@ -50,7 +50,7 @@ body {
 .train-group:nth-child(5n)  .train-glow { animation-delay: 1.1s; }
 .train-group:nth-child(7n)  .train-glow { animation-delay: 1.5s; }
 
-/* Trains held at terminus — static dot, no pulse */
+/* Trains approaching terminus — static dot, no pulse */
 .train-exiting .train-glow {
   animation: none;
   opacity: 0;
