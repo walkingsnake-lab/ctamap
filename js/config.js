@@ -42,8 +42,8 @@ const API_KEY = true; // Key is stored server-side in server.js
 const REFRESH_INTERVAL = 10000;
 
 // Visual constants
-const LINE_WIDTH = 2.5;
-const TRAIN_RADIUS = 4;
-const TRAIN_GLOW_RADIUS = 10;
+const LINE_WIDTH = 1.5;
+const TRAIN_RADIUS = 2;
+const TRAIN_GLOW_RADIUS = 5;
 const TERMINUS_HOLD_MS = 60000; // Hold train at terminus before fade-out
 const MAP_PADDING = 0.05; // 5% padding around the map
