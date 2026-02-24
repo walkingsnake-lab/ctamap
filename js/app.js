@@ -64,11 +64,12 @@
       .attr('class', 'train-group')
       .style('opacity', 0);
 
-    // Outer glow circle
+    // Outer glow circle — stagger pulse by run number so delay is stable across refreshes
     enter.append('circle')
       .attr('class', 'train-glow')
       .attr('r', TRAIN_GLOW_RADIUS)
-      .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
+      .attr('fill', d => LINE_COLORS[d.legend] || '#fff')
+      .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
     // Inner solid dot
     enter.append('circle')
