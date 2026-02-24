@@ -307,6 +307,49 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
 }
 
 /**
+ * Computes the distance along the track from one track position to another.
+ * Walks edge-by-edge using advanceOnTrack until reaching the target.
+ * Falls back to straight-line distance if the target can't be reached
+ * (e.g. wrong direction, different branch).
+ */
+function trackDistanceBetween(from, to, direction, segments) {
+  const straightDist = geoDist(from.lon, from.lat, to.lon, to.lat);
+  if (straightDist < 1e-7) return 0;
+
+  // Walk in steps proportional to the straight-line distance
+  const step = Math.max(straightDist / 40, 1e-5);
+  let pos = from;
+  let totalDist = 0;
+  let prevDistToTarget = straightDist;
+
+  for (let i = 0; i < 2000; i++) {
+    const newPos = advanceOnTrack(pos, step, direction, segments);
+    totalDist += step;
+
+    const distToTarget = geoDist(newPos.lon, newPos.lat, to.lon, to.lat);
+
+    // Close enough — add final bit and return
+    if (distToTarget < step * 0.5) {
+      return totalDist + distToTarget;
+    }
+
+    // Getting farther away — wrong direction or different branch
+    if (distToTarget > prevDistToTarget + step * 0.5) {
+      return straightDist;
+    }
+
+    if (newPos.stopped) {
+      return totalDist + distToTarget;
+    }
+
+    prevDistToTarget = distToTarget;
+    pos = newPos;
+  }
+
+  return straightDist; // safety fallback
+}
+
+/**
  * Finds a connected segment when the train reaches the end (or start) of its current segment.
  * Searches for segments with an endpoint close to the boundary point.
  * Returns { segIdx, ptIdx, t } for the new segment, or null if terminal.
