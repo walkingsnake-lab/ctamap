@@ -334,9 +334,6 @@ function advanceRealTrains(trains, lineSegments, dt) {
     const segs = lineSegments[train.legend];
     if (!segs) continue;
 
-    // Don't move if speed is effectively zero (stopped/delayed)
-    if (train.isDly === '1') continue;
-
     // During drift correction: advance along track geometry from old to new position
     if (train._correcting) {
       const elapsed = now - train._corrStartTime;
@@ -371,10 +368,6 @@ function advanceRealTrains(trains, lineSegments, dt) {
     train.lon = newPos.lon;
     train.lat = newPos.lat;
     if (newPos.direction !== undefined) train._direction = newPos.direction;
-
-    if (newPos.stopped) {
-      train._speed = 0;
-    }
 
     // Store animated position for next refresh's drift calculation
     train._animLon = train.lon;
