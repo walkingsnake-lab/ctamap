@@ -11,17 +11,47 @@
  */
 function buildLineSegments(geojson) {
   const loopLines = ['BR', 'OR', 'PK', 'PR', 'GR'];
-  const mlCoords = collectLineCoords(geojson, 'ML');
+
+  // Reverse map: legend code → human-readable name for ML segment filtering
+  const legendToLineName = {};
+  for (const [name, code] of Object.entries(LINE_NAME_TO_LEGEND_STATION)) {
+    legendToLineName[code] = name;
+  }
 
   const segments = {};
   for (const legend of Object.keys(LINE_COLORS)) {
     if (legend === 'ML') continue;
     const coords = collectLineCoords(geojson, legend);
-    segments[legend] = loopLines.includes(legend)
-      ? coords.concat(mlCoords)
-      : coords;
+
+    if (loopLines.includes(legend)) {
+      // Only include ML segments whose "lines" property mentions this line
+      const lineName = legendToLineName[legend];
+      const mlCoords = collectMLCoordsForLine(geojson, lineName);
+      segments[legend] = coords.concat(mlCoords);
+    } else {
+      segments[legend] = coords;
+    }
   }
   return segments;
+}
+
+/**
+ * Collects coordinate arrays from ML features whose "lines" property includes the given line name.
+ */
+function collectMLCoordsForLine(geojson, lineName) {
+  const coords = [];
+  for (const feature of geojson.features) {
+    if (feature.properties.legend !== 'ML') continue;
+    const linesProp = feature.properties.lines || '';
+    if (!linesProp.includes(lineName)) continue;
+    const geom = feature.geometry;
+    if (geom.type === 'MultiLineString') {
+      for (const line of geom.coordinates) coords.push(line);
+    } else if (geom.type === 'LineString') {
+      coords.push(geom.coordinates);
+    }
+  }
+  return coords;
 }
 
 /**
