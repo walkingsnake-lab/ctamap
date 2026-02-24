@@ -209,23 +209,25 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
     train._speed = result.speed;
     speedStats[result.source]++;
 
-    // Drift correction: if we had a previous animated position, set up correction
+    // Drift correction: smoothly interpolate from old visual position to new API position
     const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
     if (prev && prev._animLon !== undefined) {
       const drift = geoDist(prev._animLon, prev._animLat, train.lon, train.lat);
-      if (drift < CORRECTION_SNAP_THRESHOLD) {
-        // Smoothly correct: start from animated position, blend toward API position
-        train._correcting = true;
-        train._corrStartTime = now;
+      if (drift < CORRECTION_SNAP_THRESHOLD && drift > 1e-7) {
+        // Save the API-snapped target (where the train should end up)
+        train._corrToLon = train.lon;
+        train._corrToLat = train.lat;
+        train._corrToTrackPos = { ...train._trackPos };
+        // Start visual position at where animation was
         train._corrFromLon = prev._animLon;
         train._corrFromLat = prev._animLat;
-        // Temporarily set position to where animation was (smooth blend will handle the rest)
+        train._correcting = true;
+        train._corrStartTime = now;
+        // Set current visual position to old animated position (interpolation starts here)
         train.lon = prev._animLon;
         train.lat = prev._animLat;
-        // Re-snap the starting position to track
-        train._trackPos = snapToTrackPosition(train.lon, train.lat, segs);
       }
-      // If drift >= threshold, we already snapped to API position — no correction needed
+      // If drift >= threshold, we already snapped to API position (instant jump)
     }
 
     train._lastUpdateTime = now;
@@ -302,31 +304,38 @@ function advanceRealTrains(trains, lineSegments, dt) {
     // Don't move if speed is effectively zero (stopped/delayed)
     if (train.isDly === '1') continue;
 
+    // During drift correction: smoothly interpolate from old position to API position
+    if (train._correcting) {
+      const elapsed = now - train._corrStartTime;
+      if (elapsed >= CORRECTION_DURATION) {
+        // Correction complete — snap to API-snapped track position and resume normal advance
+        train._correcting = false;
+        train._trackPos = train._corrToTrackPos;
+        train.lon = train._corrToTrackPos.lon;
+        train.lat = train._corrToTrackPos.lat;
+      } else {
+        // Smoothstep easing: accelerate then decelerate
+        const t = elapsed / CORRECTION_DURATION;
+        const eased = t * t * (3 - 2 * t);
+        train.lon = train._corrFromLon + eased * (train._corrToLon - train._corrFromLon);
+        train.lat = train._corrFromLat + eased * (train._corrToLat - train._corrFromLat);
+      }
+      train._animLon = train.lon;
+      train._animLat = train.lat;
+      continue;
+    }
+
+    // Normal mode: advance along track at estimated speed
     const distance = train._speed * dt * ANIMATION_SPEED_MULT;
     const newPos = advanceOnTrack(train._trackPos, distance, train._direction, segs);
 
     train._trackPos = newPos;
     train.lon = newPos.lon;
     train.lat = newPos.lat;
-    // Update direction — may have flipped when crossing into a reversed segment
     if (newPos.direction !== undefined) train._direction = newPos.direction;
 
-    // If train reached a terminal (stopped by advanceOnTrack), hold position
     if (newPos.stopped) {
       train._speed = 0;
-    }
-
-    // Apply drift correction blending
-    if (train._correcting) {
-      const elapsed = now - train._corrStartTime;
-      if (elapsed >= CORRECTION_DURATION) {
-        // Correction complete
-        train._correcting = false;
-      }
-      // Exponential decay of correction offset is handled implicitly:
-      // the train is advancing from the corrected start position toward where
-      // it should be, which naturally converges since initRealTrainAnimation
-      // re-snapped the track position.
     }
 
     // Store animated position for next refresh's drift calculation
