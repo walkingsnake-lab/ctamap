@@ -161,11 +161,15 @@ async function fetchTrains() {
 }
 
 /**
- * Parses a CTA datetime string (e.g. "20240804 14:23:05") into a Date.
+ * Parses a CTA datetime string into a Date.
+ * Handles both "20240804 14:23:05" and ISO "2024-08-04T14:23:05" formats.
  */
 function parseCTATime(str) {
   if (!str) return null;
-  // Format: "YYYYMMDD HH:MM:SS"
+  // Try ISO format first: "YYYY-MM-DDTHH:MM:SS"
+  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
+  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3], +iso[4], +iso[5], +iso[6]);
+  // Legacy format: "YYYYMMDD HH:MM:SS"
   const m = str.match(/^(\d{4})(\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
   if (!m) return null;
   return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
