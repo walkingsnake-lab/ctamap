@@ -89,7 +89,7 @@ function collectLineCoords(geojson, legend) {
  * Call this on each animation frame.
  */
 function advanceDummyTrains(trains, geojson, dt) {
-  const speed = 0.00012; // Units per ms — tune for visual feel
+  const speed = 1.2e-7; // degrees/ms — ~30mph for visual feel
 
   for (const train of trains) {
     if (!train._segCoords) continue;
@@ -180,6 +180,7 @@ function parseCTATime(str) {
  */
 function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrainMap) {
   const now = Date.now();
+  const speedStats = { arrT: 0, observed: 0, fallback: 0 };
 
   for (const train of trains) {
     const segs = lineSegments[train.legend];
@@ -200,7 +201,9 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
     );
 
     // Estimate speed
-    train._speed = estimateSpeed(train, stationPositions, prevTrainMap, now);
+    const result = estimateSpeed(train, stationPositions, prevTrainMap, now);
+    train._speed = result.speed;
+    speedStats[result.source]++;
 
     // Drift correction: if we had a previous animated position, set up correction
     const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
@@ -223,6 +226,8 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
 
     train._lastUpdateTime = now;
   }
+
+  console.log(`[CTA] Speed estimation: ${speedStats.arrT} arrT-based, ${speedStats.observed} observed, ${speedStats.fallback} fallback`);
 }
 
 /**
@@ -247,9 +252,9 @@ function estimateSpeed(train, stationPositions, prevTrainMap, now) {
             // Multiply by ~1.3 to account for track curvature vs straight-line distance
             const trackDist = dist * 1.3;
             const speed = trackDist / totalTravelTime;
-            // Sanity check: cap between min and max reasonable speeds
-            if (speed > 1e-7 && speed < 0.001) {
-              return speed;
+            // Sanity check: ~25mph floor, ~125mph ceiling (in degrees/ms)
+            if (speed > 1e-8 && speed < 5e-7) {
+              return { speed, source: 'arrT' };
             }
           }
         }
@@ -265,8 +270,8 @@ function estimateSpeed(train, stationPositions, prevTrainMap, now) {
       const dist = geoDist(prev._apiLon || prev.lon, prev._apiLat || prev.lat, train.lon, train.lat);
       if (dist > 1e-6) {
         const speed = dist / elapsed;
-        if (speed > 1e-7 && speed < 0.001) {
-          return speed;
+        if (speed > 1e-8 && speed < 5e-7) {
+          return { speed, source: 'observed' };
         }
       }
     }
@@ -274,8 +279,8 @@ function estimateSpeed(train, stationPositions, prevTrainMap, now) {
 
   // 3. Fallback
   // Approaching station → slower speed
-  if (train.isApp === '1') return FALLBACK_SPEED * 0.3;
-  return FALLBACK_SPEED;
+  if (train.isApp === '1') return { speed: FALLBACK_SPEED * 0.3, source: 'fallback' };
+  return { speed: FALLBACK_SPEED, source: 'fallback' };
 }
 
 /**
