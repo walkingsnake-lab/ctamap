@@ -22,6 +22,12 @@
   const { geojson } = mapState;
   let { projection } = mapState;
 
+  // Build per-line segment lookup for path-following animation
+  const lineSegments = buildLineSegments(geojson);
+
+  // Previous train positions keyed by run number, for path-following interpolation
+  const prevPositions = new Map();
+
   // Create train layer on top
   svg.append('g').attr('class', 'trains-layer');
 
@@ -91,6 +97,31 @@
       merged.each(function (d) {
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
+
+        // Path-following: snap waypoints along the track between old and new positions
+        const old = prevPositions.get(d.rn);
+        if (old && lineSegments[d.legend]) {
+          const waypoints = computeWaypoints(old.lon, old.lat, d.lon, d.lat, lineSegments[d.legend]);
+          const projected = waypoints.map(w => projection(w)).filter(Boolean);
+          if (projected.length >= 2) {
+            d3.select(this)
+              .transition().duration(2000).ease(d3.easeCubicInOut)
+              .attrTween('transform', function () {
+                return function (t) {
+                  const i = t * (projected.length - 1);
+                  const lo = Math.floor(i);
+                  const hi = Math.min(Math.ceil(i), projected.length - 1);
+                  const frac = i - lo;
+                  const x = projected[lo][0] + frac * (projected[hi][0] - projected[lo][0]);
+                  const y = projected[lo][1] + frac * (projected[hi][1] - projected[lo][1]);
+                  return `translate(${x}, ${y})`;
+                };
+              });
+            return;
+          }
+        }
+
+        // Fallback: straight-line transition (new trains or missing segments)
         d3.select(this)
           .transition().duration(2000).ease(d3.easeCubicInOut)
           .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
@@ -102,6 +133,11 @@
         d3.select(this)
           .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
       });
+    }
+
+    // Snapshot current positions for the next transition
+    for (const d of trains) {
+      prevPositions.set(d.rn, { lon: d.lon, lat: d.lat });
     }
   }
 
