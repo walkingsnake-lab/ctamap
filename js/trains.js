@@ -226,8 +226,9 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
         // Set current visual position to old animated position (interpolation starts here)
         train.lon = prev._animLon;
         train.lat = prev._animLat;
+      } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
+        console.warn(`[CTA] Snap: rn=${train.rn} drift=${(drift * 111000).toFixed(0)}m — too far to interpolate`);
       }
-      // If drift >= threshold, we already snapped to API position (instant jump)
     }
 
     train._lastUpdateTime = now;

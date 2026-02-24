@@ -39,7 +39,8 @@ const API_BASE = '/api/trains';
 const API_KEY = true; // Key is stored server-side in server.js
 
 // How often to refresh train positions (ms)
-const REFRESH_INTERVAL = 15000;
+// CTA updates positions every ~60-120s, so faster polling just gets stale data
+const REFRESH_INTERVAL = 30000;
 
 // Visual constants
 const LINE_WIDTH = 1.5;
@@ -51,8 +52,8 @@ const MAP_PADDING = 0.05; // 5% padding around the map
 // Real-time animation constants
 const ANIMATION_SPEED_MULT = 1;              // 1 = real-time speed; visual movement comes from smooth drift correction
 const FALLBACK_SPEED = 1e-7;                 // degrees/ms — ~25mph (25mi/h ÷ 69mi/° ÷ 3.6e6ms/h)
-const CORRECTION_DURATION = 2000;            // ms to smoothly correct drift after API refresh
-const CORRECTION_SNAP_THRESHOLD = 0.005;     // degrees — beyond this, snap instead of blend
+const CORRECTION_DURATION = 2500;            // ms to smoothly correct drift after API refresh
+const CORRECTION_SNAP_THRESHOLD = 0.05;      // degrees (~5.5km) — beyond this, snap instead of blend
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
 const EXIT_COAST_TIMEOUT = 60000;            // ms — how long exiting trains keep moving toward terminal
 
