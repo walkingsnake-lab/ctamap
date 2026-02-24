@@ -166,12 +166,17 @@ function directionFromHeading(heading, segIdx, ptIdx, segments) {
 function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
   let { segIdx, ptIdx, t } = trackPos;
   let remaining = distanceDeg;
+  let dir = direction; // Mutable — updated when entering a new segment
   const seg = segments[segIdx];
 
-  if (!seg) return { ...trackPos, stopped: true };
+  if (!seg) return { ...trackPos, direction: dir, stopped: true };
+
+  // Safety limit to prevent infinite loops from malformed geometry
+  const MAX_ITER = 10000;
+  let iter = 0;
 
   // Advance within current segment
-  while (remaining > 0) {
+  while (remaining > 0 && ++iter < MAX_ITER) {
     const curSeg = segments[segIdx];
     if (!curSeg) break;
 
@@ -184,32 +189,34 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
 
     if (edgeLen < 1e-10) {
       // Degenerate edge — skip it
-      if (direction > 0) {
+      if (dir > 0) {
         ptIdx++;
         t = 0;
         if (ptIdx >= curSeg.length - 1) {
           // Try next segment
-          const next = findConnectedSegment(segIdx, ptIdx, curSeg, direction, segments);
-          if (!next) return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: bx, lat: by, stopped: true };
+          const next = findConnectedSegment(segIdx, ptIdx, curSeg, dir, segments);
+          if (!next) return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: bx, lat: by, direction: dir, stopped: true };
           segIdx = next.segIdx;
           ptIdx = next.ptIdx;
           t = next.t;
+          dir = next.direction;
         }
       } else {
         ptIdx--;
         t = 1;
         if (ptIdx < 0) {
-          const next = findConnectedSegment(segIdx, 0, curSeg, direction, segments);
-          if (!next) return { segIdx, ptIdx: 0, t: 0, lon: ax, lat: ay, stopped: true };
+          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments);
+          if (!next) return { segIdx, ptIdx: 0, t: 0, lon: ax, lat: ay, direction: dir, stopped: true };
           segIdx = next.segIdx;
           ptIdx = next.ptIdx;
           t = next.t;
+          dir = next.direction;
         }
       }
       continue;
     }
 
-    if (direction > 0) {
+    if (dir > 0) {
       const distToEdgeEnd = (1 - t) * edgeLen;
       if (remaining <= distToEdgeEnd) {
         t += remaining / edgeLen;
@@ -220,15 +227,16 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
         t = 0;
         if (ptIdx >= curSeg.length - 1) {
           // Crossed segment boundary — find the next connected one
-          const next = findConnectedSegment(segIdx, curSeg.length - 1, curSeg, direction, segments);
+          const next = findConnectedSegment(segIdx, curSeg.length - 1, curSeg, dir, segments);
           if (!next) {
             // Terminal — stop at end
             const last = curSeg[curSeg.length - 1];
-            return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: last[0], lat: last[1], stopped: true };
+            return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: last[0], lat: last[1], direction: dir, stopped: true };
           }
           segIdx = next.segIdx;
           ptIdx = next.ptIdx;
           t = next.t;
+          dir = next.direction;
         }
       }
     } else {
@@ -241,14 +249,15 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
         ptIdx--;
         t = 1;
         if (ptIdx < 0) {
-          const next = findConnectedSegment(segIdx, 0, curSeg, direction, segments);
+          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments);
           if (!next) {
             const first = curSeg[0];
-            return { segIdx, ptIdx: 0, t: 0, lon: first[0], lat: first[1], stopped: true };
+            return { segIdx, ptIdx: 0, t: 0, lon: first[0], lat: first[1], direction: dir, stopped: true };
           }
           segIdx = next.segIdx;
           ptIdx = next.ptIdx;
           t = next.t;
+          dir = next.direction;
         }
       }
     }
@@ -257,14 +266,14 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
   // Interpolate final position
   const finalSeg = segments[segIdx];
   if (!finalSeg || ptIdx < 0 || ptIdx >= finalSeg.length - 1) {
-    return { ...trackPos, stopped: true };
+    return { ...trackPos, direction: dir, stopped: true };
   }
   const ax = finalSeg[ptIdx][0], ay = finalSeg[ptIdx][1];
   const bx = finalSeg[ptIdx + 1][0], by = finalSeg[ptIdx + 1][1];
   const lon = ax + t * (bx - ax);
   const lat = ay + t * (by - ay);
 
-  return { segIdx, ptIdx, t, lon, lat, stopped: false };
+  return { segIdx, ptIdx, t, lon, lat, direction: dir, stopped: false };
 }
 
 /**
@@ -285,21 +294,19 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
     const seg = segments[s];
     if (seg.length < 2) continue;
 
-    // Check start of segment
+    // Check start of segment — enter moving forward
     const d0 = geoDist(bx, by, seg[0][0], seg[0][1]);
     if (d0 < threshold && d0 < bestDist) {
       bestDist = d0;
-      // Enter this segment from its start, moving forward
-      bestResult = { segIdx: s, ptIdx: 0, t: 0 };
+      bestResult = { segIdx: s, ptIdx: 0, t: 0, direction: 1 };
     }
 
-    // Check end of segment
+    // Check end of segment — enter moving backward
     const last = seg.length - 1;
     const dN = geoDist(bx, by, seg[last][0], seg[last][1]);
     if (dN < threshold && dN < bestDist) {
       bestDist = dN;
-      // Enter this segment from its end, moving backward
-      bestResult = { segIdx: s, ptIdx: last - 1, t: 1 };
+      bestResult = { segIdx: s, ptIdx: last - 1, t: 1, direction: -1 };
     }
   }
 

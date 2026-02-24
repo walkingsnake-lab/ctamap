@@ -299,6 +299,8 @@ function advanceRealTrains(trains, lineSegments, dt) {
     train._trackPos = newPos;
     train.lon = newPos.lon;
     train.lat = newPos.lat;
+    // Update direction — may have flipped when crossing into a reversed segment
+    if (newPos.direction !== undefined) train._direction = newPos.direction;
 
     // If train reached a terminal (stopped by advanceOnTrack), hold position
     if (newPos.stopped) {
@@ -340,6 +342,7 @@ function advanceExitingTrains(trains, lineSegments, dt) {
     train._trackPos = newPos;
     train.lon = newPos.lon;
     train.lat = newPos.lat;
+    if (newPos.direction !== undefined) train._direction = newPos.direction;
 
     if (newPos.stopped) {
       train._speed = 0;
