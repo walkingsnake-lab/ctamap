@@ -51,7 +51,7 @@ const MAP_PADDING = 0.05; // 5% padding around the map
 
 // Real-time animation constants
 const ANIMATION_SPEED_MULT = 1;              // 1 = real-time speed; visual movement comes from smooth drift correction
-const FALLBACK_SPEED = 1e-7;                 // degrees/ms — ~25mph (25mi/h ÷ 69mi/° ÷ 3.6e6ms/h)
+const FALLBACK_SPEED = 1.4e-7;               // degrees/ms — ~35mph (CTA in-motion average)
 const CORRECTION_DURATION = 2500;            // ms to smoothly correct drift after API refresh
 const CORRECTION_SNAP_THRESHOLD = 0.05;      // degrees (~5.5km) — beyond this, snap instead of blend
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected

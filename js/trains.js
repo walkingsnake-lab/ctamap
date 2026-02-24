@@ -184,7 +184,7 @@ function parseCTATime(str) {
  */
 function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrainMap) {
   const now = Date.now();
-  const speedStats = { arrT: 0, observed: 0, fallback: 0 };
+  const speedStats = {};
 
   for (const train of trains) {
     const segs = lineSegments[train.legend];
@@ -205,9 +205,9 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
     );
 
     // Estimate speed
-    const result = estimateSpeed(train, stationPositions, prevTrainMap, now);
+    const result = estimateSpeed(train, stationPositions, prevTrainMap, now, segs);
     train._speed = result.speed;
-    speedStats[result.source]++;
+    speedStats[result.source] = (speedStats[result.source] || 0) + 1;
 
     // Drift correction: smoothly interpolate from old visual position to new API position
     const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
@@ -235,32 +235,42 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
     train._lastUpdateTime = now;
   }
 
-  console.log(`[CTA] Speed estimation: ${speedStats.arrT} arrT-based, ${speedStats.observed} observed, ${speedStats.fallback} fallback (${ANIMATION_SPEED_MULT}x visual)`);
+  const statStr = Object.entries(speedStats).map(([k, v]) => `${v} ${k}`).join(', ');
+  console.log(`[CTA] Speed estimation: ${statStr}`);
 }
 
 /**
  * Estimates train speed in degrees per millisecond.
- * Priority: arrT-based > observed velocity > fallback constant.
+ * Priority: arrT-based > observed velocity > preserved previous > fallback.
+ *
+ * @param segs - line segments for this train's line (for track distance)
  */
-function estimateSpeed(train, stationPositions, prevTrainMap, now) {
-  // 1. Try arrival-time based speed
-  // Per CTA docs: arrT - prdt = total predicted travel time from the train's
-  // last track-circuit position to the next station. This is more reliable
-  // than arrT - now because prdt is when the position was actually recorded.
+function estimateSpeed(train, stationPositions, prevTrainMap, now, segs) {
+  // 1. Try arrival-time based speed using actual track distance
   if (train.arrT && train.prdt) {
     const arrTime = parseCTATime(train.arrT);
     const prdTime = parseCTATime(train.prdt);
     if (arrTime && prdTime) {
       const totalTravelTime = arrTime.getTime() - prdTime.getTime();
-      if (totalTravelTime > 2000) { // At least 2 seconds of travel
+      // Use arrT - now (remaining time) when clocks are synchronized,
+      // fall back to arrT - prdt (total time, timezone-safe) otherwise.
+      // prdt should be close to now if both are in the same timezone.
+      const rawRemaining = arrTime.getTime() - now;
+      const clockDrift = Math.abs(totalTravelTime - rawRemaining);
+      const remainingTime = clockDrift < 300000
+        ? Math.max(rawRemaining, 3000)   // same timezone: use real remaining time
+        : totalTravelTime;               // different timezone: timezone-safe fallback
+
+      if (remainingTime > 2000) {
         const stationCoord = lookupStation(train.nextStaNm, train.legend, stationPositions);
-        if (stationCoord) {
-          const dist = geoDist(train._apiLon, train._apiLat, stationCoord[0], stationCoord[1]);
-          if (dist > 1e-6) {
-            // Multiply by ~1.3 to account for track curvature vs straight-line distance
-            const trackDist = dist * 1.3;
-            const speed = trackDist / totalTravelTime;
-            // Sanity check: ~25mph floor, ~125mph ceiling (in degrees/ms)
+        if (stationCoord && train._trackPos && segs) {
+          // Snap station to track and measure real along-track distance
+          const stationTrackPos = snapToTrackPosition(stationCoord[0], stationCoord[1], segs);
+          const trackDist = trackDistanceBetween(
+            train._trackPos, stationTrackPos, train._direction, segs
+          );
+          if (trackDist > 1e-6) {
+            const speed = trackDist / remainingTime;
             if (speed > 1e-8 && speed < 5e-7) {
               return { speed, source: 'arrT' };
             }
@@ -270,12 +280,15 @@ function estimateSpeed(train, stationPositions, prevTrainMap, now) {
     }
   }
 
-  // 2. Try observed velocity from previous position
+  // 2. Try observed velocity from position change between refreshes
   const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
   if (prev && prev._lastUpdateTime) {
     const elapsed = now - prev._lastUpdateTime;
     if (elapsed > 1000) {
-      const dist = geoDist(prev._apiLon || prev.lon, prev._apiLat || prev.lat, train.lon, train.lat);
+      // Use raw API positions for consistency (both unsnapped)
+      const prevLon = prev._apiLon !== undefined ? prev._apiLon : prev.lon;
+      const prevLat = prev._apiLat !== undefined ? prev._apiLat : prev.lat;
+      const dist = geoDist(prevLon, prevLat, train._apiLon, train._apiLat);
       if (dist > 1e-6) {
         const speed = dist / elapsed;
         if (speed > 1e-8 && speed < 5e-7) {
@@ -285,8 +298,13 @@ function estimateSpeed(train, stationPositions, prevTrainMap, now) {
     }
   }
 
-  // 3. Fallback
-  // Approaching station → slower speed
+  // 3. Preserve previous speed estimate (momentum) — avoids dropping to fallback
+  //    when CTA data is temporarily stale or station lookup fails
+  if (prev && prev._speed > FALLBACK_SPEED * 0.5) {
+    return { speed: prev._speed, source: 'preserved' };
+  }
+
+  // 4. Fallback
   if (train.isApp === '1') return { speed: FALLBACK_SPEED * 0.3, source: 'fallback' };
   return { speed: FALLBACK_SPEED, source: 'fallback' };
 }
