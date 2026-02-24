@@ -215,17 +215,18 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
       const drift = geoDist(prev._animLon, prev._animLat, train.lon, train.lat);
       if (drift < CORRECTION_SNAP_THRESHOLD && drift > 1e-7) {
         // Save the API-snapped target (where the train should end up)
-        train._corrToLon = train.lon;
-        train._corrToLat = train.lat;
         train._corrToTrackPos = { ...train._trackPos };
-        // Start visual position at where animation was
-        train._corrFromLon = prev._animLon;
-        train._corrFromLat = prev._animLat;
+        // Snap the previous animated position to get a track-based starting point
+        train._corrFromTrackPos = snapToTrackPosition(prev._animLon, prev._animLat, segs);
+        // Precompute track distance so we can advance proportionally each frame
+        train._corrTotalDist = trackDistanceBetween(
+          train._corrFromTrackPos, train._corrToTrackPos, train._direction, segs
+        );
         train._correcting = true;
         train._corrStartTime = now;
-        // Set current visual position to old animated position (interpolation starts here)
-        train.lon = prev._animLon;
-        train.lat = prev._animLat;
+        // Set current visual position to the snapped starting point
+        train.lon = train._corrFromTrackPos.lon;
+        train.lat = train._corrFromTrackPos.lat;
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
         console.warn(`[CTA] Snap: rn=${train.rn} drift=${(drift * 111000).toFixed(0)}m — too far to interpolate`);
       }
@@ -305,11 +306,11 @@ function advanceRealTrains(trains, lineSegments, dt) {
     // Don't move if speed is effectively zero (stopped/delayed)
     if (train.isDly === '1') continue;
 
-    // During drift correction: smoothly interpolate from old position to API position
+    // During drift correction: advance along track geometry from old to new position
     if (train._correcting) {
       const elapsed = now - train._corrStartTime;
       if (elapsed >= CORRECTION_DURATION) {
-        // Correction complete — snap to API-snapped track position and resume normal advance
+        // Correction complete — snap to target track position and resume normal advance
         train._correcting = false;
         train._trackPos = train._corrToTrackPos;
         train.lon = train._corrToTrackPos.lon;
@@ -318,8 +319,13 @@ function advanceRealTrains(trains, lineSegments, dt) {
         // Smoothstep easing: accelerate then decelerate
         const t = elapsed / CORRECTION_DURATION;
         const eased = t * t * (3 - 2 * t);
-        train.lon = train._corrFromLon + eased * (train._corrToLon - train._corrFromLon);
-        train.lat = train._corrFromLat + eased * (train._corrToLat - train._corrFromLat);
+        // Advance along track geometry by eased fraction of total distance
+        const pos = advanceOnTrack(
+          train._corrFromTrackPos, eased * train._corrTotalDist, train._direction, segs
+        );
+        train.lon = pos.lon;
+        train.lat = pos.lat;
+        train._trackPos = pos; // keep trackPos current during correction
       }
       train._animLon = train.lon;
       train._animLat = train.lat;
