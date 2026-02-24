@@ -2,7 +2,7 @@
 const LINE_COLORS = {
   RD:  '#C60C30',
   BL:  '#00A1DE',
-  BR:  '#62361B',
+  BR:  '#895129',
   GR:  '#009B3A',
   OR:  '#F14624',
   PK:  '#E27EA6',
