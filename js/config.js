@@ -49,7 +49,7 @@ const TERMINUS_HOLD_MS = 60000; // Hold train at terminus before fade-out
 const MAP_PADDING = 0.05; // 5% padding around the map
 
 // Real-time animation constants
-const ANIMATION_SPEED_MULT = 5;              // Visual speed multiplier — real CTA speeds are invisible at city scale
+const ANIMATION_SPEED_MULT = 1;              // 1 = real-time speed; visual movement comes from smooth drift correction
 const FALLBACK_SPEED = 1e-7;                 // degrees/ms — ~25mph (25mi/h ÷ 69mi/° ÷ 3.6e6ms/h)
 const CORRECTION_DURATION = 2000;            // ms to smoothly correct drift after API refresh
 const CORRECTION_SNAP_THRESHOLD = 0.005;     // degrees — beyond this, snap instead of blend
