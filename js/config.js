@@ -47,3 +47,16 @@ const TRAIN_RADIUS = 2.5;
 const TRAIN_GLOW_RADIUS = 7;
 const TERMINUS_HOLD_MS = 60000; // Hold train at terminus before fade-out
 const MAP_PADDING = 0.05; // 5% padding around the map
+
+// Real-time animation constants
+const FALLBACK_SPEED = 0.0001;              // degrees/ms — ~25mph, used when no timing data
+const CORRECTION_DURATION = 2000;            // ms to smoothly correct drift after API refresh
+const CORRECTION_SNAP_THRESHOLD = 0.005;     // degrees — beyond this, snap instead of blend
+const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
+const EXIT_COAST_TIMEOUT = 60000;            // ms — how long exiting trains keep moving toward terminal
+
+// Map CTA line names (from GeoJSON "lines" property) → legend codes for station disambiguation
+const LINE_NAME_TO_LEGEND_STATION = {
+  'Red': 'RD', 'Blue': 'BL', 'Brown': 'BR', 'Green': 'GR',
+  'Orange': 'OR', 'Pink': 'PK', 'Purple': 'PR', 'Yellow': 'YL'
+};

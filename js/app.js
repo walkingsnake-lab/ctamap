@@ -1,5 +1,6 @@
 /**
  * Main application: initializes the map, places trains, handles animation and resize.
+ * Real trains animate continuously between API refreshes using speed estimation.
  */
 (async function () {
   const svgEl = document.getElementById('map');
@@ -25,8 +26,9 @@
   // Build per-line segment lookup for path-following animation
   const lineSegments = buildLineSegments(geojson);
 
-  // Previous train positions keyed by run number, for path-following interpolation
-  const prevPositions = new Map();
+  // Build station position lookup for speed estimation
+  const stationPositions = buildStationPositions(geojson);
+  console.log(`[CTA] Station positions: ${stationPositions.byLine.size} line-specific, ${stationPositions.byName.size} unique names`);
 
   // Create train layer on top
   svg.append('g').attr('class', 'trains-layer');
@@ -34,29 +36,29 @@
   // ---- Initialize trains ----
   let dummyTrains = null;
   let realTrains = null;
+  let exitingTrains = []; // Trains removed from API that coast to terminal
 
   const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
+    initRealTrainAnimation(realTrains, lineSegments, stationPositions, null);
     console.log(`[CTA] Using REAL train data (${realTrains.length} trains)`);
   } else {
     dummyTrains = generateDummyTrains(geojson);
     console.log(`[CTA] Using DUMMY train data (${dummyTrains.length} trains)`);
   }
 
-  // ---- Render trains ----
-  function renderTrains(animate) {
-    const trains = realTrains || dummyTrains || [];
+  // ---- Render trains (DOM management only — positions handled by animation loop) ----
+  function renderTrains() {
+    const activeTrains = realTrains || dummyTrains || [];
+    // Combine active trains with exiting trains for rendering
+    const allTrains = activeTrains.concat(exitingTrains);
     const layer = svg.select('.trains-layer');
 
-    // Cancel any running transitions to prevent conflicts with stale animations
-    // Exclude .train-exiting elements so their delayed fade-out isn't disrupted
-    layer.selectAll('.train-group:not(.train-exiting)').interrupt();
+    const groups = layer.selectAll('.train-group')
+      .data(allTrains, d => d.rn);
 
-    const groups = layer.selectAll('.train-group:not(.train-exiting)')
-      .data(trains, d => d.rn);
-
-    // Enter
+    // Enter — new trains
     const enter = groups.enter()
       .append('g')
       .attr('class', 'train-group')
@@ -80,70 +82,19 @@
       if (!pt) return;
       d3.select(this).attr('transform', `translate(${pt[0]}, ${pt[1]})`);
     });
-    enter.transition().duration(animate ? 800 : 0).style('opacity', 1);
+    enter.transition().duration(800).style('opacity', 1);
 
-    // Exit — hold at last position, then fade out
+    // Exit — trains no longer in active or exiting lists
     groups.exit()
-      .classed('train-exiting', true)
       .transition()
-      .delay(TERMINUS_HOLD_MS)
       .duration(2000)
       .style('opacity', 0)
       .remove();
-
-    // Update existing positions (enter + update only, excludes exited elements)
-    const merged = enter.merge(groups);
-    if (animate) {
-      merged.each(function (d) {
-        const pt = projection([d.lon, d.lat]);
-        if (!pt) return;
-
-        // Path-following: snap waypoints along the track between old and new positions
-        const old = prevPositions.get(d.rn);
-        if (old && lineSegments[d.legend]) {
-          const waypoints = computeWaypoints(old.lon, old.lat, d.lon, d.lat, lineSegments[d.legend]);
-          const projected = waypoints.map(w => projection(w)).filter(Boolean);
-          if (projected.length >= 2) {
-            d3.select(this)
-              .transition().duration(2000).ease(d3.easeCubicInOut)
-              .attrTween('transform', function () {
-                return function (t) {
-                  const i = t * (projected.length - 1);
-                  const lo = Math.floor(i);
-                  const hi = Math.min(Math.ceil(i), projected.length - 1);
-                  const frac = i - lo;
-                  const x = projected[lo][0] + frac * (projected[hi][0] - projected[lo][0]);
-                  const y = projected[lo][1] + frac * (projected[hi][1] - projected[lo][1]);
-                  return `translate(${x}, ${y})`;
-                };
-              });
-            return;
-          }
-        }
-
-        // Fallback: straight-line transition (new trains or missing segments)
-        d3.select(this)
-          .transition().duration(2000).ease(d3.easeCubicInOut)
-          .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
-      });
-    } else {
-      merged.each(function (d) {
-        const pt = projection([d.lon, d.lat]);
-        if (!pt) return;
-        d3.select(this)
-          .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
-      });
-    }
-
-    // Snapshot current positions for the next transition
-    for (const d of trains) {
-      prevPositions.set(d.rn, { lon: d.lon, lat: d.lat });
-    }
   }
 
   renderTrains();
 
-  // ---- Animation loop for dummy trains ----
+  // ---- Unified animation loop ----
   let lastTime = performance.now();
 
   function animate(now) {
@@ -153,17 +104,43 @@
     // Cap dt to prevent huge jumps when tab returns from background
     if (dt > 100) dt = 16;
 
+    // Advance dummy trains
     if (dummyTrains) {
       advanceDummyTrains(dummyTrains, geojson, dt);
-      // Update positions directly (no D3 transition — smoother for animation)
-      svg.select('.trains-layer').selectAll('.train-group')
-        .each(function (d) {
-          const pt = projection([d.lon, d.lat]);
-          if (!pt) return;
-          d3.select(this)
-            .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
-        });
     }
+
+    // Advance real trains continuously along track
+    if (realTrains) {
+      advanceRealTrains(realTrains, lineSegments, dt);
+    }
+
+    // Advance exiting trains (coasting to terminal)
+    if (exitingTrains.length > 0) {
+      advanceExitingTrains(exitingTrains, lineSegments, dt);
+
+      // Check for trains that should be removed (timed out or reached terminal)
+      const nowMs = Date.now();
+      const toRemove = [];
+      for (const t of exitingTrains) {
+        const elapsed = nowMs - t._exitStartTime;
+        if (elapsed > EXIT_COAST_TIMEOUT || t._reachedTerminal) {
+          toRemove.push(t.rn);
+        }
+      }
+      if (toRemove.length > 0) {
+        exitingTrains = exitingTrains.filter(t => !toRemove.includes(t.rn));
+        // Trigger DOM update to fade out removed trains
+        renderTrains();
+      }
+    }
+
+    // Update ALL train positions directly (no D3 transitions — frame-by-frame is smoother)
+    svg.select('.trains-layer').selectAll('.train-group')
+      .each(function (d) {
+        const pt = projection([d.lon, d.lat]);
+        if (!pt) return;
+        d3.select(this).attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+      });
 
     requestAnimationFrame(animate);
   }
@@ -171,12 +148,9 @@
   requestAnimationFrame(animate);
 
   // ---- Handle background tab ----
-  // When the tab comes back from being hidden, cancel stale transitions
-  // and snap all train positions immediately instead of animating.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
-      svg.select('.trains-layer').selectAll('.train-group').interrupt();
-      renderTrains(false);
+      lastTime = performance.now();
     }
   });
 
@@ -185,12 +159,35 @@
     setInterval(async () => {
       const fetched = await fetchTrains();
       if (fetched && fetched.length > 0) {
-        const wasDummy = !realTrains;
+        // Build prev map from current real trains for velocity + drift calculation
+        const prevMap = new Map();
+        if (realTrains) {
+          for (const t of realTrains) prevMap.set(t.rn, t);
+        }
+
+        // Identify trains that disappeared from the API
+        if (realTrains) {
+          const newRns = new Set(fetched.map(t => t.rn));
+          for (const oldTrain of realTrains) {
+            if (!newRns.has(oldTrain.rn) && oldTrain._trackPos && oldTrain._speed > 0) {
+              // Train disappeared — let it coast to terminal
+              oldTrain._exitStartTime = Date.now();
+              oldTrain._exiting = true;
+              exitingTrains.push(oldTrain);
+            }
+          }
+        }
+
         realTrains = fetched;
         dummyTrains = null;
-        console.log(`[CTA] Refreshed REAL train data (${realTrains.length} trains)`);
-        // Skip animation if page is hidden — transitions won't run properly
-        renderTrains(!wasDummy && !document.hidden);
+
+        // Initialize animation state (speed, track position, drift correction)
+        initRealTrainAnimation(realTrains, lineSegments, stationPositions, prevMap);
+
+        console.log(`[CTA] Refreshed REAL train data (${realTrains.length} active, ${exitingTrains.length} coasting)`);
+
+        // Update DOM (enter/exit management)
+        renderTrains();
       } else if (!realTrains && !dummyTrains) {
         dummyTrains = generateDummyTrains(geojson);
         console.log(`[CTA] Refresh failed, falling back to DUMMY data (${dummyTrains.length} trains)`);
