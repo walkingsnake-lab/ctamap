@@ -50,12 +50,9 @@ const TERMINUS_HOLD_MS = 60000; // Hold train at terminus before fade-out
 const MAP_PADDING = 0.05; // 5% padding around the map
 
 // Real-time animation constants
-const ANIMATION_SPEED_MULT = 0.7;            // < 1 so trains lag slightly behind real position; corrections always nudge forward
-const FALLBACK_SPEED = 1.4e-7;               // degrees/ms — ~35mph (CTA in-motion average)
-const CORRECTION_DURATION = 2500;            // ms to smoothly correct drift after API refresh
-const CORRECTION_SNAP_THRESHOLD = 0.05;      // degrees (~5.5km) — beyond this, snap instead of blend
+const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API position after refresh
+const CORRECTION_SNAP_THRESHOLD = 0.05;      // degrees (~5.5km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
-const EXIT_COAST_TIMEOUT = 60000;            // ms — how long exiting trains keep moving toward terminal
 
 // Map CTA line names (from GeoJSON "lines" property) → legend codes for station disambiguation
 const LINE_NAME_TO_LEGEND_STATION = {
