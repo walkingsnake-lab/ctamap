@@ -148,11 +148,6 @@ async function fetchTrains() {
       destNm: t.destNm,
       isApp: t.isApp,
       isDly: t.isDly,
-      // Timing + next station for real-time animation
-      arrT: t.arrT || null,
-      prdt: t.prdt || null,
-      nextStaNm: t.nextStaNm || null,
-      nextStaId: t.nextStaId || null,
     }));
   } catch (e) {
     console.warn('Failed to fetch trains:', e);
@@ -161,36 +156,19 @@ async function fetchTrains() {
 }
 
 /**
- * Parses a CTA datetime string into a Date.
- * Handles both "20240804 14:23:05" and ISO "2024-08-04T14:23:05" formats.
- */
-function parseCTATime(str) {
-  if (!str) return null;
-  // Try ISO format first: "YYYY-MM-DDTHH:MM:SS"
-  const iso = str.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
-  if (iso) return new Date(+iso[1], +iso[2] - 1, +iso[3], +iso[4], +iso[5], +iso[6]);
-  // Legacy format: "YYYYMMDD HH:MM:SS"
-  const m = str.match(/^(\d{4})(\d{2})(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
-  if (!m) return null;
-  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
-}
-
-/**
- * Initializes animation state (_trackPos, _speed, _direction) on real trains
- * after an API refresh. Uses arrival time predictions and station distances
- * to estimate speed, with fallback to observed velocity.
+ * Initializes animation state (_trackPos, _direction) on real trains after an API refresh.
+ * Sets up drift correction to smoothly slide each train to its new API position.
  *
  * prevTrainMap: Map<rn, previousTrainObject> from before this refresh.
  */
-function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrainMap) {
+function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
   const now = Date.now();
-  const speedStats = {};
 
   for (const train of trains) {
     const segs = lineSegments[train.legend];
     if (!segs || segs.length === 0) continue;
 
-    // Store raw API position before snapping (used for velocity calculation)
+    // Store raw API position before snapping
     train._apiLon = train.lon;
     train._apiLat = train.lat;
 
@@ -204,12 +182,7 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
       train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
     );
 
-    // Estimate speed
-    const result = estimateSpeed(train, stationPositions, prevTrainMap, now, segs);
-    train._speed = result.speed;
-    speedStats[result.source] = (speedStats[result.source] || 0) + 1;
-
-    // Drift correction: smoothly interpolate from old visual position to new API position
+    // Drift correction: smoothly slide from old visual position to new API position
     const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
     if (prev && prev._animLon !== undefined) {
       const drift = geoDist(prev._animLon, prev._animLat, train.lon, train.lat);
@@ -244,87 +217,15 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
         console.warn(`[CTA] Snap: rn=${train.rn} drift=${(drift * 111000).toFixed(0)}m — too far to interpolate`);
       }
     }
-
-    train._lastUpdateTime = now;
   }
-
-  const statStr = Object.entries(speedStats).map(([k, v]) => `${v} ${k}`).join(', ');
-  console.log(`[CTA] Speed estimation: ${statStr}`);
 }
 
-/**
- * Estimates train speed in degrees per millisecond.
- * Priority: arrT-based > observed velocity > preserved previous > fallback.
- *
- * @param segs - line segments for this train's line (for track distance)
- */
-function estimateSpeed(train, stationPositions, prevTrainMap, now, segs) {
-  // 1. Try arrival-time based speed using actual track distance
-  if (train.arrT && train.prdt) {
-    const arrTime = parseCTATime(train.arrT);
-    const prdTime = parseCTATime(train.prdt);
-    if (arrTime && prdTime) {
-      const totalTravelTime = arrTime.getTime() - prdTime.getTime();
-      // Use arrT - now (remaining time) when clocks are synchronized,
-      // fall back to arrT - prdt (total time, timezone-safe) otherwise.
-      // prdt should be close to now if both are in the same timezone.
-      const rawRemaining = arrTime.getTime() - now;
-      const clockDrift = Math.abs(totalTravelTime - rawRemaining);
-      const remainingTime = clockDrift < 300000
-        ? Math.max(rawRemaining, 3000)   // same timezone: use real remaining time
-        : totalTravelTime;               // different timezone: timezone-safe fallback
-
-      if (remainingTime > 2000) {
-        const stationCoord = lookupStation(train.nextStaNm, train.legend, stationPositions);
-        if (stationCoord && train._trackPos && segs) {
-          // Snap station to track and measure real along-track distance
-          const stationTrackPos = snapToTrackPosition(stationCoord[0], stationCoord[1], segs);
-          const trackDist = trackDistanceBetween(
-            train._trackPos, stationTrackPos, train._direction, segs
-          );
-          if (trackDist > 1e-6) {
-            const speed = trackDist / remainingTime;
-            if (speed > 1e-8 && speed < 5e-7) {
-              return { speed, source: 'arrT' };
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 2. Try observed velocity from position change between refreshes
-  const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
-  if (prev && prev._lastUpdateTime) {
-    const elapsed = now - prev._lastUpdateTime;
-    if (elapsed > 1000) {
-      // Use raw API positions for consistency (both unsnapped)
-      const prevLon = prev._apiLon !== undefined ? prev._apiLon : prev.lon;
-      const prevLat = prev._apiLat !== undefined ? prev._apiLat : prev.lat;
-      const dist = geoDist(prevLon, prevLat, train._apiLon, train._apiLat);
-      if (dist > 1e-6) {
-        const speed = dist / elapsed;
-        if (speed > 1e-8 && speed < 5e-7) {
-          return { speed, source: 'observed' };
-        }
-      }
-    }
-  }
-
-  // 3. Preserve previous speed estimate (momentum) — avoids dropping to fallback
-  //    when CTA data is temporarily stale or station lookup fails
-  if (prev && prev._speed > FALLBACK_SPEED * 0.5) {
-    return { speed: prev._speed, source: 'preserved' };
-  }
-
-  // 4. Fallback
-  if (train.isApp === '1') return { speed: FALLBACK_SPEED * 0.3, source: 'fallback' };
-  return { speed: FALLBACK_SPEED, source: 'fallback' };
-}
 
 /**
- * Advances real trains along the track each animation frame.
- * Handles drift correction blending.
+ * Advances real trains each animation frame.
+ * During the correction window after a refresh, slides trains smoothly along
+ * the track to their new API position. After that, trains sit still until
+ * the next refresh.
  */
 function advanceRealTrains(trains, lineSegments, dt) {
   const now = Date.now();
@@ -334,11 +235,11 @@ function advanceRealTrains(trains, lineSegments, dt) {
     const segs = lineSegments[train.legend];
     if (!segs) continue;
 
-    // During drift correction: advance along track geometry from old to new position
+    // Drift correction: smoothly slide from old position to new API position
     if (train._correcting) {
       const elapsed = now - train._corrStartTime;
       if (elapsed >= CORRECTION_DURATION) {
-        // Correction complete — snap to target track position and resume normal advance
+        // Correction complete — snap to target and sit still until next refresh
         train._correcting = false;
         train._trackPos = train._corrToTrackPos;
         train.lon = train._corrToTrackPos.lon;
@@ -347,56 +248,18 @@ function advanceRealTrains(trains, lineSegments, dt) {
         // Smoothstep easing: accelerate then decelerate
         const t = elapsed / CORRECTION_DURATION;
         const eased = t * t * (3 - 2 * t);
-        // Advance along track geometry by eased fraction of total distance
         const pos = advanceOnTrack(
           train._corrFromTrackPos, eased * train._corrTotalDist, train._corrDirection, segs
         );
         train.lon = pos.lon;
         train.lat = pos.lat;
-        train._trackPos = pos; // keep trackPos current during correction
+        train._trackPos = pos;
       }
-      train._animLon = train.lon;
-      train._animLat = train.lat;
-      continue;
     }
 
-    // Normal mode: advance along track at estimated speed
-    const distance = train._speed * dt * ANIMATION_SPEED_MULT;
-    const newPos = advanceOnTrack(train._trackPos, distance, train._direction, segs);
-
-    train._trackPos = newPos;
-    train.lon = newPos.lon;
-    train.lat = newPos.lat;
-    if (newPos.direction !== undefined) train._direction = newPos.direction;
-
-    // Store animated position for next refresh's drift calculation
+    // Always update animated position so drift calculation works on next refresh
     train._animLon = train.lon;
     train._animLat = train.lat;
   }
 }
 
-/**
- * Advances exiting (coasting) trains toward their terminal.
- * These are trains removed from the API that keep moving.
- * Returns the array with stopped trains removed.
- */
-function advanceExitingTrains(trains, lineSegments, dt) {
-  for (const train of trains) {
-    if (!train._trackPos) continue;
-    const segs = lineSegments[train.legend];
-    if (!segs) continue;
-
-    const distance = train._speed * dt * ANIMATION_SPEED_MULT;
-    const newPos = advanceOnTrack(train._trackPos, distance, train._direction, segs);
-    train._trackPos = newPos;
-    train.lon = newPos.lon;
-    train.lat = newPos.lat;
-    if (newPos.direction !== undefined) train._direction = newPos.direction;
-
-    if (newPos.stopped) {
-      train._speed = 0;
-      train._reachedTerminal = true;
-    }
-  }
-  return trains;
-}

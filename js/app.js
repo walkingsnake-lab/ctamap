@@ -1,6 +1,6 @@
 /**
  * Main application: initializes the map, places trains, handles animation and resize.
- * Real trains animate continuously between API refreshes using speed estimation.
+ * On each API refresh, trains smoothly slide to their new positions over 2.5s, then sit still.
  */
 (async function () {
   const svgEl = document.getElementById('map');
@@ -26,22 +26,17 @@
   // Build per-line segment lookup for path-following animation
   const lineSegments = buildLineSegments(geojson);
 
-  // Build station position lookup for speed estimation
-  const stationPositions = buildStationPositions(geojson);
-  console.log(`[CTA] Station positions: ${stationPositions.byLine.size} line-specific, ${stationPositions.byName.size} unique names`);
-
   // Create train layer on top
   svg.append('g').attr('class', 'trains-layer');
 
   // ---- Initialize trains ----
   let dummyTrains = null;
   let realTrains = null;
-  let exitingTrains = []; // Trains removed from API that coast to terminal
 
   const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
-    initRealTrainAnimation(realTrains, lineSegments, stationPositions, null);
+    initRealTrainAnimation(realTrains, lineSegments, null);
     console.log(`[CTA] Using REAL train data (${realTrains.length} trains)`);
   } else {
     dummyTrains = generateDummyTrains(geojson);
@@ -50,9 +45,7 @@
 
   // ---- Render trains (DOM management only — positions handled by animation loop) ----
   function renderTrains() {
-    const activeTrains = realTrains || dummyTrains || [];
-    // Combine active trains with exiting trains for rendering
-    const allTrains = activeTrains.concat(exitingTrains);
+    const allTrains = realTrains || dummyTrains || [];
     const layer = svg.select('.trains-layer');
 
     const groups = layer.selectAll('.train-group')
@@ -110,29 +103,9 @@
       advanceDummyTrains(dummyTrains, geojson, dt);
     }
 
-    // Advance real trains continuously along track
+    // Advance real trains (correction slides on refresh, then sit still)
     if (realTrains) {
       advanceRealTrains(realTrains, lineSegments, dt);
-    }
-
-    // Advance exiting trains (coasting to terminal)
-    if (exitingTrains.length > 0) {
-      advanceExitingTrains(exitingTrains, lineSegments, dt);
-
-      // Check for trains that should be removed (timed out or reached terminal)
-      const nowMs = Date.now();
-      const toRemove = [];
-      for (const t of exitingTrains) {
-        const elapsed = nowMs - t._exitStartTime;
-        if (elapsed > EXIT_COAST_TIMEOUT || t._reachedTerminal) {
-          toRemove.push(t.rn);
-        }
-      }
-      if (toRemove.length > 0) {
-        exitingTrains = exitingTrains.filter(t => !toRemove.includes(t.rn));
-        // Trigger DOM update to fade out removed trains
-        renderTrains();
-      }
     }
 
     // Update ALL train positions directly (no D3 transitions — frame-by-frame is smoother)
@@ -166,26 +139,13 @@
           for (const t of realTrains) prevMap.set(t.rn, t);
         }
 
-        // Identify trains that disappeared from the API
-        if (realTrains) {
-          const newRns = new Set(fetched.map(t => t.rn));
-          for (const oldTrain of realTrains) {
-            if (!newRns.has(oldTrain.rn) && oldTrain._trackPos && oldTrain._speed > 0) {
-              // Train disappeared — let it coast to terminal
-              oldTrain._exitStartTime = Date.now();
-              oldTrain._exiting = true;
-              exitingTrains.push(oldTrain);
-            }
-          }
-        }
-
         realTrains = fetched;
         dummyTrains = null;
 
-        // Initialize animation state (speed, track position, drift correction)
-        initRealTrainAnimation(realTrains, lineSegments, stationPositions, prevMap);
+        // Initialize track position and drift correction
+        initRealTrainAnimation(realTrains, lineSegments, prevMap);
 
-        console.log(`[CTA] Refreshed REAL train data (${realTrains.length} active, ${exitingTrains.length} coasting)`);
+        console.log(`[CTA] Refreshed REAL train data (${realTrains.length} trains)`);
 
         // Update DOM (enter/exit management)
         renderTrains();
