@@ -231,27 +231,7 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
     train._lastUpdateTime = now;
   }
 
-  console.log(`[CTA] Speed estimation: ${speedStats.arrT} arrT-based, ${speedStats.observed} observed, ${speedStats.fallback} fallback`);
-
-  // Diagnostic: log why arrT failed for the first train with timing data
-  if (speedStats.arrT === 0 && trains.length > 0) {
-    const sample = trains.find(t => t.arrT || t.prdt) || trains[0];
-    console.log(`[CTA] Speed debug for rn=${sample.rn}: arrT=${JSON.stringify(sample.arrT)} prdt=${JSON.stringify(sample.prdt)} nextStaNm=${JSON.stringify(sample.nextStaNm)}`);
-    if (sample.arrT && sample.prdt) {
-      const a = parseCTATime(sample.arrT), p = parseCTATime(sample.prdt);
-      console.log(`[CTA]   parseCTATime: arrT→${a} prdt→${p}`);
-      if (a && p) {
-        const tt = a.getTime() - p.getTime();
-        const sc = lookupStation(sample.nextStaNm, sample.legend, stationPositions);
-        console.log(`[CTA]   travelTime=${tt}ms stationCoord=${JSON.stringify(sc)}`);
-        if (sc) {
-          const dist = geoDist(sample._apiLon, sample._apiLat, sc[0], sc[1]);
-          const speed = (dist * 1.3) / tt;
-          console.log(`[CTA]   dist=${dist} speed=${speed} bounds=[1e-8, 5e-7]`);
-        }
-      }
-    }
-  }
+  console.log(`[CTA] Speed estimation: ${speedStats.arrT} arrT-based, ${speedStats.observed} observed, ${speedStats.fallback} fallback (${ANIMATION_SPEED_MULT}x visual)`);
 }
 
 /**
@@ -322,7 +302,7 @@ function advanceRealTrains(trains, lineSegments, dt) {
     // Don't move if speed is effectively zero (stopped/delayed)
     if (train.isDly === '1') continue;
 
-    const distance = train._speed * dt;
+    const distance = train._speed * dt * ANIMATION_SPEED_MULT;
     const newPos = advanceOnTrack(train._trackPos, distance, train._direction, segs);
 
     train._trackPos = newPos;
@@ -366,7 +346,7 @@ function advanceExitingTrains(trains, lineSegments, dt) {
     const segs = lineSegments[train.legend];
     if (!segs) continue;
 
-    const distance = train._speed * dt;
+    const distance = train._speed * dt * ANIMATION_SPEED_MULT;
     const newPos = advanceOnTrack(train._trackPos, distance, train._direction, segs);
     train._trackPos = newPos;
     train.lon = newPos.lon;
