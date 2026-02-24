@@ -216,15 +216,28 @@ function initRealTrainAnimation(trains, lineSegments, stationPositions, prevTrai
       if (drift < CORRECTION_SNAP_THRESHOLD && drift > 1e-7) {
         // Save the API-snapped target (where the train should end up)
         train._corrToTrackPos = { ...train._trackPos };
-        // Snap the previous animated position to get a track-based starting point
-        train._corrFromTrackPos = snapToTrackPosition(prev._animLon, prev._animLat, segs);
+        // Use prev's maintained track position (avoids re-snapping to wrong segment)
+        train._corrFromTrackPos = prev._trackPos
+          ? { ...prev._trackPos }
+          : snapToTrackPosition(prev._animLon, prev._animLat, segs);
+
+        // Determine correction direction empirically: test one step in each
+        // direction from the old position and pick whichever gets closer to target
+        const toPos = train._corrToTrackPos;
+        const testStep = Math.max(drift * 0.1, 1e-5);
+        const fwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, +1, segs);
+        const bwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, -1, segs);
+        const fwdDist = geoDist(fwdTest.lon, fwdTest.lat, toPos.lon, toPos.lat);
+        const bwdDist = geoDist(bwdTest.lon, bwdTest.lat, toPos.lon, toPos.lat);
+        train._corrDirection = fwdDist <= bwdDist ? 1 : -1;
+
         // Precompute track distance so we can advance proportionally each frame
         train._corrTotalDist = trackDistanceBetween(
-          train._corrFromTrackPos, train._corrToTrackPos, train._direction, segs
+          train._corrFromTrackPos, train._corrToTrackPos, train._corrDirection, segs
         );
         train._correcting = true;
         train._corrStartTime = now;
-        // Set current visual position to the snapped starting point
+        // Set current visual position to the from track position
         train.lon = train._corrFromTrackPos.lon;
         train.lat = train._corrFromTrackPos.lat;
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
@@ -339,7 +352,7 @@ function advanceRealTrains(trains, lineSegments, dt) {
         const eased = t * t * (3 - 2 * t);
         // Advance along track geometry by eased fraction of total distance
         const pos = advanceOnTrack(
-          train._corrFromTrackPos, eased * train._corrTotalDist, train._direction, segs
+          train._corrFromTrackPos, eased * train._corrTotalDist, train._corrDirection, segs
         );
         train.lon = pos.lon;
         train.lat = pos.lat;
