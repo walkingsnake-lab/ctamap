@@ -44,7 +44,6 @@ const REFRESH_INTERVAL = 30000;
 
 // Visual constants
 const LINE_WIDTH = 1.5;
-const ML_OFFSET_SPACING = 2; // SVG pixels between parallel lines on shared (ML) segments
 const TRAIN_RADIUS = 2.5;
 const TRAIN_GLOW_RADIUS = 7;
 const TERMINUS_HOLD_MS = 60000; // Hold train at terminus before fade-out
