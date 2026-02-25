@@ -88,11 +88,14 @@ async function loadMap(svg, width, height) {
   // SVG filter for subtle glow effect
   createGlowFilter(svg.append('defs'));
 
+  // Container for all layers (zoom transform is applied here)
+  const mapContainer = svg.append('g').attr('class', 'map-container');
+
   // Layer group for lines
-  const linesGroup = svg.append('g').attr('class', 'lines-layer');
+  const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');
   renderLines(linesGroup, path, geojson);
 
-  return { projection, geojson, path };
+  return { projection, geojson, path, mapContainer };
 }
 
 /**
@@ -114,11 +117,13 @@ function redrawMap(svg, width, height, geojson) {
 
   createGlowFilter(svg.append('defs'));
 
-  const linesGroup = svg.append('g').attr('class', 'lines-layer');
+  const mapContainer = svg.append('g').attr('class', 'map-container');
+
+  const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');
   renderLines(linesGroup, path, geojson);
 
   // Train layer on top
-  svg.append('g').attr('class', 'trains-layer');
+  mapContainer.append('g').attr('class', 'trains-layer');
 
   return { projection, path };
 }

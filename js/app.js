@@ -20,14 +20,22 @@
     return;
   }
 
-  const { geojson } = mapState;
+  const { geojson, mapContainer } = mapState;
   let { projection } = mapState;
 
   // Build per-line segment lookup for path-following animation
   const lineSegments = buildLineSegments(geojson);
 
-  // Create train layer on top
-  svg.append('g').attr('class', 'trains-layer');
+  // ---- D3 zoom behavior ----
+  const zoom = d3.zoom()
+    .scaleExtent([1, 10])
+    .on('zoom', (event) => {
+      svg.select('.map-container').attr('transform', event.transform);
+    });
+  svg.call(zoom);
+
+  // Create train layer on top (inside the zoom container)
+  mapContainer.append('g').attr('class', 'trains-layer');
 
   // ---- Initialize trains ----
   let dummyTrains = null;
@@ -157,6 +165,30 @@
     }, REFRESH_INTERVAL);
   }
 
+  // ---- L key: zoom to The Loop / downtown Chicago ----
+  const THE_LOOP = [-87.628, 41.882]; // [lon, lat]
+  const LOOP_ZOOM_SCALE = 4;
+  let isZoomedToLoop = false;
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'l' || event.key === 'L') {
+      if (isZoomedToLoop) {
+        svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+        isZoomedToLoop = false;
+      } else {
+        const pt = projection(THE_LOOP);
+        if (!pt) return;
+        const tx = width / 2 - LOOP_ZOOM_SCALE * pt[0];
+        const ty = height / 2 - LOOP_ZOOM_SCALE * pt[1];
+        svg.transition().duration(750).call(
+          zoom.transform,
+          d3.zoomIdentity.translate(tx, ty).scale(LOOP_ZOOM_SCALE)
+        );
+        isZoomedToLoop = true;
+      }
+    }
+  });
+
   // ---- Resize handler ----
   let resizeTimer;
   window.addEventListener('resize', () => {
@@ -168,6 +200,10 @@
 
       const result = redrawMap(svg, width, height, geojson);
       projection = result.projection;
+
+      // Reset zoom state after redraw
+      isZoomedToLoop = false;
+      svg.call(zoom.transform, d3.zoomIdentity);
 
       // Re-generate dummy trains if using them (segments may differ after reproject)
       if (!realTrains) {
