@@ -17,8 +17,11 @@ body {
   display: block;
 }
 
+.lines-layer {
+  opacity: .7;
+}
+
 /* --- Track lines --- */
-.line-casing,
 .line-path {
   fill: none;
   stroke-linecap: round;

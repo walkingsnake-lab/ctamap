@@ -69,7 +69,7 @@
     enter.append('circle')
       .attr('class', 'train-glow')
       .attr('r', TRAIN_GLOW_RADIUS)
-      .attr('fill', d => LINE_COLORS[d.legend] || '#fff')
+      .attr('fill', d => `url(#train-glow-${d.legend})`)
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
     // Inner solid dot
