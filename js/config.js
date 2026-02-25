@@ -6,7 +6,7 @@ const LINE_COLORS = {
   GR:  '#009B3A',
   OR:  '#F14624',
   PK:  '#E27EA6',
-  PR:  '#522398',
+  PR:  '#7C3AED',
   YL:  '#F9E300',
   ML:  '#888888'   // Shared / Loop segments
 };

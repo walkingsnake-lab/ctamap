@@ -10,36 +10,28 @@ const LINE_NAME_TO_LEGEND = {
 };
 
 /**
- * Creates the SVG glow filter in the given defs element (used by train dots).
+ * Creates per-line radial gradient defs used by train glow circles.
+ * Each gradient fades from the line color (center) to transparent (edge).
  */
-function createGlowFilter(defs) {
-  const glowFilter = defs.append('filter')
-    .attr('id', 'line-glow')
-    .attr('x', '-50%').attr('y', '-50%')
-    .attr('width', '200%').attr('height', '200%');
-
-  glowFilter.append('feGaussianBlur')
-    .attr('in', 'SourceGraphic')
-    .attr('stdDeviation', '1.5')
-    .attr('result', 'blur');
-
-  glowFilter.append('feMerge')
-    .selectAll('feMergeNode')
-    .data(['blur', 'SourceGraphic'])
-    .enter().append('feMergeNode')
-    .attr('in', d => d);
+function createTrainGlowGradients(defs) {
+  for (const [legend, color] of Object.entries(LINE_COLORS)) {
+    if (legend === 'ML') continue;
+    const grad = defs.append('radialGradient')
+      .attr('id', `train-glow-${legend}`);
+    grad.append('stop')
+      .attr('offset', '0%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 1);
+    grad.append('stop')
+      .attr('offset', '100%')
+      .attr('stop-color', color)
+      .attr('stop-opacity', 0);
+  }
 }
 
 /**
- * Renders transit lines as stacked colored paths with a white casing (outline) on each.
- *
- * Per line, two paths are appended back-to-back:
- *   1. Casing — slightly wider white stroke that peeks out beyond the color layer,
- *      creating a hairline border that separates lines when they overlap (e.g. the Loop).
- *   2. Color — the normal colored stroke on top.
- *
- * Lines that use the Loop have their ML (shared) segments included in their combined
- * path so each line's color is drawn through the Loop in render order.
+ * Renders transit lines — one SVG <path> per line color.
+ * Lines that use the Loop include ML segments in their own color.
  */
 function renderLines(linesGroup, path, geojson) {
   // Build a map: legend code → ML features that belong to that line
@@ -65,30 +57,18 @@ function renderLines(linesGroup, path, geojson) {
 
     if (features.length === 0) continue;
 
-    const d = path({ type: 'FeatureCollection', features });
-
-    // Casing: wider white stroke that frames the colored line on top
-    linesGroup.append('path')
-      .attr('class', 'line-casing')
-      .attr('d', d)
-      .attr('stroke', '#ffffff')
-      .attr('stroke-width', LINE_WIDTH + 1.5)
-      .attr('stroke-opacity', 0.35);
-
-    // Color stroke on top
     linesGroup.append('path')
       .attr('class', 'line-path')
-      .attr('d', d)
+      .attr('d', path({ type: 'FeatureCollection', features }))
       .attr('stroke', LINE_COLORS[legend])
       .attr('stroke-width', LINE_WIDTH)
-      .attr('stroke-opacity', 0.95);
+      .attr('stroke-opacity', 0.9);
   }
 }
 
 async function loadMap(svg, width, height) {
   const geojson = await d3.json(GEOJSON_URL);
 
-  // Fit a Mercator projection to the GeoJSON bounding box with padding
   const projection = d3.geoMercator().fitExtent(
     [
       [width * MAP_PADDING, height * MAP_PADDING],
@@ -99,13 +79,10 @@ async function loadMap(svg, width, height) {
 
   const path = d3.geoPath().projection(projection);
 
-  // SVG filter definition (used by train dot glows)
-  createGlowFilter(svg.append('defs'));
+  createTrainGlowGradients(svg.append('defs'));
 
-  // Container for all layers (zoom transform is applied here)
   const mapContainer = svg.append('g').attr('class', 'map-container');
 
-  // Layer group for lines
   const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');
   renderLines(linesGroup, path, geojson);
 
@@ -129,14 +106,13 @@ function redrawMap(svg, width, height, geojson) {
 
   const path = d3.geoPath().projection(projection);
 
-  createGlowFilter(svg.append('defs'));
+  createTrainGlowGradients(svg.append('defs'));
 
   const mapContainer = svg.append('g').attr('class', 'map-container');
 
   const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');
   renderLines(linesGroup, path, geojson);
 
-  // Train layer on top
   mapContainer.append('g').attr('class', 'trains-layer');
 
   return { projection, path };
