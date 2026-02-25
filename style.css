@@ -11,10 +11,6 @@ body {
   height: 100vh;
 }
 
-.lines-layer {
-  opacity: .6;
-}
-
 #map {
   width: 100vw;
   height: 100vh;
@@ -22,6 +18,7 @@ body {
 }
 
 /* --- Track lines --- */
+.line-casing,
 .line-path {
   fill: none;
   stroke-linecap: round;
