@@ -203,10 +203,10 @@
     if (destText.empty() || badge.empty()) return;
 
     const text = destText.text();
-    const charW = 2.2;
+    const charW = 2.3;
     const padX = 2;
     const w = Math.max(text.length * charW + padX * 2, 12);
-    badge.attr('x', -w / 2).attr('y', 0.5).attr('width', w).attr('height', 5.5);
+    badge.attr('x', -w / 2).attr('y', 0).attr('width', w).attr('height', 6);
   }
 
   renderTrains();
@@ -320,11 +320,11 @@
    * Formats destination name: uppercased, with airplane symbol for airport terminals.
    */
   function formatDestName(name) {
-    const upper = (name || '').toUpperCase();
+    const text = name || '';
     if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
-      return upper + ' \u2708';
+      return text + ' \u2708';
     }
-    return upper;
+    return text;
   }
 
   /**
@@ -446,8 +446,8 @@
           d._arrowPhase = (d._arrowPhase + dt / 2400) % 1;
 
           const dir = d._direction || 1;
-          const behindDist = 0.003; // start this far behind the dot
-          const totalDist = 0.007;  // total travel distance (behind + ahead)
+          const behindDist = 0.004; // start this far behind the dot
+          const totalDist = 0.008;  // total travel distance (behind + ahead)
 
           for (let i = 0; i < 6; i++) {
             const arrow = g.select(`.train-arrow-${i}`);
@@ -465,7 +465,7 @@
               const dy = advPt[1] - pt[1];
 
               // Smooth phase-based opacity: 0 at both ends, peak in the middle
-              const opacity = 0.6 * Math.sin(phase * Math.PI);
+              const opacity = 0.4 * Math.sin(phase * Math.PI);
 
               const seg = segs[advPos.segIdx];
               let angle = 0;
