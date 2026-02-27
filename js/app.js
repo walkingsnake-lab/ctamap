@@ -239,21 +239,26 @@
     // Show DOM label
     showTrainLabel(train);
 
-    // Animate zoom to the train (skip if switching between trains — tracking handles it)
-    if (!wasTracking) {
-      const pt = projection([train.lon, train.lat]);
-      if (pt) {
-        isZoomTransitioning = true;
-        const tx = width / 2 - TRACK_ZOOM_SCALE * pt[0];
-        const ty = height / 2 - TRACK_ZOOM_SCALE * pt[1];
-        svg.transition('zoom-track').duration(750)
-          .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(TRACK_ZOOM_SCALE))
-          .on('end', () => {
-            isZoomTransitioning = false;
-            // Disable zoom interaction while tracking
-            svg.on('.zoom', null);
-          });
-      }
+    // Animate zoom to the train (shorter duration when switching between trains)
+    const pt = projection([train.lon, train.lat]);
+    if (pt) {
+      // Cancel any in-progress zoom transition cleanly
+      svg.interrupt('zoom-track');
+
+      // Disable zoom interaction while tracking
+      svg.on('.zoom', null);
+
+      isZoomTransitioning = true;
+      const tx = width / 2 - TRACK_ZOOM_SCALE * pt[0];
+      const ty = height / 2 - TRACK_ZOOM_SCALE * pt[1];
+      svg.transition('zoom-track').duration(wasTracking ? 300 : 750)
+        .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(TRACK_ZOOM_SCALE))
+        .on('end', () => {
+          isZoomTransitioning = false;
+        })
+        .on('interrupt', () => {
+          isZoomTransitioning = false;
+        });
     }
 
     // Fetch detailed ETA data
@@ -290,12 +295,18 @@
     // Re-enable zoom interaction
     svg.call(zoom);
 
+    // Cancel any in-progress zoom transition cleanly
+    svg.interrupt('zoom-track');
+
     // Zoom back to previous view
     isZoomTransitioning = true;
     const restoreTo = preSelectTransform || d3.zoomIdentity;
     svg.transition('zoom-track').duration(750)
       .call(zoom.transform, restoreTo)
       .on('end', () => {
+        isZoomTransitioning = false;
+      })
+      .on('interrupt', () => {
         isZoomTransitioning = false;
       });
     preSelectTransform = null;
