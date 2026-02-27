@@ -96,7 +96,7 @@ body {
 }
 
 @keyframes radar-ring {
-  0%   { opacity: 0.7; transform: scale(1); }
+  0%   { opacity: 0.7; transform: scale(0.5); }
   100% { opacity: 0; transform: scale(4); }
 }
 
