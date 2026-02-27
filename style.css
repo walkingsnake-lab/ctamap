@@ -17,6 +17,38 @@ body {
   display: block;
 }
 
+/* --- Close button (visible when tracking a train) --- */
+#close-btn {
+  display: none;
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 100;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 20px;
+  line-height: 32px;
+  text-align: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+
+#close-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+#close-btn.visible {
+  display: block;
+}
+
 .lines-layer {
   opacity: .7;
 }
