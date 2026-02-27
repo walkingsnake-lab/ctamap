@@ -102,10 +102,12 @@
       .attr('stroke', 'none');
 
     // Outer glow circle — stagger pulse by run number so delay is stable across refreshes
+    // Stroke is used for the radar ring when selected; fill gradient for unselected pulse
     enter.append('circle')
       .attr('class', 'train-glow')
       .attr('r', TRAIN_GLOW_RADIUS)
       .attr('fill', d => `url(#train-glow-${d.legend})`)
+      .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
     // Direction dots — rendered before dot so they pass "behind" the circle
@@ -175,16 +177,16 @@
     const info = labelEl.querySelector('.tl-info');
     const status = labelEl.querySelector('.tl-status');
 
-    dest.textContent = formatDestName(train.destNm);
+    dest.innerHTML = formatDestName(train.destNm);
 
     const inverted = isInvertedBadge(train.legend, train.destNm);
     const lineColor = LINE_COLORS[train.legend] || '#888';
     badge.style.background = inverted ? '#fff' : lineColor;
     dest.style.color = inverted ? lineColor : (train.legend === 'YL' ? '#000' : '#fff');
 
-    // Glow matches text color
+    // Set glow color as CSS variable — animated by glow-flicker keyframes via --glow-i
     const glowColor = inverted ? lineColor : (train.legend === 'YL' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.3)');
-    dest.style.textShadow = `0 0 4px ${glowColor}, 0 0 2px ${glowColor}`;
+    dest.style.setProperty('--glow-color', glowColor);
 
     const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
     info.textContent = `${lineName} Line \u00b7 #${train.rn}`;
@@ -320,7 +322,7 @@
   function formatDestName(name) {
     const text = name || '';
     if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
-      return text + ' \u2708';
+      return text + ' <span class="tl-plane">\u2708</span>';
     }
     return text;
   }
