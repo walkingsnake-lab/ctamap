@@ -23,16 +23,42 @@ function buildLineSegments(geojson) {
     if (legend === 'ML') continue;
     const coords = collectLineCoords(geojson, legend);
 
+    // Include segments from other lines that share track with this line
+    // (e.g. Purple Express on Red Line track, Brown on shared Red segments)
+    const lineName = legendToLineName[legend];
+    const sharedCoords = lineName ? collectSharedCoordsForLine(geojson, lineName, legend) : [];
+
     if (loopLines.includes(legend)) {
       // Only include ML segments whose "lines" property mentions this line
-      const lineName = legendToLineName[legend];
       const mlCoords = collectMLCoordsForLine(geojson, lineName);
-      segments[legend] = coords.concat(mlCoords);
+      segments[legend] = coords.concat(sharedCoords).concat(mlCoords);
     } else {
-      segments[legend] = coords;
+      segments[legend] = coords.concat(sharedCoords);
     }
   }
   return segments;
+}
+
+/**
+ * Collects coordinate arrays from features of OTHER legend codes (not ML, not ownLegend)
+ * whose "lines" property includes the given line name.
+ * This captures shared track segments, e.g. Purple Express running on Red Line track.
+ */
+function collectSharedCoordsForLine(geojson, lineName, ownLegend) {
+  const coords = [];
+  for (const feature of geojson.features) {
+    const featureLegend = feature.properties.legend;
+    if (featureLegend === ownLegend || featureLegend === 'ML') continue;
+    const linesProp = feature.properties.lines || '';
+    if (!linesProp.includes(lineName)) continue;
+    const geom = feature.geometry;
+    if (geom.type === 'MultiLineString') {
+      for (const line of geom.coordinates) coords.push(line);
+    } else if (geom.type === 'LineString') {
+      coords.push(geom.coordinates);
+    }
+  }
+  return coords;
 }
 
 /**
