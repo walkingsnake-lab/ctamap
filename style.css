@@ -72,6 +72,7 @@ body {
   opacity: 0;
   transform-origin: center;
   transform-box: fill-box;
+  stroke-width: 0;
   animation: pulse-glow 2.5s ease-in-out infinite;
 }
 
@@ -83,7 +84,9 @@ body {
 }
 
 .train-group.selected .train-glow {
-  animation: radar-pulse 3.6s ease-out infinite;
+  fill: none;
+  stroke-width: 0.2;
+  animation: radar-ring 2s ease-out infinite;
 }
 
 @keyframes pulse-glow {
@@ -92,9 +95,9 @@ body {
   100% { opacity: 0; transform: scale(1); }
 }
 
-@keyframes radar-pulse {
-  0%   { opacity: 0.5; transform: scale(1); }
-  100% { opacity: 0; transform: scale(3); }
+@keyframes radar-ring {
+  0%   { opacity: 0.7; transform: scale(1); }
+  100% { opacity: 0; transform: scale(4); }
 }
 
 /* Pulse stagger is set as inline animation-delay per train (based on rn) */
@@ -115,6 +118,13 @@ body {
   pointer-events: none;
 }
 
+/* --- Animatable glow intensity variable --- */
+@property --glow-i {
+  syntax: '<number>';
+  initial-value: 0;
+  inherits: true;
+}
+
 /* --- DOM train label overlay --- */
 #train-label {
   position: fixed;
@@ -125,36 +135,54 @@ body {
   font-family: 'Jersey 10', monospace;
   display: none;
   white-space: nowrap;
+  /* Pixel font rendering */
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeSpeed;
+  image-rendering: pixelated;
 }
 
 #train-label.visible {
   display: block;
-  animation: sign-on 0.5s ease-out forwards;
+  opacity: 0;
+  animation: label-in 0.1s ease 0.7s forwards, glow-flicker 1.8s ease-out 0.7s forwards;
 }
 
 .tl-badge {
   display: inline-block;
-  padding: 1px 8px 3px;
-  border-radius: 3px;
+  padding: 2px 10px 5px;
+  border-radius: 4px;
 }
 
 .tl-dest {
-  font-size: 16px;
-  letter-spacing: 0.5px;
+  font-size: 40px;
+  text-shadow:
+    0 0 calc(8px * var(--glow-i, 0)) var(--glow-color, rgba(255,255,255,0.3)),
+    0 0 calc(3px * var(--glow-i, 0)) var(--glow-color, rgba(255,255,255,0.3));
+}
+
+.tl-plane {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 0.55em;
+  line-height: 0;
+  vertical-align: middle;
+  display: inline-block;
+  position: relative;
+  top: -2px;
 }
 
 .tl-info {
   color: rgba(255, 255, 255, 0.45);
-  font-size: 13px;
-  margin-top: 3px;
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.15);
+  font-size: 30px;
+  margin-top: 4px;
+  text-shadow: 0 0 calc(4px * var(--glow-i, 0)) rgba(255, 255, 255, 0.15);
 }
 
 .tl-status {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 14px;
+  font-size: 30px;
   margin-top: 2px;
-  text-shadow: 0 0 3px rgba(255, 255, 255, 0.2);
+  text-shadow: 0 0 calc(4px * var(--glow-i, 0)) rgba(255, 255, 255, 0.2);
 }
 
 .tl-status strong {
@@ -162,12 +190,19 @@ body {
   color: rgba(255, 255, 255, 0.8);
 }
 
-@keyframes sign-on {
-  0%   { opacity: 0; }
-  10%  { opacity: 0.6; }
-  15%  { opacity: 0.25; }
-  25%  { opacity: 0.8; }
-  32%  { opacity: 0.5; }
-  45%  { opacity: 0.95; }
-  100% { opacity: 1; }
+/* Label appears after zoom completes */
+@keyframes label-in {
+  to { opacity: 1; }
+}
+
+/* Glow flickers on like an LED sign — affects text-shadow via --glow-i */
+@keyframes glow-flicker {
+  0%   { --glow-i: 0; }
+  8%   { --glow-i: 2; }
+  15%  { --glow-i: 0.15; }
+  28%  { --glow-i: 1.5; }
+  38%  { --glow-i: 0.3; }
+  55%  { --glow-i: 1.2; }
+  75%  { --glow-i: 0.8; }
+  100% { --glow-i: 1; }
 }
