@@ -27,6 +27,19 @@ function createTrainGlowGradients(defs) {
       .attr('stop-color', color)
       .attr('stop-opacity', 0);
   }
+
+  // LED-style text glow: blurred copy of the text behind the crisp original
+  const glow = defs.append('filter')
+    .attr('id', 'text-glow')
+    .attr('x', '-50%').attr('y', '-50%')
+    .attr('width', '200%').attr('height', '200%');
+  glow.append('feGaussianBlur')
+    .attr('in', 'SourceGraphic')
+    .attr('stdDeviation', '0.4')
+    .attr('result', 'blur');
+  const merge = glow.append('feMerge');
+  merge.append('feMergeNode').attr('in', 'blur');
+  merge.append('feMergeNode').attr('in', 'SourceGraphic');
 }
 
 /**
