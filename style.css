@@ -83,15 +83,18 @@ body {
 }
 
 .train-group.selected .train-glow {
-  animation: none;
-  opacity: 0.5;
-  transform: scale(2);
+  animation: radar-pulse 3.6s ease-out infinite;
 }
 
 @keyframes pulse-glow {
   0%   { opacity: 0; transform: scale(1); }
   50%  { opacity: 0.4; transform: scale(1.6); }
   100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes radar-pulse {
+  0%   { opacity: 0.5; transform: scale(1); }
+  100% { opacity: 0; transform: scale(3); }
 }
 
 /* Pulse stagger is set as inline animation-delay per train (based on rn) */
@@ -107,40 +110,64 @@ body {
   opacity: 0;
 }
 
-/* --- Direction arrow (animated via JS, not CSS) --- */
+/* --- Direction dots (animated via JS, not CSS) --- */
 .train-arrow {
   pointer-events: none;
 }
 
-/* --- Inline label beneath dot --- */
-.train-label {
+/* --- DOM train label overlay --- */
+#train-label {
+  position: fixed;
   pointer-events: none;
+  z-index: 50;
+  text-align: center;
+  transform: translateX(-50%);
+  font-family: 'Jersey 10', monospace;
+  display: none;
+  white-space: nowrap;
 }
 
-.label-badge {
-  opacity: 0.92;
+#train-label.visible {
+  display: block;
+  animation: sign-on 0.5s ease-out forwards;
 }
 
-.label-dest {
-  font-family: 'Jersey 10', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
-  font-size: 4px;
+.tl-badge {
+  display: inline-block;
+  padding: 1px 8px 3px;
+  border-radius: 3px;
+}
+
+.tl-dest {
+  font-size: 16px;
+  letter-spacing: 0.5px;
+}
+
+.tl-info {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+  margin-top: 3px;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.15);
+}
+
+.tl-status {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  margin-top: 2px;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.2);
+}
+
+.tl-status strong {
   font-weight: 400;
-  fill: #fff;
-  letter-spacing: 0.04em;
-  filter: url(#text-glow);
+  color: rgba(255, 255, 255, 0.8);
 }
 
-.label-info {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
-  font-size: 2px;
-  font-weight: 400;
-  fill: rgba(255, 255, 255, 0.4);
-  letter-spacing: 0.02em;
-}
-
-.label-status {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
-  font-size: 2.2px;
-  fill: rgba(255, 255, 255, 0.55);
-  letter-spacing: 0.02em;
+@keyframes sign-on {
+  0%   { opacity: 0; }
+  10%  { opacity: 0.6; }
+  15%  { opacity: 0.25; }
+  25%  { opacity: 0.8; }
+  32%  { opacity: 0.5; }
+  45%  { opacity: 0.95; }
+  100% { opacity: 1; }
 }
