@@ -128,13 +128,13 @@
       .attr('class', 'label-badge')
       .attr('rx', 1)
       .attr('ry', 1)
-      .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
+      .attr('fill', d => badgeFill(d.legend, d.destNm));
 
     label.append('text')
       .attr('class', 'label-dest')
       .attr('text-anchor', 'middle')
       .attr('y', 4.5)
-      .style('fill', d => d.legend === 'YL' ? '#000' : '#fff')
+      .style('fill', d => badgeTextFill(d.legend, d.destNm))
       .text(d => formatDestName(d.destNm));
 
     // Line name + Run number
@@ -364,7 +364,10 @@
     if (group.empty()) return;
 
     const label = group.select('.train-label');
-    label.select('.label-dest').text(formatDestName(train.destNm));
+    label.select('.label-badge').attr('fill', badgeFill(train.legend, train.destNm));
+    label.select('.label-dest')
+      .style('fill', badgeTextFill(train.legend, train.destNm))
+      .text(formatDestName(train.destNm));
     const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
     label.select('.label-info').text(`${lineName} Line \u00b7 #${train.rn}`);
     renderStatusText(label.select('.label-status'), getTrainStatus(train, etas));

@@ -60,6 +60,29 @@ const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API 
 const CORRECTION_SNAP_THRESHOLD = 0.05;      // degrees (~5.5km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
 
+// Destination + line combos that use inverted badge (white bg, colored text)
+// Matches real CTA signage for certain short-turn / branch terminuses
+const INVERTED_BADGE_DESTS = {
+  BL: ['UIC-Halsted'],
+  GR: ['Cottage Grove'],
+};
+
+function isInvertedBadge(legend, destNm) {
+  const dests = INVERTED_BADGE_DESTS[legend];
+  if (!dests || !destNm) return false;
+  const upper = destNm.toUpperCase();
+  return dests.some(d => upper.includes(d.toUpperCase()));
+}
+
+function badgeFill(legend, destNm) {
+  return isInvertedBadge(legend, destNm) ? '#fff' : (LINE_COLORS[legend] || '#fff');
+}
+
+function badgeTextFill(legend, destNm) {
+  if (isInvertedBadge(legend, destNm)) return LINE_COLORS[legend] || '#000';
+  return legend === 'YL' ? '#000' : '#fff';
+}
+
 // Map CTA line names (from GeoJSON "lines" property) → legend codes for station disambiguation
 const LINE_NAME_TO_LEGEND_STATION = {
   'Red': 'RD', 'Blue': 'BL', 'Brown': 'BR', 'Green': 'GR',
