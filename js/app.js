@@ -101,12 +101,12 @@
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
     // Direction arrows — rendered before dot so they pass "behind" the circle
-    const ARROW_COUNT = 4;
+    const ARROW_COUNT = 6;
     for (let i = 0; i < ARROW_COUNT; i++) {
       enter.append('path')
         .attr('class', `train-arrow train-arrow-${i}`)
         .attr('d', 'M0,-0.8 L1.5,0 L0,0.8 Z')
-        .attr('fill', d => LINE_COLORS[d.legend] || '#fff')
+        .attr('fill', '#000')
         .attr('stroke', 'none')
         .style('opacity', 0);
     }
@@ -134,7 +134,8 @@
       .attr('class', 'label-dest')
       .attr('text-anchor', 'middle')
       .attr('y', 4.5)
-      .style('fill', d => d.legend === 'YL' ? '#000' : '#fff');
+      .style('fill', d => d.legend === 'YL' ? '#000' : '#fff')
+      .text(d => formatDestName(d.destNm));
 
     // Line name + Run number
     label.append('text')
@@ -152,10 +153,9 @@
       .attr('text-anchor', 'middle')
       .attr('y', 12);
 
-    // Render initial text and size the badge
+    // Render initial status text and size the badge
     enter.each(function (d) {
       const g = d3.select(this);
-      renderDestText(g.select('.label-dest'), d.destNm);
       renderStatusText(g.select('.label-status'), getTrainStatus(d, null));
       sizeLabelBadge(g);
     });
@@ -317,29 +317,14 @@
   }
 
   /**
-   * Returns true if the destination is an airport terminal.
+   * Formats destination name: uppercased, with airplane symbol for airport terminals.
    */
-  function isAirportDest(name) {
-    return /O'?HARE/i.test(name) || /MIDWAY/i.test(name);
-  }
-
-  /**
-   * Renders destination text into an SVG text element, with a rotated airplane
-   * glyph for airport terminals.
-   */
-  function renderDestText(sel, name) {
-    sel.selectAll('tspan').remove();
+  function formatDestName(name) {
     const upper = (name || '').toUpperCase();
-    if (isAirportDest(name)) {
-      sel.text(null);
-      sel.append('tspan').text(upper + ' ');
-      sel.append('tspan')
-        .attr('rotate', '90')
-        .attr('dy', '-0.5')
-        .text('\u2708');
-    } else {
-      sel.text(upper);
+    if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
+      return upper + ' \u2708';
     }
+    return upper;
   }
 
   /**
@@ -379,7 +364,7 @@
     if (group.empty()) return;
 
     const label = group.select('.train-label');
-    renderDestText(label.select('.label-dest'), train.destNm);
+    label.select('.label-dest').text(formatDestName(train.destNm));
     const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
     label.select('.label-info').text(`${lineName} Line \u00b7 #${train.rn}`);
     renderStatusText(label.select('.label-status'), getTrainStatus(train, etas));
@@ -455,17 +440,17 @@
 
         if (showArrows) {
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
-          d._arrowPhase = (d._arrowPhase + dt / 1800) % 1;
+          d._arrowPhase = (d._arrowPhase + dt / 2400) % 1;
 
           const dir = d._direction || 1;
-          const behindDist = 0.003; // start this far behind the dot
-          const totalDist = 0.008;  // total travel distance (behind + ahead)
+          const behindDist = 0.002; // start this far behind the dot
+          const totalDist = 0.006;  // total travel distance (behind + ahead)
           const fadeInEnd = 8;      // SVG units — fully opaque by this close behind
           const fadeOutRange = 8;   // SVG units — fades to 0 this far ahead
 
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < 6; i++) {
             const arrow = g.select(`.train-arrow-${i}`);
-            const phase = (d._arrowPhase + i / 4) % 1;
+            const phase = (d._arrowPhase + i / 6) % 1;
             // Start behind the dot, move forward through it
             const dist = -behindDist + totalDist * phase;
 
@@ -498,7 +483,10 @@
                   const sdx = ePt[0] - sPt[0];
                   const sdy = ePt[1] - sPt[1];
                   angle = Math.atan2(sdy, sdx) * 180 / Math.PI;
-                  if (dir < 0) angle += 180;
+                  // Use advPos.direction to account for segment boundary flips;
+                  // behind-dot arrows traveled in -dir, so invert their direction
+                  const fwdDir = dist >= 0 ? advPos.direction : -advPos.direction;
+                  if (fwdDir < 0) angle += 180;
                 }
               }
 
@@ -509,7 +497,7 @@
           }
         } else {
           d._arrowPhase = undefined;
-          for (let i = 0; i < 4; i++) {
+          for (let i = 0; i < 6; i++) {
             g.select(`.train-arrow-${i}`).style('opacity', 0);
           }
         }
