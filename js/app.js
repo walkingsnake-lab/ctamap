@@ -103,13 +103,13 @@
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
-    // Direction arrow — chevron that pulses outward from dot center
+    // Direction arrow — small chevron that pulses outward along the track
     enter.append('path')
       .attr('class', 'train-arrow')
-      .attr('d', 'M-3,-2.5 L0,0 L-3,2.5')
+      .attr('d', 'M0,-0.9 L1.6,0 L0,0.9')
       .attr('fill', 'none')
       .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
-      .attr('stroke-width', 1.1)
+      .attr('stroke-width', 0.9)
       .attr('stroke-linecap', 'round')
       .attr('stroke-linejoin', 'round')
       .style('opacity', 0);
@@ -133,18 +133,21 @@
       .attr('y', 4.5)
       .text(d => (d.destNm || '').toUpperCase());
 
-    // Run number — small, to the right of badge, no background
+    // Line name + Run number
     label.append('text')
-      .attr('class', 'label-run')
-      .attr('text-anchor', 'start')
-      .attr('y', 4.5)
-      .text(d => `#${d.rn}`);
+      .attr('class', 'label-info')
+      .attr('text-anchor', 'middle')
+      .attr('y', 8.5)
+      .text(d => {
+        const lineName = LEGEND_TO_LINE_NAME[d.legend] || '';
+        return `${lineName} Line \u00b7 Run ${d.rn}`;
+      });
 
-    // Status text (Approaching / Next / In transit)
+    // Status text (Approaching / Next station)
     label.append('text')
       .attr('class', 'label-status')
       .attr('text-anchor', 'middle')
-      .attr('y', 8.5)
+      .attr('y', 11)
       .text(d => getTrainStatus(d, null));
 
     // Size the badge rect to fit the text after insertion
@@ -192,22 +195,13 @@
   function sizeLabelBadge(groupSel) {
     const destText = groupSel.select('.label-dest');
     const badge = groupSel.select('.label-badge');
-    const runText = groupSel.select('.label-run');
     if (destText.empty() || badge.empty()) return;
 
-    // Use approximate character width since getBBox may not work before render
     const text = destText.text();
     const charW = 2.2;
     const padX = 2;
     const w = Math.max(text.length * charW + padX * 2, 12);
-
-    // Destination badge (centered)
     badge.attr('x', -w / 2).attr('y', 0.5).attr('width', w).attr('height', 5.5);
-
-    // Run number — positioned just past the right edge of badge
-    if (!runText.empty()) {
-      runText.attr('x', w / 2 + 1.5);
-    }
   }
 
   renderTrains();
@@ -317,19 +311,16 @@
 
   /**
    * Derives a status string from ETA data or train-level flags.
-   * Train position data always has isApp/isDly, so there's always a fallback.
+   * Only shows approaching/next station; blank if no station info.
    */
   function getTrainStatus(train, etas) {
     if (etas && etas.length > 0) {
       const eta = etas[0];
-      if (eta.isDly === '1') return 'Delayed';
-      if (eta.isApp === '1') return `Approaching ${eta.staNm}`;
+      if (eta.isApp === '1' && eta.staNm) return `Approaching ${eta.staNm}`;
       if (eta.staNm) return `Next: ${eta.staNm}`;
     }
-    // Fallback to train's own status fields (no station name available)
-    if (train.isDly === '1') return 'Delayed';
     if (train.isApp === '1') return 'Approaching station';
-    return 'In transit';
+    return '';
   }
 
   /**
@@ -341,13 +332,10 @@
     if (group.empty()) return;
 
     const label = group.select('.train-label');
-
-    // Destination — just the terminal name, no ETA
     label.select('.label-dest').text((train.destNm || '').toUpperCase());
-    label.select('.label-run').text(`#${train.rn}`);
+    const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
+    label.select('.label-info').text(`${lineName} Line \u00b7 Run ${train.rn}`);
     label.select('.label-status').text(getTrainStatus(train, etas));
-
-    // Re-size badge
     sizeLabelBadge(group);
   }
 
@@ -406,24 +394,48 @@
         const g = d3.select(this);
         g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
-        // Animate arrow: pulse outward from inside the dot, fade out, repeat
+        // Animate arrow: pulse outward along the track, fade out, repeat
         const arrow = g.select('.train-arrow');
-        if (d.rn === selectedTrainRn) {
+        const segs = lineSegments[d.legend];
+        // Hide arrow at terminal (no upcoming stops)
+        const atTerminal = d.rn === selectedTrainRn
+          && lastETAs !== null && lastETAs.length === 0;
+
+        if (d.rn === selectedTrainRn && d._trackPos && segs && !atTerminal) {
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
-          d._arrowPhase = (d._arrowPhase + dt / 1400) % 1;
+          d._arrowPhase = (d._arrowPhase + dt / 800) % 1;
 
           const phase = d._arrowPhase;
-          const rMax = 14;
-          const r = rMax * phase;
-          const arrowOpacity = Math.max(0, 1 - phase * 1.2);
+          const maxDist = 0.004; // geo-degrees along track
+          const dist = maxDist * phase;
+          const dir = d._direction || 1;
 
-          const angle = headingToSVGAngle(d.heading);
-          const rad = angle * Math.PI / 180;
-          const atx = Math.cos(rad) * r;
-          const aty = Math.sin(rad) * r;
-          arrow
-            .attr('transform', `translate(${atx},${aty}) rotate(${angle})`)
-            .style('opacity', arrowOpacity);
+          const advPos = advanceOnTrack(d._trackPos, dist, dir, segs);
+          const advPt = projection([advPos.lon, advPos.lat]);
+
+          if (advPt) {
+            const dx = advPt[0] - pt[0];
+            const dy = advPt[1] - pt[1];
+
+            // Track angle from segment geometry in projected space
+            const seg = segs[advPos.segIdx];
+            let angle = 0;
+            if (seg && advPos.ptIdx < seg.length - 1) {
+              const sPt = projection([seg[advPos.ptIdx][0], seg[advPos.ptIdx][1]]);
+              const ePt = projection([seg[advPos.ptIdx + 1][0], seg[advPos.ptIdx + 1][1]]);
+              if (sPt && ePt) {
+                const sdx = ePt[0] - sPt[0];
+                const sdy = ePt[1] - sPt[1];
+                angle = Math.atan2(sdy, sdx) * 180 / Math.PI;
+                if (dir < 0) angle += 180;
+              }
+            }
+
+            const arrowOpacity = Math.max(0, 1 - phase * 1.3);
+            arrow
+              .attr('transform', `translate(${dx},${dy}) rotate(${angle})`)
+              .style('opacity', arrowOpacity);
+          }
         } else {
           d._arrowPhase = undefined;
           arrow.style('opacity', 0);
