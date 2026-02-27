@@ -6,7 +6,6 @@
 (async function () {
   const svgEl = document.getElementById('map');
   const svg = d3.select(svgEl);
-  const detailEl = document.getElementById('train-detail');
 
   let width = window.innerWidth;
   let height = window.innerHeight;
@@ -62,6 +61,14 @@
     console.log(`[CTA] Using DUMMY train data (${dummyTrains.length} trains)`);
   }
 
+  // ---- Heading → SVG rotation ----
+  // CTA heading: 0=N, 90=E, 180=S, 270=W (clockwise from north)
+  // SVG rotation: 0=right (east), rotates clockwise
+  // So SVG angle = heading - 90
+  function headingToSVGAngle(heading) {
+    return ((heading || 0) - 90 + 360) % 360;
+  }
+
   // ---- Render trains (DOM management only — positions handled by animation loop) ----
   function renderTrains() {
     const allTrains = realTrains || dummyTrains || [];
@@ -96,6 +103,55 @@
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
+    // Direction arrow — small chevron anchored at the dot edge
+    enter.append('path')
+      .attr('class', 'train-arrow')
+      .attr('d', 'M-2.2,-1.8 L0,0 L-2.2,1.8')
+      .attr('fill', 'none')
+      .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
+      .attr('stroke-width', 0.8)
+      .attr('stroke-linecap', 'round')
+      .attr('stroke-linejoin', 'round')
+      .attr('transform', d => {
+        const angle = headingToSVGAngle(d.heading);
+        const r = TRAIN_RADIUS + 2.5;
+        const rad = angle * Math.PI / 180;
+        const tx = Math.cos(rad) * r;
+        const ty = Math.sin(rad) * r;
+        return `translate(${tx},${ty}) rotate(${angle})`;
+      });
+
+    // Inline label (hidden by default, shown on select)
+    const label = enter.append('g')
+      .attr('class', 'train-label')
+      .style('opacity', 0)
+      .attr('transform', 'translate(0, 6)');
+
+    // Destination badge — colored rect + text
+    label.append('rect')
+      .attr('class', 'label-badge')
+      .attr('rx', 1)
+      .attr('ry', 1)
+      .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
+
+    label.append('text')
+      .attr('class', 'label-dest')
+      .attr('text-anchor', 'middle')
+      .attr('y', 4.5)
+      .text(d => (d.destNm || '').toUpperCase());
+
+    // Run number below
+    label.append('text')
+      .attr('class', 'label-run')
+      .attr('text-anchor', 'middle')
+      .attr('y', 8.5)
+      .text(d => `#${d.rn}`);
+
+    // Size the badge rect to fit the text after insertion
+    enter.each(function () {
+      sizeLabelBadge(d3.select(this));
+    });
+
     // Click handler on new train groups
     enter.on('click', function (event, d) {
       event.stopPropagation();
@@ -111,14 +167,40 @@
     enter.transition().duration(800).style('opacity', 1);
 
     // Maintain selected class on merged selection
-    groups.merge(enter).classed('selected', d => d.rn === selectedTrainRn);
+    const merged = groups.merge(enter);
+    merged.classed('selected', d => d.rn === selectedTrainRn);
+
+    // Update label visibility on merged
+    merged.select('.train-label')
+      .style('opacity', d => d.rn === selectedTrainRn ? 1 : 0);
 
     // Exit — trains no longer in active or exiting lists
+    groups.exit()
+      .classed('train-exiting', true)
+      .on('click', null)
+      .select('.train-hit').attr('r', 0);
     groups.exit()
       .transition()
       .duration(2000)
       .style('opacity', 0)
       .remove();
+  }
+
+  /**
+   * Sizes the label badge rect to fit its text content.
+   */
+  function sizeLabelBadge(groupSel) {
+    const destText = groupSel.select('.label-dest');
+    const badge = groupSel.select('.label-badge');
+    if (destText.empty() || badge.empty()) return;
+
+    // Use approximate character width since getBBox may not work before render
+    const text = destText.text();
+    const charW = 2.2;
+    const padX = 2;
+    const w = Math.max(text.length * charW + padX * 2, 12);
+    const h = 5.5;
+    badge.attr('x', -w / 2).attr('y', 0.5).attr('width', w).attr('height', h);
   }
 
   renderTrains();
@@ -143,8 +225,12 @@
     selectedTrain = train;
     lastETAs = null;
 
-    // Highlight
-    svg.selectAll('.train-group').classed('selected', d => d.rn === selectedTrainRn);
+    // Highlight + show label
+    svg.selectAll('.train-group')
+      .classed('selected', d => d.rn === selectedTrainRn)
+      .select('.train-label')
+        .transition().duration(200)
+        .style('opacity', d => d.rn === selectedTrainRn ? 1 : 0);
 
     // Animate zoom to the train (skip if switching between trains — tracking handles it)
     if (!wasTracking) {
@@ -163,10 +249,6 @@
       }
     }
 
-    // Show detail with basic info immediately
-    updateDetailPanel(train, null);
-    detailEl.classList.add('visible');
-
     // Fetch detailed ETA data
     fetchTrainDetail(train.rn);
 
@@ -184,11 +266,12 @@
     selectedTrainRn = null;
     lastETAs = null;
 
-    // Remove highlight
-    svg.selectAll('.train-group').classed('selected', false);
-
-    // Hide detail panel
-    detailEl.classList.remove('visible');
+    // Remove highlight + hide labels
+    svg.selectAll('.train-group')
+      .classed('selected', false)
+      .select('.train-label')
+        .transition().duration(200)
+        .style('opacity', 0);
 
     // Stop detail refresh
     if (detailFetchInterval) {
@@ -217,7 +300,7 @@
       if (data && data.eta) {
         lastETAs = data.eta;
         if (selectedTrain && selectedTrainRn === rn) {
-          updateDetailPanel(selectedTrain, data.eta);
+          updateInlineLabel(selectedTrain, data.eta);
         }
       }
     } catch (e) {
@@ -225,50 +308,32 @@
     }
   }
 
-  function updateDetailPanel(train, etas) {
-    const lineName = LEGEND_TO_LINE_NAME[train.legend] || train.legend;
-    const lineColor = LINE_COLORS[train.legend] || '#fff';
+  /**
+   * Updates the inline label for the currently selected train with ETA info.
+   */
+  function updateInlineLabel(train, etas) {
+    const group = svg.selectAll('.train-group')
+      .filter(d => d.rn === train.rn);
+    if (group.empty()) return;
 
-    let html = `<div class="detail-header">` +
-      `<span class="detail-line-dot" style="background:${lineColor}"></span>` +
-      `<span class="detail-line-name">${lineName} Line</span>` +
-      `<span class="detail-run">#${train.rn}</span>` +
-      `</div>`;
+    const label = group.select('.train-label');
 
-    html += `<div class="detail-dest">${train.destNm}</div>`;
-
-    // Status badges
-    if (train.isDly === '1') {
-      html += `<span class="detail-status delayed">Delayed</span>`;
-    }
-    if (train.isApp === '1') {
-      html += `<span class="detail-status approaching">Approaching</span>`;
-    }
-
-    // ETA stops
+    // Update destination text
+    let destText = (train.destNm || '').toUpperCase();
     if (etas && etas.length > 0) {
-      html += `<div class="detail-stops">`;
-      const maxStops = 4;
-      for (let i = 0; i < Math.min(etas.length, maxStops); i++) {
-        const eta = etas[i];
-        const etaMin = getETAMinutes(eta);
-        let etaText = '';
-        if (eta.isApp === '1') {
-          etaText = 'Due';
-        } else if (etaMin !== null) {
-          etaText = etaMin <= 1 ? '1 min' : `${etaMin} min`;
-        }
-        html += `<div class="detail-stop">` +
-          `<span class="detail-stop-name">${eta.staNm}</span>` +
-          `<span class="detail-stop-eta">${etaText}</span>` +
-          `</div>`;
+      const eta = etas[0];
+      const etaMin = getETAMinutes(eta);
+      if (eta.isApp === '1') {
+        destText += ' · DUE';
+      } else if (etaMin !== null) {
+        destText += ` · ${etaMin}m`;
       }
-      html += `</div>`;
-    } else if (etas === null) {
-      html += `<div class="detail-stops"><span class="detail-loading">Loading stops\u2026</span></div>`;
     }
+    label.select('.label-dest').text(destText);
+    label.select('.label-run').text(`#${train.rn}`);
 
-    detailEl.innerHTML = html;
+    // Re-size badge
+    sizeLabelBadge(group);
   }
 
   function getETAMinutes(eta) {
@@ -323,7 +388,17 @@
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
-        d3.select(this).attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+        const g = d3.select(this);
+        g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+
+        // Update arrow rotation to match current heading
+        const angle = headingToSVGAngle(d.heading);
+        const r = TRAIN_RADIUS + 2.5;
+        const rad = angle * Math.PI / 180;
+        const tx = Math.cos(rad) * r;
+        const ty = Math.sin(rad) * r;
+        g.select('.train-arrow')
+          .attr('transform', `translate(${tx},${ty}) rotate(${angle})`);
       });
 
     // Camera tracking for selected train
@@ -373,7 +448,7 @@
           const newSelected = realTrains.find(t => t.rn === selectedTrainRn);
           if (newSelected) {
             selectedTrain = newSelected;
-            updateDetailPanel(selectedTrain, lastETAs);
+            updateInlineLabel(selectedTrain, lastETAs);
           } else {
             // Train disappeared from data
             deselectTrain();
@@ -449,7 +524,6 @@
         selectedTrain = null;
         selectedTrainRn = null;
         lastETAs = null;
-        detailEl.classList.remove('visible');
         if (detailFetchInterval) {
           clearInterval(detailFetchInterval);
           detailFetchInterval = null;
