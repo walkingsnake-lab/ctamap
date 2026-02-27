@@ -103,18 +103,18 @@
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
-    // Direction arrow — small chevron anchored at the dot edge
+    // Direction arrow — chevron anchored well past the dot edge
     enter.append('path')
       .attr('class', 'train-arrow')
-      .attr('d', 'M-2.2,-1.8 L0,0 L-2.2,1.8')
+      .attr('d', 'M-3.5,-3 L0,0 L-3.5,3')
       .attr('fill', 'none')
-      .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
-      .attr('stroke-width', 0.8)
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 1.2)
       .attr('stroke-linecap', 'round')
       .attr('stroke-linejoin', 'round')
       .attr('transform', d => {
         const angle = headingToSVGAngle(d.heading);
-        const r = TRAIN_RADIUS + 2.5;
+        const r = TRAIN_RADIUS + 5.5;
         const rad = angle * Math.PI / 180;
         const tx = Math.cos(rad) * r;
         const ty = Math.sin(rad) * r;
@@ -140,12 +140,23 @@
       .attr('y', 4.5)
       .text(d => (d.destNm || '').toUpperCase());
 
-    // Run number below
+    // Run number badge — dark gray, no border-radius, bold
+    label.append('rect')
+      .attr('class', 'label-run-badge')
+      .attr('fill', '#333');
+
     label.append('text')
       .attr('class', 'label-run')
       .attr('text-anchor', 'middle')
-      .attr('y', 8.5)
+      .attr('y', 9.8)
       .text(d => `#${d.rn}`);
+
+    // Status text (Approaching / Next station)
+    label.append('text')
+      .attr('class', 'label-status')
+      .attr('text-anchor', 'middle')
+      .attr('y', 13.5)
+      .text('');
 
     // Size the badge rect to fit the text after insertion
     enter.each(function () {
@@ -192,6 +203,8 @@
   function sizeLabelBadge(groupSel) {
     const destText = groupSel.select('.label-dest');
     const badge = groupSel.select('.label-badge');
+    const runText = groupSel.select('.label-run');
+    const runBadge = groupSel.select('.label-run-badge');
     if (destText.empty() || badge.empty()) return;
 
     // Use approximate character width since getBBox may not work before render
@@ -199,8 +212,14 @@
     const charW = 2.2;
     const padX = 2;
     const w = Math.max(text.length * charW + padX * 2, 12);
-    const h = 5.5;
-    badge.attr('x', -w / 2).attr('y', 0.5).attr('width', w).attr('height', h);
+
+    // Destination badge
+    badge.attr('x', -w / 2).attr('y', 0.5).attr('width', w).attr('height', 5.5);
+
+    // Run number badge — same width, dark gray, no radius
+    if (!runBadge.empty()) {
+      runBadge.attr('x', -w / 2).attr('y', 6.5).attr('width', w).attr('height', 4);
+    }
   }
 
   renderTrains();
@@ -318,21 +337,25 @@
 
     const label = group.select('.train-label');
 
-    // Update destination text
-    let destText = (train.destNm || '').toUpperCase();
-    if (etas && etas.length > 0) {
-      const eta = etas[0];
-      const etaMin = getETAMinutes(eta);
-      if (eta.isApp === '1') {
-        destText += ' · DUE';
-      } else if (etaMin !== null) {
-        destText += ` · ${etaMin}m`;
-      }
-    }
-    label.select('.label-dest').text(destText);
+    // Destination — just the terminal name, no ETA
+    label.select('.label-dest').text((train.destNm || '').toUpperCase());
     label.select('.label-run').text(`#${train.rn}`);
 
-    // Re-size badge
+    // Status from ETA data
+    let statusText = '';
+    if (etas && etas.length > 0) {
+      const eta = etas[0];
+      if (eta.isDly === '1') {
+        statusText = 'Delayed';
+      } else if (eta.isApp === '1') {
+        statusText = `Approaching ${eta.staNm}`;
+      } else if (eta.staNm) {
+        statusText = `Next: ${eta.staNm}`;
+      }
+    }
+    label.select('.label-status').text(statusText);
+
+    // Re-size badges
     sizeLabelBadge(group);
   }
 
@@ -393,7 +416,7 @@
 
         // Update arrow rotation to match current heading
         const angle = headingToSVGAngle(d.heading);
-        const r = TRAIN_RADIUS + 2.5;
+        const r = TRAIN_RADIUS + 5.5;
         const rad = angle * Math.PI / 180;
         const tx = Math.cos(rad) * r;
         const ty = Math.sin(rad) * r;
