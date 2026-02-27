@@ -38,6 +38,14 @@
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
 
+  // ---- DOM label overlay ----
+  const labelEl = document.createElement('div');
+  labelEl.id = 'train-label';
+  labelEl.innerHTML = '<div class="tl-badge"><span class="tl-dest"></span></div>' +
+    '<div class="tl-info"></div>' +
+    '<div class="tl-status"></div>';
+  document.body.appendChild(labelEl);
+
   // ---- Close button ----
   const closeBtn = document.getElementById('close-btn');
 
@@ -100,65 +108,21 @@
       .attr('fill', d => `url(#train-glow-${d.legend})`)
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
-    // Direction arrows — rendered before dot so they pass "behind" the circle
+    // Direction dots — rendered before dot so they pass "behind" the circle
     const ARROW_COUNT = 6;
     for (let i = 0; i < ARROW_COUNT; i++) {
-      enter.append('path')
+      enter.append('circle')
         .attr('class', `train-arrow train-arrow-${i}`)
-        .attr('d', 'M0,-0.8 L1.5,0 L0,0.8 Z')
-        .attr('fill', '#000')
-        .attr('stroke', 'none')
+        .attr('r', LINE_WIDTH / 2)
+        .attr('fill', d => LINE_COLORS[d.legend] || '#fff')
         .style('opacity', 0);
     }
 
-    // Inner solid dot (on top of arrows)
+    // Inner solid dot (on top of direction dots)
     enter.append('circle')
       .attr('class', 'train-dot')
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
-
-    // Inline label (hidden by default, shown on select)
-    const label = enter.append('g')
-      .attr('class', 'train-label')
-      .style('opacity', 0)
-      .attr('transform', 'translate(0, 6)');
-
-    // Destination badge — colored rect + text (centered under dot)
-    label.append('rect')
-      .attr('class', 'label-badge')
-      .attr('rx', 1)
-      .attr('ry', 1)
-      .attr('fill', d => badgeFill(d.legend, d.destNm));
-
-    label.append('text')
-      .attr('class', 'label-dest')
-      .attr('text-anchor', 'middle')
-      .attr('y', 4.5)
-      .style('fill', d => badgeTextFill(d.legend, d.destNm))
-      .text(d => formatDestName(d.destNm));
-
-    // Line name + Run number
-    label.append('text')
-      .attr('class', 'label-info')
-      .attr('text-anchor', 'middle')
-      .attr('y', 9)
-      .text(d => {
-        const lineName = LEGEND_TO_LINE_NAME[d.legend] || '';
-        return `${lineName} Line \u00b7 #${d.rn}`;
-      });
-
-    // Status text (Approaching / Next station)
-    label.append('text')
-      .attr('class', 'label-status')
-      .attr('text-anchor', 'middle')
-      .attr('y', 12);
-
-    // Render initial status text and size the badge
-    enter.each(function (d) {
-      const g = d3.select(this);
-      renderStatusText(g.select('.label-status'), getTrainStatus(d, null));
-      sizeLabelBadge(g);
-    });
 
     // Click handler on new train groups
     enter.on('click', function (event, d) {
@@ -178,10 +142,6 @@
     const merged = groups.merge(enter);
     merged.classed('selected', d => d.rn === selectedTrainRn);
 
-    // Update label visibility on merged
-    merged.select('.train-label')
-      .style('opacity', d => d.rn === selectedTrainRn ? 1 : 0);
-
     // Exit — trains no longer in active or exiting lists
     groups.exit()
       .classed('train-exiting', true)
@@ -194,22 +154,60 @@
       .remove();
   }
 
-  /**
-   * Sizes the label badge rect to fit its text content.
-   */
-  function sizeLabelBadge(groupSel) {
-    const destText = groupSel.select('.label-dest');
-    const badge = groupSel.select('.label-badge');
-    if (destText.empty() || badge.empty()) return;
+  renderTrains();
 
-    const text = destText.text();
-    const charW = 2.3;
-    const padX = 2;
-    const w = Math.max(text.length * charW + padX * 2, 12);
-    badge.attr('x', -w / 2).attr('y', 0).attr('width', w).attr('height', 6);
+  // ---- DOM label helpers ----
+
+  function showTrainLabel(train) {
+    updateTrainLabelContent(train, null);
+    labelEl.classList.remove('visible');
+    void labelEl.offsetWidth; // force reflow to restart animation
+    labelEl.classList.add('visible');
   }
 
-  renderTrains();
+  function hideTrainLabel() {
+    labelEl.classList.remove('visible');
+  }
+
+  function updateTrainLabelContent(train, etas) {
+    const dest = labelEl.querySelector('.tl-dest');
+    const badge = labelEl.querySelector('.tl-badge');
+    const info = labelEl.querySelector('.tl-info');
+    const status = labelEl.querySelector('.tl-status');
+
+    dest.textContent = formatDestName(train.destNm);
+
+    const inverted = isInvertedBadge(train.legend, train.destNm);
+    const lineColor = LINE_COLORS[train.legend] || '#888';
+    badge.style.background = inverted ? '#fff' : lineColor;
+    dest.style.color = inverted ? lineColor : (train.legend === 'YL' ? '#000' : '#fff');
+
+    // Glow matches text color
+    const glowColor = inverted ? lineColor : (train.legend === 'YL' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.3)');
+    dest.style.textShadow = `0 0 4px ${glowColor}, 0 0 2px ${glowColor}`;
+
+    const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
+    info.textContent = `${lineName} Line \u00b7 #${train.rn}`;
+
+    const st = getTrainStatus(train, etas);
+    if (st.prefix || st.station) {
+      status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
+    } else {
+      status.textContent = '';
+    }
+  }
+
+  function positionTrainLabel() {
+    if (!selectedTrain) return;
+    const pt = projection([selectedTrain.lon, selectedTrain.lat]);
+    if (!pt) return;
+    const t = d3.zoomTransform(svgEl);
+    const sx = t.applyX(pt[0]);
+    const sy = t.applyY(pt[1]);
+    const offset = TRAIN_RADIUS * 1.5 * t.k + 10;
+    labelEl.style.left = sx + 'px';
+    labelEl.style.top = (sy + offset) + 'px';
+  }
 
   // ---- Train selection functions ----
 
@@ -232,12 +230,12 @@
     lastETAs = null;
     closeBtn.classList.add('visible');
 
-    // Highlight + show label
+    // Highlight selected
     svg.selectAll('.train-group')
-      .classed('selected', d => d.rn === selectedTrainRn)
-      .select('.train-label')
-        .transition().duration(200)
-        .style('opacity', d => d.rn === selectedTrainRn ? 1 : 0);
+      .classed('selected', d => d.rn === selectedTrainRn);
+
+    // Show DOM label
+    showTrainLabel(train);
 
     // Animate zoom to the train (skip if switching between trains — tracking handles it)
     if (!wasTracking) {
@@ -274,12 +272,12 @@
     lastETAs = null;
     closeBtn.classList.remove('visible');
 
-    // Remove highlight + hide labels
+    // Remove highlight
     svg.selectAll('.train-group')
-      .classed('selected', false)
-      .select('.train-label')
-        .transition().duration(200)
-        .style('opacity', 0);
+      .classed('selected', false);
+
+    // Hide DOM label
+    hideTrainLabel();
 
     // Stop detail refresh
     if (detailFetchInterval) {
@@ -308,7 +306,7 @@
       if (data && data.eta) {
         lastETAs = data.eta;
         if (selectedTrain && selectedTrainRn === rn) {
-          updateInlineLabel(selectedTrain, data.eta);
+          updateTrainLabelContent(selectedTrain, data.eta);
         }
       }
     } catch (e) {
@@ -317,7 +315,7 @@
   }
 
   /**
-   * Formats destination name: uppercased, with airplane symbol for airport terminals.
+   * Formats destination name with airplane symbol for airport terminals.
    */
   function formatDestName(name) {
     const text = name || '';
@@ -339,59 +337,6 @@
     }
     if (train.isApp === '1') return { prefix: 'Approaching station', station: '' };
     return { prefix: '', station: '' };
-  }
-
-  /**
-   * Renders status text with bold station name using tspans.
-   */
-  function renderStatusText(sel, status) {
-    sel.selectAll('tspan').remove();
-    if (!status.prefix && !status.station) return;
-    sel.append('tspan').text(status.prefix);
-    if (status.station) {
-      sel.append('tspan')
-        .attr('font-weight', '700')
-        .text(status.station);
-    }
-  }
-
-  /**
-   * Updates the inline label for the currently selected train with ETA info.
-   */
-  function updateInlineLabel(train, etas) {
-    const group = svg.selectAll('.train-group')
-      .filter(d => d.rn === train.rn);
-    if (group.empty()) return;
-
-    const label = group.select('.train-label');
-    label.select('.label-badge').attr('fill', badgeFill(train.legend, train.destNm));
-    label.select('.label-dest')
-      .style('fill', badgeTextFill(train.legend, train.destNm))
-      .text(formatDestName(train.destNm));
-    const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
-    label.select('.label-info').text(`${lineName} Line \u00b7 #${train.rn}`);
-    renderStatusText(label.select('.label-status'), getTrainStatus(train, etas));
-    sizeLabelBadge(group);
-  }
-
-  function getETAMinutes(eta) {
-    if (!eta.arrT || !eta.prdt) return null;
-    try {
-      const arr = parseCTATime(eta.arrT);
-      const pred = parseCTATime(eta.prdt);
-      if (!arr || !pred) return null;
-      return Math.round((arr - pred) / 60000);
-    } catch {
-      return null;
-    }
-  }
-
-  function parseCTATime(str) {
-    if (!str || str.length < 15) return null;
-    const formatted = str.substring(0, 4) + '-' + str.substring(4, 6) + '-' +
-      str.substring(6, 8) + 'T' + str.substring(9);
-    const ms = Date.parse(formatted);
-    return isNaN(ms) ? null : ms;
   }
 
   // Close button handler
@@ -434,7 +379,7 @@
         const g = d3.select(this);
         g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
-        // Animate arrows: steady stream of triangles flowing along the track
+        // Animate direction dots: steady stream of circles flowing along the track
         const segs = lineSegments[d.legend];
         const atTerminal = d.rn === selectedTrainRn
           && lastETAs !== null && lastETAs.length === 0;
@@ -443,11 +388,11 @@
 
         if (showArrows) {
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
-          d._arrowPhase = (d._arrowPhase + dt / 2400) % 1;
+          d._arrowPhase = (d._arrowPhase + dt / 3600) % 1;
 
           const dir = d._direction || 1;
-          const behindDist = 0.004; // start this far behind the dot
-          const totalDist = 0.008;  // total travel distance (behind + ahead)
+          const behindDist = 0.005; // start this far behind the dot
+          const totalDist = 0.009;  // total travel distance (behind + ahead)
 
           for (let i = 0; i < 6; i++) {
             const arrow = g.select(`.train-arrow-${i}`);
@@ -464,27 +409,13 @@
               const dx = advPt[0] - pt[0];
               const dy = advPt[1] - pt[1];
 
-              // Smooth phase-based opacity: 0 at both ends, peak in the middle
-              const opacity = 0.4 * Math.sin(phase * Math.PI);
-
-              const seg = segs[advPos.segIdx];
-              let angle = 0;
-              if (seg && advPos.ptIdx < seg.length - 1) {
-                const sPt = projection([seg[advPos.ptIdx][0], seg[advPos.ptIdx][1]]);
-                const ePt = projection([seg[advPos.ptIdx + 1][0], seg[advPos.ptIdx + 1][1]]);
-                if (sPt && ePt) {
-                  const sdx = ePt[0] - sPt[0];
-                  const sdy = ePt[1] - sPt[1];
-                  angle = Math.atan2(sdy, sdx) * 180 / Math.PI;
-                  // Use advPos.direction to account for segment boundary flips;
-                  // behind-dot arrows traveled in -dir, so invert their direction
-                  const fwdDir = dist >= 0 ? advPos.direction : -advPos.direction;
-                  if (fwdDir < 0) angle += 180;
-                }
-              }
+              // Smooth phase-based opacity: 0 at edges, peak ~0.85 in the middle
+              // sin^0.6 stays high longer for a slower fade
+              const opacity = 0.85 * Math.pow(Math.sin(phase * Math.PI), 0.6);
 
               arrow
-                .attr('transform', `translate(${dx},${dy}) rotate(${angle})`)
+                .attr('cx', dx)
+                .attr('cy', dy)
                 .style('opacity', opacity);
             }
           }
@@ -508,6 +439,9 @@
         mapContainer.attr('transform', t.toString());
       }
     }
+
+    // Position DOM label over the selected train
+    positionTrainLabel();
 
     requestAnimationFrame(animate);
   }
@@ -543,7 +477,7 @@
           const newSelected = realTrains.find(t => t.rn === selectedTrainRn);
           if (newSelected) {
             selectedTrain = newSelected;
-            updateInlineLabel(selectedTrain, lastETAs);
+            updateTrainLabelContent(selectedTrain, lastETAs);
           } else {
             // Train disappeared from data
             deselectTrain();
@@ -620,6 +554,7 @@
         selectedTrainRn = null;
         lastETAs = null;
         closeBtn.classList.remove('visible');
+        hideTrainLabel();
         if (detailFetchInterval) {
           clearInterval(detailFetchInterval);
           detailFetchInterval = null;
