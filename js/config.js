@@ -28,6 +28,12 @@ const LEGEND_TO_ROUTE = Object.fromEntries(
   Object.entries(ROUTE_TO_LEGEND).map(([k, v]) => [v, k])
 );
 
+// Human-readable line names
+const LEGEND_TO_LINE_NAME = {
+  RD: 'Red', BL: 'Blue', BR: 'Brown', GR: 'Green',
+  OR: 'Orange', PK: 'Pink', PR: 'Purple', YL: 'Yellow'
+};
+
 // All API route codes
 const API_ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 
