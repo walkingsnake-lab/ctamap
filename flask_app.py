@@ -7,6 +7,7 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 
 CTA_KEY = '9e15fcfa75064b6db8ad034db11ea214'
 CTA_BASE = 'http://lapi.transitchicago.com/api/1.0/ttpositions.aspx'
+CTA_FOLLOW = 'http://lapi.transitchicago.com/api/1.0/ttfollow.aspx'
 ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y']
 
 
@@ -51,6 +52,29 @@ def api_trains():
         results = pool.map(fetch_route, ROUTES)
     trains = [t for batch in results for t in batch]
     return jsonify({'trains': trains})
+
+
+@app.route('/api/train/<rn>')
+def api_train_follow(rn):
+    """Follow a specific train run — returns ETAs for upcoming stops."""
+    if not rn.isdigit():
+        return jsonify({'error': 'Invalid run number'}), 400
+    try:
+        resp = requests.get(CTA_FOLLOW, params={
+            'key': CTA_KEY,
+            'runnumber': rn,
+            'outputType': 'JSON',
+        }, timeout=10)
+        data = resp.json()
+        ctatt = data.get('ctatt', {})
+        if str(ctatt.get('errCd')) != '0':
+            return jsonify({'eta': []})
+        etas = ctatt.get('eta', [])
+        if not isinstance(etas, list):
+            etas = [etas]
+        return jsonify({'eta': etas, 'position': ctatt.get('position')})
+    except Exception as e:
+        return jsonify({'error': 'Failed to fetch train details'}), 502
 
 
 @app.route('/api/geojson')
