@@ -38,6 +38,9 @@
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
 
+  // ---- Close button ----
+  const closeBtn = document.getElementById('close-btn');
+
   // ---- Train selection / tracking state ----
   let selectedTrain = null;
   let selectedTrainRn = null;
@@ -108,7 +111,7 @@
     for (let i = 0; i < ARROW_COUNT; i++) {
       enter.append('path')
         .attr('class', `train-arrow train-arrow-${i}`)
-        .attr('d', 'M0,-0.65 L1.2,0 L0,0.65 Z')
+        .attr('d', 'M0,-0.8 L1.5,0 L0,0.8 Z')
         .attr('fill', d => LINE_COLORS[d.legend] || '#fff')
         .attr('stroke', 'none')
         .style('opacity', 0);
@@ -131,28 +134,30 @@
       .attr('class', 'label-dest')
       .attr('text-anchor', 'middle')
       .attr('y', 4.5)
-      .text(d => (d.destNm || '').toUpperCase());
+      .attr('fill', d => d.legend === 'YL' ? '#000' : '#fff')
+      .text(d => formatDestName(d.destNm || ''));
 
     // Line name + Run number
     label.append('text')
       .attr('class', 'label-info')
       .attr('text-anchor', 'middle')
-      .attr('y', 8.5)
+      .attr('y', 9)
       .text(d => {
         const lineName = LEGEND_TO_LINE_NAME[d.legend] || '';
-        return `${lineName} Line \u00b7 Run ${d.rn}`;
+        return `${lineName} Line \u00b7 #${d.rn}`;
       });
 
     // Status text (Approaching / Next station)
     label.append('text')
       .attr('class', 'label-status')
       .attr('text-anchor', 'middle')
-      .attr('y', 11)
-      .text(d => getTrainStatus(d, null));
+      .attr('y', 12);
 
-    // Size the badge rect to fit the text after insertion
-    enter.each(function () {
-      sizeLabelBadge(d3.select(this));
+    // Size the badge rect and render initial status text
+    enter.each(function (d) {
+      const g = d3.select(this);
+      renderStatusText(g.select('.label-status'), getTrainStatus(d, null));
+      sizeLabelBadge(g);
     });
 
     // Click handler on new train groups
@@ -225,6 +230,7 @@
     selectedTrainRn = train.rn;
     selectedTrain = train;
     lastETAs = null;
+    closeBtn.classList.add('visible');
 
     // Highlight + show label
     svg.selectAll('.train-group')
@@ -266,6 +272,7 @@
     selectedTrain = null;
     selectedTrainRn = null;
     lastETAs = null;
+    closeBtn.classList.remove('visible');
 
     // Remove highlight + hide labels
     svg.selectAll('.train-group')
@@ -310,17 +317,42 @@
   }
 
   /**
-   * Derives a status string from ETA data or train-level flags.
-   * Only shows approaching/next station; blank if no station info.
+   * Formats destination name: uppercased, with airplane symbol for airport terminals.
+   */
+  function formatDestName(name) {
+    const upper = name.toUpperCase();
+    if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
+      return upper + ' \u2708';
+    }
+    return upper;
+  }
+
+  /**
+   * Derives status parts from ETA data or train-level flags.
+   * Returns { prefix, station } where station should be rendered bold.
    */
   function getTrainStatus(train, etas) {
     if (etas && etas.length > 0) {
       const eta = etas[0];
-      if (eta.isApp === '1' && eta.staNm) return `Approaching ${eta.staNm}`;
-      if (eta.staNm) return `Next: ${eta.staNm}`;
+      if (eta.isApp === '1' && eta.staNm) return { prefix: 'Approaching ', station: eta.staNm };
+      if (eta.staNm) return { prefix: 'Next: ', station: eta.staNm };
     }
-    if (train.isApp === '1') return 'Approaching station';
-    return '';
+    if (train.isApp === '1') return { prefix: 'Approaching station', station: '' };
+    return { prefix: '', station: '' };
+  }
+
+  /**
+   * Renders status text with bold station name using tspans.
+   */
+  function renderStatusText(sel, status) {
+    sel.selectAll('tspan').remove();
+    if (!status.prefix && !status.station) return;
+    sel.append('tspan').text(status.prefix);
+    if (status.station) {
+      sel.append('tspan')
+        .attr('font-weight', '700')
+        .text(status.station);
+    }
   }
 
   /**
@@ -332,10 +364,10 @@
     if (group.empty()) return;
 
     const label = group.select('.train-label');
-    label.select('.label-dest').text((train.destNm || '').toUpperCase());
+    label.select('.label-dest').text(formatDestName(train.destNm || ''));
     const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
-    label.select('.label-info').text(`${lineName} Line \u00b7 Run ${train.rn}`);
-    label.select('.label-status').text(getTrainStatus(train, etas));
+    label.select('.label-info').text(`${lineName} Line \u00b7 #${train.rn}`);
+    renderStatusText(label.select('.label-status'), getTrainStatus(train, etas));
     sizeLabelBadge(group);
   }
 
@@ -358,6 +390,11 @@
     const ms = Date.parse(formatted);
     return isNaN(ms) ? null : ms;
   }
+
+  // Close button handler
+  closeBtn.addEventListener('click', () => {
+    if (selectedTrain && !isZoomTransitioning) deselectTrain();
+  });
 
   // Click background to deselect
   svg.on('click.deselect', function (event) {
@@ -403,7 +440,7 @@
 
         if (showArrows) {
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
-          d._arrowPhase = (d._arrowPhase + dt / 1200) % 1;
+          d._arrowPhase = (d._arrowPhase + dt / 1800) % 1;
 
           const dir = d._direction || 1;
           const maxDist = 0.005;
@@ -580,6 +617,7 @@
         selectedTrain = null;
         selectedTrainRn = null;
         lastETAs = null;
+        closeBtn.classList.remove('visible');
         if (detailFetchInterval) {
           clearInterval(detailFetchInterval);
           detailFetchInterval = null;
