@@ -6,6 +6,7 @@ const url = require('url');
 const PORT = process.env.PORT || 3000;
 const CTA_KEY = '9e15fcfa75064b6db8ad034db11ea214';
 const CTA_BASE = 'http://lapi.transitchicago.com/api/1.0/ttpositions.aspx';
+const CTA_FOLLOW = 'http://lapi.transitchicago.com/api/1.0/ttfollow.aspx';
 const ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 
 const MIME_TYPES = {
@@ -99,6 +100,35 @@ const server = http.createServer(async (req, res) => {
       console.error('CTA API error:', e.message);
       res.writeHead(502, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to fetch train data' }));
+    }
+    return;
+  }
+
+  // Follow a specific train run (ETAs for upcoming stops)
+  if (parsed.pathname.startsWith('/api/train/')) {
+    const rn = parsed.pathname.split('/').pop();
+    if (!rn || !/^\d+$/.test(rn)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid run number' }));
+      return;
+    }
+    try {
+      const followUrl = `${CTA_FOLLOW}?key=${CTA_KEY}&runnumber=${rn}&outputType=JSON`;
+      const data = await fetchJSON(followUrl);
+      const ctatt = data.ctatt;
+      if (!ctatt || (ctatt.errCd !== '0' && ctatt.errCd !== 0)) {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+        res.end(JSON.stringify({ eta: [] }));
+        return;
+      }
+      let etas = ctatt.eta || [];
+      if (!Array.isArray(etas)) etas = [etas];
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+      res.end(JSON.stringify({ eta: etas, position: ctatt.position || null }));
+    } catch (e) {
+      console.error('CTA Follow API error:', e.message);
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to fetch train details' }));
     }
     return;
   }

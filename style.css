@@ -30,16 +30,33 @@ body {
 }
 
 /* --- Train dots --- */
-.train-dot {
+.train-hit {
+  cursor: pointer;
+}
+
+.train-dot,
+.train-glow {
   pointer-events: none;
 }
 
 .train-glow {
-  pointer-events: none;
   opacity: 0;
   transform-origin: center;
   transform-box: fill-box;
   animation: pulse-glow 2.5s ease-in-out infinite;
+}
+
+/* Selected train */
+.train-group.selected .train-dot {
+  transform: scale(1.4);
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+.train-group.selected .train-glow {
+  animation: none;
+  opacity: 0.5;
+  transform: scale(2);
 }
 
 @keyframes pulse-glow {
@@ -54,4 +71,122 @@ body {
 .train-exiting .train-glow {
   animation: none;
   opacity: 0;
+}
+
+/* --- Train detail panel --- */
+#train-detail {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 14px 18px;
+  color: rgba(255, 255, 255, 0.9);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  min-width: 180px;
+  max-width: 260px;
+  z-index: 10;
+  letter-spacing: 0.02em;
+}
+
+#train-detail.visible {
+  opacity: 1;
+}
+
+#train-detail .detail-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+#train-detail .detail-line-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+#train-detail .detail-line-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #fff;
+}
+
+#train-detail .detail-run {
+  color: rgba(255, 255, 255, 0.35);
+  margin-left: auto;
+  font-size: 11px;
+}
+
+#train-detail .detail-dest {
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 8px;
+}
+
+#train-detail .detail-dest::before {
+  content: '\2192\00a0';
+  color: rgba(255, 255, 255, 0.35);
+}
+
+#train-detail .detail-status {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-bottom: 8px;
+  margin-right: 4px;
+}
+
+#train-detail .detail-status.delayed {
+  background: rgba(255, 59, 48, 0.2);
+  color: #ff3b30;
+}
+
+#train-detail .detail-status.approaching {
+  background: rgba(255, 204, 0, 0.15);
+  color: #ffcc00;
+}
+
+#train-detail .detail-stops {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+
+#train-detail .detail-stop {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 2px 0;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+#train-detail .detail-stop:first-child {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+#train-detail .detail-stop-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#train-detail .detail-stop-eta {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+#train-detail .detail-loading {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 11px;
 }
