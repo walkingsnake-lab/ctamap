@@ -118,10 +118,10 @@ body {
   pointer-events: none;
 }
 
-/* --- Animatable glow intensity variable --- */
+/* --- Glow intensity variable --- */
 @property --glow-i {
   syntax: '<number>';
-  initial-value: 0;
+  initial-value: 1;
   inherits: true;
 }
 
@@ -144,7 +144,18 @@ body {
 
 #train-label.visible {
   display: block;
-  animation: sign-flicker 1.6s steps(1) 0.7s both;
+}
+
+#train-label.visible .tl-badge {
+  animation: line-in 0.3s ease-out 0.15s both;
+}
+
+#train-label.visible .tl-info {
+  animation: line-in 0.3s ease-out 0.35s both;
+}
+
+#train-label.visible .tl-status {
+  animation: line-in 0.3s ease-out 0.55s both;
 }
 
 .tl-badge {
@@ -189,15 +200,7 @@ body {
   color: rgba(255, 255, 255, 0.8);
 }
 
-/* LED sign flicker — instant on/off via steps(1), glow ramps with it */
-@keyframes sign-flicker {
-  0%        { opacity: 0; --glow-i: 0; }
-  6%        { opacity: 1; --glow-i: 2; }
-  12%       { opacity: 0; --glow-i: 0; }
-  20%       { opacity: 1; --glow-i: 1.5; }
-  28%       { opacity: 0; --glow-i: 0; }
-  38%       { opacity: 1; --glow-i: 1.2; }
-  44%       { opacity: 0; --glow-i: 0; }
-  52%       { opacity: 1; --glow-i: 1; }
-  100%      { opacity: 1; --glow-i: 1; }
+@keyframes line-in {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
