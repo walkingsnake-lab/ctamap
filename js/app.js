@@ -103,23 +103,16 @@
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
-    // Direction arrow — chevron anchored well past the dot edge
+    // Direction arrow — chevron that pulses outward from dot center
     enter.append('path')
       .attr('class', 'train-arrow')
-      .attr('d', 'M-3.5,-3 L0,0 L-3.5,3')
+      .attr('d', 'M-3,-2.5 L0,0 L-3,2.5')
       .attr('fill', 'none')
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 1.2)
+      .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
+      .attr('stroke-width', 1.1)
       .attr('stroke-linecap', 'round')
       .attr('stroke-linejoin', 'round')
-      .attr('transform', d => {
-        const angle = headingToSVGAngle(d.heading);
-        const r = TRAIN_RADIUS + 5.5;
-        const rad = angle * Math.PI / 180;
-        const tx = Math.cos(rad) * r;
-        const ty = Math.sin(rad) * r;
-        return `translate(${tx},${ty}) rotate(${angle})`;
-      });
+      .style('opacity', 0);
 
     // Inline label (hidden by default, shown on select)
     const label = enter.append('g')
@@ -127,7 +120,7 @@
       .style('opacity', 0)
       .attr('transform', 'translate(0, 6)');
 
-    // Destination badge — colored rect + text
+    // Destination badge — colored rect + text (centered under dot)
     label.append('rect')
       .attr('class', 'label-badge')
       .attr('rx', 1)
@@ -140,23 +133,19 @@
       .attr('y', 4.5)
       .text(d => (d.destNm || '').toUpperCase());
 
-    // Run number badge — dark gray, no border-radius, bold
-    label.append('rect')
-      .attr('class', 'label-run-badge')
-      .attr('fill', '#333');
-
+    // Run number — small, to the right of badge, no background
     label.append('text')
       .attr('class', 'label-run')
-      .attr('text-anchor', 'middle')
-      .attr('y', 9.8)
+      .attr('text-anchor', 'start')
+      .attr('y', 4.5)
       .text(d => `#${d.rn}`);
 
-    // Status text (Approaching / Next station)
+    // Status text (Approaching / Next / In transit)
     label.append('text')
       .attr('class', 'label-status')
       .attr('text-anchor', 'middle')
-      .attr('y', 13.5)
-      .text('');
+      .attr('y', 8.5)
+      .text(d => getTrainStatus(d, null));
 
     // Size the badge rect to fit the text after insertion
     enter.each(function () {
@@ -204,7 +193,6 @@
     const destText = groupSel.select('.label-dest');
     const badge = groupSel.select('.label-badge');
     const runText = groupSel.select('.label-run');
-    const runBadge = groupSel.select('.label-run-badge');
     if (destText.empty() || badge.empty()) return;
 
     // Use approximate character width since getBBox may not work before render
@@ -213,12 +201,12 @@
     const padX = 2;
     const w = Math.max(text.length * charW + padX * 2, 12);
 
-    // Destination badge
+    // Destination badge (centered)
     badge.attr('x', -w / 2).attr('y', 0.5).attr('width', w).attr('height', 5.5);
 
-    // Run number badge — same width, dark gray, no radius
-    if (!runBadge.empty()) {
-      runBadge.attr('x', -w / 2).attr('y', 6.5).attr('width', w).attr('height', 4);
+    // Run number — positioned just past the right edge of badge
+    if (!runText.empty()) {
+      runText.attr('x', w / 2 + 1.5);
     }
   }
 
@@ -328,6 +316,23 @@
   }
 
   /**
+   * Derives a status string from ETA data or train-level flags.
+   * Train position data always has isApp/isDly, so there's always a fallback.
+   */
+  function getTrainStatus(train, etas) {
+    if (etas && etas.length > 0) {
+      const eta = etas[0];
+      if (eta.isDly === '1') return 'Delayed';
+      if (eta.isApp === '1') return `Approaching ${eta.staNm}`;
+      if (eta.staNm) return `Next: ${eta.staNm}`;
+    }
+    // Fallback to train's own status fields (no station name available)
+    if (train.isDly === '1') return 'Delayed';
+    if (train.isApp === '1') return 'Approaching station';
+    return 'In transit';
+  }
+
+  /**
    * Updates the inline label for the currently selected train with ETA info.
    */
   function updateInlineLabel(train, etas) {
@@ -340,22 +345,9 @@
     // Destination — just the terminal name, no ETA
     label.select('.label-dest').text((train.destNm || '').toUpperCase());
     label.select('.label-run').text(`#${train.rn}`);
+    label.select('.label-status').text(getTrainStatus(train, etas));
 
-    // Status from ETA data
-    let statusText = '';
-    if (etas && etas.length > 0) {
-      const eta = etas[0];
-      if (eta.isDly === '1') {
-        statusText = 'Delayed';
-      } else if (eta.isApp === '1') {
-        statusText = `Approaching ${eta.staNm}`;
-      } else if (eta.staNm) {
-        statusText = `Next: ${eta.staNm}`;
-      }
-    }
-    label.select('.label-status').text(statusText);
-
-    // Re-size badges
+    // Re-size badge
     sizeLabelBadge(group);
   }
 
@@ -414,14 +406,28 @@
         const g = d3.select(this);
         g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
-        // Update arrow rotation to match current heading
-        const angle = headingToSVGAngle(d.heading);
-        const r = TRAIN_RADIUS + 5.5;
-        const rad = angle * Math.PI / 180;
-        const tx = Math.cos(rad) * r;
-        const ty = Math.sin(rad) * r;
-        g.select('.train-arrow')
-          .attr('transform', `translate(${tx},${ty}) rotate(${angle})`);
+        // Animate arrow: pulse outward from inside the dot, fade out, repeat
+        const arrow = g.select('.train-arrow');
+        if (d.rn === selectedTrainRn) {
+          if (d._arrowPhase === undefined) d._arrowPhase = 0;
+          d._arrowPhase = (d._arrowPhase + dt / 1400) % 1;
+
+          const phase = d._arrowPhase;
+          const rMax = 14;
+          const r = rMax * phase;
+          const arrowOpacity = Math.max(0, 1 - phase * 1.2);
+
+          const angle = headingToSVGAngle(d.heading);
+          const rad = angle * Math.PI / 180;
+          const atx = Math.cos(rad) * r;
+          const aty = Math.sin(rad) * r;
+          arrow
+            .attr('transform', `translate(${atx},${aty}) rotate(${angle})`)
+            .style('opacity', arrowOpacity);
+        } else {
+          d._arrowPhase = undefined;
+          arrow.style('opacity', 0);
+        }
       });
 
     // Camera tracking for selected train

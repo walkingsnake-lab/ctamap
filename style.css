@@ -78,15 +78,9 @@ body {
   opacity: 0;
 }
 
-/* --- Direction arrow --- */
+/* --- Direction arrow (animated via JS, not CSS) --- */
 .train-arrow {
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.train-group.selected .train-arrow {
-  opacity: 0.9;
 }
 
 /* --- Inline label beneath dot --- */
@@ -106,21 +100,17 @@ body {
   letter-spacing: 0.04em;
 }
 
-.label-run-badge {
-  opacity: 0.92;
-}
-
 .label-run {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
-  font-size: 2.5px;
-  font-weight: 800;
-  fill: #fff;
+  font-size: 2px;
+  font-weight: 400;
+  fill: rgba(255, 255, 255, 0.4);
   letter-spacing: 0.02em;
 }
 
 .label-status {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
   font-size: 2.2px;
-  fill: rgba(255, 255, 255, 0.6);
+  fill: rgba(255, 255, 255, 0.55);
   letter-spacing: 0.02em;
 }
