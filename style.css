@@ -144,8 +144,7 @@ body {
 
 #train-label.visible {
   display: block;
-  opacity: 0;
-  animation: label-in 0.1s ease 0.7s forwards, glow-flicker 1.8s ease-out 0.7s forwards;
+  animation: sign-flicker 1.6s steps(1) 0.7s both;
 }
 
 .tl-badge {
@@ -190,19 +189,15 @@ body {
   color: rgba(255, 255, 255, 0.8);
 }
 
-/* Label appears after zoom completes */
-@keyframes label-in {
-  to { opacity: 1; }
-}
-
-/* Glow flickers on like an LED sign — affects text-shadow via --glow-i */
-@keyframes glow-flicker {
-  0%   { --glow-i: 0; }
-  8%   { --glow-i: 2; }
-  15%  { --glow-i: 0.15; }
-  28%  { --glow-i: 1.5; }
-  38%  { --glow-i: 0.3; }
-  55%  { --glow-i: 1.2; }
-  75%  { --glow-i: 0.8; }
-  100% { --glow-i: 1; }
+/* LED sign flicker — instant on/off via steps(1), glow ramps with it */
+@keyframes sign-flicker {
+  0%        { opacity: 0; --glow-i: 0; }
+  6%        { opacity: 1; --glow-i: 2; }
+  12%       { opacity: 0; --glow-i: 0; }
+  20%       { opacity: 1; --glow-i: 1.5; }
+  28%       { opacity: 0; --glow-i: 0; }
+  38%       { opacity: 1; --glow-i: 1.2; }
+  44%       { opacity: 0; --glow-i: 0; }
+  52%       { opacity: 1; --glow-i: 1; }
+  100%      { opacity: 1; --glow-i: 1; }
 }
