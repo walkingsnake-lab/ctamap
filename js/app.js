@@ -103,16 +103,16 @@
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
-    // Direction arrow — small chevron that pulses outward along the track
-    enter.append('path')
-      .attr('class', 'train-arrow')
-      .attr('d', 'M0,-0.9 L1.6,0 L0,0.9')
-      .attr('fill', 'none')
-      .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
-      .attr('stroke-width', 0.9)
-      .attr('stroke-linecap', 'round')
-      .attr('stroke-linejoin', 'round')
-      .style('opacity', 0);
+    // Direction arrows — steady stream of filled triangles along the track
+    const ARROW_COUNT = 4;
+    for (let i = 0; i < ARROW_COUNT; i++) {
+      enter.append('path')
+        .attr('class', `train-arrow train-arrow-${i}`)
+        .attr('d', 'M0,-0.65 L1.2,0 L0,0.65 Z')
+        .attr('fill', d => LINE_COLORS[d.legend] || '#fff')
+        .attr('stroke', 'none')
+        .style('opacity', 0);
+    }
 
     // Inline label (hidden by default, shown on select)
     const label = enter.append('g')
@@ -394,51 +394,66 @@
         const g = d3.select(this);
         g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
-        // Animate arrow: pulse outward along the track, fade out, repeat
-        const arrow = g.select('.train-arrow');
+        // Animate arrows: steady stream of triangles flowing along the track
         const segs = lineSegments[d.legend];
-        // Hide arrow at terminal (no upcoming stops)
         const atTerminal = d.rn === selectedTrainRn
           && lastETAs !== null && lastETAs.length === 0;
+        const showArrows = d.rn === selectedTrainRn
+          && d._trackPos && segs && !atTerminal;
 
-        if (d.rn === selectedTrainRn && d._trackPos && segs && !atTerminal) {
+        if (showArrows) {
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
-          d._arrowPhase = (d._arrowPhase + dt / 800) % 1;
+          d._arrowPhase = (d._arrowPhase + dt / 1200) % 1;
 
-          const phase = d._arrowPhase;
-          const maxDist = 0.004; // geo-degrees along track
-          const dist = maxDist * phase;
           const dir = d._direction || 1;
+          const maxDist = 0.005;
+          const fadeStart = TRAIN_RADIUS + 0.5;
+          const fadeRange = 12;
 
-          const advPos = advanceOnTrack(d._trackPos, dist, dir, segs);
-          const advPt = projection([advPos.lon, advPos.lat]);
+          for (let i = 0; i < 4; i++) {
+            const arrow = g.select(`.train-arrow-${i}`);
+            const phase = (d._arrowPhase + i / 4) % 1;
+            const dist = maxDist * phase;
 
-          if (advPt) {
-            const dx = advPt[0] - pt[0];
-            const dy = advPt[1] - pt[1];
+            const advPos = advanceOnTrack(d._trackPos, dist, dir, segs);
+            const advPt = projection([advPos.lon, advPos.lat]);
 
-            // Track angle from segment geometry in projected space
-            const seg = segs[advPos.segIdx];
-            let angle = 0;
-            if (seg && advPos.ptIdx < seg.length - 1) {
-              const sPt = projection([seg[advPos.ptIdx][0], seg[advPos.ptIdx][1]]);
-              const ePt = projection([seg[advPos.ptIdx + 1][0], seg[advPos.ptIdx + 1][1]]);
-              if (sPt && ePt) {
-                const sdx = ePt[0] - sPt[0];
-                const sdy = ePt[1] - sPt[1];
-                angle = Math.atan2(sdy, sdx) * 180 / Math.PI;
-                if (dir < 0) angle += 180;
+            if (advPt) {
+              const dx = advPt[0] - pt[0];
+              const dy = advPt[1] - pt[1];
+              const distSVG = Math.sqrt(dx * dx + dy * dy);
+
+              // Hide inside dot, fade out past dot edge
+              if (distSVG < fadeStart) {
+                arrow.style('opacity', 0);
+              } else {
+                const fadeFrac = Math.min(1, (distSVG - fadeStart) / fadeRange);
+                const opacity = 0.65 * (1 - fadeFrac);
+
+                const seg = segs[advPos.segIdx];
+                let angle = 0;
+                if (seg && advPos.ptIdx < seg.length - 1) {
+                  const sPt = projection([seg[advPos.ptIdx][0], seg[advPos.ptIdx][1]]);
+                  const ePt = projection([seg[advPos.ptIdx + 1][0], seg[advPos.ptIdx + 1][1]]);
+                  if (sPt && ePt) {
+                    const sdx = ePt[0] - sPt[0];
+                    const sdy = ePt[1] - sPt[1];
+                    angle = Math.atan2(sdy, sdx) * 180 / Math.PI;
+                    if (dir < 0) angle += 180;
+                  }
+                }
+
+                arrow
+                  .attr('transform', `translate(${dx},${dy}) rotate(${angle})`)
+                  .style('opacity', opacity);
               }
             }
-
-            const arrowOpacity = Math.max(0, 1 - phase * 1.3);
-            arrow
-              .attr('transform', `translate(${dx},${dy}) rotate(${angle})`)
-              .style('opacity', arrowOpacity);
           }
         } else {
           d._arrowPhase = undefined;
-          arrow.style('opacity', 0);
+          for (let i = 0; i < 4; i++) {
+            g.select(`.train-arrow-${i}`).style('opacity', 0);
+          }
         }
       });
 
