@@ -100,13 +100,7 @@
       .attr('fill', d => `url(#train-glow-${d.legend})`)
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
-    // Inner solid dot
-    enter.append('circle')
-      .attr('class', 'train-dot')
-      .attr('r', TRAIN_RADIUS)
-      .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
-
-    // Direction arrows — steady stream of filled triangles along the track
+    // Direction arrows — rendered before dot so they pass "behind" the circle
     const ARROW_COUNT = 4;
     for (let i = 0; i < ARROW_COUNT; i++) {
       enter.append('path')
@@ -116,6 +110,12 @@
         .attr('stroke', 'none')
         .style('opacity', 0);
     }
+
+    // Inner solid dot (on top of arrows)
+    enter.append('circle')
+      .attr('class', 'train-dot')
+      .attr('r', TRAIN_RADIUS)
+      .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
     // Inline label (hidden by default, shown on select)
     const label = enter.append('g')
@@ -134,8 +134,7 @@
       .attr('class', 'label-dest')
       .attr('text-anchor', 'middle')
       .attr('y', 4.5)
-      .attr('fill', d => d.legend === 'YL' ? '#000' : '#fff')
-      .text(d => formatDestName(d.destNm || ''));
+      .style('fill', d => d.legend === 'YL' ? '#000' : '#fff');
 
     // Line name + Run number
     label.append('text')
@@ -153,9 +152,10 @@
       .attr('text-anchor', 'middle')
       .attr('y', 12);
 
-    // Size the badge rect and render initial status text
+    // Render initial text and size the badge
     enter.each(function (d) {
       const g = d3.select(this);
+      renderDestText(g.select('.label-dest'), d.destNm);
       renderStatusText(g.select('.label-status'), getTrainStatus(d, null));
       sizeLabelBadge(g);
     });
@@ -317,14 +317,29 @@
   }
 
   /**
-   * Formats destination name: uppercased, with airplane symbol for airport terminals.
+   * Returns true if the destination is an airport terminal.
    */
-  function formatDestName(name) {
-    const upper = name.toUpperCase();
-    if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
-      return upper + ' \u2708';
+  function isAirportDest(name) {
+    return /O'?HARE/i.test(name) || /MIDWAY/i.test(name);
+  }
+
+  /**
+   * Renders destination text into an SVG text element, with a rotated airplane
+   * glyph for airport terminals.
+   */
+  function renderDestText(sel, name) {
+    sel.selectAll('tspan').remove();
+    const upper = (name || '').toUpperCase();
+    if (isAirportDest(name)) {
+      sel.text(null);
+      sel.append('tspan').text(upper + ' ');
+      sel.append('tspan')
+        .attr('rotate', '90')
+        .attr('dy', '-0.5')
+        .text('\u2708');
+    } else {
+      sel.text(upper);
     }
-    return upper;
   }
 
   /**
@@ -364,7 +379,7 @@
     if (group.empty()) return;
 
     const label = group.select('.train-label');
-    label.select('.label-dest').text(formatDestName(train.destNm || ''));
+    renderDestText(label.select('.label-dest'), train.destNm);
     const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
     label.select('.label-info').text(`${lineName} Line \u00b7 #${train.rn}`);
     renderStatusText(label.select('.label-status'), getTrainStatus(train, etas));
@@ -443,16 +458,20 @@
           d._arrowPhase = (d._arrowPhase + dt / 1800) % 1;
 
           const dir = d._direction || 1;
-          const maxDist = 0.005;
-          const fadeStart = TRAIN_RADIUS + 0.5;
-          const fadeRange = 12;
+          const behindDist = 0.003; // start this far behind the dot
+          const totalDist = 0.008;  // total travel distance (behind + ahead)
+          const fadeInEnd = 8;      // SVG units — fully opaque by this close behind
+          const fadeOutRange = 8;   // SVG units — fades to 0 this far ahead
 
           for (let i = 0; i < 4; i++) {
             const arrow = g.select(`.train-arrow-${i}`);
             const phase = (d._arrowPhase + i / 4) % 1;
-            const dist = maxDist * phase;
+            // Start behind the dot, move forward through it
+            const dist = -behindDist + totalDist * phase;
 
-            const advPos = advanceOnTrack(d._trackPos, dist, dir, segs);
+            // Advance along track; negative = behind dot
+            const advDir = dist >= 0 ? dir : -dir;
+            const advPos = advanceOnTrack(d._trackPos, Math.abs(dist), advDir, segs);
             const advPt = projection([advPos.lon, advPos.lat]);
 
             if (advPt) {
@@ -460,30 +479,32 @@
               const dy = advPt[1] - pt[1];
               const distSVG = Math.sqrt(dx * dx + dy * dy);
 
-              // Hide inside dot, fade out past dot edge
-              if (distSVG < fadeStart) {
-                arrow.style('opacity', 0);
+              // Opacity: fade in behind dot, fade out ahead
+              let opacity;
+              if (dist < 0) {
+                // Behind the dot — fade in (far=0, near=0.6)
+                opacity = 0.6 * Math.max(0, 1 - distSVG / fadeInEnd);
               } else {
-                const fadeFrac = Math.min(1, (distSVG - fadeStart) / fadeRange);
-                const opacity = 0.65 * (1 - fadeFrac);
-
-                const seg = segs[advPos.segIdx];
-                let angle = 0;
-                if (seg && advPos.ptIdx < seg.length - 1) {
-                  const sPt = projection([seg[advPos.ptIdx][0], seg[advPos.ptIdx][1]]);
-                  const ePt = projection([seg[advPos.ptIdx + 1][0], seg[advPos.ptIdx + 1][1]]);
-                  if (sPt && ePt) {
-                    const sdx = ePt[0] - sPt[0];
-                    const sdy = ePt[1] - sPt[1];
-                    angle = Math.atan2(sdy, sdx) * 180 / Math.PI;
-                    if (dir < 0) angle += 180;
-                  }
-                }
-
-                arrow
-                  .attr('transform', `translate(${dx},${dy}) rotate(${angle})`)
-                  .style('opacity', opacity);
+                // Ahead of the dot — fade out
+                opacity = 0.6 * Math.max(0, 1 - distSVG / fadeOutRange);
               }
+
+              const seg = segs[advPos.segIdx];
+              let angle = 0;
+              if (seg && advPos.ptIdx < seg.length - 1) {
+                const sPt = projection([seg[advPos.ptIdx][0], seg[advPos.ptIdx][1]]);
+                const ePt = projection([seg[advPos.ptIdx + 1][0], seg[advPos.ptIdx + 1][1]]);
+                if (sPt && ePt) {
+                  const sdx = ePt[0] - sPt[0];
+                  const sdy = ePt[1] - sPt[1];
+                  angle = Math.atan2(sdy, sdx) * 180 / Math.PI;
+                  if (dir < 0) angle += 180;
+                }
+              }
+
+              arrow
+                .attr('transform', `translate(${dx},${dy}) rotate(${angle})`)
+                .style('opacity', opacity);
             }
           }
         } else {
