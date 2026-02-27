@@ -443,10 +443,8 @@
           d._arrowPhase = (d._arrowPhase + dt / 2400) % 1;
 
           const dir = d._direction || 1;
-          const behindDist = 0.002; // start this far behind the dot
-          const totalDist = 0.006;  // total travel distance (behind + ahead)
-          const fadeInEnd = 8;      // SVG units — fully opaque by this close behind
-          const fadeOutRange = 8;   // SVG units — fades to 0 this far ahead
+          const behindDist = 0.003; // start this far behind the dot
+          const totalDist = 0.007;  // total travel distance (behind + ahead)
 
           for (let i = 0; i < 6; i++) {
             const arrow = g.select(`.train-arrow-${i}`);
@@ -462,17 +460,9 @@
             if (advPt) {
               const dx = advPt[0] - pt[0];
               const dy = advPt[1] - pt[1];
-              const distSVG = Math.sqrt(dx * dx + dy * dy);
 
-              // Opacity: fade in behind dot, fade out ahead
-              let opacity;
-              if (dist < 0) {
-                // Behind the dot — fade in (far=0, near=0.6)
-                opacity = 0.6 * Math.max(0, 1 - distSVG / fadeInEnd);
-              } else {
-                // Ahead of the dot — fade out
-                opacity = 0.6 * Math.max(0, 1 - distSVG / fadeOutRange);
-              }
+              // Smooth phase-based opacity: 0 at both ends, peak in the middle
+              const opacity = 0.6 * Math.sin(phase * Math.PI);
 
               const seg = segs[advPos.segIdx];
               let angle = 0;
