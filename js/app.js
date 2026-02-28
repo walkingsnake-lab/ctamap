@@ -45,6 +45,24 @@
   let stationsVisible = false;
   renderStations(svg.select('.stations-layer'), stations, projection, geojson);
 
+  function toggleStations() {
+    stationsVisible = !stationsVisible;
+    svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
+  }
+
+  // Long-press to toggle stations (touch screens)
+  let longPressTimer = null;
+  svg.on('touchstart.stations', (event) => {
+    if (event.touches.length !== 1) return;
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      toggleStations();
+    }, 600);
+  });
+  svg.on('touchmove.stations touchend.stations touchcancel.stations', () => {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  });
+
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
 
@@ -604,8 +622,7 @@
 
     // S key: toggle station name overlay
     if (event.key === 's' || event.key === 'S') {
-      stationsVisible = !stationsVisible;
-      svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
+      toggleStations();
       return;
     }
 
