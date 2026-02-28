@@ -538,28 +538,29 @@ function displayStationName(name) {
  * Builds a deduplicated array of station objects from GeoJSON segment descriptions.
  * Filters out infrastructure points (junctions, towers, portals, etc.).
  * Each station has: { name, lon, lat, legends: string[] }
+ *
+ * Station coordinates are determined by finding shared endpoints between
+ * adjacent GeoJSON segments.  Segment descriptions follow the pattern
+ * "StationA to StationB", but the geometry direction is arbitrary (line[0]
+ * may be A or B).  Where two segments share a station name, the endpoint
+ * coordinate they have in common IS that station's location.  Terminal
+ * stations (only one segment) use the endpoint that is NOT shared with any
+ * other segment.
  */
 function buildUniqueStations(geojson) {
-  // Collect ALL coordinate occurrences per station so we can average them.
-  // The same station name appears at endpoints of adjacent segments with
-  // different coordinates (sometimes 500m+ apart on loop tracks).
-  const stationMap = new Map();
+  const coordKey = (c) => c[0].toFixed(10) + ',' + c[1].toFixed(10);
 
+  // --- Step 1: parse segments and build endpoint index ---
+  const segments = [];
   for (const feature of geojson.features) {
     const desc = feature.properties.description || '';
+    const match = desc.match(/^(.+?)\s+to\s+(.+)$/i);
+    if (!match) continue;
+
     const coords = feature.geometry.coordinates;
     const line = feature.geometry.type === 'MultiLineString' ? coords[0] : coords;
     if (!line || line.length < 2) continue;
 
-    const match = desc.match(/^(.+?)\s+to\s+(.+)$/i);
-    if (!match) continue;
-
-    const nameA = match[1].trim();
-    const nameB = match[2].trim();
-    const startCoord = line[0];
-    const endCoord = line[line.length - 1];
-
-    // Determine which legend codes this feature serves
     const legends = [];
     const featureLegend = feature.properties.legend;
     if (featureLegend && featureLegend !== 'ML') legends.push(featureLegend);
@@ -568,27 +569,85 @@ function buildUniqueStations(geojson) {
       if (linesProp.includes(lineName) && !legends.includes(code)) legends.push(code);
     }
 
-    for (const [name, coord] of [[nameA, startCoord], [nameB, endCoord]]) {
-      if (isInfrastructureName(name)) continue;
+    segments.push({
+      nameA: match[1].trim(),
+      nameB: match[2].trim(),
+      start: line[0],
+      end: line[line.length - 1],
+      legends,
+    });
+  }
 
-      // Use original GeoJSON name for dedup (keeps separate physical stations
-      // apart even when they share a display name, e.g. Damen on Pink vs Brown)
-      const norm = normalizeStationName(name);
-      if (!stationMap.has(norm)) {
-        stationMap.set(norm, { name, lons: [coord[0]], lats: [coord[1]], legends: new Set(legends) });
-      } else {
-        const entry = stationMap.get(norm);
-        entry.lons.push(coord[0]);
-        entry.lats.push(coord[1]);
-        for (const l of legends) entry.legends.add(l);
+  // Map each unique endpoint coordinate to the segment indices that use it
+  const endpointMap = new Map();
+  for (let i = 0; i < segments.length; i++) {
+    for (const pt of [segments[i].start, segments[i].end]) {
+      const key = coordKey(pt);
+      if (!endpointMap.has(key)) endpointMap.set(key, []);
+      endpointMap.get(key).push(i);
+    }
+  }
+
+  // --- Step 2: resolve station coordinates via shared endpoints ---
+  // stationCoord: stationName → [lon, lat]
+  const stationCoord = new Map();
+  // stationLegends: stationName → Set of legend codes
+  const stationLegends = new Map();
+
+  const recordStation = (name, coord, legends) => {
+    if (isInfrastructureName(name)) return;
+    if (!stationCoord.has(name)) {
+      stationCoord.set(name, coord);
+      stationLegends.set(name, new Set(legends));
+    } else {
+      for (const l of legends) stationLegends.get(name).add(l);
+    }
+  };
+
+  // Pass 1: where two segments share an endpoint, the station name common
+  // to both segments' descriptions is located at that coordinate.
+  for (const [, segIndices] of endpointMap) {
+    if (segIndices.length < 2) continue;
+    for (let i = 0; i < segIndices.length; i++) {
+      for (let j = i + 1; j < segIndices.length; j++) {
+        const si = segments[segIndices[i]];
+        const sj = segments[segIndices[j]];
+        const namesI = [si.nameA, si.nameB];
+        const namesJ = new Set([sj.nameA, sj.nameB]);
+        // Find the shared coordinate between these two segments
+        let sharedCoord = null;
+        for (const ptI of [si.start, si.end]) {
+          for (const ptJ of [sj.start, sj.end]) {
+            if (coordKey(ptI) === coordKey(ptJ)) { sharedCoord = ptI; break; }
+          }
+          if (sharedCoord) break;
+        }
+        if (!sharedCoord) continue;
+        for (const name of namesI) {
+          if (namesJ.has(name)) {
+            recordStation(name, sharedCoord, [...si.legends, ...sj.legends]);
+          }
+        }
       }
     }
   }
 
-  return Array.from(stationMap.values()).map(s => ({
-    name: displayStationName(s.name),
-    lon: s.lons.reduce((a, b) => a + b, 0) / s.lons.length,
-    lat: s.lats.reduce((a, b) => a + b, 0) / s.lats.length,
-    legends: Array.from(s.legends)
+  // Pass 2: terminal stations — the endpoint NOT shared with any other
+  // segment is the terminal station's coordinate.
+  for (const seg of segments) {
+    for (const name of [seg.nameA, seg.nameB]) {
+      if (stationCoord.has(name) || isInfrastructureName(name)) continue;
+      const startShared = endpointMap.get(coordKey(seg.start)).length > 1;
+      const endShared = endpointMap.get(coordKey(seg.end)).length > 1;
+      if (startShared && !endShared) recordStation(name, seg.end, seg.legends);
+      else if (endShared && !startShared) recordStation(name, seg.start, seg.legends);
+    }
+  }
+
+  return Array.from(stationCoord.entries()).map(([name, coord]) => ({
+    name: displayStationName(name),
+    lon: coord[0],
+    lat: coord[1],
+    legends: Array.from(stationLegends.get(name)),
   }));
 }
