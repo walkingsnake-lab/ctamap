@@ -91,6 +91,15 @@ body {
   opacity: 0.08 !important;
 }
 
+/* --- PR express path (hidden by default, shown only when Purple is focused) --- */
+.line-path.pr-express-path {
+  opacity: 0 !important;
+}
+
+.line-path.pr-express-path.pr-express-active {
+  opacity: 0.9 !important;
+}
+
 /* --- Track lines --- */
 .line-path {
   fill: none;

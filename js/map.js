@@ -34,18 +34,20 @@ function createTrainGlowGradients(defs) {
  * Lines that use the Loop include ML segments in their own color.
  */
 function renderLines(linesGroup, path, geojson) {
-  // Build maps: legend code → shared features from ML and RD segments
+  // Build maps: legend code → shared features from ML, RD, and BR segments
   const mlByLegend = {};
   const rdSharedByLegend = {};
+  const brSharedByLegend = {};
   for (const f of geojson.features) {
     const leg = f.properties.legend;
-    if (leg !== 'ML' && leg !== 'RD') continue;
+    if (leg !== 'ML' && leg !== 'RD' && leg !== 'BR') continue;
     const linesProp = f.properties.lines || '';
     for (const [name, code] of Object.entries(LINE_NAME_TO_LEGEND)) {
       if (code === leg) continue; // don't add a feature to its own legend
       if (linesProp.includes(name)) {
         if (leg === 'ML') (mlByLegend[code] ??= []).push(f);
-        else (rdSharedByLegend[code] ??= []).push(f);
+        else if (leg === 'RD') (rdSharedByLegend[code] ??= []).push(f);
+        else (brSharedByLegend[code] ??= []).push(f);
       }
     }
   }
@@ -54,13 +56,13 @@ function renderLines(linesGroup, path, geojson) {
   for (const legend of lineOrder) {
     let features = geojson.features.filter(f => f.properties.legend === legend);
 
-    // Include only the ML segments that actually serve this line
-    if (mlByLegend[legend]) {
+    // PR express service (shared BR + ML/Loop) is rendered as a separate dashed
+    // path hidden by default; exclude those ML segments from the solid main path.
+    if (mlByLegend[legend] && legend !== 'PR') {
       features = features.concat(mlByLegend[legend]);
     }
 
     // Render shadow paths for shared RD segments (behind the Red Line path)
-    // Purple gets dashed (express/limited-stop service); Brown stays solid
     const rdShared = rdSharedByLegend[legend];
     if (rdShared) {
       const shadowPath = linesGroup.append('path')
@@ -71,7 +73,28 @@ function renderLines(linesGroup, path, geojson) {
         .attr('stroke-width', LINE_WIDTH)
         .attr('stroke-opacity', 0.9);
       if (legend === 'PR') {
-        shadowPath.attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
+        shadowPath
+          .classed('pr-express-path', true)
+          .attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
+      }
+    }
+
+    // PR express path: shared BR track (subway portal → Tower 18) + Loop (ML)
+    // Rendered dashed and hidden by default; shown only when Purple is focused.
+    if (legend === 'PR') {
+      const expressFeatures = [
+        ...(brSharedByLegend['PR'] || []),
+        ...(mlByLegend['PR'] || []),
+      ];
+      if (expressFeatures.length > 0) {
+        linesGroup.append('path')
+          .attr('class', 'line-path pr-express-path')
+          .attr('data-legend', 'PR')
+          .attr('d', path({ type: 'FeatureCollection', features: expressFeatures }))
+          .attr('stroke', LINE_COLORS['PR'])
+          .attr('stroke-width', LINE_WIDTH)
+          .attr('stroke-opacity', 0.9)
+          .attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
       }
     }
 
