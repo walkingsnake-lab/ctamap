@@ -59,34 +59,17 @@ function renderLines(linesGroup, path, geojson) {
       features = features.concat(mlByLegend[legend]);
     }
 
-    // Render shadow paths for shared RD segments (rendered before RD, so behind it)
+    // Render dashed shadow paths for shared RD segments (behind the Red Line path)
     const rdShared = rdSharedByLegend[legend];
     if (rdShared) {
-      // Purple Express segments get dashed; regular shared segments stay solid
-      const isExpress = f => (f.properties.lines || '').includes('Express');
-      const expressSeg = legend === 'PR' ? rdShared.filter(isExpress) : [];
-      const solidSeg = legend === 'PR' ? rdShared.filter(f => !isExpress(f)) : rdShared;
-
-      if (solidSeg.length > 0) {
-        linesGroup.append('path')
-          .attr('class', 'line-path')
-          .attr('data-legend', legend)
-          .attr('d', path({ type: 'FeatureCollection', features: solidSeg }))
-          .attr('stroke', LINE_COLORS[legend])
-          .attr('stroke-width', LINE_WIDTH)
-          .attr('stroke-opacity', 0.9);
-      }
-
-      if (expressSeg.length > 0) {
-        linesGroup.append('path')
-          .attr('class', 'line-path')
-          .attr('data-legend', legend)
-          .attr('d', path({ type: 'FeatureCollection', features: expressSeg }))
-          .attr('stroke', LINE_COLORS[legend])
-          .attr('stroke-width', LINE_WIDTH)
-          .attr('stroke-opacity', 0.9)
-          .attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
-      }
+      linesGroup.append('path')
+        .attr('class', 'line-path')
+        .attr('data-legend', legend)
+        .attr('d', path({ type: 'FeatureCollection', features: rdShared }))
+        .attr('stroke', LINE_COLORS[legend])
+        .attr('stroke-width', LINE_WIDTH)
+        .attr('stroke-opacity', 0.9)
+        .attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
     }
 
     if (features.length === 0) continue;
