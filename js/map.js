@@ -59,17 +59,20 @@ function renderLines(linesGroup, path, geojson) {
       features = features.concat(mlByLegend[legend]);
     }
 
-    // Render dashed shadow paths for shared RD segments (behind the Red Line path)
+    // Render shadow paths for shared RD segments (behind the Red Line path)
+    // Purple gets dashed (express/limited-stop service); Brown stays solid
     const rdShared = rdSharedByLegend[legend];
     if (rdShared) {
-      linesGroup.append('path')
+      const shadowPath = linesGroup.append('path')
         .attr('class', 'line-path')
         .attr('data-legend', legend)
         .attr('d', path({ type: 'FeatureCollection', features: rdShared }))
         .attr('stroke', LINE_COLORS[legend])
         .attr('stroke-width', LINE_WIDTH)
-        .attr('stroke-opacity', 0.9)
-        .attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
+        .attr('stroke-opacity', 0.9);
+      if (legend === 'PR') {
+        shadowPath.attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
+      }
     }
 
     if (features.length === 0) continue;
