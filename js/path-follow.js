@@ -505,3 +505,51 @@ function lookupStation(stationName, legend, stationPositions) {
 function normalizeStationName(name) {
   return name.toLowerCase().replace(/[\/\-]/g, ' ').replace(/\s+/g, ' ').trim();
 }
+
+/**
+ * Builds a deduplicated array of station objects from GeoJSON segment descriptions.
+ * Each station has: { name, lon, lat, legends: string[] }
+ */
+function buildUniqueStations(geojson) {
+  const stationMap = new Map();
+
+  for (const feature of geojson.features) {
+    const desc = feature.properties.description || '';
+    const coords = feature.geometry.coordinates;
+    const line = feature.geometry.type === 'MultiLineString' ? coords[0] : coords;
+    if (!line || line.length < 2) continue;
+
+    const match = desc.match(/^(.+?)\s+to\s+(.+)$/i);
+    if (!match) continue;
+
+    const nameA = match[1].trim();
+    const nameB = match[2].trim();
+    const startCoord = line[0];
+    const endCoord = line[line.length - 1];
+
+    // Determine which legend codes this feature serves
+    const legends = [];
+    const featureLegend = feature.properties.legend;
+    if (featureLegend && featureLegend !== 'ML') legends.push(featureLegend);
+    const linesProp = feature.properties.lines || '';
+    for (const [lineName, code] of Object.entries(LINE_NAME_TO_LEGEND_STATION)) {
+      if (linesProp.includes(lineName) && !legends.includes(code)) legends.push(code);
+    }
+
+    for (const [name, coord] of [[nameA, startCoord], [nameB, endCoord]]) {
+      const norm = normalizeStationName(name);
+      if (!stationMap.has(norm)) {
+        stationMap.set(norm, { name, lon: coord[0], lat: coord[1], legends: new Set(legends) });
+      } else {
+        for (const l of legends) stationMap.get(norm).legends.add(l);
+      }
+    }
+  }
+
+  return Array.from(stationMap.values()).map(s => ({
+    name: s.name,
+    lon: s.lon,
+    lat: s.lat,
+    legends: Array.from(s.legends)
+  }));
+}

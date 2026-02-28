@@ -66,6 +66,41 @@ function renderLines(linesGroup, path, geojson) {
   }
 }
 
+/**
+ * Renders station markers (dots + labels) into a stations layer group.
+ * Stations scale naturally with the map zoom.
+ */
+function renderStations(stationsGroup, stations, projection) {
+  stationsGroup.selectAll('*').remove();
+
+  for (const station of stations) {
+    const pt = projection([station.lon, station.lat]);
+    if (!pt) continue;
+
+    const g = stationsGroup.append('g')
+      .attr('class', 'station-marker')
+      .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+
+    // Pick primary line color for the dot outline
+    const color = station.legends.length > 0
+      ? (LINE_COLORS[station.legends[0]] || '#fff')
+      : '#fff';
+
+    g.append('circle')
+      .attr('class', 'station-dot')
+      .attr('r', 1)
+      .attr('fill', '#fff')
+      .attr('stroke', color)
+      .attr('stroke-width', 0.3);
+
+    g.append('text')
+      .attr('class', 'station-label')
+      .attr('x', 1.8)
+      .attr('y', 0.6)
+      .text(station.name);
+  }
+}
+
 async function loadMap(svg, width, height) {
   const geojson = await d3.json(GEOJSON_URL);
 
@@ -85,6 +120,9 @@ async function loadMap(svg, width, height) {
 
   const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');
   renderLines(linesGroup, path, geojson);
+
+  // Stations layer sits between lines and trains (created hidden)
+  mapContainer.append('g').attr('class', 'stations-layer').style('display', 'none');
 
   return { projection, geojson, path, mapContainer };
 }
@@ -113,6 +151,7 @@ function redrawMap(svg, width, height, geojson) {
   const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');
   renderLines(linesGroup, path, geojson);
 
+  mapContainer.append('g').attr('class', 'stations-layer');
   mapContainer.append('g').attr('class', 'trains-layer');
 
   return { projection, path };

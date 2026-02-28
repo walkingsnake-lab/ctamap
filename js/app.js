@@ -30,6 +30,9 @@
   // Build station position lookup for terminal proximity checks
   const stationPositions = buildStationPositions(geojson);
 
+  // Build unique stations list for the overlay
+  const stations = buildUniqueStations(geojson);
+
   // ---- D3 zoom behavior ----
   const zoom = d3.zoom()
     .scaleExtent([1, 10])
@@ -37,6 +40,10 @@
       svg.select('.map-container').attr('transform', event.transform);
     });
   svg.call(zoom);
+
+  // Render stations into the stations layer (created hidden by loadMap)
+  let stationsVisible = false;
+  renderStations(svg.select('.stations-layer'), stations, projection);
 
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
@@ -595,6 +602,13 @@
       return;
     }
 
+    // S key: toggle station name overlay
+    if (event.key === 's' || event.key === 'S') {
+      stationsVisible = !stationsVisible;
+      svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
+      return;
+    }
+
     // L key: zoom to The Loop (deselects train first if tracking)
     if (event.key === 'l' || event.key === 'L') {
       if (selectedTrain) {
@@ -630,6 +644,10 @@
 
       const result = redrawMap(svg, width, height, geojson);
       projection = result.projection;
+
+      // Re-render stations overlay
+      renderStations(svg.select('.stations-layer'), stations, projection);
+      if (!stationsVisible) svg.select('.stations-layer').style('display', 'none');
 
       // Reset zoom state after redraw
       isZoomedToLoop = false;
