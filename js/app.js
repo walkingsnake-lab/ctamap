@@ -503,10 +503,23 @@
         // instead of letting them vanish immediately.
         // Uses the line's OWN segments only (no shared/ML) so trains like
         // Purple don't bleed past Howard onto Red line track.
-        if (realTrains) {
+        // On first load, compare against localStorage snapshot so fresh
+        // visitors still see recently-retired trains at terminals.
+        let prevTrainsForRetire = realTrains;
+        const fromStorage = !realTrains;
+        if (fromStorage) {
+          try {
+            const stored = JSON.parse(localStorage.getItem('cta_prev_trains'));
+            if (stored && Date.now() - stored.timestamp <= 120000) {
+              prevTrainsForRetire = stored.trains;
+            }
+          } catch (e) {}
+        }
+
+        if (prevTrainsForRetire) {
           const newRns = new Set(fetched.map(t => t.rn));
           const retireRns = new Set(retiringTrains.map(t => t.rn));
-          for (const train of realTrains) {
+          for (const train of prevTrainsForRetire) {
             if (newRns.has(train.rn) || train._retiring || retireRns.has(train.rn)) continue;
 
             const ownSegs = lineOwnSegments[train.legend];
@@ -538,8 +551,9 @@
 
             const dist = Math.min(dFwd, dBwd);
 
-            // If already extremely close, skip the approach slide
-            if (dist < 1e-4) {
+            // Restored from localStorage: snap to terminal (slide already happened)
+            // Also snap if already extremely close
+            if (fromStorage || dist < 1e-4) {
               train._correcting = false;
               train._trackPos = terminalPos;
               train.lon = terminalPos.lon;
@@ -613,6 +627,15 @@
         }
 
         console.log(`[CTA] Refreshed REAL train data (${realTrains.length} trains)`);
+
+        // Save snapshot to localStorage so fresh page loads can detect
+        // recently-retired trains
+        try {
+          localStorage.setItem('cta_prev_trains', JSON.stringify({
+            timestamp: Date.now(),
+            trains: fetched.map(t => ({ rn: t.rn, lon: +t.lon, lat: +t.lat, legend: t.legend }))
+          }));
+        } catch (e) {}
 
         // Update DOM (enter/exit management)
         renderTrains();
