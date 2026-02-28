@@ -12,14 +12,6 @@
 
   svg.attr('width', width).attr('height', height);
 
-  // Train dot radius scales with viewport — the map projection (fitExtent) compresses the
-  // entire CTA network into the viewport, so fixed-pixel dots appear proportionally larger
-  // on smaller screens. Scale from 1.5px (mobile) up to TRAIN_RADIUS (desktop, ≥900px).
-  function computeTrainRadius(w) {
-    return Math.max(1.5, Math.min(TRAIN_RADIUS, w / 360));
-  }
-  let trainRadius = computeTrainRadius(width);
-
   // ---- Load map lines ----
   let mapState;
   try {
@@ -143,7 +135,7 @@
     // Stroke is used for the radar ring when selected; fill gradient for unselected pulse
     enter.append('circle')
       .attr('class', 'train-glow')
-      .attr('r', trainRadius * (TRAIN_GLOW_RADIUS / TRAIN_RADIUS))
+      .attr('r', TRAIN_GLOW_RADIUS)
       .attr('fill', d => `url(#train-glow-${d.legend})`)
       .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
@@ -161,7 +153,7 @@
     // Inner solid dot (on top of direction dots)
     enter.append('circle')
       .attr('class', 'train-dot')
-      .attr('r', trainRadius)
+      .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
     // Click handler on new train groups
@@ -745,7 +737,6 @@
     resizeTimer = setTimeout(() => {
       width = window.innerWidth;
       height = window.innerHeight;
-      trainRadius = computeTrainRadius(width);
       svg.attr('width', width).attr('height', height);
 
       const result = redrawMap(svg, width, height, geojson);
