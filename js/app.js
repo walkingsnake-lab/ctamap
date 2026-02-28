@@ -25,7 +25,9 @@
   let { projection } = mapState;
 
   // Build per-line segment lookup for path-following animation
-  const lineSegments = buildLineSegments(geojson);
+  // lineSegments: full track (shared + ML) for animation/snapping
+  // lineOwnSegments: line's own colored segments only (for terminal detection)
+  const { segments: lineSegments, ownSegments: lineOwnSegments } = buildLineSegments(geojson);
 
 
   // ---- D3 zoom behavior ----
@@ -492,27 +494,42 @@
 
         // Detect trains going out of service near a terminal — retire them
         // instead of letting them vanish immediately.
-        // Walk the track geometry forward from the train to find the dead-end;
-        // no station-name matching needed.
+        // Uses the line's OWN segments only (no shared/ML) so trains like
+        // Purple don't bleed past Howard onto Red line track.
         if (realTrains) {
           const newRns = new Set(fetched.map(t => t.rn));
           const retireRns = new Set(retiringTrains.map(t => t.rn));
           for (const train of realTrains) {
             if (newRns.has(train.rn) || train._retiring || retireRns.has(train.rn)) continue;
 
-            const segs = lineSegments[train.legend];
-            if (!segs || segs.length === 0 || !train._trackPos) continue;
+            const ownSegs = lineOwnSegments[train.legend];
+            if (!ownSegs || ownSegs.length === 0) continue;
 
-            // Walk forward along the track to find the line's terminal
-            const dir = train._direction || 1;
-            const terminalPos = advanceOnTrack(train._trackPos, 0.5, dir, segs);
-            if (!terminalPos.stopped) continue; // no dead-end found (e.g. Loop circuit)
+            // Re-snap to the line's own segments (excludes shared/ML track)
+            const ownPos = snapToTrackPosition(train.lon, train.lat, ownSegs);
 
-            const dist = geoDist(train.lon, train.lat, terminalPos.lon, terminalPos.lat);
-            if (dist >= TERMINAL_PROXIMITY_THRESHOLD) continue;
+            // Walk both directions to find the nearest dead-end terminal
+            const endFwd = advanceOnTrack(ownPos, 0.5, +1, ownSegs);
+            const endBwd = advanceOnTrack(ownPos, 0.5, -1, ownSegs);
+            const dFwd = endFwd.stopped ? geoDist(train.lon, train.lat, endFwd.lon, endFwd.lat) : Infinity;
+            const dBwd = endBwd.stopped ? geoDist(train.lon, train.lat, endBwd.lon, endBwd.lat) : Infinity;
+
+            let terminalPos, slideDir;
+            if (dFwd <= dBwd) {
+              if (dFwd >= TERMINAL_PROXIMITY_THRESHOLD) continue;
+              terminalPos = endFwd;
+              slideDir = +1;
+            } else {
+              if (dBwd >= TERMINAL_PROXIMITY_THRESHOLD) continue;
+              terminalPos = endBwd;
+              slideDir = -1;
+            }
 
             train._retiring = true;
             train._retireTime = null;
+            train._retireSegs = ownSegs; // slide along own segments only
+
+            const dist = Math.min(dFwd, dBwd);
 
             // If already extremely close, skip the approach slide
             if (dist < 1e-4) {
@@ -523,11 +540,11 @@
               train._retireTime = Date.now();
             } else {
               // Set up correction slide toward terminal
-              train._corrFromTrackPos = { ...train._trackPos };
+              train._corrFromTrackPos = ownPos;
               train._corrToTrackPos = terminalPos;
-              train._corrDirection = dir;
+              train._corrDirection = slideDir;
               train._corrTotalDist = trackDistanceBetween(
-                train._corrFromTrackPos, terminalPos, dir, segs
+                ownPos, terminalPos, slideDir, ownSegs
               );
               train._correcting = true;
               train._corrStartTime = Date.now();

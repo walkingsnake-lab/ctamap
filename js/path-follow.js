@@ -7,7 +7,9 @@
 /**
  * Builds a lookup of coordinate segments per legend code.
  * Loop (ML) segments are included for lines that traverse the Loop.
- * Returns: { RD: [[seg1coords], ...], BL: [...], ... }
+ * Returns: { segments: { RD: [...], ... }, ownSegments: { RD: [...], ... } }
+ *   segments     — full track including shared and ML (for animation/snapping)
+ *   ownSegments  — only the line's own colored segments (for terminal detection)
  */
 function buildLineSegments(geojson) {
   const loopLines = ['BR', 'OR', 'PK', 'PR', 'GR'];
@@ -19,9 +21,11 @@ function buildLineSegments(geojson) {
   }
 
   const segments = {};
+  const ownSegments = {};
   for (const legend of Object.keys(LINE_COLORS)) {
     if (legend === 'ML') continue;
     const coords = collectLineCoords(geojson, legend);
+    ownSegments[legend] = coords;
 
     // Include segments from other lines that share track with this line
     // (e.g. Purple Express on Red Line track, Brown on shared Red segments)
@@ -36,7 +40,7 @@ function buildLineSegments(geojson) {
       segments[legend] = coords.concat(sharedCoords);
     }
   }
-  return segments;
+  return { segments, ownSegments };
 }
 
 /**

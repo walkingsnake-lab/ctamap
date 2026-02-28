@@ -231,7 +231,8 @@ function advanceRetiringTrains(trains, lineSegments, dt) {
 
   for (const train of trains) {
     if (!train._trackPos) continue;
-    const segs = lineSegments[train.legend];
+    // Use line's own segments if stored (avoids sliding onto shared track)
+    const segs = train._retireSegs || lineSegments[train.legend];
     if (!segs) continue;
 
     if (train._correcting) {
