@@ -495,6 +495,25 @@ function lookupStation(stationName, legend, stationPositions) {
     return stationPositions.byName.get(norm);
   }
 
+  // Partial / substring match — line-specific only to avoid cross-line
+  // mismatches (e.g. "Cermak" matching Red's Cermak-Chinatown instead of Pink's 54th/Cermak)
+  let bestPartial = null;
+  let bestLenDiff = Infinity;
+  for (const [key, coord] of stationPositions.byLine) {
+    const colonIdx = key.indexOf(':');
+    const keyLegend = key.substring(0, colonIdx);
+    const keyName = key.substring(colonIdx + 1);
+    if (keyLegend !== legend) continue;
+    if (keyName.includes(norm) || norm.includes(keyName)) {
+      const lenDiff = Math.abs(keyName.length - norm.length);
+      if (lenDiff < bestLenDiff) {
+        bestLenDiff = lenDiff;
+        bestPartial = coord;
+      }
+    }
+  }
+  if (bestPartial) return bestPartial;
+
   return null;
 }
 
@@ -503,5 +522,5 @@ function lookupStation(stationName, legend, stationPositions) {
  * Lowercases, replaces slashes and hyphens with spaces, collapses whitespace.
  */
 function normalizeStationName(name) {
-  return name.toLowerCase().replace(/[\/\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  return name.toLowerCase().replace(/[\/\-''`]/g, ' ').replace(/\s+/g, ' ').trim();
 }
