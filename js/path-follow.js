@@ -515,6 +515,26 @@ function isInfrastructureName(name) {
 }
 
 /**
+ * GeoJSON segment names use branch suffixes to disambiguate stations that
+ * share a street name on different lines (e.g. "Addison-O'Hare" vs
+ * "Addison-Ravenswood"). Strip these for display to match real CTA signage.
+ */
+const BRANCH_SUFFIXES = [
+  'Ravenswood', "O'Hare", 'North Main', 'Lake', 'Congress',
+  'Douglas', 'Midway', 'Dan Ryan', 'South Elevated', 'Evanston',
+  'Skokie', 'Homan',
+];
+
+function displayStationName(name) {
+  for (const suffix of BRANCH_SUFFIXES) {
+    if (name.endsWith('-' + suffix)) {
+      return name.slice(0, -(suffix.length + 1));
+    }
+  }
+  return name;
+}
+
+/**
  * Builds a deduplicated array of station objects from GeoJSON segment descriptions.
  * Filters out infrastructure points (junctions, towers, portals, etc.).
  * Each station has: { name, lon, lat, legends: string[] }
@@ -551,6 +571,8 @@ function buildUniqueStations(geojson) {
     for (const [name, coord] of [[nameA, startCoord], [nameB, endCoord]]) {
       if (isInfrastructureName(name)) continue;
 
+      // Use original GeoJSON name for dedup (keeps separate physical stations
+      // apart even when they share a display name, e.g. Damen on Pink vs Brown)
       const norm = normalizeStationName(name);
       if (!stationMap.has(norm)) {
         stationMap.set(norm, { name, lons: [coord[0]], lats: [coord[1]], legends: new Set(legends) });
@@ -564,7 +586,7 @@ function buildUniqueStations(geojson) {
   }
 
   return Array.from(stationMap.values()).map(s => ({
-    name: s.name,
+    name: displayStationName(s.name),
     lon: s.lons.reduce((a, b) => a + b, 0) / s.lons.length,
     lat: s.lats.reduce((a, b) => a + b, 0) / s.lats.length,
     legends: Array.from(s.legends)
