@@ -59,6 +59,7 @@ function renderLines(linesGroup, path, geojson) {
 
     linesGroup.append('path')
       .attr('class', 'line-path')
+      .attr('data-legend', legend)
       .attr('d', path({ type: 'FeatureCollection', features }))
       .attr('stroke', LINE_COLORS[legend])
       .attr('stroke-width', LINE_WIDTH)
