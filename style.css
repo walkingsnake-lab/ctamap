@@ -215,3 +215,15 @@ body {
   0%   { opacity: 0; transform: translateY(4px); }
   100% { opacity: 1; transform: translateY(0); }
 }
+
+/* --- Station overlay (toggle with S key) --- */
+.station-dot {
+  opacity: 0.85;
+}
+
+.station-label {
+  fill: rgba(255, 255, 255, 0.9);
+  font-size: 2.5px;
+  font-family: 'Jersey 10', monospace;
+  pointer-events: none;
+}
