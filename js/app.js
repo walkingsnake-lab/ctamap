@@ -27,6 +27,9 @@
   // Build per-line segment lookup for path-following animation
   const lineSegments = buildLineSegments(geojson);
 
+  // Build station position lookup for terminal proximity checks
+  const stationPositions = buildStationPositions(geojson);
+
   // ---- D3 zoom behavior ----
   const zoom = d3.zoom()
     .scaleExtent([1, 10])
@@ -61,6 +64,7 @@
   // ---- Initialize trains ----
   let dummyTrains = null;
   let realTrains = null;
+  let retiringTrains = [];
 
   const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
@@ -82,7 +86,7 @@
 
   // ---- Render trains (DOM management only — positions handled by animation loop) ----
   function renderTrains() {
-    const allTrains = realTrains || dummyTrains || [];
+    const allTrains = (realTrains || dummyTrains || []).concat(retiringTrains);
     const layer = svg.select('.trains-layer');
 
     const groups = layer.selectAll('.train-group')
@@ -140,9 +144,10 @@
     });
     enter.transition().duration(800).style('opacity', 1);
 
-    // Maintain selected class on merged selection
+    // Maintain selected / retiring classes on merged selection
     const merged = groups.merge(enter);
     merged.classed('selected', d => d.rn === selectedTrainRn);
+    merged.classed('train-retiring', d => !!d._retiring);
 
     // Exit — trains no longer in active or exiting lists
     groups.exit()
@@ -384,6 +389,14 @@
       advanceRealTrains(realTrains, lineSegments, dt);
     }
 
+    // Advance retiring trains toward terminal, then hold, then remove
+    if (retiringTrains.length > 0) {
+      advanceRetiringTrains(retiringTrains, lineSegments, dt);
+      const prevCount = retiringTrains.length;
+      retiringTrains = retiringTrains.filter(t => !t._retireComplete);
+      if (retiringTrains.length < prevCount) renderTrains();
+    }
+
     // Update ALL train positions directly (no D3 transitions — frame-by-frame is smoother)
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
@@ -477,6 +490,67 @@
         const prevMap = new Map();
         if (realTrains) {
           for (const t of realTrains) prevMap.set(t.rn, t);
+        }
+
+        // Detect trains going out of service near a terminal — retire them
+        // instead of letting them vanish immediately
+        if (realTrains) {
+          const newRns = new Set(fetched.map(t => t.rn));
+          const retireRns = new Set(retiringTrains.map(t => t.rn));
+          for (const train of realTrains) {
+            if (newRns.has(train.rn) || train._retiring || retireRns.has(train.rn)) continue;
+
+            const terminalCoord = lookupStation(train.destNm, train.legend, stationPositions);
+            if (!terminalCoord) continue;
+
+            const dist = geoDist(train.lon, train.lat, terminalCoord[0], terminalCoord[1]);
+            if (dist >= TERMINAL_PROXIMITY_THRESHOLD) continue;
+
+            const segs = lineSegments[train.legend];
+            if (!segs || segs.length === 0) continue;
+
+            train._retiring = true;
+            train._retireTime = null;
+
+            // Snap terminal to track
+            const termTrackPos = snapToTrackPosition(terminalCoord[0], terminalCoord[1], segs);
+
+            // If already extremely close, skip the approach slide
+            if (dist < 1e-4) {
+              train._correcting = false;
+              train._trackPos = termTrackPos;
+              train.lon = termTrackPos.lon;
+              train.lat = termTrackPos.lat;
+              train._retireTime = Date.now();
+            } else {
+              // Set up correction slide toward terminal
+              train._corrFromTrackPos = train._trackPos
+                ? { ...train._trackPos }
+                : snapToTrackPosition(train.lon, train.lat, segs);
+              train._corrToTrackPos = termTrackPos;
+
+              // Pick approach direction (toward terminal)
+              const testStep = Math.max(dist * 0.1, 1e-5);
+              const fwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, +1, segs);
+              const bwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, -1, segs);
+              const fwdDist = geoDist(fwdTest.lon, fwdTest.lat, termTrackPos.lon, termTrackPos.lat);
+              const bwdDist = geoDist(bwdTest.lon, bwdTest.lat, termTrackPos.lon, termTrackPos.lat);
+              train._corrDirection = fwdDist <= bwdDist ? 1 : -1;
+
+              train._corrTotalDist = trackDistanceBetween(
+                train._corrFromTrackPos, train._corrToTrackPos, train._corrDirection, segs
+              );
+              train._correcting = true;
+              train._corrStartTime = Date.now();
+            }
+
+            retiringTrains.push(train);
+          }
+
+          // Remove any retiring trains that somehow reappeared in fresh data
+          if (retiringTrains.length > 0) {
+            retiringTrains = retiringTrains.filter(t => !newRns.has(t.rn));
+          }
         }
 
         realTrains = fetched;
