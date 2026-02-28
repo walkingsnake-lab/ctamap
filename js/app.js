@@ -40,6 +40,7 @@
       svg.select('.map-container').attr('transform', event.transform);
     });
   svg.call(zoom);
+  svg.on('dblclick.zoom', null);          // disable d3's double-click-to-zoom
 
   // Render stations into the stations layer (created hidden by loadMap)
   let stationsVisible = false;
@@ -50,17 +51,22 @@
     svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
   }
 
-  // Long-press to toggle stations (touch screens)
-  let longPressTimer = null;
-  svg.on('touchstart.stations', (event) => {
-    if (event.touches.length !== 1) return;
-    longPressTimer = setTimeout(() => {
-      longPressTimer = null;
+  // Double-tap to toggle stations (touch + mouse)
+  let lastTapTime = 0;
+  svg.on('touchend.stations', (event) => {
+    if (event.changedTouches.length !== 1) return;
+    const now = Date.now();
+    if (now - lastTapTime < 350) {
+      event.preventDefault();
       toggleStations();
-    }, 600);
+      lastTapTime = 0;
+    } else {
+      lastTapTime = now;
+    }
   });
-  svg.on('touchmove.stations touchend.stations touchcancel.stations', () => {
-    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  svg.on('dblclick.stations', (event) => {
+    event.preventDefault();
+    toggleStations();
   });
 
   // Create train layer on top (inside the zoom container)
