@@ -52,7 +52,9 @@ const REFRESH_INTERVAL = 30000;
 const LINE_WIDTH = 1.5;
 const TRAIN_RADIUS = 2.5;
 const TRAIN_GLOW_RADIUS = 7;
-const TERMINUS_HOLD_MS = 60000; // Hold train at terminus before fade-out
+const TERMINUS_HOLD_MS = 120000; // Hold train at terminus before fade-out (120s)
+const TERMINAL_PROXIMITY_THRESHOLD = 0.02; // degrees (~2.2km) — max distance to terminal to trigger retirement
+const TERMINAL_APPROACH_DURATION = 5000;   // ms to slide retiring train to terminal
 const MAP_PADDING = 0.05; // 5% padding around the map
 
 // Real-time animation constants

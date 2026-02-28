@@ -113,6 +113,17 @@ body {
   opacity: 0;
 }
 
+/* Trains retiring at terminal — no pulse glow, no interaction */
+.train-retiring {
+  pointer-events: none !important;
+  cursor: default;
+}
+
+.train-retiring .train-glow {
+  animation: none;
+  opacity: 0;
+}
+
 /* --- Direction dots (animated via JS, not CSS) --- */
 .train-arrow {
   pointer-events: none;
