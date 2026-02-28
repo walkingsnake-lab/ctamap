@@ -577,7 +577,7 @@
             // Walk backward along the track to find the start terminal
             const dir = train._direction || 1;
             const startPos = advanceOnTrack(train._trackPos, 0.5, -dir, segs);
-            if (!startPos.stopped) continue; // no dead-end (e.g. Loop circuit)
+            if (!startPos.stopped) continue; // no dead-end found (disconnected segments)
 
             const dist = geoDist(train.lon, train.lat, startPos.lon, startPos.lat);
             if (dist >= TERMINAL_PROXIMITY_THRESHOLD) continue; // too far from start, just appear
