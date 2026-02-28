@@ -50,6 +50,20 @@ body {
   opacity: .7;
 }
 
+/* --- Dimmed state (when a train is selected, non-matching elements dim) --- */
+.line-path,
+.train-group {
+  transition: opacity 0.4s ease;
+}
+
+.line-path.dimmed {
+  opacity: 0.08 !important;
+}
+
+.train-group.dimmed {
+  opacity: 0.12 !important;
+}
+
 /* --- Track lines --- */
 .line-path {
   fill: none;

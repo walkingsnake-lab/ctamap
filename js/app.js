@@ -140,9 +140,13 @@
     });
     enter.transition().duration(800).style('opacity', 1);
 
-    // Maintain selected class on merged selection
+    // Maintain selected + dimmed class on merged selection
     const merged = groups.merge(enter);
     merged.classed('selected', d => d.rn === selectedTrainRn);
+
+    if (selectedTrain) {
+      applyLineFocus(selectedTrain.legend);
+    }
 
     // Exit — trains no longer in active or exiting lists
     groups.exit()
@@ -211,6 +215,25 @@
     labelEl.style.top = (sy + offset) + 'px';
   }
 
+  // ---- Dim / undim helpers ----
+
+  function applyLineFocus(legend) {
+    // Dim line paths that don't match
+    svg.selectAll('.line-path')
+      .classed('dimmed', function () {
+        return d3.select(this).attr('data-legend') !== legend;
+      });
+
+    // Dim train groups that don't match
+    svg.selectAll('.train-group')
+      .classed('dimmed', d => d.legend !== legend);
+  }
+
+  function clearLineFocus() {
+    svg.selectAll('.line-path, .train-group')
+      .classed('dimmed', false);
+  }
+
   // ---- Train selection functions ----
 
   function selectTrain(train) {
@@ -232,9 +255,10 @@
     lastETAs = null;
     closeBtn.classList.add('visible');
 
-    // Highlight selected
+    // Highlight selected and dim other lines/trains
     svg.selectAll('.train-group')
       .classed('selected', d => d.rn === selectedTrainRn);
+    applyLineFocus(train.legend);
 
     // Show DOM label
     showTrainLabel(train);
@@ -274,9 +298,10 @@
     lastETAs = null;
     closeBtn.classList.remove('visible');
 
-    // Remove highlight
+    // Remove highlight and restore full opacity
     svg.selectAll('.train-group')
       .classed('selected', false);
+    clearLineFocus();
 
     // Hide DOM label
     hideTrainLabel();
