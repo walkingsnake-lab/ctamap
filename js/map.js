@@ -68,6 +68,7 @@ function renderLines(linesGroup, path, geojson) {
 
 /**
  * Renders station markers (dots + labels) into a stations layer group.
+ * Single-line stations use that line's color; transfer stations use white.
  * Stations scale naturally with the map zoom.
  */
 function renderStations(stationsGroup, stations, projection) {
@@ -81,16 +82,15 @@ function renderStations(stationsGroup, stations, projection) {
       .attr('class', 'station-marker')
       .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
-    // Pick primary line color for the dot outline
-    const color = station.legends.length > 0
-      ? (LINE_COLORS[station.legends[0]] || '#fff')
-      : '#fff';
+    // Single-line stations: use the line color. Transfer stations: white.
+    const isTransfer = station.legends.length !== 1;
+    const color = isTransfer ? '#fff' : (LINE_COLORS[station.legends[0]] || '#fff');
 
     g.append('circle')
       .attr('class', 'station-dot')
       .attr('r', 1)
-      .attr('fill', '#fff')
-      .attr('stroke', color)
+      .attr('fill', color)
+      .attr('stroke', isTransfer ? 'rgba(255,255,255,0.5)' : color)
       .attr('stroke-width', 0.3);
 
     g.append('text')
