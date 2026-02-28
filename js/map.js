@@ -171,7 +171,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
     { ux:  0, uy: -1, anchor: 'middle' },   // N
     { ux:  0, uy:  1, anchor: 'middle' },   // S
   ];
-  const dists = [3, 6, 10];
+  const dists = [8, 12, 16];
 
   // Label AABB from anchor point + text-anchor mode
   function labelRect(cx, cy, w, anchor) {
