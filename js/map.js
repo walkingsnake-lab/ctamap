@@ -69,34 +69,115 @@ function renderLines(linesGroup, path, geojson) {
 /**
  * Renders station markers (dots + labels) into a stations layer group.
  * Single-line stations use that line's color; transfer stations use white.
- * Stations scale naturally with the map zoom.
+ *
+ * Labels are rendered at a consistent -45° angle (like real transit maps)
+ * with greedy collision avoidance: transfer stations are placed first, then
+ * each remaining label tries four candidate positions and picks the one
+ * with the least overlap against previously placed labels and station dots.
  */
 function renderStations(stationsGroup, stations, projection) {
   stationsGroup.selectAll('*').remove();
 
-  for (const station of stations) {
-    const pt = projection([station.lon, station.lat]);
-    if (!pt) continue;
+  const ANGLE = -45;
+  const FONT_SIZE = 2.5;
+  const CHAR_W = FONT_SIZE * 0.52;
+  const DOT_R = 1;
+  const OFFSET = 2.0;            // gap from dot center to label anchor
+  const LABEL_PAD = 0.6;         // padding between labels
+  const R = Math.SQRT1_2;        // cos(45°) = sin(45°) ≈ 0.707
 
-    const g = stationsGroup.append('g')
-      .attr('class', 'station-marker')
-      .attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+  // Rotate world coords by +45° to align with the -45° text baseline.
+  // In this "text frame" every label's bounding box is axis-aligned.
+  const toTF = (x, y) => [(x + y) * R, (-x + y) * R];
 
-    // Single-line stations: use the line color. Transfer stations: white.
+  // Candidate anchor offsets from dot center, ordered by preference.
+  // Directions are relative to the text baseline (-45° = upper-right).
+  const placements = [
+    { dx:  OFFSET * R, dy: -OFFSET * R, anchor: 'start' }, // along text (upper-right)
+    { dx: -OFFSET * R, dy:  OFFSET * R, anchor: 'end' },   // against text (lower-left)
+    { dx:  OFFSET * R, dy:  OFFSET * R, anchor: 'start' }, // perp right (lower-right)
+    { dx: -OFFSET * R, dy: -OFFSET * R, anchor: 'end' },   // perp left (upper-left)
+  ];
+
+  // Project all stations; sort so transfer stations get first pick.
+  const items = stations
+    .map(s => { const pt = projection([s.lon, s.lat]); return pt ? { ...s, px: pt[0], py: pt[1] } : null; })
+    .filter(Boolean)
+    .sort((a, b) => b.legends.length - a.legends.length);
+
+  // Track placed labels (AABB in text frame) and dots for collision scoring.
+  const placed = [];   // { rx, ry, rw, rh }
+  const dots = items.map(s => toTF(s.px, s.py));
+
+  const overlapScore = (rx, ry, rw, rh) => {
+    let score = 0;
+    // Label-label overlap
+    for (const p of placed) {
+      const ox = Math.max(0, Math.min(rx + rw + LABEL_PAD, p.rx + p.rw + LABEL_PAD) - Math.max(rx - LABEL_PAD, p.rx - LABEL_PAD));
+      const oy = Math.max(0, Math.min(ry + rh + LABEL_PAD, p.ry + p.rh + LABEL_PAD) - Math.max(ry - LABEL_PAD, p.ry - LABEL_PAD));
+      score += ox * oy;
+    }
+    // Label-dot overlap (check all dots in text frame)
+    const expand = DOT_R * 1.2;
+    for (const [dx, dy] of dots) {
+      if (dx + expand > rx && dx - expand < rx + rw &&
+          dy + expand > ry && dy - expand < ry + rh) {
+        score += 20;
+      }
+    }
+    return score;
+  };
+
+  const results = [];
+
+  for (const station of items) {
+    const textW = station.name.length * CHAR_W;
+    let bestIdx = 0;
+    let bestScore = Infinity;
+
+    for (let p = 0; p < placements.length; p++) {
+      const { dx, dy, anchor } = placements[p];
+      const [trx, try_] = toTF(station.px + dx, station.py + dy);
+      const rx = anchor === 'start' ? trx : trx - textW;
+      const ry = try_ - FONT_SIZE / 2;
+      const s = overlapScore(rx, ry, textW, FONT_SIZE);
+      if (s < bestScore) { bestScore = s; bestIdx = p; }
+      if (s === 0) break;
+    }
+
+    const { dx, dy, anchor } = placements[bestIdx];
+    const [trx, try_] = toTF(station.px + dx, station.py + dy);
+    placed.push({
+      rx: anchor === 'start' ? trx : trx - textW,
+      ry: try_ - FONT_SIZE / 2,
+      rw: textW,
+      rh: FONT_SIZE,
+    });
+
+    results.push({ station, dx, dy, anchor });
+  }
+
+  // Render SVG
+  for (const { station, dx, dy, anchor } of results) {
     const isTransfer = station.legends.length !== 1;
     const color = isTransfer ? '#fff' : (LINE_COLORS[station.legends[0]] || '#fff');
 
+    const g = stationsGroup.append('g')
+      .attr('class', 'station-marker')
+      .attr('transform', `translate(${station.px}, ${station.py})`);
+
     g.append('circle')
       .attr('class', 'station-dot')
-      .attr('r', 1)
+      .attr('r', DOT_R)
       .attr('fill', color)
       .attr('stroke', isTransfer ? 'rgba(255,255,255,0.5)' : color)
       .attr('stroke-width', 0.3);
 
     g.append('text')
       .attr('class', 'station-label')
-      .attr('x', 1.8)
-      .attr('y', 0.6)
+      .attr('transform', `translate(${dx},${dy}) rotate(${ANGLE})`)
+      .attr('text-anchor', anchor)
+      .attr('dominant-baseline', 'central')
       .text(station.name);
   }
 }
