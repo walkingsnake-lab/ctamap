@@ -66,16 +66,33 @@
 
   // Long-press to toggle stations (touch screens)
   // iOS text selection is suppressed via CSS (-webkit-touch-callout, user-select)
+  // touch-action:none causes touchmove to fire for sub-pixel jitter, so we use a
+  // movement threshold instead of cancelling on any touchmove.
   let longPressTimer = null;
+  let longPressOrigin = null;
+  const LONG_PRESS_MOVE_THRESHOLD = 10; // px
   svg.on('touchstart.stations', (event) => {
     if (event.touches.length !== 1) return;
+    const t = event.touches[0];
+    longPressOrigin = { x: t.clientX, y: t.clientY };
     longPressTimer = setTimeout(() => {
       longPressTimer = null;
       toggleStations();
     }, 600);
   });
-  svg.on('touchmove.stations touchend.stations touchcancel.stations', () => {
+  svg.on('touchmove.stations', (event) => {
+    if (longPressTimer && longPressOrigin && event.touches.length === 1) {
+      const t = event.touches[0];
+      const dx = t.clientX - longPressOrigin.x;
+      const dy = t.clientY - longPressOrigin.y;
+      if (dx * dx + dy * dy > LONG_PRESS_MOVE_THRESHOLD * LONG_PRESS_MOVE_THRESHOLD) {
+        clearTimeout(longPressTimer); longPressTimer = null; longPressOrigin = null;
+      }
+    }
+  });
+  svg.on('touchend.stations touchcancel.stations', () => {
     if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    longPressOrigin = null;
   });
 
   // Create train layer on top (inside the zoom container)
