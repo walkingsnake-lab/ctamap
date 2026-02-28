@@ -503,23 +503,10 @@
         // instead of letting them vanish immediately.
         // Uses the line's OWN segments only (no shared/ML) so trains like
         // Purple don't bleed past Howard onto Red line track.
-        // On first load, compare against localStorage snapshot so fresh
-        // visitors still see recently-retired trains at terminals.
-        let prevTrainsForRetire = realTrains;
-        const fromStorage = !realTrains;
-        if (fromStorage) {
-          try {
-            const stored = JSON.parse(localStorage.getItem('cta_prev_trains'));
-            if (stored && Date.now() - stored.timestamp <= 120000) {
-              prevTrainsForRetire = stored.trains;
-            }
-          } catch (e) {}
-        }
-
-        if (prevTrainsForRetire) {
+        if (realTrains) {
           const newRns = new Set(fetched.map(t => t.rn));
           const retireRns = new Set(retiringTrains.map(t => t.rn));
-          for (const train of prevTrainsForRetire) {
+          for (const train of realTrains) {
             if (newRns.has(train.rn) || train._retiring || retireRns.has(train.rn)) continue;
 
             const ownSegs = lineOwnSegments[train.legend];
@@ -551,9 +538,8 @@
 
             const dist = Math.min(dFwd, dBwd);
 
-            // Restored from localStorage: snap to terminal (slide already happened)
-            // Also snap if already extremely close
-            if (fromStorage || dist < 1e-4) {
+            // If already extremely close, skip the approach slide
+            if (dist < 1e-4) {
               train._correcting = false;
               train._trackPos = terminalPos;
               train.lon = terminalPos.lon;
@@ -586,7 +572,9 @@
         // Initialize track position and drift correction
         initRealTrainAnimation(realTrains, lineSegments, prevMap);
 
-        // Spawn animation for new trains: slide from start-of-line to tracked position
+        // Spawn animation for new trains: slide from start-of-line to tracked position,
+        // but only if the train is close to the start terminal (same threshold as retirement).
+        // Trains that appear deep into their route just pop in normally.
         if (prevMap && prevMap.size > 0) {
           for (const train of realTrains) {
             if (prevMap.has(train.rn)) continue; // existing train, not new
@@ -596,6 +584,10 @@
             // Walk backward along the track to find the start terminal
             const dir = train._direction || 1;
             const startPos = advanceOnTrack(train._trackPos, 0.5, -dir, segs);
+            if (!startPos.stopped) continue; // no dead-end found (disconnected segments)
+
+            const dist = geoDist(train.lon, train.lat, startPos.lon, startPos.lat);
+            if (dist >= TERMINAL_PROXIMITY_THRESHOLD) continue; // too far from start, just appear
 
             // Save target (current API position) and set up slide from start terminal
             const targetPos = { ...train._trackPos };
@@ -627,15 +619,6 @@
         }
 
         console.log(`[CTA] Refreshed REAL train data (${realTrains.length} trains)`);
-
-        // Save snapshot to localStorage so fresh page loads can detect
-        // recently-retired trains
-        try {
-          localStorage.setItem('cta_prev_trains', JSON.stringify({
-            timestamp: Date.now(),
-            trains: fetched.map(t => ({ rn: t.rn, lon: +t.lon, lat: +t.lat, legend: t.legend }))
-          }));
-        } catch (e) {}
 
         // Update DOM (enter/exit management)
         renderTrains();
