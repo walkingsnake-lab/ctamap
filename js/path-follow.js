@@ -520,6 +520,9 @@ function isInfrastructureName(name) {
  * Each station has: { name, lon, lat, legends: string[] }
  */
 function buildUniqueStations(geojson) {
+  // Collect ALL coordinate occurrences per station so we can average them.
+  // The same station name appears at endpoints of adjacent segments with
+  // different coordinates (sometimes 500m+ apart on loop tracks).
   const stationMap = new Map();
 
   for (const feature of geojson.features) {
@@ -550,17 +553,20 @@ function buildUniqueStations(geojson) {
 
       const norm = normalizeStationName(name);
       if (!stationMap.has(norm)) {
-        stationMap.set(norm, { name, lon: coord[0], lat: coord[1], legends: new Set(legends) });
+        stationMap.set(norm, { name, lons: [coord[0]], lats: [coord[1]], legends: new Set(legends) });
       } else {
-        for (const l of legends) stationMap.get(norm).legends.add(l);
+        const entry = stationMap.get(norm);
+        entry.lons.push(coord[0]);
+        entry.lats.push(coord[1]);
+        for (const l of legends) entry.legends.add(l);
       }
     }
   }
 
   return Array.from(stationMap.values()).map(s => ({
     name: s.name,
-    lon: s.lon,
-    lat: s.lat,
+    lon: s.lons.reduce((a, b) => a + b, 0) / s.lons.length,
+    lat: s.lats.reduce((a, b) => a + b, 0) / s.lats.length,
     legends: Array.from(s.legends)
   }));
 }
