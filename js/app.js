@@ -253,6 +253,8 @@
 
   // ---- Dim / undim helpers ----
 
+  const lineGlow = document.getElementById('line-glow');
+
   function applyLineFocus(legend) {
     // Dim line paths that don't match
     svg.selectAll('.line-path')
@@ -263,11 +265,16 @@
     // Dim train groups that don't match
     svg.selectAll('.train-group')
       .classed('dimmed', d => d.legend !== legend);
+
+    // Show bottom gradient in the selected line's color
+    lineGlow.style.setProperty('--glow-line-color', LINE_COLORS[legend]);
+    lineGlow.classList.add('visible');
   }
 
   function clearLineFocus() {
     svg.selectAll('.line-path, .train-group')
       .classed('dimmed', false);
+    lineGlow.classList.remove('visible');
   }
 
   // ---- Train selection functions ----
