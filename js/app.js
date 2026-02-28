@@ -291,6 +291,10 @@
         return d3.select(this).attr('data-legend') !== legend;
       });
 
+    // Show PR express dashed paths only when Purple is focused
+    svg.selectAll('.pr-express-path')
+      .classed('pr-express-active', legend === 'PR');
+
     // Dim train groups that don't match
     svg.selectAll('.train-group')
       .classed('dimmed', d => d.legend !== legend);
@@ -310,6 +314,8 @@
   function clearLineFocus() {
     svg.selectAll('.line-path, .train-group, .station-marker')
       .classed('dimmed', false);
+    svg.selectAll('.pr-express-path')
+      .classed('pr-express-active', false);
     lineGlow.classList.remove('visible');
   }
 
