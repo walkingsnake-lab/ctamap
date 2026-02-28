@@ -34,14 +34,18 @@ function createTrainGlowGradients(defs) {
  * Lines that use the Loop include ML segments in their own color.
  */
 function renderLines(linesGroup, path, geojson) {
-  // Build a map: legend code → ML features that belong to that line
+  // Build maps: legend code → shared features from ML and RD segments
   const mlByLegend = {};
+  const rdSharedByLegend = {};
   for (const f of geojson.features) {
-    if (f.properties.legend !== 'ML') continue;
+    const leg = f.properties.legend;
+    if (leg !== 'ML' && leg !== 'RD') continue;
     const linesProp = f.properties.lines || '';
     for (const [name, code] of Object.entries(LINE_NAME_TO_LEGEND)) {
+      if (code === leg) continue; // don't add a feature to its own legend
       if (linesProp.includes(name)) {
-        (mlByLegend[code] ??= []).push(f);
+        if (leg === 'ML') (mlByLegend[code] ??= []).push(f);
+        else (rdSharedByLegend[code] ??= []).push(f);
       }
     }
   }
@@ -53,6 +57,36 @@ function renderLines(linesGroup, path, geojson) {
     // Include only the ML segments that actually serve this line
     if (mlByLegend[legend]) {
       features = features.concat(mlByLegend[legend]);
+    }
+
+    // Render shadow paths for shared RD segments (rendered before RD, so behind it)
+    const rdShared = rdSharedByLegend[legend];
+    if (rdShared) {
+      // Purple Express segments get dashed; regular shared segments stay solid
+      const isExpress = f => (f.properties.lines || '').includes('Express');
+      const expressSeg = legend === 'PR' ? rdShared.filter(isExpress) : [];
+      const solidSeg = legend === 'PR' ? rdShared.filter(f => !isExpress(f)) : rdShared;
+
+      if (solidSeg.length > 0) {
+        linesGroup.append('path')
+          .attr('class', 'line-path')
+          .attr('data-legend', legend)
+          .attr('d', path({ type: 'FeatureCollection', features: solidSeg }))
+          .attr('stroke', LINE_COLORS[legend])
+          .attr('stroke-width', LINE_WIDTH)
+          .attr('stroke-opacity', 0.9);
+      }
+
+      if (expressSeg.length > 0) {
+        linesGroup.append('path')
+          .attr('class', 'line-path')
+          .attr('data-legend', legend)
+          .attr('d', path({ type: 'FeatureCollection', features: expressSeg }))
+          .attr('stroke', LINE_COLORS[legend])
+          .attr('stroke-width', LINE_WIDTH)
+          .attr('stroke-opacity', 0.9)
+          .attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
+      }
     }
 
     if (features.length === 0) continue;
