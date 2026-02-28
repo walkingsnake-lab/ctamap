@@ -51,13 +51,15 @@ const REFRESH_INTERVAL = 30000;
 // Visual constants
 const LINE_WIDTH = 1.5;
 const TRAIN_RADIUS = 2.5;
-const TRAIN_GLOW_RADIUS = 7;
-const TERMINUS_HOLD_MS = 60000; // Hold train at terminus before fade-out
+const TRAIN_GLOW_RADIUS = 6;
+const TERMINUS_HOLD_MS = 120000; // Hold train at terminus before fade-out (120s)
+const TERMINAL_PROXIMITY_THRESHOLD = 0.05; // degrees (~5.5km) — max distance to terminal to trigger retirement
+const TERMINAL_APPROACH_DURATION = 5000;  // ms to slide retiring train to terminal / spawn new trains
 const MAP_PADDING = 0.05; // 5% padding around the map
 
 // Real-time animation constants
 const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API position after refresh
-const CORRECTION_SNAP_THRESHOLD = 0.05;      // degrees (~5.5km) — beyond this, snap instead of slide
+const CORRECTION_SNAP_THRESHOLD = 0.03;      // degrees (~5.5km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
 
 // Destination + line combos that use inverted badge (white bg, colored text)

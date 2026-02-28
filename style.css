@@ -15,6 +15,9 @@ body {
   width: 100vw;
   height: 100vh;
   display: block;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* --- Close button (visible when tracking a train) --- */
@@ -127,6 +130,17 @@ body {
   opacity: 0;
 }
 
+/* Trains retiring at terminal — no pulse glow, no interaction */
+.train-retiring {
+  pointer-events: none !important;
+  cursor: default;
+}
+
+.train-retiring .train-glow {
+  animation: none;
+  opacity: 0;
+}
+
 /* --- Direction dots (animated via JS, not CSS) --- */
 .train-arrow {
   pointer-events: none;
@@ -217,4 +231,21 @@ body {
 @keyframes line-in {
   0%   { opacity: 0; transform: translateY(4px); }
   100% { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Station overlay (toggle with S key) --- */
+.station-dot {
+  opacity: 0.55;
+}
+
+.station-leader {
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 0.15;
+}
+
+.station-label {
+  fill: rgba(255, 255, 255, 0.6);
+  font-size: 1.8px;
+  font-family: 'Jersey 10', monospace;
+  pointer-events: none;
 }

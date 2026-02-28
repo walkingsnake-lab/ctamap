@@ -7,7 +7,9 @@
 /**
  * Builds a lookup of coordinate segments per legend code.
  * Loop (ML) segments are included for lines that traverse the Loop.
- * Returns: { RD: [[seg1coords], ...], BL: [...], ... }
+ * Returns: { segments: { RD: [...], ... }, ownSegments: { RD: [...], ... } }
+ *   segments     — full track including shared and ML (for animation/snapping)
+ *   ownSegments  — only the line's own colored segments (for terminal detection)
  */
 function buildLineSegments(geojson) {
   const loopLines = ['BR', 'OR', 'PK', 'PR', 'GR'];
@@ -19,20 +21,48 @@ function buildLineSegments(geojson) {
   }
 
   const segments = {};
+  const ownSegments = {};
   for (const legend of Object.keys(LINE_COLORS)) {
     if (legend === 'ML') continue;
     const coords = collectLineCoords(geojson, legend);
+    ownSegments[legend] = coords;
+
+    // Include segments from other lines that share track with this line
+    // (e.g. Purple Express on Red Line track, Brown on shared Red segments)
+    const lineName = legendToLineName[legend];
+    const sharedCoords = lineName ? collectSharedCoordsForLine(geojson, lineName, legend) : [];
 
     if (loopLines.includes(legend)) {
       // Only include ML segments whose "lines" property mentions this line
-      const lineName = legendToLineName[legend];
       const mlCoords = collectMLCoordsForLine(geojson, lineName);
-      segments[legend] = coords.concat(mlCoords);
+      segments[legend] = coords.concat(sharedCoords).concat(mlCoords);
     } else {
-      segments[legend] = coords;
+      segments[legend] = coords.concat(sharedCoords);
     }
   }
-  return segments;
+  return { segments, ownSegments };
+}
+
+/**
+ * Collects coordinate arrays from features of OTHER legend codes (not ML, not ownLegend)
+ * whose "lines" property includes the given line name.
+ * This captures shared track segments, e.g. Purple Express running on Red Line track.
+ */
+function collectSharedCoordsForLine(geojson, lineName, ownLegend) {
+  const coords = [];
+  for (const feature of geojson.features) {
+    const featureLegend = feature.properties.legend;
+    if (featureLegend === ownLegend || featureLegend === 'ML') continue;
+    const linesProp = feature.properties.lines || '';
+    if (!linesProp.includes(lineName)) continue;
+    const geom = feature.geometry;
+    if (geom.type === 'MultiLineString') {
+      for (const line of geom.coordinates) coords.push(line);
+    } else if (geom.type === 'LineString') {
+      coords.push(geom.coordinates);
+    }
+  }
+  return coords;
 }
 
 /**
@@ -469,6 +499,25 @@ function lookupStation(stationName, legend, stationPositions) {
     return stationPositions.byName.get(norm);
   }
 
+  // Partial / substring match — line-specific only to avoid cross-line
+  // mismatches (e.g. "Cermak" matching Red's Cermak-Chinatown instead of Pink's 54th/Cermak)
+  let bestPartial = null;
+  let bestLenDiff = Infinity;
+  for (const [key, coord] of stationPositions.byLine) {
+    const colonIdx = key.indexOf(':');
+    const keyLegend = key.substring(0, colonIdx);
+    const keyName = key.substring(colonIdx + 1);
+    if (keyLegend !== legend) continue;
+    if (keyName.includes(norm) || norm.includes(keyName)) {
+      const lenDiff = Math.abs(keyName.length - norm.length);
+      if (lenDiff < bestLenDiff) {
+        bestLenDiff = lenDiff;
+        bestPartial = coord;
+      }
+    }
+  }
+  if (bestPartial) return bestPartial;
+
   return null;
 }
 
@@ -477,5 +526,151 @@ function lookupStation(stationName, legend, stationPositions) {
  * Lowercases, replaces slashes and hyphens with spaces, collapses whitespace.
  */
 function normalizeStationName(name) {
-  return name.toLowerCase().replace(/[\/\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  return name.toLowerCase().replace(/[\/\-''`]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Returns true if a name looks like an infrastructure point rather than
+ * a passenger station (junctions, towers, portals, connectors, etc.).
+ */
+function isInfrastructureName(name) {
+  return /\b(junction|connector|tower|portal|yard|interlocking|wye)\b/i.test(name);
+}
+
+/**
+ * GeoJSON segment names use branch suffixes to disambiguate stations that
+ * share a street name on different lines (e.g. "Addison-O'Hare" vs
+ * "Addison-Ravenswood"). Strip these for display to match real CTA signage.
+ */
+const BRANCH_SUFFIXES = [
+  'Ravenswood', "O'Hare", 'North Main', 'Lake', 'Congress',
+  'Douglas', 'Midway', 'Dan Ryan', 'South Elevated', 'Evanston',
+  'Skokie', 'Homan',
+];
+
+function displayStationName(name) {
+  for (const suffix of BRANCH_SUFFIXES) {
+    if (name.endsWith('-' + suffix)) {
+      return name.slice(0, -(suffix.length + 1));
+    }
+  }
+  return name;
+}
+
+/**
+ * Builds a deduplicated array of station objects from GeoJSON segment descriptions.
+ * Filters out infrastructure points (junctions, towers, portals, etc.).
+ * Each station has: { name, lon, lat, legends: string[] }
+ *
+ * Station coordinates are determined by finding shared endpoints between
+ * adjacent GeoJSON segments.  Segment descriptions follow the pattern
+ * "StationA to StationB", but the geometry direction is arbitrary (line[0]
+ * may be A or B).  Where two segments share a station name, the endpoint
+ * coordinate they have in common IS that station's location.  Terminal
+ * stations (only one segment) use the endpoint that is NOT shared with any
+ * other segment.
+ */
+function buildUniqueStations(geojson) {
+  const coordKey = (c) => c[0].toFixed(10) + ',' + c[1].toFixed(10);
+
+  // --- Step 1: parse segments and build endpoint index ---
+  const segments = [];
+  for (const feature of geojson.features) {
+    const desc = feature.properties.description || '';
+    const match = desc.match(/^(.+?)\s+to\s+(.+)$/i);
+    if (!match) continue;
+
+    const coords = feature.geometry.coordinates;
+    const line = feature.geometry.type === 'MultiLineString' ? coords[0] : coords;
+    if (!line || line.length < 2) continue;
+
+    const legends = [];
+    const featureLegend = feature.properties.legend;
+    if (featureLegend && featureLegend !== 'ML') legends.push(featureLegend);
+    const linesProp = feature.properties.lines || '';
+    for (const [lineName, code] of Object.entries(LINE_NAME_TO_LEGEND_STATION)) {
+      if (linesProp.includes(lineName) && !legends.includes(code)) legends.push(code);
+    }
+
+    segments.push({
+      nameA: match[1].trim(),
+      nameB: match[2].trim(),
+      start: line[0],
+      end: line[line.length - 1],
+      legends,
+    });
+  }
+
+  // Map each unique endpoint coordinate to the segment indices that use it
+  const endpointMap = new Map();
+  for (let i = 0; i < segments.length; i++) {
+    for (const pt of [segments[i].start, segments[i].end]) {
+      const key = coordKey(pt);
+      if (!endpointMap.has(key)) endpointMap.set(key, []);
+      endpointMap.get(key).push(i);
+    }
+  }
+
+  // --- Step 2: resolve station coordinates via shared endpoints ---
+  // stationCoord: stationName → [lon, lat]
+  const stationCoord = new Map();
+  // stationLegends: stationName → Set of legend codes
+  const stationLegends = new Map();
+
+  const recordStation = (name, coord, legends) => {
+    if (isInfrastructureName(name)) return;
+    if (!stationCoord.has(name)) {
+      stationCoord.set(name, coord);
+      stationLegends.set(name, new Set(legends));
+    } else {
+      for (const l of legends) stationLegends.get(name).add(l);
+    }
+  };
+
+  // Pass 1: where two segments share an endpoint, the station name common
+  // to both segments' descriptions is located at that coordinate.
+  for (const [, segIndices] of endpointMap) {
+    if (segIndices.length < 2) continue;
+    for (let i = 0; i < segIndices.length; i++) {
+      for (let j = i + 1; j < segIndices.length; j++) {
+        const si = segments[segIndices[i]];
+        const sj = segments[segIndices[j]];
+        const namesI = [si.nameA, si.nameB];
+        const namesJ = new Set([sj.nameA, sj.nameB]);
+        // Find the shared coordinate between these two segments
+        let sharedCoord = null;
+        for (const ptI of [si.start, si.end]) {
+          for (const ptJ of [sj.start, sj.end]) {
+            if (coordKey(ptI) === coordKey(ptJ)) { sharedCoord = ptI; break; }
+          }
+          if (sharedCoord) break;
+        }
+        if (!sharedCoord) continue;
+        for (const name of namesI) {
+          if (namesJ.has(name)) {
+            recordStation(name, sharedCoord, [...si.legends, ...sj.legends]);
+          }
+        }
+      }
+    }
+  }
+
+  // Pass 2: terminal stations — the endpoint NOT shared with any other
+  // segment is the terminal station's coordinate.
+  for (const seg of segments) {
+    for (const name of [seg.nameA, seg.nameB]) {
+      if (stationCoord.has(name) || isInfrastructureName(name)) continue;
+      const startShared = endpointMap.get(coordKey(seg.start)).length > 1;
+      const endShared = endpointMap.get(coordKey(seg.end)).length > 1;
+      if (startShared && !endShared) recordStation(name, seg.end, seg.legends);
+      else if (endShared && !startShared) recordStation(name, seg.start, seg.legends);
+    }
+  }
+
+  return Array.from(stationCoord.entries()).map(([name, coord]) => ({
+    name: displayStationName(name),
+    lon: coord[0],
+    lat: coord[1],
+    legends: Array.from(stationLegends.get(name)),
+  }));
 }

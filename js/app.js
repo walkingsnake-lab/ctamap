@@ -25,7 +25,13 @@
   let { projection } = mapState;
 
   // Build per-line segment lookup for path-following animation
-  const lineSegments = buildLineSegments(geojson);
+  // lineSegments: full track (shared + ML) for animation/snapping
+  // lineOwnSegments: line's own colored segments only (for terminal detection)
+  const { segments: lineSegments, ownSegments: lineOwnSegments } = buildLineSegments(geojson);
+
+
+  // Build unique stations list for the overlay
+  const stations = buildUniqueStations(geojson);
 
   // ---- D3 zoom behavior ----
   const zoom = d3.zoom()
@@ -34,6 +40,34 @@
       svg.select('.map-container').attr('transform', event.transform);
     });
   svg.call(zoom);
+  svg.on('dblclick.zoom', null);          // disable d3's double-click-to-zoom
+
+  // Render stations into the stations layer (created hidden by loadMap)
+  let stationsVisible = false;
+  renderStations(svg.select('.stations-layer'), stations, projection, geojson);
+
+  function toggleStations() {
+    stationsVisible = !stationsVisible;
+    svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
+  }
+
+  // Double-tap to toggle stations (touch + mouse)
+  let lastTapTime = 0;
+  svg.on('touchend.stations', (event) => {
+    if (event.changedTouches.length !== 1) return;
+    const now = Date.now();
+    if (now - lastTapTime < 350) {
+      event.preventDefault();
+      toggleStations();
+      lastTapTime = 0;
+    } else {
+      lastTapTime = now;
+    }
+  });
+  svg.on('dblclick.stations', (event) => {
+    event.preventDefault();
+    toggleStations();
+  });
 
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
@@ -61,6 +95,7 @@
   // ---- Initialize trains ----
   let dummyTrains = null;
   let realTrains = null;
+  let retiringTrains = [];
 
   const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
@@ -82,7 +117,7 @@
 
   // ---- Render trains (DOM management only — positions handled by animation loop) ----
   function renderTrains() {
-    const allTrains = realTrains || dummyTrains || [];
+    const allTrains = (realTrains || dummyTrains || []).concat(retiringTrains);
     const layer = svg.select('.trains-layer');
 
     const groups = layer.selectAll('.train-group')
@@ -140,9 +175,10 @@
     });
     enter.transition().duration(800).style('opacity', 1);
 
-    // Maintain selected + dimmed class on merged selection
+    // Maintain selected / retiring classes on merged selection
     const merged = groups.merge(enter);
     merged.classed('selected', d => d.rn === selectedTrainRn);
+    merged.classed('train-retiring', d => !!d._retiring);
 
     if (selectedTrain) {
       applyLineFocus(selectedTrain.legend);
@@ -263,21 +299,26 @@
     // Show DOM label
     showTrainLabel(train);
 
-    // Animate zoom to the train (skip if switching between trains — tracking handles it)
-    if (!wasTracking) {
-      const pt = projection([train.lon, train.lat]);
-      if (pt) {
-        isZoomTransitioning = true;
-        const tx = width / 2 - TRACK_ZOOM_SCALE * pt[0];
-        const ty = height / 2 - TRACK_ZOOM_SCALE * pt[1];
-        svg.transition('zoom-track').duration(750)
-          .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(TRACK_ZOOM_SCALE))
-          .on('end', () => {
-            isZoomTransitioning = false;
-            // Disable zoom interaction while tracking
-            svg.on('.zoom', null);
-          });
-      }
+    // Animate zoom to the train (shorter duration when switching between trains)
+    const pt = projection([train.lon, train.lat]);
+    if (pt) {
+      // Cancel any in-progress zoom transition cleanly
+      svg.interrupt('zoom-track');
+
+      // Disable zoom interaction while tracking
+      svg.on('.zoom', null);
+
+      isZoomTransitioning = true;
+      const tx = width / 2 - TRACK_ZOOM_SCALE * pt[0];
+      const ty = height / 2 - TRACK_ZOOM_SCALE * pt[1];
+      svg.transition('zoom-track').duration(wasTracking ? 300 : 750)
+        .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(TRACK_ZOOM_SCALE))
+        .on('end', () => {
+          isZoomTransitioning = false;
+        })
+        .on('interrupt', () => {
+          isZoomTransitioning = false;
+        });
     }
 
     // Fetch detailed ETA data
@@ -315,12 +356,18 @@
     // Re-enable zoom interaction
     svg.call(zoom);
 
+    // Cancel any in-progress zoom transition cleanly
+    svg.interrupt('zoom-track');
+
     // Zoom back to previous view
     isZoomTransitioning = true;
     const restoreTo = preSelectTransform || d3.zoomIdentity;
     svg.transition('zoom-track').duration(750)
       .call(zoom.transform, restoreTo)
       .on('end', () => {
+        isZoomTransitioning = false;
+      })
+      .on('interrupt', () => {
         isZoomTransitioning = false;
       });
     preSelectTransform = null;
@@ -396,6 +443,14 @@
     // Advance real trains (correction slides on refresh, then sit still)
     if (realTrains) {
       advanceRealTrains(realTrains, lineSegments, dt);
+    }
+
+    // Advance retiring trains toward terminal, then hold, then remove
+    if (retiringTrains.length > 0) {
+      advanceRetiringTrains(retiringTrains, lineSegments, dt);
+      const prevCount = retiringTrains.length;
+      retiringTrains = retiringTrains.filter(t => !t._retireComplete);
+      if (retiringTrains.length < prevCount) renderTrains();
     }
 
     // Update ALL train positions directly (no D3 transitions — frame-by-frame is smoother)
@@ -493,11 +548,112 @@
           for (const t of realTrains) prevMap.set(t.rn, t);
         }
 
+        // Detect trains going out of service near a terminal — retire them
+        // instead of letting them vanish immediately.
+        // Uses the line's OWN segments only (no shared/ML) so trains like
+        // Purple don't bleed past Howard onto Red line track.
+        if (realTrains) {
+          const newRns = new Set(fetched.map(t => t.rn));
+          const retireRns = new Set(retiringTrains.map(t => t.rn));
+          for (const train of realTrains) {
+            if (newRns.has(train.rn) || train._retiring || retireRns.has(train.rn)) continue;
+
+            const ownSegs = lineOwnSegments[train.legend];
+            if (!ownSegs || ownSegs.length === 0) continue;
+
+            // Re-snap to the line's own segments (excludes shared/ML track)
+            const ownPos = snapToTrackPosition(train.lon, train.lat, ownSegs);
+
+            // Walk both directions to find the nearest dead-end terminal
+            const endFwd = advanceOnTrack(ownPos, 0.5, +1, ownSegs);
+            const endBwd = advanceOnTrack(ownPos, 0.5, -1, ownSegs);
+            const dFwd = endFwd.stopped ? geoDist(train.lon, train.lat, endFwd.lon, endFwd.lat) : Infinity;
+            const dBwd = endBwd.stopped ? geoDist(train.lon, train.lat, endBwd.lon, endBwd.lat) : Infinity;
+
+            let terminalPos, slideDir;
+            if (dFwd <= dBwd) {
+              if (dFwd >= TERMINAL_PROXIMITY_THRESHOLD) continue;
+              terminalPos = endFwd;
+              slideDir = +1;
+            } else {
+              if (dBwd >= TERMINAL_PROXIMITY_THRESHOLD) continue;
+              terminalPos = endBwd;
+              slideDir = -1;
+            }
+
+            train._retiring = true;
+            train._retireTime = null;
+            train._retireSegs = ownSegs; // slide along own segments only
+
+            const dist = Math.min(dFwd, dBwd);
+
+            // If already extremely close, skip the approach slide
+            if (dist < 1e-4) {
+              train._correcting = false;
+              train._trackPos = terminalPos;
+              train.lon = terminalPos.lon;
+              train.lat = terminalPos.lat;
+              train._retireTime = Date.now();
+            } else {
+              // Set up correction slide toward terminal
+              train._corrFromTrackPos = ownPos;
+              train._corrToTrackPos = terminalPos;
+              train._corrDirection = slideDir;
+              train._corrTotalDist = trackDistanceBetween(
+                ownPos, terminalPos, slideDir, ownSegs
+              );
+              train._correcting = true;
+              train._corrStartTime = Date.now();
+            }
+
+            retiringTrains.push(train);
+          }
+
+          // Remove any retiring trains that somehow reappeared in fresh data
+          if (retiringTrains.length > 0) {
+            retiringTrains = retiringTrains.filter(t => !newRns.has(t.rn));
+          }
+        }
+
         realTrains = fetched;
         dummyTrains = null;
 
         // Initialize track position and drift correction
         initRealTrainAnimation(realTrains, lineSegments, prevMap);
+
+        // Spawn animation for new trains: slide from start-of-line to tracked position,
+        // but only if the train is close to the start terminal (same threshold as retirement).
+        // Trains that appear deep into their route just pop in normally.
+        if (prevMap && prevMap.size > 0) {
+          for (const train of realTrains) {
+            if (prevMap.has(train.rn)) continue; // existing train, not new
+            const segs = lineSegments[train.legend];
+            if (!segs || !train._trackPos) continue;
+
+            // Walk backward along the track to find the start terminal
+            const dir = train._direction || 1;
+            const startPos = advanceOnTrack(train._trackPos, 0.5, -dir, segs);
+            if (!startPos.stopped) continue; // no dead-end found (disconnected segments)
+
+            const dist = geoDist(train.lon, train.lat, startPos.lon, startPos.lat);
+            if (dist >= TERMINAL_PROXIMITY_THRESHOLD) continue; // too far from start, just appear
+
+            // Save target (current API position) and set up slide from start terminal
+            const targetPos = { ...train._trackPos };
+            train._corrFromTrackPos = startPos;
+            train._corrToTrackPos = targetPos;
+            train._corrDirection = dir;
+            train._corrTotalDist = trackDistanceBetween(startPos, targetPos, dir, segs);
+            train._correcting = true;
+            train._corrStartTime = Date.now();
+            train._spawning = true;
+
+            // Place train at start terminal initially
+            train.lon = startPos.lon;
+            train.lat = startPos.lat;
+            train._trackPos = startPos;
+          }
+        }
 
         // Update selected train reference if tracking
         if (selectedTrainRn) {
@@ -532,6 +688,12 @@
     // Escape: deselect train
     if (event.key === 'Escape' && selectedTrain && !isZoomTransitioning) {
       deselectTrain();
+      return;
+    }
+
+    // S key: toggle station name overlay
+    if (event.key === 's' || event.key === 'S') {
+      toggleStations();
       return;
     }
 
@@ -570,6 +732,10 @@
 
       const result = redrawMap(svg, width, height, geojson);
       projection = result.projection;
+
+      // Re-render stations overlay
+      renderStations(svg.select('.stations-layer'), stations, projection, geojson);
+      if (!stationsVisible) svg.select('.stations-layer').style('display', 'none');
 
       // Reset zoom state after redraw
       isZoomedToLoop = false;

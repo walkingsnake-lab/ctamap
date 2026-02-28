@@ -222,6 +222,51 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
 
 
 /**
+ * Advances retiring trains toward their terminal station each frame.
+ * Once the approach slide completes, starts the TERMINUS_HOLD_MS timer.
+ * Sets _retireComplete = true when the hold expires so the caller can remove them.
+ */
+function advanceRetiringTrains(trains, lineSegments, dt) {
+  const now = Date.now();
+
+  for (const train of trains) {
+    if (!train._trackPos) continue;
+    // Use line's own segments if stored (avoids sliding onto shared track)
+    const segs = train._retireSegs || lineSegments[train.legend];
+    if (!segs) continue;
+
+    if (train._correcting) {
+      const elapsed = now - train._corrStartTime;
+      if (elapsed >= TERMINAL_APPROACH_DURATION) {
+        // Arrived at terminal — snap and start hold timer
+        train._correcting = false;
+        train._trackPos = train._corrToTrackPos;
+        train.lon = train._corrToTrackPos.lon;
+        train.lat = train._corrToTrackPos.lat;
+        train._retireTime = now;
+      } else {
+        const t = elapsed / TERMINAL_APPROACH_DURATION;
+        const eased = t * t * (3 - 2 * t); // smoothstep
+        const pos = advanceOnTrack(
+          train._corrFromTrackPos, eased * train._corrTotalDist, train._corrDirection, segs
+        );
+        train.lon = pos.lon;
+        train.lat = pos.lat;
+        train._trackPos = pos;
+      }
+    } else if (train._retireTime) {
+      // Sitting at terminal — check if hold period has elapsed
+      if (now - train._retireTime >= TERMINUS_HOLD_MS) {
+        train._retireComplete = true;
+      }
+    }
+
+    train._animLon = train.lon;
+    train._animLat = train.lat;
+  }
+}
+
+/**
  * Advances real trains each animation frame.
  * During the correction window after a refresh, slides trains smoothly along
  * the track to their new API position. After that, trains sit still until
@@ -236,17 +281,20 @@ function advanceRealTrains(trains, lineSegments, dt) {
     if (!segs) continue;
 
     // Drift correction: smoothly slide from old position to new API position
+    // Spawning trains (new to the data) get a longer slide from the start of the line
     if (train._correcting) {
       const elapsed = now - train._corrStartTime;
-      if (elapsed >= CORRECTION_DURATION) {
+      const duration = train._spawning ? TERMINAL_APPROACH_DURATION : CORRECTION_DURATION;
+      if (elapsed >= duration) {
         // Correction complete — snap to target and sit still until next refresh
         train._correcting = false;
+        train._spawning = false;
         train._trackPos = train._corrToTrackPos;
         train.lon = train._corrToTrackPos.lon;
         train.lat = train._corrToTrackPos.lat;
       } else {
         // Smoothstep easing: accelerate then decelerate
-        const t = elapsed / CORRECTION_DURATION;
+        const t = elapsed / duration;
         const eased = t * t * (3 - 2 * t);
         const pos = advanceOnTrack(
           train._corrFromTrackPos, eased * train._corrTotalDist, train._corrDirection, segs
