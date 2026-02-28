@@ -7,8 +7,8 @@
   const svgEl = document.getElementById('map');
   const svg = d3.select(svgEl);
 
-  let width = window.innerWidth;
-  let height = window.innerHeight;
+  let width = svgEl.clientWidth || window.innerWidth;
+  let height = svgEl.clientHeight || window.innerHeight;
 
   svg.attr('width', width).attr('height', height);
 
@@ -21,8 +21,8 @@
     return;
   }
 
-  const { geojson, mapContainer } = mapState;
-  let { projection } = mapState;
+  const { geojson } = mapState;
+  let { projection, mapContainer } = mapState;
 
   // Build per-line segment lookup for path-following animation
   // lineSegments: full track (shared + ML) for animation/snapping
@@ -37,6 +37,7 @@
   const zoom = d3.zoom()
     .scaleExtent([1, 10])
     .on('zoom', (event) => {
+      if (zoomAnim) return;
       if (selectedTrain && !isZoomTransitioning) {
         // User is adjusting zoom while tracking — capture their chosen scale and
         // immediately re-center on the train at that scale so positioning is never lost.
@@ -117,6 +118,7 @@
   let preSelectTransform = null;
   let detailFetchInterval = null;
   let isZoomTransitioning = false;
+  let zoomAnim = null;
   let lastETAs = null;
   const TRACK_ZOOM_SCALE = 8;
   let trackingScale = TRACK_ZOOM_SCALE;
@@ -343,24 +345,19 @@
     // Show DOM label
     showTrainLabel(train);
 
-    // Animate zoom to the train (shorter duration when switching between trains)
-    const pt = projection([train.lon, train.lat]);
-    if (pt) {
-      // Cancel any in-progress zoom transition cleanly
-      svg.interrupt('zoom-track');
-
-      isZoomTransitioning = true;
-      const tx = width / 2 - trackingScale * pt[0];
-      const ty = height / 2 - trackingScale * pt[1];
-      svg.transition('zoom-track').duration(wasTracking ? 300 : 750)
-        .call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(trackingScale))
-        .on('end', () => {
-          isZoomTransitioning = false;
-        })
-        .on('interrupt', () => {
-          isZoomTransitioning = false;
-        });
-    }
+    // Animate zoom to the train (shorter duration when switching between trains).
+    // Uses manual animation in the render loop so the camera tracks the train's
+    // live position throughout the zoom, instead of targeting a fixed snapshot.
+    svg.interrupt('zoom-track');
+    const fromTransform = d3.zoomTransform(svgEl);
+    isZoomTransitioning = true;
+    zoomAnim = {
+      startTime: performance.now(),
+      duration: wasTracking ? 300 : 750,
+      fromK: fromTransform.k,
+      fromCx: (width / 2 - fromTransform.x) / fromTransform.k,
+      fromCy: (height / 2 - fromTransform.y) / fromTransform.k,
+    };
 
     // Fetch detailed ETA data
     fetchTrainDetail(train.rn);
@@ -394,7 +391,8 @@
       detailFetchInterval = null;
     }
 
-    // Cancel any in-progress zoom transition cleanly
+    // Cancel any in-progress zoom animation / transition
+    zoomAnim = null;
     svg.interrupt('zoom-track');
 
     // Zoom back to previous view
@@ -547,14 +545,35 @@
         }
       });
 
-    // Camera tracking for selected train
-    if (selectedTrain && !isZoomTransitioning) {
+    // Camera tracking / zoom-in animation for selected train
+    if (zoomAnim && selectedTrain) {
+      // Manual zoom-in: interpolate from previous view to centering on the
+      // train's CURRENT position so the camera tracks the moving train.
+      const elapsed = now - zoomAnim.startTime;
+      const progress = Math.min(elapsed / zoomAnim.duration, 1);
+      const eased = progress * progress * (3 - 2 * progress); // smoothstep
+
+      const pt = projection([selectedTrain.lon, selectedTrain.lat]);
+      if (pt) {
+        const k = zoomAnim.fromK + (trackingScale - zoomAnim.fromK) * eased;
+        const cx = zoomAnim.fromCx + (pt[0] - zoomAnim.fromCx) * eased;
+        const cy = zoomAnim.fromCy + (pt[1] - zoomAnim.fromCy) * eased;
+        const tx = width / 2 - k * cx;
+        const ty = height / 2 - k * cy;
+        const t = d3.zoomIdentity.translate(tx, ty).scale(k);
+        svgEl.__zoom = t;
+        mapContainer.attr('transform', t.toString());
+      }
+      if (progress >= 1) {
+        zoomAnim = null;
+        isZoomTransitioning = false;
+      }
+    } else if (selectedTrain && !isZoomTransitioning) {
       const pt = projection([selectedTrain.lon, selectedTrain.lat]);
       if (pt) {
         const tx = width / 2 - trackingScale * pt[0];
         const ty = height / 2 - trackingScale * pt[1];
         const t = d3.zoomIdentity.translate(tx, ty).scale(trackingScale);
-        // Update D3's internal zoom state and DOM directly (no event dispatch)
         svgEl.__zoom = t;
         mapContainer.attr('transform', t.toString());
       }
@@ -764,34 +783,36 @@
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      width = window.innerWidth;
-      height = window.innerHeight;
+      width = svgEl.clientWidth || window.innerWidth;
+      height = svgEl.clientHeight || window.innerHeight;
       svg.attr('width', width).attr('height', height);
 
       const result = redrawMap(svg, width, height, geojson);
       projection = result.projection;
+      mapContainer = svg.select('.map-container');
 
       // Re-render stations overlay
       renderStations(svg.select('.stations-layer'), stations, projection, geojson);
       if (!stationsVisible) svg.select('.stations-layer').style('display', 'none');
 
-      // Reset zoom state after redraw
       isZoomedToLoop = false;
-      svg.call(zoom.transform, d3.zoomIdentity);
 
-      // Deselect train on resize (projection changes)
       if (selectedTrain) {
-        selectedTrain = null;
-        selectedTrainRn = null;
-        lastETAs = null;
-        closeBtn.classList.remove('visible');
-        hideTrainLabel();
-        if (detailFetchInterval) {
-          clearInterval(detailFetchInterval);
-          detailFetchInterval = null;
-        }
+        // Keep tracking through resize (e.g. mobile address bar toggle)
+        zoomAnim = null;
+        isZoomTransitioning = false;
+        svg.interrupt('zoom-track');
         preSelectTransform = null;
-        svg.call(zoom);
+        const pt = projection([selectedTrain.lon, selectedTrain.lat]);
+        if (pt) {
+          const tx = width / 2 - trackingScale * pt[0];
+          const ty = height / 2 - trackingScale * pt[1];
+          const t = d3.zoomIdentity.translate(tx, ty).scale(trackingScale);
+          svgEl.__zoom = t;
+          mapContainer.attr('transform', t.toString());
+        }
+      } else {
+        svg.call(zoom.transform, d3.zoomIdentity);
       }
 
       // Re-generate dummy trains if using them (segments may differ after reproject)
