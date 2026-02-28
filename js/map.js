@@ -67,115 +67,184 @@ function renderLines(linesGroup, path, geojson) {
 }
 
 /**
- * Renders station markers (dots + labels) into a stations layer group.
- * Single-line stations use that line's color; transfer stations use white.
+ * Renders station markers (dots + labels) with horizontal text, leader lines,
+ * and collision avoidance against other labels, station dots, and transit lines.
  *
- * Labels are rendered at a consistent -45° angle (like real transit maps)
- * with greedy collision avoidance: transfer stations are placed first, then
- * each remaining label tries four candidate positions and picks the one
- * with the least overlap against previously placed labels and station dots.
+ * Labels try 8 compass directions at multiple distances from the station dot
+ * and pick the position with the least overlap.  A thin leader line connects
+ * each dot to its label.  Transfer stations are placed first (higher priority).
  */
-function renderStations(stationsGroup, stations, projection) {
+function renderStations(stationsGroup, stations, projection, geojson) {
   stationsGroup.selectAll('*').remove();
 
-  const ANGLE = -45;
-  const FONT_SIZE = 2.5;
-  const CHAR_W = FONT_SIZE * 0.52;
-  const DOT_R = 1;
-  const OFFSET = 2.0;            // gap from dot center to label anchor
-  const LABEL_PAD = 0.6;         // padding between labels
-  const R = Math.SQRT1_2;        // cos(45°) = sin(45°) ≈ 0.707
+  const FONT_SIZE = 1.8;
+  const CHAR_W = FONT_SIZE * 0.55;
+  const DOT_R = 0.8;
+  const LABEL_PAD = 0.4;
 
-  // Rotate world coords by +45° to align with the -45° text baseline.
-  // In this "text frame" every label's bounding box is axis-aligned.
-  const toTF = (x, y) => [(x + y) * R, (-x + y) * R];
+  // --- Project every GeoJSON line segment and index them in a spatial grid ---
+  const segs = [];                          // flat: x1,y1,x2,y2, ...
+  for (const feat of geojson.features) {
+    const gc = feat.geometry.coordinates;
+    const polylines = feat.geometry.type === 'MultiLineString' ? gc : [gc];
+    for (const pl of polylines) {
+      for (let i = 0; i < pl.length - 1; i++) {
+        const a = projection(pl[i]), b = projection(pl[i + 1]);
+        if (a && b) segs.push(a[0], a[1], b[0], b[1]);
+      }
+    }
+  }
 
-  // Candidate anchor offsets from dot center, ordered by preference.
-  // Directions are relative to the text baseline (-45° = upper-right).
-  const placements = [
-    { dx:  OFFSET * R, dy: -OFFSET * R, anchor: 'start' }, // along text (upper-right)
-    { dx: -OFFSET * R, dy:  OFFSET * R, anchor: 'end' },   // against text (lower-left)
-    { dx:  OFFSET * R, dy:  OFFSET * R, anchor: 'start' }, // perp right (lower-right)
-    { dx: -OFFSET * R, dy: -OFFSET * R, anchor: 'end' },   // perp left (upper-left)
-  ];
+  const CELL = 15;
+  const segGrid = new Map();
+  for (let i = 0; i < segs.length; i += 4) {
+    const xLo = Math.min(segs[i], segs[i + 2]), xHi = Math.max(segs[i], segs[i + 2]);
+    const yLo = Math.min(segs[i + 1], segs[i + 3]), yHi = Math.max(segs[i + 1], segs[i + 3]);
+    for (let cx = Math.floor(xLo / CELL); cx <= Math.floor(xHi / CELL); cx++) {
+      for (let cy = Math.floor(yLo / CELL); cy <= Math.floor(yHi / CELL); cy++) {
+        const k = cx * 10007 + cy;
+        if (!segGrid.has(k)) segGrid.set(k, []);
+        segGrid.get(k).push(i);
+      }
+    }
+  }
 
-  // Project all stations; sort so transfer stations get first pick.
+  // Cohen-Sutherland segment ↔ rect intersection test
+  function segClipsRect(si, xn, yn, xx, yx) {
+    let x0 = segs[si], y0 = segs[si + 1], x1 = segs[si + 2], y1 = segs[si + 3];
+    for (let t = 0; t < 8; t++) {
+      let c0 = 0, c1 = 0;
+      if (x0 < xn) c0 |= 1; else if (x0 > xx) c0 |= 2;
+      if (y0 < yn) c0 |= 4; else if (y0 > yx) c0 |= 8;
+      if (x1 < xn) c1 |= 1; else if (x1 > xx) c1 |= 2;
+      if (y1 < yn) c1 |= 4; else if (y1 > yx) c1 |= 8;
+      if (!(c0 | c1)) return true;
+      if (c0 & c1) return false;
+      const c = c0 || c1;
+      let x, y;
+      if (c & 8)      { x = x0 + (x1 - x0) * (yx - y0) / (y1 - y0); y = yx; }
+      else if (c & 4) { x = x0 + (x1 - x0) * (yn - y0) / (y1 - y0); y = yn; }
+      else if (c & 2) { y = y0 + (y1 - y0) * (xx - x0) / (x1 - x0); x = xx; }
+      else             { y = y0 + (y1 - y0) * (xn - x0) / (x1 - x0); x = xn; }
+      if (c === c0) { x0 = x; y0 = y; } else { x1 = x; y1 = y; }
+    }
+    return false;
+  }
+
+  function countLineHits(rx, ry, rw, rh) {
+    const p = LINE_WIDTH * 0.6;
+    const xn = rx - p, yn = ry - p, xx = rx + rw + p, yx = ry + rh + p;
+    let hits = 0;
+    const seen = new Set();
+    for (let cx = Math.floor(xn / CELL); cx <= Math.floor(xx / CELL); cx++) {
+      for (let cy = Math.floor(yn / CELL); cy <= Math.floor(yx / CELL); cy++) {
+        const bucket = segGrid.get(cx * 10007 + cy);
+        if (!bucket) continue;
+        for (const si of bucket) {
+          if (seen.has(si)) continue;
+          seen.add(si);
+          if (segClipsRect(si, xn, yn, xx, yx)) hits++;
+        }
+      }
+    }
+    return hits;
+  }
+
+  // --- Project stations; transfer stations placed first ---
   const items = stations
-    .map(s => { const pt = projection([s.lon, s.lat]); return pt ? { ...s, px: pt[0], py: pt[1] } : null; })
+    .map(s => {
+      const pt = projection([s.lon, s.lat]);
+      return pt ? { ...s, px: pt[0], py: pt[1] } : null;
+    })
     .filter(Boolean)
     .sort((a, b) => b.legends.length - a.legends.length);
 
-  // Track placed labels (AABB in text frame) and dots for collision scoring.
-  const placed = [];   // { rx, ry, rw, rh }
-  const dots = items.map(s => toTF(s.px, s.py));
+  // --- Candidate directions (8 compass points) × distances ---
+  const R = Math.SQRT1_2;
+  const dirs = [
+    { ux:  1, uy:  0, anchor: 'start'  },   // E
+    { ux: -1, uy:  0, anchor: 'end'    },   // W
+    { ux:  R, uy: -R, anchor: 'start'  },   // NE
+    { ux: -R, uy: -R, anchor: 'end'    },   // NW
+    { ux:  R, uy:  R, anchor: 'start'  },   // SE
+    { ux: -R, uy:  R, anchor: 'end'    },   // SW
+    { ux:  0, uy: -1, anchor: 'middle' },   // N
+    { ux:  0, uy:  1, anchor: 'middle' },   // S
+  ];
+  const dists = [3, 6, 10];
 
-  const overlapScore = (rx, ry, rw, rh) => {
+  // Label AABB from anchor point + text-anchor mode
+  function labelRect(cx, cy, w, anchor) {
+    const x = anchor === 'start' ? cx : anchor === 'end' ? cx - w : cx - w / 2;
+    return { x, y: cy - FONT_SIZE / 2, w, h: FONT_SIZE };
+  }
+
+  const placed = [];   // { x, y, w, h }
+
+  function scorePlacement(bb) {
     let score = 0;
-    // Label-label overlap
+    // Label ↔ label
     for (const p of placed) {
-      const ox = Math.max(0, Math.min(rx + rw + LABEL_PAD, p.rx + p.rw + LABEL_PAD) - Math.max(rx - LABEL_PAD, p.rx - LABEL_PAD));
-      const oy = Math.max(0, Math.min(ry + rh + LABEL_PAD, p.ry + p.rh + LABEL_PAD) - Math.max(ry - LABEL_PAD, p.ry - LABEL_PAD));
-      score += ox * oy;
+      const ox = Math.max(0, Math.min(bb.x + bb.w + LABEL_PAD, p.x + p.w + LABEL_PAD) - Math.max(bb.x - LABEL_PAD, p.x - LABEL_PAD));
+      const oy = Math.max(0, Math.min(bb.y + bb.h + LABEL_PAD, p.y + p.h + LABEL_PAD) - Math.max(bb.y - LABEL_PAD, p.y - LABEL_PAD));
+      if (ox > 0 && oy > 0) score += ox * oy * 10;
     }
-    // Label-dot overlap (check all dots in text frame)
-    const expand = DOT_R * 1.2;
-    for (const [dx, dy] of dots) {
-      if (dx + expand > rx && dx - expand < rx + rw &&
-          dy + expand > ry && dy - expand < ry + rh) {
-        score += 20;
-      }
+    // Label ↔ station dots
+    for (const s of items) {
+      const cx = Math.max(bb.x, Math.min(s.px, bb.x + bb.w));
+      const cy = Math.max(bb.y, Math.min(s.py, bb.y + bb.h));
+      if ((s.px - cx) ** 2 + (s.py - cy) ** 2 < (DOT_R * 1.5) ** 2) score += 15;
     }
+    // Label ↔ transit lines
+    score += countLineHits(bb.x, bb.y, bb.w, bb.h) * 5;
     return score;
-  };
+  }
 
   const results = [];
 
   for (const station of items) {
-    const textW = station.name.length * CHAR_W;
-    let bestIdx = 0;
-    let bestScore = Infinity;
+    const tw = station.name.length * CHAR_W;
+    let best = null, bestScore = Infinity;
 
-    for (let p = 0; p < placements.length; p++) {
-      const { dx, dy, anchor } = placements[p];
-      const [trx, try_] = toTF(station.px + dx, station.py + dy);
-      const rx = anchor === 'start' ? trx : trx - textW;
-      const ry = try_ - FONT_SIZE / 2;
-      const s = overlapScore(rx, ry, textW, FONT_SIZE);
-      if (s < bestScore) { bestScore = s; bestIdx = p; }
-      if (s === 0) break;
+    search:
+    for (const d of dists) {
+      for (const dir of dirs) {
+        const dx = dir.ux * d, dy = dir.uy * d;
+        const bb = labelRect(station.px + dx, station.py + dy, tw, dir.anchor);
+        const s = scorePlacement(bb) + d * 0.3;   // prefer closer
+        if (s < bestScore) { bestScore = s; best = { dx, dy, anchor: dir.anchor, bb }; }
+        if (bestScore <= dists[0] * 0.3) break search;
+      }
     }
 
-    const { dx, dy, anchor } = placements[bestIdx];
-    const [trx, try_] = toTF(station.px + dx, station.py + dy);
-    placed.push({
-      rx: anchor === 'start' ? trx : trx - textW,
-      ry: try_ - FONT_SIZE / 2,
-      rw: textW,
-      rh: FONT_SIZE,
-    });
-
-    results.push({ station, dx, dy, anchor });
+    placed.push(best.bb);
+    results.push({ station, dx: best.dx, dy: best.dy, anchor: best.anchor });
   }
 
-  // Render SVG
+  // --- Render SVG ---
   for (const { station, dx, dy, anchor } of results) {
-    const isTransfer = station.legends.length !== 1;
-    const color = isTransfer ? '#fff' : (LINE_COLORS[station.legends[0]] || '#fff');
-
     const g = stationsGroup.append('g')
       .attr('class', 'station-marker')
-      .attr('transform', `translate(${station.px}, ${station.py})`);
+      .attr('transform', `translate(${station.px},${station.py})`);
+
+    // Leader line (dot edge → near label anchor)
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > DOT_R + 0.5) {
+      const nx = dx / len, ny = dy / len;
+      g.append('line')
+        .attr('class', 'station-leader')
+        .attr('x1', nx * DOT_R).attr('y1', ny * DOT_R)
+        .attr('x2', dx - nx * 0.3).attr('y2', dy - ny * 0.3);
+    }
 
     g.append('circle')
       .attr('class', 'station-dot')
       .attr('r', DOT_R)
-      .attr('fill', color)
-      .attr('stroke', isTransfer ? 'rgba(255,255,255,0.5)' : color)
-      .attr('stroke-width', 0.3);
+      .attr('fill', '#fff');
 
     g.append('text')
       .attr('class', 'station-label')
-      .attr('transform', `translate(${dx},${dy}) rotate(${ANGLE})`)
+      .attr('x', dx).attr('y', dy)
       .attr('text-anchor', anchor)
       .attr('dominant-baseline', 'central')
       .text(station.name);
