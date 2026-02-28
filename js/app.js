@@ -509,8 +509,8 @@
           d._arrowPhase = (d._arrowPhase + dt / 3600) % 1;
 
           const dir = d._direction || 1;
-          const behindDist = 0.015; // start this far behind the dot
-          const totalDist = 0.027;  // total travel distance (behind + ahead)
+          const behindDist = 0.010; // start this far behind the dot
+          const totalDist = 0.020;  // total travel distance (behind + ahead)
 
           for (let i = 0; i < 6; i++) {
             const arrow = g.select(`.train-arrow-${i}`);
