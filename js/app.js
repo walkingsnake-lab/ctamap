@@ -27,8 +27,6 @@
   // Build per-line segment lookup for path-following animation
   const lineSegments = buildLineSegments(geojson);
 
-  // Build station position lookup for terminal proximity checks
-  const stationPositions = buildStationPositions(geojson);
 
   // ---- D3 zoom behavior ----
   const zoom = d3.zoom()
@@ -493,55 +491,43 @@
         }
 
         // Detect trains going out of service near a terminal — retire them
-        // instead of letting them vanish immediately
+        // instead of letting them vanish immediately.
+        // Walk the track geometry forward from the train to find the dead-end;
+        // no station-name matching needed.
         if (realTrains) {
           const newRns = new Set(fetched.map(t => t.rn));
           const retireRns = new Set(retiringTrains.map(t => t.rn));
           for (const train of realTrains) {
             if (newRns.has(train.rn) || train._retiring || retireRns.has(train.rn)) continue;
 
-            const terminalCoord = lookupStation(train.destNm, train.legend, stationPositions);
-            if (!terminalCoord) {
-              console.warn(`[CTA] Cannot find terminal for retiring train rn=${train.rn} dest="${train.destNm}" line=${train.legend}`);
-              continue;
-            }
-
-            const dist = geoDist(train.lon, train.lat, terminalCoord[0], terminalCoord[1]);
-            if (dist >= TERMINAL_PROXIMITY_THRESHOLD) continue;
-
             const segs = lineSegments[train.legend];
-            if (!segs || segs.length === 0) continue;
+            if (!segs || segs.length === 0 || !train._trackPos) continue;
+
+            // Walk forward along the track to find the line's terminal
+            const dir = train._direction || 1;
+            const terminalPos = advanceOnTrack(train._trackPos, 0.5, dir, segs);
+            if (!terminalPos.stopped) continue; // no dead-end found (e.g. Loop circuit)
+
+            const dist = geoDist(train.lon, train.lat, terminalPos.lon, terminalPos.lat);
+            if (dist >= TERMINAL_PROXIMITY_THRESHOLD) continue;
 
             train._retiring = true;
             train._retireTime = null;
 
-            // Snap terminal to track
-            const termTrackPos = snapToTrackPosition(terminalCoord[0], terminalCoord[1], segs);
-
             // If already extremely close, skip the approach slide
             if (dist < 1e-4) {
               train._correcting = false;
-              train._trackPos = termTrackPos;
-              train.lon = termTrackPos.lon;
-              train.lat = termTrackPos.lat;
+              train._trackPos = terminalPos;
+              train.lon = terminalPos.lon;
+              train.lat = terminalPos.lat;
               train._retireTime = Date.now();
             } else {
               // Set up correction slide toward terminal
-              train._corrFromTrackPos = train._trackPos
-                ? { ...train._trackPos }
-                : snapToTrackPosition(train.lon, train.lat, segs);
-              train._corrToTrackPos = termTrackPos;
-
-              // Pick approach direction (toward terminal)
-              const testStep = Math.max(dist * 0.1, 1e-5);
-              const fwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, +1, segs);
-              const bwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, -1, segs);
-              const fwdDist = geoDist(fwdTest.lon, fwdTest.lat, termTrackPos.lon, termTrackPos.lat);
-              const bwdDist = geoDist(bwdTest.lon, bwdTest.lat, termTrackPos.lon, termTrackPos.lat);
-              train._corrDirection = fwdDist <= bwdDist ? 1 : -1;
-
+              train._corrFromTrackPos = { ...train._trackPos };
+              train._corrToTrackPos = terminalPos;
+              train._corrDirection = dir;
               train._corrTotalDist = trackDistanceBetween(
-                train._corrFromTrackPos, train._corrToTrackPos, train._corrDirection, segs
+                train._corrFromTrackPos, terminalPos, dir, segs
               );
               train._correcting = true;
               train._corrStartTime = Date.now();
@@ -561,6 +547,34 @@
 
         // Initialize track position and drift correction
         initRealTrainAnimation(realTrains, lineSegments, prevMap);
+
+        // Spawn animation for new trains: slide from start-of-line to tracked position
+        if (prevMap && prevMap.size > 0) {
+          for (const train of realTrains) {
+            if (prevMap.has(train.rn)) continue; // existing train, not new
+            const segs = lineSegments[train.legend];
+            if (!segs || !train._trackPos) continue;
+
+            // Walk backward along the track to find the start terminal
+            const dir = train._direction || 1;
+            const startPos = advanceOnTrack(train._trackPos, 0.5, -dir, segs);
+
+            // Save target (current API position) and set up slide from start terminal
+            const targetPos = { ...train._trackPos };
+            train._corrFromTrackPos = startPos;
+            train._corrToTrackPos = targetPos;
+            train._corrDirection = dir;
+            train._corrTotalDist = trackDistanceBetween(startPos, targetPos, dir, segs);
+            train._correcting = true;
+            train._corrStartTime = Date.now();
+            train._spawning = true;
+
+            // Place train at start terminal initially
+            train.lon = startPos.lon;
+            train.lat = startPos.lat;
+            train._trackPos = startPos;
+          }
+        }
 
         // Update selected train reference if tracking
         if (selectedTrainRn) {

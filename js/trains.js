@@ -280,17 +280,20 @@ function advanceRealTrains(trains, lineSegments, dt) {
     if (!segs) continue;
 
     // Drift correction: smoothly slide from old position to new API position
+    // Spawning trains (new to the data) get a longer slide from the start of the line
     if (train._correcting) {
       const elapsed = now - train._corrStartTime;
-      if (elapsed >= CORRECTION_DURATION) {
+      const duration = train._spawning ? TERMINAL_APPROACH_DURATION : CORRECTION_DURATION;
+      if (elapsed >= duration) {
         // Correction complete — snap to target and sit still until next refresh
         train._correcting = false;
+        train._spawning = false;
         train._trackPos = train._corrToTrackPos;
         train.lon = train._corrToTrackPos.lon;
         train.lat = train._corrToTrackPos.lat;
       } else {
         // Smoothstep easing: accelerate then decelerate
-        const t = elapsed / CORRECTION_DURATION;
+        const t = elapsed / duration;
         const eased = t * t * (3 - 2 * t);
         const pos = advanceOnTrack(
           train._corrFromTrackPos, eased * train._corrTotalDist, train._corrDirection, segs

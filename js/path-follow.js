@@ -495,32 +495,24 @@ function lookupStation(stationName, legend, stationPositions) {
     return stationPositions.byName.get(norm);
   }
 
-  // Partial / substring match — handles cases where API destination name
-  // doesn't exactly match GeoJSON endpoint name (e.g. "O'Hare" vs "O-Hare",
-  // "Midway" vs "Midway Airport", etc.)
-  // Prefer line-specific partial matches first
+  // Partial / substring match — line-specific only to avoid cross-line
+  // mismatches (e.g. "Cermak" matching Red's Cermak-Chinatown instead of Pink's 54th/Cermak)
   let bestPartial = null;
-  let bestPartialLen = Infinity;
+  let bestLenDiff = Infinity;
   for (const [key, coord] of stationPositions.byLine) {
     const colonIdx = key.indexOf(':');
     const keyLegend = key.substring(0, colonIdx);
     const keyName = key.substring(colonIdx + 1);
     if (keyLegend !== legend) continue;
     if (keyName.includes(norm) || norm.includes(keyName)) {
-      if (keyName.length < bestPartialLen) {
-        bestPartialLen = keyName.length;
+      const lenDiff = Math.abs(keyName.length - norm.length);
+      if (lenDiff < bestLenDiff) {
+        bestLenDiff = lenDiff;
         bestPartial = coord;
       }
     }
   }
   if (bestPartial) return bestPartial;
-
-  // Partial match across all names (any legend)
-  for (const [name, coord] of stationPositions.byName) {
-    if (name.includes(norm) || norm.includes(name)) {
-      return coord;
-    }
-  }
 
   return null;
 }
@@ -530,5 +522,5 @@ function lookupStation(stationName, legend, stationPositions) {
  * Lowercases, replaces slashes and hyphens with spaces, collapses whitespace.
  */
 function normalizeStationName(name) {
-  return name.toLowerCase().replace(/[\/\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  return name.toLowerCase().replace(/[\/\-''`]/g, ' ').replace(/\s+/g, ' ').trim();
 }
