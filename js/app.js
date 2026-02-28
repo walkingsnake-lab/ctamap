@@ -352,17 +352,19 @@
     showTrainLabel(train);
 
     // Animate zoom to the train (shorter duration when switching between trains).
-    // Uses manual animation in the render loop so the camera tracks the train's
-    // live position throughout the zoom, instead of targeting a fixed snapshot.
+    // Interpolates the train's SCREEN position from wherever it currently appears
+    // to screen center, so the camera always moves toward the train rather than
+    // zooming into the map center first.
     svg.interrupt('zoom-track');
     const fromTransform = d3.zoomTransform(svgEl);
+    const clickPt = projection([train.lon, train.lat]);
     isZoomTransitioning = true;
     zoomAnim = {
       startTime: performance.now(),
-      duration: wasTracking ? 300 : 750,
+      duration: wasTracking ? 200 : 750,
       fromK: fromTransform.k,
-      fromCx: (width / 2 - fromTransform.x) / fromTransform.k,
-      fromCy: (height / 2 - fromTransform.y) / fromTransform.k,
+      fromScreenX: clickPt ? (fromTransform.k * clickPt[0] + fromTransform.x) : width / 2,
+      fromScreenY: clickPt ? (fromTransform.k * clickPt[1] + fromTransform.y) : height / 2,
     };
 
     // Fetch detailed ETA data
@@ -553,8 +555,9 @@
 
     // Camera tracking / zoom-in animation for selected train
     if (zoomAnim && selectedTrain) {
-      // Manual zoom-in: interpolate from previous view to centering on the
-      // train's CURRENT position so the camera tracks the moving train.
+      // Interpolate the train's screen position from its starting location
+      // to screen center while simultaneously zooming in. This keeps the
+      // camera moving directly toward the train at all times.
       const elapsed = now - zoomAnim.startTime;
       const progress = Math.min(elapsed / zoomAnim.duration, 1);
       const eased = progress * progress * (3 - 2 * progress); // smoothstep
@@ -562,10 +565,10 @@
       const pt = projection([selectedTrain.lon, selectedTrain.lat]);
       if (pt) {
         const k = zoomAnim.fromK + (trackingScale - zoomAnim.fromK) * eased;
-        const cx = zoomAnim.fromCx + (pt[0] - zoomAnim.fromCx) * eased;
-        const cy = zoomAnim.fromCy + (pt[1] - zoomAnim.fromCy) * eased;
-        const tx = width / 2 - k * cx;
-        const ty = height / 2 - k * cy;
+        const sx = zoomAnim.fromScreenX + (width / 2 - zoomAnim.fromScreenX) * eased;
+        const sy = zoomAnim.fromScreenY + (height / 2 - zoomAnim.fromScreenY) * eased;
+        const tx = sx - k * pt[0];
+        const ty = sy - k * pt[1];
         const t = d3.zoomIdentity.translate(tx, ty).scale(k);
         svgEl.__zoom = t;
         mapContainer.attr('transform', t.toString());
