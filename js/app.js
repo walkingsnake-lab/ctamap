@@ -61,6 +61,39 @@
         svg.select('.map-container').attr('transform', event.transform);
       }
     });
+
+  // Long-press to toggle stations — registered on the raw DOM element BEFORE
+  // svg.call(zoom) so our listener fires first, before D3 zoom's pointerdown
+  // handler calls stopImmediatePropagation(). Uses pointer events so it works
+  // correctly with touch-action: none. toggleStations() is hoisted as a
+  // function declaration so calling it from the setTimeout is safe.
+  {
+    let lpTimer = null;
+    let lpOrigin = null;
+    const LP_THRESHOLD = 10;
+    svgEl.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'touch' || !event.isPrimary) return;
+      lpOrigin = { x: event.clientX, y: event.clientY };
+      lpTimer = setTimeout(() => { lpTimer = null; toggleStations(); }, 600);
+    }, { passive: true });
+    svgEl.addEventListener('pointermove', (event) => {
+      if (!lpTimer || !lpOrigin) return;
+      const dx = event.clientX - lpOrigin.x;
+      const dy = event.clientY - lpOrigin.y;
+      if (dx * dx + dy * dy > LP_THRESHOLD * LP_THRESHOLD) {
+        clearTimeout(lpTimer); lpTimer = null; lpOrigin = null;
+      }
+    }, { passive: true });
+    svgEl.addEventListener('pointerup', () => {
+      if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+      lpOrigin = null;
+    });
+    svgEl.addEventListener('pointercancel', () => {
+      if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+      lpOrigin = null;
+    });
+  }
+
   svg.call(zoom);
 
   // Render stations into the stations layer (created hidden by loadMap)
@@ -71,37 +104,6 @@
     stationsVisible = !stationsVisible;
     svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
   }
-
-  // Long-press to toggle stations (touch screens)
-  // iOS text selection is suppressed via CSS (-webkit-touch-callout, user-select)
-  // touch-action:none causes touchmove to fire for sub-pixel jitter, so we use a
-  // movement threshold instead of cancelling on any touchmove.
-  let longPressTimer = null;
-  let longPressOrigin = null;
-  const LONG_PRESS_MOVE_THRESHOLD = 10; // px
-  svg.on('touchstart.stations', (event) => {
-    if (event.touches.length !== 1) return;
-    const t = event.touches[0];
-    longPressOrigin = { x: t.clientX, y: t.clientY };
-    longPressTimer = setTimeout(() => {
-      longPressTimer = null;
-      toggleStations();
-    }, 600);
-  });
-  svg.on('touchmove.stations', (event) => {
-    if (longPressTimer && longPressOrigin && event.touches.length === 1) {
-      const t = event.touches[0];
-      const dx = t.clientX - longPressOrigin.x;
-      const dy = t.clientY - longPressOrigin.y;
-      if (dx * dx + dy * dy > LONG_PRESS_MOVE_THRESHOLD * LONG_PRESS_MOVE_THRESHOLD) {
-        clearTimeout(longPressTimer); longPressTimer = null; longPressOrigin = null;
-      }
-    }
-  });
-  svg.on('touchend.stations touchcancel.stations', () => {
-    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    longPressOrigin = null;
-  });
 
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
