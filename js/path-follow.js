@@ -507,7 +507,16 @@ function normalizeStationName(name) {
 }
 
 /**
+ * Returns true if a name looks like an infrastructure point rather than
+ * a passenger station (junctions, towers, portals, connectors, etc.).
+ */
+function isInfrastructureName(name) {
+  return /\b(junction|connector|tower|portal|yard|interlocking|wye)\b/i.test(name);
+}
+
+/**
  * Builds a deduplicated array of station objects from GeoJSON segment descriptions.
+ * Filters out infrastructure points (junctions, towers, portals, etc.).
  * Each station has: { name, lon, lat, legends: string[] }
  */
 function buildUniqueStations(geojson) {
@@ -537,6 +546,8 @@ function buildUniqueStations(geojson) {
     }
 
     for (const [name, coord] of [[nameA, startCoord], [nameB, endCoord]]) {
+      if (isInfrastructureName(name)) continue;
+
       const norm = normalizeStationName(name);
       if (!stationMap.has(norm)) {
         stationMap.set(norm, { name, lon: coord[0], lat: coord[1], legends: new Set(legends) });
