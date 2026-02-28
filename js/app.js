@@ -261,13 +261,20 @@
     svg.selectAll('.train-group')
       .classed('dimmed', d => d.legend !== legend);
 
+    // Dim station markers that don't serve the selected line
+    svg.selectAll('.station-marker')
+      .classed('dimmed', function () {
+        const legends = d3.select(this).attr('data-legends') || '';
+        return !legends.split(',').includes(legend);
+      });
+
     // Show bottom gradient in the selected line's color
     lineGlow.style.setProperty('--glow-line-color', LINE_COLORS[legend]);
     lineGlow.classList.add('visible');
   }
 
   function clearLineFocus() {
-    svg.selectAll('.line-path, .train-group')
+    svg.selectAll('.line-path, .train-group, .station-marker')
       .classed('dimmed', false);
     lineGlow.classList.remove('visible');
   }

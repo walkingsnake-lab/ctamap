@@ -246,6 +246,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
   for (const { station, dx, dy, anchor } of results) {
     const g = stationsGroup.append('g')
       .attr('class', 'station-marker')
+      .attr('data-legends', station.legends.join(','))
       .attr('transform', `translate(${station.px},${station.py})`);
 
     // Leader line (dot edge → near label anchor)
