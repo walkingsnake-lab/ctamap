@@ -43,7 +43,7 @@
 
   // Render stations into the stations layer (created hidden by loadMap)
   let stationsVisible = false;
-  renderStations(svg.select('.stations-layer'), stations, projection);
+  renderStations(svg.select('.stations-layer'), stations, projection, geojson);
 
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
@@ -646,7 +646,7 @@
       projection = result.projection;
 
       // Re-render stations overlay
-      renderStations(svg.select('.stations-layer'), stations, projection);
+      renderStations(svg.select('.stations-layer'), stations, projection, geojson);
       if (!stationsVisible) svg.select('.stations-layer').style('display', 'none');
 
       // Reset zoom state after redraw
