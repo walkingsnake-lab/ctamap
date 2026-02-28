@@ -15,6 +15,9 @@ body {
   width: 100vw;
   height: 100vh;
   display: block;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* --- Close button (visible when tracking a train) --- */
