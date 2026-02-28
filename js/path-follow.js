@@ -495,6 +495,33 @@ function lookupStation(stationName, legend, stationPositions) {
     return stationPositions.byName.get(norm);
   }
 
+  // Partial / substring match — handles cases where API destination name
+  // doesn't exactly match GeoJSON endpoint name (e.g. "O'Hare" vs "O-Hare",
+  // "Midway" vs "Midway Airport", etc.)
+  // Prefer line-specific partial matches first
+  let bestPartial = null;
+  let bestPartialLen = Infinity;
+  for (const [key, coord] of stationPositions.byLine) {
+    const colonIdx = key.indexOf(':');
+    const keyLegend = key.substring(0, colonIdx);
+    const keyName = key.substring(colonIdx + 1);
+    if (keyLegend !== legend) continue;
+    if (keyName.includes(norm) || norm.includes(keyName)) {
+      if (keyName.length < bestPartialLen) {
+        bestPartialLen = keyName.length;
+        bestPartial = coord;
+      }
+    }
+  }
+  if (bestPartial) return bestPartial;
+
+  // Partial match across all names (any legend)
+  for (const [name, coord] of stationPositions.byName) {
+    if (name.includes(norm) || norm.includes(name)) {
+      return coord;
+    }
+  }
+
   return null;
 }
 

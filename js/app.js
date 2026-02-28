@@ -501,7 +501,10 @@
             if (newRns.has(train.rn) || train._retiring || retireRns.has(train.rn)) continue;
 
             const terminalCoord = lookupStation(train.destNm, train.legend, stationPositions);
-            if (!terminalCoord) continue;
+            if (!terminalCoord) {
+              console.warn(`[CTA] Cannot find terminal for retiring train rn=${train.rn} dest="${train.destNm}" line=${train.legend}`);
+              continue;
+            }
 
             const dist = geoDist(train.lon, train.lat, terminalCoord[0], terminalCoord[1]);
             if (dist >= TERMINAL_PROXIMITY_THRESHOLD) continue;
