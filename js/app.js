@@ -188,26 +188,10 @@
         .style('opacity', 0);
     }
 
-    // Train dot — teardrop/map-pin shape (circle + smooth directional tip)
-    const R = TRAIN_RADIUS;
-    const tipX = R + 3.0;
-    const ba = 50 * Math.PI / 180; // where the taper departs the circle
-    const bx = R * Math.cos(ba);
-    const by = R * Math.sin(ba);
-    // Bézier control points: tangent to circle at departure, horizontal at tip
-    const tx = Math.sin(ba), ty = Math.cos(ba);
-    const c1x = bx + 2.0 * tx, c1y = -by + 2.0 * ty;
-    const c2x = tipX - 1.5;
-    const dotPath = [
-      `M ${bx},${-by}`,
-      `C ${c1x},${c1y} ${c2x},0 ${tipX},0`,
-      `C ${c2x},0 ${c1x},${-c1y} ${bx},${by}`,
-      `A ${R},${R} 0 1,1 ${bx},${-by}`,
-      'Z'
-    ].join(' ');
-    enter.append('path')
+    // Train dot — simple circle
+    enter.append('circle')
       .attr('class', 'train-dot')
-      .attr('d', dotPath)
+      .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
     // Click handler on new train groups
@@ -295,7 +279,7 @@
     const t = d3.zoomTransform(svgEl);
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
-    const offset = (TRAIN_RADIUS + 3.0) * 1.3 * t.k + 12;
+    const offset = TRAIN_RADIUS * 1.3 * t.k + 10;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
   }
@@ -581,24 +565,8 @@
           }
         }
 
-        // Rotate the combined dot+pointer shape to face the heading direction
-        const dotEl = g.select('.train-dot');
         const dotScale = d.rn === selectedTrainRn ? 1.3 : 1;
-        if (d._trackPos && segs) {
-          const hdir = d._direction || 1;
-          const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs);
-          const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
-          if (aheadPt) {
-            const hdx = aheadPt[0] - pt[0];
-            const hdy = aheadPt[1] - pt[1];
-            if (hdx !== 0 || hdy !== 0) {
-              const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
-              dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-            }
-          }
-        } else if (d.heading !== undefined) {
-          dotEl.attr('transform', `rotate(${headingToSVGAngle(d.heading)}) scale(${dotScale})`);
-        }
+        g.select('.train-dot').attr('transform', `scale(${dotScale})`);
       });
 
     // Camera tracking / zoom-in animation for selected train
