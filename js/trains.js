@@ -215,11 +215,27 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
         train._corrTotalDist = trackDistanceBetween(
           train._corrFromTrackPos, train._corrToTrackPos, train._corrDirection, segs
         );
-        train._correcting = true;
-        train._corrStartTime = now;
-        // Set current visual position to the from track position
-        train.lon = train._corrFromTrackPos.lon;
-        train.lat = train._corrFromTrackPos.lat;
+
+        // Validate the correction path: advance the full distance and verify we land
+        // near the target.  If not, the path took a detour — e.g. going around the
+        // downtown Loop on loop exit, or correcting a bad API position jump (like a
+        // Purple Express hop to Wilson that then snaps back to Howard).
+        // In that case, snap directly and re-derive direction from the API heading.
+        const _corrPathEnd = advanceOnTrack(
+          train._corrFromTrackPos, train._corrTotalDist, train._corrDirection, segs
+        );
+        if (geoDist(_corrPathEnd.lon, _corrPathEnd.lat, toPos.lon, toPos.lat) > drift * 0.5) {
+          train._direction = directionFromHeading(
+            train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+          );
+          // Leave _correcting = false — train stays at API-snapped position.
+        } else {
+          train._correcting = true;
+          train._corrStartTime = now;
+          // Set current visual position to the from track position
+          train.lon = train._corrFromTrackPos.lon;
+          train.lat = train._corrFromTrackPos.lat;
+        }
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
         console.warn(`[CTA] Snap: rn=${train.rn} drift=${(drift * 111000).toFixed(0)}m — too far to interpolate`);
       }
@@ -293,13 +309,25 @@ function advanceRealTrains(trains, lineSegments, dt) {
       const elapsed = now - train._corrStartTime;
       const duration = train._spawning ? TERMINAL_APPROACH_DURATION : CORRECTION_DURATION;
       if (elapsed >= duration) {
-        // Correction complete — snap to target and sit still until next refresh
+        // Correction complete — sit still until next refresh.
         train._correcting = false;
         train._spawning = false;
-        train._direction = train._corrDirection;
-        train._trackPos = train._corrToTrackPos;
-        train.lon = train._corrToTrackPos.lon;
-        train.lat = train._corrToTrackPos.lat;
+        // Use the track-path natural endpoint rather than the raw API snap.
+        // _corrToTrackPos was computed by nearest-segment snap, which near junctions
+        // (e.g. the downtown Loop) can land on an adjacent, differently-oriented
+        // segment, causing the heading arrow to flip at the moment correction ends.
+        // advanceOnTrack follows the same segment topology as the animation, so its
+        // endpoint always has a consistent segIdx and direction.
+        const finalPos = advanceOnTrack(
+          train._corrFromTrackPos, train._corrTotalDist, train._corrDirection, segs
+        );
+        train._trackPos = finalPos;
+        train.lon = finalPos.lon;
+        train.lat = finalPos.lat;
+        // finalPos.direction reflects any flip from crossing a segment boundary
+        // (e.g. exiting the ML loop onto the own Orange segment where ±1 reverses),
+        // so it is more reliable than _corrDirection for the post-correction state.
+        train._direction = finalPos.direction !== undefined ? finalPos.direction : train._corrDirection;
       } else {
         // Smoothstep easing: accelerate then decelerate
         const t = elapsed / duration;
