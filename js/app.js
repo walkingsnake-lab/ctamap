@@ -195,12 +195,12 @@
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
     // Heading direction triangle — overlays the circle, visible only when stations are shown
-    const ht = TRAIN_RADIUS * 0.65;
+    const ht = TRAIN_RADIUS * 0.75;
     const headingTriPath = `M ${ht},0 L ${-ht * 0.6},${-ht * 0.7} L ${-ht * 0.6},${ht * 0.7} Z`;
     enter.append('path')
       .attr('class', 'train-heading')
       .attr('d', headingTriPath)
-      .attr('fill', d => d.legend === 'YL' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.45)')
+      .attr('fill', d => d.legend === 'YL' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.75)')
       .style('opacity', 0);
 
     // Click handler on new train groups
