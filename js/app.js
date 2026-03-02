@@ -122,6 +122,7 @@
   let lastETAs = null;
   const TRACK_ZOOM_SCALE = 8;
   let trackingScale = TRACK_ZOOM_SCALE;
+  let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
 
   // ---- Initialize trains ----
   let dummyTrains = null;
@@ -517,6 +518,15 @@
     const currentK = d3.zoomTransform(svgEl).k;
     const scaledRadius     = TRAIN_RADIUS      / Math.pow(currentK, 0.4);
     const scaledGlowRadius = TRAIN_GLOW_RADIUS / Math.pow(currentK, 0.35);
+
+    // Thin lines slightly as zoom increases — only recalculate when k changes.
+    if (currentK !== lastLineK) {
+      lastLineK = currentK;
+      const scaledLineWidth = LINE_WIDTH / Math.pow(currentK, 0.5);
+      svg.selectAll('.line-path').attr('stroke-width', scaledLineWidth);
+      svg.selectAll('.pr-express-path')
+        .attr('stroke-dasharray', `${scaledLineWidth * 1.5} ${scaledLineWidth * 1.5}`);
+    }
 
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
