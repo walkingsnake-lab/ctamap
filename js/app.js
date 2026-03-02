@@ -28,7 +28,7 @@
   // lineSegments: full track (shared + ML) for animation/snapping
   // lineOwnSegments: line's own colored segments only (for terminal detection)
   const { segments: lineSegments, ownSegments: lineOwnSegments } = buildLineSegments(geojson);
-  const lineTerminals = buildLineTerminals(lineOwnSegments);
+  const lineTerminals = buildLineTerminals(lineOwnSegments, lineSegments);
 
   // Build unique stations list for the overlay
   const stations = buildUniqueStations(geojson);
