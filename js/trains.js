@@ -289,6 +289,7 @@ function advanceRealTrains(trains, lineSegments, dt) {
         // Correction complete — snap to target and sit still until next refresh
         train._correcting = false;
         train._spawning = false;
+        train._direction = train._corrDirection;
         train._trackPos = train._corrToTrackPos;
         train.lon = train._corrToTrackPos.lon;
         train.lat = train._corrToTrackPos.lat;

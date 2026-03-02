@@ -536,7 +536,7 @@
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
           d._arrowPhase = (d._arrowPhase + dt / 3600) % 1;
 
-          const dir = d._direction || 1;
+          const dir = (d._correcting ? d._corrDirection : d._direction) || 1;
           const behindDist = 0.005; // start this far behind the dot
           const totalDist = 0.010;  // total travel distance (behind + ahead)
 
@@ -598,7 +598,7 @@
         g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.3 : 1;
         if (d._trackPos && segs) {
-          const hdir = d._direction || 1;
+          const hdir = (d._correcting ? d._corrDirection : d._direction) || 1;
           const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs);
           const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
           if (aheadPt) {
@@ -616,7 +616,7 @@
           headingEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
         }
         // Show heading triangle only when stations are visible
-        headingEl.style('opacity', stationsVisible ? 1 : 0);
+        headingEl.style('opacity', stationsVisible && !d._retiring ? 1 : 0);
       });
 
     // Camera tracking / zoom-in animation for selected train
