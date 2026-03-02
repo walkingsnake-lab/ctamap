@@ -288,7 +288,7 @@
     const t = d3.zoomTransform(svgEl);
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
-    const scaledR = TRAIN_RADIUS / Math.pow(t.k, 0.6);
+    const scaledR = TRAIN_RADIUS / Math.pow(t.k, 0.4);
     const offset = (scaledR + 3.0) * 1.3 * t.k + 12;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
@@ -515,8 +515,8 @@
     // The "larger on mobile" feel is preserved — it comes from the map being compressed into
     // fewer pixels, not from r being different.
     const currentK = d3.zoomTransform(svgEl).k;
-    const scaledRadius     = TRAIN_RADIUS      / Math.pow(currentK, 0.6);
-    const scaledGlowRadius = TRAIN_GLOW_RADIUS / Math.pow(currentK, 0.5);
+    const scaledRadius     = TRAIN_RADIUS      / Math.pow(currentK, 0.4);
+    const scaledGlowRadius = TRAIN_GLOW_RADIUS / Math.pow(currentK, 0.35);
 
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
@@ -607,13 +607,14 @@
             if (hdx !== 0 || hdy !== 0) {
               const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
               dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-              headingEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+              headingEl.attr('transform', `rotate(${angle}) scale(${dotScale / Math.pow(currentK, 0.4)})`);
             }
           }
         } else if (d.heading !== undefined) {
           const angle = headingToSVGAngle(d.heading);
           dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-          headingEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+          headingEl.attr('transform', `rotate(${angle}) scale(${dotScale / Math.pow(currentK, 0.4)})`);
+
         }
         // Show heading triangle only when stations are visible
         headingEl.style('opacity', stationsVisible ? 1 : 0);
