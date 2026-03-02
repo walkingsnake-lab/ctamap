@@ -108,7 +108,6 @@ body {
   stroke-linecap: round;
   stroke-linejoin: round;
   shape-rendering: geometricPrecision;
-  vector-effect: non-scaling-stroke;
 }
 
 /* --- Train dots --- */
