@@ -148,6 +148,7 @@ async function fetchTrains() {
       destNm: t.destNm,
       isApp: t.isApp,
       isDly: t.isDly,
+      isSch: t.isSch,
     }));
   } catch (e) {
     console.warn('Failed to fetch trains:', e);
@@ -193,7 +194,21 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
 
     if (prev && prev._animLon !== undefined) {
       const drift = geoDist(prev._animLon, prev._animLat, train.lon, train.lat);
-      if (drift < CORRECTION_SNAP_THRESHOLD && drift > 1e-7) {
+
+      if (train.isSch === '1' && prev._trackPos && drift > 1e-7) {
+        // Schedule-based position — hold at previous position rather than jumping.
+        // isSch=1 means CTA is projecting from schedule, not confirmed track-circuit
+        // data. This is the tell for express-train phantom positions: the system
+        // knows the Purple Express will skip to Wilson, so it briefly projects the
+        // train there before the ATC circuit physically confirms it. On the next
+        // poll the GPS-equivalent (circuit) position snaps back to Lawrence/Granville.
+        // Holding prevents both the forward jump and the jarring backward correction.
+        train._trackPos = { ...prev._trackPos };
+        train.lon = prev._animLon;
+        train.lat = prev._animLat;
+        train._direction = prev._direction;
+        console.warn(`[CTA] Hold: rn=${train.rn} isSch=1, drift=${(drift * 111000).toFixed(0)}m — holding at circuit-confirmed position`);
+      } else if (drift < CORRECTION_SNAP_THRESHOLD && drift > 1e-7) {
         // Save the API-snapped target (where the train should end up)
         train._corrToTrackPos = { ...train._trackPos };
         // Use prev's maintained track position (avoids re-snapping to wrong segment)
