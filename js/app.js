@@ -28,7 +28,7 @@
   // lineSegments: full track (shared + ML) for animation/snapping
   // lineOwnSegments: line's own colored segments only (for terminal detection)
   const { segments: lineSegments, ownSegments: lineOwnSegments } = buildLineSegments(geojson);
-
+  const lineTerminals = buildLineTerminals(lineOwnSegments);
 
   // Build unique stations list for the overlay
   const stations = buildUniqueStations(geojson);
@@ -626,8 +626,10 @@
           headingEl.attr('transform', `rotate(${angle}) scale(${dotScale / Math.pow(currentK, 0.4)})`);
 
         }
-        // Show heading triangle only when stations are visible
-        headingEl.style('opacity', stationsVisible && !d._retiring ? 1 : 0);
+        // Hide heading triangle when stations aren't visible or train is at a line terminus
+        const termPts = lineTerminals[d.legend] || [];
+        const atTerminus = termPts.some(t => geoDist(d.lon, d.lat, t.lon, t.lat) < 0.003);
+        headingEl.style('opacity', stationsVisible && !atTerminus ? 1 : 0);
       });
 
     // Camera tracking / zoom-in animation for selected train

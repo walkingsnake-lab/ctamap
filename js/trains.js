@@ -177,13 +177,20 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
     train.lon = train._trackPos.lon;
     train.lat = train._trackPos.lat;
 
-    // Determine direction from heading
-    train._direction = directionFromHeading(
-      train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
-    );
-
     // Drift correction: smoothly slide from old visual position to new API position
     const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
+
+    // Preserve previously validated direction rather than re-deriving from the unreliable
+    // CTA heading field (some lines, e.g. Yellow/Orange loop exit, report wrong headings).
+    // Fall back to heading-based detection only for brand-new trains with no prior state.
+    if (prev && prev._direction !== undefined) {
+      train._direction = prev._direction;
+    } else {
+      train._direction = directionFromHeading(
+        train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+      );
+    }
+
     if (prev && prev._animLon !== undefined) {
       const drift = geoDist(prev._animLon, prev._animLat, train.lon, train.lat);
       if (drift < CORRECTION_SNAP_THRESHOLD && drift > 1e-7) {
