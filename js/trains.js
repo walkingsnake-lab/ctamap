@@ -178,6 +178,10 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
     train.lon = train._trackPos.lon;
     train.lat = train._trackPos.lat;
 
+    if (train.isSch === '1') {
+      console.log(`[CTA] isSch=1: rn=${train.rn} (${train.legend}) @ ${train._apiLat.toFixed(5)},${train._apiLon.toFixed(5)}`);
+    }
+
     // Drift correction: smoothly slide from old visual position to new API position
     const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
 
