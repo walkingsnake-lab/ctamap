@@ -61,7 +61,8 @@ const MAP_PADDING = 0.05; // 5% padding around the map
 const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API position after refresh
 const CORRECTION_SNAP_THRESHOLD = 0.03;      // degrees (~5.5km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
-const BACKWARD_CONFIRM_POLLS = 2;            // consecutive backward-direction API reports required before accepting a backward correction
+const BACKWARD_CONFIRM_POLLS = 3;            // consecutive backward-direction API reports required before accepting a backward correction
+const FORWARD_PLAUSIBLE_DIST = 0.010;        // degrees (~1.1 km) — forward drift beyond this implies >130 km/h and is treated as a phantom position
 
 // Destination + line combos that use inverted badge (white bg, colored text)
 // Matches real CTA signage for certain short-turn / branch terminuses

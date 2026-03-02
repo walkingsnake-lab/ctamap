@@ -255,12 +255,18 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
           train.lon = train._corrFromTrackPos.lon;
           train.lat = train._corrFromTrackPos.lat;
 
-          // Backward confirmation: if the correction moves against the train's direction
-          // of travel, require BACKWARD_CONFIRM_POLLS consecutive polls before committing.
-          // A phantom forward position followed by a backward correction (the common glitch
-          // pattern) shows up as a single backward poll — held here and cleared on the next
-          // forward reading, so the train never visibly slides back.
-          if (train._corrDirection !== train._direction) {
+          // Suspect-move confirmation: hold and require BACKWARD_CONFIRM_POLLS consecutive
+          // agreeing polls before committing to either:
+          //   (a) a backward correction (against _direction) — likely a phantom-forward glitch
+          //       that is now being "corrected" back, or a real but unconfirmed reversal.
+          //   (b) a forward correction faster than any CTA train can physically travel
+          //       (drift > FORWARD_PLAUSIBLE_DIST, implying >130 km/h) — almost always a
+          //       phantom position injected by the schedule-projection system without isSch=1.
+          const isSuspectBackward = train._corrDirection !== train._direction;
+          const isSuspectForward  = !isSuspectBackward && drift > FORWARD_PLAUSIBLE_DIST;
+
+          if (isSuspectBackward) {
+            train._forwardHoldCount = 0;
             train._backwardHoldCount = (prev._backwardHoldCount || 0) + 1;
             if (train._backwardHoldCount < BACKWARD_CONFIRM_POLLS) {
               train._correcting = false;
@@ -271,8 +277,21 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
             } else {
               console.log(`[CTA] Backward confirmed: rn=${train.rn} after ${train._backwardHoldCount} polls, drift=${(drift * 111000).toFixed(0)}m`);
             }
+          } else if (isSuspectForward) {
+            train._backwardHoldCount = 0;
+            train._forwardHoldCount = (prev._forwardHoldCount || 0) + 1;
+            if (train._forwardHoldCount < BACKWARD_CONFIRM_POLLS) {
+              train._correcting = false;
+              train._trackPos = { ...prev._trackPos };
+              train.lon = prev._animLon;
+              train.lat = prev._animLat;
+              console.log(`[CTA] Fast-forward hold: rn=${train.rn} [${train._forwardHoldCount}/${BACKWARD_CONFIRM_POLLS}] drift=${(drift * 111000).toFixed(0)}m`);
+            } else {
+              console.log(`[CTA] Fast-forward confirmed: rn=${train.rn} after ${train._forwardHoldCount} polls, drift=${(drift * 111000).toFixed(0)}m`);
+            }
           } else {
             train._backwardHoldCount = 0;
+            train._forwardHoldCount = 0;
           }
         }
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
