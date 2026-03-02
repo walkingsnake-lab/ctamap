@@ -179,7 +179,7 @@
 
     // Direction triangles — rendered before dot so they pass "behind" the circle
     const ARROW_COUNT = 6;
-    const arrowSize = LINE_WIDTH * 0.6;
+    const arrowSize = LINE_WIDTH * 0.45;
     const arrowPath = `M ${arrowSize},0 L ${-arrowSize},${-arrowSize * 0.8} L ${-arrowSize},${arrowSize * 0.8} Z`;
     for (let i = 0; i < ARROW_COUNT; i++) {
       enter.append('path')

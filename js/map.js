@@ -123,7 +123,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
 
   const FONT_SIZE = 1.8;
   const CHAR_W = FONT_SIZE * 0.55;
-  const DOT_R = 0.8;
+  const DOT_R = 0.55;
   const LABEL_PAD = 0.4;
 
   // --- Project every GeoJSON line segment and index them in a spatial grid ---
