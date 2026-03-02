@@ -188,13 +188,23 @@
         .style('opacity', 0);
     }
 
-    // Train dot — circle with integrated directional pointer tip
+    // Train dot — teardrop/map-pin shape (circle + smooth directional tip)
     const R = TRAIN_RADIUS;
-    const tipX = R + 2.8;
-    const ba = 30 * Math.PI / 180; // pointer emerges at ±30° from heading
+    const tipX = R + 3.0;
+    const ba = 50 * Math.PI / 180; // where the taper departs the circle
     const bx = R * Math.cos(ba);
     const by = R * Math.sin(ba);
-    const dotPath = `M ${bx},${-by} L ${tipX},0 L ${bx},${by} A ${R},${R} 0 1,1 ${bx},${-by} Z`;
+    // Bézier control points: tangent to circle at departure, horizontal at tip
+    const tx = Math.sin(ba), ty = Math.cos(ba);
+    const c1x = bx + 2.0 * tx, c1y = -by + 2.0 * ty;
+    const c2x = tipX - 1.5;
+    const dotPath = [
+      `M ${bx},${-by}`,
+      `C ${c1x},${c1y} ${c2x},0 ${tipX},0`,
+      `C ${c2x},0 ${c1x},${-c1y} ${bx},${by}`,
+      `A ${R},${R} 0 1,1 ${bx},${-by}`,
+      'Z'
+    ].join(' ');
     enter.append('path')
       .attr('class', 'train-dot')
       .attr('d', dotPath)
@@ -285,7 +295,7 @@
     const t = d3.zoomTransform(svgEl);
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
-    const offset = TRAIN_RADIUS * 1.5 * t.k + 18;
+    const offset = (TRAIN_RADIUS + 3.0) * 1.3 * t.k + 12;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
   }
