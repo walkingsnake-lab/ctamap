@@ -188,20 +188,16 @@
         .style('opacity', 0);
     }
 
-    // Inner solid dot (on top of direction dots)
-    enter.append('circle')
-      .attr('class', 'train-dot')
-      .attr('r', TRAIN_RADIUS)
-      .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
-
-    // Heading pointer — triangle extending from the dot edge
-    const pointerTip = TRAIN_RADIUS + 2.8;
-    const pointerBase = TRAIN_RADIUS - 0.5;
-    const pointerHalfW = 1.6;
-    const pointerPath = `M ${pointerTip},0 L ${pointerBase},${-pointerHalfW} L ${pointerBase},${pointerHalfW} Z`;
+    // Train dot — circle with integrated directional pointer tip
+    const R = TRAIN_RADIUS;
+    const tipX = R + 2.8;
+    const ba = 30 * Math.PI / 180; // pointer emerges at ±30° from heading
+    const bx = R * Math.cos(ba);
+    const by = R * Math.sin(ba);
+    const dotPath = `M ${bx},${-by} L ${tipX},0 L ${bx},${by} A ${R},${R} 0 1,1 ${bx},${-by} Z`;
     enter.append('path')
-      .attr('class', 'train-heading')
-      .attr('d', pointerPath)
+      .attr('class', 'train-dot')
+      .attr('d', dotPath)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
     // Click handler on new train groups
@@ -575,9 +571,9 @@
           }
         }
 
-        // Update heading pointer rotation from track geometry
-        const headingEl = g.select('.train-heading');
-        const hScale = d.rn === selectedTrainRn ? 1.3 : 1;
+        // Rotate the combined dot+pointer shape to face the heading direction
+        const dotEl = g.select('.train-dot');
+        const dotScale = d.rn === selectedTrainRn ? 1.3 : 1;
         if (d._trackPos && segs) {
           const hdir = d._direction || 1;
           const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs);
@@ -587,11 +583,11 @@
             const hdy = aheadPt[1] - pt[1];
             if (hdx !== 0 || hdy !== 0) {
               const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
-              headingEl.attr('transform', `rotate(${angle}) scale(${hScale})`);
+              dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
             }
           }
         } else if (d.heading !== undefined) {
-          headingEl.attr('transform', `rotate(${headingToSVGAngle(d.heading)}) scale(${hScale})`);
+          dotEl.attr('transform', `rotate(${headingToSVGAngle(d.heading)}) scale(${dotScale})`);
         }
       });
 
