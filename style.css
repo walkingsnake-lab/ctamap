@@ -128,13 +128,7 @@ body {
   animation: pulse-glow 2.5s ease-in-out infinite;
 }
 
-/* Selected train */
-.train-group.selected .train-dot {
-  transform: scale(1.3);
-  transform-origin: center;
-  transform-box: fill-box;
-}
-
+/* Selected train — dot scale is handled in JS (composed with heading rotation) */
 .train-group.selected .train-glow {
   fill: none;
   stroke-width: 0.2;
@@ -177,8 +171,7 @@ body {
 }
 
 /* --- Direction indicators (animated via JS, not CSS) --- */
-.train-arrow,
-.train-heading {
+.train-arrow {
   pointer-events: none;
 }
 
