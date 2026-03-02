@@ -176,8 +176,9 @@ body {
   opacity: 0;
 }
 
-/* --- Direction dots (animated via JS, not CSS) --- */
-.train-arrow {
+/* --- Direction indicators (animated via JS, not CSS) --- */
+.train-arrow,
+.train-heading {
   pointer-events: none;
 }
 
