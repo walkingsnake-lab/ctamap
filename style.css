@@ -116,7 +116,8 @@ body {
 }
 
 .train-dot,
-.train-glow {
+.train-glow,
+.train-heading {
   pointer-events: none;
 }
 

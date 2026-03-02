@@ -194,6 +194,15 @@
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
+    // Heading direction triangle — overlays the circle, visible only when stations are shown
+    const ht = TRAIN_RADIUS;
+    const headingTriPath = `M ${ht},0 L ${-ht * 0.6},${-ht * 0.7} L ${-ht * 0.6},${ht * 0.7} Z`;
+    enter.append('path')
+      .attr('class', 'train-heading')
+      .attr('d', headingTriPath)
+      .attr('fill', d => d.legend === 'YL' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.45)')
+      .style('opacity', 0);
+
     // Click handler on new train groups
     enter.on('click', function (event, d) {
       event.stopPropagation();
@@ -567,6 +576,7 @@
 
         // Rotate the combined dot+pointer shape to face the heading direction
         const dotEl = g.select('.train-dot');
+        const headingEl = g.select('.train-heading');
         const dotScale = d.rn === selectedTrainRn ? 1.3 : 1;
         if (d._trackPos && segs) {
           const hdir = d._direction || 1;
@@ -578,11 +588,16 @@
             if (hdx !== 0 || hdy !== 0) {
               const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
               dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+              headingEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
             }
           }
         } else if (d.heading !== undefined) {
-          dotEl.attr('transform', `rotate(${headingToSVGAngle(d.heading)}) scale(${dotScale})`);
+          const angle = headingToSVGAngle(d.heading);
+          dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+          headingEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
         }
+        // Show heading triangle only when stations are visible
+        headingEl.style('opacity', stationsVisible ? 1 : 0);
       });
 
     // Camera tracking / zoom-in animation for selected train
