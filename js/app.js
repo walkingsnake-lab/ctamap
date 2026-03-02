@@ -188,26 +188,10 @@
         .style('opacity', 0);
     }
 
-    // Train dot — teardrop/map-pin shape (circle + smooth directional tip)
-    const R = TRAIN_RADIUS;
-    const tipX = R + 3.0;
-    const ba = 50 * Math.PI / 180; // where the taper departs the circle
-    const bx = R * Math.cos(ba);
-    const by = R * Math.sin(ba);
-    // Bézier control points: tangent to circle at departure, horizontal at tip
-    const tx = Math.sin(ba), ty = Math.cos(ba);
-    const c1x = bx + 2.0 * tx, c1y = -by + 2.0 * ty;
-    const c2x = tipX - 1.5;
-    const dotPath = [
-      `M ${bx},${-by}`,
-      `C ${c1x},${c1y} ${c2x},0 ${tipX},0`,
-      `C ${c2x},0 ${c1x},${-c1y} ${bx},${by}`,
-      `A ${R},${R} 0 1,1 ${bx},${-by}`,
-      'Z'
-    ].join(' ');
-    enter.append('path')
+    // Train dot — circle shape
+    enter.append('circle')
       .attr('class', 'train-dot')
-      .attr('d', dotPath)
+      .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
     // Click handler on new train groups
