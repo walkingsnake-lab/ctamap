@@ -327,7 +327,18 @@ function advanceRealTrains(trains, lineSegments, dt) {
         // finalPos.direction reflects any flip from crossing a segment boundary
         // (e.g. exiting the ML loop onto the own Orange segment where ±1 reverses),
         // so it is more reliable than _corrDirection for the post-correction state.
-        train._direction = finalPos.direction !== undefined ? finalPos.direction : train._corrDirection;
+        //
+        // However, only update _direction when the correction was going forward
+        // (i.e. _corrDirection matches the train's established travel direction).
+        // When we corrected backward — because the CTA API reported a position too
+        // far ahead (e.g. Purple Express snap to Wilson that then corrects back
+        // toward Howard, or a Red Line train prematurely placed at Howard) —
+        // keeping the backward correction direction would flip the arrows to face
+        // the wrong way.  In that case, leave _direction as the preserved value
+        // set during initRealTrainAnimation.
+        if (train._corrDirection === train._direction) {
+          train._direction = finalPos.direction !== undefined ? finalPos.direction : train._corrDirection;
+        }
       } else {
         // Smoothstep easing: accelerate then decelerate
         const t = elapsed / duration;
