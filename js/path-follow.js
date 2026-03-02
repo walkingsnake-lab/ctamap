@@ -674,3 +674,21 @@ function buildUniqueStations(geojson) {
     legends: Array.from(stationLegends.get(name)),
   }));
 }
+
+/**
+ * For each line, walks to both dead-end terminals using ownSegments and returns
+ * their positions as { legend: [{lon, lat}, {lon, lat}] }.
+ * Used to detect when a train is at a line terminus for arrow hiding.
+ */
+function buildLineTerminals(ownSegments) {
+  const result = {};
+  for (const [legend, segs] of Object.entries(ownSegments)) {
+    if (!segs || segs.length === 0 || segs[0].length === 0) continue;
+    const startCoord = segs[0][0];
+    const startPos = snapToTrackPosition(startCoord[0], startCoord[1], segs);
+    const endA = advanceOnTrack(startPos, 9999, -1, segs);
+    const endB = advanceOnTrack(startPos, 9999, +1, segs);
+    result[legend] = [endA, endB].filter(e => e.stopped);
+  }
+  return result;
+}
