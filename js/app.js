@@ -288,7 +288,8 @@
     const t = d3.zoomTransform(svgEl);
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
-    const offset = (TRAIN_RADIUS + 3.0) * 1.3 * t.k + 12;
+    const scaledR = TRAIN_RADIUS / Math.pow(t.k, 0.6);
+    const offset = (scaledR + 3.0) * 1.3 * t.k + 12;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
   }
@@ -509,6 +510,14 @@
     }
 
     // Update ALL train positions directly (no D3 transitions — frame-by-frame is smoother)
+    // Scale dots inversely with zoom so they don't grow unboundedly when zoomed in.
+    // Exponent 0.6 gives partial compensation: dots shrink at high zoom but keep visual weight.
+    // The "larger on mobile" feel is preserved — it comes from the map being compressed into
+    // fewer pixels, not from r being different.
+    const currentK = d3.zoomTransform(svgEl).k;
+    const scaledRadius     = TRAIN_RADIUS      / Math.pow(currentK, 0.6);
+    const scaledGlowRadius = TRAIN_GLOW_RADIUS / Math.pow(currentK, 0.5);
+
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
@@ -585,6 +594,8 @@
         // Rotate the combined dot+pointer shape to face the heading direction
         const dotEl = g.select('.train-dot');
         const headingEl = g.select('.train-heading');
+        dotEl.attr('r', scaledRadius);
+        g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.3 : 1;
         if (d._trackPos && segs) {
           const hdir = d._direction || 1;
