@@ -195,7 +195,7 @@
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
     // Heading direction triangle — overlays the circle, visible only when stations are shown
-    const ht = TRAIN_RADIUS;
+    const ht = TRAIN_RADIUS * 0.65;
     const headingTriPath = `M ${ht},0 L ${-ht * 0.6},${-ht * 0.7} L ${-ht * 0.6},${ht * 0.7} Z`;
     enter.append('path')
       .attr('class', 'train-heading')
