@@ -553,8 +553,14 @@
               const dx = advPt[0] - pt[0];
               const dy = advPt[1] - pt[1];
 
-              // Compute rotation angle from a small look-ahead along the track
-              const aheadPos = advanceOnTrack(advPos, 0.0005, dir, segs);
+              // Compute rotation angle from a small look-ahead along the track.
+              // advPos.direction reflects any direction flips from segment boundary
+              // crossings (e.g. two segments connected end-to-end in the GeoJSON).
+              // For arrows ahead of the dot (advDir = dir) use advPos.direction;
+              // for arrows behind (advDir = -dir) invert it so the arrow still
+              // points in the train's forward direction.
+              const lookAheadDir = advDir > 0 ? advPos.direction : -advPos.direction;
+              const aheadPos = advanceOnTrack(advPos, 0.0005, lookAheadDir, segs);
               const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
               let angle = 0;
               if (aheadPt) {
