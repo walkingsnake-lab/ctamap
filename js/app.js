@@ -194,10 +194,10 @@
       .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
-    // Heading pointer — small triangle extending from the dot edge
-    const pointerTip = TRAIN_RADIUS + 2.0;
+    // Heading pointer — triangle extending from the dot edge
+    const pointerTip = TRAIN_RADIUS + 2.8;
     const pointerBase = TRAIN_RADIUS - 0.5;
-    const pointerHalfW = 1.2;
+    const pointerHalfW = 1.6;
     const pointerPath = `M ${pointerTip},0 L ${pointerBase},${-pointerHalfW} L ${pointerBase},${pointerHalfW} Z`;
     enter.append('path')
       .attr('class', 'train-heading')
@@ -289,7 +289,7 @@
     const t = d3.zoomTransform(svgEl);
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
-    const offset = TRAIN_RADIUS * 1.5 * t.k + 10;
+    const offset = TRAIN_RADIUS * 1.5 * t.k + 18;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
   }
@@ -577,6 +577,7 @@
 
         // Update heading pointer rotation from track geometry
         const headingEl = g.select('.train-heading');
+        const hScale = d.rn === selectedTrainRn ? 1.3 : 1;
         if (d._trackPos && segs) {
           const hdir = d._direction || 1;
           const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs);
@@ -585,11 +586,12 @@
             const hdx = aheadPt[0] - pt[0];
             const hdy = aheadPt[1] - pt[1];
             if (hdx !== 0 || hdy !== 0) {
-              headingEl.attr('transform', `rotate(${Math.atan2(hdy, hdx) * 180 / Math.PI})`);
+              const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
+              headingEl.attr('transform', `rotate(${angle}) scale(${hScale})`);
             }
           }
         } else if (d.heading !== undefined) {
-          headingEl.attr('transform', `rotate(${headingToSVGAngle(d.heading)})`);
+          headingEl.attr('transform', `rotate(${headingToSVGAngle(d.heading)}) scale(${hScale})`);
         }
       });
 
