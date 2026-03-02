@@ -254,6 +254,26 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
           // Set current visual position to the from track position
           train.lon = train._corrFromTrackPos.lon;
           train.lat = train._corrFromTrackPos.lat;
+
+          // Backward confirmation: if the correction moves against the train's direction
+          // of travel, require BACKWARD_CONFIRM_POLLS consecutive polls before committing.
+          // A phantom forward position followed by a backward correction (the common glitch
+          // pattern) shows up as a single backward poll — held here and cleared on the next
+          // forward reading, so the train never visibly slides back.
+          if (train._corrDirection !== train._direction) {
+            train._backwardHoldCount = (prev._backwardHoldCount || 0) + 1;
+            if (train._backwardHoldCount < BACKWARD_CONFIRM_POLLS) {
+              train._correcting = false;
+              train._trackPos = { ...prev._trackPos };
+              train.lon = prev._animLon;
+              train.lat = prev._animLat;
+              console.log(`[CTA] Backward hold: rn=${train.rn} [${train._backwardHoldCount}/${BACKWARD_CONFIRM_POLLS}] drift=${(drift * 111000).toFixed(0)}m`);
+            } else {
+              console.log(`[CTA] Backward confirmed: rn=${train.rn} after ${train._backwardHoldCount} polls, drift=${(drift * 111000).toFixed(0)}m`);
+            }
+          } else {
+            train._backwardHoldCount = 0;
+          }
         }
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
         // Large jump — can't interpolate, and the preserved _direction may be stale
