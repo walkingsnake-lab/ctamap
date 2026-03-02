@@ -176,12 +176,14 @@
       .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
-    // Direction dots — rendered before dot so they pass "behind" the circle
+    // Direction triangles — rendered before dot so they pass "behind" the circle
     const ARROW_COUNT = 6;
+    const arrowSize = LINE_WIDTH * 0.6;
+    const arrowPath = `M ${arrowSize},0 L ${-arrowSize},${-arrowSize * 0.8} L ${-arrowSize},${arrowSize * 0.8} Z`;
     for (let i = 0; i < ARROW_COUNT; i++) {
-      enter.append('circle')
+      enter.append('path')
         .attr('class', `train-arrow train-arrow-${i}`)
-        .attr('r', LINE_WIDTH / 2)
+        .attr('d', arrowPath)
         .attr('fill', d => LINE_COLORS[d.legend] || '#fff')
         .style('opacity', 0);
     }
@@ -505,7 +507,7 @@
         const g = d3.select(this);
         g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
-        // Animate direction dots: steady stream of circles flowing along the track
+        // Animate direction triangles: steady stream flowing along the track
         const segs = lineSegments[d.legend];
         const atTerminal = d.rn === selectedTrainRn
           && lastETAs !== null && lastETAs.length === 0;
@@ -535,13 +537,24 @@
               const dx = advPt[0] - pt[0];
               const dy = advPt[1] - pt[1];
 
+              // Compute rotation angle from a small look-ahead along the track
+              const aheadPos = advanceOnTrack(advPos, 0.0005, dir, segs);
+              const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
+              let angle = 0;
+              if (aheadPt) {
+                const adx = aheadPt[0] - advPt[0];
+                const ady = aheadPt[1] - advPt[1];
+                if (adx !== 0 || ady !== 0) {
+                  angle = Math.atan2(ady, adx) * 180 / Math.PI;
+                }
+              }
+
               // Smooth phase-based opacity: 0 at edges, peak ~0.85 in the middle
               // sin^0.6 stays high longer for a slower fade
               const opacity = 0.85 * Math.pow(Math.sin(phase * Math.PI), 0.6);
 
               arrow
-                .attr('cx', dx)
-                .attr('cy', dy)
+                .attr('transform', `translate(${dx},${dy}) rotate(${angle})`)
                 .style('opacity', opacity);
             }
           }
