@@ -237,6 +237,12 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
           train.lat = train._corrFromTrackPos.lat;
         }
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
+        // Large jump — can't interpolate, and the preserved _direction may be stale
+        // (e.g. after a terminus reversal that crossed the snap threshold).
+        // Re-derive from the API heading for the new position.
+        train._direction = directionFromHeading(
+          train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+        );
         console.warn(`[CTA] Snap: rn=${train.rn} drift=${(drift * 111000).toFixed(0)}m — too far to interpolate`);
       }
     }
@@ -328,16 +334,24 @@ function advanceRealTrains(trains, lineSegments, dt) {
         // (e.g. exiting the ML loop onto the own Orange segment where ±1 reverses),
         // so it is more reliable than _corrDirection for the post-correction state.
         //
-        // However, only update _direction when the correction was going forward
-        // (i.e. _corrDirection matches the train's established travel direction).
-        // When we corrected backward — because the CTA API reported a position too
-        // far ahead (e.g. Purple Express snap to Wilson that then corrects back
-        // toward Howard, or a Red Line train prematurely placed at Howard) —
-        // keeping the backward correction direction would flip the arrows to face
-        // the wrong way.  In that case, leave _direction as the preserved value
-        // set during initRealTrainAnimation.
+        // Update _direction when the correction moved in the established direction
+        // (genuine forward progress). For backward corrections, also update when the
+        // CTA heading confirms the new direction — this handles genuine terminus
+        // reversals. If heading still points in the old direction the backward
+        // correction was an API position glitch (e.g. Purple Express snapping to
+        // Wilson then correcting back), so _direction is left unchanged.
         if (train._corrDirection === train._direction) {
           train._direction = finalPos.direction !== undefined ? finalPos.direction : train._corrDirection;
+        } else {
+          // Backward correction: use heading as tiebreaker.
+          const headingDir = directionFromHeading(
+            train.heading, finalPos.segIdx, finalPos.ptIdx, segs
+          );
+          if (headingDir === train._corrDirection) {
+            // Heading confirms the correction direction — genuine reversal.
+            train._direction = finalPos.direction !== undefined ? finalPos.direction : train._corrDirection;
+          }
+          // else: API position glitch; keep _direction as established value.
         }
       } else {
         // Smoothstep easing: accelerate then decelerate
