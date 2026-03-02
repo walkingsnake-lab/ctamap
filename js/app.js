@@ -188,27 +188,20 @@
         .style('opacity', 0);
     }
 
-    // Train dot — teardrop/map-pin shape (circle + smooth directional tip)
-    const R = TRAIN_RADIUS;
-    const tipX = R + 3.0;
-    const ba = 50 * Math.PI / 180; // where the taper departs the circle
-    const bx = R * Math.cos(ba);
-    const by = R * Math.sin(ba);
-    // Bézier control points: tangent to circle at departure, horizontal at tip
-    const tx = Math.sin(ba), ty = Math.cos(ba);
-    const c1x = bx + 2.0 * tx, c1y = -by + 2.0 * ty;
-    const c2x = tipX - 1.5;
-    const dotPath = [
-      `M ${bx},${-by}`,
-      `C ${c1x},${c1y} ${c2x},0 ${tipX},0`,
-      `C ${c2x},0 ${c1x},${-c1y} ${bx},${by}`,
-      `A ${R},${R} 0 1,1 ${bx},${-by}`,
-      'Z'
-    ].join(' ');
-    enter.append('path')
+    // Train dot — circle shape
+    enter.append('circle')
       .attr('class', 'train-dot')
-      .attr('d', dotPath)
+      .attr('r', TRAIN_RADIUS)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
+
+    // Heading direction triangle — overlays the circle, visible only when stations are shown
+    const ht = TRAIN_RADIUS;
+    const headingTriPath = `M ${ht},0 L ${-ht * 0.6},${-ht * 0.7} L ${-ht * 0.6},${ht * 0.7} Z`;
+    enter.append('path')
+      .attr('class', 'train-heading')
+      .attr('d', headingTriPath)
+      .attr('fill', d => d.legend === 'YL' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.45)')
+      .style('opacity', 0);
 
     // Click handler on new train groups
     enter.on('click', function (event, d) {
@@ -583,6 +576,7 @@
 
         // Rotate the combined dot+pointer shape to face the heading direction
         const dotEl = g.select('.train-dot');
+        const headingEl = g.select('.train-heading');
         const dotScale = d.rn === selectedTrainRn ? 1.3 : 1;
         if (d._trackPos && segs) {
           const hdir = d._direction || 1;
@@ -594,11 +588,16 @@
             if (hdx !== 0 || hdy !== 0) {
               const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
               dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+              headingEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
             }
           }
         } else if (d.heading !== undefined) {
-          dotEl.attr('transform', `rotate(${headingToSVGAngle(d.heading)}) scale(${dotScale})`);
+          const angle = headingToSVGAngle(d.heading);
+          dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+          headingEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
         }
+        // Show heading triangle only when stations are visible
+        headingEl.style('opacity', stationsVisible ? 1 : 0);
       });
 
     // Camera tracking / zoom-in animation for selected train
