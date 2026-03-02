@@ -118,7 +118,7 @@ const server = http.createServer(async (req, res) => {
       const ctatt = data.ctatt;
       if (!ctatt || (ctatt.errCd !== '0' && ctatt.errCd !== 0)) {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
-        res.end(JSON.stringify({ eta: [] }));
+        res.end(JSON.stringify({ eta: null }));
         return;
       }
       let etas = ctatt.eta || [];
