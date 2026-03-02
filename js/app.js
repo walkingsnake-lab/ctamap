@@ -537,10 +537,8 @@
 
         // Animate direction triangles: steady stream flowing along the track
         const segs = lineSegments[d.legend];
-        const atTerminal = d.rn === selectedTrainRn
-          && lastETAs !== null && lastETAs.length === 0;
         const showArrows = d.rn === selectedTrainRn
-          && d._trackPos && segs && !atTerminal;
+          && d._trackPos && segs;
 
         if (showArrows) {
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
