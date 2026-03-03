@@ -608,7 +608,7 @@
         const headingEl = g.select('.train-heading');
         dotEl.attr('r', scaledRadius);
         g.select('.train-glow').attr('r', scaledGlowRadius);
-        const dotScale = d.rn === selectedTrainRn ? 1.3 : 1;
+        const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? d._corrDirection : d._direction) || 1;
           const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs);
