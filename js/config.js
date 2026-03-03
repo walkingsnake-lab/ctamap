@@ -61,7 +61,7 @@ const MAP_PADDING = 0.05; // 5% padding around the map
 const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API position after refresh
 const CORRECTION_SNAP_THRESHOLD = 0.04;      // degrees (~5.5km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
-const BACKWARD_CONFIRM_POLLS = 6;            // consecutive polls required before accepting any backward move — high bar, prefer appearing ahead over behind
+const BACKWARD_CONFIRM_POLLS = Infinity;     // never accept backward movement — always hold at last forward position
 const FORWARD_CONFIRM_POLLS  = 2;            // consecutive polls required before accepting a suspiciously fast forward jump (prediction→realtime artifact)
 const FORWARD_PLAUSIBLE_DIST = 0.010;        // degrees (~1.1 km) — forward drift beyond this implies >130 km/h and is treated as a phantom position
 
