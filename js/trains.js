@@ -296,30 +296,13 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
           }
         }
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
-        // Snap-range jumps are always physically implausible (>400 km/h at 30s poll).
-        // Apply the same direction-aware confirmation hold used for smooth corrections.
-        if (prev._trackPos) {
-          const testStep = 1e-4;
-          const fwdTest = advanceOnTrack(prev._trackPos, testStep, +1, segs);
-          const bwdTest = advanceOnTrack(prev._trackPos, testStep, -1, segs);
-          const snapDir = geoDist(fwdTest.lon, fwdTest.lat, train.lon, train.lat) <=
-                          geoDist(bwdTest.lon, bwdTest.lat, train.lon, train.lat) ? 1 : -1;
-          const isSuspectBackward = snapDir !== train._direction;
-          const countKey = isSuspectBackward ? '_backwardHoldCount' : '_forwardHoldCount';
-          const otherKey = isSuspectBackward ? '_forwardHoldCount' : '_backwardHoldCount';
-          train[otherKey] = 0;
-          train[countKey] = (prev[countKey] || 0) + 1;
-          if (train[countKey] < BACKWARD_CONFIRM_POLLS) {
-            train._trackPos = { ...prev._trackPos };
-            train.lon = prev._animLon;
-            train.lat = prev._animLat;
-            console.log(`[CTA] Snap hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train[countKey]}/${BACKWARD_CONFIRM_POLLS}]`);
-          } else {
-            console.warn(`[CTA] Snap confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train[countKey]} polls`);
-          }
-        } else {
-          console.warn(`[CTA] Snap: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} — no prior position`);
-        }
+        // Large jump — can't interpolate, and the preserved _direction may be stale
+        // (e.g. after a terminus reversal that crossed the snap threshold).
+        // Re-derive from the API heading for the new position.
+        train._direction = directionFromHeading(
+          train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+        );
+        console.warn(`[CTA] Snap: rn=${train.rn} drift=${(drift * 111000).toFixed(0)}m — too far to interpolate`);
       }
     }
   }
@@ -410,16 +393,24 @@ function advanceRealTrains(trains, lineSegments, dt) {
         // (e.g. exiting the ML loop onto the own Orange segment where ±1 reverses),
         // so it is more reliable than _corrDirection for the post-correction state.
         //
-        // However, only update _direction when the correction was going forward
-        // (i.e. _corrDirection matches the train's established travel direction).
-        // When we corrected backward — because the CTA API reported a position too
-        // far ahead (e.g. Purple Express snap to Wilson that then corrects back
-        // toward Howard, or a Red Line train prematurely placed at Howard) —
-        // keeping the backward correction direction would flip the arrows to face
-        // the wrong way.  In that case, leave _direction as the preserved value
-        // set during initRealTrainAnimation.
+        // Update _direction when the correction moved in the established direction
+        // (genuine forward progress). For backward corrections, also update when the
+        // CTA heading confirms the new direction — this handles genuine terminus
+        // reversals. If heading still points in the old direction the backward
+        // correction was an API position glitch (e.g. Purple Express snapping to
+        // Wilson then correcting back), so _direction is left unchanged.
         if (train._corrDirection === train._direction) {
           train._direction = finalPos.direction !== undefined ? finalPos.direction : train._corrDirection;
+        } else {
+          // Backward correction: use heading as tiebreaker.
+          const headingDir = directionFromHeading(
+            train.heading, finalPos.segIdx, finalPos.ptIdx, segs
+          );
+          if (headingDir === train._corrDirection) {
+            // Heading confirms the correction direction — genuine reversal.
+            train._direction = finalPos.direction !== undefined ? finalPos.direction : train._corrDirection;
+          }
+          // else: API position glitch; keep _direction as established value.
         }
       } else {
         // Smoothstep easing: accelerate then decelerate
