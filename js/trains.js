@@ -258,12 +258,21 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
 
           // Suspect-move confirmation: hold and require BACKWARD_CONFIRM_POLLS consecutive
           // agreeing polls before committing to either:
-          //   (a) a backward correction (against _direction) — likely a phantom-forward glitch
-          //       that is now being "corrected" back, or a real but unconfirmed reversal.
-          //   (b) a forward correction faster than any CTA train can physically travel
-          //       (drift > FORWARD_PLAUSIBLE_DIST, implying >130 km/h) — almost always a
+          //   (a) a backward correction — likely a phantom-forward glitch that is now
+          //       being "corrected" back, or a real but unconfirmed reversal.
+          //   (b) a forward correction beyond FORWARD_PLAUSIBLE_DIST — almost always a
           //       phantom position injected by the schedule-projection system without isSch=1.
-          const isSuspectBackward = train._corrDirection !== train._direction;
+          //
+          // Use the API heading (directionFromHeading) rather than stored _direction to
+          // classify the correction.  _direction is relative to whatever segment it was
+          // last set on; it becomes stale when the train crosses segment boundaries (e.g.
+          // navigating the Loop where adjacent segments run in opposite geometry directions).
+          // Comparing _corrDirection to a stale _direction misclassifies forward Loop-exit
+          // corrections as backward and holds the train for 5 polls unnecessarily.
+          const _headingDirFromPos = directionFromHeading(
+            train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
+          );
+          const isSuspectBackward = _headingDirFromPos !== train._corrDirection;
           const isSuspectForward  = !isSuspectBackward && drift > FORWARD_PLAUSIBLE_DIST;
 
           if (isSuspectBackward) {
@@ -311,11 +320,13 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
         // direction from the API heading since the preserved one may be stale
         // (e.g. after a terminus reversal that crossed the snap threshold).
         if (prev._trackPos) {
-          const testStep = 1e-4;
-          const fwdTest = advanceOnTrack(prev._trackPos, testStep, +1, segs);
-          const bwdTest = advanceOnTrack(prev._trackPos, testStep, -1, segs);
-          const snapDir = geoDist(fwdTest.lon, fwdTest.lat, train.lon, train.lat) <=
-                          geoDist(bwdTest.lon, bwdTest.lat, train.lon, train.lat) ? 1 : -1;
+          // For snap-range jumps the tiny geometric probe (fwd/bwd step) is
+          // unreliable — both probes land ~11 m from the old position while
+          // the new position is kilometres away, so the distance difference is
+          // noise. Use the API heading directly instead.
+          const snapDir = directionFromHeading(
+            train.heading, prev._trackPos.segIdx, prev._trackPos.ptIdx, segs
+          );
           const isSuspectBackward = snapDir !== train._direction;
           const countKey = isSuspectBackward ? '_backwardHoldCount' : '_forwardHoldCount';
           const otherKey = isSuspectBackward ? '_forwardHoldCount' : '_backwardHoldCount';
