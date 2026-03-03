@@ -300,6 +300,7 @@
   const lineGlow = document.getElementById('line-glow');
 
   function applyLineFocus(legend) {
+    lastLineK = -1; // force stroke-width recalc for selected line thickening
     // Dim line paths that don't match
     svg.selectAll('.line-path')
       .classed('dimmed', function () {
@@ -327,6 +328,7 @@
   }
 
   function clearLineFocus() {
+    lastLineK = -1; // force stroke-width recalc to restore normal line widths
     svg.selectAll('.line-path, .train-group, .station-marker')
       .classed('dimmed', false);
     svg.selectAll('.pr-express-path')
@@ -523,11 +525,17 @@
     if (currentK !== lastLineK) {
       lastLineK = currentK;
       const scaledLineWidth = LINE_WIDTH / Math.pow(currentK, 0.5);
-      svg.selectAll('.line-path').attr('stroke-width', scaledLineWidth);
+      const selLegend = selectedTrain?.legend;
+      svg.selectAll('.line-path').attr('stroke-width', function () {
+        return selLegend && d3.select(this).attr('data-legend') === selLegend
+          ? scaledLineWidth * 2.5
+          : scaledLineWidth;
+      });
       svg.selectAll('.pr-express-path')
         .attr('stroke-dasharray', `${scaledLineWidth * 1.5} ${scaledLineWidth * 1.5}`);
-      // Keep arrow width in sync with the rendered line width.
-      const sas = scaledLineWidth / 1.6;
+      // Keep arrow width in sync with the selected (thicker) line width.
+      const arrowLineWidth = selLegend ? scaledLineWidth * 2.5 : scaledLineWidth;
+      const sas = arrowLineWidth / 1.6;
       const sap = `M ${sas},0 L ${-sas},${-sas * 0.8} L ${-sas},${sas * 0.8} Z`;
       svg.selectAll('.train-arrow').attr('d', sap);
     }
