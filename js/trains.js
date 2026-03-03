@@ -276,7 +276,16 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
               train.lat = prev._animLat;
               console.log(`[CTA] Backward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train._backwardHoldCount}/${BACKWARD_CONFIRM_POLLS}]`);
             } else {
-              console.log(`[CTA] Backward confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train._backwardHoldCount} polls`);
+              // Snap directly — never animate backwards
+              train._correcting = false;
+              train._trackPos = { ...train._corrToTrackPos };
+              train.lon = train._corrToTrackPos.lon;
+              train.lat = train._corrToTrackPos.lat;
+              const headingDir = directionFromHeading(
+                train.heading, train._corrToTrackPos.segIdx, train._corrToTrackPos.ptIdx, segs
+              );
+              if (headingDir === train._corrDirection) train._direction = train._corrDirection;
+              console.log(`[CTA] Backward confirmed (snap): rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train._backwardHoldCount} polls`);
             }
           } else if (isSuspectForward) {
             train._backwardHoldCount = 0;
