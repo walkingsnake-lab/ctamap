@@ -531,18 +531,8 @@
           ? scaledLineWidth * 2.5
           : scaledLineWidth;
       });
-      // Dash pattern: 3:2 dash-to-gap ratio.  Each segment gets a dashoffset
-      // so the pattern continues seamlessly from where the previous one ended.
-      const dash = scaledLineWidth * 3;
-      const gap  = scaledLineWidth * 2;
-      const period = dash + gap;
       svg.selectAll('.pr-express-path')
-        .attr('stroke-dasharray', `${dash} ${gap}`);
-      let cumLen = 0;
-      svg.selectAll('.pr-express-segment').each(function () {
-        d3.select(this).attr('stroke-dashoffset', -(cumLen % period));
-        cumLen += this.getTotalLength();
-      });
+        .attr('stroke-dasharray', `${scaledLineWidth * 3} ${scaledLineWidth * 2}`);
       // Keep arrow width in sync with the selected (thicker) line width.
       const arrowLineWidth = selLegend ? scaledLineWidth * 2.5 : scaledLineWidth;
       const sas = arrowLineWidth / 2.0;
