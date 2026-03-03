@@ -258,12 +258,21 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
 
           // Suspect-move confirmation: hold and require BACKWARD_CONFIRM_POLLS consecutive
           // agreeing polls before committing to either:
-          //   (a) a backward correction (against _direction) — likely a phantom-forward glitch
-          //       that is now being "corrected" back, or a real but unconfirmed reversal.
-          //   (b) a forward correction faster than any CTA train can physically travel
-          //       (drift > FORWARD_PLAUSIBLE_DIST, implying >130 km/h) — almost always a
+          //   (a) a backward correction — likely a phantom-forward glitch that is now
+          //       being "corrected" back, or a real but unconfirmed reversal.
+          //   (b) a forward correction beyond FORWARD_PLAUSIBLE_DIST — almost always a
           //       phantom position injected by the schedule-projection system without isSch=1.
-          const isSuspectBackward = train._corrDirection !== train._direction;
+          //
+          // Use the API heading (directionFromHeading) rather than stored _direction to
+          // classify the correction.  _direction is relative to whatever segment it was
+          // last set on; it becomes stale when the train crosses segment boundaries (e.g.
+          // navigating the Loop where adjacent segments run in opposite geometry directions).
+          // Comparing _corrDirection to a stale _direction misclassifies forward Loop-exit
+          // corrections as backward and holds the train for 5 polls unnecessarily.
+          const _headingDirFromPos = directionFromHeading(
+            train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
+          );
+          const isSuspectBackward = _headingDirFromPos !== train._corrDirection;
           const isSuspectForward  = !isSuspectBackward && drift > FORWARD_PLAUSIBLE_DIST;
 
           if (isSuspectBackward) {
