@@ -311,11 +311,13 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
         // direction from the API heading since the preserved one may be stale
         // (e.g. after a terminus reversal that crossed the snap threshold).
         if (prev._trackPos) {
-          const testStep = 1e-4;
-          const fwdTest = advanceOnTrack(prev._trackPos, testStep, +1, segs);
-          const bwdTest = advanceOnTrack(prev._trackPos, testStep, -1, segs);
-          const snapDir = geoDist(fwdTest.lon, fwdTest.lat, train.lon, train.lat) <=
-                          geoDist(bwdTest.lon, bwdTest.lat, train.lon, train.lat) ? 1 : -1;
+          // For snap-range jumps the tiny geometric probe (fwd/bwd step) is
+          // unreliable — both probes land ~11 m from the old position while
+          // the new position is kilometres away, so the distance difference is
+          // noise. Use the API heading directly instead.
+          const snapDir = directionFromHeading(
+            train.heading, prev._trackPos.segIdx, prev._trackPos.ptIdx, segs
+          );
           const isSuspectBackward = snapDir !== train._direction;
           const countKey = isSuspectBackward ? '_backwardHoldCount' : '_forwardHoldCount';
           const otherKey = isSuspectBackward ? '_forwardHoldCount' : '_backwardHoldCount';
