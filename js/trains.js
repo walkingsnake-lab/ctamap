@@ -164,6 +164,7 @@ async function fetchTrains() {
  */
 function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
   const now = Date.now();
+  const kph = d => `~${Math.round(d * 111000 * 3.6 / (REFRESH_INTERVAL / 1000))}km/h`;
 
   for (const train of trains) {
     const segs = lineSegments[train.legend];
@@ -179,7 +180,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
     train.lat = train._trackPos.lat;
 
     if (train.isSch === '1') {
-      console.log(`[CTA] isSch=1: rn=${train.rn} (${train.legend}) @ ${train._apiLat.toFixed(5)},${train._apiLon.toFixed(5)}`);
+      console.log(`[CTA] isSch=1: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) @ ${train._apiLat.toFixed(5)},${train._apiLon.toFixed(5)}`);
     }
 
     // Drift correction: smoothly slide from old visual position to new API position
@@ -211,7 +212,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
         train.lon = prev._animLon;
         train.lat = prev._animLat;
         train._direction = prev._direction;
-        console.warn(`[CTA] Hold: rn=${train.rn} isSch=1, drift=${(drift * 111000).toFixed(0)}m — holding at circuit-confirmed position`);
+        console.warn(`[CTA] isSch hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)}`);
       } else if (drift < CORRECTION_SNAP_THRESHOLD && drift > 1e-7) {
         // Save the API-snapped target (where the train should end up)
         train._corrToTrackPos = { ...train._trackPos };
@@ -273,9 +274,9 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
               train._trackPos = { ...prev._trackPos };
               train.lon = prev._animLon;
               train.lat = prev._animLat;
-              console.log(`[CTA] Backward hold: rn=${train.rn} [${train._backwardHoldCount}/${BACKWARD_CONFIRM_POLLS}] drift=${(drift * 111000).toFixed(0)}m`);
+              console.log(`[CTA] Backward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train._backwardHoldCount}/${BACKWARD_CONFIRM_POLLS}]`);
             } else {
-              console.log(`[CTA] Backward confirmed: rn=${train.rn} after ${train._backwardHoldCount} polls, drift=${(drift * 111000).toFixed(0)}m`);
+              console.log(`[CTA] Backward confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train._backwardHoldCount} polls`);
             }
           } else if (isSuspectForward) {
             train._backwardHoldCount = 0;
@@ -285,9 +286,9 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
               train._trackPos = { ...prev._trackPos };
               train.lon = prev._animLon;
               train.lat = prev._animLat;
-              console.log(`[CTA] Fast-forward hold: rn=${train.rn} [${train._forwardHoldCount}/${BACKWARD_CONFIRM_POLLS}] drift=${(drift * 111000).toFixed(0)}m`);
+              console.log(`[CTA] Fast-forward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train._forwardHoldCount}/${BACKWARD_CONFIRM_POLLS}]`);
             } else {
-              console.log(`[CTA] Fast-forward confirmed: rn=${train.rn} after ${train._forwardHoldCount} polls, drift=${(drift * 111000).toFixed(0)}m`);
+              console.log(`[CTA] Fast-forward confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train._forwardHoldCount} polls`);
             }
           } else {
             train._backwardHoldCount = 0;
