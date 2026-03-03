@@ -911,11 +911,20 @@
 
   // Console debug helper — select any active train by run number.
   // Useful when a hold/snap log mentions an rn you want to inspect on the map.
-  // Usage: ctaTrain('523')
+  // Usage: ctaTrain('020')  ← always quote zero-padded run numbers;
+  //        ctaTrain(523)    ← bare numbers without leading zeros are fine too.
   window.ctaTrain = (rn) => {
-    const rns = String(rn);
+    // Numeric inputs are padded to 3 digits to match CTA's zero-padded rn strings.
+    // Note: bare octal literals like 020 are interpreted by JS before we see them
+    // (020 octal = 16 decimal → "016", not "020"). Always quote zero-padded rns.
+    const rns = typeof rn === 'number' ? String(rn).padStart(3, '0') : String(rn);
     const train = [...(realTrains || []), ...retiringTrains].find(t => t.rn === rns);
-    if (!train) { console.warn(`[CTA] ctaTrain: no active train with rn=${rns}`); return; }
+    if (!train) {
+      console.warn(`[CTA] ctaTrain: no active train with rn=${rns}` +
+        (typeof rn === 'number' && String(rn) !== rns ? ` (searched as "${rns}")` : '') +
+        ' — if the rn has a leading zero, quote it: ctaTrain(\'020\')');
+      return;
+    }
     selectTrain(train);
   };
 })();

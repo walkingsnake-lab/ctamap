@@ -296,13 +296,39 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
           }
         }
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
-        // Large jump — can't interpolate, and the preserved _direction may be stale
+        // Snap-range jump: too large to interpolate and physically implausible
+        // (>400 km/h at 30s poll). Apply the same confirmation-hold used for
+        // suspect smooth corrections before accepting. If confirmed, re-derive
+        // direction from the API heading since the preserved one may be stale
         // (e.g. after a terminus reversal that crossed the snap threshold).
-        // Re-derive from the API heading for the new position.
-        train._direction = directionFromHeading(
-          train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
-        );
-        console.warn(`[CTA] Snap: rn=${train.rn} drift=${(drift * 111000).toFixed(0)}m — too far to interpolate`);
+        if (prev._trackPos) {
+          const testStep = 1e-4;
+          const fwdTest = advanceOnTrack(prev._trackPos, testStep, +1, segs);
+          const bwdTest = advanceOnTrack(prev._trackPos, testStep, -1, segs);
+          const snapDir = geoDist(fwdTest.lon, fwdTest.lat, train.lon, train.lat) <=
+                          geoDist(bwdTest.lon, bwdTest.lat, train.lon, train.lat) ? 1 : -1;
+          const isSuspectBackward = snapDir !== train._direction;
+          const countKey = isSuspectBackward ? '_backwardHoldCount' : '_forwardHoldCount';
+          const otherKey = isSuspectBackward ? '_forwardHoldCount' : '_backwardHoldCount';
+          train[otherKey] = 0;
+          train[countKey] = (prev[countKey] || 0) + 1;
+          if (train[countKey] < BACKWARD_CONFIRM_POLLS) {
+            train._trackPos = { ...prev._trackPos };
+            train.lon = prev._animLon;
+            train.lat = prev._animLat;
+            console.log(`[CTA] Snap hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train[countKey]}/${BACKWARD_CONFIRM_POLLS}]`);
+          } else {
+            train._direction = directionFromHeading(
+              train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+            );
+            console.warn(`[CTA] Snap confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train[countKey]} polls`);
+          }
+        } else {
+          train._direction = directionFromHeading(
+            train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+          );
+          console.warn(`[CTA] Snap: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} — no prior position`);
+        }
       }
     }
   }
