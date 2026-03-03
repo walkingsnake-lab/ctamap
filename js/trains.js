@@ -281,12 +281,12 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
           } else if (isSuspectForward) {
             train._backwardHoldCount = 0;
             train._forwardHoldCount = (prev._forwardHoldCount || 0) + 1;
-            if (train._forwardHoldCount < BACKWARD_CONFIRM_POLLS) {
+            if (train._forwardHoldCount < FORWARD_CONFIRM_POLLS) {
               train._correcting = false;
               train._trackPos = { ...prev._trackPos };
               train.lon = prev._animLon;
               train.lat = prev._animLat;
-              console.log(`[CTA] Fast-forward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train._forwardHoldCount}/${BACKWARD_CONFIRM_POLLS}]`);
+              console.log(`[CTA] Fast-forward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train._forwardHoldCount}/${FORWARD_CONFIRM_POLLS}]`);
             } else {
               console.log(`[CTA] Fast-forward confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train._forwardHoldCount} polls`);
             }
@@ -310,13 +310,14 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
           const isSuspectBackward = snapDir !== train._direction;
           const countKey = isSuspectBackward ? '_backwardHoldCount' : '_forwardHoldCount';
           const otherKey = isSuspectBackward ? '_forwardHoldCount' : '_backwardHoldCount';
+          const confirmPolls = isSuspectBackward ? BACKWARD_CONFIRM_POLLS : FORWARD_CONFIRM_POLLS;
           train[otherKey] = 0;
           train[countKey] = (prev[countKey] || 0) + 1;
-          if (train[countKey] < BACKWARD_CONFIRM_POLLS) {
+          if (train[countKey] < confirmPolls) {
             train._trackPos = { ...prev._trackPos };
             train.lon = prev._animLon;
             train.lat = prev._animLat;
-            console.log(`[CTA] Snap hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train[countKey]}/${BACKWARD_CONFIRM_POLLS}]`);
+            console.log(`[CTA] Snap hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} [${train[countKey]}/${confirmPolls}]`);
           } else {
             train._direction = directionFromHeading(
               train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
