@@ -75,7 +75,7 @@ function renderLines(linesGroup, path, geojson) {
       if (legend === 'PR') {
         shadowPath
           .classed('pr-express-path', true)
-          .attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
+          .attr('stroke-dasharray', `0 ${LINE_WIDTH * 4}`);
       }
     }
 
@@ -94,7 +94,7 @@ function renderLines(linesGroup, path, geojson) {
           .attr('stroke', LINE_COLORS['PR'])
           .attr('stroke-width', LINE_WIDTH)
           .attr('stroke-opacity', 0.9)
-          .attr('stroke-dasharray', `${LINE_WIDTH * 1.5} ${LINE_WIDTH * 1.5}`);
+          .attr('stroke-dasharray', `0 ${LINE_WIDTH * 4}`);
       }
     }
 

@@ -96,6 +96,7 @@ body {
 /* --- PR express path (hidden by default, shown only when Purple is focused) --- */
 .line-path.pr-express-path {
   opacity: 0 !important;
+  stroke-linecap: round;
 }
 
 .line-path.pr-express-path.pr-express-active {
