@@ -388,8 +388,24 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
   const bx = curSeg[boundaryPtIdx][0];
   const by = curSeg[boundaryPtIdx][1];
   const threshold = SEGMENT_CONNECT_THRESHOLD;
+  // When two candidates are within TIE_EPS of each other in distance (e.g. two
+  // segments sharing the same junction point), break the tie by preferring the
+  // one whose entry direction best aligns with the current direction of travel.
+  // This handles shared-track junctions like the Loop exit where both the
+  // loop-continuation segment and the branch-off segment start at the same point.
+  const TIE_EPS = threshold * 0.01;
+
+  // Arrival direction vector: from the second-to-last traversed point to the boundary.
+  // direction > 0 → arriving at end of segment (prevIdx = boundaryPtIdx - 1).
+  // direction < 0 → arriving at start of segment (prevIdx = boundaryPtIdx + 1).
+  const prevIdx = direction > 0 ? boundaryPtIdx - 1 : boundaryPtIdx + 1;
+  const arrDx = prevIdx >= 0 && prevIdx < curSeg.length
+    ? bx - curSeg[prevIdx][0] : 0;
+  const arrDy = prevIdx >= 0 && prevIdx < curSeg.length
+    ? by - curSeg[prevIdx][1] : 0;
 
   let bestDist = Infinity;
+  let bestDot  = -Infinity;
   let bestResult = null;
 
   for (let s = 0; s < segments.length; s++) {
@@ -399,17 +415,25 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
 
     // Check start of segment — enter moving forward
     const d0 = geoDist(bx, by, seg[0][0], seg[0][1]);
-    if (d0 < threshold && d0 < bestDist) {
-      bestDist = d0;
-      bestResult = { segIdx: s, ptIdx: 0, t: 0, direction: 1 };
+    if (d0 < threshold) {
+      const dot = arrDx * (seg[1][0] - seg[0][0]) + arrDy * (seg[1][1] - seg[0][1]);
+      if (d0 < bestDist - TIE_EPS || (d0 < bestDist + TIE_EPS && dot > bestDot)) {
+        bestDist = d0;
+        bestDot  = dot;
+        bestResult = { segIdx: s, ptIdx: 0, t: 0, direction: 1 };
+      }
     }
 
     // Check end of segment — enter moving backward
     const last = seg.length - 1;
     const dN = geoDist(bx, by, seg[last][0], seg[last][1]);
-    if (dN < threshold && dN < bestDist) {
-      bestDist = dN;
-      bestResult = { segIdx: s, ptIdx: last - 1, t: 1, direction: -1 };
+    if (dN < threshold) {
+      const dot = arrDx * (seg[last - 1][0] - seg[last][0]) + arrDy * (seg[last - 1][1] - seg[last][1]);
+      if (dN < bestDist - TIE_EPS || (dN < bestDist + TIE_EPS && dot > bestDot)) {
+        bestDist = dN;
+        bestDot  = dot;
+        bestResult = { segIdx: s, ptIdx: last - 1, t: 1, direction: -1 };
+      }
     }
   }
 
