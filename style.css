@@ -265,16 +265,16 @@ body {
 
 /* --- Station overlay (toggle with S key) --- */
 .station-dot {
-  opacity: 0;
+  opacity: 0.5;
 }
 
 .station-leader {
-  stroke: rgba(255, 255, 255, 0.5);
+  stroke: rgba(255, 255, 255, 0.25);
   stroke-width: 0.15;
 }
 
 .station-label {
-  fill: rgba(255, 255, 255, 0.75);
+  fill: rgba(255, 255, 255, 0.5);
   font-size: 2px;
   font-family: 'Jersey 10', monospace;
   pointer-events: none;
