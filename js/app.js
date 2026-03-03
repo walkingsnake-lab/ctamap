@@ -179,7 +179,7 @@
 
     // Direction triangles — rendered before dot so they pass "behind" the circle
     const ARROW_COUNT = 6;
-    const arrowSize = LINE_WIDTH * 0.45;
+    const arrowSize = LINE_WIDTH / 1.6; // height = LINE_WIDTH (matches line stroke-width at zoom 1)
     const arrowPath = `M ${arrowSize},0 L ${-arrowSize},${-arrowSize * 0.8} L ${-arrowSize},${arrowSize * 0.8} Z`;
     for (let i = 0; i < ARROW_COUNT; i++) {
       enter.append('path')
@@ -526,6 +526,10 @@
       svg.selectAll('.line-path').attr('stroke-width', scaledLineWidth);
       svg.selectAll('.pr-express-path')
         .attr('stroke-dasharray', `${scaledLineWidth * 1.5} ${scaledLineWidth * 1.5}`);
+      // Keep arrow width in sync with the rendered line width.
+      const sas = scaledLineWidth / 1.6;
+      const sap = `M ${sas},0 L ${-sas},${-sas * 0.8} L ${-sas},${sas * 0.8} Z`;
+      svg.selectAll('.train-arrow').attr('d', sap);
     }
 
     svg.select('.trains-layer').selectAll('.train-group')
