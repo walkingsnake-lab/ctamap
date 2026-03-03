@@ -575,10 +575,10 @@ const BRANCH_SUFFIXES = [
 function displayStationName(name) {
   for (const suffix of BRANCH_SUFFIXES) {
     if (name.endsWith('-' + suffix)) {
-      return name.slice(0, -(suffix.length + 1));
+      return cleanStationName(name.slice(0, -(suffix.length + 1)));
     }
   }
-  return name;
+  return cleanStationName(name);
 }
 
 /**

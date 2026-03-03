@@ -451,7 +451,7 @@
    * Formats destination name with airplane symbol for airport terminals.
    */
   function formatDestName(name) {
-    const text = name || '';
+    const text = cleanStationName(name) || '';
     if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
       return text + ' <span class="tl-plane">\u2708</span>';
     }
@@ -465,8 +465,8 @@
   function getTrainStatus(train, etas) {
     if (etas && etas.length > 0) {
       const eta = etas[0];
-      if (eta.isApp === '1' && eta.staNm) return { prefix: 'Approaching ', station: eta.staNm };
-      if (eta.staNm) return { prefix: 'Next: ', station: eta.staNm };
+      if (eta.isApp === '1' && eta.staNm) return { prefix: 'Approaching ', station: cleanStationName(eta.staNm) };
+      if (eta.staNm) return { prefix: 'Next: ', station: cleanStationName(eta.staNm) };
     }
     if (train.isApp === '1') return { prefix: 'Approaching station', station: '' };
     return { prefix: '', station: '' };
