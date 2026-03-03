@@ -65,27 +65,17 @@ function renderLines(linesGroup, path, geojson) {
     // Render shadow paths for shared RD segments (behind the Red Line path)
     const rdShared = rdSharedByLegend[legend];
     if (rdShared) {
+      const shadowPath = linesGroup.append('path')
+        .attr('class', 'line-path')
+        .attr('data-legend', legend)
+        .attr('d', path({ type: 'FeatureCollection', features: rdShared }))
+        .attr('stroke', LINE_COLORS[legend])
+        .attr('stroke-width', LINE_WIDTH)
+        .attr('stroke-opacity', 0.9);
       if (legend === 'PR') {
-        // Each segment gets its own element so stroke-dashoffset can keep
-        // the dash pattern continuous across sub-path boundaries.
-        for (const feature of rdShared) {
-          linesGroup.append('path')
-            .attr('class', 'line-path pr-express-path pr-express-segment')
-            .attr('data-legend', legend)
-            .attr('d', path(feature))
-            .attr('stroke', LINE_COLORS[legend])
-            .attr('stroke-width', LINE_WIDTH)
-            .attr('stroke-opacity', 0.9)
-            .attr('stroke-dasharray', `${LINE_WIDTH * 3} ${LINE_WIDTH * 2}`);
-        }
-      } else {
-        linesGroup.append('path')
-          .attr('class', 'line-path')
-          .attr('data-legend', legend)
-          .attr('d', path({ type: 'FeatureCollection', features: rdShared }))
-          .attr('stroke', LINE_COLORS[legend])
-          .attr('stroke-width', LINE_WIDTH)
-          .attr('stroke-opacity', 0.9);
+        shadowPath
+          .classed('pr-express-path', true)
+          .attr('stroke-dasharray', `${LINE_WIDTH * 3} ${LINE_WIDTH * 2}`);
       }
     }
 
@@ -96,11 +86,11 @@ function renderLines(linesGroup, path, geojson) {
         ...(brSharedByLegend['PR'] || []),
         ...(mlByLegend['PR'] || []),
       ];
-      for (const feature of expressFeatures) {
+      if (expressFeatures.length > 0) {
         linesGroup.append('path')
-          .attr('class', 'line-path pr-express-path pr-express-segment')
+          .attr('class', 'line-path pr-express-path')
           .attr('data-legend', 'PR')
-          .attr('d', path(feature))
+          .attr('d', path({ type: 'FeatureCollection', features: expressFeatures }))
           .attr('stroke', LINE_COLORS['PR'])
           .attr('stroke-width', LINE_WIDTH)
           .attr('stroke-opacity', 0.9)
