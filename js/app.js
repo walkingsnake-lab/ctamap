@@ -535,7 +535,7 @@
         .attr('stroke-dasharray', `${scaledLineWidth * 1.5} ${scaledLineWidth * 1.5}`);
       // Keep arrow width in sync with the selected (thicker) line width.
       const arrowLineWidth = selLegend ? scaledLineWidth * 2.5 : scaledLineWidth;
-      const sas = arrowLineWidth / 1.6;
+      const sas = arrowLineWidth / 2.0;
       const sap = `M ${sas},0 L ${-sas},${-sas * 0.8} L ${-sas},${sas * 0.8} Z`;
       svg.selectAll('.train-arrow').attr('d', sap);
     }
