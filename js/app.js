@@ -532,7 +532,7 @@
           : scaledLineWidth;
       });
       svg.selectAll('.pr-express-path')
-        .attr('stroke-dasharray', `${scaledLineWidth * 1.5} ${scaledLineWidth * 1.5}`);
+        .attr('stroke-dasharray', `0 ${scaledLineWidth * 4}`);
       // Keep arrow width in sync with the selected (thicker) line width.
       const arrowLineWidth = selLegend ? scaledLineWidth * 2.5 : scaledLineWidth;
       const sas = arrowLineWidth / 2.0;
