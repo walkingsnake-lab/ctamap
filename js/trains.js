@@ -319,7 +319,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
           const isSuspectBackward = snapDir !== train._direction;
           const countKey = isSuspectBackward ? '_backwardHoldCount' : '_forwardHoldCount';
           const otherKey = isSuspectBackward ? '_forwardHoldCount' : '_backwardHoldCount';
-          const confirmPolls = isSuspectBackward ? BACKWARD_CONFIRM_POLLS : FORWARD_CONFIRM_POLLS;
+          const confirmPolls = isSuspectBackward ? BACKWARD_CONFIRM_POLLS : FORWARD_SNAP_CONFIRM_POLLS;
           train[otherKey] = 0;
           train[countKey] = (prev[countKey] || 0) + 1;
           if (train[countKey] < confirmPolls) {
