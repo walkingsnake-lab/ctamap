@@ -46,12 +46,12 @@ const API_KEY = true; // Key is stored server-side in server.js
 
 // How often to refresh train positions (ms)
 // CTA updates positions every ~60-120s, so faster polling just gets stale data
-const REFRESH_INTERVAL = 30000;
+const REFRESH_INTERVAL = 20000;
 
 // Visual constants
-const LINE_WIDTH = 1.5;
-const TRAIN_RADIUS = 2.5;
-const TRAIN_GLOW_RADIUS = 5;
+const LINE_WIDTH = 2;
+const TRAIN_RADIUS = 3.5;
+const TRAIN_GLOW_RADIUS = 6;
 const TERMINUS_HOLD_MS = 120000; // Hold train at terminus before fade-out (120s)
 const TERMINAL_PROXIMITY_THRESHOLD = 0.05; // degrees (~5.5km) — max distance to terminal to trigger retirement
 const TERMINAL_APPROACH_DURATION = 5000;  // ms to slide retiring train to terminal / spawn new trains
@@ -61,9 +61,9 @@ const MAP_PADDING = 0.05; // 5% padding around the map
 const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API position after refresh
 const CORRECTION_SNAP_THRESHOLD = 0.035;     // degrees (~3.9km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
-const BACKWARD_CONFIRM_POLLS     = 5;        // consecutive polls required before accepting a backward move — when confirmed, snap rather than animate
-const FORWARD_CONFIRM_POLLS      = 2;        // consecutive polls required before accepting a suspiciously fast forward jump within slide range
-const FORWARD_SNAP_CONFIRM_POLLS = 4;        // consecutive polls required before accepting a forward jump in snap range (> CORRECTION_SNAP_THRESHOLD)
+const BACKWARD_CONFIRM_POLLS     = 8;        // consecutive polls required before accepting a backward move — when confirmed, snap rather than animate
+const FORWARD_CONFIRM_POLLS      = 3;        // consecutive polls required before accepting a suspiciously fast forward jump within slide range
+const FORWARD_SNAP_CONFIRM_POLLS = 6;        // consecutive polls required before accepting a forward jump in snap range (> CORRECTION_SNAP_THRESHOLD)
 const FORWARD_PLAUSIBLE_DIST = 0.027;        // degrees (~3 km) — forward drift beyond this in a single update is treated as a phantom position
 
 // Destination + line combos that use inverted badge (white bg, colored text)
