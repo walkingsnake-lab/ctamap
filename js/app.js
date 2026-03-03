@@ -910,4 +910,14 @@
       renderTrains();
     }, 200);
   });
+
+  // Console debug helper — select any active train by run number.
+  // Useful when a hold/snap log mentions an rn you want to inspect on the map.
+  // Usage: ctaTrain('523')
+  window.ctaTrain = (rn) => {
+    const rns = String(rn);
+    const train = [...(realTrains || []), ...retiringTrains].find(t => t.rn === rns);
+    if (!train) { console.warn(`[CTA] ctaTrain: no active train with rn=${rns}`); return; }
+    selectTrain(train);
+  };
 })();
