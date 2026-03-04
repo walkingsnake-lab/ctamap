@@ -95,8 +95,13 @@ function badgeTextFill(legend, destNm) {
  * (e.g. "Washington/Dearborn", "Washington/State", "Chicago/Franklin") but CTA signage
  * and other parts of the API just call them by the street name alone.
  */
+const STATION_NAME_OVERRIDES = {
+  'Quincy/Wells': 'Quincy',
+};
+
 function cleanStationName(name) {
   if (!name) return name;
+  if (STATION_NAME_OVERRIDES[name]) return STATION_NAME_OVERRIDES[name];
   return name.replace(/\/(Dearborn|Franklin|State|Milwaukee)$/i, '');
 }
 
