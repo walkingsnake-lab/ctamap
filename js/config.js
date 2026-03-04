@@ -92,12 +92,12 @@ function badgeTextFill(legend, destNm) {
 /**
  * Strips intersection qualifiers from CTA station names.
  * Stations on the Blue/Red subway trunks include the cross-street
- * (e.g. "Washington/Dearborn", "Washington/State") but CTA signage
+ * (e.g. "Washington/Dearborn", "Washington/State", "Chicago/Franklin") but CTA signage
  * and other parts of the API just call them by the street name alone.
  */
 function cleanStationName(name) {
   if (!name) return name;
-  return name.replace(/\/(Dearborn|State|Milwaukee)$/i, '');
+  return name.replace(/\/(Dearborn|Franklin|State|Milwaukee)$/i, '');
 }
 
 // Map CTA line names (from GeoJSON "lines" property) → legend codes for station disambiguation
