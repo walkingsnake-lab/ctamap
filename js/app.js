@@ -279,7 +279,7 @@
     if (st.prefix || st.station) {
       status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
     } else if (st.delayed) {
-      status.innerHTML = '<span class="tl-delayed">Delayed</span>';
+      status.innerHTML = '<span class="tl-delayed">Delayed</span><br><span class="tl-limited">Limited tracking available</span>';
     } else if (st.limited) {
       status.innerHTML = '<span class="tl-limited">Limited tracking available</span>';
     } else {
