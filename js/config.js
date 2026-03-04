@@ -59,12 +59,12 @@ const MAP_PADDING = 0.05; // 5% padding around the map
 
 // Real-time animation constants
 const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API position after refresh
-const CORRECTION_SNAP_THRESHOLD = 0.035;     // degrees (~3.9km) — beyond this, snap instead of slide
+const CORRECTION_SNAP_THRESHOLD = 0.04;     // degrees (~3.9km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
-const BACKWARD_CONFIRM_POLLS     = 8;        // consecutive polls required before accepting a backward move — when confirmed, snap rather than animate
+const BACKWARD_CONFIRM_POLLS     = 6;        // consecutive polls required before accepting a backward move — when confirmed, snap rather than animate
 const FORWARD_CONFIRM_POLLS      = 3;        // consecutive polls required before accepting a suspiciously fast forward jump within slide range
-const FORWARD_SNAP_CONFIRM_POLLS = 6;        // consecutive polls required before accepting a forward jump in snap range (> CORRECTION_SNAP_THRESHOLD)
-const FORWARD_PLAUSIBLE_DIST = 0.027;        // degrees (~3 km) — forward drift beyond this in a single update is treated as a phantom position
+const FORWARD_SNAP_CONFIRM_POLLS = 4;        // consecutive polls required before accepting a forward jump in snap range (> CORRECTION_SNAP_THRESHOLD)
+const FORWARD_PLAUSIBLE_DIST = 0.032;        // degrees (~3 km) — forward drift beyond this in a single update is treated as a phantom position
 
 // Destination + line combos that use inverted badge (white bg, colored text)
 // Matches real CTA signage for certain short-turn / branch terminuses
