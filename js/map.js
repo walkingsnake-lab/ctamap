@@ -123,7 +123,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
 
   const FONT_SIZE = 1.8;
   const CHAR_W = FONT_SIZE * 0.55;
-  const DOT_R = 0.55;
+  const DOT_R = LINE_WIDTH / 2 * 1.2;
   const LABEL_PAD = 0.4;
 
   // --- Project every GeoJSON line segment and index them in a spatial grid ---
@@ -215,7 +215,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
     { ux:  0, uy: -1, anchor: 'middle' },   // N
     { ux:  0, uy:  1, anchor: 'middle' },   // S
   ];
-  const dists = [8, 12, 16];
+  const dists = [3, 5, 8];
 
   // Label AABB from anchor point + text-anchor mode
   function labelRect(cx, cy, w, anchor) {
@@ -245,6 +245,8 @@ function renderStations(stationsGroup, stations, projection, geojson) {
   }
 
   const results = [];
+  // Stations with only 2 legends that should still be treated as transfers
+  const TRANSFER_OVERRIDES = new Set(['Wilson']);
 
   for (const station of items) {
     const tw = station.name.length * CHAR_W;
@@ -267,14 +269,18 @@ function renderStations(stationsGroup, stations, projection, geojson) {
 
   // --- Render SVG ---
   for (const { station, dx, dy, anchor } of results) {
+    const isTransfer = station.legends.length >= 3 || station.isTerminus
+      || TRANSFER_OVERRIDES.has(station.name);
     const g = stationsGroup.append('g')
       .attr('class', 'station-marker')
       .attr('data-legends', station.legends.join(','))
+      .attr('data-tier', isTransfer ? 'transfer' : 'local')
       .attr('transform', `translate(${station.px},${station.py})`);
 
-    // Leader line (dot edge → near label anchor)
+    // Leader line — only when label is pushed far from dot
     const len = Math.sqrt(dx * dx + dy * dy);
-    if (len > DOT_R + 0.5) {
+    const LEADER_THRESHOLD = 4;
+    if (len > LEADER_THRESHOLD) {
       const nx = dx / len, ny = dy / len;
       g.append('line')
         .attr('class', 'station-leader')
@@ -282,9 +288,11 @@ function renderStations(stationsGroup, stations, projection, geojson) {
         .attr('x2', dx - nx * 0.3).attr('y2', dy - ny * 0.3);
     }
 
+    const dotR = isTransfer ? DOT_R * 1.4 : DOT_R;
     g.append('circle')
       .attr('class', 'station-dot')
-      .attr('r', DOT_R)
+      .attr('r', dotR)
+      .attr('data-base-r', dotR)
       .attr('fill', '#fff');
 
     g.append('text')

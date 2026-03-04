@@ -681,13 +681,14 @@ function buildUniqueStations(geojson) {
 
   // Pass 2: terminal stations — the endpoint NOT shared with any other
   // segment is the terminal station's coordinate.
+  const terminusNames = new Set();
   for (const seg of segments) {
     for (const name of [seg.nameA, seg.nameB]) {
       if (stationCoord.has(name) || isInfrastructureName(name)) continue;
       const startShared = endpointMap.get(coordKey(seg.start)).length > 1;
       const endShared = endpointMap.get(coordKey(seg.end)).length > 1;
-      if (startShared && !endShared) recordStation(name, seg.end, seg.legends);
-      else if (endShared && !startShared) recordStation(name, seg.start, seg.legends);
+      if (startShared && !endShared) { recordStation(name, seg.end, seg.legends); terminusNames.add(name); }
+      else if (endShared && !startShared) { recordStation(name, seg.start, seg.legends); terminusNames.add(name); }
     }
   }
 
@@ -696,6 +697,7 @@ function buildUniqueStations(geojson) {
     lon: coord[0],
     lat: coord[1],
     legends: Array.from(stationLegends.get(name)),
+    isTerminus: terminusNames.has(name),
   }));
 }
 
