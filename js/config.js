@@ -97,6 +97,7 @@ function badgeTextFill(legend, destNm) {
  */
 const STATION_NAME_OVERRIDES = {
   'Quincy/Wells': 'Quincy',
+  'Harrison/Wabash': 'Harrison',
 };
 
 function cleanStationName(name) {
