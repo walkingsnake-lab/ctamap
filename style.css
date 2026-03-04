@@ -193,11 +193,6 @@ body {
   font-family: 'Jersey 10', monospace;
   display: none;
   white-space: nowrap;
-  /* Pixel font rendering */
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeSpeed;
-  image-rendering: pixelated;
 }
 
 #train-label.visible {
@@ -278,9 +273,4 @@ body {
   font-size: 1.8px;
   font-family: 'Jersey 10', monospace;
   pointer-events: none;
-    /* Pixel font rendering */
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeSpeed;
-  image-rendering: pixelated;
 }
