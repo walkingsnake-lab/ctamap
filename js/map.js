@@ -121,7 +121,7 @@ function renderLines(linesGroup, path, geojson) {
 function renderStations(stationsGroup, stations, projection, geojson) {
   stationsGroup.selectAll('*').remove();
 
-  const FONT_SIZE = 1.8;
+  const FONT_SIZE = 2.2;
   const CHAR_W = FONT_SIZE * 0.55;
   const DOT_R = LINE_WIDTH / 2 * 1.2;
   const LABEL_PAD = 0.4;
@@ -194,14 +194,48 @@ function renderStations(stationsGroup, stations, projection, geojson) {
     return hits;
   }
 
-  // --- Project stations; transfer stations placed first ---
+  // --- Project stations; multi-line stations placed first ---
   const items = stations
     .map(s => {
       const pt = projection([s.lon, s.lat]);
       return pt ? { ...s, px: pt[0], py: pt[1] } : null;
     })
-    .filter(Boolean)
-    .sort((a, b) => b.legends.length - a.legends.length);
+    .filter(Boolean);
+
+  // --- Merge stations with identical names at nearby coordinates ---
+  // (e.g. Jackson Red + Jackson Blue are separate subway stops one block apart)
+  const MERGE_THRESHOLD = 8;
+  const nameGroups = new Map();
+  for (const item of items) {
+    if (!nameGroups.has(item.name)) nameGroups.set(item.name, []);
+    nameGroups.get(item.name).push(item);
+  }
+  const merged = [];
+  for (const [name, group] of nameGroups) {
+    if (group.length === 1) {
+      merged.push({ ...group[0], dots: [{ px: group[0].px, py: group[0].py }] });
+    } else {
+      let canMerge = true;
+      for (let i = 0; i < group.length && canMerge; i++)
+        for (let j = i + 1; j < group.length && canMerge; j++)
+          if (Math.hypot(group[i].px - group[j].px, group[i].py - group[j].py) > MERGE_THRESHOLD)
+            canMerge = false;
+      if (canMerge) {
+        const midPx = group.reduce((s, g) => s + g.px, 0) / group.length;
+        const midPy = group.reduce((s, g) => s + g.py, 0) / group.length;
+        merged.push({
+          name,
+          px: midPx, py: midPy,
+          legends: [...new Set(group.flatMap(g => g.legends))],
+          dots: group.map(g => ({ px: g.px, py: g.py })),
+        });
+      } else {
+        for (const item of group)
+          merged.push({ ...item, dots: [{ px: item.px, py: item.py }] });
+      }
+    }
+  }
+  merged.sort((a, b) => b.legends.length - a.legends.length);
 
   // --- Candidate directions (8 compass points) × distances ---
   const R = Math.SQRT1_2;
@@ -233,11 +267,13 @@ function renderStations(stationsGroup, stations, projection, geojson) {
       const oy = Math.max(0, Math.min(bb.y + bb.h + LABEL_PAD, p.y + p.h + LABEL_PAD) - Math.max(bb.y - LABEL_PAD, p.y - LABEL_PAD));
       if (ox > 0 && oy > 0) score += ox * oy * 10;
     }
-    // Label ↔ station dots
-    for (const s of items) {
-      const cx = Math.max(bb.x, Math.min(s.px, bb.x + bb.w));
-      const cy = Math.max(bb.y, Math.min(s.py, bb.y + bb.h));
-      if ((s.px - cx) ** 2 + (s.py - cy) ** 2 < (DOT_R * 1.5) ** 2) score += 15;
+    // Label ↔ station dots (check all dot positions, including merged)
+    for (const s of merged) {
+      for (const dot of s.dots) {
+        const cx = Math.max(bb.x, Math.min(dot.px, bb.x + bb.w));
+        const cy = Math.max(bb.y, Math.min(dot.py, bb.y + bb.h));
+        if ((dot.px - cx) ** 2 + (dot.py - cy) ** 2 < (DOT_R * 1.5) ** 2) score += 15;
+      }
     }
     // Label ↔ transit lines
     score += countLineHits(bb.x, bb.y, bb.w, bb.h) * 5;
@@ -245,10 +281,8 @@ function renderStations(stationsGroup, stations, projection, geojson) {
   }
 
   const results = [];
-  // Stations with only 2 legends that should still be treated as transfers
-  const TRANSFER_OVERRIDES = new Set(['Wilson']);
 
-  for (const station of items) {
+  for (const station of merged) {
     const tw = station.name.length * CHAR_W;
     let best = null, bestScore = Infinity;
 
@@ -269,12 +303,9 @@ function renderStations(stationsGroup, stations, projection, geojson) {
 
   // --- Render SVG ---
   for (const { station, dx, dy, anchor } of results) {
-    const isTransfer = station.legends.length >= 3 || station.isTerminus
-      || TRANSFER_OVERRIDES.has(station.name);
     const g = stationsGroup.append('g')
       .attr('class', 'station-marker')
       .attr('data-legends', station.legends.join(','))
-      .attr('data-tier', isTransfer ? 'transfer' : 'local')
       .attr('transform', `translate(${station.px},${station.py})`);
 
     // Leader line — only when label is pushed far from dot
@@ -288,12 +319,16 @@ function renderStations(stationsGroup, stations, projection, geojson) {
         .attr('x2', dx - nx * 0.3).attr('y2', dy - ny * 0.3);
     }
 
-    const dotR = isTransfer ? DOT_R * 1.4 : DOT_R;
-    g.append('circle')
-      .attr('class', 'station-dot')
-      .attr('r', dotR)
-      .attr('data-base-r', dotR)
-      .attr('fill', '#fff');
+    // Render a dot at each position (merged stations have multiple dots)
+    for (const dot of station.dots) {
+      g.append('circle')
+        .attr('class', 'station-dot')
+        .attr('cx', dot.px - station.px)
+        .attr('cy', dot.py - station.py)
+        .attr('r', DOT_R)
+        .attr('data-base-r', DOT_R)
+        .attr('fill', '#fff');
+    }
 
     g.append('text')
       .attr('class', 'station-label')

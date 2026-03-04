@@ -270,24 +270,11 @@ body {
 
 .station-label {
   fill: rgba(255, 255, 255, 0.5);
-  font-size: 1.8px;
+  font-size: 2.2px;
   font-family: 'Jersey 10', monospace;
   pointer-events: none;
   stroke: rgba(0, 0, 0, 0.6);
-  stroke-width: 0.4px;
+  stroke-width: 0.5px;
   paint-order: stroke fill;
   stroke-linejoin: round;
-}
-
-/* Transfer / terminus stations — more prominent */
-.station-marker[data-tier="transfer"] .station-dot {
-  opacity: 0.85;
-}
-
-.station-marker[data-tier="transfer"] .station-label {
-  fill: rgba(255, 255, 255, 0.8);
-}
-
-.station-marker[data-tier="transfer"] .station-leader {
-  stroke: rgba(255, 255, 255, 0.4);
 }
