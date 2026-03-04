@@ -93,16 +93,9 @@
   let stationsVisible = false;
   renderStations(svg.select('.stations-layer'), stations, projection, geojson);
 
-  const STATION_ZOOM_THRESHOLD = 3;
-
   function toggleStations() {
     stationsVisible = !stationsVisible;
     svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
-    if (stationsVisible) {
-      const currentK = d3.zoomTransform(svgEl).k;
-      svg.selectAll('.station-marker[data-tier="local"]')
-        .style('display', currentK >= STATION_ZOOM_THRESHOLD ? null : 'none');
-    }
   }
 
   // Create train layer on top (inside the zoom container)
@@ -561,10 +554,6 @@
           const baseR = parseFloat(el.attr('data-base-r'));
           el.attr('r', baseR * dotScale);
         });
-
-        // Tier visibility: hide local stations at low zoom
-        svg.selectAll('.station-marker[data-tier="local"]')
-          .style('display', currentK >= STATION_ZOOM_THRESHOLD ? null : 'none');
       }
     }
 
