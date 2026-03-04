@@ -109,8 +109,7 @@ function cleanStationName(name) {
 // Per-station label direction overrides: station name → compass direction
 // Valid directions: 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'
 const STATION_LABEL_OVERRIDES = {
-  'Washington': 'NW',
-  'Library':    'SE',
+
 };
 
 // Map CTA line names (from GeoJSON "lines" property) → legend codes for station disambiguation
