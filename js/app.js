@@ -93,9 +93,16 @@
   let stationsVisible = false;
   renderStations(svg.select('.stations-layer'), stations, projection, geojson);
 
+  const STATION_ZOOM_THRESHOLD = 3;
+
   function toggleStations() {
     stationsVisible = !stationsVisible;
     svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
+    if (stationsVisible) {
+      const currentK = d3.zoomTransform(svgEl).k;
+      svg.selectAll('.station-marker[data-tier="local"]')
+        .style('display', currentK >= STATION_ZOOM_THRESHOLD ? null : 'none');
+    }
   }
 
   // Create train layer on top (inside the zoom container)
@@ -545,6 +552,20 @@
       const sas = arrowLineWidth / 2.0;
       const sap = `M ${sas},0 L ${-sas},${-sas * 0.8} L ${-sas},${sas * 0.8} Z`;
       svg.selectAll('.train-arrow').attr('d', sap);
+
+      // Scale station dots to match line width at every zoom level
+      if (stationsVisible) {
+        const dotScale = 1 / Math.pow(currentK, 0.5);
+        svg.selectAll('.station-dot').each(function () {
+          const el = d3.select(this);
+          const baseR = parseFloat(el.attr('data-base-r'));
+          el.attr('r', baseR * dotScale);
+        });
+
+        // Tier visibility: hide local stations at low zoom
+        svg.selectAll('.station-marker[data-tier="local"]')
+          .style('display', currentK >= STATION_ZOOM_THRESHOLD ? null : 'none');
+      }
     }
 
     svg.select('.trains-layer').selectAll('.train-group')
