@@ -290,10 +290,13 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
               train._trackPos = { ...train._corrToTrackPos };
               train.lon = train._corrToTrackPos.lon;
               train.lat = train._corrToTrackPos.lat;
-              const headingDir = directionFromHeading(
-                train.heading, train._corrToTrackPos.segIdx, train._corrToTrackPos.ptIdx, segs
-              );
-              if (headingDir === train._corrDirection) train._direction = train._corrDirection;
+              // Unconditionally trust the empirically confirmed movement direction.
+              // Do NOT gate this on the API heading: trains with no next-station data
+              // often report a bad heading (facing the wrong way), which is exactly
+              // what caused the false-backward classification in the first place.
+              // After BACKWARD_CONFIRM_POLLS consecutive agreeing polls the observed
+              // _corrDirection is far more reliable than a single heading reading.
+              train._direction = train._corrDirection;
               console.log(`[CTA] Backward confirmed (snap): rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train._backwardHoldCount} polls`);
             }
           } else if (isSuspectForward) {
