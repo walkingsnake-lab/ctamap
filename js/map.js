@@ -308,23 +308,27 @@ function renderStations(stationsGroup, stations, projection, geojson) {
       .attr('data-legends', station.legends.join(','))
       .attr('transform', `translate(${station.px},${station.py})`);
 
-    // Leader line — only when label is pushed far from dot
-    const len = Math.sqrt(dx * dx + dy * dy);
+    // Render dots and leader lines (one per dot position)
     const LEADER_THRESHOLD = 4;
-    if (len > LEADER_THRESHOLD) {
-      const nx = dx / len, ny = dy / len;
-      g.append('line')
-        .attr('class', 'station-leader')
-        .attr('x1', nx * DOT_R).attr('y1', ny * DOT_R)
-        .attr('x2', dx - nx * 0.3).attr('y2', dy - ny * 0.3);
-    }
-
-    // Render a dot at each position (merged stations have multiple dots)
     for (const dot of station.dots) {
+      const dotCx = dot.px - station.px;
+      const dotCy = dot.py - station.py;
+
+      // Leader line from label toward this dot
+      const ldx = dx - dotCx, ldy = dy - dotCy;
+      const len = Math.sqrt(ldx * ldx + ldy * ldy);
+      if (len > LEADER_THRESHOLD) {
+        const nx = ldx / len, ny = ldy / len;
+        g.append('line')
+          .attr('class', 'station-leader')
+          .attr('x1', dotCx + nx * DOT_R).attr('y1', dotCy + ny * DOT_R)
+          .attr('x2', dx - nx * 0.3).attr('y2', dy - ny * 0.3);
+      }
+
       g.append('circle')
         .attr('class', 'station-dot')
-        .attr('cx', dot.px - station.px)
-        .attr('cy', dot.py - station.py)
+        .attr('cx', dotCx)
+        .attr('cy', dotCy)
         .attr('r', DOT_R)
         .attr('data-base-r', DOT_R)
         .attr('fill', '#fff');
