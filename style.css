@@ -253,6 +253,11 @@ body {
   color: rgba(255, 255, 255, 1);
 }
 
+.tl-delayed {
+  font-size: 28px;
+  color: rgba(255, 180, 60, 0.9);
+}
+
 .tl-limited {
   font-size: 20px;
   color: rgba(255, 255, 255, 0.4);
