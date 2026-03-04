@@ -291,7 +291,9 @@ function renderStations(stationsGroup, stations, projection, geojson) {
       for (const dir of dirs) {
         const dx = dir.ux * d, dy = dir.uy * d;
         const bb = labelRect(station.px + dx, station.py + dy, tw, dir.anchor);
-        const s = scorePlacement(bb) + d * 0.3;   // prefer closer
+        // Merged stations: penalize cardinal directions so leader lines spread apart
+        const cardinalPenalty = station.dots.length > 1 && (dir.ux === 0 || dir.uy === 0) ? 20 : 0;
+        const s = scorePlacement(bb) + d * 0.3 + cardinalPenalty;   // prefer closer
         if (s < bestScore) { bestScore = s; best = { dx, dy, anchor: dir.anchor, bb }; }
         if (bestScore <= dists[0] * 0.3) break search;
       }
