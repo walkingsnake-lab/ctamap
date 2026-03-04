@@ -278,6 +278,8 @@
     const st = getTrainStatus(train, etas);
     if (st.prefix || st.station) {
       status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
+    } else if (st.limited) {
+      status.innerHTML = '<span class="tl-limited">Limited tracking available</span>';
     } else {
       status.textContent = '';
     }
@@ -470,7 +472,7 @@
       if (eta.staNm) return { prefix: 'Next: ', station: cleanStationName(eta.staNm) };
     }
     if (train.isApp === '1') return { prefix: 'Approaching station', station: '' };
-    return { prefix: '', station: '' };
+    return { prefix: '', station: '', limited: true };
   }
 
   // Close button handler
