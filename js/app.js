@@ -161,10 +161,11 @@
       .attr('class', 'train-group')
       .style('opacity', 0);
 
-    // Invisible hit area for click detection
+    // Invisible hit area for click detection — sized to ~12px on screen.
+    // Dividing by the current zoom keeps the target consistent at all zoom levels.
     enter.append('circle')
       .attr('class', 'train-hit')
-      .attr('r', 12)
+      .attr('r', 12 / (d3.zoomTransform(svgEl).k || 1))
       .attr('fill', 'transparent')
       .attr('stroke', 'none');
 
@@ -524,6 +525,12 @@
     // Thin lines slightly as zoom increases — only recalculate when k changes.
     if (currentK !== lastLineK) {
       lastLineK = currentK;
+      // Keep hit area a fixed screen size (~12px) regardless of zoom level.
+      // Without this, the hit circle (r=12 SVG units) grows with the zoom
+      // transform, reaching 96px screen radius at k=8 and causing accidental
+      // taps and overlapping targets at high zoom.
+      const scaledHitRadius = 12 / currentK;
+      svg.selectAll('.train-hit').attr('r', scaledHitRadius);
       const scaledLineWidth = LINE_WIDTH / Math.pow(currentK, 0.5);
       const selLegend = selectedTrain?.legend;
       svg.selectAll('.line-path').attr('stroke-width', function () {
