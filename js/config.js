@@ -106,6 +106,13 @@ function cleanStationName(name) {
   return name.replace(/\/(Dearborn|Franklin|State|Milwaukee)$/i, '');
 }
 
+// Per-station label direction overrides: station name → compass direction
+// Valid directions: 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'
+const STATION_LABEL_OVERRIDES = {
+  'Washington': 'NW',
+  'Library':    'SE',
+};
+
 // Map CTA line names (from GeoJSON "lines" property) → legend codes for station disambiguation
 const LINE_NAME_TO_LEGEND_STATION = {
   'Red': 'RD', 'Blue': 'BL', 'Brown': 'BR', 'Green': 'GR',

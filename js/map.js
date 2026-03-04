@@ -121,7 +121,7 @@ function renderLines(linesGroup, path, geojson) {
 function renderStations(stationsGroup, stations, projection, geojson) {
   stationsGroup.selectAll('*').remove();
 
-  const FONT_SIZE = 2.2;
+  const FONT_SIZE = 2.0;
   const CHAR_W = FONT_SIZE * 0.55;
   const DOT_R = LINE_WIDTH / 2 * 1.2;
   const LABEL_PAD = 0.4;
@@ -251,6 +251,9 @@ function renderStations(stationsGroup, stations, projection, geojson) {
   ];
   const dists = [3, 5, 8];
 
+  // Compass name → dir index for STATION_LABEL_OVERRIDES
+  const COMPASS_TO_DIR = { E: 0, W: 1, NE: 2, NW: 3, SE: 4, SW: 5, N: 6, S: 7 };
+
   // Label AABB from anchor point + text-anchor mode
   function labelRect(cx, cy, w, anchor) {
     const x = anchor === 'start' ? cx : anchor === 'end' ? cx - w : cx - w / 2;
@@ -286,16 +289,31 @@ function renderStations(stationsGroup, stations, projection, geojson) {
     const tw = station.name.length * CHAR_W;
     let best = null, bestScore = Infinity;
 
-    search:
-    for (const d of dists) {
-      for (const dir of dirs) {
+    // Check for a per-station direction override
+    const override = STATION_LABEL_OVERRIDES[station.name];
+    const forcedDirIdx = override != null ? COMPASS_TO_DIR[override] : -1;
+
+    if (forcedDirIdx >= 0) {
+      // Use forced direction, pick best distance
+      const dir = dirs[forcedDirIdx];
+      for (const d of dists) {
         const dx = dir.ux * d, dy = dir.uy * d;
         const bb = labelRect(station.px + dx, station.py + dy, tw, dir.anchor);
-        // Merged stations: penalize cardinal directions so leader lines spread apart
-        const cardinalPenalty = station.dots.length > 1 && (dir.ux === 0 || dir.uy === 0) ? 20 : 0;
-        const s = scorePlacement(bb) + d * 0.3 + cardinalPenalty;   // prefer closer
+        const s = scorePlacement(bb) + d * 0.3;
         if (s < bestScore) { bestScore = s; best = { dx, dy, anchor: dir.anchor, bb }; }
-        if (bestScore <= dists[0] * 0.3) break search;
+      }
+    } else {
+      search:
+      for (const d of dists) {
+        for (const dir of dirs) {
+          const dx = dir.ux * d, dy = dir.uy * d;
+          const bb = labelRect(station.px + dx, station.py + dy, tw, dir.anchor);
+          // Merged stations: penalize cardinal directions so leader lines spread apart
+          const cardinalPenalty = station.dots.length > 1 && (dir.ux === 0 || dir.uy === 0) ? 20 : 0;
+          const s = scorePlacement(bb) + d * 0.3 + cardinalPenalty;   // prefer closer
+          if (s < bestScore) { bestScore = s; best = { dx, dy, anchor: dir.anchor, bb }; }
+          if (bestScore <= dists[0] * 0.3) break search;
+        }
       }
     }
 
@@ -311,21 +329,15 @@ function renderStations(stationsGroup, stations, projection, geojson) {
       .attr('transform', `translate(${station.px},${station.py})`);
 
     // Render dots and leader lines (one per dot position)
-    const LEADER_THRESHOLD = 4;
     for (const dot of station.dots) {
       const dotCx = dot.px - station.px;
       const dotCy = dot.py - station.py;
 
-      // Leader line from label toward this dot
-      const ldx = dx - dotCx, ldy = dy - dotCy;
-      const len = Math.sqrt(ldx * ldx + ldy * ldy);
-      if (len > LEADER_THRESHOLD) {
-        const nx = ldx / len, ny = ldy / len;
-        g.append('line')
-          .attr('class', 'station-leader')
-          .attr('x1', dotCx + nx * DOT_R).attr('y1', dotCy + ny * DOT_R)
-          .attr('x2', dx - nx * 0.3).attr('y2', dy - ny * 0.3);
-      }
+      // Leader line from dot center to label anchor
+      g.append('line')
+        .attr('class', 'station-leader')
+        .attr('x1', dotCx).attr('y1', dotCy)
+        .attr('x2', dx).attr('y2', dy);
 
       g.append('circle')
         .attr('class', 'station-dot')
