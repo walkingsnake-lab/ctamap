@@ -162,7 +162,7 @@ async function fetchTrains() {
  *
  * prevTrainMap: Map<rn, previousTrainObject> from before this refresh.
  */
-function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
+function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminals) {
   const now = Date.now();
   const kph = d => `~${Math.round(d * 111000 * 3.6 / (REFRESH_INTERVAL / 1000))}km/h`;
 
@@ -191,6 +191,21 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
     // Fall back to heading-based detection only for brand-new trains with no prior state.
     if (prev && prev._direction !== undefined) {
       train._direction = prev._direction;
+    } else if (train.legend === 'YL' && lineTerminals && lineTerminals.YL && train.destNm) {
+      // Yellow line reports inverted headings for new trains; derive direction by walking
+      // to both terminal dead-ends and picking the one that matches the destination.
+      // "Skokie" is the northern terminus (higher lat); "Howard" is the southern one.
+      const termFwd = advanceOnTrack(train._trackPos, 9999, +1, segs);
+      const termBwd = advanceOnTrack(train._trackPos, 9999, -1, segs);
+      if (termFwd.stopped && termBwd.stopped) {
+        const destIsNorth = train.destNm.includes('Skokie');
+        const northIsForward = termFwd.lat > termBwd.lat;
+        train._direction = (destIsNorth === northIsForward) ? 1 : -1;
+      } else {
+        train._direction = directionFromHeading(
+          train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+        );
+      }
     } else {
       train._direction = directionFromHeading(
         train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
