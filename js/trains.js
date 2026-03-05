@@ -64,6 +64,19 @@ function generateDummyTrains(geojson) {
   return trains;
 }
 
+// Lines where the CTA API reports unreliable headings for new trains.
+// For these lines, initial direction is derived by walking to both terminal
+// dead-ends and comparing latitudes against the destination name, rather than
+// trusting the heading field.  The 'northDest' value is the substring that
+// identifies the destination corresponding to the northern terminus.
+// Only non-Loop lines should be listed here: Loop-navigating trains (BR, GR,
+// OR, PK, PR) need heading-based detection because _direction can go stale
+// when crossing segment boundaries where geometry direction flips.
+const UNRELIABLE_HEADING_LINES = {
+  YL: { northDest: 'Skokie' },
+  BL: { northDest: 'O\'Hare' },
+};
+
 /**
  * Collects all coordinate arrays from GeoJSON features matching a legend code.
  * Returns array of line-strings (each is an array of [lon, lat] pairs).
@@ -191,14 +204,15 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // Fall back to heading-based detection only for brand-new trains with no prior state.
     if (prev && prev._direction !== undefined) {
       train._direction = prev._direction;
-    } else if (train.legend === 'YL' && lineTerminals && lineTerminals.YL && train.destNm) {
-      // Yellow line reports inverted headings for new trains; derive direction by walking
-      // to both terminal dead-ends and picking the one that matches the destination.
-      // "Skokie" is the northern terminus (higher lat); "Howard" is the southern one.
+    } else if (UNRELIABLE_HEADING_LINES[train.legend] && lineTerminals?.[train.legend] && train.destNm) {
+      // For lines with unreliable CTA headings, derive initial direction by walking to
+      // both terminal dead-ends and using the destination name to identify which terminal
+      // the train is heading toward (northDest = the destination at the northern terminus).
+      const { northDest } = UNRELIABLE_HEADING_LINES[train.legend];
       const termFwd = advanceOnTrack(train._trackPos, 9999, +1, segs);
       const termBwd = advanceOnTrack(train._trackPos, 9999, -1, segs);
       if (termFwd.stopped && termBwd.stopped) {
-        const destIsNorth = train.destNm.includes('Skokie');
+        const destIsNorth = train.destNm.includes(northDest);
         const northIsForward = termFwd.lat > termBwd.lat;
         train._direction = (destIsNorth === northIsForward) ? 1 : -1;
       } else {
@@ -285,10 +299,11 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // Comparing _corrDirection to a stale _direction misclassifies forward Loop-exit
           // corrections as backward and holds the train for 5 polls unnecessarily.
           // Use API heading to classify the correction direction, EXCEPT for lines
-          // where heading is known unreliable (YL). For those, use the validated
-          // stored direction instead — it's safe because YL has no Loop segment
-          // crossings that would make _direction stale.
-          const _headingDirFromPos = (train.legend === 'YL')
+          // where heading is known unreliable (UNRELIABLE_HEADING_LINES). For those,
+          // use the validated stored direction instead — safe because none of these
+          // lines navigate the elevated Loop where segment geometry flips would make
+          // _direction stale between polls.
+          const _headingDirFromPos = UNRELIABLE_HEADING_LINES[train.legend]
             ? (prev._direction !== undefined ? prev._direction : train._direction)
             : directionFromHeading(
                 train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
