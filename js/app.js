@@ -93,9 +93,21 @@
   let stationsVisible = false;
   renderStations(svg.select('.stations-layer'), stations, projection, geojson);
 
+  function scaleStationDots(k) {
+    if (!stationsVisible) return;
+    const dotScale = 1 / Math.pow(k, 0.5);
+    svg.selectAll('.station-dot').each(function () {
+      const el = d3.select(this);
+      const baseR = parseFloat(el.attr('data-base-r'));
+      el.attr('r', baseR * dotScale);
+    });
+  }
+
   function toggleStations() {
     stationsVisible = !stationsVisible;
     svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
+    // Scale dots to current zoom level when toggled on
+    scaleStationDots(d3.zoomTransform(svgEl).k);
   }
 
   // Create train layer on top (inside the zoom container)
@@ -552,14 +564,7 @@
       svg.selectAll('.train-arrow').attr('d', sap);
 
       // Scale station dots to match line width at every zoom level
-      if (stationsVisible) {
-        const dotScale = 1 / Math.pow(currentK, 0.5);
-        svg.selectAll('.station-dot').each(function () {
-          const el = d3.select(this);
-          const baseR = parseFloat(el.attr('data-base-r'));
-          el.attr('r', baseR * dotScale);
-        });
-      }
+      scaleStationDots(currentK);
     }
 
     svg.select('.trains-layer').selectAll('.train-group')
@@ -569,10 +574,14 @@
         const g = d3.select(this);
         g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
+        // Check if train is at a line terminus (reused for arrows + heading)
+        const termPts = lineTerminals[d.legend] || [];
+        const atTerminus = termPts.some(t => geoDist(d.lon, d.lat, t.lon, t.lat) < 0.003);
+
         // Animate direction triangles: steady stream flowing along the track
         const segs = lineSegments[d.legend];
         const showArrows = d.rn === selectedTrainRn
-          && d._trackPos && segs;
+          && d._trackPos && segs && !atTerminus;
 
         if (showArrows) {
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
@@ -659,8 +668,6 @@
 
         }
         // Hide heading triangle when stations aren't visible or train is at a line terminus
-        const termPts = lineTerminals[d.legend] || [];
-        const atTerminus = termPts.some(t => geoDist(d.lon, d.lat, t.lon, t.lat) < 0.003);
         headingEl.style('opacity', stationsVisible && !atTerminus ? 1 : 0);
       });
 
