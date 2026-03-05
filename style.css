@@ -253,6 +253,17 @@ body {
   color: rgba(255, 255, 255, 1);
 }
 
+.tl-delayed {
+  font-size: 28px;
+  color: rgba(255, 180, 60, 0.9);
+}
+
+.tl-limited {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+
 @keyframes line-in {
   0%   { opacity: 0; transform: translateY(6px); }
   100% { opacity: 1; transform: translateY(0); }

@@ -290,10 +290,22 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap) {
               train._trackPos = { ...train._corrToTrackPos };
               train.lon = train._corrToTrackPos.lon;
               train.lat = train._corrToTrackPos.lat;
+              // Prefer to gate the direction update on the API heading agreeing with
+              // the confirmed movement — that covers genuine reversals while leaving
+              // API overshoot-corrections intact.
+              // However, if _backwardHoldCount has grown to 5× the confirmation
+              // threshold without ever clearing, the heading is almost certainly
+              // stale/bad (e.g. train appeared with wrong heading and no ETA data).
+              // A real API oscillation resets the count to 0 when the position
+              // stabilises and forward movement resumes, so it never accumulates
+              // this high. At 5× we trust the sustained empirical movement instead.
               const headingDir = directionFromHeading(
                 train.heading, train._corrToTrackPos.segIdx, train._corrToTrackPos.ptIdx, segs
               );
-              if (headingDir === train._corrDirection) train._direction = train._corrDirection;
+              if (headingDir === train._corrDirection ||
+                  train._backwardHoldCount >= 5 * BACKWARD_CONFIRM_POLLS) {
+                train._direction = train._corrDirection;
+              }
               console.log(`[CTA] Backward confirmed (snap): rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${(drift * 111000).toFixed(0)}m ${kph(drift)} after ${train._backwardHoldCount} polls`);
             }
           } else if (isSuspectForward) {
