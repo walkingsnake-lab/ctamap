@@ -284,9 +284,15 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // navigating the Loop where adjacent segments run in opposite geometry directions).
           // Comparing _corrDirection to a stale _direction misclassifies forward Loop-exit
           // corrections as backward and holds the train for 5 polls unnecessarily.
-          const _headingDirFromPos = directionFromHeading(
-            train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
-          );
+          // Use API heading to classify the correction direction, EXCEPT for lines
+          // where heading is known unreliable (YL). For those, use the validated
+          // stored direction instead — it's safe because YL has no Loop segment
+          // crossings that would make _direction stale.
+          const _headingDirFromPos = (train.legend === 'YL')
+            ? (prev._direction !== undefined ? prev._direction : train._direction)
+            : directionFromHeading(
+                train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
+              );
           const isSuspectBackward = _headingDirFromPos !== train._corrDirection;
           const isSuspectForward  = !isSuspectBackward && drift > FORWARD_PLAUSIBLE_DIST;
 
