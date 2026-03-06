@@ -137,7 +137,6 @@
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
 
   // ---- Initialize trains ----
-  let dummyTrains = null;
   let realTrains = null;
   let retiringTrains = [];
 
@@ -145,10 +144,7 @@
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
     initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations);
-    console.log(`[CTA] Using REAL train data (${realTrains.length} trains)`);
-  } else {
-    dummyTrains = generateDummyTrains(geojson);
-    console.log(`[CTA] Using DUMMY train data (${dummyTrains.length} trains)`);
+    console.log(`[CTA] Loaded ${realTrains.length} trains`);
   }
 
   // ---- Heading → SVG rotation ----
@@ -161,7 +157,7 @@
 
   // ---- Render trains (DOM management only — positions handled by animation loop) ----
   function renderTrains() {
-    const allTrains = (realTrains || dummyTrains || []).concat(retiringTrains);
+    const allTrains = (realTrains || []).concat(retiringTrains);
     const layer = svg.select('.trains-layer');
 
     const groups = layer.selectAll('.train-group')
@@ -512,11 +508,6 @@
     // Cap dt to prevent huge jumps when tab returns from background
     if (dt > 100) dt = 16;
 
-    // Advance dummy trains
-    if (dummyTrains) {
-      advanceDummyTrains(dummyTrains, geojson, dt);
-    }
-
     // Advance real trains (correction slides on refresh, then sit still)
     if (realTrains) {
       advanceRealTrains(realTrains, lineSegments, dt);
@@ -809,7 +800,6 @@
         }
 
         realTrains = fetched;
-        dummyTrains = null;
 
         // Initialize track position and drift correction
         initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations);
@@ -860,13 +850,9 @@
           }
         }
 
-        console.log(`[CTA] Refreshed REAL train data (${realTrains.length} trains)`);
+        console.log(`[CTA] Refreshed train data (${realTrains.length} trains)`);
 
         // Update DOM (enter/exit management)
-        renderTrains();
-      } else if (!realTrains && !dummyTrains) {
-        dummyTrains = generateDummyTrains(geojson);
-        console.log(`[CTA] Refresh failed, falling back to DUMMY data (${dummyTrains.length} trains)`);
         renderTrains();
       }
     }, REFRESH_INTERVAL);
@@ -951,10 +937,6 @@
         svg.call(zoom.transform, d3.zoomIdentity);
       }
 
-      // Re-generate dummy trains if using them (segments may differ after reproject)
-      if (!realTrains) {
-        dummyTrains = generateDummyTrains(geojson);
-      }
       renderTrains();
     }, 200);
   });
