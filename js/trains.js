@@ -266,7 +266,19 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // CTA heading field (some lines, e.g. Yellow/Orange loop exit, report wrong headings).
     // Fall back to heading-based detection only for brand-new trains with no prior state.
     if (prev && prev._direction !== undefined) {
-      train._direction = prev._direction;
+      if (UNRELIABLE_HEADING_LINES[train.legend]
+          && prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx
+          && lineTerminals?.[train.legend] && train.destNm) {
+        // Re-derive direction when segment changes for lines with unreliable headings.
+        // _direction is segment-relative and becomes stale when geometry direction flips
+        // at segment boundaries (e.g. BL at Loomis Junction where Forest Park branch
+        // segments run west→east but the approach segments run east→west).
+        const { northDest } = UNRELIABLE_HEADING_LINES[train.legend];
+        train._direction = directionByTerminalWalk(train._trackPos, train.destNm, northDest, segs)
+          ?? prev._direction;
+      } else {
+        train._direction = prev._direction;
+      }
     } else if (UNRELIABLE_HEADING_LINES[train.legend] && lineTerminals?.[train.legend] && train.destNm) {
       // For lines with unreliable CTA headings, derive initial direction via terminal walk.
       const { northDest } = UNRELIABLE_HEADING_LINES[train.legend];
@@ -385,11 +397,13 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // corrections as backward and holds the train for 5 polls unnecessarily.
           // Use API heading to classify the correction direction, EXCEPT for lines
           // where heading is known unreliable (UNRELIABLE_HEADING_LINES). For those,
-          // use the validated stored direction instead — safe because none of these
-          // lines navigate the elevated Loop where segment geometry flips would make
-          // _direction stale between polls.
-          const _headingDirFromPos = UNRELIABLE_HEADING_LINES[train.legend]
-            ? (prev._direction !== undefined ? prev._direction : train._direction)
+          // derive direction at corrFromTrackPos via terminal walk so the comparison
+          // is in the same segment-relative frame as _corrDirection. Using the stored
+          // prev._direction is unsafe when segments have different geometry orientations
+          // (e.g. BL at Loomis Junction where Forest Park branch segments flip direction).
+          const _headingDirFromPos = (UNRELIABLE_HEADING_LINES[train.legend] && train.destNm)
+            ? (directionByTerminalWalk(train._corrFromTrackPos, train.destNm,
+                UNRELIABLE_HEADING_LINES[train.legend].northDest, segs) ?? train._direction)
             : directionFromHeading(
                 train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
               );
