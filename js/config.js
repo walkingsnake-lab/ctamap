@@ -85,7 +85,7 @@ const KNOWN_PHANTOM_JUMPS = [
   { legend: 'PR', fromStations: ['Wilson'], toStations: ['Howard'],
     description: 'Purple Express Wilson → Howard phantom' },
 
-  // Blue Line — Harlem/Cumberland/Jefferson Park corridor (user identified + logs)
+  // Blue Line - Harlem/Cumberland/Jefferson Park corridor (user identified + logs)
   { legend: 'BL', fromStations: ['Harlem', 'Cumberland'], toStations: ['Jefferson Park'],
     description: 'Blue Line Harlem/Cumberland → Jefferson Park phantom' },
   { legend: 'BL', fromStations: ['Jefferson Park', 'Cumberland'], toStations: ['Harlem'],
@@ -99,7 +99,7 @@ const KNOWN_PHANTOM_JUMPS = [
   { legend: 'BL', fromStations: ['Rosemont'], toStations: ["O'Hare Airport"],
     description: "Blue Line Rosemont → O'Hare phantom" },
 
-  // Green Line — 35th/Bronzeville corridor (from logs, 6.5km snap-range jump)
+  // Green Line - 35th/Bronzeville corridor (from logs, 6.5km snap-range jump)
   { legend: 'GR', fromStations: ['35-Bronzeville-IIT'], toStations: ['Cottage Grove'],
     description: 'Green Line 35-Bronzeville-IIT → Cottage Grove phantom' },
   { legend: 'GR', fromStations: ['Cottage Grove'], toStations: ['35-Bronzeville-IIT'],
