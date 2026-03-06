@@ -107,6 +107,10 @@ const KNOWN_PHANTOM_JUMPS = [
   { legend: 'GR', fromStations: ['35-Bronzeville-IIT', 'Cermak-McCormick Place'],
     toStations: ['Cottage Grove', 'King Drive'],
     description: 'Green Line 35th area → Cottage Grove branch phantom' },
+  { legend: 'GR', fromStations: ['Roosevelt'], toStations: ['Cermak-McCormick Place'],
+    description: 'Green Line Roosevelt → Cermak-McCormick Place phantom' },
+  { legend: 'GR', fromStations: ['Cermak-McCormick Place'], toStations: ['Roosevelt'],
+    description: 'Green Line Cermak-McCormick Place → Roosevelt phantom' },
 
   // Red Line — Fullerton / North/Clybourn subway portal gap (user identified)
   { legend: 'RD', fromStations: ['Fullerton'], toStations: ['North/Clybourn'],
