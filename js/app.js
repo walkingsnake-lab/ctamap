@@ -581,7 +581,7 @@
         // Animate direction triangles: steady stream flowing along the track
         const segs = lineSegments[d.legend];
         const showArrows = d.rn === selectedTrainRn
-          && d._trackPos && segs && !atTerminus;
+          && d._trackPos && segs;
 
         if (showArrows) {
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
@@ -648,6 +648,8 @@
         dotEl.attr('r', scaledRadius);
         g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
+        const headingScale = dotScale / Math.pow(currentK, 0.4);
+        let headingVisible = stationsVisible && !atTerminus;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? d._corrDirection : d._direction) || 1;
           const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs);
@@ -658,17 +660,24 @@
             if (hdx !== 0 || hdy !== 0) {
               const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
               dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-              headingEl.attr('transform', `rotate(${angle}) scale(${dotScale / Math.pow(currentK, 0.4)})`);
+              headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
+            } else {
+              // At terminus — advanceOnTrack stopped, can't determine direction.
+              // Update scale so it stays in sync with zoom; hide via opacity below.
+              dotEl.attr('transform', `scale(${dotScale})`);
+              headingEl.attr('transform', `scale(${headingScale})`);
+              headingVisible = false;
             }
           }
         } else if (d.heading !== undefined) {
           const angle = headingToSVGAngle(d.heading);
           dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-          headingEl.attr('transform', `rotate(${angle}) scale(${dotScale / Math.pow(currentK, 0.4)})`);
-
+          headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
+        } else {
+          dotEl.attr('transform', `scale(${dotScale})`);
+          headingEl.attr('transform', `scale(${headingScale})`);
         }
-        // Hide heading triangle when stations aren't visible or train is at a line terminus
-        headingEl.style('opacity', stationsVisible && !atTerminus ? 1 : 0);
+        headingEl.style('opacity', headingVisible ? 1 : 0);
       });
 
     // Camera tracking / zoom-in animation for selected train
