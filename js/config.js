@@ -107,6 +107,12 @@ const KNOWN_PHANTOM_JUMPS = [
   { legend: 'GR', fromStations: ['35-Bronzeville-IIT', 'Cermak-McCormick Place'],
     toStations: ['Cottage Grove', 'King Drive'],
     description: 'Green Line 35th area → Cottage Grove branch phantom' },
+
+  // Red Line — Fullerton / North/Clybourn subway portal gap (user identified)
+  { legend: 'RD', fromStations: ['Fullerton'], toStations: ['North/Clybourn'],
+    description: 'Red Line Fullerton → North/Clybourn phantom' },
+  { legend: 'RD', fromStations: ['North/Clybourn'], toStations: ['Fullerton'],
+    description: 'Red Line North/Clybourn → Fullerton phantom' },
 ];
 
 // Destination + line combos that use inverted badge (white bg, colored text)
