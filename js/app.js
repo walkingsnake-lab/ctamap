@@ -591,6 +591,13 @@
           const behindDist = 0.005; // start this far behind the dot
           const totalDist = 0.010;  // total travel distance (behind + ahead)
 
+          // Target hint for junction selection: when correcting, the correction
+          // target guides arrows toward the correct segment at Loop junctions
+          // (where arrival-direction alignment would pick the wrong branch).
+          const arrowTarget = d._corrToTrackPos
+            ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
+            : undefined;
+
           for (let i = 0; i < 6; i++) {
             const arrow = g.select(`.train-arrow-${i}`);
             const phase = (d._arrowPhase + i / 6) % 1;
@@ -599,7 +606,7 @@
 
             // Advance along track; negative = behind dot
             const advDir = dist >= 0 ? dir : -dir;
-            const advPos = advanceOnTrack(d._trackPos, Math.abs(dist), advDir, segs);
+            const advPos = advanceOnTrack(d._trackPos, Math.abs(dist), advDir, segs, arrowTarget);
             const advPt = projection([advPos.lon, advPos.lat]);
 
             if (advPt) {
@@ -615,7 +622,7 @@
               // because we arrived by going backward; -advPos.direction is the
               // train's forward direction from that position.
               const lookAheadDir = dist >= 0 ? advPos.direction : -advPos.direction;
-              const aheadPos = advanceOnTrack(advPos, 0.0005, lookAheadDir, segs);
+              const aheadPos = advanceOnTrack(advPos, 0.0005, lookAheadDir, segs, arrowTarget);
               const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
               let angle = 0;
               if (aheadPt) {
@@ -652,7 +659,10 @@
         let headingVisible = stationsVisible && !atTerminus;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? d._corrDirection : d._direction) || 1;
-          const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs);
+          const headingTarget = d._corrToTrackPos
+            ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
+            : undefined;
+          const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs, headingTarget);
           const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
           if (aheadPt) {
             const hdx = aheadPt[0] - pt[0];

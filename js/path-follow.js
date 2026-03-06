@@ -222,12 +222,17 @@ function directionFromHeading(heading, segIdx, ptIdx, segments) {
  * direction: +1 = forward along segment points, -1 = backward.
  * Handles crossing segment boundaries by finding nearby connected segments.
  * Returns new { segIdx, ptIdx, t, lon, lat, stopped }.
+ *
+ * Optional opts.targetLon / opts.targetLat: forwarded to findConnectedSegment
+ * to guide junction selection toward a known destination (see that function's
+ * doc for details).
  */
-function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
+function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
   let { segIdx, ptIdx, t } = trackPos;
   let remaining = distanceDeg;
   let dir = direction; // Mutable — updated when entering a new segment
   const seg = segments[segIdx];
+  const tLon = opts?.targetLon, tLat = opts?.targetLat;
 
   if (!seg) return { ...trackPos, direction: dir, stopped: true };
 
@@ -254,7 +259,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
         t = 0;
         if (ptIdx >= curSeg.length - 1) {
           // Try next segment
-          const next = findConnectedSegment(segIdx, ptIdx, curSeg, dir, segments);
+          const next = findConnectedSegment(segIdx, ptIdx, curSeg, dir, segments, tLon, tLat);
           if (!next) return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: bx, lat: by, direction: dir, stopped: true };
           segIdx = next.segIdx;
           ptIdx = next.ptIdx;
@@ -265,7 +270,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
         ptIdx--;
         t = 1;
         if (ptIdx < 0) {
-          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments);
+          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments, tLon, tLat);
           if (!next) return { segIdx, ptIdx: 0, t: 0, lon: ax, lat: ay, direction: dir, stopped: true };
           segIdx = next.segIdx;
           ptIdx = next.ptIdx;
@@ -287,7 +292,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
         t = 0;
         if (ptIdx >= curSeg.length - 1) {
           // Crossed segment boundary — find the next connected one
-          const next = findConnectedSegment(segIdx, curSeg.length - 1, curSeg, dir, segments);
+          const next = findConnectedSegment(segIdx, curSeg.length - 1, curSeg, dir, segments, tLon, tLat);
           if (!next) {
             // Terminal — stop at end
             const last = curSeg[curSeg.length - 1];
@@ -309,7 +314,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments) {
         ptIdx--;
         t = 1;
         if (ptIdx < 0) {
-          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments);
+          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments, tLon, tLat);
           if (!next) {
             const first = curSeg[0];
             return { segIdx, ptIdx: 0, t: 0, lon: first[0], lat: first[1], direction: dir, stopped: true };
@@ -351,9 +356,10 @@ function trackDistanceBetween(from, to, direction, segments) {
   let pos = from;
   let totalDist = 0;
   let prevDistToTarget = straightDist;
+  const targetHint = { targetLon: to.lon, targetLat: to.lat };
 
   for (let i = 0; i < 2000; i++) {
-    const newPos = advanceOnTrack(pos, step, direction, segments);
+    const newPos = advanceOnTrack(pos, step, direction, segments, targetHint);
     totalDist += step;
 
     const distToTarget = geoDist(newPos.lon, newPos.lat, to.lon, to.lat);
@@ -383,16 +389,20 @@ function trackDistanceBetween(from, to, direction, segments) {
  * Finds a connected segment when the train reaches the end (or start) of its current segment.
  * Searches for segments with an endpoint close to the boundary point.
  * Returns { segIdx, ptIdx, t } for the new segment, or null if terminal.
+ *
+ * Optional targetLon/targetLat: when provided, ties between equidistant candidate
+ * segments are broken by preferring the one whose exit direction points toward the
+ * target.  This guides junction selection at the downtown Loop where multiple ML
+ * segments meet and the arrival-direction heuristic picks the wrong branch.
  */
-function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segments) {
+function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segments, targetLon, targetLat) {
   const bx = curSeg[boundaryPtIdx][0];
   const by = curSeg[boundaryPtIdx][1];
   const threshold = SEGMENT_CONNECT_THRESHOLD;
   // When two candidates are within TIE_EPS of each other in distance (e.g. two
   // segments sharing the same junction point), break the tie by preferring the
-  // one whose entry direction best aligns with the current direction of travel.
-  // This handles shared-track junctions like the Loop exit where both the
-  // loop-continuation segment and the branch-off segment start at the same point.
+  // one whose entry direction best aligns with the current direction of travel
+  // (or toward the target, when one is provided).
   const TIE_EPS = threshold * 0.01;
 
   // Arrival direction vector: from the second-to-last traversed point to the boundary.
@@ -403,6 +413,13 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
     ? bx - curSeg[prevIdx][0] : 0;
   const arrDy = prevIdx >= 0 && prevIdx < curSeg.length
     ? by - curSeg[prevIdx][1] : 0;
+
+  // When a target is provided, prefer the segment whose exit direction points
+  // toward it.  This overrides the arrival-alignment heuristic at junctions like
+  // the downtown Loop entry where the correct segment requires a sharp turn.
+  const hasTarget = targetLon !== undefined && targetLat !== undefined;
+  const toTargetDx = hasTarget ? targetLon - bx : 0;
+  const toTargetDy = hasTarget ? targetLat - by : 0;
 
   let bestDist = Infinity;
   let bestDot  = -Infinity;
@@ -416,7 +433,11 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
     // Check start of segment — enter moving forward
     const d0 = geoDist(bx, by, seg[0][0], seg[0][1]);
     if (d0 < threshold) {
-      const dot = arrDx * (seg[1][0] - seg[0][0]) + arrDy * (seg[1][1] - seg[0][1]);
+      const exitDx = seg[1][0] - seg[0][0];
+      const exitDy = seg[1][1] - seg[0][1];
+      const dot = hasTarget
+        ? exitDx * toTargetDx + exitDy * toTargetDy
+        : arrDx * exitDx + arrDy * exitDy;
       if (d0 < bestDist - TIE_EPS || (d0 < bestDist + TIE_EPS && dot > bestDot)) {
         bestDist = d0;
         bestDot  = dot;
@@ -428,7 +449,11 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
     const last = seg.length - 1;
     const dN = geoDist(bx, by, seg[last][0], seg[last][1]);
     if (dN < threshold) {
-      const dot = arrDx * (seg[last - 1][0] - seg[last][0]) + arrDy * (seg[last - 1][1] - seg[last][1]);
+      const exitDx = seg[last - 1][0] - seg[last][0];
+      const exitDy = seg[last - 1][1] - seg[last][1];
+      const dot = hasTarget
+        ? exitDx * toTargetDx + exitDy * toTargetDy
+        : arrDx * exitDx + arrDy * exitDy;
       if (dN < bestDist - TIE_EPS || (dN < bestDist + TIE_EPS && dot > bestDot)) {
         bestDist = dN;
         bestDot  = dot;

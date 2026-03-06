@@ -101,29 +101,26 @@ function matchesKnownPhantomJump(legend, prevLon, prevLat, newLon, newLat, stati
   return null;
 }
 
-// Lines where the CTA API reports unreliable headings for new trains.
-// For these lines, initial direction is derived by walking to both terminal
-// dead-ends and comparing latitudes against the destination name, rather than
-// trusting the heading field.  The 'northDest' value is the substring that
-// identifies the destination corresponding to the northern terminus.
-// Only non-Loop lines should be listed here: Loop-navigating trains (BR, GR,
-// OR, PK, PR) need heading-based detection because _direction can go stale
-// when crossing segment boundaries where geometry direction flips.
-const UNRELIABLE_HEADING_LINES = {
-  YL: { northDest: 'Skokie' },
-  BL: { northDest: 'O\'Hare' },
-};
-
-// Lines where smooth corrections that cross the ML-Loop → own-line boundary always
-// fail path validation: trackDistanceBetween detects an increasing distance when the
-// internal direction flips on the new segment and bails early with straightDist,
-// causing advanceOnTrack(corrFromPos, straightDist, corrDir) to overshoot.
-// After that failure, directionFromHeading is called at the snapped position with a
-// heading that is still stale from the Loop — producing the wrong direction arrow.
-// For these lines, use a terminal walk at the snapped position instead.
-// northDest: substring of destNm that identifies the northern terminus.
-const LOOP_EXIT_DIRECTION_LINES = {
-  OR: { northDest: 'Loop' },
+// Per-line destination substring that identifies the "northern" (higher-latitude)
+// terminus.  Used by directionByTerminalWalk to convert a destination name into a
+// segment-relative direction:  walk to both dead-ends, compare latitudes, and check
+// whether the destination matches the northern one.
+//
+// Every line is listed here so that direction re-derivation on segment change,
+// suspect-backward classification, and path-validation fallbacks all use the same
+// unified config.  Previously this was split across two special-case configs
+// (UNRELIABLE_HEADING_LINES for BL/YL, LOOP_EXIT_DIRECTION_LINES for OR); those
+// are no longer needed because the terminal-walk-then-heading-fallback approach is
+// now applied to ALL lines on every segment change.
+const LINE_NORTH_DESTS = {
+  RD: 'Howard',
+  BL: 'O\'Hare',
+  BR: 'Kimball',
+  GR: 'Harlem',
+  OR: 'Loop',
+  PK: 'Loop',
+  PR: 'Linden',
+  YL: 'Skokie',
 };
 
 /**
@@ -262,28 +259,28 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // Drift correction: smoothly slide from old visual position to new API position
     const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
 
-    // Preserve previously validated direction rather than re-deriving from the unreliable
-    // CTA heading field (some lines, e.g. Yellow/Orange loop exit, report wrong headings).
-    // Fall back to heading-based detection only for brand-new trains with no prior state.
+    // _direction is segment-relative (+1 = forward along point order, -1 = backward).
+    // It becomes stale whenever the train crosses a segment boundary whose geometry runs
+    // in the opposite orientation (e.g. BL at Loomis Junction, OR entering/exiting the
+    // ML loop).  Re-derive on every segment change using a terminal walk when possible;
+    // fall back to the CTA heading for positions on the ML loop where neither walk
+    // reaches a dead-end (the loop connects back to itself).
+    const northDest = LINE_NORTH_DESTS[train.legend];
     if (prev && prev._direction !== undefined) {
-      if (UNRELIABLE_HEADING_LINES[train.legend]
-          && prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx
-          && lineTerminals?.[train.legend] && train.destNm) {
-        // Re-derive direction when segment changes for lines with unreliable headings.
-        // _direction is segment-relative and becomes stale when geometry direction flips
-        // at segment boundaries (e.g. BL at Loomis Junction where Forest Park branch
-        // segments run west→east but the approach segments run east→west).
-        const { northDest } = UNRELIABLE_HEADING_LINES[train.legend];
-        train._direction = directionByTerminalWalk(train._trackPos, train.destNm, northDest, segs)
-          ?? prev._direction;
+      if (prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx
+          && northDest && train.destNm) {
+        // Segment changed — re-derive via terminal walk to avoid stale direction.
+        const termDir = directionByTerminalWalk(train._trackPos, train.destNm, northDest, segs);
+        train._direction = termDir ?? directionFromHeading(
+          train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+        );
       } else {
         train._direction = prev._direction;
       }
-    } else if (UNRELIABLE_HEADING_LINES[train.legend] && lineTerminals?.[train.legend] && train.destNm) {
-      // For lines with unreliable CTA headings, derive initial direction via terminal walk.
-      const { northDest } = UNRELIABLE_HEADING_LINES[train.legend];
-      const termWalkDir = directionByTerminalWalk(train._trackPos, train.destNm, northDest, segs);
-      train._direction = termWalkDir ?? directionFromHeading(
+    } else if (northDest && train.destNm) {
+      // New train — try terminal walk first, fall back to heading.
+      const termDir = directionByTerminalWalk(train._trackPos, train.destNm, northDest, segs);
+      train._direction = termDir ?? directionFromHeading(
         train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
       );
     } else {
@@ -359,19 +356,21 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
         // Purple Express hop to Wilson that then snaps back to Howard).
         // In that case, snap directly and re-derive direction from the API heading.
         const _corrPathEnd = advanceOnTrack(
-          train._corrFromTrackPos, train._corrTotalDist, train._corrDirection, segs
+          train._corrFromTrackPos, train._corrTotalDist, train._corrDirection, segs,
+          { targetLon: toPos.lon, targetLat: toPos.lat }
         );
         if (geoDist(_corrPathEnd.lon, _corrPathEnd.lat, toPos.lon, toPos.lat) > drift * 0.5) {
-          // Path validation failed — most commonly a Loop-exit correction where
-          // trackDistanceBetween bails when the ML→own-line segment crossing inverts
+          // Path validation failed — commonly a Loop-entry/exit correction where
+          // trackDistanceBetween bails when the ML↔own-line segment crossing inverts
           // the direction, causing the validation walk to overshoot.
-          // For known Loop-exit lines, use terminal walk + destination name at the
-          // snapped position; the heading may still reflect a stale Loop heading.
-          const loopExitCfg = LOOP_EXIT_DIRECTION_LINES[train.legend];
-          const termWalkDir = (loopExitCfg && train.destNm)
-            ? directionByTerminalWalk(train._trackPos, train.destNm, loopExitCfg.northDest, segs)
+          // Try terminal walk at the snapped position (reliable on non-loop segments);
+          // fall back to heading for positions on the ML loop where terminal walk
+          // returns null (forward walk circles the loop without stopping).
+          const _pvNorthDest = LINE_NORTH_DESTS[train.legend];
+          const _pvTermDir = (_pvNorthDest && train.destNm)
+            ? directionByTerminalWalk(train._trackPos, train.destNm, _pvNorthDest, segs)
             : null;
-          train._direction = termWalkDir ?? directionFromHeading(
+          train._direction = _pvTermDir ?? directionFromHeading(
             train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
           );
           // Leave _correcting = false — train stays at API-snapped position.
@@ -389,21 +388,18 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           //   (b) a forward correction beyond FORWARD_PLAUSIBLE_DIST — almost always a
           //       phantom position injected by the schedule-projection system without isSch=1.
           //
-          // Use the API heading (directionFromHeading) rather than stored _direction to
-          // classify the correction.  _direction is relative to whatever segment it was
-          // last set on; it becomes stale when the train crosses segment boundaries (e.g.
-          // navigating the Loop where adjacent segments run in opposite geometry directions).
-          // Comparing _corrDirection to a stale _direction misclassifies forward Loop-exit
-          // corrections as backward and holds the train for 5 polls unnecessarily.
-          // Use API heading to classify the correction direction, EXCEPT for lines
-          // where heading is known unreliable (UNRELIABLE_HEADING_LINES). For those,
-          // derive direction at corrFromTrackPos via terminal walk so the comparison
-          // is in the same segment-relative frame as _corrDirection. Using the stored
-          // prev._direction is unsafe when segments have different geometry orientations
-          // (e.g. BL at Loomis Junction where Forest Park branch segments flip direction).
-          const _headingDirFromPos = (UNRELIABLE_HEADING_LINES[train.legend] && train.destNm)
+          // Classify the correction as forward or backward by comparing _corrDirection
+          // (empirical, which way gets closer) to the train's expected direction of
+          // travel at corrFromTrackPos.  Use a terminal walk when possible (reliable on
+          // non-loop segments and handles geometry-flip junctions); fall back to the CTA
+          // heading for ML-loop positions where terminal walk returns null.
+          const _sbNorthDest = LINE_NORTH_DESTS[train.legend];
+          const _headingDirFromPos = (_sbNorthDest && train.destNm)
             ? (directionByTerminalWalk(train._corrFromTrackPos, train.destNm,
-                UNRELIABLE_HEADING_LINES[train.legend].northDest, segs) ?? train._direction)
+                _sbNorthDest, segs)
+              ?? directionFromHeading(
+                train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
+              ))
             : directionFromHeading(
                 train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
               );
@@ -494,19 +490,25 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
             train.lat = prev._animLat;
             console.log(`[CTA] Snap hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} [${train[countKey]}/${confirmPolls}]`);
           } else {
-            // For Loop-exit lines the CTA heading may still reflect the pre-exit
-            // Loop heading; use terminal walk at the snapped position instead.
-            const snapLoopCfg = LOOP_EXIT_DIRECTION_LINES[train.legend];
-            const snapTermDir = (snapLoopCfg && train.destNm)
-              ? directionByTerminalWalk(train._trackPos, train.destNm, snapLoopCfg.northDest, segs)
+            // Re-derive direction at the snapped position.  Terminal walk is
+            // reliable on non-loop segments; fall back to heading for ML-loop
+            // positions (where the CTA heading may still reflect a stale Loop
+            // orientation, but is the only option when terminal walk returns null).
+            const _snapNorthDest = LINE_NORTH_DESTS[train.legend];
+            const _snapTermDir = (_snapNorthDest && train.destNm)
+              ? directionByTerminalWalk(train._trackPos, train.destNm, _snapNorthDest, segs)
               : null;
-            train._direction = snapTermDir ?? directionFromHeading(
+            train._direction = _snapTermDir ?? directionFromHeading(
               train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
             );
             console.warn(`[CTA] Snap confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} after ${train[countKey]} polls`);
           }
         } else {
-          train._direction = directionFromHeading(
+          const _npNorthDest = LINE_NORTH_DESTS[train.legend];
+          const _npTermDir = (_npNorthDest && train.destNm)
+            ? directionByTerminalWalk(train._trackPos, train.destNm, _npNorthDest, segs)
+            : null;
+          train._direction = _npTermDir ?? directionFromHeading(
             train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
           );
           console.warn(`[CTA] Snap: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} — no prior position`);
@@ -591,8 +593,13 @@ function advanceRealTrains(trains, lineSegments, dt) {
         // segment, causing the heading arrow to flip at the moment correction ends.
         // advanceOnTrack follows the same segment topology as the animation, so its
         // endpoint always has a consistent segIdx and direction.
+        // Pass the correction target so junction selection at the downtown Loop
+        // (where multiple ML segments meet) follows the correct branch.
+        const corrTarget = train._corrToTrackPos
+          ? { targetLon: train._corrToTrackPos.lon, targetLat: train._corrToTrackPos.lat }
+          : undefined;
         const finalPos = advanceOnTrack(
-          train._corrFromTrackPos, train._corrTotalDist, train._corrDirection, segs
+          train._corrFromTrackPos, train._corrTotalDist, train._corrDirection, segs, corrTarget
         );
         train._trackPos = finalPos;
         train.lon = finalPos.lon;
@@ -624,8 +631,11 @@ function advanceRealTrains(trains, lineSegments, dt) {
         // Smoothstep easing: accelerate then decelerate
         const t = elapsed / duration;
         const eased = t * t * (3 - 2 * t);
+        const corrTarget = train._corrToTrackPos
+          ? { targetLon: train._corrToTrackPos.lon, targetLat: train._corrToTrackPos.lat }
+          : undefined;
         const pos = advanceOnTrack(
-          train._corrFromTrackPos, eased * train._corrTotalDist, train._corrDirection, segs
+          train._corrFromTrackPos, eased * train._corrTotalDist, train._corrDirection, segs, corrTarget
         );
         train.lon = pos.lon;
         train.lat = pos.lat;
