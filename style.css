@@ -235,14 +235,14 @@ body {
 }
 
 .tl-info {
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 28px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 30px;
   margin-top: 4px;
   text-shadow: 0 0 calc(4px * var(--glow-i, 0)) rgba(255, 255, 255, 0.35);
 }
 
 .tl-status {
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 28px;
   margin-top: -2px;
   text-shadow: 0 0 calc(4px * var(--glow-i, 0)) rgba(255, 255, 255, 0.55);
@@ -255,12 +255,12 @@ body {
 
 .tl-delayed {
   font-size: 20px;
-  color: rgba(255, 180, 60, 0.5);
+  color: rgba(255, 180, 60, 0.7);
 }
 
 .tl-limited {
   font-size: 20px;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 @keyframes line-in {
