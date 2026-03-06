@@ -80,10 +80,10 @@ const PHANTOM_STATION_RADIUS = 0.005;       // degrees (~550m) — proximity thr
 //   description  — human-readable label for console logging
 const KNOWN_PHANTOM_JUMPS = [
   // Purple Express — Wilson area phantoms (user identified)
-  { legend: 'PR', fromStations: ['Wilson'], toStations: ['South Blvd'],
-    description: 'Purple Express Wilson → South Blvd phantom' },
-  { legend: 'PR', fromStations: ['Wilson'], toStations: ['Howard'],
-    description: 'Purple Express Wilson → Howard phantom' },
+  { legend: 'PR', fromStations: ['Wilson', 'Jarvis'], toStations: ['South Blvd'],
+    description: 'Purple Express Wilson/Jarvis → South Blvd phantom' },
+  { legend: 'PR', fromStations: ['Wilson', 'Jarvis'], toStations: ['Howard'],
+    description: 'Purple Express Wilson/Jarvis → Howard phantom' },
 
   // Blue Line - Harlem/Cumberland/Jefferson Park corridor (user identified + logs)
   { legend: 'BL', fromStations: ['Harlem', 'Cumberland'], toStations: ['Jefferson Park'],
