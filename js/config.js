@@ -79,12 +79,30 @@ const PHANTOM_STATION_RADIUS = 0.005;       // degrees (~550m) — proximity thr
 //   toStations   — array of station names defining the "to" zone
 //   description  — human-readable label for console logging
 const KNOWN_PHANTOM_JUMPS = [
-  {
-    legend: 'PR',
-    fromStations: ['Wilson'],
-    toStations: ['South Blvd'],
-    description: 'Purple Express Wilson → South Blvd phantom',
-  },
+  // Purple Express — Wilson area phantoms (user identified)
+  { legend: 'PR', fromStations: ['Wilson'], toStations: ['South Blvd'],
+    description: 'Purple Express Wilson → South Blvd phantom' },
+  { legend: 'PR', fromStations: ['Wilson'], toStations: ['Howard'],
+    description: 'Purple Express Wilson → Howard phantom' },
+
+  // Blue Line — Harlem/Cumberland/Jefferson Park corridor (user identified + logs)
+  { legend: 'BL', fromStations: ['Harlem', 'Cumberland'], toStations: ['Jefferson Park'],
+    description: 'Blue Line Harlem/Cumberland → Jefferson Park phantom' },
+  { legend: 'BL', fromStations: ['Jefferson Park', 'Cumberland'], toStations: ['Harlem'],
+    description: 'Blue Line Jefferson Park/Cumberland → Harlem phantom' },
+  { legend: 'BL', fromStations: ['Harlem'], toStations: ['Cumberland'],
+    description: 'Blue Line Harlem → Cumberland phantom' },
+  { legend: 'BL', fromStations: ['Cumberland'], toStations: ['Harlem'],
+    description: 'Blue Line Cumberland → Harlem phantom' },
+
+  // Green Line — 35th/Bronzeville corridor (from logs, 6.5km snap-range jump)
+  { legend: 'GR', fromStations: ['35-Bronzeville-IIT'], toStations: ['Cottage Grove'],
+    description: 'Green Line 35-Bronzeville-IIT → Cottage Grove phantom' },
+  { legend: 'GR', fromStations: ['Cottage Grove'], toStations: ['35-Bronzeville-IIT'],
+    description: 'Green Line Cottage Grove → 35-Bronzeville-IIT phantom' },
+  { legend: 'GR', fromStations: ['35-Bronzeville-IIT', 'Cermak-McCormick Place'],
+    toStations: ['Cottage Grove', 'King Drive'],
+    description: 'Green Line 35th area → Cottage Grove branch phantom' },
 ];
 
 // Destination + line combos that use inverted badge (white bg, colored text)
