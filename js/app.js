@@ -144,7 +144,7 @@
   const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
-    initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals);
+    initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations);
     console.log(`[CTA] Using REAL train data (${realTrains.length} trains)`);
   } else {
     dummyTrains = generateDummyTrains(geojson);
@@ -812,7 +812,7 @@
         dummyTrains = null;
 
         // Initialize track position and drift correction
-        initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals);
+        initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations);
 
         // Spawn animation for new trains: slide from start-of-line to tracked position,
         // but only if the train is close to the start terminal (same threshold as retirement).

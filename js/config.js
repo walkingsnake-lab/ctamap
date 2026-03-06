@@ -65,6 +65,27 @@ const BACKWARD_CONFIRM_POLLS     = 6;        // consecutive polls required befor
 const FORWARD_CONFIRM_POLLS      = 4;        // consecutive polls required before accepting a suspiciously fast forward jump within slide range
 const FORWARD_SNAP_CONFIRM_POLLS = 5;        // consecutive polls required before accepting a forward jump in snap range (> CORRECTION_SNAP_THRESHOLD)
 const FORWARD_PLAUSIBLE_DIST = 0.03;        // degrees (~3 km) — forward drift beyond this in a single update is treated as a phantom position
+const PHANTOM_STATION_RADIUS = 0.005;       // degrees (~550m) — proximity threshold for matching station-based phantom jump rules
+
+// Known phantom jump patterns: specific station→station jumps that the CTA API
+// reports erroneously.  Each rule is checked on every position update; if the
+// train's previous nearest station matches fromStations and the new position's
+// nearest station matches toStations, the jump is immediately rejected without
+// waiting for generic confirmation polls.
+//
+// Fields:
+//   legend      — line code (e.g. 'PR')
+//   fromStations — array of station names defining the "from" zone
+//   toStations   — array of station names defining the "to" zone
+//   description  — human-readable label for console logging
+const KNOWN_PHANTOM_JUMPS = [
+  {
+    legend: 'PR',
+    fromStations: ['Wilson'],
+    toStations: ['South Blvd'],
+    description: 'Purple Express Wilson → South Blvd phantom',
+  },
+];
 
 // Destination + line combos that use inverted badge (white bg, colored text)
 // Matches real CTA signage for certain short-turn / branch terminuses
