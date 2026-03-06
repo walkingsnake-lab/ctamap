@@ -117,6 +117,35 @@ const KNOWN_PHANTOM_JUMPS = [
     description: 'Red Line Fullerton → North/Clybourn phantom' },
   { legend: 'RD', fromStations: ['North/Clybourn'], toStations: ['Fullerton'],
     description: 'Red Line North/Clybourn → Fullerton phantom' },
+
+  // Red Line — Loyola / Wilson fast-forward (from logs, 4170m)
+  { legend: 'RD', fromStations: ['Loyola'], toStations: ['Wilson'],
+    description: 'Red Line Loyola → Wilson phantom' },
+  { legend: 'RD', fromStations: ['Wilson'], toStations: ['Loyola'],
+    description: 'Red Line Wilson → Loyola phantom' },
+
+  // Red Line — Roosevelt / Cermak-Chinatown backward jump
+  { legend: 'RD', fromStations: ['Roosevelt'], toStations: ['Cermak-Chinatown'],
+    description: 'Red Line Roosevelt → Cermak-Chinatown phantom' },
+  { legend: 'RD', fromStations: ['Cermak-Chinatown'], toStations: ['Roosevelt'],
+    description: 'Red Line Cermak-Chinatown → Roosevelt phantom' },
+
+  // Pink Line — Polk / Ashland backward jump (from logs, 1144m)
+  { legend: 'PK', fromStations: ['Polk'], toStations: ['Ashland'],
+    description: 'Pink Line Polk → Ashland phantom' },
+  { legend: 'PK', fromStations: ['Ashland'], toStations: ['Polk'],
+    description: 'Pink Line Ashland → Polk phantom' },
+
+  // Brown Line — Sedgwick / Chicago backward jump (from logs, 1075m)
+  // Purple Line shares this segment
+  { legend: 'BR', fromStations: ['Sedgwick'], toStations: ['Chicago'],
+    description: 'Brown Line Sedgwick → Chicago phantom' },
+  { legend: 'BR', fromStations: ['Chicago'], toStations: ['Sedgwick'],
+    description: 'Brown Line Chicago → Sedgwick phantom' },
+  { legend: 'PR', fromStations: ['Sedgwick'], toStations: ['Chicago'],
+    description: 'Purple Line Sedgwick → Chicago phantom' },
+  { legend: 'PR', fromStations: ['Chicago'], toStations: ['Sedgwick'],
+    description: 'Purple Line Chicago → Sedgwick phantom' },
 ];
 
 // Destination + line combos that use inverted badge (white bg, colored text)
