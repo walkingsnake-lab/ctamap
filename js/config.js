@@ -94,6 +94,10 @@ const KNOWN_PHANTOM_JUMPS = [
     description: 'Blue Line Harlem → Cumberland phantom' },
   { legend: 'BL', fromStations: ['Cumberland'], toStations: ['Harlem'],
     description: 'Blue Line Cumberland → Harlem phantom' },
+  { legend: 'BL', fromStations: ["O'Hare Airport"], toStations: ['Rosemont'],
+    description: "Blue Line O'Hare → Rosemont phantom" },
+  { legend: 'BL', fromStations: ['Rosemont'], toStations: ["O'Hare Airport"],
+    description: "Blue Line Rosemont → O'Hare phantom" },
 
   // Green Line — 35th/Bronzeville corridor (from logs, 6.5km snap-range jump)
   { legend: 'GR', fromStations: ['35-Bronzeville-IIT'], toStations: ['Cottage Grove'],
