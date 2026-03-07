@@ -267,14 +267,16 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // Use effective destination for direction: detects premature Loop→return
     // signage changes on OR/PK by checking if nextStaNm is still loop-bound.
     const effectiveDest = effectiveDestForDirection(train, northDest, stations);
+    train._effectiveDest = effectiveDest;
     if (prev && prev._direction !== undefined) {
-      if (prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx
-          && northDest && effectiveDest) {
-        // Segment changed — re-derive via terminal walk to avoid stale direction.
+      const segChanged = prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx;
+      const destChanged = prev._effectiveDest && effectiveDest !== prev._effectiveDest;
+      if ((segChanged || destChanged) && northDest && effectiveDest) {
+        // Segment or destination changed — re-derive via terminal walk to avoid stale direction.
         const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
         if (termDir !== null) {
           train._direction = termDir;
-        } else {
+        } else if (segChanged) {
           // Terminal walk failed (e.g. both directions circle the ML loop).
           // Infer direction from segment connectivity: check which way the
           // previous segment connects to the new one.
@@ -290,6 +292,11 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
               train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
             );
           }
+        } else {
+          // Destination changed on the same segment but terminal walk failed —
+          // reverse direction since the train switched from loop-bound to outbound
+          // (or vice versa) on the same track.
+          train._direction = -prev._direction;
         }
       } else {
         train._direction = prev._direction;
