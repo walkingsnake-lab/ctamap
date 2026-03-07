@@ -66,6 +66,8 @@ const FORWARD_CONFIRM_POLLS      = 4;        // consecutive polls required befor
 const FORWARD_SNAP_CONFIRM_POLLS = 5;        // consecutive polls required before accepting a forward jump in snap range (> CORRECTION_SNAP_THRESHOLD)
 const FORWARD_PLAUSIBLE_DIST = 0.03;        // degrees (~3 km) — forward drift beyond this in a single update is treated as a phantom position
 const PHANTOM_STATION_RADIUS = 0.005;       // degrees (~550m) — proximity threshold for matching station-based phantom jump rules
+const STATION_JUMP_CONFIRM_POLLS = 3;       // consecutive polls required before accepting a forward station-to-station jump
+const STATION_JUMP_RADIUS = 0.004;          // degrees (~440m) — proximity to station for station-jump detection
 
 // Known phantom jump patterns: specific station→station jumps that the CTA API
 // reports erroneously.  Each rule is checked on every position update; if the
