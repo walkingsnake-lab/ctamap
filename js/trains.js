@@ -92,11 +92,25 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
     // the SAME dead-end from both directions.  When that happens the two
     // terminal latitudes are nearly identical and comparing them to each other
     // gives a meaningless result.  Detecting "same side" catches this: both
-    // terminals north (or both south) of the train means one walk looped back,
-    // so we bail out and let the heading-based fallback handle it.
+    // terminals north (or both south) of the train means one walk looped back.
     const northIsForward  = termFwd.lat > trackPos.lat;
     const northIsBackward = termBwd.lat > trackPos.lat;
-    if (northIsForward === northIsBackward) return null;
+    if (northIsForward === northIsBackward) {
+      // Use local segment geometry to determine which direction is north.
+      // This is more reliable than the CTA heading fallback, which can be
+      // stale for stopped trains.  Guard against east-west segments where
+      // the latitude delta is too small to be meaningful.
+      const seg = segs[trackPos.segIdx];
+      const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
+      if (seg && pi >= 0) {
+        const dy = seg[pi + 1][1] - seg[pi][1];
+        const dx = seg[pi + 1][0] - seg[pi][0];
+        if (Math.abs(dy) > Math.abs(dx) * 0.2) {
+          return (destIsNorth === (dy > 0)) ? 1 : -1;
+        }
+      }
+      return null;
+    }
     return (destIsNorth === northIsForward) ? 1 : -1;
   }
   // Only one direction reached a dead-end — the other enters the Loop.
