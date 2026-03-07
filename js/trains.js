@@ -80,6 +80,27 @@ const LINE_NORTH_DESTS = {
  * When only ONE direction reaches a dead-end, we compare that terminal's latitude
  * to the current position to determine which way is "north."
  */
+/**
+ * Determines direction by probing toward the next station.
+ * Walks a short distance in both directions from trackPos and returns whichever
+ * direction gets closer to nextStn.  More reliable than terminal walk on the
+ * ML loop, where latitude-based heuristics fail because the loop exit can be
+ * in the opposite direction from the terminal.
+ *
+ * Returns +1 or -1, or null if ambiguous (e.g. train is at the station).
+ */
+function directionByNextStation(trackPos, nextStn, segs) {
+  const PROBE_DIST = 0.003; // ~300m — enough to resolve direction without overshooting
+  const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
+  const probeFwd = advanceOnTrack(trackPos, PROBE_DIST, +1, segs);
+  const probeBwd = advanceOnTrack(trackPos, PROBE_DIST, -1, segs);
+  const fwdDist = geoDist(probeFwd.lon, probeFwd.lat, nextStn.lon, nextStn.lat);
+  const bwdDist = geoDist(probeBwd.lon, probeBwd.lat, nextStn.lon, nextStn.lat);
+  if (fwdDist < bwdDist && fwdDist < curDist) return 1;
+  if (bwdDist < fwdDist && bwdDist < curDist) return -1;
+  return null;
+}
+
 function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
   const termFwd = advanceOnTrack(trackPos, 9999, +1, segs);
   const termBwd = advanceOnTrack(trackPos, 9999, -1, segs);
@@ -154,31 +175,34 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
 const LOOP_CENTER_LON = -87.630;
 const LOOP_CENTER_LAT = 41.882;
 
-function effectiveDestForDirection(train, northDest, stations) {
-  if (!northDest || northDest !== 'Loop') return train.destNm;
-  if (!train.destNm || train.destNm.includes('Loop')) return train.destNm;
-  if (!train.nextStaNm || !stations) return train.destNm;
-
-  // Find next station position — filter by this train's line to avoid matching
-  // same-named stations on other lines (e.g. "Damen" on Blue vs Pink).
+/**
+ * Finds the station object matching a train's nextStaNm, filtering by the
+ * train's line to avoid same-named stations on other lines.
+ * Returns the station object { name, lon, lat, legends } or null.
+ */
+function findNextStation(train, stations) {
+  if (!train.nextStaNm || !stations) return null;
   const nextClean = cleanStationName(train.nextStaNm);
-  let nextStn = null;
   for (const s of stations) {
     if (s.legends.includes(train.legend) && cleanStationName(s.name) === nextClean) {
-      nextStn = s;
-      break;
+      return s;
     }
   }
   // Try normalized matching if exact clean match fails
-  if (!nextStn) {
-    const nextNorm = normalizeStationName(nextClean);
-    for (const s of stations) {
-      if (s.legends.includes(train.legend) && normalizeStationName(s.name) === nextNorm) {
-        nextStn = s;
-        break;
-      }
+  const nextNorm = normalizeStationName(nextClean);
+  for (const s of stations) {
+    if (s.legends.includes(train.legend) && normalizeStationName(s.name) === nextNorm) {
+      return s;
     }
   }
+  return null;
+}
+
+function effectiveDestForDirection(train, northDest, stations) {
+  if (!northDest || northDest !== 'Loop') return train.destNm;
+  if (!train.destNm || train.destNm.includes('Loop')) return train.destNm;
+
+  const nextStn = findNextStation(train, stations);
   if (!nextStn) return train.destNm;
 
   // If the next station is closer to the Loop than the train, the train is
@@ -268,45 +292,68 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // signage changes on OR/PK by checking if nextStaNm is still loop-bound.
     const effectiveDest = effectiveDestForDirection(train, northDest, stations);
     train._effectiveDest = effectiveDest;
+
+    // Try next-station-based direction first — more reliable than terminal walk
+    // on the ML loop where latitude heuristics fail (loop exit can be in the
+    // opposite direction from the terminal).
+    const nextStn = findNextStation(train, stations);
+    const nextStnDir = nextStn
+      ? directionByNextStation(train._trackPos, nextStn, segs)
+      : null;
+
     if (prev && prev._direction !== undefined) {
       const segChanged = prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx;
       const destChanged = prev._effectiveDest && effectiveDest !== prev._effectiveDest;
       if ((segChanged || destChanged) && northDest && effectiveDest) {
-        // Segment or destination changed — re-derive via terminal walk to avoid stale direction.
-        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
-        if (termDir !== null) {
-          train._direction = termDir;
-        } else if (segChanged) {
-          // Terminal walk failed (e.g. both directions circle the ML loop).
-          // Infer direction from segment connectivity: check which way the
-          // previous segment connects to the new one.
-          const prevSeg = segs[prev._trackPos.segIdx];
-          const boundary = prev._direction > 0 ? prevSeg.length - 1 : 0;
-          const connected = findConnectedSegment(
-            prev._trackPos.segIdx, boundary, prevSeg, prev._direction, segs
-          );
-          if (connected && connected.segIdx === train._trackPos.segIdx) {
-            train._direction = connected.direction;
-          } else {
-            train._direction = directionFromHeading(
-              train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
-            );
-          }
+        // Segment or destination changed — re-derive direction.
+        // Prefer next-station direction (handles ML loop topology correctly),
+        // then terminal walk, then segment connectivity / heading fallbacks.
+        if (nextStnDir !== null) {
+          train._direction = nextStnDir;
         } else {
-          // Destination changed on the same segment but terminal walk failed —
-          // reverse direction since the train switched from loop-bound to outbound
-          // (or vice versa) on the same track.
-          train._direction = -prev._direction;
+          const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
+          if (termDir !== null) {
+            train._direction = termDir;
+          } else if (segChanged) {
+            // Terminal walk failed (e.g. both directions circle the ML loop).
+            // Infer direction from segment connectivity: check which way the
+            // previous segment connects to the new one.
+            const prevSeg = segs[prev._trackPos.segIdx];
+            const boundary = prev._direction > 0 ? prevSeg.length - 1 : 0;
+            const connected = findConnectedSegment(
+              prev._trackPos.segIdx, boundary, prevSeg, prev._direction, segs
+            );
+            if (connected && connected.segIdx === train._trackPos.segIdx) {
+              train._direction = connected.direction;
+            } else {
+              train._direction = directionFromHeading(
+                train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+              );
+            }
+          } else {
+            // Dest changed on same segment, terminal walk failed — keep direction.
+            // The physical direction of travel doesn't change just because the
+            // sign changed (the train continues around the loop to exit).
+            train._direction = prev._direction;
+          }
         }
       } else {
-        train._direction = prev._direction;
+        // No segment or dest change — keep previous direction, but if next-station
+        // direction disagrees, correct it (catches stale directions from before
+        // the train's nextStaNm updated).
+        train._direction = (nextStnDir !== null && nextStnDir !== prev._direction)
+          ? nextStnDir : prev._direction;
       }
     } else if (northDest && effectiveDest) {
-      // New train — try terminal walk first, fall back to heading.
-      const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
-      train._direction = termDir ?? directionFromHeading(
-        train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
-      );
+      // New train — prefer next-station direction, then terminal walk, then heading.
+      if (nextStnDir !== null) {
+        train._direction = nextStnDir;
+      } else {
+        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
+        train._direction = termDir ?? directionFromHeading(
+          train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+        );
+      }
     } else {
       train._direction = directionFromHeading(
         train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
