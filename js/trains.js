@@ -141,22 +141,30 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
  * move backward on the map.
  *
  * Detects this by checking the CTA API's nextStaNm field: if the next station
- * is north of (higher latitude than) the train, the train is still heading
- * toward the Loop regardless of what the signage says.
+ * is closer to the Loop center than the train, the train is still heading
+ * toward the Loop regardless of what the signage says.  Uses distance to Loop
+ * center (not latitude) so this works for lines approaching from any direction.
+ * Station lookup filters by the train's line to avoid same-named stations on
+ * other lines (e.g. "Damen" on Blue vs Pink).
  *
  * Returns the destination name to use for direction calculation (may differ
  * from the displayed destNm).
  */
+// Approximate center of the downtown Loop elevated
+const LOOP_CENTER_LON = -87.630;
+const LOOP_CENTER_LAT = 41.882;
+
 function effectiveDestForDirection(train, northDest, stations) {
   if (!northDest || northDest !== 'Loop') return train.destNm;
   if (!train.destNm || train.destNm.includes('Loop')) return train.destNm;
   if (!train.nextStaNm || !stations) return train.destNm;
 
-  // Find next station position in our station list
+  // Find next station position — filter by this train's line to avoid matching
+  // same-named stations on other lines (e.g. "Damen" on Blue vs Pink).
   const nextClean = cleanStationName(train.nextStaNm);
   let nextStn = null;
   for (const s of stations) {
-    if (cleanStationName(s.name) === nextClean) {
+    if (s.legends.includes(train.legend) && cleanStationName(s.name) === nextClean) {
       nextStn = s;
       break;
     }
@@ -165,7 +173,7 @@ function effectiveDestForDirection(train, northDest, stations) {
   if (!nextStn) {
     const nextNorm = normalizeStationName(nextClean);
     for (const s of stations) {
-      if (normalizeStationName(s.name) === nextNorm) {
+      if (s.legends.includes(train.legend) && normalizeStationName(s.name) === nextNorm) {
         nextStn = s;
         break;
       }
@@ -173,9 +181,14 @@ function effectiveDestForDirection(train, northDest, stations) {
   }
   if (!nextStn) return train.destNm;
 
-  // If next station is north of the train, it's still heading toward the Loop
-  if (nextStn.lat > train.lat) {
-    console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is north — using "Loop" for direction`);
+  // If the next station is closer to the Loop than the train, the train is
+  // still heading toward the Loop — override the premature signage change.
+  // Uses distance to Loop center rather than latitude so this works for lines
+  // that approach the Loop from any direction (e.g. Pink Line from the west).
+  const trainDistToLoop = geoDist(train.lon, train.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
+  const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
+  if (nextStnDistToLoop < trainDistToLoop) {
+    console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
   }
 
