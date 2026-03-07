@@ -5,6 +5,24 @@
  */
 
 /**
+ * Collects coordinate arrays from features whose legend property matches the given legend code.
+ * Returns an array of coordinate arrays (one per LineString / MultiLineString sub-line).
+ */
+function collectLineCoords(geojson, legend) {
+  const coords = [];
+  for (const feature of geojson.features) {
+    if (feature.properties.legend !== legend) continue;
+    const geom = feature.geometry;
+    if (geom.type === 'MultiLineString') {
+      for (const line of geom.coordinates) coords.push(line);
+    } else if (geom.type === 'LineString') {
+      coords.push(geom.coordinates);
+    }
+  }
+  return coords;
+}
+
+/**
  * Builds a lookup of coordinate segments per legend code.
  * Loop (ML) segments are included for lines that traverse the Loop.
  * Returns: { segments: { RD: [...], ... }, ownSegments: { RD: [...], ... } }
