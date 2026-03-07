@@ -403,7 +403,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
               const newNearStation = nearestStationWithinRadius(
                 train.lon, train.lat, stations, train.legend, STATION_JUMP_RADIUS
               );
-              if (newNearStation && newNearStation !== prev._nearStation) {
+              if (newNearStation && newNearStation !== prev._nearStation && drift >= STATION_JUMP_MIN_DRIFT) {
                 train._stationJumpHoldCount = (prev._stationJumpHoldCount || 0) + 1;
                 if (train._stationJumpHoldCount < STATION_JUMP_CONFIRM_POLLS) {
                   train._correcting = false;
