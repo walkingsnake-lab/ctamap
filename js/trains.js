@@ -109,6 +109,15 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
           return (destIsNorth === (dy > 0)) ? 1 : -1;
         }
       }
+      // Local geometry too east-west (e.g. Brown line curve between Sedgwick
+      // and Armitage, or ML extension segments).  Probe a short walk to see
+      // which direction gains latitude — this follows the track through curves
+      // and into a clearly north-south section.
+      const probe = advanceOnTrack(trackPos, 0.01, +1, segs);
+      const dLat = probe.lat - trackPos.lat;
+      if (Math.abs(dLat) > 0.001) {
+        return (destIsNorth === (dLat > 0)) ? 1 : -1;
+      }
       return null;
     }
     return (destIsNorth === northIsForward) ? 1 : -1;
@@ -338,15 +347,17 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // (empirical, which way gets closer) to the train's expected direction of
           // travel at corrFromTrackPos.  Use a terminal walk when possible (reliable on
           // non-loop segments and handles geometry-flip junctions); when terminal walk
-          // returns null (ML-loop positions), use the direction already derived at the
-          // top of this function (via connectivity or terminal walk at the new position)
-          // rather than a potentially stale CTA heading.
+          // returns null (ML-loop positions), use the PREVIOUS direction rather than
+          // the freshly re-derived train._direction.  On segment changes (e.g. loop
+          // exit from ML to own-line segment), _direction has already been updated for
+          // the NEW segment, but _corrFromTrackPos is still on the OLD segment where
+          // prev._direction is the correct expected direction.
           const _sbNorthDest = LINE_NORTH_DESTS[train.legend];
           const _headingDirFromPos = (_sbNorthDest && train.destNm)
             ? (directionByTerminalWalk(train._corrFromTrackPos, train.destNm,
                 _sbNorthDest, segs)
-              ?? train._direction)
-            : train._direction;
+              ?? prev._direction)
+            : prev._direction;
           const isSuspectBackward = _headingDirFromPos !== train._corrDirection;
           const isSuspectForward  = !isSuspectBackward && drift > FORWARD_PLAUSIBLE_DIST;
 
