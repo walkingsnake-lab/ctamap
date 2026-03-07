@@ -134,6 +134,55 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
 }
 
 /**
+ * For lines where the Loop is the "north" terminus (OR, PK), operators sometimes
+ * change the destination signage (e.g. from "Loop" to "Midway") before the train
+ * has actually entered the loop.  The CTA API reflects this early, causing
+ * directionByTerminalWalk to flip direction prematurely — the train appears to
+ * move backward on the map.
+ *
+ * Detects this by checking the CTA API's nextStaNm field: if the next station
+ * is north of (higher latitude than) the train, the train is still heading
+ * toward the Loop regardless of what the signage says.
+ *
+ * Returns the destination name to use for direction calculation (may differ
+ * from the displayed destNm).
+ */
+function effectiveDestForDirection(train, northDest, stations) {
+  if (!northDest || northDest !== 'Loop') return train.destNm;
+  if (!train.destNm || train.destNm.includes('Loop')) return train.destNm;
+  if (!train.nextStaNm || !stations) return train.destNm;
+
+  // Find next station position in our station list
+  const nextClean = cleanStationName(train.nextStaNm);
+  let nextStn = null;
+  for (const s of stations) {
+    if (cleanStationName(s.name) === nextClean) {
+      nextStn = s;
+      break;
+    }
+  }
+  // Try normalized matching if exact clean match fails
+  if (!nextStn) {
+    const nextNorm = normalizeStationName(nextClean);
+    for (const s of stations) {
+      if (normalizeStationName(s.name) === nextNorm) {
+        nextStn = s;
+        break;
+      }
+    }
+  }
+  if (!nextStn) return train.destNm;
+
+  // If next station is north of the train, it's still heading toward the Loop
+  if (nextStn.lat > train.lat) {
+    console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is north — using "Loop" for direction`);
+    return 'Loop';
+  }
+
+  return train.destNm;
+}
+
+/**
  * Fetches real train positions from the CTA API via the server-side proxy.
  * The proxy fetches all routes in parallel and returns a combined response.
  */
@@ -154,6 +203,7 @@ async function fetchTrains() {
       heading: parseInt(t.heading, 10),
       rn: t.rn,
       destNm: t.destNm,
+      nextStaNm: t.nextStaNm,
       isApp: t.isApp,
       isDly: t.isDly,
       isSch: t.isSch,
@@ -201,11 +251,14 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // fall back to the CTA heading for positions on the ML loop where neither walk
     // reaches a dead-end (the loop connects back to itself).
     const northDest = LINE_NORTH_DESTS[train.legend];
+    // Use effective destination for direction: detects premature Loop→return
+    // signage changes on OR/PK by checking if nextStaNm is still loop-bound.
+    const effectiveDest = effectiveDestForDirection(train, northDest, stations);
     if (prev && prev._direction !== undefined) {
       if (prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx
-          && northDest && train.destNm) {
+          && northDest && effectiveDest) {
         // Segment changed — re-derive via terminal walk to avoid stale direction.
-        const termDir = directionByTerminalWalk(train._trackPos, train.destNm, northDest, segs);
+        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
         if (termDir !== null) {
           train._direction = termDir;
         } else {
@@ -228,9 +281,9 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
       } else {
         train._direction = prev._direction;
       }
-    } else if (northDest && train.destNm) {
+    } else if (northDest && effectiveDest) {
       // New train — try terminal walk first, fall back to heading.
-      const termDir = directionByTerminalWalk(train._trackPos, train.destNm, northDest, segs);
+      const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
       train._direction = termDir ?? directionFromHeading(
         train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
       );
@@ -322,8 +375,8 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // derived at the top of this function — it's more reliable than a potentially
           // stale CTA heading.
           const _pvNorthDest = LINE_NORTH_DESTS[train.legend];
-          const _pvTermDir = (_pvNorthDest && train.destNm)
-            ? directionByTerminalWalk(train._trackPos, train.destNm, _pvNorthDest, segs)
+          const _pvTermDir = (_pvNorthDest && effectiveDest)
+            ? directionByTerminalWalk(train._trackPos, effectiveDest, _pvNorthDest, segs)
             : null;
           if (_pvTermDir !== null) {
             train._direction = _pvTermDir;
@@ -353,8 +406,8 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // the NEW segment, but _corrFromTrackPos is still on the OLD segment where
           // prev._direction is the correct expected direction.
           const _sbNorthDest = LINE_NORTH_DESTS[train.legend];
-          const _headingDirFromPos = (_sbNorthDest && train.destNm)
-            ? (directionByTerminalWalk(train._corrFromTrackPos, train.destNm,
+          const _headingDirFromPos = (_sbNorthDest && effectiveDest)
+            ? (directionByTerminalWalk(train._corrFromTrackPos, effectiveDest,
                 _sbNorthDest, segs)
               ?? prev._direction)
             : prev._direction;
@@ -479,8 +532,8 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
             // positions (where the CTA heading may still reflect a stale Loop
             // orientation, but is the only option when terminal walk returns null).
             const _snapNorthDest = LINE_NORTH_DESTS[train.legend];
-            const _snapTermDir = (_snapNorthDest && train.destNm)
-              ? directionByTerminalWalk(train._trackPos, train.destNm, _snapNorthDest, segs)
+            const _snapTermDir = (_snapNorthDest && effectiveDest)
+              ? directionByTerminalWalk(train._trackPos, effectiveDest, _snapNorthDest, segs)
               : null;
             train._direction = _snapTermDir ?? directionFromHeading(
               train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
@@ -489,8 +542,8 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           }
         } else {
           const _npNorthDest = LINE_NORTH_DESTS[train.legend];
-          const _npTermDir = (_npNorthDest && train.destNm)
-            ? directionByTerminalWalk(train._trackPos, train.destNm, _npNorthDest, segs)
+          const _npTermDir = (_npNorthDest && effectiveDest)
+            ? directionByTerminalWalk(train._trackPos, effectiveDest, _npNorthDest, segs)
             : null;
           train._direction = _npTermDir ?? directionFromHeading(
             train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
