@@ -60,15 +60,31 @@ const LINE_NORTH_DESTS = {
 /**
  * Determines train direction by walking to both terminal dead-ends from trackPos
  * and comparing terminal latitudes against the destination name.
- * Returns +1 or -1, or null if either terminal cannot be reached.
+ * Returns +1 or -1, or null if neither terminal can be reached.
+ *
+ * For loop lines (PR, OR, PK, BR, GR), walking toward the downtown Loop enters
+ * ML segments that circle back on themselves, hitting MAX_ITER without stopping.
+ * When only ONE direction reaches a dead-end, we compare that terminal's latitude
+ * to the current position to determine which way is "north."
  */
 function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
   const termFwd = advanceOnTrack(trackPos, 9999, +1, segs);
   const termBwd = advanceOnTrack(trackPos, 9999, -1, segs);
-  if (!termFwd.stopped || !termBwd.stopped) return null;
-  const destIsNorth    = destNm.includes(northDest);
-  const northIsForward = termFwd.lat > termBwd.lat;
-  return (destIsNorth === northIsForward) ? 1 : -1;
+  if (!termFwd.stopped && !termBwd.stopped) return null;
+  const destIsNorth = destNm.includes(northDest);
+  if (termFwd.stopped && termBwd.stopped) {
+    const northIsForward = termFwd.lat > termBwd.lat;
+    return (destIsNorth === northIsForward) ? 1 : -1;
+  }
+  // Only one direction reached a dead-end — the other enters the Loop.
+  // Compare the dead-end's latitude to the current position.
+  if (termFwd.stopped) {
+    const northIsForward = termFwd.lat > trackPos.lat;
+    return (destIsNorth === northIsForward) ? 1 : -1;
+  }
+  // termBwd.stopped
+  const northIsBackward = termBwd.lat > trackPos.lat;
+  return (destIsNorth === !northIsBackward) ? 1 : -1;
 }
 
 /**
@@ -144,9 +160,25 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           && northDest && train.destNm) {
         // Segment changed — re-derive via terminal walk to avoid stale direction.
         const termDir = directionByTerminalWalk(train._trackPos, train.destNm, northDest, segs);
-        train._direction = termDir ?? directionFromHeading(
-          train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
-        );
+        if (termDir !== null) {
+          train._direction = termDir;
+        } else {
+          // Terminal walk failed (e.g. both directions circle the ML loop).
+          // Infer direction from segment connectivity: check which way the
+          // previous segment connects to the new one.
+          const prevSeg = segs[prev._trackPos.segIdx];
+          const boundary = prev._direction > 0 ? prevSeg.length - 1 : 0;
+          const connected = findConnectedSegment(
+            prev._trackPos.segIdx, boundary, prevSeg, prev._direction, segs
+          );
+          if (connected && connected.segIdx === train._trackPos.segIdx) {
+            train._direction = connected.direction;
+          } else {
+            train._direction = directionFromHeading(
+              train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
+            );
+          }
+        }
       } else {
         train._direction = prev._direction;
       }
@@ -236,16 +268,18 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // Path validation failed — commonly a Loop-entry/exit correction where
           // trackDistanceBetween bails when the ML↔own-line segment crossing inverts
           // the direction, causing the validation walk to overshoot.
-          // Try terminal walk at the snapped position (reliable on non-loop segments);
-          // fall back to heading for positions on the ML loop where terminal walk
-          // returns null (forward walk circles the loop without stopping).
+          // Try terminal walk at the snapped position (now handles the one-terminal
+          // case for loop lines on own segments).  If terminal walk still returns null
+          // (train is on ML where both directions circle), keep the direction already
+          // derived at the top of this function — it's more reliable than a potentially
+          // stale CTA heading.
           const _pvNorthDest = LINE_NORTH_DESTS[train.legend];
           const _pvTermDir = (_pvNorthDest && train.destNm)
             ? directionByTerminalWalk(train._trackPos, train.destNm, _pvNorthDest, segs)
             : null;
-          train._direction = _pvTermDir ?? directionFromHeading(
-            train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
-          );
+          if (_pvTermDir !== null) {
+            train._direction = _pvTermDir;
+          }
           // Leave _correcting = false — train stays at API-snapped position.
         } else {
           train._correcting = true;
@@ -264,18 +298,16 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // Classify the correction as forward or backward by comparing _corrDirection
           // (empirical, which way gets closer) to the train's expected direction of
           // travel at corrFromTrackPos.  Use a terminal walk when possible (reliable on
-          // non-loop segments and handles geometry-flip junctions); fall back to the CTA
-          // heading for ML-loop positions where terminal walk returns null.
+          // non-loop segments and handles geometry-flip junctions); when terminal walk
+          // returns null (ML-loop positions), use the direction already derived at the
+          // top of this function (via connectivity or terminal walk at the new position)
+          // rather than a potentially stale CTA heading.
           const _sbNorthDest = LINE_NORTH_DESTS[train.legend];
           const _headingDirFromPos = (_sbNorthDest && train.destNm)
             ? (directionByTerminalWalk(train._corrFromTrackPos, train.destNm,
                 _sbNorthDest, segs)
-              ?? directionFromHeading(
-                train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
-              ))
-            : directionFromHeading(
-                train.heading, train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs
-              );
+              ?? train._direction)
+            : train._direction;
           const isSuspectBackward = _headingDirFromPos !== train._corrDirection;
           const isSuspectForward  = !isSuspectBackward && drift > FORWARD_PLAUSIBLE_DIST;
 
