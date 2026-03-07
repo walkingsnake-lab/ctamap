@@ -14,6 +14,19 @@ function nearestStationName(lon, lat, stations, legend) {
 }
 
 /**
+ * Returns the name of the nearest station within `radius` degrees, or null.
+ */
+function nearestStationWithinRadius(lon, lat, stations, legend, radius) {
+  let bestName = null, bestDist = Infinity;
+  for (const s of stations) {
+    if (legend && !s.legends.includes(legend)) continue;
+    const d = geoDist(lon, lat, s.lon, s.lat);
+    if (d < bestDist) { bestDist = d; bestName = s.name; }
+  }
+  return bestDist < radius ? bestName : null;
+}
+
+/**
  * Checks whether a position update matches a known phantom jump pattern.
  * Returns the matching rule, or null.
  */
@@ -214,6 +227,8 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           train._direction = prev._direction;
           train._backwardHoldCount = 0;
           train._forwardHoldCount = 0;
+          train._stationJumpHoldCount = 0;
+          train._nearStation = stations ? nearestStationWithinRadius(train.lon, train.lat, stations, train.legend, STATION_JUMP_RADIUS) : null;
           console.warn(`[CTA] Phantom blocked: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} — ${phantomRule.description}`);
           continue;
         }
@@ -319,8 +334,10 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
             train.lat = prev._animLat;
             train._backwardHoldCount = 0;
             train._forwardHoldCount = 0;
+            train._stationJumpHoldCount = 0;
           } else if (isSuspectBackward) {
             train._forwardHoldCount = 0;
+            train._stationJumpHoldCount = 0;
             train._backwardHoldCount = (prev._backwardHoldCount || 0) + 1;
             if (train._backwardHoldCount < BACKWARD_CONFIRM_POLLS) {
               train._correcting = false;
@@ -354,6 +371,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
             }
           } else if (isSuspectForward) {
             train._backwardHoldCount = 0;
+            train._stationJumpHoldCount = 0;
             train._forwardHoldCount = (prev._forwardHoldCount || 0) + 1;
             if (train._forwardHoldCount < FORWARD_CONFIRM_POLLS) {
               train._correcting = false;
@@ -367,6 +385,32 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           } else {
             train._backwardHoldCount = 0;
             train._forwardHoldCount = 0;
+            // Station-jump detection: if train was near a station and now appears
+            // near a different station in a single poll, hold to distinguish
+            // phantom jumps from real arrivals.  Express trains that skip stations
+            // still take real time to travel, so the hold confirms naturally.
+            if (prev._nearStation && stations) {
+              const newNearStation = nearestStationWithinRadius(
+                train.lon, train.lat, stations, train.legend, STATION_JUMP_RADIUS
+              );
+              if (newNearStation && newNearStation !== prev._nearStation) {
+                train._stationJumpHoldCount = (prev._stationJumpHoldCount || 0) + 1;
+                if (train._stationJumpHoldCount < STATION_JUMP_CONFIRM_POLLS) {
+                  train._correcting = false;
+                  train._trackPos = { ...prev._trackPos };
+                  train.lon = prev._animLon;
+                  train.lat = prev._animLat;
+                  console.log(`[CTA] Station-jump hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} [${train._stationJumpHoldCount}/${STATION_JUMP_CONFIRM_POLLS}]`);
+                } else {
+                  console.log(`[CTA] Station-jump confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} after ${train._stationJumpHoldCount} polls`);
+                  train._stationJumpHoldCount = 0;
+                }
+              } else {
+                train._stationJumpHoldCount = 0;
+              }
+            } else {
+              train._stationJumpHoldCount = 0;
+            }
           }
         }
       } else if (drift >= CORRECTION_SNAP_THRESHOLD) {
@@ -420,6 +464,11 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
         }
       }
     }
+
+    // Track which station the train is near for station-jump detection on next poll
+    train._nearStation = stations
+      ? nearestStationWithinRadius(train.lon, train.lat, stations, train.legend, STATION_JUMP_RADIUS)
+      : null;
   }
 }
 
