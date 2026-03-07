@@ -583,8 +583,12 @@
           const totalDist = 0.010;  // total travel distance (behind + ahead)
 
           // Target hint for junction selection: when correcting, the correction
-          // target guides arrows toward the correct segment at Loop junctions
+          // target guides forward arrows toward the correct segment at Loop junctions
           // (where arrival-direction alignment would pick the wrong branch).
+          // Trailing arrows (dist < 0) must NOT use this forward target — it would
+          // cause them to pick the wrong branch at junctions the train just passed.
+          // They rely on the arrival-direction heuristic instead, which correctly
+          // selects the segment the train came from.
           const arrowTarget = d._corrToTrackPos
             ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
             : undefined;
@@ -595,9 +599,12 @@
             // Start behind the dot, move forward through it
             const dist = -behindDist + totalDist * phase;
 
+            // Forward arrows use the correction target; trailing arrows do not.
+            const fwdTarget = dist >= 0 ? arrowTarget : undefined;
+
             // Advance along track; negative = behind dot
             const advDir = dist >= 0 ? dir : -dir;
-            const advPos = advanceOnTrack(d._trackPos, Math.abs(dist), advDir, segs, arrowTarget);
+            const advPos = advanceOnTrack(d._trackPos, Math.abs(dist), advDir, segs, fwdTarget);
             const advPt = projection([advPos.lon, advPos.lat]);
 
             if (advPt) {
@@ -613,7 +620,7 @@
               // because we arrived by going backward; -advPos.direction is the
               // train's forward direction from that position.
               const lookAheadDir = dist >= 0 ? advPos.direction : -advPos.direction;
-              const aheadPos = advanceOnTrack(advPos, 0.0005, lookAheadDir, segs, arrowTarget);
+              const aheadPos = advanceOnTrack(advPos, 0.0005, lookAheadDir, segs, fwdTarget);
               const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
               let angle = 0;
               if (aheadPt) {
