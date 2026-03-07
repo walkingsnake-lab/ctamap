@@ -86,7 +86,17 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
   if (!termFwd.stopped && !termBwd.stopped) return null;
   const destIsNorth = destNm.includes(northDest);
   if (termFwd.stopped && termBwd.stopped) {
-    const northIsForward = termFwd.lat > termBwd.lat;
+    // Check whether the two terminals are on opposite sides of the current
+    // position.  On loop lines (OR, BR, PK, GR, PR) the terminal walk can
+    // circle through the ML loop and exit back onto the same branch, reaching
+    // the SAME dead-end from both directions.  When that happens the two
+    // terminal latitudes are nearly identical and comparing them to each other
+    // gives a meaningless result.  Detecting "same side" catches this: both
+    // terminals north (or both south) of the train means one walk looped back,
+    // so we bail out and let the heading-based fallback handle it.
+    const northIsForward  = termFwd.lat > trackPos.lat;
+    const northIsBackward = termBwd.lat > trackPos.lat;
+    if (northIsForward === northIsBackward) return null;
     return (destIsNorth === northIsForward) ? 1 : -1;
   }
   // Only one direction reached a dead-end — the other enters the Loop.
