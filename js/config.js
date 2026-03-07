@@ -183,6 +183,8 @@ function badgeTextFill(legend, destNm) {
 const STATION_NAME_OVERRIDES = {
   'Quincy/Wells': 'Quincy',
   'Roosevelt/Wabash': 'Roosevelt',
+  'Harold Washington Library-State/Van Buren': 'Library',
+  'Harold Washington Library': 'Library',
 };
 
 function cleanStationName(name) {
