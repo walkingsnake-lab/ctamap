@@ -338,11 +338,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           }
         }
       } else {
-        // No segment or dest change — keep previous direction, but if next-station
-        // direction disagrees, correct it (catches stale directions from before
-        // the train's nextStaNm updated).
-        train._direction = (nextStnDir !== null && nextStnDir !== prev._direction)
-          ? nextStnDir : prev._direction;
+        train._direction = prev._direction;
       }
     } else if (northDest && effectiveDest) {
       // New train — prefer next-station direction, then terminal walk, then heading.
