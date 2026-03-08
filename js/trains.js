@@ -406,15 +406,26 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           : snapToTrackPosition(prev._animLon, prev._animLat, segs);
 
         // Determine correction direction empirically: test one step in each
-        // direction from the old position and pick whichever gets closer to target
+        // direction from the old position and pick whichever gets closer to target.
+        // Exception: when both positions are on the same segment, compare parametric
+        // positions directly — probing can overshoot a nearby junction and invert
+        // the result (e.g. near the SE corner of the ML loop between Adams/Wabash
+        // and Library, where the backward probe crosses into Tower 12 to Library).
         const toPos = train._corrToTrackPos;
-        const testStep = Math.max(drift * 0.1, 1e-5);
-        const corrTarget = { targetLon: toPos.lon, targetLat: toPos.lat };
-        const fwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, +1, segs, corrTarget);
-        const bwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, -1, segs, corrTarget);
-        const fwdDist = geoDist(fwdTest.lon, fwdTest.lat, toPos.lon, toPos.lat);
-        const bwdDist = geoDist(bwdTest.lon, bwdTest.lat, toPos.lon, toPos.lat);
-        train._corrDirection = fwdDist <= bwdDist ? 1 : -1;
+        const fromPos = train._corrFromTrackPos;
+        if (fromPos.segIdx === toPos.segIdx) {
+          const fromParam = fromPos.ptIdx + (fromPos.t || 0);
+          const toParam = toPos.ptIdx + (toPos.t || 0);
+          train._corrDirection = toParam >= fromParam ? 1 : -1;
+        } else {
+          const testStep = Math.max(drift * 0.1, 1e-5);
+          const corrTarget = { targetLon: toPos.lon, targetLat: toPos.lat };
+          const fwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, +1, segs, corrTarget);
+          const bwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, -1, segs, corrTarget);
+          const fwdDist = geoDist(fwdTest.lon, fwdTest.lat, toPos.lon, toPos.lat);
+          const bwdDist = geoDist(bwdTest.lon, bwdTest.lat, toPos.lon, toPos.lat);
+          train._corrDirection = fwdDist <= bwdDist ? 1 : -1;
+        }
 
         // Precompute track distance so we can advance proportionally each frame
         train._corrTotalDist = trackDistanceBetween(
