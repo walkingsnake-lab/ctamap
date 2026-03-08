@@ -409,8 +409,9 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
         // direction from the old position and pick whichever gets closer to target
         const toPos = train._corrToTrackPos;
         const testStep = Math.max(drift * 0.1, 1e-5);
-        const fwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, +1, segs);
-        const bwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, -1, segs);
+        const corrTarget = { targetLon: toPos.lon, targetLat: toPos.lat };
+        const fwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, +1, segs, corrTarget);
+        const bwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, -1, segs, corrTarget);
         const fwdDist = geoDist(fwdTest.lon, fwdTest.lat, toPos.lon, toPos.lat);
         const bwdDist = geoDist(bwdTest.lon, bwdTest.lat, toPos.lon, toPos.lat);
         train._corrDirection = fwdDist <= bwdDist ? 1 : -1;
