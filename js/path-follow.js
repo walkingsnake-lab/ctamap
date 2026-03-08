@@ -435,9 +435,19 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
   // When a target is provided, prefer the segment whose exit direction points
   // toward it.  This overrides the arrival-alignment heuristic at junctions like
   // the downtown Loop entry where the correct segment requires a sharp turn.
+  //
+  // Guard: only use the target for scoring when it is actually *ahead* of the
+  // junction in the direction of travel (arrDx·toTargetDx + arrDy·toTargetDy > 0).
+  // When the target is behind the junction — e.g. a forward arrow that has
+  // advanced past the correction target, or a stale _corrToTrackPos after the
+  // correction completed — the target vector points backward and would cause
+  // findConnectedSegment to select the wrong (rearward) branch.  In that case
+  // fall back to the arrival-direction heuristic, which correctly continues in
+  // the direction of travel.
   const hasTarget = targetLon !== undefined && targetLat !== undefined;
   const toTargetDx = hasTarget ? targetLon - bx : 0;
   const toTargetDy = hasTarget ? targetLat - by : 0;
+  const targetIsAhead = hasTarget && (arrDx * toTargetDx + arrDy * toTargetDy) > 0;
 
   let bestDist = Infinity;
   let bestDot  = -Infinity;
@@ -453,7 +463,7 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
     if (d0 < threshold) {
       const exitDx = seg[1][0] - seg[0][0];
       const exitDy = seg[1][1] - seg[0][1];
-      const dot = hasTarget
+      const dot = targetIsAhead
         ? exitDx * toTargetDx + exitDy * toTargetDy
         : arrDx * exitDx + arrDy * exitDy;
       if (d0 < bestDist - TIE_EPS || (d0 < bestDist + TIE_EPS && dot > bestDot)) {
@@ -469,7 +479,7 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
     if (dN < threshold) {
       const exitDx = seg[last - 1][0] - seg[last][0];
       const exitDy = seg[last - 1][1] - seg[last][1];
-      const dot = hasTarget
+      const dot = targetIsAhead
         ? exitDx * toTargetDx + exitDy * toTargetDy
         : arrDx * exitDx + arrDy * exitDy;
       if (dN < bestDist - TIE_EPS || (dN < bestDist + TIE_EPS && dot > bestDot)) {
