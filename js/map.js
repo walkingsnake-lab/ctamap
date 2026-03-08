@@ -121,7 +121,7 @@ function renderLines(linesGroup, path, geojson) {
 function renderStations(stationsGroup, stations, projection, geojson) {
   stationsGroup.selectAll('*').remove();
 
-  const FONT_SIZE = 1.8;
+  const FONT_SIZE = 1.4;
   const CHAR_W = FONT_SIZE * 0.55;
   const DOT_R = LINE_WIDTH / 2 * 1.2;
   const LABEL_PAD = 0.4;
