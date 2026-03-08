@@ -92,8 +92,9 @@ const LINE_NORTH_DESTS = {
 function directionByNextStation(trackPos, nextStn, segs) {
   const PROBE_DIST = 0.003; // ~300m — enough to resolve direction without overshooting
   const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
-  const probeFwd = advanceOnTrack(trackPos, PROBE_DIST, +1, segs);
-  const probeBwd = advanceOnTrack(trackPos, PROBE_DIST, -1, segs);
+  const target = { targetLon: nextStn.lon, targetLat: nextStn.lat };
+  const probeFwd = advanceOnTrack(trackPos, PROBE_DIST, +1, segs, target);
+  const probeBwd = advanceOnTrack(trackPos, PROBE_DIST, -1, segs, target);
   const fwdDist = geoDist(probeFwd.lon, probeFwd.lat, nextStn.lon, nextStn.lat);
   const bwdDist = geoDist(probeBwd.lon, probeBwd.lat, nextStn.lon, nextStn.lat);
   if (fwdDist < bwdDist && fwdDist < curDist) return 1;
