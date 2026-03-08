@@ -41,7 +41,24 @@ Scripts are loaded synchronously in `index.html` in the order above — this mat
 
 **Route codes** — The CTA API uses lowercase names (`red`, `blue`, `brn`); internally the app uses legend codes (`RD`, `BL`, `BR`, etc.). Mapping lives in `config.js` `ROUTE_TO_LEGEND`.
 
-**Direction inference** — Trains don't report direction. `path-follow.js` walks the track toward the next station or terminal and compares latitudes to determine northbound/southbound. Junction hints (`targetStation`) are passed in when probing at branch points.
+**Direction inference** — Trains don't report direction. It is derived in `path-follow.js` / `trains.js` via a priority cascade:
+
+1. **Next-station probe** (`directionByNextStation`) — preferred method. Advances the train a short distance (~300m) in both directions from its snapped track position and picks whichever direction gets closer to the reported next station. Reliable on straight segments and at junctions because it follows actual track geometry.
+
+2. **Terminal walk** (`directionByTerminalWalk`) — fallback when next-station is ambiguous (train is at the station, or next station unknown). Walks 9999 degrees in both directions to find the dead-end terminals, then compares terminal latitudes against `LINE_NORTH_DESTS` (e.g. Red→"Howard", Blue→"O'Hare"). Loop lines (OR, PK, BR, GR, PR) only reach one dead-end because the other direction circles through ML segments; the code handles this single-terminal case by comparing the reachable dead-end's latitude to the current position.
+
+3. **Heading fallback** (`directionFromHeading`) — last resort. Converts the CTA API's clockwise-from-north heading to a vector and dot-products it against the current track segment vector. Unreliable for stopped trains.
+
+**`LINE_NORTH_DESTS`** (in `trains.js`) maps each legend code to the destination substring that identifies the northern terminus — this is the single source of truth for all direction derivation and suspect-backward classification.
+
+**Junction handling** — `findConnectedSegment` selects the next segment when a train crosses a segment boundary. At junctions (e.g. downtown Loop entry) where multiple segments share an endpoint, ties are broken by:
+- Preferring the segment whose entry direction best aligns with the arrival direction (continuation heuristic).
+- When a `targetLon/targetLat` hint is provided *and* the target is ahead of the junction (dot-product guard), preferring the segment whose exit direction points toward the target. This fixes loop-entry mis-routing where the correct branch requires a sharp turn the arrival heuristic would reject.
+
+**Loop-line complications** — The Chicago downtown Loop is modeled as shared `ML` (multi-line) segments. `buildLineSegments` selects only the ML segments whose `lines` property includes the train's line. On the Loop:
+- `directionByTerminalWalk` hits `MAX_ITER` in the loop-bound direction; the single-terminal path handles it.
+- When both terminal walks reach the same dead-end (the loop circled back), the code falls back to local segment geometry (`dy/dx` slope), then a short probe walk, to determine which way is north.
+- `findConnectedSegment` uses the target hint (set to the next station) to pick the right ML exit segment at loop junctions.
 
 **Phantom jumps** — Known CTA API glitches where a train teleports between specific stations. `config.js` `PHANTOM_JUMPS` lists ~20 per-line patterns. `trains.js` checks each update and holds/snaps position instead of animating the jump.
 
