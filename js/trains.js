@@ -92,9 +92,13 @@ const LINE_NORTH_DESTS = {
 function directionByNextStation(trackPos, nextStn, segs) {
   const PROBE_DIST = 0.003; // ~300m — enough to resolve direction without overshooting
   const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
+  // When already close to the station a full 300m probe overshoots it, making
+  // fwdDist > curDist in both directions and causing a spurious null return.
+  // Scale the probe down so it stays short of the station.
+  const probeDist = Math.min(PROBE_DIST, Math.max(curDist * 0.5, 1e-5));
   const target = { targetLon: nextStn.lon, targetLat: nextStn.lat };
-  const probeFwd = advanceOnTrack(trackPos, PROBE_DIST, +1, segs, target);
-  const probeBwd = advanceOnTrack(trackPos, PROBE_DIST, -1, segs, target);
+  const probeFwd = advanceOnTrack(trackPos, probeDist, +1, segs, target);
+  const probeBwd = advanceOnTrack(trackPos, probeDist, -1, segs, target);
   const fwdDist = geoDist(probeFwd.lon, probeFwd.lat, nextStn.lon, nextStn.lat);
   const bwdDist = geoDist(probeBwd.lon, probeBwd.lat, nextStn.lon, nextStn.lat);
   if (fwdDist < bwdDist && fwdDist < curDist) return 1;
@@ -305,7 +309,13 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     if (prev && prev._direction !== undefined) {
       const segChanged = prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx;
       const destChanged = prev._effectiveDest && effectiveDest !== prev._effectiveDest;
-      if ((segChanged || destChanged) && northDest && effectiveDest) {
+      // For loop-line trains the direction can be wrongly initialised from a stale
+      // CTA heading (both terminal walks circle back, returning null).  Re-derive
+      // whenever next-station direction disagrees so the train self-corrects rather
+      // than staying backwards indefinitely.
+      const loopLineMismatch = ['BR', 'OR', 'PK', 'PR', 'GR'].includes(train.legend)
+        && nextStnDir !== null && nextStnDir !== prev._direction;
+      if ((segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
         // Segment or destination changed — re-derive direction.
         // Prefer next-station direction (handles ML loop topology correctly),
         // then terminal walk, then segment connectivity / heading fallbacks.
