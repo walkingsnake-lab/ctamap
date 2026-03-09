@@ -958,6 +958,13 @@
     }, 200);
   });
 
+  // Cursor flashlight effect — repositions radial gradient on mouse move.
+  const cursorLight = document.getElementById('cursor-light');
+  document.addEventListener('mousemove', (e) => {
+    cursorLight.style.background =
+      `radial-gradient(circle 850px at ${e.clientX}px ${e.clientY}px, transparent 0%, rgba(0,0,0,0.9) 100%)`;
+  });
+
   // Console debug helper — select any active train by run number.
   // Useful when a hold/snap log mentions an rn you want to inspect on the map.
   // Usage: ctaTrain('020')  ← always quote zero-padded run numbers;
