@@ -5,7 +5,7 @@
 }
 
 body {
-  background: #000;
+  background: #050a1e;
   overflow: hidden;
   width: 100vw;
   height: 100vh;
@@ -21,6 +21,18 @@ body {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* --- Cursor flashlight overlay --- */
+#cursor-light {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(circle 850px at 50% 50%, transparent 0%, rgba(0, 0, 0, 0.9) 100%);
 }
 
 /* --- Close button (visible when tracking a train) --- */
