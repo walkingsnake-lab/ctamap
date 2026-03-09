@@ -893,6 +893,13 @@
       return;
     }
 
+    // F key: toggle cursor flashlight effect
+    if (event.key === 'f' || event.key === 'F') {
+      flashlightOn = !flashlightOn;
+      cursorLight.classList.toggle('active', flashlightOn);
+      return;
+    }
+
     // L key: zoom to The Loop (deselects train first if tracking)
     if (event.key === 'l' || event.key === 'L') {
       if (selectedTrain) {
@@ -958,9 +965,11 @@
     }, 200);
   });
 
-  // Cursor flashlight effect — repositions radial gradient on mouse move.
+  // Cursor flashlight effect — toggled with F, repositions gradient on mouse move.
   const cursorLight = document.getElementById('cursor-light');
+  let flashlightOn = false;
   document.addEventListener('mousemove', (e) => {
+    if (!flashlightOn) return;
     cursorLight.style.background =
       `radial-gradient(circle 850px at ${e.clientX}px ${e.clientY}px, transparent 0%, rgba(0,0,0,0.9) 100%)`;
   });
