@@ -34,13 +34,11 @@ body {
   height: 100%;
   pointer-events: none;
   z-index: 0;
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  background: radial-gradient(circle 850px at 50% 50%, transparent 0%, rgba(0, 0, 0, 0.9) 100%);
+  background: black;
 }
 
 #cursor-light.active {
-  opacity: 1;
+  background: radial-gradient(circle 850px at 50% 50%, transparent 0%, rgba(0, 0, 0, 0.9) 100%);
 }
 
 /* --- Close button (visible when tracking a train) --- */
