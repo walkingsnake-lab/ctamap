@@ -558,27 +558,27 @@
       scaleStationDots(currentK);
     }
 
-    // --- Peek offset: when two dots heavily overlap, the under-dot shifts right ---
-    // First pass: collect projected positions in DOM order (earlier = underneath).
-    const peekOffsets = new Map(); // rn -> x-offset in SVG units
+    // --- Peek offset: settled under-dots pop right when another dot overlaps ---
+    // "Settled" trains (not correcting) peek; movers animate naturally and pop on landing.
+    // First pass: collect all positions in DOM order (earlier index = underneath).
+    const peekOffsets = new Map(); // rn → target x-offset in SVG units (settlers only)
     {
       const positions = [];
       svg.select('.trains-layer').selectAll('.train-group').each(function(d) {
         const pt = projection([d.lon, d.lat]);
-        if (pt) positions.push({ rn: d.rn, pt });
+        if (pt) positions.push({ rn: d.rn, pt, correcting: !!d._correcting });
       });
-      // Threshold: centres closer than 1 radius → >50% area overlap (user asked ~80%;
-      // using 1r keeps it practical for trains snapped to the same or adjacent coords).
       const overlapThreshold = scaledRadius;
-      const peekDx = scaledRadius; // shift under-dot this far right (in SVG units)
+      const peekDx = scaledRadius;
       for (let i = 0; i < positions.length; i++) {
+        if (positions[i].correcting) continue; // movers don't peek — they pop on landing
         for (let j = i + 1; j < positions.length; j++) {
           const a = positions[i], b = positions[j];
           const ddx = b.pt[0] - a.pt[0];
           const ddy = b.pt[1] - a.pt[1];
           if (ddx * ddx + ddy * ddy < overlapThreshold * overlapThreshold) {
-            // a is earlier in the DOM → rendered underneath → peek it to the right
             peekOffsets.set(a.rn, peekDx);
+            break; // one overlapping neighbour is enough
           }
         }
       }
@@ -589,8 +589,22 @@
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
         const g = d3.select(this);
-        const peekX = peekOffsets.get(d.rn) || 0;
-        g.attr('transform', `translate(${pt[0] + peekX}, ${pt[1]})`);
+        // Animate the peek offset per-train.
+        // While correcting: hold at 0 so the slide plays cleanly, then pop on landing.
+        // After landing: quick ease (~150ms) to the target — feels like a snap/pop.
+        const peekTarget = peekOffsets.get(d.rn) || 0;
+        if (d._peekOffset === undefined) d._peekOffset = 0;
+        if (d._correcting) {
+          d._peekOffset = 0;
+        } else {
+          const maxStep = (dt / 1000) * 7 * scaledRadius;
+          if (Math.abs(d._peekOffset - peekTarget) <= maxStep) {
+            d._peekOffset = peekTarget;
+          } else {
+            d._peekOffset += (peekTarget > d._peekOffset ? 1 : -1) * maxStep;
+          }
+        }
+        g.attr('transform', `translate(${pt[0] + d._peekOffset}, ${pt[1]})`);
 
         // Check if train is at a line terminus (reused for arrows + heading)
         const termPts = lineTerminals[d.legend] || [];
