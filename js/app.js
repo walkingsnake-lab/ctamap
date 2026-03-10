@@ -558,39 +558,12 @@
       scaleStationDots(currentK);
     }
 
-    // --- Peek offset: when two dots heavily overlap, the under-dot shifts right ---
-    // First pass: collect projected positions in DOM order (earlier = underneath).
-    const peekOffsets = new Map(); // rn -> x-offset in SVG units
-    {
-      const positions = [];
-      svg.select('.trains-layer').selectAll('.train-group').each(function(d) {
-        const pt = projection([d.lon, d.lat]);
-        if (pt) positions.push({ rn: d.rn, pt });
-      });
-      // Threshold: centres closer than 1 radius → >50% area overlap (user asked ~80%;
-      // using 1r keeps it practical for trains snapped to the same or adjacent coords).
-      const overlapThreshold = scaledRadius;
-      const peekDx = scaledRadius; // shift under-dot this far right (in SVG units)
-      for (let i = 0; i < positions.length; i++) {
-        for (let j = i + 1; j < positions.length; j++) {
-          const a = positions[i], b = positions[j];
-          const ddx = b.pt[0] - a.pt[0];
-          const ddy = b.pt[1] - a.pt[1];
-          if (ddx * ddx + ddy * ddy < overlapThreshold * overlapThreshold) {
-            // a is earlier in the DOM → rendered underneath → peek it to the right
-            peekOffsets.set(a.rn, peekDx);
-          }
-        }
-      }
-    }
-
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
         const g = d3.select(this);
-        const peekX = peekOffsets.get(d.rn) || 0;
-        g.attr('transform', `translate(${pt[0] + peekX}, ${pt[1]})`);
+        g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
         // Check if train is at a line terminus (reused for arrows + heading)
         const termPts = lineTerminals[d.legend] || [];
