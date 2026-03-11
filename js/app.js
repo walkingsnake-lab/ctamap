@@ -578,7 +578,7 @@
           if (d._arrowPhase === undefined) d._arrowPhase = 0;
           d._arrowPhase = (d._arrowPhase + dt / 3600) % 1;
 
-          const dir = (d._correcting ? d._corrDirection : d._direction) || 1;
+          const dir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
           const behindDist = 0.005; // start this far behind the dot
           const totalDist = 0.010;  // total travel distance (behind + ahead)
 
@@ -656,7 +656,7 @@
         const headingScale = dotScale / Math.pow(currentK, 0.4);
         let headingVisible = stationsVisible && !atTerminus;
         if (d._trackPos && segs) {
-          const hdir = (d._correcting ? d._corrDirection : d._direction) || 1;
+          const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
           const headingTarget = d._corrToTrackPos
             ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
             : undefined;
