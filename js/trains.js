@@ -89,17 +89,16 @@ const LINE_NORTH_DESTS = {
  *
  * Returns +1 or -1, or null if ambiguous (e.g. train is at the station).
  */
-function directionByNextStation(trackPos, nextStn, segs, overrideProbeDist) {
-  const PROBE_DIST = overrideProbeDist || 0.003; // ~300m default, longer for loop-exit retry
+function directionByNextStation(trackPos, nextStn, segs) {
+  const PROBE_DIST = 0.015; // ~1.5km — long enough to reach around corners of the ML loop
   const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
-  // When already close to the station a full probe overshoots it, making
-  // fwdDist > curDist in both directions and causing a spurious null return.
-  // Scale the probe down so it stays short of the station.
-  // For the extended (override) probe, use a gentler scale (90%) so the probe
-  // can reach around corners of the ML loop without being choked back to half
-  // the station distance.  The 90% factor still prevents overshooting.
-  const scaleFactor = overrideProbeDist ? 0.9 : 0.5;
-  const probeDist = Math.min(PROBE_DIST, Math.max(curDist * scaleFactor, 1e-5));
+  // When close to the station, scale the probe down so it stays short of the
+  // station.  A probe that overshoots makes fwdDist > curDist in both
+  // directions, causing a spurious null return.  0.9 keeps the probe at most
+  // 90% of the way to the station — can't overshoot, but still long enough to
+  // resolve direction on the ML loop where short probes on perpendicular
+  // segments barely change distance to an off-loop station.
+  const probeDist = Math.min(PROBE_DIST, Math.max(curDist * 0.9, 1e-5));
   const target = { targetLon: nextStn.lon, targetLat: nextStn.lat };
   const probeFwd = advanceOnTrack(trackPos, probeDist, +1, segs, target);
   const probeBwd = advanceOnTrack(trackPos, probeDist, -1, segs, target);
@@ -309,18 +308,6 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     let nextStnDir = nextStn
       ? directionByNextStation(train._trackPos, nextStn, segs)
       : null;
-    // Extended probe for loop lines: on the ML elevated loop, the default 300m
-    // probe can fail when the track runs perpendicular to the next station
-    // (e.g. Pink Line on the east side of the loop with Clinton due west).
-    // A short probe barely changes the east-west distance, making both probes
-    // equidistant and returning null.  Retry with a ~2km probe that can reach
-    // around a corner of the loop to clearly resolve direction.
-    if (nextStnDir === null && nextStn
-        && ['BR', 'OR', 'PK', 'PR', 'GR'].includes(train.legend)
-        && geoDist(train._trackPos.lon, train._trackPos.lat,
-                   nextStn.lon, nextStn.lat) > 0.005) {
-      nextStnDir = directionByNextStation(train._trackPos, nextStn, segs, 0.02);
-    }
     // Guard against stale nextStaNm: when the train is close to the reported
     // next station and the probe would flip the established direction, the API
     // likely hasn't updated nextStaNm yet (it still points at a station the
