@@ -92,6 +92,14 @@ const LINE_NORTH_DESTS = {
 function directionByNextStation(trackPos, nextStn, segs) {
   const PROBE_DIST = 0.003; // ~300m — enough to resolve direction without overshooting
   const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
+  // When the train is very close to the reported next station (~300m), bail out.
+  // The CTA API often hasn't updated nextStaNm yet after a train passes a station,
+  // so the "next station" is actually behind the train.  The probe would correctly
+  // point backward toward that stale station, causing a spurious direction flip.
+  // Returning null lets all callers fall through to terminal walk, which derives
+  // direction from the destination name and terminal positions — immune to stale
+  // station data.
+  if (curDist < PROBE_DIST) return null;
   // When already close to the station a full 300m probe overshoots it, making
   // fwdDist > curDist in both directions and causing a spurious null return.
   // Scale the probe down so it stays short of the station.
@@ -313,18 +321,8 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
       // CTA heading (both terminal walks circle back, returning null).  Re-derive
       // whenever next-station direction disagrees so the train self-corrects rather
       // than staying backwards indefinitely.
-      //
-      // Proximity guard: when the train is very close to the reported next station
-      // (~300m), the direction probe is unreliable — the CTA API often hasn't
-      // updated nextStaNm yet, so it still points at a station the train just
-      // passed.  directionByNextStation then returns "go backward" (toward the
-      // stale station), causing a spurious direction flip.  Require a minimum
-      // distance before trusting the mismatch signal.
-      const nextStnTooClose = nextStn
-        && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.003;
       const loopLineMismatch = ['BR', 'OR', 'PK', 'PR', 'GR'].includes(train.legend)
-        && nextStnDir !== null && nextStnDir !== prev._direction
-        && !nextStnTooClose;
+        && nextStnDir !== null && nextStnDir !== prev._direction;
       if ((segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
         // Segment or destination changed — re-derive direction.
         // Prefer next-station direction (handles ML loop topology correctly),
