@@ -90,12 +90,15 @@ const LINE_NORTH_DESTS = {
  * Returns +1 or -1, or null if ambiguous (e.g. train is at the station).
  */
 function directionByNextStation(trackPos, nextStn, segs) {
-  const PROBE_DIST = 0.003; // ~300m — enough to resolve direction without overshooting
+  const PROBE_DIST = 0.015; // ~1.5km — long enough to reach around corners of the ML loop
   const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
-  // When already close to the station a full 300m probe overshoots it, making
-  // fwdDist > curDist in both directions and causing a spurious null return.
-  // Scale the probe down so it stays short of the station.
-  const probeDist = Math.min(PROBE_DIST, Math.max(curDist * 0.5, 1e-5));
+  // When close to the station, scale the probe down so it stays short of the
+  // station.  A probe that overshoots makes fwdDist > curDist in both
+  // directions, causing a spurious null return.  0.9 keeps the probe at most
+  // 90% of the way to the station — can't overshoot, but still long enough to
+  // resolve direction on the ML loop where short probes on perpendicular
+  // segments barely change distance to an off-loop station.
+  const probeDist = Math.min(PROBE_DIST, Math.max(curDist * 0.9, 1e-5));
   const target = { targetLon: nextStn.lon, targetLat: nextStn.lat };
   const probeFwd = advanceOnTrack(trackPos, probeDist, +1, segs, target);
   const probeBwd = advanceOnTrack(trackPos, probeDist, -1, segs, target);
