@@ -508,17 +508,19 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // (empirical, which way gets closer) to the train's expected direction of
           // travel at corrFromTrackPos.  Use a terminal walk when possible (reliable on
           // non-loop segments and handles geometry-flip junctions); when terminal walk
-          // returns null (ML-loop positions), use the PREVIOUS direction rather than
-          // the freshly re-derived train._direction.  On segment changes (e.g. loop
-          // exit from ML to own-line segment), _direction has already been updated for
-          // the NEW segment, but _corrFromTrackPos is still on the OLD segment where
-          // prev._direction is the correct expected direction.
+          // returns null (ML-loop positions), use train._direction — the direction
+          // already derived above with the full cascade (nextStnDir → termWalk →
+          // connectivity → heading).  This is strictly better than prev._direction
+          // which may be stale/wrong (e.g. initialised from a bad heading on the ML
+          // loop).  On segment changes, _corrFromTrackPos is on the OLD segment while
+          // train._direction is for the NEW one, but crossing a segment boundary is
+          // inherently forward movement, so "not backward" is the correct classification.
           const _sbNorthDest = LINE_NORTH_DESTS[train.legend];
           const _headingDirFromPos = (_sbNorthDest && effectiveDest)
             ? (directionByTerminalWalk(train._corrFromTrackPos, effectiveDest,
                 _sbNorthDest, segs)
-              ?? prev._direction)
-            : prev._direction;
+              ?? train._direction)
+            : train._direction;
           const isSuspectBackward = _headingDirFromPos !== train._corrDirection;
           const isSuspectForward  = !isSuspectBackward && drift > FORWARD_PLAUSIBLE_DIST;
 
