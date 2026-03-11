@@ -92,14 +92,6 @@ const LINE_NORTH_DESTS = {
 function directionByNextStation(trackPos, nextStn, segs) {
   const PROBE_DIST = 0.003; // ~300m — enough to resolve direction without overshooting
   const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
-  // When the train is very close to the reported next station (~300m), bail out.
-  // The CTA API often hasn't updated nextStaNm yet after a train passes a station,
-  // so the "next station" is actually behind the train.  The probe would correctly
-  // point backward toward that stale station, causing a spurious direction flip.
-  // Returning null lets all callers fall through to terminal walk, which derives
-  // direction from the destination name and terminal positions — immune to stale
-  // station data.
-  if (curDist < PROBE_DIST) return null;
   // When already close to the station a full 300m probe overshoots it, making
   // fwdDist > curDist in both directions and causing a spurious null return.
   // Scale the probe down so it stays short of the station.
@@ -310,9 +302,27 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // on the ML loop where latitude heuristics fail (loop exit can be in the
     // opposite direction from the terminal).
     const nextStn = findNextStation(train, stations);
-    const nextStnDir = nextStn
+    let nextStnDir = nextStn
       ? directionByNextStation(train._trackPos, nextStn, segs)
       : null;
+    // Guard against stale nextStaNm: when the train is close to the reported
+    // next station and the probe would flip the established direction, the API
+    // likely hasn't updated nextStaNm yet (it still points at a station the
+    // train just passed).  Suppress the probe result so callers fall through to
+    // terminal walk.  Only applies when an established direction exists — new
+    // trains use the probe as-is and self-correct on subsequent polls.
+    //
+    // This is NOT a blanket distance cutoff — when the probe agrees with the
+    // established direction (train genuinely approaching), it is trusted even
+    // at close range.  This matters in dense station areas (subway trunk, Loop)
+    // where stations are ~400m apart and a blanket 300m cutoff would disable
+    // direction probing almost everywhere.
+    if (nextStnDir !== null && prev && prev._direction !== undefined
+        && nextStnDir !== prev._direction && nextStn
+        && geoDist(train._trackPos.lon, train._trackPos.lat,
+                   nextStn.lon, nextStn.lat) < 0.003) {
+      nextStnDir = null;
+    }
 
     if (prev && prev._direction !== undefined) {
       const segChanged = prev._trackPos && train._trackPos.segIdx !== prev._trackPos.segIdx;
