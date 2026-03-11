@@ -163,11 +163,12 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
 }
 
 /**
- * For lines where the Loop is the "north" terminus (OR, PK), operators sometimes
- * change the destination signage (e.g. from "Loop" to "Midway") before the train
- * has actually entered the loop.  The CTA API reflects this early, causing
- * directionByTerminalWalk to flip direction prematurely — the train appears to
- * move backward on the map.
+ * For all loop lines (OR, PK, BR, GR, PR), operators sometimes change the
+ * destination signage before the train has actually entered or exited the loop.
+ * For OR/PK the sign flips from "Loop" to the return destination (e.g. "Midway");
+ * for BR/GR/PR the sign flips from "Loop" to the outbound terminal (e.g. "Kimball").
+ * The CTA API reflects this early, causing directionByTerminalWalk to flip
+ * direction prematurely — the train appears to move backward on the map.
  *
  * Detects this by checking the CTA API's nextStaNm field: if the next station
  * is closer to the Loop center than the train, the train is still heading
@@ -207,7 +208,19 @@ function findNextStation(train, stations) {
 }
 
 function effectiveDestForDirection(train, northDest, stations) {
-  if (!northDest || northDest !== 'Loop') return train.destNm;
+  if (!northDest) return train.destNm;
+
+  // All loop lines (OR, PK, BR, GR, PR) can have premature signage changes
+  // near the Loop.  For OR/PK the sign flips FROM "Loop" TO the return dest;
+  // for BR/GR/PR the sign flips FROM "Loop" TO the outbound dest (Kimball,
+  // Harlem, Linden).  In both cases the train is still physically heading
+  // toward the Loop.  Detect by checking if nextStaNm is closer to the Loop
+  // than the train.
+  //
+  // Skip the override when the dest already says "Loop" (train genuinely
+  // heading to Loop) or when the line doesn't use the Loop at all (RD, BL, YL).
+  const LOOP_LINES = new Set(['BR', 'OR', 'PK', 'PR', 'GR']);
+  if (!LOOP_LINES.has(train.legend)) return train.destNm;
   if (!train.destNm || train.destNm.includes('Loop')) return train.destNm;
 
   const nextStn = findNextStation(train, stations);
@@ -296,8 +309,8 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // fall back to the CTA heading for positions on the ML loop where neither walk
     // reaches a dead-end (the loop connects back to itself).
     const northDest = LINE_NORTH_DESTS[train.legend];
-    // Use effective destination for direction: detects premature Loop→return
-    // signage changes on OR/PK by checking if nextStaNm is still loop-bound.
+    // Use effective destination for direction: detects premature signage
+    // changes on all loop lines by checking if nextStaNm is still loop-bound.
     const effectiveDest = effectiveDestForDirection(train, northDest, stations);
     train._effectiveDest = effectiveDest;
 
