@@ -231,14 +231,18 @@ function effectiveDestForDirection(train, northDest, stations) {
   // Uses distance to Loop center rather than latitude so this works for lines
   // that approach the Loop from any direction (e.g. Pink Line from the west).
   //
-  // Require a meaningful margin (~330m) so the override doesn't fire when the
-  // train is AT the next station — e.g. a PR train at Merchandise Mart heading
-  // to Linden.  Merchandise Mart is only marginally closer to the Loop center
-  // than the train itself, but the train is exiting, not entering.
-  const LOOP_OVERRIDE_MARGIN = 0.003;   // ~330 m in degree-space
+  // Skip when the train is very close to the next station (~110m).  This
+  // prevents false overrides when the train is AT the exit station — e.g. a
+  // PR train at Merchandise Mart heading to Linden.  MM is only marginally
+  // closer to the Loop center than the train, but the train is exiting, not
+  // entering.  A distance margin on the Loop comparison doesn't work here
+  // because the gap between Loop stations (~0.005°) and exit stations
+  // (~0.008°) is only ~0.003° — any meaningful margin eats into it.
+  const trainToNextStn = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
+  if (trainToNextStn < 0.001) return train.destNm;  // at the station — trust the sign
   const trainDistToLoop = geoDist(train.lon, train.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
   const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
-  if (nextStnDistToLoop + LOOP_OVERRIDE_MARGIN < trainDistToLoop) {
+  if (nextStnDistToLoop < trainDistToLoop) {
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
   }
