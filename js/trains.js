@@ -365,6 +365,17 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
         // then terminal walk, then segment connectivity / heading fallbacks.
         if (nextStnDir !== null) {
           train._direction = nextStnDir;
+        } else if (segChanged && !destChanged && nextStn
+            && geoDist(train._trackPos.lon, train._trackPos.lat,
+                       nextStn.lon, nextStn.lat) < 0.001) {
+          // Train is sitting at its nextStation and only a segment-boundary
+          // wobble triggered re-derivation (not a dest change).  Preserve the
+          // established direction — a stopped train at a platform shouldn't
+          // flip just because GPS jitter snapped it to an adjacent segment.
+          // This is especially important near Armitage/Sedgwick on the Brown
+          // line where the track curves from N-S to E-W, causing the terminal-
+          // walk probe to misread latitude deltas on the new segment.
+          train._direction = prev._direction;
         } else {
           const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
           if (termDir !== null) {
