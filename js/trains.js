@@ -231,18 +231,21 @@ function effectiveDestForDirection(train, northDest, stations) {
   // Uses distance to Loop center rather than latitude so this works for lines
   // that approach the Loop from any direction (e.g. Pink Line from the west).
   //
-  // Skip when the train is very close to the next station (~110m).  This
-  // prevents false overrides when the train is AT the exit station — e.g. a
-  // PR train at Merchandise Mart heading to Linden.  MM is only marginally
-  // closer to the Loop center than the train, but the train is exiting, not
-  // entering.  A distance margin on the Loop comparison doesn't work here
-  // because the gap between Loop stations (~0.005°) and exit stations
-  // (~0.008°) is only ~0.003° — any meaningful margin eats into it.
-  const trainToNextStn = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
-  if (trainToNextStn < 0.001) return train.destNm;  // at the station — trust the sign
+  // A tiny noise margin (~22m) prevents GPS jitter from spuriously triggering
+  // the override when the train is essentially AT the exit station (e.g. PR
+  // at Merchandise Mart heading to Linden, where trainDistToLoop ≈
+  // nextStnDistToLoop and GPS noise pushes it slightly outside).
+  //
+  // A proximity check (trainToNextStn < threshold) would be wrong here: it
+  // stops the override while the train is still APPROACHING the exit station,
+  // causing effectiveDest to change → destChanged fires → terminal walk
+  // re-derives direction toward the outbound terminal → direction flip.
+  // The correct guard is geometric: the override stops only once the train has
+  // passed through the exit station (trainDistToLoop < nextStnDistToLoop).
+  const GPS_NOISE = 0.0002;   // ~22 m — suppresses jitter at the exit station
   const trainDistToLoop = geoDist(train.lon, train.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
   const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
-  if (nextStnDistToLoop < trainDistToLoop) {
+  if (nextStnDistToLoop + GPS_NOISE < trainDistToLoop) {
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
   }
