@@ -133,6 +133,7 @@
   let isZoomTransitioning = false;
   let zoomAnim = null;
   let lastETAs = null;
+  let lastRenderedStopNames = null;
   const TRACK_ZOOM_SCALE = 8;
   let trackingScale = TRACK_ZOOM_SCALE;
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
@@ -297,11 +298,16 @@
     }
 
     // Upcoming stops (etas[1..5])
-    stops.innerHTML = '';
-    if (etas && etas.length > 1) {
-      const upcoming = etas.slice(1, 6);
-      upcoming.forEach((eta, i) => {
-        if (!eta.staNm) return;
+    const upcomingEtas = (etas && etas.length > 1)
+      ? etas.slice(1, 6).filter(e => e.staNm)
+      : [];
+    const newStopNames = upcomingEtas.map(e => cleanStationName(e.staNm)).join(',');
+
+    if (newStopNames !== lastRenderedStopNames) {
+      // Station list changed — full rebuild (triggers entry animation)
+      lastRenderedStopNames = newStopNames;
+      stops.innerHTML = '';
+      upcomingEtas.forEach((eta, i) => {
         const row = document.createElement('div');
         row.className = 'tl-stop-row';
         row.style.animationDelay = `${0.65 + i * 0.07}s`;
@@ -315,16 +321,29 @@
         row.appendChild(time);
         stops.appendChild(row);
       });
+    } else {
+      // Same stations — update times in place, no re-animation
+      const timeEls = stops.querySelectorAll('.tl-stop-time');
+      upcomingEtas.forEach((eta, i) => {
+        if (timeEls[i]) timeEls[i].textContent = formatEtaTime(eta.arrT);
+      });
     }
   }
 
   function formatEtaTime(arrT) {
     if (!arrT) return '';
-    // arrT format: "20260312 14:30:00"
-    const [datePart, timePart] = arrT.split(' ');
-    if (!datePart || !timePart) return '';
+    // CTA arrT format: "20260312 14:30:00"
+    const sp = arrT.indexOf(' ');
+    if (sp === -1) return '';
+    const datePart = arrT.slice(0, sp);
+    const timePart = arrT.slice(sp + 1);
     const y = +datePart.slice(0, 4), mo = +datePart.slice(4, 6) - 1, d = +datePart.slice(6, 8);
-    const [h, m, s] = timePart.split(':').map(Number);
+    const col1 = timePart.indexOf(':');
+    const col2 = timePart.lastIndexOf(':');
+    if (col1 === -1) return '';
+    const h = +timePart.slice(0, col1);
+    const m = +timePart.slice(col1 + 1, col2 > col1 ? col2 : undefined);
+    const s = col2 > col1 ? +timePart.slice(col2 + 1) : 0;
     const arrival = new Date(y, mo, d, h, m, s);
     const mins = Math.round((arrival - Date.now()) / 60000);
     if (mins < 1) return 'Due';
@@ -406,6 +425,7 @@
     selectedTrainRn = train.rn;
     selectedTrain = train;
     lastETAs = null;
+    lastRenderedStopNames = null;
     closeBtn.classList.add('visible');
 
     // Highlight selected and dim other lines/trains

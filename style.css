@@ -318,13 +318,13 @@ body {
 
 .tl-stop-time {
   text-align: right;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 0.85em;
   letter-spacing: 0.02em;
 }
 
 .tl-stop-row:first-child .tl-stop-time {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 @keyframes line-in {
