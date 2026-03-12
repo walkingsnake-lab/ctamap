@@ -373,7 +373,7 @@ function trackDistanceBetween(from, to, direction, segments) {
   const step = Math.max(straightDist / 40, 1e-5);
   let pos = from;
   let totalDist = 0;
-  let prevDistToTarget = straightDist;
+  let minDistToTarget = straightDist;
   const targetHint = { targetLon: to.lon, targetLat: to.lat };
 
   for (let i = 0; i < 2000; i++) {
@@ -387,8 +387,13 @@ function trackDistanceBetween(from, to, direction, segments) {
       return totalDist + distToTarget;
     }
 
-    // Getting farther away — wrong direction or different branch
-    if (distToTarget > prevDistToTarget + step * 0.5) {
+    if (distToTarget < minDistToTarget) minDistToTarget = distToTarget;
+
+    // Getting farther away — wrong direction or different branch.
+    // Compare against minimum distance seen (not just previous step) to allow
+    // brief distance increases on track corners (e.g. ML loop 90° turns).
+    // Tolerance of step * 2 lets the walk round a corner before bailing.
+    if (distToTarget > minDistToTarget + step * 2) {
       return straightDist;
     }
 
@@ -436,18 +441,25 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
   // toward it.  This overrides the arrival-alignment heuristic at junctions like
   // the downtown Loop entry where the correct segment requires a sharp turn.
   //
-  // Guard: only use the target for scoring when it is actually *ahead* of the
-  // junction in the direction of travel (arrDx·toTargetDx + arrDy·toTargetDy > 0).
-  // When the target is behind the junction — e.g. a forward arrow that has
+  // Guard: only use the target for scoring when it is not clearly *behind*
+  // the junction.  When the target is behind — e.g. a forward arrow that has
   // advanced past the correction target, or a stale _corrToTrackPos after the
   // correction completed — the target vector points backward and would cause
-  // findConnectedSegment to select the wrong (rearward) branch.  In that case
-  // fall back to the arrival-direction heuristic, which correctly continues in
-  // the direction of travel.
+  // findConnectedSegment to select the wrong (rearward) branch.
+  //
+  // Use a normalized cosine threshold of -0.25 (~105°) rather than a strict
+  // dot > 0 check, so that near-perpendicular targets still influence junction
+  // selection.  This matters at ML loop corners where the track turns 90° and
+  // the target is on the adjacent side — the arrival direction and target
+  // direction are nearly perpendicular, but the target hint is still needed
+  // to pick the correct ML continuation over a line's own exit segment.
   const hasTarget = targetLon !== undefined && targetLat !== undefined;
   const toTargetDx = hasTarget ? targetLon - bx : 0;
   const toTargetDy = hasTarget ? targetLat - by : 0;
-  const targetIsAhead = hasTarget && (arrDx * toTargetDx + arrDy * toTargetDy) > 0;
+  const arrMag = Math.sqrt(arrDx * arrDx + arrDy * arrDy);
+  const tarMag = Math.sqrt(toTargetDx * toTargetDx + toTargetDy * toTargetDy);
+  const targetIsAhead = hasTarget && arrMag > 0 && tarMag > 0
+    && (arrDx * toTargetDx + arrDy * toTargetDy) > -0.25 * arrMag * tarMag;
 
   let bestDist = Infinity;
   let bestDot  = -Infinity;

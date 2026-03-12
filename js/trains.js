@@ -230,9 +230,15 @@ function effectiveDestForDirection(train, northDest, stations) {
   // still heading toward the Loop — override the premature signage change.
   // Uses distance to Loop center rather than latitude so this works for lines
   // that approach the Loop from any direction (e.g. Pink Line from the west).
+  //
+  // Require a meaningful margin (~330m) so the override doesn't fire when the
+  // train is AT the next station — e.g. a PR train at Merchandise Mart heading
+  // to Linden.  Merchandise Mart is only marginally closer to the Loop center
+  // than the train itself, but the train is exiting, not entering.
+  const LOOP_OVERRIDE_MARGIN = 0.003;   // ~330 m in degree-space
   const trainDistToLoop = geoDist(train.lon, train.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
   const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
-  if (nextStnDistToLoop < trainDistToLoop) {
+  if (nextStnDistToLoop + LOOP_OVERRIDE_MARGIN < trainDistToLoop) {
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
   }
@@ -450,14 +456,23 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           : snapToTrackPosition(prev._animLon, prev._animLat, segs);
 
         // Determine correction direction empirically: test one step in each
-        // direction from the old position and pick whichever gets closer to target
+        // direction from the old position and pick whichever gets closer to target.
+        // When the probe is ambiguous (both directions roughly equidistant — e.g.
+        // near an ML loop corner where a small step in either direction is similar
+        // distance from the target), fall back to the direction already derived
+        // via the full cascade above.
         const toPos = train._corrToTrackPos;
         const testStep = Math.max(drift * 0.1, 1e-5);
         const fwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, +1, segs);
         const bwdTest = advanceOnTrack(train._corrFromTrackPos, testStep, -1, segs);
         const fwdDist = geoDist(fwdTest.lon, fwdTest.lat, toPos.lon, toPos.lat);
         const bwdDist = geoDist(bwdTest.lon, bwdTest.lat, toPos.lon, toPos.lat);
-        train._corrDirection = fwdDist <= bwdDist ? 1 : -1;
+        if (Math.abs(fwdDist - bwdDist) < testStep * 0.5) {
+          // Ambiguous probe — trust the direction already derived above
+          train._corrDirection = train._direction;
+        } else {
+          train._corrDirection = fwdDist <= bwdDist ? 1 : -1;
+        }
 
         // Precompute track distance so we can advance proportionally each frame
         train._corrTotalDist = trackDistanceBetween(
@@ -473,24 +488,40 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           train._corrFromTrackPos, train._corrTotalDist, train._corrDirection, segs,
           { targetLon: toPos.lon, targetLat: toPos.lat }
         );
-        if (geoDist(_corrPathEnd.lon, _corrPathEnd.lat, toPos.lon, toPos.lat) > drift * 0.5) {
-          // Path validation failed — commonly a Loop-entry/exit correction where
-          // trackDistanceBetween bails when the ML↔own-line segment crossing inverts
-          // the direction, causing the validation walk to overshoot.
-          // Try terminal walk at the snapped position (now handles the one-terminal
-          // case for loop lines on own segments).  If terminal walk still returns null
-          // (train is on ML where both directions circle), keep the direction already
-          // derived at the top of this function — it's more reliable than a potentially
-          // stale CTA heading.
-          const _pvNorthDest = LINE_NORTH_DESTS[train.legend];
-          const _pvTermDir = (_pvNorthDest && effectiveDest)
-            ? directionByTerminalWalk(train._trackPos, effectiveDest, _pvNorthDest, segs)
-            : null;
-          if (_pvTermDir !== null) {
-            train._direction = _pvTermDir;
+        let _pvPathValid = geoDist(_corrPathEnd.lon, _corrPathEnd.lat, toPos.lon, toPos.lat) <= drift * 0.5;
+        if (!_pvPathValid) {
+          // Path validation failed — try the opposite direction before giving up.
+          // This handles ML loop corners where the empirical probe picked the wrong
+          // direction at a junction (both directions were near-equidistant from target
+          // but one navigates a junction incorrectly).
+          const altDir = train._corrDirection * -1;
+          const altDist = trackDistanceBetween(
+            train._corrFromTrackPos, train._corrToTrackPos, altDir, segs
+          );
+          const altEnd = advanceOnTrack(
+            train._corrFromTrackPos, altDist, altDir, segs,
+            { targetLon: toPos.lon, targetLat: toPos.lat }
+          );
+          if (geoDist(altEnd.lon, altEnd.lat, toPos.lon, toPos.lat) <= drift * 0.5) {
+            // Opposite direction validates — use it
+            train._corrDirection = altDir;
+            train._corrTotalDist = altDist;
+            _pvPathValid = true;
+            console.log(`[CTA] Path validation: rn=${train.rn} (${train.legend}) flipped correction dir to ${altDir > 0 ? '+1' : '-1'}, drift=${m(drift)}`);
+          } else {
+            // Both directions fail — snap directly.
+            console.warn(`[CTA] Path validation failed: rn=${train.rn} (${train.legend}) drift=${m(drift)} — snapping`);
+            const _pvNorthDest = LINE_NORTH_DESTS[train.legend];
+            const _pvTermDir = (_pvNorthDest && effectiveDest)
+              ? directionByTerminalWalk(train._trackPos, effectiveDest, _pvNorthDest, segs)
+              : null;
+            if (_pvTermDir !== null) {
+              train._direction = _pvTermDir;
+            }
+            // Leave _correcting = false — train stays at API-snapped position.
           }
-          // Leave _correcting = false — train stays at API-snapped position.
-        } else {
+        }
+        if (_pvPathValid) {
           train._correcting = true;
           train._corrStartTime = now;
           // Set current visual position to the from track position
