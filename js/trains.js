@@ -376,16 +376,18 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
         // Segment or destination changed — re-derive direction.
         // Prefer next-station direction (handles ML loop topology correctly),
         // then terminal walk, then segment connectivity / heading fallbacks.
-        if (nextStnDir !== null) {
+        //
+        // When loopLineMismatch is the SOLE trigger (no seg/dest change), the
+        // raw next-station probe can be wrong due to a stale nextStaNm pointing
+        // at a station the train just passed (e.g. Brown Line near Armitage
+        // where the CTA API still reports "Sedgwick" for a northbound train).
+        // In that case, verify with the terminal walk before trusting the probe.
+        // The terminal walk is reliable on approach segments (not the ML loop
+        // itself) — on the loop, both walks circle back and return null, so we
+        // still fall through to the probe as a last resort.
+        const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
+        if (nextStnDir !== null && !onlyLoopMismatch) {
           train._direction = nextStnDir;
-        } else if (loopLineMismatch && rawNextStnDir !== null) {
-          // The stale-nextStaNm guard suppressed nextStnDir, but the raw
-          // probe disagrees with the established direction on a loop line.
-          // Trust the raw probe — on the ML loop, the direction is far more
-          // likely to be wrong (initialised from a stale heading) than the
-          // nextStaNm is to be stale.  The backward-hold mechanism will
-          // catch any false positives from genuinely stale nextStaNm.
-          train._direction = rawNextStnDir;
         } else if (segChanged && !destChanged && nextStn
             && geoDist(train._trackPos.lon, train._trackPos.lat,
                        nextStn.lon, nextStn.lat) < 0.001) {
@@ -401,8 +403,14 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
           if (termDir !== null) {
             train._direction = termDir;
-          } else if (segChanged) {
+          } else if (nextStnDir !== null || (loopLineMismatch && rawNextStnDir !== null)) {
             // Terminal walk failed (e.g. both directions circle the ML loop).
+            // Trust the next-station probe — on the ML loop the direction is
+            // far more likely to be wrong (stale heading initialisation) than
+            // nextStaNm is to be stale.
+            train._direction = nextStnDir ?? rawNextStnDir;
+          } else if (segChanged) {
+            // Terminal walk failed and no probe available.
             // Infer direction from segment connectivity: check which way the
             // previous segment connects to the new one.
             const prevSeg = segs[prev._trackPos.segIdx];
