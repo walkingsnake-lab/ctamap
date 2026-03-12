@@ -343,6 +343,14 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // at close range.  This matters in dense station areas (subway trunk, Loop)
     // where stations are ~400m apart and a blanket 300m cutoff would disable
     // direction probing almost everywhere.
+    //
+    // Save the raw (pre-guard) value for loopLineMismatch detection below.
+    // On the ML loop, where stations are ~400m apart, the guard fires almost
+    // always when the direction is wrong, preventing the loopLineMismatch
+    // self-correction from ever triggering.  The raw value lets the mismatch
+    // detector see through the guard while still suppressing the probe for
+    // the primary direction assignment.
+    const rawNextStnDir = nextStnDir;
     if (nextStnDir !== null && prev && prev._direction !== undefined
         && nextStnDir !== prev._direction && nextStn
         && geoDist(train._trackPos.lon, train._trackPos.lat,
@@ -357,14 +365,27 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
       // CTA heading (both terminal walks circle back, returning null).  Re-derive
       // whenever next-station direction disagrees so the train self-corrects rather
       // than staying backwards indefinitely.
+      //
+      // Use rawNextStnDir (pre-guard value) so the stale-nextStaNm guard doesn't
+      // mask the mismatch.  On the ML loop, stations are ~400m apart and trains
+      // are almost always within the guard's 0.003° radius of the next station,
+      // so using the guarded nextStnDir would prevent self-correction entirely.
       const loopLineMismatch = ['BR', 'OR', 'PK', 'PR', 'GR'].includes(train.legend)
-        && nextStnDir !== null && nextStnDir !== prev._direction;
+        && rawNextStnDir !== null && rawNextStnDir !== prev._direction;
       if ((segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
         // Segment or destination changed — re-derive direction.
         // Prefer next-station direction (handles ML loop topology correctly),
         // then terminal walk, then segment connectivity / heading fallbacks.
         if (nextStnDir !== null) {
           train._direction = nextStnDir;
+        } else if (loopLineMismatch && rawNextStnDir !== null) {
+          // The stale-nextStaNm guard suppressed nextStnDir, but the raw
+          // probe disagrees with the established direction on a loop line.
+          // Trust the raw probe — on the ML loop, the direction is far more
+          // likely to be wrong (initialised from a stale heading) than the
+          // nextStaNm is to be stale.  The backward-hold mechanism will
+          // catch any false positives from genuinely stale nextStaNm.
+          train._direction = rawNextStnDir;
         } else if (segChanged && !destChanged && nextStn
             && geoDist(train._trackPos.lon, train._trackPos.lat,
                        nextStn.lon, nextStn.lat) < 0.001) {
