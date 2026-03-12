@@ -392,8 +392,13 @@ function trackDistanceBetween(from, to, direction, segments) {
     // Getting farther away — wrong direction or different branch.
     // Compare against minimum distance seen (not just previous step) to allow
     // brief distance increases on track corners (e.g. ML loop 90° turns).
-    // Tolerance of step * 2 lets the walk round a corner before bailing.
-    if (distToTarget > minDistToTarget + step * 2) {
+    // Use a floor of 0.002 deg (~220m) so that sharp corners on the downtown
+    // Loop don't bail prematurely — the step-relative tolerance (step * 2) is
+    // only ~17m for typical station-to-station moves, far less than the lateral
+    // deviation at a 90° corner.  0.002 is still small enough that a genuinely
+    // wrong-direction walk diverges past it within a few dozen steps.
+    const cornerSlack = Math.max(step * 2, 0.002);
+    if (distToTarget > minDistToTarget + cornerSlack) {
       return straightDist;
     }
 
