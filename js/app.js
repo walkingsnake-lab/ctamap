@@ -332,19 +332,9 @@
 
   function formatEtaTime(arrT) {
     if (!arrT) return '';
-    // CTA arrT format: "20260312 14:30:00"
-    const sp = arrT.indexOf(' ');
-    if (sp === -1) return '';
-    const datePart = arrT.slice(0, sp);
-    const timePart = arrT.slice(sp + 1);
-    const y = +datePart.slice(0, 4), mo = +datePart.slice(4, 6) - 1, d = +datePart.slice(6, 8);
-    const col1 = timePart.indexOf(':');
-    const col2 = timePart.lastIndexOf(':');
-    if (col1 === -1) return '';
-    const h = +timePart.slice(0, col1);
-    const m = +timePart.slice(col1 + 1, col2 > col1 ? col2 : undefined);
-    const s = col2 > col1 ? +timePart.slice(col2 + 1) : 0;
-    const arrival = new Date(y, mo, d, h, m, s);
+    // CTA arrT is ISO 8601: "2026-03-12T18:58:22"
+    const arrival = new Date(arrT);
+    if (isNaN(arrival)) return '';
     const mins = Math.round((arrival - Date.now()) / 60000);
     if (mins < 1) return 'Due';
     if (mins === 1) return '1 min';
