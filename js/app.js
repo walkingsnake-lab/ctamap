@@ -118,7 +118,8 @@
   labelEl.id = 'train-label';
   labelEl.innerHTML = '<div class="tl-badge"><span class="tl-dest"></span></div>' +
     '<div class="tl-info"></div>' +
-    '<div class="tl-status"></div>';
+    '<div class="tl-status"></div>' +
+    '<div class="tl-stops"></div>';
   document.body.appendChild(labelEl);
 
   // ---- Close button ----
@@ -268,6 +269,7 @@
     const badge = labelEl.querySelector('.tl-badge');
     const info = labelEl.querySelector('.tl-info');
     const status = labelEl.querySelector('.tl-status');
+    const stops = labelEl.querySelector('.tl-stops');
 
     dest.innerHTML = formatDestName(train.destNm);
 
@@ -287,12 +289,47 @@
     if (st.prefix || st.station) {
       status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
     } else if (st.delayed) {
-      status.innerHTML = '<span class="tl-delayed">Delayed</span><br><span class="tl-limited">Limited tracking available</span>';
+      status.innerHTML = '<span class="tl-delayed">Delayed</span><br><span class="tl-limited">Limited tracking<br>available for this train</span>';
     } else if (st.limited) {
-      status.innerHTML = '<span class="tl-limited">Limited tracking available</span>';
+      status.innerHTML = '<span class="tl-limited">Limited tracking<br>available for this train</span>';
     } else {
       status.textContent = '';
     }
+
+    // Upcoming stops (etas[1..5])
+    stops.innerHTML = '';
+    if (etas && etas.length > 1) {
+      const upcoming = etas.slice(1, 6);
+      upcoming.forEach((eta, i) => {
+        if (!eta.staNm) return;
+        const row = document.createElement('div');
+        row.className = 'tl-stop-row';
+        row.style.animationDelay = `${0.65 + i * 0.07}s`;
+        const name = document.createElement('span');
+        name.className = 'tl-stop-name';
+        name.textContent = cleanStationName(eta.staNm);
+        const time = document.createElement('span');
+        time.className = 'tl-stop-time';
+        time.textContent = formatEtaTime(eta.arrT);
+        row.appendChild(name);
+        row.appendChild(time);
+        stops.appendChild(row);
+      });
+    }
+  }
+
+  function formatEtaTime(arrT) {
+    if (!arrT) return '';
+    // arrT format: "20260312 14:30:00"
+    const [datePart, timePart] = arrT.split(' ');
+    if (!datePart || !timePart) return '';
+    const y = +datePart.slice(0, 4), mo = +datePart.slice(4, 6) - 1, d = +datePart.slice(6, 8);
+    const [h, m, s] = timePart.split(':').map(Number);
+    const arrival = new Date(y, mo, d, h, m, s);
+    const mins = Math.round((arrival - Date.now()) / 60000);
+    if (mins < 1) return 'Due';
+    if (mins === 1) return '1 min';
+    return `${mins} min`;
   }
 
   function positionTrainLabel() {

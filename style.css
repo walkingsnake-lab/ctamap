@@ -211,6 +211,7 @@ body {
   font-family: 'Jersey 10', monospace;
   display: none;
   white-space: nowrap;
+  min-width: 220px;
 }
 
 #train-label.visible {
@@ -227,6 +228,10 @@ body {
 
 #train-label.visible .tl-status {
   animation: line-in 0.3s ease-out 0.55s both;
+}
+
+#train-label.visible .tl-stop-row {
+  animation: line-in 0.25s ease-out both;
 }
 
 .tl-badge {
@@ -278,7 +283,48 @@ body {
 
 .tl-limited {
   font-size: 20px;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.tl-stops {
+  margin-top: 8px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  white-space: normal;
+}
+
+.tl-stop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 2px;
+  gap: 16px;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: 0 0 calc(3px * var(--glow-i, 0)) rgba(255, 255, 255, 0.25);
+}
+
+.tl-stop-row:first-child {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.tl-stop-name {
+  text-align: left;
+}
+
+.tl-stop-time {
+  text-align: right;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.85em;
+  letter-spacing: 0.02em;
+}
+
+.tl-stop-row:first-child .tl-stop-time {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 @keyframes line-in {
