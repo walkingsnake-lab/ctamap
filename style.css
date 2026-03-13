@@ -289,7 +289,7 @@ body {
 }
 
 .tl-stops {
-  margin-top: 12px;
+  margin-top: 8px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -303,7 +303,7 @@ body {
   align-items: baseline;
   padding: 0 2px;
   gap: 16px;
-  font-size: 22px;
+  font-size: 20px;
   color: rgba(255, 255, 255, .8);
   text-shadow: 0 0 calc(3px * var(--glow-i, 0)) rgba(255, 255, 255, 0.25);
 }
@@ -315,7 +315,8 @@ body {
 .tl-stop-time {
   text-align: right;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 22px;
+  font-size: 20px;
+  letter-spacing: 0.02em;
 }
 
 @keyframes line-in {
