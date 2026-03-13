@@ -289,7 +289,7 @@ body {
 }
 
 .tl-stops {
-  margin-top: 8px;
+  margin-top: 12px;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -304,27 +304,18 @@ body {
   padding: 0 2px;
   gap: 16px;
   font-size: 22px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, .8);
   text-shadow: 0 0 calc(3px * var(--glow-i, 0)) rgba(255, 255, 255, 0.25);
 }
 
-.tl-stop-row:first-child {
-  color: rgba(255, 255, 255, 0.75);
-}
-
 .tl-stop-name {
-  text-align: left;
+  text-align: left
 }
 
 .tl-stop-time {
   text-align: right;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 0.85em;
-  letter-spacing: 0.02em;
-}
-
-.tl-stop-row:first-child .tl-stop-time {
-  color: rgba(255, 255, 255, 0.7);
+  font-size: 22px;
 }
 
 @keyframes line-in {
