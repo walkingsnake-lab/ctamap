@@ -294,14 +294,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  max-width: 320px;
+  margin: 0 auto;
   white-space: normal;
 }
 
 .tl-stop-row {
   display: flex;
   justify-content: space-between;
-  max-width: 200px;
-  margin: 0 auto;
+
   align-items: baseline;
   padding: 0 2px;
   gap: 16px;
