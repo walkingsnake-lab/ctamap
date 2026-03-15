@@ -89,35 +89,19 @@
 
   svg.call(zoom);
 
-  // ---- URL parameter handling ----
-  // ?embed=true  (or ?chrome=false) — non-interactive backdrop mode for iframes.
+  // ---- URL parameter handling (part 1: embed mode) ----
+  // ?embed=true (or ?chrome=false) — non-interactive backdrop mode for iframes.
   //   Hides the close button and train-label overlay; disables pointer events so
   //   the SVG stays animating but doesn't respond to clicks or touch gestures.
-  // ?lat=<lat>&lng=<lng>&zoom=<k> — set the initial viewport.
-  //   lat/lng are WGS-84 decimal degrees; zoom is the D3 scale factor (1 = full
-  //   city view, 10 = maximum zoom). For the Loop area try zoom=4–5.
+  // ?lat=<lat>&lng=<lng>&zoom=<k> — set the initial viewport (applied below,
+  //   after tracking-state variables are declared, to avoid a TDZ error).
+  const _urlParams = new URLSearchParams(window.location.search);
   {
-    const _p = new URLSearchParams(window.location.search);
-    const _embed = _p.get('embed') === 'true' || _p.get('chrome') === 'false';
-
+    const _embed = _urlParams.get('embed') === 'true' || _urlParams.get('chrome') === 'false';
     if (_embed) {
       document.body.classList.add('embed-mode');
       // Disable all pointer events so the SVG is a pure animation backdrop.
       svgEl.style.pointerEvents = 'none';
-    }
-
-    const _lat  = parseFloat(_p.get('lat'));
-    const _lng  = parseFloat(_p.get('lng') ?? _p.get('lon'));
-    const _zoom = parseFloat(_p.get('zoom'));
-
-    if (!isNaN(_lat) && !isNaN(_lng) && !isNaN(_zoom)) {
-      const _pt = projection([_lng, _lat]);
-      if (_pt) {
-        const _k  = Math.max(1, Math.min(10, _zoom));
-        const _tx = width  / 2 - _k * _pt[0];
-        const _ty = height / 2 - _k * _pt[1];
-        svg.call(zoom.transform, d3.zoomIdentity.translate(_tx, _ty).scale(_k));
-      }
     }
   }
 
@@ -164,6 +148,26 @@
   let detailFetchInterval = null;
   let isZoomTransitioning = false;
   let zoomAnim = null;
+
+  // ---- URL parameter handling (part 2: initial viewport) ----
+  // Applied here so the zoom event handler can safely read zoomAnim / selectedTrain.
+  // lat/lng are WGS-84 decimal degrees; zoom is the D3 scale factor (1 = full city,
+  // 10 = max zoom). For the Loop area zoom=4–5 works well.
+  {
+    const _lat  = parseFloat(_urlParams.get('lat'));
+    const _lng  = parseFloat(_urlParams.get('lng') ?? _urlParams.get('lon'));
+    const _zoom = parseFloat(_urlParams.get('zoom'));
+    if (!isNaN(_lat) && !isNaN(_lng) && !isNaN(_zoom)) {
+      const _pt = projection([_lng, _lat]);
+      if (_pt) {
+        const _k  = Math.max(1, Math.min(10, _zoom));
+        const _tx = width  / 2 - _k * _pt[0];
+        const _ty = height / 2 - _k * _pt[1];
+        svg.call(zoom.transform, d3.zoomIdentity.translate(_tx, _ty).scale(_k));
+      }
+    }
+  }
+
   let lastETAs = null;
   let lastRenderedStopNames = null;
   const TRACK_ZOOM_SCALE = 8;
