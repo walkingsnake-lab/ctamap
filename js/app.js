@@ -186,7 +186,6 @@
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
     initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations);
-    resolveTargetOverlaps(realTrains, lineSegments, projection, d3.zoomTransform(svgEl).k);
     console.log(`[CTA] Loaded ${realTrains.length} trains`);
   }
 
@@ -942,9 +941,6 @@
             train._trackPos = startPos;
           }
         }
-
-        // Resolve target-position overlaps so trains animate to non-overlapping spots
-        resolveTargetOverlaps(realTrains, lineSegments, projection, d3.zoomTransform(svgEl).k);
 
         // Update selected train reference if tracking
         if (selectedTrainRn) {
