@@ -1029,6 +1029,7 @@
       if (!stationsVisible) svg.select('.stations-layer').style('display', 'none');
 
       isZoomedToLoop = false;
+      lastLineK = -1; // force stroke-width recalc on fresh DOM elements
 
       if (selectedTrain) {
         // Keep tracking through resize (e.g. mobile address bar toggle)
