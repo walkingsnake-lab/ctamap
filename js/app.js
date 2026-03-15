@@ -89,6 +89,38 @@
 
   svg.call(zoom);
 
+  // ---- URL parameter handling ----
+  // ?embed=true  (or ?chrome=false) — non-interactive backdrop mode for iframes.
+  //   Hides the close button and train-label overlay; disables pointer events so
+  //   the SVG stays animating but doesn't respond to clicks or touch gestures.
+  // ?lat=<lat>&lng=<lng>&zoom=<k> — set the initial viewport.
+  //   lat/lng are WGS-84 decimal degrees; zoom is the D3 scale factor (1 = full
+  //   city view, 10 = maximum zoom). For the Loop area try zoom=4–5.
+  {
+    const _p = new URLSearchParams(window.location.search);
+    const _embed = _p.get('embed') === 'true' || _p.get('chrome') === 'false';
+
+    if (_embed) {
+      document.body.classList.add('embed-mode');
+      // Disable all pointer events so the SVG is a pure animation backdrop.
+      svgEl.style.pointerEvents = 'none';
+    }
+
+    const _lat  = parseFloat(_p.get('lat'));
+    const _lng  = parseFloat(_p.get('lng') ?? _p.get('lon'));
+    const _zoom = parseFloat(_p.get('zoom'));
+
+    if (!isNaN(_lat) && !isNaN(_lng) && !isNaN(_zoom)) {
+      const _pt = projection([_lng, _lat]);
+      if (_pt) {
+        const _k  = Math.max(1, Math.min(10, _zoom));
+        const _tx = width  / 2 - _k * _pt[0];
+        const _ty = height / 2 - _k * _pt[1];
+        svg.call(zoom.transform, d3.zoomIdentity.translate(_tx, _ty).scale(_k));
+      }
+    }
+  }
+
   // Render stations into the stations layer (created hidden by loadMap)
   let stationsVisible = false;
   renderStations(svg.select('.stations-layer'), stations, projection, geojson);
