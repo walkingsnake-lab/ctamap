@@ -876,3 +876,80 @@ function advanceRealTrains(trains, lineSegments, dt) {
   }
 }
 
+/**
+ * Resolves screen-space overlaps between train dots by nudging at-rest trains
+ * apart. Each entry in `entries` is { d, x, y, origX, origY, trackDirX,
+ * trackDirY, atRest }. `minDist` is the minimum screen-space distance between
+ * dot centers (typically 2 * scaledRadius).
+ *
+ * Trains that are animating (!atRest) are never moved — only at-rest trains
+ * are nudged. When two at-rest trains overlap, both are pushed apart. When an
+ * at-rest train overlaps an animating train, only the at-rest train moves.
+ *
+ * Nudging prefers the train's track direction so dots slide along the track
+ * rather than floating off it. When the track is nearly perpendicular to the
+ * separation vector (cross-line overlap), falls back to direct separation.
+ */
+function resolveScreenOverlaps(entries, minDist) {
+  const n = entries.length;
+  if (n < 2) return;
+
+  const minDistSq = minDist * minDist;
+
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = entries[i], b = entries[j];
+        if (!a.atRest && !b.atRest) continue;
+
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq >= minDistSq) continue;
+
+        const dist = Math.sqrt(distSq);
+        const overlap = minDist - dist;
+
+        // Separation unit vector (a → b)
+        let nx, ny;
+        if (dist < 0.01) {
+          // Coincident — use a's track direction to break tie
+          nx = a.trackDirX ?? 1;
+          ny = a.trackDirY ?? 0;
+        } else {
+          nx = dx / dist;
+          ny = dy / dist;
+        }
+
+        // Push a train along its track direction (or directly if perpendicular)
+        function computePush(entry, awayX, awayY, amount) {
+          const tdx = entry.trackDirX, tdy = entry.trackDirY;
+          if (tdx === undefined) {
+            return [awayX * amount, awayY * amount];
+          }
+          const dot = tdx * awayX + tdy * awayY;
+          if (Math.abs(dot) > 0.25) {
+            const sign = dot > 0 ? 1 : -1;
+            return [sign * tdx * amount, sign * tdy * amount];
+          }
+          return [awayX * amount, awayY * amount];
+        }
+
+        if (a.atRest && b.atRest) {
+          const half = overlap * 0.55;
+          const [pax, pay] = computePush(a, -nx, -ny, half);
+          const [pbx, pby] = computePush(b, nx, ny, half);
+          a.x += pax; a.y += pay;
+          b.x += pbx; b.y += pby;
+        } else if (a.atRest) {
+          const [pax, pay] = computePush(a, -nx, -ny, overlap * 1.05);
+          a.x += pax; a.y += pay;
+        } else {
+          const [pbx, pby] = computePush(b, nx, ny, overlap * 1.05);
+          b.x += pbx; b.y += pby;
+        }
+      }
+    }
+  }
+}
+
