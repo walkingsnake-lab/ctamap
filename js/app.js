@@ -153,20 +153,24 @@
   // Applied here so the zoom event handler can safely read zoomAnim / selectedTrain.
   // lat/lng are WGS-84 decimal degrees; zoom is the D3 scale factor (1 = full city,
   // 10 = max zoom). For the Loop area zoom=4–5 works well.
-  {
-    const _lat  = parseFloat(_urlParams.get('lat'));
-    const _lng  = parseFloat(_urlParams.get('lng') ?? _urlParams.get('lon'));
-    const _zoom = parseFloat(_urlParams.get('zoom'));
-    if (!isNaN(_lat) && !isNaN(_lng) && !isNaN(_zoom)) {
-      const _pt = projection([_lng, _lat]);
-      if (_pt) {
-        const _k  = Math.max(1, Math.min(10, _zoom));
-        const _tx = width  / 2 - _k * _pt[0];
-        const _ty = height / 2 - _k * _pt[1];
-        svg.call(zoom.transform, d3.zoomIdentity.translate(_tx, _ty).scale(_k));
-      }
-    }
+  // Values are kept in outer scope so the resize handler can re-apply them after
+  // redrawMap() recalculates the projection.
+  const _urlLat  = parseFloat(_urlParams.get('lat'));
+  const _urlLng  = parseFloat(_urlParams.get('lng') ?? _urlParams.get('lon'));
+  const _urlZoom = parseFloat(_urlParams.get('zoom'));
+
+  function applyUrlViewport() {
+    if (isNaN(_urlLat) || isNaN(_urlLng) || isNaN(_urlZoom)) return false;
+    const _pt = projection([_urlLng, _urlLat]);
+    if (!_pt) return false;
+    const _k  = Math.max(1, Math.min(10, _urlZoom));
+    const _tx = width  / 2 - _k * _pt[0];
+    const _ty = height / 2 - _k * _pt[1];
+    svg.call(zoom.transform, d3.zoomIdentity.translate(_tx, _ty).scale(_k));
+    return true;
   }
+
+  applyUrlViewport();
 
   let lastETAs = null;
   let lastRenderedStopNames = null;
@@ -1041,7 +1045,11 @@
           mapContainer.attr('transform', t.toString());
         }
       } else {
-        svg.call(zoom.transform, d3.zoomIdentity);
+        // Re-apply URL viewport if present (projection changed, so transform must be
+        // recalculated), otherwise reset to identity as before.
+        if (!applyUrlViewport()) {
+          svg.call(zoom.transform, d3.zoomIdentity);
+        }
       }
 
       renderTrains();
