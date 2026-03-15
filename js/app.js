@@ -18,6 +18,7 @@
     mapState = await loadMap(svg, width, height);
   } catch (e) {
     console.error('Failed to load CTA map data:', e);
+    document.body.innerHTML = '<div style="color:#fff;text-align:center;padding:4rem;font-family:sans-serif"><h2>Unable to load CTA map</h2><p>Please refresh the page or try again later.</p></div>';
     return;
   }
 

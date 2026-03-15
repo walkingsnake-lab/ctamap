@@ -1,7 +1,14 @@
 {
   "name": "ctamap",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "start": "node server.js"
+    "build": "mkdir -p dist && cat js/config.js js/map.js js/path-follow.js js/trains.js js/app.js | esbuild --minify --loader=js > dist/bundle.min.js && esbuild style.css --minify --outfile=dist/style.min.css",
+    "start": "npm run build && node server.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
   }
 }
