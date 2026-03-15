@@ -347,3 +347,16 @@ body {
   paint-order: stroke fill;
   stroke-linejoin: round;
 }
+
+/* ---- Embed / iframe backdrop mode (?embed=true or ?chrome=false) ---- */
+/* Keep close button hidden even if JS adds .visible, and suppress the    */
+/* train-label overlay so no interactive chrome appears over the iframe.  */
+body.embed-mode #close-btn,
+body.embed-mode #close-btn.visible {
+  display: none !important;
+}
+
+body.embed-mode #train-label,
+body.embed-mode #train-label.visible {
+  display: none !important;
+}
