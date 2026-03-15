@@ -186,6 +186,7 @@
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
     initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations);
+    resolveTargetOverlaps(realTrains, lineSegments, projection, d3.zoomTransform(svgEl).k);
     console.log(`[CTA] Loaded ${realTrains.length} trains`);
   }
 
@@ -645,38 +646,12 @@
       scaleStationDots(currentK);
     }
 
-    // Pre-pass: compute screen positions and resolve overlaps
-    const overlapEntries = [];
-    const trainGroupSel = svg.select('.trains-layer').selectAll('.train-group');
-    trainGroupSel.each(function (d) {
-      const pt = projection([d.lon, d.lat]);
-      if (!pt) { d._nudgeX = 0; d._nudgeY = 0; return; }
-      const entry = { d, x: pt[0], y: pt[1], origX: pt[0], origY: pt[1], atRest: !d._correcting };
-      const segs = lineSegments[d.legend];
-      if (d._trackPos && segs) {
-        const dir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
-        const ahead = advanceOnTrack(d._trackPos, 0.0005, dir, segs);
-        const aheadPt = projection([ahead.lon, ahead.lat]);
-        if (aheadPt) {
-          const tdx = aheadPt[0] - pt[0], tdy = aheadPt[1] - pt[1];
-          const mag = Math.sqrt(tdx * tdx + tdy * tdy);
-          if (mag > 0) { entry.trackDirX = tdx / mag; entry.trackDirY = tdy / mag; }
-        }
-      }
-      overlapEntries.push(entry);
-    });
-    resolveScreenOverlaps(overlapEntries, scaledRadius * 2);
-    for (const entry of overlapEntries) {
-      entry.d._nudgeX = entry.x - entry.origX;
-      entry.d._nudgeY = entry.y - entry.origY;
-    }
-
-    trainGroupSel
+    svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
         const g = d3.select(this);
-        g.attr('transform', `translate(${pt[0] + (d._nudgeX || 0)}, ${pt[1] + (d._nudgeY || 0)})`);
+        g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
 
         // Check if train is at a line terminus (reused for arrows + heading)
         const termPts = lineTerminals[d.legend] || [];
@@ -967,6 +942,9 @@
             train._trackPos = startPos;
           }
         }
+
+        // Resolve target-position overlaps so trains animate to non-overlapping spots
+        resolveTargetOverlaps(realTrains, lineSegments, projection, d3.zoomTransform(svgEl).k);
 
         // Update selected train reference if tracking
         if (selectedTrainRn) {
