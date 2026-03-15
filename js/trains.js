@@ -877,78 +877,113 @@ function advanceRealTrains(trains, lineSegments, dt) {
 }
 
 /**
- * Resolves screen-space overlaps between train dots by nudging at-rest trains
- * apart. Each entry in `entries` is { d, x, y, origX, origY, trackDirX,
- * trackDirY, atRest }. `minDist` is the minimum screen-space distance between
- * dot centers (typically 2 * scaledRadius).
+ * Resolves target-position overlaps at refresh time by nudging train targets
+ * apart along their tracks. This runs once per API refresh (every ~20s), not
+ * per frame — the existing smooth correction animation carries trains to their
+ * nudged positions without jitter.
  *
- * Trains that are animating (!atRest) are never moved — only at-rest trains
- * are nudged. When two at-rest trains overlap, both are pushed apart. When an
- * at-rest train overlaps an animating train, only the at-rest train moves.
+ * For trains already correcting, adjusts _corrToTrackPos and _corrTotalDist.
+ * For stationary trains that need nudging, starts a mini-correction slide.
  *
- * Nudging prefers the train's track direction so dots slide along the track
- * rather than floating off it. When the track is nearly perpendicular to the
- * separation vector (cross-line overlap), falls back to direct separation.
+ * projection: D3 geo projection function (lon/lat → SVG coords)
+ * currentK:   current D3 zoom scale factor
  */
-function resolveScreenOverlaps(entries, minDist) {
-  const n = entries.length;
-  if (n < 2) return;
+function resolveTargetOverlaps(trains, lineSegments, projection, currentK) {
+  if (!trains || trains.length < 2) return;
 
+  const scaledRadius = TRAIN_RADIUS / Math.pow(currentK, 0.4);
+  const minDist = scaledRadius * 2;
   const minDistSq = minDist * minDist;
 
-  for (let pass = 0; pass < 3; pass++) {
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
+  // Build entries with each train's target (resting) position
+  const entries = [];
+  for (const train of trains) {
+    if (!train._trackPos) continue;
+    const segs = lineSegments[train.legend];
+    if (!segs) continue;
+
+    const targetPos = train._correcting ? train._corrToTrackPos : train._trackPos;
+    if (!targetPos) continue;
+    const pt = projection([targetPos.lon, targetPos.lat]);
+    if (!pt) continue;
+
+    entries.push({
+      train, segs,
+      origPos: { ...targetPos },
+      pos: { ...targetPos },
+      sx: pt[0], sy: pt[1],
+    });
+  }
+
+  // Iteratively nudge overlapping pairs apart along their tracks.
+  // Each step advances by a small geographic distance; screen-space check
+  // determines convergence. 8 passes × 0.0002° ≈ 175m max displacement.
+  const GEO_STEP = 0.0002; // ~22m per step
+
+  for (let pass = 0; pass < 8; pass++) {
+    let anyOverlap = false;
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
         const a = entries[i], b = entries[j];
-        if (!a.atRest && !b.atRest) continue;
+        const dx = b.sx - a.sx;
+        const dy = b.sy - a.sy;
+        if (dx * dx + dy * dy >= minDistSq) continue;
+        anyOverlap = true;
 
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const distSq = dx * dx + dy * dy;
-        if (distSq >= minDistSq) continue;
-
-        const dist = Math.sqrt(distSq);
-        const overlap = minDist - dist;
-
-        // Separation unit vector (a → b)
-        let nx, ny;
-        if (dist < 0.01) {
-          // Coincident — use a's track direction to break tie
-          nx = a.trackDirX ?? 1;
-          ny = a.trackDirY ?? 0;
-        } else {
-          nx = dx / dist;
-          ny = dy / dist;
-        }
-
-        // Push a train along its track direction (or directly if perpendicular)
-        function computePush(entry, awayX, awayY, amount) {
-          const tdx = entry.trackDirX, tdy = entry.trackDirY;
-          if (tdx === undefined) {
-            return [awayX * amount, awayY * amount];
-          }
+        // Determine push direction for each train: advance along its track
+        // in the direction that increases screen separation from the other.
+        function pushDir(entry, awayX, awayY) {
+          const fwd = advanceOnTrack(entry.pos, 0.0003, +1, entry.segs);
+          const ptFwd = projection([fwd.lon, fwd.lat]);
+          if (!ptFwd) return entry.train._direction || 1;
+          const tdx = ptFwd[0] - entry.sx;
+          const tdy = ptFwd[1] - entry.sy;
           const dot = tdx * awayX + tdy * awayY;
-          if (Math.abs(dot) > 0.25) {
-            const sign = dot > 0 ? 1 : -1;
-            return [sign * tdx * amount, sign * tdy * amount];
-          }
-          return [awayX * amount, awayY * amount];
+          return dot >= 0 ? 1 : -1;
         }
 
-        if (a.atRest && b.atRest) {
-          const half = overlap * 0.55;
-          const [pax, pay] = computePush(a, -nx, -ny, half);
-          const [pbx, pby] = computePush(b, nx, ny, half);
-          a.x += pax; a.y += pay;
-          b.x += pbx; b.y += pby;
-        } else if (a.atRest) {
-          const [pax, pay] = computePush(a, -nx, -ny, overlap * 1.05);
-          a.x += pax; a.y += pay;
-        } else {
-          const [pbx, pby] = computePush(b, nx, ny, overlap * 1.05);
-          b.x += pbx; b.y += pby;
-        }
+        const dirA = pushDir(a, -dx, -dy);
+        const dirB = pushDir(b, dx, dy);
+
+        a.pos = advanceOnTrack(a.pos, GEO_STEP, dirA, a.segs);
+        b.pos = advanceOnTrack(b.pos, GEO_STEP, dirB, b.segs);
+
+        const ptA = projection([a.pos.lon, a.pos.lat]);
+        const ptB = projection([b.pos.lon, b.pos.lat]);
+        if (ptA) { a.sx = ptA[0]; a.sy = ptA[1]; }
+        if (ptB) { b.sx = ptB[0]; b.sy = ptB[1]; }
       }
+    }
+    if (!anyOverlap) break;
+  }
+
+  // Apply resolved positions back to trains
+  const now = Date.now();
+  for (const { train, origPos, pos, segs } of entries) {
+    const nudgeDist = geoDist(origPos.lon, origPos.lat, pos.lon, pos.lat);
+    if (nudgeDist < 1e-7) continue;
+
+    if (train._correcting) {
+      // Adjust in-flight correction target
+      train._corrToTrackPos = pos;
+      train._corrTotalDist = trackDistanceBetween(
+        train._corrFromTrackPos, pos, train._corrDirection, segs
+      );
+    } else {
+      // Stationary train — start a mini-correction to the nudged position
+      train._corrFromTrackPos = { ...origPos };
+      train._corrToTrackPos = pos;
+      // Determine direction empirically
+      const fwdTest = advanceOnTrack(origPos, nudgeDist * 0.5, +1, segs);
+      const bwdTest = advanceOnTrack(origPos, nudgeDist * 0.5, -1, segs);
+      const fwdD = geoDist(fwdTest.lon, fwdTest.lat, pos.lon, pos.lat);
+      const bwdD = geoDist(bwdTest.lon, bwdTest.lat, pos.lon, pos.lat);
+      train._corrDirection = fwdD <= bwdD ? 1 : -1;
+      train._corrTotalDist = trackDistanceBetween(
+        origPos, pos, train._corrDirection, segs
+      );
+      train._correcting = true;
+      train._corrStartTime = now;
     }
   }
 }
