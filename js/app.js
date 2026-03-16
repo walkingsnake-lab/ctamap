@@ -21,6 +21,11 @@
     return;
   }
 
+  // Remove static preload placeholder now that the dynamic map is ready
+  svg.select('#static-placeholder').remove();
+  svgEl.removeAttribute('viewBox');
+  svgEl.removeAttribute('preserveAspectRatio');
+
   const { geojson } = mapState;
   let { projection, mapContainer } = mapState;
 
