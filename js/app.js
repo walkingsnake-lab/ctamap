@@ -111,7 +111,7 @@
 
   function scaleStationDots(k) {
     if (!stationsVisible) return;
-    const dotScale = 1 / Math.pow(k, 0.5);
+    const dotScale = 1 / Math.pow(k, 0.6);
     svg.selectAll('.station-dot').each(function () {
       const el = d3.select(this);
       const baseR = parseFloat(el.attr('data-base-r'));
@@ -388,7 +388,7 @@
     const t = d3.zoomTransform(svgEl);
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
-    const scaledR = TRAIN_RADIUS / Math.pow(t.k, 0.4);
+    const scaledR = TRAIN_RADIUS / Math.pow(t.k, 0.55);
     const offset = (scaledR + 3.0) * 1.3 * t.k + 12;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
@@ -614,8 +614,8 @@
     // The "larger on mobile" feel is preserved — it comes from the map being compressed into
     // fewer pixels, not from r being different.
     const currentK = d3.zoomTransform(svgEl).k;
-    const scaledRadius     = TRAIN_RADIUS      / Math.pow(currentK, 0.4);
-    const scaledGlowRadius = TRAIN_GLOW_RADIUS / Math.pow(currentK, 0.35);
+    const scaledRadius     = TRAIN_RADIUS      / Math.pow(currentK, 0.55);
+    const scaledGlowRadius = TRAIN_GLOW_RADIUS / Math.pow(currentK, 0.5);
 
     // Thin lines slightly as zoom increases — only recalculate when k changes.
     if (currentK !== lastLineK) {
@@ -626,7 +626,7 @@
       // taps and overlapping targets at high zoom.
       const scaledHitRadius = 12 / currentK;
       svg.selectAll('.train-hit').attr('r', scaledHitRadius);
-      const scaledLineWidth = LINE_WIDTH / Math.pow(currentK, 0.5);
+      const scaledLineWidth = LINE_WIDTH / Math.pow(currentK, 0.6);
       const selLegend = selectedTrain?.legend;
       svg.selectAll('.line-path').attr('stroke-width', function () {
         return selLegend && d3.select(this).attr('data-legend') === selLegend
