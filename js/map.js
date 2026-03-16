@@ -372,6 +372,9 @@ async function loadMap(svg, width, height) {
 
   createTrainGlowGradients(svg.append('defs'));
 
+  // Remove the static placeholder paths (used for instant first-paint)
+  svg.select('.static-placeholder').remove();
+
   const mapContainer = svg.append('g').attr('class', 'map-container');
 
   const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');

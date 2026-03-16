@@ -12,6 +12,10 @@
 
   svg.attr('width', width).attr('height', height);
 
+  // Remove static placeholder viewBox (used for instant first-paint before JS loads)
+  svgEl.removeAttribute('viewBox');
+  svgEl.removeAttribute('preserveAspectRatio');
+
   // ---- Load map lines ----
   let mapState;
   try {
