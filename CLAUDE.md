@@ -6,8 +6,6 @@ Real-time visualization of Chicago CTA train positions using D3.js. Trains anima
 
 ```bash
 npm start        # Node.js server on port 3000 (default)
-# OR
-python flask_app.py  # Flask alternative (pip install flask requests)
 ```
 
 Open `http://localhost:3000` in a browser. No build step — JS files load directly.
