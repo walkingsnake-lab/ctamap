@@ -1,0 +1,15 @@
+{
+  "rewrites": [
+    { "source": "/api/trains", "destination": "/api/trains" },
+    { "source": "/api/train/:rn", "destination": "/api/train/:rn" },
+    { "source": "/api/geojson", "destination": "/api/geojson" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    }
+  ]
+}
