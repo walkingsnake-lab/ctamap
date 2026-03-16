@@ -1,6 +1,6 @@
 const http = require('http');
 
-const CTA_KEY = process.env.CTA_API_KEY || '9e15fcfa75064b6db8ad034db11ea214';
+const CTA_KEY = process.env.CTA_API_KEY;
 const CTA_FOLLOW = 'http://lapi.transitchicago.com/api/1.0/ttfollow.aspx';
 
 function fetchJSON(fetchUrl) {
