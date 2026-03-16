@@ -10,6 +10,13 @@
   let width = svgEl.clientWidth || window.innerWidth;
   let height = svgEl.clientHeight || window.innerHeight;
 
+  // Hide the SVG while we swap from the static placeholder to the dynamic map.
+  // The placeholder (with viewBox) was visible during initial paint; now we hide,
+  // remove viewBox, build the real map, then fade in via .map-ready.
+  svgEl.classList.add('map-loading');
+  svg.select('#static-placeholder').remove();
+  svgEl.removeAttribute('viewBox');
+  svgEl.removeAttribute('preserveAspectRatio');
   svg.attr('width', width).attr('height', height);
 
   // ---- Load map lines ----
@@ -20,11 +27,6 @@
     console.error('Failed to load CTA map data:', e);
     return;
   }
-
-  // Remove static preload placeholder now that the dynamic map is ready
-  svg.select('#static-placeholder').remove();
-  svgEl.removeAttribute('viewBox');
-  svgEl.removeAttribute('preserveAspectRatio');
 
   const { geojson } = mapState;
   let { projection, mapContainer } = mapState;
@@ -296,6 +298,13 @@
   }
 
   renderTrains();
+
+  // ---- Reveal map now that everything is ready ----
+  // Force a layout calc so the browser registers the opacity:0 state before
+  // the transition starts — without this the fade-in may be skipped.
+  void svgEl.offsetWidth;
+  svgEl.classList.remove('map-loading');
+  svgEl.classList.add('map-ready');
 
   // ---- DOM label helpers ----
 
