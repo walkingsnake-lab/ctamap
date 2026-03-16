@@ -52,7 +52,7 @@ function renderLines(linesGroup, path, geojson) {
     }
   }
 
-  const lineOrder = ['BR', 'GR', 'PK', 'OR', 'PR', 'YL', 'BL', 'RD'];
+  const lineOrder = ['BL','RD','BR', 'PK', 'OR', 'GR', 'PR', 'YL'];
   for (const legend of lineOrder) {
     let features = geojson.features.filter(f => f.properties.legend === legend);
 
