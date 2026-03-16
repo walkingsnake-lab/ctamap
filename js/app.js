@@ -4,20 +4,16 @@
  * Clicking a train dot zooms in, tracks the train, and shows live detail from the follow API.
  */
 (async function () {
-  const svgEl = document.getElementById('map');
-  const svg = d3.select(svgEl);
+  let width = window.innerWidth;
+  let height = window.innerHeight;
 
-  let width = svgEl.clientWidth || window.innerWidth;
-  let height = svgEl.clientHeight || window.innerHeight;
-
-  // Hide the SVG while we swap from the static placeholder to the dynamic map.
-  // The placeholder (with viewBox) was visible during initial paint; now we hide,
-  // remove viewBox, build the real map, then fade in via .map-ready.
+  const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svgEl.id = 'map';
+  svgEl.setAttribute('width', width);
+  svgEl.setAttribute('height', height);
   svgEl.classList.add('map-loading');
-  svg.select('#static-placeholder').remove();
-  svgEl.removeAttribute('viewBox');
-  svgEl.removeAttribute('preserveAspectRatio');
-  svg.attr('width', width).attr('height', height);
+  document.body.appendChild(svgEl);
+  const svg = d3.select(svgEl);
 
   // ---- Load map lines ----
   let mapState;
