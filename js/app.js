@@ -255,7 +255,7 @@
 
     // Heading direction triangle — overlays the circle, visible only when stations are shown
     const ht = TRAIN_RADIUS * 0.75;
-    const headingTriPath = `M ${ht * 1.3},0 L ${-ht * 0.5},${-ht * 0.5} L ${-ht * 0.15},0 L ${-ht * 0.5},${ht * 0.5} Z`;
+    const headingTriPath = `M ${ht * 0.8},0 L ${-ht * 0.8},${-ht * 0.7} L ${-ht * 0.8},${ht * 0.7} Z`;
     enter.append('path')
       .attr('class', 'train-heading')
       .attr('d', headingTriPath)
