@@ -297,6 +297,12 @@
 
   renderTrains();
 
+  // ---- Reveal map now that everything is ready ----
+  // Force a layout calc so the browser has the final transform/geometry before
+  // the opacity transition starts — avoids a flash of the un-zoomed state.
+  void svgEl.offsetWidth;
+  svgEl.classList.add('map-ready');
+
   // ---- DOM label helpers ----
 
   function showTrainLabel(train) {
