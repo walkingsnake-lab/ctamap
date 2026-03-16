@@ -255,7 +255,7 @@
 
     // Heading direction triangle — overlays the circle, visible only when stations are shown
     const ht = TRAIN_RADIUS * 0.75;
-    const headingTriPath = `M ${ht},0 L ${-ht * 0.6},${-ht * 0.7} L ${-ht * 0.6},${ht * 0.7} Z`;
+    const headingTriPath = `M ${ht * 1.3},0 L ${-ht * 0.5},${-ht * 0.5} L ${-ht * 0.15},0 L ${-ht * 0.5},${ht * 0.5} Z`;
     enter.append('path')
       .attr('class', 'train-heading')
       .attr('d', headingTriPath)
@@ -754,7 +754,7 @@
         dotEl.attr('r', scaledRadius);
         g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
-        const headingScale = dotScale / Math.pow(currentK, 0.4);
+        const headingScale = dotScale / Math.pow(currentK, 0.55);
         let headingVisible = stationsVisible && !atTerminus;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
