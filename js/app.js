@@ -10,6 +10,9 @@
   let width = svgEl.clientWidth || window.innerWidth;
   let height = svgEl.clientHeight || window.innerHeight;
 
+  // Remove static placeholder viewBox so D3 can set explicit width/height
+  svgEl.removeAttribute('viewBox');
+  svgEl.removeAttribute('preserveAspectRatio');
   svg.attr('width', width).attr('height', height);
 
   // ---- Load map lines ----
