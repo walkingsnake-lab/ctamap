@@ -1,4 +1,5 @@
 {
+  "framework": null,
   "rewrites": [
     { "source": "/api/trains", "destination": "/api/trains" },
     { "source": "/api/train/:rn", "destination": "/api/train/:rn" },
