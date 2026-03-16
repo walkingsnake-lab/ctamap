@@ -23,12 +23,18 @@ body {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* Map starts invisible; placeholder is shown via viewBox.
+   Once JS initializes, it hides the placeholder, removes viewBox,
+   builds the dynamic map, then fades everything in via .map-ready. */
+#map.map-loading {
   opacity: 0;
-  transition: opacity 0.6s ease;
 }
 
 #map.map-ready {
   opacity: 1;
+  transition: opacity 0.6s ease;
 }
 
 /* --- Cursor flashlight overlay --- */
