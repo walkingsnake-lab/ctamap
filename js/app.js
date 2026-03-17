@@ -181,6 +181,111 @@
   let trackingScale = TRACK_ZOOM_SCALE;
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
 
+  // ---- Train spreading (overlap disambiguation) ----
+  // When a train is clicked, nearby overlapping trains fan out perpendicular to
+  // the track so they become individually visible and clickable.
+  const SPREAD_SCREEN_THRESHOLD = 20; // screen px — trains closer than this are "overlapping"
+  const SPREAD_SCREEN_SPACING = 16;   // screen px between spread train centers
+
+  /**
+   * Detect trains overlapping the selected train and assign spread target offsets.
+   * Offsets are stored in SCREEN pixels (_spreadTargetPxX/Y) so the visual spread
+   * stays constant regardless of zoom.  The animate loop converts to SVG units.
+   */
+  function spreadOverlappingTrains() {
+    if (!selectedTrain || !realTrains) return;
+
+    const targetK = trackingScale; // zoom level we're heading toward
+    const selPt = projection([selectedTrain.lon, selectedTrain.lat]);
+    if (!selPt) return;
+
+    // Gather trains whose screen-space position is within threshold
+    const nearby = [];
+    const allTrains = realTrains.concat(retiringTrains);
+    for (const train of allTrains) {
+      if (train._retiring && train._retireComplete) continue;
+      const pt = projection([train.lon, train.lat]);
+      if (!pt) continue;
+      const dx = (pt[0] - selPt[0]) * targetK;
+      const dy = (pt[1] - selPt[1]) * targetK;
+      if (Math.sqrt(dx * dx + dy * dy) < SPREAD_SCREEN_THRESHOLD) {
+        nearby.push(train);
+      }
+    }
+
+    if (nearby.length <= 1) return; // no overlap — nothing to spread
+
+    // Compute perpendicular to track direction at the selected train's position
+    // (in SVG / projected coordinate space — same direction as screen space)
+    let perpX = 0, perpY = -1; // default: spread vertically
+    const segs = lineSegments[selectedTrain.legend];
+    if (selectedTrain._trackPos && segs) {
+      const dir = selectedTrain._direction || 1;
+      const ahead = advanceOnTrack(selectedTrain._trackPos, 0.001, dir, segs);
+      const aheadPt = projection([ahead.lon, ahead.lat]);
+      if (aheadPt) {
+        const tdx = aheadPt[0] - selPt[0];
+        const tdy = aheadPt[1] - selPt[1];
+        const len = Math.sqrt(tdx * tdx + tdy * tdy);
+        if (len > 0.001) {
+          // Rotate tangent 90° to get perpendicular
+          perpX = -tdy / len;
+          perpY = tdx / len;
+        }
+      }
+    }
+
+    // Stable sort by run number so ordering doesn't flicker between refreshes
+    nearby.sort((a, b) => a.rn.localeCompare(b.rn));
+
+    // Reorder: selected train at center, others alternate sides
+    const selIdx = nearby.indexOf(selectedTrain);
+    const ordered = [selectedTrain];
+    let li = selIdx - 1, ri = selIdx + 1;
+    while (li >= 0 || ri < nearby.length) {
+      if (ri < nearby.length) ordered.push(nearby[ri++]);
+      if (li >= 0) ordered.push(nearby[li--]);
+    }
+
+    // Assign screen-pixel spread targets
+    for (let i = 0; i < ordered.length; i++) {
+      const train = ordered[i];
+      if (i === 0) {
+        // Selected train stays in place
+        train._spreadTargetPxX = 0;
+        train._spreadTargetPxY = 0;
+      } else {
+        const side = (i % 2 === 1) ? 1 : -1;
+        const n = Math.ceil(i / 2);
+        train._spreadTargetPxX = perpX * SPREAD_SCREEN_SPACING * n * side;
+        train._spreadTargetPxY = perpY * SPREAD_SCREEN_SPACING * n * side;
+      }
+      // Initialize current screen-px position if not yet set
+      if (train._spreadPxX === undefined) train._spreadPxX = 0;
+      if (train._spreadPxY === undefined) train._spreadPxY = 0;
+      train._spreading = true;
+    }
+  }
+
+  /**
+   * Animate all spread trains back to their natural (non-spread) positions.
+   * If `instant` is true, snap immediately instead of animating.
+   */
+  function clearTrainSpreads(instant) {
+    const allTrains = (realTrains || []).concat(retiringTrains);
+    for (const train of allTrains) {
+      if (!train._spreading) continue;
+      train._spreadTargetPxX = 0;
+      train._spreadTargetPxY = 0;
+      if (instant) {
+        train._spreadPxX = 0;
+        train._spreadPxY = 0;
+        train._spreading = false;
+      }
+      // When not instant, the lerp in animate() will bring it back to 0
+    }
+  }
+
   // ---- Initialize trains ----
   let realTrains = null;
   let retiringTrains = [];
@@ -492,6 +597,10 @@
       fromScreenY: clickPt ? (fromTransform.k * clickPt[1] + fromTransform.y) : height / 2,
     };
 
+    // Spread apart overlapping trains near the selection
+    clearTrainSpreads(true);
+    spreadOverlappingTrains();
+
     // Fetch detailed ETA data
     fetchTrainDetail(train.rn);
 
@@ -504,6 +613,9 @@
 
   function deselectTrain() {
     if (!selectedTrain) return;
+
+    // Collapse spread trains back to their natural positions (animated)
+    clearTrainSpreads(false);
 
     selectedTrain = null;
     selectedTrainRn = null;
@@ -655,12 +767,33 @@
       scaleStationDots(currentK);
     }
 
+    // Spread interpolation factor — framerate-independent exponential ease.
+    // pow(0.00005, dt/1000) ≈ 0.85 at 60fps → alpha ≈ 0.15 per frame, snappy ~200ms settle.
+    const spreadLerp = 1 - Math.pow(0.00005, dt / 1000);
+
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
         const g = d3.select(this);
-        g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+
+        // Interpolate spread offset in screen-pixel space, convert to SVG for rendering
+        let sdx = 0, sdy = 0;
+        if (d._spreading) {
+          d._spreadPxX += ((d._spreadTargetPxX || 0) - d._spreadPxX) * spreadLerp;
+          d._spreadPxY += ((d._spreadTargetPxY || 0) - d._spreadPxY) * spreadLerp;
+          // Snap to zero when collapsing and close enough
+          if (d._spreadTargetPxX === 0 && d._spreadTargetPxY === 0 &&
+              Math.abs(d._spreadPxX) < 0.1 && Math.abs(d._spreadPxY) < 0.1) {
+            d._spreadPxX = 0;
+            d._spreadPxY = 0;
+            d._spreading = false;
+          }
+          sdx = d._spreadPxX / currentK;
+          sdy = d._spreadPxY / currentK;
+        }
+
+        g.attr('transform', `translate(${pt[0] + sdx}, ${pt[1] + sdy})`);
 
         // Check if train is at a line terminus (reused for arrows + heading)
         const termPts = lineTerminals[d.legend] || [];
@@ -958,6 +1091,8 @@
           if (newSelected) {
             selectedTrain = newSelected;
             updateTrainLabelContent(selectedTrain, lastETAs);
+            // Re-spread with new train objects (positions may have shifted)
+            spreadOverlappingTrains();
           } else {
             // Train disappeared from data
             deselectTrain();
