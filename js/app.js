@@ -185,8 +185,7 @@
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
   const SPREAD_SCREEN_THRESHOLD = 10; // screen px — trains closer than this are "overlapping"
-  const SPREAD_BASE_SPACING = 22;     // screen px between spread train centers at default zoom
-  const SPREAD_ZOOM_EXTRA = 6;        // extra px per zoom-doubling above TRACK_ZOOM_SCALE
+  const SPREAD_SVG_SPACING = 3.2;     // SVG units between spread centers (scales with dot size)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -200,13 +199,9 @@
   function spreadOverlappingTrains() {
     if (!selectedTrain || !realTrains) return;
 
-    const targetK = trackingScale; // zoom level we're heading toward
+    const currentK = d3.zoomTransform(svgEl).k || 1;
     const selPt = projection([selectedTrain.lon, selectedTrain.lat]);
     if (!selPt) return;
-
-    // Zoom-aware spacing: more room when zoomed in
-    const zoomRatio = Math.max(1, targetK / TRACK_ZOOM_SCALE);
-    const spacing = SPREAD_BASE_SPACING + SPREAD_ZOOM_EXTRA * (zoomRatio - 1);
 
     // Gather trains whose screen-space position is within threshold
     const nearby = [];
@@ -215,8 +210,8 @@
       if (train._retiring && train._retireComplete) continue;
       const pt = projection([train.lon, train.lat]);
       if (!pt) continue;
-      const dx = (pt[0] - selPt[0]) * targetK;
-      const dy = (pt[1] - selPt[1]) * targetK;
+      const dx = (pt[0] - selPt[0]) * currentK;
+      const dy = (pt[1] - selPt[1]) * currentK;
       if (Math.sqrt(dx * dx + dy * dy) < SPREAD_SCREEN_THRESHOLD) {
         nearby.push(train);
       }
@@ -226,8 +221,9 @@
     for (const train of allTrains) {
       if (train._spreading && !nearby.includes(train)) {
         // Animate back to track
-        train._spreadTargetPxX = 0;
-        train._spreadTargetPxY = 0;
+        train._spreadDirX = 0;
+        train._spreadDirY = 0;
+        train._spreadRing = 0;
       }
     }
 
@@ -251,23 +247,24 @@
       if (t !== selectedTrain) ordered.push(t);
     }
 
-    // Assign screen-pixel spread targets in cardinal directions
+    // Assign cardinal direction and ring for each spread train
     for (let i = 0; i < ordered.length; i++) {
       const train = ordered[i];
       if (i === 0) {
         // Selected train stays in place
-        train._spreadTargetPxX = 0;
-        train._spreadTargetPxY = 0;
+        train._spreadDirX = 0;
+        train._spreadDirY = 0;
+        train._spreadRing = 0;
       } else {
         // Cycle through cardinal directions; stack outward for 5+ trains
         const ci = (i - 1) % cardinals.length;
-        const ring = Math.floor((i - 1) / cardinals.length) + 1;
-        train._spreadTargetPxX = cardinals[ci][0] * spacing * ring;
-        train._spreadTargetPxY = cardinals[ci][1] * spacing * ring;
+        train._spreadDirX = cardinals[ci][0];
+        train._spreadDirY = cardinals[ci][1];
+        train._spreadRing = Math.floor((i - 1) / cardinals.length) + 1;
       }
       // Preserve current animation position if already spreading (avoids re-poke on refresh)
-      if (train._spreadPxX === undefined) train._spreadPxX = 0;
-      if (train._spreadPxY === undefined) train._spreadPxY = 0;
+      if (train._spreadX === undefined) train._spreadX = 0;
+      if (train._spreadY === undefined) train._spreadY = 0;
       train._spreading = true;
     }
 
@@ -284,11 +281,12 @@
     const allTrains = (realTrains || []).concat(retiringTrains);
     for (const train of allTrains) {
       if (!train._spreading) continue;
-      train._spreadTargetPxX = 0;
-      train._spreadTargetPxY = 0;
+      train._spreadDirX = 0;
+      train._spreadDirY = 0;
+      train._spreadRing = 0;
       if (instant) {
-        train._spreadPxX = 0;
-        train._spreadPxY = 0;
+        train._spreadX = 0;
+        train._spreadY = 0;
         train._spreading = false;
       }
       // When not instant, the lerp in animate() will bring it back to 0
@@ -790,21 +788,25 @@
         if (!pt) return;
         const g = d3.select(this);
 
-        // Interpolate spread offset in screen-pixel space, convert to SVG for rendering
+        // Interpolate spread offset — target recomputed each frame so it
+        // tracks dot size as the user zooms in/out
         let sdx = 0, sdy = 0;
         if (d._spreading) {
-          d._spreadPxX += ((d._spreadTargetPxX || 0) - d._spreadPxX) * spreadLerp;
-          d._spreadPxY += ((d._spreadTargetPxY || 0) - d._spreadPxY) * spreadLerp;
+          const spreadScale = SPREAD_SVG_SPACING / Math.pow(currentK, 0.55);
+          const targetX = (d._spreadDirX || 0) * spreadScale * (d._spreadRing || 0);
+          const targetY = (d._spreadDirY || 0) * spreadScale * (d._spreadRing || 0);
+          d._spreadX += (targetX - d._spreadX) * spreadLerp;
+          d._spreadY += (targetY - d._spreadY) * spreadLerp;
           // Snap to zero when collapsing and close enough
-          if (d._spreadTargetPxX === 0 && d._spreadTargetPxY === 0 &&
-              Math.abs(d._spreadPxX) < 0.1 && Math.abs(d._spreadPxY) < 0.1) {
-            d._spreadPxX = 0;
-            d._spreadPxY = 0;
+          if (targetX === 0 && targetY === 0 &&
+              Math.abs(d._spreadX) < 0.001 && Math.abs(d._spreadY) < 0.001) {
+            d._spreadX = 0;
+            d._spreadY = 0;
             d._spreading = false;
             g.classed('train-spread', false);
           }
-          sdx = d._spreadPxX / currentK;
-          sdy = d._spreadPxY / currentK;
+          sdx = d._spreadX;
+          sdy = d._spreadY;
         }
 
         g.attr('transform', `translate(${pt[0] + sdx}, ${pt[1] + sdy})`);
@@ -1068,10 +1070,11 @@
           for (const train of realTrains) {
             const prev = prevMap.get(train.rn);
             if (prev && prev._spreading) {
-              train._spreadPxX = prev._spreadPxX;
-              train._spreadPxY = prev._spreadPxY;
-              train._spreadTargetPxX = prev._spreadTargetPxX;
-              train._spreadTargetPxY = prev._spreadTargetPxY;
+              train._spreadX = prev._spreadX;
+              train._spreadY = prev._spreadY;
+              train._spreadDirX = prev._spreadDirX;
+              train._spreadDirY = prev._spreadDirY;
+              train._spreadRing = prev._spreadRing;
               train._spreading = true;
             }
           }
