@@ -185,7 +185,7 @@
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
   const SPREAD_SCREEN_THRESHOLD = 8;  // screen px — trains closer than this are "overlapping"
-  const SPREAD_SCREEN_SPACING = 16;   // screen px between spread train centers
+  const SPREAD_SCREEN_SPACING = 22;   // screen px between spread train centers
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -265,6 +265,10 @@
       if (train._spreadPxY === undefined) train._spreadPxY = 0;
       train._spreading = true;
     }
+
+    // Apply CSS class immediately so spread trains get boosted visibility
+    svg.selectAll('.train-group')
+      .classed('train-spread', d => !!d._spreading);
   }
 
   /**
@@ -283,6 +287,9 @@
         train._spreading = false;
       }
       // When not instant, the lerp in animate() will bring it back to 0
+    }
+    if (instant) {
+      svg.selectAll('.train-group').classed('train-spread', false);
     }
   }
 
