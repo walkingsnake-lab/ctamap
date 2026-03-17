@@ -184,13 +184,18 @@
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
-  const SPREAD_SCREEN_THRESHOLD = 8;  // screen px — trains closer than this are "overlapping"
-  const SPREAD_SCREEN_SPACING = 22;   // screen px between spread train centers
+  const SPREAD_SCREEN_THRESHOLD = 10; // screen px — trains closer than this are "overlapping"
+  const SPREAD_BASE_SPACING = 22;     // screen px between spread train centers at default zoom
+  const SPREAD_ZOOM_EXTRA = 6;        // extra px per zoom-doubling above TRACK_ZOOM_SCALE
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
    * Offsets are stored in SCREEN pixels (_spreadTargetPxX/Y) so the visual spread
    * stays constant regardless of zoom.  The animate loop converts to SVG units.
+   *
+   * On data refresh, trains that were previously spread keep their current
+   * animation position so they don't "poke out" again.  Trains that have moved
+   * out of the overlap zone smoothly animate back to the track.
    */
   function spreadOverlappingTrains() {
     if (!selectedTrain || !realTrains) return;
@@ -198,6 +203,10 @@
     const targetK = trackingScale; // zoom level we're heading toward
     const selPt = projection([selectedTrain.lon, selectedTrain.lat]);
     if (!selPt) return;
+
+    // Zoom-aware spacing: more room when zoomed in
+    const zoomRatio = Math.max(1, targetK / TRACK_ZOOM_SCALE);
+    const spacing = SPREAD_BASE_SPACING + SPREAD_ZOOM_EXTRA * (zoomRatio - 1);
 
     // Gather trains whose screen-space position is within threshold
     const nearby = [];
@@ -210,6 +219,15 @@
       const dy = (pt[1] - selPt[1]) * targetK;
       if (Math.sqrt(dx * dx + dy * dy) < SPREAD_SCREEN_THRESHOLD) {
         nearby.push(train);
+      }
+    }
+
+    // Collapse trains that were spread but are no longer in the overlap zone
+    for (const train of allTrains) {
+      if (train._spreading && !nearby.includes(train)) {
+        // Animate back to track
+        train._spreadTargetPxX = 0;
+        train._spreadTargetPxY = 0;
       }
     }
 
@@ -257,10 +275,10 @@
       } else {
         const side = (i % 2 === 1) ? 1 : -1;
         const n = Math.ceil(i / 2);
-        train._spreadTargetPxX = perpX * SPREAD_SCREEN_SPACING * n * side;
-        train._spreadTargetPxY = perpY * SPREAD_SCREEN_SPACING * n * side;
+        train._spreadTargetPxX = perpX * spacing * n * side;
+        train._spreadTargetPxY = perpY * spacing * n * side;
       }
-      // Initialize current screen-px position if not yet set
+      // Preserve current animation position if already spreading (avoids re-poke on refresh)
       if (train._spreadPxX === undefined) train._spreadPxX = 0;
       if (train._spreadPxY === undefined) train._spreadPxY = 0;
       train._spreading = true;
@@ -1056,6 +1074,21 @@
         }
 
         realTrains = fetched;
+
+        // Carry over spread animation state from previous train objects so
+        // already-spread trains don't "re-poke" from center on each refresh.
+        if (prevMap) {
+          for (const train of realTrains) {
+            const prev = prevMap.get(train.rn);
+            if (prev && prev._spreading) {
+              train._spreadPxX = prev._spreadPxX;
+              train._spreadPxY = prev._spreadPxY;
+              train._spreadTargetPxX = prev._spreadTargetPxX;
+              train._spreadTargetPxY = prev._spreadTargetPxY;
+              train._spreading = true;
+            }
+          }
+        }
 
         // Initialize track position and drift correction
         initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations);
