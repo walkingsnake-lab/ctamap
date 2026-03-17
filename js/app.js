@@ -185,7 +185,7 @@
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
   const SPREAD_SCREEN_THRESHOLD = 10; // screen px — trains closer than this are "overlapping"
-  const SPREAD_SVG_SPACING = 3.2;     // SVG units between spread centers (scales with dot size)
+  const SPREAD_SVG_SPACING = 14;      // SVG units between spread centers (scales with dot size)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -229,14 +229,42 @@
 
     if (nearby.length <= 1) return; // no overlap — nothing to spread
 
-    // Cardinal directions in screen space: up, down, left, right
-    // Each entry is [dx, dy] in screen pixels
-    const cardinals = [
+    // Cardinal directions in screen space: [dx, dy]
+    const ALL_CARDINALS = [
       [ 0, -1], // above
       [ 0,  1], // below
       [-1,  0], // left
       [ 1,  0], // right
     ];
+
+    // Rank cardinal directions: prefer perpendicular to track (avoids line
+    // overlap) and above (avoids the info label which sits below the train).
+    // Compute track tangent in screen space at the selected train.
+    let tangentSX = 0, tangentSY = 1; // default: vertical track
+    const segs = lineSegments[selectedTrain.legend];
+    if (selectedTrain._trackPos && segs) {
+      const dir = selectedTrain._direction || 1;
+      const ahead = advanceOnTrack(selectedTrain._trackPos, 0.001, dir, segs);
+      const aheadPt = projection([ahead.lon, ahead.lat]);
+      if (aheadPt) {
+        const tdx = aheadPt[0] - selPt[0];
+        const tdy = aheadPt[1] - selPt[1];
+        const len = Math.sqrt(tdx * tdx + tdy * tdy);
+        if (len > 0.001) { tangentSX = tdx / len; tangentSY = tdy / len; }
+      }
+    }
+
+    // Score each cardinal: low = better
+    // - Alignment with track tangent (dot product) → high means "along the
+    //   line" which we want to AVOID, so it adds penalty
+    // - "Below" adds penalty because the info label lives there
+    const scored = ALL_CARDINALS.map(([cx, cy]) => {
+      const alongTrack = Math.abs(cx * tangentSX + cy * tangentSY); // 0–1
+      const belowPenalty = (cy > 0) ? 0.3 : 0;
+      return { dx: cx, dy: cy, score: alongTrack + belowPenalty };
+    });
+    scored.sort((a, b) => a.score - b.score);
+    const cardinals = scored.map(s => [s.dx, s.dy]);
 
     // Stable sort by run number so ordering doesn't flicker between refreshes
     nearby.sort((a, b) => a.rn.localeCompare(b.rn));
@@ -256,7 +284,7 @@
         train._spreadDirY = 0;
         train._spreadRing = 0;
       } else {
-        // Cycle through cardinal directions; stack outward for 5+ trains
+        // Cycle through ranked cardinal directions
         const ci = (i - 1) % cardinals.length;
         train._spreadDirX = cardinals[ci][0];
         train._spreadDirY = cardinals[ci][1];
