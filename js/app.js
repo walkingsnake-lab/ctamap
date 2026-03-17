@@ -184,7 +184,7 @@
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
-  const SPREAD_SCREEN_THRESHOLD = 20; // screen px — trains closer than this are "overlapping"
+  const SPREAD_SCREEN_THRESHOLD = 8;  // screen px — trains closer than this are "overlapping"
   const SPREAD_SCREEN_SPACING = 16;   // screen px between spread train centers
 
   /**
@@ -381,6 +381,7 @@
     const merged = groups.merge(enter);
     merged.classed('selected', d => d.rn === selectedTrainRn);
     merged.classed('train-retiring', d => !!d._retiring);
+    merged.classed('train-spread', d => !!d._spreading);
 
     if (selectedTrain) {
       applyLineFocus(selectedTrain.legend);
@@ -788,6 +789,7 @@
             d._spreadPxX = 0;
             d._spreadPxY = 0;
             d._spreading = false;
+            g.classed('train-spread', false);
           }
           sdx = d._spreadPxX / currentK;
           sdy = d._spreadPxY / currentK;
