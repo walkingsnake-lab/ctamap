@@ -233,39 +233,25 @@
 
     if (nearby.length <= 1) return; // no overlap — nothing to spread
 
-    // Compute perpendicular to track direction at the selected train's position
-    // (in SVG / projected coordinate space — same direction as screen space)
-    let perpX = 0, perpY = -1; // default: spread vertically
-    const segs = lineSegments[selectedTrain.legend];
-    if (selectedTrain._trackPos && segs) {
-      const dir = selectedTrain._direction || 1;
-      const ahead = advanceOnTrack(selectedTrain._trackPos, 0.001, dir, segs);
-      const aheadPt = projection([ahead.lon, ahead.lat]);
-      if (aheadPt) {
-        const tdx = aheadPt[0] - selPt[0];
-        const tdy = aheadPt[1] - selPt[1];
-        const len = Math.sqrt(tdx * tdx + tdy * tdy);
-        if (len > 0.001) {
-          // Rotate tangent 90° to get perpendicular
-          perpX = -tdy / len;
-          perpY = tdx / len;
-        }
-      }
-    }
+    // Cardinal directions in screen space: up, down, left, right
+    // Each entry is [dx, dy] in screen pixels
+    const cardinals = [
+      [ 0, -1], // above
+      [ 0,  1], // below
+      [-1,  0], // left
+      [ 1,  0], // right
+    ];
 
     // Stable sort by run number so ordering doesn't flicker between refreshes
     nearby.sort((a, b) => a.rn.localeCompare(b.rn));
 
-    // Reorder: selected train at center, others alternate sides
-    const selIdx = nearby.indexOf(selectedTrain);
+    // Reorder: selected train first, others in stable order
     const ordered = [selectedTrain];
-    let li = selIdx - 1, ri = selIdx + 1;
-    while (li >= 0 || ri < nearby.length) {
-      if (ri < nearby.length) ordered.push(nearby[ri++]);
-      if (li >= 0) ordered.push(nearby[li--]);
+    for (const t of nearby) {
+      if (t !== selectedTrain) ordered.push(t);
     }
 
-    // Assign screen-pixel spread targets
+    // Assign screen-pixel spread targets in cardinal directions
     for (let i = 0; i < ordered.length; i++) {
       const train = ordered[i];
       if (i === 0) {
@@ -273,10 +259,11 @@
         train._spreadTargetPxX = 0;
         train._spreadTargetPxY = 0;
       } else {
-        const side = (i % 2 === 1) ? 1 : -1;
-        const n = Math.ceil(i / 2);
-        train._spreadTargetPxX = perpX * spacing * n * side;
-        train._spreadTargetPxY = perpY * spacing * n * side;
+        // Cycle through cardinal directions; stack outward for 5+ trains
+        const ci = (i - 1) % cardinals.length;
+        const ring = Math.floor((i - 1) / cardinals.length) + 1;
+        train._spreadTargetPxX = cardinals[ci][0] * spacing * ring;
+        train._spreadTargetPxY = cardinals[ci][1] * spacing * ring;
       }
       // Preserve current animation position if already spreading (avoids re-poke on refresh)
       if (train._spreadPxX === undefined) train._spreadPxX = 0;
