@@ -122,11 +122,10 @@ function renderStations(stationsGroup, stations, projection, geojson, lineWidth 
   stationsGroup.selectAll('*').remove();
 
   const vf = lineWidth / LINE_WIDTH;        // visual scale factor relative to reference
-  const FONT_SIZE = 1.4 * vf;
-  const CHAR_W = FONT_SIZE * 0.55;
+  const FONT_SIZE = 1.4 * vf;              // single size for both collision and rendering
+  const CHAR_W = FONT_SIZE * 0.6;          // char width estimate for Jersey 25
   const DOT_R = lineWidth / 2 * 1.2;
   const LABEL_PAD = 0.4 * vf;
-  const RENDER_FONT_SIZE = 1.8 * vf;
 
   // --- Project every GeoJSON line segment and index them in a spatial grid ---
   const segs = [];                          // flat: x1,y1,x2,y2, ...
@@ -355,7 +354,7 @@ function renderStations(stationsGroup, stations, projection, geojson, lineWidth 
       .attr('x', dx).attr('y', dy)
       .attr('text-anchor', anchor)
       .attr('dominant-baseline', 'central')
-      .attr('font-size', `${RENDER_FONT_SIZE}px`)
+      .attr('font-size', `${FONT_SIZE}px`)
       .text(station.name);
   }
 }
