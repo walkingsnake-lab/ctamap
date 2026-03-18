@@ -158,9 +158,9 @@ body {
 
 .train-glow {
   opacity: 0;
-  transform-origin: 0 0;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
   stroke-width: 0;
-  will-change: transform, opacity;
   animation: pulse-glow 2.5s ease-in-out infinite;
 }
 
