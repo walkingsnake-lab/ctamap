@@ -27,11 +27,11 @@
   const { geojson, geoScaleReference } = mapState;
   let { projection, mapContainer, visualScale } = mapState;
 
-  // Compensate for physical pixel density: high-DPR screens (Retina, phones) already
-  // pack more physical pixels into each CSS pixel, so labels are naturally smaller there.
-  // Low-DPR desktop monitors have larger physical CSS pixels, making the same SVG font-size
-  // appear physically bigger. sqrt(DPR) gives a partial correction without over-shrinking.
-  const dprFactor = 1 / Math.sqrt(window.devicePixelRatio || 1);
+  // Compensate for physical pixel density: low-DPR desktop monitors have physically larger
+  // CSS pixels, so labels appear bigger and can overlap. High-DPR screens (Retina, phones)
+  // are naturally smaller. DPR=2 (Retina Mac) is the baseline where labels look right;
+  // DPR=1 desktops are reduced by ~30%, DPR=3 phones by ~18%.
+  const dprFactor = Math.sqrt(2) / Math.sqrt(window.devicePixelRatio || 1);
 
   // Base visual sizes at zoom k=1, scaled relative to the reference viewport.
   // Declared as lets so the resize handler can update them after redrawMap().
