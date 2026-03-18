@@ -184,7 +184,7 @@
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
-  const SPREAD_SCREEN_THRESHOLD = 10; // screen px — trains closer than this are "overlapping"
+  const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping"
   const SPREAD_SVG_SPACING = 14;      // SVG units between spread centers (scales with dot size)
 
   /**
@@ -203,16 +203,19 @@
     const selPt = projection([selectedTrain.lon, selectedTrain.lat]);
     if (!selPt) return;
 
-    // Gather trains whose screen-space position is within threshold
+    // Gather trains whose SVG-space position is within threshold.
+    // Using SVG units (not screen pixels) keeps the overlap group stable
+    // across zoom levels — prevents trains from spreading then immediately
+    // collapsing as the zoom-in animation increases screen distance.
     const nearby = [];
     const allTrains = realTrains.concat(retiringTrains);
     for (const train of allTrains) {
       if (train._retiring && train._retireComplete) continue;
       const pt = projection([train.lon, train.lat]);
       if (!pt) continue;
-      const dx = (pt[0] - selPt[0]) * currentK;
-      const dy = (pt[1] - selPt[1]) * currentK;
-      if (Math.sqrt(dx * dx + dy * dy) < SPREAD_SCREEN_THRESHOLD) {
+      const dx = pt[0] - selPt[0];
+      const dy = pt[1] - selPt[1];
+      if (Math.sqrt(dx * dx + dy * dy) < SPREAD_SVG_THRESHOLD) {
         nearby.push(train);
       }
     }
