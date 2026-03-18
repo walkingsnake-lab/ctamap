@@ -265,7 +265,7 @@
       [ D,  D],   // lower-right
     ];
 
-    // Rank directions: prefer perpendicular to track (avoids line overlap).
+    // Compute track tangent at anchor so we can avoid overlapping the current line.
     let tangentSX = 0, tangentSY = 1; // default: vertical track
     const segs = lineSegments[selectedTrain.legend];
     if (selectedTrain._trackPos && segs) {
@@ -280,25 +280,20 @@
       }
     }
 
-    // Score each direction: low = better
-    // - Alignment with track tangent (dot product) penalised to avoid overlapping the line
-    const scored = ALL_DIRS.map(([cx, cy]) => {
-      const alongTrack = Math.abs(cx * tangentSX + cy * tangentSY); // 0–1
-      return { dx: cx, dy: cy, score: alongTrack };
-    });
-    scored.sort((a, b) => a.score - b.score);
-    const cardinals = scored.map(s => [s.dx, s.dy]);
-
-    // Stable sort by run number so ordering doesn't flicker between refreshes
+    // Separate anchor from the rest; stable sort by run number to avoid flicker
     nearby.sort((a, b) => a.rn.localeCompare(b.rn));
-
-    // Reorder: selected train first, others in stable order
     const ordered = [selectedTrain];
     for (const t of nearby) {
       if (t !== selectedTrain) ordered.push(t);
     }
 
-    // Assign cardinal direction and ring for each spread train
+    // Track which directions have been claimed so trains spread apart
+    const usedDirs = [];   // array of [dx, dy] already assigned
+
+    // Assign spread direction per train:
+    //   1. Penalise alignment with the current line's track tangent (avoid own-line overlap)
+    //   2. Heavily prefer the direction closest to the train's natural offset from anchor
+    //      so nearby trains don't visually swap sides
     for (let i = 0; i < ordered.length; i++) {
       const train = ordered[i];
       if (i === 0) {
@@ -308,11 +303,43 @@
         train._spreadRing = 0;
         train._spreadAnchor = true;
       } else {
-        // Cycle through ranked cardinal directions
-        const ci = (i - 1) % cardinals.length;
-        train._spreadDirX = cardinals[ci][0];
-        train._spreadDirY = cardinals[ci][1];
-        train._spreadRing = Math.floor((i - 1) / cardinals.length) + 1;
+        // Compute this train's natural offset from the anchor in SVG space
+        const trainPt = projection([train.lon, train.lat]);
+        let offsetX = 0, offsetY = -1; // fallback: above
+        if (trainPt) {
+          const odx = trainPt[0] - selPt[0];
+          const ody = trainPt[1] - selPt[1];
+          const olen = Math.sqrt(odx * odx + ody * ody);
+          if (olen > 0.0001) { offsetX = odx / olen; offsetY = ody / olen; }
+        }
+
+        // Score each candidate direction: low = better
+        const scored = ALL_DIRS.map(([cx, cy]) => {
+          // Penalty for aligning with the train's own track (overlaps the line)
+          const alongTrack = Math.abs(cx * tangentSX + cy * tangentSY); // 0–1
+
+          // Preference for direction closest to the train's natural offset.
+          // dot product: 1 = same direction, -1 = opposite; invert so closer = lower score
+          const closeness = -(cx * offsetX + cy * offsetY); // -1 to 1, lower = closer
+
+          // Penalty for directions already claimed by other trains
+          let claimedPenalty = 0;
+          for (const [ux, uy] of usedDirs) {
+            const dot = cx * ux + cy * uy;
+            if (dot > 0.95) { claimedPenalty = 2; break; }  // exact match — strongly avoid
+            if (dot > 0.5) { claimedPenalty = Math.max(claimedPenalty, 0.5); } // nearby
+          }
+
+          // Weight: avoid own-line overlap first, then prefer natural offset direction
+          return { dx: cx, dy: cy, score: alongTrack * 1.5 + closeness * 1.0 + claimedPenalty };
+        });
+        scored.sort((a, b) => a.score - b.score);
+
+        const best = scored[0];
+        train._spreadDirX = best.dx;
+        train._spreadDirY = best.dy;
+        train._spreadRing = 1;
+        usedDirs.push([best.dx, best.dy]);
       }
       // Preserve current animation position if already spreading (avoids re-poke on refresh)
       if (train._spreadX === undefined) train._spreadX = 0;
