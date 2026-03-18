@@ -1,5 +1,6 @@
 {
   "framework": null,
+  "buildCommand": "npm run build",
   "rewrites": [
     { "source": "/api/trains", "destination": "/api/trains" },
     { "source": "/api/train/:rn", "destination": "/api/train/:rn" },
