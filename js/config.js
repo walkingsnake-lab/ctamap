@@ -201,8 +201,8 @@ const STATION_LABEL_OVERRIDES = {
   // the dots.  NE+SE puts both labels to the east at different heights — Monroe
   // label upper-right, Jackson lower-right — matching their geography, with
   // leader lines angling westward to their own dots without crossing.
-  'Monroe': 'NE',
-  'Jackson': 'SE',
+  'Monroe': 'E',
+  'Jackson': 'E',
 };
 
 // Map CTA line names (from GeoJSON "lines" property) → legend codes for station disambiguation
