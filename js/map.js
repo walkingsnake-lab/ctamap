@@ -122,7 +122,7 @@ function renderStations(stationsGroup, stations, projection, geojson, lineWidth 
   stationsGroup.selectAll('*').remove();
 
   const vf = lineWidth / LINE_WIDTH;        // visual scale factor relative to reference
-  const FONT_SIZE = 1.4 * vf;              // single size for both collision and rendering
+  const FONT_SIZE = 1.1 * vf;              // single size for both collision and rendering
   const CHAR_W = FONT_SIZE * 0.6;          // char width estimate for Jersey 25
   const DOT_R = lineWidth / 2 * 1.2;
   const LABEL_PAD = 0.4 * vf;
