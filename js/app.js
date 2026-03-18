@@ -302,10 +302,11 @@
     for (let i = 0; i < ordered.length; i++) {
       const train = ordered[i];
       if (i === 0) {
-        // Selected train stays in place
+        // Selected train stays in place (anchor)
         train._spreadDirX = 0;
         train._spreadDirY = 0;
         train._spreadRing = 0;
+        train._spreadAnchor = true;
       } else {
         // Cycle through ranked cardinal directions
         const ci = (i - 1) % cardinals.length;
@@ -339,6 +340,7 @@
         train._spreadX = 0;
         train._spreadY = 0;
         train._spreading = false;
+        train._spreadAnchor = false;
       }
       // When not instant, the lerp in animate() will bring it back to 0
     }
@@ -884,12 +886,19 @@
           // Keep _spreading true for the selected train (spread anchor) so its
           // heading triangle stays visible while other trains are fanned out.
           if (targetX === 0 && targetY === 0 &&
-              Math.abs(d._spreadX) < 0.001 && Math.abs(d._spreadY) < 0.001 &&
-              d.rn !== selectedTrainRn) {
-            d._spreadX = 0;
-            d._spreadY = 0;
-            d._spreading = false;
-            g.classed('train-spread', false);
+              Math.abs(d._spreadX) < 0.001 && Math.abs(d._spreadY) < 0.001) {
+            // Don't clear anchor while children are still collapsing —
+            // connectors need the anchor position until all offsets reach zero.
+            if (d._spreadAnchor && d.rn !== selectedTrainRn) {
+              // Anchor after deselect: keep alive until no other train is spreading
+              // (checked below after the .each loop)
+            } else if (d.rn !== selectedTrainRn) {
+              d._spreadX = 0;
+              d._spreadY = 0;
+              d._spreading = false;
+              d._spreadAnchor = false;
+              g.classed('train-spread', false);
+            }
           }
           sdx = d._spreadX;
           sdy = d._spreadY;
@@ -907,8 +916,10 @@
 
         g.attr('transform', `translate(${finalX}, ${finalY})`);
 
-        // Track positions for spread connector lines
-        if (d._spreading && d.rn === selectedTrainRn) {
+        // Track positions for spread connector lines.
+        // _spreadAnchor persists after deselect so connectors stay visible
+        // while children lerp back to center.
+        if (d._spreading && d._spreadAnchor) {
           spreadAnchorPos = [finalX, finalY];
         } else if (d._spreading && (sdx !== 0 || sdy !== 0)) {
           spreadChildPositions.push([finalX, finalY]);
@@ -1056,8 +1067,22 @@
       .attr('y1', spreadAnchorPos ? spreadAnchorPos[1] : 0)
       .attr('x2', d => d[0])
       .attr('y2', d => d[1]);
-    connectors.exit()
-      .transition().duration(300).style('opacity', 0).remove();
+    connectors.exit().remove();
+
+    // Clean up spread anchor after all children have finished collapsing.
+    // The anchor stays alive during collapse so connectors have a source point.
+    if (spreadChildPositions.length === 0 && !selectedTrainRn) {
+      const allT = (realTrains || []).concat(retiringTrains);
+      for (const t of allT) {
+        if (t._spreadAnchor && t._spreading) {
+          t._spreading = false;
+          t._spreadAnchor = false;
+          svg.selectAll('.train-group')
+            .filter(d => d.rn === t.rn)
+            .classed('train-spread', false);
+        }
+      }
+    }
 
     // Camera tracking / zoom-in animation for selected train
     if (zoomAnim && selectedTrain) {
