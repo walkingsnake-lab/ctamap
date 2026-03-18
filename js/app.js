@@ -189,7 +189,7 @@
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
   const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping"
-  const SPREAD_SVG_SPACING = 10;      // SVG units between spread centers (scales with dot size)
+  const SPREAD_SVG_SPACING = 18;      // SVG units between spread centers (scales with dot size)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
