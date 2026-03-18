@@ -230,7 +230,13 @@
       }
     }
 
-    if (nearby.length <= 1) return; // no overlap — nothing to spread
+    if (nearby.length <= 1) {
+      // No overlap — clear anchor's spreading flag too
+      if (selectedTrain._spreading) {
+        selectedTrain._spreading = false;
+      }
+      return;
+    }
 
     // Cardinal directions in screen space: [dx, dy]
     const ALL_CARDINALS = [
@@ -847,9 +853,12 @@
           const targetY = (d._spreadDirY || 0) * spreadScale * (d._spreadRing || 0);
           d._spreadX += (targetX - d._spreadX) * spreadLerp;
           d._spreadY += (targetY - d._spreadY) * spreadLerp;
-          // Snap to zero when collapsing and close enough
+          // Snap to zero when collapsing and close enough.
+          // Keep _spreading true for the selected train (spread anchor) so its
+          // heading triangle stays visible while other trains are fanned out.
           if (targetX === 0 && targetY === 0 &&
-              Math.abs(d._spreadX) < 0.001 && Math.abs(d._spreadY) < 0.001) {
+              Math.abs(d._spreadX) < 0.001 && Math.abs(d._spreadY) < 0.001 &&
+              d.rn !== selectedTrainRn) {
             d._spreadX = 0;
             d._spreadY = 0;
             d._spreading = false;
