@@ -412,6 +412,22 @@
       .attr('fill', d => d.legend === 'YL' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.75)')
       .style('opacity', 0);
 
+    // Mini destination badge — shown on spread (non-selected) trains
+    const miniBadge = enter.append('g')
+      .attr('class', 'train-mini-badge')
+      .style('opacity', 0);
+    miniBadge.append('rect')
+      .attr('class', 'mini-badge-bg')
+      .attr('rx', 0.6)
+      .attr('ry', 0.6)
+      .attr('fill', d => badgeFill(d.legend, d.destNm));
+    miniBadge.append('text')
+      .attr('class', 'mini-badge-text')
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'central')
+      .attr('fill', d => badgeTextFill(d.legend, d.destNm))
+      .text(d => cleanStationName(d.destNm) || '');
+
     // Click handler on new train groups
     enter.on('click', function (event, d) {
       event.stopPropagation();
@@ -498,7 +514,7 @@
       if (st.prefix || st.station) {
         status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
       } else if (st.delayed) {
-        status.innerHTML = '<span class="tl-delayed">Delayed</span><br><span class="tl-limited">Limited tracking<br>available for this train</span>';
+        status.innerHTML = '<span class="tl-delayed">Delayed</span><span class="tl-limited">Limited tracking<br>available for this train</span>';
       } else if (st.limited) {
         status.innerHTML = '<span class="tl-limited">Limited tracking<br>available for this train</span>';
       } else {
@@ -1027,6 +1043,35 @@
           headingEl.attr('transform', `scale(${headingScale})`);
         }
         headingEl.style('opacity', headingVisible ? 1 : 0);
+
+        // Mini destination badge for spread (non-selected) trains
+        const miniBadgeG = g.select('.train-mini-badge');
+        const showMiniBadge = d._spreading && d.rn !== selectedTrainRn;
+        if (showMiniBadge) {
+          const badgeScale = 1 / Math.pow(currentK, 0.55);
+          const fontSize = 1.6;
+          const textEl = miniBadgeG.select('.mini-badge-text');
+          const rectEl = miniBadgeG.select('.mini-badge-bg');
+          textEl.attr('font-size', fontSize);
+          // Measure text width for the background rect
+          const textLen = (cleanStationName(d.destNm) || '').length * fontSize * 0.55;
+          const padX = fontSize * 0.45;
+          const padY = fontSize * 0.25;
+          const rw = textLen + padX * 2;
+          const rh = fontSize + padY * 2;
+          // Position below the dot
+          const offsetY = scaledRadius + rh * badgeScale * 0.5 + 0.3 * badgeScale;
+          rectEl
+            .attr('x', -rw / 2).attr('y', -rh / 2)
+            .attr('width', rw).attr('height', rh);
+          textEl.attr('y', 0);
+          miniBadgeG.attr('transform', `translate(0,${offsetY}) scale(${badgeScale})`);
+          miniBadgeG.style('opacity', 1);
+          // Hide heading triangle when mini badge is shown
+          headingEl.style('opacity', 0);
+        } else {
+          miniBadgeG.style('opacity', 0);
+        }
       });
 
     // Draw connector lines from spread anchor to each fanned-out train

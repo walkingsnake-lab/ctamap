@@ -214,6 +214,14 @@ body {
   pointer-events: none;
 }
 
+.train-mini-badge {
+  pointer-events: none;
+}
+
+.mini-badge-text {
+  font-family: 'Jersey 10', monospace;
+}
+
 /* --- Glow intensity variable --- */
 @property --glow-i {
   syntax: '<number>';
@@ -303,6 +311,7 @@ body {
 }
 
 .tl-limited {
+  display: block;
   font-size: 20px;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.15;
