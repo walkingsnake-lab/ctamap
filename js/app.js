@@ -1041,7 +1041,7 @@
         g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         const headingScale = dotScale / Math.pow(currentK, 0.55);
-        let headingVisible = (stationsVisible || d._spreading) && !atTerminus;
+        let headingVisible = stationsVisible && !atTerminus;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
           const headingTarget = d._corrToTrackPos
