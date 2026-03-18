@@ -886,21 +886,14 @@
           sdy = d._spreadY;
         }
 
-        // While spread, pin the child train to the anchor's position on the
-        // non-spread axis so small track movements don't cause jitter.
-        // e.g. a train spread "above" (dirY=-1) shares the anchor's X.
+        // Position spread children relative to the anchor so the visual
+        // separation is consistent regardless of the train's own track offset.
         let finalX = pt[0] + sdx;
         let finalY = pt[1] + sdy;
         if (d._spreading && anchorPt && d.rn !== selectedTrainRn &&
             (d._spreadDirX !== 0 || d._spreadDirY !== 0)) {
-          if (d._spreadDirX === 0) {
-            // Spread vertically — pin X to anchor
-            finalX = anchorPt[0] + sdx;
-          }
-          if (d._spreadDirY === 0) {
-            // Spread horizontally — pin Y to anchor
-            finalY = anchorPt[1] + sdy;
-          }
+          finalX = anchorPt[0] + sdx;
+          finalY = anchorPt[1] + sdy;
         }
 
         g.attr('transform', `translate(${finalX}, ${finalY})`);
