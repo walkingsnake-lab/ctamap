@@ -392,6 +392,10 @@
 
   // ---- Render trains (DOM management only — positions handled by animation loop) ----
   function renderTrains() {
+    // Force the zoom-dependent block in animate() to re-sync glow/dot radii for any
+    // newly added trains on the next animation frame.
+    lastLineK = -1;
+
     const allTrains = (realTrains || []).concat(retiringTrains);
     const layer = svg.select('.trains-layer');
 
@@ -873,6 +877,11 @@
 
       // Scale station dots to match line width at every zoom level
       scaleStationDots(currentK);
+
+      // Update glow radius for zoom level — only when k changes, not every frame.
+      // Changing an SVG attribute on a CSS-animated element every frame invalidates
+      // its compositor layer and causes the pulse animation to flicker in Chrome.
+      svg.selectAll('.train-glow').attr('r', scaledGlowRadius);
     }
 
     // Spread interpolation factor — framerate-independent exponential ease.
@@ -1033,7 +1042,6 @@
         const dotEl = g.select('.train-dot');
         const headingEl = g.select('.train-heading');
         dotEl.attr('r', scaledRadius);
-        g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         const headingScale = dotScale / Math.pow(currentK, 0.55);
         let headingVisible = stationsVisible && !atTerminus;
