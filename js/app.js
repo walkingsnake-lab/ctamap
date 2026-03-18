@@ -248,17 +248,21 @@
       return;
     }
 
-    // Cardinal directions in screen space: [dx, dy]
-    const ALL_CARDINALS = [
-      [ 0, -1], // above
-      [ 0,  1], // below
-      [-1,  0], // left
-      [ 1,  0], // right
+    // Spread directions: cardinals + diagonals (normalized)
+    const D = Math.SQRT1_2; // ~0.707
+    const ALL_DIRS = [
+      [ 0, -1],   // above
+      [ 0,  1],   // below
+      [-1,  0],   // left
+      [ 1,  0],   // right
+      [-D, -D],   // upper-left
+      [ D, -D],   // upper-right
+      [-D,  D],   // lower-left
+      [ D,  D],   // lower-right
     ];
 
-    // Rank cardinal directions: prefer perpendicular to track (avoids line
-    // overlap) and above (avoids the info label which sits below the train).
-    // Compute track tangent in screen space at the selected train.
+    // Rank directions: prefer perpendicular to track and away from the info
+    // label (which sits below). Straight-down is strongly discouraged.
     let tangentSX = 0, tangentSY = 1; // default: vertical track
     const segs = lineSegments[selectedTrain.legend];
     if (selectedTrain._trackPos && segs) {
@@ -273,14 +277,15 @@
       }
     }
 
-    // Score each cardinal: low = better
-    // - Alignment with track tangent (dot product) → high means "along the
-    //   line" which we want to AVOID, so it adds penalty
-    // - "Below" adds penalty because the info label lives there
-    const scored = ALL_CARDINALS.map(([cx, cy]) => {
+    // Score each direction: low = better
+    // - Alignment with track tangent → penalty (avoid overlapping the line)
+    // - Straight down (0,1) gets heavy penalty — info label lives there
+    // - Any downward component gets mild penalty
+    const scored = ALL_DIRS.map(([cx, cy]) => {
       const alongTrack = Math.abs(cx * tangentSX + cy * tangentSY); // 0–1
-      const belowPenalty = (cy > 0) ? 0.3 : 0;
-      return { dx: cx, dy: cy, score: alongTrack + belowPenalty };
+      const straightDownPenalty = (cx === 0 && cy > 0) ? 0.8 : 0;
+      const downPenalty = (cy > 0) ? 0.2 : 0;
+      return { dx: cx, dy: cy, score: alongTrack + straightDownPenalty + downPenalty };
     });
     scored.sort((a, b) => a.score - b.score);
     const cardinals = scored.map(s => [s.dx, s.dy]);
@@ -567,7 +572,7 @@
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
     const scaledR = TRAIN_RADIUS / Math.pow(t.k, 0.55);
-    const offset = (scaledR + 3.0) * 1.3 * t.k + 24;
+    const offset = (scaledR + 3.0) * 1.3 * t.k + 12;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
   }
