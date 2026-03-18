@@ -1046,9 +1046,7 @@
       .attr('x1', spreadAnchorPos ? spreadAnchorPos[0] : 0)
       .attr('y1', spreadAnchorPos ? spreadAnchorPos[1] : 0)
       .attr('x2', d => d[0])
-      .attr('y2', d => d[1])
-      .attr('stroke', 'rgba(255,255,255,0.25)')
-      .attr('stroke-width', 0.4 / Math.pow(currentK, 0.4));
+      .attr('y2', d => d[1]);
     connectors.exit().remove();
 
     // Camera tracking / zoom-in animation for selected train
