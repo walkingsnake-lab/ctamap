@@ -863,10 +863,8 @@
         const atTerminus = termPts.some(t => geoDist(d.lon, d.lat, t.lon, t.lat) < 0.003);
 
         // Animate direction triangles: steady stream flowing along the track
-        // Show for selected train AND for any spread trains (so direction is
-        // visible when overlapping trains fan out).
         const segs = lineSegments[d.legend];
-        const showArrows = (d.rn === selectedTrainRn || d._spreading)
+        const showArrows = d.rn === selectedTrainRn
           && d._trackPos && segs;
 
         if (showArrows) {
@@ -949,7 +947,7 @@
         g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         const headingScale = dotScale / Math.pow(currentK, 0.55);
-        let headingVisible = stationsVisible && !atTerminus;
+        let headingVisible = (stationsVisible || d._spreading) && !atTerminus;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
           const headingTarget = d._corrToTrackPos
