@@ -196,12 +196,13 @@ function cleanStationName(name) {
 // Per-station label direction overrides: station name → compass direction
 // Valid directions: 'N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'
 const STATION_LABEL_OVERRIDES = {
-  // Monroe and Jackson are adjacent downtown; without overrides the collision
-  // avoidance puts both labels in the narrow gap between them (Monroe pointing
-  // down, Jackson pointing up).  Force them outward so each label sits on its
-  // own side of its station dot.
-  'Monroe': 'N',
-  'Jackson': 'S',
+  // Monroe and Jackson are adjacent downtown N-S subway stations.  N/S overrides
+  // leave both leader lines converging in the same vertical corridor between
+  // the dots.  NE+SE puts both labels to the east at different heights — Monroe
+  // label upper-right, Jackson lower-right — matching their geography, with
+  // leader lines angling westward to their own dots without crossing.
+  'Monroe': 'NE',
+  'Jackson': 'SE',
 };
 
 // Map CTA line names (from GeoJSON "lines" property) → legend codes for station disambiguation
