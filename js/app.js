@@ -129,6 +129,8 @@
     scaleStationDots(d3.zoomTransform(svgEl).k);
   }
 
+  // Create spread-connector layer (below trains so lines sit behind dots)
+  mapContainer.append('g').attr('class', 'spread-lines-layer');
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
 
@@ -838,6 +840,10 @@
     // pow(0.00005, dt/1000) ≈ 0.85 at 60fps → alpha ≈ 0.15 per frame, snappy ~200ms settle.
     const spreadLerp = 1 - Math.pow(0.00005, dt / 1000);
 
+    // Collect spread train positions for connector lines
+    let spreadAnchorPos = null;
+    const spreadChildPositions = [];
+
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
@@ -869,6 +875,13 @@
         }
 
         g.attr('transform', `translate(${pt[0] + sdx}, ${pt[1] + sdy})`);
+
+        // Track positions for spread connector lines
+        if (d._spreading && d.rn === selectedTrainRn) {
+          spreadAnchorPos = [pt[0] + sdx, pt[1] + sdy];
+        } else if (d._spreading && (sdx !== 0 || sdy !== 0)) {
+          spreadChildPositions.push([pt[0] + sdx, pt[1] + sdy]);
+        }
 
         // Check if train is at a line terminus (reused for arrows + heading)
         const termPts = lineTerminals[d.legend] || [];
@@ -992,6 +1005,22 @@
         }
         headingEl.style('opacity', headingVisible ? 1 : 0);
       });
+
+    // Draw connector lines from spread anchor to each fanned-out train
+    const linesLayer = svg.select('.spread-lines-layer');
+    const lineData = (spreadAnchorPos && spreadChildPositions.length > 0)
+      ? spreadChildPositions : [];
+    const connectors = linesLayer.selectAll('.spread-connector').data(lineData);
+    connectors.enter().append('line')
+      .attr('class', 'spread-connector')
+      .merge(connectors)
+      .attr('x1', spreadAnchorPos ? spreadAnchorPos[0] : 0)
+      .attr('y1', spreadAnchorPos ? spreadAnchorPos[1] : 0)
+      .attr('x2', d => d[0])
+      .attr('y2', d => d[1])
+      .attr('stroke', 'rgba(255,255,255,0.25)')
+      .attr('stroke-width', 0.4 / Math.pow(currentK, 0.4));
+    connectors.exit().remove();
 
     // Camera tracking / zoom-in animation for selected train
     if (zoomAnim && selectedTrain) {
