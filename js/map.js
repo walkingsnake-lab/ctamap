@@ -33,7 +33,7 @@ function createTrainGlowGradients(defs) {
  * Renders transit lines — one SVG <path> per line color.
  * Lines that use the Loop include ML segments in their own color.
  */
-function renderLines(linesGroup, path, geojson) {
+function renderLines(linesGroup, path, geojson, lineWidth = LINE_WIDTH) {
   // Build maps: legend code → shared features from ML, RD, and BR segments
   const mlByLegend = {};
   const rdSharedByLegend = {};
@@ -70,12 +70,12 @@ function renderLines(linesGroup, path, geojson) {
         .attr('data-legend', legend)
         .attr('d', path({ type: 'FeatureCollection', features: rdShared }))
         .attr('stroke', LINE_COLORS[legend])
-        .attr('stroke-width', LINE_WIDTH)
+        .attr('stroke-width', lineWidth)
         .attr('stroke-opacity', 0.9);
       if (legend === 'PR') {
         shadowPath
           .classed('pr-express-path', true)
-          .attr('stroke-dasharray', `${LINE_WIDTH * 3} ${LINE_WIDTH * 2}`);
+          .attr('stroke-dasharray', `${lineWidth * 3} ${lineWidth * 2}`);
       }
     }
 
@@ -92,9 +92,9 @@ function renderLines(linesGroup, path, geojson) {
           .attr('data-legend', 'PR')
           .attr('d', path({ type: 'FeatureCollection', features: expressFeatures }))
           .attr('stroke', LINE_COLORS['PR'])
-          .attr('stroke-width', LINE_WIDTH)
+          .attr('stroke-width', lineWidth)
           .attr('stroke-opacity', 0.9)
-          .attr('stroke-dasharray', `${LINE_WIDTH * 3} ${LINE_WIDTH * 2}`);
+          .attr('stroke-dasharray', `${lineWidth * 3} ${lineWidth * 2}`);
       }
     }
 
@@ -105,7 +105,7 @@ function renderLines(linesGroup, path, geojson) {
       .attr('data-legend', legend)
       .attr('d', path({ type: 'FeatureCollection', features }))
       .attr('stroke', LINE_COLORS[legend])
-      .attr('stroke-width', LINE_WIDTH)
+      .attr('stroke-width', lineWidth)
       .attr('stroke-opacity', 0.9);
   }
 }
@@ -118,13 +118,15 @@ function renderLines(linesGroup, path, geojson) {
  * and pick the position with the least overlap.  A thin leader line connects
  * each dot to its label.  Transfer stations are placed first (higher priority).
  */
-function renderStations(stationsGroup, stations, projection, geojson) {
+function renderStations(stationsGroup, stations, projection, geojson, lineWidth = LINE_WIDTH) {
   stationsGroup.selectAll('*').remove();
 
-  const FONT_SIZE = 1.4;
+  const vf = lineWidth / LINE_WIDTH;        // visual scale factor relative to reference
+  const FONT_SIZE = 1.4 * vf;
   const CHAR_W = FONT_SIZE * 0.55;
-  const DOT_R = LINE_WIDTH / 2 * 1.2;
-  const LABEL_PAD = 0.4;
+  const DOT_R = lineWidth / 2 * 1.2;
+  const LABEL_PAD = 0.4 * vf;
+  const RENDER_FONT_SIZE = 1.8 * vf;
 
   // --- Project every GeoJSON line segment and index them in a spatial grid ---
   const segs = [];                          // flat: x1,y1,x2,y2, ...
@@ -176,7 +178,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
   }
 
   function countLineHits(rx, ry, rw, rh) {
-    const p = LINE_WIDTH * 0.6;
+    const p = lineWidth * 0.6;
     const xn = rx - p, yn = ry - p, xx = rx + rw + p, yx = ry + rh + p;
     let hits = 0;
     const seen = new Set();
@@ -204,7 +206,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
 
   // --- Merge stations with identical names at nearby coordinates ---
   // (e.g. Jackson Red + Jackson Blue are separate subway stops one block apart)
-  const MERGE_THRESHOLD = 8;
+  const MERGE_THRESHOLD = 8 * vf;
   const nameGroups = new Map();
   for (const item of items) {
     if (!nameGroups.has(item.name)) nameGroups.set(item.name, []);
@@ -249,7 +251,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
     { ux:  0, uy: -1, anchor: 'middle' },   // N
     { ux:  0, uy:  1, anchor: 'middle' },   // S
   ];
-  const dists = [3, 5, 8];
+  const dists = [3 * vf, 5 * vf, 8 * vf];
 
   // Compass name → dir index for STATION_LABEL_OVERRIDES
   const COMPASS_TO_DIR = { E: 0, W: 1, NE: 2, NW: 3, SE: 4, SW: 5, N: 6, S: 7 };
@@ -353,6 +355,7 @@ function renderStations(stationsGroup, stations, projection, geojson) {
       .attr('x', dx).attr('y', dy)
       .attr('text-anchor', anchor)
       .attr('dominant-baseline', 'central')
+      .attr('font-size', `${RENDER_FONT_SIZE}px`)
       .text(station.name);
   }
 }
@@ -368,6 +371,20 @@ async function loadMap(svg, width, height) {
     geojson
   );
 
+  // Compute reference scale using a canonical 1440×900 desktop viewport.
+  // All visual constants are calibrated for this reference; visualScale adjusts
+  // them proportionally so dots/labels/lines stay in the same ratio on any device.
+  const refProjection = d3.geoMercator().fitExtent(
+    [
+      [1440 * MAP_PADDING, 900 * MAP_PADDING],
+      [1440 * (1 - MAP_PADDING), 900 * (1 - MAP_PADDING)]
+    ],
+    geojson
+  );
+  const geoScaleReference = refProjection.scale();
+  const visualScale = projection.scale() / geoScaleReference;
+  const scaledLineWidth = LINE_WIDTH * visualScale;
+
   const path = d3.geoPath().projection(projection);
 
   createTrainGlowGradients(svg.append('defs'));
@@ -375,19 +392,19 @@ async function loadMap(svg, width, height) {
   const mapContainer = svg.append('g').attr('class', 'map-container');
 
   const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');
-  renderLines(linesGroup, path, geojson);
+  renderLines(linesGroup, path, geojson, scaledLineWidth);
 
   // Stations layer sits between lines and trains (created hidden)
   mapContainer.append('g').attr('class', 'stations-layer').style('display', 'none');
 
-  return { projection, geojson, path, mapContainer };
+  return { projection, geojson, path, mapContainer, geoScaleReference, visualScale };
 }
 
 /**
  * Re-renders the map into an existing SVG at the given dimensions.
  * Clears previous content and redraws everything.
  */
-function redrawMap(svg, width, height, geojson) {
+function redrawMap(svg, width, height, geojson, geoScaleReference) {
   svg.selectAll('*').remove();
 
   const projection = d3.geoMercator().fitExtent(
@@ -398,6 +415,9 @@ function redrawMap(svg, width, height, geojson) {
     geojson
   );
 
+  const visualScale = projection.scale() / geoScaleReference;
+  const scaledLineWidth = LINE_WIDTH * visualScale;
+
   const path = d3.geoPath().projection(projection);
 
   createTrainGlowGradients(svg.append('defs'));
@@ -405,9 +425,9 @@ function redrawMap(svg, width, height, geojson) {
   const mapContainer = svg.append('g').attr('class', 'map-container');
 
   const linesGroup = mapContainer.append('g').attr('class', 'lines-layer');
-  renderLines(linesGroup, path, geojson);
+  renderLines(linesGroup, path, geojson, scaledLineWidth);
 
   mapContainer.append('g').attr('class', 'stations-layer');
 
-  return { projection, path };
+  return { projection, path, visualScale };
 }
