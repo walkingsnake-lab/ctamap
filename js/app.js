@@ -925,10 +925,6 @@
           spreadChildPositions.push([finalX, finalY]);
         }
 
-        // Check if train is at a line terminus (reused for arrows + heading)
-        const termPts = lineTerminals[d.legend] || [];
-        const atTerminus = termPts.some(t => geoDist(d.lon, d.lat, t.lon, t.lat) < 0.003);
-
         // Animate direction triangles: steady stream flowing along the track
         const segs = lineSegments[d.legend];
         const showArrows = d.rn === selectedTrainRn
@@ -1014,7 +1010,7 @@
         g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         const headingScale = dotScale / Math.pow(currentK, 0.55);
-        let headingVisible = (stationsVisible || d._spreading) && !atTerminus;
+        let headingVisible = stationsVisible || d._spreading;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
           const headingTarget = d._corrToTrackPos
@@ -1031,10 +1027,9 @@
               headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
             } else {
               // At terminus — advanceOnTrack stopped, can't determine direction.
-              // Update scale so it stays in sync with zoom; hide via opacity below.
+              // Keep the last rotation; just update scale so it stays in sync with zoom.
               dotEl.attr('transform', `scale(${dotScale})`);
               headingEl.attr('transform', `scale(${headingScale})`);
-              headingVisible = false;
             }
           }
         } else if (d.heading !== undefined) {
