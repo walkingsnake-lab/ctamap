@@ -27,6 +27,12 @@
   const { geojson, geoScaleReference } = mapState;
   let { projection, mapContainer, visualScale } = mapState;
 
+  // Compensate for physical pixel density: low-DPR desktop monitors have physically larger
+  // CSS pixels, so labels appear bigger and can overlap. High-DPR screens (Retina, phones)
+  // are naturally smaller. DPR=2 (Retina Mac) is the baseline where labels look right;
+  // DPR=1 desktops are reduced by ~30%, DPR=3 phones by ~18%.
+  const dprFactor = Math.sqrt(2) / Math.sqrt(window.devicePixelRatio || 1);
+
   // Base visual sizes at zoom k=1, scaled relative to the reference viewport.
   // Declared as lets so the resize handler can update them after redrawMap().
   let baseTrainRadius = TRAIN_RADIUS * visualScale;
@@ -116,7 +122,7 @@
 
   // Render stations into the stations layer (created hidden by loadMap)
   let stationsVisible = false;
-  renderStations(svg.select('.stations-layer'), stations, projection, geojson, LINE_WIDTH * visualScale);
+  renderStations(svg.select('.stations-layer'), stations, projection, geojson, LINE_WIDTH * visualScale * dprFactor);
 
   function scaleStationDots(k) {
     if (!stationsVisible) return;
@@ -1388,7 +1394,7 @@
       mapContainer.append('g').attr('class', 'trains-layer');
 
       // Re-render stations overlay
-      renderStations(svg.select('.stations-layer'), stations, projection, geojson, LINE_WIDTH * visualScale);
+      renderStations(svg.select('.stations-layer'), stations, projection, geojson, LINE_WIDTH * visualScale * dprFactor);
       if (!stationsVisible) svg.select('.stations-layer').style('display', 'none');
 
       isZoomedToLoop = false;
