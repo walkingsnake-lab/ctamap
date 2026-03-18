@@ -316,12 +316,16 @@ body {
 .tl-stops {
   margin-top: 8px;
   width: 100%;
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 1px;
   max-width: 320px;
   margin: 0 auto;
   white-space: normal;
+}
+
+#train-label.show-stops .tl-stops {
+  display: flex;
 }
 
 .tl-stop-row {

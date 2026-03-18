@@ -127,6 +127,8 @@
     svg.select('.stations-layer').style('display', stationsVisible ? null : 'none');
     // Scale dots to current zoom level when toggled on
     scaleStationDots(d3.zoomTransform(svgEl).k);
+    // Show/hide ETA table in train info panel
+    labelEl.classList.toggle('show-stops', stationsVisible);
   }
 
   // Create spread-connector layer (below trains so lines sit behind dots)
@@ -468,6 +470,7 @@
   function showTrainLabel(train) {
     updateTrainLabelContent(train, null);
     labelEl.classList.remove('visible');
+    labelEl.classList.toggle('show-stops', stationsVisible);
     void labelEl.offsetWidth; // force reflow to restart animation
     labelEl.classList.add('visible');
   }
