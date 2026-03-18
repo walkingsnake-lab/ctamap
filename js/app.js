@@ -200,14 +200,18 @@
    * animation position so they don't "poke out" again.  Trains that have moved
    * out of the overlap zone smoothly animate back to the track.
    */
-  function spreadOverlappingTrains() {
+  function spreadOverlappingTrains(useTargetK) {
     if (!selectedTrain || !realTrains) return;
 
     const currentK = d3.zoomTransform(svgEl).k || 1;
+    // When zooming in toward a train, use the target scale so spreads activate
+    // immediately instead of waiting for the zoom animation to finish.
+    const effectiveK = (useTargetK && zoomAnim) ? trackingScale : currentK;
 
-    // Only spread when zoomed in close enough to see individual trains
-    if (currentK < 6) {
-      clearTrainSpreads(true);
+    // Only spread when zoomed in close enough to see individual trains.
+    // Animate collapse instead of snapping so the zoom-out transition is smooth.
+    if (effectiveK < 6) {
+      clearTrainSpreads(false);
       return;
     }
     const selPt = projection([selectedTrain.lon, selectedTrain.lat]);
@@ -660,9 +664,11 @@
       fromScreenY: clickPt ? (fromTransform.k * clickPt[1] + fromTransform.y) : height / 2,
     };
 
-    // Spread apart overlapping trains near the selection
+    // Spread apart overlapping trains near the selection.
+    // Don't spread yet if we're zooming in from far away — the spread will
+    // activate once the zoom animation crosses the threshold (see animate()).
     clearTrainSpreads(true);
-    spreadOverlappingTrains();
+    spreadOverlappingTrains(true);  // useTargetK: treat zoom target as current k
 
     // Fetch detailed ETA data (skip for retiring trains — API won't have them)
     if (!train._retiring) {
@@ -804,7 +810,7 @@
       animate._lastSpreadCheck += dt;
       if (animate._lastSpreadCheck > 500) {
         animate._lastSpreadCheck = 0;
-        spreadOverlappingTrains();
+        spreadOverlappingTrains(!!zoomAnim);
       }
     }
 
@@ -1028,7 +1034,14 @@
           dotEl.attr('transform', `scale(${dotScale})`);
           headingEl.attr('transform', `scale(${headingScale})`);
         }
-        headingEl.style('opacity', headingVisible ? 1 : 0);
+        // Smooth heading opacity: lerp toward target so it fades in/out
+        // instead of popping.  Uses the same exponential ease as spread.
+        const headingTarget = headingVisible ? 1 : 0;
+        if (d._headingOpacity === undefined) d._headingOpacity = headingTarget;
+        d._headingOpacity += (headingTarget - d._headingOpacity) * spreadLerp;
+        // Snap to exact 0/1 when close enough to avoid lingering sub-pixel draws
+        if (Math.abs(d._headingOpacity - headingTarget) < 0.01) d._headingOpacity = headingTarget;
+        headingEl.style('opacity', d._headingOpacity);
       });
 
     // Draw connector lines from spread anchor to each fanned-out train
@@ -1043,7 +1056,8 @@
       .attr('y1', spreadAnchorPos ? spreadAnchorPos[1] : 0)
       .attr('x2', d => d[0])
       .attr('y2', d => d[1]);
-    connectors.exit().remove();
+    connectors.exit()
+      .transition().duration(300).style('opacity', 0).remove();
 
     // Camera tracking / zoom-in animation for selected train
     if (zoomAnim && selectedTrain) {
