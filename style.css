@@ -119,6 +119,11 @@ body {
   opacity: 0.08 !important;
 }
 
+/* Spread trains get boosted visibility even when dimmed by line focus */
+.train-group.dimmed.train-spread {
+  opacity: 0.8 !important;
+}
+
 .station-marker.dimmed {
   opacity: 0.08 !important;
 }
@@ -190,10 +195,9 @@ body {
   opacity: 0;
 }
 
-/* Trains retiring at terminal — no pulse glow, no interaction */
+/* Trains retiring at terminal — no pulse glow, still clickable */
 .train-retiring {
-  pointer-events: none !important;
-  cursor: default;
+  cursor: pointer;
 }
 
 .train-retiring .train-glow {
@@ -205,6 +209,13 @@ body {
 .train-arrow {
   pointer-events: none;
 }
+
+.spread-connector {
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 0.15;
+  pointer-events: none;
+}
+
 
 /* --- Glow intensity variable --- */
 @property --glow-i {
@@ -279,6 +290,7 @@ body {
 .tl-status {
   color: rgba(255, 255, 255, 0.7);
   font-size: 28px;
+  line-height: 1.1;
   margin-top: -2px;
   text-shadow: 0 0 calc(4px * var(--glow-i, 0)) rgba(255, 255, 255, 0.55);
 }
@@ -294,9 +306,10 @@ body {
 }
 
 .tl-limited {
+  display: block;
   font-size: 20px;
   color: rgba(255, 255, 255, 0.5);
-  line-height: 1.4;
+  line-height: 1.15;
   white-space: normal;
 }
 

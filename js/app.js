@@ -147,6 +147,8 @@
     scaleStationDots(d3.zoomTransform(svgEl).k);
   }
 
+  // Create spread-connector layer (below trains so lines sit behind dots)
+  mapContainer.append('g').attr('class', 'spread-lines-layer');
   // Create train layer on top (inside the zoom container)
   mapContainer.append('g').attr('class', 'trains-layer');
 
@@ -198,6 +200,164 @@
   const TRACK_ZOOM_SCALE = 8;
   let trackingScale = TRACK_ZOOM_SCALE;
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
+
+  // ---- Train spreading (overlap disambiguation) ----
+  // When a train is clicked, nearby overlapping trains fan out perpendicular to
+  // the track so they become individually visible and clickable.
+  const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping"
+  const SPREAD_SVG_SPACING = 22;      // SVG units between spread centers (scales with dot size)
+
+  /**
+   * Detect trains overlapping the selected train and assign spread target offsets.
+   * Offsets are stored in SCREEN pixels (_spreadTargetPxX/Y) so the visual spread
+   * stays constant regardless of zoom.  The animate loop converts to SVG units.
+   *
+   * On data refresh, trains that were previously spread keep their current
+   * animation position so they don't "poke out" again.  Trains that have moved
+   * out of the overlap zone smoothly animate back to the track.
+   */
+  function spreadOverlappingTrains() {
+    if (!selectedTrain || !realTrains) return;
+
+    const currentK = d3.zoomTransform(svgEl).k || 1;
+
+    // Only spread when zoomed in close enough to see individual trains
+    if (currentK < 6) {
+      clearTrainSpreads(true);
+      return;
+    }
+    const selPt = projection([selectedTrain.lon, selectedTrain.lat]);
+    if (!selPt) return;
+
+    // Gather trains whose SVG-space position is within threshold.
+    // Using SVG units (not screen pixels) keeps the overlap group stable
+    // across zoom levels — prevents trains from spreading then immediately
+    // collapsing as the zoom-in animation increases screen distance.
+    const nearby = [];
+    const allTrains = realTrains.concat(retiringTrains);
+    for (const train of allTrains) {
+      if (train._retiring && train._retireComplete) continue;
+      const pt = projection([train.lon, train.lat]);
+      if (!pt) continue;
+      const dx = pt[0] - selPt[0];
+      const dy = pt[1] - selPt[1];
+      if (Math.sqrt(dx * dx + dy * dy) < SPREAD_SVG_THRESHOLD) {
+        nearby.push(train);
+      }
+    }
+
+    // Collapse trains that were spread but are no longer in the overlap zone
+    for (const train of allTrains) {
+      if (train._spreading && !nearby.includes(train)) {
+        // Animate back to track
+        train._spreadDirX = 0;
+        train._spreadDirY = 0;
+        train._spreadRing = 0;
+      }
+    }
+
+    if (nearby.length <= 1) {
+      // No overlap — clear anchor's spreading flag too
+      if (selectedTrain._spreading) {
+        selectedTrain._spreading = false;
+      }
+      return;
+    }
+
+    // Cardinal directions in screen space: [dx, dy]
+    const ALL_CARDINALS = [
+      [ 0, -1], // above
+      [ 0,  1], // below
+      [-1,  0], // left
+      [ 1,  0], // right
+    ];
+
+    // Rank cardinal directions: prefer perpendicular to track (avoids line
+    // overlap) and above (avoids the info label which sits below the train).
+    // Compute track tangent in screen space at the selected train.
+    let tangentSX = 0, tangentSY = 1; // default: vertical track
+    const segs = lineSegments[selectedTrain.legend];
+    if (selectedTrain._trackPos && segs) {
+      const dir = selectedTrain._direction || 1;
+      const ahead = advanceOnTrack(selectedTrain._trackPos, 0.001, dir, segs);
+      const aheadPt = projection([ahead.lon, ahead.lat]);
+      if (aheadPt) {
+        const tdx = aheadPt[0] - selPt[0];
+        const tdy = aheadPt[1] - selPt[1];
+        const len = Math.sqrt(tdx * tdx + tdy * tdy);
+        if (len > 0.001) { tangentSX = tdx / len; tangentSY = tdy / len; }
+      }
+    }
+
+    // Score each cardinal: low = better
+    // - Alignment with track tangent (dot product) → high means "along the
+    //   line" which we want to AVOID, so it adds penalty
+    // - "Below" adds penalty because the info label lives there
+    const scored = ALL_CARDINALS.map(([cx, cy]) => {
+      const alongTrack = Math.abs(cx * tangentSX + cy * tangentSY); // 0–1
+      const belowPenalty = (cy > 0) ? 0.3 : 0;
+      return { dx: cx, dy: cy, score: alongTrack + belowPenalty };
+    });
+    scored.sort((a, b) => a.score - b.score);
+    const cardinals = scored.map(s => [s.dx, s.dy]);
+
+    // Stable sort by run number so ordering doesn't flicker between refreshes
+    nearby.sort((a, b) => a.rn.localeCompare(b.rn));
+
+    // Reorder: selected train first, others in stable order
+    const ordered = [selectedTrain];
+    for (const t of nearby) {
+      if (t !== selectedTrain) ordered.push(t);
+    }
+
+    // Assign cardinal direction and ring for each spread train
+    for (let i = 0; i < ordered.length; i++) {
+      const train = ordered[i];
+      if (i === 0) {
+        // Selected train stays in place
+        train._spreadDirX = 0;
+        train._spreadDirY = 0;
+        train._spreadRing = 0;
+      } else {
+        // Cycle through ranked cardinal directions
+        const ci = (i - 1) % cardinals.length;
+        train._spreadDirX = cardinals[ci][0];
+        train._spreadDirY = cardinals[ci][1];
+        train._spreadRing = Math.floor((i - 1) / cardinals.length) + 1;
+      }
+      // Preserve current animation position if already spreading (avoids re-poke on refresh)
+      if (train._spreadX === undefined) train._spreadX = 0;
+      if (train._spreadY === undefined) train._spreadY = 0;
+      train._spreading = true;
+    }
+
+    // Apply CSS class immediately so spread trains get boosted visibility
+    svg.selectAll('.train-group')
+      .classed('train-spread', d => !!d._spreading);
+  }
+
+  /**
+   * Animate all spread trains back to their natural (non-spread) positions.
+   * If `instant` is true, snap immediately instead of animating.
+   */
+  function clearTrainSpreads(instant) {
+    const allTrains = (realTrains || []).concat(retiringTrains);
+    for (const train of allTrains) {
+      if (!train._spreading) continue;
+      train._spreadDirX = 0;
+      train._spreadDirY = 0;
+      train._spreadRing = 0;
+      if (instant) {
+        train._spreadX = 0;
+        train._spreadY = 0;
+        train._spreading = false;
+      }
+      // When not instant, the lerp in animate() will bring it back to 0
+    }
+    if (instant) {
+      svg.selectAll('.train-group').classed('train-spread', false);
+    }
+  }
 
   // ---- Initialize trains ----
   let realTrains = null;
@@ -294,6 +454,7 @@
     const merged = groups.merge(enter);
     merged.classed('selected', d => d.rn === selectedTrainRn);
     merged.classed('train-retiring', d => !!d._retiring);
+    merged.classed('train-spread', d => !!d._spreading);
 
     if (selectedTrain) {
       applyLineFocus(selectedTrain.legend);
@@ -354,15 +515,19 @@
     const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
     info.textContent = `${lineName} Line \u00b7 #${train.rn}`;
 
-    const st = getTrainStatus(train, etas);
-    if (st.prefix || st.station) {
-      status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
-    } else if (st.delayed) {
-      status.innerHTML = '<span class="tl-delayed">Delayed</span><br><span class="tl-limited">Limited tracking<br>available for this train</span>';
-    } else if (st.limited) {
-      status.innerHTML = '<span class="tl-limited">Limited tracking<br>available for this train</span>';
+    if (train._retiring) {
+      status.innerHTML = '<span class="tl-limited">Arrived at terminal</span>';
     } else {
-      status.textContent = '';
+      const st = getTrainStatus(train, etas);
+      if (st.prefix || st.station) {
+        status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
+      } else if (st.delayed) {
+        status.innerHTML = '<span class="tl-delayed">Delayed</span><span class="tl-limited">Limited tracking<br>available for this train</span>';
+      } else if (st.limited) {
+        status.innerHTML = '<span class="tl-limited">Limited tracking<br>available for this train</span>';
+      } else {
+        status.textContent = '';
+      }
     }
 
     // Upcoming stops (etas[1..5])
@@ -510,18 +675,30 @@
       fromScreenY: clickPt ? (fromTransform.k * clickPt[1] + fromTransform.y) : height / 2,
     };
 
-    // Fetch detailed ETA data
-    fetchTrainDetail(train.rn);
+    // Spread apart overlapping trains near the selection
+    clearTrainSpreads(true);
+    spreadOverlappingTrains();
 
-    // Periodic refresh of detail data
-    if (detailFetchInterval) clearInterval(detailFetchInterval);
-    detailFetchInterval = setInterval(() => {
-      if (selectedTrainRn) fetchTrainDetail(selectedTrainRn);
-    }, REFRESH_INTERVAL);
+    // Fetch detailed ETA data (skip for retiring trains — API won't have them)
+    if (!train._retiring) {
+      fetchTrainDetail(train.rn);
+
+      // Periodic refresh of detail data
+      if (detailFetchInterval) clearInterval(detailFetchInterval);
+      detailFetchInterval = setInterval(() => {
+        if (selectedTrainRn) fetchTrainDetail(selectedTrainRn);
+      }, REFRESH_INTERVAL);
+    } else {
+      if (detailFetchInterval) clearInterval(detailFetchInterval);
+      detailFetchInterval = null;
+    }
   }
 
   function deselectTrain() {
     if (!selectedTrain) return;
+
+    // Collapse spread trains back to their natural positions (animated)
+    clearTrainSpreads(false);
 
     selectedTrain = null;
     selectedTrainRn = null;
@@ -636,6 +813,16 @@
       if (retiringTrains.length < prevCount) renderTrains();
     }
 
+    // Re-evaluate spread every 500ms so trains that drift apart collapse promptly
+    if (selectedTrain) {
+      if (!animate._lastSpreadCheck) animate._lastSpreadCheck = 0;
+      animate._lastSpreadCheck += dt;
+      if (animate._lastSpreadCheck > 500) {
+        animate._lastSpreadCheck = 0;
+        spreadOverlappingTrains();
+      }
+    }
+
     // Update ALL train positions directly (no D3 transitions — frame-by-frame is smoother)
     // Scale dots inversely with zoom so they don't grow unboundedly when zoomed in.
     // Exponent 0.6 gives partial compensation: dots shrink at high zoom but keep visual weight.
@@ -673,12 +860,75 @@
       scaleStationDots(currentK);
     }
 
+    // Spread interpolation factor — framerate-independent exponential ease.
+    // pow(0.00005, dt/1000) ≈ 0.85 at 60fps → alpha ≈ 0.15 per frame, snappy ~200ms settle.
+    const spreadLerp = 1 - Math.pow(0.00005, dt / 1000);
+
+    // Collect spread train positions for connector lines
+    let spreadAnchorPos = null;
+    const spreadChildPositions = [];
+
+    // Pre-compute anchor SVG position so spread children can pin to it
+    let anchorPt = null;
+    if (selectedTrain) {
+      anchorPt = projection([selectedTrain.lon, selectedTrain.lat]);
+    }
+
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
         const g = d3.select(this);
-        g.attr('transform', `translate(${pt[0]}, ${pt[1]})`);
+
+        // Interpolate spread offset — target recomputed each frame so it
+        // tracks dot size as the user zooms in/out
+        let sdx = 0, sdy = 0;
+        if (d._spreading) {
+          const spreadScale = SPREAD_SVG_SPACING / Math.pow(currentK, 0.55);
+          const targetX = (d._spreadDirX || 0) * spreadScale * (d._spreadRing || 0);
+          const targetY = (d._spreadDirY || 0) * spreadScale * (d._spreadRing || 0);
+          d._spreadX += (targetX - d._spreadX) * spreadLerp;
+          d._spreadY += (targetY - d._spreadY) * spreadLerp;
+          // Snap to zero when collapsing and close enough.
+          // Keep _spreading true for the selected train (spread anchor) so its
+          // heading triangle stays visible while other trains are fanned out.
+          if (targetX === 0 && targetY === 0 &&
+              Math.abs(d._spreadX) < 0.001 && Math.abs(d._spreadY) < 0.001 &&
+              d.rn !== selectedTrainRn) {
+            d._spreadX = 0;
+            d._spreadY = 0;
+            d._spreading = false;
+            g.classed('train-spread', false);
+          }
+          sdx = d._spreadX;
+          sdy = d._spreadY;
+        }
+
+        // While spread, pin the child train to the anchor's position on the
+        // non-spread axis so small track movements don't cause jitter.
+        // e.g. a train spread "above" (dirY=-1) shares the anchor's X.
+        let finalX = pt[0] + sdx;
+        let finalY = pt[1] + sdy;
+        if (d._spreading && anchorPt && d.rn !== selectedTrainRn &&
+            (d._spreadDirX !== 0 || d._spreadDirY !== 0)) {
+          if (d._spreadDirX === 0) {
+            // Spread vertically — pin X to anchor
+            finalX = anchorPt[0] + sdx;
+          }
+          if (d._spreadDirY === 0) {
+            // Spread horizontally — pin Y to anchor
+            finalY = anchorPt[1] + sdy;
+          }
+        }
+
+        g.attr('transform', `translate(${finalX}, ${finalY})`);
+
+        // Track positions for spread connector lines
+        if (d._spreading && d.rn === selectedTrainRn) {
+          spreadAnchorPos = [finalX, finalY];
+        } else if (d._spreading && (sdx !== 0 || sdy !== 0)) {
+          spreadChildPositions.push([finalX, finalY]);
+        }
 
         // Check if train is at a line terminus (reused for arrows + heading)
         const termPts = lineTerminals[d.legend] || [];
@@ -769,7 +1019,7 @@
         g.select('.train-glow').attr('r', scaledGlowRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         const headingScale = dotScale / Math.pow(currentK, 0.55);
-        let headingVisible = stationsVisible && !atTerminus;
+        let headingVisible = (stationsVisible || d._spreading) && !atTerminus;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
           const headingTarget = d._corrToTrackPos
@@ -802,6 +1052,20 @@
         }
         headingEl.style('opacity', headingVisible ? 1 : 0);
       });
+
+    // Draw connector lines from spread anchor to each fanned-out train
+    const linesLayer = svg.select('.spread-lines-layer');
+    const lineData = (spreadAnchorPos && spreadChildPositions.length > 0)
+      ? spreadChildPositions : [];
+    const connectors = linesLayer.selectAll('.spread-connector').data(lineData);
+    connectors.enter().append('line')
+      .attr('class', 'spread-connector')
+      .merge(connectors)
+      .attr('x1', spreadAnchorPos ? spreadAnchorPos[0] : 0)
+      .attr('y1', spreadAnchorPos ? spreadAnchorPos[1] : 0)
+      .attr('x2', d => d[0])
+      .attr('y2', d => d[1]);
+    connectors.exit().remove();
 
     // Camera tracking / zoom-in animation for selected train
     if (zoomAnim && selectedTrain) {
@@ -933,6 +1197,22 @@
 
         realTrains = fetched;
 
+        // Carry over spread animation state from previous train objects so
+        // already-spread trains don't "re-poke" from center on each refresh.
+        if (prevMap) {
+          for (const train of realTrains) {
+            const prev = prevMap.get(train.rn);
+            if (prev && prev._spreading) {
+              train._spreadX = prev._spreadX;
+              train._spreadY = prev._spreadY;
+              train._spreadDirX = prev._spreadDirX;
+              train._spreadDirY = prev._spreadDirY;
+              train._spreadRing = prev._spreadRing;
+              train._spreading = true;
+            }
+          }
+        }
+
         // Initialize track position and drift correction
         initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations);
 
@@ -972,10 +1252,13 @@
 
         // Update selected train reference if tracking
         if (selectedTrainRn) {
-          const newSelected = realTrains.find(t => t.rn === selectedTrainRn);
+          const newSelected = realTrains.find(t => t.rn === selectedTrainRn)
+            || retiringTrains.find(t => t.rn === selectedTrainRn);
           if (newSelected) {
             selectedTrain = newSelected;
             updateTrainLabelContent(selectedTrain, lastETAs);
+            // Re-spread with new train objects (positions may have shifted)
+            spreadOverlappingTrains();
           } else {
             // Train disappeared from data
             deselectTrain();
@@ -1051,6 +1334,10 @@
       const result = redrawMap(svg, width, height, geojson);
       projection = result.projection;
       mapContainer = svg.select('.map-container');
+
+      // Recreate spread-connector and trains layers (redrawMap wipes SVG)
+      mapContainer.append('g').attr('class', 'spread-lines-layer');
+      mapContainer.append('g').attr('class', 'trains-layer');
 
       // Re-render stations overlay
       renderStations(svg.select('.stations-layer'), stations, projection, geojson);
