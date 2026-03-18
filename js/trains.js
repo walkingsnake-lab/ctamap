@@ -398,7 +398,21 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // This is especially important near Armitage/Sedgwick on the Brown
           // line where the track curves from N-S to E-W, causing the terminal-
           // walk probe to misread latitude deltas on the new segment.
-          train._direction = prev._direction;
+          //
+          // Exception for loop-line trains at ML→own-segment transitions:
+          // the sign of _direction can flip when crossing that boundary (the
+          // same physical "southbound" movement may be +1 on the ML segment
+          // and -1 on the exit segment, or vice versa).  Verify via terminal
+          // walk so we don't propagate a stale ML direction onto the new
+          // segment and trigger a spurious backward hold.
+          // Terminal walk is reliable here (single-dead-end case on the exit
+          // segment); it returns null on true E-W segments (Brown line at
+          // Armitage/Sedgwick) so the original preserve logic still applies.
+          const isLoopLine = ['BR', 'OR', 'PK', 'PR', 'GR'].includes(train.legend);
+          const verifyDir = (isLoopLine && northDest && effectiveDest)
+            ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs)
+            : null;
+          train._direction = verifyDir !== null ? verifyDir : prev._direction;
         } else {
           const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
           if (termDir !== null) {
