@@ -24,8 +24,14 @@
     return;
   }
 
-  const { geojson } = mapState;
-  let { projection, mapContainer } = mapState;
+  const { geojson, geoScaleReference } = mapState;
+  let { projection, mapContainer, visualScale } = mapState;
+
+  // Base visual sizes at zoom k=1, scaled relative to the reference viewport.
+  // Declared as lets so the resize handler can update them after redrawMap().
+  let baseTrainRadius = TRAIN_RADIUS * visualScale;
+  let baseGlowRadius  = TRAIN_GLOW_RADIUS * visualScale;
+  let baseSpread      = 18 * visualScale;   // SVG units between spread centers
 
   // Build per-line segment lookup for path-following animation
   // lineSegments: full track (shared + ML) for animation/snapping
@@ -110,7 +116,7 @@
 
   // Render stations into the stations layer (created hidden by loadMap)
   let stationsVisible = false;
-  renderStations(svg.select('.stations-layer'), stations, projection, geojson);
+  renderStations(svg.select('.stations-layer'), stations, projection, geojson, LINE_WIDTH * visualScale);
 
   function scaleStationDots(k) {
     if (!stationsVisible) return;
@@ -188,8 +194,7 @@
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
-  const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping"
-  const SPREAD_SVG_SPACING = 18;      // SVG units between spread centers (scales with dot size)
+  const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping" (at reference scale)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -224,7 +229,7 @@
       if (!pt) continue;
       const dx = pt[0] - selPt[0];
       const dy = pt[1] - selPt[1];
-      if (Math.sqrt(dx * dx + dy * dy) < SPREAD_SVG_THRESHOLD) {
+      if (Math.sqrt(dx * dx + dy * dy) < SPREAD_SVG_THRESHOLD * visualScale) {
         nearby.push(train);
       }
     }
@@ -416,14 +421,14 @@
     // Stroke is used for the radar ring when selected; fill gradient for unselected pulse
     enter.append('circle')
       .attr('class', 'train-glow')
-      .attr('r', TRAIN_GLOW_RADIUS)
+      .attr('r', baseGlowRadius)
       .attr('fill', d => `url(#train-glow-${d.legend})`)
       .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
     // Direction triangles — rendered before dot so they pass "behind" the circle
     const ARROW_COUNT = 6;
-    const arrowSize = LINE_WIDTH / 1.6; // height = LINE_WIDTH (matches line stroke-width at zoom 1)
+    const arrowSize = LINE_WIDTH * visualScale / 1.6;
     const arrowPath = `M ${arrowSize},0 L ${-arrowSize},${-arrowSize * 0.8} L ${-arrowSize},${arrowSize * 0.8} Z`;
     for (let i = 0; i < ARROW_COUNT; i++) {
       enter.append('path')
@@ -436,11 +441,11 @@
     // Train dot — circle shape
     enter.append('circle')
       .attr('class', 'train-dot')
-      .attr('r', TRAIN_RADIUS)
+      .attr('r', baseTrainRadius)
       .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
 
     // Heading direction triangle — overlays the circle, visible only when stations are shown
-    const ht = TRAIN_RADIUS * 0.75;
+    const ht = baseTrainRadius * 0.75;
     const headingTriPath = `M ${ht},0 L ${-ht * 0.6},${-ht * 0.7} L ${-ht * 0.6},${ht * 0.7} Z`;
     enter.append('path')
       .attr('class', 'train-heading')
@@ -594,7 +599,7 @@
     const t = d3.zoomTransform(svgEl);
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
-    const scaledR = TRAIN_RADIUS / Math.pow(t.k, 0.55);
+    const scaledR = baseTrainRadius / Math.pow(t.k, 0.55);
     const offset = (scaledR + 3.0) * 1.3 * t.k + 12;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
@@ -844,8 +849,8 @@
     // The "larger on mobile" feel is preserved — it comes from the map being compressed into
     // fewer pixels, not from r being different.
     const currentK = d3.zoomTransform(svgEl).k;
-    const scaledRadius     = TRAIN_RADIUS      / Math.pow(currentK, 0.55);
-    const scaledGlowRadius = TRAIN_GLOW_RADIUS / Math.pow(currentK, 0.5);
+    const scaledRadius     = baseTrainRadius / Math.pow(currentK, 0.55);
+    const scaledGlowRadius = baseGlowRadius  / Math.pow(currentK, 0.5);
 
     // Thin lines slightly as zoom increases — only recalculate when k changes.
     if (currentK !== lastLineK) {
@@ -856,7 +861,7 @@
       // taps and overlapping targets at high zoom.
       const scaledHitRadius = 12 / currentK;
       svg.selectAll('.train-hit').attr('r', scaledHitRadius);
-      const scaledLineWidth = LINE_WIDTH / Math.pow(currentK, 0.6);
+      const scaledLineWidth = LINE_WIDTH * visualScale / Math.pow(currentK, 0.6);
       const selLegend = selectedTrain?.legend;
       svg.selectAll('.line-path').attr('stroke-width', function () {
         return selLegend && d3.select(this).attr('data-legend') === selLegend
@@ -899,7 +904,7 @@
         // tracks dot size as the user zooms in/out
         let sdx = 0, sdy = 0;
         if (d._spreading) {
-          const spreadScale = SPREAD_SVG_SPACING / Math.pow(currentK, 0.55);
+          const spreadScale = baseSpread / Math.pow(currentK, 0.55);
           const targetX = (d._spreadDirX || 0) * spreadScale * (d._spreadRing || 0);
           const targetY = (d._spreadDirY || 0) * spreadScale * (d._spreadRing || 0);
           d._spreadX += (targetX - d._spreadX) * spreadLerp;
@@ -1370,8 +1375,12 @@
       height = svgEl.clientHeight || window.innerHeight;
       svg.attr('width', width).attr('height', height);
 
-      const result = redrawMap(svg, width, height, geojson);
+      const result = redrawMap(svg, width, height, geojson, geoScaleReference);
       projection = result.projection;
+      visualScale = result.visualScale;
+      baseTrainRadius = TRAIN_RADIUS * visualScale;
+      baseGlowRadius  = TRAIN_GLOW_RADIUS * visualScale;
+      baseSpread      = 18 * visualScale;
       mapContainer = svg.select('.map-container');
 
       // Recreate spread-connector and trains layers (redrawMap wipes SVG)
@@ -1379,7 +1388,7 @@
       mapContainer.append('g').attr('class', 'trains-layer');
 
       // Re-render stations overlay
-      renderStations(svg.select('.stations-layer'), stations, projection, geojson);
+      renderStations(svg.select('.stations-layer'), stations, projection, geojson, LINE_WIDTH * visualScale);
       if (!stationsVisible) svg.select('.stations-layer').style('display', 'none');
 
       isZoomedToLoop = false;
