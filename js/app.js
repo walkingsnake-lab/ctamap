@@ -4,6 +4,24 @@
  * Clicking a train dot zooms in, tracks the train, and shows live detail from the follow API.
  */
 (async function () {
+  // Darken a hex color by a factor (0 = black, 1 = original)
+  function darkenColor(hex, factor) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const dr = Math.round(r * factor);
+    const dg = Math.round(g * factor);
+    const db = Math.round(b * factor);
+    return `rgb(${dr},${dg},${db})`;
+  }
+
+  // Heading triangle fill: a darker shade of the line color
+  function headingTriFill(legend) {
+    const base = LINE_COLORS[legend] || '#ffffff';
+    if (legend === 'YL') return darkenColor(base, 0.45);  // yellow needs heavy darkening
+    return darkenColor(base, 0.55);
+  }
+
   let width = window.innerWidth;
   let height = window.innerHeight;
 
@@ -255,7 +273,7 @@
     enter.append('path')
       .attr('class', 'train-heading')
       .attr('d', headingTriPath)
-      .attr('fill', d => d.legend === 'YL' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.75)')
+      .attr('fill', d => headingTriFill(d.legend))
       .style('opacity', 0);
 
     // Click handler on new train groups
