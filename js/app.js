@@ -187,7 +187,7 @@
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
   const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping"
-  const SPREAD_SVG_SPACING = 16;      // SVG units between spread centers (scales with dot size)
+  const SPREAD_SVG_SPACING = 10;      // SVG units between spread centers (scales with dot size)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -259,8 +259,7 @@
       [ D,  D],   // lower-right
     ];
 
-    // Rank directions: prefer perpendicular to track and away from the info
-    // label (which sits below). Straight-down is strongly discouraged.
+    // Rank directions: prefer perpendicular to track (avoids line overlap).
     let tangentSX = 0, tangentSY = 1; // default: vertical track
     const segs = lineSegments[selectedTrain.legend];
     if (selectedTrain._trackPos && segs) {
@@ -276,14 +275,10 @@
     }
 
     // Score each direction: low = better
-    // - Alignment with track tangent → penalty (avoid overlapping the line)
-    // - Straight down (0,1) gets heavy penalty — info label lives there
-    // - Any downward component gets mild penalty
+    // - Alignment with track tangent (dot product) penalised to avoid overlapping the line
     const scored = ALL_DIRS.map(([cx, cy]) => {
       const alongTrack = Math.abs(cx * tangentSX + cy * tangentSY); // 0–1
-      const straightDownPenalty = (cx === 0 && cy > 0) ? 0.8 : 0;
-      const downPenalty = (cy > 0) ? 0.2 : 0;
-      return { dx: cx, dy: cy, score: alongTrack + straightDownPenalty + downPenalty };
+      return { dx: cx, dy: cy, score: alongTrack };
     });
     scored.sort((a, b) => a.score - b.score);
     const cardinals = scored.map(s => [s.dx, s.dy]);
