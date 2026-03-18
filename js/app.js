@@ -208,12 +208,7 @@
     // immediately instead of waiting for the zoom animation to finish.
     const effectiveK = (useTargetK && zoomAnim) ? trackingScale : currentK;
 
-    // Only spread when zoomed in close enough to see individual trains.
-    // Animate collapse instead of snapping so the zoom-out transition is smooth.
-    if (effectiveK < 6) {
-      clearTrainSpreads(false);
-      return;
-    }
+    // Spread at any zoom level so overlapping trains are always visible.
     const selPt = projection([selectedTrain.lon, selectedTrain.lat]);
     if (!selPt) return;
 
