@@ -187,7 +187,7 @@
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
   const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping"
-  const SPREAD_SVG_SPACING = 22;      // SVG units between spread centers (scales with dot size)
+  const SPREAD_SVG_SPACING = 16;      // SVG units between spread centers (scales with dot size)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -564,7 +564,7 @@
     const sx = t.applyX(pt[0]);
     const sy = t.applyY(pt[1]);
     const scaledR = TRAIN_RADIUS / Math.pow(t.k, 0.55);
-    const offset = (scaledR + 3.0) * 1.3 * t.k + 12;
+    const offset = (scaledR + 3.0) * 1.3 * t.k + 24;
     labelEl.style.left = sx + 'px';
     labelEl.style.top = (sy + offset) + 'px';
   }
