@@ -189,7 +189,7 @@
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
   const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping"
-  const SPREAD_SVG_SPACING = 16;      // SVG units between spread centers (scales with dot size)
+  const SPREAD_SVG_SPACING = 10;      // SVG units between spread centers (scales with dot size)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -261,8 +261,7 @@
       [ D,  D],   // lower-right
     ];
 
-    // Rank directions: prefer perpendicular to track and away from the info
-    // label (which sits below). Straight-down is strongly discouraged.
+    // Rank directions: prefer perpendicular to track (avoids line overlap).
     let tangentSX = 0, tangentSY = 1; // default: vertical track
     const segs = lineSegments[selectedTrain.legend];
     if (selectedTrain._trackPos && segs) {
@@ -278,14 +277,10 @@
     }
 
     // Score each direction: low = better
-    // - Alignment with track tangent → penalty (avoid overlapping the line)
-    // - Straight down (0,1) gets heavy penalty — info label lives there
-    // - Any downward component gets mild penalty
+    // - Alignment with track tangent (dot product) penalised to avoid overlapping the line
     const scored = ALL_DIRS.map(([cx, cy]) => {
       const alongTrack = Math.abs(cx * tangentSX + cy * tangentSY); // 0–1
-      const straightDownPenalty = (cx === 0 && cy > 0) ? 0.8 : 0;
-      const downPenalty = (cy > 0) ? 0.2 : 0;
-      return { dx: cx, dy: cy, score: alongTrack + straightDownPenalty + downPenalty };
+      return { dx: cx, dy: cy, score: alongTrack };
     });
     scored.sort((a, b) => a.score - b.score);
     const cardinals = scored.map(s => [s.dx, s.dy]);
@@ -894,21 +889,14 @@
           sdy = d._spreadY;
         }
 
-        // While spread, pin the child train to the anchor's position on the
-        // non-spread axis so small track movements don't cause jitter.
-        // e.g. a train spread "above" (dirY=-1) shares the anchor's X.
+        // Position spread children relative to the anchor so the visual
+        // separation is consistent regardless of the train's own track offset.
         let finalX = pt[0] + sdx;
         let finalY = pt[1] + sdy;
         if (d._spreading && anchorPt && d.rn !== selectedTrainRn &&
             (d._spreadDirX !== 0 || d._spreadDirY !== 0)) {
-          if (d._spreadDirX === 0) {
-            // Spread vertically — pin X to anchor
-            finalX = anchorPt[0] + sdx;
-          }
-          if (d._spreadDirY === 0) {
-            // Spread horizontally — pin Y to anchor
-            finalY = anchorPt[1] + sdy;
-          }
+          finalX = anchorPt[0] + sdx;
+          finalY = anchorPt[1] + sdy;
         }
 
         g.attr('transform', `translate(${finalX}, ${finalY})`);
