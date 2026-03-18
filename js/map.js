@@ -408,7 +408,6 @@ function redrawMap(svg, width, height, geojson) {
   renderLines(linesGroup, path, geojson);
 
   mapContainer.append('g').attr('class', 'stations-layer');
-  mapContainer.append('g').attr('class', 'trains-layer');
 
   return { projection, path };
 }

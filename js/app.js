@@ -202,6 +202,12 @@
     if (!selectedTrain || !realTrains) return;
 
     const currentK = d3.zoomTransform(svgEl).k || 1;
+
+    // Only spread when zoomed in close enough to see individual trains
+    if (currentK < 6) {
+      clearTrainSpreads(true);
+      return;
+    }
     const selPt = projection([selectedTrain.lon, selectedTrain.lat]);
     if (!selPt) return;
 
@@ -411,22 +417,6 @@
       .attr('d', headingTriPath)
       .attr('fill', d => d.legend === 'YL' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.75)')
       .style('opacity', 0);
-
-    // Mini destination badge — shown on spread (non-selected) trains
-    const miniBadge = enter.append('g')
-      .attr('class', 'train-mini-badge')
-      .style('opacity', 0);
-    miniBadge.append('rect')
-      .attr('class', 'mini-badge-bg')
-      .attr('rx', 0.6)
-      .attr('ry', 0.6)
-      .attr('fill', d => badgeFill(d.legend, d.destNm));
-    miniBadge.append('text')
-      .attr('class', 'mini-badge-text')
-      .attr('text-anchor', 'middle')
-      .attr('dominant-baseline', 'central')
-      .attr('fill', d => badgeTextFill(d.legend, d.destNm))
-      .text(d => cleanStationName(d.destNm) || '');
 
     // Click handler on new train groups
     enter.on('click', function (event, d) {
@@ -1043,36 +1033,6 @@
           headingEl.attr('transform', `scale(${headingScale})`);
         }
         headingEl.style('opacity', headingVisible ? 1 : 0);
-
-        // Mini destination badge for spread (non-selected) trains
-        const miniBadgeG = g.select('.train-mini-badge');
-        const showMiniBadge = d._spreading && d.rn !== selectedTrainRn;
-        if (showMiniBadge) {
-          // Target ~14px font on screen regardless of zoom
-          const badgeScale = 1 / currentK;
-          const fontSize = 14;
-          const textEl = miniBadgeG.select('.mini-badge-text');
-          const rectEl = miniBadgeG.select('.mini-badge-bg');
-          textEl.attr('font-size', fontSize);
-          // Approximate text width from character count
-          const textLen = (cleanStationName(d.destNm) || '').length * fontSize * 0.52;
-          const padX = fontSize * 0.4;
-          const padY = fontSize * 0.15;
-          const rw = textLen + padX * 2;
-          const rh = fontSize + padY * 2;
-          // Position below the dot
-          const offsetY = scaledRadius + rh * badgeScale * 0.5 + 2 / currentK;
-          rectEl
-            .attr('x', -rw / 2).attr('y', -rh / 2)
-            .attr('width', rw).attr('height', rh);
-          textEl.attr('y', 0.5);
-          miniBadgeG.attr('transform', `translate(0,${offsetY}) scale(${badgeScale})`);
-          miniBadgeG.style('opacity', 1);
-          // Hide heading triangle when mini badge is shown
-          headingEl.style('opacity', 0);
-        } else {
-          miniBadgeG.style('opacity', 0);
-        }
       });
 
     // Draw connector lines from spread anchor to each fanned-out train
@@ -1358,6 +1318,10 @@
       const result = redrawMap(svg, width, height, geojson);
       projection = result.projection;
       mapContainer = svg.select('.map-container');
+
+      // Recreate spread-connector and trains layers (redrawMap wipes SVG)
+      mapContainer.append('g').attr('class', 'spread-lines-layer');
+      mapContainer.append('g').attr('class', 'trains-layer');
 
       // Re-render stations overlay
       renderStations(svg.select('.stations-layer'), stations, projection, geojson);

@@ -214,13 +214,6 @@ body {
   pointer-events: none;
 }
 
-.train-mini-badge {
-  pointer-events: none;
-}
-
-.mini-badge-text {
-  font-family: 'Jersey 10', monospace;
-}
 
 /* --- Glow intensity variable --- */
 @property --glow-i {
