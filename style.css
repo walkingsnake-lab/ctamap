@@ -369,7 +369,6 @@ body {
 
 .station-label {
   fill: rgba(255, 255, 255, 0.5);
-  font-size: 1.8px;
   font-family: 'Jersey 25', monospace;
   pointer-events: none;
   stroke: rgba(0, 0, 0, 0.6);
