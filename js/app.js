@@ -1048,23 +1048,24 @@
         const miniBadgeG = g.select('.train-mini-badge');
         const showMiniBadge = d._spreading && d.rn !== selectedTrainRn;
         if (showMiniBadge) {
-          const badgeScale = 1 / Math.pow(currentK, 0.55);
-          const fontSize = 1.6;
+          // Target ~14px font on screen regardless of zoom
+          const badgeScale = 1 / currentK;
+          const fontSize = 14;
           const textEl = miniBadgeG.select('.mini-badge-text');
           const rectEl = miniBadgeG.select('.mini-badge-bg');
           textEl.attr('font-size', fontSize);
-          // Measure text width for the background rect
-          const textLen = (cleanStationName(d.destNm) || '').length * fontSize * 0.55;
-          const padX = fontSize * 0.45;
-          const padY = fontSize * 0.25;
+          // Approximate text width from character count
+          const textLen = (cleanStationName(d.destNm) || '').length * fontSize * 0.52;
+          const padX = fontSize * 0.4;
+          const padY = fontSize * 0.15;
           const rw = textLen + padX * 2;
           const rh = fontSize + padY * 2;
           // Position below the dot
-          const offsetY = scaledRadius + rh * badgeScale * 0.5 + 0.3 * badgeScale;
+          const offsetY = scaledRadius + rh * badgeScale * 0.5 + 2 / currentK;
           rectEl
             .attr('x', -rw / 2).attr('y', -rh / 2)
             .attr('width', rw).attr('height', rh);
-          textEl.attr('y', 0);
+          textEl.attr('y', 0.5);
           miniBadgeG.attr('transform', `translate(0,${offsetY}) scale(${badgeScale})`);
           miniBadgeG.style('opacity', 1);
           // Hide heading triangle when mini badge is shown
