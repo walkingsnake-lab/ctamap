@@ -480,15 +480,19 @@
     const lineName = LEGEND_TO_LINE_NAME[train.legend] || '';
     info.textContent = `${lineName} Line \u00b7 #${train.rn}`;
 
-    const st = getTrainStatus(train, etas);
-    if (st.prefix || st.station) {
-      status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
-    } else if (st.delayed) {
-      status.innerHTML = '<span class="tl-delayed">Delayed</span><br><span class="tl-limited">Limited tracking<br>available for this train</span>';
-    } else if (st.limited) {
-      status.innerHTML = '<span class="tl-limited">Limited tracking<br>available for this train</span>';
+    if (train._retiring) {
+      status.innerHTML = '<span class="tl-limited">Arrived at terminal</span>';
     } else {
-      status.textContent = '';
+      const st = getTrainStatus(train, etas);
+      if (st.prefix || st.station) {
+        status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
+      } else if (st.delayed) {
+        status.innerHTML = '<span class="tl-delayed">Delayed</span><br><span class="tl-limited">Limited tracking<br>available for this train</span>';
+      } else if (st.limited) {
+        status.innerHTML = '<span class="tl-limited">Limited tracking<br>available for this train</span>';
+      } else {
+        status.textContent = '';
+      }
     }
 
     // Upcoming stops (etas[1..5])
@@ -640,14 +644,19 @@
     clearTrainSpreads(true);
     spreadOverlappingTrains();
 
-    // Fetch detailed ETA data
-    fetchTrainDetail(train.rn);
+    // Fetch detailed ETA data (skip for retiring trains — API won't have them)
+    if (!train._retiring) {
+      fetchTrainDetail(train.rn);
 
-    // Periodic refresh of detail data
-    if (detailFetchInterval) clearInterval(detailFetchInterval);
-    detailFetchInterval = setInterval(() => {
-      if (selectedTrainRn) fetchTrainDetail(selectedTrainRn);
-    }, REFRESH_INTERVAL);
+      // Periodic refresh of detail data
+      if (detailFetchInterval) clearInterval(detailFetchInterval);
+      detailFetchInterval = setInterval(() => {
+        if (selectedTrainRn) fetchTrainDetail(selectedTrainRn);
+      }, REFRESH_INTERVAL);
+    } else {
+      if (detailFetchInterval) clearInterval(detailFetchInterval);
+      detailFetchInterval = null;
+    }
   }
 
   function deselectTrain() {
@@ -769,6 +778,16 @@
       if (retiringTrains.length < prevCount) renderTrains();
     }
 
+    // Re-evaluate spread every 500ms so trains that drift apart collapse promptly
+    if (selectedTrain) {
+      if (!animate._lastSpreadCheck) animate._lastSpreadCheck = 0;
+      animate._lastSpreadCheck += dt;
+      if (animate._lastSpreadCheck > 500) {
+        animate._lastSpreadCheck = 0;
+        spreadOverlappingTrains();
+      }
+    }
+
     // Update ALL train positions directly (no D3 transitions — frame-by-frame is smoother)
     // Scale dots inversely with zoom so they don't grow unboundedly when zoomed in.
     // Exponent 0.6 gives partial compensation: dots shrink at high zoom but keep visual weight.
@@ -844,8 +863,10 @@
         const atTerminus = termPts.some(t => geoDist(d.lon, d.lat, t.lon, t.lat) < 0.003);
 
         // Animate direction triangles: steady stream flowing along the track
+        // Show for selected train AND for any spread trains (so direction is
+        // visible when overlapping trains fan out).
         const segs = lineSegments[d.legend];
-        const showArrows = d.rn === selectedTrainRn
+        const showArrows = (d.rn === selectedTrainRn || d._spreading)
           && d._trackPos && segs;
 
         if (showArrows) {
@@ -1147,7 +1168,8 @@
 
         // Update selected train reference if tracking
         if (selectedTrainRn) {
-          const newSelected = realTrains.find(t => t.rn === selectedTrainRn);
+          const newSelected = realTrains.find(t => t.rn === selectedTrainRn)
+            || retiringTrains.find(t => t.rn === selectedTrainRn);
           if (newSelected) {
             selectedTrain = newSelected;
             updateTrainLabelContent(selectedTrain, lastETAs);
