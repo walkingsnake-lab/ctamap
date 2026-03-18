@@ -844,6 +844,12 @@
     let spreadAnchorPos = null;
     const spreadChildPositions = [];
 
+    // Pre-compute anchor SVG position so spread children can pin to it
+    let anchorPt = null;
+    if (selectedTrain) {
+      anchorPt = projection([selectedTrain.lon, selectedTrain.lat]);
+    }
+
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
@@ -874,13 +880,30 @@
           sdy = d._spreadY;
         }
 
-        g.attr('transform', `translate(${pt[0] + sdx}, ${pt[1] + sdy})`);
+        // While spread, pin the child train to the anchor's position on the
+        // non-spread axis so small track movements don't cause jitter.
+        // e.g. a train spread "above" (dirY=-1) shares the anchor's X.
+        let finalX = pt[0] + sdx;
+        let finalY = pt[1] + sdy;
+        if (d._spreading && anchorPt && d.rn !== selectedTrainRn &&
+            (d._spreadDirX !== 0 || d._spreadDirY !== 0)) {
+          if (d._spreadDirX === 0) {
+            // Spread vertically — pin X to anchor
+            finalX = anchorPt[0] + sdx;
+          }
+          if (d._spreadDirY === 0) {
+            // Spread horizontally — pin Y to anchor
+            finalY = anchorPt[1] + sdy;
+          }
+        }
+
+        g.attr('transform', `translate(${finalX}, ${finalY})`);
 
         // Track positions for spread connector lines
         if (d._spreading && d.rn === selectedTrainRn) {
-          spreadAnchorPos = [pt[0] + sdx, pt[1] + sdy];
+          spreadAnchorPos = [finalX, finalY];
         } else if (d._spreading && (sdx !== 0 || sdy !== 0)) {
-          spreadChildPositions.push([pt[0] + sdx, pt[1] + sdy]);
+          spreadChildPositions.push([finalX, finalY]);
         }
 
         // Check if train is at a line terminus (reused for arrows + heading)
