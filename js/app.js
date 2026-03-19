@@ -199,7 +199,7 @@
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
-  const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping" (at reference scale)
+  const SPREAD_SVG_THRESHOLD = 2;     // SVG units — trains closer than this are "overlapping" (at reference scale)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -549,9 +549,9 @@
       if (st.prefix || st.station) {
         status.innerHTML = st.prefix + (st.station ? `<strong>${st.station}</strong>` : '');
       } else if (st.delayed) {
-        status.innerHTML = '<span class="tl-delayed">Delayed</span><span class="tl-limited">Limited tracking<br>available for this train</span>';
+        status.innerHTML = '<span class="tl-delayed">Delayed</span><span class="tl-limited">Limited tracking on this train</span>';
       } else if (st.limited) {
-        status.innerHTML = '<span class="tl-limited">Limited tracking<br>available for this train</span>';
+        status.innerHTML = '<span class="tl-limited">Limited tracking on this train</span>';
       } else {
         status.textContent = '';
       }
@@ -874,13 +874,13 @@
       const selLegend = selectedTrain?.legend;
       svg.selectAll('.line-path').attr('stroke-width', function () {
         return selLegend && d3.select(this).attr('data-legend') === selLegend
-          ? scaledLineWidth * 2.5
+          ? scaledLineWidth * 2.2
           : scaledLineWidth;
       });
       svg.selectAll('.pr-express-path')
         .attr('stroke-dasharray', `${scaledLineWidth * 3} ${scaledLineWidth * 2}`);
       // Keep arrow width in sync with the selected (thicker) line width.
-      const arrowLineWidth = selLegend ? scaledLineWidth * 2.5 : scaledLineWidth;
+      const arrowLineWidth = selLegend ? scaledLineWidth * 2.2 : scaledLineWidth;
       const sas = arrowLineWidth / 2.0;
       const sap = `M ${sas},0 L ${-sas},${-sas * 0.8} L ${-sas},${sas * 0.8} Z`;
       svg.selectAll('.train-arrow').attr('d', sap);
@@ -966,10 +966,6 @@
           spreadChildPositions.push([finalX, finalY]);
         }
 
-        // Check if train is at a line terminus (reused for arrows + heading)
-        const termPts = lineTerminals[d.legend] || [];
-        const atTerminus = termPts.some(t => geoDist(d.lon, d.lat, t.lon, t.lat) < 0.003);
-
         // Animate direction triangles: steady stream flowing along the track
         const segs = lineSegments[d.legend];
         const showArrows = d.rn === selectedTrainRn
@@ -1054,7 +1050,7 @@
         dotEl.attr('r', scaledRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         const headingScale = dotScale / Math.pow(currentK, 0.55);
-        let headingVisible = stationsVisible && !atTerminus;
+        let headingVisible = stationsVisible;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
           const headingTarget = d._corrToTrackPos
@@ -1070,11 +1066,8 @@
               dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
               headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
             } else {
-              // At terminus — advanceOnTrack stopped, can't determine direction.
-              // Update scale so it stays in sync with zoom; hide via opacity below.
               dotEl.attr('transform', `scale(${dotScale})`);
               headingEl.attr('transform', `scale(${headingScale})`);
-              headingVisible = false;
             }
           }
         } else if (d.heading !== undefined) {
