@@ -213,6 +213,119 @@ function snapToTrackPosition(lon, lat, segments) {
 }
 
 /**
+ * Builds a precomputed neighbor map for a set of segments.
+ * For each segment index, stores the set of segment indices whose endpoints
+ * are within SEGMENT_CONNECT_THRESHOLD of this segment's endpoints.
+ * Returns: Map<segIdx, Set<segIdx>>
+ */
+function buildSegmentNeighborMap(segments) {
+  const threshold = SEGMENT_CONNECT_THRESHOLD;
+  const map = new Map();
+  for (let i = 0; i < segments.length; i++) {
+    map.set(i, new Set());
+  }
+  for (let i = 0; i < segments.length; i++) {
+    const si = segments[i];
+    if (si.length < 2) continue;
+    const iStart = si[0], iEnd = si[si.length - 1];
+    for (let j = i + 1; j < segments.length; j++) {
+      const sj = segments[j];
+      if (sj.length < 2) continue;
+      const jStart = sj[0], jEnd = sj[sj.length - 1];
+      if (geoDist(iStart[0], iStart[1], jStart[0], jStart[1]) < threshold ||
+          geoDist(iStart[0], iStart[1], jEnd[0], jEnd[1]) < threshold ||
+          geoDist(iEnd[0], iEnd[1], jStart[0], jStart[1]) < threshold ||
+          geoDist(iEnd[0], iEnd[1], jEnd[0], jEnd[1]) < threshold) {
+        map.get(i).add(j);
+        map.get(j).add(i);
+      }
+    }
+  }
+  return map;
+}
+
+/**
+ * Snaps a point to the track with segment affinity: prefers the current segment
+ * and its direct neighbors (connected segments) over distant segments.
+ * Falls back to the global best only when no nearby segment is within
+ * SNAP_AFFINITY_MARGIN of the global best.
+ *
+ * prevTrackPos: the train's previous { segIdx, ptIdx, t } (or null for first snap).
+ * neighborMap: precomputed Map<segIdx, Set<segIdx>> (or null to skip affinity).
+ *
+ * This prevents trains from snapping to a topologically distant but geographically
+ * close segment at corners, crossings, and junctions.
+ */
+function snapToTrackWithAffinity(lon, lat, segments, prevTrackPos, neighborMap) {
+  // No previous position or no neighbor map — fall back to global snap
+  if (!prevTrackPos || !neighborMap) {
+    return snapToTrackPosition(lon, lat, segments);
+  }
+
+  // Collect the set of "nearby" segment indices: current + neighbors + neighbors-of-neighbors
+  const nearby = new Set();
+  nearby.add(prevTrackPos.segIdx);
+  const directNeighbors = neighborMap.get(prevTrackPos.segIdx);
+  if (directNeighbors) {
+    for (const n of directNeighbors) {
+      nearby.add(n);
+      // Include 2nd-degree neighbors so we can look one junction ahead.
+      // This covers cases where the train crosses two segment boundaries
+      // in a single poll interval (e.g., short segments near junctions).
+      const nn = neighborMap.get(n);
+      if (nn) for (const n2 of nn) nearby.add(n2);
+    }
+  }
+
+  // Find best snap among nearby segments
+  let nearbyBestDist = Infinity;
+  let nearbyBest = null;
+
+  for (const s of nearby) {
+    const seg = segments[s];
+    if (!seg) continue;
+    for (let i = 0; i < seg.length - 1; i++) {
+      const ax = seg[i][0], ay = seg[i][1];
+      const bx = seg[i + 1][0], by = seg[i + 1][1];
+
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lenSq = dx * dx + dy * dy;
+
+      let t = 0;
+      if (lenSq > 0) {
+        t = ((lon - ax) * dx + (lat - ay) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+      }
+
+      const px = ax + t * dx;
+      const py = ay + t * dy;
+      const dist = (lon - px) * (lon - px) + (lat - py) * (lat - py);
+
+      if (dist < nearbyBestDist) {
+        nearbyBestDist = dist;
+        nearbyBest = { segIdx: s, ptIdx: i, t: t, lon: px, lat: py };
+      }
+    }
+  }
+
+  // Also compute global best for comparison
+  const globalBest = snapToTrackPosition(lon, lat, segments);
+  const globalDist = (lon - globalBest.lon) * (lon - globalBest.lon) +
+                     (lat - globalBest.lat) * (lat - globalBest.lat);
+
+  // Use nearby snap unless the global snap is dramatically closer.
+  // SNAP_AFFINITY_MARGIN (e.g. 1.5) means: only abandon affinity if the global
+  // snap distance is less than 1/1.5 of the nearby snap distance (in squared
+  // distance terms, so effectively sqrt(1.5) ≈ 1.22× closer in linear distance).
+  if (nearbyBest && nearbyBestDist < globalDist * SNAP_AFFINITY_MARGIN) {
+    return nearbyBest;
+  }
+
+  return globalBest;
+}
+
+/**
  * Determines direction (+1 or -1) along a segment that best matches a heading.
  * heading: degrees clockwise from north (0-360), as CTA API provides.
  */

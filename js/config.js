@@ -61,6 +61,7 @@ const MAP_PADDING = 0.05; // 5% padding around the map
 const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API position after refresh
 const CORRECTION_SNAP_THRESHOLD = 0.045;     // degrees (~3.9km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
+const SNAP_AFFINITY_MARGIN = 1.5;            // factor — affinity snap must be this much worse than global snap to lose
 const BACKWARD_CONFIRM_POLLS     = 6;        // consecutive polls required before accepting a backward move — when confirmed, snap rather than animate
 const FORWARD_CONFIRM_POLLS      = 4;        // consecutive polls required before accepting a suspiciously fast forward jump within slide range
 const FORWARD_SNAP_CONFIRM_POLLS = 5;        // consecutive polls required before accepting a forward jump in snap range (> CORRECTION_SNAP_THRESHOLD)

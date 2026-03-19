@@ -306,7 +306,7 @@ async function fetchTrains() {
  *
  * prevTrainMap: Map<rn, previousTrainObject> from before this refresh.
  */
-function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminals, stations) {
+function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminals, stations, lineNeighborMaps) {
   const now = Date.now();
   const m = d => `${(d * 111000).toFixed(0)}m`;
 
@@ -318,8 +318,13 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     train._apiLon = train.lon;
     train._apiLat = train.lat;
 
-    // Snap to track
-    train._trackPos = snapToTrackPosition(train.lon, train.lat, segs);
+    // Snap to track — use affinity snap when a previous position exists to
+    // prevent jumping to a topologically distant but geographically close
+    // segment at corners, crossings, and junctions.
+    const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
+    const neighborMap = lineNeighborMaps ? lineNeighborMaps[train.legend] : null;
+    const prevTrackPos = prev ? prev._trackPos : null;
+    train._trackPos = snapToTrackWithAffinity(train.lon, train.lat, segs, prevTrackPos, neighborMap);
     train.lon = train._trackPos.lon;
     train.lat = train._trackPos.lat;
 
@@ -328,7 +333,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     }
 
     // Drift correction: smoothly slide from old visual position to new API position
-    const prev = prevTrainMap ? prevTrainMap.get(train.rn) : null;
+    // (prev already declared above for affinity snap)
 
     // _direction is segment-relative (+1 = forward along point order, -1 = backward).
     // It becomes stale whenever the train crosses a segment boundary whose geometry runs
