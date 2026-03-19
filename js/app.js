@@ -196,7 +196,6 @@
   // TRACK_ZOOM_SCALE defined in config.js
   let trackingScale = TRACK_ZOOM_SCALE;
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
-  let lastRadiusK = -1; // tracks last zoom k at which glow/dot radii were updated
 
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
@@ -428,9 +427,14 @@
       .attr('fill', 'transparent')
       .attr('stroke', 'none');
 
-    // Outer glow circle — stagger pulse by run number so delay is stable across refreshes
-    // Stroke is used for the radar ring when selected; fill gradient for unselected pulse
-    enter.append('circle')
+    // Outer glow circle — wrapped in a <g> so zoom compensation is applied via SVG
+    // transform on the wrapper rather than by changing the circle's r attribute.
+    // Keeping r fixed lets will-change:transform on .train-glow hold a stable GPU
+    // compositor layer, preventing the CSS pulse animation from flickering.
+    // Stroke is used for the radar ring when selected; fill gradient for unselected pulse.
+    enter.append('g')
+      .attr('class', 'train-glow-wrap')
+      .append('circle')
       .attr('class', 'train-glow')
       .attr('r', baseGlowRadius)
       .attr('fill', d => `url(#train-glow-${d.legend})`)
@@ -878,8 +882,7 @@
     // The "larger on mobile" feel is preserved — it comes from the map being compressed into
     // fewer pixels, not from r being different.
     const currentK = d3.zoomTransform(svgEl).k;
-    const scaledRadius     = baseTrainRadius / Math.pow(currentK, 0.45);
-    const scaledGlowRadius = baseGlowRadius  / Math.pow(currentK, 0.5);
+    const scaledRadius = baseTrainRadius / Math.pow(currentK, 0.45);
 
     // Thin lines slightly as zoom increases — only recalculate when k changes.
     if (currentK !== lastLineK) {
@@ -908,16 +911,12 @@
       // Scale station dots to match line width at every zoom level
       scaleStationDots(currentK);
 
-    }
-
-    // Update glow and dot radii only when zoom is stable (not mid-transition).
-    // Updating r on CSS-animated SVG elements every frame during zoom animations
-    // continuously invalidates Chrome's GPU compositor layer, causing flicker.
-    // lastRadiusK stays behind during transitions so the update fires on the
-    // first stable frame after the zoom settles.
-    if (currentK !== lastRadiusK && !isZoomTransitioning && !zoomAnim) {
-      lastRadiusK = currentK;
-      svg.selectAll('.train-glow').attr('r', scaledGlowRadius);
+      // Scale glow wrapper and dot radius to compensate for zoom.
+      // .train-glow-wrap is a plain <g> (no CSS animation) so updating its SVG
+      // transform every zoom frame is safe — the compositor moves the child layer
+      // without invalidating it. .train-dot has no CSS animation so r changes
+      // are also safe. Neither operation touches .train-glow's own geometry.
+      svg.selectAll('.train-glow-wrap').attr('transform', `scale(${1 / Math.pow(currentK, 0.5)})`);
       svg.selectAll('.train-dot').attr('r', scaledRadius);
     }
 
@@ -982,7 +981,11 @@
           finalY = anchorPt[1] + sdy;
         }
 
-        g.attr('transform', `translate(${finalX}, ${finalY})`);
+        const groupTransform = `translate(${finalX}, ${finalY})`;
+        if (groupTransform !== d._lastGroupTransform) {
+          g.attr('transform', groupTransform);
+          d._lastGroupTransform = groupTransform;
+        }
 
         // Track positions for spread connector lines.
         // _spreadAnchor persists after deselect so connectors stay visible

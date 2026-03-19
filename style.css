@@ -162,6 +162,7 @@ body {
   transform-origin: 50% 50%;
   stroke-width: 0;
   animation: pulse-glow 2.5s ease-in-out infinite;
+  will-change: transform;
 }
 
 /* Selected train — dot scale is handled in JS (composed with heading rotation) */
