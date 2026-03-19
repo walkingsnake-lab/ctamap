@@ -27,17 +27,10 @@
   const { geojson, geoScaleReference } = mapState;
   let { projection, mapContainer, visualScale } = mapState;
 
-  // Label-specific scale: two corrections applied together.
-  //
-  // 1. Cap at the reference viewport size — prevents labels ballooning on large monitors.
-  //    visualScale > 1 on big screens means the map is spread wider, but labels don't need
-  //    to grow with it; we never want them larger than they are at 1440×900.
-  //
-  // 2. Reduce for low-DPR screens — a CSS pixel is physically larger on a DPR=1 desktop
-  //    monitor than on a Retina/phone display, so labels appear bigger there. DPR=2 is the
-  //    baseline (factor = 1); DPR=1 gets ~0.71×, DPR≥2 is uncapped (factor = 1).
-  const dprFactor = Math.min(1, Math.sqrt(window.devicePixelRatio || 1) / Math.sqrt(2));
-  let labelScale = Math.min(1, visualScale) * dprFactor;
+  // Cap at the reference viewport size — prevents labels ballooning on large monitors.
+  // visualScale > 1 on big screens means the map is spread wider, but labels don't need
+  // to grow with it; we never want them larger than they are at 1440×900.
+  let labelScale = Math.min(1, visualScale);
 
   // Base visual sizes at zoom k=1, scaled relative to the reference viewport.
   // Declared as lets so the resize handler can update them after redrawMap().
@@ -1398,7 +1391,7 @@
       const result = redrawMap(svg, width, height, geojson, geoScaleReference);
       projection = result.projection;
       visualScale = result.visualScale;
-      labelScale = Math.min(1, visualScale) * dprFactor;
+      labelScale = Math.min(1, visualScale);
       baseTrainRadius = TRAIN_RADIUS * visualScale;
       baseGlowRadius  = TRAIN_GLOW_RADIUS * visualScale;
       baseSpread      = 18 * visualScale;
