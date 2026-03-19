@@ -47,6 +47,17 @@
   // Build unique stations list for the overlay
   const stations = buildUniqueStations(geojson);
 
+  // Apply a D3 zoom transform to the map container as a CSS transform rather than
+  // an SVG attribute transform.  CSS transforms on SVG <g> elements are GPU-composited
+  // by Chrome (via Metal on Mac), so the entire map moves as a texture on the GPU
+  // with no per-element software repaint.  SVG attribute transforms trigger a
+  // progressive software repaint each frame, causing elements to blink in/out of
+  // view in document-order chunks — especially visible during zoom and deselect on
+  // Mac Chrome.  transform-origin:0 0 (set in CSS) matches SVG's default (0,0) origin
+  // so the math is identical; only the rendering path changes.
+  const setMapTransform = t =>
+    mapContainer.style('transform', `translate(${t.x}px,${t.y}px) scale(${t.k})`);
+
   // ---- D3 zoom behavior ----
   const zoom = d3.zoom()
     .scaleExtent([1, 10])
@@ -62,10 +73,10 @@
           const ty = height / 2 - trackingScale * pt[1];
           const t = d3.zoomIdentity.translate(tx, ty).scale(trackingScale);
           svgEl.__zoom = t;
-          mapContainer.attr('transform', t.toString());
+          setMapTransform(t);
         }
       } else {
-        svg.select('.map-container').attr('transform', event.transform);
+        setMapTransform(event.transform);
       }
     });
 
@@ -1160,7 +1171,7 @@
         const ty = sy - k * pt[1];
         const t = d3.zoomIdentity.translate(tx, ty).scale(k);
         svgEl.__zoom = t;
-        mapContainer.attr('transform', t.toString());
+        setMapTransform(t);
       }
       if (progress >= 1) {
         zoomAnim = null;
@@ -1173,7 +1184,7 @@
         const ty = height / 2 - trackingScale * pt[1];
         const t = d3.zoomIdentity.translate(tx, ty).scale(trackingScale);
         svgEl.__zoom = t;
-        mapContainer.attr('transform', t.toString());
+        setMapTransform(t);
       }
     }
 
@@ -1437,7 +1448,7 @@
           const ty = height / 2 - trackingScale * pt[1];
           const t = d3.zoomIdentity.translate(tx, ty).scale(trackingScale);
           svgEl.__zoom = t;
-          mapContainer.attr('transform', t.toString());
+          setMapTransform(t);
         }
       } else {
         // Re-apply URL viewport if present (projection changed, so transform must be

@@ -100,6 +100,14 @@ body {
   opacity: 0.25;
 }
 
+/* GPU-composite the entire map so zoom is a texture-move on the Metal/DirectX
+   compositor rather than a per-element software repaint.  transform-origin:0 0
+   matches SVG's default (0,0) coordinate origin so the D3 zoom math is unchanged. */
+.map-container {
+  will-change: transform;
+  transform-origin: 0 0;
+}
+
 .lines-layer {
   opacity: .65;
 }
