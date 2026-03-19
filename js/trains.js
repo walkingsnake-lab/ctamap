@@ -48,27 +48,7 @@ function matchesKnownPhantomJump(legend, prevLon, prevLat, newLon, newLat, stati
   return null;
 }
 
-// Per-line destination substring that identifies the "northern" (higher-latitude)
-// terminus.  Used by directionByTerminalWalk to convert a destination name into a
-// segment-relative direction:  walk to both dead-ends, compare latitudes, and check
-// whether the destination matches the northern one.
-//
-// Every line is listed here so that direction re-derivation on segment change,
-// suspect-backward classification, and path-validation fallbacks all use the same
-// unified config.  Previously this was split across two special-case configs
-// (UNRELIABLE_HEADING_LINES for BL/YL, LOOP_EXIT_DIRECTION_LINES for OR); those
-// are no longer needed because the terminal-walk-then-heading-fallback approach is
-// now applied to ALL lines on every segment change.
-const LINE_NORTH_DESTS = {
-  RD: 'Howard',
-  BL: 'O\'Hare',
-  BR: 'Kimball',
-  GR: 'Harlem',
-  OR: 'Loop',
-  PK: 'Loop',
-  PR: 'Linden',
-  YL: 'Skokie',
-};
+// LINE_NORTH_DESTS is defined in config.js
 
 /**
  * Determines train direction by walking to both terminal dead-ends from trackPos
@@ -90,7 +70,7 @@ const LINE_NORTH_DESTS = {
  * Returns +1 or -1, or null if ambiguous (e.g. train is at the station).
  */
 function directionByNextStation(trackPos, nextStn, segs) {
-  const PROBE_DIST = 0.015; // ~1.5km — long enough to reach around corners of the ML loop
+  // PROBE_DIST defined in config.js (~1.5km — long enough to reach around corners of the ML loop)
   const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
   // When close to the station, scale the probe down so it stays short of the
   // station.  A probe that overshoots makes fwdDist > curDist in both
@@ -180,9 +160,7 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
  * Returns the destination name to use for direction calculation (may differ
  * from the displayed destNm).
  */
-// Approximate center of the downtown Loop elevated
-const LOOP_CENTER_LON = -87.630;
-const LOOP_CENTER_LAT = 41.882;
+// LOOP_CENTER defined in config.js
 
 /**
  * Finds the station object matching a train's nextStaNm, filtering by the
@@ -219,7 +197,7 @@ function effectiveDestForDirection(train, northDest, stations) {
   //
   // Skip the override when the dest already says "Loop" (train genuinely
   // heading to Loop) or when the line doesn't use the Loop at all (RD, BL, YL).
-  const LOOP_LINES = new Set(['BR', 'OR', 'PK', 'PR', 'GR']);
+  const LOOP_LINES = new Set(LOOP_LINE_CODES);
   if (!LOOP_LINES.has(train.legend)) return train.destNm;
   if (!train.destNm || train.destNm.includes('Loop')) return train.destNm;
 
@@ -240,8 +218,8 @@ function effectiveDestForDirection(train, northDest, stations) {
   // (~0.008°) is only ~0.003° — any meaningful margin eats into it.
   const trainToNextStn = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
   if (trainToNextStn < 0.001) return train.destNm;  // at the station — trust the sign
-  const trainDistToLoop = geoDist(train.lon, train.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
-  const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, LOOP_CENTER_LON, LOOP_CENTER_LAT);
+  const trainDistToLoop = geoDist(train.lon, train.lat, LOOP_CENTER.lon, LOOP_CENTER.lat);
+  const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, LOOP_CENTER.lon, LOOP_CENTER.lat);
   if (nextStnDistToLoop < trainDistToLoop) {
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
@@ -370,7 +348,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
       // mask the mismatch.  On the ML loop, stations are ~400m apart and trains
       // are almost always within the guard's 0.003° radius of the next station,
       // so using the guarded nextStnDir would prevent self-correction entirely.
-      const loopLineMismatch = ['BR', 'OR', 'PK', 'PR', 'GR'].includes(train.legend)
+      const loopLineMismatch = LOOP_LINE_CODES.includes(train.legend)
         && rawNextStnDir !== null && rawNextStnDir !== prev._direction;
       if ((segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
         // Segment or destination changed — re-derive direction.
@@ -408,7 +386,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // Terminal walk is reliable here (single-dead-end case on the exit
           // segment); it returns null on true E-W segments (Brown line at
           // Armitage/Sedgwick) so the original preserve logic still applies.
-          const isLoopLine = ['BR', 'OR', 'PK', 'PR', 'GR'].includes(train.legend);
+          const isLoopLine = LOOP_LINE_CODES.includes(train.legend);
           const verifyDir = (isLoopLine && northDest && effectiveDest)
             ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs)
             : null;

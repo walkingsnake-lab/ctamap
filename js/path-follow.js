@@ -30,7 +30,7 @@ function collectLineCoords(geojson, legend) {
  *   ownSegments  — only the line's own colored segments (for terminal detection)
  */
 function buildLineSegments(geojson) {
-  const loopLines = ['BR', 'OR', 'PK', 'PR', 'GR'];
+  // LOOP_LINE_CODES defined in config.js
 
   // Reverse map: legend code → human-readable name for ML segment filtering
   const legendToLineName = {};
@@ -50,7 +50,7 @@ function buildLineSegments(geojson) {
     const lineName = legendToLineName[legend];
     const sharedCoords = lineName ? collectSharedCoordsForLine(geojson, lineName, legend) : [];
 
-    if (loopLines.includes(legend)) {
+    if (LOOP_LINE_CODES.includes(legend)) {
       // Only include ML segments whose "lines" property mentions this line
       const mlCoords = collectMLCoordsForLine(geojson, lineName);
       segments[legend] = coords.concat(sharedCoords).concat(mlCoords);
@@ -254,12 +254,11 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
 
   if (!seg) return { ...trackPos, direction: dir, stopped: true };
 
-  // Safety limit to prevent infinite loops from malformed geometry
-  const MAX_ITER = 10000;
+  // ADVANCE_MAX_ITER defined in config.js
   let iter = 0;
 
   // Advance within current segment
-  while (remaining > 0 && ++iter < MAX_ITER) {
+  while (remaining > 0 && ++iter < ADVANCE_MAX_ITER) {
     const curSeg = segments[segIdx];
     if (!curSeg) break;
 
@@ -636,11 +635,7 @@ function isInfrastructureName(name) {
  * share a street name on different lines (e.g. "Addison-O'Hare" vs
  * "Addison-Ravenswood"). Strip these for display to match real CTA signage.
  */
-const BRANCH_SUFFIXES = [
-  'Ravenswood', "O'Hare", 'North Main', 'Lake', 'Congress',
-  'Douglas', 'Midway', 'Dan Ryan', 'South Elevated', 'Evanston',
-  'Skokie', 'Homan',
-];
+// BRANCH_SUFFIXES defined in config.js
 
 function displayStationName(name) {
   for (const suffix of BRANCH_SUFFIXES) {

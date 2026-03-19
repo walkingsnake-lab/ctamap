@@ -210,3 +210,60 @@ const LINE_NAME_TO_LEGEND_STATION = {
   'Red': 'RD', 'Blue': 'BL', 'Brown': 'BR', 'Green': 'GR',
   'Orange': 'OR', 'Pink': 'PK', 'Purple': 'PR', 'Yellow': 'YL'
 };
+
+// ---- Direction & track constants ----
+
+// Per-line destination substring identifying the "northern" (higher-latitude) terminus.
+// Used by directionByTerminalWalk to convert a destination name into a segment-relative
+// direction.  Single source of truth for direction derivation and suspect-backward
+// classification.
+const LINE_NORTH_DESTS = {
+  RD: 'Howard',
+  BL: 'O\'Hare',
+  BR: 'Kimball',
+  GR: 'Harlem',
+  OR: 'Loop',
+  PK: 'Loop',
+  PR: 'Linden',
+  YL: 'Skokie',
+};
+
+// Lines that traverse the downtown Loop (shared ML segments)
+const LOOP_LINE_CODES = ['BR', 'OR', 'PK', 'PR', 'GR'];
+
+// Approximate center of the downtown Loop elevated
+const LOOP_CENTER = { lon: -87.629, lat: 41.882 };
+
+// Probe distance for next-station direction inference (~1.5km in degrees)
+const PROBE_DIST = 0.015;
+
+// Safety iteration limit for advanceOnTrack loop
+const ADVANCE_MAX_ITER = 10000;
+
+// ---- UI & zoom constants ----
+
+// Default zoom level when tracking a train
+const TRACK_ZOOM_SCALE = 8;
+
+// Zoom level for the Loop view shortcut
+const LOOP_ZOOM_SCALE = 4;
+
+// SVG units — trains closer than this are considered overlapping (at reference scale)
+const SPREAD_SVG_THRESHOLD = 3;
+
+// Number of direction indicator arrows along track
+const ARROW_COUNT = 6;
+
+// SVG-unit multiplier for spread distance between overlapping trains
+const BASE_SPREAD = 18;
+
+// Long-press detection: pixel movement threshold and hold duration (ms)
+const LP_THRESHOLD = 10;
+const LONG_PRESS_MS = 600;
+
+// GeoJSON segment branch suffixes to strip from station display names
+const BRANCH_SUFFIXES = [
+  'Ravenswood', "O'Hare", 'North Main', 'Lake', 'Congress',
+  'Douglas', 'Midway', 'Dan Ryan', 'South Elevated', 'Evanston',
+  'Skokie', 'Homan',
+];
