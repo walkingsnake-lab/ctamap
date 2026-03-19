@@ -907,10 +907,11 @@
       // Scale station dots to match line width at every zoom level
       scaleStationDots(currentK);
 
-      // Update glow radius for zoom level — only when k changes, not every frame.
+      // Update glow and dot radii for zoom level — only when k changes, not every frame.
       // Changing an SVG attribute on a CSS-animated element every frame invalidates
       // its compositor layer and causes the pulse animation to flicker in Chrome.
       svg.selectAll('.train-glow').attr('r', scaledGlowRadius);
+      svg.selectAll('.train-dot').attr('r', scaledRadius);
     }
 
     // Spread interpolation factor — framerate-independent exponential ease.
@@ -1066,7 +1067,6 @@
         // Rotate the combined dot+pointer shape to face the heading direction
         const dotEl = g.select('.train-dot');
         const headingEl = g.select('.train-heading');
-        dotEl.attr('r', scaledRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         const headingScale = dotScale / Math.pow(currentK, 0.55);
         let headingVisible = stationsVisible;
@@ -1083,25 +1083,35 @@
             if (hdx !== 0 || hdy !== 0) {
               const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
               d._lastHeadingAngle = angle;
-              dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-              headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
+              const dt = `rotate(${angle}) scale(${dotScale})`;
+              const ht = `rotate(${angle}) scale(${headingScale})`;
+              if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
+              if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
             } else if (d._lastHeadingAngle !== undefined) {
               // Train is at a dead-end terminal — reuse the last valid angle
               // so the arrow doesn't reset to east while the train is resting.
-              dotEl.attr('transform', `rotate(${d._lastHeadingAngle}) scale(${dotScale})`);
-              headingEl.attr('transform', `rotate(${d._lastHeadingAngle}) scale(${headingScale})`);
+              const dt = `rotate(${d._lastHeadingAngle}) scale(${dotScale})`;
+              const ht = `rotate(${d._lastHeadingAngle}) scale(${headingScale})`;
+              if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
+              if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
             } else {
-              dotEl.attr('transform', `scale(${dotScale})`);
-              headingEl.attr('transform', `scale(${headingScale})`);
+              const dt = `scale(${dotScale})`;
+              const ht = `scale(${headingScale})`;
+              if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
+              if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
             }
           }
         } else if (d.heading !== undefined) {
           const angle = headingToSVGAngle(d.heading);
-          dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-          headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
+          const dt = `rotate(${angle}) scale(${dotScale})`;
+          const ht = `rotate(${angle}) scale(${headingScale})`;
+          if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
+          if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
         } else {
-          dotEl.attr('transform', `scale(${dotScale})`);
-          headingEl.attr('transform', `scale(${headingScale})`);
+          const dt = `scale(${dotScale})`;
+          const ht = `scale(${headingScale})`;
+          if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
+          if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
         }
         // Smooth heading opacity: lerp toward target so it fades in/out
         // instead of popping.  Uses the same exponential ease as spread.
@@ -1110,7 +1120,10 @@
         d._headingOpacity += (headingTarget - d._headingOpacity) * spreadLerp;
         // Snap to exact 0/1 when close enough to avoid lingering sub-pixel draws
         if (Math.abs(d._headingOpacity - headingTarget) < 0.01) d._headingOpacity = headingTarget;
-        headingEl.style('opacity', d._headingOpacity);
+        if (d._headingOpacity !== d._lastHeadingOpacity) {
+          headingEl.style('opacity', d._headingOpacity);
+          d._lastHeadingOpacity = d._headingOpacity;
+        }
       });
 
     // Draw connector lines from spread anchor to each fanned-out train
