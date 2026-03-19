@@ -195,11 +195,33 @@ function effectiveDestForDirection(train, northDest, stations) {
   // toward the Loop.  Detect by checking if nextStaNm is closer to the Loop
   // than the train.
   //
-  // Skip the override when the dest already says "Loop" (train genuinely
-  // heading to Loop) or when the line doesn't use the Loop at all (RD, BL, YL).
+  // Skip the override for lines that don't use the Loop at all (RD, BL, YL).
+  // When dest says "Loop", handle separately below (late-flip detection).
   const LOOP_LINES = new Set(LOOP_LINE_CODES);
   if (!LOOP_LINES.has(train.legend)) return train.destNm;
-  if (!train.destNm || train.destNm.includes('Loop')) return train.destNm;
+  if (!train.destNm) return train.destNm;
+  // A "Loop" destination is usually correct (train genuinely heading to Loop),
+  // but the sign can also be a late flip — still saying "Loop" after the train
+  // has already started heading outbound (the sign hasn't changed to e.g.
+  // "54th/Cermak" yet).  Detect by checking if nextStaNm points to a station
+  // that is farther from the Loop center than the train's current position —
+  // if so, the train is heading outbound despite the stale "Loop" sign.
+  if (train.destNm.includes('Loop')) {
+    const nextStnLF = findNextStation(train, stations);
+    if (nextStnLF) {
+      const tDistLF = geoDist(train.lon, train.lat, LOOP_CENTER.lon, LOOP_CENTER.lat);
+      const nDistLF = geoDist(nextStnLF.lon, nextStnLF.lat, LOOP_CENTER.lon, LOOP_CENTER.lat);
+      if (nDistLF > tDistLF + 0.002) {
+        // Next station is meaningfully farther from the Loop — late sign flip.
+        // Return a non-Loop sentinel so directionByTerminalWalk treats the train
+        // as outbound (destIsNorth = false for all loop lines where northDest
+        // is "Loop").
+        console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is farther from Loop — late flip, treating as outbound`);
+        return 'OUTBOUND';
+      }
+    }
+    return train.destNm;
+  }
 
   const nextStn = findNextStation(train, stations);
   if (!nextStn) return train.destNm;
@@ -209,17 +231,35 @@ function effectiveDestForDirection(train, northDest, stations) {
   // Uses distance to Loop center rather than latitude so this works for lines
   // that approach the Loop from any direction (e.g. Pink Line from the west).
   //
-  // Skip when the train is very close to the next station (~110m).  This
-  // prevents false overrides when the train is AT the exit station — e.g. a
-  // PR train at Merchandise Mart heading to Linden.  MM is only marginally
-  // closer to the Loop center than the train, but the train is exiting, not
-  // entering.  A distance margin on the Loop comparison doesn't work here
-  // because the gap between Loop stations (~0.005°) and exit stations
-  // (~0.008°) is only ~0.003° — any meaningful margin eats into it.
+  // When the train is very close to the reported next station (~110m), the
+  // normal comparison (nextStnDistToLoop < trainDistToLoop) can't help because
+  // the station is at roughly the same position as the train.  Two cases:
+  //
+  //   (a) Genuine Loop exit: the train is physically AT a Loop-boundary station
+  //       (e.g. Merchandise Mart for PR, Clinton for PK).  These stations are
+  //       within ~0.014° of the Loop center.  Trust the sign.
+  //
+  //   (b) Stale nextStaNm: the API hasn't updated nextStaNm yet and still
+  //       reports the station the train just passed (e.g. Brown Line reports
+  //       nextStaNm="Chicago" while AT Chicago/Franklin heading south).  These
+  //       approach stations are farther from the Loop (~0.016°+).  If the train
+  //       itself is still within approach range (<0.025°), treat it as
+  //       loop-bound regardless of the premature signage change.
   const trainToNextStn = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
-  if (trainToNextStn < 0.001) return train.destNm;  // at the station — trust the sign
   const trainDistToLoop = geoDist(train.lon, train.lat, LOOP_CENTER.lon, LOOP_CENTER.lat);
   const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, LOOP_CENTER.lon, LOOP_CENTER.lat);
+  if (trainToNextStn < 0.001) {
+    // Case (a): station is within Loop-exit range — genuinely at a boundary
+    // station, trust the sign.
+    if (nextStnDistToLoop <= 0.014) return train.destNm;
+    // Case (b): station is farther out — likely a stale nextStaNm on an
+    // approach segment.  Override to "Loop" if the train is still approaching.
+    if (trainDistToLoop < 0.025) {
+      console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" appears stale at approach station (dist-to-loop=${trainDistToLoop.toFixed(4)}) — using "Loop"`);
+      return 'Loop';
+    }
+    return train.destNm;
+  }
   if (nextStnDistToLoop < trainDistToLoop) {
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
