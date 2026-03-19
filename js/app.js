@@ -78,6 +78,14 @@
       } else {
         setMapTransform(event.transform);
       }
+      // Mark zoom as active so animate() defers expensive per-element SVG attribute
+      // mutations until the gesture settles (see applyZoomDependentStyles).
+      isActivelyZooming = true;
+      clearTimeout(zoomEndTimer);
+      zoomEndTimer = setTimeout(() => {
+        isActivelyZooming = false;
+        applyZoomDependentStyles(d3.zoomTransform(svgEl).k);
+      }, 150);
     });
 
   // Long-press to toggle stations — registered on the raw DOM element BEFORE
@@ -207,6 +215,19 @@
   // TRACK_ZOOM_SCALE defined in config.js
   let trackingScale = TRACK_ZOOM_SCALE;
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
+
+  // During an active zoom gesture, Chrome fires a new zoom event on every pointer/
+  // wheel tick.  Each tick causes currentK to change, which triggers ~1 800 SVG
+  // setAttribute calls (hit radii, stroke-widths, arrow paths, glow radii).  Every
+  // setAttribute forces Blink to invalidate the SVG paint region and re-rasterize;
+  // on Mac Chrome (Metal backend) the async GPU texture re-upload leaves a brief
+  // blank frame each time → "whole SVG flashes during zoom".
+  //
+  // Fix: suppress those style updates while the user is actively zooming and run them
+  // once 150ms after the gesture ends (applyZoomDependentStyles).  Train positions
+  // still update every frame because the spread animation requires it.
+  let isActivelyZooming = false;
+  let zoomEndTimer = null;
 
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
@@ -849,6 +870,31 @@
     }
   });
 
+  // ---- Zoom-dependent style updates ----
+  // These touch hundreds of SVG elements and are deferred during active zoom gestures
+  // (see isActivelyZooming) to avoid triggering per-frame SVG repaints.
+  function applyZoomDependentStyles(k) {
+    lastLineK = k;
+    const scaledHitRadius = 12 / k;
+    svg.selectAll('.train-hit').attr('r', scaledHitRadius);
+    const scaledLineWidth = LINE_WIDTH * visualScale / Math.pow(k, 0.6);
+    const selLegend = selectedTrain?.legend;
+    svg.selectAll('.line-path').attr('stroke-width', function () {
+      return selLegend && d3.select(this).attr('data-legend') === selLegend
+        ? scaledLineWidth * 2.2
+        : scaledLineWidth;
+    });
+    svg.selectAll('.pr-express-path')
+      .attr('stroke-dasharray', `${scaledLineWidth * 3} ${scaledLineWidth * 2}`);
+    const arrowLineWidth = selLegend ? scaledLineWidth * 2.2 : scaledLineWidth;
+    const sas = arrowLineWidth / 2.0;
+    svg.selectAll('.train-arrow')
+      .attr('d', `M ${sas},0 L ${-sas},${-sas * 0.8} L ${-sas},${sas * 0.8} Z`);
+    scaleStationDots(k);
+    const scaledGlowRadius = baseGlowRadius / Math.pow(k, 0.5);
+    svg.selectAll('.train-glow').attr('r', scaledGlowRadius);
+  }
+
   // ---- Unified animation loop ----
   let lastTime = performance.now();
 
@@ -888,40 +934,12 @@
     // The "larger on mobile" feel is preserved — it comes from the map being compressed into
     // fewer pixels, not from r being different.
     const currentK = d3.zoomTransform(svgEl).k;
-    const scaledRadius     = baseTrainRadius / Math.pow(currentK, 0.45);
-    const scaledGlowRadius = baseGlowRadius  / Math.pow(currentK, 0.5);
+    const scaledRadius = baseTrainRadius / Math.pow(currentK, 0.45);
 
-    // Thin lines slightly as zoom increases — only recalculate when k changes.
-    if (currentK !== lastLineK) {
-      lastLineK = currentK;
-      // Keep hit area a fixed screen size (~12px) regardless of zoom level.
-      // Without this, the hit circle (r=12 SVG units) grows with the zoom
-      // transform, reaching 96px screen radius at k=8 and causing accidental
-      // taps and overlapping targets at high zoom.
-      const scaledHitRadius = 12 / currentK;
-      svg.selectAll('.train-hit').attr('r', scaledHitRadius);
-      const scaledLineWidth = LINE_WIDTH * visualScale / Math.pow(currentK, 0.6);
-      const selLegend = selectedTrain?.legend;
-      svg.selectAll('.line-path').attr('stroke-width', function () {
-        return selLegend && d3.select(this).attr('data-legend') === selLegend
-          ? scaledLineWidth * 2.2
-          : scaledLineWidth;
-      });
-      svg.selectAll('.pr-express-path')
-        .attr('stroke-dasharray', `${scaledLineWidth * 3} ${scaledLineWidth * 2}`);
-      // Keep arrow width in sync with the selected (thicker) line width.
-      const arrowLineWidth = selLegend ? scaledLineWidth * 2.2 : scaledLineWidth;
-      const sas = arrowLineWidth / 2.0;
-      const sap = `M ${sas},0 L ${-sas},${-sas * 0.8} L ${-sas},${sas * 0.8} Z`;
-      svg.selectAll('.train-arrow').attr('d', sap);
-
-      // Scale station dots to match line width at every zoom level
-      scaleStationDots(currentK);
-
-      // Update glow radius for zoom level — only when k changes, not every frame.
-      // Changing an SVG attribute on a CSS-animated element every frame invalidates
-      // its compositor layer and causes the pulse animation to flicker in Chrome.
-      svg.selectAll('.train-glow').attr('r', scaledGlowRadius);
+    // Defer zoom-dependent style updates during active zoom gestures to prevent
+    // per-frame SVG repaints (see applyZoomDependentStyles / isActivelyZooming).
+    if (!isActivelyZooming && currentK !== lastLineK) {
+      applyZoomDependentStyles(currentK);
     }
 
     // Spread interpolation factor — framerate-independent exponential ease.

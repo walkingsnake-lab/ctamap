@@ -100,11 +100,11 @@ body {
   opacity: 0.25;
 }
 
-/* GPU-composite the entire map so zoom is a texture-move on the Metal/DirectX
-   compositor rather than a per-element software repaint.  transform-origin:0 0
-   matches SVG's default (0,0) coordinate origin so the D3 zoom math is unchanged. */
+/* transform-origin:0 0 matches SVG's default (0,0) coordinate origin so the
+   D3 zoom math (translate+scale applied via CSS transform) is unchanged.
+   No will-change here: explicitly promoting the layer causes Chrome to flush the
+   GPU texture on every child SVG attribute mutation, making flicker worse. */
 .map-container {
-  will-change: transform;
   transform-origin: 0 0;
 }
 
@@ -166,8 +166,6 @@ body {
 
 .train-glow {
   opacity: 0;
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
   stroke-width: 0;
   animation: pulse-glow 2.5s ease-in-out infinite;
 }
@@ -180,9 +178,15 @@ body {
 }
 
 @keyframes pulse-glow {
-  0%   { opacity: 0; transform: scale(1); }
-  50%  { opacity: 0.4; transform: scale(1.7); }
-  100% { opacity: 0; transform: scale(1); }
+  /* No transform: scale() here — animating CSS transform on an SVG element that has
+     fill:url(#gradient) causes Chrome on Mac (Metal backend) to promote each element
+     to its own GPU compositor layer and then fail to synchronize gradient rasterization
+     with the compositor animation, producing persistent per-element flickering.
+     Opacity-only animation is handled by the compositor without re-rasterizing the
+     gradient fill, eliminating the flicker. */
+  0%   { opacity: 0; }
+  50%  { opacity: 0.4; }
+  100% { opacity: 0; }
 }
 
 @keyframes radar-ring {
