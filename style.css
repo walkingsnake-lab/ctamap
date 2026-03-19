@@ -377,6 +377,40 @@ body {
   stroke-linejoin: round;
 }
 
+/* --- Welcome hint overlay (top-left, fades out) --- */
+#welcome-hint {
+  position: fixed;
+  top: 28px;
+  left: 28px;
+  z-index: 50;
+  pointer-events: none;
+  font-family: 'Jersey 10', monospace;
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.55);
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.15);
+  opacity: 1;
+  transition: opacity 1.2s ease;
+}
+
+#welcome-hint.welcome-hidden {
+  opacity: 0;
+}
+
+#welcome-hint kbd {
+  display: inline-block;
+  font-family: 'Jersey 10', monospace;
+  font-size: 26px;
+  min-width: 28px;
+  text-align: center;
+  padding: 1px 7px 3px;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  vertical-align: baseline;
+  line-height: 1.2;
+}
+
 /* ---- Embed / iframe backdrop mode (?embed=true or ?chrome=false) ---- */
 /* Keep close button hidden even if JS adds .visible, and suppress the    */
 /* train-label overlay so no interactive chrome appears over the iframe.  */
@@ -387,5 +421,9 @@ body.embed-mode #close-btn.visible {
 
 body.embed-mode #train-label,
 body.embed-mode #train-label.visible {
+  display: none !important;
+}
+
+body.embed-mode #welcome-hint {
   display: none !important;
 }
