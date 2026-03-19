@@ -44,6 +44,14 @@
   const { segments: lineSegments, ownSegments: lineOwnSegments } = buildLineSegments(geojson);
   const lineTerminals = buildLineTerminals(lineOwnSegments, lineSegments);
 
+  // Precompute segment neighbor maps per line for affinity snapping.
+  // This avoids trains snapping to topologically distant but geographically
+  // close segments at corners, crossings, and junctions.
+  const lineNeighborMaps = {};
+  for (const [legend, segs] of Object.entries(lineSegments)) {
+    lineNeighborMaps[legend] = buildSegmentNeighborMap(segs);
+  }
+
   // Build unique stations list for the overlay
   const stations = buildUniqueStations(geojson);
 
@@ -389,7 +397,7 @@
   const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
-    initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations);
+    initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations, lineNeighborMaps);
     console.log(`[CTA] Loaded ${realTrains.length} trains`);
   }
 
@@ -1289,7 +1297,7 @@
         }
 
         // Initialize track position and drift correction
-        initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations);
+        initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations, lineNeighborMaps);
 
         // Spawn animation for new trains: slide from start-of-line to tracked position,
         // but only if the train is close to the start terminal (same threshold as retirement).
