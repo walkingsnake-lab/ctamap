@@ -36,7 +36,7 @@
   // Declared as lets so the resize handler can update them after redrawMap().
   let baseTrainRadius = TRAIN_RADIUS * visualScale;
   let baseGlowRadius  = TRAIN_GLOW_RADIUS * visualScale;
-  let baseSpread      = 18 * visualScale;   // SVG units between spread centers
+  let baseSpread      = BASE_SPREAD * visualScale;   // SVG units between spread centers
 
   // Build per-line segment lookup for path-following animation
   // lineSegments: full track (shared + ML) for animation/snapping
@@ -77,11 +77,11 @@
   {
     let lpTimer = null;
     let lpOrigin = null;
-    const LP_THRESHOLD = 10;
+    // LP_THRESHOLD and LONG_PRESS_MS defined in config.js
     svgEl.addEventListener('pointerdown', (event) => {
       if (event.pointerType !== 'touch' || !event.isPrimary) return;
       lpOrigin = { x: event.clientX, y: event.clientY };
-      lpTimer = setTimeout(() => { lpTimer = null; toggleStations(); }, 600);
+      lpTimer = setTimeout(() => { lpTimer = null; toggleStations(); }, LONG_PRESS_MS);
     }, { passive: true });
     svgEl.addEventListener('pointermove', (event) => {
       if (!lpTimer || !lpOrigin) return;
@@ -193,14 +193,14 @@
 
   let lastETAs = null;
   let lastRenderedStopNames = null;
-  const TRACK_ZOOM_SCALE = 8;
+  // TRACK_ZOOM_SCALE defined in config.js
   let trackingScale = TRACK_ZOOM_SCALE;
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
 
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
-  const SPREAD_SVG_THRESHOLD = 2;     // SVG units — trains closer than this are "overlapping" (at reference scale)
+  // SPREAD_SVG_THRESHOLD defined in config.js
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
@@ -437,7 +437,7 @@
       .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
 
     // Direction triangles — rendered before dot so they pass "behind" the circle
-    const ARROW_COUNT = 6;
+    // ARROW_COUNT defined in config.js
     const arrowSize = LINE_WIDTH * visualScale / 1.6;
     const arrowPath = `M ${arrowSize},0 L ${-arrowSize},${-arrowSize * 0.8} L ${-arrowSize},${arrowSize * 0.8} Z`;
     for (let i = 0; i < ARROW_COUNT; i++) {
@@ -1343,8 +1343,7 @@
   }
 
   // ---- Keyboard shortcuts ----
-  const THE_LOOP = [-87.628, 41.882]; // [lon, lat]
-  const LOOP_ZOOM_SCALE = 4;
+  // LOOP_CENTER and LOOP_ZOOM_SCALE defined in config.js
   let isZoomedToLoop = false;
 
   document.addEventListener('keydown', (event) => {
@@ -1378,7 +1377,7 @@
         svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
         isZoomedToLoop = false;
       } else {
-        const pt = projection(THE_LOOP);
+        const pt = projection([LOOP_CENTER.lon, LOOP_CENTER.lat]);
         if (!pt) return;
         const tx = width / 2 - LOOP_ZOOM_SCALE * pt[0];
         const ty = height / 2 - LOOP_ZOOM_SCALE * pt[1];
@@ -1406,7 +1405,7 @@
       labelScale = Math.min(1, visualScale);
       baseTrainRadius = TRAIN_RADIUS * visualScale;
       baseGlowRadius  = TRAIN_GLOW_RADIUS * visualScale;
-      baseSpread      = 18 * visualScale;
+      baseSpread      = BASE_SPREAD * visualScale;
       mapContainer = svg.select('.map-container');
 
       // Recreate spread-connector and trains layers (redrawMap wipes SVG)
