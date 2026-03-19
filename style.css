@@ -158,6 +158,8 @@ body {
 
 .train-glow {
   opacity: 0;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
   stroke-width: 0;
   animation: pulse-glow 2.5s ease-in-out infinite;
 }
@@ -170,15 +172,9 @@ body {
 }
 
 @keyframes pulse-glow {
-  /* transform:scale() removed — animating CSS transform on SVG elements with
-     fill:url(#gradient) causes Chrome/Mac to repaint each element's expanded
-     bounding box on every animation frame, producing visible flicker rectangles.
-     TRAIN_GLOW_RADIUS is enlarged to 7 (from 4) so the glow is visible at its
-     static size without needing the scale. Opacity-only animation is composited
-     without repainting the element. */
-  0%   { opacity: 0; }
-  50%  { opacity: 0.4; }
-  100% { opacity: 0; }
+  0%   { opacity: 0; transform: scale(1); }
+  50%  { opacity: 0.4; transform: scale(1.7); }
+  100% { opacity: 0; transform: scale(1); }
 }
 
 @keyframes radar-ring {
