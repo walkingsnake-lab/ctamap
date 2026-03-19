@@ -51,7 +51,7 @@ const REFRESH_INTERVAL = 20000;
 // Visual constants
 const LINE_WIDTH = 1.5;
 const TRAIN_RADIUS = 3;
-const TRAIN_GLOW_RADIUS = 4;
+const TRAIN_GLOW_RADIUS = 7; // enlarged from 4 — glow is now visible at base size without transform:scale()
 const TERMINUS_HOLD_MS = 120000; // Hold train at terminus before fade-out (120s)
 const TERMINAL_PROXIMITY_THRESHOLD = 0.05; // degrees (~5.5km) — max distance to terminal to trigger retirement
 const TERMINAL_APPROACH_DURATION = 5000;  // ms to slide retiring train to terminal / spawn new trains
