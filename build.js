@@ -7,6 +7,7 @@ const srcFiles = [
   'js/map.js',
   'js/path-follow.js',
   'js/trains.js',
+  'js/train-eta-ai.js',
   'js/app.js',
 ];
 
