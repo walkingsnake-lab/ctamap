@@ -427,14 +427,9 @@
       .attr('fill', 'transparent')
       .attr('stroke', 'none');
 
-    // Outer glow circle — wrapped in a <g> so zoom compensation is applied via SVG
-    // transform on the wrapper rather than by changing the circle's r attribute.
-    // Keeping r fixed lets will-change:transform on .train-glow hold a stable GPU
-    // compositor layer, preventing the CSS pulse animation from flickering.
-    // Stroke is used for the radar ring when selected; fill gradient for unselected pulse.
-    enter.append('g')
-      .attr('class', 'train-glow-wrap')
-      .append('circle')
+    // Outer glow circle — stagger pulse by run number so delay is stable across refreshes
+    // Stroke is used for the radar ring when selected; fill gradient for unselected pulse
+    enter.append('circle')
       .attr('class', 'train-glow')
       .attr('r', baseGlowRadius)
       .attr('fill', d => `url(#train-glow-${d.legend})`)
@@ -882,7 +877,8 @@
     // The "larger on mobile" feel is preserved — it comes from the map being compressed into
     // fewer pixels, not from r being different.
     const currentK = d3.zoomTransform(svgEl).k;
-    const scaledRadius = baseTrainRadius / Math.pow(currentK, 0.45);
+    const scaledRadius     = baseTrainRadius / Math.pow(currentK, 0.45);
+    const scaledGlowRadius = baseGlowRadius  / Math.pow(currentK, 0.5);
 
     // Thin lines slightly as zoom increases — only recalculate when k changes.
     if (currentK !== lastLineK) {
@@ -911,13 +907,10 @@
       // Scale station dots to match line width at every zoom level
       scaleStationDots(currentK);
 
-      // Scale glow wrapper and dot radius to compensate for zoom.
-      // .train-glow-wrap is a plain <g> (no CSS animation) so updating its SVG
-      // transform every zoom frame is safe — the compositor moves the child layer
-      // without invalidating it. .train-dot has no CSS animation so r changes
-      // are also safe. Neither operation touches .train-glow's own geometry.
-      svg.selectAll('.train-glow-wrap').attr('transform', `scale(${1 / Math.pow(currentK, 0.5)})`);
-      svg.selectAll('.train-dot').attr('r', scaledRadius);
+      // Update glow radius for zoom level — only when k changes, not every frame.
+      // Changing an SVG attribute on a CSS-animated element every frame invalidates
+      // its compositor layer and causes the pulse animation to flicker in Chrome.
+      svg.selectAll('.train-glow').attr('r', scaledGlowRadius);
     }
 
     // Spread interpolation factor — framerate-independent exponential ease.
@@ -981,11 +974,7 @@
           finalY = anchorPt[1] + sdy;
         }
 
-        const groupTransform = `translate(${finalX}, ${finalY})`;
-        if (groupTransform !== d._lastGroupTransform) {
-          g.attr('transform', groupTransform);
-          d._lastGroupTransform = groupTransform;
-        }
+        g.attr('transform', `translate(${finalX}, ${finalY})`);
 
         // Track positions for spread connector lines.
         // _spreadAnchor persists after deselect so connectors stay visible
@@ -1077,6 +1066,7 @@
         // Rotate the combined dot+pointer shape to face the heading direction
         const dotEl = g.select('.train-dot');
         const headingEl = g.select('.train-heading');
+        dotEl.attr('r', scaledRadius);
         const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
         const headingScale = dotScale / Math.pow(currentK, 0.55);
         let headingVisible = stationsVisible;
@@ -1093,35 +1083,25 @@
             if (hdx !== 0 || hdy !== 0) {
               const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
               d._lastHeadingAngle = angle;
-              const dt = `rotate(${angle}) scale(${dotScale})`;
-              const ht = `rotate(${angle}) scale(${headingScale})`;
-              if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
-              if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
+              dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+              headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
             } else if (d._lastHeadingAngle !== undefined) {
               // Train is at a dead-end terminal — reuse the last valid angle
               // so the arrow doesn't reset to east while the train is resting.
-              const dt = `rotate(${d._lastHeadingAngle}) scale(${dotScale})`;
-              const ht = `rotate(${d._lastHeadingAngle}) scale(${headingScale})`;
-              if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
-              if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
+              dotEl.attr('transform', `rotate(${d._lastHeadingAngle}) scale(${dotScale})`);
+              headingEl.attr('transform', `rotate(${d._lastHeadingAngle}) scale(${headingScale})`);
             } else {
-              const dt = `scale(${dotScale})`;
-              const ht = `scale(${headingScale})`;
-              if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
-              if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
+              dotEl.attr('transform', `scale(${dotScale})`);
+              headingEl.attr('transform', `scale(${headingScale})`);
             }
           }
         } else if (d.heading !== undefined) {
           const angle = headingToSVGAngle(d.heading);
-          const dt = `rotate(${angle}) scale(${dotScale})`;
-          const ht = `rotate(${angle}) scale(${headingScale})`;
-          if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
-          if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
+          dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+          headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
         } else {
-          const dt = `scale(${dotScale})`;
-          const ht = `scale(${headingScale})`;
-          if (dt !== d._lastDotTransform) { dotEl.attr('transform', dt); d._lastDotTransform = dt; }
-          if (ht !== d._lastHeadingTransform) { headingEl.attr('transform', ht); d._lastHeadingTransform = ht; }
+          dotEl.attr('transform', `scale(${dotScale})`);
+          headingEl.attr('transform', `scale(${headingScale})`);
         }
         // Smooth heading opacity: lerp toward target so it fades in/out
         // instead of popping.  Uses the same exponential ease as spread.
@@ -1130,10 +1110,7 @@
         d._headingOpacity += (headingTarget - d._headingOpacity) * spreadLerp;
         // Snap to exact 0/1 when close enough to avoid lingering sub-pixel draws
         if (Math.abs(d._headingOpacity - headingTarget) < 0.01) d._headingOpacity = headingTarget;
-        if (d._headingOpacity !== d._lastHeadingOpacity) {
-          headingEl.style('opacity', d._headingOpacity);
-          d._lastHeadingOpacity = d._headingOpacity;
-        }
+        headingEl.style('opacity', d._headingOpacity);
       });
 
     // Draw connector lines from spread anchor to each fanned-out train
