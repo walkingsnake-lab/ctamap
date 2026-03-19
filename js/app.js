@@ -858,7 +858,7 @@
     // The "larger on mobile" feel is preserved — it comes from the map being compressed into
     // fewer pixels, not from r being different.
     const currentK = d3.zoomTransform(svgEl).k;
-    const scaledRadius     = baseTrainRadius / Math.pow(currentK, 0.55);
+    const scaledRadius     = baseTrainRadius / Math.pow(currentK, 0.45);
     const scaledGlowRadius = baseGlowRadius  / Math.pow(currentK, 0.5);
 
     // Thin lines slightly as zoom increases — only recalculate when k changes.
