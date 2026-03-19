@@ -196,6 +196,7 @@
   // TRACK_ZOOM_SCALE defined in config.js
   let trackingScale = TRACK_ZOOM_SCALE;
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
+  let lastRadiusK = -1; // tracks last zoom k at which glow/dot radii were updated
 
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
@@ -907,9 +908,15 @@
       // Scale station dots to match line width at every zoom level
       scaleStationDots(currentK);
 
-      // Update glow and dot radii for zoom level — only when k changes, not every frame.
-      // Changing an SVG attribute on a CSS-animated element every frame invalidates
-      // its compositor layer and causes the pulse animation to flicker in Chrome.
+    }
+
+    // Update glow and dot radii only when zoom is stable (not mid-transition).
+    // Updating r on CSS-animated SVG elements every frame during zoom animations
+    // continuously invalidates Chrome's GPU compositor layer, causing flicker.
+    // lastRadiusK stays behind during transitions so the update fires on the
+    // first stable frame after the zoom settles.
+    if (currentK !== lastRadiusK && !isZoomTransitioning && !zoomAnim) {
+      lastRadiusK = currentK;
       svg.selectAll('.train-glow').attr('r', scaledGlowRadius);
       svg.selectAll('.train-dot').attr('r', scaledRadius);
     }
