@@ -1082,8 +1082,14 @@
             const hdy = aheadPt[1] - pt[1];
             if (hdx !== 0 || hdy !== 0) {
               const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
+              d._lastHeadingAngle = angle;
               dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
               headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
+            } else if (d._lastHeadingAngle !== undefined) {
+              // Train is at a dead-end terminal — reuse the last valid angle
+              // so the arrow doesn't reset to east while the train is resting.
+              dotEl.attr('transform', `rotate(${d._lastHeadingAngle}) scale(${dotScale})`);
+              headingEl.attr('transform', `rotate(${d._lastHeadingAngle}) scale(${headingScale})`);
             } else {
               dotEl.attr('transform', `scale(${dotScale})`);
               headingEl.attr('transform', `scale(${headingScale})`);
