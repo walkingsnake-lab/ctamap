@@ -24,38 +24,149 @@
 // ---- Station sequence builder ----
 
 /**
- * Builds an ordered list of station track positions for each line by walking
- * the track geometry from one terminal to the other.
+ * Known CTA station orders per line.  Station names match the CTA Train
+ * Tracker API's `nextStaNm` field (after cleanStationName normalization).
+ * The order goes from "Terminal A" to "Terminal B" — direction derivation
+ * checks which end matches LINE_NORTH_DESTS.
+ *
+ * For lines with branches (Blue, Green), a single linear sequence covers
+ * the primary route.  The branch is listed as a separate sub-sequence keyed
+ * with a suffix (e.g. "BL-ohare", "GR-63rd").
+ *
+ * Loop lines (BR, OR, PK, GR) include downtown Loop stations in traversal
+ * order — the sequence continues around the Loop elevated.
+ */
+const CTA_STATION_ORDERS = {
+  // Red Line: Howard → 95th/Dan Ryan (subway trunk downtown)
+  RD: [
+    'Howard', 'Jarvis', 'Morse', 'Loyola', 'Granville', 'Thorndale',
+    'Bryn Mawr', 'Berwyn', 'Argyle', 'Lawrence', 'Wilson', 'Sheridan',
+    'Addison', 'Belmont', 'Fullerton', 'North/Clybourn', 'Clark/Division',
+    'Chicago', 'Grand', 'Lake', 'Monroe', 'Jackson', 'Harrison',
+    'Roosevelt', 'Cermak-Chinatown', 'Sox-35th', '47th', 'Garfield',
+    '63rd', '69th', '79th', '87th', '95th/Dan Ryan',
+  ],
+
+  // Blue Line: O'Hare → Forest Park (includes Dearborn subway trunk)
+  BL: [
+    "O'Hare", 'Rosemont', 'Cumberland', 'Harlem', 'Jefferson Park',
+    'Montrose', 'Irving Park', 'Addison', 'Belmont', 'Logan Square',
+    'California', 'Western', 'Damen', 'Division', 'Chicago', 'Grand',
+    'Clark/Lake', 'Washington', 'Monroe', 'Jackson', 'LaSalle',
+    'Clinton', 'UIC-Halsted', 'Racine', 'Illinois Medical District',
+    'Western', 'Kedzie-Homan', 'Pulaski', 'Cicero', 'Austin',
+    'Oak Park', 'Harlem', 'Forest Park',
+  ],
+
+  // Brown Line: Kimball → Loop (elevated) → back north
+  BR: [
+    'Kimball', 'Kedzie', 'Francisco', 'Rockwell', 'Western', 'Damen',
+    'Montrose', 'Irving Park', 'Addison', 'Paulina', 'Southport',
+    'Belmont', 'Wellington', 'Diversey', 'Fullerton', 'Armitage',
+    'Sedgwick', 'Chicago', 'Merchandise Mart',
+    // Loop stations (clockwise from Merchandise Mart)
+    'Washington/Wells', 'Quincy', 'LaSalle/Van Buren', 'Library',
+    'Adams/Wabash', 'Washington/Wabash', 'State/Lake', 'Clark/Lake',
+  ],
+
+  // Green Line: Harlem/Lake → split at Roosevelt
+  // Main branch to Ashland/63rd, cottage grove branch separate
+  GR: [
+    'Harlem', 'Oak Park', 'Ridgeland', 'Austin', 'Central',
+    'Laramie', 'Cicero', 'Pulaski', 'Conservatory-Central Park',
+    'Kedzie', 'California', 'Ashland', 'Morgan', 'Clinton',
+    // Loop
+    'Clark/Lake', 'State/Lake', 'Washington/Wabash', 'Adams/Wabash',
+    'Roosevelt',
+    // South Side main
+    'Cermak-McCormick Place', '35-Bronzeville-IIT', 'Indiana',
+    '43rd', '47th', '51st', 'Garfield',
+    // Ashland/63rd branch
+    'Halsted', 'Ashland/63rd',
+    // Cottage Grove branch (trains going here pass Garfield → King Drive → Cottage Grove)
+    'King Drive', 'Cottage Grove',
+  ],
+
+  // Orange Line: Midway → Loop → back to Midway
+  OR: [
+    'Midway', 'Pulaski', 'Kedzie', 'Western', '35th/Archer',
+    'Ashland', 'Halsted', 'Roosevelt',
+    // Loop (counter-clockwise)
+    'Library', 'LaSalle/Van Buren', 'Quincy', 'Washington/Wells',
+    'Clark/Lake', 'State/Lake', 'Washington/Wabash', 'Adams/Wabash',
+  ],
+
+  // Pink Line: 54th/Cermak → Loop → back
+  PK: [
+    '54th/Cermak', 'Cicero', 'Kostner', 'Pulaski', 'Central Park',
+    'Kedzie', 'California', 'Western', 'Damen', '18th', 'Polk',
+    'Ashland', 'Morgan', 'Clinton',
+    // Loop
+    'Clark/Lake', 'State/Lake', 'Washington/Wabash', 'Adams/Wabash',
+    'Library', 'LaSalle/Van Buren', 'Quincy', 'Washington/Wells',
+  ],
+
+  // Purple Line: Linden → Howard (+ Express continues south sharing Red/Brown track)
+  PR: [
+    'Linden', 'Central', 'Noyes', 'Foster', 'Davis', 'Dempster',
+    'Main', 'South Blvd', 'Howard',
+    // Express service continues south (shares Red Line north side + Loop)
+    'Jarvis', 'Morse', 'Loyola', 'Granville', 'Thorndale',
+    'Bryn Mawr', 'Berwyn', 'Argyle', 'Lawrence', 'Wilson',
+    'Sheridan', 'Addison', 'Belmont', 'Wellington', 'Diversey',
+    'Fullerton', 'Armitage', 'Sedgwick', 'Chicago', 'Merchandise Mart',
+    // Loop
+    'Washington/Wells', 'Quincy', 'LaSalle/Van Buren', 'Library',
+    'Adams/Wabash', 'Washington/Wabash', 'State/Lake', 'Clark/Lake',
+  ],
+
+  // Yellow Line: Dempster-Skokie → Howard
+  YL: [
+    'Dempster-Skokie', 'Oakton-Skokie', 'Howard',
+  ],
+};
+
+/**
+ * Builds station sequences by resolving the known CTA station orders
+ * against actual track positions from the GeoJSON geometry.
  *
  * Returns: { legend: [ { name, lon, lat, trackPos, distFromStart } ] }
- *
- * For loop lines (BR, OR, PK, GR, PR), the sequence goes from the outer
- * terminal through the downtown Loop and back — stations on the ML loop
- * appear in traversal order.
  */
-function buildStationSequences(lineSegments, stations) {
+function buildStationSequences(lineSegments, stations, stationPositions) {
   const sequences = {};
 
-  for (const [legend, segs] of Object.entries(lineSegments)) {
+  for (const [legend, names] of Object.entries(CTA_STATION_ORDERS)) {
+    const segs = lineSegments[legend];
     if (!segs || segs.length === 0) continue;
 
-    // Start from an arbitrary point and walk to both terminals
-    const startCoord = segs[0][0];
-    const startPos = snapToTrackPosition(startCoord[0], startCoord[1], segs);
-    const termA = advanceOnTrack(startPos, 9999, -1, segs);
-    const termB = advanceOnTrack(startPos, 9999, +1, segs);
+    const sequence = [];
+    let cumulativeDist = 0;
 
-    // Walk from terminal A to terminal B, collecting stations along the way
-    const sequence = walkAndCollectStations(termA, +1, segs, stations, legend);
-
-    // If we didn't reach termB (loop line that circles back), also try
-    // walking from termB in the other direction and merge
-    if (sequence.length < 3) {
-      const altSequence = walkAndCollectStations(termB, -1, segs, stations, legend);
-      if (altSequence.length > sequence.length) {
-        sequences[legend] = altSequence;
+    for (let i = 0; i < names.length; i++) {
+      const name = names[i];
+      // Try to find the station's coordinates
+      const coord = lookupStation(name, legend, stationPositions);
+      if (!coord) {
+        console.warn(`[ETA-AI] ${legend}: station "${name}" not found in GeoJSON`);
         continue;
       }
+
+      // Snap to track
+      const trackPos = snapToTrackPosition(coord[0], coord[1], segs);
+
+      // Estimate cumulative distance from previous station
+      if (sequence.length > 0) {
+        const prev = sequence[sequence.length - 1];
+        cumulativeDist += geoDist(prev.lon, prev.lat, trackPos.lon, trackPos.lat);
+      }
+
+      sequence.push({
+        name,
+        lon: trackPos.lon,
+        lat: trackPos.lat,
+        trackPos,
+        distFromStart: cumulativeDist,
+      });
     }
 
     sequences[legend] = sequence;
@@ -67,55 +178,6 @@ function buildStationSequences(lineSegments, stations) {
   }
 
   return sequences;
-}
-
-/**
- * Walks along the track from a starting position, collecting stations
- * encountered along the way.  Returns an ordered array of station entries.
- */
-function walkAndCollectStations(startPos, direction, segs, stations, legend) {
-  const sequence = [];
-  const visited = new Set();
-
-  // Filter stations relevant to this line
-  const lineStations = stations.filter(s => s.legends.includes(legend));
-
-  // Walk in small steps, checking for nearby stations
-  const STEP_SIZE = 0.0005; // ~55m steps
-  const MAX_STEPS = 200000; // safety limit
-  const STATION_SNAP_RADIUS = 0.002; // ~220m — how close to count as "at" a station
-
-  let pos = { ...startPos };
-  let totalDist = 0;
-
-  for (let i = 0; i < MAX_STEPS; i++) {
-    // Check if we're near any unvisited station
-    for (const station of lineStations) {
-      if (visited.has(station.name)) continue;
-      const d = geoDist(pos.lon, pos.lat, station.lon, station.lat);
-      if (d < STATION_SNAP_RADIUS) {
-        // Snap station to exact track position
-        const stationTrackPos = snapToTrackPosition(station.lon, station.lat, segs);
-        visited.add(station.name);
-        sequence.push({
-          name: station.name,
-          lon: stationTrackPos.lon,
-          lat: stationTrackPos.lat,
-          trackPos: stationTrackPos,
-          distFromStart: totalDist,
-          isTerminus: station.isTerminus,
-        });
-      }
-    }
-
-    // Advance one step
-    const next = advanceOnTrack(pos, STEP_SIZE, direction, segs);
-    if (next.stopped) break; // reached a dead end
-    totalDist += STEP_SIZE;
-    pos = next;
-  }
-
-  return sequence;
 }
 
 // ---- ETA state machine ----
@@ -196,30 +258,62 @@ function estimateTravelTime(fromStation, toStation) {
 }
 
 /**
- * Determines direction (+1 or -1 along sequence) based on destination name.
- * Uses LINE_NORTH_DESTS to figure out if the train is going toward the
- * start or end of the sequence.
+ * Determines direction (+1 or -1 along sequence index) based on the
+ * train's destination and the station it's heading toward.
+ *
+ * The approach: find the destination station in the sequence.  If the
+ * destination index is higher than the current nextStation index, the
+ * train is moving in the +1 direction (increasing index).  If lower, -1.
+ *
+ * For loop lines where the destination might be "Loop" (not a real station
+ * name), we check if the destination matches any station in the upper half
+ * of the sequence (the Loop portion, which is always at the end for lines
+ * like OR, PK, BR, GR).
  */
-function inferSequenceDirection(legend, destNm, sequence) {
-  if (!sequence || sequence.length < 2 || !destNm) return +1;
+function inferSequenceDirection(legend, destNm, sequence, nextStationIdx) {
+  if (!sequence || sequence.length < 2) return +1;
+  if (!destNm) return +1;
 
+  // Try to find the destination station directly in the sequence
+  const destIdx = findStationInSequence(sequence, destNm);
+  if (destIdx !== -1 && nextStationIdx !== undefined) {
+    // If destination is ahead in the sequence, go +1; if behind, go -1
+    if (destIdx > nextStationIdx) return +1;
+    if (destIdx < nextStationIdx) return -1;
+    // At the destination — use LINE_NORTH_DESTS as fallback
+  }
+
+  // Fallback: use LINE_NORTH_DESTS to determine which end of the sequence
+  // the train is heading toward.
   const northDest = LINE_NORTH_DESTS[legend];
   if (!northDest) return +1;
 
-  // Check if destination matches the "north" terminal
   const destIsNorth = destNm.toUpperCase().includes(northDest.toUpperCase());
 
-  // Find which end of the sequence is the "north" terminal
-  const firstStation = sequence[0];
-  const lastStation = sequence[sequence.length - 1];
-  const firstIsNorth = firstStation.name.toUpperCase().includes(northDest.toUpperCase());
+  // For CTA_STATION_ORDERS, the first station is always the "north/outbound"
+  // terminal (Howard for RD, O'Hare for BL, Kimball for BR, etc.) and the
+  // last is the "south/inbound" terminal.  For loop lines, the Loop stations
+  // are at the END of the sequence.  So:
+  //   destIsNorth + first station is north terminal → going toward index 0 → -1
+  //   destIsNorth + first station is NOT north      → going toward end → +1
+  //
+  // Check if first station name matches northDest
+  const firstIsNorth = sequence[0].name.toUpperCase().includes(northDest.toUpperCase());
+  // Also check last station for Loop lines (Loop stations are at the end)
+  const lastIsNorth = sequence[sequence.length - 1].name.toUpperCase().includes(northDest.toUpperCase());
 
   if (destIsNorth) {
-    // Going toward north terminus
-    return firstIsNorth ? -1 : +1;
+    if (firstIsNorth) return -1;
+    if (lastIsNorth) return +1;
+    // Neither end matches "Loop" literally — for loop lines, the Loop stations
+    // are at the HIGH end of the sequence.  "Loop" destination → +1.
+    if (LOOP_LINE_CODES.includes(legend)) return +1;
+    return +1;
   } else {
-    // Going away from north terminus
-    return firstIsNorth ? +1 : -1;
+    if (firstIsNorth) return +1;
+    if (lastIsNorth) return -1;
+    if (LOOP_LINE_CODES.includes(legend)) return -1;
+    return -1;
   }
 }
 
@@ -270,11 +364,12 @@ function updateEtaTrainState(train, stationSequences) {
   if (nextIdx === -1) {
     // Can't find station in sequence — fall back to GPS
     train._etaFallbackGps = true;
+    console.warn(`[ETA-AI] rn=${rn} (${train.legend}): nextStaNm="${nextStaNm}" not found in sequence → GPS fallback`);
     return;
   }
 
-  // Determine direction from destination
-  const direction = inferSequenceDirection(train.legend, train.destNm, sequence);
+  // Determine direction from destination + next station position in sequence
+  const direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
 
   if (!state) {
     // New train — initialize state
@@ -515,6 +610,11 @@ function initEtaTrainAnimation(trains, lineSegments, stationSequences, prevTrain
 
   // Position all trains immediately (first frame)
   advanceEtaTrains(trains, lineSegments, stationSequences, 16);
+
+  // Log summary
+  const etaCount = trains.filter(t => !t._etaFallbackGps).length;
+  const gpsCount = trains.filter(t => t._etaFallbackGps).length;
+  console.log(`[ETA-AI] Init: ${etaCount} ETA-tracked, ${gpsCount} GPS-fallback (of ${trains.length} total)`);
 }
 
 /**

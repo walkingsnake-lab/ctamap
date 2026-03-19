@@ -55,8 +55,9 @@
   // Build unique stations list for the overlay
   const stations = buildUniqueStations(geojson);
 
-  // Build ordered station sequences for ETA-AI mode
-  const stationSequences = buildStationSequences(lineSegments, stations);
+  // Build station position lookups and ordered sequences for ETA-AI mode
+  const stationPositions = buildStationPositions(geojson);
+  const stationSequences = buildStationSequences(lineSegments, stations, stationPositions);
 
   // ---- D3 zoom behavior ----
   const zoom = d3.zoom()
@@ -1432,6 +1433,11 @@
         const prevMap = new Map();
         for (const t of realTrains) prevMap.set(t.rn, t);
         if (enabling) {
+          // Clear GPS animation state so it doesn't interfere
+          for (const t of realTrains) {
+            t._correcting = false;
+            t._spawning = false;
+          }
           initEtaTrainAnimation(realTrains, lineSegments, stationSequences, prevMap);
           const gpsFallbacks = realTrains.filter(t => t._etaFallbackGps);
           if (gpsFallbacks.length > 0) {
