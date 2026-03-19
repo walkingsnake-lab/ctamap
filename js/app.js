@@ -199,7 +199,7 @@
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
   // the track so they become individually visible and clickable.
-  const SPREAD_SVG_THRESHOLD = 3;     // SVG units — trains closer than this are "overlapping" (at reference scale)
+  const SPREAD_SVG_THRESHOLD = 2;     // SVG units — trains closer than this are "overlapping" (at reference scale)
 
   /**
    * Detect trains overlapping the selected train and assign spread target offsets.
