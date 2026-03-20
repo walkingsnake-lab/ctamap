@@ -1437,6 +1437,10 @@
           for (const t of realTrains) {
             t._correcting = false;
             t._spawning = false;
+            // Clear animation keyframes — trains will be positioned fresh by ETA
+            t._animLon = undefined;
+            t._animLat = undefined;
+            t._animHeading = undefined;
           }
           initEtaTrainAnimation(realTrains, lineSegments, stationSequences, prevMap);
           const gpsFallbacks = realTrains.filter(t => t._etaFallbackGps);
