@@ -547,30 +547,12 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
   const segs = lineSegments ? lineSegments[segLegend] : null;
 
   if (!state) {
-    // --- New train: initialize from destination + GPS hint ---
-    let direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
-
-    // CRITICAL: Verify inferred direction against GPS position.
-    // inferSequenceDirection() uses destination name parsing which is fragile
-    // (especially on lines with similar destination names or Loop re-signage).
-    // If the train's actual position is closer to what we calculated as nextIdx
-    // than prevIdx, the inferred direction was backwards — flip it.
-    // This prevents direction flipping when switching to ETA-AI tracking mode.
-    {
-      const prevIdx_candidate = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
-      const prevStn_candidate = sequence[prevIdx_candidate];
-      const nextStn_candidate = sequence[nextIdx];
-
-      const distToPrev = geoDist(train.lon, train.lat, prevStn_candidate.lon, prevStn_candidate.lat);
-      const distToNext = geoDist(train.lon, train.lat, nextStn_candidate.lon, nextStn_candidate.lat);
-
-      // If train is actually much closer to the "next" station (10%+ closer),
-      // the direction was inverted. Flip it.
-      if (distToNext < distToPrev * 0.9) {
-        direction = -direction;
-      }
-    }
-
+    // --- New train: initialize from destination name ---
+    // Direction is inferred from destination name and will self-correct on the
+    // first station transition (when direction updates based on index progression).
+    // GPS is NOT used for direction inference in ETA-AI mode — ETA data is the
+    // source of truth. Don't second-guess with potentially noisy GPS coordinates.
+    const direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
     const prevIdx = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
 
     // Use GPS position to estimate initial progress between prevStation and nextStation
