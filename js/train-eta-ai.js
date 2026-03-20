@@ -140,9 +140,23 @@ function buildStationSequences(lineSegments, stations, stationPositions) {
       sequence.push({ name, lon: trackPos.lon, lat: trackPos.lat, trackPos, distFromStart: cumulativeDist });
     }
     sequences[legend] = sequence;
+
+    // Debug: log station distances to check for anomalies
+    if (sequence.length > 0) {
+      let gapLog = [];
+      for (let i = 0; i < sequence.length - 1; i++) {
+        const gap = geoDist(sequence[i].lon, sequence[i].lat, sequence[i+1].lon, sequence[i+1].lat) * 111000;
+        if (gap === 0 || gap > 5000) {
+          gapLog.push(`${sequence[i].name}→${sequence[i+1].name}:${gap.toFixed(0)}m`);
+        }
+      }
+      if (gapLog.length > 0) {
+        console.warn(`[ETA-AI] ${legend} anomalies: ${gapLog.join(', ')}`);
+      }
+    }
   }
   for (const [legend, seq] of Object.entries(sequences)) {
-    console.log(`[ETA-AI] ${legend}: ${seq.length} stations — ${seq.map(s => s.name).join(' → ')}`);
+    console.log(`[ETA-AI] ${legend}: ${seq.length} stations`);
   }
   return sequences;
 }
@@ -374,26 +388,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     state.direction       = newDirection;
     state.prevStationIdx  = oldNextIdx;
     state.nextStationIdx  = nextIdx;
-
-    // Preserve visual position during transition: estimate progress based on
-    // train's current coords relative to the new segment. This prevents a visible
-    // pop-back when stations differ slightly due to track snapping.
-    const newPrevStn = sequence[oldNextIdx];
-    const newNextStn = sequence[nextIdx];
-    const newGap = geoDist(newPrevStn.lon, newPrevStn.lat, newNextStn.lon, newNextStn.lat);
-    const oldProgress = state.progress;
-    if (newGap > 1e-6) {
-      const fromPrev = geoDist(train.lon, train.lat, newPrevStn.lon, newPrevStn.lat);
-      state.progress = Math.max(0.05, Math.min(0.95, fromPrev / newGap));
-    } else {
-      state.progress = 0.05;
-    }
-
-    // Debug: log large progress changes during transitions
-    if (Math.abs(oldProgress - state.progress) > 0.2) {
-      console.log(`[ETA-TRANS] rn=${train.rn} transition: ${(oldProgress*100).toFixed(0)}%→${(state.progress*100).toFixed(0)}% ` +
-        `${newPrevStn.name}→${newNextStn.name} gap=${(newGap*111000).toFixed(0)}m`);
-    }
+    state.progress        = 0;  // Reset to 0 on transition, no GPS-based estimation
 
     state.stateChangeTime = now;
     state.estimatedTravelMs = estimateTravelTime(sequence[oldNextIdx], sequence[nextIdx], train.legend);
