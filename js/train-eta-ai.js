@@ -620,63 +620,67 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
     const nextStation = sequence[state.nextStationIdx];
     if (!prevStation || !nextStation) continue;
 
-    // Calculate target progress based on time
-    let targetProgress;
+    // ---- Progress: train can NEVER overshoot the next station ----
+    // Progress is clamped to [0, 1] where 1.0 = exactly at nextStation.
+    // Once the train arrives (progress == 1), it dwells there until the
+    // API confirms a station change.  This prevents the backward-snap
+    // artifact where a train overshoots, then jumps back when progress
+    // resets to 0 on the next segment.
 
-    if (state.arrivalTimeMs) {
-      // Use precise ETA timing
-      const timeToArrival = state.arrivalTimeMs - now;
-      const totalTravelTime = state.arrivalTimeMs - state.stateChangeTime;
-      if (totalTravelTime > 0) {
-        targetProgress = 1 - (timeToArrival / totalTravelTime);
-      } else {
-        targetProgress = 1;
-      }
+    if (state.atStation) {
+      // Dwelling at station — pin to exactly 1.0, don't advance
+      state.progress = 1;
     } else {
-      // Estimate based on elapsed time and estimated travel duration
-      const elapsed = now - state.stateChangeTime;
+      let targetProgress;
 
-      if (state.atStation) {
-        // Dwelling at station — don't advance
-        targetProgress = state.progress;
+      if (state.arrivalTimeMs) {
+        // Use precise ETA timing — cap at 1.0 (station arrival)
+        const timeToArrival = state.arrivalTimeMs - now;
+        const totalTravelTime = state.arrivalTimeMs - state.stateChangeTime;
+        if (totalTravelTime > 0) {
+          targetProgress = 1 - (timeToArrival / totalTravelTime);
+        } else {
+          targetProgress = 1;
+        }
       } else if (state.isApproaching) {
-        // Approaching: interpolate from current progress to 1.0
+        // Approaching: interpolate from current progress toward 1.0
         const approachElapsed = now - state.stateChangeTime;
-        // Assume ~15 seconds from "approaching" to arrival
-        const approachDuration = 15000;
+        const approachDuration = 15000; // ~15 seconds from "approaching" to arrival
         const approachT = Math.min(1, approachElapsed / approachDuration);
         targetProgress = state.progress + (1 - state.progress) * approachT;
       } else {
-        // Normal transit: time-based interpolation
+        // Normal transit: time-based interpolation, cap at 0.95
+        // (leaves room for the "approaching" phase to finish the last 5%)
+        const elapsed = now - state.stateChangeTime;
         targetProgress = Math.min(0.95, elapsed / state.estimatedTravelMs);
+      }
+
+      // Hard clamp — progress must NEVER exceed 1.0
+      targetProgress = Math.max(0, Math.min(1, targetProgress));
+
+      // Smooth progress (lerp toward target)
+      const smoothing = 1 - Math.pow(1 - ETA_DEFAULTS.PROGRESS_SMOOTHING, dt / 16);
+      state.progress += (targetProgress - state.progress) * smoothing;
+      state.progress = Math.max(0, Math.min(1, state.progress));
+
+      // Enter dwell state when we've arrived at the station
+      if (state.progress >= 0.995) {
+        state.atStation = true;
+        state.dwellStartTime = now;
+        state.progress = 1; // snap to exactly 1.0
       }
     }
 
-    // Clamp
-    targetProgress = Math.max(0, Math.min(1, targetProgress));
-
-    // If we've reached the station (progress ≈ 1), enter dwell state
-    if (targetProgress >= 0.98 && !state.atStation) {
-      state.atStation = true;
-      state.dwellStartTime = now;
-      targetProgress = 1;
-    }
-
-    // Smooth progress (lerp toward target)
-    const smoothing = 1 - Math.pow(1 - ETA_DEFAULTS.PROGRESS_SMOOTHING, dt / 16);
-    state.progress += (targetProgress - state.progress) * smoothing;
-    state.progress = Math.max(0, Math.min(1, state.progress));
-
-    // Compute position on track between the two stations.
-    // Use cached track distance (actual walk along track geometry) when available;
-    // fall back to geodesic distFromStart difference (less accurate on curves).
+    // ---- Position on track from progress ----
+    // Use cached track distance (actual walk along track geometry) when
+    // available; fall back to geodesic distFromStart difference.
     const fromPos = prevStation.trackPos;
     const toPos = nextStation.trackPos;
     const totalTrackDist = state.cachedTrackDist
       || Math.abs(nextStation.distFromStart - prevStation.distFromStart);
 
-    if (totalTrackDist < 1e-6) {
-      // Stations are basically the same point
+    if (totalTrackDist < 1e-6 || state.progress >= 1) {
+      // At the station (or stations are the same point) — snap exactly
       train.lon = nextStation.lon;
       train.lat = nextStation.lat;
       train._trackPos = toPos;
