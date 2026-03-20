@@ -707,26 +707,16 @@ function lookupStation(stationName, legend, stationPositions) {
     return stationPositions.byLine.get(lineKey);
   }
 
-  // For loop lines, the station might be in ML segments keyed under a different legend
-  // Try all legends for this station
-  for (const [key, coord] of stationPositions.byLine) {
-    if (key.endsWith(':' + norm)) return coord;
-  }
-
-  // Name-only fallback
-  if (stationPositions.byName.has(norm)) {
-    return stationPositions.byName.get(norm);
-  }
-
-  // Partial / substring match — line-specific only to avoid cross-line
-  // mismatches (e.g. "Cermak" matching Red's Cermak-Chinatown instead of Pink's 54th/Cermak)
+  // Partial / substring match — ALWAYS line-specific first to avoid cross-line mismatches
+  // (e.g. "Damen" should match Brown/Pink's Damen, not Orange's different Damen)
+  // This handles branch suffixes like "Damen-Ravenswood" in the GeoJSON
   let bestPartial = null;
   let bestLenDiff = Infinity;
   for (const [key, coord] of stationPositions.byLine) {
     const colonIdx = key.indexOf(':');
     const keyLegend = key.substring(0, colonIdx);
     const keyName = key.substring(colonIdx + 1);
-    if (keyLegend !== legend) continue;
+    if (keyLegend !== legend) continue;  // Only consider the requested line
     if (keyName.includes(norm) || norm.includes(keyName)) {
       const lenDiff = Math.abs(keyName.length - norm.length);
       if (lenDiff < bestLenDiff) {
@@ -736,6 +726,18 @@ function lookupStation(stationName, legend, stationPositions) {
     }
   }
   if (bestPartial) return bestPartial;
+
+  // For loop lines only: station might be in ML segments, try other legends
+  if (LOOP_LINE_CODES && LOOP_LINE_CODES.includes(legend)) {
+    for (const [key, coord] of stationPositions.byLine) {
+      if (key.endsWith(':' + norm)) return coord;
+    }
+  }
+
+  // Last resort: name-only fallback (use with caution — could pick wrong line)
+  if (stationPositions.byName.has(norm)) {
+    return stationPositions.byName.get(norm);
+  }
 
   return null;
 }
