@@ -362,7 +362,20 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     state.direction       = newDirection;
     state.prevStationIdx  = oldNextIdx;
     state.nextStationIdx  = nextIdx;
-    state.progress        = 0;
+
+    // Preserve visual position during transition: estimate progress based on
+    // train's current coords relative to the new segment. This prevents a visible
+    // pop-back when stations differ slightly due to track snapping.
+    const newPrevStn = sequence[oldNextIdx];
+    const newNextStn = sequence[nextIdx];
+    const newGap = geoDist(newPrevStn.lon, newPrevStn.lat, newNextStn.lon, newNextStn.lat);
+    if (newGap > 1e-6) {
+      const fromPrev = geoDist(train.lon, train.lat, newPrevStn.lon, newPrevStn.lat);
+      state.progress = Math.max(0.05, Math.min(0.95, fromPrev / newGap));
+    } else {
+      state.progress = 0.05;
+    }
+
     state.stateChangeTime = now;
     state.estimatedTravelMs = estimateTravelTime(sequence[oldNextIdx], sequence[nextIdx], train.legend);
     state.isApproaching   = isApp === '1';
