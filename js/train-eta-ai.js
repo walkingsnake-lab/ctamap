@@ -450,29 +450,37 @@ function inferSequenceDirection(legend, destNm, sequence, nextStationIdx) {
   // to a station south of it). Just find the destination without position hints.
   const destIdx = findStationInSequence(sequence, destNm);
   if (destIdx !== -1 && nextStationIdx !== undefined) {
+    // If destination is AFTER next station (higher index), we're heading FORWARD (+1)
+    // If destination is BEFORE next station (lower index), we're heading BACKWARD (-1)
+    // prevIdx = nextIdx - direction, so:
+    //   - +1 direction: prevIdx < nextIdx (going forward)
+    //   - -1 direction: prevIdx > nextIdx (going backward)
     if (destIdx > nextStationIdx) return +1;
     if (destIdx < nextStationIdx) return -1;
     // At the destination station — fallback below
   }
 
-  // For loop lines with "Loop" destination, the Loop stations are at the
-  // HIGH end of the sequence, so direction is +1.
+  // Fallback: use destination name + LINE_NORTH_DESTS to infer direction.
+  // CTA_STATION_ORDERS puts the "north" terminal first (index 0)
+  // and the "south" terminal last.
   const northDest = LINE_NORTH_DESTS[legend];
   if (northDest) {
     const destIsNorth = destNm.toUpperCase().includes(northDest.toUpperCase());
-    // CTA_STATION_ORDERS puts the "north" terminal first (index 0)
-    // and the Loop / south terminal last.
     const firstIsNorth = sequence[0].name.toUpperCase().includes(northDest.toUpperCase());
     const lastIsNorth = sequence[sequence.length - 1].name.toUpperCase().includes(northDest.toUpperCase());
     if (destIsNorth) {
-      if (firstIsNorth) return -1;
-      if (lastIsNorth) return +1;
-      if (LOOP_LINE_CODES.includes(legend)) return +1;
+      // Destination is north. To reach it, go backward through sequence (-1)
+      // UNLESS the north terminus is at the LAST position (inverted sequence).
+      if (firstIsNorth) return -1;   // North at start → go backward
+      if (lastIsNorth) return +1;    // North at end → go forward
+      if (LOOP_LINE_CODES.includes(legend)) return +1;  // Loop lines, north at end
       return -1;
     } else {
-      if (firstIsNorth) return +1;
-      if (lastIsNorth) return -1;
-      if (LOOP_LINE_CODES.includes(legend)) return -1;
+      // Destination is south. To reach it, go forward through sequence (+1)
+      // UNLESS the south terminus is at the FIRST position.
+      if (firstIsNorth) return +1;   // South at end → go forward
+      if (lastIsNorth) return -1;    // South at start → go backward
+      if (LOOP_LINE_CODES.includes(legend)) return -1;  // Loop lines, south at start
       return +1;
     }
   }
