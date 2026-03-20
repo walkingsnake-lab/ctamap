@@ -515,20 +515,38 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
   const nextStaNm = train.nextStaNm;
   const isApp = train.isApp;
 
-  // No station data at all — fall back to GPS
+  // No station data at all — but don't immediately fall back to GPS.
+  // ETA data often has brief gaps (API hiccups, network delays). Keep animating
+  // from cached ETA state instead of snapping back to GPS position, which can cause
+  // visible position jumps when ETA data returns after a few seconds.
+  // Only mark for GPS fallback if the gap exceeds 20 seconds.
   if (!nextStaNm) {
-    train._etaFallbackGps = true;
     if (state) {
       if (!state._noDataSince) {
         state._noDataSince = now;
-      } else if (now - state._noDataSince > 60000) {
+        // Continue using ETA state — it will advance smoothly during the gap
+        return;
+      } else if (now - state._noDataSince > 20000) {
+        // Data missing for 20+ seconds — fall back to GPS and drop ETA state
+        train._etaFallbackGps = true;
         etaTrainState.delete(rn);
+        return;
+      } else {
+        // Gap < 20 seconds — keep animating from cached state, don't fall back
+        return;
       }
+    } else {
+      // No prior ETA state — use GPS
+      train._etaFallbackGps = true;
+      return;
     }
-    return;
   }
 
   train._etaFallbackGps = false;
+  // Clear the no-data timer since ETA data is back
+  if (state) {
+    state._noDataSince = null;
+  }
 
   // When looking up nextStaNm, use the current/previous station as a hint so
   // duplicate station names (e.g., "Western" on Blue Line) resolve to the correct
@@ -547,30 +565,12 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
   const segs = lineSegments ? lineSegments[segLegend] : null;
 
   if (!state) {
-    // --- New train: initialize from destination + GPS hint ---
-    let direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
-
-    // CRITICAL: Verify inferred direction against GPS position.
-    // inferSequenceDirection() uses destination name parsing which is fragile
-    // (especially on lines with similar destination names or Loop re-signage).
-    // If the train's actual position is closer to what we calculated as nextIdx
-    // than prevIdx, the inferred direction was backwards — flip it.
-    // This prevents direction flipping when switching to ETA-AI tracking mode.
-    {
-      const prevIdx_candidate = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
-      const prevStn_candidate = sequence[prevIdx_candidate];
-      const nextStn_candidate = sequence[nextIdx];
-
-      const distToPrev = geoDist(train.lon, train.lat, prevStn_candidate.lon, prevStn_candidate.lat);
-      const distToNext = geoDist(train.lon, train.lat, nextStn_candidate.lon, nextStn_candidate.lat);
-
-      // If train is actually much closer to the "next" station (10%+ closer),
-      // the direction was inverted. Flip it.
-      if (distToNext < distToPrev * 0.9) {
-        direction = -direction;
-      }
-    }
-
+    // --- New train: initialize from destination name ---
+    // Direction is inferred from destination name and will self-correct on the
+    // first station transition (when direction updates based on index progression).
+    // GPS is NOT used for direction inference in ETA-AI mode — ETA data is the
+    // source of truth. Don't second-guess with potentially noisy GPS coordinates.
+    const direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
     const prevIdx = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
 
     // Use GPS position to estimate initial progress between prevStation and nextStation
