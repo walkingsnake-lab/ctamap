@@ -238,6 +238,10 @@ function inferDirection(legend, destNm, sequence, nextIdx) {
   // Direct lookup: if destination is in the sequence, direction points toward it
   const destIdx = findStationInSequence(sequence, destNm);
   if (destIdx !== -1 && nextIdx !== undefined) {
+    const dir = destIdx > nextIdx ? +1 : -1;
+    if (destIdx < nextIdx) {
+      console.log(`[ETA-INFER] dest="${destNm}" found at idx=${destIdx}, next at idx=${nextIdx} → dir=${dir}`);
+    }
     if (destIdx > nextIdx) return +1;
     if (destIdx < nextIdx) return -1;
   }
@@ -322,6 +326,9 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     const prevIdx   = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
     const { walkDir, trackDist } = _cacheSegment(sequence, prevIdx, nextIdx, segs);
 
+    console.log(`[ETA-INIT] rn=${rn} (${train.legend}): dest="${train.destNm}" nextIdx=${nextIdx} (${sequence[nextIdx]?.name}) ` +
+      `dir=${direction} prevIdx=${prevIdx} (${sequence[prevIdx]?.name})`);
+
     etaTrainState.set(rn, {
       rn,
       legend:           train.legend,
@@ -357,6 +364,11 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     const newDirection = nextIdx !== oldNextIdx
       ? (nextIdx > oldNextIdx ? +1 : -1)
       : state.direction;
+
+    if (newDirection !== state.direction) {
+      console.log(`[ETA-DIR] rn=${rn}: direction ${state.direction}→${newDirection} ` +
+        `(${sequence[oldNextIdx]?.name}[${oldNextIdx}] → ${sequence[nextIdx]?.name}[${nextIdx}])`);
+    }
     const { walkDir, trackDist } = _cacheSegment(sequence, oldNextIdx, nextIdx, segs);
 
     state.direction       = newDirection;
