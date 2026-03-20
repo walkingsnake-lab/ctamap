@@ -316,23 +316,43 @@ const ETA_DEFAULTS = {
 
 /**
  * Finds the index of a station in a line's sequence by name.
+ * When duplicate names exist (e.g., "Western" on Blue Line), preferentially
+ * returns the match that comes after prevStationIdx (following travel direction).
  * Returns -1 if not found.
+ *
+ * Parameters:
+ *   sequence: array of station objects
+ *   stationName: name to search for
+ *   prevStationIdx: optional hint — current/previous station index. When provided,
+ *                   prefers matches ahead of this index.
  */
-function findStationInSequence(sequence, stationName) {
+function findStationInSequence(sequence, stationName, prevStationIdx) {
   if (!stationName || !sequence) return -1;
   const clean = cleanStationName(stationName);
   const norm = normalizeStationName(clean);
 
-  // Exact match first
+  // Exact matches — prefer ones ahead of prevStationIdx
+  let firstExactMatch = -1;
   for (let i = 0; i < sequence.length; i++) {
-    if (normalizeStationName(sequence[i].name) === norm) return i;
+    if (normalizeStationName(sequence[i].name) === norm) {
+      if (firstExactMatch === -1) firstExactMatch = i;
+      // Prefer matches ahead of current position (for duplicate station names)
+      if (prevStationIdx !== undefined && i > prevStationIdx) return i;
+    }
   }
+  if (firstExactMatch !== -1) return firstExactMatch;
 
-  // Partial match
+  // Partial matches — same logic
+  let firstPartialMatch = -1;
   for (let i = 0; i < sequence.length; i++) {
     const sNorm = normalizeStationName(sequence[i].name);
-    if (sNorm.includes(norm) || norm.includes(sNorm)) return i;
+    if (sNorm.includes(norm) || norm.includes(sNorm)) {
+      if (firstPartialMatch === -1) firstPartialMatch = i;
+      // Prefer matches ahead of current position
+      if (prevStationIdx !== undefined && i > prevStationIdx) return i;
+    }
   }
+  if (firstPartialMatch !== -1) return firstPartialMatch;
 
   return -1;
 }
@@ -346,13 +366,40 @@ const LOOP_STATION_NAMES = new Set([
 
 /**
  * Returns the speed profile for a segment between two stations on a given line.
- * Uses Loop speed when both stations are on the downtown elevated Loop.
+ * Uses Loop speed when either endpoint is on or directly adjacent to the downtown Loop.
+ *
+ * The Loop consists of 8 stations in downtown Chicago. Loop lines (BR, OR, PK, PR)
+ * also have approach/exit segments that are slow:
+ *   - Brown/Purple approach: Sedgwick → Chicago → Merchandise Mart (entry)
+ *   - Orange approach: Halsted → Roosevelt (entry)
+ *   - Pink approach: Ashland → Morgan → Clinton (entry) / Quincy → Washington/Wells (exit)
+ *   - Green approach: Morgan → Clinton (entry)
  */
 function getSegmentSpeed(legend, fromStation, toStation) {
-  // If both endpoints are Loop stations, use the slow Loop profile
-  if (LOOP_STATION_NAMES.has(fromStation.name) && LOOP_STATION_NAMES.has(toStation.name)) {
+  // If either endpoint is on the Loop, use Loop speed (not just both endpoints).
+  // This catches both fully-Loop segments and approach/exit segments.
+  if (LOOP_STATION_NAMES.has(fromStation.name) || LOOP_STATION_NAMES.has(toStation.name)) {
     return LOOP_SPEED;
   }
+
+  // Also check for approach/exit stations on loop lines that often approach the Loop
+  const approachStations = new Set([
+    'Sedgwick',           // Brown/Purple approach to Loop
+    'Chicago',            // Brown/Purple approach to Loop
+    'Merchandise Mart',   // Brown/Purple Loop entry
+    'Halsted',            // Orange approach to Loop
+    'Roosevelt',          // Orange Loop entry; also start of southbound approach
+    'Ashland',            // Pink approach to Loop
+    'Morgan',             // Pink/Green approach to Loop
+    'Clinton',            // Pink/Green Loop entry; also Loop exit
+    'Division',           // Brown/Purple Loop exit
+  ]);
+
+  if (LOOP_LINE_CODES.includes(legend) &&
+      (approachStations.has(fromStation.name) || approachStations.has(toStation.name))) {
+    return LOOP_SPEED;
+  }
+
   return LINE_SPEED_PROFILES[legend] || DEFAULT_SPEED;
 }
 
@@ -387,7 +434,11 @@ function inferSequenceDirection(legend, destNm, sequence, nextStationIdx) {
   if (!sequence || sequence.length < 2) return +1;
   if (!destNm) return +1;
 
-  // Try to find the destination station directly in the sequence
+  // Try to find the destination station directly in the sequence.
+  // Note: do NOT use nextStationIdx as a hint here. The destination could be
+  // behind the next station if the train is heading backward (e.g., a train
+  // heading north with destination "Western" might have nextStaNm pointing
+  // to a station south of it). Just find the destination without position hints.
   const destIdx = findStationInSequence(sequence, destNm);
   if (destIdx !== -1 && nextStationIdx !== undefined) {
     if (destIdx > nextStationIdx) return +1;
@@ -470,7 +521,11 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
 
   train._etaFallbackGps = false;
 
-  const nextIdx = findStationInSequence(sequence, nextStaNm);
+  // When looking up nextStaNm, use the current/previous station as a hint so
+  // duplicate station names (e.g., "Western" on Blue Line) resolve to the correct
+  // one ahead of the current position. For new trains, state is null so hint is undefined.
+  const prevStationIdx = state ? state.prevStationIdx : undefined;
+  const nextIdx = findStationInSequence(sequence, nextStaNm, prevStationIdx);
 
   if (nextIdx === -1) {
     train._etaFallbackGps = true;
@@ -537,7 +592,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
       cachedTrackDist: trackDist,
       cachedWalkDir: walkDir,
       _reversalHoldCount: 0,
-      _pendingReversalStation: null,
+      _pendingReversalIdx: null,
     };
     etaTrainState.set(rn, state);
     return;
@@ -575,19 +630,23 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     }
 
     // Reversal hold: if this would flip direction, require 2 consecutive
-    // confirming polls.  This filters out API jitter where nextStaNm briefly
-    // reports a station behind the train (stale data from the previous poll).
+    // confirming polls with the same nextIdx (not just nextStaNm, which can be
+    // ambiguous on lines with duplicate station names like Western/Ashland).
+    // This filters out API jitter where nextStaNm briefly reports a station
+    // behind the train (stale data from the previous poll).
     if (newDirection !== state.direction) {
-      if (state._pendingReversalStation === nextStaNm) {
+      if (state._pendingReversalIdx === nextIdx) {
         state._reversalHoldCount++;
       } else {
-        state._pendingReversalStation = nextStaNm;
+        state._pendingReversalIdx = nextIdx;
         state._reversalHoldCount = 1;
       }
       if (state._reversalHoldCount < 2) {
         console.log(`[ETA-AI] Reversal hold: rn=${rn} (${train.legend}) ` +
           `${sequence[oldNextIdx]?.name}→${sequence[nextIdx]?.name} ` +
           `dir ${state.direction}→${newDirection} [${state._reversalHoldCount}/2]`);
+        // Important: update lastIsApp before returning so isApp state isn't lost
+        state.lastIsApp = isApp;
         return; // Don't update state yet — wait for confirmation
       }
       console.log(`[ETA-AI] Reversal confirmed: rn=${rn} (${train.legend}) ` +
@@ -595,7 +654,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     }
 
     // Clear reversal tracking
-    state._pendingReversalStation = null;
+    state._pendingReversalIdx = null;
     state._reversalHoldCount = 0;
 
     // Cache actual track distance and walk direction for the new segment
@@ -628,7 +687,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
   }
 
   // Same station as before — clear reversal tracking
-  state._pendingReversalStation = null;
+  state._pendingReversalIdx = null;
   state._reversalHoldCount = 0;
 
   if (isApp !== state.lastIsApp) {
@@ -777,14 +836,16 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
       } else {
         // Normal transit: time-based interpolation.
         // Cap at holdProgress (~200m before station) while waiting for isApp.
-        // If the estimated travel time has fully elapsed without isApp, slowly
-        // creep toward the station (0.001/s ≈ 0.1m/s) so trains don't stall
-        // permanently when isApp is never reported (common in dense areas).
+        // If the estimated travel time has fully elapsed without isApp, creep toward
+        // the station at ~5% per minute (reaches 0.995 from 0.95 in ~54 seconds)
+        // so trains don't stall indefinitely when isApp is never reported.
         const elapsed = now - state.stateChangeTime;
         const baseProgress = elapsed / state.estimatedTravelMs;
         if (baseProgress >= holdProgress) {
           const overtime = elapsed - state.estimatedTravelMs;
-          const creep = overtime > 0 ? overtime * 0.001 / state.estimatedTravelMs : 0;
+          // Creep at ~5% of progress per minute, taking ~1 minute to go 0.95→1.0
+          const creepRatePerMs = 0.05 / 60000;
+          const creep = overtime > 0 ? overtime * creepRatePerMs : 0;
           targetProgress = Math.min(0.995, holdProgress + creep);
         } else {
           targetProgress = baseProgress;
