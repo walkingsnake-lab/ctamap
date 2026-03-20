@@ -1,6 +1,6 @@
 # CTAMap
 
-Real-time visualization of Chicago CTA train positions using D3.js. Trains animate smoothly along track geometry, with direction inference, phantom jump detection, and live follow/ETA tracking.
+Real-time visualization of Chicago CTA train positions using D3.js. Trains animate smoothly along track geometry, with direction inference and phantom jump detection.
 
 ## Running the Project
 
@@ -8,7 +8,7 @@ Real-time visualization of Chicago CTA train positions using D3.js. Trains anima
 npm start        # Node.js server on port 3000 (default)
 ```
 
-Open `http://localhost:3000` in a browser. No build step — JS files load directly.
+Open `http://localhost:3000` in a browser.
 
 ## Architecture
 
@@ -30,7 +30,7 @@ API endpoints:
 | `js/trains.js` | Train state machine: spawn → animate → retire |
 | `js/app.js` | Main loop, API polling, zoom, user interactions |
 
-Scripts are loaded synchronously in `index.html` in the order above — this matters.
+Scripts are bundled via `build.js` (esbuild) into `dist/bundle.min.js`. Run `npm run build` after editing JS files.
 
 ### Data
 `data/cta-lines.geojson` — CTA line geometry and station coordinates. Referenced by `map.js` and `path-follow.js` for snapping train positions to actual track segments.
@@ -64,7 +64,7 @@ Scripts are loaded synchronously in `index.html` in the order above — this mat
 
 **Terminal retirement** — Trains fade out when within 5.5km of their terminus and have been sitting there for >120 seconds.
 
-**Train tracking** — Clicking a train zooms in and starts a faster polling loop (`/api/train/<rn>`) for ETA data. D3 zoom re-centers on the train each refresh.
+**Train tracking** — Clicking a train zooms in and polls `/api/train/<rn>` for ETA data to display upcoming stops in the label. D3 zoom re-centers on the train each refresh.
 
 ## Conventions
 

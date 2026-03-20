@@ -428,26 +428,3 @@ body.embed-mode #welcome-hint {
   display: none !important;
 }
 
-/* ---- ETA-AI mode indicator ---- */
-#eta-ai-indicator {
-  position: fixed;
-  bottom: 16px;
-  left: 16px;
-  z-index: 50;
-  font-family: 'Jersey 10', monospace;
-  font-size: 18px;
-  color: rgba(0, 255, 160, 0.8);
-  background: rgba(0, 255, 160, 0.08);
-  border: 1px solid rgba(0, 255, 160, 0.3);
-  border-radius: 4px;
-  padding: 4px 10px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-}
-
-#eta-ai-indicator.active {
-  opacity: 1;
-}
