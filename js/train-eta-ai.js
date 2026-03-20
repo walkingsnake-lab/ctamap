@@ -240,15 +240,46 @@ const etaTrainState = new Map();
  * }
  */
 
+// ---- Per-line speed profiles ----
+// CTA trains have a trapezoidal velocity profile: accelerate, cruise, brake.
+// Short segments never reach cruise speed — dominated by accel/decel overhead.
+// Long segments spend most of the time at cruise speed.
+//
+// Model: travel_time = overhead + (distance / cruise_speed)
+//   - overhead: fixed cost per station-to-station trip (accel + decel + dwell)
+//   - cruise_speed: top speed on straight portions — varies by line infrastructure
+//
+// Speed profiles reflect real CTA infrastructure:
+//   BL: Blue Line runs in expressway median (O'Hare branch) and freight ROW —
+//       longest inter-station distances, highest speeds (~55 mph cruise).
+//   RD: Red Line subway trunk downtown, elevated N/S sides — moderate-fast.
+//   GR: Green Line has fast south side elevated stretches, slow through Loop.
+//   OR: Orange Line Midway branch — dedicated ROW, moderate speed.
+//   YL: Yellow Line — short dedicated Skokie Swift ROW, moderate speed.
+//   BR: Brown Line — tight elevated curves (Ravenswood), short segments, slow.
+//   PK: Pink Line — similar to Brown, tight Cermak branch curves.
+//   PR: Purple Line local (Evanston) — short segments, residential area, slow.
+//       Purple Express uses Red Line tracks downtown at Red Line speeds.
+const LINE_SPEED_PROFILES = {
+  BL: { cruiseMps: 25, overheadMs: 28000 }, // 56 mph — expressway median, long runs
+  RD: { cruiseMps: 22, overheadMs: 30000 }, // 49 mph — subway + elevated mix
+  GR: { cruiseMps: 20, overheadMs: 30000 }, // 45 mph — elevated, mixed segments
+  OR: { cruiseMps: 20, overheadMs: 30000 }, // 45 mph — Midway branch ROW
+  YL: { cruiseMps: 20, overheadMs: 25000 }, // 45 mph — Skokie Swift, few stops
+  BR: { cruiseMps: 18, overheadMs: 32000 }, // 40 mph — tight Ravenswood curves
+  PK: { cruiseMps: 18, overheadMs: 32000 }, // 40 mph — Cermak branch curves
+  PR: { cruiseMps: 16, overheadMs: 30000 }, // 36 mph — Evanston local, short hops
+};
+// Downtown Loop elevated: tight 90° turns, speed-restricted, short blocks
+const LOOP_SPEED = { cruiseMps: 14, overheadMs: 25000 }; // 31 mph
+// Fallback for unknown lines
+const DEFAULT_SPEED = { cruiseMps: 20, overheadMs: 30000 }; // 45 mph
+
 const ETA_DEFAULTS = {
-  // Assumed average speed between stations when no ETA timing available
-  AVERAGE_SPEED_MPS: 12, // ~27 mph — reasonable CTA average including accel/decel
   // Minimum travel time between adjacent stations
-  MIN_TRAVEL_MS: 8000,
+  MIN_TRAVEL_MS: 20000,
   // Maximum travel time between adjacent stations (cap for very long segments)
-  MAX_TRAVEL_MS: 180000,
-  // Dwell time at each station (trains pause briefly)
-  DWELL_MS: 15000,
+  MAX_TRAVEL_MS: 600000,
   // Distance before station at which "approaching" begins (degrees, ~300m)
   // Used to compute approaching progress as a function of segment length
   // so a 7km segment doesn't jump to 80% when isApp fires.
@@ -283,14 +314,39 @@ function findStationInSequence(sequence, stationName) {
   return -1;
 }
 
+// Downtown Loop elevated station names — used to detect when a segment
+// is on the Loop (where trains crawl at restricted speed through tight turns).
+const LOOP_STATION_NAMES = new Set([
+  'Washington/Wells', 'Quincy', 'LaSalle/Van Buren', 'Library',
+  'Adams/Wabash', 'Washington/Wabash', 'State/Lake', 'Clark/Lake',
+]);
+
 /**
- * Estimates travel time between two stations based on track distance.
+ * Returns the speed profile for a segment between two stations on a given line.
+ * Uses Loop speed when both stations are on the downtown elevated Loop.
  */
-function estimateTravelTime(fromStation, toStation) {
+function getSegmentSpeed(legend, fromStation, toStation) {
+  // If both endpoints are Loop stations, use the slow Loop profile
+  if (LOOP_STATION_NAMES.has(fromStation.name) && LOOP_STATION_NAMES.has(toStation.name)) {
+    return LOOP_SPEED;
+  }
+  return LINE_SPEED_PROFILES[legend] || DEFAULT_SPEED;
+}
+
+/**
+ * Estimates travel time between two stations based on track distance and
+ * line-specific speed profiles.
+ *
+ * Model: travel_time = overhead + (meters / cruise_speed)
+ *   - overhead covers accel from stop + decel to stop
+ *   - cruise_speed varies by line (Blue Line expressway vs Brown Line curves)
+ *   - Loop segments use a slower profile (tight elevated turns)
+ */
+function estimateTravelTime(fromStation, toStation, legend) {
   const dist = geoDist(fromStation.lon, fromStation.lat, toStation.lon, toStation.lat);
-  // Convert degrees to meters (rough), use average speed
   const meters = dist * 111000;
-  const ms = (meters / ETA_DEFAULTS.AVERAGE_SPEED_MPS) * 1000;
+  const speed = getSegmentSpeed(legend, fromStation, toStation);
+  const ms = speed.overheadMs + (meters / speed.cruiseMps) * 1000;
   return Math.max(ETA_DEFAULTS.MIN_TRAVEL_MS, Math.min(ETA_DEFAULTS.MAX_TRAVEL_MS, ms));
 }
 
@@ -446,7 +502,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
       lastNextStaNm: nextStaNm,
       lastIsApp: isApp,
       stateChangeTime: now,
-      estimatedTravelMs: estimateTravelTime(sequence[prevIdx], sequence[nextIdx]),
+      estimatedTravelMs: estimateTravelTime(sequence[prevIdx], sequence[nextIdx], train.legend),
       arrivalTimeMs: null,
       isApproaching: isApp === '1',
       atStation: false,
@@ -530,7 +586,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     state.progress = 0;
     state.stateChangeTime = now;
     state.estimatedTravelMs = estimateTravelTime(
-      sequence[oldNextIdx], sequence[nextIdx]
+      sequence[oldNextIdx], sequence[nextIdx], train.legend
     );
     state.isApproaching = isApp === '1';
     state.atStation = false;
