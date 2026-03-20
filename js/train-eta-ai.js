@@ -17,14 +17,14 @@
 // ---- Station sequences ----
 
 const CTA_STATION_ORDERS = {
-  // Red Line: Howard → 95th/Dan Ryan
+  // Red Line: Howard → Sox-35th (GeoJSON uses Sox-35th, not 95th/Dan Ryan)
   RD: [
     'Howard', 'Jarvis', 'Morse', 'Loyola', 'Granville', 'Thorndale',
     'Bryn Mawr', 'Berwyn', 'Argyle', 'Lawrence', 'Wilson', 'Sheridan',
     'Addison', 'Belmont', 'Fullerton', 'North/Clybourn', 'Clark/Division',
     'Chicago', 'Grand', 'Lake', 'Monroe', 'Jackson', 'Harrison',
     'Roosevelt', 'Cermak-Chinatown', 'Sox-35th', '47th', 'Garfield',
-    '63rd', '69th', '79th', '87th', '95th/Dan Ryan',
+    '63rd', '69th', '79th', '87th',
   ],
 
   // Blue Line: O'Hare → Forest Park
@@ -80,9 +80,9 @@ const CTA_STATION_ORDERS = {
     'Clark/Lake', 'State/Lake', 'Washington/Wabash', 'Adams/Wabash',
   ],
 
-  // Pink Line: 54th/Cermak → Loop
+  // Pink Line: 54/Cermak → Loop (GeoJSON uses 54/Cermak, not 54th/Cermak)
   PK: [
-    '54th/Cermak', 'Cicero', 'Kostner', 'Pulaski', 'Central Park',
+    '54/Cermak', 'Cicero', 'Kostner', 'Pulaski', 'Central Park',
     'Kedzie', 'California', 'Western', 'Damen', '18th', 'Polk',
     'Ashland', 'Morgan', 'Clinton',
     'Clark/Lake', 'State/Lake', 'Washington/Wabash', 'Adams/Wabash',
