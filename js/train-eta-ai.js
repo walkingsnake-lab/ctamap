@@ -74,7 +74,7 @@ const CTA_STATION_ORDERS = {
   GR: [
     'Harlem', 'Oak Park', 'Ridgeland', 'Austin', 'Central',
     'Laramie', 'Cicero', 'Pulaski', 'Conservatory-Central Park',
-    'Kedzie', 'California', 'Ashland', 'Morgan', 'Clinton',
+    'Kedzie', 'California', 'Ashland', 'Morgan', 'Clinton', 'Damen',
     // Loop
     'Clark/Lake', 'State/Lake', 'Washington/Wabash', 'Adams/Wabash',
     'Roosevelt',
@@ -259,16 +259,13 @@ function estimateTravelTime(fromStation, toStation) {
 
 /**
  * Determines direction (+1 or -1 along sequence index) based on the
- * train's destination and the station it's heading toward.
+ * relationship between prevStationIdx and nextStationIdx.
  *
- * The approach: find the destination station in the sequence.  If the
- * destination index is higher than the current nextStation index, the
- * train is moving in the +1 direction (increasing index).  If lower, -1.
+ * This is simple: if nextStationIdx > prevStationIdx, we're moving +1
+ * (increasing index).  If lower, -1.
  *
- * For loop lines where the destination might be "Loop" (not a real station
- * name), we check if the destination matches any station in the upper half
- * of the sequence (the Loop portion, which is always at the end for lines
- * like OR, PK, BR, GR).
+ * For initial state (no previous station), we use the destination to
+ * figure out which way to go.
  */
 function inferSequenceDirection(legend, destNm, sequence, nextStationIdx) {
   if (!sequence || sequence.length < 2) return +1;
@@ -277,44 +274,34 @@ function inferSequenceDirection(legend, destNm, sequence, nextStationIdx) {
   // Try to find the destination station directly in the sequence
   const destIdx = findStationInSequence(sequence, destNm);
   if (destIdx !== -1 && nextStationIdx !== undefined) {
-    // If destination is ahead in the sequence, go +1; if behind, go -1
     if (destIdx > nextStationIdx) return +1;
     if (destIdx < nextStationIdx) return -1;
-    // At the destination — use LINE_NORTH_DESTS as fallback
+    // At the destination station — fallback below
   }
 
-  // Fallback: use LINE_NORTH_DESTS to determine which end of the sequence
-  // the train is heading toward.
+  // For loop lines with "Loop" destination, the Loop stations are at the
+  // HIGH end of the sequence, so direction is +1.
   const northDest = LINE_NORTH_DESTS[legend];
-  if (!northDest) return +1;
-
-  const destIsNorth = destNm.toUpperCase().includes(northDest.toUpperCase());
-
-  // For CTA_STATION_ORDERS, the first station is always the "north/outbound"
-  // terminal (Howard for RD, O'Hare for BL, Kimball for BR, etc.) and the
-  // last is the "south/inbound" terminal.  For loop lines, the Loop stations
-  // are at the END of the sequence.  So:
-  //   destIsNorth + first station is north terminal → going toward index 0 → -1
-  //   destIsNorth + first station is NOT north      → going toward end → +1
-  //
-  // Check if first station name matches northDest
-  const firstIsNorth = sequence[0].name.toUpperCase().includes(northDest.toUpperCase());
-  // Also check last station for Loop lines (Loop stations are at the end)
-  const lastIsNorth = sequence[sequence.length - 1].name.toUpperCase().includes(northDest.toUpperCase());
-
-  if (destIsNorth) {
-    if (firstIsNorth) return -1;
-    if (lastIsNorth) return +1;
-    // Neither end matches "Loop" literally — for loop lines, the Loop stations
-    // are at the HIGH end of the sequence.  "Loop" destination → +1.
-    if (LOOP_LINE_CODES.includes(legend)) return +1;
-    return +1;
-  } else {
-    if (firstIsNorth) return +1;
-    if (lastIsNorth) return -1;
-    if (LOOP_LINE_CODES.includes(legend)) return -1;
-    return -1;
+  if (northDest) {
+    const destIsNorth = destNm.toUpperCase().includes(northDest.toUpperCase());
+    // CTA_STATION_ORDERS puts the "north" terminal first (index 0)
+    // and the Loop / south terminal last.
+    const firstIsNorth = sequence[0].name.toUpperCase().includes(northDest.toUpperCase());
+    const lastIsNorth = sequence[sequence.length - 1].name.toUpperCase().includes(northDest.toUpperCase());
+    if (destIsNorth) {
+      if (firstIsNorth) return -1;
+      if (lastIsNorth) return +1;
+      if (LOOP_LINE_CODES.includes(legend)) return +1;
+      return -1;
+    } else {
+      if (firstIsNorth) return +1;
+      if (lastIsNorth) return -1;
+      if (LOOP_LINE_CODES.includes(legend)) return -1;
+      return +1;
+    }
   }
+
+  return +1;
 }
 
 /**
