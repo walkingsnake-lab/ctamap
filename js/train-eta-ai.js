@@ -591,12 +591,35 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
   const segs = lineSegments ? lineSegments[segLegend] : null;
 
   if (!state) {
-    // --- New train: initialize from destination name ---
-    // Direction is inferred from destination name and will self-correct on the
-    // first station transition (when direction updates based on index progression).
-    // GPS is NOT used for direction inference in ETA-AI mode — ETA data is the
-    // source of truth. Don't second-guess with potentially noisy GPS coordinates.
-    const direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
+    // --- New train: infer direction from track geometry, not destination name ---
+    // Destination-name-based inference is fragile (wrong for similar names, Loop re-signage).
+    // Instead: check which direction along the track makes sense given the train's
+    // actual position. The train must be between prevIdx and nextIdx; check both
+    // possible directions and pick the one that matches reality.
+
+    // Try both directions and see which one places the train in the segment
+    let direction = +1;
+    {
+      const prevIdx_fwd = Math.max(0, Math.min(sequence.length - 1, nextIdx - 1));
+      const prevIdx_bwd = Math.max(0, Math.min(sequence.length - 1, nextIdx + 1));
+
+      const fwdPrev = sequence[prevIdx_fwd];
+      const bwdPrev = sequence[prevIdx_bwd];
+      const nextStn = sequence[nextIdx];
+
+      // Distance from train to each possible previous station
+      const distToFwdPrev = geoDist(train.lon, train.lat, fwdPrev.lon, fwdPrev.lat);
+      const distToBwdPrev = geoDist(train.lon, train.lat, bwdPrev.lon, bwdPrev.lat);
+      const distToNext = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
+
+      // The train should be between prevStation and nextStation.
+      // If train is much closer to bwdPrev than fwdPrev, we're going backward.
+      if (distToBwdPrev < distToFwdPrev * 0.9) {
+        direction = -1;
+      }
+      // Otherwise, default to +1 (forward)
+    }
+
     const prevIdx = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
 
     // Use GPS position to estimate initial progress between prevStation and nextStation
