@@ -14,9 +14,10 @@
  *
  * Advantages over GPS-based positioning:
  *   - No phantom jumps (station sequence is monotonic)
- *   - No direction ambiguity (station order defines direction)
+ *   - Direction derived from station progression, not destination name or heading
  *   - Smooth, predictable animation
- *   - No confirmation holds needed
+ *   - Reversal holds prevent jittery direction flips
+ *   - Track distance cached for accurate interpolation on curved segments
  *
  * Depends on: config.js, path-follow.js (loaded before this file)
  */
@@ -74,17 +75,15 @@ const CTA_STATION_ORDERS = {
   GR: [
     'Harlem', 'Oak Park', 'Ridgeland', 'Austin', 'Central',
     'Laramie', 'Cicero', 'Pulaski', 'Conservatory-Central Park',
-    'Kedzie', 'California', 'Ashland', 'Morgan', 'Clinton', 'Damen',
+    'Kedzie', 'California', 'Damen', 'Ashland', 'Morgan', 'Clinton',
     // Loop
     'Clark/Lake', 'State/Lake', 'Washington/Wabash', 'Adams/Wabash',
     'Roosevelt',
     // South Side main
     'Cermak-McCormick Place', '35-Bronzeville-IIT', 'Indiana',
     '43rd', '47th', '51st', 'Garfield',
-    // Ashland/63rd branch
+    // Ashland/63rd branch (default; Cottage Grove branch in GR_CG)
     'Halsted', 'Ashland/63rd',
-    // Cottage Grove branch (trains going here pass Garfield → King Drive → Cottage Grove)
-    'King Drive', 'Cottage Grove',
   ],
 
   // Orange Line: Midway → Loop → back to Midway
@@ -120,11 +119,42 @@ const CTA_STATION_ORDERS = {
     'Adams/Wabash', 'Washington/Wabash', 'State/Lake', 'Clark/Lake',
   ],
 
+  // Green Line — Cottage Grove branch (shares trunk through Garfield, then diverges)
+  GR_CG: [
+    'Harlem', 'Oak Park', 'Ridgeland', 'Austin', 'Central',
+    'Laramie', 'Cicero', 'Pulaski', 'Conservatory-Central Park',
+    'Kedzie', 'California', 'Damen', 'Ashland', 'Morgan', 'Clinton',
+    // Loop
+    'Clark/Lake', 'State/Lake', 'Washington/Wabash', 'Adams/Wabash',
+    'Roosevelt',
+    // South Side
+    'Cermak-McCormick Place', '35-Bronzeville-IIT', 'Indiana',
+    '43rd', '47th', '51st', 'Garfield',
+    // Cottage Grove branch
+    'King Drive', 'Cottage Grove',
+  ],
+
   // Yellow Line: Dempster-Skokie → Howard
   YL: [
     'Dempster-Skokie', 'Oakton-Skokie', 'Howard',
   ],
 };
+
+/**
+ * Selects the correct station sequence for a train.
+ * Handles branch lines (Green Line has Ashland/63rd and Cottage Grove branches).
+ * Returns the sequence array, or null if none found.
+ */
+function getTrainSequence(legend, destNm, stationSequences) {
+  // Green Line branch selection
+  if (legend === 'GR' && destNm) {
+    const dest = destNm.toUpperCase();
+    if (dest.includes('COTTAGE') || dest.includes('KING')) {
+      return stationSequences['GR_CG'] || stationSequences['GR'];
+    }
+  }
+  return stationSequences[legend] || null;
+}
 
 /**
  * Builds station sequences by resolving the known CTA station orders
@@ -136,7 +166,9 @@ function buildStationSequences(lineSegments, stations, stationPositions) {
   const sequences = {};
 
   for (const [legend, names] of Object.entries(CTA_STATION_ORDERS)) {
-    const segs = lineSegments[legend];
+    // Branch sequences (e.g. GR_CG) share the parent line's track geometry
+    const segLegend = legend.replace(/_.*$/, '');
+    const segs = lineSegments[segLegend];
     if (!segs || segs.length === 0) continue;
 
     const sequence = [];
@@ -145,7 +177,7 @@ function buildStationSequences(lineSegments, stations, stationPositions) {
     for (let i = 0; i < names.length; i++) {
       const name = names[i];
       // Try to find the station's coordinates
-      const coord = lookupStation(name, legend, stationPositions);
+      const coord = lookupStation(name, segLegend, stationPositions);
       if (!coord) {
         console.warn(`[ETA-AI] ${legend}: station "${name}" not found in GeoJSON`);
         continue;
@@ -310,12 +342,23 @@ function inferSequenceDirection(legend, destNm, sequence, nextStationIdx) {
  * Called on each poll with the train object from fetchTrains().
  * Updates the internal state machine so advanceEtaTrains() can interpolate.
  *
+ * Key design decisions:
+ *   - Direction is ONLY set on initialization (from destination name) and on
+ *     station transitions (from index progression).  It is NEVER recalculated
+ *     from the destination name on every poll — that caused direction flipping
+ *     when Loop signage changed mid-transit.
+ *   - Reversals require 2 consecutive confirming polls (anti-jitter hold).
+ *   - Track distances are cached per transition using trackDistanceBetween()
+ *     so progress interpolation uses actual track geometry, not straight-line.
+ *   - Initial placement uses GPS as a hint to estimate progress between stations
+ *     instead of an arbitrary 0.3 default.
+ *
  * Some trains (especially Yellow and Purple lines) don't report nextStaNm
  * or any ETA data.  These trains are marked with _etaFallbackGps = true
  * so the animation loop knows to use GPS-based positioning instead.
  */
-function updateEtaTrainState(train, stationSequences) {
-  const sequence = stationSequences[train.legend];
+function updateEtaTrainState(train, stationSequences, lineSegments) {
+  const sequence = getTrainSequence(train.legend, train.destNm, stationSequences);
   if (!sequence || sequence.length < 2) {
     train._etaFallbackGps = true;
     return;
@@ -331,68 +374,151 @@ function updateEtaTrainState(train, stationSequences) {
   // No station data at all — fall back to GPS
   if (!nextStaNm) {
     train._etaFallbackGps = true;
-    // If we had ETA state before, keep it alive briefly in case data returns
     if (state) {
       if (!state._noDataSince) {
         state._noDataSince = now;
       } else if (now - state._noDataSince > 60000) {
-        // No data for 60 seconds — drop the state
         etaTrainState.delete(rn);
       }
     }
     return;
   }
 
-  // We have station data — clear fallback flag
   train._etaFallbackGps = false;
 
   const nextIdx = findStationInSequence(sequence, nextStaNm);
 
   if (nextIdx === -1) {
-    // Can't find station in sequence — fall back to GPS
     train._etaFallbackGps = true;
     console.warn(`[ETA-AI] rn=${rn} (${train.legend}): nextStaNm="${nextStaNm}" not found in sequence → GPS fallback`);
     return;
   }
 
-  // Determine direction from destination + next station position in sequence
-  const direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
+  // Get line segments for track distance calculations
+  const segLegend = train.legend.replace(/_.*$/, '');
+  const segs = lineSegments ? lineSegments[segLegend] : null;
 
   if (!state) {
-    // New train — initialize state
-    // Previous station is one step back from next in the travel direction
-    const prevIdx = nextIdx - direction;
-    const safePrevIdx = Math.max(0, Math.min(sequence.length - 1, prevIdx));
+    // --- New train: initialize from destination + GPS hint ---
+    const direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
+    const prevIdx = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
+
+    // Use GPS position to estimate initial progress between prevStation and nextStation
+    // instead of an arbitrary 0.3, so trains appear where they actually are.
+    let initialProgress;
+    if (isApp === '1') {
+      initialProgress = ETA_DEFAULTS.APPROACHING_PROGRESS;
+    } else {
+      const prevStn = sequence[prevIdx];
+      const nextStn = sequence[nextIdx];
+      const stationGap = geoDist(prevStn.lon, prevStn.lat, nextStn.lon, nextStn.lat);
+      if (stationGap > 1e-6) {
+        const fromPrev = geoDist(train.lon, train.lat, prevStn.lon, prevStn.lat);
+        initialProgress = Math.max(0.05, Math.min(0.95, fromPrev / stationGap));
+      } else {
+        initialProgress = 0.3;
+      }
+    }
+
+    // Cache actual track distance for accurate interpolation
+    let trackDist = null;
+    if (segs && sequence[prevIdx].trackPos && sequence[nextIdx].trackPos) {
+      const walkDir = nextIdx > prevIdx ? +1 : -1;
+      trackDist = trackDistanceBetween(
+        sequence[prevIdx].trackPos, sequence[nextIdx].trackPos, walkDir, segs
+      );
+    }
 
     state = {
       rn,
       legend: train.legend,
-      prevStationIdx: safePrevIdx,
+      sequenceKey: train.legend, // tracks which sequence variant we're using
+      prevStationIdx: prevIdx,
       nextStationIdx: nextIdx,
-      progress: isApp === '1' ? ETA_DEFAULTS.APPROACHING_PROGRESS : 0.3,
+      progress: initialProgress,
       direction,
       lastNextStaNm: nextStaNm,
       lastIsApp: isApp,
       stateChangeTime: now,
-      estimatedTravelMs: estimateTravelTime(sequence[safePrevIdx], sequence[nextIdx]),
+      estimatedTravelMs: estimateTravelTime(sequence[prevIdx], sequence[nextIdx]),
       arrivalTimeMs: null,
       isApproaching: isApp === '1',
       atStation: false,
       dwellStartTime: null,
       _noDataSince: null,
+      cachedTrackDist: trackDist,
+      _reversalHoldCount: 0,
+      _pendingReversalStation: null,
     };
     etaTrainState.set(rn, state);
     return;
   }
 
-  // Existing train — data is back, clear no-data timer
+  // --- Existing train ---
   state._noDataSince = null;
-  state.direction = direction;
+
+  // Check if the train switched branches (e.g. GR destination changed)
+  const newSeqKey = train.legend === 'GR'
+    ? (getTrainSequence('GR', train.destNm, stationSequences) === stationSequences['GR_CG'] ? 'GR_CG' : 'GR')
+    : train.legend;
+  if (newSeqKey !== state.sequenceKey) {
+    // Branch changed — re-initialize
+    etaTrainState.delete(rn);
+    updateEtaTrainState(train, stationSequences, lineSegments);
+    return;
+  }
+
+  // IMPORTANT: Do NOT recalculate direction from destination name here.
+  // Direction is only updated on station transitions (derived from index
+  // progression) or on initialization.  Recalculating from destNm every
+  // poll caused direction flipping when Loop signage changed mid-transit.
 
   if (nextStaNm !== state.lastNextStaNm) {
-    // Station changed — train has moved past a station
-    // The old nextStation is now the prevStation
+    // Station changed — train has moved past a station.
     const oldNextIdx = state.nextStationIdx;
+
+    // Derive direction from station index progression.
+    // This is far more reliable than destination-name inference because
+    // it reflects actual observed movement through the station sequence.
+    let newDirection = state.direction;
+    if (nextIdx !== oldNextIdx) {
+      newDirection = nextIdx > oldNextIdx ? +1 : -1;
+    }
+
+    // Reversal hold: if this would flip direction, require 2 consecutive
+    // confirming polls.  This filters out API jitter where nextStaNm briefly
+    // reports a station behind the train (stale data from the previous poll).
+    if (newDirection !== state.direction) {
+      if (state._pendingReversalStation === nextStaNm) {
+        state._reversalHoldCount++;
+      } else {
+        state._pendingReversalStation = nextStaNm;
+        state._reversalHoldCount = 1;
+      }
+      if (state._reversalHoldCount < 2) {
+        console.log(`[ETA-AI] Reversal hold: rn=${rn} (${train.legend}) ` +
+          `${sequence[oldNextIdx]?.name}→${sequence[nextIdx]?.name} ` +
+          `dir ${state.direction}→${newDirection} [${state._reversalHoldCount}/2]`);
+        return; // Don't update state yet — wait for confirmation
+      }
+      console.log(`[ETA-AI] Reversal confirmed: rn=${rn} (${train.legend}) ` +
+        `dir ${state.direction}→${newDirection}`);
+    }
+
+    // Clear reversal tracking
+    state._pendingReversalStation = null;
+    state._reversalHoldCount = 0;
+
+    // Cache actual track distance for the new segment
+    let trackDist = null;
+    if (segs && sequence[oldNextIdx]?.trackPos && sequence[nextIdx]?.trackPos) {
+      const walkDir = nextIdx > oldNextIdx ? +1 : -1;
+      trackDist = trackDistanceBetween(
+        sequence[oldNextIdx].trackPos, sequence[nextIdx].trackPos, walkDir, segs
+      );
+    }
+
+    state.direction = newDirection;
     state.prevStationIdx = oldNextIdx;
     state.nextStationIdx = nextIdx;
     state.progress = 0;
@@ -406,12 +532,16 @@ function updateEtaTrainState(train, stationSequences) {
     state.lastNextStaNm = nextStaNm;
     state.lastIsApp = isApp;
     state.arrivalTimeMs = null;
+    state.cachedTrackDist = trackDist;
     return;
   }
 
+  // Same station as before — clear reversal tracking
+  state._pendingReversalStation = null;
+  state._reversalHoldCount = 0;
+
   if (isApp !== state.lastIsApp) {
     if (isApp === '1' && !state.isApproaching) {
-      // Just started approaching — jump progress forward
       state.isApproaching = true;
       if (state.progress < ETA_DEFAULTS.APPROACHING_PROGRESS) {
         state.progress = ETA_DEFAULTS.APPROACHING_PROGRESS;
@@ -481,8 +611,9 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
     const state = etaTrainState.get(train.rn);
     if (!state) continue;
 
-    const sequence = stationSequences[train.legend];
-    const segs = lineSegments[train.legend];
+    const sequence = getTrainSequence(train.legend, train.destNm, stationSequences);
+    const segLegend = train.legend.replace(/_.*$/, '');
+    const segs = lineSegments[segLegend];
     if (!sequence || !segs) continue;
 
     const prevStation = sequence[state.prevStationIdx];
@@ -536,10 +667,13 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
     state.progress += (targetProgress - state.progress) * smoothing;
     state.progress = Math.max(0, Math.min(1, state.progress));
 
-    // Compute position on track between the two stations
+    // Compute position on track between the two stations.
+    // Use cached track distance (actual walk along track geometry) when available;
+    // fall back to geodesic distFromStart difference (less accurate on curves).
     const fromPos = prevStation.trackPos;
     const toPos = nextStation.trackPos;
-    const totalTrackDist = Math.abs(nextStation.distFromStart - prevStation.distFromStart);
+    const totalTrackDist = state.cachedTrackDist
+      || Math.abs(nextStation.distFromStart - prevStation.distFromStart);
 
     if (totalTrackDist < 1e-6) {
       // Stations are basically the same point
@@ -579,7 +713,7 @@ function initEtaTrainAnimation(trains, lineSegments, stationSequences, prevTrain
 
   // Update state for each train
   for (const train of trains) {
-    updateEtaTrainState(train, stationSequences);
+    updateEtaTrainState(train, stationSequences, lineSegments);
 
     // Carry over spread state from previous objects
     if (prevTrainMap) {
