@@ -556,18 +556,19 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     // If the train's actual position is closer to what we calculated as nextIdx
     // than prevIdx, the inferred direction was backwards — flip it.
     // This prevents direction flipping when switching to ETA-AI tracking mode.
-    const prevIdx_candidate = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
-    const nextIdx_candidate = nextIdx;
-    const prevStn = sequence[prevIdx_candidate];
-    const nextStn = sequence[nextIdx_candidate];
+    {
+      const prevIdx_candidate = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
+      const prevStn_candidate = sequence[prevIdx_candidate];
+      const nextStn_candidate = sequence[nextIdx];
 
-    const distToPrev = geoDist(train.lon, train.lat, prevStn.lon, prevStn.lat);
-    const distToNext = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
+      const distToPrev = geoDist(train.lon, train.lat, prevStn_candidate.lon, prevStn_candidate.lat);
+      const distToNext = geoDist(train.lon, train.lat, nextStn_candidate.lon, nextStn_candidate.lat);
 
-    // If train is actually much closer to the "next" station (10%+ closer),
-    // the direction was inverted. Flip it.
-    if (distToNext < distToPrev * 0.9) {
-      direction = -direction;
+      // If train is actually much closer to the "next" station (10%+ closer),
+      // the direction was inverted. Flip it.
+      if (distToNext < distToPrev * 0.9) {
+        direction = -direction;
+      }
     }
 
     const prevIdx = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
