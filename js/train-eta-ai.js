@@ -212,6 +212,29 @@ function buildStationSequences(lineSegments, stations, stationPositions) {
   return sequences;
 }
 
+// ---- Track walk direction helper ----
+
+/**
+ * Determines the correct track geometry direction to walk from one station's
+ * track position to another.  Station sequence order does NOT necessarily
+ * match GeoJSON segment direction — e.g. a sequence going [A, B] might
+ * require direction -1 along the track geometry to get from A to B.
+ *
+ * Tests a short probe in both directions from `fromPos` and picks whichever
+ * gets closer to `toPos`.  Falls back to +1 if ambiguous.
+ */
+function resolveTrackWalkDir(fromPos, toPos, segs) {
+  const target = { targetLon: toPos.lon, targetLat: toPos.lat };
+  const probeDist = Math.max(geoDist(fromPos.lon, fromPos.lat, toPos.lon, toPos.lat) * 0.1, 1e-5);
+  const fwd = advanceOnTrack(fromPos, probeDist, +1, segs, target);
+  const bwd = advanceOnTrack(fromPos, probeDist, -1, segs, target);
+  const fwdDist = geoDist(fwd.lon, fwd.lat, toPos.lon, toPos.lat);
+  const bwdDist = geoDist(bwd.lon, bwd.lat, toPos.lon, toPos.lat);
+  if (fwdDist < bwdDist) return +1;
+  if (bwdDist < fwdDist) return -1;
+  return +1;
+}
+
 // ---- ETA state machine ----
 
 /**
@@ -482,10 +505,13 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
       initialProgress = 0.3;
     }
 
-    // Cache actual track distance for accurate interpolation
+    // Cache actual track distance and walk direction for accurate interpolation.
+    // Walk direction is resolved empirically — sequence index order does NOT
+    // necessarily match GeoJSON segment direction.
     let trackDist = null;
+    let walkDir = null;
     if (segs && sequence[prevIdx].trackPos && sequence[nextIdx].trackPos) {
-      const walkDir = nextIdx > prevIdx ? +1 : -1;
+      walkDir = resolveTrackWalkDir(sequence[prevIdx].trackPos, sequence[nextIdx].trackPos, segs);
       trackDist = trackDistanceBetween(
         sequence[prevIdx].trackPos, sequence[nextIdx].trackPos, walkDir, segs
       );
@@ -509,6 +535,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
       dwellStartTime: null,
       _noDataSince: null,
       cachedTrackDist: trackDist,
+      cachedWalkDir: walkDir,
       _reversalHoldCount: 0,
       _pendingReversalStation: null,
     };
@@ -571,10 +598,11 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     state._pendingReversalStation = null;
     state._reversalHoldCount = 0;
 
-    // Cache actual track distance for the new segment
+    // Cache actual track distance and walk direction for the new segment
     let trackDist = null;
+    let walkDir = null;
     if (segs && sequence[oldNextIdx]?.trackPos && sequence[nextIdx]?.trackPos) {
-      const walkDir = nextIdx > oldNextIdx ? +1 : -1;
+      walkDir = resolveTrackWalkDir(sequence[oldNextIdx].trackPos, sequence[nextIdx].trackPos, segs);
       trackDist = trackDistanceBetween(
         sequence[oldNextIdx].trackPos, sequence[nextIdx].trackPos, walkDir, segs
       );
@@ -595,6 +623,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     state.lastIsApp = isApp;
     state.arrivalTimeMs = null;
     state.cachedTrackDist = trackDist;
+    state.cachedWalkDir = walkDir;
     return;
   }
 
@@ -715,8 +744,14 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
       : 0.80;
 
     if (state.atStation) {
-      // Dwelling at station — pin to exactly 1.0, don't advance
+      // Dwelling at station — pin to exactly 1.0.
+      // Time out after 60s to prevent permanent stalls when the API is slow
+      // to update nextStaNm.
       state.progress = 1;
+      if (state.dwellStartTime && now - state.dwellStartTime > 60000) {
+        state.atStation = false;
+        state.progress = 0.99;
+      }
     } else {
       let targetProgress;
 
@@ -741,10 +776,19 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
         targetProgress = approachBase + (1 - approachBase) * approachT;
       } else {
         // Normal transit: time-based interpolation.
-        // Cap at holdProgress (~200m before station) instead of a fixed 0.95.
-        // On a 400m segment this is ~0.50; on a 7km segment it's ~0.9997.
+        // Cap at holdProgress (~200m before station) while waiting for isApp.
+        // If the estimated travel time has fully elapsed without isApp, slowly
+        // creep toward the station (0.001/s ≈ 0.1m/s) so trains don't stall
+        // permanently when isApp is never reported (common in dense areas).
         const elapsed = now - state.stateChangeTime;
-        targetProgress = Math.min(holdProgress, elapsed / state.estimatedTravelMs);
+        const baseProgress = elapsed / state.estimatedTravelMs;
+        if (baseProgress >= holdProgress) {
+          const overtime = elapsed - state.estimatedTravelMs;
+          const creep = overtime > 0 ? overtime * 0.001 / state.estimatedTravelMs : 0;
+          targetProgress = Math.min(0.995, holdProgress + creep);
+        } else {
+          targetProgress = baseProgress;
+        }
       }
 
       // Hard clamp — progress must NEVER exceed 1.0
@@ -764,16 +808,26 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
     }
 
     // ---- Position on track from progress ----
+    // Use the empirically resolved walk direction (cached when the segment
+    // was first set up).  This is the actual track geometry direction from
+    // prevStation to nextStation — NOT derived from sequence index order,
+    // which can disagree with track geometry on Loop lines.
+    const walkDir = state.cachedWalkDir
+      || resolveTrackWalkDir(fromPos, toPos, segs);
+
     if (totalTrackDist < 1e-6 || state.progress >= 1) {
-      // At the station (or stations are the same point) — snap exactly
+      // At the station (or stations are the same point) — snap exactly.
+      // Derive direction from a small look-ahead past the station so the
+      // heading arrow points the way the train will continue, not an
+      // arbitrary segment direction.
       train.lon = nextStation.lon;
       train.lat = nextStation.lat;
-      train._trackPos = toPos;
-      train._direction = toPos.direction || state.direction;
+      train._trackPos = { ...toPos };
+      const lookAhead = advanceOnTrack(toPos, 0.001, walkDir, segs);
+      train._direction = lookAhead.direction !== undefined ? lookAhead.direction : walkDir;
     } else {
       // Advance along track from prevStation toward nextStation
       const advanceDist = state.progress * totalTrackDist;
-      const walkDir = state.nextStationIdx > state.prevStationIdx ? +1 : -1;
       const pos = advanceOnTrack(fromPos, advanceDist, walkDir, segs, {
         targetLon: toPos.lon,
         targetLat: toPos.lat,
@@ -781,7 +835,8 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
       train.lon = pos.lon;
       train.lat = pos.lat;
       train._trackPos = pos;
-      // Use the segment-relative direction from the track walker for arrow rendering
+      // Use the segment-relative direction from the track walker for arrow rendering.
+      // pos.direction is updated by advanceOnTrack when crossing segment boundaries.
       train._direction = pos.direction !== undefined ? pos.direction : walkDir;
     }
     train._animLon = train.lon;
