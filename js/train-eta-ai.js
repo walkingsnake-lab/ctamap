@@ -408,9 +408,11 @@ function inferSequenceDirection(legend, destNm, sequence, nextStationIdx) {
   if (!destNm) return +1;
 
   // Try to find the destination station directly in the sequence.
-  // Use nextStationIdx as hint so we prefer destination matches ahead of current position
-  // (useful for duplicate station names like "Western" on Blue Line).
-  const destIdx = findStationInSequence(sequence, destNm, nextStationIdx);
+  // Note: do NOT use nextStationIdx as a hint here. The destination could be
+  // behind the next station if the train is heading backward (e.g., a train
+  // heading north with destination "Western" might have nextStaNm pointing
+  // to a station south of it). Just find the destination without position hints.
+  const destIdx = findStationInSequence(sequence, destNm);
   if (destIdx !== -1 && nextStationIdx !== undefined) {
     if (destIdx > nextStationIdx) return +1;
     if (destIdx < nextStationIdx) return -1;
