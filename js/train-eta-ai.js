@@ -316,23 +316,43 @@ const ETA_DEFAULTS = {
 
 /**
  * Finds the index of a station in a line's sequence by name.
+ * When duplicate names exist (e.g., "Western" on Blue Line), preferentially
+ * returns the match that comes after prevStationIdx (following travel direction).
  * Returns -1 if not found.
+ *
+ * Parameters:
+ *   sequence: array of station objects
+ *   stationName: name to search for
+ *   prevStationIdx: optional hint — current/previous station index. When provided,
+ *                   prefers matches ahead of this index.
  */
-function findStationInSequence(sequence, stationName) {
+function findStationInSequence(sequence, stationName, prevStationIdx) {
   if (!stationName || !sequence) return -1;
   const clean = cleanStationName(stationName);
   const norm = normalizeStationName(clean);
 
-  // Exact match first
+  // Exact matches — prefer ones ahead of prevStationIdx
+  let firstExactMatch = -1;
   for (let i = 0; i < sequence.length; i++) {
-    if (normalizeStationName(sequence[i].name) === norm) return i;
+    if (normalizeStationName(sequence[i].name) === norm) {
+      if (firstExactMatch === -1) firstExactMatch = i;
+      // Prefer matches ahead of current position (for duplicate station names)
+      if (prevStationIdx !== undefined && i > prevStationIdx) return i;
+    }
   }
+  if (firstExactMatch !== -1) return firstExactMatch;
 
-  // Partial match
+  // Partial matches — same logic
+  let firstPartialMatch = -1;
   for (let i = 0; i < sequence.length; i++) {
     const sNorm = normalizeStationName(sequence[i].name);
-    if (sNorm.includes(norm) || norm.includes(sNorm)) return i;
+    if (sNorm.includes(norm) || norm.includes(sNorm)) {
+      if (firstPartialMatch === -1) firstPartialMatch = i;
+      // Prefer matches ahead of current position
+      if (prevStationIdx !== undefined && i > prevStationIdx) return i;
+    }
   }
+  if (firstPartialMatch !== -1) return firstPartialMatch;
 
   return -1;
 }
@@ -387,8 +407,10 @@ function inferSequenceDirection(legend, destNm, sequence, nextStationIdx) {
   if (!sequence || sequence.length < 2) return +1;
   if (!destNm) return +1;
 
-  // Try to find the destination station directly in the sequence
-  const destIdx = findStationInSequence(sequence, destNm);
+  // Try to find the destination station directly in the sequence.
+  // Use nextStationIdx as hint so we prefer destination matches ahead of current position
+  // (useful for duplicate station names like "Western" on Blue Line).
+  const destIdx = findStationInSequence(sequence, destNm, nextStationIdx);
   if (destIdx !== -1 && nextStationIdx !== undefined) {
     if (destIdx > nextStationIdx) return +1;
     if (destIdx < nextStationIdx) return -1;
@@ -470,7 +492,11 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
 
   train._etaFallbackGps = false;
 
-  const nextIdx = findStationInSequence(sequence, nextStaNm);
+  // When looking up nextStaNm, use the current/previous station as a hint so
+  // duplicate station names (e.g., "Western" on Blue Line) resolve to the correct
+  // one ahead of the current position. For new trains, state is null so hint is undefined.
+  const prevStationIdx = state ? state.prevStationIdx : undefined;
+  const nextIdx = findStationInSequence(sequence, nextStaNm, prevStationIdx);
 
   if (nextIdx === -1) {
     train._etaFallbackGps = true;
