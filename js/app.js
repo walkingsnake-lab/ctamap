@@ -823,7 +823,7 @@
         }
         // Feed ETA data to the ETA-AI engine for precise timing
         if (isEtaAiEnabled()) {
-          updateEtaWithFollowData(rn, data.eta, stationSequences);
+          updateEtaWithFollowData(rn, data.eta, stationSequences, lineSegments);
         }
       }
     } catch (e) {
