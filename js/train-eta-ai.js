@@ -523,25 +523,39 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
   const nextStaNm = train.nextStaNm;
   const isApp = train.isApp;
 
-  // No station data at all — but don't immediately fall back to GPS.
-  // ETA data often has brief gaps (API hiccups, network delays). Keep animating
-  // from cached ETA state instead of snapping back to GPS position, which can cause
-  // visible position jumps when ETA data returns after a few seconds.
-  // Only mark for GPS fallback if the gap exceeds 20 seconds.
+  // No station data at all — train is out of service or in a gap.
+  // ETA data often has brief gaps (API hiccups, network delays), but if data is
+  // missing AND the train's position has moved significantly since last ETA update,
+  // it's likely the train has gone out of service. Fall back to GPS immediately
+  // instead of waiting 20 seconds, which would cause visible drifting.
   if (!nextStaNm) {
     if (state) {
       if (!state._noDataSince) {
         state._noDataSince = now;
+        state.lastLon = train.lon;
+        state.lastLat = train.lat;
         // Continue using ETA state — it will advance smoothly during the gap
         return;
       } else if (now - state._noDataSince > 20000) {
-        // Data missing for 20+ seconds — fall back to GPS and drop ETA state
+        // Data missing for 20+ seconds — definitely out of service
         console.log(`[ETA-AI] rn=${rn} (${train.legend}): No ETA data for 20s, GPS fallback`);
         train._etaFallbackGps = true;
         etaTrainState.delete(rn);
         return;
       } else {
-        // Gap < 20 seconds — keep animating from cached state, don't fall back
+        // Gap < 20 seconds. Check if train position changed significantly,
+        // which would indicate it's out of service (not just a brief API gap).
+        const posDist = geoDist(train.lon, train.lat, state.lastLon || train.lon, state.lastLat || train.lat);
+        if (posDist > 0.001) {
+          // Position jumped > ~110m — train is probably out of service
+          console.log(`[ETA-AI] rn=${rn} (${train.legend}): Lost ETA data + position jumped ${(posDist * 111000).toFixed(0)}m, GPS fallback`);
+          train._etaFallbackGps = true;
+          etaTrainState.delete(rn);
+          return;
+        }
+        // No significant drift — brief hiccup, keep animating
+        state.lastLon = train.lon;
+        state.lastLat = train.lat;
         return;
       }
     } else {
