@@ -152,6 +152,17 @@ const KNOWN_PHANTOM_JUMPS = [
     description: 'Purple Line Chicago → Sedgwick phantom' },
 ];
 
+// Pre-indexed version of KNOWN_PHANTOM_JUMPS keyed by legend for O(1) legend lookup.
+// Avoids iterating all rules when most don't match the current train's line.
+const PHANTOM_JUMP_BY_LEGEND = (() => {
+  const m = new Map();
+  for (const rule of KNOWN_PHANTOM_JUMPS) {
+    if (!m.has(rule.legend)) m.set(rule.legend, []);
+    m.get(rule.legend).push(rule);
+  }
+  return m;
+})();
+
 // Destination + line combos that use inverted badge (white bg, colored text)
 // Matches real CTA signage for certain short-turn / branch terminuses
 const INVERTED_BADGE_DESTS = {

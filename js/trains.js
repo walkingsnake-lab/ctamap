@@ -1,29 +1,83 @@
 /**
  * Finds the nearest station name for a given position and optional legend filter.
- * Returns the station name string, or null if no station is within reasonable range.
+ * Uses a spatial grid index (stations._index) when available for faster lookup.
+ * Returns the station name string, or null if no station is found.
  */
 function nearestStationName(lon, lat, stations, legend) {
-  let bestName = null;
-  let bestDist = Infinity;
-  for (const s of stations) {
-    if (legend && !s.legends.includes(legend)) continue;
-    const d = geoDist(lon, lat, s.lon, s.lat);
-    if (d < bestDist) { bestDist = d; bestName = s.name; }
+  const idx = stations._index;
+  if (!idx) {
+    // Fallback: linear scan
+    let bestName = null, bestDist = Infinity;
+    for (const s of stations) {
+      if (legend && !s.legends.includes(legend)) continue;
+      const d = geoDist(lon, lat, s.lon, s.lat);
+      if (d < bestDist) { bestDist = d; bestName = s.name; }
+    }
+    return bestName;
+  }
+
+  // Spatial index: expand search ring by ring until best candidate is
+  // definitively closer than the nearest unchecked cell boundary.
+  const { cells, CELL } = idx;
+  const cx0 = Math.floor(lon / CELL);
+  const cy0 = Math.floor(lat / CELL);
+  let bestName = null, bestDist = Infinity;
+
+  for (let r = 0; r <= 60; r++) {
+    // Once the best found distance is less than the inner edge of this ring,
+    // no outer cell can improve on it.
+    if (r > 0 && bestDist < (r - 1) * CELL) break;
+    for (let dcx = -r; dcx <= r; dcx++) {
+      for (let dcy = -r; dcy <= r; dcy++) {
+        if (Math.abs(dcx) !== r && Math.abs(dcy) !== r) continue; // ring only
+        const bucket = cells.get((cx0 + dcx) + ',' + (cy0 + dcy));
+        if (!bucket) continue;
+        for (const s of bucket) {
+          if (legend && !s.legends.includes(legend)) continue;
+          const d = geoDist(lon, lat, s.lon, s.lat);
+          if (d < bestDist) { bestDist = d; bestName = s.name; }
+        }
+      }
+    }
   }
   return bestName;
 }
 
 /**
  * Returns the name of the nearest station within `radius` degrees, or null.
+ * Uses spatial index (stations._index) when available — only checks cells
+ * overlapping the search circle, typically 9 cells vs. full linear scan.
  */
 function nearestStationWithinRadius(lon, lat, stations, legend, radius) {
-  let bestName = null, bestDist = Infinity;
-  for (const s of stations) {
-    if (legend && !s.legends.includes(legend)) continue;
-    const d = geoDist(lon, lat, s.lon, s.lat);
-    if (d < bestDist) { bestDist = d; bestName = s.name; }
+  const idx = stations._index;
+  if (!idx) {
+    let bestName = null, bestDist = Infinity;
+    for (const s of stations) {
+      if (legend && !s.legends.includes(legend)) continue;
+      const d = geoDist(lon, lat, s.lon, s.lat);
+      if (d < bestDist) { bestDist = d; bestName = s.name; }
+    }
+    return bestDist < radius ? bestName : null;
   }
-  return bestDist < radius ? bestName : null;
+
+  const { cells, CELL } = idx;
+  const cx0 = Math.floor(lon / CELL);
+  const cy0 = Math.floor(lat / CELL);
+  const cellR = Math.ceil(radius / CELL);
+  let bestName = null, bestDist = radius; // use radius as upper bound
+
+  for (let dcx = -cellR; dcx <= cellR; dcx++) {
+    for (let dcy = -cellR; dcy <= cellR; dcy++) {
+      const bucket = cells.get((cx0 + dcx) + ',' + (cy0 + dcy));
+      if (!bucket) continue;
+      for (const s of bucket) {
+        if (legend && !s.legends.includes(legend)) continue;
+        const d = geoDist(lon, lat, s.lon, s.lat);
+        if (d < bestDist) { bestDist = d; bestName = s.name; }
+      }
+    }
+  }
+  return bestName;
 }
 
 /**
@@ -31,8 +85,9 @@ function nearestStationWithinRadius(lon, lat, stations, legend, radius) {
  * Returns the matching rule, or null.
  */
 function matchesKnownPhantomJump(legend, prevLon, prevLat, newLon, newLat, stations) {
-  for (const rule of KNOWN_PHANTOM_JUMPS) {
-    if (rule.legend !== legend) continue;
+  const rules = PHANTOM_JUMP_BY_LEGEND.get(legend);
+  if (!rules) return null;
+  for (const rule of rules) {
     const prevStation = nearestStationName(prevLon, prevLat, stations, legend);
     const newStation  = nearestStationName(newLon, newLat, stations, legend);
     if (!prevStation || !newStation) continue;
@@ -69,7 +124,7 @@ function matchesKnownPhantomJump(legend, prevLon, prevLat, newLon, newLat, stati
  *
  * Returns +1 or -1, or null if ambiguous (e.g. train is at the station).
  */
-function directionByNextStation(trackPos, nextStn, segs) {
+function directionByNextStation(trackPos, nextStn, segs, neighborMap) {
   // PROBE_DIST defined in config.js (~1.5km — long enough to reach around corners of the ML loop)
   const curDist = geoDist(trackPos.lon, trackPos.lat, nextStn.lon, nextStn.lat);
   // When close to the station, scale the probe down so it stays short of the
@@ -79,7 +134,7 @@ function directionByNextStation(trackPos, nextStn, segs) {
   // resolve direction on the ML loop where short probes on perpendicular
   // segments barely change distance to an off-loop station.
   const probeDist = Math.min(PROBE_DIST, Math.max(curDist * 0.9, 1e-5));
-  const target = { targetLon: nextStn.lon, targetLat: nextStn.lat };
+  const target = { targetLon: nextStn.lon, targetLat: nextStn.lat, neighborMap };
   const probeFwd = advanceOnTrack(trackPos, probeDist, +1, segs, target);
   const probeBwd = advanceOnTrack(trackPos, probeDist, -1, segs, target);
   const fwdDist = geoDist(probeFwd.lon, probeFwd.lat, nextStn.lon, nextStn.lat);
@@ -89,9 +144,10 @@ function directionByNextStation(trackPos, nextStn, segs) {
   return null;
 }
 
-function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
-  const termFwd = advanceOnTrack(trackPos, 9999, +1, segs);
-  const termBwd = advanceOnTrack(trackPos, 9999, -1, segs);
+function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap) {
+  const nmOpts = neighborMap ? { neighborMap } : undefined;
+  const termFwd = advanceOnTrack(trackPos, 9999, +1, segs, nmOpts);
+  const termBwd = advanceOnTrack(trackPos, 9999, -1, segs, nmOpts);
   if (!termFwd.stopped && !termBwd.stopped) return null;
   const destIsNorth = destNm.includes(northDest);
   if (termFwd.stopped && termBwd.stopped) {
@@ -122,7 +178,7 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs) {
       // and Armitage, or ML extension segments).  Probe a short walk to see
       // which direction gains latitude — this follows the track through curves
       // and into a clearly north-south section.
-      const probe = advanceOnTrack(trackPos, 0.01, +1, segs);
+      const probe = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
       const dLat = probe.lat - trackPos.lat;
       if (Math.abs(dLat) > 0.001) {
         return (destIsNorth === (dLat > 0)) ? 1 : -1;
@@ -352,7 +408,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     // opposite direction from the terminal).
     const nextStn = findNextStation(train, stations);
     let nextStnDir = nextStn
-      ? directionByNextStation(train._trackPos, nextStn, segs)
+      ? directionByNextStation(train._trackPos, nextStn, segs, neighborMap)
       : null;
     // Guard against stale nextStaNm: when the train is close to the reported
     // next station and the probe would flip the established direction, the API
@@ -433,11 +489,11 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           // Armitage/Sedgwick) so the original preserve logic still applies.
           const isLoopLine = LOOP_LINE_CODES.includes(train.legend);
           const verifyDir = (isLoopLine && northDest && effectiveDest)
-            ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs)
+            ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
             : null;
           train._direction = verifyDir !== null ? verifyDir : prev._direction;
         } else {
-          const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
+          const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
           if (termDir !== null) {
             train._direction = termDir;
           } else if (nextStnDir !== null || (loopLineMismatch && rawNextStnDir !== null)) {
@@ -453,7 +509,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
             const prevSeg = segs[prev._trackPos.segIdx];
             const boundary = prev._direction > 0 ? prevSeg.length - 1 : 0;
             const connected = findConnectedSegment(
-              prev._trackPos.segIdx, boundary, prevSeg, prev._direction, segs
+              prev._trackPos.segIdx, boundary, prevSeg, prev._direction, segs, undefined, undefined, neighborMap
             );
             if (connected && connected.segIdx === train._trackPos.segIdx) {
               train._direction = connected.direction;
@@ -477,7 +533,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
       if (nextStnDir !== null) {
         train._direction = nextStnDir;
       } else {
-        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs);
+        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
         train._direction = termDir ?? directionFromHeading(
           train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
         );
@@ -491,10 +547,16 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
     if (prev && prev._animLon !== undefined) {
       const drift = geoDist(prev._animLon, prev._animLat, train.lon, train.lat);
 
-      // Station names for structured logging — helps identify new phantom patterns
-      const _fromStn = stations ? nearestStationName(prev._animLon, prev._animLat, stations, train.legend) : null;
-      const _toStn   = stations ? nearestStationName(train.lon, train.lat, stations, train.legend) : null;
-      const stnTag   = (_fromStn && _toStn && _fromStn !== _toStn) ? ` [${_fromStn} → ${_toStn}]` : (_fromStn ? ` [near ${_fromStn}]` : '');
+      // Station names for structured logging — computed lazily (only when a log fires)
+      let _stnTagCache = null;
+      const stnTag = () => {
+        if (_stnTagCache === null) {
+          const _fromStn = stations ? nearestStationName(prev._animLon, prev._animLat, stations, train.legend) : null;
+          const _toStn   = stations ? nearestStationName(train.lon, train.lat, stations, train.legend) : null;
+          _stnTagCache = (_fromStn && _toStn && _fromStn !== _toStn) ? ` [${_fromStn} → ${_toStn}]` : (_fromStn ? ` [near ${_fromStn}]` : '');
+        }
+        return _stnTagCache;
+      };
 
       // Known phantom jump check — immediately reject known bad patterns
       if (stations && drift > 1e-7) {
@@ -510,7 +572,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           train._forwardHoldCount = 0;
           train._stationJumpHoldCount = 0;
           train._nearStation = stations ? nearestStationWithinRadius(train.lon, train.lat, stations, train.legend, STATION_JUMP_RADIUS) : null;
-          console.warn(`[CTA] Phantom blocked: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} — ${phantomRule.description}`);
+          console.warn(`[CTA] Phantom blocked: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} — ${phantomRule.description}`);
           continue;
         }
       }
@@ -527,7 +589,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
         train.lon = prev._animLon;
         train.lat = prev._animLat;
         train._direction = prev._direction;
-        console.warn(`[CTA] isSch hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag}`);
+        console.warn(`[CTA] isSch hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
       } else if (drift < CORRECTION_SNAP_THRESHOLD && drift > 1e-7) {
         // Save the API-snapped target (where the train should end up)
         train._corrToTrackPos = { ...train._trackPos };
@@ -594,7 +656,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
             console.warn(`[CTA] Path validation failed: rn=${train.rn} (${train.legend}) drift=${m(drift)} — snapping`);
             const _pvNorthDest = LINE_NORTH_DESTS[train.legend];
             const _pvTermDir = (_pvNorthDest && effectiveDest)
-              ? directionByTerminalWalk(train._trackPos, effectiveDest, _pvNorthDest, segs)
+              ? directionByTerminalWalk(train._trackPos, effectiveDest, _pvNorthDest, segs, neighborMap)
               : null;
             if (_pvTermDir !== null) {
               train._direction = _pvTermDir;
@@ -630,7 +692,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           const _sbNorthDest = LINE_NORTH_DESTS[train.legend];
           const _headingDirFromPos = (_sbNorthDest && effectiveDest)
             ? (directionByTerminalWalk(train._corrFromTrackPos, effectiveDest,
-                _sbNorthDest, segs)
+                _sbNorthDest, segs, neighborMap)
               ?? train._direction)
             : train._direction;
           const isSuspectBackward = _headingDirFromPos !== train._corrDirection;
@@ -654,7 +716,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
               train._trackPos = { ...prev._trackPos };
               train.lon = prev._animLon;
               train.lat = prev._animLat;
-              console.log(`[CTA] Backward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} [${train._backwardHoldCount}/${BACKWARD_CONFIRM_POLLS}]`);
+              console.log(`[CTA] Backward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} [${train._backwardHoldCount}/${BACKWARD_CONFIRM_POLLS}]`);
             } else {
               // Snap directly — never animate backwards
               train._correcting = false;
@@ -677,7 +739,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
                   train._backwardHoldCount >= 5 * BACKWARD_CONFIRM_POLLS) {
                 train._direction = train._corrDirection;
               }
-              console.log(`[CTA] Backward confirmed (snap): rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} after ${train._backwardHoldCount} polls`);
+              console.log(`[CTA] Backward confirmed (snap): rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${train._backwardHoldCount} polls`);
             }
           } else if (isSuspectForward) {
             train._backwardHoldCount = 0;
@@ -688,9 +750,9 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
               train._trackPos = { ...prev._trackPos };
               train.lon = prev._animLon;
               train.lat = prev._animLat;
-              console.log(`[CTA] Fast-forward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} [${train._forwardHoldCount}/${FORWARD_CONFIRM_POLLS}]`);
+              console.log(`[CTA] Fast-forward hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} [${train._forwardHoldCount}/${FORWARD_CONFIRM_POLLS}]`);
             } else {
-              console.log(`[CTA] Fast-forward confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} after ${train._forwardHoldCount} polls`);
+              console.log(`[CTA] Fast-forward confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${train._forwardHoldCount} polls`);
             }
           } else {
             train._backwardHoldCount = 0;
@@ -710,9 +772,9 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
                   train._trackPos = { ...prev._trackPos };
                   train.lon = prev._animLon;
                   train.lat = prev._animLat;
-                  console.log(`[CTA] Station-jump hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} [${train._stationJumpHoldCount}/${STATION_JUMP_CONFIRM_POLLS}]`);
+                  console.log(`[CTA] Station-jump hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} [${train._stationJumpHoldCount}/${STATION_JUMP_CONFIRM_POLLS}]`);
                 } else {
-                  console.log(`[CTA] Station-jump confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} after ${train._stationJumpHoldCount} polls`);
+                  console.log(`[CTA] Station-jump confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${train._stationJumpHoldCount} polls`);
                   train._stationJumpHoldCount = 0;
                 }
               } else {
@@ -747,7 +809,7 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
             train._trackPos = { ...prev._trackPos };
             train.lon = prev._animLon;
             train.lat = prev._animLat;
-            console.log(`[CTA] Snap hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} [${train[countKey]}/${confirmPolls}]`);
+            console.log(`[CTA] Snap hold: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} [${train[countKey]}/${confirmPolls}]`);
           } else {
             // Re-derive direction at the snapped position.  Terminal walk is
             // reliable on non-loop segments; fall back to heading for ML-loop
@@ -755,22 +817,22 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
             // orientation, but is the only option when terminal walk returns null).
             const _snapNorthDest = LINE_NORTH_DESTS[train.legend];
             const _snapTermDir = (_snapNorthDest && effectiveDest)
-              ? directionByTerminalWalk(train._trackPos, effectiveDest, _snapNorthDest, segs)
+              ? directionByTerminalWalk(train._trackPos, effectiveDest, _snapNorthDest, segs, neighborMap)
               : null;
             train._direction = _snapTermDir ?? directionFromHeading(
               train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
             );
-            console.warn(`[CTA] Snap confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} after ${train[countKey]} polls`);
+            console.warn(`[CTA] Snap confirmed: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${train[countKey]} polls`);
           }
         } else {
           const _npNorthDest = LINE_NORTH_DESTS[train.legend];
           const _npTermDir = (_npNorthDest && effectiveDest)
-            ? directionByTerminalWalk(train._trackPos, effectiveDest, _npNorthDest, segs)
+            ? directionByTerminalWalk(train._trackPos, effectiveDest, _npNorthDest, segs, neighborMap)
             : null;
           train._direction = _npTermDir ?? directionFromHeading(
             train.heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs
           );
-          console.warn(`[CTA] Snap: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag} — no prior position`);
+          console.warn(`[CTA] Snap: rn=${train.rn} (${train.legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} — no prior position`);
         }
       }
     }

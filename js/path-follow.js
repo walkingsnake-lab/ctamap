@@ -309,7 +309,16 @@ function snapToTrackWithAffinity(lon, lat, segments, prevTrackPos, neighborMap) 
     }
   }
 
-  // Also compute global best for comparison
+  // When the affinity snap is very close (train is essentially on the track),
+  // skip the full O(n) global scan — no other segment can realistically beat it.
+  // Threshold: squared distance < (0.0002°)² ≈ 22 m linear, well below typical
+  // position noise, so the global scan would almost always return the same result.
+  const SNAP_SKIP_GLOBAL_SQ = 4e-8; // (0.0002°)²
+  if (nearbyBest && nearbyBestDist < SNAP_SKIP_GLOBAL_SQ) {
+    return nearbyBest;
+  }
+
+  // Compute global best for comparison
   const globalBest = snapToTrackPosition(lon, lat, segments);
   const globalDist = (lon - globalBest.lon) * (lon - globalBest.lon) +
                      (lat - globalBest.lat) * (lat - globalBest.lat);
@@ -377,6 +386,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
   let dir = direction; // Mutable — updated when entering a new segment
   const seg = segments[segIdx];
   const tLon = opts?.targetLon, tLat = opts?.targetLat;
+  const neighborMap = opts?.neighborMap ?? null;
 
   if (!seg) return { ...trackPos, direction: dir, stopped: true };
 
@@ -402,7 +412,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
         t = 0;
         if (ptIdx >= curSeg.length - 1) {
           // Try next segment
-          const next = findConnectedSegment(segIdx, ptIdx, curSeg, dir, segments, tLon, tLat);
+          const next = findConnectedSegment(segIdx, ptIdx, curSeg, dir, segments, tLon, tLat, neighborMap);
           if (!next) return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: bx, lat: by, direction: dir, stopped: true };
           segIdx = next.segIdx;
           ptIdx = next.ptIdx;
@@ -413,7 +423,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
         ptIdx--;
         t = 1;
         if (ptIdx < 0) {
-          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments, tLon, tLat);
+          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments, tLon, tLat, neighborMap);
           if (!next) return { segIdx, ptIdx: 0, t: 0, lon: ax, lat: ay, direction: dir, stopped: true };
           segIdx = next.segIdx;
           ptIdx = next.ptIdx;
@@ -435,7 +445,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
         t = 0;
         if (ptIdx >= curSeg.length - 1) {
           // Crossed segment boundary — find the next connected one
-          const next = findConnectedSegment(segIdx, curSeg.length - 1, curSeg, dir, segments, tLon, tLat);
+          const next = findConnectedSegment(segIdx, curSeg.length - 1, curSeg, dir, segments, tLon, tLat, neighborMap);
           if (!next) {
             // Terminal — stop at end
             const last = curSeg[curSeg.length - 1];
@@ -457,7 +467,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
         ptIdx--;
         t = 1;
         if (ptIdx < 0) {
-          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments, tLon, tLat);
+          const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments, tLon, tLat, neighborMap);
           if (!next) {
             const first = curSeg[0];
             return { segIdx, ptIdx: 0, t: 0, lon: first[0], lat: first[1], direction: dir, stopped: true };
@@ -548,7 +558,7 @@ function trackDistanceBetween(from, to, direction, segments) {
  * target.  This guides junction selection at the downtown Loop where multiple ML
  * segments meet and the arrival-direction heuristic picks the wrong branch.
  */
-function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segments, targetLon, targetLat) {
+function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segments, targetLon, targetLat, neighborMap) {
   const bx = curSeg[boundaryPtIdx][0];
   const by = curSeg[boundaryPtIdx][1];
   const threshold = SEGMENT_CONNECT_THRESHOLD;
@@ -595,10 +605,18 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
   let bestDot  = -Infinity;
   let bestResult = null;
 
-  for (let s = 0; s < segments.length; s++) {
-    if (s === curSegIdx) continue;
+  // Use neighborMap (precomputed connected-segment set) when available to limit
+  // the search to topologically adjacent segments instead of scanning all O(n).
+  const candidates = neighborMap ? neighborMap.get(curSegIdx) : null;
+
+  const iterate = candidates
+    ? (fn) => { for (const s of candidates) fn(s); }
+    : (fn) => { for (let s = 0; s < segments.length; s++) fn(s); };
+
+  iterate((s) => {
+    if (s === curSegIdx) return;
     const seg = segments[s];
-    if (seg.length < 2) continue;
+    if (!seg || seg.length < 2) return;
 
     // Check start of segment — enter moving forward
     const d0 = geoDist(bx, by, seg[0][0], seg[0][1]);
@@ -630,7 +648,7 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
         bestResult = { segIdx: s, ptIdx: last - 1, t: 1, direction: -1 };
       }
     }
-  }
+  });
 
   return bestResult;
 }
@@ -883,13 +901,35 @@ function buildUniqueStations(geojson) {
     }
   }
 
-  return Array.from(stationCoord.entries()).map(([name, coord]) => ({
+  const stations = Array.from(stationCoord.entries()).map(([name, coord]) => ({
     name: displayStationName(name),
     lon: coord[0],
     lat: coord[1],
     legends: Array.from(stationLegends.get(name)),
     isTerminus: terminusNames.has(name),
   }));
+  // Attach spatial index for O(1) nearest-station lookups
+  stations._index = buildStationIndex(stations);
+  return stations;
+}
+
+/**
+ * Builds a spatial grid index over a stations array.
+ * Cell size ~1.1 km (0.01 degrees).  Attached as stations._index by
+ * buildUniqueStations so lookup functions can use it automatically.
+ * Returns { cells: Map<"cx,cy", station[]>, CELL: number }.
+ */
+function buildStationIndex(stations) {
+  const CELL = 0.01;
+  const cells = new Map();
+  for (const s of stations) {
+    const cx = Math.floor(s.lon / CELL);
+    const cy = Math.floor(s.lat / CELL);
+    const k = cx + ',' + cy;
+    if (!cells.has(k)) cells.set(k, []);
+    cells.get(k).push(s);
+  }
+  return { cells, CELL };
 }
 
 /**
