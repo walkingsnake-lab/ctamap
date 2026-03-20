@@ -172,12 +172,6 @@
   // ---- Close button ----
   const closeBtn = document.getElementById('close-btn');
 
-  // ---- ETA-AI mode indicator ----
-  const etaAiIndicator = document.createElement('div');
-  etaAiIndicator.id = 'eta-ai-indicator';
-  etaAiIndicator.textContent = 'ETA-AI';
-  document.body.appendChild(etaAiIndicator);
-
   // ---- Train selection / tracking state ----
   let selectedTrain = null;
   let selectedTrainRn = null;
@@ -407,16 +401,7 @@
   const fetched = await fetchTrains();
   if (fetched && fetched.length > 0) {
     realTrains = fetched;
-    if (isEtaAiEnabled()) {
-      initEtaTrainAnimation(realTrains, lineSegments, stationSequences, null);
-      // GPS fallback for trains without ETA data
-      const gpsFallbacks = realTrains.filter(t => t._etaFallbackGps);
-      if (gpsFallbacks.length > 0) {
-        initRealTrainAnimation(gpsFallbacks, lineSegments, null, lineTerminals, stations, lineNeighborMaps);
-      }
-    } else {
-      initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations, lineNeighborMaps);
-    }
+    initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations, lineNeighborMaps);
     console.log(`[CTA] Loaded ${realTrains.length} trains`);
   }
 
@@ -821,10 +806,7 @@
         if (selectedTrain && selectedTrainRn === rn) {
           updateTrainLabelContent(selectedTrain, data.eta);
         }
-        // Feed ETA data to the ETA-AI engine for precise timing
-        if (isEtaAiEnabled()) {
-          updateEtaWithFollowData(rn, data.eta, stationSequences, lineSegments);
-        }
+
       }
     } catch (e) {
       console.warn('Failed to fetch train detail:', e);
@@ -881,16 +863,7 @@
 
     // Advance real trains
     if (realTrains) {
-      if (isEtaAiEnabled()) {
-        // ETA-AI mode: advance ETA-tracked trains, GPS fallback for the rest
-        advanceEtaTrains(realTrains, lineSegments, stationSequences, dt);
-        const gpsFallbacks = realTrains.filter(t => t._etaFallbackGps);
-        if (gpsFallbacks.length > 0) {
-          advanceRealTrains(gpsFallbacks, lineSegments, dt);
-        }
-      } else {
-        advanceRealTrains(realTrains, lineSegments, dt);
-      }
+      advanceRealTrains(realTrains, lineSegments, dt);
     }
 
     // Advance retiring trains toward terminal, then hold, then remove
@@ -1329,16 +1302,7 @@
         }
 
         // Initialize track position and drift correction
-        if (isEtaAiEnabled()) {
-          initEtaTrainAnimation(realTrains, lineSegments, stationSequences, prevMap);
-          // GPS fallback for trains without ETA data
-          const gpsFallbacks = realTrains.filter(t => t._etaFallbackGps);
-          if (gpsFallbacks.length > 0) {
-            initRealTrainAnimation(gpsFallbacks, lineSegments, prevMap, lineTerminals, stations, lineNeighborMaps);
-          }
-        } else {
-          initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations, lineNeighborMaps);
-        }
+        initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations, lineNeighborMaps);
 
         // Spawn animation for new trains: slide from start-of-line to tracked position,
         // but only if the train is close to the start terminal (same threshold as retirement).
@@ -1418,39 +1382,6 @@
     if (event.key === 'f' || event.key === 'F') {
       flashlightOn = !flashlightOn;
       cursorLight.classList.toggle('active', flashlightOn);
-      return;
-    }
-
-    // T key: toggle ETA-AI train positioning
-    if (event.key === 't' || event.key === 'T') {
-      const enabling = !isEtaAiEnabled();
-      setEtaAiEnabled(enabling);
-      console.log(`[CTA] ETA-AI mode ${enabling ? 'ON' : 'OFF'}`);
-      // Show/hide indicator
-      etaAiIndicator.classList.toggle('active', enabling);
-      // Re-initialize current trains with the new mode
-      if (realTrains) {
-        const prevMap = new Map();
-        for (const t of realTrains) prevMap.set(t.rn, t);
-        if (enabling) {
-          // Clear GPS animation state so it doesn't interfere
-          for (const t of realTrains) {
-            t._correcting = false;
-            t._spawning = false;
-            // Clear animation keyframes — trains will be positioned fresh by ETA
-            t._animLon = undefined;
-            t._animLat = undefined;
-            t._animHeading = undefined;
-          }
-          initEtaTrainAnimation(realTrains, lineSegments, stationSequences, prevMap);
-          const gpsFallbacks = realTrains.filter(t => t._etaFallbackGps);
-          if (gpsFallbacks.length > 0) {
-            initRealTrainAnimation(gpsFallbacks, lineSegments, prevMap, lineTerminals, stations, lineNeighborMaps);
-          }
-        } else {
-          initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations, lineNeighborMaps);
-        }
-      }
       return;
     }
 
