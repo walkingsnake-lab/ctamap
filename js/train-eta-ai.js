@@ -369,11 +369,18 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     const newPrevStn = sequence[oldNextIdx];
     const newNextStn = sequence[nextIdx];
     const newGap = geoDist(newPrevStn.lon, newPrevStn.lat, newNextStn.lon, newNextStn.lat);
+    const oldProgress = state.progress;
     if (newGap > 1e-6) {
       const fromPrev = geoDist(train.lon, train.lat, newPrevStn.lon, newPrevStn.lat);
       state.progress = Math.max(0.05, Math.min(0.95, fromPrev / newGap));
     } else {
       state.progress = 0.05;
+    }
+
+    // Debug: log large progress changes during transitions
+    if (Math.abs(oldProgress - state.progress) > 0.2) {
+      console.log(`[ETA-TRANS] rn=${train.rn} transition: ${(oldProgress*100).toFixed(0)}%→${(state.progress*100).toFixed(0)}% ` +
+        `${newPrevStn.name}→${newNextStn.name} gap=${(newGap*111000).toFixed(0)}m`);
     }
 
     state.stateChangeTime = now;
@@ -451,7 +458,14 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
     const holdProgress     = segDist > 1e-6 ? Math.max(0.5, 1 - HOLD_DISTANCE / segDist)     : 0.95;
     const approachProgress = segDist > 1e-6 ? Math.max(0.5, 1 - APPROACH_DISTANCE / segDist) : 0.80;
 
+    // Debug: log segment changes that could cause position jumps
+    if (state._lastSegDist && Math.abs(state._lastSegDist - segDist) / Math.max(state._lastSegDist, segDist) > 0.3) {
+      console.log(`[ETA-SEG] rn=${train.rn} segment length jumped: ${(state._lastSegDist * 111000).toFixed(0)}m→${(segDist * 111000).toFixed(0)}m (${(state.progress * 100).toFixed(1)}% along)`);
+    }
+    state._lastSegDist = segDist;
+
     // ---- Progress ----
+    const oldProgress = state.progress;
     if (state.atStation) {
       state.progress = 1;
       // Escape dwell after 60s if the API hasn't confirmed a station change
@@ -488,6 +502,12 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
       const smoothing = 1 - Math.pow(1 - ETA_SMOOTHING, dt / 16);
       state.progress += (targetProgress - state.progress) * smoothing;
       state.progress  = Math.max(0, Math.min(1, state.progress));
+
+      // Debug: log large backward progress jumps
+      if (oldProgress - state.progress > 0.05) {
+        console.log(`[ETA-JUMP] rn=${train.rn} backward: ${oldProgress.toFixed(2)}→${state.progress.toFixed(2)} ` +
+          `seg=${prevStation.name}→${nextStation.name} holdProg=${holdProgress.toFixed(2)} approachProg=${approachProgress.toFixed(2)}`);
+      }
 
       if (state.progress >= 0.995) {
         state.atStation    = true;
