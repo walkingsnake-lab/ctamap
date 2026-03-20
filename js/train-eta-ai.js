@@ -750,7 +750,20 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
     state.direction = newDirection;
     state.prevStationIdx = oldNextIdx;
     state.nextStationIdx = nextIdx;
-    state.progress = 0;
+
+    // Estimate progress on the new segment from the train's current GPS position.
+    // Don't snap to progress=0, which would jump the train backward to the previous station.
+    // Instead, place it where it actually is on the new segment.
+    const newPrevStn = sequence[oldNextIdx];
+    const newNextStn = sequence[nextIdx];
+    const newSegGap = geoDist(newPrevStn.lon, newPrevStn.lat, newNextStn.lon, newNextStn.lat);
+    if (newSegGap > 1e-6) {
+      const fromNewPrev = geoDist(train.lon, train.lat, newPrevStn.lon, newPrevStn.lat);
+      state.progress = Math.max(0.05, Math.min(0.95, fromNewPrev / newSegGap));
+    } else {
+      state.progress = 0.3;
+    }
+
     state.stateChangeTime = now;
     state.estimatedTravelMs = estimateTravelTime(
       sequence[oldNextIdx], sequence[nextIdx], train.legend
