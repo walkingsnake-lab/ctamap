@@ -249,8 +249,13 @@ const ETA_DEFAULTS = {
   MAX_TRAVEL_MS: 180000,
   // Dwell time at each station (trains pause briefly)
   DWELL_MS: 15000,
-  // When isApp flips to "1", assume train is this fraction of the way there
-  APPROACHING_PROGRESS: 0.80,
+  // Distance before station at which "approaching" begins (degrees, ~300m)
+  // Used to compute approaching progress as a function of segment length
+  // so a 7km segment doesn't jump to 80% when isApp fires.
+  APPROACHING_DISTANCE: 0.003,
+  // Distance before station to hold at when waiting for isApp (degrees, ~200m)
+  // Replaces the old fixed 0.95 cap that stalled trains 350m+ short on long segments.
+  HOLD_DISTANCE: 0.002,
   // Smoothing factor for progress updates (0..1, lower = smoother)
   PROGRESS_SMOOTHING: 0.15,
 };
@@ -405,19 +410,20 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
 
     // Use GPS position to estimate initial progress between prevStation and nextStation
     // instead of an arbitrary 0.3, so trains appear where they actually are.
+    const prevStn = sequence[prevIdx];
+    const nextStn = sequence[nextIdx];
+    const stationGap = geoDist(prevStn.lon, prevStn.lat, nextStn.lon, nextStn.lat);
     let initialProgress;
     if (isApp === '1') {
-      initialProgress = ETA_DEFAULTS.APPROACHING_PROGRESS;
+      // Approaching — place at distance-based approach point (~300m out)
+      initialProgress = stationGap > 1e-6
+        ? Math.max(0.5, 1 - ETA_DEFAULTS.APPROACHING_DISTANCE / stationGap)
+        : 0.80;
+    } else if (stationGap > 1e-6) {
+      const fromPrev = geoDist(train.lon, train.lat, prevStn.lon, prevStn.lat);
+      initialProgress = Math.max(0.05, Math.min(0.95, fromPrev / stationGap));
     } else {
-      const prevStn = sequence[prevIdx];
-      const nextStn = sequence[nextIdx];
-      const stationGap = geoDist(prevStn.lon, prevStn.lat, nextStn.lon, nextStn.lat);
-      if (stationGap > 1e-6) {
-        const fromPrev = geoDist(train.lon, train.lat, prevStn.lon, prevStn.lat);
-        initialProgress = Math.max(0.05, Math.min(0.95, fromPrev / stationGap));
-      } else {
-        initialProgress = 0.3;
-      }
+      initialProgress = 0.3;
     }
 
     // Cache actual track distance for accurate interpolation
@@ -542,10 +548,11 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
 
   if (isApp !== state.lastIsApp) {
     if (isApp === '1' && !state.isApproaching) {
+      // Mark as approaching — advanceEtaTrains will compute the distance-
+      // based approach progress and interpolate toward 1.0 from there.
+      // Don't jump progress forward here; the interpolation loop handles it
+      // using the segment length so short and long segments behave correctly.
       state.isApproaching = true;
-      if (state.progress < ETA_DEFAULTS.APPROACHING_PROGRESS) {
-        state.progress = ETA_DEFAULTS.APPROACHING_PROGRESS;
-      }
       state.stateChangeTime = now;
     }
     state.lastIsApp = isApp;
@@ -620,12 +627,36 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
     const nextStation = sequence[state.nextStationIdx];
     if (!prevStation || !nextStation) continue;
 
+    // ---- Track distance (needed by both progress and position) ----
+    // Use cached track distance (actual walk along track geometry) when
+    // available; fall back to geodesic distFromStart difference.
+    const fromPos = prevStation.trackPos;
+    const toPos = nextStation.trackPos;
+    const totalTrackDist = state.cachedTrackDist
+      || Math.abs(nextStation.distFromStart - prevStation.distFromStart);
+
     // ---- Progress: train can NEVER overshoot the next station ----
     // Progress is clamped to [0, 1] where 1.0 = exactly at nextStation.
     // Once the train arrives (progress == 1), it dwells there until the
     // API confirms a station change.  This prevents the backward-snap
     // artifact where a train overshoots, then jumps back when progress
     // resets to 0 on the next segment.
+
+    // Compute distance-based progress limits for this segment.
+    // On short segments (e.g. Loop stations ~400m apart), these resolve to
+    // ~0.50 and ~0.25 — similar to the old fixed fractions.
+    // On long segments (e.g. O'Hare→Rosemont ~4km), they resolve to ~0.999
+    // and ~0.997 — the train travels almost the full distance before holding.
+    const segDist = totalTrackDist > 1e-6 ? totalTrackDist
+      : geoDist(prevStation.lon, prevStation.lat, nextStation.lon, nextStation.lat);
+    // holdProgress: how far to go before waiting for isApp (keeps ~200m gap)
+    const holdProgress = segDist > 1e-6
+      ? Math.max(0.5, 1 - ETA_DEFAULTS.HOLD_DISTANCE / segDist)
+      : 0.95;
+    // approachProgress: where to place the train when isApp fires (~300m out)
+    const approachProgress = segDist > 1e-6
+      ? Math.max(0.5, 1 - ETA_DEFAULTS.APPROACHING_DISTANCE / segDist)
+      : 0.80;
 
     if (state.atStation) {
       // Dwelling at station — pin to exactly 1.0, don't advance
@@ -643,16 +674,21 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
           targetProgress = 1;
         }
       } else if (state.isApproaching) {
-        // Approaching: interpolate from current progress toward 1.0
+        // Approaching: interpolate from current progress toward 1.0.
+        // Start from at least approachProgress (~300m out) — but if the
+        // train was already past that point (long segment, isApp came late),
+        // continue from current progress so it never jumps backward.
+        const approachBase = Math.max(state.progress, approachProgress);
         const approachElapsed = now - state.stateChangeTime;
         const approachDuration = 15000; // ~15 seconds from "approaching" to arrival
         const approachT = Math.min(1, approachElapsed / approachDuration);
-        targetProgress = state.progress + (1 - state.progress) * approachT;
+        targetProgress = approachBase + (1 - approachBase) * approachT;
       } else {
-        // Normal transit: time-based interpolation, cap at 0.95
-        // (leaves room for the "approaching" phase to finish the last 5%)
+        // Normal transit: time-based interpolation.
+        // Cap at holdProgress (~200m before station) instead of a fixed 0.95.
+        // On a 400m segment this is ~0.50; on a 7km segment it's ~0.9997.
         const elapsed = now - state.stateChangeTime;
-        targetProgress = Math.min(0.95, elapsed / state.estimatedTravelMs);
+        targetProgress = Math.min(holdProgress, elapsed / state.estimatedTravelMs);
       }
 
       // Hard clamp — progress must NEVER exceed 1.0
@@ -672,13 +708,6 @@ function advanceEtaTrains(trains, lineSegments, stationSequences, dt) {
     }
 
     // ---- Position on track from progress ----
-    // Use cached track distance (actual walk along track geometry) when
-    // available; fall back to geodesic distFromStart difference.
-    const fromPos = prevStation.trackPos;
-    const toPos = nextStation.trackPos;
-    const totalTrackDist = state.cachedTrackDist
-      || Math.abs(nextStation.distFromStart - prevStation.distFromStart);
-
     if (totalTrackDist < 1e-6 || state.progress >= 1) {
       // At the station (or stations are the same point) — snap exactly
       train.lon = nextStation.lon;
