@@ -515,20 +515,38 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
   const nextStaNm = train.nextStaNm;
   const isApp = train.isApp;
 
-  // No station data at all — fall back to GPS
+  // No station data at all — but don't immediately fall back to GPS.
+  // ETA data often has brief gaps (API hiccups, network delays). Keep animating
+  // from cached ETA state instead of snapping back to GPS position, which can cause
+  // visible position jumps when ETA data returns after a few seconds.
+  // Only mark for GPS fallback if the gap exceeds 20 seconds.
   if (!nextStaNm) {
-    train._etaFallbackGps = true;
     if (state) {
       if (!state._noDataSince) {
         state._noDataSince = now;
-      } else if (now - state._noDataSince > 60000) {
+        // Continue using ETA state — it will advance smoothly during the gap
+        return;
+      } else if (now - state._noDataSince > 20000) {
+        // Data missing for 20+ seconds — fall back to GPS and drop ETA state
+        train._etaFallbackGps = true;
         etaTrainState.delete(rn);
+        return;
+      } else {
+        // Gap < 20 seconds — keep animating from cached state, don't fall back
+        return;
       }
+    } else {
+      // No prior ETA state — use GPS
+      train._etaFallbackGps = true;
+      return;
     }
-    return;
   }
 
   train._etaFallbackGps = false;
+  // Clear the no-data timer since ETA data is back
+  if (state) {
+    state._noDataSince = null;
+  }
 
   // When looking up nextStaNm, use the current/previous station as a hint so
   // duplicate station names (e.g., "Western" on Blue Line) resolve to the correct
