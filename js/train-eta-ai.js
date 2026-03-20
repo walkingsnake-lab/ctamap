@@ -536,6 +536,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
         return;
       } else if (now - state._noDataSince > 20000) {
         // Data missing for 20+ seconds — fall back to GPS and drop ETA state
+        console.log(`[ETA-AI] rn=${rn} (${train.legend}): No ETA data for 20s, GPS fallback`);
         train._etaFallbackGps = true;
         etaTrainState.delete(rn);
         return;
@@ -545,6 +546,7 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
       }
     } else {
       // No prior ETA state — use GPS
+      console.log(`[ETA-AI] rn=${rn} (${train.legend}): No nextStaNm (no ETA data) → GPS fallback`);
       train._etaFallbackGps = true;
       return;
     }
@@ -564,7 +566,9 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
 
   if (nextIdx === -1) {
     train._etaFallbackGps = true;
-    console.warn(`[ETA-AI] rn=${rn} (${train.legend}): nextStaNm="${nextStaNm}" not found in sequence → GPS fallback`);
+    const seqStations = sequence.map(s => s.name).join(' → ');
+    console.warn(`[ETA-AI] rn=${rn} (${train.legend}): nextStaNm="${nextStaNm}" not found in sequence`);
+    console.warn(`  Available: ${seqStations}`);
     return;
   }
 
