@@ -574,6 +574,33 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
       newDirection = nextIdx > oldNextIdx ? +1 : -1;
     }
 
+    // Destination-aware reversal guard: for non-loop lines, a reversal that
+    // would take the train away from its destination is almost certainly API
+    // jitter (stale nextStaNm from the batch positions endpoint).  Reject
+    // outright instead of waiting for the hold to confirm.
+    //
+    // Example: a Blue Line "Forest Park"-bound train has destIdx=32.  Any
+    // reversal to direction=-1 (toward O'Hare/index-0) is rejected because
+    // that direction contradicts the train's destination.
+    //
+    // Skip for loop lines (BR, OR, PK, GR, PR) — their destination changes
+    // mid-transit (e.g. "Loop" → "Midway") so the dest-index relationship
+    // is unreliable during the Loop portion of the run.
+    if (newDirection !== state.direction && !LOOP_LINE_CODES.includes(train.legend)) {
+      const destIdx = findStationInSequence(sequence, train.destNm);
+      if (destIdx !== -1) {
+        const dirTowardDest = destIdx > nextIdx ? +1 : destIdx < nextIdx ? -1 : null;
+        if (dirTowardDest !== null && newDirection !== dirTowardDest) {
+          console.log(`[ETA-AI] Dest-guard: rn=${rn} (${train.legend}) rejected reversal ` +
+            `dir ${state.direction}→${newDirection} (dest="${train.destNm}" idx=${destIdx}, ` +
+            `next "${nextStaNm}" idx=${nextIdx})`);
+          state._pendingReversalStation = null;
+          state._reversalHoldCount = 0;
+          return;
+        }
+      }
+    }
+
     // Reversal hold: if this would flip direction, require 2 consecutive
     // confirming polls.  This filters out API jitter where nextStaNm briefly
     // reports a station behind the train (stale data from the previous poll).
@@ -647,8 +674,14 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
 /**
  * Update ETA state with full ETA data from the follow API.
  * Only available for the selected/tracked train.
+ *
+ * In addition to updating arrival timing, this function uses the follow
+ * API's first ETA entry station name to immediately correct the ETA-AI
+ * state when the main poll's nextStaNm was stale/wrong.  The follow API
+ * is specifically fetched for this run number and is more authoritative
+ * than the batch positions endpoint, so no hold is required here.
  */
-function updateEtaWithFollowData(rn, etas, stationSequences) {
+function updateEtaWithFollowData(rn, etas, stationSequences, lineSegments) {
   const state = etaTrainState.get(rn);
   if (!state || !etas || etas.length === 0) return;
 
@@ -657,12 +690,62 @@ function updateEtaWithFollowData(rn, etas, stationSequences) {
 
   // First ETA entry is the next stop
   const nextEta = etas[0];
-  if (!nextEta || !nextEta.arrT) return;
+  if (!nextEta) return;
 
-  // Parse CTA arrival time (format: "YYYYMMDD HH:MM:SS")
-  const arrivalTime = parseCTATime(nextEta.arrT);
+  // Parse and store arrival time for precise timing
+  const arrivalTime = nextEta.arrT ? parseCTATime(nextEta.arrT) : null;
   if (arrivalTime) {
     state.arrivalTimeMs = arrivalTime;
+  }
+
+  // Use the ETA station name to immediately correct state when the main
+  // poll's nextStaNm was stale.  This is the primary fix for the tracked-
+  // train scenario where the label shows "Next: X" but the arrow still
+  // faces the wrong way because the main poll briefly reported a backward
+  // station and triggered a direction flip.
+  if (nextEta.staNm) {
+    const etaNextIdx = findStationInSequence(sequence, nextEta.staNm);
+    if (etaNextIdx !== -1 && etaNextIdx !== state.nextStationIdx) {
+      const oldNextIdx = state.nextStationIdx;
+      const newDirection = etaNextIdx > oldNextIdx ? +1 : -1;
+
+      // Recompute cached track distance and walk direction for the new segment
+      const segLegend = state.legend.replace(/_.*$/, '');
+      const segs = lineSegments ? lineSegments[segLegend] : null;
+      let trackDist = null;
+      let walkDir = null;
+      if (segs && sequence[oldNextIdx]?.trackPos && sequence[etaNextIdx]?.trackPos) {
+        walkDir = resolveTrackWalkDir(
+          sequence[oldNextIdx].trackPos, sequence[etaNextIdx].trackPos, segs
+        );
+        trackDist = trackDistanceBetween(
+          sequence[oldNextIdx].trackPos, sequence[etaNextIdx].trackPos, walkDir, segs
+        );
+      }
+
+      console.log(`[ETA-AI] Follow API corrected: rn=${rn} (${state.legend}) ` +
+        `"${sequence[oldNextIdx]?.name}"→"${sequence[etaNextIdx]?.name}" ` +
+        `(staNm="${nextEta.staNm}") dir ${state.direction}→${newDirection}`);
+
+      // Apply immediately — no hold, the follow API is authoritative
+      state._pendingReversalStation = null;
+      state._reversalHoldCount = 0;
+      state.direction = newDirection;
+      state.prevStationIdx = oldNextIdx;
+      state.nextStationIdx = etaNextIdx;
+      state.progress = 0;
+      state.stateChangeTime = Date.now();
+      state.estimatedTravelMs = estimateTravelTime(
+        sequence[oldNextIdx], sequence[etaNextIdx], state.legend
+      );
+      state.isApproaching = false;
+      state.atStation = false;
+      state.dwellStartTime = null;
+      state.lastNextStaNm = nextEta.staNm;
+      state.arrivalTimeMs = arrivalTime;
+      state.cachedTrackDist = trackDist;
+      state.cachedWalkDir = walkDir;
+    }
   }
 }
 
