@@ -329,12 +329,19 @@ const ETA_DEFAULTS = {
 function findStationInSequence(sequence, stationName, prevStationIdx) {
   if (!stationName || !sequence) return -1;
   const clean = cleanStationName(stationName);
-  const norm = normalizeStationName(clean);
+  let norm = normalizeStationName(clean);
+  // Strip ordinal suffixes (th, st, nd, rd) that may differ between API and GeoJSON
+  // E.g., API: "35th-Bronzeville-IIT" → norm: "35 bronzeville iit"
+  //      GeoJSON: "35-Bronzeville-IIT" → norm: "35 bronzeville iit"
+  norm = norm.replace(/\b(\d+)(st|nd|rd|th)\b/g, '$1');
 
   // Exact matches — prefer ones ahead of prevStationIdx
   let firstExactMatch = -1;
   for (let i = 0; i < sequence.length; i++) {
-    if (normalizeStationName(sequence[i].name) === norm) {
+    let sNorm = normalizeStationName(sequence[i].name);
+    // Apply same ordinal stripping to sequence names for comparison
+    sNorm = sNorm.replace(/\b(\d+)(st|nd|rd|th)\b/g, '$1');
+    if (sNorm === norm) {
       if (firstExactMatch === -1) firstExactMatch = i;
       // Prefer matches ahead of current position (for duplicate station names)
       if (prevStationIdx !== undefined && i > prevStationIdx) return i;
@@ -345,7 +352,9 @@ function findStationInSequence(sequence, stationName, prevStationIdx) {
   // Partial matches — same logic
   let firstPartialMatch = -1;
   for (let i = 0; i < sequence.length; i++) {
-    const sNorm = normalizeStationName(sequence[i].name);
+    let sNorm = normalizeStationName(sequence[i].name);
+    // Apply same ordinal stripping for consistent comparison
+    sNorm = sNorm.replace(/\b(\d+)(st|nd|rd|th)\b/g, '$1');
     if (sNorm.includes(norm) || norm.includes(sNorm)) {
       if (firstPartialMatch === -1) firstPartialMatch = i;
       // Prefer matches ahead of current position
@@ -539,7 +548,28 @@ function updateEtaTrainState(train, stationSequences, lineSegments) {
 
   if (!state) {
     // --- New train: initialize from destination + GPS hint ---
-    const direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
+    let direction = inferSequenceDirection(train.legend, train.destNm, sequence, nextIdx);
+
+    // CRITICAL: Verify inferred direction against GPS position.
+    // inferSequenceDirection() uses destination name parsing which is fragile
+    // (especially on lines with similar destination names or Loop re-signage).
+    // If the train's actual position is closer to what we calculated as nextIdx
+    // than prevIdx, the inferred direction was backwards — flip it.
+    // This prevents direction flipping when switching to ETA-AI tracking mode.
+    const prevIdx_candidate = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
+    const nextIdx_candidate = nextIdx;
+    const prevStn = sequence[prevIdx_candidate];
+    const nextStn = sequence[nextIdx_candidate];
+
+    const distToPrev = geoDist(train.lon, train.lat, prevStn.lon, prevStn.lat);
+    const distToNext = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
+
+    // If train is actually much closer to the "next" station (10%+ closer),
+    // the direction was inverted. Flip it.
+    if (distToNext < distToPrev * 0.9) {
+      direction = -direction;
+    }
+
     const prevIdx = Math.max(0, Math.min(sequence.length - 1, nextIdx - direction));
 
     // Use GPS position to estimate initial progress between prevStation and nextStation
