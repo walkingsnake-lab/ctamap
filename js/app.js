@@ -1175,6 +1175,21 @@
         ctx.fillStyle = d.legend === 'YL' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.75)';
         ctx.fill();
       }
+
+      // Dashed ring for schedule-projected positions (isSch=1): the CTA API is
+      // extrapolating from timetable data rather than confirmed track-circuit data.
+      // A subtle white dashed outline signals reduced positional confidence.
+      if (d.isSch === '1') {
+        ctx.globalAlpha = alpha * 0.55;
+        ctx.beginPath();
+        ctx.arc(0, 0, scaledRadius * dotScale * 1.6, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([1.2, 1.0]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
       ctx.restore();
     }
 
