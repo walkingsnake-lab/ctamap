@@ -329,6 +329,12 @@ function effectiveDestForDirection(train, northDest, stations) {
     }
     return train.destNm;
   }
+  // If the train is already inside the Loop (trainDistToLoop < 0.016°, which
+  // covers all ML Loop stations and the boundary exit station e.g. Clinton for
+  // PK at ~0.014°), the sign is correct — the train is circling to exit, not
+  // approaching from outside.  The "next station closer to Loop" heuristic only
+  // applies on outer approach segments (approach stations are 0.024°+ away).
+  if (trainDistToLoop < 0.016) return train.destNm;
   if (nextStnDistToLoop < trainDistToLoop) {
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
