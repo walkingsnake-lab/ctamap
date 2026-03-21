@@ -328,20 +328,7 @@ function snapToTrackWithAffinity(lon, lat, segments, prevTrackPos, neighborMap) 
   // snap distance is less than 1/1.5 of the nearby snap distance (in squared
   // distance terms, so effectively sqrt(1.5) ≈ 1.22× closer in linear distance).
   if (nearbyBest && nearbyBestDist < globalDist * SNAP_AFFINITY_MARGIN) {
-    // Log when affinity chose a different segment than the global snap would have
-    if (globalBest.segIdx !== nearbyBest.segIdx) {
-      const nearbyLinear = Math.sqrt(nearbyBestDist) * 111000;
-      const globalLinear = Math.sqrt(globalDist) * 111000;
-      console.log(`[CTA] Affinity snap: kept seg ${nearbyBest.segIdx} (${nearbyLinear.toFixed(0)}m) over global seg ${globalBest.segIdx} (${globalLinear.toFixed(0)}m)`);
-    }
     return nearbyBest;
-  }
-
-  // Global snap won — log the override for diagnostics
-  if (nearbyBest && globalBest.segIdx !== nearbyBest.segIdx) {
-    const nearbyLinear = Math.sqrt(nearbyBestDist) * 111000;
-    const globalLinear = Math.sqrt(globalDist) * 111000;
-    console.log(`[CTA] Affinity override: global seg ${globalBest.segIdx} (${globalLinear.toFixed(0)}m) beat affinity seg ${nearbyBest.segIdx} (${nearbyLinear.toFixed(0)}m)`);
   }
 
   return globalBest;
@@ -541,7 +528,6 @@ function trackDistanceBetween(from, to, direction, segments) {
       return totalDist + distToTarget;
     }
 
-    prevDistToTarget = distToTarget;
     pos = newPos;
   }
 
