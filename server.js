@@ -9,6 +9,14 @@ const CTA_BASE = 'http://lapi.transitchicago.com/api/1.0/ttpositions.aspx';
 const CTA_FOLLOW = 'http://lapi.transitchicago.com/api/1.0/ttfollow.aspx';
 const ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 
+// Cache GeoJSON in memory at startup — it's static and 116 KB, no need to
+// hit disk on every request.
+let geojsonCache = null;
+fs.readFile(path.join(__dirname, 'data', 'cta-lines.geojson'), (err, buf) => {
+  if (err) console.error('Failed to pre-load GeoJSON:', err.message);
+  else geojsonCache = buf;
+});
+
 // Cache train positions for 15s to avoid 8 simultaneous CTA API calls on
 // every client request.  Protects against the 100K daily transaction limit
 // when multiple tabs or rapid reloads hit the server at the same time.
@@ -36,6 +44,30 @@ async function getCachedTrains() {
   return trainCachePending;
 }
 
+// Cache follow-train (ETA) responses for 5s — the browser polls every 2s per
+// selected train, but the CTA API data only refreshes every 30s anyway.
+const FOLLOW_CACHE_TTL = 5000; // ms
+const followCache = new Map(); // rn → { body, time }
+
+async function getCachedFollow(rn) {
+  const now = Date.now();
+  const cached = followCache.get(rn);
+  if (cached && now - cached.time < FOLLOW_CACHE_TTL) return cached.body;
+  const followUrl = `${CTA_FOLLOW}?key=${CTA_KEY}&runnumber=${rn}&outputType=JSON`;
+  const data = await fetchJSON(followUrl);
+  const ctatt = data.ctatt;
+  let body;
+  if (!ctatt || (ctatt.errCd !== '0' && ctatt.errCd !== 0)) {
+    body = JSON.stringify({ eta: null });
+  } else {
+    let etas = ctatt.eta || [];
+    if (!Array.isArray(etas)) etas = [etas];
+    body = JSON.stringify({ eta: etas, position: ctatt.position || null });
+  }
+  followCache.set(rn, { body, time: Date.now() });
+  return body;
+}
+
 const MIME_TYPES = {
   '.html': 'text/html',
   '.css': 'text/css',
@@ -50,11 +82,11 @@ const MIME_TYPES = {
 function fetchJSON(fetchUrl) {
   return new Promise((resolve, reject) => {
     http.get(fetchUrl, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         try {
-          resolve(JSON.parse(data));
+          resolve(JSON.parse(chunks.join('')));
         } catch (e) {
           reject(new Error('Invalid JSON from CTA API'));
         }
@@ -98,18 +130,18 @@ async function fetchAllTrains() {
 const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
 
-  // Serve bundled CTA line geometry GeoJSON
+  // Serve bundled CTA line geometry GeoJSON (served from memory cache)
   if (parsed.pathname === '/api/geojson') {
-    const geojsonPath = path.join(__dirname, 'data', 'cta-lines.geojson');
-    fs.readFile(geojsonPath, (err, content) => {
-      if (err) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Failed to read GeoJSON file' }));
-        return;
-      }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(content);
+    if (!geojsonCache) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'GeoJSON not ready yet' }));
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=86400',
     });
+    res.end(geojsonCache);
     return;
   }
 
@@ -140,18 +172,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const followUrl = `${CTA_FOLLOW}?key=${CTA_KEY}&runnumber=${rn}&outputType=JSON`;
-      const data = await fetchJSON(followUrl);
-      const ctatt = data.ctatt;
-      if (!ctatt || (ctatt.errCd !== '0' && ctatt.errCd !== 0)) {
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
-        res.end(JSON.stringify({ eta: null }));
-        return;
-      }
-      let etas = ctatt.eta || [];
-      if (!Array.isArray(etas)) etas = [etas];
+      const body = await getCachedFollow(rn);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
-      res.end(JSON.stringify({ eta: etas, position: ctatt.position || null }));
+      res.end(body);
     } catch (e) {
       console.error('CTA Follow API error:', e.message);
       res.writeHead(502, { 'Content-Type': 'application/json' });
@@ -180,7 +203,12 @@ const server = http.createServer(async (req, res) => {
       res.end(err.code === 'ENOENT' ? 'Not found' : 'Server error');
       return;
     }
-    res.writeHead(200, { 'Content-Type': contentType });
+    // Bundle is content-hashed via esbuild; HTML must revalidate to pick up new bundles.
+    const cacheHeader = (ext === '.js' && filePath.includes('dist'))
+      ? 'public, max-age=31536000, immutable'
+      : ext === '.html' ? 'no-cache'
+      : 'public, max-age=3600';
+    res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': cacheHeader });
     res.end(content);
   });
 });

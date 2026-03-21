@@ -170,6 +170,8 @@
   // Create train layer on top (inside the zoom container).
   // Spread connector lines are now drawn on the canvas; no spread-lines-layer needed.
   mapContainer.append('g').attr('class', 'trains-layer');
+  // Cached selection — avoids repeated DOM query in the 60fps animate loop.
+  let trainsLayerSel = svg.select('.trains-layer');
 
   // ---- DOM label overlay ----
   const labelEl = document.createElement('div');
@@ -432,7 +434,7 @@
     lastLineK = -1;
 
     const allTrains = (realTrains || []).concat(retiringTrains);
-    const layer = svg.select('.trains-layer');
+    const layer = trainsLayerSel;
 
     const groups = layer.selectAll('.train-group')
       .data(allTrains, d => d.rn);
@@ -912,7 +914,7 @@
       anchorPt = projection([selectedTrain.lon, selectedTrain.lat]);
     }
 
-    svg.select('.trains-layer').selectAll('.train-group')
+    trainsLayerSel.selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
@@ -1088,8 +1090,8 @@
           ctx.stroke();
           ctx.restore();
         } else {
-          const phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 2.5;
-          const rawT        = ((now / 2500) + phaseOffset) % 1;
+          if (d._phaseOffset === undefined) d._phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 2.5;
+          const rawT        = ((now / 2500) + d._phaseOffset) % 1;
           const pulseT      = Math.sin(rawT * Math.PI);
           const glowAlpha   = 0.4 * pulseT;
           const glowScale   = 1 + 0.7 * pulseT;
@@ -1456,6 +1458,7 @@
       // Recreate trains layer (redrawMap wipes SVG).
       // Spread connector lines are drawn on canvas — no SVG layer needed.
       mapContainer.append('g').attr('class', 'trains-layer');
+      trainsLayerSel = svg.select('.trains-layer'); // refresh cached selection
 
       // Re-render stations overlay
       renderStations(svg.select('.stations-layer'), stations, projection, geojson, LINE_WIDTH * labelScale);

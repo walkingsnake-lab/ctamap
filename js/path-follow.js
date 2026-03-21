@@ -58,6 +58,20 @@ function buildLineSegments(geojson) {
       segments[legend] = coords.concat(sharedCoords);
     }
   }
+
+  // Pre-compute edge lengths for every segment so advanceOnTrack can do a
+  // fast array lookup instead of calling geoDist (Math.sqrt) per edge.
+  for (const legend of Object.keys(segments)) {
+    for (const seg of segments[legend]) {
+      seg._lens = new Float32Array(Math.max(0, seg.length - 1));
+      for (let i = 0; i < seg.length - 1; i++) {
+        const dx = seg[i + 1][0] - seg[i][0];
+        const dy = seg[i + 1][1] - seg[i][1];
+        seg._lens[i] = Math.sqrt(dx * dx + dy * dy);
+      }
+    }
+  }
+
   return { segments, ownSegments };
 }
 
@@ -174,6 +188,15 @@ function geoDist(lon1, lat1, lon2, lat2) {
 }
 
 /**
+ * Squared Euclidean distance — avoids sqrt when only comparisons are needed.
+ */
+function geoDistSq(lon1, lat1, lon2, lat2) {
+  const dx = lon2 - lon1;
+  const dy = lat2 - lat1;
+  return dx * dx + dy * dy;
+}
+
+/**
  * Snaps a point to the nearest position on a line's track geometry.
  * Returns full track-position state for continuous animation.
  * { segIdx, ptIdx, t, lon, lat }
@@ -181,8 +204,10 @@ function geoDist(lon1, lat1, lon2, lat2) {
 function snapToTrackPosition(lon, lat, segments) {
   let bestDist = Infinity;
   let best = { segIdx: 0, ptIdx: 0, t: 0, lon: lon, lat: lat };
+  // Threshold: (0.00006°)² ≈ 7 m — if we're this close, no other segment can beat it.
+  const EARLY_EXIT_SQ = 3.6e-9;
 
-  for (let s = 0; s < segments.length; s++) {
+  outer: for (let s = 0; s < segments.length; s++) {
     const seg = segments[s];
     for (let i = 0; i < seg.length - 1; i++) {
       const ax = seg[i][0], ay = seg[i][1];
@@ -205,6 +230,7 @@ function snapToTrackPosition(lon, lat, segments) {
       if (dist < bestDist) {
         bestDist = dist;
         best = { segIdx: s, ptIdx: i, t: t, lon: px, lat: py };
+        if (bestDist < EARLY_EXIT_SQ) break outer;
       }
     }
   }
@@ -220,6 +246,7 @@ function snapToTrackPosition(lon, lat, segments) {
  */
 function buildSegmentNeighborMap(segments) {
   const threshold = SEGMENT_CONNECT_THRESHOLD;
+  const threshSq = threshold * threshold;
   const map = new Map();
   for (let i = 0; i < segments.length; i++) {
     map.set(i, new Set());
@@ -232,10 +259,11 @@ function buildSegmentNeighborMap(segments) {
       const sj = segments[j];
       if (sj.length < 2) continue;
       const jStart = sj[0], jEnd = sj[sj.length - 1];
-      if (geoDist(iStart[0], iStart[1], jStart[0], jStart[1]) < threshold ||
-          geoDist(iStart[0], iStart[1], jEnd[0], jEnd[1]) < threshold ||
-          geoDist(iEnd[0], iEnd[1], jStart[0], jStart[1]) < threshold ||
-          geoDist(iEnd[0], iEnd[1], jEnd[0], jEnd[1]) < threshold) {
+      // Use squared distance to avoid sqrt — only need to compare, not measure.
+      if (geoDistSq(iStart[0], iStart[1], jStart[0], jStart[1]) < threshSq ||
+          geoDistSq(iStart[0], iStart[1], jEnd[0],   jEnd[1])   < threshSq ||
+          geoDistSq(iEnd[0],   iEnd[1],   jStart[0], jStart[1]) < threshSq ||
+          geoDistSq(iEnd[0],   iEnd[1],   jEnd[0],   jEnd[1])   < threshSq) {
         map.get(i).add(j);
         map.get(j).add(i);
       }
@@ -380,9 +408,13 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
   // ADVANCE_MAX_ITER defined in config.js
   let iter = 0;
 
+  // Cache current segment and its pre-computed edge lengths outside the loop.
+  // Updated whenever segIdx changes (segment boundary crossing).
+  let curSeg = seg;
+  let lensArray = curSeg._lens ?? null;
+
   // Advance within current segment
   while (remaining > 0 && ++iter < ADVANCE_MAX_ITER) {
-    const curSeg = segments[segIdx];
     if (!curSeg) break;
 
     const i = ptIdx;
@@ -390,7 +422,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
 
     const ax = curSeg[i][0], ay = curSeg[i][1];
     const bx = curSeg[i + 1][0], by = curSeg[i + 1][1];
-    const edgeLen = geoDist(ax, ay, bx, by);
+    // Use pre-computed edge length when available (set by buildLineSegments).
+    const edgeLen = lensArray ? lensArray[i] : geoDist(ax, ay, bx, by);
 
     if (edgeLen < 1e-10) {
       // Degenerate edge — skip it
@@ -401,10 +434,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
           // Try next segment
           const next = findConnectedSegment(segIdx, ptIdx, curSeg, dir, segments, tLon, tLat, neighborMap);
           if (!next) return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: bx, lat: by, direction: dir, stopped: true };
-          segIdx = next.segIdx;
-          ptIdx = next.ptIdx;
-          t = next.t;
-          dir = next.direction;
+          segIdx = next.segIdx; ptIdx = next.ptIdx; t = next.t; dir = next.direction;
+          curSeg = segments[segIdx]; lensArray = curSeg?._lens ?? null;
         }
       } else {
         ptIdx--;
@@ -412,10 +443,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
         if (ptIdx < 0) {
           const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments, tLon, tLat, neighborMap);
           if (!next) return { segIdx, ptIdx: 0, t: 0, lon: ax, lat: ay, direction: dir, stopped: true };
-          segIdx = next.segIdx;
-          ptIdx = next.ptIdx;
-          t = next.t;
-          dir = next.direction;
+          segIdx = next.segIdx; ptIdx = next.ptIdx; t = next.t; dir = next.direction;
+          curSeg = segments[segIdx]; lensArray = curSeg?._lens ?? null;
         }
       }
       continue;
@@ -438,10 +467,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
             const last = curSeg[curSeg.length - 1];
             return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: last[0], lat: last[1], direction: dir, stopped: true };
           }
-          segIdx = next.segIdx;
-          ptIdx = next.ptIdx;
-          t = next.t;
-          dir = next.direction;
+          segIdx = next.segIdx; ptIdx = next.ptIdx; t = next.t; dir = next.direction;
+          curSeg = segments[segIdx]; lensArray = curSeg?._lens ?? null;
         }
       }
     } else {
@@ -459,10 +486,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
             const first = curSeg[0];
             return { segIdx, ptIdx: 0, t: 0, lon: first[0], lat: first[1], direction: dir, stopped: true };
           }
-          segIdx = next.segIdx;
-          ptIdx = next.ptIdx;
-          t = next.t;
-          dir = next.direction;
+          segIdx = next.segIdx; ptIdx = next.ptIdx; t = next.t; dir = next.direction;
+          curSeg = segments[segIdx]; lensArray = curSeg?._lens ?? null;
         }
       }
     }
@@ -582,10 +607,14 @@ function findConnectedSegment(curSegIdx, boundaryPtIdx, curSeg, direction, segme
   const hasTarget = targetLon !== undefined && targetLat !== undefined;
   const toTargetDx = hasTarget ? targetLon - bx : 0;
   const toTargetDy = hasTarget ? targetLat - by : 0;
-  const arrMag = Math.sqrt(arrDx * arrDx + arrDy * arrDy);
-  const tarMag = Math.sqrt(toTargetDx * toTargetDx + toTargetDy * toTargetDy);
-  const targetIsAhead = hasTarget && arrMag > 0 && tarMag > 0
-    && (arrDx * toTargetDx + arrDy * toTargetDy) > -0.25 * arrMag * tarMag;
+  // Check dot > -0.25 * arrMag * tarMag without sqrt:
+  //   if dot >= 0 → always true (RHS is negative).
+  //   if dot < 0  → equivalent to dot² < 0.0625 * arrMagSq * tarMagSq.
+  const arrMagSq = arrDx * arrDx + arrDy * arrDy;
+  const tarMagSq = toTargetDx * toTargetDx + toTargetDy * toTargetDy;
+  const rawDot = arrDx * toTargetDx + arrDy * toTargetDy;
+  const targetIsAhead = hasTarget && arrMagSq > 0 && tarMagSq > 0
+    && (rawDot >= 0 || rawDot * rawDot < 0.0625 * arrMagSq * tarMagSq);
 
   let bestDist = Infinity;
   let bestDot  = -Infinity;
