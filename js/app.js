@@ -55,9 +55,6 @@
   // Build unique stations list for the overlay
   const stations = buildUniqueStations(geojson);
 
-  // Build station position lookups and ordered sequences for ETA-AI mode
-  const stationPositions = buildStationPositions(geojson);
-  const stationSequences = buildStationSequences(lineSegments, stations, stationPositions);
 
   // ---- D3 zoom behavior ----
   const zoom = d3.zoom()
