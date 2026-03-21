@@ -175,13 +175,20 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap)
         }
       }
       // Local geometry too east-west (e.g. Brown line curve between Sedgwick
-      // and Armitage, or ML extension segments).  Probe a short walk to see
-      // which direction gains latitude — this follows the track through curves
-      // and into a clearly north-south section.
-      const probe = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
-      const dLat = probe.lat - trackPos.lat;
-      if (Math.abs(dLat) > 0.001) {
-        return (destIsNorth === (dLat > 0)) ? 1 : -1;
+      // and Armitage, or ML extension segments).  Probe both directions to see
+      // which gains vs. loses latitude — reliable when one probe goes north and
+      // the other south (opposite signs).  On the ML Loop's E-W Van Buren
+      // segment both +1 and -1 turn north after a short east/west run (one via
+      // Wabash, the other via Wells); in that case the signs are the same and
+      // we return null so the loopLineMismatch path can use rawNextStnDir
+      // instead of confirming the wrong direction.
+      const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
+      const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
+      const dLatFwd = probeFwd.lat - trackPos.lat;
+      const dLatBwd = probeBwd.lat - trackPos.lat;
+      if (dLatFwd * dLatBwd < 0) {
+        // One probe goes north, the other south — unambiguous.
+        return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
       }
       return null;
     }
