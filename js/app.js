@@ -1090,8 +1090,8 @@
           ctx.stroke();
           ctx.restore();
         } else {
-          const phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 2.5;
-          const rawT        = ((now / 2500) + phaseOffset) % 1;
+          if (d._phaseOffset === undefined) d._phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 2.5;
+          const rawT        = ((now / 2500) + d._phaseOffset) % 1;
           const pulseT      = Math.sin(rawT * Math.PI);
           const glowAlpha   = 0.4 * pulseT;
           const glowScale   = 1 + 0.7 * pulseT;

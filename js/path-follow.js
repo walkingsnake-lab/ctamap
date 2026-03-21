@@ -204,8 +204,10 @@ function geoDistSq(lon1, lat1, lon2, lat2) {
 function snapToTrackPosition(lon, lat, segments) {
   let bestDist = Infinity;
   let best = { segIdx: 0, ptIdx: 0, t: 0, lon: lon, lat: lat };
+  // Threshold: (0.00006°)² ≈ 7 m — if we're this close, no other segment can beat it.
+  const EARLY_EXIT_SQ = 3.6e-9;
 
-  for (let s = 0; s < segments.length; s++) {
+  outer: for (let s = 0; s < segments.length; s++) {
     const seg = segments[s];
     for (let i = 0; i < seg.length - 1; i++) {
       const ax = seg[i][0], ay = seg[i][1];
@@ -228,6 +230,7 @@ function snapToTrackPosition(lon, lat, segments) {
       if (dist < bestDist) {
         bestDist = dist;
         best = { segIdx: s, ptIdx: i, t: t, lon: px, lat: py };
+        if (bestDist < EARLY_EXIT_SQ) break outer;
       }
     }
   }
@@ -405,9 +408,13 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
   // ADVANCE_MAX_ITER defined in config.js
   let iter = 0;
 
+  // Cache current segment and its pre-computed edge lengths outside the loop.
+  // Updated whenever segIdx changes (segment boundary crossing).
+  let curSeg = seg;
+  let lensArray = curSeg._lens ?? null;
+
   // Advance within current segment
   while (remaining > 0 && ++iter < ADVANCE_MAX_ITER) {
-    const curSeg = segments[segIdx];
     if (!curSeg) break;
 
     const i = ptIdx;
@@ -416,7 +423,7 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
     const ax = curSeg[i][0], ay = curSeg[i][1];
     const bx = curSeg[i + 1][0], by = curSeg[i + 1][1];
     // Use pre-computed edge length when available (set by buildLineSegments).
-    const edgeLen = curSeg._lens ? curSeg._lens[i] : geoDist(ax, ay, bx, by);
+    const edgeLen = lensArray ? lensArray[i] : geoDist(ax, ay, bx, by);
 
     if (edgeLen < 1e-10) {
       // Degenerate edge — skip it
@@ -427,10 +434,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
           // Try next segment
           const next = findConnectedSegment(segIdx, ptIdx, curSeg, dir, segments, tLon, tLat, neighborMap);
           if (!next) return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: bx, lat: by, direction: dir, stopped: true };
-          segIdx = next.segIdx;
-          ptIdx = next.ptIdx;
-          t = next.t;
-          dir = next.direction;
+          segIdx = next.segIdx; ptIdx = next.ptIdx; t = next.t; dir = next.direction;
+          curSeg = segments[segIdx]; lensArray = curSeg?._lens ?? null;
         }
       } else {
         ptIdx--;
@@ -438,10 +443,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
         if (ptIdx < 0) {
           const next = findConnectedSegment(segIdx, 0, curSeg, dir, segments, tLon, tLat, neighborMap);
           if (!next) return { segIdx, ptIdx: 0, t: 0, lon: ax, lat: ay, direction: dir, stopped: true };
-          segIdx = next.segIdx;
-          ptIdx = next.ptIdx;
-          t = next.t;
-          dir = next.direction;
+          segIdx = next.segIdx; ptIdx = next.ptIdx; t = next.t; dir = next.direction;
+          curSeg = segments[segIdx]; lensArray = curSeg?._lens ?? null;
         }
       }
       continue;
@@ -464,10 +467,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
             const last = curSeg[curSeg.length - 1];
             return { segIdx, ptIdx: curSeg.length - 2, t: 1, lon: last[0], lat: last[1], direction: dir, stopped: true };
           }
-          segIdx = next.segIdx;
-          ptIdx = next.ptIdx;
-          t = next.t;
-          dir = next.direction;
+          segIdx = next.segIdx; ptIdx = next.ptIdx; t = next.t; dir = next.direction;
+          curSeg = segments[segIdx]; lensArray = curSeg?._lens ?? null;
         }
       }
     } else {
@@ -485,10 +486,8 @@ function advanceOnTrack(trackPos, distanceDeg, direction, segments, opts) {
             const first = curSeg[0];
             return { segIdx, ptIdx: 0, t: 0, lon: first[0], lat: first[1], direction: dir, stopped: true };
           }
-          segIdx = next.segIdx;
-          ptIdx = next.ptIdx;
-          t = next.t;
-          dir = next.direction;
+          segIdx = next.segIdx; ptIdx = next.ptIdx; t = next.t; dir = next.direction;
+          curSeg = segments[segIdx]; lensArray = curSeg?._lens ?? null;
         }
       }
     }

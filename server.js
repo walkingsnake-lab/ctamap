@@ -44,6 +44,30 @@ async function getCachedTrains() {
   return trainCachePending;
 }
 
+// Cache follow-train (ETA) responses for 5s — the browser polls every 2s per
+// selected train, but the CTA API data only refreshes every 30s anyway.
+const FOLLOW_CACHE_TTL = 5000; // ms
+const followCache = new Map(); // rn → { body, time }
+
+async function getCachedFollow(rn) {
+  const now = Date.now();
+  const cached = followCache.get(rn);
+  if (cached && now - cached.time < FOLLOW_CACHE_TTL) return cached.body;
+  const followUrl = `${CTA_FOLLOW}?key=${CTA_KEY}&runnumber=${rn}&outputType=JSON`;
+  const data = await fetchJSON(followUrl);
+  const ctatt = data.ctatt;
+  let body;
+  if (!ctatt || (ctatt.errCd !== '0' && ctatt.errCd !== 0)) {
+    body = JSON.stringify({ eta: null });
+  } else {
+    let etas = ctatt.eta || [];
+    if (!Array.isArray(etas)) etas = [etas];
+    body = JSON.stringify({ eta: etas, position: ctatt.position || null });
+  }
+  followCache.set(rn, { body, time: Date.now() });
+  return body;
+}
+
 const MIME_TYPES = {
   '.html': 'text/html',
   '.css': 'text/css',
@@ -58,11 +82,11 @@ const MIME_TYPES = {
 function fetchJSON(fetchUrl) {
   return new Promise((resolve, reject) => {
     http.get(fetchUrl, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         try {
-          resolve(JSON.parse(data));
+          resolve(JSON.parse(chunks.join('')));
         } catch (e) {
           reject(new Error('Invalid JSON from CTA API'));
         }
@@ -148,18 +172,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const followUrl = `${CTA_FOLLOW}?key=${CTA_KEY}&runnumber=${rn}&outputType=JSON`;
-      const data = await fetchJSON(followUrl);
-      const ctatt = data.ctatt;
-      if (!ctatt || (ctatt.errCd !== '0' && ctatt.errCd !== 0)) {
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
-        res.end(JSON.stringify({ eta: null }));
-        return;
-      }
-      let etas = ctatt.eta || [];
-      if (!Array.isArray(etas)) etas = [etas];
+      const body = await getCachedFollow(rn);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
-      res.end(JSON.stringify({ eta: etas, position: ctatt.position || null }));
+      res.end(body);
     } catch (e) {
       console.error('CTA Follow API error:', e.message);
       res.writeHead(502, { 'Content-Type': 'application/json' });
