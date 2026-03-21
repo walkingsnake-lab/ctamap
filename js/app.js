@@ -702,6 +702,12 @@
       fromK: fromTransform.k,
       fromScreenX: clickPt ? (fromTransform.k * clickPt[0] + fromTransform.x) : width / 2,
       fromScreenY: clickPt ? (fromTransform.k * clickPt[1] + fromTransform.y) : height / 2,
+      // Freeze the train's SVG position at click-time so mid-zoom corrections
+      // don't cause the camera to wobble chasing the moving train. We blend from
+      // this frozen position toward the live position as easing approaches 1, so
+      // handoff to the tracking loop is seamless (at eased=1 we're on live coords).
+      targetSvgX: clickPt ? clickPt[0] : null,
+      targetSvgY: clickPt ? clickPt[1] : null,
     };
 
     // Spread apart overlapping trains near the selection.
@@ -1018,8 +1024,15 @@
         const k  = zoomAnim.fromK + (trackingScale - zoomAnim.fromK) * eased;
         const sx = zoomAnim.fromScreenX + (width / 2 - zoomAnim.fromScreenX) * eased;
         const sy = zoomAnim.fromScreenY + (height / 2 - zoomAnim.fromScreenY) * eased;
-        const tx = sx - k * pt[0];
-        const ty = sy - k * pt[1];
+        // Blend from the click-time frozen SVG position toward the live position.
+        // At eased=0 we use the frozen coords (stable start), at eased=1 we're on
+        // the live position so tracking takes over with no discontinuity.
+        const frozenX = zoomAnim.targetSvgX ?? pt[0];
+        const frozenY = zoomAnim.targetSvgY ?? pt[1];
+        const targetX = frozenX + (pt[0] - frozenX) * eased;
+        const targetY = frozenY + (pt[1] - frozenY) * eased;
+        const tx = sx - k * targetX;
+        const ty = sy - k * targetY;
         const t  = d3.zoomIdentity.translate(tx, ty).scale(k);
         svgEl.__zoom = t;
         mapContainer.attr('transform', t.toString());
