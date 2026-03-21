@@ -45,8 +45,10 @@ const API_BASE = '/api/trains';
 const API_KEY = true; // Key is stored server-side in server.js
 
 // How often to refresh train positions (ms)
-// CTA updates positions every ~60-120s, so faster polling just gets stale data
-const REFRESH_INTERVAL = 20000;
+// CTA updates positions every ~60-120s, so faster polling just gets stale data.
+// 30s is a good balance: frequent enough to feel live, conservative enough to
+// respect the 100K daily API transaction limit.
+const REFRESH_INTERVAL = 30000;
 
 // Visual constants
 const LINE_WIDTH = 1.5;

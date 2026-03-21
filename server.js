@@ -9,6 +9,33 @@ const CTA_BASE = 'http://lapi.transitchicago.com/api/1.0/ttpositions.aspx';
 const CTA_FOLLOW = 'http://lapi.transitchicago.com/api/1.0/ttfollow.aspx';
 const ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 
+// Cache train positions for 15s to avoid 8 simultaneous CTA API calls on
+// every client request.  Protects against the 100K daily transaction limit
+// when multiple tabs or rapid reloads hit the server at the same time.
+const TRAIN_CACHE_TTL = 15000; // ms
+let trainCache = null;
+let trainCacheTime = 0;
+let trainCachePending = null; // in-flight promise, de-duplicates concurrent requests
+
+async function getCachedTrains() {
+  const now = Date.now();
+  if (trainCache && now - trainCacheTime < TRAIN_CACHE_TTL) {
+    return trainCache;
+  }
+  // If a fetch is already in flight, wait for it instead of firing another 8 calls.
+  if (trainCachePending) return trainCachePending;
+  trainCachePending = fetchAllTrains().then((trains) => {
+    trainCache = trains;
+    trainCacheTime = Date.now();
+    trainCachePending = null;
+    return trains;
+  }).catch((err) => {
+    trainCachePending = null;
+    throw err;
+  });
+  return trainCachePending;
+}
+
 const MIME_TYPES = {
   '.html': 'text/html',
   '.css': 'text/css',
@@ -89,7 +116,7 @@ const server = http.createServer(async (req, res) => {
   // API proxy endpoint
   if (parsed.pathname === '/api/trains') {
     try {
-      const trains = await fetchAllTrains();
+      const trains = await getCachedTrains();
       const body = JSON.stringify({ trains });
       res.writeHead(200, {
         'Content-Type': 'application/json',
