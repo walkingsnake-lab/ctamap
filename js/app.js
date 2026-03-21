@@ -18,10 +18,15 @@
   // Canvas overlay for all train visuals — eliminates per-frame SVG attribute
   // updates (600+ DOM writes/frame) and replaces them with batched Canvas draws.
   // pointer-events:none lets clicks pass through to SVG hit circles below.
+  // Physical size = logical × DPR for crisp rendering on HiDPI / Retina displays;
+  // CSS size stays at logical pixels so it overlaps the SVG exactly.
+  let dpr = window.devicePixelRatio || 1;
   const canvasEl = document.createElement('canvas');
   canvasEl.id = 'trains-canvas';
-  canvasEl.width = width;
-  canvasEl.height = height;
+  canvasEl.width  = width  * dpr;
+  canvasEl.height = height * dpr;
+  canvasEl.style.width  = width  + 'px';
+  canvasEl.style.height = height + 'px';
   document.body.appendChild(canvasEl);
   const ctx = canvasEl.getContext('2d');
 
@@ -1036,8 +1041,9 @@
 
     // ---- Canvas draw pass (uses the zoom just applied above) ----
     const zoomT = d3.zoomTransform(svgEl);
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
     ctx.save();
+    ctx.scale(dpr, dpr);  // HiDPI: map logical pixels → physical pixels
     ctx.transform(zoomT.k, 0, 0, zoomT.k, zoomT.x, zoomT.y);
 
     for (const { finalX, finalY, pt, d, frameAlpha, isSelected, segs } of drawQueue) {
@@ -1396,8 +1402,11 @@
       width = svgEl.clientWidth || window.innerWidth;
       height = svgEl.clientHeight || window.innerHeight;
       svg.attr('width', width).attr('height', height);
-      canvasEl.width  = width;
-      canvasEl.height = height;
+      dpr = window.devicePixelRatio || 1;
+      canvasEl.width        = width  * dpr;
+      canvasEl.height       = height * dpr;
+      canvasEl.style.width  = width  + 'px';
+      canvasEl.style.height = height + 'px';
 
       const result = redrawMap(svg, width, height, geojson, geoScaleReference);
       projection = result.projection;
