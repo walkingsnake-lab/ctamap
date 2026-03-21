@@ -242,6 +242,7 @@ const LINE_NORTH_DESTS = {
 
 // Lines that traverse the downtown Loop (shared ML segments)
 const LOOP_LINE_CODES = ['BR', 'OR', 'PK', 'PR', 'GR'];
+const LOOP_LINE_SET = new Set(LOOP_LINE_CODES);
 
 // Approximate center of the downtown Loop elevated
 const LOOP_CENTER = { lon: -87.629, lat: 41.882 };

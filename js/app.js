@@ -1085,28 +1085,33 @@
         let headingVisible = stationsVisible;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
-          const headingTarget = d._corrToTrackPos
-            ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
-            : undefined;
-          const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs, headingTarget);
-          const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
-          if (aheadPt) {
-            const hdx = aheadPt[0] - pt[0];
-            const hdy = aheadPt[1] - pt[1];
-            if (hdx !== 0 || hdy !== 0) {
-              const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
-              d._lastHeadingAngle = angle;
-              dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-              headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
-            } else if (d._lastHeadingAngle !== undefined) {
-              // Train is at a dead-end terminal — reuse the last valid angle
-              // so the arrow doesn't reset to east while the train is resting.
-              dotEl.attr('transform', `rotate(${d._lastHeadingAngle}) scale(${dotScale})`);
-              headingEl.attr('transform', `rotate(${d._lastHeadingAngle}) scale(${headingScale})`);
-            } else {
-              dotEl.attr('transform', `scale(${dotScale})`);
-              headingEl.attr('transform', `scale(${headingScale})`);
+          // Cache heading computation: advanceOnTrack is expensive at ~100 trains × 60fps.
+          // Skip recompute when the track position (segIdx, ptIdx, t) and direction are unchanged
+          // — trains are stationary ~87% of the time (2.5s correction / 20s interval).
+          const hCacheKey = d._trackPos.segIdx * 1e8 + d._trackPos.ptIdx * 1e4 + Math.round(d._trackPos.t * 9999);
+          if (hCacheKey !== d._hCacheKey || hdir !== d._hCacheDir) {
+            d._hCacheKey = hCacheKey;
+            d._hCacheDir = hdir;
+            const headingTarget = d._corrToTrackPos
+              ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
+              : undefined;
+            const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs, headingTarget);
+            const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
+            if (aheadPt) {
+              const hdx = aheadPt[0] - pt[0];
+              const hdy = aheadPt[1] - pt[1];
+              if (hdx !== 0 || hdy !== 0) {
+                d._lastHeadingAngle = Math.atan2(hdy, hdx) * 180 / Math.PI;
+              }
             }
+          }
+          if (d._lastHeadingAngle !== undefined) {
+            const angle = d._lastHeadingAngle;
+            dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
+            headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
+          } else {
+            dotEl.attr('transform', `scale(${dotScale})`);
+            headingEl.attr('transform', `scale(${headingScale})`);
           }
         } else if (d.heading !== undefined) {
           const angle = headingToSVGAngle(d.heading);

@@ -253,8 +253,7 @@ function effectiveDestForDirection(train, northDest, stations) {
   //
   // Skip the override for lines that don't use the Loop at all (RD, BL, YL).
   // When dest says "Loop", handle separately below (late-flip detection).
-  const LOOP_LINES = new Set(LOOP_LINE_CODES);
-  if (!LOOP_LINES.has(train.legend)) return train.destNm;
+  if (!LOOP_LINE_SET.has(train.legend)) return train.destNm;
   if (!train.destNm) return train.destNm;
   // A "Loop" destination is usually correct (train genuinely heading to Loop),
   // but the sign can also be a late flip — still saying "Loop" after the train
