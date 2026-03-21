@@ -163,13 +163,6 @@ body {
 }
 
 
-/* --- Glow intensity variable --- */
-@property --glow-i {
-  syntax: '<number>';
-  initial-value: 1;
-  inherits: true;
-}
-
 /* --- DOM train label overlay --- */
 #train-label {
   position: fixed;
@@ -211,9 +204,6 @@ body {
 
 .tl-dest {
   font-size: 40px;
-  text-shadow:
-    0 0 calc(4px * var(--glow-i, 0)) var(--glow-color, rgba(255,255,255,0.3)),
-    0 0 calc(2px * var(--glow-i, 0)) var(--glow-color, rgba(255,255,255,0.3));
 }
 
 .tl-plane {
@@ -230,7 +220,6 @@ body {
   color: rgba(255, 255, 255, 0.7);
   font-size: 30px;
   margin-top: 4px;
-  text-shadow: 0 0 calc(4px * var(--glow-i, 0)) rgba(255, 255, 255, 0.35);
 }
 
 .tl-status {
@@ -238,7 +227,6 @@ body {
   font-size: 28px;
   line-height: 1.1;
   margin-top: -2px;
-  text-shadow: 0 0 calc(4px * var(--glow-i, 0)) rgba(255, 255, 255, 0.55);
 }
 
 .tl-status strong {
@@ -283,7 +271,6 @@ body {
   gap: 16px;
   font-size: 20px;
   color: rgba(255, 255, 255, .8);
-  text-shadow: 0 0 calc(3px * var(--glow-i, 0)) rgba(255, 255, 255, 0.25);
 }
 
 .tl-stop-name {
