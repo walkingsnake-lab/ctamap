@@ -717,6 +717,8 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, lineTerminal
           const _headingDirFromPos = (_sbNorthDest && effectiveDest)
             ? (directionByTerminalWalk(train._corrFromTrackPos, effectiveDest,
                 _sbNorthDest, segs, neighborMap)
+              ?? directionFromHeading(train.heading,
+                  train._corrFromTrackPos.segIdx, train._corrFromTrackPos.ptIdx, segs)
               ?? train._direction)
             : train._direction;
           const isSuspectBackward = _headingDirFromPos !== train._corrDirection;
