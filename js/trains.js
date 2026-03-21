@@ -338,6 +338,9 @@ function effectiveDestForDirection(train, northDest, stations) {
     return train.destNm;
   }
   if (nextStnDistToLoop < trainDistToLoop) {
+    // Guard: train is well outside the Loop approach corridor (>~5.5 km).
+    // e.g. PR→Howard near Central (Evanston) — stale nextStaNm, not approaching.
+    if (trainDistToLoop > 0.05) return train.destNm;
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
   }
