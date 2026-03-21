@@ -37,6 +37,16 @@ body {
   transition: opacity 0.6s ease;
 }
 
+/* Canvas overlay — train visuals rendered here instead of SVG.
+   pointer-events:none lets clicks pass through to the SVG below. */
+#trains-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* --- Cursor flashlight overlay --- */
 #cursor-light {
   position: fixed;
@@ -106,22 +116,12 @@ body {
 
 /* --- Dimmed state (when a train is selected, non-matching elements dim) --- */
 .line-path,
-.train-group,
 .station-marker {
   transition: opacity 0.4s ease;
 }
 
 .line-path.dimmed {
   opacity: 0.08 !important;
-}
-
-.train-group.dimmed {
-  opacity: 0.08 !important;
-}
-
-/* Spread trains get boosted visibility even when dimmed by line focus */
-.train-group.dimmed.train-spread {
-  opacity: 1 !important;
 }
 
 .station-marker.dimmed {
@@ -145,76 +145,21 @@ body {
   shape-rendering: geometricPrecision;
 }
 
-/* --- Train dots --- */
+/* Promote the map container to its own compositor layer so zoom/pan
+   transforms are GPU-composited without triggering paint. */
+.map-container {
+  will-change: transform;
+}
+
+/* --- Train hit area (SVG, invisible — canvas handles all visuals) --- */
 .train-hit {
   cursor: pointer;
 }
 
-.train-dot,
-.train-glow,
-.train-heading {
-  pointer-events: none;
-}
-
-.train-glow {
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  stroke-width: 0;
-  animation: pulse-glow 2.5s ease-in-out infinite;
-}
-
-/* Selected train — dot scale is handled in JS (composed with heading rotation) */
-.train-group.selected .train-glow {
-  fill: none;
-  stroke-width: 0.2;
-  animation: radar-ring 2s ease-out infinite;
-}
-
-@keyframes pulse-glow {
-  0%   { opacity: 0; transform: scale(1); }
-  50%  { opacity: 0.4; transform: scale(1.7); }
-  100% { opacity: 0; transform: scale(1); }
-}
-
-@keyframes radar-ring {
-  0%   { opacity: 0.7; transform: scale(0.1); }
-  100% { opacity: 0; transform: scale(4); }
-}
-
-/* Pulse stagger is set as inline animation-delay per train (based on rn) */
-
-/* Trains fading out — no interaction, no pulse */
+/* Trains fading out — no interaction */
 .train-exiting {
   pointer-events: none !important;
   cursor: default;
-}
-
-.train-exiting .train-glow {
-  animation: none;
-  opacity: 0;
-}
-
-/* Trains retiring at terminal — no pulse glow, still clickable */
-.train-retiring {
-  cursor: pointer;
-}
-
-.train-retiring .train-glow {
-  animation: none;
-  opacity: 0;
-}
-
-/* --- Direction indicators (animated via JS, not CSS) --- */
-.train-arrow {
-  pointer-events: none;
-}
-
-.spread-connector {
-  stroke: rgba(255, 255, 255, 0.5);
-  stroke-width: 0.35;
-  stroke-dasharray: 0.3 0.5;
-  pointer-events: none;
 }
 
 
@@ -427,4 +372,3 @@ body.embed-mode #train-label.visible {
 body.embed-mode #welcome-hint {
   display: none !important;
 }
-
