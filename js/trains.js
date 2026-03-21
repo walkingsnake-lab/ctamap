@@ -315,7 +315,15 @@ function effectiveDestForDirection(train, northDest, stations) {
     }
     return train.destNm;
   }
-  if (nextStnDistToLoop < trainDistToLoop) {
+  // Only override when the train is actually near the Loop — the premature
+  // sign flip (e.g. sign shows "Harlem" while still circling the Loop) can
+  // only happen inside or within ~5km of the Loop.  Without this guard,
+  // trains far out on the south branch (e.g. GR at 47th, ~8km from Loop)
+  // with a northbound next-station (Roosevelt) incorrectly get effectiveDest
+  // overridden to "Loop".  That makes destIsNorth false for GR/BR/PR
+  // (whose northDest ≠ "Loop"), flipping directionByTerminalWalk to
+  // southbound and locking the train in the wrong direction indefinitely.
+  if (nextStnDistToLoop < trainDistToLoop && trainDistToLoop < 0.05) {
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
   }
