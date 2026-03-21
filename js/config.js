@@ -249,6 +249,11 @@ const LOOP_LINE_SET = new Set(LOOP_LINE_CODES);
 // Approximate center of the downtown Loop elevated
 const LOOP_CENTER = { lon: -87.629, lat: 41.882 };
 
+// Distance threshold (degrees) for "train is physically inside the Loop".
+// Covers all ML Loop stations and the boundary exit stations (e.g. Clinton
+// for PK at ~0.014°).  Outer approach stations are 0.024°+ from the center.
+const LOOP_INNER_RADIUS = 0.016;
+
 // Probe distance for next-station direction inference (~1.5km in degrees)
 const PROBE_DIST = 0.015;
 
