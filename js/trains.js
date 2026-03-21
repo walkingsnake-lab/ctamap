@@ -322,19 +322,21 @@ function effectiveDestForDirection(train, northDest, stations) {
     // station, trust the sign.
     if (nextStnDistToLoop <= 0.014) return train.destNm;
     // Case (b): station is farther out — likely a stale nextStaNm on an
-    // approach segment.  Override to "Loop" if the train is still approaching.
-    if (trainDistToLoop < 0.025) {
+    // approach segment.  Override to "Loop" if the train is still approaching,
+    // but not if the train is already inside the Loop (circling to exit).
+    if (trainDistToLoop >= LOOP_INNER_RADIUS && trainDistToLoop < 0.025) {
       console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" appears stale at approach station (dist-to-loop=${trainDistToLoop.toFixed(4)}) — using "Loop"`);
       return 'Loop';
     }
     return train.destNm;
   }
-  // If the train is already inside the Loop (trainDistToLoop < 0.016°, which
-  // covers all ML Loop stations and the boundary exit station e.g. Clinton for
-  // PK at ~0.014°), the sign is correct — the train is circling to exit, not
-  // approaching from outside.  The "next station closer to Loop" heuristic only
-  // applies on outer approach segments (approach stations are 0.024°+ away).
-  if (trainDistToLoop < 0.016) return train.destNm;
+  // If the train is already inside the Loop, the sign is correct — the train
+  // is circling to exit, not approaching from outside.  The "next station
+  // closer to Loop" heuristic only applies on outer approach segments.
+  if (trainDistToLoop < LOOP_INNER_RADIUS) {
+    console.log(`[CTA] Inside Loop: rn=${train.rn} (${train.legend}) trusting destNm="${train.destNm}" (dist-to-loop=${trainDistToLoop.toFixed(4)})`);
+    return train.destNm;
+  }
   if (nextStnDistToLoop < trainDistToLoop) {
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
