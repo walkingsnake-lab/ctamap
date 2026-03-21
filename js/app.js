@@ -15,6 +15,16 @@
   document.body.appendChild(svgEl);
   const svg = d3.select(svgEl);
 
+  // Canvas overlay for all train visuals — eliminates per-frame SVG attribute
+  // updates (600+ DOM writes/frame) and replaces them with batched Canvas draws.
+  // pointer-events:none lets clicks pass through to SVG hit circles below.
+  const canvasEl = document.createElement('canvas');
+  canvasEl.id = 'trains-canvas';
+  canvasEl.width = width;
+  canvasEl.height = height;
+  document.body.appendChild(canvasEl);
+  const ctx = canvasEl.getContext('2d');
+
   // ---- Load map lines ----
   let mapState;
   try {
@@ -152,9 +162,8 @@
     dismissWelcome();
   }
 
-  // Create spread-connector layer (below trains so lines sit behind dots)
-  mapContainer.append('g').attr('class', 'spread-lines-layer');
-  // Create train layer on top (inside the zoom container)
+  // Create train layer on top (inside the zoom container).
+  // Spread connector lines are now drawn on the canvas; no spread-lines-layer needed.
   mapContainer.append('g').attr('class', 'trains-layer');
 
   // ---- DOM label overlay ----
@@ -205,6 +214,11 @@
   // TRACK_ZOOM_SCALE defined in config.js
   let trackingScale = TRACK_ZOOM_SCALE;
   let lastLineK = -1; // tracks last zoom k at which line stroke-widths were updated
+
+  // Zoom-dependent sizes, updated only when k changes (not every frame).
+  let scaledRadius     = baseTrainRadius;
+  let scaledGlowRadius = baseGlowRadius;
+  let canvasArrowSize  = LINE_WIDTH * visualScale / 3.2; // half-width of arrow triangle in SVG units
 
   // ---- Train spreading (overlap disambiguation) ----
   // When a train is clicked, nearby overlapping trains fan out perpendicular to
@@ -362,9 +376,6 @@
       train._spreading = true;
     }
 
-    // Apply CSS class immediately so spread trains get boosted visibility
-    svg.selectAll('.train-group')
-      .classed('train-spread', d => !!d._spreading);
   }
 
   /**
@@ -386,9 +397,8 @@
       }
       // When not instant, the lerp in animate() will bring it back to 0
     }
-    if (instant) {
-      svg.selectAll('.train-group').classed('train-spread', false);
-    }
+    // Canvas reads d._spreading directly; no CSS class to clear.
+    void instant;
   }
 
   // ---- Initialize trains ----
@@ -429,48 +439,12 @@
       .style('opacity', 0);
 
     // Invisible hit area for click detection — sized to ~12px on screen.
-    // Dividing by the current zoom keeps the target consistent at all zoom levels.
+    // All train visuals (glow, dot, arrows, heading) are now drawn on the canvas overlay.
     enter.append('circle')
       .attr('class', 'train-hit')
       .attr('r', 12 / (d3.zoomTransform(svgEl).k || 1))
       .attr('fill', 'transparent')
       .attr('stroke', 'none');
-
-    // Outer glow circle — stagger pulse by run number so delay is stable across refreshes
-    // Stroke is used for the radar ring when selected; fill gradient for unselected pulse
-    enter.append('circle')
-      .attr('class', 'train-glow')
-      .attr('r', baseGlowRadius)
-      .attr('fill', d => `url(#train-glow-${d.legend})`)
-      .attr('stroke', d => LINE_COLORS[d.legend] || '#fff')
-      .style('animation-delay', d => `${((parseInt(d.rn, 10) || 0) % 25) * 0.1}s`);
-
-    // Direction triangles — rendered before dot so they pass "behind" the circle
-    // ARROW_COUNT defined in config.js
-    const arrowSize = LINE_WIDTH * visualScale / 1.6;
-    const arrowPath = `M ${arrowSize},0 L ${-arrowSize},${-arrowSize * 0.8} L ${-arrowSize},${arrowSize * 0.8} Z`;
-    for (let i = 0; i < ARROW_COUNT; i++) {
-      enter.append('path')
-        .attr('class', `train-arrow train-arrow-${i}`)
-        .attr('d', arrowPath)
-        .attr('fill', d => LINE_COLORS[d.legend] || '#fff')
-        .style('opacity', 0);
-    }
-
-    // Train dot — circle shape
-    enter.append('circle')
-      .attr('class', 'train-dot')
-      .attr('r', baseTrainRadius)
-      .attr('fill', d => LINE_COLORS[d.legend] || '#fff');
-
-    // Heading direction triangle — overlays the circle, visible only when stations are shown
-    const ht = baseTrainRadius * 0.75;
-    const headingTriPath = `M ${ht},0 L ${-ht * 0.6},${-ht * 0.7} L ${-ht * 0.6},${ht * 0.7} Z`;
-    enter.append('path')
-      .attr('class', 'train-heading')
-      .attr('d', headingTriPath)
-      .attr('fill', d => d.legend === 'YL' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.75)')
-      .style('opacity', 0);
 
     // Click handler on new train groups
     enter.on('click', function (event, d) {
@@ -486,12 +460,8 @@
     });
     enter.transition().duration(800).style('opacity', 1);
 
-    // Maintain selected / retiring classes on merged selection
-    const merged = groups.merge(enter);
-    merged.classed('selected', d => d.rn === selectedTrainRn);
-    merged.classed('train-retiring', d => !!d._retiring);
-    merged.classed('train-spread', d => !!d._spreading);
-
+    // Canvas renders all train visuals; no class toggling needed on the SVG groups.
+    // applyLineFocus sets _dimmed on train data objects for the canvas draw loop.
     if (selectedTrain) {
       applyLineFocus(selectedTrain.legend);
     }
@@ -658,9 +628,10 @@
     svg.selectAll('.pr-express-path')
       .classed('pr-express-active', legend === 'PR');
 
-    // Dim train groups that don't match
-    svg.selectAll('.train-group')
-      .classed('dimmed', d => d.legend !== legend);
+    // Mark train data objects as dimmed — canvas reads this flag instead of a CSS class.
+    // Spread trains get full opacity even when on a different line (handled in canvas loop).
+    const allT = (realTrains || []).concat(retiringTrains);
+    for (const t of allT) t._dimmed = (t.legend !== legend);
 
     // Dim station markers that don't serve the selected line
     svg.selectAll('.station-marker')
@@ -676,11 +647,15 @@
 
   function clearLineFocus() {
     lastLineK = -1; // force stroke-width recalc to restore normal line widths
-    svg.selectAll('.line-path, .train-group, .station-marker')
+    svg.selectAll('.line-path, .station-marker')
       .classed('dimmed', false);
     svg.selectAll('.pr-express-path')
       .classed('pr-express-active', false);
     lineGlow.classList.remove('visible');
+
+    // Clear dimmed flag on all train data objects
+    const allT = (realTrains || []).concat(retiringTrains);
+    for (const t of allT) t._dimmed = false;
   }
 
   // ---- Train selection functions ----
@@ -706,9 +681,7 @@
     lastRenderedStopNames = null;
     closeBtn.classList.add('visible');
 
-    // Highlight selected and dim other lines/trains
-    svg.selectAll('.train-group')
-      .classed('selected', d => d.rn === selectedTrainRn);
+    // Canvas renders selected state; applyLineFocus marks other trains as dimmed.
     applyLineFocus(train.legend);
 
     // Show DOM label
@@ -762,9 +735,6 @@
     lastETAs = null;
     closeBtn.classList.remove('visible');
 
-    // Remove highlight and restore full opacity
-    svg.selectAll('.train-group')
-      .classed('selected', false);
     clearLineFocus();
 
     // Hide DOM label
@@ -881,26 +851,25 @@
       }
     }
 
-    // Update ALL train positions directly (no D3 transitions — frame-by-frame is smoother)
+    // ---- Zoom-dependent sizes (recalculated only when k changes) ----
     // Scale dots inversely with zoom so they don't grow unboundedly when zoomed in.
-    // Exponent 0.6 gives partial compensation: dots shrink at high zoom but keep visual weight.
-    // The "larger on mobile" feel is preserved — it comes from the map being compressed into
-    // fewer pixels, not from r being different.
+    // Exponent 0.45 gives partial compensation: dots shrink at high zoom but keep visual weight.
     const currentK = d3.zoomTransform(svgEl).k;
-    const scaledRadius     = baseTrainRadius / Math.pow(currentK, 0.45);
-    const scaledGlowRadius = baseGlowRadius  / Math.pow(currentK, 0.5);
 
-    // Thin lines slightly as zoom increases — only recalculate when k changes.
     if (currentK !== lastLineK) {
       lastLineK = currentK;
-      // Keep hit area a fixed screen size (~12px) regardless of zoom level.
-      // Without this, the hit circle (r=12 SVG units) grows with the zoom
-      // transform, reaching 96px screen radius at k=8 and causing accidental
-      // taps and overlapping targets at high zoom.
-      const scaledHitRadius = 12 / currentK;
-      svg.selectAll('.train-hit').attr('r', scaledHitRadius);
-      const scaledLineWidth = LINE_WIDTH * visualScale / Math.pow(currentK, 0.6);
+      scaledRadius     = baseTrainRadius  / Math.pow(currentK, 0.45);
+      scaledGlowRadius = baseGlowRadius   / Math.pow(currentK, 0.5);
+
+      // Arrow half-width tracks the selected line's thicker stroke width
+      const scaledLineWidth  = LINE_WIDTH * visualScale / Math.pow(currentK, 0.6);
       const selLegend = selectedTrain?.legend;
+      const arrowLineWidth = selLegend ? scaledLineWidth * 2.2 : scaledLineWidth;
+      canvasArrowSize = arrowLineWidth / 2.0;
+
+      // Keep hit area a fixed screen size (~12px) regardless of zoom level.
+      svg.selectAll('.train-hit').attr('r', 12 / currentK);
+
       svg.selectAll('.line-path').attr('stroke-width', function () {
         return selLegend && d3.select(this).attr('data-legend') === selLegend
           ? scaledLineWidth * 2.2
@@ -908,26 +877,22 @@
       });
       svg.selectAll('.pr-express-path')
         .attr('stroke-dasharray', `${scaledLineWidth * 3} ${scaledLineWidth * 2}`);
-      // Keep arrow width in sync with the selected (thicker) line width.
-      const arrowLineWidth = selLegend ? scaledLineWidth * 2.2 : scaledLineWidth;
-      const sas = arrowLineWidth / 2.0;
-      const sap = `M ${sas},0 L ${-sas},${-sas * 0.8} L ${-sas},${sas * 0.8} Z`;
-      svg.selectAll('.train-arrow').attr('d', sap);
 
-      // Scale station dots to match line width at every zoom level
       scaleStationDots(currentK);
-
-      // Update glow radius for zoom level — only when k changes, not every frame.
-      // Changing an SVG attribute on a CSS-animated element every frame invalidates
-      // its compositor layer and causes the pulse animation to flicker in Chrome.
-      svg.selectAll('.train-glow').attr('r', scaledGlowRadius);
     }
 
-    // Spread interpolation factor — framerate-independent exponential ease.
+    // ---- Spread interpolation factor ----
     // pow(0.00005, dt/1000) ≈ 0.85 at 60fps → alpha ≈ 0.15 per frame, snappy ~200ms settle.
     const spreadLerp = 1 - Math.pow(0.00005, dt / 1000);
 
-    // Collect spread train positions for connector lines
+    // ---- Canvas frame setup ----
+    // Clear the canvas and apply the current zoom transform so all drawing is
+    // in map (SVG projection) coordinates — same space as the SVG layer below.
+    const zoomT = d3.zoomTransform(svgEl);
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+    ctx.transform(zoomT.k, 0, 0, zoomT.k, zoomT.x, zoomT.y);
+
     let spreadAnchorPos = null;
     const spreadChildPositions = [];
 
@@ -937,14 +902,15 @@
       anchorPt = projection([selectedTrain.lon, selectedTrain.lat]);
     }
 
+    // Iterate train SVG groups: compute positions (spread lerp) + update hit-circle
+    // transforms, then draw all visuals on the canvas.
     svg.select('.trains-layer').selectAll('.train-group')
       .each(function (d) {
         const pt = projection([d.lon, d.lat]);
         if (!pt) return;
         const g = d3.select(this);
 
-        // Interpolate spread offset — target recomputed each frame so it
-        // tracks dot size as the user zooms in/out
+        // ---- Spread interpolation ----
         let sdx = 0, sdy = 0;
         if (d._spreading) {
           const spreadScale = baseSpread / Math.pow(currentK, 0.55);
@@ -952,30 +918,23 @@
           const targetY = (d._spreadDirY || 0) * spreadScale * (d._spreadRing || 0);
           d._spreadX += (targetX - d._spreadX) * spreadLerp;
           d._spreadY += (targetY - d._spreadY) * spreadLerp;
-          // Snap to zero when collapsing and close enough.
-          // Keep _spreading true for the selected train (spread anchor) so its
-          // heading triangle stays visible while other trains are fanned out.
           if (targetX === 0 && targetY === 0 &&
               Math.abs(d._spreadX) < 0.001 && Math.abs(d._spreadY) < 0.001) {
-            // Don't clear anchor while children are still collapsing —
-            // connectors need the anchor position until all offsets reach zero.
             if (d._spreadAnchor && d.rn !== selectedTrainRn) {
               // Anchor after deselect: keep alive until no other train is spreading
-              // (checked below after the .each loop)
             } else if (d.rn !== selectedTrainRn) {
               d._spreadX = 0;
               d._spreadY = 0;
               d._spreading = false;
               d._spreadAnchor = false;
-              g.classed('train-spread', false);
             }
           }
           sdx = d._spreadX;
           sdy = d._spreadY;
         }
 
-        // Position spread children relative to the anchor so the visual
-        // separation is consistent regardless of the train's own track offset.
+        // Position spread children relative to the anchor so visual separation
+        // is consistent regardless of the train's own track offset.
         let finalX = pt[0] + sdx;
         let finalY = pt[1] + sdy;
         if (d._spreading && anchorPt && d.rn !== selectedTrainRn &&
@@ -984,175 +943,213 @@
           finalY = anchorPt[1] + sdy;
         }
 
+        // Update SVG group transform — only the hit circle lives in SVG now;
+        // this single attr write keeps it aligned for click detection.
         g.attr('transform', `translate(${finalX}, ${finalY})`);
 
-        // Track positions for spread connector lines.
-        // _spreadAnchor persists after deselect so connectors stay visible
-        // while children lerp back to center.
+        // Track positions for canvas connector lines.
         if (d._spreading && d._spreadAnchor) {
           spreadAnchorPos = [finalX, finalY];
         } else if (d._spreading && (sdx !== 0 || sdy !== 0)) {
           spreadChildPositions.push([finalX, finalY]);
         }
 
-        // Animate direction triangles: steady stream flowing along the track
+        // Current group opacity — D3 exit transitions animate this from 1→0.
+        // Reading style.opacity on the raw element avoids D3 wrapper overhead.
+        const rawOpacity = parseFloat(this.style.opacity);
+        const frameAlpha = isNaN(rawOpacity) ? 1 : rawOpacity;
+        if (frameAlpha < 0.01) return; // fully faded, skip canvas draw
+
+        const isSelected  = d.rn === selectedTrainRn;
+        const lineColor   = LINE_COLORS[d.legend] || '#fff';
+        // Spread trains always get full opacity even when on a different line
+        const isDimmed    = d._dimmed && !d._spreading;
+        const alpha       = (isDimmed ? 0.08 : 1.0) * frameAlpha;
+        const dotScale    = isSelected ? 1.8 : 1;
+
+        // ---- Update cached heading angle (radians) ----
+        // advanceOnTrack is expensive; skip recompute when track position and
+        // direction haven't changed (trains sit still ~87% of the time).
         const segs = lineSegments[d.legend];
-        const showArrows = d.rn === selectedTrainRn
-          && d._trackPos && segs;
-
-        if (showArrows) {
-          if (d._arrowPhase === undefined) d._arrowPhase = 0;
-          d._arrowPhase = (d._arrowPhase + dt / 3600) % 1;
-
-          const dir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
-          const behindDist = 0.005; // start this far behind the dot
-          const totalDist = 0.010;  // total travel distance (behind + ahead)
-
-          // Target hint for junction selection: when correcting, the correction
-          // target guides forward arrows toward the correct segment at Loop junctions
-          // (where arrival-direction alignment would pick the wrong branch).
-          // Trailing arrows (dist < 0) must NOT use this forward target — it would
-          // cause them to pick the wrong branch at junctions the train just passed.
-          // They rely on the arrival-direction heuristic instead, which correctly
-          // selects the segment the train came from.
-          const arrowTarget = d._corrToTrackPos
-            ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
-            : undefined;
-
-          for (let i = 0; i < 6; i++) {
-            const arrow = g.select(`.train-arrow-${i}`);
-            const phase = (d._arrowPhase + i / 6) % 1;
-            // Start behind the dot, move forward through it
-            const dist = -behindDist + totalDist * phase;
-
-            // Forward arrows use the correction target; trailing arrows do not.
-            const fwdTarget = dist >= 0 ? arrowTarget : undefined;
-
-            // Advance along track; negative = behind dot
-            const advDir = dist >= 0 ? dir : -dir;
-            const advPos = advanceOnTrack(d._trackPos, Math.abs(dist), advDir, segs, fwdTarget);
-            const advPt = projection([advPos.lon, advPos.lat]);
-
-            if (advPt) {
-              const dx = advPt[0] - pt[0];
-              const dy = advPt[1] - pt[1];
-
-              // Compute rotation angle from a small look-ahead along the track.
-              // advPos.direction reflects any direction flip from segment boundary
-              // crossings (e.g. two GeoJSON segments stored end-to-end).
-              // For arrows ahead of the dot (dist >= 0) the look-ahead continues
-              // in advPos.direction (the effective forward direction in that segment).
-              // For arrows behind the dot (dist < 0) the look-ahead must be inverted
-              // because we arrived by going backward; -advPos.direction is the
-              // train's forward direction from that position.
-              const lookAheadDir = dist >= 0 ? advPos.direction : -advPos.direction;
-              const aheadPos = advanceOnTrack(advPos, 0.0005, lookAheadDir, segs, fwdTarget);
-              const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
-              let angle = 0;
-              if (aheadPt) {
-                const adx = aheadPt[0] - advPt[0];
-                const ady = aheadPt[1] - advPt[1];
-                if (adx !== 0 || ady !== 0) {
-                  angle = Math.atan2(ady, adx) * 180 / Math.PI;
-                }
-              }
-
-              // Smooth phase-based opacity: 0 at edges, peak ~0.85 in the middle
-              // sin^0.6 stays high longer for a slower fade
-              const opacity = 0.85 * Math.pow(Math.sin(phase * Math.PI), 0.6);
-
-              arrow
-                .attr('transform', `translate(${dx},${dy}) rotate(${angle})`)
-                .style('opacity', opacity);
-            }
-          }
-        } else {
-          d._arrowPhase = undefined;
-          for (let i = 0; i < 6; i++) {
-            g.select(`.train-arrow-${i}`).style('opacity', 0);
-          }
-        }
-
-        // Rotate the combined dot+pointer shape to face the heading direction
-        const dotEl = g.select('.train-dot');
-        const headingEl = g.select('.train-heading');
-        dotEl.attr('r', scaledRadius);
-        const dotScale = d.rn === selectedTrainRn ? 1.8 : 1;
-        const headingScale = dotScale / Math.pow(currentK, 0.55);
-        let headingVisible = stationsVisible;
         if (d._trackPos && segs) {
           const hdir = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
-          // Cache heading computation: advanceOnTrack is expensive at ~100 trains × 60fps.
-          // Skip recompute when the track position (segIdx, ptIdx, t) and direction are unchanged
-          // — trains are stationary ~87% of the time (2.5s correction / 20s interval).
           const hCacheKey = d._trackPos.segIdx * 1e8 + d._trackPos.ptIdx * 1e4 + Math.round(d._trackPos.t * 9999);
           if (hCacheKey !== d._hCacheKey || hdir !== d._hCacheDir) {
             d._hCacheKey = hCacheKey;
             d._hCacheDir = hdir;
-            const headingTarget = d._corrToTrackPos
+            const headingHint = d._corrToTrackPos
               ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
               : undefined;
-            const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs, headingTarget);
-            const aheadPt = projection([aheadPos.lon, aheadPos.lat]);
+            const aheadPos = advanceOnTrack(d._trackPos, 0.001, hdir, segs, headingHint);
+            const aheadPt  = projection([aheadPos.lon, aheadPos.lat]);
             if (aheadPt) {
               const hdx = aheadPt[0] - pt[0];
               const hdy = aheadPt[1] - pt[1];
-              if (hdx !== 0 || hdy !== 0) {
-                d._lastHeadingAngle = Math.atan2(hdy, hdx) * 180 / Math.PI;
-              }
+              if (hdx !== 0 || hdy !== 0) d._lastHeadingAngle = Math.atan2(hdy, hdx); // radians
             }
           }
-          if (d._lastHeadingAngle !== undefined) {
-            const angle = d._lastHeadingAngle;
-            dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-            headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
-          } else {
-            dotEl.attr('transform', `scale(${dotScale})`);
-            headingEl.attr('transform', `scale(${headingScale})`);
-          }
         } else if (d.heading !== undefined) {
-          const angle = headingToSVGAngle(d.heading);
-          dotEl.attr('transform', `rotate(${angle}) scale(${dotScale})`);
-          headingEl.attr('transform', `rotate(${angle}) scale(${headingScale})`);
-        } else {
-          dotEl.attr('transform', `scale(${dotScale})`);
-          headingEl.attr('transform', `scale(${headingScale})`);
+          d._lastHeadingAngle = headingToSVGAngle(d.heading) * Math.PI / 180;
         }
-        // Smooth heading opacity: lerp toward target so it fades in/out
-        // instead of popping.  Uses the same exponential ease as spread.
-        const headingTarget = headingVisible ? 1 : 0;
-        if (d._headingOpacity === undefined) d._headingOpacity = headingTarget;
-        d._headingOpacity += (headingTarget - d._headingOpacity) * spreadLerp;
-        // Snap to exact 0/1 when close enough to avoid lingering sub-pixel draws
-        if (Math.abs(d._headingOpacity - headingTarget) < 0.01) d._headingOpacity = headingTarget;
-        headingEl.style('opacity', d._headingOpacity);
+
+        // ---- Smooth heading indicator opacity ----
+        const headingVisible = stationsVisible;
+        const headingTargetAlpha = headingVisible ? 1 : 0;
+        if (d._headingOpacity === undefined) d._headingOpacity = headingTargetAlpha;
+        d._headingOpacity += (headingTargetAlpha - d._headingOpacity) * spreadLerp;
+        if (Math.abs(d._headingOpacity - headingTargetAlpha) < 0.01) d._headingOpacity = headingTargetAlpha;
+
+        // ================================================================
+        // Canvas drawing — order matches the old SVG z-order:
+        //   1. Glow / radar ring (behind dot)
+        //   2. Direction arrows  (behind dot, selected train only)
+        //   3. Dot + heading indicator (on top)
+        // ================================================================
+
+        // ---- 1. Glow / radar ring ----
+        if (!d._retiring) {
+          if (isSelected) {
+            // Radar ring: expands outward and fades out over 2s
+            const radarT     = (now / 2000) % 1;
+            const radarScale = 0.1 + 3.9 * radarT;
+            const radarAlpha = 0.7 * (1 - radarT);
+            ctx.save();
+            ctx.globalAlpha  = alpha * radarAlpha;
+            ctx.beginPath();
+            ctx.arc(finalX, finalY, scaledGlowRadius * radarScale, 0, Math.PI * 2);
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth   = 0.2; // in SVG (map) units — scaled to screen by zoom transform
+            ctx.stroke();
+            ctx.restore();
+          } else {
+            // Pulse glow: sine-wave opacity + scale, staggered by run number.
+            // Replicates the old CSS @keyframes pulse-glow animation but on the
+            // canvas thread — avoids compositor layer invalidation on zoom changes.
+            const phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 2.5;
+            const rawT        = ((now / 2500) + phaseOffset) % 1;
+            const pulseT      = Math.sin(rawT * Math.PI); // 0 → 1 → 0 over cycle
+            const glowAlpha   = 0.4 * pulseT;
+            const glowScale   = 1 + 0.7 * pulseT;
+            if (glowAlpha > 0.005) {
+              ctx.save();
+              ctx.globalAlpha = alpha * glowAlpha;
+              ctx.beginPath();
+              ctx.arc(finalX, finalY, scaledGlowRadius * glowScale, 0, Math.PI * 2);
+              ctx.fillStyle = lineColor;
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+        }
+
+        // ---- 2. Direction arrows (selected train only) ----
+        if (isSelected && d._trackPos && segs) {
+          if (d._arrowPhase === undefined) d._arrowPhase = 0;
+          d._arrowPhase = (d._arrowPhase + dt / 3600) % 1;
+
+          const dir        = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
+          const behindDist = 0.005;
+          const totalDist  = 0.010;
+          const arrowTarget = d._corrToTrackPos
+            ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
+            : undefined;
+
+          for (let i = 0; i < ARROW_COUNT; i++) {
+            const phase  = (d._arrowPhase + i / ARROW_COUNT) % 1;
+            const dist   = -behindDist + totalDist * phase;
+            const advDir = dist >= 0 ? dir : -dir;
+            // Forward arrows use correction target; trailing arrows do not.
+            const fwdTarget = dist >= 0 ? arrowTarget : undefined;
+            const advPos = advanceOnTrack(d._trackPos, Math.abs(dist), advDir, segs, fwdTarget);
+            const advPt  = projection([advPos.lon, advPos.lat]);
+            if (!advPt) continue;
+
+            const dx = advPt[0] - pt[0];
+            const dy = advPt[1] - pt[1];
+
+            // Look-ahead angle for arrow rotation (same logic as before)
+            const lookAheadDir = dist >= 0 ? advPos.direction : -advPos.direction;
+            const aheadPos = advanceOnTrack(advPos, 0.0005, lookAheadDir, segs, fwdTarget);
+            const aheadPt  = projection([aheadPos.lon, aheadPos.lat]);
+            let angle = 0;
+            if (aheadPt) {
+              const adx = aheadPt[0] - advPt[0];
+              const ady = aheadPt[1] - advPt[1];
+              if (adx !== 0 || ady !== 0) angle = Math.atan2(ady, adx);
+            }
+
+            // sin^0.6 stays high longer for a slower fade; peak ~0.85
+            const opacity = 0.85 * Math.pow(Math.sin(phase * Math.PI), 0.6);
+            const sz = canvasArrowSize;
+            ctx.save();
+            ctx.globalAlpha = alpha * opacity;
+            ctx.translate(finalX + dx, finalY + dy);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(sz, 0);
+            ctx.lineTo(-sz, -sz * 0.8);
+            ctx.lineTo(-sz,  sz * 0.8);
+            ctx.closePath();
+            ctx.fillStyle = lineColor;
+            ctx.fill();
+            ctx.restore();
+          }
+        } else {
+          d._arrowPhase = undefined;
+        }
+
+        // ---- 3. Dot + heading indicator ----
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(finalX, finalY);
+        if (d._lastHeadingAngle !== undefined) ctx.rotate(d._lastHeadingAngle);
+
+        // Train dot
+        ctx.beginPath();
+        ctx.arc(0, 0, scaledRadius * dotScale, 0, Math.PI * 2);
+        ctx.fillStyle = lineColor;
+        ctx.fill();
+
+        // Heading triangle (forward-facing, visible when station overlay is on)
+        if (d._headingOpacity > 0.01) {
+          const ht = scaledRadius * dotScale * 0.75;
+          ctx.globalAlpha = alpha * d._headingOpacity;
+          ctx.beginPath();
+          ctx.moveTo(ht, 0);
+          ctx.lineTo(-ht * 0.6, -ht * 0.7);
+          ctx.lineTo(-ht * 0.6,  ht * 0.7);
+          ctx.closePath();
+          ctx.fillStyle = d.legend === 'YL' ? 'rgba(0,0,0,0.75)' : 'rgba(255,255,255,0.75)';
+          ctx.fill();
+        }
+        ctx.restore();
       });
 
-    // Draw connector lines from spread anchor to each fanned-out train
-    const linesLayer = svg.select('.spread-lines-layer');
-    const lineData = (spreadAnchorPos && spreadChildPositions.length > 0)
-      ? spreadChildPositions : [];
-    const connectors = linesLayer.selectAll('.spread-connector').data(lineData);
-    connectors.enter().append('line')
-      .attr('class', 'spread-connector')
-      .merge(connectors)
-      .attr('x1', spreadAnchorPos ? spreadAnchorPos[0] : 0)
-      .attr('y1', spreadAnchorPos ? spreadAnchorPos[1] : 0)
-      .attr('x2', d => d[0])
-      .attr('y2', d => d[1]);
-    connectors.exit().remove();
+    // ---- Spread connector lines (canvas dashed strokes) ----
+    if (spreadAnchorPos && spreadChildPositions.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth   = 0.35;
+      ctx.setLineDash([0.3, 0.5]);
+      for (const childPos of spreadChildPositions) {
+        ctx.beginPath();
+        ctx.moveTo(spreadAnchorPos[0], spreadAnchorPos[1]);
+        ctx.lineTo(childPos[0], childPos[1]);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
 
-    // Clean up spread anchor after all children have finished collapsing.
-    // The anchor stays alive during collapse so connectors have a source point.
+    ctx.restore(); // restore zoom transform
+
+    // ---- Clean up spread anchor after all children finish collapsing ----
     if (spreadChildPositions.length === 0 && !selectedTrainRn) {
       const allT = (realTrains || []).concat(retiringTrains);
       for (const t of allT) {
         if (t._spreadAnchor && t._spreading) {
-          t._spreading = false;
+          t._spreading   = false;
           t._spreadAnchor = false;
-          svg.selectAll('.train-group')
-            .filter(d => d.rn === t.rn)
-            .classed('train-spread', false);
         }
       }
     }
@@ -1419,6 +1416,8 @@
       width = svgEl.clientWidth || window.innerWidth;
       height = svgEl.clientHeight || window.innerHeight;
       svg.attr('width', width).attr('height', height);
+      canvasEl.width  = width;
+      canvasEl.height = height;
 
       const result = redrawMap(svg, width, height, geojson, geoScaleReference);
       projection = result.projection;
@@ -1429,8 +1428,8 @@
       baseSpread      = BASE_SPREAD * visualScale;
       mapContainer = svg.select('.map-container');
 
-      // Recreate spread-connector and trains layers (redrawMap wipes SVG)
-      mapContainer.append('g').attr('class', 'spread-lines-layer');
+      // Recreate trains layer (redrawMap wipes SVG).
+      // Spread connector lines are drawn on canvas — no SVG layer needed.
       mapContainer.append('g').attr('class', 'trains-layer');
 
       // Re-render stations overlay
