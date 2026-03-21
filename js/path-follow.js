@@ -368,11 +368,14 @@ function snapToTrackWithAffinity(lon, lat, segments, prevTrackPos, neighborMap) 
  */
 function directionFromHeading(heading, segIdx, ptIdx, segments) {
   const seg = segments[segIdx];
-  if (!seg || ptIdx >= seg.length - 1) return 1;
+  if (!seg || seg.length < 2) return 1;
+  // When at the last point of the segment, use the last edge — the train is
+  // leaving in the same direction that edge points.
+  const edgeIdx = Math.min(ptIdx, seg.length - 2);
 
   // Segment direction vector
-  const dx = seg[ptIdx + 1][0] - seg[ptIdx][0];
-  const dy = seg[ptIdx + 1][1] - seg[ptIdx][1];
+  const dx = seg[edgeIdx + 1][0] - seg[edgeIdx][0];
+  const dy = seg[edgeIdx + 1][1] - seg[edgeIdx][1];
 
   // Convert heading (CTA: degrees CW from north) to a unit vector
   const hRad = (heading * Math.PI) / 180;
