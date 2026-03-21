@@ -698,7 +698,7 @@
     isZoomTransitioning = true;
     zoomAnim = {
       startTime: performance.now(),
-      duration: wasTracking ? 200 : 750,
+      duration: wasTracking ? 200 : 600,
       fromK: fromTransform.k,
       fromScreenX: clickPt ? (fromTransform.k * clickPt[0] + fromTransform.x) : width / 2,
       fromScreenY: clickPt ? (fromTransform.k * clickPt[1] + fromTransform.y) : height / 2,
@@ -875,7 +875,12 @@
       canvasArrowSize = arrowLineWidth / 2.0;
 
       // Keep hit area a fixed screen size (~12px) regardless of zoom level.
-      svg.selectAll('.train-hit').attr('r', 12 / currentK);
+      // Skip during active zoom animation — hit circles are never clicked while
+      // zooming and this saves ~50 DOM mutations per frame. lastLineK is reset
+      // to -1 when zoomAnim ends to force a clean pass on the first quiet frame.
+      if (!zoomAnim) {
+        svg.selectAll('.train-hit').attr('r', 12 / currentK);
+      }
 
       svg.selectAll('.line-path').attr('stroke-width', function () {
         return selLegend && d3.select(this).attr('data-legend') === selLegend
@@ -1017,7 +1022,9 @@
     if (zoomAnim && selectedTrain) {
       const elapsed  = now - zoomAnim.startTime;
       const progress = Math.min(elapsed / zoomAnim.duration, 1);
-      const eased    = progress * progress * (3 - 2 * progress);
+      // Ease-out cubic: fast start, gentle deceleration — more natural than
+      // smoothstep's S-curve for a camera snapping toward a clicked target.
+      const eased    = 1 - Math.pow(1 - progress, 3);
 
       const pt = projection([selectedTrain.lon, selectedTrain.lat]);
       if (pt) {
@@ -1040,6 +1047,7 @@
       if (progress >= 1) {
         zoomAnim = null;
         isZoomTransitioning = false;
+        lastLineK = -1; // force hit-circle r refresh on the first post-zoom frame
       }
     } else if (selectedTrain && !isZoomTransitioning) {
       const pt = projection([selectedTrain.lon, selectedTrain.lat]);
