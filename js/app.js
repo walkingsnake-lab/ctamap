@@ -698,10 +698,16 @@
     isZoomTransitioning = true;
     zoomAnim = {
       startTime: performance.now(),
-      duration: wasTracking ? 200 : 750,
+      duration: wasTracking ? 200 : 600,
       fromK: fromTransform.k,
       fromScreenX: clickPt ? (fromTransform.k * clickPt[0] + fromTransform.x) : width / 2,
       fromScreenY: clickPt ? (fromTransform.k * clickPt[1] + fromTransform.y) : height / 2,
+      // Freeze the train's SVG position at click-time so mid-zoom corrections
+      // don't cause the camera to wobble chasing the moving train. We blend from
+      // this frozen position toward the live position as easing approaches 1, so
+      // handoff to the tracking loop is seamless (at eased=1 we're on live coords).
+      targetSvgX: clickPt ? clickPt[0] : null,
+      targetSvgY: clickPt ? clickPt[1] : null,
     };
 
     // Spread apart overlapping trains near the selection.
@@ -869,7 +875,12 @@
       canvasArrowSize = arrowLineWidth / 2.0;
 
       // Keep hit area a fixed screen size (~12px) regardless of zoom level.
-      svg.selectAll('.train-hit').attr('r', 12 / currentK);
+      // Skip during active zoom animation — hit circles are never clicked while
+      // zooming and this saves ~50 DOM mutations per frame. lastLineK is reset
+      // to -1 when zoomAnim ends to force a clean pass on the first quiet frame.
+      if (!zoomAnim) {
+        svg.selectAll('.train-hit').attr('r', 12 / currentK);
+      }
 
       svg.selectAll('.line-path').attr('stroke-width', function () {
         return selLegend && d3.select(this).attr('data-legend') === selLegend
@@ -1011,15 +1022,24 @@
     if (zoomAnim && selectedTrain) {
       const elapsed  = now - zoomAnim.startTime;
       const progress = Math.min(elapsed / zoomAnim.duration, 1);
-      const eased    = progress * progress * (3 - 2 * progress);
+      // Ease-out cubic: fast start, gentle deceleration — more natural than
+      // smoothstep's S-curve for a camera snapping toward a clicked target.
+      const eased    = 1 - Math.pow(1 - progress, 3);
 
       const pt = projection([selectedTrain.lon, selectedTrain.lat]);
       if (pt) {
         const k  = zoomAnim.fromK + (trackingScale - zoomAnim.fromK) * eased;
         const sx = zoomAnim.fromScreenX + (width / 2 - zoomAnim.fromScreenX) * eased;
         const sy = zoomAnim.fromScreenY + (height / 2 - zoomAnim.fromScreenY) * eased;
-        const tx = sx - k * pt[0];
-        const ty = sy - k * pt[1];
+        // Blend from the click-time frozen SVG position toward the live position.
+        // At eased=0 we use the frozen coords (stable start), at eased=1 we're on
+        // the live position so tracking takes over with no discontinuity.
+        const frozenX = zoomAnim.targetSvgX ?? pt[0];
+        const frozenY = zoomAnim.targetSvgY ?? pt[1];
+        const targetX = frozenX + (pt[0] - frozenX) * eased;
+        const targetY = frozenY + (pt[1] - frozenY) * eased;
+        const tx = sx - k * targetX;
+        const ty = sy - k * targetY;
         const t  = d3.zoomIdentity.translate(tx, ty).scale(k);
         svgEl.__zoom = t;
         mapContainer.attr('transform', t.toString());
@@ -1027,6 +1047,7 @@
       if (progress >= 1) {
         zoomAnim = null;
         isZoomTransitioning = false;
+        lastLineK = -1; // force hit-circle r refresh on the first post-zoom frame
       }
     } else if (selectedTrain && !isZoomTransitioning) {
       const pt = projection([selectedTrain.lon, selectedTrain.lat]);
