@@ -20,7 +20,7 @@ const POLL_INTERVAL = 30000;
 
 // ---- Server-side train processing ----
 const geoState   = require('./server/geo-state');
-const { processTrains } = require('./server/train-state');
+const { processTrains, resetState } = require('./server/train-state');
 const metrics    = require('./server/metrics');
 
 // Initialize geometry synchronously at startup — GeoJSON is 116 KB, fast read.
@@ -39,6 +39,12 @@ const sseClients = new Set();
 
 // ---- Processed train payload (latest) ----
 let processedPayload = null; // { trains, serverTime }
+let lastPollTime = null;     // timestamp of last successful poll
+
+// If the gap since the last poll exceeds this threshold, the machine was likely
+// suspended. Stale trainStateMap positions would trigger spurious hold loops on
+// the first post-resume poll, so we clear state when this gap is detected.
+const STALE_GAP_THRESHOLD = POLL_INTERVAL * 3; // 90s
 
 // ---- CTA API fetch helpers ----
 
@@ -87,11 +93,22 @@ async function fetchAllTrains() {
 
 async function pollAndBroadcast() {
   const t0 = Date.now();
+
+  // If we're resuming from a long sleep (machine suspension), stale per-train
+  // positions in trainStateMap would cause every train to enter hold loops for
+  // several polls before snapping to its real position. Clear state so the first
+  // post-resume poll treats all trains as freshly seen.
+  if (lastPollTime && (t0 - lastPollTime) > STALE_GAP_THRESHOLD) {
+    console.log(`[poll] Resume detected (${Math.round((t0 - lastPollTime) / 1000)}s gap) — clearing stale train state`);
+    resetState();
+  }
+
   let errorCount = 0;
   try {
     const rawTrains = await fetchAllTrains();
     const trains    = processTrains(rawTrains, geoState);
-    processedPayload = { trains, serverTime: Date.now() };
+    lastPollTime     = Date.now();
+    processedPayload = { trains, serverTime: lastPollTime };
     broadcast(processedPayload);
     metrics.recordPoll(trains, Date.now() - t0, errorCount);
     console.log(`[poll] ${trains.length} trains processed, ${sseClients.size} SSE client(s)`);
@@ -167,8 +184,10 @@ const server = http.createServer(async (req, res) => {
       'X-Accel-Buffering': 'no', // nginx: disable buffering for SSE
     });
 
-    // Send current payload immediately so new clients don't wait up to POLL_INTERVAL
-    if (processedPayload) {
+    // Send current payload immediately so new clients don't wait up to POLL_INTERVAL.
+    // Skip if the payload is stale (machine was suspended) — the client will receive
+    // fresh data on the next broadcast rather than animating from outdated positions.
+    if (processedPayload && (Date.now() - processedPayload.serverTime) < STALE_GAP_THRESHOLD) {
       res.write(`data: ${JSON.stringify(processedPayload)}\n\n`);
     }
 

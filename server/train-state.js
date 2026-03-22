@@ -438,4 +438,13 @@ function processTrains(rawTrains, geo) {
 /** For diagnostics / testing: expose the state map size. */
 function stateSize() { return trainStateMap.size; }
 
-module.exports = { processTrains, stateSize };
+/**
+ * Clear all per-train state. Called when the server detects it has resumed
+ * from a long suspension so stale positions don't trigger spurious hold loops.
+ */
+function resetState() {
+  trainStateMap.clear();
+  retiringTrainsMap.clear();
+}
+
+module.exports = { processTrains, stateSize, resetState };
