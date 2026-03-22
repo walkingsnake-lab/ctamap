@@ -1451,7 +1451,18 @@
 
     const rows = sorted.map(t => {
       const color = LINE_COLORS[t.legend] || '#888';
-      const dirArrow = t._direction > 0 ? '↑N' : '↓S';
+      const segsD = lineSegments[t.legend];
+      const tPos  = t._trackPos;
+      let geoNorth = null;
+      if (segsD && tPos && tPos.segIdx !== undefined && tPos.ptIdx !== undefined) {
+        const seg = segsD[tPos.segIdx];
+        if (seg && tPos.ptIdx < seg.length - 1) {
+          const dy = seg[tPos.ptIdx + 1][1] - seg[tPos.ptIdx][1];
+          if (Math.abs(dy) > 1e-6) geoNorth = (dy * (t._direction || 1)) > 0;
+        }
+      }
+      const dirArrow = geoNorth === null ? (t._direction > 0 ? '↑' : '↓')
+                     : (geoNorth ? '↑N' : '↓S');
       const method = t._serverDirectionMethod || 'prev';
       const isRetiring = t._serverRetiring;
 
