@@ -86,6 +86,10 @@ const PHANTOM_STATION_RADIUS     = 0.005;
 const STATION_JUMP_RADIUS        = 0.003;
 const STATION_JUMP_MIN_DRIFT     = 0.006;
 
+// Terminal retirement — keep in sync with js/config.js
+const TERMINUS_HOLD_MS             = 90000;  // 90s hold at terminal before retiring
+const TERMINAL_PROXIMITY_THRESHOLD = 0.05;   // degrees (~5.5km) — max distance to terminal
+
 const BACKWARD_CONFIRM_POLLS      = 6;
 const FORWARD_CONFIRM_POLLS       = 4;
 const FORWARD_SNAP_CONFIRM_POLLS  = 5;
@@ -182,4 +186,6 @@ module.exports = {
   STATION_JUMP_CONFIRM_POLLS,
   KNOWN_PHANTOM_JUMPS,
   PHANTOM_JUMP_BY_LEGEND,
+  TERMINUS_HOLD_MS,
+  TERMINAL_PROXIMITY_THRESHOLD,
 };

@@ -33,10 +33,16 @@ const {
 } = require('./track-engine');
 
 // Per-train state persisted across polls.
-// { trackPos, direction, effectiveDest,
+// { rt, legend, heading, destNm, lon, lat,
+//   trackPos, direction, effectiveDest,
 //   backwardHoldCount, forwardHoldCount, stationJumpHoldCount,
 //   nearStation }
 const trainStateMap = new Map();
+
+// Trains that disappeared from the CTA API near a terminal.
+// Broadcast until TERMINUS_HOLD_MS expires.
+// { rn, rt, legend, heading, destNm, terminalPos, direction, effectiveDest, retireStartMs }
+const retiringTrainsMap = new Map();
 
 /**
  * Process a batch of raw CTA trains against persistent state.
@@ -46,7 +52,7 @@ const trainStateMap = new Map();
  * @returns {object[]} processed train objects ready for SSE broadcast
  */
 function processTrains(rawTrains, geo) {
-  const { lineSegments, lineNeighborMaps, stations } = geo;
+  const { lineSegments, lineOwnSegments, lineTerminals, lineNeighborMaps, stations } = geo;
   const now = Date.now();
   const m   = d => `${(d * 111000).toFixed(0)}m`;
 
@@ -63,6 +69,8 @@ function processTrains(rawTrains, geo) {
     if (!segs || segs.length === 0) continue;
 
     seenRns.add(raw.rn);
+    // If this train was retiring and just reappeared, remove it from retirement
+    if (retiringTrainsMap.has(raw.rn)) retiringTrainsMap.delete(raw.rn);
     const prev = trainStateMap.get(raw.rn) || null;
     const neighborMap = lineNeighborMaps[legend] || null;
 
@@ -331,6 +339,12 @@ function processTrains(rawTrains, geo) {
     );
 
     trainStateMap.set(train.rn, {
+      rt:                  train.rt,
+      legend,
+      heading,
+      destNm:              train.destNm,
+      lon:                 train.lon,
+      lat:                 train.lat,
       trackPos:            train._trackPos,
       direction:           direction,
       effectiveDest:       effectiveDest,
@@ -361,9 +375,61 @@ function processTrains(rawTrains, geo) {
     });
   }
 
-  // Prune state for trains that have disappeared from the API response
+  // Prune state for trains that have disappeared from the API response.
+  // If they vanished near a terminal, track them as retiring.
   for (const rn of trainStateMap.keys()) {
-    if (!seenRns.has(rn)) trainStateMap.delete(rn);
+    if (seenRns.has(rn)) continue;
+    if (!retiringTrainsMap.has(rn)) {
+      const prev = trainStateMap.get(rn);
+      const terminals = (lineTerminals && lineTerminals[prev.legend]) || [];
+      for (const term of terminals) {
+        const d = geoDist(prev.lon, prev.lat, term.lon, term.lat);
+        if (d < C.TERMINAL_PROXIMITY_THRESHOLD) {
+          retiringTrainsMap.set(rn, {
+            rn,
+            rt:            prev.rt,
+            legend:        prev.legend,
+            heading:       prev.heading,
+            destNm:        prev.destNm,
+            terminalPos:   term,
+            direction:     prev.direction,
+            effectiveDest: prev.effectiveDest,
+            retireStartMs: now,
+          });
+          break;
+        }
+      }
+    }
+    trainStateMap.delete(rn);
+  }
+
+  // Expire retiring trains whose hold period has elapsed.
+  for (const [rn, r] of retiringTrainsMap) {
+    if (now - r.retireStartMs >= C.TERMINUS_HOLD_MS) retiringTrainsMap.delete(rn);
+  }
+
+  // Append retiring trains to the broadcast — client places them at terminal.
+  for (const r of retiringTrainsMap.values()) {
+    processed.push({
+      rn:           r.rn,
+      rt:           r.rt,
+      legend:       r.legend,
+      lat:          r.terminalPos.lat,
+      lon:          r.terminalPos.lon,
+      heading:      r.heading,
+      destNm:       r.destNm,
+      nextStaNm:    '',
+      isApp:        false,
+      isDly:        false,
+      isSch:        false,
+      trackPos:     r.terminalPos,
+      direction:    r.direction,
+      effectiveDest: r.effectiveDest,
+      held:         false,
+      heldReason:   null,
+      retiring:     true,
+      retireElapsedMs: now - r.retireStartMs,
+    });
   }
 
   return processed;

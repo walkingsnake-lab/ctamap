@@ -55,9 +55,8 @@
 
   // Build per-line segment lookup for path-following animation
   // lineSegments: full track (shared + ML) for animation/snapping
-  // lineOwnSegments: line's own colored segments only (for terminal detection)
+  // lineOwnSegments: line's own colored segments only (for retiring train animation)
   const { segments: lineSegments, ownSegments: lineOwnSegments } = buildLineSegments(geojson);
-  const lineTerminals = buildLineTerminals(lineOwnSegments, lineSegments);
 
   // Precompute segment neighbor maps per line for affinity snapping.
   // This avoids trains snapping to topologically distant but geographically
@@ -1231,7 +1230,10 @@
       let payload;
       try { payload = JSON.parse(evt.data); } catch (_) { return; }
       if (!payload || !Array.isArray(payload.trains)) return;
-      const fetched = mapServerTrains(payload.trains);
+      const allFetched = mapServerTrains(payload.trains);
+      // Split server payload into active trains and server-tracked retiring trains
+      const serverRetiring = allFetched.filter(t => t._serverRetiring);
+      const fetched = allFetched.filter(t => !t._serverRetiring);
       if (fetched && fetched.length > 0) {
         // Build prev map from current real trains for velocity + drift calculation
         const prevMap = new Map();
@@ -1239,70 +1241,29 @@
           for (const t of realTrains) prevMap.set(t.rn, t);
         }
 
-        // Detect trains going out of service near a terminal — retire them
-        // instead of letting them vanish immediately.
-        // Uses the line's OWN segments only (no shared/ML) so trains like
-        // Purple don't bleed past Howard onto Red line track.
-        if (realTrains) {
-          const newRns = new Set(fetched.map(t => t.rn));
+        // Absorb server-tracked retiring trains — place them at terminal with
+        // correct hold timer. Skip any already in the retiring list.
+        {
           const retireRns = new Set(retiringTrains.map(t => t.rn));
-          for (const train of realTrains) {
-            if (newRns.has(train.rn) || train._retiring || retireRns.has(train.rn)) continue;
-
-            const ownSegs = lineOwnSegments[train.legend];
-            if (!ownSegs || ownSegs.length === 0) continue;
-
-            // Re-snap to the line's own segments (excludes shared/ML track)
-            const ownPos = snapToTrackPosition(train.lon, train.lat, ownSegs);
-
-            // Walk both directions to find the nearest dead-end terminal
-            const endFwd = advanceOnTrack(ownPos, 0.5, +1, ownSegs);
-            const endBwd = advanceOnTrack(ownPos, 0.5, -1, ownSegs);
-            const dFwd = endFwd.stopped ? geoDist(train.lon, train.lat, endFwd.lon, endFwd.lat) : Infinity;
-            const dBwd = endBwd.stopped ? geoDist(train.lon, train.lat, endBwd.lon, endBwd.lat) : Infinity;
-
-            let terminalPos, slideDir;
-            if (dFwd <= dBwd) {
-              if (dFwd >= TERMINAL_PROXIMITY_THRESHOLD) continue;
-              terminalPos = endFwd;
-              slideDir = +1;
-            } else {
-              if (dBwd >= TERMINAL_PROXIMITY_THRESHOLD) continue;
-              terminalPos = endBwd;
-              slideDir = -1;
+          for (const train of serverRetiring) {
+            if (retireRns.has(train.rn)) continue;
+            train._retiring      = true;
+            train._trackPos      = train._serverTrackPos ? { ...train._serverTrackPos } : null;
+            if (train._trackPos) {
+              train.lon = train._trackPos.lon;
+              train.lat = train._trackPos.lat;
             }
-
-            train._retiring = true;
-            train._retireTime = null;
-            train._retireSegs = ownSegs; // slide along own segments only
-
-            const dist = Math.min(dFwd, dBwd);
-
-            // If already extremely close, skip the approach slide
-            if (dist < 1e-4) {
-              train._correcting = false;
-              train._trackPos = terminalPos;
-              train.lon = terminalPos.lon;
-              train.lat = terminalPos.lat;
-              train._retireTime = Date.now();
-            } else {
-              // Set up correction slide toward terminal
-              train._corrFromTrackPos = ownPos;
-              train._corrToTrackPos = terminalPos;
-              train._corrDirection = slideDir;
-              train._corrTotalDist = trackDistanceBetween(
-                ownPos, terminalPos, slideDir, ownSegs
-              );
-              train._correcting = true;
-              train._corrStartTime = Date.now();
-            }
-
+            train._direction     = train._serverDirection ?? 1;
+            train._retireSegs    = lineOwnSegments[train.legend];
+            train._correcting    = false; // server already placed at terminal
+            // Offset retire timer by elapsed server time so hold expires correctly
+            train._retireTime    = Date.now() - (train._serverRetireElapsedMs || 0);
             retiringTrains.push(train);
           }
-
-          // Remove any retiring trains that somehow reappeared in fresh data
+          // Remove retiring trains that reappeared as active
           if (retiringTrains.length > 0) {
-            retiringTrains = retiringTrains.filter(t => !newRns.has(t.rn));
+            const activeRns = new Set(fetched.map(t => t.rn));
+            retiringTrains = retiringTrains.filter(t => !activeRns.has(t.rn));
           }
         }
 
@@ -1325,7 +1286,7 @@
         }
 
         // Initialize track position and drift correction
-        initRealTrainAnimation(realTrains, lineSegments, prevMap, lineTerminals, stations, lineNeighborMaps);
+        initRealTrainAnimation(realTrains, lineSegments, prevMap, stations, lineNeighborMaps);
 
         // Spawn animation for new trains: slide from start-of-line to tracked position,
         // but only if the train is close to the start terminal (same threshold as retirement).

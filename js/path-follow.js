@@ -947,36 +947,3 @@ function buildStationIndex(stations) {
   return { cells, CELL };
 }
 
-/**
- * For each line, walks to both dead-end terminals using ownSegments and returns
- * their positions as { legend: [{lon, lat}, {lon, lat}] }.
- * Used to detect when a train is at a line terminus for arrow hiding.
- *
- * Loop-entry points (e.g. Clark/Lake for Orange) are dead-ends in ownSegments
- * but not in fullSegments, because ML segments extend from them.  We cross-
- * reference with fullSegments so only genuine dead-ends are returned.
- */
-function buildLineTerminals(ownSegments, fullSegments) {
-  const result = {};
-  for (const [legend, segs] of Object.entries(ownSegments)) {
-    if (!segs || segs.length === 0 || segs[0].length === 0) continue;
-    const startCoord = segs[0][0];
-    const startPos = snapToTrackPosition(startCoord[0], startCoord[1], segs);
-    const endA = advanceOnTrack(startPos, 9999, -1, segs);
-    const endB = advanceOnTrack(startPos, 9999, +1, segs);
-
-    const fullSegs = fullSegments && fullSegments[legend];
-    result[legend] = [endA, endB].filter(t => {
-      if (!t.stopped) return false;
-      if (!fullSegs) return true;
-      // A real terminus is also a dead-end in the full segment array.
-      // A loop-entry point continues into ML segments in fullSegs, so
-      // a tiny advance in at least one direction will NOT stop there.
-      const fullPos = snapToTrackPosition(t.lon, t.lat, fullSegs);
-      const fwd = advanceOnTrack(fullPos, 1e-6, +1, fullSegs);
-      const bwd = advanceOnTrack(fullPos, 1e-6, -1, fullSegs);
-      return fwd.stopped || bwd.stopped;
-    });
-  }
-  return result;
-}
