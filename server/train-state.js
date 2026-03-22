@@ -9,9 +9,9 @@
  *   - isSch=1 hold
  *   - backward / fast-forward / station-jump confirmation holds
  *
- * Exposes processTrains(rawCTATrains) which returns a processed array suitable
- * for broadcasting over SSE.  When a train is held, the returned lon/lat/trackPos
- * are the held (previous) values — clients just animate to whatever the server says.
+ * Exposes processTrains(rawCTATrains) which returns { trains, stats }.
+ * When a train is held, the returned lon/lat/trackPos are the held (previous)
+ * values — clients just animate to whatever the server says.
  */
 'use strict';
 
@@ -49,7 +49,7 @@ const retiringTrainsMap = new Map();
  *
  * @param {object[]} rawTrains   — combined array from fetchAllTrains()
  * @param {object}   geo         — geo-state module (lineSegments, lineNeighborMaps, stations)
- * @returns {object[]} processed train objects ready for SSE broadcast
+ * @returns {{ trains: object[], stats: object }} processed train objects + poll summary stats
  */
 function processTrains(rawTrains, geo) {
   const { lineSegments, lineOwnSegments, lineTerminals, lineNeighborMaps, stations } = geo;
@@ -60,6 +60,13 @@ function processTrains(rawTrains, geo) {
   const seenRns = new Set();
 
   const processed = [];
+
+  // Per-poll stats for structured log summary
+  const stats = {
+    total: 0,
+    held: {},      // heldReason → count
+    dirMethod: {}, // 'probe'|'walk'|'segment'|'heading'|'prev' → count
+  };
 
   for (const raw of rawTrains) {
     const legend = C.ROUTE_TO_LEGEND[raw.rt];
@@ -106,6 +113,7 @@ function processTrains(rawTrains, geo) {
 
     // --- 3. Direction cascade ---
     let direction = prev ? prev.direction : null;
+    let dirMethod = 'prev'; // track which inference path was used
 
     if (prev && prev.direction !== undefined) {
       const segChanged  = prev.trackPos && train._trackPos.segIdx !== prev.trackPos.segIdx;
@@ -129,6 +137,7 @@ function processTrains(rawTrains, geo) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
         if (nextStnDir !== null && !onlyLoopMismatch) {
           direction = nextStnDir;
+          dirMethod = 'probe';
         } else if (segChanged && !destChanged && nextStn
             && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.001) {
           const isLoopLine = C.LOOP_LINE_CODES.includes(legend);
@@ -136,12 +145,15 @@ function processTrains(rawTrains, geo) {
             ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
             : null;
           direction = verifyDir !== null ? verifyDir : prev.direction;
+          dirMethod = verifyDir !== null ? 'walk' : 'prev';
         } else {
           const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
           if (termDir !== null) {
             direction = termDir;
+            dirMethod = 'walk';
           } else if (nextStnDir !== null || (loopLineMismatch && rawNextStnDir !== null)) {
             direction = nextStnDir ?? rawNextStnDir;
+            dirMethod = 'probe';
           } else if (segChanged) {
             const prevSeg = segs[prev.trackPos.segIdx];
             const boundary = prev.direction > 0 ? prevSeg.length - 1 : 0;
@@ -150,15 +162,19 @@ function processTrains(rawTrains, geo) {
             );
             if (connected && connected.segIdx === train._trackPos.segIdx) {
               direction = connected.direction;
+              dirMethod = 'segment';
             } else {
               direction = directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+              dirMethod = 'heading';
             }
           } else {
             direction = prev.direction;
+            // dirMethod stays 'prev'
           }
         }
       } else {
         direction = prev.direction;
+        // dirMethod stays 'prev'
       }
     } else if (northDest && effectiveDest) {
       // New train
@@ -168,19 +184,25 @@ function processTrains(rawTrains, geo) {
         : null;
       if (nextStnDir !== null) {
         direction = nextStnDir;
+        dirMethod = 'probe';
       } else {
         const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
         direction = termDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+        dirMethod = termDir !== null ? 'walk' : 'heading';
       }
     } else {
       direction = directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+      dirMethod = 'heading';
     }
 
     train._direction = direction;
+    train._dirMethod = dirMethod;
 
     // --- 4 & 5. Phantom + isSch hold logic (requires prev position) ---
     let held = false;
     let heldReason = null;
+    let holdCount = 0;
+    let holdMax = 0;
 
     if (prev) {
       const prevLon = prev.trackPos ? prev.trackPos.lon : rawLon;
@@ -211,7 +233,7 @@ function processTrains(rawTrains, geo) {
         if (!held && train.isSch === '1' && prev.trackPos) {
           held = true;
           heldReason = 'isch';
-          console.warn(`[CTA] isSch hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
+          // No per-train log — counted in poll summary
         }
 
         if (!held) {
@@ -246,8 +268,12 @@ function processTrains(rawTrains, geo) {
               if (newCount < C.BACKWARD_CONFIRM_POLLS) {
                 held = true;
                 heldReason = 'backward';
-                console.log(`[CTA] Backward hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} [${newCount}/${C.BACKWARD_CONFIRM_POLLS}]`);
-                // persist incremented count below via nextState
+                holdCount = newCount;
+                holdMax   = C.BACKWARD_CONFIRM_POLLS;
+                // Log only when hold first starts
+                if (newCount === 1) {
+                  console.log(`[CTA] Backward hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
+                }
               } else {
                 // Confirmed — snap (not held); update direction if heading agrees
                 const headingDir = directionFromHeading(heading, toPos.segIdx, toPos.ptIdx, segs);
@@ -264,7 +290,12 @@ function processTrains(rawTrains, geo) {
               if (newCount < C.FORWARD_CONFIRM_POLLS) {
                 held = true;
                 heldReason = 'fast_forward';
-                console.log(`[CTA] Fast-forward hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} [${newCount}/${C.FORWARD_CONFIRM_POLLS}]`);
+                holdCount = newCount;
+                holdMax   = C.FORWARD_CONFIRM_POLLS;
+                // Log only when hold first starts
+                if (newCount === 1) {
+                  console.log(`[CTA] Fast-forward hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
+                }
               } else {
                 console.log(`[CTA] Fast-forward confirmed: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${newCount} polls`);
               }
@@ -280,7 +311,12 @@ function processTrains(rawTrains, geo) {
                   if (newCount < C.STATION_JUMP_CONFIRM_POLLS) {
                     held = true;
                     heldReason = 'station_jump';
-                    console.log(`[CTA] Station-jump hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} [${newCount}/${C.STATION_JUMP_CONFIRM_POLLS}]`);
+                    holdCount = newCount;
+                    holdMax   = C.STATION_JUMP_CONFIRM_POLLS;
+                    // Log only when hold first starts
+                    if (newCount === 1) {
+                      console.log(`[CTA] Station-jump hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
+                    }
                   } else {
                     console.log(`[CTA] Station-jump confirmed: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${newCount} polls`);
                   }
@@ -299,7 +335,11 @@ function processTrains(rawTrains, geo) {
               if (newCount < confirmPolls) {
                 held = true;
                 heldReason = isSuspectSnap ? 'snap_backward' : 'snap_forward';
-                console.log(`[CTA] Snap hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} [${newCount}/${confirmPolls}]`);
+                holdCount = newCount;
+                holdMax   = confirmPolls;
+                if (newCount === 1) {
+                  console.log(`[CTA] Snap hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
+                }
               } else {
                 // Re-derive direction at snapped position
                 const snapTermDir = (northDest && effectiveDest)
@@ -352,6 +392,7 @@ function processTrains(rawTrains, geo) {
       forwardHoldCount:    held && (heldReason === 'fast_forward' || heldReason === 'snap_forward')  ? (train._forwardHoldCount  || 0) : (held ? (prev?.forwardHoldCount  || 0) : 0),
       stationJumpHoldCount: held && heldReason === 'station_jump' ? (train._stationJumpHoldCount || 0) : (held ? (prev?.stationJumpHoldCount || 0) : 0),
       nearStation:         nextNearStation,
+      dirMethod,
     });
 
     // --- 7. Emit processed object ---
@@ -372,7 +413,15 @@ function processTrains(rawTrains, geo) {
       effectiveDest: train._effectiveDest,
       held,
       heldReason,
+      holdCount,
+      holdMax,
+      directionMethod: dirMethod,
     });
+
+    // --- 8. Accumulate stats ---
+    stats.total++;
+    if (held && heldReason) stats.held[heldReason] = (stats.held[heldReason] || 0) + 1;
+    stats.dirMethod[dirMethod] = (stats.dirMethod[dirMethod] || 0) + 1;
   }
 
   // Prune state for trains that have disappeared from the API response.
@@ -427,15 +476,27 @@ function processTrains(rawTrains, geo) {
       effectiveDest: r.effectiveDest,
       held:         false,
       heldReason:   null,
+      holdCount:    0,
+      holdMax:      0,
+      directionMethod: 'prev',
       retiring:     true,
       retireElapsedMs: now - r.retireStartMs,
     });
   }
 
-  return processed;
+  return { trains: processed, stats };
 }
 
 /** For diagnostics / testing: expose the state map size. */
 function stateSize() { return trainStateMap.size; }
 
-module.exports = { processTrains, stateSize };
+/** Returns a serializable snapshot of all current per-train state for /api/debug/trains. */
+function getDebugState() {
+  return {
+    trains: [...trainStateMap.entries()].map(([rn, s]) => ({ rn, ...s })),
+    retiring: [...retiringTrainsMap.entries()].map(([rn, r]) => ({ rn, ...r })),
+    counts: { active: trainStateMap.size, retiring: retiringTrainsMap.size },
+  };
+}
+
+module.exports = { processTrains, stateSize, getDebugState };

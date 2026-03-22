@@ -14,6 +14,21 @@
   <div id="line-glow"></div>
   <button id="close-btn" aria-label="Close">&times;</button>
   <div id="welcome-hint" class="welcome-hidden">Press <kbd>S</kbd> or long-press to show stations</div>
+  <div id="debug-overlay" class="debug-hidden">
+    <div class="dbg-header">
+      <span class="dbg-title">Train Debug</span>
+      <span class="dbg-hint">D to close &nbsp;·&nbsp; <a href="/api/debug/trains" target="_blank">raw state</a></span>
+    </div>
+    <div class="dbg-summary" id="dbg-summary"></div>
+    <div class="dbg-table-wrap">
+      <table class="dbg-table" id="dbg-table">
+        <thead><tr>
+          <th>RN</th><th>Line</th><th>Dest</th><th>Dir</th><th>Method</th><th>Held</th><th>Station</th>
+        </tr></thead>
+        <tbody id="dbg-tbody"></tbody>
+      </table>
+    </div>
+  </div>
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="dist/bundle.min.js"></script>
 </body>

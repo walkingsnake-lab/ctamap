@@ -20,7 +20,7 @@ const POLL_INTERVAL = 30000;
 
 // ---- Server-side train processing ----
 const geoState   = require('./server/geo-state');
-const { processTrains } = require('./server/train-state');
+const { processTrains, getDebugState } = require('./server/train-state');
 const metrics    = require('./server/metrics');
 
 // Initialize geometry synchronously at startup — GeoJSON is 116 KB, fast read.
@@ -90,11 +90,20 @@ async function pollAndBroadcast() {
   let errorCount = 0;
   try {
     const rawTrains = await fetchAllTrains();
-    const trains    = processTrains(rawTrains, geoState);
+    const { trains, stats } = processTrains(rawTrains, geoState);
     processedPayload = { trains, serverTime: Date.now() };
     broadcast(processedPayload);
     metrics.recordPoll(trains, Date.now() - t0, errorCount);
-    console.log(`[poll] ${trains.length} trains processed, ${sseClients.size} SSE client(s)`);
+
+    // Structured poll summary
+    const heldTotal = Object.values(stats.held).reduce((a, b) => a + b, 0);
+    const heldParts = Object.entries(stats.held).map(([r, n]) => `${n} ${r}`).join(' ');
+    const dirParts  = ['probe', 'walk', 'segment', 'heading', 'prev']
+      .filter(k => stats.dirMethod[k])
+      .map(k => `${stats.dirMethod[k]} ${k}`)
+      .join(' ');
+    const heldStr = heldTotal > 0 ? ` | held: ${heldTotal} (${heldParts})` : '';
+    console.log(`[poll] ${stats.total} trains | dir: ${dirParts}${heldStr} | ${sseClients.size} SSE | ${Date.now() - t0}ms`);
   } catch (e) {
     errorCount++;
     metrics.recordPoll([], Date.now() - t0, errorCount);
@@ -256,6 +265,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(502, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to fetch train details' }));
     }
+    return;
+  }
+
+  // ---- Debug: full per-train server state ----
+  if (parsed.pathname === '/api/debug/trains') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify(getDebugState(), null, 2));
     return;
   }
 
