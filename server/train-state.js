@@ -250,15 +250,17 @@ function processTrains(rawTrains, geo) {
               : (fwdD <= bwdD ? 1 : -1);
 
             // Classify backward vs forward.
-            // Use prev poll's effectiveDest so the terminal walk is evaluated in the same
-            // context as prev.trackPos — avoids false holds when dest flips Loop→Kimball
-            // while prev.trackPos is still on a Loop-entry (southbound) segment.
-            const _prevEffDest = prev.effectiveDest ?? effectiveDest;
-            const _headingDirFromPos = (northDest && _prevEffDest)
-              ? (directionByTerminalWalk(prev.trackPos, _prevEffDest, northDest, segs, neighborMap)
-                ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
-                ?? direction)
-              : direction;
+            // Use directionByNextStation at the previous position as the reference for
+            // expected direction — this is the most reliable method (same probe used in
+            // the direction cascade) and works correctly on E/W segments and loop lines
+            // where directionByTerminalWalk is unreliable (latitude comparisons break on
+            // east-west track, loop direction never reaches a dead end).
+            // Fall back to prev.direction (established by the full cascade last poll).
+            const _nextStnForHold = findNextStation(train, stations);
+            const _nextStnDir = _nextStnForHold
+              ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
+              : null;
+            const _headingDirFromPos = _nextStnDir ?? prev.direction ?? direction;
 
             const isSuspectBackward = _headingDirFromPos !== corrDir;
             const isSuspectForward  = !isSuspectBackward && drift > C.FORWARD_PLAUSIBLE_DIST;
