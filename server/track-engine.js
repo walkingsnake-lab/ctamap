@@ -684,7 +684,29 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap)
     return (destIsNorth === northIsForward) ? 1 : -1;
   }
   if (termFwd.stopped) {
-    const northIsForward = termFwd.lat > trackPos.lat;
+    const latDiff = termFwd.lat - trackPos.lat;
+    if (Math.abs(latDiff) < 0.001) {
+      // Forward terminal at nearly the same latitude — comparison is unreliable on E-W tracks.
+      // Use the same segment-geometry / probe fallback as the two-terminal tie-break.
+      const seg = segs[trackPos.segIdx];
+      const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
+      if (seg && pi >= 0) {
+        const dy = seg[pi + 1][1] - seg[pi][1];
+        const dx = seg[pi + 1][0] - seg[pi][0];
+        if (Math.abs(dy) > Math.abs(dx) * 0.2) {
+          return (destIsNorth === (dy > 0)) ? 1 : -1;
+        }
+      }
+      const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
+      const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
+      const dLatFwd  = probeFwd.lat - trackPos.lat;
+      const dLatBwd  = probeBwd.lat - trackPos.lat;
+      if (dLatFwd * dLatBwd < 0) {
+        return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
+      }
+      return null;
+    }
+    const northIsForward = latDiff > 0;
     return (destIsNorth === northIsForward) ? 1 : -1;
   }
   const northIsBackward = termBwd.lat > trackPos.lat;
@@ -738,14 +760,14 @@ function effectiveDestForDirection(train, northDest, stations) {
     }
     return train.destNm;
   }
-  if (trainDistToLoop < C.LOOP_INNER_RADIUS) {
-    console.log(`[CTA] Inside Loop: rn=${train.rn} (${train.legend}) trusting destNm="${train.destNm}" (dist-to-loop=${trainDistToLoop.toFixed(4)})`);
-    return train.destNm;
-  }
   if (nextStnDistToLoop < trainDistToLoop) {
     if (trainDistToLoop > 0.05) return train.destNm;
     console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
     return 'Loop';
+  }
+  if (trainDistToLoop < C.LOOP_INNER_RADIUS) {
+    console.log(`[CTA] Inside Loop: rn=${train.rn} (${train.legend}) trusting destNm="${train.destNm}" (dist-to-loop=${trainDistToLoop.toFixed(4)})`);
+    return train.destNm;
   }
   return train.destNm;
 }
