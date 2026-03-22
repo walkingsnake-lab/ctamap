@@ -1230,7 +1230,8 @@
     trainStream.addEventListener('message', (evt) => {
       let payload;
       try { payload = JSON.parse(evt.data); } catch (_) { return; }
-      const fetched = mapServerTrains(payload.trains || []);
+      if (!payload || !Array.isArray(payload.trains)) return;
+      const fetched = mapServerTrains(payload.trains);
       if (fetched && fetched.length > 0) {
         // Build prev map from current real trains for velocity + drift calculation
         const prevMap = new Map();
@@ -1386,6 +1387,8 @@
       // EventSource auto-reconnects on error; log for visibility only
       console.warn('[CTA] SSE connection error — browser will retry');
     });
+
+    window.addEventListener('beforeunload', () => trainStream.close());
   }
 
   // ---- Keyboard shortcuts ----

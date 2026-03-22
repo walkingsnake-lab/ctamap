@@ -334,8 +334,8 @@ function processTrains(rawTrains, geo) {
       trackPos:            train._trackPos,
       direction:           direction,
       effectiveDest:       effectiveDest,
-      backwardHoldCount:   held && heldReason === 'backward'    ? (train._backwardHoldCount || 0) : (held ? (prev?.backwardHoldCount || 0) : 0),
-      forwardHoldCount:    held && heldReason === 'fast_forward'? (train._forwardHoldCount  || 0) : (held ? (prev?.forwardHoldCount  || 0) : 0),
+      backwardHoldCount:   held && (heldReason === 'backward'     || heldReason === 'snap_backward') ? (train._backwardHoldCount || 0) : (held ? (prev?.backwardHoldCount || 0) : 0),
+      forwardHoldCount:    held && (heldReason === 'fast_forward' || heldReason === 'snap_forward')  ? (train._forwardHoldCount  || 0) : (held ? (prev?.forwardHoldCount  || 0) : 0),
       stationJumpHoldCount: held && heldReason === 'station_jump' ? (train._stationJumpHoldCount || 0) : (held ? (prev?.stationJumpHoldCount || 0) : 0),
       nearStation:         nextNearStation,
     });
