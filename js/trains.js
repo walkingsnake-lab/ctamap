@@ -235,6 +235,10 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, stations, li
         }
 
         if (_pvPathValid) {
+          const distKm = train._corrTotalDist * 111;
+          train._corrDuration  = Math.min(CORRECTION_MAX_DURATION,
+                                 Math.max(CORRECTION_MIN_DURATION,
+                                          distKm / CORRECTION_SPEED_KM_PER_MS));
           train._correcting   = true;
           train._corrStartTime = now;
           train.lon = train._corrFromTrackPos.lon;
@@ -315,7 +319,7 @@ function advanceRealTrains(trains, lineSegments, dt) {
     // Spawning trains (new to the data) get a longer slide from the start of the line
     if (train._correcting) {
       const elapsed = now - train._corrStartTime;
-      const duration = train._spawning ? TERMINAL_APPROACH_DURATION : CORRECTION_DURATION;
+      const duration = train._spawning ? TERMINAL_APPROACH_DURATION : (train._corrDuration || CORRECTION_MAX_DURATION);
       if (elapsed >= duration) {
         // Correction complete — sit still until next refresh.
         train._correcting = false;

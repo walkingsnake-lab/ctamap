@@ -60,7 +60,9 @@ const TERMINAL_APPROACH_DURATION = 5000;  // ms to slide retiring train to termi
 const MAP_PADDING = 0.05; // 5% padding around the map
 
 // Real-time animation constants
-const CORRECTION_DURATION = 2500;            // ms to smoothly slide to new API position after refresh
+const CORRECTION_SPEED_KM_PER_MS = 0.00007; // visual speed for position corrections (~70 m/s); longer moves animate longer
+const CORRECTION_MIN_DURATION    = 1500;    // ms — floor so even tiny jitter gets a smooth correction
+const CORRECTION_MAX_DURATION    = 10000;   // ms — cap so animation finishes well before the next 30s refresh
 const CORRECTION_SNAP_THRESHOLD = 0.045;     // degrees (~3.9km) — beyond this, snap instead of slide
 const SEGMENT_CONNECT_THRESHOLD = 0.001;     // degrees — max gap to consider segments connected
 const SNAP_AFFINITY_MARGIN = 1.5;            // factor — affinity snap must be this much worse than global snap to lose
