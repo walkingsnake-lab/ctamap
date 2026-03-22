@@ -1479,13 +1479,16 @@
         _dbgFilterLegend = 'ALL';
       }
 
+      const legendCounts = {};
+      allT.forEach(t => { legendCounts[t.legend] = (legendCounts[t.legend] || 0) + 1; });
+
       const btnHTML = [
-        `<button class="dbg-filter-btn${_dbgFilterLegend === 'ALL' ? ' active' : ''}" data-legend="ALL">All</button>`,
+        `<button class="dbg-filter-btn${_dbgFilterLegend === 'ALL' ? ' active' : ''}" data-legend="ALL">All ${total}</button>`,
         ...presentLegends.map(lg => {
           const color = LINE_COLORS[lg] || '#888';
           const isActive = _dbgFilterLegend === lg;
           const style = isActive ? ` style="background:${color};color:#fff;border-color:${color}"` : '';
-          return `<button class="dbg-filter-btn${isActive ? ' active' : ''}" data-legend="${lg}"${style}>${lg}</button>`;
+          return `<button class="dbg-filter-btn${isActive ? ' active' : ''}" data-legend="${lg}"${style}>${lg} ${legendCounts[lg] || 0}</button>`;
         })
       ].join('');
       _dbgFilterBar.innerHTML = btnHTML;
