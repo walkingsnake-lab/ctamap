@@ -6,7 +6,8 @@
 app = 'ctamap'
 primary_region = 'ord'
 
-[build]
+[env]
+  PORT = "8080"
 
 [http_service]
   internal_port = 8080
