@@ -250,17 +250,28 @@ function processTrains(rawTrains, geo) {
               : (fwdD <= bwdD ? 1 : -1);
 
             // Classify backward vs forward.
-            // Use directionByNextStation at the previous position as the reference for
-            // expected direction — this is the most reliable method (same probe used in
-            // the direction cascade) and works correctly on E/W segments and loop lines
-            // where directionByTerminalWalk is unreliable (latitude comparisons break on
-            // east-west track, loop direction never reaches a dead end).
-            // Fall back to prev.direction (established by the full cascade last poll).
+            // Priority: next-station probe → heading → prev.direction → direction.
+            //
+            // directionByNextStation is preferred: it uses track-following geometry to
+            // the reported next station and works correctly on E/W segments and loop lines
+            // where directionByTerminalWalk (the old approach) was unreliable.
+            //
+            // directionFromHeading fills in when next-station lookup fails (e.g. station
+            // name mismatch — "O'Hare" vs "O'Hare Airport", "Harlem" vs "Harlem-O'Hare")
+            // and the train is actually moving (heading is reliable for moving trains).
+            //
+            // prev.direction is the last resort — it avoids a hold when heading is also
+            // unavailable, but it can perpetuate a flipped direction. That's acceptable
+            // because a flipped-direction train will self-correct once it crosses a segment
+            // boundary and the Step-3 cascade re-derives direction via next-station probe.
             const _nextStnForHold = findNextStation(train, stations);
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
               : null;
-            const _headingDirFromPos = _nextStnDir ?? prev.direction ?? direction;
+            const _headingDirFromPos = _nextStnDir
+              ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
+              ?? prev.direction
+              ?? direction;
 
             const isSuspectBackward = _headingDirFromPos !== corrDir;
             const isSuspectForward  = !isSuspectBackward && drift > C.FORWARD_PLAUSIBLE_DIST;
