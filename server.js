@@ -1,56 +1,119 @@
 const http = require('http');
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
-const url = require('url');
+const url  = require('url');
 
-const PORT = process.env.PORT || 3000;
-const CTA_KEY = '9e15fcfa75064b6db8ad034db11ea214';
-const CTA_BASE = 'http://lapi.transitchicago.com/api/1.0/ttpositions.aspx';
+const PORT    = process.env.PORT || 3000;
+const CTA_KEY = process.env.CTA_KEY || '9e15fcfa75064b6db8ad034db11ea214';
+const CTA_BASE   = 'http://lapi.transitchicago.com/api/1.0/ttpositions.aspx';
 const CTA_FOLLOW = 'http://lapi.transitchicago.com/api/1.0/ttfollow.aspx';
 const ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 
-// Cache GeoJSON in memory at startup — it's static and 116 KB, no need to
-// hit disk on every request.
+// How often the server re-fetches CTA data and broadcasts to SSE clients (ms).
+// CTA updates every ~60-120s; 20s is a balanced poll that stays responsive
+// without burning the 100K daily transaction limit.
+const POLL_INTERVAL = 20000;
+
+// ---- Server-side train processing ----
+const geoState   = require('./server/geo-state');
+const { processTrains } = require('./server/train-state');
+
+// Initialize geometry synchronously at startup — GeoJSON is 116 KB, fast read.
+geoState.init();
+
+// Cache GeoJSON bytes for the /api/geojson endpoint (same file, already parsed above).
 let geojsonCache = null;
 fs.readFile(path.join(__dirname, 'data', 'cta-lines.geojson'), (err, buf) => {
-  if (err) console.error('Failed to pre-load GeoJSON:', err.message);
+  if (err) console.error('Failed to pre-load GeoJSON bytes:', err.message);
   else geojsonCache = buf;
 });
 
-// Cache train positions for 15s to avoid 8 simultaneous CTA API calls on
-// every client request.  Protects against the 100K daily transaction limit
-// when multiple tabs or rapid reloads hit the server at the same time.
-const TRAIN_CACHE_TTL = 15000; // ms
-let trainCache = null;
-let trainCacheTime = 0;
-let trainCachePending = null; // in-flight promise, de-duplicates concurrent requests
+// ---- SSE client registry ----
+// Each entry: { res, id }
+const sseClients = new Set();
 
-async function getCachedTrains() {
-  const now = Date.now();
-  if (trainCache && now - trainCacheTime < TRAIN_CACHE_TTL) {
-    return trainCache;
-  }
-  // If a fetch is already in flight, wait for it instead of firing another 8 calls.
-  if (trainCachePending) return trainCachePending;
-  trainCachePending = fetchAllTrains().then((trains) => {
-    trainCache = trains;
-    trainCacheTime = Date.now();
-    trainCachePending = null;
-    return trains;
-  }).catch((err) => {
-    trainCachePending = null;
-    throw err;
+// ---- Processed train payload (latest) ----
+let processedPayload = null; // { trains, serverTime }
+
+// ---- CTA API fetch helpers ----
+
+function fetchJSON(fetchUrl) {
+  return new Promise((resolve, reject) => {
+    http.get(fetchUrl, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        try { resolve(JSON.parse(chunks.join(''))); }
+        catch (e) { reject(new Error('Invalid JSON from CTA API')); }
+      });
+    }).on('error', reject);
   });
-  return trainCachePending;
 }
 
-// Cache follow-train (ETA) responses for 5s — the browser polls every 2s per
-// selected train, but the CTA API data only refreshes every 30s anyway.
-const FOLLOW_CACHE_TTL = 5000; // ms
-const followCache = new Map(); // rn → { body, time }
+async function fetchAllTrains() {
+  const results = await Promise.allSettled(
+    ROUTES.map(async (route) => {
+      const fetchUrl = `${CTA_BASE}?key=${CTA_KEY}&rt=${route}&outputType=JSON`;
+      const data = await fetchJSON(fetchUrl);
+      return { route, data };
+    })
+  );
+
+  const trains = [];
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    const { route, data } = result.value;
+    const ctatt = data.ctatt;
+    if (!ctatt || (ctatt.errCd !== '0' && ctatt.errCd !== 0)) continue;
+    let routeData = ctatt.route;
+    if (!routeData) continue;
+    if (!Array.isArray(routeData)) routeData = [routeData];
+    for (const r of routeData) {
+      let trainList = r.train;
+      if (!trainList) continue;
+      if (!Array.isArray(trainList)) trainList = [trainList];
+      trains.push(...trainList.map((t) => ({ ...t, rt: route })));
+    }
+  }
+  return trains;
+}
+
+// ---- Background polling loop ----
+
+async function pollAndBroadcast() {
+  try {
+    const rawTrains = await fetchAllTrains();
+    const trains    = processTrains(rawTrains, geoState);
+    processedPayload = { trains, serverTime: Date.now() };
+    broadcast(processedPayload);
+    console.log(`[poll] ${trains.length} trains processed, ${sseClients.size} SSE client(s)`);
+  } catch (e) {
+    console.error('[poll] Error:', e.message);
+  }
+}
+
+// Kick off immediately then repeat
+pollAndBroadcast();
+setInterval(pollAndBroadcast, POLL_INTERVAL);
+
+// ---- SSE helpers ----
+
+function broadcast(payload) {
+  if (sseClients.size === 0) return;
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const client of sseClients) {
+    try { client.res.write(data); }
+    catch (_) { sseClients.delete(client); }
+  }
+}
+
+// ---- Follow (ETA) cache — unchanged ----
+
+const FOLLOW_CACHE_TTL = 5000;
+const followCache = new Map();
 
 async function getCachedFollow(rn) {
-  const now = Date.now();
+  const now    = Date.now();
   const cached = followCache.get(rn);
   if (cached && now - cached.time < FOLLOW_CACHE_TTL) return cached.body;
   const followUrl = `${CTA_FOLLOW}?key=${CTA_KEY}&runnumber=${rn}&outputType=JSON`;
@@ -68,69 +131,55 @@ async function getCachedFollow(rn) {
   return body;
 }
 
+// ---- Static file serving ----
+
 const MIME_TYPES = {
   '.html': 'text/html',
-  '.css': 'text/css',
-  '.js': 'application/javascript',
+  '.css':  'text/css',
+  '.js':   'application/javascript',
   '.json': 'application/json',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
+  '.png':  'image/png',
+  '.svg':  'image/svg+xml',
+  '.ico':  'image/x-icon',
 };
 
-/** Fetch JSON from an HTTP URL using Node's built-in http module. */
-function fetchJSON(fetchUrl) {
-  return new Promise((resolve, reject) => {
-    http.get(fetchUrl, (res) => {
-      const chunks = [];
-      res.on('data', (chunk) => chunks.push(chunk));
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(chunks.join('')));
-        } catch (e) {
-          reject(new Error('Invalid JSON from CTA API'));
-        }
-      });
-    }).on('error', reject);
-  });
-}
-
-/** Fetch train positions for all routes in parallel, return combined array. */
-async function fetchAllTrains() {
-  const results = await Promise.allSettled(
-    ROUTES.map(async (route) => {
-      const fetchUrl = `${CTA_BASE}?key=${CTA_KEY}&rt=${route}&outputType=JSON`;
-      const data = await fetchJSON(fetchUrl);
-      return { route, data };
-    })
-  );
-
-  const trains = [];
-  for (const result of results) {
-    if (result.status !== 'fulfilled') continue;
-    const { route, data } = result.value;
-    const ctatt = data.ctatt;
-    if (!ctatt || (ctatt.errCd !== '0' && ctatt.errCd !== 0)) continue;
-
-    let routeData = ctatt.route;
-    if (!routeData) continue;
-    if (!Array.isArray(routeData)) routeData = [routeData];
-
-    for (const r of routeData) {
-      let trainList = r.train;
-      if (!trainList) continue;
-      if (!Array.isArray(trainList)) trainList = [trainList];
-      trains.push(...trainList.map((t) => ({ ...t, rt: route })));
-    }
-  }
-
-  return trains;
-}
+// ---- HTTP server ----
 
 const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
 
-  // Serve bundled CTA line geometry GeoJSON (served from memory cache)
+  // ---- SSE endpoint — train state stream ----
+  if (parsed.pathname === '/api/trains/stream') {
+    res.writeHead(200, {
+      'Content-Type':  'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection':    'keep-alive',
+      'X-Accel-Buffering': 'no', // nginx: disable buffering for SSE
+    });
+
+    // Send current payload immediately so new clients don't wait up to POLL_INTERVAL
+    if (processedPayload) {
+      res.write(`data: ${JSON.stringify(processedPayload)}\n\n`);
+    }
+
+    const client = { res };
+    sseClients.add(client);
+
+    // Heartbeat every 15s to keep connection alive through proxies / load balancers
+    const heartbeat = setInterval(() => {
+      try { res.write(': heartbeat\n\n'); }
+      catch (_) { clearInterval(heartbeat); sseClients.delete(client); }
+    }, 15000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      sseClients.delete(client);
+    });
+
+    return;
+  }
+
+  // ---- GeoJSON ----
   if (parsed.pathname === '/api/geojson') {
     if (!geojsonCache) {
       res.writeHead(503, { 'Content-Type': 'application/json' });
@@ -138,32 +187,26 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     res.writeHead(200, {
-      'Content-Type': 'application/json',
+      'Content-Type':  'application/json',
       'Cache-Control': 'public, max-age=86400',
     });
     res.end(geojsonCache);
     return;
   }
 
-  // API proxy endpoint
+  // ---- Raw train positions (REST fallback / debug) ----
   if (parsed.pathname === '/api/trains') {
-    try {
-      const trains = await getCachedTrains();
-      const body = JSON.stringify({ trains });
-      res.writeHead(200, {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-      });
-      res.end(body);
-    } catch (e) {
-      console.error('CTA API error:', e.message);
-      res.writeHead(502, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Failed to fetch train data' }));
+    if (!processedPayload) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Train data not ready yet' }));
+      return;
     }
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(JSON.stringify(processedPayload));
     return;
   }
 
-  // Follow a specific train run (ETAs for upcoming stops)
+  // ---- Follow a specific train ----
   if (parsed.pathname.startsWith('/api/train/')) {
     const rn = parsed.pathname.split('/').pop();
     if (!rn || !/^\d+$/.test(rn)) {
@@ -183,11 +226,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Static file serving
+  // ---- Static files ----
   let filePath = parsed.pathname === '/' ? '/index.html' : parsed.pathname;
   filePath = path.join(__dirname, filePath);
 
-  // Prevent directory traversal
   if (!filePath.startsWith(__dirname)) {
     res.writeHead(403);
     res.end('Forbidden');
@@ -203,7 +245,6 @@ const server = http.createServer(async (req, res) => {
       res.end(err.code === 'ENOENT' ? 'Not found' : 'Server error');
       return;
     }
-    // Bundle is content-hashed via esbuild; HTML must revalidate to pick up new bundles.
     const cacheHeader = (ext === '.js' && filePath.includes('dist'))
       ? 'public, max-age=31536000, immutable'
       : ext === '.html' ? 'no-cache'

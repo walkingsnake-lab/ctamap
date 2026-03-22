@@ -412,12 +412,7 @@
   let realTrains = null;
   let retiringTrains = [];
 
-  const fetched = await fetchTrains();
-  if (fetched && fetched.length > 0) {
-    realTrains = fetched;
-    initRealTrainAnimation(realTrains, lineSegments, null, lineTerminals, stations, lineNeighborMaps);
-    console.log(`[CTA] Loaded ${realTrains.length} trains`);
-  }
+  // Initial train data arrives via the SSE snapshot (server sends processedPayload immediately on connect).
 
   // ---- Heading → SVG rotation ----
   // CTA heading: 0=N, 90=E, 180=S, 270=W (clockwise from north)
@@ -1228,10 +1223,15 @@
     }
   });
 
-  // ---- Periodic refresh for real API data ----
-  if (API_KEY) {
-    setInterval(async () => {
-      const fetched = await fetchTrains();
+  // ---- Real-time train data via SSE ----
+  {
+    const trainStream = new EventSource('/api/trains/stream');
+
+    trainStream.addEventListener('message', (evt) => {
+      let payload;
+      try { payload = JSON.parse(evt.data); } catch (_) { return; }
+      if (!payload || !Array.isArray(payload.trains)) return;
+      const fetched = mapServerTrains(payload.trains);
       if (fetched && fetched.length > 0) {
         // Build prev map from current real trains for velocity + drift calculation
         const prevMap = new Map();
@@ -1381,7 +1381,14 @@
         // Update DOM (enter/exit management)
         renderTrains();
       }
-    }, REFRESH_INTERVAL);
+    });
+
+    trainStream.addEventListener('error', () => {
+      // EventSource auto-reconnects on error; log for visibility only
+      console.warn('[CTA] SSE connection error — browser will retry');
+    });
+
+    window.addEventListener('beforeunload', () => trainStream.close());
   }
 
   // ---- Keyboard shortcuts ----
