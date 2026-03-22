@@ -493,3 +493,48 @@ body.embed-mode #welcome-hint {
   opacity: 0.5;
   font-style: italic;
 }
+
+.dbg-row-selected td {
+  background: rgba(255,255,255,0.07);
+}
+
+.dbg-rn-link {
+  cursor: pointer;
+  text-decoration: underline;
+  color: #bbb;
+}
+
+.dbg-rn-link:hover {
+  color: #fff;
+}
+
+.dbg-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.dbg-filter-btn {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: #aaa;
+  cursor: pointer;
+}
+
+.dbg-filter-btn:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+
+.dbg-filter-btn.active {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border-color: rgba(255,255,255,0.35);
+}

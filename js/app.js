@@ -1412,9 +1412,35 @@
   });
 
   // ---- Debug overlay ----
-  const _dbgEl     = document.getElementById('debug-overlay');
-  const _dbgSummary = document.getElementById('dbg-summary');
-  const _dbgTbody   = document.getElementById('dbg-tbody');
+  const _dbgEl      = document.getElementById('debug-overlay');
+  const _dbgSummary  = document.getElementById('dbg-summary');
+  const _dbgTbody    = document.getElementById('dbg-tbody');
+  const _dbgFilterBar = document.getElementById('dbg-filter-bar');
+
+  let _dbgFilterLegend = 'ALL';
+
+  // Delegated click on filter bar
+  if (_dbgFilterBar) {
+    _dbgFilterBar.addEventListener('click', e => {
+      const btn = e.target.closest('.dbg-filter-btn');
+      if (!btn) return;
+      _dbgFilterLegend = btn.dataset.legend || 'ALL';
+      renderDebugOverlay();
+    });
+  }
+
+  // Delegated click on tbody — click RN cell to select/deselect train
+  if (_dbgTbody) {
+    _dbgTbody.addEventListener('click', e => {
+      const cell = e.target.closest('.dbg-rn-link');
+      if (!cell) return;
+      const rn = cell.closest('tr')?.dataset.rn;
+      if (!rn) return;
+      const allT = (realTrains || []).concat(retiringTrains);
+      const train = allT.find(t => t.rn === rn);
+      if (train) selectTrain(train);
+    });
+  }
 
   function renderDebugOverlay() {
     if (!_dbgEl || _dbgEl.classList.contains('debug-hidden')) return;
@@ -1442,18 +1468,46 @@
       .join('  ');
     _dbgSummary.textContent = `${total} trains | dir: ${dirStr}${heldStr}`;
 
+    // Build filter buttons (only lines with active trains)
+    if (_dbgFilterBar) {
+      const legendOrder = { RD: 0, BL: 1, BR: 2, GR: 3, OR: 4, PK: 5, PR: 6, YL: 7 };
+      const presentLegends = [...new Set(allT.map(t => t.legend))]
+        .sort((a, b) => (legendOrder[a] ?? 99) - (legendOrder[b] ?? 99));
+
+      // Reset filter if selected line no longer has trains
+      if (_dbgFilterLegend !== 'ALL' && !presentLegends.includes(_dbgFilterLegend)) {
+        _dbgFilterLegend = 'ALL';
+      }
+
+      const btnHTML = [
+        `<button class="dbg-filter-btn${_dbgFilterLegend === 'ALL' ? ' active' : ''}" data-legend="ALL">All</button>`,
+        ...presentLegends.map(lg => {
+          const color = LINE_COLORS[lg] || '#888';
+          const isActive = _dbgFilterLegend === lg;
+          const style = isActive ? ` style="background:${color};color:#fff;border-color:${color}"` : '';
+          return `<button class="dbg-filter-btn${isActive ? ' active' : ''}" data-legend="${lg}"${style}>${lg}</button>`;
+        })
+      ].join('');
+      _dbgFilterBar.innerHTML = btnHTML;
+    }
+
     // Sort: by legend, then rn
     const legendOrder = { RD: 0, BL: 1, BR: 2, GR: 3, OR: 4, PK: 5, PR: 6, YL: 7 };
-    const sorted = [...allT].sort((a, b) => {
+    let sorted = [...allT].sort((a, b) => {
       const lo = (legendOrder[a.legend] ?? 99) - (legendOrder[b.legend] ?? 99);
       return lo !== 0 ? lo : a.rn.localeCompare(b.rn);
     });
+
+    if (_dbgFilterLegend !== 'ALL') {
+      sorted = sorted.filter(t => t.legend === _dbgFilterLegend);
+    }
 
     const rows = sorted.map(t => {
       const color = LINE_COLORS[t.legend] || '#888';
       const dirArrow = t._direction > 0 ? '↑N' : '↓S';
       const method = t._serverDirectionMethod || 'prev';
       const isRetiring = t._serverRetiring;
+      const isSelected = t.rn === selectedTrainRn;
 
       let heldCell = '';
       if (t._serverHeld) {
@@ -1463,12 +1517,13 @@
         heldCell = `<span class="dbg-held-badge">${t._serverHeldReason}${countStr}</span>`;
       }
 
-      const rowClass = isRetiring ? ' class="dbg-retiring"' : '';
+      const classes = [isRetiring ? 'dbg-retiring' : '', isSelected ? 'dbg-row-selected' : ''].filter(Boolean).join(' ');
+      const rowClass = classes ? ` class="${classes}"` : '';
       const dest = (t.destNm || '').replace('O\'Hare', 'OHare').replace(/\(.*\)/, '').trim();
       const stn  = (t.nextStaNm || '').replace(' (Terminal)', '').trim();
 
-      return `<tr${rowClass}>` +
-        `<td>${t.rn}</td>` +
+      return `<tr data-rn="${t.rn}"${rowClass}>` +
+        `<td class="dbg-rn-link">${t.rn}</td>` +
         `<td><span class="dbg-line-chip" style="background:${color}">${t.legend}</span></td>` +
         `<td title="${t.destNm || ''}">${dest || '—'}</td>` +
         `<td>${dirArrow}</td>` +
@@ -1479,6 +1534,12 @@
     });
 
     _dbgTbody.innerHTML = rows.join('');
+
+    // Scroll selected row into view
+    if (selectedTrainRn) {
+      const selRow = _dbgTbody.querySelector(`tr[data-rn="${selectedTrainRn}"]`);
+      selRow?.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   // ---- Resize handler ----
