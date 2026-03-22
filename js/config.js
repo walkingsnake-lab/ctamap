@@ -54,7 +54,7 @@ const REFRESH_INTERVAL = 30000;
 const LINE_WIDTH = 1.5;
 const TRAIN_RADIUS = 3;
 const TRAIN_GLOW_RADIUS = 4;
-const TERMINUS_HOLD_MS = 120000; // Hold train at terminus before fade-out (120s)
+const TERMINUS_HOLD_MS = 90000; // Hold train at terminus before fade-out (90s)
 const TERMINAL_PROXIMITY_THRESHOLD = 0.05; // degrees (~5.5km) — max distance to terminal to trigger retirement
 const TERMINAL_APPROACH_DURATION = 5000;  // ms to slide retiring train to terminal / spawn new trains
 const MAP_PADDING = 0.05; // 5% padding around the map
@@ -227,35 +227,12 @@ const LINE_NAME_TO_LEGEND_STATION = {
 
 // ---- Direction & track constants ----
 
-// Per-line destination substring identifying the "northern" (higher-latitude) terminus.
-// Used by directionByTerminalWalk to convert a destination name into a segment-relative
-// direction.  Single source of truth for direction derivation and suspect-backward
-// classification.
-const LINE_NORTH_DESTS = {
-  RD: 'Howard',
-  BL: 'O\'Hare',
-  BR: 'Kimball',
-  GR: 'Harlem',
-  OR: 'Loop',
-  PK: 'Loop',
-  PR: 'Linden',
-  YL: 'Skokie',
-};
-
 // Lines that traverse the downtown Loop (shared ML segments)
 const LOOP_LINE_CODES = ['BR', 'OR', 'PK', 'PR', 'GR'];
 const LOOP_LINE_SET = new Set(LOOP_LINE_CODES);
 
 // Approximate center of the downtown Loop elevated
 const LOOP_CENTER = { lon: -87.629, lat: 41.882 };
-
-// Distance threshold (degrees) for "train is physically inside the Loop".
-// Covers all ML Loop stations and the boundary exit stations (e.g. Clinton
-// for PK at ~0.014°).  Outer approach stations are 0.024°+ from the center.
-const LOOP_INNER_RADIUS = 0.016;
-
-// Probe distance for next-station direction inference (~1.5km in degrees)
-const PROBE_DIST = 0.015;
 
 // Safety iteration limit for advanceOnTrack loop
 const ADVANCE_MAX_ITER = 10000;
