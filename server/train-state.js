@@ -246,12 +246,16 @@ function processTrains(rawTrains, geo) {
             const fwdD = geoDist(fwdTest.lon, fwdTest.lat, toPos.lon, toPos.lat);
             const bwdD = geoDist(bwdTest.lon, bwdTest.lat, toPos.lon, toPos.lat);
             const corrDir = Math.abs(fwdD - bwdD) < testStep * 0.5
-              ? direction
+              ? (prev.direction ?? direction)
               : (fwdD <= bwdD ? 1 : -1);
 
-            // Classify backward vs forward
-            const _headingDirFromPos = (northDest && effectiveDest)
-              ? (directionByTerminalWalk(prev.trackPos, effectiveDest, northDest, segs, neighborMap)
+            // Classify backward vs forward.
+            // Use prev poll's effectiveDest so the terminal walk is evaluated in the same
+            // context as prev.trackPos — avoids false holds when dest flips Loop→Kimball
+            // while prev.trackPos is still on a Loop-entry (southbound) segment.
+            const _prevEffDest = prev.effectiveDest ?? effectiveDest;
+            const _headingDirFromPos = (northDest && _prevEffDest)
+              ? (directionByTerminalWalk(prev.trackPos, _prevEffDest, northDest, segs, neighborMap)
                 ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
                 ?? direction)
               : direction;
