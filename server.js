@@ -4,7 +4,11 @@ const path = require('path');
 const url  = require('url');
 
 const PORT    = process.env.PORT || 3000;
-const CTA_KEY = process.env.CTA_KEY || '9e15fcfa75064b6db8ad034db11ea214';
+const CTA_KEY = process.env.CTA_KEY;
+if (!CTA_KEY) {
+  console.error('[startup] CTA_KEY environment variable is required');
+  process.exit(1);
+}
 const CTA_BASE   = 'http://lapi.transitchicago.com/api/1.0/ttpositions.aspx';
 const CTA_FOLLOW = 'http://lapi.transitchicago.com/api/1.0/ttfollow.aspx';
 const ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
@@ -17,6 +21,7 @@ const POLL_INTERVAL = 30000;
 // ---- Server-side train processing ----
 const geoState   = require('./server/geo-state');
 const { processTrains } = require('./server/train-state');
+const metrics    = require('./server/metrics');
 
 // Initialize geometry synchronously at startup — GeoJSON is 116 KB, fast read.
 geoState.init();
@@ -81,13 +86,18 @@ async function fetchAllTrains() {
 // ---- Background polling loop ----
 
 async function pollAndBroadcast() {
+  const t0 = Date.now();
+  let errorCount = 0;
   try {
     const rawTrains = await fetchAllTrains();
     const trains    = processTrains(rawTrains, geoState);
     processedPayload = { trains, serverTime: Date.now() };
     broadcast(processedPayload);
+    metrics.recordPoll(trains, Date.now() - t0, errorCount);
     console.log(`[poll] ${trains.length} trains processed, ${sseClients.size} SSE client(s)`);
   } catch (e) {
+    errorCount++;
+    metrics.recordPoll([], Date.now() - t0, errorCount);
     console.error('[poll] Error:', e.message);
   }
 }
@@ -164,18 +174,41 @@ const server = http.createServer(async (req, res) => {
 
     const client = { res };
     sseClients.add(client);
+    metrics.updateSseClients(1);
 
     // Heartbeat every 15s to keep connection alive through proxies / load balancers
     const heartbeat = setInterval(() => {
       try { res.write(': heartbeat\n\n'); }
-      catch (_) { clearInterval(heartbeat); sseClients.delete(client); }
+      catch (_) { clearInterval(heartbeat); sseClients.delete(client); metrics.updateSseClients(-1); }
     }, 15000);
 
     req.on('close', () => {
       clearInterval(heartbeat);
       sseClients.delete(client);
+      metrics.updateSseClients(-1);
     });
 
+    return;
+  }
+
+  // ---- Health check ----
+  if (parsed.pathname === '/health') {
+    const ready = processedPayload !== null;
+    const body = JSON.stringify({
+      ok: ready,
+      trains: ready ? processedPayload.trains.length : 0,
+      clients: sseClients.size,
+      uptime: Math.floor(process.uptime()),
+    });
+    res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.end(body);
+    return;
+  }
+
+  // ---- Prometheus metrics ----
+  if (parsed.pathname === '/metrics') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4', 'Cache-Control': 'no-cache' });
+    res.end(metrics.renderMetrics());
     return;
   }
 
