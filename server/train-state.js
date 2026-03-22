@@ -35,7 +35,7 @@ const {
 // Per-train state persisted across polls.
 // { rt, legend, heading, destNm, lon, lat,
 //   trackPos, direction, effectiveDest,
-//   backwardHoldCount, forwardHoldCount, stationJumpHoldCount,
+//   backwardHoldCount, forwardHoldCount,
 //   nearStation }
 const trainStateMap = new Map();
 
@@ -300,29 +300,6 @@ function processTrains(rawTrains, geo) {
                 console.log(`[CTA] Fast-forward confirmed: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${newCount} polls`);
               }
               train._forwardHoldCount = newCount;
-            } else {
-              // Station-jump detection
-              if (prev.nearStation && stations) {
-                const newNearStation = nearestStationWithinRadius(
-                  train.lon, train.lat, stations, legend, C.STATION_JUMP_RADIUS
-                );
-                if (newNearStation && newNearStation !== prev.nearStation && drift >= C.STATION_JUMP_MIN_DRIFT) {
-                  const newCount = (prev.stationJumpHoldCount || 0) + 1;
-                  if (newCount < C.STATION_JUMP_CONFIRM_POLLS) {
-                    held = true;
-                    heldReason = 'station_jump';
-                    holdCount = newCount;
-                    holdMax   = C.STATION_JUMP_CONFIRM_POLLS;
-                    // Log only when hold first starts
-                    if (newCount === 1) {
-                      console.log(`[CTA] Station-jump hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
-                    }
-                  } else {
-                    console.log(`[CTA] Station-jump confirmed: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${newCount} polls`);
-                  }
-                  train._stationJumpHoldCount = newCount;
-                }
-              }
             }
           } else {
             // Snap range (> CORRECTION_SNAP_THRESHOLD) — apply snap hold
@@ -390,7 +367,6 @@ function processTrains(rawTrains, geo) {
       effectiveDest:       effectiveDest,
       backwardHoldCount:   held && (heldReason === 'backward'     || heldReason === 'snap_backward') ? (train._backwardHoldCount || 0) : (held ? (prev?.backwardHoldCount || 0) : 0),
       forwardHoldCount:    held && (heldReason === 'fast_forward' || heldReason === 'snap_forward')  ? (train._forwardHoldCount  || 0) : (held ? (prev?.forwardHoldCount  || 0) : 0),
-      stationJumpHoldCount: held && heldReason === 'station_jump' ? (train._stationJumpHoldCount || 0) : (held ? (prev?.stationJumpHoldCount || 0) : 0),
       nearStation:         nextNearStation,
       dirMethod,
     });

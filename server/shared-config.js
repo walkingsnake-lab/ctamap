@@ -84,7 +84,6 @@ const CORRECTION_SNAP_THRESHOLD  = 0.045;
 const FORWARD_PLAUSIBLE_DIST     = 0.03;
 const PHANTOM_STATION_RADIUS     = 0.005;
 const STATION_JUMP_RADIUS        = 0.003;
-const STATION_JUMP_MIN_DRIFT     = 0.010;
 
 // Terminal retirement — keep in sync with js/config.js
 const TERMINUS_HOLD_MS             = 90000;  // 90s hold at terminal before retiring
@@ -93,7 +92,6 @@ const TERMINAL_PROXIMITY_THRESHOLD = 0.05;   // degrees (~5.5km) — max distanc
 const BACKWARD_CONFIRM_POLLS      = 6;
 const FORWARD_CONFIRM_POLLS       = 4;
 const FORWARD_SNAP_CONFIRM_POLLS  = 5;
-const STATION_JUMP_CONFIRM_POLLS  = 4;
 
 const KNOWN_PHANTOM_JUMPS = [
   { legend: 'PR', fromStations: ['Wilson', 'Jarvis'], toStations: ['South Blvd'],
@@ -179,11 +177,9 @@ module.exports = {
   FORWARD_PLAUSIBLE_DIST,
   PHANTOM_STATION_RADIUS,
   STATION_JUMP_RADIUS,
-  STATION_JUMP_MIN_DRIFT,
   BACKWARD_CONFIRM_POLLS,
   FORWARD_CONFIRM_POLLS,
   FORWARD_SNAP_CONFIRM_POLLS,
-  STATION_JUMP_CONFIRM_POLLS,
   KNOWN_PHANTOM_JUMPS,
   PHANTOM_JUMP_BY_LEGEND,
   TERMINUS_HOLD_MS,
