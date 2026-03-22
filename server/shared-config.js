@@ -1,0 +1,185 @@
+/**
+ * Server-side constants — keep in sync with js/config.js.
+ * These are CommonJS exports of the values that the server-side train
+ * processing engine needs.  The browser bundle still loads js/config.js
+ * as globals; this file is only ever required by server/ modules.
+ */
+'use strict';
+
+const LINE_COLORS = {
+  RD:  '#C60C30',
+  BL:  '#00A1DE',
+  BR:  '#895129',
+  GR:  '#009B3A',
+  OR:  '#F14624',
+  PK:  '#E27EA6',
+  PR:  '#7C3AED',
+  YL:  '#F9E300',
+  ML:  '#888888',
+};
+
+const ROUTE_TO_LEGEND = {
+  red:  'RD',
+  blue: 'BL',
+  brn:  'BR',
+  G:    'GR',
+  org:  'OR',
+  P:    'PR',
+  pink: 'PK',
+  Y:    'YL',
+};
+
+// Map CTA line names (from GeoJSON "lines" property) → legend codes
+const LINE_NAME_TO_LEGEND_STATION = {
+  'Red': 'RD', 'Blue': 'BL', 'Brown': 'BR', 'Green': 'GR',
+  'Orange': 'OR', 'Pink': 'PK', 'Purple': 'PR', 'Yellow': 'YL',
+};
+
+const STATION_NAME_OVERRIDES = {
+  'Quincy/Wells': 'Quincy',
+  'Roosevelt/Wabash': 'Roosevelt',
+  'Harold Washington Library-State/Van Buren': 'Library',
+  'Harold Washington Library': 'Library',
+};
+
+function cleanStationName(name) {
+  if (!name) return name;
+  if (STATION_NAME_OVERRIDES[name]) return STATION_NAME_OVERRIDES[name];
+  return name.replace(/\/(Dearborn|Franklin|State|Milwaukee)$/i, '');
+}
+
+function normalizeStationName(name) {
+  return name.toLowerCase().replace(/[/\-''`]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+const BRANCH_SUFFIXES = [
+  'Ravenswood', "O'Hare", 'North Main', 'Lake', 'Congress',
+  'Douglas', 'Midway', 'Dan Ryan', 'South Elevated', 'Evanston',
+  'Skokie', 'Homan',
+];
+
+const LINE_NORTH_DESTS = {
+  RD: 'Howard',
+  BL: "O'Hare",
+  BR: 'Kimball',
+  GR: 'Harlem',
+  OR: 'Loop',
+  PK: 'Loop',
+  PR: 'Linden',
+  YL: 'Skokie',
+};
+
+const LOOP_LINE_CODES = ['BR', 'OR', 'PK', 'PR', 'GR'];
+const LOOP_LINE_SET   = new Set(LOOP_LINE_CODES);
+
+const LOOP_CENTER = { lon: -87.629, lat: 41.882 };
+const LOOP_INNER_RADIUS = 0.016;
+
+const PROBE_DIST = 0.015;
+const ADVANCE_MAX_ITER = 10000;
+
+const SEGMENT_CONNECT_THRESHOLD  = 0.001;
+const SNAP_AFFINITY_MARGIN       = 1.5;
+const CORRECTION_SNAP_THRESHOLD  = 0.045;
+const FORWARD_PLAUSIBLE_DIST     = 0.03;
+const PHANTOM_STATION_RADIUS     = 0.005;
+const STATION_JUMP_RADIUS        = 0.003;
+const STATION_JUMP_MIN_DRIFT     = 0.006;
+
+const BACKWARD_CONFIRM_POLLS      = 6;
+const FORWARD_CONFIRM_POLLS       = 4;
+const FORWARD_SNAP_CONFIRM_POLLS  = 5;
+const STATION_JUMP_CONFIRM_POLLS  = 4;
+
+const KNOWN_PHANTOM_JUMPS = [
+  { legend: 'PR', fromStations: ['Wilson', 'Jarvis'], toStations: ['South Blvd'],
+    description: 'Purple Express Wilson/Jarvis → South Blvd phantom' },
+  { legend: 'PR', fromStations: ['Wilson', 'Jarvis'], toStations: ['Howard'],
+    description: 'Purple Express Wilson/Jarvis → Howard phantom' },
+  { legend: 'BL', fromStations: ['Harlem', 'Cumberland'], toStations: ['Jefferson Park'],
+    description: 'Blue Line Harlem/Cumberland → Jefferson Park phantom' },
+  { legend: 'BL', fromStations: ['Jefferson Park', 'Cumberland'], toStations: ['Harlem'],
+    description: 'Blue Line Jefferson Park/Cumberland → Harlem phantom' },
+  { legend: 'BL', fromStations: ['Harlem'], toStations: ['Cumberland'],
+    description: 'Blue Line Harlem → Cumberland phantom' },
+  { legend: 'BL', fromStations: ['Cumberland'], toStations: ['Harlem'],
+    description: 'Blue Line Cumberland → Harlem phantom' },
+  { legend: 'BL', fromStations: ["O'Hare Airport"], toStations: ['Rosemont'],
+    description: "Blue Line O'Hare → Rosemont phantom" },
+  { legend: 'BL', fromStations: ['Rosemont'], toStations: ["O'Hare Airport"],
+    description: "Blue Line Rosemont → O'Hare phantom" },
+  { legend: 'GR', fromStations: ['35-Bronzeville-IIT'], toStations: ['Cottage Grove'],
+    description: 'Green Line 35-Bronzeville-IIT → Cottage Grove phantom' },
+  { legend: 'GR', fromStations: ['Cottage Grove'], toStations: ['35-Bronzeville-IIT'],
+    description: 'Green Line Cottage Grove → 35-Bronzeville-IIT phantom' },
+  { legend: 'GR', fromStations: ['35-Bronzeville-IIT', 'Cermak-McCormick Place'],
+    toStations: ['Cottage Grove', 'King Drive'],
+    description: 'Green Line 35th area → Cottage Grove branch phantom' },
+  { legend: 'GR', fromStations: ['Roosevelt'], toStations: ['Cermak-McCormick Place'],
+    description: 'Green Line Roosevelt → Cermak-McCormick Place phantom' },
+  { legend: 'GR', fromStations: ['Cermak-McCormick Place'], toStations: ['Roosevelt'],
+    description: 'Green Line Cermak-McCormick Place → Roosevelt phantom' },
+  { legend: 'RD', fromStations: ['Fullerton'], toStations: ['North/Clybourn'],
+    description: 'Red Line Fullerton → North/Clybourn phantom' },
+  { legend: 'RD', fromStations: ['North/Clybourn'], toStations: ['Fullerton'],
+    description: 'Red Line North/Clybourn → Fullerton phantom' },
+  { legend: 'RD', fromStations: ['Loyola'], toStations: ['Wilson'],
+    description: 'Red Line Loyola → Wilson phantom' },
+  { legend: 'RD', fromStations: ['Wilson'], toStations: ['Loyola'],
+    description: 'Red Line Wilson → Loyola phantom' },
+  { legend: 'RD', fromStations: ['Roosevelt'], toStations: ['Cermak-Chinatown'],
+    description: 'Red Line Roosevelt → Cermak-Chinatown phantom' },
+  { legend: 'RD', fromStations: ['Cermak-Chinatown'], toStations: ['Roosevelt'],
+    description: 'Red Line Cermak-Chinatown → Roosevelt phantom' },
+  { legend: 'PK', fromStations: ['Polk'], toStations: ['Ashland'],
+    description: 'Pink Line Polk → Ashland phantom' },
+  { legend: 'PK', fromStations: ['Ashland'], toStations: ['Polk'],
+    description: 'Pink Line Ashland → Polk phantom' },
+  { legend: 'BR', fromStations: ['Sedgwick'], toStations: ['Chicago'],
+    description: 'Brown Line Sedgwick → Chicago phantom' },
+  { legend: 'BR', fromStations: ['Chicago'], toStations: ['Sedgwick'],
+    description: 'Brown Line Chicago → Sedgwick phantom' },
+  { legend: 'PR', fromStations: ['Sedgwick'], toStations: ['Chicago'],
+    description: 'Purple Line Sedgwick → Chicago phantom' },
+  { legend: 'PR', fromStations: ['Chicago'], toStations: ['Sedgwick'],
+    description: 'Purple Line Chicago → Sedgwick phantom' },
+];
+
+const PHANTOM_JUMP_BY_LEGEND = (() => {
+  const m = new Map();
+  for (const rule of KNOWN_PHANTOM_JUMPS) {
+    if (!m.has(rule.legend)) m.set(rule.legend, []);
+    m.get(rule.legend).push(rule);
+  }
+  return m;
+})();
+
+module.exports = {
+  LINE_COLORS,
+  ROUTE_TO_LEGEND,
+  LINE_NAME_TO_LEGEND_STATION,
+  STATION_NAME_OVERRIDES,
+  cleanStationName,
+  normalizeStationName,
+  BRANCH_SUFFIXES,
+  LINE_NORTH_DESTS,
+  LOOP_LINE_CODES,
+  LOOP_LINE_SET,
+  LOOP_CENTER,
+  LOOP_INNER_RADIUS,
+  PROBE_DIST,
+  ADVANCE_MAX_ITER,
+  SEGMENT_CONNECT_THRESHOLD,
+  SNAP_AFFINITY_MARGIN,
+  CORRECTION_SNAP_THRESHOLD,
+  FORWARD_PLAUSIBLE_DIST,
+  PHANTOM_STATION_RADIUS,
+  STATION_JUMP_RADIUS,
+  STATION_JUMP_MIN_DRIFT,
+  BACKWARD_CONFIRM_POLLS,
+  FORWARD_CONFIRM_POLLS,
+  FORWARD_SNAP_CONFIRM_POLLS,
+  STATION_JUMP_CONFIRM_POLLS,
+  KNOWN_PHANTOM_JUMPS,
+  PHANTOM_JUMP_BY_LEGEND,
+};
