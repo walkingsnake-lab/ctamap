@@ -1453,16 +1453,21 @@
       const color = LINE_COLORS[t.legend] || '#888';
       const segsD = lineSegments[t.legend];
       const tPos  = t._trackPos;
-      let geoNorth = null;
+      const DIR_ARROWS = ['↑N','↗NE','→E','↘SE','↓S','↙SW','←W','↖NW'];
+      let dirArrow = '?';
       if (segsD && tPos && tPos.segIdx !== undefined && tPos.ptIdx !== undefined) {
         const seg = segsD[tPos.segIdx];
         if (seg && tPos.ptIdx < seg.length - 1) {
-          const dy = seg[tPos.ptIdx + 1][1] - seg[tPos.ptIdx][1];
-          if (Math.abs(dy) > 1e-6) geoNorth = (dy * (t._direction || 1)) > 0;
+          const dir = t._direction || 1;
+          const dx  = (seg[tPos.ptIdx + 1][0] - seg[tPos.ptIdx][0]) * dir;
+          const dy  = (seg[tPos.ptIdx + 1][1] - seg[tPos.ptIdx][1]) * dir;
+          if (Math.abs(dx) > 1e-8 || Math.abs(dy) > 1e-8) {
+            // atan2: 0=east, rotate so 0=north; snap to 8 compass sectors
+            const angle = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+            dirArrow = DIR_ARROWS[Math.round(angle / 45) % 8];
+          }
         }
       }
-      const dirArrow = geoNorth === null ? (t._direction > 0 ? '↑' : '↓')
-                     : (geoNorth ? '↑N' : '↓S');
       const method = t._serverDirectionMethod || 'prev';
       const isRetiring = t._serverRetiring;
 
