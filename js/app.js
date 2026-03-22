@@ -1339,6 +1339,9 @@
 
         console.log(`[CTA] Refreshed train data (${realTrains.length} trains)`);
 
+        // Refresh debug overlay if open
+        renderDebugOverlay();
+
         // Update DOM (enter/exit management)
         renderTrains();
       }
@@ -1376,6 +1379,14 @@
       return;
     }
 
+    // D key: toggle debug overlay
+    if (event.key === 'd' || event.key === 'D') {
+      const dbgEl = document.getElementById('debug-overlay');
+      const isHidden = dbgEl.classList.toggle('debug-hidden');
+      if (!isHidden) renderDebugOverlay();
+      return;
+    }
+
     // L key: zoom to The Loop (deselects train first if tracking)
     if (event.key === 'l' || event.key === 'L') {
       if (selectedTrain) {
@@ -1399,6 +1410,76 @@
       }
     }
   });
+
+  // ---- Debug overlay ----
+  const _dbgEl     = document.getElementById('debug-overlay');
+  const _dbgSummary = document.getElementById('dbg-summary');
+  const _dbgTbody   = document.getElementById('dbg-tbody');
+
+  function renderDebugOverlay() {
+    if (!_dbgEl || _dbgEl.classList.contains('debug-hidden')) return;
+
+    const allT = (realTrains || []).concat(retiringTrains);
+
+    // Summary line
+    const total   = allT.length;
+    const heldCounts = {};
+    const dirCounts  = {};
+    for (const t of allT) {
+      if (t._serverHeld && t._serverHeldReason) {
+        heldCounts[t._serverHeldReason] = (heldCounts[t._serverHeldReason] || 0) + 1;
+      }
+      const m = t._serverDirectionMethod || 'prev';
+      dirCounts[m] = (dirCounts[m] || 0) + 1;
+    }
+    const heldTotal = Object.values(heldCounts).reduce((a, b) => a + b, 0);
+    const heldStr = heldTotal
+      ? ' | held: ' + heldTotal + ' (' + Object.entries(heldCounts).map(([r, n]) => `${n} ${r}`).join(' ') + ')'
+      : '';
+    const dirStr = ['probe', 'walk', 'segment', 'heading', 'prev']
+      .filter(k => dirCounts[k])
+      .map(k => `${dirCounts[k]} ${k}`)
+      .join('  ');
+    _dbgSummary.textContent = `${total} trains | dir: ${dirStr}${heldStr}`;
+
+    // Sort: by legend, then rn
+    const legendOrder = { RD: 0, BL: 1, BR: 2, GR: 3, OR: 4, PK: 5, PR: 6, YL: 7 };
+    const sorted = [...allT].sort((a, b) => {
+      const lo = (legendOrder[a.legend] ?? 99) - (legendOrder[b.legend] ?? 99);
+      return lo !== 0 ? lo : a.rn.localeCompare(b.rn);
+    });
+
+    const rows = sorted.map(t => {
+      const color = LINE_COLORS[t.legend] || '#888';
+      const dirArrow = t._direction > 0 ? '↑N' : '↓S';
+      const method = t._serverDirectionMethod || 'prev';
+      const isRetiring = t._serverRetiring;
+
+      let heldCell = '';
+      if (t._serverHeld) {
+        const countStr = t._serverHoldMax
+          ? ` ${t._serverHoldCount}/${t._serverHoldMax}`
+          : '';
+        heldCell = `<span class="dbg-held-badge">${t._serverHeldReason}${countStr}</span>`;
+      }
+
+      const rowClass = isRetiring ? ' class="dbg-retiring"' : '';
+      const dest = (t.destNm || '').replace('O\'Hare', 'OHare').replace(/\(.*\)/, '').trim();
+      const stn  = (t.nextStaNm || '').replace(' (Terminal)', '').trim();
+
+      return `<tr${rowClass}>` +
+        `<td>${t.rn}</td>` +
+        `<td><span class="dbg-line-chip" style="background:${color}">${t.legend}</span></td>` +
+        `<td title="${t.destNm || ''}">${dest || '—'}</td>` +
+        `<td>${dirArrow}</td>` +
+        `<td><span class="dbg-dir-method ${method}">${method}</span></td>` +
+        `<td>${heldCell}</td>` +
+        `<td title="${t.nextStaNm || ''}">${stn || '—'}</td>` +
+        `</tr>`;
+    });
+
+    _dbgTbody.innerHTML = rows.join('');
+  }
 
   // ---- Resize handler ----
   let resizeTimer;

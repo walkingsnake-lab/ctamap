@@ -150,6 +150,9 @@ function mapServerTrains(serverTrains) {
     _serverEffectiveDest:   t.effectiveDest,
     _serverHeld:            t.held,          // if true, server is holding at this position
     _serverHeldReason:      t.heldReason,
+    _serverHoldCount:       t.holdCount      || 0,
+    _serverHoldMax:         t.holdMax        || 0,
+    _serverDirectionMethod: t.directionMethod || 'prev',
     _serverRetiring:        t.retiring        || false,
     _serverRetireElapsedMs: t.retireElapsedMs || 0,
   }));
