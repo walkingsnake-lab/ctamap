@@ -84,7 +84,7 @@ const CORRECTION_SNAP_THRESHOLD  = 0.045;
 const FORWARD_PLAUSIBLE_DIST     = 0.03;
 const PHANTOM_STATION_RADIUS     = 0.005;
 const STATION_JUMP_RADIUS        = 0.003;
-const STATION_JUMP_MIN_DRIFT     = 0.006;
+const STATION_JUMP_MIN_DRIFT     = 0.010;
 
 // Terminal retirement — keep in sync with js/config.js
 const TERMINUS_HOLD_MS             = 90000;  // 90s hold at terminal before retiring
