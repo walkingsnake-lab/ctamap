@@ -12,7 +12,7 @@ const ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 // How often the server re-fetches CTA data and broadcasts to SSE clients (ms).
 // CTA updates every ~60-120s; 20s is a balanced poll that stays responsive
 // without burning the 100K daily transaction limit.
-const POLL_INTERVAL = 20000;
+const POLL_INTERVAL = 30000;
 
 // ---- Server-side train processing ----
 const geoState   = require('./server/geo-state');
