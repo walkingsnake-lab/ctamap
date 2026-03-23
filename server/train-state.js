@@ -44,6 +44,14 @@ const trainStateMap = new Map();
 // { rn, rt, legend, heading, destNm, terminalPos, direction, effectiveDest, retireStartMs }
 const retiringTrainsMap = new Map();
 
+// Timestamp of the last processTrains call — used to detect VM suspension/wakeup.
+let lastProcessMs = 0;
+
+// If the gap between polls exceeds this threshold, treat all prior state as stale
+// and clear it so trains snap cleanly to current positions instead of triggering
+// mass snap_forward holds after a Fly.io machine wakeup.
+const STALE_POLL_GAP_MS = 90_000; // 90s ≈ 3 missed poll intervals
+
 /**
  * Process a batch of raw CTA trains against persistent state.
  *
@@ -55,6 +63,18 @@ function processTrains(rawTrains, geo) {
   const { lineSegments, lineOwnSegments, lineTerminals, lineNeighborMaps, stations } = geo;
   const now = Date.now();
   const m   = d => `${(d * 111000).toFixed(0)}m`;
+
+  // Detect VM wakeup (e.g. Fly.io machine suspension/resume).
+  // A gap larger than STALE_POLL_GAP_MS means the process was paused; stale positions
+  // would cause every train to trigger snap_forward holds for the next ~2.5 minutes,
+  // so clear state to let trains snap directly to their current positions.
+  if (lastProcessMs > 0 && (now - lastProcessMs) > STALE_POLL_GAP_MS) {
+    const gapSec = ((now - lastProcessMs) / 1000).toFixed(0);
+    console.warn(`[CTA] Poll gap ${gapSec}s > ${STALE_POLL_GAP_MS / 1000}s — clearing stale train state to avoid mass snap holds`);
+    trainStateMap.clear();
+    retiringTrainsMap.clear();
+  }
+  lastProcessMs = now;
 
   // Track which rns appeared this poll — remove stale state for gone trains
   const seenRns = new Set();
@@ -322,7 +342,10 @@ function processTrains(rawTrains, geo) {
             // Snap range (> CORRECTION_SNAP_THRESHOLD) — apply snap hold
             if (prev.trackPos) {
               const snapDir = directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs);
-              const isSuspectSnap = snapDir !== direction;
+              // Compare against prev.direction (the stable held direction) rather than the
+              // freshly-derived direction from the far-ahead position, which can flip each
+              // poll if the new snapped position is in a curved/ambiguous segment.
+              const isSuspectSnap = snapDir !== (prev.direction ?? direction);
               const countKey = isSuspectSnap ? 'backwardHoldCount' : 'forwardHoldCount';
               const confirmPolls = isSuspectSnap ? C.BACKWARD_CONFIRM_POLLS : C.FORWARD_SNAP_CONFIRM_POLLS;
               const newCount = (prev[countKey] || 0) + 1;
