@@ -653,15 +653,34 @@ function directionByNextStation(trackPos, nextStn, segs, neighborMap) {
   return null;
 }
 
-function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap) {
+function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap, stations) {
   const nmOpts = neighborMap ? { neighborMap } : undefined;
   const termFwd = advanceOnTrack(trackPos, 9999, +1, segs, nmOpts);
   const termBwd = advanceOnTrack(trackPos, 9999, -1, segs, nmOpts);
   if (!termFwd.stopped && !termBwd.stopped) return null;
   const destIsNorth = destNm.includes(northDest);
+
+  // Station-name proximity is more reliable than raw latitude for determining which
+  // terminal is the "north" terminus. On the Blue Line, O'Hare Airport (lat ~41.979)
+  // sits slightly south of stations like Rosemont/Cumberland (lat ~41.983), so a
+  // pure latitude check incorrectly labels the forward-to-O'Hare direction as "south."
+  // When the stations array is available, look for a station whose name includes
+  // northDest within ~2km of the terminal; fall back to latitude otherwise.
+  function isNorthTerm(term) {
+    if (stations && northDest) {
+      for (const s of stations) {
+        if (s.name.includes(northDest) && geoDist(term.lon, term.lat, s.lon, s.lat) < 0.02) {
+          return true;
+        }
+      }
+      return false; // stations available but none matched → definitively not the north terminal
+    }
+    return term.lat > trackPos.lat;
+  }
+
   if (termFwd.stopped && termBwd.stopped) {
-    const northIsForward  = termFwd.lat > trackPos.lat;
-    const northIsBackward = termBwd.lat > trackPos.lat;
+    const northIsForward  = isNorthTerm(termFwd);
+    const northIsBackward = isNorthTerm(termBwd);
     if (northIsForward === northIsBackward) {
       const seg = segs[trackPos.segIdx];
       const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
@@ -684,32 +703,35 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap)
     return (destIsNorth === northIsForward) ? 1 : -1;
   }
   if (termFwd.stopped) {
-    const latDiff = termFwd.lat - trackPos.lat;
-    if (Math.abs(latDiff) < 0.001) {
-      // Forward terminal at nearly the same latitude — comparison is unreliable on E-W tracks.
-      // Use the same segment-geometry / probe fallback as the two-terminal tie-break.
-      const seg = segs[trackPos.segIdx];
-      const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
-      if (seg && pi >= 0) {
-        const dy = seg[pi + 1][1] - seg[pi][1];
-        const dx = seg[pi + 1][0] - seg[pi][0];
-        if (Math.abs(dy) > Math.abs(dx) * 0.2) {
-          return (destIsNorth === (dy > 0)) ? 1 : -1;
+    const northIsForward = isNorthTerm(termFwd);
+    if (!stations || !northDest) {
+      // Without stations, fall back to the original lat-based guard for near-equal latitudes.
+      const latDiff = termFwd.lat - trackPos.lat;
+      if (Math.abs(latDiff) < 0.001) {
+        // Forward terminal at nearly the same latitude — comparison is unreliable on E-W tracks.
+        // Use the same segment-geometry / probe fallback as the two-terminal tie-break.
+        const seg = segs[trackPos.segIdx];
+        const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
+        if (seg && pi >= 0) {
+          const dy = seg[pi + 1][1] - seg[pi][1];
+          const dx = seg[pi + 1][0] - seg[pi][0];
+          if (Math.abs(dy) > Math.abs(dx) * 0.2) {
+            return (destIsNorth === (dy > 0)) ? 1 : -1;
+          }
         }
+        const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
+        const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
+        const dLatFwd  = probeFwd.lat - trackPos.lat;
+        const dLatBwd  = probeBwd.lat - trackPos.lat;
+        if (dLatFwd * dLatBwd < 0) {
+          return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
+        }
+        return null;
       }
-      const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
-      const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
-      const dLatFwd  = probeFwd.lat - trackPos.lat;
-      const dLatBwd  = probeBwd.lat - trackPos.lat;
-      if (dLatFwd * dLatBwd < 0) {
-        return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
-      }
-      return null;
     }
-    const northIsForward = latDiff > 0;
     return (destIsNorth === northIsForward) ? 1 : -1;
   }
-  const northIsBackward = termBwd.lat > trackPos.lat;
+  const northIsBackward = isNorthTerm(termBwd);
   return (destIsNorth === !northIsBackward) ? 1 : -1;
 }
 

@@ -162,12 +162,12 @@ function processTrains(rawTrains, geo) {
             && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.001) {
           const isLoopLine = C.LOOP_LINE_CODES.includes(legend);
           const verifyDir = (isLoopLine && northDest && effectiveDest)
-            ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
+            ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations)
             : null;
           direction = verifyDir !== null ? verifyDir : prev.direction;
           dirMethod = verifyDir !== null ? 'walk' : 'prev';
         } else {
-          const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
+          const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
           if (termDir !== null) {
             direction = termDir;
             dirMethod = 'walk';
@@ -217,7 +217,7 @@ function processTrains(rawTrains, geo) {
         direction = nextStnDir;
         dirMethod = 'probe';
       } else {
-        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
+        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
         direction = termDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
         dirMethod = termDir !== null ? 'walk' : 'heading';
       }
@@ -371,7 +371,7 @@ function processTrains(rawTrains, geo) {
               } else {
                 // Re-derive direction at snapped position
                 const snapTermDir = (northDest && effectiveDest)
-                  ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
+                  ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations)
                   : null;
                 train._direction = snapTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
                 direction = train._direction;
@@ -381,7 +381,7 @@ function processTrains(rawTrains, geo) {
               else               train._forwardHoldCount  = newCount;
             } else {
               const npTermDir = (northDest && effectiveDest)
-                ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
+                ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations)
                 : null;
               train._direction = npTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
               direction = train._direction;
