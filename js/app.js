@@ -1067,54 +1067,38 @@
       const lineColor = LINE_COLORS[d.legend] || '#fff';
       const isDimmed  = d._dimmed && !d._spreading;
       const alpha     = (isDimmed ? 0.08 : 1.0) * frameAlpha;
-      // Breathe phase for unselected trains — used for both the glow halo and subtle dot pulse.
-      let pulseT = 0;
-      if (!isSelected) {
-        if (d._phaseOffset === undefined) d._phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 3.0;
-        const rawT = ((now / 3000) + d._phaseOffset) % 1;
-        // sin²(t*π) oscillates 0→1→0 over the full period; adding a 0.3 floor keeps the
-        // glow always present so it breathes instead of blinking out between pulses.
-        pulseT = 0.3 + 0.7 * Math.pow(Math.sin(rawT * Math.PI), 2);
-      }
-      // Subtle dot size oscillation for non-selected trains gives an organic heartbeat.
-      const dotScale = isSelected ? 1.8 : 1 + 0.05 * pulseT;
+      const dotScale = isSelected ? 1.8 : 1;
 
       // ---- 1. Glow / radar ring ----
       if (!d._retiring) {
         if (isSelected) {
-          // Sonar: two concentric rings with offset timing, ease-out expansion.
-          for (let ring = 0; ring < 2; ring++) {
-            const radarT     = ((now / 2000) % 1 + ring * 0.45) % 1;
-            const radarEased = 1 - Math.pow(1 - radarT, 2); // ease-out: fast start, decelerates
-            const radarScale = 0.15 + 3.85 * radarEased;
-            const radarAlpha = 0.65 * (1 - radarT);
-            ctx.save();
-            ctx.globalAlpha = alpha * radarAlpha;
-            ctx.beginPath();
-            ctx.arc(finalX, finalY, scaledGlowRadius * radarScale, 0, Math.PI * 2);
-            ctx.strokeStyle = lineColor;
-            ctx.lineWidth   = 0.5 * (1 - radarT * 0.4); // thicker near origin, thins as it expands
-            ctx.stroke();
-            ctx.restore();
-          }
+          // Single ring with ease-out expansion (fast start, decelerates) and variable stroke.
+          const radarT     = (now / 2000) % 1;
+          const radarEased = 1 - Math.pow(1 - radarT, 2);
+          const radarScale = 0.1 + 3.9 * radarEased;
+          const radarAlpha = 0.7 * (1 - radarT);
+          ctx.save();
+          ctx.globalAlpha = alpha * radarAlpha;
+          ctx.beginPath();
+          ctx.arc(finalX, finalY, scaledGlowRadius * radarScale, 0, Math.PI * 2);
+          ctx.strokeStyle = lineColor;
+          ctx.lineWidth   = 0.5 * (1 - radarT * 0.4); // thicker near origin, thins as it expands
+          ctx.stroke();
+          ctx.restore();
         } else {
-          // Soft radial gradient halo: transparent center → colored ring → transparent edge.
-          // Using rgba() stops (not bare hex) avoids the black-fringe artifact on fade-to-transparent.
-          const glowAlpha = 0.5 * pulseT;
-          const glowR     = scaledGlowRadius * (1.2 + 0.8 * pulseT);
-          if (glowAlpha > 0.01) {
-            const rc = parseInt(lineColor.slice(1, 3), 16);
-            const gc = parseInt(lineColor.slice(3, 5), 16);
-            const bc = parseInt(lineColor.slice(5, 7), 16);
-            const grad = ctx.createRadialGradient(finalX, finalY, scaledRadius * 0.5, finalX, finalY, glowR);
-            grad.addColorStop(0,   `rgba(${rc},${gc},${bc},0)`);
-            grad.addColorStop(0.5, `rgba(${rc},${gc},${bc},1)`);
-            grad.addColorStop(1,   `rgba(${rc},${gc},${bc},0)`);
+          if (d._phaseOffset === undefined) d._phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 3.0;
+          const rawT      = ((now / 3000) + d._phaseOffset) % 1;
+          // sin²(t*π) oscillates 0→1→0 over the full period; adding a 0.3 floor keeps the
+          // glow always present so it breathes instead of blinking out between pulses.
+          const pulseT    = 0.3 + 0.7 * Math.pow(Math.sin(rawT * Math.PI), 2);
+          const glowAlpha = 0.4 * pulseT;
+          const glowScale = 1 + 0.7 * pulseT;
+          if (glowAlpha > 0.005) {
             ctx.save();
             ctx.globalAlpha = alpha * glowAlpha;
             ctx.beginPath();
-            ctx.arc(finalX, finalY, glowR, 0, Math.PI * 2);
-            ctx.fillStyle = grad;
+            ctx.arc(finalX, finalY, scaledGlowRadius * glowScale, 0, Math.PI * 2);
+            ctx.fillStyle = lineColor;
             ctx.fill();
             ctx.restore();
           }
