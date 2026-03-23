@@ -299,10 +299,18 @@ function processTrains(rawTrains, geo) {
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
               : null;
-            const _headingDirFromPos = _nextStnDir
-              ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
-              ?? prev.direction
-              ?? direction;
+            const _headingDirForHold = directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs);
+            // When _nextStnDir conflicts with prev.direction, require the raw heading to
+            // corroborate _nextStnDir before trusting it.  A phantom API update can flip
+            // nextStaNm (e.g. "Belmont" → "Addison" on a backward phantom), which poisons
+            // _nextStnDir and disables the backward-hold check.  If heading disagrees too,
+            // fall back to prev.direction which reflects the pre-phantom consensus.
+            const _headingDirFromPos = (() => {
+              if (_nextStnDir === null) return _headingDirForHold ?? prev.direction ?? direction;
+              if (prev.direction === null || _nextStnDir === prev.direction) return _nextStnDir;
+              // _nextStnDir contradicts prev.direction — only trust it if heading corroborates
+              return (_headingDirForHold === _nextStnDir) ? _nextStnDir : (prev.direction ?? direction);
+            })();
 
             const isSuspectBackward = _headingDirFromPos !== corrDir;
             const isSuspectForward  = !isSuspectBackward && drift > C.FORWARD_PLAUSIBLE_DIST;
