@@ -987,7 +987,7 @@
         }
 
         // ---- Smooth heading indicator opacity ----
-        const headingTargetAlpha = stationsVisible ? 1 : 0;
+        const headingTargetAlpha = (stationsVisible && !d._retiring) ? 1 : 0;
         if (d._headingOpacity === undefined) d._headingOpacity = headingTargetAlpha;
         d._headingOpacity += (headingTargetAlpha - d._headingOpacity) * spreadLerp;
         if (Math.abs(d._headingOpacity - headingTargetAlpha) < 0.01) d._headingOpacity = headingTargetAlpha;
