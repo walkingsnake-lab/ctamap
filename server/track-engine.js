@@ -89,6 +89,8 @@ function buildLineSegments(geojson) {
 
     if (C.LOOP_LINE_CODES.includes(legend)) {
       const mlCoords = collectMLCoordsForLine(geojson, lineName);
+      // Tag ML segments so direction logic can identify Loop shared track
+      for (const seg of mlCoords) seg._isML = true;
       segments[legend] = coords.concat(sharedCoords).concat(mlCoords);
     } else {
       segments[legend] = coords.concat(sharedCoords);
