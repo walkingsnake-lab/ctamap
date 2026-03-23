@@ -156,11 +156,22 @@ function processTrains(rawTrains, geo) {
             dirMethod = 'probe';
           } else if (segChanged) {
             const prevSeg = segs[prev.trackPos.segIdx];
-            const boundary = prev.direction > 0 ? prevSeg.length - 1 : 0;
-            const connected = findConnectedSegment(
-              prev.trackPos.segIdx, boundary, prevSeg, prev.direction, segs, undefined, undefined, neighborMap
+            // Try both segment ends — prev.direction may have been wrong, so check the
+            // end that prev.direction predicts first, then the opposite end as a fallback.
+            const boundaryPri = prev.direction > 0 ? prevSeg.length - 1 : 0;
+            const boundaryAlt = prev.direction > 0 ? 0 : prevSeg.length - 1;
+            const connPri = findConnectedSegment(
+              prev.trackPos.segIdx, boundaryPri, prevSeg, prev.direction, segs, undefined, undefined, neighborMap
             );
-            if (connected && connected.segIdx === train._trackPos.segIdx) {
+            const connAlt = connPri?.segIdx !== train._trackPos.segIdx
+              ? findConnectedSegment(
+                  prev.trackPos.segIdx, boundaryAlt, prevSeg, -prev.direction, segs, undefined, undefined, neighborMap
+                )
+              : null;
+            const connected = connPri?.segIdx === train._trackPos.segIdx ? connPri
+              : connAlt?.segIdx === train._trackPos.segIdx ? connAlt
+              : null;
+            if (connected) {
               direction = connected.direction;
               dirMethod = 'segment';
             } else {

@@ -723,6 +723,11 @@ function findNextStation(train, stations) {
   for (const s of stations) {
     if (s.legends.includes(train.legend) && C.normalizeStationName(s.name) === nextNorm) return s;
   }
+  // Fallback: match by display name (strips branch-line suffix like -O'Hare, -Congress, etc.)
+  // so the CTA API returning "Harlem" matches our internal station "Harlem-O'Hare".
+  for (const s of stations) {
+    if (s.legends.includes(train.legend) && displayStationName(s.name) === nextClean) return s;
+  }
   return null;
 }
 
