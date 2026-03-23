@@ -789,7 +789,7 @@
   function formatDestName(name) {
     const text = cleanStationName(name) || '';
     if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
-      return text + ' <span class="tl-plane">\u2708</span>';
+      return text + ' <span class="tl-plane"><span class="tl-plane-icon">\u2708</span></span>';
     }
     return text;
   }
