@@ -209,13 +209,25 @@ body {
 }
 
 .tl-plane {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 0.65em;
-  line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6em;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 4px;
   vertical-align: middle;
-  display: inline-block;
+  line-height: 1;
+  margin-left: 3px;
   position: relative;
-  top: -4px;
+  top: -1px;
+}
+
+.tl-plane-icon {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  display: inline-block;
+  transform: rotate(-45deg);
+  line-height: 1;
 }
 
 .tl-info {
