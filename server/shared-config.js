@@ -86,7 +86,7 @@ const PHANTOM_STATION_RADIUS     = 0.005;
 const STATION_JUMP_RADIUS        = 0.003;
 
 // Terminal retirement — keep in sync with js/config.js
-const TERMINUS_HOLD_MS             = 90000;  // 90s hold at terminal before retiring
+const TERMINUS_HOLD_MS             = 30000;  // 30s hold at terminal before retiring
 const TERMINAL_PROXIMITY_THRESHOLD = 0.05;   // degrees (~5.5km) — max distance to terminal
 
 const BACKWARD_CONFIRM_POLLS      = 6;
