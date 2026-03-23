@@ -1541,6 +1541,14 @@
       const dest = (t.destNm || '').replace('O\'Hare', 'OHare').replace(/\(.*\)/, '').trim();
       const stn  = (t.nextStaNm || '').replace(' (Terminal)', '').trim();
 
+      if (isRetiring) {
+        return `<tr data-rn="${t.rn}"${rowClass}>` +
+          `<td class="dbg-rn-link">${t.rn}</td>` +
+          `<td><span class="dbg-line-chip" style="background:${color}">${t.legend}</span></td>` +
+          `<td colspan="5" style="color:#aaa;font-style:italic">Resting at terminal</td>` +
+          `</tr>`;
+      }
+
       return `<tr data-rn="${t.rn}"${rowClass}>` +
         `<td class="dbg-rn-link">${t.rn}</td>` +
         `<td><span class="dbg-line-chip" style="background:${color}">${t.legend}</span></td>` +
