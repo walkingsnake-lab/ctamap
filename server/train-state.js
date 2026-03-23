@@ -158,7 +158,10 @@ function processTrains(rawTrains, geo) {
 
       if ((segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
-        if (nextStnDir !== null && !onlyLoopMismatch) {
+        // On ML segments, skip the onlyLoopMismatch guard — terminal walk (the
+        // verification method) always fails on ML because the Loop has no dead ends,
+        // so the next-station probe is the best available direction source.
+        if (nextStnDir !== null && (!onlyLoopMismatch || _isOnML)) {
           direction = nextStnDir;
           dirMethod = 'probe';
         } else if (segChanged && !destChanged && nextStn
