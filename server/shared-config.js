@@ -91,44 +91,36 @@ const LOOP_RECT_CCW = [
   'Tower 18 to Clark/Lake',
 ];
 
+// Derived arrays for CW and partial circuits
+const _LOOP_RECT_CW = [...LOOP_RECT_CCW].reverse();
+// North+east side of the Loop (indices 5-9 of CCW = Wabash + Lake segments)
+const _LOOP_NORTH_EAST_CW = LOOP_RECT_CCW.slice(5).reverse();
+
 // Per-line Loop circuit definitions.
 // descs: ordered segment descriptions for concatenation.
 // reverseCoords: if true, reverse each segment's coordinate array (CW direction).
 // Segments not listed here remain as individual segments (approach/connector tracks).
+//
+// KEEP IN SYNC between server/shared-config.js and js/config.js.
 const LOOP_CIRCUIT = {
   // Brown: full CCW circuit (Wells↓ → Van Buren→ → Wabash↑ → Lake←)
   BR: { descs: LOOP_RECT_CCW, reverseCoords: false },
   // Purple Express: full CW circuit (Lake→ → Wabash↓ → Van Buren← → Wells↑)
-  PR: { descs: [...LOOP_RECT_CCW].reverse(), reverseCoords: true },
+  PR: { descs: _LOOP_RECT_CW, reverseCoords: true },
   // Pink: full CW circuit (same path as Purple)
-  PK: { descs: [...LOOP_RECT_CCW].reverse(), reverseCoords: true },
-  // Orange: CW arc from Library to Tower 12 (enters Loop at Library via Orange connector,
-  // exits at Tower 12 via south connector — "Tower 12 to Library" segment not used by Orange)
+  PK: { descs: _LOOP_RECT_CW, reverseCoords: true },
+  // Orange: CW arc from Library to Tower 12 (enters via Orange connector,
+  // exits at Tower 12 via south connector — "Tower 12 to Library" not used).
+  // This is LOOP_RECT_CW rotated to start at Library, with Tower 12→Library removed.
   OR: {
     descs: [
-      'Library to LaSalle/Van Buren',
-      'LaSalle/Van Buren to Quincy/Wells',
-      'Quincy/Wells to Washington/Wells',
-      'Washington/Wells to Tower 18',
-      'Tower 18 to Clark/Lake',
-      'Clark/Lake to State/Lake',
-      'State/Lake to Washington/Wabash',
-      'Washington/Wabash to Adams/Wabash',
-      'Adams/Wabash to Tower 12',
-    ],
+      ..._LOOP_RECT_CW.slice(_LOOP_RECT_CW.indexOf('Library to LaSalle/Van Buren')),
+      ..._LOOP_RECT_CW.slice(0, _LOOP_RECT_CW.indexOf('Library to LaSalle/Van Buren')),
+    ].filter(d => d !== 'Tower 12 to Library'),
     reverseCoords: true,
   },
   // Green: through-route from Tower 18 to Tower 12 (Lake→ → Wabash↓)
-  GR: {
-    descs: [
-      'Tower 18 to Clark/Lake',
-      'Clark/Lake to State/Lake',
-      'State/Lake to Washington/Wabash',
-      'Washington/Wabash to Adams/Wabash',
-      'Adams/Wabash to Tower 12',
-    ],
-    reverseCoords: true,
-  },
+  GR: { descs: _LOOP_NORTH_EAST_CW, reverseCoords: true },
 };
 
 const PROBE_DIST = 0.015;

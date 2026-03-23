@@ -54,6 +54,40 @@ function collectSharedCoordsForLine(geojson, lineName, ownLegend) {
   return coords;
 }
 
+/**
+ * Assembles a concatenated circuit path from individual GeoJSON ML segments.
+ * Returns a single coordinate array, or null if any segment is missing.
+ *
+ * KEEP IN SYNC with the identical function in js/path-follow.js.
+ *
+ * @param {Map<string, Array>} descToCoords - segment description → coordinate array
+ * @param {{ descs: string[], reverseCoords: boolean }} circuit - circuit definition
+ * @param {string} legend - line code (for warning messages)
+ * @returns {Array|null}
+ */
+function assembleCircuitPath(descToCoords, circuit, legend) {
+  const threshold = C.SEGMENT_CONNECT_THRESHOLD;
+  const path = [];
+  for (const desc of circuit.descs) {
+    let coords = descToCoords.get(desc);
+    if (!coords) {
+      console.warn(`[track-engine] ${legend} circuit: missing ML segment "${desc}" — falling back to individual segments`);
+      return null;
+    }
+    if (circuit.reverseCoords) coords = [...coords].reverse();
+    // Remove duplicate junction point where segments meet
+    if (path.length > 0) {
+      const last = path[path.length - 1];
+      const first = coords[0];
+      if (Math.abs(last[0] - first[0]) < threshold && Math.abs(last[1] - first[1]) < threshold) {
+        coords = coords.slice(1);
+      }
+    }
+    for (const pt of coords) path.push(pt);
+  }
+  return path;
+}
+
 function collectMLCoordsForLine(geojson, lineName, legend) {
   // Collect all ML features for this line
   const features = [];
@@ -64,12 +98,10 @@ function collectMLCoordsForLine(geojson, lineName, legend) {
     features.push(feature);
   }
 
-  // Check if this line has a Loop circuit definition
-  const circuit = legend ? C.LOOP_CIRCUIT[legend] : null;
-  if (!circuit) {
-    // No circuit — return individual coords as before
+  // Helper: extract raw coordinate arrays from collected features
+  function extractCoords(featureList) {
     const coords = [];
-    for (const f of features) {
+    for (const f of featureList) {
       const geom = f.geometry;
       if (geom.type === 'MultiLineString') {
         for (const line of geom.coordinates) coords.push(line);
@@ -80,59 +112,36 @@ function collectMLCoordsForLine(geojson, lineName, legend) {
     return coords;
   }
 
-  // Build lookup: description → coordinate array
+  // Check if this line has a Loop circuit definition
+  const circuit = legend ? C.LOOP_CIRCUIT[legend] : null;
+  if (!circuit) return extractCoords(features);
+
+  // Partition features into circuit vs non-circuit (approach/connector) segments
   const descToCoords = new Map();
   const circuitDescSet = new Set(circuit.descs);
-  const nonCircuitCoords = [];
+  const nonCircuitFeatures = [];
 
   for (const f of features) {
     const desc = f.properties.description || '';
     const geom = f.geometry;
     const cs = geom.type === 'MultiLineString' ? geom.coordinates[0] : geom.coordinates;
-
     if (circuitDescSet.has(desc)) {
       descToCoords.set(desc, cs);
     } else {
-      // Non-circuit ML segment (approach/connector) — keep as individual segment
-      if (geom.type === 'MultiLineString') {
-        for (const line of geom.coordinates) nonCircuitCoords.push(line);
-      } else {
-        nonCircuitCoords.push(geom.coordinates);
-      }
+      nonCircuitFeatures.push(f);
     }
   }
 
-  // Concatenate circuit segments in order
-  const circuitPath = [];
-  for (const desc of circuit.descs) {
-    let coords = descToCoords.get(desc);
-    if (!coords) continue;
-    if (circuit.reverseCoords) coords = [...coords].reverse();
-    // Remove duplicate junction point where segments meet
-    if (circuitPath.length > 0) {
-      const last = circuitPath[circuitPath.length - 1];
-      const first = coords[0];
-      if (Math.abs(last[0] - first[0]) < 0.0005 && Math.abs(last[1] - first[1]) < 0.0005) {
-        coords = coords.slice(1);
-      }
-    }
-    for (const pt of coords) circuitPath.push(pt);
+  // Assemble the circuit.  For closed circuits (BR/PR/PK), both endpoints
+  // are at Tower 18 — findConnectedSegment sees two entry candidates for
+  // the same segment, but the arrival-direction dot-product tie-break
+  // reliably picks the correct one (CCW vs CW).
+  const circuitPath = assembleCircuitPath(descToCoords, circuit, legend);
+  if (circuitPath) {
+    return [circuitPath, ...extractCoords(nonCircuitFeatures)];
   }
-
-  if (circuitPath.length > 0) {
-    return [circuitPath, ...nonCircuitCoords];
-  }
-  // Fallback: if circuit assembly failed, return individual segments
-  const coords = [];
-  for (const f of features) {
-    const geom = f.geometry;
-    if (geom.type === 'MultiLineString') {
-      for (const line of geom.coordinates) coords.push(line);
-    } else if (geom.type === 'LineString') {
-      coords.push(geom.coordinates);
-    }
-  }
-  return coords;
+  // Fallback: circuit assembly failed, return individual segments
+  return extractCoords(features);
 }
 
 function buildLineSegments(geojson) {
@@ -866,6 +875,48 @@ function effectiveDestForDirection(train, northDest, stations) {
   return train.destNm;
 }
 
+/**
+ * Validates that all LOOP_CIRCUIT segment descriptions exist in the GeoJSON
+ * and that concatenated endpoints chain correctly.  Call once at startup;
+ * throws on fatal mismatches so broken circuits don't silently degrade.
+ */
+function validateLoopCircuits(geojson) {
+  const threshold = C.SEGMENT_CONNECT_THRESHOLD;
+  // Build description → coordinate array lookup for all ML features
+  const descToCoords = new Map();
+  for (const f of geojson.features) {
+    if (f.properties.legend !== 'ML') continue;
+    const desc = f.properties.description || '';
+    if (!desc) continue;
+    const geom = f.geometry;
+    const cs = geom.type === 'MultiLineString' ? geom.coordinates[0] : geom.coordinates;
+    descToCoords.set(desc, cs);
+  }
+
+  for (const [legend, circuit] of Object.entries(C.LOOP_CIRCUIT)) {
+    // Check all descriptions resolve
+    const missing = circuit.descs.filter(d => !descToCoords.has(d));
+    if (missing.length > 0) {
+      throw new Error(`[track-engine] ${legend} LOOP_CIRCUIT: missing GeoJSON segments: ${missing.join(', ')}`);
+    }
+
+    // Check endpoints chain
+    let prevLast = null;
+    for (const desc of circuit.descs) {
+      let coords = descToCoords.get(desc);
+      if (circuit.reverseCoords) coords = [...coords].reverse();
+      const first = coords[0];
+      if (prevLast) {
+        const gap = geoDist(prevLast[0], prevLast[1], first[0], first[1]);
+        if (gap > threshold) {
+          throw new Error(`[track-engine] ${legend} LOOP_CIRCUIT: gap ${gap.toFixed(6)} between "${circuit.descs[circuit.descs.indexOf(desc) - 1]}" and "${desc}"`);
+        }
+      }
+      prevLast = coords[coords.length - 1];
+    }
+  }
+}
+
 module.exports = {
   geoDist,
   geoDistSq,
@@ -886,4 +937,5 @@ module.exports = {
   directionByTerminalWalk,
   findNextStation,
   effectiveDestForDirection,
+  validateLoopCircuits,
 };

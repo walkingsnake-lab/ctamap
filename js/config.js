@@ -256,35 +256,24 @@ const LOOP_RECT_CCW = [
   'Tower 18 to Clark/Lake',
 ];
 
-// Per-line Loop circuit definitions (kept in sync with server/shared-config.js).
+// Derived arrays for CW and partial circuits
+const _LOOP_RECT_CW = [...LOOP_RECT_CCW].reverse();
+const _LOOP_NORTH_EAST_CW = LOOP_RECT_CCW.slice(5).reverse();
+
+// Per-line Loop circuit definitions.
+// KEEP IN SYNC with server/shared-config.js.
 const LOOP_CIRCUIT = {
   BR: { descs: LOOP_RECT_CCW, reverseCoords: false },
-  PR: { descs: [...LOOP_RECT_CCW].reverse(), reverseCoords: true },
-  PK: { descs: [...LOOP_RECT_CCW].reverse(), reverseCoords: true },
+  PR: { descs: _LOOP_RECT_CW, reverseCoords: true },
+  PK: { descs: _LOOP_RECT_CW, reverseCoords: true },
   OR: {
     descs: [
-      'Library to LaSalle/Van Buren',
-      'LaSalle/Van Buren to Quincy/Wells',
-      'Quincy/Wells to Washington/Wells',
-      'Washington/Wells to Tower 18',
-      'Tower 18 to Clark/Lake',
-      'Clark/Lake to State/Lake',
-      'State/Lake to Washington/Wabash',
-      'Washington/Wabash to Adams/Wabash',
-      'Adams/Wabash to Tower 12',
-    ],
+      ..._LOOP_RECT_CW.slice(_LOOP_RECT_CW.indexOf('Library to LaSalle/Van Buren')),
+      ..._LOOP_RECT_CW.slice(0, _LOOP_RECT_CW.indexOf('Library to LaSalle/Van Buren')),
+    ].filter(d => d !== 'Tower 12 to Library'),
     reverseCoords: true,
   },
-  GR: {
-    descs: [
-      'Tower 18 to Clark/Lake',
-      'Clark/Lake to State/Lake',
-      'State/Lake to Washington/Wabash',
-      'Washington/Wabash to Adams/Wabash',
-      'Adams/Wabash to Tower 12',
-    ],
-    reverseCoords: true,
-  },
+  GR: { descs: _LOOP_NORTH_EAST_CW, reverseCoords: true },
 };
 
 // ---- UI & zoom constants ----
