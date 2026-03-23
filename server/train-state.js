@@ -303,7 +303,8 @@ function processTrains(rawTrains, geo) {
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
               : null;
-            const _headingDirFromPos = (_isOnML ? direction : prev.direction)
+            const _isOnMLForHold = segs[train._trackPos.segIdx]?._isML;
+            const _headingDirFromPos = (_isOnMLForHold ? direction : prev.direction)
               ?? _nextStnDir
               ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
               ?? direction;
