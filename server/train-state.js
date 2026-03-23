@@ -287,28 +287,26 @@ function processTrains(rawTrains, geo) {
               : (fwdD <= bwdD ? 1 : -1);
 
             // Classify backward vs forward.
-            // Use `direction` (the Step-3 cascade output) as the primary expected
-            // direction.  Step 3 re-derives direction when the segment changes (which
-            // handles Loop polarity flips correctly), but defaults to prev.direction
-            // when nothing structural changed (which catches phantom-jump backward
-            // movements — the established direction is preserved across same-segment
-            // glitches).
             //
-            // Using the raw next-station probe as primary was problematic: when a train
-            // phantom-jumped forward past its next station, the probe from the jumped
-            // position pointed backward toward the reported next station, causing
-            // backward moves to be classified as "expected" and not held.
+            // On non-ML segments, use prev.direction (the established travel direction)
+            // as the primary expected direction.  prev.direction is immune to API glitches
+            // where both position and nextStaNm jump together — Step 3 can be fooled into
+            // re-deriving the wrong direction from bad data, but prev.direction holds
+            // steady.  The 6-poll confirmation handles genuine terminus reversals.
             //
-            // Next-station probe and heading are fallbacks for when direction is still
-            // unknown (e.g. second poll of a newly appeared train).
+            // On ML (Loop) segments, use `direction` (Step-3 output) instead.  Step 3
+            // correctly handles Loop polarity flips when segments change, and the stale
+            // guard is already skipped on ML so the next-station probe feeds through.
+            // Using prev.direction on ML would cause stuck backward holds whenever
+            // segment direction polarity changes at Loop junctions.
             const _nextStnForHold = findNextStation(train, stations);
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
               : null;
-            const _headingDirFromPos = direction
+            const _headingDirFromPos = (_isOnML ? direction : prev.direction)
               ?? _nextStnDir
               ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
-              ?? prev.direction;
+              ?? direction;
 
             const isSuspectBackward = _headingDirFromPos !== corrDir;
             const isSuspectForward  = !isSuspectBackward && drift > C.FORWARD_PLAUSIBLE_DIST;
