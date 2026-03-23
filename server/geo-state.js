@@ -12,6 +12,7 @@ const {
   buildSegmentNeighborMap,
   buildUniqueStations,
   buildLineTerminals,
+  validateLoopCircuits,
 } = require('./track-engine');
 
 let geojson         = null;
@@ -26,6 +27,7 @@ function init() {
   const filePath = path.join(__dirname, '..', 'data', 'cta-lines.geojson');
   const raw = fs.readFileSync(filePath, 'utf8');
   geojson = JSON.parse(raw);
+  validateLoopCircuits(geojson);
 
   const result = buildLineSegments(geojson);
   lineSegments    = result.segments;
