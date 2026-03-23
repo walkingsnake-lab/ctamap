@@ -241,6 +241,52 @@ const LOOP_CENTER = { lon: -87.629, lat: 41.882 };
 // Safety iteration limit for advanceOnTrack loop
 const ADVANCE_MAX_ITER = 10000;
 
+// ---- Loop circuit segment ordering ----
+// The 10 Loop rectangle ML segments, listed in the natural CCW coordinate order.
+const LOOP_RECT_CCW = [
+  'Washington/Wells to Tower 18',
+  'Quincy/Wells to Washington/Wells',
+  'LaSalle/Van Buren to Quincy/Wells',
+  'Library to LaSalle/Van Buren',
+  'Tower 12 to Library',
+  'Adams/Wabash to Tower 12',
+  'Washington/Wabash to Adams/Wabash',
+  'State/Lake to Washington/Wabash',
+  'Clark/Lake to State/Lake',
+  'Tower 18 to Clark/Lake',
+];
+
+// Per-line Loop circuit definitions (kept in sync with server/shared-config.js).
+const LOOP_CIRCUIT = {
+  BR: { descs: LOOP_RECT_CCW, reverseCoords: false },
+  PR: { descs: [...LOOP_RECT_CCW].reverse(), reverseCoords: true },
+  PK: { descs: [...LOOP_RECT_CCW].reverse(), reverseCoords: true },
+  OR: {
+    descs: [
+      'Library to LaSalle/Van Buren',
+      'LaSalle/Van Buren to Quincy/Wells',
+      'Quincy/Wells to Washington/Wells',
+      'Washington/Wells to Tower 18',
+      'Tower 18 to Clark/Lake',
+      'Clark/Lake to State/Lake',
+      'State/Lake to Washington/Wabash',
+      'Washington/Wabash to Adams/Wabash',
+      'Adams/Wabash to Tower 12',
+    ],
+    reverseCoords: true,
+  },
+  GR: {
+    descs: [
+      'Tower 18 to Clark/Lake',
+      'Clark/Lake to State/Lake',
+      'State/Lake to Washington/Wabash',
+      'Washington/Wabash to Adams/Wabash',
+      'Adams/Wabash to Tower 12',
+    ],
+    reverseCoords: true,
+  },
+};
+
 // ---- UI & zoom constants ----
 
 // Default zoom level when tracking a train

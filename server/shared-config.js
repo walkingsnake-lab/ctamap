@@ -75,6 +75,62 @@ const LOOP_LINE_SET   = new Set(LOOP_LINE_CODES);
 const LOOP_CENTER = { lon: -87.629, lat: 41.882 };
 const LOOP_INNER_RADIUS = 0.016;
 
+// ---- Loop circuit segment ordering ----
+// The 10 Loop rectangle ML segments, listed in the natural CCW coordinate order.
+// GeoJSON coordinates for these segments already chain endpoint-to-endpoint in this order.
+const LOOP_RECT_CCW = [
+  'Washington/Wells to Tower 18',
+  'Quincy/Wells to Washington/Wells',
+  'LaSalle/Van Buren to Quincy/Wells',
+  'Library to LaSalle/Van Buren',
+  'Tower 12 to Library',
+  'Adams/Wabash to Tower 12',
+  'Washington/Wabash to Adams/Wabash',
+  'State/Lake to Washington/Wabash',
+  'Clark/Lake to State/Lake',
+  'Tower 18 to Clark/Lake',
+];
+
+// Per-line Loop circuit definitions.
+// descs: ordered segment descriptions for concatenation.
+// reverseCoords: if true, reverse each segment's coordinate array (CW direction).
+// Segments not listed here remain as individual segments (approach/connector tracks).
+const LOOP_CIRCUIT = {
+  // Brown: full CCW circuit (Wells↓ → Van Buren→ → Wabash↑ → Lake←)
+  BR: { descs: LOOP_RECT_CCW, reverseCoords: false },
+  // Purple Express: full CW circuit (Lake→ → Wabash↓ → Van Buren← → Wells↑)
+  PR: { descs: [...LOOP_RECT_CCW].reverse(), reverseCoords: true },
+  // Pink: full CW circuit (same path as Purple)
+  PK: { descs: [...LOOP_RECT_CCW].reverse(), reverseCoords: true },
+  // Orange: CW arc from Library to Tower 12 (enters Loop at Library via Orange connector,
+  // exits at Tower 12 via south connector — "Tower 12 to Library" segment not used by Orange)
+  OR: {
+    descs: [
+      'Library to LaSalle/Van Buren',
+      'LaSalle/Van Buren to Quincy/Wells',
+      'Quincy/Wells to Washington/Wells',
+      'Washington/Wells to Tower 18',
+      'Tower 18 to Clark/Lake',
+      'Clark/Lake to State/Lake',
+      'State/Lake to Washington/Wabash',
+      'Washington/Wabash to Adams/Wabash',
+      'Adams/Wabash to Tower 12',
+    ],
+    reverseCoords: true,
+  },
+  // Green: through-route from Tower 18 to Tower 12 (Lake→ → Wabash↓)
+  GR: {
+    descs: [
+      'Tower 18 to Clark/Lake',
+      'Clark/Lake to State/Lake',
+      'State/Lake to Washington/Wabash',
+      'Washington/Wabash to Adams/Wabash',
+      'Adams/Wabash to Tower 12',
+    ],
+    reverseCoords: true,
+  },
+};
+
 const PROBE_DIST = 0.015;
 const ADVANCE_MAX_ITER = 10000;
 
@@ -188,4 +244,5 @@ module.exports = {
   PHANTOM_JUMP_BY_LEGEND,
   TERMINUS_HOLD_MS,
   TERMINAL_PROXIMITY_THRESHOLD,
+  LOOP_CIRCUIT,
 };
