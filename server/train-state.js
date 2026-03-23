@@ -281,27 +281,27 @@ function processTrains(rawTrains, geo) {
               : (fwdD <= bwdD ? 1 : -1);
 
             // Classify backward vs forward.
-            // Priority: next-station probe → heading → prev.direction → direction.
+            // Priority: prev.direction → next-station probe → heading → direction.
             //
-            // directionByNextStation is preferred: it uses track-following geometry to
-            // the reported next station and works correctly on E/W segments and loop lines
-            // where directionByTerminalWalk (the old approach) was unreliable.
+            // prev.direction (the established travel direction) is the primary source
+            // for backward classification. The hold logic asks: "is the train moving
+            // against its established direction?" — and prev.direction IS that direction.
             //
-            // directionFromHeading fills in when next-station lookup fails (e.g. station
-            // name mismatch — "O'Hare" vs "O'Hare Airport", "Harlem" vs "Harlem-O'Hare")
-            // and the train is actually moving (heading is reliable for moving trains).
+            // Using next-station probe as primary was problematic: when a train phantom-
+            // jumps forward past its next station, the probe from the jumped position
+            // points backward toward the reported next station, causing backward moves
+            // to be classified as "expected" and not held. The 6-poll confirmation
+            // mechanism handles genuine terminus reversals correctly.
             //
-            // prev.direction is the last resort — it avoids a hold when heading is also
-            // unavailable, but it can perpetuate a flipped direction. That's acceptable
-            // because a flipped-direction train will self-correct once it crosses a segment
-            // boundary and the Step-3 cascade re-derives direction via next-station probe.
+            // Next-station probe and heading are fallbacks for when prev.direction is
+            // unknown (e.g. second poll of a newly appeared train).
             const _nextStnForHold = findNextStation(train, stations);
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
               : null;
-            const _headingDirFromPos = _nextStnDir
+            const _headingDirFromPos = prev.direction
+              ?? _nextStnDir
               ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
-              ?? prev.direction
               ?? direction;
 
             const isSuspectBackward = _headingDirFromPos !== corrDir;
