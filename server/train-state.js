@@ -170,16 +170,17 @@ function processTrains(rawTrains, geo) {
       const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend)
         && rawNextStnDir !== null && rawNextStnDir !== prev.direction;
 
-      // For non-loop lines with clear terminals (Red, Blue, Yellow), always
-      // validate prev.direction against directionByTerminalWalk.  Terminal walk
-      // uses destNm which is non-stale and unambiguous for these lines.  This
-      // catches cases where direction was set wrong on first appearance (stale
-      // nextStaNm) and never gets re-derived because segChanged/destChanged
-      // stay false — the train sits with the wrong direction while the backward
-      // hold slowly tries to confirm over many polls.
-      const isLoopLine = C.LOOP_LINE_CODES.includes(legend);
+      // On non-ML segments, always validate prev.direction against
+      // directionByTerminalWalk.  Terminal walk uses destNm (non-stale) and
+      // reliably reaches dead-end terminals on own-color track.  This catches
+      // cases where direction was set wrong (stale nextStaNm) and never gets
+      // re-derived because segChanged/destChanged stay false.
+      //
+      // ML segments are excluded because the Loop has no dead ends — terminal
+      // walk can't determine direction there.  On ML, the next-station probe
+      // and loop-mismatch logic handle direction instead.
       let termWalkOverride = false;
-      if (!isLoopLine && !_isOnML && northDest && effectiveDest && prev.direction !== null) {
+      if (!_isOnML && northDest && effectiveDest && prev.direction !== null) {
         const termCheck = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
         if (termCheck !== null && termCheck !== prev.direction) {
           console.log(`[CTA] Direction correction: rn=${train.rn} (${legend}→${train.destNm || '?'}) prev=${prev.direction} but termWalk=${termCheck} — overriding (destNm="${effectiveDest}", northDest="${northDest}")`);
@@ -333,22 +334,26 @@ function processTrains(rawTrains, geo) {
 
             // Classify backward vs forward.
             //
-            // On non-ML segments, use prev.direction (the established travel direction)
-            // as the primary expected direction.  prev.direction is immune to API glitches
-            // where both position and nextStaNm jump together — Step 3 can be fooled into
-            // re-deriving the wrong direction from bad data, but prev.direction holds
-            // steady.  The 6-poll confirmation handles genuine terminus reversals.
+            // Determine the "expected" direction to compare against empirical drift:
             //
-            // On ML (Loop) segments, use `direction` (Step-3 output) instead.  Step 3
-            // correctly handles Loop polarity flips when segments change, and the stale
-            // guard is already skipped on ML so the next-station probe feeds through.
-            // Using prev.direction on ML would cause stuck backward holds whenever
-            // segment direction polarity changes at Loop junctions.
+            // - If direction was just corrected by an authoritative source (walk-override
+            //   or walk), use the corrected direction.  These methods use destNm which is
+            //   non-stale and definitive for non-loop lines.  Using prev.direction here
+            //   would cause the backward hold to fight the correction, since prev.direction
+            //   is the value we're trying to fix.
+            //
+            // - On ML (Loop) segments, use `direction` (Step-3 output).  Step 3 correctly
+            //   handles Loop polarity flips when segments change.
+            //
+            // - Otherwise, use prev.direction (the established travel direction).  It's
+            //   immune to API glitches where both position and nextStaNm jump together.
+            //   The 6-poll confirmation handles genuine terminus reversals.
+            const _useStepDir = _isOnML || dirMethod === 'walk-override' || dirMethod === 'walk';
             const _nextStnForHold = findNextStation(train, stations);
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
               : null;
-            const _headingDirFromPos = (_isOnML ? direction : prev.direction)
+            const _headingDirFromPos = (_useStepDir ? direction : prev.direction)
               ?? _nextStnDir
               ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
               ?? direction;
@@ -441,13 +446,19 @@ function processTrains(rawTrains, geo) {
       }
     }
 
-    // When held, revert position to previous
+    // When held, revert position to previous but preserve direction corrections.
+    // Direction should only revert if it wasn't authoritatively corrected this poll.
+    // walk-override uses directionByTerminalWalk (destNm-based, non-stale) and
+    // represents a correction of a previously-wrong prev.direction — reverting it
+    // would re-introduce the error and trap the train in an infinite backward hold.
     if (held && prev && prev.trackPos) {
       train._trackPos  = { ...prev.trackPos };
       train.lon        = prev.trackPos.lon;
       train.lat        = prev.trackPos.lat;
-      train._direction = prev.direction;
-      direction        = prev.direction;
+      if (dirMethod !== 'walk-override' && dirMethod !== 'walk') {
+        train._direction = prev.direction;
+        direction        = prev.direction;
+      }
     }
 
     // --- 6. Update per-train state for next poll ---
