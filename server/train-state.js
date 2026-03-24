@@ -167,8 +167,11 @@ function processTrains(rawTrains, geo) {
         }
       }
 
-      const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend)
-        && rawNextStnDir !== null && rawNextStnDir !== prev.direction;
+      // probeMismatch: probe disagrees with stored direction — trigger re-evaluation on any line.
+      // loopLineMismatch keeps the narrower check used by the onlyLoopMismatch guard below
+      // (loop lines need extra caution because ML junctions can mislead the probe).
+      const probeMismatch    = rawNextStnDir !== null && rawNextStnDir !== prev.direction;
+      const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend) && probeMismatch;
 
       // On non-ML segments, always validate prev.direction against
       // directionByTerminalWalk.  Terminal walk uses destNm (non-stale) and
@@ -190,7 +193,7 @@ function processTrains(rawTrains, geo) {
         }
       }
 
-      if (!termWalkOverride && (segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
+      if (!termWalkOverride && (segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
         // On ML segments, skip the onlyLoopMismatch guard — terminal walk (the
         // verification method) always fails on ML because the Loop has no dead ends,
@@ -211,7 +214,7 @@ function processTrains(rawTrains, geo) {
           if (termDir !== null) {
             direction = termDir;
             dirMethod = 'walk';
-          } else if (nextStnDir !== null || (loopLineMismatch && rawNextStnDir !== null)) {
+          } else if (nextStnDir !== null || (probeMismatch && rawNextStnDir !== null)) {
             direction = nextStnDir ?? rawNextStnDir;
             dirMethod = 'probe';
           } else if (segChanged) {
@@ -424,21 +427,30 @@ function processTrains(rawTrains, geo) {
                   console.log(`[CTA] Snap hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
                 }
               } else {
-                // Re-derive direction at snapped position
+                // Re-derive direction at snapped position: probe → walk → heading
+                const _snapNextStn = findNextStation(train, stations);
+                const snapProbeDir = _snapNextStn
+                  ? directionByNextStation(train._trackPos, _snapNextStn, segs, neighborMap)
+                  : null;
                 const snapTermDir = (northDest && effectiveDest)
                   ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations)
                   : null;
-                train._direction = snapTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+                train._direction = snapProbeDir ?? snapTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
                 direction = train._direction;
                 console.warn(`[CTA] Snap confirmed: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${newCount} polls`);
               }
               if (isSuspectSnap) train._backwardHoldCount = newCount;
               else               train._forwardHoldCount  = newCount;
             } else {
+              // No prior position — probe → walk → heading
+              const _npNextStn = findNextStation(train, stations);
+              const npProbeDir = _npNextStn
+                ? directionByNextStation(train._trackPos, _npNextStn, segs, neighborMap)
+                : null;
               const npTermDir = (northDest && effectiveDest)
                 ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations)
                 : null;
-              train._direction = npTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+              train._direction = npProbeDir ?? npTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
               direction = train._direction;
               console.warn(`[CTA] Snap: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} — no prior position`);
             }
