@@ -148,9 +148,23 @@ function processTrains(rawTrains, geo) {
       // is the most reliable direction source (terminal walk always fails on ML
       // because the Loop has no dead ends, so we can't afford to discard the probe).
       const _isOnML = segs[train._trackPos.segIdx]?._isML;
-      if (!_isOnML && nextStnDir !== null && nextStnDir !== prev.direction && nextStn
-          && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.003) {
-        nextStnDir = null;
+      if (!_isOnML && nextStnDir !== null && nextStnDir !== prev.direction && nextStn) {
+        const distToNext = geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat);
+        if (distToNext < 0.003) {
+          // Very close to next station — likely stale (train just passed it)
+          nextStnDir = null;
+        } else if (northDest && effectiveDest) {
+          // Cross-validate: if terminal walk agrees with prev.direction (not the
+          // probe), the nextStaNm is stale — the train isn't actually heading toward
+          // that station.  This catches cases where the CTA API reports a station
+          // the train already passed (e.g. Wilson when the train is south of it
+          // heading toward 95th/Dan Ryan).
+          const termCheck = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
+          if (termCheck !== null && termCheck === prev.direction && termCheck !== nextStnDir) {
+            console.log(`[CTA] Stale nextStn guard: rn=${train.rn} (${legend}) probe=${nextStnDir} but termWalk=${termCheck} agrees with prev=${prev.direction} — discarding probe (nextStaNm="${train.nextStaNm}", dist=${distToNext.toFixed(4)})`);
+            nextStnDir = null;
+          }
+        }
       }
 
       const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend)
@@ -214,18 +228,30 @@ function processTrains(rawTrains, geo) {
         // dirMethod stays 'prev'
       }
     } else if (northDest && effectiveDest) {
-      // New train
+      // New train — cross-validate probe against terminal walk
       const nextStn = findNextStation(train, stations);
-      const nextStnDir = nextStn
+      let nextStnDir = nextStn
         ? directionByNextStation(train._trackPos, nextStn, segs, neighborMap)
         : null;
+      const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
+      // If probe and terminal walk disagree, trust the terminal walk — it uses
+      // the non-stale destNm rather than the potentially-stale nextStaNm.
+      if (nextStnDir !== null && termDir !== null && nextStnDir !== termDir) {
+        const _isOnML = segs[train._trackPos.segIdx]?._isML;
+        if (!_isOnML) {
+          console.log(`[CTA] New train stale guard: rn=${train.rn} (${legend}) probe=${nextStnDir} vs termWalk=${termDir} — using termWalk (nextStaNm="${train.nextStaNm}")`);
+          nextStnDir = null;
+        }
+      }
       if (nextStnDir !== null) {
         direction = nextStnDir;
         dirMethod = 'probe';
+      } else if (termDir !== null) {
+        direction = termDir;
+        dirMethod = 'walk';
       } else {
-        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
-        direction = termDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
-        dirMethod = termDir !== null ? 'walk' : 'heading';
+        direction = directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+        dirMethod = 'heading';
       }
     } else {
       direction = directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
