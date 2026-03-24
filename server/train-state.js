@@ -348,7 +348,8 @@ function processTrains(rawTrains, geo) {
             // - Otherwise, use prev.direction (the established travel direction).  It's
             //   immune to API glitches where both position and nextStaNm jump together.
             //   The 6-poll confirmation handles genuine terminus reversals.
-            const _useStepDir = _isOnML || dirMethod === 'walk-override' || dirMethod === 'walk';
+            const _isOnMLForHold = segs[train._trackPos.segIdx]?._isML;
+            const _useStepDir = _isOnMLForHold || dirMethod === 'walk-override' || dirMethod === 'walk';
             const _nextStnForHold = findNextStation(train, stations);
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)

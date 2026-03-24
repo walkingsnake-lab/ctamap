@@ -91,6 +91,12 @@ const KNOWN_PHANTOM_JUMPS = [
   { legend: 'PR', fromStations: ['Wilson', 'Jarvis'], toStations: ['Howard'],
     description: 'Purple Express Wilson/Jarvis → Howard phantom' },
 
+  // Purple Line — Belmont / Wilson jump (both directions)
+  { legend: 'PR', fromStations: ['Belmont'], toStations: ['Wilson'],
+    description: 'Purple Line Belmont → Wilson phantom' },
+  { legend: 'PR', fromStations: ['Wilson'], toStations: ['Belmont'],
+    description: 'Purple Line Wilson → Belmont phantom' },
+
   // Blue Line - Harlem/Cumberland/Jefferson Park corridor (user identified + logs)
   { legend: 'BL', fromStations: ['Harlem', 'Cumberland'], toStations: ['Jefferson Park'],
     description: 'Blue Line Harlem/Cumberland → Jefferson Park phantom' },
@@ -127,6 +133,10 @@ const KNOWN_PHANTOM_JUMPS = [
     description: 'Red Line Fullerton → North/Clybourn phantom' },
   { legend: 'RD', fromStations: ['North/Clybourn'], toStations: ['Fullerton'],
     description: 'Red Line North/Clybourn → Fullerton phantom' },
+
+  // Red Line — Morse → Howard one-way jump
+  { legend: 'RD', fromStations: ['Morse'], toStations: ['Howard'],
+    description: 'Red Line Morse → Howard phantom' },
 
   // Red Line — Loyola / Wilson fast-forward (from logs, 4170m)
   { legend: 'RD', fromStations: ['Loyola'], toStations: ['Wilson'],

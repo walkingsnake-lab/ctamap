@@ -789,9 +789,9 @@
   function formatDestName(name) {
     const text = cleanStationName(name) || '';
     if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
-      return text + ' <svg class="tl-plane" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="airport">' +
-        '<rect width="24" height="24" rx="4" ry="4" fill="white"/>' +
-        '<path fill="black" d="M12 2 L13.8 8.5 L20 11.5 L18.5 13 L13.5 11.5 L13 17 L15 18.5 L15 20 L12 19 L9 20 L9 18.5 L11 17 L10.5 11.5 L5.5 13 L4 11.5 L10.2 8.5 Z"/>' +
+      return text + ' <svg class="tl-plane" viewBox="0 0 120.135 120.148" xmlns="http://www.w3.org/2000/svg" aria-label="airport">' +
+        '<rect width="120.135" height="120.148" rx="14.36" ry="14.36" fill="white"/>' +
+        '<path fill="black" d="M54.82,16.917c0.023-7.053,10.66-7.053,10.66,0.202V46.74l41.453,24.925v10.947l-41.264-13.58v22.129l9.547,7.479v8.641l-14.723-4.57l-14.719,4.57V98.64l9.45-7.479V69.032l-41.289,13.58V71.665L54.82,46.74V16.917z"/>' +
         '</svg>';
     }
     return text;
@@ -987,7 +987,7 @@
         }
 
         // ---- Smooth heading indicator opacity ----
-        const headingTargetAlpha = stationsVisible ? 1 : 0;
+        const headingTargetAlpha = (stationsVisible && !d._retiring) ? 1 : 0;
         if (d._headingOpacity === undefined) d._headingOpacity = headingTargetAlpha;
         d._headingOpacity += (headingTargetAlpha - d._headingOpacity) * spreadLerp;
         if (Math.abs(d._headingOpacity - headingTargetAlpha) < 0.01) d._headingOpacity = headingTargetAlpha;
