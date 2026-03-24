@@ -362,7 +362,8 @@ function processTrains(rawTrains, geo) {
               ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
               ?? direction;
 
-            const isSuspectBackward = _headingDirFromPos !== corrDir;
+            const isSuspectBackward = _headingDirFromPos !== corrDir
+              && (_nextStnDir === null || _nextStnDir !== corrDir);
             const isSuspectForward  = !isSuspectBackward && drift > C.FORWARD_PLAUSIBLE_DIST;
 
             if (isSuspectBackward && drift < 0.00018) {

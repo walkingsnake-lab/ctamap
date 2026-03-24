@@ -1113,9 +1113,11 @@
         const dir        = (d._correcting ? (d._trackPos.direction ?? d._corrDirection) : d._direction) || 1;
         const behindDist = 0.005;
         const totalDist  = 0.010;
-        const arrowTarget = d._corrToTrackPos
-          ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
-          : undefined;
+        const arrowTarget = d._nextStaTargetPos
+          ? { targetLon: d._nextStaTargetPos.lon, targetLat: d._nextStaTargetPos.lat }
+          : (d._corrToTrackPos
+            ? { targetLon: d._corrToTrackPos.lon, targetLat: d._corrToTrackPos.lat }
+            : undefined);
 
         for (let i = 0; i < ARROW_COUNT; i++) {
           const phase     = (d._arrowPhase + i / ARROW_COUNT) % 1;

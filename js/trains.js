@@ -184,6 +184,13 @@ function initRealTrainAnimation(trains, lineSegments, prevTrainMap, stations, li
 
     if (!train._trackPos) continue;
 
+    // Cache next station position for junction guidance in arrow rendering
+    const _nextStnClean = cleanStationName(train.nextStaNm || '').replace(' (Terminal)', '').trim();
+    const _nextStnLookup = _nextStnClean
+      ? stations.find(s => s.legends.includes(train.legend) && s.name === _nextStnClean)
+      : null;
+    train._nextStaTargetPos = _nextStnLookup ? { lon: _nextStnLookup.lon, lat: _nextStnLookup.lat } : null;
+
     train.lon = train._trackPos.lon;
     train.lat = train._trackPos.lat;
 
