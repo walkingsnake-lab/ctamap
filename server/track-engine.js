@@ -758,6 +758,42 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap,
     const northIsForward  = isNorthTerm(termFwd);
     const northIsBackward = isNorthTerm(termBwd);
     if (northIsForward === northIsBackward) {
+      // Both terminal walks reached the same station (loop lines).
+      // Tie-break priority:
+      //   1. Terminal-station probe — directly measures distance to the known
+      //      terminal station.  Most reliable, works on E-W track.
+      //   2. Latitude probe — checks if probes diverge in latitude.
+      //   3. Segment slope — only when track is clearly N-S oriented.
+      const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
+      const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
+
+      // 1. Terminal-station probe: which direction gets closer to northDest?
+      if (stations && northDest) {
+        let northStn = null;
+        for (const s of stations) {
+          if (s.name.includes(northDest)) { northStn = s; break; }
+        }
+        if (northStn) {
+          const curD = geoDist(trackPos.lon, trackPos.lat, northStn.lon, northStn.lat);
+          const fwdD = geoDist(probeFwd.lon, probeFwd.lat, northStn.lon, northStn.lat);
+          const bwdD = geoDist(probeBwd.lon, probeBwd.lat, northStn.lon, northStn.lat);
+          if (fwdD < bwdD && fwdD < curD) {
+            return destIsNorth ? 1 : -1;
+          }
+          if (bwdD < fwdD && bwdD < curD) {
+            return destIsNorth ? -1 : 1;
+          }
+        }
+      }
+
+      // 2. Latitude probe: do probes diverge in latitude?
+      const dLatFwd = probeFwd.lat - trackPos.lat;
+      const dLatBwd = probeBwd.lat - trackPos.lat;
+      if (dLatFwd * dLatBwd < 0) {
+        return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
+      }
+
+      // 3. Segment slope: only on clearly N-S track
       const seg = segs[trackPos.segIdx];
       const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
       if (seg && pi >= 0) {
@@ -766,13 +802,6 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap,
         if (Math.abs(dy) > Math.abs(dx) * 0.2) {
           return (destIsNorth === (dy > 0)) ? 1 : -1;
         }
-      }
-      const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
-      const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
-      const dLatFwd  = probeFwd.lat - trackPos.lat;
-      const dLatBwd  = probeBwd.lat - trackPos.lat;
-      if (dLatFwd * dLatBwd < 0) {
-        return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
       }
       return null;
     }
