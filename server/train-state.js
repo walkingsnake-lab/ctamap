@@ -193,12 +193,20 @@ function processTrains(rawTrains, geo) {
         }
       }
 
-      if ((segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
+      // On ML segments with only a probe mismatch (no segment or destination change),
+      // terminal walk is unavailable (Loop has no dead ends) and the CTA API's stale
+      // nextStaNm frequently points to a loop station the train already passed, causing
+      // the probe to return the wrong direction.  Direction is reliably established when
+      // entering ML (segChanged) and should be preserved rather than overridden by a
+      // single potentially-stale probe result.
+      const mlOnlyMismatch = _isOnML && loopLineMismatch && !segChanged && !destChanged;
+      if (mlOnlyMismatch) {
+        console.log(`[CTA] ML stale-probe guard: rn=${train.rn} (${legend}→${train.destNm || '?'}) probe=${rawNextStnDir} vs prev=${prev.direction} on ML — keeping prev (nextStaNm="${train.nextStaNm}")`);
+      }
+
+      if (!mlOnlyMismatch && (segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
-        // On ML segments, skip the onlyLoopMismatch guard — terminal walk (the
-        // verification method) always fails on ML because the Loop has no dead ends,
-        // so the next-station probe is the best available direction source.
-        if (nextStnDir !== null && (!onlyLoopMismatch || _isOnML)) {
+        if (nextStnDir !== null && !onlyLoopMismatch) {
           direction = nextStnDir;
           dirMethod = 'probe';
         } else if (segChanged && !destChanged && nextStn
