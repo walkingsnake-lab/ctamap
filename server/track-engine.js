@@ -859,48 +859,14 @@ function findNextStation(train, stations) {
 }
 
 function effectiveDestForDirection(train, northDest, stations) {
-  if (!northDest) return train.destNm;
-  const LOOP_DEST_LINE_SET = new Set(['BR', 'OR', 'PK', 'PR']);
-  if (!LOOP_DEST_LINE_SET.has(train.legend)) return train.destNm;
-  if (!train.destNm) return train.destNm;
-
-  if (train.destNm.includes('Loop')) {
-    const nextStnLF = findNextStation(train, stations);
-    if (nextStnLF) {
-      const tDistLF = geoDist(train.lon, train.lat, C.LOOP_CENTER.lon, C.LOOP_CENTER.lat);
-      const nDistLF = geoDist(nextStnLF.lon, nextStnLF.lat, C.LOOP_CENTER.lon, C.LOOP_CENTER.lat);
-      if (nDistLF > tDistLF + 0.002) {
-        console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is farther from Loop — late flip, treating as outbound`);
-        return 'OUTBOUND';
-      }
-    }
-    return train.destNm;
-  }
-
-  const nextStn = findNextStation(train, stations);
-  if (!nextStn) return train.destNm;
-
-  const trainToNextStn    = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
-  const trainDistToLoop   = geoDist(train.lon, train.lat, C.LOOP_CENTER.lon, C.LOOP_CENTER.lat);
-  const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, C.LOOP_CENTER.lon, C.LOOP_CENTER.lat);
-
-  if (trainToNextStn < 0.001) {
-    if (nextStnDistToLoop <= 0.014) return train.destNm;
-    if (trainDistToLoop >= C.LOOP_INNER_RADIUS && trainDistToLoop < 0.025) {
-      console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" appears stale at approach station (dist-to-loop=${trainDistToLoop.toFixed(4)}) — using "Loop"`);
-      return 'Loop';
-    }
-    return train.destNm;
-  }
-  if (nextStnDistToLoop < trainDistToLoop) {
-    if (trainDistToLoop > 0.05) return train.destNm;
-    console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
-    return 'Loop';
-  }
-  if (trainDistToLoop < C.LOOP_INNER_RADIUS) {
-    console.log(`[CTA] Inside Loop: rn=${train.rn} (${train.legend}) trusting destNm="${train.destNm}" (dist-to-loop=${trainDistToLoop.toFixed(4)})`);
-    return train.destNm;
-  }
+  // Trust CTA's destNm directly.  Previous logic tried to flip outbound dests
+  // to "Loop" (or "Loop" to "OUTBOUND") based on nextStaNm proximity to the
+  // Loop center.  But nextStaNm is frequently stale, causing false flips that
+  // poison directionByTerminalWalk — half the Brown Line would get assigned
+  // the wrong direction.  CTA's destNm is the most reliable signal for which
+  // terminal the train is heading toward.  On ML (Loop) segments, terminal
+  // walk returns null regardless of effectiveDest, and the backward-hold
+  // mechanism provides a safety net for the rare late-sign-flip case.
   return train.destNm;
 }
 
