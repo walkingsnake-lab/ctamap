@@ -167,10 +167,36 @@ function processTrains(rawTrains, geo) {
         }
       }
 
+      // ML entry stale-probe guard — when a loop-line train transitions onto the ML
+      // (Loop) circuit, the CTA API's nextStaNm is often still pointing to the last
+      // approach station the train just passed (e.g. "Chicago" → Chicago/Franklin for
+      // BR/PR entering the Loop from the north).  The probe then returns the wrong
+      // direction (backward toward the stale station).  Detect this by comparing the
+      // probe result against the segment-transition direction from findConnectedSegment;
+      // if they disagree, capture the connectivity direction and clear the probe so the
+      // code below falls through to the segment-connectivity path.
+      let mlEntryConnDir = null;
+      if (_isOnML && segChanged && nextStnDir !== null && prev.trackPos) {
+        const prevSeg = segs[prev.trackPos.segIdx];
+        if (prevSeg) {
+          const boundaryPri = prev.direction > 0 ? prevSeg.length - 1 : 0;
+          const connEntry = findConnectedSegment(
+            prev.trackPos.segIdx, boundaryPri, prevSeg, prev.direction,
+            segs, undefined, undefined, neighborMap
+          );
+          if (connEntry && connEntry.segIdx === train._trackPos.segIdx &&
+              connEntry.direction !== nextStnDir) {
+            console.log(`[CTA] ML entry stale-probe guard: rn=${train.rn} (${legend}→${train.destNm || '?'}) probe=${nextStnDir} vs seg-entry=${connEntry.direction} — using seg-entry (nextStaNm="${train.nextStaNm}")`);
+            mlEntryConnDir = connEntry.direction;
+            nextStnDir = null;
+          }
+        }
+      }
+
       // probeMismatch: probe disagrees with stored direction — trigger re-evaluation on any line.
       // loopLineMismatch keeps the narrower check used by the onlyLoopMismatch guard below
       // (loop lines need extra caution because ML junctions can mislead the probe).
-      const probeMismatch    = rawNextStnDir !== null && rawNextStnDir !== prev.direction;
+      const probeMismatch    = mlEntryConnDir === null && rawNextStnDir !== null && rawNextStnDir !== prev.direction;
       const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend) && probeMismatch;
 
       // For loop lines (BR, OR, PK, PR, GR) on non-ML segments, validate
@@ -204,7 +230,10 @@ function processTrains(rawTrains, geo) {
         console.log(`[CTA] ML stale-probe guard: rn=${train.rn} (${legend}→${train.destNm || '?'}) probe=${rawNextStnDir} vs prev=${prev.direction} on ML — keeping prev (nextStaNm="${train.nextStaNm}")`);
       }
 
-      if (!mlOnlyMismatch && (segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
+      if (mlEntryConnDir !== null) {
+        direction = mlEntryConnDir;
+        dirMethod = 'segment';
+      } else if (!mlOnlyMismatch && (segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
         if (nextStnDir !== null && !onlyLoopMismatch) {
           direction = nextStnDir;
