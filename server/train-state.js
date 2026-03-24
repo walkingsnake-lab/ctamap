@@ -173,6 +173,26 @@ function processTrains(rawTrains, geo) {
       const probeMismatch    = rawNextStnDir !== null && rawNextStnDir !== prev.direction;
       const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend) && probeMismatch;
 
+      // For loop lines (BR, OR, PK, PR, GR) on non-ML segments, validate
+      // prev.direction against directionByTerminalWalk every poll.  These lines
+      // have unambiguous dead-end terminals so termWalk is reliable; no branch
+      // junction can mislead it the way O'Hare/Forest Park misleads Blue.
+      // This catches trains whose direction was set wrong when nextStaNm was
+      // absent (so probeMismatch never fired) and never got corrected.
+      //
+      // Non-loop lines (RD, BL) are excluded: their terminals have branch
+      // junctions where termWalk may reach the wrong dead-end and flip a
+      // correctly-directed train.  Those lines rely on probe + cascade triggers.
+      const isLoopLineCode = C.LOOP_LINE_CODES.includes(legend);
+      if (isLoopLineCode && !_isOnML && northDest && effectiveDest && prev.direction !== null) {
+        const termCheck = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
+        if (termCheck !== null && termCheck !== prev.direction) {
+          console.log(`[CTA] Loop-line direction correction: rn=${train.rn} (${legend}→${train.destNm || '?'}) prev=${prev.direction} termWalk=${termCheck} — overriding`);
+          direction = termCheck;
+          dirMethod = 'walk';
+        }
+      }
+
       if ((segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
         // On ML segments, skip the onlyLoopMismatch guard — terminal walk (the
