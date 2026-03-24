@@ -173,27 +173,7 @@ function processTrains(rawTrains, geo) {
       const probeMismatch    = rawNextStnDir !== null && rawNextStnDir !== prev.direction;
       const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend) && probeMismatch;
 
-      // On non-ML segments, always validate prev.direction against
-      // directionByTerminalWalk.  Terminal walk uses destNm (non-stale) and
-      // reliably reaches dead-end terminals on own-color track.  This catches
-      // cases where direction was set wrong (stale nextStaNm) and never gets
-      // re-derived because segChanged/destChanged stay false.
-      //
-      // ML segments are excluded because the Loop has no dead ends — terminal
-      // walk can't determine direction there.  On ML, the next-station probe
-      // and loop-mismatch logic handle direction instead.
-      let termWalkOverride = false;
-      if (!_isOnML && northDest && effectiveDest && prev.direction !== null) {
-        const termCheck = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
-        if (termCheck !== null && termCheck !== prev.direction) {
-          console.log(`[CTA] Direction correction: rn=${train.rn} (${legend}→${train.destNm || '?'}) prev=${prev.direction} but termWalk=${termCheck} — overriding (destNm="${effectiveDest}", northDest="${northDest}")`);
-          direction = termCheck;
-          dirMethod = 'walk-override';
-          termWalkOverride = true;
-        }
-      }
-
-      if (!termWalkOverride && (segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
+      if ((segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
         // On ML segments, skip the onlyLoopMismatch guard — terminal walk (the
         // verification method) always fails on ML because the Loop has no dead ends,
@@ -352,7 +332,7 @@ function processTrains(rawTrains, geo) {
             //   immune to API glitches where both position and nextStaNm jump together.
             //   The 6-poll confirmation handles genuine terminus reversals.
             const _isOnMLForHold = segs[train._trackPos.segIdx]?._isML;
-            const _useStepDir = _isOnMLForHold || dirMethod === 'walk-override' || dirMethod === 'walk';
+            const _useStepDir = _isOnMLForHold || dirMethod === 'walk';
             const _nextStnForHold = findNextStation(train, stations);
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
@@ -459,16 +439,13 @@ function processTrains(rawTrains, geo) {
       }
     }
 
-    // When held, revert position to previous but preserve direction corrections.
-    // Direction should only revert if it wasn't authoritatively corrected this poll.
-    // walk-override uses directionByTerminalWalk (destNm-based, non-stale) and
-    // represents a correction of a previously-wrong prev.direction — reverting it
-    // would re-introduce the error and trap the train in an infinite backward hold.
+    // When held, revert position to previous. Preserve direction only if it was
+    // authoritatively corrected via terminal walk this poll (dirMethod === 'walk').
     if (held && prev && prev.trackPos) {
       train._trackPos  = { ...prev.trackPos };
       train.lon        = prev.trackPos.lon;
       train.lat        = prev.trackPos.lat;
-      if (dirMethod !== 'walk-override' && dirMethod !== 'walk') {
+      if (dirMethod !== 'walk') {
         train._direction = prev.direction;
         direction        = prev.direction;
       }
