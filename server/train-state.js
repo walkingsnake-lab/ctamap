@@ -170,7 +170,26 @@ function processTrains(rawTrains, geo) {
       const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend)
         && rawNextStnDir !== null && rawNextStnDir !== prev.direction;
 
-      if ((segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
+      // For non-loop lines with clear terminals (Red, Blue, Yellow), always
+      // validate prev.direction against directionByTerminalWalk.  Terminal walk
+      // uses destNm which is non-stale and unambiguous for these lines.  This
+      // catches cases where direction was set wrong on first appearance (stale
+      // nextStaNm) and never gets re-derived because segChanged/destChanged
+      // stay false — the train sits with the wrong direction while the backward
+      // hold slowly tries to confirm over many polls.
+      const isLoopLine = C.LOOP_LINE_CODES.includes(legend);
+      let termWalkOverride = false;
+      if (!isLoopLine && !_isOnML && northDest && effectiveDest && prev.direction !== null) {
+        const termCheck = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
+        if (termCheck !== null && termCheck !== prev.direction) {
+          console.log(`[CTA] Direction correction: rn=${train.rn} (${legend}→${train.destNm || '?'}) prev=${prev.direction} but termWalk=${termCheck} — overriding (destNm="${effectiveDest}", northDest="${northDest}")`);
+          direction = termCheck;
+          dirMethod = 'walk-override';
+          termWalkOverride = true;
+        }
+      }
+
+      if (!termWalkOverride && (segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
         // On ML segments, skip the onlyLoopMismatch guard — terminal walk (the
         // verification method) always fails on ML because the Loop has no dead ends,
