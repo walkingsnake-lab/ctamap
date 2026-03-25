@@ -789,7 +789,10 @@
   function formatDestName(name) {
     const text = cleanStationName(name) || '';
     if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
-      return text + ' <span class="tl-plane">\u2708</span>';
+      return text + ' <svg class="tl-plane" viewBox="0 0 120.135 120.148" xmlns="http://www.w3.org/2000/svg" aria-label="airport">' +
+        '<rect x="3" y="3" width="114.135" height="114.148" rx="12" ry="12" fill="white" stroke="black" stroke-width="6"/>' +
+        '<path fill="black" d="M54.82,16.917c0.023-7.053,10.66-7.053,10.66,0.202V46.74l41.453,24.925v10.947l-41.264-13.58v22.129l9.547,7.479v8.641l-14.723-4.57l-14.719,4.57V98.64l9.45-7.479V69.032l-41.289,13.58V71.665L54.82,46.74V16.917z"/>' +
+        '</svg>';
     }
     return text;
   }
