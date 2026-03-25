@@ -13,23 +13,12 @@ Open `http://localhost:3000` in a browser.
 ## Architecture
 
 ### Server (`server.js`)
-Plain Node.js HTTP server (no framework). Polls the CTA Transit Tracker API every **30 seconds** server-side, processes all train state, and pushes results to browser clients via **SSE (Server-Sent Events)**. The client does not poll — it just listens.
-
-Server modules (in `server/`):
-- `geo-state.js` — loads GeoJSON once at startup, builds and caches all geometry structures (line segments, neighbor maps, station list, terminals)
-- `train-state.js` — persistent per-train state machine across polls: snapping, direction inference, phantom-jump detection, hold logic, retiring train tracking
-- `track-engine.js` — pure geometry functions (snapping, segment walking, direction cascade) — server-side port of the client's `path-follow.js` / `trains.js` logic
-- `shared-config.js` — CommonJS version of constants from `js/config.js` (kept in sync manually)
-- `metrics.js` — Prometheus-format metrics
+Plain Node.js HTTP server (no framework). Proxies CTA Transit Tracker API calls and serves static files.
 
 API endpoints:
-- `GET /api/trains/stream` — SSE stream; server pushes processed train payload every 30s. New clients receive the latest snapshot immediately on connect.
-- `GET /api/trains` — REST fallback; returns the same latest processed payload (debug / one-shot use)
-- `GET /api/train/<rn>` — ETA data for a specific run number (for live tracking), cached 5s
-- `GET /api/geojson` — serves `data/cta-lines.geojson`, cached 24h
-- `GET /health` — readiness check; 503 until first poll completes
-- `GET /metrics` — Prometheus metrics
-- `GET /api/debug/trains` — full per-train server state dump
+- `GET /api/trains` — all train positions across all lines (parallel fetches via `Promise.allSettled`)
+- `GET /api/train/<rn>` — ETA data for a specific run number (for live tracking)
+- `GET /api/geojson` — serves `data/cta-lines.geojson`
 
 ### Frontend Modules (load order matters)
 
@@ -37,14 +26,14 @@ API endpoints:
 |------|---------------|
 | `js/config.js` | Constants, line colors, route code mappings, phantom jump rules, terminal definitions |
 | `js/map.js` | SVG init, GeoJSON rendering, D3 line paths |
-| `js/path-follow.js` | Path snapping, segment navigation, direction derivation (also mirrored server-side in `track-engine.js`) |
-| `js/trains.js` | Client-side train rendering: spawn, animate, retire. Direction/snapping now pre-computed by server; client animates what it receives. |
-| `js/app.js` | SSE connection, zoom, user interactions, canvas rendering |
+| `js/path-follow.js` | Path snapping, segment navigation, direction derivation |
+| `js/trains.js` | Train state machine: spawn → animate → retire |
+| `js/app.js` | Main loop, API polling, zoom, user interactions |
 
 Scripts are bundled via `build.js` (esbuild) into `dist/bundle.min.js`. Run `npm run build` after editing JS files.
 
 ### Data
-`data/cta-lines.geojson` — CTA line geometry and station coordinates. Loaded at server startup by `geo-state.js` and also fetched by the browser once for rendering and client-side animation.
+`data/cta-lines.geojson` — CTA line geometry and station coordinates. Referenced by `map.js` and `path-follow.js` for snapping train positions to actual track segments.
 
 ## Key Concepts
 

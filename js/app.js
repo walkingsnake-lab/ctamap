@@ -789,10 +789,7 @@
   function formatDestName(name) {
     const text = cleanStationName(name) || '';
     if (/O'?HARE/i.test(name) || /MIDWAY/i.test(name)) {
-      return text + ' <svg class="tl-plane" viewBox="0 0 120.135 120.148" xmlns="http://www.w3.org/2000/svg" aria-label="airport">' +
-        '<rect width="120.135" height="120.148" rx="14.36" ry="14.36" fill="white"/>' +
-        '<path fill="black" d="M54.82,16.917c0.023-7.053,10.66-7.053,10.66,0.202V46.74l41.453,24.925v10.947l-41.264-13.58v22.129l9.547,7.479v8.641l-14.723-4.57l-14.719,4.57V98.64l9.45-7.479V69.032l-41.289,13.58V71.665L54.82,46.74V16.917z"/>' +
-        '</svg>';
+      return text + ' <span class="tl-plane">\u2708</span>';
     }
     return text;
   }
@@ -987,7 +984,7 @@
         }
 
         // ---- Smooth heading indicator opacity ----
-        const headingTargetAlpha = (stationsVisible && !d._retiring) ? 1 : 0;
+        const headingTargetAlpha = stationsVisible ? 1 : 0;
         if (d._headingOpacity === undefined) d._headingOpacity = headingTargetAlpha;
         d._headingOpacity += (headingTargetAlpha - d._headingOpacity) * spreadLerp;
         if (Math.abs(d._headingOpacity - headingTargetAlpha) < 0.01) d._headingOpacity = headingTargetAlpha;
@@ -1070,32 +1067,28 @@
       const lineColor = LINE_COLORS[d.legend] || '#fff';
       const isDimmed  = d._dimmed && !d._spreading;
       const alpha     = (isDimmed ? 0.08 : 1.0) * frameAlpha;
-      const dotScale = isSelected ? 1.8 : 1;
+      const dotScale  = isSelected ? 1.8 : 1;
 
       // ---- 1. Glow / radar ring ----
       if (!d._retiring) {
         if (isSelected) {
-          // Single ring with ease-out expansion (fast start, decelerates) and variable stroke.
           const radarT     = (now / 2000) % 1;
-          const radarEased = 1 - Math.pow(1 - radarT, 2);
-          const radarScale = 0.1 + 3.9 * radarEased;
+          const radarScale = 0.1 + 3.9 * radarT;
           const radarAlpha = 0.7 * (1 - radarT);
           ctx.save();
           ctx.globalAlpha = alpha * radarAlpha;
           ctx.beginPath();
           ctx.arc(finalX, finalY, scaledGlowRadius * radarScale, 0, Math.PI * 2);
           ctx.strokeStyle = lineColor;
-          ctx.lineWidth   = 0.5 * (1 - radarT * 0.4); // thicker near origin, thins as it expands
+          ctx.lineWidth   = 0.2;
           ctx.stroke();
           ctx.restore();
         } else {
-          if (d._phaseOffset === undefined) d._phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 3.0;
-          const rawT      = ((now / 3000) + d._phaseOffset) % 1;
-          // sin²(t*π) oscillates 0→1→0 over the full period; adding a 0.3 floor keeps the
-          // glow always present so it breathes instead of blinking out between pulses.
-          const pulseT    = 0.3 + 0.7 * Math.pow(Math.sin(rawT * Math.PI), 2);
-          const glowAlpha = 0.4 * pulseT;
-          const glowScale = 1 + 0.7 * pulseT;
+          if (d._phaseOffset === undefined) d._phaseOffset = ((parseInt(d.rn, 10) || 0) % 25) * 0.1 / 2.5;
+          const rawT        = ((now / 2500) + d._phaseOffset) % 1;
+          const pulseT      = Math.sin(rawT * Math.PI);
+          const glowAlpha   = 0.4 * pulseT;
+          const glowScale   = 1 + 0.7 * pulseT;
           if (glowAlpha > 0.005) {
             ctx.save();
             ctx.globalAlpha = alpha * glowAlpha;
@@ -1547,14 +1540,6 @@
       const rowClass = classes ? ` class="${classes}"` : '';
       const dest = (t.destNm || '').replace('O\'Hare', 'OHare').replace(/\(.*\)/, '').trim();
       const stn  = (t.nextStaNm || '').replace(' (Terminal)', '').trim();
-
-      if (isRetiring) {
-        return `<tr data-rn="${t.rn}"${rowClass}>` +
-          `<td class="dbg-rn-link">${t.rn}</td>` +
-          `<td><span class="dbg-line-chip" style="background:${color}">${t.legend}</span></td>` +
-          `<td colspan="5" style="color:#aaa;font-style:italic">Resting at terminal</td>` +
-          `</tr>`;
-      }
 
       return `<tr data-rn="${t.rn}"${rowClass}>` +
         `<td class="dbg-rn-link">${t.rn}</td>` +

@@ -44,14 +44,6 @@ const trainStateMap = new Map();
 // { rn, rt, legend, heading, destNm, terminalPos, direction, effectiveDest, retireStartMs }
 const retiringTrainsMap = new Map();
 
-// Timestamp of the last processTrains call — used to detect VM suspension/wakeup.
-let lastProcessMs = 0;
-
-// If the gap between polls exceeds this threshold, treat all prior state as stale
-// and clear it so trains snap cleanly to current positions instead of triggering
-// mass snap_forward holds after a Fly.io machine wakeup.
-const STALE_POLL_GAP_MS = 90_000; // 90s ≈ 3 missed poll intervals
-
 /**
  * Process a batch of raw CTA trains against persistent state.
  *
@@ -63,18 +55,6 @@ function processTrains(rawTrains, geo) {
   const { lineSegments, lineOwnSegments, lineTerminals, lineNeighborMaps, stations } = geo;
   const now = Date.now();
   const m   = d => `${(d * 111000).toFixed(0)}m`;
-
-  // Detect VM wakeup (e.g. Fly.io machine suspension/resume).
-  // A gap larger than STALE_POLL_GAP_MS means the process was paused; stale positions
-  // would cause every train to trigger snap_forward holds for the next ~2.5 minutes,
-  // so clear state to let trains snap directly to their current positions.
-  if (lastProcessMs > 0 && (now - lastProcessMs) > STALE_POLL_GAP_MS) {
-    const gapSec = ((now - lastProcessMs) / 1000).toFixed(0);
-    console.warn(`[CTA] Poll gap ${gapSec}s > ${STALE_POLL_GAP_MS / 1000}s — clearing stale train state to avoid mass snap holds`);
-    trainStateMap.clear();
-    retiringTrainsMap.clear();
-  }
-  lastProcessMs = now;
 
   // Track which rns appeared this poll — remove stale state for gone trains
   const seenRns = new Set();
@@ -144,120 +124,43 @@ function processTrains(rawTrains, geo) {
         ? directionByNextStation(train._trackPos, nextStn, segs, neighborMap)
         : null;
       const rawNextStnDir = nextStnDir;
-      // Stale-nextStaNm guard — skip on ML segments where the next-station probe
-      // is the most reliable direction source (terminal walk always fails on ML
-      // because the Loop has no dead ends, so we can't afford to discard the probe).
-      const _isOnML = segs[train._trackPos.segIdx]?._isML;
-      if (!_isOnML && nextStnDir !== null && nextStnDir !== prev.direction && nextStn) {
-        const distToNext = geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat);
-        if (distToNext < 0.003) {
-          // Very close to next station — likely stale (train just passed it)
-          nextStnDir = null;
-        } else if (northDest && effectiveDest) {
-          // Cross-validate: if terminal walk agrees with prev.direction (not the
-          // probe), the nextStaNm is stale — the train isn't actually heading toward
-          // that station.  This catches cases where the CTA API reports a station
-          // the train already passed (e.g. Wilson when the train is south of it
-          // heading toward 95th/Dan Ryan).
-          const termCheck = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
-          if (termCheck !== null && termCheck === prev.direction && termCheck !== nextStnDir) {
-            console.log(`[CTA] Stale nextStn guard: rn=${train.rn} (${legend}) probe=${nextStnDir} but termWalk=${termCheck} agrees with prev=${prev.direction} — discarding probe (nextStaNm="${train.nextStaNm}", dist=${distToNext.toFixed(4)})`);
-            nextStnDir = null;
-          }
-        }
+      // Stale-nextStaNm guard
+      if (nextStnDir !== null && nextStnDir !== prev.direction && nextStn
+          && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.003) {
+        nextStnDir = null;
       }
 
-      // probeMismatch: probe disagrees with stored direction — trigger re-evaluation on any line.
-      // loopLineMismatch keeps the narrower check used by the onlyLoopMismatch guard below
-      // (loop lines need extra caution because ML junctions can mislead the probe).
-      const probeMismatch    = rawNextStnDir !== null && rawNextStnDir !== prev.direction;
-      const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend) && probeMismatch;
+      const loopLineMismatch = C.LOOP_LINE_CODES.includes(legend)
+        && rawNextStnDir !== null && rawNextStnDir !== prev.direction;
 
-      // For loop lines (BR, OR, PK, PR, GR) on non-ML segments, validate
-      // prev.direction against directionByTerminalWalk every poll.  These lines
-      // have unambiguous dead-end terminals so termWalk is reliable; no branch
-      // junction can mislead it the way O'Hare/Forest Park misleads Blue.
-      // This catches trains whose direction was set wrong when nextStaNm was
-      // absent (so probeMismatch never fired) and never got corrected.
-      //
-      // Non-loop lines (RD, BL) are excluded: their terminals have branch
-      // junctions where termWalk may reach the wrong dead-end and flip a
-      // correctly-directed train.  Those lines rely on probe + cascade triggers.
-      const isLoopLineCode = C.LOOP_LINE_CODES.includes(legend);
-      if (isLoopLineCode && !_isOnML && northDest && effectiveDest && prev.direction !== null) {
-        const termCheck = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
-        if (termCheck !== null && termCheck !== prev.direction) {
-          console.log(`[CTA] Loop-line direction correction: rn=${train.rn} (${legend}→${train.destNm || '?'}) prev=${prev.direction} termWalk=${termCheck} — overriding`);
-          direction = termCheck;
-          dirMethod = 'walk';
-        }
-      }
-
-      // On ML segments with a probe mismatch, terminal walk is unavailable (the Loop
-      // has no dead ends) and the CTA API's stale nextStaNm frequently points to a
-      // station the train already passed.  PROBE_DIST (0.015°≈1.7km) is large enough
-      // to traverse the circular loop and land geographically closer to a far-away
-      // next station in the *wrong* direction, causing false probe results.
-      //
-      // Suppress the probe whenever the train was ALREADY on ML last poll and is still
-      // on ML this poll — direction was reliably established on entry (non-ML→ML
-      // transition, where prevIsOnML is false and this guard doesn't fire) and should
-      // not be overridden by an unreliable probe while circulating inside the loop.
-      // A segment change within the loop (ML→ML) is normal circulation, not a
-      // directional reversal, so !segChanged is intentionally absent here.
-      const prevIsOnML = prev.trackPos ? !!segs[prev.trackPos.segIdx]?._isML : false;
-      const mlOnlyMismatch = _isOnML && prevIsOnML && loopLineMismatch && !destChanged;
-      if (mlOnlyMismatch) {
-        console.log(`[CTA] ML stale-probe guard: rn=${train.rn} (${legend}→${train.destNm || '?'}) probe=${rawNextStnDir} vs prev=${prev.direction} on ML — keeping prev (nextStaNm="${train.nextStaNm}")`);
-      }
-
-      if (!mlOnlyMismatch && (segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
+      if ((segChanged || destChanged || loopLineMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
         if (nextStnDir !== null && !onlyLoopMismatch) {
-          // Don't let the probe downgrade dirMethod from 'walk' to 'probe'.
-          // When the terminal walk correction above already set dirMethod='walk'
-          // (authoritative direction from the dead-end terminus), overriding it
-          // to 'probe' causes the backward-hold logic to use prev.direction instead
-          // of the corrected direction, firing a hold that reverts the correction
-          // every poll and permanently traps the train.
-          if (dirMethod !== 'walk') {
-            direction = nextStnDir;
-            dirMethod = 'probe';
-          }
+          direction = nextStnDir;
+          dirMethod = 'probe';
         } else if (segChanged && !destChanged && nextStn
             && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.001) {
           const isLoopLine = C.LOOP_LINE_CODES.includes(legend);
           const verifyDir = (isLoopLine && northDest && effectiveDest)
-            ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations)
+            ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
             : null;
-          direction = verifyDir !== null ? verifyDir : (rawNextStnDir ?? prev.direction);
-          dirMethod = verifyDir !== null ? 'walk' : (rawNextStnDir !== null ? 'probe' : 'prev');
+          direction = verifyDir !== null ? verifyDir : prev.direction;
+          dirMethod = verifyDir !== null ? 'walk' : 'prev';
         } else {
-          const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
+          const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
           if (termDir !== null) {
             direction = termDir;
             dirMethod = 'walk';
-          } else if (nextStnDir !== null || (probeMismatch && rawNextStnDir !== null)) {
+          } else if (nextStnDir !== null || (loopLineMismatch && rawNextStnDir !== null)) {
             direction = nextStnDir ?? rawNextStnDir;
             dirMethod = 'probe';
           } else if (segChanged) {
             const prevSeg = segs[prev.trackPos.segIdx];
-            // Try both segment ends — prev.direction may have been wrong, so check the
-            // end that prev.direction predicts first, then the opposite end as a fallback.
-            const boundaryPri = prev.direction > 0 ? prevSeg.length - 1 : 0;
-            const boundaryAlt = prev.direction > 0 ? 0 : prevSeg.length - 1;
-            const connPri = findConnectedSegment(
-              prev.trackPos.segIdx, boundaryPri, prevSeg, prev.direction, segs, undefined, undefined, neighborMap
+            const boundary = prev.direction > 0 ? prevSeg.length - 1 : 0;
+            const connected = findConnectedSegment(
+              prev.trackPos.segIdx, boundary, prevSeg, prev.direction, segs, undefined, undefined, neighborMap
             );
-            const connAlt = connPri?.segIdx !== train._trackPos.segIdx
-              ? findConnectedSegment(
-                  prev.trackPos.segIdx, boundaryAlt, prevSeg, -prev.direction, segs, undefined, undefined, neighborMap
-                )
-              : null;
-            const connected = connPri?.segIdx === train._trackPos.segIdx ? connPri
-              : connAlt?.segIdx === train._trackPos.segIdx ? connAlt
-              : null;
-            if (connected) {
+            if (connected && connected.segIdx === train._trackPos.segIdx) {
               direction = connected.direction;
               dirMethod = 'segment';
             } else {
@@ -274,30 +177,18 @@ function processTrains(rawTrains, geo) {
         // dirMethod stays 'prev'
       }
     } else if (northDest && effectiveDest) {
-      // New train — cross-validate probe against terminal walk
+      // New train
       const nextStn = findNextStation(train, stations);
-      let nextStnDir = nextStn
+      const nextStnDir = nextStn
         ? directionByNextStation(train._trackPos, nextStn, segs, neighborMap)
         : null;
-      const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations);
-      // If probe and terminal walk disagree, trust the terminal walk — it uses
-      // the non-stale destNm rather than the potentially-stale nextStaNm.
-      if (nextStnDir !== null && termDir !== null && nextStnDir !== termDir) {
-        const _isOnML = segs[train._trackPos.segIdx]?._isML;
-        if (!_isOnML) {
-          console.log(`[CTA] New train stale guard: rn=${train.rn} (${legend}) probe=${nextStnDir} vs termWalk=${termDir} — using termWalk (nextStaNm="${train.nextStaNm}")`);
-          nextStnDir = null;
-        }
-      }
       if (nextStnDir !== null) {
         direction = nextStnDir;
         dirMethod = 'probe';
-      } else if (termDir !== null) {
-        direction = termDir;
-        dirMethod = 'walk';
       } else {
-        direction = directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
-        dirMethod = 'heading';
+        const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
+        direction = termDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+        dirMethod = termDir !== null ? 'walk' : 'heading';
       }
     } else {
       direction = directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
@@ -359,30 +250,27 @@ function processTrains(rawTrains, geo) {
               : (fwdD <= bwdD ? 1 : -1);
 
             // Classify backward vs forward.
+            // Priority: next-station probe → heading → prev.direction → direction.
             //
-            // Determine the "expected" direction to compare against empirical drift:
+            // directionByNextStation is preferred: it uses track-following geometry to
+            // the reported next station and works correctly on E/W segments and loop lines
+            // where directionByTerminalWalk (the old approach) was unreliable.
             //
-            // - If direction was just corrected by an authoritative source (walk-override
-            //   or walk), use the corrected direction.  These methods use destNm which is
-            //   non-stale and definitive for non-loop lines.  Using prev.direction here
-            //   would cause the backward hold to fight the correction, since prev.direction
-            //   is the value we're trying to fix.
+            // directionFromHeading fills in when next-station lookup fails (e.g. station
+            // name mismatch — "O'Hare" vs "O'Hare Airport", "Harlem" vs "Harlem-O'Hare")
+            // and the train is actually moving (heading is reliable for moving trains).
             //
-            // - On ML (Loop) segments, use `direction` (Step-3 output).  Step 3 correctly
-            //   handles Loop polarity flips when segments change.
-            //
-            // - Otherwise, use prev.direction (the established travel direction).  It's
-            //   immune to API glitches where both position and nextStaNm jump together.
-            //   The 6-poll confirmation handles genuine terminus reversals.
-            const _isOnMLForHold = segs[train._trackPos.segIdx]?._isML;
-            const _useStepDir = _isOnMLForHold || dirMethod === 'walk';
+            // prev.direction is the last resort — it avoids a hold when heading is also
+            // unavailable, but it can perpetuate a flipped direction. That's acceptable
+            // because a flipped-direction train will self-correct once it crosses a segment
+            // boundary and the Step-3 cascade re-derives direction via next-station probe.
             const _nextStnForHold = findNextStation(train, stations);
             const _nextStnDir = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
               : null;
-            const _headingDirFromPos = (_useStepDir ? direction : prev.direction)
-              ?? _nextStnDir
+            const _headingDirFromPos = _nextStnDir
               ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
+              ?? prev.direction
               ?? direction;
 
             const isSuspectBackward = _headingDirFromPos !== corrDir;
@@ -434,10 +322,7 @@ function processTrains(rawTrains, geo) {
             // Snap range (> CORRECTION_SNAP_THRESHOLD) — apply snap hold
             if (prev.trackPos) {
               const snapDir = directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs);
-              // Compare against prev.direction (the stable held direction) rather than the
-              // freshly-derived direction from the far-ahead position, which can flip each
-              // poll if the new snapped position is in a curved/ambiguous segment.
-              const isSuspectSnap = snapDir !== (prev.direction ?? direction);
+              const isSuspectSnap = snapDir !== direction;
               const countKey = isSuspectSnap ? 'backwardHoldCount' : 'forwardHoldCount';
               const confirmPolls = isSuspectSnap ? C.BACKWARD_CONFIRM_POLLS : C.FORWARD_SNAP_CONFIRM_POLLS;
               const newCount = (prev[countKey] || 0) + 1;
@@ -450,30 +335,21 @@ function processTrains(rawTrains, geo) {
                   console.log(`[CTA] Snap hold: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()}`);
                 }
               } else {
-                // Re-derive direction at snapped position: probe → walk → heading
-                const _snapNextStn = findNextStation(train, stations);
-                const snapProbeDir = _snapNextStn
-                  ? directionByNextStation(train._trackPos, _snapNextStn, segs, neighborMap)
-                  : null;
+                // Re-derive direction at snapped position
                 const snapTermDir = (northDest && effectiveDest)
-                  ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations)
+                  ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
                   : null;
-                train._direction = snapProbeDir ?? snapTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+                train._direction = snapTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
                 direction = train._direction;
                 console.warn(`[CTA] Snap confirmed: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} after ${newCount} polls`);
               }
               if (isSuspectSnap) train._backwardHoldCount = newCount;
               else               train._forwardHoldCount  = newCount;
             } else {
-              // No prior position — probe → walk → heading
-              const _npNextStn = findNextStation(train, stations);
-              const npProbeDir = _npNextStn
-                ? directionByNextStation(train._trackPos, _npNextStn, segs, neighborMap)
-                : null;
               const npTermDir = (northDest && effectiveDest)
-                ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap, stations)
+                ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
                 : null;
-              train._direction = npProbeDir ?? npTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
+              train._direction = npTermDir ?? directionFromHeading(heading, train._trackPos.segIdx, train._trackPos.ptIdx, segs);
               direction = train._direction;
               console.warn(`[CTA] Snap: rn=${train.rn} (${legend}→${train.destNm || '?'}) ${m(drift)}${stnTag()} — no prior position`);
             }
@@ -482,16 +358,13 @@ function processTrains(rawTrains, geo) {
       }
     }
 
-    // When held, revert position to previous. Preserve direction only if it was
-    // authoritatively corrected via terminal walk this poll (dirMethod === 'walk').
+    // When held, revert position to previous
     if (held && prev && prev.trackPos) {
       train._trackPos  = { ...prev.trackPos };
       train.lon        = prev.trackPos.lon;
       train.lat        = prev.trackPos.lat;
-      if (dirMethod !== 'walk') {
-        train._direction = prev.direction;
-        direction        = prev.direction;
-      }
+      train._direction = prev.direction;
+      direction        = prev.direction;
     }
 
     // --- 6. Update per-train state for next poll ---
