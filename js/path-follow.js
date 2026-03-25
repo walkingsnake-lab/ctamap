@@ -129,20 +129,27 @@ function buildLineSegments(geojson) {
     const sharedCoords = lineName ? collectSharedCoordsForLine(geojson, lineName, legend) : [];
 
     if (LOOP_LINE_CODES.includes(legend)) {
-      // Stitch all ML fragments into one continuous circuit, orient CCW (the
-      // direction CTA trains travel), and rotate so coords[0] is at the
-      // approach entry point — ensuring endpoint connectivity works.
       const mlCoords = collectMLCoordsForLine(geojson, lineName);
-      const stitched = stitchMLCircuit(mlCoords, SEGMENT_CONNECT_THRESHOLD);
-      if (stitched) {
-        if (signedArea(stitched) < 0) stitched.reverse();
-        const allApproach = coords.concat(sharedCoords);
-        const entryPt = findMLEntryPoint(allApproach, mlCoords, SEGMENT_CONNECT_THRESHOLD);
-        const circuit = entryPt ? rotateCircuitToEntry(stitched, entryPt) : stitched;
-        circuit._isCircuit = true;
-        segments[legend] = allApproach.concat([circuit]);
+      // GR (Green Line) is bidirectional on its Lake/Wabash loop section — keep
+      // individual ML fragments and let the normal direction cascade handle it.
+      const isUnidirectionalLoop = legend !== 'GR';
+      if (isUnidirectionalLoop) {
+        // Stitch all ML fragments into one continuous circuit, orient CCW (the
+        // direction CTA trains travel), and rotate so coords[0] is at the
+        // approach entry point — ensuring endpoint connectivity works.
+        const stitched = stitchMLCircuit(mlCoords, SEGMENT_CONNECT_THRESHOLD);
+        if (stitched) {
+          if (signedArea(stitched) < 0) stitched.reverse();
+          const allApproach = coords.concat(sharedCoords);
+          const entryPt = findMLEntryPoint(allApproach, mlCoords, SEGMENT_CONNECT_THRESHOLD);
+          const circuit = entryPt ? rotateCircuitToEntry(stitched, entryPt) : stitched;
+          circuit._isCircuit = true;
+          segments[legend] = allApproach.concat([circuit]);
+        } else {
+          segments[legend] = coords.concat(sharedCoords).concat(mlCoords);
+        }
       } else {
-        segments[legend] = coords.concat(sharedCoords);
+        segments[legend] = coords.concat(sharedCoords).concat(mlCoords);
       }
     } else {
       segments[legend] = coords.concat(sharedCoords);
