@@ -54,7 +54,7 @@ const REFRESH_INTERVAL = 30000;
 const LINE_WIDTH = 1.5;
 const TRAIN_RADIUS = 3;
 const TRAIN_GLOW_RADIUS = 4;
-const TERMINUS_HOLD_MS = 30000; // Hold train at terminus before fade-out (30s)
+const TERMINUS_HOLD_MS = 90000; // Hold train at terminus before fade-out (90s)
 const TERMINAL_PROXIMITY_THRESHOLD = 0.05; // degrees (~5.5km) — max distance to terminal to trigger retirement
 const TERMINAL_APPROACH_DURATION = 5000;  // ms to slide retiring train to terminal / spawn new trains
 const MAP_PADDING = 0.05; // 5% padding around the map
@@ -91,12 +91,6 @@ const KNOWN_PHANTOM_JUMPS = [
   { legend: 'PR', fromStations: ['Wilson', 'Jarvis'], toStations: ['Howard'],
     description: 'Purple Express Wilson/Jarvis → Howard phantom' },
 
-  // Purple Line — Belmont / Wilson jump (both directions)
-  { legend: 'PR', fromStations: ['Belmont'], toStations: ['Wilson'],
-    description: 'Purple Line Belmont → Wilson phantom' },
-  { legend: 'PR', fromStations: ['Wilson'], toStations: ['Belmont'],
-    description: 'Purple Line Wilson → Belmont phantom' },
-
   // Blue Line - Harlem/Cumberland/Jefferson Park corridor (user identified + logs)
   { legend: 'BL', fromStations: ['Harlem', 'Cumberland'], toStations: ['Jefferson Park'],
     description: 'Blue Line Harlem/Cumberland → Jefferson Park phantom' },
@@ -116,10 +110,6 @@ const KNOWN_PHANTOM_JUMPS = [
     description: 'Green Line 35-Bronzeville-IIT → Cottage Grove phantom' },
   { legend: 'GR', fromStations: ['Cottage Grove'], toStations: ['35-Bronzeville-IIT'],
     description: 'Green Line Cottage Grove → 35-Bronzeville-IIT phantom' },
-  { legend: 'GR', fromStations: ['Cermak-McCormick Place'], toStations: ['35-Bronzeville-IIT'],
-    description: 'Green Line Cermak-McCormick Place → 35-Bronzeville-IIT phantom' },
-  { legend: 'GR', fromStations: ['35-Bronzeville-IIT'], toStations: ['Cermak-McCormick Place'],
-    description: 'Green Line 35-Bronzeville-IIT → Cermak-McCormick Place phantom' },
   { legend: 'GR', fromStations: ['35-Bronzeville-IIT', 'Cermak-McCormick Place'],
     toStations: ['Cottage Grove', 'King Drive'],
     description: 'Green Line 35th area → Cottage Grove branch phantom' },
@@ -133,10 +123,6 @@ const KNOWN_PHANTOM_JUMPS = [
     description: 'Red Line Fullerton → North/Clybourn phantom' },
   { legend: 'RD', fromStations: ['North/Clybourn'], toStations: ['Fullerton'],
     description: 'Red Line North/Clybourn → Fullerton phantom' },
-
-  // Red Line — Morse → Howard one-way jump
-  { legend: 'RD', fromStations: ['Morse'], toStations: ['Howard'],
-    description: 'Red Line Morse → Howard phantom' },
 
   // Red Line — Loyola / Wilson fast-forward (from logs, 4170m)
   { legend: 'RD', fromStations: ['Loyola'], toStations: ['Wilson'],
@@ -250,41 +236,6 @@ const LOOP_CENTER = { lon: -87.629, lat: 41.882 };
 
 // Safety iteration limit for advanceOnTrack loop
 const ADVANCE_MAX_ITER = 10000;
-
-// ---- Loop circuit segment ordering ----
-// The 10 Loop rectangle ML segments, listed in the natural CCW coordinate order.
-const LOOP_RECT_CCW = [
-  'Washington/Wells to Tower 18',
-  'Quincy/Wells to Washington/Wells',
-  'LaSalle/Van Buren to Quincy/Wells',
-  'Library to LaSalle/Van Buren',
-  'Tower 12 to Library',
-  'Adams/Wabash to Tower 12',
-  'Washington/Wabash to Adams/Wabash',
-  'State/Lake to Washington/Wabash',
-  'Clark/Lake to State/Lake',
-  'Tower 18 to Clark/Lake',
-];
-
-// Derived arrays for CW and partial circuits
-const _LOOP_RECT_CW = [...LOOP_RECT_CCW].reverse();
-const _LOOP_NORTH_EAST_CW = LOOP_RECT_CCW.slice(5).reverse();
-
-// Per-line Loop circuit definitions.
-// KEEP IN SYNC with server/shared-config.js.
-const LOOP_CIRCUIT = {
-  BR: { descs: LOOP_RECT_CCW, reverseCoords: false },
-  PR: { descs: _LOOP_RECT_CW, reverseCoords: true },
-  PK: { descs: _LOOP_RECT_CW, reverseCoords: true },
-  OR: {
-    descs: [
-      ..._LOOP_RECT_CW.slice(_LOOP_RECT_CW.indexOf('Library to LaSalle/Van Buren')),
-      ..._LOOP_RECT_CW.slice(0, _LOOP_RECT_CW.indexOf('Library to LaSalle/Van Buren')),
-    ].filter(d => d !== 'Tower 12 to Library'),
-    reverseCoords: true,
-  },
-  GR: { descs: _LOOP_NORTH_EAST_CW, reverseCoords: true },
-};
 
 // ---- UI & zoom constants ----
 

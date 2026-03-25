@@ -54,94 +54,20 @@ function collectSharedCoordsForLine(geojson, lineName, ownLegend) {
   return coords;
 }
 
-/**
- * Assembles a concatenated circuit path from individual GeoJSON ML segments.
- * Returns a single coordinate array, or null if any segment is missing.
- *
- * KEEP IN SYNC with the identical function in js/path-follow.js.
- *
- * @param {Map<string, Array>} descToCoords - segment description → coordinate array
- * @param {{ descs: string[], reverseCoords: boolean }} circuit - circuit definition
- * @param {string} legend - line code (for warning messages)
- * @returns {Array|null}
- */
-function assembleCircuitPath(descToCoords, circuit, legend) {
-  const threshold = C.SEGMENT_CONNECT_THRESHOLD;
-  const path = [];
-  for (const desc of circuit.descs) {
-    let coords = descToCoords.get(desc);
-    if (!coords) {
-      console.warn(`[track-engine] ${legend} circuit: missing ML segment "${desc}" — falling back to individual segments`);
-      return null;
-    }
-    if (circuit.reverseCoords) coords = [...coords].reverse();
-    // Remove duplicate junction point where segments meet
-    if (path.length > 0) {
-      const last = path[path.length - 1];
-      const first = coords[0];
-      if (Math.abs(last[0] - first[0]) < threshold && Math.abs(last[1] - first[1]) < threshold) {
-        coords = coords.slice(1);
-      }
-    }
-    for (const pt of coords) path.push(pt);
-  }
-  return path;
-}
-
-function collectMLCoordsForLine(geojson, lineName, legend) {
-  // Collect all ML features for this line
-  const features = [];
+function collectMLCoordsForLine(geojson, lineName) {
+  const coords = [];
   for (const feature of geojson.features) {
     if (feature.properties.legend !== 'ML') continue;
     const linesProp = feature.properties.lines || '';
     if (!linesProp.includes(lineName)) continue;
-    features.push(feature);
-  }
-
-  // Helper: extract raw coordinate arrays from collected features
-  function extractCoords(featureList) {
-    const coords = [];
-    for (const f of featureList) {
-      const geom = f.geometry;
-      if (geom.type === 'MultiLineString') {
-        for (const line of geom.coordinates) coords.push(line);
-      } else if (geom.type === 'LineString') {
-        coords.push(geom.coordinates);
-      }
-    }
-    return coords;
-  }
-
-  // Check if this line has a Loop circuit definition
-  const circuit = legend ? C.LOOP_CIRCUIT[legend] : null;
-  if (!circuit) return extractCoords(features);
-
-  // Partition features into circuit vs non-circuit (approach/connector) segments
-  const descToCoords = new Map();
-  const circuitDescSet = new Set(circuit.descs);
-  const nonCircuitFeatures = [];
-
-  for (const f of features) {
-    const desc = f.properties.description || '';
-    const geom = f.geometry;
-    const cs = geom.type === 'MultiLineString' ? geom.coordinates[0] : geom.coordinates;
-    if (circuitDescSet.has(desc)) {
-      descToCoords.set(desc, cs);
-    } else {
-      nonCircuitFeatures.push(f);
+    const geom = feature.geometry;
+    if (geom.type === 'MultiLineString') {
+      for (const line of geom.coordinates) coords.push(line);
+    } else if (geom.type === 'LineString') {
+      coords.push(geom.coordinates);
     }
   }
-
-  // Assemble the circuit.  For closed circuits (BR/PR/PK), both endpoints
-  // are at Tower 18 — findConnectedSegment sees two entry candidates for
-  // the same segment, but the arrival-direction dot-product tie-break
-  // reliably picks the correct one (CCW vs CW).
-  const circuitPath = assembleCircuitPath(descToCoords, circuit, legend);
-  if (circuitPath) {
-    return [circuitPath, ...extractCoords(nonCircuitFeatures)];
-  }
-  // Fallback: circuit assembly failed, return individual segments
-  return extractCoords(features);
+  return coords;
 }
 
 function buildLineSegments(geojson) {
@@ -162,9 +88,7 @@ function buildLineSegments(geojson) {
     const sharedCoords = lineName ? collectSharedCoordsForLine(geojson, lineName, legend) : [];
 
     if (C.LOOP_LINE_CODES.includes(legend)) {
-      const mlCoords = collectMLCoordsForLine(geojson, lineName, legend);
-      // Tag ML segments so direction logic can identify Loop shared track
-      for (const seg of mlCoords) seg._isML = true;
+      const mlCoords = collectMLCoordsForLine(geojson, lineName);
       segments[legend] = coords.concat(sharedCoords).concat(mlCoords);
     } else {
       segments[legend] = coords.concat(sharedCoords);
@@ -729,71 +653,16 @@ function directionByNextStation(trackPos, nextStn, segs, neighborMap) {
   return null;
 }
 
-function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap, stations) {
+function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap) {
   const nmOpts = neighborMap ? { neighborMap } : undefined;
   const termFwd = advanceOnTrack(trackPos, 9999, +1, segs, nmOpts);
   const termBwd = advanceOnTrack(trackPos, 9999, -1, segs, nmOpts);
   if (!termFwd.stopped && !termBwd.stopped) return null;
   const destIsNorth = destNm.includes(northDest);
-
-  // Station-name proximity is more reliable than raw latitude for determining which
-  // terminal is the "north" terminus. On the Blue Line, O'Hare Airport (lat ~41.979)
-  // sits slightly south of stations like Rosemont/Cumberland (lat ~41.983), so a
-  // pure latitude check incorrectly labels the forward-to-O'Hare direction as "south."
-  // When the stations array is available, look for a station whose name includes
-  // northDest within ~2km of the terminal; fall back to latitude otherwise.
-  function isNorthTerm(term) {
-    if (stations && northDest) {
-      for (const s of stations) {
-        if (s.name.includes(northDest) && geoDist(term.lon, term.lat, s.lon, s.lat) < 0.02) {
-          return true;
-        }
-      }
-      return false; // stations available but none matched → definitively not the north terminal
-    }
-    return term.lat > trackPos.lat;
-  }
-
   if (termFwd.stopped && termBwd.stopped) {
-    const northIsForward  = isNorthTerm(termFwd);
-    const northIsBackward = isNorthTerm(termBwd);
+    const northIsForward  = termFwd.lat > trackPos.lat;
+    const northIsBackward = termBwd.lat > trackPos.lat;
     if (northIsForward === northIsBackward) {
-      // Both terminal walks reached the same station (loop lines).
-      // Tie-break priority:
-      //   1. Terminal-station probe — directly measures distance to the known
-      //      terminal station.  Most reliable, works on E-W track.
-      //   2. Latitude probe — checks if probes diverge in latitude.
-      //   3. Segment slope — only when track is clearly N-S oriented.
-      const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
-      const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
-
-      // 1. Terminal-station probe: which direction gets closer to northDest?
-      if (stations && northDest) {
-        let northStn = null;
-        for (const s of stations) {
-          if (s.name.includes(northDest)) { northStn = s; break; }
-        }
-        if (northStn) {
-          const curD = geoDist(trackPos.lon, trackPos.lat, northStn.lon, northStn.lat);
-          const fwdD = geoDist(probeFwd.lon, probeFwd.lat, northStn.lon, northStn.lat);
-          const bwdD = geoDist(probeBwd.lon, probeBwd.lat, northStn.lon, northStn.lat);
-          if (fwdD < bwdD && fwdD < curD) {
-            return destIsNorth ? 1 : -1;
-          }
-          if (bwdD < fwdD && bwdD < curD) {
-            return destIsNorth ? -1 : 1;
-          }
-        }
-      }
-
-      // 2. Latitude probe: do probes diverge in latitude?
-      const dLatFwd = probeFwd.lat - trackPos.lat;
-      const dLatBwd = probeBwd.lat - trackPos.lat;
-      if (dLatFwd * dLatBwd < 0) {
-        return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
-      }
-
-      // 3. Segment slope: only on clearly N-S track
       const seg = segs[trackPos.segIdx];
       const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
       if (seg && pi >= 0) {
@@ -803,40 +672,44 @@ function directionByTerminalWalk(trackPos, destNm, northDest, segs, neighborMap,
           return (destIsNorth === (dy > 0)) ? 1 : -1;
         }
       }
+      const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
+      const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
+      const dLatFwd  = probeFwd.lat - trackPos.lat;
+      const dLatBwd  = probeBwd.lat - trackPos.lat;
+      if (dLatFwd * dLatBwd < 0) {
+        return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
+      }
       return null;
     }
     return (destIsNorth === northIsForward) ? 1 : -1;
   }
   if (termFwd.stopped) {
-    const northIsForward = isNorthTerm(termFwd);
-    if (!stations || !northDest) {
-      // Without stations, fall back to the original lat-based guard for near-equal latitudes.
-      const latDiff = termFwd.lat - trackPos.lat;
-      if (Math.abs(latDiff) < 0.001) {
-        // Forward terminal at nearly the same latitude — comparison is unreliable on E-W tracks.
-        // Use the same segment-geometry / probe fallback as the two-terminal tie-break.
-        const seg = segs[trackPos.segIdx];
-        const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
-        if (seg && pi >= 0) {
-          const dy = seg[pi + 1][1] - seg[pi][1];
-          const dx = seg[pi + 1][0] - seg[pi][0];
-          if (Math.abs(dy) > Math.abs(dx) * 0.2) {
-            return (destIsNorth === (dy > 0)) ? 1 : -1;
-          }
+    const latDiff = termFwd.lat - trackPos.lat;
+    if (Math.abs(latDiff) < 0.001) {
+      // Forward terminal at nearly the same latitude — comparison is unreliable on E-W tracks.
+      // Use the same segment-geometry / probe fallback as the two-terminal tie-break.
+      const seg = segs[trackPos.segIdx];
+      const pi = Math.min(trackPos.ptIdx, seg ? seg.length - 2 : 0);
+      if (seg && pi >= 0) {
+        const dy = seg[pi + 1][1] - seg[pi][1];
+        const dx = seg[pi + 1][0] - seg[pi][0];
+        if (Math.abs(dy) > Math.abs(dx) * 0.2) {
+          return (destIsNorth === (dy > 0)) ? 1 : -1;
         }
-        const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
-        const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
-        const dLatFwd  = probeFwd.lat - trackPos.lat;
-        const dLatBwd  = probeBwd.lat - trackPos.lat;
-        if (dLatFwd * dLatBwd < 0) {
-          return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
-        }
-        return null;
       }
+      const probeFwd = advanceOnTrack(trackPos, 0.01, +1, segs, nmOpts);
+      const probeBwd = advanceOnTrack(trackPos, 0.01, -1, segs, nmOpts);
+      const dLatFwd  = probeFwd.lat - trackPos.lat;
+      const dLatBwd  = probeBwd.lat - trackPos.lat;
+      if (dLatFwd * dLatBwd < 0) {
+        return (destIsNorth === (dLatFwd > dLatBwd)) ? 1 : -1;
+      }
+      return null;
     }
+    const northIsForward = latDiff > 0;
     return (destIsNorth === northIsForward) ? 1 : -1;
   }
-  const northIsBackward = isNorthTerm(termBwd);
+  const northIsBackward = termBwd.lat > trackPos.lat;
   return (destIsNorth === !northIsBackward) ? 1 : -1;
 }
 
@@ -850,66 +723,53 @@ function findNextStation(train, stations) {
   for (const s of stations) {
     if (s.legends.includes(train.legend) && C.normalizeStationName(s.name) === nextNorm) return s;
   }
-  // Fallback: match by display name (strips branch-line suffix like -O'Hare, -Congress, etc.)
-  // so the CTA API returning "Harlem" matches our internal station "Harlem-O'Hare".
-  for (const s of stations) {
-    if (s.legends.includes(train.legend) && displayStationName(s.name) === nextClean) return s;
-  }
   return null;
 }
 
 function effectiveDestForDirection(train, northDest, stations) {
-  // Trust CTA's destNm directly.  Previous logic tried to flip outbound dests
-  // to "Loop" (or "Loop" to "OUTBOUND") based on nextStaNm proximity to the
-  // Loop center.  But nextStaNm is frequently stale, causing false flips that
-  // poison directionByTerminalWalk — half the Brown Line would get assigned
-  // the wrong direction.  CTA's destNm is the most reliable signal for which
-  // terminal the train is heading toward.  On ML (Loop) segments, terminal
-  // walk returns null regardless of effectiveDest, and the backward-hold
-  // mechanism provides a safety net for the rare late-sign-flip case.
-  return train.destNm;
-}
+  if (!northDest) return train.destNm;
+  const LOOP_DEST_LINE_SET = new Set(['BR', 'OR', 'PK', 'PR']);
+  if (!LOOP_DEST_LINE_SET.has(train.legend)) return train.destNm;
+  if (!train.destNm) return train.destNm;
 
-/**
- * Validates that all LOOP_CIRCUIT segment descriptions exist in the GeoJSON
- * and that concatenated endpoints chain correctly.  Call once at startup;
- * throws on fatal mismatches so broken circuits don't silently degrade.
- */
-function validateLoopCircuits(geojson) {
-  const threshold = C.SEGMENT_CONNECT_THRESHOLD;
-  // Build description → coordinate array lookup for all ML features
-  const descToCoords = new Map();
-  for (const f of geojson.features) {
-    if (f.properties.legend !== 'ML') continue;
-    const desc = f.properties.description || '';
-    if (!desc) continue;
-    const geom = f.geometry;
-    const cs = geom.type === 'MultiLineString' ? geom.coordinates[0] : geom.coordinates;
-    descToCoords.set(desc, cs);
-  }
-
-  for (const [legend, circuit] of Object.entries(C.LOOP_CIRCUIT)) {
-    // Check all descriptions resolve
-    const missing = circuit.descs.filter(d => !descToCoords.has(d));
-    if (missing.length > 0) {
-      throw new Error(`[track-engine] ${legend} LOOP_CIRCUIT: missing GeoJSON segments: ${missing.join(', ')}`);
-    }
-
-    // Check endpoints chain
-    let prevLast = null;
-    for (const desc of circuit.descs) {
-      let coords = descToCoords.get(desc);
-      if (circuit.reverseCoords) coords = [...coords].reverse();
-      const first = coords[0];
-      if (prevLast) {
-        const gap = geoDist(prevLast[0], prevLast[1], first[0], first[1]);
-        if (gap > threshold) {
-          throw new Error(`[track-engine] ${legend} LOOP_CIRCUIT: gap ${gap.toFixed(6)} between "${circuit.descs[circuit.descs.indexOf(desc) - 1]}" and "${desc}"`);
-        }
+  if (train.destNm.includes('Loop')) {
+    const nextStnLF = findNextStation(train, stations);
+    if (nextStnLF) {
+      const tDistLF = geoDist(train.lon, train.lat, C.LOOP_CENTER.lon, C.LOOP_CENTER.lat);
+      const nDistLF = geoDist(nextStnLF.lon, nextStnLF.lat, C.LOOP_CENTER.lon, C.LOOP_CENTER.lat);
+      if (nDistLF > tDistLF + 0.002) {
+        console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is farther from Loop — late flip, treating as outbound`);
+        return 'OUTBOUND';
       }
-      prevLast = coords[coords.length - 1];
     }
+    return train.destNm;
   }
+
+  const nextStn = findNextStation(train, stations);
+  if (!nextStn) return train.destNm;
+
+  const trainToNextStn    = geoDist(train.lon, train.lat, nextStn.lon, nextStn.lat);
+  const trainDistToLoop   = geoDist(train.lon, train.lat, C.LOOP_CENTER.lon, C.LOOP_CENTER.lat);
+  const nextStnDistToLoop = geoDist(nextStn.lon, nextStn.lat, C.LOOP_CENTER.lon, C.LOOP_CENTER.lat);
+
+  if (trainToNextStn < 0.001) {
+    if (nextStnDistToLoop <= 0.014) return train.destNm;
+    if (trainDistToLoop >= C.LOOP_INNER_RADIUS && trainDistToLoop < 0.025) {
+      console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" appears stale at approach station (dist-to-loop=${trainDistToLoop.toFixed(4)}) — using "Loop"`);
+      return 'Loop';
+    }
+    return train.destNm;
+  }
+  if (nextStnDistToLoop < trainDistToLoop) {
+    if (trainDistToLoop > 0.05) return train.destNm;
+    console.log(`[CTA] Dest override: rn=${train.rn} (${train.legend}) destNm="${train.destNm}" but nextStaNm="${train.nextStaNm}" is closer to Loop — using "Loop" for direction`);
+    return 'Loop';
+  }
+  if (trainDistToLoop < C.LOOP_INNER_RADIUS) {
+    console.log(`[CTA] Inside Loop: rn=${train.rn} (${train.legend}) trusting destNm="${train.destNm}" (dist-to-loop=${trainDistToLoop.toFixed(4)})`);
+    return train.destNm;
+  }
+  return train.destNm;
 }
 
 module.exports = {
@@ -932,5 +792,4 @@ module.exports = {
   directionByTerminalWalk,
   findNextStation,
   effectiveDestForDirection,
-  validateLoopCircuits,
 };
