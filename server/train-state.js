@@ -214,8 +214,16 @@ function processTrains(rawTrains, geo) {
       if (!mlOnlyMismatch && (segChanged || destChanged || probeMismatch) && northDest && effectiveDest) {
         const onlyLoopMismatch = loopLineMismatch && !segChanged && !destChanged;
         if (nextStnDir !== null && !onlyLoopMismatch) {
-          direction = nextStnDir;
-          dirMethod = 'probe';
+          // Don't let the probe downgrade dirMethod from 'walk' to 'probe'.
+          // When the terminal walk correction above already set dirMethod='walk'
+          // (authoritative direction from the dead-end terminus), overriding it
+          // to 'probe' causes the backward-hold logic to use prev.direction instead
+          // of the corrected direction, firing a hold that reverts the correction
+          // every poll and permanently traps the train.
+          if (dirMethod !== 'walk') {
+            direction = nextStnDir;
+            dirMethod = 'probe';
+          }
         } else if (segChanged && !destChanged && nextStn
             && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.001) {
           const isLoopLine = C.LOOP_LINE_CODES.includes(legend);
