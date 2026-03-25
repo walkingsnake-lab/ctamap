@@ -29,6 +29,84 @@ function collectLineCoords(geojson, legend) {
  *   segments     — full track including shared and ML (for animation/snapping)
  *   ownSegments  — only the line's own colored segments (for terminal detection)
  */
+/**
+ * Stitches ML coordinate arrays for one loop line into a single continuous path
+ * by greedy endpoint-matching. Returns a flat coordinate array, or null if input
+ * is empty. The result is an open path; if the ML segments form a closed loop the
+ * returned array will have the same first and last point.
+ */
+function stitchMLCircuit(mlCoords, threshold) {
+  if (!mlCoords || mlCoords.length === 0) return null;
+  if (mlCoords.length === 1) return mlCoords[0].slice();
+
+  const used = new Array(mlCoords.length).fill(false);
+  const chain = mlCoords[0].slice();
+  used[0] = true;
+
+  for (let pass = 0; pass < mlCoords.length - 1; pass++) {
+    const tail = chain[chain.length - 1];
+    let found = false;
+    for (let i = 0; i < mlCoords.length; i++) {
+      if (used[i]) continue;
+      const seg = mlCoords[i];
+      const d0 = geoDist(tail[0], tail[1], seg[0][0], seg[0][1]);
+      const dN = geoDist(tail[0], tail[1], seg[seg.length - 1][0], seg[seg.length - 1][1]);
+      if (d0 <= threshold) {
+        for (let k = 1; k < seg.length; k++) chain.push(seg[k]);
+        used[i] = true; found = true; break;
+      } else if (dN <= threshold) {
+        for (let k = seg.length - 2; k >= 0; k--) chain.push(seg[k]);
+        used[i] = true; found = true; break;
+      }
+    }
+    if (!found) break;
+  }
+  return chain;
+}
+
+/**
+ * Returns the signed area of a coordinate polygon (shoelace formula).
+ * Positive = CCW in geographic (lon, lat) space — the direction CTA trains travel.
+ */
+function signedArea(coords) {
+  let area = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    area += coords[i][0] * coords[i + 1][1] - coords[i + 1][0] * coords[i][1];
+  }
+  return area / 2;
+}
+
+/**
+ * Rotates a circuit array so the point nearest to targetPt becomes index 0.
+ */
+function rotateCircuitToEntry(circuit, targetPt) {
+  let bestIdx = 0, bestDist = Infinity;
+  for (let i = 0; i < circuit.length; i++) {
+    const d = geoDist(targetPt[0], targetPt[1], circuit[i][0], circuit[i][1]);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  }
+  if (bestIdx === 0) return circuit;
+  return [...circuit.slice(bestIdx), ...circuit.slice(1, bestIdx + 1)];
+}
+
+/**
+ * Finds the endpoint of any own/shared segment closest to any ML segment endpoint.
+ */
+function findMLEntryPoint(ownCoords, mlCoords, threshold) {
+  let bestPt = null, bestDist = threshold;
+  for (const own of ownCoords) {
+    for (const oPt of [own[0], own[own.length - 1]]) {
+      for (const ml of mlCoords) {
+        for (const mPt of [ml[0], ml[ml.length - 1]]) {
+          const d = geoDist(oPt[0], oPt[1], mPt[0], mPt[1]);
+          if (d < bestDist) { bestDist = d; bestPt = oPt; }
+        }
+      }
+    }
+  }
+  return bestPt;
+}
+
 function buildLineSegments(geojson) {
   // LOOP_LINE_CODES defined in config.js
 
@@ -51,9 +129,21 @@ function buildLineSegments(geojson) {
     const sharedCoords = lineName ? collectSharedCoordsForLine(geojson, lineName, legend) : [];
 
     if (LOOP_LINE_CODES.includes(legend)) {
-      // Only include ML segments whose "lines" property mentions this line
+      // Stitch all ML fragments into one continuous circuit, orient CCW (the
+      // direction CTA trains travel), and rotate so coords[0] is at the
+      // approach entry point — ensuring endpoint connectivity works.
       const mlCoords = collectMLCoordsForLine(geojson, lineName);
-      segments[legend] = coords.concat(sharedCoords).concat(mlCoords);
+      const stitched = stitchMLCircuit(mlCoords, SEGMENT_CONNECT_THRESHOLD);
+      if (stitched) {
+        if (signedArea(stitched) < 0) stitched.reverse();
+        const allApproach = coords.concat(sharedCoords);
+        const entryPt = findMLEntryPoint(allApproach, mlCoords, SEGMENT_CONNECT_THRESHOLD);
+        const circuit = entryPt ? rotateCircuitToEntry(stitched, entryPt) : stitched;
+        circuit._isCircuit = true;
+        segments[legend] = allApproach.concat([circuit]);
+      } else {
+        segments[legend] = coords.concat(sharedCoords);
+      }
     } else {
       segments[legend] = coords.concat(sharedCoords);
     }
