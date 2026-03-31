@@ -140,12 +140,14 @@ function processTrains(rawTrains, geo) {
           dirMethod = 'probe';
         } else if (segChanged && !destChanged && nextStn
             && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.001) {
-          const isLoopLine = C.LOOP_LINE_CODES.includes(legend);
-          const verifyDir = (isLoopLine && northDest && effectiveDest)
-            ? directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap)
-            : null;
-          direction = verifyDir !== null ? verifyDir : prev.direction;
-          dirMethod = verifyDir !== null ? 'walk' : 'prev';
+          // Train just crossed a segment boundary right at the next station.
+          // On loop lines, terminal walk here is unreliable: junction approach segments
+          // (e.g. the Brown/Purple Merchandise Mart→Tower 18 track at Clark/Lake) can
+          // pull the walk toward the terminus in the wrong direction, flipping a correctly
+          // eastbound train to westbound.  Trust prev.direction instead — the backward-hold
+          // system corrects genuine reversals.
+          direction = prev.direction;
+          dirMethod = 'prev';
         } else {
           const termDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
           if (termDir !== null) {
