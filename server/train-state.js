@@ -151,7 +151,13 @@ function processTrains(rawTrains, geo) {
           if (termDir !== null) {
             direction = termDir;
             dirMethod = 'walk';
-          } else if (nextStnDir !== null || (loopLineMismatch && rawNextStnDir !== null)) {
+          } else if (!onlyLoopMismatch && (nextStnDir !== null || (loopLineMismatch && rawNextStnDir !== null))) {
+            // onlyLoopMismatch guard: when the only trigger was a probe mismatch on a loop
+            // line (no seg/dest change), do NOT fall back to the probe result here.
+            // The probe may be stale (nextStaNm pointing to a station the train already
+            // passed), and terminal walk just failed to resolve it.  Trusting the stale
+            // probe would flip direction; keeping prev.direction (the else branch below)
+            // is safer — the backward-hold system corrects genuine reversals.
             direction = nextStnDir ?? rawNextStnDir;
             dirMethod = 'probe';
           } else if (segChanged) {
@@ -265,9 +271,17 @@ function processTrains(rawTrains, geo) {
             // because a flipped-direction train will self-correct once it crosses a segment
             // boundary and the Step-3 cascade re-derives direction via next-station probe.
             const _nextStnForHold = findNextStation(train, stations);
-            const _nextStnDir = _nextStnForHold
+            const _nextStnDirRaw = _nextStnForHold
               ? directionByNextStation(prev.trackPos, _nextStnForHold, segs, neighborMap)
               : null;
+            // On loop lines, a stale nextStaNm can make the probe point backward
+            // (same loopLineMismatch scenario as the direction cascade).  Discard the
+            // result when it disagrees with prev.direction so that it doesn't trigger
+            // a spurious backward hold — fall through to heading or prev.direction.
+            const _nextStnDir = (C.LOOP_LINE_CODES.includes(legend)
+              && _nextStnDirRaw !== null && _nextStnDirRaw !== prev.direction)
+              ? null
+              : _nextStnDirRaw;
             const _headingDirFromPos = _nextStnDir
               ?? directionFromHeading(heading, prev.trackPos.segIdx, prev.trackPos.ptIdx, segs)
               ?? prev.direction
