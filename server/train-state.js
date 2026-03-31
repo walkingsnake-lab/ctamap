@@ -138,6 +138,12 @@ function processTrains(rawTrains, geo) {
         if (nextStnDir !== null && !onlyLoopMismatch) {
           direction = nextStnDir;
           dirMethod = 'probe';
+        } else if (onlyLoopMismatch) {
+          // Loop line with probe mismatch (no seg/dest change): verify with terminal walk
+          // before accepting the probe result, to avoid stale next-station flips.
+          const verifyDir = directionByTerminalWalk(train._trackPos, effectiveDest, northDest, segs, neighborMap);
+          direction = verifyDir !== null ? verifyDir : prev.direction;
+          dirMethod = verifyDir !== null ? 'walk' : 'prev';
         } else if (segChanged && !destChanged && nextStn
             && geoDist(train._trackPos.lon, train._trackPos.lat, nextStn.lon, nextStn.lat) < 0.001) {
           const isLoopLine = C.LOOP_LINE_CODES.includes(legend);
@@ -151,14 +157,8 @@ function processTrains(rawTrains, geo) {
           if (termDir !== null) {
             direction = termDir;
             dirMethod = 'walk';
-          } else if (!onlyLoopMismatch && (nextStnDir !== null || (loopLineMismatch && rawNextStnDir !== null))) {
-            // onlyLoopMismatch guard: when the only trigger was a probe mismatch on a loop
-            // line (no seg/dest change), do NOT fall back to the probe result here.
-            // The probe may be stale (nextStaNm pointing to a station the train already
-            // passed), and terminal walk just failed to resolve it.  Trusting the stale
-            // probe would flip direction; keeping prev.direction (the else branch below)
-            // is safer — the backward-hold system corrects genuine reversals.
-            direction = nextStnDir ?? rawNextStnDir;
+          } else if (nextStnDir !== null) {
+            direction = nextStnDir;
             dirMethod = 'probe';
           } else if (segChanged) {
             const prevSeg = segs[prev.trackPos.segIdx];
