@@ -551,8 +551,8 @@ body.embed-mode #train-label.visible {
 /* Hazard triangle — line art */
 
 .aw-hazard {
-  width: 20px;
-  height: 19px;
+  width: 26px;
+  height: 24px;
   flex-shrink: 0;
 }
 

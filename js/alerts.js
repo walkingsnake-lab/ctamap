@@ -38,7 +38,7 @@
   function hazardSvg(color) {
     return `<svg class="aw-hazard" viewBox="0 0 100 92" fill="none" aria-hidden="true">
       <path d="M20 84 Q8 84 13.8 73.5 L44.2 18.5 Q50 8 55.8 18.5 L86.2 73.5 Q92 84 80 84 Z"
-            stroke="${color}" stroke-width="7" fill="white"/>
+            stroke="${color}" stroke-width="7" fill="none"/>
       <line x1="50" y1="32" x2="50" y2="57"
             stroke="${color}" stroke-width="7" stroke-linecap="round"/>
       <circle cx="50" cy="70" r="4.5" fill="${color}"/>
