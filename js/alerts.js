@@ -33,12 +33,16 @@
     y:    'Yellow',
   };
 
-  // Inline SVG alert icon: circle with exclamation mark
-  const ALERT_SVG = `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path d="M10 2.5 L18 17 H2 Z" stroke="rgba(255,255,255,0.88)" stroke-width="1.5" stroke-linejoin="round" fill="rgba(255,255,255,0.1)"/>
-    <line x1="10" y1="8.5" x2="10" y2="13" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-    <circle cx="10" cy="15.5" r="1.15" fill="white"/>
-  </svg>`;
+  // Inline SVG alert icon — clean exclamation in rounded shield
+  function alertSvg(color) {
+    return `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M10 1.5 L18.5 16.5 Q19 17.5 18 17.5 H2 Q1 17.5 1.5 16.5 Z"
+            stroke="${color}" stroke-width="1.6" stroke-linejoin="round"
+            fill="none"/>
+      <line x1="10" y1="7" x2="10" y2="12" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="10" cy="14.8" r="1.2" fill="${color}"/>
+    </svg>`;
+  }
 
   let alerts = [];
   let expandedLines = new Set();
@@ -91,28 +95,31 @@
       const color = SERVICE_COLORS[svc] || '#888';
       const name  = SERVICE_NAMES[svc] || svc;
       const isExp = expandedLines.has(svc);
-      const gc    = hexToRgba(color, 0.6);
+      const gc    = hexToRgba(color, 0.35);
+      const count = svcAlerts.length;
 
-      html += `<div class="aw-line-row" data-svc="${escAttr(svc)}">`;
+      html += `<div class="aw-pill${isExp ? ' aw-pill-open' : ''}" data-svc="${escAttr(svc)}" style="--ac:${color};--gc:${gc}">`;
 
-      html += `<button class="aw-icon-btn${isExp ? ' aw-expanded' : ''}"
+      // Icon area (always visible)
+      html += `<button class="aw-icon-btn"
         aria-expanded="${isExp}"
-        aria-label="${escAttr(name)} line — ${svcAlerts.length} alert${svcAlerts.length > 1 ? 's' : ''}"
-        style="background:${color};--gc:${gc}"
-      >${ALERT_SVG}</button>`;
+        aria-label="${escAttr(name)} line — ${count} alert${count > 1 ? 's' : ''}"
+      >${alertSvg(color)}<span class="aw-badge">${count}</span></button>`;
 
-      if (isExp) {
-        html += `<div class="aw-panel">`;
-        for (const a of svcAlerts) {
-          html += `<div class="aw-item" style="--line-color:${color}">`;
-          html += `<div class="aw-headline">${escHtml(a.headline)}</div>`;
-          if (a.short) {
-            html += `<div class="aw-short">${escHtml(a.short)}</div>`;
-          }
-          html += `</div>`;
+      // Expandable content area
+      html += `<div class="aw-content">`;
+      html += `<div class="aw-content-inner">`;
+      html += `<div class="aw-line-label" style="color:${color}">${escHtml(name)} Line</div>`;
+      for (const a of svcAlerts) {
+        html += `<div class="aw-item">`;
+        html += `<div class="aw-headline">${escHtml(a.headline)}</div>`;
+        if (a.short) {
+          html += `<div class="aw-short">${escHtml(a.short)}</div>`;
         }
         html += `</div>`;
       }
+      html += `</div>`;
+      html += `</div>`;
 
       html += `</div>`;
     }
@@ -123,7 +130,7 @@
     widget.querySelectorAll('.aw-icon-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        const svc = btn.closest('.aw-line-row').dataset.svc;
+        const svc = btn.closest('.aw-pill').dataset.svc;
         if (expandedLines.has(svc)) {
           expandedLines.delete(svc);
         } else {

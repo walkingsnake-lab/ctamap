@@ -512,7 +512,7 @@ body.embed-mode #train-label.visible {
   z-index: 95;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.4s ease;
@@ -528,85 +528,144 @@ body.embed-mode #train-label.visible {
   pointer-events: none;
 }
 
-.aw-line-row {
+/* --- Pill container (collapsed + expanded) --- */
+
+.aw-pill {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: stretch;
+  border-radius: 20px;
+  border: 1.5px solid var(--ac, #888);
+  background: rgba(8, 10, 20, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow: hidden;
+  max-width: 40px;               /* collapsed: icon only */
+  transition:
+    max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease,
+    border-color 0.3s ease;
+  box-shadow: 0 0 0 0 transparent;
 }
 
-@keyframes aw-glow-pulse {
-  0%, 100% { box-shadow: 0 0 7px 2px var(--gc, rgba(255,255,255,0.35)); }
-  50%       { box-shadow: 0 0 16px 6px var(--gc, rgba(255,255,255,0.35)); }
+.aw-pill:hover {
+  box-shadow: 0 0 8px 1px var(--gc, rgba(255,255,255,0.15));
 }
+
+.aw-pill.aw-pill-open {
+  max-width: min(380px, calc(100vw - 60px));
+  box-shadow: 0 0 12px 2px var(--gc, rgba(255,255,255,0.2));
+}
+
+/* --- Icon button --- */
 
 .aw-icon-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
+  width: 37px;
+  min-width: 37px;
+  height: 37px;
   border: none;
+  background: transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   padding: 0;
-  animation: aw-glow-pulse 2.6s ease-in-out infinite;
-  transition: transform 0.15s ease, filter 0.15s ease;
+  position: relative;
+  transition: background 0.2s ease;
+  border-radius: 20px 0 0 20px;
+}
+
+.aw-pill:not(.aw-pill-open) .aw-icon-btn {
+  border-radius: 50%;
 }
 
 .aw-icon-btn:hover {
-  transform: scale(1.1);
-  filter: brightness(1.15);
-}
-
-.aw-icon-btn.aw-expanded {
-  filter: brightness(1.2);
-  box-shadow: 0 0 18px 7px var(--gc, rgba(255,255,255,0.4)) !important;
-  animation: none;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .aw-icon-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: block;
+  flex-shrink: 0;
 }
 
-@keyframes aw-panel-in {
-  from { opacity: 0; transform: translateX(-6px); }
-  to   { opacity: 1; transform: translateX(0); }
+/* Badge (alert count) */
+
+.aw-badge {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  background: var(--ac, #888);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  padding: 0 3px;
+  pointer-events: none;
 }
 
-.aw-panel {
-  animation: aw-panel-in 0.18s ease-out both;
-  background: rgba(10, 10, 16, 0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  padding: 8px 10px;
+/* --- Expandable content area --- */
+
+.aw-content {
+  overflow: hidden;
+  width: 0;
+  opacity: 0;
+  transition:
+    width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.3s ease 0.05s;
+}
+
+.aw-pill-open .aw-content {
+  width: 280px;
+  opacity: 1;
+}
+
+.aw-content-inner {
+  width: 280px;
+  padding: 8px 14px 8px 6px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 200px;
-  max-width: min(300px, calc(100vw - 80px));
-  font-family: 'Jersey 10', monospace;
 }
 
+/* Line label inside expanded pill */
+
+.aw-line-label {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+  padding-bottom: 2px;
+}
+
+/* Individual alert items */
+
 .aw-item {
-  border-left: 2px solid var(--line-color, #888);
-  padding: 5px 8px;
+  border-left: 2px solid var(--ac, #888);
+  padding: 4px 0 4px 10px;
 }
 
 .aw-headline {
-  color: rgba(255,255,255,0.92);
-  font-size: 13px;
-  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .aw-short {
-  color: rgba(255,255,255,0.5);
-  font-size: 12px;
-  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 2px;
   line-height: 1.4;
-  font-family: sans-serif;
 }
