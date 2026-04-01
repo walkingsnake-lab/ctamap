@@ -504,31 +504,24 @@ body.embed-mode #train-label.visible {
 }
 
 /* ====================================================================
-   Alerts widget — unified notification drawer
+   Alerts widget — minimal floating hazard labels
    ==================================================================== */
-
-/* Shared font stack for the whole widget */
-#alerts-widget,
-#alerts-widget * {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-               'Helvetica Neue', Arial, sans-serif;
-}
 
 #alerts-widget {
   position: fixed;
-  top: 24px;
-  left: 24px;
+  top: 26px;
+  left: 26px;
   z-index: 95;
   display: flex;
   flex-direction: column;
+  gap: 6px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.5s ease;
 }
 
 #alerts-widget.alerts-visible {
   opacity: 1;
-  pointer-events: auto;
 }
 
 #alerts-widget.alerts-train-selected {
@@ -536,275 +529,40 @@ body.embed-mode #train-label.visible {
   pointer-events: none;
 }
 
-/* ── Trigger button ─────────────────────────────────────────────── */
+#alerts-widget.alerts-zoom-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
 
-.aw-trigger {
+/* ── Individual alert label ─────────────────────────────────────── */
+
+@keyframes aw-pulse {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 0.45; }
+}
+
+.aw-label {
   display: flex;
   align-items: center;
   gap: 7px;
-  height: 34px;
-  padding: 0 11px 0 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 17px;
-  background: rgba(12, 14, 24, 0.82);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition:
-    background 0.25s ease,
-    border-color 0.25s ease,
-    box-shadow 0.3s ease,
-    transform 0.15s ease;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-  -webkit-user-select: none;
-  user-select: none;
+  animation: aw-pulse 3.2s ease-in-out infinite;
 }
 
-.aw-trigger:hover {
-  background: rgba(20, 22, 36, 0.9);
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-  transform: translateY(-1px);
-}
+/* Hazard triangle — line art */
 
-.aw-trigger-active {
-  background: rgba(20, 22, 36, 0.94);
-  border-color: rgba(255, 255, 255, 0.22);
-  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.5);
-}
-
-/* Colored dots showing affected lines */
-.aw-dots {
-  display: flex;
-  gap: 3px;
-  align-items: center;
-}
-
-.aw-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.aw-hazard {
+  width: 16px;
+  height: 15px;
   flex-shrink: 0;
 }
 
-/* Triangle icon */
-.aw-trigger-icon {
-  width: 13px;
-  height: 13px;
-  display: block;
-  flex-shrink: 0;
-  opacity: 0.85;
-}
+/* "Major delays!" text */
 
-/* Count label */
-.aw-trigger-count {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.75);
+.aw-text {
+  font-family: 'Jersey 25', sans-serif;
+  font-size: 18px;
+  color: var(--c, #888);
   line-height: 1;
-}
-
-/* ── Drawer panel ───────────────────────────────────────────────── */
-
-@keyframes aw-drawer-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.aw-drawer {
-  margin-top: 6px;
-  width: min(320px, calc(100vw - 48px));
-  max-height: min(420px, calc(100vh - 100px));
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  background: rgba(10, 12, 22, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.55),
-    0 1px 0 rgba(255, 255, 255, 0.04) inset;
-  animation: aw-drawer-enter 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-/* Custom scrollbar */
-.aw-drawer::-webkit-scrollbar {
-  width: 4px;
-}
-.aw-drawer::-webkit-scrollbar-track {
-  background: transparent;
-}
-.aw-drawer::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
-}
-
-.aw-drawer-inner {
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* ── Drawer header ──────────────────────────────────────────────── */
-
-.aw-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 2px 10px 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  margin-bottom: 6px;
-}
-
-.aw-header-title {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.aw-header-count {
-  font-size: 10px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 2px 7px;
-  border-radius: 8px;
-  line-height: 1;
-}
-
-/* ── Line sections ──────────────────────────────────────────────── */
-
-@keyframes aw-section-enter {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.aw-section {
-  border-radius: 10px;
-  overflow: hidden;
-  animation: aw-section-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
-  transition: background 0.2s ease;
-}
-
-.aw-section:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-/* Section header (line name + count + chevron) */
-
-.aw-section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 9px 10px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.88);
-  cursor: pointer;
-  transition: background 0.15s ease;
-  border-radius: 10px;
-  text-align: left;
-}
-
-.aw-section-header:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.aw-section-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.aw-section-name {
-  font-size: 13px;
-  font-weight: 600;
-  flex: 1;
-  min-width: 0;
-}
-
-.aw-section-count {
-  font-size: 10px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.35);
-  background: rgba(255, 255, 255, 0.06);
-  min-width: 18px;
-  height: 18px;
-  line-height: 18px;
-  text-align: center;
-  border-radius: 9px;
-  padding: 0 5px;
-}
-
-.aw-chevron {
-  width: 10px;
-  height: 10px;
-  color: rgba(255, 255, 255, 0.3);
-  flex-shrink: 0;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.aw-chevron-collapsed {
-  transform: rotate(-90deg);
-}
-
-/* ── Alert items ────────────────────────────────────────────────── */
-
-@keyframes aw-item-enter {
-  from {
-    opacity: 0;
-    transform: translateX(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.aw-items {
-  padding: 0 10px 8px 26px; /* indent past the dot */
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.aw-item {
-  padding: 6px 0 6px 12px;
-  border-left: 2px solid var(--accent, #888);
-  animation: aw-item-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.aw-headline {
-  font-size: 12px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.88);
-  line-height: 1.45;
-}
-
-.aw-desc {
-  font-size: 11px;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.4);
-  line-height: 1.45;
-  margin-top: 2px;
+  text-shadow: 0 0 10px var(--c, #888), 0 0 3px var(--c, #888);
+  white-space: nowrap;
 }
