@@ -1,13 +1,12 @@
-// CTA Alerts widget — stacked per-line neon icons, top-left.
-// Each icon shows a colored circle for an affected line; clicking expands
-// an inline panel listing that line's alerts.
+// CTA Alerts — unified notification drawer, top-left.
+// Single trigger button with colored line dots; expands into a
+// glassmorphic panel with staggered section reveals.
 
 (function () {
   const POLL_INTERVAL = 60000;
   const mockMode = new URLSearchParams(window.location.search).get('mock') === '1';
   const ALERTS_ENDPOINT = mockMode ? '/api/alerts?mock=1' : '/api/alerts';
 
-  // Map API service IDs (lowercase) → line colors
   const SERVICE_COLORS = {
     red:  '#C60C30',
     blue: '#00A1DE',
@@ -20,7 +19,6 @@
     y:    '#F9E300',
   };
 
-  // Human-readable names for aria-labels
   const SERVICE_NAMES = {
     red:  'Red',
     blue: 'Blue',
@@ -29,23 +27,13 @@
     org:  'Orange',
     pink: 'Pink',
     p:    'Purple',
-    pexp: 'Purple Express',
+    pexp: 'Purple Exp',
     y:    'Yellow',
   };
 
-  // Inline SVG alert icon — clean exclamation in rounded shield
-  function alertSvg(color) {
-    return `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M10 1.5 L18.5 16.5 Q19 17.5 18 17.5 H2 Q1 17.5 1.5 16.5 Z"
-            stroke="${color}" stroke-width="1.6" stroke-linejoin="round"
-            fill="none"/>
-      <line x1="10" y1="7" x2="10" y2="12" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="10" cy="14.8" r="1.2" fill="${color}"/>
-    </svg>`;
-  }
-
   let alerts = [];
-  let expandedLines = new Set();
+  let drawerOpen = false;
+  let collapsedSections = new Set();   // lines the user collapsed
   const widget = document.getElementById('alerts-widget');
 
   // --- Helpers ---
@@ -60,20 +48,9 @@
     return map;
   }
 
-  function hexToRgba(hex, alpha) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
+  function esc(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
-
-  function escHtml(str) {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
-
   function escAttr(str) {
     return str.replace(/"/g, '&quot;');
   }
@@ -89,62 +66,113 @@
 
     widget.classList.add('alerts-visible');
     const byService = groupByService(alerts);
+    const totalCount = alerts.length;
+    const lineKeys = [...byService.keys()];
 
     let html = '';
-    for (const [svc, svcAlerts] of byService) {
-      const color = SERVICE_COLORS[svc] || '#888';
-      const name  = SERVICE_NAMES[svc] || svc;
-      const isExp = expandedLines.has(svc);
-      const gc    = hexToRgba(color, 0.35);
-      const count = svcAlerts.length;
 
-      html += `<div class="aw-pill${isExp ? ' aw-pill-open' : ''}" data-svc="${escAttr(svc)}" style="--ac:${color};--gc:${gc}">`;
+    // ─── Trigger button ───
+    html += `<button class="aw-trigger${drawerOpen ? ' aw-trigger-active' : ''}"
+      aria-expanded="${drawerOpen}" aria-label="${totalCount} service alert${totalCount !== 1 ? 's' : ''}">`;
+    // Line dots
+    html += `<span class="aw-dots">`;
+    for (const svc of lineKeys) {
+      html += `<span class="aw-dot" style="background:${SERVICE_COLORS[svc] || '#888'}"></span>`;
+    }
+    html += `</span>`;
+    // Alert icon
+    html += `<svg class="aw-trigger-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 1.5l6.5 11.5H1.5L8 1.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" fill="none"/>
+      <line x1="8" y1="6.2" x2="8" y2="9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="8" cy="11.3" r="0.9" fill="currentColor"/>
+    </svg>`;
+    // Count
+    html += `<span class="aw-trigger-count">${totalCount}</span>`;
+    html += `</button>`;
 
-      // Icon area (always visible)
-      html += `<button class="aw-icon-btn"
-        aria-expanded="${isExp}"
-        aria-label="${escAttr(name)} line — ${count} alert${count > 1 ? 's' : ''}"
-      >${alertSvg(color)}<span class="aw-badge">${count}</span></button>`;
+    // ─── Drawer panel ───
+    if (drawerOpen) {
+      html += `<div class="aw-drawer">`;
+      html += `<div class="aw-drawer-inner">`;
 
-      // Expandable content area
-      html += `<div class="aw-content">`;
-      html += `<div class="aw-content-inner">`;
-      html += `<div class="aw-line-label" style="color:${color}">${escHtml(name)} Line</div>`;
-      for (const a of svcAlerts) {
-        html += `<div class="aw-item">`;
-        html += `<div class="aw-headline">${escHtml(a.headline)}</div>`;
-        if (a.short) {
-          html += `<div class="aw-short">${escHtml(a.short)}</div>`;
+      // Header
+      html += `<div class="aw-header">`;
+      html += `<span class="aw-header-title">Service Alerts</span>`;
+      html += `<span class="aw-header-count">${totalCount}</span>`;
+      html += `</div>`;
+
+      // Sections — one per line
+      let sectionIdx = 0;
+      for (const [svc, svcAlerts] of byService) {
+        const color = SERVICE_COLORS[svc] || '#888';
+        const name  = SERVICE_NAMES[svc] || svc;
+        const isCollapsed = collapsedSections.has(svc);
+        const delay = Math.min(sectionIdx * 60, 300);
+
+        html += `<div class="aw-section" style="--accent:${color};animation-delay:${delay}ms" data-svc="${escAttr(svc)}">`;
+
+        // Section header (clickable to collapse)
+        html += `<button class="aw-section-header" aria-expanded="${!isCollapsed}">`;
+        html += `<span class="aw-section-dot" style="background:${color}"></span>`;
+        html += `<span class="aw-section-name">${esc(name)}</span>`;
+        html += `<span class="aw-section-count">${svcAlerts.length}</span>`;
+        html += `<svg class="aw-chevron${isCollapsed ? ' aw-chevron-collapsed' : ''}" viewBox="0 0 10 6" aria-hidden="true">
+          <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>`;
+        html += `</button>`;
+
+        // Alert items
+        if (!isCollapsed) {
+          html += `<div class="aw-items">`;
+          for (let i = 0; i < svcAlerts.length; i++) {
+            const a = svcAlerts[i];
+            const itemDelay = delay + (i + 1) * 40;
+            html += `<div class="aw-item" style="animation-delay:${itemDelay}ms">`;
+            html += `<div class="aw-headline">${esc(a.headline)}</div>`;
+            if (a.short) {
+              html += `<div class="aw-desc">${esc(a.short)}</div>`;
+            }
+            html += `</div>`;
+          }
+          html += `</div>`;
         }
-        html += `</div>`;
-      }
-      html += `</div>`;
-      html += `</div>`;
 
+        html += `</div>`;
+        sectionIdx++;
+      }
+
+      html += `</div>`;
       html += `</div>`;
     }
 
     widget.innerHTML = html;
 
-    // Attach click handlers to each icon button
-    widget.querySelectorAll('.aw-icon-btn').forEach(btn => {
+    // --- Event wiring ---
+
+    const trigger = widget.querySelector('.aw-trigger');
+    if (trigger) {
+      trigger.addEventListener('click', e => {
+        e.stopPropagation();
+        drawerOpen = !drawerOpen;
+        render();
+      });
+    }
+
+    widget.querySelectorAll('.aw-section-header').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        const svc = btn.closest('.aw-pill').dataset.svc;
-        if (expandedLines.has(svc)) {
-          expandedLines.delete(svc);
-        } else {
-          expandedLines.add(svc);
-        }
+        const svc = btn.closest('.aw-section').dataset.svc;
+        if (collapsedSections.has(svc)) collapsedSections.delete(svc);
+        else collapsedSections.add(svc);
         render();
       });
     });
   }
 
-  // Collapse all when clicking outside
+  // Collapse drawer on outside click
   document.addEventListener('click', e => {
-    if (expandedLines.size > 0 && !widget.contains(e.target)) {
-      expandedLines.clear();
+    if (drawerOpen && !widget.contains(e.target)) {
+      drawerOpen = false;
       render();
     }
   });
@@ -160,7 +188,7 @@
       alerts = data;
       render();
     } catch (_) {
-      // silently ignore — network errors shouldn't affect the map
+      // silently ignore
     }
   }
 
@@ -168,7 +196,6 @@
   setInterval(fetchAlerts, POLL_INTERVAL);
 
   // --- Hide when a train is selected ---
-  // Watch #close-btn for the .visible class (added by selectTrain, removed by deselectTrain)
 
   const closeBtn = document.getElementById('close-btn');
   if (closeBtn) {
@@ -176,7 +203,7 @@
       const trainSelected = closeBtn.classList.contains('visible');
       widget.classList.toggle('alerts-train-selected', trainSelected);
       if (trainSelected) {
-        expandedLines.clear();
+        drawerOpen = false;
         render();
       }
     });
