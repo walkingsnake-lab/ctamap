@@ -1,5 +1,6 @@
-// CTA Alerts widget — polls /api/alerts every 60s, shows major/delay alerts
-// in a fixed bottom-left badge. Fades out when a train is selected.
+// CTA Alerts widget — stacked per-line neon icons, top-left.
+// Each icon shows a colored circle for an affected line; clicking expands
+// an inline panel listing that line's alerts.
 
 (function () {
   const POLL_INTERVAL = 60000;
@@ -19,9 +20,59 @@
     y:    '#F9E300',
   };
 
+  // Human-readable names for aria-labels
+  const SERVICE_NAMES = {
+    red:  'Red',
+    blue: 'Blue',
+    brn:  'Brown',
+    g:    'Green',
+    org:  'Orange',
+    pink: 'Pink',
+    p:    'Purple',
+    pexp: 'Purple Express',
+    y:    'Yellow',
+  };
+
+  // Inline SVG alert icon: circle with exclamation mark
+  const ALERT_SVG = `<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M10 2.5 L18 17 H2 Z" stroke="rgba(255,255,255,0.88)" stroke-width="1.5" stroke-linejoin="round" fill="rgba(255,255,255,0.1)"/>
+    <line x1="10" y1="8.5" x2="10" y2="13" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+    <circle cx="10" cy="15.5" r="1.15" fill="white"/>
+  </svg>`;
+
   let alerts = [];
-  let expanded = false;
+  let expandedLines = new Set();
   const widget = document.getElementById('alerts-widget');
+
+  // --- Helpers ---
+
+  function groupByService(list) {
+    const map = new Map();
+    for (const a of list) {
+      const svc = a.service || 'unknown';
+      if (!map.has(svc)) map.set(svc, []);
+      map.get(svc).push(a);
+    }
+    return map;
+  }
+
+  function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  function escHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function escAttr(str) {
+    return str.replace(/"/g, '&quot;');
+  }
 
   // --- Render ---
 
@@ -33,44 +84,60 @@
     }
 
     widget.classList.add('alerts-visible');
+    const byService = groupByService(alerts);
 
-    const badgeLabel = alerts.length === 1
-      ? '1 alert'
-      : `${alerts.length} alerts`;
+    let html = '';
+    for (const [svc, svcAlerts] of byService) {
+      const color = SERVICE_COLORS[svc] || '#888';
+      const name  = SERVICE_NAMES[svc] || svc;
+      const isExp = expandedLines.has(svc);
+      const gc    = hexToRgba(color, 0.6);
 
-    let html = `<button class="aw-badge" aria-expanded="${expanded}" aria-label="Service alerts">`
-      + `<span class="aw-icon">⚠</span> ${badgeLabel}`
-      + `</button>`;
+      html += `<div class="aw-line-row" data-svc="${escAttr(svc)}">`;
 
-    if (expanded) {
-      html += `<div class="aw-list">`;
-      for (const a of alerts) {
-        const color = SERVICE_COLORS[a.service] || '#888';
-        html += `<div class="aw-item" style="border-left-color:${color}">`
-          + `<div class="aw-headline">${escHtml(a.headline)}</div>`
-          + (a.short ? `<div class="aw-short">${escHtml(a.short)}</div>` : '')
-          + `</div>`;
+      html += `<button class="aw-icon-btn${isExp ? ' aw-expanded' : ''}"
+        aria-expanded="${isExp}"
+        aria-label="${escAttr(name)} line — ${svcAlerts.length} alert${svcAlerts.length > 1 ? 's' : ''}"
+        style="background:${color};--gc:${gc}"
+      >${ALERT_SVG}</button>`;
+
+      if (isExp) {
+        html += `<div class="aw-panel">`;
+        for (const a of svcAlerts) {
+          html += `<div class="aw-item" style="--line-color:${color}">`;
+          html += `<div class="aw-headline">${escHtml(a.headline)}</div>`;
+          if (a.short) {
+            html += `<div class="aw-short">${escHtml(a.short)}</div>`;
+          }
+          html += `</div>`;
+        }
+        html += `</div>`;
       }
+
       html += `</div>`;
     }
 
     widget.innerHTML = html;
 
-    widget.querySelector('.aw-badge').addEventListener('click', (e) => {
-      e.stopPropagation();
-      expanded = !expanded;
-      render();
+    // Attach click handlers to each icon button
+    widget.querySelectorAll('.aw-icon-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const svc = btn.closest('.aw-line-row').dataset.svc;
+        if (expandedLines.has(svc)) {
+          expandedLines.delete(svc);
+        } else {
+          expandedLines.add(svc);
+        }
+        render();
+      });
     });
   }
 
-  function escHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  // Collapse when clicking outside the widget
-  document.addEventListener('click', (e) => {
-    if (expanded && !widget.contains(e.target)) {
-      expanded = false;
+  // Collapse all when clicking outside
+  document.addEventListener('click', e => {
+    if (expandedLines.size > 0 && !widget.contains(e.target)) {
+      expandedLines.clear();
       render();
     }
   });
@@ -102,7 +169,7 @@
       const trainSelected = closeBtn.classList.contains('visible');
       widget.classList.toggle('alerts-train-selected', trainSelected);
       if (trainSelected) {
-        expanded = false;
+        expandedLines.clear();
         render();
       }
     });
