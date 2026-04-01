@@ -163,7 +163,6 @@
     scaleStationDots(d3.zoomTransform(svgEl).k);
     // Show/hide ETA table in train info panel
     labelEl.classList.toggle('show-stops', stationsVisible);
-    dismissWelcome();
   }
 
   // Create train layer on top (inside the zoom container).
@@ -487,24 +486,6 @@
   void svgEl.offsetWidth;
   svgEl.classList.remove('map-loading');
   svgEl.classList.add('map-ready');
-
-  // ---- Welcome hint (fade in after map ready, auto-dismiss) ----
-  const _welcomeEl = document.getElementById('welcome-hint');
-  let _welcomeTimer = null;
-  if (_welcomeEl && !document.body.classList.contains('embed-mode')) {
-    // Small delay so the map fade-in finishes first
-    setTimeout(() => {
-      _welcomeEl.classList.remove('welcome-hidden');
-      _welcomeTimer = setTimeout(() => { _welcomeEl.classList.add('welcome-hidden'); }, 6000);
-    }, 800);
-  }
-
-  function dismissWelcome() {
-    if (_welcomeEl) {
-      _welcomeEl.classList.add('welcome-hidden');
-      if (_welcomeTimer) { clearTimeout(_welcomeTimer); _welcomeTimer = null; }
-    }
-  }
 
   // ---- DOM label helpers ----
 
