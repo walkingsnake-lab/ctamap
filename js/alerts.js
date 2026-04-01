@@ -3,6 +3,8 @@
 
 (function () {
   const POLL_INTERVAL = 60000;
+  const mockMode = new URLSearchParams(window.location.search).get('mock') === '1';
+  const ALERTS_ENDPOINT = mockMode ? '/api/alerts?mock=1' : '/api/alerts';
 
   // Map API service IDs (lowercase) → line colors
   const SERVICE_COLORS = {
@@ -77,7 +79,7 @@
 
   async function fetchAlerts() {
     try {
-      const res = await fetch('/api/alerts');
+      const res = await fetch(ALERTS_ENDPOINT);
       if (!res.ok) return;
       const data = await res.json();
       if (!Array.isArray(data)) return;
