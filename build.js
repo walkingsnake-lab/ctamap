@@ -8,6 +8,7 @@ const srcFiles = [
   'js/path-follow.js',
   'js/trains.js',
   'js/app.js',
+  'js/alerts.js',
 ];
 
 // Concatenate source files in load order
