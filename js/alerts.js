@@ -47,6 +47,7 @@
 
   let alerts = [];
   const widget = document.getElementById('alerts-widget');
+  const expandedServices = new Set();
 
   // --- Zoom-aware visibility ---
 
@@ -73,18 +74,20 @@
 
   // --- Render ---
 
-  function affectedLines() {
-    const set = new Set();
+  function alertsByService() {
+    const map = new Map();
     for (const a of alerts) {
-      if (a.service) set.add(a.service);
+      if (!a.service) continue;
+      if (!map.has(a.service)) map.set(a.service, []);
+      map.get(a.service).push(a);
     }
-    return [...set];
+    return map;
   }
 
   function render() {
-    const lines = affectedLines();
+    const byService = alertsByService();
 
-    if (lines.length === 0) {
+    if (byService.size === 0) {
       widget.classList.remove('alerts-visible');
       widget.innerHTML = '';
       return;
@@ -93,17 +96,38 @@
     widget.classList.add('alerts-visible');
 
     let html = '';
-    for (const svc of lines) {
-      const color = SERVICE_COLORS[svc] || '#888';
-      const name  = SERVICE_NAMES[svc] || svc;
+    for (const [svc, svcAlerts] of byService) {
+      const color   = SERVICE_COLORS[svc] || '#888';
+      const name    = SERVICE_NAMES[svc] || svc;
+      const summary = svcAlerts[0].impact || 'Major delays';
+      const detail  = svcAlerts.map(a => a.short).filter(Boolean).join(' ');
+      const isExp   = expandedServices.has(svc);
 
-      html += `<div class="aw-label" style="--c:${color}" aria-label="${name} line: major delays">`;
+      html += `<div class="aw-item${isExp ? ' expanded' : ''}" data-svc="${svc}">`;
+      html += `<div class="aw-label" style="--c:${color}" aria-label="${name} line: ${summary}" role="button" tabindex="0">`;
       html += hazardSvg(color);
-      html += `<span class="aw-text">Major delays</span>`;
+      html += `<span class="aw-text">${summary}</span>`;
+      html += `</div>`;
+      if (detail) {
+        html += `<div class="aw-detail"><div class="aw-detail-inner" style="--c:${color}">${detail}</div></div>`;
+      }
       html += `</div>`;
     }
 
     widget.innerHTML = html;
+
+    widget.querySelectorAll('.aw-item').forEach(item => {
+      item.querySelector('.aw-label').addEventListener('click', () => {
+        const svc = item.dataset.svc;
+        if (expandedServices.has(svc)) {
+          expandedServices.delete(svc);
+          item.classList.remove('expanded');
+        } else {
+          expandedServices.add(svc);
+          item.classList.add('expanded');
+        }
+      });
+    });
   }
 
   // --- Fetch ---
