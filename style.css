@@ -541,10 +541,16 @@ body.embed-mode #train-label.visible {
   50%      { opacity: 0.45; }
 }
 
+.aw-item {
+  display: flex;
+  flex-direction: column;
+}
+
 .aw-label {
   display: flex;
   align-items: center;
   gap: 7px;
+  cursor: pointer;
   animation: aw-pulse 3.2s ease-in-out infinite;
 }
 
@@ -556,7 +562,7 @@ body.embed-mode #train-label.visible {
   flex-shrink: 0;
 }
 
-/* "Major delays!" text */
+/* Summary text */
 
 .aw-text {
   font-family: 'Jersey 25', sans-serif;
@@ -565,4 +571,33 @@ body.embed-mode #train-label.visible {
   line-height: 1;
   text-shadow: 0 0 10px var(--c, #888), 0 0 3px var(--c, #888);
   white-space: nowrap;
+}
+
+/* Expandable detail text */
+
+.aw-detail {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s ease;
+}
+
+.aw-item.expanded .aw-detail {
+  grid-template-rows: 1fr;
+}
+
+.aw-detail-inner {
+  overflow: hidden;
+  font-family: 'Jersey 25', sans-serif;
+  font-size: 14px;
+  color: var(--c, #888);
+  line-height: 1.4;
+  max-width: 240px;
+  padding-top: 4px;
+  padding-left: 33px; /* align with text, past the hazard icon */
+  opacity: 0;
+  transition: opacity 0.25s ease 0.1s;
+}
+
+.aw-item.expanded .aw-detail-inner {
+  opacity: 1;
 }
