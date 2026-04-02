@@ -522,6 +522,7 @@ body.embed-mode #train-label.visible {
 
 #alerts-widget.alerts-visible {
   opacity: 1;
+  pointer-events: auto;
 }
 
 #alerts-widget.alerts-train-selected {
