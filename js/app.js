@@ -1047,6 +1047,22 @@
     ctx.scale(dpr, dpr);  // HiDPI: map logical pixels → physical pixels
     ctx.transform(zoomT.k, 0, 0, zoomT.k, zoomT.x, zoomT.y);
 
+    // ---- Spread connector lines (drawn before train dots so dots appear on top) ----
+    if (spreadAnchorPos && spreadChildPositions.length > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth   = 0.35;
+      ctx.setLineDash([0.3, 0.5]);
+      for (const childPos of spreadChildPositions) {
+        ctx.beginPath();
+        ctx.moveTo(spreadAnchorPos[0], spreadAnchorPos[1]);
+        ctx.lineTo(childPos[0], childPos[1]);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     for (const { finalX, finalY, pt, d, frameAlpha, isSelected, segs } of drawQueue) {
       const lineColor = LINE_COLORS[d.legend] || '#fff';
       const isDimmed  = d._dimmed && !d._spreading;
@@ -1170,22 +1186,6 @@
         ctx.setLineDash([]);
       }
 
-      ctx.restore();
-    }
-
-    // ---- Spread connector lines ----
-    if (spreadAnchorPos && spreadChildPositions.length > 0) {
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.lineWidth   = 0.35;
-      ctx.setLineDash([0.3, 0.5]);
-      for (const childPos of spreadChildPositions) {
-        ctx.beginPath();
-        ctx.moveTo(spreadAnchorPos[0], spreadAnchorPos[1]);
-        ctx.lineTo(childPos[0], childPos[1]);
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
       ctx.restore();
     }
 
