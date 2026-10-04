@@ -56,7 +56,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 
 | Source | How often |
 |---|---|
-| Train/Bus Tracker | every 30 s, only while a board is polling |
+| Train Tracker | every 30 s, only while a board is polling |
 | CTA alerts | every 2–5 min |
 | NWS warnings/watches | every 1–2 min |
 | Weather | every 10–15 min |
@@ -68,8 +68,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 
 | Data | Source | Notes |
 |---|---|---|
-| Train arrivals | CTA Train Tracker API | Uses `mapid`; `destNm`, `rn` (run number), `isApp` (Due), `arrT`. `isDly` intentionally **not** shown. |
-| Bus arrivals | CTA Bus Tracker API | Separate key; per-stop `stpid`; `prdctdn`. 96 Lunt and 155 Devon start at Morse, so westbound only there. |
+| Train arrivals | CTA Train Tracker API ([docs](https://www.transitchicago.com/developers/ttdocs/)) | Uses `mapid` (one call covers all lines and directions); `destNm`, `rn` (run number), `isApp` (Due), `arrT`. `isDly` intentionally **not** shown. `isSch` (schedule-based) and `isFlt` (possible fault) handling is open. |
 | CTA service alerts | CTA Customer Alerts API | Service-affecting only (no elevator outages); lines on screen only. Used **only to flag affected lines** (no alert text shown). |
 | Weather warnings/watches | NWS alerts for the configured point | Only severe thunderstorm and tornado warnings/watches. Shown as icons/tags only (no alert text). |
 | Radar | NOAA **MRMS** lowest composite reflectivity (`lcref`) via Iowa Environmental Mesonet | Palette-indexed PNG + `.wld`, 2-min updates, archive available. dBZ ≈ index × 0.5 − 32.5 (**verify**). Do **not** use the raw NEXRAD composite: it shows bird/insect returns on clear nights. |
@@ -90,6 +89,9 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
   - `min`: one 11px glyph with a 5-wide m.
   - Inline **bolt** (3x5) and **funnel** (4x5): used in the weather row tag **and** next to AM/PM on the radar.
   - **Alert circle** (5x5): red circle with a white "!" for the ticker index column.
+- **Digits are tabular** in every font (one shared cell width), so a rolling digit never shifts its neighbors. Spaces are 2px (small) and 3px (5x7).
+- The **alert circle** is two glyphs drawn at the same origin: a red disc with the "!" pixels left blank, and a white "!". Fonts are one color per glyph.
+- Codepoints for custom glyphs are in `server/board/glyphs.js`. The fonts are built by `scripts/build-fonts.js` into `server/board/fonts/` (BDF); the board build converts them to PCF.
 - X11 **9x15 Bold** for the large overnight clock, with a custom **2x2 square-dot colon** centered on the 10px digit height (the stock X11 colon is drawn for text and drops a pixel below the digits).
 
 ---
@@ -103,7 +105,6 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | First arrival time | amber `#ffb000` |
 | Later times | dim amber `#9c6a00` |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
-| Bus row blocks | neutral grey `#8a8a8a` (avoids looking like an L line) |
 | Dividers | `#333333` |
 | Shoreline | `#34485e` |
 | Ticker alert circle | red `#ff2020` with white `#ffffff` "!" |
@@ -118,10 +119,11 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ## 5. Screen 1: Transit station
 
 ### Rows
-- 3px line-color block, Tom Thumb label (uppercase), **3 times**, flush right (amber first, dim the rest).
+- 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest).
 - **Per-digit roll** when a number changes (12→11 rolls only the 2). Whole cells roll when the list shifts (the first train leaves) or to and from `DUE`.
 
 ### Layout
+- **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
 - **Header** (station grey + clock `#cccccc`, no divider) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
 - Rows fill the remaining space, centered and evenly spaced (5px rows, gaps of 1px or more).
 - **Rows that don't fit are dropped** (the last rows in config order). Accepted trade-off.
@@ -141,12 +143,13 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | on | on | 2 |
 
 ### Weather row (optional)
-- 8x8 condition icon, temperature, condition word (uppercase) on the right.
+- 8x8 condition icon, temperature with a small 2x2 degree sign (e.g. `54°`), condition word (uppercase) on the right.
+- Icons are multi-color sprites defined in `server/board/icons.js` (with the Open-Meteo weather-code mapping); previews in `docs/board/previews/sheet-icons.png`.
 - Icons: sun, moon, partly cloudy (day/night), cloudy, **umbrella** (rain/drizzle/showers), **icy umbrella** (freezing rain), **snowflake**, storm cloud with bolt, fog.
-- **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **2px gap** between icon and word (1px read as `SWATCH`). Static, no scrolling.
+- **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
 
 ### CTA alerts
-- Affected rows' color blocks **blink to a 1px "!"**. That's the whole indicator; no alert text is shown (details are on the phone).
+- Affected rows' color blocks **blink to a 1px "!"** in the line color (middle column of the 3x5 block: 3px stem, 1px gap, 1px dot; `ALERT_BANG` in `server/board/icons.js`). That's the whole indicator; no alert text is shown (details are on the phone).
 - CTA alerts are per line, so **every row of the affected line blinks, both directions**. Blinking only one direction would need parsing the alert text; not planned for v1.
 
 ### Destination labels
@@ -172,7 +175,6 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ### Other states
 - **Overnight / no predictions:** large **9x15 Bold** clock (`#cccccc`) with the 2x2 square colon, dim `NO TRAINS` label below it, weather row below the divider. Follows the board's weather-row setting; with the weather row off, the clock and `NO TRAINS` are centered vertically.
-- **Buses** (96, 155): grey blocks; separate screen via button.
 
 ---
 
@@ -192,6 +194,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Appears only when rain is in the box** (count of colored pixels, with separate on/off thresholds so it doesn't flicker in and out).
 - **Configurable location**; crop centered on it (~1.5 mi/pixel).
 - **Pipeline (server):** crop → palette index to dBZ → average linear reflectivity per LED block → levels (15/25/35/45/55 dBZ: dim green, green, yellow, orange, red) → despeckle (drop pixels with <2 colored neighbors) → small indexed image.
+- **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when Open-Meteo reports a snow weather code, or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/20/30 dBZ) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
 - **Loop:** 6 frames (30 min), **holds on the last frame**. Network requests (including the next radar frame) happen during the hold.
 - **Water masked black** (mask generated per location from coastline data); faint shoreline only where there's no rain.
 - **Location marker:** white dot with 4 unlit pixels around it.
@@ -219,9 +222,9 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 A small page on the fly.dev server, saved to the phone home screen. The server holds the board's state; the board reads it and draws what it's told.
 
 ### Controls
-- **Screen:** Auto (normal rules), Transit, Ticker, Buses, Radar.
+- **Screen:** Auto (normal rules), Transit, Ticker, Radar.
 - **Brightness:** Auto (sunrise/sunset), fixed level, or Off.
-- **Station and destination filter:** per-board config, editable instead of hardcoded.
+- **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Transit header and weather row:** independent on/off toggles per board (see §5 for how many rows each combination fits).
 
 ### Behavior
@@ -250,10 +253,10 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 ## 11. Open questions
 
 - Verify the MRMS dBZ offset before setting thresholds.
-- On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors.
+- On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors, Tom Thumb `M`/`N` legibility (3px wide; may need widening like `W`), 3x5 bolt legibility.
 - Whether the work visitor WiFi has a captive portal (check with a phone).
 - Measure the real fetch time on the board to set the scheduler's fetch budget.
 
 ## 12. Parked ideas
 
-Combined radar + conditions screen · full-screen conditions layouts · Cubs/Sox scores (16x16 logos from a sprite sheet, personal use) · trains + buses on one screen · leave-by line · Divvy · Metra row · approach track · custom clock digit styles (Chunky, Outline) · chronological lists · timeline strips · merging short-turns into their direction's row with a marker · tap-to-switch via onboard accelerometer · I2C rotary encoder · ambient light sensor · big-number bus layout (route number left, name + times right; tried and declined in favor of the standard rows) · first-train time under the overnight clock (needs CTA GTFS schedule) · CTA alert headline scroll (cut to minimize animation) · full-screen CTA alert text screen (cut; indicators only) · CTA-style alert circle after the destination name on the ticker (declined: collides with long names and two-digit times) · blinking/alternating clock colon (cut to minimize animation) · transit row scrolling/paging for 6–7 destination stations (post-v1) · Bluetooth WiFi provisioning from the phone.
+**Bus screen** (cut from v1: needs a separate Bus Tracker API key; was 96/155 at Morse with grey `#8a8a8a` row blocks, westbound only since both start at Morse) · separate board location independent of the station · Combined radar + conditions screen · full-screen conditions layouts · Cubs/Sox scores (16x16 logos from a sprite sheet, personal use) · trains + buses on one screen · leave-by line · Divvy · Metra row · approach track · custom clock digit styles (Chunky, Outline) · chronological lists · timeline strips · merging short-turns into their direction's row with a marker · tap-to-switch via onboard accelerometer · I2C rotary encoder · ambient light sensor · big-number bus layout (route number left, name + times right; tried and declined in favor of the standard rows) · first-train time under the overnight clock (needs CTA GTFS schedule) · CTA alert headline scroll (cut to minimize animation) · full-screen CTA alert text screen (cut; indicators only) · CTA-style alert circle after the destination name on the ticker (declined: collides with long names and two-digit times) · blinking/alternating clock colon (cut to minimize animation) · transit row scrolling/paging for 6–7 destination stations (post-v1) · Bluetooth WiFi provisioning from the phone · per-pixel rain/snow from MRMS `PrecipFlag` (GRIB2; replaces the v1 temperature heuristic if the decoder fits in memory).
