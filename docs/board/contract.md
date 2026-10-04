@@ -142,6 +142,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 - `min = ceil((t - now) / 60)`: rounded **up**, like CTA's own predictions (every `arrT` is `prdt` plus a whole number of minutes, so a fresh "2 min" counts down from 120 s).
 - Show `DUE` (transit) / `Due` (ticker) when `min <= 1`, i.e. 0–60 s out, which is when CTA sets `isApp` in the recorded fixtures. The board never shows 1. Chrono rows show `<min>m` otherwise.
 - DUE can still last a few minutes when a train is held: CTA keeps predicting "1 minute" while it waits, so `arrT` keeps moving later.
+- **DUE doesn't un-DUE (server):** if the previous prediction for a run (`ln` + `rn`) had already reached DUE by the time of a new fetch, and the new prediction is within 3 min, the server sends `t = fetch time + 60` (still DUE) instead of jumping back to 2. Fresh CTA predictions are whole minutes from a possibly stale prediction time, so this jump was common. A larger delay shows minutes again. (`latchDue` in `arrivals.js`, applied in `tracker.js`.)
 - Drop an arrival once `now > t + 30`; its cell fades out and the list shifts (see `createTransitAnimator()` in `draw.js`). **(decide)** whether the 30 s grace is right; CTA's `isApp` is not sent.
 
 #### Weather row (`wx`)
