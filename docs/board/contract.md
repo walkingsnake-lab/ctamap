@@ -197,7 +197,9 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | Endpoint | Purpose |
 |---|---|
 | `GET /board/<secret>/` | Phone control page (HTML). |
-| `GET /board/<secret>/sim?b=<id>` | 64x32 canvas simulator rendering the live `/board/update` and radar frames. |
+| `GET /board/<secret>/sim?b=<id>` | Simulator page: the live transit and ticker screens, refreshed every few seconds (alert blink and ticker paging included), plus the raw payload. |
+| `GET /board/<secret>/sim.png?b=<id>[&screen=transit\|ticker][&page=N][&blink=1][&scale=1-16]` | One rendered frame of the live payload as a PNG (`server/board/render.js`). `screen` defaults to the payload's screen. |
+| `GET /board/<secret>/api/update?b=<id>` | The same payload as `/board/update`, without the token header (the path is the credential). |
 | `GET /board/<secret>/api/state` | Full state JSON (all boards). |
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |

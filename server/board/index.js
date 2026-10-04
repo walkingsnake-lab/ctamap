@@ -6,6 +6,11 @@ const crypto = require('crypto');
 const { createStore, ValidationError } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
+const fs = require('fs');
+const path = require('path');
+const { render } = require('./render');
+
+const SIM_HTML = fs.readFileSync(path.join(__dirname, 'sim.html'));
 
 const MAX_BODY = 8 * 1024;
 // Board endpoint names; the control path must not collide with them.
@@ -70,7 +75,11 @@ function createBoard({
     const data = await tracker.get(board.station.mapid);
     if (!data) return null;
     const now = nowSecs();
-    const { rows, ticker } = format(data.arrivals, board, { now, alerts: new Set() });
+    // Weather isn't wired up yet; the row cap only reserves space for the
+    // weather row when there's weather to show.
+    const wx = null;
+    const cfg = { ...board, showWeather: board.showWeather && !!wx };
+    const { rows, ticker } = format(data.arrivals, cfg, { now, alerts: new Set() });
     return {
       v: board.v,
       now,
@@ -80,7 +89,7 @@ function createBoard({
       header: board.showHeader ? board.station.name : null,
       rows,
       ticker,
-      wx: null,
+      wx,
       warn: null,
       radar: { on: false, frames: [], ft: [], clock: null, split: false },
     };
@@ -132,6 +141,43 @@ function createBoard({
           }
         }
         return send(res, 405, { err: 'method' });
+      }
+
+      // Same payload as /board/update, for the simulator (the path is the credential).
+      if (sub === 'api/update') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const id = String(parsed.query.b || '');
+        const board = store.get(id);
+        if (!board) return send(res, 404, { err: 'unknown_board' });
+        const body = await update(board, id, false);
+        if (!body) return send(res, 503, { err: 'not_ready' });
+        return send(res, 200, body);
+      }
+
+      // Simulator page and the PNG frames it shows.
+      if (sub === 'sim') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(SIM_HTML);
+        return;
+      }
+      if (sub === 'sim.png') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const id = String(parsed.query.b || '');
+        const board = store.get(id);
+        if (!board) return send(res, 404, { err: 'unknown_board' });
+        const body = await update(board, id, false);
+        if (!body) return send(res, 503, { err: 'not_ready' });
+        const screen = ['transit', 'ticker'].includes(parsed.query.screen) ? parsed.query.screen : body.screen;
+        const scale = Math.min(16, Math.max(1, parseInt(parsed.query.scale, 10) || 8));
+        const frame = render(body, {
+          screen,
+          page: Math.max(0, parseInt(parsed.query.page, 10) || 0),
+          blink: parsed.query.blink === '1',
+        });
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
+        res.end(frame.toPNG(scale));
+        return;
       }
 
       // Raw Train Tracker response for recording fixtures.

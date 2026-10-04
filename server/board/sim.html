@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board Simulator</title>
+<style>
+  :root { color-scheme: dark; --bg: #0b0b0b; --fg: #d8d8d8; --muted: #8f8f8f; --line: #262626; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+  .screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  figure { margin: 0; }
+  figcaption { color: var(--muted); font-size: 12px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; }
+  img { width: 100%; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 6px; background: #080808; display: block; }
+  .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 16px 0; color: var(--muted); font-size: 12px; }
+  .bar b { color: var(--fg); font-weight: 600; }
+  .err { color: #ff6b6b; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  pre { background: #111; border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow-x: auto; font-size: 12px; max-height: 50vh; }
+  label { display: inline-flex; gap: 6px; align-items: center; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Board simulator</h1>
+  <div class="screens">
+    <figure>
+      <figcaption><span>Transit</span><span id="blinkState"></span></figcaption>
+      <img id="transit" alt="Transit screen">
+    </figure>
+    <figure>
+      <figcaption><span>Ticker</span><span id="pageState"></span></figcaption>
+      <img id="ticker" alt="Ticker screen">
+    </figure>
+  </div>
+  <div class="bar">
+    <span>board <b id="board"></b></span>
+    <span>screen <b id="screen">…</b></span>
+    <span>v <b id="v">…</b></span>
+    <span>data age <b id="age">…</b></span>
+    <span>bright <b id="bright">…</b></span>
+    <label><input type="checkbox" id="pause"> pause</label>
+    <span id="status"></span>
+  </div>
+  <details>
+    <summary>/board/update payload</summary>
+    <pre id="json">…</pre>
+  </details>
+</main>
+<script>
+  const params = new URLSearchParams(location.search);
+  const board = params.get('b') || 'home';
+  document.getElementById('board').textContent = board;
+  const $ = (id) => document.getElementById(id);
+  let page = 0, pages = 1, blink = false;
+
+  function img(screen, extra) {
+    const q = new URLSearchParams({ b: board, screen, scale: '10', _: Date.now(), ...extra });
+    return 'sim.png?' + q;
+  }
+
+  async function poll() {
+    if ($('pause').checked) return;
+    try {
+      const r = await fetch('api/update?b=' + encodeURIComponent(board), { cache: 'no-store' });
+      const p = await r.json();
+      if (!r.ok) throw new Error(p.err || r.status);
+      $('json').textContent = JSON.stringify(p, null, 2);
+      $('screen').textContent = p.screen;
+      $('v').textContent = p.v;
+      $('age').textContent = p.age + ' s';
+      $('bright').textContent = p.bright;
+      pages = Math.max(1, Math.ceil((p.ticker || []).length / 2));
+      $('status').textContent = '';
+      $('status').className = '';
+    } catch (e) {
+      $('status').textContent = 'update failed: ' + e.message;
+      $('status').className = 'err';
+    }
+  }
+
+  function drawTransit() {
+    if ($('pause').checked) return;
+    blink = !blink;
+    $('transit').src = img('transit', blink ? { blink: '1' } : {});
+    $('blinkState').textContent = blink ? 'alert blink: "!"' : 'alert blink: block';
+  }
+
+  function drawTicker() {
+    if ($('pause').checked) return;
+    $('ticker').src = img('ticker', { page: String(page) });
+    $('pageState').textContent = 'page ' + (page + 1) + ' of ' + pages;
+    page = (page + 1) % pages;
+  }
+
+  poll(); drawTransit(); drawTicker();
+  setInterval(poll, 5000);
+  setInterval(drawTransit, 1000);
+  setInterval(drawTicker, 4000);
+</script>
+</body>
+</html>

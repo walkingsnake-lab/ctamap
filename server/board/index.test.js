@@ -26,7 +26,7 @@ async function serve(opts = {}) {
     const r = await fetch(base + p, init);
     return { status: r.status, body: await r.json(), headers: r.headers };
   };
-  return { req, store, close: () => new Promise((r) => server.close(r)) };
+  return { req, store, port: server.address().port, close: () => new Promise((r) => server.close(r)) };
 }
 
 test('ping needs no token', async () => {
@@ -194,5 +194,27 @@ test('update: boot=1 resets screen/brightness and bumps v; settings flow through
   assert.equal(b.screen, 'transit');
   assert.equal(b.bright, 100);
   assert.equal(b.v, 3);
+  await s.close();
+});
+
+// ---- simulator ----
+
+test('simulator page, PNG frames, and update proxy live under the control path', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
+  const page = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim`);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /Board simulator/);
+  const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=ticker&scale=4`);
+  assert.equal(png.headers.get('content-type'), 'image/png');
+  const buf = Buffer.from(await png.arrayBuffer());
+  assert.equal(buf.subarray(1, 4).toString(), 'PNG');
+  assert.equal(buf.readUInt32BE(16), 256); // 64 px * scale 4
+  const upd = await s.req('/board/secret123/api/update?b=home');
+  assert.equal(upd.status, 200);
+  assert.equal(upd.body.header, 'MORSE');
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/wrong/sim`)).status, 404);
   await s.close();
 });
