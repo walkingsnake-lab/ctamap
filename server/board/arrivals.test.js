@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { normalize, format, maxRows, timeText, worstTimesWidth, TICKER_DEST_PX } = require('./arrivals');
+const { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD } = require('./arrivals');
 const { parseCtaTime } = require('./time');
 const { measure } = require('./fonts');
 
@@ -41,14 +41,23 @@ test('Belmont: line order, then direction; Brown "Loop" kept as-is', () => {
   assert.deepEqual(rows.map((r) => `${r.ln}:${r.lbl}`), ['RD:HOWARD', 'RD:95TH', 'BR:KIMBALL', 'BR:LOOP']);
 });
 
-test('Clark/Lake: short names, and the row cap drops the last rows', () => {
-  const header = run('clark-lake-2026-10-03-2317.json');
-  assert.equal(header.rows.length, 4);
-  assert.deepEqual(header.rows.map((r) => r.lbl), ["O'HARE", 'FOREST', 'KIMBALL', 'HARLEM']);
+test('Clark/Lake: five destinations fit five rows; short names', () => {
   const all = run('clark-lake-2026-10-03-2317.json', { ...base, showHeader: false });
-  assert.equal(all.rows[4].lbl, '54TH');
-  // The ticker isn't limited by the row cap.
-  assert.ok(header.ticker.some((x) => x.ln === 'PK'));
+  assert.equal(all.view, 'dest');
+  assert.deepEqual(all.rows.map((r) => r.lbl), ["O'HARE", 'FOREST', 'KIMBALL', 'HARLEM', '54TH']);
+});
+
+test('Clark/Lake with the header: five destinations overflow four rows -> chronological list', () => {
+  const { view, rows, ticker, now } = run('clark-lake-2026-10-03-2317.json');
+  assert.equal(view, 'chrono');
+  // One train per row, soonest first, with extras for the board to bring in.
+  assert.equal(rows.length, 4 + CHRONO_EXTRA);
+  assert.deepEqual(rows.map((r) => `${r.ln}:${r.lbl}`), ['GR:HARLEM', "BL:O'HARE", 'BL:FOREST', "BL:O'HARE", 'PK:54TH', 'BR:KIMBALL']);
+  assert.ok(rows.every((r) => r.t.length === 1 && r.s.length === 1));
+  assert.deepEqual(rows.map((r) => r.rn), ['016', '133', '139', '223', '313', '424']);
+  assert.ok(mins({ t: rows.map((r) => r.t[0]) }, now).every((m, i, a) => !i || m >= a[i - 1]));
+  // The ticker is the same as in the destination view.
+  assert.ok(ticker.some((x) => x.ln === 'PK'));
 });
 
 test('row cap follows the header and weather toggles', () => {
@@ -56,8 +65,36 @@ test('row cap follows the header and weather toggles', () => {
   assert.equal(maxRows(true, false), 4);
   assert.equal(maxRows(false, true), 3);
   assert.equal(maxRows(true, true), 2);
-  const { rows } = run('belmont-2026-10-03-2316.json', { ...base, showWeather: true });
-  assert.equal(rows.length, 2);
+  // Belmont's four destinations don't fit two rows.
+  const { view, rows } = run('belmont-2026-10-03-2316.json', { ...base, showWeather: true });
+  assert.equal(view, 'chrono');
+  assert.equal(rows.length, 2 + CHRONO_EXTRA);
+});
+
+test('the destination filter runs before the overflow check', () => {
+  const { view, rows } = run('clark-lake-2026-10-03-2317.json', { ...base, rows: ["BL:O'Hare", 'BL:Forest', 'BR:Kimball'] });
+  assert.equal(view, 'dest');
+  assert.equal(rows.length, 3);
+});
+
+test('view follows the destination count: chrono on overflow, back as soon as rows fit', () => {
+  assert.equal(CHRONO_HOLD, 0);
+  let st = chooseView(5, 4, null, 0);
+  assert.equal(st.view, 'chrono');
+  assert.equal(chooseView(5, 4, st, 30).view, 'chrono');
+  st = chooseView(4, 4, st, 60);
+  assert.equal(st.view, 'dest');
+  assert.equal(chooseView(4, 4, st, 90).view, 'dest');
+});
+
+test('with a hold time, chrono stays until rows have fit that long', () => {
+  let st = chooseView(5, 4, null, 0, 600);
+  st = chooseView(4, 4, st, 100, 600);
+  assert.deepEqual(st, { view: 'chrono', fitSince: 100 });
+  st = chooseView(4, 4, st, 699, 600);
+  assert.equal(st.view, 'chrono');
+  assert.equal(chooseView(5, 4, st, 400, 600).fitSince, null); // overflow again resets the clock
+  assert.equal(chooseView(4, 4, st, 700, 600).view, 'dest');
 });
 
 test('the configured row list filters and orders destinations', () => {
@@ -103,7 +140,9 @@ test('arrivals more than 30 s past are dropped', () => {
 
 test('no predictions -> empty rows (board shows the overnight layout)', () => {
   const r = format(normalize({ ctatt: { tmst: '2026-10-04T03:00:00', errCd: '0' } }, { log: quiet }), base, { now: 0 });
-  assert.deepEqual(r, { rows: [], ticker: [] });
+  assert.deepEqual(r.rows, []);
+  assert.deepEqual(r.ticker, []);
+  assert.equal(r.view, 'dest');
 });
 
 test('labels never collide with the times, including when the first time turns DUE', () => {

@@ -23,6 +23,24 @@ const TICKER_COUNT = 6;
 // Drop an arrival once it's this far past its time (contract countdown rules).
 const DROP_GRACE = 30;
 
+// Chronological view (design spec §5): one train per row. Sent with a couple
+// of extra trains so the board can bring the next one in between updates.
+const CHRONO_EXTRA = 2;
+// Back to destination rows only after they've fit this long. 0 = switch
+// back as soon as they fit; raise it if the view flips too often.
+const CHRONO_HOLD = 0;
+// Chrono labels are fitted against the widest single time ("99m" or "DUE").
+const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
+
+// Destination rows, or the chronological list when they don't fit.
+// prev: the last result for this board ({view, fitSince}), or null.
+function chooseView(destCount, max, prev, now, hold = CHRONO_HOLD) {
+  if (destCount > max) return { view: 'chrono', fitSince: null };
+  if (!prev || prev.view !== 'chrono') return { view: 'dest', fitSince: null };
+  const fitSince = prev.fitSince != null ? prev.fitSince : now;
+  return now - fitSince >= hold ? { view: 'dest', fitSince: null } : { view: 'chrono', fitSince };
+}
+
 // Max transit rows by header/weather toggles (design spec §5 table).
 function maxRows(showHeader, showWeather) {
   if (showHeader && showWeather) return 2;
@@ -72,7 +90,9 @@ function normalize(json, { log = console, unknown = new Set() } = {}) {
 
 // cfg: the board's state (rows filter, showHeader, showWeather).
 // alerts: Set of line codes with an active service alert.
-function format(arrivals, cfg, { now, alerts = new Set() } = {}) {
+// prevView: this board's last view state (see chooseView); the new one is
+// returned as viewState for the caller to keep.
+function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}) {
   const live = arrivals.filter((a) => a.t >= now - DROP_GRACE).sort((a, b) => a.t - b.t);
 
   // Group into rows by line + short destination.
@@ -97,8 +117,19 @@ function format(arrivals, cfg, { now, alerts = new Set() } = {}) {
       LINE_ORDER.indexOf(a.ln) - LINE_ORDER.indexOf(b.ln) || a.dir - b.dir || a.dest.localeCompare(b.dest));
   }
   const shownKeys = new Set(ordered.map((g) => g.key));
+  const max = maxRows(cfg.showHeader, cfg.showWeather);
+  const viewState = chooseView(ordered.length, max, prevView, now);
+  const shown = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
 
-  const rows = ordered.slice(0, maxRows(cfg.showHeader, cfg.showWeather)).map((g) => {
+  const chronoLabelPx = RIGHT_X - LABEL_GAP - CHRONO_TIME_PX - LABEL_X + 1;
+  const rows = viewState.view === 'chrono' ? shown.slice(0, max + CHRONO_EXTRA).map((a) => ({
+    ln: a.ln,
+    lbl: fit('small', a.dest.toUpperCase(), chronoLabelPx),
+    t: [a.t],
+    s: [a.s],
+    a: alerts.has(a.ln) ? 1 : 0,
+    rn: a.rn != null ? String(a.rn) : undefined,
+  })) : ordered.slice(0, max).map((g) => {
     const items = g.items.slice(0, MAX_TIMES);
     const t = items.map((a) => a.t);
     const labelPx = RIGHT_X - LABEL_GAP - worstTimesWidth(t, now) - LABEL_X + 1;
@@ -112,7 +143,7 @@ function format(arrivals, cfg, { now, alerts = new Set() } = {}) {
   });
 
   // Ticker: the next individual arrivals among the shown destinations.
-  const ticker = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`)).slice(0, TICKER_COUNT).map((a) => ({
+  const ticker = shown.slice(0, TICKER_COUNT).map((a) => ({
     ln: a.ln,
     d: fit('5x7', ligatures(a.dest), TICKER_DEST_PX),
     t: a.t,
@@ -120,7 +151,7 @@ function format(arrivals, cfg, { now, alerts = new Set() } = {}) {
     a: alerts.has(a.ln) ? 1 : 0,
   }));
 
-  return { rows, ticker };
+  return { view: viewState.view, viewState, rows, ticker };
 }
 
-module.exports = { normalize, format, maxRows, timeText, worstTimesWidth, TICKER_DEST_PX };
+module.exports = { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };

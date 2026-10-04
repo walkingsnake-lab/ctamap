@@ -90,13 +90,13 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 - The map and the board share one process. Board failures must not take down the map: wrap every board poller and the radar pipeline in try/catch, log, and skip the cycle.
 
 ### Shared alerts
-- CTA alerts are fetched by one **background poller** (every 2–5 min) that both `/api/alerts` and the board read. Do not add a second alerts fetch.
-- Parse **every** `ImpactedService` in an alert (one alert can cover several lines). The map keeps its existing filter (major or delay); the board uses service-affecting alerts per line.
+- CTA alerts are fetched by one **background poller** (`server/board/cta-alerts.js`, every 3 min, created in `server.js` and passed to `createBoard`) that both `/api/alerts` and the board read. Do not add a second alerts fetch.
+- Parse **every** `ImpactedService` in an alert (one alert can cover several lines). The map keeps its existing filter (major or delay); the board blinks a line only for major alerts (`SeverityCSS` `major`, or `MajorAlert`).
 
 ### Stack and dependencies
 - Plain Node `http`, no framework, same as the map.
-- Radar PNG decoding uses **`pngjs`** (pure JS). Do not add `sharp`, canvas, GIS libraries, or a Python sidecar.
-- Water masks are generated once per station by a script in `scripts/` and committed as files; no geo processing at runtime.
+- MRMS radar frames are decoded by `server/board/radar-png.js`, a streaming row decoder on Node's built-in `zlib` (pngjs would expand a 7000 × 3500 frame to RGBA: ~150 MB, measured). `pngjs` is for writing preview PNGs and for checking the decoder in tests. Do not add `sharp`, canvas, GIS libraries, or a Python sidecar.
+- Water masks are generated once per station by `scripts/build-locations.js` (from `scripts/geo-src/lake-michigan.geojson`) into `server/board/locations/<mapid>.json` and committed; no geo processing at runtime. Rebuild after changing `stations.json` or the radar geometry (a test fails if they drift).
 - The Fly VM has **256 MB**, shared with the map. Radar processing must stay small: decode only what's needed, crop early, and don't hold full source images between cycles.
 
 ### Tests
@@ -117,10 +117,10 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 - Board state (per-board config, screen/brightness overrides, version counter) is a JSON file on a Fly volume mounted at **`/data`**, never inside the app directory: the static file fallback in `server.js` serves any file under it. Write atomically (temp file + rename).
 - Key state by board ID, even with one board.
 - Locally, set `BOARD_STATE_DIR` to any folder (or let it fall back to a temp dir). The board router is `server/board/index.js`; state is `server/board/state.js`.
-- Arrivals pipeline: `tracker.js` (Train Tracker cache/poller) → `arrivals.js` (`normalize` raw JSON, `format` into rows/ticker) → `/board/update` in `index.js`. Destination short names: `destinations.js`. CTA times: `time.js`.
+- Arrivals pipeline: `tracker.js` (Train Tracker cache/poller) → `arrivals.js` (`normalize` raw JSON, `format` into rows/ticker, `chooseView` for the chronological overflow view) → `/board/update` in `index.js`. Destination short names: `destinations.js`. CTA times: `time.js`. Weather row and auto brightness: `weather.js` (Open-Meteo); warnings: `nws.js`; both use `location-poller.js`. Radar: `radar.js` (poller, crop, levels) on `radar-png.js`.
 - Secrets are Fly secrets: `CTA_KEY` (Train Tracker), `BOARD_TOKEN`, `BOARD_CONTROL_PATH`. Never commit keys or put them in fixtures (strip `key=` from recorded URLs).
 
 ### Verification
-- The board's output can't be seen on hardware from here. `server/board/draw.js` is the reference renderer, including animations (digit roll, ticker slide, alert blink): it draws a payload exactly as the board should, runs in both Node and the browser simulator, and the CircuitPython code mirrors it. It has no dependencies; `render.js` binds it to the fonts and icons for Node. Layout and animation changes go there first, with tests in `render.test.js` / `draw.test.js`.
+- The board's output can't be seen on hardware from here. `server/board/draw.js` is the reference renderer, including both transit views and their animations (digit roll, fades and slides via `createTransitAnimator()`, ticker slide, alert blink): it draws a payload exactly as the board should, runs in both Node and the browser simulator, and the CircuitPython code mirrors it. It has no dependencies; `render.js` binds it to the fonts and icons for Node. Layout and animation changes go there first, with tests in `render.test.js` / `draw.test.js`.
 - Check layout changes visually: render fixtures with `render()` and `Frame.toPNG()` and look at the image, or open the live simulator at `/board/<BOARD_CONTROL_PATH>/sim`.
 - Board-side CircuitPython is flashed and tested on hardware by the owner; ask for serial logs rather than guessing.

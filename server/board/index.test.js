@@ -14,7 +14,7 @@ const quiet = { warn() {}, error() {} };
 // Spin up a server that routes /board/* the same way server.js does.
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, ...opts });
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), radar: fakeRadar(), ...opts });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -140,6 +140,15 @@ test('raw arrivals capture reports upstream failures as 502', async () => {
 const { normalize } = require('./arrivals');
 const morseJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
 
+function fakeRadar(state = { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true }, frames = {}) {
+  return { want: () => state, frame: (mapid, id) => frames[`${mapid}/${id}`] || null };
+}
+
+function fakeWeather(data) {
+  const asked = [];
+  return { asked, get: async (lat, lon) => { asked.push([lat, lon]); return data; } };
+}
+
 function fakeTracker(data) {
   const asked = [];
   return { asked, get: async (mapid) => { asked.push(mapid); return data; } };
@@ -245,5 +254,140 @@ test('simulator serves draw.js and the assets it runs on', async () => {
   assert.ok(assets.body.fonts.small['65']); // 'A'
   assert.ok(assets.body.icons.ICONS.sun);
   assert.equal(assets.body.glyphs.CLOCK, 0xe006);
+  await s.close();
+});
+
+// ---- phone control page ----
+
+test('control page is served at the secret path, with a trailing-slash redirect', async () => {
+  const s = await serve({ tracker: fakeTracker(null) });
+  const base = `http://127.0.0.1:${s.port}`;
+  const page = await fetch(`${base}/board/secret123/`);
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get('content-type'), /text\/html/);
+  assert.match(await page.text(), /apple-mobile-web-app-capable/);
+  const bare = await fetch(`${base}/board/secret123?b=home`, { redirect: 'manual' });
+  assert.equal(bare.status, 301);
+  assert.equal(bare.headers.get('location'), '/board/secret123/?b=home');
+  assert.equal((await fetch(`${base}/board/wrong/`)).status, 404);
+  await s.close();
+});
+
+test('destinations: every destination the lines can show, plus live and chosen ones', async () => {
+  const live = [{ ln: 'RD', dest: 'Howard' }, { ln: 'RD', dest: 'Granville' }];
+  const s = await serve({ tracker: fakeTracker({ arrivals: live, fetchedAt: 0 }) });
+  // Belmont: Purple's rush-only Linden/Loop are offered even with none running.
+  const b = await s.req('/board/secret123/api/destinations?b=home&mapid=41320');
+  assert.equal(b.status, 200);
+  assert.deepEqual(b.body.map((d) => d.key), ['RD:Howard', 'RD:95th', 'BR:Kimball', 'BR:Loop', 'PR:Linden', 'PR:Loop', 'RD:Granville']);
+  assert.deepEqual(b.body[0], { key: 'RD:Howard', ln: 'RD', name: 'Howard', live: 1 });
+  assert.equal(b.body[1].live, 0);
+  // Howard: trains ending at Howard aren't offered.
+  const h = await s.req('/board/secret123/api/destinations?mapid=40900');
+  assert.ok(!h.body.some((d) => d.name === 'Howard' && !d.live));
+  assert.ok(h.body.some((d) => d.key === 'YL:Skokie'));
+  // A chosen row is kept even if it isn't a usual destination.
+  s.store.update('home', { rows: ['RD:Howard', 'RD:Loyola'] });
+  const m = await s.req('/board/secret123/api/destinations?b=home&mapid=40100');
+  assert.ok(m.body.some((d) => d.key === 'RD:Loyola'));
+  assert.equal((await s.req('/board/secret123/api/destinations?mapid=1')).status, 400);
+  await s.close();
+});
+
+test('changing the station resets the destination filter unless rows are sent too', async () => {
+  const s = await serve({ tracker: fakeTracker(null) });
+  s.store.update('home', { rows: ['RD:Howard'] });
+  s.store.update('home', { station: { mapid: '40100' } }); // same station: kept
+  assert.deepEqual(s.store.get('home').rows, ['RD:Howard']);
+  s.store.update('home', { station: { mapid: '41320' } });
+  assert.deepEqual(s.store.get('home').rows, []);
+  s.store.update('home', { station: { mapid: '40100' }, rows: ['RD:95th'] });
+  assert.deepEqual(s.store.get('home').rows, ['RD:95th']);
+  await s.close();
+});
+
+// ---- weather and alerts in the update ----
+
+test('update: weather row, auto brightness, and alert flags', async () => {
+  const fx = (f) => path.join(__dirname, 'fixtures', f);
+  const { parse } = require('./weather');
+  const { parseAlerts } = require('./cta-alerts');
+  const now = Math.floor(Date.now() / 1000);
+  const json = JSON.parse(fs.readFileSync(fx('tt-arrivals/clark-lake-2026-10-03-2317.json'), 'utf8'));
+  const arrivals = normalize(json, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const w = { ...parse(JSON.parse(fs.readFileSync(fx('open-meteo/morse-2026-10-04-1045.json'), 'utf8'))), sunrise: now - 100, sunset: now + 100 };
+  const weather = fakeWeather(w);
+  // The recorded Orange/Green minor delay, rated major so it blinks.
+  const xml = fs.readFileSync(fx('cta-alerts/2026-10-04-1057.xml'), 'utf8').replace('<SeverityCSS>minor</SeverityCSS>', '<SeverityCSS>major</SeverityCSS>');
+  const alerts = { get: () => ({ alerts: parseAlerts(xml), fetchedAt: now }) };
+  const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }), weather, alerts });
+  s.store.update('home', { station: { mapid: '40380' } }); // Clark/Lake
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual(weather.asked.at(-1), [41.885737, -87.630886]); // the station's coordinates
+  assert.deepEqual(b.wx, { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 });
+  assert.equal(b.bright, 100);
+  // Header + weather leaves 2 rows, so Clark/Lake's 5 destinations go chronological.
+  assert.equal(b.view, 'chrono');
+  // Green has a major delay; Blue only has a planned schedule change.
+  for (const r of b.rows) assert.equal(r.a, r.ln === 'GR' ? 1 : 0, `${r.ln} ${r.lbl}`);
+  assert.ok(b.ticker.every((x) => x.a === (x.ln === 'GR' || x.ln === 'OR' ? 1 : 0)));
+  // Weather row off: no wx, and the rows get the space back.
+  s.store.update('home', { showWeather: false });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.wx, null);
+  assert.equal(b.rows.filter((r) => r.t.length).length >= 4, true);
+  // Overnight: auto brightness dims.
+  w.sunset = now - 1;
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.bright, 40);
+  assert.equal(b.warn, null);
+  await s.close();
+});
+
+test('update: an NWS warning in effect is sent as warn, even with the weather row off', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const iso = (t) => new Date(t * 1000).toISOString();
+  const nwsJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'nws', 'svr-warning-expired-2026-10-03-jax.json'), 'utf8'));
+  const f = nwsJson.features[0].properties;
+  Object.assign(f, { event: 'Tornado Warning', onset: iso(now - 60), ends: iso(now + 600), expires: iso(now + 600) });
+  f.parameters.VTEC = ['/O.NEW.KLOT.TO.W.0001.000000T0000Z-000000T0000Z/'];
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), nws: fakeWeather(require('./nws').parse(nwsJson)) });
+  s.store.update('home', { showWeather: false });
+  const b = (await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).body;
+  assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' });
+  assert.equal(b.wx, null);
+  await s.close();
+});
+
+// ---- radar ----
+
+test('radar: frames by ID behind the token; auto switches to radar when it rains', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const bytes = new Uint8Array(2048); bytes[16 * 64 + 20] = 7; bytes[0] = 3;
+  const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], clock: [40, 0, 24, 32], split: true };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(state, { '40100/40100-202610041600': bytes }) });
+  const base = `http://127.0.0.1:${s.port}`;
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.screen, 'radar');
+  assert.deepEqual(b.radar, state);
+  assert.equal((await fetch(`${base}/board/radar/40100-202610041600?b=home`)).status, 401);
+  const r = await fetch(`${base}/board/radar/40100-202610041600?b=home`, h);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'application/octet-stream');
+  assert.match(r.headers.get('cache-control'), /immutable/);
+  const got = new Uint8Array(await r.arrayBuffer());
+  assert.equal(got.length, 2048);
+  assert.equal(got[0], 3);
+  assert.equal((await fetch(`${base}/board/radar/40100-209901010000?b=home`, h)).status, 404);
+  // Simulator copy, and a PNG of the radar screen.
+  assert.equal((await fetch(`${base}/board/secret123/api/radar/40100-202610041600?b=home`)).status, 200);
+  const png = await fetch(`${base}/board/secret123/sim.png?b=home&screen=radar&scale=2`);
+  assert.equal(png.status, 200);
+  // A forced screen still wins over auto.
+  s.store.update('home', { screen: 'transit' });
+  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'transit');
   await s.close();
 });

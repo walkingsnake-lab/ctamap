@@ -26,12 +26,16 @@ const metrics    = require('./server/metrics');
 // Initialize geometry synchronously at startup — GeoJSON is 116 KB, fast read.
 geoState.init();
 
+// ---- CTA alerts: one background poller shared by /api/alerts and the board ----
+const { createAlertsPoller, mapAlerts } = require('./server/board/cta-alerts');
+const ctaAlerts = createAlertsPoller().start();
+
 // ---- LED board (all board code lives in server/board/) ----
 // A failure to start the board must not take down the map: fall back to a
 // handler that answers every /board/ request with 503.
 let board;
 try {
-  board = require('./server/board').createBoard();
+  board = require('./server/board').createBoard({ alerts: ctaAlerts });
 } catch (e) {
   console.error('[board] failed to start:', e && e.stack ? e.stack : e);
   board = {
@@ -146,9 +150,7 @@ function broadcast(payload) {
 
 // ---- Alerts cache ----
 
-const ALERTS_URL = 'http://www.transitchicago.com/api/1.0/alerts.aspx?activeonly=true&routeid=red,blue,brn,g,org,p,pink,y';
-const ALERTS_CACHE_TTL = 60000; // 60s
-let alertsCache = null; // { body, time }
+// Fetched by the shared poller (server/board/cta-alerts.js), every 3 min.
 
 const MOCK_ALERTS = JSON.stringify([{
   id: '99999',
@@ -159,60 +161,6 @@ const MOCK_ALERTS = JSON.stringify([{
   service: 'red',
   start: '2026-04-01T08:00:00',
 }]);
-
-function parseAlerts(xml) {
-  const alerts = [];
-  const alertRe = /<Alert>([\s\S]*?)<\/Alert>/g;
-  let m;
-  while ((m = alertRe.exec(xml)) !== null) {
-    const block = m[1];
-    const get = (tag) => {
-      const r = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`);
-      const hit = r.exec(block);
-      return hit ? hit[1].trim() : '';
-    };
-    const isMajor  = get('MajorAlert') === '1';
-    const impact   = get('Impact');
-    const isDelay  = /delay/i.test(impact);
-    if (!isMajor && !isDelay) continue;
-    const serviceBlock = /<ImpactedService>([\s\S]*?)<\/ImpactedService>/.exec(block);
-    const serviceId = serviceBlock
-      ? (/<ServiceId>([\s\S]*?)<\/ServiceId>/.exec(serviceBlock[1]) || [])[1] || ''
-      : '';
-    alerts.push({
-      id:       get('AlertId'),
-      headline: get('Headline'),
-      short:    get('ShortDescription').replace(/<[^>]+>/g, ''),
-      severity: get('SeverityCSS'),
-      impact,
-      service:  serviceId.trim().toLowerCase(),
-      start:    get('EventStart'),
-    });
-  }
-  return alerts;
-}
-
-function fetchAlerts() {
-  return new Promise((resolve, reject) => {
-    http.get(ALERTS_URL, (res) => {
-      const chunks = [];
-      res.on('data', (chunk) => chunks.push(chunk));
-      res.on('end', () => {
-        try { resolve(parseAlerts(chunks.join(''))); }
-        catch (e) { reject(e); }
-      });
-    }).on('error', reject);
-  });
-}
-
-async function getCachedAlerts() {
-  const now = Date.now();
-  if (alertsCache && now - alertsCache.time < ALERTS_CACHE_TTL) return alertsCache.body;
-  const alerts = await fetchAlerts();
-  const body = JSON.stringify(alerts);
-  alertsCache = { body, time: now };
-  return body;
-}
 
 // ---- Follow (ETA) cache — unchanged ----
 
@@ -370,9 +318,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     try {
-      const body = await getCachedAlerts();
+      const data = await ctaAlerts.ready();
+      if (!data) throw new Error('no alerts data yet');
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
-      res.end(body);
+      res.end(JSON.stringify(mapAlerts(data.alerts)));
     } catch (e) {
       console.error('CTA Alerts API error:', e.message);
       res.writeHead(502, { 'Content-Type': 'application/json' });

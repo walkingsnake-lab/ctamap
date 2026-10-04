@@ -1,6 +1,7 @@
 // Board drawing: the reference implementation of how the 64x32 board draws a
-// /board/update payload, including its animations (per-digit roll, ticker
-// slide, alert blink). Runs unchanged in Node (render.js, tests, previews)
+// /board/update payload in either transit view (destination rows or the
+// chronological list), including its animations (per-digit roll, fades and
+// slides, ticker slide, alert blink). Runs unchanged in Node (render.js, tests, previews)
 // and in the browser (the simulator), and has no dependencies; fonts and
 // icons are passed in. The CircuitPython board code mirrors this file.
 //
@@ -85,8 +86,19 @@
     return min <= 1 ? 'DUE' : String(min);
   }
 
+  // Chronological view: digits + "m" (the glyph's own 1px spacing), DUE bare.
+  function chronoText(t, now) {
+    const min = Math.floor((t - now) / 60);
+    return min <= 1 ? 'DUE' : `${min}m`;
+  }
+
   // Arrivals stay listed until 30 s past their time (contract countdown rules).
   const DROP_GRACE = 30;
+
+  // Max transit rows for the header/weather toggles (design spec §5).
+  function maxRows(hasHeader, hasWeather) {
+    return (hasHeader ? 4 : 5) - (hasWeather ? 2 : 0);
+  }
 
   // Row tops for n transit rows. Spec-pinned cases first; otherwise the
   // preferred pitch (shrunk to fit) with the block centered in the free area.
@@ -136,7 +148,7 @@
       label: '#d8d8d8', clock: '#cccccc', amber: '#ffb000', dimAmber: '#9c6a00',
       sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', band: '#202020', divider: '#333333',
       tickerHead: '#a6a6a6', index: '#1f2f35', white: '#ffffff', red: '#ff2020',
-      watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c',
+      watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
 
     const TIME_GAP = 3;   // px between arrival times...
@@ -189,7 +201,8 @@
       const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
       f.withClip(0, top, 63, top + 4, () => {
         const from = roll.from;
-        const perDigit = from.length === text.length && /^\d+$/.test(from) && /^\d+$/.test(text);
+        const num = /^\d+m?$/;
+        const perDigit = from.length === text.length && num.test(from) && num.test(text);
         if (perDigit) {
           let x = right - measure('small', text) + 1;
           for (let i = 0; i < text.length; i++) {
@@ -207,22 +220,86 @@
       });
     }
 
-    function drawRow(f, r, top, now, blink, rolls) {
-      if (r.a && blink) {
-        icons.ALERT_BANG.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(i, top + j, 1, 1, LINE[r.ln]); }));
-      } else {
-        f.fill(0, top, 3, 5, LINE[r.ln]);
-      }
-      f.text('small', r.lbl, 5, top + 5, C.label);
+    // Lay out one row's times: right-aligned group, 3px gaps tightening to 2px
+    // when the row is full. Returns cells (right-to-left order not assumed).
+    function layoutCells(r, now) {
       const texts = r.t.map((t) => timeText(t, now));
       const widthAt = (gap) => texts.reduce((w, txt, i) => w + measure('small', txt) + (i ? gap : 0), 0);
       const labelEnd = 5 + measure('small', r.lbl) - 1;
       const gap = 63 - widthAt(TIME_GAP) + 1 - labelEnd - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
+      const cells = new Array(texts.length);
       let x = 63;
       for (let k = texts.length - 1; k >= 0; k--) {
-        const color = r.s && r.s[k] ? (k ? C.schDim : C.sch) : (k ? C.dimAmber : C.amber);
-        drawTimeCell(f, texts[k], x, top, color, rolls && rolls[slotKey(r, k)]);
+        const sch = r.s && r.s[k];
+        cells[k] = {
+          id: slotKey(r, k), t: r.t[k], text: texts[k], right: x, alpha: 1, roll: null,
+          color: sch ? (k ? C.schDim : C.sch) : (k ? C.dimAmber : C.amber),
+        };
         x -= measure('small', texts[k]) + gap;
+      }
+      return cells;
+    }
+
+    // The transit screen as data: what to draw where, before any animation.
+    // The animator (createTransitAnimator) adjusts positions, colors, and alphas.
+    function buildTransitView(p, now) {
+      if (p.view === 'chrono') return buildChronoView(p, now);
+      const rows = liveRows(p, now);
+      const tops = rowTops(rows.length, !!p.header, !!p.wx);
+      return {
+        now,
+        mode: 'dest',
+        header: p.header,
+        wx: p.wx,
+        warn: p.warn,
+        rows: rows.map((r, i) => ({
+          key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
+          cells: layoutCells(r, now),
+        })),
+      };
+    }
+
+    // Chronological view: one train per row, soonest first; the payload's
+    // extra trains wait below until a row frees up.
+    function buildChronoView(p, now) {
+      const rows = liveRows(p, now).slice(0, maxRows(!!p.header, !!p.wx));
+      const tops = rowTops(rows.length, !!p.header, !!p.wx);
+      return {
+        now,
+        mode: 'chrono',
+        pitch: tops.length > 1 ? tops[1] - tops[0] : 6,
+        header: p.header,
+        wx: p.wx,
+        warn: p.warn,
+        rows: rows.map((r, i) => {
+          const key = r.rn != null ? `rn:${r.rn}` : `${r.ln}:${r.lbl}:${r.t[0]}`;
+          const sch = r.s && r.s[0];
+          return {
+            key, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
+            cells: [{
+              id: key, t: r.t[0], text: chronoText(r.t[0], now), right: 63, alpha: 1, roll: null,
+              color: sch ? (i ? C.schDim : C.sch) : (i ? C.dimAmber : C.amber),
+            }],
+          };
+        }),
+      };
+    }
+
+    const fade = (color, alpha) => (alpha >= 1 ? color : scaleColor(color, Math.max(0, alpha)));
+
+    function drawViewRow(f, row, blink) {
+      const top = Math.round(row.top);
+      const line = fade(LINE[row.ln], row.alpha);
+      if (row.a && blink) {
+        icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(i, top + j, 1, 1, line); }));
+      } else {
+        f.fill(0, top, 3, 5, line);
+      }
+      f.text('small', row.lbl, 5, top + 5, fade(C.label, row.alpha));
+      for (const cell of row.cells) {
+        const a = cell.alpha * row.alpha;
+        if (a <= 0) continue;
+        drawTimeCell(f, cell.text, Math.round(cell.right), top, fade(cell.color, a), cell.roll);
       }
     }
 
@@ -236,21 +313,147 @@
       f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), top + 18, C.noTrains);
     }
 
-    // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}})
+    function drawTransitView(f, view, blink) {
+      if (!view.rows.length) {
+        drawOvernight(f, view, view.now);
+      } else {
+        if (view.header) drawHeader(f, view.header, view.now, C.band, C.grey);
+        f.withClip(0, view.header ? 7 : 0, 63, view.wx ? 21 : 31, () => {
+          for (const row of view.rows) drawViewRow(f, row, blink);
+        });
+      }
+      if (view.wx) drawWeather(f, view.wx, view.warn);
+    }
+
+    // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}}),
+    // view (a frame from createTransitAnimator; overrides the static layout)
     function renderTransit(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const f = newFrame();
-      const rows = liveRows(p, now);
-      if (!rows.length) {
-        drawOvernight(f, p, now);
-      } else {
-        if (p.header) drawHeader(f, p.header, now, C.band, C.grey);
-        const tops = rowTops(rows.length, !!p.header, !!p.wx);
-        rows.forEach((r, i) => drawRow(f, r, tops[i], now, !!o.blink, o.rolls));
+      let view = o.view;
+      if (!view) {
+        view = buildTransitView(p, now);
+        if (o.rolls) for (const row of view.rows) for (const c of row.cells) if (o.rolls[c.id]) c.roll = o.rolls[c.id];
       }
-      if (p.wx) drawWeather(f, p.wx, p.warn);
+      drawTransitView(f, view, !!o.blink);
       return f;
+    }
+
+    // ---- transit animation ----
+    // Keeps arrivals' identity across frames and updates (matched by time,
+    // within MATCH_S), so the board can animate what actually changed:
+    //   - a time's text changes  -> roll (per digit, or whole cell)
+    //   - an arrival leaves      -> fade out, then the rest settle
+    //   - an arrival appears     -> fade in
+    //   - a time becomes first   -> color eases from dim to bright
+    //   - a row leaves or joins  -> fade, then rows slide to their new places
+    // In the chronological view, the departing first row slides up and out
+    // while fading, the list slides up with it, and the next train slides in
+    // at the bottom (no wait between the two).
+    const ROLL_MS = 400, FADE_MS = 700, MOVE_MS = 500, COLOR_MS = 700, MATCH_S = 90;
+    const lerp = (a, b, k) => a + (b - a) * k;
+    const lerpColor = (c1, c2, k) => {
+      if (k >= 1 || c1 === c2) return c2;
+      const a = hex(c1), b = hex(c2);
+      return '#' + a.map((v, i) => Math.round(lerp(v, b[i], k)).toString(16).padStart(2, '0')).join('');
+    };
+    const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    const tween = (from, to, start, dur, t) => (t <= start ? from : t >= start + dur ? to : lerp(from, to, easeInOut((t - start) / dur)));
+
+    function createTransitAnimator() {
+      let nextId = 1;
+      const rows = new Map(); // key -> row state
+
+      function matchCells(state, cells, t, isNewRow) {
+        const unmatched = state.cells.filter((c) => !c.leaving);
+        const used = new Set();
+        const out = [];
+        for (const c of cells) {
+          const m = unmatched.find((u) => !used.has(u) && Math.abs(u.t - c.t) <= MATCH_S);
+          if (m) {
+            used.add(m);
+            if (m.text !== c.text) m.roll = { from: m.text, start: t };
+            if (m.color !== c.color) { m.fromColor = m.shownColor || m.color; m.colorStart = t; }
+            if (m.right !== c.right) { m.fromRight = m.shownRight == null ? m.right : m.shownRight; m.moveStart = t; }
+            Object.assign(m, { t: c.t, text: c.text, color: c.color, right: c.right });
+            out.push(m);
+          } else {
+            // New arrivals fade in; a new row's arrivals come in with the row.
+            out.push({ ...c, id: nextId++, born: isNewRow ? null : t });
+          }
+        }
+        for (const u of unmatched) if (!used.has(u)) { u.leaving = t; out.push(u); }
+        for (const c of state.cells) if (c.leaving && c.leaving !== t && t - c.leaving < FADE_MS) out.push(c);
+        state.cells = out.filter((c, i) => out.indexOf(c) === i);
+      }
+
+      return {
+        // Returns the view to draw at animation time `t` (ms).
+        step(p, now, t) {
+          const target = buildTransitView(p, now);
+          const chrono = target.mode === 'chrono';
+          const keys = new Set(target.rows.map((r) => r.key));
+          const current = [...rows.values()].filter((st) => !st.leaving);
+          const firstTop = Math.min(...current.map((st) => st.top));
+          const continuing = current.some((st) => keys.has(st.key));
+          // Rows leaving: fade out where they are (chrono: the first row
+          // slides up and out as it fades).
+          let leavingUntil = 0;
+          for (const [key, st] of rows) {
+            if (!keys.has(key) && !st.leaving) {
+              st.leaving = t;
+              if (chrono && st.mode === 'chrono' && st.top === firstTop) {
+                st.fromTop = st.shownTop; st.top = st.top - target.pitch; st.moveStart = t;
+              }
+            }
+            if (st.leaving) {
+              if (t - st.leaving >= FADE_MS) rows.delete(key);
+              else if (!(chrono && st.mode === 'chrono')) leavingUntil = Math.max(leavingUntil, st.leaving + FADE_MS);
+            }
+          }
+          // Rows staying or joining: slide to their new places once any
+          // leaving row has faded.
+          for (const r of target.rows) {
+            let st = rows.get(r.key);
+            const isNewRow = !st || !!st.leaving;
+            if (isNewRow) {
+              st = { key: r.key, top: r.top, shownTop: r.top, born: rows.size ? t : null, cells: [] };
+              // Chrono: a train joining a running list slides in from below.
+              if (chrono && continuing) { st.fromTop = r.top + target.pitch; st.moveStart = t; }
+              rows.set(r.key, st);
+            } else if (st.top !== r.top) {
+              st.fromTop = st.shownTop;
+              st.moveStart = Math.max(t, leavingUntil);
+              st.top = r.top;
+            }
+            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, mode: target.mode });
+            matchCells(st, r.cells, t, isNewRow);
+          }
+
+          const view = { now, mode: target.mode, header: target.header, wx: target.wx, warn: target.warn, rows: [] };
+          if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
+          for (const st of rows.values()) {
+            st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
+            const alpha = st.leaving ? 1 - clamp01((t - st.leaving) / FADE_MS)
+              : st.born != null ? clamp01((t - Math.max(st.born, leavingUntil)) / FADE_MS) : 1;
+            const cells = st.cells.filter((c) => !c.leaving || t - c.leaving < FADE_MS).map((c) => {
+              c.shownRight = c.moveStart != null ? tween(c.fromRight, c.right, c.moveStart, MOVE_MS, t) : c.right;
+              c.shownColor = c.colorStart != null ? lerpColor(c.fromColor, c.color, easeInOut(clamp01((t - c.colorStart) / COLOR_MS))) : c.color;
+              const rollP = c.roll ? (t - c.roll.start) / ROLL_MS : 1;
+              if (rollP >= 1) c.roll = null;
+              return {
+                id: c.id, text: c.text, right: c.shownRight, color: c.shownColor,
+                alpha: c.leaving ? 1 - clamp01((t - c.leaving) / FADE_MS) : c.born != null ? clamp01((t - c.born) / FADE_MS) : 1,
+                roll: c.roll ? { from: c.roll.from, p: rollP } : null,
+              };
+            });
+            st.cells = st.cells.filter((c) => !c.leaving || t - c.leaving < FADE_MS);
+            view.rows.push({ key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, top: st.shownTop, alpha, cells });
+          }
+          return view;
+        },
+      };
     }
 
     function drawTickerItem(f, it, idx, top, now) {
@@ -300,6 +503,59 @@
       return f;
     }
 
+    // ---- radar ----
+    // Frame values (contract "Radar frame"): 1-5 rain, 6 shoreline,
+    // 7 location marker, 8-10 snow. Precip fills at ~65%.
+    const RADAR_FILL = 0.65;
+    const RADAR = {
+      1: scaleColor('#1f8f1f', RADAR_FILL), 2: scaleColor('#2ee02e', RADAR_FILL), 3: scaleColor('#ffe000', RADAR_FILL),
+      4: scaleColor('#ff8c00', RADAR_FILL), 5: scaleColor('#ff1a1a', RADAR_FILL),
+      6: '#34485e', 7: '#ffffff',
+      8: scaleColor('#4f86ff', RADAR_FILL), 9: scaleColor('#a9c9ff', RADAR_FILL), 10: scaleColor('#ffffff', RADAR_FILL),
+    };
+    // Clock stack: indicator 2 + gap 2 + clock 7 + gap 2 + AM/PM 5 = 18 rows.
+    const ampmFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: true });
+    const ampmText = (t) => (/PM/i.test(ampmFmt.format(new Date(t * 1000))) ? 'PM' : 'AM');
+
+    // opts: now, idx (frame index into p.radar.frames; default the newest),
+    // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
+    function renderRadar(p, opts) {
+      const o = opts || {};
+      const r = p.radar || {};
+      const ids = r.frames || [];
+      const idx = o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
+      const f = newFrame();
+      const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
+      if (bytes) {
+        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+          const c = RADAR[bytes[y * 64 + x]];
+          if (c) f.fill(x, y, 1, 1, c);
+        }
+      }
+      // Split layout: gray line on the clock panel's left edge.
+      if (r.split && r.clock) f.fill(r.clock[0] - 1, 0, 1, 32, C.divider);
+      // Clock stack, right-aligned in the clock box: frame indicator, clock
+      // (frame time), AM/PM with the warning icon to its left.
+      const [bx, by, bw, bh] = r.clock || [40, 0, 24, 32];
+      const right = Math.min(62, bx + bw - 1);
+      const top = by + 2; // top-aligned (spec: rows 2-19)
+      const t = idx >= 0 && r.ft ? r.ft[idx] : (o.now != null ? o.now : p.now);
+      if (ids.length) {
+        const segW = 2, segGap = 1;
+        let x = right - (ids.length * (segW + segGap) - segGap) + 1;
+        ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
+      }
+      rtext(f, '5x7', clockText(t), right, top + 11, C.clock);
+      const ap = ampmText(t);
+      const apX = right - measure('small', ap) + 1;
+      f.text('small', ap, apX, top + 18, C.grey);
+      if (p.warn) {
+        const glyph = s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT);
+        f.text('small', glyph, apX - 2 - measure('small', glyph), top + 18, p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere);
+      }
+      return f;
+    }
+
     function applyBrightness(f, bright) {
       const k = Math.max(0, Math.min(100, bright == null ? 100 : bright)) / 100;
       if (k === 1) return f;
@@ -310,23 +566,25 @@
     function render(p, opts) {
       const o = opts || {};
       const screen = o.screen || p.screen;
-      const f = screen === 'ticker' ? renderTicker(p, o) : renderTransit(p, o);
+      const f = screen === 'ticker' ? renderTicker(p, o) : screen === 'radar' ? renderRadar(p, o) : renderTransit(p, o);
       return applyBrightness(f, p.bright);
     }
 
     // Time texts per transit slot at `now`, keyed for change detection.
     function transitTexts(p, now) {
       const out = {};
-      for (const r of liveRows(p, now)) r.t.forEach((t, k) => { out[slotKey(r, k)] = timeText(t, now); });
+      for (const r of buildTransitView(p, now).rows) for (const c of r.cells) out[c.id] = c.text;
       return out;
     }
 
     return {
-      Frame, LINE, C, measure, clockText, rowTops, timeText, render, renderTransit, renderTicker,
-      transitTexts, tickerPages, applyBrightness,
-      ROLL_MS: 400, SLIDE_MS: 500, PAGE_HOLD_MS: 3500, BLINK_MS: 500,
+      Frame, LINE, C, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
+      transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
+      ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 500,
+      // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.
+      RADAR_FRAME_MS: 500, RADAR_HOLD_MS: 4000,
     };
   }
 
-  return { Frame, create, timeText, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
+  return { Frame, create, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
 });

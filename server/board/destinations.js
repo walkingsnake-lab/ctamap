@@ -48,6 +48,20 @@ const DEST_MAPID = {
   'Dempster-Skokie': '40140',
 };
 
+// Every destination each line's trains can show (Train Tracker `destNm`), in
+// direction order (trDr 1 first). Used for the phone page's destination
+// filter, so rush-only service (Purple to the Loop) can be chosen off-peak.
+const LINE_DESTS = {
+  RD: ['Howard', '95th/Dan Ryan'],
+  BL: ["O'Hare", 'Rosemont', 'Jefferson Park', 'Cumberland', 'Forest Park', 'UIC-Halsted'],
+  BR: ['Kimball', 'Loop'],
+  GR: ['Harlem/Lake', '63rd Street', 'Cottage Grove'],
+  OR: ['Loop', 'Midway'],
+  PR: ['Linden', 'Howard', 'Loop'],
+  PK: ['Loop', '54th/Cermak'],
+  YL: ['Dempster-Skokie', 'Howard'],
+};
+
 const lineCode = (rt) => RT_TO_LN[String(rt || '').toLowerCase()] || null;
 
 // True when a prediction is for a train that ends at this station.
@@ -66,4 +80,23 @@ function shortDest(destNm) {
   return { name: d, known: PASS_THROUGH.has(d) };
 }
 
-module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, lineCode, shortDest, endsHere };
+// Purple trains only run to Howard from Evanston (north of Howard).
+const HOWARD_LAT = 42.019063;
+
+// Destination row keys ("RD:Howard") a station can have, in default row
+// order, without trains that end at the station. st: a stations.json entry.
+function stationDestinations(st) {
+  const out = [];
+  for (const ln of LINE_ORDER) {
+    if (!st.lines.includes(ln)) continue;
+    for (const d of LINE_DESTS[ln]) {
+      if (DEST_MAPID[d] === st.mapid) continue;
+      if (ln === 'PR' && d === 'Howard' && !(st.lat > HOWARD_LAT)) continue;
+      const key = `${ln}:${shortDest(d).name}`;
+      if (!out.includes(key)) out.push(key);
+    }
+  }
+  return out;
+}
+
+module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, lineCode, shortDest, endsHere, stationDestinations };
