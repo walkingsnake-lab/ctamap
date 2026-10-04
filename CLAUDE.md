@@ -96,17 +96,18 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 ### Stack and dependencies
 - Plain Node `http`, no framework, same as the map.
 - Radar PNG decoding uses **`pngjs`** (pure JS). Do not add `sharp`, canvas, GIS libraries, or a Python sidecar.
-- Water masks are generated once per location by a script in `scripts/` and committed as files; no geo processing at runtime.
+- Water masks are generated once per station by a script in `scripts/` and committed as files; no geo processing at runtime.
+- The Fly VM has **256 MB**, shared with the map. Radar processing must stay small: decode only what's needed, crop early, and don't hold full source images between cycles.
 
 ### Tests
 - Every board formatting rule gets a test using Node's built-in `node:test` (no test framework dependency). `npm test` runs `node --test server/board/`.
-- Tests run against **recorded fixtures** in `server/board/fixtures/` (real responses from Train Tracker, Bus Tracker, CTA alerts, NWS, Open-Meteo, MRMS frames). Tests never hit live APIs and never need API keys.
+- Tests run against **recorded fixtures** in `server/board/fixtures/` (real responses from Train Tracker, CTA alerts, NWS, Open-Meteo, MRMS frames). Tests never hit live APIs and never need API keys.
 - When you hit a new real-world case (unknown destination, short-turn, multi-line alert, storm), save the raw response as a fixture and add a test.
 
 ### State and secrets
 - Board state (per-board config, screen/brightness overrides, version counter) is a JSON file on a Fly volume mounted at **`/data`**, never inside the app directory: the static file fallback in `server.js` serves any file under it. Write atomically (temp file + rename).
 - Key state by board ID, even with one board.
-- Secrets are Fly secrets: `CTA_KEY` (Train Tracker), `CTA_BUS_KEY`, `BOARD_TOKEN`, `BOARD_CONTROL_PATH`. Never commit keys or put them in fixtures (strip `key=` from recorded URLs).
+- Secrets are Fly secrets: `CTA_KEY` (Train Tracker), `BOARD_TOKEN`, `BOARD_CONTROL_PATH`. Never commit keys or put them in fixtures (strip `key=` from recorded URLs).
 
 ### Verification
 - The board's output can't be seen from here. Use the board simulator (a 64x32 canvas page rendering `/board/update`, to be built under `server/board/`) and check its screenshots for layout changes.
