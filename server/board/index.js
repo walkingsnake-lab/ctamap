@@ -8,9 +8,11 @@ const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const fs = require('fs');
 const path = require('path');
-const { render } = require('./render');
+const { render, assets } = require('./render');
 
 const SIM_HTML = fs.readFileSync(path.join(__dirname, 'sim.html'));
+const DRAW_JS = fs.readFileSync(path.join(__dirname, 'draw.js'));
+const SIM_ASSETS = JSON.stringify(assets());
 
 const MAX_BODY = 8 * 1024;
 // Board endpoint names; the control path must not collide with them.
@@ -180,6 +182,14 @@ function createBoard({
         if (method !== 'GET') return send(res, 405, { err: 'method' });
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(SIM_HTML);
+        return;
+      }
+      // draw.js and the fonts/icons it needs, for the simulator page.
+      if (sub === 'draw.js' || sub === 'sim-assets.json') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const js = sub === 'draw.js';
+        res.writeHead(200, { 'Content-Type': js ? 'application/javascript' : 'application/json', 'Cache-Control': 'no-cache' });
+        res.end(js ? DRAW_JS : SIM_ASSETS);
         return;
       }
       if (sub === 'sim.png') {

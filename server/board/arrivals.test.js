@@ -110,11 +110,20 @@ test('labels never collide with the times, including when the first time turns D
   const now = 1_000_000;
   const t = [now + 90, now + 15 * 60, now + 32 * 60]; // 1 min -> DUE soon, then two 2-digit times
   assert.equal(timeText(t[0], now + 60), 'DUE');
-  const { rows } = format(t.map((x) => ({ ln: 'GR', dest: 'Cottage', known: true, dir: 5, t: x, s: 0 })), base, { now });
+  const { rows } = format(t.map((x) => ({ ln: 'BR', dest: 'Kimball', known: true, dir: 1, t: x, s: 0 })), base, { now });
+  // With times tightened to 2px gaps, the full name fits even in this worst case.
+  assert.equal(rows[0].lbl, 'KIMBALL');
   const labelEnd = 5 + measure('small', rows[0].lbl) - 1;
   const timesStart = 63 - worstTimesWidth(t, now) + 1;
   assert.ok(timesStart - labelEnd - 1 >= 3, `gap ${timesStart - labelEnd - 1}`);
-  // With room, the full name is kept.
-  const roomy = format([{ ln: 'GR', dest: 'Cottage', known: true, dir: 5, t: now + 600, s: 0 }], base, { now });
-  assert.equal(roomy.rows[0].lbl, 'COTTAGE');
+  assert.equal(format([{ ln: 'GR', dest: 'Cottage', known: true, dir: 5, t: t[0], s: 0 }, { ln: 'GR', dest: 'Cottage', known: true, dir: 5, t: t[1], s: 0 }, { ln: 'GR', dest: 'Cottage', known: true, dir: 5, t: t[2], s: 0 }], base, { now }).rows[0].lbl, 'COTTAGE');
+});
+
+test('Green Line "63rd Street" is shown as 63rd', () => {
+  const json = load('clark-lake-2026-10-03-2317.json');
+  json.ctatt.eta[0].destNm = '63rd Street';
+  const warnings = [];
+  const { rows } = format(normalize(json, { log: { warn: (m) => warnings.push(m) } }), { ...base, showHeader: false }, { now: nowOf(json) });
+  assert.ok(rows.some((r) => r.ln === 'GR' && r.lbl === '63RD'));
+  assert.equal(warnings.length, 0);
 });

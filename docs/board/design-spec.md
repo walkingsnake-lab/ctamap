@@ -121,7 +121,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ## 5. Screen 1: Transit station
 
 ### Rows
-- 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest).
+- 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest). Times are 3px apart, tightening to 2px when the row is full, so long names like `KIMBALL` and `COTTAGE` always fit.
 - **Schedule-based predictions** (`isSch`, e.g. southbound trains at Morse that haven't left the Howard terminal) are shown, with the time in grey instead of amber. `isFlt` (possible fault) predictions are shown normally.
 - **Trains ending at this station** (`destNm` = the station, e.g. Terminal Arrival at Howard) are not shown.
 - **Per-digit roll** when a number changes (12→11 rolls only the 2). Whole cells roll when the list shifts (the first train leaves) or to and from `DUE`.
@@ -164,7 +164,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 | Forest Park | `Forest` |
 | 54th/Cermak | `54th` |
 | 95th/Dan Ryan | `95th` |
-| Ashland/63rd | `63rd` |
+| Ashland/63rd, 63rd Street (what Train Tracker sends) | `63rd` |
 | Harlem/Lake | `Harlem` |
 | Dempster-Skokie | `Skokie` |
 | UIC-Halsted (Blue Line short turn) | `UIC` |
