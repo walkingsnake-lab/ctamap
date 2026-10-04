@@ -49,7 +49,8 @@ function maxRows(showHeader, showWeather) {
   return 5;
 }
 
-// What the board will draw for a time (contract: DUE at <= 1 min).
+// What the board will draw for a time (contract countdown rules: minutes
+// rounded up, DUE within 60 s).
 const { timeText } = require('./draw');
 
 // Widest the times group can get before the next update: digits only shrink

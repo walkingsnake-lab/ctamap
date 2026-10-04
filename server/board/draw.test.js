@@ -6,7 +6,7 @@ const { liveRows, easeInOut } = require('./draw');
 
 const hex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
 const NOW = 1_800_000_000;
-const min = (m) => NOW + m * 60 + 5;
+const min = (m) => NOW + m * 60 - 5; // shows as m (minutes round up)
 
 function payload(rows, ticker = []) {
   return { v: 1, now: NOW, age: 0, screen: 'transit', bright: 100, header: 'TEST', rows, ticker, wx: null, warn: null };
@@ -326,4 +326,18 @@ test('radar with no frames shows current conditions on the left', () => {
   // Once frames exist, the radar replaces the conditions.
   const withFrames = draw.render({ now, bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [now], clock: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: { a: new Uint8Array(2048) } });
   assert.equal(count(withFrames, draw.C.label, 0, 0, 38, 31), 0);
+});
+
+test('minutes round up, like CTA: DUE through 60 s, then 2, 3, ...; never 1', () => {
+  const cases = [[-30, 'DUE'], [0, 'DUE'], [1, 'DUE'], [60, 'DUE'], [61, '2'], [120, '2'], [121, '3'], [599, '10'], [600, '10'], [601, '11']];
+  for (const [s, want] of cases) assert.equal(draw.timeText(NOW + s, NOW), want, `${s} s`);
+  assert.equal(draw.chronoText(NOW + 61, NOW), '2m');
+  assert.equal(draw.chronoText(NOW + 60, NOW), 'DUE');
+  // A fresh CTA prediction of "2 min" (arrival = prediction time + 120 s) shows 2.
+  assert.equal(draw.timeText(NOW + 120, NOW), '2');
+  // Ticker: same rule, "Due" / "2 min".
+  const p = { now: NOW, bright: 100, header: null, ticker: [{ ln: 'RD', d: 'Howard', t: NOW + 61, s: 0, a: 0 }, { ln: 'RD', d: '95th', t: NOW + 60, s: 0, a: 0 }] };
+  const f = draw.render(p, { screen: 'ticker', now: NOW });
+  const g = draw.render({ ...p, ticker: [{ ...p.ticker[0], t: NOW + 120 }, p.ticker[1]] }, { screen: 'ticker', now: NOW });
+  assert.deepEqual(f.px, g.px, '61 s and 120 s both draw as 2 min');
 });

@@ -80,15 +80,21 @@
 
   // ---- pure helpers (also used by the server) ----
 
-  // What the board draws for an arrival time: DUE at <= 1 min.
+  // Minutes shown for an arrival: rounded up, like CTA's own predictions
+  // (each is a whole number of minutes from when it was made, so a fresh
+  // "2 min" counts down from 120 s). <= 1 shows DUE: 0-60 s out, which is
+  // when CTA flags the train as approaching (isApp). The board never shows 1.
+  const minutesUntil = (t, now) => Math.ceil((t - now) / 60);
+
+  // What the board draws for an arrival time.
   function timeText(t, now) {
-    const min = Math.floor((t - now) / 60);
+    const min = minutesUntil(t, now);
     return min <= 1 ? 'DUE' : String(min);
   }
 
   // Chronological view: digits + "m" (the glyph's own 1px spacing), DUE bare.
   function chronoText(t, now) {
-    const min = Math.floor((t - now) / 60);
+    const min = minutesUntil(t, now);
     return min <= 1 ? 'DUE' : `${min}m`;
   }
 
@@ -469,7 +475,7 @@
         f.text('small', String(idx), 1, base, C.label);
       }
       f.text('5x7', it.d, 7, base, C.white);
-      const min = Math.floor((it.t - now) / 60);
+      const min = minutesUntil(it.t, now);
       if (min <= 1) {
         rtext(f, '5x7', 'Due', 62, base, C.white);
       } else {
@@ -605,5 +611,5 @@
     };
   }
 
-  return { Frame, create, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
+  return { Frame, create, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
 });
