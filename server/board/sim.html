@@ -29,6 +29,10 @@
   button { cursor: pointer; }
   button:disabled { opacity: .4; cursor: default; }
   .note { color: var(--muted); font-size: 12px; }
+  .tests { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -6px 0 16px; font-size: 12px; color: var(--muted); }
+  .tests .chip { padding: 4px 8px; border-radius: 6px; border: 1px solid #333; background: #161616; color: var(--fg); font: inherit; cursor: pointer; }
+  .tests .chip[aria-pressed="true"] { color: #fff; border-color: transparent; }
+  .tests select { flex: 0 0 auto; padding: 4px 6px; }
 </style>
 </head>
 <body>
@@ -40,6 +44,19 @@
     <label><input type="checkbox" id="showWeather"> Weather row</label>
     <button id="apply" disabled>Use on board</button>
     <span class="note" id="previewNote"></span>
+  </div>
+  <div class="tests" id="tests">
+    <span>Test alerts (board too, 10 min):</span>
+    <span id="testLines"></span>
+    <select id="testWarn" aria-label="Test weather alert">
+      <option value="">No weather alert</option>
+      <option value="svr:watch">Severe t-storm watch</option>
+      <option value="svr:warning">Severe t-storm warning</option>
+      <option value="tor:watch">Tornado watch</option>
+      <option value="tor:warning">Tornado warning</option>
+    </select>
+    <button class="chip" id="testClear">Clear</button>
+    <span id="testLeft"></span>
   </div>
   <div class="screens">
     <figure id="fig-transit">
@@ -160,7 +177,7 @@
       clockOffset = p.now - Date.now() / 1000;
       $('json').textContent = JSON.stringify(p, null, 2);
       $('screen').textContent = p.screen;
-      $('view').textContent = p.view || 'dest';
+      $('view').textContent = (p.view || 'dest') + (p.hidden && p.hidden.length ? ` (${p.hidden.join(' + ')} hidden to fit)` : '');
       $('v').textContent = p.v;
       $('age').textContent = p.age + ' s';
       $('bright').textContent = p.bright;
@@ -255,6 +272,39 @@
     if (r.ok) { const b = await r.json(); boardCfg = { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather }; syncPicker(); poll(); }
     else { setStatus('could not update the board'); syncPicker(); }
   });
+
+  // ---- test alerts ----
+  const TEST_LINES = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
+  let test = { lines: [], warn: null, left: 0 };
+  function renderTest() {
+    for (const b of $('testLines').children) {
+      const on = test.lines.includes(b.dataset.ln);
+      b.setAttribute('aria-pressed', String(on));
+      b.style.background = on ? TEST_LINES[b.dataset.ln] : '';
+    }
+    $('testWarn').value = test.warn ? `${test.warn.kind}:${test.warn.lvl}` : '';
+    $('testLeft').textContent = test.left > 0 ? `clears in ${Math.ceil(test.left / 60)} min` : '';
+  }
+  async function setTest(next) {
+    const r = await fetch('api/test?b=' + encodeURIComponent(board), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(next),
+    });
+    if (r.ok) { test = await r.json(); renderTest(); poll(); } else setStatus('could not set test alerts');
+  }
+  $('testLines').replaceChildren(...Object.keys(TEST_LINES).map((ln) => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.dataset.ln = ln; b.textContent = ln; b.title = `Fake a major alert on ${ln}`;
+    b.onclick = () => setTest({ lines: test.lines.includes(ln) ? test.lines.filter((x) => x !== ln) : [...test.lines, ln], warn: test.warn });
+    return b;
+  }));
+  $('testWarn').addEventListener('change', (e) => {
+    const [kind, lvl] = e.target.value.split(':');
+    setTest({ lines: test.lines, warn: kind ? { kind, lvl } : null });
+  });
+  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null }));
+  const pollTest = () => fetch('api/test?b=' + encodeURIComponent(board), { cache: 'no-store' }).then((r) => r.json()).then((t) => { test = t; renderTest(); }).catch(() => {});
+  pollTest();
+  setInterval(pollTest, 15000);
 
   await loadStations().catch((e) => setStatus('stations failed: ' + e.message));
   await poll();

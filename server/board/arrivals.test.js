@@ -47,17 +47,55 @@ test('Clark/Lake: five destinations fit five rows; short names', () => {
   assert.deepEqual(all.rows.map((r) => r.lbl), ["O'HARE", 'FOREST', 'KIMBALL', 'HARLEM', '54TH']);
 });
 
-test('Clark/Lake with the header: five destinations overflow four rows -> chronological list', () => {
-  const { view, rows, ticker, now } = run('clark-lake-2026-10-03-2317.json');
+test('Clark/Lake with the header: five destinations -> header and weather hidden, five rows', () => {
+  const { view, rows, bars } = run('clark-lake-2026-10-03-2317.json', { ...base, showWeather: true });
+  assert.equal(view, 'dest');
+  assert.equal(rows.length, 5);
+  assert.deepEqual(bars, { showHeader: false, showWeather: false, hidden: ['weather', 'header'] });
+});
+
+// Clark/Lake plus Orange and Purple: 7 destinations.
+function clarkLakeRush() {
+  const json = load('clark-lake-2026-10-03-2317.json');
+  const now = nowOf(json);
+  const arr = normalize(json, { log: quiet });
+  arr.push({ ln: 'OR', dest: 'Midway', known: true, dir: 5, t: now + 200, s: 0, rn: '701' });
+  arr.push({ ln: 'PR', dest: 'Linden', known: true, dir: 1, t: now + 260, s: 0, rn: '501' });
+  return { arr, now };
+}
+
+test('more than 5 destinations -> one train per row, header kept, weather off', () => {
+  const { arr, now } = clarkLakeRush();
+  const { view, rows, bars } = format(arr, { ...base, showWeather: true }, { now });
   assert.equal(view, 'chrono');
-  // One train per row, soonest first, with extras for the board to bring in.
+  assert.deepEqual(bars, { showHeader: true, showWeather: false, hidden: ['weather'] });
   assert.equal(rows.length, 4 + CHRONO_EXTRA);
-  assert.deepEqual(rows.map((r) => `${r.ln}:${r.lbl}`), ['GR:HARLEM', "BL:O'HARE", 'BL:FOREST', "BL:O'HARE", 'PK:54TH', 'BR:KIMBALL']);
-  assert.ok(rows.every((r) => r.t.length === 1 && r.s.length === 1));
-  assert.deepEqual(rows.map((r) => r.rn), ['016', '133', '139', '223', '313', '424']);
+  assert.ok(rows.every((r) => r.t.length === 1 && r.s.length === 1 && r.rn));
   assert.ok(mins({ t: rows.map((r) => r.t[0]) }, now).every((m, i, a) => !i || m >= a[i - 1]));
-  // The ticker is the same as in the destination view.
-  assert.ok(ticker.some((x) => x.ln === 'PK'));
+  assert.equal(format(arr, { ...base, showHeader: false, showWeather: true }, { now }).rows.length, 5 + CHRONO_EXTRA);
+});
+
+test('fitBars: weather goes first, then the header; past 5 the header comes back', () => {
+  const { fitBars } = require('./arrivals');
+  const f = (n, h, w) => { const b = fitBars(n, h, w); return `${b.showHeader ? 'H' : '-'}${b.showWeather ? 'W' : '-'}`; };
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 9].map((n) => f(n, true, true)), ['HW', 'HW', 'H-', 'H-', '--', 'H-', 'H-']);
+  assert.deepEqual([1, 3, 4, 5, 6].map((n) => f(n, false, true)), ['-W', '-W', '--', '--', '--']);
+  assert.deepEqual([4, 5, 6].map((n) => f(n, true, false)), ['H-', '--', 'H-']);
+  assert.deepEqual([5, 6].map((n) => f(n, false, false)), ['--', '--']);
+});
+
+test('Merchandise Mart all day: the weather row comes and goes with rush-only Purple', () => {
+  const now = 1_800_000_000;
+  const a = (ln, dest, m, rn) => ({ ln, dest, known: true, dir: 1, t: now + m * 60, s: 0, rn });
+  const offPeak = [a('BR', 'Kimball', 3, '401'), a('BR', 'Loop', 5, '402')];
+  const rush = [...offPeak, a('PR', 'Linden', 4, '501'), a('PR', 'Loop', 7, '502')];
+  const cfg = { ...base, showWeather: true };
+  const off = format(offPeak, cfg, { now });
+  assert.deepEqual([off.view, off.bars.showHeader, off.bars.showWeather], ['dest', true, true]);
+  const on = format(rush, cfg, { now, prevView: off.viewState });
+  assert.deepEqual([on.view, on.bars.showHeader, on.bars.showWeather, on.rows.length], ['dest', true, false, 4]);
+  const back = format(offPeak, cfg, { now, prevView: on.viewState });
+  assert.deepEqual([back.view, back.bars.showWeather], ['dest', true]);
 });
 
 test('row cap follows the header and weather toggles', () => {
@@ -65,10 +103,13 @@ test('row cap follows the header and weather toggles', () => {
   assert.equal(maxRows(true, false), 4);
   assert.equal(maxRows(false, true), 3);
   assert.equal(maxRows(true, true), 2);
-  // Belmont's four destinations don't fit two rows.
-  const { view, rows } = run('belmont-2026-10-03-2316.json', { ...base, showWeather: true });
-  assert.equal(view, 'chrono');
-  assert.equal(rows.length, 2 + CHRONO_EXTRA);
+  // Belmont's four destinations: the weather row is hidden to fit them as rows.
+  const { view, rows, bars } = run('belmont-2026-10-03-2316.json', { ...base, showWeather: true });
+  assert.equal(view, 'dest');
+  assert.equal(rows.length, 4);
+  assert.deepEqual(bars.hidden, ['weather']);
+  // autoFit off: the plain cap (2 rows) and the chronological list.
+  assert.equal(run('belmont-2026-10-03-2316.json', { ...base, showWeather: true, autoFit: false }).view, 'chrono');
 });
 
 test('the destination filter runs before the overflow check', () => {

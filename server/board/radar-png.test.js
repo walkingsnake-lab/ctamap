@@ -47,3 +47,12 @@ test('rejects what it can\'t decode', async () => {
   const truncated = fs.readFileSync(path.join(FX, 'lcref_202008102100.png')).subarray(0, 50000);
   await assert.rejects(decodeRows(Readable.from([truncated]), { y0: 3000, y1: 3100, onRow() {} }), /truncated|ended|end of file/);
 });
+
+test('a download that closes without ending or erroring rejects instead of hanging', async () => {
+  const { PassThrough } = require('stream');
+  const src = new PassThrough();
+  const p = decodeRows(src, { y0: 0, y1: 10, onRow() {} });
+  src.write(fs.readFileSync(path.join(FX, 'lcref_202610041600.png')).subarray(0, 5000));
+  src.destroy(); // like a socket torn down mid-transfer
+  await assert.rejects(p, /closed early|aborted|truncated/);
+});

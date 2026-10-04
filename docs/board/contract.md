@@ -49,6 +49,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 {
   "v": 42,
   "now": 1759546800,
+  "tzo": -18000,
   "age": 12,
   "screen": "transit",
   "bright": 100,
@@ -67,7 +68,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
   "radar": {
     "on": false,
     "frames": ["40100-202610032310", "40100-202610032315", "40100-202610032320", "40100-202610032325", "40100-202610032330", "40100-202610032335"],
-    "ft": [1759545000, 1759545300, 1759545600, 1759545900, 1759546200, 1759546500],
+    "ft": [1759544640, 1759545000, 1759545360, 1759545720, 1759546080, 1759546440],
     "clock": [40, 0, 24, 22],
     "split": false
   }
@@ -80,10 +81,13 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 |---|---|---|
 | `v` | int | Settings version (same as `/board/version`). |
 | `now` | int | Server epoch seconds. |
+| `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
 | `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. Until radar lands, `auto` resolves to `transit`. |
 | `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (Open-Meteo times for the station; 100 until weather data arrives), or the fixed level, or 0 for off. |
-| `header` | string \| null | Station name for the transit header, or `null` when the header is off. Also used as the ticker header. |
+| `header` | string \| null | Station name for the transit header, or `null` when the header is off or hidden to fit (see *Fitting the header and weather row*). |
+| `tickerHeader` | string \| null | Station name for the ticker header, or `null` when the header is off. Never hidden to fit. (Boards without it fall back to `header`.) |
+| `hidden` | array | Which of `"weather"`, `"header"` the server hid to fit this update's destinations, for the phone page and simulator. The board just follows `header` and `wx`. |
 | `view` | string | Transit view: `dest` (one row per destination, up to 3 times) or `chrono` (one row per train, soonest first). Chosen by the server; see *Transit view* below. |
 | `rows` | array | Transit rows, already filtered and ordered. `dest`: **capped** to the max for the header/weather toggles (5/4/3/2). `chrono`: the cap **plus 2** extra trains; the board shows the first *cap* live rows. Empty array means no predictions: the board shows the overnight layout. |
 | `ticker` | array | Up to 6 individual arrivals in time order for the ticker. |
@@ -103,6 +107,18 @@ Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 - When the destinations (after the filter) exceed the cap for the header/weather toggles, the server sends the chronological view instead of dropping rows. The ticker uses the same filter but not the cap.
 - Times are drawn 3px apart, tightening to 2px when the label would otherwise come within 3px of them. Transit labels are fitted per row against the 2px spacing at the times' widest before the next update (digits only shrink as times count down, but the first time may turn into `DUE`), so 7-letter names like `KIMBALL` and `COTTAGE` always fit.
 - Ticker destinations are fitted to 32px of 5x7 (`Jeff Pk` is exactly 32).
+
+#### Fitting the header and weather row (server)
+The board's `showHeader` / `showWeather` are the most it shows. On every update the server counts the destinations (after the row filter) and fits them (`fitBars` in `arrivals.js`):
+
+| Destinations | Header | Weather row | View |
+|---|---|---|---|
+| fit with both | shown | shown | rows |
+| fit without the weather row | shown | hidden | rows |
+| 5 | hidden | hidden | rows |
+| 6 or more | shown | hidden | one train per row |
+
+So a station with rush-only service (Purple at Merchandise Mart) gains and loses the weather row on its own. The weather row never shows with the chronological list.
 
 #### Transit view (server)
 - `chrono` whenever the destination count exceeds the cap, `dest` otherwise, decided on every update. `CHRONO_HOLD` in `arrivals.js` (0 now) can add a hold before switching back; that state is kept in memory per board and station.
@@ -175,7 +191,7 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 | Field | Meaning |
 |---|---|
 | `on` | Rain is in the box (server applies on/off hysteresis). Auto mode switches to `screen: "radar"` when true. |
-| `frames` | IDs of up to 6 latest frames (5 min apart), oldest first. Frame IDs are immutable, so the board fetches only IDs it doesn't already have. ID: `<mapid>-<YYYYMMDDHHMM UTC>`, plus `s` for a snow frame (so a station or mode change never reuses a cached frame). |
+| `frames` | IDs of up to 6 latest frames (6 min apart, on even minutes), oldest first. Frame IDs are immutable, so the board fetches only IDs it doesn't already have. ID: `<mapid>-<YYYYMMDDHHMM UTC>`, plus `s` for a snow frame (so a station or mode change never reuses a cached frame). |
 | `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar clock. |
 | `clock` | `[x, y, w, h]`: box the board draws the clock stack into (frame indicator, clock, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
 | `split` | `true` when the location has no usable water area; the clock box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–38, marker at 19,16; the board draws a gray `#333333` line on col 39; clock box `[40, 0, 24, 32]`, leaving a 1px gap before the widest clock). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator rows 2–3, clock rows 6–12, AM/PM rows 15–19, right-aligned to column 62. |
@@ -186,7 +202,7 @@ When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`. Th
 
 **`on` hysteresis** (provisional): turns on when the newest frame has ≥ 30 precip pixels (after water masking and despeckle, marker excluded), off when it drops below 10. Judged once per new frame. With `screen` `auto`, `on` switches the board to `radar`.
 
-**Source and processing** (`server/board/radar.js`): IEM `mrms_lcref` archive, `https://mesonet.agron.iastate.edu/archive/data/YYYY/MM/DD/GIS/mrms/lcref_YYYYMMDDHHMM.png` + `.wld` (7000 × 3500, 8-bit palette, 0.01°; the world file's origin differs by half a pixel between older and newer files, so each frame's `.wld` is read). Palette index → **dBZ = index × 0.5 − 32** (255 = missing; ≤ 65 is no echo), per IEM's lookup table. Each LED is ~1.5 mi (2.92 source columns × 2.17 rows at Chicago's latitude); a source pixel goes to the LED containing its center; LED value = mean **linear** Z → dBZ → level; water LEDs set to 0, then despeckle (drop precip pixels with < 2 precip neighbors), shoreline (6) on water LEDs next to land, the clock box cleared, then the marker. Masks come from `scripts/build-locations.js`: an LED is water when its center is inside Lake Michigan (`scripts/geo-src/lake-michigan.geojson`, Natural Earth 1:10m, public domain); a test checks every committed file matches a fresh build. Frames are stream-decoded (`radar-png.js`): only the ~70 rows around the station are unfiltered, and the download stops after them (~14 MB peak vs ~150 MB for a full pngjs decode). The poller runs every 20 s while a board asked in the last 2 min, fetching one source frame per pass: the newest 5-minute slot first (expected 2 min after its time), then the rest of the 30-minute loop. A missing frame (404) is retried after 2 min. The last 12 processed frames per station are kept.
+**Source and processing** (`server/board/radar.js`): IEM `mrms_lcref` archive, `https://mesonet.agron.iastate.edu/archive/data/YYYY/MM/DD/GIS/mrms/lcref_YYYYMMDDHHMM.png` + `.wld` (7000 × 3500, 8-bit palette, 0.01°; the world file's origin differs by half a pixel between older and newer files, so each frame's `.wld` is read). Palette index → **dBZ = index × 0.5 − 32** (255 = missing; ≤ 65 is no echo), per IEM's lookup table. Each LED is ~1.5 mi (2.92 source columns × 2.17 rows at Chicago's latitude); a source pixel goes to the LED containing its center; LED value = mean **linear** Z → dBZ → level; water LEDs set to 0, then despeckle (drop precip pixels with < 2 precip neighbors), shoreline (6) on water LEDs next to land, the clock box cleared, then the marker. Masks come from `scripts/build-locations.js`: an LED is water when its center is inside Lake Michigan (`scripts/geo-src/lake-michigan.geojson`, Natural Earth 1:10m, public domain); a test checks every committed file matches a fresh build. Frames are stream-decoded (`radar-png.js`): only the ~70 rows around the station are unfiltered, and the download stops after them (~14 MB peak vs ~150 MB for a full pngjs decode). The poller runs every 20 s while a board asked in the last 2 min, fetching one source frame per pass: the newest slot first (expected 2 min after its time), then the rest of the 30-minute loop. Slots are every **6 minutes** (multiples of 6 min since midnight UTC): IEM's archive only has frames at even minutes, and 5-minute slots asked for odd minutes half the time. A missing frame (404) is retried after 2 min; a download that hasn't finished in 60 s is abandoned. The last 12 processed frames per station are kept.
 
 ### `GET /board/radar/<frameId>?b=<id>`
 One radar frame for that board's location.
@@ -199,7 +215,7 @@ One radar frame for that board's location.
 | 0 | off (land with no rain, masked water, clock box) |
 | 1–5 | rain levels: 15/25/35/45/55 dBZ (dim green, green, yellow, orange, red) |
 | 6 | shoreline: the lake's edge pixels, water side; always drawn (water is masked, so rain never covers it) |
-| 7 | location marker (white dot; the 4 pixels around it are 0) |
+| 7 | location marker (white dot; precip in the 4 pixels around it is cleared to 0, shoreline is kept) |
 | 8–10 | snow levels, light to heavy (light blue, pale blue, white) |
 
 A frame is either all rain levels (1–5) or all snow levels (8–10); the server picks the mode per frame (see **Snow mode** below). The board owns the palette, including the ~65% fill brightness.
@@ -229,6 +245,8 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/stations` | Station list for pickers: `[{mapid, desc, short}]`, sorted by `desc`. |
 | `GET /board/<secret>/api/state` | Full state JSON (all boards). |
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
+| `GET /board/<secret>/api/test?b=<id>` | Simulator test alerts for board `b`: `{lines, warn, left}` (`left` = seconds until expiry, 0 when none). |
+| `POST /board/<secret>/api/test?b=<id>` | Start a test alert: body `{lines: ["RD", ...], warn: {kind: "svr"\|"tor", lvl: "watch"\|"warning"} \| null}`. Lines are `RD BL BR GR OR PR PK YL`; they blink as if CTA had a major alert, and `warn` replaces the NWS warning. Applies to the real board's updates too, and expires after 10 minutes. An empty body (no lines, no warn) clears it. `400` for bad values, `404` for an unknown board. |
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 
 POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `screen`, and `bright`; anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.

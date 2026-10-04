@@ -177,6 +177,7 @@ test('update: payload shape for the default Morse board', async () => {
   assert.deepEqual(tracker.asked, ['40100']);
   assert.equal(b.v, 1);
   assert.ok(Math.abs(b.now - now) < 5);
+  assert.ok(b.tzo === -5 * 3600 || b.tzo === -6 * 3600);
   assert.ok(b.age >= 7 && b.age < 12);
   assert.equal(b.screen, 'transit');
   assert.equal(b.bright, 100);
@@ -323,21 +324,29 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   const alerts = { get: () => ({ alerts: parseAlerts(xml), fetchedAt: now }) };
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }), weather, alerts });
   s.store.update('home', { station: { mapid: '40380' } }); // Clark/Lake
+  s.store.update('home', { rows: ["BL:O'Hare", 'GR:Harlem'] }); // 2 destinations: everything fits
   const h = { headers: { 'X-Board-Token': 'tok' } };
   let b = (await s.req('/board/update?b=home', h)).body;
   assert.deepEqual(weather.asked.at(-1), [41.885737, -87.630886]); // the station's coordinates
   assert.deepEqual(b.wx, { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 });
+  assert.equal(b.header, 'CLARK/LAKE');
+  assert.deepEqual(b.hidden, []);
   assert.equal(b.bright, 100);
-  // Header + weather leaves 2 rows, so Clark/Lake's 5 destinations go chronological.
-  assert.equal(b.view, 'chrono');
+  // All 5 destinations: weather and header are hidden to fit them as rows;
+  // the ticker keeps its header.
+  s.store.update('home', { rows: [] });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.view, 'dest');
+  assert.equal(b.rows.length, 5);
+  assert.deepEqual([b.header, b.wx, b.tickerHeader], [null, null, 'CLARK/LAKE']);
+  assert.deepEqual(b.hidden, ['weather', 'header']);
   // Green has a major delay; Blue only has a planned schedule change.
   for (const r of b.rows) assert.equal(r.a, r.ln === 'GR' ? 1 : 0, `${r.ln} ${r.lbl}`);
   assert.ok(b.ticker.every((x) => x.a === (x.ln === 'GR' || x.ln === 'OR' ? 1 : 0)));
-  // Weather row off: no wx, and the rows get the space back.
+  // Weather row off: no wx either way.
   s.store.update('home', { showWeather: false });
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.wx, null);
-  assert.equal(b.rows.filter((r) => r.t.length).length >= 4, true);
   // Overnight: auto brightness dims.
   w.sunset = now - 1;
   b = (await s.req('/board/update?b=home', h)).body;
@@ -426,5 +435,35 @@ test('simulator preview: header and weather toggles without changing the board',
   assert.equal((await s.req('/board/secret123/api/update?b=home&header=1')).body.header, 'MORSE');
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&header=1&weather=0`);
   assert.equal(png.status, 200);
+  await s.close();
+});
+
+test('simulator test alerts: fake line alerts and a weather warning, merged into updates, then expire', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, left: 0 });
+  let r = await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' } });
+  assert.equal(r.status, 200);
+  const t = await r.json();
+  assert.deepEqual([t.lines, t.warn], [['RD'], { kind: 'tor', lvl: 'warning' }]);
+  assert.ok(t.left > 590 && t.left <= 600);
+  // The real board's update carries them.
+  const b = (await s.req('/board/update?b=home', h)).body;
+  assert.ok(b.rows.every((x) => x.a === 1));
+  assert.ok(b.ticker.every((x) => x.a === 1));
+  assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' });
+  // Bad input is rejected; an empty set clears.
+  assert.equal((await post({ lines: ['XX'] })).status, 400);
+  assert.equal((await post({ warn: { kind: 'hail', lvl: 'warning' } })).status, 400);
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=nope`)).status, 404);
+  r = await post({ lines: [], warn: null });
+  assert.deepEqual((await r.json()).lines, []);
+  const c = (await s.req('/board/update?b=home', h)).body;
+  assert.ok(c.rows.every((x) => x.a === 0));
+  assert.equal(c.warn, null);
   await s.close();
 });

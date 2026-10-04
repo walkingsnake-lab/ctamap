@@ -111,8 +111,13 @@ function decodeRows(source, { y0 = 0, y1 = Infinity, onRow }) {
         }
       } catch (e) { finish(e); }
     });
-    source.on('end', () => { if (!done && inflate) inflate.end(); else if (!done) finish(new Error('PNG truncated')); });
+    let ended = false;
+    source.on('end', () => { ended = true; if (!done && inflate) inflate.end(); else if (!done) finish(new Error('PNG truncated')); });
     source.on('error', (e) => finish(e));
+    // A connection that just closes (aborted, destroyed after a socket
+    // timeout) emits neither 'end' nor 'error' on some paths.
+    source.on('close', () => { if (!done && !ended) finish(new Error('PNG source closed early')); });
+    source.on('aborted', () => finish(new Error('PNG download aborted')));
   });
 }
 

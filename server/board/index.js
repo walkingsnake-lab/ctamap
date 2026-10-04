@@ -11,6 +11,7 @@ const { createWeather, toWx, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar } = require('./radar');
+const { tzOffset } = require('./time');
 const fs = require('fs');
 const path = require('path');
 const { render, assets } = require('./render');
@@ -103,6 +104,29 @@ function createBoard({
   const resolveScreen = (s, radarOn) => (s === 'auto' ? (radarOn ? 'radar' : 'transit') : s);
   const NO_RADAR = { on: false, frames: [], ft: [], clock: null, split: false };
 
+  // Test alerts, set from the simulator: fake major CTA alerts on some lines
+  // and/or a fake NWS warning, merged into this board's updates (so the real
+  // board shows them too) until they expire. Memory only.
+  const TEST_S = 600;
+  const LINES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
+  const tests = new Map(); // board id -> { lines, warn, until }
+  function activeTest(id, now) {
+    const t = tests.get(id);
+    if (t && t.until > now) return t;
+    tests.delete(id);
+    return null;
+  }
+  function validateTest(body) {
+    if (!body || typeof body !== 'object') throw new ValidationError('body must be an object');
+    const lines = body.lines == null ? [] : body.lines;
+    if (!Array.isArray(lines) || !lines.every((l) => LINES.includes(l))) throw new ValidationError(`lines must be codes from ${LINES.join(' ')}`);
+    const warn = body.warn == null ? null : body.warn;
+    if (warn && !(['svr', 'tor'].includes(warn.kind) && ['watch', 'warning'].includes(warn.lvl))) {
+      throw new ValidationError('warn must be {kind: svr|tor, lvl: watch|warning}');
+    }
+    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl } };
+  }
+
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
   // without changing the board's config. The board's row list is
   // station-specific, so it's ignored while previewing another station.
@@ -139,21 +163,29 @@ function createBoard({
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }
+    // Test alerts from the simulator (expire on their own).
+    const test = activeTest(id, now);
+    if (test) for (const ln of test.lines) alertLines.add(ln);
     const viewKey = `${id}:${board.station.mapid}`;
-    const { view, viewState, rows, ticker } = format(data.arrivals, cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
+    const { view, viewState, rows, ticker, bars } = format(data.arrivals, cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
       v: board.v,
       now,
+      tzo: tzOffset(now),
       age: Math.max(0, Math.round(now - data.fetchedAt)),
       screen: resolveScreen(board.screen, radarState.on),
       bright: resolveBright(board.bright, w, now),
-      header: board.showHeader ? board.station.name : null,
+      // Transit header and weather row as fitted to the destinations; the
+      // ticker keeps its header (it doesn't need the room).
+      header: bars.showHeader ? board.station.name : null,
+      tickerHeader: board.showHeader ? board.station.name : null,
+      hidden: bars.hidden,
       view,
       rows,
       ticker,
-      wx,
-      warn: pickWarn(nwsAlerts, now),
+      wx: bars.showWeather ? wx : null,
+      warn: (test && test.warn) || pickWarn(nwsAlerts, now),
       radar: radarState,
     };
   }
@@ -270,6 +302,28 @@ function createBoard({
         const mapid = String(parsed.query.mapid || '') || (board && board.station.mapid);
         if (!mapid) return send(res, 404, { err: 'unknown_board' });
         return sendFrame(res, radar.frame(mapid, rest[2]));
+      }
+
+      // Test alerts for this board: GET the active set, POST to replace it
+      // (an empty set clears it).
+      if (sub === 'api/test') {
+        const id = String(parsed.query.b || '');
+        if (!store.get(id)) return send(res, 404, { err: 'unknown_board' });
+        const now = nowSecs();
+        if (method === 'POST') {
+          let t;
+          try { t = validateTest(await readJson(req)); }
+          catch (e) {
+            if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+            throw e;
+          }
+          if (t.lines.length || t.warn) tests.set(id, { ...t, until: now + TEST_S });
+          else tests.delete(id);
+        } else if (method !== 'GET') {
+          return send(res, 405, { err: 'method' });
+        }
+        const t = activeTest(id, now);
+        return send(res, 200, t ? { lines: t.lines, warn: t.warn, left: t.until - now } : { lines: [], warn: null, left: 0 });
       }
 
       // Station list for the simulator's picker.

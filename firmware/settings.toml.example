@@ -1,0 +1,16 @@
+# Copy to CIRCUITPY/settings.toml and fill in. Networks are tried in order;
+# the phone hotspot last (spec §10).
+WIFI_SSID_1 = "home-network"
+WIFI_PASSWORD_1 = "..."
+WIFI_SSID_2 = "work-visitor"
+WIFI_PASSWORD_2 = "..."
+WIFI_SSID_3 = "Jake's iPhone"
+WIFI_PASSWORD_3 = "..."
+
+BOARD_URL = "https://ctamap.fly.dev"
+BOARD_ID = "home"
+# Same value as the BOARD_TOKEN Fly secret.
+BOARD_TOKEN = "..."
+
+# Panel color depth (1-6). Higher = smoother dim colors, more flicker risk.
+MATRIX_BIT_DEPTH = 5

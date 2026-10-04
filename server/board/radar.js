@@ -23,7 +23,10 @@ const SPLIT_CLOCK = [40, 0, W - 40, H];
 // rows 2-19 + margin). Built per station by scripts/build-locations.js.
 const FULL_CLOCK = [40, 0, 24, 22];
 const SHORE = 6;
-const STEP = 300;                        // s between loop frames
+// s between loop frames. IEM's archive only has frames at even minutes;
+// every multiple of 6 minutes is one (5-minute steps hit odd minutes half
+// the time). 6 frames still span 30 minutes.
+const STEP = 360;
 const LOOP = 6;                          // frames in the loop (30 min)
 const KEEP = 12;                         // frames kept per location
 const ON_PX = 30, OFF_PX = 10;           // radar.on hysteresis (colored px); provisional
@@ -170,9 +173,10 @@ function toFrame(dbz, geo, mode, loc = null) {
     const [bx, by, bw, bh] = loc.clock;
     for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) { if (isPrecip(out[y * W + x])) colored--; out[y * W + x] = 0; }
   }
-  // Location marker: white dot, the 4 pixels around it unlit.
+  // Location marker: white dot. Precip in the 4 pixels around it is cleared
+  // so the dot stands out; the shoreline stays continuous.
   const m = geo.my * W + geo.mx;
-  for (const k of [m - 1, m + 1, m - W, m + W]) { if (isPrecip(out[k])) colored--; out[k] = 0; }
+  for (const k of [m - 1, m + 1, m - W, m + W]) if (isPrecip(out[k])) { colored--; out[k] = 0; }
   if (isPrecip(out[m])) colored--;
   out[m] = MARKER;
   return { bytes: out, colored };
@@ -219,6 +223,17 @@ async function fetchFrame(stamp) {
 
 // ---- frame store and poller ----
 
+// A stalled download must not block the poller forever (it runs one fetch
+// at a time).
+const FRAME_TIMEOUT_MS = 60000;
+function withTimeout(promise, ms, what) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${what} timed out`)), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 // Keeps processed frames per station for the stations boards are showing.
 // One source frame is fetched per pass (newest missing first, then the rest
 // of the 30-minute loop), and only while a board has asked recently.
@@ -230,6 +245,7 @@ function createRadar({
   retry = 120,             // s before retrying a missing frame
   idle = 120,              // s without a board request before polling stops
   tick = 20000,            // ms between passes
+  frameTimeoutMs = FRAME_TIMEOUT_MS,
   log = console,
 } = {}) {
   const locs = new Map();     // mapid -> { lat, lon, wantedAt, frames: Map(stamp -> frame), on }
@@ -261,7 +277,7 @@ function createRadar({
 
   async function pass() {
     if (busy) return busy;
-    busy = (async () => {
+    const run = (async () => {
       try {
         const t = now();
         const active = [...locs.entries()].filter(([, l]) => t - l.wantedAt <= idle);
@@ -273,7 +289,7 @@ function createRadar({
           const lacking = active.filter(([, l]) => !l.frames.has(stamp));
           if (!lacking.length) continue;
           try {
-            await processStamp(stamp, lacking);
+            await withTimeout(processStamp(stamp, lacking), frameTimeoutMs, `radar ${stamp}`);
             missing.delete(stamp);
           } catch (e) {
             missing.set(stamp, t + retry);
@@ -284,11 +300,15 @@ function createRadar({
         for (const [s, until] of missing) if (until < t - 3600) missing.delete(s);
       } catch (e) {
         log.error('[board] radar pass failed:', e && e.stack ? e.stack : e);
-      } finally {
-        busy = null;
       }
     })();
-    return busy;
+    // Clear after assigning: a pass with nothing to do finishes synchronously,
+    // and clearing inside it ran before `busy` was set, which left the poller
+    // stuck "busy" forever (radar froze after the first slot missing from the
+    // archive).
+    busy = run;
+    run.then(() => { if (busy === run) busy = null; });
+    return run;
   }
 
   return {
