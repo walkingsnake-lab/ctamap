@@ -2,10 +2,13 @@
 
 Real-time visualization of Chicago CTA train positions using D3.js. Trains animate smoothly along track geometry, with direction inference and phantom jump detection.
 
+This server also backs a **64x32 LED arrivals board** (Adafruit Matrix Portal M4). The board code lives in `server/board/` and has its own rules; see [LED Board](#led-board-serverboard) below.
+
 ## Running the Project
 
 ```bash
 npm start        # Node.js server on port 3000 (default)
+npm test         # board tests (node:test); script added with the first board code
 ```
 
 Open `http://localhost:3000` in a browser.
@@ -71,8 +74,40 @@ Scripts are bundled via `build.js` (esbuild) into `dist/bundle.min.js`. Run `npm
 - Variable names: `rn` = run number, `rt` = route code, `lon`/`lat`, `legend` = line code
 - Train state lives in plain JS objects; D3 selections reference them via `.datum()`
 - CSS classes for state: `.selected`, `.dimmed`, `.exiting`, `.retiring`, `.pr-express-active`
-- No TypeScript, no bundler, no test suite — manual testing only
+- No TypeScript, no bundler. The map has no test suite (manual testing only); board code under `server/board/` is tested, see below.
 
 ## Branching
 
 PRs use `claude/<feature>-<id>` branch names. Recent work has focused on direction logic (loop/junction handling) and station label display.
+
+## LED Board (`server/board/`)
+
+The server fetches and formats everything for a 64x32 LED matrix board; the board only draws what it receives. Full design: [`docs/board/design-spec.md`](docs/board/design-spec.md). The API contract (endpoints, `/board/update` JSON, radar frame format) will live in `docs/board/contract.md`; once it exists, it is the source of truth, and changes to the API must update it in the same PR.
+
+### Boundaries
+- All board code goes in `server/board/`. `server.js` gets exactly one hook: requests whose path starts with `/board/` are handed to the board router. Do not add board logic anywhere else.
+- Do not modify map code (`js/`, `server/train-state.js`, `server/track-engine.js`, `server/geo-state.js`) for board work. Exception: shared alerts (below).
+- The map and the board share one process. Board failures must not take down the map: wrap every board poller and the radar pipeline in try/catch, log, and skip the cycle.
+
+### Shared alerts
+- CTA alerts are fetched by one **background poller** (every 2–5 min) that both `/api/alerts` and the board read. Do not add a second alerts fetch.
+- Parse **every** `ImpactedService` in an alert (one alert can cover several lines). The map keeps its existing filter (major or delay); the board uses service-affecting alerts per line.
+
+### Stack and dependencies
+- Plain Node `http`, no framework, same as the map.
+- Radar PNG decoding uses **`pngjs`** (pure JS). Do not add `sharp`, canvas, GIS libraries, or a Python sidecar.
+- Water masks are generated once per location by a script in `scripts/` and committed as files; no geo processing at runtime.
+
+### Tests
+- Every board formatting rule gets a test using Node's built-in `node:test` (no test framework dependency). `npm test` runs `node --test server/board/`.
+- Tests run against **recorded fixtures** in `server/board/fixtures/` (real responses from Train Tracker, Bus Tracker, CTA alerts, NWS, Open-Meteo, MRMS frames). Tests never hit live APIs and never need API keys.
+- When you hit a new real-world case (unknown destination, short-turn, multi-line alert, storm), save the raw response as a fixture and add a test.
+
+### State and secrets
+- Board state (per-board config, screen/brightness overrides, version counter) is a JSON file on a Fly volume mounted at **`/data`**, never inside the app directory: the static file fallback in `server.js` serves any file under it. Write atomically (temp file + rename).
+- Key state by board ID, even with one board.
+- Secrets are Fly secrets: `CTA_KEY` (Train Tracker), `CTA_BUS_KEY`, `BOARD_TOKEN`, `BOARD_CONTROL_PATH`. Never commit keys or put them in fixtures (strip `key=` from recorded URLs).
+
+### Verification
+- The board's output can't be seen from here. Use the board simulator (a 64x32 canvas page rendering `/board/update`, to be built under `server/board/`) and check its screenshots for layout changes.
+- Board-side CircuitPython is flashed and tested on hardware by the owner; ask for serial logs rather than guessing.
