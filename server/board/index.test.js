@@ -437,3 +437,33 @@ test('simulator preview: header and weather toggles without changing the board',
   assert.equal(png.status, 200);
   await s.close();
 });
+
+test('simulator test alerts: fake line alerts and a weather warning, merged into updates, then expire', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, left: 0 });
+  let r = await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' } });
+  assert.equal(r.status, 200);
+  const t = await r.json();
+  assert.deepEqual([t.lines, t.warn], [['RD'], { kind: 'tor', lvl: 'warning' }]);
+  assert.ok(t.left > 590 && t.left <= 600);
+  // The real board's update carries them.
+  const b = (await s.req('/board/update?b=home', h)).body;
+  assert.ok(b.rows.every((x) => x.a === 1));
+  assert.ok(b.ticker.every((x) => x.a === 1));
+  assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' });
+  // Bad input is rejected; an empty set clears.
+  assert.equal((await post({ lines: ['XX'] })).status, 400);
+  assert.equal((await post({ warn: { kind: 'hail', lvl: 'warning' } })).status, 400);
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=nope`)).status, 404);
+  r = await post({ lines: [], warn: null });
+  assert.deepEqual((await r.json()).lines, []);
+  const c = (await s.req('/board/update?b=home', h)).body;
+  assert.ok(c.rows.every((x) => x.a === 0));
+  assert.equal(c.warn, null);
+  await s.close();
+});
