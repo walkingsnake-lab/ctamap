@@ -9,7 +9,7 @@ Status: **draft v0**. Items marked **(decide)** are open.
 ## Conventions
 
 - **Base URL:** `https://ctamap.fly.dev`
-- **Times:** all timestamps are **epoch seconds (UTC)**. The server converts CTA's zone-less Chicago local times (`arrT` and `prdt`, format `yyyyMMdd HH:mm:ss`) before sending.
+- **Times:** all timestamps are **epoch seconds (UTC)**. The server converts CTA's zone-less Chicago local times before sending. With `outputType=JSON`, `arrT`, `prdt`, and `tmst` look like `2026-10-03T23:16:07` (ISO without an offset), not the `yyyyMMdd HH:mm:ss` the API docs show for XML.
 - **Clock sync:** every JSON response includes `now`, the server's epoch time. The board keeps `offset = now - time.monotonic()` and uses it for countdowns and clocks. No NTP on the board.
 - **Board ID:** query param `b` (e.g. `b=home`). State is keyed by board ID.
 - **Auth:** header `X-Board-Token: <BOARD_TOKEN>` on every board endpoint except `/board/ping`. If `BOARD_TOKEN` is unset (local dev), auth is skipped.
@@ -90,6 +90,11 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `radar` | object | Radar state (see below). |
 
 All screens' data is always included so a button press switches screens without a fetch.
+
+#### Which predictions are shown
+Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
+- **Trains ending at this station are dropped**: any prediction whose `destNm` equals the station's `staNm` (e.g. at Howard, Red/Yellow "Terminal Arrival" and late-night Purple trains marked `destNm` "Howard").
+- `destSt` is `"0"` and `lat`/`lon` are null on schedule-based predictions; `lat`/`lon` can also be `"0"`. Don't rely on them.
 
 #### Line codes
 Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`, `G`→`GR`, `Org`→`OR`, `P`→`PR`, `Pink`→`PK`, `Y`→`YL`. Short-name map keys are matched against `destNm` exactly as Train Tracker returns it (e.g. `O'Hare`, `Loop`); confirm each key against recorded fixtures.
@@ -243,7 +248,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 ## Open items
 
 - **(decide)** Arrival drop grace (30 s) and whether `DUE` should also honor `isApp`.
-- **(decide)** Schedule-based predictions (`isSch=1`, common at terminals and late at night): show like live ones, mark them, or drop them. Same question for `isFlt=1` (possible fault).
+- **(decide)** Schedule-based predictions (`isSch=1`): show like live ones, mark them, or drop them. Same for `isFlt=1`. Evidence: at Morse, southbound trains are schedule-based until they leave the Howard terminal one stop away, so dropping them would hide most southbound trains at Morse.
 - **(decide)** Hysteresis thresholds for `radar.on` (colored-pixel counts); set after viewing real storms from the IEM archive.
 - Verify the MRMS dBZ formula before fixing level thresholds.
 - Tune snow thresholds (provisional 10/20/30 dBZ) on archived snow events.
