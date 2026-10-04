@@ -733,6 +733,9 @@ def render_radar(p, f, now=None, idx=None, frames=None):
 
 def apply_brightness(f, bright):
     k = max(0, min(100, 100 if bright is None else bright)) / 100
+    if hasattr(f, 'set_brightness'):
+        f.set_brightness(k)  # the board scales its palette instead of pixels
+        return f
     if k == 1:
         return f
     px = f.px

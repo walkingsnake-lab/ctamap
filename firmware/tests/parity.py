@@ -8,7 +8,37 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.dirname(__file__))
 from boardlib import draw  # noqa: E402
+
+# --device: render through the board's BoardFrame (palette-indexed bitmap,
+# fills and radar copies via bitmaptools stand-ins) instead of draw.Frame.
+DEVICE = '--device' in sys.argv
+if DEVICE:
+    import fakehw  # noqa: E402
+    fakehw.install()
+    from boardlib import device  # noqa: E402
+    import displayio  # noqa: E402
+
+
+class Result:
+    def __init__(self, px):
+        self.px = px
+
+
+def new_frame():
+    if not DEVICE:
+        return draw.Frame()
+    f = device.BoardFrame(displayio.Bitmap(64, 32, 256), displayio.Palette(256))
+    f.begin()
+    return f
+
+
+def finish(f):
+    if not DEVICE:
+        return f
+    f.commit()
+    return Result(fakehw.to_rgb(f))
 
 
 def diff(name, want_b64, f, limit=6):
@@ -32,9 +62,9 @@ def main(path):
             frames = {k: bytes(v) for k, v in s['frames'].items()} if s.get('frames') else None
             for r in s['renders']:
                 o = r['opts']
-                f = draw.render(s['payload'], draw.Frame(), screen=o.get('screen'), now=o.get('now'),
-                                blink=o.get('blink', False), page=o.get('page', 0), slide=o.get('slide', 0),
-                                idx=o.get('idx'), frames=frames)
+                f = finish(draw.render(s['payload'], new_frame(), screen=o.get('screen'), now=o.get('now'),
+                                       blink=o.get('blink', False), page=o.get('page', 0), slide=o.get('slide', 0),
+                                       idx=o.get('idx'), frames=frames))
                 count += 1
                 d = diff('%s %s' % (s['name'], json.dumps(o)), r['px'], f)
                 if d:
@@ -43,7 +73,7 @@ def main(path):
             anim = draw.TransitAnimator()
             for i, st in enumerate(s['steps']):
                 view = anim.step(st['payload'], st['now'], st['t'])
-                f = draw.render(st['payload'], draw.Frame(), screen='transit', now=st['now'], view=view, blink=st['blink'])
+                f = finish(draw.render(st['payload'], new_frame(), screen='transit', now=st['now'], view=view, blink=st['blink']))
                 count += 1
                 d = diff('%s step %d (t=%s)' % (s['name'], i, st['t']), st['px'], f)
                 if d:
@@ -55,4 +85,4 @@ def main(path):
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1]))
+    sys.exit(main([a for a in sys.argv[1:] if not a.startswith('--')][0]))
