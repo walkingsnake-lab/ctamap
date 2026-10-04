@@ -9,7 +9,7 @@ Status: **draft v0**. Items marked **(decide)** are open.
 ## Conventions
 
 - **Base URL:** `https://ctamap.fly.dev`
-- **Times:** all timestamps are **epoch seconds (UTC)**. The server converts CTA's zone-less Chicago local times (`arrT` and `prdt`, format `yyyyMMdd HH:mm:ss`) before sending.
+- **Times:** all timestamps are **epoch seconds (UTC)**. The server converts CTA's zone-less Chicago local times before sending. With `outputType=JSON`, `arrT`, `prdt`, and `tmst` look like `2026-10-03T23:16:07` (ISO without an offset), not the `yyyyMMdd HH:mm:ss` the API docs show for XML.
 - **Clock sync:** every JSON response includes `now`, the server's epoch time. The board keeps `offset = now - time.monotonic()` and uses it for countdowns and clocks. No NTP on the board.
 - **Board ID:** query param `b` (e.g. `b=home`). State is keyed by board ID.
 - **Auth:** header `X-Board-Token: <BOARD_TOKEN>` on every board endpoint except `/board/ping`. If `BOARD_TOKEN` is unset (local dev), auth is skipped.
@@ -54,12 +54,12 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
   "bright": 100,
   "header": "MORSE",
   "rows": [
-    {"ln": "RD", "lbl": "HOWARD", "t": [1759546860, 1759547280, 1759547700], "a": 0},
-    {"ln": "RD", "lbl": "95TH",   "t": [1759547040, 1759547520],             "a": 0}
+    {"ln": "RD", "lbl": "HOWARD", "t": [1759546860, 1759547280, 1759547700], "s": [0, 0, 0], "a": 0},
+    {"ln": "RD", "lbl": "95TH",   "t": [1759547040, 1759547520],             "s": [0, 1],    "a": 0}
   ],
   "ticker": [
-    {"ln": "RD", "d": "Howard", "t": 1759546860, "a": 0},
-    {"ln": "RD", "d": "95th",   "t": 1759547040, "a": 0}
+    {"ln": "RD", "d": "Howard", "t": 1759546860, "s": 0, "a": 0},
+    {"ln": "RD", "d": "95th",   "t": 1759547040, "s": 0, "a": 0}
   ],
   "wx": {"icon": "rain", "temp": 54, "word": "RAIN", "hi": 60, "lo": 48},
   "warn": null,
@@ -80,8 +80,8 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `v` | int | Settings version (same as `/board/version`). |
 | `now` | int | Server epoch seconds. |
 | `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
-| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. |
-| `bright` | int | Global brightness 0–100, already resolved (auto sunrise/sunset, fixed level, or 0 for off). |
+| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. Until radar lands, `auto` resolves to `transit`. |
+| `bright` | int | Global brightness 0–100, already resolved (auto sunrise/sunset, fixed level, or 0 for off). Until weather lands, `auto` resolves to 100. |
 | `header` | string \| null | Station name for the transit header, or `null` when the header is off. Also used as the ticker header. |
 | `rows` | array | Transit rows, already filtered, ordered, and **capped** to the max for the header/weather toggles (5/4/3/2). Empty array means no predictions: the board shows the overnight layout. |
 | `ticker` | array | Up to 6 individual arrivals in time order for the ticker. |
@@ -90,6 +90,17 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `radar` | object | Radar state (see below). |
 
 All screens' data is always included so a button press switches screens without a fetch.
+
+#### Which predictions are shown
+Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
+- **Trains ending at this station are dropped**: any prediction whose `destNm` equals the station's `staNm` (e.g. at Howard, Red/Yellow "Terminal Arrival" and late-night Purple trains marked `destNm` "Howard").
+- `destSt` is `"0"` and `lat`/`lon` are null on schedule-based predictions; `lat`/`lon` can also be `"0"`. Don't rely on them.
+
+#### Row order and fitting (server)
+- With no `rows` list in the board config, rows are ordered by line (`RD BL BR GR OR PR PK YL`), then Train Tracker direction (`trDr`), then name. With a list, the list is the order and the filter; destinations CTA doesn't normally use are appended after it.
+- Rows past the cap for the header/weather toggles are dropped from the end. The ticker uses the same filter but not the cap.
+- Transit labels are fitted per row so they end at least 3px before the times at their widest before the next update (digits only shrink as times count down, but the first time may turn into `DUE`). In the rare `DUE` + two 2-digit case, `COTTAGE`/`KIMBALL` lose a letter.
+- Ticker destinations are fitted to 32px of 5x7 (`Jeff Pk` is exactly 32).
 
 #### Line codes
 Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`, `G`→`GR`, `Org`→`OR`, `P`→`PR`, `Pink`→`PK`, `Y`→`YL`. Short-name map keys are matched against `destNm` exactly as Train Tracker returns it (e.g. `O'Hare`, `Loop`); confirm each key against recorded fixtures.
@@ -101,6 +112,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `ln` | Line code for the color block: `RD` `BL` `BR` `GR` `OR` `PK` `PR` `YL`. The board owns the color palette. |
 | `lbl` | Label, uppercase, fitted. |
 | `t` | Up to 3 arrival times (epoch), ascending. |
+| `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`), drawn grey instead of amber. |
 | `a` | `1` if the line has an active service-affecting CTA alert (block blinks to "!"). |
 
 #### Ticker item (`ticker[]`)
@@ -110,6 +122,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `ln` | Line code (row fill color). |
 | `d` | Destination, mixed case, `tt` replaced with the ligature codepoint, fitted for the 5x7 font. |
 | `t` | Arrival time (epoch). |
+| `s` | `1` if schedule-based → index number is replaced by the clock glyph (unless `a` is `1`; the alert circle wins). |
 | `a` | `1` → index number is replaced by the alert circle. |
 
 #### Countdown rules (board side)
@@ -149,7 +162,7 @@ When `warn` is non-null, the board replaces `word` with the warning tag.
 | `clock` | `[x, y, w, h]`: box the board draws the clock stack into (frame indicator, clock, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
 | `split` | `true` when the location has no usable water area; the clock box is then the right-side panel. |
 
-When `on` is false, `frames` and `ft` may be empty.
+When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`.
 
 ### `GET /board/radar/<frameId>?b=<id>`
 One radar frame for that board's location.
@@ -243,7 +256,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 ## Open items
 
 - **(decide)** Arrival drop grace (30 s) and whether `DUE` should also honor `isApp`.
-- **(decide)** Schedule-based predictions (`isSch=1`, common at terminals and late at night): show like live ones, mark them, or drop them. Same question for `isFlt=1` (possible fault).
+- Schedule-based predictions (`isSch=1`) are shown and marked via `s` (decided Oct 3: grey times on transit, clock on ticker). `isFlt=1` is shown normally. Ticker clock is the `CLOCK` glyph (U+E006).
 - **(decide)** Hysteresis thresholds for `radar.on` (colored-pixel counts); set after viewing real storms from the IEM archive.
 - Verify the MRMS dBZ formula before fixing level thresholds.
 - Tune snow thresholds (provisional 10/20/30 dBZ) on archived snow events.

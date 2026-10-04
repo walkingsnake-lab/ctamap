@@ -104,6 +104,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | **Clocks (all screens)** | 80% white `#cccccc` |
 | First arrival time | amber `#ffb000` |
 | Later times | dim amber `#9c6a00` |
+| Schedule-based times (`isSch`), first / later | grey `#b0b0b0` / `#6e6e6e` (instead of amber; same width, so digit rolls are unaffected) |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
 | Dividers | `#333333` |
 | Shoreline | `#34485e` |
@@ -120,20 +121,22 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 
 ### Rows
 - 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest).
+- **Schedule-based predictions** (`isSch`, e.g. southbound trains at Morse that haven't left the Howard terminal) are shown, with the time in grey instead of amber. `isFlt` (possible fault) predictions are shown normally.
+- **Trains ending at this station** (`destNm` = the station, e.g. Terminal Arrival at Howard) are not shown.
 - **Per-digit roll** when a number changes (12→11 rolls only the 2). Whole cells roll when the list shifts (the first train leaves) or to and from `DUE`.
 
 ### Layout
 - **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
-- **Header** (station grey + clock `#cccccc`, no divider) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
+- **Header** (station grey + clock `#cccccc`, with a `#333333` divider below it, except when 4 rows leave no room) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
 - Rows fill the remaining space, centered and evenly spaced (5px rows, gaps of 1px or more).
 - **Rows that don't fit are dropped** (the last rows in config order). Accepted trade-off.
 - **v1 rule:** stations that need more rows than a bar combination allows simply don't enable those bars. Row order isn't a concern.
 - Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**.
 
 **Geometry (from the mocks):**
-- Header text on rows 1–5; train rows start at row 7 or lower.
+- Header text on rows 1–5. With 1–3 train rows: divider on row 7, train rows start at row 10 or lower. With 4 rows: no divider, rows start at row 7.
 - Weather divider on row 22; weather icon on rows 24–31; train rows end by row 20.
-- Row pitch (row top to row top): 2 rows 7px; 3 rows 10px (8px with header); 4 rows 8px (6px with header); 5 rows 6px. Rows are centered in whatever space is left.
+- Row pitch (row top to row top): 2 rows 7px; 3 rows 10px (8px with header: rows at 10, 18, 26); 4 rows 8px (6px with header: rows at 7, 13, 19, 25); 5 rows 6px. Otherwise rows are centered in whatever space is left.
 
 | Header | Weather row | Max rows |
 |---|---|---|
@@ -184,6 +187,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Two 12px rows** with a 1px gap; dark slate index column `#1f2f35`, **5px wide**, numbered 1–6 in Tom Thumb. The row fill starts right after it (no gap); the destination starts 2px into the fill. Minutes are right-aligned to column 62, with a 2px gap between the digits and `min`.
 - Row fill = line color at 55%; **white** destination (X11 5x7 proportional, mixed case) + minutes (5x7 digits + `min` glyph); `Due` at ≤1 min. Yellow rows also use white text.
 - Destinations use the short-name map, so short-turns appear as `UIC` and `Jeff Pk`.
+- **Schedule-based arrivals:** the **index number is replaced by a 5x5 clock** (`CLOCK` glyph: ring with hands up and right), drawn in the index number's color. If an arrival is both scheduled and on an alerted line, the alert circle wins.
 - **CTA alerts:** on arrivals whose line has an active alert, the **index number is replaced by the 5x5 red alert circle** (white "!"), which fills the 5px column exactly. It sits on the dark index column, so it never collides with the destination or time. Static, no blinking.
 - Pages of 2 hold ~3.5s, then **slide up** (~0.5s ease) through the next **6 individual arrivals**, looping. Network requests happen during the holds.
 

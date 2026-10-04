@@ -4,6 +4,8 @@
 
 const crypto = require('crypto');
 const { createStore, ValidationError } = require('./state');
+const { createTracker } = require('./tracker');
+const { format } = require('./arrivals');
 
 const MAX_BODY = 8 * 1024;
 // Board endpoint names; the control path must not collide with them.
@@ -44,6 +46,7 @@ function createBoard({
   token = process.env.BOARD_TOKEN || '',
   controlPath = process.env.BOARD_CONTROL_PATH || '',
   capture = require('./capture'),
+  tracker = null,
   stationIds = new Set(require('./stations.json').map((s) => s.mapid)),
   log = console,
 } = {}) {
@@ -55,6 +58,33 @@ function createBoard({
   }
 
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
+  if (!tracker) tracker = createTracker({ log }).start();
+
+  // 'auto' brightness is 100 until sunrise/sunset data lands (weather PR).
+  const resolveBright = (b) => (b === 'off' ? 0 : b === 'auto' ? 100 : b);
+  // 'auto' screen is transit until radar and its rain trigger land.
+  const resolveScreen = (s) => (s === 'auto' ? 'transit' : s);
+
+  async function update(board, id, boot) {
+    if (boot) board = store.boot(id);
+    const data = await tracker.get(board.station.mapid);
+    if (!data) return null;
+    const now = nowSecs();
+    const { rows, ticker } = format(data.arrivals, board, { now, alerts: new Set() });
+    return {
+      v: board.v,
+      now,
+      age: Math.max(0, Math.round(now - data.fetchedAt)),
+      screen: resolveScreen(board.screen),
+      bright: resolveBright(board.bright),
+      header: board.showHeader ? board.station.name : null,
+      rows,
+      ticker,
+      wx: null,
+      warn: null,
+      radar: { on: false, frames: [], ft: [], clock: null, split: false },
+    };
+  }
 
   async function route(req, res, parsed) {
     const parts = parsed.pathname.split('/').filter(Boolean); // ['board', ...]
@@ -73,6 +103,17 @@ function createBoard({
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
       return send(res, 200, { v: board.v, now: nowSecs() });
+    }
+
+    if (first === 'update' && rest.length === 0) {
+      if (method !== 'GET') return send(res, 405, { err: 'method' });
+      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      const id = String(parsed.query.b || '');
+      const board = store.get(id);
+      if (!board) return send(res, 404, { err: 'unknown_board' });
+      const body = await update(board, id, parsed.query.boot === '1');
+      if (!body) return send(res, 503, { err: 'not_ready' });
+      return send(res, 200, body);
     }
 
     // ---- control endpoints, under the secret path ----
