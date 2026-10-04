@@ -106,29 +106,30 @@ test('stamps and archive URLs', () => {
 });
 
 test('poller: newest frame first, then backfill; 404s retried later; on/off hysteresis', async () => {
-  let t = R.timeOf('202008102108') + 120; // so the newest slot is 21:05
+  let t = R.timeOf('202008102108') + 120; // so the newest slot is 21:06
   const fetched = [];
   const available = new Set(['202008102100', '202008102050']);
   const radar = R.createRadar({
     now: () => t, log: quiet,
     fetch: async (stamp) => {
       fetched.push(stamp);
-      // Every slot uses the derecho frame; slot 21:05 isn't in the archive yet.
-      if (stamp === '202008102105') { const e = new Error('HTTP 404'); e.status = 404; throw e; }
+      // Every slot uses the derecho frame; slot 21:06 isn't in the archive yet.
+      if (stamp === '202008102106') { const e = new Error('HTTP 404'); e.status = 404; throw e; }
       if (!available.has(stamp)) available.add(stamp);
       return { wld: wldOf('202008102100'), png: pngOf('202008102100') };
     },
   });
-  assert.deepEqual(radar.slots(), ['202008102040', '202008102045', '202008102050', '202008102055', '202008102100', '202008102105']);
+  // 6-minute slots: always even minutes (IEM only has even-minute frames).
+  assert.deepEqual(radar.slots(), ['202008102036', '202008102042', '202008102048', '202008102054', '202008102100', '202008102106']);
   // Morse: the clock sits over the lake (full-width layout).
   assert.deepEqual(radar.want('40100', MORSE.lat, MORSE.lon), { on: false, frames: [], ft: [], clock: R.FULL_CLOCK, split: false });
   await radar.pass();
   await radar.pass();
-  assert.deepEqual(fetched, ['202008102105', '202008102100']); // 404, then the next newest
+  assert.deepEqual(fetched, ['202008102106', '202008102100']); // 404, then the next newest
   for (let i = 0; i < 6; i++) await radar.pass();
   const r = radar.want('40100', MORSE.lat, MORSE.lon);
   assert.equal(r.frames.length, 5);
-  assert.deepEqual(r.frames, ['40100-202008102040', '40100-202008102045', '40100-202008102050', '40100-202008102055', '40100-202008102100']);
+  assert.deepEqual(r.frames, ['40100-202008102036', '40100-202008102042', '40100-202008102048', '40100-202008102054', '40100-202008102100']);
   assert.deepEqual(r.ft, r.frames.map((id) => R.timeOf(id.split('-')[1])));
   assert.equal(r.on, true);
   assert.equal(radar.frame('40100', r.frames[0]).length, 2048);
@@ -136,8 +137,9 @@ test('poller: newest frame first, then backfill; 404s retried later; on/off hyst
   assert.equal(radar.frame('99999', r.frames[0]), null);
   // The 404'd slot is retried after the retry delay.
   t += 121;
+  radar.want('40100', MORSE.lat, MORSE.lon); // the board is still asking
   await radar.pass();
-  assert.equal(fetched.filter((s) => s === '202008102105').length >= 1, true);
+  assert.equal(fetched.filter((s) => s === '202008102106').length >= 2, true);
 });
 
 test('poller: idle stations cost nothing', async () => {
@@ -190,4 +192,43 @@ test('every station has a location file built from the current lake data', () =>
     const file = JSON.parse(fs.readFileSync(path.join(__dirname, 'locations', `${st.mapid}.json`), 'utf8'));
     assert.deepEqual(file, build(st), `${st.name}: run node scripts/build-locations.js`);
   }
+});
+
+test('poller: every slot is an even minute, all day', () => {
+  for (let m = 0; m < 24 * 60; m += 7) {
+    const radar = R.createRadar({ now: () => Date.UTC(2026, 9, 4, 0, m, 13) / 1000, log: quiet });
+    for (const s of radar.slots()) assert.equal(Number(s.slice(10)) % 2, 0, s);
+  }
+});
+
+test('poller: a hung download times out and the poller moves on', async () => {
+  let t = R.timeOf('202008102108') + 120, calls = 0;
+  const radar = R.createRadar({ now: () => t, log: quiet, fetch: async () => { calls++; return new Promise(() => {}); }, frameTimeoutMs: 50 });
+  radar.want('40100', MORSE.lat, MORSE.lon);
+  await radar.pass();
+  t += 130;
+  radar.want('40100', MORSE.lat, MORSE.lon);
+  await radar.pass();
+  assert.equal(calls, 2, 'second pass ran after the first timed out');
+});
+
+test('poller: a pass with nothing to do does not leave it stuck', async () => {
+  // Regression: the newest slot missing from the archive made a pass finish
+  // without awaiting anything, and the poller never ran again.
+  let t = R.timeOf('202008102108') + 120, calls = 0;
+  const radar = R.createRadar({
+    now: () => t, log: quiet,
+    fetch: async () => { calls++; const e = new Error('HTTP 404'); e.status = 404; throw e; },
+  });
+  radar.want('40100', MORSE.lat, MORSE.lon);
+  for (let i = 0; i < 8; i++) await radar.pass(); // every slot 404s, then nothing to try
+  const before = calls;
+  t += 121;
+  radar.want('40100', MORSE.lat, MORSE.lon);
+  await radar.pass();
+  assert.equal(calls, before + 1, 'retried after the retry delay');
+  // And with nothing wanted at all, passes still complete.
+  const idle = R.createRadar({ now: () => 1e9, log: quiet, fetch: async () => { throw new Error('x'); } });
+  await idle.pass();
+  await idle.pass();
 });
