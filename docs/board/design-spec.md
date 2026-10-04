@@ -149,7 +149,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 
 ### Chronological view (overflow)
 - **When:** the destination count (after the per-board destination filter) exceeds the board's max rows. The server decides on each update and sends `view` in the combined update.
-- **Hysteresis:** switch to chronological as soon as destinations exceed max rows; switch back only after they've fit continuously for 10 minutes (starting value; tune). Keeps short-turns from flipping the format mid-rush. Held in server memory per board and station; a restart just picks fresh.
+- **Switching is immediate both ways:** chronological as soon as destinations exceed max rows, back as soon as they fit. If short-turns make it flip too often, raise `CHRONO_HOLD` in `arrivals.js` (a hold time before switching back; the mechanism is built, set to 0).
 - **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
 - **Time format:** digits + lowercase `m` with the font's own **1px gap** (`4m`, `12m`); `DUE` stays bare. Labels are fitted against the widest time (`99m`), so they have up to 43px.
 - **Line ID is the color block only.** No run numbers.
@@ -189,7 +189,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - Same destination on two lines (e.g. Brown and Purple `LOOP` at Merchandise Mart): two rows told apart by the color block only. Accepted.
 - **Short-turn trains** (e.g. Blue Line to UIC-Halsted or Jefferson Park) get **their own row**. The layout follows the row count as these come and go.
 - **Unknown destinations** (disruptions, reroutes): own row, name truncated to fit; the server logs them so they can be added to the map.
-- **No per-station default view.** The view follows the live destination count. Example: Belmont shows 4 destinations off-peak (Red and Brown), which fit a 4- or 5-row board. It switches to chronological only when rush-only Purple service adds `LINDEN` and `LOOP`, and returns ~10 min after Purple stops, so a board there changes format twice a day at predictable times. The **per-board destination filter** avoids that if unwanted; it's applied first, and the overflow check runs on the filtered list.
+- **No per-station default view.** The view follows the live destination count. Example: Belmont shows 4 destinations off-peak (Red and Brown), which fit a 4- or 5-row board. It switches to chronological only when rush-only Purple service adds `LINDEN` and `LOOP`, and returns when Purple stops, so a board there changes format twice a day at predictable times. The **per-board destination filter** avoids that if unwanted; it's applied first, and the overflow check runs on the filtered list.
 
 ### Other states
 - **Overnight / no predictions:** large **9x15 Bold** clock (`#cccccc`) with the 2x2 square colon, dim `NO TRAINS` label below it, weather row below the divider. Follows the board's weather-row setting; with the weather row off, the clock and `NO TRAINS` are centered vertically.
@@ -276,7 +276,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - Whether the work visitor WiFi has a captive portal (check with a phone).
 - Measure the real fetch time on the board to set the scheduler's fetch budget.
 - On-panel check: lowercase `m` legibility (diffuser glow between the humps), and whether `4m` needs a 2px gap.
-- Chronological view: tune the 10 min hysteresis hold.
+- Chronological view: whether it flips too often at short-turn stations (if so, raise `CHRONO_HOLD`).
 
 ## 12. Parked ideas
 

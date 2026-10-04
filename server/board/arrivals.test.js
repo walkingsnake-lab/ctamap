@@ -77,17 +77,24 @@ test('the destination filter runs before the overflow check', () => {
   assert.equal(rows.length, 3);
 });
 
-test('hysteresis: chrono at once on overflow, back to rows only after fitting for 10 minutes', () => {
+test('view follows the destination count: chrono on overflow, back as soon as rows fit', () => {
+  assert.equal(CHRONO_HOLD, 0);
   let st = chooseView(5, 4, null, 0);
   assert.equal(st.view, 'chrono');
-  st = chooseView(4, 4, st, 100);                 // fits: start the clock, stay chrono
-  assert.deepEqual(st, { view: 'chrono', fitSince: 100 });
-  st = chooseView(4, 4, st, 100 + CHRONO_HOLD - 1);
-  assert.equal(st.view, 'chrono');
-  assert.equal(chooseView(5, 4, st, 400).fitSince, null); // overflow again resets the clock
-  st = chooseView(3, 4, st, 100 + CHRONO_HOLD);
+  assert.equal(chooseView(5, 4, st, 30).view, 'chrono');
+  st = chooseView(4, 4, st, 60);
   assert.equal(st.view, 'dest');
-  assert.equal(chooseView(4, 4, st, 2000).view, 'dest');
+  assert.equal(chooseView(4, 4, st, 90).view, 'dest');
+});
+
+test('with a hold time, chrono stays until rows have fit that long', () => {
+  let st = chooseView(5, 4, null, 0, 600);
+  st = chooseView(4, 4, st, 100, 600);
+  assert.deepEqual(st, { view: 'chrono', fitSince: 100 });
+  st = chooseView(4, 4, st, 699, 600);
+  assert.equal(st.view, 'chrono');
+  assert.equal(chooseView(5, 4, st, 400, 600).fitSince, null); // overflow again resets the clock
+  assert.equal(chooseView(4, 4, st, 700, 600).view, 'dest');
 });
 
 test('the configured row list filters and orders destinations', () => {

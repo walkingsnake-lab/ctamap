@@ -105,7 +105,7 @@ Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 - Ticker destinations are fitted to 32px of 5x7 (`Jeff Pk` is exactly 32).
 
 #### Transit view (server)
-- `chrono` as soon as the destination count exceeds the cap; back to `dest` only after it has fit for **10 minutes** straight (`CHRONO_HOLD` in `arrivals.js`). The state is kept in memory per board and station.
+- `chrono` whenever the destination count exceeds the cap, `dest` otherwise, decided on every update. `CHRONO_HOLD` in `arrivals.js` (0 now) can add a hold before switching back; that state is kept in memory per board and station.
 - `chrono` rows each carry one time (`t` and `s` have one entry) and `rn`. Labels are fitted against the widest chrono time (`99m`).
 
 #### Line codes

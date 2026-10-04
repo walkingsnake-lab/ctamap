@@ -26,18 +26,19 @@ const DROP_GRACE = 30;
 // Chronological view (design spec §5): one train per row. Sent with a couple
 // of extra trains so the board can bring the next one in between updates.
 const CHRONO_EXTRA = 2;
-// Back to destination rows only after they've fit this long (hysteresis).
-const CHRONO_HOLD = 600;
+// Back to destination rows only after they've fit this long. 0 = switch
+// back as soon as they fit; raise it if the view flips too often.
+const CHRONO_HOLD = 0;
 // Chrono labels are fitted against the widest single time ("99m" or "DUE").
 const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
 
 // Destination rows, or the chronological list when they don't fit.
 // prev: the last result for this board ({view, fitSince}), or null.
-function chooseView(destCount, max, prev, now) {
+function chooseView(destCount, max, prev, now, hold = CHRONO_HOLD) {
   if (destCount > max) return { view: 'chrono', fitSince: null };
   if (!prev || prev.view !== 'chrono') return { view: 'dest', fitSince: null };
   const fitSince = prev.fitSince != null ? prev.fitSince : now;
-  return now - fitSince >= CHRONO_HOLD ? { view: 'dest', fitSince: null } : { view: 'chrono', fitSince };
+  return now - fitSince >= hold ? { view: 'dest', fitSince: null } : { view: 'chrono', fitSince };
 }
 
 // Max transit rows by header/weather toggles (design spec §5 table).
