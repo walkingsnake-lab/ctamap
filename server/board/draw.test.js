@@ -300,3 +300,30 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   assert.equal(count(empty, draw.RADAR[1], 0, 0, 39, 31), 0);
   assert.equal(hex(empty.get(56, 2)), draw.C.amber);
 });
+
+test('radar with no frames yet draws the clock at the current time (no crash)', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
+  for (const radar of [{ on: false, frames: [], ft: [], clock: null, split: false }, { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true }, undefined]) {
+    for (const idx of [undefined, -1, 0, 3]) {
+      const f = draw.render({ now, bright: 100, warn: null, radar }, { screen: 'radar', now, idx, frames: {} });
+      assert.ok(count(f, draw.C.clock, 40, 0, 63, 31) > 15, 'clock drawn');
+    }
+  }
+});
+
+test('radar with no frames shows current conditions on the left', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
+  const wx = { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 };
+  const f = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], clock: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: {} });
+  assert.ok(count(f, draw.C.label, 12, 3, 30, 9) > 15, 'temperature');
+  assert.ok(count(f, draw.C.label, 0, 15, 38, 19) > 15, 'condition word');
+  assert.ok(count(f, draw.C.grey, 0, 23, 38, 27) > 15, 'high/low');
+  assert.ok(count(f, draw.C.clock, 40, 6, 63, 12) > 15, 'clock still drawn');
+  // Widest case stays clear of the split divider.
+  const wide = { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 };
+  const g = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true, wx: wide } }, { screen: 'radar', now, frames: {} });
+  for (let y = 0; y < 32; y++) assert.deepEqual(g.get(38, y), [0, 0, 0], `col 38 row ${y}`);
+  // Once frames exist, the radar replaces the conditions.
+  const withFrames = draw.render({ now, bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [now], clock: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: { a: new Uint8Array(2048) } });
+  assert.equal(count(withFrames, draw.C.label, 0, 0, 38, 31), 0);
+});

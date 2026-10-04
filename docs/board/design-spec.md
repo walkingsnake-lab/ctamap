@@ -218,6 +218,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Loop:** 6 frames (30 min), 0.5 s each, **holds on the last frame** for 4 s. Network requests (including the next radar frame) happen during the hold.
 - **Water masked black** (mask generated per location from coastline data), with a faint shoreline along its edge.
 - **Layout per station** (`server/board/locations/`, built by `scripts/build-locations.js` from Natural Earth's Lake Michigan outline): full width with the clock over the lake when the clock's area is all water (114 of 144 stations), otherwise the split layout (radar left 39 columns, a gray `#333333` line on the panel's left edge, clock right 24). The clock stack is **top-aligned** (rows 2–19) in both.
+- **No frames yet** (right after a deploy or a station change): the left side shows current conditions instead: weather icon and temperature on rows 2–9, condition word on rows 15–19 (level with AM/PM), `H 69  L 51` in grey on rows 23–27. The clock stack shows the current time.
 - **Shoreline** is painted on the lake's edge pixels (inside the water), so rain never covers it.
 - **Colors** (fills at 65%): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.
 - **Location marker:** white dot with 4 unlit pixels around it.
