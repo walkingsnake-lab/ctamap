@@ -21,14 +21,25 @@
   summary { cursor: pointer; color: var(--muted); font-size: 12px; }
   pre { background: #111; border: 1px solid var(--line); border-radius: 6px; padding: 12px; overflow-x: auto; font-size: 12px; max-height: 50vh; }
   label { display: inline-flex; gap: 6px; align-items: center; }
+  .picker { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  select, button { font: inherit; color: var(--fg); background: #161616; border: 1px solid #333; border-radius: 6px; padding: 6px 8px; }
+  select { flex: 1 1 260px; max-width: 420px; }
+  button { cursor: pointer; }
+  button:disabled { opacity: .4; cursor: default; }
+  .note { color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
 <main>
   <h1>Board simulator</h1>
+  <div class="picker">
+    <select id="station" aria-label="Station"></select>
+    <button id="apply" disabled>Use on board</button>
+    <span class="note" id="previewNote"></span>
+  </div>
   <div class="screens">
     <figure>
-      <figcaption><span>Transit</span><span id="blinkState"></span></figcaption>
+      <figcaption><span>Transit</span></figcaption>
       <img id="transit" alt="Transit screen">
     </figure>
     <figure>
@@ -56,16 +67,55 @@
   document.getElementById('board').textContent = board;
   const $ = (id) => document.getElementById(id);
   let page = 0, pages = 1, blink = false;
+  let boardMapid = null;              // the board's configured station
+  let preview = params.get('mapid');  // station being previewed, if different
+
+  const previewing = () => preview && preview !== boardMapid;
+  const withPreview = (q) => { if (previewing()) q.set('mapid', preview); return q; };
 
   function img(screen, extra) {
-    const q = new URLSearchParams({ b: board, screen, scale: '10', _: Date.now(), ...extra });
+    const q = withPreview(new URLSearchParams({ b: board, screen, scale: '10', _: Date.now(), ...extra }));
     return 'sim.png?' + q;
   }
+
+  function syncPicker() {
+    $('station').value = preview || boardMapid || '';
+    $('apply').disabled = !previewing();
+    $('previewNote').textContent = previewing() ? 'Preview only: the board still shows its own station.' : '';
+    const q = new URLSearchParams(location.search);
+    if (previewing()) q.set('mapid', preview); else q.delete('mapid');
+    history.replaceState(null, '', '?' + q);
+  }
+
+  async function loadStations() {
+    const [list, state] = await Promise.all([
+      fetch('api/stations').then((r) => r.json()),
+      fetch('api/state', { cache: 'no-store' }).then((r) => r.json()),
+    ]);
+    $('station').replaceChildren(...list.map((s) => new Option(s.desc, s.mapid)));
+    const b = state.boards && state.boards[board];
+    boardMapid = b ? b.station.mapid : null;
+    if (!preview) preview = boardMapid;
+    syncPicker();
+  }
+
+  function refreshAll() { page = 0; poll(); drawTransit(); drawTicker(); }
+
+  $('station').addEventListener('change', (e) => { preview = e.target.value; syncPicker(); refreshAll(); });
+  $('apply').addEventListener('click', async () => {
+    $('apply').disabled = true;
+    const r = await fetch('api/state?b=' + encodeURIComponent(board), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ station: { mapid: preview } }),
+    });
+    if (r.ok) { boardMapid = preview; syncPicker(); refreshAll(); }
+    else { $('status').textContent = 'could not set station'; $('status').className = 'err'; syncPicker(); }
+  });
 
   async function poll() {
     if ($('pause').checked) return;
     try {
-      const r = await fetch('api/update?b=' + encodeURIComponent(board), { cache: 'no-store' });
+      const r = await fetch('api/update?' + withPreview(new URLSearchParams({ b: board })), { cache: 'no-store' });
       const p = await r.json();
       if (!r.ok) throw new Error(p.err || r.status);
       $('json').textContent = JSON.stringify(p, null, 2);
@@ -86,7 +136,6 @@
     if ($('pause').checked) return;
     blink = !blink;
     $('transit').src = img('transit', blink ? { blink: '1' } : {});
-    $('blinkState').textContent = blink ? 'alert blink: "!"' : 'alert blink: block';
   }
 
   function drawTicker() {
@@ -96,6 +145,7 @@
     page = (page + 1) % pages;
   }
 
+  loadStations().catch((e) => { $('status').textContent = 'stations failed: ' + e.message; $('status').className = 'err'; });
   poll(); drawTransit(); drawTicker();
   setInterval(poll, 5000);
   setInterval(drawTransit, 1000);
