@@ -68,7 +68,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 
 | Data | Source | Notes |
 |---|---|---|
-| Train arrivals | CTA Train Tracker API | Uses `mapid`; `destNm`, `rn` (run number), `isApp` (Due), `arrT`. `isDly` intentionally **not** shown. |
+| Train arrivals | CTA Train Tracker API ([docs](https://www.transitchicago.com/developers/ttdocs/)) | Uses `mapid` (one call covers all lines and directions); `destNm`, `rn` (run number), `isApp` (Due), `arrT`. `isDly` intentionally **not** shown. `isSch` (schedule-based) and `isFlt` (possible fault) handling is open. |
 | CTA service alerts | CTA Customer Alerts API | Service-affecting only (no elevator outages); lines on screen only. Used **only to flag affected lines** (no alert text shown). |
 | Weather warnings/watches | NWS alerts for the configured point | Only severe thunderstorm and tornado warnings/watches. Shown as icons/tags only (no alert text). |
 | Radar | NOAA **MRMS** lowest composite reflectivity (`lcref`) via Iowa Environmental Mesonet | Palette-indexed PNG + `.wld`, 2-min updates, archive available. dBZ ≈ index × 0.5 − 32.5 (**verify**). Do **not** use the raw NEXRAD composite: it shows bird/insect returns on clear nights. |

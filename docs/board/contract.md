@@ -9,7 +9,7 @@ Status: **draft v0**. Items marked **(decide)** are open.
 ## Conventions
 
 - **Base URL:** `https://ctamap.fly.dev`
-- **Times:** all timestamps are **epoch seconds (UTC)**. The server converts CTA's zone-less Chicago local times (`arrT`, `prdtm`) before sending.
+- **Times:** all timestamps are **epoch seconds (UTC)**. The server converts CTA's zone-less Chicago local times (`arrT` and `prdt`, format `yyyyMMdd HH:mm:ss`) before sending.
 - **Clock sync:** every JSON response includes `now`, the server's epoch time. The board keeps `offset = now - time.monotonic()` and uses it for countdowns and clocks. No NTP on the board.
 - **Board ID:** query param `b` (e.g. `b=home`). State is keyed by board ID.
 - **Auth:** header `X-Board-Token: <BOARD_TOKEN>` on every board endpoint except `/board/ping`. If `BOARD_TOKEN` is unset (local dev), auth is skipped.
@@ -89,6 +89,9 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `radar` | object | Radar state (see below). |
 
 All screens' data is always included so a button press switches screens without a fetch.
+
+#### Line codes
+Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`, `G`→`GR`, `Org`→`OR`, `P`→`PR`, `Pink`→`PK`, `Y`→`YL`. Short-name map keys are matched against `destNm` exactly as Train Tracker returns it (e.g. `O'Hare`, `Loop`); confirm each key against recorded fixtures.
 
 #### Row (`rows[]`)
 
@@ -215,7 +218,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `screen` | `auto` or a forced screen. Reset to `auto` on boot. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |
 
-**Stations:** `server/board/stations.json` lists every L station: `mapid`, display name, lines served, and coordinates. It is generated from the City of Chicago "CTA L Stops" dataset by a script in `scripts/` and committed. The control page's station picker and the location lookup both read it. (The map's GeoJSON has track lines only, no station points or `mapid`s.)
+**Stations:** `server/board/stations.json` lists every L station: `mapid`, name, descriptive name, lines served, and coordinates. It is generated from the City of Chicago "CTA System Information - List of 'L' Stops" dataset (`8pix-ypme`, the list the Train Tracker docs point to) by a script in `scripts/` and committed. That dataset has one record per platform; the script groups by `map_id` and takes `station_name`, `station_descriptive_name`, the line flags (`red`, `blue`, `g`, `brn`, `p`, `y`, `pnk`, `o`), and `location`. Station names repeat across lines (four Damens, three Addisons, Californias, Chicagos, Ciceros), so the picker shows the descriptive name with lines; the header shows the short name only. The control page's station picker and the location lookup both read it. (The map's GeoJSON has track lines only, no station points or `mapid`s.)
 
 **Location assets:** the radar water mask, clock box, and split flag depend on the location, and the location is the station. A script in `scripts/` generates them for **every station** and commits them under `server/board/locations/<mapid>.json`, so changing stations from the phone needs no build step. Nearby stations will share near-identical masks; that's fine at ~2 KB each.
 
@@ -225,7 +228,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 
 | Source | Interval | Notes |
 |---|---|---|
-| Train Tracker `ttarrivals` | 30 s per unique `mapid` | Only for boards that polled in the last 2 min. |
+| Train Tracker `ttarrivals` | 30 s per unique `mapid` | Only for boards that polled in the last 2 min. One `mapid` call returns every line and direction at the station. |
 | CTA alerts | 3 min | Shared with the map's `/api/alerts`. |
 | NWS alerts | 90 s per location | `User-Agent` header required. |
 | Open-Meteo | 15 min per location | |
@@ -236,6 +239,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 ## Open items
 
 - **(decide)** Arrival drop grace (30 s) and whether `DUE` should also honor `isApp`.
+- **(decide)** Schedule-based predictions (`isSch=1`, common at terminals and late at night): show like live ones, mark them, or drop them. Same question for `isFlt=1` (possible fault).
 - **(decide)** Hysteresis thresholds for `radar.on` (colored-pixel counts); set after viewing real storms from the IEM archive.
 - Verify the MRMS dBZ formula before fixing level thresholds.
 - Tune snow thresholds (provisional 10/20/30 dBZ) on archived snow events.
