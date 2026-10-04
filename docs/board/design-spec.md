@@ -222,7 +222,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **No frames yet** (right after a deploy or a station change): the left side shows current conditions instead: weather icon and temperature on rows 2–9, condition word on rows 15–19 (level with AM/PM), `H 69  L 51` in grey on rows 23–27. The clock stack shows the current time.
 - **Shoreline** is painted on the lake's edge pixels (inside the water), so rain never covers it.
 - **Colors** (fills at 65%): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.
-- **Location marker:** white dot with 4 unlit pixels around it.
+- **Location marker:** white dot; rain or snow in the 4 pixels around it is cleared so it stands out, but the shoreline stays continuous next to it.
 - **Clock:** X11 5x7 (`#cccccc`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (2px-tall segments, current frame amber), AM/PM in Tom Thumb below. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
 - **Warnings:** the small inline **bolt** (3x5, orange, severe) or **funnel** (4x5, red, tornado) sits **to the left of AM/PM** with a 2px gap, on the same 5px line. It never overlaps the clock or the frame indicator; the clock stack (indicator + clock + AM/PM line) occupies ~rows 2–18, which is the height the water-area check must reserve. Steady, no blinking. No polygons, no scrolling text.
 
