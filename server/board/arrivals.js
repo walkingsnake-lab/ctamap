@@ -3,7 +3,7 @@
 // Rules: docs/board/design-spec.md §5–6 and docs/board/contract.md.
 
 const { parseCtaTime } = require('./time');
-const { lineCode, shortDest, LINE_ORDER } = require('./destinations');
+const { lineCode, shortDest, endsHere, LINE_ORDER } = require('./destinations');
 const { measure, fit, ligatures } = require('./fonts');
 
 // Transit row geometry (x positions on the 64px panel).
@@ -54,8 +54,9 @@ function normalize(json, { log = console, unknown = new Set() } = {}) {
   if (!Array.isArray(etas)) etas = [etas];
   const out = [];
   for (const e of etas) {
-    // Trains ending at this station (e.g. "Terminal Arrival" at Howard).
-    if (String(e.destNm).trim() === String(e.staNm).trim()) continue;
+    // Trains ending at this station (Terminal Arrival at Howard, "63rd Street"
+    // trains at Ashland/63rd).
+    if (endsHere(e)) continue;
     const ln = lineCode(e.rt);
     const t = parseCtaTime(e.arrT);
     if (!ln || t == null) continue;

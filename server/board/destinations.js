@@ -25,7 +25,38 @@ const SHORT_DEST = {
 // Destinations CTA normally uses, shown as-is.
 const PASS_THROUGH = new Set(['Howard', "O'Hare", 'Kimball', 'Loop', 'Linden', 'Midway', 'Rosemont', 'Cumberland']);
 
+// CTA `destNm` -> the station (mapid) the train ends at. Train Tracker's
+// destination names don't always match station names ("63rd Street" for
+// Ashland/63rd), so terminal arrivals are recognized through this map.
+const DEST_MAPID = {
+  'Howard': '40900',
+  '95th/Dan Ryan': '40450',
+  "O'Hare": '40890',
+  'Forest Park': '40390',
+  'UIC-Halsted': '40350',
+  'Jefferson Park': '41280',
+  'Rosemont': '40820',
+  'Cumberland': '40230',
+  'Kimball': '41290',
+  'Midway': '40930',
+  'Harlem/Lake': '40020',
+  'Ashland/63rd': '40290',
+  '63rd Street': '40290',
+  'Cottage Grove': '40720',
+  '54th/Cermak': '40580',
+  'Linden': '41050',
+  'Dempster-Skokie': '40140',
+};
+
 const lineCode = (rt) => RT_TO_LN[String(rt || '').toLowerCase()] || null;
+
+// True when a prediction is for a train that ends at this station.
+function endsHere(e) {
+  const dest = String(e.destNm || '').trim();
+  if (dest === String(e.staNm || '').trim()) return true;
+  if (DEST_MAPID[dest] && DEST_MAPID[dest] === String(e.staId)) return true;
+  return /terminal arrival/i.test(String(e.stpDe || ''));
+}
 
 // Returns { name, known }. Unknown destinations (reroutes, disruptions) keep
 // CTA's name; callers fit it to width and log it so it can be added here.
@@ -35,4 +66,4 @@ function shortDest(destNm) {
   return { name: d, known: PASS_THROUGH.has(d) };
 }
 
-module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, lineCode, shortDest };
+module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, lineCode, shortDest, endsHere };

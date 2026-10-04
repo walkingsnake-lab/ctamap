@@ -127,3 +127,25 @@ test('Green Line "63rd Street" is shown as 63rd', () => {
   assert.ok(rows.some((r) => r.ln === 'GR' && r.lbl === '63RD'));
   assert.equal(warnings.length, 0);
 });
+
+test('trains ending at the station are dropped even when CTA names the destination differently', () => {
+  // Ashland/63rd: arriving Green Line trains are listed with destNm "63rd Street".
+  const mk = (o) => ({ staId: '40290', staNm: 'Ashland/63rd', stpDe: 'Service toward Harlem', rt: 'G', trDr: '1', arrT: '2026-10-04T01:50:00', isSch: '0', destNm: 'Harlem/Lake', ...o });
+  const json = { ctatt: { tmst: '2026-10-04T01:45:00', errCd: '0', eta: [
+    mk({}),
+    mk({ destNm: '63rd Street', stpDe: 'Service toward 63rd', trDr: '5', arrT: '2026-10-04T01:47:00' }),
+    mk({ destNm: 'Ashland/63rd', stpDe: 'Ashland/63rd (Terminal arrival)', trDr: '5', arrT: '2026-10-04T01:55:00' }),
+  ] } };
+  const { rows } = format(normalize(json, { log: quiet }), base, { now: nowOf(json) });
+  assert.deepEqual(rows.map((r) => r.lbl), ['HARLEM']);
+  // Elsewhere, "63rd Street" trains are shown normally.
+  json.ctatt.eta.forEach((e) => { e.staId = '41160'; e.staNm = 'Clinton'; e.stpDe = 'Service toward 63rd'; });
+  const other = format(normalize({ ctatt: { ...json.ctatt, eta: json.ctatt.eta.slice(0, 2) } }, { log: quiet }), base, { now: nowOf(json) });
+  assert.deepEqual(other.rows.map((r) => r.lbl).sort(), ['63RD', 'HARLEM']);
+});
+
+test('every terminal in the destination map is a real station', () => {
+  const { DEST_MAPID } = require('./destinations');
+  const stations = new Map(require('./stations.json').map((s) => [s.mapid, s.name]));
+  for (const [dest, mapid] of Object.entries(DEST_MAPID)) assert.ok(stations.has(mapid), `${dest} -> ${mapid}`);
+});
