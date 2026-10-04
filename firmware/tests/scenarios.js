@@ -92,6 +92,9 @@ async function build() {
   tk.ticker[1] = { ...tk.ticker[1], a: 1 };
   add('ticker', tk, [0, 1, 2].flatMap((page) => [0, 0.3, 0.5, 0.8].map((slide) => ({ screen: 'ticker', page, slide }))));
   add('ticker no header', { ...tk, header: null }, [{ screen: 'ticker' }, { screen: 'ticker', now: tk.now + 400 }]);
+  // Transit header hidden to fit; the ticker keeps its own.
+  add('ticker header kept', { ...tk, header: null, tickerHeader: 'MORSE' }, [{ screen: 'ticker' }]);
+  add('ticker header off', { ...tk, header: 'MORSE', tickerHeader: null }, [{ screen: 'ticker' }]);
 
   // Radar: frames, split layout, conditions, warnings.
   const rf = await radarFrames();

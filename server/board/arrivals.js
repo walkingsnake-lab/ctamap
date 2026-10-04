@@ -32,17 +32,19 @@ const CHRONO_HOLD = 0;
 // Chrono labels are fitted against the widest single time ("99m" or "DUE").
 const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
 
-// The header and weather row are the most the board shows: when the live
-// destinations don't fit, the weather row goes first, then the header, so
-// up to 5 destinations stay as rows. Past 5, both come back and the board
-// lists one train per row (chooseView). Returns the bars to show and which
-// ones were hidden to fit.
+// The header and weather row are the most the board shows. When the live
+// destinations don't fit as rows, the weather row goes first, then the
+// header, so up to 5 destinations stay as rows. Past 5 the board lists one
+// train per row (chooseView): the header comes back (if it's on), the
+// weather row stays off. Re-evaluated on every update, so a station like
+// Merchandise Mart gains and loses the weather row as rush-only Purple
+// service comes and goes. Returns the bars to show and which were hidden.
 function fitBars(n, showHeader, showWeather) {
   const hidden = [];
   let h = showHeader, w = showWeather;
-  if (n > maxRows(h, w) && n <= maxRows(false, false)) {
+  if (n > maxRows(h, w)) {
     if (w) { w = false; hidden.push('weather'); }
-    if (n > maxRows(h, w) && h) { h = false; hidden.push('header'); }
+    if (n > maxRows(h, w) && n <= maxRows(false, false) && h) { h = false; hidden.push('header'); }
   }
   return { showHeader: h, showWeather: w, hidden };
 }

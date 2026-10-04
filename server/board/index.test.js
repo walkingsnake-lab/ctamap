@@ -324,21 +324,29 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   const alerts = { get: () => ({ alerts: parseAlerts(xml), fetchedAt: now }) };
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }), weather, alerts });
   s.store.update('home', { station: { mapid: '40380' } }); // Clark/Lake
+  s.store.update('home', { rows: ["BL:O'Hare", 'GR:Harlem'] }); // 2 destinations: everything fits
   const h = { headers: { 'X-Board-Token': 'tok' } };
   let b = (await s.req('/board/update?b=home', h)).body;
   assert.deepEqual(weather.asked.at(-1), [41.885737, -87.630886]); // the station's coordinates
   assert.deepEqual(b.wx, { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 });
+  assert.equal(b.header, 'CLARK/LAKE');
+  assert.deepEqual(b.hidden, []);
   assert.equal(b.bright, 100);
-  // Header + weather leaves 2 rows, so Clark/Lake's 5 destinations go chronological.
-  assert.equal(b.view, 'chrono');
+  // All 5 destinations: weather and header are hidden to fit them as rows;
+  // the ticker keeps its header.
+  s.store.update('home', { rows: [] });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.view, 'dest');
+  assert.equal(b.rows.length, 5);
+  assert.deepEqual([b.header, b.wx, b.tickerHeader], [null, null, 'CLARK/LAKE']);
+  assert.deepEqual(b.hidden, ['weather', 'header']);
   // Green has a major delay; Blue only has a planned schedule change.
   for (const r of b.rows) assert.equal(r.a, r.ln === 'GR' ? 1 : 0, `${r.ln} ${r.lbl}`);
   assert.ok(b.ticker.every((x) => x.a === (x.ln === 'GR' || x.ln === 'OR' ? 1 : 0)));
-  // Weather row off: no wx, and the rows get the space back.
+  // Weather row off: no wx either way.
   s.store.update('home', { showWeather: false });
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.wx, null);
-  assert.equal(b.rows.filter((r) => r.t.length).length >= 4, true);
   // Overnight: auto brightness dims.
   w.sunset = now - 1;
   b = (await s.req('/board/update?b=home', h)).body;
