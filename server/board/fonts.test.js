@@ -41,6 +41,12 @@ test('patched glyph widths', () => {
   assert.equal(glyph('5x7', G.TT).bbx[0], 6);
 });
 
+test('degree sign is a small 2x2 dot at digit-top height', () => {
+  const g = glyph('small', 0xb0);
+  assert.deepEqual(g.bbx, [2, 2, 0, 3]);
+  assert.equal(g.dw, 3);
+});
+
 test('custom glyph sizes', () => {
   const size = (font, cp) => glyph(font, cp).bbx.slice(0, 2);
   assert.deepEqual(size('5x7', G.MIN), [11, 7]);

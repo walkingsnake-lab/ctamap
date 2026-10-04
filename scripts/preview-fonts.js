@@ -9,6 +9,7 @@ const path = require('path');
 const { Frame } = require('../server/board/raster');
 const { measure, ligatures } = require('../server/board/fonts');
 const G = require('../server/board/glyphs');
+const { ICONS, drawIcon } = require('../server/board/icons');
 
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'previews');
 fs.mkdirSync(OUT, { recursive: true });
@@ -68,25 +69,20 @@ function drawTag(f, icon, word, x, base, color) {
 }
 const tagWidth = (icon, word) => measure('small', s(icon)) + TAG_GAP + measure('small', word);
 
-// Provisional 8x8 storm icon (cloud + bolt) until the weather icons are drawn.
-const STORM = {
-  cloud: ['..####..', '.######.', '########', '.######.'],
-  bolt: ['...##...', '..##....', '...##...', '..#.....'],
-};
-function drawIcon(f, x, y) {
-  STORM.cloud.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(x + i, y + j, 1, 1, C.grey); }));
-  STORM.bolt.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(x + i, y + 4 + j, 1, 1, C.yellow); }));
-}
-
 // Weather row: divider on row 22, icon rows 24-31, temp after the icon,
 // condition word (or warning tag) right-aligned.
-function drawWeatherRow(f, temp, tag) {
-  f.fill(0, 22, 64, 1, C.divider);
-  drawIcon(f, 0, 24);
-  const base = 31; // text on rows 26-30
+// `tag` is either a condition word or [glyph, word, color] for a warning.
+function drawWeatherRow(f, icon, temp, tag, top = 24, divider = true) {
+  if (divider) f.fill(0, top - 2, 64, 1, C.divider);
+  drawIcon(f, icon, 0, top);
+  const base = top + 7; // text on rows top+2..top+6
   f.text('small', temp, 10, base, C.label);
-  const [icon, word, color] = tag;
-  drawTag(f, icon, word, 63 - tagWidth(icon, word) + 1, base, color);
+  if (typeof tag === 'string') {
+    rtext(f, 'small', tag, 63, base, C.label);
+  } else {
+    const [glyph, word, color] = tag;
+    drawTag(f, glyph, word, 63 - tagWidth(glyph, word) + 1, base, color);
+  }
 }
 
 function transitRows(f, rows, tops) {
@@ -122,7 +118,7 @@ function transitRows(f, rows, tops) {
     ['RD', '95TH', ['3', '11', '19']],
     ['GR', 'COTTAGE', ['12', '27']],
   ], [0, 8, 16]);
-  drawWeatherRow(f, '54', [G.BOLT, 'WATCH', C.yellow]);
+  drawWeatherRow(f, 'storm', '54\u00b0', [G.BOLT, 'WATCH', C.yellow]);
   save('mock-transit-weather.png', f, 10);
 }
 
@@ -162,7 +158,7 @@ function transitRows(f, rows, tops) {
   f.text('clock', clock, Math.floor((64 - w) / 2), 13, C.clock);
   const nt = 'NO TRAINS';
   f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), 20, dim(C.label, 0.5));
-  drawWeatherRow(f, '54', [G.FUNNEL, 'WARNING', C.red]);
+  drawWeatherRow(f, 'storm', '54\u00b0', [G.FUNNEL, 'WARNING', C.red]);
   save('mock-overnight.png', f, 10);
 }
 
@@ -175,4 +171,22 @@ function transitRows(f, rows, tops) {
   f.text('small', s(G.ALERT_DISC), 42, 10, C.red);
   f.text('small', s(G.ALERT_MARK), 42, 10, C.white);
   save('mock-icons.png', f, 16);
+}
+
+// Weather icons: large sheet, and each one in a weather row (made-up temps;
+// condition words are placeholders until the word list is decided).
+{
+  const names = Object.keys(ICONS);
+  const sheetF = new Frame(names.length * 10, 10);
+  names.forEach((n, i) => drawIcon(sheetF, n, 1 + i * 10, 1));
+  save('sheet-icons.png', sheetF, 20);
+
+  const words = {
+    sun: ['72°', 'SUNNY'], moon: ['58°', 'CLEAR'], pcloudy_day: ['66°', 'PT CLOUDY'],
+    pcloudy_night: ['55°', 'PT CLOUDY'], cloudy: ['48°', 'CLOUDY'], rain: ['51°', 'RAIN'],
+    ice: ['31°', 'FRZ RAIN'], snow: ['24°', 'SNOW'], storm: ['79°', 'STORMS'], fog: ['44°', 'FOG'],
+  };
+  const rowsF = new Frame(64, names.length * 10);
+  names.forEach((n, i) => drawWeatherRow(rowsF, n, words[n][0], words[n][1], 1 + i * 10, false));
+  save('mock-weather-rows.png', rowsF, 10);
 }

@@ -136,6 +136,12 @@ function buildSmall() {
     '.#.#.',
   ]), 0));
 
+  // Degree sign, kept small: a 2x2 dot level with the top of the digits.
+  f.glyphs.set(0xb0, glyph('degree', 0xb0, art([
+    '##',
+    '##',
+  ]), 3));
+
   f.glyphs.set(G.BOLT, glyph('bolt', G.BOLT, art([
     '..#',
     '.#.',
