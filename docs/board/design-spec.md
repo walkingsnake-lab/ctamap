@@ -123,7 +123,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ### Rows
 - 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest). Times are 3px apart, tightening to 2px when the row is full, so long names like `KIMBALL` and `COTTAGE` always fit.
 - **Schedule-based predictions** (`isSch`, e.g. southbound trains at Morse that haven't left the Howard terminal) are shown, with the time in grey instead of amber. `isFlt` (possible fault) predictions are shown normally.
-- **Trains ending at this station** (`destNm` = the station, e.g. Terminal Arrival at Howard) are not shown.
+- **Trains ending at this station** are not shown (Terminal Arrival at Howard; "63rd Street" trains at Ashland/63rd, which only shows Harlem trains).
 - **Per-digit roll** when a number changes (12→11 rolls only the 2). Whole cells roll when the list shifts (the first train leaves) or to and from `DUE`.
 
 ### Layout

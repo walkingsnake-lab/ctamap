@@ -93,7 +93,7 @@ All screens' data is always included so a button press switches screens without 
 
 #### Which predictions are shown
 Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
-- **Trains ending at this station are dropped**: any prediction whose `destNm` equals the station's `staNm` (e.g. at Howard, Red/Yellow "Terminal Arrival" and late-night Purple trains marked `destNm` "Howard").
+- **Trains ending at this station are dropped**: a prediction whose `destNm` equals the station's `staNm` (Howard), whose `destNm` maps to this station in `DEST_MAPID` (`server/board/destinations.js`; e.g. "63rd Street" at Ashland/63rd), or whose `stpDe` says "Terminal Arrival".
 - `destSt` is `"0"` and `lat`/`lon` are null on schedule-based predictions; `lat`/`lon` can also be `"0"`. Don't rely on them.
 
 #### Row order and fitting (server)
