@@ -52,6 +52,7 @@
   <div class="bar">
     <span>board <b id="board"></b></span>
     <span>screen <b id="screen">…</b></span>
+    <span>view <b id="view">…</b></span>
     <span>v <b id="v">…</b></span>
     <span>data age <b id="age">…</b></span>
     <span>bright <b id="bright">…</b></span>
@@ -129,6 +130,7 @@
       clockOffset = p.now - Date.now() / 1000;
       $('json').textContent = JSON.stringify(p, null, 2);
       $('screen').textContent = p.screen;
+      $('view').textContent = p.view || 'dest';
       $('v').textContent = p.v;
       $('age').textContent = p.age + ' s';
       $('bright').textContent = p.bright;

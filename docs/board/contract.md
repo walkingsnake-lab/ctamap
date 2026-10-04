@@ -53,6 +53,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
   "screen": "transit",
   "bright": 100,
   "header": "MORSE",
+  "view": "dest",
   "rows": [
     {"ln": "RD", "lbl": "HOWARD", "t": [1759546860, 1759547280, 1759547700], "s": [0, 0, 0], "a": 0},
     {"ln": "RD", "lbl": "95TH",   "t": [1759547040, 1759547520],             "s": [0, 1],    "a": 0}
@@ -83,7 +84,8 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. Until radar lands, `auto` resolves to `transit`. |
 | `bright` | int | Global brightness 0–100, already resolved (auto sunrise/sunset, fixed level, or 0 for off). Until weather lands, `auto` resolves to 100. |
 | `header` | string \| null | Station name for the transit header, or `null` when the header is off. Also used as the ticker header. |
-| `rows` | array | Transit rows, already filtered, ordered, and **capped** to the max for the header/weather toggles (5/4/3/2). Empty array means no predictions: the board shows the overnight layout. |
+| `view` | string | Transit view: `dest` (one row per destination, up to 3 times) or `chrono` (one row per train, soonest first). Chosen by the server; see *Transit view* below. |
+| `rows` | array | Transit rows, already filtered and ordered. `dest`: **capped** to the max for the header/weather toggles (5/4/3/2). `chrono`: the cap **plus 2** extra trains; the board shows the first *cap* live rows. Empty array means no predictions: the board shows the overnight layout. |
 | `ticker` | array | Up to 6 individual arrivals in time order for the ticker. |
 | `wx` | object \| null | Weather row, or `null` when the weather row is off. |
 | `warn` | object \| null | Active NWS warning/watch (see below). Sent regardless of the weather-row toggle, since the radar screen uses it too. |
@@ -98,9 +100,13 @@ Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 
 #### Row order and fitting (server)
 - With no `rows` list in the board config, rows are ordered by line (`RD BL BR GR OR PR PK YL`), then Train Tracker direction (`trDr`), then name. With a list, the list is the order and the filter; destinations CTA doesn't normally use are appended after it.
-- Rows past the cap for the header/weather toggles are dropped from the end. The ticker uses the same filter but not the cap.
+- When the destinations (after the filter) exceed the cap for the header/weather toggles, the server sends the chronological view instead of dropping rows. The ticker uses the same filter but not the cap.
 - Times are drawn 3px apart, tightening to 2px when the label would otherwise come within 3px of them. Transit labels are fitted per row against the 2px spacing at the times' widest before the next update (digits only shrink as times count down, but the first time may turn into `DUE`), so 7-letter names like `KIMBALL` and `COTTAGE` always fit.
 - Ticker destinations are fitted to 32px of 5x7 (`Jeff Pk` is exactly 32).
+
+#### Transit view (server)
+- `chrono` as soon as the destination count exceeds the cap; back to `dest` only after it has fit for **10 minutes** straight (`CHRONO_HOLD` in `arrivals.js`). The state is kept in memory per board and station.
+- `chrono` rows each carry one time (`t` and `s` have one entry) and `rn`. Labels are fitted against the widest chrono time (`99m`).
 
 #### Line codes
 Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`, `G`→`GR`, `Org`→`OR`, `P`→`PR`, `Pink`→`PK`, `Y`→`YL`. Short-name map keys are matched against `destNm` exactly as Train Tracker returns it (e.g. `O'Hare`, `Loop`); confirm each key against recorded fixtures.
@@ -114,6 +120,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `t` | Up to 3 arrival times (epoch), ascending. |
 | `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`), drawn grey instead of amber. |
 | `a` | `1` if the line has an active service-affecting CTA alert (block blinks to "!"). |
+| `rn` | `chrono` only: Train Tracker run number (string). The board keys rows by it, so trains keep their identity when they swap order. |
 
 #### Ticker item (`ticker[]`)
 
@@ -128,7 +135,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 #### Countdown rules (board side)
 
 - `min = floor((t - now) / 60)`
-- Show `DUE` (transit) / `Due` (ticker) when `min <= 1`.
+- Show `DUE` (transit) / `Due` (ticker) when `min <= 1`. Chrono rows show `<min>m` otherwise.
 - Drop an arrival once `now > t + 30`; its cell fades out and the list shifts (see `createTransitAnimator()` in `draw.js`). **(decide)** whether the 30 s grace is right; CTA's `isApp` is not sent.
 
 #### Weather row (`wx`)
@@ -233,7 +240,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 |---|---|
 | `v` | Settings version for this board. |
 | `station` | Train Tracker `mapid` and header name. Changeable from the control page. The station's coordinates are also the board's **location** for weather, NWS alerts, and the radar crop. |
-| `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the drop order (rows that don't fit are dropped from the end). Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
+| `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the row order; if more destinations than the cap remain, the board shows the chronological view. Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |
 | `screen` | `auto` or a forced screen. Reset to `auto` on boot. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |

@@ -1,6 +1,7 @@
 // Board drawing: the reference implementation of how the 64x32 board draws a
-// /board/update payload, including its animations (per-digit roll, ticker
-// slide, alert blink). Runs unchanged in Node (render.js, tests, previews)
+// /board/update payload in either transit view (destination rows or the
+// chronological list), including its animations (per-digit roll, fades and
+// slides, ticker slide, alert blink). Runs unchanged in Node (render.js, tests, previews)
 // and in the browser (the simulator), and has no dependencies; fonts and
 // icons are passed in. The CircuitPython board code mirrors this file.
 //
@@ -85,8 +86,19 @@
     return min <= 1 ? 'DUE' : String(min);
   }
 
+  // Chronological view: digits + "m" (the glyph's own 1px spacing), DUE bare.
+  function chronoText(t, now) {
+    const min = Math.floor((t - now) / 60);
+    return min <= 1 ? 'DUE' : `${min}m`;
+  }
+
   // Arrivals stay listed until 30 s past their time (contract countdown rules).
   const DROP_GRACE = 30;
+
+  // Max transit rows for the header/weather toggles (design spec §5).
+  function maxRows(hasHeader, hasWeather) {
+    return (hasHeader ? 4 : 5) - (hasWeather ? 2 : 0);
+  }
 
   // Row tops for n transit rows. Spec-pinned cases first; otherwise the
   // preferred pitch (shrunk to fit) with the block centered in the free area.
@@ -189,7 +201,8 @@
       const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
       f.withClip(0, top, 63, top + 4, () => {
         const from = roll.from;
-        const perDigit = from.length === text.length && /^\d+$/.test(from) && /^\d+$/.test(text);
+        const num = /^\d+m?$/;
+        const perDigit = from.length === text.length && num.test(from) && num.test(text);
         if (perDigit) {
           let x = right - measure('small', text) + 1;
           for (let i = 0; i < text.length; i++) {
@@ -230,10 +243,12 @@
     // The transit screen as data: what to draw where, before any animation.
     // The animator (createTransitAnimator) adjusts positions, colors, and alphas.
     function buildTransitView(p, now) {
+      if (p.view === 'chrono') return buildChronoView(p, now);
       const rows = liveRows(p, now);
       const tops = rowTops(rows.length, !!p.header, !!p.wx);
       return {
         now,
+        mode: 'dest',
         header: p.header,
         wx: p.wx,
         warn: p.warn,
@@ -241,6 +256,32 @@
           key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
           cells: layoutCells(r, now),
         })),
+      };
+    }
+
+    // Chronological view: one train per row, soonest first; the payload's
+    // extra trains wait below until a row frees up.
+    function buildChronoView(p, now) {
+      const rows = liveRows(p, now).slice(0, maxRows(!!p.header, !!p.wx));
+      const tops = rowTops(rows.length, !!p.header, !!p.wx);
+      return {
+        now,
+        mode: 'chrono',
+        pitch: tops.length > 1 ? tops[1] - tops[0] : 6,
+        header: p.header,
+        wx: p.wx,
+        warn: p.warn,
+        rows: rows.map((r, i) => {
+          const key = r.rn != null ? `rn:${r.rn}` : `${r.ln}:${r.lbl}:${r.t[0]}`;
+          const sch = r.s && r.s[0];
+          return {
+            key, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
+            cells: [{
+              id: key, t: r.t[0], text: chronoText(r.t[0], now), right: 63, alpha: 1, roll: null,
+              color: sch ? (i ? C.schDim : C.sch) : (i ? C.dimAmber : C.amber),
+            }],
+          };
+        }),
       };
     }
 
@@ -307,6 +348,9 @@
     //   - an arrival appears     -> fade in
     //   - a time becomes first   -> color eases from dim to bright
     //   - a row leaves or joins  -> fade, then rows slide to their new places
+    // In the chronological view, the departing first row slides up and out
+    // while fading, the list slides up with it, and the next train slides in
+    // at the bottom (no wait between the two).
     const ROLL_MS = 400, FADE_MS = 700, MOVE_MS = 500, COLOR_MS = 700, MATCH_S = 90;
     const lerp = (a, b, k) => a + (b - a) * k;
     const lerpColor = (c1, c2, k) => {
@@ -348,14 +392,24 @@
         // Returns the view to draw at animation time `t` (ms).
         step(p, now, t) {
           const target = buildTransitView(p, now);
+          const chrono = target.mode === 'chrono';
           const keys = new Set(target.rows.map((r) => r.key));
-          // Rows leaving: fade out where they are.
+          const current = [...rows.values()].filter((st) => !st.leaving);
+          const firstTop = Math.min(...current.map((st) => st.top));
+          const continuing = current.some((st) => keys.has(st.key));
+          // Rows leaving: fade out where they are (chrono: the first row
+          // slides up and out as it fades).
           let leavingUntil = 0;
           for (const [key, st] of rows) {
-            if (!keys.has(key) && !st.leaving) st.leaving = t;
+            if (!keys.has(key) && !st.leaving) {
+              st.leaving = t;
+              if (chrono && st.mode === 'chrono' && st.top === firstTop) {
+                st.fromTop = st.shownTop; st.top = st.top - target.pitch; st.moveStart = t;
+              }
+            }
             if (st.leaving) {
               if (t - st.leaving >= FADE_MS) rows.delete(key);
-              else leavingUntil = Math.max(leavingUntil, st.leaving + FADE_MS);
+              else if (!(chrono && st.mode === 'chrono')) leavingUntil = Math.max(leavingUntil, st.leaving + FADE_MS);
             }
           }
           // Rows staying or joining: slide to their new places once any
@@ -365,17 +419,19 @@
             const isNewRow = !st || !!st.leaving;
             if (isNewRow) {
               st = { key: r.key, top: r.top, shownTop: r.top, born: rows.size ? t : null, cells: [] };
+              // Chrono: a train joining a running list slides in from below.
+              if (chrono && continuing) { st.fromTop = r.top + target.pitch; st.moveStart = t; }
               rows.set(r.key, st);
             } else if (st.top !== r.top) {
               st.fromTop = st.shownTop;
               st.moveStart = Math.max(t, leavingUntil);
               st.top = r.top;
             }
-            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a });
+            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, mode: target.mode });
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, header: target.header, wx: target.wx, warn: target.warn, rows: [] };
+          const view = { now, mode: target.mode, header: target.header, wx: target.wx, warn: target.warn, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
@@ -464,16 +520,16 @@
     // Time texts per transit slot at `now`, keyed for change detection.
     function transitTexts(p, now) {
       const out = {};
-      for (const r of liveRows(p, now)) r.t.forEach((t, k) => { out[slotKey(r, k)] = timeText(t, now); });
+      for (const r of buildTransitView(p, now).rows) for (const c of r.cells) out[c.id] = c.text;
       return out;
     }
 
     return {
-      Frame, LINE, C, measure, clockText, rowTops, timeText, render, renderTransit, renderTicker,
+      Frame, LINE, C, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker,
       transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 500,
     };
   }
 
-  return { Frame, create, timeText, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
+  return { Frame, create, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
 });

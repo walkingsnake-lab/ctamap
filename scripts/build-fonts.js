@@ -136,6 +136,14 @@ function buildSmall() {
     '.#.#.',
   ]), 0));
 
+  // m widened to 5px with a 3-row x-height (the stock 3px m is a blob). Only
+  // used as the chronological view's minutes suffix ("4m").
+  f.glyphs.set(109, glyph('m', 109, art([
+    '####.',
+    '#.#.#',
+    '#.#.#',
+  ]), 0));
+
   // Degree sign, kept small: a 2x2 dot level with the top of the digits.
   f.glyphs.set(0xb0, glyph('degree', 0xb0, art([
     '##',

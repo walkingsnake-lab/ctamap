@@ -18,7 +18,7 @@ Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the desi
 ## 2. Architecture
 
 - **The existing fly.dev server (from the CTA map project) does all fetching and formatting.** The board only draws what it receives.
-- The server chooses the layout (row count, alerts) and sends compact JSON plus small indexed images (radar frames, ~2 KB each).
+- The server chooses the layout (row count, alerts, destination rows vs. chronological transit view) and sends compact JSON plus small indexed images (radar frames, ~2 KB each).
 - Optional shared token on board endpoints (`BOARD_TOKEN` Fly secret) to keep randoms off the CTA quota.
 
 ### Minimal animation
@@ -33,7 +33,7 @@ No blinking colons, no scrolling text, and no alert text screens anywhere. Alert
 
 ### Scheduler (board main loop)
 A small cooperative scheduler lines up network requests with animation gaps:
-- **Animation timeline:** the board tracks when its next animation will start: next digit roll (computed from arrival timestamps), next ticker slide, radar frame steps, and screen switches.
+- **Animation timeline:** the board tracks when its next animation will start: next digit roll (computed from arrival timestamps), next list slide (chronological view), next ticker slide, radar frame steps, and screen switches.
 - **Network jobs:** each job (version check, combined update, radar frame) has a **due time** and a **deadline**.
 - **Each loop pass:** if a job is due and the next animation is at least the **fetch budget** away, run it now; otherwise wait for the next gap.
 - **Deadline override:** if a job passes its deadline (e.g. data older than ~60 s), run it anyway. A brief freeze beats stale times.
@@ -81,7 +81,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 
 One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led-matrix/fonts`:
 
-- **Tom Thumb** (3x5): the default small text everywhere. **All Tom Thumb text is uppercase** (row labels, headers, weather words, status text). Only the ticker's 5x7 destinations use mixed case.
+- **Tom Thumb** (3x5): the default small text everywhere. **All Tom Thumb text is uppercase** (row labels, headers, weather words, status text), except the lowercase `m` minutes suffix in the chronological transit view (patched to 5px wide with a 3-row x-height, bottom-aligned with the digits; the stock 3px `m` reads as a blob). Only the ticker's 5x7 destinations use mixed case.
 - **X11 5x7**: CTA-style ticker destinations and the radar clock.
 - Both made **proportional** (advance = ink width + 1px). CircuitPython honors per-glyph widths.
 - Patched glyphs: **W** and **w** widened to 5px (the stock 4px versions read as H/u). 5x7 **t** narrowed to 3px (bottom hook tucked under the crossbar).
@@ -132,9 +132,8 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
 - **Header** (station grey + clock `#cccccc` on a faint full-width background band, no divider line) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
 - Rows fill the remaining space, centered and evenly spaced (5px rows, gaps of 1px or more).
-- **Rows that don't fit are dropped** (the last rows in config order). Accepted trade-off.
-- **v1 rule:** stations that need more rows than a bar combination allows simply don't enable those bars. Row order isn't a concern.
-- Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**.
+- **When destination rows don't fit, the board switches to the chronological view** (below) instead of dropping rows. Row order isn't a concern.
+- Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**; the chronological view covers those stations.
 
 **Geometry (from the mocks):**
 - Header band on rows 0–6, text on rows 1–5. Train rows start at row 9 or lower (at least 2px clear of the band).
@@ -147,6 +146,19 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | on | off | 4 |
 | off | on | 3 |
 | on | on | 2 |
+
+### Chronological view (overflow)
+- **When:** the destination count (after the per-board destination filter) exceeds the board's max rows. The server decides on each update and sends `view` in the combined update.
+- **Hysteresis:** switch to chronological as soon as destinations exceed max rows; switch back only after they've fit continuously for 10 minutes (starting value; tune). Keeps short-turns from flipping the format mid-rush. Held in server memory per board and station; a restart just picks fresh.
+- **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
+- **Time format:** digits + lowercase `m` with the font's own **1px gap** (`4m`, `12m`); `DUE` stays bare. Labels are fitted against the widest time (`99m`), so they have up to 43px.
+- **Line ID is the color block only.** No run numbers.
+- Same row counts and geometry as destination rows; header and weather row settings apply. The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
+- **Departure:** the first row slides up under the header while fading, the list slides up one row pitch with it (0.5 s ease), the next train turns amber, and a new train slides in at the bottom. Per-digit roll still applies within a row (`12m`→`11m` rolls only the 2).
+- **Trains swapping order** between updates: rows are keyed by run number, so the two rows just slide past each other.
+- **Switching views** cross-fades: the old rows fade out, then the new ones fade in.
+- **CTA alerts:** same block blink as destination rows.
+- **Accepted trade-off:** infrequent lines can drop off the screen when frequent ones fill all rows.
 
 ### Weather row (optional)
 - 8x8 condition icon, temperature with a small 2x2 degree sign (e.g. `54°`), condition word (uppercase) on the right.
@@ -177,7 +189,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - Same destination on two lines (e.g. Brown and Purple `LOOP` at Merchandise Mart): two rows told apart by the color block only. Accepted.
 - **Short-turn trains** (e.g. Blue Line to UIC-Halsted or Jefferson Park) get **their own row**. The layout follows the row count as these come and go.
 - **Unknown destinations** (disruptions, reroutes): own row, name truncated to fit; the server logs them so they can be added to the map.
-- Large Loop stations, and Belmont/Howard at rush (6 destinations): **per-board destination filter** in config.
+- **No per-station default view.** The view follows the live destination count. Example: Belmont shows 4 destinations off-peak (Red and Brown), which fit a 4- or 5-row board. It switches to chronological only when rush-only Purple service adds `LINDEN` and `LOOP`, and returns ~10 min after Purple stops, so a board there changes format twice a day at predictable times. The **per-board destination filter** avoids that if unwanted; it's applied first, and the overflow check runs on the filtered list.
 
 ### Other states
 - **Overnight / no predictions:** large **9x15 Bold** clock (`#cccccc`) with the 2x2 square colon, dim `NO TRAINS` label below it, weather row below the divider. Follows the board's weather-row setting; with the weather row off, the clock and `NO TRAINS` are centered vertically.
@@ -263,7 +275,9 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors, Tom Thumb `M`/`N` legibility (3px wide; may need widening like `W`), 3x5 bolt legibility.
 - Whether the work visitor WiFi has a captive portal (check with a phone).
 - Measure the real fetch time on the board to set the scheduler's fetch budget.
+- On-panel check: lowercase `m` legibility (diffuser glow between the humps), and whether `4m` needs a 2px gap.
+- Chronological view: tune the 10 min hysteresis hold.
 
 ## 12. Parked ideas
 
-**Bus screen** (cut from v1: needs a separate Bus Tracker API key; was 96/155 at Morse with grey `#8a8a8a` row blocks, westbound only since both start at Morse) · separate board location independent of the station · Combined radar + conditions screen · full-screen conditions layouts · Cubs/Sox scores (16x16 logos from a sprite sheet, personal use) · trains + buses on one screen · leave-by line · Divvy · Metra row · approach track · custom clock digit styles (Chunky, Outline) · chronological lists · timeline strips · merging short-turns into their direction's row with a marker · tap-to-switch via onboard accelerometer · I2C rotary encoder · ambient light sensor · big-number bus layout (route number left, name + times right; tried and declined in favor of the standard rows) · first-train time under the overnight clock (needs CTA GTFS schedule) · CTA alert headline scroll (cut to minimize animation) · full-screen CTA alert text screen (cut; indicators only) · CTA-style alert circle after the destination name on the ticker (declined: collides with long names and two-digit times) · blinking/alternating clock colon (cut to minimize animation) · transit row scrolling/paging for 6–7 destination stations (post-v1) · Bluetooth WiFi provisioning from the phone · per-pixel rain/snow from MRMS `PrecipFlag` (GRIB2; replaces the v1 temperature heuristic if the decoder fits in memory).
+**Bus screen** (cut from v1: needs a separate Bus Tracker API key; was 96/155 at Morse with grey `#8a8a8a` row blocks, westbound only since both start at Morse) · separate board location independent of the station · Combined radar + conditions screen · full-screen conditions layouts · Cubs/Sox scores (16x16 logos from a sprite sheet, personal use) · trains + buses on one screen · leave-by line · Divvy · Metra row · approach track · custom clock digit styles (Chunky, Outline) · timeline strips · merging short-turns into their direction's row with a marker · tap-to-switch via onboard accelerometer · I2C rotary encoder · ambient light sensor · big-number bus layout (route number left, name + times right; tried and declined in favor of the standard rows) · first-train time under the overnight clock (needs CTA GTFS schedule) · CTA alert headline scroll (cut to minimize animation) · full-screen CTA alert text screen (cut; indicators only) · CTA-style alert circle after the destination name on the ticker (declined: collides with long names and two-digit times) · blinking/alternating clock colon (cut to minimize animation) · transit row scrolling/paging for 6–7 destination stations (post-v1) · Bluetooth WiFi provisioning from the phone · run numbers in line color on chronological rows (declined: the color block scans faster, and Brown/Purple read dim as thin strokes) · `MIN` suffix on chronological rows (declined in favor of lowercase `m`) · per-pixel rain/snow from MRMS `PrecipFlag` (GRIB2; replaces the v1 temperature heuristic if the decoder fits in memory).

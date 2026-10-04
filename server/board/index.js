@@ -79,6 +79,10 @@ function createBoard({
   // `previewMapid` (simulator only) shows another station without changing
   // the board's config; the board's row list is station-specific, so it's
   // ignored while previewing.
+  // Last transit view per board and station, for the chrono hysteresis.
+  // In memory only: after a restart the view is chosen fresh.
+  const views = new Map();
+
   async function update(board, id, boot, previewMapid) {
     if (boot) board = store.boot(id);
     if (previewMapid && previewMapid !== board.station.mapid) {
@@ -92,7 +96,9 @@ function createBoard({
     // weather row when there's weather to show.
     const wx = null;
     const cfg = { ...board, showWeather: board.showWeather && !!wx };
-    const { rows, ticker } = format(data.arrivals, cfg, { now, alerts: new Set() });
+    const viewKey = `${id}:${board.station.mapid}`;
+    const { view, viewState, rows, ticker } = format(data.arrivals, cfg, { now, alerts: new Set(), prevView: views.get(viewKey) });
+    views.set(viewKey, viewState);
     return {
       v: board.v,
       now,
@@ -100,6 +106,7 @@ function createBoard({
       screen: resolveScreen(board.screen),
       bright: resolveBright(board.bright),
       header: board.showHeader ? board.station.name : null,
+      view,
       rows,
       ticker,
       wx,

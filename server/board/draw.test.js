@@ -187,3 +187,82 @@ test('ticker pacing is slow: long hold, gentle slide', () => {
   assert.ok(draw.PAGE_HOLD_MS >= 8000);
   assert.ok(draw.SLIDE_MS >= 1000);
 });
+
+// ---- chronological view ----
+
+const chronoRow = (ln, lbl, t, rn, s = 0) => ({ ln, lbl, t: [t], s: [s], a: 0, rn });
+const chronoPayload = (rows) => ({ ...payload(rows), view: 'chrono' });
+
+test('chrono: "4m" with a 1px gap, DUE bare, right-aligned; first row amber', () => {
+  assert.equal(draw.chronoText(min(4), NOW), '4m');
+  assert.equal(draw.chronoText(min(12), NOW), '12m');
+  assert.equal(draw.chronoText(NOW + 30, NOW), 'DUE');
+  const p = chronoPayload([chronoRow('RD', 'HOWARD', min(4), '801'), chronoRow('BR', 'KIMBALL', min(12), '402')]);
+  const f = draw.renderTransit(p);
+  const [top0, top1] = draw.rowTops(2, true, false);
+  // m (5px) ends on the last column; one blank column before it.
+  assert.equal(count(f, draw.C.amber, 59, top0, 63, top0 + 4), 10);
+  assert.equal(count(f, draw.C.amber, 58, top0, 58, top0 + 4), 0);
+  assert.ok(count(f, draw.C.amber, 55, top0, 57, top0 + 4) > 0);
+  assert.equal(count(f, draw.C.amber, 0, top1, 63, top1 + 4), 0);
+  assert.ok(count(f, draw.C.dimAmber, 50, top1, 63, top1 + 4) > 0);
+});
+
+test('chrono: the board shows at most the row cap; extra trains wait', () => {
+  const rows = [1, 2, 3, 4, 5, 6].map((m) => chronoRow('BL', "O'HARE", min(m * 3), String(100 + m)));
+  const v = draw.buildTransitView(chronoPayload(rows), NOW);
+  assert.equal(v.rows.length, 4);
+  assert.deepEqual(v.rows.map((r) => r.top), draw.rowTops(4, true, false));
+});
+
+test('chrono animator: the first train slides up and out, the list follows, the next train slides in', () => {
+  const rows = [chronoRow('RD', 'HOWARD', NOW + 10, '801'), ...[4, 7, 9, 12].map((m, i) => chronoRow('BR', 'LOOP', min(m), String(400 + i)))];
+  const p = chronoPayload(rows);
+  const tops = draw.rowTops(4, true, false);
+  const pitch = tops[1] - tops[0];
+  const anim = draw.createTransitAnimator();
+  const v0 = anim.step(p, NOW, 0);
+  assert.deepEqual(v0.rows.map((r) => r.key), ['rn:801', 'rn:400', 'rn:401', 'rn:402']);
+  // 45 s later the first train is past the 30 s grace.
+  const t = 1000;
+  anim.step(p, NOW + 45, t);
+  const mid = anim.step(p, NOW + 45, t + draw.MOVE_MS / 2);
+  const by = (v, k) => v.rows.find((r) => r.key === k);
+  const gone = by(mid, 'rn:801');
+  assert.ok(gone.top < tops[0] && gone.top > tops[0] - pitch, 'departing row moves up');
+  assert.ok(gone.alpha < 1 && gone.alpha > 0);
+  assert.ok(by(mid, 'rn:400').top < tops[1] && by(mid, 'rn:400').top > tops[0], 'list slides at the same time');
+  const incoming = by(mid, 'rn:403');
+  assert.ok(incoming.top > tops[3] && incoming.alpha < 1, 'next train comes in from below');
+  const end = anim.step(p, NOW + 45, t + draw.FADE_MS + 10);
+  assert.deepEqual(end.rows.map((r) => r.key), ['rn:400', 'rn:401', 'rn:402', 'rn:403']);
+  assert.deepEqual(end.rows.map((r) => r.top), tops);
+  assert.equal(by(end, 'rn:400').cells[0].color, draw.C.amber);
+  assert.deepEqual(draw.renderTransit(p, { now: NOW + 45, view: end }).px, draw.renderTransit(p, { now: NOW + 45 }).px);
+});
+
+test('chrono animator: two trains swapping order slide past each other, no fade', () => {
+  const anim = draw.createTransitAnimator();
+  const a = chronoRow('RD', 'HOWARD', min(5), '801');
+  const b = chronoRow('RD', '95TH', min(6), '802');
+  anim.step(chronoPayload([a, b]), NOW, 0);
+  const swapped = chronoPayload([{ ...b, t: [min(4)] }, a]);
+  anim.step(swapped, NOW, 1000);
+  const mid = anim.step(swapped, NOW, 1000 + draw.MOVE_MS / 2);
+  assert.ok(mid.rows.every((r) => r.alpha === 1));
+  const end = anim.step(swapped, NOW, 1000 + draw.MOVE_MS + 10);
+  assert.equal(end.rows.find((r) => r.key === 'rn:802').top, draw.rowTops(2, true, false)[0]);
+});
+
+test('switching views cross-fades: old rows fade out, then the new ones fade in', () => {
+  const anim = draw.createTransitAnimator();
+  anim.step(payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(4), min(9)], s: [0, 0], a: 0 }]), NOW, 0);
+  const chrono = chronoPayload([chronoRow('RD', 'HOWARD', min(4), '801'), chronoRow('RD', 'HOWARD', min(9), '802')]);
+  anim.step(chrono, NOW, 1000);
+  const mid = anim.step(chrono, NOW, 1000 + draw.FADE_MS / 2);
+  assert.ok(mid.rows.find((r) => r.key === 'RD:HOWARD').alpha < 1);
+  assert.ok(mid.rows.filter((r) => r.key.startsWith('rn:')).every((r) => r.alpha === 0));
+  const end = anim.step(chrono, NOW, 1000 + 2 * draw.FADE_MS + 10);
+  assert.deepEqual(end.rows.map((r) => r.key), ['rn:801', 'rn:802']);
+  assert.ok(end.rows.every((r) => r.alpha === 1));
+});
