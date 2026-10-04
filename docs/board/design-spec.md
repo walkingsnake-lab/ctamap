@@ -123,7 +123,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Per-digit roll** when a number changes (12→11 rolls only the 2). Whole cells roll when the list shifts (the first train leaves) or to and from `DUE`.
 
 ### Layout
-- **Header station names** are curated short names (≤ 42px, the space left by the widest clock), e.g. `HW LIBRARY`, `MERCH MART`, `CLARK/DIV`; list in `server/board/station-names.js`, editable per board from the phone.
+- **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
 - **Header** (station grey + clock `#cccccc`, no divider) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
 - Rows fill the remaining space, centered and evenly spaced (5px rows, gaps of 1px or more).
 - **Rows that don't fit are dropped** (the last rows in config order). Accepted trade-off.

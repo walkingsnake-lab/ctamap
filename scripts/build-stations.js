@@ -8,14 +8,14 @@
 //   node scripts/build-stations.js stops.json   # or uses a saved JSON export
 //
 // The dataset has one record per platform; this groups them by map_id.
-// Each station gets a header short name: the curated one from
-// server/board/station-names.js, or the uppercase name if it fits. The build
+// Each station gets a header short name via shortName() in
+// server/board/station-names.js (full name, then ordinals dropped, then curated). The build
 // fails, listing the stations, if any name overflows without a curated entry.
 
 const fs = require('fs');
 const path = require('path');
 const { measure } = require('../server/board/fonts');
-const { HEADER_NAME_PX, SHORT_NAMES } = require('../server/board/station-names');
+const { HEADER_NAME_PX, SHORT_NAMES, shortName } = require('../server/board/station-names');
 
 const URL = 'https://data.cityofchicago.org/resource/8pix-ypme.json?$limit=5000';
 const OUT = path.join(__dirname, '..', 'server', 'board', 'stations.json');
@@ -56,8 +56,8 @@ function build(records) {
   const stations = [...byMap.values()].map((st) => {
     const lat = st.pts.reduce((a, p) => a + p.lat, 0) / st.pts.length;
     const lon = st.pts.reduce((a, p) => a + p.lon, 0) / st.pts.length;
-    const short = SHORT_NAMES[st.name] || st.name.toUpperCase();
-    if (measure('small', short) > HEADER_NAME_PX) overflow.push(`${st.name} (${measure('small', short)}px)`);
+    const short = shortName(st.name, measure);
+    if (!short) overflow.push(`${st.name} (${measure('small', st.name.toUpperCase())}px)`);
     return {
       mapid: st.mapid,
       name: st.name,
