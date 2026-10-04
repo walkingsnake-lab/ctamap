@@ -288,8 +288,13 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   assert.ok(count(f, draw.C.grey, 40, 15, 63, 19) > 5, 'PM on rows 15-19');
   assert.ok(count(f, draw.C.warnSevere, 40, 15, 63, 19) > 3, 'bolt left of PM');
   for (let y = 20; y < 32; y++) for (let x = 40; x < 64; x++) assert.deepEqual(f.get(x, y), [0, 0, 0], 'nothing below the stack');
-  // Nothing of the stack spills into the radar area.
-  for (let y = 0; y < 32; y++) for (let x = 37; x < 40; x++) assert.deepEqual(f.get(x, y), [0, 0, 0]);
+  // Split layout: gray line on the panel's left edge (col 39); nothing of the
+  // stack spills into the radar area.
+  for (let y = 0; y < 32; y++) assert.equal(hex(f.get(39, y)), draw.C.divider);
+  for (let y = 0; y < 32; y++) for (let x = 36; x < 39; x++) assert.deepEqual(f.get(x, y), [0, 0, 0]);
+  for (let y = 0; y < 32; y++) assert.deepEqual(f.get(40, y), [0, 0, 0], '1px gap before the widest clock');
+  const full = draw.render({ ...p, radar: { ...p.radar, clock: [40, 0, 24, 22], split: false } }, { screen: 'radar', frames: {}, idx: 2 });
+  assert.deepEqual(full.get(39, 25), [0, 0, 0], 'no line in the full-width layout');
   // A frame not fetched yet draws as empty radar with the stack.
   const empty = draw.render(p, { screen: 'radar', frames: {}, idx: 0 });
   assert.equal(count(empty, draw.RADAR[1], 0, 0, 39, 31), 0);

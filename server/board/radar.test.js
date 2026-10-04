@@ -35,7 +35,7 @@ test('palette index to dBZ follows the IEM table', () => {
 test('geometry: ~1.5 mi per LED, station on the marker LED', () => {
   const g = R.geometry(wldOf('202610041600'), MORSE.lat, MORSE.lon, R.SPLIT_W);
   assert.ok(Math.abs(g.colsPer - 2.92) < 0.01 && Math.abs(g.rowsPer - 2.17) < 0.01);
-  assert.equal(g.mx, 20); assert.equal(g.my, 16);
+  assert.equal(g.mx, 19); assert.equal(g.my, 16);
   // Morse's own source pixel maps to the marker LED.
   const sx = Math.round((MORSE.lon + 129.995) / 0.01), sy = Math.round((54.995 - MORSE.lat) / 0.01);
   assert.equal(g.ledCol[sx - g.x0], g.mx);
@@ -47,7 +47,7 @@ test('clear day: nothing but the marker', async () => {
   const f = await frameFor('202610041600', 'rain');
   assert.equal(f.colored, 0);
   assert.deepEqual(hist(f.bytes), { 0: 2047, 7: 1 });
-  assert.equal(f.bytes[16 * 64 + 20], R.MARKER);
+  assert.equal(f.bytes[16 * 64 + 19], R.MARKER);
 });
 
 test('derecho: a wide range of rain levels; the split panel stays empty', async () => {
@@ -57,7 +57,7 @@ test('derecho: a wide range of rain levels; the split panel stays empty', async 
   assert.ok(f.colored > R.ON_PX);
   for (let y = 0; y < 32; y++) for (let x = R.SPLIT_W; x < 64; x++) assert.equal(f.bytes[y * 64 + x], 0);
   // Marker and its 4 neighbors.
-  const m = 16 * 64 + 20;
+  const m = 16 * 64 + 19;
   assert.deepEqual([f.bytes[m], f.bytes[m - 1], f.bytes[m + 1], f.bytes[m - 64], f.bytes[m + 64]], [7, 0, 0, 0, 0]);
 });
 
@@ -147,6 +147,9 @@ test('poller: idle stations cost nothing', async () => {
   assert.equal(calls, 0);
 });
 
+const nearMarker = (k) => [16 * 64 + 32, 16 * 64 + 31, 16 * 64 + 33, 15 * 64 + 32, 17 * 64 + 32].includes(k);
+const inBox = (k) => { const x = k % 64, y = k >> 6, [bx, by, bw, bh] = R.FULL_CLOCK; return x >= bx && x < bx + bw && y >= by && y < by + bh; };
+
 test('water masks: Morse is full width with the lake east; masked water, shoreline, clear clock box', async () => {
   const loc = R.loadLocation('40100');
   assert.equal(loc.split, false);
@@ -158,13 +161,16 @@ test('water masks: Morse is full width with the lake east; masked water, shoreli
   const out = await R.crops(pngOf('202008102100'), wldOf('202008102100'), [{ key: 'k', ...MORSE, width: 64 }]);
   const { dbz, geo } = out.get('k');
   const f = R.toFrame(dbz, geo, 'rain', loc);
-  for (let k = 0; k < 2048; k++) if (loc.water[k]) assert.equal(f.bytes[k], 0, `water at ${k % 64},${k >> 6}`);
+  for (let k = 0; k < 2048; k++) if (loc.water[k]) assert.equal(f.bytes[k], loc.shore[k] && !inBox(k) && !nearMarker(k) ? R.SHORE : 0, `water at ${k % 64},${k >> 6}`);
   for (const [bx, by, bw, bh] of [R.FULL_CLOCK]) for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) assert.equal(f.bytes[y * 64 + x], 0);
-  // Shoreline shows on land next to the lake where there's no rain (here, north
-  // of the storm), and never on top of rain.
+  // Shoreline: the lake's edge pixels, water side, drawn even right next to
+  // the storm (rain stops at the land pixel beside it).
   let shore = 0;
-  for (let k = 0; k < 2048; k++) if (f.bytes[k] === R.SHORE) { shore++; assert.equal(loc.shore[k], 1); }
-  assert.ok(shore > 0);
+  for (let k = 0; k < 2048; k++) if (f.bytes[k] === R.SHORE) { shore++; assert.equal(loc.water[k], 1); }
+  assert.ok(shore > 20);
+  let besideRain = 0;
+  for (let k = 0; k < 2048; k++) if (f.bytes[k] === R.SHORE && [k - 1, k + 1].some((j) => f.bytes[j] >= 1 && f.bytes[j] <= 5)) besideRain++;
+  assert.ok(besideRain > 0, 'shoreline survives next to rain');
   assert.equal(f.bytes[16 * 64 + 32], R.MARKER);
 });
 

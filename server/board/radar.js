@@ -16,8 +16,8 @@ const { decodeRows } = require('./radar-png');
 const BASE = 'https://mesonet.agron.iastate.edu/archive/data';
 const W = 64, H = 32;
 const KM_PER_LED = 1.5 * 1.609344;      // ~1.5 mi per LED
-const SPLIT_W = 40;                      // radar width in the split layout (clock panel: 24 cols, the 22px clock + 1px gap)
-const SPLIT_CLOCK = [SPLIT_W, 0, W - SPLIT_W, H];
+const SPLIT_W = 39;                      // radar width in the split layout: cols 0-38, gray divider at 39, clock panel 40-63
+const SPLIT_CLOCK = [40, 0, W - 40, H];
 // Full-width layout: the clock stack sits top-right over open water. The
 // box must be all water: 24 cols (22px clock + margin) x 22 rows (stack on
 // rows 2-19 + margin). Built per station by scripts/build-locations.js.
@@ -160,9 +160,10 @@ function toFrame(dbz, geo, mode, loc = null) {
     }
     if (n >= 2) { out[y * W + x] = v; colored++; }
   }
-  // Faint shoreline (land side) where there's no precip.
+  // Shoreline: the lake's edge pixels (water side), always drawn. Water is
+  // masked, so rain never covers it.
   if (loc && loc.shore) {
-    for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) if (loc.shore[y * w + x] && !out[y * W + x]) out[y * W + x] = SHORE;
+    for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) if (loc.shore[y * w + x]) out[y * W + x] = SHORE;
   }
   // The clock box stays empty.
   if (loc && !loc.split) {

@@ -532,6 +532,8 @@
           if (c) f.fill(x, y, 1, 1, c);
         }
       }
+      // Split layout: gray line on the clock panel's left edge.
+      if (r.split && r.clock) f.fill(r.clock[0] - 1, 0, 1, 32, C.divider);
       // Clock stack, right-aligned in the clock box: frame indicator, clock
       // (frame time), AM/PM with the warning icon to its left.
       const [bx, by, bw, bh] = r.clock || [40, 0, 24, 32];

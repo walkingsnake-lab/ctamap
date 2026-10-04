@@ -5,10 +5,10 @@
 //
 // Water: an LED is water when its center falls inside Lake Michigan
 // (scripts/geo-src/lake-michigan.geojson, Natural Earth 1:10m, public
-// domain). Shoreline: land LEDs next to water (4-neighbors), drawn faintly
-// where there's no rain. Layout: full width with the clock stack top-right
-// when the area it draws on is all water; otherwise the split layout (radar left 40
-// columns, clock panel right), with masks on the 40-column grid.
+// domain). Shoreline: water LEDs next to land (4-neighbors), the inside edge
+// of the lake, always drawn. Layout: full width with the clock stack top-right
+// when the area it draws on is all water; otherwise the split layout (radar left 39
+// columns, gray divider, clock panel right), with masks on the 39-column grid.
 //
 // Run: node scripts/build-locations.js   (no network; commit the output)
 
@@ -35,10 +35,10 @@ function masks(st, width) {
   for (let y = 0; y < H; y++) for (let x = 0; x < width; x++) water[y * width + x] = isWater(...ledCenter(st.lat, st.lon, x, y, width)) ? 1 : 0;
   const shore = new Uint8Array(width * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < width; x++) {
-    if (water[y * width + x]) continue;
+    if (!water[y * width + x]) continue;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const xx = x + dx, yy = y + dy;
-      if (xx >= 0 && yy >= 0 && xx < width && yy < H && water[yy * width + xx]) { shore[y * width + x] = 1; break; }
+      if (xx >= 0 && yy >= 0 && xx < width && yy < H && !water[yy * width + xx]) { shore[y * width + x] = 1; break; }
     }
   }
   return { water, shore };
