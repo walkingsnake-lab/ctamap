@@ -45,7 +45,7 @@ function build(records) {
   for (const rec of records) {
     const mapid = String(rec.map_id);
     if (!byMap.has(mapid)) {
-      byMap.set(mapid, { mapid, name: rec.station_name, desc: rec.station_descriptive_name, lines: new Set(), pts: [] });
+      byMap.set(mapid, { mapid, name: rec.station_name.trim(), desc: rec.station_descriptive_name.replace(/\s+/g, ' ').trim(), lines: new Set(), pts: [] });
     }
     const st = byMap.get(mapid);
     for (const [flag, code] of Object.entries(LINE_FLAGS)) if (truthy(rec[flag])) st.lines.add(code);

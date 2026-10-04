@@ -35,6 +35,7 @@ const SHORT_NAMES = {
   'Oakton-Skokie': 'OAKTON',
   'Dempster-Skokie': 'SKOKIE',
   'Merchandise Mart': 'MERCH MART',
+  'Quincy/Wells': 'QUINCY',
 };
 
 const dropOrdinals = (name) => name.replace(/\b(\d+)(st|nd|rd|th)\b/gi, '$1');
