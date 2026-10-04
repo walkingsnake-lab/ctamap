@@ -29,4 +29,8 @@ function parseCtaTime(s) {
   return Math.round(ms / 1000);
 }
 
-module.exports = { parseCtaTime, TZ };
+// Chicago's UTC offset in seconds (e.g. -18000 in CDT) at epoch second t.
+// Sent to the board as `tzo`: CircuitPython has no time zone database.
+const tzOffset = (t) => offsetAt(t * 1000) / 1000;
+
+module.exports = { parseCtaTime, tzOffset, TZ };

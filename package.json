@@ -4,7 +4,7 @@
   "scripts": {
     "build": "node build.js",
     "start": "node server.js",
-    "test": "node --test \"server/board/**/*.test.js\"",
+    "test": "node --test \"server/board/**/*.test.js\" \"firmware/tests/*.test.js\"",
     "build-fonts": "node scripts/build-fonts.js"
   },
   "devDependencies": {

@@ -49,6 +49,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 {
   "v": 42,
   "now": 1759546800,
+  "tzo": -18000,
   "age": 12,
   "screen": "transit",
   "bright": 100,
@@ -80,10 +81,13 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 |---|---|---|
 | `v` | int | Settings version (same as `/board/version`). |
 | `now` | int | Server epoch seconds. |
+| `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
 | `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. Until radar lands, `auto` resolves to `transit`. |
 | `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (Open-Meteo times for the station; 100 until weather data arrives), or the fixed level, or 0 for off. |
-| `header` | string \| null | Station name for the transit header, or `null` when the header is off. Also used as the ticker header. |
+| `header` | string \| null | Station name for the transit header, or `null` when the header is off or hidden to fit (see *Fitting the header and weather row*). |
+| `tickerHeader` | string \| null | Station name for the ticker header, or `null` when the header is off. Never hidden to fit. (Boards without it fall back to `header`.) |
+| `hidden` | array | Which of `"weather"`, `"header"` the server hid to fit this update's destinations, for the phone page and simulator. The board just follows `header` and `wx`. |
 | `view` | string | Transit view: `dest` (one row per destination, up to 3 times) or `chrono` (one row per train, soonest first). Chosen by the server; see *Transit view* below. |
 | `rows` | array | Transit rows, already filtered and ordered. `dest`: **capped** to the max for the header/weather toggles (5/4/3/2). `chrono`: the cap **plus 2** extra trains; the board shows the first *cap* live rows. Empty array means no predictions: the board shows the overnight layout. |
 | `ticker` | array | Up to 6 individual arrivals in time order for the ticker. |
@@ -103,6 +107,18 @@ Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 - When the destinations (after the filter) exceed the cap for the header/weather toggles, the server sends the chronological view instead of dropping rows. The ticker uses the same filter but not the cap.
 - Times are drawn 3px apart, tightening to 2px when the label would otherwise come within 3px of them. Transit labels are fitted per row against the 2px spacing at the times' widest before the next update (digits only shrink as times count down, but the first time may turn into `DUE`), so 7-letter names like `KIMBALL` and `COTTAGE` always fit.
 - Ticker destinations are fitted to 32px of 5x7 (`Jeff Pk` is exactly 32).
+
+#### Fitting the header and weather row (server)
+The board's `showHeader` / `showWeather` are the most it shows. On every update the server counts the destinations (after the row filter) and fits them (`fitBars` in `arrivals.js`):
+
+| Destinations | Header | Weather row | View |
+|---|---|---|---|
+| fit with both | shown | shown | rows |
+| fit without the weather row | shown | hidden | rows |
+| 5 | hidden | hidden | rows |
+| 6 or more | shown | hidden | one train per row |
+
+So a station with rush-only service (Purple at Merchandise Mart) gains and loses the weather row on its own. The weather row never shows with the chronological list.
 
 #### Transit view (server)
 - `chrono` whenever the destination count exceeds the cap, `dest` otherwise, decided on every update. `CHRONO_HOLD` in `arrivals.js` (0 now) can add a hold before switching back; that state is kept in memory per board and station.

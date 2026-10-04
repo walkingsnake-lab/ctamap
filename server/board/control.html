@@ -121,7 +121,7 @@
   const LINE_NAME = { RD: 'Red', BL: 'Blue', BR: 'Brown', GR: 'Green', OR: 'Orange', PR: 'Purple', PK: 'Pink', YL: 'Yellow' };
   const params = new URLSearchParams(location.search);
   let boardId = params.get('b') || 'home';
-  let board = null, stations = [], dests = [], hasWx = false;
+  let board = null, stations = [], dests = [], hasWx = false, hidden = [];
 
   let statusTimer = null;
   function setStatus(msg, err) {
@@ -159,7 +159,8 @@
   async function refreshPreview() {
     try {
       const p = await api('api/update?b=' + enc(boardId));
-      if (hasWx !== !!p.wx) { hasWx = !!p.wx; render(); }
+      const h = p.hidden || [];
+      if (hasWx !== !!p.wx || h.join() !== hidden.join()) { hasWx = !!p.wx; hidden = h; render(); }
       const img = new Image();
       img.onload = () => { $('preview').src = img.src; };
       img.src = `sim.png?b=${enc(boardId)}&scale=8&t=${Date.now()}`;
@@ -191,9 +192,9 @@
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
     $('showHeader').checked = board.showHeader;
     $('showWeather').checked = board.showWeather;
-    const n = maxRows();
-    $('rowsHint').textContent = `Fits ${n} destination rows. With more, the board lists one train per row instead.`
-      + (board.showWeather && !hasWx ? ' The weather row (2 fewer rows) appears once weather is wired up.' : '');
+    $('rowsHint').textContent = 'These are the most the board shows. When more destinations are running than fit, '
+      + 'it hides the weather row first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather row.'
+      + (hidden.length ? ` Hidden right now: ${hidden.join(' and ')}.` : '');
     renderDests();
   }
 

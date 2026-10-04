@@ -506,7 +506,9 @@
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const f = newFrame();
-      if (p.header) drawHeader(f, p.header, now, null, C.tickerHead);
+      // The ticker's header stays when the transit header is hidden to fit.
+      const th = p.tickerHeader !== undefined ? p.tickerHeader : p.header;
+      if (th) drawHeader(f, th, now, null, C.tickerHead);
       const items = liveTicker(p, now);
       const pages = Math.max(1, Math.ceil(items.length / 2));
       const page = (o.page || 0) % pages;

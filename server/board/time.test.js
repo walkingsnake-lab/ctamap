@@ -27,3 +27,9 @@ test('garbage returns null', () => {
   assert.equal(parseCtaTime('soon'), null);
   assert.equal(parseCtaTime(null), null);
 });
+
+test('tzOffset: Chicago offset in seconds, DST-aware', () => {
+  const { tzOffset } = require('./time');
+  assert.equal(tzOffset(Date.UTC(2026, 9, 4, 17, 0) / 1000), -5 * 3600);  // CDT
+  assert.equal(tzOffset(Date.UTC(2026, 11, 1, 17, 0) / 1000), -6 * 3600); // CST
+});
