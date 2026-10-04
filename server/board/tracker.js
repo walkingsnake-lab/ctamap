@@ -4,7 +4,7 @@
 // waits on CTA and idle stations cost no API calls. Shared by all boards.
 
 const { rawArrivals } = require('./capture');
-const { normalize } = require('./arrivals');
+const { normalize, latchDue } = require('./arrivals');
 
 function createTracker({
   fetchRaw = rawArrivals,
@@ -34,8 +34,9 @@ function createTracker({
         const json = JSON.parse(body);
         const err = json && json.ctatt && json.ctatt.errCd;
         if (err !== undefined && String(err) !== '0') throw new Error(`errCd ${err}: ${json.ctatt.errNm}`);
-        e.arrivals = normalize(json, { log, unknown });
-        e.fetchedAt = now();
+        const t = now();
+        e.arrivals = latchDue(e.arrivals, normalize(json, { log, unknown }), t);
+        e.fetchedAt = t;
         e.failures = 0;
       } catch (err) {
         // Keep the last good data; the board keeps counting down from it.

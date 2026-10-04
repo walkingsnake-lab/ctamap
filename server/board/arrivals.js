@@ -106,6 +106,29 @@ function normalize(json, { log = console, unknown = new Set() } = {}) {
   return out;
 }
 
+// Once a train has reached DUE, keep it there. CTA predictions are whole
+// minutes from when they're made, so a train the board has counted down to
+// DUE often comes back in the next fetch as "2 min" (the prediction was
+// stale, or the train is held just outside), and the board would jump
+// DUE -> 2. If the previous prediction for the same run had already reached
+// DUE by this fetch and the new one is within DUE_LATCH_MAX, the new time is
+// held at the DUE edge (now + 60 s). A real delay (more than 3 min) shows
+// minutes again.
+const DUE_S = 60;
+const DUE_LATCH_MAX = 180;
+
+function latchDue(prev, next, now) {
+  if (!prev || !prev.length) return next;
+  const before = new Map();
+  for (const a of prev) if (a.rn != null) before.set(`${a.ln}:${a.rn}`, a.t);
+  return next.map((a) => {
+    const old = a.rn != null ? before.get(`${a.ln}:${a.rn}`) : undefined;
+    if (old == null || now < old - DUE_S) return a; // wasn't DUE yet
+    if (a.t <= now + DUE_S || a.t > now + DUE_LATCH_MAX) return a; // DUE anyway, or a real delay
+    return { ...a, t: now + DUE_S };
+  });
+}
+
 // cfg: the board's state (rows filter, showHeader, showWeather).
 // alerts: Set of line codes with an active service alert.
 // prevView: this board's last view state (see chooseView); the new one is
@@ -175,4 +198,4 @@ function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}
   return { view: viewState.view, viewState, rows, ticker, bars };
 }
 
-module.exports = { normalize, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };
+module.exports = { normalize, latchDue, DUE_LATCH_MAX, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };

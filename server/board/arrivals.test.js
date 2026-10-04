@@ -229,3 +229,47 @@ test('every terminal in the destination map is a real station', () => {
   const stations = new Map(require('./stations.json').map((s) => [s.mapid, s.name]));
   for (const [dest, mapid] of Object.entries(DEST_MAPID)) assert.ok(stations.has(mapid), `${dest} -> ${mapid}`);
 });
+
+test('DUE latch: a train that reached DUE stays DUE when the next prediction says 2 min', () => {
+  const { latchDue, DUE_LATCH_MAX } = require('./arrivals');
+  const { timeText } = require('./draw');
+  const now = 1_000_000;
+  const a = (rn, t, ln = 'RD') => ({ ln, dest: 'Howard', known: true, dir: 1, t, s: 0, rn });
+  // Previous fetch: run 801 at +70 s ("2"); by this fetch, 30 s later, the board
+  // has counted it down to 40 s: DUE.
+  const prev = [a('801', now + 40), a('802', now + 400)];
+  // CTA now says 801 is 2 min out again (whole minutes from a fresh prediction).
+  const next = latchDue(prev, [a('801', now + 120), a('802', now + 370)], now);
+  assert.equal(timeText(next[0].t, now), 'DUE');
+  assert.equal(next[0].t, now + 60);
+  assert.equal(next[1].t, now + 370); // not DUE before: untouched
+  // Counting down from the held time keeps DUE until the next fetch.
+  assert.equal(timeText(next[0].t, now + 25), 'DUE');
+  // Still held on the next fetch if CTA keeps saying ~2 min...
+  const again = latchDue(next, [a('801', now + 30 + 120)], now + 30);
+  assert.equal(timeText(again[0].t, now + 30), 'DUE');
+  // ...but a real delay shows minutes again.
+  const delayed = latchDue(next, [a('801', now + 30 + DUE_LATCH_MAX + 60)], now + 30);
+  assert.equal(timeText(delayed[0].t, now + 30), '4');
+  // Same run number on another line is a different train.
+  assert.equal(latchDue(prev, [a('801', now + 120, 'BL')], now)[0].t, now + 120);
+  // First fetch: nothing to compare.
+  assert.equal(latchDue(null, [a('801', now + 120)], now)[0].t, now + 120);
+});
+
+test('tracker applies the DUE latch between fetches', async () => {
+  const { createTracker } = require('./tracker');
+  let t = 1_791_000_000; // Oct 2026 (CDT, matching the -5 h below)
+  const tmst = (s) => { const d = new Date((s - 5 * 3600) * 1000); return d.toISOString().slice(0, 19); };
+  const resp = (arr) => ({ status: 200, body: JSON.stringify({ ctatt: { tmst: tmst(t), errCd: '0', eta: [{ staId: '40100', staNm: 'Morse', stpDe: 'Service toward Howard', rn: '801', rt: 'Red', destNm: 'Howard', trDr: '1', arrT: tmst(arr), isSch: '0' }] } }) });
+  let next = t + 70;
+  const tr = createTracker({ fetchRaw: async () => resp(next), now: () => t, log: quiet });
+  const first = (await tr.get('40100')).arrivals[0].t;
+  t += 30; next = t + 120; // board has counted 801 to 40 s (DUE); CTA says 2 min
+  tr.pass();
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setTimeout(r, 10));
+  const second = (await tr.get('40100')).arrivals[0].t;
+  assert.ok(Math.abs(first - (t - 30 + 70)) <= 1);
+  assert.equal(second, t + 60);
+});
