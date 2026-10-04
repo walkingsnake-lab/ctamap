@@ -38,6 +38,7 @@ class Server:
         self.calls = []
         self.fail_next = 0
         self.wifi = ['ok']
+        self.visit = None
 
     def now(self):
         return T0 + self.clock.t / 1000
@@ -65,12 +66,12 @@ class Server:
         ]
         frames = ['40100-%d' % (now // 300 * 300 - k * 300) for k in range(5, -1, -1)] if self.radar_on else []
         return {
-            'v': self.v, 'now': now, 'tzo': -18000, 'age': 3, 'screen': 'radar' if self.radar_on else self.screen,
+            'v': self.v, 'now': now, 'tzo': -18000, 'age': 3, 'screen': 'radar' if self.radar_on and not self.visit else self.screen,
             'bright': 100, 'header': 'MORSE', 'view': 'dest', 'rows': rows,
             'ticker': [{'ln': 'RD', 'd': 'Howard', 't': t, 's': 0, 'a': 0} for t in rows[0]['t']] +
                       [{'ln': 'RD', 'd': '95th', 't': t, 's': 0, 'a': 0} for t in rows[1]['t']],
             'wx': None, 'warn': None,
-            'radar': {'on': self.radar_on, 'frames': frames, 'ft': [T0] * len(frames), 'clock': [40, 0, 24, 22], 'split': False},
+            'radar': {'on': self.radar_on, 'visit': self.visit, 'frames': frames, 'ft': [T0] * len(frames), 'clock': [40, 0, 24, 22], 'split': False},
         }
 
     # net interface
@@ -244,6 +245,49 @@ class TestBoardLoop(unittest.TestCase):
         board.connect()
         run_for(board, clock, 45000)
         self.assertAlmostEqual(board.now(clock.t), server.now(), delta=2)
+
+
+class TestRadarVisits(unittest.TestCase):
+    def test_auto_visits_the_radar_on_a_timer_and_prefetches_frames(self):
+        board, server, clock, _, _, _ = make()
+        server.radar_on = True
+        server.visit = {'every': 240, 'for': 60}
+        board.connect()
+        screens = []
+        for _ in range(int(10 * 60 * 1000 / 50)):
+            board.step()
+            screens.append((int(board.now(clock.t)) % 240, board.player.screen))
+            clock.sleep_ms(50)
+        # Radar exactly in the first 60 s of each 240 s cycle (a few seconds of
+        # slack at the edges for the 30 s update cadence).
+        for phase, scr in screens:
+            if 3 <= phase < 57:
+                self.assertEqual(scr, 'radar', phase)
+            elif 63 <= phase < 237:
+                self.assertEqual(scr, 'transit', phase)
+        self.assertEqual(board.player.missing_frames(), [])  # fetched before the visit
+
+    def test_buttons_beat_the_timer(self):
+        board, server, clock, _, btn, _ = make(buttons=True)
+        server.radar_on = True
+        server.visit = {'every': 240, 'for': 60}
+        board.connect()
+        run_for(board, clock, 2000)
+        btn.held['down'] = True
+        run_for(board, clock, 200)
+        btn.held['down'] = False
+        pressed = board.player.screen
+        run_for(board, clock, 200000)  # many cycles, same settings version
+        self.assertEqual(board.player.screen, pressed)
+
+    def test_no_visits_without_rain_or_when_off(self):
+        board, server, clock, _, _, _ = make()
+        server.radar_on = False
+        server.visit = {'every': 240, 'for': 60}
+        board.connect()
+        run_for(board, clock, 5 * 60 * 1000)
+        self.assertEqual(board.player.screen, 'transit')
+        self.assertFalse([c for c in server.calls if c['name'].startswith('radar')])
 
 
 class TestPlayerTiming(unittest.TestCase):

@@ -17,6 +17,8 @@ test('a fresh store starts with the home board at Morse and writes the file', ()
   assert.deepEqual(home.station, { mapid: '40100', name: 'MORSE' });
   assert.equal(home.screen, 'auto');
   assert.equal(home.bright, 'auto');
+  assert.equal(home.radarEvery, 0);
+  assert.equal(home.radarFor, 60);
   assert.ok(fs.existsSync(path.join(dir, 'board-state.json')));
 });
 

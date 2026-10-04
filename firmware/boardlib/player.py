@@ -46,6 +46,26 @@ class Player:
     def add_frame(self, fid, data):
         self.radar_frames[fid] = data
 
+    def auto_screen(self, now):
+        """The screen the server wants now: its `screen`, except that on the
+        auto screen the radar is visited for `for` seconds at the start of
+        every `every`-second cycle while rain is in the box. Mirrors
+        autoScreen() in draw.js."""
+        p = self.p
+        screen = (p.get('screen') or 'transit') if p else 'transit'
+        r = (p.get('radar') or {}) if p else {}
+        v = r.get('visit')
+        if screen != 'transit' or not r.get('on') or not v or not v.get('every', 0) > 0:
+            return screen
+        return 'radar' if int(now) % v['every'] < v['for'] else 'transit'
+
+    def wants_frames(self):
+        """Radar frames are needed on the radar screen, and ahead of visits."""
+        if self.screen == 'radar':
+            return True
+        r = (self.p.get('radar') or {}) if self.p else {}
+        return bool(r.get('on') and r.get('visit'))
+
     def set_screen(self, screen, ms):
         if screen != self.screen:
             self.screen = screen

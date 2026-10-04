@@ -99,7 +99,7 @@ class Board:
     def _apply(self, p, ms):
         self._sync(p['now'], ms)
         self.player.set_payload(p, ms)
-        self.player.set_screen(self.override.resolve(p.get('screen') or 'transit', p.get('v')), ms)
+        self.player.set_screen(self.override.resolve(self.player.auto_screen(self.now(ms)), p.get('v')), ms)
 
     def _version(self, ms):
         r = self.net.version()
@@ -114,8 +114,8 @@ class Board:
         return 'ok'
 
     def _radar(self, ms):
-        # Frames are only needed while the radar is on screen.
-        if self.player.screen != 'radar':
+        # Frames are only needed on the radar screen or ahead of a visit.
+        if not self.player.wants_frames():
             return 'skip'
         missing = self.player.missing_frames()
         if not missing:
@@ -136,6 +136,10 @@ class Board:
         self._buttons(ms)
 
         now = self.now(ms)
+        if self.player.p:
+            # Timed radar visits: follow the server's schedule unless a
+            # button press is overriding it.
+            self.player.set_screen(self.override.resolve(self.player.auto_screen(now), self.player.p.get('v')), ms)
         busy = self.player.busy(ms)
         quiet = self.player.quiet_ms(ms, now)
         job = self.sched.pick(ms, busy, quiet)

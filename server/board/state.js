@@ -48,6 +48,10 @@ function defaultBoard(stations) {
     showWeather: true,
     screen: 'auto',
     bright: 'auto',
+    // Auto screen: show the radar for `radarFor` seconds every `radarEvery`
+    // minutes while rain is in the box. 0 = never (stay on transit).
+    radarEvery: 0,
+    radarFor: 60,
   };
 }
 
@@ -87,6 +91,14 @@ function validatePatch(patch, stations) {
       case 'screen':
         if (!SCREENS.includes(val)) throw new ValidationError(`screen must be one of ${SCREENS.join(', ')}`);
         out.screen = val;
+        break;
+      case 'radarEvery':
+        if (!Number.isInteger(val) || val < 0 || val > 60) throw new ValidationError('radarEvery must be 0 (off) or 1-60 minutes');
+        out.radarEvery = val;
+        break;
+      case 'radarFor':
+        if (!Number.isInteger(val) || val < 10 || val > 600) throw new ValidationError('radarFor must be 10-600 seconds');
+        out.radarFor = val;
         break;
       case 'bright':
         if (!(val === 'auto' || val === 'off' || (Number.isInteger(val) && val >= 0 && val <= 100))) {
