@@ -54,12 +54,12 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
   "bright": 100,
   "header": "MORSE",
   "rows": [
-    {"ln": "RD", "lbl": "HOWARD", "t": [1759546860, 1759547280, 1759547700], "a": 0},
-    {"ln": "RD", "lbl": "95TH",   "t": [1759547040, 1759547520],             "a": 0}
+    {"ln": "RD", "lbl": "HOWARD", "t": [1759546860, 1759547280, 1759547700], "s": [0, 0, 0], "a": 0},
+    {"ln": "RD", "lbl": "95TH",   "t": [1759547040, 1759547520],             "s": [0, 1],    "a": 0}
   ],
   "ticker": [
-    {"ln": "RD", "d": "Howard", "t": 1759546860, "a": 0},
-    {"ln": "RD", "d": "95th",   "t": 1759547040, "a": 0}
+    {"ln": "RD", "d": "Howard", "t": 1759546860, "s": 0, "a": 0},
+    {"ln": "RD", "d": "95th",   "t": 1759547040, "s": 0, "a": 0}
   ],
   "wx": {"icon": "rain", "temp": 54, "word": "RAIN", "hi": 60, "lo": 48},
   "warn": null,
@@ -106,6 +106,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `ln` | Line code for the color block: `RD` `BL` `BR` `GR` `OR` `PK` `PR` `YL`. The board owns the color palette. |
 | `lbl` | Label, uppercase, fitted. |
 | `t` | Up to 3 arrival times (epoch), ascending. |
+| `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`), drawn grey instead of amber. |
 | `a` | `1` if the line has an active service-affecting CTA alert (block blinks to "!"). |
 
 #### Ticker item (`ticker[]`)
@@ -115,6 +116,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `ln` | Line code (row fill color). |
 | `d` | Destination, mixed case, `tt` replaced with the ligature codepoint, fitted for the 5x7 font. |
 | `t` | Arrival time (epoch). |
+| `s` | `1` if schedule-based → index number is replaced by the clock glyph (unless `a` is `1`; the alert circle wins). |
 | `a` | `1` → index number is replaced by the alert circle. |
 
 #### Countdown rules (board side)
@@ -248,7 +250,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 ## Open items
 
 - **(decide)** Arrival drop grace (30 s) and whether `DUE` should also honor `isApp`.
-- **(decide)** Schedule-based predictions (`isSch=1`): show like live ones, mark them, or drop them. Same for `isFlt=1`. Evidence: at Morse, southbound trains are schedule-based until they leave the Howard terminal one stop away, so dropping them would hide most southbound trains at Morse.
+- Schedule-based predictions (`isSch=1`) are shown and marked via `s` (decided Oct 3: grey times on transit, clock on ticker). `isFlt=1` is shown normally. Ticker clock glyph still to be chosen.
 - **(decide)** Hysteresis thresholds for `radar.on` (colored-pixel counts); set after viewing real storms from the IEM archive.
 - Verify the MRMS dBZ formula before fixing level thresholds.
 - Tune snow thresholds (provisional 10/20/30 dBZ) on archived snow events.
