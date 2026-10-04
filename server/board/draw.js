@@ -517,6 +517,22 @@
     const ampmFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: true });
     const ampmText = (t) => (/PM/i.test(ampmFmt.format(new Date(t * 1000))) ? 'PM' : 'AM');
 
+    // Conditions panel (radar screen before any frames): icon + temperature,
+    // condition word level with AM/PM, high/low below. Left 39 columns.
+    function drawConditions(f, wx) {
+      drawIcon(f, wx.icon, 1, 2);
+      const x = f.text('5x7', String(wx.temp), 12, 10, C.label);
+      f.text('small', '°', x, 8, C.label);
+      f.text('small', wx.word, 1, 20, C.label);
+      if (wx.hi != null && wx.lo != null) {
+        // Double space between high and low, single when that would reach the
+        // split layout's divider (col 39; keep col 38 clear).
+        let hl = `H ${wx.hi}  L ${wx.lo}`;
+        if (1 + measure('small', hl) - 1 > 37) hl = `H ${wx.hi} L ${wx.lo}`;
+        f.text('small', hl, 1, 28, C.grey);
+      }
+    }
+
     // opts: now, idx (frame index into p.radar.frames; default the newest),
     // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
     function renderRadar(p, opts) {
@@ -533,6 +549,8 @@
           if (c) f.fill(x, y, 1, 1, c);
         }
       }
+      // No frames yet: current conditions on the left instead of the radar.
+      if (!ids.length && r.wx) drawConditions(f, r.wx);
       // Split layout: gray line on the clock panel's left edge.
       if (r.split && r.clock) f.fill(r.clock[0] - 1, 0, 1, 32, C.divider);
       // Clock stack, right-aligned in the clock box: frame indicator, clock

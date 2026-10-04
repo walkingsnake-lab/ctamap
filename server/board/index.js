@@ -126,6 +126,8 @@ function createBoard({
     let radarState = NO_RADAR;
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
     catch (e) { log.error('[board] radar:', e.message); }
+    // Until radar frames arrive, the radar screen shows current conditions.
+    if (!radarState.frames.length && w) radarState = { ...radarState, wx: toWx(w) };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }

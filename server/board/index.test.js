@@ -391,3 +391,20 @@ test('radar: frames by ID behind the token; auto switches to radar when it rains
   assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'transit');
   await s.close();
 });
+
+test('update: radar carries current conditions only until frames arrive', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8')));
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  let s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
+  s.store.update('home', { showWeather: false });
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.wx, null); // weather row off...
+  assert.deepEqual(b.radar.wx, { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 }); // ...but the radar screen still gets conditions
+  await s.close();
+  s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar({ on: false, frames: ['x'], ft: [now], clock: [40, 0, 24, 22], split: false }) });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.radar.wx, undefined);
+  await s.close();
+});

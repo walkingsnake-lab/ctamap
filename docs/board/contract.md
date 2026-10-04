@@ -178,6 +178,8 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 | `clock` | `[x, y, w, h]`: box the board draws the clock stack into (frame indicator, clock, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
 | `split` | `true` when the location has no usable water area; the clock box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–38, marker at 19,16; the board draws a gray `#333333` line on col 39; clock box `[40, 0, 24, 32]`, leaving a 1px gap before the widest clock). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator rows 2–3, clock rows 6–12, AM/PM rows 15–19, right-aligned to column 62. |
 
+| `wx` | Only while `frames` is empty: current conditions (same shape as the top-level `wx`), sent even with the weather row off. The board shows them on the radar screen's left side (icon + temperature, condition word, `H hi  L lo`) with the clock stack at the current time, instead of an empty radar. Omitted once frames exist. |
+
 When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`. The server still sends frames it has, so a forced radar screen shows them.
 
 **`on` hysteresis** (provisional): turns on when the newest frame has ≥ 30 precip pixels (after water masking and despeckle, marker excluded), off when it drops below 10. Judged once per new frame. With `screen` `auto`, `on` switches the board to `radar`.
