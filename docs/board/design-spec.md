@@ -148,7 +148,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
 
 ### CTA alerts
-- Affected rows' color blocks **blink to a 1px "!"**. That's the whole indicator; no alert text is shown (details are on the phone).
+- Affected rows' color blocks **blink to a 1px "!"** in the line color (middle column of the 3x5 block: 3px stem, 1px gap, 1px dot; `ALERT_BANG` in `server/board/icons.js`). That's the whole indicator; no alert text is shown (details are on the phone).
 - CTA alerts are per line, so **every row of the affected line blinks, both directions**. Blinking only one direction would need parsing the alert text; not planned for v1.
 
 ### Destination labels

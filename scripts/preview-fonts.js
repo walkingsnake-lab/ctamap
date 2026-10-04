@@ -9,7 +9,7 @@ const path = require('path');
 const { Frame } = require('../server/board/raster');
 const { measure, ligatures } = require('../server/board/fonts');
 const G = require('../server/board/glyphs');
-const { ICONS, drawIcon } = require('../server/board/icons');
+const { ICONS, ALERT_BANG, drawIcon } = require('../server/board/icons');
 
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'previews');
 fs.mkdirSync(OUT, { recursive: true });
@@ -85,11 +85,16 @@ function drawWeatherRow(f, icon, temp, tag, top = 24, divider = true) {
   }
 }
 
+// `alert` rows draw the "!" blink state instead of the solid block.
 function transitRows(f, rows, tops) {
-  rows.forEach(([ln, label, times], i) => {
+  rows.forEach(([ln, label, times, alert], i) => {
     const top = tops[i];
     const base = top + 5;
-    f.fill(0, top, 3, 5, LINE[ln]);
+    if (alert) {
+      ALERT_BANG.forEach((r, j) => [...r].forEach((c, k) => { if (c === '#') f.fill(k, top + j, 1, 1, LINE[ln]); }));
+    } else {
+      f.fill(0, top, 3, 5, LINE[ln]);
+    }
     f.text('small', label, 5, base, C.label);
     drawTimes(f, times, 63, base);
   });
@@ -107,6 +112,20 @@ function transitRows(f, rows, tops) {
     ['GR', 'COTTAGE', ['12', '27']],
   ], [7, 13, 19, 25]);
   save('mock-transit.png', f, 10);
+}
+
+// Transit with a Red Line alert: both Red rows in the "!" half of the blink.
+{
+  const f = new Frame();
+  f.text('small', 'MORSE', 1, 6, C.grey);
+  rtext(f, 'small', '9:41', 62, 6, C.clock);
+  transitRows(f, [
+    ['RD', 'HOWARD', ['DUE', '8', '15'], true],
+    ['RD', '95TH', ['3', '11', '19'], true],
+    ['BL', 'JEFF PK', ['6', '14']],
+    ['GR', 'COTTAGE', ['12', '27']],
+  ], [7, 13, 19, 25]);
+  save('mock-transit-alert.png', f, 10);
 }
 
 // Transit: header off, weather on -> 3 rows in rows 0-20 (pitch 8 assumed;

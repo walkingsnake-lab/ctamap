@@ -122,10 +122,20 @@ const ICONS = {
   ],
 };
 
+// Transit CTA alert: the row's 3x5 color block blinks between solid and this
+// 1px "!" (middle column), drawn in the line color.
+const ALERT_BANG = [
+  '.#.',
+  '.#.',
+  '.#.',
+  '...',
+  '.#.',
+];
+
 // Open-Meteo WMO weather code -> icon name. isDay picks sun/moon variants.
 function iconForCode(code, isDay) {
-  if (code === 0) return isDay ? 'sun' : 'moon';
-  if (code === 1 || code === 2) return isDay ? 'pcloudy_day' : 'pcloudy_night';
+  if (code === 0 || code === 1) return isDay ? 'sun' : 'moon'; // clear, mainly clear
+  if (code === 2) return isDay ? 'pcloudy_day' : 'pcloudy_night';
   if (code === 3) return 'cloudy';
   if (code === 45 || code === 48) return 'fog';
   if ([56, 57, 66, 67].includes(code)) return 'ice';
@@ -144,4 +154,4 @@ function drawIcon(frame, name, x, y) {
   }));
 }
 
-module.exports = { ICONS, PALETTE, iconForCode, drawIcon };
+module.exports = { ICONS, PALETTE, ALERT_BANG, iconForCode, drawIcon };
