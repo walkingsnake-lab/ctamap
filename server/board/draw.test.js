@@ -300,3 +300,13 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   assert.equal(count(empty, draw.RADAR[1], 0, 0, 39, 31), 0);
   assert.equal(hex(empty.get(56, 2)), draw.C.amber);
 });
+
+test('radar with no frames yet draws the clock at the current time (no crash)', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
+  for (const radar of [{ on: false, frames: [], ft: [], clock: null, split: false }, { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true }, undefined]) {
+    for (const idx of [undefined, -1, 0, 3]) {
+      const f = draw.render({ now, bright: 100, warn: null, radar }, { screen: 'radar', now, idx, frames: {} });
+      assert.ok(count(f, draw.C.clock, 40, 0, 63, 31) > 15, 'clock drawn');
+    }
+  }
+});

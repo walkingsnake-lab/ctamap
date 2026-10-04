@@ -523,7 +523,8 @@
       const o = opts || {};
       const r = p.radar || {};
       const ids = r.frames || [];
-      const idx = o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
+      // -1 when there are no frames yet (the clock then shows the current time).
+      const idx = !ids.length ? -1 : o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
       const f = newFrame();
       const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
       if (bytes) {
@@ -539,7 +540,7 @@
       const [bx, by, bw, bh] = r.clock || [40, 0, 24, 32];
       const right = Math.min(62, bx + bw - 1);
       const top = by + 2; // top-aligned (spec: rows 2-19)
-      const t = idx >= 0 && r.ft ? r.ft[idx] : (o.now != null ? o.now : p.now);
+      const t = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
       if (ids.length) {
         const segW = 2, segGap = 1;
         let x = right - (ids.length * (segW + segGap) - segGap) + 1;
