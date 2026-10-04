@@ -80,8 +80,8 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `v` | int | Settings version (same as `/board/version`). |
 | `now` | int | Server epoch seconds. |
 | `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
-| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. |
-| `bright` | int | Global brightness 0–100, already resolved (auto sunrise/sunset, fixed level, or 0 for off). |
+| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. Until radar lands, `auto` resolves to `transit`. |
+| `bright` | int | Global brightness 0–100, already resolved (auto sunrise/sunset, fixed level, or 0 for off). Until weather lands, `auto` resolves to 100. |
 | `header` | string \| null | Station name for the transit header, or `null` when the header is off. Also used as the ticker header. |
 | `rows` | array | Transit rows, already filtered, ordered, and **capped** to the max for the header/weather toggles (5/4/3/2). Empty array means no predictions: the board shows the overnight layout. |
 | `ticker` | array | Up to 6 individual arrivals in time order for the ticker. |
@@ -95,6 +95,12 @@ All screens' data is always included so a button press switches screens without 
 Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 - **Trains ending at this station are dropped**: any prediction whose `destNm` equals the station's `staNm` (e.g. at Howard, Red/Yellow "Terminal Arrival" and late-night Purple trains marked `destNm` "Howard").
 - `destSt` is `"0"` and `lat`/`lon` are null on schedule-based predictions; `lat`/`lon` can also be `"0"`. Don't rely on them.
+
+#### Row order and fitting (server)
+- With no `rows` list in the board config, rows are ordered by line (`RD BL BR GR OR PR PK YL`), then Train Tracker direction (`trDr`), then name. With a list, the list is the order and the filter; destinations CTA doesn't normally use are appended after it.
+- Rows past the cap for the header/weather toggles are dropped from the end. The ticker uses the same filter but not the cap.
+- Transit labels are fitted per row so they end at least 3px before the times at their widest before the next update (digits only shrink as times count down, but the first time may turn into `DUE`). In the rare `DUE` + two 2-digit case, `COTTAGE`/`KIMBALL` lose a letter.
+- Ticker destinations are fitted to 32px of 5x7 (`Jeff Pk` is exactly 32).
 
 #### Line codes
 Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`, `G`→`GR`, `Org`→`OR`, `P`→`PR`, `Pink`→`PK`, `Y`→`YL`. Short-name map keys are matched against `destNm` exactly as Train Tracker returns it (e.g. `O'Hare`, `Loop`); confirm each key against recorded fixtures.
@@ -156,7 +162,7 @@ When `warn` is non-null, the board replaces `word` with the warning tag.
 | `clock` | `[x, y, w, h]`: box the board draws the clock stack into (frame indicator, clock, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
 | `split` | `true` when the location has no usable water area; the clock box is then the right-side panel. |
 
-When `on` is false, `frames` and `ft` may be empty.
+When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`.
 
 ### `GET /board/radar/<frameId>?b=<id>`
 One radar frame for that board's location.

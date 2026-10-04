@@ -134,3 +134,65 @@ test('raw arrivals capture reports upstream failures as 502', async () => {
   assert.equal(r.body.err, 'upstream');
   await s.close();
 });
+
+// ---- /board/update ----
+
+const { normalize } = require('./arrivals');
+const morseJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
+
+function fakeTracker(data) {
+  const asked = [];
+  return { asked, get: async (mapid) => { asked.push(mapid); return data; } };
+}
+
+test('update: auth, unknown board, and not-ready', async () => {
+  const s = await serve({ tracker: fakeTracker(null) });
+  assert.equal((await s.req('/board/update?b=home')).status, 401);
+  assert.equal((await s.req('/board/update?b=x', { headers: { 'X-Board-Token': 'tok' } })).status, 404);
+  const r = await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(r.status, 503);
+  assert.equal(r.body.err, 'not_ready');
+  await s.close();
+});
+
+test('update: payload shape for the default Morse board', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  // Shift the Morse fixture so its arrivals are in the future relative to now.
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const tracker = fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now - 7 });
+  const s = await serve({ tracker });
+  const r = await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(r.status, 200);
+  const b = r.body;
+  assert.deepEqual(tracker.asked, ['40100']);
+  assert.equal(b.v, 1);
+  assert.ok(Math.abs(b.now - now) < 5);
+  assert.ok(b.age >= 7 && b.age < 12);
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.bright, 100);
+  assert.equal(b.header, 'MORSE');
+  assert.deepEqual(b.rows.map((x) => x.lbl), ['HOWARD', '95TH']);
+  assert.equal(b.ticker.length, 6);
+  assert.equal(b.wx, null);
+  assert.equal(b.radar.on, false);
+  assert.ok(JSON.stringify(b).length < 1200, `payload ${JSON.stringify(b).length} bytes`);
+  await s.close();
+});
+
+test('update: boot=1 resets screen/brightness and bumps v; settings flow through', async () => {
+  const tracker = fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) });
+  const s = await serve({ tracker });
+  s.store.update('home', { screen: 'ticker', bright: 'off', showHeader: false });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.screen, 'ticker');
+  assert.equal(b.bright, 0);
+  assert.equal(b.header, null);
+  assert.deepEqual(b.rows, []);
+  b = (await s.req('/board/update?b=home&boot=1', h)).body;
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.bright, 100);
+  assert.equal(b.v, 3);
+  await s.close();
+});
