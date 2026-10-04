@@ -10,6 +10,7 @@ const { stationDestinations } = require('./destinations');
 const { createWeather, toWx, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
+const { createRadar } = require('./radar');
 const fs = require('fs');
 const path = require('path');
 const { render, assets } = require('./render');
@@ -26,6 +27,12 @@ const RESERVED = new Set(['ping', 'version', 'update', 'radar']);
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
+}
+
+function sendFrame(res, bytes) {
+  if (!bytes) return send(res, 404, { err: 'unknown_frame' });
+  res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'Cache-Control': 'max-age=3600, immutable' });
+  res.end(Buffer.from(bytes));
 }
 
 function sameSecret(given, expected) {
@@ -61,6 +68,7 @@ function createBoard({
   tracker = null,
   weather = null,
   nws = null,
+  radar = null,
   alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
   stations = require('./stations.json'),
   log = console,
@@ -80,11 +88,13 @@ function createBoard({
   if (!tracker) tracker = createTracker({ log }).start();
   if (!weather) weather = createWeather({ log }).start();
   if (!nws) nws = createNws({ log }).start();
+  if (!radar) radar = createRadar({ weather, log }).start();
 
   // 'auto' brightness follows sunrise/sunset (100 until weather data arrives).
   const resolveBright = (b, w, now) => (b === 'off' ? 0 : b === 'auto' ? autoBright(w, now) : b);
-  // 'auto' screen is transit until radar and its rain trigger land.
-  const resolveScreen = (s) => (s === 'auto' ? 'transit' : s);
+  // 'auto' shows the radar while there's rain in the box, transit otherwise.
+  const resolveScreen = (s, radarOn) => (s === 'auto' ? (radarOn ? 'radar' : 'transit') : s);
+  const NO_RADAR = { on: false, frames: [], ft: [], clock: null, split: false };
 
   // `previewMapid` (simulator only) shows another station without changing
   // the board's config; the board's row list is station-specific, so it's
@@ -113,6 +123,9 @@ function createBoard({
     // weather to show.
     const wx = board.showWeather && w ? toWx(w) : null;
     const cfg = { ...board, showWeather: !!wx };
+    let radarState = NO_RADAR;
+    try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
+    catch (e) { log.error('[board] radar:', e.message); }
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }
@@ -123,7 +136,7 @@ function createBoard({
       v: board.v,
       now,
       age: Math.max(0, Math.round(now - data.fetchedAt)),
-      screen: resolveScreen(board.screen),
+      screen: resolveScreen(board.screen, radarState.on),
       bright: resolveBright(board.bright, w, now),
       header: board.showHeader ? board.station.name : null,
       view,
@@ -131,7 +144,7 @@ function createBoard({
       ticker,
       wx,
       warn: pickWarn(nwsAlerts, now),
-      radar: { on: false, frames: [], ft: [], clock: null, split: false },
+      radar: radarState,
     };
   }
 
@@ -163,6 +176,15 @@ function createBoard({
       const body = await update(board, id, parsed.query.boot === '1');
       if (!body) return send(res, 503, { err: 'not_ready' });
       return send(res, 200, body);
+    }
+
+    // One radar frame for the board's station: 2048 bytes, immutable.
+    if (first === 'radar' && rest.length === 1) {
+      if (method !== 'GET') return send(res, 405, { err: 'method' });
+      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      const board = store.get(String(parsed.query.b || ''));
+      if (!board) return send(res, 404, { err: 'unknown_board' });
+      return sendFrame(res, radar.frame(board.station.mapid, rest[0]));
     }
 
     // ---- control endpoints, under the secret path ----
@@ -230,6 +252,16 @@ function createBoard({
         return send(res, 200, body);
       }
 
+      // Radar frame for the simulator (the path is the credential); `mapid`
+      // for a previewed station.
+      if (rest[0] === 'api' && rest[1] === 'radar' && rest.length === 3) {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const board = store.get(String(parsed.query.b || ''));
+        const mapid = String(parsed.query.mapid || '') || (board && board.station.mapid);
+        if (!mapid) return send(res, 404, { err: 'unknown_board' });
+        return sendFrame(res, radar.frame(mapid, rest[2]));
+      }
+
       // Station list for the simulator's picker.
       if (sub === 'api/stations') {
         if (method !== 'GET') return send(res, 405, { err: 'method' });
@@ -262,12 +294,16 @@ function createBoard({
         if (preview && !stationById.has(preview)) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${preview}` });
         const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
-        const screen = ['transit', 'ticker'].includes(parsed.query.screen) ? parsed.query.screen : body.screen;
+        const screen = ['transit', 'ticker', 'radar'].includes(parsed.query.screen) ? parsed.query.screen : body.screen;
+        const radarMapid = preview || board.station.mapid;
+        const frames = {};
+        for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid); if (b) frames[fid] = b; }
         const scale = Math.min(16, Math.max(1, parseInt(parsed.query.scale, 10) || 8));
         const frame = render(body, {
           screen,
           page: Math.max(0, parseInt(parsed.query.page, 10) || 0),
           blink: parsed.query.blink === '1',
+          frames,
         });
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
         res.end(frame.toPNG(scale));

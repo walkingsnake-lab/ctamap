@@ -22,4 +22,9 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
   - `morse-2026-10-04-none.json`: no active alerts.
   - `svr-warning-expired-2026-10-03-jax.json`: from `alerts?event=Severe Thunderstorm Warning&limit=1` (past week). A Severe Thunderstorm Warning **expiration** statement (VTEC `/O.EXP./`, `ends` before `sent`), NWS Jacksonville. Tests derive in-effect warnings and watches from it.
 
+- `mrms/` — IEM `mrms_lcref` frames (full CONUS PNG + `.wld`), from `mesonet.agron.iastate.edu/archive/data/.../GIS/mrms/`.
+  - `lcref_202008102100.*`: Aug 10, 2020 derecho crossing Chicago (4:00 PM CDT). Old-style `.wld` origin (-130.0, 55.0).
+  - `lcref_202202021800.*`: Feb 2, 2022 snowstorm, noon CST. Chicago crop averages 11–18 dBZ.
+  - `lcref_202610041600.*`: Oct 4, 2026, clear at Chicago. New-style `.wld` origin (-129.995, 54.995).
+
 Never record a URL with `key=` in it here.

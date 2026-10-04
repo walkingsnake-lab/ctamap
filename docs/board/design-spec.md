@@ -72,7 +72,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 | Train arrivals | CTA Train Tracker API ([docs](https://www.transitchicago.com/developers/ttdocs/)) | Uses `mapid` (one call covers all lines and directions); `destNm`, `rn` (run number), `isApp` (Due), `arrT`. `isDly` intentionally **not** shown. `isSch` (schedule-based) and `isFlt` (possible fault) handling is open. |
 | CTA service alerts | CTA Customer Alerts API | **Major alerts only** (CTA severity `major`): no minor delays, planned work, schedule changes, long-term closures, or elevator outages; lines on screen only. Used **only to flag affected lines** (no alert text shown). |
 | Weather warnings/watches | NWS alerts for the configured point | Only severe thunderstorm and tornado warnings/watches. Shown as icons/tags only (no alert text). |
-| Radar | NOAA **MRMS** lowest composite reflectivity (`lcref`) via Iowa Environmental Mesonet | Palette-indexed PNG + `.wld`, 2-min updates, archive available. dBZ ≈ index × 0.5 − 32.5 (**verify**). Do **not** use the raw NEXRAD composite: it shows bird/insect returns on clear nights. |
+| Radar | NOAA **MRMS** lowest composite reflectivity (`lcref`) via Iowa Environmental Mesonet | Palette-indexed PNG + `.wld`, 2-min updates, archive available. dBZ = index × 0.5 − 32 (verified against IEM's lookup table). Full CONUS frames (7000 × 3500); decoded as a stream, only the rows around the station. Do **not** use the raw NEXRAD composite: it shows bird/insect returns on clear nights. |
 | Weather | Open-Meteo (no key) | Current temp, weather code, `is_day`, daily high/low, sunrise/sunset. |
 
 ---
@@ -214,9 +214,11 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Appears only when rain is in the box** (count of colored pixels, with separate on/off thresholds so it doesn't flicker in and out).
 - **Configurable location**; crop centered on it (~1.5 mi/pixel).
 - **Pipeline (server):** crop → palette index to dBZ → average linear reflectivity per LED block → levels (15/25/35/45/55 dBZ: dim green, green, yellow, orange, red) → despeckle (drop pixels with <2 colored neighbors) → small indexed image.
-- **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when Open-Meteo reports a snow weather code, or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/20/30 dBZ) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
-- **Loop:** 6 frames (30 min), **holds on the last frame**. Network requests (including the next radar frame) happen during the hold.
+- **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when Open-Meteo reports a snow weather code, or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/15/20 dBZ, from the Feb 2, 2022 storm) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
+- **Loop:** 6 frames (30 min), 0.5 s each, **holds on the last frame** for 4 s. Network requests (including the next radar frame) happen during the hold.
 - **Water masked black** (mask generated per location from coastline data); faint shoreline only where there's no rain.
+- **Until water masks are built, every location uses the split layout**: radar in the left 40 columns (station centered), clock stack in the right 24.
+- **Colors** (fills at 65%): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.
 - **Location marker:** white dot with 4 unlit pixels around it.
 - **Clock:** X11 5x7 (`#cccccc`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (2px-tall segments, current frame amber), AM/PM in Tom Thumb below. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
 - **Warnings:** the small inline **bolt** (3x5, orange, severe) or **funnel** (4x5, red, tornado) sits **to the left of AM/PM** with a 2px gap, on the same 5px line. It never overlaps the clock or the frame indicator; the clock stack (indicator + clock + AM/PM line) occupies ~rows 2–18, which is the height the water-area check must reserve. Steady, no blinking. No polygons, no scrolling text.
@@ -274,7 +276,6 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 
 ## 11. Open questions
 
-- Verify the MRMS dBZ offset before setting thresholds.
 - On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors, Tom Thumb `M`/`N` legibility (3px wide; may need widening like `W`), 3x5 bolt legibility.
 - Whether the work visitor WiFi has a captive portal (check with a phone).
 - Measure the real fetch time on the board to set the scheduler's fetch budget.

@@ -148,7 +148,7 @@
       label: '#d8d8d8', clock: '#cccccc', amber: '#ffb000', dimAmber: '#9c6a00',
       sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', band: '#202020', divider: '#333333',
       tickerHead: '#a6a6a6', index: '#1f2f35', white: '#ffffff', red: '#ff2020',
-      watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c',
+      watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
 
     const TIME_GAP = 3;   // px between arrival times...
@@ -503,6 +503,57 @@
       return f;
     }
 
+    // ---- radar ----
+    // Frame values (contract "Radar frame"): 1-5 rain, 6 shoreline,
+    // 7 location marker, 8-10 snow. Precip fills at ~65%.
+    const RADAR_FILL = 0.65;
+    const RADAR = {
+      1: scaleColor('#1f8f1f', RADAR_FILL), 2: scaleColor('#2ee02e', RADAR_FILL), 3: scaleColor('#ffe000', RADAR_FILL),
+      4: scaleColor('#ff8c00', RADAR_FILL), 5: scaleColor('#ff1a1a', RADAR_FILL),
+      6: '#34485e', 7: '#ffffff',
+      8: scaleColor('#4f86ff', RADAR_FILL), 9: scaleColor('#a9c9ff', RADAR_FILL), 10: scaleColor('#ffffff', RADAR_FILL),
+    };
+    const RADAR_STACK_H = 18; // indicator 2 + gap 2 + clock 7 + gap 2 + AM/PM 5
+    const ampmFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: true });
+    const ampmText = (t) => (/PM/i.test(ampmFmt.format(new Date(t * 1000))) ? 'PM' : 'AM');
+
+    // opts: now, idx (frame index into p.radar.frames; default the newest),
+    // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
+    function renderRadar(p, opts) {
+      const o = opts || {};
+      const r = p.radar || {};
+      const ids = r.frames || [];
+      const idx = o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
+      const f = newFrame();
+      const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
+      if (bytes) {
+        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+          const c = RADAR[bytes[y * 64 + x]];
+          if (c) f.fill(x, y, 1, 1, c);
+        }
+      }
+      // Clock stack, right-aligned in the clock box: frame indicator, clock
+      // (frame time), AM/PM with the warning icon to its left.
+      const [bx, by, bw, bh] = r.clock || [40, 0, 24, 32];
+      const right = Math.min(62, bx + bw - 1);
+      const top = by + Math.max(0, Math.floor((bh - RADAR_STACK_H) / 2));
+      const t = idx >= 0 && r.ft ? r.ft[idx] : (o.now != null ? o.now : p.now);
+      if (ids.length) {
+        const segW = 2, segGap = 1;
+        let x = right - (ids.length * (segW + segGap) - segGap) + 1;
+        ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
+      }
+      rtext(f, '5x7', clockText(t), right, top + 11, C.clock);
+      const ap = ampmText(t);
+      const apX = right - measure('small', ap) + 1;
+      f.text('small', ap, apX, top + 18, C.grey);
+      if (p.warn) {
+        const glyph = s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT);
+        f.text('small', glyph, apX - 2 - measure('small', glyph), top + 18, p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere);
+      }
+      return f;
+    }
+
     function applyBrightness(f, bright) {
       const k = Math.max(0, Math.min(100, bright == null ? 100 : bright)) / 100;
       if (k === 1) return f;
@@ -513,7 +564,7 @@
     function render(p, opts) {
       const o = opts || {};
       const screen = o.screen || p.screen;
-      const f = screen === 'ticker' ? renderTicker(p, o) : renderTransit(p, o);
+      const f = screen === 'ticker' ? renderTicker(p, o) : screen === 'radar' ? renderRadar(p, o) : renderTransit(p, o);
       return applyBrightness(f, p.bright);
     }
 
@@ -525,9 +576,11 @@
     }
 
     return {
-      Frame, LINE, C, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker,
+      Frame, LINE, C, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
       transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 500,
+      // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.
+      RADAR_FRAME_MS: 500, RADAR_HOLD_MS: 4000,
     };
   }
 

@@ -266,3 +266,31 @@ test('switching views cross-fades: old rows fade out, then the new ones fade in'
   assert.deepEqual(end.rows.map((r) => r.key), ['rn:801', 'rn:802']);
   assert.ok(end.rows.every((r) => r.alpha === 1));
 });
+
+// ---- radar screen ----
+
+test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', () => {
+  const bytes = new Uint8Array(2048);
+  bytes[0] = 1; bytes[1] = 5; bytes[2] = 8; bytes[16 * 64 + 20] = 7;
+  const t = Date.UTC(2020, 7, 10, 21, 0) / 1000; // 4:00 PM CDT
+  const ids = ['a', 'b', 'c'];
+  const p = { now: t, bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: [t - 600, t - 300, t], clock: [40, 0, 24, 32], split: true } };
+  const f = draw.render(p, { screen: 'radar', frames: { a: bytes, b: bytes, c: bytes }, idx: 2 });
+  assert.equal(hex(f.get(0, 0)), draw.RADAR[1]);
+  assert.equal(hex(f.get(1, 0)), draw.RADAR[5]);
+  assert.equal(hex(f.get(2, 0)), draw.RADAR[8]);
+  assert.equal(hex(f.get(20, 16)), '#ffffff');
+  // Stack is 18 rows, centered in the 32-row box: indicator on rows 7-8,
+  // current (last) segment amber at the right edge.
+  assert.equal(hex(f.get(62, 7)), draw.C.amber);
+  assert.equal(hex(f.get(56, 7)), draw.C.indicator);
+  assert.ok(count(f, draw.C.clock, 40, 11, 63, 17) > 20, 'clock "4:00" on rows 11-17');
+  assert.ok(count(f, draw.C.grey, 40, 20, 63, 24) > 5, 'PM on rows 20-24');
+  assert.ok(count(f, draw.C.warnSevere, 40, 20, 63, 24) > 3, 'bolt left of PM');
+  // Nothing of the stack spills into the radar area.
+  for (let y = 0; y < 32; y++) for (let x = 37; x < 40; x++) assert.deepEqual(f.get(x, y), [0, 0, 0]);
+  // A frame not fetched yet draws as empty radar with the stack.
+  const empty = draw.render(p, { screen: 'radar', frames: {}, idx: 0 });
+  assert.equal(count(empty, draw.RADAR[1], 0, 0, 39, 31), 0);
+  assert.equal(hex(empty.get(56, 7)), draw.C.amber);
+});

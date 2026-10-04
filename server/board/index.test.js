@@ -14,7 +14,7 @@ const quiet = { warn() {}, error() {} };
 // Spin up a server that routes /board/* the same way server.js does.
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), ...opts });
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), radar: fakeRadar(), ...opts });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -139,6 +139,10 @@ test('raw arrivals capture reports upstream failures as 502', async () => {
 
 const { normalize } = require('./arrivals');
 const morseJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
+
+function fakeRadar(state = { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true }, frames = {}) {
+  return { want: () => state, frame: (mapid, id) => frames[`${mapid}/${id}`] || null };
+}
 
 function fakeWeather(data) {
   const asked = [];
@@ -354,5 +358,36 @@ test('update: an NWS warning in effect is sent as warn, even with the weather ro
   const b = (await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).body;
   assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' });
   assert.equal(b.wx, null);
+  await s.close();
+});
+
+// ---- radar ----
+
+test('radar: frames by ID behind the token; auto switches to radar when it rains', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const bytes = new Uint8Array(2048); bytes[16 * 64 + 20] = 7; bytes[0] = 3;
+  const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], clock: [40, 0, 24, 32], split: true };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(state, { '40100/40100-202610041600': bytes }) });
+  const base = `http://127.0.0.1:${s.port}`;
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.screen, 'radar');
+  assert.deepEqual(b.radar, state);
+  assert.equal((await fetch(`${base}/board/radar/40100-202610041600?b=home`)).status, 401);
+  const r = await fetch(`${base}/board/radar/40100-202610041600?b=home`, h);
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('content-type'), 'application/octet-stream');
+  assert.match(r.headers.get('cache-control'), /immutable/);
+  const got = new Uint8Array(await r.arrayBuffer());
+  assert.equal(got.length, 2048);
+  assert.equal(got[0], 3);
+  assert.equal((await fetch(`${base}/board/radar/40100-209901010000?b=home`, h)).status, 404);
+  // Simulator copy, and a PNG of the radar screen.
+  assert.equal((await fetch(`${base}/board/secret123/api/radar/40100-202610041600?b=home`)).status, 200);
+  const png = await fetch(`${base}/board/secret123/sim.png?b=home&screen=radar&scale=2`);
+  assert.equal(png.status, 200);
+  // A forced screen still wins over auto.
+  s.store.update('home', { screen: 'transit' });
+  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'transit');
   await s.close();
 });
