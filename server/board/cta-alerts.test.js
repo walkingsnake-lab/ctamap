@@ -26,8 +26,11 @@ test('map alerts: same filter as before (major or delay), one entry per line', (
   assert.deepEqual(Object.keys(out[0]), ['id', 'headline', 'short', 'severity', 'impact', 'service', 'start']);
 });
 
-test('board: only unplanned disruptions blink (not planned work, closures, or elevators)', () => {
-  assert.deepEqual([...boardAlertLines(parseAlerts(XML))].sort(), ['GR', 'OR']);
+test('board: only major alerts blink (not minor delays, planned work, closures, or elevators)', () => {
+  assert.deepEqual([...boardAlertLines(parseAlerts(XML))], []);
+  // The same Orange/Green delay rated major does blink.
+  const asMajor = parseAlerts(XML.replace('<SeverityCSS>minor</SeverityCSS>', '<SeverityCSS>major</SeverityCSS>'));
+  assert.deepEqual([...boardAlertLines(asMajor)].sort(), ['GR', 'OR']);
   // A major alert counts whatever its severity class.
   const major = parseAlerts(XML.replace('<MajorAlert>0</MajorAlert>', '<MajorAlert>1</MajorAlert>'));
   assert.ok(boardAlertLines(major).has('PR')); // first alert in the file is the 5-line closure

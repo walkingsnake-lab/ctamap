@@ -110,7 +110,7 @@ Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 
 #### CTA alerts (server)
 - One poller (`server/board/cta-alerts.js`, every 3 min) fetches `alerts.aspx?activeonly=true&routeid=red,blue,brn,g,org,p,pink,y` (XML) for both the map's `/api/alerts` and the board. Every `<Service>` in `<ImpactedService>` is read; only `ServiceType` `R` (train routes) count, so a station listed first (43rd before Green Line) doesn't hide the line.
-- **Board rule:** a line's `a` is `1` when an alert covering it has `SeverityCSS` `major` or `minor`, or `MajorAlert` `1`. Planned work (`planned`), schedule changes, long-term closures and elevator outages (`special-note`) don't blink. Fixture: `fixtures/cta-alerts/2026-10-04-1057.xml` (7 alerts; only the Orange/Green minor delay blinks).
+- **Board rule:** a line's `a` is `1` only when an alert covering it has `SeverityCSS` `major` or `MajorAlert` `1`. Minor delays (`minor`), planned work (`planned`), schedule changes, long-term closures and elevator outages (`special-note`) don't blink. Fixture: `fixtures/cta-alerts/2026-10-04-1057.xml` (7 alerts, none major, so nothing blinks).
 - **Map:** unchanged filter (major, or an impact containing "delay"), now one entry per impacted line.
 
 #### Line codes
@@ -124,7 +124,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `lbl` | Label, uppercase, fitted. |
 | `t` | Up to 3 arrival times (epoch), ascending. |
 | `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`), drawn grey instead of amber. |
-| `a` | `1` if the line has an active **unplanned disruption** (block blinks to "!"); see *CTA alerts* below. |
+| `a` | `1` if the line has an active **major** CTA alert (block blinks to "!"); see *CTA alerts* below. |
 | `rn` | `chrono` only: Train Tracker run number (string). The board keys rows by it, so trains keep their identity when they swap order. |
 
 #### Ticker item (`ticker[]`)

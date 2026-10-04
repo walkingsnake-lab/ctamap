@@ -91,7 +91,7 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 
 ### Shared alerts
 - CTA alerts are fetched by one **background poller** (`server/board/cta-alerts.js`, every 3 min, created in `server.js` and passed to `createBoard`) that both `/api/alerts` and the board read. Do not add a second alerts fetch.
-- Parse **every** `ImpactedService` in an alert (one alert can cover several lines). The map keeps its existing filter (major or delay); the board blinks a line only for unplanned disruptions (`SeverityCSS` `major`/`minor`, or `MajorAlert`).
+- Parse **every** `ImpactedService` in an alert (one alert can cover several lines). The map keeps its existing filter (major or delay); the board blinks a line only for major alerts (`SeverityCSS` `major`, or `MajorAlert`).
 
 ### Stack and dependencies
 - Plain Node `http`, no framework, same as the map.

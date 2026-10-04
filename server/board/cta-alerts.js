@@ -58,13 +58,14 @@ function mapAlerts(alerts) {
   return out;
 }
 
-// Board rule: a line's rows blink only for unplanned disruptions (CTA rates
-// them `major` or `minor`). Planned work, schedule changes, long-term
-// closures, and elevator outages don't blink. Returns a Set of line codes.
+// Board rule: a line's rows blink only for major alerts (CTA severity
+// `major`, or MajorAlert). Minor delays, planned work, schedule changes,
+// long-term closures, and elevator outages don't blink. Returns a Set of
+// line codes.
 function boardAlertLines(alerts) {
   const lines = new Set();
   for (const a of alerts || []) {
-    if (!(a.major || a.severity === 'major' || a.severity === 'minor')) continue;
+    if (!(a.major || a.severity === 'major')) continue;
     for (const r of a.routes) { const ln = lineCode(r); if (ln) lines.add(ln); }
   }
   return lines;

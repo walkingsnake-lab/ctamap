@@ -314,7 +314,9 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
   const w = { ...parse(JSON.parse(fs.readFileSync(fx('open-meteo/morse-2026-10-04-1045.json'), 'utf8'))), sunrise: now - 100, sunset: now + 100 };
   const weather = fakeWeather(w);
-  const alerts = { get: () => ({ alerts: parseAlerts(fs.readFileSync(fx('cta-alerts/2026-10-04-1057.xml'), 'utf8')), fetchedAt: now }) };
+  // The recorded Orange/Green minor delay, rated major so it blinks.
+  const xml = fs.readFileSync(fx('cta-alerts/2026-10-04-1057.xml'), 'utf8').replace('<SeverityCSS>minor</SeverityCSS>', '<SeverityCSS>major</SeverityCSS>');
+  const alerts = { get: () => ({ alerts: parseAlerts(xml), fetchedAt: now }) };
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }), weather, alerts });
   s.store.update('home', { station: { mapid: '40380' } }); // Clark/Lake
   const h = { headers: { 'X-Board-Token': 'tok' } };
@@ -324,7 +326,7 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   assert.equal(b.bright, 100);
   // Header + weather leaves 2 rows, so Clark/Lake's 5 destinations go chronological.
   assert.equal(b.view, 'chrono');
-  // Green has an unplanned delay; Blue only has a planned schedule change.
+  // Green has a major delay; Blue only has a planned schedule change.
   for (const r of b.rows) assert.equal(r.a, r.ln === 'GR' ? 1 : 0, `${r.ln} ${r.lbl}`);
   assert.ok(b.ticker.every((x) => x.a === (x.ln === 'GR' || x.ln === 'OR' ? 1 : 0)));
   // Weather row off: no wx, and the rows get the space back.
