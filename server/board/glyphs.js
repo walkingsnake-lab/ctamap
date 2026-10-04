@@ -9,4 +9,5 @@ module.exports = {
   FUNNEL: 0xe003,      // small: 4x5 funnel (tornado)
   ALERT_DISC: 0xe004,  // small: 5x5 alert circle, red layer ("!" pixels left blank)
   ALERT_MARK: 0xe005,  // small: 5x5 "!" for the alert circle, white layer (same origin)
+  CLOCK: 0xe006,       // small: 5x5 clock, replaces the ticker index for schedule-based arrivals
 };

@@ -54,6 +54,7 @@ test('custom glyph sizes', () => {
   assert.deepEqual(size('small', G.FUNNEL), [4, 5]);
   assert.deepEqual(size('small', G.ALERT_DISC), [5, 5]);
   assert.deepEqual(size('small', G.ALERT_MARK), [5, 5]);
+  assert.deepEqual(size('small', G.CLOCK), [5, 5]);
 });
 
 test('alert mark pixels sit only on holes in the disc', () => {

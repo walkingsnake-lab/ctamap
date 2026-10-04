@@ -187,7 +187,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Two 12px rows** with a 1px gap; dark slate index column `#1f2f35`, **5px wide**, numbered 1–6 in Tom Thumb. The row fill starts right after it (no gap); the destination starts 2px into the fill. Minutes are right-aligned to column 62, with a 2px gap between the digits and `min`.
 - Row fill = line color at 55%; **white** destination (X11 5x7 proportional, mixed case) + minutes (5x7 digits + `min` glyph); `Due` at ≤1 min. Yellow rows also use white text.
 - Destinations use the short-name map, so short-turns appear as `UIC` and `Jeff Pk`.
-- **Schedule-based arrivals:** the **index number is replaced by a 5x5 clock** (glyph to be chosen). If an arrival is both scheduled and on an alerted line, the alert circle wins.
+- **Schedule-based arrivals:** the **index number is replaced by a 5x5 clock** (`CLOCK` glyph: ring with hands up and right), drawn in the index number's color. If an arrival is both scheduled and on an alerted line, the alert circle wins.
 - **CTA alerts:** on arrivals whose line has an active alert, the **index number is replaced by the 5x5 red alert circle** (white "!"), which fills the 5px column exactly. It sits on the dark index column, so it never collides with the destination or time. Static, no blinking.
 - Pages of 2 hold ~3.5s, then **slide up** (~0.5s ease) through the next **6 individual arrivals**, looping. Network requests happen during the holds.
 

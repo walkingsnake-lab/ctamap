@@ -250,7 +250,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 ## Open items
 
 - **(decide)** Arrival drop grace (30 s) and whether `DUE` should also honor `isApp`.
-- Schedule-based predictions (`isSch=1`) are shown and marked via `s` (decided Oct 3: grey times on transit, clock on ticker). `isFlt=1` is shown normally. Ticker clock glyph still to be chosen.
+- Schedule-based predictions (`isSch=1`) are shown and marked via `s` (decided Oct 3: grey times on transit, clock on ticker). `isFlt=1` is shown normally. Ticker clock is the `CLOCK` glyph (U+E006).
 - **(decide)** Hysteresis thresholds for `radar.on` (colored-pixel counts); set after viewing real storms from the IEM archive.
 - Verify the MRMS dBZ formula before fixing level thresholds.
 - Tune snow thresholds (provisional 10/20/30 dBZ) on archived snow events.

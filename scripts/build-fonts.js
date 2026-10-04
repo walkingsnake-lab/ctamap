@@ -172,6 +172,15 @@ function buildSmall() {
     '..#..',
   ]), 0));
 
+  // Clock for schedule-based arrivals in the ticker index column (5px wide).
+  f.glyphs.set(G.CLOCK, glyph('clock', G.CLOCK, art([
+    '.###.',
+    '#.#.#',
+    '#.###',
+    '#...#',
+    '.###.',
+  ]), 0));
+
   rename(f, '-ctamap-BoardSmall-Medium-R-Normal--6-60-75-75-P-40-ISO10646-1',
     'Board small font. Based on Tom Thumb by Robey Pointer (MIT license).');
   fixBoundingBox(f);
