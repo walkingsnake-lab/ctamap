@@ -198,7 +198,7 @@ One radar frame for that board's location.
 | 0 | off (land with no rain, masked water, clock box) |
 | 1–5 | rain levels: 15/25/35/45/55 dBZ (dim green, green, yellow, orange, red) |
 | 6 | shoreline: the lake's edge pixels, water side; always drawn (water is masked, so rain never covers it) |
-| 7 | location marker (white dot; the 4 pixels around it are 0) |
+| 7 | location marker (white dot; precip in the 4 pixels around it is cleared to 0, shoreline is kept) |
 | 8–10 | snow levels, light to heavy (light blue, pale blue, white) |
 
 A frame is either all rain levels (1–5) or all snow levels (8–10); the server picks the mode per frame (see **Snow mode** below). The board owns the palette, including the ~65% fill brightness.

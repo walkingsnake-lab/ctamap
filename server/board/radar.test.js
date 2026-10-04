@@ -147,7 +147,6 @@ test('poller: idle stations cost nothing', async () => {
   assert.equal(calls, 0);
 });
 
-const nearMarker = (k) => [16 * 64 + 32, 16 * 64 + 31, 16 * 64 + 33, 15 * 64 + 32, 17 * 64 + 32].includes(k);
 const inBox = (k) => { const x = k % 64, y = k >> 6, [bx, by, bw, bh] = R.FULL_CLOCK; return x >= bx && x < bx + bw && y >= by && y < by + bh; };
 
 test('water masks: Morse is full width with the lake east; masked water, shoreline, clear clock box', async () => {
@@ -161,7 +160,7 @@ test('water masks: Morse is full width with the lake east; masked water, shoreli
   const out = await R.crops(pngOf('202008102100'), wldOf('202008102100'), [{ key: 'k', ...MORSE, width: 64 }]);
   const { dbz, geo } = out.get('k');
   const f = R.toFrame(dbz, geo, 'rain', loc);
-  for (let k = 0; k < 2048; k++) if (loc.water[k]) assert.equal(f.bytes[k], loc.shore[k] && !inBox(k) && !nearMarker(k) ? R.SHORE : 0, `water at ${k % 64},${k >> 6}`);
+  for (let k = 0; k < 2048; k++) if (loc.water[k]) assert.equal(f.bytes[k], loc.shore[k] && !inBox(k) && k !== 16 * 64 + 32 ? R.SHORE : 0, `water at ${k % 64},${k >> 6}`);
   for (const [bx, by, bw, bh] of [R.FULL_CLOCK]) for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) assert.equal(f.bytes[y * 64 + x], 0);
   // Shoreline: the lake's edge pixels, water side, drawn even right next to
   // the storm (rain stops at the land pixel beside it).
@@ -172,6 +171,11 @@ test('water masks: Morse is full width with the lake east; masked water, shoreli
   for (let k = 0; k < 2048; k++) if (f.bytes[k] === R.SHORE && [k - 1, k + 1].some((j) => f.bytes[j] >= 1 && f.bytes[j] <= 5)) besideRain++;
   assert.ok(besideRain > 0, 'shoreline survives next to rain');
   assert.equal(f.bytes[16 * 64 + 32], R.MARKER);
+  // Morse sits on the shore: the shoreline continues right next to the dot.
+  assert.equal(loc.shore[16 * 64 + 33], 1);
+  assert.equal(f.bytes[16 * 64 + 33], R.SHORE);
+  // ...while rain next to the dot is still cleared.
+  for (const k of [16 * 64 + 31, 15 * 64 + 32, 17 * 64 + 32]) assert.ok(f.bytes[k] === 0 || f.bytes[k] === R.SHORE, `pixel ${k % 64},${k >> 6}`);
 });
 
 test('water masks: a station with land under the clock falls back to split', () => {
