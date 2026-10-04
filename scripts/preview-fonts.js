@@ -48,26 +48,82 @@ save('sheet-clock.png', sheet('clock', 17, 13, '12:34', '0123456789'), 8);
 // Right-align text so its last pixel is at column `right`.
 const rtext = (f, font, str, right, base, color) => f.text(font, str, right - measure(font, str) + 1, base, color);
 
+// Arrival times: right-aligned as a group (not columns), first amber, the rest
+// dim. TIME_GAP is the space between times.
+const TIME_GAP = 3;
+function drawTimes(f, times, right, base) {
+  let x = right;
+  for (let k = times.length - 1; k >= 0; k--) {
+    const w = measure('small', times[k]);
+    f.text('small', times[k], x - w + 1, base, k === 0 ? C.amber : C.dimAmber);
+    x -= w + TIME_GAP;
+  }
+}
+
+// Warning tag: icon, 3px gap, word.
+const TAG_GAP = 3;
+function drawTag(f, icon, word, x, base, color) {
+  const after = f.text('small', s(icon), x, base, color); // advance already includes 1px
+  return f.text('small', word, after + TAG_GAP - 1, base, color);
+}
+const tagWidth = (icon, word) => measure('small', s(icon)) + TAG_GAP + measure('small', word);
+
+// Provisional 8x8 storm icon (cloud + bolt) until the weather icons are drawn.
+const STORM = {
+  cloud: ['..####..', '.######.', '########', '.######.'],
+  bolt: ['...##...', '..##....', '...##...', '..#.....'],
+};
+function drawIcon(f, x, y) {
+  STORM.cloud.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(x + i, y + j, 1, 1, C.grey); }));
+  STORM.bolt.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(x + i, y + 4 + j, 1, 1, C.yellow); }));
+}
+
+// Weather row: divider on row 22, icon rows 24-31, temp after the icon,
+// condition word (or warning tag) right-aligned.
+function drawWeatherRow(f, temp, tag) {
+  f.fill(0, 22, 64, 1, C.divider);
+  drawIcon(f, 0, 24);
+  const base = 31; // text on rows 26-30
+  f.text('small', temp, 10, base, C.label);
+  const [icon, word, color] = tag;
+  drawTag(f, icon, word, 63 - tagWidth(icon, word) + 1, base, color);
+}
+
+function transitRows(f, rows, tops) {
+  rows.forEach(([ln, label, times], i) => {
+    const top = tops[i];
+    const base = top + 5;
+    f.fill(0, top, 3, 5, LINE[ln]);
+    f.text('small', label, 5, base, C.label);
+    drawTimes(f, times, 63, base);
+  });
+}
+
 // Transit: header on, weather off -> 4 rows, pitch 6, rows start at 7.
 {
   const f = new Frame();
   f.text('small', 'MORSE', 1, 6, C.grey);
   rtext(f, 'small', '9:41', 62, 6, C.clock);
-  const rows = [
+  transitRows(f, [
     ['RD', 'HOWARD', ['DUE', '8', '15']],
     ['RD', '95TH', ['3', '11', '19']],
-    ['BL', 'JEFF PK', ['6', '14', '']],
-    ['GR', 'COTTAGE', ['12', '27', '']],
-  ];
-  rows.forEach(([ln, label, times], i) => {
-    const top = 8 + i * 6;
-    const base = top + 5;
-    f.fill(0, top, 3, 5, LINE[ln]);
-    f.text('small', label, 5, base, C.label);
-    const right = [43, 53, 63];
-    times.forEach((t, k) => { if (t) rtext(f, 'small', t, right[k], base, k === 0 ? C.amber : C.dimAmber); });
-  });
+    ['BL', 'JEFF PK', ['6', '14']],
+    ['GR', 'COTTAGE', ['12', '27']],
+  ], [7, 13, 19, 25]);
   save('mock-transit.png', f, 10);
+}
+
+// Transit: header off, weather on -> 3 rows in rows 0-20 (pitch 8 assumed;
+// the spec doesn't give this case's pitch).
+{
+  const f = new Frame();
+  transitRows(f, [
+    ['RD', 'HOWARD', ['DUE', '8', '15']],
+    ['RD', '95TH', ['3', '11', '19']],
+    ['GR', 'COTTAGE', ['12', '27']],
+  ], [0, 8, 16]);
+  drawWeatherRow(f, '54', [G.BOLT, 'WATCH', C.yellow]);
+  save('mock-transit-weather.png', f, 10);
 }
 
 // Ticker: two 12px rows with a 1px gap, 5px index column, 55% row fill.
@@ -98,7 +154,7 @@ const rtext = (f, font, str, right, base, color) => f.text(font, str, right - me
   save('mock-ticker.png', f, 10);
 }
 
-// Overnight clock with the weather-row warning tags underneath.
+// Overnight clock with the weather row.
 {
   const f = new Frame();
   const clock = '12:34';
@@ -106,9 +162,7 @@ const rtext = (f, font, str, right, base, color) => f.text(font, str, right - me
   f.text('clock', clock, Math.floor((64 - w) / 2), 13, C.clock);
   const nt = 'NO TRAINS';
   f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), 20, dim(C.label, 0.5));
-  f.fill(0, 22, 64, 1, C.divider);
-  const x = f.text('small', s(G.BOLT), 1, 30, C.yellow) + 1; // advance includes 1px; +1 = 2px gap
-  f.text('small', 'WATCH', x, 30, C.yellow);
+  drawWeatherRow(f, '54', [G.FUNNEL, 'WARNING', C.red]);
   save('mock-overnight.png', f, 10);
 }
 
@@ -116,10 +170,7 @@ const rtext = (f, font, str, right, base, color) => f.text(font, str, right - me
 {
   const f = new Frame(48, 20);
   const tags = [[G.BOLT, 'WATCH', C.yellow], [G.BOLT, 'WARNING', C.orange], [G.FUNNEL, 'WARNING', C.red]];
-  tags.forEach(([icon, word, color], i) => {
-    const x = f.text('small', s(icon), 1, 6 + i * 6, color) + 1;
-    f.text('small', word, x, 6 + i * 6, color);
-  });
+  tags.forEach(([icon, word, color], i) => drawTag(f, icon, word, 1, 6 + i * 6, color));
   f.fill(42, 1, 5, 12, C.index);
   f.text('small', s(G.ALERT_DISC), 42, 10, C.red);
   f.text('small', s(G.ALERT_MARK), 42, 10, C.white);

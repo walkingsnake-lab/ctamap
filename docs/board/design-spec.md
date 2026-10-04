@@ -121,7 +121,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ## 5. Screen 1: Transit station
 
 ### Rows
-- 3px line-color block, Tom Thumb label (uppercase), **3 times**, flush right (amber first, dim the rest).
+- 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest).
 - **Per-digit roll** when a number changes (12→11 rolls only the 2). Whole cells roll when the list shifts (the first train leaves) or to and from `DUE`.
 
 ### Layout
@@ -146,7 +146,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ### Weather row (optional)
 - 8x8 condition icon, temperature, condition word (uppercase) on the right.
 - Icons: sun, moon, partly cloudy (day/night), cloudy, **umbrella** (rain/drizzle/showers), **icy umbrella** (freezing rain), **snowflake**, storm cloud with bolt, fog.
-- **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **2px gap** between icon and word (1px read as `SWATCH`). Static, no scrolling.
+- **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
 
 ### CTA alerts
 - Affected rows' color blocks **blink to a 1px "!"**. That's the whole indicator; no alert text is shown (details are on the phone).
