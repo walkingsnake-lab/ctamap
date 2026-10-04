@@ -33,3 +33,9 @@ primary_region = 'ord'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 256
+
+# LED board state (server/board/state.js). Volume created once with:
+#   fly volumes create board_data -a ctamap -r ord -s 1
+[mounts]
+  source = 'board_data'
+  destination = '/data'
