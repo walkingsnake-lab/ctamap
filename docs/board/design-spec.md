@@ -25,7 +25,7 @@ Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the desi
 Animation is deliberately limited so the board's network pauses (CircuitPython is single-threaded, and each HTTPS request through the M4's WiFi co-processor blocks the display for roughly a second or more) are invisible. The only animations are:
 - **Per-digit roll** when an arrival time changes.
 - **Transit transitions:** a departing train fades out in place, the next time eases to amber, and rows fade in/out and slide (all under 1.2 s, at the same moments as digit rolls).
-- **Alert blink** on affected rows' color blocks (transit screen).
+- **Alert blink** on affected rows' color blocks (transit screen): 1 s on, 1 s off.
 - **Ticker page slide.**
 - **Radar loop.**
 
