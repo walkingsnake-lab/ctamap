@@ -6,11 +6,13 @@ const crypto = require('crypto');
 const { createStore, ValidationError } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
+const { stationDestinations } = require('./destinations');
 const fs = require('fs');
 const path = require('path');
 const { render, assets } = require('./render');
 
 const SIM_HTML = fs.readFileSync(path.join(__dirname, 'sim.html'));
+const CONTROL_HTML = fs.readFileSync(path.join(__dirname, 'control.html'));
 const DRAW_JS = fs.readFileSync(path.join(__dirname, 'draw.js'));
 const SIM_ASSETS = JSON.stringify(assets());
 
@@ -148,6 +150,40 @@ function createBoard({
     // ---- control endpoints, under the secret path ----
     if (controlPath && first && sameSecret(first, controlPath)) {
       const sub = rest.join('/');
+
+      // Phone control page. Relative URLs need the trailing slash.
+      if (sub === '') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        if (!parsed.pathname.endsWith('/')) {
+          res.writeHead(301, { Location: parsed.pathname + '/' + (parsed.search || '') });
+          res.end();
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(CONTROL_HTML);
+        return;
+      }
+
+      // Destinations for the phone page's filter: every destination the
+      // station's lines can show, plus any running now or already chosen.
+      if (sub === 'api/destinations') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const st = stationById.get(String(parsed.query.mapid || ''));
+        if (!st) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${parsed.query.mapid}` });
+        const keys = stationDestinations(st);
+        const live = new Set();
+        try {
+          const data = await tracker.get(st.mapid);
+          for (const a of (data && data.arrivals) || []) live.add(`${a.ln}:${a.dest}`);
+        } catch (e) { log.warn('[board] destinations: no live data:', e.message); }
+        const board = store.get(String(parsed.query.b || ''));
+        const chosen = board && board.station.mapid === st.mapid ? board.rows : [];
+        for (const k of [...live, ...chosen]) if (!keys.includes(k)) keys.push(k);
+        return send(res, 200, keys.map((key) => {
+          const i = key.indexOf(':');
+          return { key, ln: key.slice(0, i), name: key.slice(i + 1), live: live.has(key) ? 1 : 0 };
+        }));
+      }
       if (sub === 'api/state') {
         if (method === 'GET') return send(res, 200, store.all());
         if (method === 'POST') {

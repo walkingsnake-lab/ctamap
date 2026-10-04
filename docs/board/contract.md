@@ -203,7 +203,8 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /board/<secret>/` | Phone control page (HTML). |
+| `GET /board/<secret>/` | Phone control page (HTML, `server/board/control.html`): live preview, screen, brightness, station and header name, header/weather toggles, destination filter. `/board/<secret>` redirects here (relative URLs need the slash). |
+| `GET /board/<secret>/api/destinations?mapid=<id>[&b=<id>]` | Destinations for the filter: `[{key, ln, name, live}]` in default row order. Every destination the station's lines can show (`LINE_DESTS` in `destinations.js`, minus trains ending there; Purple to Howard only north of Howard), then any running now (`live: 1`) or already in board `b`'s `rows`. |
 | `GET /board/<secret>/sim?b=<id>[&mapid=<id>]` | Simulator page: the live transit and ticker screens, refreshed every few seconds (alert blink and ticker paging included), plus the raw payload. A station picker previews any station; "Use on board" sets it as the board's station. |
 | `GET /board/<secret>/sim.png?b=<id>[&screen=transit\|ticker][&page=N][&blink=1][&scale=1-16]` | One rendered frame of the live payload as a PNG (`server/board/render.js`). `screen` defaults to the payload's screen. |
 | `GET /board/<secret>/api/update?b=<id>[&mapid=<id>]` | The same payload as `/board/update`, without the token header (the path is the credential). `mapid` previews another station without changing the board (its row list is ignored while previewing); `sim.png` takes it too. |
@@ -212,7 +213,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 
-POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `screen`, and `bright`; anything else is a `400`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
+POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `screen`, and `bright`; anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
 
 ---
 

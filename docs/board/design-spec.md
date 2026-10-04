@@ -241,9 +241,11 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 A small page on the fly.dev server, saved to the phone home screen. The server holds the board's state; the board reads it and draws what it's told.
 
 ### Controls
-- **Screen:** Auto (normal rules), Transit, Ticker, Radar.
+- **Screen:** Auto (normal rules), Transit, Ticker, Radar (disabled until radar is built).
 - **Brightness:** Auto (sunrise/sunset), fixed level, or Off.
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
+- **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
+- **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
 - **Transit header and weather row:** independent on/off toggles per board (see §5 for how many rows each combination fits).
 
 ### Behavior

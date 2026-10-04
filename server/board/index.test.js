@@ -247,3 +247,52 @@ test('simulator serves draw.js and the assets it runs on', async () => {
   assert.equal(assets.body.glyphs.CLOCK, 0xe006);
   await s.close();
 });
+
+// ---- phone control page ----
+
+test('control page is served at the secret path, with a trailing-slash redirect', async () => {
+  const s = await serve({ tracker: fakeTracker(null) });
+  const base = `http://127.0.0.1:${s.port}`;
+  const page = await fetch(`${base}/board/secret123/`);
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get('content-type'), /text\/html/);
+  assert.match(await page.text(), /apple-mobile-web-app-capable/);
+  const bare = await fetch(`${base}/board/secret123?b=home`, { redirect: 'manual' });
+  assert.equal(bare.status, 301);
+  assert.equal(bare.headers.get('location'), '/board/secret123/?b=home');
+  assert.equal((await fetch(`${base}/board/wrong/`)).status, 404);
+  await s.close();
+});
+
+test('destinations: every destination the lines can show, plus live and chosen ones', async () => {
+  const live = [{ ln: 'RD', dest: 'Howard' }, { ln: 'RD', dest: 'Granville' }];
+  const s = await serve({ tracker: fakeTracker({ arrivals: live, fetchedAt: 0 }) });
+  // Belmont: Purple's rush-only Linden/Loop are offered even with none running.
+  const b = await s.req('/board/secret123/api/destinations?b=home&mapid=41320');
+  assert.equal(b.status, 200);
+  assert.deepEqual(b.body.map((d) => d.key), ['RD:Howard', 'RD:95th', 'BR:Kimball', 'BR:Loop', 'PR:Linden', 'PR:Loop', 'RD:Granville']);
+  assert.deepEqual(b.body[0], { key: 'RD:Howard', ln: 'RD', name: 'Howard', live: 1 });
+  assert.equal(b.body[1].live, 0);
+  // Howard: trains ending at Howard aren't offered.
+  const h = await s.req('/board/secret123/api/destinations?mapid=40900');
+  assert.ok(!h.body.some((d) => d.name === 'Howard' && !d.live));
+  assert.ok(h.body.some((d) => d.key === 'YL:Skokie'));
+  // A chosen row is kept even if it isn't a usual destination.
+  s.store.update('home', { rows: ['RD:Howard', 'RD:Loyola'] });
+  const m = await s.req('/board/secret123/api/destinations?b=home&mapid=40100');
+  assert.ok(m.body.some((d) => d.key === 'RD:Loyola'));
+  assert.equal((await s.req('/board/secret123/api/destinations?mapid=1')).status, 400);
+  await s.close();
+});
+
+test('changing the station resets the destination filter unless rows are sent too', async () => {
+  const s = await serve({ tracker: fakeTracker(null) });
+  s.store.update('home', { rows: ['RD:Howard'] });
+  s.store.update('home', { station: { mapid: '40100' } }); // same station: kept
+  assert.deepEqual(s.store.get('home').rows, ['RD:Howard']);
+  s.store.update('home', { station: { mapid: '41320' } });
+  assert.deepEqual(s.store.get('home').rows, []);
+  s.store.update('home', { station: { mapid: '40100' }, rows: ['RD:95th'] });
+  assert.deepEqual(s.store.get('home').rows, ['RD:95th']);
+  await s.close();
+});

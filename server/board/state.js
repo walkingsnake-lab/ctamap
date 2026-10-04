@@ -19,7 +19,7 @@ const SCREENS = ['auto', 'transit', 'ticker', 'radar'];
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
 const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
-const MAX_ROWS = 12;
+const MAX_ROWS = 24; // Clark/Lake can have 18 destinations
 
 class ValidationError extends Error {}
 
@@ -140,6 +140,9 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       if (!BOARD_ID_RE.test(id)) throw new ValidationError('board id must be 1-32 chars of a-z, 0-9, -');
       const fields = validatePatch(patch, stations);
       const board = state.boards[id] || defaultBoard(stations);
+      // A destination filter belongs to its station: a new station starts
+      // with all destinations unless the patch sets rows too.
+      if (fields.station && fields.station.mapid !== board.station.mapid && !fields.rows) fields.rows = [];
       Object.assign(board, fields);
       board.v = (board.v || 0) + 1;
       state.boards[id] = board;
