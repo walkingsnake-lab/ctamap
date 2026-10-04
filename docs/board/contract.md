@@ -163,8 +163,17 @@ One radar frame for that board's location.
 | 1–5 | rain levels: 15/25/35/45/55 dBZ (dim green, green, yellow, orange, red) |
 | 6 | shoreline (drawn only where there's no rain) |
 | 7 | location marker (white dot; the 4 pixels around it are 0) |
+| 8–10 | snow levels, light to heavy (light blue, pale blue, white) |
 
-The board owns the palette, including the ~65% fill brightness. `404` if the frame ID is no longer kept (the server keeps the last 12).
+A frame is either all rain levels (1–5) or all snow levels (8–10); the server picks the mode per frame (see **Snow mode** below). The board owns the palette, including the ~65% fill brightness.
+
+#### Snow mode (v1 heuristic)
+- Reflectivity can't tell rain from snow, so v1 decides from the board location's Open-Meteo data, for the whole frame:
+  - **Snow** if the weather code is a snow code (71, 73, 75, 77, 85, 86), or the temperature is ≤ 32°F and the code is not freezing rain (56, 57, 66, 67).
+  - Otherwise **rain**.
+- Snow uses its own dBZ thresholds, because dry snow reflects much less than rain at the same rate. Provisional: **10 / 20 / 30 dBZ**. Tune them on archived snow events.
+- Known limits: a rain/snow line inside the box, and sleet or mixed precip, render as one type.
+- `radar.on` hysteresis counts snow pixels the same as rain pixels. `404` if the frame ID is no longer kept (the server keeps the last 12).
 
 ---
 
@@ -236,4 +245,6 @@ Per-location radar assets (water mask, clock box, split flag) are committed file
 - **(decide)** Arrival drop grace (30 s) and whether `DUE` should also honor `isApp`.
 - **(decide)** Hysteresis thresholds for `radar.on` (colored-pixel counts); set after viewing real storms from the IEM archive.
 - Verify the MRMS dBZ formula before fixing level thresholds.
+- Tune snow thresholds (provisional 10/20/30 dBZ) on archived snow events.
+- Later: per-pixel precip type from MRMS `PrecipFlag` (GRIB2, CONUS-wide). Needs a decoder and a memory check on the Fly VM before it replaces the heuristic.
 - Confirm the payload stays under ~1.2 KB at a 5-row station with buses configured.
