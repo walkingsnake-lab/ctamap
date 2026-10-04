@@ -107,7 +107,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Schedule-based times (`isSch`), first / later | grey `#b0b0b0` / `#6e6e6e` (instead of amber; same width, so digit rolls are unaffected) |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
 | Dividers (weather row) | `#333333` |
-| Transit header background band | faint grey (`#202020`–`#303030`; pick on the panel) |
+| Transit header background band | `#202020` (confirm on the panel; raise toward `#303030` if it vanishes at night) |
 | Shoreline | `#34485e` |
 | Ticker alert circle | red `#ff2020` with white `#ffffff` "!" |
 

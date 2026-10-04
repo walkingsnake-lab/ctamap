@@ -19,7 +19,7 @@ const save = (name, frame, scale) => {
 };
 
 const C = {
-  label: '#d8d8d8', clock: '#cccccc', band: '#262626', amber: '#ffb000', dimAmber: '#9c6a00', grey: '#8f8f8f',
+  label: '#d8d8d8', clock: '#cccccc', band: '#202020', amber: '#ffb000', dimAmber: '#9c6a00', grey: '#8f8f8f',
   tickerHead: '#a6a6a6', index: '#1f2f35', white: '#ffffff', red: '#ff2020',
   yellow: '#ffd800', orange: '#ff8000', divider: '#333333',
 };
