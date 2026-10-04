@@ -80,15 +80,21 @@
 
   // ---- pure helpers (also used by the server) ----
 
-  // What the board draws for an arrival time: DUE at <= 1 min.
+  // Minutes shown for an arrival: rounded up, like CTA's own predictions
+  // (each is a whole number of minutes from when it was made, so a fresh
+  // "2 min" counts down from 120 s). <= 1 shows DUE: 0-60 s out, which is
+  // when CTA flags the train as approaching (isApp). The board never shows 1.
+  const minutesUntil = (t, now) => Math.ceil((t - now) / 60);
+
+  // What the board draws for an arrival time.
   function timeText(t, now) {
-    const min = Math.floor((t - now) / 60);
+    const min = minutesUntil(t, now);
     return min <= 1 ? 'DUE' : String(min);
   }
 
   // Chronological view: digits + "m" (the glyph's own 1px spacing), DUE bare.
   function chronoText(t, now) {
-    const min = Math.floor((t - now) / 60);
+    const min = minutesUntil(t, now);
     return min <= 1 ? 'DUE' : `${min}m`;
   }
 
@@ -143,7 +149,11 @@
     const newFrame = makeFrame || (() => new Frame(64, 32, fonts));
     const s = (cp) => String.fromCodePoint(cp);
 
+    // Line colors for thin strokes (the chronological view's index digits):
+    // Brown and Purple are too dark as 1px strokes, so they're brightened.
+    const DIGIT_OVERRIDE = { BR: '#a8673f', PR: '#9168e0' };
     const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
+    const DIGIT = Object.fromEntries(Object.entries(LINE).map(([k, v]) => [k, DIGIT_OVERRIDE[k] || v]));
     const C = {
       label: '#d8d8d8', clock: '#cccccc', amber: '#ffb000', dimAmber: '#9c6a00',
       sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', band: '#202020', divider: '#333333',
@@ -275,7 +285,7 @@
           const key = r.rn != null ? `rn:${r.rn}` : `${r.ln}:${r.lbl}:${r.t[0]}`;
           const sch = r.s && r.s[0];
           return {
-            key, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
+            key, ln: r.ln, lbl: r.lbl, a: r.a, num: i + 1, top: tops[i], alpha: 1,
             cells: [{
               id: key, t: r.t[0], text: chronoText(r.t[0], now), right: 63, alpha: 1, roll: null,
               color: sch ? (i ? C.schDim : C.sch) : (i ? C.dimAmber : C.amber),
@@ -289,9 +299,12 @@
 
     function drawViewRow(f, row, blink) {
       const top = Math.round(row.top);
-      const line = fade(LINE[row.ln], row.alpha);
+      const line = fade(row.num != null ? DIGIT[row.ln] : LINE[row.ln], row.alpha);
       if (row.a && blink) {
         icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(i, top + j, 1, 1, line); }));
+      } else if (row.num != null) {
+        // Chronological view: the row's position as a line-colored digit.
+        drawTimeCell(f, String(row.num), 2, top, line, row.numRoll);
       } else {
         f.fill(0, top, 3, 5, line);
       }
@@ -427,7 +440,9 @@
               st.moveStart = Math.max(t, leavingUntil);
               st.top = r.top;
             }
-            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, mode: target.mode });
+            // Position numbers roll when a row moves up (2 -> 1).
+            if (r.num != null && st.num != null && st.num !== r.num && !isNewRow) st.numRoll = { from: String(st.num), start: t };
+            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, num: r.num, mode: target.mode });
             matchCells(st, r.cells, t, isNewRow);
           }
 
@@ -449,7 +464,12 @@
               };
             });
             st.cells = st.cells.filter((c) => !c.leaving || t - c.leaving < FADE_MS);
-            view.rows.push({ key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, top: st.shownTop, alpha, cells });
+            const numP = st.numRoll ? (t - st.numRoll.start) / ROLL_MS : 1;
+            if (numP >= 1) st.numRoll = null;
+            view.rows.push({
+              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, top: st.shownTop, alpha, cells,
+              num: st.num, numRoll: st.numRoll ? { from: st.numRoll.from, p: numP } : null,
+            });
           }
           return view;
         },
@@ -469,7 +489,7 @@
         f.text('small', String(idx), 1, base, C.label);
       }
       f.text('5x7', it.d, 7, base, C.white);
-      const min = Math.floor((it.t - now) / 60);
+      const min = minutesUntil(it.t, now);
       if (min <= 1) {
         rtext(f, '5x7', 'Due', 62, base, C.white);
       } else {
@@ -597,7 +617,7 @@
     }
 
     return {
-      Frame, LINE, C, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
+      Frame, LINE, DIGIT, C, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
       transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 500,
       // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.
@@ -605,5 +625,5 @@
     };
   }
 
-  return { Frame, create, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
+  return { Frame, create, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
 });

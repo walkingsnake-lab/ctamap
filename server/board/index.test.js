@@ -408,3 +408,23 @@ test('update: radar carries current conditions only until frames arrive', async 
   assert.equal(b.radar.wx, undefined);
   await s.close();
 });
+
+test('simulator preview: header and weather toggles without changing the board', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8')));
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
+  let b = (await s.req('/board/secret123/api/update?b=home')).body;
+  assert.equal(b.header, 'MORSE');
+  assert.ok(b.wx);
+  b = (await s.req('/board/secret123/api/update?b=home&header=0&weather=0')).body;
+  assert.equal(b.header, null);
+  assert.equal(b.wx, null);
+  assert.equal(s.store.get('home').showHeader, true); // board unchanged
+  assert.equal(s.store.get('home').showWeather, true);
+  s.store.update('home', { showHeader: false });
+  assert.equal((await s.req('/board/secret123/api/update?b=home&header=1')).body.header, 'MORSE');
+  const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&header=1&weather=0`);
+  assert.equal(png.status, 200);
+  await s.close();
+});

@@ -36,6 +36,8 @@
   <h1>Board simulator</h1>
   <div class="picker">
     <select id="station" aria-label="Station"></select>
+    <label><input type="checkbox" id="showHeader"> Header</label>
+    <label><input type="checkbox" id="showWeather"> Weather row</label>
     <button id="apply" disabled>Use on board</button>
     <span class="note" id="previewNote"></span>
   </div>
@@ -123,7 +125,7 @@
     for (const id of Object.keys(radarFrames)) if (!ids.includes(id)) delete radarFrames[id];
     for (const id of ids) {
       if (radarFrames[id]) continue;
-      const q = new URLSearchParams({ b: board }); if (previewing()) q.set('mapid', preview);
+      const q = query();
       const r = await fetch(`api/radar/${encodeURIComponent(id)}?${q}`);
       if (r.ok) radarFrames[id] = new Uint8Array(await r.arrayBuffer());
     }
@@ -133,10 +135,20 @@
   let p = null, clockOffset = 0;
   const now = () => Date.now() / 1000 + clockOffset;
 
-  let boardMapid = null;
-  let preview = params.get('mapid');
-  const previewing = () => preview && preview !== boardMapid;
-  const query = () => { const q = new URLSearchParams({ b: board }); if (previewing()) q.set('mapid', preview); return q; };
+  // The board's own settings, and what the simulator is previewing. Preview
+  // settings that differ from the board's go to the server as query params
+  // and never change the board until "Use on board".
+  let boardCfg = null; // { mapid, showHeader, showWeather }
+  const flag = (v) => (v === '1' ? true : v === '0' ? false : null);
+  const prev = { mapid: params.get('mapid'), showHeader: flag(params.get('header')), showWeather: flag(params.get('weather')) };
+  const FIELDS = ['mapid', 'showHeader', 'showWeather'];
+  const changed = () => (boardCfg ? FIELDS.filter((k) => prev[k] != null && prev[k] !== boardCfg[k]) : []);
+  const previewing = () => changed().length > 0;
+  const query = () => {
+    const q = new URLSearchParams({ b: board });
+    for (const k of changed()) q.set(k === 'mapid' ? 'mapid' : k === 'showHeader' ? 'header' : 'weather', k === 'mapid' ? prev.mapid : prev[k] ? '1' : '0');
+    return q;
+  };
 
   async function poll() {
     if ($('pause').checked) return;
@@ -198,13 +210,18 @@
     requestAnimationFrame(loop);
   }
 
-  // ---- station picker ----
+  // ---- station picker and transit toggles ----
   function syncPicker() {
-    $('station').value = preview || boardMapid || '';
+    if (!boardCfg) return;
+    for (const k of FIELDS) if (prev[k] == null) prev[k] = boardCfg[k];
+    $('station').value = prev.mapid || '';
+    $('showHeader').checked = prev.showHeader;
+    $('showWeather').checked = prev.showWeather;
     $('apply').disabled = !previewing();
-    $('previewNote').textContent = previewing() ? 'Preview only: the board still shows its own station.' : '';
+    $('previewNote').textContent = previewing() ? 'Preview only: the board keeps its own settings until you press "Use on board".' : '';
     const q = new URLSearchParams(location.search);
-    if (previewing()) q.set('mapid', preview); else q.delete('mapid');
+    for (const [k, name] of [['mapid', 'mapid'], ['showHeader', 'header'], ['showWeather', 'weather']]) q.delete(name);
+    for (const [k, v] of query()) if (k !== 'b') q.set(k, v);
     history.replaceState(null, '', '?' + q);
   }
 
@@ -220,23 +237,26 @@
     ]);
     $('station').replaceChildren(...list.map((s) => new Option(s.desc, s.mapid)));
     const b = state.boards && state.boards[board];
-    boardMapid = b ? b.station.mapid : null;
-    if (!preview) preview = boardMapid;
+    boardCfg = b ? { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather } : null;
     syncPicker();
   }
 
-  $('station').addEventListener('change', (e) => { preview = e.target.value; syncPicker(); resetAnimation(); p = null; poll(); });
+  const previewChanged = () => { syncPicker(); resetAnimation(); p = null; poll(); };
+  $('station').addEventListener('change', (e) => { prev.mapid = e.target.value; previewChanged(); });
+  $('showHeader').addEventListener('change', (e) => { prev.showHeader = e.target.checked; previewChanged(); });
+  $('showWeather').addEventListener('change', (e) => { prev.showWeather = e.target.checked; previewChanged(); });
   $('apply').addEventListener('click', async () => {
     $('apply').disabled = true;
+    const patch = {};
+    for (const k of changed()) if (k === 'mapid') patch.station = { mapid: prev.mapid }; else patch[k] = prev[k];
     const r = await fetch('api/state?b=' + encodeURIComponent(board), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ station: { mapid: preview } }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
     });
-    if (r.ok) { boardMapid = preview; syncPicker(); poll(); }
-    else { setStatus('could not set station'); syncPicker(); }
+    if (r.ok) { const b = await r.json(); boardCfg = { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather }; syncPicker(); poll(); }
+    else { setStatus('could not update the board'); syncPicker(); }
   });
 
-  loadStations().catch((e) => setStatus('stations failed: ' + e.message));
+  await loadStations().catch((e) => setStatus('stations failed: ' + e.message));
   await poll();
   setInterval(poll, 5000);
   requestAnimationFrame(loop);

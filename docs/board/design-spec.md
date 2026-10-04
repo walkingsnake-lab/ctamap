@@ -125,6 +125,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest). Times are 3px apart, tightening to 2px when the row is full, so long names like `KIMBALL` and `COTTAGE` always fit.
 - **Schedule-based predictions** (`isSch`, e.g. southbound trains at Morse that haven't left the Howard terminal) are shown, with the time in grey instead of amber. `isFlt` (possible fault) predictions are shown normally.
 - **Trains ending at this station** are not shown (Terminal Arrival at Howard; "63rd Street" trains at Ashland/63rd, which only shows Harlem trains).
+- **Minutes round up**, like CTA's own predictions: `DUE` within 60 s (when CTA flags the train as approaching), then 2, 3, …; never 1.
 - **Per-digit roll** when a number changes (12→11 rolls only the 2), and whole-cell rolls to and from `DUE`.
 - **Departures fade, not roll:** when the first train leaves, its cell fades out in place (0.7 s), the remaining times slide left (0.5 s), and the new first time eases from dim to amber (0.7 s). A row losing its last train fades out, then the rows below slide up; new rows and times fade in. Arrivals are matched across updates by time (within 90 s), so refreshed predictions don't flicker. Reference: `createTransitAnimator()` in `server/board/draw.js`.
 
@@ -152,7 +153,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Switching is immediate both ways:** chronological as soon as destinations exceed max rows, back as soon as they fit. If short-turns make it flip too often, raise `CHRONO_HOLD` in `arrivals.js` (a hold time before switching back; the mechanism is built, set to 0).
 - **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
 - **Time format:** digits + lowercase `m` with the font's own **1px gap** (`4m`, `12m`); `DUE` stays bare. Labels are fitted against the widest time (`99m`), so they have up to 43px.
-- **Line ID is the color block only.** No run numbers.
+- **Line ID: a line-colored position digit** (1–5, Tom Thumb, in the 3px block's place) instead of the color block, like the ticker's index column. Brown (`#a8673f`) and Purple (`#9168e0`) digits are brightened because the official colors read too dark as 1px strokes; everything else uses the line color. When a train departs, each digit rolls down (2→1) as the list slides up. Alerts blink the digit to the same `!`. No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
 - Same row counts and geometry as destination rows; header and weather row settings apply. The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
 - **Departure:** the first row slides up under the header while fading, the list slides up one row pitch with it (0.5 s ease), the next train turns amber, and a new train slides in at the bottom. Per-digit roll still applies within a row (`12m`→`11m` rolls only the 2).
 - **Trains swapping order** between updates: rows are keyed by run number, so the two rows just slide past each other.
@@ -201,7 +202,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 - **Header:** station in light grey `#a6a6a6`, clock `#cccccc`, no background.
 - **Two 12px rows** with a 1px gap; dark slate index column `#1f2f35`, **5px wide**, numbered 1–6 in Tom Thumb. The row fill starts right after it (no gap); the destination starts 2px into the fill. Minutes are right-aligned to column 62, with a 2px gap between the digits and `min`.
-- Row fill = line color at 55%; **white** destination (X11 5x7 proportional, mixed case) + minutes (5x7 digits + `min` glyph); `Due` at ≤1 min. Yellow rows also use white text.
+- Row fill = line color at 55%; **white** destination (X11 5x7 proportional, mixed case) + minutes (5x7 digits + `min` glyph); `Due` within 60 s (minutes round up, like CTA; see contract countdown rules). Yellow rows also use white text.
 - Destinations use the short-name map, so short-turns appear as `UIC` and `Jeff Pk`.
 - **Schedule-based arrivals:** the **index number is replaced by a 5x5 clock** (`CLOCK` glyph: ring with hands up and right), drawn in the index number's color. If an arrival is both scheduled and on an alerted line, the alert circle wins.
 - **CTA alerts:** on arrivals whose line has an active alert, the **index number is replaced by the 5x5 red alert circle** (white "!"), which fills the 5px column exactly. It sits on the dark index column, so it never collides with the destination or time. Static, no blinking.

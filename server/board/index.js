@@ -84,6 +84,13 @@ function createBoard({
   const stationList = JSON.stringify(stations
     .map(({ mapid, desc, short }) => ({ mapid, desc, short }))
     .sort((a, b) => a.desc.localeCompare(b.desc)));
+  // Simulator preview settings from the query: mapid, header=0|1, weather=0|1.
+  function previewOf(q) {
+    const mapid = String(q.mapid || '');
+    if (mapid && !stationById.has(mapid)) return { err: `unknown mapid: ${mapid}` };
+    const flag = (v) => (v === '1' ? true : v === '0' ? false : null);
+    return { mapid, showHeader: flag(q.header), showWeather: flag(q.weather) };
+  }
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
   if (!tracker) tracker = createTracker({ log }).start();
   if (!weather) weather = createWeather({ log }).start();
@@ -96,19 +103,20 @@ function createBoard({
   const resolveScreen = (s, radarOn) => (s === 'auto' ? (radarOn ? 'radar' : 'transit') : s);
   const NO_RADAR = { on: false, frames: [], ft: [], clock: null, split: false };
 
-  // `previewMapid` (simulator only) shows another station without changing
-  // the board's config; the board's row list is station-specific, so it's
-  // ignored while previewing.
+  // `preview` (simulator only): {mapid, showHeader, showWeather} shown
+  // without changing the board's config. The board's row list is
+  // station-specific, so it's ignored while previewing another station.
   // Last transit view per board and station, for the chrono hysteresis.
   // In memory only: after a restart the view is chosen fresh.
   const views = new Map();
 
-  async function update(board, id, boot, previewMapid) {
+  async function update(board, id, boot, preview = {}) {
     if (boot) board = store.boot(id);
-    if (previewMapid && previewMapid !== board.station.mapid) {
-      const st = stationById.get(previewMapid);
+    if (preview.mapid && preview.mapid !== board.station.mapid) {
+      const st = stationById.get(preview.mapid);
       board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
     }
+    for (const k of ['showHeader', 'showWeather']) if (preview[k] != null) board = { ...board, [k]: preview[k] };
     const st = stationById.get(board.station.mapid);
     // Weather and warnings are nice-to-haves: a failure just leaves them off.
     const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
@@ -247,8 +255,8 @@ function createBoard({
         const id = String(parsed.query.b || '');
         const board = store.get(id);
         if (!board) return send(res, 404, { err: 'unknown_board' });
-        const preview = String(parsed.query.mapid || '');
-        if (preview && !stationById.has(preview)) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${preview}` });
+        const preview = previewOf(parsed.query);
+        if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
         return send(res, 200, body);
@@ -292,12 +300,12 @@ function createBoard({
         const id = String(parsed.query.b || '');
         const board = store.get(id);
         if (!board) return send(res, 404, { err: 'unknown_board' });
-        const preview = String(parsed.query.mapid || '');
-        if (preview && !stationById.has(preview)) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${preview}` });
+        const preview = previewOf(parsed.query);
+        if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
         const screen = ['transit', 'ticker', 'radar'].includes(parsed.query.screen) ? parsed.query.screen : body.screen;
-        const radarMapid = preview || board.station.mapid;
+        const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid); if (b) frames[fid] = b; }
         const scale = Math.min(16, Math.max(1, parseInt(parsed.query.scale, 10) || 8));

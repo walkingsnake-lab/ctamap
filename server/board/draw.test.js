@@ -6,7 +6,7 @@ const { liveRows, easeInOut } = require('./draw');
 
 const hex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
 const NOW = 1_800_000_000;
-const min = (m) => NOW + m * 60 + 5;
+const min = (m) => NOW + m * 60 - 5; // shows as m (minutes round up)
 
 function payload(rows, ticker = []) {
   return { v: 1, now: NOW, age: 0, screen: 'transit', bright: 100, header: 'TEST', rows, ticker, wx: null, warn: null };
@@ -326,4 +326,61 @@ test('radar with no frames shows current conditions on the left', () => {
   // Once frames exist, the radar replaces the conditions.
   const withFrames = draw.render({ now, bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [now], clock: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: { a: new Uint8Array(2048) } });
   assert.equal(count(withFrames, draw.C.label, 0, 0, 38, 31), 0);
+});
+
+test('minutes round up, like CTA: DUE through 60 s, then 2, 3, ...; never 1', () => {
+  const cases = [[-30, 'DUE'], [0, 'DUE'], [1, 'DUE'], [60, 'DUE'], [61, '2'], [120, '2'], [121, '3'], [599, '10'], [600, '10'], [601, '11']];
+  for (const [s, want] of cases) assert.equal(draw.timeText(NOW + s, NOW), want, `${s} s`);
+  assert.equal(draw.chronoText(NOW + 61, NOW), '2m');
+  assert.equal(draw.chronoText(NOW + 60, NOW), 'DUE');
+  // A fresh CTA prediction of "2 min" (arrival = prediction time + 120 s) shows 2.
+  assert.equal(draw.timeText(NOW + 120, NOW), '2');
+  // Ticker: same rule, "Due" / "2 min".
+  const p = { now: NOW, bright: 100, header: null, ticker: [{ ln: 'RD', d: 'Howard', t: NOW + 61, s: 0, a: 0 }, { ln: 'RD', d: '95th', t: NOW + 60, s: 0, a: 0 }] };
+  const f = draw.render(p, { screen: 'ticker', now: NOW });
+  const g = draw.render({ ...p, ticker: [{ ...p.ticker[0], t: NOW + 120 }, p.ticker[1]] }, { screen: 'ticker', now: NOW });
+  assert.deepEqual(f.px, g.px, '61 s and 120 s both draw as 2 min');
+});
+
+test('chrono: line-colored position digits instead of blocks; Brown and Purple brightened', () => {
+  const p = chronoPayload([chronoRow('RD', 'HOWARD', min(2), '1'), chronoRow('BR', 'KIMBALL', min(4), '2'), chronoRow('PR', 'LINDEN', min(6), '3')]);
+  const f = draw.renderTransit(p);
+  const tops = draw.rowTops(3, true, false);
+  assert.equal(draw.DIGIT.RD, draw.LINE.RD);
+  assert.notEqual(draw.DIGIT.BR, draw.LINE.BR);
+  assert.notEqual(draw.DIGIT.PR, draw.LINE.PR);
+  ['RD', 'BR', 'PR'].forEach((ln, i) => {
+    const n = count(f, draw.DIGIT[ln], 0, tops[i], 2, tops[i] + 4);
+    assert.ok(n >= 5 && n < 15, `${ln} digit ${i + 1}: ${n} px (a solid block would be 15)`);
+    assert.equal(count(f, draw.LINE[ln], 0, tops[i], 4, tops[i] + 4) - (draw.DIGIT[ln] === draw.LINE[ln] ? n : 0), 0, 'no color block');
+  });
+  // Destination rows keep the solid blocks.
+  const d = draw.renderTransit(payload([{ ln: 'BR', lbl: 'KIMBALL', t: [min(4)], s: [0], a: 0 }]));
+  assert.equal(count(d, draw.LINE.BR, 0, 0, 2, 31), 15);
+});
+
+test('chrono: alert blinks the digit to "!"', () => {
+  const p = chronoPayload([{ ...chronoRow('GR', 'HARLEM', min(3), '1'), a: 1 }]);
+  const top = draw.rowTops(1, true, false)[0];
+  const on = draw.renderTransit(p, { blink: true });
+  const off = draw.renderTransit(p, { blink: false });
+  assert.equal(count(on, draw.DIGIT.GR, 0, top, 2, top + 4), 4); // 3px stem + dot
+  assert.ok(count(off, draw.DIGIT.GR, 0, top, 2, top + 4) > 4);
+});
+
+test('chrono animator: position digits roll down as the list slides up', () => {
+  const rows = [chronoRow('RD', 'HOWARD', NOW + 10, '801'), chronoRow('BR', 'LOOP', min(4), '400'), chronoRow('PR', 'LINDEN', min(7), '401')];
+  const p = chronoPayload(rows);
+  const anim = draw.createTransitAnimator();
+  const v0 = anim.step(p, NOW, 0);
+  assert.deepEqual(v0.rows.map((r) => r.num), [1, 2, 3]);
+  anim.step(p, NOW + 45, 1000); // first train gone
+  const mid = anim.step(p, NOW + 45, 1000 + draw.ROLL_MS / 2);
+  const loop = mid.rows.find((r) => r.key === 'rn:400');
+  assert.equal(loop.num, 1);
+  assert.equal(loop.numRoll.from, '2');
+  assert.ok(loop.numRoll.p > 0 && loop.numRoll.p < 1);
+  const end = anim.step(p, NOW + 45, 1000 + draw.FADE_MS + 10);
+  assert.deepEqual(end.rows.map((r) => [r.key, r.num, r.numRoll]), [['rn:400', 1, null], ['rn:401', 2, null]]);
+  assert.deepEqual(draw.renderTransit(p, { now: NOW + 45, view: end }).px, draw.renderTransit(p, { now: NOW + 45 }).px);
 });

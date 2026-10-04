@@ -139,8 +139,9 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 
 #### Countdown rules (board side)
 
-- `min = floor((t - now) / 60)`
-- Show `DUE` (transit) / `Due` (ticker) when `min <= 1`. Chrono rows show `<min>m` otherwise.
+- `min = ceil((t - now) / 60)`: rounded **up**, like CTA's own predictions (every `arrT` is `prdt` plus a whole number of minutes, so a fresh "2 min" counts down from 120 s).
+- Show `DUE` (transit) / `Due` (ticker) when `min <= 1`, i.e. 0–60 s out, which is when CTA sets `isApp` in the recorded fixtures. The board never shows 1. Chrono rows show `<min>m` otherwise.
+- DUE can still last a few minutes when a train is held: CTA keeps predicting "1 minute" while it waits, so `arrT` keeps moving later.
 - Drop an arrival once `now > t + 30`; its cell fades out and the list shifts (see `createTransitAnimator()` in `draw.js`). **(decide)** whether the 30 s grace is right; CTA's `isApp` is not sent.
 
 #### Weather row (`wx`)
@@ -222,7 +223,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/destinations?mapid=<id>[&b=<id>]` | Destinations for the filter: `[{key, ln, name, live}]` in default row order. Every destination the station's lines can show (`LINE_DESTS` in `destinations.js`, minus trains ending there; Purple to Howard only north of Howard), then any running now (`live: 1`) or already in board `b`'s `rows`. |
 | `GET /board/<secret>/sim?b=<id>[&mapid=<id>]` | Simulator page: the live transit and ticker screens, refreshed every few seconds (alert blink and ticker paging included), plus the raw payload. A station picker previews any station; "Use on board" sets it as the board's station. |
 | `GET /board/<secret>/sim.png?b=<id>[&screen=transit\|ticker][&page=N][&blink=1][&scale=1-16]` | One rendered frame of the live payload as a PNG (`server/board/render.js`). `screen` defaults to the payload's screen. |
-| `GET /board/<secret>/api/update?b=<id>[&mapid=<id>]` | The same payload as `/board/update`, without the token header (the path is the credential). `mapid` previews another station without changing the board (its row list is ignored while previewing); `sim.png` takes it too. |
+| `GET /board/<secret>/api/update?b=<id>[&mapid=<id>][&header=0\|1][&weather=0\|1]` | The same payload as `/board/update`, without the token header (the path is the credential). `mapid`, `header`, and `weather` preview another station or the transit toggles without changing the board (the row list is ignored while previewing another station); `sim.png` takes them too. The simulator's "Use on board" posts the previewed settings to `api/state`. |
 | `GET /board/<secret>/api/radar/<frameId>?b=<id>[&mapid=<id>]` | Same as `/board/radar/<frameId>` without the token, for the simulator. `sim.png` also takes `screen=radar`. |
 | `GET /board/<secret>/api/stations` | Station list for pickers: `[{mapid, desc, short}]`, sorted by `desc`. |
 | `GET /board/<secret>/api/state` | Full state JSON (all boards). |
