@@ -18,6 +18,11 @@ const W = 64, H = 32;
 const KM_PER_LED = 1.5 * 1.609344;      // ~1.5 mi per LED
 const SPLIT_W = 40;                      // radar width in the split layout (clock panel: 24 cols, the 22px clock + 1px gap)
 const SPLIT_CLOCK = [SPLIT_W, 0, W - SPLIT_W, H];
+// Full-width layout: the clock stack sits top-right over open water. The
+// box must be all water: 24 cols (22px clock + margin) x 22 rows (stack on
+// rows 2-19 + margin). Built per station by scripts/build-locations.js.
+const FULL_CLOCK = [40, 0, 24, 22];
+const SHORE = 6;
 const STEP = 300;                        // s between loop frames
 const LOOP = 6;                          // frames in the loop (30 min)
 const KEEP = 12;                         // frames kept per location
@@ -47,6 +52,34 @@ function parseWld(text) {
   const v = String(text).trim().split(/\s+/).map(Number);
   if (v.length < 6 || v.some((x) => !Number.isFinite(x)) || !v[0] || !v[3]) throw new Error('bad world file');
   return { dx: v[0], dy: v[3], x0: v[4], y0: v[5] };
+}
+
+// Lat/lon of an LED's center, for a station on the marker LED. Same math as
+// geometry() below, used by scripts/build-locations.js for the water masks.
+function ledCenter(lat, lon, x, y, width = W) {
+  const mx = Math.floor(width / 2), my = Math.floor(H / 2);
+  const degLon = KM_PER_LED / (111.32 * Math.cos(lat * Math.PI / 180));
+  const degLat = KM_PER_LED / 111.32;
+  return [lon + (x - mx) * degLon, lat - (y - my) * degLat];
+}
+
+// Per-station layout and masks (server/board/locations/<mapid>.json), or
+// the split layout without masks when a station has no file.
+const locCache = new Map();
+function hexRows(rows, width) {
+  const out = new Uint8Array(width * H);
+  rows.forEach((hex, y) => { for (let x = 0; x < width; x++) if ((parseInt(hex[x >> 2], 16) >> (3 - (x & 3))) & 1) out[y * width + x] = 1; });
+  return out;
+}
+function loadLocation(mapid) {
+  if (locCache.has(mapid)) return locCache.get(mapid);
+  let loc = { split: true, width: SPLIT_W, clock: SPLIT_CLOCK, water: null, shore: null };
+  try {
+    const j = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'locations', `${mapid}.json`), 'utf8'));
+    loc = { split: j.split, width: j.width, clock: j.clock, water: hexRows(j.water, j.width), shore: hexRows(j.shore, j.width) };
+  } catch (e) { /* no file: split layout, no masks */ }
+  locCache.set(mapid, loc);
+  return loc;
 }
 
 // Which source pixels feed which LED, for a station at lat/lon. The station
@@ -99,9 +132,10 @@ function modeFor(w) {
 
 const isPrecip = (v) => (v >= 1 && v <= 5) || (v >= 8 && v <= 10);
 
-// Mean dBZ grid -> the 2048-byte frame: levels, despeckle, marker, and the
-// split layout's empty clock panel. Returns { bytes, colored }.
-function toFrame(dbz, geo, mode) {
+// Mean dBZ grid -> the 2048-byte frame: levels, water masked, despeckle,
+// shoreline, clock box cleared, marker. loc: loadLocation() result (masks
+// are on the crop's grid). Returns { bytes, colored }.
+function toFrame(dbz, geo, mode, loc = null) {
   const levels = mode === 'snow' ? SNOW_DBZ : RAIN_DBZ;
   const first = mode === 'snow' ? 8 : 1;
   const w = geo.width;
@@ -110,6 +144,7 @@ function toFrame(dbz, geo, mode) {
     let n = 0;
     while (n < levels.length && dbz[k] >= levels[n]) n++;
     lv[k] = n ? first + n - 1 : 0;
+    if (loc && loc.water && loc.water[k]) lv[k] = 0; // water is masked black
   }
   // Despeckle: drop precip pixels with fewer than 2 precip neighbors.
   const out = new Uint8Array(W * H);
@@ -124,6 +159,15 @@ function toFrame(dbz, geo, mode) {
       if (xx >= 0 && yy >= 0 && xx < w && yy < H && lv[yy * w + xx]) n++;
     }
     if (n >= 2) { out[y * W + x] = v; colored++; }
+  }
+  // Faint shoreline (land side) where there's no precip.
+  if (loc && loc.shore) {
+    for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) if (loc.shore[y * w + x] && !out[y * W + x]) out[y * W + x] = SHORE;
+  }
+  // The clock box stays empty.
+  if (loc && !loc.split) {
+    const [bx, by, bw, bh] = loc.clock;
+    for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) { if (isPrecip(out[y * W + x])) colored--; out[y * W + x] = 0; }
   }
   // Location marker: white dot, the 4 pixels around it unlit.
   const m = geo.my * W + geo.mx;
@@ -200,13 +244,13 @@ function createRadar({
 
   async function processStamp(stamp, wanted) {
     const { wld, png } = await fetch(stamp);
-    const list = wanted.map(([key, l]) => ({ key, lat: l.lat, lon: l.lon, width: SPLIT_W }));
+    const list = wanted.map(([key, l]) => ({ key, lat: l.lat, lon: l.lon, width: loadLocation(key).width }));
     const out = await crops(png, wld, list);
     for (const [key, l] of wanted) {
       const w = weather ? await weather.get(l.lat, l.lon, { wait: 0 }).catch(() => null) : null;
       const mode = modeFor(w);
       const { dbz, geo } = out.get(key);
-      const f = toFrame(dbz, geo, mode);
+      const f = toFrame(dbz, geo, mode, loadLocation(key));
       l.frames.set(stamp, { id: `${key}-${stamp}${mode === 'snow' ? 's' : ''}`, t: timeOf(stamp), mode, ...f });
       // Keep the newest KEEP frames.
       const old = [...l.frames.keys()].sort().slice(0, -KEEP);
@@ -260,7 +304,8 @@ function createRadar({
         else if (l.on && latest.colored < OFF_PX) l.on = false;
         l.judged = latest;
       }
-      return { on: l.on, frames: frames.map((f) => f.id), ft: frames.map((f) => f.t), clock: SPLIT_CLOCK, split: true };
+      const loc = loadLocation(mapid);
+      return { on: l.on, frames: frames.map((f) => f.id), ft: frames.map((f) => f.t), clock: loc.clock, split: loc.split };
     },
     // A kept frame's bytes for this station, or null.
     frame(mapid, id) {
@@ -284,5 +329,5 @@ function createRadar({
 
 module.exports = {
   parseWld, geometry, accumulator, modeFor, toFrame, crops, createRadar, fetchFrame,
-  stampOf, timeOf, frameUrl, dbzOf, W, H, SPLIT_W, SPLIT_CLOCK, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
+  ledCenter, loadLocation, stampOf, timeOf, frameUrl, dbzOf, W, H, SPLIT_W, SPLIT_CLOCK, FULL_CLOCK, SHORE, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
 };

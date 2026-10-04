@@ -280,17 +280,18 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   assert.equal(hex(f.get(1, 0)), draw.RADAR[5]);
   assert.equal(hex(f.get(2, 0)), draw.RADAR[8]);
   assert.equal(hex(f.get(20, 16)), '#ffffff');
-  // Stack is 18 rows, centered in the 32-row box: indicator on rows 7-8,
-  // current (last) segment amber at the right edge.
-  assert.equal(hex(f.get(62, 7)), draw.C.amber);
-  assert.equal(hex(f.get(56, 7)), draw.C.indicator);
-  assert.ok(count(f, draw.C.clock, 40, 11, 63, 17) > 20, 'clock "4:00" on rows 11-17');
-  assert.ok(count(f, draw.C.grey, 40, 20, 63, 24) > 5, 'PM on rows 20-24');
-  assert.ok(count(f, draw.C.warnSevere, 40, 20, 63, 24) > 3, 'bolt left of PM');
+  // Stack is top-aligned (rows 2-19): indicator on rows 2-3, current (last)
+  // segment amber at the right edge.
+  assert.equal(hex(f.get(62, 2)), draw.C.amber);
+  assert.equal(hex(f.get(56, 2)), draw.C.indicator);
+  assert.ok(count(f, draw.C.clock, 40, 6, 63, 12) > 20, 'clock "4:00" on rows 6-12');
+  assert.ok(count(f, draw.C.grey, 40, 15, 63, 19) > 5, 'PM on rows 15-19');
+  assert.ok(count(f, draw.C.warnSevere, 40, 15, 63, 19) > 3, 'bolt left of PM');
+  for (let y = 20; y < 32; y++) for (let x = 40; x < 64; x++) assert.deepEqual(f.get(x, y), [0, 0, 0], 'nothing below the stack');
   // Nothing of the stack spills into the radar area.
   for (let y = 0; y < 32; y++) for (let x = 37; x < 40; x++) assert.deepEqual(f.get(x, y), [0, 0, 0]);
   // A frame not fetched yet draws as empty radar with the stack.
   const empty = draw.render(p, { screen: 'radar', frames: {}, idx: 0 });
   assert.equal(count(empty, draw.RADAR[1], 0, 0, 39, 31), 0);
-  assert.equal(hex(empty.get(56, 7)), draw.C.amber);
+  assert.equal(hex(empty.get(56, 2)), draw.C.amber);
 });

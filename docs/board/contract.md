@@ -68,8 +68,8 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
     "on": false,
     "frames": ["40100-202610032310", "40100-202610032315", "40100-202610032320", "40100-202610032325", "40100-202610032330", "40100-202610032335"],
     "ft": [1759545000, 1759545300, 1759545600, 1759545900, 1759546200, 1759546500],
-    "clock": [40, 0, 24, 32],
-    "split": true
+    "clock": [40, 0, 24, 22],
+    "split": false
   }
 }
 ```
@@ -176,13 +176,13 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 | `frames` | IDs of up to 6 latest frames (5 min apart), oldest first. Frame IDs are immutable, so the board fetches only IDs it doesn't already have. ID: `<mapid>-<YYYYMMDDHHMM UTC>`, plus `s` for a snow frame (so a station or mode change never reuses a cached frame). |
 | `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar clock. |
 | `clock` | `[x, y, w, h]`: box the board draws the clock stack into (frame indicator, clock, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
-| `split` | `true` when the location has no usable water area; the clock box is then the right-side panel. **Until water masks land, every location uses the split layout:** radar in columns 0–39 (station marker at 20,16), clock box `[40, 0, 24, 32]` (the 22px widest clock plus a 1px gap). |
+| `split` | `true` when the location has no usable water area; the clock box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–39, marker at 20,16, clock box `[40, 0, 24, 32]`). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator rows 2–3, clock rows 6–12, AM/PM rows 15–19, right-aligned to column 62. |
 
 When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`. The server still sends frames it has, so a forced radar screen shows them.
 
-**`on` hysteresis** (provisional): turns on when the newest frame has ≥ 30 precip pixels (after despeckle, marker excluded), off when it drops below 10. Judged once per new frame. With `screen` `auto`, `on` switches the board to `radar`.
+**`on` hysteresis** (provisional): turns on when the newest frame has ≥ 30 precip pixels (after water masking and despeckle, marker excluded), off when it drops below 10. Judged once per new frame. With `screen` `auto`, `on` switches the board to `radar`.
 
-**Source and processing** (`server/board/radar.js`): IEM `mrms_lcref` archive, `https://mesonet.agron.iastate.edu/archive/data/YYYY/MM/DD/GIS/mrms/lcref_YYYYMMDDHHMM.png` + `.wld` (7000 × 3500, 8-bit palette, 0.01°; the world file's origin differs by half a pixel between older and newer files, so each frame's `.wld` is read). Palette index → **dBZ = index × 0.5 − 32** (255 = missing; ≤ 65 is no echo), per IEM's lookup table. Each LED is ~1.5 mi (2.92 source columns × 2.17 rows at Chicago's latitude); a source pixel goes to the LED containing its center; LED value = mean **linear** Z → dBZ → level; then despeckle (drop precip pixels with < 2 precip neighbors), then the marker. Frames are stream-decoded (`radar-png.js`): only the ~70 rows around the station are unfiltered, and the download stops after them (~14 MB peak vs ~150 MB for a full pngjs decode). The poller runs every 20 s while a board asked in the last 2 min, fetching one source frame per pass: the newest 5-minute slot first (expected 2 min after its time), then the rest of the 30-minute loop. A missing frame (404) is retried after 2 min. The last 12 processed frames per station are kept.
+**Source and processing** (`server/board/radar.js`): IEM `mrms_lcref` archive, `https://mesonet.agron.iastate.edu/archive/data/YYYY/MM/DD/GIS/mrms/lcref_YYYYMMDDHHMM.png` + `.wld` (7000 × 3500, 8-bit palette, 0.01°; the world file's origin differs by half a pixel between older and newer files, so each frame's `.wld` is read). Palette index → **dBZ = index × 0.5 − 32** (255 = missing; ≤ 65 is no echo), per IEM's lookup table. Each LED is ~1.5 mi (2.92 source columns × 2.17 rows at Chicago's latitude); a source pixel goes to the LED containing its center; LED value = mean **linear** Z → dBZ → level; water LEDs set to 0, then despeckle (drop precip pixels with < 2 precip neighbors), shoreline (6) on land LEDs next to water where there's no precip, the clock box cleared, then the marker. Masks come from `scripts/build-locations.js`: an LED is water when its center is inside Lake Michigan (`scripts/geo-src/lake-michigan.geojson`, Natural Earth 1:10m, public domain); a test checks every committed file matches a fresh build. Frames are stream-decoded (`radar-png.js`): only the ~70 rows around the station are unfiltered, and the download stops after them (~14 MB peak vs ~150 MB for a full pngjs decode). The poller runs every 20 s while a board asked in the last 2 min, fetching one source frame per pass: the newest 5-minute slot first (expected 2 min after its time), then the rest of the 30-minute loop. A missing frame (404) is retried after 2 min. The last 12 processed frames per station are kept.
 
 ### `GET /board/radar/<frameId>?b=<id>`
 One radar frame for that board's location.
@@ -284,7 +284,6 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 - Schedule-based predictions (`isSch=1`) are shown and marked via `s` (decided Oct 3: grey times on transit, clock on ticker). `isFlt=1` is shown normally. Ticker clock is the `CLOCK` glyph (U+E006).
 - Tune `radar.on` hysteresis (provisional 30 on / 10 off) on more archived storms.
 - Tune snow thresholds (provisional 10/15/20 dBZ, from one storm) on more snow events.
-- Water masks, shoreline, and the in-water clock box (until then: split layout everywhere).
 - Later: per-pixel precip type from MRMS `PrecipFlag` (GRIB2, CONUS-wide). Needs a decoder and a memory check on the Fly VM before it replaces the heuristic.
 - Confirm the payload stays under ~1.2 KB at a 5-row station.
 - **(decide)** Condition word list for `wx.word` (previews use SUNNY, CLEAR, PT CLOUDY, CLOUDY, RAIN, FRZ RAIN, SNOW, STORMS, FOG as placeholders).

@@ -96,7 +96,7 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 ### Stack and dependencies
 - Plain Node `http`, no framework, same as the map.
 - MRMS radar frames are decoded by `server/board/radar-png.js`, a streaming row decoder on Node's built-in `zlib` (pngjs would expand a 7000 × 3500 frame to RGBA: ~150 MB, measured). `pngjs` is for writing preview PNGs and for checking the decoder in tests. Do not add `sharp`, canvas, GIS libraries, or a Python sidecar.
-- Water masks are generated once per station by a script in `scripts/` and committed as files; no geo processing at runtime.
+- Water masks are generated once per station by `scripts/build-locations.js` (from `scripts/geo-src/lake-michigan.geojson`) into `server/board/locations/<mapid>.json` and committed; no geo processing at runtime. Rebuild after changing `stations.json` or the radar geometry (a test fails if they drift).
 - The Fly VM has **256 MB**, shared with the map. Radar processing must stay small: decode only what's needed, crop early, and don't hold full source images between cycles.
 
 ### Tests

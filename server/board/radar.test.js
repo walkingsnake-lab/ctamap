@@ -120,7 +120,8 @@ test('poller: newest frame first, then backfill; 404s retried later; on/off hyst
     },
   });
   assert.deepEqual(radar.slots(), ['202008102040', '202008102045', '202008102050', '202008102055', '202008102100', '202008102105']);
-  assert.deepEqual(radar.want('40100', MORSE.lat, MORSE.lon), { on: false, frames: [], ft: [], clock: R.SPLIT_CLOCK, split: true });
+  // Morse: the clock sits over the lake (full-width layout).
+  assert.deepEqual(radar.want('40100', MORSE.lat, MORSE.lon), { on: false, frames: [], ft: [], clock: R.FULL_CLOCK, split: false });
   await radar.pass();
   await radar.pass();
   assert.deepEqual(fetched, ['202008102105', '202008102100']); // 404, then the next newest
@@ -144,4 +145,43 @@ test('poller: idle stations cost nothing', async () => {
   const radar = R.createRadar({ now: () => 1e9, log: quiet, fetch: async () => { calls++; throw new Error('x'); } });
   await radar.pass();
   assert.equal(calls, 0);
+});
+
+test('water masks: Morse is full width with the lake east; masked water, shoreline, clear clock box', async () => {
+  const loc = R.loadLocation('40100');
+  assert.equal(loc.split, false);
+  assert.equal(loc.width, 64);
+  // Lake Michigan is east of Morse: the whole clock area is water, the far
+  // west is land.
+  for (let y = 2; y <= 19; y++) for (let x = 41; x <= 62; x++) assert.equal(loc.water[y * 64 + x], 1);
+  assert.equal(loc.water[16 * 64 + 0], 0);
+  const out = await R.crops(pngOf('202008102100'), wldOf('202008102100'), [{ key: 'k', ...MORSE, width: 64 }]);
+  const { dbz, geo } = out.get('k');
+  const f = R.toFrame(dbz, geo, 'rain', loc);
+  for (let k = 0; k < 2048; k++) if (loc.water[k]) assert.equal(f.bytes[k], 0, `water at ${k % 64},${k >> 6}`);
+  for (const [bx, by, bw, bh] of [R.FULL_CLOCK]) for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) assert.equal(f.bytes[y * 64 + x], 0);
+  // Shoreline shows on land next to the lake where there's no rain (here, north
+  // of the storm), and never on top of rain.
+  let shore = 0;
+  for (let k = 0; k < 2048; k++) if (f.bytes[k] === R.SHORE) { shore++; assert.equal(loc.shore[k], 1); }
+  assert.ok(shore > 0);
+  assert.equal(f.bytes[16 * 64 + 32], R.MARKER);
+});
+
+test('water masks: a station with land under the clock falls back to split', () => {
+  const loc = R.loadLocation('40450'); // 95th/Dan Ryan: Indiana under the top-right corner
+  assert.equal(loc.split, true);
+  assert.equal(loc.width, R.SPLIT_W);
+  assert.deepEqual(loc.clock, R.SPLIT_CLOCK);
+  // No file: split layout, no masks.
+  const none = R.loadLocation('nope');
+  assert.deepEqual([none.split, none.water], [true, null]);
+});
+
+test('every station has a location file built from the current lake data', () => {
+  const { build } = require('../../scripts/build-locations');
+  for (const st of require('./stations.json')) {
+    const file = JSON.parse(fs.readFileSync(path.join(__dirname, 'locations', `${st.mapid}.json`), 'utf8'));
+    assert.deepEqual(file, build(st), `${st.name}: run node scripts/build-locations.js`);
+  }
 });

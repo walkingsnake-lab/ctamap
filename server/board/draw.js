@@ -513,7 +513,7 @@
       6: '#34485e', 7: '#ffffff',
       8: scaleColor('#4f86ff', RADAR_FILL), 9: scaleColor('#a9c9ff', RADAR_FILL), 10: scaleColor('#ffffff', RADAR_FILL),
     };
-    const RADAR_STACK_H = 18; // indicator 2 + gap 2 + clock 7 + gap 2 + AM/PM 5
+    // Clock stack: indicator 2 + gap 2 + clock 7 + gap 2 + AM/PM 5 = 18 rows.
     const ampmFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: true });
     const ampmText = (t) => (/PM/i.test(ampmFmt.format(new Date(t * 1000))) ? 'PM' : 'AM');
 
@@ -536,7 +536,7 @@
       // (frame time), AM/PM with the warning icon to its left.
       const [bx, by, bw, bh] = r.clock || [40, 0, 24, 32];
       const right = Math.min(62, bx + bw - 1);
-      const top = by + Math.max(0, Math.floor((bh - RADAR_STACK_H) / 2));
+      const top = by + 2; // top-aligned (spec: rows 2-19)
       const t = idx >= 0 && r.ft ? r.ft[idx] : (o.now != null ? o.now : p.now);
       if (ids.length) {
         const segW = 2, segGap = 1;

@@ -217,7 +217,8 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when Open-Meteo reports a snow weather code, or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/15/20 dBZ, from the Feb 2, 2022 storm) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
 - **Loop:** 6 frames (30 min), 0.5 s each, **holds on the last frame** for 4 s. Network requests (including the next radar frame) happen during the hold.
 - **Water masked black** (mask generated per location from coastline data); faint shoreline only where there's no rain.
-- **Until water masks are built, every location uses the split layout**: radar in the left 40 columns (station centered), clock stack in the right 24.
+- **Layout per station** (`server/board/locations/`, built by `scripts/build-locations.js` from Natural Earth's Lake Michigan outline): full width with the clock over the lake when the clock's area is all water (114 of 144 stations), otherwise the split layout (radar left 40 columns, clock right 24). The clock stack is **top-aligned** (rows 2–19) in both.
+- **Shoreline** is drawn on the land side of the lake edge, so rain covers it.
 - **Colors** (fills at 65%): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.
 - **Location marker:** white dot with 4 unlit pixels around it.
 - **Clock:** X11 5x7 (`#cccccc`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (2px-tall segments, current frame amber), AM/PM in Tom Thumb below. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
