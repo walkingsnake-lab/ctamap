@@ -121,5 +121,6 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 - Secrets are Fly secrets: `CTA_KEY` (Train Tracker), `BOARD_TOKEN`, `BOARD_CONTROL_PATH`. Never commit keys or put them in fixtures (strip `key=` from recorded URLs).
 
 ### Verification
-- The board's output can't be seen from here. Use the board simulator (a 64x32 canvas page rendering `/board/update`, to be built under `server/board/`) and check its screenshots for layout changes.
+- The board's output can't be seen on hardware from here. `server/board/render.js` is the reference renderer: it draws a payload exactly as the board should, and the CircuitPython code mirrors it. Layout changes go there first, with a test in `render.test.js`.
+- Check layout changes visually: render fixtures with `render()` and `Frame.toPNG()` and look at the image, or open the live simulator at `/board/<BOARD_CONTROL_PATH>/sim`.
 - Board-side CircuitPython is flashed and tested on hardware by the owner; ask for serial logs rather than guessing.
