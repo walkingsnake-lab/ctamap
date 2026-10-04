@@ -9,6 +9,7 @@ const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
 const { createWeather, toWx, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
+const { createNws, pickWarn } = require('./nws');
 const fs = require('fs');
 const path = require('path');
 const { render, assets } = require('./render');
@@ -59,6 +60,7 @@ function createBoard({
   capture = require('./capture'),
   tracker = null,
   weather = null,
+  nws = null,
   alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
   stations = require('./stations.json'),
   log = console,
@@ -77,6 +79,7 @@ function createBoard({
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
   if (!tracker) tracker = createTracker({ log }).start();
   if (!weather) weather = createWeather({ log }).start();
+  if (!nws) nws = createNws({ log }).start();
 
   // 'auto' brightness follows sunrise/sunset (100 until weather data arrives).
   const resolveBright = (b, w, now) => (b === 'off' ? 0 : b === 'auto' ? autoBright(w, now) : b);
@@ -97,10 +100,12 @@ function createBoard({
       board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
     }
     const st = stationById.get(board.station.mapid);
-    // Weather is a nice-to-have: a failure just leaves the row off.
-    const [data, w] = await Promise.all([
+    // Weather and warnings are nice-to-haves: a failure just leaves them off.
+    const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
+    const [data, w, nwsAlerts] = await Promise.all([
       tracker.get(board.station.mapid),
-      st ? weather.get(st.lat, st.lon).catch((e) => { log.error('[board] weather:', e.message); return null; }) : null,
+      st ? soft('weather', weather.get(st.lat, st.lon)) : null,
+      st ? soft('nws', nws.get(st.lat, st.lon)) : null,
     ]);
     if (!data) return null;
     const now = nowSecs();
@@ -125,7 +130,7 @@ function createBoard({
       rows,
       ticker,
       wx,
-      warn: null,
+      warn: pickWarn(nwsAlerts, now),
       radar: { on: false, frames: [], ft: [], clock: null, split: false },
     };
   }

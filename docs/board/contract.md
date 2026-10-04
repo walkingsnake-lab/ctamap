@@ -154,7 +154,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 
 When `warn` is non-null, the board replaces `word` with the warning tag.
 
-From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at the station's coordinates: `temp` is `current.temperature_2m` rounded, `hi`/`lo` the day's max/min. WMO `weather_code` → `icon` / `word`: 0–1 `sun` SUNNY or `moon` CLEAR (by `is_day`); 2 `pcloudy_day`/`pcloudy_night` PT CLOUDY; 3 `cloudy` CLOUDY; 45, 48 `fog` FOG; 51–55, 61–65, 80–82 `rain` RAIN; 56–57, 66–67 `ice` FRZ RAIN; 71–77, 85–86 `snow` SNOW; 95–99 `storm` STORMS; anything else `cloudy` CLOUDY. `warn` stays `null` until NWS is wired up (needs a recorded warning).
+From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at the station's coordinates: `temp` is `current.temperature_2m` rounded, `hi`/`lo` the day's max/min. WMO `weather_code` → `icon` / `word`: 0–1 `sun` SUNNY or `moon` CLEAR (by `is_day`); 2 `pcloudy_day`/`pcloudy_night` PT CLOUDY; 3 `cloudy` CLOUDY; 45, 48 `fog` FOG; 51–55, 61–65, 80–82 `rain` RAIN; 56–57, 66–67 `ice` FRZ RAIN; 71–77, 85–86 `snow` SNOW; 95–99 `storm` STORMS; anything else `cloudy` CLOUDY. 
 
 #### Warning (`warn`)
 
@@ -165,6 +165,8 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 - `kind`: `svr` (severe thunderstorm, bolt) or `tor` (tornado, funnel).
 - `lvl`: `watch` or `warning`.
 - If several are active, the server sends the most severe: tornado warning > severe warning > tornado watch > severe watch.
+- Source: `api.weather.gov/alerts/active?point=<station lat,lon>` (`server/board/nws.js`), every 90 s per location while a board is asking. Only `Tornado Warning`, `Severe Thunderstorm Warning`, `Tornado Watch`, `Severe Thunderstorm Watch` count.
+- **Ignored:** `status` other than `Actual`, `messageType` `Cancel`, VTEC action `CAN` or `EXP` (NWS sends "the warning has expired" statements under the warning's own event name and keeps them in `active` until they expire; fixture `fixtures/nws/svr-warning-expired-2026-10-03-jax.json`), and alerts before `onset` or after `ends` (falling back to `effective`/`expires`). Timing is checked on every update, so a warning drops off on time between fetches.
 
 #### Radar (`radar`)
 

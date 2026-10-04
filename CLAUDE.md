@@ -117,7 +117,7 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 - Board state (per-board config, screen/brightness overrides, version counter) is a JSON file on a Fly volume mounted at **`/data`**, never inside the app directory: the static file fallback in `server.js` serves any file under it. Write atomically (temp file + rename).
 - Key state by board ID, even with one board.
 - Locally, set `BOARD_STATE_DIR` to any folder (or let it fall back to a temp dir). The board router is `server/board/index.js`; state is `server/board/state.js`.
-- Arrivals pipeline: `tracker.js` (Train Tracker cache/poller) → `arrivals.js` (`normalize` raw JSON, `format` into rows/ticker, `chooseView` for the chronological overflow view) → `/board/update` in `index.js`. Destination short names: `destinations.js`. CTA times: `time.js`. Weather row and auto brightness: `weather.js` (Open-Meteo).
+- Arrivals pipeline: `tracker.js` (Train Tracker cache/poller) → `arrivals.js` (`normalize` raw JSON, `format` into rows/ticker, `chooseView` for the chronological overflow view) → `/board/update` in `index.js`. Destination short names: `destinations.js`. CTA times: `time.js`. Weather row and auto brightness: `weather.js` (Open-Meteo); warnings: `nws.js`; both use `location-poller.js`.
 - Secrets are Fly secrets: `CTA_KEY` (Train Tracker), `BOARD_TOKEN`, `BOARD_CONTROL_PATH`. Never commit keys or put them in fixtures (strip `key=` from recorded URLs).
 
 ### Verification

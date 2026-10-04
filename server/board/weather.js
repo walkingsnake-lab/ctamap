@@ -3,7 +3,7 @@
 // the weather row (`wx`) and auto brightness from sunrise/sunset.
 // Rules: docs/board/design-spec.md §4–5, contract "Weather row".
 
-const https = require('https');
+const { createLocationPoller, fetchJson } = require('./location-poller');
 
 const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast';
 const NIGHT_BRIGHT = 40; // % overnight (spec §4)
@@ -61,75 +61,9 @@ function autoBright(w, now) {
   return now >= w.sunrise && now < w.sunset ? 100 : NIGHT_BRIGHT;
 }
 
-function fetchJson(u, timeout = 10000) {
-  return new Promise((resolve, reject) => {
-    const req = https.get(u, { timeout, headers: { 'User-Agent': 'ctamap-board' } }, (res) => {
-      const chunks = [];
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => {
-        if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
-        try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); } catch (e) { reject(e); }
-      });
-    });
-    req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', reject);
-  });
-}
-
-// Per-location cache, polled every `interval` s while a board wants it
-// (same pattern as tracker.js). Keeps the last good data.
-function createWeather({
-  fetch = (lat, lon) => fetchJson(url(lat, lon)),
-  interval = 600, idle = 300, forget = 3600, tick = 15000,
-  now = () => Date.now() / 1000,
-  log = console,
-} = {}) {
-  const cache = new Map(); // "lat,lon" -> { lat, lon, data, fetchedAt, wantedAt, inflight }
-  let timer = null;
-
-  function refresh(e) {
-    if (e.inflight) return e.inflight;
-    e.inflight = (async () => {
-      try {
-        e.data = parse(await fetch(e.lat, e.lon));
-        e.fetchedAt = now();
-      } catch (err) {
-        log.error(`[board] weather ${e.lat},${e.lon} failed: ${err.message}`);
-      } finally {
-        e.inflight = null;
-      }
-    })();
-    return e.inflight;
-  }
-
-  function pass() {
-    const t = now();
-    for (const [k, e] of cache) {
-      if (t - e.wantedAt > forget) { cache.delete(k); continue; }
-      if (t - e.wantedAt <= idle && t - e.fetchedAt >= interval) refresh(e);
-    }
-  }
-
-  return {
-    // Latest parsed weather for a location, or null. Waits briefly on first use.
-    async get(lat, lon, { wait = 3000 } = {}) {
-      const k = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-      if (!cache.has(k)) cache.set(k, { lat, lon, data: null, fetchedAt: 0, wantedAt: 0, inflight: null });
-      const e = cache.get(k);
-      e.wantedAt = now();
-      if (!e.data) await Promise.race([refresh(e), new Promise((r) => setTimeout(r, wait))]);
-      return e.data;
-    },
-    start() {
-      if (!timer) {
-        timer = setInterval(() => { try { pass(); } catch (err) { log.error('[board] weather pass failed:', err); } }, tick);
-        timer.unref();
-      }
-      return this;
-    },
-    stop() { clearInterval(timer); timer = null; },
-    pass,
-  };
+// Open-Meteo per location, every 10 min while a board is asking.
+function createWeather({ fetch = (lat, lon) => fetchJson(url(lat, lon)), interval = 600, ...opts } = {}) {
+  return createLocationPoller({ name: 'weather', fetch, parse, interval, ...opts });
 }
 
 module.exports = { url, parse, condition, toWx, autoBright, createWeather, NIGHT_BRIGHT };

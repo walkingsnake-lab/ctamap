@@ -19,6 +19,7 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
 - `open-meteo/` — Open-Meteo forecasts for a station's coordinates (`weather.js` `url()`).
   - `morse-2026-10-04-1045.json`: clear (code 0), day, 63.3°F, hi 68.9 / lo 51.0.
 - `nws/` — NWS `alerts/active?point=` responses.
-  - `morse-2026-10-04-none.json`: no active alerts. Still needed: a real warning/watch (`api.weather.gov/alerts?event=...` returns the past week).
+  - `morse-2026-10-04-none.json`: no active alerts.
+  - `svr-warning-expired-2026-10-03-jax.json`: from `alerts?event=Severe Thunderstorm Warning&limit=1` (past week). A Severe Thunderstorm Warning **expiration** statement (VTEC `/O.EXP./`, `ends` before `sent`), NWS Jacksonville. Tests derive in-effect warnings and watches from it.
 
 Never record a URL with `key=` in it here.

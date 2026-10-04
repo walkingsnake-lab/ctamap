@@ -14,7 +14,7 @@ const quiet = { warn() {}, error() {} };
 // Spin up a server that routes /board/* the same way server.js does.
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), ...opts });
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), ...opts });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -336,5 +336,21 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   w.sunset = now - 1;
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.bright, 40);
+  assert.equal(b.warn, null);
+  await s.close();
+});
+
+test('update: an NWS warning in effect is sent as warn, even with the weather row off', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const iso = (t) => new Date(t * 1000).toISOString();
+  const nwsJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'nws', 'svr-warning-expired-2026-10-03-jax.json'), 'utf8'));
+  const f = nwsJson.features[0].properties;
+  Object.assign(f, { event: 'Tornado Warning', onset: iso(now - 60), ends: iso(now + 600), expires: iso(now + 600) });
+  f.parameters.VTEC = ['/O.NEW.KLOT.TO.W.0001.000000T0000Z-000000T0000Z/'];
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), nws: fakeWeather(require('./nws').parse(nwsJson)) });
+  s.store.update('home', { showWeather: false });
+  const b = (await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).body;
+  assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' });
+  assert.equal(b.wx, null);
   await s.close();
 });
