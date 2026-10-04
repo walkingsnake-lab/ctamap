@@ -51,4 +51,22 @@ function hasGlyph(fontName, cp) {
   return getFont(fontName).glyphs.has(cp);
 }
 
-module.exports = { measure, fit, ligatures, hasGlyph, getFont };
+// All board fonts in the compact form draw.js uses (and the simulator
+// downloads): { name: { [codepoint]: [dw, w, h, xoff, yoff, ...rowBits] } }.
+let packed = null;
+function packFonts() {
+  if (packed) return packed;
+  packed = {};
+  for (const name of Object.keys(FILES)) {
+    const out = {};
+    for (const [cp, g] of getFont(name).glyphs) {
+      const [w, h, xo, yo] = g.bbx;
+      const rows = g.rows.map((row) => row.slice(0, w).reduce((acc, b) => (acc << 1) | (b ? 1 : 0), 0));
+      out[cp] = [g.dw, w, h, xo, yo, ...rows];
+    }
+    packed[name] = out;
+  }
+  return packed;
+}
+
+module.exports = { measure, fit, ligatures, hasGlyph, getFont, packFonts };

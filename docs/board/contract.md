@@ -99,7 +99,7 @@ Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 #### Row order and fitting (server)
 - With no `rows` list in the board config, rows are ordered by line (`RD BL BR GR OR PR PK YL`), then Train Tracker direction (`trDr`), then name. With a list, the list is the order and the filter; destinations CTA doesn't normally use are appended after it.
 - Rows past the cap for the header/weather toggles are dropped from the end. The ticker uses the same filter but not the cap.
-- Transit labels are fitted per row so they end at least 3px before the times at their widest before the next update (digits only shrink as times count down, but the first time may turn into `DUE`). In the rare `DUE` + two 2-digit case, `COTTAGE`/`KIMBALL` lose a letter.
+- Times are drawn 3px apart, tightening to 2px when the label would otherwise come within 3px of them. Transit labels are fitted per row against the 2px spacing at the times' widest before the next update (digits only shrink as times count down, but the first time may turn into `DUE`), so 7-letter names like `KIMBALL` and `COTTAGE` always fit.
 - Ticker destinations are fitted to 32px of 5x7 (`Jeff Pk` is exactly 32).
 
 #### Line codes

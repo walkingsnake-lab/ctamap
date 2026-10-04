@@ -9,8 +9,10 @@ const { measure, fit, ligatures } = require('./fonts');
 // Transit row geometry (x positions on the 64px panel).
 const LABEL_X = 5;       // after the 3px color block + 2px gap
 const RIGHT_X = 63;      // times are right-aligned to the last column
-const TIME_GAP = 3;      // px between arrival times
 const LABEL_GAP = 3;     // min px between label and times
+// Times are 3px apart, tightening to 2px when a row is full (draw.js does the
+// same), so labels are fitted against the 2px spacing.
+const MIN_TIME_GAP = 2;
 const MAX_TIMES = 3;
 
 // Ticker geometry: destination starts 2px into the fill (x=7); minutes and
@@ -30,19 +32,16 @@ function maxRows(showHeader, showWeather) {
 }
 
 // What the board will draw for a time (contract: DUE at <= 1 min).
-function timeText(t, now) {
-  const min = Math.floor((t - now) / 60);
-  return min <= 1 ? 'DUE' : String(min);
-}
+const { timeText } = require('./draw');
 
 // Widest the times group can get before the next update: digits only shrink
 // as times count down, but the first time may turn into DUE.
-function worstTimesWidth(times, now, horizon = 60) {
+function worstTimesWidth(times, now, horizon = 60, gap = MIN_TIME_GAP) {
   let w = 0;
   times.forEach((t, i) => {
     let txt = timeText(t, now);
     if (i === 0 && timeText(t, now + horizon) === 'DUE') txt = 'DUE';
-    w += measure('small', txt) + (i ? TIME_GAP : 0);
+    w += measure('small', txt) + (i ? gap : 0);
   });
   return w;
 }

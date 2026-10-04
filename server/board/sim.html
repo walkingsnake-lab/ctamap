@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Board Simulator</title>
 <style>
-  :root { color-scheme: dark; --bg: #0b0b0b; --fg: #d8d8d8; --muted: #8f8f8f; --line: #262626; }
+  :root { color-scheme: dark; --bg: #0b0b0b; --fg: #d8d8d8; --muted: #8f8f8f; --line: #262626; --accent: #ffb000; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   main { max-width: 1100px; margin: 0 auto; padding: 16px; }
@@ -13,7 +13,9 @@
   .screens { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
   figure { margin: 0; }
   figcaption { color: var(--muted); font-size: 12px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; }
-  img { width: 100%; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 6px; background: #080808; display: block; }
+  figure.active figcaption span:first-child { color: var(--accent); }
+  canvas { width: 100%; aspect-ratio: 2 / 1; display: block; border: 1px solid var(--line); border-radius: 6px; background: #080808; }
+  figure.active canvas { border-color: #4a3a10; }
   .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 16px 0; color: var(--muted); font-size: 12px; }
   .bar b { color: var(--fg); font-weight: 600; }
   .err { color: #ff6b6b; }
@@ -38,13 +40,13 @@
     <span class="note" id="previewNote"></span>
   </div>
   <div class="screens">
-    <figure>
+    <figure id="fig-transit">
       <figcaption><span>Transit</span></figcaption>
-      <img id="transit" alt="Transit screen">
+      <canvas id="transit" width="640" height="320" aria-label="Transit screen"></canvas>
     </figure>
-    <figure>
+    <figure id="fig-ticker">
       <figcaption><span>Ticker</span><span id="pageState"></span></figcaption>
-      <img id="ticker" alt="Ticker screen">
+      <canvas id="ticker" width="640" height="320" aria-label="Ticker screen"></canvas>
     </figure>
   </div>
   <div class="bar">
@@ -61,23 +63,124 @@
     <pre id="json">…</pre>
   </details>
 </main>
+<script src="draw.js"></script>
 <script>
+(async () => {
+  const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
   const board = params.get('b') || 'home';
-  document.getElementById('board').textContent = board;
-  const $ = (id) => document.getElementById(id);
-  let page = 0, pages = 1, blink = false;
-  let boardMapid = null;              // the board's configured station
-  let preview = params.get('mapid');  // station being previewed, if different
+  $('board').textContent = board;
+  const setStatus = (msg) => { $('status').textContent = msg || ''; $('status').className = msg ? 'err' : ''; };
 
+  // ---- draw.js, bound to the board's fonts and icons ----
+  const assets = await fetch('sim-assets.json').then((r) => r.json());
+  const D = BoardDraw.create(assets);
+
+  // ---- LED canvas: 64x32 pixels scaled up, with a dot grille on top ----
+  function ledCanvas(canvas) {
+    const S = canvas.width / 64;
+    const ctx = canvas.getContext('2d');
+    const small = new OffscreenCanvas(64, 32);
+    const sctx = small.getContext('2d');
+    const img = sctx.createImageData(64, 32);
+    // Grille: dark board with round holes; unlit LEDs show as near-black dots.
+    const grille = new OffscreenCanvas(canvas.width, canvas.height);
+    const g = grille.getContext('2d');
+    g.fillStyle = '#080808';
+    g.fillRect(0, 0, grille.width, grille.height);
+    g.globalCompositeOperation = 'destination-out';
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+      g.beginPath(); g.arc(x * S + S / 2, y * S + S / 2, S * 0.42, 0, Math.PI * 2); g.fill();
+    }
+    return (frame) => {
+      for (let i = 0, j = 0; i < 64 * 32; i++, j += 3) {
+        const r = frame.px[j], gg = frame.px[j + 1], b = frame.px[j + 2];
+        const lit = r || gg || b;
+        img.data[i * 4] = lit ? r : 12;
+        img.data[i * 4 + 1] = lit ? gg : 12;
+        img.data[i * 4 + 2] = lit ? b : 12;
+        img.data[i * 4 + 3] = 255;
+      }
+      sctx.putImageData(img, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(small, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(grille, 0, 0);
+    };
+  }
+  const paintTransit = ledCanvas($('transit'));
+  const paintTicker = ledCanvas($('ticker'));
+
+  // ---- payload, with the board's clock sync (now = server now + elapsed) ----
+  let p = null, clockOffset = 0;
+  const now = () => Date.now() / 1000 + clockOffset;
+
+  let boardMapid = null;
+  let preview = params.get('mapid');
   const previewing = () => preview && preview !== boardMapid;
-  const withPreview = (q) => { if (previewing()) q.set('mapid', preview); return q; };
+  const query = () => { const q = new URLSearchParams({ b: board }); if (previewing()) q.set('mapid', preview); return q; };
 
-  function img(screen, extra) {
-    const q = withPreview(new URLSearchParams({ b: board, screen, scale: '10', _: Date.now(), ...extra }));
-    return 'sim.png?' + q;
+  async function poll() {
+    if ($('pause').checked) return;
+    try {
+      const r = await fetch('api/update?' + query(), { cache: 'no-store' });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.err || r.status);
+      p = body;
+      clockOffset = p.now - Date.now() / 1000;
+      $('json').textContent = JSON.stringify(p, null, 2);
+      $('screen').textContent = p.screen;
+      $('v').textContent = p.v;
+      $('age').textContent = p.age + ' s';
+      $('bright').textContent = p.bright;
+      $('fig-transit').classList.toggle('active', p.screen === 'transit');
+      $('fig-ticker').classList.toggle('active', p.screen === 'ticker');
+      setStatus('');
+    } catch (e) {
+      setStatus('update failed: ' + e.message);
+    }
   }
 
+  // ---- animation state, as the board keeps it ----
+  const prevText = {};          // slot -> last drawn time text
+  const rolls = {};             // slot -> { from, start }
+  let page = 0, pageStart = performance.now();
+
+  function frame(t) {
+    if (!p || $('pause').checked) return;
+    const n = now();
+
+    // Transit: start a roll whenever a slot's text changes.
+    const texts = D.transitTexts(p, n);
+    for (const [k, txt] of Object.entries(texts)) {
+      if (prevText[k] !== undefined && prevText[k] !== txt) rolls[k] = { from: prevText[k], start: t };
+      prevText[k] = txt;
+    }
+    const active = {};
+    for (const [k, r] of Object.entries(rolls)) {
+      const prog = (t - r.start) / D.ROLL_MS;
+      if (prog >= 1 || !(k in texts)) delete rolls[k];
+      else active[k] = { from: r.from, p: prog };
+    }
+    const blink = Math.floor(t / D.BLINK_MS) % 2 === 1;
+    paintTransit(D.render(p, { screen: 'transit', now: n, blink, rolls: active }));
+
+    // Ticker: hold each page, then slide up to the next, looping.
+    const pages = D.tickerPages(p, n);
+    if (page >= pages) page = 0;
+    let since = t - pageStart;
+    if (since >= D.PAGE_HOLD_MS + D.SLIDE_MS) { page = (page + 1) % pages; pageStart = t; since = 0; }
+    const slide = pages > 1 && since > D.PAGE_HOLD_MS ? (since - D.PAGE_HOLD_MS) / D.SLIDE_MS : 0;
+    paintTicker(D.render(p, { screen: 'ticker', now: n, page, slide }));
+    $('pageState').textContent = `page ${page + 1} of ${pages}`;
+  }
+
+  let last = 0;
+  function loop(t) {
+    if (t - last >= 33) { last = t; try { frame(t); } catch (e) { setStatus('draw failed: ' + e.message); } }
+    requestAnimationFrame(loop);
+  }
+
+  // ---- station picker ----
   function syncPicker() {
     $('station').value = preview || boardMapid || '';
     $('apply').disabled = !previewing();
@@ -85,6 +188,12 @@
     const q = new URLSearchParams(location.search);
     if (previewing()) q.set('mapid', preview); else q.delete('mapid');
     history.replaceState(null, '', '?' + q);
+  }
+
+  function resetAnimation() {
+    for (const k of Object.keys(prevText)) delete prevText[k];
+    for (const k of Object.keys(rolls)) delete rolls[k];
+    page = 0; pageStart = performance.now();
   }
 
   async function loadStations() {
@@ -99,57 +208,25 @@
     syncPicker();
   }
 
-  function refreshAll() { page = 0; poll(); drawTransit(); drawTicker(); }
-
-  $('station').addEventListener('change', (e) => { preview = e.target.value; syncPicker(); refreshAll(); });
+  $('station').addEventListener('change', (e) => { preview = e.target.value; syncPicker(); resetAnimation(); p = null; poll(); });
   $('apply').addEventListener('click', async () => {
     $('apply').disabled = true;
     const r = await fetch('api/state?b=' + encodeURIComponent(board), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ station: { mapid: preview } }),
     });
-    if (r.ok) { boardMapid = preview; syncPicker(); refreshAll(); }
-    else { $('status').textContent = 'could not set station'; $('status').className = 'err'; syncPicker(); }
+    if (r.ok) { boardMapid = preview; syncPicker(); poll(); }
+    else { setStatus('could not set station'); syncPicker(); }
   });
 
-  async function poll() {
-    if ($('pause').checked) return;
-    try {
-      const r = await fetch('api/update?' + withPreview(new URLSearchParams({ b: board })), { cache: 'no-store' });
-      const p = await r.json();
-      if (!r.ok) throw new Error(p.err || r.status);
-      $('json').textContent = JSON.stringify(p, null, 2);
-      $('screen').textContent = p.screen;
-      $('v').textContent = p.v;
-      $('age').textContent = p.age + ' s';
-      $('bright').textContent = p.bright;
-      pages = Math.max(1, Math.ceil((p.ticker || []).length / 2));
-      $('status').textContent = '';
-      $('status').className = '';
-    } catch (e) {
-      $('status').textContent = 'update failed: ' + e.message;
-      $('status').className = 'err';
-    }
-  }
-
-  function drawTransit() {
-    if ($('pause').checked) return;
-    blink = !blink;
-    $('transit').src = img('transit', blink ? { blink: '1' } : {});
-  }
-
-  function drawTicker() {
-    if ($('pause').checked) return;
-    $('ticker').src = img('ticker', { page: String(page) });
-    $('pageState').textContent = 'page ' + (page + 1) + ' of ' + pages;
-    page = (page + 1) % pages;
-  }
-
-  loadStations().catch((e) => { $('status').textContent = 'stations failed: ' + e.message; $('status').className = 'err'; });
-  poll(); drawTransit(); drawTicker();
+  loadStations().catch((e) => setStatus('stations failed: ' + e.message));
+  await poll();
   setInterval(poll, 5000);
-  setInterval(drawTransit, 1000);
-  setInterval(drawTicker, 4000);
+  requestAnimationFrame(loop);
+})().catch((e) => {
+  document.getElementById('status').textContent = 'simulator failed: ' + e.message;
+  document.getElementById('status').className = 'err';
+});
 </script>
 </body>
 </html>

@@ -14,6 +14,7 @@ const SHORT_DEST = {
   '54th/Cermak': '54th',
   '95th/Dan Ryan': '95th',
   'Ashland/63rd': '63rd',
+  '63rd Street': '63rd',  // what Train Tracker actually sends for Green Line trains to Ashland/63rd
   'Harlem/Lake': 'Harlem',
   'Dempster-Skokie': 'Skokie',
   'UIC-Halsted': 'UIC',

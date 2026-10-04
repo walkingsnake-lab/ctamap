@@ -235,3 +235,15 @@ test('simulator: station list and previewing another station without changing th
   assert.equal(png.status, 200);
   await s.close();
 });
+
+test('simulator serves draw.js and the assets it runs on', async () => {
+  const s = await serve({ tracker: fakeTracker(null) });
+  const js = await fetch(`http://127.0.0.1:${s.port}/board/secret123/draw.js`);
+  assert.equal(js.headers.get('content-type'), 'application/javascript');
+  assert.match(await js.text(), /BoardDraw/);
+  const assets = await s.req('/board/secret123/sim-assets.json');
+  assert.ok(assets.body.fonts.small['65']); // 'A'
+  assert.ok(assets.body.icons.ICONS.sun);
+  assert.equal(assets.body.glyphs.CLOCK, 0xe006);
+  await s.close();
+});
