@@ -9,7 +9,7 @@ const PALETTE = {
   Y: '#ffc800', // sun
   M: '#e8dca0', // moon
   C: '#a0a0a0', // cloud
-  G: '#6a6a6a', // storm cloud (darker)
+  G: '#8f8f8f', // storm cloud
   B: '#1e90ff', // umbrella canopy
   H: '#8f8f8f', // umbrella handle
   I: '#9fe6ff', // icy canopy
@@ -41,11 +41,11 @@ const ICONS = {
     '...MMM..',
   ],
   pcloudy_day: [
-    '..Y.....',
-    'Y..YY...',
-    '..YYYY..',
-    '.YYYYCC.',
-    '..YYCCCC',
+    '..YY....',
+    '.YYYY...',
+    '.YYYY...',
+    '..YY.CC.',
+    '....CCCC',
     '..CCCCCC',
     '.CCCCCCC',
     '..CCCCC.',
@@ -101,14 +101,14 @@ const ICONS = {
     '........',
   ],
   storm: [
-    '...GG...',
+    '..GGGG..',
     '.GGGGGG.',
     'GGGGGGGG',
     '.GGGGGG.',
     '...LL...',
     '..LL....',
-    '.LLLL...',
-    '...L....',
+    '...LL...',
+    '..L.....',
   ],
   fog: [
     '........',
