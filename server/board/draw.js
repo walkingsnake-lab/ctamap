@@ -621,7 +621,7 @@
     return {
       Frame, LINE, DIGIT, C, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
       transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
-      ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 500,
+      ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
       // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.
       RADAR_FRAME_MS: 500, RADAR_HOLD_MS: 4000,
     };

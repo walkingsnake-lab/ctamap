@@ -165,7 +165,7 @@ class Board:
             ms = self.clock.ms()
 
         # Redraw: every ~33 ms while animating, otherwise 4x a second (alert
-        # blink is 500 ms; clocks change once a minute).
+        # blink is 1 s; clocks change once a minute).
         interval = 33 if self.player.busy(ms) else 250
         if self.last_draw < 0 or ms - self.last_draw >= interval:
             now = self.now(ms)
