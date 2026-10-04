@@ -106,3 +106,84 @@ test('a full row tightens the gaps between times to 2px instead of overlapping t
   assert.equal(count(roomy, draw.C.amber, 0, top, 32, top + 4), 0);
   assert.ok(count(roomy, draw.C.amber, 33, top, 43, top + 4) > 0); // DUE starts at 33
 });
+
+// ---- transit animator ----
+
+test('animator: a departing DUE fades out in place while the next time brightens; nothing rolls', () => {
+  // Times chosen so the 7 and 16 don't tick over during the 55 s below.
+  const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 20, NOW + 7 * 60 + 58, NOW + 16 * 60 + 58], s: [0, 0, 0], a: 0 }]);
+  const anim = draw.createTransitAnimator();
+  const first = anim.step(p, NOW, 0);
+  const [due, seven, sixteen] = first.rows[0].cells;
+  assert.equal(due.text, 'DUE');
+  // 55 s later the DUE train is gone from the live list (30 s grace).
+  const t = 1000;
+  const v = anim.step(p, NOW + 55, t);
+  const cells = v.rows[0].cells;
+  const leaving = cells.find((c) => c.id === due.id);
+  assert.ok(leaving && leaving.alpha === 1 && leaving.text === 'DUE', 'starts fading from full');
+  const mid = anim.step(p, NOW + 55, t + draw.FADE_MS / 2).rows[0].cells;
+  const half = mid.find((c) => c.id === due.id);
+  assert.ok(half.alpha > 0 && half.alpha < 1);
+  // The remaining times keep their identity and position: no roll, no jump.
+  const next = mid.find((c) => c.id === seven.id);
+  assert.equal(next.roll, null);
+  assert.equal(next.right, seven.right);
+  assert.notEqual(next.color, draw.C.amber);        // still easing toward amber
+  assert.notEqual(next.color, draw.C.dimAmber);
+  const done = anim.step(p, NOW + 55, t + draw.FADE_MS + 10).rows[0].cells;
+  assert.ok(!done.some((c) => c.id === due.id));
+  assert.equal(done.find((c) => c.id === seven.id).color, draw.C.amber);
+  assert.ok(done.some((c) => c.id === sixteen.id));
+});
+
+test('animator: a countdown change rolls the same arrival', () => {
+  const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(12)], s: [0], a: 0 }]);
+  const anim = draw.createTransitAnimator();
+  const a = anim.step(p, NOW, 0).rows[0].cells[0];
+  const b = anim.step(p, NOW + 60, 100).rows[0].cells[0];
+  assert.equal(a.id, b.id);
+  assert.equal(b.text, '11');
+  assert.deepEqual(b.roll, { from: '12', p: 0 });
+});
+
+test('animator: refreshed predictions keep identity (matched by time)', () => {
+  const anim = draw.createTransitAnimator();
+  const a = anim.step(payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5), min(12)], s: [0, 0], a: 0 }]), NOW, 0).rows[0].cells;
+  // New update: both trains slipped by 20 s.
+  const b = anim.step(payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5) + 20, min(12) + 20], s: [0, 0], a: 0 }]), NOW, 100).rows[0].cells;
+  assert.deepEqual(b.map((c) => c.id), a.map((c) => c.id));
+  assert.ok(b.every((c) => c.alpha === 1));
+});
+
+test('animator: a row whose last train leaves fades out, then the others slide to their new places', () => {
+  const rowsAt = (gone) => [
+    { ln: 'RD', lbl: 'HOWARD', t: [min(4)], s: [0], a: 0 },
+    { ln: 'RD', lbl: '95TH', t: gone ? [] : [NOW + 10], s: [0], a: 0 },
+    { ln: 'BR', lbl: 'KIMBALL', t: [min(9)], s: [0], a: 0 },
+  ].filter((r) => r.t.length);
+  const anim = draw.createTransitAnimator();
+  const v0 = anim.step(payload(rowsAt(false)), NOW, 0);
+  const kimball0 = v0.rows.find((r) => r.key === 'BR:KIMBALL').top;
+  const v1 = anim.step(payload(rowsAt(true)), NOW + 60, 1000);
+  assert.equal(v1.rows.find((r) => r.key === 'RD:95TH').alpha, 1);
+  const during = anim.step(payload(rowsAt(true)), NOW + 60, 1000 + draw.FADE_MS / 2);
+  assert.ok(during.rows.find((r) => r.key === 'RD:95TH').alpha < 1);
+  assert.equal(during.rows.find((r) => r.key === 'BR:KIMBALL').top, kimball0, 'others wait for the fade');
+  const after = anim.step(payload(rowsAt(true)), NOW + 60, 1000 + draw.FADE_MS + draw.MOVE_MS + 10);
+  assert.ok(!after.rows.some((r) => r.key === 'RD:95TH'));
+  assert.deepEqual(after.rows.map((r) => r.top), draw.rowTops(2, true, false));
+});
+
+test('animator frames render without errors and match the static frame when settled', () => {
+  const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(8)], s: [0, 1], a: 0 }]);
+  const anim = draw.createTransitAnimator();
+  anim.step(p, NOW, 0);
+  const view = anim.step(p, NOW, 5000);
+  assert.deepEqual(draw.renderTransit(p, { view }).px, draw.renderTransit(p).px);
+});
+
+test('ticker pacing is slow: long hold, gentle slide', () => {
+  assert.ok(draw.PAGE_HOLD_MS >= 8000);
+  assert.ok(draw.SLIDE_MS >= 1000);
+});

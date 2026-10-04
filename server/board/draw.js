@@ -207,22 +207,58 @@
       });
     }
 
-    function drawRow(f, r, top, now, blink, rolls) {
-      if (r.a && blink) {
-        icons.ALERT_BANG.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(i, top + j, 1, 1, LINE[r.ln]); }));
-      } else {
-        f.fill(0, top, 3, 5, LINE[r.ln]);
-      }
-      f.text('small', r.lbl, 5, top + 5, C.label);
+    // Lay out one row's times: right-aligned group, 3px gaps tightening to 2px
+    // when the row is full. Returns cells (right-to-left order not assumed).
+    function layoutCells(r, now) {
       const texts = r.t.map((t) => timeText(t, now));
       const widthAt = (gap) => texts.reduce((w, txt, i) => w + measure('small', txt) + (i ? gap : 0), 0);
       const labelEnd = 5 + measure('small', r.lbl) - 1;
       const gap = 63 - widthAt(TIME_GAP) + 1 - labelEnd - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
+      const cells = new Array(texts.length);
       let x = 63;
       for (let k = texts.length - 1; k >= 0; k--) {
-        const color = r.s && r.s[k] ? (k ? C.schDim : C.sch) : (k ? C.dimAmber : C.amber);
-        drawTimeCell(f, texts[k], x, top, color, rolls && rolls[slotKey(r, k)]);
+        const sch = r.s && r.s[k];
+        cells[k] = {
+          id: slotKey(r, k), t: r.t[k], text: texts[k], right: x, alpha: 1, roll: null,
+          color: sch ? (k ? C.schDim : C.sch) : (k ? C.dimAmber : C.amber),
+        };
         x -= measure('small', texts[k]) + gap;
+      }
+      return cells;
+    }
+
+    // The transit screen as data: what to draw where, before any animation.
+    // The animator (createTransitAnimator) adjusts positions, colors, and alphas.
+    function buildTransitView(p, now) {
+      const rows = liveRows(p, now);
+      const tops = rowTops(rows.length, !!p.header, !!p.wx);
+      return {
+        now,
+        header: p.header,
+        wx: p.wx,
+        warn: p.warn,
+        rows: rows.map((r, i) => ({
+          key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
+          cells: layoutCells(r, now),
+        })),
+      };
+    }
+
+    const fade = (color, alpha) => (alpha >= 1 ? color : scaleColor(color, Math.max(0, alpha)));
+
+    function drawViewRow(f, row, blink) {
+      const top = Math.round(row.top);
+      const line = fade(LINE[row.ln], row.alpha);
+      if (row.a && blink) {
+        icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(i, top + j, 1, 1, line); }));
+      } else {
+        f.fill(0, top, 3, 5, line);
+      }
+      f.text('small', row.lbl, 5, top + 5, fade(C.label, row.alpha));
+      for (const cell of row.cells) {
+        const a = cell.alpha * row.alpha;
+        if (a <= 0) continue;
+        drawTimeCell(f, cell.text, Math.round(cell.right), top, fade(cell.color, a), cell.roll);
       }
     }
 
@@ -236,21 +272,132 @@
       f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), top + 18, C.noTrains);
     }
 
-    // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}})
+    function drawTransitView(f, view, blink) {
+      if (!view.rows.length) {
+        drawOvernight(f, view, view.now);
+      } else {
+        if (view.header) drawHeader(f, view.header, view.now, C.band, C.grey);
+        f.withClip(0, view.header ? 7 : 0, 63, view.wx ? 21 : 31, () => {
+          for (const row of view.rows) drawViewRow(f, row, blink);
+        });
+      }
+      if (view.wx) drawWeather(f, view.wx, view.warn);
+    }
+
+    // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}}),
+    // view (a frame from createTransitAnimator; overrides the static layout)
     function renderTransit(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const f = newFrame();
-      const rows = liveRows(p, now);
-      if (!rows.length) {
-        drawOvernight(f, p, now);
-      } else {
-        if (p.header) drawHeader(f, p.header, now, C.band, C.grey);
-        const tops = rowTops(rows.length, !!p.header, !!p.wx);
-        rows.forEach((r, i) => drawRow(f, r, tops[i], now, !!o.blink, o.rolls));
+      let view = o.view;
+      if (!view) {
+        view = buildTransitView(p, now);
+        if (o.rolls) for (const row of view.rows) for (const c of row.cells) if (o.rolls[c.id]) c.roll = o.rolls[c.id];
       }
-      if (p.wx) drawWeather(f, p.wx, p.warn);
+      drawTransitView(f, view, !!o.blink);
       return f;
+    }
+
+    // ---- transit animation ----
+    // Keeps arrivals' identity across frames and updates (matched by time,
+    // within MATCH_S), so the board can animate what actually changed:
+    //   - a time's text changes  -> roll (per digit, or whole cell)
+    //   - an arrival leaves      -> fade out, then the rest settle
+    //   - an arrival appears     -> fade in
+    //   - a time becomes first   -> color eases from dim to bright
+    //   - a row leaves or joins  -> fade, then rows slide to their new places
+    const ROLL_MS = 400, FADE_MS = 700, MOVE_MS = 500, COLOR_MS = 700, MATCH_S = 90;
+    const lerp = (a, b, k) => a + (b - a) * k;
+    const lerpColor = (c1, c2, k) => {
+      if (k >= 1 || c1 === c2) return c2;
+      const a = hex(c1), b = hex(c2);
+      return '#' + a.map((v, i) => Math.round(lerp(v, b[i], k)).toString(16).padStart(2, '0')).join('');
+    };
+    const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    const tween = (from, to, start, dur, t) => (t <= start ? from : t >= start + dur ? to : lerp(from, to, easeInOut((t - start) / dur)));
+
+    function createTransitAnimator() {
+      let nextId = 1;
+      const rows = new Map(); // key -> row state
+
+      function matchCells(state, cells, t, isNewRow) {
+        const unmatched = state.cells.filter((c) => !c.leaving);
+        const used = new Set();
+        const out = [];
+        for (const c of cells) {
+          const m = unmatched.find((u) => !used.has(u) && Math.abs(u.t - c.t) <= MATCH_S);
+          if (m) {
+            used.add(m);
+            if (m.text !== c.text) m.roll = { from: m.text, start: t };
+            if (m.color !== c.color) { m.fromColor = m.shownColor || m.color; m.colorStart = t; }
+            if (m.right !== c.right) { m.fromRight = m.shownRight == null ? m.right : m.shownRight; m.moveStart = t; }
+            Object.assign(m, { t: c.t, text: c.text, color: c.color, right: c.right });
+            out.push(m);
+          } else {
+            // New arrivals fade in; a new row's arrivals come in with the row.
+            out.push({ ...c, id: nextId++, born: isNewRow ? null : t });
+          }
+        }
+        for (const u of unmatched) if (!used.has(u)) { u.leaving = t; out.push(u); }
+        for (const c of state.cells) if (c.leaving && c.leaving !== t && t - c.leaving < FADE_MS) out.push(c);
+        state.cells = out.filter((c, i) => out.indexOf(c) === i);
+      }
+
+      return {
+        // Returns the view to draw at animation time `t` (ms).
+        step(p, now, t) {
+          const target = buildTransitView(p, now);
+          const keys = new Set(target.rows.map((r) => r.key));
+          // Rows leaving: fade out where they are.
+          let leavingUntil = 0;
+          for (const [key, st] of rows) {
+            if (!keys.has(key) && !st.leaving) st.leaving = t;
+            if (st.leaving) {
+              if (t - st.leaving >= FADE_MS) rows.delete(key);
+              else leavingUntil = Math.max(leavingUntil, st.leaving + FADE_MS);
+            }
+          }
+          // Rows staying or joining: slide to their new places once any
+          // leaving row has faded.
+          for (const r of target.rows) {
+            let st = rows.get(r.key);
+            const isNewRow = !st || !!st.leaving;
+            if (isNewRow) {
+              st = { key: r.key, top: r.top, shownTop: r.top, born: rows.size ? t : null, cells: [] };
+              rows.set(r.key, st);
+            } else if (st.top !== r.top) {
+              st.fromTop = st.shownTop;
+              st.moveStart = Math.max(t, leavingUntil);
+              st.top = r.top;
+            }
+            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a });
+            matchCells(st, r.cells, t, isNewRow);
+          }
+
+          const view = { now, header: target.header, wx: target.wx, warn: target.warn, rows: [] };
+          if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
+          for (const st of rows.values()) {
+            st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
+            const alpha = st.leaving ? 1 - clamp01((t - st.leaving) / FADE_MS)
+              : st.born != null ? clamp01((t - Math.max(st.born, leavingUntil)) / FADE_MS) : 1;
+            const cells = st.cells.filter((c) => !c.leaving || t - c.leaving < FADE_MS).map((c) => {
+              c.shownRight = c.moveStart != null ? tween(c.fromRight, c.right, c.moveStart, MOVE_MS, t) : c.right;
+              c.shownColor = c.colorStart != null ? lerpColor(c.fromColor, c.color, easeInOut(clamp01((t - c.colorStart) / COLOR_MS))) : c.color;
+              const rollP = c.roll ? (t - c.roll.start) / ROLL_MS : 1;
+              if (rollP >= 1) c.roll = null;
+              return {
+                id: c.id, text: c.text, right: c.shownRight, color: c.shownColor,
+                alpha: c.leaving ? 1 - clamp01((t - c.leaving) / FADE_MS) : c.born != null ? clamp01((t - c.born) / FADE_MS) : 1,
+                roll: c.roll ? { from: c.roll.from, p: rollP } : null,
+              };
+            });
+            st.cells = st.cells.filter((c) => !c.leaving || t - c.leaving < FADE_MS);
+            view.rows.push({ key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, top: st.shownTop, alpha, cells });
+          }
+          return view;
+        },
+      };
     }
 
     function drawTickerItem(f, it, idx, top, now) {
@@ -323,8 +470,8 @@
 
     return {
       Frame, LINE, C, measure, clockText, rowTops, timeText, render, renderTransit, renderTicker,
-      transitTexts, tickerPages, applyBrightness,
-      ROLL_MS: 400, SLIDE_MS: 500, PAGE_HOLD_MS: 3500, BLINK_MS: 500,
+      transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
+      ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 500,
     };
   }
 

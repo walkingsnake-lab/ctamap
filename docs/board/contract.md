@@ -129,7 +129,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 
 - `min = floor((t - now) / 60)`
 - Show `DUE` (transit) / `Due` (ticker) when `min <= 1`.
-- Drop an arrival once `now > t + 30`; the list shifts and cells roll. **(decide)** whether the 30 s grace is right; CTA's `isApp` is not sent.
+- Drop an arrival once `now > t + 30`; its cell fades out and the list shifts (see `createTransitAnimator()` in `draw.js`). **(decide)** whether the 30 s grace is right; CTA's `isApp` is not sent.
 
 #### Weather row (`wx`)
 

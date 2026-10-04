@@ -121,6 +121,6 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 - Secrets are Fly secrets: `CTA_KEY` (Train Tracker), `BOARD_TOKEN`, `BOARD_CONTROL_PATH`. Never commit keys or put them in fixtures (strip `key=` from recorded URLs).
 
 ### Verification
-- The board's output can't be seen on hardware from here. `server/board/draw.js` is the reference renderer, including animations (digit roll, ticker slide, alert blink): it draws a payload exactly as the board should, runs in both Node and the browser simulator, and the CircuitPython code mirrors it. It has no dependencies; `render.js` binds it to the fonts and icons for Node. Layout and animation changes go there first, with tests in `render.test.js` / `draw.test.js`.
+- The board's output can't be seen on hardware from here. `server/board/draw.js` is the reference renderer, including animations (digit roll, transit fades and slides via `createTransitAnimator()`, ticker slide, alert blink): it draws a payload exactly as the board should, runs in both Node and the browser simulator, and the CircuitPython code mirrors it. It has no dependencies; `render.js` binds it to the fonts and icons for Node. Layout and animation changes go there first, with tests in `render.test.js` / `draw.test.js`.
 - Check layout changes visually: render fixtures with `render()` and `Frame.toPNG()` and look at the image, or open the live simulator at `/board/<BOARD_CONTROL_PATH>/sim`.
 - Board-side CircuitPython is flashed and tested on hardware by the owner; ask for serial logs rather than guessing.

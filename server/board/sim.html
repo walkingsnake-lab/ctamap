@@ -141,28 +141,17 @@
   }
 
   // ---- animation state, as the board keeps it ----
-  const prevText = {};          // slot -> last drawn time text
-  const rolls = {};             // slot -> { from, start }
+  let transitAnim = D.createTransitAnimator();
   let page = 0, pageStart = performance.now();
 
   function frame(t) {
     if (!p || $('pause').checked) return;
     const n = now();
 
-    // Transit: start a roll whenever a slot's text changes.
-    const texts = D.transitTexts(p, n);
-    for (const [k, txt] of Object.entries(texts)) {
-      if (prevText[k] !== undefined && prevText[k] !== txt) rolls[k] = { from: prevText[k], start: t };
-      prevText[k] = txt;
-    }
-    const active = {};
-    for (const [k, r] of Object.entries(rolls)) {
-      const prog = (t - r.start) / D.ROLL_MS;
-      if (prog >= 1 || !(k in texts)) delete rolls[k];
-      else active[k] = { from: r.from, p: prog };
-    }
+    // Transit: rolls, fades, and slides come from the animator.
+    const view = transitAnim.step(p, n, t);
     const blink = Math.floor(t / D.BLINK_MS) % 2 === 1;
-    paintTransit(D.render(p, { screen: 'transit', now: n, blink, rolls: active }));
+    paintTransit(D.render(p, { screen: 'transit', now: n, blink, view }));
 
     // Ticker: hold each page, then slide up to the next, looping.
     const pages = D.tickerPages(p, n);
@@ -191,8 +180,7 @@
   }
 
   function resetAnimation() {
-    for (const k of Object.keys(prevText)) delete prevText[k];
-    for (const k of Object.keys(rolls)) delete rolls[k];
+    transitAnim = D.createTransitAnimator();
     page = 0; pageStart = performance.now();
   }
 
