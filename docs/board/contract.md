@@ -82,12 +82,12 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `now` | int | Server epoch seconds. |
 | `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
 | `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. Until radar lands, `auto` resolves to `transit`. |
-| `bright` | int | Global brightness 0–100, already resolved (auto sunrise/sunset, fixed level, or 0 for off). Until weather lands, `auto` resolves to 100. |
+| `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (Open-Meteo times for the station; 100 until weather data arrives), or the fixed level, or 0 for off. |
 | `header` | string \| null | Station name for the transit header, or `null` when the header is off. Also used as the ticker header. |
 | `view` | string | Transit view: `dest` (one row per destination, up to 3 times) or `chrono` (one row per train, soonest first). Chosen by the server; see *Transit view* below. |
 | `rows` | array | Transit rows, already filtered and ordered. `dest`: **capped** to the max for the header/weather toggles (5/4/3/2). `chrono`: the cap **plus 2** extra trains; the board shows the first *cap* live rows. Empty array means no predictions: the board shows the overnight layout. |
 | `ticker` | array | Up to 6 individual arrivals in time order for the ticker. |
-| `wx` | object \| null | Weather row, or `null` when the weather row is off. |
+| `wx` | object \| null | Weather row, or `null` when the weather row is off or there's no weather data yet (the row cap then gives the space back to rows). |
 | `warn` | object \| null | Active NWS warning/watch (see below). Sent regardless of the weather-row toggle, since the radar screen uses it too. |
 | `radar` | object | Radar state (see below). |
 
@@ -108,6 +108,11 @@ Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 - `chrono` whenever the destination count exceeds the cap, `dest` otherwise, decided on every update. `CHRONO_HOLD` in `arrivals.js` (0 now) can add a hold before switching back; that state is kept in memory per board and station.
 - `chrono` rows each carry one time (`t` and `s` have one entry) and `rn`. Labels are fitted against the widest chrono time (`99m`).
 
+#### CTA alerts (server)
+- One poller (`server/board/cta-alerts.js`, every 3 min) fetches `alerts.aspx?activeonly=true&routeid=red,blue,brn,g,org,p,pink,y` (XML) for both the map's `/api/alerts` and the board. Every `<Service>` in `<ImpactedService>` is read; only `ServiceType` `R` (train routes) count, so a station listed first (43rd before Green Line) doesn't hide the line.
+- **Board rule:** a line's `a` is `1` when an alert covering it has `SeverityCSS` `major` or `minor`, or `MajorAlert` `1`. Planned work (`planned`), schedule changes, long-term closures and elevator outages (`special-note`) don't blink. Fixture: `fixtures/cta-alerts/2026-10-04-1057.xml` (7 alerts; only the Orange/Green minor delay blinks).
+- **Map:** unchanged filter (major, or an impact containing "delay"), now one entry per impacted line.
+
 #### Line codes
 Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`, `G`→`GR`, `Org`→`OR`, `P`→`PR`, `Pink`→`PK`, `Y`→`YL`. Short-name map keys are matched against `destNm` exactly as Train Tracker returns it (e.g. `O'Hare`, `Loop`); confirm each key against recorded fixtures.
 
@@ -119,7 +124,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `lbl` | Label, uppercase, fitted. |
 | `t` | Up to 3 arrival times (epoch), ascending. |
 | `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`), drawn grey instead of amber. |
-| `a` | `1` if the line has an active service-affecting CTA alert (block blinks to "!"). |
+| `a` | `1` if the line has an active **unplanned disruption** (block blinks to "!"); see *CTA alerts* below. |
 | `rn` | `chrono` only: Train Tracker run number (string). The board keys rows by it, so trains keep their identity when they swap order. |
 
 #### Ticker item (`ticker[]`)
@@ -148,6 +153,8 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `hi`, `lo` | Daily high/low °F. |
 
 When `warn` is non-null, the board replaces `word` with the warning tag.
+
+From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at the station's coordinates: `temp` is `current.temperature_2m` rounded, `hi`/`lo` the day's max/min. WMO `weather_code` → `icon` / `word`: 0–1 `sun` SUNNY or `moon` CLEAR (by `is_day`); 2 `pcloudy_day`/`pcloudy_night` PT CLOUDY; 3 `cloudy` CLOUDY; 45, 48 `fog` FOG; 51–55, 61–65, 80–82 `rain` RAIN; 56–57, 66–67 `ice` FRZ RAIN; 71–77, 85–86 `snow` SNOW; 95–99 `storm` STORMS; anything else `cloudy` CLOUDY. `warn` stays `null` until NWS is wired up (needs a recorded warning).
 
 #### Warning (`warn`)
 
@@ -259,7 +266,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 | Train Tracker `ttarrivals` | 30 s per unique `mapid` | Only for boards that polled in the last 2 min. One `mapid` call returns every line and direction at the station. |
 | CTA alerts | 3 min | Shared with the map's `/api/alerts`. |
 | NWS alerts | 90 s per location | `User-Agent` header required. |
-| Open-Meteo | 15 min per location | |
+| Open-Meteo | 10 min per location | Only while a board polled in the last 5 min; last good data kept. |
 | MRMS `lcref` via IEM | 5 min per location | Always runs, since it decides `radar.on`. |
 
 ---

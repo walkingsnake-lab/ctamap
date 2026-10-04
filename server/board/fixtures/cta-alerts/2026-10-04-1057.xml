@@ -1,0 +1,404 @@
+<CTAAlerts>
+<TimeStamp>20261004 10:57</TimeStamp>
+<ErrorCode>0</ErrorCode>
+<ErrorMessage/>
+<Alert>
+<AlertId>112148</AlertId>
+<Headline>State/Lake Elevated Station Temporary Closure</Headline>
+<ShortDescription>Effective, now, the State/Lake Loop Elevated station is closed for reconstruction into 2029. Please use adjacent stations at Clark/Lake or Washington/Wabash.</ShortDescription>
+<FullDescription>
+<![CDATA[ <p><strong>How does this affect my trip?</strong><br />
+Effective, Monday, January 5, 2026, the State/Lake Loop Elevated&nbsp;station will temporarily close.<br />
+<br />
+Please use the accessible Clark/Lake or Washington/Wabash&nbsp;stations, located within a few blocks of the State/Lake station. To&nbsp;transfer between the Red Line at Lake station and the Loop &lsquo;L&rsquo; lines,&nbsp;use Washington/Wabash.<br />
+<br />
+<strong>Why is service being changed?</strong><br />
+The new State/Lake elevated station is scheduled to open in 2029. It&nbsp;will replace one of the oldest stations on the CTA rail system with a&nbsp;modern facility designed to improve safety, accessibility, and comfort&nbsp;for all riders.</p>
+ ]]>
+</FullDescription>
+<SeverityScore>12</SeverityScore>
+<SeverityColor>000000</SeverityColor>
+<SeverityCSS>special-note</SeverityCSS>
+<Impact>Special Note</Impact>
+<EventStart>20260105</EventStart>
+<EventEnd/>
+<TBD>1</TBD>
+<MajorAlert>0</MajorAlert>
+<AlertURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=112148 ]]>
+</AlertURL>
+<ImpactedService>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Purple Line</ServiceName>
+<ServiceId>P</ServiceId>
+<ServiceBackColor>522398</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/purpleline/ ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Pink Line</ServiceName>
+<ServiceId>Pink</ServiceId>
+<ServiceBackColor>e27ea6</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/pinkline/ ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Green Line</ServiceName>
+<ServiceId>G</ServiceId>
+<ServiceBackColor>009b3a</ServiceBackColor>
+<ServiceTextColor>FFFFFF</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/greenline/ ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Brown Line</ServiceName>
+<ServiceId>Brn</ServiceId>
+<ServiceBackColor>62361b</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/brownline/ ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Orange Line</ServiceName>
+<ServiceId>Org</ServiceId>
+<ServiceBackColor>f9461c</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/orangeline/ ]]>
+</ServiceURL>
+</Service>
+</ImpactedService>
+<ttim>1</ttim>
+<GUID>98b85267-5863-4fd8-ab33-caa4f77edc38</GUID>
+</Alert>
+<Alert>
+<AlertId>116637</AlertId>
+<Headline>Temporary Schedule Change</Headline>
+<ShortDescription>A slightly modified schedule for the Blue Line O’Hare branch will be in effect during non-rush hours and weekends, due to construction. </ShortDescription>
+<FullDescription>
+<![CDATA[ <p>A slightly modified schedule for the Blue Line O&rsquo;Hare branch will be in effect during non-rush hours and weekends, due to construction.</p>
+
+<p>Scheduled frequency between trips may increase an average of 3-4 minutes during non-rush and weekend hours.</p>
+ ]]>
+</FullDescription>
+<SeverityScore>20</SeverityScore>
+<SeverityColor>000000</SeverityColor>
+<SeverityCSS>planned</SeverityCSS>
+<Impact>Service Change</Impact>
+<EventStart>20260810</EventStart>
+<EventEnd>20261009</EventEnd>
+<TBD>0</TBD>
+<MajorAlert>0</MajorAlert>
+<AlertURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=116637 ]]>
+</AlertURL>
+<ImpactedService>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Blue Line</ServiceName>
+<ServiceId>Blue</ServiceId>
+<ServiceBackColor>00a1de</ServiceBackColor>
+<ServiceTextColor>FFFFFF</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/blueline/ ]]>
+</ServiceURL>
+</Service>
+</ImpactedService>
+<ttim>0</ttim>
+<GUID>92af3734-9fdb-4a21-805c-01bfd3178237</GUID>
+</Alert>
+<Alert>
+<AlertId>117370</AlertId>
+<Headline>63rd-bound Trains Bypass 43rd Station</Headline>
+<ShortDescription>Ashland/63rd- and Cottage Grove-bound trains will not stop at the 43rd Green Line station.</ShortDescription>
+<FullDescription>
+<![CDATA[ <p><strong>How does this affect my trip?</strong><br />
+Ashland/63rd- and Cottage Grove-bound trains will not stop at the 43rd Green Line station.</p>
+
+<ul>
+	<li>For 63rd-bound service from this station, take a Harlem-bound train to Indiana and transfer to a 63rd-bound train.</li>
+	<li>For 63rd-bound service to this station, take a 63rd-bound train to 47th and transfer to a Harlem-bound train.</li>
+</ul>
+
+<p>Allow extra travel time.</p>
+
+<p><strong>Why is service being changed?</strong></p>
+
+<p>We are making improvements at the 43rd Green Line station.</p>
+ ]]>
+</FullDescription>
+<SeverityScore>35</SeverityScore>
+<SeverityColor>06c</SeverityColor>
+<SeverityCSS>planned</SeverityCSS>
+<Impact>Planned Work w/Station(s) Bypassed</Impact>
+<EventStart>20260928 04:00</EventStart>
+<EventEnd>20261016 04:00</EventEnd>
+<TBD>0</TBD>
+<MajorAlert>0</MajorAlert>
+<AlertURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=117370 ]]>
+</AlertURL>
+<ImpactedService>
+<Service>
+<ServiceType>T</ServiceType>
+<ServiceTypeDescription>Train Station</ServiceTypeDescription>
+<ServiceName>43rd</ServiceName>
+<ServiceId>41270</ServiceId>
+<ServiceBackColor>009b3a</ServiceBackColor>
+<ServiceTextColor>FFFFFF</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/station.aspx?StopId=4 ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Green Line</ServiceName>
+<ServiceId>G</ServiceId>
+<ServiceBackColor>009b3a</ServiceBackColor>
+<ServiceTextColor>FFFFFF</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/greenline/ ]]>
+</ServiceURL>
+</Service>
+</ImpactedService>
+<ttim>1</ttim>
+<GUID>d5dd2e1b-f96f-46ef-aeef-81d5a1e6305e</GUID>
+</Alert>
+<Alert>
+<AlertId>117753</AlertId>
+<Headline>Elevator at Chicago Temporarily Out-of-Service</Headline>
+<ShortDescription>The Kimball- and Linden-bound platform elevator at Chicago (Brown, Purple Lines) is temporarily out-of-service.</ShortDescription>
+<FullDescription>
+<![CDATA[ <p>The Kimball- and Linden-bound platform elevator at Chicago (Brown, Purple Lines) is temporarily out-of-service.</p>
+
+<p>Our crews are working to assess the repair time for this elevator&mdash;this alert will be updated with additional information if/when we can estimate its return to service.\</p>
+
+<p>Crews are working to return this elevator to service as quickly as possible.</p>
+
+<p><a href="http://www.transitchicago.com/elevatorescalatorupgrades/">Learn more about the work we do to maintain, repair and upgrade elevators.</a></p>
+ ]]>
+</FullDescription>
+<SeverityScore>5</SeverityScore>
+<SeverityColor>000000</SeverityColor>
+<SeverityCSS>special-note</SeverityCSS>
+<Impact>Elevator Status</Impact>
+<EventStart>20260928 18:14</EventStart>
+<EventEnd/>
+<TBD>1</TBD>
+<MajorAlert>0</MajorAlert>
+<AlertURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=117753 ]]>
+</AlertURL>
+<ImpactedService>
+<Service>
+<ServiceType>T</ServiceType>
+<ServiceTypeDescription>Train Station</ServiceTypeDescription>
+<ServiceName>Chicago</ServiceName>
+<ServiceId>40710</ServiceId>
+<ServiceBackColor>522398</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/station.aspx?StopId=37 ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Purple Line</ServiceName>
+<ServiceId>P</ServiceId>
+<ServiceBackColor>522398</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/purpleline/ ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Brown Line</ServiceName>
+<ServiceId>Brn</ServiceId>
+<ServiceBackColor>62361b</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/brownline/ ]]>
+</ServiceURL>
+</Service>
+</ImpactedService>
+<ttim>0</ttim>
+<GUID>f843d220-0aac-4311-ae88-eec66f0224a5</GUID>
+</Alert>
+<Alert>
+<AlertId>117894</AlertId>
+<Headline>Elevator at Central Temporarily Out-of-Service</Headline>
+<ShortDescription>The elevator at Central (Green Line) is temporarily out-of-service.</ShortDescription>
+<FullDescription>
+<![CDATA[ <p>The elevator at Central (Green Line) is temporarily out-of-service.</p>
+
+<p>Our crews are working to assess the repair time for this elevator&mdash;this alert will be updated with additional information if/when we can estimate its return to service.</p>
+
+<p>Crews are working to return this elevator to service as quickly as possible.</p>
+
+<p><a href="http://www.transitchicago.com/elevatorescalatorupgrades/">Learn more about the work we do to maintain, repair and upgrade elevators.</a></p>
+ ]]>
+</FullDescription>
+<SeverityScore>5</SeverityScore>
+<SeverityColor>000000</SeverityColor>
+<SeverityCSS>special-note</SeverityCSS>
+<Impact>Elevator Status</Impact>
+<EventStart>20261003 22:23</EventStart>
+<EventEnd/>
+<TBD>1</TBD>
+<MajorAlert>0</MajorAlert>
+<AlertURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=117894 ]]>
+</AlertURL>
+<ImpactedService>
+<Service>
+<ServiceType>T</ServiceType>
+<ServiceTypeDescription>Train Station</ServiceTypeDescription>
+<ServiceName>Central</ServiceName>
+<ServiceId>40280</ServiceId>
+<ServiceBackColor>009b3a</ServiceBackColor>
+<ServiceTextColor>FFFFFF</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/station.aspx?StopId=33 ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Green Line</ServiceName>
+<ServiceId>G</ServiceId>
+<ServiceBackColor>009b3a</ServiceBackColor>
+<ServiceTextColor>FFFFFF</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/greenline/ ]]>
+</ServiceURL>
+</Service>
+</ImpactedService>
+<ttim>0</ttim>
+<GUID>86b1f50b-b322-42cd-ba0d-484d42eea0a6</GUID>
+</Alert>
+<Alert>
+<AlertId>117901</AlertId>
+<Headline>Elevator at Chicago Temporarily Out-of-Service</Headline>
+<ShortDescription>The Howard-bound platform elevator at Chicago (Red Line) is temporarily out-of-service.</ShortDescription>
+<FullDescription>
+<![CDATA[ <p>The Howard-bound platform elevator at Chicago (Red Line) is temporarily out-of-service.</p>
+
+<p>Our crews are working to assess the repair time for this elevator&mdash;this alert will be updated with additional information if/when we can estimate its return to service.</p>
+
+<p>Crews are working to return this elevator to service as quickly as possible.</p>
+
+<p>&nbsp;</p>
+ ]]>
+</FullDescription>
+<SeverityScore>5</SeverityScore>
+<SeverityColor>000000</SeverityColor>
+<SeverityCSS>special-note</SeverityCSS>
+<Impact>Elevator Status</Impact>
+<EventStart>20261004 06:29</EventStart>
+<EventEnd/>
+<TBD>1</TBD>
+<MajorAlert>0</MajorAlert>
+<AlertURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=117901 ]]>
+</AlertURL>
+<ImpactedService>
+<Service>
+<ServiceType>T</ServiceType>
+<ServiceTypeDescription>Train Station</ServiceTypeDescription>
+<ServiceName>Chicago</ServiceName>
+<ServiceId>41450</ServiceId>
+<ServiceBackColor>c60c30</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/station.aspx?StopId=38 ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Red Line</ServiceName>
+<ServiceId>Red</ServiceId>
+<ServiceBackColor>c60c30</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/redline/ ]]>
+</ServiceURL>
+</Service>
+</ImpactedService>
+<ttim>0</ttim>
+<GUID>fd4edcf1-607f-46ba-812b-dc37065a1697</GUID>
+</Alert>
+<Alert>
+<AlertId>117906</AlertId>
+<Headline>Orange and Green Line Delays</Headline>
+<ShortDescription>Orange and Green Line trains are running with residual delays and congestion following an earlier signal problem. Service is resuming, allow extra time.</ShortDescription>
+<FullDescription>
+<![CDATA[ <p>Orange and Green Line trains are running with residual delays and congestion following an earlier signal problem.</p>
+
+<p>Some trains and platforms may be busier than usual as crews work to restore normal service.</p>
+
+<p>Trains are moving and normal service is being restored.</p>
+
+<p>Allow extra travel time.</p>
+ ]]>
+</FullDescription>
+<SeverityScore>40</SeverityScore>
+<SeverityColor>B45F04</SeverityColor>
+<SeverityCSS>minor</SeverityCSS>
+<Impact>Minor Delays</Impact>
+<EventStart>20261004 10:28</EventStart>
+<EventEnd/>
+<TBD>1</TBD>
+<MajorAlert>0</MajorAlert>
+<AlertURL>
+<![CDATA[ http://www.transitchicago.com/travel_information/alert_detail.aspx?AlertId=117906 ]]>
+</AlertURL>
+<ImpactedService>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Green Line</ServiceName>
+<ServiceId>G</ServiceId>
+<ServiceBackColor>009b3a</ServiceBackColor>
+<ServiceTextColor>FFFFFF</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/greenline/ ]]>
+</ServiceURL>
+</Service>
+<Service>
+<ServiceType>R</ServiceType>
+<ServiceTypeDescription>Train Route</ServiceTypeDescription>
+<ServiceName>Orange Line</ServiceName>
+<ServiceId>Org</ServiceId>
+<ServiceBackColor>f9461c</ServiceBackColor>
+<ServiceTextColor>ffffff</ServiceTextColor>
+<ServiceURL>
+<![CDATA[ http://www.transitchicago.com/orangeline/ ]]>
+</ServiceURL>
+</Service>
+</ImpactedService>
+<ttim>0</ttim>
+<GUID>d7e74408-35be-4c83-abd3-4e449c07a1bb</GUID>
+</Alert>
+</CTAAlerts>

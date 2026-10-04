@@ -70,7 +70,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 | Data | Source | Notes |
 |---|---|---|
 | Train arrivals | CTA Train Tracker API ([docs](https://www.transitchicago.com/developers/ttdocs/)) | Uses `mapid` (one call covers all lines and directions); `destNm`, `rn` (run number), `isApp` (Due), `arrT`. `isDly` intentionally **not** shown. `isSch` (schedule-based) and `isFlt` (possible fault) handling is open. |
-| CTA service alerts | CTA Customer Alerts API | Service-affecting only (no elevator outages); lines on screen only. Used **only to flag affected lines** (no alert text shown). |
+| CTA service alerts | CTA Customer Alerts API | **Unplanned disruptions only** (CTA severity `major`/`minor`): no planned work, schedule changes, long-term closures, or elevator outages; lines on screen only. Used **only to flag affected lines** (no alert text shown). |
 | Weather warnings/watches | NWS alerts for the configured point | Only severe thunderstorm and tornado warnings/watches. Shown as icons/tags only (no alert text). |
 | Radar | NOAA **MRMS** lowest composite reflectivity (`lcref`) via Iowa Environmental Mesonet | Palette-indexed PNG + `.wld`, 2-min updates, archive available. dBZ ≈ index × 0.5 − 32.5 (**verify**). Do **not** use the raw NEXRAD composite: it shows bird/insect returns on clear nights. |
 | Weather | Open-Meteo (no key) | Current temp, weather code, `is_day`, daily high/low, sunrise/sunset. |
@@ -167,6 +167,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
 
 ### CTA alerts
+- **Which alerts:** unplanned disruptions only (delays, service disruptions: CTA severity `major` or `minor`). A sample on Oct 4 had 7 active alerts (a 2029 station closure across 5 lines, a schedule change, a station bypass, elevators, and one Orange/Green delay); only the delay should blink, or the board would blink all the time.
 - Affected rows' color blocks **blink to a 1px "!"** in the line color (middle column of the 3x5 block: 3px stem, 1px gap, 1px dot; `ALERT_BANG` in `server/board/icons.js`). That's the whole indicator; no alert text is shown (details are on the phone).
 - CTA alerts are per line, so **every row of the affected line blinks, both directions**. Blinking only one direction would need parsing the alert text; not planned for v1.
 

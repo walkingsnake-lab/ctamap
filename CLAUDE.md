@@ -90,8 +90,8 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 - The map and the board share one process. Board failures must not take down the map: wrap every board poller and the radar pipeline in try/catch, log, and skip the cycle.
 
 ### Shared alerts
-- CTA alerts are fetched by one **background poller** (every 2–5 min) that both `/api/alerts` and the board read. Do not add a second alerts fetch.
-- Parse **every** `ImpactedService` in an alert (one alert can cover several lines). The map keeps its existing filter (major or delay); the board uses service-affecting alerts per line.
+- CTA alerts are fetched by one **background poller** (`server/board/cta-alerts.js`, every 3 min, created in `server.js` and passed to `createBoard`) that both `/api/alerts` and the board read. Do not add a second alerts fetch.
+- Parse **every** `ImpactedService` in an alert (one alert can cover several lines). The map keeps its existing filter (major or delay); the board blinks a line only for unplanned disruptions (`SeverityCSS` `major`/`minor`, or `MajorAlert`).
 
 ### Stack and dependencies
 - Plain Node `http`, no framework, same as the map.
@@ -117,7 +117,7 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 - Board state (per-board config, screen/brightness overrides, version counter) is a JSON file on a Fly volume mounted at **`/data`**, never inside the app directory: the static file fallback in `server.js` serves any file under it. Write atomically (temp file + rename).
 - Key state by board ID, even with one board.
 - Locally, set `BOARD_STATE_DIR` to any folder (or let it fall back to a temp dir). The board router is `server/board/index.js`; state is `server/board/state.js`.
-- Arrivals pipeline: `tracker.js` (Train Tracker cache/poller) → `arrivals.js` (`normalize` raw JSON, `format` into rows/ticker, `chooseView` for the chronological overflow view) → `/board/update` in `index.js`. Destination short names: `destinations.js`. CTA times: `time.js`.
+- Arrivals pipeline: `tracker.js` (Train Tracker cache/poller) → `arrivals.js` (`normalize` raw JSON, `format` into rows/ticker, `chooseView` for the chronological overflow view) → `/board/update` in `index.js`. Destination short names: `destinations.js`. CTA times: `time.js`. Weather row and auto brightness: `weather.js` (Open-Meteo).
 - Secrets are Fly secrets: `CTA_KEY` (Train Tracker), `BOARD_TOKEN`, `BOARD_CONTROL_PATH`. Never commit keys or put them in fixtures (strip `key=` from recorded URLs).
 
 ### Verification

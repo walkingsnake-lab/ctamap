@@ -7,6 +7,8 @@ const { createStore, ValidationError } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
+const { createWeather, toWx, autoBright } = require('./weather');
+const { boardAlertLines } = require('./cta-alerts');
 const fs = require('fs');
 const path = require('path');
 const { render, assets } = require('./render');
@@ -56,6 +58,8 @@ function createBoard({
   controlPath = process.env.BOARD_CONTROL_PATH || '',
   capture = require('./capture'),
   tracker = null,
+  weather = null,
+  alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
   stations = require('./stations.json'),
   log = console,
 } = {}) {
@@ -72,9 +76,10 @@ function createBoard({
     .sort((a, b) => a.desc.localeCompare(b.desc)));
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
   if (!tracker) tracker = createTracker({ log }).start();
+  if (!weather) weather = createWeather({ log }).start();
 
-  // 'auto' brightness is 100 until sunrise/sunset data lands (weather PR).
-  const resolveBright = (b) => (b === 'off' ? 0 : b === 'auto' ? 100 : b);
+  // 'auto' brightness follows sunrise/sunset (100 until weather data arrives).
+  const resolveBright = (b, w, now) => (b === 'off' ? 0 : b === 'auto' ? autoBright(w, now) : b);
   // 'auto' screen is transit until radar and its rain trigger land.
   const resolveScreen = (s) => (s === 'auto' ? 'transit' : s);
 
@@ -91,22 +96,30 @@ function createBoard({
       const st = stationById.get(previewMapid);
       board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
     }
-    const data = await tracker.get(board.station.mapid);
+    const st = stationById.get(board.station.mapid);
+    // Weather is a nice-to-have: a failure just leaves the row off.
+    const [data, w] = await Promise.all([
+      tracker.get(board.station.mapid),
+      st ? weather.get(st.lat, st.lon).catch((e) => { log.error('[board] weather:', e.message); return null; }) : null,
+    ]);
     if (!data) return null;
     const now = nowSecs();
-    // Weather isn't wired up yet; the row cap only reserves space for the
-    // weather row when there's weather to show.
-    const wx = null;
-    const cfg = { ...board, showWeather: board.showWeather && !!wx };
+    // The row cap only reserves space for the weather row when there's
+    // weather to show.
+    const wx = board.showWeather && w ? toWx(w) : null;
+    const cfg = { ...board, showWeather: !!wx };
+    let alertLines = new Set();
+    try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
+    catch (e) { log.error('[board] alerts:', e.message); }
     const viewKey = `${id}:${board.station.mapid}`;
-    const { view, viewState, rows, ticker } = format(data.arrivals, cfg, { now, alerts: new Set(), prevView: views.get(viewKey) });
+    const { view, viewState, rows, ticker } = format(data.arrivals, cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
       v: board.v,
       now,
       age: Math.max(0, Math.round(now - data.fetchedAt)),
       screen: resolveScreen(board.screen),
-      bright: resolveBright(board.bright),
+      bright: resolveBright(board.bright, w, now),
       header: board.showHeader ? board.station.name : null,
       view,
       rows,

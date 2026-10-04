@@ -14,7 +14,7 @@ const quiet = { warn() {}, error() {} };
 // Spin up a server that routes /board/* the same way server.js does.
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, ...opts });
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), ...opts });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -139,6 +139,11 @@ test('raw arrivals capture reports upstream failures as 502', async () => {
 
 const { normalize } = require('./arrivals');
 const morseJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
+
+function fakeWeather(data) {
+  const asked = [];
+  return { asked, get: async (lat, lon) => { asked.push([lat, lon]); return data; } };
+}
 
 function fakeTracker(data) {
   const asked = [];
@@ -294,5 +299,42 @@ test('changing the station resets the destination filter unless rows are sent to
   assert.deepEqual(s.store.get('home').rows, []);
   s.store.update('home', { station: { mapid: '40100' }, rows: ['RD:95th'] });
   assert.deepEqual(s.store.get('home').rows, ['RD:95th']);
+  await s.close();
+});
+
+// ---- weather and alerts in the update ----
+
+test('update: weather row, auto brightness, and alert flags', async () => {
+  const fx = (f) => path.join(__dirname, 'fixtures', f);
+  const { parse } = require('./weather');
+  const { parseAlerts } = require('./cta-alerts');
+  const now = Math.floor(Date.now() / 1000);
+  const json = JSON.parse(fs.readFileSync(fx('tt-arrivals/clark-lake-2026-10-03-2317.json'), 'utf8'));
+  const arrivals = normalize(json, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const w = { ...parse(JSON.parse(fs.readFileSync(fx('open-meteo/morse-2026-10-04-1045.json'), 'utf8'))), sunrise: now - 100, sunset: now + 100 };
+  const weather = fakeWeather(w);
+  const alerts = { get: () => ({ alerts: parseAlerts(fs.readFileSync(fx('cta-alerts/2026-10-04-1057.xml'), 'utf8')), fetchedAt: now }) };
+  const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }), weather, alerts });
+  s.store.update('home', { station: { mapid: '40380' } }); // Clark/Lake
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual(weather.asked.at(-1), [41.885737, -87.630886]); // the station's coordinates
+  assert.deepEqual(b.wx, { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 });
+  assert.equal(b.bright, 100);
+  // Header + weather leaves 2 rows, so Clark/Lake's 5 destinations go chronological.
+  assert.equal(b.view, 'chrono');
+  // Green has an unplanned delay; Blue only has a planned schedule change.
+  for (const r of b.rows) assert.equal(r.a, r.ln === 'GR' ? 1 : 0, `${r.ln} ${r.lbl}`);
+  assert.ok(b.ticker.every((x) => x.a === (x.ln === 'GR' || x.ln === 'OR' ? 1 : 0)));
+  // Weather row off: no wx, and the rows get the space back.
+  s.store.update('home', { showWeather: false });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.wx, null);
+  assert.equal(b.rows.filter((r) => r.t.length).length >= 4, true);
+  // Overnight: auto brightness dims.
+  w.sunset = now - 1;
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.bright, 40);
   await s.close();
 });
