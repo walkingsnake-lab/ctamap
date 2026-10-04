@@ -110,3 +110,27 @@ test('wrong methods get 405', async () => {
   assert.equal((await s.req('/board/secret123/api/state', { method: 'DELETE' })).status, 405);
   await s.close();
 });
+
+test('raw arrivals capture passes the upstream body through, behind the control path', async () => {
+  const calls = [];
+  const capture = {
+    rawArrivals: async (mapid) => { calls.push(mapid); return { status: 200, body: '{"ctatt":{"errCd":"0"}}' }; },
+  };
+  const s = await serve({ capture });
+  const r = await s.req('/board/secret123/api/raw/arrivals?mapid=40100');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { ctatt: { errCd: '0' } });
+  assert.deepEqual(calls, ['40100']);
+  assert.equal((await s.req('/board/secret123/api/raw/arrivals?mapid=99999')).status, 400);
+  assert.equal((await s.req('/board/wrong/api/raw/arrivals?mapid=40100')).status, 404);
+  assert.deepEqual(calls, ['40100']);
+  await s.close();
+});
+
+test('raw arrivals capture reports upstream failures as 502', async () => {
+  const s = await serve({ capture: { rawArrivals: async () => { throw new Error('timeout'); } } });
+  const r = await s.req('/board/secret123/api/raw/arrivals?mapid=40100');
+  assert.equal(r.status, 502);
+  assert.equal(r.body.err, 'upstream');
+  await s.close();
+});

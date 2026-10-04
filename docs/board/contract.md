@@ -187,6 +187,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/sim?b=<id>` | 64x32 canvas simulator rendering the live `/board/update` and radar frames. |
 | `GET /board/<secret>/api/state` | Full state JSON (all boards). |
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
+| `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 
 POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `screen`, and `bright`; anything else is a `400`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
 

@@ -43,6 +43,8 @@ function createBoard({
   store = createStore(),
   token = process.env.BOARD_TOKEN || '',
   controlPath = process.env.BOARD_CONTROL_PATH || '',
+  capture = require('./capture'),
+  stationIds = new Set(require('./stations.json').map((s) => s.mapid)),
   log = console,
 } = {}) {
   if (!token) log.warn('[board] BOARD_TOKEN not set; board endpoints are unauthenticated');
@@ -89,6 +91,23 @@ function createBoard({
           }
         }
         return send(res, 405, { err: 'method' });
+      }
+
+      // Raw Train Tracker response for recording fixtures.
+      if (sub === 'api/raw/arrivals') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const mapid = String(parsed.query.mapid || '');
+        if (!stationIds.has(mapid)) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${mapid}` });
+        let up;
+        try {
+          up = await capture.rawArrivals(mapid);
+        } catch (e) {
+          log.error('[board] capture failed:', e.message);
+          return send(res, 502, { err: 'upstream', detail: e.message });
+        }
+        res.writeHead(up.status === 200 ? 200 : 502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(up.body);
+        return;
       }
     }
 
