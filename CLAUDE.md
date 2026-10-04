@@ -8,7 +8,7 @@ This server also backs a **64x32 LED arrivals board** (Adafruit Matrix Portal M4
 
 ```bash
 npm start        # Node.js server on port 3000 (default)
-npm test         # board tests (node:test); script added with the first board code
+npm test         # board tests (node:test)
 ```
 
 Open `http://localhost:3000` in a browser.
@@ -99,9 +99,14 @@ The server fetches and formats everything for a 64x32 LED matrix board; the boar
 - Water masks are generated once per location by a script in `scripts/` and committed as files; no geo processing at runtime.
 
 ### Tests
-- Every board formatting rule gets a test using Node's built-in `node:test` (no test framework dependency). `npm test` runs `node --test server/board/`.
+- Every board formatting rule gets a test using Node's built-in `node:test` (no test framework dependency). `npm test` runs every `server/board/**/*.test.js`.
 - Tests run against **recorded fixtures** in `server/board/fixtures/` (real responses from Train Tracker, Bus Tracker, CTA alerts, NWS, Open-Meteo, MRMS frames). Tests never hit live APIs and never need API keys.
 - When you hit a new real-world case (unknown destination, short-turn, multi-line alert, storm), save the raw response as a fixture and add a test.
+
+### Fonts
+- Board fonts are generated: edit `scripts/build-fonts.js`, then run `npm run build-fonts` and `node scripts/preview-fonts.js`. Never hand-edit `server/board/fonts/*.bdf`.
+- Custom glyph codepoints live in `server/board/glyphs.js`. Measure and fit text with `server/board/fonts.js`; never estimate widths by character count.
+- Previews in `docs/board/previews/` are the visual check for glyph changes; look at them before committing.
 
 ### State and secrets
 - Board state (per-board config, screen/brightness overrides, version counter) is a JSON file on a Fly volume mounted at **`/data`**, never inside the app directory: the static file fallback in `server.js` serves any file under it. Write atomically (temp file + rename).

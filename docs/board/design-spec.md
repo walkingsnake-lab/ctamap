@@ -90,6 +90,9 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
   - `min`: one 11px glyph with a 5-wide m.
   - Inline **bolt** (3x5) and **funnel** (4x5): used in the weather row tag **and** next to AM/PM on the radar.
   - **Alert circle** (5x5): red circle with a white "!" for the ticker index column.
+- **Digits are tabular** in every font (one shared cell width), so a rolling digit never shifts its neighbors. Spaces are 2px (small) and 3px (5x7).
+- The **alert circle** is two glyphs drawn at the same origin: a red disc with the "!" pixels left blank, and a white "!". Fonts are one color per glyph.
+- Codepoints for custom glyphs are in `server/board/glyphs.js`. The fonts are built by `scripts/build-fonts.js` into `server/board/fonts/` (BDF); the board build converts them to PCF.
 - X11 **9x15 Bold** for the large overnight clock, with a custom **2x2 square-dot colon** centered on the 10px digit height (the stock X11 colon is drawn for text and drops a pixel below the digits).
 
 ---
@@ -250,7 +253,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 ## 11. Open questions
 
 - Verify the MRMS dBZ offset before setting thresholds.
-- On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors.
+- On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors, Tom Thumb `M`/`N` legibility (3px wide; may need widening like `W`), 3x5 bolt legibility.
 - Whether the work visitor WiFi has a captive portal (check with a phone).
 - Measure the real fetch time on the board to set the scheduler's fetch budget.
 

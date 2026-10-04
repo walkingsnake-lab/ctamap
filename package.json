@@ -3,9 +3,14 @@
   "private": true,
   "scripts": {
     "build": "node build.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test \"server/board/**/*.test.js\"",
+    "build-fonts": "node scripts/build-fonts.js"
   },
   "devDependencies": {
     "esbuild": "^0.27.4"
+  },
+  "dependencies": {
+    "pngjs": "^7.0.0"
   }
 }
