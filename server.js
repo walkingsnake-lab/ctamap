@@ -26,6 +26,22 @@ const metrics    = require('./server/metrics');
 // Initialize geometry synchronously at startup — GeoJSON is 116 KB, fast read.
 geoState.init();
 
+// ---- LED board (all board code lives in server/board/) ----
+// A failure to start the board must not take down the map: fall back to a
+// handler that answers every /board/ request with 503.
+let board;
+try {
+  board = require('./server/board').createBoard();
+} catch (e) {
+  console.error('[board] failed to start:', e && e.stack ? e.stack : e);
+  board = {
+    handle: async (req, res) => {
+      res.writeHead(503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end('{"err":"board_unavailable"}');
+    },
+  };
+}
+
 // Cache GeoJSON bytes for the /api/geojson endpoint (same file, already parsed above).
 let geojsonCache = null;
 fs.readFile(path.join(__dirname, 'data', 'cta-lines.geojson'), (err, buf) => {
@@ -238,6 +254,12 @@ const MIME_TYPES = {
 
 const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
+
+  // ---- LED board: every /board/* request goes to server/board/ ----
+  if (parsed.pathname.startsWith('/board/')) {
+    await board.handle(req, res, parsed);
+    return;
+  }
 
   // ---- SSE endpoint — train state stream ----
   if (parsed.pathname === '/api/trains/stream') {

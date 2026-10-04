@@ -13,7 +13,8 @@ Status: **draft v0**. Items marked **(decide)** are open.
 - **Clock sync:** every JSON response includes `now`, the server's epoch time. The board keeps `offset = now - time.monotonic()` and uses it for countdowns and clocks. No NTP on the board.
 - **Board ID:** query param `b` (e.g. `b=home`). State is keyed by board ID.
 - **Auth:** header `X-Board-Token: <BOARD_TOKEN>` on every board endpoint except `/board/ping`. If `BOARD_TOKEN` is unset (local dev), auth is skipped.
-- **Errors:** `401` bad/missing token · `404` unknown board ID · `503` data not ready yet (just after server start). Error bodies are `{"err":"<short code>"}`.
+- **Errors:** `400` invalid input · `401` bad/missing token · `404` unknown board ID or route · `405` wrong method · `503` data not ready yet (just after server start). Error bodies are `{"err":"<short code>"}`; `400` adds `"detail"` with a human-readable reason.
+- **Caching:** every `/board/` response is `Cache-Control: no-store` (radar frames excepted, see below).
 - **Text is final:** the server sends labels already shortened, cased, ligature-substituted, and truncated to fit by pixel width. The board never edits text.
 - **Fonts:** the board font BDFs are committed under `server/board/fonts/`. The server reads glyph advances from them to measure and truncate text; the board build uses the same files. One source for widths.
 
@@ -187,11 +188,13 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/state` | Full state JSON (all boards). |
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
 
+POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `screen`, and `bright`; anything else is a `400`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
+
 ---
 
 ## Server state file
 
-`/data/board-state.json` on the Fly volume. Written atomically (temp file + rename).
+`/data/board-state.json` on the Fly volume (`board_data`, mounted via `[mounts]` in `fly.toml`). Written atomically (temp file + rename). `BOARD_STATE_DIR` overrides the directory (tests, local dev); without it and without `/data`, the server uses a temp dir and logs a warning. An unreadable file is moved aside to `board-state.json.corrupt-<time>` and the server starts from defaults (board `home` at Morse).
 
 ```json
 {
