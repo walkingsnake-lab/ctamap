@@ -19,7 +19,7 @@ const save = (name, frame, scale) => {
 };
 
 const C = {
-  label: '#d8d8d8', clock: '#cccccc', amber: '#ffb000', dimAmber: '#9c6a00', grey: '#8f8f8f',
+  label: '#d8d8d8', clock: '#cccccc', band: '#262626', amber: '#ffb000', dimAmber: '#9c6a00', grey: '#8f8f8f',
   tickerHead: '#a6a6a6', index: '#1f2f35', white: '#ffffff', red: '#ff2020',
   yellow: '#ffd800', orange: '#ff8000', divider: '#333333',
 };
@@ -100,9 +100,10 @@ function transitRows(f, rows, tops) {
   });
 }
 
-// Transit: header on, weather off -> 4 rows, pitch 6, rows start at 7.
+// Transit: header on, weather off -> 4 rows, pitch 6, rows at 9-27 under a faint header band.
 {
   const f = new Frame();
+  f.fill(0, 0, 64, 7, C.band);
   f.text('small', 'MORSE', 1, 6, C.grey);
   rtext(f, 'small', '9:41', 62, 6, C.clock);
   transitRows(f, [
@@ -110,13 +111,14 @@ function transitRows(f, rows, tops) {
     ['RD', '95TH', ['3', '11', '19']],
     ['BL', 'JEFF PK', ['6', '14']],
     ['GR', 'COTTAGE', ['12', '27']],
-  ], [7, 13, 19, 25]);
+  ], [9, 15, 21, 27]);
   save('mock-transit.png', f, 10);
 }
 
 // Transit with a Red Line alert: both Red rows in the "!" half of the blink.
 {
   const f = new Frame();
+  f.fill(0, 0, 64, 7, C.band);
   f.text('small', 'MORSE', 1, 6, C.grey);
   rtext(f, 'small', '9:41', 62, 6, C.clock);
   transitRows(f, [
@@ -124,7 +126,7 @@ function transitRows(f, rows, tops) {
     ['RD', '95TH', ['3', '11', '19'], true],
     ['BL', 'JEFF PK', ['6', '14']],
     ['GR', 'COTTAGE', ['12', '27']],
-  ], [7, 13, 19, 25]);
+  ], [9, 15, 21, 27]);
   save('mock-transit-alert.png', f, 10);
 }
 
