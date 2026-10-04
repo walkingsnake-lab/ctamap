@@ -177,6 +177,7 @@ test('update: payload shape for the default Morse board', async () => {
   assert.deepEqual(tracker.asked, ['40100']);
   assert.equal(b.v, 1);
   assert.ok(Math.abs(b.now - now) < 5);
+  assert.ok(b.tzo === -5 * 3600 || b.tzo === -6 * 3600);
   assert.ok(b.age >= 7 && b.age < 12);
   assert.equal(b.screen, 'transit');
   assert.equal(b.bright, 100);

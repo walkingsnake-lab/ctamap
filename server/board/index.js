@@ -11,6 +11,7 @@ const { createWeather, toWx, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar } = require('./radar');
+const { tzOffset } = require('./time');
 const fs = require('fs');
 const path = require('path');
 const { render, assets } = require('./render');
@@ -145,6 +146,7 @@ function createBoard({
     return {
       v: board.v,
       now,
+      tzo: tzOffset(now),
       age: Math.max(0, Math.round(now - data.fetchedAt)),
       screen: resolveScreen(board.screen, radarState.on),
       bright: resolveBright(board.bright, w, now),

@@ -49,6 +49,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 {
   "v": 42,
   "now": 1759546800,
+  "tzo": -18000,
   "age": 12,
   "screen": "transit",
   "bright": 100,
@@ -80,6 +81,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 |---|---|---|
 | `v` | int | Settings version (same as `/board/version`). |
 | `now` | int | Server epoch seconds. |
+| `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
 | `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`. A local button press overrides it until `v` changes. Until radar lands, `auto` resolves to `transit`. |
 | `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (Open-Meteo times for the station; 100 until weather data arrives), or the fixed level, or 0 for off. |

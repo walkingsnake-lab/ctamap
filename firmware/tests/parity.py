@@ -1,0 +1,58 @@
+"""Renders the scenarios from scenarios.js with firmware/boardlib/draw.py and
+compares every pixel with draw.js. Usage: python3 parity.py scenarios.json
+Exit status 0 when everything matches; otherwise prints the first mismatches."""
+
+import base64
+import json
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from boardlib import draw  # noqa: E402
+
+
+def diff(name, want_b64, f, limit=6):
+    want = base64.b64decode(want_b64)
+    if bytes(f.px) == want:
+        return None
+    bad = []
+    for i in range(0, len(want), 3):
+        if want[i:i + 3] != bytes(f.px[i:i + 3]):
+            p = i // 3
+            bad.append('(%d,%d) want %s got %s' % (p % 64, p // 64, tuple(want[i:i + 3]), tuple(f.px[i:i + 3])))
+    return '%s: %d px differ: %s' % (name, len(bad), '; '.join(bad[:limit]))
+
+
+def main(path):
+    scenarios = json.load(open(path))
+    fails = []
+    count = 0
+    for s in scenarios:
+        if 'renders' in s:
+            frames = {k: bytes(v) for k, v in s['frames'].items()} if s.get('frames') else None
+            for r in s['renders']:
+                o = r['opts']
+                f = draw.render(s['payload'], draw.Frame(), screen=o.get('screen'), now=o.get('now'),
+                                blink=o.get('blink', False), page=o.get('page', 0), slide=o.get('slide', 0),
+                                idx=o.get('idx'), frames=frames)
+                count += 1
+                d = diff('%s %s' % (s['name'], json.dumps(o)), r['px'], f)
+                if d:
+                    fails.append(d)
+        else:
+            anim = draw.TransitAnimator()
+            for i, st in enumerate(s['steps']):
+                view = anim.step(st['payload'], st['now'], st['t'])
+                f = draw.render(st['payload'], draw.Frame(), screen='transit', now=st['now'], view=view, blink=st['blink'])
+                count += 1
+                d = diff('%s step %d (t=%s)' % (s['name'], i, st['t']), st['px'], f)
+                if d:
+                    fails.append(d)
+    for x in fails[:20]:
+        print(x)
+    print('%d frames compared, %d differ' % (count, len(fails)))
+    return 1 if fails else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1]))
