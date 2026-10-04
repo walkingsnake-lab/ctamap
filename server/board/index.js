@@ -52,7 +52,7 @@ function createBoard({
   controlPath = process.env.BOARD_CONTROL_PATH || '',
   capture = require('./capture'),
   tracker = null,
-  stationIds = new Set(require('./stations.json').map((s) => s.mapid)),
+  stations = require('./stations.json'),
   log = console,
 } = {}) {
   if (!token) log.warn('[board] BOARD_TOKEN not set; board endpoints are unauthenticated');
@@ -62,6 +62,10 @@ function createBoard({
     controlPath = '';
   }
 
+  const stationById = new Map(stations.map((st) => [st.mapid, st]));
+  const stationList = JSON.stringify(stations
+    .map(({ mapid, desc, short }) => ({ mapid, desc, short }))
+    .sort((a, b) => a.desc.localeCompare(b.desc)));
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
   if (!tracker) tracker = createTracker({ log }).start();
 
@@ -70,8 +74,15 @@ function createBoard({
   // 'auto' screen is transit until radar and its rain trigger land.
   const resolveScreen = (s) => (s === 'auto' ? 'transit' : s);
 
-  async function update(board, id, boot) {
+  // `previewMapid` (simulator only) shows another station without changing
+  // the board's config; the board's row list is station-specific, so it's
+  // ignored while previewing.
+  async function update(board, id, boot, previewMapid) {
     if (boot) board = store.boot(id);
+    if (previewMapid && previewMapid !== board.station.mapid) {
+      const st = stationById.get(previewMapid);
+      board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
+    }
     const data = await tracker.get(board.station.mapid);
     if (!data) return null;
     const now = nowSecs();
@@ -149,9 +160,19 @@ function createBoard({
         const id = String(parsed.query.b || '');
         const board = store.get(id);
         if (!board) return send(res, 404, { err: 'unknown_board' });
-        const body = await update(board, id, false);
+        const preview = String(parsed.query.mapid || '');
+        if (preview && !stationById.has(preview)) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${preview}` });
+        const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
         return send(res, 200, body);
+      }
+
+      // Station list for the simulator's picker.
+      if (sub === 'api/stations') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' });
+        res.end(stationList);
+        return;
       }
 
       // Simulator page and the PNG frames it shows.
@@ -166,7 +187,9 @@ function createBoard({
         const id = String(parsed.query.b || '');
         const board = store.get(id);
         if (!board) return send(res, 404, { err: 'unknown_board' });
-        const body = await update(board, id, false);
+        const preview = String(parsed.query.mapid || '');
+        if (preview && !stationById.has(preview)) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${preview}` });
+        const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
         const screen = ['transit', 'ticker'].includes(parsed.query.screen) ? parsed.query.screen : body.screen;
         const scale = Math.min(16, Math.max(1, parseInt(parsed.query.scale, 10) || 8));
@@ -184,7 +207,7 @@ function createBoard({
       if (sub === 'api/raw/arrivals') {
         if (method !== 'GET') return send(res, 405, { err: 'method' });
         const mapid = String(parsed.query.mapid || '');
-        if (!stationIds.has(mapid)) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${mapid}` });
+        if (!stationById.has(mapid)) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${mapid}` });
         let up;
         try {
           up = await capture.rawArrivals(mapid);

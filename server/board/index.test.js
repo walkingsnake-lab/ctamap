@@ -218,3 +218,20 @@ test('simulator page, PNG frames, and update proxy live under the control path',
   assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/wrong/sim`)).status, 404);
   await s.close();
 });
+
+test('simulator: station list and previewing another station without changing the board', async () => {
+  const tracker = fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) });
+  const s = await serve({ tracker });
+  const list = await s.req('/board/secret123/api/stations');
+  assert.equal(list.status, 200);
+  assert.ok(list.body.length > 100);
+  assert.ok(list.body.some((x) => x.mapid === '40100' && x.desc === 'Morse (Red Line)'));
+  const prev = await s.req('/board/secret123/api/update?b=home&mapid=40850');
+  assert.equal(prev.body.header, 'HW LIBRARY');
+  assert.deepEqual(tracker.asked, ['40850']);
+  assert.equal(s.store.get('home').station.mapid, '40100'); // board unchanged
+  assert.equal((await s.req('/board/secret123/api/update?b=home&mapid=99999')).status, 400);
+  const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&mapid=40850`);
+  assert.equal(png.status, 200);
+  await s.close();
+});
