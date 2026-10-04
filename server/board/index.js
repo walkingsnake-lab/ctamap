@@ -141,7 +141,7 @@ function createBoard({
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }
     const viewKey = `${id}:${board.station.mapid}`;
-    const { view, viewState, rows, ticker } = format(data.arrivals, cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
+    const { view, viewState, rows, ticker, bars } = format(data.arrivals, cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
       v: board.v,
@@ -150,11 +150,15 @@ function createBoard({
       age: Math.max(0, Math.round(now - data.fetchedAt)),
       screen: resolveScreen(board.screen, radarState.on),
       bright: resolveBright(board.bright, w, now),
-      header: board.showHeader ? board.station.name : null,
+      // Transit header and weather row as fitted to the destinations; the
+      // ticker keeps its header (it doesn't need the room).
+      header: bars.showHeader ? board.station.name : null,
+      tickerHeader: board.showHeader ? board.station.name : null,
+      hidden: bars.hidden,
       view,
       rows,
       ticker,
-      wx,
+      wx: bars.showWeather ? wx : null,
       warn: pickWarn(nwsAlerts, now),
       radar: radarState,
     };

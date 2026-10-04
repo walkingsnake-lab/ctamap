@@ -32,6 +32,21 @@ const CHRONO_HOLD = 0;
 // Chrono labels are fitted against the widest single time ("99m" or "DUE").
 const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
 
+// The header and weather row are the most the board shows: when the live
+// destinations don't fit, the weather row goes first, then the header, so
+// up to 5 destinations stay as rows. Past 5, both come back and the board
+// lists one train per row (chooseView). Returns the bars to show and which
+// ones were hidden to fit.
+function fitBars(n, showHeader, showWeather) {
+  const hidden = [];
+  let h = showHeader, w = showWeather;
+  if (n > maxRows(h, w) && n <= maxRows(false, false)) {
+    if (w) { w = false; hidden.push('weather'); }
+    if (n > maxRows(h, w) && h) { h = false; hidden.push('header'); }
+  }
+  return { showHeader: h, showWeather: w, hidden };
+}
+
 // Destination rows, or the chronological list when they don't fit.
 // prev: the last result for this board ({view, fitSince}), or null.
 function chooseView(destCount, max, prev, now, hold = CHRONO_HOLD) {
@@ -118,7 +133,10 @@ function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}
       LINE_ORDER.indexOf(a.ln) - LINE_ORDER.indexOf(b.ln) || a.dir - b.dir || a.dest.localeCompare(b.dest));
   }
   const shownKeys = new Set(ordered.map((g) => g.key));
-  const max = maxRows(cfg.showHeader, cfg.showWeather);
+  const bars = cfg.autoFit === false
+    ? { showHeader: cfg.showHeader, showWeather: cfg.showWeather, hidden: [] }
+    : fitBars(ordered.length, cfg.showHeader, cfg.showWeather);
+  const max = maxRows(bars.showHeader, bars.showWeather);
   const viewState = chooseView(ordered.length, max, prevView, now);
   const shown = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
 
@@ -152,7 +170,7 @@ function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}
     a: alerts.has(a.ln) ? 1 : 0,
   }));
 
-  return { view: viewState.view, viewState, rows, ticker };
+  return { view: viewState.view, viewState, rows, ticker, bars };
 }
 
-module.exports = { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };
+module.exports = { normalize, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };

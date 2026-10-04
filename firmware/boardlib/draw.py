@@ -642,8 +642,9 @@ def ticker_pages(p, now):
 def render_ticker(p, f, now=None, page=0, slide=0):
     if now is None:
         now = p['now']
-    if p.get('header'):
-        draw_header(f, p['header'], now, p.get('tzo', 0), None, C['tickerHead'])
+    th = p['tickerHeader'] if 'tickerHeader' in p else p.get('header')
+    if th:
+        draw_header(f, th, now, p.get('tzo', 0), None, C['tickerHead'])
     items = live_ticker(p, now)
     pages = max(1, -(-len(items) // 2))
     page = (page or 0) % pages
