@@ -86,16 +86,19 @@
   // when CTA flags the train as approaching (isApp). The board never shows 1.
   const minutesUntil = (t, now) => Math.ceil((t - now) / 60);
 
-  // What the board draws for an arrival time.
-  function timeText(t, now) {
+  // What the board draws for an arrival time. Only the soonest train of a
+  // destination may show DUE (`due` false for the others): bunched trains
+  // within a minute of each other would otherwise both read DUE, so the
+  // later one shows 2.
+  function timeText(t, now, due = true) {
     const min = minutesUntil(t, now);
-    return min <= 1 ? 'DUE' : String(min);
+    return min <= 1 ? (due ? 'DUE' : '2') : String(min);
   }
 
   // Chronological view: digits + "m" (the glyph's own 1px spacing), DUE bare.
-  function chronoText(t, now) {
+  function chronoText(t, now, due = true) {
     const min = minutesUntil(t, now);
-    return min <= 1 ? 'DUE' : `${min}m`;
+    return min <= 1 ? (due ? 'DUE' : '2m') : `${min}m`;
   }
 
   // Arrivals stay listed until 30 s past their time (contract countdown rules).
@@ -233,7 +236,7 @@
     // Lay out one row's times: right-aligned group, 3px gaps tightening to 2px
     // when the row is full. Returns cells (right-to-left order not assumed).
     function layoutCells(r, now) {
-      const texts = r.t.map((t) => timeText(t, now));
+      const texts = r.t.map((t, k) => timeText(t, now, k === 0));
       const widthAt = (gap) => texts.reduce((w, txt, i) => w + measure('small', txt) + (i ? gap : 0), 0);
       const labelEnd = 5 + measure('small', r.lbl) - 1;
       const gap = 63 - widthAt(TIME_GAP) + 1 - labelEnd - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
@@ -274,6 +277,7 @@
     function buildChronoView(p, now) {
       const rows = liveRows(p, now).slice(0, maxRows(!!p.header, !!p.wx));
       const tops = rowTops(rows.length, !!p.header, !!p.wx);
+      const seenDest = new Set();
       return {
         now,
         mode: 'chrono',
@@ -282,12 +286,15 @@
         wx: p.wx,
         warn: p.warn,
         rows: rows.map((r, i) => {
+          const dest = `${r.ln}:${r.lbl}`;
+          const due = !seenDest.has(dest); // chronological: the first one per destination is the soonest
+          seenDest.add(dest);
           const key = r.rn != null ? `rn:${r.rn}` : `${r.ln}:${r.lbl}:${r.t[0]}`;
           const sch = r.s && r.s[0];
           return {
             key, ln: r.ln, lbl: r.lbl, a: r.a, num: i + 1, top: tops[i], alpha: 1,
             cells: [{
-              id: key, t: r.t[0], text: chronoText(r.t[0], now), right: 63, alpha: 1, roll: null,
+              id: key, t: r.t[0], text: chronoText(r.t[0], now, due), right: 63, alpha: 1, roll: null,
               color: sch ? (i ? C.schDim : C.sch) : (i ? C.dimAmber : C.amber),
             }],
           };
@@ -476,7 +483,7 @@
       };
     }
 
-    function drawTickerItem(f, it, idx, top, now) {
+    function drawTickerItem(f, it, idx, top, now, due = true) {
       const base = top + 9;
       f.fill(0, top, 5, 12, C.index);
       f.fill(5, top, 59, 12, scaleColor(LINE[it.ln], 0.55));
@@ -490,8 +497,13 @@
       }
       f.text('5x7', it.d, 7, base, C.white);
       const min = minutesUntil(it.t, now);
-      if (min <= 1) {
+      if (min <= 1 && due) {
         rtext(f, '5x7', 'Due', 62, base, C.white);
+      } else if (min <= 1) {
+        // A second train within a minute of the first: not also Due.
+        const mw = measure('5x7', s(G.MIN));
+        f.text('5x7', s(G.MIN), 62 - mw + 1, base, C.white);
+        rtext(f, '5x7', '2', 62 - mw - 2, base, C.white);
       } else {
         const mw = measure('5x7', s(G.MIN));
         f.text('5x7', s(G.MIN), 62 - mw + 1, base, C.white);
@@ -513,9 +525,16 @@
       const pages = Math.max(1, Math.ceil(items.length / 2));
       const page = (o.page || 0) % pages;
       const offset = Math.round(easeInOut(Math.min(1, Math.max(0, o.slide || 0))) * 26);
+      // Only the soonest train per destination may read Due.
+      const firstOf = new Map();
+      items.forEach((it, i) => {
+        const k = `${it.ln}:${it.d}`;
+        if (!firstOf.has(k) || it.t < items[firstOf.get(k)].t) firstOf.set(k, i);
+      });
       const drawPage = (pg, shift) => {
         items.slice(pg * 2, pg * 2 + 2).forEach((it, i) => {
-          drawTickerItem(f, it, pg * 2 + i + 1, 7 + i * 13 + shift, now);
+          const n = pg * 2 + i;
+          drawTickerItem(f, it, n + 1, 7 + i * 13 + shift, now, firstOf.get(`${it.ln}:${it.d}`) === n);
         });
       };
       f.withClip(0, 7, 63, 31, () => {

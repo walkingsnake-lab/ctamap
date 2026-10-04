@@ -384,3 +384,16 @@ test('chrono animator: position digits roll down as the list slides up', () => {
   assert.deepEqual(end.rows.map((r) => [r.key, r.num, r.numRoll]), [['rn:400', 1, null], ['rn:401', 2, null]]);
   assert.deepEqual(draw.renderTransit(p, { now: NOW + 45, view: end }).px, draw.renderTransit(p, { now: NOW + 45 }).px);
 });
+
+test('only the soonest train of a destination reads DUE; a bunched second shows 2', () => {
+  const { timeText, chronoText } = require('./draw');
+  assert.equal(timeText(NOW + 20, NOW), 'DUE');
+  assert.equal(timeText(NOW + 45, NOW, false), '2');
+  assert.equal(timeText(NOW + 200, NOW, false), '4'); // normal times unaffected
+  assert.equal(chronoText(NOW + 45, NOW, false), '2m');
+  const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 20, NOW + 45, NOW + 400], s: [0, 0, 0], a: 0 }]);
+  const texts = Object.values(draw.transitTexts(p, NOW));
+  assert.deepEqual(texts, ['DUE', '2', '7']);
+  const chrono = { ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 20], s: [0], a: 0 }, { ln: 'RD', lbl: 'HOWARD', t: [NOW + 45], s: [0], a: 0 }, { ln: 'RD', lbl: '95TH', t: [NOW + 50], s: [0], a: 0 }]), view: 'chrono' };
+  assert.deepEqual(Object.values(draw.transitTexts(chrono, NOW)), ['DUE', '2m', 'DUE']); // a different destination can be DUE too
+});

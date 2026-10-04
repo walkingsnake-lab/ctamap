@@ -126,6 +126,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Schedule-based predictions** (`isSch`, e.g. southbound trains at Morse that haven't left the Howard terminal) are shown, with the time in grey instead of amber. `isFlt` (possible fault) predictions are shown normally.
 - **Trains ending at this station** are not shown (Terminal Arrival at Howard; "63rd Street" trains at Ashland/63rd, which only shows Harlem trains).
 - **Minutes round up**, like CTA's own predictions: `DUE` within 60 s (when CTA flags the train as approaching), then 2, 3, …; never 1.
+- **One DUE per destination:** only the soonest train of a destination (same line and direction) can read `DUE` (rows, chronological view, and ticker alike). When trains are bunched and a later one is also within 60 s, it shows `2` (`2m`) instead, so two DUEs never sit side by side.
 - **Per-digit roll** when a number changes (12→11 rolls only the 2), and whole-cell rolls to and from `DUE`.
 - **Departures fade, not roll:** when the first train leaves, its cell fades out in place (0.7 s), the remaining times slide left (0.5 s), and the new first time eases from dim to amber (0.7 s). A row losing its last train fades out, then the rows below slide up; new rows and times fade in. Arrivals are matched across updates by time (within 90 s), so refreshed predictions don't flicker. Reference: `createTransitAnimator()` in `server/board/draw.js`.
 
