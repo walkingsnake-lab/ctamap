@@ -461,8 +461,8 @@ test('baseball rotates games one minute each; no games shows the clock', () => {
   const other = bbGame({ id: 2, st: 'live', inn: 1, half: 'B', b: 0, s: 0, o: 0, on: [0, 0, 0], away: { ab: 'NYY', c: '#3a5fa8', r: 0 }, home: { ab: 'BOS', c: '#c8323d', r: 0 } });
   const p = bb(LIVE, other);
   const t0 = Math.floor(NOW / 120) * 120; // a minute where game 0 is up
-  assert.equal(draw.gameIndex(2, t0), 0);
-  assert.equal(draw.gameIndex(2, t0 + 60), 1);
+  assert.equal(draw.pickGame(p.mlb.games, t0).i, 0);
+  assert.equal(draw.pickGame(p.mlb.games, t0 + 60).i, 1);
   assert.equal(count(draw.renderBaseball(p, { now: t0 }), CHC.c, 1, 2, 3, 7), 18);
   assert.equal(count(draw.renderBaseball(p, { now: t0 + 60 }), '#3a5fa8', 1, 2, 3, 7), 18);
   assert.ok(count(draw.renderBaseball(bb()), draw.C.clock, 0, 0, 63, 31) > 0);
@@ -485,4 +485,46 @@ test('radar visits interrupt baseball like transit; forced screens are left alon
   assert.equal(autoScreen({ screen: 'baseball', radar }, t + 100), 'baseball');
   assert.equal(autoScreen({ screen: 'baseball', radar: { ...radar, on: false } }, t + 10), 'baseball');
   assert.equal(autoScreen({ screen: 'ticker', radar }, t + 10), 'ticker');
+});
+
+test('baseball: a live game takes precedence; pregame and finals rotate only when nothing is live', () => {
+  const pre = bbGame({ id: 3, st: 'pre', start: NOW + 900 });
+  const fin = bbGame({ id: 4, st: 'final' });
+  const t0 = Math.floor(NOW / 180) * 180;
+  for (let k = 0; k < 6; k++) {
+    const pick = draw.pickGame([pre, LIVE, fin], t0 + k * 60);
+    assert.deepEqual([pick.i, pick.of], [1, 1]); // always the live game
+  }
+  const seen = new Set([0, 1, 2].map((k) => draw.pickGame([pre, fin], t0 + k * 60).i));
+  assert.deepEqual([...seen].sort(), [0, 1]);
+  const live2 = { ...LIVE, id: 5 };
+  assert.deepEqual([0, 1].map((k) => draw.pickGame([pre, LIVE, fin, live2], t0 + k * 60).i).sort(), [1, 3]);
+});
+
+test('baseball live: inning, count, and outs roll; TOP -> BOT rolls only the changed letters', () => {
+  const next = { ...LIVE, half: 'B', b: 0, s: 0, o: 0 };
+  const still = draw.renderBaseball(bb(next));
+  const rolls = { inn: { from: 'TOP 7', p: 1 }, count: { from: '2-1', p: 1 }, outs: { from: '2 OUT', p: 1 } };
+  assert.deepEqual(draw.renderBaseball(bb(next), { rolls }).px, still.px);
+  const half = { inn: { from: 'TOP 7', p: 0.5 }, count: { from: '2-1', p: 0.5 }, outs: { from: '2 OUT', p: 0.5 } };
+  const mid = draw.renderBaseball(bb(next), { rolls: half });
+  assert.notDeepEqual(mid.px, still.px);
+  // The 'O' and ' 7' of the inning don't move: compare those columns.
+  const innLeft = 51 - Math.floor(draw.measure('small', 'BOT 7') / 2);
+  const col = (f, x) => [15, 16, 17, 18, 19].map((y) => hex(f.get(x, y))).join();
+  const m = (str) => draw.measure('small', str);
+  const oLeft = innLeft + m('B') + 1, sevenLeft = innLeft + m('BOT ') + 1;
+  const steady = [...Array(m('O')).keys()].map((i) => oLeft + i).concat([...Array(m('7')).keys()].map((i) => sevenLeft + i));
+  for (const x of steady) assert.equal(col(mid, x), col(still, x));
+  assert.ok([...Array(m('B')).keys()].some((i) => col(mid, innLeft + i) !== col(still, innLeft + i)));
+  // Rolls stay inside their own rows.
+  assert.equal(count(mid, draw.C.label, 38, 13, 63, 14), 0);
+  assert.equal(count(mid, draw.C.label, 0, 22, 63, 23), 0);
+});
+
+test('baseballTexts: scores always, live status only while live; key changes with game or state', () => {
+  const t = draw.baseballTexts(bb(LIVE), NOW);
+  assert.deepEqual(t, { key: '1:live', texts: { away: '3', home: '2', inn: 'TOP 7', count: '2-1', outs: '2 OUT' } });
+  assert.deepEqual(draw.baseballTexts(bb(bbGame({ st: 'final' })), NOW), { key: '1:final', texts: { away: '3', home: '2' } });
+  assert.equal(draw.baseballTexts(bb(), NOW), null);
 });

@@ -43,7 +43,7 @@ Polled ~every 10 s.
 ### `GET /board/update?b=<id>[&boot=1]`
 The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 
-`boot=1` is sent on the board's first update after startup. It resets `screen` and `bright` overrides to auto and bumps `v`. Station, row, and toggle config persist.
+`boot=1` is sent on the board's first update after startup. It resets `bright` to auto and bumps `v`. The chosen `screen`, station, row, and toggle config persist.
 
 ```json
 {
@@ -228,7 +228,7 @@ When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`. Th
 | `on` | Live only. Runners as `[1st, 2nd, 3rd]`, 1 = occupied. |
 
 - **Server:** `server/board/mlb.js` polls `statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=<yesterday>&endDate=<today>&hydrate=linescore` (Chicago dates) every 15 s while a shown game is live or within 30 min of first pitch, every 5 min otherwise. Shown: Cubs games (team 112) and postseason games (`gameType` `F`, `D`, `L`, `W`), from 30 min before first pitch until 15 min after the server first sees the final; postponed and cancelled games are skipped. Sorted by first pitch.
-- **Board:** shows `games[floor(now / 60) % games.length]` (one minute each, no state), drawn per `draw.js` `renderBaseball` (design spec §8). Score changes roll per digit.
+- **Board:** shows a live game whenever one is on: the live games (or, with none live, all games) rotate one minute each by wall time, `set[floor(now / 60) % set.length]` (`draw.js` `pickGame`, no state), drawn per `draw.js` `renderBaseball` (design spec §8). Scores, inning, count, and outs roll when they change (`baseballTexts`).
 
 ### `GET /board/radar/<frameId>?b=<id>`
 One radar frame for that board's location.
@@ -306,7 +306,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 | `station` | Train Tracker `mapid` and header name. Changeable from the control page. The station's coordinates are also the board's **location** for weather, NWS alerts, and the radar crop. |
 | `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the row order; if more destinations than the cap remain, the board shows the chronological view. Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |
-| `screen` | `auto` or a forced screen (`transit`, `ticker`, `radar`, `baseball`). Reset to `auto` on boot. `auto` resolves to `transit`, or `baseball` while a game is on (no NWS warning or watch); it never changes screens on its own otherwise, except for radar visits. |
+| `screen` | `auto` or a forced screen (`transit`, `ticker`, `radar`, `baseball`). Persists across boots. `auto` resolves to `transit`, or `baseball` while a game is on (no NWS warning or watch); it never changes screens on its own otherwise, except for radar visits. |
 | `radarEvery`, `radarFor` | Radar visits on the auto screen: every `radarEvery` minutes (0 = never, the default; max 60) show the radar for `radarFor` seconds (10–600, default 60), only while rain is in the box. Persist across restarts. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |
 

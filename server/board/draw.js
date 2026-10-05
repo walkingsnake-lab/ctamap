@@ -626,9 +626,17 @@
     const ctext = (f, font, str, cx, base, color) => f.text(font, str, cx - Math.floor(measure(font, str) / 2), base, color);
     const record = (t) => (t.w == null || t.l == null ? '' : `${t.w}-${t.l}`);
 
-    // Which game is up: one minute each by wall time, so the board and the
-    // simulator agree without keeping rotation state.
-    const gameIndex = (n, now) => (n ? Math.floor(now / 60) % n : -1);
+    // Which game is up: live games take precedence over pregame and finals;
+    // within that set, one minute each by wall time, so the board and the
+    // simulator agree without keeping rotation state. Returns the index into
+    // games, the game's place in the rotation, and the rotation size.
+    function pickGame(games, now) {
+      if (!games.length) return { i: -1, pos: 0, of: 0 };
+      const live = games.map((g, i) => (g.st === 'live' ? i : -1)).filter((i) => i >= 0);
+      const pool = live.length ? live : games.map((_, i) => i);
+      const pos = Math.floor(now / 60) % pool.length;
+      return { i: pool[pos], pos, of: pool.length };
+    }
 
     // Score, right-aligned at SCORE_RIGHT; a changed score rolls digit by
     // digit like arrival times.
@@ -672,6 +680,41 @@
       drawDiamond(f, PANEL_X + 5, 7, 2, on[0] ? C.amber : BB.base, true);
     }
 
+    // Tom Thumb status text that can roll like an arrival time: `left` is
+    // its left edge. Same-length texts whose changed characters keep their
+    // widths roll only those characters ("TOP 7" -> "BOT 7" rolls T/B and
+    // P/T); anything else rolls the whole text.
+    function drawRollText(f, text, left, base, color, roll) {
+      if (!roll || roll.from === text || roll.p >= 1) { f.text('small', text, left, base, color); return; }
+      const from = roll.from;
+      const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
+      const sameShape = from.length === text.length && [...text].every((ch, i) => measure('small', ch) === measure('small', from[i]));
+      f.withClip(0, base - 5, 63, base - 1, () => {
+        if (sameShape) {
+          let x = left;
+          for (let i = 0; i < text.length; i++) {
+            if (from[i] === text[i]) f.text('small', text[i], x, base, color);
+            else {
+              f.text('small', from[i], x, base - up, color);
+              f.text('small', text[i], x, base - up + ROLL_DIST, color);
+            }
+            x += measure('small', text[i]) + 1;
+          }
+        } else {
+          const fromLeft = left + measure('small', text) - measure('small', from); // keep the right edge
+          f.text('small', from, fromLeft, base - up, color);
+          f.text('small', text, left, base - up + ROLL_DIST, color);
+        }
+      });
+    }
+
+    // Live status texts, shared by the renderer and change detection.
+    const liveTexts = (g) => ({
+      inn: `${g.half === 'B' ? 'BOT' : 'TOP'} ${g.inn}`,
+      count: `${g.b || 0}-${g.s || 0}`,
+      outs: `${g.o || 0} OUT`,
+    });
+
     function drawNoGames(f, now) {
       const clock = clockText(now);
       const label = 'NO GAMES';
@@ -681,14 +724,15 @@
     }
 
     // opts: now, game (index into p.mlb.games; default the rotation),
-    // rolls ({away|home: {from, p}} score rolls)
+    // rolls ({away|home|inn|count|outs: {from, p}}: scores and live status
+    // texts mid-roll)
     function renderBaseball(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const f = newFrame();
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) { drawNoGames(f, now); return f; }
-      const g = games[o.game != null ? o.game % games.length : gameIndex(games.length, now)];
+      const g = games[o.game != null ? o.game % games.length : pickGame(games, now).i];
       const rolls = o.rolls || {};
       const final = g.st === 'final';
       const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
@@ -724,19 +768,24 @@
       drawScore(f, String(g.away.r), ROW_TOPS[0], BB.live, rolls.away);
       drawScore(f, String(g.home.r), ROW_TOPS[1], BB.live, rolls.home);
       drawInfield(f, g.on || [0, 0, 0]);
-      ctext(f, 'small', `${g.half === 'B' ? 'BOT' : 'TOP'} ${g.inn}`, PANEL_X, 20, C.label);
-      const outs = `${g.o || 0} OUT`;
-      rtext(f, 'small', outs, 62, BOTTOM, C.grey);
-      rtext(f, 'small', `${g.b || 0}-${g.s || 0}`, 62 - measure('small', outs) - 5, BOTTOM, C.label);
+      const t = liveTexts(g);
+      drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), 20, C.label, rolls.inn);
+      const outsLeft = 62 - measure('small', t.outs) + 1;
+      drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
+      drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
       return f;
     }
 
-    // Score texts of the game on screen, for change detection (rolls).
-    function baseballScores(p, now) {
+    // Texts of the game on screen that roll when they change: scores, and
+    // while live the inning, count, and outs. `key` (game and state) changes
+    // when a different game or state is up; don't roll across those.
+    function baseballTexts(p, now) {
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) return null;
-      const g = games[gameIndex(games.length, now)];
-      return { id: g.id, away: String(g.away.r), home: String(g.home.r) };
+      const g = games[pickGame(games, now).i];
+      const texts = { away: String(g.away.r), home: String(g.home.r) };
+      if (g.st === 'live') Object.assign(texts, liveTexts(g));
+      return { key: `${g.id}:${g.st}`, texts };
     }
 
     function applyBrightness(f, bright) {
@@ -763,7 +812,7 @@
 
     return {
       Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
-      renderBaseball, baseballScores, gameIndex,
+      renderBaseball, baseballTexts, pickGame,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
       // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.
