@@ -114,7 +114,7 @@
 
   <section>
     <h2>Radar screen</h2>
-    <div class="row"><span>Clock (frame time)</span><label class="switch"><input type="checkbox" id="radarClock"><span></span></label></div>
+    <div class="row"><span>Time (radar frame)</span><label class="switch"><input type="checkbox" id="radarTime"><span></span></label></div>
     <p class="hint">Off hides the time and AM/PM; the frame indicator and any warning icon stay.</p>
   </section>
 
@@ -228,7 +228,7 @@
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
     $('showHeader').checked = board.showHeader;
     $('showWeather').checked = board.showWeather;
-    $('radarClock').checked = board.radarClock !== false;
+    $('radarTime').checked = board.radarTime !== false;
     $('rowsHint').textContent = 'These are the most the board shows. When more destinations are running than fit, '
       + 'it hides the weather row first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather row.'
       + (hidden.length ? ` Hidden right now: ${hidden.join(' and ')}.` : '');
@@ -292,7 +292,7 @@
   $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('name').blur(); saveName(); } });
   $('showHeader').addEventListener('change', (e) => save({ showHeader: e.target.checked }));
   $('showWeather').addEventListener('change', (e) => save({ showWeather: e.target.checked }));
-  $('radarClock').addEventListener('change', (e) => save({ radarClock: e.target.checked }));
+  $('radarTime').addEventListener('change', (e) => save({ radarTime: e.target.checked }));
   $('allDest').addEventListener('change', (e) => save({ rows: e.target.checked ? [] : dests.map((d) => d.key) }));
   $('boardPick').addEventListener('change', (e) => {
     boardId = e.target.value;

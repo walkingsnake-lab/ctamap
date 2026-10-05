@@ -382,7 +382,7 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.screen, 'transit'); // no automatic switching unless radar visits are on
-  assert.deepEqual(b.radar, { ...state, visit: null, showClock: true });
+  assert.deepEqual(b.radar, { ...state, visit: null, showTime: true });
   assert.equal((await fetch(`${base}/board/radar/40100-202610041600?b=home`)).status, 401);
   const r = await fetch(`${base}/board/radar/40100-202610041600?b=home`, h);
   assert.equal(r.status, 200);

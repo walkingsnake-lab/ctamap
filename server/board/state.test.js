@@ -98,10 +98,10 @@ test('new boards are created on first update; bad ids are rejected', () => {
   assert.throws(() => store.update('Bad Id', {}), ValidationError);
 });
 
-test('radarClock defaults to true and must be a boolean', () => {
+test('radarTime defaults to true and must be a boolean', () => {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet });
-  assert.equal(store.get('home').radarClock, true);
-  store.update('home', { radarClock: false });
-  assert.equal(store.get('home').radarClock, false);
-  assert.throws(() => store.update('home', { radarClock: 'no' }), /radarClock must be true or false/);
+  assert.equal(store.get('home').radarTime, true);
+  store.update('home', { radarTime: false });
+  assert.equal(store.get('home').radarTime, false);
+  assert.throws(() => store.update('home', { radarTime: 'no' }), /radarTime must be true or false/);
 });

@@ -742,7 +742,7 @@ def render_radar(p, f, now=None, idx=None, frames=None):
         warn_glyph = g(assets.FUNNEL if p['warn']['kind'] == 'tor' else assets.BOLT)
         if p['warn']['kind'] == 'tor':
             warn_color = C['warnTornado']
-    if r.get('showClock') is False:
+    if r.get('showTime') is False:
         if warn_glyph is not None:
             f.text('small', warn_glyph, right - measure('small', warn_glyph) + 1, top + 8, warn_color)
         return f
