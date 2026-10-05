@@ -240,9 +240,11 @@ def rtext(f, font, s, right, base, rgb):
 
 
 # ---- time (Chicago, via the payload's UTC offset) ----
+# Integer math on epoch times: CircuitPython's math.floor goes through a
+# float, which can't hold epoch seconds.
 
 def clock_text(t, tzo):
-    lt = int(math.floor(t + tzo))
+    lt = int((t + tzo) // 1)
     h = (lt // 3600) % 24
     m = (lt // 60) % 60
     h12 = h % 12 or 12
@@ -250,7 +252,7 @@ def clock_text(t, tzo):
 
 
 def ampm_text(t, tzo):
-    lt = int(math.floor(t + tzo))
+    lt = int((t + tzo) // 1)
     return 'PM' if (lt // 3600) % 24 >= 12 else 'AM'
 
 
@@ -905,7 +907,7 @@ def pick_game(games, now):
         return {'i': -1, 'pos': 0, 'of': 0}
     live = [i for i, gm in enumerate(games) if gm.get('st') == 'live']
     pool = live if live else list(range(len(games)))
-    pos = int(math.floor(now / 60)) % len(pool)
+    pos = int(now // 60) % len(pool)
     return {'i': pool[pos], 'pos': pos, 'of': len(pool)}
 
 

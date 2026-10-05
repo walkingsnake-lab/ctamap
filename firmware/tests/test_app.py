@@ -4,11 +4,13 @@ scheduling the real board depends on: fetches land in animation gaps, data
 stays fresh, settings changes show up fast, radar frames are fetched only
 when needed, and buttons follow "last action wins"."""
 
+import math
 import os
 import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.dirname(__file__))
 from boardlib import app, draw, player  # noqa: E402
 
 T0 = 1791140000  # epoch seconds at the start of each simulation
@@ -40,6 +42,7 @@ class Server:
         self.wifi = ['ok']
         self.visit = None
         self.alert = 0
+        self.latency = lambda: LATENCY
 
     def now(self):
         return T0 + self.clock.t / 1000
@@ -54,7 +57,7 @@ class Server:
             rec['budget'] = b.sched.budget_ms
             rec['phase'] = (ms - b.player.blink_shift) % 2000
         self.calls.append(rec)
-        self.clock.t += LATENCY
+        self.clock.t += self.latency()
         if self.fail_next:
             self.fail_next -= 1
             raise OSError('simulated failure')
@@ -274,6 +277,47 @@ class TestBoardLoop(unittest.TestCase):
         run_for(board, clock, 45000)
         self.assertAlmostEqual(board.now(clock.t), server.now(), delta=2)
 
+    def test_syncs_never_set_the_clock_back_while_it_is_right(self):
+        board, server, clock, _, _, _ = make()
+        lat = [400, 2600, 900, 1800, 300, 3100, 1200]
+        n = [0]
+
+        def latency():
+            n[0] += 1
+            return lat[n[0] % len(lat)]
+        server.latency = latency
+        board.connect()
+        last = board.now_ms(clock.t)
+        for _ in range(int(5 * 60 * 1000 / 5)):
+            board.step()
+            t = board.now_ms(clock.t)
+            self.assertGreaterEqual(t, last)
+            self.assertLess(abs(t - server.now() * 1000), 3500)
+            last = t
+            clock.sleep_ms(5)
+
+    def test_a_drifting_clock_is_pulled_back_in(self):
+        board, server, clock, _, _, _ = make()
+        board.connect()
+        board.epoch_ms += 20000  # 20 s fast
+        run_for(board, clock, 15000)
+        self.assertLess(abs(board.now_ms(clock.t) - server.now() * 1000), 3000)
+        board.epoch_ms -= 40000  # 20 s slow
+        run_for(board, clock, 15000)
+        self.assertLess(abs(board.now_ms(clock.t) - server.now() * 1000), 3000)
+
+    def test_idle_screens_redraw_only_when_something_changes(self):
+        board, server, clock, display, _, _ = make()
+        board.connect()
+        run_for(board, clock, 5000)
+        start = display.frames
+        run_for(board, clock, 5 * 60 * 1000)
+        per_s = (display.frames - start) / 300
+        # Was 4 a second plus animations; now about one a second (the
+        # clock's seconds) plus the animation frames.
+        self.assertLess(per_s, 2, per_s)
+        self.assertGreater(per_s, 0.9, per_s)
+
 
 class TestRadarVisits(unittest.TestCase):
     def test_auto_visits_the_radar_on_a_timer_and_prefetches_frames(self):
@@ -327,6 +371,78 @@ class TestPlayerTiming(unittest.TestCase):
         self.assertEqual(player.transit_quiet_ms(p, now), 5000)
         # At DUE (40 s out), the next change is the drop 30 s after arrival.
         self.assertEqual(player.transit_quiet_ms(p, now + 85), 70000)
+
+
+class StrictMath:
+    """math as CircuitPython runs it: floor and ceil go through a float with
+    22 bits of precision, so they're only exact for smaller numbers."""
+
+    def __getattr__(self, name):
+        return getattr(math, name)
+
+    @staticmethod
+    def floor(x):
+        assert abs(x) < 2 ** 21, 'math.floor(%r) loses precision on CircuitPython' % (x,)
+        return math.floor(x)
+
+    @staticmethod
+    def ceil(x):
+        assert abs(x) < 2 ** 21, 'math.ceil(%r) loses precision on CircuitPython' % (x,)
+        return math.ceil(x)
+
+
+class TestCircuitPythonNumbers(unittest.TestCase):
+    def setUp(self):
+        self.saved = (draw.math, player.math)
+        draw.math = player.math = StrictMath()
+
+    def tearDown(self):
+        draw.math, player.math = self.saved
+
+    def test_epoch_times_stay_exact_on_every_screen(self):
+        board, server, clock, _, _, _ = make()
+        server.radar_on = True
+        server.visit = {'every': 120, 'for': 30}
+        board.connect()
+        self.assertIsInstance(board.now(clock.t), int)
+        for screen in ('transit', 'ticker', 'weather', 'baseball'):
+            board.player.set_screen(screen, clock.t)
+            run_for(board, clock, 70000)
+        g = {'id': 1, 'st': 'live', 'start': T0, 'inn': 7, 'half': 'T', 'b': 2, 's': 1, 'o': 2, 'on': [1, 0, 1],
+             'away': {'ab': 'CHC', 'c': '#2a5bd8', 'r': 3, 'w': 92, 'l': 70, 'at': T0},
+             'home': {'ab': 'STL', 'c': '#d62a2a', 'r': 2, 'w': 88, 'l': 74}}
+        board.player.p = dict(board.player.p, mlb={'games': [g, dict(g, id=2, st='pre')]})
+        run_for(board, clock, 70000)
+
+
+class TestColdBoot(unittest.TestCase):
+    def boot(self, run_reason, reset_reason):
+        import types
+        import fakehw
+        fakehw.install()
+        sup = types.ModuleType('supervisor')
+        sup.RunReason = types.SimpleNamespace(STARTUP=0, AUTO_RELOAD=1, SUPERVISOR_RELOAD=2, REPL_RELOAD=3)
+        sup.runtime = types.SimpleNamespace(run_reason=getattr(sup.RunReason, run_reason))
+        mc = types.ModuleType('microcontroller')
+        mc.ResetReason = types.SimpleNamespace(POWER_ON=0, RESET_PIN=1, WATCHDOG=2, BROWNOUT=3, SOFTWARE=4)
+        mc.cpu = types.SimpleNamespace(reset_reason=getattr(mc.ResetReason, reset_reason))
+        sys.modules['supervisor'] = sup
+        sys.modules['microcontroller'] = mc
+        from boardlib import device
+        return device.cold_boot()
+
+    def tearDown(self):
+        sys.modules.pop('supervisor', None)
+        sys.modules.pop('microcontroller', None)
+
+    def test_power_on_and_reset_button_reset_the_brightness(self):
+        self.assertTrue(self.boot('STARTUP', 'POWER_ON'))
+        self.assertTrue(self.boot('STARTUP', 'RESET_PIN'))
+
+    def test_crash_reloads_and_watchdog_resets_do_not(self):
+        self.assertFalse(self.boot('SUPERVISOR_RELOAD', 'POWER_ON'))
+        self.assertFalse(self.boot('AUTO_RELOAD', 'POWER_ON'))
+        self.assertFalse(self.boot('STARTUP', 'WATCHDOG'))
 
 
 if __name__ == '__main__':

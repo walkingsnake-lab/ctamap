@@ -22,6 +22,7 @@ from . import draw
 # straight into the bitmap), the rest are allocated per frame.
 RADAR_FIRST = 1
 FREE_FIRST = 11
+GLYPH_CACHE = 96  # glyph bitmaps kept for arrayblit, per font, codepoint, and palette slot
 
 
 def _pack(rgb):
@@ -42,6 +43,7 @@ class BoardFrame(draw.Frame):
         self.colors = {}
         self.next = FREE_FIRST
         self.k = 1
+        self.glyphs = {}
 
     def begin(self):
         self.bitmap.fill(0)
@@ -78,8 +80,25 @@ class BoardFrame(draw.Frame):
             return
         bitmaptools.fill_region(self.bitmap, x0, y0, x1 + 1, y1 + 1, self._index(rgb))
 
+    def _glyph(self, font_name, cp, g, idx):
+        key = (font_name, cp, idx)
+        data = self.glyphs.get(key)
+        if data is None:
+            if len(self.glyphs) >= GLYPH_CACHE:
+                self.glyphs = {}
+            w, h = g[1], g[2]
+            data = bytearray(w * h)
+            for r in range(h):
+                bits = g[5 + r]
+                for col in range(w):
+                    if (bits >> (w - 1 - col)) & 1:
+                        data[r * w + col] = idx
+            self.glyphs[key] = data
+        return data
+
     def text(self, font_name, s, x, baseline, rgb):
-        # Same as draw.Frame.text, with the palette slot looked up once.
+        # Same as draw.Frame.text. Glyphs fully inside the clip are copied in
+        # one arrayblit; clipped ones (rolls, slides) go pixel by pixel.
         font = draw.assets.FONTS[font_name]
         idx = self._index(rgb)
         bmp = self.bitmap
@@ -91,6 +110,11 @@ class BoardFrame(draw.Frame):
                 continue
             dw, w, h, xo, yo = g[0], g[1], g[2], g[3], g[4]
             top = baseline - (yo + h)
+            left = x + xo
+            if idx and w and h and left >= cx0 and top >= cy0 and left + w - 1 <= cx1 and top + h - 1 <= cy1:
+                bitmaptools.arrayblit(bmp, self._glyph(font_name, ord(ch), g, idx), left, top, left + w, top + h, 0)
+                x += dw
+                continue
             for r in range(h):
                 yy = top + r
                 if yy < cy0 or yy > cy1:
@@ -138,6 +162,7 @@ class Display:
         self.display.root_group = group
         self.frame = BoardFrame(self.bitmap, self.palette)
         self.last_ms = 0
+        self.max_ms = 0
 
     def show(self, draw_fn):
         t0 = time.monotonic_ns()
@@ -147,6 +172,7 @@ class Display:
         f.commit()
         self.display.refresh(minimum_frames_per_second=0)
         self.last_ms = (time.monotonic_ns() - t0) // 1000000
+        self.max_ms = max(self.max_ms, self.last_ms)
 
 
 class Clock:
@@ -283,6 +309,20 @@ class Watchdog:
     def feed(self):
         if self.wd:
             self.wd.feed()
+
+
+def cold_boot():
+    """True after power-on or the RESET button. False after code.py's
+    reload on a crash or a watchdog reset, so those don't reset the board's
+    brightness (and light up a board that was switched off)."""
+    import microcontroller
+    import supervisor
+    try:
+        if supervisor.runtime.run_reason != supervisor.RunReason.STARTUP:
+            return False
+        return microcontroller.cpu.reset_reason != microcontroller.ResetReason.WATCHDOG
+    except AttributeError:
+        return True
 
 
 class Hardware:

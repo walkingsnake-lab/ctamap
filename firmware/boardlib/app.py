@@ -36,10 +36,12 @@ class Board:
         self.up = Debounce()
         self.down = Debounce()
         self.sync_ms = 0
-        self.sync_now = 0
+        self.epoch_ms = 0
+        self.synced = False
         self.fails = 0
         self.online = False
         self.last_draw = -1
+        self.last_key = None
         self.sched = Scheduler()
         self.version_job = self.sched.add(Job('version', VERSION_EVERY, 20000, self._version))
         self.update_job = self.sched.add(Job('update', UPDATE_EVERY, 30000, self._update))
@@ -47,14 +49,27 @@ class Board:
         self.stats = {'fetches': 0, 'forced': 0, 'draws': 0}
 
     # ---- time ----
+    # Epoch time stays in integers: CircuitPython floats have 22 bits of
+    # precision, which is about 8 minutes at today's epoch seconds.
+
+    def now_ms(self, ms):
+        return self.epoch_ms + (ms - self.sync_ms)
 
     def now(self, ms):
-        """Epoch seconds: server time at the last sync plus elapsed."""
-        return self.sync_now + (ms - self.sync_ms) / 1000
+        """Epoch seconds (int)."""
+        return self.now_ms(ms) // 1000
 
-    def _sync(self, server_now, ms):
-        self.sync_now = server_now
-        self.sync_ms = ms
+    def _sync(self, server_now, started, ended):
+        """The server's whole-second `now` puts the true time at `ended`
+        between `lo` and `hi`. The clock starts at `lo` and moves only when
+        it's outside that range, to its nearest edge: forward as better
+        samples come in, back only if the board's own clock runs fast."""
+        lo = server_now * 1000
+        hi = lo + 1000 + (ended - started)
+        t = self.now_ms(ended) if self.synced else lo
+        self.synced = True
+        self.epoch_ms = min(max(t, lo), hi)
+        self.sync_ms = ended
 
     # ---- connecting ----
 
@@ -72,9 +87,10 @@ class Board:
             if result == 'ok':
                 self._status('ok', detail)
                 try:
+                    started = self.clock.ms()
                     p = self.net.update(boot)
                     ms = self.clock.ms()
-                    self._apply(p, ms)
+                    self._apply(p, started, ms)
                     self.update_job.due_at = ms + UPDATE_EVERY
                     self.version_job.due_at = ms + VERSION_EVERY
                     self.online = True
@@ -96,21 +112,21 @@ class Board:
 
     # ---- jobs ----
 
-    def _apply(self, p, ms):
-        self._sync(p['now'], ms)
+    def _apply(self, p, started, ms):
+        self._sync(p['now'], started, ms)
         self.player.set_payload(p, ms)
         self.player.set_screen(self.override.resolve(self.player.auto_screen(self.now(ms)), p.get('v')), ms)
 
     def _version(self, ms):
         r = self.net.version()
-        self._sync(r['now'], self.clock.ms())
+        self._sync(r['now'], ms, self.clock.ms())
         if self.player.p is None or r.get('v') != self.player.p.get('v'):
             self.update_job.due_at = 0  # settings changed: fetch now
         return 'ok'
 
     def _update(self, ms):
         p = self.net.update(False)
-        self._apply(p, self.clock.ms())
+        self._apply(p, ms, self.clock.ms())
         return 'ok'
 
     def _radar(self, ms):
@@ -141,7 +157,7 @@ class Board:
             # button press is overriding it.
             self.player.set_screen(self.override.resolve(self.player.auto_screen(now), self.player.p.get('v')), ms)
         busy = self.player.busy(ms)
-        quiet = self.player.quiet_ms(ms, now)
+        quiet = max(0, self.player.quiet_ms(ms, now) - self.now_ms(ms) % 1000)
         job = self.sched.pick(ms, busy, quiet)
         if job is not None and not job.overdue(ms) and not self.player.at_blink_start(ms):
             job = None  # wait for the alert blink to turn on, then fetch
@@ -176,13 +192,14 @@ class Board:
                 self.connect(boot=False)
             ms = self.clock.ms()
 
-        # Redraw: every ~33 ms while animating, otherwise 4x a second (alert
-        # blink is 1 s; clocks change once a minute).
-        interval = 33 if self.player.busy(ms) else 250
-        if self.last_draw < 0 or ms - self.last_draw >= interval:
-            now = self.now(ms)
+        # Redraw every ~33 ms while animating; otherwise only when something
+        # on screen can have changed.
+        now = self.now(ms)
+        key = self.player.frame_key(ms, now)
+        if self.last_draw < 0 or (ms - self.last_draw >= 33 if key is None else key != self.last_key):
             self.display.show(lambda f: self.player.draw(f, ms, now))
             self.last_draw = ms
+            self.last_key = key
             self.stats['draws'] += 1
 
     def _buttons(self, ms):
@@ -215,13 +232,14 @@ def run():
         bit_depth=int(os.getenv('MATRIX_BIT_DEPTH') or 5),
     )
     board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog)
-    board.connect()
+    board.connect(boot=device.cold_boot())
     last_report = hw.clock.ms()
     while True:
         board.step()
         ms = hw.clock.ms()
         if ms - last_report > 60000:
-            print('[board] fetch budget %d ms, last draw %d ms, %r, mem free %s' % (
-                board.sched.budget_ms, hw.display.last_ms, board.stats, hw.mem_free()))
+            print('[board] fetch budget %d ms, draw %d ms (max %d), %r, mem free %s' % (
+                board.sched.budget_ms, hw.display.last_ms, hw.display.max_ms, board.stats, hw.mem_free()))
+            hw.display.max_ms = 0
             last_report = ms
         hw.clock.sleep_ms(5)
