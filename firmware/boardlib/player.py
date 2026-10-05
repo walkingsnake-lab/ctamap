@@ -14,7 +14,7 @@ import math
 
 from . import draw
 
-SCREENS = ('transit', 'ticker', 'radar')
+SCREENS = ('transit', 'ticker', 'radar', 'baseball')
 BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
 
@@ -30,6 +30,8 @@ class Player:
         self.blink_shift = 0     # ms; blink phase 0 (off) starts here
         self.screen = 'transit'
         self._screen_since = 0
+        self.bb_shown = None     # baseball texts last drawn (for rolls)
+        self.bb_rolls = {}       # text key -> {'from', 'start'}
 
     # ---- inputs ----
 
@@ -57,9 +59,9 @@ class Player:
         screen = (p.get('screen') or 'transit') if p else 'transit'
         r = (p.get('radar') or {}) if p else {}
         v = r.get('visit')
-        if screen != 'transit' or not r.get('on') or not v or not v.get('every', 0) > 0:
+        if screen not in ('transit', 'baseball') or not r.get('on') or not v or not v.get('every', 0) > 0:
             return screen
-        return 'radar' if int(now) % v['every'] < v['for'] else 'transit'
+        return 'radar' if int(now) % v['every'] < v['for'] else screen
 
     def wants_frames(self):
         """Radar frames are needed on the radar screen, and ahead of visits."""
@@ -76,6 +78,8 @@ class Player:
             self.page_start = ms
             self.loop_start = ms
             self.anim = draw.TransitAnimator()
+            self.bb_shown = None
+            self.bb_rolls = {}
 
     # ---- drawing ----
 
@@ -93,6 +97,27 @@ class Player:
                 since = 0
             slide = (since - draw.PAGE_HOLD_MS) / draw.SLIDE_MS if pages > 1 and since > draw.PAGE_HOLD_MS else 0
             return draw.render(p, frame, screen='ticker', now=now, page=self.page, slide=slide)
+        if self.screen == 'baseball':
+            # Scores, inning, count, and outs roll when they change (not
+            # across a change of game or state). Mirrors sim.html.
+            bt = draw.baseball_texts(p, now)
+            if bt and self.bb_shown and self.bb_shown['key'] == bt['key']:
+                for k, v in bt['texts'].items():
+                    old = self.bb_shown['texts'].get(k)
+                    if old is not None and old != v:
+                        self.bb_rolls[k] = {'from': old, 'start': ms}
+            else:
+                self.bb_rolls = {}
+            self.bb_shown = bt
+            rolls = {}
+            for k in list(self.bb_rolls):
+                r = self.bb_rolls[k]
+                rp = (ms - r['start']) / draw.ROLL_MS
+                if rp >= 1:
+                    del self.bb_rolls[k]
+                else:
+                    rolls[k] = {'from': r['from'], 'p': rp}
+            return draw.render(p, frame, screen='baseball', now=now, rolls=rolls)
         if self.screen == 'radar':
             return draw.render(p, frame, screen='radar', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms))
         view = self.anim.step(p, now, ms)
@@ -108,9 +133,13 @@ class Player:
         return ((ms - self.blink_shift) // draw.BLINK_MS) % 2 == 1
 
     def blinking(self):
-        if not self.p or self.screen != 'transit':
+        if not self.p or self.screen not in ('transit', 'radar'):
             return False
-        return any(r.get('a') for r in self.p.get('rows') or [])
+        w = self.p.get('warn') or {}
+        tornado = w.get('kind') == 'tor' and w.get('lvl') == 'warning'
+        if self.screen == 'radar':
+            return tornado
+        return any(r.get('a') for r in self.p.get('rows') or []) or bool(tornado and self.p.get('wx'))
 
     def at_blink_start(self, ms):
         """True in the first moments of an 'on' phase (or when nothing blinks)."""
@@ -137,6 +166,8 @@ class Player:
         if self.screen == 'ticker':
             since = ms - self.page_start
             return draw.ticker_pages(self.p, 0) > 1 and draw.PAGE_HOLD_MS < since < draw.PAGE_HOLD_MS + draw.SLIDE_MS
+        if self.screen == 'baseball':
+            return any(ms - r['start'] < draw.ROLL_MS for r in self.bb_rolls.values())
         if self.screen == 'radar':
             n = len((self.p.get('radar') or {}).get('frames') or [])
             if n < 2:
@@ -155,6 +186,8 @@ class Player:
             if draw.ticker_pages(self.p, now) < 2:
                 return FAR
             return max(0, draw.PAGE_HOLD_MS - (ms - self.page_start))
+        if self.screen == 'baseball':
+            return FAR  # rolls follow fetched changes; the rotation swaps without animating
         if self.screen == 'radar':
             n = len((self.p.get('radar') or {}).get('frames') or [])
             if n < 2:

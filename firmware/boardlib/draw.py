@@ -792,6 +792,210 @@ def render_radar(p, f, now=None, idx=None, frames=None, blink=False):
     return f
 
 
+# ---- baseball (design spec §8) ----
+# Team rows on the left (color block + 5x7 abbreviation + score), status
+# panel centered on x51, divider on row 22, bottom line right-aligned.
+
+BB = {'live': hexc('#f0f0f0'), 'lose': hexc('#6a6a6a'), 'base': hexc('#454545'), 'infield': hexc('#3a3a3a')}
+BB_ROW_TOPS = (2, 12)   # away, home
+SCORE_RIGHT = 30
+PANEL_X = 51
+BB_BOTTOM = 31
+BB_DIVIDER = 22
+SCORE_ROLL = 8
+SCORE_HOLD_S = 30
+SCORE_FADE_S = 5
+HALF = {'T': 'TOP', 'B': 'BOT', 'M': 'MID', 'E': 'END'}
+
+
+def ctext(f, font, s, cx, base, rgb):
+    return f.text(font, s, cx - measure(font, s) // 2, base, rgb)
+
+
+def bb_record(t):
+    if t.get('w') is None or t.get('l') is None:
+        return ''
+    return '%d-%d' % (t['w'], t['l'])
+
+
+def pick_game(games, now):
+    """Live games take precedence; one minute each by wall time."""
+    if not games:
+        return {'i': -1, 'pos': 0, 'of': 0}
+    live = [i for i, gm in enumerate(games) if gm.get('st') == 'live']
+    pool = live if live else list(range(len(games)))
+    pos = int(math.floor(now / 60)) % len(pool)
+    return {'i': pool[pos], 'pos': pos, 'of': len(pool)}
+
+
+def score_color(side, now):
+    if side.get('at') is None:
+        return BB['live']
+    age = now - side['at']
+    if age < 0 or age < SCORE_HOLD_S:
+        return C['amber']
+    if age >= SCORE_HOLD_S + SCORE_FADE_S:
+        return BB['live']
+    return _lerp_color(C['amber'], BB['live'], (age - SCORE_HOLD_S) / SCORE_FADE_S)
+
+
+def draw_score(f, text, top, color, roll):
+    base = top + 6
+    if not roll or roll['from'] == text or roll['p'] >= 1:
+        rtext(f, '5x7', text, SCORE_RIGHT, base, color)
+        return
+    up = jsround(ease_in_out(roll['p']) * SCORE_ROLL)
+    f.push_clip(SCORE_RIGHT - 12, top, SCORE_RIGHT, top + 6)
+    try:
+        frm = roll['from']
+        if len(frm) == len(text):
+            x = SCORE_RIGHT - measure('5x7', text) + 1
+            for i in range(len(text)):
+                if frm[i] == text[i]:
+                    f.text('5x7', text[i], x, base, color)
+                else:
+                    f.text('5x7', frm[i], x, base - up, color)
+                    f.text('5x7', text[i], x, base - up + SCORE_ROLL, color)
+                x += measure('5x7', text[i]) + 1
+        else:
+            rtext(f, '5x7', frm, SCORE_RIGHT, base - up, color)
+            rtext(f, '5x7', text, SCORE_RIGHT, base - up + SCORE_ROLL, color)
+    finally:
+        f.pop_clip()
+
+
+def draw_diamond(f, cx, cy, r, color, filled):
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            d = abs(dx) + abs(dy)
+            if d == r or (filled and d < r):
+                f.fill(cx + dx, cy + dy, 1, 1, color)
+
+
+def draw_infield(f, on):
+    draw_diamond(f, PANEL_X, 7, 5, BB['infield'], False)
+    draw_diamond(f, PANEL_X, 2, 2, C['amber'] if on[1] else BB['base'], True)
+    draw_diamond(f, PANEL_X - 5, 7, 2, C['amber'] if on[2] else BB['base'], True)
+    draw_diamond(f, PANEL_X + 5, 7, 2, C['amber'] if on[0] else BB['base'], True)
+
+
+def draw_roll_text(f, text, left, base, color, roll):
+    if not roll or roll['from'] == text or roll['p'] >= 1:
+        f.text('small', text, left, base, color)
+        return
+    frm = roll['from']
+    up = jsround(ease_in_out(roll['p']) * ROLL_DIST)
+    same_shape = len(frm) == len(text)
+    if same_shape:
+        for i in range(len(text)):
+            if measure('small', text[i]) != measure('small', frm[i]):
+                same_shape = False
+                break
+    f.push_clip(0, base - 5, 63, base - 1)
+    try:
+        if same_shape:
+            x = left
+            for i in range(len(text)):
+                if frm[i] == text[i]:
+                    f.text('small', text[i], x, base, color)
+                else:
+                    f.text('small', frm[i], x, base - up, color)
+                    f.text('small', text[i], x, base - up + ROLL_DIST, color)
+                x += measure('small', text[i]) + 1
+        else:
+            from_left = left + measure('small', text) - measure('small', frm)
+            f.text('small', frm, from_left, base - up, color)
+            f.text('small', text, left, base - up + ROLL_DIST, color)
+    finally:
+        f.pop_clip()
+
+
+def live_texts(gm):
+    brk = gm.get('half') in ('M', 'E')
+    return {
+        'inn': '%s %s' % (HALF.get(gm.get('half')) or 'TOP', gm.get('inn')),
+        'count': '' if brk else '%d-%d' % (gm.get('b') or 0, gm.get('s') or 0),
+        'outs': '' if brk else '%d OUT' % (gm.get('o') or 0),
+    }
+
+
+def draw_no_games(f, now, tzo):
+    clock = clock_text(now, tzo)
+    label = 'NO GAMES'
+    top = (32 - 18) // 2
+    f.text('clock', clock, (64 - measure('clock', clock)) // 2, top + 10, C['clock'])
+    f.text('small', label, (64 - measure('small', label)) // 2, top + 18, C['noTrains'])
+
+
+def render_baseball(p, f, now=None, game=None, rolls=None):
+    if now is None:
+        now = p['now']
+    tzo = p.get('tzo', 0)
+    games = (p.get('mlb') or {}).get('games') or []
+    if not games:
+        draw_no_games(f, now, tzo)
+        return f
+    gm = games[game % len(games) if game is not None else pick_game(games, now)['i']]
+    rolls = rolls or {}
+    final = gm['st'] == 'final'
+    winner = None
+    if final:
+        if gm['away']['r'] > gm['home']['r']:
+            winner = 'away'
+        elif gm['home']['r'] > gm['away']['r']:
+            winner = 'home'
+
+    name_end = 0
+    for k, top in (('away', BB_ROW_TOPS[0]), ('home', BB_ROW_TOPS[1])):
+        side = gm[k]
+        f.fill(1, top, 3, 6, hexc(side['c']) if side.get('c') else C['grey'])
+        name_end = max(name_end, f.text('5x7', side['ab'], 6, top + 6, C['amber'] if winner == k else C['label']))
+    f.fill(0, BB_DIVIDER, 64, 1, C['divider'])
+
+    if gm['st'] == 'pre':
+        f.text('small', bb_record(gm['away']), name_end + 2, BB_ROW_TOPS[0] + 6, C['grey'])
+        f.text('small', bb_record(gm['home']), name_end + 2, BB_ROW_TOPS[1] + 6, C['grey'])
+        ap = ampm_text(gm['start'], tzo)
+        rtext(f, 'small', ap, 62, BB_BOTTOM, C['grey'])
+        rtext(f, 'small', clock_text(gm['start'], tzo), 62 - measure('small', ap) - 3, BB_BOTTOM, C['label'])
+        return f
+
+    if final:
+        for k, top in (('away', BB_ROW_TOPS[0]), ('home', BB_ROW_TOPS[1])):
+            if winner == k:
+                color = C['amber']
+            elif winner:
+                color = BB['lose']
+            else:
+                color = C['label']
+            draw_score(f, str(gm[k]['r']), top, color, rolls.get(k))
+            ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 6, C['grey'])
+        rtext(f, 'small', 'FINAL', 62, BB_BOTTOM, C['label'])
+        return f
+
+    draw_score(f, str(gm['away']['r']), BB_ROW_TOPS[0], score_color(gm['away'], now), rolls.get('away'))
+    draw_score(f, str(gm['home']['r']), BB_ROW_TOPS[1], score_color(gm['home'], now), rolls.get('home'))
+    draw_infield(f, gm.get('on') or [0, 0, 0])
+    t = live_texts(gm)
+    draw_roll_text(f, t['inn'], PANEL_X - measure('small', t['inn']) // 2, 20, C['label'], rolls.get('inn'))
+    outs_left = 62 - measure('small', t['outs']) + 1
+    draw_roll_text(f, t['outs'], outs_left, BB_BOTTOM, C['grey'], rolls.get('outs'))
+    draw_roll_text(f, t['count'], outs_left - 5 - measure('small', t['count']), BB_BOTTOM, C['label'], rolls.get('count'))
+    return f
+
+
+def baseball_texts(p, now):
+    """Texts that roll when they change, keyed by game and state."""
+    games = (p.get('mlb') or {}).get('games') or []
+    if not games:
+        return None
+    gm = games[pick_game(games, now)['i']]
+    texts = {'away': str(gm['away']['r']), 'home': str(gm['home']['r'])}
+    if gm['st'] == 'live':
+        texts.update(live_texts(gm))
+    return {'key': '%s:%s' % (gm['id'], gm['st']), 'texts': texts}
+
+
 # ---- whole screen ----
 
 def apply_brightness(f, bright):
@@ -807,12 +1011,14 @@ def apply_brightness(f, bright):
     return f
 
 
-def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0, idx=None, frames=None):
+def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0, idx=None, frames=None, game=None, rolls=None):
     screen = screen or p.get('screen')
     if screen == 'ticker':
         render_ticker(p, f, now=now, page=page, slide=slide)
     elif screen == 'radar':
         render_radar(p, f, now=now, idx=idx, frames=frames, blink=blink)
+    elif screen == 'baseball':
+        render_baseball(p, f, now=now, game=game, rolls=rolls)
     else:
         render_transit(p, f, now=now, blink=blink, view=view)
     return apply_brightness(f, p.get('bright'))

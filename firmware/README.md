@@ -45,7 +45,7 @@ before copying. Ask and it can be set up.
 | `boardlib/app.py` | Main loop: connecting (status screens), the scheduled jobs (version check every 10 s, update every 30 s or on a settings change, radar frames while the radar shows), buttons, redraws. |
 | `boardlib/player.py` | What to draw at each moment (transit animator, ticker paging, radar loop, blink) and when the next animation starts. |
 | `boardlib/sched.py` | Runs network requests in animation gaps; forces them past a deadline; learns the request time. |
-| `boardlib/control.py` | UP/DOWN buttons: last action wins against the phone. |
+| `boardlib/control.py` | UP/DOWN buttons (cycle transit, ticker, radar, baseball): last action wins against the phone. |
 | `boardlib/status.py` | WIFI / WIFI OK / PORTAL / NO WIFI / NO SERVER screens. |
 | `boardlib/device.py` | Hardware only: the matrix (palette-indexed bitmap, `bitmaptools` fills and radar copies), ESP32 WiFi + HTTPS, buttons, watchdog. |
 | `tests/` | Run by `npm test` (needs `python3`): pixel parity with draw.js through both the plain frame and the board's bitmap frame (with stand-ins for the CircuitPython modules), and the main loop against a simulated server, clock, and buttons. |
