@@ -228,7 +228,7 @@ When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`. Th
 | `on` | Live only. Runners as `[1st, 2nd, 3rd]`, 1 = occupied. |
 
 - **Server:** `server/board/mlb.js` polls `statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=<yesterday>&endDate=<today>&hydrate=linescore` (Chicago dates) every 15 s while a shown game is live or within 30 min of first pitch, every 5 min otherwise. Shown: Cubs games (team 112) and postseason games (`gameType` `F`, `D`, `L`, `W`), from 30 min before first pitch until 15 min after the server first sees the final; postponed and cancelled games are skipped. Sorted by first pitch.
-- **Board:** shows a live game whenever one is on: the live games (or, with none live, all games) rotate one minute each by wall time, `set[floor(now / 60) % set.length]` (`draw.js` `pickGame`, no state), drawn per `draw.js` `renderBaseball` (design spec §8). Score changes roll per digit.
+- **Board:** shows a live game whenever one is on: the live games (or, with none live, all games) rotate one minute each by wall time, `set[floor(now / 60) % set.length]` (`draw.js` `pickGame`, no state), drawn per `draw.js` `renderBaseball` (design spec §8). Scores, inning, count, and outs roll when they change (`baseballTexts`).
 
 ### `GET /board/radar/<frameId>?b=<id>`
 One radar frame for that board's location.

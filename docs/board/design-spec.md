@@ -267,7 +267,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - Updated W-L for each team (Tom Thumb, grey) centered on x51, level with its team (rows 3 and 13).
 - `FINAL` (label white) in the bottom line.
 
-**Animation:** per-digit roll when a score changes. Nothing else.
+**Animation:** the arrival-time roll, reused: scores, and while live the inning, count, and outs, roll when they change. Same-shape texts roll only the changed characters (`TOP 7` → `BOT 7` rolls T/B and P/T); anything else rolls whole. No roll across a change of game or state. Nothing else animates.
 
 ### Team colors
 - One block color per team, from its primary color. Dark navies and maroons (Yankees, Tigers, Padres, Brewers, Twins, Astros, Mariners, Rays, Nationals…) are **boosted** so they read as color, not black, on the panel, like Brown/Purple on the transit screen. Mock values: Cubs `#2a5bd8`, Cardinals `#d62a2a`.
