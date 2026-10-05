@@ -128,7 +128,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Minutes round up**, like CTA's own predictions: `DUE` within 60 s (when CTA flags the train as approaching), then 2, 3, …; never 1.
 - **One DUE per destination:** only the soonest train of a destination (same line and direction) can read `DUE` (rows, chronological view, and ticker alike). When trains are bunched and a later one is also within 60 s, it shows `2` (`2m`) instead, so two DUEs never sit side by side.
 - **Per-digit roll** when a number changes (12→11 rolls only the 2), and whole-cell rolls to and from `DUE`.
-- **Departures fade, not roll:** when the first train leaves, its cell fades out in place (0.7 s), the remaining times slide left (0.5 s), and the new first time eases from dim to amber (0.7 s). A row losing its last train fades out, then the rows below slide up; new rows and times fade in. Arrivals are matched across updates by time (within 90 s), so refreshed predictions don't flicker. Reference: `createTransitAnimator()` in `server/board/draw.js`.
+- **Departures fade, not roll:** when the first train leaves, its cell fades out in place (0.7 s), then (not during the fade) the remaining times slide left (0.5 s), a newly joined time at the end fades in after that slide, and the new first time eases from dim to amber (0.7 s). A row losing its last train fades out, then the rows below slide up; new rows and times fade in. Arrivals are matched across updates by time (within 90 s), so refreshed predictions don't flicker. Reference: `createTransitAnimator()` in `server/board/draw.js`.
 
 ### Layout
 - **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
@@ -262,7 +262,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Team rows:** 3x6 team-color block at x1 and the abbreviation in X11 5x7 (label white) at x6; away on top (block rows 2–7), home below (rows 12–17). No logos.
 - **Divider** on row 22 (`#333333`), full width, the same row as the transit weather divider. **No series label** (e.g. `NLDS G2`) anywhere.
 - **Bottom line** (Tom Thumb, baseline 31) sits on the same rows as the transit weather row and is right-aligned to x62.
-- **Score flash:** when a live score changes, that team's score turns amber for 60 s, then fades back to white over 10 s. The server stamps the change time (the board only draws it); a game first seen mid-game doesn't flash.
+- **Score flash:** when a live score changes, that team's score turns amber for 30 s, then fades back to white over 5 s. The server stamps the change time (the board only draws it); a game first seen mid-game doesn't flash.
 
 **Live**
 - Scores: X11 5x7, right-aligned to **x30** (a two-digit score still clears the name), both lit white `#f0f0f0`.

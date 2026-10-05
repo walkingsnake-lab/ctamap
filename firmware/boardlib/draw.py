@@ -484,6 +484,8 @@ class TransitAnimator:
         unmatched = [c for c in state['cells'] if not c.get('leaving')]
         used = []
         out = []
+        moved = []
+        joined = []
         for c in cells:
             m = None
             for u in unmatched:
@@ -500,6 +502,7 @@ class TransitAnimator:
                 if m['right'] != c['right']:
                     m['fromRight'] = m['right'] if m.get('shownRight') is None else m['shownRight']
                     m['moveStart'] = t
+                    moved.append(m)
                 m['t'] = c['t']
                 m['text'] = c['text']
                 m['color'] = c['color']
@@ -510,6 +513,8 @@ class TransitAnimator:
                 n['id'] = self.next_id
                 self.next_id += 1
                 n['born'] = None if is_new_row else t
+                if not is_new_row:
+                    joined.append(n)
                 out.append(n)
         for u in unmatched:
             if not _contains(used, u):
@@ -523,6 +528,15 @@ class TransitAnimator:
             if not _contains(dedup, c):
                 dedup.append(c)
         state['cells'] = dedup
+        # Cells slide and join only once the leaving ones have faded.
+        until = t
+        for c in state['cells']:
+            if c.get('leaving'):
+                until = max(until, c['leaving'] + FADE_MS)
+        for m in moved:
+            m['moveStart'] = until
+        for n in joined:
+            n['born'] = until + (MOVE_MS if moved else 0)
 
     def step(self, p, now, t):
         target = build_transit_view(p, now)

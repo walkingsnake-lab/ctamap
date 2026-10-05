@@ -585,3 +585,32 @@ test('radar time off: no time or AM/PM; indicator stays; warning icon at the top
   assert.deepEqual(on.px, on2.px);
   assert.ok(count(on, draw.C.radarTime, 40, 6, 63, 14) > 15);
 });
+
+test('animator: times slide only after a leaving DUE has faded; a new arrival waits for the slide', () => {
+  const row = (t) => payload([{ ln: 'RD', lbl: 'HOWARD', t, s: t.map(() => 0), a: 0 }]);
+  const anim = draw.createTransitAnimator();
+  const first = anim.step(row([NOW + 10, min(7), min(16)]), NOW, 0).rows[0].cells;
+  const p2 = row([NOW + 10, min(7), min(16), min(25)]);
+  const t0 = 1000;
+  const at = (d) => anim.step(p2, NOW + 45, t0 + d).rows[0].cells;
+  const id = (k) => first[k].id;
+  const start = at(0);
+  const sevenRight = start.find((c) => c.id === id(1)).right;
+  // While DUE fades, nothing else moves or appears.
+  const midFade = at(draw.FADE_MS / 2);
+  assert.ok(midFade.find((c) => c.id === id(0)).alpha < 1);
+  assert.equal(midFade.find((c) => c.id === id(1)).right, sevenRight);
+  assert.equal(midFade.find((c) => c.id === id(2)).right, start.find((c) => c.id === id(2)).right);
+  const newcomer = (cells) => cells.find((c) => ![0, 1, 2].some((k) => c.id === id(k)));
+  assert.equal(newcomer(midFade).alpha, 0);
+  // Then they slide (DUE gone), and the new time fades in only after the slide.
+  const slide = at(draw.FADE_MS + draw.MOVE_MS / 2);
+  assert.ok(!slide.some((c) => c.id === id(0)));
+  const moving = slide.find((c) => c.id === id(1)).right;
+  assert.ok(moving < sevenRight && moving > 0);
+  assert.equal(newcomer(slide).alpha, 0);
+  const after = at(draw.FADE_MS + draw.MOVE_MS + draw.FADE_MS / 2);
+  assert.ok(newcomer(after).alpha > 0 && newcomer(after).alpha < 1);
+  const done = at(draw.FADE_MS + draw.MOVE_MS + draw.FADE_MS + 10);
+  assert.ok(done.every((c) => c.alpha === 1));
+});
