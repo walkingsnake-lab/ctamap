@@ -7,7 +7,7 @@ const { createStore, ValidationError } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, toWx, autoBright } = require('./weather');
+const { createWeather, toWx, toScreenWx, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar } = require('./radar');
@@ -181,8 +181,10 @@ function createBoard({
     let radarState = NO_RADAR;
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
     catch (e) { log.error('[board] radar:', e.message); }
-    // Until radar frames arrive, the radar screen shows current conditions.
-    if (!radarState.frames.length && w) radarState = { ...radarState, wx: toWx(w) };
+    // The radar screen is the weather screen: the radar loop only while rain
+    // is in the box (frames are sent only then), current conditions otherwise.
+    if (!radarState.on) radarState = { ...radarState, frames: [], ft: [] };
+    if (w) radarState = { ...radarState, wx: toScreenWx(w) };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }
@@ -387,7 +389,7 @@ function createBoard({
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
-        const screen = ['transit', 'ticker', 'radar', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
+        const screen = ['transit', 'ticker', 'weather', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid); if (b) frames[fid] = b; }

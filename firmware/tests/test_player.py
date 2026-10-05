@@ -68,16 +68,16 @@ class BaseballPlayer(unittest.TestCase):
         r = {'on': True, 'frames': [], 'ft': [], 'visit': {'every': 240, 'for': 60}}
         self.pl.set_payload(payload([game()], radar=r), 0)
         t = (T0 // 240) * 240
-        self.assertEqual(self.pl.auto_screen(t + 10), 'radar')
+        self.assertEqual(self.pl.auto_screen(t + 10), 'weather')
         self.assertEqual(self.pl.auto_screen(t + 100), 'baseball')
 
     def test_tornado_warning_blinks_on_radar_and_the_weather_row(self):
         pl = player.Player()
         tor = {'kind': 'tor', 'lvl': 'warning'}
-        pl.set_payload(payload([], screen='radar', warn=tor), 0)
-        pl.set_screen('radar', 0)
+        pl.set_payload(payload([], screen='weather', warn=tor), 0)
+        pl.set_screen('weather', 0)
         self.assertTrue(pl.blinking())
-        pl.set_payload(payload([], screen='radar', warn={'kind': 'tor', 'lvl': 'watch'}), 0)
+        pl.set_payload(payload([], screen='weather', warn={'kind': 'tor', 'lvl': 'watch'}), 0)
         self.assertFalse(pl.blinking())
         pl.set_payload(payload([], screen='transit', warn=tor, wx={'icon': 'storm', 'temp': 54, 'word': 'STORMS'}), 0)
         pl.set_screen('transit', 0)

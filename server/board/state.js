@@ -15,7 +15,7 @@ const FILE_NAME = 'board-state.json';
 const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
-const SCREENS = ['auto', 'transit', 'ticker', 'radar', 'baseball'];
+const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball'];
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
 const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
@@ -131,6 +131,8 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     try {
       state = JSON.parse(fs.readFileSync(file, 'utf8'));
       if (!state || typeof state.boards !== 'object') throw new Error('missing "boards"');
+      // The radar screen was renamed weather.
+      for (const b of Object.values(state.boards)) if (b && b.screen === 'radar') b.screen = 'weather';
     } catch (e) {
       if (e.code !== 'ENOENT') {
         const aside = `${file}.corrupt-${Date.now()}`;

@@ -4,7 +4,7 @@
 # settings version. The override holds until the version changes (someone
 # changed something on the phone), then the board follows the server again.
 
-SCREENS = ('transit', 'ticker', 'radar', 'baseball')
+SCREENS = ('transit', 'ticker', 'weather', 'baseball')
 
 
 class ScreenOverride:

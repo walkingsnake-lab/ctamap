@@ -113,11 +113,27 @@ async function build() {
     const t = radar.timeOf(key.split('-')[1]);
     const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
     const p = { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (5 - i) * 300), timeBox: loc.timeBox, split: loc.split } };
-    add(`radar ${key}`, p, [{ screen: 'radar', idx: 5 }, { screen: 'radar', idx: 0 }, { screen: 'radar', idx: 3 }], Object.fromEntries(ids.map((id) => [id, bytes])));
+    add(`radar ${key}`, p, [{ screen: 'weather', idx: 5 }, { screen: 'weather', idx: 0 }, { screen: 'weather', idx: 3 }], Object.fromEntries(ids.map((id) => [id, bytes])));
   }
-  for (const [timeBox, split] of [[radar.FULL_TIME_BOX, false], [radar.SPLIT_TIME_BOX, true]]) {
+  // Weather screen (radar screen with no frames): every warning, cold/hot
+  // extremes (minus bar, word skipped for 3-digit temps, high/low losing its
+  // degree signs), and a response without the extras.
+  {
     const t = 1791140000;
-    add(`radar conditions split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'watch' }, radar: { on: false, frames: [], ft: [], timeBox, split, wx: { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 } } }, [{ screen: 'radar' }]);
+    const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
+    const wxCases = [
+      ['normal', wx, null],
+      ['svr watch', wx, { kind: 'svr', lvl: 'watch' }],
+      ['svr warning', wx, { kind: 'svr', lvl: 'warning' }],
+      ['tor watch', wx, { kind: 'tor', lvl: 'watch' }],
+      ['tor warning', wx, { kind: 'tor', lvl: 'warning' }],
+      ['cold', { icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -31, wind: 'NW 22', pop: 100 }, null],
+      ['hot', { icon: 'sun', temp: 101, word: 'PT CLOUDY', hi: 103, lo: 82, feels: 112, wind: 'CALM', pop: 0 }, null],
+      ['no extras', { icon: 'moon', temp: 48, word: 'CLEAR', hi: 61, lo: 44, feels: null, wind: null, pop: null }, null],
+    ];
+    for (const [name, w, warn] of wxCases) {
+      add(`weather screen ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
+    }
   }
 
   // Radar time off: icon + temperature, WATCH/WARN tag bottom right (tornado warning blinks).
@@ -127,10 +143,10 @@ async function build() {
     const frames = Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048).fill(3)]));
     const r = { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false, temp: split ? -12 : 63, icon: split ? 'snow' : 'pcloudy_day' };
     for (const warn of [{ kind: 'tor', lvl: 'warning' }, { kind: 'tor', lvl: 'watch' }, { kind: 'svr', lvl: 'warning' }]) {
-      add(`radar time off split=${split} ${warn.kind} ${warn.lvl}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: r }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0, blink: true }], frames);
+      add(`radar time off split=${split} ${warn.kind} ${warn.lvl}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: r }, [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 0, blink: true }], frames);
     }
-    add(`radar time off split=${split} no temp, no icon`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, temp: null } }, [{ screen: 'radar', idx: 2 }], frames);
-    add(`radar time on split=${split} tornado warning blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 2, blink: true }], frames);
+    add(`radar time off split=${split} no temp, no icon`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, temp: null } }, [{ screen: 'weather', idx: 2 }], frames);
+    add(`radar time on split=${split} tornado warning blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true } }, [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, blink: true }], frames);
   }
   // Weather row: tornado warning tag blinks.
   {

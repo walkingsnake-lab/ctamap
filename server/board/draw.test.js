@@ -275,7 +275,7 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   const t = Date.UTC(2020, 7, 10, 21, 0) / 1000; // 4:00 PM CDT
   const ids = ['a', 'b', 'c'];
   const p = { now: t, bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: [t - 600, t - 300, t], timeBox: [40, 0, 24, 32], split: true } };
-  const f = draw.render(p, { screen: 'radar', frames: { a: bytes, b: bytes, c: bytes }, idx: 2 });
+  const f = draw.render(p, { screen: 'weather', frames: { a: bytes, b: bytes, c: bytes }, idx: 2 });
   assert.equal(hex(f.get(0, 0)), draw.RADAR[1]);
   assert.equal(hex(f.get(1, 0)), draw.RADAR[5]);
   assert.equal(hex(f.get(2, 0)), draw.RADAR[8]);
@@ -293,10 +293,10 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   for (let y = 0; y < 32; y++) assert.equal(hex(f.get(39, y)), draw.C.divider);
   for (let y = 0; y < 32; y++) for (let x = 36; x < 39; x++) assert.deepEqual(f.get(x, y), [0, 0, 0]);
   for (let y = 0; y < 32; y++) assert.deepEqual(f.get(40, y), [0, 0, 0], '1px gap before the widest clock');
-  const full = draw.render({ ...p, radar: { ...p.radar, timeBox: [40, 0, 24, 22], split: false } }, { screen: 'radar', frames: {}, idx: 2 });
+  const full = draw.render({ ...p, radar: { ...p.radar, timeBox: [40, 0, 24, 22], split: false } }, { screen: 'weather', frames: {}, idx: 2 });
   assert.deepEqual(full.get(39, 25), [0, 0, 0], 'no line in the full-width layout');
   // A frame not fetched yet draws as empty radar with the stack.
-  const empty = draw.render(p, { screen: 'radar', frames: {}, idx: 0 });
+  const empty = draw.render(p, { screen: 'weather', frames: {}, idx: 0 });
   assert.equal(count(empty, draw.RADAR[1], 0, 0, 39, 31), 0);
   assert.equal(hex(empty.get(56, 2)), draw.C.amber);
 });
@@ -305,27 +305,66 @@ test('radar with no frames yet draws the clock at the current time (no crash)', 
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
   for (const radar of [{ on: false, frames: [], ft: [], timeBox: null, split: false }, { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 32], split: true }, undefined]) {
     for (const idx of [undefined, -1, 0, 3]) {
-      const f = draw.render({ now, bright: 100, warn: null, radar }, { screen: 'radar', now, idx, frames: {} });
+      const f = draw.render({ now, bright: 100, warn: null, radar }, { screen: 'weather', now, idx, frames: {} });
       assert.ok(count(f, draw.C.radarTime, 40, 0, 63, 31) > 15, 'clock drawn');
     }
   }
 });
 
-test('radar with no frames shows current conditions on the left', () => {
+test('weather screen: radar screen with no frames shows big temp, details, and rain chance', () => {
   const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
-  const wx = { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 };
-  const f = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: {} });
-  assert.ok(count(f, draw.C.label, 12, 3, 30, 9) > 15, 'temperature');
-  assert.ok(count(f, draw.C.label, 0, 15, 38, 19) > 15, 'condition word');
-  assert.ok(count(f, draw.C.grey, 0, 23, 38, 27) > 15, 'high/low');
-  assert.ok(count(f, draw.C.radarTime, 40, 6, 63, 12) > 15, 'clock still drawn');
-  // Widest case stays clear of the split divider.
-  const wide = { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 };
-  const g = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 32], split: true, wx: wide } }, { screen: 'radar', now, frames: {} });
-  for (let y = 0; y < 32; y++) assert.deepEqual(g.get(38, y), [0, 0, 0], `col 38 row ${y}`);
-  // Once frames exist, the radar replaces the conditions.
-  const withFrames = draw.render({ now, bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [now], timeBox: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: { a: new Uint8Array(2048) } });
-  assert.equal(count(withFrames, draw.C.label, 0, 0, 38, 31), 0);
+  const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
+  const rad = (w, extra = {}) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w, ...extra });
+  const f = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
+  assert.ok(count(f, draw.C.label, 1, 4, 22, 13) > 40, 'big temperature + degree ring');
+  assert.equal(hex(f.get(56, 2)), '#ffc800', 'icon top right');
+  assert.ok(count(f, draw.C.wxText, 29, 11, 63, 15) > 15, 'dim condition word');
+  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 18)), draw.C.divider, `divider col ${x}`);
+  assert.ok(count(f, draw.C.grey, 0, 20, 40, 24) > 15, 'FEELS');
+  assert.ok(count(f, draw.C.label, 40, 20, 63, 24) > 10, 'wind');
+  assert.ok(count(f, draw.C.grey, 0, 26, 45, 30) > 15, 'high/low');
+  assert.equal(count(f, '#1e90ff', 45, 27, 52, 30), 8, 'drop');
+  assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0, 'no radar clock');
+  // Missing extras leave their spots empty.
+  const bare = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, feels: null, wind: null, pop: null }) }, { screen: 'weather', now, frames: {} });
+  assert.equal(count(bare, draw.C.grey, 0, 20, 63, 24) + count(bare, draw.C.label, 0, 20, 63, 24), 0);
+  assert.equal(count(bare, '#1e90ff', 0, 19, 63, 31), 0);
+  // Frames (rain in the box) bring the radar back.
+  const withFrames = draw.render({ now, bright: 100, warn: null, radar: rad(wx, { on: true, frames: ['a'], ft: [now] }) }, { screen: 'weather', now, frames: { a: new Uint8Array(2048) } });
+  assert.equal(count(withFrames, draw.C.divider, 0, 18, 63, 18), 0);
+  assert.ok(count(withFrames, draw.C.radarTime, 40, 6, 63, 12) > 15, 'radar clock');
+});
+
+test('weather screen: a watch or warning replaces the high/low line; tornado warning blinks', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
+  const wx = { icon: 'storm', temp: 57, word: 'STORMS', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 90 };
+  const rad = { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx };
+  const cases = [['svr', 'watch', draw.C.watch], ['svr', 'warning', draw.C.warnSevere], ['tor', 'watch', draw.C.watch], ['tor', 'warning', draw.C.warnTornado]];
+  for (const [kind, lvl, color] of cases) {
+    const f = draw.render({ now, bright: 100, warn: { kind, lvl }, radar: rad }, { screen: 'weather', now, frames: {} });
+    assert.ok(count(f, color, 0, 26, 63, 30) > 30, `${kind} ${lvl} tag`);
+    assert.equal(count(f, draw.C.grey, 0, 26, 63, 30), 0, `${kind} ${lvl}: no high/low`);
+    assert.equal(count(f, '#1e90ff', 0, 26, 63, 31), 0, `${kind} ${lvl}: no rain chance`);
+    for (let y = 26; y <= 30; y++) assert.deepEqual(f.get(63, y), [0, 0, 0], 'fits the panel');
+    const off = draw.render({ now, bright: 100, warn: { kind, lvl }, radar: rad }, { screen: 'weather', now, frames: {}, blink: true });
+    assert.equal(count(off, color, 0, 26, 63, 30) > 0, !(kind === 'tor' && lvl === 'warning'), `${kind} ${lvl} blink`);
+  }
+});
+
+test('weather screen extremes: minus bar, 3-digit temp drops the word, high/low drops degrees to fit', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
+  const rad = (wx) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx });
+  const cold = draw.render({ now, bright: 100, warn: null, radar: rad({ icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -31, wind: 'NW 22', pop: 100 }) }, { screen: 'weather', now, frames: {} });
+  assert.equal(count(cold, draw.C.label, 1, 8, 5, 9), 10, 'minus bar');
+  assert.equal(count(cold, draw.C.label, 1, 4, 5, 7) + count(cold, draw.C.label, 1, 10, 5, 13), 0);
+  const hot = draw.render({ now, bright: 100, warn: null, radar: rad({ icon: 'sun', temp: 101, word: 'PT CLOUDY', hi: 103, lo: 82, feels: 112, wind: 'CALM', pop: 0 }) }, { screen: 'weather', now, frames: {} });
+  assert.equal(count(hot, draw.C.wxText, 0, 11, 63, 15), 0, 'word skipped');
+  // -21° low with 100%: degree signs dropped, 3px clear of the drop.
+  let lastGrey = -1;
+  for (let x = 0; x < 64; x++) for (let y = 26; y <= 30; y++) if (hex(cold.get(x, y)) === draw.C.grey) lastGrey = x;
+  let firstBlue = 64;
+  for (let x = 63; x >= 0; x--) for (let y = 26; y <= 31; y++) if (hex(cold.get(x, y)) === '#1e90ff') firstBlue = x;
+  assert.ok(firstBlue - lastGrey >= 3, `gap ${firstBlue - lastGrey}`);
 });
 
 test('minutes round up, like CTA: DUE through 60 s, then 2, 3, ...; never 1', () => {
@@ -402,11 +441,11 @@ test('autoScreen: radar visits on a timer, only while it rains on the auto scree
   const { autoScreen } = require('./draw');
   const p = (over = {}, radar = {}) => ({ screen: 'transit', radar: { on: true, visit: { every: 240, for: 60 }, ...radar }, ...over });
   const at = (cycle, off) => 1_800_000_000 - (1_800_000_000 % 240) + cycle * 240 + off; // epoch-aligned
-  assert.equal(autoScreen(p(), at(3, 0)), 'radar');
-  assert.equal(autoScreen(p(), at(3, 59.9)), 'radar');
+  assert.equal(autoScreen(p(), at(3, 0)), 'weather');
+  assert.equal(autoScreen(p(), at(3, 59.9)), 'weather');
   assert.equal(autoScreen(p(), at(3, 60)), 'transit');
   assert.equal(autoScreen(p(), at(3, 239)), 'transit');
-  assert.equal(autoScreen(p(), at(4, 0)), 'radar');
+  assert.equal(autoScreen(p(), at(4, 0)), 'weather');
   assert.equal(autoScreen(p({}, { on: false }), at(3, 0)), 'transit'); // no rain: no visit
   assert.equal(autoScreen(p({}, { visit: null }), at(3, 0)), 'transit'); // visits off
   assert.equal(autoScreen(p({ screen: 'ticker' }), at(3, 0)), 'ticker'); // forced screens win
@@ -481,7 +520,7 @@ test('radar visits interrupt baseball like transit; forced screens are left alon
   const { autoScreen } = require('./draw');
   const radar = { on: true, frames: [], ft: [], visit: { every: 240, for: 60 } };
   const t = Math.floor(NOW / 240) * 240;
-  assert.equal(autoScreen({ screen: 'baseball', radar }, t + 10), 'radar');
+  assert.equal(autoScreen({ screen: 'baseball', radar }, t + 10), 'weather');
   assert.equal(autoScreen({ screen: 'baseball', radar }, t + 100), 'baseball');
   assert.equal(autoScreen({ screen: 'baseball', radar: { ...radar, on: false } }, t + 10), 'baseball');
   assert.equal(autoScreen({ screen: 'ticker', radar }, t + 10), 'ticker');
@@ -570,7 +609,7 @@ test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at 
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
   const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 22], split: false, temp: 63, icon: 'sun' };
   const base = { now, bright: 100, warn: null };
-  const off = (warn, extra = {}, opts = {}) => draw.render({ ...base, warn, radar: { ...radar, showTime: false, ...extra } }, { screen: 'radar', now, frames: {}, ...opts });
+  const off = (warn, extra = {}, opts = {}) => draw.render({ ...base, warn, radar: { ...radar, showTime: false, ...extra } }, { screen: 'weather', now, frames: {}, ...opts });
   const f = off(null);
   assert.equal(count(f, draw.C.radarAmpm, 0, 0, 63, 31), 0);       // no AM/PM
   assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0);       // no frame time
@@ -595,13 +634,13 @@ test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at 
   const none = off({ kind: 'svr', lvl: 'warning' }, { temp: null });
   assert.equal(count(none, draw.C.label, 0, 0, 63, 31), 0);
   // Time on (default and explicit) is unchanged by temp/icon.
-  const on = draw.render({ ...base, radar }, { screen: 'radar', now, frames: {} });
-  const on2 = draw.render({ ...base, radar: { ...radar, showTime: true } }, { screen: 'radar', now, frames: {} });
+  const on = draw.render({ ...base, radar }, { screen: 'weather', now, frames: {} });
+  const on2 = draw.render({ ...base, radar: { ...radar, showTime: true } }, { screen: 'weather', now, frames: {} });
   assert.deepEqual(on.px, on2.px);
   // Time on: a tornado watch next to AM/PM is yellow; a tornado warning blinks.
-  const watchOn = draw.render({ ...base, warn: { kind: 'tor', lvl: 'watch' }, radar }, { screen: 'radar', now, frames: {} });
+  const watchOn = draw.render({ ...base, warn: { kind: 'tor', lvl: 'watch' }, radar }, { screen: 'weather', now, frames: {} });
   assert.ok(count(watchOn, draw.C.watch, 40, 15, 63, 19) > 3);
-  const torOn = (blink) => draw.render({ ...base, warn: tor, radar }, { screen: 'radar', now, frames: {}, blink });
+  const torOn = (blink) => draw.render({ ...base, warn: tor, radar }, { screen: 'weather', now, frames: {}, blink });
   assert.ok(count(torOn(false), draw.C.warnTornado, 40, 15, 63, 19) > 3);
   assert.equal(count(torOn(true), draw.C.warnTornado, 40, 15, 63, 19), 0);
 });

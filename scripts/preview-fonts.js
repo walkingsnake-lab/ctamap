@@ -211,3 +211,19 @@ function transitRows(f, rows, tops) {
   names.forEach((n, i) => drawWeatherRow(rowsF, n, words[n][0], words[n][1], 1 + i * 10, false));
   save('mock-weather-rows.png', rowsF, 10);
 }
+
+// Weather screen (radar screen without rain), drawn by draw.js: normal and
+// with each warning/watch on the bottom line (made-up conditions).
+{
+  const { render } = require('../server/board/render');
+  const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
+  const storm = { ...wx, icon: 'storm', word: 'STORMS', pop: 80 };
+  const states = [[wx, null], [storm, { kind: 'svr', lvl: 'watch' }], [storm, { kind: 'svr', lvl: 'warning' }], [storm, { kind: 'tor', lvl: 'warning' }]];
+  const f = new Frame(64 * 2 + 4, 32 * 2 + 4);
+  states.forEach(([w, warn], i) => {
+    const panel = render({ now: 0, bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx: w } }, { screen: 'weather' });
+    const ox = (i % 2) * 68, oy = Math.floor(i / 2) * 36;
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(ox + x, oy + y, panel.get(x, y));
+  });
+  save('mock-weather-screen.png', f, 8);
+}
