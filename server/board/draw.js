@@ -116,6 +116,7 @@
   function rowTops(n, hasHeader, hasWeather) {
     if (n === 0) return [];
     if (!hasHeader) {
+      if (!hasWeather && n === 4) return [1, 9, 17, 25];   // pinned: 3px between rows
       const areaH = hasWeather ? 22 : 32;   // rows 0-21 (divider on 22) or 0-31
       const gap = Math.max(1, Math.round((areaH - 5 * n) / (n + 1)));
       const top = Math.floor((areaH - 5 * n - (n - 1) * gap) / 2);

@@ -28,7 +28,7 @@ test('row positions follow the spec', () => {
 test('without the header, rows are spread evenly (equal gaps, odd pixel to the bottom)', () => {
   assert.deepEqual(rowTops(2, false, false), [7, 19]);
   assert.deepEqual(rowTops(3, false, false), [4, 13, 22]);
-  assert.deepEqual(rowTops(4, false, false), [3, 10, 17, 24]);
+  assert.deepEqual(rowTops(4, false, false), [1, 9, 17, 25]);   // pinned: 3px between rows
   assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);
   assert.deepEqual(rowTops(2, false, true), [4, 13]);
   assert.deepEqual(rowTops(3, false, true), [1, 8, 15]);

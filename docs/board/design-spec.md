@@ -148,7 +148,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 |---|---|---|---|
 | off | 2 | 7, 19 | 7 / 7 / 8 |
 | off | 3 | 4, 13, 22 | 4 / 4 / 5 |
-| off | 4 | 3, 10, 17, 24 | 3 / 2 / 3 |
+| off | 4 | 1, 9, 17, 25 | 1 / 3 / 2 (pinned: 3px between rows reads better than the rounded 2px) |
 | off | 5 | 1, 7, 13, 19, 25 | 1 / 1 / 2 |
 | on | 2 | 4, 13 | 4 / 4 / 4 |
 | on | 3 | 1, 8, 15 | 1 / 2 / 2 |
