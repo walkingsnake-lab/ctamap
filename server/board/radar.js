@@ -136,7 +136,8 @@ function modeFor(w) {
 const isPrecip = (v) => (v >= 1 && v <= 5) || (v >= 8 && v <= 10);
 
 // Mean dBZ grid -> the 2048-byte frame: levels, water masked, despeckle,
-// shoreline, time box cleared, marker. loc: loadLocation() result (masks
+// shoreline, marker. The time box is not cleared: the shoreline (and rain)
+// draw under the time stack. loc: loadLocation() result (masks
 // are on the crop's grid). Returns { bytes, colored }.
 function toFrame(dbz, geo, mode, loc = null) {
   const levels = mode === 'snow' ? SNOW_DBZ : RAIN_DBZ;
@@ -167,11 +168,6 @@ function toFrame(dbz, geo, mode, loc = null) {
   // masked, so rain never covers it.
   if (loc && loc.shore) {
     for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) if (loc.shore[y * w + x]) out[y * W + x] = SHORE;
-  }
-  // The time box stays empty.
-  if (loc && !loc.split) {
-    const [bx, by, bw, bh] = loc.timeBox;
-    for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) { if (isPrecip(out[y * W + x])) colored--; out[y * W + x] = 0; }
   }
   // Location marker: white dot. Precip in the 4 pixels around it is cleared
   // so the dot stands out; the shoreline stays continuous.

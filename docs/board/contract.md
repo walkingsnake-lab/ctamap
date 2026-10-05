@@ -198,7 +198,7 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 | `showTime` | Boolean (absent = true). `false` replaces the time and AM/PM with current conditions: the weather `icon` (8x8) and `temp` (Tom Thumb with a degree sign, label white), right-aligned under the frame indicator. The warning tag moves to the screen's bottom right (rows 27–31, right edge x63, on a black backing; it may run past the time box): icon + `WATCH` or `WARN`. With no `temp`, only the tag. |
 | `temp` | Current temperature (°F, rounded) from Open-Meteo, or `null` before the first weather fetch. Sent whatever the weather row setting. |
 | `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar time. |
-| `timeBox` | `[x, y, w, h]`: box the board draws the time stack into (frame indicator, time, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
+| `timeBox` | `[x, y, w, h]`: box the board draws the time stack into (frame indicator, time, AM/PM + warning icon), right-aligned. The server does not clear it: shoreline and rain can sit under the time stack. |
 | `split` | `true` when the location has no usable water area; the time box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–38, marker at 19,16; the board draws a gray `#333333` line on col 39; clock box `[40, 0, 24, 32]`, leaving a 1px gap before the widest clock). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator rows 2–3, clock rows 6–12, AM/PM rows 15–19, right-aligned to column 62. |
 
 | `wx` | Only while `frames` is empty: current conditions (same shape as the top-level `wx`), sent even with the weather row off. The board shows them on the radar screen's left side (icon + temperature, condition word, `H hi  L lo`) with the clock stack at the current time, instead of an empty radar. Omitted once frames exist. |
@@ -242,7 +242,7 @@ One radar frame for that board's location.
 
 | Value | Meaning |
 |---|---|
-| 0 | off (land with no rain, masked water, time box) |
+| 0 | off (land with no rain, masked water) |
 | 1–5 | rain levels: 15/25/35/45/55 dBZ (dim green, green, yellow, orange, red) |
 | 6 | shoreline: the lake's edge pixels, water side; always drawn (water is masked, so rain never covers it) |
 | 7 | location marker (white dot; precip in the 4 pixels around it is cleared to 0, shoreline is kept) |
