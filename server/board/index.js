@@ -114,7 +114,7 @@ function createBoard({
   // Radar visits apply only on the auto screen, and only if turned on.
   const visitOf = (b) => (b.screen === 'auto' && b.radarEvery > 0
     ? { every: b.radarEvery * 60, for: Math.min(b.radarFor || 60, b.radarEvery * 60) } : null);
-  const NO_RADAR = { on: false, frames: [], ft: [], clock: null, split: false };
+  const NO_RADAR = { on: false, frames: [], ft: [], timeBox: null, split: false };
 
   // Test alerts, set from the simulator: fake major CTA alerts on some lines
   // and/or a fake NWS warning, merged into this board's updates (so the real
@@ -213,7 +213,7 @@ function createBoard({
       ticker,
       wx: bars.showWeather ? wx : null,
       warn,
-      radar: { ...radarState, visit: visitOf(board) },
+      radar: { ...radarState, visit: visitOf(board), showTime: board.radarTime !== false },
       mlb: { games },
     };
   }

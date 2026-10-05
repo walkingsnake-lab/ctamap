@@ -602,10 +602,10 @@
       // No frames yet: current conditions on the left instead of the radar.
       if (!ids.length && r.wx) drawConditions(f, r.wx);
       // Split layout: gray line on the clock panel's left edge.
-      if (r.split && r.clock) f.fill(r.clock[0] - 1, 0, 1, 32, C.divider);
+      if (r.split && r.timeBox) f.fill(r.timeBox[0] - 1, 0, 1, 32, C.divider);
       // Clock stack, right-aligned in the clock box: frame indicator, clock
       // (frame time), AM/PM with the warning icon to its left.
-      const [bx, by, bw, bh] = r.clock || [40, 0, 24, 32];
+      const [bx, by, bw, bh] = r.timeBox || [40, 0, 24, 32];
       const right = Math.min(62, bx + bw - 1);
       const top = by + 2; // top-aligned (spec: rows 2-19)
       const t = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
@@ -615,14 +615,19 @@
         ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
       }
       // Dimmed so a frame's time doesn't read as the current time.
+      const warnGlyph = p.warn ? s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT) : null;
+      const warnColor = p.warn && p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere;
+      if (r.showTime === false) {
+        // Time off: the area stays, the warning icon moves to its top right
+        // (just under the frame indicator's rows).
+        if (warnGlyph) f.text('small', warnGlyph, right - measure('small', warnGlyph) + 1, top + 8, warnColor);
+        return f;
+      }
       rtext(f, '5x7', clockText(t), right, top + 11, C.radarTime);
       const ap = ampmText(t);
       const apX = right - measure('small', ap) + 1;
       f.text('small', ap, apX, top + 18, C.radarAmpm);
-      if (p.warn) {
-        const glyph = s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT);
-        f.text('small', glyph, apX - 2 - measure('small', glyph), top + 18, p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere);
-      }
+      if (warnGlyph) f.text('small', warnGlyph, apX - 2 - measure('small', warnGlyph), top + 18, warnColor);
       return f;
     }
 

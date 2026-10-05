@@ -112,12 +112,19 @@ async function build() {
   for (const [key, { bytes, loc }] of Object.entries(rf)) {
     const t = radar.timeOf(key.split('-')[1]);
     const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
-    const p = { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (5 - i) * 300), clock: loc.clock, split: loc.split } };
+    const p = { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (5 - i) * 300), timeBox: loc.timeBox, split: loc.split } };
     add(`radar ${key}`, p, [{ screen: 'radar', idx: 5 }, { screen: 'radar', idx: 0 }, { screen: 'radar', idx: 3 }], Object.fromEntries(ids.map((id) => [id, bytes])));
   }
-  for (const [clock, split] of [[radar.FULL_CLOCK, false], [radar.SPLIT_CLOCK, true]]) {
+  for (const [timeBox, split] of [[radar.FULL_TIME_BOX, false], [radar.SPLIT_TIME_BOX, true]]) {
     const t = 1791140000;
-    add(`radar conditions split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'watch' }, radar: { on: false, frames: [], ft: [], clock, split, wx: { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 } } }, [{ screen: 'radar' }]);
+    add(`radar conditions split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'watch' }, radar: { on: false, frames: [], ft: [], timeBox, split, wx: { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 } } }, [{ screen: 'radar' }]);
+  }
+
+  // Radar time off: indicator and warning icon only.
+  for (const [timeBox, split] of [[radar.FULL_TIME_BOX, false], [radar.SPLIT_TIME_BOX, true]]) {
+    const t = 1791140000;
+    const ids = ['a', 'b', 'c'];
+    add(`radar time off split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0 }], Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048)])));
   }
 
   // Transit animator sequences.

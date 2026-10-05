@@ -141,7 +141,7 @@ test('raw arrivals capture reports upstream failures as 502', async () => {
 const { normalize } = require('./arrivals');
 const morseJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
 
-function fakeRadar(state = { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true }, frames = {}) {
+function fakeRadar(state = { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 32], split: true }, frames = {}) {
   return { want: () => state, frame: (mapid, id) => frames[`${mapid}/${id}`] || null };
 }
 
@@ -377,13 +377,13 @@ test('update: an NWS warning in effect is sent as warn, even with the weather ro
 test('radar: frames by ID behind the token; auto stays on transit even when it rains', async () => {
   const now = Math.floor(Date.now() / 1000);
   const bytes = new Uint8Array(2048); bytes[16 * 64 + 20] = 7; bytes[0] = 3;
-  const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], clock: [40, 0, 24, 32], split: true };
+  const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], timeBox: [40, 0, 24, 32], split: true };
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(state, { '40100/40100-202610041600': bytes }) });
   const base = `http://127.0.0.1:${s.port}`;
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.screen, 'transit'); // no automatic switching unless radar visits are on
-  assert.deepEqual(b.radar, { ...state, visit: null });
+  assert.deepEqual(b.radar, { ...state, visit: null, showTime: true });
   assert.equal((await fetch(`${base}/board/radar/40100-202610041600?b=home`)).status, 401);
   const r = await fetch(`${base}/board/radar/40100-202610041600?b=home`, h);
   assert.equal(r.status, 200);
@@ -405,7 +405,7 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
 
 test('radar visits: off by default, then on a timer for auto only', async () => {
   const now = Math.floor(Date.now() / 1000);
-  const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], clock: [40, 0, 24, 32], split: true };
+  const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], timeBox: [40, 0, 24, 32], split: true };
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(state, {}) });
   const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
   const get = async () => (await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).body;
@@ -436,7 +436,7 @@ test('update: radar carries current conditions only until frames arrive', async 
   assert.equal(b.wx, null); // weather row off...
   assert.deepEqual(b.radar.wx, { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 }); // ...but the radar screen still gets conditions
   await s.close();
-  s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar({ on: false, frames: ['x'], ft: [now], clock: [40, 0, 24, 22], split: false }) });
+  s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar({ on: false, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false }) });
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.radar.wx, undefined);
   await s.close();
