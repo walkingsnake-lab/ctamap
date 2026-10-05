@@ -115,6 +115,7 @@
     if (n === 0) return [];
     if (hasHeader && !hasWeather && n === 4) return [9, 15, 21, 27];
     if (hasHeader && !hasWeather && n === 3) return [10, 18, 26];
+    if (hasHeader && !hasWeather && n === 2) return [13, 23];
     const areaTop = hasHeader ? 9 : 0;
     const areaBottom = hasWeather ? 20 : 31;
     const areaH = areaBottom - areaTop + 1;
