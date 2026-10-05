@@ -3,6 +3,13 @@
 // `interval` s while a board has asked in the last `idle` s, so idle
 // locations cost no requests. Keeps the last good data on failure. Same
 // pattern as tracker.js.
+//
+// With `cacheFile`, the last good data per location is also kept on disk, so
+// a restart (a deploy) doesn't start empty; saved data older than `maxAge` s
+// is ignored.
+
+const fs = require('fs');
+const path = require('path');
 
 // Seconds before retrying after `failures` failures in a row: 30 s, doubling
 // up to 5 minutes (or the interval, if longer).
@@ -13,11 +20,40 @@ function createLocationPoller({
   fetch,                // (lat, lon) -> raw response
   parse = (x) => x,     // raw -> stored data; throws on bad input
   interval, idle = 300, forget = 3600, tick = 15000,
+  cacheFile = null, maxAge = 3 * 3600,
   now = () => Date.now() / 1000,
   log = console,
 }) {
   const cache = new Map(); // "lat,lon" -> { lat, lon, data, fetchedAt, wantedAt, inflight, failures, retryAt }
   let timer = null;
+
+  // Saved locations count as asked for just past `idle`: kept for a while,
+  // but not polled until a board asks.
+  function load() {
+    let saved;
+    try { saved = JSON.parse(fs.readFileSync(cacheFile, 'utf8')); }
+    catch (e) { if (e.code !== 'ENOENT') log.warn(`[board] ${name} cache unreadable: ${e.message}`); return; }
+    const t = now();
+    for (const [k, v] of Object.entries(saved || {})) {
+      if (!v || v.data == null || !(t - v.fetchedAt < maxAge)) continue;
+      cache.set(k, { lat: v.lat, lon: v.lon, data: v.data, fetchedAt: v.fetchedAt, wantedAt: t - idle - 1, inflight: null, failures: 0, retryAt: 0 });
+    }
+  }
+
+  function save() {
+    try {
+      const out = {};
+      for (const [k, e] of cache) if (e.data != null) out[k] = { lat: e.lat, lon: e.lon, data: e.data, fetchedAt: e.fetchedAt };
+      fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
+      const tmp = `${cacheFile}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(out));
+      fs.renameSync(tmp, cacheFile);
+    } catch (e) {
+      log.error(`[board] ${name} cache not saved: ${e.message}`);
+    }
+  }
+
+  if (cacheFile) load();
 
   function refresh(e) {
     if (e.inflight) return e.inflight;
@@ -26,6 +62,7 @@ function createLocationPoller({
         e.data = parse(await fetch(e.lat, e.lon));
         e.fetchedAt = now();
         e.failures = 0;
+        if (cacheFile) save();
       } catch (err) {
         e.failures += 1;
         e.retryAt = now() + backoff(interval, e.failures);

@@ -142,3 +142,31 @@ test('cache: a first weather fetch that fails is retried in 30 s, not the 10-min
   assert.equal((await wx.get(42.0084, -87.6659)).temp, 63.3);
   assert.equal(calls, 2);
 });
+
+test('cache file: a restart starts from the last good weather, until it is 3 hours old', async () => {
+  const file = path.join(fs.mkdtempSync(path.join(require('os').tmpdir(), 'board-wx-')), 'board-weather.json');
+  let t = 1000, calls = 0;
+  const make = (fetch) => createWeather({ fetch: async () => { calls++; return fetch(); }, now: () => t, log: quiet, cacheFile: file });
+  await make(() => MORSE).get(42.0084, -87.6659);
+  assert.ok(fs.existsSync(file));
+  // Restart with Open-Meteo down: the saved data is there right away.
+  t += 1800;
+  const down = make(() => { throw new Error('down'); });
+  calls = 0;
+  assert.equal((await down.get(42.0084, -87.6659, { wait: 1e6 })).temp, 63.3);
+  assert.equal(calls, 0, 'no wait for a fetch');
+  down.pass();
+  await new Promise((r) => setImmediate(r));
+  assert.equal(calls, 1, 'refreshed on the next pass');
+  // Saved locations nobody asks for aren't polled.
+  const idle = make(() => MORSE);
+  calls = 0;
+  idle.pass();
+  assert.equal(calls, 0);
+  // Too old to show.
+  t += 3 * 3600;
+  assert.equal(await make(() => { throw new Error('down'); }).get(42.0084, -87.6659, { wait: 0 }), null);
+  // A bad file is ignored.
+  fs.writeFileSync(file, '{not json');
+  assert.equal(await make(() => { throw new Error('down'); }).get(42.0084, -87.6659, { wait: 0 }), null);
+});

@@ -124,7 +124,7 @@ function createBoard({
   }
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
   if (!tracker) tracker = createTracker({ log }).start();
-  if (!weather) weather = createWeather({ log }).start();
+  if (!weather) weather = createWeather({ log, cacheFile: path.join(path.dirname(store.file), 'board-weather.json') }).start();
   if (!nws) nws = createNws({ log }).start();
   if (!radar) radar = createRadar({ weather, log }).start();
   if (!mlb) mlb = createMlb({ log }).start();

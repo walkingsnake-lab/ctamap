@@ -315,6 +315,8 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 
 `/data/board-state.json` on the Fly volume (`board_data`, mounted via `[mounts]` in `fly.toml`). Written atomically (temp file + rename). `BOARD_STATE_DIR` overrides the directory (tests, local dev); without it and without `/data`, the server uses a temp dir and logs a warning. An unreadable file is moved aside to `board-state.json.corrupt-<time>` and the server starts from defaults (board `home` at Morse).
 
+Next to it, `board-weather.json` keeps the last good Open-Meteo data per location (written atomically after each successful fetch), so a restart has weather right away. Entries older than 3 hours, or an unreadable file, are ignored.
+
 ```json
 {
   "boards": {
