@@ -168,6 +168,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 |---|---|
 | `icon` | `sun` `moon` `pcloudy_day` `pcloudy_night` `cloudy` `rain` `ice` `snow` `storm` `fog` |
 | `temp` | Current °F, integer. The board draws it with the small `°` glyph (U+00B0). |
+| `icon` | Current weather icon name (same set as `wx.icon`), or `null` before the first weather fetch. |
 | `word` | Condition word, uppercase, fitted. |
 | `hi`, `lo` | Daily high/low °F. |
 
@@ -194,7 +195,7 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 | `on` | Rain is in the box (server applies on/off hysteresis). On the auto screen, `on` allows timed radar visits (see `visit`). |
 | `visit` | `{every, for}` in seconds, or `null`. Set only when the board's `screen` is `auto` and `radarEvery` > 0 (`for` is capped at `every`). The **board** (and simulator) shows the radar while `now mod every < for` and `on` is true, otherwise the payload's `screen` (`transit`); cycles are epoch-aligned. Mirrored by `autoScreen()` in `draw.js` and `auto_screen()` in `player.py`. The board fetches radar frames ahead of a visit whenever `on` and `visit` are set. A button press overrides it until `v` changes. |
 | `frames` | IDs of up to 6 latest frames (6 min apart, on even minutes), oldest first. Frame IDs are immutable, so the board fetches only IDs it doesn't already have. ID: `<mapid>-<YYYYMMDDHHMM UTC>`, plus `s` for a snow frame (so a station or mode change never reuses a cached frame). |
-| `showTime` | Boolean (absent = true). `false` replaces the time and AM/PM with the current temperature (`temp`): X11 5x7 with a small degree sign, right-aligned where the time was, under the frame indicator; the warning icon goes under it, right-aligned where AM/PM was. With no `temp`, only the warning icon. |
+| `showTime` | Boolean (absent = true). `false` replaces the time and AM/PM with current conditions: the weather `icon` (8x8) and `temp` (Tom Thumb with a degree sign, label white), right-aligned under the frame indicator. The warning tag moves to the screen's bottom right (rows 27–31, right edge x63, on a black backing; it may run past the time box): icon + `WATCH` or `WARN`. With no `temp`, only the tag. |
 | `temp` | Current temperature (°F, rounded) from Open-Meteo, or `null` before the first weather fetch. Sent whatever the weather row setting. |
 | `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar time. |
 | `timeBox` | `[x, y, w, h]`: box the board draws the time stack into (frame indicator, time, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |

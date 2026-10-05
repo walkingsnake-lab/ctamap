@@ -270,21 +270,27 @@ def draw_header(f, name, now, tzo, band, name_color):
     rtext(f, 'small', clock_text(now, tzo), 62, 6, C['clock'])
 
 
-def draw_weather(f, wx, warn):
+def warn_style(warn):
+    glyph = g(assets.FUNNEL if warn['kind'] == 'tor' else assets.BOLT)
+    if warn['lvl'] == 'watch':
+        color = C['watch']
+    else:
+        color = C['warnTornado'] if warn['kind'] == 'tor' else C['warnSevere']
+    return glyph, color, warn['kind'] == 'tor' and warn['lvl'] == 'warning'
+
+
+def draw_weather(f, wx, warn, blink=False):
     f.fill(0, 22, 64, 1, C['divider'])
     draw_icon(f, wx['icon'], 0, 24)
     base = 31
     f.text('small', str(wx['temp']) + '°', 10, base, C['wxText'])
     if warn:
-        glyph = g(assets.FUNNEL if warn['kind'] == 'tor' else assets.BOLT)
+        glyph, color, blinks = warn_style(warn)
         word = 'WARNING' if warn['lvl'] == 'warning' else 'WATCH'
-        if warn['lvl'] == 'watch':
-            color = C['watch']
-        else:
-            color = C['warnTornado'] if warn['kind'] == 'tor' else C['warnSevere']
-        w = measure('small', glyph) + TAG_GAP + measure('small', word)
-        x = f.text('small', glyph, 63 - w + 1, base, color)
-        f.text('small', word, x + TAG_GAP - 1, base, color)
+        if not (blinks and blink):
+            w = measure('small', glyph) + TAG_GAP + measure('small', word)
+            x = f.text('small', glyph, 63 - w + 1, base, color)
+            f.text('small', word, x + TAG_GAP - 1, base, color)
     else:
         rtext(f, 'small', wx['word'], 63, base, C['wxText'])
 
@@ -437,7 +443,7 @@ def draw_transit_view(f, view, blink):
         finally:
             f.pop_clip()
     if view.get('wx'):
-        draw_weather(f, view['wx'], view.get('warn'))
+        draw_weather(f, view['wx'], view.get('warn'), blink)
 
 
 def render_transit(p, f, now=None, blink=False, view=None):
@@ -727,7 +733,7 @@ def draw_radar_frame(f, data):
                 f.fill(x, y, 1, 1, c)
 
 
-def render_radar(p, f, now=None, idx=None, frames=None):
+def render_radar(p, f, now=None, idx=None, frames=None, blink=False):
     r = p.get('radar') or {}
     ids = r.get('frames') or []
     if not ids:
@@ -759,26 +765,30 @@ def render_radar(p, f, now=None, idx=None, frames=None):
         for i in range(len(ids)):
             f.fill(x, top, seg_w, 2, C['amber'] if i == idx else C['indicator'])
             x += seg_w + seg_gap
-    warn_glyph = None
-    warn_color = C['warnSevere']
-    if p.get('warn'):
-        warn_glyph = g(assets.FUNNEL if p['warn']['kind'] == 'tor' else assets.BOLT)
-        if p['warn']['kind'] == 'tor':
-            warn_color = C['warnTornado']
+    ws = warn_style(p['warn']) if p.get('warn') else None
+    hide_warn = bool(ws and ws[2] and blink)
     if r.get('showTime') is False:
         if r.get('temp') is not None:
-            ts = str(r['temp'])
-            x = f.text('5x7', ts, right + 1 - (measure('5x7', ts) + 1 + measure('small', '°')), top + 11, C['radarTime'])
-            f.text('small', '°', x, top + 10, C['radarTime'])
-        if warn_glyph is not None:
-            f.text('small', warn_glyph, right - measure('small', warn_glyph) + 1, top + 18, warn_color)
+            ts = str(r['temp']) + '°'
+            icon = r.get('icon') if r.get('icon') in assets.ICONS else None
+            x0 = right + 1 - ((10 if icon else 0) + measure('small', ts))
+            if icon:
+                draw_icon(f, icon, x0, top + 4)
+            f.text('small', ts, x0 + (10 if icon else 0), top + 10, C['label'])
+        if ws:
+            word = 'WARN' if p['warn']['lvl'] == 'warning' else 'WATCH'
+            x0 = 64 - (measure('small', ws[0]) + TAG_GAP + measure('small', word))
+            f.fill(x0 - 1, 25, 64 - x0 + 1, 7, hexc('#000000'))
+            if not hide_warn:
+                x = f.text('small', ws[0], x0, 31, ws[1])
+                f.text('small', word, x + TAG_GAP - 1, 31, ws[1])
         return f
     rtext(f, '5x7', clock_text(t, tzo), right, top + 11, C['radarTime'])
     ap = ampm_text(t, tzo)
     ap_x = right - measure('small', ap) + 1
     f.text('small', ap, ap_x, top + 18, C['radarAmpm'])
-    if warn_glyph is not None:
-        f.text('small', warn_glyph, ap_x - 2 - measure('small', warn_glyph), top + 18, warn_color)
+    if ws and not hide_warn:
+        f.text('small', ws[0], ap_x - 2 - measure('small', ws[0]), top + 18, ws[1])
     return f
 
 
@@ -802,7 +812,7 @@ def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0,
     if screen == 'ticker':
         render_ticker(p, f, now=now, page=page, slide=slide)
     elif screen == 'radar':
-        render_radar(p, f, now=now, idx=idx, frames=frames)
+        render_radar(p, f, now=now, idx=idx, frames=frames, blink=blink)
     else:
         render_transit(p, f, now=now, blink=blink, view=view)
     return apply_brightness(f, p.get('bright'))

@@ -94,7 +94,7 @@ class Player:
             slide = (since - draw.PAGE_HOLD_MS) / draw.SLIDE_MS if pages > 1 and since > draw.PAGE_HOLD_MS else 0
             return draw.render(p, frame, screen='ticker', now=now, page=self.page, slide=slide)
         if self.screen == 'radar':
-            return draw.render(p, frame, screen='radar', now=now, idx=self.radar_idx(ms), frames=self.radar_frames)
+            return draw.render(p, frame, screen='radar', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms))
         view = self.anim.step(p, now, ms)
         return draw.render(p, frame, screen='transit', now=now, view=view, blink=self.blink_on(ms))
 

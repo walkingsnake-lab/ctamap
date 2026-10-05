@@ -120,11 +120,22 @@ async function build() {
     add(`radar conditions split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'watch' }, radar: { on: false, frames: [], ft: [], timeBox, split, wx: { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 } } }, [{ screen: 'radar' }]);
   }
 
-  // Radar time off: indicator and warning icon only.
+  // Radar time off: icon + temperature, WATCH/WARN tag bottom right (tornado warning blinks).
   for (const [timeBox, split] of [[radar.FULL_TIME_BOX, false], [radar.SPLIT_TIME_BOX, true]]) {
     const t = 1791140000;
     const ids = ['a', 'b', 'c'];
-    add(`radar time off split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false, temp: split ? -12 : 63 } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0 }], Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048)])));
+    const frames = Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048).fill(3)]));
+    const r = { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false, temp: split ? -12 : 63, icon: split ? 'snow' : 'pcloudy_day' };
+    for (const warn of [{ kind: 'tor', lvl: 'warning' }, { kind: 'tor', lvl: 'watch' }, { kind: 'svr', lvl: 'warning' }]) {
+      add(`radar time off split=${split} ${warn.kind} ${warn.lvl}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: r }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0, blink: true }], frames);
+    }
+    add(`radar time off split=${split} no temp, no icon`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, temp: null } }, [{ screen: 'radar', idx: 2 }], frames);
+    add(`radar time on split=${split} tornado warning blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 2, blink: true }], frames);
+  }
+  // Weather row: tornado warning tag blinks.
+  {
+    const p = payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX, warn: { kind: 'tor', lvl: 'warning' } });
+    add('weather row tornado warning blink', p, [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
   }
 
   // Transit animator sequences.
