@@ -100,14 +100,18 @@ def minutes_until(t, now):
     return math.ceil((t - now) / 60)
 
 
-def time_text(t, now):
+def time_text(t, now, due=True):
     m = minutes_until(t, now)
-    return 'DUE' if m <= 1 else str(m)
+    if m <= 1:
+        return 'DUE' if due else '2'
+    return str(m)
 
 
-def chrono_text(t, now):
+def chrono_text(t, now, due=True):
     m = minutes_until(t, now)
-    return 'DUE' if m <= 1 else str(m) + 'm'
+    if m <= 1:
+        return 'DUE' if due else '2m'
+    return str(m) + 'm'
 
 
 DROP_GRACE = 30
@@ -317,7 +321,7 @@ def draw_time_cell(f, text, right, top, color, roll):
 
 
 def layout_cells(r, now):
-    texts = [time_text(t, now) for t in r['t']]
+    texts = [time_text(t, now, k == 0) for k, t in enumerate(r['t'])]
 
     def width_at(gap):
         w = 0
@@ -360,7 +364,11 @@ def build_chrono_view(p, now):
     rows = live_rows(p, now)[:max_rows(bool(p.get('header')), bool(p.get('wx')))]
     tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')))
     out = []
+    seen_dest = set()
     for i, r in enumerate(rows):
+        dest = '%s:%s' % (r['ln'], r['lbl'])
+        due = dest not in seen_dest
+        seen_dest.add(dest)
         key = ('rn:' + str(r['rn'])) if r.get('rn') is not None else '%s:%s:%s' % (r['ln'], r['lbl'], r['t'][0])
         sch = r.get('s') and r['s'][0]
         if sch:
@@ -369,7 +377,7 @@ def build_chrono_view(p, now):
             color = C['dimAmber'] if i else C['amber']
         out.append({'key': key, 'ln': r['ln'], 'lbl': r['lbl'], 'a': r.get('a'), 'num': i + 1, 'numRoll': None,
                     'top': tops[i], 'alpha': 1,
-                    'cells': [{'id': key, 't': r['t'][0], 'text': chrono_text(r['t'][0], now), 'right': 63,
+                    'cells': [{'id': key, 't': r['t'][0], 'text': chrono_text(r['t'][0], now, due), 'right': 63,
                                'alpha': 1, 'roll': None, 'color': color}]})
     return {
         'now': now, 'mode': 'chrono', 'pitch': (tops[1] - tops[0]) if len(tops) > 1 else 6,
@@ -614,7 +622,7 @@ def _contains(lst, obj):
 
 # ---- ticker ----
 
-def draw_ticker_item(f, it, idx, top, now):
+def draw_ticker_item(f, it, idx, top, now, due=True):
     base = top + 9
     f.fill(0, top, 5, 12, C['index'])
     f.fill(5, top, 59, 12, scale_color(LINE[it['ln']], 0.55))
@@ -627,12 +635,13 @@ def draw_ticker_item(f, it, idx, top, now):
         f.text('small', str(idx), 1, base, C['label'])
     f.text('5x7', it['d'], 7, base, C['white'])
     m = minutes_until(it['t'], now)
-    if m <= 1:
+    if m <= 1 and due:
         rtext(f, '5x7', 'Due', 62, base, C['white'])
     else:
+        # A second train within a minute of the first shows 2, not Due.
         mw = measure('5x7', g(assets.MIN))
         f.text('5x7', g(assets.MIN), 62 - mw + 1, base, C['white'])
-        rtext(f, '5x7', str(m), 62 - mw - 2, base, C['white'])
+        rtext(f, '5x7', str(2 if m <= 1 else m), 62 - mw - 2, base, C['white'])
 
 
 def ticker_pages(p, now):
@@ -650,9 +659,17 @@ def render_ticker(p, f, now=None, page=0, slide=0):
     page = (page or 0) % pages
     offset = jsround(ease_in_out(min(1, max(0, slide or 0))) * 26)
 
+    # Only the soonest train per destination may read Due.
+    first_of = {}
+    for i, it in enumerate(items):
+        k = '%s:%s' % (it['ln'], it['d'])
+        if k not in first_of or it['t'] < items[first_of[k]]['t']:
+            first_of[k] = i
+
     def draw_page(pg, shift):
         for i, it in enumerate(items[pg * 2:pg * 2 + 2]):
-            draw_ticker_item(f, it, pg * 2 + i + 1, 7 + i * 13 + shift, now)
+            n = pg * 2 + i
+            draw_ticker_item(f, it, n + 1, 7 + i * 13 + shift, now, first_of['%s:%s' % (it['ln'], it['d'])] == n)
 
     f.push_clip(0, 7, 63, 31)
     try:

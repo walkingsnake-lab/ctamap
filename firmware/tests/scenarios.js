@@ -81,6 +81,17 @@ async function build() {
     const p = { v: 1, now: t0, tzo: tzOffset(t0), screen: 'transit', bright: 100, header: 'TEST', rows: [full('KIMBALL', 'BR'), full('COTTAGE', 'GR'), full('54TH', 'PK')], ticker: [], wx: null, warn: null };
     add('full rows tighten gaps', p, [{ screen: 'transit' }, { screen: 'transit', now: t0 + 31 }]);
   }
+  // Bunched trains: only the soonest of a destination reads DUE; the next shows 2.
+  {
+    const t0 = 1791140000;
+    const base = { v: 1, now: t0, tzo: tzOffset(t0), screen: 'transit', bright: 100, header: 'TEST', wx: null, warn: null };
+    const dest = { ...base, rows: [{ ln: 'RD', lbl: 'HOWARD', t: [t0 + 20, t0 + 45, t0 + 400], s: [0, 0, 0], a: 0 }, { ln: 'RD', lbl: '95TH', t: [t0 + 50, t0 + 600], s: [0, 0], a: 0 }], ticker: [] };
+    add('bunched trains', dest, [{ screen: 'transit' }, { screen: 'transit', now: t0 + 30 }]);
+    const chrono = { ...base, view: 'chrono', rows: [{ ln: 'RD', lbl: 'HOWARD', t: [t0 + 20], s: [0], a: 0 }, { ln: 'RD', lbl: 'HOWARD', t: [t0 + 45], s: [0], a: 0 }, { ln: 'RD', lbl: '95TH', t: [t0 + 55], s: [0], a: 0 }, { ln: 'BR', lbl: 'LOOP', t: [t0 + 400], s: [0], a: 0 }], ticker: [] };
+    add('bunched chrono', chrono, [{ screen: 'transit' }]);
+    const tkr = { ...base, rows: [], ticker: [{ ln: 'RD', d: 'Howard', t: t0 + 20, s: 0, a: 0 }, { ln: 'RD', d: 'Howard', t: t0 + 45, s: 0, a: 0 }, { ln: 'RD', d: '95th', t: t0 + 50, s: 0, a: 0 }, { ln: 'RD', d: '95th', t: t0 + 400, s: 0, a: 0 }] };
+    add('bunched ticker', tkr, [{ screen: 'ticker' }]);
+  }
   // Overnight.
   const night = { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE'), rows: [], ticker: [] };
   add('overnight', night, [{ screen: 'transit' }]);
