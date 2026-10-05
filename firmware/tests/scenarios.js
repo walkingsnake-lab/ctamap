@@ -115,9 +115,25 @@ async function build() {
     const p = { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (5 - i) * 300), timeBox: loc.timeBox, split: loc.split } };
     add(`radar ${key}`, p, [{ screen: 'radar', idx: 5 }, { screen: 'radar', idx: 0 }, { screen: 'radar', idx: 3 }], Object.fromEntries(ids.map((id) => [id, bytes])));
   }
-  for (const [timeBox, split] of [[radar.FULL_TIME_BOX, false], [radar.SPLIT_TIME_BOX, true]]) {
+  // Weather screen (radar screen with no frames): every warning, cold/hot
+  // extremes (minus bar, word skipped for 3-digit temps, high/low losing its
+  // degree signs), and a response without the extras.
+  {
     const t = 1791140000;
-    add(`radar conditions split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'watch' }, radar: { on: false, frames: [], ft: [], timeBox, split, wx: { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 } } }, [{ screen: 'radar' }]);
+    const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
+    const wxCases = [
+      ['normal', wx, null],
+      ['svr watch', wx, { kind: 'svr', lvl: 'watch' }],
+      ['svr warning', wx, { kind: 'svr', lvl: 'warning' }],
+      ['tor watch', wx, { kind: 'tor', lvl: 'watch' }],
+      ['tor warning', wx, { kind: 'tor', lvl: 'warning' }],
+      ['cold', { icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -31, wind: 'NW 22', pop: 100 }, null],
+      ['hot', { icon: 'sun', temp: 101, word: 'PT CLOUDY', hi: 103, lo: 82, feels: 112, wind: 'CALM', pop: 0 }, null],
+      ['no extras', { icon: 'moon', temp: 48, word: 'CLEAR', hi: 61, lo: 44, feels: null, wind: null, pop: null }, null],
+    ];
+    for (const [name, w, warn] of wxCases) {
+      add(`weather screen ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'radar' }, { screen: 'radar', blink: true }]);
+    }
   }
 
   // Radar time off: icon + temperature, WATCH/WARN tag bottom right (tornado warning blinks).

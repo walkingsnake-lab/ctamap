@@ -72,7 +72,7 @@
       <button data-v="auto">Auto</button>
       <button data-v="transit">Transit</button>
       <button data-v="ticker">Ticker</button>
-      <button data-v="radar">Radar</button>
+      <button data-v="radar">Weather</button>
       <button data-v="baseball">Baseball</button>
     </div>
     <p class="hint" id="screenHint">Auto stays on the transit screen.</p>
@@ -113,7 +113,7 @@
   </section>
 
   <section>
-    <h2>Radar screen</h2>
+    <h2>Radar (while raining)</h2>
     <div class="seg" id="radarCorner">
       <button data-v="time">Frame time</button>
       <button data-v="temp">Temperature</button>
@@ -218,7 +218,7 @@
     $('visit').hidden = !auto;
     $('radarEvery').value = String(board.radarEvery || 0);
     $('radarFor').value = String(board.radarFor || 60);
-    $('screenHint').textContent = !auto ? 'Stays on this screen until you change it.'
+    $('screenHint').textContent = !auto ? (board.screen === 'radar' ? 'Current weather; switches to the radar loop while rain is nearby.' : 'Stays on this screen until you change it.')
       : board.radarEvery ? `Stays on transit (baseball during Cubs and postseason games). While it's raining, the radar shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min.`
       : 'Stays on transit (baseball during Cubs and postseason games). Pick a time below to have the radar drop in while it\'s raining.';
     const fixed = Number.isInteger(board.bright);

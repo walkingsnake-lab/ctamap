@@ -1,19 +1,26 @@
 'use strict';
 // Open-Meteo current conditions for the board's location (its station):
-// the weather row (`wx`) and auto brightness from sunrise/sunset.
+// the weather row (`wx`), the weather screen (`radar.wx`: adds feels-like,
+// wind, and the next 6 hours' rain chance), and auto brightness from
+// sunrise/sunset.
 // Rules: docs/board/design-spec.md §4–5, contract "Weather row".
 
 const { createLocationPoller, fetchJson } = require('./location-poller');
 
 const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast';
 const NIGHT_BRIGHT = 40; // % overnight (spec §4)
+const POP_HOURS = 6;     // rain chance: max over the next 6 hourly slots
+
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 function url(lat, lon) {
   const q = new URLSearchParams({
     latitude: lat.toFixed(4), longitude: lon.toFixed(4),
-    current: 'temperature_2m,weather_code,is_day',
+    current: 'temperature_2m,weather_code,is_day,apparent_temperature,wind_speed_10m,wind_direction_10m',
+    hourly: 'precipitation_probability',
     daily: 'temperature_2m_max,temperature_2m_min,sunrise,sunset',
-    temperature_unit: 'fahrenheit', timezone: 'America/Chicago', timeformat: 'unixtime', forecast_days: '1',
+    temperature_unit: 'fahrenheit', wind_speed_unit: 'mph', timezone: 'America/Chicago', timeformat: 'unixtime',
+    forecast_days: '1', forecast_hours: String(POP_HOURS),
   });
   return `${OPEN_METEO}?${q}`;
 }
@@ -31,7 +38,31 @@ function parse(json) {
     lo: d.temperature_2m_min[0],
     sunrise: d.sunrise[0],
     sunset: d.sunset[0],
+    // Weather screen extras; null when the response lacks them.
+    feels: num(c.apparent_temperature),
+    windSpeed: num(c.wind_speed_10m),
+    windDir: num(c.wind_direction_10m),
+    pop: maxPop(json.hourly),
   };
+}
+
+// Highest hourly precipitation probability in the response (the request asks
+// for POP_HOURS hours starting with the current one), or null.
+function maxPop(hourly) {
+  const v = ((hourly && hourly.precipitation_probability) || []).slice(0, POP_HOURS).map(num).filter((x) => x != null);
+  return v.length ? Math.max(...v) : null;
+}
+
+// Degrees (direction the wind comes from) -> 8-point compass.
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const compass = (deg) => COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+
+// Wind as the screen shows it: "NW 12" (mph), "CALM" under 1 mph, or null.
+function windText(speed, dir) {
+  if (speed == null) return null;
+  const mph = Math.round(speed);
+  if (mph < 1) return 'CALM';
+  return dir == null ? String(mph) : `${compass(dir)} ${mph}`;
 }
 
 // WMO weather code -> icon and condition word. Words are the contract's
@@ -54,6 +85,17 @@ function toWx(w) {
   return { icon, temp: Math.round(w.temp), word, hi: Math.round(w.hi), lo: Math.round(w.lo) };
 }
 
+// Parsed weather -> the weather screen's `radar.wx`: the weather row plus
+// feels-like (°F), wind text, and rain chance (%); each null when missing.
+function toScreenWx(w) {
+  return {
+    ...toWx(w),
+    feels: w.feels == null ? null : Math.round(w.feels),
+    wind: windText(w.windSpeed, w.windDir),
+    pop: w.pop == null ? null : Math.round(w.pop),
+  };
+}
+
 // 'auto' brightness: full from sunrise to sunset, dimmer overnight. Uses the
 // day's times even slightly stale (a few minutes off at midnight is fine).
 function autoBright(w, now) {
@@ -66,4 +108,4 @@ function createWeather({ fetch = (lat, lon) => fetchJson(url(lat, lon)), interva
   return createLocationPoller({ name: 'weather', fetch, parse, interval, ...opts });
 }
 
-module.exports = { url, parse, condition, toWx, autoBright, createWeather, NIGHT_BRIGHT };
+module.exports = { url, parse, condition, toWx, toScreenWx, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS };

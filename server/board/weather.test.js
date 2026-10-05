@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { url, parse, condition, toWx, autoBright, createWeather, NIGHT_BRIGHT } = require('./weather');
+const { url, parse, condition, toWx, toScreenWx, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS } = require('./weather');
 const { measure } = require('./fonts');
 const { ICONS } = require('./icons');
 
@@ -49,13 +49,47 @@ test('auto brightness: full from sunrise to sunset, dimmer overnight', () => {
   assert.equal(autoBright(null, w.time), 100); // no data yet
 });
 
-test('request URL asks for exactly what the recorded fixture has', () => {
+test('request URL asks for the weather row fields plus the weather screen extras', () => {
   const u = new URL(url(42.008362, -87.665909));
   assert.equal(u.searchParams.get('latitude'), '42.0084');
-  assert.equal(u.searchParams.get('current'), 'temperature_2m,weather_code,is_day');
+  assert.equal(u.searchParams.get('current'), 'temperature_2m,weather_code,is_day,apparent_temperature,wind_speed_10m,wind_direction_10m');
+  assert.equal(u.searchParams.get('hourly'), 'precipitation_probability');
+  assert.equal(u.searchParams.get('forecast_hours'), String(POP_HOURS));
   assert.equal(u.searchParams.get('temperature_unit'), 'fahrenheit');
+  assert.equal(u.searchParams.get('wind_speed_unit'), 'mph');
   assert.equal(u.searchParams.get('timeformat'), 'unixtime');
-  assert.deepEqual(Object.keys(MORSE.current).filter((k) => k !== 'time' && k !== 'interval'), u.searchParams.get('current').split(','));
+  // The recorded fixture predates the extras: its fields are a prefix.
+  const asked = u.searchParams.get('current').split(',');
+  const recorded = Object.keys(MORSE.current).filter((k) => k !== 'time' && k !== 'interval');
+  assert.deepEqual(asked.slice(0, recorded.length), recorded);
+});
+
+test('weather screen: extras are null when the response lacks them (older fixture)', () => {
+  assert.deepEqual(toScreenWx(parse(MORSE)), { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51, feels: null, wind: null, pop: null });
+});
+
+test('weather screen: feels-like, wind, and the next 6 hours\' highest rain chance', () => {
+  // The Morse fixture with the extra fields in Open-Meteo's response shape.
+  const json = {
+    ...MORSE,
+    current: { ...MORSE.current, apparent_temperature: 60.6, wind_speed_10m: 11.6, wind_direction_10m: 312 },
+    hourly: { time: [0, 1, 2, 3, 4, 5].map((i) => MORSE.current.time + i * 3600), precipitation_probability: [0, 5, 20, 45, null, 30] },
+  };
+  assert.deepEqual(toScreenWx(parse(json)), { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51, feels: 61, wind: 'NW 12', pop: 45 });
+  // Only the first POP_HOURS slots count.
+  const longer = { ...json, hourly: { precipitation_probability: [0, 0, 0, 0, 0, 0, 90] } };
+  assert.equal(parse(longer).pop, 0);
+  // The weather row's wx keeps its shape.
+  assert.deepEqual(toWx(parse(json)), { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 });
+});
+
+test('wind: 8-point compass, CALM under 1 mph', () => {
+  assert.equal(compass(0), 'N'); assert.equal(compass(22), 'N'); assert.equal(compass(23), 'NE');
+  assert.equal(compass(180), 'S'); assert.equal(compass(337), 'NW'); assert.equal(compass(338), 'N'); assert.equal(compass(360), 'N');
+  assert.equal(windText(0.4, 90), 'CALM');
+  assert.equal(windText(5.5, 90), 'E 6');
+  assert.equal(windText(5, null), '5');
+  assert.equal(windText(null, 90), null);
 });
 
 test('cache: one fetch per location per interval, last good data kept on failure', async () => {
