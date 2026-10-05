@@ -566,24 +566,30 @@ test('baseball score flash: amber for a minute after a change, fades to white, t
   assert.ok(count(f, draw.BB.live, 22, 12, 30, 18) > 0);
 });
 
-test('radar time off: no time or AM/PM; indicator stays; warning icon at the top right of the time area', () => {
+test('radar time off: temperature where the time was, warning icon under it, right-aligned under the indicator', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
-  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 32], split: false };
+  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 32], split: false, temp: 63 };
   const base = { now, bright: 100, warn: null };
-  const off = (warn) => draw.render({ ...base, warn, radar: { ...radar, showTime: false } }, { screen: 'radar', now, frames: {} });
+  const off = (warn, extra = {}) => draw.render({ ...base, warn, radar: { ...radar, showTime: false, ...extra } }, { screen: 'radar', now, frames: {} });
   const f = off(null);
-  assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0);
-  assert.equal(count(f, draw.C.radarAmpm, 0, 0, 63, 31), 0);
-  assert.equal(hex(f.get(62, 2)), draw.C.amber);                 // indicator unchanged
-  const w = off({ kind: 'tor', lvl: 'warning' });
-  assert.ok(count(w, draw.C.warnTornado, 56, 6, 62, 10) > 3);    // icon right-aligned, under the indicator
-  assert.equal(count(w, draw.C.warnTornado, 0, 11, 63, 31), 0);  // nothing lower
-  assert.equal(hex(w.get(62, 2)), draw.C.amber);
-  // On (default and explicit) is unchanged.
+  assert.equal(count(f, draw.C.radarAmpm, 0, 0, 63, 31), 0);       // no AM/PM
+  assert.equal(hex(f.get(62, 2)), draw.C.amber);                   // indicator unchanged
+  assert.ok(count(f, draw.C.radarTime, 40, 6, 63, 13) > 15);       // 63° on the time's rows
+  let maxX = 0; for (let y = 0; y < 32; y++) for (let x = 40; x < 64; x++) if (hex(f.get(x, y)) === draw.C.radarTime) maxX = Math.max(maxX, x);
+  assert.equal(maxX, 62);                                          // degree sign right-aligned to x62
+  // The temperature differs from the time drawing.
   const on = draw.render({ ...base, radar }, { screen: 'radar', now, frames: {} });
+  assert.notDeepEqual(on.px, f.px);
+  const w = off({ kind: 'tor', lvl: 'warning' });
+  assert.ok(count(w, draw.C.warnTornado, 56, 15, 62, 19) > 3);     // under the temperature, right-aligned
+  assert.equal(count(w, draw.C.warnTornado, 0, 0, 63, 14), 0);
+  // No weather yet: just the warning.
+  const none = off({ kind: 'svr', lvl: 'warning' }, { temp: null });
+  assert.equal(count(none, draw.C.radarTime, 0, 0, 63, 31), 0);
+  assert.ok(count(none, draw.C.warnSevere, 56, 15, 62, 19) > 3);
+  // On (default and explicit) is unchanged.
   const on2 = draw.render({ ...base, radar: { ...radar, showTime: true } }, { screen: 'radar', now, frames: {} });
   assert.deepEqual(on.px, on2.px);
-  assert.ok(count(on, draw.C.radarTime, 40, 6, 63, 14) > 15);
 });
 
 test('animator: times slide only after a leaving DUE has faded; a new arrival waits for the slide', () => {

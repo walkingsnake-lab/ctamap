@@ -628,9 +628,14 @@
       const warnGlyph = p.warn ? s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT) : null;
       const warnColor = p.warn && p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere;
       if (r.showTime === false) {
-        // Time off: the area stays, the warning icon moves to its top right
-        // (just under the frame indicator's rows).
-        if (warnGlyph) f.text('small', warnGlyph, right - measure('small', warnGlyph) + 1, top + 8, warnColor);
+        // Time off: the current temperature where the time was (5x7 with a
+        // small degree sign, right-aligned), the warning icon under it.
+        if (r.temp != null) {
+          const t = String(r.temp);
+          const x = f.text('5x7', t, right + 1 - (measure('5x7', t) + 1 + measure('small', '°')), top + 11, C.radarTime);
+          f.text('small', '°', x, top + 10, C.radarTime);
+        }
+        if (warnGlyph) f.text('small', warnGlyph, right - measure('small', warnGlyph) + 1, top + 18, warnColor);
         return f;
       }
       rtext(f, '5x7', clockText(t), right, top + 11, C.radarTime);

@@ -124,7 +124,7 @@ async function build() {
   for (const [timeBox, split] of [[radar.FULL_TIME_BOX, false], [radar.SPLIT_TIME_BOX, true]]) {
     const t = 1791140000;
     const ids = ['a', 'b', 'c'];
-    add(`radar time off split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0 }], Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048)])));
+    add(`radar time off split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false, temp: split ? -12 : 63 } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0 }], Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048)])));
   }
 
   // Transit animator sequences.

@@ -766,8 +766,12 @@ def render_radar(p, f, now=None, idx=None, frames=None):
         if p['warn']['kind'] == 'tor':
             warn_color = C['warnTornado']
     if r.get('showTime') is False:
+        if r.get('temp') is not None:
+            ts = str(r['temp'])
+            x = f.text('5x7', ts, right + 1 - (measure('5x7', ts) + 1 + measure('small', '°')), top + 11, C['radarTime'])
+            f.text('small', '°', x, top + 10, C['radarTime'])
         if warn_glyph is not None:
-            f.text('small', warn_glyph, right - measure('small', warn_glyph) + 1, top + 8, warn_color)
+            f.text('small', warn_glyph, right - measure('small', warn_glyph) + 1, top + 18, warn_color)
         return f
     rtext(f, '5x7', clock_text(t, tzo), right, top + 11, C['radarTime'])
     ap = ampm_text(t, tzo)
