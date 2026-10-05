@@ -647,7 +647,7 @@
     // A score that just changed shows amber for SCORE_HOLD_S, then fades back
     // to the live white over SCORE_FADE_S. `side.at` is when the server saw
     // the change (epoch s); without it the score is plain white.
-    const SCORE_HOLD_S = 60, SCORE_FADE_S = 10;
+    const SCORE_HOLD_S = 30, SCORE_FADE_S = 10;
     function scoreColor(side, now) {
       if (side.at == null) return BB.live;
       const age = now - side.at;
