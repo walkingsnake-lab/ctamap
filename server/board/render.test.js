@@ -23,6 +23,18 @@ test('row positions follow the spec', () => {
   assert.deepEqual(rowTops(3, true, false), [10, 18, 26]);
   assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);
   assert.deepEqual(rowTops(2, true, true), [9, 16]);            // ends by row 20, above the weather divider
+});
+
+test('without the header, rows are spread evenly (equal gaps, odd pixel to the bottom)', () => {
+  assert.deepEqual(rowTops(2, false, false), [7, 19]);
+  assert.deepEqual(rowTops(3, false, false), [4, 13, 22]);
+  assert.deepEqual(rowTops(4, false, false), [3, 10, 17, 24]);
+  assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);
+  assert.deepEqual(rowTops(2, false, true), [4, 13]);
+  assert.deepEqual(rowTops(3, false, true), [1, 8, 15]);
+});
+
+test('rows stay inside their area', () => {
   for (const [n, h, w] of [[1, true, true], [2, false, true], [3, false, true], [5, false, false], [2, true, false]]) {
     const tops = rowTops(n, h, w);
     assert.ok(tops[0] >= (h ? 9 : 0), `${n}/${h}/${w} starts at ${tops[0]}`);
