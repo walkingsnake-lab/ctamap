@@ -188,7 +188,7 @@ DIGIT['BR'] = hexc('#a8673f')
 DIGIT['PR'] = hexc('#9168e0')
 
 C = {
-    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#9c6a00'),
+    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#555555'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#9c6a00'),
     'sch': hexc('#b0b0b0'), 'schDim': hexc('#6e6e6e'), 'grey': hexc('#8f8f8f'), 'band': hexc('#202020'),
     'divider': hexc('#333333'), 'tickerHead': hexc('#a6a6a6'), 'index': hexc('#1f2f35'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
@@ -736,10 +736,10 @@ def render_radar(p, f, now=None, idx=None, frames=None):
         for i in range(len(ids)):
             f.fill(x, top, seg_w, 2, C['amber'] if i == idx else C['indicator'])
             x += seg_w + seg_gap
-    rtext(f, '5x7', clock_text(t, tzo), right, top + 11, C['clock'])
+    rtext(f, '5x7', clock_text(t, tzo), right, top + 11, C['radarTime'])
     ap = ampm_text(t, tzo)
     ap_x = right - measure('small', ap) + 1
-    f.text('small', ap, ap_x, top + 18, C['grey'])
+    f.text('small', ap, ap_x, top + 18, C['radarAmpm'])
     if p.get('warn'):
         glyph = g(assets.FUNNEL if p['warn']['kind'] == 'tor' else assets.BOLT)
         f.text('small', glyph, ap_x - 2 - measure('small', glyph), top + 18,
