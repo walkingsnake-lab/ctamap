@@ -3,14 +3,17 @@
 // linescore hydrated, which carries everything the screen draws (score,
 // inning, count, outs, runners, records), so there's no per-game live feed.
 //
-// Shown games: every Cubs game and every postseason game, from 30 min before
-// first pitch until 15 min after the final. Polled every 15 s while any game
+// Shown games: every Cubs game and every postseason game. Two sets of windows:
+//   auto   (baseball takes over transit): from 30 min before first pitch
+//          until 15 min after the final.
+//   forced (the board is set to Baseball): today's games all day from
+//          midnight, finals until 3 AM the next morning (Chicago time). Polled every 15 s while any game
 // is live or about to start, every 5 min otherwise. Keeps the last good
 // response on failure.
 
 const { fetchJson } = require('./location-poller');
 const { team } = require('./teams');
-const { TZ } = require('./time');
+const { TZ, tzOffset } = require('./time');
 
 const BASE = 'https://statsapi.mlb.com/api/v1/schedule';
 const CUBS = 112;
@@ -23,6 +26,9 @@ const SKIP_STATES = /postponed|cancel/i;
 
 const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 const chicagoDate = (t) => dayFmt.format(new Date(t * 1000)); // YYYY-MM-DD
+const FORCED_FINAL_HOUR = 3; // forced view: finals hold until 3 AM the next morning
+// Epoch of local midnight starting the Chicago day that contains t.
+const dayStart = (t) => { const local = t + tzOffset(t); return t - (((local % 86400) + 86400) % 86400); };
 
 // Yesterday through today (Chicago dates), so a late game stays after midnight.
 function url(now) {
@@ -67,7 +73,10 @@ function liveState(ls) {
 
 // Schedule JSON -> the games to show at `now`, in start order.
 // `finals` (gamePk -> epoch first seen final) is updated in place.
-function shown(json, now, finals = new Map(), changes = new Map()) {
+// `mode`: 'auto' (default) or 'forced' (see the windows above).
+function shown(json, now, finals = new Map(), changes = new Map(), mode = 'auto') {
+  const forced = mode === 'forced';
+  const today = dayStart(now);
   const out = [];
   for (const d of (json && json.dates) || []) {
     for (const g of d.games || []) {
@@ -84,10 +93,17 @@ function shown(json, now, finals = new Map(), changes = new Map()) {
         away: side(g.teams.away),
         home: side(g.teams.home),
       };
-      if (game.st === 'pre' && now < start - PRE_S) continue;
-      if (game.st === 'final') {
-        if (!finals.has(g.gamePk)) finals.set(g.gamePk, now - start > STALE_S ? -Infinity : now);
-        if (now - finals.get(g.gamePk) >= FINAL_S) continue;
+      if (forced) {
+        const gameDay = dayStart(start);
+        if (game.st === 'pre' && gameDay !== today) continue;
+        // A final shows through its own day and the next day until 3 AM.
+        if (game.st === 'final' && !(gameDay === today || (gameDay < today && gameDay >= dayStart(today - 3600) && now - today < FORCED_FINAL_HOUR * 3600))) continue;
+      } else {
+        if (game.st === 'pre' && now < start - PRE_S) continue;
+        if (game.st === 'final') {
+          if (!finals.has(g.gamePk)) finals.set(g.gamePk, now - start > STALE_S ? -Infinity : now);
+          if (now - finals.get(g.gamePk) >= FINAL_S) continue;
+        }
       }
       if (game.st === 'live') {
         Object.assign(game, liveState(g.linescore || {}));
@@ -153,8 +169,9 @@ function createMlb({ fetch = fetchJson, now = () => Date.now() / 1000, log = con
 
   return {
     // Games to show now ([] when none, or before the first fetch).
-    get() {
-      try { return raw ? shown(raw, now(), finals, changes) : []; }
+    // mode: 'auto' or 'forced' (the board is set to Baseball).
+    get(mode = 'auto') {
+      try { return raw ? shown(raw, now(), finals, changes, mode) : []; }
       catch (e) { log.error('[board] mlb parse failed:', e.message); return []; }
     },
     raw: () => raw,
@@ -167,4 +184,4 @@ function createMlb({ fetch = fetchJson, now = () => Date.now() / 1000, log = con
   };
 }
 
-module.exports = { createMlb, shown, trackScores, nextDelay, url, qualifies, CUBS, PRE_S, FINAL_S, FAST_S, SLOW_S };
+module.exports = { createMlb, dayStart, FORCED_FINAL_HOUR, shown, trackScores, nextDelay, url, qualifies, CUBS, PRE_S, FINAL_S, FAST_S, SLOW_S };

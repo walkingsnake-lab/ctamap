@@ -10,7 +10,7 @@ const { createBoard } = require('./index');
 const { createStore } = require('./state');
 
 const quiet = { warn() {}, error() {} };
-const fakeMlb = (games = []) => ({ get: () => games, raw: () => null });
+const fakeMlb = (games = [], forcedGames = games) => ({ get: (mode) => (mode === 'forced' ? forcedGames : games), raw: () => null });
 
 // Spin up a server that routes /board/* the same way server.js does.
 async function serve(opts = {}) {
@@ -555,5 +555,20 @@ test('baseball: the simulator test game goes first in the list, in the chosen st
   }
   await post({});
   assert.equal((await s.req('/board/secret123/api/update?b=home')).body.mlb.games.length, 0);
+  await s.close();
+});
+
+test('forced Baseball asks for the wider forced windows; auto uses the auto ones', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { team } = require('./teams');
+  const g = { id: 9, st: 'pre', start: now + 6 * 3600, away: { ...team(112), r: 0, w: 1, l: 0 }, home: { ...team(138), r: 0, w: 0, l: 1 } };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), mlb: fakeMlb([], [g]) });
+  let b = (await s.req('/board/secret123/api/update?b=home')).body;
+  assert.equal(b.screen, 'transit');
+  assert.deepEqual(b.mlb.games, []);
+  s.store.update('home', { screen: 'baseball' });
+  b = (await s.req('/board/secret123/api/update?b=home')).body;
+  assert.equal(b.screen, 'baseball');
+  assert.equal(b.mlb.games[0].id, 9);
   await s.close();
 });

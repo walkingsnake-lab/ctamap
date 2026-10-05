@@ -192,7 +192,7 @@ function createBoard({
     const test = activeTest(id, now);
     if (test) for (const ln of test.lines) alertLines.add(ln);
     let games = [];
-    try { games = mlb.get(); }
+    try { games = mlb.get(board.screen === 'baseball' ? 'forced' : 'auto'); }
     catch (e) { log.error('[board] mlb:', e.message); }
     if (test && test.game) games = [testGame(test.game, now), ...games];
     const warn = (test && test.warn) || pickWarn(nwsAlerts, now);

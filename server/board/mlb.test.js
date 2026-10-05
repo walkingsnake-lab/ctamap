@@ -135,3 +135,22 @@ test('score changes between polls are stamped on the live game, only for the tea
   trackScores(s2, t + 30, seen, changes);                          // unchanged: stamp stays
   assert.equal(shown(s2, t + 31, new Map(), changes)[0].home.at, t + 15);
 });
+
+test('forced view: today\'s games all day from midnight; finals until 3 AM the next morning', () => {
+  const { dayStart } = require('./mlb');
+  const midnight = dayStart(START);                                   // 2026-10-03 00:00 CDT
+  assert.equal(new Date(midnight * 1000).toISOString(), '2026-10-03T05:00:00.000Z');
+  const s = schedule(game(pre));
+  assert.equal(shown(s, midnight - 60, new Map(), new Map(), 'forced').length, 0);   // still yesterday
+  assert.equal(shown(s, midnight + 60, new Map(), new Map(), 'forced')[0].st, 'pre');
+  assert.equal(shown(s, midnight + 60).length, 0);                                    // auto: not yet
+  // Final (12:00 PM game): through the evening and until 3 AM, not after.
+  const f = (t) => shown(FIX, t, new Map(), new Map(), 'forced').length;
+  assert.equal(f(START + 3 * 3600), 1);
+  assert.equal(f(midnight + 86400 - 60), 1);                          // 11:59 PM
+  assert.equal(f(midnight + 86400 + 3 * 3600 - 60), 1);               // 2:59 AM
+  assert.equal(f(midnight + 86400 + 3 * 3600), 0);                    // 3:00 AM
+  // Auto keeps its 15-minute hold; forced ignores the stale-final rule.
+  assert.equal(shown(FIX, START + 7 * 3600).length, 0);
+  assert.equal(f(START + 7 * 3600), 1);
+});

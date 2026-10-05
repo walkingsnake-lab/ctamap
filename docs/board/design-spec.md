@@ -115,7 +115,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from Open-Meteo). Every dim element has a **minimum floor** so it never drops to black at night.
 - **Radar rain fills** render at ~65%; **ticker row fills** at 55%. Text stays full brightness.
 - Rule of thumb from the session: **lit strokes on dark survive; dark strokes on lit don't** (diffuser glow fills them in).
-- **Clock colons are steady** on every clock. Every clock (transit header, overnight, ticker header) uses the same `#cccccc`; the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#555555`) so it doesn't read as the current time.
+- **Clock colons are steady** on every clock. Every clock (transit header, overnight, ticker header) uses the same `#cccccc`; the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#8f8f8f`) so it doesn't read as the current time.
 
 ---
 
@@ -175,7 +175,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Accepted trade-off:** infrequent lines can drop off the screen when frequent ones fill all rows.
 
 ### Weather row (optional)
-- 8x8 condition icon, temperature with a small 2x2 degree sign (e.g. `54°`), condition word (uppercase) on the right. Both texts are dimmed (`#555555`, same as the radar's AM/PM) so the row reads as secondary; the watch/warning tag keeps its colors.
+- 8x8 condition icon, temperature with a small 2x2 degree sign (e.g. `54°`), condition word (uppercase) on the right. Both texts are mid grey (`#8f8f8f`, the grey used for records and high/low) so the row reads as secondary; the watch/warning tag keeps its colors.
 - Icons are multi-color sprites defined in `server/board/icons.js` (with the Open-Meteo weather-code mapping); previews in `docs/board/previews/sheet-icons.png`.
 - Icons: sun, moon, partly cloudy (day/night), cloudy, **umbrella** (rain/drizzle/showers), **icy umbrella** (freezing rain), **snowflake**, storm cloud with bolt, fog.
 - **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
@@ -256,6 +256,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 ### When it shows (Auto mode)
 - **Every Cubs game** (team ID 112, any game type) and **every postseason game** (game types `F`, `D`, `L`, `W`). Postponed and cancelled games are skipped.
 - **Window:** pregame from 30 min before first pitch (a delayed start stays in pregame), live, then final held 15 min after the server first sees it final (starting values; tune). A final first seen more than 6 h after first pitch (e.g. after a server restart) isn't shown.
+- **Forced Baseball** (screen set to Baseball on the phone) uses wider windows: every game scheduled today shows all day from midnight, and finals hold until 3 AM the next morning (no stale-final rule). Auto keeps the windows above, since there baseball takes over transit.
 - **Priority:** weather wins. Auto shows baseball while any game is in its window, except during an NWS warning or watch (transit, with its warning tag). Timed radar visits (§10), when turned on, interrupt baseball the same way they interrupt transit.
 - **Live games take precedence:** while any shown game is live, only live games are shown (rotating one minute each if there are several). With nothing live, pregame and final games rotate one minute each. Picked by wall time (`floor(now / 60) % count` over that set), so the board keeps no rotation state. Screen switches are natural gaps for network jobs (§2).
 - Phone page and buttons can still switch screens (§10); the phone page gets a Baseball option.
