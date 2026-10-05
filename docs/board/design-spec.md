@@ -255,6 +255,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 ### When it shows (Auto mode)
 - **Every Cubs game** (team ID 112, any game type) and **every postseason game** (game types `F`, `D`, `L`, `W`). Postponed and cancelled games are skipped.
 - **Window:** pregame from 30 min before first pitch (a delayed start stays in pregame), live, then final held 15 min after the server first sees it final (starting values; tune). A final first seen more than 6 h after first pitch (e.g. after a server restart) isn't shown.
+- **Forced Baseball** (screen set to Baseball on the phone) uses wider windows: every game scheduled today shows all day from midnight, and finals hold until 3 AM the next morning (no stale-final rule). Auto keeps the windows above, since there baseball takes over transit.
 - **Priority:** weather wins. Auto shows baseball while any game is in its window, except during an NWS warning or watch (transit, with its warning tag). Timed radar visits (§10), when turned on, interrupt baseball the same way they interrupt transit.
 - **Live games take precedence:** while any shown game is live, only live games are shown (rotating one minute each if there are several). With nothing live, pregame and final games rotate one minute each. Picked by wall time (`floor(now / 60) % count` over that set), so the board keeps no rotation state. Screen switches are natural gaps for network jobs (§2).
 - Phone page and buttons can still switch screens (§10); the phone page gets a Baseball option.
