@@ -236,3 +236,18 @@ test('poller: a pass with nothing to do does not leave it stuck', async () => {
   await idle.pass();
   await idle.pass();
 });
+
+test('poller: after a quiet spell, old frames are not served and on resets', async () => {
+  let t = R.timeOf('202008102108') + 120;
+  const radar = R.createRadar({ now: () => t, log: quiet, fetch: async () => ({ wld: wldOf('202008102100'), png: pngOf('202008102100') }) });
+  radar.want('40100', MORSE.lat, MORSE.lon);
+  for (let i = 0; i < 6; i++) await radar.pass();
+  const storm = radar.want('40100', MORSE.lat, MORSE.lon);
+  assert.equal(storm.on, true);
+  assert.equal(storm.frames.length, 6);
+  t += 2 * 86400; // nobody asked for two days
+  const later = radar.want('40100', MORSE.lat, MORSE.lon);
+  assert.deepEqual([later.on, later.frames, later.ft], [false, [], []]);
+  // An old frame the board still lists can still be fetched by id.
+  assert.equal(radar.frame('40100', storm.frames[0]).length, 2048);
+});

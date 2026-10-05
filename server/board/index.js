@@ -24,6 +24,8 @@ const DRAW_JS = fs.readFileSync(path.join(__dirname, 'draw.js'));
 const SIM_ASSETS = JSON.stringify(assets());
 
 const MAX_BODY = 8 * 1024;
+// Arrivals older than this are stale (red top edge, NO DATA when none are left).
+const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
 const RESERVED = new Set(['ping', 'version', 'update', 'radar']);
 
@@ -105,13 +107,9 @@ function createBoard({
 
   // 'auto' brightness follows sunrise/sunset (100 until weather data arrives).
   const resolveBright = (b, w, now) => (b === 'off' ? 0 : b === 'auto' ? autoBright(w, now) : b);
-  // 'auto': baseball while a game is on, unless there's an NWS warning or
-  // watch (weather first: transit carries the warning tag); otherwise
-  // transit. Timed radar visits (radar.visit) ride on top of either.
-  function resolveScreen(s, { warn, games }) {
-    if (s !== 'auto') return s;
-    return games && !warn ? 'baseball' : 'transit';
-  }
+  // 'auto': baseball while a game is on, otherwise transit. Timed radar
+  // visits (radar.visit) ride on top of either.
+  const resolveScreen = (s, games) => (s !== 'auto' ? s : games ? 'baseball' : 'transit');
   // Radar visits apply only on the auto screen, and only if turned on.
   const visitOf = (b) => (b.screen === 'auto' && b.radarEvery > 0
     ? { every: b.radarEvery * 60, for: Math.min(b.radarFor || 60, b.radarEvery * 60) } : null);
@@ -172,8 +170,8 @@ function createBoard({
       st ? soft('weather', weather.get(st.lat, st.lon)) : null,
       st ? soft('nws', nws.get(st.lat, st.lon)) : null,
     ]);
-    if (!data) return null;
     const now = nowSecs();
+    const stale = !data || now - data.fetchedAt > STALE_S;
     // The row cap only reserves space for the weather row when there's
     // weather to show.
     const wx = board.showWeather && w ? toWx(w) : null;
@@ -197,14 +195,15 @@ function createBoard({
     if (test && test.game) games = [testGame(test.game, now), ...games];
     const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
     const viewKey = `${id}:${board.station.mapid}`;
-    const { view, viewState, rows, ticker, bars } = format(data.arrivals, cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
+    const { view, viewState, rows, ticker, bars } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
       v: board.v,
       now,
       tzo: tzOffset(now),
-      age: Math.max(0, Math.round(now - data.fetchedAt)),
-      screen: resolveScreen(board.screen, { warn, games: games.length > 0 }),
+      age: data ? Math.max(0, Math.round(now - data.fetchedAt)) : null,
+      stale: stale ? 1 : 0,
+      screen: resolveScreen(board.screen, games.length > 0),
       bright: resolveBright(board.bright, w, now),
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
@@ -246,9 +245,7 @@ function createBoard({
       const id = String(parsed.query.b || '');
       const board = store.get(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      const body = await update(board, id, parsed.query.boot === '1');
-      if (!body) return send(res, 503, { err: 'not_ready' });
-      return send(res, 200, body);
+      return send(res, 200, await update(board, id, parsed.query.boot === '1'));
     }
 
     // One radar frame for the board's station: 2048 bytes, immutable.
@@ -320,9 +317,7 @@ function createBoard({
         if (!board) return send(res, 404, { err: 'unknown_board' });
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
-        const body = await update(board, id, false, preview);
-        if (!body) return send(res, 503, { err: 'not_ready' });
-        return send(res, 200, body);
+        return send(res, 200, await update(board, id, false, preview));
       }
 
       // Radar frame for the simulator (the path is the credential); `mapid`
@@ -388,7 +383,6 @@ function createBoard({
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
-        if (!body) return send(res, 503, { err: 'not_ready' });
         const screen = ['transit', 'ticker', 'weather', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};

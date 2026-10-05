@@ -155,13 +155,33 @@ function fakeTracker(data) {
   return { asked, get: async (mapid) => { asked.push(mapid); return data; } };
 }
 
-test('update: auth, unknown board, and not-ready', async () => {
-  const s = await serve({ tracker: fakeTracker(null) });
+test('update: auth, unknown board, and no Train Tracker data yet', async () => {
+  const s = await serve({ tracker: fakeTracker(null), mlb: fakeMlb([{ id: 7, st: 'pre', start: 1, away: {}, home: {} }]) });
   assert.equal((await s.req('/board/update?b=home')).status, 401);
   assert.equal((await s.req('/board/update?b=x', { headers: { 'X-Board-Token': 'tok' } })).status, 404);
+  // Everything but the trains still works; transit says NO DATA.
   const r = await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } });
-  assert.equal(r.status, 503);
-  assert.equal(r.body.err, 'not_ready');
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.age, r.body.stale, r.body.rows, r.body.ticker], [null, 1, [], []]);
+  assert.equal(r.body.mlb.games.length, 1);
+  await s.close();
+});
+
+test('update: arrivals older than 3 minutes are stale; the times themselves are unchanged', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const at = (fetchedAt) => fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  let s = await serve({ tracker: at(now - 170) });
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.stale, 0);
+  const fresh = b.rows;
+  await s.close();
+  s = await serve({ tracker: at(now - 190) });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.stale, 1);
+  assert.deepEqual(b.rows.map((r) => r.s), fresh.map((r) => r.s));
   await s.close();
 });
 
@@ -508,7 +528,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   await s.close();
 });
 
-test('baseball: auto shows it during a game; a weather warning comes first', async () => {
+test('baseball: auto shows it during a game, weather warnings or not', async () => {
   const now = Math.floor(Date.now() / 1000);
   const arrivals = normalize(morseJson, { log: quiet });
   const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
@@ -526,10 +546,10 @@ test('baseball: auto shows it during a game; a weather warning comes first', asy
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.screen, 'baseball');
   assert.deepEqual(b.mlb.games, [game]);
-  // A weather warning (simulator test warning here) puts transit first.
+  // A weather warning doesn't take the board off the game.
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  await post({ warn: { kind: 'svr', lvl: 'watch' } });
-  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'transit');
+  await post({ warn: { kind: 'tor', lvl: 'warning' } });
+  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'baseball');
   // The phone can pick baseball directly.
   await post({});
   await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/state?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ screen: 'baseball' }) });

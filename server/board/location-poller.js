@@ -4,6 +4,10 @@
 // locations cost no requests. Keeps the last good data on failure. Same
 // pattern as tracker.js.
 
+// Seconds before retrying after `failures` failures in a row: the normal
+// interval, doubling up to 5 minutes (or the interval, if longer).
+const backoff = (interval, failures) => Math.min(interval * 2 ** (failures - 1), Math.max(interval, 300));
+
 function createLocationPoller({
   name,
   fetch,                // (lat, lon) -> raw response
@@ -12,7 +16,7 @@ function createLocationPoller({
   now = () => Date.now() / 1000,
   log = console,
 }) {
-  const cache = new Map(); // "lat,lon" -> { lat, lon, data, fetchedAt, wantedAt, inflight }
+  const cache = new Map(); // "lat,lon" -> { lat, lon, data, fetchedAt, wantedAt, inflight, failures, retryAt }
   let timer = null;
 
   function refresh(e) {
@@ -21,7 +25,10 @@ function createLocationPoller({
       try {
         e.data = parse(await fetch(e.lat, e.lon));
         e.fetchedAt = now();
+        e.failures = 0;
       } catch (err) {
+        e.failures += 1;
+        e.retryAt = now() + backoff(interval, e.failures);
         log.error(`[board] ${name} ${e.lat},${e.lon} failed: ${err.message}`);
       } finally {
         e.inflight = null;
@@ -34,7 +41,7 @@ function createLocationPoller({
     const t = now();
     for (const [k, e] of cache) {
       if (t - e.wantedAt > forget) { cache.delete(k); continue; }
-      if (t - e.wantedAt <= idle && t - e.fetchedAt >= interval) refresh(e);
+      if (t - e.wantedAt <= idle && t - e.fetchedAt >= interval && t >= e.retryAt) refresh(e);
     }
   }
 
@@ -42,10 +49,10 @@ function createLocationPoller({
     // Latest data for a location, or null. Waits briefly on first use.
     async get(lat, lon, { wait = 3000 } = {}) {
       const k = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-      if (!cache.has(k)) cache.set(k, { lat, lon, data: null, fetchedAt: 0, wantedAt: 0, inflight: null });
+      if (!cache.has(k)) cache.set(k, { lat, lon, data: null, fetchedAt: 0, wantedAt: 0, inflight: null, failures: 0, retryAt: 0 });
       const e = cache.get(k);
       e.wantedAt = now();
-      if (!e.data) await Promise.race([refresh(e), new Promise((r) => setTimeout(r, wait))]);
+      if (!e.data && (e.inflight || now() >= e.retryAt)) await Promise.race([refresh(e), new Promise((r) => setTimeout(r, wait))]);
       return e.data;
     },
     start() {
@@ -77,4 +84,4 @@ function fetchJson(u, { timeout = 10000, headers = {} } = {}) {
   });
 }
 
-module.exports = { createLocationPoller, fetchJson };
+module.exports = { createLocationPoller, fetchJson, backoff };

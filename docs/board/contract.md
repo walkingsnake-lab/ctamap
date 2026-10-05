@@ -13,7 +13,7 @@ Status: **draft v0**. Items marked **(decide)** are open.
 - **Clock sync:** every JSON response includes `now`, the server's epoch time. The board keeps `offset = now - time.monotonic()` and uses it for countdowns and clocks. No NTP on the board.
 - **Board ID:** query param `b` (e.g. `b=home`). State is keyed by board ID.
 - **Auth:** header `X-Board-Token: <BOARD_TOKEN>` on every board endpoint except `/board/ping`. If `BOARD_TOKEN` is unset (local dev), auth is skipped.
-- **Errors:** `400` invalid input · `401` bad/missing token · `404` unknown board ID or route · `405` wrong method · `503` data not ready yet (just after server start). Error bodies are `{"err":"<short code>"}`; `400` adds `"detail"` with a human-readable reason.
+- **Errors:** `400` invalid input · `401` bad/missing token · `404` unknown board ID or route · `405` wrong method · `503` data not ready yet. Error bodies are `{"err":"<short code>"}`; `400` adds `"detail"` with a human-readable reason.
 - **Caching:** every `/board/` response is `Cache-Control: no-store` (radar frames excepted, see below).
 - **Text is final:** the server sends labels already shortened, cased, ligature-substituted, and truncated to fit by pixel width. The board never edits text.
 - **Fonts:** the board font BDFs are committed under `server/board/fonts/`. The server reads glyph advances from them to measure and truncate text; the board build uses the same files. One source for widths.
@@ -82,8 +82,9 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `v` | int | Settings version (same as `/board/version`). |
 | `now` | int | Server epoch seconds. |
 | `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
-| `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
-| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `weather` (radar loop while raining; see *Radar*), `baseball`. `auto` resolves to `baseball` while `mlb.games` is non-empty and there's no NWS warning or watch (weather first), otherwise `transit`; timed radar visits ride on top of either, see `radar.visit`. A local button press overrides it until `v` changes. Firmware before the baseball port draws `transit` for `baseball`. |
+| `age` | int \| null | Seconds since the arrivals data was last fetched successfully, or `null` when the server hasn't reached Train Tracker since it started (the update is still sent, with no rows). The server keeps serving last-good data when CTA fails. |
+| `stale` | int | `1` when there's no arrivals data or it's more than 3 minutes old (`STALE_S` in `index.js`): the transit and ticker screens draw a red (`#ff2020`) line along the top edge (row 0, full width), and the overnight layout says `NO DATA` instead of `NO TRAINS`. Otherwise `0`. |
+| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `weather` (radar loop while raining; see *Radar*), `baseball`. `auto` resolves to `baseball` while `mlb.games` is non-empty, otherwise `transit` (NWS warnings and watches don't change it); timed radar visits ride on top of either, see `radar.visit`. A local button press overrides it until `v` changes. Firmware before the baseball port draws `transit` for `baseball`. |
 | `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (Open-Meteo times for the station; 100 until weather data arrives), or the fixed level, or 0 for off. |
 | `header` | string \| null | Station name for the transit header, or `null` when the header is off or hidden to fit (see *Fitting the header and weather row*). |
 | `tickerHeader` | string \| null | Station name for the ticker header. Always sent: the ticker shows its header even when the transit header toggle is off. (Boards without it fall back to `header`.) |
@@ -194,7 +195,7 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 |---|---|
 | `on` | Rain is in the box (server applies on/off hysteresis). On the auto screen, `on` allows timed radar visits (see `visit`). |
 | `visit` | `{every, for}` in seconds, or `null`. Set only when the board's `screen` is `auto` and `radarEvery` > 0 (`for` is capped at `every`). The **board** (and simulator) shows the radar while `now mod every < for` and `on` is true, otherwise the payload's `screen` (`transit`); cycles are epoch-aligned. Mirrored by `autoScreen()` in `draw.js` and `auto_screen()` in `player.py`. The board fetches radar frames ahead of a visit whenever `on` and `visit` are set. A button press overrides it until `v` changes. |
-| `frames` | IDs of up to 6 latest frames (6 min apart, on even minutes), oldest first. Frame IDs are immutable, so the board fetches only IDs it doesn't already have. ID: `<mapid>-<YYYYMMDDHHMM UTC>`, plus `s` for a snow frame (so a station or mode change never reuses a cached frame). |
+| `frames` | IDs of up to 6 latest frames (6 min apart, on even minutes), oldest first; only frames from the current 30-minute loop (after a quiet spell, older frames aren't sent and `on` is `false` until new ones arrive). Frame IDs are immutable, so the board fetches only IDs it doesn't already have. ID: `<mapid>-<YYYYMMDDHHMM UTC>`, plus `s` for a snow frame (so a station or mode change never reuses a cached frame). |
 | `showTime` | Boolean (absent = true). `false` replaces the time and AM/PM with current conditions: the weather `icon` (8x8) and `temp` (Tom Thumb with a degree sign, label white), right-aligned under the frame indicator. The warning tag moves to the screen's bottom right (rows 27–31, right edge x63, on a black backing; it may run past the time box): icon + `WATCH` or `WARN`. With no `temp`, only the tag. |
 | `temp` | Current temperature (°F, rounded) from Open-Meteo, or `null` before the first weather fetch. Sent whatever the weather row setting. |
 | `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar time. |
@@ -319,7 +320,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 | `station` | Train Tracker `mapid` and header name. Changeable from the control page. The station's coordinates are also the board's **location** for weather, NWS alerts, and the radar crop. |
 | `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the row order; if more destinations than the cap remain, the board shows the chronological view. Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |
-| `screen` | `auto` or a forced screen (`transit`, `ticker`, `weather`, `baseball`; a saved `radar` loads as `weather`). Persists across boots. `auto` resolves to `transit`, or `baseball` while a game is on (no NWS warning or watch); it never changes screens on its own otherwise, except for radar visits. |
+| `screen` | `auto` or a forced screen (`transit`, `ticker`, `weather`, `baseball`; a saved `radar` loads as `weather`). Persists across boots. `auto` resolves to `transit`, or `baseball` while a game is on; it never changes screens on its own otherwise, except for radar visits. |
 | `radarEvery`, `radarFor` | Radar visits on the auto screen: every `radarEvery` minutes (0 = never, the default; max 60) show the radar for `radarFor` seconds (10–600, default 60), only while rain is in the box. Persist across restarts. |
 | `radarTime` | Boolean, default `true`. Sent to the board as `radar.showTime`; off shows the temperature instead of the frame time. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |
@@ -331,6 +332,8 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 ---
 
 ## Server polling
+
+After a failure, Train Tracker, NWS, and Open-Meteo retry at their interval, doubling with each failure in a row up to 5 minutes (or the interval, if longer); a board request doesn't wait during that backoff.
 
 | Source | Interval | Notes |
 |---|---|---|

@@ -5,6 +5,7 @@
 
 const { rawArrivals } = require('./capture');
 const { normalize, latchDue } = require('./arrivals');
+const { backoff } = require('./location-poller');
 
 function createTracker({
   fetchRaw = rawArrivals,
@@ -15,12 +16,12 @@ function createTracker({
   now = () => Date.now() / 1000,
   log = console,
 } = {}) {
-  const cache = new Map(); // mapid -> { arrivals, fetchedAt, wantedAt, inflight, failures }
+  const cache = new Map(); // mapid -> { arrivals, fetchedAt, wantedAt, inflight, failures, retryAt }
   const unknown = new Set(); // destinations already logged
   let timer = null;
 
   function entry(mapid) {
-    if (!cache.has(mapid)) cache.set(mapid, { arrivals: null, fetchedAt: 0, wantedAt: 0, inflight: null, failures: 0 });
+    if (!cache.has(mapid)) cache.set(mapid, { arrivals: null, fetchedAt: 0, wantedAt: 0, inflight: null, failures: 0, retryAt: 0 });
     return cache.get(mapid);
   }
 
@@ -41,6 +42,7 @@ function createTracker({
       } catch (err) {
         // Keep the last good data; the board keeps counting down from it.
         e.failures += 1;
+        e.retryAt = now() + backoff(interval, e.failures);
         log.error(`[board] Train Tracker ${mapid} failed (${e.failures}): ${err.message}`);
       } finally {
         e.inflight = null;
@@ -53,7 +55,7 @@ function createTracker({
     const t = now();
     for (const [mapid, e] of cache) {
       if (t - e.wantedAt > forget) { cache.delete(mapid); continue; }
-      if (t - e.wantedAt <= idle && t - e.fetchedAt >= interval) refresh(mapid);
+      if (t - e.wantedAt <= idle && t - e.fetchedAt >= interval && t >= e.retryAt) refresh(mapid);
     }
   }
 
@@ -63,7 +65,7 @@ function createTracker({
     async get(mapid, { wait = 5000 } = {}) {
       const e = entry(mapid);
       e.wantedAt = now();
-      if (!e.arrivals) {
+      if (!e.arrivals && (e.inflight || now() >= e.retryAt)) {
         await Promise.race([refresh(mapid), new Promise((r) => setTimeout(r, wait))]);
       }
       return e.arrivals ? { arrivals: e.arrivals, fetchedAt: e.fetchedAt } : null;

@@ -22,6 +22,7 @@ FAR = 10 ** 9  # "no animation coming"
 class Player:
     def __init__(self):
         self.p = None
+        self.gen = 0             # bumped with every payload
         self.anim = draw.TransitAnimator()
         self.radar_frames = {}   # frame id -> bytes(2048)
         self.page = 0
@@ -37,6 +38,7 @@ class Player:
 
     def set_payload(self, p, ms):
         self.p = p
+        self.gen += 1
         # Keep only frames still in the loop.
         ids = (p.get('radar') or {}).get('frames') or []
         for k in list(self.radar_frames):
@@ -157,6 +159,18 @@ class Player:
             return -1
         cycle = max(1, n - 1) * draw.RADAR_FRAME_MS + draw.RADAR_HOLD_MS
         return min(n - 1, ((ms - self.loop_start) % cycle) // draw.RADAR_FRAME_MS)
+
+    def frame_key(self, ms, now):
+        """Everything a still frame depends on, or None while an animation
+        needs every frame. The board redraws only when this changes."""
+        if self.screen != 'weather' and self.busy(ms):
+            return None
+        key = (self.screen, self.gen, now, self.blinking() and self.blink_on(ms))
+        if self.screen == 'ticker':
+            return key + (self.page, ms - self.page_start >= draw.PAGE_HOLD_MS + draw.SLIDE_MS)
+        if self.screen == 'weather':
+            return key + (self.radar_idx(ms), len(self.radar_frames))
+        return key
 
     # ---- timing for the scheduler ----
 
