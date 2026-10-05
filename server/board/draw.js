@@ -706,17 +706,16 @@
       }
       const ws = p.warn ? warnStyle(p.warn) : null;
       const hideWarn = ws && ws.blinks && o.blink;
-      if (r.showTime === false) {
+      if (r.showTime === false && r.temp != null) {
         // Time off: current conditions (icon + temperature, as on the weather
         // row) right-aligned under the indicator, and the warning tag (icon +
-        // WATCH/WARN) at the screen's bottom right on a black backing.
-        if (r.temp != null) {
-          const t = `${r.temp}°`;
-          const icon = r.icon && icons.ICONS[r.icon] ? r.icon : null;
-          const x0 = right + 1 - ((icon ? 10 : 0) + measure('small', t));
-          if (icon) drawIcon(f, icon, x0, top + 4);
-          f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
-        }
+        // WATCH/WARN) at the screen's bottom right on a black backing. With no
+        // weather data yet, the time shows instead.
+        const t = `${r.temp}°`;
+        const icon = r.icon && icons.ICONS[r.icon] ? r.icon : null;
+        const x0 = right + 1 - ((icon ? 10 : 0) + measure('small', t));
+        if (icon) drawIcon(f, icon, x0, top + 4);
+        f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
         if (ws) {
           const word = p.warn.lvl === 'warning' ? 'WARN' : 'WATCH';
           const x0 = 64 - (measure('small', ws.glyph) + TAG_GAP + measure('small', word));

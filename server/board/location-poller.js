@@ -4,9 +4,9 @@
 // locations cost no requests. Keeps the last good data on failure. Same
 // pattern as tracker.js.
 
-// Seconds before retrying after `failures` failures in a row: the normal
-// interval, doubling up to 5 minutes (or the interval, if longer).
-const backoff = (interval, failures) => Math.min(interval * 2 ** (failures - 1), Math.max(interval, 300));
+// Seconds before retrying after `failures` failures in a row: 30 s, doubling
+// up to 5 minutes (or the interval, if longer).
+const backoff = (interval, failures) => Math.min(30 * 2 ** (failures - 1), Math.max(interval, 300));
 
 function createLocationPoller({
   name,

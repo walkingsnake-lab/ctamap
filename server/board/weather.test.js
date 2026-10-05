@@ -119,12 +119,26 @@ test('cache: failures back off instead of retrying every pass', async () => {
   assert.equal(await nws.get(42.0084, -87.6659), null);
   assert.equal(calls, 1);
   const tick = async (s) => { t += s; await nws.get(42.0084, -87.6659, { wait: 0 }); nws.pass(); await new Promise((r) => setImmediate(r)); };
-  for (let i = 0; i < 5; i++) await tick(15); // 75 s: still inside the 90 s backoff
+  await tick(15); // inside the 30 s backoff
   assert.equal(calls, 1);
   await tick(15);
   assert.equal(calls, 2);
-  for (let i = 0; i < 11; i++) await tick(15); // 165 s: inside the 180 s backoff
+  for (let i = 0; i < 3; i++) await tick(15); // 45 s: inside the 60 s backoff
   assert.equal(calls, 2);
   await tick(15);
   assert.equal(calls, 3);
+  for (let i = 0; i < 7; i++) await tick(15); // 105 s: inside the 120 s backoff
+  assert.equal(calls, 3);
+  await tick(15);
+  assert.equal(calls, 4);
+});
+
+test('cache: a first weather fetch that fails is retried in 30 s, not the 10-minute interval', async () => {
+  let t = 1000, calls = 0, fail = true;
+  const wx = createWeather({ fetch: async () => { calls++; if (fail) throw new Error('down'); return MORSE; }, now: () => t, log: quiet });
+  assert.equal(await wx.get(42.0084, -87.6659), null);
+  fail = false;
+  t += 30;
+  assert.equal((await wx.get(42.0084, -87.6659)).temp, 63.3);
+  assert.equal(calls, 2);
 });

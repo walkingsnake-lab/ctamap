@@ -352,7 +352,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 
 ## Server polling
 
-After a failure, Train Tracker, NWS, and Open-Meteo retry at their interval, doubling with each failure in a row up to 5 minutes (or the interval, if longer); a board request doesn't wait during that backoff.
+After a failure, Train Tracker, NWS, and Open-Meteo retry in 30 s, doubling with each failure in a row up to 5 minutes (or the interval, if longer); a board request doesn't wait during that backoff.
 
 | Source | Interval | Notes |
 |---|---|---|
