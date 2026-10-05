@@ -39,6 +39,7 @@ class Server:
         self.fail_next = 0
         self.wifi = ['ok']
         self.visit = None
+        self.alert = 0
 
     def now(self):
         return T0 + self.clock.t / 1000
@@ -51,6 +52,7 @@ class Server:
             rec['busy'] = b.player.busy(ms)
             rec['quiet'] = b.player.quiet_ms(ms, b.now(ms))
             rec['budget'] = b.sched.budget_ms
+            rec['phase'] = (ms - b.player.blink_shift) % 2000
         self.calls.append(rec)
         self.clock.t += LATENCY
         if self.fail_next:
@@ -61,7 +63,7 @@ class Server:
         now = int(self.now())
         # Trains every ~4 minutes each way, so times roll every minute.
         rows = [
-            {'ln': 'RD', 'lbl': 'HOWARD', 't': [now + 75 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': 0},
+            {'ln': 'RD', 'lbl': 'HOWARD', 't': [now + 75 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': self.alert},
             {'ln': 'RD', 'lbl': '95TH', 't': [now + 130 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': 0},
         ]
         frames = ['40100-%d' % (now // 300 * 300 - k * 300) for k in range(5, -1, -1)] if self.radar_on else []
@@ -239,6 +241,32 @@ class TestBoardLoop(unittest.TestCase):
         names = [c['name'] for c in server.calls]
         self.assertEqual(names.count('update-boot'), 1)  # only the real boot resets overrides
         self.assertTrue(board.player.p)
+
+    def test_fetches_start_as_the_alert_blink_turns_on(self):
+        board, server, clock, _, _, _ = make()
+        server.alert = 1
+        board.connect()
+        run_for(board, clock, 5 * 60 * 1000)
+        fetches = [c for c in server.calls[1:] if 'phase' in c]
+        self.assertGreater(len(fetches), 30)
+        off_beat = [c for c in fetches if not 1000 <= c['phase'] < 1200]
+        self.assertLessEqual(len(off_beat), board.stats['forced'])
+        self.assertLessEqual(board.stats['forced'], 2)
+        # Data still stays fresh while blinking.
+        updates = [c['ms'] for c in server.calls if c['name'].startswith('update')]
+        self.assertLessEqual(max(b - a for a, b in zip(updates, updates[1:])), 62000)
+
+    def test_blink_restarts_off_after_a_fetch(self):
+        board, server, clock, _, _, _ = make()
+        server.alert = 1
+        board.connect()
+        run_for(board, clock, 40000)
+        p = board.player
+        self.assertTrue(p.blinking())
+        # Right after a fetch ends the blink is in its off phase.
+        ended = p.blink_shift
+        self.assertFalse(p.blink_on(ended + 10))
+        self.assertTrue(p.blink_on(ended + 1010))
 
     def test_time_follows_the_server(self):
         board, server, clock, _, _, _ = make()

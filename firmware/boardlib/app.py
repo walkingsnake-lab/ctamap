@@ -143,7 +143,13 @@ class Board:
         busy = self.player.busy(ms)
         quiet = self.player.quiet_ms(ms, now)
         job = self.sched.pick(ms, busy, quiet)
+        if job is not None and not job.overdue(ms) and not self.player.at_blink_start(ms):
+            job = None  # wait for the alert blink to turn on, then fetch
         if job is not None:
+            if self.player.blinking():
+                # Show the lit frame now; the freeze will hold it.
+                self.display.show(lambda f: self.player.draw(f, ms, now))
+                self.last_draw = ms
             started = self.clock.ms()
             try:
                 result = job.run(started)
@@ -154,6 +160,8 @@ class Board:
                 result = 'fail'
                 self.fails += 1
             ended = self.clock.ms()
+            if self.player.blinking() and ended - started > 300:
+                self.player.blink_restart(ended)
             if result == 'skip':
                 job.due_at = ended + job.interval_ms
             else:

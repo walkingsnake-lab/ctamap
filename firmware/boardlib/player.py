@@ -15,6 +15,7 @@ import math
 from . import draw
 
 SCREENS = ('transit', 'ticker', 'radar')
+BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
 
 
@@ -26,6 +27,7 @@ class Player:
         self.page = 0
         self.page_start = 0
         self.loop_start = 0
+        self.blink_shift = 0     # ms; blink phase 0 (off) starts here
         self.screen = 'transit'
         self._screen_since = 0
 
@@ -94,8 +96,31 @@ class Player:
         if self.screen == 'radar':
             return draw.render(p, frame, screen='radar', now=now, idx=self.radar_idx(ms), frames=self.radar_frames)
         view = self.anim.step(p, now, ms)
-        blink = (ms // draw.BLINK_MS) % 2 == 1
-        return draw.render(p, frame, screen='transit', now=now, view=view, blink=blink)
+        return draw.render(p, frame, screen='transit', now=now, view=view, blink=self.blink_on(ms))
+
+    # ---- alert blink vs. network fetches ----
+    # A fetch freezes the display for longer than one blink phase. To make
+    # that freeze look like one slightly long "on" phase instead of a random
+    # glitch, fetches start right as the blink turns on, and the blink
+    # restarts (off) the moment the fetch ends.
+
+    def blink_on(self, ms):
+        return ((ms - self.blink_shift) // draw.BLINK_MS) % 2 == 1
+
+    def blinking(self):
+        if not self.p or self.screen != 'transit':
+            return False
+        return any(r.get('a') for r in self.p.get('rows') or [])
+
+    def at_blink_start(self, ms):
+        """True in the first moments of an 'on' phase (or when nothing blinks)."""
+        if not self.blinking():
+            return True
+        phase = (ms - self.blink_shift) % (2 * draw.BLINK_MS)
+        return draw.BLINK_MS <= phase < draw.BLINK_MS + BLINK_START_WINDOW_MS
+
+    def blink_restart(self, ms):
+        self.blink_shift = ms
 
     def radar_idx(self, ms):
         n = len((self.p.get('radar') or {}).get('frames') or [])

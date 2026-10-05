@@ -37,7 +37,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 - **Network jobs:** each job (version check, combined update, radar frame) has a **due time** and a **deadline**.
 - **Each loop pass:** if a job is due and the next animation is at least the **fetch budget** away, run it now; otherwise wait for the next gap.
 - **Deadline override:** if a job passes its deadline (e.g. data older than ~60 s), run it anyway. A brief freeze beats stale times.
-- **Non-blocking animations:** the transit alert blink doesn't count as busy; a request landing mid-blink just holds the block in one state.
+- **Alert blink:** the blink doesn't count as busy, but a fetch freezes it. While a row blinks, non-overdue fetches wait for the blink to turn on, show the lit frame, and the blink restarts (off) when the fetch ends, so the freeze reads as one slightly long "on" phase instead of a glitch.
 - **Natural gaps:** radar last-frame hold, ticker page holds, screen switches, and the stretch between minute rollovers on the transit screen.
 - **Fetch budget:** start at ~2 s; replace with the measured request time on the real board.
 
