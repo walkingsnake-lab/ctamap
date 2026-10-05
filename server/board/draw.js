@@ -627,10 +627,10 @@
 
     // ---- baseball (design spec §8) ----
     // Team rows on the left (color block + 5x7 abbreviation + score), status
-    // panel centered on x51, divider on row 21, bottom line right-aligned.
+    // panel centered on x51, divider on row 22, bottom line right-aligned.
     const BB = { live: '#f0f0f0', lose: '#6a6a6a', base: '#454545', infield: '#3a3a3a' };
     const ROW_TOPS = [2, 12];   // away, home
-    const SCORE_RIGHT = 30, PANEL_X = 51, BOTTOM = 29;
+    const SCORE_RIGHT = 30, PANEL_X = 51, BOTTOM = 31, DIVIDER = 22; // divider and bottom line match the transit weather row
     const SCORE_ROLL = 8;       // 5x7 digit (7 rows incl. descender) + 1px
     const ctext = (f, font, str, cx, base, color) => f.text(font, str, cx - Math.floor(measure(font, str) / 2), base, color);
     const record = (t) => (t.w == null || t.l == null ? '' : `${t.w}-${t.l}`);
@@ -645,6 +645,18 @@
       const pool = live.length ? live : games.map((_, i) => i);
       const pos = Math.floor(now / 60) % pool.length;
       return { i: pool[pos], pos, of: pool.length };
+    }
+
+    // A score that just changed shows amber for SCORE_HOLD_S, then fades back
+    // to the live white over SCORE_FADE_S. `side.at` is when the server saw
+    // the change (epoch s); without it the score is plain white.
+    const SCORE_HOLD_S = 60, SCORE_FADE_S = 10;
+    function scoreColor(side, now) {
+      if (side.at == null) return BB.live;
+      const age = now - side.at;
+      if (age < 0 || age < SCORE_HOLD_S) return C.amber;
+      if (age >= SCORE_HOLD_S + SCORE_FADE_S) return BB.live;
+      return lerpColor(C.amber, BB.live, (age - SCORE_HOLD_S) / SCORE_FADE_S);
     }
 
     // Score, right-aligned at SCORE_RIGHT; a changed score rolls digit by
@@ -718,11 +730,16 @@
     }
 
     // Live status texts, shared by the renderer and change detection.
-    const liveTexts = (g) => ({
-      inn: `${g.half === 'B' ? 'BOT' : 'TOP'} ${g.inn}`,
-      count: `${g.b || 0}-${g.s || 0}`,
-      outs: `${g.o || 0} OUT`,
-    });
+    // Between halves (MID 4, END 5) there's no count or outs to show.
+    const HALF = { T: 'TOP', B: 'BOT', M: 'MID', E: 'END' };
+    const liveTexts = (g) => {
+      const brk = g.half === 'M' || g.half === 'E';
+      return {
+        inn: `${HALF[g.half] || 'TOP'} ${g.inn}`,
+        count: brk ? '' : `${g.b || 0}-${g.s || 0}`,
+        outs: brk ? '' : `${g.o || 0} OUT`,
+      };
+    };
 
     function drawNoGames(f, now) {
       const clock = clockText(now);
@@ -752,7 +769,7 @@
         f.fill(1, top, 3, 6, g[k].c || C.grey);
         nameEnd = Math.max(nameEnd, f.text('5x7', g[k].ab, 6, top + 6, winner === k ? C.amber : C.label));
       }
-      f.fill(0, 21, 64, 1, C.divider);
+      f.fill(0, DIVIDER, 64, 1, C.divider);
 
       if (g.st === 'pre') {
         // Records 3px after the longer name; first pitch in the bottom line.
@@ -774,12 +791,12 @@
       }
 
       // Live.
-      drawScore(f, String(g.away.r), ROW_TOPS[0], BB.live, rolls.away);
-      drawScore(f, String(g.home.r), ROW_TOPS[1], BB.live, rolls.home);
+      drawScore(f, String(g.away.r), ROW_TOPS[0], scoreColor(g.away, now), rolls.away);
+      drawScore(f, String(g.home.r), ROW_TOPS[1], scoreColor(g.home, now), rolls.home);
       drawInfield(f, g.on || [0, 0, 0]);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), 20, C.label, rolls.inn);
-      const outsLeft = 62 - measure('small', t.outs) + 1;
+      const outsLeft = 62 - measure('small', t.outs) + 1; // empty texts draw nothing
       drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
       drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
       return f;
@@ -821,7 +838,7 @@
 
     return {
       Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
-      renderBaseball, baseballTexts, pickGame,
+      renderBaseball, baseballTexts, pickGame, scoreColor, SCORE_HOLD_S, SCORE_FADE_S,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
       // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.

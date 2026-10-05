@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { shown, nextDelay, url, PRE_S, FINAL_S, FAST_S, SLOW_S } = require('./mlb');
+const { shown, trackScores, nextDelay, url, PRE_S, FINAL_S, FAST_S, SLOW_S } = require('./mlb');
 
 const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'mlb', 'schedule-2026-10-03-alds-final.json'), 'utf8'));
 const G = FIX.dates[0].games[0];               // CWS 3 @ CLE 0, ALDS Game 1, final
@@ -75,11 +75,11 @@ test('live: inning, half, count, outs, runners', () => {
   );
 });
 
-test('breaks show the half-inning that is up next, empty', () => {
-  const mid = shown(schedule(game(live({ currentInning: 7, inningState: 'Middle', balls: 0, strikes: 3, outs: 3, offense: { first: { id: 1 } } }))), START + 7200)[0];
-  assert.deepEqual([mid.inn, mid.half, mid.o, mid.b, mid.s, mid.on], [7, 'B', 0, 0, 0, [0, 0, 0]]);
-  const end = shown(schedule(game(live({ currentInning: 7, inningState: 'End', outs: 3 }))), START + 7200)[0];
-  assert.deepEqual([end.inn, end.half], [8, 'T']);
+test('breaks: Middle and End come through as M and E for the same inning, empty', () => {
+  const mid = shown(schedule(game(live({ currentInning: 4, inningState: 'Middle', balls: 0, strikes: 3, outs: 3, offense: { first: { id: 1 } } }))), START + 7200)[0];
+  assert.deepEqual([mid.inn, mid.half, mid.o, mid.b, mid.s, mid.on], [4, 'M', 0, 0, 0, [0, 0, 0]]);
+  const end = shown(schedule(game(live({ currentInning: 5, inningState: 'End', outs: 3 }))), START + 7200)[0];
+  assert.deepEqual([end.inn, end.half], [5, 'E']);
 });
 
 test('which games: Cubs any time, other teams only in the postseason', () => {
@@ -119,4 +119,19 @@ test('team map: all 30 teams, unique abbreviations, hex colors', () => {
   assert.equal(rows.length, 30);
   assert.equal(new Set(rows.map((r) => r[0])).size, 30);
   for (const [, c] of rows) assert.match(c, /^#[0-9a-f]{6}$/);
+});
+
+test('score changes between polls are stamped on the live game, only for the team that scored', () => {
+  const t = START + 7200;
+  const s1 = schedule(game(live({ currentInning: 3 })));          // away 2, home 1
+  const s2 = schedule(game((g) => { live({ currentInning: 3 })(g); g.teams.home.score = 2; }));
+  const seen = new Map(), changes = new Map();
+  trackScores(s1, t, seen, changes);                               // first sight: no flash
+  assert.equal(shown(s1, t, new Map(), changes)[0].home.at, undefined);
+  trackScores(s2, t + 15, seen, changes);
+  const [g] = shown(s2, t + 20, new Map(), changes);
+  assert.equal(g.home.at, t + 15);
+  assert.equal(g.away.at, undefined);
+  trackScores(s2, t + 30, seen, changes);                          // unchanged: stamp stays
+  assert.equal(shown(s2, t + 31, new Map(), changes)[0].home.at, t + 15);
 });

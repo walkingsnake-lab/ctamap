@@ -260,15 +260,16 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ### Layout
 - **Team rows:** 3x6 team-color block at x1 and the abbreviation in X11 5x7 (label white) at x6; away on top (block rows 2–7), home below (rows 12–17). No logos.
-- **Divider** on row 21 (`#333333`), full width. **No series label** (e.g. `NLDS G2`) anywhere.
-- **Bottom line** (rows 24–28, Tom Thumb) is right-aligned to x62.
+- **Divider** on row 22 (`#333333`), full width, the same row as the transit weather divider. **No series label** (e.g. `NLDS G2`) anywhere.
+- **Bottom line** (Tom Thumb, baseline 31) sits on the same rows as the transit weather row and is right-aligned to x62.
+- **Score flash:** when a live score changes, that team's score turns amber for 60 s, then fades back to white over 10 s. The server stamps the change time (the board only draws it); a game first seen mid-game doesn't flash.
 
 **Live**
 - Scores: X11 5x7, right-aligned to **x30** (a two-digit score still clears the name), both lit white `#f0f0f0`.
 - **Infield:** dim diamond outline (`#3a3a3a`, radius 5) centered at (51,7). Bases are 5x5 diamonds on its corners: 2nd (51,2), 3rd (46,7), 1st (56,7). **Occupied = amber `#ffb000`; empty = solid dark grey `#454545`.**
-- **Inning:** `TOP 7` / `BOT 10` in Tom Thumb, label white, centered on x51, rows 15–19.
+- **Inning:** `TOP 7` / `BOT 10`, and `MID 4` / `END 5` between halves (the API's `inningState` Middle/End), in Tom Thumb, label white, centered on x51, rows 15–19.
 - **Bottom line:** count (`2-1`, label white), 5px gap, outs as text (`2 OUT`, grey).
-- During a break the server sends the half-inning that's up next with no count, outs, or runners (Middle → bottom; End → top of the next inning).
+- **Breaks** (`MID`/`END`): bases empty, and the bottom line is blank (no count or outs).
 
 **Pregame**
 - No scores. Each team's W-L (Tom Thumb, grey) sits 3px after the longer team name, on its team's row.
