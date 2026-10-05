@@ -120,6 +120,13 @@ async function build() {
     add(`radar conditions split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'watch' }, radar: { on: false, frames: [], ft: [], clock, split, wx: { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 } } }, [{ screen: 'radar' }]);
   }
 
+  // Radar clock off: indicator and warning icon only.
+  for (const [clock, split] of [[radar.FULL_CLOCK, false], [radar.SPLIT_CLOCK, true]]) {
+    const t = 1791140000;
+    const ids = ['a', 'b', 'c'];
+    add(`radar clock off split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), clock, split, showClock: false } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0 }], Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048)])));
+  }
+
   // Transit animator sequences.
   const NOW = 1_800_000_000;
   const min = (m) => NOW + m * 60 - 5;

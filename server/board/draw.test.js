@@ -565,3 +565,23 @@ test('baseball score flash: amber for a minute after a change, fades to white, t
   assert.equal(count(f, AMBER, 22, 12, 30, 18), 0);          // other score white
   assert.ok(count(f, draw.BB.live, 22, 12, 30, 18) > 0);
 });
+
+test('radar clock off: no time or AM/PM; indicator stays; warning icon at the top right of the clock area', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
+  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], clock: [40, 0, 24, 32], split: false };
+  const base = { now, bright: 100, warn: null };
+  const off = (warn) => draw.render({ ...base, warn, radar: { ...radar, showClock: false } }, { screen: 'radar', now, frames: {} });
+  const f = off(null);
+  assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0);
+  assert.equal(count(f, draw.C.radarAmpm, 0, 0, 63, 31), 0);
+  assert.equal(hex(f.get(62, 2)), draw.C.amber);                 // indicator unchanged
+  const w = off({ kind: 'tor', lvl: 'warning' });
+  assert.ok(count(w, draw.C.warnTornado, 56, 6, 62, 10) > 3);    // icon right-aligned, under the indicator
+  assert.equal(count(w, draw.C.warnTornado, 0, 11, 63, 31), 0);  // nothing lower
+  assert.equal(hex(w.get(62, 2)), draw.C.amber);
+  // On (default and explicit) is unchanged.
+  const on = draw.render({ ...base, radar }, { screen: 'radar', now, frames: {} });
+  const on2 = draw.render({ ...base, radar: { ...radar, showClock: true } }, { screen: 'radar', now, frames: {} });
+  assert.deepEqual(on.px, on2.px);
+  assert.ok(count(on, draw.C.radarTime, 40, 6, 63, 14) > 15);
+});

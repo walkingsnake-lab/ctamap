@@ -736,14 +736,22 @@ def render_radar(p, f, now=None, idx=None, frames=None):
         for i in range(len(ids)):
             f.fill(x, top, seg_w, 2, C['amber'] if i == idx else C['indicator'])
             x += seg_w + seg_gap
+    warn_glyph = None
+    warn_color = C['warnSevere']
+    if p.get('warn'):
+        warn_glyph = g(assets.FUNNEL if p['warn']['kind'] == 'tor' else assets.BOLT)
+        if p['warn']['kind'] == 'tor':
+            warn_color = C['warnTornado']
+    if r.get('showClock') is False:
+        if warn_glyph is not None:
+            f.text('small', warn_glyph, right - measure('small', warn_glyph) + 1, top + 8, warn_color)
+        return f
     rtext(f, '5x7', clock_text(t, tzo), right, top + 11, C['radarTime'])
     ap = ampm_text(t, tzo)
     ap_x = right - measure('small', ap) + 1
     f.text('small', ap, ap_x, top + 18, C['radarAmpm'])
-    if p.get('warn'):
-        glyph = g(assets.FUNNEL if p['warn']['kind'] == 'tor' else assets.BOLT)
-        f.text('small', glyph, ap_x - 2 - measure('small', glyph), top + 18,
-               C['warnTornado'] if p['warn']['kind'] == 'tor' else C['warnSevere'])
+    if warn_glyph is not None:
+        f.text('small', warn_glyph, ap_x - 2 - measure('small', warn_glyph), top + 18, warn_color)
     return f
 
 

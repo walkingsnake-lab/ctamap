@@ -606,14 +606,19 @@
         ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
       }
       // Dimmed so a frame's time doesn't read as the current time.
+      const warnGlyph = p.warn ? s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT) : null;
+      const warnColor = p.warn && p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere;
+      if (r.showClock === false) {
+        // Clock off: the area stays, the warning icon moves to its top right
+        // (just under the frame indicator's rows).
+        if (warnGlyph) f.text('small', warnGlyph, right - measure('small', warnGlyph) + 1, top + 8, warnColor);
+        return f;
+      }
       rtext(f, '5x7', clockText(t), right, top + 11, C.radarTime);
       const ap = ampmText(t);
       const apX = right - measure('small', ap) + 1;
       f.text('small', ap, apX, top + 18, C.radarAmpm);
-      if (p.warn) {
-        const glyph = s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT);
-        f.text('small', glyph, apX - 2 - measure('small', glyph), top + 18, p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere);
-      }
+      if (warnGlyph) f.text('small', warnGlyph, apX - 2 - measure('small', warnGlyph), top + 18, warnColor);
       return f;
     }
 

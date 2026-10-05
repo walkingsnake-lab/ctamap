@@ -213,7 +213,7 @@ function createBoard({
       ticker,
       wx: bars.showWeather ? wx : null,
       warn,
-      radar: { ...radarState, visit: visitOf(board) },
+      radar: { ...radarState, visit: visitOf(board), showClock: board.radarClock !== false },
       mlb: { games },
     };
   }

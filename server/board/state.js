@@ -52,6 +52,8 @@ function defaultBoard(stations) {
     // minutes while rain is in the box. 0 = never (stay on transit).
     radarEvery: 0,
     radarFor: 60,
+    // Radar screen: show the frame's time and AM/PM in the clock area.
+    radarClock: true,
   };
 }
 
@@ -85,6 +87,7 @@ function validatePatch(patch, stations) {
         break;
       case 'showHeader':
       case 'showWeather':
+      case 'radarClock':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;
