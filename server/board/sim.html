@@ -70,9 +70,9 @@
       <figcaption><span>Transit</span></figcaption>
       <canvas id="transit" width="640" height="320" aria-label="Transit screen"></canvas>
     </figure>
-    <figure id="fig-radar">
+    <figure id="fig-weather">
       <figcaption><span>Weather</span><span id="radarState"></span></figcaption>
-      <canvas id="radar" width="640" height="320" aria-label="Weather screen"></canvas>
+      <canvas id="weather" width="640" height="320" aria-label="Weather screen"></canvas>
     </figure>
     <figure id="fig-ticker">
       <figcaption><span>Ticker</span><span id="pageState"></span></figcaption>
@@ -144,7 +144,7 @@
   }
   const paintTransit = ledCanvas($('transit'));
   const paintTicker = ledCanvas($('ticker'));
-  const paintRadar = ledCanvas($('radar'));
+  const paintWeather = ledCanvas($('weather'));
   const paintBaseball = ledCanvas($('baseball'));
 
   // Radar frames are immutable: fetch each ID once, keep the ones in use.
@@ -222,7 +222,7 @@
     if (shown !== lastShown) {
       lastShown = shown;
       $('screen').textContent = shown;
-      for (const k of ['transit', 'ticker', 'radar', 'baseball']) $('fig-' + k).classList.toggle('active', shown === k);
+      for (const k of ['transit', 'ticker', 'weather', 'baseball']) $('fig-' + k).classList.toggle('active', shown === k);
     }
 
     // Transit: rolls, fades, and slides come from the animator.
@@ -243,7 +243,7 @@
     const nf = (p.radar && p.radar.frames.length) || 0;
     const cycle = Math.max(1, nf - 1) * D.RADAR_FRAME_MS + D.RADAR_HOLD_MS;
     const idx = nf ? Math.min(nf - 1, Math.floor((t % cycle) / D.RADAR_FRAME_MS)) : -1;
-    paintRadar(D.render(full, { screen: 'radar', now: n, idx, frames: radarFrames, blink }));
+    paintWeather(D.render(full, { screen: 'weather', now: n, idx, frames: radarFrames, blink }));
     $('radarState').textContent = p.radar && p.radar.on ? (nf ? 'rain in the box: radar' : 'rain in the box, no frames yet') : 'no rain: conditions';
 
     // Baseball: scores, inning, count, and outs roll when they change, as on

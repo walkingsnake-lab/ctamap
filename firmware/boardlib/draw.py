@@ -777,7 +777,9 @@ def draw_radar_frame(f, data):
                 f.fill(x, y, 1, 1, c)
 
 
-def render_radar(p, f, now=None, idx=None, frames=None, blink=False):
+def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
+    """The weather screen: the radar loop while there are frames, current
+    conditions otherwise. Mirrors renderWeather() in draw.js."""
     r = p.get('radar') or {}
     ids = r.get('frames') or []
     if not ids:
@@ -1060,8 +1062,8 @@ def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0,
     screen = screen or p.get('screen')
     if screen == 'ticker':
         render_ticker(p, f, now=now, page=page, slide=slide)
-    elif screen == 'radar':
-        render_radar(p, f, now=now, idx=idx, frames=frames, blink=blink)
+    elif screen == 'weather':
+        render_weather(p, f, now=now, idx=idx, frames=frames, blink=blink)
     elif screen == 'baseball':
         render_baseball(p, f, now=now, game=game, rolls=rolls)
     else:

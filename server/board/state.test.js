@@ -83,10 +83,21 @@ test('a corrupt state file is moved aside and defaults are used', () => {
   assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('board-state.json.corrupt-')));
 });
 
+test('a saved radar screen loads as weather (renamed)', () => {
+  const dir = tmpDir();
+  createStore({ dir, log: quiet }).update('home', { screen: 'weather' });
+  const file = path.join(dir, 'board-state.json');
+  const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+  saved.boards.home.screen = 'radar';
+  fs.writeFileSync(file, JSON.stringify(saved));
+  assert.equal(createStore({ dir, log: quiet }).get('home').screen, 'weather');
+  assert.throws(() => createStore({ dir, log: quiet }).update('home', { screen: 'radar' }), /screen must be/);
+});
+
 test('writes are atomic: no temp file left behind', () => {
   const dir = tmpDir();
   const store = createStore({ dir, log: quiet });
-  store.update('home', { screen: 'radar' });
+  store.update('home', { screen: 'weather' });
   assert.deepEqual(fs.readdirSync(dir), ['board-state.json']);
 });
 

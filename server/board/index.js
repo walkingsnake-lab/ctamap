@@ -389,7 +389,7 @@ function createBoard({
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
-        const screen = ['transit', 'ticker', 'radar', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
+        const screen = ['transit', 'ticker', 'weather', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid); if (b) frames[fid] = b; }

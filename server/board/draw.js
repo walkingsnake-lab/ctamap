@@ -636,7 +636,9 @@
 
     // opts: now, idx (frame index into p.radar.frames; default the newest),
     // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
-    function renderRadar(p, opts) {
+    // The weather screen: the radar loop while there are frames (rain in the
+    // box), current conditions otherwise.
+    function renderWeather(p, opts) {
       const o = opts || {};
       const r = p.radar || {};
       const ids = r.frames || [];
@@ -897,7 +899,7 @@
     function render(p, opts) {
       const o = opts || {};
       const screen = o.screen || p.screen;
-      const f = screen === 'ticker' ? renderTicker(p, o) : screen === 'radar' ? renderRadar(p, o)
+      const f = screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
         : screen === 'baseball' ? renderBaseball(p, o) : renderTransit(p, o);
       return applyBrightness(f, p.bright);
     }
@@ -910,7 +912,7 @@
     }
 
     return {
-      Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
+      Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, baseballTexts, pickGame, scoreColor, SCORE_HOLD_S, SCORE_FADE_S,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
@@ -926,7 +928,7 @@
   function autoScreen(p, now) {
     const r = p.radar;
     if ((p.screen !== 'transit' && p.screen !== 'baseball') || !r || !r.on || !r.visit || !(r.visit.every > 0)) return p.screen;
-    return Math.floor(now) % r.visit.every < r.visit.for ? 'radar' : p.screen;
+    return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : p.screen;
   }
 
   return { Frame, create, autoScreen, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
