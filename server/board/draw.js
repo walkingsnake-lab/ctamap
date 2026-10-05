@@ -109,17 +109,26 @@
     return (hasHeader ? 4 : 5) - (hasWeather ? 2 : 0);
   }
 
-  // Row tops for n transit rows. Spec-pinned cases first; otherwise the
-  // preferred pitch (shrunk to fit) with the block centered in the free area.
+  // Row tops for n transit rows. Without the header, rows are spread evenly
+  // from the panel top to the weather divider (or the bottom edge): equal gaps
+  // above, between, and below, the odd pixel going to the bottom. With the
+  // header: spec-pinned cases, else the preferred pitch centered in the area.
   function rowTops(n, hasHeader, hasWeather) {
     if (n === 0) return [];
+    if (!hasHeader) {
+      if (!hasWeather && n === 4) return [1, 9, 17, 25];   // pinned: 3px between rows
+      const areaH = hasWeather ? 22 : 32;   // rows 0-21 (divider on 22) or 0-31
+      const gap = Math.max(1, Math.round((areaH - 5 * n) / (n + 1)));
+      const top = Math.floor((areaH - 5 * n - (n - 1) * gap) / 2);
+      return Array.from({ length: n }, (_, i) => top + i * (5 + gap));
+    }
     if (hasHeader && !hasWeather && n === 4) return [9, 15, 21, 27];
     if (hasHeader && !hasWeather && n === 3) return [10, 18, 26];
     if (hasHeader && !hasWeather && n === 2) return [13, 23];
-    const areaTop = hasHeader ? 9 : 0;
+    const areaTop = 9;
     const areaBottom = hasWeather ? 20 : 31;
     const areaH = areaBottom - areaTop + 1;
-    const preferred = hasHeader ? { 2: 8, 3: 8, 4: 6, 5: 6 } : { 2: 7, 3: 10, 4: 8, 5: 6 };
+    const preferred = { 2: 8, 3: 8, 4: 6, 5: 6 };
     const pitch = n === 1 ? 0 : Math.min(preferred[n], Math.floor((areaH - 5) / (n - 1)));
     const block = (n - 1) * pitch + 5;
     const top = areaTop + Math.max(0, Math.floor((areaH - block) / 2));

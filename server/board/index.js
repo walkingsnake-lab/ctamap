@@ -204,9 +204,9 @@ function createBoard({
       screen: resolveScreen(board.screen, { warn, games: games.length > 0 }),
       bright: resolveBright(board.bright, w, now),
       // Transit header and weather row as fitted to the destinations; the
-      // ticker keeps its header (it doesn't need the room).
+      // ticker always shows its header (hiding it frees no room it can use).
       header: bars.showHeader ? board.station.name : null,
-      tickerHeader: board.showHeader ? board.station.name : null,
+      tickerHeader: board.station.name,
       hidden: bars.hidden,
       view,
       rows,

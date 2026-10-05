@@ -200,6 +200,7 @@ test('update: boot=1 resets brightness, keeps the screen, and bumps v; settings 
   assert.equal(b.screen, 'ticker');
   assert.equal(b.bright, 0);
   assert.equal(b.header, null);
+  assert.equal(b.tickerHeader, 'MORSE');   // the ticker header ignores the toggle
   assert.deepEqual(b.rows, []);
   b = (await s.req('/board/update?b=home&boot=1', h)).body;
   assert.equal(b.screen, 'ticker');

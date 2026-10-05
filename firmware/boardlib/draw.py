@@ -124,16 +124,23 @@ def max_rows(has_header, has_weather):
 def row_tops(n, has_header, has_weather):
     if n == 0:
         return []
+    if not has_header:
+        if not has_weather and n == 4:
+            return [1, 9, 17, 25]
+        area_h = 22 if has_weather else 32
+        gap = max(1, jsround((area_h - 5 * n) / (n + 1)))
+        top = (area_h - 5 * n - (n - 1) * gap) // 2
+        return [top + i * (5 + gap) for i in range(n)]
     if has_header and not has_weather and n == 4:
         return [9, 15, 21, 27]
     if has_header and not has_weather and n == 3:
         return [10, 18, 26]
     if has_header and not has_weather and n == 2:
         return [13, 23]
-    area_top = 9 if has_header else 0
+    area_top = 9
     area_bottom = 20 if has_weather else 31
     area_h = area_bottom - area_top + 1
-    preferred = {2: 8, 3: 8, 4: 6, 5: 6} if has_header else {2: 7, 3: 10, 4: 8, 5: 6}
+    preferred = {2: 8, 3: 8, 4: 6, 5: 6}
     pitch = 0 if n == 1 else min(preferred[n], (area_h - 5) // (n - 1))
     block = (n - 1) * pitch + 5
     top = area_top + max(0, (area_h - block) // 2)

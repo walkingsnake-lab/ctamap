@@ -133,14 +133,26 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ### Layout
 - **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
 - **Header** (station grey + clock `#cccccc` on a faint full-width background band, no divider line) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
-- Rows fill the remaining space, centered and evenly spaced (5px rows, gaps of 1px or more).
-- **Fitting:** the header and weather toggles are the most the board shows. When more destinations are running than fit, the **weather row is hidden first, then the header**, so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header (if on) and **no weather row**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker keeps its header regardless. Row order isn't a concern.
+- Rows fill the remaining space (5px rows, gaps of 1px or more).
+- **Without the header, rows are spread evenly** from the top of the panel to the weather divider (or the bottom edge): equal gaps above, between, and below. The between-row gap is the ideal gap rounded to the nearest pixel; the leftover is split top and bottom, any odd pixel going to the bottom.
+- **Fitting:** the header and weather toggles are the most the board shows. When more destinations are running than fit, the **weather row is hidden first, then the header**, so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header (if on) and **no weather row**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
 - Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**; the chronological view covers those stations.
 
 **Geometry (from the mocks):**
 - Header band on rows 0–6, text on rows 1–5. Train rows start at row 9 or lower (at least 2px clear of the band).
 - Weather divider on row 22; weather icon on rows 24–31; train rows end by row 20.
-- Row pitch (row top to row top): 2 rows 7px (10px with a header and no weather row: rows at 13 and 23); 3 rows 10px (8px with header: rows at 10, 18, 26); 4 rows 8px (6px with header: rows at 9, 15, 21, 27, using the full height); 5 rows 6px. Otherwise rows are centered in whatever space is left.
+- **With header** (row pitch, row top to row top): 2 rows 8px (10px with no weather row: rows at 13 and 23); 3 rows 8px (rows at 10, 18, 26); 4 rows 6px (rows at 9, 15, 21, 27, using the full height). Otherwise rows are centered in whatever space is left.
+- **Without header** (even spacing over rows 0–31, or rows 0–21 with the weather row on):
+
+| Weather row | Rows | Row tops | Gaps (top / between / bottom) |
+|---|---|---|---|
+| off | 2 | 7, 19 | 7 / 7 / 8 |
+| off | 3 | 4, 13, 22 | 4 / 4 / 5 |
+| off | 4 | 1, 9, 17, 25 | 1 / 3 / 2 (pinned: 3px between rows reads better than the rounded 2px) |
+| off | 5 | 1, 7, 13, 19, 25 | 1 / 1 / 2 |
+| on | 2 | 4, 13 | 4 / 4 / 4 |
+| on | 3 | 1, 8, 15 | 1 / 2 / 2 |
+
 
 | Header | Weather row | Max rows |
 |---|---|---|
