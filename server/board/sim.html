@@ -42,6 +42,7 @@
     <select id="station" aria-label="Station"></select>
     <label><input type="checkbox" id="showHeader"> Header</label>
     <label><input type="checkbox" id="showWeather"> Weather row</label>
+    <label><input type="checkbox" id="radarTime"> Radar time</label>
     <button id="apply" disabled>Use on board</button>
     <span class="note" id="previewNote"></span>
   </div>
@@ -166,15 +167,16 @@
   // The board's own settings, and what the simulator is previewing. Preview
   // settings that differ from the board's go to the server as query params
   // and never change the board until "Use on board".
-  let boardCfg = null; // { mapid, showHeader, showWeather }
+  let boardCfg = null; // { mapid, showHeader, showWeather, radarTime }
   const flag = (v) => (v === '1' ? true : v === '0' ? false : null);
-  const prev = { mapid: params.get('mapid'), showHeader: flag(params.get('header')), showWeather: flag(params.get('weather')) };
-  const FIELDS = ['mapid', 'showHeader', 'showWeather'];
+  const prev = { mapid: params.get('mapid'), showHeader: flag(params.get('header')), showWeather: flag(params.get('weather')), radarTime: flag(params.get('rtime')) };
+  const FIELDS = ['mapid', 'showHeader', 'showWeather', 'radarTime'];
+  const QNAME = { mapid: 'mapid', showHeader: 'header', showWeather: 'weather', radarTime: 'rtime' };
   const changed = () => (boardCfg ? FIELDS.filter((k) => prev[k] != null && prev[k] !== boardCfg[k]) : []);
   const previewing = () => changed().length > 0;
   const query = () => {
     const q = new URLSearchParams({ b: board });
-    for (const k of changed()) q.set(k === 'mapid' ? 'mapid' : k === 'showHeader' ? 'header' : 'weather', k === 'mapid' ? prev.mapid : prev[k] ? '1' : '0');
+    for (const k of changed()) q.set(QNAME[k], k === 'mapid' ? prev.mapid : prev[k] ? '1' : '0');
     return q;
   };
 
@@ -276,10 +278,11 @@
     $('station').value = prev.mapid || '';
     $('showHeader').checked = prev.showHeader;
     $('showWeather').checked = prev.showWeather;
+    $('radarTime').checked = prev.radarTime;
     $('apply').disabled = !previewing();
     $('previewNote').textContent = previewing() ? 'Preview only: the board keeps its own settings until you press "Use on board".' : '';
     const q = new URLSearchParams(location.search);
-    for (const [k, name] of [['mapid', 'mapid'], ['showHeader', 'header'], ['showWeather', 'weather']]) q.delete(name);
+    for (const name of Object.values(QNAME)) q.delete(name);
     for (const [k, v] of query()) if (k !== 'b') q.set(k, v);
     history.replaceState(null, '', '?' + q);
   }
@@ -296,7 +299,7 @@
     ]);
     $('station').replaceChildren(...list.map((s) => new Option(s.desc, s.mapid)));
     const b = state.boards && state.boards[board];
-    boardCfg = b ? { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather } : null;
+    boardCfg = b ? { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather, radarTime: b.radarTime !== false } : null;
     syncPicker();
   }
 
@@ -304,6 +307,7 @@
   $('station').addEventListener('change', (e) => { prev.mapid = e.target.value; previewChanged(); });
   $('showHeader').addEventListener('change', (e) => { prev.showHeader = e.target.checked; previewChanged(); });
   $('showWeather').addEventListener('change', (e) => { prev.showWeather = e.target.checked; previewChanged(); });
+  $('radarTime').addEventListener('change', (e) => { prev.radarTime = e.target.checked; previewChanged(); });
   $('apply').addEventListener('click', async () => {
     $('apply').disabled = true;
     const patch = {};
@@ -311,7 +315,7 @@
     const r = await fetch('api/state?b=' + encodeURIComponent(board), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
     });
-    if (r.ok) { const b = await r.json(); boardCfg = { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather }; syncPicker(); poll(); }
+    if (r.ok) { const b = await r.json(); boardCfg = { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather, radarTime: b.radarTime !== false }; syncPicker(); poll(); }
     else { setStatus('could not update the board'); syncPicker(); }
   });
 

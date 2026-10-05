@@ -457,6 +457,12 @@ test('simulator preview: header and weather toggles without changing the board',
   assert.equal(s.store.get('home').showWeather, true);
   s.store.update('home', { showHeader: false });
   assert.equal((await s.req('/board/secret123/api/update?b=home&header=1')).body.header, 'MORSE');
+  // Radar corner preview: rtime=0 shows the temperature, board unchanged.
+  assert.equal(b.radar.showTime, true);
+  const r = (await s.req('/board/secret123/api/update?b=home&rtime=0')).body.radar;
+  assert.equal(r.showTime, false);
+  assert.equal(r.temp, Math.round(w.temp));
+  assert.equal(s.store.get('home').radarTime, true);
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&header=1&weather=0`);
   assert.equal(png.status, 200);
   await s.close();

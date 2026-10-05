@@ -114,8 +114,11 @@
 
   <section>
     <h2>Radar screen</h2>
-    <div class="row"><span>Time (radar frame)</span><label class="switch"><input type="checkbox" id="radarTime"><span></span></label></div>
-    <p class="hint">Off shows the current weather icon and temperature in its place; a weather watch or warning shows at the bottom right.</p>
+    <div class="seg" id="radarCorner">
+      <button data-v="time">Frame time</button>
+      <button data-v="temp">Temperature</button>
+    </div>
+    <p class="hint" id="radarCornerHint"></p>
   </section>
 
   <section>
@@ -228,7 +231,10 @@
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
     $('showHeader').checked = board.showHeader;
     $('showWeather').checked = board.showWeather;
-    $('radarTime').checked = board.radarTime !== false;
+    pressed('radarCorner', board.radarTime !== false ? 'time' : 'temp');
+    $('radarCornerHint').textContent = board.radarTime !== false
+      ? 'The radar frame\'s time, with AM/PM and any weather warning icon under it.'
+      : 'Current weather icon and temperature; a weather watch or warning shows at the bottom right.';
     $('rowsHint').textContent = 'These are the most the board shows. When more destinations are running than fit, '
       + 'it hides the weather row first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather row.'
       + (hidden.length ? ` Hidden right now: ${hidden.join(' and ')}.` : '');
@@ -292,7 +298,7 @@
   $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('name').blur(); saveName(); } });
   $('showHeader').addEventListener('change', (e) => save({ showHeader: e.target.checked }));
   $('showWeather').addEventListener('change', (e) => save({ showWeather: e.target.checked }));
-  $('radarTime').addEventListener('change', (e) => save({ radarTime: e.target.checked }));
+  $('radarCorner').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ radarTime: v === 'time' }); });
   $('allDest').addEventListener('change', (e) => save({ rows: e.target.checked ? [] : dests.map((d) => d.key) }));
   $('boardPick').addEventListener('change', (e) => {
     boardId = e.target.value;
