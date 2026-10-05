@@ -19,6 +19,7 @@ function payload(name, cfg = {}, extra = {}) {
 }
 
 test('row positions follow the spec', () => {
+  assert.deepEqual(rowTops(2, true, false), [13, 23]);          // header + 2 rows: 10px pitch, 4px above and below
   assert.deepEqual(rowTops(4, true, false), [9, 15, 21, 27]);   // last row ends on row 31
   assert.deepEqual(rowTops(3, true, false), [10, 18, 26]);
   assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);

@@ -141,7 +141,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 **Geometry (from the mocks):**
 - Header band on rows 0–6, text on rows 1–5. Train rows start at row 9 or lower (at least 2px clear of the band).
 - Weather divider on row 22; weather icon on rows 24–31; train rows end by row 20.
-- **With header** (row pitch, row top to row top): 2 rows 8px; 3 rows 8px (rows at 10, 18, 26); 4 rows 6px (rows at 9, 15, 21, 27, using the full height). Otherwise rows are centered in whatever space is left.
+- **With header** (row pitch, row top to row top): 2 rows 8px (10px with no weather row: rows at 13 and 23); 3 rows 8px (rows at 10, 18, 26); 4 rows 6px (rows at 9, 15, 21, 27, using the full height). Otherwise rows are centered in whatever space is left.
 - **Without header** (even spacing over rows 0–31, or rows 0–21 with the weather row on):
 
 | Weather row | Rows | Row tops | Gaps (top / between / bottom) |

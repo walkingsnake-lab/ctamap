@@ -135,6 +135,8 @@ def row_tops(n, has_header, has_weather):
         return [9, 15, 21, 27]
     if has_header and not has_weather and n == 3:
         return [10, 18, 26]
+    if has_header and not has_weather and n == 2:
+        return [13, 23]
     area_top = 9
     area_bottom = 20 if has_weather else 31
     area_h = area_bottom - area_top + 1
