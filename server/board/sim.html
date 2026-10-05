@@ -244,12 +244,13 @@
     paintRadar(D.render(full, { screen: 'radar', now: n, idx, frames: radarFrames }));
     $('radarState').textContent = p.radar && p.radar.on ? 'rain in the box' : nf ? 'no rain (auto stays on transit)' : 'no frames yet';
 
-    // Baseball: one game per minute; a changed score rolls, as on the board.
-    const sc = D.baseballScores(p, n);
-    if (sc && bbShown && bbShown.id === sc.id) {
-      for (const k of ['away', 'home']) if (bbShown[k] !== sc[k]) bbRolls[k] = { from: bbShown[k], start: t };
+    // Baseball: scores, inning, count, and outs roll when they change, as on
+    // the board (not across a change of game or state).
+    const bt = D.baseballTexts(p, n);
+    if (bt && bbShown && bbShown.key === bt.key) {
+      for (const [k, v] of Object.entries(bt.texts)) if (bbShown.texts[k] !== v) bbRolls[k] = { from: bbShown.texts[k], start: t };
     } else bbRolls = {};
-    bbShown = sc;
+    bbShown = bt;
     const rolls = {};
     for (const [k, r] of Object.entries(bbRolls)) {
       const rp = (t - r.start) / D.ROLL_MS;
