@@ -61,3 +61,32 @@ test('no data yet and a slow upstream -> null after the wait', async () => {
   const { tracker } = setup(() => new Promise(() => {}));
   assert.equal(await tracker.get('40100', { wait: 20 }), null);
 });
+
+test('failures back off: 30 s, 60 s, 120 s, ... up to 5 min; a success resets', async () => {
+  let fail = true;
+  const { tracker, calls, advance, at } = setup(() => (fail ? { status: 500, body: '' } : { status: 200, body: morse }));
+  const times = [];
+  const run = async (secs) => {
+    // The board asks every 30 s; the scheduler passes every 5 s.
+    for (let s = 0; s < secs; s += 5) {
+      const n = calls.length;
+      if (s % 30 === 0) tracker.get('40100', { wait: 0 });
+      tracker.pass();
+      await new Promise((r) => setImmediate(r));
+      if (calls.length > n) times.push(at());
+      advance(5);
+    }
+  };
+  assert.equal(await tracker.get('40100'), null);
+  times.push(at());
+  // In backoff, a board request neither fetches nor waits.
+  assert.equal(await tracker.get('40100', { wait: 1e6 }), null);
+  await run(1300);
+  assert.deepEqual(times.slice(1).map((t, i) => t - times[i]), [30, 60, 120, 240, 300, 300]);
+  fail = false;
+  await run(400);
+  assert.equal((await tracker.get('40100')).arrivals.length, 10);
+  const n = times.length;
+  await run(60);
+  assert.deepEqual(times.slice(n).map((t, i) => t - times[n + i - 1]), [30, 30]);
+});

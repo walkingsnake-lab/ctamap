@@ -116,3 +116,15 @@ test('radarTime defaults to true and must be a boolean', () => {
   assert.equal(store.get('home').radarTime, false);
   assert.throws(() => store.update('home', { radarTime: 'no' }), /radarTime must be true or false/);
 });
+
+test('board ids never reach Object.prototype', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  for (const id of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+    assert.equal(store.get(id), null, id);
+    assert.equal(store.boot(id), null, id);
+  }
+  assert.equal(store.update('constructor', { showWeather: false }).showWeather, false);
+  assert.equal(store.get('constructor').v, 2);
+  assert.equal(({}).bright, undefined);
+  assert.equal(Object.showWeather, undefined);
+});

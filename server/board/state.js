@@ -148,7 +148,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
 
   return {
     file,
-    get: (id) => state.boards[id] || null,
+    get: (id) => (Object.hasOwn(state.boards, id) ? state.boards[id] : null),
     all: () => state,
 
     // Apply a validated partial update; creates the board from defaults if
@@ -156,7 +156,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     update(id, patch) {
       if (!BOARD_ID_RE.test(id)) throw new ValidationError('board id must be 1-32 chars of a-z, 0-9, -');
       const fields = validatePatch(patch, stations);
-      const board = state.boards[id] || defaultBoard(stations);
+      const board = Object.hasOwn(state.boards, id) ? state.boards[id] : defaultBoard(stations);
       // A destination filter belongs to its station: a new station starts
       // with all destinations unless the patch sets rows too.
       if (fields.station && fields.station.mapid !== board.station.mapid && !fields.rows) fields.rows = [];
@@ -170,8 +170,8 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     // Board restart: brightness goes back to auto (so a board left off comes
     // back lit); the chosen screen, station, rows, and toggles persist. Bumps v.
     boot(id) {
+      if (!Object.hasOwn(state.boards, id)) return null;
       const board = state.boards[id];
-      if (!board) return null;
       board.bright = 'auto';
       board.v += 1;
       save();

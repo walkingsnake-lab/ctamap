@@ -6,6 +6,7 @@ const path = require('path');
 const { url, parse, condition, toWx, toScreenWx, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS } = require('./weather');
 const { measure } = require('./fonts');
 const { ICONS } = require('./icons');
+const { createNws } = require('./nws');
 
 const MORSE = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
 const quiet = { warn() {}, error() {} };
@@ -110,4 +111,20 @@ test('cache: one fetch per location per interval, last good data kept on failure
   await new Promise((r) => setImmediate(r));
   assert.equal(calls, 2);
   assert.throws(() => parse({}), /Open-Meteo/);
+});
+
+test('cache: failures back off instead of retrying every pass', async () => {
+  let t = 1000, calls = 0;
+  const nws = createNws({ fetch: async () => { calls++; throw new Error('down'); }, now: () => t, log: quiet });
+  assert.equal(await nws.get(42.0084, -87.6659), null);
+  assert.equal(calls, 1);
+  const tick = async (s) => { t += s; await nws.get(42.0084, -87.6659, { wait: 0 }); nws.pass(); await new Promise((r) => setImmediate(r)); };
+  for (let i = 0; i < 5; i++) await tick(15); // 75 s: still inside the 90 s backoff
+  assert.equal(calls, 1);
+  await tick(15);
+  assert.equal(calls, 2);
+  for (let i = 0; i < 11; i++) await tick(15); // 165 s: inside the 180 s backoff
+  assert.equal(calls, 2);
+  await tick(15);
+  assert.equal(calls, 3);
 });

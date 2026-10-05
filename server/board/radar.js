@@ -317,9 +317,11 @@ function createRadar({
       if (!locs.has(mapid)) locs.set(mapid, { lat, lon, wantedAt: 0, frames: new Map(), on: false });
       const l = locs.get(mapid);
       l.wantedAt = now();
-      const frames = [...l.frames.values()].sort((a, b) => a.t - b.t).slice(-LOOP);
+      const oldest = timeOf(slots()[0]);
+      const frames = [...l.frames.values()].filter((f) => f.t >= oldest).sort((a, b) => a.t - b.t);
       const latest = frames[frames.length - 1];
-      if (latest && latest !== l.judged) {
+      if (!latest) l.on = false;
+      else if (latest !== l.judged) {
         // Hysteresis on the newest frame's precip pixel count.
         if (!l.on && latest.colored >= ON_PX) l.on = true;
         else if (l.on && latest.colored < OFF_PX) l.on = false;
