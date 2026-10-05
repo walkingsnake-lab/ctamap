@@ -224,7 +224,7 @@ When `on` is false, `frames` and `ft` may be empty and `timeBox` may be `null`. 
 | `st` | `pre`, `live`, or `final`. |
 | `start` | First pitch, epoch seconds. Pregame shows it as the time. |
 | `away`, `home` | `ab` team abbreviation (Stats API `abbreviation`), `c` block color (`server/board/teams.js`), `r` runs (0 before first pitch), `w`/`l` record (`null` if unknown; postseason W-L in the postseason). |
-| `away.at`, `home.at` | Live only, optional. Epoch seconds when the server saw that team's score change between two polls. The board draws the score amber for 30 s after it, fading to white over the next 10 s. Absent when no change has been seen (including a game first seen mid-game). |
+| `away.at`, `home.at` | Live only, optional. Epoch seconds when the server saw that team's score change between two polls. The board draws the score amber for 30 s after it, fading to white over the next 5 s. Absent when no change has been seen (including a game first seen mid-game). |
 | `inn`, `half` | Live only. Inning and half: `T` top, `B` bottom, or between halves `M` (Middle, after the top) and `E` (End, after the bottom), from the linescore's `inningState`. Breaks send no runners, count, or outs; the board shows `MID 4` / `END 5` with an empty bottom line. |
 | `b`, `s`, `o` | Live only. Balls, strikes, outs (0 during a break). |
 | `on` | Live only. Runners as `[1st, 2nd, 3rd]`, 1 = occupied. |
