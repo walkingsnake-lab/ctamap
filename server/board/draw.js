@@ -167,7 +167,7 @@
     const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
     const DIGIT = Object.fromEntries(Object.entries(LINE).map(([k, v]) => [k, DIGIT_OVERRIDE[k] || v]));
     const C = {
-      label: '#d8d8d8', clock: '#cccccc', amber: '#ffb000', dimAmber: '#9c6a00',
+      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#555555', wxText: '#555555', amber: '#ffb000', dimAmber: '#9c6a00',
       sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', band: '#202020', divider: '#333333',
       tickerHead: '#a6a6a6', index: '#1f2f35', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
@@ -201,7 +201,7 @@
       f.fill(0, 22, 64, 1, C.divider);
       drawIcon(f, wx.icon, 0, 24);
       const base = 31;
-      f.text('small', `${wx.temp}°`, 10, base, C.label);
+      f.text('small', `${wx.temp}°`, 10, base, C.wxText);
       if (warn) {
         const glyph = warn.kind === 'tor' ? G.FUNNEL : G.BOLT;
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
@@ -210,7 +210,7 @@
         const x = f.text('small', s(glyph), 63 - w + 1, base, color);
         f.text('small', word, x + TAG_GAP - 1, base, color);
       } else {
-        rtext(f, 'small', wx.word, 63, base, C.label);
+        rtext(f, 'small', wx.word, 63, base, C.wxText);
       }
     }
 
@@ -614,10 +614,11 @@
         let x = right - (ids.length * (segW + segGap) - segGap) + 1;
         ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
       }
-      rtext(f, '5x7', clockText(t), right, top + 11, C.clock);
+      // Dimmed so a frame's time doesn't read as the current time.
+      rtext(f, '5x7', clockText(t), right, top + 11, C.radarTime);
       const ap = ampmText(t);
       const apX = right - measure('small', ap) + 1;
-      f.text('small', ap, apX, top + 18, C.grey);
+      f.text('small', ap, apX, top + 18, C.radarAmpm);
       if (p.warn) {
         const glyph = s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT);
         f.text('small', glyph, apX - 2 - measure('small', glyph), top + 18, p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere);

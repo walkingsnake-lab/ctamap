@@ -284,8 +284,8 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   // segment amber at the right edge.
   assert.equal(hex(f.get(62, 2)), draw.C.amber);
   assert.equal(hex(f.get(56, 2)), draw.C.indicator);
-  assert.ok(count(f, draw.C.clock, 40, 6, 63, 12) > 20, 'clock "4:00" on rows 6-12');
-  assert.ok(count(f, draw.C.grey, 40, 15, 63, 19) > 5, 'PM on rows 15-19');
+  assert.ok(count(f, draw.C.radarTime, 40, 6, 63, 12) > 20, 'clock "4:00" on rows 6-12');
+  assert.ok(count(f, draw.C.radarAmpm, 40, 15, 63, 19) > 5, 'PM on rows 15-19');
   assert.ok(count(f, draw.C.warnSevere, 40, 15, 63, 19) > 3, 'bolt left of PM');
   for (let y = 20; y < 32; y++) for (let x = 40; x < 64; x++) assert.deepEqual(f.get(x, y), [0, 0, 0], 'nothing below the stack');
   // Split layout: gray line on the panel's left edge (col 39); nothing of the
@@ -306,7 +306,7 @@ test('radar with no frames yet draws the clock at the current time (no crash)', 
   for (const radar of [{ on: false, frames: [], ft: [], clock: null, split: false }, { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true }, undefined]) {
     for (const idx of [undefined, -1, 0, 3]) {
       const f = draw.render({ now, bright: 100, warn: null, radar }, { screen: 'radar', now, idx, frames: {} });
-      assert.ok(count(f, draw.C.clock, 40, 0, 63, 31) > 15, 'clock drawn');
+      assert.ok(count(f, draw.C.radarTime, 40, 0, 63, 31) > 15, 'clock drawn');
     }
   }
 });
@@ -318,7 +318,7 @@ test('radar with no frames shows current conditions on the left', () => {
   assert.ok(count(f, draw.C.label, 12, 3, 30, 9) > 15, 'temperature');
   assert.ok(count(f, draw.C.label, 0, 15, 38, 19) > 15, 'condition word');
   assert.ok(count(f, draw.C.grey, 0, 23, 38, 27) > 15, 'high/low');
-  assert.ok(count(f, draw.C.clock, 40, 6, 63, 12) > 15, 'clock still drawn');
+  assert.ok(count(f, draw.C.radarTime, 40, 6, 63, 12) > 15, 'clock still drawn');
   // Widest case stays clear of the split divider.
   const wide = { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 };
   const g = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true, wx: wide } }, { screen: 'radar', now, frames: {} });

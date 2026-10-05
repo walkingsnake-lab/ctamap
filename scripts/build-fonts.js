@@ -221,6 +221,17 @@ function build5x7() {
     '.#.#.',
     '.....',
   ]), -1));
+  // 0 widened from 3px to the 4px digit cell (the stock one is a skinny
+  // diamond next to the 4px 8 and 6).
+  f.glyphs.set(48, glyph('zero', 48, art([
+    '.##.',
+    '#..#',
+    '#..#',
+    '#..#',
+    '#..#',
+    '.##.',
+    '....',
+  ]), -1, 5));
   // t narrowed to 3px, bottom hook tucked under the crossbar.
   f.glyphs.set(116, glyph('t', 116, art([
     '.#.',

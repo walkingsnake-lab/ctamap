@@ -115,7 +115,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from Open-Meteo). Every dim element has a **minimum floor** so it never drops to black at night.
 - **Radar rain fills** render at ~65%; **ticker row fills** at 55%. Text stays full brightness.
 - Rule of thumb from the session: **lit strokes on dark survive; dark strokes on lit don't** (diffuser glow fills them in).
-- **Clock colons are steady** on every clock. Every clock (transit header, overnight, ticker header, radar) uses the same `#cccccc`.
+- **Clock colons are steady** on every clock. Every clock (transit header, overnight, ticker header) uses the same `#cccccc`; the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#555555`) so it doesn't read as the current time.
 
 ---
 
@@ -175,7 +175,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Accepted trade-off:** infrequent lines can drop off the screen when frequent ones fill all rows.
 
 ### Weather row (optional)
-- 8x8 condition icon, temperature with a small 2x2 degree sign (e.g. `54°`), condition word (uppercase) on the right.
+- 8x8 condition icon, temperature with a small 2x2 degree sign (e.g. `54°`), condition word (uppercase) on the right. Both texts are dimmed (`#555555`, same as the radar's AM/PM) so the row reads as secondary; the watch/warning tag keeps its colors.
 - Icons are multi-color sprites defined in `server/board/icons.js` (with the Open-Meteo weather-code mapping); previews in `docs/board/previews/sheet-icons.png`.
 - Icons: sun, moon, partly cloudy (day/night), cloudy, **umbrella** (rain/drizzle/showers), **icy umbrella** (freezing rain), **snowflake**, storm cloud with bolt, fog.
 - **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
@@ -236,7 +236,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Shoreline** is painted on the lake's edge pixels (inside the water), so rain never covers it.
 - **Colors** (fills at 65%): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.
 - **Location marker:** white dot; rain or snow in the 4 pixels around it is cleared so it stands out, but the shoreline stays continuous next to it.
-- **Clock:** X11 5x7 (`#cccccc`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (2px-tall segments, current frame amber), AM/PM in Tom Thumb below. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
+- **Clock:** X11 5x7 (dimmed `#7a7a7a`, AM/PM `#555555`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (2px-tall segments, current frame amber), AM/PM in Tom Thumb below. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
 - **Warnings:** the small inline **bolt** (3x5, orange, severe) or **funnel** (4x5, red, tornado) sits **to the left of AM/PM** with a 2px gap, on the same 5px line. It never overlaps the clock or the frame indicator; the clock stack (indicator + clock + AM/PM line) occupies ~rows 2–18, which is the height the water-area check must reserve. Steady, no blinking. No polygons, no scrolling text.
 
 ---

@@ -41,7 +41,7 @@ function sheet(fontName, lineHeight, baselineOffset, extra, chars) {
 }
 
 save('sheet-small.png', sheet('small', 8, 6, `${s(G.BOLT)} ${s(G.FUNNEL)} ${s(G.ALERT_DISC)} ${s(G.ALERT_MARK)}`), 8);
-save('sheet-5x7.png', sheet('5x7', 10, 7, `${s(G.TT)} ${s(G.MIN)} Cottage ${ligatures('Cottage')}`), 8);
+save('sheet-5x7.png', sheet('5x7', 10, 7, `${s(G.TT)} ${s(G.MIN)} ${ligatures('Cottage')}`), 8);
 save('sheet-clock.png', sheet('clock', 17, 13, '12:34', '0123456789'), 8);
 
 // ---- mock panels ----
