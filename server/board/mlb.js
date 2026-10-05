@@ -47,14 +47,14 @@ function side(t) {
   };
 }
 
-// Live game state from the linescore. During a break the board shows the
-// half-inning that's up next: nobody on, no count, no outs.
+// Live game state from the linescore. half: T (top), B (bottom), or the
+// breaks the API reports as inningState: M (Middle, after the top) and
+// E (End, after the bottom). Breaks have nobody on, no count, no outs.
 function liveState(ls) {
   const state = ls.inningState || ls.inningHalf || 'Top';
-  let inn = ls.currentInning || 1;
-  let half = state === 'Bottom' || state === 'Middle' ? 'B' : 'T';
-  if (state === 'End') inn += 1;
-  const brk = state === 'Middle' || state === 'End';
+  const inn = ls.currentInning || 1;
+  const half = { Top: 'T', Bottom: 'B', Middle: 'M', End: 'E' }[state] || 'T';
+  const brk = half === 'M' || half === 'E';
   const off = ls.offense || {};
   return {
     inn, half,

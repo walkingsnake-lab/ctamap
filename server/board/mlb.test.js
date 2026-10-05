@@ -75,11 +75,11 @@ test('live: inning, half, count, outs, runners', () => {
   );
 });
 
-test('breaks show the half-inning that is up next, empty', () => {
-  const mid = shown(schedule(game(live({ currentInning: 7, inningState: 'Middle', balls: 0, strikes: 3, outs: 3, offense: { first: { id: 1 } } }))), START + 7200)[0];
-  assert.deepEqual([mid.inn, mid.half, mid.o, mid.b, mid.s, mid.on], [7, 'B', 0, 0, 0, [0, 0, 0]]);
-  const end = shown(schedule(game(live({ currentInning: 7, inningState: 'End', outs: 3 }))), START + 7200)[0];
-  assert.deepEqual([end.inn, end.half], [8, 'T']);
+test('breaks: Middle and End come through as M and E for the same inning, empty', () => {
+  const mid = shown(schedule(game(live({ currentInning: 4, inningState: 'Middle', balls: 0, strikes: 3, outs: 3, offense: { first: { id: 1 } } }))), START + 7200)[0];
+  assert.deepEqual([mid.inn, mid.half, mid.o, mid.b, mid.s, mid.on], [4, 'M', 0, 0, 0, [0, 0, 0]]);
+  const end = shown(schedule(game(live({ currentInning: 5, inningState: 'End', outs: 3 }))), START + 7200)[0];
+  assert.deepEqual([end.inn, end.half], [5, 'E']);
 });
 
 test('which games: Cubs any time, other teams only in the postseason', () => {

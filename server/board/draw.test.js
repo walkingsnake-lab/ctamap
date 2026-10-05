@@ -528,3 +528,14 @@ test('baseballTexts: scores always, live status only while live; key changes wit
   assert.deepEqual(draw.baseballTexts(bb(bbGame({ st: 'final' })), NOW), { key: '1:final', texts: { away: '3', home: '2' } });
   assert.equal(draw.baseballTexts(bb(), NOW), null);
 });
+
+test('baseball breaks: MID 4 / END 5, empty bases, no count or outs', () => {
+  for (const [half, inn, text] of [['M', 4, 'MID 4'], ['E', 5, 'END 5']]) {
+    const g = { ...LIVE, half, inn, b: 0, s: 0, o: 0, on: [0, 0, 0] };
+    assert.equal(draw.baseballTexts(bb(g), NOW).texts.inn, text);
+    const f = draw.renderBaseball(bb(g));
+    assert.ok(count(f, draw.C.label, 38, 15, 63, 19) > 0);
+    assert.equal(count(f, draw.C.label, 0, 24, 63, 28) + count(f, draw.C.grey, 0, 24, 63, 28), 0); // bottom line empty
+    assert.equal(count(f, AMBER, 38, 0, 63, 12), 0);
+  }
+});

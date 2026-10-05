@@ -709,11 +709,16 @@
     }
 
     // Live status texts, shared by the renderer and change detection.
-    const liveTexts = (g) => ({
-      inn: `${g.half === 'B' ? 'BOT' : 'TOP'} ${g.inn}`,
-      count: `${g.b || 0}-${g.s || 0}`,
-      outs: `${g.o || 0} OUT`,
-    });
+    // Between halves (MID 4, END 5) there's no count or outs to show.
+    const HALF = { T: 'TOP', B: 'BOT', M: 'MID', E: 'END' };
+    const liveTexts = (g) => {
+      const brk = g.half === 'M' || g.half === 'E';
+      return {
+        inn: `${HALF[g.half] || 'TOP'} ${g.inn}`,
+        count: brk ? '' : `${g.b || 0}-${g.s || 0}`,
+        outs: brk ? '' : `${g.o || 0} OUT`,
+      };
+    };
 
     function drawNoGames(f, now) {
       const clock = clockText(now);
@@ -770,7 +775,7 @@
       drawInfield(f, g.on || [0, 0, 0]);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), 20, C.label, rolls.inn);
-      const outsLeft = 62 - measure('small', t.outs) + 1;
+      const outsLeft = 62 - measure('small', t.outs) + 1; // empty texts draw nothing
       drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
       drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
       return f;

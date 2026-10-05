@@ -223,7 +223,7 @@ When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`. Th
 | `st` | `pre`, `live`, or `final`. |
 | `start` | First pitch, epoch seconds. Pregame shows it as the time. |
 | `away`, `home` | `ab` team abbreviation (Stats API `abbreviation`), `c` block color (`server/board/teams.js`), `r` runs (0 before first pitch), `w`/`l` record (`null` if unknown; postseason W-L in the postseason). |
-| `inn`, `half` | Live only. Inning and `T`/`B`. During a break, the half-inning up next. |
+| `inn`, `half` | Live only. Inning and half: `T` top, `B` bottom, or between halves `M` (Middle, after the top) and `E` (End, after the bottom), from the linescore's `inningState`. Breaks send no runners, count, or outs; the board shows `MID 4` / `END 5` with an empty bottom line. |
 | `b`, `s`, `o` | Live only. Balls, strikes, outs (0 during a break). |
 | `on` | Live only. Runners as `[1st, 2nd, 3rd]`, 1 = occupied. |
 
