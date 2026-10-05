@@ -83,7 +83,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `now` | int | Server epoch seconds. |
 | `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
-| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar` (`auto` resolves to `transit`; timed radar visits ride on top, see `radar.visit`). A local button press overrides it until `v` changes. Until radar lands, `auto` resolves to `transit`. |
+| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`, `baseball`. `auto` resolves to `baseball` while `mlb.games` is non-empty and there's no NWS warning or watch (weather first), otherwise `transit`; timed radar visits ride on top of either, see `radar.visit`. A local button press overrides it until `v` changes. Firmware without the baseball screen draws `transit` for `baseball`. |
 | `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (Open-Meteo times for the station; 100 until weather data arrives), or the fixed level, or 0 for off. |
 | `header` | string \| null | Station name for the transit header, or `null` when the header is off or hidden to fit (see *Fitting the header and weather row*). |
 | `tickerHeader` | string \| null | Station name for the ticker header, or `null` when the header is off. Never hidden to fit. (Boards without it fall back to `header`.) |
@@ -94,6 +94,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `wx` | object \| null | Weather row, or `null` when the weather row is off or there's no weather data yet (the row cap then gives the space back to rows). |
 | `warn` | object \| null | Active NWS warning/watch (see below). Sent regardless of the weather-row toggle, since the radar screen uses it too. |
 | `radar` | object | Radar state (see below). |
+| `mlb` | object | Baseball: `{games: [...]}`, the games to show now (see *Baseball* below). Always present; `games` is empty when there's nothing on. |
 
 All screens' data is always included so a button press switches screens without a fetch.
 
@@ -205,6 +206,30 @@ When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`. Th
 
 **Source and processing** (`server/board/radar.js`): IEM `mrms_lcref` archive, `https://mesonet.agron.iastate.edu/archive/data/YYYY/MM/DD/GIS/mrms/lcref_YYYYMMDDHHMM.png` + `.wld` (7000 × 3500, 8-bit palette, 0.01°; the world file's origin differs by half a pixel between older and newer files, so each frame's `.wld` is read). Palette index → **dBZ = index × 0.5 − 32** (255 = missing; ≤ 65 is no echo), per IEM's lookup table. Each LED is ~1.5 mi (2.92 source columns × 2.17 rows at Chicago's latitude); a source pixel goes to the LED containing its center; LED value = mean **linear** Z → dBZ → level; water LEDs set to 0, then despeckle (drop precip pixels with < 2 precip neighbors), shoreline (6) on water LEDs next to land, the clock box cleared, then the marker. Masks come from `scripts/build-locations.js`: an LED is water when its center is inside Lake Michigan (`scripts/geo-src/lake-michigan.geojson`, Natural Earth 1:10m, public domain); a test checks every committed file matches a fresh build. Frames are stream-decoded (`radar-png.js`): only the ~70 rows around the station are unfiltered, and the download stops after them (~14 MB peak vs ~150 MB for a full pngjs decode). The poller runs every 20 s while a board asked in the last 2 min, fetching one source frame per pass: the newest slot first (expected 2 min after its time), then the rest of the 30-minute loop. Slots are every **6 minutes** (multiples of 6 min since midnight UTC): IEM's archive only has frames at even minutes, and 5-minute slots asked for odd minutes half the time. A missing frame (404) is retried after 2 min; a download that hasn't finished in 60 s is abandoned. The last 12 processed frames per station are kept.
 
+#### Baseball (`mlb`)
+
+```json
+"mlb": {"games": [
+  {"id": 849829, "st": "live", "start": 1759510800,
+   "away": {"ab": "CHC", "c": "#2a5bd8", "r": 3, "w": 92, "l": 70},
+   "home": {"ab": "STL", "c": "#d62a2a", "r": 2, "w": 88, "l": 74},
+   "inn": 7, "half": "T", "b": 2, "s": 1, "o": 2, "on": [1, 0, 1]}
+]}
+```
+
+| Field | Meaning |
+|---|---|
+| `id` | MLB `gamePk`. |
+| `st` | `pre`, `live`, or `final`. |
+| `start` | First pitch, epoch seconds. Pregame shows it as the time. |
+| `away`, `home` | `ab` team abbreviation (Stats API `abbreviation`), `c` block color (`server/board/teams.js`), `r` runs (0 before first pitch), `w`/`l` record (`null` if unknown; postseason W-L in the postseason). |
+| `inn`, `half` | Live only. Inning and `T`/`B`. During a break, the half-inning up next. |
+| `b`, `s`, `o` | Live only. Balls, strikes, outs (0 during a break). |
+| `on` | Live only. Runners as `[1st, 2nd, 3rd]`, 1 = occupied. |
+
+- **Server:** `server/board/mlb.js` polls `statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=<yesterday>&endDate=<today>&hydrate=linescore` (Chicago dates) every 15 s while a shown game is live or within 30 min of first pitch, every 5 min otherwise. Shown: Cubs games (team 112) and postseason games (`gameType` `F`, `D`, `L`, `W`), from 30 min before first pitch until 15 min after the server first sees the final; postponed and cancelled games are skipped. Sorted by first pitch.
+- **Board:** shows `games[floor(now / 60) % games.length]` (one minute each, no state), drawn per `draw.js` `renderBaseball` (design spec §8). Score changes roll per digit.
+
 ### `GET /board/radar/<frameId>?b=<id>`
 One radar frame for that board's location.
 
@@ -240,14 +265,15 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/` | Phone control page (HTML, `server/board/control.html`): live preview, screen, brightness, station and header name, header/weather toggles, destination filter. `/board/<secret>` redirects here (relative URLs need the slash). |
 | `GET /board/<secret>/api/destinations?mapid=<id>[&b=<id>]` | Destinations for the filter: `[{key, ln, name, live}]` in default row order. Every destination the station's lines can show (`LINE_DESTS` in `destinations.js`, minus trains ending there; Purple to Howard only north of Howard), then any running now (`live: 1`) or already in board `b`'s `rows`. |
 | `GET /board/<secret>/sim?b=<id>[&mapid=<id>]` | Simulator page: the live transit and ticker screens, refreshed every few seconds (alert blink and ticker paging included), plus the raw payload. A station picker previews any station; "Use on board" sets it as the board's station. |
-| `GET /board/<secret>/sim.png?b=<id>[&screen=transit\|ticker][&page=N][&blink=1][&scale=1-16]` | One rendered frame of the live payload as a PNG (`server/board/render.js`). `screen` defaults to the payload's screen. |
+| `GET /board/<secret>/sim.png?b=<id>[&screen=transit\|ticker\|radar\|baseball][&page=N][&blink=1][&scale=1-16]` | One rendered frame of the live payload as a PNG (`server/board/render.js`). `screen` defaults to the payload's screen. |
 | `GET /board/<secret>/api/update?b=<id>[&mapid=<id>][&header=0\|1][&weather=0\|1]` | The same payload as `/board/update`, without the token header (the path is the credential). `mapid`, `header`, and `weather` preview another station or the transit toggles without changing the board (the row list is ignored while previewing another station); `sim.png` takes them too. The simulator's "Use on board" posts the previewed settings to `api/state`. |
 | `GET /board/<secret>/api/radar/<frameId>?b=<id>[&mapid=<id>]` | Same as `/board/radar/<frameId>` without the token, for the simulator. `sim.png` also takes `screen=radar`. |
 | `GET /board/<secret>/api/stations` | Station list for pickers: `[{mapid, desc, short}]`, sorted by `desc`. |
 | `GET /board/<secret>/api/state` | Full state JSON (all boards). |
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
-| `GET /board/<secret>/api/test?b=<id>` | Simulator test alerts for board `b`: `{lines, warn, left}` (`left` = seconds until expiry, 0 when none). |
-| `POST /board/<secret>/api/test?b=<id>` | Start a test alert: body `{lines: ["RD", ...], warn: {kind: "svr"\|"tor", lvl: "watch"\|"warning"} \| null}`. Lines are `RD BL BR GR OR PR PK YL`; they blink as if CTA had a major alert, and `warn` replaces the NWS warning. Applies to the real board's updates too, and expires after 10 minutes. An empty body (no lines, no warn) clears it. `400` for bad values, `404` for an unknown board. |
+| `GET /board/<secret>/api/test?b=<id>` | Simulator test alerts for board `b`: `{lines, warn, game, left}` (`left` = seconds until expiry, 0 when none). |
+| `POST /board/<secret>/api/test?b=<id>` | Start a test alert: body `{lines: ["RD", ...], warn: {kind: "svr"\|"tor", lvl: "watch"\|"warning"} \| null}`. Lines are `RD BL BR GR OR PR PK YL`; they blink as if CTA had a major alert, and `warn` replaces the NWS warning. Applies to the real board's updates too, and expires after 10 minutes. `game` (`pre` \| `live` \| `final` \| `null`) adds a made-up Cubs-Cardinals game in that state at the front of `mlb.games`. An empty body (no lines, no warn, no game) clears it. `400` for bad values, `404` for an unknown board. |
+| `GET /board/<secret>/api/raw/mlb` | The MLB schedule response the poller last fetched, unchanged, for recording fixtures. `503` before the first fetch. |
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 
 POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `screen`, and `bright`; anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
@@ -280,7 +306,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 | `station` | Train Tracker `mapid` and header name. Changeable from the control page. The station's coordinates are also the board's **location** for weather, NWS alerts, and the radar crop. |
 | `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the row order; if more destinations than the cap remain, the board shows the chronological view. Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |
-| `screen` | `auto` or a forced screen. Reset to `auto` on boot. `auto` resolves to `transit`; it never changes screens on its own except for radar visits. |
+| `screen` | `auto` or a forced screen (`transit`, `ticker`, `radar`, `baseball`). Reset to `auto` on boot. `auto` resolves to `transit`, or `baseball` while a game is on (no NWS warning or watch); it never changes screens on its own otherwise, except for radar visits. |
 | `radarEvery`, `radarFor` | Radar visits on the auto screen: every `radarEvery` minutes (0 = never, the default; max 60) show the radar for `radarFor` seconds (10–600, default 60), only while rain is in the box. Persist across restarts. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |
 

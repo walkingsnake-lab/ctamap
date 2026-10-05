@@ -46,7 +46,7 @@
     <span class="note" id="previewNote"></span>
   </div>
   <div class="tests" id="tests">
-    <span>Test alerts (board too, 10 min):</span>
+    <span>Test alerts and game (board too, 10 min):</span>
     <span id="testLines"></span>
     <select id="testWarn" aria-label="Test weather alert">
       <option value="">No weather alert</option>
@@ -54,6 +54,12 @@
       <option value="svr:warning">Severe t-storm warning</option>
       <option value="tor:watch">Tornado watch</option>
       <option value="tor:warning">Tornado warning</option>
+    </select>
+    <select id="testGame" aria-label="Test baseball game">
+      <option value="">No test game</option>
+      <option value="pre">Cubs game: pregame</option>
+      <option value="live">Cubs game: live</option>
+      <option value="final">Cubs game: final</option>
     </select>
     <button class="chip" id="testClear">Clear</button>
     <span id="testLeft"></span>
@@ -70,6 +76,10 @@
     <figure id="fig-ticker">
       <figcaption><span>Ticker</span><span id="pageState"></span></figcaption>
       <canvas id="ticker" width="640" height="320" aria-label="Ticker screen"></canvas>
+    </figure>
+    <figure id="fig-baseball">
+      <figcaption><span>Baseball</span><span id="gameState"></span></figcaption>
+      <canvas id="baseball" width="640" height="320" aria-label="Baseball screen"></canvas>
     </figure>
   </div>
   <div class="bar">
@@ -134,6 +144,7 @@
   const paintTransit = ledCanvas($('transit'));
   const paintTicker = ledCanvas($('ticker'));
   const paintRadar = ledCanvas($('radar'));
+  const paintBaseball = ledCanvas($('baseball'));
 
   // Radar frames are immutable: fetch each ID once, keep the ones in use.
   const radarFrames = {};
@@ -198,6 +209,7 @@
   // ---- animation state, as the board keeps it ----
   let transitAnim = D.createTransitAnimator();
   let page = 0, pageStart = performance.now();
+  let bbShown = null, bbRolls = {};
 
   function frame(t) {
     if (!p || $('pause').checked) return;
@@ -206,7 +218,7 @@
     if (shown !== lastShown) {
       lastShown = shown;
       $('screen').textContent = shown;
-      for (const k of ['transit', 'ticker', 'radar']) $('fig-' + k).classList.toggle('active', shown === k);
+      for (const k of ['transit', 'ticker', 'radar', 'baseball']) $('fig-' + k).classList.toggle('active', shown === k);
     }
 
     // Transit: rolls, fades, and slides come from the animator.
@@ -229,6 +241,21 @@
     const idx = nf ? Math.min(nf - 1, Math.floor((t % cycle) / D.RADAR_FRAME_MS)) : -1;
     paintRadar(D.render(p, { screen: 'radar', now: n, idx, frames: radarFrames }));
     $('radarState').textContent = p.radar && p.radar.on ? 'rain in the box' : nf ? 'no rain (auto stays on transit)' : 'no frames yet';
+
+    // Baseball: one game per minute; a changed score rolls, as on the board.
+    const sc = D.baseballScores(p, n);
+    if (sc && bbShown && bbShown.id === sc.id) {
+      for (const k of ['away', 'home']) if (bbShown[k] !== sc[k]) bbRolls[k] = { from: bbShown[k], start: t };
+    } else bbRolls = {};
+    bbShown = sc;
+    const rolls = {};
+    for (const [k, r] of Object.entries(bbRolls)) {
+      const rp = (t - r.start) / D.ROLL_MS;
+      if (rp >= 1) delete bbRolls[k]; else rolls[k] = { from: r.from, p: rp };
+    }
+    paintBaseball(D.render(p, { screen: 'baseball', now: n, rolls }));
+    const ng = (p.mlb && p.mlb.games.length) || 0;
+    $('gameState').textContent = ng ? `game ${D.gameIndex(ng, n) + 1} of ${ng}` : 'no games';
   }
 
   let lastShown = null;
@@ -286,7 +313,7 @@
 
   // ---- test alerts ----
   const TEST_LINES = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
-  let test = { lines: [], warn: null, left: 0 };
+  let test = { lines: [], warn: null, game: null, left: 0 };
   function renderTest() {
     for (const b of $('testLines').children) {
       const on = test.lines.includes(b.dataset.ln);
@@ -294,6 +321,7 @@
       b.style.background = on ? TEST_LINES[b.dataset.ln] : '';
     }
     $('testWarn').value = test.warn ? `${test.warn.kind}:${test.warn.lvl}` : '';
+    $('testGame').value = test.game || '';
     $('testLeft').textContent = test.left > 0 ? `clears in ${Math.ceil(test.left / 60)} min` : '';
   }
   async function setTest(next) {
@@ -305,14 +333,15 @@
   $('testLines').replaceChildren(...Object.keys(TEST_LINES).map((ln) => {
     const b = document.createElement('button');
     b.className = 'chip'; b.dataset.ln = ln; b.textContent = ln; b.title = `Fake a major alert on ${ln}`;
-    b.onclick = () => setTest({ lines: test.lines.includes(ln) ? test.lines.filter((x) => x !== ln) : [...test.lines, ln], warn: test.warn });
+    b.onclick = () => setTest({ lines: test.lines.includes(ln) ? test.lines.filter((x) => x !== ln) : [...test.lines, ln], warn: test.warn, game: test.game });
     return b;
   }));
   $('testWarn').addEventListener('change', (e) => {
     const [kind, lvl] = e.target.value.split(':');
-    setTest({ lines: test.lines, warn: kind ? { kind, lvl } : null });
+    setTest({ lines: test.lines, warn: kind ? { kind, lvl } : null, game: test.game });
   });
-  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null }));
+  $('testGame').addEventListener('change', (e) => setTest({ lines: test.lines, warn: test.warn, game: e.target.value || null }));
+  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null, game: null }));
   const pollTest = () => fetch('api/test?b=' + encodeURIComponent(board), { cache: 'no-store' }).then((r) => r.json()).then((t) => { test = t; renderTest(); }).catch(() => {});
   pollTest();
   setInterval(pollTest, 15000);
