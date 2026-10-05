@@ -151,6 +151,13 @@ async function build() {
     const q = { rows: [{ ln: 'RD', lbl: 'HOWARD', t: [min(12), min(20)], s: [0, 0], a: 0 }] };
     seq('anim countdown roll', [{ p: q, now: NOW, t: 0 }, ...ts(100, 450, 10).map((t) => ({ p: q, now: NOW + 60, t }))]);
   }
+  // DUE leaves, the other times slide left, a new time joins at the end.
+  {
+    const rowOf = (t) => ({ rows: [{ ln: 'RD', lbl: 'HOWARD', t, s: t.map(() => 0), a: 0 }] });
+    const before = rowOf([NOW + 10, min(7), min(16)]);
+    const after = rowOf([NOW + 10, min(7), min(16), min(25)]);
+    seq('anim DUE leaves, times slide', [{ p: before, now: NOW, t: 0 }, ...[...ts(1000, 1800, 19), 1350, 1600].sort((x, y) => x - y).map((t) => ({ p: after, now: NOW + 45, t }))]);
+  }
   // A row leaves; the others slide.
   {
     const rowsAt = (gone) => [

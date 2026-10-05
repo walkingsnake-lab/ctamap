@@ -389,23 +389,32 @@
         const unmatched = state.cells.filter((c) => !c.leaving);
         const used = new Set();
         const out = [];
+        const moved = [], joined = []; // cells that slide / fade in as part of this step
         for (const c of cells) {
           const m = unmatched.find((u) => !used.has(u) && Math.abs(u.t - c.t) <= MATCH_S);
           if (m) {
             used.add(m);
             if (m.text !== c.text) m.roll = { from: m.text, start: t };
             if (m.color !== c.color) { m.fromColor = m.shownColor || m.color; m.colorStart = t; }
-            if (m.right !== c.right) { m.fromRight = m.shownRight == null ? m.right : m.shownRight; m.moveStart = t; }
+            if (m.right !== c.right) { m.fromRight = m.shownRight == null ? m.right : m.shownRight; m.moveStart = t; moved.push(m); }
             Object.assign(m, { t: c.t, text: c.text, color: c.color, right: c.right });
             out.push(m);
           } else {
             // New arrivals fade in; a new row's arrivals come in with the row.
-            out.push({ ...c, id: nextId++, born: isNewRow ? null : t });
+            const n = { ...c, id: nextId++, born: isNewRow ? null : t };
+            if (!isNewRow) joined.push(n);
+            out.push(n);
           }
         }
         for (const u of unmatched) if (!used.has(u)) { u.leaving = t; out.push(u); }
         for (const c of state.cells) if (c.leaving && c.leaving !== t && t - c.leaving < FADE_MS) out.push(c);
         state.cells = out.filter((c, i) => out.indexOf(c) === i);
+        // Cells slide and join only once the leaving ones (a DUE going out)
+        // have faded, so nothing slides across text that's still fading.
+        const until = Math.max(t, ...state.cells.filter((c) => c.leaving).map((c) => c.leaving + FADE_MS));
+        for (const m of moved) m.moveStart = until;
+        // A new arrival waits for the slide too (it takes the space the slide frees).
+        for (const n of joined) n.born = until + (moved.length ? MOVE_MS : 0);
       }
 
       return {
