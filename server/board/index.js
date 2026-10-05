@@ -14,7 +14,7 @@ const { createRadar } = require('./radar');
 const { tzOffset } = require('./time');
 const fs = require('fs');
 const path = require('path');
-const { render, assets } = require('./render');
+const { render, assets, autoScreen } = require('./render');
 
 const SIM_HTML = fs.readFileSync(path.join(__dirname, 'sim.html'));
 const CONTROL_HTML = fs.readFileSync(path.join(__dirname, 'control.html'));
@@ -100,8 +100,12 @@ function createBoard({
 
   // 'auto' brightness follows sunrise/sunset (100 until weather data arrives).
   const resolveBright = (b, w, now) => (b === 'off' ? 0 : b === 'auto' ? autoBright(w, now) : b);
-  // 'auto' shows the radar while there's rain in the box, transit otherwise.
-  const resolveScreen = (s, radarOn) => (s === 'auto' ? (radarOn ? 'radar' : 'transit') : s);
+  // 'auto' stays on transit; the board (and simulator) visit the radar on a
+  // timer while it's raining (radar.visit), so screens don't change unless asked.
+  const resolveScreen = (s) => (s === 'auto' ? 'transit' : s);
+  // Radar visits apply only on the auto screen, and only if turned on.
+  const visitOf = (b) => (b.screen === 'auto' && b.radarEvery > 0
+    ? { every: b.radarEvery * 60, for: Math.min(b.radarFor || 60, b.radarEvery * 60) } : null);
   const NO_RADAR = { on: false, frames: [], ft: [], clock: null, split: false };
 
   // Test alerts, set from the simulator: fake major CTA alerts on some lines
@@ -174,7 +178,7 @@ function createBoard({
       now,
       tzo: tzOffset(now),
       age: Math.max(0, Math.round(now - data.fetchedAt)),
-      screen: resolveScreen(board.screen, radarState.on),
+      screen: resolveScreen(board.screen),
       bright: resolveBright(board.bright, w, now),
       // Transit header and weather row as fitted to the destinations; the
       // ticker keeps its header (it doesn't need the room).
@@ -186,7 +190,7 @@ function createBoard({
       ticker,
       wx: bars.showWeather ? wx : null,
       warn: (test && test.warn) || pickWarn(nwsAlerts, now),
-      radar: radarState,
+      radar: { ...radarState, visit: visitOf(board) },
     };
   }
 
@@ -358,7 +362,7 @@ function createBoard({
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
-        const screen = ['transit', 'ticker', 'radar'].includes(parsed.query.screen) ? parsed.query.screen : body.screen;
+        const screen = ['transit', 'ticker', 'radar'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid); if (b) frames[fid] = b; }

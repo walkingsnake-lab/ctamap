@@ -183,14 +183,11 @@
       // on every poll can hitch the animation (and the alert blink).
       const text = JSON.stringify(p, (k, v) => (k === 'now' || k === 'age' ? undefined : v), 2);
       if (text !== lastJson) { lastJson = text; $('json').textContent = text; }
-      $('screen').textContent = p.screen;
+      $('screen').textContent = D.autoScreen(p, now());
       $('view').textContent = (p.view || 'dest') + (p.hidden && p.hidden.length ? ` (${p.hidden.join(' + ')} hidden to fit)` : '');
       $('v').textContent = p.v;
       $('age').textContent = p.age + ' s';
       $('bright').textContent = p.bright;
-      $('fig-transit').classList.toggle('active', p.screen === 'transit');
-      $('fig-ticker').classList.toggle('active', p.screen === 'ticker');
-      $('fig-radar').classList.toggle('active', p.screen === 'radar');
       syncRadarFrames().catch(() => {});
       setStatus('');
     } catch (e) {
@@ -205,6 +202,12 @@
   function frame(t) {
     if (!p || $('pause').checked) return;
     const n = now();
+    const shown = D.autoScreen(p, n);
+    if (shown !== lastShown) {
+      lastShown = shown;
+      $('screen').textContent = shown;
+      for (const k of ['transit', 'ticker', 'radar']) $('fig-' + k).classList.toggle('active', shown === k);
+    }
 
     // Transit: rolls, fades, and slides come from the animator.
     const view = transitAnim.step(p, n, t);
@@ -228,6 +231,7 @@
     $('radarState').textContent = p.radar && p.radar.on ? 'rain in the box' : nf ? 'no rain (auto stays on transit)' : 'no frames yet';
   }
 
+  let lastShown = null;
   let last = 0;
   function loop(t) {
     if (t - last >= 33) { last = t; try { frame(t); } catch (e) { setStatus('draw failed: ' + e.message); } }

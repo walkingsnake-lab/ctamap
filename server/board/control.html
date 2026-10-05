@@ -74,6 +74,20 @@
       <button data-v="ticker">Ticker</button>
       <button data-v="radar">Radar</button>
     </div>
+    <p class="hint" id="screenHint">Auto stays on the transit screen.</p>
+    <div id="visit" hidden>
+      <div class="row"><span>Show radar every</span>
+        <select id="radarEvery" aria-label="Show radar every" style="width:auto">
+          <option value="0">Never</option><option value="2">2 min</option><option value="3">3 min</option><option value="4">4 min</option>
+          <option value="5">5 min</option><option value="6">6 min</option><option value="10">10 min</option>
+          <option value="15">15 min</option><option value="20">20 min</option><option value="30">30 min</option>
+        </select></div>
+      <div class="row"><span>For</span>
+        <select id="radarFor" aria-label="Show radar for" style="width:auto">
+          <option value="30">30 sec</option><option value="45">45 sec</option><option value="60">1 min</option>
+          <option value="90">90 sec</option><option value="120">2 min</option><option value="180">3 min</option>
+        </select></div>
+    </div>
   </section>
 
   <section>
@@ -155,6 +169,13 @@
     }
   }
 
+  // Same rule as the board: radar visits on the auto screen while it rains.
+  function visitScreen(p) {
+    const r = p.radar, v = r && r.visit;
+    if (p.screen !== 'transit' || !r || !r.on || !v) return p.screen;
+    return Math.floor(p.now) % v.every < v.for ? 'radar' : 'transit';
+  }
+
   // ---- preview ----
   async function refreshPreview() {
     try {
@@ -164,7 +185,8 @@
       const img = new Image();
       img.onload = () => { $('preview').src = img.src; };
       img.src = `sim.png?b=${enc(boardId)}&scale=8&t=${Date.now()}`;
-      const shown = p.screen === 'transit' && p.view === 'chrono' ? 'transit (one train per row)' : p.screen;
+      const scr = visitScreen(p);
+      const shown = scr === 'transit' && p.view === 'chrono' ? 'transit (one train per row)' : scr;
       $('caption').textContent = `Showing ${shown} · data ${p.age}s old`;
     } catch (e) {
       $('caption').textContent = 'Preview unavailable: ' + e.message;
@@ -182,6 +204,13 @@
   function render() {
     if (!board) return;
     pressed('screen', board.screen);
+    const auto = board.screen === 'auto';
+    $('visit').hidden = !auto;
+    $('radarEvery').value = String(board.radarEvery || 0);
+    $('radarFor').value = String(board.radarFor || 60);
+    $('screenHint').textContent = !auto ? 'Showing the chosen screen until you change it or the board restarts.'
+      : board.radarEvery ? `Stays on transit. While it's raining, the radar shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min.`
+      : 'Stays on transit. Pick a time below to have the radar drop in while it\'s raining.';
     const fixed = Number.isInteger(board.bright);
     pressed('bright', fixed ? 'fixed' : board.bright);
     $('level').hidden = !fixed;
@@ -242,6 +271,8 @@
 
   // ---- events ----
   $('screen').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !e.target.disabled) save({ screen: v }); });
+  $('radarEvery').addEventListener('change', (e) => save({ radarEvery: Number(e.target.value) }));
+  $('radarFor').addEventListener('change', (e) => save({ radarFor: Number(e.target.value) }));
   $('bright').addEventListener('click', (e) => {
     const v = e.target.dataset.v; if (!v) return;
     save({ bright: v === 'fixed' ? (Number.isInteger(board.bright) ? board.bright : 60) : v });
