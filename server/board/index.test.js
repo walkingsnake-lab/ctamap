@@ -10,11 +10,12 @@ const { createBoard } = require('./index');
 const { createStore } = require('./state');
 
 const quiet = { warn() {}, error() {} };
+const fakeMlb = (games = []) => ({ get: () => games, raw: () => null });
 
 // Spin up a server that routes /board/* the same way server.js does.
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), radar: fakeRadar(), ...opts });
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), ...opts });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -467,7 +468,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, left: 0 });
+  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, left: 0 });
   let r = await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' } });
   assert.equal(r.status, 200);
   const t = await r.json();
@@ -487,5 +488,55 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   const c = (await s.req('/board/update?b=home', h)).body;
   assert.ok(c.rows.every((x) => x.a === 0));
   assert.equal(c.warn, null);
+  await s.close();
+});
+
+test('baseball: auto shows it during a game; a weather warning comes first', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const tracker = () => fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now });
+  const game = { id: 7, st: 'live', start: now - 3600, away: { ab: 'CHC', c: '#2a5bd8', r: 1, w: 92, l: 70 }, home: { ab: 'STL', c: '#d62a2a', r: 0, w: 88, l: 74 }, inn: 3, half: 'T', b: 0, s: 0, o: 0, on: [0, 0, 0] };
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+
+  let s = await serve({ tracker: tracker(), mlb: fakeMlb([]) });
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.screen, 'transit');
+  assert.deepEqual(b.mlb, { games: [] });
+  await s.close();
+
+  s = await serve({ tracker: tracker(), mlb: fakeMlb([game]) });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.screen, 'baseball');
+  assert.deepEqual(b.mlb.games, [game]);
+  // A weather warning (simulator test warning here) puts transit first.
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  await post({ warn: { kind: 'svr', lvl: 'watch' } });
+  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'transit');
+  // The phone can pick baseball directly.
+  await post({});
+  await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/state?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ screen: 'baseball' }) });
+  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'baseball');
+  await s.close();
+
+});
+
+test('baseball: the simulator test game goes first in the list, in the chosen state', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await post({ game: 'extra' })).status, 400);
+  for (const st of ['pre', 'live', 'final']) {
+    const r = await post({ game: st });
+    assert.equal((await r.json()).game, st);
+    const b = (await s.req('/board/secret123/api/update?b=home')).body;
+    assert.equal(b.mlb.games[0].st, st);
+    assert.equal(b.mlb.games[0].away.ab, 'CHC');
+    assert.equal(b.screen, 'baseball');
+  }
+  await post({});
+  assert.equal((await s.req('/board/secret123/api/update?b=home')).body.mlb.games.length, 0);
   await s.close();
 });

@@ -1,6 +1,6 @@
 # CTA LED Board: Design Spec
 
-Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the design sessions of Oct 2–3, 2026. All mocks used made-up train times unless noted.
+Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the design sessions of Oct 2–4, 2026. All mocks used made-up train times unless noted.
 
 ---
 
@@ -10,8 +10,8 @@ Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the desi
 |---|---|
 | Panel | 64x32, 4mm pitch, HUB75. Black acrylic diffuser recommended. |
 | Controller | **Decided: Matrix Portal M4** (starter kit, purchased Oct 3, 2026; includes panel, diffuser, 5V 2.4A supply). 192 KB RAM, WiFi via ESP32 co-processor over SPI: keep JSON payloads small, use PCF fonts, fetch only between animations. |
-| Input | **Phone/web control** (primary, see §9) plus built-in UP/DOWN buttons to switch screens. No extra hardware. |
-| Power | Kit supply is 5V 2.4A; panel can draw ~4A all-white. See §8. |
+| Input | **Phone/web control** (primary, see §10) plus built-in UP/DOWN buttons to switch screens. No extra hardware. |
+| Power | Kit supply is 5V 2.4A; panel can draw ~4A all-white. See §9. |
 
 ---
 
@@ -229,13 +229,59 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ---
 
-## 8. Power
+## 8. Screen 4: Baseball
+
+### Data
+- **Source:** MLB Stats API (`statsapi.mlb.com`, free, no key, unofficial).
+- **One request:** `/api/v1/schedule?sportId=1&startDate=<yesterday>&endDate=<today>&hydrate=linescore` (Chicago dates, so a late game survives midnight). The hydrated linescore carries everything the screen draws: runs, inning and half, inning state, balls/strikes/outs, runners (`offense.first/second/third`), and each team's `leagueRecord`. No per-game live feed.
+- **Records:** `leagueRecord` is the regular-season W-L during the season and the **postseason** W-L in the postseason (e.g. 1-0 after an ALDS Game 1 win).
+- **Teams:** the server keeps a map of MLB team ID → abbreviation (matching `/api/v1/teams` `abbreviation`: `CHC`, `CWS`, `ATH`, `AZ`, …) and block color.
+- **Poller:** every 15 s while a qualifying game is live or within its pregame window, every 5 min otherwise. Keeps the last good response on failure.
+- **Payload:** the combined update gets `mlb.games` (already filtered, in start order), ~100 bytes per game.
+
+### When it shows (Auto mode)
+- **Every Cubs game** (team ID 112, any game type) and **every postseason game** (game types `F`, `D`, `L`, `W`). Postponed and cancelled games are skipped.
+- **Window:** pregame from 30 min before first pitch (a delayed start stays in pregame), live, then final held 15 min after the server first sees it final (starting values; tune). A final first seen more than 6 h after first pitch (e.g. after a server restart) isn't shown.
+- **Priority:** weather wins. Auto shows baseball while any game is in its window, except during an NWS warning or watch (transit, with its warning tag). Timed radar visits (§10), when turned on, interrupt baseball the same way they interrupt transit.
+- **Multiple games:** one minute each, picked by wall time (`floor(now / 60) % count`), so the board keeps no rotation state. Screen switches are natural gaps for network jobs (§2).
+- Phone page and buttons can still switch screens (§10); the phone page gets a Baseball option.
+
+### Layout
+- **Team rows:** 3x6 team-color block at x1 and the abbreviation in X11 5x7 (label white) at x6; away on top (block rows 2–7), home below (rows 12–17). No logos.
+- **Divider** on row 21 (`#333333`), full width. **No series label** (e.g. `NLDS G2`) anywhere.
+- **Bottom line** (rows 24–28, Tom Thumb) is right-aligned to x62.
+
+**Live**
+- Scores: X11 5x7, right-aligned to **x30** (a two-digit score still clears the name), both lit white `#f0f0f0`.
+- **Infield:** dim diamond outline (`#3a3a3a`, radius 5) centered at (51,7). Bases are 5x5 diamonds on its corners: 2nd (51,2), 3rd (46,7), 1st (56,7). **Occupied = amber `#ffb000`; empty = solid dark grey `#454545`.**
+- **Inning:** `TOP 7` / `BOT 10` in Tom Thumb, label white, centered on x51, rows 15–19.
+- **Bottom line:** count (`2-1`, label white), 5px gap, outs as text (`2 OUT`, grey).
+- During a break the server sends the half-inning that's up next with no count, outs, or runners (Middle → bottom; End → top of the next inning).
+
+**Pregame**
+- No scores. Each team's W-L (Tom Thumb, grey) sits 3px after the longer team name, on its team's row.
+- First pitch time (label white) + `AM`/`PM` (grey) in the bottom line, where `FINAL` goes. No `TODAY` (it's assumed). The right panel is empty.
+
+**Final**
+- **Winner's name and score in amber `#ffb000`**; loser's name label white, loser's score darkened white `#6a6a6a`.
+- Updated W-L for each team (Tom Thumb, grey) centered on x51, level with its team (rows 3 and 13).
+- `FINAL` (label white) in the bottom line.
+
+**Animation:** per-digit roll when a score changes. Nothing else.
+
+### Team colors
+- One block color per team, from its primary color. Dark navies and maroons (Yankees, Tigers, Padres, Brewers, Twins, Astros, Mariners, Rays, Nationals…) are **boosted** so they read as color, not black, on the panel, like Brown/Purple on the transit screen. Mock values: Cubs `#2a5bd8`, Cardinals `#d62a2a`.
+
+---
+
+## 9. Power
 
 | Screen | Rough draw |
 |---|---|
 | Transit board | ~0.3–0.6 A |
 | Radar, widespread rain | ~0.5–1 A (lower with 65% fills) |
 | Ticker | ~1 A with 55% fills (was ~2+ A at full brightness) |
+| Baseball | ~0.3–0.5 A |
 
 - Underpowering symptoms: flicker, colors shifting red, resets, WiFi drops.
 - **Laptop USB is the trap:** develop with dim test colors or use the 2.4A supply.
@@ -243,12 +289,12 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ---
 
-## 9. Phone/web control
+## 10. Phone/web control
 
 A small page on the fly.dev server, saved to the phone home screen. The server holds the board's state; the board reads it and draws what it's told.
 
 ### Controls
-- **Screen:** Auto, Transit, Ticker, Radar. Auto stays on transit: screens don't change on their own. Optional radar visits (off by default): every N minutes (e.g. 4) show the radar for M seconds (e.g. 60) while rain is in the box, set on the control page.
+- **Screen:** Auto, Transit, Ticker, Radar, Baseball. Auto stays on transit, or baseball while a game is on (§8): screens don't change on their own otherwise. Optional radar visits (off by default): every N minutes (e.g. 4) show the radar for M seconds (e.g. 60) while rain is in the box, set on the control page.
 - **Brightness:** Auto (sunrise/sunset), fixed level, or Off.
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
@@ -267,7 +313,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 
 ---
 
-## 10. Connectivity
+## 11. Connectivity
 
 - WiFi is set in `settings.toml` on the CIRCUITPY drive over USB (cannot be changed from the phone page, since the board needs WiFi to reach the server).
 - **Network list:** home, work (visitor), and **phone hotspot** in `settings.toml`; the board tries each in order and moves on if a network is missing or portal-blocked. The hotspot is the last-resort fallback anywhere (data use is small: ~1 KB per 30 s plus radar frames).
@@ -278,7 +324,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 
 ---
 
-## 11. Open questions
+## 12. Open questions
 
 - On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors, Tom Thumb `M`/`N` legibility (3px wide; may need widening like `W`), 3x5 bolt legibility.
 - Whether the work visitor WiFi has a captive portal (check with a phone).
@@ -286,6 +332,6 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - On-panel check: lowercase `m` legibility (diffuser glow between the humps), and whether `4m` needs a 2px gap.
 - Chronological view: whether it flips too often at short-turn stations (if so, raise `CHRONO_HOLD`).
 
-## 12. Parked ideas
+## 13. Parked ideas
 
 **Bus screen** (cut from v1: needs a separate Bus Tracker API key; was 96/155 at Morse with grey `#8a8a8a` row blocks, westbound only since both start at Morse) · separate board location independent of the station · Combined radar + conditions screen · full-screen conditions layouts · Cubs/Sox scores (16x16 logos from a sprite sheet, personal use) · trains + buses on one screen · leave-by line · Divvy · Metra row · approach track · custom clock digit styles (Chunky, Outline) · timeline strips · merging short-turns into their direction's row with a marker · tap-to-switch via onboard accelerometer · I2C rotary encoder · ambient light sensor · big-number bus layout (route number left, name + times right; tried and declined in favor of the standard rows) · first-train time under the overnight clock (needs CTA GTFS schedule) · CTA alert headline scroll (cut to minimize animation) · full-screen CTA alert text screen (cut; indicators only) · CTA-style alert circle after the destination name on the ticker (declined: collides with long names and two-digit times) · blinking/alternating clock colon (cut to minimize animation) · transit row scrolling/paging for 6–7 destination stations (post-v1) · Bluetooth WiFi provisioning from the phone · run numbers in line color on chronological rows (declined: the color block scans faster, and Brown/Purple read dim as thin strokes) · `MIN` suffix on chronological rows (declined in favor of lowercase `m`) · per-pixel rain/snow from MRMS `PrecipFlag` (GRIB2; replaces the v1 temperature heuristic if the decoder fits in memory).

@@ -27,4 +27,7 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
   - `lcref_202202021800.*`: Feb 2, 2022 snowstorm, noon CST. Chicago crop averages 11–18 dBZ.
   - `lcref_202610041600.*`: Oct 4, 2026, clear at Chicago. New-style `.wld` origin (-129.995, 54.995).
 
+- `mlb/` — MLB Stats API schedule responses (`mlb.js` `url()`, `hydrate=linescore`). Record new ones from `/board/<control path>/api/raw/mlb`.
+  - `schedule-2026-10-03-alds-final.json`: ALDS Game 1, White Sox 3 at Guardians 0, final (postseason `leagueRecord` 1-0 / 0-1). **Not a byte-for-byte recording**: the cloud session couldn't reach the API directly, so it was assembled from a fetched copy of the game object (field names and values as returned; the date wrapper and a trimmed `defense` block filled in). Replace with a capture from `api/raw/mlb` when convenient.
+
 Never record a URL with `key=` in it here.

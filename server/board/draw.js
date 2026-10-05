@@ -5,7 +5,7 @@
 // and in the browser (the simulator), and has no dependencies; fonts and
 // icons are passed in. The CircuitPython board code mirrors this file.
 //
-// Layout rules: docs/board/design-spec.md §3–6.
+// Layout rules: docs/board/design-spec.md §3–8.
 
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -616,6 +616,129 @@
       return f;
     }
 
+    // ---- baseball (design spec §8) ----
+    // Team rows on the left (color block + 5x7 abbreviation + score), status
+    // panel centered on x51, divider on row 21, bottom line right-aligned.
+    const BB = { live: '#f0f0f0', lose: '#6a6a6a', base: '#454545', infield: '#3a3a3a' };
+    const ROW_TOPS = [2, 12];   // away, home
+    const SCORE_RIGHT = 30, PANEL_X = 51, BOTTOM = 29;
+    const SCORE_ROLL = 8;       // 5x7 digit (7 rows incl. descender) + 1px
+    const ctext = (f, font, str, cx, base, color) => f.text(font, str, cx - Math.floor(measure(font, str) / 2), base, color);
+    const record = (t) => (t.w == null || t.l == null ? '' : `${t.w}-${t.l}`);
+
+    // Which game is up: one minute each by wall time, so the board and the
+    // simulator agree without keeping rotation state.
+    const gameIndex = (n, now) => (n ? Math.floor(now / 60) % n : -1);
+
+    // Score, right-aligned at SCORE_RIGHT; a changed score rolls digit by
+    // digit like arrival times.
+    function drawScore(f, text, top, color, roll) {
+      const base = top + 6;
+      if (!roll || roll.from === text || roll.p >= 1) { rtext(f, '5x7', text, SCORE_RIGHT, base, color); return; }
+      const up = Math.round(easeInOut(roll.p) * SCORE_ROLL);
+      f.withClip(SCORE_RIGHT - 12, top, SCORE_RIGHT, top + 6, () => {
+        const from = roll.from;
+        if (from.length === text.length) {
+          let x = SCORE_RIGHT - measure('5x7', text) + 1;
+          for (let i = 0; i < text.length; i++) {
+            if (from[i] === text[i]) f.text('5x7', text[i], x, base, color);
+            else {
+              f.text('5x7', from[i], x, base - up, color);
+              f.text('5x7', text[i], x, base - up + SCORE_ROLL, color);
+            }
+            x += measure('5x7', text[i]) + 1;
+          }
+        } else {
+          rtext(f, '5x7', from, SCORE_RIGHT, base - up, color);
+          rtext(f, '5x7', text, SCORE_RIGHT, base - up + SCORE_ROLL, color);
+        }
+      });
+    }
+
+    // Diamond of radius r centered at (cx, cy): just the outline, or filled.
+    function drawDiamond(f, cx, cy, r, color, filled) {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        const d = Math.abs(dx) + Math.abs(dy);
+        if (d === r || (filled && d < r)) f.fill(cx + dx, cy + dy, 1, 1, color);
+      }
+    }
+
+    // Infield outline with 5x5 bases on its corners: amber when occupied,
+    // solid dark grey when empty. on = [1st, 2nd, 3rd].
+    function drawInfield(f, on) {
+      drawDiamond(f, PANEL_X, 7, 5, BB.infield, false);
+      drawDiamond(f, PANEL_X, 2, 2, on[1] ? C.amber : BB.base, true);
+      drawDiamond(f, PANEL_X - 5, 7, 2, on[2] ? C.amber : BB.base, true);
+      drawDiamond(f, PANEL_X + 5, 7, 2, on[0] ? C.amber : BB.base, true);
+    }
+
+    function drawNoGames(f, now) {
+      const clock = clockText(now);
+      const label = 'NO GAMES';
+      const top = Math.floor((32 - 18) / 2);
+      f.text('clock', clock, Math.floor((64 - measure('clock', clock)) / 2), top + 10, C.clock);
+      f.text('small', label, Math.floor((64 - measure('small', label)) / 2), top + 18, C.noTrains);
+    }
+
+    // opts: now, game (index into p.mlb.games; default the rotation),
+    // rolls ({away|home: {from, p}} score rolls)
+    function renderBaseball(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const f = newFrame();
+      const games = (p.mlb && p.mlb.games) || [];
+      if (!games.length) { drawNoGames(f, now); return f; }
+      const g = games[o.game != null ? o.game % games.length : gameIndex(games.length, now)];
+      const rolls = o.rolls || {};
+      const final = g.st === 'final';
+      const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
+
+      // Team rows.
+      let nameEnd = 0;
+      for (const [k, top] of [['away', ROW_TOPS[0]], ['home', ROW_TOPS[1]]]) {
+        f.fill(1, top, 3, 6, g[k].c || C.grey);
+        nameEnd = Math.max(nameEnd, f.text('5x7', g[k].ab, 6, top + 6, winner === k ? C.amber : C.label));
+      }
+      f.fill(0, 21, 64, 1, C.divider);
+
+      if (g.st === 'pre') {
+        // Records 3px after the longer name; first pitch in the bottom line.
+        f.text('small', record(g.away), nameEnd + 2, ROW_TOPS[0] + 6, C.grey);
+        f.text('small', record(g.home), nameEnd + 2, ROW_TOPS[1] + 6, C.grey);
+        const ap = ampmText(g.start);
+        rtext(f, 'small', ap, 62, BOTTOM, C.grey);
+        rtext(f, 'small', clockText(g.start), 62 - measure('small', ap) - 3, BOTTOM, C.label);
+        return f;
+      }
+
+      if (final) {
+        for (const [k, top] of [['away', ROW_TOPS[0]], ['home', ROW_TOPS[1]]]) {
+          drawScore(f, String(g[k].r), top, winner === k ? C.amber : winner ? BB.lose : C.label, rolls[k]);
+          ctext(f, 'small', record(g[k]), PANEL_X, top + 6, C.grey);
+        }
+        rtext(f, 'small', 'FINAL', 62, BOTTOM, C.label);
+        return f;
+      }
+
+      // Live.
+      drawScore(f, String(g.away.r), ROW_TOPS[0], BB.live, rolls.away);
+      drawScore(f, String(g.home.r), ROW_TOPS[1], BB.live, rolls.home);
+      drawInfield(f, g.on || [0, 0, 0]);
+      ctext(f, 'small', `${g.half === 'B' ? 'BOT' : 'TOP'} ${g.inn}`, PANEL_X, 20, C.label);
+      const outs = `${g.o || 0} OUT`;
+      rtext(f, 'small', outs, 62, BOTTOM, C.grey);
+      rtext(f, 'small', `${g.b || 0}-${g.s || 0}`, 62 - measure('small', outs) - 5, BOTTOM, C.label);
+      return f;
+    }
+
+    // Score texts of the game on screen, for change detection (rolls).
+    function baseballScores(p, now) {
+      const games = (p.mlb && p.mlb.games) || [];
+      if (!games.length) return null;
+      const g = games[gameIndex(games.length, now)];
+      return { id: g.id, away: String(g.away.r), home: String(g.home.r) };
+    }
+
     function applyBrightness(f, bright) {
       const k = Math.max(0, Math.min(100, bright == null ? 100 : bright)) / 100;
       if (k === 1) return f;
@@ -626,7 +749,8 @@
     function render(p, opts) {
       const o = opts || {};
       const screen = o.screen || p.screen;
-      const f = screen === 'ticker' ? renderTicker(p, o) : screen === 'radar' ? renderRadar(p, o) : renderTransit(p, o);
+      const f = screen === 'ticker' ? renderTicker(p, o) : screen === 'radar' ? renderRadar(p, o)
+        : screen === 'baseball' ? renderBaseball(p, o) : renderTransit(p, o);
       return applyBrightness(f, p.bright);
     }
 
@@ -638,7 +762,8 @@
     }
 
     return {
-      Frame, LINE, DIGIT, C, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
+      Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
+      renderBaseball, baseballScores, gameIndex,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
       // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.
@@ -652,8 +777,8 @@
   // in the box. Mirrored by player.py's auto_screen().
   function autoScreen(p, now) {
     const r = p.radar;
-    if (p.screen !== 'transit' || !r || !r.on || !r.visit || !(r.visit.every > 0)) return p.screen;
-    return Math.floor(now) % r.visit.every < r.visit.for ? 'radar' : 'transit';
+    if ((p.screen !== 'transit' && p.screen !== 'baseball') || !r || !r.on || !r.visit || !(r.visit.every > 0)) return p.screen;
+    return Math.floor(now) % r.visit.every < r.visit.for ? 'radar' : p.screen;
   }
 
   return { Frame, create, autoScreen, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };

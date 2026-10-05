@@ -11,6 +11,8 @@ const { createWeather, toWx, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar } = require('./radar');
+const { createMlb } = require('./mlb');
+const { team } = require('./teams');
 const { tzOffset } = require('./time');
 const fs = require('fs');
 const path = require('path');
@@ -70,6 +72,7 @@ function createBoard({
   weather = null,
   nws = null,
   radar = null,
+  mlb = null,
   alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
   stations = require('./stations.json'),
   log = console,
@@ -97,12 +100,17 @@ function createBoard({
   if (!weather) weather = createWeather({ log }).start();
   if (!nws) nws = createNws({ log }).start();
   if (!radar) radar = createRadar({ weather, log }).start();
+  if (!mlb) mlb = createMlb({ log }).start();
 
   // 'auto' brightness follows sunrise/sunset (100 until weather data arrives).
   const resolveBright = (b, w, now) => (b === 'off' ? 0 : b === 'auto' ? autoBright(w, now) : b);
-  // 'auto' stays on transit; the board (and simulator) visit the radar on a
-  // timer while it's raining (radar.visit), so screens don't change unless asked.
-  const resolveScreen = (s) => (s === 'auto' ? 'transit' : s);
+  // 'auto': baseball while a game is on, unless there's an NWS warning or
+  // watch (weather first: transit carries the warning tag); otherwise
+  // transit. Timed radar visits (radar.visit) ride on top of either.
+  function resolveScreen(s, { warn, games }) {
+    if (s !== 'auto') return s;
+    return games && !warn ? 'baseball' : 'transit';
+  }
   // Radar visits apply only on the auto screen, and only if turned on.
   const visitOf = (b) => (b.screen === 'auto' && b.radarEvery > 0
     ? { every: b.radarEvery * 60, for: Math.min(b.radarFor || 60, b.radarEvery * 60) } : null);
@@ -120,6 +128,14 @@ function createBoard({
     tests.delete(id);
     return null;
   }
+  // Test game (simulator): a made-up Cubs game in one state, shown first.
+  const GAME_STATES = ['pre', 'live', 'final'];
+  function testGame(st, now) {
+    const g = { id: 0, st, start: now - 3600, away: { ...team(112), r: 3, w: 92, l: 70 }, home: { ...team(138), r: 2, w: 88, l: 74 } };
+    if (st === 'pre') return { ...g, start: now + 25 * 60, away: { ...g.away, r: 0 }, home: { ...g.home, r: 0 } };
+    if (st === 'final') return { ...g, away: { ...g.away, w: 93 }, home: { ...g.home, l: 75 } };
+    return { ...g, inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] };
+  }
   function validateTest(body) {
     if (!body || typeof body !== 'object') throw new ValidationError('body must be an object');
     const lines = body.lines == null ? [] : body.lines;
@@ -128,7 +144,9 @@ function createBoard({
     if (warn && !(['svr', 'tor'].includes(warn.kind) && ['watch', 'warning'].includes(warn.lvl))) {
       throw new ValidationError('warn must be {kind: svr|tor, lvl: watch|warning}');
     }
-    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl } };
+    const game = body.game == null ? null : body.game;
+    if (game && !GAME_STATES.includes(game)) throw new ValidationError(`game must be one of ${GAME_STATES.join(', ')}`);
+    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game };
   }
 
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
@@ -170,6 +188,11 @@ function createBoard({
     // Test alerts from the simulator (expire on their own).
     const test = activeTest(id, now);
     if (test) for (const ln of test.lines) alertLines.add(ln);
+    let games = [];
+    try { games = mlb.get(); }
+    catch (e) { log.error('[board] mlb:', e.message); }
+    if (test && test.game) games = [testGame(test.game, now), ...games];
+    const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
     const viewKey = `${id}:${board.station.mapid}`;
     const { view, viewState, rows, ticker, bars } = format(data.arrivals, cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
@@ -178,7 +201,7 @@ function createBoard({
       now,
       tzo: tzOffset(now),
       age: Math.max(0, Math.round(now - data.fetchedAt)),
-      screen: resolveScreen(board.screen),
+      screen: resolveScreen(board.screen, { warn, games: games.length > 0 }),
       bright: resolveBright(board.bright, w, now),
       // Transit header and weather row as fitted to the destinations; the
       // ticker keeps its header (it doesn't need the room).
@@ -189,8 +212,9 @@ function createBoard({
       rows,
       ticker,
       wx: bars.showWeather ? wx : null,
-      warn: (test && test.warn) || pickWarn(nwsAlerts, now),
+      warn,
       radar: { ...radarState, visit: visitOf(board) },
+      mlb: { games },
     };
   }
 
@@ -321,13 +345,13 @@ function createBoard({
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
             throw e;
           }
-          if (t.lines.length || t.warn) tests.set(id, { ...t, until: now + TEST_S });
+          if (t.lines.length || t.warn || t.game) tests.set(id, { ...t, until: now + TEST_S });
           else tests.delete(id);
         } else if (method !== 'GET') {
           return send(res, 405, { err: 'method' });
         }
         const t = activeTest(id, now);
-        return send(res, 200, t ? { lines: t.lines, warn: t.warn, left: t.until - now } : { lines: [], warn: null, left: 0 });
+        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, left: t.until - now } : { lines: [], warn: null, game: null, left: 0 });
       }
 
       // Station list for the simulator's picker.
@@ -362,7 +386,7 @@ function createBoard({
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
         if (!body) return send(res, 503, { err: 'not_ready' });
-        const screen = ['transit', 'ticker', 'radar'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
+        const screen = ['transit', 'ticker', 'radar', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid); if (b) frames[fid] = b; }
@@ -376,6 +400,14 @@ function createBoard({
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
         res.end(frame.toPNG(scale));
         return;
+      }
+
+      // Raw MLB schedule (as the poller last fetched it) for recording fixtures.
+      if (sub === 'api/raw/mlb') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const raw = mlb.raw ? mlb.raw() : null;
+        if (!raw) return send(res, 503, { err: 'not_ready' });
+        return send(res, 200, raw);
       }
 
       // Raw Train Tracker response for recording fixtures.

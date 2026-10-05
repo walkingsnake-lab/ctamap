@@ -412,3 +412,77 @@ test('autoScreen: radar visits on a timer, only while it rains on the auto scree
   assert.equal(autoScreen(p({ screen: 'ticker' }), at(3, 0)), 'ticker'); // forced screens win
   assert.equal(autoScreen({ screen: 'transit' }, at(3, 0)), 'transit'); // old payloads
 });
+
+// ---- baseball (design spec §8) ----
+
+const CHC = { ab: 'CHC', c: '#2a5bd8' }, STL = { ab: 'STL', c: '#d62a2a' };
+const bbGame = (extra) => ({ id: 1, start: NOW - 3600, away: { ...CHC, r: 3, w: 92, l: 70 }, home: { ...STL, r: 2, w: 88, l: 74 }, ...extra });
+const LIVE = bbGame({ st: 'live', inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] });
+const bb = (...games) => ({ ...payload([]), screen: 'baseball', mlb: { games } });
+const AMBER = draw.C.amber;
+
+test('baseball live: team blocks, white scores, infield bases by runner, divider', () => {
+  const f = draw.renderBaseball(bb(LIVE));
+  assert.equal(count(f, CHC.c, 1, 2, 3, 7), 18);           // 3x6 away block
+  assert.equal(count(f, STL.c, 1, 12, 3, 17), 18);         // 3x6 home block
+  assert.ok(count(f, draw.BB.live, 22, 2, 30, 8) > 0);     // away score right-aligned to x30
+  assert.equal(count(f, draw.BB.live, 31, 2, 40, 18), 0);
+  assert.equal(count(f, draw.C.divider, 0, 21, 63, 21), 64);
+  // 1st (56,7) and 3rd (46,7) occupied: amber 5x5 diamonds (13 px); 2nd empty: dark grey.
+  assert.equal(count(f, AMBER, 54, 5, 58, 9), 13);
+  assert.equal(count(f, AMBER, 44, 5, 48, 9), 13);
+  assert.equal(count(f, draw.BB.base, 49, 0, 53, 4), 13);
+  assert.ok(count(f, draw.BB.infield, 40, 0, 62, 13) > 0);
+  // Inning on rows 15-19; count and outs on the bottom line.
+  assert.ok(count(f, draw.C.label, 38, 15, 63, 19) > 0);
+  assert.ok(count(f, draw.C.grey, 40, 24, 62, 28) > 0);
+});
+
+test('baseball final: winner name and score amber, loser score darkened, FINAL bottom right', () => {
+  const f = draw.renderBaseball(bb(bbGame({ st: 'final' })));
+  assert.ok(count(f, AMBER, 6, 2, 20, 8) > 0);             // CHC name
+  assert.ok(count(f, AMBER, 22, 2, 30, 8) > 0);            // CHC score
+  assert.equal(count(f, AMBER, 0, 12, 63, 31), 0);         // nothing else amber
+  assert.ok(count(f, draw.BB.lose, 22, 12, 30, 18) > 0);   // STL score
+  assert.ok(count(f, draw.C.label, 6, 12, 20, 18) > 0);    // STL name stays white
+  assert.ok(count(f, draw.C.label, 40, 24, 62, 28) > 0);   // FINAL
+});
+
+test('baseball pregame: records by the names, first pitch bottom right, no scores or infield', () => {
+  const f = draw.renderBaseball(bb(bbGame({ st: 'pre', start: NOW + 1500, away: { ...CHC, r: 0, w: 109, l: 53 } })));
+  assert.ok(count(f, draw.C.grey, 22, 3, 50, 7) > 0);      // 109-53 after CHC
+  assert.equal(count(f, draw.BB.base, 38, 0, 63, 20), 0);
+  assert.equal(count(f, draw.BB.live, 0, 0, 63, 31), 0);
+  assert.ok(count(f, draw.C.label, 40, 24, 62, 28) > 0);   // time
+  assert.ok(count(f, draw.C.grey, 50, 24, 62, 28) > 0);    // AM/PM
+});
+
+test('baseball rotates games one minute each; no games shows the clock', () => {
+  const other = bbGame({ id: 2, st: 'live', inn: 1, half: 'B', b: 0, s: 0, o: 0, on: [0, 0, 0], away: { ab: 'NYY', c: '#3a5fa8', r: 0 }, home: { ab: 'BOS', c: '#c8323d', r: 0 } });
+  const p = bb(LIVE, other);
+  const t0 = Math.floor(NOW / 120) * 120; // a minute where game 0 is up
+  assert.equal(draw.gameIndex(2, t0), 0);
+  assert.equal(draw.gameIndex(2, t0 + 60), 1);
+  assert.equal(count(draw.renderBaseball(p, { now: t0 }), CHC.c, 1, 2, 3, 7), 18);
+  assert.equal(count(draw.renderBaseball(p, { now: t0 + 60 }), '#3a5fa8', 1, 2, 3, 7), 18);
+  assert.ok(count(draw.renderBaseball(bb()), draw.C.clock, 0, 0, 63, 31) > 0);
+});
+
+test('baseball score roll: a finished roll equals a static frame', () => {
+  const still = draw.renderBaseball(bb(LIVE));
+  const done = draw.renderBaseball(bb(LIVE), { rolls: { away: { from: '2', p: 1 } } });
+  assert.deepEqual(done.px, still.px);
+  const mid = draw.renderBaseball(bb(LIVE), { rolls: { away: { from: '2', p: 0.5 } } });
+  assert.notDeepEqual(mid.px, still.px);
+  assert.equal(count(mid, draw.BB.live, 0, 9, 63, 11), 0); // clipped to the score's rows
+});
+
+test('radar visits interrupt baseball like transit; forced screens are left alone', () => {
+  const { autoScreen } = require('./draw');
+  const radar = { on: true, frames: [], ft: [], visit: { every: 240, for: 60 } };
+  const t = Math.floor(NOW / 240) * 240;
+  assert.equal(autoScreen({ screen: 'baseball', radar }, t + 10), 'radar');
+  assert.equal(autoScreen({ screen: 'baseball', radar }, t + 100), 'baseball');
+  assert.equal(autoScreen({ screen: 'baseball', radar: { ...radar, on: false } }, t + 10), 'baseball');
+  assert.equal(autoScreen({ screen: 'ticker', radar }, t + 10), 'ticker');
+});
