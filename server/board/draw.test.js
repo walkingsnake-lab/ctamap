@@ -427,7 +427,7 @@ test('baseball live: team blocks, white scores, infield bases by runner, divider
   assert.equal(count(f, STL.c, 1, 12, 3, 17), 18);         // 3x6 home block
   assert.ok(count(f, draw.BB.live, 22, 2, 30, 8) > 0);     // away score right-aligned to x30
   assert.equal(count(f, draw.BB.live, 31, 2, 40, 18), 0);
-  assert.equal(count(f, draw.C.divider, 0, 21, 63, 21), 64);
+  assert.equal(count(f, draw.C.divider, 0, 22, 63, 22), 64);
   // 1st (56,7) and 3rd (46,7) occupied: amber 5x5 diamonds (13 px); 2nd empty: dark grey.
   assert.equal(count(f, AMBER, 54, 5, 58, 9), 13);
   assert.equal(count(f, AMBER, 44, 5, 48, 9), 13);
@@ -435,7 +435,7 @@ test('baseball live: team blocks, white scores, infield bases by runner, divider
   assert.ok(count(f, draw.BB.infield, 40, 0, 62, 13) > 0);
   // Inning on rows 15-19; count and outs on the bottom line.
   assert.ok(count(f, draw.C.label, 38, 15, 63, 19) > 0);
-  assert.ok(count(f, draw.C.grey, 40, 24, 62, 28) > 0);
+  assert.ok(count(f, draw.C.grey, 40, 25, 62, 31) > 0);
 });
 
 test('baseball final: winner name and score amber, loser score darkened, FINAL bottom right', () => {
@@ -445,7 +445,7 @@ test('baseball final: winner name and score amber, loser score darkened, FINAL b
   assert.equal(count(f, AMBER, 0, 12, 63, 31), 0);         // nothing else amber
   assert.ok(count(f, draw.BB.lose, 22, 12, 30, 18) > 0);   // STL score
   assert.ok(count(f, draw.C.label, 6, 12, 20, 18) > 0);    // STL name stays white
-  assert.ok(count(f, draw.C.label, 40, 24, 62, 28) > 0);   // FINAL
+  assert.ok(count(f, draw.C.label, 40, 25, 62, 31) > 0);   // FINAL
 });
 
 test('baseball pregame: records by the names, first pitch bottom right, no scores or infield', () => {
@@ -453,8 +453,8 @@ test('baseball pregame: records by the names, first pitch bottom right, no score
   assert.ok(count(f, draw.C.grey, 22, 3, 50, 7) > 0);      // 109-53 after CHC
   assert.equal(count(f, draw.BB.base, 38, 0, 63, 20), 0);
   assert.equal(count(f, draw.BB.live, 0, 0, 63, 31), 0);
-  assert.ok(count(f, draw.C.label, 40, 24, 62, 28) > 0);   // time
-  assert.ok(count(f, draw.C.grey, 50, 24, 62, 28) > 0);    // AM/PM
+  assert.ok(count(f, draw.C.label, 40, 25, 62, 31) > 0);   // time
+  assert.ok(count(f, draw.C.grey, 50, 25, 62, 31) > 0);    // AM/PM
 });
 
 test('baseball rotates games one minute each; no games shows the clock', () => {
@@ -519,7 +519,7 @@ test('baseball live: inning, count, and outs roll; TOP -> BOT rolls only the cha
   assert.ok([...Array(m('B')).keys()].some((i) => col(mid, innLeft + i) !== col(still, innLeft + i)));
   // Rolls stay inside their own rows.
   assert.equal(count(mid, draw.C.label, 38, 13, 63, 14), 0);
-  assert.equal(count(mid, draw.C.label, 0, 22, 63, 23), 0);
+  assert.equal(count(mid, draw.C.label, 0, 23, 63, 24), 0);
 });
 
 test('baseballTexts: scores always, live status only while live; key changes with game or state', () => {
@@ -535,7 +535,33 @@ test('baseball breaks: MID 4 / END 5, empty bases, no count or outs', () => {
     assert.equal(draw.baseballTexts(bb(g), NOW).texts.inn, text);
     const f = draw.renderBaseball(bb(g));
     assert.ok(count(f, draw.C.label, 38, 15, 63, 19) > 0);
-    assert.equal(count(f, draw.C.label, 0, 24, 63, 28) + count(f, draw.C.grey, 0, 24, 63, 28), 0); // bottom line empty
+    assert.equal(count(f, draw.C.label, 0, 25, 63, 31) + count(f, draw.C.grey, 0, 25, 63, 31), 0); // bottom line empty
     assert.equal(count(f, AMBER, 38, 0, 63, 12), 0);
   }
+});
+
+test('baseball: bottom line and divider sit where the transit weather row does', () => {
+  const rows = (f, x0, x1) => { const ys = []; for (let y = 23; y < 32; y++) for (let x = x0; x <= x1; x++) if (f.get(x, y) && hex(f.get(x, y)) !== '#000000') { ys.push(y); break; } return ys; };
+  const g = draw.renderBaseball(bb(bbGame({ st: 'final' })));
+  const w = draw.renderTransit({ ...payload([]), screen: 'transit', wx: { temp: 61, icon: 'sun', word: 'CLEAR' } });
+  assert.equal(count(g, draw.C.divider, 0, 22, 63, 22), 64);
+  assert.equal(count(w, draw.C.divider, 0, 22, 63, 22), 64);
+  assert.equal(Math.max(...rows(g, 40, 62)), Math.max(...rows(w, 40, 62)));
+});
+
+test('baseball score flash: amber for a minute after a change, fades to white, then plain', () => {
+  const at = NOW - 10;
+  const side = { ...CHC, r: 4, at };
+  const hold = draw.SCORE_HOLD_S, fade = draw.SCORE_FADE_S;
+  assert.equal(draw.scoreColor(side, at + 5), AMBER);
+  assert.equal(draw.scoreColor(side, at + hold - 1), AMBER);
+  const mid = draw.scoreColor(side, at + hold + fade / 2);
+  assert.notEqual(mid, AMBER); assert.notEqual(mid, draw.BB.live);
+  assert.equal(draw.scoreColor(side, at + hold + fade), draw.BB.live);
+  assert.equal(draw.scoreColor({ ...CHC, r: 4 }, NOW), draw.BB.live);
+  const flash = bb({ ...LIVE, away: { ...LIVE.away, at }, home: { ...LIVE.home } });
+  const f = draw.renderBaseball(flash, { now: NOW });
+  assert.ok(count(f, AMBER, 22, 2, 30, 8) > 0);              // changed score amber
+  assert.equal(count(f, AMBER, 22, 12, 30, 18), 0);          // other score white
+  assert.ok(count(f, draw.BB.live, 22, 12, 30, 18) > 0);
 });

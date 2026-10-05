@@ -248,8 +248,9 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ### Layout
 - **Team rows:** 3x6 team-color block at x1 and the abbreviation in X11 5x7 (label white) at x6; away on top (block rows 2–7), home below (rows 12–17). No logos.
-- **Divider** on row 21 (`#333333`), full width. **No series label** (e.g. `NLDS G2`) anywhere.
-- **Bottom line** (rows 24–28, Tom Thumb) is right-aligned to x62.
+- **Divider** on row 22 (`#333333`), full width, the same row as the transit weather divider. **No series label** (e.g. `NLDS G2`) anywhere.
+- **Bottom line** (Tom Thumb, baseline 31) sits on the same rows as the transit weather row and is right-aligned to x62.
+- **Score flash:** when a live score changes, that team's score turns amber for 60 s, then fades back to white over 10 s. The server stamps the change time (the board only draws it); a game first seen mid-game doesn't flash.
 
 **Live**
 - Scores: X11 5x7, right-aligned to **x30** (a two-digit score still clears the name), both lit white `#f0f0f0`.

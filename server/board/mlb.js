@@ -67,7 +67,7 @@ function liveState(ls) {
 
 // Schedule JSON -> the games to show at `now`, in start order.
 // `finals` (gamePk -> epoch first seen final) is updated in place.
-function shown(json, now, finals = new Map()) {
+function shown(json, now, finals = new Map(), changes = new Map()) {
   const out = [];
   for (const d of (json && json.dates) || []) {
     for (const g of d.games || []) {
@@ -89,11 +89,36 @@ function shown(json, now, finals = new Map()) {
         if (!finals.has(g.gamePk)) finals.set(g.gamePk, now - start > STALE_S ? -Infinity : now);
         if (now - finals.get(g.gamePk) >= FINAL_S) continue;
       }
-      if (game.st === 'live') Object.assign(game, liveState(g.linescore || {}));
+      if (game.st === 'live') {
+        Object.assign(game, liveState(g.linescore || {}));
+        const ch = changes.get(g.gamePk) || {};
+        if (ch.away != null) game.away.at = ch.away;
+        if (ch.home != null) game.home.at = ch.home;
+      }
       out.push(game);
     }
   }
   return out.sort((a, b) => a.start - b.start || a.id - b.id);
+}
+
+// Remember when each live team's score last changed between two polls, so the
+// board can flash it. `seen` (gamePk -> last scores) and `changes` (gamePk ->
+// {away, home} epoch s) are updated in place. A game first seen mid-game
+// (server restart) doesn't flash.
+function trackScores(json, now, seen, changes) {
+  for (const d of (json && json.dates) || []) {
+    for (const g of d.games || []) {
+      if (!qualifies(g) || (g.status || {}).abstractGameState !== 'Live') continue;
+      const cur = { away: g.teams.away.score || 0, home: g.teams.home.score || 0 };
+      const prev = seen.get(g.gamePk);
+      if (prev) {
+        const ch = changes.get(g.gamePk) || {};
+        for (const k of ['away', 'home']) if (cur[k] !== prev[k]) ch[k] = now;
+        changes.set(g.gamePk, ch);
+      }
+      seen.set(g.gamePk, cur);
+    }
+  }
 }
 
 // Fast polling while anything is live or within the pregame window.
@@ -113,9 +138,10 @@ function createMlb({ fetch = fetchJson, now = () => Date.now() / 1000, log = con
   let raw = null;
   let timer = null;
   const finals = new Map();
+  const seen = new Map(), changes = new Map();
 
   async function refresh() {
-    try { raw = await fetch(url(now())); }
+    try { raw = await fetch(url(now())); trackScores(raw, now(), seen, changes); }
     catch (e) { log.error('[board] mlb failed:', e.message); }
   }
 
@@ -128,7 +154,7 @@ function createMlb({ fetch = fetchJson, now = () => Date.now() / 1000, log = con
   return {
     // Games to show now ([] when none, or before the first fetch).
     get() {
-      try { return raw ? shown(raw, now(), finals) : []; }
+      try { return raw ? shown(raw, now(), finals, changes) : []; }
       catch (e) { log.error('[board] mlb parse failed:', e.message); return []; }
     },
     raw: () => raw,
@@ -141,4 +167,4 @@ function createMlb({ fetch = fetchJson, now = () => Date.now() / 1000, log = con
   };
 }
 
-module.exports = { createMlb, shown, nextDelay, url, qualifies, CUBS, PRE_S, FINAL_S, FAST_S, SLOW_S };
+module.exports = { createMlb, shown, trackScores, nextDelay, url, qualifies, CUBS, PRE_S, FINAL_S, FAST_S, SLOW_S };
