@@ -37,7 +37,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 - **Network jobs:** each job (version check, combined update, radar frame) has a **due time** and a **deadline**.
 - **Each loop pass:** if a job is due and the next animation is at least the **fetch budget** away, run it now; otherwise wait for the next gap.
 - **Deadline override:** if a job passes its deadline (e.g. data older than ~60 s), run it anyway. A brief freeze beats stale times.
-- **Non-blocking animations:** the transit alert blink doesn't count as busy; a request landing mid-blink just holds the block in one state.
+- **Alert blink:** the blink doesn't count as busy, but a fetch freezes it. While a row blinks, non-overdue fetches wait for the blink to turn on, show the lit frame, and the blink restarts (off) when the fetch ends, so the freeze reads as one slightly long "on" phase instead of a glitch.
 - **Natural gaps:** radar last-frame hold, ticker page holds, screen switches, and the stretch between minute rollovers on the transit screen.
 - **Fetch budget:** start at ~2 s; replace with the measured request time on the real board.
 
@@ -248,7 +248,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 A small page on the fly.dev server, saved to the phone home screen. The server holds the board's state; the board reads it and draws what it's told.
 
 ### Controls
-- **Screen:** Auto (normal rules), Transit, Ticker, Radar (disabled until radar is built).
+- **Screen:** Auto, Transit, Ticker, Radar. Auto stays on transit: screens don't change on their own. Optional radar visits (off by default): every N minutes (e.g. 4) show the radar for M seconds (e.g. 60) while rain is in the box, set on the control page.
 - **Brightness:** Auto (sunrise/sunset), fixed level, or Off.
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.

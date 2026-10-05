@@ -99,7 +99,7 @@ class Board:
     def _apply(self, p, ms):
         self._sync(p['now'], ms)
         self.player.set_payload(p, ms)
-        self.player.set_screen(self.override.resolve(p.get('screen') or 'transit', p.get('v')), ms)
+        self.player.set_screen(self.override.resolve(self.player.auto_screen(self.now(ms)), p.get('v')), ms)
 
     def _version(self, ms):
         r = self.net.version()
@@ -114,8 +114,8 @@ class Board:
         return 'ok'
 
     def _radar(self, ms):
-        # Frames are only needed while the radar is on screen.
-        if self.player.screen != 'radar':
+        # Frames are only needed on the radar screen or ahead of a visit.
+        if not self.player.wants_frames():
             return 'skip'
         missing = self.player.missing_frames()
         if not missing:
@@ -136,10 +136,20 @@ class Board:
         self._buttons(ms)
 
         now = self.now(ms)
+        if self.player.p:
+            # Timed radar visits: follow the server's schedule unless a
+            # button press is overriding it.
+            self.player.set_screen(self.override.resolve(self.player.auto_screen(now), self.player.p.get('v')), ms)
         busy = self.player.busy(ms)
         quiet = self.player.quiet_ms(ms, now)
         job = self.sched.pick(ms, busy, quiet)
+        if job is not None and not job.overdue(ms) and not self.player.at_blink_start(ms):
+            job = None  # wait for the alert blink to turn on, then fetch
         if job is not None:
+            if self.player.blinking():
+                # Show the lit frame now; the freeze will hold it.
+                self.display.show(lambda f: self.player.draw(f, ms, now))
+                self.last_draw = ms
             started = self.clock.ms()
             try:
                 result = job.run(started)
@@ -150,6 +160,8 @@ class Board:
                 result = 'fail'
                 self.fails += 1
             ended = self.clock.ms()
+            if self.player.blinking() and ended - started > 300:
+                self.player.blink_restart(ended)
             if result == 'skip':
                 job.due_at = ended + job.interval_ms
             else:

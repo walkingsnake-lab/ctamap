@@ -15,6 +15,7 @@ import math
 from . import draw
 
 SCREENS = ('transit', 'ticker', 'radar')
+BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
 
 
@@ -26,6 +27,7 @@ class Player:
         self.page = 0
         self.page_start = 0
         self.loop_start = 0
+        self.blink_shift = 0     # ms; blink phase 0 (off) starts here
         self.screen = 'transit'
         self._screen_since = 0
 
@@ -45,6 +47,26 @@ class Player:
 
     def add_frame(self, fid, data):
         self.radar_frames[fid] = data
+
+    def auto_screen(self, now):
+        """The screen the server wants now: its `screen`, except that on the
+        auto screen the radar is visited for `for` seconds at the start of
+        every `every`-second cycle while rain is in the box. Mirrors
+        autoScreen() in draw.js."""
+        p = self.p
+        screen = (p.get('screen') or 'transit') if p else 'transit'
+        r = (p.get('radar') or {}) if p else {}
+        v = r.get('visit')
+        if screen != 'transit' or not r.get('on') or not v or not v.get('every', 0) > 0:
+            return screen
+        return 'radar' if int(now) % v['every'] < v['for'] else 'transit'
+
+    def wants_frames(self):
+        """Radar frames are needed on the radar screen, and ahead of visits."""
+        if self.screen == 'radar':
+            return True
+        r = (self.p.get('radar') or {}) if self.p else {}
+        return bool(r.get('on') and r.get('visit'))
 
     def set_screen(self, screen, ms):
         if screen != self.screen:
@@ -74,8 +96,31 @@ class Player:
         if self.screen == 'radar':
             return draw.render(p, frame, screen='radar', now=now, idx=self.radar_idx(ms), frames=self.radar_frames)
         view = self.anim.step(p, now, ms)
-        blink = (ms // draw.BLINK_MS) % 2 == 1
-        return draw.render(p, frame, screen='transit', now=now, view=view, blink=blink)
+        return draw.render(p, frame, screen='transit', now=now, view=view, blink=self.blink_on(ms))
+
+    # ---- alert blink vs. network fetches ----
+    # A fetch freezes the display for longer than one blink phase. To make
+    # that freeze look like one slightly long "on" phase instead of a random
+    # glitch, fetches start right as the blink turns on, and the blink
+    # restarts (off) the moment the fetch ends.
+
+    def blink_on(self, ms):
+        return ((ms - self.blink_shift) // draw.BLINK_MS) % 2 == 1
+
+    def blinking(self):
+        if not self.p or self.screen != 'transit':
+            return False
+        return any(r.get('a') for r in self.p.get('rows') or [])
+
+    def at_blink_start(self, ms):
+        """True in the first moments of an 'on' phase (or when nothing blinks)."""
+        if not self.blinking():
+            return True
+        phase = (ms - self.blink_shift) % (2 * draw.BLINK_MS)
+        return draw.BLINK_MS <= phase < draw.BLINK_MS + BLINK_START_WINDOW_MS
+
+    def blink_restart(self, ms):
+        self.blink_shift = ms
 
     def radar_idx(self, ms):
         n = len((self.p.get('radar') or {}).get('frames') or [])

@@ -397,3 +397,18 @@ test('only the soonest train of a destination reads DUE; a bunched second shows 
   const chrono = { ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 20], s: [0], a: 0 }, { ln: 'RD', lbl: 'HOWARD', t: [NOW + 45], s: [0], a: 0 }, { ln: 'RD', lbl: '95TH', t: [NOW + 50], s: [0], a: 0 }]), view: 'chrono' };
   assert.deepEqual(Object.values(draw.transitTexts(chrono, NOW)), ['DUE', '2m', 'DUE']); // a different destination can be DUE too
 });
+
+test('autoScreen: radar visits on a timer, only while it rains on the auto screen', () => {
+  const { autoScreen } = require('./draw');
+  const p = (over = {}, radar = {}) => ({ screen: 'transit', radar: { on: true, visit: { every: 240, for: 60 }, ...radar }, ...over });
+  const at = (cycle, off) => 1_800_000_000 - (1_800_000_000 % 240) + cycle * 240 + off; // epoch-aligned
+  assert.equal(autoScreen(p(), at(3, 0)), 'radar');
+  assert.equal(autoScreen(p(), at(3, 59.9)), 'radar');
+  assert.equal(autoScreen(p(), at(3, 60)), 'transit');
+  assert.equal(autoScreen(p(), at(3, 239)), 'transit');
+  assert.equal(autoScreen(p(), at(4, 0)), 'radar');
+  assert.equal(autoScreen(p({}, { on: false }), at(3, 0)), 'transit'); // no rain: no visit
+  assert.equal(autoScreen(p({}, { visit: null }), at(3, 0)), 'transit'); // visits off
+  assert.equal(autoScreen(p({ screen: 'ticker' }), at(3, 0)), 'ticker'); // forced screens win
+  assert.equal(autoScreen({ screen: 'transit' }, at(3, 0)), 'transit'); // old payloads
+});

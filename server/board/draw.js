@@ -639,12 +639,22 @@
 
     return {
       Frame, LINE, DIGIT, C, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
-      transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
+      autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
       // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.
       RADAR_FRAME_MS: 500, RADAR_HOLD_MS: 4000,
     };
   }
 
-  return { Frame, create, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
+  // Which screen the board shows now. The payload's `screen` is the base; on
+  // the auto screen (radar.visit set) the radar is visited for `for` seconds
+  // at the start of every `every`-second cycle (epoch-aligned) while rain is
+  // in the box. Mirrored by player.py's auto_screen().
+  function autoScreen(p, now) {
+    const r = p.radar;
+    if (p.screen !== 'transit' || !r || !r.on || !r.visit || !(r.visit.every > 0)) return p.screen;
+    return Math.floor(now) % r.visit.every < r.visit.for ? 'radar' : 'transit';
+  }
+
+  return { Frame, create, autoScreen, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
 });

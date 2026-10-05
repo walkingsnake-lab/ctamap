@@ -372,7 +372,7 @@ test('update: an NWS warning in effect is sent as warn, even with the weather ro
 
 // ---- radar ----
 
-test('radar: frames by ID behind the token; auto switches to radar when it rains', async () => {
+test('radar: frames by ID behind the token; auto stays on transit even when it rains', async () => {
   const now = Math.floor(Date.now() / 1000);
   const bytes = new Uint8Array(2048); bytes[16 * 64 + 20] = 7; bytes[0] = 3;
   const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], clock: [40, 0, 24, 32], split: true };
@@ -380,8 +380,8 @@ test('radar: frames by ID behind the token; auto switches to radar when it rains
   const base = `http://127.0.0.1:${s.port}`;
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const b = (await s.req('/board/update?b=home', h)).body;
-  assert.equal(b.screen, 'radar');
-  assert.deepEqual(b.radar, state);
+  assert.equal(b.screen, 'transit'); // no automatic switching unless radar visits are on
+  assert.deepEqual(b.radar, { ...state, visit: null });
   assert.equal((await fetch(`${base}/board/radar/40100-202610041600?b=home`)).status, 401);
   const r = await fetch(`${base}/board/radar/40100-202610041600?b=home`, h);
   assert.equal(r.status, 200);
@@ -398,6 +398,28 @@ test('radar: frames by ID behind the token; auto switches to radar when it rains
   // A forced screen still wins over auto.
   s.store.update('home', { screen: 'transit' });
   assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'transit');
+  await s.close();
+});
+
+test('radar visits: off by default, then on a timer for auto only', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], clock: [40, 0, 24, 32], split: true };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(state, {}) });
+  const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
+  const get = async () => (await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).body;
+  assert.equal((await get()).radar.visit, null);
+  assert.equal((await post({ radarEvery: 4, radarFor: 60 })).status, 200);
+  assert.deepEqual((await get()).radar.visit, { every: 240, for: 60 });
+  // The visit can't outlast its cycle.
+  await post({ radarEvery: 1, radarFor: 120 });
+  assert.deepEqual((await get()).radar.visit, { every: 60, for: 60 });
+  // A forced screen ignores visits.
+  await post({ screen: 'ticker' });
+  const b = await get();
+  assert.equal(b.screen, 'ticker');
+  assert.equal(b.radar.visit, null);
+  assert.equal((await post({ radarEvery: 61 })).status, 400);
+  assert.equal((await post({ radarFor: 5 })).status, 400);
   await s.close();
 });
 
