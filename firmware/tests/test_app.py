@@ -68,7 +68,7 @@ class Server:
         ]
         frames = ['40100-%d' % (now // 300 * 300 - k * 300) for k in range(5, -1, -1)] if self.radar_on else []
         return {
-            'v': self.v, 'now': now, 'tzo': -18000, 'age': 3, 'screen': 'radar' if self.radar_on and not self.visit else self.screen,
+            'v': self.v, 'now': now, 'tzo': -18000, 'age': 3, 'screen': 'weather' if self.radar_on and not self.visit else self.screen,
             'bright': 100, 'header': 'MORSE', 'view': 'dest', 'rows': rows,
             'ticker': [{'ln': 'RD', 'd': 'Howard', 't': t, 's': 0, 'a': 0} for t in rows[0]['t']] +
                       [{'ln': 'RD', 'd': '95th', 't': t, 's': 0, 'a': 0} for t in rows[1]['t']],
@@ -194,7 +194,7 @@ class TestBoardLoop(unittest.TestCase):
         server.radar_on = True
         server.v = 2
         run_for(board, clock, 90000)
-        self.assertEqual(board.player.screen, 'radar')
+        self.assertEqual(board.player.screen, 'weather')
         got = [c['name'] for c in server.calls if c['name'].startswith('radar')]
         self.assertEqual(len(got), len(set(got)), 'a frame was fetched twice')
         self.assertEqual(board.player.missing_frames(), [])
@@ -290,7 +290,7 @@ class TestRadarVisits(unittest.TestCase):
         # slack at the edges for the 30 s update cadence).
         for phase, scr in screens:
             if 3 <= phase < 57:
-                self.assertEqual(scr, 'radar', phase)
+                self.assertEqual(scr, 'weather', phase)
             elif 63 <= phase < 237:
                 self.assertEqual(scr, 'transit', phase)
         self.assertEqual(board.player.missing_frames(), [])  # fetched before the visit

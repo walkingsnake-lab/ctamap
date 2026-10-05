@@ -221,7 +221,7 @@ function transitRows(f, rows, tops) {
   const states = [[wx, null], [storm, { kind: 'svr', lvl: 'watch' }], [storm, { kind: 'svr', lvl: 'warning' }], [storm, { kind: 'tor', lvl: 'warning' }]];
   const f = new Frame(64 * 2 + 4, 32 * 2 + 4);
   states.forEach(([w, warn], i) => {
-    const panel = render({ now: 0, bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx: w } }, { screen: 'radar' });
+    const panel = render({ now: 0, bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx: w } }, { screen: 'weather' });
     const ox = (i % 2) * 68, oy = Math.floor(i / 2) * 36;
     for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(ox + x, oy + y, panel.get(x, y));
   });

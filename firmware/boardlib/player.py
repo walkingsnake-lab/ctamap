@@ -14,7 +14,7 @@ import math
 
 from . import draw
 
-SCREENS = ('transit', 'ticker', 'radar', 'baseball')
+SCREENS = ('transit', 'ticker', 'weather', 'baseball')
 BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
 
@@ -61,11 +61,11 @@ class Player:
         v = r.get('visit')
         if screen not in ('transit', 'baseball') or not r.get('on') or not v or not v.get('every', 0) > 0:
             return screen
-        return 'radar' if int(now) % v['every'] < v['for'] else screen
+        return 'weather' if int(now) % v['every'] < v['for'] else screen
 
     def wants_frames(self):
         """Radar frames are needed on the radar screen, and ahead of visits."""
-        if self.screen == 'radar':
+        if self.screen == 'weather':
             return True
         r = (self.p.get('radar') or {}) if self.p else {}
         return bool(r.get('on') and r.get('visit'))
@@ -118,8 +118,8 @@ class Player:
                 else:
                     rolls[k] = {'from': r['from'], 'p': rp}
             return draw.render(p, frame, screen='baseball', now=now, rolls=rolls)
-        if self.screen == 'radar':
-            return draw.render(p, frame, screen='radar', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms))
+        if self.screen == 'weather':
+            return draw.render(p, frame, screen='weather', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms))
         view = self.anim.step(p, now, ms)
         return draw.render(p, frame, screen='transit', now=now, view=view, blink=self.blink_on(ms))
 
@@ -133,11 +133,11 @@ class Player:
         return ((ms - self.blink_shift) // draw.BLINK_MS) % 2 == 1
 
     def blinking(self):
-        if not self.p or self.screen not in ('transit', 'radar'):
+        if not self.p or self.screen not in ('transit', 'weather'):
             return False
         w = self.p.get('warn') or {}
         tornado = w.get('kind') == 'tor' and w.get('lvl') == 'warning'
-        if self.screen == 'radar':
+        if self.screen == 'weather':
             return tornado
         return any(r.get('a') for r in self.p.get('rows') or []) or bool(tornado and self.p.get('wx'))
 
@@ -168,7 +168,7 @@ class Player:
             return draw.ticker_pages(self.p, 0) > 1 and draw.PAGE_HOLD_MS < since < draw.PAGE_HOLD_MS + draw.SLIDE_MS
         if self.screen == 'baseball':
             return any(ms - r['start'] < draw.ROLL_MS for r in self.bb_rolls.values())
-        if self.screen == 'radar':
+        if self.screen == 'weather':
             n = len((self.p.get('radar') or {}).get('frames') or [])
             if n < 2:
                 return False
@@ -188,7 +188,7 @@ class Player:
             return max(0, draw.PAGE_HOLD_MS - (ms - self.page_start))
         if self.screen == 'baseball':
             return FAR  # rolls follow fetched changes; the rotation swaps without animating
-        if self.screen == 'radar':
+        if self.screen == 'weather':
             n = len((self.p.get('radar') or {}).get('frames') or [])
             if n < 2:
                 return FAR

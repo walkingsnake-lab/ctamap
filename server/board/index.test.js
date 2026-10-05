@@ -395,7 +395,7 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
   assert.equal((await fetch(`${base}/board/radar/40100-209901010000?b=home`, h)).status, 404);
   // Simulator copy, and a PNG of the radar screen.
   assert.equal((await fetch(`${base}/board/secret123/api/radar/40100-202610041600?b=home`)).status, 200);
-  const png = await fetch(`${base}/board/secret123/sim.png?b=home&screen=radar&scale=2`);
+  const png = await fetch(`${base}/board/secret123/sim.png?b=home&screen=weather&scale=2`);
   assert.equal(png.status, 200);
   // A forced screen still wins over auto.
   s.store.update('home', { screen: 'transit' });
