@@ -222,7 +222,7 @@
     pressed('bright', fixed ? 'fixed' : board.bright);
     $('level').hidden = !fixed;
     if (fixed) $('level').value = board.bright;
-    $('brightHint').textContent = board.bright === 'auto' ? 'Full by day, dimmer at night (once sunrise/sunset data is wired up).'
+    $('brightHint').textContent = board.bright === 'auto' ? 'Full from sunrise to sunset, 40% at night.'
       : fixed ? `${board.bright}%` : 'Panel off until you change this or the board restarts.';
     $('station').value = board.station.mapid;
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
