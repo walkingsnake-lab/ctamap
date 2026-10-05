@@ -311,21 +311,60 @@ test('radar with no frames yet draws the clock at the current time (no crash)', 
   }
 });
 
-test('radar with no frames shows current conditions on the left', () => {
+test('weather screen: radar screen with no frames shows big temp, details, and rain chance', () => {
   const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
-  const wx = { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 };
-  const f = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: {} });
-  assert.ok(count(f, draw.C.label, 12, 3, 30, 9) > 15, 'temperature');
-  assert.ok(count(f, draw.C.label, 0, 15, 38, 19) > 15, 'condition word');
-  assert.ok(count(f, draw.C.grey, 0, 23, 38, 27) > 15, 'high/low');
-  assert.ok(count(f, draw.C.radarTime, 40, 6, 63, 12) > 15, 'clock still drawn');
-  // Widest case stays clear of the split divider.
-  const wide = { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 };
-  const g = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 32], split: true, wx: wide } }, { screen: 'radar', now, frames: {} });
-  for (let y = 0; y < 32; y++) assert.deepEqual(g.get(38, y), [0, 0, 0], `col 38 row ${y}`);
-  // Once frames exist, the radar replaces the conditions.
-  const withFrames = draw.render({ now, bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [now], timeBox: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: { a: new Uint8Array(2048) } });
-  assert.equal(count(withFrames, draw.C.label, 0, 0, 38, 31), 0);
+  const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
+  const rad = (w, extra = {}) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w, ...extra });
+  const f = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'radar', now, frames: {} });
+  assert.ok(count(f, draw.C.label, 1, 4, 22, 13) > 40, 'big temperature + degree ring');
+  assert.equal(hex(f.get(56, 2)), '#ffc800', 'icon top right');
+  assert.ok(count(f, draw.C.wxText, 29, 11, 63, 15) > 15, 'dim condition word');
+  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 18)), draw.C.divider, `divider col ${x}`);
+  assert.ok(count(f, draw.C.grey, 0, 20, 40, 24) > 15, 'FEELS');
+  assert.ok(count(f, draw.C.label, 40, 20, 63, 24) > 10, 'wind');
+  assert.ok(count(f, draw.C.grey, 0, 26, 45, 30) > 15, 'high/low');
+  assert.equal(count(f, '#1e90ff', 45, 27, 52, 30), 8, 'drop');
+  assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0, 'no radar clock');
+  // Missing extras leave their spots empty.
+  const bare = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, feels: null, wind: null, pop: null }) }, { screen: 'radar', now, frames: {} });
+  assert.equal(count(bare, draw.C.grey, 0, 20, 63, 24) + count(bare, draw.C.label, 0, 20, 63, 24), 0);
+  assert.equal(count(bare, '#1e90ff', 0, 19, 63, 31), 0);
+  // Frames (rain in the box) bring the radar back.
+  const withFrames = draw.render({ now, bright: 100, warn: null, radar: rad(wx, { on: true, frames: ['a'], ft: [now] }) }, { screen: 'radar', now, frames: { a: new Uint8Array(2048) } });
+  assert.equal(count(withFrames, draw.C.divider, 0, 18, 63, 18), 0);
+  assert.ok(count(withFrames, draw.C.radarTime, 40, 6, 63, 12) > 15, 'radar clock');
+});
+
+test('weather screen: a watch or warning replaces the high/low line; tornado warning blinks', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
+  const wx = { icon: 'storm', temp: 57, word: 'STORMS', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 90 };
+  const rad = { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx };
+  const cases = [['svr', 'watch', draw.C.watch], ['svr', 'warning', draw.C.warnSevere], ['tor', 'watch', draw.C.watch], ['tor', 'warning', draw.C.warnTornado]];
+  for (const [kind, lvl, color] of cases) {
+    const f = draw.render({ now, bright: 100, warn: { kind, lvl }, radar: rad }, { screen: 'radar', now, frames: {} });
+    assert.ok(count(f, color, 0, 26, 63, 30) > 30, `${kind} ${lvl} tag`);
+    assert.equal(count(f, draw.C.grey, 0, 26, 63, 30), 0, `${kind} ${lvl}: no high/low`);
+    assert.equal(count(f, '#1e90ff', 0, 26, 63, 31), 0, `${kind} ${lvl}: no rain chance`);
+    for (let y = 26; y <= 30; y++) assert.deepEqual(f.get(63, y), [0, 0, 0], 'fits the panel');
+    const off = draw.render({ now, bright: 100, warn: { kind, lvl }, radar: rad }, { screen: 'radar', now, frames: {}, blink: true });
+    assert.equal(count(off, color, 0, 26, 63, 30) > 0, !(kind === 'tor' && lvl === 'warning'), `${kind} ${lvl} blink`);
+  }
+});
+
+test('weather screen extremes: minus bar, 3-digit temp drops the word, high/low drops degrees to fit', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
+  const rad = (wx) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx });
+  const cold = draw.render({ now, bright: 100, warn: null, radar: rad({ icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -31, wind: 'NW 22', pop: 100 }) }, { screen: 'radar', now, frames: {} });
+  assert.equal(count(cold, draw.C.label, 1, 8, 5, 9), 10, 'minus bar');
+  assert.equal(count(cold, draw.C.label, 1, 4, 5, 7) + count(cold, draw.C.label, 1, 10, 5, 13), 0);
+  const hot = draw.render({ now, bright: 100, warn: null, radar: rad({ icon: 'sun', temp: 101, word: 'PT CLOUDY', hi: 103, lo: 82, feels: 112, wind: 'CALM', pop: 0 }) }, { screen: 'radar', now, frames: {} });
+  assert.equal(count(hot, draw.C.wxText, 0, 11, 63, 15), 0, 'word skipped');
+  // -21° low with 100%: degree signs dropped, 3px clear of the drop.
+  let lastGrey = -1;
+  for (let x = 0; x < 64; x++) for (let y = 26; y <= 30; y++) if (hex(cold.get(x, y)) === draw.C.grey) lastGrey = x;
+  let firstBlue = 64;
+  for (let x = 63; x >= 0; x--) for (let y = 26; y <= 31; y++) if (hex(cold.get(x, y)) === '#1e90ff') firstBlue = x;
+  assert.ok(firstBlue - lastGrey >= 3, `gap ${firstBlue - lastGrey}`);
 });
 
 test('minutes round up, like CTA: DUE through 60 s, then 2, 3, ...; never 1', () => {

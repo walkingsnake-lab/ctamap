@@ -425,20 +425,30 @@ test('radar visits: off by default, then on a timer for auto only', async () => 
   await s.close();
 });
 
-test('update: radar carries current conditions only until frames arrive', async () => {
+test('update: weather screen gets conditions always, radar frames only while rain is in the box', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
   const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8')));
   const h = { headers: { 'X-Board-Token': 'tok' } };
+  const screenWx = { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51, feels: null, wind: null, pop: null };
   let s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
   s.store.update('home', { showWeather: false });
   let b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.wx, null); // weather row off...
-  assert.deepEqual(b.radar.wx, { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 }); // ...but the radar screen still gets conditions
+  assert.deepEqual(b.radar.wx, screenWx); // ...but the weather screen still gets conditions
   await s.close();
+  // Frames kept but no rain in the box: no frames sent, so the screen shows the weather.
   s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar({ on: false, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false }) });
   b = (await s.req('/board/update?b=home', h)).body;
-  assert.equal(b.radar.wx, undefined);
+  assert.deepEqual(b.radar.frames, []);
+  assert.deepEqual(b.radar.ft, []);
+  assert.deepEqual(b.radar.wx, screenWx);
+  await s.close();
+  // Rain in the box: the loop's frames, and conditions still sent.
+  s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar({ on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false }) });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual(b.radar.frames, ['x']);
+  assert.deepEqual(b.radar.wx, screenWx);
   await s.close();
 });
 

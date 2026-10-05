@@ -712,16 +712,60 @@ def render_ticker(p, f, now=None, page=0, slide=0):
 
 # ---- radar ----
 
-def draw_conditions(f, wx):
-    draw_icon(f, wx['icon'], 1, 2)
-    x = f.text('5x7', str(wx['temp']), 12, 10, C['label'])
-    f.text('small', '°', x, 8, C['label'])
-    f.text('small', wx['word'], 1, 20, C['label'])
+# ---- weather screen (design spec §7) ----
+# The radar screen without rain (no frames). Mirrors drawWeatherScreen() in
+# draw.js.
+
+WX_BLUE = hexc('#1e90ff')
+WX_DROP = ('.#.', '###', '###', '.#.')
+WARN_TEXT = {
+    'svr': {'watch': 'TSTORM WATCH', 'warning': 'TSTORM WARNING'},
+    'tor': {'watch': 'TORNADO WATCH', 'warning': 'TORNADO WARN'},
+}
+
+
+def draw_weather_screen(f, wx, warn, blink):
+    x = 1
+    if wx['temp'] < 0:
+        f.fill(x, 8, 5, 2, C['label'])
+        x += 7
+    x = f.text('clock', str(abs(wx['temp'])), x, 14, C['label'])
+    f.fill(x, 4, 3, 1, C['label'])
+    f.fill(x, 6, 3, 1, C['label'])
+    f.fill(x, 5, 1, 1, C['label'])
+    f.fill(x + 2, 5, 1, 1, C['label'])
+    temp_right = x + 2
+    if wx.get('icon') in assets.ICONS:
+        draw_icon(f, wx['icon'], 55, 1)
+    word = wx.get('word')
+    if word and 63 - measure('small', word) + 1 > temp_right + 2:
+        rtext(f, 'small', word, 63, 16, C['wxText'])
+    f.fill(0, 18, 64, 1, C['divider'])
+    if wx.get('feels') is not None:
+        f.text('small', 'FEELS %s°' % wx['feels'], 0, 25, C['grey'])
+    if wx.get('wind'):
+        rtext(f, 'small', wx['wind'], 63, 25, C['label'])
+    if warn:
+        glyph, color, blinks = warn_style(warn)
+        if not (blinks and blink):
+            gx = f.text('small', glyph, 0, 31, color)
+            f.text('small', WARN_TEXT[warn['kind']][warn['lvl']], gx + TAG_GAP - 1, 31, color)
+        return
+    pop_left = 64
+    if wx.get('pop') is not None:
+        t = '%s%%' % wx['pop']
+        px = 63 - measure('small', t) + 1
+        f.text('small', t, px, 31, C['label'])
+        for j, row in enumerate(WX_DROP):
+            for i, c in enumerate(row):
+                if c == '#':
+                    f.fill(px - 5 + i, 27 + j, 1, 1, WX_BLUE)
+        pop_left = px - 5
     if wx.get('hi') is not None and wx.get('lo') is not None:
-        hl = 'H %s  L %s' % (wx['hi'], wx['lo'])
-        if 1 + measure('small', hl) - 1 > 37:
+        hl = 'H %s° L %s°' % (wx['hi'], wx['lo'])
+        if measure('small', hl) + 3 > pop_left:
             hl = 'H %s L %s' % (wx['hi'], wx['lo'])
-        f.text('small', hl, 1, 28, C['grey'])
+        f.text('small', hl, 0, 31, C['grey'])
 
 
 def draw_radar_frame(f, data):
@@ -742,11 +786,12 @@ def render_radar(p, f, now=None, idx=None, frames=None, blink=False):
         idx = max(0, min(len(ids) - 1, idx))
     else:
         idx = len(ids) - 1
+    if not ids and r.get('wx'):
+        draw_weather_screen(f, r['wx'], p.get('warn'), blink)
+        return f
     data = frames.get(ids[idx]) if idx >= 0 and frames else None
     if data:
         f.draw_radar(data) if hasattr(f, 'draw_radar') else draw_radar_frame(f, data)
-    if not ids and r.get('wx'):
-        draw_conditions(f, r['wx'])
     if r.get('split') and r.get('timeBox'):
         f.fill(r['timeBox'][0] - 1, 0, 1, 32, C['divider'])
     bx, by, bw, bh = r.get('timeBox') or (40, 0, 24, 32)

@@ -83,7 +83,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `now` | int | Server epoch seconds. |
 | `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int | Seconds since the arrivals data was last fetched successfully. The server keeps serving last-good data when CTA fails. Board display of staleness is not in v1. |
-| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar`, `baseball`. `auto` resolves to `baseball` while `mlb.games` is non-empty and there's no NWS warning or watch (weather first), otherwise `transit`; timed radar visits ride on top of either, see `radar.visit`. A local button press overrides it until `v` changes. Firmware before the baseball port draws `transit` for `baseball`. |
+| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `radar` (the weather screen; see *Radar*), `baseball`. `auto` resolves to `baseball` while `mlb.games` is non-empty and there's no NWS warning or watch (weather first), otherwise `transit`; timed radar visits ride on top of either, see `radar.visit`. A local button press overrides it until `v` changes. Firmware before the baseball port draws `transit` for `baseball`. |
 | `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (Open-Meteo times for the station; 100 until weather data arrives), or the fixed level, or 0 for off. |
 | `header` | string \| null | Station name for the transit header, or `null` when the header is off or hidden to fit (see *Fitting the header and weather row*). |
 | `tickerHeader` | string \| null | Station name for the ticker header. Always sent: the ticker shows its header even when the transit header toggle is off. (Boards without it fall back to `header`.) |
@@ -174,7 +174,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 
 When `warn` is non-null, the board replaces `word` with the warning tag.
 
-From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at the station's coordinates: `temp` is `current.temperature_2m` rounded, `hi`/`lo` the day's max/min. WMO `weather_code` → `icon` / `word`: 0–1 `sun` SUNNY or `moon` CLEAR (by `is_day`); 2 `pcloudy_day`/`pcloudy_night` PT CLOUDY; 3 `cloudy` CLOUDY; 45, 48 `fog` FOG; 51–55, 61–65, 80–82 `rain` RAIN; 56–57, 66–67 `ice` FRZ RAIN; 71–77, 85–86 `snow` SNOW; 95–99 `storm` STORMS; anything else `cloudy` CLOUDY. 
+From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at the station's coordinates: `temp` is `current.temperature_2m` rounded, `hi`/`lo` the day's max/min. The same request (`wind_speed_unit=mph`, `forecast_hours=6`) also asks for `apparent_temperature`, `wind_speed_10m`, `wind_direction_10m`, and hourly `precipitation_probability` for the weather screen (`radar.wx`). The recorded fixture predates those fields; **(todo)** record a new one. WMO `weather_code` → `icon` / `word`: 0–1 `sun` SUNNY or `moon` CLEAR (by `is_day`); 2 `pcloudy_day`/`pcloudy_night` PT CLOUDY; 3 `cloudy` CLOUDY; 45, 48 `fog` FOG; 51–55, 61–65, 80–82 `rain` RAIN; 56–57, 66–67 `ice` FRZ RAIN; 71–77, 85–86 `snow` SNOW; 95–99 `storm` STORMS; anything else `cloudy` CLOUDY. 
 
 #### Warning (`warn`)
 
@@ -201,9 +201,17 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 | `timeBox` | `[x, y, w, h]`: box the board draws the time stack into (frame indicator, time, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
 | `split` | `true` when the location has no usable water area; the time box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–38, marker at 19,16; the board draws a gray `#333333` line on col 39; clock box `[40, 0, 24, 32]`, leaving a 1px gap before the widest clock). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator rows 2–3, clock rows 6–12, AM/PM rows 15–19, right-aligned to column 62. |
 
-| `wx` | Only while `frames` is empty: current conditions (same shape as the top-level `wx`), sent even with the weather row off. The board shows them on the radar screen's left side (icon + temperature, condition word, `H hi  L lo`) with the clock stack at the current time, instead of an empty radar. Omitted once frames exist. |
+| `wx` | Weather screen conditions, sent whenever there's weather data (even with the weather row off): the top-level `wx` fields plus `feels` (apparent temperature °F, rounded), `wind` (`"NW 12"`: 8-point compass the wind blows from + mph, rounded; `"CALM"` under 1 mph; just the speed without a direction), and `pop` (highest hourly precipitation probability % over the next 6 hours, starting with the current hour). Each of the three is `null` when Open-Meteo didn't send it. Omitted before the first weather fetch. |
 
-When `on` is false, `frames` and `ft` may be empty and `timeBox` may be `null`. The server still sends frames it has, so a forced radar screen shows them.
+**Weather screen.** The `radar` screen is the weather screen: the board draws the radar loop only when `frames` is non-empty, otherwise current conditions from `wx`. The server sends `frames`/`ft` **only while `on`** (empty otherwise), so the screen shows the radar while rain is in the box and the weather the rest of the time, and the board fetches no frames without rain. With no `frames` and no `wx`, the board draws the empty radar with the clock stack at the current time. Layout (Tom Thumb unless noted; `drawWeatherScreen()` in `draw.js`, `draw_weather_screen()` in `draw.py`):
+- Temperature in the 9x15 Bold clock digits at x1, baseline 14 (ink rows 4–13), label white; below zero a 5x2 minus bar at rows 8–9 then a 2px gap; a 3x3 ring degree sign (center unlit) right after the digits at rows 4–6.
+- Icon (8x8) at x55, y1. Condition word dim (`#555555`) right-aligned to x63, rows 11–15, skipped if it would come within 2px of the degree sign (3-digit temperatures).
+- Divider `#333333` on row 18.
+- Rows 20–24: `FEELS 53°` grey at x0; `wind` label white right-aligned to x63.
+- Rows 26–30: `H 63° L 49°` grey at x0 (degree signs dropped when it would come within 3px of the drop); `pop` + `%` label white right-aligned to x63, with a 3x4 drop (`#1e90ff`, rows 27–30) 2px to its left.
+- **Warning or watch:** replaces the whole rows 26–30 line: glyph (bolt or funnel) at x0, 3px gap, `TSTORM WATCH`, `TSTORM WARNING`, `TORNADO WATCH`, or `TORNADO WARN` (`TORNADO WARNING` doesn't fit), in the warning colors; a tornado warning blinks.
+
+When `on` is false, `frames` and `ft` are empty and `timeBox` may be `null`.
 
 **`on` hysteresis** (provisional): turns on when the newest frame has ≥ 30 precip pixels (after water masking and despeckle, marker excluded), off when it drops below 10. Judged once per new frame. `on` doesn't switch screens by itself: `auto` stays on transit unless radar visits are turned on.
 
@@ -310,7 +318,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 | `station` | Train Tracker `mapid` and header name. Changeable from the control page. The station's coordinates are also the board's **location** for weather, NWS alerts, and the radar crop. |
 | `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the row order; if more destinations than the cap remain, the board shows the chronological view. Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |
-| `screen` | `auto` or a forced screen (`transit`, `ticker`, `radar`, `baseball`). Persists across boots. `auto` resolves to `transit`, or `baseball` while a game is on (no NWS warning or watch); it never changes screens on its own otherwise, except for radar visits. |
+| `screen` | `auto` or a forced screen (`transit`, `ticker`, `radar` (labeled Weather on the control page), `baseball`). Persists across boots. `auto` resolves to `transit`, or `baseball` while a game is on (no NWS warning or watch); it never changes screens on its own otherwise, except for radar visits. |
 | `radarEvery`, `radarFor` | Radar visits on the auto screen: every `radarEvery` minutes (0 = never, the default; max 60) show the radar for `radarFor` seconds (10–600, default 60), only while rain is in the box. Persist across restarts. |
 | `radarTime` | Boolean, default `true`. Sent to the board as `radar.showTime`; off shows the temperature instead of the frame time. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |
