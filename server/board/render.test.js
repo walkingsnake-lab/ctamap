@@ -85,6 +85,15 @@ test('no rows -> overnight clock instead of the header', () => {
   assert.ok(lit > 60, `clock pixels: ${lit}`);
 });
 
+test('no rows and stale data -> NO DATA instead of NO TRAINS', () => {
+  const p = { ...payload('morse-2026-10-03-2316.json'), rows: [] };
+  const lit = (f) => { let n = 0; for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (hex(f.get(x, y)) === C.noTrains) n++; return n; };
+  const fresh = render(p), stale = render({ ...p, stale: 1 });
+  assert.ok(lit(fresh) > 0 && lit(stale) > 0);
+  assert.notEqual(lit(stale), lit(fresh));
+  assert.deepEqual(render({ ...p, stale: 1 }).px, stale.px);
+});
+
 test('ticker: index column shows the number, the clock for scheduled, the alert circle for alerts', () => {
   const p = payload('morse-2026-10-03-2316.json');
   // Morse ticker: [95th (scheduled), Howard, 95th (scheduled), Howard, ...]

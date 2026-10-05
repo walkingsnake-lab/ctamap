@@ -96,6 +96,8 @@ async function build() {
   const night = { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE'), rows: [], ticker: [] };
   add('overnight', night, [{ screen: 'transit' }]);
   add('overnight weather', { ...night, wx: WX }, [{ screen: 'transit' }]);
+  add('no data', { ...night, stale: 1 }, [{ screen: 'transit' }]);
+  add('no data weather', { ...night, stale: 1, wx: WX }, [{ screen: 'transit' }]);
   // Rolls via explicit roll state are covered by the animator sequences below.
 
   // Ticker: pages and slides.
@@ -203,6 +205,11 @@ async function build() {
     seq('anim departing DUE', [{ p, now: NOW, t: 0 }, ...[...ts(1000, 900, 10), 1175, 1350, 1250].sort((x, y) => x - y).map((t) => ({ p, now: NOW + 55, t }))]);
     const q = { rows: [{ ln: 'RD', lbl: 'HOWARD', t: [min(12), min(20)], s: [0, 0], a: 0 }] };
     seq('anim countdown roll', [{ p: q, now: NOW, t: 0 }, ...ts(100, 450, 10).map((t) => ({ p: q, now: NOW + 60, t }))]);
+  }
+  // Bunched trains: the departing DUE fades, the next one rolls to DUE.
+  {
+    const p = { rows: [{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 20, NOW + 80, NOW + 400], s: [0, 0, 0], a: 0 }] };
+    seq('anim bunched departure', [{ p, now: NOW, t: 0 }, ...ts(1000, 1400, 12).map((t) => ({ p, now: NOW + 51, t }))]);
   }
   // DUE leaves, the other times slide left, a new time joins at the end.
   {

@@ -284,6 +284,7 @@
         header: p.header,
         wx: p.wx,
         warn: p.warn,
+        stale: p.stale,
         rows: rows.map((r, i) => ({
           key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
           cells: layoutCells(r, now),
@@ -304,6 +305,7 @@
         header: p.header,
         wx: p.wx,
         warn: p.warn,
+        stale: p.stale,
         rows: rows.map((r, i) => {
           const dest = `${r.ln}:${r.lbl}`;
           const due = !seenDest.has(dest); // chronological: the first one per destination is the soonest
@@ -344,7 +346,7 @@
 
     function drawOvernight(f, p, now) {
       const clock = clockText(now);
-      const nt = 'NO TRAINS';
+      const nt = p.stale ? 'NO DATA' : 'NO TRAINS';
       const blockH = 10 + 3 + 5; // 10px digits, gap, label
       const areaH = p.wx ? 22 : 32;
       const top = Math.floor((areaH - blockH) / 2);
@@ -400,17 +402,44 @@
     const clamp01 = (x) => Math.max(0, Math.min(1, x));
     const tween = (from, to, start, dur, t) => (t <= start ? from : t >= start + dur ? to : lerp(from, to, easeInOut((t - start) / dur)));
 
+    // Pairs the shown cells with the new ones, both in time order, at the
+    // lowest total cost: a pair costs its time difference (at most MATCH_S),
+    // a cell left unpaired costs MATCH_S. Returns the shown cell for each new
+    // one, or null. (Taking the first close enough time instead pairs a
+    // departed train with the next one when they're bunched.)
+    function pairCells(old, cells) {
+      const n = old.length, m = cells.length;
+      const cost = [], how = [];
+      for (let i = n; i >= 0; i--) {
+        cost[i] = []; how[i] = [];
+        for (let j = m; j >= 0; j--) {
+          if (i === n || j === m) { cost[i][j] = (n - i + m - j) * MATCH_S; continue; }
+          let best = cost[i + 1][j] + MATCH_S, pick = 'old';
+          if (cost[i][j + 1] + MATCH_S < best) { best = cost[i][j + 1] + MATCH_S; pick = 'new'; }
+          const d = Math.abs(old[i].t - cells[j].t);
+          if (d <= MATCH_S && cost[i + 1][j + 1] + d < best) { best = cost[i + 1][j + 1] + d; pick = 'pair'; }
+          cost[i][j] = best; how[i][j] = pick;
+        }
+      }
+      const out = cells.map(() => null);
+      for (let i = 0, j = 0; i < n && j < m;) {
+        if (how[i][j] === 'pair') { out[j] = old[i]; i++; j++; } else if (how[i][j] === 'old') i++; else j++;
+      }
+      return out;
+    }
+
     function createTransitAnimator() {
       let nextId = 1;
       const rows = new Map(); // key -> row state
 
       function matchCells(state, cells, t, isNewRow) {
         const unmatched = state.cells.filter((c) => !c.leaving);
+        const pairs = pairCells(unmatched, cells);
         const used = new Set();
         const out = [];
         const moved = [], joined = []; // cells that slide / fade in as part of this step
-        for (const c of cells) {
-          const m = unmatched.find((u) => !used.has(u) && Math.abs(u.t - c.t) <= MATCH_S);
+        for (const [j, c] of cells.entries()) {
+          const m = pairs[j];
           if (m) {
             used.add(m);
             if (m.text !== c.text) m.roll = { from: m.text, start: t };
@@ -481,7 +510,7 @@
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, mode: target.mode, header: target.header, wx: target.wx, warn: target.warn, rows: [] };
+          const view = { now, mode: target.mode, header: target.header, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;

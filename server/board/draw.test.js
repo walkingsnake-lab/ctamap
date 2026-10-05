@@ -137,6 +137,29 @@ test('animator: a departing DUE fades out in place while the next time brightens
   assert.ok(done.some((c) => c.id === sixteen.id));
 });
 
+test('animator: bunched trains: the departing DUE fades and the next one rolls to DUE in its own place', () => {
+  const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 20, NOW + 80, NOW + 400], s: [0, 0, 0], a: 0 }]);
+  const anim = draw.createTransitAnimator();
+  const [due, second, third] = anim.step(p, NOW, 0).rows[0].cells;
+  assert.deepEqual([due.text, second.text], ['DUE', '2']);
+  anim.step(p, NOW + 51, 1000);
+  const cells = anim.step(p, NOW + 51, 1000 + draw.FADE_MS / 2).rows[0].cells;
+  const byId = (c) => cells.find((x) => x.id === c.id);
+  assert.ok(byId(due).alpha < 1, 'the departed train fades');
+  assert.equal(byId(due).text, 'DUE');
+  assert.deepEqual([byId(second).text, byId(second).alpha, byId(second).roll.from], ['DUE', 1, '2']);
+  assert.equal(byId(third).alpha, 1);
+});
+
+test('animator: a delay on bunched trains keeps every identity', () => {
+  const anim = draw.createTransitAnimator();
+  const at = (d) => payload([{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 200 + d, NOW + 260 + d, NOW + 600 + d], s: [0, 0, 0], a: 0 }]);
+  const a = anim.step(at(0), NOW, 0).rows[0].cells;
+  const b = anim.step(at(40), NOW, 100).rows[0].cells;
+  assert.deepEqual(b.map((c) => c.id), a.map((c) => c.id));
+  assert.ok(b.every((c) => c.alpha === 1));
+});
+
 test('animator: a countdown change rolls the same arrival', () => {
   const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(12)], s: [0], a: 0 }]);
   const anim = draw.createTransitAnimator();

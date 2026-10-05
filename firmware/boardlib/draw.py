@@ -368,7 +368,7 @@ def build_transit_view(p, now):
     tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')))
     return {
         'now': now, 'mode': 'dest', 'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'),
-        'tzo': p.get('tzo', 0),
+        'stale': p.get('stale'), 'tzo': p.get('tzo', 0),
         'rows': [{'key': r['ln'] + ':' + r['lbl'], 'ln': r['ln'], 'lbl': r['lbl'], 'a': r.get('a'),
                   'num': None, 'numRoll': None, 'top': tops[i], 'alpha': 1, 'cells': layout_cells(r, now)}
                  for i, r in enumerate(rows)],
@@ -396,7 +396,8 @@ def build_chrono_view(p, now):
                                'alpha': 1, 'roll': None, 'color': color}]})
     return {
         'now': now, 'mode': 'chrono', 'pitch': (tops[1] - tops[0]) if len(tops) > 1 else 6,
-        'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'), 'tzo': p.get('tzo', 0), 'rows': out,
+        'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'), 'stale': p.get('stale'),
+        'tzo': p.get('tzo', 0), 'rows': out,
     }
 
 
@@ -422,7 +423,7 @@ def draw_view_row(f, row, blink):
 
 def draw_overnight(f, view, now):
     clock = clock_text(now, view.get('tzo', 0))
-    nt = 'NO TRAINS'
+    nt = 'NO DATA' if view.get('stale') else 'NO TRAINS'
     block_h = 10 + 3 + 5
     area_h = 22 if view.get('wx') else 32
     top = (area_h - block_h) // 2
@@ -479,6 +480,42 @@ def _tween(frm, to, start, dur, t):
     return _lerp(frm, to, ease_in_out((t - start) / dur))
 
 
+def _pair_cells(old, cells):
+    n = len(old)
+    m = len(cells)
+    cost = [[0] * (m + 1) for _ in range(n + 1)]
+    how = [[None] * (m + 1) for _ in range(n + 1)]
+    for i in range(n, -1, -1):
+        for j in range(m, -1, -1):
+            if i == n or j == m:
+                cost[i][j] = (n - i + m - j) * MATCH_S
+                continue
+            best = cost[i + 1][j] + MATCH_S
+            pick = 'old'
+            if cost[i][j + 1] + MATCH_S < best:
+                best = cost[i][j + 1] + MATCH_S
+                pick = 'new'
+            d = abs(old[i]['t'] - cells[j]['t'])
+            if d <= MATCH_S and cost[i + 1][j + 1] + d < best:
+                best = cost[i + 1][j + 1] + d
+                pick = 'pair'
+            cost[i][j] = best
+            how[i][j] = pick
+    out = [None] * m
+    i = 0
+    j = 0
+    while i < n and j < m:
+        if how[i][j] == 'pair':
+            out[j] = old[i]
+            i += 1
+            j += 1
+        elif how[i][j] == 'old':
+            i += 1
+        else:
+            j += 1
+    return out
+
+
 class TransitAnimator:
     """Keeps arrivals' identity across frames and updates so the board can
     animate what changed (rolls, fades, color easing, row slides). step()
@@ -490,16 +527,13 @@ class TransitAnimator:
 
     def _match_cells(self, state, cells, t, is_new_row):
         unmatched = [c for c in state['cells'] if not c.get('leaving')]
+        pairs = _pair_cells(unmatched, cells)
         used = []
         out = []
         moved = []
         joined = []
-        for c in cells:
-            m = None
-            for u in unmatched:
-                if not _contains(used, u) and abs(u['t'] - c['t']) <= MATCH_S:
-                    m = u
-                    break
+        for j, c in enumerate(cells):
+            m = pairs[j]
             if m is not None:
                 used.append(m)
                 if m['text'] != c['text']:
@@ -595,7 +629,7 @@ class TransitAnimator:
             self._match_cells(st, r['cells'], t, is_new_row)
 
         view = {'now': now, 'mode': target['mode'], 'header': target.get('header'), 'wx': target.get('wx'),
-                'warn': target.get('warn'), 'tzo': target.get('tzo', 0), 'rows': []}
+                'warn': target.get('warn'), 'stale': target.get('stale'), 'tzo': target.get('tzo', 0), 'rows': []}
         if not target['rows'] and not any(st.get('leaving') for st in self.rows.values()):
             self.rows.clear()
             return view
