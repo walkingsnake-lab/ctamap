@@ -198,18 +198,27 @@
       rtext(f, 'small', clockText(now), 62, 6, C.clock);
     }
 
-    function drawWeather(f, wx, warn) {
+    // NWS warning tag style: watches yellow, severe warnings orange, tornado
+    // warnings red and blinking (hidden on the blink's "on" phase).
+    const warnStyle = (warn) => ({
+      glyph: s(warn.kind === 'tor' ? G.FUNNEL : G.BOLT),
+      color: warn.lvl === 'watch' ? C.watch : warn.kind === 'tor' ? C.warnTornado : C.warnSevere,
+      blinks: warn.kind === 'tor' && warn.lvl === 'warning',
+    });
+
+    function drawWeather(f, wx, warn, blink) {
       f.fill(0, 22, 64, 1, C.divider);
       drawIcon(f, wx.icon, 0, 24);
       const base = 31;
       f.text('small', `${wx.temp}°`, 10, base, C.wxText);
       if (warn) {
-        const glyph = warn.kind === 'tor' ? G.FUNNEL : G.BOLT;
+        const { glyph, color, blinks } = warnStyle(warn);
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
-        const color = warn.lvl === 'watch' ? C.watch : warn.kind === 'tor' ? C.warnTornado : C.warnSevere;
-        const w = measure('small', s(glyph)) + TAG_GAP + measure('small', word);
-        const x = f.text('small', s(glyph), 63 - w + 1, base, color);
-        f.text('small', word, x + TAG_GAP - 1, base, color);
+        if (!(blinks && blink)) {
+          const w = measure('small', glyph) + TAG_GAP + measure('small', word);
+          const x = f.text('small', glyph, 63 - w + 1, base, color);
+          f.text('small', word, x + TAG_GAP - 1, base, color);
+        }
       } else {
         rtext(f, 'small', wx.word, 63, base, C.wxText);
       }
@@ -352,7 +361,7 @@
           for (const row of view.rows) drawViewRow(f, row, blink);
         });
       }
-      if (view.wx) drawWeather(f, view.wx, view.warn);
+      if (view.wx) drawWeather(f, view.wx, view.warn, blink);
     }
 
     // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}}),
@@ -624,20 +633,36 @@
         let x = right - (ids.length * (segW + segGap) - segGap) + 1;
         ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
       }
-      // Dimmed so a frame's time doesn't read as the current time.
-      const warnGlyph = p.warn ? s(p.warn.kind === 'tor' ? G.FUNNEL : G.BOLT) : null;
-      const warnColor = p.warn && p.warn.kind === 'tor' ? C.warnTornado : C.warnSevere;
+      const ws = p.warn ? warnStyle(p.warn) : null;
+      const hideWarn = ws && ws.blinks && o.blink;
       if (r.showTime === false) {
-        // Time off: the area stays, the warning icon moves to its top right
-        // (just under the frame indicator's rows).
-        if (warnGlyph) f.text('small', warnGlyph, right - measure('small', warnGlyph) + 1, top + 8, warnColor);
+        // Time off: current conditions (icon + temperature, as on the weather
+        // row) right-aligned under the indicator, and the warning tag (icon +
+        // WATCH/WARN) at the screen's bottom right on a black backing.
+        if (r.temp != null) {
+          const t = `${r.temp}°`;
+          const icon = r.icon && icons.ICONS[r.icon] ? r.icon : null;
+          const x0 = right + 1 - ((icon ? 10 : 0) + measure('small', t));
+          if (icon) drawIcon(f, icon, x0, top + 4);
+          f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
+        }
+        if (ws) {
+          const word = p.warn.lvl === 'warning' ? 'WARN' : 'WATCH';
+          const x0 = 64 - (measure('small', ws.glyph) + TAG_GAP + measure('small', word));
+          f.fill(x0 - 1, 25, 64 - x0 + 1, 7, '#000000');
+          if (!hideWarn) {
+            const x = f.text('small', ws.glyph, x0, 31, ws.color);
+            f.text('small', word, x + TAG_GAP - 1, 31, ws.color);
+          }
+        }
         return f;
       }
+      // Dimmed so a frame's time doesn't read as the current time.
       rtext(f, '5x7', clockText(t), right, top + 11, C.radarTime);
       const ap = ampmText(t);
       const apX = right - measure('small', ap) + 1;
       f.text('small', ap, apX, top + 18, C.radarAmpm);
-      if (warnGlyph) f.text('small', warnGlyph, apX - 2 - measure('small', warnGlyph), top + 18, warnColor);
+      if (ws && !hideWarn) f.text('small', ws.glyph, apX - 2 - measure('small', ws.glyph), top + 18, ws.color);
       return f;
     }
 

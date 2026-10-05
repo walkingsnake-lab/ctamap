@@ -120,11 +120,48 @@ async function build() {
     add(`radar conditions split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'watch' }, radar: { on: false, frames: [], ft: [], timeBox, split, wx: { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 } } }, [{ screen: 'radar' }]);
   }
 
-  // Radar time off: indicator and warning icon only.
+  // Radar time off: icon + temperature, WATCH/WARN tag bottom right (tornado warning blinks).
   for (const [timeBox, split] of [[radar.FULL_TIME_BOX, false], [radar.SPLIT_TIME_BOX, true]]) {
     const t = 1791140000;
     const ids = ['a', 'b', 'c'];
-    add(`radar time off split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0 }], Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048)])));
+    const frames = Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048).fill(3)]));
+    const r = { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false, temp: split ? -12 : 63, icon: split ? 'snow' : 'pcloudy_day' };
+    for (const warn of [{ kind: 'tor', lvl: 'warning' }, { kind: 'tor', lvl: 'watch' }, { kind: 'svr', lvl: 'warning' }]) {
+      add(`radar time off split=${split} ${warn.kind} ${warn.lvl}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: r }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 0, blink: true }], frames);
+    }
+    add(`radar time off split=${split} no temp, no icon`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, temp: null } }, [{ screen: 'radar', idx: 2 }], frames);
+    add(`radar time on split=${split} tornado warning blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true } }, [{ screen: 'radar', idx: 2 }, { screen: 'radar', idx: 2, blink: true }], frames);
+  }
+  // Weather row: tornado warning tag blinks.
+  {
+    const p = payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX, warn: { kind: 'tor', lvl: 'warning' } });
+    add('weather row tornado warning blink', p, [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
+  }
+
+  // Baseball (design spec §8).
+  {
+    const t = 1791140000;
+    const CHC = { ab: 'CHC', c: '#2a5bd8' }, STL = { ab: 'STL', c: '#d62a2a' }, NYY = { ab: 'NYY', c: '#3a5fa8' }, BOS = { ab: 'BOS', c: '#c8323d' };
+    const game = (extra) => ({ id: 1, start: t - 3600, away: { ...CHC, r: 3, w: 92, l: 70 }, home: { ...STL, r: 2, w: 88, l: 74 }, ...extra });
+    const bb = (...games) => ({ now: t, tzo: tzOffset(t), bright: 100, screen: 'baseball', mlb: { games } });
+    const live = game({ st: 'live', inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] });
+    add('baseball live', bb(live), [{ screen: 'baseball' }]);
+    add('baseball live rolls', bb({ ...live, half: 'B', b: 0, s: 0, o: 0, on: [0, 1, 0], away: { ...live.away, r: 10 } }), [0.25, 0.5, 0.75].map((p) => ({
+      screen: 'baseball', rolls: { away: { from: '3', p }, home: { from: '2', p }, inn: { from: 'TOP 7', p }, count: { from: '2-1', p }, outs: { from: '2 OUT', p } },
+    })));
+    add('baseball live same-length score roll', bb({ ...live, away: { ...live.away, r: 13 } }), [{ screen: 'baseball', rolls: { away: { from: '12', p: 0.5 } } }]);
+    for (const half of ['M', 'E']) add(`baseball break ${half}`, bb({ ...live, half, b: 0, s: 0, o: 0, on: [0, 0, 0] }), [{ screen: 'baseball' }]);
+    // Score flash: amber, mid-fade, white again.
+    const flash = { ...live, away: { ...live.away, at: t - 10 }, home: { ...live.home, at: t - 32 } };
+    add('baseball score flash', bb(flash), [{ screen: 'baseball', now: t }, { screen: 'baseball', now: t + 21.5 }, { screen: 'baseball', now: t + 40 }]);
+    add('baseball pregame', bb(game({ st: 'pre', start: t + 1500, away: { ...CHC, r: 0, w: 109, l: 53 }, home: { ...STL, r: 0, w: null, l: null } })), [{ screen: 'baseball' }]);
+    add('baseball final', bb(game({ st: 'final' })), [{ screen: 'baseball' }, { screen: 'baseball', rolls: { away: { from: '2', p: 0.4 } } }]);
+    add('baseball final tie (suspended)', bb(game({ st: 'final', away: { ...CHC, r: 4, w: 1, l: 1 }, home: { ...STL, r: 4, w: 1, l: 1 } })), [{ screen: 'baseball' }]);
+    const other = game({ id: 2, st: 'pre', start: t + 900, away: { ...NYY, r: 0, w: 2, l: 1 }, home: { ...BOS, r: 0, w: 1, l: 2 } });
+    const fin = game({ id: 3, st: 'final', away: { ab: 'XYZ', c: null, r: 1, w: 0, l: 1 }, home: { ...BOS, r: 5, w: 1, l: 0 } });
+    add('baseball rotation', bb(other, fin), [0, 60, 120].map((d) => ({ screen: 'baseball', now: t + d })).concat([{ screen: 'baseball', game: 1 }]));
+    add('baseball live takes precedence', bb(other, live, fin), [{ screen: 'baseball', now: t }, { screen: 'baseball', now: t + 60 }]);
+    add('baseball no games', bb(), [{ screen: 'baseball' }]);
   }
 
   // Transit animator sequences.

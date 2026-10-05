@@ -88,12 +88,13 @@ function createBoard({
   const stationList = JSON.stringify(stations
     .map(({ mapid, desc, short }) => ({ mapid, desc, short }))
     .sort((a, b) => a.desc.localeCompare(b.desc)));
-  // Simulator preview settings from the query: mapid, header=0|1, weather=0|1.
+  // Simulator preview settings from the query: mapid, header=0|1, weather=0|1,
+  // rtime=0|1 (radar corner: frame time or temperature).
   function previewOf(q) {
     const mapid = String(q.mapid || '');
     if (mapid && !stationById.has(mapid)) return { err: `unknown mapid: ${mapid}` };
     const flag = (v) => (v === '1' ? true : v === '0' ? false : null);
-    return { mapid, showHeader: flag(q.header), showWeather: flag(q.weather) };
+    return { mapid, showHeader: flag(q.header), showWeather: flag(q.weather), radarTime: flag(q.rtime) };
   }
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
   if (!tracker) tracker = createTracker({ log }).start();
@@ -162,7 +163,7 @@ function createBoard({
       const st = stationById.get(preview.mapid);
       board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
     }
-    for (const k of ['showHeader', 'showWeather']) if (preview[k] != null) board = { ...board, [k]: preview[k] };
+    for (const k of ['showHeader', 'showWeather', 'radarTime']) if (preview[k] != null) board = { ...board, [k]: preview[k] };
     const st = stationById.get(board.station.mapid);
     // Weather and warnings are nice-to-haves: a failure just leaves them off.
     const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
@@ -213,7 +214,7 @@ function createBoard({
       ticker,
       wx: bars.showWeather ? wx : null,
       warn,
-      radar: { ...radarState, visit: visitOf(board), showTime: board.radarTime !== false },
+      radar: { ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null },
       mlb: { games },
     };
   }

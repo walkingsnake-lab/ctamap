@@ -566,24 +566,53 @@ test('baseball score flash: amber for a minute after a change, fades to white, t
   assert.ok(count(f, draw.BB.live, 22, 12, 30, 18) > 0);
 });
 
-test('radar time off: no time or AM/PM; indicator stays; warning icon at the top right of the time area', () => {
+test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at the bottom right', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
-  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 32], split: false };
+  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 22], split: false, temp: 63, icon: 'sun' };
   const base = { now, bright: 100, warn: null };
-  const off = (warn) => draw.render({ ...base, warn, radar: { ...radar, showTime: false } }, { screen: 'radar', now, frames: {} });
+  const off = (warn, extra = {}, opts = {}) => draw.render({ ...base, warn, radar: { ...radar, showTime: false, ...extra } }, { screen: 'radar', now, frames: {}, ...opts });
   const f = off(null);
-  assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0);
-  assert.equal(count(f, draw.C.radarAmpm, 0, 0, 63, 31), 0);
-  assert.equal(hex(f.get(62, 2)), draw.C.amber);                 // indicator unchanged
-  const w = off({ kind: 'tor', lvl: 'warning' });
-  assert.ok(count(w, draw.C.warnTornado, 56, 6, 62, 10) > 3);    // icon right-aligned, under the indicator
-  assert.equal(count(w, draw.C.warnTornado, 0, 11, 63, 31), 0);  // nothing lower
-  assert.equal(hex(w.get(62, 2)), draw.C.amber);
-  // On (default and explicit) is unchanged.
+  assert.equal(count(f, draw.C.radarAmpm, 0, 0, 63, 31), 0);       // no AM/PM
+  assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0);       // no frame time
+  assert.equal(hex(f.get(62, 2)), draw.C.amber);                   // indicator unchanged
+  assert.ok(count(f, draw.C.label, 40, 8, 63, 12) > 8);            // 63° in label white, rows 8-12
+  let maxX = 0; for (let y = 0; y < 32; y++) for (let x = 40; x < 64; x++) if (hex(f.get(x, y)) === draw.C.label) maxX = Math.max(maxX, x);
+  assert.equal(maxX, 62);                                          // right-aligned to x62
+  const iconPx = (fr) => { let n = 0; for (let y = 6; y < 14; y++) for (let x = 40; x < 56; x++) { const c = hex(fr.get(x, y)); if (c !== '#000000' && c !== draw.C.label) n++; } return n; };
+  assert.ok(iconPx(f) > 10, 'weather icon left of the temperature');
+  assert.equal(iconPx(off(null, { icon: null })), 0);              // no icon: temperature only
+  // Tags: bottom right (rows 27-31), colored by level; a tornado warning blinks.
+  const tag = (fr, c) => count(fr, c, 30, 27, 63, 31);
+  assert.ok(tag(off({ kind: 'tor', lvl: 'watch' }), draw.C.watch) > 20);         // WATCH always yellow
+  assert.ok(tag(off({ kind: 'svr', lvl: 'watch' }), draw.C.watch) > 20);
+  assert.ok(tag(off({ kind: 'svr', lvl: 'warning' }), draw.C.warnSevere) > 15);  // WARN orange
+  assert.ok(tag(off({ kind: 'svr', lvl: 'warning' }, {}, { blink: true }), draw.C.warnSevere) > 15); // doesn't blink
+  const tor = { kind: 'tor', lvl: 'warning' };
+  assert.ok(tag(off(tor), draw.C.warnTornado) > 15);                              // WARN red
+  assert.equal(tag(off(tor, {}, { blink: true }), draw.C.warnTornado), 0);       // blinks
+  assert.equal(tag(off({ kind: 'tor', lvl: 'watch' }, {}, { blink: true }), draw.C.watch) > 20, true);
+  // No weather yet: just the tag.
+  const none = off({ kind: 'svr', lvl: 'warning' }, { temp: null });
+  assert.equal(count(none, draw.C.label, 0, 0, 63, 31), 0);
+  // Time on (default and explicit) is unchanged by temp/icon.
   const on = draw.render({ ...base, radar }, { screen: 'radar', now, frames: {} });
   const on2 = draw.render({ ...base, radar: { ...radar, showTime: true } }, { screen: 'radar', now, frames: {} });
   assert.deepEqual(on.px, on2.px);
-  assert.ok(count(on, draw.C.radarTime, 40, 6, 63, 14) > 15);
+  // Time on: a tornado watch next to AM/PM is yellow; a tornado warning blinks.
+  const watchOn = draw.render({ ...base, warn: { kind: 'tor', lvl: 'watch' }, radar }, { screen: 'radar', now, frames: {} });
+  assert.ok(count(watchOn, draw.C.watch, 40, 15, 63, 19) > 3);
+  const torOn = (blink) => draw.render({ ...base, warn: tor, radar }, { screen: 'radar', now, frames: {}, blink });
+  assert.ok(count(torOn(false), draw.C.warnTornado, 40, 15, 63, 19) > 3);
+  assert.equal(count(torOn(true), draw.C.warnTornado, 40, 15, 63, 19), 0);
+});
+
+test('weather row: a tornado warning tag blinks; watches and severe warnings stay', () => {
+  const p = (warn) => ({ ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5)], s: [0], a: 0 }]), wx: { icon: 'storm', temp: 54, word: 'STORMS' }, warn });
+  const tag = (warn, blink, c) => count(draw.renderTransit(p(warn), { blink }), c, 20, 27, 63, 31);
+  assert.ok(tag({ kind: 'tor', lvl: 'warning' }, false, draw.C.warnTornado) > 15);
+  assert.equal(tag({ kind: 'tor', lvl: 'warning' }, true, draw.C.warnTornado), 0);
+  assert.ok(tag({ kind: 'tor', lvl: 'watch' }, true, draw.C.watch) > 15);
+  assert.ok(tag({ kind: 'svr', lvl: 'warning' }, true, draw.C.warnSevere) > 15);
 });
 
 test('animator: times slide only after a leaving DUE has faded; a new arrival waits for the slide', () => {

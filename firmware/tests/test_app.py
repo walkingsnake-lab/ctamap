@@ -73,7 +73,7 @@ class Server:
             'ticker': [{'ln': 'RD', 'd': 'Howard', 't': t, 's': 0, 'a': 0} for t in rows[0]['t']] +
                       [{'ln': 'RD', 'd': '95th', 't': t, 's': 0, 'a': 0} for t in rows[1]['t']],
             'wx': None, 'warn': None,
-            'radar': {'on': self.radar_on, 'visit': self.visit, 'frames': frames, 'ft': [T0] * len(frames), 'clock': [40, 0, 24, 22], 'split': False},
+            'radar': {'on': self.radar_on, 'visit': self.visit, 'frames': frames, 'ft': [T0] * len(frames), 'timeBox': [40, 0, 24, 22], 'split': False},
         }
 
     # net interface
@@ -219,7 +219,7 @@ class TestBoardLoop(unittest.TestCase):
         run_for(board, clock, 100)
         btn.held['up'] = False
         run_for(board, clock, 100)
-        self.assertEqual(board.player.screen, 'radar')  # UP wraps around
+        self.assertEqual(board.player.screen, 'baseball')  # UP wraps around
         server.v = 5  # a phone change: the board follows the server again
         run_for(board, clock, 30000)
         self.assertEqual(board.player.screen, 'transit')
