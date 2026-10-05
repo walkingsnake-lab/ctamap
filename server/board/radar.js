@@ -16,12 +16,12 @@ const { decodeRows } = require('./radar-png');
 const BASE = 'https://mesonet.agron.iastate.edu/archive/data';
 const W = 64, H = 32;
 const KM_PER_LED = 1.5 * 1.609344;      // ~1.5 mi per LED
-const SPLIT_W = 39;                      // radar width in the split layout: cols 0-38, gray divider at 39, clock panel 40-63
-const SPLIT_CLOCK = [40, 0, W - 40, H];
-// Full-width layout: the clock stack sits top-right over open water. The
-// box must be all water: 24 cols (22px clock + margin) x 22 rows (stack on
+const SPLIT_W = 39;                      // radar width in the split layout: cols 0-38, gray divider at 39, time panel 40-63
+const SPLIT_TIME_BOX = [40, 0, W - 40, H];
+// Full-width layout: the time stack sits top-right over open water. The
+// box must be all water: 24 cols (22px time + margin) x 22 rows (stack on
 // rows 2-19 + margin). Built per station by scripts/build-locations.js.
-const FULL_CLOCK = [40, 0, 24, 22];
+const FULL_TIME_BOX = [40, 0, 24, 22];
 const SHORE = 6;
 // s between loop frames. IEM's archive only has frames at even minutes;
 // every multiple of 6 minutes is one (5-minute steps hit odd minutes half
@@ -76,10 +76,10 @@ function hexRows(rows, width) {
 }
 function loadLocation(mapid) {
   if (locCache.has(mapid)) return locCache.get(mapid);
-  let loc = { split: true, width: SPLIT_W, clock: SPLIT_CLOCK, water: null, shore: null };
+  let loc = { split: true, width: SPLIT_W, timeBox: SPLIT_TIME_BOX, water: null, shore: null };
   try {
     const j = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'locations', `${mapid}.json`), 'utf8'));
-    loc = { split: j.split, width: j.width, clock: j.clock, water: hexRows(j.water, j.width), shore: hexRows(j.shore, j.width) };
+    loc = { split: j.split, width: j.width, timeBox: j.timeBox, water: hexRows(j.water, j.width), shore: hexRows(j.shore, j.width) };
   } catch (e) { /* no file: split layout, no masks */ }
   locCache.set(mapid, loc);
   return loc;
@@ -136,7 +136,7 @@ function modeFor(w) {
 const isPrecip = (v) => (v >= 1 && v <= 5) || (v >= 8 && v <= 10);
 
 // Mean dBZ grid -> the 2048-byte frame: levels, water masked, despeckle,
-// shoreline, clock box cleared, marker. loc: loadLocation() result (masks
+// shoreline, time box cleared, marker. loc: loadLocation() result (masks
 // are on the crop's grid). Returns { bytes, colored }.
 function toFrame(dbz, geo, mode, loc = null) {
   const levels = mode === 'snow' ? SNOW_DBZ : RAIN_DBZ;
@@ -168,9 +168,9 @@ function toFrame(dbz, geo, mode, loc = null) {
   if (loc && loc.shore) {
     for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) if (loc.shore[y * w + x]) out[y * W + x] = SHORE;
   }
-  // The clock box stays empty.
+  // The time box stays empty.
   if (loc && !loc.split) {
-    const [bx, by, bw, bh] = loc.clock;
+    const [bx, by, bw, bh] = loc.timeBox;
     for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) { if (isPrecip(out[y * W + x])) colored--; out[y * W + x] = 0; }
   }
   // Location marker: white dot. Precip in the 4 pixels around it is cleared
@@ -326,7 +326,7 @@ function createRadar({
         l.judged = latest;
       }
       const loc = loadLocation(mapid);
-      return { on: l.on, frames: frames.map((f) => f.id), ft: frames.map((f) => f.t), clock: loc.clock, split: loc.split };
+      return { on: l.on, frames: frames.map((f) => f.id), ft: frames.map((f) => f.t), timeBox: loc.timeBox, split: loc.split };
     },
     // A kept frame's bytes for this station, or null.
     frame(mapid, id) {
@@ -350,5 +350,5 @@ function createRadar({
 
 module.exports = {
   parseWld, geometry, accumulator, modeFor, toFrame, crops, createRadar, fetchFrame,
-  ledCenter, loadLocation, stampOf, timeOf, frameUrl, dbzOf, W, H, SPLIT_W, SPLIT_CLOCK, FULL_CLOCK, SHORE, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
+  ledCenter, loadLocation, stampOf, timeOf, frameUrl, dbzOf, W, H, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX, SHORE, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
 };

@@ -14,7 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ledCenter, W, H, SPLIT_W, SPLIT_CLOCK, FULL_CLOCK } = require('../server/board/radar');
+const { ledCenter, W, H, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX } = require('../server/board/radar');
 
 const OUT = path.join(__dirname, '..', 'server', 'board', 'locations');
 const lake = JSON.parse(fs.readFileSync(path.join(__dirname, 'geo-src', 'lake-michigan.geojson'), 'utf8')).features[0].geometry;
@@ -65,9 +65,9 @@ function build(st) {
   // all water. The rest of the box is cleared either way.
   let boxWater = true;
   for (let y = 2; y <= 19 && boxWater; y++) for (let x = 41; x <= 62; x++) if (!full.water[y * W + x]) { boxWater = false; break; }
-  if (boxWater) return { mapid: st.mapid, split: false, width: W, clock: FULL_CLOCK, water: hex(full.water, W), shore: hex(full.shore, W) };
+  if (boxWater) return { mapid: st.mapid, split: false, width: W, timeBox: FULL_TIME_BOX, water: hex(full.water, W), shore: hex(full.shore, W) };
   const split = masks(st, SPLIT_W);
-  return { mapid: st.mapid, split: true, width: SPLIT_W, clock: SPLIT_CLOCK, water: hex(split.water, SPLIT_W), shore: hex(split.shore, SPLIT_W) };
+  return { mapid: st.mapid, split: true, width: SPLIT_W, timeBox: SPLIT_TIME_BOX, water: hex(split.water, SPLIT_W), shore: hex(split.shore, SPLIT_W) };
 }
 
 if (require.main === module) {

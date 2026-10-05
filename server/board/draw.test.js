@@ -274,7 +274,7 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   bytes[0] = 1; bytes[1] = 5; bytes[2] = 8; bytes[16 * 64 + 20] = 7;
   const t = Date.UTC(2020, 7, 10, 21, 0) / 1000; // 4:00 PM CDT
   const ids = ['a', 'b', 'c'];
-  const p = { now: t, bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: [t - 600, t - 300, t], clock: [40, 0, 24, 32], split: true } };
+  const p = { now: t, bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: [t - 600, t - 300, t], timeBox: [40, 0, 24, 32], split: true } };
   const f = draw.render(p, { screen: 'radar', frames: { a: bytes, b: bytes, c: bytes }, idx: 2 });
   assert.equal(hex(f.get(0, 0)), draw.RADAR[1]);
   assert.equal(hex(f.get(1, 0)), draw.RADAR[5]);
@@ -293,7 +293,7 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   for (let y = 0; y < 32; y++) assert.equal(hex(f.get(39, y)), draw.C.divider);
   for (let y = 0; y < 32; y++) for (let x = 36; x < 39; x++) assert.deepEqual(f.get(x, y), [0, 0, 0]);
   for (let y = 0; y < 32; y++) assert.deepEqual(f.get(40, y), [0, 0, 0], '1px gap before the widest clock');
-  const full = draw.render({ ...p, radar: { ...p.radar, clock: [40, 0, 24, 22], split: false } }, { screen: 'radar', frames: {}, idx: 2 });
+  const full = draw.render({ ...p, radar: { ...p.radar, timeBox: [40, 0, 24, 22], split: false } }, { screen: 'radar', frames: {}, idx: 2 });
   assert.deepEqual(full.get(39, 25), [0, 0, 0], 'no line in the full-width layout');
   // A frame not fetched yet draws as empty radar with the stack.
   const empty = draw.render(p, { screen: 'radar', frames: {}, idx: 0 });
@@ -303,7 +303,7 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
 
 test('radar with no frames yet draws the clock at the current time (no crash)', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
-  for (const radar of [{ on: false, frames: [], ft: [], clock: null, split: false }, { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true }, undefined]) {
+  for (const radar of [{ on: false, frames: [], ft: [], timeBox: null, split: false }, { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 32], split: true }, undefined]) {
     for (const idx of [undefined, -1, 0, 3]) {
       const f = draw.render({ now, bright: 100, warn: null, radar }, { screen: 'radar', now, idx, frames: {} });
       assert.ok(count(f, draw.C.radarTime, 40, 0, 63, 31) > 15, 'clock drawn');
@@ -314,17 +314,17 @@ test('radar with no frames yet draws the clock at the current time (no crash)', 
 test('radar with no frames shows current conditions on the left', () => {
   const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
   const wx = { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 };
-  const f = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], clock: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: {} });
+  const f = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: {} });
   assert.ok(count(f, draw.C.label, 12, 3, 30, 9) > 15, 'temperature');
   assert.ok(count(f, draw.C.label, 0, 15, 38, 19) > 15, 'condition word');
   assert.ok(count(f, draw.C.grey, 0, 23, 38, 27) > 15, 'high/low');
   assert.ok(count(f, draw.C.radarTime, 40, 6, 63, 12) > 15, 'clock still drawn');
   // Widest case stays clear of the split divider.
   const wide = { icon: 'pcloudy_day', temp: -10, word: 'PT CLOUDY', hi: 100, lo: -10 };
-  const g = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], clock: [40, 0, 24, 32], split: true, wx: wide } }, { screen: 'radar', now, frames: {} });
+  const g = draw.render({ now, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 32], split: true, wx: wide } }, { screen: 'radar', now, frames: {} });
   for (let y = 0; y < 32; y++) assert.deepEqual(g.get(38, y), [0, 0, 0], `col 38 row ${y}`);
   // Once frames exist, the radar replaces the conditions.
-  const withFrames = draw.render({ now, bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [now], clock: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: { a: new Uint8Array(2048) } });
+  const withFrames = draw.render({ now, bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [now], timeBox: [40, 0, 24, 22], split: false, wx } }, { screen: 'radar', now, frames: { a: new Uint8Array(2048) } });
   assert.equal(count(withFrames, draw.C.label, 0, 0, 38, 31), 0);
 });
 
@@ -568,7 +568,7 @@ test('baseball score flash: amber for a minute after a change, fades to white, t
 
 test('radar time off: no time or AM/PM; indicator stays; warning icon at the top right of the time area', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
-  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], clock: [40, 0, 24, 32], split: false };
+  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 32], split: false };
   const base = { now, bright: 100, warn: null };
   const off = (warn) => draw.render({ ...base, warn, radar: { ...radar, showTime: false } }, { screen: 'radar', now, frames: {} });
   const f = off(null);

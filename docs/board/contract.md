@@ -69,7 +69,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
     "on": false,
     "frames": ["40100-202610032310", "40100-202610032315", "40100-202610032320", "40100-202610032325", "40100-202610032330", "40100-202610032335"],
     "ft": [1759544640, 1759545000, 1759545360, 1759545720, 1759546080, 1759546440],
-    "clock": [40, 0, 24, 22],
+    "timeBox": [40, 0, 24, 22],
     "split": false
   }
 }
@@ -194,14 +194,14 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 | `on` | Rain is in the box (server applies on/off hysteresis). On the auto screen, `on` allows timed radar visits (see `visit`). |
 | `visit` | `{every, for}` in seconds, or `null`. Set only when the board's `screen` is `auto` and `radarEvery` > 0 (`for` is capped at `every`). The **board** (and simulator) shows the radar while `now mod every < for` and `on` is true, otherwise the payload's `screen` (`transit`); cycles are epoch-aligned. Mirrored by `autoScreen()` in `draw.js` and `auto_screen()` in `player.py`. The board fetches radar frames ahead of a visit whenever `on` and `visit` are set. A button press overrides it until `v` changes. |
 | `frames` | IDs of up to 6 latest frames (6 min apart, on even minutes), oldest first. Frame IDs are immutable, so the board fetches only IDs it doesn't already have. ID: `<mapid>-<YYYYMMDDHHMM UTC>`, plus `s` for a snow frame (so a station or mode change never reuses a cached frame). |
-| `showTime` | Boolean (absent = true). `false` hides the time and AM/PM; the clock box (the area) stays, the frame indicator stays, and the warning icon moves to the box's top right (right-aligned, under the indicator's rows). |
-| `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar clock. |
-| `clock` | `[x, y, w, h]`: box the board draws the clock stack into (frame indicator, clock, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
-| `split` | `true` when the location has no usable water area; the clock box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–38, marker at 19,16; the board draws a gray `#333333` line on col 39; clock box `[40, 0, 24, 32]`, leaving a 1px gap before the widest clock). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator rows 2–3, clock rows 6–12, AM/PM rows 15–19, right-aligned to column 62. |
+| `showTime` | Boolean (absent = true). `false` hides the time and AM/PM; the time box (the area) stays, the frame indicator stays, and the warning icon moves to the box's top right (right-aligned, under the indicator's rows). |
+| `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar time. |
+| `timeBox` | `[x, y, w, h]`: box the board draws the time stack into (frame indicator, time, AM/PM + warning icon), right-aligned. The server keeps this box empty in every frame. |
+| `split` | `true` when the location has no usable water area; the time box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–38, marker at 19,16; the board draws a gray `#333333` line on col 39; clock box `[40, 0, 24, 32]`, leaving a 1px gap before the widest clock). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator rows 2–3, clock rows 6–12, AM/PM rows 15–19, right-aligned to column 62. |
 
 | `wx` | Only while `frames` is empty: current conditions (same shape as the top-level `wx`), sent even with the weather row off. The board shows them on the radar screen's left side (icon + temperature, condition word, `H hi  L lo`) with the clock stack at the current time, instead of an empty radar. Omitted once frames exist. |
 
-When `on` is false, `frames` and `ft` may be empty and `clock` may be `null`. The server still sends frames it has, so a forced radar screen shows them.
+When `on` is false, `frames` and `ft` may be empty and `timeBox` may be `null`. The server still sends frames it has, so a forced radar screen shows them.
 
 **`on` hysteresis** (provisional): turns on when the newest frame has ≥ 30 precip pixels (after water masking and despeckle, marker excluded), off when it drops below 10. Judged once per new frame. `on` doesn't switch screens by itself: `auto` stays on transit unless radar visits are turned on.
 
@@ -240,7 +240,7 @@ One radar frame for that board's location.
 
 | Value | Meaning |
 |---|---|
-| 0 | off (land with no rain, masked water, clock box) |
+| 0 | off (land with no rain, masked water, time box) |
 | 1–5 | rain levels: 15/25/35/45/55 dBZ (dim green, green, yellow, orange, red) |
 | 6 | shoreline: the lake's edge pixels, water side; always drawn (water is masked, so rain never covers it) |
 | 7 | location marker (white dot; precip in the 4 pixels around it is cleared to 0, shoreline is kept) |
@@ -315,7 +315,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 
 **Stations:** `server/board/stations.json` lists every L station: `mapid`, name, descriptive name, lines served, and coordinates. It is generated from the City of Chicago "CTA System Information - List of 'L' Stops" dataset (`8pix-ypme`, the list the Train Tracker docs point to) by a script in `scripts/` and committed. That dataset has one record per platform; the script groups by `map_id` and takes `station_name`, `station_descriptive_name`, the line flags (`red`, `blue`, `g`, `brn`, `p`, `y`, `pnk`, `o`), and `location`. Each entry: `{mapid, name, desc, short, lines, lat, lon}`. `short` is the header name from `shortName()` in `server/board/station-names.js`: the uppercase name if it fits the 42px header budget, else the name with ordinals dropped (`95/DAN RYAN`), else a curated entry. The build fails if any name overflows without a curated entry. Picking a station on the phone copies `short` into the board's `station.name`, which stays editable. Station names repeat across lines (four Damens, three Addisons, Californias, Chicagos, Ciceros), so the picker shows the descriptive name with lines; the header shows the short name only. The control page's station picker and the location lookup both read it. (The map's GeoJSON has track lines only, no station points or `mapid`s.)
 
-**Location assets:** the radar water mask, clock box, and split flag depend on the location, and the location is the station. A script in `scripts/` generates them for **every station** and commits them under `server/board/locations/<mapid>.json`, so changing stations from the phone needs no build step. Nearby stations will share near-identical masks; that's fine at ~2 KB each.
+**Location assets:** the radar water mask, time box, and split flag depend on the location, and the location is the station. A script in `scripts/` generates them for **every station** and commits them under `server/board/locations/<mapid>.json`, so changing stations from the phone needs no build step. Nearby stations will share near-identical masks; that's fine at ~2 KB each.
 
 ---
 

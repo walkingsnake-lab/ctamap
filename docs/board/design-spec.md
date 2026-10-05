@@ -82,7 +82,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led-matrix/fonts`:
 
 - **Tom Thumb** (3x5): the default small text everywhere. **All Tom Thumb text is uppercase** (row labels, headers, weather words, status text), except the lowercase `m` minutes suffix in the chronological transit view (patched to 5px wide with a 3-row x-height, bottom-aligned with the digits; the stock 3px `m` reads as a blob). Only the ticker's 5x7 destinations use mixed case.
-- **X11 5x7**: CTA-style ticker destinations and the radar clock.
+- **X11 5x7**: CTA-style ticker destinations and the radar time.
 - Both made **proportional** (advance = ink width + 1px). CircuitPython honors per-glyph widths.
 - Patched glyphs: **W** and **w** widened to 5px (the stock 4px versions read as H/u). 5x7 **t** narrowed to 3px (bottom hook tucked under the crossbar).
 - **`tt` ligature** (5x7, 6px): two narrow t's sharing one crossbar, at a private-use codepoint. The server substitutes it for "tt" in ticker destinations. `Cottage` is 31px with it, leaving a 4px gap before a two-digit time.
@@ -219,7 +219,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when Open-Meteo reports a snow weather code, or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/15/20 dBZ, from the Feb 2, 2022 storm) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
 - **Loop:** 6 frames, 6 min apart (30 min; IEM only archives even minutes), 0.5 s each, **holds on the last frame** for 4 s. Network requests (including the next radar frame) happen during the hold.
 - **Water masked black** (mask generated per location from coastline data), with a faint shoreline along its edge.
-- **Layout per station** (`server/board/locations/`, built by `scripts/build-locations.js` from Natural Earth's Lake Michigan outline): full width with the clock over the lake when the clock's area is all water (114 of 144 stations), otherwise the split layout (radar left 39 columns, a gray `#333333` line on the panel's left edge, clock right 24). The clock stack is **top-aligned** (rows 2–19) in both.
+- **Layout per station** (`server/board/locations/`, built by `scripts/build-locations.js` from Natural Earth's Lake Michigan outline): full width with the time over the lake when the time's area is all water (114 of 144 stations), otherwise the split layout (radar left 39 columns, a gray `#333333` line on the panel's left edge, time right 24). The time stack is **top-aligned** (rows 2–19) in both.
 - **No frames yet** (right after a deploy or a station change): the left side shows current conditions instead: weather icon and temperature on rows 2–9, condition word on rows 15–19 (level with AM/PM), `H 69  L 51` in grey on rows 23–27. The clock stack shows the current time.
 - **Shoreline** is painted on the lake's edge pixels (inside the water), so rain never covers it.
 - **Colors** (fills at 65%): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.

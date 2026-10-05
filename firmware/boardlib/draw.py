@@ -718,9 +718,9 @@ def render_radar(p, f, now=None, idx=None, frames=None):
         f.draw_radar(data) if hasattr(f, 'draw_radar') else draw_radar_frame(f, data)
     if not ids and r.get('wx'):
         draw_conditions(f, r['wx'])
-    if r.get('split') and r.get('clock'):
-        f.fill(r['clock'][0] - 1, 0, 1, 32, C['divider'])
-    bx, by, bw, bh = r.get('clock') or (40, 0, 24, 32)
+    if r.get('split') and r.get('timeBox'):
+        f.fill(r['timeBox'][0] - 1, 0, 1, 32, C['divider'])
+    bx, by, bw, bh = r.get('timeBox') or (40, 0, 24, 32)
     right = min(62, bx + bw - 1)
     top = by + 2
     ft = r.get('ft')

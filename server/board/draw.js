@@ -593,10 +593,10 @@
       // No frames yet: current conditions on the left instead of the radar.
       if (!ids.length && r.wx) drawConditions(f, r.wx);
       // Split layout: gray line on the clock panel's left edge.
-      if (r.split && r.clock) f.fill(r.clock[0] - 1, 0, 1, 32, C.divider);
+      if (r.split && r.timeBox) f.fill(r.timeBox[0] - 1, 0, 1, 32, C.divider);
       // Clock stack, right-aligned in the clock box: frame indicator, clock
       // (frame time), AM/PM with the warning icon to its left.
-      const [bx, by, bw, bh] = r.clock || [40, 0, 24, 32];
+      const [bx, by, bw, bh] = r.timeBox || [40, 0, 24, 32];
       const right = Math.min(62, bx + bw - 1);
       const top = by + 2; // top-aligned (spec: rows 2-19)
       const t = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
