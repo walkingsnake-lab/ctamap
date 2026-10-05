@@ -98,6 +98,7 @@ async function build() {
   add('overnight weather', { ...night, wx: WX }, [{ screen: 'transit' }]);
   add('no data', { ...night, stale: 1 }, [{ screen: 'transit' }]);
   add('no data weather', { ...night, stale: 1, wx: WX }, [{ screen: 'transit' }]);
+  add('stale', { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE'), stale: 1 }, [{ screen: 'transit' }, { screen: 'ticker' }, { screen: 'ticker', page: 1, slide: 0.5 }]);
   // Rolls via explicit roll state are covered by the animator sequences below.
 
   // Ticker: pages and slides.

@@ -208,7 +208,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ### Other states
 - **Overnight / no predictions:** large **9x15 Bold** clock (`#cccccc`) with the 2x2 square colon, dim `NO TRAINS` label below it, weather row below the divider. Follows the board's weather-row setting; with the weather row off, the clock and `NO TRAINS` are centered vertically.
-- **Stale data:** when the server has no Train Tracker data, or it's more than 3 minutes old (CTA failing), every time is drawn like a schedule-based one (grey; the ticker shows the clock glyph), and once none are left the overnight layout says `NO DATA` instead of `NO TRAINS`.
+- **Stale data:** when the server has no Train Tracker data, or it's more than 3 minutes old (CTA failing), the transit and ticker screens show a red (`#ff2020`) line along the top edge (row 0, which no screen draws on, with or without the header), and once none are left the overnight layout says `NO DATA` instead of `NO TRAINS`.
 
 ---
 

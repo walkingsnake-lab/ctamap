@@ -83,7 +83,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `now` | int | Server epoch seconds. |
 | `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int \| null | Seconds since the arrivals data was last fetched successfully, or `null` when the server hasn't reached Train Tracker since it started (the update is still sent, with no rows). The server keeps serving last-good data when CTA fails. |
-| `stale` | int | `1` when there's no arrivals data or it's more than 3 minutes old (`STALE_S` in `index.js`): every `s` is then `1`, so the times draw grey and the ticker shows the clock glyph, and the overnight layout says `NO DATA` instead of `NO TRAINS`. Otherwise `0`. |
+| `stale` | int | `1` when there's no arrivals data or it's more than 3 minutes old (`STALE_S` in `index.js`): the transit and ticker screens draw a red (`#ff2020`) line along the top edge (row 0, full width), and the overnight layout says `NO DATA` instead of `NO TRAINS`. Otherwise `0`. |
 | `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `weather` (radar loop while raining; see *Radar*), `baseball`. `auto` resolves to `baseball` while `mlb.games` is non-empty, otherwise `transit` (NWS warnings and watches don't change it); timed radar visits ride on top of either, see `radar.visit`. A local button press overrides it until `v` changes. Firmware before the baseball port draws `transit` for `baseball`. |
 | `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (Open-Meteo times for the station; 100 until weather data arrives), or the fixed level, or 0 for off. |
 | `header` | string \| null | Station name for the transit header, or `null` when the header is off or hidden to fit (see *Fitting the header and weather row*). |
@@ -141,7 +141,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `ln` | Line code for the color block: `RD` `BL` `BR` `GR` `OR` `PK` `PR` `YL`. The board owns the color palette. |
 | `lbl` | Label, uppercase, fitted. |
 | `t` | Up to 3 arrival times (epoch), ascending. |
-| `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`) or the data is `stale`, drawn grey instead of amber. |
+| `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`), drawn grey instead of amber. |
 | `a` | `1` if the line has an active **major** CTA alert (block blinks to "!"); see *CTA alerts* below. |
 | `rn` | `chrono` only: Train Tracker run number (string). The board keys rows by it, so trains keep their identity when they swap order. |
 

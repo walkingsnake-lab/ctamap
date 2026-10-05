@@ -131,12 +131,10 @@ function latchDue(prev, next, now) {
 
 // cfg: the board's state (rows filter, showHeader, showWeather).
 // alerts: Set of line codes with an active service alert.
-// stale: the arrivals are old; every time is flagged like a schedule-based one.
 // prevView: this board's last view state (see chooseView); the new one is
 // returned as viewState for the caller to keep.
-function format(arrivals, cfg, { now, alerts = new Set(), prevView = null, stale = false } = {}) {
-  const live = arrivals.filter((a) => a.t >= now - DROP_GRACE).sort((a, b) => a.t - b.t)
-    .map((a) => (stale ? { ...a, s: 1 } : a));
+function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}) {
+  const live = arrivals.filter((a) => a.t >= now - DROP_GRACE).sort((a, b) => a.t - b.t);
 
   // Group into rows by line + short destination.
   const groups = new Map();

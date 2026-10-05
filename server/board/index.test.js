@@ -167,7 +167,7 @@ test('update: auth, unknown board, and no Train Tracker data yet', async () => {
   await s.close();
 });
 
-test('update: arrivals older than 3 minutes are stale: every time flagged like a schedule-based one', async () => {
+test('update: arrivals older than 3 minutes are stale; the times themselves are unchanged', async () => {
   const now = Math.floor(Date.now() / 1000);
   const arrivals = normalize(morseJson, { log: quiet });
   const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
@@ -176,13 +176,12 @@ test('update: arrivals older than 3 minutes are stale: every time flagged like a
   let s = await serve({ tracker: at(now - 170) });
   let b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.stale, 0);
-  assert.ok(b.rows[0].s.includes(0));
+  const fresh = b.rows;
   await s.close();
   s = await serve({ tracker: at(now - 190) });
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.stale, 1);
-  assert.ok(b.rows.length && b.rows.every((r) => r.s.every((x) => x === 1)));
-  assert.ok(b.ticker.length && b.ticker.every((x) => x.s === 1));
+  assert.deepEqual(b.rows.map((r) => r.s), fresh.map((r) => r.s));
   await s.close();
 });
 

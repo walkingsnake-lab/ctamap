@@ -94,6 +94,19 @@ test('no rows and stale data -> NO DATA instead of NO TRAINS', () => {
   assert.deepEqual(render({ ...p, stale: 1 }).px, stale.px);
 });
 
+test('stale data: a red line along the top edge on transit and ticker, nowhere else changed', () => {
+  const p = payload('morse-2026-10-03-2316.json');
+  for (const screen of ['transit', 'ticker']) {
+    const fresh = render(p, { screen }), stale = render({ ...p, stale: 1 }, { screen });
+    for (let x = 0; x < 64; x++) {
+      assert.equal(hex(fresh.get(x, 0)) === C.red, false);
+      assert.equal(hex(stale.get(x, 0)), C.red, `${screen} x=${x}`);
+    }
+    for (let y = 1; y < 32; y++) for (let x = 0; x < 64; x++) assert.deepEqual(stale.get(x, y), fresh.get(x, y));
+  }
+  assert.equal(hex(render({ ...p, rows: [], stale: 1 }).get(10, 0)), C.red);
+});
+
 test('ticker: index column shows the number, the clock for scheduled, the alert circle for alerts', () => {
   const p = payload('morse-2026-10-03-2316.json');
   // Morse ticker: [95th (scheduled), Howard, 95th (scheduled), Howard, ...]

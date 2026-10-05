@@ -354,6 +354,12 @@
       f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), top + 18, C.noTrains);
     }
 
+    // Stale train data (the server hasn't reached Train Tracker for a while):
+    // a red line along the top edge, which no screen draws on.
+    function drawStale(f, p) {
+      if (p.stale) f.fill(0, 0, 64, 1, C.red);
+    }
+
     function drawTransitView(f, view, blink) {
       if (!view.rows.length) {
         drawOvernight(f, view, view.now);
@@ -378,6 +384,7 @@
         if (o.rolls) for (const row of view.rows) for (const c of row.cells) if (o.rolls[c.id]) c.roll = o.rolls[c.id];
       }
       drawTransitView(f, view, !!o.blink);
+      drawStale(f, p);
       return f;
     }
 
@@ -598,6 +605,7 @@
         drawPage(page, -offset);
         if (offset > 0 && pages > 1) drawPage((page + 1) % pages, 26 - offset);
       });
+      drawStale(f, p);
       return f;
     }
 

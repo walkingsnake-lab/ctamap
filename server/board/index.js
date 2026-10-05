@@ -24,7 +24,7 @@ const DRAW_JS = fs.readFileSync(path.join(__dirname, 'draw.js'));
 const SIM_ASSETS = JSON.stringify(assets());
 
 const MAX_BODY = 8 * 1024;
-// Arrivals older than this are drawn as stale (grey, NO DATA when none are left).
+// Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
 const RESERVED = new Set(['ping', 'version', 'update', 'radar']);
@@ -195,7 +195,7 @@ function createBoard({
     if (test && test.game) games = [testGame(test.game, now), ...games];
     const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
     const viewKey = `${id}:${board.station.mapid}`;
-    const { view, viewState, rows, ticker, bars } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey), stale });
+    const { view, viewState, rows, ticker, bars } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
       v: board.v,

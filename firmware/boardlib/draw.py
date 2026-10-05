@@ -433,6 +433,11 @@ def draw_overnight(f, view, now):
     f.text('small', nt, (64 - measure('small', nt)) // 2, top + 18, C['noTrains'])
 
 
+def draw_stale(f, p):
+    if p.get('stale'):
+        f.fill(0, 0, 64, 1, C['red'])
+
+
 def draw_transit_view(f, view, blink):
     if not view['rows']:
         draw_overnight(f, view, view['now'])
@@ -455,6 +460,7 @@ def render_transit(p, f, now=None, blink=False, view=None):
     if view is None:
         view = build_transit_view(p, now)
     draw_transit_view(f, view, blink)
+    draw_stale(f, p)
     return f
 
 
@@ -743,6 +749,7 @@ def render_ticker(p, f, now=None, page=0, slide=0):
             draw_page((page + 1) % pages, 26 - offset)
     finally:
         f.pop_clip()
+    draw_stale(f, p)
     return f
 
 
