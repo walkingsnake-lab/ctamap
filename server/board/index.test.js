@@ -191,7 +191,7 @@ test('update: payload shape for the default Morse board', async () => {
   await s.close();
 });
 
-test('update: boot=1 resets screen/brightness and bumps v; settings flow through', async () => {
+test('update: boot=1 resets brightness, keeps the screen, and bumps v; settings flow through', async () => {
   const tracker = fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) });
   const s = await serve({ tracker });
   s.store.update('home', { screen: 'ticker', bright: 'off', showHeader: false });
@@ -202,7 +202,7 @@ test('update: boot=1 resets screen/brightness and bumps v; settings flow through
   assert.equal(b.header, null);
   assert.deepEqual(b.rows, []);
   b = (await s.req('/board/update?b=home&boot=1', h)).body;
-  assert.equal(b.screen, 'transit');
+  assert.equal(b.screen, 'ticker');
   assert.equal(b.bright, 100);
   assert.equal(b.v, 3);
   await s.close();

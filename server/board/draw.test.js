@@ -461,8 +461,8 @@ test('baseball rotates games one minute each; no games shows the clock', () => {
   const other = bbGame({ id: 2, st: 'live', inn: 1, half: 'B', b: 0, s: 0, o: 0, on: [0, 0, 0], away: { ab: 'NYY', c: '#3a5fa8', r: 0 }, home: { ab: 'BOS', c: '#c8323d', r: 0 } });
   const p = bb(LIVE, other);
   const t0 = Math.floor(NOW / 120) * 120; // a minute where game 0 is up
-  assert.equal(draw.gameIndex(2, t0), 0);
-  assert.equal(draw.gameIndex(2, t0 + 60), 1);
+  assert.equal(draw.pickGame(p.mlb.games, t0).i, 0);
+  assert.equal(draw.pickGame(p.mlb.games, t0 + 60).i, 1);
   assert.equal(count(draw.renderBaseball(p, { now: t0 }), CHC.c, 1, 2, 3, 7), 18);
   assert.equal(count(draw.renderBaseball(p, { now: t0 + 60 }), '#3a5fa8', 1, 2, 3, 7), 18);
   assert.ok(count(draw.renderBaseball(bb()), draw.C.clock, 0, 0, 63, 31) > 0);
@@ -485,4 +485,18 @@ test('radar visits interrupt baseball like transit; forced screens are left alon
   assert.equal(autoScreen({ screen: 'baseball', radar }, t + 100), 'baseball');
   assert.equal(autoScreen({ screen: 'baseball', radar: { ...radar, on: false } }, t + 10), 'baseball');
   assert.equal(autoScreen({ screen: 'ticker', radar }, t + 10), 'ticker');
+});
+
+test('baseball: a live game takes precedence; pregame and finals rotate only when nothing is live', () => {
+  const pre = bbGame({ id: 3, st: 'pre', start: NOW + 900 });
+  const fin = bbGame({ id: 4, st: 'final' });
+  const t0 = Math.floor(NOW / 180) * 180;
+  for (let k = 0; k < 6; k++) {
+    const pick = draw.pickGame([pre, LIVE, fin], t0 + k * 60);
+    assert.deepEqual([pick.i, pick.of], [1, 1]); // always the live game
+  }
+  const seen = new Set([0, 1, 2].map((k) => draw.pickGame([pre, fin], t0 + k * 60).i));
+  assert.deepEqual([...seen].sort(), [0, 1]);
+  const live2 = { ...LIVE, id: 5 };
+  assert.deepEqual([0, 1].map((k) => draw.pickGame([pre, LIVE, fin, live2], t0 + k * 60).i).sort(), [1, 3]);
 });

@@ -214,6 +214,8 @@
   function frame(t) {
     if (!p || $('pause').checked) return;
     const n = now();
+    // Always drawn at full brightness (the bar still shows the board's level).
+    const full = p.bright === 100 ? p : { ...p, bright: 100 };
     const shown = D.autoScreen(p, n);
     if (shown !== lastShown) {
       lastShown = shown;
@@ -224,7 +226,7 @@
     // Transit: rolls, fades, and slides come from the animator.
     const view = transitAnim.step(p, n, t);
     const blink = Math.floor(t / D.BLINK_MS) % 2 === 1;
-    paintTransit(D.render(p, { screen: 'transit', now: n, blink, view }));
+    paintTransit(D.render(full, { screen: 'transit', now: n, blink, view }));
 
     // Ticker: hold each page, then slide up to the next, looping.
     const pages = D.tickerPages(p, n);
@@ -232,14 +234,14 @@
     let since = t - pageStart;
     if (since >= D.PAGE_HOLD_MS + D.SLIDE_MS) { page = (page + 1) % pages; pageStart = t; since = 0; }
     const slide = pages > 1 && since > D.PAGE_HOLD_MS ? (since - D.PAGE_HOLD_MS) / D.SLIDE_MS : 0;
-    paintTicker(D.render(p, { screen: 'ticker', now: n, page, slide }));
+    paintTicker(D.render(full, { screen: 'ticker', now: n, page, slide }));
     $('pageState').textContent = `page ${page + 1} of ${pages}`;
 
     // Radar: step through the loop, then hold on the newest frame.
     const nf = (p.radar && p.radar.frames.length) || 0;
     const cycle = Math.max(1, nf - 1) * D.RADAR_FRAME_MS + D.RADAR_HOLD_MS;
     const idx = nf ? Math.min(nf - 1, Math.floor((t % cycle) / D.RADAR_FRAME_MS)) : -1;
-    paintRadar(D.render(p, { screen: 'radar', now: n, idx, frames: radarFrames }));
+    paintRadar(D.render(full, { screen: 'radar', now: n, idx, frames: radarFrames }));
     $('radarState').textContent = p.radar && p.radar.on ? 'rain in the box' : nf ? 'no rain (auto stays on transit)' : 'no frames yet';
 
     // Baseball: one game per minute; a changed score rolls, as on the board.
@@ -253,9 +255,10 @@
       const rp = (t - r.start) / D.ROLL_MS;
       if (rp >= 1) delete bbRolls[k]; else rolls[k] = { from: r.from, p: rp };
     }
-    paintBaseball(D.render(p, { screen: 'baseball', now: n, rolls }));
-    const ng = (p.mlb && p.mlb.games.length) || 0;
-    $('gameState').textContent = ng ? `game ${D.gameIndex(ng, n) + 1} of ${ng}` : 'no games';
+    paintBaseball(D.render(full, { screen: 'baseball', now: n, rolls }));
+    const pick = D.pickGame((p.mlb && p.mlb.games) || [], n);
+    const anyLive = ((p.mlb && p.mlb.games) || []).some((g) => g.st === 'live');
+    $('gameState').textContent = !pick.of ? 'no games' : `${anyLive ? 'live game' : 'game'} ${pick.pos + 1} of ${pick.of}`;
   }
 
   let lastShown = null;

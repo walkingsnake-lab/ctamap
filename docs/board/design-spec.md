@@ -243,7 +243,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Every Cubs game** (team ID 112, any game type) and **every postseason game** (game types `F`, `D`, `L`, `W`). Postponed and cancelled games are skipped.
 - **Window:** pregame from 30 min before first pitch (a delayed start stays in pregame), live, then final held 15 min after the server first sees it final (starting values; tune). A final first seen more than 6 h after first pitch (e.g. after a server restart) isn't shown.
 - **Priority:** weather wins. Auto shows baseball while any game is in its window, except during an NWS warning or watch (transit, with its warning tag). Timed radar visits (§10), when turned on, interrupt baseball the same way they interrupt transit.
-- **Multiple games:** one minute each, picked by wall time (`floor(now / 60) % count`), so the board keeps no rotation state. Screen switches are natural gaps for network jobs (§2).
+- **Live games take precedence:** while any shown game is live, only live games are shown (rotating one minute each if there are several). With nothing live, pregame and final games rotate one minute each. Picked by wall time (`floor(now / 60) % count` over that set), so the board keeps no rotation state. Screen switches are natural gaps for network jobs (§2).
 - Phone page and buttons can still switch screens (§10); the phone page gets a Baseball option.
 
 ### Layout
@@ -303,7 +303,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 
 ### Behavior
 - **Latency:** the board checks `/board/version` about every 10 s (scheduled in animation gaps, see §2) and fetches the full update right away when the version changes. Phone changes show up within ~10–15 s.
-- **Overrides stick** until changed or until the board restarts. On boot the board sends a boot flag on its first request; the server resets screen and brightness to Auto and bumps the version. Station and filter config persist across restarts.
+- **The chosen screen is permanent:** Auto, Transit, Ticker, Radar, or Baseball stays until changed on the phone, including across board restarts. A forced screen ignores the auto rules (no baseball takeover, no radar visits); forced Baseball with no game on shows the clock and `NO GAMES`. On boot the board sends a boot flag on its first request; the server resets **brightness** to Auto (so a board left off comes back lit) and bumps the version. Screen, station, and filter config persist across restarts.
 - **Persistence:** state lives in a small JSON file on a Fly volume, so deploys and server restarts don't wipe config.
 - **Buttons vs. phone: last action wins.** A button press sets a local override and records the current server version. The local override holds until the server version changes (a phone change), then the board follows the server again.
 - Possible optimization to test on the board: keep the HTTPS connection open between requests to avoid repeating the TLS handshake, which would make version checks nearly free.

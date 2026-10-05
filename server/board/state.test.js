@@ -64,11 +64,11 @@ test('rows accept an ordered destination list', () => {
   assert.deepEqual(b.rows, ['RD:Howard', 'RD:95th']);
 });
 
-test('boot resets screen and brightness but keeps config', () => {
+test('boot resets brightness but keeps the chosen screen and config', () => {
   const store = createStore({ dir: tmpDir(), log: quiet });
   store.update('home', { screen: 'ticker', bright: 30, showHeader: false });
   const b = store.boot('home');
-  assert.equal(b.screen, 'auto');
+  assert.equal(b.screen, 'ticker');
   assert.equal(b.bright, 'auto');
   assert.equal(b.showHeader, false);
   assert.equal(b.v, 3);

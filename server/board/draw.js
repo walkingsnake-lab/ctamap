@@ -626,9 +626,17 @@
     const ctext = (f, font, str, cx, base, color) => f.text(font, str, cx - Math.floor(measure(font, str) / 2), base, color);
     const record = (t) => (t.w == null || t.l == null ? '' : `${t.w}-${t.l}`);
 
-    // Which game is up: one minute each by wall time, so the board and the
-    // simulator agree without keeping rotation state.
-    const gameIndex = (n, now) => (n ? Math.floor(now / 60) % n : -1);
+    // Which game is up: live games take precedence over pregame and finals;
+    // within that set, one minute each by wall time, so the board and the
+    // simulator agree without keeping rotation state. Returns the index into
+    // games, the game's place in the rotation, and the rotation size.
+    function pickGame(games, now) {
+      if (!games.length) return { i: -1, pos: 0, of: 0 };
+      const live = games.map((g, i) => (g.st === 'live' ? i : -1)).filter((i) => i >= 0);
+      const pool = live.length ? live : games.map((_, i) => i);
+      const pos = Math.floor(now / 60) % pool.length;
+      return { i: pool[pos], pos, of: pool.length };
+    }
 
     // Score, right-aligned at SCORE_RIGHT; a changed score rolls digit by
     // digit like arrival times.
@@ -688,7 +696,7 @@
       const f = newFrame();
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) { drawNoGames(f, now); return f; }
-      const g = games[o.game != null ? o.game % games.length : gameIndex(games.length, now)];
+      const g = games[o.game != null ? o.game % games.length : pickGame(games, now).i];
       const rolls = o.rolls || {};
       const final = g.st === 'final';
       const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
@@ -735,7 +743,7 @@
     function baseballScores(p, now) {
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) return null;
-      const g = games[gameIndex(games.length, now)];
+      const g = games[pickGame(games, now).i];
       return { id: g.id, away: String(g.away.r), home: String(g.home.r) };
     }
 
@@ -763,7 +771,7 @@
 
     return {
       Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderRadar,
-      renderBaseball, baseballScores, gameIndex,
+      renderBaseball, baseballScores, pickGame,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
       // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.

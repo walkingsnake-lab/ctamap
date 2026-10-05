@@ -162,12 +162,11 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       return board;
     },
 
-    // Board restart: screen and brightness overrides go back to auto
-    // (station, rows, and toggles persist). Bumps v.
+    // Board restart: brightness goes back to auto (so a board left off comes
+    // back lit); the chosen screen, station, rows, and toggles persist. Bumps v.
     boot(id) {
       const board = state.boards[id];
       if (!board) return null;
-      board.screen = 'auto';
       board.bright = 'auto';
       board.v += 1;
       save();
