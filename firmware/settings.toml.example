@@ -14,3 +14,8 @@ BOARD_TOKEN = "..."
 
 # Panel color depth (1-6). Higher = smoother dim colors, more flicker risk.
 MATRIX_BIT_DEPTH = 5
+
+# Gamma applied to every palette color (the panel is linear; colors are
+# authored for screens). "1" = off. Try "1.8", then "2.2". Quoted: settings.toml
+# has no floats.
+MATRIX_GAMMA = "1.8"

@@ -242,6 +242,7 @@ def run():
         board_id=os.getenv('BOARD_ID') or 'home',
         token=os.getenv('BOARD_TOKEN') or '',
         bit_depth=int(os.getenv('MATRIX_BIT_DEPTH') or 5),
+        gamma=float(os.getenv('MATRIX_GAMMA') or 1),
     )
     board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog)
     board.connect(boot=device.cold_boot())
