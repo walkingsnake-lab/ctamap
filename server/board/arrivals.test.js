@@ -271,10 +271,24 @@ test('DUE latch: a train that goes DUE before the board sees this fetch never ju
     const shown = timeText(prev[0].t, r);
     if (shown === 'DUE') assert.equal(timeText(next[0].t, r), 'DUE', `payload landing at +${r - now} s`);
   }
-  // 802 is still minutes away when the board sees this fetch: the new time stands.
-  assert.equal(next[1].t, now + 250);
   // An earlier new prediction is kept as is.
   assert.equal(latchDue(prev, [a('801', now + 50)], now)[0].t, now + 50);
+});
+
+test('times only count down: a slip of under a minute keeps the previous time; a bigger one shows', () => {
+  const { latchDue, SLIP_S } = require('./arrivals');
+  const { timeText } = require('./draw');
+  const now = 1_000_000;
+  const a = (rn, t) => ({ ln: 'RD', dest: 'Howard', known: true, dir: 1, t, s: 0, rn });
+  const prev = [a('801', now + 400), a('802', now + 900)];
+  // 801 at 6:40 shows 7; CTA's fresh "8 min" is 40 s later: still 7, counting down.
+  const next = latchDue(prev, [a('801', now + 440), a('802', now + 900 + SLIP_S)], now);
+  assert.equal(next[0].t, now + 400);
+  assert.equal(timeText(next[0].t, now + 25), '7');
+  // 802 slipped a full minute: a real delay.
+  assert.equal(next[1].t, now + 900 + SLIP_S);
+  // Each fetch compares with the time it kept, so a slow drift shows once it adds up.
+  assert.equal(latchDue(next, [a('801', now + 30 + 440)], now + 30)[0].t, now + 400 + 30 + 40);
 });
 
 test('tracker applies the DUE latch between fetches', async () => {
