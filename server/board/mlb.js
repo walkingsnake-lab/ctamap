@@ -129,7 +129,8 @@ function trackScores(json, now, seen, changes) {
       const prev = seen.get(g.gamePk);
       if (prev) {
         const ch = changes.get(g.gamePk) || {};
-        for (const k of ['away', 'home']) if (cur[k] !== prev[k]) ch[k] = now;
+        // Whole seconds: the board's floats can't hold a fractional epoch.
+        for (const k of ['away', 'home']) if (cur[k] !== prev[k]) ch[k] = Math.floor(now);
         changes.set(g.gamePk, ch);
       }
       seen.set(g.gamePk, cur);

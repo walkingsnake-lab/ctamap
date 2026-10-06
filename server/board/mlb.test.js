@@ -136,6 +136,16 @@ test('score changes between polls are stamped on the live game, only for the tea
   assert.equal(shown(s2, t + 31, new Map(), changes)[0].home.at, t + 15);
 });
 
+test('score change stamps are whole seconds (CircuitPython floats would round them by minutes)', () => {
+  const t = START + 7200;
+  const s1 = schedule(game(live({ currentInning: 3 })));
+  const s2 = schedule(game((g) => { live({ currentInning: 3 })(g); g.teams.home.score = 2; }));
+  const seen = new Map(), changes = new Map();
+  trackScores(s1, t + 0.25, seen, changes);
+  trackScores(s2, t + 15.75, seen, changes);
+  assert.equal(shown(s2, t + 20, new Map(), changes)[0].home.at, t + 15);
+});
+
 test('forced view: today\'s games all day from midnight; finals until 3 AM the next morning', () => {
   const { dayStart } = require('./mlb');
   const midnight = dayStart(START);                                   // 2026-10-03 00:00 CDT
