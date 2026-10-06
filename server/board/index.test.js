@@ -518,6 +518,39 @@ test('simulator preview: header and weather toggles without changing the board',
   await s.close();
 });
 
+test('simulator test radar: a recorded storm or snowstorm loops at the board station, frames served by id', async () => {
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const post = async (body) => {
+    const r = await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return { status: r.status, body: await r.json() };
+  };
+  assert.equal((await post({ radar: 'hail' })).status, 400);
+  const r = (await post({ radar: 'storm' })).body;
+  assert.equal(r.radar, 'storm');
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.radar.on, true);
+  assert.equal(b.radar.frames.length, 6);
+  assert.deepEqual(b.radar.ft.map((t, i) => (i ? t - b.radar.ft[i - 1] : 0)), [0, 360, 360, 360, 360, 360]);
+  const frames = [];
+  for (const id of b.radar.frames) {
+    const f = await fetch(`http://127.0.0.1:${s.port}/board/radar/${id}?b=home`, h);
+    assert.equal(f.status, 200);
+    frames.push(Buffer.from(await f.arrayBuffer()));
+  }
+  const rain = (f) => [...f].filter((v) => v >= 1 && v <= 5).length;
+  assert.ok(frames.every((f) => f.length === 2048 && rain(f) > 100), 'storm in every frame');
+  assert.notDeepEqual(frames[0], frames[5], 'the loop moves');
+  await post({ radar: 'snow' });
+  b = (await s.req('/board/update?b=home', h)).body;
+  const snow = Buffer.from(await (await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/radar/${b.radar.frames[5]}?b=home`)).arrayBuffer());
+  assert.ok([...snow].some((v) => v >= 8 && v <= 10), 'snow levels');
+  await post({});
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual([b.radar.on, b.radar.frames], [false, []]);
+  await s.close();
+});
+
 test('simulator test alerts: fake line alerts and a weather warning, merged into updates, then expire', async () => {
   const now = Math.floor(Date.now() / 1000);
   const arrivals = normalize(morseJson, { log: quiet });
@@ -525,7 +558,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, left: 0 });
+  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, left: 0 });
   let r = await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' } });
   assert.equal(r.status, 200);
   const t = await r.json();

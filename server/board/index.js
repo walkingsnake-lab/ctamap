@@ -11,6 +11,7 @@ const { createWeather, toWx, toScreenWx, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar } = require('./radar');
+const { createTestRadar } = require('./test-radar');
 const { createMlb } = require('./mlb');
 const { createLogos } = require('./mlb-logos');
 const { team } = require('./teams');
@@ -127,6 +128,7 @@ function createBoard({
   if (!weather) weather = createWeather({ log, cacheFile: path.join(path.dirname(store.file), 'board-weather.json') }).start();
   if (!nws) nws = createNws({ log }).start();
   if (!radar) radar = createRadar({ weather, log }).start();
+  const testRadar = createTestRadar();
   if (!mlb) mlb = createMlb({ log }).start();
   if (!logos) logos = createLogos({ dir: resolveDir(log), log });
 
@@ -187,7 +189,9 @@ function createBoard({
     }
     const game = body.game == null ? null : body.game;
     if (game && !GAME_STATES.includes(game)) throw new ValidationError(`game must be one of ${GAME_STATES.join(', ')}`);
-    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game };
+    const rad = body.radar == null ? null : body.radar;
+    if (rad && !testRadar.KINDS.includes(rad)) throw new ValidationError(`radar must be one of ${testRadar.KINDS.join(', ')}`);
+    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad };
   }
 
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
@@ -221,6 +225,12 @@ function createBoard({
     let radarState = NO_RADAR;
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
     catch (e) { log.error('[board] radar:', e.message); }
+    // Test radar loop from the simulator (expires with the test alerts).
+    const test = activeTest(id, nowSecs());
+    if (test && test.radar && st) {
+      try { radarState = { ...radarState, ...(await testRadar.want(test.radar, st, nowSecs())) }; }
+      catch (e) { log.error('[board] test radar:', e.message); }
+    }
     // The radar screen is the weather screen: the radar loop only while rain
     // is in the box (frames are sent only then), current conditions otherwise.
     if (!radarState.on) radarState = { ...radarState, frames: [], ft: [] };
@@ -229,7 +239,6 @@ function createBoard({
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }
     // Test alerts from the simulator (expire on their own).
-    const test = activeTest(id, now);
     if (test) for (const ln of test.lines) alertLines.add(ln);
     let games = [];
     try { games = mlb.get(board.screen === 'baseball' ? 'forced' : 'auto'); }
@@ -309,7 +318,7 @@ function createBoard({
       if (!authed(req)) return send(res, 401, { err: 'bad_token' });
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      return sendFrame(res, radar.frame(board.station.mapid, rest[0]));
+      return sendFrame(res, radar.frame(board.station.mapid, rest[0]) || testRadar.frame(rest[0]));
     }
 
     // One team logo crop: 24 x 12 RGB (864 bytes), immutable (the id carries a hash).
@@ -389,7 +398,7 @@ function createBoard({
         const board = store.get(String(parsed.query.b || ''));
         const mapid = String(parsed.query.mapid || '') || (board && board.station.mapid);
         if (!mapid) return send(res, 404, { err: 'unknown_board' });
-        return sendFrame(res, radar.frame(mapid, rest[2]));
+        return sendFrame(res, radar.frame(mapid, rest[2]) || testRadar.frame(rest[2]));
       }
 
       // Team logos: GET status; POST a PNG to replace them: the whole sheet,
@@ -426,13 +435,13 @@ function createBoard({
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
             throw e;
           }
-          if (t.lines.length || t.warn || t.game) tests.set(id, { ...t, until: now + TEST_S });
+          if (t.lines.length || t.warn || t.game || t.radar) tests.set(id, { ...t, until: now + TEST_S });
           else tests.delete(id);
         } else if (method !== 'GET') {
           return send(res, 405, { err: 'method' });
         }
         const t = activeTest(id, now);
-        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, left: t.until - now } : { lines: [], warn: null, game: null, left: 0 });
+        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, left: 0 });
       }
 
       // Station list for the simulator's picker.
@@ -469,7 +478,7 @@ function createBoard({
         const screen = ['transit', 'ticker', 'weather', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
-        for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid); if (b) frames[fid] = b; }
+        for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid) || testRadar.frame(fid); if (b) frames[fid] = b; }
         const scale = Math.min(16, Math.max(1, parseInt(parsed.query.scale, 10) || 8));
         const frame = render(body, {
           screen,
