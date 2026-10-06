@@ -654,11 +654,12 @@ test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at 
   assert.ok(tag(off(tor), draw.C.warnTornado) > 15);                              // WARN red
   assert.equal(tag(off(tor, {}, { blink: true }), draw.C.warnTornado), 0);       // blinks
   assert.equal(tag(off({ kind: 'tor', lvl: 'watch' }, {}, { blink: true }), draw.C.watch) > 20, true);
-  // No weather yet: just the tag.
-  const none = off({ kind: 'svr', lvl: 'warning' }, { temp: null });
-  assert.equal(count(none, draw.C.label, 0, 0, 63, 31), 0);
   // Time on (default and explicit) is unchanged by temp/icon.
   const on = draw.render({ ...base, radar }, { screen: 'weather', now, frames: {} });
+  // No weather yet: the time shows instead of an empty corner.
+  assert.deepEqual(off(null, { temp: null }).px, draw.render({ ...base, radar: { ...radar, temp: null } }, { screen: 'weather', now, frames: {} }).px);
+  const none = draw.render({ ...base, radar: { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, showTime: false, temp: null, icon: null } }, { screen: 'weather', now });
+  assert.ok(count(none, draw.C.radarTime, 40, 0, 63, 21) > 10, 'never a blank screen');
   const on2 = draw.render({ ...base, radar: { ...radar, showTime: true } }, { screen: 'weather', now, frames: {} });
   assert.deepEqual(on.px, on2.px);
   // Time on: a tornado watch next to AM/PM is yellow; a tornado warning blinks.

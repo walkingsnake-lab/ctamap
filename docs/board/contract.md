@@ -160,7 +160,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 - `min = ceil((t - now) / 60)`: rounded **up**, like CTA's own predictions (every `arrT` is `prdt` plus a whole number of minutes, so a fresh "2 min" counts down from 120 s).
 - Show `DUE` (transit) / `Due` (ticker) when `min <= 1`, i.e. 0–60 s out, which is when CTA sets `isApp` in the recorded fixtures. The board never shows 1. Chrono rows show `<min>m` otherwise.
 - DUE can still last a few minutes when a train is held: CTA keeps predicting "1 minute" while it waits, so `arrT` keeps moving later.
-- **DUE doesn't un-DUE (server):** if the previous prediction for a run (`ln` + `rn`) had already reached DUE by the time of a new fetch, and the new prediction is within 3 min, the server sends `t = fetch time + 60` (still DUE) instead of jumping back to 2. Fresh CTA predictions are whole minutes from a possibly stale prediction time, so this jump was common. A larger delay shows minutes again. (`latchDue` in `arrivals.js`, applied in `tracker.js`.)
+- **Times only count down (server):** fresh CTA predictions are whole minutes from a possibly stale prediction time, so they often come back up to a minute later than the board's countdown (often "2 min" for a train already showing DUE). For a run (`ln` + `rn`) seen in the previous fetch, a later new prediction keeps the previous time when it's less than 60 s later. Near DUE the tolerance is wider: a fetch reaches the board up to 60 s later (tracker poll + board poll), so for a run whose previous prediction is DUE within 60 s of the fetch, a new prediction within 3 min keeps the previous time, and one already DUE is held at `t = fetch time + 60` (still DUE). Bigger slips are real delays and show. (`latchDue` in `arrivals.js`, applied in `tracker.js`.)
 - Drop an arrival once `now > t + 30`; its cell fades out and the list shifts (see `createTransitAnimator()` in `draw.js`). **(decide)** whether the 30 s grace is right; CTA's `isApp` is not sent.
 
 #### Weather row (`wx`)
@@ -315,6 +315,8 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 
 `/data/board-state.json` on the Fly volume (`board_data`, mounted via `[mounts]` in `fly.toml`). Written atomically (temp file + rename). `BOARD_STATE_DIR` overrides the directory (tests, local dev); without it and without `/data`, the server uses a temp dir and logs a warning. An unreadable file is moved aside to `board-state.json.corrupt-<time>` and the server starts from defaults (board `home` at Morse).
 
+Next to it, `board-weather.json` keeps the last good Open-Meteo data per location (written atomically after each successful fetch), so a restart has weather right away. Entries older than 3 hours, or an unreadable file, are ignored.
+
 ```json
 {
   "boards": {
@@ -352,7 +354,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 
 ## Server polling
 
-After a failure, Train Tracker, NWS, and Open-Meteo retry at their interval, doubling with each failure in a row up to 5 minutes (or the interval, if longer); a board request doesn't wait during that backoff.
+After a failure, Train Tracker, NWS, and Open-Meteo retry in 30 s, doubling with each failure in a row up to 5 minutes (or the interval, if longer); a board request doesn't wait during that backoff.
 
 | Source | Interval | Notes |
 |---|---|---|

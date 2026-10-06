@@ -857,14 +857,13 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
             x += seg_w + seg_gap
     ws = warn_style(p['warn']) if p.get('warn') else None
     hide_warn = bool(ws and ws[2] and blink)
-    if r.get('showTime') is False:
-        if r.get('temp') is not None:
-            ts = str(r['temp']) + '°'
-            icon = r.get('icon') if r.get('icon') in assets.ICONS else None
-            x0 = right + 1 - ((10 if icon else 0) + measure('small', ts))
-            if icon:
-                draw_icon(f, icon, x0, top + 4)
-            f.text('small', ts, x0 + (10 if icon else 0), top + 10, C['label'])
+    if r.get('showTime') is False and r.get('temp') is not None:
+        ts = str(r['temp']) + '°'
+        icon = r.get('icon') if r.get('icon') in assets.ICONS else None
+        x0 = right + 1 - ((10 if icon else 0) + measure('small', ts))
+        if icon:
+            draw_icon(f, icon, x0, top + 4)
+        f.text('small', ts, x0 + (10 if icon else 0), top + 10, C['label'])
         if ws:
             word = 'WARN' if p['warn']['lvl'] == 'warning' else 'WATCH'
             x0 = 64 - (measure('small', ws[0]) + TAG_GAP + measure('small', word))

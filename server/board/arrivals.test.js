@@ -257,6 +257,40 @@ test('DUE latch: a train that reached DUE stays DUE when the next prediction say
   assert.equal(latchDue(null, [a('801', now + 120)], now)[0].t, now + 120);
 });
 
+test('DUE latch: a train that goes DUE before the board sees this fetch never jumps back to 2', () => {
+  const { latchDue } = require('./arrivals');
+  const { timeText } = require('./draw');
+  const now = 1_000_000;
+  const a = (rn, t) => ({ ln: 'RD', dest: 'Howard', known: true, dir: 1, t, s: 0, rn });
+  // At this fetch 801 is 70 s out ("2"); the board shows DUE 10 s later,
+  // but this fetch's "2 min" only reaches it up to 60 s later.
+  const prev = [a('801', now + 70), a('802', now + 200)];
+  const next = latchDue(prev, [a('801', now + 120), a('802', now + 250)], now);
+  assert.equal(next[0].t, now + 70, 'no later than before');
+  for (let r = now; r <= now + 60; r += 5) {
+    const shown = timeText(prev[0].t, r);
+    if (shown === 'DUE') assert.equal(timeText(next[0].t, r), 'DUE', `payload landing at +${r - now} s`);
+  }
+  // An earlier new prediction is kept as is.
+  assert.equal(latchDue(prev, [a('801', now + 50)], now)[0].t, now + 50);
+});
+
+test('times only count down: a slip of under a minute keeps the previous time; a bigger one shows', () => {
+  const { latchDue, SLIP_S } = require('./arrivals');
+  const { timeText } = require('./draw');
+  const now = 1_000_000;
+  const a = (rn, t) => ({ ln: 'RD', dest: 'Howard', known: true, dir: 1, t, s: 0, rn });
+  const prev = [a('801', now + 400), a('802', now + 900)];
+  // 801 at 6:40 shows 7; CTA's fresh "8 min" is 40 s later: still 7, counting down.
+  const next = latchDue(prev, [a('801', now + 440), a('802', now + 900 + SLIP_S)], now);
+  assert.equal(next[0].t, now + 400);
+  assert.equal(timeText(next[0].t, now + 25), '7');
+  // 802 slipped a full minute: a real delay.
+  assert.equal(next[1].t, now + 900 + SLIP_S);
+  // Each fetch compares with the time it kept, so a slow drift shows once it adds up.
+  assert.equal(latchDue(next, [a('801', now + 30 + 440)], now + 30)[0].t, now + 400 + 30 + 40);
+});
+
 test('tracker applies the DUE latch between fetches', async () => {
   const { createTracker } = require('./tracker');
   let t = 1_791_000_000; // Oct 2026 (CDT, matching the -5 h below)
