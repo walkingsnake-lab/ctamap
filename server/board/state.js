@@ -16,6 +16,7 @@ const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball'];
+const BASEBALL_LAYOUTS = ['classic', 'logos'];
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
 const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
@@ -54,6 +55,9 @@ function defaultBoard(stations) {
     radarFor: 60,
     // Radar screen: show the frame's time and AM/PM.
     radarTime: true,
+    // Baseball screen layout: 'classic' (color blocks + abbreviations) or
+    // 'logos' (team logo bands, from the uploaded sprite sheet).
+    baseballLayout: 'classic',
   };
 }
 
@@ -90,6 +94,10 @@ function validatePatch(patch, stations) {
       case 'radarTime':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
+        break;
+      case 'baseballLayout':
+        if (!BASEBALL_LAYOUTS.includes(val)) throw new ValidationError(`baseballLayout must be one of ${BASEBALL_LAYOUTS.join(', ')}`);
+        out.baseballLayout = val;
         break;
       case 'screen':
         if (!SCREENS.includes(val)) throw new ValidationError(`screen must be one of ${SCREENS.join(', ')}`);
@@ -180,4 +188,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, ValidationError, DEFAULT_BOARD_ID, SCREENS };
+module.exports = { createStore, validatePatch, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, BASEBALL_LAYOUTS };

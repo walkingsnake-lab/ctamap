@@ -122,6 +122,17 @@
   </section>
 
   <section>
+    <h2>Baseball screen</h2>
+    <div class="seg" id="bbLayout">
+      <button data-v="classic">Classic</button>
+      <button data-v="logos">Logos</button>
+    </div>
+    <p class="hint" id="bbLayoutHint"></p>
+    <div class="row"><span>Logo sheet</span><label><input type="file" id="logoSheet" accept="image/png" style="width:auto"></label></div>
+    <p class="hint" id="logoStatus"></p>
+  </section>
+
+  <section>
     <h2>Transit screen</h2>
     <div class="row"><span>Transit header (station + clock)</span><label class="switch"><input type="checkbox" id="showHeader"><span></span></label></div>
     <div class="row"><span>Weather row</span><label class="switch"><input type="checkbox" id="showWeather"><span></span></label></div>
@@ -231,6 +242,10 @@
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
     $('showHeader').checked = board.showHeader;
     $('showWeather').checked = board.showWeather;
+    pressed('bbLayout', board.baseballLayout === 'logos' ? 'logos' : 'classic');
+    $('bbLayoutHint').textContent = board.baseballLayout === 'logos'
+      ? 'Team logo bands from your uploaded sheet; teams without a logo get a plain team-color band.'
+      : 'Team color blocks and abbreviations.';
     pressed('radarCorner', board.radarTime !== false ? 'time' : 'temp');
     $('radarCornerHint').textContent = board.radarTime !== false
       ? 'The radar frame\'s time, with AM/PM and any weather warning icon under it.'
@@ -298,6 +313,29 @@
   $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('name').blur(); saveName(); } });
   $('showHeader').addEventListener('change', (e) => save({ showHeader: e.target.checked }));
   $('showWeather').addEventListener('change', (e) => save({ showWeather: e.target.checked }));
+  $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
+  async function loadLogoStatus() {
+    try {
+      const s = await api('api/logos');
+      const custom = s.custom && s.custom.length ? ` Used as drawn (your own art): ${s.custom.join(', ')}.` : '';
+      $('logoStatus').textContent = s.teams
+        ? `${s.teams} team logos, uploaded ${new Date(s.updated * 1000).toLocaleString()}.${custom} Upload the sheet again to replace them.`
+        : 'No logos yet. Upload the 5 x 6 sheet of 32px tiles (any whole-number scale). It stays on the server, not in the repo.';
+    } catch (e) { $('logoStatus').textContent = e.message; }
+  }
+  $('logoSheet').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setStatus('Uploading logos…');
+    try {
+      await api('api/logos', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: file });
+      setStatus('Logos updated.');
+      await loadLogoStatus();
+      refreshPreview();
+    } catch (err) { setStatus(err.message, true); }
+    e.target.value = '';
+  });
+  loadLogoStatus();
   $('radarCorner').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ radarTime: v === 'time' }); });
   $('allDest').addEventListener('change', (e) => save({ rows: e.target.checked ? [] : dests.map((d) => d.key) }));
   $('boardPick').addEventListener('change', (e) => {

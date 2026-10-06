@@ -489,7 +489,7 @@ test('baseball live: team blocks, white scores, infield bases by runner, divider
   assert.equal(count(f, STL.c, 1, 12, 3, 17), 18);         // 3x6 home block
   assert.ok(count(f, draw.BB.live, 22, 2, 30, 8) > 0);     // away score right-aligned to x30
   assert.equal(count(f, draw.BB.live, 31, 2, 40, 18), 0);
-  assert.equal(count(f, draw.C.divider, 0, 22, 63, 22), 64);
+  assert.equal(count(f, draw.C.divider, 0, 24, 63, 24), 64);
   // 1st (56,7) and 3rd (46,7) occupied: amber 5x5 diamonds (13 px); 2nd empty: dark grey.
   assert.equal(count(f, AMBER, 54, 5, 58, 9), 13);
   assert.equal(count(f, AMBER, 44, 5, 48, 9), 13);
@@ -602,13 +602,14 @@ test('baseball breaks: MID 4 / END 5, empty bases, no count or outs', () => {
   }
 });
 
-test('baseball: bottom line and divider sit where the transit weather row does', () => {
-  const rows = (f, x0, x1) => { const ys = []; for (let y = 23; y < 32; y++) for (let x = x0; x <= x1; x++) if (f.get(x, y) && hex(f.get(x, y)) !== '#000000') { ys.push(y); break; } return ys; };
-  const g = draw.renderBaseball(bb(bbGame({ st: 'final' })));
+test('baseball: both layouts share the divider (row 24) and the bottom line (baseline 31, like the weather row)', () => {
+  const rows = (f, x0, x1) => { const ys = []; for (let y = 25; y < 32; y++) for (let x = x0; x <= x1; x++) if (f.get(x, y) && hex(f.get(x, y)) !== '#000000') { ys.push(y); break; } return ys; };
   const w = draw.renderTransit({ ...payload([]), screen: 'transit', wx: { temp: 61, icon: 'sun', word: 'CLEAR' } });
-  assert.equal(count(g, draw.C.divider, 0, 22, 63, 22), 64);
-  assert.equal(count(w, draw.C.divider, 0, 22, 63, 22), 64);
-  assert.equal(Math.max(...rows(g, 40, 62)), Math.max(...rows(w, 40, 62)));
+  for (const layout of ['classic', 'logos']) {
+    const g = draw.renderBaseball({ ...bb(bbGame({ st: 'final' })), mlb: { layout, games: [bbGame({ st: 'final' })] } });
+    assert.equal(count(g, draw.C.divider, 0, 24, 63, 24), 64, layout);
+    assert.equal(Math.max(...rows(g, 40, 62)), Math.max(...rows(w, 40, 62)), layout);
+  }
 });
 
 test('baseball score flash: amber for a minute after a change, fades to white, then plain', () => {
@@ -704,4 +705,71 @@ test('animator: times slide only after a leaving DUE has faded; a new arrival wa
   assert.ok(newcomer(after).alpha > 0 && newcomer(after).alpha < 1);
   const done = at(draw.FADE_MS + draw.MOVE_MS + draw.FADE_MS + 10);
   assert.ok(done.every((c) => c.alpha === 1));
+});
+
+// ---- baseball, logo layout ----
+
+const LOGO = (rgb) => Uint8Array.from({ length: 864 }, (_, i) => rgb[i % 3]);
+const lgGame = (extra) => ({
+  id: 1, start: NOW - 3600,
+  away: { ab: 'CHC', c: '#2a5bd8', r: 3, w: 92, l: 70, lg: 'CHC-1', bd: '#142d5a' },
+  home: { ab: 'STL', c: '#d62a2a', r: 2, w: 88, l: 74, lg: null, bd: '#761717' }, ...extra,
+});
+const lg = (...games) => ({ ...payload([]), screen: 'baseball', mlb: { layout: 'logos', games } });
+const LOGOS = { 'CHC-1': LOGO([0x40, 0x10, 0x10]) };
+
+test('logo layout live: bands to x37, logo crop at the left, bordered white scores, infield on the right', () => {
+  const f = draw.renderBaseball(lg(lgGame({ st: 'live', inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] })), { logos: LOGOS });
+  assert.equal(count(f, '#401010', 0, 0, 23, 11), 24 * 12);         // the whole crop, rows 0-11
+  assert.ok(count(f, '#142d5a', 24, 0, 37, 11) > 60);               // away band
+  assert.equal(count(f, '#142d5a', 38, 0, 63, 11), 0);              // band stops at x37
+  assert.ok(count(f, '#761717', 0, 12, 37, 23) > 150);              // home band, no logo
+  assert.ok(count(f, draw.BB.live, 24, 3, 37, 9) > 5);              // away score in its box
+  assert.ok(count(f, '#000000', 24, 2, 38, 10) > 10);               // black border around it
+  assert.equal(count(f, draw.C.divider, 0, 24, 63, 24), 64);
+  assert.equal(count(f, AMBER, 54, 6, 58, 10), 13);                 // 1st base, infield centered on row 8
+});
+
+test('logo layout without a logo shows the abbreviation, dimmed, in the logo slot', () => {
+  const f = draw.renderBaseball(lg(lgGame({ st: 'live', inn: 1, half: 'T', on: [0, 0, 0] })), { logos: {} });
+  assert.ok(count(f, '#c2c2c2', 0, 12, 23, 23) > 10);               // "STL" at 90% label grey
+  assert.equal(count(f, '#401010', 0, 0, 63, 31), 0);
+});
+
+test('logo layout pregame: abbreviations in the score boxes, records in the panel, TODAY bottom left', () => {
+  const f = draw.renderBaseball(lg(lgGame({ st: 'pre', start: NOW + 1500 })), { logos: LOGOS });
+  assert.ok(count(f, draw.BB.live, 24, 3, 38, 9) > 10);             // CHC
+  assert.ok(count(f, draw.C.grey, 40, 3, 63, 8) > 10);              // 92-70
+  assert.ok(count(f, draw.C.grey, 0, 27, 20, 31) > 10);             // TODAY
+  assert.ok(count(f, draw.C.label, 40, 27, 62, 31) > 5);            // first pitch
+});
+
+test('logo layout final: winner amber, loser white (not dimmed), records, FINAL', () => {
+  const f = draw.renderBaseball(lg(lgGame({ st: 'final' })), { logos: LOGOS });
+  assert.ok(count(f, AMBER, 24, 3, 37, 9) > 5);
+  assert.ok(count(f, draw.BB.live, 24, 15, 37, 21) > 5);
+  assert.equal(count(f, draw.BB.lose, 0, 0, 63, 31), 0);
+  assert.ok(count(f, draw.C.label, 40, 27, 62, 31) > 5);
+});
+
+test('logo layout score roll stays inside its digit rows; a finished roll equals a static frame', () => {
+  const g = lgGame({ st: 'live', inn: 3, half: 'B', b: 0, s: 2, o: 1, on: [0, 1, 0] });
+  const still = draw.renderBaseball(lg(g), { logos: LOGOS });
+  assert.deepEqual(draw.renderBaseball(lg(g), { logos: LOGOS, rolls: { home: { from: '1', p: 1 } } }).px, still.px);
+  const mid = draw.renderBaseball(lg(g), { logos: LOGOS, rolls: { home: { from: '1', p: 0.5 } } });
+  assert.notDeepEqual(mid.px, still.px);
+  assert.equal(count(mid, draw.BB.live, 24, 12, 37, 13), 0);        // above the digit rows + border: band only
+  assert.equal(count(mid, draw.BB.live, 24, 23, 37, 23), 0);
+});
+
+test('embossText: black right, below, and below-right; nothing else', () => {
+  const f = draw.renderBaseball(bb());
+  f.fill(0, 0, 64, 32, '#202020');
+  draw.embossText(f, '5x7', '1', 10, 10, '#ffffff');
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+    const c = hex(f.get(x, y));
+    if (c !== '#000000') continue;
+    const lit = (dx, dy) => hex(f.get(x - dx, y - dy)) === '#ffffff' || false;
+    assert.ok(lit(1, 0) || lit(0, 1) || lit(1, 1) || (x > 0 && y > 0 && [[1, 0], [0, 1], [1, 1]].some(([dx, dy]) => hex(f.get(x - dx, y - dy)) === '#ffffff')), `${x},${y}`);
+  }
 });
