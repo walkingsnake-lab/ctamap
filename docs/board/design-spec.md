@@ -216,7 +216,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 ## 6. Screen 2: CTA-style ticker (easter egg)
 
 - **Header:** station in light grey `#a6a6a6`, clock `#cccccc`, no background.
-- **Two 12px rows** with a 1px gap; dark slate index column `#1f2f35`, **5px wide**, numbered 1–6 in Tom Thumb. The row fill starts right after it (no gap); the destination starts 2px into the fill. Minutes are right-aligned to column 62, with a 2px gap between the digits and `min`.
+- **Two 12px rows** with a 1px gap; dark grey index column `#2d2d2d` (neutral: a tinted dark color collapses to one saturated channel on the panel), **5px wide**, numbered 1–6 in Tom Thumb. The row fill starts right after it (no gap); the destination starts 2px into the fill. Minutes are right-aligned to column 62, with a 2px gap between the digits and `min`.
 - Row fill = line color at 55% (adjustable per board on the phone, 25–80%); **white** destination (X11 5x7 proportional, mixed case) + minutes (5x7 digits + `min` glyph); `Due` within 60 s (minutes round up, like CTA; see contract countdown rules). Yellow rows also use white text.
 - Destinations use the short-name map, so short-turns appear as `UIC` and `Jeff Pk`.
 - **Schedule-based arrivals:** the **index number is replaced by a 5x5 clock** (`CLOCK` glyph: ring with hands up and right), drawn in the index number's color. If an arrival is both scheduled and on an alerted line, the alert circle wins.

@@ -71,6 +71,12 @@ class Player:
                     out.append(lg)
         return out
 
+    def live_game(self):
+        """True while the baseball screen is up with a game in progress."""
+        if self.screen != 'baseball' or not self.p:
+            return False
+        return any(g.get('st') == 'live' for g in (self.p.get('mlb') or {}).get('games') or [])
+
     def missing_logos(self):
         """Logos to fetch: only while the baseball screen is up."""
         if self.screen != 'baseball':

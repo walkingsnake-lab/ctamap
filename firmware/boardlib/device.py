@@ -29,11 +29,38 @@ def _pack(rgb):
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]
 
 
+def gamma_lut(gamma):
+    """0-255 -> 0-255 through a power curve. The panel's PWM is linear in
+    light, while the palette is authored in sRGB-ish values, so without this
+    dim values and minor channels come out too bright (Red reads pink)."""
+    if gamma == 1:
+        return None
+    return bytes(int((v / 255) ** gamma * 255 + 0.5) for v in range(256))
+
+
+def correct(rgb, lut, floor):
+    """Apply the gamma LUT. If the whole color would fall below one visible
+    step, lift its brightest channel to that step (and drop the rest) so dim
+    elements never vanish without picking up a tint."""
+    if lut is None:
+        return rgb
+    out = (lut[rgb[0]], lut[rgb[1]], lut[rgb[2]])
+    m = max(out)
+    if m >= floor or not (rgb[0] or rgb[1] or rgb[2]):
+        return out
+    top = max(rgb)
+    return tuple(floor if c == top else 0 for c in rgb)
+
+
 class BoardFrame(draw.Frame):
     """draw.Frame drawing into a palette-indexed displayio Bitmap. Colors get
     palette slots as they're used; brightness scales the palette."""
 
-    def __init__(self, bitmap, palette):
+    def __init__(self, bitmap, palette, gamma=1, bit_depth=5):
+        self.lut = gamma_lut(gamma)
+        # Smallest 8-bit value that survives quantization (RGB565, then the
+        # top bit_depth bits; red and blue only have 5).
+        self.floor = 256 >> min(bit_depth, 5)
         self.w = 64
         self.h = 32
         self.clip = None
@@ -138,15 +165,16 @@ class BoardFrame(draw.Frame):
     def commit(self):
         k = self.k
         pal = self.palette
+        lut, floor = self.lut, self.floor
         for rgb, i in self.colors.items():
-            pal[i] = _pack(draw.scale_color(rgb, k) if k != 1 else rgb)
+            pal[i] = _pack(correct(draw.scale_color(rgb, k) if k != 1 else rgb, lut, floor))
         for v in range(RADAR_FIRST, FREE_FIRST):
             rgb = draw.RADAR[v]
-            pal[v] = _pack(draw.scale_color(rgb, k) if k != 1 else rgb)
+            pal[v] = _pack(correct(draw.scale_color(rgb, k) if k != 1 else rgb, lut, floor))
 
 
 class Display:
-    def __init__(self, bit_depth=5):
+    def __init__(self, bit_depth=5, gamma=1):
         displayio.release_displays()
         matrix = rgbmatrix.RGBMatrix(
             width=64, height=32, bit_depth=bit_depth,
@@ -160,7 +188,7 @@ class Display:
         group = displayio.Group()
         group.append(displayio.TileGrid(self.bitmap, pixel_shader=self.palette))
         self.display.root_group = group
-        self.frame = BoardFrame(self.bitmap, self.palette)
+        self.frame = BoardFrame(self.bitmap, self.palette, gamma, bit_depth)
         self.last_ms = 0
         self.max_ms = 0
 
@@ -336,8 +364,8 @@ def cold_boot():
 
 
 class Hardware:
-    def __init__(self, url, board_id, token, bit_depth=5):
-        self.display = Display(bit_depth)
+    def __init__(self, url, board_id, token, bit_depth=5, gamma=1):
+        self.display = Display(bit_depth, gamma)
         self.clock = Clock()
         self.buttons = Buttons()
         self.net = Net(url, board_id, token)

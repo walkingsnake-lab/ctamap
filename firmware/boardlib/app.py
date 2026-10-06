@@ -17,6 +17,7 @@ from .sched import Scheduler, Job
 
 VERSION_EVERY = 10000   # settings version check (spec: ~10 s)
 UPDATE_EVERY = 30000    # combined update (spec: ~30 s)
+LIVE_EVERY = 10000      # combined update while a live game is on screen
 RADAR_EVERY = 3000      # one missing radar frame per run
 LOGO_EVERY = 3000       # one missing team logo per run (baseball logo layout)
 FAILS_BEFORE_RECONNECT = 3
@@ -93,7 +94,7 @@ class Board:
                     p = self.net.update(boot)
                     ms = self.clock.ms()
                     self._apply(p, started, ms)
-                    self.update_job.due_at = ms + UPDATE_EVERY
+                    self.update_job.due_at = ms + self.update_job.interval_ms
                     self.version_job.due_at = ms + VERSION_EVERY
                     self.online = True
                     self.fails = 0
@@ -118,6 +119,7 @@ class Board:
         self._sync(p['now'], started, ms)
         self.player.set_payload(p, ms)
         self.player.set_screen(self.override.resolve(self.player.auto_screen(self.now(ms)), p.get('v')), ms)
+        self.update_job.interval_ms = LIVE_EVERY if self.player.live_game() else UPDATE_EVERY
 
     def _version(self, ms):
         r = self.net.version()
@@ -242,6 +244,7 @@ def run():
         board_id=os.getenv('BOARD_ID') or 'home',
         token=os.getenv('BOARD_TOKEN') or '',
         bit_depth=int(os.getenv('MATRIX_BIT_DEPTH') or 5),
+        gamma=float(os.getenv('MATRIX_GAMMA') or 1),
     )
     board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog)
     board.connect(boot=device.cold_boot())

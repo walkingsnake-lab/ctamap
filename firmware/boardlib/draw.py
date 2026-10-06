@@ -199,7 +199,7 @@ DIGIT['PR'] = hexc('#9168e0')
 C = {
     'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#9c6a00'),
     'sch': hexc('#b0b0b0'), 'schDim': hexc('#6e6e6e'), 'grey': hexc('#8f8f8f'), 'band': hexc('#202020'),
-    'divider': hexc('#333333'), 'tickerHead': hexc('#a6a6a6'), 'index': hexc('#1f2f35'), 'white': hexc('#ffffff'),
+    'divider': hexc('#333333'), 'tickerHead': hexc('#a6a6a6'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
     'noTrains': hexc('#6c6c6c'), 'indicator': hexc('#3a3a3a'),
 }
