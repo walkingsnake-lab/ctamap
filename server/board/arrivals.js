@@ -110,11 +110,14 @@ function normalize(json, { log = console, unknown = new Set() } = {}) {
 // minutes from when they're made, so a train the board has counted down to
 // DUE often comes back in the next fetch as "2 min" (the prediction was
 // stale, or the train is held just outside), and the board would jump
-// DUE -> 2. If the previous prediction for the same run had already reached
-// DUE by this fetch and the new one is within DUE_LATCH_MAX, the new time is
+// DUE -> 2. A fetch reaches the board up to DUE_LEAD later (tracker poll +
+// board poll), so it counts from the board's side: for a run whose previous
+// prediction is DUE within DUE_LEAD of this fetch, a new one within
+// DUE_LATCH_MAX is no later than the previous one, and one already DUE is
 // held at the DUE edge (now + 60 s). A real delay (more than 3 min) shows
 // minutes again.
 const DUE_S = 60;
+const DUE_LEAD = 60;
 const DUE_LATCH_MAX = 180;
 
 function latchDue(prev, next, now) {
@@ -123,9 +126,9 @@ function latchDue(prev, next, now) {
   for (const a of prev) if (a.rn != null) before.set(`${a.ln}:${a.rn}`, a.t);
   return next.map((a) => {
     const old = a.rn != null ? before.get(`${a.ln}:${a.rn}`) : undefined;
-    if (old == null || now < old - DUE_S) return a; // wasn't DUE yet
+    if (old == null || old - DUE_S > now + DUE_LEAD) return a; // not DUE by the time boards see this
     if (a.t <= now + DUE_S || a.t > now + DUE_LATCH_MAX) return a; // DUE anyway, or a real delay
-    return { ...a, t: now + DUE_S };
+    return { ...a, t: Math.min(a.t, Math.max(old, now + DUE_S)) };
   });
 }
 

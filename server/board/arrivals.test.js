@@ -257,6 +257,26 @@ test('DUE latch: a train that reached DUE stays DUE when the next prediction say
   assert.equal(latchDue(null, [a('801', now + 120)], now)[0].t, now + 120);
 });
 
+test('DUE latch: a train that goes DUE before the board sees this fetch never jumps back to 2', () => {
+  const { latchDue } = require('./arrivals');
+  const { timeText } = require('./draw');
+  const now = 1_000_000;
+  const a = (rn, t) => ({ ln: 'RD', dest: 'Howard', known: true, dir: 1, t, s: 0, rn });
+  // At this fetch 801 is 70 s out ("2"); the board shows DUE 10 s later,
+  // but this fetch's "2 min" only reaches it up to 60 s later.
+  const prev = [a('801', now + 70), a('802', now + 200)];
+  const next = latchDue(prev, [a('801', now + 120), a('802', now + 250)], now);
+  assert.equal(next[0].t, now + 70, 'no later than before');
+  for (let r = now; r <= now + 60; r += 5) {
+    const shown = timeText(prev[0].t, r);
+    if (shown === 'DUE') assert.equal(timeText(next[0].t, r), 'DUE', `payload landing at +${r - now} s`);
+  }
+  // 802 is still minutes away when the board sees this fetch: the new time stands.
+  assert.equal(next[1].t, now + 250);
+  // An earlier new prediction is kept as is.
+  assert.equal(latchDue(prev, [a('801', now + 50)], now)[0].t, now + 50);
+});
+
 test('tracker applies the DUE latch between fetches', async () => {
   const { createTracker } = require('./tracker');
   let t = 1_791_000_000; // Oct 2026 (CDT, matching the -5 h below)
