@@ -34,6 +34,11 @@
   label.field { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
   .name { display: flex; gap: 8px; }
   .name button, .small { font: inherit; font-size: 15px; color: var(--fg); background: #222; border: 1px solid #333; border-radius: 9px; padding: 10px 14px; cursor: pointer; }
+  .nw { white-space: nowrap; }
+  .grp { display: flex; gap: 6px; align-items: center; min-width: 0; }
+  label.file { position: relative; overflow: hidden; white-space: nowrap; }
+  label.file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  input[type=number] { width: 3.6em; font: inherit; color: var(--fg); background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px 8px; }
   input[type=range] { width: 100%; margin-top: 12px; accent-color: var(--accent); }
   .switch { position: relative; width: 48px; height: 28px; flex: none; }
   .switch input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; cursor: pointer; z-index: 1; }
@@ -54,10 +59,20 @@
   #status:empty { display: none; }
   #status.err { color: var(--err); border-color: #5a2a2a; }
   #boardPick { margin-bottom: 4px; }
+  /* Desktop: preview, screen, and brightness stay in view on the left;
+     settings in two columns on the right. */
+  @media (min-width: 900px) {
+    main { max-width: 1240px; display: grid; grid-template-columns: minmax(380px, 460px) 1fr; gap: 24px; align-items: start; padding: 24px 24px 40px; }
+    .col-main { position: sticky; top: 24px; }
+    .col-side { columns: 2 340px; column-gap: 16px; }
+    .col-side section { break-inside: avoid; margin-top: 0; margin-bottom: 16px; }
+    #status { grid-column: 1 / -1; }
+  }
 </style>
 </head>
 <body>
 <main>
+ <div class="col col-main">
   <header>
     <h1>Board</h1>
     <a id="simLink" href="sim">Simulator</a>
@@ -101,7 +116,9 @@
     <input type="range" id="level" min="5" max="100" step="5" aria-label="Brightness level" hidden>
     <p class="hint" id="brightHint"></p>
   </section>
+ </div>
 
+ <div class="col col-side">
   <section>
     <h2>Station</h2>
     <select id="station" aria-label="Station"></select>
@@ -129,12 +146,14 @@
       <button data-v="bands">Bands</button>
     </div>
     <p class="hint" id="bbLayoutHint"></p>
-    <div class="row"><span>Logo brightness</span><input type="range" id="logoBright" min="10" max="100" step="5" style="width:50%"><span id="logoBrightV"></span></div>
-    <div class="row"><span>Whole logo sheet</span><label><input type="file" id="logoSheet" accept="image/png" style="width:auto"></label></div>
-    <div class="row"><span>One team</span>
-      <select id="logoTeam" aria-label="Team" style="width:auto"></select>
-      <input type="number" id="logoCrop" min="0" max="12" placeholder="crop" aria-label="Crop row (0-12, blank = default)" style="width:5em">
-      <label><input type="file" id="logoOne" accept="image/*" style="width:auto"></label>
+    <div class="row"><span class="nw">Logo brightness</span><input type="range" id="logoBright" min="10" max="100" step="5" style="flex:1;margin:0"><span id="logoBrightV" class="nw"></span></div>
+    <div class="row"><span class="nw">Whole sheet</span><label class="small file">Upload PNG<input type="file" id="logoSheet" accept="image/png"></label></div>
+    <div class="row"><span class="nw">One team</span>
+      <span class="grp">
+        <select id="logoTeam" aria-label="Team" style="width:auto"></select>
+        <input type="number" id="logoCrop" min="0" max="12" placeholder="row" aria-label="Crop row (0-12, blank = default)">
+        <label class="small file" style="padding:10px 12px">Upload<input type="file" id="logoOne" accept="image/*"></label>
+      </span>
     </div>
     <p class="hint" id="logoStatus"></p>
   </section>
@@ -152,6 +171,7 @@
     <ul id="dests"></ul>
     <p class="hint" id="destHint"></p>
   </section>
+ </div>
 
   <div id="status" role="status"></div>
 </main>
