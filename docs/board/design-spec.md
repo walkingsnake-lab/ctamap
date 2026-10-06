@@ -191,7 +191,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 | CTA destination | Shown |
 |---|---|
 | Forest Park | `Forest` |
-| 54th/Cermak | `54th` |
+| 54th/Cermak | `54/Crmk` (the ticker's 5x7 cuts it to `54/Crm`) |
 | 95th/Dan Ryan | `95th` |
 | Ashland/63rd, 63rd Street (what Train Tracker sends) | `63rd` |
 | Harlem/Lake | `Harlem` |
@@ -200,6 +200,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 | Jefferson Park (Blue Line short turn) | `Jeff Pk` |
 | Cottage Grove | `Cottage` (borderline; check on panel) |
 
+- **Two possible destinations** (Train Tracker's `Howard (or Loop)` before a Purple trip starts, local or Express): shown in the first one's row (`Howard`; every such train gets there), or the second one's at the first one's own station (`Loop` at Howard). Any `A (or B)` is handled the same way (`resolveDest` in `destinations.js`).
 - Green Line eastbound at Ashland: separate `63RD` and `COTTAGE` rows.
 - Same destination on two lines (e.g. Brown and Purple `LOOP` at Merchandise Mart): two rows told apart by the color block only. Accepted.
 - **Short-turn trains** (e.g. Blue Line to UIC-Halsted or Jefferson Park) get **their own row**. The layout follows the row count as these come and go.

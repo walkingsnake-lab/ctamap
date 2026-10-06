@@ -63,6 +63,8 @@ function defaultBoard(stations) {
     radarFor: 60,
     // Radar screen: show the frame's time and AM/PM.
     radarTime: true,
+    // Weather screen: a temperature-colored shadow behind the big temperature.
+    tempShadow: false,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -110,6 +112,7 @@ function validatePatch(patch, stations) {
       case 'showHeader':
       case 'showWeather':
       case 'radarTime':
+      case 'tempShadow':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;
@@ -175,6 +178,8 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       if (!state || typeof state.boards !== 'object') throw new Error('missing "boards"');
       // The radar screen was renamed weather.
       for (const b of Object.values(state.boards)) if (b && b.screen === 'radar') b.screen = 'weather';
+      // 54th/Cermak's short name was 54th.
+      for (const b of Object.values(state.boards)) if (b && Array.isArray(b.rows)) b.rows = b.rows.map((r) => (r === 'PK:54th' ? 'PK:54/Crmk' : r));
     } catch (e) {
       if (e.code !== 'ENOENT') {
         const aside = `${file}.corrupt-${Date.now()}`;

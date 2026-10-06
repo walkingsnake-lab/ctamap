@@ -788,17 +788,37 @@ WARN_TEXT = {
 }
 
 
-def draw_weather_screen(f, wx, warn, blink):
-    x = 1
-    if wx['temp'] < 0:
-        f.fill(x, 8, 5, 2, C['label'])
-        x += 7
-    x = f.text('clock', str(abs(wx['temp'])), x, 14, C['label'])
-    f.fill(x, 4, 3, 1, C['label'])
-    f.fill(x, 6, 3, 1, C['label'])
-    f.fill(x, 5, 1, 1, C['label'])
-    f.fill(x + 2, 5, 1, 1, C['label'])
-    temp_right = x + 2
+TEMP_STOPS = ((-10, hexc('#3050ff')), (20, hexc('#40a0ff')), (40, hexc('#30d0d0')), (55, hexc('#40d040')),
+              (70, hexc('#ffd000')), (85, hexc('#ff8000')), (100, hexc('#ff2020')))
+
+
+def temp_color(t):
+    if t <= TEMP_STOPS[0][0]:
+        return TEMP_STOPS[0][1]
+    for i in range(1, len(TEMP_STOPS)):
+        t1, c1 = TEMP_STOPS[i]
+        if t <= t1:
+            t0, c0 = TEMP_STOPS[i - 1]
+            return _lerp_color(c0, c1, (t - t0) / (t1 - t0))
+    return TEMP_STOPS[-1][1]
+
+
+def draw_weather_screen(f, wx, warn, blink, shadow=False):
+    def draw_temp(dx, dy, color):
+        x = 1 + dx
+        if wx['temp'] < 0:
+            f.fill(x, 8 + dy, 5, 2, color)
+            x += 7
+        x = f.text('clock', str(abs(wx['temp'])), x, 14 + dy, color)
+        f.fill(x, 4 + dy, 3, 1, color)
+        f.fill(x, 6 + dy, 3, 1, color)
+        f.fill(x, 5 + dy, 1, 1, color)
+        f.fill(x + 2, 5 + dy, 1, 1, color)
+        return x + 2
+
+    if shadow:
+        draw_temp(1, 1, scale_color(temp_color(wx["temp"]), 0.3))
+    temp_right = draw_temp(0, 0, C['label']) + (1 if shadow else 0)
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], 55, 1)
     word = wx.get('word')
@@ -853,7 +873,7 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     else:
         idx = len(ids) - 1
     if not ids and r.get('wx'):
-        draw_weather_screen(f, r['wx'], p.get('warn'), blink)
+        draw_weather_screen(f, r['wx'], p.get('warn'), blink, r.get('tempShadow'))
         return f
     data = frames.get(ids[idx]) if idx >= 0 and frames else None
     if data:

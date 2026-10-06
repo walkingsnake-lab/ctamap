@@ -11,7 +11,7 @@ const LINE_ORDER = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 // CTA `destNm` -> short name (mixed case; transit renders it uppercase).
 const SHORT_DEST = {
   'Forest Park': 'Forest',
-  '54th/Cermak': '54th',
+  '54th/Cermak': '54/Crmk',
   '95th/Dan Ryan': '95th',
   'Ashland/63rd': '63rd',
   '63rd Street': '63rd',  // what Train Tracker actually sends for Green Line trains to Ashland/63rd
@@ -72,6 +72,16 @@ function endsHere(e) {
   return /terminal arrival/i.test(String(e.stpDe || ''));
 }
 
+// Before a trip starts, Train Tracker can name two possible destinations,
+// e.g. "Howard (or Loop)" for a Purple train that may run Express. Every such
+// train reaches the first one, so it's shown there; at the first one's own
+// station, where a train ending there doesn't matter, it's the second.
+function resolveDest(destNm, staId) {
+  const m = /^(.+?) \(or (.+)\)$/.exec(String(destNm || '').trim());
+  if (!m) return destNm;
+  return DEST_MAPID[m[1]] && DEST_MAPID[m[1]] === String(staId) ? m[2] : m[1];
+}
+
 // Returns { name, known }. Unknown destinations (reroutes, disruptions) keep
 // CTA's name; callers fit it to width and log it so it can be added here.
 function shortDest(destNm) {
@@ -99,4 +109,4 @@ function stationDestinations(st) {
   return out;
 }
 
-module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, lineCode, shortDest, endsHere, stationDestinations };
+module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, lineCode, shortDest, resolveDest, endsHere, stationDestinations };

@@ -48,7 +48,7 @@
     <span class="note" id="previewNote"></span>
   </div>
   <div class="tests" id="tests">
-    <span>Test alerts and game (board too, 10 min):</span>
+    <span>Test alerts, game, and radar (board too, 10 min):</span>
     <span id="testLines"></span>
     <select id="testWarn" aria-label="Test weather alert">
       <option value="">No weather alert</option>
@@ -62,6 +62,11 @@
       <option value="pre">Cubs game: pregame</option>
       <option value="live">Cubs game: live</option>
       <option value="final">Cubs game: final</option>
+    </select>
+    <select id="testRadar" aria-label="Test radar">
+      <option value="">No test radar</option>
+      <option value="storm">Radar: storm (Aug 2020 derecho)</option>
+      <option value="snow">Radar: snow (Feb 2022)</option>
     </select>
     <button class="chip" id="testClear">Clear</button>
     <span id="testLeft"></span>
@@ -341,7 +346,7 @@
 
   // ---- test alerts ----
   const TEST_LINES = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
-  let test = { lines: [], warn: null, game: null, left: 0 };
+  let test = { lines: [], warn: null, game: null, radar: null, left: 0 };
   function renderTest() {
     for (const b of $('testLines').children) {
       const on = test.lines.includes(b.dataset.ln);
@@ -350,6 +355,7 @@
     }
     $('testWarn').value = test.warn ? `${test.warn.kind}:${test.warn.lvl}` : '';
     $('testGame').value = test.game || '';
+    $('testRadar').value = test.radar || '';
     $('testLeft').textContent = test.left > 0 ? `clears in ${Math.ceil(test.left / 60)} min` : '';
   }
   async function setTest(next) {
@@ -361,15 +367,16 @@
   $('testLines').replaceChildren(...Object.keys(TEST_LINES).map((ln) => {
     const b = document.createElement('button');
     b.className = 'chip'; b.dataset.ln = ln; b.textContent = ln; b.title = `Fake a major alert on ${ln}`;
-    b.onclick = () => setTest({ lines: test.lines.includes(ln) ? test.lines.filter((x) => x !== ln) : [...test.lines, ln], warn: test.warn, game: test.game });
+    b.onclick = () => setTest({ ...test, lines: test.lines.includes(ln) ? test.lines.filter((x) => x !== ln) : [...test.lines, ln] });
     return b;
   }));
   $('testWarn').addEventListener('change', (e) => {
     const [kind, lvl] = e.target.value.split(':');
-    setTest({ lines: test.lines, warn: kind ? { kind, lvl } : null, game: test.game });
+    setTest({ ...test, warn: kind ? { kind, lvl } : null });
   });
-  $('testGame').addEventListener('change', (e) => setTest({ lines: test.lines, warn: test.warn, game: e.target.value || null }));
-  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null, game: null }));
+  $('testGame').addEventListener('change', (e) => setTest({ ...test, game: e.target.value || null }));
+  $('testRadar').addEventListener('change', (e) => setTest({ ...test, radar: e.target.value || null }));
+  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null, game: null, radar: null }));
   const pollTest = () => fetch('api/test?b=' + encodeURIComponent(board), { cache: 'no-store' }).then((r) => r.json()).then((t) => { test = t; renderTest(); }).catch(() => {});
   pollTest();
   setInterval(pollTest, 15000);
