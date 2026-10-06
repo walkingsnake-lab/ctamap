@@ -63,6 +63,8 @@ function defaultBoard(stations) {
     radarFor: 60,
     // Radar screen: show the frame's time and AM/PM.
     radarTime: true,
+    // Weather screen: a temperature-colored shadow behind the big temperature.
+    tempShadow: false,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -110,6 +112,7 @@ function validatePatch(patch, stations) {
       case 'showHeader':
       case 'showWeather':
       case 'radarTime':
+      case 'tempShadow':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;

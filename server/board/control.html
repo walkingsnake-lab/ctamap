@@ -130,6 +130,12 @@
   </section>
 
   <section>
+    <h2>Weather screen</h2>
+    <div class="row"><span>Temperature shadow</span><label class="switch"><input type="checkbox" id="tempShadow"><span></span></label></div>
+    <p class="hint">A faint shadow behind the big temperature, colored from blue (cold) to red (hot).</p>
+  </section>
+
+  <section>
     <h2>Radar (while raining)</h2>
     <div class="seg" id="radarCorner">
       <button data-v="time">Frame time</button>
@@ -297,6 +303,7 @@
       : bl === 'bands' ? 'Team-color bands with abbreviations and drop-shadowed scores, no logos.'
       : 'Team color blocks and abbreviations.';
     pressed('radarCorner', board.radarTime !== false ? 'time' : 'temp');
+    $('tempShadow').checked = board.tempShadow === true;
     $('radarCornerHint').textContent = board.radarTime !== false
       ? 'The radar frame\'s time, with AM/PM and any weather warning icon under it.'
       : 'Current weather icon and temperature; a weather watch or warning shows at the bottom right.';
@@ -363,6 +370,7 @@
   $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('name').blur(); saveName(); } });
   $('showHeader').addEventListener('change', (e) => save({ showHeader: e.target.checked }));
   $('showWeather').addEventListener('change', (e) => save({ showWeather: e.target.checked }));
+  $('tempShadow').addEventListener('change', (e) => save({ tempShadow: e.target.checked }));
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
   for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('tickerFill').addEventListener('input', (e) => { $('tickerFillV').textContent = `${e.target.value}%`; });

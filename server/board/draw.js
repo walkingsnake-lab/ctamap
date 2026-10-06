@@ -643,14 +643,31 @@
     const WX_BLUE = '#1e90ff';
     const WX_DROP = ['.#.', '###', '###', '.#.'];
     const WARN_TEXT = { svr: { watch: 'TSTORM WATCH', warning: 'TSTORM WARNING' }, tor: { watch: 'TORNADO WATCH', warning: 'TORNADO WARN' } };
-    function drawWeatherScreen(f, wx, warn, blink) {
+    // Temperature shadow (optional): 1px down-right at 30%, its color blended
+    // from cold blue to hot red along these stops (°F).
+    const TEMP_STOPS = [[-10, '#3050ff'], [20, '#40a0ff'], [40, '#30d0d0'], [55, '#40d040'], [70, '#ffd000'], [85, '#ff8000'], [100, '#ff2020']];
+    function tempColor(t) {
+      if (t <= TEMP_STOPS[0][0]) return TEMP_STOPS[0][1];
+      for (let i = 1; i < TEMP_STOPS.length; i++) {
+        const [t1, c1] = TEMP_STOPS[i];
+        if (t <= t1) { const [t0, c0] = TEMP_STOPS[i - 1]; return lerpColor(c0, c1, (t - t0) / (t1 - t0)); }
+      }
+      return TEMP_STOPS[TEMP_STOPS.length - 1][1];
+    }
+
+    function drawWeatherScreen(f, wx, warn, blink, shadow) {
       // Temperature; a 5x2 bar for the minus (the clock font has digits only).
-      let x = 1;
-      if (wx.temp < 0) { f.fill(x, 8, 5, 2, C.label); x += 7; }
-      x = f.text('clock', String(Math.abs(wx.temp)), x, 14, C.label);
-      f.fill(x, 4, 3, 1, C.label); f.fill(x, 6, 3, 1, C.label);
-      f.fill(x, 5, 1, 1, C.label); f.fill(x + 2, 5, 1, 1, C.label);
-      const tempRight = x + 2;
+      // Returns the degree sign's right edge.
+      const drawTemp = (dx, dy, color) => {
+        let x = 1 + dx;
+        if (wx.temp < 0) { f.fill(x, 8 + dy, 5, 2, color); x += 7; }
+        x = f.text('clock', String(Math.abs(wx.temp)), x, 14 + dy, color);
+        f.fill(x, 4 + dy, 3, 1, color); f.fill(x, 6 + dy, 3, 1, color);
+        f.fill(x, 5 + dy, 1, 1, color); f.fill(x + 2, 5 + dy, 1, 1, color);
+        return x + 2;
+      };
+      if (shadow) drawTemp(1, 1, scaleColor(tempColor(wx.temp), 0.3));
+      const tempRight = drawTemp(0, 0, C.label) + (shadow ? 1 : 0);
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 55, 1);
       // Word right-aligned under the icon, unless a 3-digit temperature reaches it.
       if (wx.word && 63 - measure('small', wx.word) + 1 > tempRight + 2) rtext(f, 'small', wx.word, 63, 16, C.wxText);
@@ -694,7 +711,7 @@
       const idx = !ids.length ? -1 : o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
       const f = newFrame();
       // No frames (no rain in the box, or none processed yet): the weather screen.
-      if (!ids.length && r.wx) { drawWeatherScreen(f, r.wx, p.warn, o.blink); return f; }
+      if (!ids.length && r.wx) { drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow); return f; }
       const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
       if (bytes) {
         for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
