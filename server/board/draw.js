@@ -181,6 +181,15 @@
     const ROLL_DIST = 6;  // px a digit travels during a roll (5px glyph + 1px gap)
     const scaleColor = (hexc, k) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hexc.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('');
     const rtext = (f, font, str, right, base, color) => f.text(font, str, right - measure(font, str) + 1, base, color);
+    // Ink box [x0, y0, x1, y1] of text drawn at x on baseline `base`.
+    function textBox(font, str, x, base) {
+      let y0 = Infinity, y1 = -Infinity;
+      for (const ch of str) {
+        const g = fonts[font][ch.codePointAt(0)];
+        if (g && g[1] && g[2]) { y0 = Math.min(y0, base - (g[4] + g[2])); y1 = Math.max(y1, base - g[4] - 1); }
+      }
+      return [x, y0, x + measure(font, str) - 1, y1];
+    }
 
     const clockFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true });
     // "1:02": 12-hour Chicago time, no AM/PM, no leading zero.
@@ -699,11 +708,16 @@
       const right = Math.min(62, bx + bw - 1);
       const top = by + 2; // top-aligned (spec: rows 2-19)
       const t = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
-      if (ids.length) {
-        const segW = 2, segGap = 1;
-        let x = right - (ids.length * (segW + segGap) - segGap) + 1;
+      // The radar (shoreline included) can reach into the clock box; each
+      // piece of the corner gets a 1px black margin so nothing touches it.
+      const clear = (b) => { if (b[1] <= b[3]) f.fill(b[0] - 1, b[1] - 1, b[2] - b[0] + 3, b[3] - b[1] + 3, '#000000'); };
+      const segW = 2, segGap = 1;
+      const indX = right - (ids.length * (segW + segGap) - segGap) + 1;
+      if (ids.length) clear([indX, top, right, top + 1]);
+      const drawIndicator = () => {
+        let x = indX;
         ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
-      }
+      };
       const ws = p.warn ? warnStyle(p.warn) : null;
       const hideWarn = ws && ws.blinks && o.blink;
       if (r.showTime === false && r.temp != null) {
@@ -714,6 +728,9 @@
         const t = `${r.temp}°`;
         const icon = r.icon && icons.ICONS[r.icon] ? r.icon : null;
         const x0 = right + 1 - ((icon ? 10 : 0) + measure('small', t));
+        if (icon) clear([x0, top + 4, x0 + 7, top + 11]);
+        clear(textBox('small', t, x0 + (icon ? 10 : 0), top + 10));
+        drawIndicator();
         if (icon) drawIcon(f, icon, x0, top + 4);
         f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
         if (ws) {
@@ -727,12 +744,18 @@
         }
         return f;
       }
-      // Dimmed so a frame's time doesn't read as the current time.
-      rtext(f, '5x7', clockText(t), right, top + 11, C.radarTime);
+      const clock = clockText(t);
       const ap = ampmText(t);
       const apX = right - measure('small', ap) + 1;
+      const wX = ws ? apX - 2 - measure('small', ws.glyph) : 0;
+      clear(textBox('5x7', clock, right - measure('5x7', clock) + 1, top + 11));
+      clear(textBox('small', ap, apX, top + 18));
+      if (ws) clear(textBox('small', ws.glyph, wX, top + 18));
+      drawIndicator();
+      // Dimmed so a frame's time doesn't read as the current time.
+      rtext(f, '5x7', clock, right, top + 11, C.radarTime);
       f.text('small', ap, apX, top + 18, C.radarAmpm);
-      if (ws && !hideWarn) f.text('small', ws.glyph, apX - 2 - measure('small', ws.glyph), top + 18, ws.color);
+      if (ws && !hideWarn) f.text('small', ws.glyph, wX, top + 18, ws.color);
       return f;
     }
 

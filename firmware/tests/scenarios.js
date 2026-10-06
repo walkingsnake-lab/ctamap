@@ -28,7 +28,7 @@ const hexOf = (f) => Buffer.from(f.px).toString('base64');
 async function radarFrames() {
   const out = {};
   const MORSE = { lat: 42.008362, lon: -87.665909 };
-  for (const [stamp, mode, mapid] of [['202008102100', 'rain', '40100'], ['202202021800', 'snow', '40100'], ['202008102100', 'rain', '40450']]) {
+  for (const [stamp, mode, mapid] of [['202008102100', 'rain', '40100'], ['202202021800', 'snow', '40100'], ['202008102100', 'rain', '40450'], ['202610041600', 'rain', '41450']]) {
     const st = require(path.join(B, 'stations.json')).find((s) => s.mapid === mapid);
     const loc = radar.loadLocation(mapid);
     const wld = radar.parseWld(fs.readFileSync(path.join(B, 'fixtures', 'mrms', `lcref_${stamp}.wld`), 'utf8'));
@@ -118,6 +118,7 @@ async function build() {
     const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
     const p = { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (5 - i) * 300), timeBox: loc.timeBox, split: loc.split } };
     add(`radar ${key}`, p, [{ screen: 'weather', idx: 5 }, { screen: 'weather', idx: 0 }, { screen: 'weather', idx: 3 }], Object.fromEntries(ids.map((id) => [id, bytes])));
+    add(`radar ${key} temperature`, { ...p, radar: { ...p.radar, showTime: false, temp: 63, icon: 'sun' } }, [{ screen: 'weather', idx: 5 }], Object.fromEntries(ids.map((id) => [id, bytes])));
   }
   // Weather screen (radar screen with no frames): every warning, cold/hot
   // extremes (minus bar, word skipped for 3-digit temps, high/low losing its

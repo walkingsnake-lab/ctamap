@@ -149,9 +149,7 @@ test('poller: idle stations cost nothing', async () => {
   assert.equal(calls, 0);
 });
 
-const inBox = (k) => { const x = k % 64, y = k >> 6, [bx, by, bw, bh] = R.FULL_TIME_BOX; return x >= bx && x < bx + bw && y >= by && y < by + bh; };
-
-test('water masks: Morse is full width with the lake east; masked water, shoreline, clear time box', async () => {
+test('water masks: Morse is full width with the lake east; masked water, shoreline', async () => {
   const loc = R.loadLocation('40100');
   assert.equal(loc.split, false);
   assert.equal(loc.width, 64);
@@ -162,8 +160,7 @@ test('water masks: Morse is full width with the lake east; masked water, shoreli
   const out = await R.crops(pngOf('202008102100'), wldOf('202008102100'), [{ key: 'k', ...MORSE, width: 64 }]);
   const { dbz, geo } = out.get('k');
   const f = R.toFrame(dbz, geo, 'rain', loc);
-  for (let k = 0; k < 2048; k++) if (loc.water[k]) assert.equal(f.bytes[k], loc.shore[k] && !inBox(k) && k !== 16 * 64 + 32 ? R.SHORE : 0, `water at ${k % 64},${k >> 6}`);
-  for (const [bx, by, bw, bh] of [R.FULL_TIME_BOX]) for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) assert.equal(f.bytes[y * 64 + x], 0);
+  for (let k = 0; k < 2048; k++) if (loc.water[k]) assert.equal(f.bytes[k], loc.shore[k] && k !== 16 * 64 + 32 ? R.SHORE : 0, `water at ${k % 64},${k >> 6}`);
   // Shoreline: the lake's edge pixels, water side, drawn even right next to
   // the storm (rain stops at the land pixel beside it).
   let shore = 0;
@@ -178,6 +175,19 @@ test('water masks: Morse is full width with the lake east; masked water, shoreli
   assert.equal(f.bytes[16 * 64 + 33], R.SHORE);
   // ...while rain next to the dot is still cleared.
   for (const k of [16 * 64 + 31, 15 * 64 + 32, 17 * 64 + 32]) assert.ok(f.bytes[k] === 0 || f.bytes[k] === R.SHORE, `pixel ${k % 64},${k >> 6}`);
+});
+
+test('water masks: the shoreline is drawn inside the time box', () => {
+  // 41450 (Chicago): the shore curves up into the box's bottom-right
+  // corner and must reach the screen edge.
+  const loc = R.loadLocation('41450');
+  assert.equal(loc.split, false);
+  const geo = { width: 64, mx: 32, my: 16 };
+  const f = R.toFrame(new Float32Array(2048).fill(-99), geo, 'rain', loc);
+  for (const [x, y] of [[62, 19], [63, 19], [61, 20], [60, 21]]) {
+    assert.equal(loc.shore[y * 64 + x], 1, `mask ${x},${y}`);
+    assert.equal(f.bytes[y * 64 + x], R.SHORE, `frame ${x},${y}`);
+  }
 });
 
 test('water masks: a station with land under the time falls back to split', () => {
