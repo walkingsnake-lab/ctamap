@@ -117,6 +117,17 @@ test('radarTime defaults to true and must be a boolean', () => {
   assert.throws(() => store.update('home', { radarTime: 'no' }), /radarTime must be true or false/);
 });
 
+test('speed settings and ticker fill: defaults, allowed values only', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  const b = store.get('home');
+  assert.deepEqual([b.tickerHold, b.tickerSlide, b.radarFrame, b.radarHold, b.gameEvery, b.tickerFill], [8, 1200, 500, 4, 60, 55]);
+  const c = store.update('home', { tickerHold: 12, tickerSlide: 1600, radarFrame: 300, radarHold: 8, gameEvery: 30, tickerFill: 40 });
+  assert.deepEqual([c.tickerHold, c.tickerSlide, c.radarFrame, c.radarHold, c.gameEvery, c.tickerFill], [12, 1600, 300, 8, 30, 40]);
+  for (const patch of [{ tickerHold: 7 }, { tickerSlide: 100 }, { radarFrame: 50 }, { radarHold: 60 }, { gameEvery: 1 }, { tickerFill: 90 }, { tickerFill: 20 }, { tickerHold: '8' }]) {
+    assert.throws(() => store.update('home', patch), ValidationError, JSON.stringify(patch));
+  }
+});
+
 test('board ids never reach Object.prototype', () => {
   const store = createStore({ dir: tmpDir(), log: quiet });
   for (const id of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {

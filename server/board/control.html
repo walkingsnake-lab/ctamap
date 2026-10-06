@@ -136,6 +136,10 @@
       <button data-v="temp">Temperature</button>
     </div>
     <p class="hint" id="radarCornerHint"></p>
+    <div class="row"><span>Loop speed</span>
+      <select id="radarFrame" aria-label="Loop speed" style="width:auto"><option value="300">Fast (0.3 s)</option><option value="400">Quicker (0.4 s)</option><option value="500">Normal (0.5 s)</option><option value="700">Slower (0.7 s)</option><option value="1000">Slow (1 s)</option></select></div>
+    <div class="row"><span>Pause on the newest frame</span>
+      <select id="radarHold" aria-label="Pause on the newest frame" style="width:auto"><option value="2">2 sec</option><option value="3">3 sec</option><option value="4">4 sec</option><option value="6">6 sec</option><option value="8">8 sec</option></select></div>
   </section>
 
   <section>
@@ -146,6 +150,8 @@
       <button data-v="bands">Bands</button>
     </div>
     <p class="hint" id="bbLayoutHint"></p>
+    <div class="row"><span>Each game shows for</span>
+      <select id="gameEvery" aria-label="Each game shows for" style="width:auto"><option value="30">30 sec</option><option value="45">45 sec</option><option value="60">1 min</option><option value="90">90 sec</option><option value="120">2 min</option></select></div>
     <div class="row"><span class="nw">Logo brightness</span><input type="range" id="logoBright" min="10" max="100" step="5" style="flex:1;margin:0"><span id="logoBrightV" class="nw"></span></div>
     <div class="row"><span class="nw">Whole sheet</span><label class="small file">Upload PNG<input type="file" id="logoSheet" accept="image/png"></label></div>
     <div class="row"><span class="nw">One team</span>
@@ -163,6 +169,16 @@
     <div class="row"><span>Transit header (station + clock)</span><label class="switch"><input type="checkbox" id="showHeader"><span></span></label></div>
     <div class="row"><span>Weather row</span><label class="switch"><input type="checkbox" id="showWeather"><span></span></label></div>
     <p class="hint" id="rowsHint"></p>
+  </section>
+
+  <section>
+    <h2>Ticker screen</h2>
+    <div class="row"><span>Each page holds</span>
+      <select id="tickerHold" aria-label="Each page holds" style="width:auto"><option value="5">5 sec</option><option value="6">6 sec</option><option value="8">8 sec</option><option value="10">10 sec</option><option value="12">12 sec</option><option value="15">15 sec</option></select></div>
+    <div class="row"><span>Slide</span>
+      <select id="tickerSlide" aria-label="Slide" style="width:auto"><option value="800">Quick (0.8 s)</option><option value="1200">Normal (1.2 s)</option><option value="1600">Slower (1.6 s)</option><option value="2000">Slow (2 s)</option></select></div>
+    <div class="row"><span class="nw">Row background</span><input type="range" id="tickerFill" min="25" max="80" step="5" style="flex:1;margin:0"><span id="tickerFillV" class="nw"></span></div>
+    <p class="hint">How bright each row's line color is behind the white text (55% by default).</p>
   </section>
 
   <section>
@@ -271,6 +287,9 @@
     $('showWeather').checked = board.showWeather;
     const bl = board.baseballLayout || 'classic';
     pressed('bbLayout', bl);
+    for (const [k, d] of [['tickerHold', 8], ['tickerSlide', 1200], ['radarFrame', 500], ['radarHold', 4], ['gameEvery', 60]]) $(k).value = String(board[k] || d);
+    $('tickerFill').value = board.tickerFill || 55;
+    $('tickerFillV').textContent = `${board.tickerFill || 55}%`;
     $('logoBright').value = board.logoBright || 90;
     $('logoBrightV').textContent = `${board.logoBright || 90}%`;
     $('bbLayoutHint').textContent = bl === 'logos'
@@ -345,6 +364,9 @@
   $('showHeader').addEventListener('change', (e) => save({ showHeader: e.target.checked }));
   $('showWeather').addEventListener('change', (e) => save({ showWeather: e.target.checked }));
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
+  for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
+  $('tickerFill').addEventListener('input', (e) => { $('tickerFillV').textContent = `${e.target.value}%`; });
+  $('tickerFill').addEventListener('change', (e) => save({ tickerFill: Number(e.target.value) }));
   $('logoBright').addEventListener('input', (e) => { $('logoBrightV').textContent = `${e.target.value}%`; });
   $('logoBright').addEventListener('change', (e) => save({ logoBright: Number(e.target.value) }));
   const TEAMS = ['AZ', 'ATH', 'ATL', 'BAL', 'BOS', 'CHC', 'CIN', 'CLE', 'COL', 'CWS', 'DET', 'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'PHI', 'PIT', 'SD', 'SEA', 'SF', 'STL', 'TB', 'TEX', 'TOR', 'WSH'];

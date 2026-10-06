@@ -556,10 +556,10 @@
       };
     }
 
-    function drawTickerItem(f, it, idx, top, now, due = true) {
+    function drawTickerItem(f, it, idx, top, now, due, fill) {
       const base = top + 9;
       f.fill(0, top, 5, 12, C.index);
-      f.fill(5, top, 59, 12, scaleColor(LINE[it.ln], 0.55));
+      f.fill(5, top, 59, 12, scaleColor(LINE[it.ln], fill));
       if (it.a) {
         f.text('small', s(G.ALERT_DISC), 0, base, C.red);
         f.text('small', s(G.ALERT_MARK), 0, base, C.white);
@@ -595,6 +595,8 @@
       const th = p.tickerHeader !== undefined ? p.tickerHeader : p.header;
       if (th) drawHeader(f, th, now, null, C.tickerHead);
       const items = liveTicker(p, now);
+      // Row fill: the line color dimmed to the board's tickerFill (percent).
+      const fill = (p.tickerFill || 55) / 100;
       const pages = Math.max(1, Math.ceil(items.length / 2));
       const page = (o.page || 0) % pages;
       const offset = Math.round(easeInOut(Math.min(1, Math.max(0, o.slide || 0))) * 26);
@@ -607,7 +609,7 @@
       const drawPage = (pg, shift) => {
         items.slice(pg * 2, pg * 2 + 2).forEach((it, i) => {
           const n = pg * 2 + i;
-          drawTickerItem(f, it, n + 1, 7 + i * 13 + shift, now, firstOf.get(`${it.ln}:${it.d}`) === n);
+          drawTickerItem(f, it, n + 1, 7 + i * 13 + shift, now, firstOf.get(`${it.ln}:${it.d}`) === n, fill);
         });
       };
       f.withClip(0, 7, 63, 31, () => {
@@ -775,11 +777,11 @@
     // within that set, one minute each by wall time, so the board and the
     // simulator agree without keeping rotation state. Returns the index into
     // games, the game's place in the rotation, and the rotation size.
-    function pickGame(games, now) {
+    function pickGame(games, now, every = 60) {
       if (!games.length) return { i: -1, pos: 0, of: 0 };
       const live = games.map((g, i) => (g.st === 'live' ? i : -1)).filter((i) => i >= 0);
       const pool = live.length ? live : games.map((_, i) => i);
-      const pos = Math.floor(now / 60) % pool.length;
+      const pos = Math.floor(now / every) % pool.length;
       return { i: pool[pos], pos, of: pool.length };
     }
 
@@ -1010,7 +1012,7 @@
       const f = newFrame();
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) { drawNoGames(f, now); return f; }
-      const g = games[o.game != null ? o.game % games.length : pickGame(games, now).i];
+      const g = games[o.game != null ? o.game % games.length : pickGame(games, now, timing(p).game).i];
       if (p.mlb.layout === 'logos' || p.mlb.layout === 'bands') return renderBaseballLogos(f, p, g, now, o);
       const rolls = o.rolls || {};
       const final = g.st === 'final';
@@ -1062,7 +1064,7 @@
     function baseballTexts(p, now) {
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) return null;
-      const g = games[pickGame(games, now).i];
+      const g = games[pickGame(games, now, timing(p).game).i];
       const texts = { away: String(g.away.r), home: String(g.home.r) };
       if (g.st === 'live') Object.assign(texts, liveTexts(g));
       return { key: `${g.id}:${g.st}`, texts };
@@ -1094,9 +1096,19 @@
       Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
-      ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
-      // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.
-      RADAR_FRAME_MS: 500, RADAR_HOLD_MS: 4000,
+      ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing,
+    };
+  }
+
+  // The board's speed settings from the payload's `anim` (ms; `game` in s),
+  // with the defaults for anything missing: ticker page hold and slide,
+  // radar frame step and the hold on the newest frame, baseball rotation.
+  function timing(p) {
+    const a = (p && p.anim) || {};
+    return {
+      pageHold: a.pageHold || 8000, slide: a.slide || 1200,
+      radarFrame: a.radarFrame || 500, radarHold: a.radarHold || 4000,
+      game: a.game || 60,
     };
   }
 
@@ -1110,5 +1122,5 @@
     return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : p.screen;
   }
 
-  return { Frame, create, autoScreen, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
+  return { Frame, create, autoScreen, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
 });

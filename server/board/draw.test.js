@@ -207,8 +207,28 @@ test('animator frames render without errors and match the static frame when sett
 });
 
 test('ticker pacing is slow: long hold, gentle slide', () => {
-  assert.ok(draw.PAGE_HOLD_MS >= 8000);
-  assert.ok(draw.SLIDE_MS >= 1000);
+  assert.ok(draw.timing({}).pageHold >= 8000);
+  assert.ok(draw.timing({}).slide >= 1000);
+});
+
+test('speed settings come from the payload, with defaults for anything missing', () => {
+  assert.deepEqual(draw.timing({}), { pageHold: 8000, slide: 1200, radarFrame: 500, radarHold: 4000, game: 60 });
+  assert.deepEqual(draw.timing({ anim: { pageHold: 5000, game: 30 } }), { pageHold: 5000, slide: 1200, radarFrame: 500, radarHold: 4000, game: 30 });
+  // Baseball rotation follows `game`.
+  const g = (id) => ({ id, st: 'pre', start: 0, away: {}, home: {} });
+  const games = [g(1), g(2)];
+  assert.deepEqual([0, 30, 60, 90].map((s) => draw.pickGame(games, 1_800_000_000 + s, 30).i), [0, 1, 0, 1]);
+  assert.deepEqual([0, 30, 60, 90].map((s) => draw.pickGame(games, 1_800_000_000 + s).i), [0, 0, 1, 1]);
+});
+
+test('ticker row fill follows tickerFill (percent of the line color)', () => {
+  const p = payload([], [{ ln: 'RD', d: 'Howard', t: NOW + 300, s: 0, a: 0 }]);
+  const at = (fill) => hex(draw.render({ ...p, tickerFill: fill }, { screen: 'ticker' }).get(60, 8));
+  const red = [0xc6, 0x0c, 0x30];
+  const scaled = (k) => '#' + red.map((v) => Math.round(v * k).toString(16).padStart(2, '0')).join('');
+  assert.equal(at(undefined), scaled(0.55));
+  assert.equal(at(30), scaled(0.3));
+  assert.equal(at(80), scaled(0.8));
 });
 
 // ---- chronological view ----

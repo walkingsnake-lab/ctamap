@@ -109,6 +109,7 @@ async function build() {
   add('ticker no header', { ...tk, header: null }, [{ screen: 'ticker' }, { screen: 'ticker', now: tk.now + 400 }]);
   // Transit header hidden to fit; the ticker keeps its own.
   add('ticker header kept', { ...tk, header: null, tickerHeader: 'MORSE' }, [{ screen: 'ticker' }]);
+  add('ticker fill 30%', { ...tk, tickerFill: 30 }, [{ screen: 'ticker' }, { screen: 'ticker', page: 1, slide: 0.5 }]);
   add('ticker header off', { ...tk, header: 'MORSE', tickerHeader: null }, [{ screen: 'ticker' }]);
 
   // Radar: frames, split layout, conditions, warnings.
@@ -196,6 +197,7 @@ async function build() {
     const bb = (...games) => ({ now: t, tzo: tzOffset(t), bright: 100, screen: 'baseball', mlb: { games } });
     const live = game({ st: 'live', inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] });
     add('baseball live', bb(live), [{ screen: 'baseball' }]);
+    add('baseball rotation every 30 s', { ...bb({ ...live, st: 'pre' }, { ...live, id: 2, st: 'final' }), anim: { game: 30 } }, [0, 30, 60, 90].map((s) => ({ screen: 'baseball', now: t + s })));
     add('baseball live rolls', bb({ ...live, half: 'B', b: 0, s: 0, o: 0, on: [0, 1, 0], away: { ...live.away, r: 10 } }), [0.25, 0.5, 0.75].map((p) => ({
       screen: 'baseball', rolls: { away: { from: '3', p }, home: { from: '2', p }, inn: { from: 'TOP 7', p }, count: { from: '2-1', p }, outs: { from: '2 OUT', p } },
     })));

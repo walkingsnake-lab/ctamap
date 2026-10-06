@@ -17,6 +17,14 @@ const DEFAULT_MAPID = '40100'; // Morse
 
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball'];
 const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
+// Speed settings: the allowed values (defaults in defaultBoard).
+const SPEEDS = {
+  tickerHold: [5, 6, 8, 10, 12, 15],         // s each ticker page holds
+  tickerSlide: [800, 1200, 1600, 2000],      // ms the ticker slide takes
+  radarFrame: [300, 400, 500, 700, 1000],    // ms per radar loop frame
+  radarHold: [2, 3, 4, 6, 8],                // s the loop holds on the newest frame
+  gameEvery: [30, 45, 60, 90, 120],          // s per game when baseball rotates
+};
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
 const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
@@ -61,6 +69,13 @@ function defaultBoard(stations) {
     baseballLayout: 'classic',
     // Logo/band layouts: logo and band brightness, percent (the board dims).
     logoBright: 90,
+    tickerHold: 8,
+    tickerSlide: 1200,
+    radarFrame: 500,
+    radarHold: 4,
+    gameEvery: 60,
+    // Ticker row fill: the line color at this percent.
+    tickerFill: 55,
   };
 }
 
@@ -101,6 +116,18 @@ function validatePatch(patch, stations) {
       case 'logoBright':
         if (!Number.isInteger(val) || val < 10 || val > 100) throw new ValidationError('logoBright must be 10-100');
         out.logoBright = val;
+        break;
+      case 'tickerHold':
+      case 'tickerSlide':
+      case 'radarFrame':
+      case 'radarHold':
+      case 'gameEvery':
+        if (!SPEEDS[key].includes(val)) throw new ValidationError(`${key} must be one of ${SPEEDS[key].join(', ')}`);
+        out[key] = val;
+        break;
+      case 'tickerFill':
+        if (!Number.isInteger(val) || val < 25 || val > 80) throw new ValidationError('tickerFill must be 25-80');
+        out.tickerFill = val;
         break;
       case 'baseballLayout':
         if (!BASEBALL_LAYOUTS.includes(val)) throw new ValidationError(`baseballLayout must be one of ${BASEBALL_LAYOUTS.join(', ')}`);
@@ -195,4 +222,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, BASEBALL_LAYOUTS };
+module.exports = { createStore, validatePatch, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, BASEBALL_LAYOUTS, SPEEDS };

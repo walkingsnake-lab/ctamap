@@ -247,15 +247,16 @@
     const pages = D.tickerPages(p, n);
     if (page >= pages) page = 0;
     let since = t - pageStart;
-    if (since >= D.PAGE_HOLD_MS + D.SLIDE_MS) { page = (page + 1) % pages; pageStart = t; since = 0; }
-    const slide = pages > 1 && since > D.PAGE_HOLD_MS ? (since - D.PAGE_HOLD_MS) / D.SLIDE_MS : 0;
+    const tm = D.timing(p);
+    if (since >= tm.pageHold + tm.slide) { page = (page + 1) % pages; pageStart = t; since = 0; }
+    const slide = pages > 1 && since > tm.pageHold ? (since - tm.pageHold) / tm.slide : 0;
     paintTicker(D.render(full, { screen: 'ticker', now: n, page, slide }));
     $('pageState').textContent = `page ${page + 1} of ${pages}`;
 
     // Radar: step through the loop, then hold on the newest frame.
     const nf = (p.radar && p.radar.frames.length) || 0;
-    const cycle = Math.max(1, nf - 1) * D.RADAR_FRAME_MS + D.RADAR_HOLD_MS;
-    const idx = nf ? Math.min(nf - 1, Math.floor((t % cycle) / D.RADAR_FRAME_MS)) : -1;
+    const cycle = Math.max(1, nf - 1) * tm.radarFrame + tm.radarHold;
+    const idx = nf ? Math.min(nf - 1, Math.floor((t % cycle) / tm.radarFrame)) : -1;
     paintWeather(D.render(full, { screen: 'weather', now: n, idx, frames: radarFrames, blink }));
     $('radarState').textContent = p.radar && p.radar.on ? (nf ? 'rain in the box: radar' : 'rain in the box, no frames yet') : 'no rain: conditions';
 
@@ -272,7 +273,7 @@
       if (rp >= 1) delete bbRolls[k]; else rolls[k] = { from: r.from, p: rp };
     }
     paintBaseball(D.render(full, { screen: 'baseball', now: n, rolls, logos: logoBytes }));
-    const pick = D.pickGame((p.mlb && p.mlb.games) || [], n);
+    const pick = D.pickGame((p.mlb && p.mlb.games) || [], n, tm.game);
     const anyLive = ((p.mlb && p.mlb.games) || []).some((g) => g.st === 'live');
     $('gameState').textContent = !pick.of ? 'no games' : `${anyLive ? 'live game' : 'game'} ${pick.pos + 1} of ${pick.of}`;
   }
