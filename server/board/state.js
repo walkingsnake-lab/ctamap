@@ -175,6 +175,8 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       if (!state || typeof state.boards !== 'object') throw new Error('missing "boards"');
       // The radar screen was renamed weather.
       for (const b of Object.values(state.boards)) if (b && b.screen === 'radar') b.screen = 'weather';
+      // 54th/Cermak's short name was 54th.
+      for (const b of Object.values(state.boards)) if (b && Array.isArray(b.rows)) b.rows = b.rows.map((r) => (r === 'PK:54th' ? 'PK:54/Crmk' : r));
     } catch (e) {
       if (e.code !== 'ENOENT') {
         const aside = `${file}.corrupt-${Date.now()}`;

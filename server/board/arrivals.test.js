@@ -44,7 +44,25 @@ test('Belmont: line order, then direction; Brown "Loop" kept as-is', () => {
 test('Clark/Lake: five destinations fit five rows; short names', () => {
   const all = run('clark-lake-2026-10-03-2317.json', { ...base, showHeader: false });
   assert.equal(all.view, 'dest');
-  assert.deepEqual(all.rows.map((r) => r.lbl), ["O'HARE", 'FOREST', 'KIMBALL', 'HARLEM', '54TH']);
+  assert.deepEqual(all.rows.map((r) => r.lbl), ["O'HARE", 'FOREST', 'KIMBALL', 'HARLEM', '54/CRMK']);
+  // The ticker's 5x7 can't fit 54/Crmk (34px of 32): it's cut to fit.
+  const tk = all.ticker.find((x) => x.ln === 'PK');
+  if (tk) assert.equal(tk.d, '54/Crm');
+});
+
+test('"Howard (or Loop)" before a Purple trip starts: the Howard row, or the Loop row at Howard', () => {
+  // Synthetic: not yet recorded from Train Tracker (record one with api/raw/arrivals when it shows up).
+  const eta = (staId, staNm, destNm, rn, min) => ({ staId, staNm, stpDe: 'Service toward Howard or Loop', rn, rt: 'P', destNm, trDr: '5',
+    prdt: '2026-10-06T07:30:00', arrT: `2026-10-06T07:${String(30 + min).padStart(2, '0')}:00`, isApp: '0', isSch: '1' });
+  const json = (staId, staNm) => ({ ctatt: { tmst: '2026-10-06T07:30:00', errCd: '0', eta: [
+    eta(staId, staNm, 'Howard', '501', 3), eta(staId, staNm, 'Howard (or Loop)', '502', 12), eta(staId, staNm, 'Loop', '503', 20),
+  ] } });
+  const unknown = new Set();
+  const davis = normalize(json('40050', 'Davis'), { log: { warn: () => assert.fail('logged as unknown') }, unknown });
+  assert.deepEqual(davis.map((a) => a.dest), ['Howard', 'Howard', 'Loop']);
+  assert.ok(davis.every((a) => a.known));
+  const howard = normalize(json('40900', 'Howard'), { log: quiet });
+  assert.deepEqual(howard.map((a) => a.dest), ['Loop', 'Loop'], 'ending at Howard: dropped; maybe-Loop: the Loop row');
 });
 
 test('Clark/Lake with the header: five destinations -> header and weather hidden, five rows', () => {

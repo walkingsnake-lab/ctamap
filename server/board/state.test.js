@@ -22,6 +22,12 @@ test('a fresh store starts with the home board at Morse and writes the file', ()
   assert.ok(fs.existsSync(path.join(dir, 'board-state.json')));
 });
 
+test('a saved filter with the old 54th short name loads as 54/Crmk', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'board-state.json'), JSON.stringify({ boards: { home: { v: 3, station: { mapid: '40380', name: 'CLARK/LAKE' }, rows: ['PK:54th', 'BL:Forest'], showHeader: true, showWeather: true, screen: 'auto', bright: 'auto' } } }));
+  assert.deepEqual(createStore({ dir, log: quiet }).get('home').rows, ['PK:54/Crmk', 'BL:Forest']);
+});
+
 test('state survives a restart (new store on the same dir)', () => {
   const dir = tmpDir();
   createStore({ dir, log: quiet }).update('home', { showWeather: false });

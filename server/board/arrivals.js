@@ -3,7 +3,7 @@
 // Rules: docs/board/design-spec.md §5–6 and docs/board/contract.md.
 
 const { parseCtaTime } = require('./time');
-const { lineCode, shortDest, endsHere, LINE_ORDER } = require('./destinations');
+const { lineCode, shortDest, resolveDest, endsHere, LINE_ORDER } = require('./destinations');
 const { measure, fit, ligatures } = require('./fonts');
 
 // Transit row geometry (x positions on the 64px panel).
@@ -96,7 +96,7 @@ function normalize(json, { log = console, unknown = new Set() } = {}) {
     const ln = lineCode(e.rt);
     const t = parseCtaTime(e.arrT);
     if (!ln || t == null) continue;
-    const dest = shortDest(e.destNm);
+    const dest = shortDest(resolveDest(e.destNm, e.staId));
     if (!dest.known && !unknown.has(e.destNm)) {
       unknown.add(e.destNm);
       log.warn(`[board] unknown destination "${e.destNm}" (${e.rt}); add it to server/board/destinations.js`);
