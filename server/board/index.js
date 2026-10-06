@@ -147,6 +147,11 @@ function createBoard({
   // 'auto': baseball while a game is on, otherwise transit. Timed radar
   // visits (radar.visit) ride on top of either.
   const resolveScreen = (s, games) => (s !== 'auto' ? s : games ? 'baseball' : 'transit');
+  // Speed settings (contract "anim"): ms, baseball rotation in s.
+  const animOf = (b) => ({
+    pageHold: (b.tickerHold || 8) * 1000, slide: b.tickerSlide || 1200,
+    radarFrame: b.radarFrame || 500, radarHold: (b.radarHold || 4) * 1000, game: b.gameEvery || 60,
+  });
   // Radar visits apply only on the auto screen, and only if turned on.
   const visitOf = (b) => (b.screen === 'auto' && b.radarEvery > 0
     ? { every: b.radarEvery * 60, for: Math.min(b.radarFor || 60, b.radarEvery * 60) } : null);
@@ -252,6 +257,8 @@ function createBoard({
       ticker,
       wx: bars.showWeather ? wx : null,
       warn,
+      anim: animOf(board),
+      tickerFill: board.tickerFill || 55,
       radar: { ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null },
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')) }

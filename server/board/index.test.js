@@ -218,6 +218,19 @@ test('update: payload shape for the default Morse board', async () => {
   await s.close();
 });
 
+test('update: speed settings and ticker fill are sent as anim (ms) and tickerFill', async () => {
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual(b.anim, { pageHold: 8000, slide: 1200, radarFrame: 500, radarHold: 4000, game: 60 });
+  assert.equal(b.tickerFill, 55);
+  s.store.update('home', { tickerHold: 5, tickerSlide: 800, radarFrame: 700, radarHold: 2, gameEvery: 90, tickerFill: 40 });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual(b.anim, { pageHold: 5000, slide: 800, radarFrame: 700, radarHold: 2000, game: 90 });
+  assert.equal(b.tickerFill, 40);
+  await s.close();
+});
+
 test('update: boot=1 resets brightness, keeps the screen, and bumps v; settings flow through', async () => {
   const tracker = fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) });
   const s = await serve({ tracker });

@@ -215,11 +215,18 @@ FADE_MS = 700
 MOVE_MS = 500
 COLOR_MS = 700
 MATCH_S = 90
-SLIDE_MS = 1200
-PAGE_HOLD_MS = 8000
 BLINK_MS = 1000
-RADAR_FRAME_MS = 500
-RADAR_HOLD_MS = 4000
+
+
+def timing(p):
+    """Speed settings from the payload's `anim` (ms; `game` in s), with
+    defaults. Mirrors timing() in draw.js."""
+    a = (p.get('anim') if p else None) or {}
+    return {
+        'pageHold': a.get('pageHold') or 8000, 'slide': a.get('slide') or 1200,
+        'radarFrame': a.get('radarFrame') or 500, 'radarHold': a.get('radarHold') or 4000,
+        'game': a.get('game') or 60,
+    }
 
 RADAR_FILL = 0.65
 RADAR = {
@@ -706,10 +713,10 @@ def _contains(lst, obj):
 
 # ---- ticker ----
 
-def draw_ticker_item(f, it, idx, top, now, due=True):
+def draw_ticker_item(f, it, idx, top, now, due, fill):
     base = top + 9
     f.fill(0, top, 5, 12, C['index'])
-    f.fill(5, top, 59, 12, scale_color(LINE[it['ln']], 0.55))
+    f.fill(5, top, 59, 12, scale_color(LINE[it['ln']], fill))
     if it.get('a'):
         f.text('small', g(assets.ALERT_DISC), 0, base, C['red'])
         f.text('small', g(assets.ALERT_MARK), 0, base, C['white'])
@@ -739,6 +746,7 @@ def render_ticker(p, f, now=None, page=0, slide=0):
     if th:
         draw_header(f, th, now, p.get('tzo', 0), None, C['tickerHead'])
     items = live_ticker(p, now)
+    fill = (p.get('tickerFill') or 55) / 100
     pages = max(1, -(-len(items) // 2))
     page = (page or 0) % pages
     offset = jsround(ease_in_out(min(1, max(0, slide or 0))) * 26)
@@ -753,7 +761,7 @@ def render_ticker(p, f, now=None, page=0, slide=0):
     def draw_page(pg, shift):
         for i, it in enumerate(items[pg * 2:pg * 2 + 2]):
             n = pg * 2 + i
-            draw_ticker_item(f, it, n + 1, 7 + i * 13 + shift, now, first_of['%s:%s' % (it['ln'], it['d'])] == n)
+            draw_ticker_item(f, it, n + 1, 7 + i * 13 + shift, now, first_of['%s:%s' % (it['ln'], it['d'])] == n, fill)
 
     f.push_clip(0, 7, 63, 31)
     try:
@@ -943,13 +951,13 @@ def bb_record(t):
     return '%d-%d' % (t['w'], t['l'])
 
 
-def pick_game(games, now):
-    """Live games take precedence; one minute each by wall time."""
+def pick_game(games, now, every=60):
+    """Live games take precedence; `every` seconds each by wall time."""
     if not games:
         return {'i': -1, 'pos': 0, 'of': 0}
     live = [i for i, gm in enumerate(games) if gm.get('st') == 'live']
     pool = live if live else list(range(len(games)))
-    pos = int(now // 60) % len(pool)
+    pos = int(now // every) % len(pool)
     return {'i': pool[pos], 'pos': pos, 'of': len(pool)}
 
 
@@ -1184,7 +1192,7 @@ def render_baseball(p, f, now=None, game=None, rolls=None, logos=None):
     if not games:
         draw_no_games(f, now, tzo)
         return f
-    gm = games[game % len(games) if game is not None else pick_game(games, now)['i']]
+    gm = games[game % len(games) if game is not None else pick_game(games, now, timing(p)['game'])['i']]
     rolls = rolls or {}
     if (p.get('mlb') or {}).get('layout') in ('logos', 'bands'):
         return render_baseball_logos(f, p, gm, now, tzo, rolls, logos or {})
@@ -1241,7 +1249,7 @@ def baseball_texts(p, now):
     games = (p.get('mlb') or {}).get('games') or []
     if not games:
         return None
-    gm = games[pick_game(games, now)['i']]
+    gm = games[pick_game(games, now, timing(p)['game'])['i']]
     texts = {'away': str(gm['away']['r']), 'home': str(gm['home']['r'])}
     if gm['st'] == 'live':
         texts.update(live_texts(gm))

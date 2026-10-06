@@ -95,6 +95,8 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `wx` | object \| null | Weather row, or `null` when the weather row is off or there's no weather data yet (the row cap then gives the space back to rows). |
 | `warn` | object \| null | Active NWS warning/watch (see below). Sent regardless of the weather-row toggle, since the radar screen uses it too. |
 | `radar` | object | Radar state (see below). |
+| `anim` | object | Speed settings, from the board's state: `{pageHold, slide, radarFrame, radarHold, game}`. Ticker page hold and slide (ms), radar loop frame step and the hold on the newest frame (ms), and baseball rotation per game (s). Defaults 8000, 1200, 500, 4000, 60 (`timing()` in `draw.js` fills in any missing one). |
+| `tickerFill` | int | Ticker row fill: the line color at this percent behind the white text (25–80, default 55). |
 | `mlb` | object | Baseball: `{layout, dim?, games: [...]}`, the layout and the games to show now (see *Baseball* below). Always present; `games` is empty when there's nothing on. |
 
 All screens' data is always included so a button press switches screens without a fetch.
@@ -307,7 +309,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/raw/mlb` | The MLB schedule response the poller last fetched, unchanged, for recording fixtures. `503` before the first fetch. |
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 
-POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `radarTime`, `radarEvery`, `radarFor`, `screen`, and `bright`; anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
+POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `radarTime`, `radarEvery`, `radarFor`, `screen`, `bright`, `baseballLayout`, `logoBright`, the speed settings (`tickerHold` s: 5, 6, 8, 10, 12, 15; `tickerSlide` ms: 800, 1200, 1600, 2000; `radarFrame` ms: 300, 400, 500, 700, 1000; `radarHold` s: 2, 3, 4, 6, 8; `gameEvery` s: 30, 45, 60, 90, 120), and `tickerFill` (25–80); anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
 
 ---
 
@@ -343,6 +345,8 @@ Next to it, `board-weather.json` keeps the last good Open-Meteo data per locatio
 | `radarEvery`, `radarFor` | Radar visits on the auto screen: every `radarEvery` minutes (0 = never, the default; max 60) show the radar for `radarFor` seconds (10–600, default 60), only while rain is in the box. Persist across restarts. |
 | `baseballLayout` | `classic` (default), `logos`, or `bands`. Sent as `mlb.layout`. |
 | `logoBright` | 10–100, default 90: logo and band brightness in the `logos`/`bands` layouts, sent as `mlb.dim`. |
+| `tickerHold`, `tickerSlide`, `radarFrame`, `radarHold`, `gameEvery` | Speed settings (allowed values under the POST rules above), sent to the board as `anim`. Defaults 8 s, 1200 ms, 500 ms, 4 s, 60 s. |
+| `tickerFill` | Ticker row fill percent (25–80, default 55), sent as `tickerFill`. |
 | `radarTime` | Boolean, default `true`. Sent to the board as `radar.showTime`; off shows the temperature instead of the frame time. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |
 

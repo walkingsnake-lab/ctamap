@@ -121,11 +121,12 @@ class Player:
             if self.page >= pages:
                 self.page = 0
             since = ms - self.page_start
-            if since >= draw.PAGE_HOLD_MS + draw.SLIDE_MS:
+            tm = draw.timing(p)
+            if since >= tm['pageHold'] + tm['slide']:
                 self.page = (self.page + 1) % pages
                 self.page_start = ms
                 since = 0
-            slide = (since - draw.PAGE_HOLD_MS) / draw.SLIDE_MS if pages > 1 and since > draw.PAGE_HOLD_MS else 0
+            slide = (since - tm['pageHold']) / tm['slide'] if pages > 1 and since > tm['pageHold'] else 0
             return draw.render(p, frame, screen='ticker', now=now, page=self.page, slide=slide)
         if self.screen == 'baseball':
             # Scores, inning, count, and outs roll when they change (not
@@ -185,8 +186,9 @@ class Player:
         n = len((self.p.get('radar') or {}).get('frames') or [])
         if not n:
             return -1
-        cycle = max(1, n - 1) * draw.RADAR_FRAME_MS + draw.RADAR_HOLD_MS
-        return min(n - 1, ((ms - self.loop_start) % cycle) // draw.RADAR_FRAME_MS)
+        tm = draw.timing(self.p)
+        cycle = max(1, n - 1) * tm['radarFrame'] + tm['radarHold']
+        return min(n - 1, ((ms - self.loop_start) % cycle) // tm['radarFrame'])
 
     def frame_key(self, ms, now):
         """Everything a still frame depends on, or None while an animation
@@ -195,7 +197,8 @@ class Player:
             return None
         key = (self.screen, self.gen, now, self.blinking() and self.blink_on(ms))
         if self.screen == 'ticker':
-            return key + (self.page, ms - self.page_start >= draw.PAGE_HOLD_MS + draw.SLIDE_MS)
+            tm = draw.timing(self.p)
+            return key + (self.page, ms - self.page_start >= tm['pageHold'] + tm['slide'])
         if self.screen == 'weather':
             return key + (self.radar_idx(ms), len(self.radar_frames))
         if self.screen == 'baseball':
@@ -209,15 +212,17 @@ class Player:
             return False
         if self.screen == 'ticker':
             since = ms - self.page_start
-            return draw.ticker_pages(self.p, 0) > 1 and draw.PAGE_HOLD_MS < since < draw.PAGE_HOLD_MS + draw.SLIDE_MS
+            tm = draw.timing(self.p)
+            return draw.ticker_pages(self.p, 0) > 1 and tm['pageHold'] < since < tm['pageHold'] + tm['slide']
         if self.screen == 'baseball':
             return any(ms - r['start'] < draw.ROLL_MS for r in self.bb_rolls.values())
         if self.screen == 'weather':
             n = len((self.p.get('radar') or {}).get('frames') or [])
             if n < 2:
                 return False
-            cycle = (n - 1) * draw.RADAR_FRAME_MS + draw.RADAR_HOLD_MS
-            return (ms - self.loop_start) % cycle < (n - 1) * draw.RADAR_FRAME_MS
+            tm = draw.timing(self.p)
+            cycle = (n - 1) * tm['radarFrame'] + tm['radarHold']
+            return (ms - self.loop_start) % cycle < (n - 1) * tm['radarFrame']
         return transit_busy(self.anim, ms)
 
     def quiet_ms(self, ms, now):
@@ -229,14 +234,15 @@ class Player:
         if self.screen == 'ticker':
             if draw.ticker_pages(self.p, now) < 2:
                 return FAR
-            return max(0, draw.PAGE_HOLD_MS - (ms - self.page_start))
+            return max(0, draw.timing(self.p)['pageHold'] - (ms - self.page_start))
         if self.screen == 'baseball':
             return FAR  # rolls follow fetched changes; the rotation swaps without animating
         if self.screen == 'weather':
             n = len((self.p.get('radar') or {}).get('frames') or [])
             if n < 2:
                 return FAR
-            cycle = (n - 1) * draw.RADAR_FRAME_MS + draw.RADAR_HOLD_MS
+            tm = draw.timing(self.p)
+            cycle = (n - 1) * tm['radarFrame'] + tm['radarHold']
             return cycle - (ms - self.loop_start) % cycle
         return transit_quiet_ms(self.p, now)
 

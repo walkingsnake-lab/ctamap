@@ -216,11 +216,11 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 - **Header:** station in light grey `#a6a6a6`, clock `#cccccc`, no background.
 - **Two 12px rows** with a 1px gap; dark slate index column `#1f2f35`, **5px wide**, numbered 1–6 in Tom Thumb. The row fill starts right after it (no gap); the destination starts 2px into the fill. Minutes are right-aligned to column 62, with a 2px gap between the digits and `min`.
-- Row fill = line color at 55%; **white** destination (X11 5x7 proportional, mixed case) + minutes (5x7 digits + `min` glyph); `Due` within 60 s (minutes round up, like CTA; see contract countdown rules). Yellow rows also use white text.
+- Row fill = line color at 55% (adjustable per board on the phone, 25–80%); **white** destination (X11 5x7 proportional, mixed case) + minutes (5x7 digits + `min` glyph); `Due` within 60 s (minutes round up, like CTA; see contract countdown rules). Yellow rows also use white text.
 - Destinations use the short-name map, so short-turns appear as `UIC` and `Jeff Pk`.
 - **Schedule-based arrivals:** the **index number is replaced by a 5x5 clock** (`CLOCK` glyph: ring with hands up and right), drawn in the index number's color. If an arrival is both scheduled and on an alerted line, the alert circle wins.
 - **CTA alerts:** on arrivals whose line has an active alert, the **index number is replaced by the 5x5 red alert circle** (white "!"), which fills the 5px column exactly. It sits on the dark index column, so it never collides with the destination or time. Static, no blinking.
-- Pages of 2 hold **8 s**, then **slide up** (**1.2 s** ease) through the next **6 individual arrivals**, looping. Network requests happen during the holds.
+- Pages of 2 hold **8 s**, then **slide up** (**1.2 s** ease) through the next **6 individual arrivals**, looping. Network requests happen during the holds. Hold (5–15 s) and slide (0.8–2 s) are adjustable per board on the phone.
 
 ---
 
@@ -231,7 +231,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Configurable location**; crop centered on it (~1.5 mi/pixel).
 - **Pipeline (server):** crop → palette index to dBZ → average linear reflectivity per LED block → levels (15/25/35/45/55 dBZ: dim green, green, yellow, orange, red) → despeckle (drop pixels with <2 colored neighbors) → small indexed image.
 - **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when Open-Meteo reports a snow weather code, or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/15/20 dBZ, from the Feb 2, 2022 storm) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
-- **Loop:** 6 frames, 6 min apart (30 min; IEM only archives even minutes), 0.5 s each, **holds on the last frame** for 4 s. Network requests (including the next radar frame) happen during the hold.
+- **Loop:** 6 frames, 6 min apart (30 min; IEM only archives even minutes), 0.5 s each, **holds on the last frame** for 4 s. Network requests (including the next radar frame) happen during the hold. Frame step (0.3–1 s) and hold (2–8 s) are adjustable per board on the phone.
 - **Water masked black** (mask generated per location from coastline data), with a faint shoreline along its edge.
 - **Layout per station** (`server/board/locations/`, built by `scripts/build-locations.js` from Natural Earth's Lake Michigan outline): full width with the time over the lake when the time's area is all water (114 of 144 stations), otherwise the split layout (radar left 39 columns, a gray `#333333` line on the panel's left edge, time right 24). The time stack is **top-aligned** (rows 2–19) in both.
 - **No frames yet** (rain in the box but nothing processed, e.g. right after a deploy): the weather layout.
@@ -259,7 +259,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Window:** pregame from 30 min before first pitch (a delayed start stays in pregame), live, then final held 15 min after the server first sees it final (starting values; tune). A final first seen more than 6 h after first pitch (e.g. after a server restart) isn't shown.
 - **Forced Baseball** (screen set to Baseball on the phone) uses wider windows: every game scheduled today shows all day from midnight, and finals hold until 3 AM the next morning (no stale-final rule). Auto keeps the windows above, since there baseball takes over transit.
 - **Priority:** Auto shows baseball while any game is in its window, NWS warnings and watches included (plenty else announces the weather). Timed radar visits (§10), when turned on, interrupt baseball the same way they interrupt transit.
-- **Live games take precedence:** while any shown game is live, only live games are shown (rotating one minute each if there are several). With nothing live, pregame and final games rotate one minute each. Picked by wall time (`floor(now / 60) % count` over that set), so the board keeps no rotation state. Screen switches are natural gaps for network jobs (§2).
+- **Live games take precedence:** while any shown game is live, only live games are shown (rotating one minute each if there are several). With nothing live, pregame and final games rotate one minute each. Picked by wall time (`floor(now / 60) % count` over that set), so the board keeps no rotation state. The minute is adjustable per board on the phone (30 s–2 min). Screen switches are natural gaps for network jobs (§2).
 - Phone page and buttons can still switch screens (§10); the phone page gets a Baseball option.
 
 ### Layout

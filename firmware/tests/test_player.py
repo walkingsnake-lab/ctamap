@@ -86,5 +86,22 @@ class BaseballPlayer(unittest.TestCase):
         self.assertFalse(pl.blinking())
 
 
+class SpeedSettings(unittest.TestCase):
+    def test_ticker_hold_and_radar_loop_follow_anim(self):
+        pl = player.Player()
+        tk = [{'ln': 'RD', 'd': 'Howard', 't': T0 + 300 + 60 * i, 's': 0, 'a': 0} for i in range(4)]
+        pl.set_payload(payload([], screen='ticker', ticker=tk, anim={'pageHold': 5000, 'slide': 800}), 0)
+        pl.set_screen('ticker', 0)
+        self.assertEqual(pl.quiet_ms(1000, T0), 4000)
+        self.assertTrue(pl.busy(5400))
+        self.assertFalse(pl.busy(5900))
+        pl.draw(draw.Frame(), 5900, T0)
+        self.assertEqual(pl.page, 1)
+        r = {'on': True, 'frames': ['a', 'b', 'c'], 'ft': [T0] * 3}
+        pl.set_payload(payload([], screen='weather', radar=r, anim={'radarFrame': 1000, 'radarHold': 2000}), 0)
+        pl.set_screen('weather', 0)
+        self.assertEqual([pl.radar_idx(ms) for ms in (0, 999, 1000, 2000, 3999, 4000)], [0, 0, 1, 2, 2, 0])
+
+
 if __name__ == '__main__':
     unittest.main()
