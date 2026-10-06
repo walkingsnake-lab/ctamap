@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError } = require('./state');
+const { createStore, ValidationError, resolveDir } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -12,6 +12,7 @@ const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar } = require('./radar');
 const { createMlb } = require('./mlb');
+const { createLogos } = require('./mlb-logos');
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
 const fs = require('fs');
@@ -27,7 +28,8 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'radar']);
+const RESERVED = new Set(['ping', 'version', 'update', 'radar', 'logo']);
+const MAX_SHEET = 8 * 1024 * 1024; // uploaded logo sheet (PNG)
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -38,6 +40,26 @@ function sendFrame(res, bytes) {
   if (!bytes) return send(res, 404, { err: 'unknown_frame' });
   res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'Cache-Control': 'max-age=3600, immutable' });
   res.end(Buffer.from(bytes));
+}
+
+function sendLogo(res, bytes) {
+  if (!bytes) return send(res, 404, { err: 'unknown_logo' });
+  res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'Cache-Control': 'max-age=86400, immutable' });
+  res.end(Buffer.from(bytes));
+}
+
+function readBody(req, max) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > max) { reject(new ValidationError('body too large')); req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
 }
 
 function sameSecret(given, expected) {
@@ -75,6 +97,7 @@ function createBoard({
   nws = null,
   radar = null,
   mlb = null,
+  logos = null,   // prepared team logos (mlb-logos.js); default beside the board state
   alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
   stations = require('./stations.json'),
   log = console,
@@ -91,12 +114,13 @@ function createBoard({
     .map(({ mapid, desc, short }) => ({ mapid, desc, short }))
     .sort((a, b) => a.desc.localeCompare(b.desc)));
   // Simulator preview settings from the query: mapid, header=0|1, weather=0|1,
-  // rtime=0|1 (radar corner: frame time or temperature).
+  // rtime=0|1 (radar corner: frame time or temperature), bblayout=classic|logos|bands (baseball layout).
   function previewOf(q) {
     const mapid = String(q.mapid || '');
     if (mapid && !stationById.has(mapid)) return { err: `unknown mapid: ${mapid}` };
     const flag = (v) => (v === '1' ? true : v === '0' ? false : null);
-    return { mapid, showHeader: flag(q.header), showWeather: flag(q.weather), radarTime: flag(q.rtime) };
+    const lg = ['classic', 'logos', 'bands'].includes(q.bblayout) ? q.bblayout : null;
+    return { mapid, showHeader: flag(q.header), showWeather: flag(q.weather), radarTime: flag(q.rtime), baseballLayout: lg };
   }
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
   if (!tracker) tracker = createTracker({ log }).start();
@@ -104,6 +128,19 @@ function createBoard({
   if (!nws) nws = createNws({ log }).start();
   if (!radar) radar = createRadar({ weather, log }).start();
   if (!mlb) mlb = createMlb({ log }).start();
+  if (!logos) logos = createLogos({ dir: resolveDir(log), log });
+
+  // Logo and band layouts: each side gets its band color (the logo's, or the
+  // team color) and, in the logo layout, its logo id (fetched once by the
+  // board). The board dims both by mlb.dim.
+  function withLogos(g, useLogos) {
+    const side = (s) => {
+      let l = null;
+      try { l = logos.get(s.ab); } catch (e) { log.error('[board] logos:', e.message); }
+      return { ...s, lg: l && useLogos ? l.id : null, bd: l ? l.band : s.c || '#8f8f8f' };
+    };
+    return { ...g, away: side(g.away), home: side(g.home) };
+  }
 
   // 'auto' brightness follows sunrise/sunset (100 until weather data arrives).
   const resolveBright = (b, w, now) => (b === 'off' ? 0 : b === 'auto' ? autoBright(w, now) : b);
@@ -161,7 +198,7 @@ function createBoard({
       const st = stationById.get(preview.mapid);
       board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
     }
-    for (const k of ['showHeader', 'showWeather', 'radarTime']) if (preview[k] != null) board = { ...board, [k]: preview[k] };
+    for (const k of ['showHeader', 'showWeather', 'radarTime', 'baseballLayout']) if (preview[k] != null) board = { ...board, [k]: preview[k] };
     const st = stationById.get(board.station.mapid);
     // Weather and warnings are nice-to-haves: a failure just leaves them off.
     const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
@@ -216,8 +253,19 @@ function createBoard({
       wx: bars.showWeather ? wx : null,
       warn,
       radar: { ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null },
-      mlb: { games },
+      mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
+        ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')) }
+        : { layout: 'classic', games },
     };
+  }
+
+  // Logo crops a payload refers to, for server-side renders (sim.png).
+  function logoBytes(body) {
+    const out = {};
+    for (const g of (body.mlb && body.mlb.games) || []) for (const sd of [g.away, g.home]) {
+      if (sd.lg && !out[sd.lg]) { const b = logos.bytes(sd.lg); if (b) out[sd.lg] = b; }
+    }
+    return out;
   }
 
   async function route(req, res, parsed) {
@@ -255,6 +303,13 @@ function createBoard({
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
       return sendFrame(res, radar.frame(board.station.mapid, rest[0]));
+    }
+
+    // One team logo crop: 24 x 12 RGB (864 bytes), immutable (the id carries a hash).
+    if (first === 'logo' && rest.length === 1) {
+      if (method !== 'GET') return send(res, 405, { err: 'method' });
+      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      return sendLogo(res, logos.bytes(rest[0]));
     }
 
     // ---- control endpoints, under the secret path ----
@@ -330,6 +385,27 @@ function createBoard({
         return sendFrame(res, radar.frame(mapid, rest[2]));
       }
 
+      // Team logos: GET status; POST a PNG to replace them: the whole sheet,
+      // or with ?team=AB (and optional &crop=0-12) one team's logo. Kept
+      // beside the board state, never in the repo.
+      if (sub === 'api/logos') {
+        if (method === 'GET') return send(res, 200, logos.status());
+        if (method !== 'POST') return send(res, 405, { err: 'method' });
+        let status;
+        try {
+          const body = await readBody(req, MAX_SHEET);
+          const ab = parsed.query.team ? String(parsed.query.team) : null;
+          const crop = parsed.query.crop != null && parsed.query.crop !== '' ? Number(parsed.query.crop) : null;
+          status = ab ? logos.uploadOne(ab, body, crop) : logos.uploadSheet(body);
+        } catch (e) { return send(res, 400, { err: 'invalid', detail: e.message }); }
+        return send(res, 200, status);
+      }
+      // A logo crop for the simulator (the path is the credential).
+      if (rest[0] === 'api' && rest[1] === 'logo' && rest.length === 3) {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        return sendLogo(res, logos.bytes(rest[2]));
+      }
+
       // Test alerts for this board: GET the active set, POST to replace it
       // (an empty set clears it).
       if (sub === 'api/test') {
@@ -393,6 +469,7 @@ function createBoard({
           page: Math.max(0, parseInt(parsed.query.page, 10) || 0),
           blink: parsed.query.blink === '1',
           frames,
+          logos: logoBytes(body),
         });
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
         res.end(frame.toPNG(scale));

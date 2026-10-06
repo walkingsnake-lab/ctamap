@@ -25,6 +25,7 @@ class Player:
         self.gen = 0             # bumped with every payload
         self.anim = draw.TransitAnimator()
         self.radar_frames = {}   # frame id -> bytes(2048)
+        self.logos = {}          # logo id -> bytes(864), baseball logo layout
         self.page = 0
         self.page_start = 0
         self.loop_start = 0
@@ -44,6 +45,11 @@ class Player:
         for k in list(self.radar_frames):
             if k not in ids:
                 del self.radar_frames[k]
+        # Keep only logos the games still use.
+        want = self.wanted_logos()
+        for k in list(self.logos):
+            if k not in want:
+                del self.logos[k]
 
     def missing_frames(self):
         ids = (self.p.get('radar') or {}).get('frames') or [] if self.p else []
@@ -51,6 +57,28 @@ class Player:
 
     def add_frame(self, fid, data):
         self.radar_frames[fid] = data
+
+    def wanted_logos(self):
+        """Logo ids the payload's games use (logo layout only)."""
+        mlb = (self.p.get('mlb') or {}) if self.p else {}
+        if mlb.get('layout') != 'logos':
+            return []
+        out = []
+        for g in mlb.get('games') or []:
+            for k in ('away', 'home'):
+                lg = (g.get(k) or {}).get('lg')
+                if lg and lg not in out:
+                    out.append(lg)
+        return out
+
+    def missing_logos(self):
+        """Logos to fetch: only while the baseball screen is up."""
+        if self.screen != 'baseball':
+            return []
+        return [i for i in self.wanted_logos() if i not in self.logos]
+
+    def add_logo(self, lid, data):
+        self.logos[lid] = data
 
     def auto_screen(self, now):
         """The screen the server wants now: its `screen`, except that on the
@@ -119,7 +147,7 @@ class Player:
                     del self.bb_rolls[k]
                 else:
                     rolls[k] = {'from': r['from'], 'p': rp}
-            return draw.render(p, frame, screen='baseball', now=now, rolls=rolls)
+            return draw.render(p, frame, screen='baseball', now=now, rolls=rolls, logos=self.logos)
         if self.screen == 'weather':
             return draw.render(p, frame, screen='weather', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms))
         view = self.anim.step(p, now, ms)
@@ -170,6 +198,8 @@ class Player:
             return key + (self.page, ms - self.page_start >= draw.PAGE_HOLD_MS + draw.SLIDE_MS)
         if self.screen == 'weather':
             return key + (self.radar_idx(ms), len(self.radar_frames))
+        if self.screen == 'baseball':
+            return key + (len(self.logos),)
         return key
 
     # ---- timing for the scheduler ----

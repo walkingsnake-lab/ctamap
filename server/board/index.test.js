@@ -10,12 +10,19 @@ const { createBoard } = require('./index');
 const { createStore } = require('./state');
 
 const quiet = { warn() {}, error() {} };
+const fakeLogos = (have = {}) => ({
+  get: (ab) => (have[ab] ? { id: `${ab}-1`, band: have[ab] } : null),
+  bytes: (id) => (Object.keys(have).some((ab) => id === `${ab}-1`) ? Buffer.alloc(864, 7) : null),
+  status: () => ({ teams: Object.keys(have).sort(), updated: null }),
+  uploadSheet: () => { throw new Error('not a PNG'); },
+  uploadOne: (ab) => { throw new Error(`unknown team: ${ab}`); },
+});
 const fakeMlb = (games = [], forcedGames = games) => ({ get: (mode) => (mode === 'forced' ? forcedGames : games), raw: () => null });
 
 // Spin up a server that routes /board/* the same way server.js does.
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), ...opts });
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), logos: fakeLogos(), ...opts });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -539,7 +546,7 @@ test('baseball: auto shows it during a game, weather warnings or not', async () 
   let s = await serve({ tracker: tracker(), mlb: fakeMlb([]) });
   let b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.screen, 'transit');
-  assert.deepEqual(b.mlb, { games: [] });
+  assert.deepEqual(b.mlb, { layout: 'classic', games: [] });
   await s.close();
 
   s = await serve({ tracker: tracker(), mlb: fakeMlb([game]) });
@@ -590,5 +597,31 @@ test('forced Baseball asks for the wider forced windows; auto uses the auto ones
   b = (await s.req('/board/secret123/api/update?b=home')).body;
   assert.equal(b.screen, 'baseball');
   assert.equal(b.mlb.games[0].id, 9);
+  await s.close();
+});
+
+test('baseball logo layout: payload carries logo ids and band colors; the board fetches logo crops', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const game = { id: 7, st: 'live', start: now - 3600, away: { ab: 'CHC', c: '#2a5bd8', r: 1 }, home: { ab: 'STL', c: '#d62a2a', r: 0 }, inn: 3, half: 'T', b: 0, s: 0, o: 0, on: [0, 0, 0] };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), mlb: fakeMlb([game]), logos: fakeLogos({ CHC: '#142d5a' }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  s.store.update('home', { baseballLayout: 'logos' });
+  const b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal(b.mlb.layout, 'logos');
+  assert.equal(b.mlb.dim, 0.9);
+  assert.deepEqual([b.mlb.games[0].away.lg, b.mlb.games[0].away.bd], ['CHC-1', '#142d5a']);
+  assert.deepEqual([b.mlb.games[0].home.lg, b.mlb.games[0].home.bd], [null, '#d62a2a']); // no logo: the team color (the board dims)
+  const logo = await fetch(`http://127.0.0.1:${s.port}/board/logo/CHC-1`, h);
+  assert.equal(logo.status, 200);
+  assert.equal((await logo.arrayBuffer()).byteLength, 864);
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/logo/CHC-1`)).status, 401);
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/logo/NOPE-1`, h)).status, 404);
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/logo/CHC-1`)).status, 200);
+  assert.deepEqual((await s.req('/board/secret123/api/logos')).body, { teams: ['CHC'], updated: null });
+  const one = await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/logos?team=XYZ`, { method: 'POST', body: 'nope' });
+  assert.equal(one.status, 400);
+  const bad = await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/logos`, { method: 'POST', body: 'nope' });
+  assert.equal(bad.status, 400);
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=baseball`)).status, 200);
   await s.close();
 });

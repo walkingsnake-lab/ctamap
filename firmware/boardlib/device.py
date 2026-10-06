@@ -281,6 +281,16 @@ class Net:
     def update(self, boot):
         return self._json('/board/update?b=' + self.board_id + ('&boot=1' if boot else ''))
 
+    def logo(self, logo_id):
+        r = self._get('/board/logo/' + logo_id + '?b=' + self.board_id)
+        try:
+            data = r.content
+        finally:
+            r.close()
+        if len(data) != 864:
+            raise ValueError('logo is %d bytes' % len(data))
+        return data
+
     def radar(self, frame_id):
         r = self._get('/board/radar/' + frame_id + '?b=' + self.board_id)
         try:

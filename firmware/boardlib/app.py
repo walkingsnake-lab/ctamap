@@ -3,7 +3,7 @@
 # Board takes its hardware as plain objects so the whole loop can run under
 # CPython against a fake network and clock (firmware/tests/test_app.py):
 #   net      - connect(networks, status) / ping() / version() / update(boot)
-#              / radar(frame_id) / mac; raises on failure
+#              / radar(frame_id) / logo(logo_id) / mac; raises on failure
 #   display  - show(draw_fn): draw_fn(frame) fills a fresh frame, then it's shown
 #   clock    - ms(): monotonic milliseconds (int)
 #   buttons  - up() / down(): True while held (optional)
@@ -18,6 +18,7 @@ from .sched import Scheduler, Job
 VERSION_EVERY = 10000   # settings version check (spec: ~10 s)
 UPDATE_EVERY = 30000    # combined update (spec: ~30 s)
 RADAR_EVERY = 3000      # one missing radar frame per run
+LOGO_EVERY = 3000       # one missing team logo per run (baseball logo layout)
 FAILS_BEFORE_RECONNECT = 3
 RETRY_WIFI_MS = 60000
 
@@ -46,6 +47,7 @@ class Board:
         self.version_job = self.sched.add(Job('version', VERSION_EVERY, 20000, self._version))
         self.update_job = self.sched.add(Job('update', UPDATE_EVERY, 30000, self._update))
         self.radar_job = self.sched.add(Job('radar', RADAR_EVERY, 120000, self._radar))
+        self.logo_job = self.sched.add(Job('logo', LOGO_EVERY, 120000, self._logo))
         self.stats = {'fetches': 0, 'forced': 0, 'draws': 0}
 
     # ---- time ----
@@ -127,6 +129,16 @@ class Board:
     def _update(self, ms):
         p = self.net.update(False)
         self._apply(p, ms, self.clock.ms())
+        return 'ok'
+
+    def _logo(self, ms):
+        # Team logos (24 x 12, immutable ids) for the baseball logo layout.
+        missing = self.player.missing_logos()
+        if not missing:
+            return 'skip'
+        self.player.add_logo(missing[0], self.net.logo(missing[0]))
+        if len(missing) > 1:
+            self.logo_job.due_at = 0
         return 'ok'
 
     def _radar(self, ms):

@@ -42,6 +42,7 @@ class Server:
         self.wifi = ['ok']
         self.visit = None
         self.alert = 0
+        self.layout = 'classic'
         self.latency = lambda: LATENCY
 
     def now(self):
@@ -77,6 +78,11 @@ class Server:
                       [{'ln': 'RD', 'd': '95th', 't': t, 's': 0, 'a': 0} for t in rows[1]['t']],
             'wx': None, 'warn': None,
             'radar': {'on': self.radar_on, 'visit': self.visit, 'frames': frames, 'ft': [T0] * len(frames), 'timeBox': [40, 0, 24, 22], 'split': False},
+            'mlb': {'layout': self.layout, 'games': [{
+                'id': 1, 'st': 'live', 'start': now - 3600, 'inn': 3, 'half': 'T', 'b': 0, 's': 0, 'o': 0, 'on': [0, 0, 0],
+                'away': {'ab': 'CHC', 'c': '#2a5bd8', 'r': 1, 'lg': 'CHC-1' if self.layout == 'logos' else None, 'bd': '#204882'},
+                'home': {'ab': 'STL', 'c': '#d62a2a', 'r': 0, 'lg': 'STL-1' if self.layout == 'logos' else None, 'bd': '#c12626'},
+            }]},
         }
 
     # net interface
@@ -102,6 +108,10 @@ class Server:
     def radar(self, fid):
         self._call('radar:' + fid)
         return bytes(2048)
+
+    def logo(self, lid):
+        self._call('logo:' + lid)
+        return bytes(864)
 
 
 class Display:
@@ -201,6 +211,24 @@ class TestBoardLoop(unittest.TestCase):
         got = [c['name'] for c in server.calls if c['name'].startswith('radar')]
         self.assertEqual(len(got), len(set(got)), 'a frame was fetched twice')
         self.assertEqual(board.player.missing_frames(), [])
+
+    def test_logos_only_on_the_baseball_screen_and_once_each(self):
+        board, server, clock, _, _, _ = make()
+        server.layout = 'logos'
+        board.connect()
+        run_for(board, clock, 60000)
+        self.assertFalse([c for c in server.calls if c['name'].startswith('logo')])  # transit: none
+        server.screen = 'baseball'
+        server.v = 2
+        run_for(board, clock, 90000)
+        self.assertEqual(board.player.screen, 'baseball')
+        got = [c['name'] for c in server.calls if c['name'].startswith('logo')]
+        self.assertEqual(sorted(got), ['logo:CHC-1', 'logo:STL-1'])
+        self.assertEqual(board.player.missing_logos(), [])
+        server.layout = 'bands'  # bands use no logos: the cache empties
+        server.v = 3
+        run_for(board, clock, 30000)
+        self.assertEqual(board.player.logos, {})
 
     def test_buttons_override_until_the_phone_changes_something(self):
         board, server, clock, _, btn, _ = make(buttons=True)

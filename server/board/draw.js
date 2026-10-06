@@ -738,11 +738,13 @@
     }
 
     // ---- baseball (design spec §8) ----
-    // Team rows on the left (color block + 5x7 abbreviation + score), status
-    // panel centered on x51, divider on row 22, bottom line right-aligned.
+    // Three layouts (p.mlb.layout): 'classic' (default), 'logos', and 'bands'
+    // (the logo layout's bands with abbreviations instead of logos). Classic:
+    // team rows on the left (color block + 5x7 abbreviation + score), status
+    // panel centered on x51, divider on row 24, bottom line right-aligned.
     const BB = { live: '#f0f0f0', lose: '#6a6a6a', base: '#454545', infield: '#3a3a3a' };
     const ROW_TOPS = [2, 12];   // away, home
-    const SCORE_RIGHT = 30, PANEL_X = 51, BOTTOM = 31, DIVIDER = 22; // divider and bottom line match the transit weather row
+    const SCORE_RIGHT = 30, PANEL_X = 51, BOTTOM = 31, DIVIDER = 24; // same divider and bottom line in both layouts
     const SCORE_ROLL = 8;       // 5x7 digit (7 rows incl. descender) + 1px
     const ctext = (f, font, str, cx, base, color) => f.text(font, str, cx - Math.floor(measure(font, str) / 2), base, color);
     const record = (t) => (t.w == null || t.l == null ? '' : `${t.w}-${t.l}`);
@@ -763,12 +765,12 @@
     // to the live white over SCORE_FADE_S. `side.at` is when the server saw
     // the change (epoch s); without it the score is plain white.
     const SCORE_HOLD_S = 30, SCORE_FADE_S = 5;
-    function scoreColor(side, now) {
-      if (side.at == null) return BB.live;
+    function scoreColor(side, now, rest = BB.live) {
+      if (side.at == null) return rest;
       const age = now - side.at;
       if (age < 0 || age < SCORE_HOLD_S) return C.amber;
-      if (age >= SCORE_HOLD_S + SCORE_FADE_S) return BB.live;
-      return lerpColor(C.amber, BB.live, (age - SCORE_HOLD_S) / SCORE_FADE_S);
+      if (age >= SCORE_HOLD_S + SCORE_FADE_S) return rest;
+      return lerpColor(C.amber, rest, (age - SCORE_HOLD_S) / SCORE_FADE_S);
     }
 
     // Score, right-aligned at SCORE_RIGHT; a changed score rolls digit by
@@ -806,11 +808,11 @@
 
     // Infield outline with 5x5 bases on its corners: amber when occupied,
     // solid dark grey when empty. on = [1st, 2nd, 3rd].
-    function drawInfield(f, on) {
-      drawDiamond(f, PANEL_X, 7, 5, BB.infield, false);
-      drawDiamond(f, PANEL_X, 2, 2, on[1] ? C.amber : BB.base, true);
-      drawDiamond(f, PANEL_X - 5, 7, 2, on[2] ? C.amber : BB.base, true);
-      drawDiamond(f, PANEL_X + 5, 7, 2, on[0] ? C.amber : BB.base, true);
+    function drawInfield(f, on, cy = 7) {
+      drawDiamond(f, PANEL_X, cy, 5, BB.infield, false);
+      drawDiamond(f, PANEL_X, cy - 5, 2, on[1] ? C.amber : BB.base, true);
+      drawDiamond(f, PANEL_X - 5, cy, 2, on[2] ? C.amber : BB.base, true);
+      drawDiamond(f, PANEL_X + 5, cy, 2, on[0] ? C.amber : BB.base, true);
     }
 
     // Tom Thumb status text that can roll like an arrival time: `left` is
@@ -861,9 +863,125 @@
       f.text('small', label, Math.floor((64 - measure('small', label)) / 2), top + 18, C.noTrains);
     }
 
+    // Embossed text: black right of, below, and below-right of every lit
+    // pixel, then the text, so it reads as raised over logos and bands.
+    function embossText(f, font, str, x, base, color, shadow = '#000000') {
+      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) f.text(font, str, x + dx, base + dy, shadow);
+      return f.text(font, str, x, base, color);
+    }
+
+    // ---- baseball, logo layout ----
+    // Each team gets a 12-row band (rows 0-11 away, 12-23 home) out to x37 in
+    // its band color, with its 24x12 logo crop at the left (both dimmed here by
+    // p.mlb.dim; crops come from mlb-logos.js) and the score centered between logo and band
+    // end in white, or black (unlit) on a light band. The status panel and bottom line are the
+    // classic layout's, with the infield and inning nudged down to center on
+    // the taller rows.
+    const LG = { w: 24, rows: 12, tops: [0, 12], bandR: 37, cx: 30, infieldY: 8, innBase: 21, dim: 0.9 }; // dim: default when the payload has none
+    const LG_ROLL = 8;
+    // Text on a band is white, or black (unlit) on a light band: drawn band
+    // luma above LG_LIGHT, e.g. Atlanta's light grey or Milwaukee's gold.
+    const LG_LIGHT = 140;
+    const lgInk = (side, dim) => {
+      const [r, g, b] = hex(scaleColor(side.bd || side.c || C.grey, dim));
+      return (299 * r + 587 * g + 114 * b) / 1000 > LG_LIGHT ? '#000000' : BB.live;
+    };
+
+    // bands: true for the 'bands' layout (no logos: the abbreviation in white
+    // with a drop shadow takes the logo's place).
+    function drawLogoBand(f, side, top, logos, bands, dim) {
+      f.fill(0, top, LG.bandR + 1, LG.rows, scaleColor(side.bd || side.c || C.grey, dim));
+      if (bands) {
+        const ab = side.ab || '';
+        f.text('5x7', ab, (LG.w >> 1) - Math.floor(measure('5x7', ab) / 2), top + 9, lgInk(side, dim));
+        return;
+      }
+      const bytes = side.lg && logos ? logos[side.lg] : null;
+      if (bytes && bytes.length >= LG.w * LG.rows * 3) {
+        for (let y = 0; y < LG.rows; y++) for (let x = 0; x < LG.w; x++) {
+          const i = (y * LG.w + x) * 3;
+          f.set(x, top + y, [Math.round(bytes[i] * dim), Math.round(bytes[i + 1] * dim), Math.round(bytes[i + 2] * dim)]);
+        }
+      } else {
+        // No logo (none uploaded, or not fetched yet): the abbreviation, dimmed.
+        ctext(f, '5x7', side.ab || '', LG.w >> 1, top + 9, scaleColor(C.label, dim));
+      }
+    }
+
+    // Score (or pregame abbreviation) centered in the band's box, embossed;
+    // a changed score rolls digit by digit inside the box.
+    function drawLogoScore(f, text, top, color, roll) {
+      const base = top + 9;
+      const left = (t) => LG.cx - Math.floor(measure('5x7', t) / 2);
+      if (!roll || roll.from === text || roll.p >= 1) { f.text('5x7', text, left(text), base, color); return; }
+      const up = Math.round(easeInOut(roll.p) * LG_ROLL);
+      f.withClip(LG.w, base - 6, LG.bandR + 1, base, () => { // the digit rows
+        const from = roll.from;
+        if (from.length === text.length) {
+          let x = left(text);
+          for (let i = 0; i < text.length; i++) {
+            if (from[i] === text[i]) f.text('5x7', text[i], x, base, color);
+            else {
+              f.text('5x7', from[i], x, base - up, color);
+              f.text('5x7', text[i], x, base - up + LG_ROLL, color);
+            }
+            x += measure('5x7', text[i]) + 1;
+          }
+        } else {
+          f.text('5x7', from, left(from), base - up, color);
+          f.text('5x7', text, left(text), base - up + LG_ROLL, color);
+        }
+      });
+    }
+
+    function renderBaseballLogos(f, p, g, now, o) {
+      const rolls = o.rolls || {};
+      const logos = o.logos || {};
+      const bands = p.mlb.layout === 'bands';
+      const dim = p.mlb.dim != null ? p.mlb.dim : LG.dim;
+      const final = g.st === 'final';
+      const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
+      const sides = [['away', LG.tops[0]], ['home', LG.tops[1]]];
+      for (const [k, top] of sides) drawLogoBand(f, g[k], top, logos, bands, dim);
+      f.fill(0, DIVIDER, 64, 1, C.divider);
+
+      if (g.st === 'pre') {
+        // Abbreviations in the score boxes, records in the panel, TODAY and
+        // the first-pitch time on the bottom line.
+        for (const [k, top] of sides) {
+          if (!bands) drawLogoScore(f, g[k].ab || '', top, lgInk(g[k], dim), null);
+          ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
+        }
+        f.text('small', 'TODAY', 1, BOTTOM, C.grey);
+        const ap = ampmText(g.start);
+        rtext(f, 'small', ap, 62, BOTTOM, C.grey);
+        rtext(f, 'small', clockText(g.start), 62 - measure('small', ap) - 3, BOTTOM, C.label);
+        return f;
+      }
+
+      if (final) {
+        for (const [k, top] of sides) {
+          drawLogoScore(f, String(g[k].r), top, winner === k ? C.amber : lgInk(g[k], dim), rolls[k]);
+          ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
+        }
+        rtext(f, 'small', 'FINAL', 62, BOTTOM, C.label);
+        return f;
+      }
+
+      drawLogoScore(f, String(g.away.r), LG.tops[0], scoreColor(g.away, now, lgInk(g.away, dim)), rolls.away);
+      drawLogoScore(f, String(g.home.r), LG.tops[1], scoreColor(g.home, now, lgInk(g.home, dim)), rolls.home);
+      drawInfield(f, g.on || [0, 0, 0], LG.infieldY);
+      const t = liveTexts(g);
+      drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), LG.innBase, C.label, rolls.inn);
+      const outsLeft = 62 - measure('small', t.outs) + 1;
+      drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
+      drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
+      return f;
+    }
+
     // opts: now, game (index into p.mlb.games; default the rotation),
     // rolls ({away|home|inn|count|outs: {from, p}}: scores and live status
-    // texts mid-roll)
+    // texts mid-roll), logos ({id: 864-byte 24x12 RGB crop}; logo layout)
     function renderBaseball(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
@@ -871,6 +989,7 @@
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) { drawNoGames(f, now); return f; }
       const g = games[o.game != null ? o.game % games.length : pickGame(games, now).i];
+      if (p.mlb.layout === 'logos' || p.mlb.layout === 'bands') return renderBaseballLogos(f, p, g, now, o);
       const rolls = o.rolls || {};
       const final = g.st === 'final';
       const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
@@ -887,6 +1006,7 @@
         // Records 3px after the longer name; first pitch in the bottom line.
         f.text('small', record(g.away), nameEnd + 2, ROW_TOPS[0] + 6, C.grey);
         f.text('small', record(g.home), nameEnd + 2, ROW_TOPS[1] + 6, C.grey);
+        f.text('small', 'TODAY', 1, BOTTOM, C.grey);
         const ap = ampmText(g.start);
         rtext(f, 'small', ap, 62, BOTTOM, C.grey);
         rtext(f, 'small', clockText(g.start), 62 - measure('small', ap) - 3, BOTTOM, C.label);
@@ -950,7 +1070,7 @@
 
     return {
       Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, baseballTexts, pickGame, scoreColor, SCORE_HOLD_S, SCORE_FADE_S,
+      renderBaseball, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, SLIDE_MS: 1200, PAGE_HOLD_MS: 8000, BLINK_MS: 1000,
       // Radar loop: each frame shows RADAR_FRAME_MS, the newest holds RADAR_HOLD_MS.

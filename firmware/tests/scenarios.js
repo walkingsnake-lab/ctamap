@@ -45,12 +45,13 @@ async function radarFrames() {
 // transit animator (one animator across the steps).
 async function build() {
   const S = [];
-  const add = (name, payload, optsList, frames) => {
-    const framesObj = frames ? Object.fromEntries(Object.entries(frames).map(([k, v]) => [k, v])) : undefined;
+  const arrays = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.from(v)])) : undefined);
+  const add = (name, payload, optsList, frames, logos) => {
     S.push({
       name, payload,
-      frames: framesObj ? Object.fromEntries(Object.entries(framesObj).map(([k, v]) => [k, Array.from(v)])) : undefined,
-      renders: optsList.map((o) => ({ opts: o, px: hexOf(draw.render(payload, { ...o, frames: framesObj })) })),
+      frames: arrays(frames),
+      logos: arrays(logos),
+      renders: optsList.map((o) => ({ opts: o, px: hexOf(draw.render(payload, { ...o, frames, logos })) })),
     });
   };
 
@@ -155,6 +156,35 @@ async function build() {
   {
     const p = payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX, warn: { kind: 'tor', lvl: 'warning' } });
     add('weather row tornado warning blink', p, [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
+  }
+
+  // Baseball logo and band layouts: synthetic logo crops (not team art).
+  {
+    const t = 1791140000;
+    const crop = (seed) => Uint8Array.from({ length: 864 }, (_, i) => ((Math.floor(i / 3) * seed) % 24) * 10 + (i % 3) * 5); // 24 colors, like a real crop
+    const logos = { 'CHC-1': crop(7), 'STL-1': crop(13) };
+    const side = (ab, c, lg, bd, extra) => ({ ab, c, lg, bd, ...extra });
+    const game = (st, extra) => ({ id: 9, st, start: t - 3600,
+      away: side('CHC', '#2a5bd8', 'CHC-1', '#204882', { r: 3, w: 92, l: 70 }),
+      home: side('STL', '#d62a2a', null, '#c12626', { r: 12, w: 88, l: 74 }), ...extra });
+    const lightHome = side('ATL', '#ce1141', null, '#d5d7d9', { r: 4, w: 90, l: 72 });
+    const bbp = (layout, ...games) => ({ now: t, tzo: tzOffset(t), bright: 100, screen: 'baseball', mlb: { layout, dim: 0.9, games } });
+    const live = game('live', { inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] });
+    for (const layout of ['logos', 'bands']) {
+      add(`baseball ${layout} live`, bbp(layout, live), [{ screen: 'baseball' },
+        { screen: 'baseball', rolls: { away: { from: '2', p: 0.4 }, home: { from: '11', p: 0.6 }, inn: { from: 'MID 6', p: 0.5 } } }], undefined, logos);
+      add(`baseball ${layout} flash`, bbp(layout, { ...live, away: { ...live.away, at: t - 10 } }), [{ screen: 'baseball' }], undefined, logos);
+      add(`baseball ${layout} pregame`, bbp(layout, game('pre', { start: t + 1500, away: { ...live.away, r: 0 }, home: { ...live.home, r: 0, ab: 'WSH' } })), [{ screen: 'baseball' }], undefined, logos);
+      add(`baseball ${layout} final`, bbp(layout, game('final')), [{ screen: 'baseball' }, { screen: 'baseball', rolls: { home: { from: '9', p: 0.5 } } }], undefined, logos);
+    }
+    for (const layout of ['logos', 'bands']) {
+      add(`baseball ${layout} light band`, bbp(layout, { ...live, home: lightHome }), [{ screen: 'baseball' }, { screen: 'baseball', rolls: { home: { from: '3', p: 0.5 } } }], undefined, logos);
+      add(`baseball ${layout} light band flash`, bbp(layout, { ...live, home: { ...lightHome, at: t - 32 } }), [{ screen: 'baseball' }], undefined, logos);
+    }
+    add('baseball logos without crops (not fetched yet)', bbp('logos', live), [{ screen: 'baseball' }]);
+    add('baseball logos at 47% and with no dim (default)', { ...bbp('logos', live), mlb: { layout: 'logos', dim: 0.47, games: [live] } }, [{ screen: 'baseball' }], undefined, logos);
+    add('baseball logos, payload without dim', { ...bbp('logos', live), mlb: { layout: 'logos', games: [live] } }, [{ screen: 'baseball' }], undefined, logos);
+    add('baseball logos without band colors', bbp('logos', { ...live, away: { ...live.away, bd: null }, home: { ...live.home, bd: null, c: null } }), [{ screen: 'baseball' }], undefined, logos);
   }
 
   // Baseball (design spec §8).
