@@ -809,3 +809,28 @@ test('classic pregame: TODAY bottom left', () => {
   const f = draw.renderBaseball(bb(bbGame({ st: 'pre', start: NOW + 1500 })));
   assert.ok(count(f, draw.C.grey, 0, 27, 20, 31) > 10);
 });
+
+test('radar corner: shoreline in the clock box keeps a 1px margin from the time, AM/PM, temperature, and icon', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 0) / 1000;
+  // A shoreline running right through the clock box.
+  const bytes = new Uint8Array(2048);
+  for (let y = 0; y < 32; y++) for (let x = 38; x < 64; x++) bytes[y * 64 + x] = 6;
+  const base = { now, bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ['a', 'b'], ft: [now - 360, now], timeBox: [40, 0, 24, 22], split: false } };
+  for (const extra of [{}, { showTime: false, temp: 63, icon: 'sun' }]) {
+    const f = draw.render({ ...base, radar: { ...base.radar, ...extra } }, { screen: 'weather', frames: { a: bytes, b: bytes } });
+    const shore = draw.RADAR[6];
+    let corner = 0;
+    for (let y = 0; y < 22; y++) for (let x = 40; x < 64; x++) {
+      const c = hex(f.get(x, y));
+      if (c === '#000000' || c === shore) continue;
+      corner++;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx >= 0 && xx < 64 && yy >= 0 && yy < 32) assert.notEqual(hex(f.get(xx, yy)), shore, `shoreline touches (${x},${y}) ${JSON.stringify(extra)}`);
+      }
+    }
+    assert.ok(corner > 20);
+    assert.equal(hex(f.get(41, 21)), shore, 'the shoreline still draws elsewhere in the box');
+  }
+});
+

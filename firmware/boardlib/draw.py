@@ -239,6 +239,19 @@ def rtext(f, font, s, right, base, rgb):
     return f.text(font, s, right - measure(font, s) + 1, base, rgb)
 
 
+def text_box(font, s, x, base):
+    y0 = None
+    y1 = None
+    for ch in s:
+        g = assets.FONTS[font].get(ord(ch))
+        if g and g[1] and g[2]:
+            top = base - (g[4] + g[2])
+            bottom = base - g[4] - 1
+            y0 = top if y0 is None else min(y0, top)
+            y1 = bottom if y1 is None else max(y1, bottom)
+    return (x, y0, x + measure(font, s) - 1, y1)
+
+
 # ---- time (Chicago, via the payload's UTC offset) ----
 # Integer math on epoch times: CircuitPython's math.floor goes through a
 # float, which can't hold epoch seconds.
@@ -848,13 +861,24 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     else:
         t = now if now is not None else p['now']
     tzo = p.get('tzo', 0)
+    black = hexc('#000000')
+
+    def clear(b):
+        if b[1] is not None and b[1] <= b[3]:
+            f.fill(b[0] - 1, b[1] - 1, b[2] - b[0] + 3, b[3] - b[1] + 3, black)
+
+    seg_w = 2
+    seg_gap = 1
+    ind_x = right - (len(ids) * (seg_w + seg_gap) - seg_gap) + 1
     if ids:
-        seg_w = 2
-        seg_gap = 1
-        x = right - (len(ids) * (seg_w + seg_gap) - seg_gap) + 1
+        clear((ind_x, top, right, top + 1))
+
+    def draw_indicator():
+        x = ind_x
         for i in range(len(ids)):
             f.fill(x, top, seg_w, 2, C['amber'] if i == idx else C['indicator'])
             x += seg_w + seg_gap
+
     ws = warn_style(p['warn']) if p.get('warn') else None
     hide_warn = bool(ws and ws[2] and blink)
     if r.get('showTime') is False and r.get('temp') is not None:
@@ -862,22 +886,33 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
         icon = r.get('icon') if r.get('icon') in assets.ICONS else None
         x0 = right + 1 - ((10 if icon else 0) + measure('small', ts))
         if icon:
+            clear((x0, top + 4, x0 + 7, top + 11))
+        clear(text_box('small', ts, x0 + (10 if icon else 0), top + 10))
+        draw_indicator()
+        if icon:
             draw_icon(f, icon, x0, top + 4)
         f.text('small', ts, x0 + (10 if icon else 0), top + 10, C['label'])
         if ws:
             word = 'WARN' if p['warn']['lvl'] == 'warning' else 'WATCH'
             x0 = 64 - (measure('small', ws[0]) + TAG_GAP + measure('small', word))
-            f.fill(x0 - 1, 25, 64 - x0 + 1, 7, hexc('#000000'))
+            f.fill(x0 - 1, 25, 64 - x0 + 1, 7, black)
             if not hide_warn:
                 x = f.text('small', ws[0], x0, 31, ws[1])
                 f.text('small', word, x + TAG_GAP - 1, 31, ws[1])
         return f
-    rtext(f, '5x7', clock_text(t, tzo), right, top + 11, C['radarTime'])
+    clock = clock_text(t, tzo)
     ap = ampm_text(t, tzo)
     ap_x = right - measure('small', ap) + 1
+    w_x = ap_x - 2 - measure('small', ws[0]) if ws else 0
+    clear(text_box('5x7', clock, right - measure('5x7', clock) + 1, top + 11))
+    clear(text_box('small', ap, ap_x, top + 18))
+    if ws:
+        clear(text_box('small', ws[0], w_x, top + 18))
+    draw_indicator()
+    rtext(f, '5x7', clock, right, top + 11, C['radarTime'])
     f.text('small', ap, ap_x, top + 18, C['radarAmpm'])
     if ws and not hide_warn:
-        f.text('small', ws[0], ap_x - 2 - measure('small', ws[0]), top + 18, ws[1])
+        f.text('small', ws[0], w_x, top + 18, ws[1])
     return f
 
 
