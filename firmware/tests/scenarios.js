@@ -167,6 +167,7 @@ async function build() {
     const game = (st, extra) => ({ id: 9, st, start: t - 3600,
       away: side('CHC', '#2a5bd8', 'CHC-1', '#204882', { r: 3, w: 92, l: 70 }),
       home: side('STL', '#d62a2a', null, '#c12626', { r: 12, w: 88, l: 74 }), ...extra });
+    const lightHome = side('ATL', '#ce1141', null, '#d5d7d9', { r: 4, w: 90, l: 72 });
     const bbp = (layout, ...games) => ({ now: t, tzo: tzOffset(t), bright: 100, screen: 'baseball', mlb: { layout, dim: 0.9, games } });
     const live = game('live', { inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] });
     for (const layout of ['logos', 'bands']) {
@@ -175,6 +176,10 @@ async function build() {
       add(`baseball ${layout} flash`, bbp(layout, { ...live, away: { ...live.away, at: t - 10 } }), [{ screen: 'baseball' }], undefined, logos);
       add(`baseball ${layout} pregame`, bbp(layout, game('pre', { start: t + 1500, away: { ...live.away, r: 0 }, home: { ...live.home, r: 0, ab: 'WSH' } })), [{ screen: 'baseball' }], undefined, logos);
       add(`baseball ${layout} final`, bbp(layout, game('final')), [{ screen: 'baseball' }, { screen: 'baseball', rolls: { home: { from: '9', p: 0.5 } } }], undefined, logos);
+    }
+    for (const layout of ['logos', 'bands']) {
+      add(`baseball ${layout} light band`, bbp(layout, { ...live, home: lightHome }), [{ screen: 'baseball' }, { screen: 'baseball', rolls: { home: { from: '3', p: 0.5 } } }], undefined, logos);
+      add(`baseball ${layout} light band flash`, bbp(layout, { ...live, home: { ...lightHome, at: t - 32 } }), [{ screen: 'baseball' }], undefined, logos);
     }
     add('baseball logos without crops (not fetched yet)', bbp('logos', live), [{ screen: 'baseball' }]);
     add('baseball logos at 47% and with no dim (default)', { ...bbp('logos', live), mlb: { layout: 'logos', dim: 0.47, games: [live] } }, [{ screen: 'baseball' }], undefined, logos);

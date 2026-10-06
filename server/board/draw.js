@@ -765,12 +765,12 @@
     // to the live white over SCORE_FADE_S. `side.at` is when the server saw
     // the change (epoch s); without it the score is plain white.
     const SCORE_HOLD_S = 30, SCORE_FADE_S = 5;
-    function scoreColor(side, now) {
-      if (side.at == null) return BB.live;
+    function scoreColor(side, now, rest = BB.live) {
+      if (side.at == null) return rest;
       const age = now - side.at;
       if (age < 0 || age < SCORE_HOLD_S) return C.amber;
-      if (age >= SCORE_HOLD_S + SCORE_FADE_S) return BB.live;
-      return lerpColor(C.amber, BB.live, (age - SCORE_HOLD_S) / SCORE_FADE_S);
+      if (age >= SCORE_HOLD_S + SCORE_FADE_S) return rest;
+      return lerpColor(C.amber, rest, (age - SCORE_HOLD_S) / SCORE_FADE_S);
     }
 
     // Score, right-aligned at SCORE_RIGHT; a changed score rolls digit by
@@ -874,13 +874,18 @@
     // Each team gets a 12-row band (rows 0-11 away, 12-23 home) out to x37 in
     // its band color, with its 24x12 logo crop at the left (both dimmed here by
     // p.mlb.dim; crops come from mlb-logos.js) and the score centered between logo and band
-    // end in white with a black drop shadow. The status panel and bottom line are the
+    // end in white, or black (unlit) on a light band. The status panel and bottom line are the
     // classic layout's, with the infield and inning nudged down to center on
     // the taller rows.
     const LG = { w: 24, rows: 12, tops: [0, 12], bandR: 37, cx: 30, infieldY: 8, innBase: 21, dim: 0.9 }; // dim: default when the payload has none
     const LG_ROLL = 8;
-    const LG_SHADOW = 0.3; // drop shadows: the band color at 30% of its drawn brightness
-    const lgShadow = (side, dim) => scaleColor(side.bd || side.c || C.grey, dim * LG_SHADOW);
+    // Text on a band is white, or black (unlit) on a light band: drawn band
+    // luma above LG_LIGHT, e.g. Atlanta's light grey or Milwaukee's gold.
+    const LG_LIGHT = 140;
+    const lgInk = (side, dim) => {
+      const [r, g, b] = hex(scaleColor(side.bd || side.c || C.grey, dim));
+      return (299 * r + 587 * g + 114 * b) / 1000 > LG_LIGHT ? '#000000' : BB.live;
+    };
 
     // bands: true for the 'bands' layout (no logos: the abbreviation in white
     // with a drop shadow takes the logo's place).
@@ -888,7 +893,7 @@
       f.fill(0, top, LG.bandR + 1, LG.rows, scaleColor(side.bd || side.c || C.grey, dim));
       if (bands) {
         const ab = side.ab || '';
-        embossText(f, '5x7', ab, (LG.w >> 1) - Math.floor(measure('5x7', ab) / 2), top + 9, BB.live, lgShadow(side, dim));
+        f.text('5x7', ab, (LG.w >> 1) - Math.floor(measure('5x7', ab) / 2), top + 9, lgInk(side, dim));
         return;
       }
       const bytes = side.lg && logos ? logos[side.lg] : null;
@@ -905,26 +910,26 @@
 
     // Score (or pregame abbreviation) centered in the band's box, embossed;
     // a changed score rolls digit by digit inside the box.
-    function drawLogoScore(f, text, top, color, roll, shadow) {
+    function drawLogoScore(f, text, top, color, roll) {
       const base = top + 9;
       const left = (t) => LG.cx - Math.floor(measure('5x7', t) / 2);
-      if (!roll || roll.from === text || roll.p >= 1) { embossText(f, '5x7', text, left(text), base, color, shadow); return; }
+      if (!roll || roll.from === text || roll.p >= 1) { f.text('5x7', text, left(text), base, color); return; }
       const up = Math.round(easeInOut(roll.p) * LG_ROLL);
-      f.withClip(LG.w, base - 6, LG.bandR + 1, base + 1, () => { // digit rows + shadow row
+      f.withClip(LG.w, base - 6, LG.bandR + 1, base, () => { // the digit rows
         const from = roll.from;
         if (from.length === text.length) {
           let x = left(text);
           for (let i = 0; i < text.length; i++) {
-            if (from[i] === text[i]) embossText(f, '5x7', text[i], x, base, color, shadow);
+            if (from[i] === text[i]) f.text('5x7', text[i], x, base, color);
             else {
-              embossText(f, '5x7', from[i], x, base - up, color, shadow);
-              embossText(f, '5x7', text[i], x, base - up + LG_ROLL, color, shadow);
+              f.text('5x7', from[i], x, base - up, color);
+              f.text('5x7', text[i], x, base - up + LG_ROLL, color);
             }
             x += measure('5x7', text[i]) + 1;
           }
         } else {
-          embossText(f, '5x7', from, left(from), base - up, color, shadow);
-          embossText(f, '5x7', text, left(text), base - up + LG_ROLL, color, shadow);
+          f.text('5x7', from, left(from), base - up, color);
+          f.text('5x7', text, left(text), base - up + LG_ROLL, color);
         }
       });
     }
@@ -944,7 +949,7 @@
         // Abbreviations in the score boxes, records in the panel, TODAY and
         // the first-pitch time on the bottom line.
         for (const [k, top] of sides) {
-          if (!bands) drawLogoScore(f, g[k].ab || '', top, BB.live, null, lgShadow(g[k], dim));
+          if (!bands) drawLogoScore(f, g[k].ab || '', top, lgInk(g[k], dim), null);
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
         f.text('small', 'TODAY', 1, BOTTOM, C.grey);
@@ -956,15 +961,15 @@
 
       if (final) {
         for (const [k, top] of sides) {
-          drawLogoScore(f, String(g[k].r), top, winner === k ? C.amber : BB.live, rolls[k], lgShadow(g[k], dim));
+          drawLogoScore(f, String(g[k].r), top, winner === k ? C.amber : lgInk(g[k], dim), rolls[k]);
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
         rtext(f, 'small', 'FINAL', 62, BOTTOM, C.label);
         return f;
       }
 
-      drawLogoScore(f, String(g.away.r), LG.tops[0], scoreColor(g.away, now), rolls.away, lgShadow(g.away, dim));
-      drawLogoScore(f, String(g.home.r), LG.tops[1], scoreColor(g.home, now), rolls.home, lgShadow(g.home, dim));
+      drawLogoScore(f, String(g.away.r), LG.tops[0], scoreColor(g.away, now, lgInk(g.away, dim)), rolls.away);
+      drawLogoScore(f, String(g.home.r), LG.tops[1], scoreColor(g.home, now, lgInk(g.home, dim)), rolls.home);
       drawInfield(f, g.on || [0, 0, 0], LG.infieldY);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), LG.innBase, C.label, rolls.inn);
@@ -1001,6 +1006,7 @@
         // Records 3px after the longer name; first pitch in the bottom line.
         f.text('small', record(g.away), nameEnd + 2, ROW_TOPS[0] + 6, C.grey);
         f.text('small', record(g.home), nameEnd + 2, ROW_TOPS[1] + 6, C.grey);
+        f.text('small', 'TODAY', 1, BOTTOM, C.grey);
         const ap = ampmText(g.start);
         rtext(f, 'small', ap, 62, BOTTOM, C.grey);
         rtext(f, 'small', clockText(g.start), 62 - measure('small', ap) - 3, BOTTOM, C.label);

@@ -718,14 +718,14 @@ const lgGame = (extra) => ({
 const lg = (...games) => ({ ...payload([]), screen: 'baseball', mlb: { layout: 'logos', dim: 1, games } });
 const LOGOS = { 'CHC-1': LOGO([0x40, 0x10, 0x10]) };
 
-test('logo layout live: bands to x37, logo crop at the left, drop-shadowed white scores, infield on the right', () => {
+test('logo layout live: bands to x37, logo crop at the left, white scores, infield on the right', () => {
   const f = draw.renderBaseball(lg(lgGame({ st: 'live', inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] })), { logos: LOGOS });
   assert.equal(count(f, '#401010', 0, 0, 23, 11), 24 * 12);         // the whole crop, rows 0-11
   assert.ok(count(f, '#142d5a', 24, 0, 37, 11) > 60);               // away band
   assert.equal(count(f, '#142d5a', 38, 0, 63, 11), 0);              // band stops at x37
   assert.ok(count(f, '#761717', 0, 12, 37, 23) > 150);              // home band, no logo
   assert.ok(count(f, draw.BB.live, 24, 3, 37, 9) > 5);              // away score in its box
-  assert.ok(count(f, '#060e1b', 24, 3, 38, 10) > 5);                // drop shadow: the band color at 30% of its drawn brightness
+  assert.equal(count(f, '#000000', 24, 0, 37, 11), 0);              // no shadow
   assert.equal(count(f, draw.C.divider, 0, 24, 63, 24), 64);
   assert.equal(count(f, AMBER, 54, 6, 58, 10), 13);                 // 1st base, infield centered on row 8
 });
@@ -782,11 +782,29 @@ test('logo layout dims logos and bands on the board by mlb.dim (default 0.9)', (
   assert.equal(count(at(undefined), '#3a0e0e', 0, 0, 23, 11), 24 * 12); // default 90%
 });
 
-test('bands layout: team-color bands, white abbreviations with a drop shadow, no logos', () => {
+test('bands layout: team-color bands, white abbreviations, no logos', () => {
   const g = lgGame({ st: 'live', inn: 1, half: 'T', on: [0, 0, 0] });
   const f = draw.renderBaseball({ ...payload([]), screen: 'baseball', mlb: { layout: 'bands', dim: 1, games: [g] } }, { logos: LOGOS });
   assert.equal(count(f, '#401010', 0, 0, 63, 31), 0);               // no logo drawn
   assert.ok(count(f, draw.BB.live, 0, 3, 23, 9) > 8);                // CHC in the logo slot
-  assert.ok(count(f, '#060e1b', 1, 3, 24, 10) > 5);                  // its drop shadow: the band at 30%
+  assert.equal(count(f, '#000000', 0, 0, 37, 11), 0);                // no shadow
   assert.ok(count(f, draw.BB.live, 24, 3, 37, 9) > 3);               // score
+});
+
+test('logo and band layouts: black (unlit) text on a light band; amber stays amber', () => {
+  const light = { ab: 'ATL', c: '#ce1141', r: 4, lg: null, bd: '#d5d7d9' };
+  for (const layout of ['logos', 'bands']) {
+    const g = lgGame({ st: 'live', inn: 1, half: 'T', on: [0, 0, 0], home: light });
+    const f = draw.renderBaseball({ ...payload([]), screen: 'baseball', mlb: { layout, dim: 0.9, games: [g] } }, { logos: LOGOS });
+    assert.ok(count(f, '#000000', 24, 15, 37, 21) > 5, layout);     // home score cut out of the light band
+    assert.equal(count(f, draw.BB.live, 0, 12, 37, 23), 0, layout);
+    assert.ok(count(f, draw.BB.live, 24, 3, 37, 9) > 3, layout);    // dark band: white
+    const fin = draw.renderBaseball({ ...payload([]), screen: 'baseball', mlb: { layout, dim: 0.9, games: [lgGame({ st: 'final', home: { ...light, r: 9 } })] } }, { logos: LOGOS });
+    assert.ok(count(fin, AMBER, 24, 15, 37, 21) > 3, layout);       // the winner is amber even on a light band
+  }
+});
+
+test('classic pregame: TODAY bottom left', () => {
+  const f = draw.renderBaseball(bb(bbGame({ st: 'pre', start: NOW + 1500 })));
+  assert.ok(count(f, draw.C.grey, 0, 27, 20, 31) > 10);
 });

@@ -278,7 +278,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 **Pregame**
 - No scores. Each team's W-L (Tom Thumb, grey) sits 3px after the longer team name, on its team's row.
-- First pitch time (label white) + `AM`/`PM` (grey) in the bottom line, where `FINAL` goes. No `TODAY` (it's assumed). The right panel is empty.
+- `TODAY` (grey) bottom left, as in the logo and band layouts; first pitch time (label white) + `AM`/`PM` (grey) bottom right, where `FINAL` goes. The right panel is empty.
 
 **Final**
 - **Winner's name and score in amber `#ffb000`**; loser's name label white, loser's score darkened white `#6a6a6a`.
@@ -288,8 +288,8 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 **Animation:** the arrival-time roll, reused: scores, and while live the inning, count, and outs, roll when they change. Same-shape texts roll only the changed characters (`TOP 7` → `BOT 7` rolls T/B and P/T); anything else rolls whole. No roll across a change of game or state. Nothing else animates.
 
 ### Logo and band layouts
-- **Bands:** each team gets a 12-row band (away rows 0–11, home 12–23) from x0 to x37. **Logos:** the band is the logo tile's background color and the team's 24 x 12 logo crop sits at its left. **Bands:** the team's block color, with the abbreviation (X11 5x7, white, drop shadow) in the logo's place. Bands and logos are drawn at the **logo brightness** setting (default 90%), applied by the board.
-- **Scores** (X11 5x7) are centered at x30 in the box between logo and band end: white with a drop shadow (right, below, below-right) in a dark shade of the band (its color at 30% of its drawn brightness). Amber for the score flash and the final's winner; the loser stays white.
+- **Bands:** each team gets a 12-row band (away rows 0–11, home 12–23) from x0 to x37. **Logos:** the band is the logo tile's background color and the team's 24 x 12 logo crop sits at its left. **Bands:** the team's block color, with the abbreviation (X11 5x7, white or black on a light band) in the logo's place. Bands and logos are drawn at the **logo brightness** setting (default 90%), applied by the board.
+- **Scores** (X11 5x7) are centered at x30 in the box between logo and band end: white, or black (unlit pixels) on a light band (drawn band luma above 140, e.g. Atlanta's light grey), so the text always contrasts. No drop shadow for now (`embossText` stays in `draw.js` for later). Amber for the score flash and the final's winner; the loser stays white.
 - **Panel:** infield centered on row 8, inning on baseline 21; records (pregame and final) centered on x51 at each band's text row.
 - **Pregame:** the abbreviation in each score box (Logos), records in the panel, **`TODAY`** (grey) bottom left, first pitch bottom right.
 - **Logos** are the owner's 32px pixel art (a 5 x 6 sheet or one team at a time, uploaded from the phone page), never in the repo. The server only resizes (32 → 24px, area average) and crops 12 rows at each team's crop row; colors are untouched apart from a 64-color cap per logo for the board's palette. Without a logo, a team gets its block-color band and its abbreviation in the logo slot.
