@@ -13,8 +13,9 @@ const quiet = { warn() {}, error() {} };
 const fakeLogos = (have = {}) => ({
   get: (ab) => (have[ab] ? { id: `${ab}-1`, band: have[ab] } : null),
   bytes: (id) => (Object.keys(have).some((ab) => id === `${ab}-1`) ? Buffer.alloc(864, 7) : null),
-  status: () => ({ teams: Object.keys(have).length, updated: null, custom: [] }),
-  upload: () => { throw new Error('not a PNG'); },
+  status: () => ({ teams: Object.keys(have).sort(), updated: null }),
+  uploadSheet: () => { throw new Error('not a PNG'); },
+  uploadOne: (ab) => { throw new Error(`unknown team: ${ab}`); },
 });
 const fakeMlb = (games = [], forcedGames = games) => ({ get: (mode) => (mode === 'forced' ? forcedGames : games), raw: () => null });
 
@@ -607,15 +608,18 @@ test('baseball logo layout: payload carries logo ids and band colors; the board 
   s.store.update('home', { baseballLayout: 'logos' });
   const b = (await s.req('/board/update?b=home', h)).body;
   assert.equal(b.mlb.layout, 'logos');
+  assert.equal(b.mlb.dim, 0.9);
   assert.deepEqual([b.mlb.games[0].away.lg, b.mlb.games[0].away.bd], ['CHC-1', '#142d5a']);
-  assert.deepEqual([b.mlb.games[0].home.lg, b.mlb.games[0].home.bd], [null, '#c12626']); // no logo: team color dimmed
+  assert.deepEqual([b.mlb.games[0].home.lg, b.mlb.games[0].home.bd], [null, '#d62a2a']); // no logo: the team color (the board dims)
   const logo = await fetch(`http://127.0.0.1:${s.port}/board/logo/CHC-1`, h);
   assert.equal(logo.status, 200);
   assert.equal((await logo.arrayBuffer()).byteLength, 864);
   assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/logo/CHC-1`)).status, 401);
   assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/logo/NOPE-1`, h)).status, 404);
   assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/logo/CHC-1`)).status, 200);
-  assert.deepEqual((await s.req('/board/secret123/api/logos')).body, { teams: 1, updated: null, custom: [] });
+  assert.deepEqual((await s.req('/board/secret123/api/logos')).body, { teams: ['CHC'], updated: null });
+  const one = await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/logos?team=XYZ`, { method: 'POST', body: 'nope' });
+  assert.equal(one.status, 400);
   const bad = await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/logos`, { method: 'POST', body: 'nope' });
   assert.equal(bad.status, 400);
   assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=baseball`)).status, 200);

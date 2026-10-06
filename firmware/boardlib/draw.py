@@ -883,15 +883,16 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
 
 
 # ---- baseball (design spec §8) ----
-# Team rows on the left (color block + 5x7 abbreviation + score), status
-# panel centered on x51, divider on row 22, bottom line right-aligned.
+# Two layouts (p['mlb']['layout']): 'classic' (default) and 'logos'. Classic:
+# team rows on the left (color block + 5x7 abbreviation + score), status
+# panel centered on x51, divider on row 24, bottom line right-aligned.
 
 BB = {'live': hexc('#f0f0f0'), 'lose': hexc('#6a6a6a'), 'base': hexc('#454545'), 'infield': hexc('#3a3a3a')}
 BB_ROW_TOPS = (2, 12)   # away, home
 SCORE_RIGHT = 30
 PANEL_X = 51
 BB_BOTTOM = 31
-BB_DIVIDER = 22
+BB_DIVIDER = 24
 SCORE_ROLL = 8
 SCORE_HOLD_S = 30
 SCORE_FADE_S = 5
@@ -962,11 +963,11 @@ def draw_diamond(f, cx, cy, r, color, filled):
                 f.fill(cx + dx, cy + dy, 1, 1, color)
 
 
-def draw_infield(f, on):
-    draw_diamond(f, PANEL_X, 7, 5, BB['infield'], False)
-    draw_diamond(f, PANEL_X, 2, 2, C['amber'] if on[1] else BB['base'], True)
-    draw_diamond(f, PANEL_X - 5, 7, 2, C['amber'] if on[2] else BB['base'], True)
-    draw_diamond(f, PANEL_X + 5, 7, 2, C['amber'] if on[0] else BB['base'], True)
+def draw_infield(f, on, cy=7):
+    draw_diamond(f, PANEL_X, cy, 5, BB['infield'], False)
+    draw_diamond(f, PANEL_X, cy - 5, 2, C['amber'] if on[1] else BB['base'], True)
+    draw_diamond(f, PANEL_X - 5, cy, 2, C['amber'] if on[2] else BB['base'], True)
+    draw_diamond(f, PANEL_X + 5, cy, 2, C['amber'] if on[0] else BB['base'], True)
 
 
 def draw_roll_text(f, text, left, base, color, roll):
@@ -1017,7 +1018,130 @@ def draw_no_games(f, now, tzo):
     f.text('small', label, (64 - measure('small', label)) // 2, top + 18, C['noTrains'])
 
 
-def render_baseball(p, f, now=None, game=None, rolls=None):
+BLACK = (0, 0, 0)
+RING = ((-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1))
+
+
+def emboss_text(f, font, s, x, base, color):
+    for dx, dy in ((1, 0), (0, 1), (1, 1)):
+        f.text(font, s, x + dx, base + dy, BLACK)
+    return f.text(font, s, x, base, color)
+
+
+def border_text(f, font, s, x, base, color):
+    for dx, dy in RING:
+        f.text(font, s, x + dx, base + dy, BLACK)
+    return f.text(font, s, x, base, color)
+
+
+# ---- baseball, logo layout ----
+
+LG_W = 24
+LG_ROWS = 12
+LG_TOPS = (0, 12)
+LG_BAND_R = 37
+LG_CX = 31
+LG_INFIELD_Y = 8
+LG_INN_BASE = 21
+LG_DIM = 0.9
+LG_ROLL = 8
+
+
+def draw_logo_band(f, side, top, logos, bands, dim):
+    base = hexc(side['bd']) if side.get('bd') else (hexc(side['c']) if side.get('c') else C['grey'])
+    f.fill(0, top, LG_BAND_R + 1, LG_ROWS, scale_color(base, dim))
+    if bands:
+        ab = side.get('ab') or ''
+        emboss_text(f, '5x7', ab, (LG_W >> 1) - measure('5x7', ab) // 2, top + 9, BB['live'])
+        return
+    data = logos.get(side['lg']) if side.get('lg') and logos else None
+    if data and len(data) >= LG_W * LG_ROWS * 3:
+        for y in range(LG_ROWS):
+            for x in range(LG_W):
+                i = (y * LG_W + x) * 3
+                f.set(x, top + y, (jsround(data[i] * dim), jsround(data[i + 1] * dim), jsround(data[i + 2] * dim)))
+    else:
+        ctext(f, '5x7', side.get('ab') or '', LG_W >> 1, top + 9, scale_color(C['label'], dim))
+
+
+def _lg_left(t):
+    return LG_CX - measure('5x7', t) // 2
+
+
+def draw_logo_score(f, text, top, color, roll, deco=None):
+    deco = deco or border_text
+    base = top + 9
+    if not roll or roll['from'] == text or roll['p'] >= 1:
+        deco(f, '5x7', text, _lg_left(text), base, color)
+        return
+    up = jsround(ease_in_out(roll['p']) * LG_ROLL)
+    f.push_clip(LG_W - 1, base - 7, LG_BAND_R + 1, base + 1)
+    try:
+        frm = roll['from']
+        if len(frm) == len(text):
+            x = _lg_left(text)
+            for i in range(len(text)):
+                if frm[i] == text[i]:
+                    deco(f, '5x7', text[i], x, base, color)
+                else:
+                    deco(f, '5x7', frm[i], x, base - up, color)
+                    deco(f, '5x7', text[i], x, base - up + LG_ROLL, color)
+                x += measure('5x7', text[i]) + 1
+        else:
+            deco(f, '5x7', frm, _lg_left(frm), base - up, color)
+            deco(f, '5x7', text, _lg_left(text), base - up + LG_ROLL, color)
+    finally:
+        f.pop_clip()
+
+
+def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
+    bands = (p.get('mlb') or {}).get('layout') == 'bands'
+    dim = (p.get('mlb') or {}).get('dim')
+    if dim is None:
+        dim = LG_DIM
+    deco = emboss_text if bands else border_text
+    final = gm['st'] == 'final'
+    winner = None
+    if final:
+        if gm['away']['r'] > gm['home']['r']:
+            winner = 'away'
+        elif gm['home']['r'] > gm['away']['r']:
+            winner = 'home'
+    sides = (('away', LG_TOPS[0]), ('home', LG_TOPS[1]))
+    for k, top in sides:
+        draw_logo_band(f, gm[k], top, logos, bands, dim)
+    f.fill(0, BB_DIVIDER, 64, 1, C['divider'])
+
+    if gm['st'] == 'pre':
+        for k, top in sides:
+            if not bands:
+                draw_logo_score(f, gm[k].get('ab') or '', top, BB['live'], None, deco)
+            ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
+        f.text('small', 'TODAY', 1, BB_BOTTOM, C['grey'])
+        ap = ampm_text(gm['start'], tzo)
+        rtext(f, 'small', ap, 62, BB_BOTTOM, C['grey'])
+        rtext(f, 'small', clock_text(gm['start'], tzo), 62 - measure('small', ap) - 3, BB_BOTTOM, C['label'])
+        return f
+
+    if final:
+        for k, top in sides:
+            draw_logo_score(f, str(gm[k]['r']), top, C['amber'] if winner == k else BB['live'], rolls.get(k), deco)
+            ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
+        rtext(f, 'small', 'FINAL', 62, BB_BOTTOM, C['label'])
+        return f
+
+    draw_logo_score(f, str(gm['away']['r']), LG_TOPS[0], score_color(gm['away'], now), rolls.get('away'), deco)
+    draw_logo_score(f, str(gm['home']['r']), LG_TOPS[1], score_color(gm['home'], now), rolls.get('home'), deco)
+    draw_infield(f, gm.get('on') or [0, 0, 0], LG_INFIELD_Y)
+    t = live_texts(gm)
+    draw_roll_text(f, t['inn'], PANEL_X - measure('small', t['inn']) // 2, LG_INN_BASE, C['label'], rolls.get('inn'))
+    outs_left = 62 - measure('small', t['outs']) + 1
+    draw_roll_text(f, t['outs'], outs_left, BB_BOTTOM, C['grey'], rolls.get('outs'))
+    draw_roll_text(f, t['count'], outs_left - 5 - measure('small', t['count']), BB_BOTTOM, C['label'], rolls.get('count'))
+    return f
+
+
+def render_baseball(p, f, now=None, game=None, rolls=None, logos=None):
     if now is None:
         now = p['now']
     tzo = p.get('tzo', 0)
@@ -1027,6 +1151,8 @@ def render_baseball(p, f, now=None, game=None, rolls=None):
         return f
     gm = games[game % len(games) if game is not None else pick_game(games, now)['i']]
     rolls = rolls or {}
+    if (p.get('mlb') or {}).get('layout') in ('logos', 'bands'):
+        return render_baseball_logos(f, p, gm, now, tzo, rolls, logos or {})
     final = gm['st'] == 'final'
     winner = None
     if final:
@@ -1101,14 +1227,14 @@ def apply_brightness(f, bright):
     return f
 
 
-def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0, idx=None, frames=None, game=None, rolls=None):
+def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0, idx=None, frames=None, game=None, rolls=None, logos=None):
     screen = screen or p.get('screen')
     if screen == 'ticker':
         render_ticker(p, f, now=now, page=page, slide=slide)
     elif screen == 'weather':
         render_weather(p, f, now=now, idx=idx, frames=frames, blink=blink)
     elif screen == 'baseball':
-        render_baseball(p, f, now=now, game=game, rolls=rolls)
+        render_baseball(p, f, now=now, game=game, rolls=rolls, logos=logos)
     else:
         render_transit(p, f, now=now, blink=blink, view=view)
     return apply_brightness(f, p.get('bright'))

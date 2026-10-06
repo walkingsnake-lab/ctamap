@@ -738,7 +738,8 @@
     }
 
     // ---- baseball (design spec §8) ----
-    // Two layouts (p.mlb.layout): 'classic' (default) and 'logos'. Classic:
+    // Three layouts (p.mlb.layout): 'classic' (default), 'logos', and 'bands'
+    // (the logo layout's bands with abbreviations instead of logos). Classic:
     // team rows on the left (color block + 5x7 abbreviation + score), status
     // panel centered on x51, divider on row 24, bottom line right-aligned.
     const BB = { live: '#f0f0f0', lose: '#6a6a6a', base: '#454545', infield: '#3a3a3a' };
@@ -879,50 +880,57 @@
 
     // ---- baseball, logo layout ----
     // Each team gets a 12-row band (rows 0-11 away, 12-23 home) out to x37 in
-    // its band color, with its 24x12 logo crop at the left (both dimmed by the
-    // server, see mlb-logos.js) and the score centered between logo and band
+    // its band color, with its 24x12 logo crop at the left (both dimmed here by
+    // p.mlb.dim; crops come from mlb-logos.js) and the score centered between logo and band
     // end in white with a black border. The status panel and bottom line are the
     // classic layout's, with the infield and inning nudged down to center on
     // the taller rows.
-    const LG = { w: 24, rows: 12, tops: [0, 12], bandR: 37, cx: 31, infieldY: 8, innBase: 21, dim: 0.9 };
+    const LG = { w: 24, rows: 12, tops: [0, 12], bandR: 37, cx: 31, infieldY: 8, innBase: 21, dim: 0.9 }; // dim: default when the payload has none
     const LG_ROLL = 8;
 
-    function drawLogoBand(f, side, top, logos) {
-      f.fill(0, top, LG.bandR + 1, LG.rows, side.bd || scaleColor(side.c || C.grey, LG.dim));
+    // bands: true for the 'bands' layout (no logos: the abbreviation in white
+    // with a drop shadow takes the logo's place).
+    function drawLogoBand(f, side, top, logos, bands, dim) {
+      f.fill(0, top, LG.bandR + 1, LG.rows, scaleColor(side.bd || side.c || C.grey, dim));
+      if (bands) {
+        const ab = side.ab || '';
+        embossText(f, '5x7', ab, (LG.w >> 1) - Math.floor(measure('5x7', ab) / 2), top + 9, BB.live);
+        return;
+      }
       const bytes = side.lg && logos ? logos[side.lg] : null;
       if (bytes && bytes.length >= LG.w * LG.rows * 3) {
         for (let y = 0; y < LG.rows; y++) for (let x = 0; x < LG.w; x++) {
           const i = (y * LG.w + x) * 3;
-          f.set(x, top + y, [bytes[i], bytes[i + 1], bytes[i + 2]]);
+          f.set(x, top + y, [Math.round(bytes[i] * dim), Math.round(bytes[i + 1] * dim), Math.round(bytes[i + 2] * dim)]);
         }
       } else {
         // No logo (none uploaded, or not fetched yet): the abbreviation, dimmed.
-        ctext(f, '5x7', side.ab || '', LG.w >> 1, top + 9, scaleColor(C.label, LG.dim));
+        ctext(f, '5x7', side.ab || '', LG.w >> 1, top + 9, scaleColor(C.label, dim));
       }
     }
 
     // Score (or pregame abbreviation) centered in the band's box, embossed;
     // a changed score rolls digit by digit inside the box.
-    function drawLogoScore(f, text, top, color, roll) {
+    function drawLogoScore(f, text, top, color, roll, deco = borderText) {
       const base = top + 9;
       const left = (t) => LG.cx - Math.floor(measure('5x7', t) / 2);
-      if (!roll || roll.from === text || roll.p >= 1) { borderText(f, '5x7', text, left(text), base, color); return; }
+      if (!roll || roll.from === text || roll.p >= 1) { deco(f, '5x7', text, left(text), base, color); return; }
       const up = Math.round(easeInOut(roll.p) * LG_ROLL);
       f.withClip(LG.w - 1, base - 7, LG.bandR + 1, base + 1, () => { // digit rows + border
         const from = roll.from;
         if (from.length === text.length) {
           let x = left(text);
           for (let i = 0; i < text.length; i++) {
-            if (from[i] === text[i]) borderText(f, '5x7', text[i], x, base, color);
+            if (from[i] === text[i]) deco(f, '5x7', text[i], x, base, color);
             else {
-              borderText(f, '5x7', from[i], x, base - up, color);
-              borderText(f, '5x7', text[i], x, base - up + LG_ROLL, color);
+              deco(f, '5x7', from[i], x, base - up, color);
+              deco(f, '5x7', text[i], x, base - up + LG_ROLL, color);
             }
             x += measure('5x7', text[i]) + 1;
           }
         } else {
-          borderText(f, '5x7', from, left(from), base - up, color);
-          borderText(f, '5x7', text, left(text), base - up + LG_ROLL, color);
+          deco(f, '5x7', from, left(from), base - up, color);
+          deco(f, '5x7', text, left(text), base - up + LG_ROLL, color);
         }
       });
     }
@@ -930,17 +938,20 @@
     function renderBaseballLogos(f, p, g, now, o) {
       const rolls = o.rolls || {};
       const logos = o.logos || {};
+      const bands = p.mlb.layout === 'bands';
+      const dim = p.mlb.dim != null ? p.mlb.dim : LG.dim;
+      const deco = bands ? embossText : borderText; // bands: drop shadow; logos: black border
       const final = g.st === 'final';
       const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
       const sides = [['away', LG.tops[0]], ['home', LG.tops[1]]];
-      for (const [k, top] of sides) drawLogoBand(f, g[k], top, logos);
+      for (const [k, top] of sides) drawLogoBand(f, g[k], top, logos, bands, dim);
       f.fill(0, DIVIDER, 64, 1, C.divider);
 
       if (g.st === 'pre') {
         // Abbreviations in the score boxes, records in the panel, TODAY and
         // the first-pitch time on the bottom line.
         for (const [k, top] of sides) {
-          drawLogoScore(f, g[k].ab || '', top, BB.live, null);
+          if (!bands) drawLogoScore(f, g[k].ab || '', top, BB.live, null, deco);
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
         f.text('small', 'TODAY', 1, BOTTOM, C.grey);
@@ -952,15 +963,15 @@
 
       if (final) {
         for (const [k, top] of sides) {
-          drawLogoScore(f, String(g[k].r), top, winner === k ? C.amber : BB.live, rolls[k]);
+          drawLogoScore(f, String(g[k].r), top, winner === k ? C.amber : BB.live, rolls[k], deco);
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
         rtext(f, 'small', 'FINAL', 62, BOTTOM, C.label);
         return f;
       }
 
-      drawLogoScore(f, String(g.away.r), LG.tops[0], scoreColor(g.away, now), rolls.away);
-      drawLogoScore(f, String(g.home.r), LG.tops[1], scoreColor(g.home, now), rolls.home);
+      drawLogoScore(f, String(g.away.r), LG.tops[0], scoreColor(g.away, now), rolls.away, deco);
+      drawLogoScore(f, String(g.home.r), LG.tops[1], scoreColor(g.home, now), rolls.home, deco);
       drawInfield(f, g.on || [0, 0, 0], LG.infieldY);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), LG.innBase, C.label, rolls.inn);
@@ -980,7 +991,7 @@
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) { drawNoGames(f, now); return f; }
       const g = games[o.game != null ? o.game % games.length : pickGame(games, now).i];
-      if (p.mlb.layout === 'logos') return renderBaseballLogos(f, p, g, now, o);
+      if (p.mlb.layout === 'logos' || p.mlb.layout === 'bands') return renderBaseballLogos(f, p, g, now, o);
       const rolls = o.rolls || {};
       const final = g.st === 'final';
       const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;

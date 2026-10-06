@@ -1,27 +1,33 @@
 'use strict';
 // Team logos for the baseball screen's logo layout (design spec §8).
 //
-// The art is the owner's 32x32 sprite sheet (5 x 6 tiles in the order of
-// SHEET, drawn at any integer scale). It is never committed: the repo is
-// public and the logos are trademarks. The owner uploads the sheet from the
-// phone control page; prepSheet() turns it into what the board draws and the
-// result is kept next to the board state (BOARD_STATE_DIR / the Fly volume).
+// The art is the owner's: 32x32 pixel-art tiles, uploaded from the phone
+// control page, either the whole 5 x 6 sheet (tiles in SHEET order, at any
+// whole-number scale) or one team at a time. It is never committed (the repo
+// is public and the logos are trademarks); prepared logos are kept beside the
+// board state (BOARD_STATE_DIR / the Fly volume).
 //
-// Prep only recolors and fills the given art (nothing is drawn): per team,
-// outlines are removed or remapped (PREP), the tile is box-scaled to 24px,
-// dimmed to DIM (scores carry a black border to stand out), and a 12-row band is cropped at
-// the team's offset (OFFSET). Each crop is 24 x 12 RGB (864 bytes) with the
-// band color it sits on; its id is the team plus a content hash, so the board
-// fetches each logo once (GET /board/logo/<id>, like radar frames).
+// Processing is only a resize and a crop: each 32px tile is box-scaled to
+// 24px and a 12-row band is cut at the team's crop offset. The band color the
+// logo sits on is the tile's top-left pixel. Colors are otherwise untouched;
+// dimming happens on the board (payload `mlb.dim`), so it can be changed
+// without re-uploading. The only other step keeps each crop within
+// MAX_COLORS colors, because the board draws into a 256-color palette.
+//
+// Each crop is 24 x 12 RGB (864 bytes); its id is the team plus a content
+// hash, so the board fetches each logo once (GET /board/logo/<id>).
 
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { PNG } = require('pngjs');
+const { TEAMS } = require('./teams');
 
 const FILE_NAME = 'mlb-logos.json';
-const TILE = 32, SIZE = 24, ROWS = 12, DIM = 0.9;
+const TILE = 32, SIZE = 24, ROWS = 12;
 const LOGO_BYTES = SIZE * ROWS * 3;
+const MAX_COLORS = 64;
+const TEAM_ABS = Object.values(TEAMS).map((t) => t[0]);
 
 // Tile order on the sheet (teams.js abbreviations).
 const SHEET = [
@@ -33,80 +39,52 @@ const SHEET = [
   'AZ', 'COL', 'LAD', 'SD', 'SF',
 ];
 
-const RED = '#be0039', W = '#ffffff', BLUE = '#2451a3', DARK = '#282828', BLACK = '#000000';
-const GOLD = '#ffa900', ORANGE = '#ff4500', YEL = '#fed634', GREY = '#898d90', LGREY = '#d5d7d9';
-const BROWN = '#6d492f', TAN = '#ffb470', DRED = '#6c001b';
-const B = 'band';
+// First of the 12 rows shown, out of 24 (default: centered). An upload can
+// set its own.
+const DEFAULT_OFFSET = (SIZE - ROWS) / 2;
+const OFFSET = { TB: 4, TOR: 3, KC: 5, TEX: 2, PHI: 3, PIT: 3, MIA: 3, LAA: 2, AZ: 4, MIN: 3, COL: 3 };
 
-// Per team (colors as on the sheet):
-//   band   : band color when it isn't the tile background
-//   map    : color -> color for every pixel ('band' = the band color)
-//   hollow : outline-art logos: background enclosed by this outline color
-//            becomes the solid mark (in `body`, default the outline color),
-//            counters stay band, and the outline itself goes to band
-//   minbody: with hollow, enclosed pieces smaller than this stay band
-//   strip  : remove only the outline of this color that touches the outside
-//   halo   : LAA: the blue ellipse above the A becomes this color
-const PREP = {
-  BAL: { band: DARK },
-  BOS: { hollow: W },
-  NYY: { hollow: W, band: '#3a5fa8' },
-  TB: { map: { [BLUE]: B } },
-  TOR: {},
-  CWS: { hollow: W, band: DARK },
-  CLE: { map: { [W]: B } },
-  DET: { hollow: W },
-  KC: { strip: W },
-  MIN: { hollow: W, minbody: 15 },
-  HOU: {},
-  LAA: { band: RED, map: { [GREY]: B, [BLUE]: B, [RED]: W, [DRED]: W }, halo: LGREY },
-  ATH: { map: { [GOLD]: B } },
-  SEA: { map: { [W]: B } },
-  TEX: {},
-  ATL: { map: { [BLUE]: B } },
-  MIA: { band: DARK },
-  NYM: { map: { [W]: B } },
-  PHI: { map: { [W]: B } },
-  WSH: { map: { [LGREY]: RED, [RED]: W, [BLUE]: B } },
-  CHC: {},                                   // keeps its white outline
-  CIN: { hollow: W },
-  MIL: { hollow: YEL },
-  PIT: { hollow: BLACK, band: DARK, body: YEL },
-  STL: { map: { [BLUE]: RED, [RED]: W, [W]: B } },
-  AZ: { hollow: TAN },
-  COL: { map: { [BLACK]: B } },
-  LAD: { hollow: W },
-  SD: { hollow: GOLD },
-  SF: { hollow: BROWN, band: DARK, body: ORANGE },
-};
+function decode(pngBytes) {
+  try { return PNG.sync.read(pngBytes); }
+  catch (e) { throw new Error(`not a PNG: ${e.message}`); }
+}
 
-// Fingerprints of the tiles PREP and OFFSET were tuned on. A tile that
-// doesn't match (the owner swapped in their own art) is used as drawn: no
-// cleanup, band = its corner color, centered crop.
-const TUNED = {
-  BAL: 'ba2b1661940b', BOS: '088dd7acdd7c', NYY: '07f7264d8266', TB: 'e07a2eda3c52', TOR: 'f46ccea2c270',
-  CWS: 'cebbfc21b31a', CLE: 'e2913106be42', DET: 'f29a40607ffb', KC: '97e46df32c51', MIN: 'b1814468393e',
-  HOU: '9794246ab736', LAA: 'a69b2e0d5520', ATH: '16766d7f5954', SEA: 'cb620840f895', TEX: '0634a41087d8',
-  ATL: '24442ef59536', MIA: 'c773bc471c6a', NYM: '50be8affb9ba', PHI: 'dbce3ce22cda', WSH: 'cbe3c436cdaf',
-  CHC: '9d1caf7cdc28', CIN: '5192e4d14daa', MIL: '4f8510e84935', PIT: 'e4977cc1f063', STL: '51b633b0bf02',
-  AZ: 'fd9b668e17d0', COL: '14b09b5e62f0', LAD: 'b9da8945d52a', SD: '21c4a842aaec', SF: '18966f7a0848',
-};
-// Owner-supplied replacement tiles (by fingerprint): used as drawn, with a
-// crop offset picked for each.
-const CUSTOM = {
-  '5c7653cd53c5': { offset: 3 },  // COL: the CR
-  '2c5d7416e1e8': { offset: 2 },  // LAA: the A with its halo
-};
-const fingerprint = (tile) => crypto.createHash('sha1').update(tile.map((r) => r.join('')).join('')).digest('hex').slice(0, 12);
+// A tile as [r, g, b] rows (32 x 32) from a region of a decoded PNG. Square
+// whole multiples of 32 sample each scaled pixel's center (exact for pixel
+// art); any other size is area-averaged down to 32.
+function tileFrom(png, x0, y0, w, h) {
+  const px = (x, y) => { const i = (y * png.width + x) * 4; return [png.data[i], png.data[i + 1], png.data[i + 2]]; };
+  const t = [];
+  if (w === h && w % TILE === 0) {
+    const s = w / TILE;
+    for (let y = 0; y < TILE; y++) {
+      const row = [];
+      for (let x = 0; x < TILE; x++) row.push(px(x0 + x * s + (s >> 1), y0 + y * s + (s >> 1)));
+      t.push(row);
+    }
+    return t;
+  }
+  const kx = w / TILE, ky = h / TILE;
+  for (let y = 0; y < TILE; y++) {
+    const row = [];
+    for (let x = 0; x < TILE; x++) {
+      const acc = [0, 0, 0];
+      let n = 0;
+      const ya = Math.floor(y * ky), yb = Math.max(ya + 1, Math.floor((y + 1) * ky));
+      const xa = Math.floor(x * kx), xb = Math.max(xa + 1, Math.floor((x + 1) * kx));
+      for (let sy = ya; sy < yb; sy++) for (let sx = xa; sx < xb; sx++) {
+        const c = px(x0 + sx, y0 + sy);
+        acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2]; n++;
+      }
+      row.push(acc.map((v) => Math.round(v / n)));
+    }
+    t.push(row);
+  }
+  return t;
+}
 
-// First of the 12 rows shown, out of 24 (default: centered).
-const OFFSET = { TB: 4, TOR: 3, KC: 5, TEX: 2, PHI: 3, PIT: 3, MIA: 3, LAA: 1, AZ: 4, MIN: 3 };
-
-const hex = (r, g, b) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
-const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-
-// One 32x32 tile as hex colors, sampling each scaled pixel's center.
-function readTiles(png) {
+// The sheet's tiles by team.
+function readSheet(png) {
   const cols = 5, rows = 6;
   const scale = Math.floor(png.width / (cols * TILE));
   if (scale < 1 || png.width !== cols * TILE * scale || png.height !== rows * TILE * scale) {
@@ -114,98 +92,13 @@ function readTiles(png) {
   }
   const tiles = {};
   SHEET.forEach((ab, n) => {
-    const ox = (n % cols) * TILE * scale, oy = Math.floor(n / cols) * TILE * scale;
-    const t = [];
-    for (let y = 0; y < TILE; y++) {
-      const row = [];
-      for (let x = 0; x < TILE; x++) {
-        const i = ((oy + y * scale + (scale >> 1)) * png.width + ox + x * scale + (scale >> 1)) * 4;
-        row.push(hex(png.data[i], png.data[i + 1], png.data[i + 2]));
-      }
-      t.push(row);
-    }
-    tiles[ab] = t;
+    tiles[ab] = tileFrom(png, (n % cols) * TILE * scale, Math.floor(n / cols) * TILE * scale, TILE * scale, TILE * scale);
   });
   return tiles;
 }
 
-const N4 = (x, y) => [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]];
-const inside = (x, y) => x >= 0 && y >= 0 && x < TILE && y < TILE;
-
-// 4-connected components of the pixels where pred(x, y) holds.
-function components(pred) {
-  const seen = new Set(), out = [];
-  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
-    if (seen.has(y * TILE + x) || !pred(x, y)) continue;
-    const comp = [], stack = [[x, y]];
-    while (stack.length) {
-      const [px, py] = stack.pop();
-      const k = py * TILE + px;
-      if (!inside(px, py) || seen.has(k) || !pred(px, py)) continue;
-      seen.add(k); comp.push(k);
-      for (const q of N4(px, py)) stack.push(q);
-    }
-    out.push(comp);
-  }
-  return out;
-}
-
-// Recolor one tile per its PREP entry. Returns { px: hex[32][32], band }.
-function prepTile(t, c = {}) {
-  const at = (k) => t[Math.floor(k / TILE)][k % TILE];
-  const bg = t[0][0];
-  const onEdge = (comp) => comp.some((k) => { const x = k % TILE, y = Math.floor(k / TILE); return x === 0 || y === 0 || x === TILE - 1 || y === TILE - 1; });
-  const bgComps = components((x, y) => t[y][x] === bg);
-  const outer = new Set(bgComps.filter(onEdge).flat());
-  const map = c.map || {};
-  const band = c.band || (map[bg] && map[bg] !== B ? map[bg] : bg);
-  const res = new Map();
-  const nb = (k) => N4(k % TILE, Math.floor(k / TILE)).filter(([x, y]) => inside(x, y)).map(([x, y]) => y * TILE + x);
-
-  if (c.hollow) {
-    const oc = c.hollow;
-    const touch = new Set(components((x, y) => t[y][x] === oc).filter((comp) => comp.some((k) => nb(k).some((q) => outer.has(q)))).flat());
-    for (const comp of bgComps) {
-      if (onEdge(comp)) continue;
-      const ring = comp.flatMap(nb).filter((q) => at(q) === oc);
-      let body = ring.length > 0 && ring.filter((q) => touch.has(q)).length / ring.length > 0.2;
-      if (c.minbody && comp.length < c.minbody) body = false;
-      for (const k of comp) res.set(k, body ? (c.body || oc) : band);
-    }
-  }
-  if (c.strip) {
-    for (const comp of components((x, y) => t[y][x] === c.strip)) {
-      if (comp.some((k) => nb(k).some((q) => outer.has(q)))) for (const k of comp) res.set(k, band);
-    }
-  }
-  if (c.halo) {
-    const isA = (x, y) => inside(x, y) && (t[y][x] === RED || t[y][x] === DRED);
-    for (let y = 0; y < 11; y++) for (let x = 0; x < TILE; x++) {
-      if (t[y][x] !== BLUE) continue;
-      const d = ((x - 15.5) / 7) ** 2 + ((y - 5) / 4) ** 2;
-      const nearA = N4(x, y).some(([qx, qy]) => isA(qx, qy));
-      if (d >= (y < 5 ? 0.45 : 0.55) && d <= 1.4 && !(y >= 6 && nearA)) res.set(y * TILE + x, c.halo);
-    }
-  }
-  const px = [];
-  for (let y = 0; y < TILE; y++) {
-    const row = [];
-    for (let x = 0; x < TILE; x++) {
-      const k = y * TILE + x, v = t[y][x];
-      let out;
-      if (outer.has(k)) out = band;
-      else if (res.has(k)) out = res.get(k);
-      else if (c.hollow && v === c.hollow) out = band;
-      else out = map[v] === B ? band : map[v] || v;
-      row.push(out);
-    }
-    px.push(row);
-  }
-  return { px, band };
-}
-
-// Area-average a 32x32 hex tile down to SIZE x SIZE RGB (Float arrays).
-function boxScale(px) {
+// Area-average 32x32 down to SIZE x SIZE.
+function boxScale(t) {
   const k = TILE / SIZE, out = [];
   for (let y = 0; y < SIZE; y++) for (let x = 0; x < SIZE; x++) {
     const x0 = x * k, x1 = x0 + k, y0 = y * k, y1 = y0 + k;
@@ -214,82 +107,131 @@ function boxScale(px) {
     for (let sy = Math.floor(y0); sy < Math.ceil(y1); sy++) for (let sx = Math.floor(x0); sx < Math.ceil(x1); sx++) {
       const w = (Math.min(x1, sx + 1) - Math.max(x0, sx)) * (Math.min(y1, sy + 1) - Math.max(y0, sy));
       if (w <= 0) continue;
-      const c = rgb(px[sy][sx]);
-      for (let i = 0; i < 3; i++) acc[i] += c[i] * w;
+      for (let i = 0; i < 3; i++) acc[i] += t[sy][sx][i] * w;
       wsum += w;
     }
-    out.push(acc.map((v) => v / wsum));
+    out.push(acc.map((v) => Math.round(v / wsum)));
   }
   return out;
 }
 
-// Uploaded sheet (PNG bytes) -> { ab: { id, band, bytes, custom } }.
-function prepSheet(pngBytes) {
-  let png;
-  try { png = PNG.sync.read(pngBytes); }
-  catch (e) { throw new Error(`not a PNG: ${e.message}`); }
-  const tiles = readTiles(png);
-  const out = {};
-  for (const ab of SHEET) {
-    const fp = fingerprint(tiles[ab]);
-    const custom = fp !== TUNED[ab];
-    const { px, band } = prepTile(tiles[ab], custom ? {} : PREP[ab]);
-    const scaled = boxScale(px);
-    const off = custom ? (CUSTOM[fp] ? CUSTOM[fp].offset : (SIZE - ROWS) / 2) : OFFSET[ab] != null ? OFFSET[ab] : (SIZE - ROWS) / 2;
-    const bytes = Buffer.alloc(LOGO_BYTES);
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < SIZE; x++) {
-      const c = scaled[(off + y) * SIZE + x];
-      for (let i = 0; i < 3; i++) bytes[(y * SIZE + x) * 3 + i] = Math.round(c[i] * DIM);
+// Merge the closest colors (weighted by use) until at most `max` remain.
+function limitColors(bytes, max) {
+  const counts = new Map();
+  for (let i = 0; i < bytes.length; i += 3) {
+    const k = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  if (counts.size <= max) return bytes;
+  let cols = [...counts].map(([k, n]) => ({ c: [k >> 16, (k >> 8) & 255, k & 255], n, from: [k] }));
+  const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  while (cols.length > max) {
+    let bi = 0, bj = 1, best = Infinity;
+    for (let i = 0; i < cols.length; i++) for (let j = i + 1; j < cols.length; j++) {
+      const d = d2(cols[i].c, cols[j].c) * Math.min(cols[i].n, cols[j].n);
+      if (d < best) { best = d; bi = i; bj = j; }
     }
-    const bandDim = hex(...rgb(band).map((v) => Math.round(v * DIM)));
-    const id = `${ab}-${crypto.createHash('sha1').update(bytes).update(bandDim).digest('hex').slice(0, 8)}`;
-    out[ab] = { id, band: bandDim, bytes, custom };
+    const a = cols[bi], b = cols[bj], n = a.n + b.n;
+    const merged = { c: a.c.map((v, i) => Math.round((v * a.n + b.c[i] * b.n) / n)), n, from: a.from.concat(b.from) };
+    cols = cols.filter((_, i) => i !== bi && i !== bj).concat([merged]);
+  }
+  const to = new Map();
+  for (const m of cols) for (const k of m.from) to.set(k, m.c);
+  const out = Buffer.from(bytes);
+  for (let i = 0; i < out.length; i += 3) {
+    const c = to.get((out[i] << 16) | (out[i + 1] << 8) | out[i + 2]);
+    out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2];
   }
   return out;
+}
+
+const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+
+// One tile -> { id, band, bytes, crop } for team `ab`.
+function prepare(ab, tile, crop) {
+  const off = crop != null ? crop : OFFSET[ab] != null ? OFFSET[ab] : DEFAULT_OFFSET;
+  if (!Number.isInteger(off) || off < 0 || off > SIZE - ROWS) throw new Error(`crop must be 0-${SIZE - ROWS}`);
+  const scaled = boxScale(tile);
+  const raw = Buffer.alloc(LOGO_BYTES);
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < SIZE; x++) raw.set(scaled[(off + y) * SIZE + x], (y * SIZE + x) * 3);
+  const bytes = limitColors(raw, MAX_COLORS);
+  const band = hex(tile[0][0]);
+  const id = `${ab}-${crypto.createHash('sha1').update(bytes).update(band).digest('hex').slice(0, 8)}`;
+  return { id, band, bytes, crop: off };
+}
+
+// Whole sheet (PNG bytes) -> { ab: prepared }.
+function prepSheet(pngBytes) {
+  const tiles = readSheet(decode(pngBytes));
+  const out = {};
+  for (const ab of SHEET) out[ab] = prepare(ab, tiles[ab]);
+  return out;
+}
+
+// One team's logo: a PNG of a single 32px tile (any whole-number scale), or
+// any other image, area-averaged to 32px.
+function prepOne(ab, pngBytes, crop) {
+  if (!TEAM_ABS.includes(ab)) throw new Error(`unknown team: ${ab}`);
+  const png = decode(pngBytes);
+  return prepare(ab, tileFrom(png, 0, 0, png.width, png.height), crop);
 }
 
 // Prepared logos, kept as one JSON file beside the board state.
 function createLogos({ dir, log = console } = {}) {
   const file = dir ? path.join(dir, FILE_NAME) : null;
-  let byAb = {}, byId = new Map(), updated = null;
+  let teams = {}, byId = new Map(), updated = null;
 
   function index(data) {
-    byAb = {}; byId = new Map();
+    teams = {}; byId = new Map();
     for (const [ab, l] of Object.entries(data.teams || {})) {
       const bytes = Buffer.from(l.bytes, 'base64');
       if (bytes.length !== LOGO_BYTES) continue;
-      byAb[ab] = { id: l.id, band: l.band, custom: !!l.custom };
+      teams[ab] = l;
       byId.set(l.id, bytes);
     }
     updated = data.updated || null;
   }
+
+  function save(next, now) {
+    const data = { updated: now, teams: next };
+    if (file) {
+      fs.mkdirSync(dir, { recursive: true });
+      const tmp = `${file}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(data));
+      fs.renameSync(tmp, file);
+    }
+    index(data);
+  }
+
+  const entry = (l) => ({ id: l.id, band: l.band, crop: l.crop, bytes: l.bytes.toString('base64') });
 
   if (file) {
     try { if (fs.existsSync(file)) index(JSON.parse(fs.readFileSync(file, 'utf8'))); }
     catch (e) { log.error('[board] logos: could not read', file, e.message); }
   }
 
+  const status = () => ({ teams: Object.keys(teams).sort(), updated });
   return {
-    // { id, band } for a team abbreviation, or null without logos.
-    get: (ab) => (byAb[ab] ? { id: byAb[ab].id, band: byAb[ab].band } : null),
+    // { id, band } for a team abbreviation, or null without a logo.
+    get: (ab) => (teams[ab] ? { id: teams[ab].id, band: teams[ab].band } : null),
     // 864 bytes (24 x 12 RGB) for a logo id, or null.
     bytes: (id) => byId.get(id) || null,
-    status: () => ({ teams: Object.keys(byAb).length, updated, custom: Object.keys(byAb).filter((ab) => byAb[ab].custom) }),
-    // Replace the set from an uploaded sheet; persists atomically.
-    upload(pngBytes, now = Math.floor(Date.now() / 1000)) {
+    status,
+    // Replace every team from a sheet.
+    uploadSheet(pngBytes, now = Math.floor(Date.now() / 1000)) {
       const prepared = prepSheet(pngBytes);
-      const data = { updated: now, teams: {} };
-      for (const [ab, l] of Object.entries(prepared)) data.teams[ab] = { id: l.id, band: l.band, custom: l.custom, bytes: l.bytes.toString('base64') };
-      if (file) {
-        fs.mkdirSync(dir, { recursive: true });
-        const tmp = `${file}.${process.pid}.tmp`;
-        fs.writeFileSync(tmp, JSON.stringify(data));
-        fs.renameSync(tmp, file);
-      }
-      index(data);
-      return this.status();
+      const next = {};
+      for (const [ab, l] of Object.entries(prepared)) next[ab] = entry(l);
+      save(next, now);
+      return status();
+    },
+    // Replace one team's logo (crop: first row of 24 shown; default per team).
+    uploadOne(ab, pngBytes, crop, now = Math.floor(Date.now() / 1000)) {
+      const l = prepOne(ab, pngBytes, crop);
+      save({ ...teams, [ab]: entry(l) }, now);
+      return status();
     },
   };
 }
 
-module.exports = { createLogos, prepSheet, prepTile, readTiles, fingerprint, TUNED, SHEET, PREP, OFFSET, SIZE, ROWS, DIM, LOGO_BYTES };
+module.exports = { createLogos, prepSheet, prepOne, readSheet, limitColors, SHEET, OFFSET, SIZE, ROWS, LOGO_BYTES, MAX_COLORS };

@@ -263,8 +263,9 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - Phone page and buttons can still switch screens (§10); the phone page gets a Baseball option.
 
 ### Layout
-- **Team rows:** 3x6 team-color block at x1 and the abbreviation in X11 5x7 (label white) at x6; away on top (block rows 2–7), home below (rows 12–17). No logos.
-- **Divider** on row 22 (`#333333`), full width, the same row as the transit weather divider. **No series label** (e.g. `NLDS G2`) anywhere.
+- **Three layouts** (phone page, Baseball screen): **Classic** (below), **Logos**, and **Bands** (see *Logo and band layouts*). The status panel, divider, and bottom line are shared.
+- **Team rows (Classic):** 3x6 team-color block at x1 and the abbreviation in X11 5x7 (label white) at x6; away on top (block rows 2–7), home below (rows 12–17).
+- **Divider** on row 24 (`#333333`), full width, in every layout (moved down from the weather row's 22 so the logo bands get 12 rows each). **No series label** (e.g. `NLDS G2`) anywhere.
 - **Bottom line** (Tom Thumb, baseline 31) sits on the same rows as the transit weather row and is right-aligned to x62.
 - **Score flash:** when a live score changes, that team's score turns amber for 30 s, then fades back to white over 5 s. The server stamps the change time (the board only draws it); a game first seen mid-game doesn't flash.
 
@@ -285,6 +286,13 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - `FINAL` (label white) in the bottom line.
 
 **Animation:** the arrival-time roll, reused: scores, and while live the inning, count, and outs, roll when they change. Same-shape texts roll only the changed characters (`TOP 7` → `BOT 7` rolls T/B and P/T); anything else rolls whole. No roll across a change of game or state. Nothing else animates.
+
+### Logo and band layouts
+- **Bands:** each team gets a 12-row band (away rows 0–11, home 12–23) from x0 to x37. **Logos:** the band is the logo tile's background color and the team's 24 x 12 logo crop sits at its left. **Bands:** the team's block color, with the abbreviation (X11 5x7, white, drop shadow) in the logo's place. Bands and logos are drawn at the **logo brightness** setting (default 90%), applied by the board.
+- **Scores** (X11 5x7) are centered in the box between logo and band end (x31): white, with a 1px black border (Logos) or a black drop shadow right/below/below-right (Bands). Amber for the score flash and the final's winner; the loser stays white.
+- **Panel:** infield centered on row 8, inning on baseline 21; records (pregame and final) centered on x51 at each band's text row.
+- **Pregame:** the abbreviation in each score box (Logos), records in the panel, **`TODAY`** (grey) bottom left, first pitch bottom right.
+- **Logos** are the owner's 32px pixel art (a 5 x 6 sheet or one team at a time, uploaded from the phone page), never in the repo. The server only resizes (32 → 24px, area average) and crops 12 rows at each team's crop row; colors are untouched apart from a 64-color cap per logo for the board's palette. Without a logo, a team gets its block-color band and its abbreviation in the logo slot.
 
 ### Team colors
 - One block color per team, from its primary color. Dark navies and maroons (Yankees, Tigers, Padres, Brewers, Twins, Astros, Mariners, Rays, Nationals…) are **boosted** so they read as color, not black, on the panel, like Brown/Purple on the transit screen. Mock values: Cubs `#2a5bd8`, Cardinals `#d62a2a`.

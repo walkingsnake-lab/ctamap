@@ -95,7 +95,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB.
 | `wx` | object \| null | Weather row, or `null` when the weather row is off or there's no weather data yet (the row cap then gives the space back to rows). |
 | `warn` | object \| null | Active NWS warning/watch (see below). Sent regardless of the weather-row toggle, since the radar screen uses it too. |
 | `radar` | object | Radar state (see below). |
-| `mlb` | object | Baseball: `{games: [...]}`, the games to show now (see *Baseball* below). Always present; `games` is empty when there's nothing on. |
+| `mlb` | object | Baseball: `{layout, dim?, games: [...]}`, the layout and the games to show now (see *Baseball* below). Always present; `games` is empty when there's nothing on. |
 
 All screens' data is always included so a button press switches screens without a fetch.
 
@@ -239,10 +239,24 @@ When `on` is false, `frames` and `ft` are empty and `timeBox` may be `null`.
 | `inn`, `half` | Live only. Inning and half: `T` top, `B` bottom, or between halves `M` (Middle, after the top) and `E` (End, after the bottom), from the linescore's `inningState`. Breaks send no runners, count, or outs; the board shows `MID 4` / `END 5` with an empty bottom line. |
 | `b`, `s`, `o` | Live only. Balls, strikes, outs (0 during a break). |
 | `on` | Live only. Runners as `[1st, 2nd, 3rd]`, 1 = occupied. |
+| `layout` | `classic` (default), `logos`, or `bands`: the board's `baseballLayout` setting. |
+| `dim` | `logos` and `bands` only. Brightness (0.1–1) the board applies to the bands and logos when drawing: the board's `logoBright` / 100 (default 0.9). Logos are sent undimmed, so this changes without re-uploading. |
+| `away.lg`, `home.lg` | `logos` only. Logo id (`<ab>-<hash>`, immutable) to fetch once from `GET /board/logo/<id>`, or `null` (no logo uploaded: the board draws the abbreviation in the logo slot). |
+| `away.bd`, `home.bd` | `logos` and `bands`. Band color (undimmed): the logo tile's top-left pixel, or the team's block color `c` without a logo. |
 
 - **Server:** `server/board/mlb.js` polls `statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=<yesterday>&endDate=<today>&hydrate=linescore` (Chicago dates) every 15 s while a shown game is live or within 30 min of first pitch, every 5 min otherwise. Shown: Cubs games (team 112) and postseason games (`gameType` `F`, `D`, `L`, `W`), from 30 min before first pitch until 15 min after the server first sees the final; postponed and cancelled games are skipped. Sorted by first pitch.
 - **Forced windows:** when the board's `screen` is `baseball`, `mlb.games` uses wider windows (`mlb.get('forced')`): pregame for any game whose first pitch is today (Chicago), from midnight; finals through their own day and until 3 AM the next morning. Live games always show. Auto (and every other screen) gets the windows above.
 - **Board:** shows a live game whenever one is on: the live games (or, with none live, all games) rotate one minute each by wall time, `set[floor(now / 60) % set.length]` (`draw.js` `pickGame`, no state), drawn per `draw.js` `renderBaseball` (design spec §8). Scores, inning, count, and outs roll when they change (`baseballTexts`).
+
+- **Logo and band layouts:** 12-row team bands (away rows 0–11, home 12–23) to x37 in `bd` at `dim`; `logos` draws the 24 x 12 logo crop at the left (also at `dim`), `bands` the abbreviation in white with a drop shadow. Scores are centered in the band's box at x31: white with a black border (`logos`) or drop shadow (`bands`), amber for the score flash and the final's winner (the loser stays white). Pregame: the abbreviation in the score box (`logos`), records in the panel, `TODAY` bottom left. Infield centered on row 8, inning on baseline 21. Divider row 24 and the bottom line are shared with `classic`.
+
+### `GET /board/logo/<logoId>?b=<id>`
+One team logo crop for the logo layout.
+
+- `Content-Type: application/octet-stream`, `Cache-Control: max-age=86400, immutable`. Token required.
+- **Format:** 864 bytes: 24 x 12 pixels, RGB, row by row from the top left. Undimmed; at most 64 distinct colors (the board draws into a 256-color palette).
+- The board fetches missing logos one per scheduler run while the baseball screen is up (`firmware/boardlib/app.py` `_logo`) and drops logos the payload no longer uses.
+- Logos come from the owner's uploads (`POST /board/<secret>/api/logos`); they're kept beside the board state and never committed (trademarks; the repo is public). Processing is only a resize and a crop: each 32px tile (or any image, area-averaged to 32px) is box-scaled to 24px and 12 rows are cut at the team's crop row (`OFFSET` in `server/board/mlb-logos.js`, or `crop=` on upload).
 
 ### `GET /board/radar/<frameId>?b=<id>`
 One radar frame for that board's location.
@@ -287,6 +301,9 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
 | `GET /board/<secret>/api/test?b=<id>` | Simulator test alerts for board `b`: `{lines, warn, game, left}` (`left` = seconds until expiry, 0 when none). |
 | `POST /board/<secret>/api/test?b=<id>` | Start a test alert: body `{lines: ["RD", ...], warn: {kind: "svr"\|"tor", lvl: "watch"\|"warning"} \| null}`. Lines are `RD BL BR GR OR PR PK YL`; they blink as if CTA had a major alert, and `warn` replaces the NWS warning. Applies to the real board's updates too, and expires after 10 minutes. `game` (`pre` \| `live` \| `final` \| `null`) adds a made-up Cubs-Cardinals game in that state at the front of `mlb.games`. An empty body (no lines, no warn, no game) clears it. `400` for bad values, `404` for an unknown board. |
+| `GET /board/<secret>/api/logos` | Logo status: `{teams: [abbreviations with a logo], updated}`. |
+| `POST /board/<secret>/api/logos[?team=<ab>[&crop=0-12]]` | Upload logos as a PNG body (max 8 MB): without `team`, the whole 5 x 6 sheet of 32px tiles in `mlb-logos.js` `SHEET` order, at any whole-number scale (replaces every team); with `team`, one team's logo (any PNG; a non-32px image is area-averaged to 32px), cropped at `crop` (first of the 24px logo's rows shown; default per team). `400` with a reason on a bad image. The phone page converts other image types to PNG before uploading. |
+| `GET /board/<secret>/api/logo/<logoId>` | A logo crop for the simulator. |
 | `GET /board/<secret>/api/raw/mlb` | The MLB schedule response the poller last fetched, unchanged, for recording fixtures. `503` before the first fetch. |
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 
@@ -322,6 +339,8 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |
 | `screen` | `auto` or a forced screen (`transit`, `ticker`, `weather`, `baseball`; a saved `radar` loads as `weather`). Persists across boots. `auto` resolves to `transit`, or `baseball` while a game is on; it never changes screens on its own otherwise, except for radar visits. |
 | `radarEvery`, `radarFor` | Radar visits on the auto screen: every `radarEvery` minutes (0 = never, the default; max 60) show the radar for `radarFor` seconds (10–600, default 60), only while rain is in the box. Persist across restarts. |
+| `baseballLayout` | `classic` (default), `logos`, or `bands`. Sent as `mlb.layout`. |
+| `logoBright` | 10–100, default 90: logo and band brightness in the `logos`/`bands` layouts, sent as `mlb.dim`. |
 | `radarTime` | Boolean, default `true`. Sent to the board as `radar.showTime`; off shows the temperature instead of the frame time. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |
 

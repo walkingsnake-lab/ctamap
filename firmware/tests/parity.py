@@ -60,11 +60,12 @@ def main(path):
     for s in scenarios:
         if 'renders' in s:
             frames = {k: bytes(v) for k, v in s['frames'].items()} if s.get('frames') else None
+            logos = {k: bytes(v) for k, v in s['logos'].items()} if s.get('logos') else None
             for r in s['renders']:
                 o = r['opts']
                 f = finish(draw.render(s['payload'], new_frame(), screen=o.get('screen'), now=o.get('now'),
                                        blink=o.get('blink', False), page=o.get('page', 0), slide=o.get('slide', 0),
-                                       idx=o.get('idx'), frames=frames, game=o.get('game'), rolls=o.get('rolls')))
+                                       idx=o.get('idx'), frames=frames, game=o.get('game'), rolls=o.get('rolls'), logos=logos))
                 count += 1
                 d = diff('%s %s' % (s['name'], json.dumps(o)), r['px'], f)
                 if d:

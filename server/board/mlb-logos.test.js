@@ -1,6 +1,6 @@
 'use strict';
-// Logo prep (mlb-logos.js). The real sprite sheet is never in the repo, so
-// these build synthetic sheets: plain shapes, not team art.
+// Logo prep (mlb-logos.js): resize + crop only. The real sprite sheet is
+// never in the repo, so these build synthetic tiles: plain shapes.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -12,77 +12,79 @@ const L = require('./mlb-logos');
 const BG = [0x24, 0x51, 0xa3], WHITE = [255, 255, 255], RED = [0xbe, 0x00, 0x39];
 const hexOf = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
 
-// A 5 x 6 sheet of 32px tiles at `scale`; draw(tileIndex, x, y) -> rgb.
-function sheet(scale, draw) {
-  const png = new PNG({ width: 5 * 32 * scale, height: 6 * 32 * scale });
-  for (let ty = 0; ty < 6; ty++) for (let tx = 0; tx < 5; tx++) for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
-    const c = draw(ty * 5 + tx, x, y);
-    for (let sy = 0; sy < scale; sy++) for (let sx = 0; sx < scale; sx++) {
-      const i = (((ty * 32 + y) * scale + sy) * png.width + (tx * 32 + x) * scale + sx) * 4;
-      png.data[i] = c[0]; png.data[i + 1] = c[1]; png.data[i + 2] = c[2]; png.data[i + 3] = 255;
-    }
+function png(w, h, draw) {
+  const p = new PNG({ width: w, height: h });
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const c = draw(x, y), i = (y * w + x) * 4;
+    p.data[i] = c[0]; p.data[i + 1] = c[1]; p.data[i + 2] = c[2]; p.data[i + 3] = 255;
   }
-  return PNG.sync.write(png);
+  return PNG.sync.write(p);
 }
-// A white square with a red center on blue: an "outline + fill" mark.
+// A 5 x 6 sheet of 32px tiles at `scale`; draw(tileIndex, x, y) -> rgb.
+const sheet = (scale, draw) => png(5 * 32 * scale, 6 * 32 * scale, (x, y) => {
+  const tx = Math.floor(x / (32 * scale)), ty = Math.floor(y / (32 * scale));
+  return draw(ty * 5 + tx, Math.floor(x / scale) % 32, Math.floor(y / scale) % 32);
+});
+// White square with a red center on blue.
 const box = (n, x, y) => (x >= 8 && x < 24 && y >= 8 && y < 24 ? (x >= 10 && x < 22 && y >= 10 && y < 22 ? RED : WHITE) : BG);
+const px = (l, x, y) => [...l.bytes.subarray((y * 24 + x) * 3, (y * 24 + x) * 3 + 3)];
 
-test('reads a 5 x 6 sheet at any integer scale; rejects other sizes', () => {
-  const a = L.readTiles(PNG.sync.read(sheet(1, box)));
-  const b = L.readTiles(PNG.sync.read(sheet(3, box)));
-  assert.deepEqual(a.CHC, b.CHC);
-  assert.equal(a.CHC[0][0], hexOf(BG));
-  assert.equal(a.CHC[16][16], hexOf(RED));
-  assert.throws(() => L.prepSheet(PNG.sync.write(new PNG({ width: 100, height: 100 }))), /5 x 6 sheet/);
+test('a sheet reads at any whole-number scale; other sizes are rejected', () => {
+  const a = L.prepSheet(sheet(1, box)), b = L.prepSheet(sheet(3, box));
+  assert.deepEqual(Object.keys(a), L.SHEET);
+  assert.equal(a.CHC.id, b.CHC.id);
+  assert.throws(() => L.prepSheet(png(100, 100, () => BG)), /5 x 6 sheet/);
   assert.throws(() => L.prepSheet(Buffer.from('nope')), /not a PNG/);
 });
 
-test('every team gets a 24 x 12 crop dimmed to 55% and a band color; ids follow the content', () => {
+test('resize and crop only: colors untouched (no dimming), band = top-left pixel', () => {
   const out = L.prepSheet(sheet(2, box));
-  assert.deepEqual(Object.keys(out), L.SHEET);
-  for (const ab of L.SHEET) {
-    assert.equal(out[ab].bytes.length, L.LOGO_BYTES);
-    assert.equal(out[ab].band, hexOf(BG.map((v) => Math.round(v * L.DIM))));
-    assert.match(out[ab].id, new RegExp(`^${ab}-[0-9a-f]{8}$`));
-    assert.equal(out[ab].custom, true); // not the tuned art: used as drawn
-  }
-  // Used as drawn: centered crop (rows 6-17 of 24), the corner pixel is band.
-  const px = (ab, x, y) => [...out[ab].bytes.subarray((y * 24 + x) * 3, (y * 24 + x) * 3 + 3)];
-  assert.deepEqual(px('CHC', 0, 0), BG.map((v) => Math.round(v * L.DIM)));
-  assert.deepEqual(px('CHC', 12, 6), RED.map((v) => Math.round(v * L.DIM))); // tile center
-  // Same art, same id; different art, different id.
-  assert.equal(L.prepSheet(sheet(1, box)).CHC.id, out.CHC.id);
-  assert.notEqual(L.prepSheet(sheet(1, (n, x, y) => (x > 20 ? WHITE : BG))).CHC.id, out.CHC.id);
+  const chc = out.CHC; // centered crop: rows 6-17 of 24
+  assert.equal(chc.bytes.length, L.LOGO_BYTES);
+  assert.equal(chc.band, hexOf(BG));
+  assert.equal(chc.crop, 6);
+  assert.deepEqual(px(chc, 0, 0), BG);
+  assert.deepEqual(px(chc, 12, 6), RED);          // tile center, full brightness
+  assert.equal(out.TB.crop, L.OFFSET.TB);         // per-team default crop
+  assert.match(chc.id, /^CHC-[0-9a-f]{8}$/);
 });
 
-test('prep rules: map outline to band, fill hollow outline art, keep counters', () => {
-  const t = Array.from({ length: 32 }, (_, y) => Array.from({ length: 32 }, (_, x) => hexOf(box(0, x, y))));
-  // Outline (white) -> band: the red fill remains on blue.
-  const mapped = L.prepTile(t, { map: { '#ffffff': 'band' } });
-  assert.equal(mapped.px[9][9], hexOf(BG));
-  assert.equal(mapped.px[16][16], hexOf(RED));
-  // Hollow: a white ring around background becomes a solid white mark; a
-  // smaller ring inside it (a counter) stays band.
-  const ring = (x, y, a, b) => (x === a || x === b || y === a || y === b) && x >= a && x <= b && y >= a && y <= b;
-  const h = Array.from({ length: 32 }, (_, y) => Array.from({ length: 32 }, (_, x) => hexOf(ring(x, y, 6, 25) || ring(x, y, 13, 18) ? WHITE : BG)));
-  const hollow = L.prepTile(h, { hollow: '#ffffff' });
-  assert.equal(hollow.px[6][6], hexOf(BG));     // outline gone
-  assert.equal(hollow.px[9][9], '#ffffff');     // body filled
-  assert.equal(hollow.px[15][15], hexOf(BG));   // counter stays open
+test('one logo: a 32px tile at any scale, or any other image area-averaged to 32; crop override', () => {
+  const tile = (s) => png(32 * s, 32 * s, (x, y) => box(0, Math.floor(x / s), Math.floor(y / s)));
+  const a = L.prepOne('CHC', tile(1)), b = L.prepOne('CHC', tile(5));
+  assert.equal(a.id, b.id);
+  const odd = L.prepOne('CHC', png(50, 50, (x, y) => (x < 25 ? RED : BG)));
+  assert.deepEqual(px(odd, 0, 0), RED);
+  assert.equal(L.prepOne('CHC', tile(1), 0).crop, 0);
+  assert.throws(() => L.prepOne('CHC', tile(1), 13), /crop must be 0-12/);
+  assert.throws(() => L.prepOne('XYZ', tile(1)), /unknown team/);
 });
 
-test('upload persists beside the board state and reloads; status lists teams', () => {
+test('crops keep at most MAX_COLORS colors (the board palette holds two logos and the screen)', () => {
+  const noisy = Buffer.from(Array.from({ length: L.LOGO_BYTES }, (_, i) => (i * 37) % 256));
+  const out = L.limitColors(noisy, L.MAX_COLORS);
+  const set = new Set();
+  for (let i = 0; i < out.length; i += 3) set.add(`${out[i]},${out[i + 1]},${out[i + 2]}`);
+  assert.ok(set.size <= L.MAX_COLORS);
+  const few = Buffer.alloc(L.LOGO_BYTES, 9);
+  assert.equal(L.limitColors(few, L.MAX_COLORS), few);
+});
+
+test('uploads persist beside the board state and reload; one team replaces only that team', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'logos-'));
   const a = L.createLogos({ dir, log: { error() {} } });
-  assert.deepEqual(a.status(), { teams: 0, updated: null, custom: [] });
+  assert.deepEqual(a.status(), { teams: [], updated: null });
   assert.equal(a.get('CHC'), null);
-  const st = a.upload(sheet(1, box), 1791140000);
-  assert.equal(st.teams, 30);
-  assert.equal(st.updated, 1791140000);
+  assert.equal(a.uploadSheet(sheet(1, box), 1791140000).teams.length, 30);
+  const before = a.get('STL');
+  a.uploadOne('CHC', png(32, 32, () => RED), 0, 1791140100);
+  assert.notEqual(a.get('CHC').id, before.id);
+  assert.deepEqual(a.get('STL'), before);
+  assert.equal(a.get('CHC').band, hexOf(RED));
   const b = L.createLogos({ dir, log: { error() {} } });
   assert.deepEqual(b.get('CHC'), a.get('CHC'));
+  assert.equal(b.status().updated, 1791140100);
   assert.equal(b.bytes(a.get('CHC').id).length, L.LOGO_BYTES);
-  assert.equal(b.bytes('CHC-00000000'), null);
-  assert.throws(() => a.upload(Buffer.from('x')), /not a PNG/);
-  assert.equal(a.status().teams, 30); // a bad upload keeps the old set
+  assert.throws(() => a.uploadSheet(Buffer.from('x')), /not a PNG/);
+  assert.equal(a.status().teams.length, 30); // a bad upload keeps the old set
 });

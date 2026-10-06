@@ -126,9 +126,16 @@
     <div class="seg" id="bbLayout">
       <button data-v="classic">Classic</button>
       <button data-v="logos">Logos</button>
+      <button data-v="bands">Bands</button>
     </div>
     <p class="hint" id="bbLayoutHint"></p>
-    <div class="row"><span>Logo sheet</span><label><input type="file" id="logoSheet" accept="image/png" style="width:auto"></label></div>
+    <div class="row"><span>Logo brightness</span><input type="range" id="logoBright" min="10" max="100" step="5" style="width:50%"><span id="logoBrightV"></span></div>
+    <div class="row"><span>Whole logo sheet</span><label><input type="file" id="logoSheet" accept="image/png" style="width:auto"></label></div>
+    <div class="row"><span>One team</span>
+      <select id="logoTeam" aria-label="Team" style="width:auto"></select>
+      <input type="number" id="logoCrop" min="0" max="12" placeholder="crop" aria-label="Crop row (0-12, blank = default)" style="width:5em">
+      <label><input type="file" id="logoOne" accept="image/*" style="width:auto"></label>
+    </div>
     <p class="hint" id="logoStatus"></p>
   </section>
 
@@ -242,9 +249,13 @@
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
     $('showHeader').checked = board.showHeader;
     $('showWeather').checked = board.showWeather;
-    pressed('bbLayout', board.baseballLayout === 'logos' ? 'logos' : 'classic');
-    $('bbLayoutHint').textContent = board.baseballLayout === 'logos'
+    const bl = board.baseballLayout || 'classic';
+    pressed('bbLayout', bl);
+    $('logoBright').value = board.logoBright || 90;
+    $('logoBrightV').textContent = `${board.logoBright || 90}%`;
+    $('bbLayoutHint').textContent = bl === 'logos'
       ? 'Team logo bands from your uploaded sheet; teams without a logo get a plain team-color band.'
+      : bl === 'bands' ? 'Team-color bands with abbreviations and drop-shadowed scores, no logos.'
       : 'Team color blocks and abbreviations.';
     pressed('radarCorner', board.radarTime !== false ? 'time' : 'temp');
     $('radarCornerHint').textContent = board.radarTime !== false
@@ -314,25 +325,47 @@
   $('showHeader').addEventListener('change', (e) => save({ showHeader: e.target.checked }));
   $('showWeather').addEventListener('change', (e) => save({ showWeather: e.target.checked }));
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
+  $('logoBright').addEventListener('input', (e) => { $('logoBrightV').textContent = `${e.target.value}%`; });
+  $('logoBright').addEventListener('change', (e) => save({ logoBright: Number(e.target.value) }));
+  const TEAMS = ['AZ', 'ATH', 'ATL', 'BAL', 'BOS', 'CHC', 'CIN', 'CLE', 'COL', 'CWS', 'DET', 'HOU', 'KC', 'LAA', 'LAD', 'MIA', 'MIL', 'MIN', 'NYM', 'NYY', 'PHI', 'PIT', 'SD', 'SEA', 'SF', 'STL', 'TB', 'TEX', 'TOR', 'WSH'];
+  $('logoTeam').replaceChildren(...TEAMS.map((t) => new Option(t, t)));
   async function loadLogoStatus() {
     try {
       const s = await api('api/logos');
-      const custom = s.custom && s.custom.length ? ` Used as drawn (your own art): ${s.custom.join(', ')}.` : '';
-      $('logoStatus').textContent = s.teams
-        ? `${s.teams} team logos, uploaded ${new Date(s.updated * 1000).toLocaleString()}.${custom} Upload the sheet again to replace them.`
-        : 'No logos yet. Upload the 5 x 6 sheet of 32px tiles (any whole-number scale). It stays on the server, not in the repo.';
+      const n = (s.teams || []).length;
+      $('logoStatus').textContent = n
+        ? `${n} of 30 team logos, last change ${new Date(s.updated * 1000).toLocaleString()}. Logos are only resized and cropped; they stay on the server, not in the repo.`
+        : 'No logos yet. Upload the 5 x 6 sheet of 32px tiles (any whole-number scale), or one team at a time.';
     } catch (e) { $('logoStatus').textContent = e.message; }
   }
-  $('logoSheet').addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    setStatus('Uploading logos…');
+  // Any image -> PNG (phones hand over JPEG/HEIC-as-JPEG), at most 256px.
+  async function asPng(file) {
+    if (file.type === 'image/png') return file;
+    const img = await createImageBitmap(file);
+    const k = Math.min(1, 256 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return new Promise((res) => c.toBlob(res, 'image/png'));
+  }
+  async function uploadLogo(file, query) {
+    setStatus('Uploading logo…');
     try {
-      await api('api/logos', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: file });
+      await api('api/logos' + query, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: await asPng(file) });
       setStatus('Logos updated.');
       await loadLogoStatus();
       refreshPreview();
     } catch (err) { setStatus(err.message, true); }
+  }
+  $('logoSheet').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) await uploadLogo(file, '');
+    e.target.value = '';
+  });
+  $('logoOne').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    const crop = $('logoCrop').value;
+    if (file) await uploadLogo(file, `?team=${enc($('logoTeam').value)}${crop !== '' ? `&crop=${enc(crop)}` : ''}`);
     e.target.value = '';
   });
   loadLogoStatus();

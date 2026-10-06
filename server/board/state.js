@@ -16,7 +16,7 @@ const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball'];
-const BASEBALL_LAYOUTS = ['classic', 'logos'];
+const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
 const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
@@ -55,9 +55,12 @@ function defaultBoard(stations) {
     radarFor: 60,
     // Radar screen: show the frame's time and AM/PM.
     radarTime: true,
-    // Baseball screen layout: 'classic' (color blocks + abbreviations) or
-    // 'logos' (team logo bands, from the uploaded sprite sheet).
+    // Baseball screen layout: 'classic' (color blocks + abbreviations),
+    // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
+    // (the same bands with abbreviations, no logos).
     baseballLayout: 'classic',
+    // Logo/band layouts: logo and band brightness, percent (the board dims).
+    logoBright: 90,
   };
 }
 
@@ -94,6 +97,10 @@ function validatePatch(patch, stations) {
       case 'radarTime':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
+        break;
+      case 'logoBright':
+        if (!Number.isInteger(val) || val < 10 || val > 100) throw new ValidationError('logoBright must be 10-100');
+        out.logoBright = val;
         break;
       case 'baseballLayout':
         if (!BASEBALL_LAYOUTS.includes(val)) throw new ValidationError(`baseballLayout must be one of ${BASEBALL_LAYOUTS.join(', ')}`);

@@ -715,7 +715,7 @@ const lgGame = (extra) => ({
   away: { ab: 'CHC', c: '#2a5bd8', r: 3, w: 92, l: 70, lg: 'CHC-1', bd: '#142d5a' },
   home: { ab: 'STL', c: '#d62a2a', r: 2, w: 88, l: 74, lg: null, bd: '#761717' }, ...extra,
 });
-const lg = (...games) => ({ ...payload([]), screen: 'baseball', mlb: { layout: 'logos', games } });
+const lg = (...games) => ({ ...payload([]), screen: 'baseball', mlb: { layout: 'logos', dim: 1, games } });
 const LOGOS = { 'CHC-1': LOGO([0x40, 0x10, 0x10]) };
 
 test('logo layout live: bands to x37, logo crop at the left, bordered white scores, infield on the right', () => {
@@ -732,7 +732,7 @@ test('logo layout live: bands to x37, logo crop at the left, bordered white scor
 
 test('logo layout without a logo shows the abbreviation, dimmed, in the logo slot', () => {
   const f = draw.renderBaseball(lg(lgGame({ st: 'live', inn: 1, half: 'T', on: [0, 0, 0] })), { logos: {} });
-  assert.ok(count(f, '#c2c2c2', 0, 12, 23, 23) > 10);               // "STL" at 90% label grey
+  assert.ok(count(f, draw.C.label, 0, 12, 23, 23) > 10);            // "STL" in label grey (dim 1)
   assert.equal(count(f, '#401010', 0, 0, 63, 31), 0);
 });
 
@@ -772,4 +772,21 @@ test('embossText: black right, below, and below-right; nothing else', () => {
     const lit = (dx, dy) => hex(f.get(x - dx, y - dy)) === '#ffffff' || false;
     assert.ok(lit(1, 0) || lit(0, 1) || lit(1, 1) || (x > 0 && y > 0 && [[1, 0], [0, 1], [1, 1]].some(([dx, dy]) => hex(f.get(x - dx, y - dy)) === '#ffffff')), `${x},${y}`);
   }
+});
+
+test('logo layout dims logos and bands on the board by mlb.dim (default 0.9)', () => {
+  const g = lgGame({ st: 'live', inn: 1, half: 'T', on: [0, 0, 0] });
+  const at = (dim) => draw.renderBaseball({ ...payload([]), screen: 'baseball', mlb: { layout: 'logos', dim, games: [g] } }, { logos: LOGOS });
+  assert.equal(count(at(0.5), '#200808', 0, 0, 23, 11), 24 * 12);   // 0x40,0x10,0x10 at 50%
+  assert.ok(count(at(0.5), '#0a172d', 24, 0, 37, 11) > 60);          // band #142d5a at 50%
+  assert.equal(count(at(undefined), '#3a0e0e', 0, 0, 23, 11), 24 * 12); // default 90%
+});
+
+test('bands layout: team-color bands, white abbreviations with a drop shadow, no logos', () => {
+  const g = lgGame({ st: 'live', inn: 1, half: 'T', on: [0, 0, 0] });
+  const f = draw.renderBaseball({ ...payload([]), screen: 'baseball', mlb: { layout: 'bands', dim: 1, games: [g] } }, { logos: LOGOS });
+  assert.equal(count(f, '#401010', 0, 0, 63, 31), 0);               // no logo drawn
+  assert.ok(count(f, draw.BB.live, 0, 3, 23, 9) > 8);                // CHC in the logo slot
+  assert.ok(count(f, '#000000', 1, 3, 24, 10) > 5);                  // its drop shadow
+  assert.ok(count(f, draw.BB.live, 24, 3, 37, 9) > 3);               // score
 });

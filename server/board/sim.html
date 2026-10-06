@@ -43,7 +43,7 @@
     <label><input type="checkbox" id="showHeader"> Header</label>
     <label><input type="checkbox" id="showWeather"> Weather row</label>
     <label><input type="checkbox" id="radarTime"> Radar time</label>
-    <label><input type="checkbox" id="logoLayout"> Baseball logos</label>
+    <select id="logoLayout" aria-label="Baseball layout"><option value="classic">Baseball: classic</option><option value="logos">Baseball: logos</option><option value="bands">Baseball: bands</option></select>
     <button id="apply" disabled>Use on board</button>
     <span class="note" id="previewNote"></span>
   </div>
@@ -181,14 +181,14 @@
   // and never change the board until "Use on board".
   let boardCfg = null; // { mapid, showHeader, showWeather, radarTime, logoLayout }
   const flag = (v) => (v === '1' ? true : v === '0' ? false : null);
-  const prev = { mapid: params.get('mapid'), showHeader: flag(params.get('header')), showWeather: flag(params.get('weather')), radarTime: flag(params.get('rtime')), logoLayout: flag(params.get('logos')) };
+  const prev = { mapid: params.get('mapid'), showHeader: flag(params.get('header')), showWeather: flag(params.get('weather')), radarTime: flag(params.get('rtime')), logoLayout: params.get('bblayout') };
   const FIELDS = ['mapid', 'showHeader', 'showWeather', 'radarTime', 'logoLayout'];
-  const QNAME = { mapid: 'mapid', showHeader: 'header', showWeather: 'weather', radarTime: 'rtime', logoLayout: 'logos' };
+  const QNAME = { mapid: 'mapid', showHeader: 'header', showWeather: 'weather', radarTime: 'rtime', logoLayout: 'bblayout' };
   const changed = () => (boardCfg ? FIELDS.filter((k) => prev[k] != null && prev[k] !== boardCfg[k]) : []);
   const previewing = () => changed().length > 0;
   const query = () => {
     const q = new URLSearchParams({ b: board });
-    for (const k of changed()) q.set(QNAME[k], k === 'mapid' ? prev.mapid : prev[k] ? '1' : '0');
+    for (const k of changed()) q.set(QNAME[k], k === 'mapid' || k === 'logoLayout' ? prev[k] : prev[k] ? '1' : '0');
     return q;
   };
 
@@ -292,7 +292,7 @@
     $('showHeader').checked = prev.showHeader;
     $('showWeather').checked = prev.showWeather;
     $('radarTime').checked = prev.radarTime;
-    $('logoLayout').checked = prev.logoLayout;
+    $('logoLayout').value = prev.logoLayout || 'classic';
     $('apply').disabled = !previewing();
     $('previewNote').textContent = previewing() ? 'Preview only: the board keeps its own settings until you press "Use on board".' : '';
     const q = new URLSearchParams(location.search);
@@ -313,7 +313,7 @@
     ]);
     $('station').replaceChildren(...list.map((s) => new Option(s.desc, s.mapid)));
     const b = state.boards && state.boards[board];
-    boardCfg = b ? { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather, radarTime: b.radarTime !== false, logoLayout: b.baseballLayout === 'logos' } : null;
+    boardCfg = b ? { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather, radarTime: b.radarTime !== false, logoLayout: b.baseballLayout || 'classic' } : null;
     syncPicker();
   }
 
@@ -322,19 +322,19 @@
   $('showHeader').addEventListener('change', (e) => { prev.showHeader = e.target.checked; previewChanged(); });
   $('showWeather').addEventListener('change', (e) => { prev.showWeather = e.target.checked; previewChanged(); });
   $('radarTime').addEventListener('change', (e) => { prev.radarTime = e.target.checked; previewChanged(); });
-  $('logoLayout').addEventListener('change', (e) => { prev.logoLayout = e.target.checked; previewChanged(); });
+  $('logoLayout').addEventListener('change', (e) => { prev.logoLayout = e.target.value; previewChanged(); });
   $('apply').addEventListener('click', async () => {
     $('apply').disabled = true;
     const patch = {};
     for (const k of changed()) {
       if (k === 'mapid') patch.station = { mapid: prev.mapid };
-      else if (k === 'logoLayout') patch.baseballLayout = prev[k] ? 'logos' : 'classic';
+      else if (k === 'logoLayout') patch.baseballLayout = prev[k];
       else patch[k] = prev[k];
     }
     const r = await fetch('api/state?b=' + encodeURIComponent(board), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
     });
-    if (r.ok) { const b = await r.json(); boardCfg = { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather, radarTime: b.radarTime !== false, logoLayout: b.baseballLayout === 'logos' }; syncPicker(); poll(); }
+    if (r.ok) { const b = await r.json(); boardCfg = { mapid: b.station.mapid, showHeader: b.showHeader, showWeather: b.showWeather, radarTime: b.radarTime !== false, logoLayout: b.baseballLayout || 'classic' }; syncPicker(); poll(); }
     else { setStatus('could not update the board'); syncPicker(); }
   });
 

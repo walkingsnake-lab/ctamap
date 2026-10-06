@@ -114,13 +114,13 @@ function createBoard({
     .map(({ mapid, desc, short }) => ({ mapid, desc, short }))
     .sort((a, b) => a.desc.localeCompare(b.desc)));
   // Simulator preview settings from the query: mapid, header=0|1, weather=0|1,
-  // rtime=0|1 (radar corner: frame time or temperature), logos=0|1 (baseball layout).
+  // rtime=0|1 (radar corner: frame time or temperature), bblayout=classic|logos|bands (baseball layout).
   function previewOf(q) {
     const mapid = String(q.mapid || '');
     if (mapid && !stationById.has(mapid)) return { err: `unknown mapid: ${mapid}` };
     const flag = (v) => (v === '1' ? true : v === '0' ? false : null);
-    const lg = flag(q.logos);
-    return { mapid, showHeader: flag(q.header), showWeather: flag(q.weather), radarTime: flag(q.rtime), baseballLayout: lg == null ? null : lg ? 'logos' : 'classic' };
+    const lg = ['classic', 'logos', 'bands'].includes(q.bblayout) ? q.bblayout : null;
+    return { mapid, showHeader: flag(q.header), showWeather: flag(q.weather), radarTime: flag(q.rtime), baseballLayout: lg };
   }
   const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
   if (!tracker) tracker = createTracker({ log }).start();
@@ -130,15 +130,14 @@ function createBoard({
   if (!mlb) mlb = createMlb({ log }).start();
   if (!logos) logos = createLogos({ dir: resolveDir(log), log });
 
-  // Logo layout: each side gets its logo id (fetched once by the board) and
-  // band color; without an uploaded logo, the team color dimmed like a band.
-  const LOGO_DIM = 0.9;
-  const dimHex = (c) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(c.slice(i, i + 2), 16) * LOGO_DIM).toString(16).padStart(2, '0')).join('');
-  function withLogos(g) {
+  // Logo and band layouts: each side gets its band color (the logo's, or the
+  // team color) and, in the logo layout, its logo id (fetched once by the
+  // board). The board dims both by mlb.dim.
+  function withLogos(g, useLogos) {
     const side = (s) => {
       let l = null;
       try { l = logos.get(s.ab); } catch (e) { log.error('[board] logos:', e.message); }
-      return { ...s, lg: l ? l.id : null, bd: l ? l.band : dimHex(s.c || '#8f8f8f') };
+      return { ...s, lg: l && useLogos ? l.id : null, bd: l ? l.band : s.c || '#8f8f8f' };
     };
     return { ...g, away: side(g.away), home: side(g.home) };
   }
@@ -254,7 +253,9 @@ function createBoard({
       wx: bars.showWeather ? wx : null,
       warn,
       radar: { ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null },
-      mlb: board.baseballLayout === 'logos' ? { layout: 'logos', games: games.map(withLogos) } : { layout: 'classic', games },
+      mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
+        ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')) }
+        : { layout: 'classic', games },
     };
   }
 
@@ -384,14 +385,19 @@ function createBoard({
         return sendFrame(res, radar.frame(mapid, rest[2]));
       }
 
-      // Team logos: GET status, POST the sprite sheet (raw PNG body) to
-      // replace them. The sheet is processed and kept beside the board state.
+      // Team logos: GET status; POST a PNG to replace them: the whole sheet,
+      // or with ?team=AB (and optional &crop=0-12) one team's logo. Kept
+      // beside the board state, never in the repo.
       if (sub === 'api/logos') {
         if (method === 'GET') return send(res, 200, logos.status());
         if (method !== 'POST') return send(res, 405, { err: 'method' });
         let status;
-        try { status = logos.upload(await readBody(req, MAX_SHEET)); }
-        catch (e) { return send(res, 400, { err: 'invalid', detail: e.message }); }
+        try {
+          const body = await readBody(req, MAX_SHEET);
+          const ab = parsed.query.team ? String(parsed.query.team) : null;
+          const crop = parsed.query.crop != null && parsed.query.crop !== '' ? Number(parsed.query.crop) : null;
+          status = ab ? logos.uploadOne(ab, body, crop) : logos.uploadSheet(body);
+        } catch (e) { return send(res, 400, { err: 'invalid', detail: e.message }); }
         return send(res, 200, status);
       }
       // A logo crop for the simulator (the path is the credential).
