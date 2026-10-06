@@ -230,6 +230,20 @@ class TestBoardLoop(unittest.TestCase):
         run_for(board, clock, 30000)
         self.assertEqual(board.player.logos, {})
 
+    def test_live_games_update_faster(self):
+        board, server, clock, _, _, _ = make()
+        board.connect()
+        run_for(board, clock, 60000)
+        self.assertEqual(board.update_job.interval_ms, app.UPDATE_EVERY)  # transit
+        server.screen = 'baseball'
+        server.v = 2
+        run_for(board, clock, 20000)
+        start = clock.t
+        run_for(board, clock, 120000)
+        updates = [c['ms'] for c in server.calls if c['name'] == 'update' and c['ms'] >= start]
+        self.assertGreaterEqual(len(updates), 9)
+        self.assertLessEqual(max(b - a for a, b in zip(updates, updates[1:])), 15000)
+
     def test_buttons_override_until_the_phone_changes_something(self):
         board, server, clock, _, btn, _ = make(buttons=True)
         board.connect()

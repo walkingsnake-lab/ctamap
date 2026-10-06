@@ -20,7 +20,7 @@ const save = (name, frame, scale) => {
 
 const C = {
   label: '#d8d8d8', clock: '#cccccc', band: '#202020', amber: '#ffb000', dimAmber: '#9c6a00', grey: '#8f8f8f',
-  tickerHead: '#a6a6a6', index: '#1f2f35', white: '#ffffff', red: '#ff2020',
+  tickerHead: '#a6a6a6', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
   yellow: '#ffd800', orange: '#ff8000', divider: '#333333',
 };
 const LINE = { RD: '#c60c30', BL: '#00a1de', GR: '#009b3a', BR: '#62361b', PR: '#522398', YL: '#f9e300', PK: '#e27ea6', OR: '#f9461c' };

@@ -170,7 +170,7 @@
     const C = {
       label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#9c6a00',
       sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', band: '#202020', divider: '#333333',
-      tickerHead: '#a6a6a6', index: '#1f2f35', white: '#ffffff', red: '#ff2020',
+      tickerHead: '#a6a6a6', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
 
