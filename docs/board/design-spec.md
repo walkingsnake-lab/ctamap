@@ -289,7 +289,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ### Logo and band layouts
 - **Bands:** each team gets a 12-row band (away rows 0–11, home 12–23) from x0 to x37. **Logos:** the band is the logo tile's background color and the team's 24 x 12 logo crop sits at its left. **Bands:** the team's block color, with the abbreviation (X11 5x7, white, drop shadow) in the logo's place. Bands and logos are drawn at the **logo brightness** setting (default 90%), applied by the board.
-- **Scores** (X11 5x7) are centered in the box between logo and band end (x31): white with a black drop shadow (right, below, below-right). Amber for the score flash and the final's winner; the loser stays white.
+- **Scores** (X11 5x7) are centered at x30 in the box between logo and band end: white with a drop shadow (right, below, below-right) in a dark shade of the band (its color at 30% of its drawn brightness). Amber for the score flash and the final's winner; the loser stays white.
 - **Panel:** infield centered on row 8, inning on baseline 21; records (pregame and final) centered on x51 at each band's text row.
 - **Pregame:** the abbreviation in each score box (Logos), records in the panel, **`TODAY`** (grey) bottom left, first pitch bottom right.
 - **Logos** are the owner's 32px pixel art (a 5 x 6 sheet or one team at a time, uploaded from the phone page), never in the repo. The server only resizes (32 → 24px, area average) and crops 12 rows at each team's crop row; colors are untouched apart from a 64-color cap per logo for the board's palette. Without a logo, a team gets its block-color band and its abbreviation in the logo slot.

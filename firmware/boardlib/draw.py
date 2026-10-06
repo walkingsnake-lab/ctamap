@@ -1021,9 +1021,9 @@ def draw_no_games(f, now, tzo):
 BLACK = (0, 0, 0)
 
 
-def emboss_text(f, font, s, x, base, color):
+def emboss_text(f, font, s, x, base, color, shadow=BLACK):
     for dx, dy in ((1, 0), (0, 1), (1, 1)):
-        f.text(font, s, x + dx, base + dy, BLACK)
+        f.text(font, s, x + dx, base + dy, shadow)
     return f.text(font, s, x, base, color)
 
 
@@ -1033,11 +1033,17 @@ LG_W = 24
 LG_ROWS = 12
 LG_TOPS = (0, 12)
 LG_BAND_R = 37
-LG_CX = 31
+LG_CX = 30
 LG_INFIELD_Y = 8
 LG_INN_BASE = 21
 LG_DIM = 0.9
 LG_ROLL = 8
+LG_SHADOW = 0.3
+
+
+def lg_shadow(side, dim):
+    base = hexc(side['bd']) if side.get('bd') else (hexc(side['c']) if side.get('c') else C['grey'])
+    return scale_color(base, dim * LG_SHADOW)
 
 
 def draw_logo_band(f, side, top, logos, bands, dim):
@@ -1045,7 +1051,7 @@ def draw_logo_band(f, side, top, logos, bands, dim):
     f.fill(0, top, LG_BAND_R + 1, LG_ROWS, scale_color(base, dim))
     if bands:
         ab = side.get('ab') or ''
-        emboss_text(f, '5x7', ab, (LG_W >> 1) - measure('5x7', ab) // 2, top + 9, BB['live'])
+        emboss_text(f, '5x7', ab, (LG_W >> 1) - measure('5x7', ab) // 2, top + 9, BB['live'], lg_shadow(side, dim))
         return
     data = logos.get(side['lg']) if side.get('lg') and logos else None
     if data and len(data) >= LG_W * LG_ROWS * 3:
@@ -1061,10 +1067,10 @@ def _lg_left(t):
     return LG_CX - measure('5x7', t) // 2
 
 
-def draw_logo_score(f, text, top, color, roll):
+def draw_logo_score(f, text, top, color, roll, shadow=BLACK):
     base = top + 9
     if not roll or roll['from'] == text or roll['p'] >= 1:
-        emboss_text(f, '5x7', text, _lg_left(text), base, color)
+        emboss_text(f, '5x7', text, _lg_left(text), base, color, shadow)
         return
     up = jsround(ease_in_out(roll['p']) * LG_ROLL)
     f.push_clip(LG_W, base - 6, LG_BAND_R + 1, base + 1)
@@ -1074,14 +1080,14 @@ def draw_logo_score(f, text, top, color, roll):
             x = _lg_left(text)
             for i in range(len(text)):
                 if frm[i] == text[i]:
-                    emboss_text(f, '5x7', text[i], x, base, color)
+                    emboss_text(f, '5x7', text[i], x, base, color, shadow)
                 else:
-                    emboss_text(f, '5x7', frm[i], x, base - up, color)
-                    emboss_text(f, '5x7', text[i], x, base - up + LG_ROLL, color)
+                    emboss_text(f, '5x7', frm[i], x, base - up, color, shadow)
+                    emboss_text(f, '5x7', text[i], x, base - up + LG_ROLL, color, shadow)
                 x += measure('5x7', text[i]) + 1
         else:
-            emboss_text(f, '5x7', frm, _lg_left(frm), base - up, color)
-            emboss_text(f, '5x7', text, _lg_left(text), base - up + LG_ROLL, color)
+            emboss_text(f, '5x7', frm, _lg_left(frm), base - up, color, shadow)
+            emboss_text(f, '5x7', text, _lg_left(text), base - up + LG_ROLL, color, shadow)
     finally:
         f.pop_clip()
 
@@ -1106,7 +1112,7 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
     if gm['st'] == 'pre':
         for k, top in sides:
             if not bands:
-                draw_logo_score(f, gm[k].get('ab') or '', top, BB['live'], None)
+                draw_logo_score(f, gm[k].get('ab') or '', top, BB['live'], None, lg_shadow(gm[k], dim))
             ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
         f.text('small', 'TODAY', 1, BB_BOTTOM, C['grey'])
         ap = ampm_text(gm['start'], tzo)
@@ -1116,13 +1122,13 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
 
     if final:
         for k, top in sides:
-            draw_logo_score(f, str(gm[k]['r']), top, C['amber'] if winner == k else BB['live'], rolls.get(k))
+            draw_logo_score(f, str(gm[k]['r']), top, C['amber'] if winner == k else BB['live'], rolls.get(k), lg_shadow(gm[k], dim))
             ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
         rtext(f, 'small', 'FINAL', 62, BB_BOTTOM, C['label'])
         return f
 
-    draw_logo_score(f, str(gm['away']['r']), LG_TOPS[0], score_color(gm['away'], now), rolls.get('away'))
-    draw_logo_score(f, str(gm['home']['r']), LG_TOPS[1], score_color(gm['home'], now), rolls.get('home'))
+    draw_logo_score(f, str(gm['away']['r']), LG_TOPS[0], score_color(gm['away'], now), rolls.get('away'), lg_shadow(gm['away'], dim))
+    draw_logo_score(f, str(gm['home']['r']), LG_TOPS[1], score_color(gm['home'], now), rolls.get('home'), lg_shadow(gm['home'], dim))
     draw_infield(f, gm.get('on') or [0, 0, 0], LG_INFIELD_Y)
     t = live_texts(gm)
     draw_roll_text(f, t['inn'], PANEL_X - measure('small', t['inn']) // 2, LG_INN_BASE, C['label'], rolls.get('inn'))

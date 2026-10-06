@@ -725,7 +725,7 @@ test('logo layout live: bands to x37, logo crop at the left, drop-shadowed white
   assert.equal(count(f, '#142d5a', 38, 0, 63, 11), 0);              // band stops at x37
   assert.ok(count(f, '#761717', 0, 12, 37, 23) > 150);              // home band, no logo
   assert.ok(count(f, draw.BB.live, 24, 3, 37, 9) > 5);              // away score in its box
-  assert.ok(count(f, '#000000', 24, 3, 38, 10) > 5);                // drop shadow under it
+  assert.ok(count(f, '#060e1b', 24, 3, 38, 10) > 5);                // drop shadow: the band color at 30% of its drawn brightness
   assert.equal(count(f, draw.C.divider, 0, 24, 63, 24), 64);
   assert.equal(count(f, AMBER, 54, 6, 58, 10), 13);                 // 1st base, infield centered on row 8
 });
@@ -787,6 +787,6 @@ test('bands layout: team-color bands, white abbreviations with a drop shadow, no
   const f = draw.renderBaseball({ ...payload([]), screen: 'baseball', mlb: { layout: 'bands', dim: 1, games: [g] } }, { logos: LOGOS });
   assert.equal(count(f, '#401010', 0, 0, 63, 31), 0);               // no logo drawn
   assert.ok(count(f, draw.BB.live, 0, 3, 23, 9) > 8);                // CHC in the logo slot
-  assert.ok(count(f, '#000000', 1, 3, 24, 10) > 5);                  // its drop shadow
+  assert.ok(count(f, '#060e1b', 1, 3, 24, 10) > 5);                  // its drop shadow: the band at 30%
   assert.ok(count(f, draw.BB.live, 24, 3, 37, 9) > 3);               // score
 });

@@ -865,8 +865,8 @@
 
     // Embossed text: black right of, below, and below-right of every lit
     // pixel, then the text, so it reads as raised over logos and bands.
-    function embossText(f, font, str, x, base, color) {
-      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) f.text(font, str, x + dx, base + dy, '#000000');
+    function embossText(f, font, str, x, base, color, shadow = '#000000') {
+      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) f.text(font, str, x + dx, base + dy, shadow);
       return f.text(font, str, x, base, color);
     }
 
@@ -877,8 +877,10 @@
     // end in white with a black drop shadow. The status panel and bottom line are the
     // classic layout's, with the infield and inning nudged down to center on
     // the taller rows.
-    const LG = { w: 24, rows: 12, tops: [0, 12], bandR: 37, cx: 31, infieldY: 8, innBase: 21, dim: 0.9 }; // dim: default when the payload has none
+    const LG = { w: 24, rows: 12, tops: [0, 12], bandR: 37, cx: 30, infieldY: 8, innBase: 21, dim: 0.9 }; // dim: default when the payload has none
     const LG_ROLL = 8;
+    const LG_SHADOW = 0.3; // drop shadows: the band color at 30% of its drawn brightness
+    const lgShadow = (side, dim) => scaleColor(side.bd || side.c || C.grey, dim * LG_SHADOW);
 
     // bands: true for the 'bands' layout (no logos: the abbreviation in white
     // with a drop shadow takes the logo's place).
@@ -886,7 +888,7 @@
       f.fill(0, top, LG.bandR + 1, LG.rows, scaleColor(side.bd || side.c || C.grey, dim));
       if (bands) {
         const ab = side.ab || '';
-        embossText(f, '5x7', ab, (LG.w >> 1) - Math.floor(measure('5x7', ab) / 2), top + 9, BB.live);
+        embossText(f, '5x7', ab, (LG.w >> 1) - Math.floor(measure('5x7', ab) / 2), top + 9, BB.live, lgShadow(side, dim));
         return;
       }
       const bytes = side.lg && logos ? logos[side.lg] : null;
@@ -903,26 +905,26 @@
 
     // Score (or pregame abbreviation) centered in the band's box, embossed;
     // a changed score rolls digit by digit inside the box.
-    function drawLogoScore(f, text, top, color, roll) {
+    function drawLogoScore(f, text, top, color, roll, shadow) {
       const base = top + 9;
       const left = (t) => LG.cx - Math.floor(measure('5x7', t) / 2);
-      if (!roll || roll.from === text || roll.p >= 1) { embossText(f, '5x7', text, left(text), base, color); return; }
+      if (!roll || roll.from === text || roll.p >= 1) { embossText(f, '5x7', text, left(text), base, color, shadow); return; }
       const up = Math.round(easeInOut(roll.p) * LG_ROLL);
       f.withClip(LG.w, base - 6, LG.bandR + 1, base + 1, () => { // digit rows + shadow row
         const from = roll.from;
         if (from.length === text.length) {
           let x = left(text);
           for (let i = 0; i < text.length; i++) {
-            if (from[i] === text[i]) embossText(f, '5x7', text[i], x, base, color);
+            if (from[i] === text[i]) embossText(f, '5x7', text[i], x, base, color, shadow);
             else {
-              embossText(f, '5x7', from[i], x, base - up, color);
-              embossText(f, '5x7', text[i], x, base - up + LG_ROLL, color);
+              embossText(f, '5x7', from[i], x, base - up, color, shadow);
+              embossText(f, '5x7', text[i], x, base - up + LG_ROLL, color, shadow);
             }
             x += measure('5x7', text[i]) + 1;
           }
         } else {
-          embossText(f, '5x7', from, left(from), base - up, color);
-          embossText(f, '5x7', text, left(text), base - up + LG_ROLL, color);
+          embossText(f, '5x7', from, left(from), base - up, color, shadow);
+          embossText(f, '5x7', text, left(text), base - up + LG_ROLL, color, shadow);
         }
       });
     }
@@ -942,7 +944,7 @@
         // Abbreviations in the score boxes, records in the panel, TODAY and
         // the first-pitch time on the bottom line.
         for (const [k, top] of sides) {
-          if (!bands) drawLogoScore(f, g[k].ab || '', top, BB.live, null);
+          if (!bands) drawLogoScore(f, g[k].ab || '', top, BB.live, null, lgShadow(g[k], dim));
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
         f.text('small', 'TODAY', 1, BOTTOM, C.grey);
@@ -954,15 +956,15 @@
 
       if (final) {
         for (const [k, top] of sides) {
-          drawLogoScore(f, String(g[k].r), top, winner === k ? C.amber : BB.live, rolls[k]);
+          drawLogoScore(f, String(g[k].r), top, winner === k ? C.amber : BB.live, rolls[k], lgShadow(g[k], dim));
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
         rtext(f, 'small', 'FINAL', 62, BOTTOM, C.label);
         return f;
       }
 
-      drawLogoScore(f, String(g.away.r), LG.tops[0], scoreColor(g.away, now), rolls.away);
-      drawLogoScore(f, String(g.home.r), LG.tops[1], scoreColor(g.home, now), rolls.home);
+      drawLogoScore(f, String(g.away.r), LG.tops[0], scoreColor(g.away, now), rolls.away, lgShadow(g.away, dim));
+      drawLogoScore(f, String(g.home.r), LG.tops[1], scoreColor(g.home, now), rolls.home, lgShadow(g.home, dim));
       drawInfield(f, g.on || [0, 0, 0], LG.infieldY);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), LG.innBase, C.label, rolls.inn);
