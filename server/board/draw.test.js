@@ -718,14 +718,14 @@ const lgGame = (extra) => ({
 const lg = (...games) => ({ ...payload([]), screen: 'baseball', mlb: { layout: 'logos', dim: 1, games } });
 const LOGOS = { 'CHC-1': LOGO([0x40, 0x10, 0x10]) };
 
-test('logo layout live: bands to x37, logo crop at the left, bordered white scores, infield on the right', () => {
+test('logo layout live: bands to x37, logo crop at the left, drop-shadowed white scores, infield on the right', () => {
   const f = draw.renderBaseball(lg(lgGame({ st: 'live', inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] })), { logos: LOGOS });
   assert.equal(count(f, '#401010', 0, 0, 23, 11), 24 * 12);         // the whole crop, rows 0-11
   assert.ok(count(f, '#142d5a', 24, 0, 37, 11) > 60);               // away band
   assert.equal(count(f, '#142d5a', 38, 0, 63, 11), 0);              // band stops at x37
   assert.ok(count(f, '#761717', 0, 12, 37, 23) > 150);              // home band, no logo
   assert.ok(count(f, draw.BB.live, 24, 3, 37, 9) > 5);              // away score in its box
-  assert.ok(count(f, '#000000', 24, 2, 38, 10) > 10);               // black border around it
+  assert.ok(count(f, '#000000', 24, 3, 38, 10) > 5);                // drop shadow under it
   assert.equal(count(f, draw.C.divider, 0, 24, 63, 24), 64);
   assert.equal(count(f, AMBER, 54, 6, 58, 10), 13);                 // 1st base, infield centered on row 8
 });

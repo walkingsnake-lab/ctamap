@@ -1019,17 +1019,10 @@ def draw_no_games(f, now, tzo):
 
 
 BLACK = (0, 0, 0)
-RING = ((-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1))
 
 
 def emboss_text(f, font, s, x, base, color):
     for dx, dy in ((1, 0), (0, 1), (1, 1)):
-        f.text(font, s, x + dx, base + dy, BLACK)
-    return f.text(font, s, x, base, color)
-
-
-def border_text(f, font, s, x, base, color):
-    for dx, dy in RING:
         f.text(font, s, x + dx, base + dy, BLACK)
     return f.text(font, s, x, base, color)
 
@@ -1068,28 +1061,27 @@ def _lg_left(t):
     return LG_CX - measure('5x7', t) // 2
 
 
-def draw_logo_score(f, text, top, color, roll, deco=None):
-    deco = deco or border_text
+def draw_logo_score(f, text, top, color, roll):
     base = top + 9
     if not roll or roll['from'] == text or roll['p'] >= 1:
-        deco(f, '5x7', text, _lg_left(text), base, color)
+        emboss_text(f, '5x7', text, _lg_left(text), base, color)
         return
     up = jsround(ease_in_out(roll['p']) * LG_ROLL)
-    f.push_clip(LG_W - 1, base - 7, LG_BAND_R + 1, base + 1)
+    f.push_clip(LG_W, base - 6, LG_BAND_R + 1, base + 1)
     try:
         frm = roll['from']
         if len(frm) == len(text):
             x = _lg_left(text)
             for i in range(len(text)):
                 if frm[i] == text[i]:
-                    deco(f, '5x7', text[i], x, base, color)
+                    emboss_text(f, '5x7', text[i], x, base, color)
                 else:
-                    deco(f, '5x7', frm[i], x, base - up, color)
-                    deco(f, '5x7', text[i], x, base - up + LG_ROLL, color)
+                    emboss_text(f, '5x7', frm[i], x, base - up, color)
+                    emboss_text(f, '5x7', text[i], x, base - up + LG_ROLL, color)
                 x += measure('5x7', text[i]) + 1
         else:
-            deco(f, '5x7', frm, _lg_left(frm), base - up, color)
-            deco(f, '5x7', text, _lg_left(text), base - up + LG_ROLL, color)
+            emboss_text(f, '5x7', frm, _lg_left(frm), base - up, color)
+            emboss_text(f, '5x7', text, _lg_left(text), base - up + LG_ROLL, color)
     finally:
         f.pop_clip()
 
@@ -1099,7 +1091,6 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
     dim = (p.get('mlb') or {}).get('dim')
     if dim is None:
         dim = LG_DIM
-    deco = emboss_text if bands else border_text
     final = gm['st'] == 'final'
     winner = None
     if final:
@@ -1115,7 +1106,7 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
     if gm['st'] == 'pre':
         for k, top in sides:
             if not bands:
-                draw_logo_score(f, gm[k].get('ab') or '', top, BB['live'], None, deco)
+                draw_logo_score(f, gm[k].get('ab') or '', top, BB['live'], None)
             ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
         f.text('small', 'TODAY', 1, BB_BOTTOM, C['grey'])
         ap = ampm_text(gm['start'], tzo)
@@ -1125,13 +1116,13 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
 
     if final:
         for k, top in sides:
-            draw_logo_score(f, str(gm[k]['r']), top, C['amber'] if winner == k else BB['live'], rolls.get(k), deco)
+            draw_logo_score(f, str(gm[k]['r']), top, C['amber'] if winner == k else BB['live'], rolls.get(k))
             ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
         rtext(f, 'small', 'FINAL', 62, BB_BOTTOM, C['label'])
         return f
 
-    draw_logo_score(f, str(gm['away']['r']), LG_TOPS[0], score_color(gm['away'], now), rolls.get('away'), deco)
-    draw_logo_score(f, str(gm['home']['r']), LG_TOPS[1], score_color(gm['home'], now), rolls.get('home'), deco)
+    draw_logo_score(f, str(gm['away']['r']), LG_TOPS[0], score_color(gm['away'], now), rolls.get('away'))
+    draw_logo_score(f, str(gm['home']['r']), LG_TOPS[1], score_color(gm['home'], now), rolls.get('home'))
     draw_infield(f, gm.get('on') or [0, 0, 0], LG_INFIELD_Y)
     t = live_texts(gm)
     draw_roll_text(f, t['inn'], PANEL_X - measure('small', t['inn']) // 2, LG_INN_BASE, C['label'], rolls.get('inn'))
