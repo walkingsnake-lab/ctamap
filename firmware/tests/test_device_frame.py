@@ -116,6 +116,25 @@ class TestBoardFrame(unittest.TestCase):
             ref = draw.render(self.p, draw.Frame(), screen=screen, now=self.now, logos=self.logos)
             self.assertEqual(self.draw_board(self.p, screen, logos=self.logos), ref_pixels(ref), screen)
 
+    def test_a_full_glyph_cache_draws_the_rest_pixel_by_pixel(self):
+        old = device.GLYPH_CACHE
+        device.GLYPH_CACHE = 5
+        try:
+            for screen in ('transit', 'ticker', 'baseball'):
+                ref = draw.render(self.p, draw.Frame(), screen=screen, now=self.now, logos=self.logos)
+                self.assertEqual(self.draw_board(self.p, screen, logos=self.logos), ref_pixels(ref), screen)
+                self.assertLessEqual(len(self.bf.glyphs), 5)
+        finally:
+            device.GLYPH_CACHE = old
+
+    def test_cache_keys_are_ints(self):
+        # Tuple keys cost memory to keep and a new tuple per glyph per frame.
+        for screen in ('transit', 'baseball'):
+            self.draw_board(self.p, screen, logos=self.logos)
+        self.assertTrue(self.bf.glyphs and all(isinstance(k, int) for k in self.bf.glyphs))
+        self.assertTrue(all(isinstance(k, int) for k in self.bf.colors))
+        self.assertTrue(all(isinstance(c, int) for ent in self.bf.logo_cache.values() for c in ent[0]))
+
     def test_the_color_table_resets_when_full(self):
         for n in range(400):
             self.bf.begin()

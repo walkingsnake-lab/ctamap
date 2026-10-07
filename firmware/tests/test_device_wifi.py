@@ -73,6 +73,14 @@ class TestConnect(unittest.TestCase):
         self.assertEqual(net.connect(nets, lambda *a: None), ('ok', 'JakeAtHome2.4'))
         self.assertEqual(esp.joins, ['JakeAtHome2.4'], 'visible networks go first')
 
+    def test_still_connected_after_a_soft_reboot_skips_the_join(self):
+        esp = FakeESP(['JakeAtHome2.4'])
+        esp.is_connected = True
+        esp.ap_info = types.SimpleNamespace(ssid='JakeAtHome2.4')
+        net = make_net(esp)
+        self.assertEqual(net.connect([('JakeAtHome2.4', 'pw')], lambda *a: None), ('ok', 'JakeAtHome2.4'))
+        self.assertEqual(esp.joins, [])
+
     def test_unseen_networks_are_still_tried_last(self):
         esp = FakeESP(['Neighbor'])
         net = make_net(esp)

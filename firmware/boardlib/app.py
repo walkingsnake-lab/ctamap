@@ -318,7 +318,13 @@ class Board:
 def run():
     """Entry point on the board (code.py)."""
     import os
+
+    def free():
+        gc.collect()
+        return gc.mem_free()
+    mem = [('start', free())]
     from . import device
+    mem.append(('device', free()))
     networks = []
     for i in (1, 2, 3):
         ssid = os.getenv('WIFI_SSID_%d' % i)
@@ -331,8 +337,13 @@ def run():
         bit_depth=int(os.getenv('MATRIX_BIT_DEPTH') or 5),
         gamma=float(os.getenv('MATRIX_GAMMA') or 1),
     )
+    mem.append(('hardware', free()))
     board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog, mem_free=hw.mem_free)
+    mem.append(('board', free()))
     board.connect(boot=device.cold_boot())
+    mem.append(('online', free()))
+    # Where the heap goes, for tuning: free bytes after each startup stage.
+    print('[board] memory free: ' + ', '.join('%s %d' % m for m in mem))
     last_report = hw.clock.ms()
     while True:
         board.step()
