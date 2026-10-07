@@ -204,6 +204,7 @@
       const r = await fetch('api/update?' + query(), { cache: 'no-store' });
       const body = await r.json();
       if (!r.ok) throw new Error(body.err || r.status);
+      if (p && body.stn !== p.stn) resetAnimation(); // new station: start fresh, like the board
       p = body;
       // The server's clock is whole seconds; adopt a new offset only on real
       // drift so the clock doesn't jitter by up to a second every poll.

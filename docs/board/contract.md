@@ -84,6 +84,7 @@ The combined update, polled ~every 30 s. Target size â‰¤ ~1.2 KB (typically 0.5â
 | Field | Type | Meaning |
 |---|---|---|
 | `v` | int | Settings version (same as `/board/version`). |
+| `stn` | string | The board's station (mapid). When it changes, the board starts the transit and ticker screens fresh instead of animating from the old station's rows. |
 | `now` | int | Server epoch seconds. |
 | `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int \| null | Seconds since the arrivals data was last fetched successfully, or `null` when the server hasn't reached Train Tracker since it started (the update is still sent, with no rows). The server keeps serving last-good data when CTA fails. |

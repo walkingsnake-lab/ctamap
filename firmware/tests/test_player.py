@@ -105,3 +105,31 @@ class SpeedSettings(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StationChange(unittest.TestCase):
+    """A new station starts transit fresh instead of animating from the old
+    station's rows to the new one's (they overlapped mid-fade)."""
+
+    def rows(self, lbls):
+        return [{'ln': 'RD', 'lbl': l, 't': [T0 + 120 + 60 * i], 's': [0], 'a': 0} for i, l in enumerate(lbls)]
+
+    def test_new_station_drops_the_old_rows_at_once(self):
+        pl = player.Player()
+        pl.set_payload(payload([], screen='transit', stn='40100', header='MORSE', view='dest', rows=self.rows(['HOWARD', '95TH'])), 0)
+        pl.set_screen('transit', 0)
+        for ms in range(0, 3000, 50):
+            pl.draw(draw.Frame(), ms, T0)
+        pl.set_payload(payload([], screen='transit', stn='41320', header='BELMONT', view='dest', rows=self.rows(['KIMBALL', 'LOOP'])), 3000)
+        pl.draw(draw.Frame(), 3000, T0)
+        self.assertEqual(sorted(k.split(':')[1] for k in pl.anim.rows), ['KIMBALL', 'LOOP'], 'no old rows fading out')
+        self.assertFalse(pl.busy(3000 + 2 * draw.FADE_MS + 100))
+
+    def test_same_station_keeps_animating(self):
+        pl = player.Player()
+        pl.set_payload(payload([], screen='transit', stn='40100', header='MORSE', view='dest', rows=self.rows(['HOWARD', '95TH'])), 0)
+        pl.set_screen('transit', 0)
+        pl.draw(draw.Frame(), 0, T0)
+        anim = pl.anim
+        pl.set_payload(payload([], screen='transit', stn='40100', header='MORSE', view='dest', rows=self.rows(['HOWARD'])), 1000)
+        self.assertIs(pl.anim, anim)
