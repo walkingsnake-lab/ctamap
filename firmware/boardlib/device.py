@@ -29,6 +29,28 @@ def _pack(rgb):
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]
 
 
+def read_into(r, buf):
+    """Fill buf from an adafruit_requests Response body. Uses the library's
+    _readinto (private, but it's what iter_content uses) so nothing the size
+    of buf is allocated; falls back to small iter_content chunks."""
+    mv = memoryview(buf)
+    got = 0
+    readinto = getattr(r, '_readinto', None)
+    if readinto is not None:
+        while got < len(buf):
+            n = readinto(mv[got:])
+            if not n:
+                break
+            got += n
+    else:
+        for chunk in r.iter_content(64):
+            n = min(len(chunk), len(buf) - got)
+            mv[got:got + n] = chunk[:n]
+            got += n
+    if got != len(buf):
+        raise ValueError('short read: %d of %d bytes' % (got, len(buf)))
+
+
 def gamma_lut(gamma):
     """0-255 -> 0-255 through a power curve. The panel's PWM is linear in
     light, while the palette is authored in sRGB-ish values, so without this
@@ -319,15 +341,18 @@ class Net:
             raise ValueError('logo is %d bytes' % len(data))
         return data
 
-    def radar(self, frame_id):
+    def radar(self, frame_id, buf):
+        """Read one frame into buf (2048 bytes) without allocating it:
+        r.content builds a fresh 2 KB bytes, which a fragmented heap can't
+        fit even with 30+ KB free."""
         r = self._get('/board/radar/' + frame_id + '?b=' + self.board_id)
         try:
-            data = r.content
+            size = r.headers.get('content-length')
+            if size != str(len(buf)):
+                raise ValueError('radar frame is %s bytes' % size)
+            read_into(r, buf)
         finally:
             r.close()
-        if len(data) != 2048:
-            raise ValueError('radar frame is %d bytes' % len(data))
-        return data
 
 
 class Watchdog:

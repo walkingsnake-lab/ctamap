@@ -39,6 +39,7 @@ class Server:
         self.radar_on = False
         self.calls = []
         self.fail_next = 0
+        self.radar_oom = 0
         self.wifi = ['ok']
         self.visit = None
         self.alert = 0
@@ -105,9 +106,12 @@ class Server:
         self._call('update-boot' if boot else 'update')
         return self.payload()
 
-    def radar(self, fid):
+    def radar(self, fid, buf):
         self._call('radar:' + fid)
-        return bytes(2048)
+        if self.radar_oom:
+            self.radar_oom -= 1
+            raise MemoryError('memory allocation failed, allocating 2049 bytes')
+        buf[:] = bytes([int(fid.rsplit('-', 1)[1]) % 251 + 1]) * len(buf)
 
     def logo(self, lid):
         self._call('logo:' + lid)
@@ -211,6 +215,36 @@ class TestBoardLoop(unittest.TestCase):
         got = [c['name'] for c in server.calls if c['name'].startswith('radar')]
         self.assertEqual(len(got), len(set(got)), 'a frame was fetched twice')
         self.assertEqual(board.player.missing_frames(), [])
+
+    def test_radar_frames_reuse_six_preallocated_buffers(self):
+        # A fragmented heap can't fit a fresh 2 KB frame, so frames go into
+        # buffers allocated at startup, recycled as the loop moves on.
+        board, server, clock, _, _, _ = make()
+        pool = {id(b) for b in board.player.radar_free}
+        self.assertEqual(len(pool), player.RADAR_SLOTS)
+        server.radar_on = True
+        board.connect()
+        run_for(board, clock, 30 * 60 * 1000)  # the loop turns over 6 times
+        got = [c['name'] for c in server.calls if c['name'].startswith('radar')]
+        self.assertGreaterEqual(len(got), 2 * player.RADAR_SLOTS)
+        self.assertEqual(board.player.missing_frames(), [])
+        held = board.player.radar_frames
+        self.assertEqual({id(b) for b in held.values()} | {id(b) for b in board.player.radar_free}, pool)
+        for fid, buf in held.items():
+            self.assertEqual(len(buf), player.RADAR_BYTES)
+            self.assertEqual(buf[0], int(fid.rsplit('-', 1)[1]) % 251 + 1, 'frame %s holds stale data' % fid)
+
+    def test_radar_memory_error_is_retried_without_reconnecting(self):
+        board, server, clock, _, _, statuses = make()
+        server.radar_on = True
+        board.connect()
+        connects = statuses.count('connecting')
+        server.radar_oom = 5
+        run_for(board, clock, 90000)
+        self.assertEqual(statuses.count('connecting'), connects, 'a MemoryError reconnected WiFi')
+        self.assertEqual(server.radar_oom, 0)
+        self.assertEqual(board.player.missing_frames(), [])
+        self.assertEqual(len(board.player.radar_frames) + len(board.player.radar_free), player.RADAR_SLOTS)
 
     def test_logos_only_on_the_baseball_screen_and_once_each(self):
         board, server, clock, _, _, _ = make()
