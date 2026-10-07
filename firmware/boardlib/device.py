@@ -29,16 +29,21 @@ def _pack(rgb):
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]
 
 
+READ_CHUNK = 256  # bytes per socket read; the ESP32 socket allocates a temp copy of each
+
+
 def read_into(r, buf):
     """Fill buf from an adafruit_requests Response body. Uses the library's
     _readinto (private, but it's what iter_content uses) so nothing the size
-    of buf is allocated; falls back to small iter_content chunks."""
+    of buf is allocated; falls back to small iter_content chunks. Reads are
+    capped at READ_CHUNK: esp32spi's recv_into allocates a bytes of each
+    read's size, so one 2 KB read needs a 2 KB block all the same."""
     mv = memoryview(buf)
     got = 0
     readinto = getattr(r, '_readinto', None)
     if readinto is not None:
         while got < len(buf):
-            n = readinto(mv[got:])
+            n = readinto(mv[got:got + READ_CHUNK])
             if not n:
                 break
             got += n
