@@ -34,7 +34,7 @@ Anything else (HTML, redirect, non-200) means a portal.
 ### `GET /board/version?b=<id>[&hu=…]`
 Polled ~every 10 s.
 
-**Health** (optional query fields, refreshed by the board about once a minute): `hu` uptime (s), `hm` free memory (bytes), `ho` draws skipped on `MemoryError`, `hb` fetch budget (ms), `hf` failed fetches, `hr` WiFi reconnects, `hw` WiFi RSSI (dBm), `he` last error as `<job>:<ExceptionName>` (letters, digits, `_`, `:` only; anything else is dropped). The server keeps the latest report per board in memory, plus the lowest free memory and a restart count (uptime going backwards) since the server started; the control page shows them (`api/health`).
+**Health** (optional query fields, refreshed by the board about once a minute): `hu` uptime (s), `hm` free memory (bytes), `hl` largest single allocatable block (bytes; the fragmentation measure), `ho` draws skipped on `MemoryError`, `hb` fetch budget (ms), `hf` failed fetches, `hr` WiFi reconnects, `hw` WiFi RSSI (dBm), `he` last error as `<job>:<ExceptionName>` (letters, digits, `_`, `:` only; anything else is dropped). The server keeps the latest report per board in memory, plus the lowest free memory and a restart count (uptime going backwards) since the server started; the control page shows them (`api/health`).
 
 ```json
 {"v":42,"now":1759546800}
@@ -306,7 +306,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/radar/<frameId>?b=<id>[&mapid=<id>]` | Same as `/board/radar/<frameId>` without the token, for the simulator. `sim.png` also takes `screen=weather`. |
 | `GET /board/<secret>/api/stations` | Station list for pickers: `[{mapid, desc, short}]`, sorted by `desc`. |
 | `GET /board/<secret>/api/state` | Full state JSON (all boards). |
-| `GET /board/<secret>/api/health` | Latest health report per board (see `/board/version`): `{<id>: {at, uptime, memFree, minMem, oom, budget, fails, reconnects, rssi, lastError, restarts, lastRestart, since}}`. In memory only. |
+| `GET /board/<secret>/api/health` | Latest health report per board (see `/board/version`): `{<id>: {at, uptime, memFree, largestBlock, minMem, oom, budget, fails, reconnects, rssi, lastError, restarts, lastRestart, since}}`. In memory only. |
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
 | `GET /board/<secret>/api/test?b=<id>` | Simulator test alerts for board `b`: `{lines, warn, game, radar, left}` (`left` = seconds until expiry, 0 when none). |
 | `POST /board/<secret>/api/test?b=<id>` | Start a test alert: body `{lines: ["RD", ...], warn: {kind: "svr"\|"tor", lvl: "watch"\|"warning"} \| null}`. Lines are `RD BL BR GR OR PR PK YL`; they blink as if CTA had a major alert, and `warn` replaces the NWS warning. Applies to the real board's updates too, and expires after 10 minutes. `game` (`pre` \| `live` \| `final` \| `null`) adds a made-up Cubs-Cardinals game in that state at the front of `mlb.games`. `radar` (`storm` \| `snow` \| `null`) replays a recorded storm (Aug 10, 2020 derecho) or snowstorm (Feb 2, 2022) from `fixtures/mrms/` as the radar loop at the board's station (`test-radar.js`): `radar.on` is true and `frames` are 3 test frames, the crop shifted 3 LEDs per frame so the weather moves east; the frame endpoints serve them by id. An empty body (no lines, no warn, no game, no radar) clears it. `400` for bad values, `404` for an unknown board. |

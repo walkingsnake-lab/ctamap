@@ -31,6 +31,17 @@ FREE_FIRST = LOGO_FIRST + LOGO_POSITIONS * LOGO_COLORS  # 139
 COLOR_RESET = 190  # at a frame start past this slot, forget allocated colors (65 left for one frame)
 LOGO_CACHE = 4     # indexed logos kept (current game + next, by position)
 GLYPH_CACHE = 96  # glyph bitmaps kept for arrayblit, per font, codepoint, and palette slot
+# Cache keys are plain ints (small ints don't allocate in CircuitPython):
+# colors as 0xRRGGBB, glyphs as font << 24 | codepoint << 8 | slot. Tuple
+# keys cost ~32 bytes each to keep, and a new one per glyph per frame.
+
+
+def _rgb_int(rgb):
+    return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]
+
+
+def _int_rgb(k):
+    return ((k >> 16) & 255, (k >> 8) & 255, k & 255)
 
 
 JOIN_TRIES = 3       # attempts per network before moving on
@@ -107,11 +118,12 @@ class BoardFrame(draw.Frame):
         self._clips = []
         self.bitmap = bitmap
         self.palette = palette
-        self.colors = {(0, 0, 0): 0}
+        self.colors = {0: 0}     # 0xRRGGBB -> palette slot
         self.next = FREE_FIRST
         self.k = 1
-        self.glyphs = {}
-        self.fresh = []          # (rgb, slot) allocated since the last commit
+        self.glyphs = {}         # int key (see GLYPH_CACHE) -> bytearray
+        self.font_ids = {}
+        self.fresh = []          # (0xRRGGBB, slot) allocated since the last commit
         self.committed_k = None  # brightness the palette was last written for
         self.logo_cache = {}     # (logo id, position) -> [colors, slots, packed, packed_for]
         self.logo_drawn = {}     # position -> cache entry drawn this frame
@@ -120,7 +132,7 @@ class BoardFrame(draw.Frame):
     def begin(self):
         self.bitmap.fill(0)
         if self.next > COLOR_RESET:
-            self.colors = {(0, 0, 0): 0}
+            self.colors = {0: 0}
             self.next = FREE_FIRST
             self.glyphs = {}  # keyed by slot
             self.committed_k = None
@@ -141,20 +153,20 @@ class BoardFrame(draw.Frame):
             if len(self.logo_cache) >= LOGO_CACHE:
                 self.logo_cache = {}
             base = LOGO_FIRST + pos * LOGO_COLORS
-            cols = []
+            cols = []  # 0xRRGGBB
             seen = {}
             slots = bytearray(24 * 12)
             for i in range(24 * 12):
                 j = i * 3
-                rgb = (data[j], data[j + 1], data[j + 2])
-                n = seen.get(rgb)
+                c = (data[j] << 16) | (data[j + 1] << 8) | data[j + 2]
+                n = seen.get(c)
                 if n is None:
                     n = len(cols)
                     if n >= LOGO_COLORS:
                         n = LOGO_COLORS - 1  # over the server's cap: share the last slot
                     else:
-                        cols.append(rgb)
-                        seen[rgb] = n
+                        cols.append(c)
+                        seen[c] = n
                 slots[i] = base + n
             ent = [cols, slots, None, None]
             self.logo_cache[key] = ent
@@ -162,6 +174,7 @@ class BoardFrame(draw.Frame):
         bitmaptools.arrayblit(self.bitmap, ent[1], x, top, x + 24, top + 12)
 
     def _index(self, rgb):
+        rgb = _rgb_int(rgb)
         i = self.colors.get(rgb)
         if i is None:
             if self.next > 255:
@@ -189,16 +202,22 @@ class BoardFrame(draw.Frame):
             return
         bitmaptools.fill_region(self.bitmap, x0, y0, x1 + 1, y1 + 1, self._index(rgb))
 
-    def _glyph(self, font_name, cp, g, idx):
-        key = (font_name, cp, idx)
+    def _glyph(self, font_name, cp, d, o, idx):
+        """The glyph as slot bytes for arrayblit, or None when the cache is
+        full (the caller draws it pixel by pixel). A full cache isn't cleared:
+        regrowing its dict needed ever larger blocks on a fragmented heap."""
+        fid = self.font_ids.get(font_name)
+        if fid is None:
+            fid = self.font_ids[font_name] = len(self.font_ids)
+        key = (fid << 24) | (cp << 8) | idx
         data = self.glyphs.get(key)
         if data is None:
             if len(self.glyphs) >= GLYPH_CACHE:
-                self.glyphs = {}
-            w, h = g[1], g[2]
+                return None
+            w, h = d[o + 1], d[o + 2]
             data = bytearray(w * h)
             for r in range(h):
-                bits = g[5 + r]
+                bits = draw.glyph_row(d, o, r)
                 for col in range(w):
                     if (bits >> (w - 1 - col)) & 1:
                         data[r * w + col] = idx
@@ -208,27 +227,30 @@ class BoardFrame(draw.Frame):
     def text(self, font_name, s, x, baseline, rgb):
         # Same as draw.Frame.text. Glyphs fully inside the clip are copied in
         # one arrayblit; clipped ones (rolls, slides) go pixel by pixel.
-        font = draw.assets.FONTS[font_name]
+        d = draw.assets.FONT_DATA[font_name]
         idx = self._index(rgb)
         bmp = self.bitmap
         c = self.clip or (0, 0, 63, 31)
         cx0, cy0, cx1, cy1 = max(0, c[0]), max(0, c[1]), min(63, c[2]), min(31, c[3])
         for ch in s:
-            g = font.get(ord(ch))
-            if not g:
+            cp = ord(ch)
+            o = draw.glyph(font_name, cp)
+            if o < 0:
                 continue
-            dw, w, h, xo, yo = g[0], g[1], g[2], g[3], g[4]
+            dw, w, h, xo, yo = d[o], d[o + 1], d[o + 2], d[o + 3] - 128, d[o + 4] - 128
             top = baseline - (yo + h)
             left = x + xo
             if idx and w and h and left >= cx0 and top >= cy0 and left + w - 1 <= cx1 and top + h - 1 <= cy1:
-                bitmaptools.arrayblit(bmp, self._glyph(font_name, ord(ch), g, idx), left, top, left + w, top + h, 0)
-                x += dw
-                continue
+                data = self._glyph(font_name, cp, d, o, idx)
+                if data is not None:
+                    bitmaptools.arrayblit(bmp, data, left, top, left + w, top + h, 0)
+                    x += dw
+                    continue
             for r in range(h):
                 yy = top + r
                 if yy < cy0 or yy > cy1:
                     continue
-                bits = g[5 + r]
+                bits = draw.glyph_row(d, o, r)
                 for col in range(w):
                     if (bits >> (w - 1 - col)) & 1:
                         xx = x + xo + col
@@ -253,21 +275,21 @@ class BoardFrame(draw.Frame):
             return _pack(correct(draw.scale_color(rgb, k) if k != 1 else rgb, lut, floor))
         if k != self.committed_k:
             # Brightness changed (or the table reset): rewrite everything.
-            for rgb, i in self.colors.items():
-                pal[i] = packed(rgb)
+            for c, i in self.colors.items():
+                pal[i] = packed(_int_rgb(c))
             for v in range(RADAR_FIRST, LOGO_FIRST):
                 pal[v] = packed(draw.RADAR[v])
             self.logo_written = {}
             self.committed_k = k
         else:
-            for rgb, i in self.fresh:
-                pal[i] = packed(rgb)
+            for c, i in self.fresh:
+                pal[i] = packed(_int_rgb(c))
         self.fresh = []
         for pos, (ent, dim) in self.logo_drawn.items():
             if self.logo_written.get(pos) == (id(ent), dim, k):
                 continue
             if ent[3] != (dim, k):
-                ent[2] = [packed((draw.jsround(c[0] * dim), draw.jsround(c[1] * dim), draw.jsround(c[2] * dim))) for c in ent[0]]
+                ent[2] = [packed((draw.jsround((c >> 16) * dim), draw.jsround(((c >> 8) & 255) * dim), draw.jsround((c & 255) * dim))) for c in ent[0]]
                 ent[3] = (dim, k)
             base = LOGO_FIRST + pos * LOGO_COLORS
             for n, v in enumerate(ent[2]):
@@ -428,6 +450,14 @@ class Net:
         Always disconnects first: a failed join leaves the ESP32's status at
         'No such ssid', and without a disconnect the next join (even to a
         visible network) reports it too."""
+        # After a soft reboot the ESP32 is often still on this network:
+        # dropping and rejoining failed the first try, ~12 s at every boot.
+        try:
+            if self.esp.is_connected and self.esp.ap_info.ssid == ssid:
+                print('[wifi] %s: still connected' % ssid)
+                return True
+        except Exception:  # noqa: BLE001 - fall through to a fresh join
+            pass
         for attempt in range(JOIN_TRIES):
             status_cb('connecting', ssid)
             try:
@@ -545,13 +575,34 @@ def cold_boot():
 
 
 class Hardware:
-    def __init__(self, url, board_id, token, bit_depth=5, gamma=1):
+    def __init__(self, url, board_id, token, bit_depth=5, gamma=1, note=None):
+        note = note or (lambda stage: None)  # startup memory report
         self.display = Display(bit_depth, gamma)
+        note('display')
         self.clock = Clock()
         self.buttons = Buttons()
         self.net = Net(url, board_id, token)
+        note('net libs')
         self.watchdog = Watchdog()
         self.net.feed = self.watchdog.feed
+
+    @staticmethod
+    def largest_block():
+        """Largest single allocation the heap can take right now (bytes,
+        within 64): the fragmentation measure. Free memory alone can look
+        fine while no contiguous block is big enough."""
+        gc.collect()
+        lo, hi = 0, gc.mem_free()
+        while hi - lo > 64:
+            mid = (lo + hi) // 2
+            try:
+                b = bytearray(mid)
+                del b
+                lo = mid
+            except MemoryError:
+                hi = mid
+        gc.collect()
+        return lo
 
     @staticmethod
     def mem_free():

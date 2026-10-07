@@ -457,6 +457,7 @@
       ['Last report', ago(now - h.at) + ' ago' + (late ? ' (offline?)' : '')],
       ['Running for', ago(h.uptime)],
       h.memFree != null && ['Free memory', kb(h.memFree) + (h.minMem != null ? ` (lowest ${kb(h.minMem)})` : '')],
+      h.largestBlock != null && ['Largest free block', kb(h.largestBlock)],
       ['Skipped frames', h.oom],
       ['Failed fetches', h.fails],
       ['WiFi reconnects', h.reconnects],

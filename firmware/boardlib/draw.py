@@ -68,15 +68,15 @@ class Frame:
     # Text with its baseline at row `baseline` (glyph rows with BDF y >= 0
     # land on rows baseline-1 and up). Returns x after the last advance.
     def text(self, font_name, s, x, baseline, rgb):
-        font = assets.FONTS[font_name]
+        d = assets.FONT_DATA[font_name]
         for ch in s:
-            g = font.get(ord(ch))
-            if not g:
+            o = glyph(font_name, ord(ch))
+            if o < 0:
                 continue
-            dw, w, h, xo, yo = g[0], g[1], g[2], g[3], g[4]
+            dw, w, h, xo, yo = d[o], d[o + 1], d[o + 2], d[o + 3] - 128, d[o + 4] - 128
             top = baseline - (yo + h)
             for r in range(h):
-                bits = g[5 + r]
+                bits = glyph_row(d, o, r)
                 for c in range(w):
                     if (bits >> (w - 1 - c)) & 1:
                         self.set(x + xo + c, top + r, rgb)
@@ -84,13 +84,39 @@ class Frame:
         return x
 
 
+# ---- packed fonts (assets.py) ----
+# A glyph is an offset into assets.FONT_DATA[font]: dwidth, w, h, xoff + 128,
+# yoff + 128, then its rows (1 byte each, 2 when wider than 8 px).
+
+def glyph(font_name, cp):
+    """Offset of codepoint cp's glyph in FONT_DATA[font_name], or -1."""
+    if assets.LOW0 <= cp < assets.LOW0 + 224:
+        t = assets.FONT_LOW[font_name]
+        i = (cp - assets.LOW0) << 1
+    elif assets.PUA <= cp < assets.PUA + 16:
+        t = assets.FONT_PUA[font_name]
+        i = (cp - assets.PUA) << 1
+    else:
+        return -1
+    o = (t[i] << 8) | t[i + 1]
+    return -1 if o == 0xFFFF else o
+
+
+def glyph_row(d, o, r):
+    """Row r's bits (MSB-left) of the glyph at offset o in font data d."""
+    if d[o + 1] > 8:
+        p = o + 5 + (r << 1)
+        return (d[p] << 8) | d[p + 1]
+    return d[o + 5 + r]
+
+
 def measure(font_name, s):
-    font = assets.FONTS[font_name]
+    d = assets.FONT_DATA[font_name]
     w = 0
     for ch in s:
-        g = font.get(ord(ch))
-        if g:
-            w += g[0]
+        o = glyph(font_name, ord(ch))
+        if o >= 0:
+            w += d[o]
     return w - 1 if w > 0 else 0
 
 
@@ -249,11 +275,13 @@ def rtext(f, font, s, right, base, rgb):
 def text_box(font, s, x, base):
     y0 = None
     y1 = None
+    d = assets.FONT_DATA[font]
     for ch in s:
-        g = assets.FONTS[font].get(ord(ch))
-        if g and g[1] and g[2]:
-            top = base - (g[4] + g[2])
-            bottom = base - g[4] - 1
+        o = glyph(font, ord(ch))
+        if o >= 0 and d[o + 1] and d[o + 2]:
+            yo = d[o + 4] - 128
+            top = base - (yo + d[o + 2])
+            bottom = base - yo - 1
             y0 = top if y0 is None else min(y0, top)
             y1 = bottom if y1 is None else max(y1, bottom)
     return (x, y0, x + measure(font, s) - 1, y1)
@@ -279,9 +307,11 @@ def ampm_text(t, tzo):
 # ---- pieces ----
 
 def draw_icon(f, name, x, y):
-    for j, row in enumerate(assets.ICONS[name]):
-        for i, c in enumerate(row):
-            if c != '.':
+    icon = assets.ICONS[name]  # 8 x 8 bytes, palette letter codes; 46 ('.') = none
+    for j in range(8):
+        for i in range(8):
+            c = icon[j * 8 + i]
+            if c != 46:
                 f.fill(x + i, y + j, 1, 1, assets.ICON_PALETTE[c])
 
 

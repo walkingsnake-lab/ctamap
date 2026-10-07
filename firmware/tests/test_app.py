@@ -361,12 +361,14 @@ class TestBoardLoop(unittest.TestCase):
     def test_health_rides_on_the_version_check_once_a_minute(self):
         board, server, clock, _, _, _ = make()
         board.mem_free = lambda: 26000
+        board.largest_block = lambda: 4032
         board.connect()
         server.fail_next = 1
         run_for(board, clock, 150000)
         sent = [h for h in server.health if h]
         self.assertTrue(all(h.startswith('&hu=') for h in sent))
         self.assertIn('&hm=26000', sent[-1])
+        self.assertIn('&hl=4032', sent[-1])
         self.assertIn('&hf=1', sent[-1])
         self.assertTrue(sent[-1].endswith('&he=version:OSError') or '&he=update:OSError' in sent[-1], sent[-1])
         self.assertLessEqual(len(set(sent)), 4, 'rebuilt at most once a minute')
