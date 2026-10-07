@@ -280,6 +280,8 @@ class Net:
         pool = adafruit_connection_manager.get_radio_socketpool(self.esp)
         ssl = adafruit_connection_manager.get_radio_ssl_context(self.esp)
         self.requests = adafruit_requests.Session(pool, ssl)
+        self._pool = pool
+        self._close_all = adafruit_connection_manager.connection_manager_close_all
         self.url = url.rstrip('/')
         self.board_id = board_id
         self.token = token
@@ -290,11 +292,13 @@ class Net:
         return ':'.join('%02x' % x for x in b)
 
     def connect(self, networks, status_cb):
-        """Try each (ssid, password) in order. Returns ('ok', ssid),
-        ('portal', mac) if a network answered with a captive portal, or
-        ('nowifi', None)."""
+        """Try each (ssid, password) in order, networks the radio can see
+        first. Returns ('ok', ssid), ('portal', mac) if a network answered
+        with a captive portal, or ('nowifi', None)."""
         portal = False
-        self._warm_up(status_cb)
+        seen = self._warm_up(status_cb)
+        if seen:
+            networks = [n for n in networks if n[0] in seen] + [n for n in networks if n[0] not in seen]
         for ssid, password in networks:
             if not self._join(ssid, password, status_cb):
                 continue
@@ -304,12 +308,26 @@ class Net:
                 return ('ok', ssid)
             portal = True
             print('[wifi] %s: joined, but /board/ping failed (captive portal?)' % ssid)
+        if not portal:
+            self._reset_radio('no network joined')  # start the next round clean
         return ('portal', self.mac) if portal else ('nowifi', None)
+
+    def _reset_radio(self, why):
+        """Hardware-reset the ESP32. After failed joins it can keep
+        reporting 'No such ssid' for visible networks, then stop answering
+        commands (BrokenPipeError) until it's reset."""
+        print('[wifi] resetting radio: %s' % why)
+        try:
+            self._close_all(self._pool)  # sockets from before the reset are dead
+        except Exception:  # noqa: BLE001
+            pass
+        self.esp.reset()
 
     def _warm_up(self, status_cb):
         """After a reset the ESP32 answers before its radio is ready, and
         every join fails with 'No such ssid'. Scan until it sees any network
-        (up to WARMUP_S), logging what it sees."""
+        (up to WARMUP_S), logging what it sees. A failed scan means the
+        ESP32 is wedged: reset it and keep scanning. Returns the SSIDs seen."""
         end = time.monotonic() + WARMUP_S
         while True:
             status_cb('connecting', None)  # feeds the watchdog
@@ -318,6 +336,7 @@ class Net:
             except Exception as e:  # noqa: BLE001
                 seen = []
                 print('[wifi] scan failed: %r' % (e,))
+                self._reset_radio('scan failed')
             if seen:
                 names = []
                 for ap in seen:
@@ -326,20 +345,25 @@ class Net:
                     if n and n not in names:
                         names.append(n)
                 print('[wifi] radio ready; sees: %s' % ', '.join(names))
-                return
+                return names
             if time.monotonic() > end:
                 print('[wifi] radio still sees nothing after %d s' % WARMUP_S)
-                return
+                return []
             time.sleep(1)
 
     def _join(self, ssid, password, status_cb):
         """Join one network, with a few tries (a hotspot can drop out of a
-        scan now and then). status_cb feeds the watchdog before each try."""
+        scan now and then). status_cb feeds the watchdog before each try.
+        Always disconnects first: a failed join leaves the ESP32's status at
+        'No such ssid', and without a disconnect the next join (even to a
+        visible network) reports it too."""
         for attempt in range(JOIN_TRIES):
             status_cb('connecting', ssid)
             try:
-                if self.esp.is_connected:
-                    self.esp.disconnect()
+                self.esp.disconnect()
+            except Exception:  # noqa: BLE001 - not connected: nothing to drop
+                pass
+            try:
                 self.esp.connect_AP(ssid, password)
                 return True
             except Exception as e:  # noqa: BLE001
