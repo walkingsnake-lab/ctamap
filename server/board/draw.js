@@ -169,8 +169,8 @@
     const DIGIT = Object.fromEntries(Object.entries(LINE).map(([k, v]) => [k, DIGIT_OVERRIDE[k] || v]));
     const C = {
       label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#9c6a00',
-      sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', band: '#202020', divider: '#333333',
-      tickerHead: '#a6a6a6', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
+      sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', divider: '#333333',
+      head: '#808080', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
 
@@ -201,9 +201,9 @@
       }));
     }
 
-    function drawHeader(f, name, now, band, nameColor) {
-      if (band) f.fill(0, 0, 64, 7, band);
-      f.text('small', name, 1, 6, nameColor);
+    // Station name + clock on rows 1-5, no background (transit and ticker).
+    function drawHeader(f, name, now) {
+      f.text('small', name, 1, 6, C.head);
       rtext(f, 'small', clockText(now), 62, 6, C.clock);
     }
 
@@ -373,7 +373,7 @@
       if (!view.rows.length) {
         drawOvernight(f, view, view.now);
       } else {
-        if (view.header) drawHeader(f, view.header, view.now, C.band, C.grey);
+        if (view.header) drawHeader(f, view.header, view.now);
         f.withClip(0, view.header ? 7 : 0, 63, view.wx ? 21 : 31, () => {
           for (const row of view.rows) drawViewRow(f, row, blink);
         });
@@ -593,7 +593,7 @@
       const f = newFrame();
       // The ticker's header stays when the transit header is hidden to fit.
       const th = p.tickerHeader !== undefined ? p.tickerHeader : p.header;
-      if (th) drawHeader(f, th, now, null, C.tickerHead);
+      if (th) drawHeader(f, th, now);
       const items = liveTicker(p, now);
       // Row fill: the line color dimmed to the board's tickerFill (percent).
       const fill = (p.tickerFill || 55) / 100;

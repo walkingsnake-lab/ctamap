@@ -49,10 +49,13 @@ test('clock is 12-hour Chicago time without AM/PM', () => {
   assert.equal(clockText(parseCtaTime('2026-10-04T12:59:00')), '12:59');
 });
 
-test('transit: header band, line blocks, amber and grey times', () => {
+test('transit: header without a band, line blocks, amber and grey times', () => {
   const p = payload('morse-2026-10-03-2316.json');
   const f = render(p);
-  assert.equal(hex(f.get(63, 0)), C.band);        // header band reaches the right edge
+  assert.equal(hex(f.get(63, 0)), '#000000');     // no header band
+  const head = new Set();
+  for (let y = 1; y <= 5; y++) for (let x = 1; x < 30; x++) head.add(hex(f.get(x, y)));
+  assert.ok(head.has(C.head));                    // station name in the header grey
   const tops = rowTops(2, true, false);            // two rows, centered below the header
   assert.equal(hex(f.get(0, tops[0])), LINE.RD);  // first row's color block
   // Find the colors used in the 95TH row (schedule-based times are grey, never amber).
@@ -79,7 +82,7 @@ test('transit: alert blink swaps the block for a 1px "!"', () => {
 test('no rows -> overnight clock instead of the header', () => {
   const p = { ...payload('morse-2026-10-03-2316.json'), rows: [] };
   const f = render(p);
-  assert.notEqual(hex(f.get(63, 0)), C.band);
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) assert.notEqual(hex(f.get(x, y)), C.head);
   let lit = 0;
   for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (hex(f.get(x, y)) === C.clock) lit++;
   assert.ok(lit > 60, `clock pixels: ${lit}`);
