@@ -25,6 +25,10 @@ FREE_FIRST = 11
 GLYPH_CACHE = 96  # glyph bitmaps kept for arrayblit, per font, codepoint, and palette slot
 
 
+JOIN_TRIES = 3       # attempts per network before moving on
+JOIN_PAUSE_S = 2     # pause between attempts
+
+
 def _pack(rgb):
     return (rgb[0] << 16) | (rgb[1] << 8) | rgb[2]
 
@@ -263,19 +267,33 @@ class Net:
         ('nowifi', None)."""
         portal = False
         for ssid, password in networks:
-            status_cb('connecting', ssid)
-            try:
-                if self.esp.is_connected:
-                    self.esp.disconnect()
-                self.esp.connect_AP(ssid, password)
-            except Exception as e:  # noqa: BLE001
-                print('[wifi] %s: %r' % (ssid, e))
+            if not self._join(ssid, password, status_cb):
                 continue
-            if self.ping():
+            # A fresh join can fail its first request (DHCP/DNS still
+            # settling), so one failed ping doesn't mean a captive portal.
+            if self.ping() or (time.sleep(JOIN_PAUSE_S) or self.ping()):
                 return ('ok', ssid)
             portal = True
             print('[wifi] %s: joined, but /board/ping failed (captive portal?)' % ssid)
         return ('portal', self.mac) if portal else ('nowifi', None)
+
+    def _join(self, ssid, password, status_cb):
+        """Join one network, retrying: right after a restart the ESP32 often
+        refuses the first attempts. The last retry hard-resets it first.
+        status_cb feeds the watchdog before each (up to ~10 s) attempt."""
+        for attempt in range(JOIN_TRIES):
+            status_cb('connecting', ssid)
+            try:
+                if attempt == JOIN_TRIES - 1:
+                    self.esp.reset()
+                elif self.esp.is_connected:
+                    self.esp.disconnect()
+                self.esp.connect_AP(ssid, password)
+                return True
+            except Exception as e:  # noqa: BLE001
+                print('[wifi] %s: try %d/%d: %r' % (ssid, attempt + 1, JOIN_TRIES, e))
+                time.sleep(JOIN_PAUSE_S)
+        return False
 
     def _get(self, path, auth=True):
         headers = {'X-Board-Token': self.token} if auth and self.token else {}
