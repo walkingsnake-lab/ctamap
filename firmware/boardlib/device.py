@@ -202,7 +202,7 @@ class BoardFrame(draw.Frame):
             return
         bitmaptools.fill_region(self.bitmap, x0, y0, x1 + 1, y1 + 1, self._index(rgb))
 
-    def _glyph(self, font_name, cp, g, idx):
+    def _glyph(self, font_name, cp, d, o, idx):
         """The glyph as slot bytes for arrayblit, or None when the cache is
         full (the caller draws it pixel by pixel). A full cache isn't cleared:
         regrowing its dict needed ever larger blocks on a fragmented heap."""
@@ -214,10 +214,10 @@ class BoardFrame(draw.Frame):
         if data is None:
             if len(self.glyphs) >= GLYPH_CACHE:
                 return None
-            w, h = g[1], g[2]
+            w, h = d[o + 1], d[o + 2]
             data = bytearray(w * h)
             for r in range(h):
-                bits = g[5 + r]
+                bits = draw.glyph_row(d, o, r)
                 for col in range(w):
                     if (bits >> (w - 1 - col)) & 1:
                         data[r * w + col] = idx
@@ -227,20 +227,21 @@ class BoardFrame(draw.Frame):
     def text(self, font_name, s, x, baseline, rgb):
         # Same as draw.Frame.text. Glyphs fully inside the clip are copied in
         # one arrayblit; clipped ones (rolls, slides) go pixel by pixel.
-        font = draw.assets.FONTS[font_name]
+        d = draw.assets.FONT_DATA[font_name]
         idx = self._index(rgb)
         bmp = self.bitmap
         c = self.clip or (0, 0, 63, 31)
         cx0, cy0, cx1, cy1 = max(0, c[0]), max(0, c[1]), min(63, c[2]), min(31, c[3])
         for ch in s:
-            g = font.get(ord(ch))
-            if not g:
+            cp = ord(ch)
+            o = draw.glyph(font_name, cp)
+            if o < 0:
                 continue
-            dw, w, h, xo, yo = g[0], g[1], g[2], g[3], g[4]
+            dw, w, h, xo, yo = d[o], d[o + 1], d[o + 2], d[o + 3] - 128, d[o + 4] - 128
             top = baseline - (yo + h)
             left = x + xo
             if idx and w and h and left >= cx0 and top >= cy0 and left + w - 1 <= cx1 and top + h - 1 <= cy1:
-                data = self._glyph(font_name, ord(ch), g, idx)
+                data = self._glyph(font_name, cp, d, o, idx)
                 if data is not None:
                     bitmaptools.arrayblit(bmp, data, left, top, left + w, top + h, 0)
                     x += dw
@@ -249,7 +250,7 @@ class BoardFrame(draw.Frame):
                 yy = top + r
                 if yy < cy0 or yy > cy1:
                     continue
-                bits = g[5 + r]
+                bits = draw.glyph_row(d, o, r)
                 for col in range(w):
                     if (bits >> (w - 1 - col)) & 1:
                         xx = x + xo + col
