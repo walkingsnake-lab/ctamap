@@ -19,11 +19,20 @@ function payload(name, cfg = {}, extra = {}) {
 }
 
 test('row positions follow the spec', () => {
-  assert.deepEqual(rowTops(2, true, false), [13, 23]);          // header + 2 rows: 10px pitch, 4px above and below
-  assert.deepEqual(rowTops(4, true, false), [9, 15, 21, 27]);   // last row ends on row 31
-  assert.deepEqual(rowTops(3, true, false), [10, 18, 26]);
+  assert.deepEqual(rowTops(2, true, false, true), [13, 23]);    // header + divider + 2 rows: 10px pitch
+  assert.deepEqual(rowTops(4, true, false, true), [9, 15, 21, 27]); // with the divider: last row ends on row 31
+  assert.deepEqual(rowTops(3, true, false, true), [10, 18, 26]);
   assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);
-  assert.deepEqual(rowTops(2, true, true), [9, 16]);            // ends by row 20, above the weather divider
+  assert.deepEqual(rowTops(2, true, true, true), [9, 16]);      // ends by row 20, above the weather divider
+  // Without the header's divider line the rows move up: the gap under the
+  // header text (row 5) matches the gaps between rows.
+  assert.deepEqual(rowTops(2, true, false, false), [11, 21]);   // gaps 5, 5, 6
+  assert.deepEqual(rowTops(3, true, false, false), [9, 17, 25]); // gaps 3, 3, 3, 2
+  assert.deepEqual(rowTops(4, true, false, false), [8, 14, 20, 26]);
+  assert.deepEqual(rowTops(1, true, false, false), [16]);       // centered: 10 above, 11 below
+  assert.deepEqual(rowTops(1, true, true, false), [11]);
+  assert.deepEqual(rowTops(2, true, true, false), [8, 15]);     // gaps 2, 2, 2 above the weather divider
+  assert.deepEqual(rowTops(2, false, false, false), rowTops(2, false, false)); // no header: unchanged
 });
 
 test('without the header, rows are spread evenly (equal gaps, odd pixel to the bottom)', () => {
@@ -70,13 +79,15 @@ test('transit: alert blink swaps the block for a 1px "!"', () => {
   const p = payload('belmont-2026-10-03-2316.json', {}, { alerts: new Set(['BR']) });
   const solid = render(p);
   const bang = render(p, { blink: true });
-  // Kimball is row 3 (top 21). Solid block lights column 0; the "!" only column 1.
-  assert.equal(hex(solid.get(0, 21)), LINE.BR);
-  assert.equal(hex(bang.get(0, 21)), '#000000');
-  assert.equal(hex(bang.get(1, 21)), LINE.BR);
-  assert.equal(hex(bang.get(1, 24)), '#000000'); // the gap in the "!"
+  // Kimball is row 3. Solid block lights column 0; the "!" only column 1.
+  const tops = rowTops(4, true, false);
+  const k = tops[2];
+  assert.equal(hex(solid.get(0, k)), LINE.BR);
+  assert.equal(hex(bang.get(0, k)), '#000000');
+  assert.equal(hex(bang.get(1, k)), LINE.BR);
+  assert.equal(hex(bang.get(1, k + 3)), '#000000'); // the gap in the "!"
   // Red rows are unaffected.
-  assert.equal(hex(bang.get(0, 9)), LINE.RD);
+  assert.equal(hex(bang.get(0, tops[0])), LINE.RD);
 });
 
 test('no rows -> overnight clock instead of the header', () => {

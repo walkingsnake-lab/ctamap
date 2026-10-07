@@ -147,7 +147,17 @@ def max_rows(has_header, has_weather):
     return (4 if has_header else 5) - (2 if has_weather else 0)
 
 
-def row_tops(n, has_header, has_weather):
+def row_tops(n, has_header, has_weather, divider=False):
+    """Mirrors rowTops in draw.js: without the header's divider line, the
+    header layouts move up so the gap under the header matches the rest."""
+    tops = _row_tops_base(n, has_header, has_weather)
+    if not has_header or divider or not tops:
+        return tops
+    shift = 2 if (not has_weather and n <= 2) else 1
+    return [t - shift for t in tops]
+
+
+def _row_tops_base(n, has_header, has_weather):
     if n == 0:
         return []
     if not has_header:
@@ -418,7 +428,7 @@ def build_transit_view(p, now):
     if p.get('view') == 'chrono':
         return build_chrono_view(p, now)
     rows = live_rows(p, now)
-    tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')))
+    tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')), p.get('headerDivider') is True)
     return {
         'now': now, 'mode': 'dest', 'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'),
         'hdiv': p.get('headerDivider') is True, 'wdiv': p.get('wxDivider') is not False,
@@ -437,7 +447,7 @@ def _first_t(r):
 def build_chrono_view(p, now):
     # Sorted here too, by time (stable). Mirrors buildChronoView in draw.js.
     rows = sorted(live_rows(p, now), key=_first_t)[:max_rows(bool(p.get('header')), bool(p.get('wx')))]
-    tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')))
+    tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')), p.get('headerDivider') is True)
     out = []
     seen_dest = set()
     seen_key = set()

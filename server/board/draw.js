@@ -113,7 +113,18 @@
   // from the panel top to the weather divider (or the bottom edge): equal gaps
   // above, between, and below, the odd pixel going to the bottom. With the
   // header: spec-pinned cases, else the preferred pitch centered in the area.
-  function rowTops(n, hasHeader, hasWeather) {
+  // divider: the header's line on row 7 (headerDivider). The header layouts
+  // below are tuned around that line; without it the header text ends on
+  // row 5, so the rows move up to keep the gap under the header even with
+  // the gaps between rows (2 px for one or two rows without weather, else 1).
+  function rowTops(n, hasHeader, hasWeather, divider = false) {
+    const tops = rowTopsBase(n, hasHeader, hasWeather);
+    if (!hasHeader || divider || !tops.length) return tops;
+    const shift = !hasWeather && n <= 2 ? 2 : 1;
+    return tops.map((t) => t - shift);
+  }
+
+  function rowTopsBase(n, hasHeader, hasWeather) {
     if (n === 0) return [];
     if (!hasHeader) {
       if (!hasWeather && n === 4) return [1, 9, 17, 25];   // pinned: 3px between rows
@@ -284,7 +295,7 @@
     function buildTransitView(p, now) {
       if (p.view === 'chrono') return buildChronoView(p, now);
       const rows = liveRows(p, now);
-      const tops = rowTops(rows.length, !!p.header, !!p.wx);
+      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider);
       return {
         now,
         mode: 'dest',
@@ -309,7 +320,7 @@
       // Sorted here too, by time (stable): the order must hold however the
       // payload arrives.
       const rows = liveRows(p, now).sort((a, b) => a.t[0] - b.t[0]).slice(0, maxRows(!!p.header, !!p.wx));
-      const tops = rowTops(rows.length, !!p.header, !!p.wx);
+      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider);
       const seenDest = new Set();
       const seenKey = new Set();
       return {
