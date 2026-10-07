@@ -1078,13 +1078,14 @@ def draw_infield(f, on, cy=7):
     draw_diamond(f, PANEL_X + 5, cy, 2, C['amber'] if on[0] else BB['base'], True)
 
 
-def draw_roll_text(f, text, left, base, color, roll):
+def draw_roll_text(f, text, left, base, color, roll, from_left=None):
     if not roll or roll['from'] == text or roll['p'] >= 1:
         f.text('small', text, left, base, color)
         return
     frm = roll['from']
     up = jsround(ease_in_out(roll['p']) * ROLL_DIST)
-    same_shape = len(frm) == len(text)
+    old_left = from_left if from_left is not None else left + measure('small', text) - measure('small', frm)
+    same_shape = old_left == left and len(frm) == len(text)
     if same_shape:
         for i in range(len(text)):
             if measure('small', text[i]) != measure('small', frm[i]):
@@ -1102,11 +1103,27 @@ def draw_roll_text(f, text, left, base, color, roll):
                     f.text('small', text[i], x, base - up + ROLL_DIST, color)
                 x += measure('small', text[i]) + 1
         else:
-            from_left = left + measure('small', text) - measure('small', frm)
-            f.text('small', frm, from_left, base - up, color)
+            f.text('small', frm, old_left, base - up, color)
             f.text('small', text, left, base - up + ROLL_DIST, color)
     finally:
         f.pop_clip()
+
+
+def _bottom_layout(count, outs):
+    outs_left = 63 - measure('small', outs) + 1
+    return outs_left - 5 - measure('small', count), outs_left
+
+
+def draw_bottom_line(f, t, rolls):
+    """Count and outs, right-aligned; outgoing texts keep the old layout.
+    Mirrors drawBottomLine() in draw.js."""
+    def was(k):
+        r = rolls.get(k)
+        return r['from'] if r and r['p'] < 1 else t[k]
+    count_left, outs_left = _bottom_layout(t['count'], t['outs'])
+    old_count_left, old_outs_left = _bottom_layout(was('count'), was('outs'))
+    draw_roll_text(f, t['outs'], outs_left, BB_BOTTOM, C['grey'], rolls.get('outs'), old_outs_left)
+    draw_roll_text(f, t['count'], count_left, BB_BOTTOM, C['label'], rolls.get('count'), old_count_left)
 
 
 def live_texts(gm):
@@ -1244,9 +1261,7 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
     draw_infield(f, gm.get('on') or [0, 0, 0], LG_INFIELD_Y)
     t = live_texts(gm)
     draw_roll_text(f, t['inn'], PANEL_X - measure('small', t['inn']) // 2, LG_INN_BASE, C['label'], rolls.get('inn'))
-    outs_left = 63 - measure('small', t['outs']) + 1
-    draw_roll_text(f, t['outs'], outs_left, BB_BOTTOM, C['grey'], rolls.get('outs'))
-    draw_roll_text(f, t['count'], outs_left - 5 - measure('small', t['count']), BB_BOTTOM, C['label'], rolls.get('count'))
+    draw_bottom_line(f, t, rolls)
     return f
 
 
@@ -1304,9 +1319,7 @@ def render_baseball(p, f, now=None, game=None, rolls=None, logos=None):
     draw_infield(f, gm.get('on') or [0, 0, 0])
     t = live_texts(gm)
     draw_roll_text(f, t['inn'], PANEL_X - measure('small', t['inn']) // 2, 20, C['label'], rolls.get('inn'))
-    outs_left = 63 - measure('small', t['outs']) + 1
-    draw_roll_text(f, t['outs'], outs_left, BB_BOTTOM, C['grey'], rolls.get('outs'))
-    draw_roll_text(f, t['count'], outs_left - 5 - measure('small', t['count']), BB_BOTTOM, C['label'], rolls.get('count'))
+    draw_bottom_line(f, t, rolls)
     return f
 
 

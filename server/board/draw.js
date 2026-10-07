@@ -868,14 +868,16 @@
     }
 
     // Tom Thumb status text that can roll like an arrival time: `left` is
-    // its left edge. Same-length texts whose changed characters keep their
+    // its left edge, `fromLeft` the outgoing text's (default: keep the right
+    // edge). Same-length texts in place whose changed characters keep their
     // widths roll only those characters ("TOP 7" -> "BOT 7" rolls T/B and
-    // P/T); anything else rolls the whole text.
-    function drawRollText(f, text, left, base, color, roll) {
+    // P/T); anything else rolls the whole text: old up and out, new up in.
+    function drawRollText(f, text, left, base, color, roll, fromLeft) {
       if (!roll || roll.from === text || roll.p >= 1) { f.text('small', text, left, base, color); return; }
       const from = roll.from;
       const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
-      const sameShape = from.length === text.length && [...text].every((ch, i) => measure('small', ch) === measure('small', from[i]));
+      const oldLeft = fromLeft != null ? fromLeft : left + measure('small', text) - measure('small', from);
+      const sameShape = oldLeft === left && from.length === text.length && [...text].every((ch, i) => measure('small', ch) === measure('small', from[i]));
       f.withClip(0, base - 5, 63, base - 1, () => {
         if (sameShape) {
           let x = left;
@@ -888,11 +890,26 @@
             x += measure('small', text[i]) + 1;
           }
         } else {
-          const fromLeft = left + measure('small', text) - measure('small', from); // keep the right edge
-          f.text('small', from, fromLeft, base - up, color);
+          f.text('small', from, oldLeft, base - up, color);
           f.text('small', text, left, base - up + ROLL_DIST, color);
         }
       });
+    }
+
+    // The live bottom line: count, a 5px gap, then outs, right-aligned to
+    // x63. Outgoing texts keep the old line's layout, so when the line
+    // empties between halves (or a width changes) the old count and outs
+    // roll out where they were instead of piling onto each other.
+    function drawBottomLine(f, t, rolls) {
+      const layout = (count, outs) => {
+        const outsLeft = 63 - measure('small', outs) + 1;
+        return [outsLeft - 5 - measure('small', count), outsLeft];
+      };
+      const was = (k) => (rolls[k] && rolls[k].p < 1 ? rolls[k].from : t[k]);
+      const [countLeft, outsLeft] = layout(t.count, t.outs);
+      const [oldCountLeft, oldOutsLeft] = layout(was('count'), was('outs'));
+      drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs, oldOutsLeft);
+      drawRollText(f, t.count, countLeft, BOTTOM, C.label, rolls.count, oldCountLeft);
     }
 
     // Live status texts, shared by the renderer and change detection.
@@ -1026,9 +1043,7 @@
       drawInfield(f, g.on || [0, 0, 0], LG.infieldY);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), LG.innBase, C.label, rolls.inn);
-      const outsLeft = 63 - measure('small', t.outs) + 1;
-      drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
-      drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
+      drawBottomLine(f, t, rolls);
       return f;
     }
 
@@ -1081,9 +1096,7 @@
       drawInfield(f, g.on || [0, 0, 0]);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), 20, C.label, rolls.inn);
-      const outsLeft = 63 - measure('small', t.outs) + 1; // empty texts draw nothing
-      drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
-      drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
+      drawBottomLine(f, t, rolls);
       return f;
     }
 
