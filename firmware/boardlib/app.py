@@ -3,11 +3,14 @@
 # Board takes its hardware as plain objects so the whole loop can run under
 # CPython against a fake network and clock (firmware/tests/test_app.py):
 #   net      - connect(networks, status) / ping() / version() / update(boot)
-#              / radar(frame_id) / logo(logo_id) / mac; raises on failure
+#              / radar(frame_id, buf) (fills buf) / logo(logo_id) / mac;
+#              raises on failure
 #   display  - show(draw_fn): draw_fn(frame) fills a fresh frame, then it's shown
 #   clock    - ms(): monotonic milliseconds (int)
 #   buttons  - up() / down(): True while held (optional)
 #   watchdog - feed() (optional)
+
+import gc
 
 from . import draw
 from . import status
@@ -150,7 +153,15 @@ class Board:
         missing = self.player.missing_frames()
         if not missing:
             return 'skip'
-        self.player.add_frame(missing[0], self.net.radar(missing[0]))
+        buf = self.player.take_slot()
+        if buf is None:
+            return 'skip'
+        try:
+            self.net.radar(missing[0], buf)
+        except Exception:
+            self.player.release_slot(buf)
+            raise
+        self.player.add_frame(missing[0], buf)
         if len(missing) > 1:
             self.radar_job.due_at = 0
         return 'ok'
@@ -188,7 +199,10 @@ class Board:
             except Exception as e:  # noqa: BLE001 - a failed fetch must not stop the board
                 self.log('[board] %s failed: %r' % (job.name, e))
                 result = 'fail'
-                self.fails += 1
+                if isinstance(e, MemoryError):
+                    gc.collect()  # says nothing about the network: don't count it toward a reconnect
+                else:
+                    self.fails += 1
             ended = self.clock.ms()
             if self.player.blinking() and ended - started > 300:
                 self.player.blink_restart(ended)

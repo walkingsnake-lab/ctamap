@@ -15,6 +15,11 @@ import math
 from . import draw
 
 SCREENS = ('transit', 'ticker', 'weather', 'baseball')
+# Radar frame buffers, allocated once while the heap is still whole. After
+# hours of JSON parsing the heap is too fragmented for a fresh 2 KB block
+# (MemoryError with 37 KB free), so frames are read into these instead.
+RADAR_SLOTS = 6          # the loop's length (contract: up to 6 frames)
+RADAR_BYTES = 64 * 32
 BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
 
@@ -24,7 +29,8 @@ class Player:
         self.p = None
         self.gen = 0             # bumped with every payload
         self.anim = draw.TransitAnimator()
-        self.radar_frames = {}   # frame id -> bytes(2048)
+        self.radar_frames = {}   # frame id -> one of the slot buffers
+        self.radar_free = [bytearray(RADAR_BYTES) for _ in range(RADAR_SLOTS)]
         self.logos = {}          # logo id -> bytes(864), baseball logo layout
         self.page = 0
         self.page_start = 0
@@ -44,7 +50,7 @@ class Player:
         ids = (p.get('radar') or {}).get('frames') or []
         for k in list(self.radar_frames):
             if k not in ids:
-                del self.radar_frames[k]
+                self.radar_free.append(self.radar_frames.pop(k))
         # Keep only logos the games still use.
         want = self.wanted_logos()
         for k in list(self.logos):
@@ -55,8 +61,17 @@ class Player:
         ids = (self.p.get('radar') or {}).get('frames') or [] if self.p else []
         return [i for i in ids if i not in self.radar_frames]
 
-    def add_frame(self, fid, data):
-        self.radar_frames[fid] = data
+    def take_slot(self):
+        """A free frame buffer, or None if all are holding frames."""
+        return self.radar_free.pop() if self.radar_free else None
+
+    def release_slot(self, buf):
+        """Return a buffer whose fetch failed."""
+        self.radar_free.append(buf)
+
+    def add_frame(self, fid, buf):
+        """buf: a buffer from take_slot(), now holding frame fid."""
+        self.radar_frames[fid] = buf
 
     def wanted_logos(self):
         """Logo ids the payload's games use (logo layout only)."""
