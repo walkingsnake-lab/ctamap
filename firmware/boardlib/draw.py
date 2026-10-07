@@ -198,8 +198,8 @@ DIGIT['PR'] = hexc('#9168e0')
 
 C = {
     'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#9c6a00'),
-    'sch': hexc('#b0b0b0'), 'schDim': hexc('#6e6e6e'), 'grey': hexc('#8f8f8f'), 'band': hexc('#202020'),
-    'divider': hexc('#333333'), 'tickerHead': hexc('#a6a6a6'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
+    'sch': hexc('#b0b0b0'), 'schDim': hexc('#6e6e6e'), 'grey': hexc('#8f8f8f'),
+    'divider': hexc('#333333'), 'head': hexc('#808080'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
     'noTrains': hexc('#6c6c6c'), 'indicator': hexc('#3a3a3a'),
 }
@@ -285,10 +285,9 @@ def draw_icon(f, name, x, y):
                 f.fill(x + i, y + j, 1, 1, assets.ICON_PALETTE[c])
 
 
-def draw_header(f, name, now, tzo, band, name_color):
-    if band:
-        f.fill(0, 0, 64, 7, band)
-    f.text('small', name, 1, 6, name_color)
+# Station name + clock on rows 1-5, no background (transit and ticker).
+def draw_header(f, name, now, tzo):
+    f.text('small', name, 1, 6, C['head'])
     rtext(f, 'small', clock_text(now, tzo), 62, 6, C['clock'])
 
 
@@ -463,7 +462,7 @@ def draw_transit_view(f, view, blink):
         draw_overnight(f, view, view['now'])
     else:
         if view.get('header'):
-            draw_header(f, view['header'], view['now'], view.get('tzo', 0), C['band'], C['grey'])
+            draw_header(f, view['header'], view['now'], view.get('tzo', 0))
         f.push_clip(0, 7 if view.get('header') else 0, 63, 21 if view.get('wx') else 31)
         try:
             for row in view['rows']:
@@ -744,7 +743,7 @@ def render_ticker(p, f, now=None, page=0, slide=0):
         now = p['now']
     th = p['tickerHeader'] if 'tickerHeader' in p else p.get('header')
     if th:
-        draw_header(f, th, now, p.get('tzo', 0), None, C['tickerHead'])
+        draw_header(f, th, now, p.get('tzo', 0))
     items = live_ticker(p, now)
     fill = (p.get('tickerFill') or 55) / 100
     pages = max(1, -(-len(items) // 2))

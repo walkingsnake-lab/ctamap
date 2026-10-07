@@ -19,8 +19,8 @@ const save = (name, frame, scale) => {
 };
 
 const C = {
-  label: '#d8d8d8', clock: '#cccccc', band: '#202020', amber: '#ffb000', dimAmber: '#9c6a00', grey: '#8f8f8f',
-  tickerHead: '#a6a6a6', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
+  label: '#d8d8d8', clock: '#cccccc', amber: '#ffb000', dimAmber: '#9c6a00', grey: '#8f8f8f',
+  head: '#808080', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
   yellow: '#ffd800', orange: '#ff8000', divider: '#333333',
 };
 const LINE = { RD: '#c60c30', BL: '#00a1de', GR: '#009b3a', BR: '#62361b', PR: '#522398', YL: '#f9e300', PK: '#e27ea6', OR: '#f9461c' };
@@ -100,11 +100,10 @@ function transitRows(f, rows, tops) {
   });
 }
 
-// Transit: header on, weather off -> 4 rows, pitch 6, rows at 9-27 under a faint header band.
+// Transit: header on, weather off -> 4 rows, pitch 6, rows at 9-27 under the header (no band).
 {
   const f = new Frame();
-  f.fill(0, 0, 64, 7, C.band);
-  f.text('small', 'MORSE', 1, 6, C.grey);
+  f.text('small', 'MORSE', 1, 6, C.head);
   rtext(f, 'small', '9:41', 62, 6, C.clock);
   transitRows(f, [
     ['RD', 'HOWARD', ['DUE', '8', '15']],
@@ -118,8 +117,7 @@ function transitRows(f, rows, tops) {
 // Transit with a Red Line alert: both Red rows in the "!" half of the blink.
 {
   const f = new Frame();
-  f.fill(0, 0, 64, 7, C.band);
-  f.text('small', 'MORSE', 1, 6, C.grey);
+  f.text('small', 'MORSE', 1, 6, C.head);
   rtext(f, 'small', '9:41', 62, 6, C.clock);
   transitRows(f, [
     ['RD', 'HOWARD', ['DUE', '8', '15'], true],
@@ -146,7 +144,7 @@ function transitRows(f, rows, tops) {
 // Ticker: two 12px rows with a 1px gap, 5px index column, 55% row fill.
 {
   const f = new Frame();
-  f.text('small', 'MORSE', 1, 6, C.tickerHead);
+  f.text('small', 'MORSE', 1, 6, C.head);
   rtext(f, 'small', '9:41', 62, 6, C.clock);
   const rows = [
     { ln: 'RD', dest: 'Howard', min: '4', idx: '1', alert: false },
