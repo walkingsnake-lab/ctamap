@@ -150,6 +150,8 @@ def max_rows(has_header, has_weather):
 def row_tops(n, has_header, has_weather, divider=False):
     """Mirrors rowTops in draw.js: without the header's divider line, the
     header layouts move up so the gap under the header matches the rest."""
+    if has_header and not has_weather and n == 2:
+        return [12, 21] if divider else [10, 19]
     tops = _row_tops_base(n, has_header, has_weather)
     if not has_header or divider or not tops:
         return tops

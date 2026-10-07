@@ -118,6 +118,9 @@
   // row 5, so the rows move up to keep the gap under the header even with
   // the gaps between rows (2 px for one or two rows without weather, else 1).
   function rowTops(n, hasHeader, hasWeather, divider = false) {
+    // Two rows under the header: 4 px above, between, and below the rows
+    // (from the text, or from the line), the rest of the space at the bottom.
+    if (hasHeader && !hasWeather && n === 2) return divider ? [12, 21] : [10, 19];
     const tops = rowTopsBase(n, hasHeader, hasWeather);
     if (!hasHeader || divider || !tops.length) return tops;
     const shift = !hasWeather && n <= 2 ? 2 : 1;

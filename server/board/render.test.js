@@ -19,14 +19,14 @@ function payload(name, cfg = {}, extra = {}) {
 }
 
 test('row positions follow the spec', () => {
-  assert.deepEqual(rowTops(2, true, false, true), [13, 23]);    // header + divider + 2 rows: 10px pitch
+  assert.deepEqual(rowTops(2, true, false, true), [12, 21]);    // header + divider + 2 rows: 4 px from the line, 4 between
   assert.deepEqual(rowTops(4, true, false, true), [9, 15, 21, 27]); // with the divider: last row ends on row 31
   assert.deepEqual(rowTops(3, true, false, true), [10, 18, 26]);
   assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);
   assert.deepEqual(rowTops(2, true, true, true), [9, 16]);      // ends by row 20, above the weather divider
   // Without the header's divider line the rows move up: the gap under the
   // header text (row 5) matches the gaps between rows.
-  assert.deepEqual(rowTops(2, true, false, false), [11, 21]);   // gaps 5, 5, 6
+  assert.deepEqual(rowTops(2, true, false, false), [10, 19]);   // 4 px under the text, 4 between
   assert.deepEqual(rowTops(3, true, false, false), [9, 17, 25]); // gaps 3, 3, 3, 2
   assert.deepEqual(rowTops(4, true, false, false), [8, 14, 20, 26]);
   assert.deepEqual(rowTops(1, true, false, false), [16]);       // centered: 10 above, 11 below
