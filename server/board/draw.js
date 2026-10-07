@@ -162,14 +162,10 @@
     const newFrame = makeFrame || (() => new Frame(64, 32, fonts));
     const s = (cp) => String.fromCodePoint(cp);
 
-    // Line colors for thin strokes (the chronological view's index digits):
-    // Brown and Purple are too dark as 1px strokes, so they're brightened.
-    const DIGIT_OVERRIDE = { BR: '#a8673f', PR: '#9168e0' };
     const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
-    const DIGIT = Object.fromEntries(Object.entries(LINE).map(([k, v]) => [k, DIGIT_OVERRIDE[k] || v]));
     const C = {
-      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#9c6a00',
-      sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', divider: '#333333',
+      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
+      sch: '#b0b0b0', schDim: '#474747', grey: '#8f8f8f', divider: '#333333',
       head: '#808080', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
@@ -347,9 +343,9 @@
       const top = Math.round(row.top);
       const chrono = row.num != null;
       const line = fade(LINE[row.ln], row.alpha);
-      // Chronological view: the row's position as a line-colored digit
-      // (Brown/Purple brightened for thin strokes), before the block.
-      if (chrono) drawTimeCell(f, String(row.num), 2, top, fade(DIGIT[row.ln], row.alpha), row.numRoll);
+      // Chronological view: the row's position as a digit in the block's
+      // exact color, before the block.
+      if (chrono) drawTimeCell(f, String(row.num), 2, top, line, row.numRoll);
       const bx = chrono ? CHRONO_BLOCK_X : 0;
       if (row.a && blink) {
         icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(bx + i, top + j, 1, 1, line); }));
@@ -868,14 +864,16 @@
     }
 
     // Tom Thumb status text that can roll like an arrival time: `left` is
-    // its left edge. Same-length texts whose changed characters keep their
+    // its left edge, `fromLeft` the outgoing text's (default: keep the right
+    // edge). Same-length texts in place whose changed characters keep their
     // widths roll only those characters ("TOP 7" -> "BOT 7" rolls T/B and
-    // P/T); anything else rolls the whole text.
-    function drawRollText(f, text, left, base, color, roll) {
+    // P/T); anything else rolls the whole text: old up and out, new up in.
+    function drawRollText(f, text, left, base, color, roll, fromLeft) {
       if (!roll || roll.from === text || roll.p >= 1) { f.text('small', text, left, base, color); return; }
       const from = roll.from;
       const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
-      const sameShape = from.length === text.length && [...text].every((ch, i) => measure('small', ch) === measure('small', from[i]));
+      const oldLeft = fromLeft != null ? fromLeft : left + measure('small', text) - measure('small', from);
+      const sameShape = oldLeft === left && from.length === text.length && [...text].every((ch, i) => measure('small', ch) === measure('small', from[i]));
       f.withClip(0, base - 5, 63, base - 1, () => {
         if (sameShape) {
           let x = left;
@@ -888,11 +886,26 @@
             x += measure('small', text[i]) + 1;
           }
         } else {
-          const fromLeft = left + measure('small', text) - measure('small', from); // keep the right edge
-          f.text('small', from, fromLeft, base - up, color);
+          f.text('small', from, oldLeft, base - up, color);
           f.text('small', text, left, base - up + ROLL_DIST, color);
         }
       });
+    }
+
+    // The live bottom line: count, a 5px gap, then outs, right-aligned to
+    // x63. Outgoing texts keep the old line's layout, so when the line
+    // empties between halves (or a width changes) the old count and outs
+    // roll out where they were instead of piling onto each other.
+    function drawBottomLine(f, t, rolls) {
+      const layout = (count, outs) => {
+        const outsLeft = 63 - measure('small', outs) + 1;
+        return [outsLeft - 5 - measure('small', count), outsLeft];
+      };
+      const was = (k) => (rolls[k] && rolls[k].p < 1 ? rolls[k].from : t[k]);
+      const [countLeft, outsLeft] = layout(t.count, t.outs);
+      const [oldCountLeft, oldOutsLeft] = layout(was('count'), was('outs'));
+      drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs, oldOutsLeft);
+      drawRollText(f, t.count, countLeft, BOTTOM, C.label, rolls.count, oldCountLeft);
     }
 
     // Live status texts, shared by the renderer and change detection.
@@ -1026,9 +1039,7 @@
       drawInfield(f, g.on || [0, 0, 0], LG.infieldY);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), LG.innBase, C.label, rolls.inn);
-      const outsLeft = 63 - measure('small', t.outs) + 1;
-      drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
-      drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
+      drawBottomLine(f, t, rolls);
       return f;
     }
 
@@ -1081,9 +1092,7 @@
       drawInfield(f, g.on || [0, 0, 0]);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), 20, C.label, rolls.inn);
-      const outsLeft = 63 - measure('small', t.outs) + 1; // empty texts draw nothing
-      drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
-      drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
+      drawBottomLine(f, t, rolls);
       return f;
     }
 
@@ -1122,7 +1131,7 @@
     }
 
     return {
-      Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
+      Frame, LINE, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing,

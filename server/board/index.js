@@ -294,6 +294,7 @@ function createBoard({
       v: board.v,
       now,
       tzo: tzOffset(now),
+      stn: board.station.mapid, // the board starts transit and ticker fresh when it changes
       age: data ? Math.max(0, Math.round(now - data.fetchedAt)) : null,
       stale: stale ? 1 : 0,
       screen: resolveScreen(board.screen, games.length > 0),

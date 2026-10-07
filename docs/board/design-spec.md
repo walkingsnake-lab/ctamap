@@ -104,8 +104,8 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Labels | white `#d8d8d8` |
 | **Clocks** | 80% white `#cccccc` (overnight, no-games); header clocks use the header grey `#808080` |
 | First arrival time | amber `#ffb000` |
-| Later times | dim amber `#9c6a00` |
-| Schedule-based times (`isSch`), first / later | grey `#b0b0b0` / `#6e6e6e` (instead of amber; same width, so digit rolls are unaffected) |
+| Later times | dim amber `#664600` (~40% of the first time; at ~61% it was hard to tell apart on the panel) |
+| Schedule-based times (`isSch`), first / later | grey `#b0b0b0` / `#474747` (instead of amber; same width, so digit rolls are unaffected) |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
 | Dividers (weather row) | `#333333` |
 | Transit header background band | `#202020` (confirm on the panel; raise toward `#303030` if it vanishes at night) |
@@ -168,7 +168,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Switching is immediate both ways:** chronological as soon as destinations exceed max rows, back as soon as they fit. If short-turns make it flip too often, raise `CHRONO_HOLD` in `arrivals.js` (a hold time before switching back; the mechanism is built, set to 0).
 - **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
 - **Time format:** digits + lowercase `m` with the font's own **1px gap** (`4m`, `12m`); `DUE` stays bare. Labels are fitted against the widest time (`99m`), so they have up to 43px.
-- **Line ID: a line-colored position digit** (1–5, Tom Thumb, columns 0–2), then a 1px gap, the 3px line-color block (columns 4–6), and the label at x9. Brown (`#a8673f`) and Purple (`#9168e0`) digits are brightened because the official colors read too dark as 1px strokes; everything else uses the line color. When a train departs, each digit rolls down (2→1) as the list slides up. Alerts blink the block to the same `!` (the digit stays). No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
+- **Line ID: a line-colored position digit** (1–5, Tom Thumb, columns 0–2), then a 1px gap, the 3px line-color block (columns 4–6), and the label at x9. The digit is the block's exact color for every line (Brown and Purple were briefly brightened for thin strokes; matching the block won out). When a train departs, each digit rolls down (2→1) as the list slides up. Alerts blink the block to the same `!` (the digit stays). No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
 - Same row counts and geometry as destination rows; the header follows its setting; the weather row is always off (4 rows with the header, 5 without). The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
 - **Departure:** the first row slides up under the header while fading, the list slides up one row pitch with it (0.5 s ease), the next train turns amber, and a new train slides in at the bottom. Per-digit roll still applies within a row (`12m`→`11m` rolls only the 2).
 - **Trains swapping order** between updates: rows are keyed by run number, so the two rows just slide past each other.

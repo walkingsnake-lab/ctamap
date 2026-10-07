@@ -186,6 +186,9 @@ async function build() {
     }
     for (const layout of ['logos', 'bands']) {
       add(`baseball ${layout} light band`, bbp(layout, { ...live, home: lightHome }), [{ screen: 'baseball' }, { screen: 'baseball', rolls: { home: { from: '3', p: 0.5 } } }], undefined, logos);
+      add(`baseball ${layout} rolls into a break`, bbp(layout, { ...live, half: 'E', b: 0, s: 0, o: 0, on: [0, 0, 0] }), [0.5].map((p) => ({
+        screen: 'baseball', rolls: { count: { from: '3-2', p }, outs: { from: '1 OUT', p } },
+      })), undefined, logos);
       add(`baseball ${layout} light band flash`, bbp(layout, { ...live, home: { ...lightHome, at: t - 32 } }), [{ screen: 'baseball' }], undefined, logos);
     }
     add('baseball logos without crops (not fetched yet)', bbp('logos', live), [{ screen: 'baseball' }]);
@@ -208,6 +211,14 @@ async function build() {
     })));
     add('baseball live same-length score roll', bb({ ...live, away: { ...live.away, r: 13 } }), [{ screen: 'baseball', rolls: { away: { from: '12', p: 0.5 } } }]);
     for (const half of ['M', 'E']) add(`baseball break ${half}`, bb({ ...live, half, b: 0, s: 0, o: 0, on: [0, 0, 0] }), [{ screen: 'baseball' }]);
+    // Into and out of a break: the count and outs roll out where they were
+    // (no pile-up), then roll back in.
+    add('baseball rolls into a break', bb({ ...live, half: 'M', b: 0, s: 0, o: 0, on: [0, 0, 0] }), [0.25, 0.5, 0.75].map((p) => ({
+      screen: 'baseball', rolls: { inn: { from: 'BOT 6', p }, count: { from: '2-1', p }, outs: { from: '3 OUT', p } },
+    })));
+    add('baseball rolls out of a break', bb({ ...live, half: 'T', b: 0, s: 0, o: 0, on: [0, 0, 0] }), [0.25, 0.5, 0.75].map((p) => ({
+      screen: 'baseball', rolls: { inn: { from: 'MID 7', p }, count: { from: '', p }, outs: { from: '', p } },
+    })));
     // Score flash: amber, mid-fade, white again.
     const flash = { ...live, away: { ...live.away, at: t - 10 }, home: { ...live.home, at: t - 32 } };
     add('baseball score flash', bb(flash), [{ screen: 'baseball', now: t }, { screen: 'baseball', now: t + 21.5 }, { screen: 'baseball', now: t + 40 }]);

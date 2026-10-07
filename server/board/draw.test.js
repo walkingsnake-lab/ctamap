@@ -424,18 +424,15 @@ test('minutes round up, like CTA: DUE through 60 s, then 2, 3, ...; never 1', ()
   assert.deepEqual(f.px, g.px, '61 s and 120 s both draw as 2 min');
 });
 
-test('chrono: line-colored position digit, then the color block; Brown and Purple digits brightened', () => {
+test('chrono: position digit in the block\'s exact color, then the block', () => {
   const p = chronoPayload([chronoRow('RD', 'HOWARD', min(2), '1'), chronoRow('BR', 'KIMBALL', min(4), '2'), chronoRow('PR', 'LINDEN', min(6), '3')]);
   const f = draw.renderTransit(p);
   const tops = draw.rowTops(3, true, false);
-  assert.equal(draw.DIGIT.RD, draw.LINE.RD);
-  assert.notEqual(draw.DIGIT.BR, draw.LINE.BR);
-  assert.notEqual(draw.DIGIT.PR, draw.LINE.PR);
   ['RD', 'BR', 'PR'].forEach((ln, i) => {
-    const n = count(f, draw.DIGIT[ln], 0, tops[i], 2, tops[i] + 4);
+    const n = count(f, draw.LINE[ln], 0, tops[i], 2, tops[i] + 4);
     assert.ok(n >= 5 && n < 15, `${ln} digit ${i + 1}: ${n} px (a solid block would be 15)`);
     assert.equal(count(f, draw.LINE[ln], 4, tops[i], 6, tops[i] + 4), 15, '3x5 block after a 1px gap');
-    assert.equal(count(f, draw.LINE[ln], 3, tops[i], 3, tops[i] + 4) + count(f, draw.DIGIT[ln], 3, tops[i], 3, tops[i] + 4), 0, 'gap');
+    assert.equal(count(f, draw.LINE[ln], 3, tops[i], 3, tops[i] + 4), 0, 'gap');
     assert.ok(count(f, draw.C.label, 9, tops[i], 9, tops[i] + 4) > 0, 'label at x9');
     assert.equal(count(f, draw.C.label, 7, tops[i], 8, tops[i] + 4), 0);
   });
@@ -451,7 +448,7 @@ test('chrono: alert blinks the block to "!"; the digit stays', () => {
   const off = draw.renderTransit(p, { blink: false });
   assert.equal(count(on, draw.LINE.GR, 4, top, 6, top + 4), 4);   // 3px stem + dot
   assert.equal(count(off, draw.LINE.GR, 4, top, 6, top + 4), 15);  // solid block
-  assert.equal(count(on, draw.DIGIT.GR, 0, top, 2, top + 4), count(off, draw.DIGIT.GR, 0, top, 2, top + 4));
+  assert.equal(count(on, draw.LINE.GR, 0, top, 2, top + 4), count(off, draw.LINE.GR, 0, top, 2, top + 4));
 });
 
 test('chrono animator: position digits roll down as the list slides up', () => {

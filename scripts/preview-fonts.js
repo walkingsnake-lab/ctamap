@@ -19,7 +19,7 @@ const save = (name, frame, scale) => {
 };
 
 const C = {
-  label: '#d8d8d8', clock: '#cccccc', amber: '#ffb000', dimAmber: '#9c6a00', grey: '#8f8f8f',
+  label: '#d8d8d8', clock: '#cccccc', amber: '#ffb000', dimAmber: '#664600', grey: '#8f8f8f',
   head: '#808080', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
   yellow: '#ffd800', orange: '#ff8000', divider: '#333333',
 };

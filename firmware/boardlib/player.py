@@ -49,6 +49,12 @@ class Player:
     # ---- inputs ----
 
     def set_payload(self, p, ms):
+        # A new station: start transit and the ticker fresh. Animating from
+        # the old station's rows to the new one's overlapped them mid-fade.
+        if self.p is not None and p.get('stn') != self.p.get('stn'):
+            self.anim = draw.TransitAnimator()
+            self.page = 0
+            self.page_start = ms
         self.p = p
         self.gen += 1
         # Keep only frames still in the loop.
