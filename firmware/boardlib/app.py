@@ -3,7 +3,7 @@
 # Board takes its hardware as plain objects so the whole loop can run under
 # CPython against a fake network and clock (firmware/tests/test_app.py):
 #   net      - connect(networks, status) / ping() / version() / update(boot)
-#              / radar(frame_id, buf) (fills buf) / logo(logo_id) / mac;
+#              / radar(frame_id, buf) / logo(logo_id, buf) (fill buf) / mac;
 #              raises on failure
 #   display  - show(draw_fn): draw_fn(frame) fills a fresh frame, then it's shown
 #   clock    - ms(): monotonic milliseconds (int)
@@ -139,11 +139,20 @@ class Board:
         return 'ok'
 
     def _logo(self, ms):
-        # Team logos (24 x 12, immutable ids) for the baseball logo layout.
-        missing = self.player.missing_logos()
+        # Team logos (24 x 12, immutable ids) for the baseball logo layout:
+        # the game on screen and the next one, in preallocated slots.
+        missing = self.player.missing_logos(self.now(ms))
         if not missing:
             return 'skip'
-        self.player.add_logo(missing[0], self.net.logo(missing[0]))
+        buf = self.player.take_logo_slot()
+        if buf is None:
+            return 'skip'
+        try:
+            self.net.logo(missing[0], buf)
+        except Exception:
+            self.player.release_logo_slot(buf)
+            raise
+        self.player.add_logo(missing[0], buf)
         return 'more' if len(missing) > 1 else 'ok'
 
     def _radar(self, ms):

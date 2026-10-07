@@ -169,10 +169,8 @@ function toFrame(dbz, geo, mode, loc = null) {
   if (loc && loc.shore) {
     for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) if (loc.shore[y * w + x]) out[y * W + x] = SHORE;
   }
-  // Location marker: white dot. Precip in the 4 pixels around it is cleared
-  // so the dot stands out; the shoreline stays continuous.
+  // Location marker: a white dot. The pixels around it keep their precip.
   const m = geo.my * W + geo.mx;
-  for (const k of [m - 1, m + 1, m - W, m + W]) if (isPrecip(out[k])) { colored--; out[k] = 0; }
   if (isPrecip(out[m])) colored--;
   out[m] = MARKER;
   return { bytes: out, colored };

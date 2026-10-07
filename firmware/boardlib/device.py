@@ -403,15 +403,16 @@ class Net:
     def update(self, boot):
         return self._json('/board/update?b=' + self.board_id + ('&boot=1' if boot else ''))
 
-    def logo(self, logo_id):
+    def logo(self, logo_id, buf):
+        """Read one logo (864 bytes) into buf, like radar()."""
         r = self._get('/board/logo/' + logo_id + '?b=' + self.board_id)
         try:
-            data = r.content
+            size = r.headers.get('content-length')
+            if size != str(len(buf)):
+                raise ValueError('logo is %s bytes' % size)
+            read_into(r, buf)
         finally:
             r.close()
-        if len(data) != 864:
-            raise ValueError('logo is %d bytes' % len(data))
-        return data
 
     def radar(self, frame_id, buf):
         """Read one frame into buf (2048 bytes) without allocating it:

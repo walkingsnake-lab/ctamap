@@ -40,6 +40,7 @@ class Server:
         self.calls = []
         self.fail_next = 0
         self.radar_oom = 0
+        self.games = None  # fn(now) -> mlb games, replacing the one live game
         self.wifi = ['ok']
         self.visit = None
         self.alert = 0
@@ -79,7 +80,7 @@ class Server:
                       [{'ln': 'RD', 'd': '95th', 't': t, 's': 0, 'a': 0} for t in rows[1]['t']],
             'wx': None, 'warn': None,
             'radar': {'on': self.radar_on, 'visit': self.visit, 'frames': frames, 'ft': [T0] * len(frames), 'timeBox': [40, 0, 24, 22], 'split': False},
-            'mlb': {'layout': self.layout, 'games': [{
+            'mlb': {'layout': self.layout, 'games': self.games(now) if self.games else [{
                 'id': 1, 'st': 'live', 'start': now - 3600, 'inn': 3, 'half': 'T', 'b': 0, 's': 0, 'o': 0, 'on': [0, 0, 0],
                 'away': {'ab': 'CHC', 'c': '#2a5bd8', 'r': 1, 'lg': 'CHC-1' if self.layout == 'logos' else None, 'bd': '#204882'},
                 'home': {'ab': 'STL', 'c': '#d62a2a', 'r': 0, 'lg': 'STL-1' if self.layout == 'logos' else None, 'bd': '#c12626'},
@@ -113,9 +114,9 @@ class Server:
             raise MemoryError('memory allocation failed, allocating 2049 bytes')
         buf[:] = bytes([int(fid.rsplit('-', 1)[1]) % 251 + 1]) * len(buf)
 
-    def logo(self, lid):
+    def logo(self, lid, buf):
         self._call('logo:' + lid)
-        return bytes(864)
+        buf[:] = bytes([sum(lid.encode()) % 251 + 1]) * len(buf)
 
 
 class Display:
@@ -271,11 +272,44 @@ class TestBoardLoop(unittest.TestCase):
         self.assertEqual(board.player.screen, 'baseball')
         got = [c['name'] for c in server.calls if c['name'].startswith('logo')]
         self.assertEqual(sorted(got), ['logo:CHC-1', 'logo:STL-1'])
-        self.assertEqual(board.player.missing_logos(), [])
+        self.assertEqual(board.player.missing_logos(board.now(clock.t)), [])
         server.layout = 'bands'  # bands use no logos: the cache empties
         server.v = 3
         run_for(board, clock, 30000)
         self.assertEqual(board.player.logos, {})
+
+    def test_logos_hold_the_current_and_next_game_in_four_slots(self):
+        # Three pregame games rotate a minute each. The board holds the one
+        # on screen and the next (fetched ahead), never more than 4 logos.
+        board, server, clock, _, _, _ = make()
+        server.layout = 'logos'
+        server.screen = 'baseball'
+        teams = [('CHC', 'STL'), ('CWS', 'CLE'), ('NYY', 'BOS')]
+
+        def games(now):
+            return [{'id': i + 1, 'st': 'pre', 'start': now + 3600,
+                     'away': {'ab': a, 'c': '#2a5bd8', 'r': 0, 'lg': a + '-1', 'bd': '#204882'},
+                     'home': {'ab': h, 'c': '#d62a2a', 'r': 0, 'lg': h + '-1', 'bd': '#c12626'}}
+                    for i, (a, h) in enumerate(teams)]
+        server.games = games
+        pool = {id(b) for b in board.player.logo_free}
+        self.assertEqual(len(pool), player.LOGO_SLOTS)
+        board.connect()
+        shown_without_logos = 0
+        for _ in range(5 * 60 * 20):  # 5 minutes in 50 ms steps
+            board.step()
+            clock.sleep_ms(50)
+            now = board.now(clock.t)
+            gm = draw.pick_game(board.player.p['mlb']['games'], now)
+            on_screen = [gm_side['lg'] for gm_side in (board.player.p['mlb']['games'][gm['i']]['away'], board.player.p['mlb']['games'][gm['i']]['home'])]
+            if any(lg not in board.player.logos for lg in on_screen) and clock.t > 20000:
+                shown_without_logos += 1
+            self.assertLessEqual(len(board.player.logos), player.LOGO_SLOTS)
+        # After the first fetches, a rotation never shows a game without its logos.
+        self.assertEqual(shown_without_logos, 0)
+        self.assertEqual({id(b) for b in board.player.logos.values()} | {id(b) for b in board.player.logo_free}, pool)
+        for lid, buf in board.player.logos.items():
+            self.assertEqual(buf[0], sum(lid.encode()) % 251 + 1, 'slot %s holds stale data' % lid)
 
     def test_live_games_update_faster(self):
         board, server, clock, _, _, _ = make()

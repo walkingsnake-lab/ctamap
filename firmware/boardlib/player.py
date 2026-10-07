@@ -20,6 +20,10 @@ SCREENS = ('transit', 'ticker', 'weather', 'baseball')
 # (MemoryError with 37 KB free), so frames are read into these instead.
 RADAR_SLOTS = 3          # the loop's length (contract: up to 3 frames)
 RADAR_BYTES = 64 * 32
+# Team logos (logo layout), same reason: 4 slots hold the game on screen and
+# the next one in the rotation, fetched ahead so a rotation shows no gap.
+LOGO_SLOTS = 4
+LOGO_BYTES = 24 * 12 * 3
 BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
 
@@ -31,7 +35,8 @@ class Player:
         self.anim = draw.TransitAnimator()
         self.radar_frames = {}   # frame id -> one of the slot buffers
         self.radar_free = [bytearray(RADAR_BYTES) for _ in range(RADAR_SLOTS)]
-        self.logos = {}          # logo id -> bytes(864), baseball logo layout
+        self.logos = {}          # logo id -> one of the logo slot buffers
+        self.logo_free = [bytearray(LOGO_BYTES) for _ in range(LOGO_SLOTS)]
         self.page = 0
         self.page_start = 0
         self.loop_start = 0
@@ -52,10 +57,7 @@ class Player:
             if k not in ids:
                 self.radar_free.append(self.radar_frames.pop(k))
         # Keep only logos the games still use.
-        want = self.wanted_logos()
-        for k in list(self.logos):
-            if k not in want:
-                del self.logos[k]
+        self._keep_logos(self._game_logos(range(len(self._games()))))
 
     def missing_frames(self):
         ids = (self.p.get('radar') or {}).get('frames') or [] if self.p else []
@@ -73,18 +75,38 @@ class Player:
         """buf: a buffer from take_slot(), now holding frame fid."""
         self.radar_frames[fid] = buf
 
-    def wanted_logos(self):
-        """Logo ids the payload's games use (logo layout only)."""
+    def _games(self):
         mlb = (self.p.get('mlb') or {}) if self.p else {}
-        if mlb.get('layout') != 'logos':
-            return []
+        return (mlb.get('games') or []) if mlb.get('layout') == 'logos' else []
+
+    def _game_logos(self, idxs):
+        games = self._games()
         out = []
-        for g in mlb.get('games') or []:
+        for i in idxs:
             for k in ('away', 'home'):
-                lg = (g.get(k) or {}).get('lg')
+                lg = (games[i].get(k) or {}).get('lg')
                 if lg and lg not in out:
                     out.append(lg)
         return out
+
+    def _keep_logos(self, want):
+        for k in list(self.logos):
+            if k not in want:
+                self.logo_free.append(self.logos.pop(k))
+
+    def wanted_logos(self, now):
+        """Logo ids for the game on screen, then the next one in the
+        rotation (logo layout only). Mirrors draw.pick_game()."""
+        games = self._games()
+        if not games:
+            return []
+        pick = draw.pick_game(games, now, draw.timing(self.p)['game'])
+        live = [i for i, gm in enumerate(games) if gm.get('st') == 'live']
+        pool = live if live else list(range(len(games)))
+        idxs = [pick['i']]
+        if pick['of'] > 1:
+            idxs.append(pool[(pick['pos'] + 1) % pick['of']])
+        return self._game_logos(idxs)
 
     def live_game(self):
         """True while the baseball screen is up with a game in progress."""
@@ -92,14 +114,24 @@ class Player:
             return False
         return any(g.get('st') == 'live' for g in (self.p.get('mlb') or {}).get('games') or [])
 
-    def missing_logos(self):
-        """Logos to fetch: only while the baseball screen is up."""
+    def missing_logos(self, now):
+        """Logos to fetch: only while the baseball screen is up. Frees the
+        slots of logos the current and next game don't use."""
         if self.screen != 'baseball':
             return []
-        return [i for i in self.wanted_logos() if i not in self.logos]
+        want = self.wanted_logos(now)
+        self._keep_logos(want)
+        return [i for i in want if i not in self.logos]
 
-    def add_logo(self, lid, data):
-        self.logos[lid] = data
+    def take_logo_slot(self):
+        return self.logo_free.pop() if self.logo_free else None
+
+    def release_logo_slot(self, buf):
+        self.logo_free.append(buf)
+
+    def add_logo(self, lid, buf):
+        """buf: a buffer from take_logo_slot(), now holding logo lid."""
+        self.logos[lid] = buf
 
     def auto_screen(self, now):
         """The screen the server wants now: its `screen`, except that on the

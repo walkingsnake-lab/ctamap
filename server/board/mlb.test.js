@@ -82,12 +82,13 @@ test('breaks: Middle and End come through as M and E for the same inning, empty'
   assert.deepEqual([end.inn, end.half], [5, 'E']);
 });
 
-test('which games: Cubs any time, other teams only in the postseason', () => {
+test('which games: Cubs and White Sox any time, other teams only in the postseason', () => {
   const t = START - 600;
   const cubsRegular = game((g) => { pre(g); regularSeason(112, 138)(g); g.gamePk = 1; });
   const otherRegular = game((g) => { pre(g); regularSeason(158, 138)(g); g.gamePk = 2; });
   const otherPost = game((g) => { pre(g); g.gamePk = 3; });
-  assert.deepEqual(shown(schedule(otherPost, otherRegular, cubsRegular), t).map((g) => g.id), [1, 3]);
+  const soxRegular = game((g) => { pre(g); regularSeason(116, 145)(g); g.gamePk = 4; });
+  assert.deepEqual(shown(schedule(otherPost, otherRegular, cubsRegular, soxRegular), t).map((g) => g.id).sort(), [1, 3, 4]);
 });
 
 test('postponed games are skipped; games sort by first pitch', () => {
