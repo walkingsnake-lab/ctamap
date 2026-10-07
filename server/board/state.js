@@ -55,6 +55,9 @@ function defaultBoard(stations) {
     rows: [],
     showHeader: true,
     showWeather: true,
+    // Transit divider lines: under the header (row 7) and above the weather row (row 22).
+    headerDivider: false,
+    wxDivider: true,
     screen: 'auto',
     bright: 'auto',
     // Auto screen: show the radar for `radarFor` seconds every `radarEvery`
@@ -111,6 +114,8 @@ function validatePatch(patch, stations) {
         break;
       case 'showHeader':
       case 'showWeather':
+      case 'headerDivider':
+      case 'wxDivider':
       case 'radarTime':
       case 'tempShadow':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);

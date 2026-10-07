@@ -201,10 +201,12 @@
       }));
     }
 
-    // Station name + clock on rows 1-5, no background (transit and ticker).
-    function drawHeader(f, name, now) {
-      f.text('small', name, 1, 6, C.head);
-      rtext(f, 'small', clockText(now), 62, 6, C.clock);
+    // Station name + clock on rows 1-5, flush to the screen edges, both in the
+    // header grey (transit and ticker). `divider`: a line on row 7 (transit).
+    function drawHeader(f, name, now, divider) {
+      f.text('small', name, 0, 6, C.head);
+      rtext(f, 'small', clockText(now), 63, 6, C.head);
+      if (divider) f.fill(0, 7, 64, 1, C.divider);
     }
 
     // NWS warning tag style: watches yellow, severe warnings orange, tornado
@@ -215,8 +217,8 @@
       blinks: warn.kind === 'tor' && warn.lvl === 'warning',
     });
 
-    function drawWeather(f, wx, warn, blink) {
-      f.fill(0, 22, 64, 1, C.divider);
+    function drawWeather(f, wx, warn, blink, divider = true) {
+      if (divider) f.fill(0, 22, 64, 1, C.divider);
       drawIcon(f, wx.icon, 0, 24);
       const base = 31;
       f.text('small', `${wx.temp}°`, 10, base, C.wxText);
@@ -291,6 +293,8 @@
         now,
         mode: 'dest',
         header: p.header,
+        hdiv: !!p.headerDivider,
+        wdiv: p.wxDivider !== false,
         wx: p.wx,
         warn: p.warn,
         stale: p.stale,
@@ -312,6 +316,8 @@
         mode: 'chrono',
         pitch: tops.length > 1 ? tops[1] - tops[0] : 6,
         header: p.header,
+        hdiv: !!p.headerDivider,
+        wdiv: p.wxDivider !== false,
         wx: p.wx,
         warn: p.warn,
         stale: p.stale,
@@ -334,18 +340,23 @@
 
     const fade = (color, alpha) => (alpha >= 1 ? color : scaleColor(color, Math.max(0, alpha)));
 
+    // Chronological rows: digit in columns 0-2, the 3px line-color block at
+    // CHRONO_BLOCK_X (1px gap), the label 2px after it.
+    const CHRONO_BLOCK_X = 4, CHRONO_LABEL_X = 9;
     function drawViewRow(f, row, blink) {
       const top = Math.round(row.top);
-      const line = fade(row.num != null ? DIGIT[row.ln] : LINE[row.ln], row.alpha);
+      const chrono = row.num != null;
+      const line = fade(LINE[row.ln], row.alpha);
+      // Chronological view: the row's position as a line-colored digit
+      // (Brown/Purple brightened for thin strokes), before the block.
+      if (chrono) drawTimeCell(f, String(row.num), 2, top, fade(DIGIT[row.ln], row.alpha), row.numRoll);
+      const bx = chrono ? CHRONO_BLOCK_X : 0;
       if (row.a && blink) {
-        icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(i, top + j, 1, 1, line); }));
-      } else if (row.num != null) {
-        // Chronological view: the row's position as a line-colored digit.
-        drawTimeCell(f, String(row.num), 2, top, line, row.numRoll);
+        icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(bx + i, top + j, 1, 1, line); }));
       } else {
-        f.fill(0, top, 3, 5, line);
+        f.fill(bx, top, 3, 5, line);
       }
-      f.text('small', row.lbl, 5, top + 5, fade(C.label, row.alpha));
+      f.text('small', row.lbl, chrono ? CHRONO_LABEL_X : 5, top + 5, fade(C.label, row.alpha));
       for (const cell of row.cells) {
         const a = cell.alpha * row.alpha;
         if (a <= 0) continue;
@@ -373,12 +384,12 @@
       if (!view.rows.length) {
         drawOvernight(f, view, view.now);
       } else {
-        if (view.header) drawHeader(f, view.header, view.now);
+        if (view.header) drawHeader(f, view.header, view.now, view.hdiv);
         f.withClip(0, view.header ? 7 : 0, 63, view.wx ? 21 : 31, () => {
           for (const row of view.rows) drawViewRow(f, row, blink);
         });
       }
-      if (view.wx) drawWeather(f, view.wx, view.warn, blink);
+      if (view.wx) drawWeather(f, view.wx, view.warn, blink, view.wdiv !== false);
     }
 
     // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}}),
@@ -526,7 +537,7 @@
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, mode: target.mode, header: target.header, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
+          const view = { now, mode: target.mode, header: target.header, hdiv: target.hdiv, wdiv: target.wdiv, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
@@ -643,7 +654,7 @@
     const WX_BLUE = '#1e90ff';
     const WX_DROP = ['.#.', '###', '###', '.#.'];
     const WARN_TEXT = { svr: { watch: 'TSTORM WATCH', warning: 'TSTORM WARNING' }, tor: { watch: 'TORNADO WATCH', warning: 'TORNADO WARN' } };
-    // Temperature shadow (optional): 1px down-right at 30%, its color blended
+    // Temperature shadow (optional): 1px down-right at 20%, its color blended
     // from cold blue to hot red along these stops (°F).
     const TEMP_STOPS = [[-10, '#3050ff'], [20, '#40a0ff'], [40, '#30d0d0'], [55, '#40d040'], [70, '#ffd000'], [85, '#ff8000'], [100, '#ff2020']];
     function tempColor(t) {
@@ -659,14 +670,14 @@
       // Temperature; a 5x2 bar for the minus (the clock font has digits only).
       // Returns the degree sign's right edge.
       const drawTemp = (dx, dy, color) => {
-        let x = 1 + dx;
+        let x = dx;
         if (wx.temp < 0) { f.fill(x, 8 + dy, 5, 2, color); x += 7; }
         x = f.text('clock', String(Math.abs(wx.temp)), x, 14 + dy, color);
         f.fill(x, 4 + dy, 3, 1, color); f.fill(x, 6 + dy, 3, 1, color);
         f.fill(x, 5 + dy, 1, 1, color); f.fill(x + 2, 5 + dy, 1, 1, color);
         return x + 2;
       };
-      if (shadow) drawTemp(1, 1, scaleColor(tempColor(wx.temp), 0.3));
+      if (shadow) drawTemp(1, 1, scaleColor(tempColor(wx.temp), 0.2));
       const tempRight = drawTemp(0, 0, C.label) + (shadow ? 1 : 0);
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 55, 1);
       // Word right-aligned under the icon, unless a 3-digit temperature reaches it.
@@ -724,7 +735,7 @@
       // Clock stack, right-aligned in the clock box: frame indicator, clock
       // (frame time), AM/PM with the warning icon to its left.
       const [bx, by, bw, bh] = r.timeBox || [40, 0, 24, 32];
-      const right = Math.min(62, bx + bw - 1);
+      const right = Math.min(63, bx + bw - 1);
       const top = by + 2; // top-aligned (spec: rows 2-19)
       const t = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
       // The radar (shoreline included) can reach into the clock box; each
@@ -944,8 +955,9 @@
           f.set(x, top + y, [Math.round(bytes[i] * dim), Math.round(bytes[i + 1] * dim), Math.round(bytes[i + 2] * dim)]);
         }
       } else {
-        // No logo (none uploaded, or not fetched yet): the abbreviation, dimmed.
-        ctext(f, '5x7', side.ab || '', LG.w >> 1, top + 9, scaleColor(C.label, dim));
+        // No logo (none uploaded, or not fetched yet): the abbreviation, in the
+        // band's ink (black on a light band), like the score.
+        ctext(f, '5x7', side.ab || '', LG.w >> 1, top + 9, lgInk(side, dim));
       }
     }
 
@@ -993,10 +1005,10 @@
           if (!bands) drawLogoScore(f, g[k].ab || '', top, lgInk(g[k], dim), null);
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
-        f.text('small', 'TODAY', 1, BOTTOM, C.grey);
+        f.text('small', 'TODAY', 0, BOTTOM, C.grey);
         const ap = ampmText(g.start);
-        rtext(f, 'small', ap, 62, BOTTOM, C.grey);
-        rtext(f, 'small', clockText(g.start), 62 - measure('small', ap) - 3, BOTTOM, C.label);
+        rtext(f, 'small', ap, 63, BOTTOM, C.grey);
+        rtext(f, 'small', clockText(g.start), 63 - measure('small', ap) - 3, BOTTOM, C.label);
         return f;
       }
 
@@ -1005,7 +1017,7 @@
           drawLogoScore(f, String(g[k].r), top, winner === k ? C.amber : lgInk(g[k], dim), rolls[k]);
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
-        rtext(f, 'small', 'FINAL', 62, BOTTOM, C.label);
+        rtext(f, 'small', 'FINAL', 63, BOTTOM, C.label);
         return f;
       }
 
@@ -1014,7 +1026,7 @@
       drawInfield(f, g.on || [0, 0, 0], LG.infieldY);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), LG.innBase, C.label, rolls.inn);
-      const outsLeft = 62 - measure('small', t.outs) + 1;
+      const outsLeft = 63 - measure('small', t.outs) + 1;
       drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
       drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
       return f;
@@ -1038,8 +1050,8 @@
       // Team rows.
       let nameEnd = 0;
       for (const [k, top] of [['away', ROW_TOPS[0]], ['home', ROW_TOPS[1]]]) {
-        f.fill(1, top, 3, 6, g[k].c || C.grey);
-        nameEnd = Math.max(nameEnd, f.text('5x7', g[k].ab, 6, top + 6, winner === k ? C.amber : C.label));
+        f.fill(0, top, 3, 6, g[k].c || C.grey);
+        nameEnd = Math.max(nameEnd, f.text('5x7', g[k].ab, 5, top + 6, winner === k ? C.amber : C.label));
       }
       f.fill(0, DIVIDER, 64, 1, C.divider);
 
@@ -1047,10 +1059,10 @@
         // Records 3px after the longer name; first pitch in the bottom line.
         f.text('small', record(g.away), nameEnd + 2, ROW_TOPS[0] + 6, C.grey);
         f.text('small', record(g.home), nameEnd + 2, ROW_TOPS[1] + 6, C.grey);
-        f.text('small', 'TODAY', 1, BOTTOM, C.grey);
+        f.text('small', 'TODAY', 0, BOTTOM, C.grey);
         const ap = ampmText(g.start);
-        rtext(f, 'small', ap, 62, BOTTOM, C.grey);
-        rtext(f, 'small', clockText(g.start), 62 - measure('small', ap) - 3, BOTTOM, C.label);
+        rtext(f, 'small', ap, 63, BOTTOM, C.grey);
+        rtext(f, 'small', clockText(g.start), 63 - measure('small', ap) - 3, BOTTOM, C.label);
         return f;
       }
 
@@ -1059,7 +1071,7 @@
           drawScore(f, String(g[k].r), top, winner === k ? C.amber : winner ? BB.lose : C.label, rolls[k]);
           ctext(f, 'small', record(g[k]), PANEL_X, top + 6, C.grey);
         }
-        rtext(f, 'small', 'FINAL', 62, BOTTOM, C.label);
+        rtext(f, 'small', 'FINAL', 63, BOTTOM, C.label);
         return f;
       }
 
@@ -1069,7 +1081,7 @@
       drawInfield(f, g.on || [0, 0, 0]);
       const t = liveTexts(g);
       drawRollText(f, t.inn, PANEL_X - Math.floor(measure('small', t.inn) / 2), 20, C.label, rolls.inn);
-      const outsLeft = 62 - measure('small', t.outs) + 1; // empty texts draw nothing
+      const outsLeft = 63 - measure('small', t.outs) + 1; // empty texts draw nothing
       drawRollText(f, t.outs, outsLeft, BOTTOM, C.grey, rolls.outs);
       drawRollText(f, t.count, outsLeft - 5 - measure('small', t.count), BOTTOM, C.label, rolls.count);
       return f;
