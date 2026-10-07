@@ -574,13 +574,34 @@ def cold_boot():
 
 
 class Hardware:
-    def __init__(self, url, board_id, token, bit_depth=5, gamma=1):
+    def __init__(self, url, board_id, token, bit_depth=5, gamma=1, note=None):
+        note = note or (lambda stage: None)  # startup memory report
         self.display = Display(bit_depth, gamma)
+        note('display')
         self.clock = Clock()
         self.buttons = Buttons()
         self.net = Net(url, board_id, token)
+        note('net libs')
         self.watchdog = Watchdog()
         self.net.feed = self.watchdog.feed
+
+    @staticmethod
+    def largest_block():
+        """Largest single allocation the heap can take right now (bytes,
+        within 64): the fragmentation measure. Free memory alone can look
+        fine while no contiguous block is big enough."""
+        gc.collect()
+        lo, hi = 0, gc.mem_free()
+        while hi - lo > 64:
+            mid = (lo + hi) // 2
+            try:
+                b = bytearray(mid)
+                del b
+                lo = mid
+            except MemoryError:
+                hi = mid
+        gc.collect()
+        return lo
 
     @staticmethod
     def mem_free():

@@ -220,7 +220,7 @@ function createBoard({
   // Board health, sent with the version check about once a minute
   // (contract: /board/version). In memory only: it's a live view.
   const healthOf = new Map(); // board id -> latest report + history bits
-  const HEALTH_FIELDS = { hu: 'uptime', hm: 'memFree', ho: 'oom', hb: 'budget', hf: 'fails', hr: 'reconnects', hw: 'rssi' };
+  const HEALTH_FIELDS = { hu: 'uptime', hm: 'memFree', hl: 'largestBlock', ho: 'oom', hb: 'budget', hf: 'fails', hr: 'reconnects', hw: 'rssi' };
   function noteHealth(id, q, now) {
     if (q.hu == null) return;
     const h = { at: now };

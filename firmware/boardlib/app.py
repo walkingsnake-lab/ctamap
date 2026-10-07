@@ -30,7 +30,7 @@ RETRY_WIFI_MS = (10000, 20000, 30000, 60000)  # waits between rounds, then every
 
 
 class Board:
-    def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print, mem_free=None):
+    def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print, mem_free=None, largest_block=None):
         self.net = net
         self.display = display
         self.clock = clock
@@ -56,6 +56,7 @@ class Board:
         self.logo_job = self.sched.add(Job('logo', LOGO_EVERY, 120000, self._logo))
         self.stats = {'fetches': 0, 'forced': 0, 'draws': 0, 'oom': 0, 'fails': 0, 'reconnects': 0}
         self.mem_free = mem_free     # () -> bytes free, for health reports
+        self.largest_block = largest_block  # () -> largest allocatable block
         self.last_error = ''         # '<job>:<ExceptionName>' of the latest failure
         self.health_q = ''
         self.health_at = None
@@ -164,6 +165,8 @@ class Board:
                 ms // 1000, self.sched.budget_ms, self.stats['oom'], self.stats['fails'], self.stats['reconnects'])
             if self.mem_free:
                 q += '&hm=%d' % self.mem_free()
+            if self.largest_block:
+                q += '&hl=%d' % self.largest_block()
             rssi = getattr(self.net, 'rssi', None)
             if rssi:
                 try:
@@ -315,14 +318,15 @@ class Board:
             self.update_job.due_at = ms - self.update_job.deadline_ms
 
 
-def run():
-    """Entry point on the board (code.py)."""
+def run(mem=None):
+    """Entry point on the board (code.py). mem: [(stage, bytes free)]
+    from code.py's imports; startup stages are added and printed."""
     import os
 
     def free():
         gc.collect()
         return gc.mem_free()
-    mem = [('start', free())]
+    mem = list(mem or [])
     from . import device
     mem.append(('device', free()))
     networks = []
@@ -336,21 +340,23 @@ def run():
         token=os.getenv('BOARD_TOKEN') or '',
         bit_depth=int(os.getenv('MATRIX_BIT_DEPTH') or 5),
         gamma=float(os.getenv('MATRIX_GAMMA') or 1),
+        note=lambda stage: mem.append((stage, free())),
     )
-    mem.append(('hardware', free()))
-    board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog, mem_free=hw.mem_free)
+    board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog,
+                  mem_free=hw.mem_free, largest_block=hw.largest_block)
     mem.append(('board', free()))
     board.connect(boot=device.cold_boot())
     mem.append(('online', free()))
-    # Where the heap goes, for tuning: free bytes after each startup stage.
+    # Where the heap goes: free bytes after each stage, and what each cost.
     print('[board] memory free: ' + ', '.join('%s %d' % m for m in mem))
+    print('[board] memory used: ' + ', '.join('%s %d' % (mem[i][0], mem[i - 1][1] - mem[i][1]) for i in range(1, len(mem))))
     last_report = hw.clock.ms()
     while True:
         board.step()
         ms = hw.clock.ms()
         if ms - last_report > 60000:
-            print('[board] fetch budget %d ms, draw %d ms (max %d), %r, mem free %s' % (
-                board.sched.budget_ms, hw.display.last_ms, hw.display.max_ms, board.stats, hw.mem_free()))
+            print('[board] fetch budget %d ms, draw %d ms (max %d), %r, mem free %s, largest block %s' % (
+                board.sched.budget_ms, hw.display.last_ms, hw.display.max_ms, board.stats, hw.mem_free(), hw.largest_block()))
             hw.display.max_ms = 0
             last_report = ms
         hw.clock.sleep_ms(5)

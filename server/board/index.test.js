@@ -98,10 +98,10 @@ test('health rides on the version check and shows on the control API', async () 
   assert.deepEqual((await s.req('/board/secret123/api/health')).body, {});
   await s.req('/board/version?b=home', h); // no health fields: nothing stored
   assert.deepEqual((await s.req('/board/secret123/api/health')).body, {});
-  await s.req('/board/version?b=home&hu=3600&hb=1100&ho=2&hf=5&hr=1&hm=26000&hw=-61&he=radar:MemoryError', h);
+  await s.req('/board/version?b=home&hu=3600&hb=1100&ho=2&hf=5&hr=1&hm=26000&hl=4032&hw=-61&he=radar:MemoryError', h);
   let r = (await s.req('/board/secret123/api/health')).body.home;
   assert.deepEqual({ ...r, at: 0, since: 0 }, {
-    at: 0, since: 0, uptime: 3600, budget: 1100, oom: 2, fails: 5, reconnects: 1, memFree: 26000, rssi: -61,
+    at: 0, since: 0, uptime: 3600, budget: 1100, oom: 2, fails: 5, reconnects: 1, memFree: 26000, largestBlock: 4032, rssi: -61,
     lastError: 'radar:MemoryError', minMem: 26000, restarts: 0, lastRestart: null,
   });
   // Uptime going backwards is a restart; the lowest free memory is kept;
