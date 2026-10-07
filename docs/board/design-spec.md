@@ -259,7 +259,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ### When it shows (Auto mode)
 - **Every Cubs and White Sox game** (team IDs 112 and 145, any game type) and **every postseason game** (game types `F`, `D`, `L`, `W`). Postponed and cancelled games are skipped.
-- **Window:** pregame from 30 min before first pitch (a delayed start stays in pregame), live, then final held 15 min after the server first sees it final (starting values; tune). A final first seen more than 6 h after first pitch (e.g. after a server restart) isn't shown.
+- **Window** (per board, see §10): pregame from 30 min before first pitch (a delayed start stays in pregame), live, then final held 15 min after the server first sees it final (starting values; tune). A final first seen more than 6 h after first pitch (e.g. after a server restart) isn't shown.
 - **Forced Baseball** (screen set to Baseball on the phone) uses wider windows: every game scheduled today shows all day from midnight, and finals hold until 3 AM the next morning (no stale-final rule). Auto keeps the windows above, since there baseball takes over transit.
 - **Priority:** Auto shows baseball while any game is in its window, NWS warnings and watches included (plenty else announces the weather). Timed radar visits (§10), when turned on, interrupt baseball the same way they interrupt transit.
 - **Live games take precedence:** while any shown game is live, only live games are shown (rotating one minute each if there are several). With nothing live, pregame and final games rotate one minute each. Picked by wall time (`floor(now / 60) % count` over that set), so the board keeps no rotation state. The minute is adjustable per board on the phone (30 s–2 min). Screen switches are natural gaps for network jobs (§2).
@@ -322,12 +322,17 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 A small page on the fly.dev server, saved to the phone home screen. The server holds the board's state; the board reads it and draws what it's told.
 
 ### Controls
-- **Screen:** Auto, Transit, Ticker, Weather (radar while raining), Baseball. Auto stays on transit, or baseball while a game is on (§8): screens don't change on their own otherwise. Optional radar visits (off by default): every N minutes (e.g. 4) show the radar for M seconds (e.g. 60) while rain is in the box, set on the control page.
+- **Screen:** Auto, Transit, Ticker, Weather (radar while raining), Baseball. Auto settings (defaults reproduce the original behavior):
+  - **Auto shows:** Transit and/or Ticker; with both, they alternate every 30 s–10 min (default: Transit only).
+  - **Weather visits:** Off (default), While raining, or Always; every N min for M s.
+  - **Jump to weather for NWS alerts:** Off (default), Warnings, or Watches too; stays on the weather screen while the alert is on, over baseball.
+  - **Baseball takes over for:** Cubs, White Sox, Postseason (default all); pregame window 0–2 h (default 30 min), final 0–60 min (default 15); during live games show live games (default), Cubs/Sox first, or all games.
 - **Brightness:** Auto (sunrise/sunset), fixed level, or Off.
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
 - **Transit header and weather row:** independent on/off toggles per board (see §5 for how many rows each combination fits).
+- **Header clock** (transit and ticker) on/off, and **destination names** in white or the line's color (Brown and Purple read dim as text in their true colors).
 - **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.
 
 ### Behavior

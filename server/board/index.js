@@ -12,7 +12,7 @@ const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar } = require('./radar');
 const { createTestRadar } = require('./test-radar');
-const { createMlb } = require('./mlb');
+const { createMlb, prioritize } = require('./mlb');
 const { createLogos } = require('./mlb-logos');
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
@@ -41,8 +41,9 @@ function send(res, status, body) {
 // "Sections"): less JSON to parse on a heap that fragments. `for` names that
 // screen: the payload's `screen`, or `s` when a button press overrides it.
 // radar rides along whole on the weather screen and whenever timed visits
-// are on (the board switches to it by itself); otherwise only `on`. The
-// simulator's copy (api/update) stays whole.
+// are on (the board switches to it by itself); otherwise only `on`. While
+// Auto alternates screens (rot), every rotation screen's sections ride
+// along. The simulator's copy (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball'];
 const SECTIONS = {
   transit: ['header', 'hidden', 'view', 'rows', 'wx'],
@@ -52,7 +53,8 @@ const SECTIONS = {
 };
 function sectionsFor(body, screen) {
   const out = { ...body, for: screen };
-  for (const [sc, keys] of Object.entries(SECTIONS)) if (sc !== screen) for (const k of keys) delete out[k];
+  const keep = new Set([screen, ...(body.rot && body.rot.screens.includes(screen) ? body.rot.screens : [])]);
+  for (const [sc, keys] of Object.entries(SECTIONS)) if (!keep.has(sc)) for (const k of keys) delete out[k];
   if (screen !== 'weather' && body.radar && !body.radar.visit) out.radar = { on: body.radar.on, visit: null };
   return out;
 }
@@ -166,17 +168,28 @@ function createBoard({
 
   // 'auto' brightness follows sunrise/sunset (100 until weather data arrives).
   const resolveBright = (b, w, now) => (b === 'off' ? 0 : b === 'auto' ? autoBright(w, now) : b);
-  // 'auto': baseball while a game is on, otherwise transit. Timed radar
-  // visits (radar.visit) ride on top of either.
-  const resolveScreen = (s, games) => (s !== 'auto' ? s : games ? 'baseball' : 'transit');
+  // 'auto': the weather screen while a matching NWS alert is on (alertJump),
+  // else baseball while a game is on, else the first Auto screen. The board
+  // alternates Auto screens (rot) and makes timed weather visits
+  // (radar.visit) on top.
+  const alertJumps = (b, warn) => !!warn && (b.alertJump === 'all' || (b.alertJump === 'warning' && warn.lvl === 'warning'));
+  const resolveScreen = (b, games, warn) => {
+    if (b.screen !== 'auto') return b.screen;
+    if (alertJumps(b, warn)) return 'weather';
+    if (games) return 'baseball';
+    return (b.autoScreens && b.autoScreens[0]) || 'transit';
+  };
+  const rotOf = (b, screen) => (b.screen === 'auto' && b.autoScreens && b.autoScreens.length > 1 && b.autoScreens.includes(screen)
+    ? { screens: b.autoScreens, every: b.autoEvery || 60 } : null);
   // Speed settings (contract "anim"): ms, baseball rotation in s.
   const animOf = (b) => ({
     pageHold: (b.tickerHold || 8) * 1000, slide: b.tickerSlide || 1200,
     radarFrame: b.radarFrame || 500, radarHold: (b.radarHold || 4) * 1000, game: b.gameEvery || 60,
   });
-  // Radar visits apply only on the auto screen, and only if turned on.
-  const visitOf = (b) => (b.screen === 'auto' && b.radarEvery > 0
-    ? { every: b.radarEvery * 60, for: Math.min(b.radarFor || 60, b.radarEvery * 60) } : null);
+  // Weather visits apply only on the auto screen, and only if turned on;
+  // `always` visits even without rain (current conditions).
+  const visitOf = (b) => (b.screen === 'auto' && (b.wxVisit === 'rain' || b.wxVisit === 'always') && b.radarEvery > 0
+    ? { every: b.radarEvery * 60, for: Math.min(b.radarFor || 60, b.radarEvery * 60), ...(b.wxVisit === 'always' ? { always: true } : {}) } : null);
   const NO_RADAR = { on: false, frames: [], ft: [], timeBox: null, split: false };
 
   // Test alerts, set from the simulator: fake major CTA alerts on some lines
@@ -283,10 +296,17 @@ function createBoard({
     // Test alerts from the simulator (expire on their own).
     if (test) for (const ln of test.lines) alertLines.add(ln);
     let games = [];
-    try { games = mlb.get(board.screen === 'baseball' ? 'forced' : 'auto'); }
-    catch (e) { log.error('[board] mlb:', e.message); }
+    const bbTeams = board.bbTeams || ['cubs', 'sox', 'post'];
+    try {
+      games = mlb.get(board.screen === 'baseball' ? 'forced' : 'auto', {
+        teams: board.screen === 'baseball' ? ['cubs', 'sox', 'post'] : bbTeams,
+        pre: (board.bbPre != null ? board.bbPre : 30) * 60, final: (board.bbFinal != null ? board.bbFinal : 15) * 60,
+      });
+      games = prioritize(games, board.bbPriority, bbTeams);
+    } catch (e) { log.error('[board] mlb:', e.message); }
     if (test && test.game) games = [testGame(test.game, now), ...games];
     const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
+    const screen = resolveScreen(board, games.length > 0, warn);
     const viewKey = `${id}:${board.station.mapid}`;
     const { view, viewState, rows, ticker, bars } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
@@ -297,7 +317,8 @@ function createBoard({
       stn: board.station.mapid, // the board starts transit and ticker fresh when it changes
       age: data ? Math.max(0, Math.round(now - data.fetchedAt)) : null,
       stale: stale ? 1 : 0,
-      screen: resolveScreen(board.screen, games.length > 0),
+      screen,
+      rot: rotOf(board, screen),
       bright: resolveBright(board.bright, w, now),
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
@@ -305,6 +326,9 @@ function createBoard({
       headerDivider: board.headerDivider === true,
       wxDivider: board.wxDivider !== false,
       tickerHeader: board.station.name,
+      // Header clock (transit and ticker) and line-colored labels.
+      hclock: board.headerClock !== false,
+      lnc: board.lineNames === 'line',
       hidden: bars.hidden,
       view,
       rows,
@@ -315,8 +339,8 @@ function createBoard({
       tickerFill: board.tickerFill || 55,
       radar: { ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null },
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
-        ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')) }
-        : { layout: 'classic', games },
+        ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
+        : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
     };
   }
 

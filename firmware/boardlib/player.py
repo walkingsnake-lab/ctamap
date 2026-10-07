@@ -106,8 +106,9 @@ class Player:
         games = self._games()
         if not games:
             return []
-        pick = draw.pick_game(games, now, draw.timing(self.p)['game'])
-        live = [i for i, gm in enumerate(games) if gm.get('st') == 'live']
+        all_games = (self.p.get('mlb') or {}).get('all') is True
+        pick = draw.pick_game(games, now, draw.timing(self.p)['game'], all_games)
+        live = [] if all_games else [i for i, gm in enumerate(games) if gm.get('st') == 'live']
         pool = live if live else list(range(len(games)))
         idxs = [pick['i']]
         if pick['of'] > 1:
@@ -141,14 +142,19 @@ class Player:
 
     def auto_screen(self, now):
         """The screen the server wants now: its `screen`, except that on the
-        auto screen the radar is visited for `for` seconds at the start of
-        every `every`-second cycle while rain is in the box. Mirrors
-        autoScreen() in draw.js."""
+        auto screen `rot` alternates the main screens every `every` s, and the
+        weather screen is visited for `for` seconds at the start of every
+        `every`-second cycle while rain is in the box (or always). Both
+        epoch-aligned. Mirrors autoScreen() in draw.js."""
         p = self.p
-        screen = (p.get('screen') or 'transit') if p else 'transit'
+        base = (p.get('screen') or 'transit') if p else 'transit'
+        screen = base
+        rot = p.get('rot') if p else None
+        if rot and len(rot.get('screens') or []) > 1 and rot.get('every', 0) > 0 and base in rot['screens']:
+            screen = rot['screens'][(int(now) // rot['every']) % len(rot['screens'])]
         r = (p.get('radar') or {}) if p else {}
         v = r.get('visit')
-        if screen not in ('transit', 'baseball') or not r.get('on') or not v or not v.get('every', 0) > 0:
+        if base not in ('transit', 'ticker', 'baseball') or not v or not v.get('every', 0) > 0 or not (r.get('on') or v.get('always')):
             return screen
         return 'weather' if int(now) % v['every'] < v['for'] else screen
 

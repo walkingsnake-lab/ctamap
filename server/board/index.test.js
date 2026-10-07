@@ -85,7 +85,7 @@ test('update: the board gets only the shown screen\'s sections; a button press a
   b = await get('&s=bogus');
   assert.equal(b.for, 'transit');
   // Timed visits: the whole radar rides along on every screen.
-  s.store.update('home', { radarEvery: 5 });
+  s.store.update('home', { wxVisit: 'rain', radarEvery: 5 });
   b = await get();
   assert.deepEqual(b.radar.frames, ['40100-1']);
   assert.ok(b.radar.visit);
@@ -506,8 +506,11 @@ test('radar visits: off by default, then on a timer for auto only', async () => 
   const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
   const get = async () => (await s.req(FULL)).body;
   assert.equal((await get()).radar.visit, null);
-  assert.equal((await post({ radarEvery: 4, radarFor: 60 })).status, 200);
+  assert.equal((await post({ wxVisit: 'rain', radarEvery: 4, radarFor: 60 })).status, 200);
   assert.deepEqual((await get()).radar.visit, { every: 240, for: 60 });
+  await post({ wxVisit: 'always' });
+  assert.deepEqual((await get()).radar.visit, { every: 240, for: 60, always: true });
+  await post({ wxVisit: 'rain' });
   // The visit can't outlast its cycle.
   await post({ radarEvery: 1, radarFor: 120 });
   assert.deepEqual((await get()).radar.visit, { every: 60, for: 60 });
@@ -518,6 +521,60 @@ test('radar visits: off by default, then on a timer for auto only', async () => 
   assert.equal(b.radar.visit, null);
   assert.equal((await post({ radarEvery: 61 })).status, 400);
   assert.equal((await post({ radarFor: 5 })).status, 400);
+  await s.close();
+});
+
+test('auto: main screens, alternating, alert jump, and baseball teams/priority', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const live = (id, away, home) => ({ id, st: 'live', start: now - 3600, inn: 3, half: 'T', away: { ab: away, c: '#000000', r: 1 }, home: { ab: home, c: '#000000', r: 0 } });
+  let games = [];
+  const mlb = { get: (mode, opts) => { mlb.asked = opts; return games; }, raw: () => null };
+  let warn = null;
+  const nws = { get: async () => (warn ? [{ status: 'Actual', messageType: 'Alert', kind: 'svr', lvl: warn, rank: warn === 'warning' ? 3 : 2 }] : []) };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), mlb, nws });
+  const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
+  const get = async () => (await s.req(FULL)).body;
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  // Defaults: transit, no rotation.
+  let b = await get();
+  assert.deepEqual([b.screen, b.rot, b.hclock, b.lnc], ['transit', null, true, false]);
+  // Ticker as the only Auto screen; then both alternate.
+  await post({ autoScreens: ['ticker'] });
+  assert.equal((await get()).screen, 'ticker');
+  await post({ autoScreens: ['transit', 'ticker'], autoEvery: 120 });
+  b = await get();
+  assert.deepEqual([b.screen, b.rot], ['transit', { screens: ['transit', 'ticker'], every: 120 }]);
+  // The board's copy carries both screens' sections while alternating.
+  const board = (await s.req('/board/update?b=home', h)).body;
+  assert.ok('rows' in board && 'ticker' in board);
+  // Alert jump: watches only with 'all'; warnings with either; over baseball.
+  games = [live(1, 'CHC', 'STL')];
+  warn = 'watch';
+  await post({ alertJump: 'warning' });
+  assert.equal((await get()).screen, 'baseball');
+  await post({ alertJump: 'all' });
+  assert.equal((await get()).screen, 'weather');
+  warn = 'warning';
+  await post({ alertJump: 'warning' });
+  b = await get();
+  assert.deepEqual([b.screen, b.rot], ['weather', null]);
+  warn = null;
+  // Baseball teams and windows reach the poller; a forced Baseball screen shows all.
+  await post({ bbTeams: ['sox'], bbPre: 60, bbFinal: 5 });
+  await get();
+  assert.deepEqual(mlb.asked, { teams: ['sox'], pre: 3600, final: 300 });
+  // Priority: 'favorite' keeps only live Cubs/Sox games while one is on;
+  // 'all' tells the board to rotate every game.
+  games = [live(1, 'NYY', 'BOS'), live(2, 'CWS', 'CLE')];
+  await post({ bbPriority: 'favorite' });
+  assert.deepEqual((await get()).mlb.games.map((g) => g.id), [2]);
+  await post({ bbPriority: 'all' });
+  b = await get();
+  assert.deepEqual([b.mlb.games.length, b.mlb.all], [2, true]);
+  // Header clock and line-colored names.
+  await post({ headerClock: false, lineNames: 'line' });
+  b = await get();
+  assert.deepEqual([b.hclock, b.lnc], [false, true]);
   await s.close();
 });
 

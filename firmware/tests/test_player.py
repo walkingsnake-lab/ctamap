@@ -133,3 +133,27 @@ class StationChange(unittest.TestCase):
         anim = pl.anim
         pl.set_payload(payload([], screen='transit', stn='40100', header='MORSE', view='dest', rows=self.rows(['HOWARD'])), 1000)
         self.assertIs(pl.anim, anim)
+
+
+# Same table as AUTO_CASES in server/board/draw.test.js.
+AUTO_CASES = [
+    ({'screen': 'transit', 'rot': {'screens': ['transit', 'ticker'], 'every': 60}}, 0, 'transit'),
+    ({'screen': 'transit', 'rot': {'screens': ['transit', 'ticker'], 'every': 60}}, 60, 'ticker'),
+    ({'screen': 'transit', 'rot': {'screens': ['transit', 'ticker'], 'every': 60}}, 119, 'ticker'),
+    ({'screen': 'transit', 'rot': {'screens': ['transit', 'ticker'], 'every': 60}}, 120, 'transit'),
+    ({'screen': 'baseball', 'rot': {'screens': ['transit', 'ticker'], 'every': 60}}, 60, 'baseball'),
+    ({'screen': 'transit', 'radar': {'on': False, 'visit': {'every': 240, 'for': 60, 'always': True}}}, 10, 'weather'),
+    ({'screen': 'transit', 'radar': {'on': False, 'visit': {'every': 240, 'for': 60}}}, 10, 'transit'),
+    ({'screen': 'ticker', 'rot': {'screens': ['transit', 'ticker'], 'every': 120}, 'radar': {'on': True, 'visit': {'every': 240, 'for': 60}}}, 30, 'weather'),
+    ({'screen': 'ticker', 'rot': {'screens': ['transit', 'ticker'], 'every': 120}, 'radar': {'on': True, 'visit': {'every': 240, 'for': 60}}}, 130, 'ticker'),
+    ({'screen': 'weather', 'rot': None}, 0, 'weather'),
+]
+
+
+class AutoScreenTable(unittest.TestCase):
+    def test_matches_the_simulator_table(self):
+        base = 1800000000 - (1800000000 % 240)
+        for p, off, want in AUTO_CASES:
+            pl = player.Player()
+            pl.p = dict(p)
+            self.assertEqual(pl.auto_screen(base + off), want, '%r +%d' % (p, off))

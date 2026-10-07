@@ -17,9 +17,35 @@ test('a fresh store starts with the home board at Morse and writes the file', ()
   assert.deepEqual(home.station, { mapid: '40100', name: 'MORSE' });
   assert.equal(home.screen, 'auto');
   assert.equal(home.bright, 'auto');
-  assert.equal(home.radarEvery, 0);
+  assert.equal(home.wxVisit, 'off');
+  assert.equal(home.radarEvery, 4);
   assert.equal(home.radarFor, 60);
+  // Settings defaults reproduce the behavior before they were settings.
+  assert.deepEqual([home.autoScreens, home.autoEvery, home.alertJump, home.bbTeams, home.bbPre, home.bbFinal, home.bbPriority, home.lineNames, home.headerClock],
+    [['transit'], 60, 'off', ['cubs', 'sox', 'post'], 30, 15, 'live', 'white', true]);
   assert.ok(fs.existsSync(path.join(dir, 'board-state.json')));
+});
+
+test('an older state file: radar visits migrate and new settings get their defaults', () => {
+  for (const [every, visit, interval] of [[0, 'off', 4], [6, 'rain', 6]]) {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, 'board-state.json'), JSON.stringify({ boards: { home: { v: 3, station: { mapid: '40100', name: 'MORSE' }, rows: [], screen: 'auto', bright: 'auto', radarEvery: every, radarFor: 90 } } }));
+    const b = createStore({ dir, log: quiet }).get('home');
+    assert.deepEqual([b.wxVisit, b.radarEvery, b.radarFor], [visit, interval, 90]);
+    assert.deepEqual([b.autoScreens, b.bbTeams, b.headerClock, b.tickerHold], [['transit'], ['cubs', 'sox', 'post'], true, 8]);
+  }
+});
+
+test('settings validation: lists, choices, and ranges', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  const ok = { autoScreens: ['ticker', 'transit'], autoEvery: 120, wxVisit: 'always', alertJump: 'all', bbTeams: [], bbPre: 120, bbFinal: 0, bbPriority: 'favorite', lineNames: 'line', headerClock: false };
+  const b = store.update('home', ok);
+  assert.deepEqual(b.autoScreens, ['transit', 'ticker']); // stored in a fixed order
+  assert.deepEqual(b.bbTeams, []);
+  for (const bad of [{ autoScreens: [] }, { autoScreens: ['weather'] }, { autoScreens: ['transit', 'transit'] }, { autoEvery: 45 }, { wxVisit: 'sometimes' },
+    { alertJump: 'watch' }, { bbTeams: ['mets'] }, { bbPre: 121 }, { bbFinal: -1 }, { bbPriority: 'first' }, { lineNames: 'red' }, { headerClock: 'no' }, { radarEvery: 0 }]) {
+    assert.throws(() => store.update('home', bad), /must/, JSON.stringify(bad));
+  }
 });
 
 test('a saved filter with the old 54th short name loads as 54/Crmk', () => {
