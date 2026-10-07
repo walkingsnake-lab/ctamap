@@ -428,16 +428,25 @@ def build_transit_view(p, now):
     }
 
 
+def _first_t(r):
+    return r['t'][0]
+
+
 def build_chrono_view(p, now):
-    rows = live_rows(p, now)[:max_rows(bool(p.get('header')), bool(p.get('wx')))]
+    # Sorted here too, by time (stable). Mirrors buildChronoView in draw.js.
+    rows = sorted(live_rows(p, now), key=_first_t)[:max_rows(bool(p.get('header')), bool(p.get('wx')))]
     tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')))
     out = []
     seen_dest = set()
+    seen_key = set()
     for i, r in enumerate(rows):
         dest = '%s:%s' % (r['ln'], r['lbl'])
         due = dest not in seen_dest
         seen_dest.add(dest)
-        key = ('rn:' + str(r['rn'])) if r.get('rn') is not None else '%s:%s:%s' % (r['ln'], r['lbl'], r['t'][0])
+        key = ('rn:%s:%s' % (r['ln'], r['rn'])) if r.get('rn') is not None else '%s:%s:%s' % (r['ln'], r['lbl'], r['t'][0])
+        if key in seen_key:
+            key += '#%d' % i
+        seen_key.add(key)
         sch = r.get('s') and r['s'][0]
         if sch:
             color = C['schDim'] if i else C['sch']

@@ -265,22 +265,22 @@ test('chrono animator: the first train slides up and out, the list follows, the 
   const pitch = tops[1] - tops[0];
   const anim = draw.createTransitAnimator();
   const v0 = anim.step(p, NOW, 0);
-  assert.deepEqual(v0.rows.map((r) => r.key), ['rn:801', 'rn:400', 'rn:401', 'rn:402']);
+  assert.deepEqual(v0.rows.map((r) => r.key), ['rn:RD:801', 'rn:BR:400', 'rn:BR:401', 'rn:BR:402']);
   // 45 s later the first train is past the 30 s grace.
   const t = 1000;
   anim.step(p, NOW + 45, t);
   const mid = anim.step(p, NOW + 45, t + draw.MOVE_MS / 2);
   const by = (v, k) => v.rows.find((r) => r.key === k);
-  const gone = by(mid, 'rn:801');
+  const gone = by(mid, 'rn:RD:801');
   assert.ok(gone.top < tops[0] && gone.top > tops[0] - pitch, 'departing row moves up');
   assert.ok(gone.alpha < 1 && gone.alpha > 0);
-  assert.ok(by(mid, 'rn:400').top < tops[1] && by(mid, 'rn:400').top > tops[0], 'list slides at the same time');
-  const incoming = by(mid, 'rn:403');
+  assert.ok(by(mid, 'rn:BR:400').top < tops[1] && by(mid, 'rn:BR:400').top > tops[0], 'list slides at the same time');
+  const incoming = by(mid, 'rn:BR:403');
   assert.ok(incoming.top > tops[3] && incoming.alpha < 1, 'next train comes in from below');
   const end = anim.step(p, NOW + 45, t + draw.FADE_MS + 10);
-  assert.deepEqual(end.rows.map((r) => r.key), ['rn:400', 'rn:401', 'rn:402', 'rn:403']);
+  assert.deepEqual(end.rows.map((r) => r.key), ['rn:BR:400', 'rn:BR:401', 'rn:BR:402', 'rn:BR:403']);
   assert.deepEqual(end.rows.map((r) => r.top), tops);
-  assert.equal(by(end, 'rn:400').cells[0].color, draw.C.amber);
+  assert.equal(by(end, 'rn:BR:400').cells[0].color, draw.C.amber);
   assert.deepEqual(draw.renderTransit(p, { now: NOW + 45, view: end }).px, draw.renderTransit(p, { now: NOW + 45 }).px);
 });
 
@@ -294,7 +294,28 @@ test('chrono animator: two trains swapping order slide past each other, no fade'
   const mid = anim.step(swapped, NOW, 1000 + draw.MOVE_MS / 2);
   assert.ok(mid.rows.every((r) => r.alpha === 1));
   const end = anim.step(swapped, NOW, 1000 + draw.MOVE_MS + 10);
-  assert.equal(end.rows.find((r) => r.key === 'rn:802').top, draw.rowTops(2, true, false)[0]);
+  assert.equal(end.rows.find((r) => r.key === 'rn:RD:802').top, draw.rowTops(2, true, false)[0]);
+});
+
+test('chrono: rows are drawn in time order however the payload lists them', () => {
+  // Seen on the board: a DUE train listed below a 5m one.
+  const rows = [chronoRow('BR', 'KIMBALL', NOW + 20, '401'), chronoRow('PK', '54/CRMK', min(5), '305'),
+    chronoRow('GR', 'HARLEM', NOW + 40, '002'), chronoRow('GR', '63RD', min(5) + 2, '013')];
+  const v = draw.buildTransitView(chronoPayload(rows), NOW);
+  assert.deepEqual(v.rows.map((r) => r.lbl), ['KIMBALL', 'HARLEM', '54/CRMK', '63RD']);
+  assert.deepEqual(v.rows.map((r) => r.cells[0].text), ['DUE', 'DUE', '5m', '5m']);
+  assert.deepEqual(v.rows.map((r) => r.num), [1, 2, 3, 4]);
+});
+
+test('chrono: every row has its own animator key (runs repeat across lines and within a list)', () => {
+  const rows = [chronoRow('PR', 'LINDEN', min(2), '501'), chronoRow('YL', 'SKOKIE', min(3), '501'), chronoRow('PR', 'LINDEN', min(9), '501')];
+  const v = draw.buildTransitView(chronoPayload(rows), NOW);
+  assert.equal(new Set(v.rows.map((r) => r.key)).size, 3);
+  // ...so the animator keeps three rows, each at its own place.
+  const anim = draw.createTransitAnimator();
+  const shown = anim.step(chronoPayload(rows), NOW, 0);
+  assert.equal(shown.rows.length, 3);
+  assert.deepEqual(shown.rows.map((r) => r.top).sort((a, b) => a - b), draw.rowTops(3, true, false));
 });
 
 test('switching views cross-fades: old rows fade out, then the new ones fade in', () => {
@@ -306,7 +327,7 @@ test('switching views cross-fades: old rows fade out, then the new ones fade in'
   assert.ok(mid.rows.find((r) => r.key === 'RD:HOWARD').alpha < 1);
   assert.ok(mid.rows.filter((r) => r.key.startsWith('rn:')).every((r) => r.alpha === 0));
   const end = anim.step(chrono, NOW, 1000 + 2 * draw.FADE_MS + 10);
-  assert.deepEqual(end.rows.map((r) => r.key), ['rn:801', 'rn:802']);
+  assert.deepEqual(end.rows.map((r) => r.key), ['rn:RD:801', 'rn:RD:802']);
   assert.ok(end.rows.every((r) => r.alpha === 1));
 });
 
@@ -459,12 +480,12 @@ test('chrono animator: position digits roll down as the list slides up', () => {
   assert.deepEqual(v0.rows.map((r) => r.num), [1, 2, 3]);
   anim.step(p, NOW + 45, 1000); // first train gone
   const mid = anim.step(p, NOW + 45, 1000 + draw.ROLL_MS / 2);
-  const loop = mid.rows.find((r) => r.key === 'rn:400');
+  const loop = mid.rows.find((r) => r.key === 'rn:BR:400');
   assert.equal(loop.num, 1);
   assert.equal(loop.numRoll.from, '2');
   assert.ok(loop.numRoll.p > 0 && loop.numRoll.p < 1);
   const end = anim.step(p, NOW + 45, 1000 + draw.FADE_MS + 10);
-  assert.deepEqual(end.rows.map((r) => [r.key, r.num, r.numRoll]), [['rn:400', 1, null], ['rn:401', 2, null]]);
+  assert.deepEqual(end.rows.map((r) => [r.key, r.num, r.numRoll]), [['rn:BR:400', 1, null], ['rn:PR:401', 2, null]]);
   assert.deepEqual(draw.renderTransit(p, { now: NOW + 45, view: end }).px, draw.renderTransit(p, { now: NOW + 45 }).px);
 });
 

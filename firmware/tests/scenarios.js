@@ -213,6 +213,9 @@ async function build() {
     for (const half of ['M', 'E']) add(`baseball break ${half}`, bb({ ...live, half, b: 0, s: 0, o: 0, on: [0, 0, 0] }), [{ screen: 'baseball' }]);
     // Into and out of a break: the count and outs roll out where they were
     // (no pile-up), then roll back in.
+    add('chrono payload out of time order, repeated runs', { now: t, tzo: tzOffset(t), bright: 100, screen: 'transit', header: 'CLARK/LAKE', view: 'chrono',
+      rows: [{ ln: 'BR', lbl: 'KIMBALL', t: [t + 20], s: [0], a: 0, rn: '401' }, { ln: 'PK', lbl: '54/CRMK', t: [t + 290], s: [0], a: 0, rn: '501' },
+        { ln: 'GR', lbl: 'HARLEM', t: [t + 40], s: [0], a: 0, rn: '002' }, { ln: 'YL', lbl: 'SKOKIE', t: [t + 310], s: [0], a: 0, rn: '501' }] }, [{ screen: 'transit' }]);
     add('baseball rolls into a break', bb({ ...live, half: 'M', b: 0, s: 0, o: 0, on: [0, 0, 0] }), [0.25, 0.5, 0.75].map((p) => ({
       screen: 'baseball', rolls: { inn: { from: 'BOT 6', p }, count: { from: '2-1', p }, outs: { from: '3 OUT', p } },
     })));
