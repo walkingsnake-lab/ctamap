@@ -23,9 +23,12 @@ const SPLIT_TIME_BOX = [40, 0, W - 40, H];
 // rows 2-19 + margin). Built per station by scripts/build-locations.js.
 const FULL_TIME_BOX = [40, 0, 24, 22];
 const SHORE = 6;
-// s between loop frames. IEM's archive only has frames at even minutes;
-// every multiple of 12 minutes is one. 3 frames span 24 minutes: half the
-// frames the board has to download, at the cost of a jumpier loop.
+// Loop slots (IEM's archive only has frames at even minutes). The newest
+// frame is on a 6-minute grid, so it's at most ~8 min old; the older ones
+// are on a 12-minute grid before it. Each 6-minute step adds exactly one new
+// frame (the previous newest becomes an older slot, or stays newest's
+// neighbor), so the board downloads one frame per step.
+const NEWEST_STEP = 360;
 const STEP = 720;
 const LOOP = 3;                          // frames in the loop
 const KEEP = 6;                          // frames kept per location
@@ -246,11 +249,13 @@ function createRadar({
   const missing = new Map();  // stamp -> retry-after time
   let timer = null, busy = null;
 
-  // Loop slots, oldest first: the latest 12-minute time expected to exist,
-  // and the ones before it.
+  // Loop slots, oldest first: the latest 6-minute time expected to exist,
+  // then the 12-minute slots before it.
   function slots() {
-    const latest = Math.floor((now() - lag) / STEP) * STEP;
-    return Array.from({ length: LOOP }, (_, i) => stampOf(latest - (LOOP - 1 - i) * STEP));
+    const newest = Math.floor((now() - lag) / NEWEST_STEP) * NEWEST_STEP;
+    const grid = Math.floor((newest - 1) / STEP) * STEP; // last 12-minute slot before it
+    const older = Array.from({ length: LOOP - 1 }, (_, i) => grid - (LOOP - 2 - i) * STEP);
+    return [...older, newest].map(stampOf);
   }
 
   async function processStamp(stamp, wanted) {

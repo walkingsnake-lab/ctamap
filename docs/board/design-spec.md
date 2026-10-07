@@ -48,7 +48,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 | Request | How often | Size |
 |---|---|---|
 | Settings version check (`/board/version`) | ~every 10 s | a few bytes |
-| Combined update (arrivals as absolute times, alert flags, weather row, settings version) | ~every 30 s, or right away when the version changes | ~1 KB |
+| Combined update (only the shown screen's sections; contract "Sections") | ~every 30 s, or right away when the version changes or a button changes the screen | ~0.5–0.75 KB |
 | Radar frame (only while radar is showing) | one new frame every 5 min | ~2 KB |
 
 - The board **counts down locally** from the arrival timestamps, so minutes tick over on time between fetches; fetches only refresh predictions.
@@ -234,7 +234,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Configurable location**; crop centered on it (~1.5 mi/pixel).
 - **Pipeline (server):** crop → palette index to dBZ → average linear reflectivity per LED block → levels (15/25/35/45/55 dBZ: dim green, green, yellow, orange, red) → despeckle (drop pixels with <2 colored neighbors) → small indexed image.
 - **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when Open-Meteo reports a snow weather code, or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/15/20 dBZ, from the Feb 2, 2022 storm) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
-- **Loop:** 3 frames, 12 min apart (24 min; IEM only archives even minutes; cut from 6 so the board fills the loop faster), 0.5 s each, **holds on the last frame** for 4 s. Network requests happen during the hold, except while the loop is still filling in on screen: then the missing frames are fetched back to back. Frame step (0.3–1 s) and hold (2–8 s) are adjustable per board on the phone.
+- **Loop:** 3 frames: the newest every 6 min (at most ~8 min old), the older two 12 min apart before it (IEM only archives even minutes; cut from 6 frames so the board fills the loop faster), 0.5 s each, **holds on the last frame** for 4 s. Network requests happen during the hold, except while the loop is still filling in on screen: then the missing frames are fetched back to back. Frame step (0.3–1 s) and hold (2–8 s) are adjustable per board on the phone.
 - **Water masked black** (mask generated per location from coastline data), with a faint shoreline along its edge.
 - **Layout per station** (`server/board/locations/`, built by `scripts/build-locations.js` from Natural Earth's Lake Michigan outline): full width with the time over the lake when the time's area is all water (114 of 144 stations), otherwise the split layout (radar left 39 columns, a gray `#333333` line on the panel's left edge, time right 24). The time stack is **top-aligned** (rows 2–19) in both.
 - **No frames yet** (rain in the box but nothing processed, e.g. right after a deploy): the weather layout.
@@ -328,12 +328,14 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
 - **Transit header and weather row:** independent on/off toggles per board (see §5 for how many rows each combination fits).
+- **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.
 
 ### Behavior
 - **Latency:** the board checks `/board/version` about every 10 s (scheduled in animation gaps, see §2) and fetches the full update right away when the version changes. Phone changes show up within ~10–15 s.
 - **The chosen screen is permanent:** Auto, Transit, Ticker, Weather, or Baseball stays until changed on the phone, including across board restarts. A forced screen ignores the auto rules (no baseball takeover, no radar visits); forced Baseball with no game on shows the clock and `NO GAMES`. On boot the board sends a boot flag on its first request; the server resets **brightness** to Auto (so a board left off comes back lit) and bumps the version. Screen, station, and filter config persist across restarts.
 - **Persistence:** state lives in a small JSON file on a Fly volume, so deploys and server restarts don't wipe config.
 - **Buttons vs. phone: last action wins.** A button press sets a local override and records the current server version. The local override holds until the server version changes (a phone change), then the board follows the server again.
+- **Watchdog:** the board's hardware watchdog (16 s, the M4's maximum) resets it if the loop hangs. The loop feeds it every pass and before each request. A watchdog reset is not a cold boot, so it doesn't reset brightness.
 - Possible optimization to test on the board: keep the HTTPS connection open between requests to avoid repeating the TLS handshake, which would make version checks nearly free.
 
 ### Access

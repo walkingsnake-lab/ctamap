@@ -209,6 +209,23 @@ test('every station has a location file built from the current lake data', () =>
   }
 });
 
+test('poller: the newest slot is on the 6-minute grid; each step adds one new slot', () => {
+  const at = (stamp) => R.createRadar({ now: () => R.timeOf(stamp) + 120, log: quiet }).slots();
+  assert.deepEqual(at('202008102112'), ['202008102048', '202008102100', '202008102112']); // newest on the 12-min grid
+  assert.deepEqual(at('202008102118'), ['202008102100', '202008102112', '202008102118']); // 6 past it
+  assert.deepEqual(at('202008102124'), ['202008102100', '202008102112', '202008102124']);
+  // Over a day, consecutive 6-minute steps share all but one slot, and
+  // the newest is never more than 8 minutes old.
+  let prev = null;
+  for (let t = Date.UTC(2026, 9, 4) / 1000; t < Date.UTC(2026, 9, 5) / 1000; t += 360) {
+    const radar = R.createRadar({ now: () => t + 120, log: quiet });
+    const s = radar.slots();
+    assert.ok(t + 120 - R.timeOf(s[2]) <= 8 * 60);
+    if (prev) assert.equal(s.filter((x) => !prev.includes(x)).length, 1, `${prev} -> ${s}`);
+    prev = s;
+  }
+});
+
 test('poller: every slot is an even minute, all day', () => {
   for (let m = 0; m < 24 * 60; m += 7) {
     const radar = R.createRadar({ now: () => Date.UTC(2026, 9, 4, 0, m, 13) / 1000, log: quiet });

@@ -20,6 +20,10 @@ const fakeLogos = (have = {}) => ({
 const fakeMlb = (games = [], forcedGames = games) => ({ get: (mode) => (mode === 'forced' ? forcedGames : games), raw: () => null });
 
 // Spin up a server that routes /board/* the same way server.js does.
+// The whole /board/update payload (the simulator's copy). The board's own
+// endpoint sends only the shown screen's sections; see the sections test.
+const FULL = '/board/secret123/api/update?b=home';
+
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
   const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), logos: fakeLogos(), ...opts });
@@ -57,6 +61,57 @@ test('version requires the token and a known board', async () => {
   assert.equal(ok.status, 200);
   assert.equal(ok.body.v, 1);
   assert.ok(Math.abs(ok.body.now - Date.now() / 1000) < 5);
+  await s.close();
+});
+
+test('update: the board gets only the shown screen\'s sections; a button press asks for its screen', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const radar = { on: true, frames: ['40100-1'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(radar) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const get = async (q = '') => (await s.req('/board/update?b=home' + q, h)).body;
+  let b = await get(); // transit (auto, no game)
+  assert.equal(b.for, 'transit');
+  assert.ok('rows' in b && 'view' in b);
+  assert.ok(!('ticker' in b) && !('mlb' in b));
+  assert.deepEqual(b.radar, { on: true, visit: null }); // no visits: just `on`
+  for (const k of ['v', 'now', 'tzo', 'screen', 'bright', 'warn', 'anim']) assert.ok(k in b, k);
+  b = await get('&s=ticker'); // a button press on the board
+  assert.equal(b.for, 'ticker');
+  assert.ok('ticker' in b && 'tickerHeader' in b && !('rows' in b));
+  b = await get('&s=weather');
+  assert.deepEqual(b.radar.frames, ['40100-1']);
+  assert.ok(!('rows' in b) && !('ticker' in b));
+  b = await get('&s=bogus');
+  assert.equal(b.for, 'transit');
+  // Timed visits: the whole radar rides along on every screen.
+  s.store.update('home', { radarEvery: 5 });
+  b = await get();
+  assert.deepEqual(b.radar.frames, ['40100-1']);
+  assert.ok(b.radar.visit);
+  await s.close();
+});
+
+test('health rides on the version check and shows on the control API', async () => {
+  const s = await serve();
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  assert.deepEqual((await s.req('/board/secret123/api/health')).body, {});
+  await s.req('/board/version?b=home', h); // no health fields: nothing stored
+  assert.deepEqual((await s.req('/board/secret123/api/health')).body, {});
+  await s.req('/board/version?b=home&hu=3600&hb=1100&ho=2&hf=5&hr=1&hm=26000&hw=-61&he=radar:MemoryError', h);
+  let r = (await s.req('/board/secret123/api/health')).body.home;
+  assert.deepEqual({ ...r, at: 0, since: 0 }, {
+    at: 0, since: 0, uptime: 3600, budget: 1100, oom: 2, fails: 5, reconnects: 1, memFree: 26000, rssi: -61,
+    lastError: 'radar:MemoryError', minMem: 26000, restarts: 0, lastRestart: null,
+  });
+  // Uptime going backwards is a restart; the lowest free memory is kept;
+  // an error string that isn't plain letters is dropped.
+  await s.req('/board/version?b=home&hu=30&hb=1000&ho=0&hf=0&hr=0&hm=28000&he=%3Cscript%3E', h);
+  r = (await s.req('/board/secret123/api/health')).body.home;
+  assert.equal(r.restarts, 1);
+  assert.equal(r.minMem, 26000);
+  assert.equal(r.lastError, undefined);
+  assert.ok(Math.abs(r.lastRestart - (Date.now() / 1000 - 30)) < 5);
   await s.close();
 });
 
@@ -166,8 +221,9 @@ test('update: auth, unknown board, and no Train Tracker data yet', async () => {
   const s = await serve({ tracker: fakeTracker(null), mlb: fakeMlb([{ id: 7, st: 'pre', start: 1, away: {}, home: {} }]) });
   assert.equal((await s.req('/board/update?b=home')).status, 401);
   assert.equal((await s.req('/board/update?b=x', { headers: { 'X-Board-Token': 'tok' } })).status, 404);
+  assert.equal((await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).status, 200);
   // Everything but the trains still works; transit says NO DATA.
-  const r = await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } });
+  const r = await s.req(FULL);
   assert.equal(r.status, 200);
   assert.deepEqual([r.body.age, r.body.stale, r.body.rows, r.body.ticker], [null, 1, [], []]);
   assert.equal(r.body.mlb.games.length, 1);
@@ -181,12 +237,12 @@ test('update: arrivals older than 3 minutes are stale; the times themselves are 
   const at = (fetchedAt) => fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   let s = await serve({ tracker: at(now - 170) });
-  let b = (await s.req('/board/update?b=home', h)).body;
+  let b = (await s.req(FULL)).body;
   assert.equal(b.stale, 0);
   const fresh = b.rows;
   await s.close();
   s = await serve({ tracker: at(now - 190) });
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.equal(b.stale, 1);
   assert.deepEqual(b.rows.map((r) => r.s), fresh.map((r) => r.s));
   await s.close();
@@ -199,7 +255,7 @@ test('update: payload shape for the default Morse board', async () => {
   const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
   const tracker = fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now - 7 });
   const s = await serve({ tracker });
-  const r = await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } });
+  const r = await s.req(FULL);
   assert.equal(r.status, 200);
   const b = r.body;
   assert.deepEqual(tracker.asked, ['40100']);
@@ -221,11 +277,11 @@ test('update: payload shape for the default Morse board', async () => {
 test('update: speed settings and ticker fill are sent as anim (ms) and tickerFill', async () => {
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
-  let b = (await s.req('/board/update?b=home', h)).body;
+  let b = (await s.req(FULL)).body;
   assert.deepEqual(b.anim, { pageHold: 8000, slide: 1200, radarFrame: 500, radarHold: 4000, game: 60 });
   assert.equal(b.tickerFill, 55);
   s.store.update('home', { tickerHold: 5, tickerSlide: 800, radarFrame: 700, radarHold: 2, gameEvery: 90, tickerFill: 40 });
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.deepEqual(b.anim, { pageHold: 5000, slide: 800, radarFrame: 700, radarHold: 2000, game: 90 });
   assert.equal(b.tickerFill, 40);
   await s.close();
@@ -236,7 +292,7 @@ test('update: boot=1 resets brightness, keeps the screen, and bumps v; settings 
   const s = await serve({ tracker });
   s.store.update('home', { screen: 'ticker', bright: 'off', showHeader: false });
   const h = { headers: { 'X-Board-Token': 'tok' } };
-  let b = (await s.req('/board/update?b=home', h)).body;
+  let b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'ticker');
   assert.equal(b.bright, 0);
   assert.equal(b.header, null);
@@ -368,7 +424,7 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   s.store.update('home', { station: { mapid: '40380' } }); // Clark/Lake
   s.store.update('home', { rows: ["BL:O'Hare", 'GR:Harlem'] }); // 2 destinations: everything fits
   const h = { headers: { 'X-Board-Token': 'tok' } };
-  let b = (await s.req('/board/update?b=home', h)).body;
+  let b = (await s.req(FULL)).body;
   assert.deepEqual(weather.asked.at(-1), [41.885737, -87.630886]); // the station's coordinates
   assert.deepEqual(b.wx, { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 });
   assert.equal(b.header, 'CLARK/LAKE');
@@ -377,7 +433,7 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   // All 5 destinations: weather and header are hidden to fit them as rows;
   // the ticker keeps its header.
   s.store.update('home', { rows: [] });
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.equal(b.view, 'dest');
   assert.equal(b.rows.length, 5);
   assert.deepEqual([b.header, b.wx, b.tickerHeader], [null, null, 'CLARK/LAKE']);
@@ -387,11 +443,11 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   assert.ok(b.ticker.every((x) => x.a === (x.ln === 'GR' || x.ln === 'OR' ? 1 : 0)));
   // Weather row off: no wx either way.
   s.store.update('home', { showWeather: false });
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.equal(b.wx, null);
   // Overnight: auto brightness dims.
   w.sunset = now - 1;
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.equal(b.bright, 40);
   assert.equal(b.warn, null);
   await s.close();
@@ -406,7 +462,7 @@ test('update: an NWS warning in effect is sent as warn, even with the weather ro
   f.parameters.VTEC = ['/O.NEW.KLOT.TO.W.0001.000000T0000Z-000000T0000Z/'];
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), nws: fakeWeather(require('./nws').parse(nwsJson)) });
   s.store.update('home', { showWeather: false });
-  const b = (await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).body;
+  const b = (await s.req(FULL)).body;
   assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' });
   assert.equal(b.wx, null);
   await s.close();
@@ -421,7 +477,7 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(state, { '40100/40100-202610041600': bytes }) });
   const base = `http://127.0.0.1:${s.port}`;
   const h = { headers: { 'X-Board-Token': 'tok' } };
-  const b = (await s.req('/board/update?b=home', h)).body;
+  const b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'transit'); // no automatic switching unless radar visits are on
   assert.deepEqual({ ...b.radar, temp: undefined, icon: undefined }, { ...state, visit: null, showTime: true, tempShadow: false, temp: undefined, icon: undefined });
   assert.equal((await fetch(`${base}/board/radar/40100-202610041600?b=home`)).status, 401);
@@ -439,7 +495,7 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
   assert.equal(png.status, 200);
   // A forced screen still wins over auto.
   s.store.update('home', { screen: 'transit' });
-  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'transit');
+  assert.equal((await s.req(FULL)).body.screen, 'transit');
   await s.close();
 });
 
@@ -448,7 +504,7 @@ test('radar visits: off by default, then on a timer for auto only', async () => 
   const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], timeBox: [40, 0, 24, 32], split: true };
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(state, {}) });
   const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
-  const get = async () => (await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).body;
+  const get = async () => (await s.req(FULL)).body;
   assert.equal((await get()).radar.visit, null);
   assert.equal((await post({ radarEvery: 4, radarFor: 60 })).status, 200);
   assert.deepEqual((await get()).radar.visit, { every: 240, for: 60 });
@@ -473,20 +529,20 @@ test('update: weather screen gets conditions always, radar frames only while rai
   const screenWx = { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51, feels: null, wind: null, pop: null };
   let s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
   s.store.update('home', { showWeather: false });
-  let b = (await s.req('/board/update?b=home', h)).body;
+  let b = (await s.req(FULL)).body;
   assert.equal(b.wx, null); // weather row off...
   assert.deepEqual(b.radar.wx, screenWx); // ...but the weather screen still gets conditions
   await s.close();
   // Frames kept but no rain in the box: no frames sent, so the screen shows the weather.
   s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar({ on: false, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false }) });
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.deepEqual(b.radar.frames, []);
   assert.deepEqual(b.radar.ft, []);
   assert.deepEqual(b.radar.wx, screenWx);
   await s.close();
   // Rain in the box: the loop's frames, and conditions still sent.
   s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar({ on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false }) });
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.deepEqual(b.radar.frames, ['x']);
   assert.deepEqual(b.radar.wx, screenWx);
   await s.close();
@@ -528,7 +584,7 @@ test('simulator test radar: a recorded storm or snowstorm loops at the board sta
   assert.equal((await post({ radar: 'hail' })).status, 400);
   const r = (await post({ radar: 'storm' })).body;
   assert.equal(r.radar, 'storm');
-  let b = (await s.req('/board/update?b=home', h)).body;
+  let b = (await s.req(FULL)).body;
   assert.equal(b.radar.on, true);
   assert.equal(b.radar.frames.length, 3);
   assert.deepEqual(b.radar.ft.map((t, i) => (i ? t - b.radar.ft[i - 1] : 0)), [0, 720, 720]);
@@ -542,11 +598,11 @@ test('simulator test radar: a recorded storm or snowstorm loops at the board sta
   assert.ok(frames.every((f) => f.length === 2048 && rain(f) > 100), 'storm in every frame');
   assert.notDeepEqual(frames[0], frames[2], 'the loop moves');
   await post({ radar: 'snow' });
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   const snow = Buffer.from(await (await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/radar/${b.radar.frames[2]}?b=home`)).arrayBuffer());
   assert.ok([...snow].some((v) => v >= 8 && v <= 10), 'snow levels');
   await post({});
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.deepEqual([b.radar.on, b.radar.frames], [false, []]);
   await s.close();
 });
@@ -565,7 +621,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   assert.deepEqual([t.lines, t.warn], [['RD'], { kind: 'tor', lvl: 'warning' }]);
   assert.ok(t.left > 590 && t.left <= 600);
   // The real board's update carries them.
-  const b = (await s.req('/board/update?b=home', h)).body;
+  const b = (await s.req(FULL)).body;
   assert.ok(b.rows.every((x) => x.a === 1));
   assert.ok(b.ticker.every((x) => x.a === 1));
   assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' });
@@ -575,7 +631,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=nope`)).status, 404);
   r = await post({ lines: [], warn: null });
   assert.deepEqual((await r.json()).lines, []);
-  const c = (await s.req('/board/update?b=home', h)).body;
+  const c = (await s.req(FULL)).body;
   assert.ok(c.rows.every((x) => x.a === 0));
   assert.equal(c.warn, null);
   await s.close();
@@ -590,23 +646,23 @@ test('baseball: auto shows it during a game, weather warnings or not', async () 
   const h = { headers: { 'X-Board-Token': 'tok' } };
 
   let s = await serve({ tracker: tracker(), mlb: fakeMlb([]) });
-  let b = (await s.req('/board/update?b=home', h)).body;
+  let b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'transit');
   assert.deepEqual(b.mlb, { layout: 'classic', games: [] });
   await s.close();
 
   s = await serve({ tracker: tracker(), mlb: fakeMlb([game]) });
-  b = (await s.req('/board/update?b=home', h)).body;
+  b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'baseball');
   assert.deepEqual(b.mlb.games, [game]);
   // A weather warning doesn't take the board off the game.
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   await post({ warn: { kind: 'tor', lvl: 'warning' } });
-  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'baseball');
+  assert.equal((await s.req(FULL)).body.screen, 'baseball');
   // The phone can pick baseball directly.
   await post({});
   await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/state?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ screen: 'baseball' }) });
-  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'baseball');
+  assert.equal((await s.req(FULL)).body.screen, 'baseball');
   await s.close();
 
 });
@@ -652,7 +708,7 @@ test('baseball logo layout: payload carries logo ids and band colors; the board 
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), mlb: fakeMlb([game]), logos: fakeLogos({ CHC: '#142d5a' }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   s.store.update('home', { baseballLayout: 'logos' });
-  const b = (await s.req('/board/update?b=home', h)).body;
+  const b = (await s.req(FULL)).body;
   assert.equal(b.mlb.layout, 'logos');
   assert.equal(b.mlb.dim, 0.9);
   assert.deepEqual([b.mlb.games[0].away.lg, b.mlb.games[0].away.bd], ['CHC-1', '#142d5a']);

@@ -2,7 +2,7 @@
 #
 # Board takes its hardware as plain objects so the whole loop can run under
 # CPython against a fake network and clock (firmware/tests/test_app.py):
-#   net      - connect(networks, status) / ping() / version() / update(boot)
+#   net      - connect(networks, status) / ping() / version(health) / update(boot, screen)
 #              / radar(frame_id, buf) / logo(logo_id, buf) (fill buf) / mac;
 #              raises on failure
 #   display  - show(draw_fn): draw_fn(frame) fills a fresh frame, then it's shown
@@ -24,12 +24,13 @@ LIVE_EVERY = 10000      # combined update while a live game is on screen
 RADAR_EVERY = 3000      # one missing radar frame per run
 LOGO_EVERY = 3000       # one missing team logo per run (baseball logo layout)
 FAILS_BEFORE_RECONNECT = 3
+HEALTH_EVERY = 60000    # ms between health snapshots sent with the version check
 OOM_STREAK_MAX = 50     # draws in a row that hit MemoryError before giving up (restart)
 RETRY_WIFI_MS = (10000, 20000, 30000, 60000)  # waits between rounds, then every minute
 
 
 class Board:
-    def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print):
+    def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print, mem_free=None):
         self.net = net
         self.display = display
         self.clock = clock
@@ -53,7 +54,11 @@ class Board:
         self.update_job = self.sched.add(Job('update', UPDATE_EVERY, 30000, self._update))
         self.radar_job = self.sched.add(Job('radar', RADAR_EVERY, 120000, self._radar))
         self.logo_job = self.sched.add(Job('logo', LOGO_EVERY, 120000, self._logo))
-        self.stats = {'fetches': 0, 'forced': 0, 'draws': 0, 'oom': 0}
+        self.stats = {'fetches': 0, 'forced': 0, 'draws': 0, 'oom': 0, 'fails': 0, 'reconnects': 0}
+        self.mem_free = mem_free     # () -> bytes free, for health reports
+        self.last_error = ''         # '<job>:<ExceptionName>' of the latest failure
+        self.health_q = ''
+        self.health_at = None
         self.oom_streak = 0
 
     # ---- time ----
@@ -149,15 +154,38 @@ class Board:
             gc.collect()
             return False
 
+    def health_query(self, ms):
+        """Health fields for the version check (contract: /board/version),
+        rebuilt at most once a minute: free memory, skipped draws, fetch
+        budget, uptime, failed fetches, reconnects, last error, WiFi signal."""
+        if self.health_at is None or ms - self.health_at >= HEALTH_EVERY:
+            self.health_at = ms
+            q = '&hu=%d&hb=%d&ho=%d&hf=%d&hr=%d' % (
+                ms // 1000, self.sched.budget_ms, self.stats['oom'], self.stats['fails'], self.stats['reconnects'])
+            if self.mem_free:
+                q += '&hm=%d' % self.mem_free()
+            rssi = getattr(self.net, 'rssi', None)
+            if rssi:
+                try:
+                    q += '&hw=%d' % rssi()
+                except Exception:  # noqa: BLE001 - nice to have
+                    pass
+            if self.last_error:
+                q += '&he=' + self.last_error
+            self.health_q = q
+        return self.health_q
+
     def _version(self, ms):
-        r = self.net.version()
+        r = self.net.version(self.health_query(ms))
         self._sync(r['now'], ms, self.clock.ms())
         if self.player.p is None or r.get('v') != self.player.p.get('v'):
             self.update_job.due_at = 0  # settings changed: fetch now
         return 'ok'
 
     def _update(self, ms):
-        p = self.net.update(False)
+        # The server sends only the shown screen's sections; while a button
+        # press overrides the screen, ask for that one.
+        p = self.net.update(False, self.override.screen)
         self._apply(p, ms, self.clock.ms())
         return 'ok'
 
@@ -229,6 +257,8 @@ class Board:
             except Exception as e:  # noqa: BLE001 - a failed fetch must not stop the board
                 self.log('[board] %s failed: %r' % (job.name, e))
                 result = 'fail'
+                self.stats['fails'] += 1
+                self.last_error = job.name + ':' + type(e).__name__  # letters only: safe in a URL
                 if isinstance(e, MemoryError):
                     gc.collect()  # says nothing about the network: don't count it toward a reconnect
                 else:
@@ -255,6 +285,7 @@ class Board:
                 self.log('[board] %d failures in a row; reconnecting' % self.fails)
                 self.online = False
                 self.fails = 0
+                self.stats['reconnects'] += 1
                 self.connect(boot=False)
             ms = self.clock.ms()
 
@@ -280,6 +311,8 @@ class Board:
             screen = self.override.press(step, self.player.screen, self.player.p.get('v'))
             self.player.set_screen(screen, ms)
             self.radar_job.due_at = 0
+            # The payload only has the old screen's data: fetch the new one now.
+            self.update_job.due_at = ms - self.update_job.deadline_ms
 
 
 def run():
@@ -298,7 +331,7 @@ def run():
         bit_depth=int(os.getenv('MATRIX_BIT_DEPTH') or 5),
         gamma=float(os.getenv('MATRIX_GAMMA') or 1),
     )
-    board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog)
+    board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog, mem_free=hw.mem_free)
     board.connect(boot=device.cold_boot())
     last_report = hw.clock.ms()
     while True:
