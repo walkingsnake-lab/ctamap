@@ -162,14 +162,10 @@
     const newFrame = makeFrame || (() => new Frame(64, 32, fonts));
     const s = (cp) => String.fromCodePoint(cp);
 
-    // Line colors for thin strokes (the chronological view's index digits):
-    // Brown and Purple are too dark as 1px strokes, so they're brightened.
-    const DIGIT_OVERRIDE = { BR: '#a8673f', PR: '#9168e0' };
     const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
-    const DIGIT = Object.fromEntries(Object.entries(LINE).map(([k, v]) => [k, DIGIT_OVERRIDE[k] || v]));
     const C = {
-      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#9c6a00',
-      sch: '#b0b0b0', schDim: '#6e6e6e', grey: '#8f8f8f', divider: '#333333',
+      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
+      sch: '#b0b0b0', schDim: '#474747', grey: '#8f8f8f', divider: '#333333',
       head: '#808080', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
@@ -347,9 +343,9 @@
       const top = Math.round(row.top);
       const chrono = row.num != null;
       const line = fade(LINE[row.ln], row.alpha);
-      // Chronological view: the row's position as a line-colored digit
-      // (Brown/Purple brightened for thin strokes), before the block.
-      if (chrono) drawTimeCell(f, String(row.num), 2, top, fade(DIGIT[row.ln], row.alpha), row.numRoll);
+      // Chronological view: the row's position as a digit in the block's
+      // exact color, before the block.
+      if (chrono) drawTimeCell(f, String(row.num), 2, top, line, row.numRoll);
       const bx = chrono ? CHRONO_BLOCK_X : 0;
       if (row.a && blink) {
         icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(bx + i, top + j, 1, 1, line); }));
@@ -1135,7 +1131,7 @@
     }
 
     return {
-      Frame, LINE, DIGIT, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
+      Frame, LINE, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing,

@@ -218,13 +218,10 @@ LINE = {
     'OR': hexc('#f9461c'), 'PR': hexc('#522398'), 'PK': hexc('#e27ea6'), 'YL': hexc('#f9e300'),
 }
 # Index digits in the chronological view: Brown and Purple brightened.
-DIGIT = dict(LINE)
-DIGIT['BR'] = hexc('#a8673f')
-DIGIT['PR'] = hexc('#9168e0')
 
 C = {
-    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#9c6a00'),
-    'sch': hexc('#b0b0b0'), 'schDim': hexc('#6e6e6e'), 'grey': hexc('#8f8f8f'),
+    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
+    'sch': hexc('#b0b0b0'), 'schDim': hexc('#474747'), 'grey': hexc('#8f8f8f'),
     'divider': hexc('#333333'), 'head': hexc('#808080'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
     'noTrains': hexc('#6c6c6c'), 'indicator': hexc('#3a3a3a'),
@@ -469,7 +466,7 @@ def draw_view_row(f, row, blink):
     chrono = row.get('num') is not None
     line = fade(LINE[row['ln']], row['alpha'])
     if chrono:
-        draw_time_cell(f, str(row['num']), 2, top, fade(DIGIT[row['ln']], row['alpha']), row.get('numRoll'))
+        draw_time_cell(f, str(row['num']), 2, top, fade(LINE[row['ln']], row['alpha']), row.get('numRoll'))
     bx = CHRONO_BLOCK_X if chrono else 0
     if row.get('a') and blink:
         for j, r in enumerate(assets.ALERT_BANG):
