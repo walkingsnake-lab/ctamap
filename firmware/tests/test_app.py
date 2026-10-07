@@ -311,6 +311,33 @@ class TestBoardLoop(unittest.TestCase):
         for lid, buf in board.player.logos.items():
             self.assertEqual(buf[0], sum(lid.encode()) % 251 + 1, 'slot %s holds stale data' % lid)
 
+    def test_a_draw_memory_error_skips_the_frame_instead_of_crashing(self):
+        board, server, clock, display, _, _ = make()
+        board.connect()
+        real = display.show
+        fails = [3]
+
+        def flaky(fn):
+            if fails[0]:
+                fails[0] -= 1
+                raise MemoryError('memory allocation failed, allocating 640 bytes')
+            real(fn)
+        display.show = flaky
+        run_for(board, clock, 5000)
+        self.assertEqual(fails[0], 0)
+        self.assertEqual(board.stats['oom'], 3)
+        self.assertGreater(board.stats['draws'], 0, 'drawing resumed')
+
+    def test_a_draw_that_never_recovers_still_restarts(self):
+        board, server, clock, display, _, _ = make()
+        board.connect()
+
+        def broken(fn):
+            raise MemoryError('memory allocation failed')
+        display.show = broken
+        with self.assertRaises(MemoryError):
+            run_for(board, clock, 60000)
+
     def test_live_games_update_faster(self):
         board, server, clock, _, _, _ = make()
         board.connect()
