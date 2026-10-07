@@ -24,11 +24,11 @@ const SPLIT_TIME_BOX = [40, 0, W - 40, H];
 const FULL_TIME_BOX = [40, 0, 24, 22];
 const SHORE = 6;
 // s between loop frames. IEM's archive only has frames at even minutes;
-// every multiple of 6 minutes is one (5-minute steps hit odd minutes half
-// the time). 6 frames still span 30 minutes.
-const STEP = 360;
-const LOOP = 6;                          // frames in the loop (30 min)
-const KEEP = 12;                         // frames kept per location
+// every multiple of 12 minutes is one. 3 frames span 24 minutes: half the
+// frames the board has to download, at the cost of a jumpier loop.
+const STEP = 720;
+const LOOP = 3;                          // frames in the loop
+const KEEP = 6;                          // frames kept per location
 const ON_PX = 30, OFF_PX = 10;           // radar.on hysteresis (colored px); provisional
 
 const RAIN_DBZ = [15, 25, 35, 45, 55];   // -> values 1..5
@@ -232,7 +232,7 @@ function withTimeout(promise, ms, what) {
 
 // Keeps processed frames per station for the stations boards are showing.
 // One source frame is fetched per pass (newest missing first, then the rest
-// of the 30-minute loop), and only while a board has asked recently.
+// of the loop), and only while a board has asked recently.
 function createRadar({
   fetch = fetchFrame,
   weather = null,          // weather.js poller, for snow mode
@@ -248,8 +248,8 @@ function createRadar({
   const missing = new Map();  // stamp -> retry-after time
   let timer = null, busy = null;
 
-  // Loop slots, oldest first: the latest 5-minute time expected to exist, and
-  // the 5 before it.
+  // Loop slots, oldest first: the latest 12-minute time expected to exist,
+  // and the ones before it.
   function slots() {
     const latest = Math.floor((now() - lag) / STEP) * STEP;
     return Array.from({ length: LOOP }, (_, i) => stampOf(latest - (LOOP - 1 - i) * STEP));

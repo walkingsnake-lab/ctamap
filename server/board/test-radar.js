@@ -12,9 +12,9 @@ const KINDS = {
   storm: { stamp: '202008102100', mode: 'rain' },
   snow: { stamp: '202202021800', mode: 'snow' },
 };
-const LOOP = 6;
-const STEP = 360;      // s between frames, as in the real loop
-const DRIFT = 1.5;     // LEDs the weather moves per frame
+const LOOP = 3;
+const STEP = 720;      // s between frames, as in the real loop
+const DRIFT = 3;       // LEDs the weather moves per frame
 
 function createTestRadar({ dir = path.join(__dirname, 'fixtures', 'mrms') } = {}) {
   const built = new Map(); // `${kind}:${mapid}` -> Promise<Uint8Array[]>

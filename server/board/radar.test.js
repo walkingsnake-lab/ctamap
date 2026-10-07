@@ -106,30 +106,28 @@ test('stamps and archive URLs', () => {
 });
 
 test('poller: newest frame first, then backfill; 404s retried later; on/off hysteresis', async () => {
-  let t = R.timeOf('202008102108') + 120; // so the newest slot is 21:06
+  let t = R.timeOf('202008102112') + 120; // so the newest slot is 21:12
   const fetched = [];
-  const available = new Set(['202008102100', '202008102050']);
   const radar = R.createRadar({
     now: () => t, log: quiet,
     fetch: async (stamp) => {
       fetched.push(stamp);
-      // Every slot uses the derecho frame; slot 21:06 isn't in the archive yet.
-      if (stamp === '202008102106') { const e = new Error('HTTP 404'); e.status = 404; throw e; }
-      if (!available.has(stamp)) available.add(stamp);
+      // Every slot uses the derecho frame; slot 21:12 isn't in the archive yet.
+      if (stamp === '202008102112') { const e = new Error('HTTP 404'); e.status = 404; throw e; }
       return { wld: wldOf('202008102100'), png: pngOf('202008102100') };
     },
   });
-  // 6-minute slots: always even minutes (IEM only has even-minute frames).
-  assert.deepEqual(radar.slots(), ['202008102036', '202008102042', '202008102048', '202008102054', '202008102100', '202008102106']);
+  // 3 slots, 12 minutes apart: always even minutes (IEM only has even-minute frames).
+  assert.deepEqual(radar.slots(), ['202008102048', '202008102100', '202008102112']);
   // Morse: the time sits over the lake (full-width layout).
   assert.deepEqual(radar.want('40100', MORSE.lat, MORSE.lon), { on: false, frames: [], ft: [], timeBox: R.FULL_TIME_BOX, split: false });
   await radar.pass();
   await radar.pass();
-  assert.deepEqual(fetched, ['202008102106', '202008102100']); // 404, then the next newest
-  for (let i = 0; i < 6; i++) await radar.pass();
+  assert.deepEqual(fetched, ['202008102112', '202008102100']); // 404, then the next newest
+  for (let i = 0; i < 3; i++) await radar.pass();
   const r = radar.want('40100', MORSE.lat, MORSE.lon);
-  assert.equal(r.frames.length, 5);
-  assert.deepEqual(r.frames, ['40100-202008102036', '40100-202008102042', '40100-202008102048', '40100-202008102054', '40100-202008102100']);
+  assert.equal(r.frames.length, 2);
+  assert.deepEqual(r.frames, ['40100-202008102048', '40100-202008102100']);
   assert.deepEqual(r.ft, r.frames.map((id) => R.timeOf(id.split('-')[1])));
   assert.equal(r.on, true);
   assert.equal(radar.frame('40100', r.frames[0]).length, 2048);
@@ -139,7 +137,7 @@ test('poller: newest frame first, then backfill; 404s retried later; on/off hyst
   t += 121;
   radar.want('40100', MORSE.lat, MORSE.lon); // the board is still asking
   await radar.pass();
-  assert.equal(fetched.filter((s) => s === '202008102106').length >= 2, true);
+  assert.equal(fetched.filter((s) => s === '202008102112').length >= 2, true);
 });
 
 test('poller: idle stations cost nothing', async () => {
@@ -251,10 +249,10 @@ test('poller: after a quiet spell, old frames are not served and on resets', asy
   let t = R.timeOf('202008102108') + 120;
   const radar = R.createRadar({ now: () => t, log: quiet, fetch: async () => ({ wld: wldOf('202008102100'), png: pngOf('202008102100') }) });
   radar.want('40100', MORSE.lat, MORSE.lon);
-  for (let i = 0; i < 6; i++) await radar.pass();
+  for (let i = 0; i < 3; i++) await radar.pass();
   const storm = radar.want('40100', MORSE.lat, MORSE.lon);
   assert.equal(storm.on, true);
-  assert.equal(storm.frames.length, 6);
+  assert.equal(storm.frames.length, 3);
   t += 2 * 86400; // nobody asked for two days
   const later = radar.want('40100', MORSE.lat, MORSE.lon);
   assert.deepEqual([later.on, later.frames, later.ft], [false, [], []]);

@@ -71,7 +71,7 @@ class Server:
             {'ln': 'RD', 'lbl': 'HOWARD', 't': [now + 75 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': self.alert},
             {'ln': 'RD', 'lbl': '95TH', 't': [now + 130 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': 0},
         ]
-        frames = ['40100-%d' % (now // 300 * 300 - k * 300) for k in range(5, -1, -1)] if self.radar_on else []
+        frames = ['40100-%d' % (now // 720 * 720 - k * 720) for k in range(player.RADAR_SLOTS - 1, -1, -1)] if self.radar_on else []
         return {
             'v': self.v, 'now': now, 'tzo': -18000, 'age': 3, 'screen': 'weather' if self.radar_on and not self.visit else self.screen,
             'bright': 100, 'header': 'MORSE', 'view': 'dest', 'rows': rows,
@@ -224,7 +224,7 @@ class TestBoardLoop(unittest.TestCase):
         self.assertEqual(len(pool), player.RADAR_SLOTS)
         server.radar_on = True
         board.connect()
-        run_for(board, clock, 30 * 60 * 1000)  # the loop turns over 6 times
+        run_for(board, clock, 40 * 60 * 1000)  # the loop turns over 3+ times
         got = [c['name'] for c in server.calls if c['name'].startswith('radar')]
         self.assertGreaterEqual(len(got), 2 * player.RADAR_SLOTS)
         self.assertEqual(board.player.missing_frames(), [])
@@ -233,6 +233,19 @@ class TestBoardLoop(unittest.TestCase):
         for fid, buf in held.items():
             self.assertEqual(len(buf), player.RADAR_BYTES)
             self.assertEqual(buf[0], int(fid.rsplit('-', 1)[1]) % 251 + 1, 'frame %s holds stale data' % fid)
+
+    def test_radar_loop_fills_in_back_to_back(self):
+        # After the first frame, the rest follow right away instead of one
+        # per loop cycle (ran() used to push each to the next gap).
+        board, server, clock, _, _, _ = make()
+        board.connect()
+        run_for(board, clock, 30000)
+        server.radar_on = True
+        server.v = 2
+        run_for(board, clock, 60000)
+        fetches = [c['ms'] for c in server.calls if c['name'].startswith('radar')]
+        self.assertEqual(len(fetches), player.RADAR_SLOTS)
+        self.assertLess(fetches[-1] - fetches[0], player.RADAR_SLOTS * (LATENCY + 500))
 
     def test_radar_memory_error_is_retried_without_reconnecting(self):
         board, server, clock, _, _, statuses = make()
