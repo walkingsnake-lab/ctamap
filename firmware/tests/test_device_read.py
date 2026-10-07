@@ -25,7 +25,10 @@ class FakeResponse:
         if not private:
             self._readinto = None
 
+    biggest = 0
+
     def _readinto(self, buf):
+        self.biggest = max(self.biggest, len(buf))
         n = min(len(buf), self.step, len(self.body) - self.pos)
         buf[:n] = self.body[self.pos:self.pos + n]
         self.pos += n
@@ -49,6 +52,14 @@ class TestReadInto(unittest.TestCase):
         buf = bytearray(2048)
         device.read_into(FakeResponse(self.body), buf)
         self.assertEqual(bytes(buf), self.body)
+
+    def test_reads_are_small(self):
+        # esp32spi allocates a temp bytes per read, sized to the request.
+        r = FakeResponse(self.body, step=4096)
+        buf = bytearray(2048)
+        device.read_into(r, buf)
+        self.assertEqual(bytes(buf), self.body)
+        self.assertLessEqual(r.biggest, device.READ_CHUNK)
 
     def test_falls_back_to_small_chunks_without_readinto(self):
         buf = bytearray(2048)
