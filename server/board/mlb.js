@@ -17,6 +17,8 @@ const { TZ, tzOffset } = require('./time');
 
 const BASE = 'https://statsapi.mlb.com/api/v1/schedule';
 const CUBS = 112;
+const SOX = 145;
+const TEAMS = new Set([CUBS, SOX]); // every game for these teams, any game type
 const POSTSEASON = new Set(['F', 'D', 'L', 'W']); // wild card, division, LCS, World Series
 const PRE_S = 30 * 60;     // pregame shows from 30 min before first pitch
 const FINAL_S = 15 * 60;   // finals hold 15 min after the server first sees them
@@ -38,7 +40,7 @@ function url(now) {
   return `${BASE}?${q}`;
 }
 
-const qualifies = (g) => g.teams.away.team.id === CUBS || g.teams.home.team.id === CUBS || POSTSEASON.has(g.gameType);
+const qualifies = (g) => TEAMS.has(g.teams.away.team.id) || TEAMS.has(g.teams.home.team.id) || POSTSEASON.has(g.gameType);
 
 // One team: abbreviation, block color, runs (0 before first pitch), W-L.
 // In the postseason the API's leagueRecord is the team's postseason record.
@@ -185,4 +187,4 @@ function createMlb({ fetch = fetchJson, now = () => Date.now() / 1000, log = con
   };
 }
 
-module.exports = { createMlb, dayStart, FORCED_FINAL_HOUR, shown, trackScores, nextDelay, url, qualifies, CUBS, PRE_S, FINAL_S, FAST_S, SLOW_S };
+module.exports = { createMlb, dayStart, FORCED_FINAL_HOUR, shown, trackScores, nextDelay, url, qualifies, CUBS, SOX, TEAMS, PRE_S, FINAL_S, FAST_S, SLOW_S };

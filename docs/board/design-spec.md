@@ -240,7 +240,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **No frames yet** (rain in the box but nothing processed, e.g. right after a deploy): the weather layout.
 - **Shoreline** is painted on the lake's edge pixels (inside the water), so rain never covers it.
 - **Colors** (fills at 65%): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.
-- **Location marker:** white dot; rain or snow in the 4 pixels around it is cleared so it stands out, but the shoreline stays continuous next to it.
+- **Location marker:** white dot. The pixels around it keep their rain or snow (the earlier ring of 4 cleared pixels was dropped).
 - **Time:** X11 5x7 (dimmed `#7a7a7a`, AM/PM `#555555`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (2px-tall segments, current frame amber), AM/PM in Tom Thumb below. **The time is optional** (per-board `radarTime`, on by default): off replaces it with **current conditions**, the weather icon and temperature (Tom Thumb, label white `#d8d8d8`) right-aligned under the frame indicator, as on the weather row. The warning tag then moves to the **bottom right of the screen**: icon + `WATCH` or `WARN` on a black backing (WATCH runs past the time box onto the radar; to revisit). 
 - **Warning colors (every screen):** watches yellow, severe thunderstorm warnings orange, tornado warnings red and **blinking** (same 1 s blink as CTA alerts) on the weather row and the radar. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
 - **Warnings:** the small inline **bolt** (3x5, orange, severe) or **funnel** (4x5, red, tornado) sits **to the left of AM/PM** with a 2px gap, on the same 5px line. It never overlaps the clock or the frame indicator; the clock stack (indicator + clock + AM/PM line) occupies ~rows 2–18, which is the height the water-area check must reserve. Steady, no blinking. No polygons, no scrolling text.
@@ -258,7 +258,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Payload:** the combined update gets `mlb.games` (already filtered, in start order), ~100 bytes per game.
 
 ### When it shows (Auto mode)
-- **Every Cubs game** (team ID 112, any game type) and **every postseason game** (game types `F`, `D`, `L`, `W`). Postponed and cancelled games are skipped.
+- **Every Cubs and White Sox game** (team IDs 112 and 145, any game type) and **every postseason game** (game types `F`, `D`, `L`, `W`). Postponed and cancelled games are skipped.
 - **Window:** pregame from 30 min before first pitch (a delayed start stays in pregame), live, then final held 15 min after the server first sees it final (starting values; tune). A final first seen more than 6 h after first pitch (e.g. after a server restart) isn't shown.
 - **Forced Baseball** (screen set to Baseball on the phone) uses wider windows: every game scheduled today shows all day from midnight, and finals hold until 3 AM the next morning (no stale-final rule). Auto keeps the windows above, since there baseball takes over transit.
 - **Priority:** Auto shows baseball while any game is in its window, NWS warnings and watches included (plenty else announces the weather). Timed radar visits (§10), when turned on, interrupt baseball the same way they interrupt transit.

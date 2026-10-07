@@ -3,7 +3,7 @@
 # Board takes its hardware as plain objects so the whole loop can run under
 # CPython against a fake network and clock (firmware/tests/test_app.py):
 #   net      - connect(networks, status) / ping() / version() / update(boot)
-#              / radar(frame_id, buf) (fills buf) / logo(logo_id) / mac;
+#              / radar(frame_id, buf) / logo(logo_id, buf) (fill buf) / mac;
 #              raises on failure
 #   display  - show(draw_fn): draw_fn(frame) fills a fresh frame, then it's shown
 #   clock    - ms(): monotonic milliseconds (int)
@@ -24,6 +24,7 @@ LIVE_EVERY = 10000      # combined update while a live game is on screen
 RADAR_EVERY = 3000      # one missing radar frame per run
 LOGO_EVERY = 3000       # one missing team logo per run (baseball logo layout)
 FAILS_BEFORE_RECONNECT = 3
+OOM_STREAK_MAX = 50     # draws in a row that hit MemoryError before giving up (restart)
 RETRY_WIFI_MS = (10000, 20000, 30000, 60000)  # waits between rounds, then every minute
 
 
@@ -52,7 +53,8 @@ class Board:
         self.update_job = self.sched.add(Job('update', UPDATE_EVERY, 30000, self._update))
         self.radar_job = self.sched.add(Job('radar', RADAR_EVERY, 120000, self._radar))
         self.logo_job = self.sched.add(Job('logo', LOGO_EVERY, 120000, self._logo))
-        self.stats = {'fetches': 0, 'forced': 0, 'draws': 0}
+        self.stats = {'fetches': 0, 'forced': 0, 'draws': 0, 'oom': 0}
+        self.oom_streak = 0
 
     # ---- time ----
     # Epoch time stays in integers: CircuitPython floats have 22 bits of
@@ -125,6 +127,27 @@ class Board:
         self.player.set_payload(p, ms)
         self.player.set_screen(self.override.resolve(self.player.auto_screen(self.now(ms)), p.get('v')), ms)
         self.update_job.interval_ms = LIVE_EVERY if self.player.live_game() else UPDATE_EVERY
+        # Free the old payload now, in one piece, rather than leaving it to
+        # be collected mid-draw between newer allocations.
+        gc.collect()
+
+    def _draw(self, ms, now):
+        """Draw one frame. A MemoryError (a fragmented heap that can't fit
+        one allocation) skips the frame instead of crashing the board; the
+        next loop pass tries again. Returns True if the frame was shown."""
+        try:
+            self.display.show(lambda f: self.player.draw(f, ms, now))
+            self.oom_streak = 0
+            return True
+        except MemoryError as e:
+            self.stats['oom'] += 1
+            self.oom_streak += 1
+            if self.oom_streak >= OOM_STREAK_MAX:
+                raise  # stuck: let code.py restart the board
+            if self.oom_streak == 1:
+                self.log('[board] draw skipped: %r' % (e,))
+            gc.collect()
+            return False
 
     def _version(self, ms):
         r = self.net.version()
@@ -139,11 +162,20 @@ class Board:
         return 'ok'
 
     def _logo(self, ms):
-        # Team logos (24 x 12, immutable ids) for the baseball logo layout.
-        missing = self.player.missing_logos()
+        # Team logos (24 x 12, immutable ids) for the baseball logo layout:
+        # the game on screen and the next one, in preallocated slots.
+        missing = self.player.missing_logos(self.now(ms))
         if not missing:
             return 'skip'
-        self.player.add_logo(missing[0], self.net.logo(missing[0]))
+        buf = self.player.take_logo_slot()
+        if buf is None:
+            return 'skip'
+        try:
+            self.net.logo(missing[0], buf)
+        except Exception:
+            self.player.release_logo_slot(buf)
+            raise
+        self.player.add_logo(missing[0], buf)
         return 'more' if len(missing) > 1 else 'ok'
 
     def _radar(self, ms):
@@ -187,7 +219,7 @@ class Board:
         if job is not None:
             if self.player.blinking():
                 # Show the lit frame now; the freeze will hold it.
-                self.display.show(lambda f: self.player.draw(f, ms, now))
+                self._draw(ms, now)
                 self.last_draw = ms
             started = self.clock.ms()
             try:
@@ -231,10 +263,10 @@ class Board:
         now = self.now(ms)
         key = self.player.frame_key(ms, now)
         if self.last_draw < 0 or (ms - self.last_draw >= 33 if key is None else key != self.last_key):
-            self.display.show(lambda f: self.player.draw(f, ms, now))
-            self.last_draw = ms
-            self.last_key = key
-            self.stats['draws'] += 1
+            if self._draw(ms, now):
+                self.last_draw = ms
+                self.last_key = key
+                self.stats['draws'] += 1
 
     def _buttons(self, ms):
         if not self.buttons or not self.player.p:

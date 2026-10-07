@@ -56,9 +56,12 @@ test('derecho: a wide range of rain levels; the split panel stays empty', async 
   for (const lv of [1, 2, 3, 4]) assert.ok(h[lv] > 20, `level ${lv}: ${h[lv]}`);
   assert.ok(f.colored > R.ON_PX);
   for (let y = 0; y < 32; y++) for (let x = R.SPLIT_W; x < 64; x++) assert.equal(f.bytes[y * 64 + x], 0);
-  // Marker and its 4 neighbors.
+  // The marker, with its 4 neighbors left as they are (no cleared ring:
+  // the derecho has rain on 2 of them).
   const m = 16 * 64 + 19;
-  assert.deepEqual([f.bytes[m], f.bytes[m - 1], f.bytes[m + 1], f.bytes[m - 64], f.bytes[m + 64]], [7, 0, 0, 0, 0]);
+  assert.equal(f.bytes[m], R.MARKER);
+  const ring = [m - 1, m + 1, m - 64, m + 64].filter((k) => f.bytes[k] >= 1 && f.bytes[k] <= 5);
+  assert.equal(ring.length, 2, `rain next to the marker: ${ring.length}`);
 });
 
 test('snow: same echoes use the snow levels and thresholds', async () => {
@@ -171,8 +174,8 @@ test('water masks: Morse is full width with the lake east; masked water, shoreli
   // Morse sits on the shore: the shoreline continues right next to the dot.
   assert.equal(loc.shore[16 * 64 + 33], 1);
   assert.equal(f.bytes[16 * 64 + 33], R.SHORE);
-  // ...while rain next to the dot is still cleared.
-  for (const k of [16 * 64 + 31, 15 * 64 + 32, 17 * 64 + 32]) assert.ok(f.bytes[k] === 0 || f.bytes[k] === R.SHORE, `pixel ${k % 64},${k >> 6}`);
+  // ...and land next to the dot keeps its rain.
+  for (const k of [16 * 64 + 31, 15 * 64 + 32, 17 * 64 + 32]) assert.ok(f.bytes[k] !== R.MARKER, `pixel ${k % 64},${k >> 6}`);
 });
 
 test('water masks: the shoreline is drawn inside the time box', () => {
