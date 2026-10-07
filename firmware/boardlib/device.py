@@ -27,6 +27,7 @@ GLYPH_CACHE = 96  # glyph bitmaps kept for arrayblit, per font, codepoint, and p
 
 JOIN_TRIES = 3       # attempts per network before moving on
 JOIN_PAUSE_S = 2     # pause between attempts
+WARMUP_S = 20        # max wait for the radio to see any network
 
 
 def _pack(rgb):
@@ -266,6 +267,7 @@ class Net:
         ('portal', mac) if a network answered with a captive portal, or
         ('nowifi', None)."""
         portal = False
+        self._warm_up(status_cb)
         for ssid, password in networks:
             if not self._join(ssid, password, status_cb):
                 continue
@@ -277,16 +279,39 @@ class Net:
             print('[wifi] %s: joined, but /board/ping failed (captive portal?)' % ssid)
         return ('portal', self.mac) if portal else ('nowifi', None)
 
+    def _warm_up(self, status_cb):
+        """After a reset the ESP32 answers before its radio is ready, and
+        every join fails with 'No such ssid'. Scan until it sees any network
+        (up to WARMUP_S), logging what it sees."""
+        end = time.monotonic() + WARMUP_S
+        while True:
+            status_cb('connecting', None)  # feeds the watchdog
+            try:
+                seen = self.esp.scan_networks()
+            except Exception as e:  # noqa: BLE001
+                seen = []
+                print('[wifi] scan failed: %r' % (e,))
+            if seen:
+                names = []
+                for ap in seen:
+                    n = ap.ssid if hasattr(ap, 'ssid') else ap['ssid']
+                    n = n.decode('utf-8') if isinstance(n, bytes) else n
+                    if n and n not in names:
+                        names.append(n)
+                print('[wifi] radio ready; sees: %s' % ', '.join(names))
+                return
+            if time.monotonic() > end:
+                print('[wifi] radio still sees nothing after %d s' % WARMUP_S)
+                return
+            time.sleep(1)
+
     def _join(self, ssid, password, status_cb):
-        """Join one network, retrying: right after a restart the ESP32 often
-        refuses the first attempts. The last retry hard-resets it first.
-        status_cb feeds the watchdog before each (up to ~10 s) attempt."""
+        """Join one network, with a few tries (a hotspot can drop out of a
+        scan now and then). status_cb feeds the watchdog before each try."""
         for attempt in range(JOIN_TRIES):
             status_cb('connecting', ssid)
             try:
-                if attempt == JOIN_TRIES - 1:
-                    self.esp.reset()
-                elif self.esp.is_connected:
+                if self.esp.is_connected:
                     self.esp.disconnect()
                 self.esp.connect_AP(ssid, password)
                 return True
