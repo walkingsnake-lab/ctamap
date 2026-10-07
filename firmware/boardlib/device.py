@@ -19,9 +19,17 @@ from digitalio import DigitalInOut, Direction, Pull
 from . import draw
 
 # Palette: 0 is black, 1-10 are the radar values (so a radar frame copies
-# straight into the bitmap), the rest are allocated per frame.
+# straight into the bitmap), then a block per team-logo position (so a logo
+# copies in as one indexed blit), and the rest are allocated as colors are
+# used. Allocated colors persist across frames (rebuilding the table every
+# frame fragmented the heap) and reset only when the palette fills up.
 RADAR_FIRST = 1
-FREE_FIRST = 11
+LOGO_FIRST = 11
+LOGO_COLORS = 64  # per logo; the server caps each logo at this (mlb-logos.js MAX_COLORS)
+LOGO_POSITIONS = 2  # away (top band) and home
+FREE_FIRST = LOGO_FIRST + LOGO_POSITIONS * LOGO_COLORS  # 139
+COLOR_RESET = 190  # at a frame start past this slot, forget allocated colors (65 left for one frame)
+LOGO_CACHE = 4     # indexed logos kept (current game + next, by position)
 GLYPH_CACHE = 96  # glyph bitmaps kept for arrayblit, per font, codepoint, and palette slot
 
 
@@ -99,18 +107,59 @@ class BoardFrame(draw.Frame):
         self._clips = []
         self.bitmap = bitmap
         self.palette = palette
-        self.colors = {}
-        self.next = FREE_FIRST
-        self.k = 1
-        self.glyphs = {}
-
-    def begin(self):
-        self.bitmap.fill(0)
         self.colors = {(0, 0, 0): 0}
         self.next = FREE_FIRST
         self.k = 1
+        self.glyphs = {}
+        self.fresh = []          # (rgb, slot) allocated since the last commit
+        self.committed_k = None  # brightness the palette was last written for
+        self.logo_cache = {}     # (logo id, position) -> [colors, slots, packed, packed_for]
+        self.logo_drawn = {}     # position -> cache entry drawn this frame
+        self.logo_written = {}   # position -> (entry, dim, k) last written to the palette
+
+    def begin(self):
+        self.bitmap.fill(0)
+        if self.next > COLOR_RESET:
+            self.colors = {(0, 0, 0): 0}
+            self.next = FREE_FIRST
+            self.glyphs = {}  # keyed by slot
+            self.committed_k = None
+        self.k = 1
         self.clip = None
         self._clips = []
+        self.logo_drawn = {}
+
+    def draw_logo(self, lid, data, x, top, dim):
+        """A 24 x 12 RGB logo as one indexed blit. Converted once per logo and
+        position into slots of that position's palette block; the colors
+        (dimmed, then brightness and gamma) are written in commit(). Same
+        pixels as draw_logo_band's per-pixel path, without allocating per pixel."""
+        pos = 0 if top < 12 else 1
+        key = (lid, pos)
+        ent = self.logo_cache.get(key)
+        if ent is None:
+            if len(self.logo_cache) >= LOGO_CACHE:
+                self.logo_cache = {}
+            base = LOGO_FIRST + pos * LOGO_COLORS
+            cols = []
+            seen = {}
+            slots = bytearray(24 * 12)
+            for i in range(24 * 12):
+                j = i * 3
+                rgb = (data[j], data[j + 1], data[j + 2])
+                n = seen.get(rgb)
+                if n is None:
+                    n = len(cols)
+                    if n >= LOGO_COLORS:
+                        n = LOGO_COLORS - 1  # over the server's cap: share the last slot
+                    else:
+                        cols.append(rgb)
+                        seen[rgb] = n
+                slots[i] = base + n
+            ent = [cols, slots, None, None]
+            self.logo_cache[key] = ent
+        self.logo_drawn[pos] = (ent, dim)
+        bitmaptools.arrayblit(self.bitmap, ent[1], x, top, x + 24, top + 12)
 
     def _index(self, rgb):
         i = self.colors.get(rgb)
@@ -120,6 +169,7 @@ class BoardFrame(draw.Frame):
             i = self.next
             self.next += 1
             self.colors[rgb] = i
+            self.fresh.append((rgb, i))
         return i
 
     def set(self, x, y, rgb):
@@ -198,11 +248,31 @@ class BoardFrame(draw.Frame):
         k = self.k
         pal = self.palette
         lut, floor = self.lut, self.floor
-        for rgb, i in self.colors.items():
-            pal[i] = _pack(correct(draw.scale_color(rgb, k) if k != 1 else rgb, lut, floor))
-        for v in range(RADAR_FIRST, FREE_FIRST):
-            rgb = draw.RADAR[v]
-            pal[v] = _pack(correct(draw.scale_color(rgb, k) if k != 1 else rgb, lut, floor))
+
+        def packed(rgb):
+            return _pack(correct(draw.scale_color(rgb, k) if k != 1 else rgb, lut, floor))
+        if k != self.committed_k:
+            # Brightness changed (or the table reset): rewrite everything.
+            for rgb, i in self.colors.items():
+                pal[i] = packed(rgb)
+            for v in range(RADAR_FIRST, LOGO_FIRST):
+                pal[v] = packed(draw.RADAR[v])
+            self.logo_written = {}
+            self.committed_k = k
+        else:
+            for rgb, i in self.fresh:
+                pal[i] = packed(rgb)
+        self.fresh = []
+        for pos, (ent, dim) in self.logo_drawn.items():
+            if self.logo_written.get(pos) == (id(ent), dim, k):
+                continue
+            if ent[3] != (dim, k):
+                ent[2] = [packed((draw.jsround(c[0] * dim), draw.jsround(c[1] * dim), draw.jsround(c[2] * dim))) for c in ent[0]]
+                ent[3] = (dim, k)
+            base = LOGO_FIRST + pos * LOGO_COLORS
+            for n, v in enumerate(ent[2]):
+                pal[base + n] = v
+            self.logo_written[pos] = (id(ent), dim, k)
 
 
 class Display:
