@@ -102,7 +102,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Use | Color |
 |---|---|
 | Labels | white `#d8d8d8` |
-| **Clocks (all screens)** | 80% white `#cccccc` |
+| **Clocks** | 80% white `#cccccc` (overnight, no-games); header clocks use the header grey `#808080` |
 | First arrival time | amber `#ffb000` |
 | Later times | dim amber `#9c6a00` |
 | Schedule-based times (`isSch`), first / later | grey `#b0b0b0` / `#6e6e6e` (instead of amber; same width, so digit rolls are unaffected) |
@@ -115,7 +115,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from Open-Meteo). Every dim element has a **minimum floor** so it never drops to black at night.
 - **Radar rain fills** render at ~65%; **ticker row fills** at 55%. Text stays full brightness.
 - Rule of thumb from the session: **lit strokes on dark survive; dark strokes on lit don't** (diffuser glow fills them in).
-- **Clock colons are steady** on every clock. Every clock (transit header, overnight, ticker header) uses the same `#cccccc`; the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#8f8f8f`) so it doesn't read as the current time.
+- **Clock colons are steady** on every clock. The big clocks (overnight, no-games) use `#cccccc`; the transit and ticker header clocks match the station name's `#808080`; the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#8f8f8f`) so it doesn't read as the current time.
 
 ---
 
@@ -132,7 +132,9 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 
 ### Layout
 - **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
-- **Header** (station grey + clock `#cccccc` on a faint full-width background band, no divider line) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
+- **Header** (station name and clock both `#808080`, flush to the screen edges at x0 and x63, no background; same as the ticker header) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
+- **Divider lines** are separate per-board toggles: a `#333333` line on row 7 under the header (default off) and the row-22 line above the weather row (default on). Neither changes the row layout.
+- **No edge padding:** text runs to the screen edges (x0 and x63) everywhere outside filled bands.
 - Rows fill the remaining space (5px rows, gaps of 1px or more).
 - **Without the header, rows are spread evenly** from the top of the panel to the weather divider (or the bottom edge): equal gaps above, between, and below. The between-row gap is the ideal gap rounded to the nearest pixel; the leftover is split top and bottom, any odd pixel going to the bottom.
 - **Fitting:** the header and weather toggles are the most the board shows. When more destinations are running than fit, the **weather row is hidden first, then the header**, so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header (if on) and **no weather row**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
@@ -166,7 +168,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Switching is immediate both ways:** chronological as soon as destinations exceed max rows, back as soon as they fit. If short-turns make it flip too often, raise `CHRONO_HOLD` in `arrivals.js` (a hold time before switching back; the mechanism is built, set to 0).
 - **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
 - **Time format:** digits + lowercase `m` with the font's own **1px gap** (`4m`, `12m`); `DUE` stays bare. Labels are fitted against the widest time (`99m`), so they have up to 43px.
-- **Line ID: a line-colored position digit** (1–5, Tom Thumb, in the 3px block's place) instead of the color block, like the ticker's index column. Brown (`#a8673f`) and Purple (`#9168e0`) digits are brightened because the official colors read too dark as 1px strokes; everything else uses the line color. When a train departs, each digit rolls down (2→1) as the list slides up. Alerts blink the digit to the same `!`. No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
+- **Line ID: a line-colored position digit** (1–5, Tom Thumb, columns 0–2), then a 1px gap, the 3px line-color block (columns 4–6), and the label at x9. Brown (`#a8673f`) and Purple (`#9168e0`) digits are brightened because the official colors read too dark as 1px strokes; everything else uses the line color. When a train departs, each digit rolls down (2→1) as the list slides up. Alerts blink the block to the same `!` (the digit stays). No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
 - Same row counts and geometry as destination rows; the header follows its setting; the weather row is always off (4 rows with the header, 5 without). The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
 - **Departure:** the first row slides up under the header while fading, the list slides up one row pitch with it (0.5 s ease), the next train turns amber, and a new train slides in at the bottom. Per-digit roll still applies within a row (`12m`→`11m` rolls only the 2).
 - **Trains swapping order** between updates: rows are keyed by run number, so the two rows just slide past each other.
@@ -215,7 +217,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ## 6. Screen 2: CTA-style ticker (easter egg)
 
-- **Header:** station in light grey `#a6a6a6`, clock `#cccccc`, no background.
+- **Header:** the transit header's: station and clock `#808080`, flush to the edges, no background. (No divider option: the rows start at row 7.)
 - **Two 12px rows** with a 1px gap; dark grey index column `#2d2d2d` (neutral: a tinted dark color collapses to one saturated channel on the panel), **5px wide**, numbered 1–6 in Tom Thumb. The row fill starts right after it (no gap); the destination starts 2px into the fill. Minutes are right-aligned to column 62, with a 2px gap between the digits and `min`.
 - Row fill = line color at 55% (adjustable per board on the phone, 25–80%); **white** destination (X11 5x7 proportional, mixed case) + minutes (5x7 digits + `min` glyph); `Due` within 60 s (minutes round up, like CTA; see contract countdown rules). Yellow rows also use white text.
 - Destinations use the short-name map, so short-turns appear as `UIC` and `Jeff Pk`.
@@ -265,9 +267,9 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ### Layout
 - **Three layouts** (phone page, Baseball screen): **Classic** (below), **Logos**, and **Bands** (see *Logo and band layouts*). The status panel, divider, and bottom line are shared.
-- **Team rows (Classic):** 3x6 team-color block at x1 and the abbreviation in X11 5x7 (label white) at x6; away on top (block rows 2–7), home below (rows 12–17).
+- **Team rows (Classic):** 3x6 team-color block at x0 and the abbreviation in X11 5x7 (label white) at x5; away on top (block rows 2–7), home below (rows 12–17).
 - **Divider** on row 24 (`#333333`), full width, in every layout (moved down from the weather row's 22 so the logo bands get 12 rows each). **No series label** (e.g. `NLDS G2`) anywhere.
-- **Bottom line** (Tom Thumb, baseline 31) sits on the same rows as the transit weather row and is right-aligned to x62.
+- **Bottom line** (Tom Thumb, baseline 31) sits on the same rows as the transit weather row and is right-aligned to x63 (`TODAY` at x0).
 - **Score flash:** when a live score changes, that team's score turns amber for 30 s, then fades back to white over 5 s. The server stamps the change time (the board only draws it); a game first seen mid-game doesn't flash.
 
 **Live**

@@ -103,8 +103,8 @@ function transitRows(f, rows, tops) {
 // Transit: header on, weather off -> 4 rows, pitch 6, rows at 9-27 under the header (no band).
 {
   const f = new Frame();
-  f.text('small', 'MORSE', 1, 6, C.head);
-  rtext(f, 'small', '9:41', 62, 6, C.clock);
+  f.text('small', 'MORSE', 0, 6, C.head);
+  rtext(f, 'small', '9:41', 63, 6, C.head);
   transitRows(f, [
     ['RD', 'HOWARD', ['DUE', '8', '15']],
     ['RD', '95TH', ['3', '11', '19']],
@@ -117,8 +117,8 @@ function transitRows(f, rows, tops) {
 // Transit with a Red Line alert: both Red rows in the "!" half of the blink.
 {
   const f = new Frame();
-  f.text('small', 'MORSE', 1, 6, C.head);
-  rtext(f, 'small', '9:41', 62, 6, C.clock);
+  f.text('small', 'MORSE', 0, 6, C.head);
+  rtext(f, 'small', '9:41', 63, 6, C.head);
   transitRows(f, [
     ['RD', 'HOWARD', ['DUE', '8', '15'], true],
     ['RD', '95TH', ['3', '11', '19'], true],
@@ -144,8 +144,8 @@ function transitRows(f, rows, tops) {
 // Ticker: two 12px rows with a 1px gap, 5px index column, 55% row fill.
 {
   const f = new Frame();
-  f.text('small', 'MORSE', 1, 6, C.head);
-  rtext(f, 'small', '9:41', 62, 6, C.clock);
+  f.text('small', 'MORSE', 0, 6, C.head);
+  rtext(f, 'small', '9:41', 63, 6, C.head);
   const rows = [
     { ln: 'RD', dest: 'Howard', min: '4', idx: '1', alert: false },
     { ln: 'GR', dest: 'Cottage', min: '12', idx: '2', alert: true },

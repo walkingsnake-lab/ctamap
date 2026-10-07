@@ -67,6 +67,11 @@ async function build() {
   add('chrono clark/lake alerts', cl, [{ screen: 'transit' }, { screen: 'transit', blink: true }, { screen: 'transit', now: cl.now + 200 }]);
   add('chrono clark/lake weather + warning', payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { wx: WX, warn: { kind: 'svr', lvl: 'warning' } }), [{ screen: 'transit' }]);
   // 50%: every odd channel value lands on .5, where JS and Python rounding differ.
+  // Divider toggles: header line on, weather line off (dest and chrono views).
+  for (const [name, hdr] of [['belmont-2026-10-03-2316.json', 'BELMONT'], ['clark-lake-2026-10-03-2317.json', 'CLARK/LAKE']]) {
+    const p = { ...payloadFrom(name, hdr, { wx: WX }), headerDivider: true, wxDivider: false };
+    add(`dividers ${hdr}`, p, [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
+  }
   add('brightness 50', payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { wx: WX, bright: 50 }), [{ screen: 'transit' }, { screen: 'ticker' }]);
   add('dest belmont alerts blink + dim', payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { alerts: ['BR'], bright: 40 }), [{ screen: 'transit', blink: true }, { screen: 'transit', blink: false }]);
   for (const warn of [{ kind: 'tor', lvl: 'warning' }, { kind: 'svr', lvl: 'watch' }, { kind: 'tor', lvl: 'watch' }]) {

@@ -285,10 +285,13 @@ def draw_icon(f, name, x, y):
                 f.fill(x + i, y + j, 1, 1, assets.ICON_PALETTE[c])
 
 
-# Station name + clock on rows 1-5, no background (transit and ticker).
-def draw_header(f, name, now, tzo):
-    f.text('small', name, 1, 6, C['head'])
-    rtext(f, 'small', clock_text(now, tzo), 62, 6, C['clock'])
+# Station name + clock on rows 1-5, flush to the screen edges, both in the
+# header grey (transit and ticker). `divider`: a line on row 7 (transit).
+def draw_header(f, name, now, tzo, divider=False):
+    f.text('small', name, 0, 6, C['head'])
+    rtext(f, 'small', clock_text(now, tzo), 63, 6, C['head'])
+    if divider:
+        f.fill(0, 7, 64, 1, C['divider'])
 
 
 def warn_style(warn):
@@ -300,8 +303,9 @@ def warn_style(warn):
     return glyph, color, warn['kind'] == 'tor' and warn['lvl'] == 'warning'
 
 
-def draw_weather(f, wx, warn, blink=False):
-    f.fill(0, 22, 64, 1, C['divider'])
+def draw_weather(f, wx, warn, blink=False, divider=True):
+    if divider:
+        f.fill(0, 22, 64, 1, C['divider'])
     draw_icon(f, wx['icon'], 0, 24)
     base = 31
     f.text('small', str(wx['temp']) + '°', 10, base, C['wxText'])
@@ -389,6 +393,7 @@ def build_transit_view(p, now):
     tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')))
     return {
         'now': now, 'mode': 'dest', 'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'),
+        'hdiv': p.get('headerDivider') is True, 'wdiv': p.get('wxDivider') is not False,
         'stale': p.get('stale'), 'tzo': p.get('tzo', 0),
         'rows': [{'key': r['ln'] + ':' + r['lbl'], 'ln': r['ln'], 'lbl': r['lbl'], 'a': r.get('a'),
                   'num': None, 'numRoll': None, 'top': tops[i], 'alpha': 1, 'cells': layout_cells(r, now)}
@@ -418,23 +423,32 @@ def build_chrono_view(p, now):
     return {
         'now': now, 'mode': 'chrono', 'pitch': (tops[1] - tops[0]) if len(tops) > 1 else 6,
         'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'), 'stale': p.get('stale'),
+        'hdiv': p.get('headerDivider') is True, 'wdiv': p.get('wxDivider') is not False,
         'tzo': p.get('tzo', 0), 'rows': out,
     }
 
 
+# Chronological rows: digit in columns 0-2, the 3px line-color block at
+# CHRONO_BLOCK_X (1px gap), the label 2px after it.
+CHRONO_BLOCK_X = 4
+CHRONO_LABEL_X = 9
+
+
 def draw_view_row(f, row, blink):
     top = jsround(row['top'])
-    line = fade(DIGIT[row['ln']] if row.get('num') is not None else LINE[row['ln']], row['alpha'])
+    chrono = row.get('num') is not None
+    line = fade(LINE[row['ln']], row['alpha'])
+    if chrono:
+        draw_time_cell(f, str(row['num']), 2, top, fade(DIGIT[row['ln']], row['alpha']), row.get('numRoll'))
+    bx = CHRONO_BLOCK_X if chrono else 0
     if row.get('a') and blink:
         for j, r in enumerate(assets.ALERT_BANG):
             for i, c in enumerate(r):
                 if c == '#':
-                    f.fill(i, top + j, 1, 1, line)
-    elif row.get('num') is not None:
-        draw_time_cell(f, str(row['num']), 2, top, line, row.get('numRoll'))
+                    f.fill(bx + i, top + j, 1, 1, line)
     else:
-        f.fill(0, top, 3, 5, line)
-    f.text('small', row['lbl'], 5, top + 5, fade(C['label'], row['alpha']))
+        f.fill(bx, top, 3, 5, line)
+    f.text('small', row['lbl'], CHRONO_LABEL_X if chrono else 5, top + 5, fade(C['label'], row['alpha']))
     for cell in row['cells']:
         a = cell['alpha'] * row['alpha']
         if a <= 0:
@@ -462,7 +476,7 @@ def draw_transit_view(f, view, blink):
         draw_overnight(f, view, view['now'])
     else:
         if view.get('header'):
-            draw_header(f, view['header'], view['now'], view.get('tzo', 0))
+            draw_header(f, view['header'], view['now'], view.get('tzo', 0), view.get('hdiv') is True)
         f.push_clip(0, 7 if view.get('header') else 0, 63, 21 if view.get('wx') else 31)
         try:
             for row in view['rows']:
@@ -470,7 +484,7 @@ def draw_transit_view(f, view, blink):
         finally:
             f.pop_clip()
     if view.get('wx'):
-        draw_weather(f, view['wx'], view.get('warn'), blink)
+        draw_weather(f, view['wx'], view.get('warn'), blink, view.get('wdiv') is not False)
 
 
 def render_transit(p, f, now=None, blink=False, view=None):
@@ -656,6 +670,7 @@ class TransitAnimator:
             self._match_cells(st, r['cells'], t, is_new_row)
 
         view = {'now': now, 'mode': target['mode'], 'header': target.get('header'), 'wx': target.get('wx'),
+                'hdiv': target.get('hdiv'), 'wdiv': target.get('wdiv'),
                 'warn': target.get('warn'), 'stale': target.get('stale'), 'tzo': target.get('tzo', 0), 'rows': []}
         if not target['rows'] and not any(st.get('leaving') for st in self.rows.values()):
             self.rows.clear()
@@ -804,7 +819,7 @@ def temp_color(t):
 
 def draw_weather_screen(f, wx, warn, blink, shadow=False):
     def draw_temp(dx, dy, color):
-        x = 1 + dx
+        x = dx
         if wx['temp'] < 0:
             f.fill(x, 8 + dy, 5, 2, color)
             x += 7
@@ -816,7 +831,7 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
         return x + 2
 
     if shadow:
-        draw_temp(1, 1, scale_color(temp_color(wx["temp"]), 0.3))
+        draw_temp(1, 1, scale_color(temp_color(wx["temp"]), 0.2))
     temp_right = draw_temp(0, 0, C['label']) + (1 if shadow else 0)
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], 55, 1)
@@ -880,7 +895,7 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     if r.get('split') and r.get('timeBox'):
         f.fill(r['timeBox'][0] - 1, 0, 1, 32, C['divider'])
     bx, by, bw, bh = r.get('timeBox') or (40, 0, 24, 32)
-    right = min(62, bx + bw - 1)
+    right = min(63, bx + bw - 1)
     top = by + 2
     ft = r.get('ft')
     if idx >= 0 and ft and ft[idx] is not None:
@@ -1125,7 +1140,7 @@ def draw_logo_band(f, side, top, logos, bands, dim):
                 i = (y * LG_W + x) * 3
                 f.set(x, top + y, (jsround(data[i] * dim), jsround(data[i + 1] * dim), jsround(data[i + 2] * dim)))
     else:
-        ctext(f, '5x7', side.get('ab') or '', LG_W >> 1, top + 9, scale_color(C['label'], dim))
+        ctext(f, '5x7', side.get('ab') or '', LG_W >> 1, top + 9, lg_ink(side, dim))
 
 
 def _lg_left(t):
@@ -1179,17 +1194,17 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
             if not bands:
                 draw_logo_score(f, gm[k].get('ab') or '', top, lg_ink(gm[k], dim), None)
             ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
-        f.text('small', 'TODAY', 1, BB_BOTTOM, C['grey'])
+        f.text('small', 'TODAY', 0, BB_BOTTOM, C['grey'])
         ap = ampm_text(gm['start'], tzo)
-        rtext(f, 'small', ap, 62, BB_BOTTOM, C['grey'])
-        rtext(f, 'small', clock_text(gm['start'], tzo), 62 - measure('small', ap) - 3, BB_BOTTOM, C['label'])
+        rtext(f, 'small', ap, 63, BB_BOTTOM, C['grey'])
+        rtext(f, 'small', clock_text(gm['start'], tzo), 63 - measure('small', ap) - 3, BB_BOTTOM, C['label'])
         return f
 
     if final:
         for k, top in sides:
             draw_logo_score(f, str(gm[k]['r']), top, C['amber'] if winner == k else lg_ink(gm[k], dim), rolls.get(k))
             ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
-        rtext(f, 'small', 'FINAL', 62, BB_BOTTOM, C['label'])
+        rtext(f, 'small', 'FINAL', 63, BB_BOTTOM, C['label'])
         return f
 
     draw_logo_score(f, str(gm['away']['r']), LG_TOPS[0], score_color(gm['away'], now, lg_ink(gm['away'], dim)), rolls.get('away'))
@@ -1197,7 +1212,7 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
     draw_infield(f, gm.get('on') or [0, 0, 0], LG_INFIELD_Y)
     t = live_texts(gm)
     draw_roll_text(f, t['inn'], PANEL_X - measure('small', t['inn']) // 2, LG_INN_BASE, C['label'], rolls.get('inn'))
-    outs_left = 62 - measure('small', t['outs']) + 1
+    outs_left = 63 - measure('small', t['outs']) + 1
     draw_roll_text(f, t['outs'], outs_left, BB_BOTTOM, C['grey'], rolls.get('outs'))
     draw_roll_text(f, t['count'], outs_left - 5 - measure('small', t['count']), BB_BOTTOM, C['label'], rolls.get('count'))
     return f
@@ -1226,17 +1241,17 @@ def render_baseball(p, f, now=None, game=None, rolls=None, logos=None):
     name_end = 0
     for k, top in (('away', BB_ROW_TOPS[0]), ('home', BB_ROW_TOPS[1])):
         side = gm[k]
-        f.fill(1, top, 3, 6, hexc(side['c']) if side.get('c') else C['grey'])
-        name_end = max(name_end, f.text('5x7', side['ab'], 6, top + 6, C['amber'] if winner == k else C['label']))
+        f.fill(0, top, 3, 6, hexc(side['c']) if side.get('c') else C['grey'])
+        name_end = max(name_end, f.text('5x7', side['ab'], 5, top + 6, C['amber'] if winner == k else C['label']))
     f.fill(0, BB_DIVIDER, 64, 1, C['divider'])
 
     if gm['st'] == 'pre':
         f.text('small', bb_record(gm['away']), name_end + 2, BB_ROW_TOPS[0] + 6, C['grey'])
         f.text('small', bb_record(gm['home']), name_end + 2, BB_ROW_TOPS[1] + 6, C['grey'])
-        f.text('small', 'TODAY', 1, BB_BOTTOM, C['grey'])
+        f.text('small', 'TODAY', 0, BB_BOTTOM, C['grey'])
         ap = ampm_text(gm['start'], tzo)
-        rtext(f, 'small', ap, 62, BB_BOTTOM, C['grey'])
-        rtext(f, 'small', clock_text(gm['start'], tzo), 62 - measure('small', ap) - 3, BB_BOTTOM, C['label'])
+        rtext(f, 'small', ap, 63, BB_BOTTOM, C['grey'])
+        rtext(f, 'small', clock_text(gm['start'], tzo), 63 - measure('small', ap) - 3, BB_BOTTOM, C['label'])
         return f
 
     if final:
@@ -1249,7 +1264,7 @@ def render_baseball(p, f, now=None, game=None, rolls=None, logos=None):
                 color = C['label']
             draw_score(f, str(gm[k]['r']), top, color, rolls.get(k))
             ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 6, C['grey'])
-        rtext(f, 'small', 'FINAL', 62, BB_BOTTOM, C['label'])
+        rtext(f, 'small', 'FINAL', 63, BB_BOTTOM, C['label'])
         return f
 
     draw_score(f, str(gm['away']['r']), BB_ROW_TOPS[0], score_color(gm['away'], now), rolls.get('away'))
@@ -1257,7 +1272,7 @@ def render_baseball(p, f, now=None, game=None, rolls=None, logos=None):
     draw_infield(f, gm.get('on') or [0, 0, 0])
     t = live_texts(gm)
     draw_roll_text(f, t['inn'], PANEL_X - measure('small', t['inn']) // 2, 20, C['label'], rolls.get('inn'))
-    outs_left = 62 - measure('small', t['outs']) + 1
+    outs_left = 63 - measure('small', t['outs']) + 1
     draw_roll_text(f, t['outs'], outs_left, BB_BOTTOM, C['grey'], rolls.get('outs'))
     draw_roll_text(f, t['count'], outs_left - 5 - measure('small', t['count']), BB_BOTTOM, C['label'], rolls.get('count'))
     return f

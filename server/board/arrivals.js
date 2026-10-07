@@ -8,6 +8,7 @@ const { measure, fit, ligatures } = require('./fonts');
 
 // Transit row geometry (x positions on the 64px panel).
 const LABEL_X = 5;       // after the 3px color block + 2px gap
+const CHRONO_LABEL_X = 9; // chronological rows: digit, 1px gap, 3px block, 2px gap
 const RIGHT_X = 63;      // times are right-aligned to the last column
 const LABEL_GAP = 3;     // min px between label and times
 // Times are 3px apart, tightening to 2px when a row is full (draw.js does the
@@ -174,7 +175,7 @@ function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}
   const viewState = chooseView(ordered.length, max, prevView, now);
   const shown = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
 
-  const chronoLabelPx = RIGHT_X - LABEL_GAP - CHRONO_TIME_PX - LABEL_X + 1;
+  const chronoLabelPx = RIGHT_X - LABEL_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
   const rows = viewState.view === 'chrono' ? shown.slice(0, max + CHRONO_EXTRA).map((a) => ({
     ln: a.ln,
     lbl: fit('small', a.dest.toUpperCase(), chronoLabelPx),

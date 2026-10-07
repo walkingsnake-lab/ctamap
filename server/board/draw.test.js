@@ -398,8 +398,8 @@ test('weather screen extremes: minus bar, 3-digit temp drops the word, high/low 
   const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
   const rad = (wx) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx });
   const cold = draw.render({ now, bright: 100, warn: null, radar: rad({ icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -31, wind: 'NW 22', pop: 100 }) }, { screen: 'weather', now, frames: {} });
-  assert.equal(count(cold, draw.C.label, 1, 8, 5, 9), 10, 'minus bar');
-  assert.equal(count(cold, draw.C.label, 1, 4, 5, 7) + count(cold, draw.C.label, 1, 10, 5, 13), 0);
+  assert.equal(count(cold, draw.C.label, 0, 8, 4, 9), 10, 'minus bar at the left edge');
+  assert.equal(count(cold, draw.C.label, 0, 4, 4, 7) + count(cold, draw.C.label, 0, 10, 4, 13), 0);
   const hot = draw.render({ now, bright: 100, warn: null, radar: rad({ icon: 'sun', temp: 101, word: 'PT CLOUDY', hi: 103, lo: 82, feels: 112, wind: 'CALM', pop: 0 }) }, { screen: 'weather', now, frames: {} });
   assert.equal(count(hot, draw.C.wxText, 0, 11, 63, 15), 0, 'word skipped');
   // -21° low with 100%: degree signs dropped, 3px clear of the drop.
@@ -424,7 +424,7 @@ test('minutes round up, like CTA: DUE through 60 s, then 2, 3, ...; never 1', ()
   assert.deepEqual(f.px, g.px, '61 s and 120 s both draw as 2 min');
 });
 
-test('chrono: line-colored position digits instead of blocks; Brown and Purple brightened', () => {
+test('chrono: line-colored position digit, then the color block; Brown and Purple digits brightened', () => {
   const p = chronoPayload([chronoRow('RD', 'HOWARD', min(2), '1'), chronoRow('BR', 'KIMBALL', min(4), '2'), chronoRow('PR', 'LINDEN', min(6), '3')]);
   const f = draw.renderTransit(p);
   const tops = draw.rowTops(3, true, false);
@@ -434,20 +434,24 @@ test('chrono: line-colored position digits instead of blocks; Brown and Purple b
   ['RD', 'BR', 'PR'].forEach((ln, i) => {
     const n = count(f, draw.DIGIT[ln], 0, tops[i], 2, tops[i] + 4);
     assert.ok(n >= 5 && n < 15, `${ln} digit ${i + 1}: ${n} px (a solid block would be 15)`);
-    assert.equal(count(f, draw.LINE[ln], 0, tops[i], 4, tops[i] + 4) - (draw.DIGIT[ln] === draw.LINE[ln] ? n : 0), 0, 'no color block');
+    assert.equal(count(f, draw.LINE[ln], 4, tops[i], 6, tops[i] + 4), 15, '3x5 block after a 1px gap');
+    assert.equal(count(f, draw.LINE[ln], 3, tops[i], 3, tops[i] + 4) + count(f, draw.DIGIT[ln], 3, tops[i], 3, tops[i] + 4), 0, 'gap');
+    assert.ok(count(f, draw.C.label, 9, tops[i], 9, tops[i] + 4) > 0, 'label at x9');
+    assert.equal(count(f, draw.C.label, 7, tops[i], 8, tops[i] + 4), 0);
   });
   // Destination rows keep the solid blocks.
   const d = draw.renderTransit(payload([{ ln: 'BR', lbl: 'KIMBALL', t: [min(4)], s: [0], a: 0 }]));
   assert.equal(count(d, draw.LINE.BR, 0, 0, 2, 31), 15);
 });
 
-test('chrono: alert blinks the digit to "!"', () => {
+test('chrono: alert blinks the block to "!"; the digit stays', () => {
   const p = chronoPayload([{ ...chronoRow('GR', 'HARLEM', min(3), '1'), a: 1 }]);
   const top = draw.rowTops(1, true, false)[0];
   const on = draw.renderTransit(p, { blink: true });
   const off = draw.renderTransit(p, { blink: false });
-  assert.equal(count(on, draw.DIGIT.GR, 0, top, 2, top + 4), 4); // 3px stem + dot
-  assert.ok(count(off, draw.DIGIT.GR, 0, top, 2, top + 4) > 4);
+  assert.equal(count(on, draw.LINE.GR, 4, top, 6, top + 4), 4);   // 3px stem + dot
+  assert.equal(count(off, draw.LINE.GR, 4, top, 6, top + 4), 15);  // solid block
+  assert.equal(count(on, draw.DIGIT.GR, 0, top, 2, top + 4), count(off, draw.DIGIT.GR, 0, top, 2, top + 4));
 });
 
 test('chrono animator: position digits roll down as the list slides up', () => {
@@ -505,8 +509,8 @@ const AMBER = draw.C.amber;
 
 test('baseball live: team blocks, white scores, infield bases by runner, divider', () => {
   const f = draw.renderBaseball(bb(LIVE));
-  assert.equal(count(f, CHC.c, 1, 2, 3, 7), 18);           // 3x6 away block
-  assert.equal(count(f, STL.c, 1, 12, 3, 17), 18);         // 3x6 home block
+  assert.equal(count(f, CHC.c, 0, 2, 2, 7), 18);           // 3x6 away block at the left edge
+  assert.equal(count(f, STL.c, 0, 12, 2, 17), 18);         // 3x6 home block
   assert.ok(count(f, draw.BB.live, 22, 2, 30, 8) > 0);     // away score right-aligned to x30
   assert.equal(count(f, draw.BB.live, 31, 2, 40, 18), 0);
   assert.equal(count(f, draw.C.divider, 0, 24, 63, 24), 64);
@@ -545,8 +549,8 @@ test('baseball rotates games one minute each; no games shows the clock', () => {
   const t0 = Math.floor(NOW / 120) * 120; // a minute where game 0 is up
   assert.equal(draw.pickGame(p.mlb.games, t0).i, 0);
   assert.equal(draw.pickGame(p.mlb.games, t0 + 60).i, 1);
-  assert.equal(count(draw.renderBaseball(p, { now: t0 }), CHC.c, 1, 2, 3, 7), 18);
-  assert.equal(count(draw.renderBaseball(p, { now: t0 + 60 }), '#3a5fa8', 1, 2, 3, 7), 18);
+  assert.equal(count(draw.renderBaseball(p, { now: t0 }), CHC.c, 0, 2, 2, 7), 18);
+  assert.equal(count(draw.renderBaseball(p, { now: t0 + 60 }), '#3a5fa8', 0, 2, 2, 7), 18);
   assert.ok(count(draw.renderBaseball(bb()), draw.C.clock, 0, 0, 63, 31) > 0);
 });
 
@@ -660,7 +664,7 @@ test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at 
   assert.equal(hex(f.get(62, 2)), draw.C.amber);                   // indicator unchanged
   assert.ok(count(f, draw.C.label, 40, 8, 63, 12) > 8);            // 63° in label white, rows 8-12
   let maxX = 0; for (let y = 0; y < 32; y++) for (let x = 40; x < 64; x++) if (hex(f.get(x, y)) === draw.C.label) maxX = Math.max(maxX, x);
-  assert.equal(maxX, 62);                                          // right-aligned to x62
+  assert.equal(maxX, 63);                                          // right-aligned to the edge
   const iconPx = (fr) => { let n = 0; for (let y = 6; y < 14; y++) for (let x = 40; x < 56; x++) { const c = hex(fr.get(x, y)); if (c !== '#000000' && c !== draw.C.label) n++; } return n; };
   assert.ok(iconPx(f) > 10, 'weather icon left of the temperature');
   assert.equal(iconPx(off(null, { icon: null })), 0);              // no icon: temperature only
@@ -751,9 +755,15 @@ test('logo layout live: bands to x37, logo crop at the left, white scores, infie
   assert.equal(count(f, AMBER, 54, 6, 58, 10), 13);                 // 1st base, infield centered on row 8
 });
 
-test('logo layout without a logo shows the abbreviation, dimmed, in the logo slot', () => {
+test('logo layout without a logo shows the abbreviation in the band ink, in the logo slot', () => {
   const f = draw.renderBaseball(lg(lgGame({ st: 'live', inn: 1, half: 'T', on: [0, 0, 0] })), { logos: {} });
-  assert.ok(count(f, draw.C.label, 0, 12, 23, 23) > 10);            // "STL" in label grey (dim 1)
+  assert.ok(count(f, draw.BB.live, 0, 12, 23, 23) > 10);            // "STL" white on a dark band
+  // Light band (logo not loaded yet): black like the score, not white.
+  const gold = lgGame({ st: 'live', inn: 1, half: 'T', on: [0, 0, 0] });
+  gold.away = { ...gold.away, bd: '#ffc52f', c: '#ffc52f' };
+  const lt = draw.renderBaseball(lg(gold), { logos: {} });
+  assert.equal(count(lt, draw.BB.live, 0, 0, 23, 11), 0);
+  assert.ok(count(lt, '#000000', 0, 0, 23, 11) > 10);
   assert.equal(count(f, '#401010', 0, 0, 63, 31), 0);
 });
 
@@ -854,3 +864,21 @@ test('radar corner: shoreline in the clock box keeps a 1px margin from the time,
   }
 });
 
+
+test('header: name and clock flush to the edges in the header grey; divider toggles', () => {
+  const rows = [{ ln: 'RD', lbl: 'HOWARD', t: [min(3)], s: [0], a: 0 }];
+  const wx = { icon: 'rain', temp: 54, word: 'RAIN' };
+  const base = { ...payload(rows), header: 'MORSE', wx };
+  const f = draw.renderTransit(base);
+  assert.ok(count(f, draw.C.head, 0, 1, 0, 5) > 0, 'name starts at x0');
+  assert.ok(count(f, draw.C.head, 63, 1, 63, 5) > 0, 'clock ends at x63');
+  assert.equal(count(f, draw.C.clock, 0, 0, 63, 6), 0, 'clock in the header grey');
+  assert.equal(count(f, draw.C.divider, 0, 7, 63, 7), 0, 'no header line by default');
+  assert.equal(count(f, draw.C.divider, 0, 22, 63, 22), 64, 'weather line by default');
+  const g = draw.renderTransit({ ...base, headerDivider: true, wxDivider: false });
+  assert.equal(count(g, draw.C.divider, 0, 7, 63, 7), 64);
+  assert.equal(count(g, draw.C.divider, 0, 22, 63, 22), 0);
+  // The ticker header matches; it has no divider (its rows start at row 7).
+  const t = draw.render({ ...base, headerDivider: true, ticker: [] }, { screen: 'ticker' });
+  assert.ok(count(t, draw.C.head, 63, 1, 63, 5) > 0);
+});

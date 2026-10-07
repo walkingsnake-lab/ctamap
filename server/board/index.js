@@ -259,6 +259,8 @@ function createBoard({
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
       header: bars.showHeader ? board.station.name : null,
+      headerDivider: board.headerDivider === true,
+      wxDivider: board.wxDivider !== false,
       tickerHeader: board.station.name,
       hidden: bars.hidden,
       view,
