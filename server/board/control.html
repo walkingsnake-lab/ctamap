@@ -59,12 +59,19 @@
   #status:empty { display: none; }
   #status.err { color: var(--err); border-color: #5a2a2a; }
   #boardPick { margin-bottom: 4px; }
+  /* Settings tabs: one screen's settings at a time. */
+  .tabs { display: flex; gap: 4px; margin-top: 18px; overflow-x: auto; scrollbar-width: none; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: 1 1 auto; font: inherit; font-size: 13px; color: var(--muted); background: #161616; border: 1px solid #2a2a2a; border-radius: 999px; padding: 8px 6px; cursor: pointer; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { color: #111; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .col-side section[hidden] { display: none; }
   /* Desktop: preview, screen, and brightness stay in view on the left;
      settings in two columns on the right. */
   @media (min-width: 900px) {
     main { max-width: 1240px; display: grid; grid-template-columns: minmax(380px, 460px) 1fr; gap: 24px; align-items: start; padding: 24px 24px 40px; }
     .col-main { position: sticky; top: 24px; }
     .col-side { columns: 2 340px; column-gap: 16px; }
+    .tabs { column-span: all; margin: 0 0 16px; top: 24px; }
     .col-side section { break-inside: avoid; margin-top: 0; margin-bottom: 16px; }
     #status { grid-column: 1 / -1; }
   }
@@ -137,9 +144,7 @@
     <input type="range" id="level" min="5" max="100" step="5" aria-label="Brightness level" hidden>
     <p class="hint" id="brightHint"></p>
   </section>
- </div>
 
- <div class="col col-side">
   <section>
     <h2>Station</h2>
     <select id="station" aria-label="Station"></select>
@@ -149,14 +154,24 @@
       <button id="saveName">Save</button>
     </div>
   </section>
+ </div>
 
-  <section>
+ <div class="col col-side">
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Settings for">
+    <button role="tab" data-tab="transit">Transit</button>
+    <button role="tab" data-tab="ticker">Ticker</button>
+    <button role="tab" data-tab="weather">Weather</button>
+    <button role="tab" data-tab="baseball">Baseball</button>
+    <button role="tab" data-tab="health">Health</button>
+  </nav>
+
+  <section data-tab="weather">
     <h2>Weather screen</h2>
     <div class="row"><span>Temperature shadow</span><label class="switch"><input type="checkbox" id="tempShadow"><span></span></label></div>
     <p class="hint">A faint shadow behind the big temperature, colored from blue (cold) to red (hot).</p>
   </section>
 
-  <section>
+  <section data-tab="weather">
     <h2>Radar (while raining)</h2>
     <div class="seg" id="radarCorner">
       <button data-v="time">Frame time</button>
@@ -169,7 +184,7 @@
       <select id="radarHold" aria-label="Pause on the newest frame" style="width:auto"><option value="2">2 sec</option><option value="3">3 sec</option><option value="4">4 sec</option><option value="6">6 sec</option><option value="8">8 sec</option></select></div>
   </section>
 
-  <section>
+  <section data-tab="baseball">
     <h2>Baseball screen</h2>
     <div class="seg" id="bbLayout">
       <button data-v="classic">Classic</button>
@@ -210,7 +225,7 @@
     <p class="hint" id="logoStatus"></p>
   </section>
 
-  <section>
+  <section data-tab="transit">
     <h2>Transit screen</h2>
     <div class="row"><span>Transit header (station name)</span><label class="switch"><input type="checkbox" id="showHeader"><span></span></label></div>
     <div class="row"><span>Clock in the header (transit and ticker)</span><label class="switch"><input type="checkbox" id="headerClock"><span></span></label></div>
@@ -225,7 +240,7 @@
     <p class="hint" id="rowsHint"></p>
   </section>
 
-  <section>
+  <section data-tab="ticker">
     <h2>Ticker screen</h2>
     <div class="row"><span>Each page holds</span>
       <select id="tickerHold" aria-label="Each page holds" style="width:auto"><option value="5">5 sec</option><option value="6">6 sec</option><option value="8">8 sec</option><option value="10">10 sec</option><option value="12">12 sec</option><option value="15">15 sec</option></select></div>
@@ -235,14 +250,14 @@
     <p class="hint">How bright each row's line color is behind the white text (55% by default).</p>
   </section>
 
-  <section>
+  <section data-tab="transit">
     <h2>Destinations</h2>
     <div class="row"><span>All destinations</span><label class="switch"><input type="checkbox" id="allDest"><span></span></label></div>
     <ul id="dests"></ul>
     <p class="hint" id="destHint"></p>
   </section>
 
-  <section>
+  <section data-tab="health">
     <h2>Board health</h2>
     <div id="health"><p class="hint">No report yet. The board sends one about once a minute.</p></div>
   </section>
@@ -293,10 +308,18 @@
   }
 
   // Same rule as the board: radar visits on the auto screen while it rains.
+  // The screen the board shows now: the payload's screen, Auto's rotation,
+  // and weather visits. Same rules as autoScreen() in draw.js.
   function visitScreen(p) {
+    const now = Math.floor(p.now);
+    let screen = p.screen;
+    const rot = p.rot;
+    if (rot && rot.screens && rot.screens.length > 1 && rot.every > 0 && rot.screens.includes(screen)) {
+      screen = rot.screens[Math.floor(now / rot.every) % rot.screens.length];
+    }
     const r = p.radar, v = r && r.visit;
-    if (p.screen !== 'transit' || !r || !r.on || !v) return p.screen;
-    return Math.floor(p.now) % v.every < v.for ? 'weather' : 'transit';
+    if (!['transit', 'ticker', 'baseball'].includes(p.screen) || !v || !(v.every > 0) || !(r.on || v.always)) return screen;
+    return now % v.every < v.for ? 'weather' : screen;
   }
 
   // ---- preview ----
@@ -309,12 +332,27 @@
       img.onload = () => { $('preview').src = img.src; };
       img.src = `sim.png?b=${enc(boardId)}&scale=8&t=${Date.now()}`;
       const scr = visitScreen(p);
+      if (!tabChosen) { showTab(['transit', 'ticker', 'weather', 'baseball'].includes(scr) ? scr : 'transit'); tabChosen = true; }
       const shown = scr === 'transit' && p.view === 'chrono' ? 'transit (one train per row)' : scr;
       $('caption').textContent = `Showing ${shown} · data ${p.age}s old`;
     } catch (e) {
       $('caption').textContent = 'Preview unavailable: ' + e.message;
     }
   }
+
+  // ---- tabs ----
+  // One screen's settings at a time. Opens on whatever the board is showing
+  // (from the first preview), then stays where the user puts it.
+  let tab = null;
+  function showTab(name) {
+    tab = name;
+    for (const b of $('tabs').querySelectorAll('button')) b.setAttribute('aria-selected', String(b.dataset.tab === name));
+    for (const sec of document.querySelectorAll('.col-side section[data-tab]')) sec.hidden = sec.dataset.tab !== name;
+  }
+  $('tabs').addEventListener('click', (e) => { const t = e.target.dataset.tab; if (t) showTab(t); });
+  showTab('transit');
+  let tabChosen = false;
+  $('tabs').addEventListener('click', () => { tabChosen = true; });
 
   // ---- render ----
   function pressed(group, value) {
