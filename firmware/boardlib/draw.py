@@ -443,7 +443,7 @@ def build_chrono_view(p, now):
         dest = '%s:%s' % (r['ln'], r['lbl'])
         due = dest not in seen_dest
         seen_dest.add(dest)
-        key = ('rn:%s:%s' % (r['ln'], r['rn'])) if r.get('rn') is not None else '%s:%s:%s' % (r['ln'], r['lbl'], r['t'][0])
+        key = ('rn:' + str(r['rn'])) if r.get('rn') is not None else '%s:%s:%s' % (r['ln'], r['lbl'], r['t'][0])
         if key in seen_key:
             key += '#%d' % i
         seen_key.add(key)

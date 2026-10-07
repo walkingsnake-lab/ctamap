@@ -324,10 +324,10 @@
           const dest = `${r.ln}:${r.lbl}`;
           const due = !seenDest.has(dest); // chronological: the first one per destination is the soonest
           seenDest.add(dest);
-          // Identity for the animator: line + run (run numbers repeat across
-          // lines, and Train Tracker can list one run twice). Two rows must
-          // never share a key, or the animator merges them.
-          let key = r.rn != null ? `rn:${r.ln}:${r.rn}` : `${r.ln}:${r.lbl}:${r.t[0]}`;
+          // Identity for the animator: the run number. Two rows must never
+          // share a key or the animator merges them, so a run listed twice
+          // (or an odd shared number like 1000) gets a suffix.
+          let key = r.rn != null ? `rn:${r.rn}` : `${r.ln}:${r.lbl}:${r.t[0]}`;
           if (seenKey.has(key)) key += `#${i}`;
           seenKey.add(key);
           const sch = r.s && r.s[0];
