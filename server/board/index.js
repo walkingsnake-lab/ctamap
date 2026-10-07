@@ -37,6 +37,26 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+// The board's /board/update carries only what one screen draws (contract:
+// "Sections"): less JSON to parse on a heap that fragments. `for` names that
+// screen: the payload's `screen`, or `s` when a button press overrides it.
+// radar rides along whole on the weather screen and whenever timed visits
+// are on (the board switches to it by itself); otherwise only `on`. The
+// simulator's copy (api/update) stays whole.
+const SCREENS = ['transit', 'ticker', 'weather', 'baseball'];
+const SECTIONS = {
+  transit: ['header', 'hidden', 'view', 'rows', 'wx'],
+  ticker: ['ticker', 'tickerHeader', 'tickerFill'],
+  baseball: ['mlb'],
+  weather: [],
+};
+function sectionsFor(body, screen) {
+  const out = { ...body, for: screen };
+  for (const [sc, keys] of Object.entries(SECTIONS)) if (sc !== screen) for (const k of keys) delete out[k];
+  if (screen !== 'weather' && body.radar && !body.radar.visit) out.radar = { on: body.radar.on, visit: null };
+  return out;
+}
+
 function sendFrame(res, bytes) {
   if (!bytes) return send(res, 404, { err: 'unknown_frame' });
   res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': bytes.length, 'Cache-Control': 'max-age=3600, immutable' });
@@ -197,6 +217,28 @@ function createBoard({
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
   // without changing the board's config. The board's row list is
   // station-specific, so it's ignored while previewing another station.
+  // Board health, sent with the version check about once a minute
+  // (contract: /board/version). In memory only: it's a live view.
+  const healthOf = new Map(); // board id -> latest report + history bits
+  const HEALTH_FIELDS = { hu: 'uptime', hm: 'memFree', ho: 'oom', hb: 'budget', hf: 'fails', hr: 'reconnects', hw: 'rssi' };
+  function noteHealth(id, q, now) {
+    if (q.hu == null) return;
+    const h = { at: now };
+    for (const [k, name] of Object.entries(HEALTH_FIELDS)) {
+      const n = Number(q[k]);
+      if (q[k] != null && Number.isFinite(n)) h[name] = n;
+    }
+    if (typeof q.he === 'string' && /^[A-Za-z0-9_:]{1,64}$/.test(q.he)) h.lastError = q.he;
+    const prev = healthOf.get(id);
+    h.minMem = Math.min(h.memFree ?? Infinity, prev ? prev.minMem : Infinity);
+    if (!Number.isFinite(h.minMem)) delete h.minMem;
+    // Uptime going backwards means the board restarted (crash, watchdog, power).
+    h.restarts = (prev ? prev.restarts : 0) + (prev && h.uptime < prev.uptime ? 1 : 0);
+    h.lastRestart = prev && h.uptime < prev.uptime ? now - h.uptime : prev ? prev.lastRestart : null;
+    h.since = prev ? prev.since : now;
+    healthOf.set(id, h);
+  }
+
   // Last transit view per board and station, for the chrono hysteresis.
   // In memory only: after a restart the view is chosen fresh.
   const views = new Map();
@@ -302,6 +344,7 @@ function createBoard({
       if (!authed(req)) return send(res, 401, { err: 'bad_token' });
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
+      noteHealth(String(parsed.query.b), parsed.query, nowSecs());
       return send(res, 200, { v: board.v, now: nowSecs() });
     }
 
@@ -311,7 +354,9 @@ function createBoard({
       const id = String(parsed.query.b || '');
       const board = store.get(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      return send(res, 200, await update(board, id, parsed.query.boot === '1'));
+      const body = await update(board, id, parsed.query.boot === '1');
+      const shown = SCREENS.includes(parsed.query.s) ? parsed.query.s : body.screen;
+      return send(res, 200, sectionsFor(body, shown));
     }
 
     // One radar frame for the board's station: 2048 bytes, immutable.
@@ -366,6 +411,10 @@ function createBoard({
           const i = key.indexOf(':');
           return { key, ln: key.slice(0, i), name: key.slice(i + 1), live: live.has(key) ? 1 : 0 };
         }));
+      }
+      if (sub === 'api/health') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        return send(res, 200, Object.fromEntries(healthOf));
       }
       if (sub === 'api/state') {
         if (method === 'GET') return send(res, 200, store.all());
@@ -539,4 +588,4 @@ function createBoard({
   };
 }
 
-module.exports = { createBoard };
+module.exports = { sectionsFor, SECTIONS, createBoard };

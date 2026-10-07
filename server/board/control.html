@@ -195,6 +195,11 @@
     <ul id="dests"></ul>
     <p class="hint" id="destHint"></p>
   </section>
+
+  <section>
+    <h2>Board health</h2>
+    <div id="health"><p class="hint">No report yet. The board sends one about once a minute.</p></div>
+  </section>
  </div>
 
   <div id="status" role="status"></div>
@@ -433,6 +438,43 @@
     location.search = q;
   });
 
+  // ---- health ----
+  function ago(s) {
+    if (s < 90) return `${Math.round(s)} s`;
+    if (s < 5400) return `${Math.round(s / 60)} min`;
+    if (s < 172800) return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
+    return `${Math.round(s / 86400)} days`;
+  }
+  async function loadHealth() {
+    let all;
+    try { all = await api('api/health'); } catch (e) { return; }
+    const h = all[boardId];
+    if (!h) return;
+    const now = Date.now() / 1000;
+    const late = now - h.at > 180;
+    const kb = (b) => `${(b / 1024).toFixed(1)} KB`;
+    const rows = [
+      ['Last report', ago(now - h.at) + ' ago' + (late ? ' (offline?)' : '')],
+      ['Running for', ago(h.uptime)],
+      h.memFree != null && ['Free memory', kb(h.memFree) + (h.minMem != null ? ` (lowest ${kb(h.minMem)})` : '')],
+      ['Skipped frames', h.oom],
+      ['Failed fetches', h.fails],
+      ['WiFi reconnects', h.reconnects],
+      ['Restarts seen', h.restarts + (h.lastRestart ? `, last ${ago(now - h.lastRestart)} ago` : '')],
+      h.lastError && ['Last error', h.lastError.replace(':', ': ')],
+      h.rssi != null && ['WiFi signal', `${h.rssi} dBm`],
+      ['Fetch time', `${(h.budget / 1000).toFixed(1)} s`],
+    ].filter(Boolean);
+    $('health').replaceChildren(...rows.map(([k, v]) => {
+      const d = document.createElement('div');
+      d.className = 'row';
+      const a = document.createElement('span'); a.textContent = k;
+      const b = document.createElement('span'); b.textContent = String(v); b.style.color = late && k === 'Last report' ? 'var(--err)' : 'var(--muted)';
+      d.append(a, b);
+      return d;
+    }));
+  }
+
   // ---- start ----
   async function init() {
     $('simLink').href = 'sim?b=' + enc(boardId);
@@ -451,7 +493,9 @@
     render();
     refreshPreview();
     setInterval(refreshPreview, 10000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshPreview(); });
+    loadHealth();
+    setInterval(loadHealth, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); } });
   }
   init().catch((e) => setStatus('Could not load: ' + e.message, true));
 })();

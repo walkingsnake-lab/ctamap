@@ -40,6 +40,8 @@ class Server:
         self.calls = []
         self.fail_next = 0
         self.radar_oom = 0
+        self.health = []
+        self.update_screens = []
         self.games = None  # fn(now) -> mlb games, replacing the one live game
         self.wifi = ['ok']
         self.visit = None
@@ -99,12 +101,14 @@ class Server:
             return ('ok', networks[0][0])
         return (result, self.mac if result == 'portal' else None)
 
-    def version(self):
+    def version(self, health=''):
         self._call('version')
+        self.health.append(health)
         return {'v': self.v, 'now': int(self.now())}
 
-    def update(self, boot):
+    def update(self, boot, screen=None):
         self._call('update-boot' if boot else 'update')
+        self.update_screens.append(screen)
         return self.payload()
 
     def radar(self, fid, buf):
@@ -337,6 +341,35 @@ class TestBoardLoop(unittest.TestCase):
         display.show = broken
         with self.assertRaises(MemoryError):
             run_for(board, clock, 60000)
+
+    def test_a_button_press_fetches_the_new_screens_sections_right_away(self):
+        board, server, clock, _, btn, _ = make(buttons=True)
+        board.connect()
+        run_for(board, clock, 40000)
+        before = len(server.update_screens)
+        btn.held['down'] = True
+        run_for(board, clock, 100)
+        btn.held['down'] = False
+        pressed_at = clock.t
+        while len(server.update_screens) == before:
+            board.step()
+            clock.sleep_ms(5)
+            self.assertLess(clock.t - pressed_at, 3000, 'no update after the press')
+        self.assertEqual(server.update_screens[-1], board.player.screen)
+        self.assertEqual(server.update_screens[-1], 'ticker')
+
+    def test_health_rides_on_the_version_check_once_a_minute(self):
+        board, server, clock, _, _, _ = make()
+        board.mem_free = lambda: 26000
+        board.connect()
+        server.fail_next = 1
+        run_for(board, clock, 150000)
+        sent = [h for h in server.health if h]
+        self.assertTrue(all(h.startswith('&hu=') for h in sent))
+        self.assertIn('&hm=26000', sent[-1])
+        self.assertIn('&hf=1', sent[-1])
+        self.assertTrue(sent[-1].endswith('&he=version:OSError') or '&he=update:OSError' in sent[-1], sent[-1])
+        self.assertLessEqual(len(set(sent)), 4, 'rebuilt at most once a minute')
 
     def test_live_games_update_faster(self):
         board, server, clock, _, _, _ = make()

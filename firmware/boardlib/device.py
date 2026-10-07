@@ -285,6 +285,7 @@ class Net:
         self.url = url.rstrip('/')
         self.board_id = board_id
         self.token = token
+        self.feed = None  # watchdog feed, set by Hardware
 
     @property
     def mac(self):
@@ -372,6 +373,8 @@ class Net:
         return False
 
     def _get(self, path, auth=True):
+        if self.feed:
+            self.feed()
         headers = {'X-Board-Token': self.token} if auth and self.token else {}
         r = self.requests.get(self.url + path, headers=headers, timeout=10)
         if r.status_code != 200:
@@ -397,11 +400,16 @@ class Net:
         except Exception:  # noqa: BLE001 - HTML, redirects, timeouts all mean "not our server"
             return False
 
-    def version(self):
-        return self._json('/board/version?b=' + self.board_id)
+    def version(self, health=''):
+        """health: '&h...=' query fields (app.Board builds them)."""
+        return self._json('/board/version?b=' + self.board_id + health)
 
-    def update(self, boot):
-        return self._json('/board/update?b=' + self.board_id + ('&boot=1' if boot else ''))
+    def rssi(self):
+        return self.esp.rssi
+
+    def update(self, boot, screen=None):
+        """screen: a button-pressed screen whose sections to send."""
+        return self._json('/board/update?b=' + self.board_id + ('&boot=1' if boot else '') + ('&s=' + screen if screen else ''))
 
     def logo(self, logo_id, buf):
         """Read one logo (864 bytes) into buf, like radar()."""
@@ -428,10 +436,15 @@ class Net:
             r.close()
 
 
-class Watchdog:
-    """Resets the board if the loop stops feeding it (a hung request)."""
+WATCHDOG_S = 16  # the SAMD51's maximum
 
-    def __init__(self, timeout=60):
+
+class Watchdog:
+    """Resets the board if the loop stops feeding it (a hung request). The
+    loop feeds it every pass, and Net feeds it before each request, so one
+    request gets the whole WATCHDOG_S."""
+
+    def __init__(self, timeout=WATCHDOG_S):
         try:
             from microcontroller import watchdog
             from watchdog import WatchDogMode
@@ -468,6 +481,7 @@ class Hardware:
         self.buttons = Buttons()
         self.net = Net(url, board_id, token)
         self.watchdog = Watchdog()
+        self.net.feed = self.watchdog.feed
 
     @staticmethod
     def mem_free():
