@@ -144,9 +144,7 @@ class Board:
         if not missing:
             return 'skip'
         self.player.add_logo(missing[0], self.net.logo(missing[0]))
-        if len(missing) > 1:
-            self.logo_job.due_at = 0
-        return 'ok'
+        return 'more' if len(missing) > 1 else 'ok'
 
     def _radar(self, ms):
         # Frames are only needed on the radar screen or ahead of a visit.
@@ -164,9 +162,7 @@ class Board:
             self.player.release_slot(buf)
             raise
         self.player.add_frame(missing[0], buf)
-        if len(missing) > 1:
-            self.radar_job.due_at = 0
-        return 'ok'
+        return 'more' if len(missing) > 1 else 'ok'
 
     # ---- loop ----
 
@@ -196,7 +192,7 @@ class Board:
             started = self.clock.ms()
             try:
                 result = job.run(started)
-                if result == 'ok':
+                if result in ('ok', 'more'):
                     self.fails = 0  # a skipped job proves nothing about the network
             except Exception as e:  # noqa: BLE001 - a failed fetch must not stop the board
                 self.log('[board] %s failed: %r' % (job.name, e))
@@ -214,7 +210,15 @@ class Board:
                 self.stats['fetches'] += 1
                 if job.overdue(started) and (busy or quiet < self.sched.budget_ms):
                     self.stats['forced'] += 1
-                self.sched.ran(job, started, ended, result == 'ok')
+                self.sched.ran(job, started, ended, result != 'fail')
+                if result == 'more':
+                    # More of a set to fetch (radar frames, logos). Set after
+                    # ran(), which would push it to the next gap: one radar
+                    # frame per loop cycle. While that screen is showing,
+                    # go again right away (the loop is incomplete anyway);
+                    # while prefetching, take the next gap.
+                    showing = self.player.screen == ('weather' if job is self.radar_job else 'baseball')
+                    job.due_at = ended - job.deadline_ms if showing else ended
             if self.fails >= FAILS_BEFORE_RECONNECT:
                 self.log('[board] %d failures in a row; reconnecting' % self.fails)
                 self.online = False

@@ -18,7 +18,7 @@ SCREENS = ('transit', 'ticker', 'weather', 'baseball')
 # Radar frame buffers, allocated once while the heap is still whole. After
 # hours of JSON parsing the heap is too fragmented for a fresh 2 KB block
 # (MemoryError with 37 KB free), so frames are read into these instead.
-RADAR_SLOTS = 6          # the loop's length (contract: up to 6 frames)
+RADAR_SLOTS = 3          # the loop's length (contract: up to 3 frames)
 RADAR_BYTES = 64 * 32
 BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
