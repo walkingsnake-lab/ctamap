@@ -304,9 +304,12 @@
     // Chronological view: one train per row, soonest first; the payload's
     // extra trains wait below until a row frees up.
     function buildChronoView(p, now) {
-      const rows = liveRows(p, now).slice(0, maxRows(!!p.header, !!p.wx));
+      // Sorted here too, by time (stable): the order must hold however the
+      // payload arrives.
+      const rows = liveRows(p, now).sort((a, b) => a.t[0] - b.t[0]).slice(0, maxRows(!!p.header, !!p.wx));
       const tops = rowTops(rows.length, !!p.header, !!p.wx);
       const seenDest = new Set();
+      const seenKey = new Set();
       return {
         now,
         mode: 'chrono',
@@ -321,7 +324,12 @@
           const dest = `${r.ln}:${r.lbl}`;
           const due = !seenDest.has(dest); // chronological: the first one per destination is the soonest
           seenDest.add(dest);
-          const key = r.rn != null ? `rn:${r.rn}` : `${r.ln}:${r.lbl}:${r.t[0]}`;
+          // Identity for the animator: line + run (run numbers repeat across
+          // lines, and Train Tracker can list one run twice). Two rows must
+          // never share a key, or the animator merges them.
+          let key = r.rn != null ? `rn:${r.ln}:${r.rn}` : `${r.ln}:${r.lbl}:${r.t[0]}`;
+          if (seenKey.has(key)) key += `#${i}`;
+          seenKey.add(key);
           const sch = r.s && r.s[0];
           return {
             key, ln: r.ln, lbl: r.lbl, a: r.a, num: i + 1, top: tops[i], alpha: 1,
