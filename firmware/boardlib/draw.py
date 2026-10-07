@@ -1134,7 +1134,9 @@ def draw_logo_band(f, side, top, logos, bands, dim):
         f.text('5x7', ab, (LG_W >> 1) - measure('5x7', ab) // 2, top + 9, lg_ink(side, dim))
         return
     data = logos.get(side['lg']) if side.get('lg') and logos else None
-    if data and len(data) >= LG_W * LG_ROWS * 3:
+    if data and len(data) >= LG_W * LG_ROWS * 3 and hasattr(f, 'draw_logo'):
+        f.draw_logo(side['lg'], data, 0, top, dim)  # the board: one indexed blit, same pixels
+    elif data and len(data) >= LG_W * LG_ROWS * 3:
         for y in range(LG_ROWS):
             for x in range(LG_W):
                 i = (y * LG_W + x) * 3
