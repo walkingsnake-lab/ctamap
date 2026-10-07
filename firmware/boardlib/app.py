@@ -21,7 +21,7 @@ LIVE_EVERY = 10000      # combined update while a live game is on screen
 RADAR_EVERY = 3000      # one missing radar frame per run
 LOGO_EVERY = 3000       # one missing team logo per run (baseball logo layout)
 FAILS_BEFORE_RECONNECT = 3
-RETRY_WIFI_MS = 60000
+RETRY_WIFI_MS = (10000, 20000, 30000, 60000)  # waits between rounds, then every minute
 
 
 class Board:
@@ -83,8 +83,9 @@ class Board:
 
     def connect(self, boot=True):
         """Blocks until online: tries each network, shows status screens,
-        retries every minute. Then fetches an update; boot=1 only after a
+        retries after 10, 20, 30 s, then every minute. Then fetches an update; boot=1 only after a
         real restart (it resets the phone's screen/brightness overrides)."""
+        round_ = 0
         while True:
             result, detail = self.net.connect(self.networks, self._status)
             if result == 'ok':
@@ -104,7 +105,8 @@ class Board:
                     self._status('noserver')
             else:
                 self._status(result, detail if result == 'portal' else None)
-            self._wait(RETRY_WIFI_MS)
+            self._wait(RETRY_WIFI_MS[min(round_, len(RETRY_WIFI_MS) - 1)])
+            round_ += 1
 
     def _wait(self, ms_total):
         end = self.clock.ms() + ms_total

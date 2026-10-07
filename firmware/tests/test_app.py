@@ -275,6 +275,14 @@ class TestBoardLoop(unittest.TestCase):
         self.assertEqual([s for s in statuses if s != 'connecting'], ['nowifi', 'portal', 'ok'])
         self.assertEqual(server.calls[-1]['name'], 'update-boot')
 
+    def test_first_retries_come_quickly(self):
+        board, server, clock, _, _, statuses = make(wifi=('nowifi', 'nowifi', 'nowifi', 'nowifi', 'ok'))
+        start = clock.t
+        board.connect()
+        # 10 + 20 + 30 + 60 s of waiting, plus 6 s of simulated joins per round.
+        self.assertLess(clock.t - start, 160000)  # was 270 s at a flat minute
+        self.assertGreater(clock.t - start, 120000)
+
     def test_reconnects_after_repeated_failures(self):
         board, server, clock, _, _, statuses = make()
         board.connect()
