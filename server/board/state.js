@@ -17,6 +17,15 @@ const DEFAULT_MAPID = '40100'; // Morse
 
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball'];
 const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
+// Auto mode and screen options (design spec §10). Defaults reproduce the
+// behavior before these were settings.
+const AUTO_SCREENS = ['transit', 'ticker'];
+const AUTO_EVERY = [30, 60, 120, 300, 600];   // s per screen when Auto alternates
+const WX_VISITS = ['off', 'rain', 'always'];  // weather visits: never, while raining, always
+const ALERT_JUMPS = ['off', 'warning', 'all']; // jump to weather: never, NWS warnings, watches too
+const BB_TEAMS = ['cubs', 'sox', 'post'];
+const BB_PRIORITIES = ['live', 'favorite', 'all'];
+const LINE_NAMES = ['white', 'line'];
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
   tickerHold: [5, 6, 8, 10, 12, 15],         // s each ticker page holds
@@ -60,10 +69,28 @@ function defaultBoard(stations) {
     wxDivider: true,
     screen: 'auto',
     bright: 'auto',
-    // Auto screen: show the radar for `radarFor` seconds every `radarEvery`
-    // minutes while rain is in the box. 0 = never (stay on transit).
-    radarEvery: 0,
+    // Auto: the main screens (both: alternate every autoEvery s).
+    autoScreens: ['transit'],
+    autoEvery: 60,
+    // Auto: visit the weather screen for `radarFor` s every `radarEvery`
+    // min: 'off', 'rain' (while rain is in the box), or 'always'.
+    wxVisit: 'off',
+    radarEvery: 4,
     radarFor: 60,
+    // Auto: jump to the weather screen while an NWS alert is active:
+    // 'off', 'warning', or 'all' (watches too). Overrides baseball.
+    alertJump: 'off',
+    // Baseball: which games take over Auto, their windows, and which
+    // games rotate while one is live ('live': live only; 'favorite': live
+    // Cubs/Sox only when one is on; 'all': every shown game).
+    bbTeams: ['cubs', 'sox', 'post'],
+    bbPre: 30,
+    bbFinal: 15,
+    bbPriority: 'live',
+    // Transit and chrono labels: 'white' or 'line' (the line's color).
+    lineNames: 'white',
+    // Transit and ticker header: the clock at the right.
+    headerClock: true,
     // Radar screen: show the frame's time and AM/PM.
     radarTime: true,
     // Weather screen: a temperature-colored shadow behind the big temperature.
@@ -118,6 +145,7 @@ function validatePatch(patch, stations) {
       case 'wxDivider':
       case 'radarTime':
       case 'tempShadow':
+      case 'headerClock':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;
@@ -146,9 +174,42 @@ function validatePatch(patch, stations) {
         out.screen = val;
         break;
       case 'radarEvery':
-        if (!Number.isInteger(val) || val < 0 || val > 60) throw new ValidationError('radarEvery must be 0 (off) or 1-60 minutes');
+        if (!Number.isInteger(val) || val < 1 || val > 60) throw new ValidationError('radarEvery must be 1-60 minutes');
         out.radarEvery = val;
         break;
+      case 'autoScreens':
+        if (!Array.isArray(val) || !val.length || !val.every((v) => AUTO_SCREENS.includes(v)) || new Set(val).size !== val.length) {
+          throw new ValidationError(`autoScreens must be a non-empty list of ${AUTO_SCREENS.join(', ')}`);
+        }
+        out.autoScreens = AUTO_SCREENS.filter((v) => val.includes(v));
+        break;
+      case 'bbTeams':
+        if (!Array.isArray(val) || !val.every((v) => BB_TEAMS.includes(v)) || new Set(val).size !== val.length) {
+          throw new ValidationError(`bbTeams must be a list of ${BB_TEAMS.join(', ')} (empty: never)`);
+        }
+        out.bbTeams = BB_TEAMS.filter((v) => val.includes(v));
+        break;
+      case 'autoEvery':
+        if (!AUTO_EVERY.includes(val)) throw new ValidationError(`autoEvery must be one of ${AUTO_EVERY.join(', ')}`);
+        out.autoEvery = val;
+        break;
+      case 'bbPre':
+        if (!Number.isInteger(val) || val < 0 || val > 120) throw new ValidationError('bbPre must be 0-120 minutes');
+        out.bbPre = val;
+        break;
+      case 'bbFinal':
+        if (!Number.isInteger(val) || val < 0 || val > 60) throw new ValidationError('bbFinal must be 0-60 minutes');
+        out.bbFinal = val;
+        break;
+      case 'wxVisit':
+      case 'alertJump':
+      case 'bbPriority':
+      case 'lineNames': {
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES }[key];
+        if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
+        out[key] = val;
+        break;
+      }
       case 'radarFor':
         if (!Number.isInteger(val) || val < 10 || val > 600) throw new ValidationError('radarFor must be 10-600 seconds');
         out.radarFor = val;
@@ -183,6 +244,19 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       if (!state || typeof state.boards !== 'object') throw new Error('missing "boards"');
       // The radar screen was renamed weather.
       for (const b of Object.values(state.boards)) if (b && b.screen === 'radar') b.screen = 'weather';
+      // Radar visits were radarEvery > 0 (0 = off); now wxVisit with the interval kept.
+      for (const b of Object.values(state.boards)) {
+        if (b && b.wxVisit === undefined && b.radarEvery !== undefined) {
+          b.wxVisit = b.radarEvery > 0 ? 'rain' : 'off';
+          if (!(b.radarEvery > 0)) b.radarEvery = 4;
+        }
+      }
+      // Settings added later: fill in their defaults (today's behavior).
+      const defaults = defaultBoard(stations);
+      for (const b of Object.values(state.boards)) {
+        if (!b) continue;
+        for (const [k, v] of Object.entries(defaults)) if (!Object.hasOwn(b, k)) b[k] = Array.isArray(v) ? [...v] : v;
+      }
       // 54th/Cermak's short name was 54th.
       for (const b of Object.values(state.boards)) if (b && Array.isArray(b.rows)) b.rows = b.rows.map((r) => (r === 'PK:54th' ? 'PK:54/Crmk' : r));
     } catch (e) {
@@ -232,4 +306,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, BASEBALL_LAYOUTS, SPEEDS };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES };

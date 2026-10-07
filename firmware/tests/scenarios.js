@@ -65,6 +65,11 @@ async function build() {
   // Chronological view (Clark/Lake with the header overflows 4 rows), alerts, schedule-based, brightness.
   const cl = payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { alerts: ['GR', 'BL'] });
   add('chrono clark/lake alerts', cl, [{ screen: 'transit' }, { screen: 'transit', blink: true }, { screen: 'transit', now: cl.now + 200 }]);
+  // Options: no header clock, line-colored labels (dest and chrono), ticker header.
+  const mo = payloadFrom('morse-2026-10-03-2316.json', 'MORSE');
+  add('options: no header clock, line-colored names (dest)', { ...mo, hclock: false, lnc: true }, [{ screen: 'transit' }, { screen: 'ticker' }]);
+  add('options: line-colored names (chrono)', { ...cl, lnc: true }, [{ screen: 'transit' }]);
+  add('options: no header clock (chrono)', { ...cl, hclock: false }, [{ screen: 'transit' }, { screen: 'ticker' }]);
   add('chrono clark/lake weather + warning', payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { wx: WX, warn: { kind: 'svr', lvl: 'warning' } }), [{ screen: 'transit' }]);
   // 50%: every odd channel value lands on .5, where JS and Python rounding differ.
   // Divider toggles: header line on, weather line off (dest and chrono views).

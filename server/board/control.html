@@ -91,18 +91,39 @@
       <button data-v="baseball">Baseball</button>
     </div>
     <p class="hint" id="screenHint">Auto stays on the transit screen.</p>
-    <div id="visit" hidden>
-      <div class="row"><span>Show radar every</span>
-        <select id="radarEvery" aria-label="Show radar every" style="width:auto">
-          <option value="0">Never</option><option value="2">2 min</option><option value="3">3 min</option><option value="4">4 min</option>
-          <option value="5">5 min</option><option value="6">6 min</option><option value="10">10 min</option>
-          <option value="15">15 min</option><option value="20">20 min</option><option value="30">30 min</option>
+    <div id="autoOpts" hidden>
+      <label class="field">Auto shows</label>
+      <div class="row"><span>Transit</span><label class="switch"><input type="checkbox" id="autoTransit"><span></span></label></div>
+      <div class="row"><span>Ticker</span><label class="switch"><input type="checkbox" id="autoTicker"><span></span></label></div>
+      <div class="row" id="autoEveryRow"><span>Switch every</span>
+        <select id="autoEvery" aria-label="Switch every" style="width:auto">
+          <option value="30">30 sec</option><option value="60">1 min</option><option value="120">2 min</option><option value="300">5 min</option><option value="600">10 min</option>
         </select></div>
-      <div class="row"><span>For</span>
-        <select id="radarFor" aria-label="Show radar for" style="width:auto">
-          <option value="30">30 sec</option><option value="45">45 sec</option><option value="60">1 min</option>
-          <option value="90">90 sec</option><option value="120">2 min</option><option value="180">3 min</option>
-        </select></div>
+      <label class="field">Weather visits</label>
+      <div class="seg" id="wxVisit">
+        <button data-v="off">Off</button>
+        <button data-v="rain">While raining</button>
+        <button data-v="always">Always</button>
+      </div>
+      <div id="visit">
+        <div class="row"><span>Every</span>
+          <select id="radarEvery" aria-label="Weather visit every" style="width:auto">
+            <option value="2">2 min</option><option value="3">3 min</option><option value="4">4 min</option>
+            <option value="5">5 min</option><option value="6">6 min</option><option value="10">10 min</option>
+            <option value="15">15 min</option><option value="20">20 min</option><option value="30">30 min</option>
+          </select></div>
+        <div class="row"><span>For</span>
+          <select id="radarFor" aria-label="Weather visit length" style="width:auto">
+            <option value="30">30 sec</option><option value="45">45 sec</option><option value="60">1 min</option>
+            <option value="90">90 sec</option><option value="120">2 min</option><option value="180">3 min</option>
+          </select></div>
+      </div>
+      <label class="field">Jump to weather for NWS alerts</label>
+      <div class="seg" id="alertJump">
+        <button data-v="off">Off</button>
+        <button data-v="warning">Warnings</button>
+        <button data-v="all">Watches too</button>
+      </div>
     </div>
   </section>
 
@@ -156,6 +177,25 @@
       <button data-v="bands">Bands</button>
     </div>
     <p class="hint" id="bbLayoutHint"></p>
+    <label class="field">Takes over Auto for</label>
+    <div class="row"><span>Cubs</span><label class="switch"><input type="checkbox" id="bbCubs"><span></span></label></div>
+    <div class="row"><span>White Sox</span><label class="switch"><input type="checkbox" id="bbSox"><span></span></label></div>
+    <div class="row"><span>Postseason (all teams)</span><label class="switch"><input type="checkbox" id="bbPost"><span></span></label></div>
+    <div class="row"><span>Starts showing</span>
+      <select id="bbPre" aria-label="Starts showing before first pitch" style="width:auto">
+        <option value="0">At first pitch</option><option value="15">15 min before</option><option value="30">30 min before</option><option value="60">1 hr before</option><option value="90">90 min before</option><option value="120">2 hr before</option>
+      </select></div>
+    <div class="row"><span>Final score stays</span>
+      <select id="bbFinal" aria-label="Final score stays" style="width:auto">
+        <option value="0">Not at all</option><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hr</option>
+      </select></div>
+    <label class="field">During live games, show</label>
+    <div class="seg" id="bbPriority">
+      <button data-v="live">Live games</button>
+      <button data-v="favorite">Cubs/Sox first</button>
+      <button data-v="all">All games</button>
+    </div>
+    <p class="hint" id="bbPriorityHint"></p>
     <div class="row"><span>Each game shows for</span>
       <select id="gameEvery" aria-label="Each game shows for" style="width:auto"><option value="30">30 sec</option><option value="45">45 sec</option><option value="60">1 min</option><option value="90">90 sec</option><option value="120">2 min</option></select></div>
     <div class="row"><span class="nw">Logo brightness</span><input type="range" id="logoBright" min="10" max="100" step="5" style="flex:1;margin:0"><span id="logoBrightV" class="nw"></span></div>
@@ -172,7 +212,13 @@
 
   <section>
     <h2>Transit screen</h2>
-    <div class="row"><span>Transit header (station + clock)</span><label class="switch"><input type="checkbox" id="showHeader"><span></span></label></div>
+    <div class="row"><span>Transit header (station name)</span><label class="switch"><input type="checkbox" id="showHeader"><span></span></label></div>
+    <div class="row"><span>Clock in the header (transit and ticker)</span><label class="switch"><input type="checkbox" id="headerClock"><span></span></label></div>
+    <label class="field">Destination names</label>
+    <div class="seg" id="lineNames">
+      <button data-v="white">White</button>
+      <button data-v="line">Line color</button>
+    </div>
     <div class="row"><span>Weather row</span><label class="switch"><input type="checkbox" id="showWeather"><span></span></label></div>
     <div class="row"><span>Line under header</span><label class="switch"><input type="checkbox" id="headerDivider"><span></span></label></div>
     <div class="row"><span>Line above weather row</span><label class="switch"><input type="checkbox" id="wxDivider"><span></span></label></div>
@@ -282,12 +328,29 @@
     if (!board) return;
     pressed('screen', board.screen);
     const auto = board.screen === 'auto';
-    $('visit').hidden = !auto;
-    $('radarEvery').value = String(board.radarEvery || 0);
+    $('autoOpts').hidden = !auto;
+    const mains = board.autoScreens || ['transit'];
+    $('autoTransit').checked = mains.includes('transit');
+    $('autoTicker').checked = mains.includes('ticker');
+    // Auto needs at least one main screen: the last one on can't be turned off.
+    $('autoTransit').disabled = mains.length === 1 && mains[0] === 'transit';
+    $('autoTicker').disabled = mains.length === 1 && mains[0] === 'ticker';
+    $('autoEveryRow').hidden = mains.length < 2;
+    $('autoEvery').value = String(board.autoEvery || 60);
+    const wv = board.wxVisit || 'off';
+    pressed('wxVisit', wv);
+    $('visit').hidden = wv === 'off';
+    $('radarEvery').value = String(board.radarEvery || 4);
     $('radarFor').value = String(board.radarFor || 60);
+    pressed('alertJump', board.alertJump || 'off');
+    const teams = board.bbTeams || ['cubs', 'sox', 'post'];
+    const names = { transit: 'transit', ticker: 'the ticker' };
+    const mainText = mains.length > 1 ? `switches between transit and the ticker every ${$('autoEvery').selectedOptions[0].text}` : `stays on ${names[mains[0]]}`;
+    const bbText = teams.length ? ` Baseball takes over during ${[teams.includes('cubs') && 'Cubs', teams.includes('sox') && 'White Sox', teams.includes('post') && 'postseason'].filter(Boolean).join(', ')} games.` : ' Baseball never takes over.';
+    const wvText = wv === 'off' ? '' : ` The weather screen shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min${wv === 'rain' ? ' while it\'s raining' : ''}.`;
+    const ajText = board.alertJump === 'warning' ? ' During NWS warnings it stays on the weather screen.' : board.alertJump === 'all' ? ' During NWS watches and warnings it stays on the weather screen.' : '';
     $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : 'Stays on this screen until you change it.')
-      : board.radarEvery ? `Stays on transit (baseball during Cubs and postseason games). While it's raining, the radar shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min.`
-      : 'Stays on transit (baseball during Cubs and postseason games). Pick a time below to have the radar drop in while it\'s raining.';
+      : `Auto ${mainText}.${bbText}${wvText}${ajText}`;
     const fixed = Number.isInteger(board.bright);
     pressed('bright', fixed ? 'fixed' : board.bright);
     $('level').hidden = !fixed;
@@ -297,6 +360,8 @@
     $('station').value = board.station.mapid;
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
     $('showHeader').checked = board.showHeader;
+    $('headerClock').checked = board.headerClock !== false;
+    pressed('lineNames', board.lineNames || 'white');
     $('showWeather').checked = board.showWeather;
     $('headerDivider').checked = board.headerDivider === true;
     $('wxDivider').checked = board.wxDivider !== false;
@@ -311,6 +376,16 @@
       ? 'Team logo bands from your uploaded sheet; teams without a logo get a plain team-color band.'
       : bl === 'bands' ? 'Team-color bands with abbreviations and drop-shadowed scores, no logos.'
       : 'Team color blocks and abbreviations.';
+    $('bbCubs').checked = teams.includes('cubs');
+    $('bbSox').checked = teams.includes('sox');
+    $('bbPost').checked = teams.includes('post');
+    $('bbPre').value = String(board.bbPre != null ? board.bbPre : 30);
+    $('bbFinal').value = String(board.bbFinal != null ? board.bbFinal : 15);
+    const pri = board.bbPriority || 'live';
+    pressed('bbPriority', pri);
+    $('bbPriorityHint').textContent = pri === 'live' ? 'While any game is live, only live games rotate; otherwise every game shown.'
+      : pri === 'favorite' ? 'While a Cubs or White Sox game is live, only that game shows; otherwise live games first.'
+      : 'Every game shown rotates, live or not.';
     pressed('radarCorner', board.radarTime !== false ? 'time' : 'temp');
     $('tempShadow').checked = board.tempShadow === true;
     $('radarCornerHint').textContent = board.radarTime !== false
@@ -367,6 +442,17 @@
   // ---- events ----
   $('screen').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !e.target.disabled) save({ screen: v }); });
   $('radarEvery').addEventListener('change', (e) => save({ radarEvery: Number(e.target.value) }));
+  const autoMains = () => ['transit', 'ticker'].filter((k) => $(k === 'transit' ? 'autoTransit' : 'autoTicker').checked);
+  for (const id of ['autoTransit', 'autoTicker']) $(id).addEventListener('change', () => { const m = autoMains(); if (m.length) save({ autoScreens: m }); else render(); });
+  $('autoEvery').addEventListener('change', (e) => save({ autoEvery: Number(e.target.value) }));
+  for (const id of ['wxVisit', 'alertJump', 'bbPriority', 'lineNames']) {
+    $(id).addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !e.target.disabled) save({ [id]: v }); });
+  }
+  const bbTeams = () => [['cubs', 'bbCubs'], ['sox', 'bbSox'], ['post', 'bbPost']].filter(([, id]) => $(id).checked).map(([k]) => k);
+  for (const id of ['bbCubs', 'bbSox', 'bbPost']) $(id).addEventListener('change', () => save({ bbTeams: bbTeams() }));
+  $('bbPre').addEventListener('change', (e) => save({ bbPre: Number(e.target.value) }));
+  $('bbFinal').addEventListener('change', (e) => save({ bbFinal: Number(e.target.value) }));
+  $('headerClock').addEventListener('change', (e) => save({ headerClock: e.target.checked }));
   $('radarFor').addEventListener('change', (e) => save({ radarFor: Number(e.target.value) }));
   $('bright').addEventListener('click', (e) => {
     const v = e.target.dataset.v; if (!v) return;

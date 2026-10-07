@@ -314,9 +314,10 @@ def draw_icon(f, name, x, y):
 
 # Station name + clock on rows 1-5, flush to the screen edges, both in the
 # header grey (transit and ticker). `divider`: a line on row 7 (transit).
-def draw_header(f, name, now, tzo, divider=False):
+def draw_header(f, name, now, tzo, divider=False, clock=True):
     f.text('small', name, 0, 6, C['head'])
-    rtext(f, 'small', clock_text(now, tzo), 63, 6, C['head'])
+    if clock:
+        rtext(f, 'small', clock_text(now, tzo), 63, 6, C['head'])
     if divider:
         f.fill(0, 7, 64, 1, C['divider'])
 
@@ -421,6 +422,7 @@ def build_transit_view(p, now):
     return {
         'now': now, 'mode': 'dest', 'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'),
         'hdiv': p.get('headerDivider') is True, 'wdiv': p.get('wxDivider') is not False,
+        'clock': p.get('hclock') is not False, 'lnc': p.get('lnc') is True,
         'stale': p.get('stale'), 'tzo': p.get('tzo', 0),
         'rows': [{'key': r['ln'] + ':' + r['lbl'], 'ln': r['ln'], 'lbl': r['lbl'], 'a': r.get('a'),
                   'num': None, 'numRoll': None, 'top': tops[i], 'alpha': 1, 'cells': layout_cells(r, now)}
@@ -460,6 +462,7 @@ def build_chrono_view(p, now):
         'now': now, 'mode': 'chrono', 'pitch': (tops[1] - tops[0]) if len(tops) > 1 else 6,
         'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'), 'stale': p.get('stale'),
         'hdiv': p.get('headerDivider') is True, 'wdiv': p.get('wxDivider') is not False,
+        'clock': p.get('hclock') is not False, 'lnc': p.get('lnc') is True,
         'tzo': p.get('tzo', 0), 'rows': out,
     }
 
@@ -470,7 +473,7 @@ CHRONO_BLOCK_X = 4
 CHRONO_LABEL_X = 9
 
 
-def draw_view_row(f, row, blink):
+def draw_view_row(f, row, blink, lnc=False):
     top = jsround(row['top'])
     chrono = row.get('num') is not None
     line = fade(LINE[row['ln']], row['alpha'])
@@ -484,7 +487,7 @@ def draw_view_row(f, row, blink):
                     f.fill(bx + i, top + j, 1, 1, line)
     else:
         f.fill(bx, top, 3, 5, line)
-    f.text('small', row['lbl'], CHRONO_LABEL_X if chrono else 5, top + 5, fade(C['label'], row['alpha']))
+    f.text('small', row['lbl'], CHRONO_LABEL_X if chrono else 5, top + 5, fade(LINE[row['ln']] if lnc else C['label'], row['alpha']))
     for cell in row['cells']:
         a = cell['alpha'] * row['alpha']
         if a <= 0:
@@ -512,11 +515,11 @@ def draw_transit_view(f, view, blink):
         draw_overnight(f, view, view['now'])
     else:
         if view.get('header'):
-            draw_header(f, view['header'], view['now'], view.get('tzo', 0), view.get('hdiv') is True)
+            draw_header(f, view['header'], view['now'], view.get('tzo', 0), view.get('hdiv') is True, view.get('clock') is not False)
         f.push_clip(0, 7 if view.get('header') else 0, 63, 21 if view.get('wx') else 31)
         try:
             for row in view['rows']:
-                draw_view_row(f, row, blink)
+                draw_view_row(f, row, blink, view.get('lnc') is True)
         finally:
             f.pop_clip()
     if view.get('wx'):
@@ -707,6 +710,7 @@ class TransitAnimator:
 
         view = {'now': now, 'mode': target['mode'], 'header': target.get('header'), 'wx': target.get('wx'),
                 'hdiv': target.get('hdiv'), 'wdiv': target.get('wdiv'),
+                'clock': target.get('clock') is not False, 'lnc': target.get('lnc') is True,
                 'warn': target.get('warn'), 'stale': target.get('stale'), 'tzo': target.get('tzo', 0), 'rows': []}
         if not target['rows'] and not any(st.get('leaving') for st in self.rows.values()):
             self.rows.clear()
@@ -794,7 +798,7 @@ def render_ticker(p, f, now=None, page=0, slide=0):
         now = p['now']
     th = p['tickerHeader'] if 'tickerHeader' in p else p.get('header')
     if th:
-        draw_header(f, th, now, p.get('tzo', 0))
+        draw_header(f, th, now, p.get('tzo', 0), False, p.get('hclock') is not False)
     items = live_ticker(p, now)
     fill = (p.get('tickerFill') or 55) / 100
     pages = max(1, -(-len(items) // 2))
@@ -1021,11 +1025,11 @@ def bb_record(t):
     return '%d-%d' % (t['w'], t['l'])
 
 
-def pick_game(games, now, every=60):
-    """Live games take precedence; `every` seconds each by wall time."""
+def pick_game(games, now, every=60, all_games=False):
+    """Live games take precedence (unless all_games); `every` seconds each by wall time."""
     if not games:
         return {'i': -1, 'pos': 0, 'of': 0}
-    live = [i for i, gm in enumerate(games) if gm.get('st') == 'live']
+    live = [] if all_games else [i for i, gm in enumerate(games) if gm.get('st') == 'live']
     pool = live if live else list(range(len(games)))
     pos = int(now // every) % len(pool)
     return {'i': pool[pos], 'pos': pos, 'of': len(pool)}
@@ -1279,7 +1283,7 @@ def render_baseball(p, f, now=None, game=None, rolls=None, logos=None):
     if not games:
         draw_no_games(f, now, tzo)
         return f
-    gm = games[game % len(games) if game is not None else pick_game(games, now, timing(p)['game'])['i']]
+    gm = games[game % len(games) if game is not None else pick_game(games, now, timing(p)['game'], (p.get('mlb') or {}).get('all') is True)['i']]
     rolls = rolls or {}
     if (p.get('mlb') or {}).get('layout') in ('logos', 'bands'):
         return render_baseball_logos(f, p, gm, now, tzo, rolls, logos or {})
@@ -1334,7 +1338,7 @@ def baseball_texts(p, now):
     games = (p.get('mlb') or {}).get('games') or []
     if not games:
         return None
-    gm = games[pick_game(games, now, timing(p)['game'])['i']]
+    gm = games[pick_game(games, now, timing(p)['game'], (p.get('mlb') or {}).get('all') is True)['i']]
     texts = {'away': str(gm['away']['r']), 'home': str(gm['home']['r'])}
     if gm['st'] == 'live':
         texts.update(live_texts(gm))

@@ -199,9 +199,9 @@
 
     // Station name + clock on rows 1-5, flush to the screen edges, both in the
     // header grey (transit and ticker). `divider`: a line on row 7 (transit).
-    function drawHeader(f, name, now, divider) {
+    function drawHeader(f, name, now, divider, clock = true) {
       f.text('small', name, 0, 6, C.head);
-      rtext(f, 'small', clockText(now), 63, 6, C.head);
+      if (clock) rtext(f, 'small', clockText(now), 63, 6, C.head);
       if (divider) f.fill(0, 7, 64, 1, C.divider);
     }
 
@@ -291,6 +291,8 @@
         header: p.header,
         hdiv: !!p.headerDivider,
         wdiv: p.wxDivider !== false,
+        clock: p.hclock !== false,
+        lnc: !!p.lnc,
         wx: p.wx,
         warn: p.warn,
         stale: p.stale,
@@ -317,6 +319,8 @@
         header: p.header,
         hdiv: !!p.headerDivider,
         wdiv: p.wxDivider !== false,
+        clock: p.hclock !== false,
+        lnc: !!p.lnc,
         wx: p.wx,
         warn: p.warn,
         stale: p.stale,
@@ -347,7 +351,8 @@
     // Chronological rows: digit in columns 0-2, the 3px line-color block at
     // CHRONO_BLOCK_X (1px gap), the label 2px after it.
     const CHRONO_BLOCK_X = 4, CHRONO_LABEL_X = 9;
-    function drawViewRow(f, row, blink) {
+    // lnc: labels in the line's color instead of white.
+    function drawViewRow(f, row, blink, lnc) {
       const top = Math.round(row.top);
       const chrono = row.num != null;
       const line = fade(LINE[row.ln], row.alpha);
@@ -360,7 +365,7 @@
       } else {
         f.fill(bx, top, 3, 5, line);
       }
-      f.text('small', row.lbl, chrono ? CHRONO_LABEL_X : 5, top + 5, fade(C.label, row.alpha));
+      f.text('small', row.lbl, chrono ? CHRONO_LABEL_X : 5, top + 5, fade(lnc ? LINE[row.ln] : C.label, row.alpha));
       for (const cell of row.cells) {
         const a = cell.alpha * row.alpha;
         if (a <= 0) continue;
@@ -388,9 +393,9 @@
       if (!view.rows.length) {
         drawOvernight(f, view, view.now);
       } else {
-        if (view.header) drawHeader(f, view.header, view.now, view.hdiv);
+        if (view.header) drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false);
         f.withClip(0, view.header ? 7 : 0, 63, view.wx ? 21 : 31, () => {
-          for (const row of view.rows) drawViewRow(f, row, blink);
+          for (const row of view.rows) drawViewRow(f, row, blink, view.lnc);
         });
       }
       if (view.wx) drawWeather(f, view.wx, view.warn, blink, view.wdiv !== false);
@@ -541,7 +546,7 @@
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, mode: target.mode, header: target.header, hdiv: target.hdiv, wdiv: target.wdiv, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
+          const view = { now, mode: target.mode, header: target.header, hdiv: target.hdiv, wdiv: target.wdiv, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
@@ -608,7 +613,7 @@
       const f = newFrame();
       // The ticker's header stays when the transit header is hidden to fit.
       const th = p.tickerHeader !== undefined ? p.tickerHeader : p.header;
-      if (th) drawHeader(f, th, now);
+      if (th) drawHeader(f, th, now, false, p.hclock !== false);
       const items = liveTicker(p, now);
       // Row fill: the line color dimmed to the board's tickerFill (percent).
       const fill = (p.tickerFill || 55) / 100;
@@ -809,9 +814,10 @@
     // within that set, one minute each by wall time, so the board and the
     // simulator agree without keeping rotation state. Returns the index into
     // games, the game's place in the rotation, and the rotation size.
-    function pickGame(games, now, every = 60) {
+    // all: rotate every game (bbPriority 'all'); otherwise live games first.
+    function pickGame(games, now, every = 60, all = false) {
       if (!games.length) return { i: -1, pos: 0, of: 0 };
-      const live = games.map((g, i) => (g.st === 'live' ? i : -1)).filter((i) => i >= 0);
+      const live = all ? [] : games.map((g, i) => (g.st === 'live' ? i : -1)).filter((i) => i >= 0);
       const pool = live.length ? live : games.map((_, i) => i);
       const pos = Math.floor(now / every) % pool.length;
       return { i: pool[pos], pos, of: pool.length };
@@ -1060,7 +1066,7 @@
       const f = newFrame();
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) { drawNoGames(f, now); return f; }
-      const g = games[o.game != null ? o.game % games.length : pickGame(games, now, timing(p).game).i];
+      const g = games[o.game != null ? o.game % games.length : pickGame(games, now, timing(p).game, !!(p.mlb && p.mlb.all)).i];
       if (p.mlb.layout === 'logos' || p.mlb.layout === 'bands') return renderBaseballLogos(f, p, g, now, o);
       const rolls = o.rolls || {};
       const final = g.st === 'final';
@@ -1110,7 +1116,7 @@
     function baseballTexts(p, now) {
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) return null;
-      const g = games[pickGame(games, now, timing(p).game).i];
+      const g = games[pickGame(games, now, timing(p).game, !!(p.mlb && p.mlb.all)).i];
       const texts = { away: String(g.away.r), home: String(g.home.r) };
       if (g.st === 'live') Object.assign(texts, liveTexts(g));
       return { key: `${g.id}:${g.st}`, texts };
@@ -1158,14 +1164,21 @@
     };
   }
 
-  // Which screen the board shows now. The payload's `screen` is the base; on
-  // the auto screen (radar.visit set) the radar is visited for `for` seconds
-  // at the start of every `every`-second cycle (epoch-aligned) while rain is
-  // in the box. Mirrored by player.py's auto_screen().
+  // Which screen the board shows now. The payload's `screen` is the base.
+  // On the auto screen, `rot` alternates the main screens every `every` s,
+  // and (radar.visit set) the weather screen is visited for `for` seconds at
+  // the start of every `every`-second cycle while rain is in the box (or
+  // always, visit.always). Both are epoch-aligned. Mirrored by player.py's
+  // auto_screen().
   function autoScreen(p, now) {
+    let screen = p.screen;
+    const rot = p.rot;
+    if (rot && rot.screens && rot.screens.length > 1 && rot.every > 0 && rot.screens.includes(screen)) {
+      screen = rot.screens[Math.floor(Math.floor(now) / rot.every) % rot.screens.length];
+    }
     const r = p.radar;
-    if ((p.screen !== 'transit' && p.screen !== 'baseball') || !r || !r.on || !r.visit || !(r.visit.every > 0)) return p.screen;
-    return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : p.screen;
+    if (!['transit', 'ticker', 'baseball'].includes(p.screen) || !r || !r.visit || !(r.visit.every > 0) || !(r.on || r.visit.always)) return screen;
+    return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : screen;
   }
 
   return { Frame, create, autoScreen, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };

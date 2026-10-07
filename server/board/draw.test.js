@@ -516,8 +516,30 @@ test('autoScreen: radar visits on a timer, only while it rains on the auto scree
   assert.equal(autoScreen(p(), at(4, 0)), 'weather');
   assert.equal(autoScreen(p({}, { on: false }), at(3, 0)), 'transit'); // no rain: no visit
   assert.equal(autoScreen(p({}, { visit: null }), at(3, 0)), 'transit'); // visits off
-  assert.equal(autoScreen(p({ screen: 'ticker' }), at(3, 0)), 'ticker'); // forced screens win
+  assert.equal(autoScreen(p({ screen: 'ticker' }, { visit: null }), at(3, 0)), 'ticker'); // forced screens: the server sends no visit
+  assert.equal(autoScreen(p({ screen: 'weather' }), at(3, 60)), 'weather'); // the weather screen stays
   assert.equal(autoScreen({ screen: 'transit' }, at(3, 0)), 'transit'); // old payloads
+});
+
+// Same table as firmware/tests/test_player.py (AutoScreenTable), so the
+// board and the simulator agree.
+const AUTO_CASES = [
+  // [payload, seconds into the 240 s cycle, expected]
+  [{ screen: 'transit', rot: { screens: ['transit', 'ticker'], every: 60 } }, 0, 'transit'],
+  [{ screen: 'transit', rot: { screens: ['transit', 'ticker'], every: 60 } }, 60, 'ticker'],
+  [{ screen: 'transit', rot: { screens: ['transit', 'ticker'], every: 60 } }, 119, 'ticker'],
+  [{ screen: 'transit', rot: { screens: ['transit', 'ticker'], every: 60 } }, 120, 'transit'],
+  [{ screen: 'baseball', rot: { screens: ['transit', 'ticker'], every: 60 } }, 60, 'baseball'], // rotation is for main screens only
+  [{ screen: 'transit', radar: { on: false, visit: { every: 240, for: 60, always: true } } }, 10, 'weather'], // always: no rain needed
+  [{ screen: 'transit', radar: { on: false, visit: { every: 240, for: 60 } } }, 10, 'transit'],
+  [{ screen: 'ticker', rot: { screens: ['transit', 'ticker'], every: 120 }, radar: { on: true, visit: { every: 240, for: 60 } } }, 30, 'weather'], // visits over a rotation
+  [{ screen: 'ticker', rot: { screens: ['transit', 'ticker'], every: 120 }, radar: { on: true, visit: { every: 240, for: 60 } } }, 130, 'ticker'],
+  [{ screen: 'weather', rot: null }, 0, 'weather'],
+];
+test('autoScreen: Auto rotation and always-on weather visits (table shared with the board)', () => {
+  const { autoScreen } = require('./draw');
+  const base = 1_800_000_000 - (1_800_000_000 % 240);
+  for (const [p, off, want] of AUTO_CASES) assert.equal(autoScreen(p, base + off), want, `${JSON.stringify(p)} +${off}`);
 });
 
 // ---- baseball (design spec §8) ----
@@ -591,7 +613,8 @@ test('radar visits interrupt baseball like transit; forced screens are left alon
   assert.equal(autoScreen({ screen: 'baseball', radar }, t + 10), 'weather');
   assert.equal(autoScreen({ screen: 'baseball', radar }, t + 100), 'baseball');
   assert.equal(autoScreen({ screen: 'baseball', radar: { ...radar, on: false } }, t + 10), 'baseball');
-  assert.equal(autoScreen({ screen: 'ticker', radar }, t + 10), 'ticker');
+  assert.equal(autoScreen({ screen: 'ticker', radar: { ...radar, visit: null } }, t + 10), 'ticker'); // forced: no visit sent
+  assert.equal(autoScreen({ screen: 'ticker', radar }, t + 10), 'weather'); // ticker as the Auto screen gets visits too
 });
 
 test('baseball: a live game takes precedence; pregame and finals rotate only when nothing is live', () => {

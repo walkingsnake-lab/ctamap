@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { shown, trackScores, nextDelay, url, PRE_S, FINAL_S, FAST_S, SLOW_S } = require('./mlb');
+const { shown, trackScores, nextDelay, url, prioritize, PRE_S, FINAL_S, FAST_S, SLOW_S } = require('./mlb');
 
 const FIX = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'mlb', 'schedule-2026-10-03-alds-final.json'), 'utf8'));
 const G = FIX.dates[0].games[0];               // CWS 3 @ CLE 0, ALDS Game 1, final
@@ -164,4 +164,34 @@ test('forced view: today\'s games all day from midnight; finals until 3 AM the n
   // Auto keeps its 15-minute hold; forced ignores the stale-final rule.
   assert.equal(shown(FIX, START + 7 * 3600).length, 0);
   assert.equal(f(START + 7 * 3600), 1);
+});
+
+test('per board: teams, pregame and final windows', () => {
+  const t = START - 600;
+  const cubs = game((g) => { pre(g); regularSeason(112, 138)(g); g.gamePk = 1; });
+  const sox = game((g) => { pre(g); regularSeason(116, 145)(g); g.gamePk = 4; });
+  const post = game((g) => { pre(g); g.gamePk = 3; g.teams.away.team.id = 147; g.teams.home.team.id = 111; }); // NYY @ BOS, postseason
+  const ids = (opts, now = t) => shown(schedule(cubs, sox, post), now, new Map(), new Map(), 'auto', opts).map((g) => g.id).sort();
+  assert.deepEqual(ids({ teams: ['sox'] }), [4]);
+  assert.deepEqual(ids({ teams: ['cubs', 'post'] }), [1, 3]);
+  assert.deepEqual(ids({ teams: [] }), []);
+  // Pregame window: 30 min by default, wider or zero per board.
+  assert.deepEqual(ids({}, START - 45 * 60), []);
+  assert.deepEqual(ids({ pre: 60 * 60 }, START - 45 * 60), [1, 3, 4]);
+  assert.deepEqual(ids({ pre: 0 }, START - 60), []);
+  // Final window: shown for `final` s after the server first sees it.
+  const fin = game(() => {});
+  const finals = new Map();
+  assert.equal(shown(schedule(fin), START + 3 * 3600, finals, new Map(), 'auto', { final: 300 }).length, 1);
+  assert.equal(shown(schedule(fin), START + 3 * 3600 + 299, finals, new Map(), 'auto', { final: 300 }).length, 1);
+  assert.equal(shown(schedule(fin), START + 3 * 3600 + 300, finals, new Map(), 'auto', { final: 300 }).length, 0);
+});
+
+test('priority: favorite keeps only live Cubs/Sox games while one is on', () => {
+  const g = (id, st, away, home) => ({ id, st, away: { ab: away }, home: { ab: home } });
+  const games = [g(1, 'live', 'NYY', 'BOS'), g(2, 'live', 'CWS', 'CLE'), g(3, 'pre', 'CHC', 'STL')];
+  assert.deepEqual(prioritize(games, 'favorite').map((x) => x.id), [2]);
+  assert.deepEqual(prioritize(games, 'favorite', ['cubs']).map((x) => x.id), [1, 2, 3]); // no live Cubs game: unchanged
+  assert.deepEqual(prioritize(games, 'live').map((x) => x.id), [1, 2, 3]);
+  assert.deepEqual(prioritize(games, 'all').map((x) => x.id), [1, 2, 3]);
 });

@@ -41,6 +41,15 @@ function url(now) {
 }
 
 const qualifies = (g) => TEAMS.has(g.teams.away.team.id) || TEAMS.has(g.teams.home.team.id) || POSTSEASON.has(g.gameType);
+// Per board (state bbTeams): 'cubs', 'sox', 'post'.
+const TEAM_IDS = { cubs: CUBS, sox: SOX };
+function qualifiesFor(g, teams) {
+  for (const t of teams) {
+    if (t === 'post' ? POSTSEASON.has(g.gameType) : (g.teams.away.team.id === TEAM_IDS[t] || g.teams.home.team.id === TEAM_IDS[t])) return true;
+  }
+  return false;
+}
+const ALL_TEAMS = ['cubs', 'sox', 'post'];
 
 // One team: abbreviation, block color, runs (0 before first pitch), W-L.
 // In the postseason the API's leagueRecord is the team's postseason record.
@@ -76,13 +85,17 @@ function liveState(ls) {
 // Schedule JSON -> the games to show at `now`, in start order.
 // `finals` (gamePk -> epoch first seen final) is updated in place.
 // `mode`: 'auto' (default) or 'forced' (see the windows above).
-function shown(json, now, finals = new Map(), changes = new Map(), mode = 'auto') {
+// opts (per board): teams (bbTeams), pre / final windows in s.
+function shown(json, now, finals = new Map(), changes = new Map(), mode = 'auto', opts = {}) {
   const forced = mode === 'forced';
+  const teams = opts.teams || ALL_TEAMS;
+  const preS = opts.pre != null ? opts.pre : PRE_S;
+  const finalS = opts.final != null ? opts.final : FINAL_S;
   const today = dayStart(now);
   const out = [];
   for (const d of (json && json.dates) || []) {
     for (const g of d.games || []) {
-      if (!qualifies(g)) continue;
+      if (!qualifiesFor(g, teams)) continue;
       if (!team(g.teams.away.team.id) || !team(g.teams.home.team.id)) continue;
       const status = g.status || {};
       if (SKIP_STATES.test(status.detailedState || '')) continue;
@@ -101,10 +114,10 @@ function shown(json, now, finals = new Map(), changes = new Map(), mode = 'auto'
         // A final shows through its own day and the next day until 3 AM.
         if (game.st === 'final' && !(gameDay === today || (gameDay < today && gameDay >= dayStart(today - 3600) && now - today < FORCED_FINAL_HOUR * 3600))) continue;
       } else {
-        if (game.st === 'pre' && now < start - PRE_S) continue;
+        if (game.st === 'pre' && now < start - preS) continue;
         if (game.st === 'final') {
           if (!finals.has(g.gamePk)) finals.set(g.gamePk, now - start > STALE_S ? -Infinity : now);
-          if (now - finals.get(g.gamePk) >= FINAL_S) continue;
+          if (now - finals.get(g.gamePk) >= finalS) continue;
         }
       }
       if (game.st === 'live') {
@@ -173,8 +186,9 @@ function createMlb({ fetch = fetchJson, now = () => Date.now() / 1000, log = con
   return {
     // Games to show now ([] when none, or before the first fetch).
     // mode: 'auto' or 'forced' (the board is set to Baseball).
-    get(mode = 'auto') {
-      try { return raw ? shown(raw, now(), finals, changes, mode) : []; }
+    // opts: per-board teams and windows (see shown).
+    get(mode = 'auto', opts = {}) {
+      try { return raw ? shown(raw, now(), finals, changes, mode, opts) : []; }
       catch (e) { log.error('[board] mlb parse failed:', e.message); return []; }
     },
     raw: () => raw,
@@ -187,4 +201,15 @@ function createMlb({ fetch = fetchJson, now = () => Date.now() / 1000, log = con
   };
 }
 
-module.exports = { createMlb, dayStart, FORCED_FINAL_HOUR, shown, trackScores, nextDelay, url, qualifies, CUBS, SOX, TEAMS, PRE_S, FINAL_S, FAST_S, SLOW_S };
+// Which games rotate (state bbPriority). 'live': the board shows live games
+// when any are on (pickGame); 'favorite': while a Cubs/Sox game is live, only
+// those; 'all': every shown game, live or not (games.all for pickGame).
+function prioritize(games, priority, teams = ALL_TEAMS) {
+  if (priority !== 'favorite') return games;
+  let favs = teams.filter((t) => TEAM_IDS[t]).map((t) => team(TEAM_IDS[t]).ab);
+  if (!favs.length) favs = [team(CUBS).ab, team(SOX).ab];
+  const fav = games.filter((g) => g.st === 'live' && (favs.includes(g.away.ab) || favs.includes(g.home.ab)));
+  return fav.length ? fav : games;
+}
+
+module.exports = { createMlb, dayStart, FORCED_FINAL_HOUR, shown, trackScores, nextDelay, url, qualifies, qualifiesFor, prioritize, CUBS, SOX, TEAMS, PRE_S, FINAL_S, FAST_S, SLOW_S };

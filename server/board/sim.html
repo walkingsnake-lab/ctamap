@@ -279,7 +279,7 @@
       if (rp >= 1) delete bbRolls[k]; else rolls[k] = { from: r.from, p: rp };
     }
     paintBaseball(D.render(full, { screen: 'baseball', now: n, rolls, logos: logoBytes }));
-    const pick = D.pickGame((p.mlb && p.mlb.games) || [], n, tm.game);
+    const pick = D.pickGame((p.mlb && p.mlb.games) || [], n, tm.game, !!(p.mlb && p.mlb.all));
     const anyLive = ((p.mlb && p.mlb.games) || []).some((g) => g.st === 'live');
     $('gameState').textContent = !pick.of ? 'no games' : `${anyLive ? 'live game' : 'game'} ${pick.pos + 1} of ${pick.of}`;
   }
