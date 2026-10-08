@@ -731,6 +731,25 @@
       }
     }
 
+    // The radar loop over the frames on hand, in time order: step through
+    // them, then hold on the newest. A frame still downloading is skipped
+    // rather than drawn as empty radar. t: ms into the loop; tm: timing().
+    // Returns an index into ids, or -1 with none on hand.
+    function radarLoopIdx(ids, frames, t, tm) {
+      const n = radarOnHand(ids, frames);
+      if (!n) return -1;
+      const cycle = Math.max(1, n - 1) * tm.radarFrame + tm.radarHold;
+      const k = Math.min(n - 1, Math.floor((t % cycle) / tm.radarFrame));
+      let seen = 0;
+      for (let i = 0; i < ids.length; i++) if (frames[ids[i]] && seen++ === k) return i;
+      return -1;
+    }
+    function radarOnHand(ids, frames) {
+      let n = 0;
+      for (const id of ids) if (frames && frames[id]) n++;
+      return n;
+    }
+
     // opts: now, idx (frame index into p.radar.frames; default the newest),
     // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
     // The weather screen: the radar loop while there are frames (rain in the
@@ -742,8 +761,9 @@
       // -1 when there are no frames yet (the clock then shows the current time).
       const idx = !ids.length ? -1 : o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
       const f = newFrame();
-      // No frames (no rain in the box, or none processed yet): the weather screen.
-      if (!ids.length && r.wx) { drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow); return f; }
+      // No frames (no rain in the box, or none processed yet), or none
+      // downloaded yet: the weather screen.
+      if ((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) && r.wx) { drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow); return f; }
       const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
       if (bytes) {
         const rc = radarFor(r.rb);
@@ -1184,7 +1204,7 @@
     }
 
     return {
-      Frame, LINE, C, BB, RADAR, radarColors, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
+      Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing,
