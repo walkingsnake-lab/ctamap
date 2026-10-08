@@ -19,3 +19,7 @@ MATRIX_BIT_DEPTH = 5
 # authored for screens). "1" = off. Try "1.8", then "2.2". Quoted: settings.toml
 # has no floats.
 MATRIX_GAMMA = "1.8"
+
+# Status NeoPixel (on the board, behind the panel): 2 = every state, including
+# blue during each request; 1 = errors and connecting only; 0 = always off.
+STATUS_LED = 2

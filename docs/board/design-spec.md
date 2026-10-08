@@ -354,6 +354,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - **Network list:** home, work (visitor), and **phone hotspot** in `settings.toml`; the board tries each in order and moves on if a network is missing or portal-blocked. The hotspot is the last-resort fallback anywhere (data use is small: ~1 KB per 30 s plus radar frames).
 - **Portal detection:** after connecting, the board requests `/board/ping`, which returns `{"ok":1}`. Anything else (HTML, redirect) means a captive portal.
 - **Status screens** instead of silent failure: `WIFI OK`, `PORTAL` (with the board's MAC address shown, for IT), `NO WIFI`.
+- **Status NeoPixel** (on the board, behind the panel, very dim): blue during each request, yellow/amber/red while connecting (joining, portal, no WiFi or server), dim red after a failed request, magenta blink after a caught MemoryError, white at startup after a watchdog reset, red blink before a crash restart. `STATUS_LED` in `settings.toml`: 2 all, 1 no fetch light, 0 off. Colors in `firmware/README.md`.
 - **Work visitor WiFi:** assume a captive portal until verified. Fixes in order: phone hotspot (works immediately), ask IT to whitelist the MAC, use a portal-free network if one exists, or use a travel router that clears the portal and rebroadcasts WPA2.
 - **Bluetooth:** considered and declined. The ESP32 can't run WiFi and BLE at once, and using the phone as the data source would need a native app and stall whenever iOS suspends it.
 

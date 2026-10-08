@@ -39,6 +39,26 @@ transit screen. `PORTAL` with the MAC address means the network wants a login
 page; `NO WIFI` means none of the networks could be joined (it retries every
 minute).
 
+## Status LED
+
+The NeoPixel on the Matrix Portal (behind the panel) shows what the board is
+doing, very dimly. Set `STATUS_LED` in `settings.toml` to turn parts of it off.
+
+| Color | Means |
+|---|---|
+| off | Running normally |
+| blue | A request is in progress (the panel is frozen until it returns) |
+| yellow | Joining WiFi |
+| amber | Captive portal |
+| red | No WiFi, or the server isn't answering |
+| dim red | Online, but the last request failed (clears on the next success) |
+| magenta, blinking for 2 s | A MemoryError was caught (a draw or fetch skipped) |
+| white for 2 s at startup | The last reset was the watchdog (the loop hung) |
+| red, blinking for 10 s | `code.py` caught a crash and is about to restart |
+
+A long blue means a slow request; the panel freezing with the LED off means
+the loop itself is stuck.
+
 ## Layout
 
 | Path | What |
@@ -53,7 +73,7 @@ minute).
 | `boardlib/control.py` | UP/DOWN buttons (cycle transit, ticker, weather, baseball): last action wins against the phone. |
 | `boardlib/crash.py` | Why the board (re)started: `code.py` saves a crash to `microcontroller.nvm` before reloading, and the next run sends it and its start reason with the health report. |
 | `boardlib/status.py` | WIFI / WIFI OK / PORTAL / NO WIFI / NO SERVER screens. |
-| `boardlib/device.py` | Hardware only: the matrix (palette-indexed bitmap, `bitmaptools` fills and glyph and radar copies), ESP32 WiFi + HTTPS, buttons, watchdog. |
+| `boardlib/device.py` | Hardware only: the matrix (palette-indexed bitmap, `bitmaptools` fills and glyph and radar copies), ESP32 WiFi + HTTPS, buttons, status NeoPixel, watchdog. |
 | `tests/` | Run by `npm test` (needs `python3`): pixel parity with draw.js through both the plain frame and the board's bitmap frame (with stand-ins for the CircuitPython modules), and the main loop against a simulated server, clock, and buttons. |
 
 ## Rules
