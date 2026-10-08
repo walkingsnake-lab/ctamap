@@ -745,18 +745,20 @@
       }
     }
 
-    // The radar loop over the frames on hand, in time order: step through
-    // them, then hold on the newest. A frame still downloading is skipped
-    // rather than drawn as empty radar. t: ms into the loop; tm: timing().
-    // Returns an index into ids, or -1 with none on hand.
+    // The radar loop: with every frame on hand, step through them in time
+    // order, then hold on the newest. While any is still downloading, hold
+    // on the newest on hand (playing a partial loop showed missing frames
+    // as empty radar, or stepped backward in time as older frames landed).
+    // t: ms since the loop started (restart it when the set completes);
+    // tm: timing(). Returns an index into ids, or -1 with none on hand.
     function radarLoopIdx(ids, frames, t, tm) {
       const n = radarOnHand(ids, frames);
       if (!n) return -1;
+      if (n < ids.length) {
+        for (let i = ids.length - 1; i >= 0; i--) if (frames[ids[i]]) return i;
+      }
       const cycle = Math.max(1, n - 1) * tm.radarFrame + tm.radarHold;
-      const k = Math.min(n - 1, Math.floor((t % cycle) / tm.radarFrame));
-      let seen = 0;
-      for (let i = 0; i < ids.length; i++) if (frames[ids[i]] && seen++ === k) return i;
-      return -1;
+      return Math.min(n - 1, Math.floor((t % cycle) / tm.radarFrame));
     }
     function radarOnHand(ids, frames) {
       let n = 0;

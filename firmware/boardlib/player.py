@@ -79,9 +79,12 @@ class Player:
         """Return a buffer whose fetch failed."""
         self.radar_free.append(buf)
 
-    def add_frame(self, fid, buf):
-        """buf: a buffer from take_slot(), now holding frame fid."""
+    def add_frame(self, fid, buf, ms=None):
+        """buf: a buffer from take_slot(), now holding frame fid. The frame
+        that completes the set restarts the loop at its oldest frame."""
         self.radar_frames[fid] = buf
+        if ms is not None and self._loop_len():
+            self.loop_start = ms
 
     def _games(self):
         mlb = (self.p.get('mlb') or {}) if self.p else {}
@@ -253,8 +256,11 @@ class Player:
         ids = (self.p.get('radar') or {}).get('frames') or []
         return draw.radar_loop_idx(ids, self.radar_frames, ms - self.loop_start, draw.timing(self.p))
 
-    def _on_hand(self):
-        return draw.radar_on_hand((self.p.get('radar') or {}).get('frames') or [], self.radar_frames)
+    def _loop_len(self):
+        """Frames in the playing loop: all of them once every frame is on
+        hand, else 0 (the screen holds on the newest on hand)."""
+        ids = (self.p.get('radar') or {}).get('frames') or [] if self.p else []
+        return len(ids) if ids and draw.radar_on_hand(ids, self.radar_frames) == len(ids) else 0
 
     def frame_key(self, ms, now):
         """Everything a still frame depends on, or None while an animation
@@ -283,7 +289,7 @@ class Player:
         if self.screen == 'baseball':
             return any(ms - r['start'] < draw.ROLL_MS for r in self.bb_rolls.values())
         if self.screen == 'weather':
-            n = self._on_hand()
+            n = self._loop_len()
             if n < 2:
                 return False
             tm = draw.timing(self.p)
@@ -304,7 +310,7 @@ class Player:
         if self.screen == 'baseball':
             return FAR  # rolls follow fetched changes; the rotation swaps without animating
         if self.screen == 'weather':
-            n = self._on_hand()
+            n = self._loop_len()
             if n < 2:
                 return FAR
             tm = draw.timing(self.p)

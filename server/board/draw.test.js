@@ -336,13 +336,18 @@ test('switching views cross-fades: old rows fade out, then the new ones fade in'
 
 // ---- radar screen ----
 
-test('radar loop: only frames on hand, newest held; conditions until the first lands', () => {
+test('radar loop: holds on the newest on hand until the set is complete; conditions until the first lands', () => {
   const tm = { radarFrame: 1000, radarHold: 2000 };
   const ids = ['a', 'b', 'c', 'd'];
   const have = (...k) => Object.fromEntries(k.map((id) => [id, new Uint8Array(2048)]));
   assert.equal(draw.radarLoopIdx(ids, {}, 0, tm), -1);
-  assert.deepEqual([0, 3000, 5999].map((t) => draw.radarLoopIdx(ids, have('d'), t, tm)), [3, 3, 3]);
-  assert.deepEqual([0, 1000, 2000, 3999, 4000].map((t) => draw.radarLoopIdx(ids, have('a', 'b', 'd'), t, tm)), [0, 1, 3, 3, 0]);
+  // Filling in (newest first): a still frame, never stepping back in time.
+  for (const on of [have('d'), have('c', 'd'), have('b', 'c', 'd')]) {
+    assert.deepEqual(new Set([0, 1000, 2000, 3000, 4500].map((t) => draw.radarLoopIdx(ids, on, t, tm))), new Set([3]));
+  }
+  // A new newest still downloading: hold on the newest on hand.
+  assert.deepEqual(new Set([0, 1000, 2500].map((t) => draw.radarLoopIdx(ids, have('a', 'b', 'c'), t, tm))), new Set([2]));
+  // Complete: the loop plays.
   assert.deepEqual([0, 1000, 2000, 3000, 4999, 5000].map((t) => draw.radarLoopIdx(ids, have('a', 'b', 'c', 'd'), t, tm)), [0, 1, 2, 3, 3, 0]);
   const t = Date.UTC(2020, 7, 10, 21, 0) / 1000;
   const wx = { temp: 60, icon: 'rain', word: 'RAIN' };

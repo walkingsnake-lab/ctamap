@@ -224,7 +224,7 @@ class Board:
         except Exception:
             self.player.release_slot(buf)
             raise
-        self.player.add_frame(missing[0], buf)
+        self.player.add_frame(missing[0], buf, self.clock.ms())
         return 'more' if len(missing) > 1 else 'ok'
 
     # ---- loop ----
