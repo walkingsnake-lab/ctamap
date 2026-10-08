@@ -718,10 +718,10 @@ test('radar clock now: the current time in white; conditions under the clock', (
   assert.equal(count(frame, draw.C.label, 40, 14, 63, 31), 0);
   const cond = at({ cond: true });
   assert.equal(count(cond, draw.C.radarAmpm, 40, 14, 63, 20), 0, 'no AM/PM row');
-  assert.ok(count(cond, draw.C.radarAmpm, 59, 8, 63, 12) > 4, 'A/P on the clock line, rows 8-12');
-  assert.equal(count(cond, draw.C.radarAmpm, 40, 6, 63, 7), 0);
-  assert.ok(count(cond, draw.C.label, 40, 15, 63, 19) > 8, '63° on rows 15-19');
-  let maxX = 0; for (let y = 14; y < 21; y++) for (let x = 40; x < 64; x++) if (hex(cond.get(x, y)) === draw.C.label) maxX = Math.max(maxX, x);
+  assert.ok(count(cond, draw.C.radarSub, 59, 8, 63, 12) > 4, 'A/P on the clock line, rows 8-12');
+  assert.equal(count(cond, draw.C.radarSub, 40, 6, 63, 7), 0);
+  assert.ok(count(cond, draw.C.radarSub, 40, 15, 63, 19) > 8, '63° on rows 15-19, dark gray');
+  let maxX = 0; for (let y = 14; y < 21; y++) for (let x = 40; x < 64; x++) if (hex(cond.get(x, y)) === draw.C.radarSub) maxX = Math.max(maxX, x);
   assert.equal(maxX, 63);
   const colored = (fr, y0, y1) => { let n = 0; for (let y = y0; y <= y1; y++) for (let x = 0; x < 64; x++) if (hex(fr.get(x, y)) !== '#000000') n++; return n; };
   assert.equal(colored(cond, 21, 31), 0, 'no icon');
@@ -730,7 +730,7 @@ test('radar clock now: the current time in white; conditions under the clock', (
   let minX = 64; for (let y = 6; y < 13; y++) for (let x = 0; x < 64; x++) if (hex(noon.get(x, y)) === draw.C.clock) minX = Math.min(minX, x);
   assert.equal(minX, 39);
   // No temperature yet: just the clock line.
-  assert.equal(count(at({ cond: true, temp: null }), draw.C.label, 0, 0, 63, 31), 0);
+  assert.equal(count(at({ cond: true, temp: null }), draw.C.radarSub, 40, 14, 63, 31), 0);
   // Warning tag at the bottom right, as with time off; nothing next to A/P.
   const tor = (blink) => draw.render({ now, bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...radar, cond: true } }, { screen: 'weather', now, frames: {}, idx: 0, blink });
   assert.ok(count(tor(false), draw.C.warnTornado, 30, 27, 63, 31) > 15);

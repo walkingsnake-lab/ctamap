@@ -220,7 +220,7 @@ LINE = {
 # Index digits in the chronological view: Brown and Purple brightened.
 
 C = {
-    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
+    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'radarSub': hexc('#666666'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
     'sch': hexc('#b0b0b0'), 'schDim': hexc('#474747'), 'grey': hexc('#8f8f8f'),
     'divider': hexc('#333333'), 'head': hexc('#808080'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
@@ -1003,9 +1003,9 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
             clear(text_box('small', ct, right - measure('small', ct) + 1, top + 18))
         draw_indicator()
         rtext(f, '5x7', clock, clock_right, top + 11, C['clock'] if now_clock else C['radarTime'])
-        f.text('small', ap, ap_x, top + 11, C['radarAmpm'])
+        f.text('small', ap, ap_x, top + 11, C['radarSub'])
         if ct:
-            rtext(f, 'small', ct, right, top + 18, C['label'])
+            rtext(f, 'small', ct, right, top + 18, C['radarSub'])
         if ws:
             draw_warn_tag()
         return f
