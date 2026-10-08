@@ -23,15 +23,13 @@ const SPLIT_TIME_BOX = [40, 0, W - 40, H];
 // rows 2-19 + margin). Built per station by scripts/build-locations.js.
 const FULL_TIME_BOX = [40, 0, 24, 22];
 const SHORE = 6;
-// Loop slots (IEM's archive only has frames at even minutes). The newest
-// frame is on a 6-minute grid, so it's at most ~8 min old; the older ones
-// are on a 12-minute grid before it. Each 6-minute step adds exactly one new
-// frame (the previous newest becomes an older slot, or stays newest's
-// neighbor), so the board downloads one frame per step.
-const NEWEST_STEP = 360;
-const STEP = 720;
-const LOOP = 3;                          // frames in the loop
-const KEEP = 6;                          // frames kept per location
+// Loop slots (IEM's archive only has frames at even minutes): the latest
+// 6-minute time expected to exist and the 6-minute slots before it, 30
+// minutes end to end. Each 6-minute step adds exactly one new frame and
+// drops the oldest, so the board downloads one frame per step.
+const STEP = 360;
+const LOOP = 6;                          // frames in the loop
+const KEEP = 8;                          // frames kept per location (a late frame doesn't evict a slot)
 const ON_PX = 30, OFF_PX = 10;           // radar.on hysteresis (colored px); provisional
 
 const RAIN_DBZ = [15, 25, 35, 45, 55];   // -> values 1..5
@@ -249,13 +247,11 @@ function createRadar({
   const missing = new Map();  // stamp -> retry-after time
   let timer = null, busy = null;
 
-  // Loop slots, oldest first: the latest 6-minute time expected to exist,
-  // then the 12-minute slots before it.
+  // Loop slots, oldest first, ending at the latest 6-minute time expected
+  // to exist.
   function slots() {
-    const newest = Math.floor((now() - lag) / NEWEST_STEP) * NEWEST_STEP;
-    const grid = Math.floor((newest - 1) / STEP) * STEP; // last 12-minute slot before it
-    const older = Array.from({ length: LOOP - 1 }, (_, i) => grid - (LOOP - 2 - i) * STEP);
-    return [...older, newest].map(stampOf);
+    const newest = Math.floor((now() - lag) / STEP) * STEP;
+    return Array.from({ length: LOOP }, (_, i) => newest - (LOOP - 1 - i) * STEP).map(stampOf);
   }
 
   async function processStamp(stamp, wanted) {

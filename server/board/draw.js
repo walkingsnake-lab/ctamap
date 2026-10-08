@@ -178,7 +178,7 @@
 
     const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
     const C = {
-      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
+      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
       sch: '#b0b0b0', schDim: '#474747', grey: '#8f8f8f', divider: '#333333',
       head: '#808080', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
@@ -760,7 +760,10 @@
       const [bx, by, bw, bh] = r.timeBox || [40, 0, 24, 32];
       const right = Math.min(63, bx + bw - 1);
       const top = by + 2; // top-aligned (spec: rows 2-19)
-      const t = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
+      // The clock: the frame's time (dim), or the current time (white) with
+      // clock 'now' or before any frame.
+      const nowClock = r.clock === 'now';
+      const t = !nowClock && idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
       // The radar (shoreline included) can reach into the clock box; each
       // piece of the corner gets a 1px black margin so nothing touches it.
       const clear = (b) => { if (b[1] <= b[3]) f.fill(b[0] - 1, b[1] - 1, b[2] - b[0] + 3, b[3] - b[1] + 3, '#000000'); };
@@ -773,6 +776,17 @@
       };
       const ws = p.warn ? warnStyle(p.warn) : null;
       const hideWarn = ws && ws.blinks && o.blink;
+      // Warning tag (icon + WATCH/WARN) at the screen's bottom right on a
+      // black backing (it may run past the time box).
+      const drawWarnTag = () => {
+        const word = p.warn.lvl === 'warning' ? 'WARN' : 'WATCH';
+        const x0 = 64 - (measure('small', ws.glyph) + TAG_GAP + measure('small', word));
+        f.fill(x0 - 1, 25, 64 - x0 + 1, 7, '#000000');
+        if (!hideWarn) {
+          const x = f.text('small', ws.glyph, x0, 31, ws.color);
+          f.text('small', word, x + TAG_GAP - 1, 31, ws.color);
+        }
+      };
       if (r.showTime === false && r.temp != null) {
         // Time off: current conditions (icon + temperature, as on the weather
         // row) right-aligned under the indicator, and the warning tag (icon +
@@ -786,15 +800,27 @@
         drawIndicator();
         if (icon) drawIcon(f, icon, x0, top + 4);
         f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
-        if (ws) {
-          const word = p.warn.lvl === 'warning' ? 'WARN' : 'WATCH';
-          const x0 = 64 - (measure('small', ws.glyph) + TAG_GAP + measure('small', word));
-          f.fill(x0 - 1, 25, 64 - x0 + 1, 7, '#000000');
-          if (!hideWarn) {
-            const x = f.text('small', ws.glyph, x0, 31, ws.color);
-            f.text('small', word, x + TAG_GAP - 1, 31, ws.color);
-          }
-        }
+        if (ws) drawWarnTag();
+        return f;
+      }
+      if (r.cond) {
+        // Time with conditions: time and A/P on one line (A/P 1px after the
+        // time, bottom-aligned), the temperature right-aligned under it on
+        // rows 15-19 (both dark gray), the warning tag at the bottom right as with time off.
+        // From 10:00 to 12:59 the line is 26px and runs 2px past a 24px box.
+        const clock = clockText(t);
+        const ap = ampmText(t).slice(0, 1);
+        const apX = right - measure('small', ap) + 1;
+        const clockRight = apX - 2;
+        const ct = r.temp != null ? `${r.temp}°` : null;
+        clear(textBox('5x7', clock, clockRight - measure('5x7', clock) + 1, top + 11));
+        clear(textBox('small', ap, apX, top + 11));
+        if (ct) clear(textBox('small', ct, right - measure('small', ct) + 1, top + 18));
+        drawIndicator();
+        rtext(f, '5x7', clock, clockRight, top + 11, nowClock ? C.clock : C.radarTime);
+        f.text('small', ap, apX, top + 11, C.radarSub);
+        if (ct) rtext(f, 'small', ct, right, top + 18, C.radarSub);
+        if (ws) drawWarnTag();
         return f;
       }
       const clock = clockText(t);
@@ -805,8 +831,8 @@
       clear(textBox('small', ap, apX, top + 18));
       if (ws) clear(textBox('small', ws.glyph, wX, top + 18));
       drawIndicator();
-      // Dimmed so a frame's time doesn't read as the current time.
-      rtext(f, '5x7', clock, right, top + 11, C.radarTime);
+      // A frame's time is dimmed so it doesn't read as the current time.
+      rtext(f, '5x7', clock, right, top + 11, nowClock ? C.clock : C.radarTime);
       f.text('small', ap, apX, top + 18, C.radarAmpm);
       if (ws && !hideWarn) f.text('small', ws.glyph, wX, top + 18, ws.color);
       return f;

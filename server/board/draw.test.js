@@ -697,6 +697,47 @@ test('baseball score flash: amber for a minute after a change, fades to white, t
   assert.ok(count(f, draw.BB.live, 22, 12, 30, 18) > 0);
 });
 
+test('radar clock now: the current time in white; conditions under the clock', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 46) / 1000; // 11:46 AM in Chicago
+  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 3600, now - 1800, now - 600], timeBox: [40, 0, 24, 22], split: false, showTime: true, temp: 63, icon: 'sun' };
+  const at = (extra, opts = {}) => draw.render({ now, bright: 100, warn: null, radar: { ...radar, ...extra } }, { screen: 'weather', now, frames: {}, idx: 0, ...opts });
+  // Frame time (default): dim, and it's the frame's time, not now.
+  const frame = at({});
+  assert.ok(count(frame, draw.C.radarTime, 40, 6, 63, 12) > 15);
+  assert.equal(count(frame, draw.C.clock, 40, 6, 63, 12), 0);
+  // Now: white, and the same pixels on every frame of the loop.
+  const live = at({ clock: 'now' });
+  assert.equal(count(live, draw.C.radarTime, 40, 6, 63, 12), 0);
+  assert.ok(count(live, draw.C.clock, 40, 6, 63, 12) > 15);
+  const ref = draw.render({ now, bright: 100, warn: null, radar: { ...radar, ft: [now, now, now] } }, { screen: 'weather', now, frames: {}, idx: 0 });
+  const clockPx = (f, c) => { const out = []; for (let y = 6; y <= 12; y++) for (let x = 40; x < 64; x++) out.push(hex(f.get(x, y)) === c); return out; };
+  assert.deepEqual(clockPx(live, draw.C.clock), clockPx(ref, draw.C.radarTime), 'shows the current time');
+  assert.deepEqual(clockPx(live, draw.C.clock), clockPx(at({ clock: 'now' }, { idx: 2 }), draw.C.clock), 'on every frame');
+  // Conditions (cond): time + A/P on one line, the temperature under it,
+  // no icon, the warning tag at the bottom right.
+  assert.equal(count(frame, draw.C.label, 40, 14, 63, 31), 0);
+  const cond = at({ cond: true });
+  assert.equal(count(cond, draw.C.radarAmpm, 40, 14, 63, 20), 0, 'no AM/PM row');
+  assert.ok(count(cond, draw.C.radarSub, 59, 8, 63, 12) > 4, 'A/P on the clock line, rows 8-12');
+  assert.equal(count(cond, draw.C.radarSub, 40, 6, 63, 7), 0);
+  assert.ok(count(cond, draw.C.radarSub, 40, 15, 63, 19) > 8, '63° on rows 15-19, dark gray');
+  let maxX = 0; for (let y = 14; y < 21; y++) for (let x = 40; x < 64; x++) if (hex(cond.get(x, y)) === draw.C.radarSub) maxX = Math.max(maxX, x);
+  assert.equal(maxX, 63);
+  const colored = (fr, y0, y1) => { let n = 0; for (let y = y0; y <= y1; y++) for (let x = 0; x < 64; x++) if (hex(fr.get(x, y)) !== '#000000') n++; return n; };
+  assert.equal(colored(cond, 21, 31), 0, 'no icon');
+  // 12:46 PM: the 26px line ends at the edge, 2px past the 24px box.
+  const noon = draw.render({ now, bright: 100, warn: null, radar: { ...radar, cond: true, clock: 'now' } }, { screen: 'weather', now: now + 3600, frames: {}, idx: 0 });
+  let minX = 64; for (let y = 6; y < 13; y++) for (let x = 0; x < 64; x++) if (hex(noon.get(x, y)) === draw.C.clock) minX = Math.min(minX, x);
+  assert.equal(minX, 39);
+  // No temperature yet: just the clock line.
+  assert.equal(count(at({ cond: true, temp: null }), draw.C.radarSub, 40, 14, 63, 31), 0);
+  // Warning tag at the bottom right, as with time off; nothing next to A/P.
+  const tor = (blink) => draw.render({ now, bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...radar, cond: true } }, { screen: 'weather', now, frames: {}, idx: 0, blink });
+  assert.ok(count(tor(false), draw.C.warnTornado, 30, 27, 63, 31) > 15);
+  assert.equal(count(tor(false), draw.C.warnTornado, 0, 0, 63, 24), 0);
+  assert.equal(count(tor(true), draw.C.warnTornado, 0, 0, 63, 31), 0, 'blinks');
+});
+
 test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at the bottom right', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
   const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 22], split: false, temp: 63, icon: 'sun' };

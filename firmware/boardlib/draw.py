@@ -232,7 +232,7 @@ LINE = {
 # Index digits in the chronological view: Brown and Purple brightened.
 
 C = {
-    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
+    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'radarSub': hexc('#666666'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
     'sch': hexc('#b0b0b0'), 'schDim': hexc('#474747'), 'grey': hexc('#8f8f8f'),
     'divider': hexc('#333333'), 'head': hexc('#808080'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
@@ -949,8 +949,11 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     bx, by, bw, bh = r.get('timeBox') or (40, 0, 24, 32)
     right = min(63, bx + bw - 1)
     top = by + 2
+    # The clock: the frame's time (dim), or the current time (white) with
+    # clock 'now' or before any frame.
+    now_clock = r.get('clock') == 'now'
     ft = r.get('ft')
-    if idx >= 0 and ft and ft[idx] is not None:
+    if not now_clock and idx >= 0 and ft and ft[idx] is not None:
         t = ft[idx]
     else:
         t = now if now is not None else p['now']
@@ -975,6 +978,15 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
 
     ws = warn_style(p['warn']) if p.get('warn') else None
     hide_warn = bool(ws and ws[2] and blink)
+
+    def draw_warn_tag():
+        word = 'WARN' if p['warn']['lvl'] == 'warning' else 'WATCH'
+        x0 = 64 - (measure('small', ws[0]) + TAG_GAP + measure('small', word))
+        f.fill(x0 - 1, 25, 64 - x0 + 1, 7, black)
+        if not hide_warn:
+            x = f.text('small', ws[0], x0, 31, ws[1])
+            f.text('small', word, x + TAG_GAP - 1, 31, ws[1])
+
     if r.get('showTime') is False and r.get('temp') is not None:
         ts = str(r['temp']) + '°'
         icon = r.get('icon') if r.get('icon') in assets.ICONS else None
@@ -987,12 +999,27 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
             draw_icon(f, icon, x0, top + 4)
         f.text('small', ts, x0 + (10 if icon else 0), top + 10, C['label'])
         if ws:
-            word = 'WARN' if p['warn']['lvl'] == 'warning' else 'WATCH'
-            x0 = 64 - (measure('small', ws[0]) + TAG_GAP + measure('small', word))
-            f.fill(x0 - 1, 25, 64 - x0 + 1, 7, black)
-            if not hide_warn:
-                x = f.text('small', ws[0], x0, 31, ws[1])
-                f.text('small', word, x + TAG_GAP - 1, 31, ws[1])
+            draw_warn_tag()
+        return f
+    if r.get('cond'):
+        # Time with conditions: time and A/P on one line, the temperature
+        # under it, the warning tag at the bottom right (as with time off).
+        clock = clock_text(t, tzo)
+        ap = ampm_text(t, tzo)[0]
+        ap_x = right - measure('small', ap) + 1
+        clock_right = ap_x - 2
+        ct = str(r['temp']) + '°' if r.get('temp') is not None else None
+        clear(text_box('5x7', clock, clock_right - measure('5x7', clock) + 1, top + 11))
+        clear(text_box('small', ap, ap_x, top + 11))
+        if ct:
+            clear(text_box('small', ct, right - measure('small', ct) + 1, top + 18))
+        draw_indicator()
+        rtext(f, '5x7', clock, clock_right, top + 11, C['clock'] if now_clock else C['radarTime'])
+        f.text('small', ap, ap_x, top + 11, C['radarSub'])
+        if ct:
+            rtext(f, 'small', ct, right, top + 18, C['radarSub'])
+        if ws:
+            draw_warn_tag()
         return f
     clock = clock_text(t, tzo)
     ap = ampm_text(t, tzo)
@@ -1003,7 +1030,8 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     if ws:
         clear(text_box('small', ws[0], w_x, top + 18))
     draw_indicator()
-    rtext(f, '5x7', clock, right, top + 11, C['radarTime'])
+    # A frame's time is dimmed so it doesn't read as the current time.
+    rtext(f, '5x7', clock, right, top + 11, C['clock'] if now_clock else C['radarTime'])
     f.text('small', ap, ap_x, top + 18, C['radarAmpm'])
     if ws and not hide_warn:
         f.text('small', ws[0], w_x, top + 18, ws[1])

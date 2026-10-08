@@ -149,6 +149,17 @@ test('radarTime defaults to true and must be a boolean', () => {
   assert.throws(() => store.update('home', { radarTime: 'no' }), /radarTime must be true or false/);
 });
 
+test('radarClock and radarCond: defaults frame time, no conditions; validated', () => {
+  const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet });
+  assert.equal(store.get('home').radarClock, 'frame');
+  assert.equal(store.get('home').radarCond, false);
+  store.update('home', { radarClock: 'now', radarCond: true });
+  assert.equal(store.get('home').radarClock, 'now');
+  assert.equal(store.get('home').radarCond, true);
+  assert.throws(() => store.update('home', { radarClock: 'live' }), /radarClock must be one of frame, now/);
+  assert.throws(() => store.update('home', { radarCond: 1 }), /radarCond must be true or false/);
+});
+
 test('speed settings and ticker fill: defaults, allowed values only', () => {
   const store = createStore({ dir: tmpDir(), log: quiet });
   const b = store.get('home');

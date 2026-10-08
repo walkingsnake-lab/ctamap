@@ -74,7 +74,7 @@ class Server:
             {'ln': 'RD', 'lbl': 'HOWARD', 't': [now + 75 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': self.alert},
             {'ln': 'RD', 'lbl': '95TH', 't': [now + 130 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': 0},
         ]
-        frames = ['40100-%d' % (now // 720 * 720 - k * 720) for k in range(player.RADAR_SLOTS - 1, -1, -1)] if self.radar_on else []
+        frames = ['40100-%d' % (now // 360 * 360 - k * 360) for k in range(player.RADAR_SLOTS - 1, -1, -1)] if self.radar_on else []
         return {
             'v': self.v, 'now': now, 'tzo': -18000, 'age': 3, 'screen': 'weather' if self.radar_on and not self.visit else self.screen,
             'bright': 100, 'header': 'MORSE', 'view': 'dest', 'rows': rows,
@@ -249,8 +249,10 @@ class TestBoardLoop(unittest.TestCase):
         server.v = 2
         run_for(board, clock, 60000)
         fetches = [c['ms'] for c in server.calls if c['name'].startswith('radar')]
-        self.assertEqual(len(fetches), player.RADAR_SLOTS)
-        self.assertLess(fetches[-1] - fetches[0], player.RADAR_SLOTS * (LATENCY + 500))
+        # (Plus one more if the 6-minute grid stepped during the run.)
+        self.assertIn(len(fetches), (player.RADAR_SLOTS, player.RADAR_SLOTS + 1))
+        fill = fetches[:player.RADAR_SLOTS]
+        self.assertLess(fill[-1] - fill[0], player.RADAR_SLOTS * (LATENCY + 500))
 
     def test_radar_memory_error_is_retried_without_reconnecting(self):
         board, server, clock, _, _, statuses = make()

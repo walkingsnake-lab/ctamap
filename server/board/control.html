@@ -28,6 +28,7 @@
   .seg button:disabled { color: #555; cursor: default; }
   .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
   .row + .row { border-top: 1px solid var(--line); }
+  .row[hidden] { display: none; }
   .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
   select, input[type=text] { width: 100%; font: inherit; color: var(--fg); background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; }
   input[type=text] { text-transform: uppercase; }
@@ -174,10 +175,12 @@
   <section data-tab="weather">
     <h2>Radar (while raining)</h2>
     <div class="seg" id="radarCorner">
-      <button data-v="time">Frame time</button>
-      <button data-v="temp">Temperature</button>
+      <button data-v="frame">Frame time</button>
+      <button data-v="now">Current time</button>
+      <button data-v="temp">Weather</button>
     </div>
     <p class="hint" id="radarCornerHint"></p>
+    <div class="row" id="radarCondRow"><span>Temperature under the clock</span><label class="switch"><input type="checkbox" id="radarCond"><span></span></label></div>
     <div class="row"><span>Loop speed</span>
       <select id="radarFrame" aria-label="Loop speed" style="width:auto"><option value="300">Fast (0.3 s)</option><option value="400">Quicker (0.4 s)</option><option value="500">Normal (0.5 s)</option><option value="700">Slower (0.7 s)</option><option value="1000">Slow (1 s)</option></select></div>
     <div class="row"><span>Pause on the newest frame</span>
@@ -424,10 +427,14 @@
     $('bbPriorityHint').textContent = pri === 'live' ? 'While any game is live, only live games rotate; otherwise every game shown.'
       : pri === 'favorite' ? 'While a Cubs or White Sox game is live, only that game shows; otherwise live games first.'
       : 'Every game shown rotates, live or not.';
-    pressed('radarCorner', board.radarTime !== false ? 'time' : 'temp');
+    const corner = board.radarTime === false ? 'temp' : board.radarClock === 'now' ? 'now' : 'frame';
+    pressed('radarCorner', corner);
+    $('radarCond').checked = board.radarCond === true;
+    $('radarCondRow').hidden = corner === 'temp';
     $('tempShadow').checked = board.tempShadow === true;
-    $('radarCornerHint').textContent = board.radarTime !== false
-      ? 'The radar frame\'s time, with AM/PM and any weather warning icon under it.'
+    $('radarCornerHint').textContent = corner === 'frame'
+      ? 'The radar frame\'s time (dim), with AM/PM and any weather warning icon under it.'
+      : corner === 'now' ? 'The current time in white, with AM/PM and any weather warning icon under it.'
       : 'Current weather icon and temperature; a weather watch or warning shows at the bottom right.';
     $('rowsHint').textContent = 'These are the most the board shows. When more destinations are running than fit, '
       + 'it hides the weather row first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather row.'
@@ -554,7 +561,11 @@
     e.target.value = '';
   });
   loadLogoStatus();
-  $('radarCorner').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ radarTime: v === 'time' }); });
+  $('radarCorner').addEventListener('click', (e) => {
+    const v = e.target.dataset.v;
+    if (v) save(v === 'temp' ? { radarTime: false } : { radarTime: true, radarClock: v });
+  });
+  $('radarCond').addEventListener('change', (e) => save({ radarCond: e.target.checked }));
   $('allDest').addEventListener('change', (e) => save({ rows: e.target.checked ? [] : dests.map((d) => d.key) }));
   $('boardPick').addEventListener('change', (e) => {
     boardId = e.target.value;
