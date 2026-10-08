@@ -697,6 +697,41 @@ test('baseball score flash: amber for a minute after a change, fades to white, t
   assert.ok(count(f, draw.BB.live, 22, 12, 30, 18) > 0);
 });
 
+test('radar clock now: the current time in white; conditions under the clock', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 46) / 1000; // 11:46 AM in Chicago
+  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 3600, now - 1800, now - 600], timeBox: [40, 0, 24, 22], split: false, showTime: true, temp: 63, icon: 'sun' };
+  const at = (extra, opts = {}) => draw.render({ now, bright: 100, warn: null, radar: { ...radar, ...extra } }, { screen: 'weather', now, frames: {}, idx: 0, ...opts });
+  // Frame time (default): dim, and it's the frame's time, not now.
+  const frame = at({});
+  assert.ok(count(frame, draw.C.radarTime, 40, 6, 63, 12) > 15);
+  assert.equal(count(frame, draw.C.clock, 40, 6, 63, 12), 0);
+  // Now: white, and the same pixels on every frame of the loop.
+  const live = at({ clock: 'now' });
+  assert.equal(count(live, draw.C.radarTime, 40, 6, 63, 12), 0);
+  assert.ok(count(live, draw.C.clock, 40, 6, 63, 12) > 15);
+  const ref = draw.render({ now, bright: 100, warn: null, radar: { ...radar, ft: [now, now, now] } }, { screen: 'weather', now, frames: {}, idx: 0 });
+  const clockPx = (f, c) => { const out = []; for (let y = 6; y <= 12; y++) for (let x = 40; x < 64; x++) out.push(hex(f.get(x, y)) === c); return out; };
+  assert.deepEqual(clockPx(live, draw.C.clock), clockPx(ref, draw.C.radarTime), 'shows the current time');
+  assert.deepEqual(clockPx(live, draw.C.clock), clockPx(at({ clock: 'now' }, { idx: 2 }), draw.C.clock), 'on every frame');
+  // Conditions: off by default; on, icon + temperature on rows 22-29, right-aligned.
+  assert.equal(count(frame, draw.C.label, 40, 20, 63, 31), 0);
+  const cond = at({ cond: true });
+  assert.ok(count(cond, draw.C.label, 40, 23, 63, 27) > 8, '63° on rows 23-27');
+  let maxX = 0; for (let y = 20; y < 32; y++) for (let x = 40; x < 64; x++) if (hex(cond.get(x, y)) === draw.C.label) maxX = Math.max(maxX, x);
+  assert.equal(maxX, 63);
+  const iconPx = (fr) => { let n = 0; for (let y = 22; y < 30; y++) for (let x = 40; x < 56; x++) { const c = hex(fr.get(x, y)); if (c !== '#000000' && c !== draw.C.label) n++; } return n; };
+  assert.ok(iconPx(cond) > 10, 'icon left of the temperature');
+  // The clock stack above is unchanged; no temperature yet: nothing extra.
+  assert.deepEqual(clockPx(cond, draw.C.radarTime), clockPx(frame, draw.C.radarTime));
+  assert.deepEqual(at({ cond: true, temp: null }).px, frame.px);
+  // Radar under the conditions is cleared with a 1px margin, not around it.
+  const rain = { a: new Uint8Array(2048).fill(3) };
+  const wet = at({ cond: true }, { frames: rain });
+  assert.equal(hex(wet.get(63, 22)), '#000000');     // temperature (rows 23-27) + margin
+  assert.equal(hex(wet.get(63, 29)), draw.RADAR[3]);
+  assert.equal(hex(wet.get(30, 25)), draw.RADAR[3]);
+});
+
 test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at the bottom right', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
   const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 22], split: false, temp: 63, icon: 'sun' };

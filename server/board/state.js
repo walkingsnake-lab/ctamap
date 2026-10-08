@@ -26,6 +26,7 @@ const ALERT_JUMPS = ['off', 'warning', 'all']; // jump to weather: never, NWS wa
 const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
+const RADAR_CLOCKS = ['frame', 'now'];
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
   tickerHold: [5, 6, 8, 10, 12, 15],         // s each ticker page holds
@@ -91,8 +92,13 @@ function defaultBoard(stations) {
     lineNames: 'white',
     // Transit and ticker header: the clock at the right.
     headerClock: true,
-    // Radar screen: show the frame's time and AM/PM.
+    // Radar screen: show a clock and AM/PM (off: current conditions instead).
     radarTime: true,
+    // The radar clock: 'frame' (the frame's time, dim) or 'now' (the current
+    // time, white).
+    radarClock: 'frame',
+    // Current conditions (icon + temperature) under the radar clock.
+    radarCond: false,
     // Weather screen: a temperature-colored shadow behind the big temperature.
     tempShadow: false,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
@@ -144,6 +150,7 @@ function validatePatch(patch, stations) {
       case 'headerDivider':
       case 'wxDivider':
       case 'radarTime':
+      case 'radarCond':
       case 'tempShadow':
       case 'headerClock':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
@@ -204,8 +211,9 @@ function validatePatch(patch, stations) {
       case 'wxVisit':
       case 'alertJump':
       case 'bbPriority':
-      case 'lineNames': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES }[key];
+      case 'lineNames':
+      case 'radarClock': {
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, radarClock: RADAR_CLOCKS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;
@@ -306,4 +314,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };

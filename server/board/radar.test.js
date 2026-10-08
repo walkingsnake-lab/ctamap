@@ -120,17 +120,18 @@ test('poller: newest frame first, then backfill; 404s retried later; on/off hyst
       return { wld: wldOf('202008102100'), png: pngOf('202008102100') };
     },
   });
-  // 3 slots, 12 minutes apart: always even minutes (IEM only has even-minute frames).
-  assert.deepEqual(radar.slots(), ['202008102048', '202008102100', '202008102112']);
+  // 6 slots, 6 minutes apart (30 minutes end to end): always even minutes
+  // (IEM only has even-minute frames).
+  assert.deepEqual(radar.slots(), ['202008102042', '202008102048', '202008102054', '202008102100', '202008102106', '202008102112']);
   // Morse: the time sits over the lake (full-width layout).
   assert.deepEqual(radar.want('40100', MORSE.lat, MORSE.lon), { on: false, frames: [], ft: [], timeBox: R.FULL_TIME_BOX, split: false });
   await radar.pass();
   await radar.pass();
-  assert.deepEqual(fetched, ['202008102112', '202008102100']); // 404, then the next newest
-  for (let i = 0; i < 3; i++) await radar.pass();
+  assert.deepEqual(fetched, ['202008102112', '202008102106']); // 404, then the next newest
+  for (let i = 0; i < 6; i++) await radar.pass();
   const r = radar.want('40100', MORSE.lat, MORSE.lon);
-  assert.equal(r.frames.length, 2);
-  assert.deepEqual(r.frames, ['40100-202008102048', '40100-202008102100']);
+  assert.equal(r.frames.length, 5);
+  assert.deepEqual(r.frames, ['202008102042', '202008102048', '202008102054', '202008102100', '202008102106'].map((s) => `40100-${s}`));
   assert.deepEqual(r.ft, r.frames.map((id) => R.timeOf(id.split('-')[1])));
   assert.equal(r.on, true);
   assert.equal(radar.frame('40100', r.frames[0]).length, 2048);
@@ -209,18 +210,19 @@ test('every station has a location file built from the current lake data', () =>
   }
 });
 
-test('poller: the newest slot is on the 6-minute grid; each step adds one new slot', () => {
+test('poller: slots are on the 6-minute grid; each step adds one new slot and drops the oldest', () => {
   const at = (stamp) => R.createRadar({ now: () => R.timeOf(stamp) + 120, log: quiet }).slots();
-  assert.deepEqual(at('202008102112'), ['202008102048', '202008102100', '202008102112']); // newest on the 12-min grid
-  assert.deepEqual(at('202008102118'), ['202008102100', '202008102112', '202008102118']); // 6 past it
-  assert.deepEqual(at('202008102124'), ['202008102100', '202008102112', '202008102124']);
-  // Over a day, consecutive 6-minute steps share all but one slot, and
-  // the newest is never more than 8 minutes old.
+  assert.deepEqual(at('202008102112'), ['202008102042', '202008102048', '202008102054', '202008102100', '202008102106', '202008102112']);
+  assert.deepEqual(at('202008102118'), ['202008102048', '202008102054', '202008102100', '202008102106', '202008102112', '202008102118']);
+  // Over a day, consecutive 6-minute steps share all but one slot, the
+  // newest is never more than 8 minutes old, and the loop spans 30 minutes.
   let prev = null;
   for (let t = Date.UTC(2026, 9, 4) / 1000; t < Date.UTC(2026, 9, 5) / 1000; t += 360) {
     const radar = R.createRadar({ now: () => t + 120, log: quiet });
     const s = radar.slots();
-    assert.ok(t + 120 - R.timeOf(s[2]) <= 8 * 60);
+    assert.equal(s.length, 6);
+    assert.ok(t + 120 - R.timeOf(s[5]) <= 8 * 60);
+    assert.equal(R.timeOf(s[5]) - R.timeOf(s[0]), 30 * 60);
     if (prev) assert.equal(s.filter((x) => !prev.includes(x)).length, 1, `${prev} -> ${s}`);
     prev = s;
   }
@@ -269,10 +271,10 @@ test('poller: after a quiet spell, old frames are not served and on resets', asy
   let t = R.timeOf('202008102108') + 120;
   const radar = R.createRadar({ now: () => t, log: quiet, fetch: async () => ({ wld: wldOf('202008102100'), png: pngOf('202008102100') }) });
   radar.want('40100', MORSE.lat, MORSE.lon);
-  for (let i = 0; i < 3; i++) await radar.pass();
+  for (let i = 0; i < 6; i++) await radar.pass();
   const storm = radar.want('40100', MORSE.lat, MORSE.lon);
   assert.equal(storm.on, true);
-  assert.equal(storm.frames.length, 3);
+  assert.equal(storm.frames.length, 6);
   t += 2 * 86400; // nobody asked for two days
   const later = radar.want('40100', MORSE.lat, MORSE.lon);
   assert.deepEqual([later.on, later.frames, later.ft], [false, [], []]);

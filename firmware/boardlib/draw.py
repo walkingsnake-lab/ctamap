@@ -937,8 +937,11 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     bx, by, bw, bh = r.get('timeBox') or (40, 0, 24, 32)
     right = min(63, bx + bw - 1)
     top = by + 2
+    # The clock: the frame's time (dim), or the current time (white) with
+    # clock 'now' or before any frame.
+    now_clock = r.get('clock') == 'now'
     ft = r.get('ft')
-    if idx >= 0 and ft and ft[idx] is not None:
+    if not now_clock and idx >= 0 and ft and ft[idx] is not None:
         t = ft[idx]
     else:
         t = now if now is not None else p['now']
@@ -986,15 +989,31 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     ap = ampm_text(t, tzo)
     ap_x = right - measure('small', ap) + 1
     w_x = ap_x - 2 - measure('small', ws[0]) if ws else 0
+    # Conditions under the clock (cond): icon rows 22-29 and temperature,
+    # right-aligned, below the clock box on the full-width layout.
+    cond = bool(r.get('cond')) and r.get('temp') is not None
+    ct = str(r['temp']) + '°' if cond else ''
+    c_icon = r.get('icon') if cond and r.get('icon') in assets.ICONS else None
+    cx = right + 1 - ((10 if c_icon else 0) + measure('small', ct))
+    cy = top + 20
     clear(text_box('5x7', clock, right - measure('5x7', clock) + 1, top + 11))
     clear(text_box('small', ap, ap_x, top + 18))
     if ws:
         clear(text_box('small', ws[0], w_x, top + 18))
+    if c_icon:
+        clear((cx, cy, cx + 7, cy + 7))
+    if cond:
+        clear(text_box('small', ct, cx + (10 if c_icon else 0), cy + 6))
     draw_indicator()
-    rtext(f, '5x7', clock, right, top + 11, C['radarTime'])
+    # A frame's time is dimmed so it doesn't read as the current time.
+    rtext(f, '5x7', clock, right, top + 11, C['clock'] if now_clock else C['radarTime'])
     f.text('small', ap, ap_x, top + 18, C['radarAmpm'])
     if ws and not hide_warn:
         f.text('small', ws[0], w_x, top + 18, ws[1])
+    if c_icon:
+        draw_icon(f, c_icon, cx, cy)
+    if cond:
+        f.text('small', ct, cx + (10 if c_icon else 0), cy + 6, C['label'])
     return f
 
 

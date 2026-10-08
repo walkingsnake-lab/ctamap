@@ -626,6 +626,12 @@ test('simulator preview: header and weather toggles without changing the board',
   assert.equal(r.showTime, false);
   assert.equal(r.temp, Math.round(w.temp));
   assert.equal(s.store.get('home').radarTime, true);
+  // Radar clock now and conditions: sent only when set.
+  assert.equal(r.clock, undefined);
+  assert.equal(r.cond, undefined);
+  s.store.update('home', { radarClock: 'now', radarCond: true });
+  const r2 = (await s.req('/board/secret123/api/update?b=home')).body.radar;
+  assert.deepEqual([r2.clock, r2.cond, r2.showTime], ['now', true, true]);
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&header=1&weather=0`);
   assert.equal(png.status, 200);
   await s.close();
@@ -643,8 +649,8 @@ test('simulator test radar: a recorded storm or snowstorm loops at the board sta
   assert.equal(r.radar, 'storm');
   let b = (await s.req(FULL)).body;
   assert.equal(b.radar.on, true);
-  assert.equal(b.radar.frames.length, 3);
-  assert.deepEqual(b.radar.ft.map((t, i) => (i ? t - b.radar.ft[i - 1] : 0)), [0, 720, 720]);
+  assert.equal(b.radar.frames.length, 6);
+  assert.deepEqual(b.radar.ft.map((t, i) => (i ? t - b.radar.ft[i - 1] : 0)), [0, 360, 360, 360, 360, 360]);
   const frames = [];
   for (const id of b.radar.frames) {
     const f = await fetch(`http://127.0.0.1:${s.port}/board/radar/${id}?b=home`, h);
@@ -653,7 +659,7 @@ test('simulator test radar: a recorded storm or snowstorm loops at the board sta
   }
   const rain = (f) => [...f].filter((v) => v >= 1 && v <= 5).length;
   assert.ok(frames.every((f) => f.length === 2048 && rain(f) > 100), 'storm in every frame');
-  assert.notDeepEqual(frames[0], frames[2], 'the loop moves');
+  assert.notDeepEqual(frames[0], frames[5], 'the loop moves');
   await post({ radar: 'snow' });
   b = (await s.req(FULL)).body;
   const snow = Buffer.from(await (await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/radar/${b.radar.frames[2]}?b=home`)).arrayBuffer());

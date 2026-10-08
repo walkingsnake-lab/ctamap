@@ -746,7 +746,10 @@
       const [bx, by, bw, bh] = r.timeBox || [40, 0, 24, 32];
       const right = Math.min(63, bx + bw - 1);
       const top = by + 2; // top-aligned (spec: rows 2-19)
-      const t = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
+      // The clock: the frame's time (dim), or the current time (white) with
+      // clock 'now' or before any frame.
+      const nowClock = r.clock === 'now';
+      const t = !nowClock && idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : (o.now != null ? o.now : p.now);
       // The radar (shoreline included) can reach into the clock box; each
       // piece of the corner gets a 1px black margin so nothing touches it.
       const clear = (b) => { if (b[1] <= b[3]) f.fill(b[0] - 1, b[1] - 1, b[2] - b[0] + 3, b[3] - b[1] + 3, '#000000'); };
@@ -787,14 +790,25 @@
       const ap = ampmText(t);
       const apX = right - measure('small', ap) + 1;
       const wX = ws ? apX - 2 - measure('small', ws.glyph) : 0;
+      // Conditions under the clock (cond): icon rows 22-29 and temperature,
+      // right-aligned, below the clock box on the full-width layout.
+      const cond = r.cond && r.temp != null;
+      const ct = cond ? `${r.temp}°` : '';
+      const cIcon = cond && r.icon && icons.ICONS[r.icon] ? r.icon : null;
+      const cx = right + 1 - ((cIcon ? 10 : 0) + measure('small', ct));
+      const cy = top + 20;
       clear(textBox('5x7', clock, right - measure('5x7', clock) + 1, top + 11));
       clear(textBox('small', ap, apX, top + 18));
       if (ws) clear(textBox('small', ws.glyph, wX, top + 18));
+      if (cIcon) clear([cx, cy, cx + 7, cy + 7]);
+      if (cond) clear(textBox('small', ct, cx + (cIcon ? 10 : 0), cy + 6));
       drawIndicator();
-      // Dimmed so a frame's time doesn't read as the current time.
-      rtext(f, '5x7', clock, right, top + 11, C.radarTime);
+      // A frame's time is dimmed so it doesn't read as the current time.
+      rtext(f, '5x7', clock, right, top + 11, nowClock ? C.clock : C.radarTime);
       f.text('small', ap, apX, top + 18, C.radarAmpm);
       if (ws && !hideWarn) f.text('small', ws.glyph, wX, top + 18, ws.color);
+      if (cIcon) drawIcon(f, cIcon, cx, cy);
+      if (cond) f.text('small', ct, cx + (cIcon ? 10 : 0), cy + 6, C.label);
       return f;
     }
 

@@ -163,6 +163,10 @@ async function build() {
     }
     add(`radar time off split=${split} no temp, no icon`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, temp: null } }, [{ screen: 'weather', idx: 2 }], frames);
     add(`radar time on split=${split} tornado warning blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true } }, [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, blink: true }], frames);
+    // Current-time clock and conditions under the clock (-12: the widest temperature).
+    add(`radar clock now + conditions split=${split} svr warning`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { ...r, showTime: true, clock: 'now', cond: true } }, [{ screen: 'weather', idx: 0, now: t + 3600 }, { screen: 'weather', idx: 2 }], frames);
+    add(`radar frame clock + conditions split=${split} no icon`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, cond: true, icon: null } }, [{ screen: 'weather', idx: 1 }], frames);
+    add(`radar conditions without temp split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'now', cond: true, temp: null } }, [{ screen: 'weather', idx: 1 }], frames);
   }
   // Weather row: tornado warning tag blinks.
   {

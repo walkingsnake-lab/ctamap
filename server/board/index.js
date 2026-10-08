@@ -337,7 +337,12 @@ function createBoard({
       warn,
       anim: animOf(board),
       tickerFill: board.tickerFill || 55,
-      radar: { ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null },
+      radar: {
+        ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null,
+        // Radar clock: the current time instead of the frame's; conditions under it.
+        ...(board.radarClock === 'now' ? { clock: 'now' } : {}),
+        ...(board.radarCond === true ? { cond: true } : {}),
+      },
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
