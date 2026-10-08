@@ -762,6 +762,17 @@
       };
       const ws = p.warn ? warnStyle(p.warn) : null;
       const hideWarn = ws && ws.blinks && o.blink;
+      // Warning tag (icon + WATCH/WARN) at the screen's bottom right on a
+      // black backing (it may run past the time box).
+      const drawWarnTag = () => {
+        const word = p.warn.lvl === 'warning' ? 'WARN' : 'WATCH';
+        const x0 = 64 - (measure('small', ws.glyph) + TAG_GAP + measure('small', word));
+        f.fill(x0 - 1, 25, 64 - x0 + 1, 7, '#000000');
+        if (!hideWarn) {
+          const x = f.text('small', ws.glyph, x0, 31, ws.color);
+          f.text('small', word, x + TAG_GAP - 1, 31, ws.color);
+        }
+      };
       if (r.showTime === false && r.temp != null) {
         // Time off: current conditions (icon + temperature, as on the weather
         // row) right-aligned under the indicator, and the warning tag (icon +
@@ -775,40 +786,41 @@
         drawIndicator();
         if (icon) drawIcon(f, icon, x0, top + 4);
         f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
-        if (ws) {
-          const word = p.warn.lvl === 'warning' ? 'WARN' : 'WATCH';
-          const x0 = 64 - (measure('small', ws.glyph) + TAG_GAP + measure('small', word));
-          f.fill(x0 - 1, 25, 64 - x0 + 1, 7, '#000000');
-          if (!hideWarn) {
-            const x = f.text('small', ws.glyph, x0, 31, ws.color);
-            f.text('small', word, x + TAG_GAP - 1, 31, ws.color);
-          }
-        }
+        if (ws) drawWarnTag();
+        return f;
+      }
+      if (r.cond) {
+        // Time with conditions: time and A/P on one line (A/P 1px after the
+        // time, bottom-aligned), the temperature right-aligned under it on
+        // rows 15-19, the warning tag at the bottom right as with time off.
+        // From 10:00 to 12:59 the line is 26px and runs 2px past a 24px box.
+        const clock = clockText(t);
+        const ap = ampmText(t).slice(0, 1);
+        const apX = right - measure('small', ap) + 1;
+        const clockRight = apX - 2;
+        const ct = r.temp != null ? `${r.temp}°` : null;
+        clear(textBox('5x7', clock, clockRight - measure('5x7', clock) + 1, top + 11));
+        clear(textBox('small', ap, apX, top + 11));
+        if (ct) clear(textBox('small', ct, right - measure('small', ct) + 1, top + 18));
+        drawIndicator();
+        rtext(f, '5x7', clock, clockRight, top + 11, nowClock ? C.clock : C.radarTime);
+        f.text('small', ap, apX, top + 11, C.radarAmpm);
+        if (ct) rtext(f, 'small', ct, right, top + 18, C.label);
+        if (ws) drawWarnTag();
         return f;
       }
       const clock = clockText(t);
       const ap = ampmText(t);
       const apX = right - measure('small', ap) + 1;
       const wX = ws ? apX - 2 - measure('small', ws.glyph) : 0;
-      // Conditions under the clock (cond): icon rows 22-29 and temperature,
-      // right-aligned, below the clock box on the full-width layout.
-      const cond = r.cond && r.temp != null;
-      const ct = cond ? `${r.temp}°` : '';
-      const cIcon = cond && r.icon && icons.ICONS[r.icon] ? r.icon : null;
-      const cx = right + 1 - ((cIcon ? 10 : 0) + measure('small', ct));
-      const cy = top + 20;
       clear(textBox('5x7', clock, right - measure('5x7', clock) + 1, top + 11));
       clear(textBox('small', ap, apX, top + 18));
       if (ws) clear(textBox('small', ws.glyph, wX, top + 18));
-      if (cIcon) clear([cx, cy, cx + 7, cy + 7]);
-      if (cond) clear(textBox('small', ct, cx + (cIcon ? 10 : 0), cy + 6));
       drawIndicator();
       // A frame's time is dimmed so it doesn't read as the current time.
       rtext(f, '5x7', clock, right, top + 11, nowClock ? C.clock : C.radarTime);
       f.text('small', ap, apX, top + 18, C.radarAmpm);
       if (ws && !hideWarn) f.text('small', ws.glyph, wX, top + 18, ws.color);
-      if (cIcon) drawIcon(f, cIcon, cx, cy);
-      if (cond) f.text('small', ct, cx + (cIcon ? 10 : 0), cy + 6, C.label);
       return f;
     }
 

@@ -713,23 +713,29 @@ test('radar clock now: the current time in white; conditions under the clock', (
   const clockPx = (f, c) => { const out = []; for (let y = 6; y <= 12; y++) for (let x = 40; x < 64; x++) out.push(hex(f.get(x, y)) === c); return out; };
   assert.deepEqual(clockPx(live, draw.C.clock), clockPx(ref, draw.C.radarTime), 'shows the current time');
   assert.deepEqual(clockPx(live, draw.C.clock), clockPx(at({ clock: 'now' }, { idx: 2 }), draw.C.clock), 'on every frame');
-  // Conditions: off by default; on, icon + temperature on rows 22-29, right-aligned.
-  assert.equal(count(frame, draw.C.label, 40, 20, 63, 31), 0);
+  // Conditions (cond): time + A/P on one line, the temperature under it,
+  // no icon, the warning tag at the bottom right.
+  assert.equal(count(frame, draw.C.label, 40, 14, 63, 31), 0);
   const cond = at({ cond: true });
-  assert.ok(count(cond, draw.C.label, 40, 23, 63, 27) > 8, '63° on rows 23-27');
-  let maxX = 0; for (let y = 20; y < 32; y++) for (let x = 40; x < 64; x++) if (hex(cond.get(x, y)) === draw.C.label) maxX = Math.max(maxX, x);
+  assert.equal(count(cond, draw.C.radarAmpm, 40, 14, 63, 20), 0, 'no AM/PM row');
+  assert.ok(count(cond, draw.C.radarAmpm, 59, 8, 63, 12) > 4, 'A/P on the clock line, rows 8-12');
+  assert.equal(count(cond, draw.C.radarAmpm, 40, 6, 63, 7), 0);
+  assert.ok(count(cond, draw.C.label, 40, 15, 63, 19) > 8, '63° on rows 15-19');
+  let maxX = 0; for (let y = 14; y < 21; y++) for (let x = 40; x < 64; x++) if (hex(cond.get(x, y)) === draw.C.label) maxX = Math.max(maxX, x);
   assert.equal(maxX, 63);
-  const iconPx = (fr) => { let n = 0; for (let y = 22; y < 30; y++) for (let x = 40; x < 56; x++) { const c = hex(fr.get(x, y)); if (c !== '#000000' && c !== draw.C.label) n++; } return n; };
-  assert.ok(iconPx(cond) > 10, 'icon left of the temperature');
-  // The clock stack above is unchanged; no temperature yet: nothing extra.
-  assert.deepEqual(clockPx(cond, draw.C.radarTime), clockPx(frame, draw.C.radarTime));
-  assert.deepEqual(at({ cond: true, temp: null }).px, frame.px);
-  // Radar under the conditions is cleared with a 1px margin, not around it.
-  const rain = { a: new Uint8Array(2048).fill(3) };
-  const wet = at({ cond: true }, { frames: rain });
-  assert.equal(hex(wet.get(63, 22)), '#000000');     // temperature (rows 23-27) + margin
-  assert.equal(hex(wet.get(63, 29)), draw.RADAR[3]);
-  assert.equal(hex(wet.get(30, 25)), draw.RADAR[3]);
+  const colored = (fr, y0, y1) => { let n = 0; for (let y = y0; y <= y1; y++) for (let x = 0; x < 64; x++) if (hex(fr.get(x, y)) !== '#000000') n++; return n; };
+  assert.equal(colored(cond, 21, 31), 0, 'no icon');
+  // 12:46 PM: the 26px line ends at the edge, 2px past the 24px box.
+  const noon = draw.render({ now, bright: 100, warn: null, radar: { ...radar, cond: true, clock: 'now' } }, { screen: 'weather', now: now + 3600, frames: {}, idx: 0 });
+  let minX = 64; for (let y = 6; y < 13; y++) for (let x = 0; x < 64; x++) if (hex(noon.get(x, y)) === draw.C.clock) minX = Math.min(minX, x);
+  assert.equal(minX, 39);
+  // No temperature yet: just the clock line.
+  assert.equal(count(at({ cond: true, temp: null }), draw.C.label, 0, 0, 63, 31), 0);
+  // Warning tag at the bottom right, as with time off; nothing next to A/P.
+  const tor = (blink) => draw.render({ now, bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...radar, cond: true } }, { screen: 'weather', now, frames: {}, idx: 0, blink });
+  assert.ok(count(tor(false), draw.C.warnTornado, 30, 27, 63, 31) > 15);
+  assert.equal(count(tor(false), draw.C.warnTornado, 0, 0, 63, 24), 0);
+  assert.equal(count(tor(true), draw.C.warnTornado, 0, 0, 63, 31), 0, 'blinks');
 });
 
 test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at the bottom right', () => {

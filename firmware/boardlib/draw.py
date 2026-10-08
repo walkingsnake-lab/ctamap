@@ -966,6 +966,15 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
 
     ws = warn_style(p['warn']) if p.get('warn') else None
     hide_warn = bool(ws and ws[2] and blink)
+
+    def draw_warn_tag():
+        word = 'WARN' if p['warn']['lvl'] == 'warning' else 'WATCH'
+        x0 = 64 - (measure('small', ws[0]) + TAG_GAP + measure('small', word))
+        f.fill(x0 - 1, 25, 64 - x0 + 1, 7, black)
+        if not hide_warn:
+            x = f.text('small', ws[0], x0, 31, ws[1])
+            f.text('small', word, x + TAG_GAP - 1, 31, ws[1])
+
     if r.get('showTime') is False and r.get('temp') is not None:
         ts = str(r['temp']) + '°'
         icon = r.get('icon') if r.get('icon') in assets.ICONS else None
@@ -978,42 +987,42 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
             draw_icon(f, icon, x0, top + 4)
         f.text('small', ts, x0 + (10 if icon else 0), top + 10, C['label'])
         if ws:
-            word = 'WARN' if p['warn']['lvl'] == 'warning' else 'WATCH'
-            x0 = 64 - (measure('small', ws[0]) + TAG_GAP + measure('small', word))
-            f.fill(x0 - 1, 25, 64 - x0 + 1, 7, black)
-            if not hide_warn:
-                x = f.text('small', ws[0], x0, 31, ws[1])
-                f.text('small', word, x + TAG_GAP - 1, 31, ws[1])
+            draw_warn_tag()
+        return f
+    if r.get('cond'):
+        # Time with conditions: time and A/P on one line, the temperature
+        # under it, the warning tag at the bottom right (as with time off).
+        clock = clock_text(t, tzo)
+        ap = ampm_text(t, tzo)[0]
+        ap_x = right - measure('small', ap) + 1
+        clock_right = ap_x - 2
+        ct = str(r['temp']) + '°' if r.get('temp') is not None else None
+        clear(text_box('5x7', clock, clock_right - measure('5x7', clock) + 1, top + 11))
+        clear(text_box('small', ap, ap_x, top + 11))
+        if ct:
+            clear(text_box('small', ct, right - measure('small', ct) + 1, top + 18))
+        draw_indicator()
+        rtext(f, '5x7', clock, clock_right, top + 11, C['clock'] if now_clock else C['radarTime'])
+        f.text('small', ap, ap_x, top + 11, C['radarAmpm'])
+        if ct:
+            rtext(f, 'small', ct, right, top + 18, C['label'])
+        if ws:
+            draw_warn_tag()
         return f
     clock = clock_text(t, tzo)
     ap = ampm_text(t, tzo)
     ap_x = right - measure('small', ap) + 1
     w_x = ap_x - 2 - measure('small', ws[0]) if ws else 0
-    # Conditions under the clock (cond): icon rows 22-29 and temperature,
-    # right-aligned, below the clock box on the full-width layout.
-    cond = bool(r.get('cond')) and r.get('temp') is not None
-    ct = str(r['temp']) + '°' if cond else ''
-    c_icon = r.get('icon') if cond and r.get('icon') in assets.ICONS else None
-    cx = right + 1 - ((10 if c_icon else 0) + measure('small', ct))
-    cy = top + 20
     clear(text_box('5x7', clock, right - measure('5x7', clock) + 1, top + 11))
     clear(text_box('small', ap, ap_x, top + 18))
     if ws:
         clear(text_box('small', ws[0], w_x, top + 18))
-    if c_icon:
-        clear((cx, cy, cx + 7, cy + 7))
-    if cond:
-        clear(text_box('small', ct, cx + (10 if c_icon else 0), cy + 6))
     draw_indicator()
     # A frame's time is dimmed so it doesn't read as the current time.
     rtext(f, '5x7', clock, right, top + 11, C['clock'] if now_clock else C['radarTime'])
     f.text('small', ap, ap_x, top + 18, C['radarAmpm'])
     if ws and not hide_warn:
         f.text('small', ws[0], w_x, top + 18, ws[1])
-    if c_icon:
-        draw_icon(f, c_icon, cx, cy)
-    if cond:
-        f.text('small', ct, cx + (10 if c_icon else 0), cy + 6, C['label'])
     return f
 
 
