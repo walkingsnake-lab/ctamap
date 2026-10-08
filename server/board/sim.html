@@ -155,6 +155,7 @@
 
   // Radar frames are immutable: fetch each ID once, keep the ones in use.
   const radarFrames = {};
+  let loopStart = 0;
   async function syncRadarFrames() {
     const ids = (p && p.radar && p.radar.frames) || [];
     for (const id of Object.keys(radarFrames)) if (!ids.includes(id)) delete radarFrames[id];
@@ -164,6 +165,8 @@
       const q = query();
       const r = await fetch(`api/radar/${encodeURIComponent(id)}?${q}`);
       if (r.ok) radarFrames[id] = new Uint8Array(await r.arrayBuffer());
+      // The frame that completes the set restarts the loop at its oldest.
+      if (ids.every((k) => radarFrames[k])) loopStart = performance.now();
     }
   }
 
@@ -262,7 +265,7 @@
 
     // Radar: step through the loop, then hold on the newest frame.
     const nf = (p.radar && p.radar.frames.length) || 0;
-    const idx = D.radarLoopIdx((p.radar && p.radar.frames) || [], radarFrames, t, tm);
+    const idx = D.radarLoopIdx((p.radar && p.radar.frames) || [], radarFrames, t - loopStart, tm);
     paintWeather(D.render(full, { screen: 'weather', now: n, idx, frames: radarFrames, blink }));
     $('radarState').textContent = p.radar && p.radar.on ? (nf ? 'rain in the box: radar' : 'rain in the box, no frames yet') : 'no rain: conditions';
 

@@ -117,7 +117,7 @@ class RadarLoop(unittest.TestCase):
         self.pl.add_frame('d', self.pl.take_slot())
         self.assertEqual(self.pl.missing_frames(), ['c', 'b', 'a'])
 
-    def test_the_loop_plays_only_frames_on_hand(self):
+    def test_the_loop_holds_until_the_set_is_complete(self):
         # Nothing yet: no loop, and the screen is the conditions screen, not empty radar.
         self.assertEqual(self.pl.radar_idx(0), -1)
         self.assertFalse(self.pl.busy(500))
@@ -126,19 +126,23 @@ class RadarLoop(unittest.TestCase):
         ref = draw.render(self.pl.p, draw.Frame(), screen='weather', now=T0, frames={})
         self.assertEqual(f.px, ref.px)
         self.assertGreater(sum(1 for v in ref.px if v), 100, 'conditions drawn')
-        # Newest only: held.
-        self.pl.add_frame('d', self.pl.take_slot())
-        self.assertEqual({self.pl.radar_idx(ms) for ms in range(0, 6000, 250)}, {3})
-        # A missing frame in the middle is skipped, never shown.
-        self.pl.add_frame('a', self.pl.take_slot())
-        self.pl.add_frame('b', self.pl.take_slot())
-        self.assertEqual([self.pl.radar_idx(ms) for ms in (0, 1000, 2000, 3999, 4000)], [0, 1, 3, 3, 0])
-        # A new newest frame not yet downloaded: the loop holds on the last one on hand.
+        # Filling in newest first: a still frame on the newest (never stepping
+        # back in time), and nothing animating, so fetches run back to back.
+        for k, fid in enumerate(self.pl.missing_frames()[:-1]):
+            self.pl.add_frame(fid, self.pl.take_slot(), 1000 * k)
+            self.assertEqual({self.pl.radar_idx(ms) for ms in range(0, 9000, 250)}, {3})
+            self.assertFalse(self.pl.busy(1500))
+        # The last frame restarts the loop at its oldest frame.
+        self.pl.add_frame('a', self.pl.take_slot(), 7000)
+        self.assertEqual([self.pl.radar_idx(ms) for ms in (7000, 8000, 9000, 10000, 11999, 12000)], [0, 1, 2, 3, 3, 0])
+        self.assertTrue(self.pl.busy(7500))
+        # A new newest frame not yet downloaded: hold on the last one on hand.
         self.r = dict(self.r, frames=['b', 'c', 'd', 'e'])
         self.pl.set_payload(payload([], screen='weather', radar=self.r, anim={'radarFrame': 1000, 'radarHold': 2000}), 0)
-        self.assertEqual(self.pl.missing_frames(), ['e', 'c'])
-        self.assertNotIn(3, {self.pl.radar_idx(ms) for ms in range(0, 6000, 250)})
-
+        self.assertEqual(self.pl.missing_frames(), ['e'])
+        self.assertEqual({self.pl.radar_idx(ms) for ms in range(13000, 20000, 250)}, {2})
+        self.pl.add_frame('e', self.pl.take_slot(), 20000)
+        self.assertEqual([self.pl.radar_idx(ms) for ms in (20000, 23000)], [0, 3])
 
 if __name__ == '__main__':
     unittest.main()

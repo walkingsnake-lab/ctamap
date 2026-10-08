@@ -944,21 +944,19 @@ def radar_on_hand(ids, frames):
 
 
 def radar_loop_idx(ids, frames, t, tm):
-    """The radar loop over the frames on hand, in time order: step through
-    them, then hold on the newest; a frame still downloading is skipped.
-    Mirrors radarLoopIdx() in draw.js. Returns an index into ids, or -1."""
+    """The radar loop: with every frame on hand, step through them in time
+    order, then hold on the newest; while any is still downloading, hold on
+    the newest on hand. t: ms since the loop started. Mirrors radarLoopIdx()
+    in draw.js. Returns an index into ids, or -1 with none on hand."""
     n = radar_on_hand(ids, frames)
     if not n:
         return -1
-    cycle = max(1, n - 1) * tm['radarFrame'] + tm['radarHold']
-    k = min(n - 1, (t % cycle) // tm['radarFrame'])
-    seen = 0
-    for i in range(len(ids)):
-        if ids[i] in frames:
-            if seen == k:
+    if n < len(ids):
+        for i in range(len(ids) - 1, -1, -1):
+            if ids[i] in frames:
                 return i
-            seen += 1
-    return -1
+    cycle = max(1, n - 1) * tm['radarFrame'] + tm['radarHold']
+    return min(n - 1, (t % cycle) // tm['radarFrame'])
 
 
 def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
