@@ -125,6 +125,7 @@ class BoardFrame(draw.Frame):
         self.font_ids = {}
         self.fresh = []          # (0xRRGGBB, slot) allocated since the last commit
         self.committed_k = None  # brightness the palette was last written for
+        self.radar_rb = 100      # radar brightness (radar.rb) of palette slots 1-10
         self.logo_cache = {}     # (logo id, position) -> [colors, slots, packed, packed_for]
         self.logo_drawn = {}     # position -> cache entry drawn this frame
         self.logo_written = {}   # position -> (entry, dim, k) last written to the palette
@@ -259,8 +260,12 @@ class BoardFrame(draw.Frame):
             x += dw
         return x
 
-    def draw_radar(self, data):
+    def draw_radar(self, data, rb=100):
         # Radar values 1-10 are palette slots 1-10; 0 (nothing) is skipped.
+        # A new radar brightness rewrites those slots at commit.
+        if rb != self.radar_rb:
+            self.radar_rb = rb
+            self.committed_k = None
         bitmaptools.arrayblit(self.bitmap, data, 0, 0, 64, 32, 0)
 
     def set_brightness(self, k):
@@ -277,8 +282,9 @@ class BoardFrame(draw.Frame):
             # Brightness changed (or the table reset): rewrite everything.
             for c, i in self.colors.items():
                 pal[i] = packed(_int_rgb(c))
+            rc = draw.radar_for(self.radar_rb)
             for v in range(RADAR_FIRST, LOGO_FIRST):
-                pal[v] = packed(draw.RADAR[v])
+                pal[v] = packed(rc[v])
             self.logo_written = {}
             self.committed_k = k
         else:

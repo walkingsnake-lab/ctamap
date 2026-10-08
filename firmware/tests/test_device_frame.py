@@ -127,6 +127,19 @@ class TestBoardFrame(unittest.TestCase):
         finally:
             device.GLYPH_CACHE = old
 
+    def test_radar_brightness_rewrites_the_radar_slots(self):
+        data = bytes((i % 11) for i in range(2048))
+        for rb in (100, 60, 60, 150, 100):
+            self.bf.begin()
+            self.bf.draw_radar(data, rb)
+            self.bf.commit()
+            ref = draw.Frame()
+            draw.draw_radar_frame(ref, data, rb)
+            got = board_pixels(self.bf)
+            for i in range(64 * 32):
+                if data[i]:
+                    self.assertEqual(got[i], ref.get(i % 64, i // 64), 'rb %d value %d' % (rb, data[i]))
+
     def test_cache_keys_are_ints(self):
         # Tuple keys cost memory to keep and a new tuple per glyph per frame.
         for screen in ('transit', 'baseball'):

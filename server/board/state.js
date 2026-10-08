@@ -97,8 +97,10 @@ function defaultBoard(stations) {
     // The radar clock: 'frame' (the frame's time, dim) or 'now' (the current
     // time, white).
     radarClock: 'frame',
-    // Current conditions (icon + temperature) under the radar clock.
+    // The temperature under the radar clock (A/P on the clock line).
     radarCond: false,
+    // Radar precipitation brightness, percent of the base palette.
+    radarBright: 100,
     // Weather screen: a temperature-colored shadow behind the big temperature.
     tempShadow: false,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
@@ -167,6 +169,10 @@ function validatePatch(patch, stations) {
       case 'gameEvery':
         if (!SPEEDS[key].includes(val)) throw new ValidationError(`${key} must be one of ${SPEEDS[key].join(', ')}`);
         out[key] = val;
+        break;
+      case 'radarBright':
+        if (!Number.isInteger(val) || val < 20 || val > 150) throw new ValidationError('radarBright must be 20-150');
+        out.radarBright = val;
         break;
       case 'tickerFill':
         if (!Number.isInteger(val) || val < 25 || val > 80) throw new ValidationError('tickerFill must be 25-80');

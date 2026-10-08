@@ -642,13 +642,25 @@
 
     // ---- radar ----
     // Frame values (contract "Radar frame"): 1-5 rain, 6 shoreline,
-    // 7 location marker, 8-10 snow. Precip fills at ~65%.
+    // 7 location marker, 8-10 snow. Precip fills at ~65%; the greens (light
+    // rain, most of any loop, and the brightest color on the panel) at 70%
+    // of that. `rb` (radar.rb, percent, default 100) scales all precip.
     const RADAR_FILL = 0.65;
-    const RADAR = {
-      1: scaleColor('#1f8f1f', RADAR_FILL), 2: scaleColor('#2ee02e', RADAR_FILL), 3: scaleColor('#ffe000', RADAR_FILL),
-      4: scaleColor('#ff8c00', RADAR_FILL), 5: scaleColor('#ff1a1a', RADAR_FILL),
-      6: '#34485e', 7: '#ffffff',
-      8: scaleColor('#4f86ff', RADAR_FILL), 9: scaleColor('#a9c9ff', RADAR_FILL), 10: scaleColor('#ffffff', RADAR_FILL),
+    const RADAR_BASE = [
+      [1, '#1f8f1f', 0.7], [2, '#2ee02e', 0.7], [3, '#ffe000', 1], [4, '#ff8c00', 1], [5, '#ff1a1a', 1],
+      [8, '#4f86ff', 1], [9, '#a9c9ff', 1], [10, '#ffffff', 1],
+    ];
+    function radarColors(rb) {
+      const out = { 6: '#34485e', 7: '#ffffff' };
+      for (const [v, c, trim] of RADAR_BASE) out[v] = scaleColor(c, RADAR_FILL * trim * rb / 100);
+      return out;
+    }
+    const RADAR = radarColors(100);
+    let radarRb = 100, radarRc = RADAR;
+    const radarFor = (rb) => {
+      if (rb == null) rb = 100;
+      if (rb !== radarRb) { radarRb = rb; radarRc = radarColors(rb); }
+      return radarRc;
     };
     // Clock stack: indicator 2 + gap 2 + clock 7 + gap 2 + AM/PM 5 = 18 rows.
     const ampmFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: true });
@@ -734,8 +746,9 @@
       if (!ids.length && r.wx) { drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow); return f; }
       const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
       if (bytes) {
+        const rc = radarFor(r.rb);
         for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
-          const c = RADAR[bytes[y * 64 + x]];
+          const c = rc[bytes[y * 64 + x]];
           if (c) f.fill(x, y, 1, 1, c);
         }
       }
@@ -1171,7 +1184,7 @@
     }
 
     return {
-      Frame, LINE, C, BB, RADAR, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
+      Frame, LINE, C, BB, RADAR, radarColors, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing,

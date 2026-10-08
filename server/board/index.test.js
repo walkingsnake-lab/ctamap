@@ -632,6 +632,9 @@ test('simulator preview: header and weather toggles without changing the board',
   s.store.update('home', { radarClock: 'now', radarCond: true });
   const r2 = (await s.req('/board/secret123/api/update?b=home')).body.radar;
   assert.deepEqual([r2.clock, r2.cond, r2.showTime], ['now', true, true]);
+  assert.equal(r2.rb, undefined);
+  s.store.update('home', { radarBright: 60 });
+  assert.equal((await s.req('/board/secret123/api/update?b=home')).body.radar.rb, 60);
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&header=1&weather=0`);
   assert.equal(png.status, 200);
   await s.close();
