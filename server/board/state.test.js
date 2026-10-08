@@ -160,6 +160,14 @@ test('radarClock and radarCond: defaults frame time, no conditions; validated', 
   assert.throws(() => store.update('home', { radarCond: 1 }), /radarCond must be true or false/);
 });
 
+test('radarBright: default 100, 20-150', () => {
+  const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet });
+  assert.equal(store.get('home').radarBright, 100);
+  store.update('home', { radarBright: 60 });
+  assert.equal(store.get('home').radarBright, 60);
+  for (const bad of [10, 151, 60.5, '60']) assert.throws(() => store.update('home', { radarBright: bad }), /radarBright must be 20-150/);
+});
+
 test('speed settings and ticker fill: defaults, allowed values only', () => {
   const store = createStore({ dir: tmpDir(), log: quiet });
   const b = store.get('home');

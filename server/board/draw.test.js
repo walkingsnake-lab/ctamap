@@ -336,6 +336,21 @@ test('switching views cross-fades: old rows fade out, then the new ones fade in'
 
 // ---- radar screen ----
 
+test('radar brightness: greens trimmed; rb scales precip, not the shoreline or marker', () => {
+  assert.equal(draw.RADAR[2], '#156615');   // #2ee02e at 65% x 70% (was #1e921e)
+  assert.equal(draw.RADAR[5], '#a61111');   // reds and yellows at 65%
+  assert.equal(draw.RADAR[3], '#a69200');
+  const half = draw.radarColors(50);
+  assert.equal(half[5], '#530808');
+  assert.deepEqual([half[6], half[7]], [draw.RADAR[6], draw.RADAR[7]]);
+  const bytes = new Uint8Array(2048);
+  bytes[0] = 2; bytes[1] = 5; bytes[2] = 6;
+  const t = Date.UTC(2020, 7, 10, 21, 0) / 1000;
+  const at = (rb) => draw.render({ now: t, bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [t], timeBox: [40, 0, 24, 32], split: true, ...(rb ? { rb } : {}) } }, { screen: 'weather', frames: { a: bytes }, idx: 0 });
+  assert.deepEqual([0, 1, 2].map((x) => hex(at(50).get(x, 0))), [half[2], half[5], draw.RADAR[6]]);
+  assert.deepEqual([0, 1, 2].map((x) => hex(at().get(x, 0))), [draw.RADAR[2], draw.RADAR[5], draw.RADAR[6]]);
+});
+
 test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', () => {
   const bytes = new Uint8Array(2048);
   bytes[0] = 1; bytes[1] = 5; bytes[2] = 8; bytes[16 * 64 + 20] = 7;

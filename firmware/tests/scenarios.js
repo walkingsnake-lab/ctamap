@@ -167,6 +167,7 @@ async function build() {
     // t + 3600 is 12:13 PM, the widest time).
     add(`radar clock now + conditions split=${split} svr warning`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { ...r, showTime: true, clock: 'now', cond: true } }, [{ screen: 'weather', idx: 0, now: t + 3600 }, { screen: 'weather', idx: 2 }], frames);
     add(`radar frame clock + conditions split=${split} tornado blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true, cond: true } }, [{ screen: 'weather', idx: 1 }, { screen: 'weather', idx: 1, blink: true }], frames);
+    add(`radar brightness 60 split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, rb: 60 } }, [{ screen: 'weather', idx: 1 }], Object.fromEntries(ids.map((id, i) => [id, Uint8Array.from({ length: 2048 }, (_, k) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10][(k + i) % 11])])));
     add(`radar conditions without temp split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'now', cond: true, temp: null } }, [{ screen: 'weather', idx: 1 }], frames);
   }
   // Weather row: tornado warning tag blinks.

@@ -263,14 +263,32 @@ def timing(p):
         'game': a.get('game') or 60,
     }
 
+# Precip fills at ~65%; the greens (light rain, most of any loop, and the
+# brightest color on the panel) at 70% of that. rb (radar.rb, percent,
+# default 100) scales all precip. Mirrors radarColors() in draw.js.
 RADAR_FILL = 0.65
-RADAR = {
-    1: scale_color(hexc('#1f8f1f'), RADAR_FILL), 2: scale_color(hexc('#2ee02e'), RADAR_FILL),
-    3: scale_color(hexc('#ffe000'), RADAR_FILL), 4: scale_color(hexc('#ff8c00'), RADAR_FILL),
-    5: scale_color(hexc('#ff1a1a'), RADAR_FILL), 6: hexc('#34485e'), 7: hexc('#ffffff'),
-    8: scale_color(hexc('#4f86ff'), RADAR_FILL), 9: scale_color(hexc('#a9c9ff'), RADAR_FILL),
-    10: scale_color(hexc('#ffffff'), RADAR_FILL),
-}
+RADAR_BASE = ((1, '#1f8f1f', 0.7), (2, '#2ee02e', 0.7), (3, '#ffe000', 1), (4, '#ff8c00', 1), (5, '#ff1a1a', 1),
+              (8, '#4f86ff', 1), (9, '#a9c9ff', 1), (10, '#ffffff', 1))
+
+
+def radar_colors(rb):
+    out = {6: hexc('#34485e'), 7: hexc('#ffffff')}
+    for v, c, trim in RADAR_BASE:
+        out[v] = scale_color(hexc(c), RADAR_FILL * trim * rb / 100)
+    return out
+
+
+RADAR = radar_colors(100)
+_radar_rc = [100, RADAR]  # last rb and its colors: rebuilt only when rb changes
+
+
+def radar_for(rb):
+    if rb is None:
+        rb = 100
+    if rb != _radar_rc[0]:
+        _radar_rc[0] = rb
+        _radar_rc[1] = radar_colors(rb)
+    return _radar_rc[1]
 
 
 def g(cp):
@@ -918,11 +936,12 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
         f.text('small', hl, 0, 31, C['grey'])
 
 
-def draw_radar_frame(f, data):
+def draw_radar_frame(f, data, rb=100):
     """Radar values -> colors. The board overrides this with a C-speed copy."""
+    rc = radar_for(rb)
     for y in range(32):
         for x in range(64):
-            c = RADAR.get(data[y * 64 + x])
+            c = rc.get(data[y * 64 + x])
             if c:
                 f.fill(x, y, 1, 1, c)
 
@@ -943,7 +962,8 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
         return f
     data = frames.get(ids[idx]) if idx >= 0 and frames else None
     if data:
-        f.draw_radar(data) if hasattr(f, 'draw_radar') else draw_radar_frame(f, data)
+        rb = r.get('rb', 100)
+        f.draw_radar(data, rb) if hasattr(f, 'draw_radar') else draw_radar_frame(f, data, rb)
     if r.get('split') and r.get('timeBox'):
         f.fill(r['timeBox'][0] - 1, 0, 1, 32, C['divider'])
     bx, by, bw, bh = r.get('timeBox') or (40, 0, 24, 32)

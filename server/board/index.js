@@ -342,6 +342,8 @@ function createBoard({
         // Radar clock: the current time instead of the frame's; conditions under it.
         ...(board.radarClock === 'now' ? { clock: 'now' } : {}),
         ...(board.radarCond === true ? { cond: true } : {}),
+        // Precip brightness, percent (absent = 100).
+        ...(board.radarBright != null && board.radarBright !== 100 ? { rb: board.radarBright } : {}),
       },
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
