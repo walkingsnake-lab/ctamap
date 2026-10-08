@@ -158,7 +158,8 @@
   async function syncRadarFrames() {
     const ids = (p && p.radar && p.radar.frames) || [];
     for (const id of Object.keys(radarFrames)) if (!ids.includes(id)) delete radarFrames[id];
-    for (const id of ids) {
+    // Newest first: the loop plays the frames on hand, so it starts current.
+    for (const id of [...ids].reverse()) {
       if (radarFrames[id]) continue;
       const q = query();
       const r = await fetch(`api/radar/${encodeURIComponent(id)}?${q}`);
@@ -261,8 +262,7 @@
 
     // Radar: step through the loop, then hold on the newest frame.
     const nf = (p.radar && p.radar.frames.length) || 0;
-    const cycle = Math.max(1, nf - 1) * tm.radarFrame + tm.radarHold;
-    const idx = nf ? Math.min(nf - 1, Math.floor((t % cycle) / tm.radarFrame)) : -1;
+    const idx = D.radarLoopIdx((p.radar && p.radar.frames) || [], radarFrames, t, tm);
     paintWeather(D.render(full, { screen: 'weather', now: n, idx, frames: radarFrames, blink }));
     $('radarState').textContent = p.radar && p.radar.on ? (nf ? 'rain in the box: radar' : 'rain in the box, no frames yet') : 'no rain: conditions';
 

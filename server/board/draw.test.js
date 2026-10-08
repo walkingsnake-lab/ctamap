@@ -336,6 +336,22 @@ test('switching views cross-fades: old rows fade out, then the new ones fade in'
 
 // ---- radar screen ----
 
+test('radar loop: only frames on hand, newest held; conditions until the first lands', () => {
+  const tm = { radarFrame: 1000, radarHold: 2000 };
+  const ids = ['a', 'b', 'c', 'd'];
+  const have = (...k) => Object.fromEntries(k.map((id) => [id, new Uint8Array(2048)]));
+  assert.equal(draw.radarLoopIdx(ids, {}, 0, tm), -1);
+  assert.deepEqual([0, 3000, 5999].map((t) => draw.radarLoopIdx(ids, have('d'), t, tm)), [3, 3, 3]);
+  assert.deepEqual([0, 1000, 2000, 3999, 4000].map((t) => draw.radarLoopIdx(ids, have('a', 'b', 'd'), t, tm)), [0, 1, 3, 3, 0]);
+  assert.deepEqual([0, 1000, 2000, 3000, 4999, 5000].map((t) => draw.radarLoopIdx(ids, have('a', 'b', 'c', 'd'), t, tm)), [0, 1, 2, 3, 3, 0]);
+  const t = Date.UTC(2020, 7, 10, 21, 0) / 1000;
+  const wx = { temp: 60, icon: 'rain', word: 'RAIN' };
+  const p = { now: t, bright: 100, warn: null, radar: { on: true, frames: ids, ft: [t, t, t, t], timeBox: [40, 0, 24, 22], split: false, wx } };
+  const screen = draw.render({ ...p, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx } }, { screen: 'weather', now: t });
+  assert.deepEqual(draw.render(p, { screen: 'weather', now: t, idx: -1, frames: {} }).px, screen.px, 'none on hand: the conditions screen');
+  assert.notDeepEqual(draw.render(p, { screen: 'weather', now: t, idx: 3, frames: have('d') }).px, screen.px);
+});
+
 test('radar brightness: greens trimmed; rb scales precip, not the shoreline or marker', () => {
   assert.equal(draw.RADAR[2], '#156615');   // #2ee02e at 65% x 70% (was #1e921e)
   assert.equal(draw.RADAR[5], '#a61111');   // reds and yellows at 65%

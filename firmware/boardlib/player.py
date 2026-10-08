@@ -66,8 +66,10 @@ class Player:
         self._keep_logos(self._game_logos(range(len(self._games()))))
 
     def missing_frames(self):
+        """Frames not yet downloaded, newest first: the loop plays the
+        frames on hand, so it starts with the current one."""
         ids = (self.p.get('radar') or {}).get('frames') or [] if self.p else []
-        return [i for i in ids if i not in self.radar_frames]
+        return [ids[i] for i in range(len(ids) - 1, -1, -1) if ids[i] not in self.radar_frames]
 
     def take_slot(self):
         """A free frame buffer, or None if all are holding frames."""
@@ -248,12 +250,11 @@ class Player:
         self.blink_shift = ms
 
     def radar_idx(self, ms):
-        n = len((self.p.get('radar') or {}).get('frames') or [])
-        if not n:
-            return -1
-        tm = draw.timing(self.p)
-        cycle = max(1, n - 1) * tm['radarFrame'] + tm['radarHold']
-        return min(n - 1, ((ms - self.loop_start) % cycle) // tm['radarFrame'])
+        ids = (self.p.get('radar') or {}).get('frames') or []
+        return draw.radar_loop_idx(ids, self.radar_frames, ms - self.loop_start, draw.timing(self.p))
+
+    def _on_hand(self):
+        return draw.radar_on_hand((self.p.get('radar') or {}).get('frames') or [], self.radar_frames)
 
     def frame_key(self, ms, now):
         """Everything a still frame depends on, or None while an animation
@@ -282,7 +283,7 @@ class Player:
         if self.screen == 'baseball':
             return any(ms - r['start'] < draw.ROLL_MS for r in self.bb_rolls.values())
         if self.screen == 'weather':
-            n = len((self.p.get('radar') or {}).get('frames') or [])
+            n = self._on_hand()
             if n < 2:
                 return False
             tm = draw.timing(self.p)
@@ -303,7 +304,7 @@ class Player:
         if self.screen == 'baseball':
             return FAR  # rolls follow fetched changes; the rotation swaps without animating
         if self.screen == 'weather':
-            n = len((self.p.get('radar') or {}).get('frames') or [])
+            n = self._on_hand()
             if n < 2:
                 return FAR
             tm = draw.timing(self.p)

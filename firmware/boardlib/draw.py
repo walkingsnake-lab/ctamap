@@ -946,6 +946,33 @@ def draw_radar_frame(f, data, rb=100):
                 f.fill(x, y, 1, 1, c)
 
 
+def radar_on_hand(ids, frames):
+    n = 0
+    if frames:
+        for fid in ids:
+            if fid in frames:
+                n += 1
+    return n
+
+
+def radar_loop_idx(ids, frames, t, tm):
+    """The radar loop over the frames on hand, in time order: step through
+    them, then hold on the newest; a frame still downloading is skipped.
+    Mirrors radarLoopIdx() in draw.js. Returns an index into ids, or -1."""
+    n = radar_on_hand(ids, frames)
+    if not n:
+        return -1
+    cycle = max(1, n - 1) * tm['radarFrame'] + tm['radarHold']
+    k = min(n - 1, (t % cycle) // tm['radarFrame'])
+    seen = 0
+    for i in range(len(ids)):
+        if ids[i] in frames:
+            if seen == k:
+                return i
+            seen += 1
+    return -1
+
+
 def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     """The weather screen: the radar loop while there are frames, current
     conditions otherwise. Mirrors renderWeather() in draw.js."""
@@ -957,7 +984,7 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
         idx = max(0, min(len(ids) - 1, idx))
     else:
         idx = len(ids) - 1
-    if not ids and r.get('wx'):
+    if (not ids or (frames is not None and not radar_on_hand(ids, frames))) and r.get('wx'):
         draw_weather_screen(f, r['wx'], p.get('warn'), blink, r.get('tempShadow'))
         return f
     data = frames.get(ids[idx]) if idx >= 0 and frames else None

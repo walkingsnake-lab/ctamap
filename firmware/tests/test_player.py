@@ -100,7 +100,44 @@ class SpeedSettings(unittest.TestCase):
         r = {'on': True, 'frames': ['a', 'b', 'c'], 'ft': [T0] * 3}
         pl.set_payload(payload([], screen='weather', radar=r, anim={'radarFrame': 1000, 'radarHold': 2000}), 0)
         pl.set_screen('weather', 0)
+        for fid in r['frames']:
+            pl.add_frame(fid, pl.take_slot())
         self.assertEqual([pl.radar_idx(ms) for ms in (0, 999, 1000, 2000, 3999, 4000)], [0, 0, 1, 2, 2, 0])
+
+
+class RadarLoop(unittest.TestCase):
+    def setUp(self):
+        self.pl = player.Player()
+        self.r = {'on': True, 'frames': ['a', 'b', 'c', 'd'], 'ft': [T0] * 4, 'wx': {'temp': 60, 'icon': 'rain', 'word': 'RAIN'}}
+        self.pl.set_payload(payload([], screen='weather', radar=self.r, anim={'radarFrame': 1000, 'radarHold': 2000}), 0)
+        self.pl.set_screen('weather', 0)
+
+    def test_newest_is_fetched_first(self):
+        self.assertEqual(self.pl.missing_frames(), ['d', 'c', 'b', 'a'])
+        self.pl.add_frame('d', self.pl.take_slot())
+        self.assertEqual(self.pl.missing_frames(), ['c', 'b', 'a'])
+
+    def test_the_loop_plays_only_frames_on_hand(self):
+        # Nothing yet: no loop, and the screen is the conditions screen, not empty radar.
+        self.assertEqual(self.pl.radar_idx(0), -1)
+        self.assertFalse(self.pl.busy(500))
+        f = draw.Frame()
+        self.pl.draw(f, 0, T0)
+        ref = draw.render(self.pl.p, draw.Frame(), screen='weather', now=T0, frames={})
+        self.assertEqual(f.px, ref.px)
+        self.assertGreater(sum(1 for v in ref.px if v), 100, 'conditions drawn')
+        # Newest only: held.
+        self.pl.add_frame('d', self.pl.take_slot())
+        self.assertEqual({self.pl.radar_idx(ms) for ms in range(0, 6000, 250)}, {3})
+        # A missing frame in the middle is skipped, never shown.
+        self.pl.add_frame('a', self.pl.take_slot())
+        self.pl.add_frame('b', self.pl.take_slot())
+        self.assertEqual([self.pl.radar_idx(ms) for ms in (0, 1000, 2000, 3999, 4000)], [0, 1, 3, 3, 0])
+        # A new newest frame not yet downloaded: the loop holds on the last one on hand.
+        self.r = dict(self.r, frames=['b', 'c', 'd', 'e'])
+        self.pl.set_payload(payload([], screen='weather', radar=self.r, anim={'radarFrame': 1000, 'radarHold': 2000}), 0)
+        self.assertEqual(self.pl.missing_frames(), ['e', 'c'])
+        self.assertNotIn(3, {self.pl.radar_idx(ms) for ms in range(0, 6000, 250)})
 
 
 if __name__ == '__main__':
