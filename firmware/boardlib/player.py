@@ -266,6 +266,26 @@ class Player:
         ids = (self.p.get('radar') or {}).get('frames') or [] if self.p else []
         return len(ids) if ids and draw.radar_on_hand(ids, self.radar_frames) == len(ids) else 0
 
+    def awaiting_drop(self, now):
+        """True while a train on the transit or ticker screen is past its
+        drop time but the payload predates that moment (draw.is_shown holds
+        it): fetch now so the server says whether it's gone or held."""
+        p = self.p
+        if not p or self.screen not in ('transit', 'ticker'):
+            return False
+        pnow = p.get('now')
+        if pnow is None:
+            return False
+        for r in p.get('rows') or []:
+            for x in r['t']:
+                if x + draw.DROP_GRACE <= now <= x + draw.DROP_GRACE + draw.HOLD_MAX and pnow < x + draw.DROP_GRACE:
+                    return True
+        for it in p.get('ticker') or []:
+            x = it['t']
+            if x + draw.DROP_GRACE <= now <= x + draw.DROP_GRACE + draw.HOLD_MAX and pnow < x + draw.DROP_GRACE:
+                return True
+        return False
+
     def frame_key(self, ms, now):
         """Everything a still frame depends on, or None while an animation
         needs every frame. The board redraws only when this changes."""
@@ -373,6 +393,8 @@ def transit_next_change(p, now):
                 at = t - 60 * (m - 1)     # when ceil((t - now) / 60) drops to m - 1
             else:
                 at = t + draw.DROP_GRACE  # DUE until it drops off
+                if at <= now:
+                    at += draw.HOLD_MAX   # held for a fresh payload (draw.is_shown)
             if best is None or at < best:
                 best = at
     return best

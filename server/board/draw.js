@@ -151,17 +151,25 @@
 
   // Rows as the board shows them at `now`: past arrivals dropped (the list
   // shifts), rows with nothing left removed.
+  // A train drops DROP_GRACE s after its time, as the server drops it, but
+  // only once a payload made after that moment agrees: until then it stays
+  // (DUE), since the server may have pushed its time later (a held train)
+  // and a board fetches less often than the simulator polls. HOLD_MAX caps
+  // the wait when no fresh payload comes.
+  const HOLD_MAX = 60;
+  const isShown = (x, now, pnow) => x >= now - DROP_GRACE || (pnow != null && pnow < x + DROP_GRACE && x >= now - DROP_GRACE - HOLD_MAX);
+
   function liveRows(p, now) {
     const out = [];
     for (const r of p.rows || []) {
       const t = [], s = [];
-      r.t.forEach((x, i) => { if (x >= now - DROP_GRACE) { t.push(x); s.push(r.s ? r.s[i] : 0); } });
+      r.t.forEach((x, i) => { if (isShown(x, now, p.now)) { t.push(x); s.push(r.s ? r.s[i] : 0); } });
       if (t.length) out.push({ ...r, t, s });
     }
     return out;
   }
 
-  const liveTicker = (p, now) => (p.ticker || []).filter((x) => x.t >= now - DROP_GRACE);
+  const liveTicker = (p, now) => (p.ticker || []).filter((x) => isShown(x.t, now, p.now));
 
   // Stable key for a transit time slot, used to detect changes to animate.
   const slotKey = (r, k) => `${r.ln}:${r.lbl}:${k}`;
@@ -1256,5 +1264,5 @@
     return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : screen;
   }
 
-  return { Frame, create, autoScreen, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE };
+  return { Frame, create, autoScreen, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE, HOLD_MAX };
 });

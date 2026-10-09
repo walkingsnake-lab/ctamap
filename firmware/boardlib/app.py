@@ -294,6 +294,10 @@ class Board:
             # Timed radar visits: follow the server's schedule unless a
             # button press is overriding it.
             self.player.set_screen(self.override.resolve(self.player.auto_screen(now), self.player.p.get('v')), ms)
+        if self.fails == 0 and self.player.awaiting_drop(now):
+            # A train is due to drop but the payload is older than that
+            # moment: fetch now rather than drop it on stale data.
+            self.sched.due_now(self.update_job, ms)
         busy = self.player.busy(ms)
         quiet = max(0, self.player.quiet_ms(ms, now) - self.now_ms(ms) % 1000)
         job = self.sched.pick(ms, busy, quiet)

@@ -30,6 +30,20 @@ test('liveRows drops arrivals 30 s past and removes empty rows', () => {
   assert.deepEqual(rows[0].s, [1]); // schedule flags stay aligned
 });
 
+test('liveRows holds a train past its drop time until a payload made after that moment', () => {
+  const rows = [{ ln: 'RD', lbl: 'HOWARD', t: [NOW - 45, NOW - 55, NOW + 300], s: [0, 0, 0], a: 0 }];
+  // A 20 s old payload predates NOW-45's drop time (NOW-15): the server may
+  // have pushed its time later since, so it stays. NOW-55's drop time
+  // (NOW-25) came before the payload, which settles it: dropped.
+  assert.deepEqual(liveRows({ ...payload(rows), now: NOW - 20 }, NOW)[0].t, [NOW - 45, NOW + 300]);
+  // A payload made after their drop times (it would no longer list them): dropped.
+  assert.deepEqual(liveRows({ ...payload(rows), now: NOW }, NOW)[0].t, [NOW + 300]);
+  // With no fresh payload at all, held at most HOLD_MAX past the grace.
+  const old = [{ ln: 'RD', lbl: 'HOWARD', t: [NOW - 89, NOW - 91, NOW + 300], s: [0, 0, 0], a: 0 }];
+  assert.deepEqual(liveRows({ ...payload(old), now: NOW - 100 }, NOW)[0].t, [NOW - 89, NOW + 300]);
+  assert.equal(require('./draw').HOLD_MAX, 60);
+});
+
 test('transitTexts keys each slot for change detection', () => {
   const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(12), min(20)], s: [0, 0], a: 0 }]);
   assert.deepEqual(draw.transitTexts(p, NOW), { 'RD:HOWARD:0': '12', 'RD:HOWARD:1': '20' });
@@ -110,6 +124,8 @@ test('a full row tightens the gaps between times to 2px instead of overlapping t
 // ---- transit animator ----
 
 test('animator: a departing DUE fades out in place while the next time brightens; nothing rolls', () => {
+  // Later steps carry a payload made at that time: the board drops a
+  // departed train only on a payload made after its drop moment.
   // Times chosen so the 7 and 16 don't tick over during the 55 s below.
   const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 20, NOW + 7 * 60 + 58, NOW + 16 * 60 + 58], s: [0, 0, 0], a: 0 }]);
   const anim = draw.createTransitAnimator();
@@ -118,11 +134,11 @@ test('animator: a departing DUE fades out in place while the next time brightens
   assert.equal(due.text, 'DUE');
   // 55 s later the DUE train is gone from the live list (30 s grace).
   const t = 1000;
-  const v = anim.step(p, NOW + 55, t);
+  const v = anim.step({ ...p, now: NOW + 55 }, NOW + 55, t);
   const cells = v.rows[0].cells;
   const leaving = cells.find((c) => c.id === due.id);
   assert.ok(leaving && leaving.alpha === 1 && leaving.text === 'DUE', 'starts fading from full');
-  const mid = anim.step(p, NOW + 55, t + draw.FADE_MS / 2).rows[0].cells;
+  const mid = anim.step({ ...p, now: NOW + 55 }, NOW + 55, t + draw.FADE_MS / 2).rows[0].cells;
   const half = mid.find((c) => c.id === due.id);
   assert.ok(half.alpha > 0 && half.alpha < 1);
   // The remaining times keep their identity and position: no roll, no jump.
@@ -131,19 +147,21 @@ test('animator: a departing DUE fades out in place while the next time brightens
   assert.equal(next.right, seven.right);
   assert.notEqual(next.color, draw.C.amber);        // still easing toward amber
   assert.notEqual(next.color, draw.C.dimAmber);
-  const done = anim.step(p, NOW + 55, t + draw.FADE_MS + 10).rows[0].cells;
+  const done = anim.step({ ...p, now: NOW + 55 }, NOW + 55, t + draw.FADE_MS + 10).rows[0].cells;
   assert.ok(!done.some((c) => c.id === due.id));
   assert.equal(done.find((c) => c.id === seven.id).color, draw.C.amber);
   assert.ok(done.some((c) => c.id === sixteen.id));
 });
 
 test('animator: bunched trains: the departing DUE fades and the next one rolls to DUE in its own place', () => {
+  // Later steps carry a payload made at that time: the board drops a
+  // departed train only on a payload made after its drop moment.
   const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [NOW + 20, NOW + 80, NOW + 400], s: [0, 0, 0], a: 0 }]);
   const anim = draw.createTransitAnimator();
   const [due, second, third] = anim.step(p, NOW, 0).rows[0].cells;
   assert.deepEqual([due.text, second.text], ['DUE', '2']);
-  anim.step(p, NOW + 51, 1000);
-  const cells = anim.step(p, NOW + 51, 1000 + draw.FADE_MS / 2).rows[0].cells;
+  anim.step({ ...p, now: NOW + 51 }, NOW + 51, 1000);
+  const cells = anim.step({ ...p, now: NOW + 51 }, NOW + 51, 1000 + draw.FADE_MS / 2).rows[0].cells;
   const byId = (c) => cells.find((x) => x.id === c.id);
   assert.ok(byId(due).alpha < 1, 'the departed train fades');
   assert.equal(byId(due).text, 'DUE');
@@ -259,6 +277,8 @@ test('chrono: the board shows at most the row cap; extra trains wait', () => {
 });
 
 test('chrono animator: the first train slides up and out, the list follows, the next train slides in', () => {
+  // Later steps carry a payload made at that time: the board drops a
+  // departed train only on a payload made after its drop moment.
   const rows = [chronoRow('RD', 'HOWARD', NOW + 10, '801'), ...[4, 7, 9, 12].map((m, i) => chronoRow('BR', 'LOOP', min(m), String(400 + i)))];
   const p = chronoPayload(rows);
   const tops = draw.rowTops(4, true, false);
@@ -268,8 +288,8 @@ test('chrono animator: the first train slides up and out, the list follows, the 
   assert.deepEqual(v0.rows.map((r) => r.key), ['rn:801', 'rn:400', 'rn:401', 'rn:402']);
   // 45 s later the first train is past the 30 s grace.
   const t = 1000;
-  anim.step(p, NOW + 45, t);
-  const mid = anim.step(p, NOW + 45, t + draw.MOVE_MS / 2);
+  anim.step({ ...p, now: NOW + 45 }, NOW + 45, t);
+  const mid = anim.step({ ...p, now: NOW + 45 }, NOW + 45, t + draw.MOVE_MS / 2);
   const by = (v, k) => v.rows.find((r) => r.key === k);
   const gone = by(mid, 'rn:801');
   assert.ok(gone.top < tops[0] && gone.top > tops[0] - pitch, 'departing row moves up');
@@ -277,11 +297,11 @@ test('chrono animator: the first train slides up and out, the list follows, the 
   assert.ok(by(mid, 'rn:400').top < tops[1] && by(mid, 'rn:400').top > tops[0], 'list slides at the same time');
   const incoming = by(mid, 'rn:403');
   assert.ok(incoming.top > tops[3] && incoming.alpha < 1, 'next train comes in from below');
-  const end = anim.step(p, NOW + 45, t + draw.FADE_MS + 10);
+  const end = anim.step({ ...p, now: NOW + 45 }, NOW + 45, t + draw.FADE_MS + 10);
   assert.deepEqual(end.rows.map((r) => r.key), ['rn:400', 'rn:401', 'rn:402', 'rn:403']);
   assert.deepEqual(end.rows.map((r) => r.top), tops);
   assert.equal(by(end, 'rn:400').cells[0].color, draw.C.amber);
-  assert.deepEqual(draw.renderTransit(p, { now: NOW + 45, view: end }).px, draw.renderTransit(p, { now: NOW + 45 }).px);
+  assert.deepEqual(draw.renderTransit({ ...p, now: NOW + 45 }, { now: NOW + 45, view: end }).px, draw.renderTransit({ ...p, now: NOW + 45 }, { now: NOW + 45 }).px);
 });
 
 test('chrono animator: two trains swapping order slide past each other, no fade', () => {
@@ -512,20 +532,22 @@ test('chrono: alert blinks the block to "!"; the digit stays', () => {
 });
 
 test('chrono animator: position digits roll down as the list slides up', () => {
+  // Later steps carry a payload made at that time: the board drops a
+  // departed train only on a payload made after its drop moment.
   const rows = [chronoRow('RD', 'HOWARD', NOW + 10, '801'), chronoRow('BR', 'LOOP', min(4), '400'), chronoRow('PR', 'LINDEN', min(7), '401')];
   const p = chronoPayload(rows);
   const anim = draw.createTransitAnimator();
   const v0 = anim.step(p, NOW, 0);
   assert.deepEqual(v0.rows.map((r) => r.num), [1, 2, 3]);
-  anim.step(p, NOW + 45, 1000); // first train gone
-  const mid = anim.step(p, NOW + 45, 1000 + draw.ROLL_MS / 2);
+  anim.step({ ...p, now: NOW + 45 }, NOW + 45, 1000); // first train gone
+  const mid = anim.step({ ...p, now: NOW + 45 }, NOW + 45, 1000 + draw.ROLL_MS / 2);
   const loop = mid.rows.find((r) => r.key === 'rn:400');
   assert.equal(loop.num, 1);
   assert.equal(loop.numRoll.from, '2');
   assert.ok(loop.numRoll.p > 0 && loop.numRoll.p < 1);
-  const end = anim.step(p, NOW + 45, 1000 + draw.FADE_MS + 10);
+  const end = anim.step({ ...p, now: NOW + 45 }, NOW + 45, 1000 + draw.FADE_MS + 10);
   assert.deepEqual(end.rows.map((r) => [r.key, r.num, r.numRoll]), [['rn:400', 1, null], ['rn:401', 2, null]]);
-  assert.deepEqual(draw.renderTransit(p, { now: NOW + 45, view: end }).px, draw.renderTransit(p, { now: NOW + 45 }).px);
+  assert.deepEqual(draw.renderTransit({ ...p, now: NOW + 45 }, { now: NOW + 45, view: end }).px, draw.renderTransit({ ...p, now: NOW + 45 }, { now: NOW + 45 }).px);
 });
 
 test('only the soonest train of a destination reads DUE; a bunched second shows 2', () => {
@@ -825,12 +847,14 @@ test('weather row: a tornado warning tag blinks; watches and severe warnings sta
 });
 
 test('animator: times slide only after a leaving DUE has faded; a new arrival waits for the slide', () => {
+  // Later steps carry a payload made at that time: the board drops a
+  // departed train only on a payload made after its drop moment.
   const row = (t) => payload([{ ln: 'RD', lbl: 'HOWARD', t, s: t.map(() => 0), a: 0 }]);
   const anim = draw.createTransitAnimator();
   const first = anim.step(row([NOW + 10, min(7), min(16)]), NOW, 0).rows[0].cells;
   const p2 = row([NOW + 10, min(7), min(16), min(25)]);
   const t0 = 1000;
-  const at = (d) => anim.step(p2, NOW + 45, t0 + d).rows[0].cells;
+  const at = (d) => anim.step({ ...p2, now: NOW + 45 }, NOW + 45, t0 + d).rows[0].cells;
   const id = (k) => first[k].id;
   const start = at(0);
   const sevenRight = start.find((c) => c.id === id(1)).right;
