@@ -241,11 +241,17 @@ function createBoard({
       const n = Number(q[k]);
       if (q[k] != null && Number.isFinite(n)) h[name] = n;
     }
-    if (typeof q.he === 'string' && /^[A-Za-z0-9_:]{1,64}$/.test(q.he)) h.lastError = q.he;
+    const safe = (v) => typeof v === 'string' && /^[A-Za-z0-9_:]{1,64}$/.test(v);
+    if (safe(q.he)) h.lastError = q.he;
+    if (safe(q.hs)) h.started = q.hs;
     const prev = healthOf.get(id);
+    // The crash that ended a run, sent by the run after it. Kept after
+    // later restarts that weren't crashes, until another crash replaces it.
+    if (safe(q.hc)) h.lastCrash = q.hc;
+    else if (prev && prev.lastCrash) h.lastCrash = prev.lastCrash;
     h.minMem = Math.min(h.memFree ?? Infinity, prev ? prev.minMem : Infinity);
     if (!Number.isFinite(h.minMem)) delete h.minMem;
-    // Uptime going backwards means the board restarted (crash, watchdog, power).
+    // Uptime going backwards means the board restarted (crash reload, watchdog, power).
     h.restarts = (prev ? prev.restarts : 0) + (prev && h.uptime < prev.uptime ? 1 : 0);
     h.lastRestart = prev && h.uptime < prev.uptime ? now - h.uptime : prev ? prev.lastRestart : null;
     h.since = prev ? prev.since : now;

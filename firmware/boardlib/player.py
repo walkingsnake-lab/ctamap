@@ -10,8 +10,6 @@
 #
 # Pure Python; runs on CircuitPython and CPython (tests).
 
-import math
-
 from . import draw
 
 SCREENS = ('transit', 'ticker', 'weather', 'baseball')
@@ -45,6 +43,12 @@ class Player:
         self._screen_since = 0
         self.bb_shown = None     # baseball texts last drawn (for rolls)
         self.bb_rolls = {}       # text key -> {'from', 'start'}
+        # Next transit change (epoch s), kept between loop passes: building
+        # the transit view to find it allocated ~1 KB on every pass, which
+        # churned and fragmented the heap. -1 means none (FAR).
+        self._quiet_gen = -1
+        self._quiet_now = -1     # the second it was computed at
+        self._quiet_at = -1
 
     # ---- inputs ----
 
@@ -316,7 +320,18 @@ class Player:
             tm = draw.timing(self.p)
             cycle = (n - 1) * tm['radarFrame'] + tm['radarHold']
             return cycle - (ms - self.loop_start) % cycle
-        return transit_quiet_ms(self.p, now)
+        if self._quiet_gen != self.gen or (now != self._quiet_now and 0 <= self._quiet_at <= now):
+            # A new payload, or the cached change is here. Before it, no
+            # shown time changes and no train drops off, so the answer holds;
+            # at it, recompute once per second (a train due to drop this
+            # second keeps the answer at 0 until the next one).
+            self._quiet_gen = self.gen
+            self._quiet_now = now
+            at = transit_next_change(self.p, now)
+            self._quiet_at = -1 if at is None else at
+        if self._quiet_at < 0:
+            return FAR
+        return max(0, (self._quiet_at - now) * 1000)
 
 
 def transit_busy(anim, t):
@@ -343,11 +358,13 @@ def transit_busy(anim, t):
     return False
 
 
-def transit_quiet_ms(p, now):
-    """Milliseconds until a shown time next changes (a roll) or a train drops
-    off (a fade): the next minute boundary of any visible arrival."""
+def transit_next_change(p, now):
+    """Epoch second when a shown time next changes (a roll) or a train drops
+    off (a fade): the next minute boundary of any visible arrival. None if
+    nothing on screen will change. Until that second passes, the answer
+    stays the same (each cell's boundary is fixed until it's reached)."""
     view = draw.build_transit_view(p, now)
-    best = FAR
+    best = None
     for row in view['rows']:
         for c in row['cells']:
             t = c['t']
@@ -356,5 +373,12 @@ def transit_quiet_ms(p, now):
                 at = t - 60 * (m - 1)     # when ceil((t - now) / 60) drops to m - 1
             else:
                 at = t + draw.DROP_GRACE  # DUE until it drops off
-            best = min(best, int(math.ceil((at - now) * 1000)))
-    return max(0, best)
+            if best is None or at < best:
+                best = at
+    return best
+
+
+def transit_quiet_ms(p, now):
+    """Milliseconds until a shown time next changes or a train drops off."""
+    at = transit_next_change(p, now)
+    return FAR if at is None else max(0, (at - now) * 1000)

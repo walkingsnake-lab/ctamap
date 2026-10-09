@@ -25,12 +25,13 @@ RADAR_EVERY = 3000      # one missing radar frame per run
 LOGO_EVERY = 3000       # one missing team logo per run (baseball logo layout)
 FAILS_BEFORE_RECONNECT = 3
 HEALTH_EVERY = 60000    # ms between health snapshots sent with the version check
-OOM_STREAK_MAX = 50     # draws in a row that hit MemoryError before giving up (restart)
+OOM_STREAK_MAX = 50     # draws (or loop passes) in a row that hit MemoryError before giving up (restart)
 RETRY_WIFI_MS = (10000, 20000, 30000, 60000)  # waits between rounds, then every minute
 
 
 class Board:
-    def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print, mem_free=None, largest_block=None):
+    def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print, mem_free=None, largest_block=None,
+                 started='', crash=''):
         self.net = net
         self.display = display
         self.clock = clock
@@ -61,6 +62,12 @@ class Board:
         self.health_q = ''
         self.health_at = None
         self.oom_streak = 0
+        self.step_oom_streak = 0
+        # Uptime counts from this run, not from time.monotonic(), which keeps
+        # going through code.py's reload: the server sees reloads as restarts.
+        self.run_start = clock.ms()
+        self.started = started       # what started this run (device.start_reason())
+        self.crash = crash           # the crash that ended the last run, if any
 
     # ---- time ----
     # Epoch time stays in integers: CircuitPython floats have 22 bits of
@@ -145,14 +152,14 @@ class Board:
             self.display.show(lambda f: self.player.draw(f, ms, now))
             self.oom_streak = 0
             return True
-        except MemoryError as e:
+        except MemoryError:
+            gc.collect()  # first: logging needs memory too
             self.stats['oom'] += 1
             self.oom_streak += 1
             if self.oom_streak >= OOM_STREAK_MAX:
                 raise  # stuck: let code.py restart the board
             if self.oom_streak == 1:
-                self.log('[board] draw skipped: %r' % (e,))
-            gc.collect()
+                self.log('[board] draw skipped: MemoryError')
             return False
 
     def health_query(self, ms):
@@ -162,7 +169,7 @@ class Board:
         if self.health_at is None or ms - self.health_at >= HEALTH_EVERY:
             self.health_at = ms
             q = '&hu=%d&hb=%d&ho=%d&hf=%d&hr=%d' % (
-                ms // 1000, self.sched.budget_ms, self.stats['oom'], self.stats['fails'], self.stats['reconnects'])
+                (ms - self.run_start) // 1000, self.sched.budget_ms, self.stats['oom'], self.stats['fails'], self.stats['reconnects'])
             if self.mem_free:
                 q += '&hm=%d' % self.mem_free()
             if self.largest_block:
@@ -175,6 +182,10 @@ class Board:
                     pass
             if self.last_error:
                 q += '&he=' + self.last_error
+            if self.started:
+                q += '&hs=' + self.started
+            if self.crash:
+                q += '&hc=' + self.crash
             self.health_q = q
         return self.health_q
 
@@ -230,8 +241,24 @@ class Board:
     # ---- loop ----
 
     def step(self):
-        """One loop pass: buttons, at most one network job, and a redraw when
-        something on screen can have changed."""
+        """One loop pass. A MemoryError outside the draw and the jobs (which
+        handle their own) skips the rest of the pass instead of restarting
+        the board; only a long run of them gives up."""
+        try:
+            self._step()
+            self.step_oom_streak = 0
+        except MemoryError:
+            gc.collect()
+            self.stats['oom'] += 1
+            self.step_oom_streak += 1
+            if self.step_oom_streak >= OOM_STREAK_MAX:
+                raise  # stuck: let code.py restart the board
+            if self.step_oom_streak == 1:
+                self.log('[board] loop pass skipped: MemoryError')
+
+    def _step(self):
+        """Buttons, at most one network job, and a redraw when something on
+        screen can have changed."""
         ms = self.clock.ms()
         if self.watchdog:
             self.watchdog.feed()
@@ -258,14 +285,15 @@ class Board:
                 if result in ('ok', 'more'):
                     self.fails = 0  # a skipped job proves nothing about the network
             except Exception as e:  # noqa: BLE001 - a failed fetch must not stop the board
+                oom = isinstance(e, MemoryError)
+                if oom:
+                    gc.collect()  # first: logging needs memory too
                 self.log('[board] %s failed: %r' % (job.name, e))
                 result = 'fail'
                 self.stats['fails'] += 1
                 self.last_error = job.name + ':' + type(e).__name__  # letters only: safe in a URL
-                if isinstance(e, MemoryError):
-                    gc.collect()  # says nothing about the network: don't count it toward a reconnect
-                else:
-                    self.fails += 1
+                if not oom:
+                    self.fails += 1  # a MemoryError says nothing about the network
             ended = self.clock.ms()
             if self.player.blinking() and ended - started > 300:
                 self.player.blink_restart(ended)
@@ -342,8 +370,12 @@ def run(mem=None):
         gamma=float(os.getenv('MATRIX_GAMMA') or 1),
         note=lambda stage: mem.append((stage, free())),
     )
+    from . import crash as crash_mod
+    crash = crash_mod.take()
+    started = crash_mod.start_reason()
+    print('[board] started by %s%s' % (started, (', after crash ' + crash) if crash else ''))
     board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog,
-                  mem_free=hw.mem_free, largest_block=hw.largest_block)
+                  mem_free=hw.mem_free, largest_block=hw.largest_block, started=started, crash=crash)
     mem.append(('board', free()))
     board.connect(boot=device.cold_boot())
     mem.append(('online', free()))
