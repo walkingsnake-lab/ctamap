@@ -695,6 +695,109 @@ class TestCircuitPythonNumbers(unittest.TestCase):
         run_for(board, clock, 70000)
 
 
+class Led:
+    """Records status LED changes, like device.StatusLed (which skips repeats)."""
+
+    def __init__(self, clock):
+        self.clock = clock
+        self.state = None
+        self.log = []
+
+    def set(self, name):
+        if name != self.state:
+            self.state = name
+            self.log.append((self.clock.t, name))
+
+
+def make_led(**kw):
+    board, server, clock, display, btn, statuses = make(**kw)
+    board.led = Led(clock)
+    seen = []
+    orig = server._call
+
+    def call(name):
+        seen.append(board.led.state)  # the LED while the request blocks
+        orig(name)
+    server._call = call
+    return board, server, clock, display, board.led, seen
+
+
+class TestStatusLed(unittest.TestCase):
+    def test_blue_during_each_request_and_off_between(self):
+        board, server, clock, _, led, seen = make_led()
+        board.connect()
+        self.assertEqual(led.state, 'off')
+        n = len(seen)
+        run_for(board, clock, 60000)
+        self.assertGreater(len(seen), n)
+        self.assertEqual(set(seen[n:]), {'fetch'})
+        self.assertEqual(led.state, 'off')
+
+    def test_connecting_portal_and_offline(self):
+        board, server, clock, _, led, _ = make_led(wifi=('nowifi', 'portal', 'ok'))
+        board.connect()
+        names = [n for _, n in led.log]
+        self.assertEqual(names, ['connecting', 'offline', 'connecting', 'portal', 'connecting', 'off'])
+
+    def test_dim_red_after_a_failure_until_a_request_succeeds(self):
+        board, server, clock, _, led, _ = make_led()
+        board.connect()
+        run_for(board, clock, 20000)
+        server.fail_next = 1
+        n = len(led.log)
+        run_for(board, clock, 30000)
+        names = [x for _, x in led.log[n:] if x != 'fetch']
+        self.assertEqual(names[:2], ['failing', 'off'])
+        self.assertEqual(led.state, 'off')
+
+    def test_red_while_reconnecting_after_repeated_failures(self):
+        board, server, clock, _, led, _ = make_led()
+        board.connect()
+        run_for(board, clock, 20000)
+        server.fail_next = 3
+        n = len(led.log)
+        run_for(board, clock, 60000)
+        names = [x for _, x in led.log[n:]]
+        self.assertIn('failing', names)
+        self.assertIn('connecting', names)
+        self.assertEqual(led.state, 'off')
+
+    def test_magenta_blink_after_a_memory_error(self):
+        board, server, clock, display, led, _ = make_led()
+        board.connect()
+        real = display.show
+        fails = [1]
+
+        def flaky(fn):
+            if fails[0]:
+                fails[0] -= 1
+                raise MemoryError('memory allocation failed')
+            real(fn)
+        display.show = flaky
+        run_for(board, clock, 5000)
+        oom = [t for t, x in led.log if x == 'oom']
+        self.assertGreaterEqual(len(oom), 2, 'blinks')
+        self.assertLess(oom[-1] - oom[0], app.OOM_LED_MS)
+        self.assertEqual(led.state, 'off')
+        self.assertIsNone(board.oom_at)
+
+    def test_a_fetch_memory_error_blinks_without_failing(self):
+        board, server, clock, _, led, _ = make_led()
+        server.radar_on = True
+        board.connect()
+        server.radar_oom = 1
+        run_for(board, clock, 30000)
+        names = [x for _, x in led.log]
+        self.assertIn('oom', names)
+        self.assertNotIn('failing', names)
+
+    def test_no_led_is_fine(self):
+        board, server, clock, _, _, _ = make()
+        board.connect()
+        run_for(board, clock, 30000)
+        self.assertIsNone(board.led)
+
+
 class TestColdBoot(unittest.TestCase):
     def boot(self, run_reason, reset_reason):
         import types

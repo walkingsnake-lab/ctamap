@@ -9,6 +9,8 @@
 #   clock    - ms(): monotonic milliseconds (int)
 #   buttons  - up() / down(): True while held (optional)
 #   watchdog - feed() (optional)
+#   led      - set(name): the status NeoPixel (optional); names in LED_FOR_STATUS
+#              plus 'off', 'fetch', 'failing', 'oom'
 
 import gc
 
@@ -27,11 +29,18 @@ FAILS_BEFORE_RECONNECT = 3
 HEALTH_EVERY = 60000    # ms between health snapshots sent with the version check
 OOM_STREAK_MAX = 50     # draws (or loop passes) in a row that hit MemoryError before giving up (restart)
 RETRY_WIFI_MS = (10000, 20000, 30000, 60000)  # waits between rounds, then every minute
+OOM_LED_MS = 2000       # the status LED blinks this long after a MemoryError
+OOM_BLINK_MS = 250
+WATCHDOG_LED_MS = 2000  # white at startup after a watchdog reset
+
+# Status LED while connecting, by status screen (status.py).
+LED_FOR_STATUS = {'connecting': 'connecting', 'ok': 'connecting', 'portal': 'portal',
+                  'nowifi': 'offline', 'noserver': 'offline'}
 
 
 class Board:
     def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print, mem_free=None, largest_block=None,
-                 started='', crash=''):
+                 started='', crash='', led=None):
         self.net = net
         self.display = display
         self.clock = clock
@@ -68,6 +77,11 @@ class Board:
         self.run_start = clock.ms()
         self.started = started       # what started this run (device.start_reason())
         self.crash = crash           # the crash that ended the last run, if any
+        # Status LED: a base state ('ok' is unlit) plus a short blink after a
+        # MemoryError; blue while a request blocks the loop.
+        self.led = led
+        self.led_base = 'connecting'
+        self.oom_at = None
 
     # ---- time ----
     # Epoch time stays in integers: CircuitPython floats have 22 bits of
@@ -97,6 +111,9 @@ class Board:
     def _status(self, kind, detail=None):
         if self.watchdog:
             self.watchdog.feed()
+        self.led_base = LED_FOR_STATUS.get(kind, 'connecting')
+        if self.led:
+            self.led.set(self.led_base)
         self.display.show(lambda f: status.render(f, kind, detail))
 
     def connect(self, boot=True):
@@ -117,6 +134,8 @@ class Board:
                     self.version_job.due_at = ms + VERSION_EVERY
                     self.online = True
                     self.fails = 0
+                    self.led_base = 'ok'
+                    self._led_update(ms)
                     return
                 except Exception as e:  # noqa: BLE001 - any failure: show it and retry
                     self.log('[board] first update failed: %r' % (e,))
@@ -156,6 +175,7 @@ class Board:
             gc.collect()  # first: logging needs memory too
             self.stats['oom'] += 1
             self.oom_streak += 1
+            self.oom_at = ms
             if self.oom_streak >= OOM_STREAK_MAX:
                 raise  # stuck: let code.py restart the board
             if self.oom_streak == 1:
@@ -190,6 +210,7 @@ class Board:
         return self.health_q
 
     def _version(self, ms):
+        self._fetching()
         r = self.net.version(self.health_query(ms))
         self._sync(r['now'], ms, self.clock.ms())
         if self.player.p is None or r.get('v') != self.player.p.get('v'):
@@ -199,6 +220,7 @@ class Board:
     def _update(self, ms):
         # The server sends only the shown screen's sections; while a button
         # press overrides the screen, ask for that one.
+        self._fetching()
         p = self.net.update(False, self.override.screen)
         self._apply(p, ms, self.clock.ms())
         return 'ok'
@@ -213,6 +235,7 @@ class Board:
         if buf is None:
             return 'skip'
         try:
+            self._fetching()
             self.net.logo(missing[0], buf)
         except Exception:
             self.player.release_logo_slot(buf)
@@ -231,6 +254,7 @@ class Board:
         if buf is None:
             return 'skip'
         try:
+            self._fetching()
             self.net.radar(missing[0], buf)
         except Exception:
             self.player.release_slot(buf)
@@ -251,6 +275,7 @@ class Board:
             gc.collect()
             self.stats['oom'] += 1
             self.step_oom_streak += 1
+            self.oom_at = self.clock.ms()
             if self.step_oom_streak >= OOM_STREAK_MAX:
                 raise  # stuck: let code.py restart the board
             if self.step_oom_streak == 1:
@@ -284,6 +309,7 @@ class Board:
                 result = job.run(started)
                 if result in ('ok', 'more'):
                     self.fails = 0  # a skipped job proves nothing about the network
+                    self.led_base = 'ok'
             except Exception as e:  # noqa: BLE001 - a failed fetch must not stop the board
                 oom = isinstance(e, MemoryError)
                 if oom:
@@ -292,8 +318,11 @@ class Board:
                 result = 'fail'
                 self.stats['fails'] += 1
                 self.last_error = job.name + ':' + type(e).__name__  # letters only: safe in a URL
-                if not oom:
+                if oom:
+                    self.oom_at = self.clock.ms()
+                else:
                     self.fails += 1  # a MemoryError says nothing about the network
+                    self.led_base = 'failing'
             ended = self.clock.ms()
             if self.player.blinking() and ended - started > 300:
                 self.player.blink_restart(ended)
@@ -319,6 +348,7 @@ class Board:
                 self.stats['reconnects'] += 1
                 self.connect(boot=False)
             ms = self.clock.ms()
+        self._led_update(ms)
 
         # Redraw every ~33 ms while animating; otherwise only when something
         # on screen can have changed.
@@ -329,6 +359,26 @@ class Board:
                 self.last_draw = ms
                 self.last_key = key
                 self.stats['draws'] += 1
+
+    def _fetching(self):
+        """Blue while a request blocks the loop (the display is frozen
+        until it returns); step() sets the LED back after the job."""
+        if self.led:
+            self.led.set('fetch')
+
+    def _led_update(self, ms):
+        """Set the status LED to the base state, or the MemoryError blink.
+        Called every loop pass; StatusLed skips writes that change nothing."""
+        if not self.led:
+            return
+        name = 'off' if self.led_base == 'ok' else self.led_base
+        if self.oom_at is not None:
+            t = ms - self.oom_at
+            if t < OOM_LED_MS:
+                name = 'oom' if t // OOM_BLINK_MS % 2 == 0 else 'off'
+            else:
+                self.oom_at = None
+        self.led.set(name)
 
     def _buttons(self, ms):
         if not self.buttons or not self.player.p:
@@ -374,8 +424,12 @@ def run(mem=None):
     crash = crash_mod.take()
     started = crash_mod.start_reason()
     print('[board] started by %s%s' % (started, (', after crash ' + crash) if crash else ''))
+    if hw.led and started == 'WATCHDOG':
+        hw.led.set('watchdog')  # white for a moment: the loop hung last time
+        hw.clock.sleep_ms(WATCHDOG_LED_MS)
     board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog,
-                  mem_free=hw.mem_free, largest_block=hw.largest_block, started=started, crash=crash)
+                  mem_free=hw.mem_free, largest_block=hw.largest_block, started=started, crash=crash,
+                  led=hw.led)
     mem.append(('board', free()))
     board.connect(boot=device.cold_boot())
     mem.append(('online', free()))

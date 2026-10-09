@@ -1,5 +1,5 @@
 # Matrix Portal M4 hardware: the HUB75 matrix, the ESP32 WiFi co-processor,
-# the UP/DOWN buttons, and the watchdog. Only imported on the board; the
+# the UP/DOWN buttons, the status NeoPixel, and the watchdog. Only imported on the board; the
 # rest of boardlib runs under CPython for tests.
 #
 # Libraries (copy to CIRCUITPY/lib, or `circup install`): adafruit_esp32spi,
@@ -427,6 +427,71 @@ class Buttons:
         return not self._down.value
 
 
+# Status NeoPixel colors (r, g, b), kept very dim: it sits behind the panel
+# and shouldn't light up the wall at night.
+LED_COLORS = {
+    'off': (0, 0, 0),
+    'fetch': (0, 0, 10),        # blue: a request is blocking the loop (the display is frozen)
+    'connecting': (8, 6, 0),    # yellow: joining WiFi
+    'portal': (10, 3, 0),       # amber: captive portal
+    'offline': (12, 0, 0),      # red: no WiFi, or the server isn't answering
+    'failing': (3, 0, 0),       # dim red: online, but the last request failed
+    'oom': (8, 0, 8),           # magenta (blinks): a MemoryError was caught
+    'watchdog': (6, 6, 6),      # white, at startup: the last reset was the watchdog
+    'crash': (12, 0, 0),        # red (blinks): code.py caught a crash and restarts in 10 s
+}
+
+
+class StatusLed:
+    """The NeoPixel on the Matrix Portal, written with the built-in
+    neopixel_write (no neopixel library: a 3-byte buffer, nothing else on
+    the heap). mode: 2 = every state, 1 = no fetch light, 0 = never built."""
+
+    def __init__(self, mode=2):
+        import neopixel_write
+        self._write = neopixel_write.neopixel_write
+        self._pin = DigitalInOut(board.NEOPIXEL)
+        self._pin.direction = Direction.OUTPUT
+        self._buf = bytearray(3)
+        self.mode = mode
+        self.state = None
+        self.set('off')
+
+    def set(self, name):
+        if self.mode < 2 and name == 'fetch':
+            name = 'off'
+        if name == self.state:
+            return
+        self.state = name
+        r, g, b = LED_COLORS.get(name, LED_COLORS['off'])
+        buf = self._buf
+        buf[0] = g  # the NeoPixel takes GRB
+        buf[1] = r
+        buf[2] = b
+        self._write(self._pin, buf)
+
+
+_led = []
+
+
+def status_led():
+    """The one StatusLed (the pin can only be claimed once), or None when
+    STATUS_LED = 0 in settings.toml or the pixel can't be set up. Shared
+    with code.py's crash blink."""
+    if not _led:
+        import os
+        v = os.getenv('STATUS_LED')  # settings.toml ints come back as ints; 0 is falsy
+        mode = 2 if v is None or v == '' else int(v)
+        led = None
+        if mode > 0:
+            try:
+                led = StatusLed(mode)
+            except Exception as e:  # noqa: BLE001 - the board runs fine without it
+                print('[board] no status LED: %r' % (e,))
+        _led.append(led)
+    return _led[0]
+
+
 class Net:
     """Board endpoints over the ESP32 co-processor (contract.md)."""
 
@@ -653,6 +718,7 @@ class Hardware:
         note('net libs')
         self.watchdog = Watchdog()
         self.net.feed = self.watchdog.feed
+        self.led = status_led()
 
     @staticmethod
     def largest_block():
