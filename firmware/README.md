@@ -51,6 +51,7 @@ minute).
 | `boardlib/player.py` | What to draw at each moment (transit animator, ticker paging, radar loop, blink) and when the next animation starts. |
 | `boardlib/sched.py` | Runs network requests in animation gaps; forces them past a deadline; learns the request time. |
 | `boardlib/control.py` | UP/DOWN buttons (cycle transit, ticker, weather, baseball): last action wins against the phone. |
+| `boardlib/crash.py` | Why the board (re)started: `code.py` saves a crash to `microcontroller.nvm` before reloading, and the next run sends it and its start reason with the health report. |
 | `boardlib/status.py` | WIFI / WIFI OK / PORTAL / NO WIFI / NO SERVER screens. |
 | `boardlib/device.py` | Hardware only: the matrix (palette-indexed bitmap, `bitmaptools` fills and glyph and radar copies), ESP32 WiFi + HTTPS, buttons, watchdog. |
 | `tests/` | Run by `npm test` (needs `python3`): pixel parity with draw.js through both the plain frame and the board's bitmap frame (with stand-ins for the CircuitPython modules), and the main loop against a simulated server, clock, and buttons. |

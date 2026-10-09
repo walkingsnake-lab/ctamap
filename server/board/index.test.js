@@ -112,6 +112,17 @@ test('health rides on the version check and shows on the control API', async () 
   assert.equal(r.minMem, 26000);
   assert.equal(r.lastError, undefined);
   assert.ok(Math.abs(r.lastRestart - (Date.now() / 1000 - 30)) < 5);
+  // A crash reload: what started the run and the crash that ended the last
+  // one. The crash stays through a later restart that wasn't one.
+  await s.req('/board/version?b=home&hu=5&hs=SUPERVISOR_RELOAD&hc=MemoryError:player:312:quiet_ms', h);
+  r = (await s.req('/board/secret123/api/health')).body.home;
+  assert.equal(r.restarts, 2);
+  assert.equal(r.started, 'SUPERVISOR_RELOAD');
+  assert.equal(r.lastCrash, 'MemoryError:player:312:quiet_ms');
+  await s.req('/board/version?b=home&hu=2&hs=POWER_ON&hc=%3Cx%3E', h);
+  r = (await s.req('/board/secret123/api/health')).body.home;
+  assert.equal(r.started, 'POWER_ON');
+  assert.equal(r.lastCrash, 'MemoryError:player:312:quiet_ms');
   await s.close();
 });
 

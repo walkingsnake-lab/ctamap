@@ -7,6 +7,7 @@
 
 import gc
 import time
+from array import array
 
 import bitmaptools
 import board
@@ -31,9 +32,65 @@ FREE_FIRST = LOGO_FIRST + LOGO_POSITIONS * LOGO_COLORS  # 139
 COLOR_RESET = 190  # at a frame start past this slot, forget allocated colors (65 left for one frame)
 LOGO_CACHE = 4     # indexed logos kept (current game + next, by position)
 GLYPH_CACHE = 96  # glyph bitmaps kept for arrayblit, per font, codepoint, and palette slot
+GLYPH_BYTES = 40  # bytes per cached glyph (w * h); bigger glyphs (clock digits) draw pixel by pixel
+GLYPH_SLOTS = 128  # hash slots for the glyph cache (power of two, > GLYPH_CACHE)
+COLOR_SLOTS = 256  # hash slots for allocated colors (power of two, > the 117 a cycle can use)
 # Cache keys are plain ints (small ints don't allocate in CircuitPython):
 # colors as 0xRRGGBB, glyphs as font << 24 | codepoint << 8 | slot. Tuple
 # keys cost ~32 bytes each to keep, and a new one per glyph per frame.
+
+
+class IntTable:
+    """A fixed-size int -> int map, allocated once at boot. A dict grows by
+    reallocating its whole table (73 -> 97 slots is one 776-byte block), and
+    on a fragmented heap that block isn't there: the glyph cache's dict did
+    exactly that and restarted the board. This never allocates after
+    __init__; clear() empties it in place. Keys are ints >= 0."""
+
+    def __init__(self, slots):
+        self.mask = slots - 1
+        self.keys = array('l', [-1 for _ in range(slots)])
+        self.vals = array('l', [0 for _ in range(slots)])
+        self.n = 0
+
+    def _find(self, key):
+        i = (key ^ (key >> 9)) & self.mask
+        keys = self.keys
+        while keys[i] != -1 and keys[i] != key:
+            i = (i + 1) & self.mask
+        return i
+
+    def get(self, key, default=-1):
+        i = self._find(key)
+        return self.vals[i] if self.keys[i] == key else default
+
+    def put(self, key, val):
+        """Callers keep n well under the slot count (see the caps above)."""
+        i = self._find(key)
+        if self.keys[i] != key:
+            self.keys[i] = key
+            self.n += 1
+        self.vals[i] = val
+
+    def clear(self):
+        keys = self.keys
+        for i in range(len(keys)):
+            keys[i] = -1
+        self.n = 0
+
+    def __len__(self):
+        return self.n
+
+    def __iter__(self):
+        for k in self.keys:
+            if k != -1:
+                yield k
+
+    def items(self):
+        keys, vals = self.keys, self.vals
+        for i in range(len(keys)):
+            if keys[i] != -1:
+                yield keys[i], vals[i]
 
 
 def _rgb_int(rgb):
@@ -118,10 +175,13 @@ class BoardFrame(draw.Frame):
         self._clips = []
         self.bitmap = bitmap
         self.palette = palette
-        self.colors = {0: 0}     # 0xRRGGBB -> palette slot
+        # Caches allocated once, here, while the heap is whole (IntTable).
+        self.colors = IntTable(COLOR_SLOTS)   # 0xRRGGBB -> palette slot
+        self.colors.put(0, 0)
         self.next = FREE_FIRST
         self.k = 1
-        self.glyphs = {}         # int key (see GLYPH_CACHE) -> bytearray
+        self.glyphs = IntTable(GLYPH_SLOTS)   # int key (see GLYPH_CACHE) -> index into glyph_pool
+        self.glyph_pool = [bytearray(GLYPH_BYTES) for _ in range(GLYPH_CACHE)]
         self.font_ids = {}
         self.fresh = []          # (0xRRGGBB, slot) allocated since the last commit
         self.committed_k = None  # brightness the palette was last written for
@@ -133,9 +193,10 @@ class BoardFrame(draw.Frame):
     def begin(self):
         self.bitmap.fill(0)
         if self.next > COLOR_RESET:
-            self.colors = {0: 0}
+            self.colors.clear()
+            self.colors.put(0, 0)
             self.next = FREE_FIRST
-            self.glyphs = {}  # keyed by slot
+            self.glyphs.clear()  # keyed by slot
             self.committed_k = None
         self.k = 1
         self.clip = None
@@ -177,12 +238,12 @@ class BoardFrame(draw.Frame):
     def _index(self, rgb):
         rgb = _rgb_int(rgb)
         i = self.colors.get(rgb)
-        if i is None:
+        if i < 0:
             if self.next > 255:
                 return 255  # out of slots: reuse the last (never seen in practice)
             i = self.next
             self.next += 1
-            self.colors[rgb] = i
+            self.colors.put(rgb, i)
             self.fresh.append((rgb, i))
         return i
 
@@ -204,25 +265,26 @@ class BoardFrame(draw.Frame):
         bitmaptools.fill_region(self.bitmap, x0, y0, x1 + 1, y1 + 1, self._index(rgb))
 
     def _glyph(self, font_name, cp, d, o, idx):
-        """The glyph as slot bytes for arrayblit, or None when the cache is
-        full (the caller draws it pixel by pixel). A full cache isn't cleared:
-        regrowing its dict needed ever larger blocks on a fragmented heap."""
+        """The glyph as slot bytes for arrayblit (a preallocated pool buffer;
+        arrayblit reads only the first w * h bytes), or None when the cache
+        is full or the glyph is too big (the caller draws it pixel by pixel)."""
         fid = self.font_ids.get(font_name)
         if fid is None:
             fid = self.font_ids[font_name] = len(self.font_ids)
         key = (fid << 24) | (cp << 8) | idx
-        data = self.glyphs.get(key)
-        if data is None:
-            if len(self.glyphs) >= GLYPH_CACHE:
-                return None
-            w, h = d[o + 1], d[o + 2]
-            data = bytearray(w * h)
-            for r in range(h):
-                bits = draw.glyph_row(d, o, r)
-                for col in range(w):
-                    if (bits >> (w - 1 - col)) & 1:
-                        data[r * w + col] = idx
-            self.glyphs[key] = data
+        n = self.glyphs.get(key)
+        if n >= 0:
+            return self.glyph_pool[n]
+        w, h = d[o + 1], d[o + 2]
+        n = len(self.glyphs)
+        if n >= GLYPH_CACHE or n >= len(self.glyph_pool) or w * h > GLYPH_BYTES:
+            return None
+        data = self.glyph_pool[n]
+        for r in range(h):
+            bits = draw.glyph_row(d, o, r)
+            for col in range(w):
+                data[r * w + col] = idx if (bits >> (w - 1 - col)) & 1 else 0
+        self.glyphs.put(key, n)
         return data
 
     def text(self, font_name, s, x, baseline, rgb):

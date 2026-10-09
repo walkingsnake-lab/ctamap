@@ -334,6 +334,43 @@ class TestBoardLoop(unittest.TestCase):
         self.assertEqual(board.stats['oom'], 3)
         self.assertGreater(board.stats['draws'], 0, 'drawing resumed')
 
+    def test_a_memory_error_elsewhere_in_the_loop_skips_the_pass(self):
+        board, server, clock, _, _, _ = make()
+        board.connect()
+        real = board.player.frame_key
+        fails = [3]
+
+        def flaky(ms, now):
+            if fails[0]:
+                fails[0] -= 1
+                raise MemoryError('memory allocation failed, allocating 200 bytes')
+            return real(ms, now)
+        board.player.frame_key = flaky
+        run_for(board, clock, 5000)
+        self.assertEqual(fails[0], 0)
+        self.assertEqual(board.stats['oom'], 3)
+        self.assertGreater(board.stats['draws'], 0, 'the loop carried on')
+
+    def test_a_loop_that_never_recovers_still_restarts(self):
+        board, server, clock, _, _, _ = make()
+        board.connect()
+
+        def broken(ms, now):
+            raise MemoryError('memory allocation failed')
+        board.player.frame_key = broken
+        with self.assertRaises(MemoryError):
+            run_for(board, clock, 60000)
+
+    def test_other_loop_errors_still_reach_code_py(self):
+        board, server, clock, _, _, _ = make()
+        board.connect()
+
+        def broken(ms, now):
+            raise KeyError('rows')
+        board.player.frame_key = broken
+        with self.assertRaises(KeyError):
+            run_for(board, clock, 1000)
+
     def test_a_draw_that_never_recovers_still_restarts(self):
         board, server, clock, display, _, _ = make()
         board.connect()
@@ -374,6 +411,24 @@ class TestBoardLoop(unittest.TestCase):
         self.assertIn('&hf=1', sent[-1])
         self.assertTrue(sent[-1].endswith('&he=version:OSError') or '&he=update:OSError' in sent[-1], sent[-1])
         self.assertLessEqual(len(set(sent)), 4, 'rebuilt at most once a minute')
+
+    def test_health_uptime_counts_from_this_run_and_names_the_last_crash(self):
+        # time.monotonic() keeps going through code.py's reload: a run that
+        # starts at 1 h of monotonic time still reports its own uptime.
+        clock = Clock()
+        clock.t = 3600000
+        holder = []
+        server = Server(clock, holder)
+        board = app.Board(server, Display(clock), clock, [('home', 'pw')], log=lambda *a: None,
+                          started='SUPERVISOR_RELOAD', crash='MemoryError:player:312:quiet_ms')
+        holder.append(board)
+        board.connect()
+        run_for(board, clock, 70000)
+        sent = [h for h in server.health if h][-1]
+        uptime = int(sent.split('&hu=')[1].split('&')[0])
+        self.assertLess(uptime, 120)
+        self.assertIn('&hs=SUPERVISOR_RELOAD', sent)
+        self.assertIn('&hc=MemoryError:player:312:quiet_ms', sent)
 
     def test_live_games_update_faster(self):
         board, server, clock, _, _, _ = make()
@@ -567,6 +622,36 @@ class TestPlayerTiming(unittest.TestCase):
         # At DUE (40 s out), the next change is the drop 30 s after arrival.
         self.assertEqual(player.transit_quiet_ms(p, now + 85), 70000)
 
+    def test_the_cached_quiet_time_matches_a_fresh_one_every_second(self):
+        now = T0
+        rows = [{'ln': 'RD', 'lbl': 'HOWARD', 't': [now + 125, now + 400, now + 700], 's': [0, 0, 1], 'a': 0},
+                {'ln': 'RD', 'lbl': '95TH', 't': [now + 15, now + 290], 's': [0, 0], 'a': 0},
+                {'ln': 'PR', 'lbl': 'LINDEN', 't': [now + 61], 's': [1], 'a': 0}]
+        for view in ('dest', 'chrono'):
+            pl = player.Player()
+            pl.set_payload({'now': now, 'tzo': 0, 'header': None, 'view': view, 'wx': None, 'rows': rows}, 0)
+            for s in range(0, 800):
+                self.assertEqual(pl.quiet_ms(0, now + s), player.transit_quiet_ms(pl.p, now + s), (view, s))
+            self.assertEqual(pl.quiet_ms(0, now + 800), player.FAR, 'every train gone')
+
+    def test_the_transit_view_is_not_rebuilt_every_loop_pass(self):
+        board, server, clock, _, _, _ = make()
+        board.connect()
+        builds = [0]
+        real = draw.build_transit_view
+
+        def counting(p, now):
+            builds[0] += 1
+            return real(p, now)
+        draw.build_transit_view = counting
+        try:
+            run_for(board, clock, 60000)
+        finally:
+            draw.build_transit_view = real
+        # Draws build their own (the animator); the quiet time used to add
+        # one per loop pass (~12,000 here).
+        self.assertLess(builds[0], board.stats['draws'] + 100)
+
 
 class StrictMath:
     """math as CircuitPython runs it: floor and ceil go through a float with
@@ -588,11 +673,11 @@ class StrictMath:
 
 class TestCircuitPythonNumbers(unittest.TestCase):
     def setUp(self):
-        self.saved = (draw.math, player.math)
-        draw.math = player.math = StrictMath()
+        self.saved = draw.math
+        draw.math = StrictMath()
 
     def tearDown(self):
-        draw.math, player.math = self.saved
+        draw.math = self.saved
 
     def test_epoch_times_stay_exact_on_every_screen(self):
         board, server, clock, _, _, _ = make()

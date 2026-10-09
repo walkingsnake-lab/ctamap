@@ -6,6 +6,8 @@ import supervisor
 
 import gc
 
+from boardlib import crash  # tiny; imported first so the crash handler needs no import
+
 
 def free():
     gc.collect()
@@ -24,6 +26,12 @@ try:
     app.run(mem)
 except Exception as e:  # noqa: BLE001 - any crash: log it, then restart cleanly
     import traceback
-    traceback.print_exception(e)
+    gc.collect()
+    try:
+        tb = ''.join(traceback.format_exception(e))
+    except Exception:  # noqa: BLE001 - out of memory even for that
+        tb = ''
+    print(tb or repr(e))
+    crash.save(e, tb)  # nvm survives the reload: the next run sends it with its health
     time.sleep(10)
     supervisor.reload()
