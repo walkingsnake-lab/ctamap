@@ -26,6 +26,9 @@ class FakeBitmap:
             self.v[i] = value
 
     def __setitem__(self, xy, value):
+        if isinstance(xy, int):  # linear index, y * w + x
+            self.v[xy] = value
+            return
         x, y = xy
         self.v[y * self.w + x] = value
 
@@ -159,13 +162,40 @@ class TestBoardFrame(unittest.TestCase):
     def test_int_table(self):
         t = device.IntTable(8)
         for k in (0, 8, 16, 3, 0xFFFFFF):  # 0, 8 and 16 collide
-            t.put(k, k + 1)
-        self.assertEqual([t.get(k) for k in (0, 8, 16, 3, 0xFFFFFF, 5)], [1, 9, 17, 4, 0x1000000, -1])
+            t.put(k, (k + 1) & 255)       # values are bytes (palette slots, pool indexes)
+        self.assertEqual([t.get(k) for k in (0, 8, 16, 3, 0xFFFFFF, 5)], [1, 9, 17, 4, 0, -1])
         t.put(8, 99)
         self.assertEqual((t.get(8), len(t)), (99, 5))
         self.assertEqual(sorted(t), [0, 3, 8, 16, 0xFFFFFF])
         t.clear()
         self.assertEqual((len(t), t.get(16), list(t.items())), (0, -1, []))
+
+    def test_packed_radar_draws_like_the_unpacked_frame(self):
+        # The board stores frames packed (4 bits a pixel); every value 0-10
+        # at every position, both nibbles.
+        frame = bytes((i * 7 + i // 64) % 11 for i in range(2048))
+        packed = bytes((frame[2 * i] << 4) | frame[2 * i + 1] for i in range(1024))
+        for rb in (100, 60):
+            self.bf.begin()
+            self.bf.draw_radar(packed, rb)
+            self.bf.commit()
+            got = board_pixels(self.bf)
+            ref = draw.Frame()
+            draw.draw_radar_frame(ref, frame, rb)
+            want = ref_pixels(ref)
+            for i in range(2048):
+                if frame[i]:
+                    self.assertEqual(got[i], want[i], 'pixel %d rb %d' % (i, rb))
+                else:
+                    self.assertEqual(self.bf.bitmap.v[i], 0, 'pixel %d left clear' % i)
+            # The Python renderer reads packed frames the same way.
+            ref2 = draw.Frame()
+            draw.draw_radar_frame(ref2, packed, rb)
+            self.assertEqual(ref_pixels(ref2), want)
+
+    def test_table_values_are_bytes(self):
+        self.assertIsInstance(self.bf.colors.vals, bytearray)
+        self.assertIsInstance(self.bf.glyphs.vals, bytearray)
 
     def test_cache_keys_are_ints(self):
         # Tuple keys cost memory to keep and a new tuple per glyph per frame.

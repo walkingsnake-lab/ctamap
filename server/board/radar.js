@@ -345,7 +345,16 @@ function createRadar({
   };
 }
 
-module.exports = {
+// A frame packed for the board: two pixels a byte, the left one in the high
+// nibble (values are 0-10). 1024 bytes instead of 2048, so the board's
+// frame buffers take half the memory (and the download is half the size).
+function packFrame(bytes) {
+  const out = new Uint8Array(bytes.length >> 1);
+  for (let i = 0; i < out.length; i++) out[i] = (bytes[2 * i] << 4) | bytes[2 * i + 1];
+  return out;
+}
+
+module.exports = { packFrame,
   parseWld, geometry, accumulator, modeFor, toFrame, crops, createRadar, fetchFrame,
   ledCenter, loadLocation, stampOf, timeOf, frameUrl, dbzOf, W, H, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX, SHORE, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
 };

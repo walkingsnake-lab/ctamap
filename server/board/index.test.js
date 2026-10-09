@@ -499,6 +499,11 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
   const got = new Uint8Array(await r.arrayBuffer());
   assert.equal(got.length, 2048);
   assert.equal(got[0], 3);
+  // pk=4: packed for the board, two pixels a byte, left in the high nibble.
+  const pr = await fetch(`${base}/board/radar/40100-202610041600?b=home&pk=4`, h);
+  assert.equal(pr.headers.get('content-length'), '1024');
+  const packed = new Uint8Array(await pr.arrayBuffer());
+  assert.deepEqual([...packed].flatMap((b) => [b >> 4, b & 15]), [...got]);
   assert.equal((await fetch(`${base}/board/radar/40100-209901010000?b=home`, h)).status, 404);
   // Simulator copy, and a PNG of the radar screen.
   assert.equal((await fetch(`${base}/board/secret123/api/radar/40100-202610041600?b=home`)).status, 200);

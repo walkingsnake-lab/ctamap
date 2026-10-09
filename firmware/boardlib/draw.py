@@ -949,12 +949,22 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
         f.text('small', hl, 0, 31, C['grey'])
 
 
+def radar_value(data, i):
+    """Pixel i of a frame: 2048 bytes (one a pixel, as from the server), or
+    1024 packed (two a byte, left pixel in the high nibble, as the board
+    stores them to halve their memory)."""
+    if len(data) == 2048:
+        return data[i]
+    b = data[i >> 1]
+    return b & 15 if i & 1 else b >> 4
+
+
 def draw_radar_frame(f, data, rb=100):
-    """Radar values -> colors. The board overrides this with a C-speed copy."""
+    """Radar values -> colors. The board overrides this with its own copy."""
     rc = radar_for(rb)
     for y in range(32):
         for x in range(64):
-            c = rc.get(data[y * 64 + x])
+            c = rc.get(radar_value(data, y * 64 + x))
             if c:
                 f.fill(x, y, 1, 1, c)
 

@@ -17,7 +17,7 @@ SCREENS = ('transit', 'ticker', 'weather', 'baseball')
 # hours of JSON parsing the heap is too fragmented for a fresh 2 KB block
 # (MemoryError with 37 KB free), so frames are read into these instead.
 RADAR_SLOTS = 6          # the loop's length (contract: up to 6 frames)
-RADAR_BYTES = 64 * 32
+RADAR_BYTES = 64 * 32 // 2   # packed: 4 bits a pixel (device.RADAR_PACKED)
 # Team logos (logo layout), same reason: 4 slots hold the game on screen and
 # the next one in the rotation, fetched ahead so a rotation shows no gap.
 LOGO_SLOTS = 4

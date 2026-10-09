@@ -10,12 +10,11 @@ the board draws what it receives.
    double-tap its RESET button (a `MATRIXBOOT` drive appears), and drag the
    Matrix Portal M4 `.uf2` from circuitpython.org/board/matrixportal_m4 onto it.
    It restarts as a `CIRCUITPY` drive.
-2. **Libraries.** Copy these from the CircuitPython library bundle (matching
-   your CircuitPython version) into `CIRCUITPY/lib/`, or run
-   `circup install adafruit_esp32spi adafruit_requests adafruit_connection_manager`:
-   - `adafruit_esp32spi/`
-   - `adafruit_requests.mpy`
-   - `adafruit_connection_manager.mpy`
+2. **Libraries: nothing to install.** CircuitPython's Matrix Portal M4 build
+   has `adafruit_esp32spi`, `adafruit_requests`, `adafruit_connection_manager`
+   and `neopixel` frozen into its firmware (flash, no RAM for their code), and
+   frozen modules are found before `CIRCUITPY/lib/`, so copies in `lib/` are
+   never imported. They can be deleted.
 3. **This code.** The board can't compile the larger `.py` files itself (it
    runs out of memory), so build them to `.mpy` first. Download CircuitPython's
    `mpy-cross` for your computer and CircuitPython version from

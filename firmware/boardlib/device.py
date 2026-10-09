@@ -31,6 +31,7 @@ LOGO_POSITIONS = 2  # away (top band) and home
 FREE_FIRST = LOGO_FIRST + LOGO_POSITIONS * LOGO_COLORS  # 139
 COLOR_RESET = 190  # at a frame start past this slot, forget allocated colors (65 left for one frame)
 LOGO_CACHE = 4     # indexed logos kept (current game + next, by position)
+RADAR_PACKED = 64 * 32 // 2  # a radar frame as the board stores it: 4 bits a pixel (values 0-10)
 GLYPH_CACHE = 96  # glyph bitmaps kept for arrayblit, per font, codepoint, and palette slot
 GLYPH_BYTES = 40  # bytes per cached glyph (w * h); bigger glyphs (clock digits) draw pixel by pixel
 GLYPH_SLOTS = 128  # hash slots for the glyph cache (power of two, > GLYPH_CACHE)
@@ -45,12 +46,13 @@ class IntTable:
     reallocating its whole table (73 -> 97 slots is one 776-byte block), and
     on a fragmented heap that block isn't there: the glyph cache's dict did
     exactly that and restarted the board. This never allocates after
-    __init__; clear() empties it in place. Keys are ints >= 0."""
+    __init__; clear() empties it in place. Keys are ints >= 0; values are
+    0-255 (palette slots, glyph pool indexes), so they're kept as bytes."""
 
     def __init__(self, slots):
         self.mask = slots - 1
         self.keys = array('l', [-1 for _ in range(slots)])
-        self.vals = array('l', [0 for _ in range(slots)])
+        self.vals = bytearray(slots)
         self.n = 0
 
     def _find(self, key):
@@ -328,7 +330,20 @@ class BoardFrame(draw.Frame):
         if rb != self.radar_rb:
             self.radar_rb = rb
             self.committed_k = None
-        bitmaptools.arrayblit(self.bitmap, data, 0, 0, 64, 32, 0)
+        if len(data) != RADAR_PACKED:
+            bitmaptools.arrayblit(self.bitmap, data, 0, 0, 64, 32, 0)
+            return
+        # Packed (2 pixels a byte, left pixel in the high nibble): set each
+        # lit pixel by its linear index (y * 64 + x; an int, so no tuple).
+        bmp = self.bitmap
+        i = 0
+        for b in data:
+            if b:
+                if b >> 4:
+                    bmp[i] = b >> 4
+                if b & 15:
+                    bmp[i + 1] = b & 15
+            i += 2
 
     def set_brightness(self, k):
         self.k = k
@@ -656,10 +671,10 @@ class Net:
             r.close()
 
     def radar(self, frame_id, buf):
-        """Read one frame into buf (2048 bytes) without allocating it:
-        r.content builds a fresh 2 KB bytes, which a fragmented heap can't
-        fit even with 30+ KB free."""
-        r = self._get('/board/radar/' + frame_id + '?b=' + self.board_id)
+        """Read one frame into buf (1024 bytes, packed 4 bits a pixel:
+        pk=4) without allocating it: r.content builds a fresh bytes, which
+        a fragmented heap may not fit."""
+        r = self._get('/board/radar/' + frame_id + '?b=' + self.board_id + '&pk=4')
         try:
             size = r.headers.get('content-length')
             if size != str(len(buf)):
