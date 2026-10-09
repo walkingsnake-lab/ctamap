@@ -185,14 +185,26 @@ def _row_tops_base(n, has_header, has_weather):
     return [top + i * pitch for i in range(n)]
 
 
+# A train drops DROP_GRACE s after its time, as the server drops it, but
+# only once a payload made after that moment agrees: until then it stays
+# (DUE), since the server may have pushed its time later (a held train).
+# HOLD_MAX caps the wait. Mirrors isShown() in draw.js.
+HOLD_MAX = 60
+
+
+def is_shown(x, now, pnow):
+    return x >= now - DROP_GRACE or (pnow is not None and pnow < x + DROP_GRACE and x >= now - DROP_GRACE - HOLD_MAX)
+
+
 def live_rows(p, now):
     out = []
+    pnow = p.get('now')
     for r in p.get('rows') or []:
         t = []
         s = []
         rs = r.get('s')
         for i, x in enumerate(r['t']):
-            if x >= now - DROP_GRACE:
+            if is_shown(x, now, pnow):
                 t.append(x)
                 s.append(rs[i] if rs else 0)
         if t:
@@ -204,7 +216,8 @@ def live_rows(p, now):
 
 
 def live_ticker(p, now):
-    return [x for x in (p.get('ticker') or []) if x['t'] >= now - DROP_GRACE]
+    pnow = p.get('now')
+    return [x for x in (p.get('ticker') or []) if is_shown(x['t'], now, pnow)]
 
 
 def slot_key(r, k):

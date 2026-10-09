@@ -48,6 +48,7 @@ class Server:
         self.alert = 0
         self.layout = 'classic'
         self.latency = lambda: LATENCY
+        self.rows_fn = None  # fn(now) -> rows, replacing the default trains
 
     def now(self):
         return T0 + self.clock.t / 1000
@@ -74,11 +75,14 @@ class Server:
             {'ln': 'RD', 'lbl': 'HOWARD', 't': [now + 75 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': self.alert},
             {'ln': 'RD', 'lbl': '95TH', 't': [now + 130 + k * 240 - (now % 240) for k in range(3)], 's': [0, 0, 0], 'a': 0},
         ]
+        if self.rows_fn:
+            rows = self.rows_fn(now)
         frames = ['40100-%d' % (now // 360 * 360 - k * 360) for k in range(player.RADAR_SLOTS - 1, -1, -1)] if self.radar_on else []
         return {
             'v': self.v, 'now': now, 'tzo': -18000, 'age': 3, 'screen': 'weather' if self.radar_on and not self.visit else self.screen,
             'bright': 100, 'header': 'MORSE', 'view': 'dest', 'rows': rows,
-            'ticker': [{'ln': 'RD', 'd': 'Howard', 't': t, 's': 0, 'a': 0} for t in rows[0]['t']] +
+            'ticker': [{'ln': r['ln'], 'd': r['lbl'].title(), 't': t, 's': 0, 'a': 0} for r in rows for t in r['t']] if self.rows_fn else
+                      [{'ln': 'RD', 'd': 'Howard', 't': t, 's': 0, 'a': 0} for t in rows[0]['t']] +
                       [{'ln': 'RD', 'd': '95th', 't': t, 's': 0, 'a': 0} for t in rows[1]['t']],
             'wx': None, 'warn': None,
             'radar': {'on': self.radar_on, 'visit': self.visit, 'frames': frames, 'ft': [T0] * len(frames), 'timeBox': [40, 0, 24, 22], 'split': False},
@@ -175,6 +179,35 @@ def run_for(board, clock, ms, every=5):
 
 
 class TestBoardLoop(unittest.TestCase):
+    def test_a_held_train_stays_due_until_the_server_drops_it(self):
+        # The CTA pushes a due train's time later (held at a station). The
+        # board's payload can be ~a minute older than the simulator's: it
+        # must not drop the train on its old time, then bring it back. Run
+        # at several offsets against the board's 30 s update phase.
+        for off in range(0, 30, 3):
+            board, server, clock, _, _, _ = make()
+            b0 = T0 + off
+
+            def rows(now, b0=b0):
+                t = b0 + 90 if now < b0 + 95 else b0 + 170   # held: its time moves later
+                live = [x for x in (t, b0 + 900) if x >= now - draw.DROP_GRACE]  # the server's own drop rule
+                return [{'ln': 'BR', 'lbl': 'KIMBALL', 't': live, 's': [0] * len(live), 'a': 0}]
+            server.rows_fn = rows
+            board.connect()
+            shown = []
+            end = clock.t + (260 + off) * 1000
+            while clock.t < end:
+                board.step()
+                now = board.now(clock.t)
+                view = draw.build_transit_view(board.player.p, now)
+                shown.append((now, any(c['t'] < b0 + 900 for r in view['rows'] for c in r['cells'])))
+                clock.sleep_ms(50)
+            # Due from its first time until the server drops it (170 + 30), never gone in between.
+            gaps = [n - b0 for n, on in shown if b0 + 30 <= n < b0 + 200 and not on]
+            self.assertEqual(gaps, [], 'offset %d: the held train vanished on stale data' % off)
+            # And it leaves once the server drops it: fetched at the drop moment, not after HOLD_MAX.
+            self.assertFalse(any(on for n, on in shown if n >= b0 + 215), 'offset %d' % off)
+
     def test_fetches_land_in_gaps_and_data_stays_fresh(self):
         board, server, clock, _, _, _ = make()
         board.connect()
