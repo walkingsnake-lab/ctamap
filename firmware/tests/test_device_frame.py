@@ -140,6 +140,33 @@ class TestBoardFrame(unittest.TestCase):
                 if data[i]:
                     self.assertEqual(got[i], ref.get(i % 64, i // 64), 'rb %d value %d' % (rb, data[i]))
 
+    def test_caches_never_reallocate(self):
+        # A dict cache grows by reallocating its whole table (776 bytes at 97
+        # slots), which a fragmented heap can't fit: the board restarted on
+        # exactly that in _glyph. The tables are allocated once and reused.
+        bf = self.bf
+        arrays = (bf.colors.keys, bf.colors.vals, bf.glyphs.keys, bf.glyphs.vals, bf.glyph_pool)
+        for i in range(400):
+            bf.begin()
+            bf.text('5x7', 'HOWARD 95TH', 0, 10, (i % 251, (i * 7) % 251, 200))  # a new color every frame: forces resets
+            bf.commit()
+        self.assertTrue(all(a is b for a, b in zip(arrays, (bf.colors.keys, bf.colors.vals, bf.glyphs.keys, bf.glyphs.vals, bf.glyph_pool))))
+        self.assertLessEqual(len(bf.glyphs), device.GLYPH_CACHE)
+        for screen in ('transit', 'ticker', 'baseball'):
+            ref = draw.render(self.p, draw.Frame(), screen=screen, now=self.now, logos=self.logos)
+            self.assertEqual(self.draw_board(self.p, screen, logos=self.logos), ref_pixels(ref), 'after resets: ' + screen)
+
+    def test_int_table(self):
+        t = device.IntTable(8)
+        for k in (0, 8, 16, 3, 0xFFFFFF):  # 0, 8 and 16 collide
+            t.put(k, k + 1)
+        self.assertEqual([t.get(k) for k in (0, 8, 16, 3, 0xFFFFFF, 5)], [1, 9, 17, 4, 0x1000000, -1])
+        t.put(8, 99)
+        self.assertEqual((t.get(8), len(t)), (99, 5))
+        self.assertEqual(sorted(t), [0, 3, 8, 16, 0xFFFFFF])
+        t.clear()
+        self.assertEqual((len(t), t.get(16), list(t.items())), (0, -1, []))
+
     def test_cache_keys_are_ints(self):
         # Tuple keys cost memory to keep and a new tuple per glyph per frame.
         for screen in ('transit', 'baseball'):
