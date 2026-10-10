@@ -954,7 +954,7 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
 # drawFiveDay() in draw.js.
 
 FD_LETTER = hexc('#4a4a4a')
-FD_NUM = hexc('#b0b0b0')
+FD_NUM = C['grey']
 FD_PITCH = 13
 
 
@@ -979,6 +979,8 @@ def draw_day_temp(f, s, cx, base, color):
 
 
 def draw_five_day(f, wx):
+    sh = scale_color(temp_color(wx['temp']), 0.2)
+    f.text('small', '°', f.text('5x7', str(wx['temp']), 1, 8, sh), 7, sh)
     x = f.text('5x7', str(wx['temp']), 0, 7, C['label'])
     f.text('small', '°', x, 6, C['label'])
     if wx.get('icon') in assets.ICONS:
@@ -989,7 +991,6 @@ def draw_five_day(f, wx):
         hx = f.text('small', str(wx['hi']), hx, 6, FD_NUM)
         hx = f.text('small', ' L', hx, 6, FD_LETTER)
         f.text('small', str(wx['lo']), hx, 6, FD_NUM)
-    f.fill(0, 9, 64, 1, C['divider'])
     for i in range(1, 5):
         f.fill(i * FD_PITCH - 1, 10, 1, 22, C['divider'])
     for i, d in enumerate(wx['days'][:5]):

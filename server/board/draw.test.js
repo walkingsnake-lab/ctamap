@@ -498,14 +498,20 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
   const rad = (w) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w });
   const f = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
   assert.ok(count(f, draw.C.label, 0, 0, 20, 7) > 20, 'current temperature in label white');
+  // Its shadow: 1px down-right, 20% of the temperature color, only where the
+  // white doesn't cover it (57 is green-ish).
+  const shadow = [];
+  for (let y = 0; y <= 8; y++) for (let x = 0; x <= 20; x++) { const c = f.get(x, y); if (c.some((v) => v) && hex(c) !== draw.C.label) shadow.push(c); }
+  assert.ok(shadow.length > 5, 'shadow pixels');
+  for (const c of shadow) assert.ok(c[1] > c[0] && Math.max(...c) < 60, `dim green shadow ${c}`);
+  assert.ok(count(f, '#000000', 0, 7, 20, 7) < 21, 'shadow on row 7, under the digits');
+  assert.equal(count(f, '#000000', 0, 8, 63, 8), 64, 'row 8 clear');
   assert.equal(hex(f.get(23, 1)), '#ffc800', 'icon at x22');
-  assert.ok(count(f, '#b0b0b0', 34, 1, 63, 5) > 15, 'high/low numbers');
+  assert.ok(count(f, draw.C.grey, 34, 1, 63, 5) > 15, 'high/low numbers grey');
   assert.ok(count(f, '#4a4a4a', 34, 1, 63, 5) > 5, 'dim H/L letters');
-  assert.ok(count(f, '#b0b0b0', 61, 1, 63, 5) > 0, 'right-aligned to x63');
+  assert.ok(count(f, draw.C.grey, 61, 1, 63, 5) > 0, 'right-aligned to x63');
   for (const x of [12, 25, 38, 51]) for (let y = 10; y <= 31; y++) assert.equal(hex(f.get(x, y)), draw.C.divider, `divider ${x},${y}`);
-  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 9)), draw.C.divider, `rule col ${x}`);
-  assert.equal(count(f, draw.C.divider, 0, 0, 63, 8), 0, 'row 8 clear under the top bar');
-  for (let x = 0; x < 64; x++) assert.deepEqual(f.get(x, 8), [0, 0, 0], `margin col ${x}`);
+  assert.equal(count(f, draw.C.divider, 0, 0, 63, 9), 0, 'no horizontal rule');
   for (let i = 0; i < 5; i++) {
     const x0 = i * 13, x1 = x0 + 11;
     assert.ok(count(f, draw.C.grey, x0, 11, x1, 15) > 8, `day ${i} label`);
