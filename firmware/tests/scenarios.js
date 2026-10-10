@@ -182,8 +182,9 @@ async function build() {
       ['break', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 30 MIN', [5, 4, 0, 0, 6, 8, 7, 5], [2, 1, 0, 0, 2, 2, 2, 2]) }, null],
       ['downpour', { ...wx, temp: 78, hi: 84, lo: 66, rain: rain(0, 0, 'RAIN IN 25 MIN', [0, 5, 9, 10, 10, 8, 5, 3], [0, 2, 3, 3, 3, 2, 2, 1]) }, null],
       ['snow in', { ...wx, icon: 'cloudy', temp: 30, hi: 33, lo: 24, rain: rain(1, 0, 'SNOW IN 40 MIN', [0, 0, 4, 6, 7, 9, 8, 6], [0, 0, 1, 2, 2, 3, 2, 2]) }, null],
+      ['snow ends', { ...wx, icon: 'snow', temp: 28, hi: 31, lo: 22, rain: rain(1, 1, 'ENDS IN 40 MIN', [5, 4, 3, 2, 1, 0, 0, 0], [2, 2, 2, 1, 1, 0, 0, 0]) }, null],
       ['snow now', { ...wx, icon: 'snow', temp: 28, hi: 31, lo: 22, rain: rain(1, 1, 'SNOW NEXT 2 HRS', [5, 7, 9, 10, 9, 8, 7, 5], [2, 2, 3, 3, 3, 3, 2, 2]) }, null],
-      ['no room for the drop', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 105 MIN', [1, 1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0]) }, null],
+      ['no room for the mark', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 105 MIN', [1, 1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0]) }, null],
       ['tor warning', { ...wx, icon: 'storm', rain: rain(0, 1, 'RAIN NEXT 2 HRS', [6, 7, 8, 9, 8, 7, 6, 5], [2, 2, 2, 3, 2, 2, 2, 2]) }, { kind: 'tor', lvl: 'warning' }],
       ['svr watch', { ...wx, icon: 'storm', rain: rain(0, 0, 'RAIN IN 45 MIN', [0, 0, 0, 3, 9, 10, 6, 2], [0, 0, 0, 1, 3, 3, 2, 1]) }, { kind: 'svr', lvl: 'watch' }],
     ];
@@ -216,6 +217,11 @@ async function build() {
     // t + 3600 is 12:13 PM, the widest time).
     add(`radar clock now + conditions split=${split} svr warning`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { ...r, showTime: true, clock: 'now', cond: true } }, [{ screen: 'weather', idx: 0, now: t + 3600 }, { screen: 'weather', idx: 2 }], frames);
     add(`radar frame clock + conditions split=${split} tornado blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true, cond: true } }, [{ screen: 'weather', idx: 1 }, { screen: 'weather', idx: 1, blink: true }], frames);
+    // Frame age ("3m") and no corner at all, with and without a warning tag.
+    add(`radar clock age split=${split} svr watch`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'watch' }, radar: { ...r, showTime: true, clock: 'age' } }, [{ screen: 'weather', idx: 0 }, { screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, now: t + 3000 }], frames);
+    add(`radar clock age split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'age' } }, [{ screen: 'weather', idx: 1 }], frames);
+    add(`radar clock none split=${split} tornado blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true, clock: 'none' } }, [{ screen: 'weather', idx: 1 }, { screen: 'weather', idx: 1, blink: true }], frames);
+    add(`radar clock none split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'none' } }, [{ screen: 'weather', idx: 1 }], frames);
     add(`radar brightness 60 split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, rb: 60 } }, [{ screen: 'weather', idx: 1 }], Object.fromEntries(ids.map((id, i) => [id, Uint8Array.from({ length: 2048 }, (_, k) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10][(k + i) % 11])])));
     add(`radar conditions without temp split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'now', cond: true, temp: null } }, [{ screen: 'weather', idx: 1 }], frames);
   }
@@ -250,6 +256,13 @@ async function build() {
         screen: 'baseball', rolls: { count: { from: '3-2', p }, outs: { from: '1 OUT', p } },
       })), undefined, logos);
       add(`baseball ${layout} light band flash`, bbp(layout, { ...live, home: { ...lightHome, at: t - 32 } }), [{ screen: 'baseball' }], undefined, logos);
+    }
+    // One of two logos loaded: the band layout until both are.
+    {
+      const two = (extra) => ({ ...live, away: { ...live.away, lg: 'CHC-1' }, home: { ...live.home, lg: 'STL-1' }, ...extra });
+      add('baseball logos one of two loaded', bbp('logos', two()), [{ screen: 'baseball' }], undefined, { 'CHC-1': logos['CHC-1'] });
+      add('baseball logos both loaded', bbp('logos', two()), [{ screen: 'baseball' }], undefined, { 'CHC-1': logos['CHC-1'], 'STL-1': logos['STL-1'] || crop(21) });
+      add('baseball logos pregame, both loaded (names 1px left)', bbp('logos', two(game('pre', { start: t + 1500, away: { ...live.away, r: 0, lg: 'CHC-1' }, home: { ...live.home, r: 0, ab: 'WSH', lg: 'STL-1' } }))), [{ screen: 'baseball' }], undefined, { 'CHC-1': logos['CHC-1'], 'STL-1': crop(21) });
     }
     add('baseball logos without crops (not fetched yet)', bbp('logos', live), [{ screen: 'baseball' }]);
     add('baseball logos at 47% and with no dim (default)', { ...bbp('logos', live), mlb: { layout: 'logos', dim: 0.47, games: [live] } }, [{ screen: 'baseball' }], undefined, logos);

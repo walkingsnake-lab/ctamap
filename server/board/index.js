@@ -362,7 +362,7 @@ function createBoard({
       radar: {
         ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null,
         // Radar clock: the current time instead of the frame's; conditions under it.
-        ...(board.radarClock === 'now' ? { clock: 'now' } : {}),
+        ...(board.radarClock && board.radarClock !== 'frame' ? { clock: board.radarClock } : {}),
         ...(board.radarCond === true ? { cond: true } : {}),
         // Precip brightness, percent (absent = 100).
         ...(board.radarBright != null && board.radarBright !== 100 ? { rb: board.radarBright } : {}),

@@ -851,7 +851,7 @@
     // ---- rain bars (wxRain 'bars'; mockup docs/board/mockups/weather/rain-states) ----
     // The weather screen while precipitation is falling or due in the next 2
     // hours (wx.rain). The top bar, then the title centered on rows 10-14
-    // (a drop, or a flake for snow, in front while it's falling now), eight
+    // (a drop, or a flake for snow, in front of titles that don't say RAIN or SNOW), eight
     // 15-minute bars (7px wide on an 8px pitch) rising from row 25 up to 10
     // rows, and `1H` / `2H` under the 4th/5th bar gap and the last bar. An NWS
     // warning or watch takes the title's place.
@@ -873,11 +873,13 @@
           f.text('small', t, gx + TAG_GAP - 1, 14, ws.color);
         }
       } else {
-        // The mark only when it fits beside the title.
-        const art = rain.now ? (rain.snow ? FLAKE : WX_DROP) : null;
+        // The drop or flake stands in for the word: only on titles that don't
+        // say RAIN or SNOW (ENDS IN..., BREAK IN...), and only if it fits.
+        const art = /RAIN|SNOW/.test(rain.title) ? null : (rain.snow ? FLAKE : WX_DROP);
         const markW = art && measure('small', rain.title) + art[0].length + 2 <= 64 ? art[0].length + 2 : 0;
         const x = 32 - Math.floor((measure('small', rain.title) + markW) / 2);
-        if (markW) drawArt(f, art, x, 10, rain.snow ? color : WX_BLUE);
+        // The text's rows are 9-13; the 5px flake matches them, the 4px drop sits on the bottom.
+        if (markW) drawArt(f, art, x, rain.snow ? 9 : 10, rain.snow ? color : WX_BLUE);
         f.text('small', rain.title, x + markW, 14, color);
       }
       const levels = rain.snow ? SNOW_LEVELS : RAIN_LEVELS;
@@ -960,7 +962,7 @@
       const clear = (b) => { if (b[1] <= b[3]) f.fill(b[0] - 1, b[1] - 1, b[2] - b[0] + 3, b[3] - b[1] + 3, '#000000'); };
       const segW = 2, segGap = 1;
       const indX = right - (ids.length * (segW + segGap) - segGap) + 1;
-      if (ids.length) clear([indX, top, right, top + 1]);
+      if (ids.length && r.clock !== 'none') clear([indX, top, right, top + 1]);
       const drawIndicator = () => {
         let x = indX;
         ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
@@ -991,6 +993,24 @@
         drawIndicator();
         if (icon) drawIcon(f, icon, x0, top + 4);
         f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
+        if (ws) drawWarnTag();
+        return f;
+      }
+      if (r.clock === 'none') {
+        // Nothing in the corner but the radar (and a warning tag, if any).
+        if (ws) drawWarnTag();
+        return f;
+      }
+      if (r.clock === 'age') {
+        // How long ago the shown frame is ("3m"), dark grey Tom Thumb under
+        // the frame indicator; the warning tag at the bottom right as with
+        // time off.
+        const nowS = o.now != null ? o.now : p.now;
+        const ft = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : nowS;
+        const age = `${Math.max(0, Math.floor((nowS - ft + 30) / 60))}m`;
+        clear(textBox('small', age, right - measure('small', age) + 1, top + 9));
+        drawIndicator();
+        rtext(f, 'small', age, right, top + 9, C.radarSub);
         if (ws) drawWarnTag();
         return f;
       }
@@ -1221,9 +1241,9 @@
 
     // Score (or pregame abbreviation) centered in the band's box, embossed;
     // a changed score rolls digit by digit inside the box.
-    function drawLogoScore(f, text, top, color, roll) {
+    function drawLogoScore(f, text, top, color, roll, dx = 0) {
       const base = top + 9;
-      const left = (t) => LG.cx - Math.floor(measure('5x7', t) / 2);
+      const left = (t) => LG.cx + dx - Math.floor(measure('5x7', t) / 2);
       if (!roll || roll.from === text || roll.p >= 1) { f.text('5x7', text, left(text), base, color); return; }
       const up = Math.round(easeInOut(roll.p) * LG_ROLL);
       f.withClip(LG.w, base - 6, LG.bandR + 1, base, () => { // the digit rows
@@ -1248,7 +1268,11 @@
     function renderBaseballLogos(f, p, g, now, o) {
       const rolls = o.rolls || {};
       const logos = o.logos || {};
-      const bands = p.mlb.layout === 'bands';
+      // Logos: the band layout (abbreviations) until every logo the game uses
+      // has loaded, rather than popping in one at a time. A side with no
+      // logo uploaded (lg null) never loads, so it doesn't hold the others.
+      const bands = p.mlb.layout === 'bands'
+        || [g.away, g.home].some((s) => s.lg && !(logos[s.lg] && logos[s.lg].length >= LG.w * LG.rows * 3));
       const dim = p.mlb.dim != null ? p.mlb.dim : LG.dim;
       const final = g.st === 'final';
       const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
@@ -1260,7 +1284,7 @@
         // Abbreviations in the score boxes, records in the panel, TODAY and
         // the first-pitch time on the bottom line.
         for (const [k, top] of sides) {
-          if (!bands) drawLogoScore(f, g[k].ab || '', top, lgInk(g[k], dim), null);
+          if (!bands) drawLogoScore(f, g[k].ab || '', top, lgInk(g[k], dim), null, -1); // 1px left of the score's center
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
         f.text('small', 'TODAY', 0, BOTTOM, C.grey);

@@ -26,7 +26,7 @@ const ALERT_JUMPS = ['off', 'warning', 'all']; // jump to weather: never, NWS wa
 const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
-const RADAR_CLOCKS = ['frame', 'now'];
+const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame time, current time, how long ago the frame is, or nothing
 const WX_VIEWS = ['now', '5day', 'hourly'];  // weather screen without rain: conditions, 5-day, or hourly
 const WX_RAINS = ['radar', 'bars', 'both'];  // weather screen with rain around: radar loop, rain bars, or both alternating
 // Speed settings: the allowed values (defaults in defaultBoard).

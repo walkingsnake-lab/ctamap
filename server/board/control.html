@@ -191,7 +191,9 @@
     <div class="seg" id="radarCorner">
       <button data-v="frame">Frame time</button>
       <button data-v="now">Current time</button>
+      <button data-v="age">Frame age</button>
       <button data-v="temp">Weather</button>
+      <button data-v="none">None</button>
     </div>
     <p class="hint" id="radarCornerHint"></p>
     <div class="row" id="radarCondRow"><span>Temperature under the clock</span><label class="switch"><input type="checkbox" id="radarCond"><span></span></label></div>
@@ -443,11 +445,11 @@
     $('bbPriorityHint').textContent = pri === 'live' ? 'While any game is live, only live games rotate; otherwise every game shown.'
       : pri === 'favorite' ? 'While a Cubs or White Sox game is live, only that game shows; otherwise live games first.'
       : 'Every game shown rotates, live or not.';
-    const corner = board.radarTime === false ? 'temp' : board.radarClock === 'now' ? 'now' : 'frame';
+    const corner = board.radarTime === false ? 'temp' : ['now', 'age', 'none'].includes(board.radarClock) ? board.radarClock : 'frame';
     pressed('radarCorner', corner);
     $('radarCond').checked = board.radarCond === true;
     $('radarBright').value = String(board.radarBright || 100);
-    $('radarCondRow').hidden = corner === 'temp';
+    $('radarCondRow').hidden = corner === 'temp' || corner === 'age' || corner === 'none';
     $('tempShadow').checked = board.tempShadow === true;
     pressed('wxView', board.wxView === '5day' || board.wxView === 'hourly' ? board.wxView : 'now');
     const wr = board.wxRain === 'bars' || board.wxRain === 'both' ? board.wxRain : 'radar';
@@ -467,6 +469,8 @@
     $('radarCornerHint').textContent = corner === 'frame'
       ? 'The radar frame\'s time (dim), with AM/PM and any weather warning icon under it.'
       : corner === 'now' ? 'The current time in white, with AM/PM and any weather warning icon under it.'
+      : corner === 'age' ? 'How long ago the frame is (3m, 10m…) in dark grey under the frame indicator; a weather watch or warning shows at the bottom right.'
+      : corner === 'none' ? 'Just the radar: no time, temperature or frame indicator. A weather watch or warning still shows at the bottom right.'
       : 'Current weather icon and temperature; a weather watch or warning shows at the bottom right.';
     $('rowsHint').textContent = 'These are the most the board shows. When more destinations are running than fit, '
       + 'it hides the weather row first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather row.'

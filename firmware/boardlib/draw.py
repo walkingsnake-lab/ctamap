@@ -1084,11 +1084,11 @@ def draw_rain_bars(f, wx, warn, blink):
             f.text('small', t, gx + TAG_GAP - 1, 14, wcolor)
     else:
         title = rain['title']
-        art = (FLAKE if rain.get('snow') else WX_DROP) if rain.get('now') else None
+        art = None if ('RAIN' in title or 'SNOW' in title) else (FLAKE if rain.get('snow') else WX_DROP)
         mark_w = len(art[0]) + 2 if art and measure('small', title) + len(art[0]) + 2 <= 64 else 0
         x = 32 - (measure('small', title) + mark_w) // 2
         if mark_w:
-            draw_art(f, art, x, 10, color if rain.get('snow') else WX_BLUE)
+            draw_art(f, art, x, 9 if rain.get('snow') else 10, color if rain.get('snow') else WX_BLUE)
         f.text('small', title, x + mark_w, 14, color)
     levels = SNOW_LEVELS if rain.get('snow') else RAIN_LEVELS
     for i, h in enumerate(rain['h'][:8]):
@@ -1200,7 +1200,7 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     seg_w = 2
     seg_gap = 1
     ind_x = right - (len(ids) * (seg_w + seg_gap) - seg_gap) + 1
-    if ids:
+    if ids and r.get('clock') != 'none':
         clear((ind_x, top, right, top + 1))
 
     def draw_indicator():
@@ -1231,6 +1231,20 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
         if icon:
             draw_icon(f, icon, x0, top + 4)
         f.text('small', ts, x0 + (10 if icon else 0), top + 10, C['label'])
+        if ws:
+            draw_warn_tag()
+        return f
+    if r.get('clock') == 'none':
+        if ws:
+            draw_warn_tag()
+        return f
+    if r.get('clock') == 'age':
+        now_s = now if now is not None else p['now']
+        ft_i = ft[idx] if idx >= 0 and ft and ft[idx] is not None else now_s
+        age = str(max(0, (now_s - ft_i + 30) // 60)) + 'm'
+        clear(text_box('small', age, right - measure('small', age) + 1, top + 9))
+        draw_indicator()
+        rtext(f, 'small', age, right, top + 9, C['radarSub'])
         if ws:
             draw_warn_tag()
         return f
@@ -1479,10 +1493,10 @@ def _lg_left(t):
     return LG_CX - measure('5x7', t) // 2
 
 
-def draw_logo_score(f, text, top, color, roll):
+def draw_logo_score(f, text, top, color, roll, dx=0):
     base = top + 9
     if not roll or roll['from'] == text or roll['p'] >= 1:
-        f.text('5x7', text, _lg_left(text), base, color)
+        f.text('5x7', text, _lg_left(text) + dx, base, color)
         return
     up = jsround(ease_in_out(roll['p']) * LG_ROLL)
     f.push_clip(LG_W, base - 6, LG_BAND_R + 1, base)
@@ -1505,7 +1519,13 @@ def draw_logo_score(f, text, top, color, roll):
 
 
 def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
+    # Logos: the band layout until every logo the game uses has loaded (a
+    # side with no logo uploaded never loads, so it doesn't hold the others).
     bands = (p.get('mlb') or {}).get('layout') == 'bands'
+    if not bands:
+        for s in (gm['away'], gm['home']):
+            if s.get('lg') and not (logos and logos.get(s['lg']) and len(logos[s['lg']]) >= LG_W * LG_ROWS * 3):
+                bands = True
     dim = (p.get('mlb') or {}).get('dim')
     if dim is None:
         dim = LG_DIM
@@ -1524,7 +1544,7 @@ def render_baseball_logos(f, p, gm, now, tzo, rolls, logos):
     if gm['st'] == 'pre':
         for k, top in sides:
             if not bands:
-                draw_logo_score(f, gm[k].get('ab') or '', top, lg_ink(gm[k], dim), None)
+                draw_logo_score(f, gm[k].get('ab') or '', top, lg_ink(gm[k], dim), None, -1)  # 1px left of the score's center
             ctext(f, 'small', bb_record(gm[k]), PANEL_X, top + 8, C['grey'])
         f.text('small', 'TODAY', 0, BB_BOTTOM, C['grey'])
         ap = ampm_text(gm['start'], tzo)
