@@ -28,11 +28,12 @@ const W = 64, H = 32, GROUND = 31, WILLIS_H = 23;
 const rowOf = (floor) => GROUND + 1 - Math.round(WILLIS_H * floor / 108);
 
 // ---- the skyline: role per pixel ('box0', 'box1', 'base', 'front', 'mid', 'back', 'hancock') ----
-const BOXES = [[0, 4, 26], [4, 3, 23], [19, 4, 22], [23, 5, 25], [28, 4, 21], [32, 5, 24], [37, 3, 26], [51, 5, 25], [56, 8, 27]];
+const BOXES = [[0, 4, 26], [4, 3, 23], [19, 4, 22], [23, 5, 25], [28, 4, 21], [32, 5, 24], [37, 3, 26], [50, 4, 24]];
+const SHORE = 54;   // lake from here east (right)
 function skyline() {
   const role = Array.from({ length: H }, () => new Array(W).fill(null));
   const rect = (x, w, top, r) => { for (let y = top; y <= GROUND; y++) for (let i = x; i < x + w; i++) if (i >= 0 && i < W) role[y][i] = r; };
-  rect(0, W, 27, 'base');
+  rect(0, SHORE, 27, 'base');
   BOXES.forEach(([x, w, t], i) => rect(x, w, t, `box${i % 2}`));
   const x0 = 7, tw = 3;
   [[66, 108, 50], [90, 108, 90], [50, 90, 66]].forEach(([front, mid, back], c) => {
@@ -84,6 +85,37 @@ function paint(f, sky, bldg) {
   }
 }
 
+
+// ---- lake, Navy Pier wheel, elevated L train ----
+// pal: { lake, ripple, glint (reflection color or null), pier, wheel: [colors], track, car, window, head }
+function lakefront(f, pal) {
+  for (let y = 28; y < H; y++) for (let x = SHORE; x < W; x++) {
+    const ripple = (x * 3 + y * 5) % 7 === 0;
+    f.fill(x, y, 1, 1, ripple ? pal.ripple : pal.lake);
+  }
+  if (pal.glint) [[56, 29], [59, 30], [61, 28], [57, 31]].forEach(([x, y]) => f.fill(x, y, 1, 1, pal.glint));
+  // Pier deck and the Ferris wheel on it: rim, spokes, hub, legs.
+  f.fill(SHORE, 27, W - SHORE, 1, pal.pier);
+  const cx = 59, cy = 21, r = 4;
+  for (let a = 0; a < 360; a += 15) {
+    const t = a * Math.PI / 180, x = Math.round(cx + r * Math.cos(t)), y = Math.round(cy + r * Math.sin(t));
+    f.fill(x, y, 1, 1, pal.wheel[(a / 15) % pal.wheel.length]);
+  }
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) f.fill(cx + dx, cy + dy, 1, 1, pal.spoke);
+  f.fill(cx, cy, 1, 1, pal.wheel[0]);
+  for (let y = cy + 1; y < 27; y++) { const k = y - cy; f.fill(cx - Math.ceil(k / 2), y, 1, 1, pal.spoke); f.fill(cx + Math.ceil(k / 2), y, 1, 1, pal.spoke); }
+}
+function elevated(f, pal, x0) {
+  f.fill(0, 27, SHORE, 1, pal.track);
+  for (let x = 2; x < SHORE; x += 6) f.fill(x, 28, 1, 4, pal.track);
+  // Two cars, 6px each, 1px apart, heading east (right): headlight on the front.
+  for (const cx of [x0, x0 + 7]) {
+    f.fill(cx, 24, 6, 3, pal.car);
+    for (let i = 1; i < 6; i += 2) f.fill(cx + i, 25, 1, 1, pal.window);
+  }
+  f.fill(x0 + 12, 25, 1, 1, pal.head);
+}
+
 const STATES = [
   ['day', 'CLEAR DAY', (f) => {
     paint(f, (y) => ramp([[0, '#08245a'], [20, '#1a4a8e'], [31, '#2c62a8']], y), DAY_BLDG);
@@ -91,6 +123,8 @@ const STATES = [
     [' yyy ', 'yyyyy', 'yyyyy', 'yyyyy', ' yyy '].forEach((row, j) => [...row].forEach((c, i) => { if (c === 'y') f.fill(26 + i, 2 + j, 1, 1, '#ffd040'); }));
     [[0, 2, '..ccc...'], [1, 0, '.ccccccc'], [2, 0, 'cccccccc']].forEach(([j, , row]) => [...row].forEach((c, i) => { if (c === 'c') f.fill(33 + i, 9 + j, 1, 1, '#7088a8'); }));
     antennas(f, '#0c101a', true);
+    lakefront(f, { lake: '#0c2e5a', ripple: '#24548c', glint: '#5a7ab0', pier: '#0c101a', wheel: ['#c0c8d8', '#8a90a0'], spoke: '#5a6070' });
+    elevated(f, { track: '#0c101a', car: '#9aa0ae', window: '#2a3040', head: '#ffffff' }, 23);
     temp(f, '72°');
   }],
   ['night', 'CLEAR NIGHT', (f) => {
@@ -102,6 +136,8 @@ const STATES = [
     ['.mm.', 'm...', 'm...', 'm...', '.mm.'].forEach((row, j) => [...row].forEach((c, i) => { if (c === 'm') f.fill(28 + i, 2 + j, 1, 1, '#e8dca0'); }));
     windows(f, 0.4, ['#ffb050', '#8a5c20']);
     antennas(f, '#5a5a70', true);
+    lakefront(f, { lake: '#050e26', ripple: '#163070', glint: '#c09a40', pier: '#14141e', wheel: ['#ff2020', '#ffd000', '#20c040', '#2080ff', '#c040ff'], spoke: '#3a3a4a' });
+    elevated(f, { track: '#2a2a3a', car: '#606478', window: '#ffd070', head: '#ffffff' }, 23);
     temp(f, '58°');
   }],
   ['rain', 'RAIN', (f) => {
@@ -116,6 +152,8 @@ const STATES = [
       f.fill(x, y, 1, 1, '#1a4a90'); if (y + 1 < H) f.fill(x, y + 1, 1, 1, '#2a6ad0');
     }
     f.fill(48, 0, 16, 7, '#40444c');
+    lakefront(f, { lake: '#141c2a', ripple: '#2e3a50', glint: null, pier: '#0c0d11', wheel: ['#ff2020', '#8a6020'], spoke: '#22252e' });
+    elevated(f, { track: '#0c0d11', car: '#4a4e5c', window: '#c08a40', head: '#ffffff' }, 23);
     temp(f, '51°');
   }],
   ['snow', 'SNOW', (f) => {
@@ -131,6 +169,9 @@ const STATES = [
       f.fill(x, y, 1, 1, rand() < 0.4 ? '#ffffff' : '#8a90a0');
     }
     f.fill(48, 0, 16, 7, '#3a3e48');
+    lakefront(f, { lake: '#1a1e26', ripple: '#2c323e', glint: null, pier: '#9aa4b8', wheel: ['#9aa4b8', '#5a6070'], spoke: '#22252e' });
+    elevated(f, { track: '#0c0d11', car: '#4a4e5c', window: '#c08a40', head: '#ffffff' }, 23);
+    f.fill(23, 23, 6, 1, '#9aa4b8'); f.fill(30, 23, 6, 1, '#9aa4b8');
     temp(f, '28°');
   }],
 ];
