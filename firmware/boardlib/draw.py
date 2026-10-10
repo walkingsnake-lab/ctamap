@@ -985,15 +985,17 @@ def draw_five_day(f, wx):
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], FD_ICON_X, 0)
     sh = scale_color(temp_color(wx['temp']), 0.2)
-    f.text('small', '°', f.text('5x7', str(wx['temp']), FD_TEMP_X + 1, 8, sh), 7, sh)
+    temp_right = f.text('small', '°', f.text('5x7', str(wx['temp']), FD_TEMP_X + 1, 8, sh), 7, sh) - 2
     x = f.text('5x7', str(wx['temp']), FD_TEMP_X, 7, C['label'])
     f.text('small', '°', x, 6, C['label'])
     if wx.get('hi') is not None and wx.get('lo') is not None:
-        hx = FD_HL_RIGHT - measure('small', 'H%s L%s' % (wx['hi'], wx['lo'])) + 1
-        hx = f.text('small', 'H', hx, 6, FD_LETTER)
-        hx = f.text('small', str(wx['hi']), hx, 6, FD_NUM)
-        hx = f.text('small', ' L', hx, 6, FD_LETTER)
-        f.text('small', str(wx['lo']), hx, 6, FD_NUM)
+        up, down, hi, lo = g(assets.UP), g(assets.DOWN), str(wx['hi']), str(wx['lo'])
+        parts = ((up, FD_LETTER), (hi, FD_NUM), (' ' + down, FD_LETTER), (lo, FD_NUM))
+        if FD_HL_RIGHT - measure('small', ''.join(p[0] for p in parts)) + 1 < temp_right + 2:
+            parts = ((hi + ' ' + lo, FD_NUM),)
+        hx = FD_HL_RIGHT - measure('small', ''.join(p[0] for p in parts)) + 1
+        for t, c in parts:
+            hx = f.text('small', t, hx, 6, c)
     for i in range(1, 5):
         f.fill(i * FD_PITCH - 1, 10, 1, 22, C['divider'])
     for i, d in enumerate(wx['days'][:5]):

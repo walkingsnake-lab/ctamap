@@ -510,7 +510,28 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
   assert.ok(count(f, '#000000', 11, 7, 31, 7) < 21, 'shadow on row 7, under the digits');
   assert.equal(count(f, '#000000', 0, 8, 63, 8), 64, 'row 8 clear');
   assert.ok(count(f, draw.C.grey, 34, 1, 63, 5) > 15, 'high/low numbers grey');
-  assert.ok(count(f, '#4a4a4a', 34, 1, 63, 5) > 5, 'dim H/L letters');
+  assert.equal(count(f, '#4a4a4a', 30, 1, 63, 5), 18, 'two dim arrows');
+  // A long high/low next to a three-character temperature keeps 1px clear:
+  // the arrows go only when they'd touch it.
+  const topGap = (w) => {
+    const fr = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, ...w }) }, { screen: 'weather', now, frames: {} });
+    const t = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, ...w, hi: null, lo: null }) }, { screen: 'weather', now, frames: {} });
+    let tr = -1; for (let x = 10; x < 64; x++) for (let y = 0; y < 9; y++) if (t.get(x, y).some((v) => v)) tr = x;
+    let hl = 64; for (let x = tr + 1; x < 64; x++) for (let y = 0; y < 8; y++) if (fr.get(x, y).some((v) => v)) hl = Math.min(hl, x);
+    return [hl - tr - 1, count(fr, '#4a4a4a', 20, 0, 63, 7)];
+  };
+  for (const w of [{ temp: 100, hi: 104, lo: 82 }, { temp: -10, hi: -2, lo: -14 }, { temp: -15, hi: -10, lo: -24 }, { temp: 100, hi: 101, lo: 100 }, { temp: -15, hi: -100, lo: -100 }]) {
+    const [gap] = topGap(w);
+    assert.ok(gap >= 1, `${JSON.stringify(w)}: gap ${gap}`);
+  }
+  assert.equal(topGap({ temp: 100, hi: 104, lo: 82 })[1], 18, 'arrows kept');
+  assert.equal(topGap({ temp: -15, hi: -10, lo: -24 })[1], 0, 'arrows dropped');
+  // Chevron heads: the up arrow's on its second row, the down arrow's on its fourth.
+  const arrowRows = (x0, x1) => { const r = []; for (let y = 1; y <= 5; y++) r.push(count(f, '#4a4a4a', x0, y, x1, y)); return r; };
+  const dimCols = []; for (let x = 30; x < 64; x++) if (count(f, '#4a4a4a', x, 1, x, 5)) dimCols.push(x);
+  assert.deepEqual(arrowRows(dimCols[0], dimCols[0] + 4), [1, 3, 3, 1, 1], 'up arrow first');
+  const down0 = dimCols.find((x) => x > dimCols[0] + 4);
+  assert.deepEqual(arrowRows(down0, down0 + 4), [1, 1, 3, 3, 1], 'down arrow second');
   assert.ok(count(f, draw.C.grey, 60, 1, 62, 5) > 0, 'right-aligned to x62');
   for (let y = 0; y < 8; y++) assert.deepEqual(f.get(63, y), [0, 0, 0], `col 63 clear, row ${y}`);
   for (const x of [12, 25, 38, 51]) for (let y = 10; y <= 31; y++) assert.equal(hex(f.get(x, y)), draw.C.divider, `divider ${x},${y}`);

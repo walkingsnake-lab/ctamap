@@ -756,9 +756,9 @@
     // ---- 5-day layout (wxView '5day'; mockup docs/board/mockups/weather/5day-final) ----
     // The weather screen without rain when wx carries `days`. Today on rows
     // 0-7: the icon at x1, the temperature at x11 (5x7, label white, small
-    // degree sign, 1px temperature-colored shadow), `H63 L49` right-aligned to
-    // x62 (a 1px margin, like the icon's)
-    // (letters dim, numbers grey). Below, five 13px day columns split by
+    // degree sign, 1px temperature-colored shadow), the high and low (`↑63 ↓49`,
+    // arrow glyphs) right-aligned to x62 (a 1px margin, like the icon's)
+    // (arrows dim, numbers grey). Below, five 13px day columns split by
     // dividers on rows 10-31:
     // weekday (rows 11-15), icon (17-24), and the high in its temperature
     // color (rows 27-31).
@@ -789,15 +789,21 @@
       // the conditions screen), under the white temperature.
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
       const sh = scaleColor(tempColor(wx.temp), 0.2);
-      f.text('small', '°', f.text('5x7', String(wx.temp), FD_TEMP_X + 1, 8, sh), 7, sh);
+      // Right edge of the temperature's ink, shadow included (the degree
+      // sign advances 1px past its ink).
+      const tempRight = f.text('small', '°', f.text('5x7', String(wx.temp), FD_TEMP_X + 1, 8, sh), 7, sh) - 2;
       const x = f.text('5x7', String(wx.temp), FD_TEMP_X, 7, C.label);
       f.text('small', '°', x, 6, C.label);
       if (wx.hi != null && wx.lo != null) {
-        let hx = FD_HL_RIGHT - measure('small', `H${wx.hi} L${wx.lo}`) + 1;
-        hx = f.text('small', 'H', hx, 6, FD_LETTER);
-        hx = f.text('small', String(wx.hi), hx, 6, FD_NUM);
-        hx = f.text('small', ' L', hx, 6, FD_LETTER);
-        f.text('small', String(wx.lo), hx, 6, FD_NUM);
+        // `↑63 ↓49`, or just `-10 -24` when the arrows would bring it within
+        // 1px of the temperature (a three-character temperature with a
+        // three-character high and low).
+        const up = s(G.UP), down = s(G.DOWN), hi = String(wx.hi), lo = String(wx.lo);
+        const fits = (parts) => FD_HL_RIGHT - measure('small', parts.map((p) => p[0]).join('')) + 1 >= tempRight + 2;
+        const arrows = [[up, FD_LETTER], [hi, FD_NUM], [' ' + down, FD_LETTER], [lo, FD_NUM]];
+        const parts = fits(arrows) ? arrows : [[`${hi} ${lo}`, FD_NUM]];
+        let hx = FD_HL_RIGHT - measure('small', parts.map((p) => p[0]).join('')) + 1;
+        for (const [t, c] of parts) hx = f.text('small', t, hx, 6, c);
       }
       for (let i = 1; i < 5; i++) f.fill(i * FD_PITCH - 1, 10, 1, 22, C.divider);
       wx.days.slice(0, 5).forEach((d, i) => {
