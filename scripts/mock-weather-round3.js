@@ -169,3 +169,27 @@ group('rain-wide', (panel) => {
     axis(f, [[2, 'NOW'], [32, '6P'], [62, '9P', 'r']]);
   });
 });
+
+// ------------------------------------------------------------ 5-day, refined
+// Variant A with five columns, dim H/L letters, and 2px between icon and high.
+const FIVE = [...NEXT, ['WE', 48, 60, 'pcloudy_day']];
+group('5day-final', (panel) => {
+  panel('5day-final', 'A REFINED', (f) => {
+    const x = f.text('5x7', String(NOWT), 0, 7, tempColor(NOWT));
+    f.text('small', '°', x, 6, tempColor(NOWT));
+    drawIcon(f, 'pcloudy_day', 22, 0);
+    const LET = '#4a4a4a', NUM = '#b0b0b0';
+    let hx = 63 - measure('small', 'H63 L49');
+    hx = f.text('small', 'H', hx, 6, LET);
+    hx = f.text('small', '63', hx, 6, NUM);
+    hx = f.text('small', ' L', hx, 6, LET);
+    f.text('small', '49', hx, 6, NUM);
+    f.fill(0, 9, 64, 1, C.divider);
+    FIVE.forEach(([d, , h, icon], i) => {
+      const cx = i * 13 + 6;
+      ctext(f, 'small', d, cx, 15, C.grey);
+      drawIcon(f, icon, cx - 4, 17);
+      ctext(f, 'small', String(h), cx, 31, tempColor(h));
+    });
+  });
+});
