@@ -1200,7 +1200,7 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     seg_w = 2
     seg_gap = 1
     ind_x = right - (len(ids) * (seg_w + seg_gap) - seg_gap) + 1
-    if ids and r.get('clock') != 'none':
+    if ids:
         clear((ind_x, top, right, top + 1))
 
     def draw_indicator():
@@ -1235,6 +1235,7 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
             draw_warn_tag()
         return f
     if r.get('clock') == 'none':
+        draw_indicator()
         if ws:
             draw_warn_tag()
         return f
