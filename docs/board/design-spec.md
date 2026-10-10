@@ -179,7 +179,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ### Weather row (optional)
 - 8x8 condition icon, temperature with a small 2x2 degree sign (e.g. `54°`), condition word (uppercase) on the right. Both texts are mid grey (`#8f8f8f`, the grey used for records and high/low) so the row reads as secondary; the watch/warning tag keeps its colors.
 - Icons are multi-color sprites defined in `server/board/icons.js` (with the Open-Meteo weather-code mapping); previews in `docs/board/previews/sheet-icons.png`.
-- Icons: sun, moon, partly cloudy (day/night), cloudy, **umbrella** (rain/drizzle/showers), **icy umbrella** (freezing rain), **snowflake**, storm cloud with bolt, fog.
+- Icons: sun, moon, partly cloudy (day/night), cloudy, **cloud with rain** (rain/drizzle/showers), **cloud with rain and an ice crystal** (freezing rain), **snowflake**, storm cloud with bolt, fog.
 - **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
 
 ### CTA alerts

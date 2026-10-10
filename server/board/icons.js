@@ -16,10 +16,8 @@ const PALETTE = {
   D: '#7c7c7c', // cloud underside
   G: '#8a8a8a', // storm cloud
   K: '#545454', // storm cloud underside
-  B: '#1e88ff', // umbrella canopy
-  H: '#8f8f8f', // umbrella handle
-  I: '#40d0ff', // icy canopy
-  W: '#ffffff', // icicles
+  B: '#1e88ff', // rain
+  W: '#ffffff', // ice crystal (freezing rain)
   S: '#d0f0ff', // snowflake
   F: '#b0b0b0', // fog
   E: '#686868', // fog, far line
@@ -78,24 +76,24 @@ const ICONS = {
     '........',
   ],
   rain: [
-    '...BB...',
-    '.BBBBBB.',
-    'BBBBBBBB',
-    '...H....',
-    '...H....',
-    '...H....',
-    'H..H....',
-    '.HH.....',
+    '...CC...',
+    '.CCCCCC.',
+    'CCCCCCCC',
+    '.DDDDDD.',
+    '........',
+    '.B..B..B',
+    'B..B..B.',
+    '........',
   ],
   ice: [
-    '...II...',
-    '.IIIIII.',
-    'IIIIIIII',
-    'W..H.W.W',
-    'W..H...W',
-    '...H....',
-    'H..H....',
-    '.HH.....',
+    '...CC...',
+    '.CCCCCC.',
+    'CCCCCCCC',
+    '.DDDDDD.',
+    '........',
+    '.B...W..',
+    'B...WWW.',
+    '.....W..',
   ],
   snow: [
     '...S....',
