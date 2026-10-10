@@ -601,6 +601,21 @@ test('weather rain bars: shared top bar, centered title with a drop, bars on an 
   assert.equal(count(warn(false), '#60b0ff', 0, 10, 63, 14), 0, 'no rain title');
 });
 
+test('weather rain bars alternate with the radar loop on epoch-aligned turns (rain.alt)', () => {
+  const wx = { icon: 'rain', temp: 54, word: 'RAIN', hi: 61, lo: 49, rain: { snow: 0, now: 1, title: 'RAIN NEXT 2 HRS', h: [5, 5, 5, 5, 5, 5, 5, 5], l: [2, 2, 2, 2, 2, 2, 2, 2], alt: 20 } };
+  const p = { bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [0], timeBox: [40, 0, 24, 22], split: false, wx } };
+  const frames = { a: new Uint8Array(2048).fill(3) };
+  const at = (now) => draw.render({ ...p, now }, { screen: 'weather', now, frames });
+  const radarTurn = at(0), barsTurn = at(25), radarAgain = at(40), barsAgain = at(79);
+  assert.ok(count(radarTurn, '#60b0ff', 0, 10, 63, 14) === 0, 'radar on the even turn');
+  assert.ok(count(barsTurn, '#60b0ff', 0, 10, 63, 14) > 40, 'bars on the odd turn');
+  assert.equal(count(radarAgain, '#60b0ff', 0, 10, 63, 14), 0);
+  assert.ok(count(barsAgain, '#60b0ff', 0, 10, 63, 14) > 40);
+  // Without alt (bars mode or no radar) the frames never matter.
+  const noAlt = draw.render({ ...p, now: 0, radar: { ...p.radar, frames: [], wx: { ...wx, rain: { ...wx.rain, alt: undefined } } } }, { screen: 'weather', now: 0, frames: {} });
+  assert.ok(count(noAlt, '#60b0ff', 0, 10, 63, 14) > 40);
+});
+
 test('weather hourly: the 5-day top bar over four 16px columns; a warning falls back to conditions', () => {
   const now = Date.UTC(2026, 9, 9, 16, 48) / 1000;
   const hours = [{ h: '3P', icon: 'sun', t: 78 }, { h: '6P', icon: 'cloudy', t: 76 }, { h: '9P', icon: 'pcloudy_night', t: 69 }, { h: '12A', icon: 'moon', t: 104 }];

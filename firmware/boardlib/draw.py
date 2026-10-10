@@ -1156,8 +1156,13 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
         idx = max(0, min(len(ids) - 1, idx))
     else:
         idx = len(ids) - 1
-    if (not ids or (frames is not None and not radar_on_hand(ids, frames))) and r.get('wx'):
-        # Rain bars when sent; the 5-day layout has no room for a warning:
+    wx = r.get('wx')
+    rn = wx.get('rain') if wx else None
+    t = now if now is not None else p.get('now')
+    bars_turn = bool(rn and rn.get('h') and rn.get('alt') and (t // rn['alt']) % 2 == 1)
+    if ((not ids or (frames is not None and not radar_on_hand(ids, frames))) or bars_turn) and wx:
+        # Rain bars when sent (alternating with the radar loop while the
+        # payload says so); the 5-day layout has no room for a warning:
         # conditions while one is on.
         if r['wx'].get('rain') and r['wx']['rain'].get('h'):
             draw_rain_bars(f, r['wx'], p.get('warn'), blink)

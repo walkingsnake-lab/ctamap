@@ -171,7 +171,11 @@ test('wxView: default conditions, 5day allowed; validated', () => {
   assert.equal(store.get('home').wxRain, 'radar');
   store.update('home', { wxRain: 'bars' });
   assert.equal(store.get('home').wxRain, 'bars');
-  assert.throws(() => store.update('home', { wxRain: 'both' }), /wxRain must be one of radar, bars/);
+  store.update('home', { wxRain: 'both', wxRainEvery: 30 });
+  assert.deepEqual([store.get('home').wxRain, store.get('home').wxRainEvery], ['both', 30]);
+  assert.equal(createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet }).get('home').wxRainEvery, 15);
+  assert.throws(() => store.update('home', { wxRain: 'all' }), /wxRain must be one of radar, bars, both/);
+  assert.throws(() => store.update('home', { wxRainEvery: 12 }), /wxRainEvery must be one of/);
 });
 
 test('radarBright: default 100, 20-150', () => {

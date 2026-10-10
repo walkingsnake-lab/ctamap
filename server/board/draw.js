@@ -923,9 +923,13 @@
       const f = newFrame();
       // No frames (no rain in the box, or none processed yet), or none
       // downloaded yet: the weather screen.
-      // Rain bars when sent; the 5-day layout has no room for a warning:
-      // conditions while one is on.
-      if ((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) && r.wx) {
+      // Rain bars when sent (alternating with the radar loop while the
+      // payload says so: rain.alt s each, epoch-aligned, bars on the odd
+      // turns); the 5-day layout has no room for a warning: conditions while
+      // one is on.
+      const rn = r.wx && r.wx.rain;
+      const barsTurn = !!(rn && rn.h && rn.alt && Math.floor((o.now != null ? o.now : p.now) / rn.alt) % 2 === 1);
+      if (((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
         if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, p.warn, o.blink);
         else if (r.wx.hours && r.wx.hours.length && !p.warn) drawHourly(f, r.wx);
         else if (r.wx.days && r.wx.days.length && !p.warn) drawFiveDay(f, r.wx);
