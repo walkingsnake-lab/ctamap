@@ -497,16 +497,18 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
     days: days([['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']]) };
   const rad = (w) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w });
   const f = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
-  assert.ok(count(f, draw.C.label, 0, 0, 20, 7) > 20, 'current temperature in label white');
+  assert.equal(hex(f.get(2, 1)), '#ffc800', 'icon at x1');
+  for (let y = 0; y < 8; y++) assert.deepEqual(f.get(0, y), [0, 0, 0], `col 0 clear, row ${y}`);
+  assert.ok(count(f, draw.C.label, 11, 0, 31, 7) > 20, 'current temperature in label white at x11');
+  assert.equal(count(f, draw.C.label, 0, 0, 10, 7), 0, 'nothing white over the icon');
   // Its shadow: 1px down-right, 20% of the temperature color, only where the
   // white doesn't cover it (57 is green-ish).
   const shadow = [];
-  for (let y = 0; y <= 8; y++) for (let x = 0; x <= 20; x++) { const c = f.get(x, y); if (c.some((v) => v) && hex(c) !== draw.C.label) shadow.push(c); }
+  for (let y = 0; y <= 8; y++) for (let x = 11; x <= 31; x++) { const c = f.get(x, y); if (c.some((v) => v) && hex(c) !== draw.C.label) shadow.push(c); }
   assert.ok(shadow.length > 5, 'shadow pixels');
   for (const c of shadow) assert.ok(c[1] > c[0] && Math.max(...c) < 60, `dim green shadow ${c}`);
-  assert.ok(count(f, '#000000', 0, 7, 20, 7) < 21, 'shadow on row 7, under the digits');
+  assert.ok(count(f, '#000000', 11, 7, 31, 7) < 21, 'shadow on row 7, under the digits');
   assert.equal(count(f, '#000000', 0, 8, 63, 8), 64, 'row 8 clear');
-  assert.equal(hex(f.get(23, 1)), '#ffc800', 'icon at x22');
   assert.ok(count(f, draw.C.grey, 34, 1, 63, 5) > 15, 'high/low numbers grey');
   assert.ok(count(f, '#4a4a4a', 34, 1, 63, 5) > 5, 'dim H/L letters');
   assert.ok(count(f, draw.C.grey, 61, 1, 63, 5) > 0, 'right-aligned to x63');

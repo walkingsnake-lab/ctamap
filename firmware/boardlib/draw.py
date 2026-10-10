@@ -956,6 +956,8 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
 FD_LETTER = hexc('#4a4a4a')
 FD_NUM = C['grey']
 FD_PITCH = 13
+FD_ICON_X = 1
+FD_TEMP_X = FD_ICON_X + 10
 
 
 def _fd_adv(ch):
@@ -979,12 +981,12 @@ def draw_day_temp(f, s, cx, base, color):
 
 
 def draw_five_day(f, wx):
-    sh = scale_color(temp_color(wx['temp']), 0.2)
-    f.text('small', '°', f.text('5x7', str(wx['temp']), 1, 8, sh), 7, sh)
-    x = f.text('5x7', str(wx['temp']), 0, 7, C['label'])
-    f.text('small', '°', x, 6, C['label'])
     if wx.get('icon') in assets.ICONS:
-        draw_icon(f, wx['icon'], 22, 0)
+        draw_icon(f, wx['icon'], FD_ICON_X, 0)
+    sh = scale_color(temp_color(wx['temp']), 0.2)
+    f.text('small', '°', f.text('5x7', str(wx['temp']), FD_TEMP_X + 1, 8, sh), 7, sh)
+    x = f.text('5x7', str(wx['temp']), FD_TEMP_X, 7, C['label'])
+    f.text('small', '°', x, 6, C['label'])
     if wx.get('hi') is not None and wx.get('lo') is not None:
         hx = 63 - measure('small', 'H%s L%s' % (wx['hi'], wx['lo'])) + 1
         hx = f.text('small', 'H', hx, 6, FD_LETTER)
