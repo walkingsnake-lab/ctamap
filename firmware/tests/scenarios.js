@@ -150,6 +150,19 @@ async function build() {
     for (const [name, w, warn] of wxCases) {
       add(`weather screen ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
     }
+    // 5-day layout: wx with `days`; three-character highs draw tight; fewer
+    // than five days; a warning falls back to the conditions layout.
+    const days = (list) => list.map(([d, hi, icon]) => ({ d, hi, icon }));
+    const fiveDay = [
+      ['normal', { ...wx, days: days([['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']]) }, null],
+      ['heat', { ...wx, icon: 'sun', temp: 97, hi: 101, lo: 82, days: days([['SA', 99, 'sun'], ['SU', 104, 'sun'], ['MO', 100, 'pcloudy_day'], ['TU', 92, 'storm'], ['WE', 86, 'pcloudy_day']]) }, null],
+      ['cold', { ...wx, icon: 'moon', temp: -8, hi: 2, lo: -14, days: days([['SA', -3, 'snow'], ['SU', -12, 'sun'], ['MO', -6, 'ice'], ['TU', 9, 'fog'], ['WE', 21, 'cloudy']]) }, null],
+      ['three days', { ...wx, days: days([['TH', 45, 'pcloudy_day'], ['FR', 39, 'snow'], ['SA', 50, 'storm']]) }, null],
+      ['tor warning', { ...wx, days: days([['SA', 71, 'sun']]) }, { kind: 'tor', lvl: 'warning' }],
+    ];
+    for (const [name, w, warn] of fiveDay) {
+      add(`weather 5-day ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
+    }
   }
 
   // Radar time off: icon + temperature, WATCH/WARN tag bottom right (tornado warning blinks).

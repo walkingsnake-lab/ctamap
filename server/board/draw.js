@@ -753,6 +753,51 @@
       }
     }
 
+    // ---- 5-day layout (wxView '5day'; mockup docs/board/mockups/weather/5day-final) ----
+    // The weather screen without rain when wx carries `days`. Today on rows
+    // 0-7: the temperature (5x7, label white, small degree sign), the icon at x22, `H63 L49` right-aligned (letters dim, numbers
+    // light). Below, five 13px day columns split by dividers on rows 10-31:
+    // weekday (rows 11-15), icon (17-24), and the high in its temperature
+    // color (rows 27-31).
+    const FD_LETTER = '#4a4a4a', FD_NUM = '#b0b0b0';
+    const FD_PITCH = 13;
+    // A day's high, centered at cx. Three characters (100+, -10 and below)
+    // are 11px in Tom Thumb against 12px between dividers, so they draw
+    // tight: '1' advances 3 (its right column is blank) and the minus is a
+    // 2px bar, keeping a pixel clear of the dividers. Every negative uses the
+    // short minus so they match.
+    function drawDayTemp(f, str, cx, base, color) {
+      if (str.length < 3 && str[0] !== '-') { ctext(f, 'small', str, cx, base, color); return; }
+      const adv = (ch) => (ch === '1' || ch === '-' ? 3 : 4);
+      let w = -1;
+      for (const ch of str) w += adv(ch);
+      let x = cx - Math.floor(w / 2);
+      for (const ch of str) {
+        if (ch === '-') f.fill(x, base - 3, 2, 1, color);
+        else f.text('small', ch, x, base, color);
+        x += adv(ch);
+      }
+    }
+    function drawFiveDay(f, wx) {
+      const x = f.text('5x7', String(wx.temp), 0, 7, C.label);
+      f.text('small', '°', x, 6, C.label);
+      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 22, 0);
+      if (wx.hi != null && wx.lo != null) {
+        let hx = 63 - measure('small', `H${wx.hi} L${wx.lo}`) + 1;
+        hx = f.text('small', 'H', hx, 6, FD_LETTER);
+        hx = f.text('small', String(wx.hi), hx, 6, FD_NUM);
+        hx = f.text('small', ' L', hx, 6, FD_LETTER);
+        f.text('small', String(wx.lo), hx, 6, FD_NUM);
+      }
+      for (let i = 1; i < 5; i++) f.fill(i * FD_PITCH - 1, 10, 1, 22, C.divider);
+      wx.days.slice(0, 5).forEach((d, i) => {
+        const cx = i * FD_PITCH + 6;
+        ctext(f, 'small', d.d, cx, 15, C.grey);
+        if (icons.ICONS[d.icon]) drawIcon(f, d.icon, cx - 4, 17);
+        drawDayTemp(f, String(d.hi), cx, 31, tempColor(d.hi));
+      });
+    }
+
     // The radar loop: with every frame on hand, step through them in time
     // order, then hold on the newest. While any is still downloading, hold
     // on the newest on hand (playing a partial loop showed missing frames
@@ -777,7 +822,7 @@
     // opts: now, idx (frame index into p.radar.frames; default the newest),
     // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
     // The weather screen: the radar loop while there are frames (rain in the
-    // box), current conditions otherwise.
+    // box), current conditions (or the 5-day layout) otherwise.
     function renderWeather(p, opts) {
       const o = opts || {};
       const r = p.radar || {};
@@ -787,7 +832,12 @@
       const f = newFrame();
       // No frames (no rain in the box, or none processed yet), or none
       // downloaded yet: the weather screen.
-      if ((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) && r.wx) { drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow); return f; }
+      // The 5-day layout has no room for a warning: conditions while one is on.
+      if ((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) && r.wx) {
+        if (r.wx.days && r.wx.days.length && !p.warn) drawFiveDay(f, r.wx);
+        else drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow);
+        return f;
+      }
       const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
       if (bytes) {
         const rc = radarFor(r.rb);

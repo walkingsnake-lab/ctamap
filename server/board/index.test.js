@@ -621,6 +621,24 @@ test('update: weather screen gets conditions always, radar frames only while rai
   await s.close();
 });
 
+test('update: the 5-day setting sends the next days with the weather screen conditions', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const mid = raw.daily.time[0];
+  const w = parse({ ...raw, daily: { ...raw.daily, time: [0, 1, 2].map((i) => mid + i * 86400), temperature_2m_max: [68.9, 71.4, 66], temperature_2m_min: [51, 55, 50], weather_code: [0, 61, 2] } });
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
+  assert.equal((await s.req(FULL)).body.radar.wx.days, undefined); // conditions by default
+  s.store.update('home', { wxView: '5day' });
+  assert.deepEqual((await s.req(FULL)).body.radar.wx.days, [{ d: 'MO', icon: 'rain', hi: 71 }, { d: 'TU', icon: 'pcloudy_day', hi: 66 }]);
+  // The board's own sections: the days ride with the weather screen only.
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const get = async (q) => (await fetch(`http://127.0.0.1:${s.port}/board/update?b=home${q}`, h)).json();
+  assert.equal((await get('&s=weather')).radar.wx.days.length, 2);
+  assert.equal(((await get('&s=transit')).radar.wx || {}).days, undefined);
+  await s.close();
+});
+
 test('simulator preview: header and weather toggles without changing the board', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');

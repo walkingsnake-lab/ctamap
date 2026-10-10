@@ -27,6 +27,7 @@ const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
 const RADAR_CLOCKS = ['frame', 'now'];
+const WX_VIEWS = ['now', '5day'];            // weather screen without rain: conditions or 5-day
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
   tickerHold: [5, 6, 8, 10, 12, 15],         // s each ticker page holds
@@ -103,6 +104,9 @@ function defaultBoard(stations) {
     radarBright: 100,
     // Weather screen: a temperature-colored shadow behind the big temperature.
     tempShadow: false,
+    // Weather screen without rain: 'now' (current conditions) or '5day'
+    // (today on top, the next five days in columns).
+    wxView: 'now',
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -218,8 +222,9 @@ function validatePatch(patch, stations) {
       case 'alertJump':
       case 'bbPriority':
       case 'lineNames':
-      case 'radarClock': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, radarClock: RADAR_CLOCKS }[key];
+      case 'radarClock':
+      case 'wxView': {
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;

@@ -490,6 +490,45 @@ test('weather screen extremes: minus bar, 3-digit temp drops the word, high/low 
   assert.ok(firstBlue - lastGrey >= 3, `gap ${firstBlue - lastGrey}`);
 });
 
+test('weather 5-day: today on top, five day columns between dividers; a warning falls back to conditions', () => {
+  const now = Date.UTC(2026, 9, 9, 16, 48) / 1000;
+  const days = (list) => list.map(([d, hi, icon]) => ({ d, hi, icon }));
+  const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20,
+    days: days([['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']]) };
+  const rad = (w) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w });
+  const f = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
+  assert.ok(count(f, draw.C.label, 0, 0, 20, 7) > 20, 'current temperature in label white');
+  assert.equal(hex(f.get(23, 1)), '#ffc800', 'icon at x22');
+  assert.ok(count(f, '#b0b0b0', 34, 1, 63, 5) > 15, 'high/low numbers');
+  assert.ok(count(f, '#4a4a4a', 34, 1, 63, 5) > 5, 'dim H/L letters');
+  assert.ok(count(f, '#b0b0b0', 61, 1, 63, 5) > 0, 'right-aligned to x63');
+  for (const x of [12, 25, 38, 51]) for (let y = 10; y <= 31; y++) assert.equal(hex(f.get(x, y)), draw.C.divider, `divider ${x},${y}`);
+  assert.equal(count(f, draw.C.divider, 0, 0, 63, 9), 0, 'no horizontal divider');
+  for (let i = 0; i < 5; i++) {
+    const x0 = i * 13, x1 = x0 + 11;
+    assert.ok(count(f, draw.C.grey, x0, 11, x1, 15) > 8, `day ${i} label`);
+    assert.ok(count(f, '#000000', x0, 17, x1, 24) < 12 * 8, `day ${i} icon`);
+  }
+  // Highs in their temperature color: 52 green-ish, 78 orange-ish.
+  const hiColor = (x0, x1) => { for (let x = x0; x <= x1; x++) for (let y = 26; y <= 30; y++) { const c = f.get(x, y); if (c.some((v) => v)) return c; } return null; };
+  assert.ok(hiColor(39, 50)[1] > hiColor(39, 50)[0], 'TU 52 greener than red');
+  assert.ok(hiColor(13, 24)[0] > hiColor(13, 24)[2], 'SU 78 warm');
+  // No conditions-layout pieces.
+  assert.equal(count(f, '#1e90ff', 0, 26, 63, 31), 0, 'no rain-chance drop');
+  // Three-character highs keep a pixel clear of the dividers.
+  const ext = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, temp: -8, hi: 2, lo: -14,
+    days: days([['SA', 104, 'sun'], ['SU', -12, 'sun'], ['MO', 100, 'snow'], ['TU', -14, 'snow'], ['WE', 111, 'sun']]) }) }, { screen: 'weather', now, frames: {} });
+  for (const x of [11, 13, 24, 26, 37, 39, 50, 52]) for (let y = 26; y <= 30; y++) assert.deepEqual(ext.get(x, y), [0, 0, 0], `clear at ${x},${y}`);
+  for (let y = 26; y <= 30; y++) assert.deepEqual(ext.get(63, y), [0, 0, 0], 'last column inside the panel');
+  // Fewer days: only those columns.
+  const three = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, days: wx.days.slice(0, 3) }) }, { screen: 'weather', now, frames: {} });
+  assert.equal(count(three, draw.C.grey, 39, 11, 63, 15), 0);
+  // A warning: the conditions layout, which has room for it.
+  const warned = draw.render({ now, bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
+  for (let x = 0; x < 64; x++) assert.equal(hex(warned.get(x, 18)), draw.C.divider);
+  assert.ok(count(warned, draw.C.warnSevere, 0, 26, 63, 30) > 30);
+});
+
 test('minutes round up, like CTA: DUE through 60 s, then 2, 3, ...; never 1', () => {
   const cases = [[-30, 'DUE'], [0, 'DUE'], [1, 'DUE'], [60, 'DUE'], [61, '2'], [120, '2'], [121, '3'], [599, '10'], [600, '10'], [601, '11']];
   for (const [s, want] of cases) assert.equal(draw.timeText(NOW + s, NOW), want, `${s} s`);
