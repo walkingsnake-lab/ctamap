@@ -512,7 +512,7 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
   assert.ok(count(f, draw.C.grey, 34, 1, 63, 5) > 15, 'high/low numbers grey');
   assert.equal(count(f, '#4a4a4a', 30, 1, 63, 5), 18, 'two dim arrows');
   // A long high/low next to a three-character temperature keeps 1px clear:
-  // the arrows go only when they'd touch it.
+  // numbers condensed, then no space before the down arrow, then no arrows.
   const topGap = (w) => {
     const fr = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, ...w }) }, { screen: 'weather', now, frames: {} });
     const t = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, ...w, hi: null, lo: null }) }, { screen: 'weather', now, frames: {} });
@@ -524,8 +524,15 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
     const [gap] = topGap(w);
     assert.ok(gap >= 1, `${JSON.stringify(w)}: gap ${gap}`);
   }
-  assert.equal(topGap({ temp: 100, hi: 104, lo: 82 })[1], 18, 'arrows kept');
-  assert.equal(topGap({ temp: -15, hi: -10, lo: -24 })[1], 0, 'arrows dropped');
+  for (const w of [{ temp: 100, hi: 104, lo: 82 }, { temp: 100, hi: 101, lo: 100 }, { temp: -15, hi: -10, lo: -24 }, { temp: -20, hi: -11, lo: -28 }]) {
+    assert.equal(topGap(w)[1], 18, `${JSON.stringify(w)}: arrows kept`);
+  }
+  assert.equal(topGap({ temp: -15, hi: -100, lo: -100 })[1], 0, 'arrows dropped last');
+  // Condensed like the day highs: a 2px minus on row 4, '1' 3px wide.
+  const cold = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, temp: -12, hi: -1, lo: -10 }) }, { screen: 'weather', now, frames: {} });
+  let bars = 0;
+  for (let x = 30; x < 63; x++) if (hex(cold.get(x, 3)) === draw.C.grey && hex(cold.get(x + 1, 3)) === draw.C.grey && hex(cold.get(x + 2, 3)) !== draw.C.grey && hex(cold.get(x - 1, 3)) !== draw.C.grey) bars++;
+  assert.ok(bars >= 2, `2px minus bars: ${bars}`);
   // Chevron heads: the up arrow's on its second row, the down arrow's on its fourth.
   const arrowRows = (x0, x1) => { const r = []; for (let y = 1; y <= 5; y++) r.push(count(f, '#4a4a4a', x0, y, x1, y)); return r; };
   const dimCols = []; for (let x = 30; x < 64; x++) if (count(f, '#4a4a4a', x, 1, x, 5)) dimCols.push(x);
