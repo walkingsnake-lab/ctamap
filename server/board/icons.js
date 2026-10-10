@@ -10,8 +10,7 @@
 // over a darker underside, and lighter than the row's gray text; the storm
 // cloud is darker so it doesn't read as plain cloudy.
 const PALETTE = {
-  Y: '#ffd000', // sun
-  O: '#ff8c00', // sun rays
+  Y: '#ffc800', // sun
   M: '#ffe47a', // moon
   C: '#d0d0d0', // cloud
   D: '#7c7c7c', // cloud underside
@@ -20,8 +19,8 @@ const PALETTE = {
   B: '#1e88ff', // umbrella canopy
   H: '#8f8f8f', // umbrella handle
   I: '#40d0ff', // icy canopy
-  W: '#ffffff', // icicles, snowflake center
-  S: '#80c8ff', // snowflake arms
+  W: '#ffffff', // icicles
+  S: '#d0f0ff', // snowflake
   F: '#b0b0b0', // fog
   E: '#686868', // fog, far line
   L: '#ffe000', // lightning
@@ -29,24 +28,24 @@ const PALETTE = {
 
 const ICONS = {
   sun: [
-    '...OO...',
-    '.O....O.',
     '...YY...',
-    'O.YYYY.O',
-    'O.YYYY.O',
+    '.Y....Y.',
     '...YY...',
-    '.O....O.',
-    '...OO...',
+    'Y.YYYY.Y',
+    'Y.YYYY.Y',
+    '...YY...',
+    '.Y....Y.',
+    '...YY...',
   ],
   moon: [
-    '...MMM..',
+    '..MMMM..',
     '.MMM....',
-    '.MM.....',
-    'MM......',
-    'MM......',
-    '.MM.....',
+    'MMM.....',
+    'MMM.....',
+    'MMM.....',
+    'MMM.....',
     '.MMM....',
-    '...MMM..',
+    '..MMMM..',
   ],
   pcloudy_day: [
     '..YY....',
@@ -59,14 +58,14 @@ const ICONS = {
     '..DDDDD.',
   ],
   pcloudy_night: [
-    '.MMM....',
+    '.MM.....',
     'MM......',
-    'M.......',
-    'M....CC.',
-    'MM..CCCC',
-    '.MMCCCCC',
+    'MM......',
+    '.MM..CC.',
+    '....CCCC',
     '..CCCCCC',
-    '...DDDD.',
+    '.CCCCCCC',
+    '..DDDDD.',
   ],
   cloudy: [
     '........',
@@ -101,9 +100,9 @@ const ICONS = {
   snow: [
     '...S....',
     '.S.S.S..',
-    '..WWW...',
-    'SSWWWSS.',
-    '..WWW...',
+    '..SSS...',
+    'SSSSSSS.',
+    '..SSS...',
     '.S.S.S..',
     '...S....',
     '........',
