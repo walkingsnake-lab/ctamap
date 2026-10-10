@@ -6,7 +6,8 @@
 //
 // With `cacheFile`, the last good data per location is also kept on disk, so
 // a restart (a deploy) doesn't start empty; saved data older than `maxAge` s
-// is ignored.
+// is ignored, as is data `usable` rejects (saved by an older parse that
+// lacks fields this version needs).
 
 const fs = require('fs');
 const path = require('path');
@@ -21,6 +22,7 @@ function createLocationPoller({
   parse = (x) => x,     // raw -> stored data; throws on bad input
   interval, idle = 300, forget = 3600, tick = 15000,
   cacheFile = null, maxAge = 3 * 3600,
+  usable = () => true,  // saved data -> whether this version can use it
   now = () => Date.now() / 1000,
   log = console,
 }) {
@@ -35,7 +37,7 @@ function createLocationPoller({
     catch (e) { if (e.code !== 'ENOENT') log.warn(`[board] ${name} cache unreadable: ${e.message}`); return; }
     const t = now();
     for (const [k, v] of Object.entries(saved || {})) {
-      if (!v || v.data == null || !(t - v.fetchedAt < maxAge)) continue;
+      if (!v || v.data == null || !(t - v.fetchedAt < maxAge) || !usable(v.data)) continue;
       cache.set(k, { lat: v.lat, lon: v.lon, data: v.data, fetchedAt: v.fetchedAt, wantedAt: t - idle - 1, inflight: null, failures: 0, retryAt: 0 });
     }
   }

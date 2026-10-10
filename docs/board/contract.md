@@ -231,7 +231,7 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 
 **5-day layout** (`wx.days` present and no `warn`; with a warning or watch the board draws the conditions layout above, which has room for it; `drawFiveDay()` in `draw.js`, `draw_five_day()` in `draw.py`; preview `previews/mock-weather-5day.png`):
 - Today on rows 0–7: `temp` in X11 5x7 at x0, baseline 7, label white, then a Tom Thumb `°` (baseline 6); the `icon` at x22, y0; `H63 L49` (Tom Thumb, baseline 6) right-aligned to x63, the letters `#4a4a4a` and the numbers `#b0b0b0`.
-- Five 13px day columns, centers x6, 19, 32, 45, 58, split by `#333333` dividers on cols 12, 25, 38, 51 (rows 10–31). Per column: `d` grey centered (baseline 15), the day's icon at center − 4, y17, and `hi` centered (baseline 31) in its temperature color (the `TEMP_STOPS` blend, blue −10°F to red 100°F). Three-character highs (100+, −10 and below) draw tight to keep a pixel off the dividers: `1` advances 3 and the minus is a 2px bar (row 28); every negative high uses that minus. Fewer than five days leave the right columns empty.
+- A `#333333` rule on row 9, full width (row 8 stays clear under the top row), and five 13px day columns, centers x6, 19, 32, 45, 58, split by `#333333` dividers hanging from it on cols 12, 25, 38, 51 (rows 10–31). Per column: `d` grey centered (baseline 15), the day's icon at center − 4, y17, and `hi` centered (baseline 31) in its temperature color (the `TEMP_STOPS` blend, blue −10°F to red 100°F). Three-character highs (100+, −10 and below) draw tight to keep a pixel off the dividers: `1` advances 3 and the minus is a 2px bar (row 28); every negative high uses that minus. Fewer than five days leave the right columns empty.
 
 When `on` is false, `frames` and `ft` are empty and `timeBox` may be `null`.
 
@@ -339,7 +339,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 
 `/data/board-state.json` on the Fly volume (`board_data`, mounted via `[mounts]` in `fly.toml`). Written atomically (temp file + rename). `BOARD_STATE_DIR` overrides the directory (tests, local dev); without it and without `/data`, the server uses a temp dir and logs a warning. An unreadable file is moved aside to `board-state.json.corrupt-<time>` and the server starts from defaults (board `home` at Morse).
 
-Next to it, `board-weather.json` keeps the last good Open-Meteo data per location (written atomically after each successful fetch), so a restart has weather right away. Entries older than 3 hours, or an unreadable file, are ignored.
+Next to it, `board-weather.json` keeps the last good Open-Meteo data per location (written atomically after each successful fetch), so a restart has weather right away. Entries older than 3 hours, entries saved before the 5-day forecast (no `days`), or an unreadable file, are ignored.
 
 ```json
 {

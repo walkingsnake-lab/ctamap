@@ -989,6 +989,7 @@ def draw_five_day(f, wx):
         hx = f.text('small', str(wx['hi']), hx, 6, FD_NUM)
         hx = f.text('small', ' L', hx, 6, FD_LETTER)
         f.text('small', str(wx['lo']), hx, 6, FD_NUM)
+    f.fill(0, 9, 64, 1, C['divider'])
     for i in range(1, 5):
         f.fill(i * FD_PITCH - 1, 10, 1, 22, C['divider'])
     for i, d in enumerate(wx['days'][:5]):
