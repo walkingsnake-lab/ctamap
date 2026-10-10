@@ -184,7 +184,7 @@ group('5day-final', (panel) => {
     hx = f.text('small', '63', hx, 6, NUM);
     hx = f.text('small', ' L', hx, 6, LET);
     f.text('small', '49', hx, 6, NUM);
-    f.fill(0, 9, 64, 1, C.divider);
+    for (let i = 0; i < 4; i++) f.fill(i * 13 + 12, 10, 1, 22, C.divider);   // between days
     FIVE.forEach(([d, , h, icon], i) => {
       const cx = i * 13 + 6;
       ctext(f, 'small', d, cx, 15, C.grey);
