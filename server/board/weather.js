@@ -3,7 +3,9 @@
 // the weather row (`wx`), the weather screen (`radar.wx`: adds feels-like,
 // wind, and the next 6 hours' rain chance), and auto brightness from
 // sunrise/sunset. The weather screen's 5-day layout adds the next five
-// days' highs and conditions.
+// days' highs and conditions; its rain bars, the next 2 hours of
+// precipitation in 15-minute steps; its hourly layout, the next hours'
+// temperature and conditions.
 // Rules: docs/board/design-spec.md §4–5, contract "Weather row".
 
 const { createLocationPoller, fetchJson } = require('./location-poller');
@@ -12,6 +14,23 @@ const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast';
 const NIGHT_BRIGHT = 40; // % overnight (spec §4)
 const POP_HOURS = 6;     // rain chance: max over the next 6 hourly slots
 const FORECAST_DAYS = 5; // 5-day layout: the days after today
+// Rain bars: 8 quarter hours (2 hours). Open-Meteo's 15-minute amounts are
+// sums over the preceding 15 minutes; a few spare steps keep 8 ahead of
+// `now` while the data ages between fetches (10 min).
+// Hourly layout: the slots HOUR_STEPS hours after the current hour.
+const HOUR_STEPS = [3, 6, 9, 12];
+const HOURS = HOUR_STEPS[HOUR_STEPS.length - 1] + 1;
+const BARS = 8;
+const SLOT_S = 900;
+const STEPS_15 = 12;
+// Intensity scales (rate in mm/h, as water; snow is measured melted, so its
+// scale tops out lower): height on a square-root scale, full at `full`, so
+// drizzle stays visible but short; levels at the NWS light/moderate/heavy
+// cutoffs.
+const RAIN_SCALE = { full: 10, levels: [2.5, 7.6] };
+const SNOW_SCALE = { full: 4, levels: [1, 2.5] };
+const BAR_MAX = 10; // rows
+const SNOW_CM_PER_MM = 0.7; // Open-Meteo's snowfall (cm) from water (mm)
 
 // Two-letter weekday at a daily slot's time (local midnight; noon keeps it
 // clear of DST changes).
@@ -24,10 +43,11 @@ function url(lat, lon) {
   const q = new URLSearchParams({
     latitude: lat.toFixed(4), longitude: lon.toFixed(4),
     current: 'temperature_2m,weather_code,is_day,apparent_temperature,wind_speed_10m,wind_direction_10m',
-    hourly: 'precipitation_probability',
+    hourly: 'precipitation_probability,temperature_2m,weather_code,is_day',
     daily: 'temperature_2m_max,temperature_2m_min,sunrise,sunset,weather_code',
     temperature_unit: 'fahrenheit', wind_speed_unit: 'mph', timezone: 'America/Chicago', timeformat: 'unixtime',
-    forecast_days: String(FORECAST_DAYS + 1), forecast_hours: String(POP_HOURS),
+    minutely_15: 'precipitation,snowfall',
+    forecast_days: String(FORECAST_DAYS + 1), forecast_hours: String(HOURS), forecast_minutely_15: String(STEPS_15),
   });
   return `${OPEN_METEO}?${q}`;
 }
@@ -51,7 +71,26 @@ function parse(json) {
     windDir: num(c.wind_direction_10m),
     pop: maxPop(json.hourly),
     days: forecastDays(d),
+    q15: quarterHours(json.minutely_15),
+    hrs: hourSlots(json.hourly),
   };
+}
+
+// The hourly slots from the current hour on: [{time, temp, code, isDay}].
+function hourSlots(h) {
+  if (!h || !Array.isArray(h.time)) return [];
+  return h.time.map((time, i) => ({ time, temp: num((h.temperature_2m || [])[i]), code: num((h.weather_code || [])[i]), isDay: (h.is_day || [])[i] === 1 }));
+}
+
+// 3 PM -> "3P", midnight "12A".
+const hourFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hour12: true });
+const hourLabel = (t) => hourFmt.format(new Date(t * 1000)).replace(/\s?([AP])M$/i, '$1').toUpperCase();
+
+// 15-minute steps: [{t, p, s}] (end of the step, precipitation mm, snowfall
+// cm); missing amounts count as 0.
+function quarterHours(m) {
+  if (!m || !Array.isArray(m.time)) return [];
+  return m.time.map((t, i) => ({ t, p: num((m.precipitation || [])[i]) || 0, s: num((m.snowfall || [])[i]) || 0 }));
 }
 
 // The days after today with a high and a weather code: [{time, code, hi, lo}].
@@ -122,6 +161,55 @@ function toDays(w) {
   return w.days.map((x) => ({ d: dayName(x.time), icon: condition(x.code, true)[0], hi: Math.round(x.hi) }));
 }
 
+// Parsed weather -> the hourly layout's columns: [{h: '6P', icon, t}] for
+// the hours 3, 6, 9 and 12 after the current one, or null without all four.
+function toHours(w) {
+  const out = [];
+  for (const n of HOUR_STEPS) {
+    const x = (w.hrs || [])[n];
+    if (!x || x.temp == null || x.code == null) return null;
+    out.push({ h: hourLabel(x.time), icon: condition(x.code, x.isDay)[0], t: Math.round(x.temp) });
+  }
+  return out;
+}
+
+// Parsed weather -> the rain bars at `now`, or null when no precipitation
+// is falling or due in the next 2 hours (or there's no 15-minute data):
+//   {snow, now, title, h, l}
+// snow: 1 when snow makes up at least half the water (the whole view is one
+// kind); now: 1 when it's falling in the current quarter hour; title: what
+// it's doing, uppercase; h: 8 bar heights (0 = dry, else 1-BAR_MAX); l: 8
+// intensity levels (0 dry, 1-3).
+function toRain(w, now) {
+  const steps = (w.q15 || []).filter((x) => x.t > now).slice(0, BARS);
+  if (steps.length < BARS) return null;
+  const wet = steps.map((x) => x.p > 0);
+  if (!wet.includes(true)) return null;
+  const water = steps.reduce((a, x) => a + x.p, 0);
+  const snowWater = steps.reduce((a, x) => a + x.s, 0) / SNOW_CM_PER_MM;
+  const snow = snowWater * 2 >= water;
+  const sc = snow ? SNOW_SCALE : RAIN_SCALE;
+  const h = [], l = [];
+  for (const x of steps) {
+    const rate = x.p * 4;
+    if (!(x.p > 0)) { h.push(0); l.push(0); continue; }
+    h.push(Math.max(1, Math.round(Math.sqrt(Math.min(rate, sc.full) / sc.full) * BAR_MAX)));
+    l.push(1 + (rate >= sc.levels[0] ? 1 : 0) + (rate >= sc.levels[1] ? 1 : 0));
+  }
+  // Minutes until step i starts, to the nearest 5 (at least 5).
+  const mins = (i) => Math.max(5, Math.round((steps[i].t - SLOT_S - now) / 300) * 5);
+  const kind = snow ? 'SNOW' : 'RAIN';
+  let title;
+  if (wet[0]) {
+    const dry = wet.indexOf(false);
+    if (dry < 0) title = `${kind} NEXT 2 HRS`;
+    else title = `${wet.indexOf(true, dry) > 0 ? 'BREAK' : 'ENDS'} IN ${mins(dry)} MIN`;
+  } else {
+    title = `${kind} IN ${mins(wet.indexOf(true))} MIN`;
+  }
+  return { snow: snow ? 1 : 0, now: wet[0] ? 1 : 0, title, h, l };
+}
+
 // 'auto' brightness: full from sunrise to sunset, dimmer overnight. Uses the
 // day's times even slightly stale (a few minutes off at midnight is fine).
 function autoBright(w, now) {
@@ -131,8 +219,9 @@ function autoBright(w, now) {
 
 // Open-Meteo per location, every 10 min while a board is asking.
 function createWeather({ fetch = (lat, lon) => fetchJson(url(lat, lon)), interval = 600, ...opts } = {}) {
-  // Saved data from before the 5-day forecast has no `days`: fetch fresh.
-  return createLocationPoller({ name: 'weather', fetch, parse, interval, usable: (d) => Array.isArray(d.days), ...opts });
+  // Saved data from before the 5-day forecast or the rain bars (no `days`
+  // `q15` or `hrs`): fetch fresh.
+  return createLocationPoller({ name: 'weather', fetch, parse, interval, usable: (d) => Array.isArray(d.days) && Array.isArray(d.q15) && Array.isArray(d.hrs), ...opts });
 }
 
-module.exports = { url, parse, condition, toWx, toScreenWx, toDays, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS };
+module.exports = { url, parse, condition, toWx, toScreenWx, toDays, toHours, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };

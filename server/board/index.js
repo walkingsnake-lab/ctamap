@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, toWx, toScreenWx, toDays, autoBright } = require('./weather');
+const { createWeather, toWx, toScreenWx, toDays, toHours, toRain, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar, packFrame } = require('./radar');
@@ -294,10 +294,14 @@ function createBoard({
     }
     // The radar screen is the weather screen: the radar loop only while rain
     // is in the box (frames are sent only then), current conditions otherwise.
-    if (!radarState.on) radarState = { ...radarState, frames: [], ft: [] };
+    // Rain bars (wxRain 'bars'): while precipitation is falling or due in
+    // the next 2 hours they replace the radar loop (no frames sent).
+    const rain = board.wxRain === 'bars' && w ? toRain(w, now) : null;
+    if (!radarState.on || rain) radarState = { ...radarState, frames: [], ft: [] };
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && w ? toDays(w) : null;
-    if (w) radarState = { ...radarState, wx: { ...toScreenWx(w), ...(days ? { days } : {}) } };
+    const hours = board.wxView === 'hourly' && w ? toHours(w) : null;
+    if (w) radarState = { ...radarState, wx: { ...toScreenWx(w), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(rain ? { rain } : {}) } };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }

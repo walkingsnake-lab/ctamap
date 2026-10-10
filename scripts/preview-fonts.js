@@ -243,3 +243,39 @@ function transitRows(f, rows, tops) {
   });
   save('mock-weather-5day.png', f, 8);
 }
+
+// Weather screen, rain bars (wxRain 'bars'), drawn by draw.js: rain breaking,
+// a downpour due, snow due and snow falling (made-up data).
+{
+  const { render } = require('../server/board/render');
+  const R = (snow, now, title, h, l) => ({ snow, now, title, h, l });
+  const states = [
+    { icon: 'rain', temp: 54, hi: 61, lo: 49, rain: R(0, 1, 'BREAK IN 30 MIN', [5, 4, 0, 0, 6, 8, 7, 5], [2, 1, 0, 0, 2, 2, 2, 2]) },
+    { icon: 'pcloudy_day', temp: 78, hi: 84, lo: 66, rain: R(0, 0, 'RAIN IN 25 MIN', [0, 5, 9, 10, 10, 8, 5, 3], [0, 2, 3, 3, 3, 2, 2, 1]) },
+    { icon: 'cloudy', temp: 30, hi: 33, lo: 24, rain: R(1, 0, 'SNOW IN 40 MIN', [0, 0, 4, 6, 7, 9, 8, 6], [0, 0, 1, 2, 2, 3, 2, 2]) },
+    { icon: 'snow', temp: 28, hi: 31, lo: 22, rain: R(1, 1, 'SNOW NEXT 2 HRS', [5, 7, 9, 10, 9, 8, 7, 5], [2, 2, 3, 3, 3, 3, 2, 2]) },
+  ];
+  const f = new Frame(64 * 2 + 4, 32 * 2 + 4);
+  states.forEach((w, i) => {
+    const panel = render({ now: 0, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx: w } }, { screen: 'weather' });
+    const ox = (i % 2) * 68, oy = Math.floor(i / 2) * 36;
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(ox + x, oy + y, panel.get(x, y));
+  });
+  save('mock-weather-rain.png', f, 8);
+}
+
+// Weather screen, hourly layout (wxView 'hourly'), drawn by draw.js (made-up data).
+{
+  const { render } = require('../server/board/render');
+  const hrs = (list) => list.map(([h, icon, t]) => ({ h, icon, t }));
+  const states = [
+    { icon: 'pcloudy_day', temp: 77, hi: 78, lo: 58, hours: hrs([['3P', 'sun', 78], ['6P', 'cloudy', 76], ['9P', 'pcloudy_night', 69], ['12A', 'moon', 63]]) },
+    { icon: 'sun', temp: 97, hi: 101, lo: 82, hours: hrs([['10P', 'storm', 104], ['1A', 'fog', 100], ['4A', 'ice', 92], ['7A', 'snow', 88]]) },
+  ];
+  const f = new Frame(64 * 2 + 4, 32);
+  states.forEach((w, i) => {
+    const panel = render({ now: 0, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx: w } }, { screen: 'weather' });
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(i * 68 + x, y, panel.get(x, y));
+  });
+  save('mock-weather-hourly.png', f, 8);
+}
