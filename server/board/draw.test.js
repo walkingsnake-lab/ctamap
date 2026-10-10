@@ -912,6 +912,37 @@ test('baseball score flash: amber for a minute after a change, fades to white, t
   assert.ok(count(f, draw.BB.live, 22, 12, 30, 18) > 0);
 });
 
+test('radar corner age: "3m" in dark grey under the indicator; none: just the radar', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
+  const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 1500, now - 600, now - 170], timeBox: [40, 0, 24, 22], split: false, showTime: true, temp: 63, icon: 'sun' };
+  const frames = { a: new Uint8Array(2048).fill(3), b: new Uint8Array(2048).fill(3), c: new Uint8Array(2048).fill(3) };
+  const at = (extra, opts = {}, warn = null) => draw.render({ now, bright: 100, warn, radar: { ...radar, ...extra } }, { screen: 'weather', now, frames, idx: 2, ...opts });
+  const sub = (f, x0, y0, x1, y1) => count(f, draw.C.radarSub, x0, y0, x1, y1);
+  const ageCells = (f) => { const out = []; for (let y = 6; y <= 10; y++) for (let x = 40; x < 64; x++) out.push(hex(f.get(x, y)) === draw.C.radarSub); return out; };
+  // Frame indicator on rows 2-3, the age on rows 6-10 (dark grey Tom Thumb),
+  // no clock, AM/PM or anything else in the corner.
+  const f = at({ clock: 'age' });
+  assert.ok(count(f, draw.C.amber, 40, 2, 63, 3) > 0, 'indicator');
+  assert.ok(sub(f, 40, 6, 63, 10) > 5, 'age text');
+  assert.ok(sub(f, 60, 6, 63, 10) > 0, 'right-aligned to x63');
+  assert.equal(count(f, draw.C.radarTime, 40, 4, 63, 22), 0, 'no clock');
+  assert.equal(count(f, draw.C.radarAmpm, 40, 4, 63, 22), 0, 'no AM/PM');
+  assert.equal(sub(f, 40, 11, 63, 22), 0, 'nothing below');
+  // 170 s rounds to 3m; it follows the shown frame and the clock.
+  const text = (ft, nowS) => ageCells(draw.render({ now: nowS, bright: 100, warn: null, radar: { ...radar, clock: 'age', ft: [ft, ft, ft] } }, { screen: 'weather', now: nowS, frames, idx: 2 }));
+  assert.deepEqual(text(now - 170, now), text(now - 180, now), '170 s and 180 s are both 3m');
+  assert.notDeepEqual(text(now - 170, now), text(now - 600, now), '3m vs 10m');
+  assert.deepEqual(text(now, now + 600), text(now - 600, now), 'a frame from now, 10 min on, reads 10m');
+  assert.notDeepEqual(ageCells(at({ clock: 'age' }, { idx: 0 })), ageCells(f), '25m vs 3m');
+  // A warning tag at the bottom right, like time off.
+  assert.ok(count(at({ clock: 'age' }, {}, { kind: 'svr', lvl: 'watch' }), draw.C.watch, 30, 26, 63, 31) > 5);
+  // None: radar only; no indicator or text, and the radar under the corner is untouched.
+  const none = at({ clock: 'none' });
+  const first = none.get(0, 0);
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) assert.deepEqual(none.get(x, y), first, `radar pixel ${x},${y}`);
+  assert.ok(count(at({ clock: 'none' }, {}, { kind: 'tor', lvl: 'watch' }), draw.C.watch, 30, 26, 63, 31) > 5, 'warning tag stays');
+});
+
 test('radar clock now: the current time in white; conditions under the clock', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000; // 11:46 AM in Chicago
   const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 3600, now - 1800, now - 600], timeBox: [40, 0, 24, 22], split: false, showTime: true, temp: 63, icon: 'sun' };
@@ -1075,6 +1106,32 @@ test('logo layout pregame: abbreviations in the score boxes, records in the pane
   assert.ok(count(f, draw.C.grey, 40, 3, 63, 8) > 10);              // 92-70
   assert.ok(count(f, draw.C.grey, 0, 27, 20, 31) > 10);             // TODAY
   assert.ok(count(f, draw.C.label, 40, 27, 62, 31) > 5);            // first pitch
+});
+
+test('logo layout shows the band layout until every logo in the game has loaded', () => {
+  const g = lgGame({ st: 'live', inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] });
+  const bands = draw.renderBaseball({ ...lg(g), mlb: { layout: 'bands', dim: 1, games: [g] } }, { logos: {} });
+  assert.deepEqual(draw.renderBaseball(lg(g), { logos: {} }).px, bands.px, 'no logo yet: the band layout');
+  assert.equal(count(draw.renderBaseball(lg(g), { logos: {} }), '#401010', 0, 0, 23, 11), 0);
+  // Two logos, one loaded: still bands, not one logo among abbreviations.
+  const two = lgGame({ st: 'live', inn: 7, half: 'T', on: [0, 0, 0], home: { ab: 'STL', c: '#d62a2a', r: 2, w: 88, l: 74, lg: 'STL-1', bd: '#761717' } });
+  const half = draw.renderBaseball(lg(two), { logos: LOGOS });
+  assert.equal(count(half, '#401010', 0, 0, 23, 11), 0, 'one of two loaded: bands');
+  const all = draw.renderBaseball(lg(two), { logos: { ...LOGOS, 'STL-1': LOGO([0x10, 0x40, 0x10]) } });
+  assert.equal(count(all, '#401010', 0, 0, 23, 11), 24 * 12);
+  assert.equal(count(all, '#104010', 0, 12, 23, 23), 24 * 12);
+  // A side with no logo uploaded (lg null) doesn't hold the other back.
+  assert.equal(count(draw.renderBaseball(lg(lgGame({ st: 'live', inn: 7, half: 'T', on: [0, 0, 0] })), { logos: LOGOS }), '#401010', 0, 0, 23, 11), 24 * 12);
+});
+
+test('logo layout pregame: the abbreviations sit 1px left of the score boxes\' center', () => {
+  const f = draw.renderBaseball(lg(lgGame({ st: 'pre', start: NOW + 1500 })), { logos: LOGOS });
+  let x0 = 64; for (let x = 16; x < 38; x++) for (let y = 3; y <= 9; y++) if (hex(f.get(x, y)) === draw.BB.live) x0 = Math.min(x0, x);
+  assert.equal(x0, 30 - 1 - Math.floor(draw.measure('5x7', 'CHC') / 2));
+  // Live and final scores stay centered.
+  const live = draw.renderBaseball(lg(lgGame({ st: 'live', inn: 3, half: 'T', on: [0, 0, 0], away: { ab: 'CHC', c: '#2a5bd8', r: 3, w: 1, l: 1, lg: 'CHC-1', bd: '#142d5a' } })), { logos: LOGOS });
+  let l0 = 64; for (let x = 16; x < 38; x++) for (let y = 3; y <= 9; y++) if (hex(live.get(x, y)) === draw.BB.live) l0 = Math.min(l0, x);
+  assert.equal(l0, 30 - Math.floor(draw.measure('5x7', '3') / 2));
 });
 
 test('logo layout final: winner amber, loser white (not dimmed), records, FINAL', () => {

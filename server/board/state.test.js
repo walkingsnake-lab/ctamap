@@ -156,7 +156,7 @@ test('radarClock and radarCond: defaults frame time, no conditions; validated', 
   store.update('home', { radarClock: 'now', radarCond: true });
   assert.equal(store.get('home').radarClock, 'now');
   assert.equal(store.get('home').radarCond, true);
-  assert.throws(() => store.update('home', { radarClock: 'live' }), /radarClock must be one of frame, now/);
+  assert.throws(() => store.update('home', { radarClock: 'live' }), /radarClock must be one of frame, now, age, none/);
   assert.throws(() => store.update('home', { radarCond: 1 }), /radarCond must be true or false/);
 });
 
