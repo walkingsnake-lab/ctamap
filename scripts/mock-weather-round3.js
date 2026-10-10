@@ -392,7 +392,7 @@ group('rain-states', (panel) => {
   });
   panel('d-downpour', 'DOWNPOUR', (f) => {
     topBar2(f, 78, 'pcloudy_day', 84, 66);
-    title2(f, 'STORM IN 25 MIN', RAIN_SCALE);
+    title2(f, 'RAIN IN 25 MIN', RAIN_SCALE);
     rateBars(f, [0, 3, 9, 16, 12, 6, 3, 1], RAIN_SCALE);
     axis2(f);
   });
@@ -408,4 +408,39 @@ group('rain-states', (panel) => {
     rateBars(f, [1.2, 2, 3, 4.5, 3.5, 2.6, 1.8, 1.1], SNOW_SCALE);
     axis2(f);
   });
+});
+
+// ------------------------------------------------------------ 5-day edge cases
+// Three-character temperatures (100+ or -10 and below) are 11px in Tom Thumb;
+// a column has 12px between dividers.
+// Three-character temperatures drawn tight so they keep 1px off the dividers:
+// '1' advances 3 (its right column is blank anyway) and the minus is 2px wide.
+// "104" -> 10px, "-12" -> 9px. The 2px minus is used for every negative so
+// they match; other two-digit numbers draw normally.
+function numText(f, str, cx, base, color) {
+  if (str.length < 3 && str[0] !== '-') return ctext(f, 'small', str, cx, base, color);
+  const adv = (ch) => (ch === '1' || ch === '-' ? 3 : 4);
+  const w = [...str].reduce((a, ch) => a + adv(ch), 0) - 1;
+  let x = cx - Math.floor(w / 2);
+  for (const ch of str) {
+    if (ch === '-') f.fill(x, base - 3, 2, 1, color);
+    else f.text('small', ch, x, base, color);
+    x += adv(ch);
+  }
+}
+function fiveDay(f, now, icon, hi, lo, days) {
+  topBar2(f, now, icon, hi, lo);
+  for (let i = 0; i < 4; i++) f.fill(i * 13 + 12, 10, 1, 22, C.divider);
+  days.forEach(([d, h, ic], i) => {
+    const cx = i * 13 + 6;
+    ctext(f, 'small', d, cx, 15, C.grey);
+    drawIcon(f, ic, cx - 4, 17);
+    numText(f, String(h), cx, 31, tempColor(h));
+  });
+}
+group('5day-edge', (panel) => {
+  panel('a-heat', 'HEAT WAVE', (f) => fiveDay(f, 97, 'sun', 101, 82,
+    [['SA', 99, 'sun'], ['SU', 104, 'sun'], ['MO', 100, 'pcloudy_day'], ['TU', 92, 'storm'], ['WE', 86, 'pcloudy_day']]));
+  panel('b-cold', 'COLD SNAP', (f) => fiveDay(f, -8, 'moon', 2, -14,
+    [['SA', -3, 'snow'], ['SU', -12, 'sun'], ['MO', -6, 'pcloudy_day'], ['TU', 9, 'snow'], ['WE', 21, 'cloudy']]));
 });
