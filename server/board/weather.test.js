@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { url, parse, condition, toWx, toScreenWx, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS } = require('./weather');
+const { url, parse, condition, toWx, toScreenWx, toDays, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS } = require('./weather');
 const { measure } = require('./fonts');
 const { ICONS } = require('./icons');
 const { createNws } = require('./nws');
@@ -82,6 +82,41 @@ test('weather screen: feels-like, wind, and the next 6 hours\' highest rain chan
   assert.equal(parse(longer).pop, 0);
   // The weather row's wx keeps its shape.
   assert.deepEqual(toWx(parse(json)), { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51 });
+});
+
+test('5-day: the five days after today, weekday names, day icons, rounded highs', () => {
+  const u = new URL(url(42.008362, -87.665909));
+  assert.equal(u.searchParams.get('forecast_days'), String(FORECAST_DAYS + 1));
+  assert.ok(u.searchParams.get('daily').split(',').includes('weather_code'));
+  // The fixture predates the forecast: one day, no daily codes.
+  assert.deepEqual(parse(MORSE).days, []);
+  assert.equal(toDays(parse(MORSE)), null);
+  // The Morse fixture (Sunday Oct 4) with six days in Open-Meteo's response
+  // shape (unixtime local midnights; Nov 1 brings the DST change).
+  const mid = MORSE.daily.time[0];
+  const json = { ...MORSE, daily: {
+    time: [0, 1, 2, 3, 4, 5].map((i) => mid + i * 86400),
+    temperature_2m_max: [68.9, 71.4, 103.6, 52.2, -9.5, 60],
+    temperature_2m_min: [51, 55, 80, 41, -20, 48],
+    sunrise: MORSE.daily.sunrise, sunset: MORSE.daily.sunset,
+    weather_code: [0, 0, 95, 3, 73, 2],
+  } };
+  const w = parse(json);
+  assert.equal(w.hi, 68.9); // today stays index 0
+  assert.deepEqual(toDays(w), [
+    { d: 'MO', icon: 'sun', hi: 71 },
+    { d: 'TU', icon: 'storm', hi: 104 },
+    { d: 'WE', icon: 'cloudy', hi: 52 },
+    { d: 'TH', icon: 'snow', hi: -9 },
+    { d: 'FR', icon: 'pcloudy_day', hi: 60 },
+  ]);
+  // A gap ends the list.
+  const gap = { ...json, daily: { ...json.daily, temperature_2m_max: [68.9, 71.4, null, 52, 50, 60] } };
+  assert.equal(parse(gap).days.length, 1);
+  // Weekday at a local midnight, across both DST changes.
+  assert.equal(dayName(Date.UTC(2026, 10, 1, 5) / 1000), 'SU'); // CDT midnight, the day DST ends
+  assert.equal(dayName(Date.UTC(2026, 10, 2, 6) / 1000), 'MO'); // CST midnight
+  assert.equal(dayName(Date.UTC(2027, 2, 14, 6) / 1000), 'SU'); // CST midnight, the day DST starts
 });
 
 test('wind: 8-point compass, CALM under 1 mph', () => {

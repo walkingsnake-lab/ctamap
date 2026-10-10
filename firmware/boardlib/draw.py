@@ -949,6 +949,56 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
         f.text('small', hl, 0, 31, C['grey'])
 
 
+# ---- 5-day layout ----
+# The weather screen without rain when wx carries `days`. Mirrors
+# drawFiveDay() in draw.js.
+
+FD_LETTER = hexc('#4a4a4a')
+FD_NUM = hexc('#b0b0b0')
+FD_PITCH = 13
+
+
+def _fd_adv(ch):
+    return 3 if ch == '1' or ch == '-' else 4
+
+
+def draw_day_temp(f, s, cx, base, color):
+    if len(s) < 3 and s[0] != '-':
+        ctext(f, 'small', s, cx, base, color)
+        return
+    w = -1
+    for ch in s:
+        w += _fd_adv(ch)
+    x = cx - w // 2
+    for ch in s:
+        if ch == '-':
+            f.fill(x, base - 3, 2, 1, color)
+        else:
+            f.text('small', ch, x, base, color)
+        x += _fd_adv(ch)
+
+
+def draw_five_day(f, wx):
+    x = f.text('5x7', str(wx['temp']), 0, 7, C['label'])
+    f.text('small', '°', x, 6, C['label'])
+    if wx.get('icon') in assets.ICONS:
+        draw_icon(f, wx['icon'], 22, 0)
+    if wx.get('hi') is not None and wx.get('lo') is not None:
+        hx = 63 - measure('small', 'H%s L%s' % (wx['hi'], wx['lo'])) + 1
+        hx = f.text('small', 'H', hx, 6, FD_LETTER)
+        hx = f.text('small', str(wx['hi']), hx, 6, FD_NUM)
+        hx = f.text('small', ' L', hx, 6, FD_LETTER)
+        f.text('small', str(wx['lo']), hx, 6, FD_NUM)
+    for i in range(1, 5):
+        f.fill(i * FD_PITCH - 1, 10, 1, 22, C['divider'])
+    for i, d in enumerate(wx['days'][:5]):
+        cx = i * FD_PITCH + 6
+        ctext(f, 'small', d['d'], cx, 15, C['grey'])
+        if d.get('icon') in assets.ICONS:
+            draw_icon(f, d['icon'], cx - 4, 17)
+        draw_day_temp(f, str(d['hi']), cx, 31, temp_color(d['hi']))
+
+
 def radar_value(data, i):
     """Pixel i of a frame: 2048 bytes (one a pixel, as from the server), or
     1024 packed (two a byte, left pixel in the high nibble, as the board
@@ -1006,7 +1056,11 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     else:
         idx = len(ids) - 1
     if (not ids or (frames is not None and not radar_on_hand(ids, frames))) and r.get('wx'):
-        draw_weather_screen(f, r['wx'], p.get('warn'), blink, r.get('tempShadow'))
+        # The 5-day layout has no room for a warning: conditions while one is on.
+        if r['wx'].get('days') and not p.get('warn'):
+            draw_five_day(f, r['wx'])
+        else:
+            draw_weather_screen(f, r['wx'], p.get('warn'), blink, r.get('tempShadow'))
         return f
     data = frames.get(ids[idx]) if idx >= 0 and frames else None
     if data:

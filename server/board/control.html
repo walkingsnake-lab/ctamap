@@ -168,6 +168,11 @@
 
   <section data-tab="weather">
     <h2>Weather screen</h2>
+    <div class="seg" id="wxView">
+      <button data-v="now">Conditions</button>
+      <button data-v="5day">5-day</button>
+    </div>
+    <p class="hint" id="wxViewHint"></p>
     <div class="row"><span>Temperature shadow</span><label class="switch"><input type="checkbox" id="tempShadow"><span></span></label></div>
     <p class="hint">A faint shadow behind the big temperature, colored from blue (cold) to red (hot).</p>
   </section>
@@ -435,6 +440,10 @@
     $('radarBright').value = String(board.radarBright || 100);
     $('radarCondRow').hidden = corner === 'temp';
     $('tempShadow').checked = board.tempShadow === true;
+    pressed('wxView', board.wxView === '5day' ? '5day' : 'now');
+    $('wxViewHint').textContent = board.wxView === '5day'
+      ? 'Today on top, the next five days\' highs below. Shows conditions while a weather warning or watch is on.'
+      : 'The big temperature, feels-like, wind, high/low, and rain chance.';
     $('radarCornerHint').textContent = corner === 'frame'
       ? 'The radar frame\'s time (dim), with AM/PM and any weather warning icon under it.'
       : corner === 'now' ? 'The current time in white, with AM/PM and any weather warning icon under it.'
@@ -516,6 +525,7 @@
   $('headerDivider').addEventListener('change', (e) => save({ headerDivider: e.target.checked }));
   $('wxDivider').addEventListener('change', (e) => save({ wxDivider: e.target.checked }));
   $('tempShadow').addEventListener('change', (e) => save({ tempShadow: e.target.checked }));
+  $('wxView').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxView: v }); });
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
   for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('tickerFill').addEventListener('input', (e) => { $('tickerFillV').textContent = `${e.target.value}%`; });

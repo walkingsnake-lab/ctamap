@@ -160,6 +160,14 @@ test('radarClock and radarCond: defaults frame time, no conditions; validated', 
   assert.throws(() => store.update('home', { radarCond: 1 }), /radarCond must be true or false/);
 });
 
+test('wxView: default conditions, 5day allowed; validated', () => {
+  const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet });
+  assert.equal(store.get('home').wxView, 'now');
+  store.update('home', { wxView: '5day' });
+  assert.equal(store.get('home').wxView, '5day');
+  assert.throws(() => store.update('home', { wxView: 'week' }), /wxView must be one of now, 5day/);
+});
+
 test('radarBright: default 100, 20-150', () => {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet });
   assert.equal(store.get('home').radarBright, 100);

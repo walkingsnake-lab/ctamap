@@ -225,3 +225,21 @@ function transitRows(f, rows, tops) {
   });
   save('mock-weather-screen.png', f, 8);
 }
+
+// Weather screen, 5-day layout (wxView '5day'), drawn by draw.js: a mild
+// week, a heat wave and a cold snap (three-character highs drawn tight).
+{
+  const { render } = require('../server/board/render');
+  const days = (list) => list.map(([d, hi, icon]) => ({ d, hi, icon }));
+  const states = [
+    { icon: 'pcloudy_day', temp: 57, hi: 63, lo: 49, days: days([['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']]) },
+    { icon: 'sun', temp: 97, hi: 101, lo: 82, days: days([['SA', 99, 'sun'], ['SU', 104, 'sun'], ['MO', 100, 'pcloudy_day'], ['TU', 92, 'storm'], ['WE', 86, 'pcloudy_day']]) },
+    { icon: 'moon', temp: -8, hi: 2, lo: -14, days: days([['SA', -3, 'snow'], ['SU', -12, 'sun'], ['MO', -6, 'pcloudy_day'], ['TU', 9, 'snow'], ['WE', 21, 'cloudy']]) },
+  ];
+  const f = new Frame(64 * 3 + 8, 32);
+  states.forEach((w, i) => {
+    const panel = render({ now: 0, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx: w } }, { screen: 'weather' });
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(i * 68 + x, y, panel.get(x, y));
+  });
+  save('mock-weather-5day.png', f, 8);
+}
