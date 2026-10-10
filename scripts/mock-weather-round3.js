@@ -298,3 +298,38 @@ group('rain-top2', (panel) => {
     });
   }
 });
+
+// ------------------------------------------------------------ rain, title row (final round)
+// C and F refined: deeper blues (no pale shades, which wash out on the LEDs),
+// title moved up a row, bars as tall as fit (rows 16-25), no NOW label, 1H
+// centered on the gap between the 4th and 5th 15-minute bars (x 31).
+const DEEP = [[0.4, '#0a2a78'], [0.75, '#0f48c0'], [1.01, '#1a6cff']];
+const deepColor = (v) => DEEP.find(([max]) => v < max)[1];
+function deepBars(f, data) {
+  data.forEach((v, i) => {
+    const x = i * 8;
+    if (!v) { f.fill(x, 25, 7, 1, '#081428'); return; }
+    const h = Math.max(1, Math.round(v * 10));
+    f.fill(x, 26 - h, 7, h, deepColor(v));
+  });
+}
+function axis2(f) {
+  ctext(f, 'small', '1H', 31, 31, C.dim);
+  rtext(f, 'small', '2H', 63, 31, C.dim);
+}
+group('rain-final', (panel) => {
+  panel('c-begins', 'C BEGINS', (f) => {
+    topBar(f, 57, 'pcloudy_day');
+    ctext(f, 'small', 'RAIN IN 25 MIN', 32, 14, BLUE_TXT);
+    deepBars(f, D15_2H.begin);
+    axis2(f);
+  });
+  panel('f-ends', 'F ENDS', (f) => {
+    topBar(f, 54, 'rain');
+    const t = 'ENDS IN 60 MIN', w = measure('small', t) + 5, x = Math.round(32 - w / 2);
+    dropIcon(f, x, 10);
+    f.text('small', t, x + 5, 14, BLUE_TXT);
+    deepBars(f, D15_2H.end);
+    axis2(f);
+  });
+});
