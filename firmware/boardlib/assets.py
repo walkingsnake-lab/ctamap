@@ -37,7 +37,6 @@ ICON_PALETTE = {
     71: (138, 138, 138),  # G
     75: (84, 84, 84),  # K
     66: (30, 136, 255),  # B
-    72: (143, 143, 143),  # H
     73: (64, 208, 255),  # I
     87: (255, 255, 255),  # W
     83: (208, 240, 255),  # S
@@ -52,8 +51,8 @@ ICONS = {
     'pcloudy_day': b'..YY.....YYYY....YYYY.....YY.CC.....CCCC..CCCCCC.CCCCCCC..DDDDD.',
     'pcloudy_night': b'.MM.....MM......MM.......MM..CC.....CCCC..CCCCCC.CCCCCCC..DDDDD.',
     'cloudy': b'............CC...CC.CCC.CCCCCCCCCCCCCCCC.DDDDDD.................',
-    'rain': b'...BB....BBBBBB.BBBBBBBB...H.......H.......H....H..H.....HH.....',
-    'ice': b'...II....IIIIII.IIIIIIIIW..H.W.WW..H...W...H....H..H.....HH.....',
+    'rain': b'...CC....CCCCCC.CCCCCCCC.DDDDDD..........B..B..BB..B..B.........',
+    'ice': b'...CC....CCCCCC.CCCCCCCC.DDDDDD..........I..I..II..I..I.W..W..W.',
     'snow': b'...S.....S.S.S....SSS...SSSSSSS...SSS....S.S.S.....S............',
     'storm': b'..GGGG...GGGGGG.GGGGGGGG.KKKKKK....LL.....LL.......LL.....L.....',
     'fog': b'........FFFFFF............EEEEEE........FFFFFF..................',
