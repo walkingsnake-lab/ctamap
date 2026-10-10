@@ -333,3 +333,79 @@ group('rain-final', (panel) => {
     axis2(f);
   });
 });
+
+// ------------------------------------------------------------ rain states
+// The other titles, a fixed intensity scale (rate in mm/h from the 15-minute
+// amounts; height on a square-root scale, full at 10 mm/h, so drizzle stays
+// visible but short; levels at the NWS light/moderate/heavy
+// cutoffs 2.5 and 7.6 mm/h), and snow (the radar's snow colors, the snow
+// scale topping out lower since snow is measured as melted water).
+function topBar2(f, temp, icon, hi, lo) {
+  const x = f.text('5x7', String(temp), 0, 7, tempColor(temp));
+  f.text('small', '°', x, 6, tempColor(temp));
+  drawIcon(f, icon, 22, 0);
+  const s = `H${hi} L${lo}`;
+  let hx = 63 - measure('small', s);
+  hx = f.text('small', 'H', hx, 6, '#4a4a4a');
+  hx = f.text('small', String(hi), hx, 6, '#b0b0b0');
+  hx = f.text('small', ' L', hx, 6, '#4a4a4a');
+  f.text('small', String(lo), hx, 6, '#b0b0b0');
+}
+const RAIN_SCALE = { full: 10, levels: [[2.5, '#0a2a78'], [7.6, '#0f48c0'], [Infinity, '#1a6cff']], txt: BLUE_TXT };
+// Radar snow levels as the board draws them (draw.js RADAR_BASE 8-10 at 65%).
+const SNOW_SCALE = { full: 4, levels: [[1, '#3357a6'], [2.5, '#6e83a6'], [Infinity, '#a6a6a6']], txt: '#a9c9ff' };
+function rateBars(f, rates, sc) {
+  rates.forEach((r, i) => {
+    const x = i * 8;
+    if (r < 0.4) { f.fill(x, 25, 7, 1, '#081428'); return; }
+    const h = Math.max(1, Math.round(Math.sqrt(Math.min(r, sc.full) / sc.full) * 10));   // sqrt: light rain stays visible
+    f.fill(x, 26 - h, 7, h, sc.levels.find(([max]) => r < max)[1]);
+  });
+}
+const FLAKE = ['..#..', '#.#.#', '.###.', '#.#.#', '..#..'];
+// Title centered on the row, with the drop (or flake) in front when it's falling now.
+function title2(f, t, sc, mark) {
+  const mw = mark === 'drop' ? 3 : mark === 'flake' ? 5 : 0;
+  const w = measure('small', t) + (mw ? mw + 2 : 0), x = Math.round(32 - w / 2);
+  if (mark === 'drop') dropIcon(f, x, 10);
+  if (mark === 'flake') FLAKE.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') px(f, x + i, 10 + j, sc.txt); }));
+  f.text('small', t, x + (mw ? mw + 2 : 0), 14, sc.txt);
+}
+group('rain-states', (panel) => {
+  panel('a-break', 'BREAK IN 30 MIN', (f) => {
+    topBar2(f, 54, 'rain', 61, 49);
+    title2(f, 'BREAK IN 30 MIN', RAIN_SCALE, 'drop');
+    rateBars(f, [3, 2, 0, 0, 4, 6, 5, 3], RAIN_SCALE);
+    axis2(f);
+  });
+  panel('b-continues', 'RAIN NEXT 2 HRS', (f) => {
+    topBar2(f, 54, 'rain', 58, 49);
+    title2(f, 'RAIN NEXT 2 HRS', RAIN_SCALE, 'drop');
+    rateBars(f, [4, 5, 6, 8, 7, 5, 4, 3], RAIN_SCALE);
+    axis2(f);
+  });
+  panel('c-drizzle', 'DRIZZLE', (f) => {
+    topBar2(f, 57, 'cloudy', 63, 49);
+    title2(f, 'RAIN IN 15 MIN', RAIN_SCALE);
+    rateBars(f, [0, 0.5, 1, 1.2, 1, 0.8, 0.5, 0.3], RAIN_SCALE);
+    axis2(f);
+  });
+  panel('d-downpour', 'DOWNPOUR', (f) => {
+    topBar2(f, 78, 'pcloudy_day', 84, 66);
+    title2(f, 'STORM IN 25 MIN', RAIN_SCALE);
+    rateBars(f, [0, 3, 9, 16, 12, 6, 3, 1], RAIN_SCALE);
+    axis2(f);
+  });
+  panel('e-snow-in', 'SNOW IN 40 MIN', (f) => {
+    topBar2(f, 30, 'cloudy', 33, 24);
+    title2(f, 'SNOW IN 40 MIN', SNOW_SCALE);
+    rateBars(f, [0, 0, 0.6, 1.5, 2.2, 3, 2.4, 1.6], SNOW_SCALE);
+    axis2(f);
+  });
+  panel('f-snow-continues', 'SNOW NEXT 2 HRS', (f) => {
+    topBar2(f, 28, 'snow', 31, 22);
+    title2(f, 'SNOW NEXT 2 HRS', SNOW_SCALE, 'flake');
+    rateBars(f, [1.2, 2, 3, 4.5, 3.5, 2.6, 1.8, 1.1], SNOW_SCALE);
+    axis2(f);
+  });
+});
