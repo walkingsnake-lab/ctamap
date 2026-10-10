@@ -17,8 +17,7 @@ const PALETTE = {
   G: '#8a8a8a', // storm cloud
   K: '#545454', // storm cloud underside
   B: '#1e88ff', // rain
-  I: '#40d0ff', // freezing rain
-  W: '#ffffff', // ice under freezing rain
+  W: '#ffffff', // ice crystal (freezing rain)
   S: '#d0f0ff', // snowflake
   F: '#b0b0b0', // fog
   E: '#686868', // fog, far line
@@ -92,9 +91,9 @@ const ICONS = {
     'CCCCCCCC',
     '.DDDDDD.',
     '........',
-    '.I..I..I',
-    'I..I..I.',
-    'W..W..W.',
+    '.B...W..',
+    'B...WWW.',
+    '.....W..',
   ],
   snow: [
     '...S....',
