@@ -193,3 +193,67 @@ group('5day-final', (panel) => {
     });
   });
 });
+
+// ------------------------------------------------------------ rain with the top bar
+// Same current-conditions bar as the 5-day screen; bars are flat colors (one
+// per intensity level, no gradient inside a bar).
+const LEVELS = [[0.4, '#1860b8'], [0.75, '#1e90ff'], [1.01, '#8fd8ff']];
+const flatColor = (v) => LEVELS.find(([max]) => v < max)[1];
+function topBar(f, temp, icon) {
+  const x = f.text('5x7', String(temp), 0, 7, tempColor(temp));
+  f.text('small', '°', x, 6, tempColor(temp));
+  drawIcon(f, icon, 22, 0);
+  let hx = 63 - measure('small', 'H63 L49');
+  hx = f.text('small', 'H', hx, 6, '#4a4a4a');
+  hx = f.text('small', '63', hx, 6, '#b0b0b0');
+  hx = f.text('small', ' L', hx, 6, '#4a4a4a');
+  f.text('small', '49', hx, 6, '#b0b0b0');
+}
+function flatBars(f, data, x0, w, base, max, single) {
+  data.forEach((v, i) => {
+    const x = x0 + i * (w + 1);
+    if (!v) { f.fill(x, base, w, 1, '#0e1a2c'); return; }
+    const h = Math.max(1, Math.round(v * max));
+    f.fill(x, base - h + 1, w, h, single ? '#1e90ff' : flatColor(v));
+  });
+}
+const BLUE_TXT = '#60b0ff';
+const dropIcon = (f, x, y) => ['.#.', '###', '###', '.#.'].forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') px(f, x + i, y + j, C.blue); }));
+
+group('rain-top', (panel) => {
+  // Title at the bottom, tallest bars (rows 12-26).
+  panel('a-bottom-levels', 'A LEVELS', (f) => {
+    topBar(f, 57, 'pcloudy_day');
+    flatBars(f, D15_2H.begin, 0, 7, 25, 14);
+    dropIcon(f, 0, 27); f.text('small', 'RAIN IN 25 MIN', 6, 31, BLUE_TXT);
+  });
+  panel('b-bottom-single', 'B ONE BLUE', (f) => {
+    topBar(f, 57, 'pcloudy_day');
+    flatBars(f, D15_2H.begin, 0, 7, 25, 14, true);
+    dropIcon(f, 0, 27); f.text('small', 'RAIN IN 25 MIN', 6, 31, BLUE_TXT);
+  });
+  // Title row under the top bar, shorter bars, time axis at the bottom.
+  panel('c-title-row', 'C TITLE ROW', (f) => {
+    topBar(f, 57, 'pcloudy_day');
+    ctext(f, 'small', 'RAIN IN 25 MIN', 32, 15, BLUE_TXT);
+    flatBars(f, D15_2H.begin, 0, 7, 25, 9);
+    f.text('small', 'NOW', 0, 31, C.grey); ctext(f, 'small', '1H', 28, 31, C.dim); rtext(f, 'small', '2H', 63, 31, C.dim);
+  });
+  // Rain already falling: it ends.
+  panel('d-ends-bottom', 'D ENDS', (f) => {
+    topBar(f, 54, 'rain');
+    flatBars(f, D15_2H.end, 0, 7, 25, 14);
+    dropIcon(f, 0, 27); f.text('small', 'ENDS IN 60 MIN', 6, 31, BLUE_TXT);
+  });
+  panel('e-hourly', 'E HOURLY', (f) => {
+    topBar(f, 57, 'pcloudy_day');
+    flatBars(f, D1H.begin, 2, 9, 25, 14);
+    dropIcon(f, 0, 27); f.text('small', 'RAIN BY 4P', 6, 31, BLUE_TXT);
+  });
+  panel('f-ends-title-row', 'F ENDS TITLE ROW', (f) => {
+    topBar(f, 54, 'rain');
+    ctext(f, 'small', 'ENDS IN 60 MIN', 32, 15, BLUE_TXT);
+    flatBars(f, D15_2H.end, 0, 7, 25, 9);
+    f.text('small', 'NOW', 0, 31, C.grey); ctext(f, 'small', '1H', 28, 31, C.dim); rtext(f, 'small', '2H', 63, 31, C.dim);
+  });
+});
