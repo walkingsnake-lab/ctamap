@@ -257,3 +257,44 @@ group('rain-top', (panel) => {
     f.text('small', 'NOW', 0, 31, C.grey); ctext(f, 'small', '1H', 28, 31, C.dim); rtext(f, 'small', '2H', 63, 31, C.dim);
   });
 });
+
+// ------------------------------------------------------------ rain, title-row round 2
+// Saturated hues only (no pale/near-white level) so the LEDs don't wash out.
+const SCHEMES = {
+  s1: ['#1a4dff', '#00d4ff', '#b040ff'],   // blue, cyan, violet
+  s2: ['#1a4dff', '#8c3cff', '#ff2fd0'],   // blue, violet, magenta
+  s3: ['#1a4dff', '#00d84a', '#ffd000'],   // blue, green, yellow
+};
+// 8 bars x 8px = the 2 hour timeline; 1H is the edge between bars 4 and 5 (x 32).
+// Bars rise from row 25 (max 10 rows, to row 16) under the title on rows 10-14.
+function rainBars(f, data, colors) {
+  data.forEach((v, i) => {
+    const x = i * 8;
+    if (!v) { f.fill(x, 25, 7, 1, '#0e1a2c'); return; }
+    const h = Math.max(1, Math.round(v * 10));
+    f.fill(x, 25 - h + 1, 7, h, colors[v < 0.4 ? 0 : v < 0.75 ? 1 : 2]);
+  });
+}
+function rainAxis(f) {
+  px(f, 32, 26, C.dim); px(f, 63, 26, C.dim);
+  ctext(f, 'small', '1H', 32, 31, C.dim);
+  rtext(f, 'small', '2H', 63, 31, C.dim);
+}
+group('rain-top2', (panel) => {
+  for (const [k, colors] of Object.entries(SCHEMES)) {
+    panel(`c-${k}`, `C ${k.toUpperCase()}`, (f) => {
+      topBar(f, 57, 'pcloudy_day');
+      ctext(f, 'small', 'RAIN IN 25 MIN', 32, 14, BLUE_TXT);
+      rainBars(f, D15_2H.begin, colors);
+      rainAxis(f);
+    });
+    panel(`f-${k}`, `F ${k.toUpperCase()}`, (f) => {
+      topBar(f, 54, 'rain');
+      const text = 'ENDS IN 60 MIN', w = 3 + 2 + measure('small', text), x0 = Math.round(32 - w / 2);
+      dropIcon(f, x0, 10);
+      f.text('small', text, x0 + 5, 14, BLUE_TXT);
+      rainBars(f, D15_2H.end, colors);
+      rainAxis(f);
+    });
+  }
+});
