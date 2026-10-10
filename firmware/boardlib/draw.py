@@ -957,6 +957,7 @@ FD_LETTER = hexc('#4a4a4a')
 FD_NUM = C['grey']
 FD_PITCH = 13
 FD_ICON_X = 1
+FD_HL_RIGHT = 62
 FD_TEMP_X = FD_ICON_X + 10
 
 
@@ -988,7 +989,7 @@ def draw_five_day(f, wx):
     x = f.text('5x7', str(wx['temp']), FD_TEMP_X, 7, C['label'])
     f.text('small', '°', x, 6, C['label'])
     if wx.get('hi') is not None and wx.get('lo') is not None:
-        hx = 63 - measure('small', 'H%s L%s' % (wx['hi'], wx['lo'])) + 1
+        hx = FD_HL_RIGHT - measure('small', 'H%s L%s' % (wx['hi'], wx['lo'])) + 1
         hx = f.text('small', 'H', hx, 6, FD_LETTER)
         hx = f.text('small', str(wx['hi']), hx, 6, FD_NUM)
         hx = f.text('small', ' L', hx, 6, FD_LETTER)

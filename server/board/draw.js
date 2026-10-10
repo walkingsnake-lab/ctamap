@@ -756,7 +756,8 @@
     // ---- 5-day layout (wxView '5day'; mockup docs/board/mockups/weather/5day-final) ----
     // The weather screen without rain when wx carries `days`. Today on rows
     // 0-7: the icon at x1, the temperature at x11 (5x7, label white, small
-    // degree sign, 1px temperature-colored shadow), `H63 L49` right-aligned
+    // degree sign, 1px temperature-colored shadow), `H63 L49` right-aligned to
+    // x62 (a 1px margin, like the icon's)
     // (letters dim, numbers grey). Below, five 13px day columns split by
     // dividers on rows 10-31:
     // weekday (rows 11-15), icon (17-24), and the high in its temperature
@@ -764,6 +765,7 @@
     const FD_LETTER = '#4a4a4a', FD_NUM = C.grey;
     const FD_PITCH = 13;
     const FD_ICON_X = 1;
+    const FD_HL_RIGHT = 62;
     const FD_TEMP_X = FD_ICON_X + 10;   // after the 8px icon and a 2px gap, as on the weather row
     // A day's high, centered at cx. Three characters (100+, -10 and below)
     // are 11px in Tom Thumb against 12px between dividers, so they draw
@@ -791,7 +793,7 @@
       const x = f.text('5x7', String(wx.temp), FD_TEMP_X, 7, C.label);
       f.text('small', '°', x, 6, C.label);
       if (wx.hi != null && wx.lo != null) {
-        let hx = 63 - measure('small', `H${wx.hi} L${wx.lo}`) + 1;
+        let hx = FD_HL_RIGHT - measure('small', `H${wx.hi} L${wx.lo}`) + 1;
         hx = f.text('small', 'H', hx, 6, FD_LETTER);
         hx = f.text('small', String(wx.hi), hx, 6, FD_NUM);
         hx = f.text('small', ' L', hx, 6, FD_LETTER);

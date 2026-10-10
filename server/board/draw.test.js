@@ -511,7 +511,8 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
   assert.equal(count(f, '#000000', 0, 8, 63, 8), 64, 'row 8 clear');
   assert.ok(count(f, draw.C.grey, 34, 1, 63, 5) > 15, 'high/low numbers grey');
   assert.ok(count(f, '#4a4a4a', 34, 1, 63, 5) > 5, 'dim H/L letters');
-  assert.ok(count(f, draw.C.grey, 61, 1, 63, 5) > 0, 'right-aligned to x63');
+  assert.ok(count(f, draw.C.grey, 60, 1, 62, 5) > 0, 'right-aligned to x62');
+  for (let y = 0; y < 8; y++) assert.deepEqual(f.get(63, y), [0, 0, 0], `col 63 clear, row ${y}`);
   for (const x of [12, 25, 38, 51]) for (let y = 10; y <= 31; y++) assert.equal(hex(f.get(x, y)), draw.C.divider, `divider ${x},${y}`);
   assert.equal(count(f, draw.C.divider, 0, 0, 63, 9), 0, 'no horizontal rule');
   for (let i = 0; i < 5; i++) {
