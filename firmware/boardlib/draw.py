@@ -1084,11 +1084,11 @@ def draw_rain_bars(f, wx, warn, blink):
             f.text('small', t, gx + TAG_GAP - 1, 14, wcolor)
     else:
         title = rain['title']
-        art = (FLAKE if rain.get('snow') else WX_DROP) if rain.get('now') else None
+        art = None if ('RAIN' in title or 'SNOW' in title) else (FLAKE if rain.get('snow') else WX_DROP)
         mark_w = len(art[0]) + 2 if art and measure('small', title) + len(art[0]) + 2 <= 64 else 0
         x = 32 - (measure('small', title) + mark_w) // 2
         if mark_w:
-            draw_art(f, art, x, 10, color if rain.get('snow') else WX_BLUE)
+            draw_art(f, art, x, 9 if rain.get('snow') else 10, color if rain.get('snow') else WX_BLUE)
         f.text('small', title, x + mark_w, 14, color)
     levels = SNOW_LEVELS if rain.get('snow') else RAIN_LEVELS
     for i, h in enumerate(rain['h'][:8]):

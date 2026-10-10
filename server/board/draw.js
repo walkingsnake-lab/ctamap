@@ -851,7 +851,7 @@
     // ---- rain bars (wxRain 'bars'; mockup docs/board/mockups/weather/rain-states) ----
     // The weather screen while precipitation is falling or due in the next 2
     // hours (wx.rain). The top bar, then the title centered on rows 10-14
-    // (a drop, or a flake for snow, in front while it's falling now), eight
+    // (a drop, or a flake for snow, in front of titles that don't say RAIN or SNOW), eight
     // 15-minute bars (7px wide on an 8px pitch) rising from row 25 up to 10
     // rows, and `1H` / `2H` under the 4th/5th bar gap and the last bar. An NWS
     // warning or watch takes the title's place.
@@ -873,11 +873,13 @@
           f.text('small', t, gx + TAG_GAP - 1, 14, ws.color);
         }
       } else {
-        // The mark only when it fits beside the title.
-        const art = rain.now ? (rain.snow ? FLAKE : WX_DROP) : null;
+        // The drop or flake stands in for the word: only on titles that don't
+        // say RAIN or SNOW (ENDS IN..., BREAK IN...), and only if it fits.
+        const art = /RAIN|SNOW/.test(rain.title) ? null : (rain.snow ? FLAKE : WX_DROP);
         const markW = art && measure('small', rain.title) + art[0].length + 2 <= 64 ? art[0].length + 2 : 0;
         const x = 32 - Math.floor((measure('small', rain.title) + markW) / 2);
-        if (markW) drawArt(f, art, x, 10, rain.snow ? color : WX_BLUE);
+        // The text's rows are 9-13; the 5px flake matches them, the 4px drop sits on the bottom.
+        if (markW) drawArt(f, art, x, rain.snow ? 9 : 10, rain.snow ? color : WX_BLUE);
         f.text('small', rain.title, x + markW, 14, color);
       }
       const levels = rain.snow ? SNOW_LEVELS : RAIN_LEVELS;

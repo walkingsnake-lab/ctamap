@@ -253,7 +253,7 @@ function transitRows(f, rows, tops) {
     { icon: 'rain', temp: 54, hi: 61, lo: 49, rain: R(0, 1, 'BREAK IN 30 MIN', [5, 4, 0, 0, 6, 8, 7, 5], [2, 1, 0, 0, 2, 2, 2, 2]) },
     { icon: 'pcloudy_day', temp: 78, hi: 84, lo: 66, rain: R(0, 0, 'RAIN IN 25 MIN', [0, 5, 9, 10, 10, 8, 5, 3], [0, 2, 3, 3, 3, 2, 2, 1]) },
     { icon: 'cloudy', temp: 30, hi: 33, lo: 24, rain: R(1, 0, 'SNOW IN 40 MIN', [0, 0, 4, 6, 7, 9, 8, 6], [0, 0, 1, 2, 2, 3, 2, 2]) },
-    { icon: 'snow', temp: 28, hi: 31, lo: 22, rain: R(1, 1, 'SNOW NEXT 2 HRS', [5, 7, 9, 10, 9, 8, 7, 5], [2, 2, 3, 3, 3, 3, 2, 2]) },
+    { icon: 'snow', temp: 28, hi: 31, lo: 22, rain: R(1, 1, 'ENDS IN 40 MIN', [5, 7, 9, 10, 9, 8, 7, 5], [2, 2, 3, 3, 3, 3, 2, 2]) },
   ];
   const f = new Frame(64 * 2 + 4, 32 * 2 + 4);
   states.forEach((w, i) => {

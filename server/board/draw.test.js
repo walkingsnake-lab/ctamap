@@ -588,12 +588,21 @@ test('weather rain bars: shared top bar, centered title with a drop, bars on an 
   assert.ok(count(f, '#555555', 26, 26, 36, 31) > 5, '1H');
   assert.ok(count(f, '#555555', 54, 26, 63, 31) > 5, '2H');
   assert.deepEqual(f.get(63, 31), [0, 0, 0], 'margin right of 2H');
-  // Not falling now: no drop; snow: flake and the snow colors.
-  const due = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rain: { ...rain, now: 0, title: 'RAIN IN 25 MIN' } }) }, { screen: 'weather', now, frames: {} });
-  assert.equal(count(due, '#1e90ff', 0, 10, 63, 14), 0);
+  // The drop stands in for the word: none on titles that say RAIN or SNOW,
+  // whether or not it's falling now; always on ENDS / BREAK titles.
+  for (const [title, now_, mark] of [['RAIN IN 25 MIN', 0, false], ['RAIN NEXT 2 HRS', 1, false], ['ENDS IN 60 MIN', 0, true], ['BREAK IN 30 MIN', 1, true]]) {
+    const r = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rain: { ...rain, now: now_, title } }) }, { screen: 'weather', now, frames: {} });
+    assert.equal(count(r, '#1e90ff', 0, 9, 63, 14) > 0, mark, `${title} (now ${now_})`);
+  }
+  // Snow: the colors; the flake only on ENDS / BREAK titles, on the text's
+  // rows 9-13.
   const snow = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rain: { ...rain, snow: 1, title: 'SNOW NEXT 2 HRS' } }) }, { screen: 'weather', now, frames: {} });
   assert.equal(hex(snow.get(3, 25)), '#6e83a6');
-  assert.ok(count(snow, '#a9c9ff', 0, 10, 63, 14) > 40);
+  assert.ok(count(snow, '#a9c9ff', 0, 9, 63, 14) > 40);
+  const ends = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rain: { ...rain, snow: 1, title: 'ENDS IN 60 MIN' } }) }, { screen: 'weather', now, frames: {} });
+  let x0 = -1; for (let x = 0; x < 64 && x0 < 0; x++) for (let y = 9; y <= 14; y++) if (hex(ends.get(x, y)) === '#a9c9ff') { x0 = x; break; }
+  const flake = []; for (let y = 8; y <= 15; y++) { let n = 0; for (let x = x0; x < x0 + 5; x++) if (hex(ends.get(x, y)) === '#a9c9ff') n++; flake.push(n); }
+  assert.deepEqual(flake, [0, 1, 3, 3, 3, 1, 0, 0], 'flake on rows 9-13');
   // A warning takes the title row; a tornado warning blinks.
   const warn = (blink) => draw.render({ now, bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: rad({ ...wx, rain }) }, { screen: 'weather', now, frames: {}, blink });
   assert.ok(count(warn(false), draw.C.warnTornado, 0, 10, 63, 14) > 30);

@@ -182,8 +182,9 @@ async function build() {
       ['break', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 30 MIN', [5, 4, 0, 0, 6, 8, 7, 5], [2, 1, 0, 0, 2, 2, 2, 2]) }, null],
       ['downpour', { ...wx, temp: 78, hi: 84, lo: 66, rain: rain(0, 0, 'RAIN IN 25 MIN', [0, 5, 9, 10, 10, 8, 5, 3], [0, 2, 3, 3, 3, 2, 2, 1]) }, null],
       ['snow in', { ...wx, icon: 'cloudy', temp: 30, hi: 33, lo: 24, rain: rain(1, 0, 'SNOW IN 40 MIN', [0, 0, 4, 6, 7, 9, 8, 6], [0, 0, 1, 2, 2, 3, 2, 2]) }, null],
+      ['snow ends', { ...wx, icon: 'snow', temp: 28, hi: 31, lo: 22, rain: rain(1, 1, 'ENDS IN 40 MIN', [5, 4, 3, 2, 1, 0, 0, 0], [2, 2, 2, 1, 1, 0, 0, 0]) }, null],
       ['snow now', { ...wx, icon: 'snow', temp: 28, hi: 31, lo: 22, rain: rain(1, 1, 'SNOW NEXT 2 HRS', [5, 7, 9, 10, 9, 8, 7, 5], [2, 2, 3, 3, 3, 3, 2, 2]) }, null],
-      ['no room for the drop', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 105 MIN', [1, 1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0]) }, null],
+      ['no room for the mark', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 105 MIN', [1, 1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0]) }, null],
       ['tor warning', { ...wx, icon: 'storm', rain: rain(0, 1, 'RAIN NEXT 2 HRS', [6, 7, 8, 9, 8, 7, 6, 5], [2, 2, 2, 3, 2, 2, 2, 2]) }, { kind: 'tor', lvl: 'warning' }],
       ['svr watch', { ...wx, icon: 'storm', rain: rain(0, 0, 'RAIN IN 45 MIN', [0, 0, 0, 3, 9, 10, 6, 2], [0, 0, 0, 1, 3, 3, 2, 1]) }, { kind: 'svr', lvl: 'watch' }],
     ];
