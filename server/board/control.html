@@ -470,7 +470,7 @@
       ? 'The radar frame\'s time (dim), with AM/PM and any weather warning icon under it.'
       : corner === 'now' ? 'The current time in white, with AM/PM and any weather warning icon under it.'
       : corner === 'age' ? 'How long ago the frame is (3m, 10m…) in dark grey under the frame indicator; a weather watch or warning shows at the bottom right.'
-      : corner === 'none' ? 'Just the radar: no time, temperature or frame indicator. A weather watch or warning still shows at the bottom right.'
+      : corner === 'none' ? 'Just the radar and the frame indicator: no time or temperature. A weather watch or warning still shows at the bottom right.'
       : 'Current weather icon and temperature; a weather watch or warning shows at the bottom right.';
     $('rowsHint').textContent = 'These are the most the board shows. When more destinations are running than fit, '
       + 'it hides the weather row first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather row.'

@@ -962,7 +962,7 @@
       const clear = (b) => { if (b[1] <= b[3]) f.fill(b[0] - 1, b[1] - 1, b[2] - b[0] + 3, b[3] - b[1] + 3, '#000000'); };
       const segW = 2, segGap = 1;
       const indX = right - (ids.length * (segW + segGap) - segGap) + 1;
-      if (ids.length && r.clock !== 'none') clear([indX, top, right, top + 1]);
+      if (ids.length) clear([indX, top, right, top + 1]);
       const drawIndicator = () => {
         let x = indX;
         ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
@@ -997,7 +997,9 @@
         return f;
       }
       if (r.clock === 'none') {
-        // Nothing in the corner but the radar (and a warning tag, if any).
+        // Nothing in the corner but the frame indicator (and a warning tag,
+        // if any); the rest is radar.
+        drawIndicator();
         if (ws) drawWarnTag();
         return f;
       }

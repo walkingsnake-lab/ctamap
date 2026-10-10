@@ -912,7 +912,7 @@ test('baseball score flash: amber for a minute after a change, fades to white, t
   assert.ok(count(f, draw.BB.live, 22, 12, 30, 18) > 0);
 });
 
-test('radar corner age: "3m" in dark grey under the indicator; none: just the radar', () => {
+test('radar corner age: "3m" in dark grey under the indicator; none: the radar and the indicator', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
   const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 1500, now - 600, now - 170], timeBox: [40, 0, 24, 22], split: false, showTime: true, temp: 63, icon: 'sun' };
   const frames = { a: new Uint8Array(2048).fill(3), b: new Uint8Array(2048).fill(3), c: new Uint8Array(2048).fill(3) };
@@ -936,10 +936,14 @@ test('radar corner age: "3m" in dark grey under the indicator; none: just the ra
   assert.notDeepEqual(ageCells(at({ clock: 'age' }, { idx: 0 })), ageCells(f), '25m vs 3m');
   // A warning tag at the bottom right, like time off.
   assert.ok(count(at({ clock: 'age' }, {}, { kind: 'svr', lvl: 'watch' }), draw.C.watch, 30, 26, 63, 31) > 5);
-  // None: radar only; no indicator or text, and the radar under the corner is untouched.
+  // None: the frame indicator and nothing else but radar and any warning tag.
   const none = at({ clock: 'none' });
+  assert.ok(count(none, draw.C.amber, 40, 2, 63, 3) > 0, 'indicator');
+  assert.equal(count(none, draw.C.radarSub, 0, 0, 63, 31) + count(none, draw.C.radarTime, 0, 0, 63, 31) + count(none, draw.C.label, 0, 0, 63, 31), 0, 'no text');
+  const indicator = (f) => { const out = []; for (let y = 2; y <= 3; y++) for (let x = 40; x < 64; x++) out.push(hex(f.get(x, y))); return out; };
+  assert.deepEqual(indicator(none), indicator(f), 'the same indicator as age');
   const first = none.get(0, 0);
-  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) assert.deepEqual(none.get(x, y), first, `radar pixel ${x},${y}`);
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (!(y >= 1 && y <= 4 && x >= 38)) assert.deepEqual(none.get(x, y), first, `radar pixel ${x},${y}`);
   assert.ok(count(at({ clock: 'none' }, {}, { kind: 'tor', lvl: 'watch' }), draw.C.watch, 30, 26, 63, 31) > 5, 'warning tag stays');
 });
 
