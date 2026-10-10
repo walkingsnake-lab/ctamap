@@ -954,42 +954,74 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
 # drawFiveDay() in draw.js.
 
 FD_LETTER = hexc('#4a4a4a')
-FD_NUM = hexc('#b0b0b0')
+FD_NUM = C['grey']
 FD_PITCH = 13
+FD_ICON_X = 1
+FD_HL_RIGHT = 62
+FD_TEMP_X = FD_ICON_X + 10
 
 
-def _fd_adv(ch):
+def _tight_temp(s):
+    return len(s) >= 3 or s[0] == '-'
+
+
+def _tight_adv(ch):
     return 3 if ch == '1' or ch == '-' else 4
 
 
-def draw_day_temp(f, s, cx, base, color):
-    if len(s) < 3 and s[0] != '-':
-        ctext(f, 'small', s, cx, base, color)
-        return
+def temp_width(s):
+    if not _tight_temp(s):
+        return measure('small', s)
     w = -1
     for ch in s:
-        w += _fd_adv(ch)
-    x = cx - w // 2
+        w += _tight_adv(ch)
+    return w
+
+
+def draw_temp_text(f, s, x, base, color):
+    if not _tight_temp(s):
+        return f.text('small', s, x, base, color)
     for ch in s:
         if ch == '-':
             f.fill(x, base - 3, 2, 1, color)
         else:
             f.text('small', ch, x, base, color)
-        x += _fd_adv(ch)
+        x += _tight_adv(ch)
+    return x
+
+
+def draw_day_temp(f, s, cx, base, color):
+    draw_temp_text(f, s, cx - temp_width(s) // 2, base, color)
+
+
+def _fd_left(parts):
+    w = -1
+    for t, c, n in parts:
+        w += (temp_width(t) if n else measure('small', t)) + 1
+    return FD_HL_RIGHT - w + 1
 
 
 def draw_five_day(f, wx):
-    x = f.text('5x7', str(wx['temp']), 0, 7, C['label'])
-    f.text('small', '°', x, 6, C['label'])
     if wx.get('icon') in assets.ICONS:
-        draw_icon(f, wx['icon'], 22, 0)
+        draw_icon(f, wx['icon'], FD_ICON_X, 0)
+    sh = scale_color(temp_color(wx['temp']), 0.2)
+    temp_right = f.text('small', '°', f.text('5x7', str(wx['temp']), FD_TEMP_X + 1, 8, sh), 7, sh) - 2
+    x = f.text('5x7', str(wx['temp']), FD_TEMP_X, 7, C['label'])
+    f.text('small', '°', x, 6, C['label'])
     if wx.get('hi') is not None and wx.get('lo') is not None:
-        hx = 63 - measure('small', 'H%s L%s' % (wx['hi'], wx['lo'])) + 1
-        hx = f.text('small', 'H', hx, 6, FD_LETTER)
-        hx = f.text('small', str(wx['hi']), hx, 6, FD_NUM)
-        hx = f.text('small', ' L', hx, 6, FD_LETTER)
-        f.text('small', str(wx['lo']), hx, 6, FD_NUM)
-    f.fill(0, 9, 64, 1, C['divider'])
+        hi, lo = str(wx['hi']), str(wx['lo'])
+        up, down = g(assets.UP), g(assets.DOWN)
+        ways = (((up, FD_LETTER, False), (hi, FD_NUM, True), (' ' + down, FD_LETTER, False), (lo, FD_NUM, True)),
+                ((up, FD_LETTER, False), (hi, FD_NUM, True), (down, FD_LETTER, False), (lo, FD_NUM, True)),
+                ((hi, FD_NUM, True), (' ', FD_NUM, False), (lo, FD_NUM, True)))
+        parts = ways[-1]
+        for w in ways:
+            if _fd_left(w) >= temp_right + 2:
+                parts = w
+                break
+        hx = _fd_left(parts)
+        for t, c, n in parts:
+            hx = draw_temp_text(f, t, hx, 6, c) if n else f.text('small', t, hx, 6, c)
     for i in range(1, 5):
         f.fill(i * FD_PITCH - 1, 10, 1, 22, C['divider'])
     for i, d in enumerate(wx['days'][:5]):

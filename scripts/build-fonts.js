@@ -6,7 +6,7 @@
 //   node scripts/build-fonts.js
 //
 // Outputs (all BDF; the board build converts them to PCF):
-//   board-small.bdf  Tom Thumb 3x5, proportional, + bolt, funnel, alert circle
+//   board-small.bdf  Tom Thumb 3x5, proportional, + bolt, funnel, alert circle, arrows
 //   board-5x7.bdf    X11 5x7, proportional, + "tt" ligature, "min" glyph
 //   board-clock.bdf  X11 9x15 Bold, digits + square-dot colon (monospace)
 //
@@ -187,6 +187,22 @@ function buildSmall() {
     '#.###',
     '#...#',
     '.###.',
+  ]), 0));
+
+  // Up and down arrows (5x5): a filled head on a shaft, for the high and low.
+  f.glyphs.set(G.UP, glyph('up', G.UP, art([
+    '..#..',
+    '.###.',
+    '#.#.#',
+    '..#..',
+    '..#..',
+  ]), 0));
+  f.glyphs.set(G.DOWN, glyph('down', G.DOWN, art([
+    '..#..',
+    '..#..',
+    '#.#.#',
+    '.###.',
+    '..#..',
   ]), 0));
 
   rename(f, '-ctamap-BoardSmall-Medium-R-Normal--6-60-75-75-P-40-ISO10646-1',

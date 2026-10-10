@@ -157,6 +157,9 @@ async function build() {
       ['normal', { ...wx, days: days([['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']]) }, null],
       ['heat', { ...wx, icon: 'sun', temp: 97, hi: 101, lo: 82, days: days([['SA', 99, 'sun'], ['SU', 104, 'sun'], ['MO', 100, 'pcloudy_day'], ['TU', 92, 'storm'], ['WE', 86, 'pcloudy_day']]) }, null],
       ['cold', { ...wx, icon: 'moon', temp: -8, hi: 2, lo: -14, days: days([['SA', -3, 'snow'], ['SU', -12, 'sun'], ['MO', -6, 'ice'], ['TU', 9, 'fog'], ['WE', 21, 'cloudy']]) }, null],
+      ['high/low condensed', { ...wx, icon: 'snow', temp: -12, hi: -1, lo: -10, days: days([['SA', -12, 'snow']]) }, null],
+      ['high/low no space', { ...wx, icon: 'snow', temp: -15, hi: -10, lo: -24, days: days([['SA', -12, 'snow']]) }, null],
+      ['high/low without arrows', { ...wx, icon: 'snow', temp: -15, hi: -100, lo: -100, days: days([['SA', -12, 'snow']]) }, null],
       ['three days', { ...wx, days: days([['TH', 45, 'pcloudy_day'], ['FR', 39, 'snow'], ['SA', 50, 'storm']]) }, null],
       ['tor warning', { ...wx, days: days([['SA', 71, 'sun']]) }, { kind: 'tor', lvl: 'warning' }],
     ];

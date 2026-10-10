@@ -10,4 +10,6 @@ module.exports = {
   ALERT_DISC: 0xe004,  // small: 5x5 alert circle, red layer ("!" pixels left blank)
   ALERT_MARK: 0xe005,  // small: 5x5 "!" for the alert circle, white layer (same origin)
   CLOCK: 0xe006,       // small: 5x5 clock, replaces the ticker index for schedule-based arrivals
+  UP: 0xe007,          // small: 5x5 up arrow (the day's high)
+  DOWN: 0xe008,        // small: 5x5 down arrow (the day's low)
 };

@@ -755,42 +755,71 @@
 
     // ---- 5-day layout (wxView '5day'; mockup docs/board/mockups/weather/5day-final) ----
     // The weather screen without rain when wx carries `days`. Today on rows
-    // 0-7: the temperature (5x7, label white, small degree sign), the icon at x22, `H63 L49` right-aligned (letters dim, numbers
-    // light). Below, a rule on row 9 (row 8 kept clear of the icon) and five
-    // 13px day columns split by dividers hanging from it on rows 10-31:
+    // 0-7: the icon at x1, the temperature at x11 (5x7, label white, small
+    // degree sign, 1px temperature-colored shadow), the high and low (`↑63 ↓49`,
+    // arrow glyphs) right-aligned to x62 (a 1px margin, like the icon's)
+    // (arrows dim, numbers grey). Below, five 13px day columns split by
+    // dividers on rows 10-31:
     // weekday (rows 11-15), icon (17-24), and the high in its temperature
     // color (rows 27-31).
-    const FD_LETTER = '#4a4a4a', FD_NUM = '#b0b0b0';
+    const FD_LETTER = '#4a4a4a', FD_NUM = C.grey;
     const FD_PITCH = 13;
-    // A day's high, centered at cx. Three characters (100+, -10 and below)
-    // are 11px in Tom Thumb against 12px between dividers, so they draw
+    const FD_ICON_X = 1;
+    const FD_HL_RIGHT = 62;
+    const FD_TEMP_X = FD_ICON_X + 10;   // after the 8px icon and a 2px gap, as on the weather row
+    // Tom Thumb temperatures, condensed. Three characters (100+, -10 and
+    // below) are 11px, against 12px between the day dividers, so they draw
     // tight: '1' advances 3 (its right column is blank) and the minus is a
-    // 2px bar, keeping a pixel clear of the dividers. Every negative uses the
-    // short minus so they match.
-    function drawDayTemp(f, str, cx, base, color) {
-      if (str.length < 3 && str[0] !== '-') { ctext(f, 'small', str, cx, base, color); return; }
-      const adv = (ch) => (ch === '1' || ch === '-' ? 3 : 4);
+    // 2px bar. Every negative uses the short minus so they match. Used for
+    // the day highs and for today's high/low.
+    const tightTemp = (str) => str.length >= 3 || str[0] === '-';
+    const tightAdv = (ch) => (ch === '1' || ch === '-' ? 3 : 4);
+    function tempWidth(str) {
+      if (!tightTemp(str)) return measure('small', str);
       let w = -1;
-      for (const ch of str) w += adv(ch);
-      let x = cx - Math.floor(w / 2);
+      for (const ch of str) w += tightAdv(ch);
+      return w;
+    }
+    // Draws at x; returns x after the last advance, like f.text.
+    function drawTempText(f, str, x, base, color) {
+      if (!tightTemp(str)) return f.text('small', str, x, base, color);
       for (const ch of str) {
         if (ch === '-') f.fill(x, base - 3, 2, 1, color);
         else f.text('small', ch, x, base, color);
-        x += adv(ch);
+        x += tightAdv(ch);
       }
+      return x;
+    }
+    // A day's high, centered at cx (a pixel clear of the dividers).
+    function drawDayTemp(f, str, cx, base, color) {
+      drawTempText(f, str, cx - Math.floor(tempWidth(str) / 2), base, color);
     }
     function drawFiveDay(f, wx) {
-      const x = f.text('5x7', String(wx.temp), 0, 7, C.label);
+      // A 1px shadow down and right in the temperature's color (20%, as on
+      // the conditions screen), under the white temperature.
+      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
+      const sh = scaleColor(tempColor(wx.temp), 0.2);
+      // Right edge of the temperature's ink, shadow included (the degree
+      // sign advances 1px past its ink).
+      const tempRight = f.text('small', '°', f.text('5x7', String(wx.temp), FD_TEMP_X + 1, 8, sh), 7, sh) - 2;
+      const x = f.text('5x7', String(wx.temp), FD_TEMP_X, 7, C.label);
       f.text('small', '°', x, 6, C.label);
-      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 22, 0);
       if (wx.hi != null && wx.lo != null) {
-        let hx = 63 - measure('small', `H${wx.hi} L${wx.lo}`) + 1;
-        hx = f.text('small', 'H', hx, 6, FD_LETTER);
-        hx = f.text('small', String(wx.hi), hx, 6, FD_NUM);
-        hx = f.text('small', ' L', hx, 6, FD_LETTER);
-        f.text('small', String(wx.lo), hx, 6, FD_NUM);
+        // `↑63 ↓49` (numbers condensed like the day highs). When that would
+        // come within 1px of the temperature (a three-character temperature
+        // with long highs/lows): without the space before the down arrow,
+        // then just `-10 -24`. Parts: [text, color, is a number].
+        const hi = String(wx.hi), lo = String(wx.lo);
+        const ways = [
+          [[s(G.UP), FD_LETTER, false], [hi, FD_NUM, true], [' ' + s(G.DOWN), FD_LETTER, false], [lo, FD_NUM, true]],
+          [[s(G.UP), FD_LETTER, false], [hi, FD_NUM, true], [s(G.DOWN), FD_LETTER, false], [lo, FD_NUM, true]],
+          [[hi, FD_NUM, true], [' ', FD_NUM, false], [lo, FD_NUM, true]],
+        ];
+        const left = (parts) => FD_HL_RIGHT - parts.reduce((w, [t, , n]) => w + (n ? tempWidth(t) : measure('small', t)) + 1, -1) + 1;
+        const parts = ways.find((w) => left(w) >= tempRight + 2) || ways[ways.length - 1];
+        let hx = left(parts);
+        for (const [t, c, n] of parts) hx = n ? drawTempText(f, t, hx, 6, c) : f.text('small', t, hx, 6, c);
       }
-      f.fill(0, 9, 64, 1, C.divider);
       for (let i = 1; i < 5; i++) f.fill(i * FD_PITCH - 1, 10, 1, 22, C.divider);
       wx.days.slice(0, 5).forEach((d, i) => {
         const cx = i * FD_PITCH + 6;
