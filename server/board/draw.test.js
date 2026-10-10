@@ -440,7 +440,7 @@ test('weather screen: radar screen with no frames shows big temp, details, and r
   const rad = (w, extra = {}) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w, ...extra });
   const f = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
   assert.ok(count(f, draw.C.label, 1, 4, 22, 13) > 40, 'big temperature + degree ring');
-  assert.equal(hex(f.get(56, 2)), '#ffc800', 'icon top right');
+  assert.equal(hex(f.get(56, 2)), '#ffd000', 'icon top right');
   assert.ok(count(f, draw.C.wxText, 29, 11, 63, 15) > 15, 'dim condition word');
   for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 18)), draw.C.divider, `divider col ${x}`);
   assert.ok(count(f, draw.C.grey, 0, 20, 40, 24) > 15, 'FEELS');

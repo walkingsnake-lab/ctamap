@@ -30,30 +30,34 @@ FONT_PUA = {
 }
 
 ICON_PALETTE = {
-    89: (255, 200, 0),  # Y
-    77: (232, 220, 160),  # M
-    67: (160, 160, 160),  # C
-    71: (143, 143, 143),  # G
-    66: (30, 144, 255),  # B
+    89: (255, 208, 0),  # Y
+    79: (255, 140, 0),  # O
+    77: (255, 228, 122),  # M
+    67: (208, 208, 208),  # C
+    68: (124, 124, 124),  # D
+    71: (138, 138, 138),  # G
+    75: (84, 84, 84),  # K
+    66: (30, 136, 255),  # B
     72: (143, 143, 143),  # H
-    73: (159, 230, 255),  # I
+    73: (64, 208, 255),  # I
     87: (255, 255, 255),  # W
-    83: (208, 240, 255),  # S
-    70: (143, 143, 143),  # F
-    76: (255, 216, 0),  # L
+    83: (128, 200, 255),  # S
+    70: (176, 176, 176),  # F
+    69: (104, 104, 104),  # E
+    76: (255, 224, 0),  # L
 }
 
 ICONS = {
-    'sun': b'...YY....Y....Y....YY...Y.YYYY.YY.YYYY.Y...YY....Y....Y....YY...',
+    'sun': b'...OO....O....O....YY...O.YYYY.OO.YYYY.O...YY....O....O....OO...',
     'moon': b'...MMM...MMM.....MM.....MM......MM.......MM......MMM.......MMM..',
-    'pcloudy_day': b'..YY.....YYYY....YYYY.....YY.CC.....CCCC..CCCCCC.CCCCCCC..CCCCC.',
-    'pcloudy_night': b'.MMM....MM......M.......M....CC.MM..CCCC.MMCCCCC..CCCCCC...CCCC.',
-    'cloudy': b'............CC...CC.CCC.CCCCCCCCCCCCCCCC.CCCCCC.................',
+    'pcloudy_day': b'..YY.....YYYY....YYYY.....YY.CC.....CCCC..CCCCCC.CCCCCCC..DDDDD.',
+    'pcloudy_night': b'.MMM....MM......M.......M....CC.MM..CCCC.MMCCCCC..CCCCCC...DDDD.',
+    'cloudy': b'............CC...CC.CCC.CCCCCCCCCCCCCCCC.DDDDDD.................',
     'rain': b'...BB....BBBBBB.BBBBBBBB...H.......H.......H....H..H.....HH.....',
     'ice': b'...II....IIIIII.IIIIIIIIW..H.W.WW..H...W...H....H..H.....HH.....',
-    'snow': b'...S.....S.S.S....SSS...SSSSSSS...SSS....S.S.S.....S............',
-    'storm': b'..GGGG...GGGGGG.GGGGGGGG.GGGGGG....LL.....LL.......LL.....L.....',
-    'fog': b'........FFFFFF............FFFFFF........FFFFFF..................',
+    'snow': b'...S.....S.S.S....WWW...SSWWWSS...WWW....S.S.S.....S............',
+    'storm': b'..GGGG...GGGGGG.GGGGGGGG.KKKKKK....LL.....LL.......LL.....L.....',
+    'fog': b'........FFFFFF............EEEEEE........FFFFFF..................',
 }
 
 ALERT_BANG = ('.#.', '.#.', '.#.', '...', '.#.')
