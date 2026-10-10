@@ -119,6 +119,22 @@ test('5-day: the five days after today, weekday names, day icons, rounded highs'
   assert.equal(dayName(Date.UTC(2027, 2, 14, 6) / 1000), 'SU'); // CST midnight, the day DST starts
 });
 
+test('cache file: saved data from before the 5-day forecast (no days) is fetched fresh', async () => {
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'wx-'));
+  const cacheFile = path.join(dir, 'board-weather.json');
+  const t = 2000;
+  const old = { ...parse(MORSE) }; delete old.days;
+  fs.writeFileSync(cacheFile, JSON.stringify({ '42.008,-87.666': { lat: 42.0084, lon: -87.6659, data: old, fetchedAt: t - 60 } }));
+  let calls = 0;
+  const wx = createWeather({ fetch: async () => { calls++; return MORSE; }, now: () => t, log: quiet, cacheFile });
+  assert.deepEqual((await wx.get(42.0084, -87.6659)).days, []);
+  assert.equal(calls, 1);
+  // Current data is used as saved.
+  const wx2 = createWeather({ fetch: async () => { calls++; return MORSE; }, now: () => t, log: quiet, cacheFile });
+  await wx2.get(42.0084, -87.6659);
+  assert.equal(calls, 1);
+});
+
 test('wind: 8-point compass, CALM under 1 mph', () => {
   assert.equal(compass(0), 'N'); assert.equal(compass(22), 'N'); assert.equal(compass(23), 'NE');
   assert.equal(compass(180), 'S'); assert.equal(compass(337), 'NW'); assert.equal(compass(338), 'N'); assert.equal(compass(360), 'N');

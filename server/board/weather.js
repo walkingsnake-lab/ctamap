@@ -131,7 +131,8 @@ function autoBright(w, now) {
 
 // Open-Meteo per location, every 10 min while a board is asking.
 function createWeather({ fetch = (lat, lon) => fetchJson(url(lat, lon)), interval = 600, ...opts } = {}) {
-  return createLocationPoller({ name: 'weather', fetch, parse, interval, ...opts });
+  // Saved data from before the 5-day forecast has no `days`: fetch fresh.
+  return createLocationPoller({ name: 'weather', fetch, parse, interval, usable: (d) => Array.isArray(d.days), ...opts });
 }
 
 module.exports = { url, parse, condition, toWx, toScreenWx, toDays, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS };
