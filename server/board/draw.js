@@ -756,7 +756,8 @@
     // ---- 5-day layout (wxView '5day'; mockup docs/board/mockups/weather/5day-final) ----
     // The weather screen without rain when wx carries `days`. Today on rows
     // 0-7: the temperature (5x7, label white, small degree sign), the icon at x22, `H63 L49` right-aligned (letters dim, numbers
-    // light). Below, five 13px day columns split by dividers on rows 10-31:
+    // light). Below, a rule on row 9 (row 8 kept clear of the icon) and five
+    // 13px day columns split by dividers hanging from it on rows 10-31:
     // weekday (rows 11-15), icon (17-24), and the high in its temperature
     // color (rows 27-31).
     const FD_LETTER = '#4a4a4a', FD_NUM = '#b0b0b0';
@@ -789,6 +790,7 @@
         hx = f.text('small', ' L', hx, 6, FD_LETTER);
         f.text('small', String(wx.lo), hx, 6, FD_NUM);
       }
+      f.fill(0, 9, 64, 1, C.divider);
       for (let i = 1; i < 5; i++) f.fill(i * FD_PITCH - 1, 10, 1, 22, C.divider);
       wx.days.slice(0, 5).forEach((d, i) => {
         const cx = i * FD_PITCH + 6;
