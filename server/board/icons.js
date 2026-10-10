@@ -5,18 +5,25 @@
 // character is a key into PALETTE. The board gets these as a sprite sheet
 // (generated later from this file), so this file is the source of truth.
 
+// Grays stay neutral (equal channels): at night brightness the panel's 5-bit
+// steps turn a slightly tinted gray green or teal. Clouds are two-tone, light
+// over a darker underside, and lighter than the row's gray text; the storm
+// cloud is darker so it doesn't read as plain cloudy.
 const PALETTE = {
   Y: '#ffc800', // sun
-  M: '#e8dca0', // moon
-  C: '#a0a0a0', // cloud
-  G: '#8f8f8f', // storm cloud
-  B: '#1e90ff', // umbrella canopy
+  M: '#ffe47a', // moon
+  C: '#d0d0d0', // cloud
+  D: '#7c7c7c', // cloud underside
+  G: '#8a8a8a', // storm cloud
+  K: '#545454', // storm cloud underside
+  B: '#1e88ff', // umbrella canopy
   H: '#8f8f8f', // umbrella handle
-  I: '#9fe6ff', // icy canopy
+  I: '#40d0ff', // icy canopy
   W: '#ffffff', // icicles
   S: '#d0f0ff', // snowflake
-  F: '#8f8f8f', // fog
-  L: '#ffd800', // lightning
+  F: '#b0b0b0', // fog
+  E: '#686868', // fog, far line
+  L: '#ffe000', // lightning
 };
 
 const ICONS = {
@@ -31,14 +38,14 @@ const ICONS = {
     '...YY...',
   ],
   moon: [
-    '...MMM..',
+    '..MMMM..',
     '.MMM....',
-    '.MM.....',
-    'MM......',
-    'MM......',
-    '.MM.....',
+    'MMM.....',
+    'MMM.....',
+    'MMM.....',
+    'MMM.....',
     '.MMM....',
-    '...MMM..',
+    '..MMMM..',
   ],
   pcloudy_day: [
     '..YY....',
@@ -48,17 +55,17 @@ const ICONS = {
     '....CCCC',
     '..CCCCCC',
     '.CCCCCCC',
-    '..CCCCC.',
+    '..DDDDD.',
   ],
   pcloudy_night: [
-    '.MMM....',
+    '.MM.....',
     'MM......',
-    'M.......',
-    'M....CC.',
-    'MM..CCCC',
-    '.MMCCCCC',
+    'MM......',
+    '.MM..CC.',
+    '....CCCC',
     '..CCCCCC',
-    '...CCCC.',
+    '.CCCCCCC',
+    '..DDDDD.',
   ],
   cloudy: [
     '........',
@@ -66,7 +73,7 @@ const ICONS = {
     '.CC.CCC.',
     'CCCCCCCC',
     'CCCCCCCC',
-    '.CCCCCC.',
+    '.DDDDDD.',
     '........',
     '........',
   ],
@@ -104,7 +111,7 @@ const ICONS = {
     '..GGGG..',
     '.GGGGGG.',
     'GGGGGGGG',
-    '.GGGGGG.',
+    '.KKKKKK.',
     '...LL...',
     '..LL....',
     '...LL...',
@@ -114,7 +121,7 @@ const ICONS = {
     '........',
     'FFFFFF..',
     '........',
-    '..FFFFFF',
+    '..EEEEEE',
     '........',
     'FFFFFF..',
     '........',
