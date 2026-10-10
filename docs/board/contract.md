@@ -275,11 +275,12 @@ One team logo crop for the logo layout.
 - The board fetches missing logos one per scheduler run while the baseball screen is up (`firmware/boardlib/app.py` `_logo`) and drops logos the payload no longer uses.
 - Logos come from the owner's uploads (`POST /board/<secret>/api/logos`); they're kept beside the board state and never committed (trademarks; the repo is public). Processing is only a resize and a crop: each 32px tile (or any image, area-averaged to 32px) is box-scaled to 24px and 12 rows are cut at the team's crop row (`OFFSET` in `server/board/mlb-logos.js`, or `crop=` on upload).
 
-### `GET /board/radar/<frameId>?b=<id>`
+### `GET /board/radar/<frameId>?b=<id>[&pk=4]`
 One radar frame for that board's location.
 
 - `Content-Type: application/octet-stream`, `Cache-Control: max-age=3600, immutable`.
 - Body: **2048 bytes**, 64 × 32, row-major from top-left, **one byte per pixel**.
+- `pk=4` (what the board asks for): **1024 bytes**, the same pixels packed two a byte, the left pixel in the high nibble (values fit in 4 bits). The board keeps its frames packed, halving their memory (6 frames: 6 KB instead of 12 KB), and unpacks while drawing (`packFrame()` in `radar.js`, `BoardFrame.draw_radar()` in `device.py`).
 
 | Value | Meaning |
 |---|---|

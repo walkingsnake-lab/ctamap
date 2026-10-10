@@ -281,3 +281,11 @@ test('poller: after a quiet spell, old frames are not served and on resets', asy
   // An old frame the board still lists can still be fetched by id.
   assert.equal(radar.frame('40100', storm.frames[0]).length, 2048);
 });
+
+test('packFrame: two pixels a byte, left in the high nibble', () => {
+  const frame = Uint8Array.from({ length: 2048 }, (_, i) => (i * 7) % 11);
+  const p = R.packFrame(frame);
+  assert.equal(p.length, 1024);
+  assert.equal(p[0], (frame[0] << 4) | frame[1]);
+  assert.deepEqual([...p].flatMap((b) => [b >> 4, b & 15]), [...frame]);
+});

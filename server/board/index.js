@@ -10,7 +10,7 @@ const { stationDestinations } = require('./destinations');
 const { createWeather, toWx, toScreenWx, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
-const { createRadar } = require('./radar');
+const { createRadar, packFrame } = require('./radar');
 const { createTestRadar } = require('./test-radar');
 const { createMlb, prioritize } = require('./mlb');
 const { createLogos } = require('./mlb-logos');
@@ -397,13 +397,15 @@ function createBoard({
       return send(res, 200, sectionsFor(body, shown));
     }
 
-    // One radar frame for the board's station: 2048 bytes, immutable.
+    // One radar frame for the board's station: 2048 bytes, immutable;
+    // pk=4: packed to 1024 (radar.packFrame), as the board stores them.
     if (first === 'radar' && rest.length === 1) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
       if (!authed(req)) return send(res, 401, { err: 'bad_token' });
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      return sendFrame(res, radar.frame(board.station.mapid, rest[0]) || testRadar.frame(rest[0]));
+      const bytes = radar.frame(board.station.mapid, rest[0]) || testRadar.frame(rest[0]);
+      return sendFrame(res, bytes && parsed.query.pk === '4' ? packFrame(bytes) : bytes);
     }
 
     // One team logo crop: 24 x 12 RGB (864 bytes), immutable (the id carries a hash).
