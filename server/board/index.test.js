@@ -658,15 +658,36 @@ test('update: rain bars replace the radar loop while precipitation is due, when 
   assert.deepEqual(b.ft, []);
   assert.equal(b.wx.rain.snow, 0);
   assert.equal(b.wx.rain.h.length, 8);
+  assert.equal(b.wx.rain.alt, undefined);
   assert.match(b.wx.rain.title, /^RAIN IN \d+ MIN$/);
+  // Both: the frames stay, and the board alternates (alt s each).
+  s.store.update('home', { wxRain: 'both', wxRainEvery: 20 });
+  b = (await s.req(FULL)).body.radar;
+  assert.deepEqual(b.frames, ['x']);
+  assert.equal(b.wx.rain.alt, 20);
   await s.close();
-  // Dry: no bars, the radar as before.
+  // Bars mode never sends the radar loop, even when the forecast is dry but
+  // the radar box has rain.
+  const dry0 = parse({ ...raw, minutely_15: { time, precipitation: time.map(() => 0), snowfall: time.map(() => 0) } });
+  const s0 = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(dry0), radar: fakeRadar(radarOn) });
+  s0.store.update('home', { wxRain: 'bars' });
+  b = (await s0.req(FULL)).body.radar;
+  assert.deepEqual(b.frames, []);
+  assert.equal(b.wx.rain, undefined);
+  s0.store.update('home', { wxRain: 'both' });
+  b = (await s0.req(FULL)).body.radar;
+  assert.deepEqual(b.frames, ['x']);       // radar only, nothing to alternate with
+  assert.equal(b.wx.rain, undefined);
+  await s0.close();
+  // Dry forecast: no bars; 'bars' never sends the loop, 'both' and 'radar' do.
   const dry = parse({ ...raw, minutely_15: { time, precipitation: precipitation.map(() => 0), snowfall: precipitation.map(() => 0) } });
   const s2 = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(dry), radar: fakeRadar(radarOn) });
   s2.store.update('home', { wxRain: 'bars' });
   b = (await s2.req(FULL)).body.radar;
   assert.equal(b.wx.rain, undefined);
-  assert.deepEqual(b.frames, ['x']);
+  assert.deepEqual(b.frames, []);
+  s2.store.update('home', { wxRain: 'both' });
+  assert.deepEqual((await s2.req(FULL)).body.radar.frames, ['x']);
   await s2.close();
 });
 
@@ -684,6 +705,46 @@ test('update: the hourly setting sends the four hourly columns with the weather 
   assert.deepEqual(hours.map((x) => x.t), [53, 56, 59, 62]);
   assert.ok(hours.every((x) => x.icon === 'cloudy' && /^\d{1,2}[AP]$/.test(x.h)));
   assert.equal((await s.req(FULL)).body.radar.wx.days, undefined);
+  await s.close();
+});
+
+test('simulator test rain bars: forced whatever the setting, expires and clears like the other tests', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const radarOn = { on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(raw)), radar: fakeRadar(radarOn) });
+  const post = async (body) => {
+    const r = await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return { status: r.status, body: await r.json() };
+  };
+  assert.deepEqual((await s.req(FULL)).body.radar.frames, ['x']); // dry forecast, rain on radar
+  assert.equal((await post({ bars: 'nope' })).status, 400);
+  const titles = {};
+  for (const kind of ['rain', 'downpour', 'break', 'ends', 'continues', 'snow', 'snow now']) {
+    const r = await post({ bars: kind });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.bars, kind);
+    const rad = (await s.req(FULL)).body.radar;
+    assert.deepEqual(rad.frames, [], `${kind}: bars replace the loop`);
+    assert.equal(rad.wx.rain.h.length, 8);
+    titles[kind] = rad.wx.rain.title;
+  }
+  assert.match(titles.rain, /^RAIN IN \d+ MIN$/);
+  assert.match(titles.break, /^BREAK IN \d+ MIN$/);
+  assert.match(titles.ends, /^ENDS IN \d+ MIN$/);
+  assert.equal(titles.continues, 'RAIN NEXT 2 HRS');
+  assert.match(titles.snow, /^SNOW IN \d+ MIN$/);
+  assert.equal(titles['snow now'], 'SNOW NEXT 2 HRS');
+  assert.ok((await s.req(FULL)).body.radar.wx.rain.snow === 1);
+  // Both: the radar loop stays and the board alternates.
+  s.store.update('home', { wxRain: 'both', wxRainEvery: 10 });
+  const both = (await s.req(FULL)).body.radar;
+  assert.deepEqual(both.frames, ['x']);
+  assert.equal(both.wx.rain.alt, 10);
+  // Cleared: back to the dry forecast.
+  assert.equal((await post({})).body.bars, null);
+  assert.equal((await s.req(FULL)).body.radar.wx.rain, undefined);
   await s.close();
 });
 
@@ -762,7 +823,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, left: 0 });
+  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, bars: null, left: 0 });
   let r = await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' } });
   assert.equal(r.status, 200);
   const t = await r.json();

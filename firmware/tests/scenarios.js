@@ -187,6 +187,15 @@ async function build() {
       ['tor warning', { ...wx, icon: 'storm', rain: rain(0, 1, 'RAIN NEXT 2 HRS', [6, 7, 8, 9, 8, 7, 6, 5], [2, 2, 2, 3, 2, 2, 2, 2]) }, { kind: 'tor', lvl: 'warning' }],
       ['svr watch', { ...wx, icon: 'storm', rain: rain(0, 0, 'RAIN IN 45 MIN', [0, 0, 0, 3, 9, 10, 6, 2], [0, 0, 0, 1, 3, 3, 2, 1]) }, { kind: 'svr', lvl: 'watch' }],
     ];
+    // Alternating with the radar loop (rain.alt): a radar turn and a bars turn.
+    {
+      const ids = ['40100-202610091200', '40100-202610091206'];
+      const frame = new Uint8Array(2048).fill(3);
+      const alt = { ...wx, icon: 'rain', rain: rain(0, 1, 'RAIN NEXT 2 HRS', [6, 7, 8, 9, 8, 7, 6, 5], [2, 2, 2, 3, 2, 2, 2, 2]) };
+      alt.rain.alt = 20;
+      add('weather rain bars alternating', { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: true, frames: ids, ft: [t - 360, t], timeBox: radar.FULL_TIME_BOX, split: false, wx: alt } },
+        [{ screen: 'weather', idx: 1, now: t - (t % 40) }, { screen: 'weather', idx: 1, now: t - (t % 40) + 25 }], Object.fromEntries(ids.map((id) => [id, frame])));
+    }
     for (const [name, w, warn] of rainCases) {
       add(`weather rain bars ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
     }

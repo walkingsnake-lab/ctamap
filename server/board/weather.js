@@ -210,6 +210,28 @@ function toRain(w, now) {
   return { snow: snow ? 1 : 0, now: wet[0] ? 1 : 0, title, h, l };
 }
 
+// Made-up rain bars for the simulator's test controls: a kind from
+// TEST_RAIN, built as 15-minute data and run through toRain() so titles and
+// heights come from the real rules. Amounts are mm per 15 min for the next 8
+// quarter hours (the first is the current one).
+const TEST_RAIN = {
+  rain: [0, 0, 0.1, 0.4, 0.9, 1.2, 0.6, 0.3],
+  downpour: [0, 0.8, 2.5, 4, 3, 1.5, 0.7, 0.2],
+  break: [0.6, 0.4, 0, 0, 0.5, 1, 0.8, 0.5],
+  ends: [1.2, 0.9, 0.5, 0.2, 0, 0, 0, 0],
+  continues: [0.5, 0.7, 1, 1.4, 1.2, 0.9, 0.7, 0.5],
+  snow: [0, 0, 0.05, 0.2, 0.35, 0.5, 0.4, 0.2],
+  'snow now': [0.2, 0.3, 0.5, 0.7, 0.6, 0.45, 0.3, 0.2],
+};
+function testRain(kind, now) {
+  const mm = TEST_RAIN[kind];
+  if (!mm) return null;
+  const snow = kind.startsWith('snow');
+  const b0 = Math.floor(now / SLOT_S) * SLOT_S;
+  const q15 = [{ t: b0, p: 0, s: 0 }, ...mm.map((p, i) => ({ t: b0 + (i + 1) * SLOT_S, p, s: snow ? p * SNOW_CM_PER_MM : 0 }))];
+  return toRain({ q15 }, now);
+}
+
 // 'auto' brightness: full from sunrise to sunset, dimmer overnight. Uses the
 // day's times even slightly stale (a few minutes off at midnight is fine).
 function autoBright(w, now) {
@@ -224,4 +246,4 @@ function createWeather({ fetch = (lat, lon) => fetchJson(url(lat, lon)), interva
   return createLocationPoller({ name: 'weather', fetch, parse, interval, usable: (d) => Array.isArray(d.days) && Array.isArray(d.q15) && Array.isArray(d.hrs), ...opts });
 }
 
-module.exports = { url, parse, condition, toWx, toScreenWx, toDays, toHours, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };
+module.exports = { url, parse, condition, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };

@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, toWx, toScreenWx, toDays, toHours, toRain, autoBright } = require('./weather');
+const { createWeather, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar, packFrame } = require('./radar');
@@ -224,7 +224,9 @@ function createBoard({
     if (game && !GAME_STATES.includes(game)) throw new ValidationError(`game must be one of ${GAME_STATES.join(', ')}`);
     const rad = body.radar == null ? null : body.radar;
     if (rad && !testRadar.KINDS.includes(rad)) throw new ValidationError(`radar must be one of ${testRadar.KINDS.join(', ')}`);
-    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad };
+    const bars = body.bars == null ? null : body.bars;
+    if (bars && !Object.keys(TEST_RAIN).includes(bars)) throw new ValidationError(`bars must be one of ${Object.keys(TEST_RAIN).join(', ')}`);
+    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, bars };
   }
 
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
@@ -294,10 +296,18 @@ function createBoard({
     }
     // The radar screen is the weather screen: the radar loop only while rain
     // is in the box (frames are sent only then), current conditions otherwise.
-    // Rain bars (wxRain 'bars'): while precipitation is falling or due in
-    // the next 2 hours they replace the radar loop (no frames sent).
-    const rain = board.wxRain === 'bars' && w ? toRain(w, now) : null;
-    if (!radarState.on || rain) radarState = { ...radarState, frames: [], ft: [] };
+    // Rain bars (wxRain 'bars' or 'both'): while precipitation is falling or
+    // due in the next 2 hours. 'bars' never sends the radar loop; 'both'
+    // sends both and the board alternates them (rain.alt s each) while both
+    // apply.
+    const barsOn = board.wxRain === 'bars' || board.wxRain === 'both';
+    let rain = barsOn && w ? toRain(w, now) : null;
+    // Test rain bars (simulator): shown whatever the board's setting, and
+    // replacing the radar loop unless it's alternating ('both').
+    const testBars = test && test.bars ? testRain(test.bars, now) : null;
+    if (testBars) rain = testBars;
+    if (!radarState.on || board.wxRain === 'bars' || (testBars && board.wxRain !== 'both')) radarState = { ...radarState, frames: [], ft: [] };
+    if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15 };
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && w ? toDays(w) : null;
     const hours = board.wxView === 'hourly' && w ? toHours(w) : null;
@@ -532,13 +542,13 @@ function createBoard({
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
             throw e;
           }
-          if (t.lines.length || t.warn || t.game || t.radar) tests.set(id, { ...t, until: now + TEST_S });
+          if (t.lines.length || t.warn || t.game || t.radar || t.bars) tests.set(id, { ...t, until: now + TEST_S });
           else tests.delete(id);
         } else if (method !== 'GET') {
           return send(res, 405, { err: 'method' });
         }
         const t = activeTest(id, now);
-        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, left: 0 });
+        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, bars: t.bars || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, bars: null, left: 0 });
       }
 
       // Station list for the simulator's picker.

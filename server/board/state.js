@@ -28,14 +28,15 @@ const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
 const RADAR_CLOCKS = ['frame', 'now'];
 const WX_VIEWS = ['now', '5day', 'hourly'];  // weather screen without rain: conditions, 5-day, or hourly
-const WX_RAINS = ['radar', 'bars'];          // weather screen with rain around: radar loop or rain bars
+const WX_RAINS = ['radar', 'bars', 'both'];  // weather screen with rain around: radar loop, rain bars, or both alternating
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
   tickerHold: [5, 6, 8, 10, 12, 15],         // s each ticker page holds
   tickerSlide: [800, 1200, 1600, 2000],      // ms the ticker slide takes
   radarFrame: [300, 400, 500, 700, 1000],    // ms per radar loop frame
   radarHold: [2, 3, 4, 6, 8],                // s the loop holds on the newest frame
-  gameEvery: [30, 45, 60, 90, 120],          // s per game when baseball rotates
+  gameEvery: [30, 45, 60, 90, 120],
+  wxRainEvery: [10, 15, 20, 30, 45, 60],     // s each of radar / rain bars when both alternate          // s per game when baseball rotates
 };
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
@@ -109,10 +110,12 @@ function defaultBoard(stations) {
     // (today on top, the next five days in columns), or 'hourly' (today on
     // top, 3/6/9/12 hours ahead in columns).
     wxView: 'now',
-    // Weather screen while rain or snow is falling or due in 2 hours:
-    // 'radar' (the loop, while rain is in the box) or 'bars' (the next 2
-    // hours in 15-minute bars).
+    // Weather screen while rain is around: 'radar' (the loop, while rain is
+    // in the box), 'bars' (the next 2 hours in 15-minute bars, while the
+    // forecast has rain; never the loop), or 'both' (alternate every
+    // wxRainEvery s while both apply).
     wxRain: 'radar',
+    wxRainEvery: 15,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -177,6 +180,7 @@ function validatePatch(patch, stations) {
       case 'radarFrame':
       case 'radarHold':
       case 'gameEvery':
+      case 'wxRainEvery':
         if (!SPEEDS[key].includes(val)) throw new ValidationError(`${key} must be one of ${SPEEDS[key].join(', ')}`);
         out[key] = val;
         break;
