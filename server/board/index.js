@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, toWx, toScreenWx, toDays, toRain, autoBright } = require('./weather');
+const { createWeather, toWx, toScreenWx, toDays, toHours, toRain, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createRadar, packFrame } = require('./radar');
@@ -300,7 +300,8 @@ function createBoard({
     if (!radarState.on || rain) radarState = { ...radarState, frames: [], ft: [] };
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && w ? toDays(w) : null;
-    if (w) radarState = { ...radarState, wx: { ...toScreenWx(w), ...(days ? { days } : {}), ...(rain ? { rain } : {}) } };
+    const hours = board.wxView === 'hourly' && w ? toHours(w) : null;
+    if (w) radarState = { ...radarState, wx: { ...toScreenWx(w), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(rain ? { rain } : {}) } };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }

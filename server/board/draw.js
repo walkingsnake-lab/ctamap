@@ -833,6 +833,21 @@
       });
     }
 
+    // ---- hourly layout (wxView 'hourly') ----
+    // The 5-day layout's top bar, then four 16px columns (dividers on cols
+    // 15, 31, 47, rows 10-31) for the hours 3, 6, 9 and 12 ahead: time label
+    // (rows 11-15, grey), icon (17-24), temperature (27-31, its color).
+    function drawHourly(f, wx) {
+      drawTopBar(f, wx);
+      for (let i = 1; i < 4; i++) f.fill(i * 16 - 1, 10, 1, 22, C.divider);
+      wx.hours.slice(0, 4).forEach((h, i) => {
+        const cx = i * 16 + 7;
+        ctext(f, 'small', h.h, cx, 15, C.grey);
+        if (icons.ICONS[h.icon]) drawIcon(f, h.icon, cx - 4, 17);
+        drawDayTemp(f, String(h.t), cx, 31, tempColor(h.t));
+      });
+    }
+
     // ---- rain bars (wxRain 'bars'; mockup docs/board/mockups/weather/rain-states) ----
     // The weather screen while precipitation is falling or due in the next 2
     // hours (wx.rain). The top bar, then the title centered on rows 10-14
@@ -912,6 +927,7 @@
       // conditions while one is on.
       if ((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) && r.wx) {
         if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, p.warn, o.blink);
+        else if (r.wx.hours && r.wx.hours.length && !p.warn) drawHourly(f, r.wx);
         else if (r.wx.days && r.wx.days.length && !p.warn) drawFiveDay(f, r.wx);
         else drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow);
         return f;

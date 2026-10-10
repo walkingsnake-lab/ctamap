@@ -171,6 +171,7 @@
     <div class="seg" id="wxView">
       <button data-v="now">Conditions</button>
       <button data-v="5day">5-day</button>
+      <button data-v="hourly">Hourly</button>
     </div>
     <p class="hint" id="wxViewHint"></p>
     <div class="seg" id="wxRain">
@@ -445,13 +446,15 @@
     $('radarBright').value = String(board.radarBright || 100);
     $('radarCondRow').hidden = corner === 'temp';
     $('tempShadow').checked = board.tempShadow === true;
-    pressed('wxView', board.wxView === '5day' ? '5day' : 'now');
+    pressed('wxView', board.wxView === '5day' || board.wxView === 'hourly' ? board.wxView : 'now');
     pressed('wxRain', board.wxRain === 'bars' ? 'bars' : 'radar');
     $('wxRainHint').textContent = board.wxRain === 'bars'
       ? 'While rain or snow is falling or due in the next 2 hours: today on top and 15-minute bars below. Without any, the layout above.'
       : 'While rain is in the radar box: the radar loop.';
     $('wxViewHint').textContent = board.wxView === '5day'
       ? 'Today on top, the next five days\' highs below. Shows conditions while a weather warning or watch is on.'
+      : board.wxView === 'hourly'
+      ? 'Today on top, then the weather 3, 6, 9 and 12 hours ahead. Shows conditions while a weather warning or watch is on.'
       : 'The big temperature, feels-like, wind, high/low, and rain chance.';
     $('radarCornerHint').textContent = corner === 'frame'
       ? 'The radar frame\'s time (dim), with AM/PM and any weather warning icon under it.'

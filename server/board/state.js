@@ -27,7 +27,7 @@ const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
 const RADAR_CLOCKS = ['frame', 'now'];
-const WX_VIEWS = ['now', '5day'];            // weather screen without rain: conditions or 5-day
+const WX_VIEWS = ['now', '5day', 'hourly'];  // weather screen without rain: conditions, 5-day, or hourly
 const WX_RAINS = ['radar', 'bars'];          // weather screen with rain around: radar loop or rain bars
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
@@ -105,8 +105,9 @@ function defaultBoard(stations) {
     radarBright: 100,
     // Weather screen: a temperature-colored shadow behind the big temperature.
     tempShadow: false,
-    // Weather screen without rain: 'now' (current conditions) or '5day'
-    // (today on top, the next five days in columns).
+    // Weather screen without rain: 'now' (current conditions), '5day'
+    // (today on top, the next five days in columns), or 'hourly' (today on
+    // top, 3/6/9/12 hours ahead in columns).
     wxView: 'now',
     // Weather screen while rain or snow is falling or due in 2 hours:
     // 'radar' (the loop, while rain is in the box) or 'bars' (the next 2

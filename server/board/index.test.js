@@ -670,6 +670,23 @@ test('update: rain bars replace the radar loop while precipitation is due, when 
   await s2.close();
 });
 
+test('update: the hourly setting sends the four hourly columns with the weather screen conditions', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const h0 = Math.floor(now / 3600) * 3600;
+  const time = Array.from({ length: 13 }, (_, i) => h0 + i * 3600);
+  const w = parse({ ...raw, hourly: { time, temperature_2m: time.map((_, i) => 50 + i), weather_code: time.map(() => 3), is_day: time.map(() => 1), precipitation_probability: [] } });
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
+  assert.equal((await s.req(FULL)).body.radar.wx.hours, undefined);
+  s.store.update('home', { wxView: 'hourly' });
+  const hours = (await s.req(FULL)).body.radar.wx.hours;
+  assert.deepEqual(hours.map((x) => x.t), [53, 56, 59, 62]);
+  assert.ok(hours.every((x) => x.icon === 'cloudy' && /^\d{1,2}[AP]$/.test(x.h)));
+  assert.equal((await s.req(FULL)).body.radar.wx.days, undefined);
+  await s.close();
+});
+
 test('simulator preview: header and weather toggles without changing the board', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');

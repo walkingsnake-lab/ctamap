@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { url, parse, condition, toWx, toScreenWx, toDays, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS } = require('./weather');
+const { url, parse, condition, toWx, toScreenWx, toDays, toHours, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS } = require('./weather');
 const { measure } = require('./fonts');
 const { ICONS } = require('./icons');
 const { createNws } = require('./nws');
@@ -54,8 +54,8 @@ test('request URL asks for the weather row fields plus the weather screen extras
   const u = new URL(url(42.008362, -87.665909));
   assert.equal(u.searchParams.get('latitude'), '42.0084');
   assert.equal(u.searchParams.get('current'), 'temperature_2m,weather_code,is_day,apparent_temperature,wind_speed_10m,wind_direction_10m');
-  assert.equal(u.searchParams.get('hourly'), 'precipitation_probability');
-  assert.equal(u.searchParams.get('forecast_hours'), String(POP_HOURS));
+  assert.ok(u.searchParams.get('hourly').split(',').includes('precipitation_probability'));
+  assert.ok(Number(u.searchParams.get('forecast_hours')) >= POP_HOURS); // the rain chance still reads only the first POP_HOURS
   assert.equal(u.searchParams.get('temperature_unit'), 'fahrenheit');
   assert.equal(u.searchParams.get('wind_speed_unit'), 'mph');
   assert.equal(u.searchParams.get('timeformat'), 'unixtime');
@@ -123,7 +123,7 @@ test('cache file: saved data from before the 5-day forecast or rain bars is fetc
   const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'wx-'));
   const cacheFile = path.join(dir, 'board-weather.json');
   const t = 2000;
-  const old = { ...parse(MORSE) }; delete old.q15;
+  const old = { ...parse(MORSE) }; delete old.hrs;
   fs.writeFileSync(cacheFile, JSON.stringify({ '42.008,-87.666': { lat: 42.0084, lon: -87.6659, data: old, fetchedAt: t - 60 } }));
   let calls = 0;
   const wx = createWeather({ fetch: async () => { calls++; return MORSE; }, now: () => t, log: quiet, cacheFile });
@@ -196,6 +196,31 @@ test('rain bars: every title fits the panel without its mark', () => {
   const { measure: m } = require('./fonts');
   for (const t of ['BREAK IN 105 MIN', 'ENDS IN 105 MIN', 'RAIN IN 105 MIN', 'SNOW NEXT 2 HRS', 'RAIN NEXT 2 HRS']) assert.ok(m('small', t) <= 64, t);
 });
+
+test('hourly: hours 3, 6, 9 and 12 after the current hour, labels, day and night icons', () => {
+  const u = new URL(url(42.008362, -87.665909));
+  assert.equal(u.searchParams.get('hourly'), 'precipitation_probability,temperature_2m,weather_code,is_day');
+  assert.equal(u.searchParams.get('forecast_hours'), '13');
+  assert.deepEqual(parse(MORSE).hrs, []);
+  assert.equal(toHours(parse(MORSE)), null);
+  // The Morse fixture at 10:45 CDT; hourly slots start with the current hour.
+  const h0 = Date.UTC(2026, 9, 4, 15) / 1000; // 10 AM CDT
+  const time = [], temperature_2m = [], weather_code = [], is_day = [];
+  for (let i = 0; i < 13; i++) { time.push(h0 + i * 3600); temperature_2m.push(60 + i + 0.4); weather_code.push(i < 6 ? 0 : 61); is_day.push(i < 9 ? 1 : 0); }
+  const w = parse({ ...MORSE, hourly: { time, temperature_2m, weather_code, is_day, precipitation_probability: time.map(() => 10) } });
+  assert.equal(w.pop, 10); // POP_HOURS still caps the rain chance
+  assert.deepEqual(toHours(w), [
+    { h: '1P', icon: 'sun', t: 63 },
+    { h: '4P', icon: 'rain', t: 66 },
+    { h: '7P', icon: 'rain', t: 69 },
+    { h: '10P', icon: 'rain', t: 72 },
+  ]);
+  const night = parse({ ...MORSE, hourly: { time: time.map((t) => t + 9 * 3600), temperature_2m, weather_code: weather_code.map(() => 2), is_day: is_day.map(() => 0), precipitation_probability: [] } });
+  assert.deepEqual(toHours(night).map((x) => [x.h, x.icon]), [['10P', 'pcloudy_night'], ['1A', 'pcloudy_night'], ['4A', 'pcloudy_night'], ['7A', 'pcloudy_night']]);
+  assert.equal(toHours(parse({ ...MORSE, hourly: { time: time.slice(0, 12), temperature_2m, weather_code, is_day } })), null); // too short
+  assert.equal(hourLabelFor(Date.UTC(2026, 9, 5, 5) / 1000), '12A');
+});
+const hourLabelFor = (t) => toHours({ hrs: [0, 0, 0, { time: t, temp: 50, code: 0, isDay: 1 }, 0, 0, { time: t, temp: 50, code: 0, isDay: 1 }, 0, 0, { time: t, temp: 50, code: 0, isDay: 1 }, 0, 0, { time: t, temp: 50, code: 0, isDay: 1 }] })[0].h;
 
 test('wind: 8-point compass, CALM under 1 mph', () => {
   assert.equal(compass(0), 'N'); assert.equal(compass(22), 'N'); assert.equal(compass(23), 'NE');

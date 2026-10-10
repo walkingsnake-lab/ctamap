@@ -1036,6 +1036,21 @@ def draw_five_day(f, wx):
         draw_day_temp(f, str(d['hi']), cx, 31, temp_color(d['hi']))
 
 
+# ---- hourly layout ----
+# Mirrors drawHourly() in draw.js.
+
+def draw_hourly(f, wx):
+    draw_top_bar(f, wx)
+    for i in range(1, 4):
+        f.fill(i * 16 - 1, 10, 1, 22, C['divider'])
+    for i, h in enumerate(wx['hours'][:4]):
+        cx = i * 16 + 7
+        ctext(f, 'small', h['h'], cx, 15, C['grey'])
+        if h.get('icon') in assets.ICONS:
+            draw_icon(f, h['icon'], cx - 4, 17)
+        draw_day_temp(f, str(h['t']), cx, 31, temp_color(h['t']))
+
+
 # ---- rain bars ----
 # The weather screen while precipitation is falling or due in the next 2
 # hours (wx.rain). Mirrors drawRainBars() in draw.js.
@@ -1146,6 +1161,8 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
         # conditions while one is on.
         if r['wx'].get('rain') and r['wx']['rain'].get('h'):
             draw_rain_bars(f, r['wx'], p.get('warn'), blink)
+        elif r['wx'].get('hours') and not p.get('warn'):
+            draw_hourly(f, r['wx'])
         elif r['wx'].get('days') and not p.get('warn'):
             draw_five_day(f, r['wx'])
         else:

@@ -166,6 +166,15 @@ async function build() {
     for (const [name, w, warn] of fiveDay) {
       add(`weather 5-day ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
     }
+    // Hourly layout: three-character temperatures, night icons, long labels.
+    const hrs = (list) => list.map(([h, icon, tt]) => ({ h, icon, t: tt }));
+    for (const [name, w, warn] of [
+      ['normal', { ...wx, hours: hrs([['3P', 'sun', 78], ['6P', 'cloudy', 76], ['9P', 'pcloudy_night', 69], ['12A', 'moon', 63]]) }],
+      ['extremes', { ...wx, temp: 97, hi: 101, lo: 82, hours: hrs([['10P', 'storm', 104], ['1A', 'fog', 100], ['4A', 'ice', -12], ['7A', 'snow', -3]]) }],
+      ['tor warning', { ...wx, hours: hrs([['3P', 'sun', 78], ['6P', 'cloudy', 76], ['9P', 'moon', 69], ['12A', 'moon', 63]]) }, { kind: 'tor', lvl: 'warning' }],
+    ]) {
+      add(`weather hourly ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn: warn || null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
+    }
     // Rain bars: rain and snow, falling now (drop or flake) or due, a title
     // too wide for its mark, every level, and warnings in the title row.
     const rain = (snow, now, title, h, l) => ({ snow, now, title, h, l });

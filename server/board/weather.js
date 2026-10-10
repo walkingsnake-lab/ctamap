@@ -4,7 +4,8 @@
 // wind, and the next 6 hours' rain chance), and auto brightness from
 // sunrise/sunset. The weather screen's 5-day layout adds the next five
 // days' highs and conditions; its rain bars, the next 2 hours of
-// precipitation in 15-minute steps.
+// precipitation in 15-minute steps; its hourly layout, the next hours'
+// temperature and conditions.
 // Rules: docs/board/design-spec.md §4–5, contract "Weather row".
 
 const { createLocationPoller, fetchJson } = require('./location-poller');
@@ -16,6 +17,9 @@ const FORECAST_DAYS = 5; // 5-day layout: the days after today
 // Rain bars: 8 quarter hours (2 hours). Open-Meteo's 15-minute amounts are
 // sums over the preceding 15 minutes; a few spare steps keep 8 ahead of
 // `now` while the data ages between fetches (10 min).
+// Hourly layout: the slots HOUR_STEPS hours after the current hour.
+const HOUR_STEPS = [3, 6, 9, 12];
+const HOURS = HOUR_STEPS[HOUR_STEPS.length - 1] + 1;
 const BARS = 8;
 const SLOT_S = 900;
 const STEPS_15 = 12;
@@ -39,11 +43,11 @@ function url(lat, lon) {
   const q = new URLSearchParams({
     latitude: lat.toFixed(4), longitude: lon.toFixed(4),
     current: 'temperature_2m,weather_code,is_day,apparent_temperature,wind_speed_10m,wind_direction_10m',
-    hourly: 'precipitation_probability',
+    hourly: 'precipitation_probability,temperature_2m,weather_code,is_day',
     daily: 'temperature_2m_max,temperature_2m_min,sunrise,sunset,weather_code',
     temperature_unit: 'fahrenheit', wind_speed_unit: 'mph', timezone: 'America/Chicago', timeformat: 'unixtime',
     minutely_15: 'precipitation,snowfall',
-    forecast_days: String(FORECAST_DAYS + 1), forecast_hours: String(POP_HOURS), forecast_minutely_15: String(STEPS_15),
+    forecast_days: String(FORECAST_DAYS + 1), forecast_hours: String(HOURS), forecast_minutely_15: String(STEPS_15),
   });
   return `${OPEN_METEO}?${q}`;
 }
@@ -68,8 +72,19 @@ function parse(json) {
     pop: maxPop(json.hourly),
     days: forecastDays(d),
     q15: quarterHours(json.minutely_15),
+    hrs: hourSlots(json.hourly),
   };
 }
+
+// The hourly slots from the current hour on: [{time, temp, code, isDay}].
+function hourSlots(h) {
+  if (!h || !Array.isArray(h.time)) return [];
+  return h.time.map((time, i) => ({ time, temp: num((h.temperature_2m || [])[i]), code: num((h.weather_code || [])[i]), isDay: (h.is_day || [])[i] === 1 }));
+}
+
+// 3 PM -> "3P", midnight "12A".
+const hourFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hour12: true });
+const hourLabel = (t) => hourFmt.format(new Date(t * 1000)).replace(/\s?([AP])M$/i, '$1').toUpperCase();
 
 // 15-minute steps: [{t, p, s}] (end of the step, precipitation mm, snowfall
 // cm); missing amounts count as 0.
@@ -146,6 +161,18 @@ function toDays(w) {
   return w.days.map((x) => ({ d: dayName(x.time), icon: condition(x.code, true)[0], hi: Math.round(x.hi) }));
 }
 
+// Parsed weather -> the hourly layout's columns: [{h: '6P', icon, t}] for
+// the hours 3, 6, 9 and 12 after the current one, or null without all four.
+function toHours(w) {
+  const out = [];
+  for (const n of HOUR_STEPS) {
+    const x = (w.hrs || [])[n];
+    if (!x || x.temp == null || x.code == null) return null;
+    out.push({ h: hourLabel(x.time), icon: condition(x.code, x.isDay)[0], t: Math.round(x.temp) });
+  }
+  return out;
+}
+
 // Parsed weather -> the rain bars at `now`, or null when no precipitation
 // is falling or due in the next 2 hours (or there's no 15-minute data):
 //   {snow, now, title, h, l}
@@ -193,8 +220,8 @@ function autoBright(w, now) {
 // Open-Meteo per location, every 10 min while a board is asking.
 function createWeather({ fetch = (lat, lon) => fetchJson(url(lat, lon)), interval = 600, ...opts } = {}) {
   // Saved data from before the 5-day forecast or the rain bars (no `days`
-  // or `q15`): fetch fresh.
-  return createLocationPoller({ name: 'weather', fetch, parse, interval, usable: (d) => Array.isArray(d.days) && Array.isArray(d.q15), ...opts });
+  // `q15` or `hrs`): fetch fresh.
+  return createLocationPoller({ name: 'weather', fetch, parse, interval, usable: (d) => Array.isArray(d.days) && Array.isArray(d.q15) && Array.isArray(d.hrs), ...opts });
 }
 
-module.exports = { url, parse, condition, toWx, toScreenWx, toDays, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, BARS, BAR_MAX };
+module.exports = { url, parse, condition, toWx, toScreenWx, toDays, toHours, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };

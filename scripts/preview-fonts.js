@@ -263,3 +263,19 @@ function transitRows(f, rows, tops) {
   });
   save('mock-weather-rain.png', f, 8);
 }
+
+// Weather screen, hourly layout (wxView 'hourly'), drawn by draw.js (made-up data).
+{
+  const { render } = require('../server/board/render');
+  const hrs = (list) => list.map(([h, icon, t]) => ({ h, icon, t }));
+  const states = [
+    { icon: 'pcloudy_day', temp: 77, hi: 78, lo: 58, hours: hrs([['3P', 'sun', 78], ['6P', 'cloudy', 76], ['9P', 'pcloudy_night', 69], ['12A', 'moon', 63]]) },
+    { icon: 'sun', temp: 97, hi: 101, lo: 82, hours: hrs([['10P', 'storm', 104], ['1A', 'fog', 100], ['4A', 'ice', 92], ['7A', 'snow', 88]]) },
+  ];
+  const f = new Frame(64 * 2 + 4, 32);
+  states.forEach((w, i) => {
+    const panel = render({ now: 0, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx: w } }, { screen: 'weather' });
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(i * 68 + x, y, panel.get(x, y));
+  });
+  save('mock-weather-hourly.png', f, 8);
+}
