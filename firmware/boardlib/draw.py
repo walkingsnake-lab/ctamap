@@ -1001,7 +1001,7 @@ def _fd_left(parts):
     return FD_HL_RIGHT - w + 1
 
 
-def draw_five_day(f, wx):
+def draw_top_bar(f, wx):
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], FD_ICON_X, 0)
     sh = scale_color(temp_color(wx['temp']), 0.2)
@@ -1022,6 +1022,10 @@ def draw_five_day(f, wx):
         hx = _fd_left(parts)
         for t, c, n in parts:
             hx = draw_temp_text(f, t, hx, 6, c) if n else f.text('small', t, hx, 6, c)
+
+
+def draw_five_day(f, wx):
+    draw_top_bar(f, wx)
     for i in range(1, 5):
         f.fill(i * FD_PITCH - 1, 10, 1, 22, C['divider'])
     for i, d in enumerate(wx['days'][:5]):
@@ -1030,6 +1034,55 @@ def draw_five_day(f, wx):
         if d.get('icon') in assets.ICONS:
             draw_icon(f, d['icon'], cx - 4, 17)
         draw_day_temp(f, str(d['hi']), cx, 31, temp_color(d['hi']))
+
+
+# ---- rain bars ----
+# The weather screen while precipitation is falling or due in the next 2
+# hours (wx.rain). Mirrors drawRainBars() in draw.js.
+
+RAIN_LEVELS = (hexc('#0a2a78'), hexc('#0f48c0'), hexc('#1a6cff'))
+SNOW_LEVELS = (hexc('#3357a6'), hexc('#6e83a6'), hexc('#a6a6a6'))
+RAIN_TEXT = hexc('#60b0ff')
+SNOW_TEXT = hexc('#a9c9ff')
+RAIN_DRY = hexc('#081428')
+AXIS = hexc('#555555')
+FLAKE = ('..#..', '#.#.#', '.###.', '#.#.#', '..#..')
+
+
+def draw_art(f, art, x, y, color):
+    for j, row in enumerate(art):
+        for i, c in enumerate(row):
+            if c == '#':
+                f.fill(x + i, y + j, 1, 1, color)
+
+
+def draw_rain_bars(f, wx, warn, blink):
+    rain = wx['rain']
+    draw_top_bar(f, wx)
+    color = SNOW_TEXT if rain.get('snow') else RAIN_TEXT
+    if warn:
+        glyph, wcolor, blinks = warn_style(warn)
+        if not (blinks and blink):
+            t = WARN_TEXT[warn['kind']][warn['lvl']]
+            x = 32 - (measure('small', glyph) + TAG_GAP + measure('small', t)) // 2
+            gx = f.text('small', glyph, x, 14, wcolor)
+            f.text('small', t, gx + TAG_GAP - 1, 14, wcolor)
+    else:
+        title = rain['title']
+        art = (FLAKE if rain.get('snow') else WX_DROP) if rain.get('now') else None
+        mark_w = len(art[0]) + 2 if art and measure('small', title) + len(art[0]) + 2 <= 64 else 0
+        x = 32 - (measure('small', title) + mark_w) // 2
+        if mark_w:
+            draw_art(f, art, x, 10, color if rain.get('snow') else WX_BLUE)
+        f.text('small', title, x + mark_w, 14, color)
+    levels = SNOW_LEVELS if rain.get('snow') else RAIN_LEVELS
+    for i, h in enumerate(rain['h'][:8]):
+        if not h:
+            f.fill(i * 8, 25, 7, 1, RAIN_DRY)
+        else:
+            f.fill(i * 8, 26 - h, 7, h, levels[max(1, min(3, rain['l'][i])) - 1])
+    ctext(f, 'small', '1H', 31, 31, AXIS)
+    rtext(f, 'small', '2H', 62, 31, AXIS)
 
 
 def radar_value(data, i):
@@ -1089,8 +1142,11 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
     else:
         idx = len(ids) - 1
     if (not ids or (frames is not None and not radar_on_hand(ids, frames))) and r.get('wx'):
-        # The 5-day layout has no room for a warning: conditions while one is on.
-        if r['wx'].get('days') and not p.get('warn'):
+        # Rain bars when sent; the 5-day layout has no room for a warning:
+        # conditions while one is on.
+        if r['wx'].get('rain') and r['wx']['rain'].get('h'):
+            draw_rain_bars(f, r['wx'], p.get('warn'), blink)
+        elif r['wx'].get('days') and not p.get('warn'):
             draw_five_day(f, r['wx'])
         else:
             draw_weather_screen(f, r['wx'], p.get('warn'), blink, r.get('tempShadow'))

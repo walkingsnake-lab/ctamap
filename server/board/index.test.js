@@ -639,6 +639,37 @@ test('update: the 5-day setting sends the next days with the weather screen cond
   await s.close();
 });
 
+test('update: rain bars replace the radar loop while precipitation is due, when the board asks for them', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const t0 = Math.ceil(now / 900) * 900;
+  const time = [], precipitation = [];
+  for (let i = 0; i < 12; i++) { time.push(t0 + i * 900); precipitation.push(i >= 2 && i <= 5 ? 0.5 : 0); }
+  const w = parse({ ...raw, minutely_15: { time, precipitation, snowfall: precipitation.map(() => 0) } });
+  const radarOn = { on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar(radarOn) });
+  let b = (await s.req(FULL)).body.radar;
+  assert.deepEqual(b.frames, ['x']);       // default: the radar loop
+  assert.equal(b.wx.rain, undefined);
+  s.store.update('home', { wxRain: 'bars' });
+  b = (await s.req(FULL)).body.radar;
+  assert.deepEqual(b.frames, []);          // bars replace it
+  assert.deepEqual(b.ft, []);
+  assert.equal(b.wx.rain.snow, 0);
+  assert.equal(b.wx.rain.h.length, 8);
+  assert.match(b.wx.rain.title, /^RAIN IN \d+ MIN$/);
+  await s.close();
+  // Dry: no bars, the radar as before.
+  const dry = parse({ ...raw, minutely_15: { time, precipitation: precipitation.map(() => 0), snowfall: precipitation.map(() => 0) } });
+  const s2 = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(dry), radar: fakeRadar(radarOn) });
+  s2.store.update('home', { wxRain: 'bars' });
+  b = (await s2.req(FULL)).body.radar;
+  assert.equal(b.wx.rain, undefined);
+  assert.deepEqual(b.frames, ['x']);
+  await s2.close();
+});
+
 test('simulator preview: header and weather toggles without changing the board', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');

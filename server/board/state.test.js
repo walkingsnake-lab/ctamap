@@ -166,6 +166,10 @@ test('wxView: default conditions, 5day allowed; validated', () => {
   store.update('home', { wxView: '5day' });
   assert.equal(store.get('home').wxView, '5day');
   assert.throws(() => store.update('home', { wxView: 'week' }), /wxView must be one of now, 5day/);
+  assert.equal(store.get('home').wxRain, 'radar');
+  store.update('home', { wxRain: 'bars' });
+  assert.equal(store.get('home').wxRain, 'bars');
+  assert.throws(() => store.update('home', { wxRain: 'both' }), /wxRain must be one of radar, bars/);
 });
 
 test('radarBright: default 100, 20-150', () => {

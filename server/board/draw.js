@@ -794,7 +794,8 @@
     function drawDayTemp(f, str, cx, base, color) {
       drawTempText(f, str, cx - Math.floor(tempWidth(str) / 2), base, color);
     }
-    function drawFiveDay(f, wx) {
+    // Today on rows 0-7, shared by the 5-day layout and the rain bars.
+    function drawTopBar(f, wx) {
       // A 1px shadow down and right in the temperature's color (20%, as on
       // the conditions screen), under the white temperature.
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
@@ -820,6 +821,9 @@
         let hx = left(parts);
         for (const [t, c, n] of parts) hx = n ? drawTempText(f, t, hx, 6, c) : f.text('small', t, hx, 6, c);
       }
+    }
+    function drawFiveDay(f, wx) {
+      drawTopBar(f, wx);
       for (let i = 1; i < 5; i++) f.fill(i * FD_PITCH - 1, 10, 1, 22, C.divider);
       wx.days.slice(0, 5).forEach((d, i) => {
         const cx = i * FD_PITCH + 6;
@@ -827,6 +831,47 @@
         if (icons.ICONS[d.icon]) drawIcon(f, d.icon, cx - 4, 17);
         drawDayTemp(f, String(d.hi), cx, 31, tempColor(d.hi));
       });
+    }
+
+    // ---- rain bars (wxRain 'bars'; mockup docs/board/mockups/weather/rain-states) ----
+    // The weather screen while precipitation is falling or due in the next 2
+    // hours (wx.rain). The top bar, then the title centered on rows 10-14
+    // (a drop, or a flake for snow, in front while it's falling now), eight
+    // 15-minute bars (7px wide on an 8px pitch) rising from row 25 up to 10
+    // rows, and `1H` / `2H` under the 4th/5th bar gap and the last bar. An NWS
+    // warning or watch takes the title's place.
+    const RAIN_LEVELS = ['#0a2a78', '#0f48c0', '#1a6cff'];
+    const SNOW_LEVELS = ['#3357a6', '#6e83a6', '#a6a6a6'];
+    const RAIN_TEXT = '#60b0ff', SNOW_TEXT = '#a9c9ff', RAIN_DRY = '#081428', AXIS = '#555555';
+    const FLAKE = ['..#..', '#.#.#', '.###.', '#.#.#', '..#..'];
+    const drawArt = (f, art, x, y, color) => art.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i, y + j, 1, 1, color); }));
+    function drawRainBars(f, wx, warn, blink) {
+      const rain = wx.rain;
+      drawTopBar(f, wx);
+      const color = rain.snow ? SNOW_TEXT : RAIN_TEXT;
+      if (warn) {
+        const ws = warnStyle(warn);
+        if (!(ws.blinks && blink)) {
+          const t = WARN_TEXT[warn.kind][warn.lvl];
+          const x = 32 - Math.floor((measure('small', ws.glyph) + TAG_GAP + measure('small', t)) / 2);
+          const gx = f.text('small', ws.glyph, x, 14, ws.color);
+          f.text('small', t, gx + TAG_GAP - 1, 14, ws.color);
+        }
+      } else {
+        // The mark only when it fits beside the title.
+        const art = rain.now ? (rain.snow ? FLAKE : WX_DROP) : null;
+        const markW = art && measure('small', rain.title) + art[0].length + 2 <= 64 ? art[0].length + 2 : 0;
+        const x = 32 - Math.floor((measure('small', rain.title) + markW) / 2);
+        if (markW) drawArt(f, art, x, 10, rain.snow ? color : WX_BLUE);
+        f.text('small', rain.title, x + markW, 14, color);
+      }
+      const levels = rain.snow ? SNOW_LEVELS : RAIN_LEVELS;
+      rain.h.slice(0, 8).forEach((h, i) => {
+        if (!h) f.fill(i * 8, 25, 7, 1, RAIN_DRY);
+        else f.fill(i * 8, 26 - h, 7, h, levels[Math.max(1, Math.min(3, rain.l[i])) - 1]);
+      });
+      ctext(f, 'small', '1H', 31, 31, AXIS);
+      rtext(f, 'small', '2H', 62, 31, AXIS);
     }
 
     // The radar loop: with every frame on hand, step through them in time
@@ -863,9 +908,11 @@
       const f = newFrame();
       // No frames (no rain in the box, or none processed yet), or none
       // downloaded yet: the weather screen.
-      // The 5-day layout has no room for a warning: conditions while one is on.
+      // Rain bars when sent; the 5-day layout has no room for a warning:
+      // conditions while one is on.
       if ((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) && r.wx) {
-        if (r.wx.days && r.wx.days.length && !p.warn) drawFiveDay(f, r.wx);
+        if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, p.warn, o.blink);
+        else if (r.wx.days && r.wx.days.length && !p.warn) drawFiveDay(f, r.wx);
         else drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow);
         return f;
       }

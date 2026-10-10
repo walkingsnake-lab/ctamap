@@ -173,6 +173,11 @@
       <button data-v="5day">5-day</button>
     </div>
     <p class="hint" id="wxViewHint"></p>
+    <div class="seg" id="wxRain">
+      <button data-v="radar">Radar loop</button>
+      <button data-v="bars">Rain bars</button>
+    </div>
+    <p class="hint" id="wxRainHint"></p>
     <div class="row"><span>Temperature shadow</span><label class="switch"><input type="checkbox" id="tempShadow"><span></span></label></div>
     <p class="hint">A faint shadow behind the big temperature, colored from blue (cold) to red (hot).</p>
   </section>
@@ -441,6 +446,10 @@
     $('radarCondRow').hidden = corner === 'temp';
     $('tempShadow').checked = board.tempShadow === true;
     pressed('wxView', board.wxView === '5day' ? '5day' : 'now');
+    pressed('wxRain', board.wxRain === 'bars' ? 'bars' : 'radar');
+    $('wxRainHint').textContent = board.wxRain === 'bars'
+      ? 'While rain or snow is falling or due in the next 2 hours: today on top and 15-minute bars below. Without any, the layout above.'
+      : 'While rain is in the radar box: the radar loop.';
     $('wxViewHint').textContent = board.wxView === '5day'
       ? 'Today on top, the next five days\' highs below. Shows conditions while a weather warning or watch is on.'
       : 'The big temperature, feels-like, wind, high/low, and rain chance.';
@@ -525,6 +534,7 @@
   $('headerDivider').addEventListener('change', (e) => save({ headerDivider: e.target.checked }));
   $('wxDivider').addEventListener('change', (e) => save({ wxDivider: e.target.checked }));
   $('tempShadow').addEventListener('change', (e) => save({ tempShadow: e.target.checked }));
+  $('wxRain').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxRain: v }); });
   $('wxView').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxView: v }); });
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
   for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
