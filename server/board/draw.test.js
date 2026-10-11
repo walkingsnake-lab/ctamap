@@ -576,8 +576,11 @@ test('weather 5-day: today on top, five day columns between dividers; the top ba
   assert.equal(count(warned, '#4a4a4a', 30, 0, 63, 7) + count(warned, draw.C.grey, 30, 0, 63, 7), 0, 'high/low gone');
   assert.equal(count(warned, draw.C.warnSevere, 0, 8, 63, 31), 0);
   for (const x of [12, 25, 38, 51]) assert.equal(hex(warned.get(x, 20)), draw.C.divider, 'still the 5-day layout');
-  assert.deepEqual(warn(true, { kind: 'tor', lvl: 'warning' }).px, warn(false, { kind: 'tor', lvl: 'warning' }).px, 'a tornado warning does not blink here');
+  // A tornado warning blinks (hidden on the blink phase); others stay steady.
   assert.ok(count(warn(false, { kind: 'tor', lvl: 'warning' }), draw.C.warnTornado, 34, 2, 62, 6) > 15);
+  assert.equal(count(warn(true, { kind: 'tor', lvl: 'warning' }), draw.C.warnTornado, 0, 0, 63, 31), 0, 'hidden on the blink phase');
+  assert.deepEqual(warn(true).px, warn(false).px, 'a severe warning does not blink');
+  assert.deepEqual(warn(true, { kind: 'tor', lvl: 'watch' }).px, warn(false, { kind: 'tor', lvl: 'watch' }).px, 'a tornado watch does not blink');
   assert.ok(count(warn(false, { kind: 'svr', lvl: 'watch' }), draw.C.watch, 34, 2, 62, 6) > 15, 'WATCH in yellow');
   for (let y = 0; y < 8; y++) assert.deepEqual(warned.get(63, y), [0, 0, 0], 'right margin');
 });
@@ -617,11 +620,11 @@ test('weather rain bars: shared top bar, centered title with a drop, bars on an 
   let x0 = -1; for (let x = 0; x < 64 && x0 < 0; x++) for (let y = 9; y <= 14; y++) if (hex(ends.get(x, y)) === '#a9c9ff') { x0 = x; break; }
   const flake = []; for (let y = 8; y <= 15; y++) { let n = 0; for (let x = x0; x < x0 + 5; x++) if (hex(ends.get(x, y)) === '#a9c9ff') n++; flake.push(n); }
   assert.deepEqual(flake, [0, 1, 3, 3, 3, 1, 0, 0], 'flake on rows 9-13');
-  // A warning takes over the top bar's high/low line, steady; the title stays.
+  // A warning takes over the top bar's high/low line; the title stays.
   const warn = (blink) => draw.render({ now, bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: rad({ ...wx, rain }) }, { screen: 'weather', now, frames: {}, blink });
   assert.ok(count(warn(false), draw.C.warnTornado, 34, 2, 62, 6) > 15);
-  assert.deepEqual(warn(true).px, warn(false).px, 'no blinking');
-  assert.ok(count(warn(false), '#60b0ff', 14, 9, 63, 14) > 40, 'the title stays');
+  assert.equal(count(warn(true), draw.C.warnTornado, 0, 0, 63, 31), 0, 'the tornado warning blinks');
+  assert.ok(count(warn(true), '#60b0ff', 14, 9, 63, 14) > 40, 'the title stays');
 });
 
 test('weather rain bars alternate with the radar loop on epoch-aligned turns (rain.alt)', () => {

@@ -1001,9 +1001,10 @@ def _fd_left(parts):
     return FD_HL_RIGHT - w + 1
 
 
-def draw_top_bar(f, wx, shadow=False, warn=None):
+def draw_top_bar(f, wx, shadow=False, warn=None, blink=False):
     """Today on rows 0-7. The optional temperature shadow follows the board's
-    setting; a warning takes over the high/low line, steady. Mirrors
+    setting; a warning takes over the high/low line (a tornado warning
+    blinks). Mirrors
     drawTopBar() in draw.js."""
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], FD_ICON_X, 0)
@@ -1014,7 +1015,9 @@ def draw_top_bar(f, wx, shadow=False, warn=None):
     f.text('small', '°', x, 6, C['label'])
     temp_right = x + 1 + (1 if shadow else 0)
     if warn:
-        glyph, color, _blinks = warn_style(warn)
+        glyph, color, blinks = warn_style(warn)
+        if blinks and blink:
+            return
         word = 'WARN' if warn['lvl'] == 'warning' else 'WATCH'
         gx = FD_HL_RIGHT - (measure('small', glyph) + TAG_GAP + measure('small', word)) + 1
         word_x = f.text('small', glyph, gx, 7, color)
@@ -1035,8 +1038,8 @@ def draw_top_bar(f, wx, shadow=False, warn=None):
             hx = draw_temp_text(f, t, hx, 7, c) if n else f.text('small', t, hx, 7, c)
 
 
-def draw_five_day(f, wx, shadow=False, warn=None):
-    draw_top_bar(f, wx, shadow, warn)
+def draw_five_day(f, wx, shadow=False, warn=None, blink=False):
+    draw_top_bar(f, wx, shadow, warn, blink)
     for i in range(1, 5):
         f.fill(i * FD_PITCH - 1, 10, 1, 22, C['divider'])
     for i, d in enumerate(wx['days'][:5]):
@@ -1050,8 +1053,8 @@ def draw_five_day(f, wx, shadow=False, warn=None):
 # ---- hourly layout ----
 # Mirrors drawHourly() in draw.js.
 
-def draw_hourly(f, wx, shadow=False, warn=None):
-    draw_top_bar(f, wx, shadow, warn)
+def draw_hourly(f, wx, shadow=False, warn=None, blink=False):
+    draw_top_bar(f, wx, shadow, warn, blink)
     for i in range(1, 4):
         f.fill(i * 16 - 1, 10, 1, 22, C['divider'])
     for i, h in enumerate(wx['hours'][:4]):
@@ -1082,9 +1085,9 @@ def draw_art(f, art, x, y, color):
                 f.fill(x + i, y + j, 1, 1, color)
 
 
-def draw_rain_bars(f, wx, shadow=False, warn=None):
+def draw_rain_bars(f, wx, shadow=False, warn=None, blink=False):
     rain = wx['rain']
-    draw_top_bar(f, wx, shadow, warn)
+    draw_top_bar(f, wx, shadow, warn, blink)
     color = SNOW_TEXT if rain.get('snow') else RAIN_TEXT
     title = rain['title']
     art = None if ('RAIN' in title or 'SNOW' in title) else (FLAKE if rain.get('snow') else WX_DROP)
@@ -1168,11 +1171,11 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
         # payload says so); the forecast layouts' top bar carries a warning.
         shadow = bool(r.get('tempShadow'))
         if r['wx'].get('rain') and r['wx']['rain'].get('h'):
-            draw_rain_bars(f, r['wx'], shadow, p.get('warn'))
+            draw_rain_bars(f, r['wx'], shadow, p.get('warn'), blink)
         elif r['wx'].get('hours'):
-            draw_hourly(f, r['wx'], shadow, p.get('warn'))
+            draw_hourly(f, r['wx'], shadow, p.get('warn'), blink)
         elif r['wx'].get('days'):
-            draw_five_day(f, r['wx'], shadow, p.get('warn'))
+            draw_five_day(f, r['wx'], shadow, p.get('warn'), blink)
         else:
             draw_weather_screen(f, r['wx'], p.get('warn'), blink, r.get('tempShadow'))
         return f

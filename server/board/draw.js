@@ -796,10 +796,11 @@
     }
     // Today on rows 0-7, shared by the 5-day layout and the rain bars.
     // top: {shadow: the board's temperature shadow setting, warn: the NWS
-    // watch/warning}. The warning takes over the high/low line, steady (no
-    // blinking): glyph + WATCH / WARN in its color, right-aligned to x62.
+    // watch/warning, blink: the blink phase}. The warning takes over the
+    // high/low line: glyph + WATCH / WARN in its color, right-aligned to x62;
+    // a tornado warning blinks (hidden on the blink's "on" phase).
     function drawTopBar(f, wx, top) {
-      const { shadow, warn } = top || {};
+      const { shadow, warn, blink } = top || {};
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
       // The optional 1px shadow down and right in the temperature's color
       // (20%, as on the conditions screen), under the white temperature.
@@ -814,6 +815,7 @@
       const tempRight = x + 1 + (shadow ? 1 : 0);
       if (warn) {
         const ws = warnStyle(warn);
+        if (ws.blinks && blink) return;
         const word = warn.lvl === 'warning' ? 'WARN' : 'WATCH';
         const gx = FD_HL_RIGHT - (measure('small', ws.glyph) + TAG_GAP + measure('small', word)) + 1;
         const wordX = f.text('small', ws.glyph, gx, 7, ws.color);
@@ -936,7 +938,7 @@
       const barsTurn = !!(rn && rn.h && rn.alt && Math.floor((o.now != null ? o.now : p.now) / rn.alt) % 2 === 1);
       if (((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
         // The forecast layouts' top bar carries a warning on its high/low line.
-        const top = { shadow: !!r.tempShadow, warn: p.warn };
+        const top = { shadow: !!r.tempShadow, warn: p.warn, blink: o.blink };
         if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, top);
         else if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
         else if (r.wx.days && r.wx.days.length) drawFiveDay(f, r.wx, top);
