@@ -40,7 +40,7 @@ LED_FOR_STATUS = {'connecting': 'connecting', 'ok': 'connecting', 'portal': 'por
 
 class Board:
     def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print, mem_free=None, largest_block=None,
-                 started='', crash='', led=None):
+                 started='', crash='', led=None, radar_bufs=None, logo_bufs=None):
         self.net = net
         self.display = display
         self.clock = clock
@@ -48,7 +48,7 @@ class Board:
         self.buttons = buttons
         self.watchdog = watchdog
         self.log = log
-        self.player = Player()
+        self.player = Player(radar_bufs, logo_bufs)
         self.override = ScreenOverride()
         self.up = Debounce()
         self.down = Debounce()
@@ -400,9 +400,10 @@ class Board:
             self.update_job.due_at = ms - self.update_job.deadline_ms
 
 
-def run(mem=None):
-    """Entry point on the board (code.py). mem: [(stage, bytes free)]
-    from code.py's imports; startup stages are added and printed."""
+def run(mx, mem=None):
+    """Entry point on the board (code.py). mx: matrix.Matrix (the big
+    buffers, allocated first). mem: [(stage, bytes free)] from code.py's
+    imports; startup stages are added and printed."""
     import os
 
     def free():
@@ -417,10 +418,10 @@ def run(mem=None):
         if ssid:
             networks.append((ssid, os.getenv('WIFI_PASSWORD_%d' % i) or ''))
     hw = device.Hardware(
+        mx,
         url=os.getenv('BOARD_URL') or 'https://ctamap.fly.dev',
         board_id=os.getenv('BOARD_ID') or 'home',
         token=os.getenv('BOARD_TOKEN') or '',
-        bit_depth=int(os.getenv('MATRIX_BIT_DEPTH') or 5),
         gamma=float(os.getenv('MATRIX_GAMMA') or 1),
         note=lambda stage: mem.append((stage, free())),
     )
@@ -433,13 +434,15 @@ def run(mem=None):
         hw.clock.sleep_ms(WATCHDOG_LED_MS)
     board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog,
                   mem_free=hw.mem_free, largest_block=hw.largest_block, started=started, crash=crash,
-                  led=hw.led)
+                  led=hw.led, radar_bufs=mx.radar, logo_bufs=mx.logos)
     mem.append(('board', free()))
-    board.connect(boot=device.cold_boot())
-    mem.append(('online', free()))
     # Where the heap goes: free bytes after each stage, and what each cost.
-    print('[board] memory free: ' + ', '.join('%s %d' % m for m in mem))
+    # Printed before WiFi too, so a boot that fails while connecting still
+    # shows it.
+    print('[board] memory free: ' + ', '.join('%s %d' % m for m in mem) + ', largest block %d' % hw.largest_block())
     print('[board] memory used: ' + ', '.join('%s %d' % (mem[i][0], mem[i - 1][1] - mem[i][1]) for i in range(1, len(mem))))
+    board.connect(boot=device.cold_boot())
+    print('[board] online: memory free %d, largest block %d' % (free(), hw.largest_block()))
     last_report = hw.clock.ms()
     while True:
         board.step()

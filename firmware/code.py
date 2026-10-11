@@ -18,13 +18,19 @@ def free():
 # Free memory after each import, for the startup memory report.
 mem = [('boot', free())]
 try:
+    # The big fixed buffers first, while the heap is whole: allocated after
+    # the imports below, they had to fit between scattered bytecode.
+    import os
+    from boardlib import matrix
+    mx = matrix.Matrix(int(os.getenv('MATRIX_BIT_DEPTH') or 5))
+    mem.append(('matrix', free()))
     from boardlib import assets
     mem.append(('fonts', free()))
     from boardlib import draw
     mem.append(('draw', free()))
     from boardlib import app
     mem.append(('app', free()))
-    app.run(mem)
+    app.run(mx, mem)
 except Exception as e:  # noqa: BLE001 - any crash: log it, then restart cleanly
     import traceback
     gc.collect()

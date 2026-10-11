@@ -81,6 +81,22 @@ class TestConnect(unittest.TestCase):
         self.assertEqual(net.connect([('JakeAtHome2.4', 'pw')], lambda *a: None), ('ok', 'JakeAtHome2.4'))
         self.assertEqual(esp.joins, [])
 
+    def test_scan_keeps_only_our_networks(self):
+        # A busy building: dozens of networks. Listing them all ran the
+        # boot heap out of memory (MemoryError in _warm_up).
+        esp = FakeESP(['N%d' % i for i in range(40)] + ['JakeAtHome2.4'])
+        net = make_net(esp)
+        seen = net._warm_up(['JakeAtHome2.4', 'Gone'], lambda *a: None)
+        self.assertEqual(seen, ['JakeAtHome2.4'])
+
+    def test_still_connected_to_another_network_scans(self):
+        esp = FakeESP(['JakeAtHome2.4'])
+        esp.is_connected = True
+        esp.ap_info = types.SimpleNamespace(ssid=b'Neighbor')
+        net = make_net(esp)
+        self.assertEqual(net.connect([('JakeAtHome2.4', 'pw')], lambda *a: None), ('ok', 'JakeAtHome2.4'))
+        self.assertEqual(esp.joins, ['JakeAtHome2.4'])
+
     def test_unseen_networks_are_still_tried_last(self):
         esp = FakeESP(['Neighbor'])
         net = make_net(esp)
