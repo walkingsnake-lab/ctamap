@@ -491,21 +491,25 @@ def warn_style(warn):
     return glyph, color, warn['kind'] == 'tor' and warn['lvl'] == 'warning'
 
 
+# Weather row: icon and white 5x7 temperature on the right (ink ends at
+# x63), a watch/warning tag on the left; no condition word. Mirrors
+# drawWeather() in draw.js.
 def draw_weather(f, wx, warn, blink=False, divider=True):
     if divider:
         f.fill(0, 22, 64, 1, C['divider'])
-    draw_icon(f, wx['icon'], 0, 24)
     base = 31
-    f.text('small', str(wx['temp']) + '°', 10, base, C['wxText'])
+    temp = str(wx['temp'])
+    tx = 62 - measure('5x7', temp) - 1
+    icon_x = tx - 10
+    if wx.get('icon') in assets.ICONS:
+        draw_icon(f, wx['icon'], icon_x, 24)
+    f.text('small', '°', f.text('5x7', temp, tx, base, C['label']), base - 1, C['label'])
     if warn:
         glyph, color, blinks = warn_style(warn)
         word = 'WARNING' if warn['lvl'] == 'warning' else 'WATCH'
         if not (blinks and blink):
-            w = measure('small', glyph) + TAG_GAP + measure('small', word)
-            x = f.text('small', glyph, 63 - w + 1, base, color)
+            x = f.text('small', glyph, 0, base, color)
             f.text('small', word, x + TAG_GAP - 1, base, color)
-    else:
-        rtext(f, 'small', wx['word'], 63, base, C['wxText'])
 
 
 def _is_num(s):
