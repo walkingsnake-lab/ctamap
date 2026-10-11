@@ -26,7 +26,7 @@ const FULL = '/board/secret123/api/update?b=home';
 
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), logos: fakeLogos(), ...opts });
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), nwsForecast: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), logos: fakeLogos(), ...opts });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -934,5 +934,28 @@ test('baseball logo layout: payload carries logo ids and band colors; the board 
   const bad = await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/logos`, { method: 'POST', body: 'nope' });
   assert.equal(bad.status, 400);
   assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=baseball`)).status, 200);
+  await s.close();
+});
+
+test('update: NWS forecasts drive the 5-day layout over Open-Meteo\'s days', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const nf = require('./nws-forecast');
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const mid = raw.daily.time[0];
+  const w = parse({ ...raw, daily: { ...raw.daily, time: [0, 1, 2].map((i) => mid + i * 86400), temperature_2m_max: [68.9, 71.4, 66], temperature_2m_min: [51, 55, 50], weather_code: [0, 61, 2] } });
+  // The Morse NWS fixtures, moved by whole days so the recorded Sunday is today.
+  const nws = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'nws-forecast', f), 'utf8'));
+  const f = nf.parse({ forecast: nws('morse-2026-10-11-1406-forecast.json'), hourly: nws('morse-2026-10-11-1404-hourly.json') });
+  const day = (t) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date(t * 1000));
+  let shift = Math.round((now - f.periods[0].s) / 86400) * 86400;
+  while (day(f.periods[0].s + shift) > day(now)) shift -= 86400;
+  while (day(f.periods[0].s + shift) < day(now)) shift += 86400;
+  const move = (p) => ({ ...p, s: p.s + shift, e: p.e + shift });
+  const fc = { periods: f.periods.map(move), hours: f.hours.map(move) };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), nwsForecast: fakeWeather(fc) });
+  s.store.update('home', { wxView: '5day' });
+  const days = (await s.req(FULL)).body.radar.wx.days;
+  assert.deepEqual(days.map((x) => [x.icon, x.hi]), [['pcloudy_day', 83], ['sun', 81], ['rain', 67], ['rain', 64], ['rain', 58]]);
   await s.close();
 });

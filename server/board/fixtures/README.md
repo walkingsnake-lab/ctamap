@@ -22,6 +22,11 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
   - `morse-2026-10-04-none.json`: no active alerts.
   - `svr-warning-expired-2026-10-03-jax.json`: from `alerts?event=Severe Thunderstorm Warning&limit=1` (past week). A Severe Thunderstorm Warning **expiration** statement (VTEC `/O.EXP./`, `ends` before `sent`), NWS Jacksonville. Tests derive in-effect warnings and watches from it.
 
+- `nws-forecast/` — NWS forecasts for Morse (grid LOT 74,79; `nws-forecast.js`), saved from a browser.
+  - `morse-points.json`: `/points/42.0084,-87.6659`.
+  - `morse-2026-10-11-1406-forecast.json`: 12-hour periods, Sunday afternoon. Sunny today and Monday; rain showers likely Tue night–Thu (60–70%); Friday a split icon (`rain_showers,20/wind_bkn`, slight chance before 7 AM).
+  - `morse-2026-10-11-1404-hourly.json`: 156 hourly periods from 2 PM Sunday.
+
 - `mrms/` — IEM `mrms_lcref` frames (full CONUS PNG + `.wld`), from `mesonet.agron.iastate.edu/archive/data/.../GIS/mrms/`.
   - `lcref_202008102100.*`: Aug 10, 2020 derecho crossing Chicago (4:00 PM CDT). Old-style `.wld` origin (-130.0, 55.0).
   - `lcref_202202021800.*`: Feb 2, 2022 snowstorm, noon CST. Chicago crop averages 11–18 dBZ.

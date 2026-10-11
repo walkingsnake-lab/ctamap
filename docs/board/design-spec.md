@@ -73,7 +73,8 @@ A small cooperative scheduler lines up network requests with animation gaps:
 | CTA service alerts | CTA Customer Alerts API | **Major alerts only** (CTA severity `major`): no minor delays, planned work, schedule changes, long-term closures, or elevator outages; lines on screen only. Used **only to flag affected lines** (no alert text shown). |
 | Weather warnings/watches | NWS alerts for the configured point | Only severe thunderstorm and tornado warnings/watches. Shown as icons/tags only (no alert text). |
 | Radar | NOAA **MRMS** lowest composite reflectivity (`lcref`) via Iowa Environmental Mesonet | Palette-indexed PNG + `.wld`, 2-min updates, archive available. dBZ = index × 0.5 − 32 (verified against IEM's lookup table). Full CONUS frames (7000 × 3500); decoded as a stream, only the rows around the station. Do **not** use the raw NEXRAD composite: it shows bird/insect returns on clear nights. |
-| Weather | Open-Meteo (no key) | Current temp, weather code, `is_day`, daily high/low, sunrise/sunset. |
+| Weather | Open-Meteo (no key) | Current temp, weather code, `is_day`, sunrise/sunset, rain bars. |
+| Forecast | NWS `api.weather.gov` (no key) | Today's high/low, rain chance, 5-day and hourly icons and temperatures (forecaster-edited; icons used as NWS sends them). |
 
 ---
 
