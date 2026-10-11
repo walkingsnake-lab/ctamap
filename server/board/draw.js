@@ -851,7 +851,7 @@
 
     // ---- hourly layout (wxView 'hourly') ----
     // The 5-day layout's top bar, then four 16px columns (dividers on cols
-    // 15, 31, 47, rows 10-31) for the hours 3, 6, 9 and 12 ahead: time label
+    // 15, 31, 47, rows 10-31) for the hours 2, 4, 6 and 8 ahead: time label
     // (rows 11-15, grey), icon (17-24), temperature (27-31, its color).
     function drawHourly(f, wx, top) {
       drawTopBar(f, wx, top);
