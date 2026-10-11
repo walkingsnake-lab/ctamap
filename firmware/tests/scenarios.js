@@ -166,6 +166,10 @@ async function build() {
     for (const [name, w, warn] of fiveDay) {
       add(`weather 5-day ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
     }
+    // The top bar follows the board's temperature shadow setting, and carries warnings (steady).
+    for (const [name, w, warn] of [['shadow', fiveDay[0][1], null], ['shadow + watch', fiveDay[1][1], { kind: 'svr', lvl: 'watch' }], ['shadow + tornado warning', fiveDay[0][1], { kind: 'tor', lvl: 'warning' }]]) {
+      add(`weather 5-day ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, tempShadow: true, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
+    }
     // Hourly layout: three-character temperatures, night icons, long labels.
     const hrs = (list) => list.map(([h, icon, tt]) => ({ h, icon, t: tt }));
     for (const [name, w, warn] of [

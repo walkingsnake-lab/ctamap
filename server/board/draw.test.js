@@ -490,13 +490,13 @@ test('weather screen extremes: minus bar, 3-digit temp drops the word, high/low 
   assert.ok(firstBlue - lastGrey >= 3, `gap ${firstBlue - lastGrey}`);
 });
 
-test('weather 5-day: today on top, five day columns between dividers; a warning falls back to conditions', () => {
+test('weather 5-day: today on top, five day columns between dividers; the top bar follows the shadow setting and carries a warning', () => {
   const now = Date.UTC(2026, 9, 9, 16, 48) / 1000;
   const days = (list) => list.map(([d, hi, icon]) => ({ d, hi, icon }));
   const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20,
     days: days([['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']]) };
   const rad = (w) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w });
-  const f = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
+  const f = draw.render({ now, bright: 100, warn: null, radar: { ...rad(wx), tempShadow: true } }, { screen: 'weather', now, frames: {} });
   assert.equal(hex(f.get(2, 1)), '#ffc800', 'icon at x1');
   for (let y = 0; y < 8; y++) assert.deepEqual(f.get(0, y), [0, 0, 0], `col 0 clear, row ${y}`);
   assert.ok(count(f, draw.C.label, 11, 0, 31, 7) > 20, 'current temperature in label white at x11');
@@ -509,8 +509,8 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
   for (const c of shadow) assert.ok(c[1] > c[0] && Math.max(...c) < 60, `dim green shadow ${c}`);
   assert.ok(count(f, '#000000', 11, 7, 31, 7) < 21, 'shadow on row 7, under the digits');
   assert.equal(count(f, '#000000', 0, 8, 63, 8), 64, 'row 8 clear');
-  assert.ok(count(f, draw.C.grey, 34, 1, 63, 5) > 15, 'high/low numbers grey');
-  assert.equal(count(f, '#4a4a4a', 30, 1, 63, 5), 18, 'two dim arrows');
+  assert.ok(count(f, draw.C.grey, 34, 2, 63, 6) > 15, 'high/low numbers grey');
+  assert.equal(count(f, '#4a4a4a', 30, 2, 63, 6), 18, 'two dim arrows');
   // A long high/low next to a three-character temperature keeps 1px clear:
   // numbers condensed, then no space before the down arrow, then no arrows.
   const topGap = (w) => {
@@ -528,18 +528,18 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
     assert.equal(topGap(w)[1], 18, `${JSON.stringify(w)}: arrows kept`);
   }
   assert.equal(topGap({ temp: -15, hi: -100, lo: -100 })[1], 0, 'arrows dropped last');
-  // Condensed like the day highs: a 2px minus on row 4, '1' 3px wide.
+  // Condensed like the day highs: a 2px minus on row 4 of the line, '1' 3px wide.
   const cold = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, temp: -12, hi: -1, lo: -10 }) }, { screen: 'weather', now, frames: {} });
   let bars = 0;
-  for (let x = 30; x < 63; x++) if (hex(cold.get(x, 3)) === draw.C.grey && hex(cold.get(x + 1, 3)) === draw.C.grey && hex(cold.get(x + 2, 3)) !== draw.C.grey && hex(cold.get(x - 1, 3)) !== draw.C.grey) bars++;
+  for (let x = 30; x < 63; x++) if (hex(cold.get(x, 4)) === draw.C.grey && hex(cold.get(x + 1, 4)) === draw.C.grey && hex(cold.get(x + 2, 4)) !== draw.C.grey && hex(cold.get(x - 1, 4)) !== draw.C.grey) bars++;
   assert.ok(bars >= 2, `2px minus bars: ${bars}`);
   // Chevron heads: the up arrow's on its second row, the down arrow's on its fourth.
-  const arrowRows = (x0, x1) => { const r = []; for (let y = 1; y <= 5; y++) r.push(count(f, '#4a4a4a', x0, y, x1, y)); return r; };
-  const dimCols = []; for (let x = 30; x < 64; x++) if (count(f, '#4a4a4a', x, 1, x, 5)) dimCols.push(x);
+  const arrowRows = (x0, x1) => { const r = []; for (let y = 2; y <= 6; y++) r.push(count(f, '#4a4a4a', x0, y, x1, y)); return r; };
+  const dimCols = []; for (let x = 30; x < 64; x++) if (count(f, '#4a4a4a', x, 2, x, 6)) dimCols.push(x);
   assert.deepEqual(arrowRows(dimCols[0], dimCols[0] + 4), [1, 3, 3, 1, 1], 'up arrow first');
   const down0 = dimCols.find((x) => x > dimCols[0] + 4);
   assert.deepEqual(arrowRows(down0, down0 + 4), [1, 1, 3, 3, 1], 'down arrow second');
-  assert.ok(count(f, draw.C.grey, 60, 1, 62, 5) > 0, 'right-aligned to x62');
+  assert.ok(count(f, draw.C.grey, 60, 2, 62, 6) > 0, 'right-aligned to x62');
   for (let y = 0; y < 8; y++) assert.deepEqual(f.get(63, y), [0, 0, 0], `col 63 clear, row ${y}`);
   for (const x of [12, 25, 38, 51]) for (let y = 10; y <= 31; y++) assert.equal(hex(f.get(x, y)), draw.C.divider, `divider ${x},${y}`);
   assert.equal(count(f, draw.C.divider, 0, 0, 63, 9), 0, 'no horizontal rule');
@@ -562,10 +562,24 @@ test('weather 5-day: today on top, five day columns between dividers; a warning 
   // Fewer days: only those columns.
   const three = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, days: wx.days.slice(0, 3) }) }, { screen: 'weather', now, frames: {} });
   assert.equal(count(three, draw.C.grey, 39, 11, 63, 15), 0);
-  // A warning: the conditions layout, which has room for it.
-  const warned = draw.render({ now, bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
-  for (let x = 0; x < 64; x++) assert.equal(hex(warned.get(x, 18)), draw.C.divider);
-  assert.ok(count(warned, draw.C.warnSevere, 0, 26, 63, 30) > 30);
+  // The shadow follows the board's setting: none by default.
+  const flat = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
+  for (let y = 0; y <= 8; y++) for (let x = 11; x <= 31; x++) { const c = flat.get(x, y); assert.ok(!c.some((v) => v) || hex(c) === draw.C.label, `no shadow at ${x},${y}`); }
+  // Today's high/low line is level with the bottom of the big temperature (row 6), not its shadow (row 7).
+  const bottom = (g, color) => { let b = -1; for (let y = 0; y < 8; y++) for (let x = 0; x < 64; x++) if (hex(g.get(x, y)) === color) b = Math.max(b, y); return b; };
+  assert.equal(bottom(flat, draw.C.label), 6);
+  assert.equal(bottom(flat, draw.C.grey), 6);
+  // A warning takes over the high/low line, steady, and the layout stays.
+  const warn = (blink, w = { kind: 'svr', lvl: 'warning' }) => draw.render({ now, bright: 100, warn: w, radar: rad(wx) }, { screen: 'weather', now, frames: {}, blink });
+  const warned = warn(false);
+  assert.ok(count(warned, draw.C.warnSevere, 34, 2, 62, 6) > 15, 'bolt + WARN in the high/low area');
+  assert.equal(count(warned, '#4a4a4a', 30, 0, 63, 7) + count(warned, draw.C.grey, 30, 0, 63, 7), 0, 'high/low gone');
+  assert.equal(count(warned, draw.C.warnSevere, 0, 8, 63, 31), 0);
+  for (const x of [12, 25, 38, 51]) assert.equal(hex(warned.get(x, 20)), draw.C.divider, 'still the 5-day layout');
+  assert.deepEqual(warn(true, { kind: 'tor', lvl: 'warning' }).px, warn(false, { kind: 'tor', lvl: 'warning' }).px, 'a tornado warning does not blink here');
+  assert.ok(count(warn(false, { kind: 'tor', lvl: 'warning' }), draw.C.warnTornado, 34, 2, 62, 6) > 15);
+  assert.ok(count(warn(false, { kind: 'svr', lvl: 'watch' }), draw.C.watch, 34, 2, 62, 6) > 15, 'WATCH in yellow');
+  for (let y = 0; y < 8; y++) assert.deepEqual(warned.get(63, y), [0, 0, 0], 'right margin');
 });
 
 test('weather rain bars: shared top bar, centered title with a drop, bars on an 8px pitch, 1H/2H axis', () => {
@@ -603,11 +617,11 @@ test('weather rain bars: shared top bar, centered title with a drop, bars on an 
   let x0 = -1; for (let x = 0; x < 64 && x0 < 0; x++) for (let y = 9; y <= 14; y++) if (hex(ends.get(x, y)) === '#a9c9ff') { x0 = x; break; }
   const flake = []; for (let y = 8; y <= 15; y++) { let n = 0; for (let x = x0; x < x0 + 5; x++) if (hex(ends.get(x, y)) === '#a9c9ff') n++; flake.push(n); }
   assert.deepEqual(flake, [0, 1, 3, 3, 3, 1, 0, 0], 'flake on rows 9-13');
-  // A warning takes the title row; a tornado warning blinks.
+  // A warning takes over the top bar's high/low line, steady; the title stays.
   const warn = (blink) => draw.render({ now, bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: rad({ ...wx, rain }) }, { screen: 'weather', now, frames: {}, blink });
-  assert.ok(count(warn(false), draw.C.warnTornado, 0, 10, 63, 14) > 30);
-  assert.equal(count(warn(true), draw.C.warnTornado, 0, 10, 63, 14), 0);
-  assert.equal(count(warn(false), '#60b0ff', 0, 10, 63, 14), 0, 'no rain title');
+  assert.ok(count(warn(false), draw.C.warnTornado, 34, 2, 62, 6) > 15);
+  assert.deepEqual(warn(true).px, warn(false).px, 'no blinking');
+  assert.ok(count(warn(false), '#60b0ff', 14, 9, 63, 14) > 40, 'the title stays');
 });
 
 test('weather rain bars alternate with the radar loop on epoch-aligned turns (rain.alt)', () => {
@@ -625,7 +639,7 @@ test('weather rain bars alternate with the radar loop on epoch-aligned turns (ra
   assert.ok(count(noAlt, '#60b0ff', 0, 10, 63, 14) > 40);
 });
 
-test('weather hourly: the 5-day top bar over four 16px columns; a warning falls back to conditions', () => {
+test('weather hourly: the 5-day top bar over four 16px columns; the top bar follows the shadow setting and carries a warning', () => {
   const now = Date.UTC(2026, 9, 9, 16, 48) / 1000;
   const hours = [{ h: '3P', icon: 'sun', t: 78 }, { h: '6P', icon: 'cloudy', t: 76 }, { h: '9P', icon: 'pcloudy_night', t: 69 }, { h: '12A', icon: 'moon', t: 104 }];
   const wx = { icon: 'pcloudy_day', temp: 77, word: 'PT CLOUDY', hi: 78, lo: 58, feels: 75, wind: 'NW 12', pop: 20 };
@@ -644,7 +658,8 @@ test('weather hourly: the 5-day top bar over four 16px columns; a warning falls 
   for (const x of [15, 31, 47]) for (const y of [11, 12, 13, 14, 15, 27, 28, 29, 30, 31]) assert.equal(hex(f.get(x, y)), draw.C.divider, `clear at ${x},${y}`);
   for (const x of [14, 16, 30, 32, 46, 48]) for (let y = 27; y <= 31; y++) assert.deepEqual(f.get(x, y), [0, 0, 0], `margin ${x},${y}`);
   const warned = draw.render({ now, bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: rad({ ...wx, hours }) }, { screen: 'weather', now, frames: {} });
-  for (let x = 0; x < 64; x++) assert.equal(hex(warned.get(x, 18)), draw.C.divider);
+  assert.ok(count(warned, draw.C.warnSevere, 34, 2, 62, 6) > 15, 'the warning takes the high/low line');
+  for (const x of [15, 31, 47]) assert.equal(hex(warned.get(x, 20)), draw.C.divider, 'still the hourly layout');
 });
 
 test('minutes round up, like CTA: DUE through 60 s, then 2, 3, ...; never 1', () => {
