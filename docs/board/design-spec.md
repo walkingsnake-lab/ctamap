@@ -333,6 +333,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
   - **Jump to weather for NWS alerts:** Off (default), Warnings, or Watches too; stays on the weather screen while the alert is on, over baseball.
   - **Baseball takes over for:** Cubs, White Sox, Postseason (default all); pregame window 0–2 h (default 30 min), final 0–60 min (default 15); during live games show live games (default), Cubs/Sox first, or all games.
 - **Brightness:** Auto (sunrise/sunset), fixed level, or Off.
+- **Temperature unit:** °F (default) or °C, per board, for every weather display (weather row, weather screen, radar corner). The server converts; temperature colors still follow the °F scale. Wind stays mph.
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).

@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { url, parse, condition, toWx, toScreenWx, toDays, toHours, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS } = require('./weather');
+const { url, parse, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS } = require('./weather');
 const { measure } = require('./fonts');
 const { ICONS } = require('./icons');
 const { createNws } = require('./nws');
@@ -307,4 +307,15 @@ test('cache file: a restart starts from the last good weather, until it is 3 hou
   // A bad file is ignored.
   fs.writeFileSync(file, '{not json');
   assert.equal(await make(() => { throw new Error('down'); }).get(42.0084, -87.6659, { wait: 0 }), null);
+});
+
+test('tempUnit C: every displayed temperature converted; F untouched', () => {
+  const w = { temp: 63.4, hi: 69, lo: 51, feels: null, code: 0, isDay: true, days: [{ time: 1, code: 0, hi: 32, lo: -4 }], hrs: [{ time: 1, temp: 50, code: 0 }] };
+  assert.equal(inUnit(w, 'F'), w);
+  assert.equal(inUnit(null, 'C'), null);
+  const c = inUnit(w, 'C');
+  assert.deepEqual(toWx(c), { icon: 'sun', temp: 17, word: 'SUNNY', hi: 21, lo: 11 });
+  assert.equal(c.feels, null);
+  assert.deepEqual([c.days[0].hi, Math.round(c.days[0].lo), c.hrs[0].temp], [0, -20, 10]);
+  assert.equal(w.temp, 63.4); // original left alone (radar snow mode reads °F)
 });

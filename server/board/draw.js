@@ -769,7 +769,10 @@
     // Temperature shadow (optional): 1px down-right at 20%, its color blended
     // from cold blue to hot red along these stops (°F).
     const TEMP_STOPS = [[-10, '#3050ff'], [20, '#40a0ff'], [40, '#30d0d0'], [55, '#40d040'], [70, '#ffd000'], [85, '#ff8000'], [100, '#ff2020']];
-    function tempColor(t) {
+    // TEMP_STOPS are °F; c: the temperature is °C (wx.c), converted back
+    // with integer math so the board matches.
+    function tempColor(t, c) {
+      if (c) t = Math.floor(t * 9 / 5) + 32;
       if (t <= TEMP_STOPS[0][0]) return TEMP_STOPS[0][1];
       for (let i = 1; i < TEMP_STOPS.length; i++) {
         const [t1, c1] = TEMP_STOPS[i];
@@ -789,7 +792,7 @@
         f.fill(x, 5 + dy, 1, 1, color); f.fill(x + 2, 5 + dy, 1, 1, color);
         return x + 2;
       };
-      if (shadow) drawTemp(1, 1, scaleColor(tempColor(wx.temp), 0.2));
+      if (shadow) drawTemp(1, 1, scaleColor(tempColor(wx.temp, wx.c), 0.2));
       const tempRight = drawTemp(0, 0, C.label) + (shadow ? 1 : 0);
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 55, 1);
       // Word right-aligned under the icon, unless a 3-digit temperature reaches it.
@@ -874,7 +877,7 @@
       // The optional 1px shadow down and right in the temperature's color
       // (20%, as on the conditions screen), under the white temperature.
       if (shadow) {
-        const sh = scaleColor(tempColor(wx.temp), 0.2);
+        const sh = scaleColor(tempColor(wx.temp, wx.c), 0.2);
         f.text('small', '°', f.text('5x7', String(wx.temp), FD_TEMP_X + 1, 8, sh), 7, sh);
       }
       const x = f.text('5x7', String(wx.temp), FD_TEMP_X, 7, C.label);
@@ -914,7 +917,7 @@
         const cx = i * FD_PITCH + 6;
         ctext(f, 'small', d.d, cx, 15, C.grey);
         if (icons.ICONS[d.icon]) drawIcon(f, d.icon, cx - 4, 17);
-        drawDayTemp(f, String(d.hi), cx, 31, tempColor(d.hi));
+        drawDayTemp(f, String(d.hi), cx, 31, tempColor(d.hi, wx.c));
       });
     }
 
@@ -929,7 +932,7 @@
         const cx = i * 16 + 7;
         ctext(f, 'small', h.h, cx, 15, C.grey);
         if (icons.ICONS[h.icon]) drawIcon(f, h.icon, cx - 4, 17);
-        drawDayTemp(f, String(h.t), cx, 31, tempColor(h.t));
+        drawDayTemp(f, String(h.t), cx, 31, tempColor(h.t, wx.c));
       });
     }
 

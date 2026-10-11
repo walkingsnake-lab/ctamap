@@ -212,3 +212,11 @@ test('board ids never reach Object.prototype', () => {
   assert.equal(({}).bright, undefined);
   assert.equal(Object.showWeather, undefined);
 });
+
+test('tempUnit: default F, C allowed; validated', () => {
+  const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet });
+  assert.equal(store.get('home').tempUnit, 'F');
+  store.update('home', { tempUnit: 'C' });
+  assert.equal(store.get('home').tempUnit, 'C');
+  assert.throws(() => store.update('home', { tempUnit: 'K' }), /tempUnit must be one of F, C/);
+});
