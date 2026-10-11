@@ -13,7 +13,8 @@
 from . import draw
 
 SCREENS = ('transit', 'ticker', 'weather', 'baseball')
-# Radar frame buffers, allocated once while the heap is still whole. After
+# Radar frame buffers, allocated once while the heap is still whole (by
+# matrix.py, first thing in code.py; its counts and sizes must match these). After
 # hours of JSON parsing the heap is too fragmented for a fresh 2 KB block
 # (MemoryError with 37 KB free), so frames are read into these instead.
 RADAR_SLOTS = 6          # the loop's length (contract: up to 6 frames)
@@ -26,15 +27,23 @@ BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
 
 
+def _slots(bufs, n, size):
+    """The preallocated buffers (matrix.py, made before the big imports),
+    or fresh ones (tests, or if matrix.py's sizes drift from these)."""
+    if bufs and len(bufs) == n and all(len(b) == size for b in bufs):
+        return list(bufs)
+    return [bytearray(size) for _ in range(n)]
+
+
 class Player:
-    def __init__(self):
+    def __init__(self, radar_bufs=None, logo_bufs=None):
         self.p = None
         self.gen = 0             # bumped with every payload
         self.anim = draw.TransitAnimator()
         self.radar_frames = {}   # frame id -> one of the slot buffers
-        self.radar_free = [bytearray(RADAR_BYTES) for _ in range(RADAR_SLOTS)]
+        self.radar_free = _slots(radar_bufs, RADAR_SLOTS, RADAR_BYTES)
         self.logos = {}          # logo id -> one of the logo slot buffers
-        self.logo_free = [bytearray(LOGO_BYTES) for _ in range(LOGO_SLOTS)]
+        self.logo_free = _slots(logo_bufs, LOGO_SLOTS, LOGO_BYTES)
         self.page = 0
         self.page_start = 0
         self.loop_start = 0

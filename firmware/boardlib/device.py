@@ -1,4 +1,4 @@
-# Matrix Portal M4 hardware: the HUB75 matrix, the ESP32 WiFi co-processor,
+# Matrix Portal M4 hardware: drawing to the HUB75 matrix (built by matrix.py), the ESP32 WiFi co-processor,
 # the UP/DOWN buttons, the status NeoPixel, and the watchdog. Only imported on the board; the
 # rest of boardlib runs under CPython for tests.
 #
@@ -13,8 +13,6 @@ import bitmaptools
 import board
 import busio
 import displayio
-import framebufferio
-import rgbmatrix
 from digitalio import DigitalInOut, Direction, Pull
 
 from . import draw
@@ -381,17 +379,12 @@ class BoardFrame(draw.Frame):
 
 
 class Display:
-    def __init__(self, bit_depth=5, gamma=1):
-        displayio.release_displays()
-        matrix = rgbmatrix.RGBMatrix(
-            width=64, height=32, bit_depth=bit_depth,
-            rgb_pins=[board.MTX_R1, board.MTX_G1, board.MTX_B1, board.MTX_R2, board.MTX_G2, board.MTX_B2],
-            addr_pins=[board.MTX_ADDRA, board.MTX_ADDRB, board.MTX_ADDRC, board.MTX_ADDRD],
-            clock_pin=board.MTX_CLK, latch_pin=board.MTX_LAT, output_enable_pin=board.MTX_OE,
-        )
-        self.display = framebufferio.FramebufferDisplay(matrix, auto_refresh=False)
-        self.bitmap = displayio.Bitmap(64, 32, 256)
-        self.palette = displayio.Palette(256)
+    def __init__(self, mx, gamma=1):
+        """mx: matrix.Matrix, made by code.py before the big imports."""
+        bit_depth = mx.bit_depth
+        self.display = mx.display
+        self.bitmap = mx.bitmap
+        self.palette = mx.palette
         group = displayio.Group()
         group.append(displayio.TileGrid(self.bitmap, pixel_shader=self.palette))
         self.display.root_group = group
@@ -537,7 +530,14 @@ class Net:
         first. Returns ('ok', ssid), ('portal', mac) if a network answered
         with a captive portal, or ('nowifi', None)."""
         portal = False
-        seen = self._warm_up(status_cb)
+        # After a soft reboot the ESP32 is usually still joined: skip the
+        # scan (its result list is the biggest allocation before the first
+        # request, and the heap is tight at boot).
+        ssid = self._connected_ssid()
+        if ssid and any(n[0] == ssid for n in networks) and self.ping():
+            print('[wifi] %s: still connected' % ssid)
+            return ('ok', ssid)
+        seen = self._warm_up([n[0] for n in networks], status_cb)
         if seen:
             networks = [n for n in networks if n[0] in seen] + [n for n in networks if n[0] not in seen]
         for ssid, password in networks:
@@ -564,28 +564,42 @@ class Net:
             pass
         self.esp.reset()
 
-    def _warm_up(self, status_cb):
+    def _connected_ssid(self):
+        try:
+            if self.esp.is_connected:
+                n = self.esp.ap_info.ssid
+                return n.decode('utf-8') if isinstance(n, bytes) else n
+        except Exception:  # noqa: BLE001 - treat as not connected
+            pass
+        return None
+
+    def _warm_up(self, wanted, status_cb):
         """After a reset the ESP32 answers before its radio is ready, and
         every join fails with 'No such ssid'. Scan until it sees any network
-        (up to WARMUP_S), logging what it sees. A failed scan means the
-        ESP32 is wedged: reset it and keep scanning. Returns the SSIDs seen."""
+        (up to WARMUP_S). A failed scan means the ESP32 is wedged: reset it
+        and keep scanning. Returns which of the wanted SSIDs it sees.
+        Only those are kept and logged: a busy building shows dozens of
+        networks, and listing them all ran the boot heap out of memory."""
         end = time.monotonic() + WARMUP_S
         while True:
             status_cb('connecting', None)  # feeds the watchdog
+            gc.collect()
             try:
-                seen = self.esp.scan_networks()
-            except Exception as e:  # noqa: BLE001
-                seen = []
-                print('[wifi] scan failed: %r' % (e,))
-                self._reset_radio('scan failed')
-            if seen:
+                found = 0
                 names = []
-                for ap in seen:
+                for ap in self.esp.scan_networks():
+                    found += 1
                     n = ap.ssid if hasattr(ap, 'ssid') else ap['ssid']
                     n = n.decode('utf-8') if isinstance(n, bytes) else n
-                    if n and n not in names:
+                    if n in wanted and n not in names:
                         names.append(n)
-                print('[wifi] radio ready; sees: %s' % ', '.join(names))
+            except Exception as e:  # noqa: BLE001
+                found = 0
+                print('[wifi] scan failed: %r' % (e,))
+                self._reset_radio('scan failed')
+            gc.collect()  # drop the scan's AP list before joining
+            if found:
+                print('[wifi] radio ready; %d networks, ours: %s' % (found, ', '.join(names) or 'none'))
                 return names
             if time.monotonic() > end:
                 print('[wifi] radio still sees nothing after %d s' % WARMUP_S)
@@ -598,14 +612,6 @@ class Net:
         Always disconnects first: a failed join leaves the ESP32's status at
         'No such ssid', and without a disconnect the next join (even to a
         visible network) reports it too."""
-        # After a soft reboot the ESP32 is often still on this network:
-        # dropping and rejoining failed the first try, ~12 s at every boot.
-        try:
-            if self.esp.is_connected and self.esp.ap_info.ssid == ssid:
-                print('[wifi] %s: still connected' % ssid)
-                return True
-        except Exception:  # noqa: BLE001 - fall through to a fresh join
-            pass
         for attempt in range(JOIN_TRIES):
             status_cb('connecting', ssid)
             try:
@@ -723,9 +729,9 @@ def cold_boot():
 
 
 class Hardware:
-    def __init__(self, url, board_id, token, bit_depth=5, gamma=1, note=None):
+    def __init__(self, mx, url, board_id, token, gamma=1, note=None):
         note = note or (lambda stage: None)  # startup memory report
-        self.display = Display(bit_depth, gamma)
+        self.display = Display(mx, gamma)
         note('display')
         self.clock = Clock()
         self.buttons = Buttons()
