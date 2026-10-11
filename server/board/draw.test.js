@@ -627,17 +627,21 @@ test('weather rain bars: shared top bar, centered title with a drop, bars on an 
   assert.ok(count(warn(true), '#60b0ff', 14, 9, 63, 14) > 40, 'the title stays');
 });
 
-test('weather rain bars alternate with the radar loop on epoch-aligned turns (rain.alt)', () => {
-  const wx = { icon: 'rain', temp: 54, word: 'RAIN', hi: 61, lo: 49, rain: { snow: 0, now: 1, title: 'RAIN NEXT 2 HRS', h: [5, 5, 5, 5, 5, 5, 5, 5], l: [2, 2, 2, 2, 2, 2, 2, 2], alt: 20 } };
+test('weather rain: the radar loop plays rain.loops full cycles, then the bars for rain.alt s (never cut off)', () => {
+  // One frame: the cycle is one 500 ms step plus the 4 s hold (4.5 s), so 2 loops
+  // are 9 s, then 20 s of bars.
+  const wx = { icon: 'rain', temp: 54, word: 'RAIN', hi: 61, lo: 49, rain: { snow: 0, now: 1, title: 'RAIN NEXT 2 HRS', h: [5, 5, 5, 5, 5, 5, 5, 5], l: [2, 2, 2, 2, 2, 2, 2, 2], alt: 20, loops: 2 } };
   const p = { bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [0], timeBox: [40, 0, 24, 22], split: false, wx } };
   const frames = { a: new Uint8Array(2048).fill(3) };
-  const at = (now) => draw.render({ ...p, now }, { screen: 'weather', now, frames });
-  const radarTurn = at(0), barsTurn = at(25), radarAgain = at(40), barsAgain = at(79);
-  assert.ok(count(radarTurn, '#60b0ff', 0, 10, 63, 14) === 0, 'radar on the even turn');
-  assert.ok(count(barsTurn, '#60b0ff', 0, 10, 63, 14) > 40, 'bars on the odd turn');
-  assert.equal(count(radarAgain, '#60b0ff', 0, 10, 63, 14), 0);
-  assert.ok(count(barsAgain, '#60b0ff', 0, 10, 63, 14) > 40);
-  // Without alt (bars mode or no radar) the frames never matter.
+  const at = (t) => draw.render({ ...p, now: 0 }, { screen: 'weather', now: 0, t, frames });
+  const bars = (t) => count(at(t), '#60b0ff', 0, 10, 63, 14) > 40;
+  assert.equal(bars(0), false, 'loop 1');
+  assert.equal(bars(8999), false, 'loop 2 ends at 9 s, not cut off');
+  assert.equal(bars(9000), true, 'bars after 2 loops');
+  assert.equal(bars(28999), true, 'bars for alt s');
+  assert.equal(bars(29000), false, 'the loop starts again');
+  assert.equal(bars(38000), true, 'and turns to bars after its 2 loops');
+  // Without loops or alt (bars mode or no radar) the frames never matter.
   const noAlt = draw.render({ ...p, now: 0, radar: { ...p.radar, frames: [], wx: { ...wx, rain: { ...wx.rain, alt: undefined } } } }, { screen: 'weather', now: 0, frames: {} });
   assert.ok(count(noAlt, '#60b0ff', 0, 10, 63, 14) > 40);
 });

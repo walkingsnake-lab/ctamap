@@ -36,7 +36,8 @@ const SPEEDS = {
   radarFrame: [300, 400, 500, 700, 1000],    // ms per radar loop frame
   radarHold: [2, 3, 4, 6, 8],                // s the loop holds on the newest frame
   gameEvery: [30, 45, 60, 90, 120],
-  wxRainEvery: [10, 15, 20, 30, 45, 60],     // s each of radar / rain bars when both alternate          // s per game when baseball rotates
+  wxRainEvery: [10, 15, 20, 30, 45, 60],     // s of rain bars per turn when both alternate
+  wxRainLoops: [1, 2, 3, 5],                 // full radar loops per turn when both alternate
 };
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
@@ -113,9 +114,11 @@ function defaultBoard(stations) {
     // Weather screen while rain is around: 'radar' (the loop, while rain is
     // in the box), 'bars' (the next 2 hours in 15-minute bars, while the
     // forecast has rain; never the loop), or 'both' (alternate every
-    // wxRainEvery s while both apply).
+    // wxRainLoops full radar loops, then wxRainEvery s of bars, repeating,
+    // while both apply).
     wxRain: 'radar',
     wxRainEvery: 15,
+    wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -181,6 +184,7 @@ function validatePatch(patch, stations) {
       case 'radarHold':
       case 'gameEvery':
       case 'wxRainEvery':
+      case 'wxRainLoops':
         if (!SPEEDS[key].includes(val)) throw new ValidationError(`${key} must be one of ${SPEEDS[key].join(', ')}`);
         out[key] = val;
         break;

@@ -1151,9 +1151,22 @@ def radar_loop_idx(ids, frames, t, tm):
     return min(n - 1, (t % cycle) // tm['radarFrame'])
 
 
-def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
+def rain_bars_turn(rn, n, tm, t):
+    """The rain turns (rain.loops, rain.alt): the radar loop plays `loops`
+    full cycles from its start (the hold included), then the bars show for
+    alt s, then the loop starts again. n: frames in the loop; t: ms since
+    the loop started. Mirrors rainBarsTurn() in draw.js."""
+    if not rn or not rn.get('h') or not rn.get('alt') or not rn.get('loops') or not n:
+        return False
+    cycle = max(1, n - 1) * tm['radarFrame'] + tm['radarHold']
+    loop_ms = rn['loops'] * cycle
+    return t % (loop_ms + rn['alt'] * 1000) >= loop_ms
+
+
+def render_weather(p, f, now=None, idx=None, frames=None, blink=False, t=None):
     """The weather screen: the radar loop while there are frames, current
-    conditions otherwise. Mirrors renderWeather() in draw.js."""
+    conditions otherwise. Mirrors renderWeather() in draw.js. t: ms since
+    the radar loop started (defaults to the epoch clock, as in draw.js)."""
     r = p.get('radar') or {}
     ids = r.get('frames') or []
     if not ids:
@@ -1164,8 +1177,9 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False):
         idx = len(ids) - 1
     wx = r.get('wx')
     rn = wx.get('rain') if wx else None
-    t = now if now is not None else p.get('now')
-    bars_turn = bool(rn and rn.get('h') and rn.get('alt') and (t // rn['alt']) % 2 == 1)
+    clock = now if now is not None else p.get('now')
+    loop_t = t if t is not None else clock * 1000
+    bars_turn = rain_bars_turn(rn, len(ids), timing(p), loop_t)
     if ((not ids or (frames is not None and not radar_on_hand(ids, frames))) or bars_turn) and wx:
         # Rain bars when sent (alternating with the radar loop while the
         # payload says so); the forecast layouts' top bar carries a warning.
@@ -1660,12 +1674,12 @@ def apply_brightness(f, bright):
     return f
 
 
-def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0, idx=None, frames=None, game=None, rolls=None, logos=None):
+def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0, idx=None, frames=None, game=None, rolls=None, logos=None, t=None):
     screen = screen or p.get('screen')
     if screen == 'ticker':
         render_ticker(p, f, now=now, page=page, slide=slide)
     elif screen == 'weather':
-        render_weather(p, f, now=now, idx=idx, frames=frames, blink=blink)
+        render_weather(p, f, now=now, idx=idx, frames=frames, blink=blink, t=t)
     elif screen == 'baseball':
         render_baseball(p, f, now=now, game=game, rolls=rolls, logos=logos)
     else:
