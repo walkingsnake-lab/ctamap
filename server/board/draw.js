@@ -922,6 +922,17 @@
     // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
     // The weather screen: the radar loop while there are frames (rain in the
     // box), current conditions (or the 5-day layout) otherwise.
+    // The rain turns (rain.loops, rain.alt): the radar loop plays `loops` full
+    // cycles from its start (cycle as radarLoopIdx() counts it, the hold
+    // included), then the bars show for alt s, then the loop starts again.
+    // n: frames in the loop; t: ms since the loop started. Mirrors
+    // rain_bars_turn() in draw.py.
+    function rainBarsTurn(rn, n, tm, t) {
+      if (!rn || !rn.h || !rn.alt || !rn.loops || !n) return false;
+      const cycle = Math.max(1, n - 1) * tm.radarFrame + tm.radarHold;
+      const loopMs = rn.loops * cycle;
+      return t % (loopMs + rn.alt * 1000) >= loopMs;
+    }
     function renderWeather(p, opts) {
       const o = opts || {};
       const r = p.radar || {};
@@ -935,7 +946,10 @@
       // payload says so: rain.alt s each, epoch-aligned, bars on the odd
       // turns).
       const rn = r.wx && r.wx.rain;
-      const barsTurn = !!(rn && rn.h && rn.alt && Math.floor((o.now != null ? o.now : p.now) / rn.alt) % 2 === 1);
+      // t defaults to the epoch clock (the simulator's stills); the board
+      // passes ms since its loop started.
+      const loopT = o.t != null ? o.t : (o.now != null ? o.now : p.now) * 1000;
+      const barsTurn = rainBarsTurn(rn, ids.length, timing(p), loopT);
       if (((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
         // The forecast layouts' top bar carries a warning on its high/low line.
         const top = { shadow: !!r.tempShadow, warn: p.warn, blink: o.blink };
@@ -1409,7 +1423,7 @@
     }
 
     return {
-      Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
+      Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing,

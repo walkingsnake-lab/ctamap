@@ -176,6 +176,10 @@ test('wxView: default conditions, 5day allowed; validated', () => {
   assert.equal(createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet }).get('home').wxRainEvery, 15);
   assert.throws(() => store.update('home', { wxRain: 'all' }), /wxRain must be one of radar, bars, both/);
   assert.throws(() => store.update('home', { wxRainEvery: 12 }), /wxRainEvery must be one of/);
+  assert.equal(store.get('home').wxRainLoops, 2);
+  store.update('home', { wxRainLoops: 5 });
+  assert.equal(store.get('home').wxRainLoops, 5);
+  assert.throws(() => store.update('home', { wxRainLoops: 4 }), /wxRainLoops must be one of 1, 2, 3, 5/);
 });
 
 test('radarBright: default 100, 20-150', () => {

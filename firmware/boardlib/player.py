@@ -224,7 +224,7 @@ class Player:
                     rolls[k] = {'from': r['from'], 'p': rp}
             return draw.render(p, frame, screen='baseball', now=now, rolls=rolls, logos=self.logos)
         if self.screen == 'weather':
-            return draw.render(p, frame, screen='weather', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms))
+            return draw.render(p, frame, screen='weather', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms), t=ms - self.loop_start)
         view = self.anim.step(p, now, ms)
         return draw.render(p, frame, screen='transit', now=now, view=view, blink=self.blink_on(ms))
 
@@ -259,6 +259,22 @@ class Player:
     def radar_idx(self, ms):
         ids = (self.p.get('radar') or {}).get('frames') or []
         return draw.radar_loop_idx(ids, self.radar_frames, ms - self.loop_start, draw.timing(self.p))
+
+    def rain_bars(self, ms):
+        """True while the rain bars show in the radar loop's turn (the
+        payload's rain.loops and rain.alt; draw.rain_bars_turn)."""
+        r = (self.p.get('radar') or {}) if self.p else {}
+        rn = (r.get('wx') or {}).get('rain')
+        return bool(draw.rain_bars_turn(rn, self._loop_len(), draw.timing(self.p), ms - self.loop_start))
+
+    def rain_period(self, ms):
+        """ms in one full turn: the loops, then the bars."""
+        r = (self.p.get('radar') or {}) if self.p else {}
+        rn = (r.get('wx') or {}).get('rain') or {}
+        n = self._loop_len()
+        tm = draw.timing(self.p)
+        cycle = max(1, n - 1) * tm['radarFrame'] + tm['radarHold']
+        return (rn.get('loops') or 0) * cycle + (rn.get('alt') or 0) * 1000
 
     def _loop_len(self):
         """Frames in the playing loop: all of them once every frame is on
@@ -296,7 +312,7 @@ class Player:
             tm = draw.timing(self.p)
             return key + (self.page, ms - self.page_start >= tm['pageHold'] + tm['slide'])
         if self.screen == 'weather':
-            return key + (self.radar_idx(ms), len(self.radar_frames))
+            return key + (self.radar_idx(ms), len(self.radar_frames), self.rain_bars(ms))
         if self.screen == 'baseball':
             return key + (len(self.logos),)
         return key
@@ -314,7 +330,7 @@ class Player:
             return any(ms - r['start'] < draw.ROLL_MS for r in self.bb_rolls.values())
         if self.screen == 'weather':
             n = self._loop_len()
-            if n < 2:
+            if n < 2 or self.rain_bars(ms):
                 return False
             tm = draw.timing(self.p)
             cycle = (n - 1) * tm['radarFrame'] + tm['radarHold']
@@ -335,9 +351,12 @@ class Player:
             return FAR  # rolls follow fetched changes; the rotation swaps without animating
         if self.screen == 'weather':
             n = self._loop_len()
-            if n < 2:
+            if n < 2 and not self.rain_bars(ms):
                 return FAR
             tm = draw.timing(self.p)
+            if self.rain_bars(ms):
+                # Bars show between two loop turns: the next turn starts the loop again.
+                return self.rain_period(ms) - (ms - self.loop_start) % self.rain_period(ms)
             cycle = (n - 1) * tm['radarFrame'] + tm['radarHold']
             return cycle - (ms - self.loop_start) % cycle
         if self._quiet_gen != self.gen or (now != self._quiet_now and 0 <= self._quiet_at <= now):

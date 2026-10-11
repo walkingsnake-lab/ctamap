@@ -180,8 +180,10 @@
       <button data-v="both">Both</button>
     </div>
     <p class="hint" id="wxRainHint"></p>
-    <div class="row" id="wxRainEveryRow"><span>Switch every</span>
-      <select id="wxRainEvery" aria-label="Switch between radar and rain bars every" style="width:auto"><option value="10">10 sec</option><option value="15">15 sec</option><option value="20">20 sec</option><option value="30">30 sec</option><option value="45">45 sec</option><option value="60">60 sec</option></select></div>
+    <div class="row" id="wxRainEveryRow"><span>Bars for</span>
+      <select id="wxRainEvery" aria-label="Rain bars show for" style="width:auto"><option value="10">10 sec</option><option value="15">15 sec</option><option value="20">20 sec</option><option value="30">30 sec</option><option value="45">45 sec</option><option value="60">60 sec</option></select></div>
+    <div class="row" id="wxRainLoopsRow"><span>Radar loops first</span>
+      <select id="wxRainLoops" aria-label="Full radar loops before the bars" style="width:auto"><option value="1">1 loop</option><option value="2">2 loops</option><option value="3">3 loops</option><option value="5">5 loops</option></select></div>
     <div class="row"><span>Temperature shadow</span><label class="switch"><input type="checkbox" id="tempShadow"><span></span></label></div>
     <p class="hint">A faint shadow behind the big temperature, colored from blue (cold) to red (hot).</p>
   </section>
@@ -455,11 +457,13 @@
     const wr = board.wxRain === 'bars' || board.wxRain === 'both' ? board.wxRain : 'radar';
     pressed('wxRain', wr);
     $('wxRainEveryRow').style.display = wr === 'both' ? '' : 'none';
+    $('wxRainLoopsRow').style.display = wr === 'both' ? '' : 'none';
     $('wxRainEvery').value = String(board.wxRainEvery || 15);
+    $('wxRainLoops').value = String(board.wxRainLoops || 2);
     $('wxRainHint').textContent = wr === 'bars'
       ? 'While rain or snow is falling or due in the next 2 hours: today on top and 15-minute bars below, never the radar loop. Without any in the forecast, the layout above.'
       : wr === 'both'
-      ? 'The radar loop while rain is in the radar box and the rain bars while the forecast has rain; alternating when both apply.'
+      ? 'The radar loop while rain is in the radar box, then the rain bars for the time below while the forecast has rain. Each radar run plays in full before the bars; when both apply, the two repeat.'
       : 'While rain is in the radar box: the radar loop. Otherwise the layout above.';
     $('wxViewHint').textContent = board.wxView === '5day'
       ? 'Today on top, the next five days\' highs below. A weather warning or watch shows on the high/low line.'
@@ -550,6 +554,7 @@
   $('wxDivider').addEventListener('change', (e) => save({ wxDivider: e.target.checked }));
   $('tempShadow').addEventListener('change', (e) => save({ tempShadow: e.target.checked }));
   $('wxRainEvery').addEventListener('change', (e) => save({ wxRainEvery: Number(e.target.value) }));
+  $('wxRainLoops').addEventListener('change', (e) => save({ wxRainLoops: Number(e.target.value) }));
   $('wxRain').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxRain: v }); });
   $('wxView').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxView: v }); });
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });

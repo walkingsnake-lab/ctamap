@@ -144,6 +144,38 @@ class RadarLoop(unittest.TestCase):
         self.pl.add_frame('e', self.pl.take_slot(), 20000)
         self.assertEqual([self.pl.radar_idx(ms) for ms in (20000, 23000)], [0, 3])
 
+class RainTurns(unittest.TestCase):
+    """Both (rain.loops, rain.alt): the loop plays `loops` full cycles, then the bars show for alt s."""
+    def setUp(self):
+        self.pl = player.Player()
+        rain = {'h': [5] * 8, 'l': [2] * 8, 'title': 'RAIN NEXT 2 HRS', 'snow': 0, 'alt': 20, 'loops': 2}
+        r = {'on': True, 'frames': ['a', 'b', 'c', 'd'], 'ft': [T0] * 4,
+             'wx': {'temp': 60, 'icon': 'rain', 'word': 'RAIN', 'rain': rain}}
+        self.pl.set_payload(payload([], screen='weather', radar=r, anim={'radarFrame': 1000, 'radarHold': 2000}), 0)
+        self.pl.set_screen('weather', 0)
+        for fid in ['a', 'b', 'c', 'd']:
+            self.pl.add_frame(fid, self.pl.take_slot(), 0)  # the set completes at 0: the loop starts there
+
+    def test_two_loops_then_bars_then_the_loop_again(self):
+        # A 5 s cycle (3 steps + the 2 s hold): 2 loops are 10 s, then 20 s of bars.
+        self.assertFalse(self.pl.rain_bars(9999))
+        self.assertTrue(self.pl.rain_bars(10000))
+        self.assertTrue(self.pl.rain_bars(29999))
+        self.assertFalse(self.pl.rain_bars(30000))
+
+    def test_the_loop_is_never_cut_off_and_bars_are_not_busy(self):
+        self.assertTrue(self.pl.busy(5500))          # loop 2 steps (5 s cycle, 3 steps then the hold)
+        self.assertFalse(self.pl.busy(9999))         # loop 2's hold: the bars come after it, not mid-loop
+        self.assertFalse(self.pl.busy(10500))        # bars: nothing animates
+        self.assertEqual(self.pl.quiet_ms(10000, T0), 20000)  # the gap is the bars
+
+    def test_the_drawn_bars_match_the_reference_renderer(self):
+        f = draw.Frame()
+        self.pl.draw(f, 12000, T0)
+        ref = draw.render(self.pl.p, draw.Frame(), screen='weather', now=T0, t=12000, frames=self.pl.radar_frames)
+        self.assertEqual(f.px, ref.px)
+
+
 if __name__ == '__main__':
     unittest.main()
 

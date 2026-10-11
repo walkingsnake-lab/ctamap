@@ -744,11 +744,11 @@ test('simulator test rain bars: forced whatever the setting, expires and clears 
   assert.match(titles.snow, /^SNOW IN \d+ MIN$/);
   assert.equal(titles['snow now'], 'SNOW NEXT 2 HRS');
   assert.ok((await s.req(FULL)).body.radar.wx.rain.snow === 1);
-  // Both: the radar loop stays and the board alternates.
-  s.store.update('home', { wxRain: 'both', wxRainEvery: 10 });
+  // Both: the radar loop stays and the board alternates: bars for alt s after loops radar loops.
+  s.store.update('home', { wxRain: 'both', wxRainEvery: 10, wxRainLoops: 3 });
   const both = (await s.req(FULL)).body.radar;
   assert.deepEqual(both.frames, ['x']);
-  assert.equal(both.wx.rain.alt, 10);
+  assert.deepEqual([both.wx.rain.alt, both.wx.rain.loops], [10, 3]);
   // Cleared: back to the dry forecast.
   assert.equal((await post({})).body.bars, null);
   assert.equal((await s.req(FULL)).body.radar.wx.rain, undefined);

@@ -306,8 +306,8 @@ function createBoard({
     // is in the box (frames are sent only then), current conditions otherwise.
     // Rain bars (wxRain 'bars' or 'both'): while precipitation is falling or
     // due in the next 2 hours. 'bars' never sends the radar loop; 'both'
-    // sends both and the board alternates them (rain.alt s each) while both
-    // apply.
+    // sends both and the board alternates them (rain.loops radar loops, then
+    // rain.alt s of bars) while both apply.
     const barsOn = board.wxRain === 'bars' || board.wxRain === 'both';
     let rain = barsOn && w ? toRain(w, now) : null;
     // Test rain bars (simulator): shown whatever the board's setting, and
@@ -315,7 +315,9 @@ function createBoard({
     const testBars = test && test.bars ? testRain(test.bars, now) : null;
     if (testBars) rain = testBars;
     if (!radarState.on || board.wxRain === 'bars' || (testBars && board.wxRain !== 'both')) radarState = { ...radarState, frames: [], ft: [] };
-    if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15 };
+    // Both: the radar loop plays wxRainLoops full cycles, then the bars show
+    // for alt s, repeating (draw.js rainBarsTurn()).
+    if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15, loops: board.wxRainLoops || 2 };
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && w ? toDays(w) : null;
     const hours = board.wxView === 'hourly' && w ? toHours(w) : null;
