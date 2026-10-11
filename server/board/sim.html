@@ -245,7 +245,7 @@
   let transitAnim = D.createTransitAnimator();
   let page = 0, pageStart = performance.now();
   let bbShown = null, bbRolls = {};
-  // Clock and weather-number rolls, one roller per screen (all four draw at once).
+  // Clock rolls, one roller per screen (all four draw at once).
   const numRollers = {};
   const rolled = (screen, t, opts) => {
     const r = numRollers[screen] || (numRollers[screen] = D.createNumRoller());

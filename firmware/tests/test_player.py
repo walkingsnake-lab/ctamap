@@ -177,7 +177,7 @@ class RainTurns(unittest.TestCase):
 
 
 class NumberRolls(unittest.TestCase):
-    """Clocks and weather numbers roll when they change (NumRoller)."""
+    """The header and radar clocks roll at the minute (NumRoller)."""
 
     def setUp(self):
         self.t = T0 - T0 % 60 + 50   # 10 s before a minute rolls over
@@ -210,13 +210,20 @@ class NumberRolls(unittest.TestCase):
         self.pl.draw(draw.Frame(), 10000, self.t + 10)
         self.assertFalse(self.pl.busy(10000))
 
-    def test_a_new_temperature_rolls(self):
+    def test_a_new_temperature_does_not_roll(self):
         wx = {'icon': 'sun', 'temp': 63, 'word': 'SUNNY'}
         self.pl.set_payload(dict(self.pl.p, wx=wx), 0)
         self.draw(0)
         self.pl.set_payload(dict(self.pl.p, wx=dict(wx, temp=64)), 2000)
         self.draw(2000)
-        self.assertTrue(self.pl.busy(2100))
+        self.assertFalse(self.pl.busy(2100))
+
+    def test_the_overnight_clock_does_not_roll(self):
+        self.pl.set_payload(dict(self.pl.p, rows=[]), 0)
+        self.draw(0)
+        self.draw(10000)
+        self.assertFalse(self.pl.busy(10100))
+        self.assertFalse(self.pl.nums.clock())
 
     def test_no_clock_no_minute_gap(self):
         self.pl.set_payload(dict(self.pl.p, header=None), 0)

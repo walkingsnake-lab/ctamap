@@ -219,8 +219,11 @@
       }));
     }
 
-    // ---- number rolls (clocks, temperatures, weather numbers) ----
-    // Each rollable text is drawn under a name ('hdr.clock', 'wx.temp', ...).
+    // ---- clock rolls ----
+    // The header clock (transit, ticker) and the radar's current time roll
+    // at each minute like arrival times; each is drawn under a name
+    // ('hdr.clock', 'rad.clock'). The big overnight and no-games clocks
+    // don't roll.
     // During render(), NR holds either a roller (createNumRoller: the board
     // and the simulator, which notice changes as they draw) or fixed rolls
     // ({name: {from, p}}: tests and parity scenarios).
@@ -233,7 +236,7 @@
     }
     // [travel, top, bottom] for a font's digits: the ink rows the digits
     // span, relative to the baseline (the roll's clip), and travel = their
-    // height + 1px (bitmaps can carry blank rows, e.g. the 9x15 clock's).
+    // height + 1px (bitmaps can carry blank rows).
     const ROLL_FONT = {};
     function fontRoll(font) {
       if (!ROLL_FONT[font]) {
@@ -246,49 +249,36 @@
       }
       return ROLL_FONT[font];
     }
-    // Draws `text` character by character from x: adv(ch) is a character's
-    // advance, put(ch, x, dy, str) draws one (dy: vertical offset; str: the
-    // text it belongs to). Mid-roll (roll = {from, p}), the old text (at fx)
-    // moves up `dist` px and out of `clip` while the new one moves up into
-    // place; with the same left edge, length, and character widths, only the
-    // changed characters move (12:59 -> 1:00 rolls the whole text). Returns
-    // x after the last advance.
-    function rollChars(f, roll, text, x, fx, clip, dist, adv, put) {
-      const run = (str, cx, dy, only) => {
-        let i = 0;
-        for (const ch of str) { if (!only || only[i]) put(ch, cx, dy, str); cx += adv(ch); i++; }
-        return cx;
-      };
-      if (!roll) return run(text, x, 0, null);
-      const a = [...text], b = [...roll.from];
+    // Text that rolls when it changes; xOf(str) gives a text's left edge
+    // (alignment). Mid-roll (roll = {from, p}), the old text moves up out of
+    // the digits' rows while the new one moves up into place; with the same
+    // left edge, length, and character widths, only the changed characters
+    // move (12:59 -> 1:00 rolls the whole text). Returns x after the last
+    // advance, like f.text. Mirrors roll_text() in draw.py.
+    function rollTextWith(f, font, roll, text, xOf, base, color) {
+      let x = xOf(text);
+      if (!roll) return f.text(font, text, x, base, color);
+      const from = roll.from, fx = xOf(from);
+      const [dist, t0, t1] = fontRoll(font);
       const up = Math.round(easeInOut(roll.p) * dist);
-      const same = fx === x && a.length === b.length && a.every((ch, i) => adv(ch) === adv(b[i]));
-      f.withClip(clip[0], clip[1], clip[2], clip[3], () => {
+      const a = [...text], b = [...from];
+      const same = fx === x && a.length === b.length && a.every((ch, i) => measure(font, ch) === measure(font, b[i]));
+      f.withClip(0, base + t0, 63, base + t1, () => {
         if (same) {
-          const changed = a.map((ch, i) => ch !== b[i]);
-          run(text, x, 0, changed.map((c) => !c));
-          run(roll.from, x, -up, changed);
-          run(text, x, dist - up, changed);
+          a.forEach((ch, i) => {
+            if (ch === b[i]) f.text(font, ch, x, base, color);
+            else { f.text(font, b[i], x, base - up, color); f.text(font, ch, x, base - up + dist, color); }
+            x += measure(font, ch) + 1;
+          });
         } else {
-          run(roll.from, fx, -up, null);
-          run(text, x, dist - up, null);
+          f.text(font, from, fx, base - up, color);
+          x = f.text(font, text, x, base - up + dist, color);
         }
       });
-      return a.reduce((cx, ch) => cx + adv(ch), x);
-    }
-    // One-font text that rolls when it changes; xOf(str) gives a text's
-    // left edge (alignment). Returns x after the last advance, like f.text.
-    function rollTextWith(f, font, roll, text, xOf, base, color) {
-      const x = xOf(text);
-      if (!roll) return f.text(font, text, x, base, color);
-      const [dist, t0, t1] = fontRoll(font);
-      return rollChars(f, roll, text, x, xOf(roll.from), [0, base + t0, 63, base + t1], dist,
-        (ch) => measure(font, ch) + 1, (ch, cx, dy) => f.text(font, ch, cx, base + dy, color));
+      return x;
     }
     const rollText = (f, font, name, text, xOf, base, color) => rollTextWith(f, font, takeRoll(name, text), text, xOf, base, color);
-    const leftAt = (x) => () => x;
     const rightAt = (font, right) => (str) => right - measure(font, str) + 1;
-    const centerIn = (font) => (str) => Math.floor((64 - measure(font, str)) / 2);
 
     // Station name + clock on rows 1-5, flush to the screen edges, both in the
     // header grey (transit and ticker). `divider`: a line on row 7 (transit).
@@ -310,7 +300,7 @@
       if (divider) f.fill(0, 22, 64, 1, C.divider);
       drawIcon(f, wx.icon, 0, 24);
       const base = 31;
-      rollText(f, 'small', 'row.temp', `${wx.temp}°`, leftAt(10), base, C.wxText);
+      f.text('small', `${wx.temp}°`, 10, base, C.wxText);
       if (warn) {
         const { glyph, color, blinks } = warnStyle(warn);
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
@@ -472,7 +462,7 @@
       const blockH = 10 + 3 + 5; // 10px digits, gap, label
       const areaH = p.wx ? 22 : 32;
       const top = Math.floor((areaH - blockH) / 2);
-      rollText(f, 'clock', 'night.clock', clock, centerIn('clock'), top + 10, C.clock);
+      f.text('clock', clock, Math.floor((64 - measure('clock', clock)) / 2), top + 10, C.clock);
       f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), top + 18, C.noTrains);
     }
 
@@ -785,30 +775,24 @@
     }
 
     function drawWeatherScreen(f, wx, warn, blink, shadow) {
-      // Temperature, rolling when it changes: 9x15 digits, a 5x2 bar for the
-      // minus (the clock font has digits only), a 3x3 ring degree sign. The
-      // shadow layer (str: the text it shows, for its color) rolls with it.
-      const text = `${wx.temp}°`;
-      const roll = takeRoll('wx.temp', text);
-      const adv = (ch) => (ch === '-' ? 7 : ch === '°' ? 3 : measure('clock', ch) + 1);
-      const [dist, t0, t1] = fontRoll('clock');
-      const layer = (d, colorOf) => rollChars(f, roll, text, d, d, [0, 14 + d + t0, 63, 14 + d + t1], dist, adv, (ch, x, dy, str) => {
-        const color = colorOf(str), y = d + dy;
-        if (ch === '-') f.fill(x, 8 + y, 5, 2, color);
-        else if (ch === '°') {
-          f.fill(x, 4 + y, 3, 1, color); f.fill(x, 6 + y, 3, 1, color);
-          f.fill(x, 5 + y, 1, 1, color); f.fill(x + 2, 5 + y, 1, 1, color);
-        } else f.text('clock', ch, x, 14 + y, color);
-      });
-      if (shadow) layer(1, (str) => scaleColor(tempColor(parseInt(str, 10)), 0.2));
-      // Right edge of the degree sign.
-      const tempRight = layer(0, () => C.label) - 1 + (shadow ? 1 : 0);
+      // Temperature; a 5x2 bar for the minus (the clock font has digits only).
+      // Returns the degree sign's right edge.
+      const drawTemp = (dx, dy, color) => {
+        let x = dx;
+        if (wx.temp < 0) { f.fill(x, 8 + dy, 5, 2, color); x += 7; }
+        x = f.text('clock', String(Math.abs(wx.temp)), x, 14 + dy, color);
+        f.fill(x, 4 + dy, 3, 1, color); f.fill(x, 6 + dy, 3, 1, color);
+        f.fill(x, 5 + dy, 1, 1, color); f.fill(x + 2, 5 + dy, 1, 1, color);
+        return x + 2;
+      };
+      if (shadow) drawTemp(1, 1, scaleColor(tempColor(wx.temp), 0.2));
+      const tempRight = drawTemp(0, 0, C.label) + (shadow ? 1 : 0);
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 55, 1);
       // Word right-aligned under the icon, unless a 3-digit temperature reaches it.
       if (wx.word && 63 - measure('small', wx.word) + 1 > tempRight + 2) rtext(f, 'small', wx.word, 63, 16, C.wxText);
       f.fill(0, 18, 64, 1, C.divider);
-      if (wx.feels != null) rollText(f, 'small', 'wx.feels', `FEELS ${wx.feels}°`, leftAt(0), 25, C.grey);
-      if (wx.wind) rollText(f, 'small', 'wx.wind', wx.wind, rightAt('small', 63), 25, C.label);
+      if (wx.feels != null) f.text('small', `FEELS ${wx.feels}°`, 0, 25, C.grey);
+      if (wx.wind) rtext(f, 'small', wx.wind, 63, 25, C.label);
       if (warn) {
         const ws = warnStyle(warn);
         if (!(ws.blinks && blink)) {
@@ -823,14 +807,14 @@
       if (wx.pop != null) {
         const t = `${wx.pop}%`;
         const px = 63 - measure('small', t) + 1;
-        rollText(f, 'small', 'wx.pop', t, rightAt('small', 63), 31, C.label);
+        f.text('small', t, px, 31, C.label);
         WX_DROP.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(px - 5 + i, 27 + j, 1, 1, WX_BLUE); }));
         popLeft = px - 5;
       }
       if (wx.hi != null && wx.lo != null) {
         let hl = `H ${wx.hi}° L ${wx.lo}°`;
         if (measure('small', hl) + 3 > popLeft) hl = `H ${wx.hi} L ${wx.lo}`;
-        rollText(f, 'small', 'wx.hl', hl, leftAt(0), 31, C.grey);
+        f.text('small', hl, 0, 31, C.grey);
       }
     }
 
@@ -885,19 +869,15 @@
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
       // The optional 1px shadow down and right in the temperature's color
       // (20%, as on the conditions screen), under the white temperature.
-      // Both roll when the temperature changes.
-      const text = `${wx.temp}°`;
-      const roll = takeRoll('bar.temp', text);
-      const adv = (ch) => (ch === '°' ? measure('small', ch) : measure('5x7', ch)) + 1;
-      const [dist, t0, t1] = fontRoll('5x7');
-      const layer = (d, colorOf) => rollChars(f, roll, text, FD_TEMP_X + d, FD_TEMP_X + d, [0, 7 + d + t0, 63, 7 + d + t1], dist, adv, (ch, x, dy, str) => {
-        if (ch === '°') f.text('small', ch, x, 6 + d + dy, colorOf(str));
-        else f.text('5x7', ch, x, 7 + d + dy, colorOf(str));
-      });
-      if (shadow) layer(1, (str) => scaleColor(tempColor(parseInt(str, 10)), 0.2));
+      if (shadow) {
+        const sh = scaleColor(tempColor(wx.temp), 0.2);
+        f.text('small', '°', f.text('5x7', String(wx.temp), FD_TEMP_X + 1, 8, sh), 7, sh);
+      }
+      const x = f.text('5x7', String(wx.temp), FD_TEMP_X, 7, C.label);
+      f.text('small', '°', x, 6, C.label);
       // Right edge of the temperature's ink (the 2px degree sign), shadow
       // included.
-      const tempRight = layer(0, () => C.label) - adv('°') + 1 + (shadow ? 1 : 0);
+      const tempRight = x + 1 + (shadow ? 1 : 0);
       if (warn) {
         const ws = warnStyle(warn);
         if (ws.blinks && blink) return;
@@ -1094,14 +1074,11 @@
         const t = `${r.temp}°`;
         const icon = r.icon && icons.ICONS[r.icon] ? r.icon : null;
         const x0 = right + 1 - ((icon ? 10 : 0) + measure('small', t));
-        const tx = rightAt('small', right);
-        const tr = takeRoll('rad.temp', t);
         if (icon) clear([x0, top + 4, x0 + 7, top + 11]);
-        clear(textBox('small', t, tx(t), top + 10));
-        if (tr) clear(textBox('small', tr.from, tx(tr.from), top + 10));
+        clear(textBox('small', t, x0 + (icon ? 10 : 0), top + 10));
         drawIndicator();
         if (icon) drawIcon(f, icon, x0, top + 4);
-        rollTextWith(f, 'small', tr, t, tx, top + 10, C.label);
+        f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
         if (ws) drawWarnTag();
         return f;
       }
@@ -1135,21 +1112,18 @@
         const apX = right - measure('small', ap) + 1;
         const clockRight = apX - 2;
         const ct = r.temp != null ? `${r.temp}°` : null;
-        // The current time and the temperature roll when they change (a
-        // frame's time steps with the loop, so it doesn't).
-        const cx = rightAt('5x7', clockRight), tx = rightAt('small', right);
+        // The current time rolls when it changes (a frame's time steps with
+        // the loop, so it doesn't).
+        const cx = rightAt('5x7', clockRight);
         const cr = nowClock ? takeRoll('rad.clock', clock) : null;
-        const ar = nowClock ? takeRoll('rad.ap', ap) : null;
-        const tr = ct ? takeRoll('rad.temp', ct) : null;
         clear(textBox('5x7', clock, cx(clock), top + 11));
         if (cr) clear(textBox('5x7', cr.from, cx(cr.from), top + 11));
         clear(textBox('small', ap, apX, top + 11));
-        if (ct) clear(textBox('small', ct, tx(ct), top + 18));
-        if (tr) clear(textBox('small', tr.from, tx(tr.from), top + 18));
+        if (ct) clear(textBox('small', ct, right - measure('small', ct) + 1, top + 18));
         drawIndicator();
         rollTextWith(f, '5x7', cr, clock, cx, top + 11, nowClock ? C.clock : C.radarTime);
-        rollTextWith(f, 'small', ar, ap, leftAt(apX), top + 11, C.radarSub);
-        if (ct) rollTextWith(f, 'small', tr, ct, tx, top + 18, C.radarSub);
+        f.text('small', ap, apX, top + 11, C.radarSub);
+        if (ct) rtext(f, 'small', ct, right, top + 18, C.radarSub);
         if (ws) drawWarnTag();
         return f;
       }
@@ -1159,17 +1133,15 @@
       const wX = ws ? apX - 2 - measure('small', ws.glyph) : 0;
       const cx = rightAt('5x7', right);
       const cr = nowClock ? takeRoll('rad.clock', clock) : null;
-      const ar = nowClock ? takeRoll('rad.ap', ap) : null;
       clear(textBox('5x7', clock, cx(clock), top + 11));
       if (cr) clear(textBox('5x7', cr.from, cx(cr.from), top + 11));
       clear(textBox('small', ap, apX, top + 18));
-      if (ar) clear(textBox('small', ar.from, apX, top + 18));
       if (ws) clear(textBox('small', ws.glyph, wX, top + 18));
       drawIndicator();
       // A frame's time is dimmed so it doesn't read as the current time.
       // The current time rolls when it changes.
       rollTextWith(f, '5x7', cr, clock, cx, top + 11, nowClock ? C.clock : C.radarTime);
-      rollTextWith(f, 'small', ar, ap, leftAt(apX), top + 18, C.radarAmpm);
+      f.text('small', ap, apX, top + 18, C.radarAmpm);
       if (ws && !hideWarn) f.text('small', ws.glyph, wX, top + 18, ws.color);
       return f;
     }
@@ -1314,7 +1286,7 @@
       const clock = clockText(now);
       const label = 'NO GAMES';
       const top = Math.floor((32 - 18) / 2);
-      rollText(f, 'clock', 'ng.clock', clock, centerIn('clock'), top + 10, C.clock);
+      f.text('clock', clock, Math.floor((64 - measure('clock', clock)) / 2), top + 10, C.clock);
       f.text('small', label, Math.floor((64 - measure('small', label)) / 2), top + 18, C.noTrains);
     }
 
@@ -1510,7 +1482,7 @@
     }
 
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock
-    // and weather-number rolls (see takeRoll).
+    // rolls (see takeRoll).
     function render(p, opts) {
       const o = opts || {};
       const screen = o.screen || p.screen;
@@ -1530,7 +1502,7 @@
       return out;
     }
 
-    // Rolls for clocks and weather numbers on one screen. Pass it to render()
+    // Clock rolls on one screen. Pass it to render()
     // as opts.roller between begin(t) and end(): while drawing, take(name,
     // text) compares each named text with what the last frame showed and
     // starts a roll when it changed, so the change rolls from its first frame.
