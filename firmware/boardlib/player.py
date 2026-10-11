@@ -52,7 +52,7 @@ class Player:
         self._screen_since = 0
         self.bb_shown = None     # baseball texts last drawn (for rolls)
         self.bb_rolls = {}       # text key -> {'from', 'start'}
-        self.nums = draw.NumRoller()  # clock and weather-number rolls
+        self.nums = draw.NumRoller()  # header and radar clock rolls
         # Next transit change (epoch s), kept between loop passes: building
         # the transit view to find it allocated ~1 KB on every pass, which
         # churned and fragmented the heap. -1 means none (FAR).
@@ -200,16 +200,11 @@ class Player:
 
     def draw(self, frame, ms, now):
         """Render the current screen into frame at monotonic ms / epoch now.
-        Clocks and weather numbers roll when they change (NumRoller)."""
-        self.nums.begin(ms)
-        try:
-            return self._draw(frame, ms, now)
-        finally:
-            self.nums.end()
-
-    def _draw(self, frame, ms, now):
+        The header and radar clocks roll at the minute (NumRoller; render()
+        ends its frame). No wrapper method: the board's Python stack is small."""
         p = self.p
         nums = self.nums
+        nums.begin(ms)
         if self.screen == 'ticker':
             pages = draw.ticker_pages(p, now)
             if self.page >= pages:

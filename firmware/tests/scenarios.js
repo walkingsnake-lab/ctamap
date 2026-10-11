@@ -131,39 +131,27 @@ async function build() {
     add(`radar ${key}`, p, [{ screen: 'weather', idx: 5 }, { screen: 'weather', idx: 0 }, { screen: 'weather', idx: 3 }], Object.fromEntries(ids.map((id) => [id, bytes])));
     add(`radar ${key} temperature`, { ...p, radar: { ...p.radar, showTime: false, temp: 63, icon: 'sun' } }, [{ screen: 'weather', idx: 5 }], Object.fromEntries(ids.map((id) => [id, bytes])));
   }
-  // Clock and weather-number rolls (opts.nums: {name: {from, p}}): per-digit
-  // when the shape holds, the whole text when its width changes.
+  // Clock rolls (opts.nums: {name: {from, p}}): per-digit when the shape
+  // holds, the whole clock when its width changes. Names the renderer
+  // doesn't roll (overnight and no-games clocks, temperatures) draw still.
   {
     const ps = [0.25, 0.5, 0.75];
     const nums = (o) => ps.map((p) => Object.fromEntries(Object.entries(o).map(([k, from]) => [k, { from, p }])));
     const hdr = payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX });
-    add('rolls header clock + weather row', hdr, nums({ 'hdr.clock': '11:15', 'row.temp': '62°' }).map((n) => ({ screen: 'transit', nums: n })));
-    add('rolls header clock width change', hdr, nums({ 'hdr.clock': '12:59', 'row.temp': '9°' }).map((n) => ({ screen: 'transit', nums: n })));
+    add('rolls header clock', hdr, nums({ 'hdr.clock': '11:15', 'row.temp': '62°' }).map((n) => ({ screen: 'transit', nums: n })));
+    add('rolls header clock width change', hdr, nums({ 'hdr.clock': '12:59' }).map((n) => ({ screen: 'transit', nums: n })));
     add('rolls ticker header clock', hdr, nums({ 'hdr.clock': '11:15' }).map((n) => ({ screen: 'ticker', nums: n })));
-    const nt = { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE'), rows: [], ticker: [] };
-    add('rolls overnight clock', nt, nums({ 'night.clock': '11:15' }).map((n) => ({ screen: 'transit', nums: n })));
-    add('rolls overnight clock width change + weather', { ...nt, wx: WX }, nums({ 'night.clock': '9:59', 'row.temp': '100°' }).map((n) => ({ screen: 'transit', nums: n })));
-    add('rolls no games clock', { now: hdr.now, tzo: hdr.tzo, bright: 100, screen: 'baseball', mlb: { games: [] } }, nums({ 'ng.clock': '10:59' }).map((n) => ({ screen: 'baseball', nums: n })));
-    const t = 1791140000;
-    const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
-    const wp = (w, extra) => ({ now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w, ...extra } });
-    const wxFrom = { 'wx.temp': '56°', 'wx.feels': 'FEELS 52°', 'wx.wind': 'NW 9', 'wx.pop': '10%', 'wx.hl': 'H 62° L 49°' };
-    add('rolls weather screen', wp(wx), nums(wxFrom).map((n) => ({ screen: 'weather', nums: n })));
-    add('rolls weather screen shadow', wp(wx, { tempShadow: true }), nums(wxFrom).map((n) => ({ screen: 'weather', nums: n })));
-    add('rolls weather screen cold, width change', wp({ ...wx, temp: -12 }, { tempShadow: true }), nums({ 'wx.temp': '-9°' }).map((n) => ({ screen: 'weather', nums: n })));
-    const fd = { ...wx, days: [{ d: 'SA', hi: 71, icon: 'sun' }, { d: 'SU', hi: 78, icon: 'sun' }] };
-    add('rolls top bar', wp(fd), nums({ 'bar.temp': '58°' }).map((n) => ({ screen: 'weather', nums: n })));
-    add('rolls top bar shadow, width change', wp({ ...fd, temp: 101 }, { tempShadow: true }), nums({ 'bar.temp': '99°' }).map((n) => ({ screen: 'weather', nums: n })));
+    const nt = { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE'), rows: [], ticker: [], wx: WX };
+    add('rolls overnight clock stays still', nt, nums({ 'night.clock': '11:15' }).map((n) => ({ screen: 'transit', nums: n })));
     const [key, { bytes, loc }] = Object.entries(rf)[0];
     const rt = radar.timeOf(key.split('-')[1]);
     const ids = ['a', 'b', 'c'];
     const rp = (extra) => ({ now: rt, tzo: tzOffset(rt), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => rt - (2 - i) * 360), timeBox: loc.timeBox, split: loc.split, clock: 'now', ...extra } });
     const fr = Object.fromEntries(ids.map((id) => [id, bytes]));
-    const radarNums = nums({ 'rad.clock': '12:59', 'rad.ap': 'AM', 'rad.temp': '9°' });
+    const radarNums = nums({ 'rad.clock': '12:59', 'rad.temp': '9°' });
     add('rolls radar current time', rp(), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
-    add('rolls radar current time + conditions', rp({ cond: true, temp: 63 }), nums({ 'rad.clock': '3:59', 'rad.ap': 'A', 'rad.temp': '9°' }).map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
+    add('rolls radar current time + conditions', rp({ cond: true, temp: 63 }), nums({ 'rad.clock': '3:59' }).map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
     add('rolls radar frame time stays put', rp({ clock: 'frame' }), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
-    add('rolls radar temperature', rp({ showTime: false, temp: 63, icon: 'sun' }), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
   }
   // Weather screen (radar screen with no frames): every warning, cold/hot
   // extremes (minus bar, word skipped for 3-digit temps, high/low losing its

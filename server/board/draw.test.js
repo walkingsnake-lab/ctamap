@@ -1286,7 +1286,7 @@ test('animator: rows already shown stay lit while another row leaves', () => {
   }
 });
 
-test('number rolls: a changed clock rolls from the frame it changes, then settles', () => {
+test('clock rolls: a changed clock rolls from the frame it changes, then settles', () => {
   const t = 1791140000 - (1791140000 % 60) + 59;
   const p = { now: t, tzo: -18000, screen: 'transit', bright: 100, header: 'MORSE', rows: [{ ln: 'RD', lbl: 'HOWARD', t: [t + 3600], s: [0], a: 0 }], ticker: [], wx: { icon: 'sun', temp: 63, word: 'SUNNY' } };
   const r = draw.createNumRoller();
@@ -1301,9 +1301,11 @@ test('number rolls: a changed clock rolls from the frame it changes, then settle
   const done = frame(1000 + draw.ROLL_MS + 1, t + 1);
   assert.notDeepEqual(mid.px, done.px);
   assert.deepEqual(done.px, draw.render(p, { screen: 'transit', now: t + 1 }).px);
-  // A weather-row temperature from a new payload rolls too.
+  // Temperatures and the overnight clock don't roll.
   frame(5000, t + 5, { ...p, wx: { ...p.wx, temp: 64 } });
-  assert.equal(r.busy(5100), true);
+  assert.equal(r.busy(5100), false);
+  frame(6000, t + 6, { ...p, rows: [] });
+  assert.equal(r.clock(), false);
 });
 
 test('number rolls: texts new to the screen just appear; reset drops rolls', () => {

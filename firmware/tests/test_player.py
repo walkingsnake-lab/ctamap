@@ -177,7 +177,7 @@ class RainTurns(unittest.TestCase):
 
 
 class NumberRolls(unittest.TestCase):
-    """Clocks and weather numbers roll when they change (NumRoller)."""
+    """The header and radar clocks roll at the minute (NumRoller)."""
 
     def setUp(self):
         self.t = T0 - T0 % 60 + 50   # 10 s before a minute rolls over
@@ -210,18 +210,63 @@ class NumberRolls(unittest.TestCase):
         self.pl.draw(draw.Frame(), 10000, self.t + 10)
         self.assertFalse(self.pl.busy(10000))
 
-    def test_a_new_temperature_rolls(self):
+    def test_a_new_temperature_does_not_roll(self):
         wx = {'icon': 'sun', 'temp': 63, 'word': 'SUNNY'}
         self.pl.set_payload(dict(self.pl.p, wx=wx), 0)
         self.draw(0)
         self.pl.set_payload(dict(self.pl.p, wx=dict(wx, temp=64)), 2000)
         self.draw(2000)
-        self.assertTrue(self.pl.busy(2100))
+        self.assertFalse(self.pl.busy(2100))
+
+    def test_the_overnight_clock_does_not_roll(self):
+        self.pl.set_payload(dict(self.pl.p, rows=[]), 0)
+        self.draw(0)
+        self.draw(10000)
+        self.assertFalse(self.pl.busy(10100))
+        self.assertFalse(self.pl.nums.clock())
 
     def test_no_clock_no_minute_gap(self):
         self.pl.set_payload(dict(self.pl.p, header=None), 0)
         self.draw(0)
         self.assertFalse(self.pl.nums.clock())
+
+
+class RollStackAndMetrics(unittest.TestCase):
+    """The board's Python stack is small (pystack exhausted on the header
+    clock once); a roll must draw no deeper than the same text drawn still."""
+
+    def test_roll_metrics_match_the_fonts(self):
+        from boardlib import assets
+        for font, want in draw.ROLL_FONT.items():
+            d = assets.FONT_DATA[font]
+            t0, t1 = 99, -99
+            for cp in range(48, 58):
+                o = draw.glyph(font, cp)
+                h, yo = d[o + 2], d[o + 4] - 128
+                for r in range(h):
+                    if draw.glyph_row(d, o, r):
+                        t0, t1 = min(t0, r - (yo + h)), max(t1, r - (yo + h))
+            self.assertEqual(want, (t1 - t0 + 2, t0, t1), font)
+
+    def test_a_rolling_clock_draws_no_deeper_than_a_still_one(self):
+        import inspect
+
+        class DepthFrame(draw.Frame):
+            deepest = 0
+
+            def text(self, *a):
+                DepthFrame.deepest = max(DepthFrame.deepest, len(inspect.stack(0)))
+                return draw.Frame.text(self, *a)
+
+        t = T0 - T0 % 60
+        p = payload([], screen='transit', now=t, header='MORSE', wx={'icon': 'sun', 'temp': 63, 'word': 'SUNNY'},
+                    rows=[{'ln': 'RD', 'lbl': 'HOWARD', 't': [t + 3600], 's': [0], 'a': 0}])
+        depth = {}
+        for name, nums in (('still', None), ('roll', {'hdr.clock': {'from': '11:59', 'p': 0.5}, 'row.temp': {'from': '9°', 'p': 0.5}})):
+            DepthFrame.deepest = 0
+            draw.render(p, DepthFrame(), screen='transit', now=t, nums=nums)
+            depth[name] = DepthFrame.deepest
+        self.assertLessEqual(depth['roll'], depth['still'])
 
 
 if __name__ == '__main__':
