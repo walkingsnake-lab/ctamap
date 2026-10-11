@@ -28,6 +28,7 @@ const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
 const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame time, current time, how long ago the frame is, or nothing
 const WX_VIEWS = ['now', '5day', 'hourly'];  // weather screen without rain: conditions, 5-day, or hourly
+const TEMP_UNITS = ['F', 'C'];  // temperatures on every weather display
 const WX_RAINS = ['radar', 'bars', 'both'];  // weather screen with rain around: radar loop, rain bars, or both alternating
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
@@ -107,6 +108,8 @@ function defaultBoard(stations) {
     radarBright: 100,
     // Weather screen: a temperature-colored shadow behind the big temperature.
     tempShadow: false,
+    // Temperature unit on every weather display: 'F' or 'C'.
+    tempUnit: 'F',
     // Weather screen without rain: 'now' (current conditions), '5day'
     // (today on top, the next five days in columns), or 'hourly' (today on
     // top, 3/6/9/12 hours ahead in columns).
@@ -238,8 +241,9 @@ function validatePatch(patch, stations) {
       case 'lineNames':
       case 'radarClock':
       case 'wxView':
+      case 'tempUnit':
       case 'wxRain': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, wxRain: WX_RAINS }[key];
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;

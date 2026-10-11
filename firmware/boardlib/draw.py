@@ -1013,7 +1013,10 @@ TEMP_STOPS = ((-10, hexc('#3050ff')), (20, hexc('#40a0ff')), (40, hexc('#30d0d0'
               (70, hexc('#ffd000')), (85, hexc('#ff8000')), (100, hexc('#ff2020')))
 
 
-def temp_color(t):
+def temp_color(t, c=None):
+    # TEMP_STOPS are F; c: the temperature is C (wx 'c'). Integer math.
+    if c:
+        t = t * 9 // 5 + 32
     if t <= TEMP_STOPS[0][0]:
         return TEMP_STOPS[0][1]
     for i in range(1, len(TEMP_STOPS)):
@@ -1038,7 +1041,7 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
         return x + 2
 
     if shadow:
-        draw_temp(1, 1, scale_color(temp_color(wx["temp"]), 0.2))
+        draw_temp(1, 1, scale_color(temp_color(wx["temp"], wx.get('c')), 0.2))
     temp_right = draw_temp(0, 0, C['label']) + (1 if shadow else 0)
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], 55, 1)
@@ -1133,7 +1136,7 @@ def draw_top_bar(f, wx, shadow=False, warn=None, blink=False):
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], FD_ICON_X, 0)
     if shadow:
-        sh = scale_color(temp_color(wx['temp']), 0.2)
+        sh = scale_color(temp_color(wx['temp'], wx.get('c')), 0.2)
         f.text('small', '°', f.text('5x7', str(wx['temp']), FD_TEMP_X + 1, 8, sh), 7, sh)
     x = f.text('5x7', str(wx['temp']), FD_TEMP_X, 7, C['label'])
     f.text('small', '°', x, 6, C['label'])
@@ -1171,7 +1174,7 @@ def draw_five_day(f, wx, shadow=False, warn=None, blink=False):
         ctext(f, 'small', d['d'], cx, 15, C['grey'])
         if d.get('icon') in assets.ICONS:
             draw_icon(f, d['icon'], cx - 4, 17)
-        draw_day_temp(f, str(d['hi']), cx, 31, temp_color(d['hi']))
+        draw_day_temp(f, str(d['hi']), cx, 31, temp_color(d['hi'], wx.get('c')))
 
 
 # ---- hourly layout ----
@@ -1186,7 +1189,7 @@ def draw_hourly(f, wx, shadow=False, warn=None, blink=False):
         ctext(f, 'small', h['h'], cx, 15, C['grey'])
         if h.get('icon') in assets.ICONS:
             draw_icon(f, h['icon'], cx - 4, 17)
-        draw_day_temp(f, str(h['t']), cx, 31, temp_color(h['t']))
+        draw_day_temp(f, str(h['t']), cx, 31, temp_color(h['t'], wx.get('c')))
 
 
 # ---- rain bars ----

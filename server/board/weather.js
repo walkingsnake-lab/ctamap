@@ -137,6 +137,20 @@ function condition(code, isDay) {
   return ['cloudy', 'CLOUDY']; // unknown code: neutral
 }
 
+// Parsed weather with its temperatures in the board's unit ('F' as fetched,
+// or 'C'), converted before rounding. Wind stays mph; everything else is
+// untouched (radar snow mode and rain bars read the original).
+const toC = (f) => (f == null ? f : (f - 32) * 5 / 9);
+function inUnit(w, unit) {
+  if (!w || unit !== 'C') return w;
+  return {
+    ...w,
+    temp: toC(w.temp), hi: toC(w.hi), lo: toC(w.lo), feels: toC(w.feels),
+    days: (w.days || []).map((x) => ({ ...x, hi: toC(x.hi), lo: toC(x.lo) })),
+    hrs: (w.hrs || []).map((x) => ({ ...x, temp: toC(x.temp) })),
+  };
+}
+
 // Parsed weather -> the payload's `wx`.
 function toWx(w) {
   const [icon, word] = condition(w.code, w.isDay);
@@ -144,7 +158,7 @@ function toWx(w) {
 }
 
 // Parsed weather -> the weather screen's `radar.wx`: the weather row plus
-// feels-like (°F), wind text, and rain chance (%); each null when missing.
+// feels-like (board unit), wind text, and rain chance (%); each null when missing.
 function toScreenWx(w) {
   return {
     ...toWx(w),
@@ -247,4 +261,4 @@ function createWeather({ fetch = (lat, lon) => fetchJson(url(lat, lon)), interva
   return createLocationPoller({ name: 'weather', fetch, parse, interval, usable: (d) => Array.isArray(d.days) && Array.isArray(d.q15) && Array.isArray(d.hrs), ...opts });
 }
 
-module.exports = { url, parse, condition, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };
+module.exports = { url, parse, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };

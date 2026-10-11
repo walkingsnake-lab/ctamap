@@ -168,6 +168,12 @@
 
   <section data-tab="weather">
     <h2>Weather screen</h2>
+    <label class="field">Temperature</label>
+    <div class="seg" id="tempUnit">
+      <button data-v="F">°F</button>
+      <button data-v="C">°C</button>
+    </div>
+    <p class="hint">Every temperature on the board: the weather row, this screen, and the radar corner. Wind stays in mph.</p>
     <div class="seg" id="wxView">
       <button data-v="now">Conditions</button>
       <button data-v="5day">5-day</button>
@@ -423,6 +429,7 @@
     $('showHeader').checked = board.showHeader;
     $('headerClock').checked = board.headerClock !== false;
     pressed('lineNames', board.lineNames || 'white');
+    pressed('tempUnit', board.tempUnit === 'C' ? 'C' : 'F');
     $('showWeather').checked = board.showWeather;
     $('headerDivider').checked = board.headerDivider === true;
     $('wxDivider').checked = board.wxDivider !== false;
@@ -530,7 +537,7 @@
   const autoMains = () => ['transit', 'ticker'].filter((k) => $(k === 'transit' ? 'autoTransit' : 'autoTicker').checked);
   for (const id of ['autoTransit', 'autoTicker']) $(id).addEventListener('change', () => { const m = autoMains(); if (m.length) save({ autoScreens: m }); else render(); });
   $('autoEvery').addEventListener('change', (e) => save({ autoEvery: Number(e.target.value) }));
-  for (const id of ['wxVisit', 'alertJump', 'bbPriority', 'lineNames']) {
+  for (const id of ['wxVisit', 'alertJump', 'bbPriority', 'lineNames', 'tempUnit']) {
     $(id).addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !e.target.disabled) save({ [id]: v }); });
   }
   const bbTeams = () => [['cubs', 'bbCubs'], ['sox', 'bbSox'], ['post', 'bbPost']].filter(([, id]) => $(id).checked).map(([k]) => k);

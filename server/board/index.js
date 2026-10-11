@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, autoBright } = require('./weather');
+const { createWeather, inUnit, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
@@ -291,7 +291,9 @@ function createBoard({
     const stale = !data || now - data.fetchedAt > STALE_S;
     // The row cap only reserves space for the weather row when there's
     // weather to show.
-    const wx = board.showWeather && w ? toWx(w) : null;
+    // Temperatures in the board's unit (wd); rain bars keep the raw data.
+    const wd = inUnit(w, board.tempUnit);
+    const wx = board.showWeather && wd ? toWx(wd) : null;
     const cfg = { ...board, showWeather: !!wx };
     let radarState = NO_RADAR;
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
@@ -319,9 +321,9 @@ function createBoard({
     // for alt s, repeating (draw.js rainBarsTurn()).
     if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15, loops: board.wxRainLoops || 2 };
     // The 5-day layout (wxView) draws when wx carries the days.
-    const days = board.wxView === '5day' && w ? toDays(w) : null;
-    const hours = board.wxView === 'hourly' && w ? toHours(w) : null;
-    if (w) radarState = { ...radarState, wx: { ...toScreenWx(w), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(rain ? { rain } : {}) } };
+    const days = board.wxView === '5day' && wd ? toDays(wd) : null;
+    const hours = board.wxView === 'hourly' && wd ? toHours(wd) : null;
+    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(rain ? { rain } : {}) } };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }
@@ -370,7 +372,7 @@ function createBoard({
       anim: animOf(board),
       tickerFill: board.tickerFill || 55,
       radar: {
-        ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: w ? toWx(w).temp : null, icon: w ? toWx(w).icon : null,
+        ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: wd ? toWx(wd).temp : null, icon: wd ? toWx(wd).icon : null,
         // Radar clock: the current time instead of the frame's; conditions under it.
         ...(board.radarClock && board.radarClock !== 'frame' ? { clock: board.radarClock } : {}),
         ...(board.radarCond === true ? { cond: true } : {}),

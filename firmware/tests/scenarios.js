@@ -201,6 +201,16 @@ async function build() {
     ]) {
       add(`weather hourly ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn: warn || null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
     }
+    // Celsius (board tempUnit 'C', wx.c): temperatures arrive converted; the
+    // colors convert back to °F with integer math (shadow, days, hours).
+    const cWx = { ...wx, c: 1, icon: 'snow', temp: -7, hi: -2, lo: -12, feels: -13 };
+    for (const [name, w] of [
+      ['conditions', cWx],
+      ['5-day', { ...cWx, days: days([['SA', -1, 'snow'], ['SU', 4, 'sun'], ['MO', 12, 'rain'], ['TU', 22, 'cloudy'], ['WE', 38, 'sun']]) }],
+      ['hourly', { ...cWx, hours: hrs([['3P', 'snow', -1], ['6P', 'cloudy', -5], ['9P', 'moon', -9], ['12A', 'moon', -11]]) }],
+    ]) {
+      add(`weather celsius ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, tempShadow: true, wx: w } }, [{ screen: 'weather' }]);
+    }
     // Rain bars: rain and snow, falling now (drop or flake) or due, a title
     // too wide for its mark, every level, and warnings in the title row.
     const rain = (snow, now, title, h, l) => ({ snow, now, title, h, l });
