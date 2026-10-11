@@ -200,16 +200,11 @@ class Player:
 
     def draw(self, frame, ms, now):
         """Render the current screen into frame at monotonic ms / epoch now.
-        Clocks and weather numbers roll when they change (NumRoller)."""
-        self.nums.begin(ms)
-        try:
-            return self._draw(frame, ms, now)
-        finally:
-            self.nums.end()
-
-    def _draw(self, frame, ms, now):
+        Clocks and weather numbers roll when they change (NumRoller; render()
+        ends its frame). No wrapper method: the board's Python stack is small."""
         p = self.p
         nums = self.nums
+        nums.begin(ms)
         if self.screen == 'ticker':
             pages = draw.ticker_pages(p, now)
             if self.page >= pages:
