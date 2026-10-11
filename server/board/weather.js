@@ -18,7 +18,7 @@ const FORECAST_DAYS = 5; // 5-day layout: the days after today
 // sums over the preceding 15 minutes; a few spare steps keep 8 ahead of
 // `now` while the data ages between fetches (10 min).
 // Hourly layout: the slots HOUR_STEPS hours after the current hour.
-const HOUR_STEPS = [3, 6, 9, 12];
+const HOUR_STEPS = [2, 4, 6, 8];
 const HOURS = HOUR_STEPS[HOUR_STEPS.length - 1] + 1;
 const BARS = 8;
 const SLOT_S = 900;
@@ -163,7 +163,7 @@ function toDays(w) {
 }
 
 // Parsed weather -> the hourly layout's columns: [{h: '6P', icon, t}] for
-// the hours 3, 6, 9 and 12 after the current one, or null without all four.
+// the hours 2, 4, 6 and 8 after the current one, or null without all four.
 function toHours(w) {
   const out = [];
   for (const n of HOUR_STEPS) {

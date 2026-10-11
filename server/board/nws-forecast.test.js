@@ -79,10 +79,10 @@ test('withForecast: evening, the day period is over: Open-Meteo high, NWS low', 
 test('withForecast: hourly layout from NWS hours, night icons at night', () => {
   const w = withForecast(OM, F, NOW);
   assert.deepStrictEqual(toHours(w), [
-    { h: '5P', icon: 'sun', t: 70 },
+    { h: '4P', icon: 'sun', t: 71 },
+    { h: '6P', icon: 'moon', t: 68 },
     { h: '8P', icon: 'moon', t: 65 },
-    { h: '11P', icon: 'moon', t: 64 },
-    { h: '2A', icon: 'pcloudy_night', t: 63 },
+    { h: '10P', icon: 'moon', t: 64 },
   ]);
 });
 

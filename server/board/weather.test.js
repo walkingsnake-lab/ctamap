@@ -197,10 +197,10 @@ test('rain bars: every title fits the panel without its mark', () => {
   for (const t of ['BREAK IN 105 MIN', 'ENDS IN 105 MIN', 'RAIN IN 105 MIN', 'SNOW NEXT 2 HRS', 'RAIN NEXT 2 HRS']) assert.ok(m('small', t) <= 64, t);
 });
 
-test('hourly: hours 3, 6, 9 and 12 after the current hour, labels, day and night icons', () => {
+test('hourly: hours 2, 4, 6 and 8 after the current hour, labels, day and night icons', () => {
   const u = new URL(url(42.008362, -87.665909));
   assert.equal(u.searchParams.get('hourly'), 'precipitation_probability,temperature_2m,weather_code,is_day');
-  assert.equal(u.searchParams.get('forecast_hours'), '13');
+  assert.equal(u.searchParams.get('forecast_hours'), '9');
   assert.deepEqual(parse(MORSE).hrs, []);
   assert.equal(toHours(parse(MORSE)), null);
   // The Morse fixture at 10:45 CDT; hourly slots start with the current hour.
@@ -210,17 +210,17 @@ test('hourly: hours 3, 6, 9 and 12 after the current hour, labels, day and night
   const w = parse({ ...MORSE, hourly: { time, temperature_2m, weather_code, is_day, precipitation_probability: time.map(() => 10) } });
   assert.equal(w.pop, 10); // POP_HOURS still caps the rain chance
   assert.deepEqual(toHours(w), [
-    { h: '1P', icon: 'sun', t: 63 },
+    { h: '12P', icon: 'sun', t: 62 },
+    { h: '2P', icon: 'sun', t: 64 },
     { h: '4P', icon: 'rain', t: 66 },
-    { h: '7P', icon: 'rain', t: 69 },
-    { h: '10P', icon: 'rain', t: 72 },
+    { h: '6P', icon: 'rain', t: 68 },
   ]);
   const night = parse({ ...MORSE, hourly: { time: time.map((t) => t + 9 * 3600), temperature_2m, weather_code: weather_code.map(() => 2), is_day: is_day.map(() => 0), precipitation_probability: [] } });
-  assert.deepEqual(toHours(night).map((x) => [x.h, x.icon]), [['10P', 'pcloudy_night'], ['1A', 'pcloudy_night'], ['4A', 'pcloudy_night'], ['7A', 'pcloudy_night']]);
-  assert.equal(toHours(parse({ ...MORSE, hourly: { time: time.slice(0, 12), temperature_2m, weather_code, is_day } })), null); // too short
+  assert.deepEqual(toHours(night).map((x) => [x.h, x.icon]), [['9P', 'pcloudy_night'], ['11P', 'pcloudy_night'], ['1A', 'pcloudy_night'], ['3A', 'pcloudy_night']]);
+  assert.equal(toHours(parse({ ...MORSE, hourly: { time: time.slice(0, 8), temperature_2m, weather_code, is_day } })), null); // too short
   assert.equal(hourLabelFor(Date.UTC(2026, 9, 5, 5) / 1000), '12A');
 });
-const hourLabelFor = (t) => toHours({ hrs: [0, 0, 0, { time: t, temp: 50, code: 0, isDay: 1 }, 0, 0, { time: t, temp: 50, code: 0, isDay: 1 }, 0, 0, { time: t, temp: 50, code: 0, isDay: 1 }, 0, 0, { time: t, temp: 50, code: 0, isDay: 1 }] })[0].h;
+const hourLabelFor = (t) => { const hrs = Array(9).fill(0); for (const i of [2, 4, 6, 8]) hrs[i] = { time: t, temp: 50, code: 0, isDay: 1 }; return toHours({ hrs })[0].h; };
 
 test('wind: 8-point compass, CALM under 1 mph', () => {
   assert.equal(compass(0), 'N'); assert.equal(compass(22), 'N'); assert.equal(compass(23), 'NE');

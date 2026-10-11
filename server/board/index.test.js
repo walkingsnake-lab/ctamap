@@ -1,5 +1,6 @@
 'use strict';
 const test = require('node:test');
+const { after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
 const url = require('url');
@@ -24,6 +25,11 @@ const fakeMlb = (games = [], forcedGames = games) => ({ get: (mode) => (mode ===
 // endpoint sends only the shown screen's sections; see the sections test.
 const FULL = '/board/secret123/api/update?b=home';
 
+// Servers still open when a test fails never reach their close() call, and
+// the open socket keeps `node --test` from exiting. Close them all at the end.
+const openServers = new Set();
+after(() => { for (const srv of openServers) { srv.closeAllConnections(); srv.close(); } });
+
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
   const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), nwsForecast: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), logos: fakeLogos(), ...opts });
@@ -33,12 +39,13 @@ async function serve(opts = {}) {
     res.writeHead(404); res.end();
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  openServers.add(server);
   const base = `http://127.0.0.1:${server.address().port}`;
   const req = async (p, init = {}) => {
     const r = await fetch(base + p, init);
     return { status: r.status, body: await r.json(), headers: r.headers };
   };
-  return { req, store, port: server.address().port, close: () => new Promise((r) => server.close(r)) };
+  return { req, store, port: server.address().port, close: () => new Promise((r) => { openServers.delete(server); server.close(r); }) };
 }
 
 test('ping needs no token', async () => {
@@ -702,7 +709,7 @@ test('update: the hourly setting sends the four hourly columns with the weather 
   assert.equal((await s.req(FULL)).body.radar.wx.hours, undefined);
   s.store.update('home', { wxView: 'hourly' });
   const hours = (await s.req(FULL)).body.radar.wx.hours;
-  assert.deepEqual(hours.map((x) => x.t), [53, 56, 59, 62]);
+  assert.deepEqual(hours.map((x) => x.t), [52, 54, 56, 58]);
   assert.ok(hours.every((x) => x.icon === 'cloudy' && /^\d{1,2}[AP]$/.test(x.h)));
   assert.equal((await s.req(FULL)).body.radar.wx.days, undefined);
   await s.close();
