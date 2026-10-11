@@ -296,21 +296,27 @@
       blinks: warn.kind === 'tor' && warn.lvl === 'warning',
     });
 
+    // Weather row: icon and temperature on the right as on the forecast
+    // screens' top bar (8x8 icon, 2px gap, white 5x7 digits, small degree
+    // sign, its ink ending at x63); the condition word (grey) or the
+    // watch/warning tag on the left from x0.
     function drawWeather(f, wx, warn, blink, divider = true) {
       if (divider) f.fill(0, 22, 64, 1, C.divider);
-      drawIcon(f, wx.icon, 0, 24);
       const base = 31;
-      f.text('small', `${wx.temp}°`, 10, base, C.wxText);
+      const temp = String(wx.temp);
+      const tx = 62 - measure('5x7', temp) - 1;
+      const iconX = tx - 10;
+      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, iconX, 24);
+      f.text('small', '°', f.text('5x7', temp, tx, base, C.label), base - 1, C.label);
       if (warn) {
         const { glyph, color, blinks } = warnStyle(warn);
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
         if (!(blinks && blink)) {
-          const w = measure('small', glyph) + TAG_GAP + measure('small', word);
-          const x = f.text('small', glyph, 63 - w + 1, base, color);
+          const x = f.text('small', glyph, 0, base, color);
           f.text('small', word, x + TAG_GAP - 1, base, color);
         }
-      } else {
-        rtext(f, 'small', wx.word, 63, base, C.wxText);
+      } else if (wx.word && measure('small', wx.word) + 2 <= iconX) {
+        f.text('small', wx.word, 0, base, C.wxText);
       }
     }
 

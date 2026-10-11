@@ -178,10 +178,10 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Accepted trade-off:** infrequent lines can drop off the screen when frequent ones fill all rows.
 
 ### Weather row (optional)
-- 8x8 condition icon, temperature with a small 2x2 degree sign (e.g. `54°`), condition word (uppercase) on the right. Both texts are mid grey (`#8f8f8f`, the grey used for records and high/low) so the row reads as secondary; the watch/warning tag keeps its colors.
+- **Right:** 8x8 condition icon, 2px gap, then the temperature as on the forecast screens' top bar: white (`#d8d8d8`) X11 5x7 digits with a small degree sign, its ink ending at x63. **Left:** the condition word (uppercase, mid grey `#8f8f8f`) from x0, dropped if it would come within 2px of the icon (never with the current words; `PT CLOUDY` is 33px and the icon starts at x37 or later).
 - Icons are multi-color sprites defined in `server/board/icons.js` (with the Open-Meteo weather-code mapping); previews in `docs/board/previews/sheet-icons.png`.
 - Icons: sun, moon, partly cloudy (day/night), cloudy, **cloud with rain** (rain/drizzle/showers), **cloud with rain and an ice crystal** (freezing rain), **snowflake**, storm cloud with bolt, fog.
-- **Watch/warning tag** replaces the condition word: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
+- **Watch/warning tag** replaces the condition word (left side): `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
 
 ### CTA alerts
 - **Which alerts:** major alerts only (CTA severity `major`, or flagged MajorAlert). A sample on Oct 4 had 7 active alerts (a 2029 station closure across 5 lines, a schedule change, a station bypass, elevators, and an Orange/Green minor delay) and none of them blink.
