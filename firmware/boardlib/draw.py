@@ -727,12 +727,13 @@ class TransitAnimator:
                     del self.rows[key]
                 elif not (chrono and st.get('mode') == 'chrono'):
                     leaving_until = max(leaving_until, st['leaving'] + FADE_MS)
+        fresh = not self.rows  # a fresh animator shows its rows at once
         for r in target['rows']:
             st = self.rows.get(r['key'])
             is_new_row = st is None or bool(st.get('leaving'))
             if is_new_row:
                 st = {'key': r['key'], 'top': r['top'], 'shownTop': r['top'],
-                      'born': t if len(self.rows) else None, 'cells': [], 'num': None}
+                      'born': None if fresh else max(t, leaving_until), 'cells': [], 'num': None}
                 if chrono and continuing:
                     st['fromTop'] = r['top'] + target['pitch']
                     st['moveStart'] = t
@@ -764,9 +765,11 @@ class TransitAnimator:
             if st.get('leaving'):
                 alpha = 1 - _clamp01((t - st['leaving']) / FADE_MS)
             elif st.get('born') is not None:
-                alpha = _clamp01((t - max(st['born'], leaving_until)) / FADE_MS)
+                alpha = _clamp01((t - st['born']) / FADE_MS)
             else:
                 alpha = 1
+            if not st.get('leaving') and alpha >= 1:
+                st['born'] = None
             cells = []
             for c in st['cells']:
                 if c.get('leaving') and not (t - c['leaving'] < FADE_MS):

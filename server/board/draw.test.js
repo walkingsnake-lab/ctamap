@@ -1263,3 +1263,21 @@ test('header: name and clock flush to the edges in the header grey; divider togg
   const t = draw.render({ ...base, headerDivider: true, ticker: [] }, { screen: 'ticker' });
   assert.ok(count(t, draw.C.head, 63, 1, 63, 5) > 0);
 });
+
+test('animator: rows already shown stay lit while another row leaves', () => {
+  const A = { ln: 'RD', lbl: 'HOWARD', t: [NOW + 300, NOW + 700], s: [0, 0], a: 0 };
+  const B = { ln: 'RD', lbl: '95TH', t: [NOW + 400, NOW + 900], s: [0, 0], a: 0 };
+  const X = { ln: 'RD', lbl: 'LOOP', t: [NOW + 500], s: [0], a: 0 };
+  const anim = draw.createTransitAnimator();
+  const alphas = (v) => Object.fromEntries(v.rows.map((r) => [r.lbl, r.alpha]));
+  // A fresh animator shows every row at once.
+  assert.deepEqual(alphas(anim.step(payload([A, B]), NOW, 0)), { HOWARD: 1, '95TH': 1 });
+  anim.step(payload([A, B, X]), NOW, 5000);
+  assert.equal(alphas(anim.step(payload([A, B, X]), NOW, 7000)).LOOP, 1);
+  // LOOP leaves: it fades; HOWARD and 95TH never blink out.
+  for (const dt of [0, 200, 350, 699, 800]) {
+    const a = alphas(anim.step(payload([A, B]), NOW, 60000 + dt));
+    assert.equal(a.HOWARD, 1);
+    assert.equal(a['95TH'], 1, `95TH at +${dt} ms`);
+  }
+});

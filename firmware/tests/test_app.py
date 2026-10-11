@@ -628,10 +628,13 @@ class TestRadarVisits(unittest.TestCase):
         server.visit = {'every': 240, 'for': 60}
         board.connect()
         run_for(board, clock, 2000)
+        # Held longer than one fetch (which blocks the loop), so the press
+        # registers whenever the scheduler fetches.
         btn.held['down'] = True
-        run_for(board, clock, 200)
+        run_for(board, clock, 2500)
         btn.held['down'] = False
         pressed = board.player.screen
+        self.assertIsNotNone(board.override.screen)
         run_for(board, clock, 200000)  # many cycles, same settings version
         self.assertEqual(board.player.screen, pressed)
 
