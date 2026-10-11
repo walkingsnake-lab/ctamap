@@ -548,12 +548,15 @@
             }
           }
           // Rows staying or joining: slide to their new places once any
-          // leaving row has faded.
+          // leaving row has faded. A fresh animator shows its rows at once.
+          const fresh = rows.size === 0;
           for (const r of target.rows) {
             let st = rows.get(r.key);
             const isNewRow = !st || !!st.leaving;
             if (isNewRow) {
-              st = { key: r.key, top: r.top, shownTop: r.top, born: rows.size ? t : null, cells: [] };
+              // A joining row fades in once any leaving row has faded. Its start
+              // is fixed here: rows already shown never wait on a later leaver.
+              st = { key: r.key, top: r.top, shownTop: r.top, born: fresh ? null : Math.max(t, leavingUntil), cells: [] };
               // Chrono: a train joining a running list slides in from below.
               if (chrono && continuing) { st.fromTop = r.top + target.pitch; st.moveStart = t; }
               rows.set(r.key, st);
@@ -573,7 +576,8 @@
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
             const alpha = st.leaving ? 1 - clamp01((t - st.leaving) / FADE_MS)
-              : st.born != null ? clamp01((t - Math.max(st.born, leavingUntil)) / FADE_MS) : 1;
+              : st.born != null ? clamp01((t - st.born) / FADE_MS) : 1;
+            if (!st.leaving && alpha >= 1) st.born = null;
             const cells = st.cells.filter((c) => !c.leaving || t - c.leaving < FADE_MS).map((c) => {
               c.shownRight = c.moveStart != null ? tween(c.fromRight, c.right, c.moveStart, MOVE_MS, t) : c.right;
               c.shownColor = c.colorStart != null ? lerpColor(c.fromColor, c.color, easeInOut(clamp01((t - c.colorStart) / COLOR_MS))) : c.color;
