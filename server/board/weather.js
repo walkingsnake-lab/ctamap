@@ -155,10 +155,11 @@ function toScreenWx(w) {
 }
 
 // Parsed weather -> the 5-day layout's days: [{d: 'SA', icon, hi}], day
-// icons (a daily code has no night), or null without forecast data.
+// icons (a daily code has no night), or null without forecast data. Days
+// and hours from NWS (nws-forecast.js) carry their icon instead of a code.
 function toDays(w) {
   if (!w.days || !w.days.length) return null;
-  return w.days.map((x) => ({ d: dayName(x.time), icon: condition(x.code, true)[0], hi: Math.round(x.hi) }));
+  return w.days.map((x) => ({ d: dayName(x.time), icon: x.icon || condition(x.code, true)[0], hi: Math.round(x.hi) }));
 }
 
 // Parsed weather -> the hourly layout's columns: [{h: '6P', icon, t}] for
@@ -167,8 +168,8 @@ function toHours(w) {
   const out = [];
   for (const n of HOUR_STEPS) {
     const x = (w.hrs || [])[n];
-    if (!x || x.temp == null || x.code == null) return null;
-    out.push({ h: hourLabel(x.time), icon: condition(x.code, x.isDay)[0], t: Math.round(x.temp) });
+    if (!x || x.temp == null || (x.icon == null && x.code == null)) return null;
+    out.push({ h: hourLabel(x.time), icon: x.icon || condition(x.code, x.isDay)[0], t: Math.round(x.temp) });
   }
   return out;
 }

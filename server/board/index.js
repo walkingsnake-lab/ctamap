@@ -10,6 +10,7 @@ const { stationDestinations } = require('./destinations');
 const { createWeather, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, autoBright } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
+const { createNwsForecast, withForecast } = require('./nws-forecast');
 const { createRadar, packFrame } = require('./radar');
 const { createTestRadar } = require('./test-radar');
 const { createMlb, prioritize } = require('./mlb');
@@ -118,6 +119,7 @@ function createBoard({
   tracker = null,
   weather = null,
   nws = null,
+  nwsForecast = null,
   radar = null,
   mlb = null,
   logos = null,   // prepared team logos (mlb-logos.js); default beside the board state
@@ -149,6 +151,7 @@ function createBoard({
   if (!tracker) tracker = createTracker({ log }).start();
   if (!weather) weather = createWeather({ log, cacheFile: path.join(path.dirname(store.file), 'board-weather.json') }).start();
   if (!nws) nws = createNws({ log }).start();
+  if (!nwsForecast) nwsForecast = createNwsForecast({ log, cacheFile: path.join(path.dirname(store.file), 'board-nws-forecast.json') }).start();
   if (!radar) radar = createRadar({ weather, log }).start();
   const testRadar = createTestRadar();
   if (!mlb) mlb = createMlb({ log }).start();
@@ -274,12 +277,17 @@ function createBoard({
     const st = stationById.get(board.station.mapid);
     // Weather and warnings are nice-to-haves: a failure just leaves them off.
     const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
-    const [data, w, nwsAlerts] = await Promise.all([
+    const [data, om, nwsAlerts, fc] = await Promise.all([
       tracker.get(board.station.mapid),
       st ? soft('weather', weather.get(st.lat, st.lon)) : null,
       st ? soft('nws', nws.get(st.lat, st.lon)) : null,
+      st ? soft('nws-forecast', nwsForecast.get(st.lat, st.lon)) : null,
     ]);
     const now = nowSecs();
+    // Open-Meteo conditions with NWS's forecast fields (days, hours, hi/lo,
+    // rain chance) laid over them.
+    let w = om;
+    try { w = withForecast(om, fc, now); } catch (e) { log.error('[board] nws-forecast:', e.message); }
     const stale = !data || now - data.fetchedAt > STALE_S;
     // The row cap only reserves space for the weather row when there's
     // weather to show.
