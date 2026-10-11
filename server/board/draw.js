@@ -795,17 +795,32 @@
       drawTempText(f, str, cx - Math.floor(tempWidth(str) / 2), base, color);
     }
     // Today on rows 0-7, shared by the 5-day layout and the rain bars.
-    function drawTopBar(f, wx) {
-      // A 1px shadow down and right in the temperature's color (20%, as on
-      // the conditions screen), under the white temperature.
+    // top: {shadow: the board's temperature shadow setting, warn: the NWS
+    // watch/warning, blink: the blink phase}. The warning takes over the
+    // high/low line: glyph + WATCH / WARN in its color, right-aligned to x62;
+    // a tornado warning blinks (hidden on the blink's "on" phase).
+    function drawTopBar(f, wx, top) {
+      const { shadow, warn, blink } = top || {};
       if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
-      const sh = scaleColor(tempColor(wx.temp), 0.2);
-      // Right edge of the temperature's ink, shadow included (the degree
-      // sign advances 1px past its ink).
-      const tempRight = f.text('small', '°', f.text('5x7', String(wx.temp), FD_TEMP_X + 1, 8, sh), 7, sh) - 2;
+      // The optional 1px shadow down and right in the temperature's color
+      // (20%, as on the conditions screen), under the white temperature.
+      if (shadow) {
+        const sh = scaleColor(tempColor(wx.temp), 0.2);
+        f.text('small', '°', f.text('5x7', String(wx.temp), FD_TEMP_X + 1, 8, sh), 7, sh);
+      }
       const x = f.text('5x7', String(wx.temp), FD_TEMP_X, 7, C.label);
       f.text('small', '°', x, 6, C.label);
-      if (wx.hi != null && wx.lo != null) {
+      // Right edge of the temperature's ink (the 2px degree sign), shadow
+      // included.
+      const tempRight = x + 1 + (shadow ? 1 : 0);
+      if (warn) {
+        const ws = warnStyle(warn);
+        if (ws.blinks && blink) return;
+        const word = warn.lvl === 'warning' ? 'WARN' : 'WATCH';
+        const gx = FD_HL_RIGHT - (measure('small', ws.glyph) + TAG_GAP + measure('small', word)) + 1;
+        const wordX = f.text('small', ws.glyph, gx, 7, ws.color);
+        f.text('small', word, wordX + TAG_GAP - 1, 7, ws.color);
+      } else if (wx.hi != null && wx.lo != null) {
         // `↑63 ↓49` (numbers condensed like the day highs). When that would
         // come within 1px of the temperature (a three-character temperature
         // with long highs/lows): without the space before the down arrow,
@@ -819,11 +834,12 @@
         const left = (parts) => FD_HL_RIGHT - parts.reduce((w, [t, , n]) => w + (n ? tempWidth(t) : measure('small', t)) + 1, -1) + 1;
         const parts = ways.find((w) => left(w) >= tempRight + 2) || ways[ways.length - 1];
         let hx = left(parts);
-        for (const [t, c, n] of parts) hx = n ? drawTempText(f, t, hx, 6, c) : f.text('small', t, hx, 6, c);
+        // Baseline 7: level with the bottom of the big temperature (not its shadow).
+        for (const [t, c, n] of parts) hx = n ? drawTempText(f, t, hx, 7, c) : f.text('small', t, hx, 7, c);
       }
     }
-    function drawFiveDay(f, wx) {
-      drawTopBar(f, wx);
+    function drawFiveDay(f, wx, top) {
+      drawTopBar(f, wx, top);
       for (let i = 1; i < 5; i++) f.fill(i * FD_PITCH - 1, 10, 1, 22, C.divider);
       wx.days.slice(0, 5).forEach((d, i) => {
         const cx = i * FD_PITCH + 6;
@@ -837,8 +853,8 @@
     // The 5-day layout's top bar, then four 16px columns (dividers on cols
     // 15, 31, 47, rows 10-31) for the hours 3, 6, 9 and 12 ahead: time label
     // (rows 11-15, grey), icon (17-24), temperature (27-31, its color).
-    function drawHourly(f, wx) {
-      drawTopBar(f, wx);
+    function drawHourly(f, wx, top) {
+      drawTopBar(f, wx, top);
       for (let i = 1; i < 4; i++) f.fill(i * 16 - 1, 10, 1, 22, C.divider);
       wx.hours.slice(0, 4).forEach((h, i) => {
         const cx = i * 16 + 7;
@@ -860,28 +876,18 @@
     const RAIN_TEXT = '#60b0ff', SNOW_TEXT = '#a9c9ff', RAIN_DRY = '#081428', AXIS = '#555555';
     const FLAKE = ['..#..', '#.#.#', '.###.', '#.#.#', '..#..'];
     const drawArt = (f, art, x, y, color) => art.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i, y + j, 1, 1, color); }));
-    function drawRainBars(f, wx, warn, blink) {
+    function drawRainBars(f, wx, top) {
       const rain = wx.rain;
-      drawTopBar(f, wx);
+      drawTopBar(f, wx, top);
       const color = rain.snow ? SNOW_TEXT : RAIN_TEXT;
-      if (warn) {
-        const ws = warnStyle(warn);
-        if (!(ws.blinks && blink)) {
-          const t = WARN_TEXT[warn.kind][warn.lvl];
-          const x = 32 - Math.floor((measure('small', ws.glyph) + TAG_GAP + measure('small', t)) / 2);
-          const gx = f.text('small', ws.glyph, x, 14, ws.color);
-          f.text('small', t, gx + TAG_GAP - 1, 14, ws.color);
-        }
-      } else {
-        // The drop or flake stands in for the word: only on titles that don't
-        // say RAIN or SNOW (ENDS IN..., BREAK IN...), and only if it fits.
-        const art = /RAIN|SNOW/.test(rain.title) ? null : (rain.snow ? FLAKE : WX_DROP);
-        const markW = art && measure('small', rain.title) + art[0].length + 2 <= 64 ? art[0].length + 2 : 0;
-        const x = 32 - Math.floor((measure('small', rain.title) + markW) / 2);
-        // The text's rows are 9-13; the 5px flake matches them, the 4px drop sits on the bottom.
-        if (markW) drawArt(f, art, x, rain.snow ? 9 : 10, rain.snow ? color : WX_BLUE);
-        f.text('small', rain.title, x + markW, 14, color);
-      }
+      // The drop or flake stands in for the word: only on titles that don't
+      // say RAIN or SNOW (ENDS IN..., BREAK IN...), and only if it fits.
+      const art = /RAIN|SNOW/.test(rain.title) ? null : (rain.snow ? FLAKE : WX_DROP);
+      const markW = art && measure('small', rain.title) + art[0].length + 2 <= 64 ? art[0].length + 2 : 0;
+      const x = 32 - Math.floor((measure('small', rain.title) + markW) / 2);
+      // The text's rows are 9-13; the 5px flake matches them, the 4px drop sits on the bottom.
+      if (markW) drawArt(f, art, x, rain.snow ? 9 : 10, rain.snow ? color : WX_BLUE);
+      f.text('small', rain.title, x + markW, 14, color);
       const levels = rain.snow ? SNOW_LEVELS : RAIN_LEVELS;
       rain.h.slice(0, 8).forEach((h, i) => {
         if (!h) f.fill(i * 8, 25, 7, 1, RAIN_DRY);
@@ -927,14 +933,15 @@
       // downloaded yet: the weather screen.
       // Rain bars when sent (alternating with the radar loop while the
       // payload says so: rain.alt s each, epoch-aligned, bars on the odd
-      // turns); the 5-day layout has no room for a warning: conditions while
-      // one is on.
+      // turns).
       const rn = r.wx && r.wx.rain;
       const barsTurn = !!(rn && rn.h && rn.alt && Math.floor((o.now != null ? o.now : p.now) / rn.alt) % 2 === 1);
       if (((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
-        if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, p.warn, o.blink);
-        else if (r.wx.hours && r.wx.hours.length && !p.warn) drawHourly(f, r.wx);
-        else if (r.wx.days && r.wx.days.length && !p.warn) drawFiveDay(f, r.wx);
+        // The forecast layouts' top bar carries a warning on its high/low line.
+        const top = { shadow: !!r.tempShadow, warn: p.warn, blink: o.blink };
+        if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, top);
+        else if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
+        else if (r.wx.days && r.wx.days.length) drawFiveDay(f, r.wx, top);
         else drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow);
         return f;
       }
