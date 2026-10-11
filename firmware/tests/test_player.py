@@ -176,6 +176,54 @@ class RainTurns(unittest.TestCase):
         self.assertEqual(f.px, ref.px)
 
 
+class NumberRolls(unittest.TestCase):
+    """Clocks and weather numbers roll when they change (NumRoller)."""
+
+    def setUp(self):
+        self.t = T0 - T0 % 60 + 50   # 10 s before a minute rolls over
+        self.pl = player.Player()
+        self.pl.set_payload(payload([], screen='transit', now=self.t, header='MORSE',
+                                    rows=[{'ln': 'RD', 'lbl': 'HOWARD', 't': [self.t + 3600], 's': [0], 'a': 0}]), 0)
+        self.pl.set_screen('transit', 0)
+
+    def draw(self, ms):
+        return self.pl.draw(draw.Frame(), ms, self.t + ms // 1000)
+
+    def test_the_clock_rolls_at_the_minute_and_settles(self):
+        self.draw(0)
+        self.assertFalse(self.pl.busy(0))
+        # The next minute is the next animation: fetches wait for a gap before it.
+        self.assertEqual(self.pl.quiet_ms(0, self.t), 10000)
+        self.draw(10000)   # first frame of the new minute starts the roll
+        mid = self.draw(10000 + draw.ROLL_MS // 2)
+        self.assertTrue(self.pl.busy(10000 + draw.ROLL_MS // 2))
+        self.assertIsNone(self.pl.frame_key(10000 + draw.ROLL_MS // 2, self.t + 10))
+        done = self.draw(10000 + draw.ROLL_MS + 10)
+        self.assertFalse(self.pl.busy(10000 + draw.ROLL_MS + 10))
+        still = draw.render(self.pl.p, draw.Frame(), screen='transit', now=self.t + 10)
+        self.assertEqual(bytes(done.px), bytes(still.px))
+        self.assertNotEqual(bytes(mid.px), bytes(done.px))
+
+    def test_no_roll_across_a_screen_change(self):
+        self.draw(0)
+        self.pl.set_screen('ticker', 9000)
+        self.pl.draw(draw.Frame(), 10000, self.t + 10)
+        self.assertFalse(self.pl.busy(10000))
+
+    def test_a_new_temperature_rolls(self):
+        wx = {'icon': 'sun', 'temp': 63, 'word': 'SUNNY'}
+        self.pl.set_payload(dict(self.pl.p, wx=wx), 0)
+        self.draw(0)
+        self.pl.set_payload(dict(self.pl.p, wx=dict(wx, temp=64)), 2000)
+        self.draw(2000)
+        self.assertTrue(self.pl.busy(2100))
+
+    def test_no_clock_no_minute_gap(self):
+        self.pl.set_payload(dict(self.pl.p, header=None), 0)
+        self.draw(0)
+        self.assertFalse(self.pl.nums.clock())
+
+
 if __name__ == '__main__':
     unittest.main()
 

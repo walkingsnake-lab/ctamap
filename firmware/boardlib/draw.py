@@ -355,12 +355,173 @@ def draw_icon(f, name, x, y):
                 f.fill(x + i, y + j, 1, 1, assets.ICON_PALETTE[c])
 
 
+# ---- number rolls (clocks, temperatures, weather numbers) ----
+# Mirrors draw.js: each rollable text is drawn under a name. During render(),
+# _NR holds a NumRoller (the board) or fixed rolls ({name: {from, p}}: tests).
+
+_NR = [None, None]   # roller, rolls
+
+
+def take_roll(name, text):
+    roller, rolls = _NR
+    if roller is not None:
+        return roller.take(name, text)
+    if rolls:
+        r = rolls.get(name)
+        if r and r['p'] < 1 and r['from'] != text:
+            return r
+    return None
+
+
+_ROLL_FONT = {}
+
+
+def font_roll(font):
+    """(travel, top, bottom): the digits' ink rows relative to the baseline,
+    and travel = their height + 1px. Mirrors fontRoll() in draw.js."""
+    m = _ROLL_FONT.get(font)
+    if m is None:
+        d = assets.FONT_DATA[font]
+        t0 = 99
+        t1 = -99
+        for cp in range(48, 58):
+            o = glyph(font, cp)
+            h = d[o + 2]
+            yo = d[o + 4] - 128
+            for r in range(h):
+                if glyph_row(d, o, r):
+                    t0 = min(t0, r - (yo + h))
+                    t1 = max(t1, r - (yo + h))
+        m = (t1 - t0 + 2, t0, t1)
+        _ROLL_FONT[font] = m
+    return m
+
+
+def roll_chars(f, roll, text, x, fx, clip, dist, adv, put):
+    """Draws text char by char from x (adv(ch): advance; put(ch, x, dy, s)),
+    mid-roll from roll['from'] (at fx). Mirrors rollChars() in draw.js.
+    Returns x after the last advance."""
+    def run(s, cx, dy, only):
+        i = 0
+        for ch in s:
+            if only is None or only[i]:
+                put(ch, cx, dy, s)
+            cx += adv(ch)
+            i += 1
+        return cx
+
+    if not roll:
+        return run(text, x, 0, None)
+    frm = roll['from']
+    up = jsround(ease_in_out(roll['p']) * dist)
+    same = fx == x and len(text) == len(frm)
+    if same:
+        for i in range(len(text)):
+            if adv(text[i]) != adv(frm[i]):
+                same = False
+                break
+    f.push_clip(clip[0], clip[1], clip[2], clip[3])
+    try:
+        if same:
+            changed = [text[i] != frm[i] for i in range(len(text))]
+            run(text, x, 0, [not c for c in changed])
+            run(frm, x, -up, changed)
+            run(text, x, dist - up, changed)
+        else:
+            run(frm, fx, -up, None)
+            run(text, x, dist - up, None)
+    finally:
+        f.pop_clip()
+    for ch in text:
+        x += adv(ch)
+    return x
+
+
+def roll_text_with(f, font, roll, text, x_of, base, color):
+    x = x_of(text)
+    if not roll:
+        return f.text(font, text, x, base, color)
+    dist, t0, t1 = font_roll(font)
+    return roll_chars(f, roll, text, x, x_of(roll['from']), (0, base + t0, 63, base + t1), dist,
+                      lambda ch: measure(font, ch) + 1,
+                      lambda ch, cx, dy, s: f.text(font, ch, cx, base + dy, color))
+
+
+def roll_text(f, font, name, text, x_of, base, color):
+    return roll_text_with(f, font, take_roll(name, text), text, x_of, base, color)
+
+
+def left_at(x):
+    return lambda s: x
+
+
+def right_at(font, right):
+    return lambda s: right - measure(font, s) + 1
+
+
+def center_in(font):
+    return lambda s: (64 - measure(font, s)) // 2
+
+
+class NumRoller:
+    """Rolls for clocks and weather numbers on one screen; mirrors
+    createNumRoller() in draw.js. begin(ms), render(..., roller=self), end().
+    Two dicts swap between frames instead of allocating new ones."""
+
+    def __init__(self):
+        self.prev = {}
+        self.cur = {}
+        self.live = {}    # name -> [from, start ms]
+        self.t = 0
+
+    def begin(self, ms):
+        self.t = ms
+        self.cur.clear()
+
+    def take(self, name, text):
+        self.cur[name] = text
+        old = self.prev.get(name)
+        if old is not None and old != text:
+            self.live[name] = [old, self.t]
+        r = self.live.get(name)
+        if r is None:
+            return None
+        p = (self.t - r[1]) / ROLL_MS
+        if p >= 1 or r[0] == text:
+            del self.live[name]
+            return None
+        return {'from': r[0], 'p': p}
+
+    def end(self):
+        for k in list(self.live):
+            if k not in self.cur:
+                del self.live[k]
+        self.prev, self.cur = self.cur, self.prev
+
+    def reset(self):
+        self.prev.clear()
+        self.live.clear()
+
+    def busy(self, ms):
+        for r in self.live.values():
+            if ms - r[1] < ROLL_MS:
+                return True
+        return False
+
+    def clock(self):
+        """A clock on screen: it rolls at every minute."""
+        for k in self.prev:
+            if k.endswith('clock'):
+                return True
+        return False
+
+
 # Station name + clock on rows 1-5, flush to the screen edges, both in the
 # header grey (transit and ticker). `divider`: a line on row 7 (transit).
 def draw_header(f, name, now, tzo, divider=False, clock=True):
     f.text('small', name, 0, 6, C['head'])
     if clock:
-        rtext(f, 'small', clock_text(now, tzo), 63, 6, C['head'])
+        roll_text(f, 'small', 'hdr.clock', clock_text(now, tzo), right_at('small', 63), 6, C['head'])
     if divider:
         f.fill(0, 7, 64, 1, C['divider'])
 
@@ -379,7 +540,7 @@ def draw_weather(f, wx, warn, blink=False, divider=True):
         f.fill(0, 22, 64, 1, C['divider'])
     draw_icon(f, wx['icon'], 0, 24)
     base = 31
-    f.text('small', str(wx['temp']) + '°', 10, base, C['wxText'])
+    roll_text(f, 'small', 'row.temp', str(wx['temp']) + '°', left_at(10), base, C['wxText'])
     if warn:
         glyph, color, blinks = warn_style(warn)
         word = 'WARNING' if warn['lvl'] == 'warning' else 'WATCH'
@@ -544,7 +705,7 @@ def draw_overnight(f, view, now):
     block_h = 10 + 3 + 5
     area_h = 22 if view.get('wx') else 32
     top = (area_h - block_h) // 2
-    f.text('clock', clock, (64 - measure('clock', clock)) // 2, top + 10, C['clock'])
+    roll_text(f, 'clock', 'night.clock', clock, center_in('clock'), top + 10, C['clock'])
     f.text('small', nt, (64 - measure('small', nt)) // 2, top + 18, C['noTrains'])
 
 
@@ -903,22 +1064,46 @@ def temp_color(t):
     return TEMP_STOPS[-1][1]
 
 
+def _shadow_of(s):
+    return scale_color(temp_color(int(s[:-1])), 0.2)
+
+
+def _label_of(s):
+    return C['label']
+
+
 def draw_weather_screen(f, wx, warn, blink, shadow=False):
-    def draw_temp(dx, dy, color):
-        x = dx
-        if wx['temp'] < 0:
-            f.fill(x, 8 + dy, 5, 2, color)
-            x += 7
-        x = f.text('clock', str(abs(wx['temp'])), x, 14 + dy, color)
-        f.fill(x, 4 + dy, 3, 1, color)
-        f.fill(x, 6 + dy, 3, 1, color)
-        f.fill(x, 5 + dy, 1, 1, color)
-        f.fill(x + 2, 5 + dy, 1, 1, color)
-        return x + 2
+    # The temperature rolls when it changes (shadow layer with it). Mirrors
+    # drawWeatherScreen() in draw.js.
+    text = str(wx['temp']) + '°'
+    roll = take_roll('wx.temp', text)
+    dist, t0, t1 = font_roll('clock')
+
+    def adv(ch):
+        if ch == '-':
+            return 7
+        if ch == '°':
+            return 3
+        return measure('clock', ch) + 1
+
+    def layer(d, color_of):
+        def put(ch, x, dy, s):
+            color = color_of(s)
+            y = d + dy
+            if ch == '-':
+                f.fill(x, 8 + y, 5, 2, color)
+            elif ch == '°':
+                f.fill(x, 4 + y, 3, 1, color)
+                f.fill(x, 6 + y, 3, 1, color)
+                f.fill(x, 5 + y, 1, 1, color)
+                f.fill(x + 2, 5 + y, 1, 1, color)
+            else:
+                f.text('clock', ch, x, 14 + y, color)
+        return roll_chars(f, roll, text, d, d, (0, 14 + d + t0, 63, 14 + d + t1), dist, adv, put)
 
     if shadow:
-        draw_temp(1, 1, scale_color(temp_color(wx["temp"]), 0.2))
-    temp_right = draw_temp(0, 0, C['label']) + (1 if shadow else 0)
+        layer(1, _shadow_of)
+    temp_right = layer(0, _label_of) - 1 + (1 if shadow else 0)
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], 55, 1)
     word = wx.get('word')
@@ -926,9 +1111,9 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
         rtext(f, 'small', word, 63, 16, C['wxText'])
     f.fill(0, 18, 64, 1, C['divider'])
     if wx.get('feels') is not None:
-        f.text('small', 'FEELS %s°' % wx['feels'], 0, 25, C['grey'])
+        roll_text(f, 'small', 'wx.feels', 'FEELS %s°' % wx['feels'], left_at(0), 25, C['grey'])
     if wx.get('wind'):
-        rtext(f, 'small', wx['wind'], 63, 25, C['label'])
+        roll_text(f, 'small', 'wx.wind', wx['wind'], right_at('small', 63), 25, C['label'])
     if warn:
         glyph, color, blinks = warn_style(warn)
         if not (blinks and blink):
@@ -939,7 +1124,7 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
     if wx.get('pop') is not None:
         t = '%s%%' % wx['pop']
         px = 63 - measure('small', t) + 1
-        f.text('small', t, px, 31, C['label'])
+        roll_text(f, 'small', 'wx.pop', t, right_at('small', 63), 31, C['label'])
         for j, row in enumerate(WX_DROP):
             for i, c in enumerate(row):
                 if c == '#':
@@ -949,7 +1134,7 @@ def draw_weather_screen(f, wx, warn, blink, shadow=False):
         hl = 'H %s° L %s°' % (wx['hi'], wx['lo'])
         if measure('small', hl) + 3 > pop_left:
             hl = 'H %s L %s' % (wx['hi'], wx['lo'])
-        f.text('small', hl, 0, 31, C['grey'])
+        roll_text(f, 'small', 'wx.hl', hl, left_at(0), 31, C['grey'])
 
 
 # ---- 5-day layout ----
@@ -1011,12 +1196,25 @@ def draw_top_bar(f, wx, shadow=False, warn=None, blink=False):
     drawTopBar() in draw.js."""
     if wx.get('icon') in assets.ICONS:
         draw_icon(f, wx['icon'], FD_ICON_X, 0)
+    # The temperature (and its shadow) rolls when it changes.
+    text = str(wx['temp']) + '°'
+    roll = take_roll('bar.temp', text)
+    dist, t0, t1 = font_roll('5x7')
+
+    def adv(ch):
+        return (measure('small', ch) if ch == '°' else measure('5x7', ch)) + 1
+
+    def layer(d, color_of):
+        def put(ch, x, dy, s):
+            if ch == '°':
+                f.text('small', ch, x, 6 + d + dy, color_of(s))
+            else:
+                f.text('5x7', ch, x, 7 + d + dy, color_of(s))
+        return roll_chars(f, roll, text, FD_TEMP_X + d, FD_TEMP_X + d, (0, 7 + d + t0, 63, 7 + d + t1), dist, adv, put)
+
     if shadow:
-        sh = scale_color(temp_color(wx['temp']), 0.2)
-        f.text('small', '°', f.text('5x7', str(wx['temp']), FD_TEMP_X + 1, 8, sh), 7, sh)
-    x = f.text('5x7', str(wx['temp']), FD_TEMP_X, 7, C['label'])
-    f.text('small', '°', x, 6, C['label'])
-    temp_right = x + 1 + (1 if shadow else 0)
+        layer(1, _shadow_of)
+    temp_right = layer(0, _label_of) - adv('°') + 1 + (1 if shadow else 0)
     if warn:
         glyph, color, blinks = warn_style(warn)
         if blinks and blink:
@@ -1247,13 +1445,17 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False, t=None):
         ts = str(r['temp']) + '°'
         icon = r.get('icon') if r.get('icon') in assets.ICONS else None
         x0 = right + 1 - ((10 if icon else 0) + measure('small', ts))
+        tx = right_at('small', right)
+        tr = take_roll('rad.temp', ts)
         if icon:
             clear((x0, top + 4, x0 + 7, top + 11))
-        clear(text_box('small', ts, x0 + (10 if icon else 0), top + 10))
+        clear(text_box('small', ts, tx(ts), top + 10))
+        if tr:
+            clear(text_box('small', tr['from'], tx(tr['from']), top + 10))
         draw_indicator()
         if icon:
             draw_icon(f, icon, x0, top + 4)
-        f.text('small', ts, x0 + (10 if icon else 0), top + 10, C['label'])
+        roll_text_with(f, 'small', tr, ts, tx, top + 10, C['label'])
         if ws:
             draw_warn_tag()
         return f
@@ -1280,15 +1482,25 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False, t=None):
         ap_x = right - measure('small', ap) + 1
         clock_right = ap_x - 2
         ct = str(r['temp']) + '°' if r.get('temp') is not None else None
-        clear(text_box('5x7', clock, clock_right - measure('5x7', clock) + 1, top + 11))
+        # The current time and the temperature roll (not a frame's time).
+        cx = right_at('5x7', clock_right)
+        tx = right_at('small', right)
+        cr = take_roll('rad.clock', clock) if now_clock else None
+        ar = take_roll('rad.ap', ap) if now_clock else None
+        tr = take_roll('rad.temp', ct) if ct else None
+        clear(text_box('5x7', clock, cx(clock), top + 11))
+        if cr:
+            clear(text_box('5x7', cr['from'], cx(cr['from']), top + 11))
         clear(text_box('small', ap, ap_x, top + 11))
         if ct:
-            clear(text_box('small', ct, right - measure('small', ct) + 1, top + 18))
+            clear(text_box('small', ct, tx(ct), top + 18))
+        if tr:
+            clear(text_box('small', tr['from'], tx(tr['from']), top + 18))
         draw_indicator()
-        rtext(f, '5x7', clock, clock_right, top + 11, C['clock'] if now_clock else C['radarTime'])
-        f.text('small', ap, ap_x, top + 11, C['radarSub'])
+        roll_text_with(f, '5x7', cr, clock, cx, top + 11, C['clock'] if now_clock else C['radarTime'])
+        roll_text_with(f, 'small', ar, ap, left_at(ap_x), top + 11, C['radarSub'])
         if ct:
-            rtext(f, 'small', ct, right, top + 18, C['radarSub'])
+            roll_text_with(f, 'small', tr, ct, tx, top + 18, C['radarSub'])
         if ws:
             draw_warn_tag()
         return f
@@ -1296,14 +1508,22 @@ def render_weather(p, f, now=None, idx=None, frames=None, blink=False, t=None):
     ap = ampm_text(t, tzo)
     ap_x = right - measure('small', ap) + 1
     w_x = ap_x - 2 - measure('small', ws[0]) if ws else 0
-    clear(text_box('5x7', clock, right - measure('5x7', clock) + 1, top + 11))
+    cx = right_at('5x7', right)
+    cr = take_roll('rad.clock', clock) if now_clock else None
+    ar = take_roll('rad.ap', ap) if now_clock else None
+    clear(text_box('5x7', clock, cx(clock), top + 11))
+    if cr:
+        clear(text_box('5x7', cr['from'], cx(cr['from']), top + 11))
     clear(text_box('small', ap, ap_x, top + 18))
+    if ar:
+        clear(text_box('small', ar['from'], ap_x, top + 18))
     if ws:
         clear(text_box('small', ws[0], w_x, top + 18))
     draw_indicator()
-    # A frame's time is dimmed so it doesn't read as the current time.
-    rtext(f, '5x7', clock, right, top + 11, C['clock'] if now_clock else C['radarTime'])
-    f.text('small', ap, ap_x, top + 18, C['radarAmpm'])
+    # A frame's time is dimmed so it doesn't read as the current time. The
+    # current time rolls when it changes.
+    roll_text_with(f, '5x7', cr, clock, cx, top + 11, C['clock'] if now_clock else C['radarTime'])
+    roll_text_with(f, 'small', ar, ap, left_at(ap_x), top + 18, C['radarAmpm'])
     if ws and not hide_warn:
         f.text('small', ws[0], w_x, top + 18, ws[1])
     return f
@@ -1460,7 +1680,7 @@ def draw_no_games(f, now, tzo):
     clock = clock_text(now, tzo)
     label = 'NO GAMES'
     top = (32 - 18) // 2
-    f.text('clock', clock, (64 - measure('clock', clock)) // 2, top + 10, C['clock'])
+    roll_text(f, 'clock', 'ng.clock', clock, center_in('clock'), top + 10, C['clock'])
     f.text('small', label, (64 - measure('small', label)) // 2, top + 18, C['noTrains'])
 
 
@@ -1677,14 +1897,22 @@ def apply_brightness(f, bright):
     return f
 
 
-def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0, idx=None, frames=None, game=None, rolls=None, logos=None, t=None):
+def render(p, f, screen=None, now=None, blink=False, view=None, page=0, slide=0, idx=None, frames=None, game=None, rolls=None, logos=None, t=None, roller=None, nums=None):
+    """roller (NumRoller) or nums ({name: {from, p}}): clock and
+    weather-number rolls (take_roll)."""
     screen = screen or p.get('screen')
-    if screen == 'ticker':
-        render_ticker(p, f, now=now, page=page, slide=slide)
-    elif screen == 'weather':
-        render_weather(p, f, now=now, idx=idx, frames=frames, blink=blink, t=t)
-    elif screen == 'baseball':
-        render_baseball(p, f, now=now, game=game, rolls=rolls, logos=logos)
-    else:
-        render_transit(p, f, now=now, blink=blink, view=view)
+    _NR[0] = roller
+    _NR[1] = nums
+    try:
+        if screen == 'ticker':
+            render_ticker(p, f, now=now, page=page, slide=slide)
+        elif screen == 'weather':
+            render_weather(p, f, now=now, idx=idx, frames=frames, blink=blink, t=t)
+        elif screen == 'baseball':
+            render_baseball(p, f, now=now, game=game, rolls=rolls, logos=logos)
+        else:
+            render_transit(p, f, now=now, blink=blink, view=view)
+    finally:
+        _NR[0] = None
+        _NR[1] = None
     return apply_brightness(f, p.get('bright'))

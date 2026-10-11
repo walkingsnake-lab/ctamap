@@ -43,6 +43,7 @@ class Player:
         self._screen_since = 0
         self.bb_shown = None     # baseball texts last drawn (for rolls)
         self.bb_rolls = {}       # text key -> {'from', 'start'}
+        self.nums = draw.NumRoller()  # clock and weather-number rolls
         # Next transit change (epoch s), kept between loop passes: building
         # the transit view to find it allocated ~1 KB on every pass, which
         # churned and fragmented the heap. -1 means none (FAR).
@@ -184,12 +185,22 @@ class Player:
             self.anim = draw.TransitAnimator()
             self.bb_shown = None
             self.bb_rolls = {}
+            self.nums.reset()
 
     # ---- drawing ----
 
     def draw(self, frame, ms, now):
-        """Render the current screen into frame at monotonic ms / epoch now."""
+        """Render the current screen into frame at monotonic ms / epoch now.
+        Clocks and weather numbers roll when they change (NumRoller)."""
+        self.nums.begin(ms)
+        try:
+            return self._draw(frame, ms, now)
+        finally:
+            self.nums.end()
+
+    def _draw(self, frame, ms, now):
         p = self.p
+        nums = self.nums
         if self.screen == 'ticker':
             pages = draw.ticker_pages(p, now)
             if self.page >= pages:
@@ -201,7 +212,7 @@ class Player:
                 self.page_start = ms
                 since = 0
             slide = (since - tm['pageHold']) / tm['slide'] if pages > 1 and since > tm['pageHold'] else 0
-            return draw.render(p, frame, screen='ticker', now=now, page=self.page, slide=slide)
+            return draw.render(p, frame, screen='ticker', now=now, page=self.page, slide=slide, roller=nums)
         if self.screen == 'baseball':
             # Scores, inning, count, and outs roll when they change (not
             # across a change of game or state). Mirrors sim.html.
@@ -222,11 +233,11 @@ class Player:
                     del self.bb_rolls[k]
                 else:
                     rolls[k] = {'from': r['from'], 'p': rp}
-            return draw.render(p, frame, screen='baseball', now=now, rolls=rolls, logos=self.logos)
+            return draw.render(p, frame, screen='baseball', now=now, rolls=rolls, logos=self.logos, roller=nums)
         if self.screen == 'weather':
-            return draw.render(p, frame, screen='weather', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms), t=ms - self.loop_start)
+            return draw.render(p, frame, screen='weather', now=now, idx=self.radar_idx(ms), frames=self.radar_frames, blink=self.blink_on(ms), t=ms - self.loop_start, roller=nums)
         view = self.anim.step(p, now, ms)
-        return draw.render(p, frame, screen='transit', now=now, view=view, blink=self.blink_on(ms))
+        return draw.render(p, frame, screen='transit', now=now, view=view, blink=self.blink_on(ms), roller=nums)
 
     # ---- alert blink vs. network fetches ----
     # A fetch freezes the display for longer than one blink phase. To make
@@ -305,7 +316,7 @@ class Player:
     def frame_key(self, ms, now):
         """Everything a still frame depends on, or None while an animation
         needs every frame. The board redraws only when this changes."""
-        if self.screen != 'weather' and self.busy(ms):
+        if (self.screen != 'weather' and self.busy(ms)) or self.nums.busy(ms):
             return None
         key = (self.screen, self.gen, now, self.blinking() and self.blink_on(ms))
         if self.screen == 'ticker':
@@ -322,6 +333,11 @@ class Player:
     def busy(self, ms):
         if not self.p:
             return False
+        if self.nums.busy(ms):
+            return True
+        return self._screen_busy(ms)
+
+    def _screen_busy(self, ms):
         if self.screen == 'ticker':
             since = ms - self.page_start
             tm = draw.timing(self.p)
@@ -338,11 +354,18 @@ class Player:
         return transit_busy(self.anim, ms)
 
     def quiet_ms(self, ms, now):
-        """Milliseconds until the next animation starts (0 while one runs)."""
+        """Milliseconds until the next animation starts (0 while one runs).
+        A clock on screen rolls at the top of every minute."""
         if not self.p:
             return FAR
         if self.busy(ms):
             return 0
+        q = self._screen_quiet_ms(ms, now)
+        if self.nums.clock():
+            q = min(q, (60 - now % 60) * 1000)
+        return q
+
+    def _screen_quiet_ms(self, ms, now):
         if self.screen == 'ticker':
             if draw.ticker_pages(self.p, now) < 2:
                 return FAR

@@ -245,6 +245,15 @@
   let transitAnim = D.createTransitAnimator();
   let page = 0, pageStart = performance.now();
   let bbShown = null, bbRolls = {};
+  // Clock and weather-number rolls, one roller per screen (all four draw at once).
+  const numRollers = {};
+  const rolled = (screen, t, opts) => {
+    const r = numRollers[screen] || (numRollers[screen] = D.createNumRoller());
+    r.begin(t);
+    const f = D.render(opts.full, { ...opts.o, screen, roller: r });
+    r.end();
+    return f;
+  };
 
   function frame(t) {
     if (!p || $('pause').checked) return;
@@ -261,7 +270,7 @@
     // Transit: rolls, fades, and slides come from the animator.
     const view = transitAnim.step(p, n, t);
     const blink = Math.floor(t / D.BLINK_MS) % 2 === 1;
-    paintTransit(D.render(full, { screen: 'transit', now: n, blink, view }));
+    paintTransit(rolled('transit', t, { full, o: { now: n, blink, view } }));
 
     // Ticker: hold each page, then slide up to the next, looping.
     const pages = D.tickerPages(p, n);
@@ -270,13 +279,13 @@
     const tm = D.timing(p);
     if (since >= tm.pageHold + tm.slide) { page = (page + 1) % pages; pageStart = t; since = 0; }
     const slide = pages > 1 && since > tm.pageHold ? (since - tm.pageHold) / tm.slide : 0;
-    paintTicker(D.render(full, { screen: 'ticker', now: n, page, slide }));
+    paintTicker(rolled('ticker', t, { full, o: { now: n, page, slide } }));
     $('pageState').textContent = `page ${page + 1} of ${pages}`;
 
     // Radar: step through the loop, then hold on the newest frame.
     const nf = (p.radar && p.radar.frames.length) || 0;
     const idx = D.radarLoopIdx((p.radar && p.radar.frames) || [], radarFrames, t - loopStart, tm);
-    paintWeather(D.render(full, { screen: 'weather', now: n, idx, frames: radarFrames, blink }));
+    paintWeather(rolled('weather', t, { full, o: { now: n, idx, frames: radarFrames, blink } }));
     $('radarState').textContent = p.radar && p.radar.on ? (nf ? 'rain in the box: radar' : 'rain in the box, no frames yet') : 'no rain: conditions';
 
     // Baseball: scores, inning, count, and outs roll when they change, as on
@@ -291,7 +300,7 @@
       const rp = (t - r.start) / D.ROLL_MS;
       if (rp >= 1) delete bbRolls[k]; else rolls[k] = { from: r.from, p: rp };
     }
-    paintBaseball(D.render(full, { screen: 'baseball', now: n, rolls, logos: logoBytes }));
+    paintBaseball(rolled('baseball', t, { full, o: { now: n, rolls, logos: logoBytes } }));
     const pick = D.pickGame((p.mlb && p.mlb.games) || [], n, tm.game, !!(p.mlb && p.mlb.all));
     const anyLive = ((p.mlb && p.mlb.games) || []).some((g) => g.st === 'live');
     $('gameState').textContent = !pick.of ? 'no games' : `${anyLive ? 'live game' : 'game'} ${pick.pos + 1} of ${pick.of}`;
