@@ -913,7 +913,7 @@ test('baseball: both layouts share the divider (row 24) and the bottom line (bas
   for (const layout of ['classic', 'logos']) {
     const g = draw.renderBaseball({ ...bb(bbGame({ st: 'final' })), mlb: { layout, games: [bbGame({ st: 'final' })] } });
     assert.equal(count(g, draw.C.divider, 0, 24, 63, 24), 64, layout);
-    assert.equal(Math.max(...rows(g, 40, 62)), Math.max(...rows(w, 0, 20)), layout); // the weather row's condition word, at the left
+    assert.equal(Math.max(...rows(g, 40, 62)), Math.max(...rows(w, 56, 60)), layout); // the weather row's temperature digits
   }
 });
 
@@ -1317,13 +1317,13 @@ test('number rolls: texts new to the screen just appear; reset drops rolls', () 
   assert.equal(r.busy(20), false);
 });
 
-test('weather row: icon and white 5x7 temperature on the right (ink to x63), condition word on the left', () => {
+test('weather row: icon and white 5x7 temperature on the right (ink to x63), no condition word', () => {
   const ink = (f, x0, x1, y0, y1, c) => { let n = 0, maxX = -1; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hex(f.get(x, y)) === c) { n++; maxX = Math.max(maxX, x); } return [n, maxX]; };
   for (const temp of [5, 63, 100, -12]) {
     const f = draw.renderTransit({ ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5)], s: [0], a: 0 }]), wx: { icon: 'sun', temp, word: 'PT CLOUDY' } });
     const [n, maxX] = ink(f, 30, 63, 23, 31, draw.C.label);
     assert.ok(n > 10, `temp ${temp} drawn white`);
     assert.equal(maxX, 63, `temp ${temp} ends at x63`);
-    assert.ok(ink(f, 0, 32, 25, 30, draw.C.wxText)[0] > 10, `word drawn at ${temp}`);
+    assert.equal(ink(f, 0, 32, 23, 31, draw.C.wxText)[0], 0, `no word at ${temp}`);
   }
 });

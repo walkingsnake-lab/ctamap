@@ -298,8 +298,8 @@
 
     // Weather row: icon and temperature on the right as on the forecast
     // screens' top bar (8x8 icon, 2px gap, white 5x7 digits, small degree
-    // sign, its ink ending at x63); the condition word (grey) or the
-    // watch/warning tag on the left from x0.
+    // sign, its ink ending at x63); a watch/warning tag on the left from x0.
+    // No condition word.
     function drawWeather(f, wx, warn, blink, divider = true) {
       if (divider) f.fill(0, 22, 64, 1, C.divider);
       const base = 31;
@@ -315,8 +315,6 @@
           const x = f.text('small', glyph, 0, base, color);
           f.text('small', word, x + TAG_GAP - 1, base, color);
         }
-      } else if (wx.word && measure('small', wx.word) + 2 <= iconX) {
-        f.text('small', wx.word, 0, base, C.wxText);
       }
     }
 

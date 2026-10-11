@@ -492,7 +492,7 @@ def warn_style(warn):
 
 
 # Weather row: icon and white 5x7 temperature on the right (ink ends at
-# x63), the condition word or the watch/warning tag on the left. Mirrors
+# x63), a watch/warning tag on the left; no condition word. Mirrors
 # drawWeather() in draw.js.
 def draw_weather(f, wx, warn, blink=False, divider=True):
     if divider:
@@ -510,8 +510,6 @@ def draw_weather(f, wx, warn, blink=False, divider=True):
         if not (blinks and blink):
             x = f.text('small', glyph, 0, base, color)
             f.text('small', word, x + TAG_GAP - 1, base, color)
-    elif wx.get('word') and measure('small', wx['word']) + 2 <= icon_x:
-        f.text('small', wx['word'], 0, base, C['wxText'])
 
 
 def _is_num(s):
