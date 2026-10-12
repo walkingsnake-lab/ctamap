@@ -187,7 +187,7 @@
     const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
     const C = {
       label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
-      sch: '#b0b0b0', schDim: '#474747', grey: '#8f8f8f', divider: '#333333',
+      sch: '#6a6a6a', schDim: '#2e2e2e', grey: '#8f8f8f', divider: '#333333',
       head: '#808080', dimHead: '#555555', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };

@@ -246,7 +246,7 @@ LINE = {
 
 C = {
     'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'radarSub': hexc('#666666'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
-    'sch': hexc('#b0b0b0'), 'schDim': hexc('#474747'), 'grey': hexc('#8f8f8f'),
+    'sch': hexc('#6a6a6a'), 'schDim': hexc('#2e2e2e'), 'grey': hexc('#8f8f8f'),
     'divider': hexc('#333333'), 'head': hexc('#808080'), 'dimHead': hexc('#555555'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
     'noTrains': hexc('#6c6c6c'), 'indicator': hexc('#3a3a3a'),

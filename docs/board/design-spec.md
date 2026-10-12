@@ -106,7 +106,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | **Clocks** | 80% white `#cccccc` (overnight, no-games); the transit header clock uses the transit dark grey `#555555`, the ticker's the header grey `#808080` |
 | First arrival time | amber `#ffb000` |
 | Later times | dim amber `#664600` (~40% of the first time; at ~61% it was hard to tell apart on the panel) |
-| Schedule-based times (`isSch`), first / later | grey `#b0b0b0` / `#474747` (instead of amber; same width, so digit rolls are unaffected) |
+| Schedule-based times (`isSch`), first / later | grey `#6a6a6a` / `#2e2e2e` (instead of amber; same width, so digit rolls are unaffected). The first is about half the light of the white labels so it reads as grey on the panel (`#b0b0b0` looked white); later ones are about 40% of the first, the same step as amber to dim amber |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
 | Dividers (weather row) | `#333333` |
 | Transit header background band | `#202020` (confirm on the panel; raise toward `#303030` if it vanishes at night) |
