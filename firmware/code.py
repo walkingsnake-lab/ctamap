@@ -22,7 +22,7 @@ try:
     # the imports below, they had to fit between scattered bytecode.
     import os
     from boardlib import matrix
-    mx = matrix.Matrix(int(os.getenv('MATRIX_BIT_DEPTH') or 5))
+    mx = matrix.Matrix(int(os.getenv('MATRIX_BIT_DEPTH') or 5), int(os.getenv('MATRIX_ROTATION') or 0))
     mem.append(('matrix', free()))
     from boardlib import assets
     mem.append(('fonts', free()))

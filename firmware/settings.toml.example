@@ -15,6 +15,10 @@ BOARD_TOKEN = "..."
 # Panel color depth (1-6). Higher = smoother dim colors, more flicker risk.
 MATRIX_BIT_DEPTH = 5
 
+# Panel rotation: 0, or 180 when the panel is mounted upside down (Matrix
+# Portal on the other side). The UP/DOWN buttons keep their screen order.
+MATRIX_ROTATION = 0
+
 # Gamma applied to every palette color (the panel is linear; colors are
 # authored for screens). "1" = off. Try "1.8", then "2.2". Quoted: settings.toml
 # has no floats.

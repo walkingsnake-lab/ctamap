@@ -19,7 +19,7 @@ LOGO_BYTES = 24 * 12 * 3
 
 
 class Matrix:
-    def __init__(self, bit_depth=5):
+    def __init__(self, bit_depth=5, rotation=0):
         displayio.release_displays()
         m = rgbmatrix.RGBMatrix(
             width=64, height=32, bit_depth=bit_depth,
@@ -28,7 +28,7 @@ class Matrix:
             clock_pin=board.MTX_CLK, latch_pin=board.MTX_LAT, output_enable_pin=board.MTX_OE,
         )
         self.bit_depth = bit_depth
-        self.display = framebufferio.FramebufferDisplay(m, auto_refresh=False)
+        self.display = framebufferio.FramebufferDisplay(m, auto_refresh=False, rotation=rotation)
         self.bitmap = displayio.Bitmap(64, 32, 256)
         self.palette = displayio.Palette(256)
         self.radar = [bytearray(RADAR_BYTES) for _ in range(RADAR_SLOTS)]
