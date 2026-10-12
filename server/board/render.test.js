@@ -64,7 +64,7 @@ test('transit: header without a band, line blocks, amber and grey times', () => 
   assert.equal(hex(f.get(63, 0)), '#000000');     // no header band
   const head = new Set();
   for (let y = 1; y <= 5; y++) for (let x = 1; x < 30; x++) head.add(hex(f.get(x, y)));
-  assert.ok(head.has(C.head));                    // station name in the header grey
+  assert.ok(head.has(C.dimHead));                 // station name in the transit dark grey
   const tops = rowTops(2, true, false);            // two rows, centered below the header
   assert.equal(hex(f.get(0, tops[0])), LINE.RD);  // first row's color block
   // Find the colors used in the 95TH row (schedule-based times are grey, never amber).

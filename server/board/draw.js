@@ -188,7 +188,7 @@
     const C = {
       label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
       sch: '#b0b0b0', schDim: '#474747', grey: '#8f8f8f', divider: '#333333',
-      head: '#808080', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
+      head: '#808080', dimHead: '#555555', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
 
@@ -213,9 +213,11 @@
     // "1:02": 12-hour Chicago time, no AM/PM, no leading zero.
     const clockText = (now) => clockFmt.format(new Date(now * 1000)).replace(/\s?[AP]M$/i, '');
 
-    function drawIcon(f, name, x, y) {
+    // `color`: draw every lit pixel in that one color (a mono icon) instead
+    // of the icon's own palette.
+    function drawIcon(f, name, x, y, color) {
       icons.ICONS[name].forEach((row, j) => [...row].forEach((c, i) => {
-        if (c !== '.') f.fill(x + i, y + j, 1, 1, icons.PALETTE[c]);
+        if (c !== '.') f.fill(x + i, y + j, 1, 1, color || icons.PALETTE[c]);
       }));
     }
 
@@ -280,11 +282,12 @@
     const rollText = (f, font, name, text, xOf, base, color) => rollTextWith(f, font, takeRoll(name, text), text, xOf, base, color);
     const rightAt = (font, right) => (str) => right - measure(font, str) + 1;
 
-    // Station name + clock on rows 1-5, flush to the screen edges, both in the
-    // header grey (transit and ticker). `divider`: a line on row 7 (transit).
-    function drawHeader(f, name, now, divider, clock = true) {
-      f.text('small', name, 0, 6, C.head);
-      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', 63), 6, C.head);
+    // Station name + clock on rows 1-5, flush to the screen edges, both in
+    // `color` (the transit screen's dark grey, or the ticker's header grey).
+    // `divider`: a line on row 7 (transit).
+    function drawHeader(f, name, now, divider, clock = true, color = C.head) {
+      f.text('small', name, 0, 6, color);
+      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', 63), 6, color);
       if (divider) f.fill(0, 7, 64, 1, C.divider);
     }
 
@@ -297,17 +300,18 @@
     });
 
     // Weather row: icon and temperature on the right as on the forecast
-    // screens' top bar (8x8 icon, 2px gap, white 5x7 digits, small degree
-    // sign, its ink ending at x63); a watch/warning tag on the left from x0.
-    // No condition word.
+    // screens' top bar (8x8 icon, 2px gap, 5x7 digits, small degree sign, its
+    // ink ending at x63); a watch/warning tag on the left from x0. No
+    // condition word. Icon and temperature are both the transit header's dark
+    // grey (mono icon) so the train rows lead; the tag keeps its colors.
     function drawWeather(f, wx, warn, blink, divider = true) {
       if (divider) f.fill(0, 22, 64, 1, C.divider);
       const base = 31;
       const temp = String(wx.temp);
       const tx = 62 - measure('5x7', temp) - 1;
       const iconX = tx - 10;
-      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, iconX, 24);
-      f.text('small', '°', f.text('5x7', temp, tx, base, C.label), base - 1, C.label);
+      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, iconX, 24, C.dimHead);
+      f.text('small', '°', f.text('5x7', temp, tx, base, C.dimHead), base - 1, C.dimHead);
       if (warn) {
         const { glyph, color, blinks } = warnStyle(warn);
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
@@ -480,7 +484,7 @@
       if (!view.rows.length) {
         drawOvernight(f, view, view.now);
       } else {
-        if (view.header) drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false);
+        if (view.header) drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false, C.dimHead);
         f.withClip(0, view.header ? 7 : 0, 63, view.wx ? 21 : 31, () => {
           for (const row of view.rows) drawViewRow(f, row, blink, view.lnc);
         });
