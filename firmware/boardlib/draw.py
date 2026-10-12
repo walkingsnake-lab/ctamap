@@ -247,7 +247,7 @@ LINE = {
 C = {
     'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'radarSub': hexc('#666666'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
     'sch': hexc('#b0b0b0'), 'schDim': hexc('#474747'), 'grey': hexc('#8f8f8f'),
-    'divider': hexc('#333333'), 'head': hexc('#808080'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
+    'divider': hexc('#333333'), 'head': hexc('#808080'), 'dimHead': hexc('#555555'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
     'noTrains': hexc('#6c6c6c'), 'indicator': hexc('#3a3a3a'),
 }
@@ -346,13 +346,15 @@ def ampm_text(t, tzo):
 
 # ---- pieces ----
 
-def draw_icon(f, name, x, y):
+# `color`: every lit pixel in that one color (a mono icon) instead of the
+# icon's own palette.
+def draw_icon(f, name, x, y, color=None):
     icon = assets.ICONS[name]  # 8 x 8 bytes, palette letter codes; 46 ('.') = none
     for j in range(8):
         for i in range(8):
             c = icon[j * 8 + i]
             if c != 46:
-                f.fill(x + i, y + j, 1, 1, assets.ICON_PALETTE[c])
+                f.fill(x + i, y + j, 1, 1, color if color is not None else assets.ICON_PALETTE[c])
 
 
 # ---- clock rolls (the header clock, the radar's current time) ----
@@ -471,13 +473,16 @@ class NumRoller:
         return False
 
 
-# Station name + clock on rows 1-5, flush to the screen edges, both in the
-# header grey (transit and ticker). `divider`: a line on row 7 (transit).
-def draw_header(f, name, now, tzo, divider=False, clock=True):
-    f.text('small', name, 0, 6, C['head'])
+# Station name + clock on rows 1-5, flush to the screen edges, both in
+# `color` (the transit screen's dark grey, or the ticker's header grey).
+# `divider`: a line on row 7 (transit).
+def draw_header(f, name, now, tzo, divider=False, clock=True, color=None):
+    if color is None:
+        color = C['head']
+    f.text('small', name, 0, 6, color)
     if clock:
         ck = clock_text(now, tzo)
-        roll_text(f, 'small', ck, 63, 6, C['head'], take_roll('hdr.clock', ck))
+        roll_text(f, 'small', ck, 63, 6, color, take_roll('hdr.clock', ck))
     if divider:
         f.fill(0, 7, 64, 1, C['divider'])
 
@@ -491,8 +496,9 @@ def warn_style(warn):
     return glyph, color, warn['kind'] == 'tor' and warn['lvl'] == 'warning'
 
 
-# Weather row: icon and white 5x7 temperature on the right (ink ends at
-# x63), a watch/warning tag on the left; no condition word. Mirrors
+# Weather row: mono icon and 5x7 temperature in the transit header's dark
+# grey on the right (ink ends at x63), a watch/warning tag on the left; no
+# condition word. Mirrors
 # drawWeather() in draw.js.
 def draw_weather(f, wx, warn, blink=False, divider=True):
     if divider:
@@ -502,8 +508,8 @@ def draw_weather(f, wx, warn, blink=False, divider=True):
     tx = 62 - measure('5x7', temp) - 1
     icon_x = tx - 10
     if wx.get('icon') in assets.ICONS:
-        draw_icon(f, wx['icon'], icon_x, 24)
-    f.text('small', '°', f.text('5x7', temp, tx, base, C['label']), base - 1, C['label'])
+        draw_icon(f, wx['icon'], icon_x, 24, C['dimHead'])
+    f.text('small', '°', f.text('5x7', temp, tx, base, C['dimHead']), base - 1, C['dimHead'])
     if warn:
         glyph, color, blinks = warn_style(warn)
         word = 'WARNING' if warn['lvl'] == 'warning' else 'WATCH'
@@ -679,7 +685,7 @@ def draw_transit_view(f, view, blink):
         draw_overnight(f, view, view['now'])
     else:
         if view.get('header'):
-            draw_header(f, view['header'], view['now'], view.get('tzo', 0), view.get('hdiv') is True, view.get('clock') is not False)
+            draw_header(f, view['header'], view['now'], view.get('tzo', 0), view.get('hdiv') is True, view.get('clock') is not False, C['dimHead'])
         f.push_clip(0, 7 if view.get('header') else 0, 63, 21 if view.get('wx') else 31)
         try:
             for row in view['rows']:

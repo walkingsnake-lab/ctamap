@@ -1250,22 +1250,25 @@ test('radar corner: shoreline in the clock box keeps a 1px margin from the time,
 });
 
 
-test('header: name and clock flush to the edges in the header grey; divider toggles', () => {
+test('header: name and clock flush to the edges in the transit dark grey; divider toggles', () => {
   const rows = [{ ln: 'RD', lbl: 'HOWARD', t: [min(3)], s: [0], a: 0 }];
   const wx = { icon: 'rain', temp: 54, word: 'RAIN' };
   const base = { ...payload(rows), header: 'MORSE', wx };
   const f = draw.renderTransit(base);
-  assert.ok(count(f, draw.C.head, 0, 1, 0, 5) > 0, 'name starts at x0');
-  assert.ok(count(f, draw.C.head, 63, 1, 63, 5) > 0, 'clock ends at x63');
-  assert.equal(count(f, draw.C.clock, 0, 0, 63, 6), 0, 'clock in the header grey');
+  assert.ok(count(f, draw.C.dimHead, 0, 1, 0, 5) > 0, 'name starts at x0');
+  assert.ok(count(f, draw.C.dimHead, 63, 1, 63, 5) > 0, 'clock ends at x63');
+  assert.equal(count(f, draw.C.clock, 0, 0, 63, 6), 0, 'clock in the dark grey');
+  assert.equal(count(f, draw.C.head, 0, 0, 63, 6), 0, 'not the ticker header grey');
   assert.equal(count(f, draw.C.divider, 0, 7, 63, 7), 0, 'no header line by default');
   assert.equal(count(f, draw.C.divider, 0, 22, 63, 22), 64, 'weather line by default');
   const g = draw.renderTransit({ ...base, headerDivider: true, wxDivider: false });
   assert.equal(count(g, draw.C.divider, 0, 7, 63, 7), 64);
   assert.equal(count(g, draw.C.divider, 0, 22, 63, 22), 0);
-  // The ticker header matches; it has no divider (its rows start at row 7).
+  // The ticker header keeps the lighter header grey; it has no divider (its
+  // rows start at row 7).
   const t = draw.render({ ...base, headerDivider: true, ticker: [] }, { screen: 'ticker' });
   assert.ok(count(t, draw.C.head, 63, 1, 63, 5) > 0);
+  assert.equal(count(t, draw.C.dimHead, 0, 0, 63, 6), 0);
 });
 
 test('animator: rows already shown stay lit while another row leaves', () => {
@@ -1317,13 +1320,25 @@ test('number rolls: texts new to the screen just appear; reset drops rolls', () 
   assert.equal(r.busy(20), false);
 });
 
-test('weather row: icon and white 5x7 temperature on the right (ink to x63), no condition word', () => {
+test('weather row: mono icon and dark grey 5x7 temperature on the right (ink to x63), no condition word', () => {
   const ink = (f, x0, x1, y0, y1, c) => { let n = 0, maxX = -1; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hex(f.get(x, y)) === c) { n++; maxX = Math.max(maxX, x); } return [n, maxX]; };
   for (const temp of [5, 63, 100, -12]) {
     const f = draw.renderTransit({ ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5)], s: [0], a: 0 }]), wx: { icon: 'sun', temp, word: 'PT CLOUDY' } });
-    const [n, maxX] = ink(f, 30, 63, 23, 31, draw.C.label);
-    assert.ok(n > 10, `temp ${temp} drawn white`);
+    const [n, maxX] = ink(f, 30, 63, 23, 31, draw.C.dimHead);
+    assert.ok(n > 10, `temp ${temp} drawn dark grey`);
     assert.equal(maxX, 63, `temp ${temp} ends at x63`);
     assert.equal(ink(f, 0, 32, 23, 31, draw.C.wxText)[0], 0, `no word at ${temp}`);
+    // The sun is one color: no lit pixel in the row is anything but the grey.
+    for (let y = 23; y <= 31; y++) for (let x = 0; x < 64; x++) {
+      const c = hex(f.get(x, y));
+      assert.ok(c === '#000000' || c === draw.C.dimHead, `${c} at ${x},${y}`);
+    }
+  }
+  // drawIcon's mono color applies to every icon; the palette is the default.
+  const ICONS = require('./icons').ICONS;
+  for (const icon of Object.keys(ICONS)) {
+    const f = draw.renderTransit({ ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5)], s: [0], a: 0 }]), wx: { icon, temp: 50 } });
+    const lit = ICONS[icon].join('').replace(/\./g, '').length;
+    assert.equal(ink(f, 0, 63, 24, 31, draw.C.dimHead)[0] >= lit, true, icon);
   }
 });

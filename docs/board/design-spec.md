@@ -103,7 +103,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Use | Color |
 |---|---|
 | Labels | white `#d8d8d8` |
-| **Clocks** | 80% white `#cccccc` (overnight, no-games); header clocks use the header grey `#808080` |
+| **Clocks** | 80% white `#cccccc` (overnight, no-games); the transit header clock uses the transit dark grey `#555555`, the ticker's the header grey `#808080` |
 | First arrival time | amber `#ffb000` |
 | Later times | dim amber `#664600` (~40% of the first time; at ~61% it was hard to tell apart on the panel) |
 | Schedule-based times (`isSch`), first / later | grey `#b0b0b0` / `#474747` (instead of amber; same width, so digit rolls are unaffected) |
@@ -116,7 +116,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from Open-Meteo). Every dim element has a **minimum floor** so it never drops to black at night.
 - **Radar rain fills** render at ~65%; **ticker row fills** at 55%. Text stays full brightness.
 - Rule of thumb from the session: **lit strokes on dark survive; dark strokes on lit don't** (diffuser glow fills them in).
-- **Clock colons are steady** on every clock. The big clocks (overnight, no-games) use `#cccccc`; the transit and ticker header clocks match the station name's `#808080`; the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#8f8f8f`) so it doesn't read as the current time.
+- **Clock colons are steady** on every clock. The big clocks (overnight, no-games) use `#cccccc`; the transit and ticker header clocks match their station names (`#555555` transit, `#808080` ticker); the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#8f8f8f`) so it doesn't read as the current time.
 
 ---
 
@@ -133,7 +133,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 
 ### Layout
 - **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
-- **Header** (station name and clock both `#808080`, flush to the screen edges at x0 and x63, no background; same as the ticker header) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
+- **Header** (station name and clock both dark grey `#555555`, so the train rows are the focus; flush to the screen edges at x0 and x63, no background; same layout as the ticker header, which stays `#808080`) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
 - **Divider lines** are separate per-board toggles: a `#333333` line on row 7 under the header (default off) and the row-22 line above the weather row (default on). Neither changes the row layout.
 - **No edge padding:** text runs to the screen edges (x0 and x63) everywhere outside filled bands.
 - Rows fill the remaining space (5px rows, gaps of 1px or more).
@@ -178,8 +178,8 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Accepted trade-off:** infrequent lines can drop off the screen when frequent ones fill all rows.
 
 ### Weather row (optional)
-- **Right:** 8x8 condition icon, 2px gap, then the temperature as on the forecast screens' top bar: white (`#d8d8d8`) X11 5x7 digits with a small degree sign, its ink ending at x63. **Left:** empty, except for a watch/warning tag. No condition word (the icon carries it).
-- Icons are multi-color sprites defined in `server/board/icons.js` (with the Open-Meteo weather-code mapping); previews in `docs/board/previews/sheet-icons.png`.
+- **Right:** 8x8 condition icon, 2px gap, then the temperature as on the forecast screens' top bar: X11 5x7 digits with a small degree sign, its ink ending at x63. Icon and temperature are both the header's dark grey `#555555`, the icon drawn **mono** (every lit pixel one color, `drawIcon(..., color)`), so the row stays secondary; the watch/warning tag keeps its colors. **Left:** empty, except for a watch/warning tag. No condition word (the icon carries it).
+- Icons are multi-color sprites defined in `server/board/icons.js` (any spot can draw one mono by passing a color to `drawIcon` / `draw_icon`) (with the Open-Meteo weather-code mapping); previews in `docs/board/previews/sheet-icons.png`.
 - Icons: sun, moon, partly cloudy (day/night), cloudy, **cloud with rain** (rain/drizzle/showers), **cloud with rain and an ice crystal** (freezing rain), **snowflake**, storm cloud with bolt, fog.
 - **Watch/warning tag** on the left side: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
 
