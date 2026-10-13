@@ -47,7 +47,7 @@ function send(res, status, body) {
 // along. The simulator's copy (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball'];
 const SECTIONS = {
-  transit: ['header', 'hidden', 'view', 'rows', 'wx'],
+  transit: ['header', 'key', 'hidden', 'view', 'rows', 'wx'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
@@ -293,8 +293,10 @@ function createBoard({
     // weather to show.
     // Temperatures in the board's unit (wd); rain bars keep the raw data.
     const wd = inUnit(w, board.tempUnit);
-    const wx = board.showWeather && wd ? toWx(wd) : null;
-    const cfg = { ...board, showWeather: !!wx };
+    // The key layout has no weather strip: the station band takes rows 27-31.
+    const keyLayout = board.transitLayout === 'key';
+    const wx = board.showWeather && !keyLayout && wd ? toWx(wd) : null;
+    const cfg = { ...board, showWeather: !!wx, showKey: keyLayout };
     let radarState = NO_RADAR;
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
     catch (e) { log.error('[board] radar:', e.message); }
@@ -358,7 +360,8 @@ function createBoard({
       // ticker always shows its header (hiding it frees no room it can use).
       header: bars.showHeader ? board.station.name : null,
       headerDivider: board.headerDivider === true,
-      wxDivider: board.wxDivider !== false,
+      // Key layout: the key on top; `header` then goes on the bottom band.
+      ...(bars.showKey ? { key: 1 } : {}),
       tickerHeader: board.station.name,
       // Header clock (transit and ticker) and line-colored labels.
       hclock: board.headerClock !== false,

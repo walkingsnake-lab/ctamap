@@ -700,14 +700,17 @@ test('chrono: position digit in the block\'s exact color, then the block', () =>
   assert.equal(count(d, draw.LINE.BR, 0, 0, 2, 31), 15);
 });
 
-test('chrono: alert blinks the block to "!"; the digit stays', () => {
+test('chrono: an alert puts the "!" over the dimmed block; the digit stays', () => {
   const p = chronoPayload([{ ...chronoRow('GR', 'HARLEM', min(3), '1'), a: 1 }]);
+  const plain = chronoPayload([chronoRow('GR', 'HARLEM', min(3), '1')]);
   const top = draw.rowTops(1, true, false)[0];
   const on = draw.renderTransit(p, { blink: true });
   const off = draw.renderTransit(p, { blink: false });
-  assert.equal(count(on, draw.LINE.GR, 4, top, 6, top + 4), 4);   // 3px stem + dot
-  assert.equal(count(off, draw.LINE.GR, 4, top, 6, top + 4), 15);  // solid block
-  assert.equal(count(on, draw.LINE.GR, 0, top, 2, top + 4), count(off, draw.LINE.GR, 0, top, 2, top + 4));
+  assert.deepEqual([...on.px], [...off.px]);                       // static
+  assert.equal(count(on, draw.LINE.GR, 4, top, 6, top + 4), 4);    // 3px stem + dot
+  assert.equal(count(on, '#001f0c', 4, top, 6, top + 4), 11);      // the rest of the block at 20%
+  const n = draw.renderTransit(plain);
+  assert.equal(count(on, draw.LINE.GR, 0, top, 2, top + 4), count(n, draw.LINE.GR, 0, top, 2, top + 4));
 });
 
 test('chrono animator: position digits roll down as the list slides up', () => {
@@ -907,13 +910,12 @@ test('baseball breaks: MID 4 / END 5, empty bases, no count or outs', () => {
   }
 });
 
-test('baseball: both layouts share the divider (row 24) and the bottom line (baseline 31, like the weather row)', () => {
+test('baseball: both layouts share the divider (row 24) and the bottom line (baseline 31)', () => {
   const rows = (f, x0, x1) => { const ys = []; for (let y = 25; y < 32; y++) for (let x = x0; x <= x1; x++) if (f.get(x, y) && hex(f.get(x, y)) !== '#000000') { ys.push(y); break; } return ys; };
-  const w = draw.renderTransit({ ...payload([]), screen: 'transit', wx: { temp: 61, icon: 'sun', word: 'CLEAR' } });
   for (const layout of ['classic', 'logos']) {
     const g = draw.renderBaseball({ ...bb(bbGame({ st: 'final' })), mlb: { layout, games: [bbGame({ st: 'final' })] } });
     assert.equal(count(g, draw.C.divider, 0, 24, 63, 24), 64, layout);
-    assert.equal(Math.max(...rows(g, 40, 62)), Math.max(...rows(w, 56, 60)), layout); // the weather row's temperature digits
+    assert.equal(Math.max(...rows(g, 40, 62)), 30, layout);
   }
 });
 
@@ -1051,9 +1053,9 @@ test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at 
   assert.equal(count(torOn(true), draw.C.warnTornado, 40, 15, 63, 19), 0);
 });
 
-test('weather row: a tornado warning tag blinks; watches and severe warnings stay', () => {
+test('weather strip: a tornado warning tag blinks; watches and severe warnings stay', () => {
   const p = (warn) => ({ ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5)], s: [0], a: 0 }]), wx: { icon: 'storm', temp: 54, word: 'STORMS' }, warn });
-  const tag = (warn, blink, c) => count(draw.renderTransit(p(warn), { blink }), c, 0, 27, 36, 31); // the tag sits at the left
+  const tag = (warn, blink, c) => count(draw.renderTransit(p(warn), { blink }), c, 20, 27, 63, 31); // the tag sits at the right
   assert.ok(tag({ kind: 'tor', lvl: 'warning' }, false, draw.C.warnTornado) > 15);
   assert.equal(tag({ kind: 'tor', lvl: 'warning' }, true, draw.C.warnTornado), 0);
   assert.ok(tag({ kind: 'tor', lvl: 'watch' }, true, draw.C.watch) > 15);
@@ -1260,10 +1262,9 @@ test('header: name and clock flush to the edges in the transit dark grey; divide
   assert.equal(count(f, draw.C.clock, 0, 0, 63, 6), 0, 'clock in the dark grey');
   assert.equal(count(f, draw.C.head, 0, 0, 63, 6), 0, 'not the ticker header grey');
   assert.equal(count(f, draw.C.divider, 0, 7, 63, 7), 0, 'no header line by default');
-  assert.equal(count(f, draw.C.divider, 0, 22, 63, 22), 64, 'weather line by default');
-  const g = draw.renderTransit({ ...base, headerDivider: true, wxDivider: false });
+  assert.equal(count(f, draw.C.divider, 0, 8, 63, 31), 0, 'no line above the weather strip');
+  const g = draw.renderTransit({ ...base, headerDivider: true });
   assert.equal(count(g, draw.C.divider, 0, 7, 63, 7), 64);
-  assert.equal(count(g, draw.C.divider, 0, 22, 63, 22), 0);
   // The ticker header keeps the lighter header grey; it has no divider (its
   // rows start at row 7).
   const t = draw.render({ ...base, headerDivider: true, ticker: [] }, { screen: 'ticker' });
@@ -1320,25 +1321,18 @@ test('number rolls: texts new to the screen just appear; reset drops rolls', () 
   assert.equal(r.busy(20), false);
 });
 
-test('weather row: mono icon and dark grey 5x7 temperature on the right (ink to x63), no condition word', () => {
-  const ink = (f, x0, x1, y0, y1, c) => { let n = 0, maxX = -1; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hex(f.get(x, y)) === c) { n++; maxX = Math.max(maxX, x); } return [n, maxX]; };
+test('weather strip: Tom Thumb temperature at x0 and condition word ending at x63, both dark grey, on rows 27-31', () => {
+  const ink = (f, x0, x1, y0, y1, c) => { let n = 0, minX = 99, maxX = -1; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hex(f.get(x, y)) === c) { n++; minX = Math.min(minX, x); maxX = Math.max(maxX, x); } return [n, minX, maxX]; };
   for (const temp of [5, 63, 100, -12]) {
-    const f = draw.renderTransit({ ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5)], s: [0], a: 0 }]), wx: { icon: 'sun', temp, word: 'PT CLOUDY' } });
-    const [n, maxX] = ink(f, 30, 63, 23, 31, draw.C.dimHead);
-    assert.ok(n > 10, `temp ${temp} drawn dark grey`);
-    assert.equal(maxX, 63, `temp ${temp} ends at x63`);
-    assert.equal(ink(f, 0, 32, 23, 31, draw.C.wxText)[0], 0, `no word at ${temp}`);
-    // The sun is one color: no lit pixel in the row is anything but the grey.
-    for (let y = 23; y <= 31; y++) for (let x = 0; x < 64; x++) {
+    const f = draw.renderTransit({ ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5)], s: [0], a: 0 }]), wx: { icon: 'pcloudy_day', temp, word: 'PT CLOUDY' } });
+    const [n, minX] = ink(f, 0, 20, 27, 31, draw.C.dimHead);
+    assert.ok(n > 6, `temp ${temp} drawn dark grey`);
+    assert.equal(minX, 0, `temp ${temp} starts at x0`);
+    assert.equal(ink(f, 25, 63, 27, 31, draw.C.dimHead)[2], 63, 'word ends at x63');
+    for (let y = 22; y <= 31; y++) for (let x = 0; x < 64; x++) {
       const c = hex(f.get(x, y));
       assert.ok(c === '#000000' || c === draw.C.dimHead, `${c} at ${x},${y}`);
     }
-  }
-  // drawIcon's mono color applies to every icon; the palette is the default.
-  const ICONS = require('./icons').ICONS;
-  for (const icon of Object.keys(ICONS)) {
-    const f = draw.renderTransit({ ...payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(5)], s: [0], a: 0 }]), wx: { icon, temp: 50 } });
-    const lit = ICONS[icon].join('').replace(/\./g, '').length;
-    assert.equal(ink(f, 0, 63, 24, 31, draw.C.dimHead)[0] >= lit, true, icon);
+    assert.equal(ink(f, 0, 63, 22, 26, draw.C.dimHead)[0], 0, 'nothing above row 27');
   }
 });

@@ -23,15 +23,17 @@ test('row positions follow the spec', () => {
   assert.deepEqual(rowTops(4, true, false, true), [9, 15, 21, 27]); // with the divider: last row ends on row 31
   assert.deepEqual(rowTops(3, true, false, true), [10, 18, 26]);
   assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);
-  assert.deepEqual(rowTops(2, true, true, true), [9, 16]);      // ends by row 20, above the weather divider
+  assert.deepEqual(rowTops(2, true, true, true), [11, 19]);     // ends by row 25, above the weather strip
+  assert.deepEqual(rowTops(3, true, true, true), [9, 15, 21]);
   // Without the header's divider line the rows move up: the gap under the
   // header text (row 5) matches the gaps between rows.
   assert.deepEqual(rowTops(2, true, false, false), [10, 19]);   // 4 px under the text, 4 between
   assert.deepEqual(rowTops(3, true, false, false), [9, 17, 25]); // gaps 3, 3, 3, 2
   assert.deepEqual(rowTops(4, true, false, false), [8, 14, 20, 26]);
   assert.deepEqual(rowTops(1, true, false, false), [16]);       // centered: 10 above, 11 below
-  assert.deepEqual(rowTops(1, true, true, false), [11]);
-  assert.deepEqual(rowTops(2, true, true, false), [8, 15]);     // gaps 2, 2, 2 above the weather divider
+  assert.deepEqual(rowTops(1, true, true, false), [14]);
+  assert.deepEqual(rowTops(2, true, true, false), [10, 18]);
+  assert.deepEqual(rowTops(3, true, true, false), [8, 14, 20]); // 2 px under the text, 1 between, 2 above the strip
   assert.deepEqual(rowTops(2, false, false, false), rowTops(2, false, false)); // no header: unchanged
 });
 
@@ -40,16 +42,25 @@ test('without the header, rows are spread evenly (equal gaps, odd pixel to the b
   assert.deepEqual(rowTops(3, false, false), [4, 13, 22]);
   assert.deepEqual(rowTops(4, false, false), [1, 9, 17, 25]);   // pinned: 3px between rows
   assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);
-  assert.deepEqual(rowTops(2, false, true), [4, 13]);
-  assert.deepEqual(rowTops(3, false, true), [1, 8, 15]);
+  assert.deepEqual(rowTops(2, false, true), [5, 15]);
+  assert.deepEqual(rowTops(3, false, true), [2, 10, 18]);
+  assert.deepEqual(rowTops(4, false, true), [1, 7, 13, 19]);
 });
 
 test('rows stay inside their area', () => {
-  for (const [n, h, w] of [[1, true, true], [2, false, true], [3, false, true], [5, false, false], [2, true, false]]) {
+  for (const [n, h, w] of [[1, true, true], [3, true, true], [2, false, true], [4, false, true], [5, false, false], [2, true, false]]) {
     const tops = rowTops(n, h, w);
-    assert.ok(tops[0] >= (h ? 9 : 0), `${n}/${h}/${w} starts at ${tops[0]}`);
-    assert.ok(tops[n - 1] + 4 <= (w ? 20 : 31), `${n}/${h}/${w} ends at ${tops[n - 1] + 4}`);
+    assert.ok(tops[0] >= (h ? 7 : 0), `${n}/${h}/${w} starts at ${tops[0]}`);
+    assert.ok(tops[n - 1] + 4 <= (w ? 25 : 31), `${n}/${h}/${w} ends at ${tops[n - 1] + 4}`);
   }
+});
+
+test('key layout: rows between the key and the band, 1 px apart from three rows up', () => {
+  assert.deepEqual(rowTops(3, true, false, false, true), [8, 14, 20]);   // 2 under the key, 1, 1, 2 above the band
+  assert.deepEqual(rowTops(2, true, false, false, true), [10, 18]);
+  assert.deepEqual(rowTops(1, true, false, false, true), [14]);
+  assert.deepEqual(rowTops(4, false, false, false, true), [7, 13, 19, 25]); // band hidden: to the bottom edge
+  assert.deepEqual(rowTops(3, true, false, true, true), [8, 14, 20]);    // the header divider doesn't apply
 });
 
 test('clock is 12-hour Chicago time without AM/PM', () => {
@@ -75,19 +86,22 @@ test('transit: header without a band, line blocks, amber and grey times', () => 
   assert.ok(!colors.has(C.amber));
 });
 
-test('transit: alert blink swaps the block for a 1px "!"', () => {
+test('transit: an alerted line shows a "!" over its block at 20%, without blinking', () => {
   const p = payload('belmont-2026-10-03-2316.json', {}, { alerts: new Set(['BR']) });
-  const solid = render(p);
-  const bang = render(p, { blink: true });
-  // Kimball is row 3. Solid block lights column 0; the "!" only column 1.
+  const a = render(p);
+  const b = render(p, { blink: true });
+  assert.deepEqual([...a.px], [...b.px]);          // static
+  // Kimball is row 3: the dim block in columns 0 and 2, the "!" in column 1.
   const tops = rowTops(4, true, false);
   const k = tops[2];
-  assert.equal(hex(solid.get(0, k)), LINE.BR);
-  assert.equal(hex(bang.get(0, k)), '#000000');
-  assert.equal(hex(bang.get(1, k)), LINE.BR);
-  assert.equal(hex(bang.get(1, k + 3)), '#000000'); // the gap in the "!"
+  const dim = '#140b05';                           // #62361b at 20%
+  assert.equal(hex(a.get(0, k)), dim);
+  assert.equal(hex(a.get(2, k + 4)), dim);
+  assert.equal(hex(a.get(1, k)), LINE.BR);
+  assert.equal(hex(a.get(1, k + 3)), dim);         // the gap in the "!"
+  assert.equal(hex(a.get(1, k + 4)), LINE.BR);
   // Red rows are unaffected.
-  assert.equal(hex(bang.get(0, tops[0])), LINE.RD);
+  assert.equal(hex(a.get(0, tops[0])), LINE.RD);
 });
 
 test('no rows -> overnight clock instead of the header', () => {
@@ -146,13 +160,30 @@ test('brightness scales every pixel', () => {
   assert.ok(off.px.every((v) => v === 0));
 });
 
-test('weather row: icon, temperature, warning tag', () => {
-  const p = payload('morse-2026-10-03-2316.json', { showWeather: true }, {
-    p: { wx: { icon: 'storm', temp: 54, word: 'STORMS' }, warn: { kind: 'tor', lvl: 'warning' } },
-  });
+test('weather strip: temperature left, condition right; a warning tag replaces the condition', () => {
+  const colors = (f, x0, x1) => { const c = new Set(); for (let y = 27; y < 32; y++) for (let x = x0; x <= x1; x++) c.add(hex(f.get(x, y))); return c; };
+  const wx = { icon: 'storm', temp: 54, word: 'STORMS' };
+  const plain = render(payload('morse-2026-10-03-2316.json', { showWeather: true }, { p: { wx } }));
+  assert.ok(colors(plain, 0, 10).has(C.dimHead));
+  assert.ok(colors(plain, 40, 63).has(C.dimHead));
+  for (let x = 0; x < 64; x++) assert.equal(hex(plain.get(x, 26)), '#000000'); // no divider
+  const warned = render(payload('morse-2026-10-03-2316.json', { showWeather: true }, { p: { wx, warn: { kind: 'tor', lvl: 'warning' } } }));
+  assert.ok(colors(warned, 0, 10).has(C.dimHead));  // the temperature stays
+  assert.ok(colors(warned, 30, 63).has(C.warnTornado));
+  assert.ok(!colors(warned, 30, 63).has(C.dimHead));
+});
+
+test('key layout: key on rows 1-5, station and clock on the band, no header on top', () => {
+  const p = { ...payload('morse-2026-10-03-2316.json'), key: 1 };
   const f = render(p);
-  assert.equal(hex(f.get(10, 22)), C.divider);
-  const right = new Set();
-  for (let y = 26; y < 31; y++) for (let x = 30; x < 64; x++) right.add(hex(f.get(x, y)));
-  assert.ok(right.has(C.warnTornado));
+  const top = new Set(), band = new Set();
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 64; x++) top.add(hex(f.get(x, y)));
+  for (let y = 27; y < 32; y++) for (let x = 0; x < 64; x++) band.add(hex(f.get(x, y)));
+  assert.deepEqual([...top].sort(), ['#000000', C.dimHead].sort());
+  assert.ok(band.has(C.band) && band.has(C.head));
+  assert.equal(hex(f.get(0, 10)), LINE.RD);        // two rows: 10 and 18
+  assert.equal(hex(f.get(0, 18)), LINE.RD);
+  // Band hidden (header null): no band, the key stays.
+  const g = render({ ...p, header: null });
+  assert.equal(hex(g.get(0, 31)), '#000000');
 });

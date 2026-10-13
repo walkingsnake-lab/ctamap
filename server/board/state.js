@@ -26,6 +26,7 @@ const ALERT_JUMPS = ['off', 'warning', 'all']; // jump to weather: never, NWS wa
 const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
+const TRANSIT_LAYOUTS = ['header', 'key'];
 const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame time, current time, how long ago the frame is, or nothing
 const WX_VIEWS = ['now', '5day', 'hourly'];  // weather screen without rain: conditions, 5-day, or hourly
 const TEMP_UNITS = ['F', 'C'];  // temperatures on every weather display
@@ -70,9 +71,13 @@ function defaultBoard(stations) {
     rows: [],
     showHeader: true,
     showWeather: true,
-    // Transit divider lines: under the header (row 7) and above the weather row (row 22).
+    // Transit divider line under the header (row 7). (wxDivider, the line
+    // above the old weather row, is still accepted but no longer drawn.)
     headerDivider: false,
     wxDivider: true,
+    // Transit layout: 'header' (station and clock on top) or 'key' (a
+    // "trains to / min" key on top, station and clock on a band at the bottom).
+    transitLayout: 'header',
     screen: 'auto',
     bright: 'auto',
     // Auto: the main screens (both: alternate every autoEvery s).
@@ -239,11 +244,12 @@ function validatePatch(patch, stations) {
       case 'alertJump':
       case 'bbPriority':
       case 'lineNames':
+      case 'transitLayout':
       case 'radarClock':
       case 'wxView':
       case 'tempUnit':
       case 'wxRain': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS }[key];
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;

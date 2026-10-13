@@ -104,9 +104,11 @@
   // Arrivals stay listed until 30 s past their time (contract countdown rules).
   const DROP_GRACE = 30;
 
-  // Max transit rows for the header/weather toggles (design spec §5).
-  function maxRows(hasHeader, hasWeather) {
-    return (hasHeader ? 4 : 5) - (hasWeather ? 2 : 0);
+  // Max transit rows for the header/weather/key toggles (design spec §5).
+  // Each takes one row: the header (or, with the key, the station band at
+  // the bottom), the weather strip, the key.
+  function maxRows(hasHeader, hasWeather, hasKey = false) {
+    return 5 - (hasHeader ? 1 : 0) - (hasWeather ? 1 : 0) - (hasKey ? 1 : 0);
   }
 
   // Row tops for n transit rows. Without the header, rows are spread evenly
@@ -117,7 +119,10 @@
   // below are tuned around that line; without it the header text ends on
   // row 5, so the rows move up to keep the gap under the header even with
   // the gaps between rows (2 px for one or two rows without weather, else 1).
-  function rowTops(n, hasHeader, hasWeather, divider = false) {
+  // key: the key layout (KEY_ROWS): the key on rows 1-5 and, with
+  // hasHeader, the station band on rows 27-31.
+  function rowTops(n, hasHeader, hasWeather, divider = false, key = false) {
+    if (key) return keyRowTops(n, hasHeader);
     // Two rows under the header: 4 px above, between, and below the rows
     // (from the text, or from the line), the rest of the space at the bottom.
     if (hasHeader && !hasWeather && n === 2) return divider ? [12, 21] : [10, 19];
@@ -127,11 +132,24 @@
     return tops.map((t) => t - shift);
   }
 
+  // Key layout: rows between the key (ink rows 1-5) and the band (27) or
+  // the bottom edge, at the preferred pitch (1px between rows from three
+  // rows up), centered, the odd pixel going below.
+  function keyRowTops(n, band) {
+    if (n === 0) return [];
+    const areaTop = 6, areaBottom = band ? 26 : 31;
+    const areaH = areaBottom - areaTop + 1;
+    const preferred = { 2: 8, 3: 6, 4: 6 };
+    const pitch = n === 1 ? 0 : Math.min(preferred[n] || 6, Math.floor((areaH - 5) / (n - 1)));
+    const top = areaTop + Math.max(0, Math.floor((areaH - ((n - 1) * pitch + 5)) / 2));
+    return Array.from({ length: n }, (_, i) => top + i * pitch);
+  }
+
   function rowTopsBase(n, hasHeader, hasWeather) {
     if (n === 0) return [];
     if (!hasHeader) {
       if (!hasWeather && n === 4) return [1, 9, 17, 25];   // pinned: 3px between rows
-      const areaH = hasWeather ? 22 : 32;   // rows 0-21 (divider on 22) or 0-31
+      const areaH = hasWeather ? 26 : 32;   // rows 0-25 (strip on 27-31) or 0-31
       const gap = Math.max(1, Math.round((areaH - 5 * n) / (n + 1)));
       const top = Math.floor((areaH - 5 * n - (n - 1) * gap) / 2);
       return Array.from({ length: n }, (_, i) => top + i * (5 + gap));
@@ -140,7 +158,7 @@
     if (hasHeader && !hasWeather && n === 3) return [10, 18, 26];
     if (hasHeader && !hasWeather && n === 2) return [13, 23];
     const areaTop = 9;
-    const areaBottom = hasWeather ? 20 : 31;
+    const areaBottom = hasWeather ? 25 : 31;
     const areaH = areaBottom - areaTop + 1;
     const preferred = { 2: 8, 3: 8, 4: 6, 5: 6 };
     const pitch = n === 1 ? 0 : Math.min(preferred[n], Math.floor((areaH - 5) / (n - 1)));
@@ -188,7 +206,7 @@
     const C = {
       label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
       sch: '#6a6a6a', schDim: '#2e2e2e', grey: '#8f8f8f', divider: '#333333',
-      head: '#808080', dimHead: '#555555', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
+      head: '#808080', dimHead: '#555555', band: '#141414', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
 
@@ -299,27 +317,37 @@
       blinks: warn.kind === 'tor' && warn.lvl === 'warning',
     });
 
-    // Weather row: icon and temperature on the right as on the forecast
-    // screens' top bar (8x8 icon, 2px gap, 5x7 digits, small degree sign, its
-    // ink ending at x63); a watch/warning tag on the left from x0. No
-    // condition word. Icon and temperature are both the transit header's dark
-    // grey (mono icon) so the train rows lead; the tag keeps its colors.
-    function drawWeather(f, wx, warn, blink, divider = true) {
-      if (divider) f.fill(0, 22, 64, 1, C.divider);
-      const base = 31;
-      const temp = String(wx.temp);
-      const tx = 62 - measure('5x7', temp) - 1;
-      const iconX = tx - 10;
-      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, iconX, 24, C.dimHead);
-      f.text('small', '°', f.text('5x7', temp, tx, base, C.dimHead), base - 1, C.dimHead);
+    // Weather strip: one Tom Thumb line on rows 27-31 (no divider), in the
+    // transit header's dark grey so the train rows lead: the temperature on
+    // the left, the condition word on the right. A watch or warning replaces
+    // the word with its tag (glyph + WATCH/WARNING, in its colors); the
+    // temperature stays.
+    function drawWeather(f, wx, warn, blink) {
+      const base = 32;
+      f.text('small', `${wx.temp}°`, 0, base, C.dimHead);
       if (warn) {
         const { glyph, color, blinks } = warnStyle(warn);
+        if (blinks && blink) return;
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
-        if (!(blinks && blink)) {
-          const x = f.text('small', glyph, 0, base, color);
-          f.text('small', word, x + TAG_GAP - 1, base, color);
-        }
+        const x = 63 - (measure('small', glyph) + TAG_GAP + measure('small', word)) + 1;
+        f.text('small', word, f.text('small', glyph, x, base, color) + TAG_GAP - 1, base, color);
+      } else if (wx.word) {
+        rtext(f, 'small', wx.word, 63, base, C.dimHead);
       }
+    }
+
+    // Key layout (transitLayout 'key'): a lowercase key over the columns on
+    // rows 1-5 ("trains to" from x0, over the color blocks; "min" flush
+    // right), and the station name and clock on a dark band on rows 27-31
+    // (`band`: the header, null when it's hidden to fit the rows).
+    function drawKey(f) {
+      f.text('small', 'trains to', 0, 6, C.dimHead);
+      rtext(f, 'small', 'min', 63, 6, C.dimHead);
+    }
+    function drawBand(f, name, now, clock) {
+      f.fill(0, 27, 64, 5, C.band);
+      f.text('small', name, 0, 32, C.head);
+      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', 63), 32, C.head);
     }
 
     // One time cell, right-aligned at `right`, optionally mid-roll from
@@ -375,13 +403,13 @@
     function buildTransitView(p, now) {
       if (p.view === 'chrono') return buildChronoView(p, now);
       const rows = liveRows(p, now);
-      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider);
+      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
       return {
         now,
         mode: 'dest',
         header: p.header,
         hdiv: !!p.headerDivider,
-        wdiv: p.wxDivider !== false,
+        key: !!p.key,
         clock: p.hclock !== false,
         lnc: !!p.lnc,
         wx: p.wx,
@@ -399,8 +427,8 @@
     function buildChronoView(p, now) {
       // Sorted here too, by time (stable): the order must hold however the
       // payload arrives.
-      const rows = liveRows(p, now).sort((a, b) => a.t[0] - b.t[0]).slice(0, maxRows(!!p.header, !!p.wx));
-      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider);
+      const rows = liveRows(p, now).sort((a, b) => a.t[0] - b.t[0]).slice(0, maxRows(!!p.header, !!p.wx, !!p.key));
+      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
       const seenDest = new Set();
       const seenKey = new Set();
       return {
@@ -409,7 +437,7 @@
         pitch: tops.length > 1 ? tops[1] - tops[0] : 6,
         header: p.header,
         hdiv: !!p.headerDivider,
-        wdiv: p.wxDivider !== false,
+        key: !!p.key,
         clock: p.hclock !== false,
         lnc: !!p.lnc,
         wx: p.wx,
@@ -442,8 +470,12 @@
     // Chronological rows: digit in columns 0-2, the 3px line-color block at
     // CHRONO_BLOCK_X (1px gap), the label 2px after it.
     const CHRONO_BLOCK_X = 4, CHRONO_LABEL_X = 9;
+    // A line with a major alert: its block at ALERT_DIM of the line color
+    // with the "!" (ALERT_BANG) over it in the full color. Static.
+    const ALERT_DIM = 0.2;
+    const LINE_ALERT = Object.fromEntries(Object.entries(LINE).map(([k, c]) => [k, scaleColor(c, ALERT_DIM)]));
     // lnc: labels in the line's color instead of white.
-    function drawViewRow(f, row, blink, lnc) {
+    function drawViewRow(f, row, lnc) {
       const top = Math.round(row.top);
       const chrono = row.num != null;
       const line = fade(LINE[row.ln], row.alpha);
@@ -451,7 +483,8 @@
       // exact color, before the block.
       if (chrono) drawTimeCell(f, String(row.num), 2, top, line, row.numRoll);
       const bx = chrono ? CHRONO_BLOCK_X : 0;
-      if (row.a && blink) {
+      if (row.a) {
+        f.fill(bx, top, 3, 5, fade(LINE_ALERT[row.ln], row.alpha));
         icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(bx + i, top + j, 1, 1, line); }));
       } else {
         f.fill(bx, top, 3, 5, line);
@@ -468,7 +501,7 @@
       const clock = clockText(now);
       const nt = p.stale ? 'NO DATA' : 'NO TRAINS';
       const blockH = 10 + 3 + 5; // 10px digits, gap, label
-      const areaH = p.wx ? 22 : 32;
+      const areaH = p.wx ? 26 : 32;
       const top = Math.floor((areaH - blockH) / 2);
       f.text('clock', clock, Math.floor((64 - measure('clock', clock)) / 2), top + 10, C.clock);
       f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), top + 18, C.noTrains);
@@ -484,12 +517,19 @@
       if (!view.rows.length) {
         drawOvernight(f, view, view.now);
       } else {
-        if (view.header) drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false, C.dimHead);
-        f.withClip(0, view.header ? 7 : 0, 63, view.wx ? 21 : 31, () => {
-          for (const row of view.rows) drawViewRow(f, row, blink, view.lnc);
+        if (view.key) {
+          drawKey(f);
+          if (view.header) drawBand(f, view.header, view.now, view.clock !== false);
+        } else if (view.header) {
+          drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false, C.dimHead);
+        }
+        const clipTop = view.key ? 6 : view.header ? 7 : 0;
+        const clipBottom = view.key && view.header ? 26 : view.wx ? 25 : 31;
+        f.withClip(0, clipTop, 63, clipBottom, () => {
+          for (const row of view.rows) drawViewRow(f, row, view.lnc);
         });
       }
-      if (view.wx) drawWeather(f, view.wx, view.warn, blink, view.wdiv !== false);
+      if (view.wx) drawWeather(f, view.wx, view.warn, blink);
     }
 
     // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}}),
@@ -640,7 +680,7 @@
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, mode: target.mode, header: target.header, hdiv: target.hdiv, wdiv: target.wdiv, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
+          const view = { now, mode: target.mode, header: target.header, hdiv: target.hdiv, key: target.key, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;

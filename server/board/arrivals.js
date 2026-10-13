@@ -33,21 +33,27 @@ const CHRONO_HOLD = 0;
 // Chrono labels are fitted against the widest single time ("99m" or "DUE").
 const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
 
-// The header and weather row are the most the board shows. When the live
-// destinations don't fit as rows, the weather row goes first, then the
-// header, so up to 5 destinations stay as rows. Past 5 the board lists one
-// train per row (chooseView): the header comes back (if it's on), the
-// weather row stays off. Re-evaluated on every update, so a station like
-// Merchandise Mart gains and loses the weather row as rush-only Purple
-// service comes and goes. Returns the bars to show and which were hidden.
-function fitBars(n, showHeader, showWeather) {
+// The header, weather strip, and key are the most the board shows. When the
+// live destinations don't fit as rows, the weather strip goes first, then
+// the header (in the key layout, the station band), then the key, so up to 5
+// destinations stay as rows. Past 5 the board lists one train per row
+// (chooseView): the header (or the key) comes back if it's on, the weather
+// strip and the band stay off. Re-evaluated on every update, so a station
+// like Merchandise Mart gains and loses the weather strip as rush-only
+// Purple service comes and goes. Returns the bars to show and which were
+// hidden.
+function fitBars(n, showHeader, showWeather, showKey = false) {
   const hidden = [];
-  let h = showHeader, w = showWeather;
-  if (n > maxRows(h, w)) {
+  let h = showHeader, w = showWeather, k = showKey;
+  if (n > maxRows(h, w, k)) {
     if (w) { w = false; hidden.push('weather'); }
-    if (n > maxRows(h, w) && n <= maxRows(false, false) && h) { h = false; hidden.push('header'); }
+    if (k) {
+      // Key layout: the band goes before the key; past 5 the key stays.
+      if (n > maxRows(h, w, k) && h) { h = false; hidden.push('header'); }
+      if (n > maxRows(h, w, k) && n <= maxRows(false, false, false)) { k = false; hidden.push('key'); }
+    } else if (n > maxRows(h, w) && n <= maxRows(false, false) && h) { h = false; hidden.push('header'); }
   }
-  return { showHeader: h, showWeather: w, hidden };
+  return { showHeader: h, showWeather: w, showKey: k, hidden };
 }
 
 // Destination rows, or the chronological list when they don't fit.
@@ -59,12 +65,10 @@ function chooseView(destCount, max, prev, now, hold = CHRONO_HOLD) {
   return now - fitSince >= hold ? { view: 'dest', fitSince: null } : { view: 'chrono', fitSince };
 }
 
-// Max transit rows by header/weather toggles (design spec §5 table).
-function maxRows(showHeader, showWeather) {
-  if (showHeader && showWeather) return 2;
-  if (showWeather) return 3;
-  if (showHeader) return 4;
-  return 5;
+// Max transit rows by header/weather/key toggles (design spec §5 table):
+// each takes one row.
+function maxRows(showHeader, showWeather, showKey = false) {
+  return 5 - (showHeader ? 1 : 0) - (showWeather ? 1 : 0) - (showKey ? 1 : 0);
 }
 
 // What the board will draw for a time (contract countdown rules: minutes
@@ -139,7 +143,7 @@ function latchDue(prev, next, now) {
   });
 }
 
-// cfg: the board's state (rows filter, showHeader, showWeather).
+// cfg: the board's state (rows filter, showHeader, showWeather, showKey).
 // alerts: Set of line codes with an active service alert.
 // prevView: this board's last view state (see chooseView); the new one is
 // returned as viewState for the caller to keep.
@@ -169,9 +173,9 @@ function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}
   }
   const shownKeys = new Set(ordered.map((g) => g.key));
   const bars = cfg.autoFit === false
-    ? { showHeader: cfg.showHeader, showWeather: cfg.showWeather, hidden: [] }
-    : fitBars(ordered.length, cfg.showHeader, cfg.showWeather);
-  const max = maxRows(bars.showHeader, bars.showWeather);
+    ? { showHeader: cfg.showHeader, showWeather: cfg.showWeather, showKey: !!cfg.showKey, hidden: [] }
+    : fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
+  const max = maxRows(bars.showHeader, bars.showWeather, bars.showKey);
   const viewState = chooseView(ordered.length, max, prevView, now);
   const shown = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
 

@@ -46,6 +46,7 @@ class Server:
         self.wifi = ['ok']
         self.visit = None
         self.alert = 0
+        self.tornado = 0  # a tornado warning on the weather strip (the one thing that blinks)
         self.layout = 'classic'
         self.latency = lambda: LATENCY
         self.rows_fn = None  # fn(now) -> rows, replacing the default trains
@@ -84,7 +85,8 @@ class Server:
             'ticker': [{'ln': r['ln'], 'd': r['lbl'].title(), 't': t, 's': 0, 'a': 0} for r in rows for t in r['t']] if self.rows_fn else
                       [{'ln': 'RD', 'd': 'Howard', 't': t, 's': 0, 'a': 0} for t in rows[0]['t']] +
                       [{'ln': 'RD', 'd': '95th', 't': t, 's': 0, 'a': 0} for t in rows[1]['t']],
-            'wx': None, 'warn': None,
+            'wx': {'icon': 'storm', 'temp': 70, 'word': 'STORMS'} if self.tornado else None,
+            'warn': {'kind': 'tor', 'lvl': 'warning'} if self.tornado else None,
             'radar': {'on': self.radar_on, 'visit': self.visit, 'frames': frames, 'ft': [T0] * len(frames), 'timeBox': [40, 0, 24, 22], 'split': False},
             'mlb': {'layout': self.layout, 'games': self.games(now) if self.games else [{
                 'id': 1, 'st': 'live', 'start': now - 3600, 'inn': 3, 'half': 'T', 'b': 0, 's': 0, 'o': 0, 'on': [0, 0, 0],
@@ -528,9 +530,16 @@ class TestBoardLoop(unittest.TestCase):
         self.assertEqual(names.count('update-boot'), 1)  # only the real boot resets overrides
         self.assertTrue(board.player.p)
 
-    def test_fetches_start_as_the_alert_blink_turns_on(self):
+    def test_line_alerts_dont_blink(self):
         board, server, clock, _, _, _ = make()
         server.alert = 1
+        board.connect()
+        run_for(board, clock, 40000)
+        self.assertFalse(board.player.blinking())
+
+    def test_fetches_start_as_the_alert_blink_turns_on(self):
+        board, server, clock, _, _, _ = make()
+        server.tornado = 1
         board.connect()
         run_for(board, clock, 5 * 60 * 1000)
         fetches = [c for c in server.calls[1:] if 'phase' in c]
@@ -544,7 +553,7 @@ class TestBoardLoop(unittest.TestCase):
 
     def test_blink_restarts_off_after_a_fetch(self):
         board, server, clock, _, _, _ = make()
-        server.alert = 1
+        server.tornado = 1
         board.connect()
         run_for(board, clock, 40000)
         p = board.player

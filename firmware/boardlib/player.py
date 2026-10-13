@@ -259,7 +259,8 @@ class Player:
         tornado = w.get('kind') == 'tor' and w.get('lvl') == 'warning'
         if self.screen == 'weather':
             return tornado
-        return any(r.get('a') for r in self.p.get('rows') or []) or bool(tornado and self.p.get('wx'))
+        # Line alerts are static; only the weather strip's tornado tag blinks.
+        return bool(tornado and self.p.get('wx'))
 
     def at_blink_start(self, ms):
         """True in the first moments of an 'on' phase (or when nothing blinks)."""

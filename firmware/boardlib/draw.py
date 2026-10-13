@@ -143,13 +143,15 @@ def chrono_text(t, now, due=True):
 DROP_GRACE = 30
 
 
-def max_rows(has_header, has_weather):
-    return (4 if has_header else 5) - (2 if has_weather else 0)
+def max_rows(has_header, has_weather, has_key=False):
+    return 5 - (1 if has_header else 0) - (1 if has_weather else 0) - (1 if has_key else 0)
 
 
-def row_tops(n, has_header, has_weather, divider=False):
+def row_tops(n, has_header, has_weather, divider=False, key=False):
     """Mirrors rowTops in draw.js: without the header's divider line, the
     header layouts move up so the gap under the header matches the rest."""
+    if key:
+        return _key_row_tops(n, has_header)
     if has_header and not has_weather and n == 2:
         return [12, 21] if divider else [10, 19]
     tops = _row_tops_base(n, has_header, has_weather)
@@ -159,13 +161,27 @@ def row_tops(n, has_header, has_weather, divider=False):
     return [t - shift for t in tops]
 
 
+_KEY_PITCH = {2: 8, 3: 6, 4: 6}
+
+
+def _key_row_tops(n, band):
+    # Mirrors keyRowTops in draw.js.
+    if n == 0:
+        return []
+    area_top = 6
+    area_h = (26 if band else 31) - area_top + 1
+    pitch = 0 if n == 1 else min(_KEY_PITCH.get(n, 6), (area_h - 5) // (n - 1))
+    top = area_top + max(0, (area_h - ((n - 1) * pitch + 5)) // 2)
+    return [top + i * pitch for i in range(n)]
+
+
 def _row_tops_base(n, has_header, has_weather):
     if n == 0:
         return []
     if not has_header:
         if not has_weather and n == 4:
             return [1, 9, 17, 25]
-        area_h = 22 if has_weather else 32
+        area_h = 26 if has_weather else 32
         gap = max(1, jsround((area_h - 5 * n) / (n + 1)))
         top = (area_h - 5 * n - (n - 1) * gap) // 2
         return [top + i * (5 + gap) for i in range(n)]
@@ -176,7 +192,7 @@ def _row_tops_base(n, has_header, has_weather):
     if has_header and not has_weather and n == 2:
         return [13, 23]
     area_top = 9
-    area_bottom = 20 if has_weather else 31
+    area_bottom = 25 if has_weather else 31
     area_h = area_bottom - area_top + 1
     preferred = {2: 8, 3: 8, 4: 6, 5: 6}
     pitch = 0 if n == 1 else min(preferred[n], (area_h - 5) // (n - 1))
@@ -247,7 +263,7 @@ LINE = {
 C = {
     'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'radarSub': hexc('#666666'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
     'sch': hexc('#6a6a6a'), 'schDim': hexc('#2e2e2e'), 'grey': hexc('#8f8f8f'),
-    'divider': hexc('#333333'), 'head': hexc('#808080'), 'dimHead': hexc('#555555'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
+    'divider': hexc('#333333'), 'head': hexc('#808080'), 'dimHead': hexc('#555555'), 'band': hexc('#141414'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
     'noTrains': hexc('#6c6c6c'), 'indicator': hexc('#3a3a3a'),
 }
@@ -496,26 +512,36 @@ def warn_style(warn):
     return glyph, color, warn['kind'] == 'tor' and warn['lvl'] == 'warning'
 
 
-# Weather row: mono icon and 5x7 temperature in the transit header's dark
-# grey on the right (ink ends at x63), a watch/warning tag on the left; no
-# condition word. Mirrors
-# drawWeather() in draw.js.
-def draw_weather(f, wx, warn, blink=False, divider=True):
-    if divider:
-        f.fill(0, 22, 64, 1, C['divider'])
-    base = 31
-    temp = str(wx['temp'])
-    tx = 62 - measure('5x7', temp) - 1
-    icon_x = tx - 10
-    if wx.get('icon') in assets.ICONS:
-        draw_icon(f, wx['icon'], icon_x, 24, C['dimHead'])
-    f.text('small', '°', f.text('5x7', temp, tx, base, C['dimHead']), base - 1, C['dimHead'])
+# Weather strip: one Tom Thumb line on rows 27-31, temperature left and
+# condition word right in the transit header's dark grey; a watch/warning
+# tag replaces the word. Mirrors drawWeather() in draw.js.
+def draw_weather(f, wx, warn, blink=False):
+    base = 32
+    f.text('small', str(wx['temp']) + '°', 0, base, C['dimHead'])
     if warn:
         glyph, color, blinks = warn_style(warn)
+        if blinks and blink:
+            return
         word = 'WARNING' if warn['lvl'] == 'warning' else 'WATCH'
-        if not (blinks and blink):
-            x = f.text('small', glyph, 0, base, color)
-            f.text('small', word, x + TAG_GAP - 1, base, color)
+        x = 63 - (measure('small', glyph) + TAG_GAP + measure('small', word)) + 1
+        f.text('small', word, f.text('small', glyph, x, base, color) + TAG_GAP - 1, base, color)
+    elif wx.get('word'):
+        rtext(f, 'small', wx['word'], 63, base, C['dimHead'])
+
+
+# Key layout: the key on rows 1-5, the station and clock on a dark band on
+# rows 27-31. Mirrors drawKey() / drawBand() in draw.js.
+def draw_key(f):
+    f.text('small', 'trains to', 0, 6, C['dimHead'])
+    rtext(f, 'small', 'min', 63, 6, C['dimHead'])
+
+
+def draw_band(f, name, now, tzo, clock=True):
+    f.fill(0, 27, 64, 5, C['band'])
+    f.text('small', name, 0, 32, C['head'])
+    if clock:
+        ck = clock_text(now, tzo)
+        roll_text(f, 'small', ck, 63, 32, C['head'], take_roll('hdr.clock', ck))
 
 
 def _is_num(s):
@@ -588,10 +614,10 @@ def build_transit_view(p, now):
     if p.get('view') == 'chrono':
         return build_chrono_view(p, now)
     rows = live_rows(p, now)
-    tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')), p.get('headerDivider') is True)
+    tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')), p.get('headerDivider') is True, bool(p.get('key')))
     return {
         'now': now, 'mode': 'dest', 'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'),
-        'hdiv': p.get('headerDivider') is True, 'wdiv': p.get('wxDivider') is not False,
+        'hdiv': p.get('headerDivider') is True, 'key': bool(p.get('key')),
         'clock': p.get('hclock') is not False, 'lnc': p.get('lnc') is True,
         'stale': p.get('stale'), 'tzo': p.get('tzo', 0),
         'rows': [{'key': r['ln'] + ':' + r['lbl'], 'ln': r['ln'], 'lbl': r['lbl'], 'a': r.get('a'),
@@ -606,8 +632,8 @@ def _first_t(r):
 
 def build_chrono_view(p, now):
     # Sorted here too, by time (stable). Mirrors buildChronoView in draw.js.
-    rows = sorted(live_rows(p, now), key=_first_t)[:max_rows(bool(p.get('header')), bool(p.get('wx')))]
-    tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')), p.get('headerDivider') is True)
+    rows = sorted(live_rows(p, now), key=_first_t)[:max_rows(bool(p.get('header')), bool(p.get('wx')), bool(p.get('key')))]
+    tops = row_tops(len(rows), bool(p.get('header')), bool(p.get('wx')), p.get('headerDivider') is True, bool(p.get('key')))
     out = []
     seen_dest = set()
     seen_key = set()
@@ -631,7 +657,7 @@ def build_chrono_view(p, now):
     return {
         'now': now, 'mode': 'chrono', 'pitch': (tops[1] - tops[0]) if len(tops) > 1 else 6,
         'header': p.get('header'), 'wx': p.get('wx'), 'warn': p.get('warn'), 'stale': p.get('stale'),
-        'hdiv': p.get('headerDivider') is True, 'wdiv': p.get('wxDivider') is not False,
+        'hdiv': p.get('headerDivider') is True, 'key': bool(p.get('key')),
         'clock': p.get('hclock') is not False, 'lnc': p.get('lnc') is True,
         'tzo': p.get('tzo', 0), 'rows': out,
     }
@@ -643,14 +669,23 @@ CHRONO_BLOCK_X = 4
 CHRONO_LABEL_X = 9
 
 
-def draw_view_row(f, row, blink, lnc=False):
+# A line with a major alert: its block at ALERT_DIM of the line color, the
+# "!" over it in the full color. Static. Mirrors LINE_ALERT in draw.js.
+ALERT_DIM = 0.2
+LINE_ALERT = {}
+for _k in LINE:
+    LINE_ALERT[_k] = scale_color(LINE[_k], ALERT_DIM)
+
+
+def draw_view_row(f, row, lnc=False):
     top = jsround(row['top'])
     chrono = row.get('num') is not None
     line = fade(LINE[row['ln']], row['alpha'])
     if chrono:
         draw_time_cell(f, str(row['num']), 2, top, fade(LINE[row['ln']], row['alpha']), row.get('numRoll'))
     bx = CHRONO_BLOCK_X if chrono else 0
-    if row.get('a') and blink:
+    if row.get('a'):
+        f.fill(bx, top, 3, 5, fade(LINE_ALERT[row['ln']], row['alpha']))
         for j, r in enumerate(assets.ALERT_BANG):
             for i, c in enumerate(r):
                 if c == '#':
@@ -669,7 +704,7 @@ def draw_overnight(f, view, now):
     clock = clock_text(now, view.get('tzo', 0))
     nt = 'NO DATA' if view.get('stale') else 'NO TRAINS'
     block_h = 10 + 3 + 5
-    area_h = 22 if view.get('wx') else 32
+    area_h = 26 if view.get('wx') else 32
     top = (area_h - block_h) // 2
     f.text('clock', clock, (64 - measure('clock', clock)) // 2, top + 10, C['clock'])
     f.text('small', nt, (64 - measure('small', nt)) // 2, top + 18, C['noTrains'])
@@ -684,16 +719,23 @@ def draw_transit_view(f, view, blink):
     if not view['rows']:
         draw_overnight(f, view, view['now'])
     else:
-        if view.get('header'):
+        key = view.get('key')
+        if key:
+            draw_key(f)
+            if view.get('header'):
+                draw_band(f, view['header'], view['now'], view.get('tzo', 0), view.get('clock') is not False)
+        elif view.get('header'):
             draw_header(f, view['header'], view['now'], view.get('tzo', 0), view.get('hdiv') is True, view.get('clock') is not False, C['dimHead'])
-        f.push_clip(0, 7 if view.get('header') else 0, 63, 21 if view.get('wx') else 31)
+        clip_top = 6 if key else (7 if view.get('header') else 0)
+        clip_bottom = 26 if (key and view.get('header')) else (25 if view.get('wx') else 31)
+        f.push_clip(0, clip_top, 63, clip_bottom)
         try:
             for row in view['rows']:
-                draw_view_row(f, row, blink, view.get('lnc') is True)
+                draw_view_row(f, row, view.get('lnc') is True)
         finally:
             f.pop_clip()
     if view.get('wx'):
-        draw_weather(f, view['wx'], view.get('warn'), blink, view.get('wdiv') is not False)
+        draw_weather(f, view['wx'], view.get('warn'), blink)
 
 
 def render_transit(p, f, now=None, blink=False, view=None):
@@ -880,7 +922,7 @@ class TransitAnimator:
             self._match_cells(st, r['cells'], t, is_new_row)
 
         view = {'now': now, 'mode': target['mode'], 'header': target.get('header'), 'wx': target.get('wx'),
-                'hdiv': target.get('hdiv'), 'wdiv': target.get('wdiv'),
+                'hdiv': target.get('hdiv'), 'key': target.get('key'),
                 'clock': target.get('clock') is not False, 'lnc': target.get('lnc') is True,
                 'warn': target.get('warn'), 'stale': target.get('stale'), 'tzo': target.get('tzo', 0), 'rows': []}
         if not target['rows'] and not any(st.get('leaving') for st in self.rows.values()):
