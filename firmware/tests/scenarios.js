@@ -19,8 +19,9 @@ function payloadFrom(name, header, cfg = {}) {
   const json = fixture(name);
   const now = parseCtaTime(json.ctatt.tmst);
   const showWeather = !!cfg.wx;
-  const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather }, { now, alerts: new Set(cfg.alerts || []) });
-  return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: cfg.bright != null ? cfg.bright : 100, header, view: r.view, rows: r.rows, ticker: r.ticker, wx: cfg.wx || null, warn: cfg.warn || null };
+  const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather, showKey: !!cfg.key }, { now, alerts: new Set(cfg.alerts || []) });
+  const key = r.bars.showKey ? { key: 1 } : {};
+  return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: cfg.bright != null ? cfg.bright : 100, header: r.bars.showHeader ? header : null, ...key, view: r.view, rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx || null : null, warn: cfg.warn || null };
 }
 
 const hexOf = (f) => Buffer.from(f.px).toString('base64');
@@ -72,15 +73,24 @@ async function build() {
   add('options: no header clock (chrono)', { ...cl, hclock: false }, [{ screen: 'transit' }, { screen: 'ticker' }]);
   add('chrono clark/lake weather + warning', payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { wx: WX, warn: { kind: 'svr', lvl: 'warning' } }), [{ screen: 'transit' }]);
   // 50%: every odd channel value lands on .5, where JS and Python rounding differ.
-  // Divider toggles: header line on, weather line off (dest and chrono views).
+  // Header divider line (dest and chrono views).
   for (const [name, hdr] of [['belmont-2026-10-03-2316.json', 'BELMONT'], ['clark-lake-2026-10-03-2317.json', 'CLARK/LAKE']]) {
-    const p = { ...payloadFrom(name, hdr, { wx: WX }), headerDivider: true, wxDivider: false };
+    const p = { ...payloadFrom(name, hdr, { wx: WX }), headerDivider: true };
     add(`dividers ${hdr}`, p, [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
   }
   add('brightness 50', payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { wx: WX, bright: 50 }), [{ screen: 'transit' }, { screen: 'ticker' }]);
+  // Key layout: key + band (Morse, 2 rows; Howard), band hidden (Belmont, 4
+  // rows), key hidden (Clark/Lake as dest rows needs 5), chrono with the key,
+  // no band clock, alerts, dim.
+  for (const [name, hdr] of [['morse-2026-10-03-2316.json', 'MORSE'], ['howard-2026-10-03-2316.json', 'HOWARD'], ['belmont-2026-10-03-2316.json', 'BELMONT'], ['jefferson-park-2026-10-03-2316.json', 'JEFFERSON PK']]) {
+    const p = payloadFrom(name, hdr, { key: true, alerts: ['RD', 'BL'] });
+    add(`key layout ${hdr}`, p, [{ screen: 'transit' }, { screen: 'transit', now: p.now + 75 }]);
+  }
+  add('key layout chrono', payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { key: true, alerts: ['GR'] }), [{ screen: 'transit' }]);
+  add('key layout 3 rows no clock dim', { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { key: true }), rows: payloadFrom('belmont-2026-10-03-2316.json', null).rows.slice(0, 3), hclock: false, bright: 40 }, [{ screen: 'transit' }]);
   add('dest belmont alerts blink + dim', payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { alerts: ['BR'], bright: 40 }), [{ screen: 'transit', blink: true }, { screen: 'transit', blink: false }]);
   for (const warn of [{ kind: 'tor', lvl: 'warning' }, { kind: 'svr', lvl: 'watch' }, { kind: 'tor', lvl: 'watch' }]) {
-    add(`weather row ${warn.kind} ${warn.lvl}`, payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: { ...WX, icon: 'storm', word: 'STORMS', temp: -10 }, warn }), [{ screen: 'transit' }]);
+    add(`weather strip ${warn.kind} ${warn.lvl}`, payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: { ...WX, icon: 'storm', word: 'STORMS', temp: -10 }, warn }), [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
   }
   for (const icon of ['sun', 'moon', 'cloudy', 'rain', 'ice', 'snow', 'fog', 'pcloudy_night']) {
     add(`weather icon ${icon}`, payloadFrom('morse-2026-10-03-2316.json', null, { wx: { ...WX, icon, word: 'X', temp: 100 } }), [{ screen: 'transit' }]);
@@ -391,6 +401,15 @@ async function build() {
       { ln: 'BR', lbl: 'KIMBALL', t: [min(9)], s: [0], a: 1 },
     ].filter((r) => r.t.length);
     seq('anim row leaves', [{ p: { rows: rowsAt(false) }, now: NOW, t: 0 }, ...ts(1000, 1400, 14).map((t, i) => ({ p: { rows: rowsAt(true) }, now: NOW + 60, t, blink: i % 3 === 0 }))]);
+  }
+  // Key layout: a row leaves and the others slide between the key and the band.
+  {
+    const rowsAt = (gone) => [
+      { ln: 'RD', lbl: 'HOWARD', t: [min(4)], s: [0], a: 1 },
+      { ln: 'RD', lbl: '95TH', t: gone ? [] : [NOW + 10], s: [0], a: 1 },
+      { ln: 'BR', lbl: 'KIMBALL', t: [min(9)], s: [0], a: 0 },
+    ].filter((r) => r.t.length);
+    seq('anim key layout row leaves', [{ p: { key: 1, rows: rowsAt(false) }, now: NOW, t: 0 }, ...ts(1000, 1400, 14).map((t) => ({ p: { key: 1, rows: rowsAt(true) }, now: NOW + 60, t }))]);
   }
   // Chronological departure: slide, digits roll, next train slides in.
   {

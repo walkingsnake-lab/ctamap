@@ -256,16 +256,21 @@
 
   <section data-tab="transit">
     <h2>Transit screen</h2>
-    <div class="row"><span>Transit header (station name)</span><label class="switch"><input type="checkbox" id="showHeader"><span></span></label></div>
-    <div class="row"><span>Clock in the header (transit and ticker)</span><label class="switch"><input type="checkbox" id="headerClock"><span></span></label></div>
+    <label class="field">Layout</label>
+    <div class="seg" id="transitLayout">
+      <button data-v="header">Station on top</button>
+      <button data-v="key">Key on top</button>
+    </div>
+    <p class="hint" id="layoutHint"></p>
+    <div class="row"><span>Station name and clock</span><label class="switch"><input type="checkbox" id="showHeader"><span></span></label></div>
+    <div class="row"><span>Clock with the station (transit and ticker)</span><label class="switch"><input type="checkbox" id="headerClock"><span></span></label></div>
     <label class="field">Destination names</label>
     <div class="seg" id="lineNames">
       <button data-v="white">White</button>
       <button data-v="line">Line color</button>
     </div>
-    <div class="row"><span>Weather row</span><label class="switch"><input type="checkbox" id="showWeather"><span></span></label></div>
-    <div class="row"><span>Line under header</span><label class="switch"><input type="checkbox" id="headerDivider"><span></span></label></div>
-    <div class="row"><span>Line above weather row</span><label class="switch"><input type="checkbox" id="wxDivider"><span></span></label></div>
+    <div class="row" id="wxRow"><span>Weather strip</span><label class="switch"><input type="checkbox" id="showWeather"><span></span></label></div>
+    <div class="row" id="hdivRow"><span>Line under header</span><label class="switch"><input type="checkbox" id="headerDivider"><span></span></label></div>
     <p class="hint" id="rowsHint"></p>
   </section>
 
@@ -432,7 +437,13 @@
     pressed('tempUnit', board.tempUnit === 'C' ? 'C' : 'F');
     $('showWeather').checked = board.showWeather;
     $('headerDivider').checked = board.headerDivider === true;
-    $('wxDivider').checked = board.wxDivider !== false;
+    const keyLayout = board.transitLayout === 'key';
+    pressed('transitLayout', keyLayout ? 'key' : 'header');
+    $('wxRow').hidden = keyLayout;
+    $('hdivRow').hidden = keyLayout;
+    $('layoutHint').textContent = keyLayout
+      ? '"trains to / min" on top, station and clock on a band at the bottom. No weather strip in this layout.'
+      : 'Station and clock on top, weather strip at the bottom.';
     const bl = board.baseballLayout || 'classic';
     pressed('bbLayout', bl);
     for (const [k, d] of [['tickerHold', 8], ['tickerSlide', 1200], ['radarFrame', 500], ['radarHold', 4], ['gameEvery', 60]]) $(k).value = String(board[k] || d);
@@ -484,8 +495,10 @@
       : corner === 'none' ? 'Just the radar and the frame indicator: no time or temperature. A weather watch or warning still shows at the bottom right.'
       : 'Current weather icon and temperature; a weather watch or warning shows at the bottom right.';
     $('rowsHint').textContent = 'These are the most the board shows. When more destinations are running than fit, '
-      + 'it hides the weather row first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather row.'
-      + (hidden.length ? ` Hidden right now: ${hidden.join(' and ')}.` : '');
+      + (board.transitLayout === 'key'
+        ? 'it hides the station band first, then the key (up to 5 rows). Past 5, it lists one train per row with the key.'
+        : 'it hides the weather strip first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather strip.')
+      + (hidden.length ? ` Hidden right now: ${hidden.map((h) => (h === 'header' && board.transitLayout === 'key' ? 'station band' : h === 'weather' ? 'weather strip' : h)).join(' and ')}.` : '');
     renderDests();
   }
 
@@ -537,7 +550,7 @@
   const autoMains = () => ['transit', 'ticker'].filter((k) => $(k === 'transit' ? 'autoTransit' : 'autoTicker').checked);
   for (const id of ['autoTransit', 'autoTicker']) $(id).addEventListener('change', () => { const m = autoMains(); if (m.length) save({ autoScreens: m }); else render(); });
   $('autoEvery').addEventListener('change', (e) => save({ autoEvery: Number(e.target.value) }));
-  for (const id of ['wxVisit', 'alertJump', 'bbPriority', 'lineNames', 'tempUnit']) {
+  for (const id of ['wxVisit', 'alertJump', 'bbPriority', 'lineNames', 'tempUnit', 'transitLayout']) {
     $(id).addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !e.target.disabled) save({ [id]: v }); });
   }
   const bbTeams = () => [['cubs', 'bbCubs'], ['sox', 'bbSox'], ['post', 'bbPost']].filter(([, id]) => $(id).checked).map(([k]) => k);
@@ -558,7 +571,6 @@
   $('showHeader').addEventListener('change', (e) => save({ showHeader: e.target.checked }));
   $('showWeather').addEventListener('change', (e) => save({ showWeather: e.target.checked }));
   $('headerDivider').addEventListener('change', (e) => save({ headerDivider: e.target.checked }));
-  $('wxDivider').addEventListener('change', (e) => save({ wxDivider: e.target.checked }));
   $('tempShadow').addEventListener('change', (e) => save({ tempShadow: e.target.checked }));
   $('wxRainEvery').addEventListener('change', (e) => save({ wxRainEvery: Number(e.target.value) }));
   $('wxRainLoops').addEventListener('change', (e) => save({ wxRainLoops: Number(e.target.value) }));

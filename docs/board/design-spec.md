@@ -25,7 +25,7 @@ Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the desi
 Animation is deliberately limited so the board's network pauses (CircuitPython is single-threaded, and each HTTPS request through the M4's WiFi co-processor blocks the display for roughly a second or more) are invisible. The only animations are:
 - **Per-digit roll** when an arrival time changes, and the same roll for the **header clock** (transit, ticker) and the radar's **current time** at each minute. Only the changed digits move while the clock keeps its shape; a width change (`9:59`→`10:00`) rolls the whole clock. Nothing rolls across a screen change. The big overnight and no-games clocks, the radar's frame time, and temperatures and other weather numbers don't roll (board memory). Clock minute rollovers count as animations for the scheduler. Reference: `createNumRoller()` in `server/board/draw.js`.
 - **Transit transitions:** a departing train fades out in place, the next time eases to amber, and rows fade in/out and slide (all under 1.2 s, at the same moments as digit rolls).
-- **Alert blink** on affected rows' color blocks (transit screen): 1 s on, 1 s off.
+- **Tornado warning blink** on the weather strip and weather screens: 1 s on, 1 s off. (CTA line alerts are static: see §5.)
 - **Ticker page slide.**
 - **Radar loop.**
 
@@ -37,7 +37,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 - **Network jobs:** each job (version check, combined update, radar frame) has a **due time** and a **deadline**.
 - **Each loop pass:** if a job is due and the next animation is at least the **fetch budget** away, run it now; otherwise wait for the next gap.
 - **Deadline override:** if a job passes its deadline (e.g. data older than ~60 s), run it anyway. A brief freeze beats stale times.
-- **Alert blink:** the blink doesn't count as busy, but a fetch freezes it. While a row blinks, non-overdue fetches wait for the blink to turn on, show the lit frame, and the blink restarts (off) when the fetch ends, so the freeze reads as one slightly long "on" phase instead of a glitch.
+- **Alert blink:** the blink doesn't count as busy, but a fetch freezes it. While a tornado warning blinks, non-overdue fetches wait for the blink to turn on, show the lit frame, and the blink restarts (off) when the fetch ends, so the freeze reads as one slightly long "on" phase instead of a glitch.
 - **Natural gaps:** radar last-frame hold, ticker page holds, screen switches, and the stretch between minute rollovers on the transit screen.
 - **Fetch budget:** start at ~2 s; replace with the measured request time on the real board.
 
@@ -89,7 +89,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **`tt` ligature** (5x7, 6px): two narrow t's sharing one crossbar, at a private-use codepoint. The server substitutes it for "tt" in ticker destinations. `Cottage` is 31px with it, leaving a 4px gap before a two-digit time.
 - Custom glyphs at private-use codepoints:
   - `min`: one 11px glyph with a 5-wide m.
-  - Inline **bolt** (3x5) and **funnel** (4x5): used in the weather row tag **and** next to AM/PM on the radar.
+  - Inline **bolt** (3x5) and **funnel** (4x5): used in the weather strip tag **and** next to AM/PM on the radar.
   - **Alert circle** (5x5): red circle with a white "!" for the ticker index column.
 - **Digits are tabular** in every font (one shared cell width), so a rolling digit never shifts its neighbors. Spaces are 2px (small) and 3px (5x7).
 - The **alert circle** is two glyphs drawn at the same origin: a red disc with the "!" pixels left blank, and a white "!". Fonts are one color per glyph.
@@ -108,8 +108,9 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Later times | dim amber `#664600` (~40% of the first time; at ~61% it was hard to tell apart on the panel) |
 | Schedule-based times (`isSch`), first / later | grey `#6a6a6a` / `#2e2e2e` (instead of amber; same width, so digit rolls are unaffected). The first is about half the light of the white labels so it reads as grey on the panel (`#b0b0b0` looked white); later ones are about 40% of the first, the same step as amber to dim amber |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
-| Dividers (weather row) | `#333333` |
-| Transit header background band | `#202020` (confirm on the panel; raise toward `#303030` if it vanishes at night) |
+| Dividers (header line, weather screens) | `#333333` |
+| Key layout station band | `#141414` behind `#808080` text (darker than the earlier `#202020` header band; expected to drop out at night dimming, leaving the text) |
+| CTA alert block | the line color at 20% behind a full-color "!" |
 | Shoreline | `#34485e` |
 | Ticker alert circle | red `#ff2020` with white `#ffffff` "!" |
 
@@ -133,60 +134,70 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 
 ### Layout
 - **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
-- **Header** (station name and clock both dark grey `#555555`, so the train rows are the focus; flush to the screen edges at x0 and x63, no background; same layout as the ticker header, which stays `#808080`) and **weather row** (below a `#333333` divider) are **each optional**, set per board in config, independent of row count.
-- **Divider lines** are separate per-board toggles: a `#333333` line on row 7 under the header (default off) and the row-22 line above the weather row (default on). Neither changes the row layout.
+- **Header** (station name and clock both dark grey `#555555`, so the train rows are the focus; flush to the screen edges at x0 and x63, no background; same layout as the ticker header, which stays `#808080`) and **weather strip** (rows 27–31, no divider) are **each optional**, set per board in config, independent of row count.
+- **Header divider:** a per-board toggle for a `#333333` line on row 7 under the header (default off). The old line above the weather row is gone with the row (`wxDivider` is still accepted but not drawn).
+- **Layouts** (per board, `transitLayout`): **header** (above) or **key** (below).
 - **No edge padding:** text runs to the screen edges (x0 and x63) everywhere outside filled bands.
 - Rows fill the remaining space (5px rows, gaps of 1px or more).
-- **Without the header, rows are spread evenly** from the top of the panel to the weather divider (or the bottom edge): equal gaps above, between, and below. The between-row gap is the ideal gap rounded to the nearest pixel; the leftover is split top and bottom, any odd pixel going to the bottom.
-- **Fitting:** the header and weather toggles are the most the board shows. When more destinations are running than fit, the **weather row is hidden first, then the header**, so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header (if on) and **no weather row**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
+- **Without the header, rows are spread evenly** from the top of the panel to the weather strip (rows 0–25) (or the bottom edge): equal gaps above, between, and below. The between-row gap is the ideal gap rounded to the nearest pixel; the leftover is split top and bottom, any odd pixel going to the bottom.
+- **Fitting:** the header and weather toggles are the most the board shows; each takes one row. When more destinations are running than fit, the **weather strip is hidden first, then the header** (key layout: **the station band first, then the key**), so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header or key (if on) and **no weather strip or band**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
 - Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**; the chronological view covers those stations.
 
 **Geometry (from the mocks):**
 - Header band on rows 0–6, text on rows 1–5. Train rows start at row 9 or lower (at least 2px clear of the band).
-- Weather divider on row 22; weather icon on rows 24–31; train rows end by row 20.
-- **With header** (row pitch, row top to row top): 2 rows 8px (9px with no weather row: 4 px under the header and between the rows, rows at 12 and 21 with the header's divider line, 10 and 19 without; the rest of the space stays at the bottom); 3 rows 8px (rows at 10, 18, 26); 4 rows 6px (rows at 9, 15, 21, 27, using the full height). Without the divider line the 3- and 4-row layouts and the weather-row layouts move up 1 px (the header text ends on row 5) so the gap under the header matches the gaps between rows. Otherwise rows are centered in whatever space is left.
-- **Without header** (even spacing over rows 0–31, or rows 0–21 with the weather row on):
+- Weather strip on rows 27–31; train rows end by row 25.
+- **With header** (row pitch, row top to row top): 2 rows 8px (9px with no weather strip: 4 px under the header and between the rows, rows at 12 and 21 with the header's divider line, 10 and 19 without; the rest of the space stays at the bottom); 3 rows 8px (rows at 10, 18, 26); 4 rows 6px (rows at 9, 15, 21, 27, using the full height). With the weather strip: 2 rows at 10, 18; 3 rows at 8, 14, 20 (2 px under the header text, 1 between, 2 above the strip). Without the divider line the 3- and 4-row layouts and the weather-strip layouts move up 1 px (the header text ends on row 5) so the gap under the header matches the gaps between rows. Otherwise rows are centered in whatever space is left.
+- **Without header** (even spacing over rows 0–31, or rows 0–25 with the weather strip on):
 
-| Weather row | Rows | Row tops | Gaps (top / between / bottom) |
+| Weather strip | Rows | Row tops | Gaps (top / between / bottom) |
 |---|---|---|---|
 | off | 2 | 7, 19 | 7 / 7 / 8 |
 | off | 3 | 4, 13, 22 | 4 / 4 / 5 |
 | off | 4 | 1, 9, 17, 25 | 1 / 3 / 2 (pinned: 3px between rows reads better than the rounded 2px) |
 | off | 5 | 1, 7, 13, 19, 25 | 1 / 1 / 2 |
-| on | 2 | 4, 13 | 4 / 4 / 4 |
-| on | 3 | 1, 8, 15 | 1 / 2 / 2 |
+| on | 2 | 5, 15 | 5 / 5 / 6 |
+| on | 3 | 2, 10, 18 | 2 / 3 / 3 |
+| on | 4 | 1, 7, 13, 19 | 1 / 1 / 2 |
 
 
-| Header | Weather row | Max rows |
-|---|---|---|
-| off | off | 5 |
-| on | off | 4 |
-| off | on | 3 |
-| on | on | 2 |
+| Header (or band) | Weather strip | Key | Max rows |
+|---|---|---|---|
+| off | off | off | 5 |
+| on | off | off | 4 |
+| off | on | off | 4 |
+| on | on | off | 3 |
+| on (band) | — | on | 3 |
+| off | — | on | 4 |
+
+### Key layout (optional)
+- **Key** on rows 1–5: lowercase Tom Thumb in the transit dark grey `#555555`, `trains to` from x0 (over the color blocks) and `min` flush right. Never amber (amber means a live train). The wording follows WMATA's `LN | CAR | DEST | MIN` header row; most agencies have no key.
+- **Station band** on rows 27–31: `#141414` fill with the station name (x0) and clock (flush right, rolling) in `#808080` on baseline 32, so the text sits on the band's bottom edge. It reads as a footer, not as the key's equal.
+- **Rows** between the key and the band (rows 6–26), 1 px apart from three rows up: 3 rows at 8, 14, 20 (2 / 1 / 1 / 2); 2 rows at 10, 18; 1 row at 14. With the band hidden (4 rows): 7, 13, 19, 25.
+- **Fitting:** the band hides before the key (4 rows: key and rows; 5: neither). The chronological view keeps the key (4 rows). No weather strip in this layout (the band takes its rows).
+- The header divider doesn't apply.
 
 ### Chronological view (overflow)
 - **When:** the destination count (after the per-board destination filter) exceeds the board's max rows. The server decides on each update and sends `view` in the combined update.
 - **Switching is immediate both ways:** chronological as soon as destinations exceed max rows, back as soon as they fit. If short-turns make it flip too often, raise `CHRONO_HOLD` in `arrivals.js` (a hold time before switching back; the mechanism is built, set to 0).
 - **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
 - **Time format:** digits + lowercase `m` with the font's own **1px gap** (`4m`, `12m`); `DUE` stays bare. Labels are fitted against the widest time (`99m`), so they have up to 43px.
-- **Line ID: a line-colored position digit** (1–5, Tom Thumb, columns 0–2), then a 1px gap, the 3px line-color block (columns 4–6), and the label at x9. The digit is the block's exact color for every line (Brown and Purple were briefly brightened for thin strokes; matching the block won out). When a train departs, each digit rolls down (2→1) as the list slides up. Alerts blink the block to the same `!` (the digit stays). No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
-- Same row counts and geometry as destination rows; the header follows its setting; the weather row is always off (4 rows with the header, 5 without). The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
+- **Line ID: a line-colored position digit** (1–5, Tom Thumb, columns 0–2), then a 1px gap, the 3px line-color block (columns 4–6), and the label at x9. The digit is the block's exact color for every line (Brown and Purple were briefly brightened for thin strokes; matching the block won out). When a train departs, each digit rolls down (2→1) as the list slides up. Alerts show the same dimmed block and `!` (the digit stays). No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
+- Same row counts and geometry as destination rows; the header (or key) follows its setting; the weather strip and station band are always off (4 rows with the header or key, 5 without). The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
 - **Departure:** the first row slides up under the header while fading, the list slides up one row pitch with it (0.5 s ease), the next train turns amber, and a new train slides in at the bottom. Per-digit roll still applies within a row (`12m`→`11m` rolls only the 2).
 - **Trains swapping order** between updates: rows are keyed by run number, so the two rows just slide past each other.
 - **Switching views** cross-fades: the old rows fade out, then the new ones fade in.
-- **CTA alerts:** same block blink as destination rows.
+- **CTA alerts:** same static block as destination rows.
 - **Accepted trade-off:** infrequent lines can drop off the screen when frequent ones fill all rows.
 
-### Weather row (optional)
-- **Right:** 8x8 condition icon, 2px gap, then the temperature as on the forecast screens' top bar: X11 5x7 digits with a small degree sign, its ink ending at x63. Icon and temperature are both the header's dark grey `#555555`, the icon drawn **mono** (every lit pixel one color, `drawIcon(..., color)`), so the row stays secondary; the watch/warning tag keeps its colors. **Left:** empty, except for a watch/warning tag. No condition word (the icon carries it).
-- Icons are multi-color sprites defined in `server/board/icons.js` (any spot can draw one mono by passing a color to `drawIcon` / `draw_icon`) (with the Open-Meteo weather-code mapping); previews in `docs/board/previews/sheet-icons.png`.
-- Icons: sun, moon, partly cloudy (day/night), cloudy, **cloud with rain** (rain/drizzle/showers), **cloud with rain and an ice crystal** (freezing rain), **snowflake**, storm cloud with bolt, fog.
-- **Watch/warning tag** on the left side: `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). Static, no scrolling.
+### Weather strip (optional)
+- One Tom Thumb line on rows 27–31 (baseline 32), no divider, in the header's dark grey `#555555` so the train rows lead: the **temperature** (`54°`) from x0 and the **condition word** (`PT CLOUDY`, `STORMS`, …) flush right. No icon. Replaced the 8x8-icon weather row (rows 22–31, which capped header + weather at 2 rows) in Oct 2026.
+- **Watch/warning tag** replaces the condition word (the temperature stays): `[bolt]` or `[funnel]` + `WATCH` (yellow) / `WARNING` (orange for severe, red for tornado), flush right, with a **3px gap** between icon and word (1px read as `SWATCH`; 2px still looked tight). A tornado warning blinks; the rest are static. (Also tried: the whole strip swapping to `TSTORM WARNING` / `TORNADO WARN`; declined because it hides the temperature for the hours a watch lasts.)
+- Icons (`server/board/icons.js`, previews in `docs/board/previews/sheet-icons.png`) are still used by the weather screens.
 
 ### CTA alerts
 - **Which alerts:** major alerts only (CTA severity `major`, or flagged MajorAlert). A sample on Oct 4 had 7 active alerts (a 2029 station closure across 5 lines, a schedule change, a station bypass, elevators, and an Orange/Green minor delay) and none of them blink.
-- Affected rows' color blocks **blink to a 1px "!"** in the line color (middle column of the 3x5 block: 3px stem, 1px gap, 1px dot; `ALERT_BANG` in `server/board/icons.js`). That's the whole indicator; no alert text is shown (details are on the phone).
-- CTA alerts are per line, so **every row of the affected line blinks, both directions**. Blinking only one direction would need parsing the alert text; not planned for v1.
+- Affected rows' color blocks drop to **20% of the line color with a 1px "!" over them in the full line color** (middle column of the 3x5 block: 3px stem, 1px gap, 1px dot; `ALERT_BANG` in `server/board/icons.js`). **Static, no blink.** That's the whole indicator; no alert text is shown (details are on the phone). (Replaced a 1 s blink between the block and the bare "!" in Oct 2026. Also tried: a white "!" on the block (lost on Yellow), a knocked-out "!" (reads as a U), 30% and 15% dims; at night dimming Brown, Purple, and Green blocks mostly drop out at 15–20%, leaving the bare "!".)
+- CTA alerts are per line, so **every row of the affected line is marked, both directions**. Marking only one direction would need parsing the alert text; not planned for v1.
 
 ### Destination labels
 Server-side short-name map so labels fit (~6–7 characters next to a two-digit time). Shared by the transit screen (rendered uppercase) and the ticker (mixed case).
@@ -208,10 +219,10 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - Same destination on two lines (e.g. Brown and Purple `LOOP` at Merchandise Mart): two rows told apart by the color block only. Accepted.
 - **Short-turn trains** (e.g. Blue Line to UIC-Halsted or Jefferson Park) get **their own row**. The layout follows the row count as these come and go.
 - **Unknown destinations** (disruptions, reroutes): own row, name truncated to fit; the server logs them so they can be added to the map.
-- **No per-station default layout.** The layout follows the live destination count. Examples: Merchandise Mart shows 2 destinations off-peak (Brown) with the header and weather row; rush-only Purple adds `LINDEN` and `LOOP`, the weather row hides to fit 4 rows, and it returns when Purple stops. Belmont off-peak has 4 (Red and Brown, weather row hidden); at rush, Purple makes 6 and it switches to the chronological view. The **per-board destination filter** avoids those changes if unwanted; it's applied first, and the fit runs on the filtered list.
+- **No per-station default layout.** The layout follows the live destination count. Examples: Merchandise Mart shows 2 destinations off-peak (Brown) with the header and weather strip; rush-only Purple adds `LINDEN` and `LOOP`, the weather strip hides to fit 4 rows, and it returns when Purple stops. Belmont off-peak has 4 (Red and Brown, weather strip hidden); at rush, Purple makes 6 and it switches to the chronological view. The **per-board destination filter** avoids those changes if unwanted; it's applied first, and the fit runs on the filtered list.
 
 ### Other states
-- **Overnight / no predictions:** large **9x15 Bold** clock (`#cccccc`) with the 2x2 square colon, dim `NO TRAINS` label below it, weather row below the divider. Follows the board's weather-row setting; with the weather row off, the clock and `NO TRAINS` are centered vertically.
+- **Overnight / no predictions:** large **9x15 Bold** clock (`#cccccc`) with the 2x2 square colon, dim `NO TRAINS` label below it, weather strip below. Follows the board's weather setting; with the weather strip off, the clock and `NO TRAINS` are centered vertically.
 - **Stale data:** when the server has no Train Tracker data, or it's more than 3 minutes old (CTA failing), the transit and ticker screens show a red (`#ff2020`) line along the top edge (row 0, which no screen draws on, with or without the header), and once none are left the overnight layout says `NO DATA` instead of `NO TRAINS`.
 
 ---
@@ -246,8 +257,8 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Shoreline** is painted on the lake's edge pixels (inside the water), so rain never covers it.
 - **Colors** (fills at 65%; the two greens at 70% of that, since light rain covers most of a loop and green reads brightest on the panel; the phone's radar brightness scales all precip): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.
 - **Location marker:** white dot. The pixels around it keep their rain or snow (the earlier ring of 4 cleared pixels was dropped).
-- **Time:** X11 5x7 (dimmed `#7a7a7a`, AM/PM `#555555`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (2px-tall segments, current frame amber), AM/PM in Tom Thumb below. **The time is optional** (per-board `radarTime`, on by default): off replaces it with **current conditions**, the weather icon and temperature (Tom Thumb, label white `#d8d8d8`) right-aligned under the frame indicator, as on the weather row. The warning tag then moves to the **bottom right of the screen**: icon + `WATCH` or `WARN` on a black backing (WATCH runs past the time box onto the radar; to revisit). 
-- **Warning colors (every screen):** watches yellow, severe thunderstorm warnings orange, tornado warnings red and **blinking** (same 1 s blink as CTA alerts) on the weather row and the radar. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
+- **Time:** X11 5x7 (dimmed `#7a7a7a`, AM/PM `#555555`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (2px-tall segments, current frame amber), AM/PM in Tom Thumb below. **The time is optional** (per-board `radarTime`, on by default): off replaces it with **current conditions**, the weather icon and temperature (Tom Thumb, label white `#d8d8d8`) right-aligned under the frame indicator, as on the old transit weather row. The warning tag then moves to the **bottom right of the screen**: icon + `WATCH` or `WARN` on a black backing (WATCH runs past the time box onto the radar; to revisit). 
+- **Warning colors (every screen):** watches yellow, severe thunderstorm warnings orange, tornado warnings red and **blinking** (1 s on, 1 s off) on the weather strip and the radar. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
 - **Warnings:** the small inline **bolt** (3x5, orange, severe) or **funnel** (4x5, red, tornado) sits **to the left of AM/PM** with a 2px gap, on the same 5px line. It never overlaps the clock or the frame indicator; the clock stack (indicator + clock + AM/PM line) occupies ~rows 2–18, which is the height the water-area check must reserve. Steady, no blinking. No polygons, no scrolling text.
 
 ---
@@ -274,7 +285,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Three layouts** (phone page, Baseball screen): **Classic** (below), **Logos**, and **Bands** (see *Logo and band layouts*). The status panel, divider, and bottom line are shared.
 - **Team rows (Classic):** 3x6 team-color block at x0 and the abbreviation in X11 5x7 (label white) at x5; away on top (block rows 2–7), home below (rows 12–17).
 - **Divider** on row 24 (`#333333`), full width, in every layout (moved down from the weather row's 22 so the logo bands get 12 rows each). **No series label** (e.g. `NLDS G2`) anywhere.
-- **Bottom line** (Tom Thumb, baseline 31) sits on the same rows as the transit weather row and is right-aligned to x63 (`TODAY` at x0).
+- **Bottom line** (Tom Thumb, baseline 31; one row above the transit weather strip, which moved to baseline 32) is right-aligned to x63 (`TODAY` at x0).
 - **Score flash:** when a live score changes, that team's score turns amber for 30 s, then fades back to white over 5 s. The server stamps the change time (the board only draws it); a game first seen mid-game doesn't flash.
 
 **Live**
@@ -333,11 +344,11 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
   - **Jump to weather for NWS alerts:** Off (default), Warnings, or Watches too; stays on the weather screen while the alert is on, over baseball.
   - **Baseball takes over for:** Cubs, White Sox, Postseason (default all); pregame window 0–2 h (default 30 min), final 0–60 min (default 15); during live games show live games (default), Cubs/Sox first, or all games.
 - **Brightness:** Auto (sunrise/sunset), fixed level, or Off.
-- **Temperature unit:** °F (default) or °C, per board, for every weather display (weather row, weather screen, radar corner). The server converts; temperature colors still follow the °F scale. Wind stays mph.
+- **Temperature unit:** °F (default) or °C, per board, for every weather display (weather strip, weather screen, radar corner). The server converts; temperature colors still follow the °F scale. Wind stays mph.
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
-- **Transit header and weather row:** independent on/off toggles per board (see §5 for how many rows each combination fits).
+- **Transit layout:** station on top (header) or key on top (station band at the bottom). **Header and weather strip:** independent on/off toggles per board (see §5 for how many rows each combination fits; the key layout has no weather strip).
 - **Header clock** (transit and ticker) on/off, and **destination names** in white or the line's color (Brown and Purple read dim as text in their true colors).
 - **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.
 

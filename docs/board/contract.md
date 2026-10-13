@@ -45,7 +45,7 @@ Polled ~every 10 s.
 ### `GET /board/update?b=<id>[&boot=1][&s=<screen>]`
 The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB (typically 0.5–0.75 KB with sections).
 
-**Sections.** To keep JSON parsing light on the board's fragmenting heap, this endpoint sends only what one screen draws, named by `for`: the payload's `screen`, or `s` (`transit`, `ticker`, `weather`, `baseball`) when a button press on the board overrides it. The board fetches right away after a press, asking for the new screen. Fields kept only for their screen: transit `header`, `hidden`, `view`, `rows`, `wx`; ticker `ticker`, `tickerHeader`, `tickerFill`; baseball `mlb`. `radar` is whole on the weather screen and whenever `radar.visit` is set (the board switches to it by itself); otherwise it's just `{on, visit: null}`. Everything else is always sent. The simulator's `api/update` returns the whole payload.
+**Sections.** To keep JSON parsing light on the board's fragmenting heap, this endpoint sends only what one screen draws, named by `for`: the payload's `screen`, or `s` (`transit`, `ticker`, `weather`, `baseball`) when a button press on the board overrides it. The board fetches right away after a press, asking for the new screen. Fields kept only for their screen: transit `header`, `key`, `hidden`, `view`, `rows`, `wx`; ticker `ticker`, `tickerHeader`, `tickerFill`; baseball `mlb`. `radar` is whole on the weather screen and whenever `radar.visit` is set (the board switches to it by itself); otherwise it's just `{on, visit: null}`. Everything else is always sent. The simulator's `api/update` returns the whole payload.
 
 `boot=1` is sent on the board's first update after startup. It resets `bright` to auto and bumps `v`. The chosen `screen`, station, row, and toggle config persist.
 
@@ -94,16 +94,16 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB (typically 0.5�
 | `rot` | object \| null | Auto alternating its screens: `{screens, every}` (`screens`: 2+ of `transit`, `ticker`; `every` s). Set only on the auto screen when `screen` is one of `screens`. The board (and simulator) shows `screens[floor(now / every) % screens.length]`, epoch-aligned (`autoScreen()` / `auto_screen()`); the board's `/board/update` then carries every rotation screen's sections. |
 | `hclock` | bool | Clock at the right of the transit and ticker headers (state `headerClock`). |
 | `lnc` | bool | Transit and chronological labels in the line's color instead of white (state `lineNames`). |
-| `header` | string \| null | Station name for the transit header, or `null` when the header is off or hidden to fit (see *Fitting the header and weather row*). |
+| `header` | string \| null | Station name for the transit header (with `key`, for the station band at the bottom), or `null` when it's off or hidden to fit (see *Fitting the header, weather strip, and key*). |
+| `key` | `1` \| absent | Transit only, key layout (state `transitLayout` `key`): the `trains to` / `min` key on rows 1–5, and `header` (if not null) on the `#141414` station band on rows 27–31 instead of the top. Absent in the header layout, or when the key is hidden to fit 5 rows. |
 | `headerDivider` | bool | Transit only: a `#333333` line on row 7 under the header (rows still start at row 9). Default `false`. |
-| `wxDivider` | bool | Transit only: the `#333333` line on row 22 above the weather row. Default `true`. |
 | `tickerHeader` | string \| null | Station name for the ticker header. Always sent: the ticker shows its header even when the transit header toggle is off. (Boards without it fall back to `header`.) |
-| `hidden` | array | Which of `"weather"`, `"header"` the server hid to fit this update's destinations, for the phone page and simulator. The board just follows `header` and `wx`. |
+| `hidden` | array | Which of `"weather"`, `"header"`, `"key"` the server hid to fit this update's destinations, for the phone page and simulator. The board just follows `header`, `key`, and `wx`. |
 | `view` | string | Transit view: `dest` (one row per destination, up to 3 times) or `chrono` (one row per train, soonest first). Chosen by the server; see *Transit view* below. |
-| `rows` | array | Transit rows, already filtered and ordered. `dest`: **capped** to the max for the header/weather toggles (5/4/3/2). `chrono`: the cap **plus 2** extra trains; the board shows the first *cap* live rows. Empty array means no predictions: the board shows the overnight layout. |
+| `rows` | array | Transit rows, already filtered and ordered. `dest`: **capped** to the max for the header/weather/key toggles (5 minus one for each shown). `chrono`: the cap **plus 2** extra trains; the board shows the first *cap* live rows. Empty array means no predictions: the board shows the overnight layout. |
 | `ticker` | array | Up to 6 individual arrivals in time order for the ticker. |
-| `wx` | object \| null | Weather row, or `null` when the weather row is off or there's no weather data yet (the row cap then gives the space back to rows). |
-| `warn` | object \| null | Active NWS warning/watch (see below). Sent regardless of the weather-row toggle, since the radar screen uses it too. |
+| `wx` | object \| null | Weather strip, or `null` when the strip is off, hidden to fit, in the key layout, or there's no weather data yet (the row cap then gives the space back to rows). |
+| `warn` | object \| null | Active NWS warning/watch (see below). Sent regardless of the weather-strip toggle, since the radar screen uses it too. |
 | `radar` | object | Radar state (see below). |
 | `anim` | object | Speed settings, from the board's state: `{pageHold, slide, radarFrame, radarHold, game}`. Ticker page hold and slide (ms), radar loop frame step and the hold on the newest frame (ms), and baseball rotation per game (s). Defaults 8000, 1200, 500, 4000, 60 (`timing()` in `draw.js` fills in any missing one). |
 | `tickerFill` | int | Ticker row fill: the line color at this percent behind the white text (25–80, default 55). |
@@ -118,21 +118,30 @@ Learned from recorded fixtures (`server/board/fixtures/tt-arrivals/`):
 
 #### Row order and fitting (server)
 - With no `rows` list in the board config, rows are ordered by line (`RD BL BR GR OR PR PK YL`), then Train Tracker direction (`trDr`), then name. With a list, the list is the order and the filter; destinations CTA doesn't normally use are appended after it.
-- When the destinations (after the filter) exceed the cap for the header/weather toggles, the server sends the chronological view instead of dropping rows. The ticker uses the same filter but not the cap.
+- When the destinations (after the filter) exceed the cap for the header/weather/key toggles, the server sends the chronological view instead of dropping rows. The ticker uses the same filter but not the cap.
 - Times are drawn 3px apart, tightening to 2px when the label would otherwise come within 3px of them. Transit labels are fitted per row against the 2px spacing at the times' widest before the next update (digits only shrink as times count down, but the first time may turn into `DUE`), so 7-letter names like `KIMBALL` and `COTTAGE` always fit.
 - Ticker destinations are fitted to 32px of 5x7 (`Jeff Pk` is exactly 32).
 
-#### Fitting the header and weather row (server)
-The board's `showHeader` / `showWeather` are the most it shows. On every update the server counts the destinations (after the row filter) and fits them (`fitBars` in `arrivals.js`):
+#### Fitting the header, weather strip, and key (server)
+The board's `showHeader` / `showWeather` (and, in the key layout, the key) are the most it shows; each takes one row. On every update the server counts the destinations (after the row filter) and fits them (`fitBars` in `arrivals.js`):
 
-| Destinations | Header | Weather row | View |
+| Destinations | Header | Weather strip | View |
 |---|---|---|---|
-| fit with both | shown | shown | rows |
-| fit without the weather row | shown | hidden | rows |
+| fit with both (up to 3) | shown | shown | rows |
+| fit without the weather strip (4) | shown | hidden | rows |
 | 5 | hidden | hidden | rows |
 | 6 or more | shown | hidden | one train per row |
 
-So a station with rush-only service (Purple at Merchandise Mart) gains and loses the weather row on its own. The weather row never shows with the chronological list.
+Key layout (no weather strip):
+
+| Destinations | Key | Station band (`header`) | View |
+|---|---|---|---|
+| up to 3 | shown | shown | rows |
+| 4 | shown | hidden | rows |
+| 5 | hidden | hidden | rows |
+| 6 or more | shown | hidden | one train per row |
+
+So a station with rush-only service (Purple at Merchandise Mart) gains and loses the weather strip on its own. The weather strip and band never show with the chronological list.
 
 #### Transit view (server)
 - `chrono` whenever the destination count exceeds the cap, `dest` otherwise, decided on every update. `CHRONO_HOLD` in `arrivals.js` (0 now) can add a hold before switching back; that state is kept in memory per board and station.
@@ -140,7 +149,7 @@ So a station with rush-only service (Purple at Merchandise Mart) gains and loses
 
 #### CTA alerts (server)
 - One poller (`server/board/cta-alerts.js`, every 3 min) fetches `alerts.aspx?activeonly=true&routeid=red,blue,brn,g,org,p,pink,y` (XML) for both the map's `/api/alerts` and the board. Every `<Service>` in `<ImpactedService>` is read; only `ServiceType` `R` (train routes) count, so a station listed first (43rd before Green Line) doesn't hide the line.
-- **Board rule:** a line's `a` is `1` only when an alert covering it has `SeverityCSS` `major` or `MajorAlert` `1`. Minor delays (`minor`), planned work (`planned`), schedule changes, long-term closures and elevator outages (`special-note`) don't blink. Fixture: `fixtures/cta-alerts/2026-10-04-1057.xml` (7 alerts, none major, so nothing blinks).
+- **Board rule:** a line's `a` is `1` only when an alert covering it has `SeverityCSS` `major` or `MajorAlert` `1`. Minor delays (`minor`), planned work (`planned`), schedule changes, long-term closures and elevator outages (`special-note`) aren't marked. Fixture: `fixtures/cta-alerts/2026-10-04-1057.xml` (7 alerts, none major, so nothing is marked).
 - **Map:** unchanged filter (major, or an impact containing "delay"), now one entry per impacted line.
 
 #### Line codes
@@ -154,7 +163,7 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `lbl` | Label, uppercase, fitted. |
 | `t` | Up to 3 arrival times (epoch), ascending. |
 | `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`), drawn grey instead of amber. |
-| `a` | `1` if the line has an active **major** CTA alert (block blinks to "!"); see *CTA alerts* below. |
+| `a` | `1` if the line has an active **major** CTA alert: the block drops to 20% of the line color with a full-color "!" over it (static); see *CTA alerts* below. |
 | `rn` | `chrono` only: Train Tracker run number (string). The board keys rows by it, so trains keep their identity when they swap order. |
 
 #### Ticker item (`ticker[]`)
@@ -176,7 +185,9 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 - Drop an arrival once `now > t + 30`; its cell fades out and the list shifts (see `createTransitAnimator()` in `draw.js`). **(decide)** whether the 30 s grace is right; CTA's `isApp` is not sent.
 - **Only on a fresh payload:** the server drops an arrival with the same rule, and a held DUE train's `t` keeps moving later on the server (above). So while the payload's `now` is before `t + 30`, the board keeps the arrival (still DUE) and fetches an update right away; the fresh payload either no longer lists it (it fades out) or carries its later time. Without a fresh payload it drops at `t + 90` at the latest (`HOLD_MAX` 60 s; `isShown()` in `draw.js`, `is_shown()` in `draw.py`). The board's payload can be up to a minute older than the simulator's, which used to make a held train vanish on the board, then come back.
 
-#### Weather row (`wx`)
+#### Weather strip (`wx`)
+
+Drawn on rows 27–31 (Tom Thumb, baseline 32, `#555555`, no divider): `temp` + `°` from x0, `word` flush right to x63. A `warn` replaces `word` with the glyph, a 3px gap, and `WATCH` / `WARNING` in the warning colors, flush right (a tornado warning blinks). `icon` isn't drawn on the strip.
 
 | Field | Meaning |
 |---|---|
@@ -215,12 +226,12 @@ From Open-Meteo (`server/board/weather.js`; fixture `fixtures/open-meteo/`), at 
 | `clock` | `"now"`, `"age"`, `"none"` (absent = frame time). `now`: the clock shows the current time in clock white (`#cccccc`) on every frame instead of the shown frame's time in dim gray; AM/PM, the indicator and the warning icon are unchanged. `age`: how long ago the shown frame is, `3m`, `10m` (`floor((now − frame time + 30) / 60)` minutes, at least 0), in dark gray (`#666666`) Tom Thumb right-aligned under the frame indicator (baseline `timeBox` top + 11, rows 6–10), with no clock or AM/PM, and the warning tag at the screen's bottom right as with `showTime: false`. `none`: nothing in the corner but the frame indicator: no clock, AM/PM or temperature, and the warning tag at the bottom right if there is one. `showTime: false` (the weather icon and temperature) takes precedence over all three. From the board's `radarClock`. |
 | `cond` | `true` (absent = off), with the time on: a compact corner. The clock line holds the time and a one-letter `A`/`P` (Tom Thumb, dark gray `#666666`, 1px after the time, bottom-aligned: rows 8–12); the temperature (`temp`, the same dark gray, no icon) is right-aligned under it on rows 15–19; the warning tag moves to the bottom right as with `showTime: false`. From 10:00 to 12:59 the clock line is 26px and starts at x38, 2px left of the 24px time box (its black margin then covers 2 more columns of radar, or the split divider on rows 5–13). With no `temp`, only the clock line. From the board's `radarCond`. |
 | `rb` | Precipitation brightness, percent (absent = 100): scales the precip colors (values 1–5, 8–10; not the shoreline or marker) of the radar palette. From the board's `radarBright`. |
-| `temp` | Current temperature (board unit, rounded) from Open-Meteo, or `null` before the first weather fetch. Sent whatever the weather row setting. |
+| `temp` | Current temperature (board unit, rounded) from Open-Meteo, or `null` before the first weather fetch. Sent whatever the weather strip setting. |
 | `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar time. |
 | `timeBox` | `[x, y, w, h]`: box the board draws the time stack into (frame indicator, time, AM/PM + warning icon), right-aligned. The server does not clear it (the shoreline can run into it); the board clears a 1px black margin around each piece it draws there (indicator, time, AM/PM, warning icon, or the weather icon and temperature), so nothing touches them. |
 | `split` | `true` when the location has no usable water area; the time box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–38, marker at 19,16; the board draws a gray `#333333` line on col 39; clock box `[40, 0, 24, 32]`, leaving a 1px gap before the widest clock). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator rows 2–3, clock rows 6–12, AM/PM rows 15–19, right-aligned to column 63. |
 
-| `wx` | Weather screen conditions, sent whenever there's weather data (even with the weather row off): the top-level `wx` fields plus `feels` (apparent temperature in the board unit, rounded), `wind` (`"NW 12"`: 8-point compass the wind blows from + mph, rounded; `"CALM"` under 1 mph; just the speed without a direction), and `pop` (highest hourly precipitation probability % over the next 6 hours, starting with the current hour). Each of the three is `null` when Open-Meteo didn't send it. Omitted before the first weather fetch. With the board's `tempUnit` `C`, every temperature in it (and `days`, `hours`) is °C and `wx.c` is `1`: the board converts back to °F (`t * 9 // 5 + 32`, integers) only to pick `TEMP_STOPS` colors. Wind stays mph. |
+| `wx` | Weather screen conditions, sent whenever there's weather data (even with the weather strip off): the top-level `wx` fields plus `feels` (apparent temperature in the board unit, rounded), `wind` (`"NW 12"`: 8-point compass the wind blows from + mph, rounded; `"CALM"` under 1 mph; just the speed without a direction), and `pop` (highest hourly precipitation probability % over the next 6 hours, starting with the current hour). Each of the three is `null` when Open-Meteo didn't send it. Omitted before the first weather fetch. With the board's `tempUnit` `C`, every temperature in it (and `days`, `hours`) is °C and `wx.c` is `1`: the board converts back to °F (`t * 9 // 5 + 32`, integers) only to pick `TEMP_STOPS` colors. Wind stays mph. |
 | `wx.hours` | Only with the board's `wxView` `hourly` (absent otherwise, or without hourly data): four columns `{h, icon, t}` for the hours 2, 4, 6 and 8 after the current hour: `h` the Chicago hour as `3P`, `12A`; `icon` from that NWS hour's icon (night variants; Open-Meteo's `weather_code` and `is_day` without NWS data); `t` in the board unit, rounded. The weather screen draws the hourly layout instead of conditions. |
 | `wx.rain` | Only with the board's `wxRain` `bars` or `both` and precipitation falling or due in the next 2 hours (absent otherwise, or without 15-minute data): `{snow, now, title, h, l}`. `snow` 1 when snow is at least half the water (`snowfall` ÷ 0.7 cm per mm against `precipitation`, over the 8 steps; the whole view is one kind), else 0. `now` 1 when it's falling in the current quarter hour (informational; the board doesn't draw it). `title` is final text: `RAIN IN 25 MIN`, `RAIN NEXT 2 HRS`, `ENDS IN 60 MIN`, `BREAK IN 30 MIN` (rain now, dry, then more), with `SNOW` for snow; minutes are to the next 5, at least 5. `h` and `l` are 8 bars (the next 8 quarter hours after `now`): height 0 (dry) or 1–10 rows, `round(sqrt(rate / full) × 10)` with rate = mm per 15 min × 4 in mm/h and `full` 10 (rain) or 4 (snow); level 0 (dry) or 1–3 at 2.5 / 7.6 mm/h (rain) or 1 / 2.5 mm/h (snow). `alt` and `loops` (only with `both` while radar `frames` are sent): `alt` is the seconds of bars per turn and `loops` the full radar loops before them. The loop plays `loops` full cycles from its start (the cycle as `radarLoopIdx()` counts it, the newest-frame hold included), then the bars show for `alt` s, then the loop starts again (`rainBarsTurn()`, `rain_bars_turn()`; `t` is ms since the loop started, the epoch clock in the simulator). Without `alt`, the board draws the bars whenever it has no frames to show. |
 | `wx.days` | Only with the board's `wxView` `5day` (absent otherwise, or without forecast data): the days after today, up to 5, as `{d, icon, hi}`: `d` the two-letter weekday (`SA`), `icon` from that day's NWS daytime period (day icons; Open-Meteo's `daily.weather_code` without NWS data), `hi` the day's high in the board unit (the daytime period's temperature), rounded. When present, the weather screen draws the 5-day layout instead of conditions. |
@@ -333,14 +344,14 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/health` | Latest health report per board (see `/board/version`): `{<id>: {at, uptime, memFree, largestBlock, minMem, oom, budget, fails, reconnects, rssi, lastError, started, lastCrash, restarts, lastRestart, since}}`; `lastCrash` stays until a newer crash replaces it. In memory only. |
 | `POST /board/<secret>/api/state?b=<id>` | Partial update for one board, body is a subset of the board object below. Returns the board's full state. Bumps `v`. |
 | `GET /board/<secret>/api/test?b=<id>` | Simulator test alerts for board `b`: `{lines, warn, game, radar, bars, left}` (`left` = seconds until expiry, 0 when none). |
-| `POST /board/<secret>/api/test?b=<id>` | Start a test alert: body `{lines: ["RD", ...], warn: {kind: "svr"\|"tor", lvl: "watch"\|"warning"} \| null}`. Lines are `RD BL BR GR OR PR PK YL`; they blink as if CTA had a major alert, and `warn` replaces the NWS warning. Applies to the real board's updates too, and expires after 10 minutes. `game` (`pre` \| `live` \| `final` \| `null`) adds a made-up Cubs-Cardinals game in that state at the front of `mlb.games`. `radar` (`storm` \| `snow` \| `null`) replays a recorded storm (Aug 10, 2020 derecho) or snowstorm (Feb 2, 2022) from `fixtures/mrms/` as the radar loop at the board's station (`test-radar.js`): `radar.on` is true and `frames` are 3 test frames, the crop shifted 3 LEDs per frame so the weather moves east; the frame endpoints serve them by id. `bars` (`rain` \| `downpour` \| `break` \| `ends` \| `continues` \| `snow` \| `snow now` \| `null`) forces made-up rain bars (`radar.wx.rain`, built from 15-minute data through the real title and height rules) whatever the board's `wxRain`: they replace the radar loop, or alternate with a test `radar` loop when `wxRain` is `both`. An empty body (no lines, no warn, no game, no radar, no bars) clears it. `400` for bad values, `404` for an unknown board. |
+| `POST /board/<secret>/api/test?b=<id>` | Start a test alert: body `{lines: ["RD", ...], warn: {kind: "svr"\|"tor", lvl: "watch"\|"warning"} \| null}`. Lines are `RD BL BR GR OR PR PK YL`; they're marked as if CTA had a major alert, and `warn` replaces the NWS warning. Applies to the real board's updates too, and expires after 10 minutes. `game` (`pre` \| `live` \| `final` \| `null`) adds a made-up Cubs-Cardinals game in that state at the front of `mlb.games`. `radar` (`storm` \| `snow` \| `null`) replays a recorded storm (Aug 10, 2020 derecho) or snowstorm (Feb 2, 2022) from `fixtures/mrms/` as the radar loop at the board's station (`test-radar.js`): `radar.on` is true and `frames` are 3 test frames, the crop shifted 3 LEDs per frame so the weather moves east; the frame endpoints serve them by id. `bars` (`rain` \| `downpour` \| `break` \| `ends` \| `continues` \| `snow` \| `snow now` \| `null`) forces made-up rain bars (`radar.wx.rain`, built from 15-minute data through the real title and height rules) whatever the board's `wxRain`: they replace the radar loop, or alternate with a test `radar` loop when `wxRain` is `both`. An empty body (no lines, no warn, no game, no radar, no bars) clears it. `400` for bad values, `404` for an unknown board. |
 | `GET /board/<secret>/api/logos` | Logo status: `{teams: [abbreviations with a logo], updated}`. |
 | `POST /board/<secret>/api/logos[?team=<ab>[&crop=0-12]]` | Upload logos as a PNG body (max 8 MB): without `team`, the whole 5 x 6 sheet of 32px tiles in `mlb-logos.js` `SHEET` order, at any whole-number scale (replaces every team); with `team`, one team's logo (any PNG; a non-32px image is area-averaged to 32px), cropped at `crop` (first of the 24px logo's rows shown; default per team). `400` with a reason on a bad image. The phone page converts other image types to PNG before uploading. |
 | `GET /board/<secret>/api/logo/<logoId>` | A logo crop for the simulator. |
 | `GET /board/<secret>/api/raw/mlb` | The MLB schedule response the poller last fetched, unchanged, for recording fixtures. `503` before the first fetch. |
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 
-POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `headerDivider`, `wxDivider`, `radarTime`, `radarClock`, `radarCond`, `tempUnit`, `radarBright`, `wxView`, `wxRain`, `wxRainEvery`, `wxRainLoops`, `radarEvery`, `radarFor`, `screen`, the Auto and screen options (`autoScreens`, `autoEvery`, `wxVisit`, `alertJump`, `bbTeams`, `bbPre`, `bbFinal`, `bbPriority`, `lineNames`, `headerClock`; see the state table), `bright`, `baseballLayout`, `logoBright`, the speed settings (`tickerHold` s: 5, 6, 8, 10, 12, 15; `tickerSlide` ms: 800, 1200, 1600, 2000; `radarFrame` ms: 300, 400, 500, 700, 1000; `radarHold` s: 2, 3, 4, 6, 8; `gameEvery` s: 30, 45, 60, 90, 120), `wxRainLoops` (1, 2, 3, 5), and `tickerFill` (25–80); anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
+POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `headerDivider`, `wxDivider`, `transitLayout`, `radarTime`, `radarClock`, `radarCond`, `tempUnit`, `radarBright`, `wxView`, `wxRain`, `wxRainEvery`, `wxRainLoops`, `radarEvery`, `radarFor`, `screen`, the Auto and screen options (`autoScreens`, `autoEvery`, `wxVisit`, `alertJump`, `bbTeams`, `bbPre`, `bbFinal`, `bbPriority`, `lineNames`, `headerClock`; see the state table), `bright`, `baseballLayout`, `logoBright`, the speed settings (`tickerHold` s: 5, 6, 8, 10, 12, 15; `tickerSlide` ms: 800, 1200, 1600, 2000; `radarFrame` ms: 300, 400, 500, 700, 1000; `radarHold` s: 2, 3, 4, 6, 8; `gameEvery` s: 30, 45, 60, 90, 120), `wxRainLoops` (1, 2, 3, 5), and `tickerFill` (25–80); anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be `ping`, `version`, `update`, or `radar`; if it is, control endpoints are disabled.
 
 ---
 
@@ -372,7 +383,8 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 | `station` | Train Tracker `mapid` and header name. Changeable from the control page. The station's coordinates are also the board's **location** for weather, NWS alerts, and the radar crop. |
 | `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the row order; if more destinations than the cap remain, the board shows the chronological view. Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |
-| `headerDivider`, `wxDivider` | Transit divider lines under the header and above the weather row (defaults off / on). They don't change the row layout. |
+| `headerDivider` | Transit divider line under the header (default off). It doesn't change the row layout. `wxDivider` (the line above the old weather row) is still accepted but no longer drawn or sent. |
+| `transitLayout` | `header` (default): station and clock on top, weather strip at the bottom. `key`: the `trains to` / `min` key on top and the station band at the bottom, no weather strip (sent as `key`). |
 | `screen` | `auto` or a forced screen (`transit`, `ticker`, `weather`, `baseball`; a saved `radar` loads as `weather`). Persists across boots. `auto` resolves to `transit`, or `baseball` while a game is on; it never changes screens on its own otherwise, except for radar visits. |
 | `autoScreens`, `autoEvery` | Auto's main screens: a non-empty list of `transit`, `ticker` (default `["transit"]`); with both, alternate every `autoEvery` s (30, 60, 120, 300, 600; default 60). |
 | `wxVisit`, `radarEvery`, `radarFor` | Weather visits on the auto screen: `off` (default), `rain` (only while rain is in the box), or `always`; every `radarEvery` minutes (1–60, default 4) for `radarFor` seconds (10–600, default 60). An older file's `radarEvery: 0` loads as `off`, `> 0` as `rain`. |
@@ -389,7 +401,7 @@ Settings added after a board's state was saved load with these defaults (today's
 | `radarCond` | Boolean, default `false`. Sent as `radar.cond: true` when on: the temperature under the radar clock, A/P on the clock line. |
 | `radarBright` | Integer 20–150, default `100`. Sent as `radar.rb` when not 100: radar precipitation brightness, percent. |
 | `wxRain`, `wxRainEvery`, `wxRainLoops` | The weather screen while rain is around. `radar` (default): the radar loop while rain is in the radar box, else the layout. `bars`: the rain bars while the forecast has rain or snow falling or due in 2 hours, else the layout; never the radar loop (no `frames` sent). `both`: the loop while rain is in the box, the bars while the forecast has rain. Each turn is `wxRainLoops` full radar loops (1, 2, 3, 5; default 2, sent as `wx.rain.loops`), then the bars for `wxRainEvery` s (10–60, default 15, sent as `wx.rain.alt`), when both apply. |
-| `tempUnit` | `F` (default) or `C`: every temperature the board shows (weather row, weather screen, radar corner). Converted on the server from Open-Meteo/NWS °F before rounding; radar snow mode still uses °F. |
+| `tempUnit` | `F` (default) or `C`: every temperature the board shows (weather strip, weather screen, radar corner). Converted on the server from Open-Meteo/NWS °F before rounding; radar snow mode still uses °F. |
 | `wxView` | `now` (default), `5day`, or `hourly`: the weather screen's layout without rain. `5day` adds `radar.wx.days`; `hourly` adds `radar.wx.hours`. |
 | `bright` | `auto`, an integer 0–100, or `off`. Reset to `auto` on boot. |
 

@@ -69,7 +69,7 @@ test('Clark/Lake with the header: five destinations -> header and weather hidden
   const { view, rows, bars } = run('clark-lake-2026-10-03-2317.json', { ...base, showWeather: true });
   assert.equal(view, 'dest');
   assert.equal(rows.length, 5);
-  assert.deepEqual(bars, { showHeader: false, showWeather: false, hidden: ['weather', 'header'] });
+  assert.deepEqual(bars, { showHeader: false, showWeather: false, showKey: false, hidden: ['weather', 'header'] });
 });
 
 // Clark/Lake plus Orange and Purple: 7 destinations.
@@ -86,7 +86,7 @@ test('more than 5 destinations -> one train per row, header kept, weather off', 
   const { arr, now } = clarkLakeRush();
   const { view, rows, bars } = format(arr, { ...base, showWeather: true }, { now });
   assert.equal(view, 'chrono');
-  assert.deepEqual(bars, { showHeader: true, showWeather: false, hidden: ['weather'] });
+  assert.deepEqual(bars, { showHeader: true, showWeather: false, showKey: false, hidden: ['weather'] });
   assert.equal(rows.length, 4 + CHRONO_EXTRA);
   assert.ok(rows.every((r) => r.t.length === 1 && r.s.length === 1 && r.rn));
   assert.ok(mins({ t: rows.map((r) => r.t[0]) }, now).every((m, i, a) => !i || m >= a[i - 1]));
@@ -96,10 +96,20 @@ test('more than 5 destinations -> one train per row, header kept, weather off', 
 test('fitBars: weather goes first, then the header; past 5 the header comes back', () => {
   const { fitBars } = require('./arrivals');
   const f = (n, h, w) => { const b = fitBars(n, h, w); return `${b.showHeader ? 'H' : '-'}${b.showWeather ? 'W' : '-'}`; };
-  assert.deepEqual([1, 2, 3, 4, 5, 6, 9].map((n) => f(n, true, true)), ['HW', 'HW', 'H-', 'H-', '--', 'H-', 'H-']);
-  assert.deepEqual([1, 3, 4, 5, 6].map((n) => f(n, false, true)), ['-W', '-W', '--', '--', '--']);
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 9].map((n) => f(n, true, true)), ['HW', 'HW', 'HW', 'H-', '--', 'H-', 'H-']);
+  assert.deepEqual([1, 3, 4, 5, 6].map((n) => f(n, false, true)), ['-W', '-W', '-W', '--', '--']);
   assert.deepEqual([4, 5, 6].map((n) => f(n, true, false)), ['H-', '--', 'H-']);
   assert.deepEqual([5, 6].map((n) => f(n, false, false)), ['--', '--']);
+});
+
+test('fitBars, key layout: the station band goes first, then the key; past 5 the key comes back', () => {
+  const { fitBars } = require('./arrivals');
+  const f = (n, h) => { const b = fitBars(n, h, false, true); return `${b.showKey ? 'K' : '-'}${b.showHeader ? 'B' : '-'}`; };
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 9].map((n) => f(n, true)), ['KB', 'KB', 'KB', 'K-', '--', 'K-', 'K-']);
+  assert.deepEqual(fitBars(5, true, false, true).hidden, ['header', 'key']);
+  assert.deepEqual([4, 5, 6].map((n) => f(n, false)), ['K-', '--', 'K-']);
+  assert.equal(maxRows(true, false, true), 3);
+  assert.equal(maxRows(false, false, true), 4);
 });
 
 test('Merchandise Mart all day: the weather row comes and goes with rush-only Purple', () => {
@@ -119,14 +129,14 @@ test('Merchandise Mart all day: the weather row comes and goes with rush-only Pu
 test('row cap follows the header and weather toggles', () => {
   assert.equal(maxRows(false, false), 5);
   assert.equal(maxRows(true, false), 4);
-  assert.equal(maxRows(false, true), 3);
-  assert.equal(maxRows(true, true), 2);
+  assert.equal(maxRows(false, true), 4);
+  assert.equal(maxRows(true, true), 3);
   // Belmont's four destinations: the weather row is hidden to fit them as rows.
   const { view, rows, bars } = run('belmont-2026-10-03-2316.json', { ...base, showWeather: true });
   assert.equal(view, 'dest');
   assert.equal(rows.length, 4);
   assert.deepEqual(bars.hidden, ['weather']);
-  // autoFit off: the plain cap (2 rows) and the chronological list.
+  // autoFit off: the plain cap (3 rows) and the chronological list.
   assert.equal(run('belmont-2026-10-03-2316.json', { ...base, showWeather: true, autoFit: false }).view, 'chrono');
 });
 
