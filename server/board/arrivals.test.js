@@ -102,7 +102,7 @@ test('fitBars: weather goes first, then the header; past 5 the header comes back
   assert.deepEqual([5, 6].map((n) => f(n, false, false)), ['--', '--']);
 });
 
-test('fitBars, key layout: the station band goes first, then the key; past 5 the key comes back', () => {
+test('fitBars, key layout: the station line goes first, then the key; past 5 the key comes back', () => {
   const { fitBars } = require('./arrivals');
   const f = (n, h) => { const b = fitBars(n, h, false, true); return `${b.showKey ? 'K' : '-'}${b.showHeader ? 'B' : '-'}`; };
   assert.deepEqual([1, 2, 3, 4, 5, 6, 9].map((n) => f(n, true)), ['KB', 'KB', 'KB', 'K-', '--', 'K-', 'K-']);

@@ -35,10 +35,10 @@ const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE')
 
 // The header, weather strip, and key are the most the board shows. When the
 // live destinations don't fit as rows, the weather strip goes first, then
-// the header (in the key layout, the station band), then the key, so up to 5
+// the header (in the key layout, the station line), then the key, so up to 5
 // destinations stay as rows. Past 5 the board lists one train per row
 // (chooseView): the header (or the key) comes back if it's on, the weather
-// strip and the band stay off. Re-evaluated on every update, so a station
+// strip and the station line stay off. Re-evaluated on every update, so a station
 // like Merchandise Mart gains and loses the weather strip as rush-only
 // Purple service comes and goes. Returns the bars to show and which were
 // hidden.
@@ -48,7 +48,7 @@ function fitBars(n, showHeader, showWeather, showKey = false) {
   if (n > maxRows(h, w, k)) {
     if (w) { w = false; hidden.push('weather'); }
     if (k) {
-      // Key layout: the band goes before the key; past 5 the key stays.
+      // Key layout: the station line goes before the key; past 5 the key stays.
       if (n > maxRows(h, w, k) && h) { h = false; hidden.push('header'); }
       if (n > maxRows(h, w, k) && n <= maxRows(false, false, false)) { k = false; hidden.push('key'); }
     } else if (n > maxRows(h, w) && n <= maxRows(false, false) && h) { h = false; hidden.push('header'); }

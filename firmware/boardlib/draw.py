@@ -169,7 +169,7 @@ def _key_row_tops(n, band):
     if n == 0:
         return []
     area_top = 6
-    area_h = (26 if band else 31) - area_top + 1
+    area_h = (24 if band else 31) - area_top + 1
     pitch = 0 if n == 1 else min(_KEY_PITCH.get(n, 6), (area_h - 5) // (n - 1))
     top = area_top + max(0, (area_h - ((n - 1) * pitch + 5)) // 2)
     return [top + i * pitch for i in range(n)]
@@ -263,7 +263,7 @@ LINE = {
 C = {
     'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'radarSub': hexc('#666666'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
     'sch': hexc('#6a6a6a'), 'schDim': hexc('#2e2e2e'), 'grey': hexc('#8f8f8f'),
-    'divider': hexc('#333333'), 'head': hexc('#808080'), 'dimHead': hexc('#555555'), 'band': hexc('#141414'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
+    'divider': hexc('#333333'), 'head': hexc('#808080'), 'dimHead': hexc('#555555'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
     'noTrains': hexc('#6c6c6c'), 'indicator': hexc('#3a3a3a'),
 }
@@ -528,16 +528,15 @@ def draw_weather(f, wx, warn, blink=False):
     elif wx.get('word'):
         rtext(f, 'small', wx['word'], 63, base, C['dimHead'])
 
-
-# Key layout: the key on rows 1-5, the station and clock on a dark band on
-# rows 27-31. Mirrors drawKey() / drawBand() in draw.js.
+# Key layout: the key on rows 1-5, the station and clock on rows 27-31 under
+# a divider on row 25. Mirrors drawKey() / drawBand() in draw.js.
 def draw_key(f):
     f.text('small', 'trains to', 0, 6, C['dimHead'])
     rtext(f, 'small', 'min', 63, 6, C['dimHead'])
 
 
 def draw_band(f, name, now, tzo, clock=True):
-    f.fill(0, 27, 64, 5, C['band'])
+    f.fill(0, 25, 64, 1, C['divider'])
     f.text('small', name, 0, 32, C['head'])
     if clock:
         ck = clock_text(now, tzo)
@@ -727,7 +726,7 @@ def draw_transit_view(f, view, blink):
         elif view.get('header'):
             draw_header(f, view['header'], view['now'], view.get('tzo', 0), view.get('hdiv') is True, view.get('clock') is not False, C['dimHead'])
         clip_top = 6 if key else (7 if view.get('header') else 0)
-        clip_bottom = 26 if (key and view.get('header')) else (25 if view.get('wx') else 31)
+        clip_bottom = 24 if (key and view.get('header')) else (25 if view.get('wx') else 31)
         f.push_clip(0, clip_top, 63, clip_bottom)
         try:
             for row in view['rows']:

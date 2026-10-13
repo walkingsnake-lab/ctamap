@@ -94,8 +94,8 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB (typically 0.5�
 | `rot` | object \| null | Auto alternating its screens: `{screens, every}` (`screens`: 2+ of `transit`, `ticker`; `every` s). Set only on the auto screen when `screen` is one of `screens`. The board (and simulator) shows `screens[floor(now / every) % screens.length]`, epoch-aligned (`autoScreen()` / `auto_screen()`); the board's `/board/update` then carries every rotation screen's sections. |
 | `hclock` | bool | Clock at the right of the transit and ticker headers (state `headerClock`). |
 | `lnc` | bool | Transit and chronological labels in the line's color instead of white (state `lineNames`). |
-| `header` | string \| null | Station name for the transit header (with `key`, for the station band at the bottom), or `null` when it's off or hidden to fit (see *Fitting the header, weather strip, and key*). |
-| `key` | `1` \| absent | Transit only, key layout (state `transitLayout` `key`): the `trains to` / `min` key on rows 1–5, and `header` (if not null) on the `#141414` station band on rows 27–31 instead of the top. Absent in the header layout, or when the key is hidden to fit 5 rows. |
+| `header` | string \| null | Station name for the transit header (with `key`, for the station line at the bottom), or `null` when it's off or hidden to fit (see *Fitting the header, weather strip, and key*). |
+| `key` | `1` \| absent | Transit only, key layout (state `transitLayout` `key`): the `trains to` / `min` key on rows 1–5, and `header` (if not null) on rows 27–31 under a `#333333` divider on row 25, unlit, instead of the top. Absent in the header layout, or when the key is hidden to fit 5 rows. |
 | `headerDivider` | bool | Transit only: a `#333333` line on row 7 under the header (rows still start at row 9). Default `false`. |
 | `tickerHeader` | string \| null | Station name for the ticker header. Always sent: the ticker shows its header even when the transit header toggle is off. (Boards without it fall back to `header`.) |
 | `hidden` | array | Which of `"weather"`, `"header"`, `"key"` the server hid to fit this update's destinations, for the phone page and simulator. The board just follows `header`, `key`, and `wx`. |
@@ -134,14 +134,14 @@ The board's `showHeader` / `showWeather` (and, in the key layout, the key) are t
 
 Key layout (no weather strip):
 
-| Destinations | Key | Station band (`header`) | View |
+| Destinations | Key | Station line (`header`) | View |
 |---|---|---|---|
 | up to 3 | shown | shown | rows |
 | 4 | shown | hidden | rows |
 | 5 | hidden | hidden | rows |
 | 6 or more | shown | hidden | one train per row |
 
-So a station with rush-only service (Purple at Merchandise Mart) gains and loses the weather strip on its own. The weather strip and band never show with the chronological list.
+So a station with rush-only service (Purple at Merchandise Mart) gains and loses the weather strip on its own. The weather strip and station line never show with the chronological list.
 
 #### Transit view (server)
 - `chrono` whenever the destination count exceeds the cap, `dest` otherwise, decided on every update. `CHRONO_HOLD` in `arrivals.js` (0 now) can add a hold before switching back; that state is kept in memory per board and station.
@@ -384,7 +384,7 @@ POST rules: allowed fields are `station` (`{mapid, name?}`; `name` defaults to t
 | `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the row order; if more destinations than the cap remain, the board shows the chronological view. Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |
 | `headerDivider` | Transit divider line under the header (default off). It doesn't change the row layout. `wxDivider` (the line above the old weather row) is still accepted but no longer drawn or sent. |
-| `transitLayout` | `header` (default): station and clock on top, weather strip at the bottom. `key`: the `trains to` / `min` key on top and the station band at the bottom, no weather strip (sent as `key`). |
+| `transitLayout` | `header` (default): station and clock on top, weather strip at the bottom. `key`: the `trains to` / `min` key on top and the station line at the bottom, no weather strip (sent as `key`). |
 | `screen` | `auto` or a forced screen (`transit`, `ticker`, `weather`, `baseball`; a saved `radar` loads as `weather`). Persists across boots. `auto` resolves to `transit`, or `baseball` while a game is on; it never changes screens on its own otherwise, except for radar visits. |
 | `autoScreens`, `autoEvery` | Auto's main screens: a non-empty list of `transit`, `ticker` (default `["transit"]`); with both, alternate every `autoEvery` s (30, 60, 120, 300, 600; default 60). |
 | `wxVisit`, `radarEvery`, `radarFor` | Weather visits on the auto screen: `off` (default), `rain` (only while rain is in the box), or `always`; every `radarEvery` minutes (1–60, default 4) for `radarFor` seconds (10–600, default 60). An older file's `radarEvery: 0` loads as `off`, `> 0` as `rain`. |

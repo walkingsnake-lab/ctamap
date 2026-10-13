@@ -79,9 +79,9 @@ async function build() {
     add(`dividers ${hdr}`, p, [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
   }
   add('brightness 50', payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { wx: WX, bright: 50 }), [{ screen: 'transit' }, { screen: 'ticker' }]);
-  // Key layout: key + band (Morse, 2 rows; Howard), band hidden (Belmont, 4
+  // Key layout: key + station line (Morse, 2 rows; Howard), station line hidden (Belmont, 4
   // rows), key hidden (Clark/Lake as dest rows needs 5), chrono with the key,
-  // no band clock, alerts, dim.
+  // no station clock, alerts, dim.
   for (const [name, hdr] of [['morse-2026-10-03-2316.json', 'MORSE'], ['howard-2026-10-03-2316.json', 'HOWARD'], ['belmont-2026-10-03-2316.json', 'BELMONT'], ['jefferson-park-2026-10-03-2316.json', 'JEFFERSON PK']]) {
     const p = payloadFrom(name, hdr, { key: true, alerts: ['RD', 'BL'] });
     add(`key layout ${hdr}`, p, [{ screen: 'transit' }, { screen: 'transit', now: p.now + 75 }]);

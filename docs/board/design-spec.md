@@ -109,7 +109,6 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Schedule-based times (`isSch`), first / later | grey `#6a6a6a` / `#2e2e2e` (instead of amber; same width, so digit rolls are unaffected). The first is about half the light of the white labels so it reads as grey on the panel (`#b0b0b0` looked white); later ones are about 40% of the first, the same step as amber to dim amber |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
 | Dividers (header line, weather screens) | `#333333` |
-| Key layout station band | `#141414` behind `#808080` text (darker than the earlier `#202020` header band; expected to drop out at night dimming, leaving the text) |
 | CTA alert block | the line color at 20% behind a full-color "!" |
 | Shoreline | `#34485e` |
 | Ticker alert circle | red `#ff2020` with white `#ffffff` "!" |
@@ -140,7 +139,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **No edge padding:** text runs to the screen edges (x0 and x63) everywhere outside filled bands.
 - Rows fill the remaining space (5px rows, gaps of 1px or more).
 - **Without the header, rows are spread evenly** from the top of the panel to the weather strip (rows 0–25) (or the bottom edge): equal gaps above, between, and below. The between-row gap is the ideal gap rounded to the nearest pixel; the leftover is split top and bottom, any odd pixel going to the bottom.
-- **Fitting:** the header and weather toggles are the most the board shows; each takes one row. When more destinations are running than fit, the **weather strip is hidden first, then the header** (key layout: **the station band first, then the key**), so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header or key (if on) and **no weather strip or band**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
+- **Fitting:** the header and weather toggles are the most the board shows; each takes one row. When more destinations are running than fit, the **weather strip is hidden first, then the header** (key layout: **the station line first, then the key**), so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header or key (if on) and **no weather strip or station line**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
 - Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**; the chronological view covers those stations.
 
 **Geometry (from the mocks):**
@@ -160,20 +159,20 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | on | 4 | 1, 7, 13, 19 | 1 / 1 / 2 |
 
 
-| Header (or band) | Weather strip | Key | Max rows |
+| Header (or station line) | Weather strip | Key | Max rows |
 |---|---|---|---|
 | off | off | off | 5 |
 | on | off | off | 4 |
 | off | on | off | 4 |
 | on | on | off | 3 |
-| on (band) | — | on | 3 |
+| on (station line) | — | on | 3 |
 | off | — | on | 4 |
 
 ### Key layout (optional)
 - **Key** on rows 1–5: lowercase Tom Thumb in the transit dark grey `#555555`, `trains to` from x0 (over the color blocks) and `min` flush right. Never amber (amber means a live train). The wording follows WMATA's `LN | CAR | DEST | MIN` header row; most agencies have no key.
-- **Station band** on rows 27–31: `#141414` fill with the station name (x0) and clock (flush right, rolling) in `#808080` on baseline 32, so the text sits on the band's bottom edge. It reads as a footer, not as the key's equal.
-- **Rows** between the key and the band (rows 6–26), 1 px apart from three rows up: 3 rows at 8, 14, 20 (2 / 1 / 1 / 2); 2 rows at 10, 18; 1 row at 14. With the band hidden (4 rows): 7, 13, 19, 25.
-- **Fitting:** the band hides before the key (4 rows: key and rows; 5: neither). The chronological view keeps the key (4 rows). No weather strip in this layout (the band takes its rows).
+- **Station line** at the bottom: a `#333333` divider on row 25, then the station name (x0) and clock (flush right, rolling) in `#808080` on rows 27–31 (baseline 32), on an unlit background. It reads as a footer, not as the key's equal. (First built on a `#141414` band on rows 27–31; replaced by the unlit line.)
+- **Rows** between the key and the divider (rows 6–24), 1 px apart from three rows up: 3 rows at 7, 13, 19 (1 px everywhere: key, rows, divider, station); 2 rows at 9, 17; 1 row at 13. With the station line hidden (4 rows): 7, 13, 19, 25.
+- **Fitting:** the station line hides before the key (4 rows: key and rows; 5: neither). The chronological view keeps the key (4 rows). No weather strip in this layout (the station line takes its rows).
 - The header divider doesn't apply.
 
 ### Chronological view (overflow)
@@ -182,7 +181,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
 - **Time format:** digits + lowercase `m` with the font's own **1px gap** (`4m`, `12m`); `DUE` stays bare. Labels are fitted against the widest time (`99m`), so they have up to 43px.
 - **Line ID: a line-colored position digit** (1–5, Tom Thumb, columns 0–2), then a 1px gap, the 3px line-color block (columns 4–6), and the label at x9. The digit is the block's exact color for every line (Brown and Purple were briefly brightened for thin strokes; matching the block won out). When a train departs, each digit rolls down (2→1) as the list slides up. Alerts show the same dimmed block and `!` (the digit stays). No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
-- Same row counts and geometry as destination rows; the header (or key) follows its setting; the weather strip and station band are always off (4 rows with the header or key, 5 without). The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
+- Same row counts and geometry as destination rows; the header (or key) follows its setting; the weather strip and station line are always off (4 rows with the header or key, 5 without). The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
 - **Departure:** the first row slides up under the header while fading, the list slides up one row pitch with it (0.5 s ease), the next train turns amber, and a new train slides in at the bottom. Per-digit roll still applies within a row (`12m`→`11m` rolls only the 2).
 - **Trains swapping order** between updates: rows are keyed by run number, so the two rows just slide past each other.
 - **Switching views** cross-fades: the old rows fade out, then the new ones fade in.
@@ -348,7 +347,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
-- **Transit layout:** station on top (header) or key on top (station band at the bottom). **Header and weather strip:** independent on/off toggles per board (see §5 for how many rows each combination fits; the key layout has no weather strip).
+- **Transit layout:** station on top (header) or key on top (station line at the bottom). **Header and weather strip:** independent on/off toggles per board (see §5 for how many rows each combination fits; the key layout has no weather strip).
 - **Header clock** (transit and ticker) on/off, and **destination names** in white or the line's color (Brown and Purple read dim as text in their true colors).
 - **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.
 

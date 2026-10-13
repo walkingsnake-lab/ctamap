@@ -293,7 +293,7 @@ function createBoard({
     // weather to show.
     // Temperatures in the board's unit (wd); rain bars keep the raw data.
     const wd = inUnit(w, board.tempUnit);
-    // The key layout has no weather strip: the station band takes rows 27-31.
+    // The key layout has no weather strip: the station line takes rows 25-31.
     const keyLayout = board.transitLayout === 'key';
     const wx = board.showWeather && !keyLayout && wd ? toWx(wd) : null;
     const cfg = { ...board, showWeather: !!wx, showKey: keyLayout };
@@ -360,7 +360,7 @@ function createBoard({
       // ticker always shows its header (hiding it frees no room it can use).
       header: bars.showHeader ? board.station.name : null,
       headerDivider: board.headerDivider === true,
-      // Key layout: the key on top; `header` then goes on the bottom band.
+      // Key layout: the key on top; `header` then goes on the bottom line.
       ...(bars.showKey ? { key: 1 } : {}),
       tickerHeader: board.station.name,
       // Header clock (transit and ticker) and line-colored labels.

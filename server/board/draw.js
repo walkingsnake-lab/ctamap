@@ -105,7 +105,7 @@
   const DROP_GRACE = 30;
 
   // Max transit rows for the header/weather/key toggles (design spec §5).
-  // Each takes one row: the header (or, with the key, the station band at
+  // Each takes one row: the header (or, with the key, the station line at
   // the bottom), the weather strip, the key.
   function maxRows(hasHeader, hasWeather, hasKey = false) {
     return 5 - (hasHeader ? 1 : 0) - (hasWeather ? 1 : 0) - (hasKey ? 1 : 0);
@@ -120,7 +120,7 @@
   // row 5, so the rows move up to keep the gap under the header even with
   // the gaps between rows (2 px for one or two rows without weather, else 1).
   // key: the key layout (KEY_ROWS): the key on rows 1-5 and, with
-  // hasHeader, the station band on rows 27-31.
+  // hasHeader, the station line: a divider on row 25, text on rows 27-31.
   function rowTops(n, hasHeader, hasWeather, divider = false, key = false) {
     if (key) return keyRowTops(n, hasHeader);
     // Two rows under the header: 4 px above, between, and below the rows
@@ -132,12 +132,12 @@
     return tops.map((t) => t - shift);
   }
 
-  // Key layout: rows between the key (ink rows 1-5) and the band (27) or
-  // the bottom edge, at the preferred pitch (1px between rows from three
-  // rows up), centered, the odd pixel going below.
+  // Key layout: rows between the key (ink rows 1-5) and the station line's
+  // divider (row 25) or the bottom edge, at the preferred pitch (1px between
+  // rows from three rows up), centered, the odd pixel going below.
   function keyRowTops(n, band) {
     if (n === 0) return [];
-    const areaTop = 6, areaBottom = band ? 26 : 31;
+    const areaTop = 6, areaBottom = band ? 24 : 31;
     const areaH = areaBottom - areaTop + 1;
     const preferred = { 2: 8, 3: 6, 4: 6 };
     const pitch = n === 1 ? 0 : Math.min(preferred[n] || 6, Math.floor((areaH - 5) / (n - 1)));
@@ -206,7 +206,7 @@
     const C = {
       label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
       sch: '#6a6a6a', schDim: '#2e2e2e', grey: '#8f8f8f', divider: '#333333',
-      head: '#808080', dimHead: '#555555', band: '#141414', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
+      head: '#808080', dimHead: '#555555', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
 
@@ -338,14 +338,14 @@
 
     // Key layout (transitLayout 'key'): a lowercase key over the columns on
     // rows 1-5 ("trains to" from x0, over the color blocks; "min" flush
-    // right), and the station name and clock on a dark band on rows 27-31
-    // (`band`: the header, null when it's hidden to fit the rows).
+    // right), and the station name and clock on rows 27-31, unlit, under a
+    // divider on row 25 (drawn when the header isn't hidden to fit the rows).
     function drawKey(f) {
       f.text('small', 'trains to', 0, 6, C.dimHead);
       rtext(f, 'small', 'min', 63, 6, C.dimHead);
     }
     function drawBand(f, name, now, clock) {
-      f.fill(0, 27, 64, 5, C.band);
+      f.fill(0, 25, 64, 1, C.divider);
       f.text('small', name, 0, 32, C.head);
       if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', 63), 32, C.head);
     }
@@ -524,7 +524,7 @@
           drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false, C.dimHead);
         }
         const clipTop = view.key ? 6 : view.header ? 7 : 0;
-        const clipBottom = view.key && view.header ? 26 : view.wx ? 25 : 31;
+        const clipBottom = view.key && view.header ? 24 : view.wx ? 25 : 31;
         f.withClip(0, clipTop, 63, clipBottom, () => {
           for (const row of view.rows) drawViewRow(f, row, view.lnc);
         });

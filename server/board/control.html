@@ -442,7 +442,7 @@
     $('wxRow').hidden = keyLayout;
     $('hdivRow').hidden = keyLayout;
     $('layoutHint').textContent = keyLayout
-      ? '"trains to / min" on top, station and clock on a band at the bottom. No weather strip in this layout.'
+      ? '"trains to / min" on top, station and clock under a line at the bottom. No weather strip in this layout.'
       : 'Station and clock on top, weather strip at the bottom.';
     const bl = board.baseballLayout || 'classic';
     pressed('bbLayout', bl);
@@ -496,9 +496,9 @@
       : 'Current weather icon and temperature; a weather watch or warning shows at the bottom right.';
     $('rowsHint').textContent = 'These are the most the board shows. When more destinations are running than fit, '
       + (board.transitLayout === 'key'
-        ? 'it hides the station band first, then the key (up to 5 rows). Past 5, it lists one train per row with the key.'
+        ? 'it hides the station line first, then the key (up to 5 rows). Past 5, it lists one train per row with the key.'
         : 'it hides the weather strip first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather strip.')
-      + (hidden.length ? ` Hidden right now: ${hidden.map((h) => (h === 'header' && board.transitLayout === 'key' ? 'station band' : h === 'weather' ? 'weather strip' : h)).join(' and ')}.` : '');
+      + (hidden.length ? ` Hidden right now: ${hidden.map((h) => (h === 'header' && board.transitLayout === 'key' ? 'station line' : h === 'weather' ? 'weather strip' : h)).join(' and ')}.` : '');
     renderDests();
   }
 
