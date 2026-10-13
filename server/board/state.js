@@ -76,7 +76,7 @@ function defaultBoard(stations) {
     headerDivider: false,
     wxDivider: true,
     // Transit layout: 'header' (station and clock on top) or 'key' (a
-    // "trains to / min" key on top, station and clock on a band at the bottom).
+    // "trains to / min" key on top, station and clock under a line at the bottom).
     transitLayout: 'header',
     screen: 'auto',
     bright: 'auto',

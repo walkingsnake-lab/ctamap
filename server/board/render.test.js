@@ -56,11 +56,11 @@ test('rows stay inside their area', () => {
 });
 
 test('key layout: rows between the key and the band, 1 px apart from three rows up', () => {
-  assert.deepEqual(rowTops(3, true, false, false, true), [8, 14, 20]);   // 2 under the key, 1, 1, 2 above the band
-  assert.deepEqual(rowTops(2, true, false, false, true), [10, 18]);
-  assert.deepEqual(rowTops(1, true, false, false, true), [14]);
+  assert.deepEqual(rowTops(3, true, false, false, true), [7, 13, 19]);   // 1 px everywhere: key, rows, line (25), station
+  assert.deepEqual(rowTops(2, true, false, false, true), [9, 17]);
+  assert.deepEqual(rowTops(1, true, false, false, true), [13]);
   assert.deepEqual(rowTops(4, false, false, false, true), [7, 13, 19, 25]); // band hidden: to the bottom edge
-  assert.deepEqual(rowTops(3, true, false, true, true), [8, 14, 20]);    // the header divider doesn't apply
+  assert.deepEqual(rowTops(3, true, false, true, true), [7, 13, 19]);    // the header divider doesn't apply
 });
 
 test('clock is 12-hour Chicago time without AM/PM', () => {
@@ -173,17 +173,19 @@ test('weather strip: temperature left, condition right; a warning tag replaces t
   assert.ok(!colors(warned, 30, 63).has(C.dimHead));
 });
 
-test('key layout: key on rows 1-5, station and clock on the band, no header on top', () => {
+test('key layout: key on rows 1-5, station and clock unlit under a line on row 25, no header on top', () => {
   const p = { ...payload('morse-2026-10-03-2316.json'), key: 1 };
   const f = render(p);
   const top = new Set(), band = new Set();
   for (let y = 0; y < 6; y++) for (let x = 0; x < 64; x++) top.add(hex(f.get(x, y)));
   for (let y = 27; y < 32; y++) for (let x = 0; x < 64; x++) band.add(hex(f.get(x, y)));
   assert.deepEqual([...top].sort(), ['#000000', C.dimHead].sort());
-  assert.ok(band.has(C.band) && band.has(C.head));
-  assert.equal(hex(f.get(0, 10)), LINE.RD);        // two rows: 10 and 18
-  assert.equal(hex(f.get(0, 18)), LINE.RD);
-  // Band hidden (header null): no band, the key stays.
+  assert.deepEqual([...band].sort(), ['#000000', C.head].sort()); // unlit background
+  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 25)), C.divider);
+  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 26)), '#000000');
+  assert.equal(hex(f.get(0, 9)), LINE.RD);         // two rows: 9 and 17
+  assert.equal(hex(f.get(0, 17)), LINE.RD);
+  // Station line hidden (header null): no line, the key stays.
   const g = render({ ...p, header: null });
-  assert.equal(hex(g.get(0, 31)), '#000000');
+  assert.equal(hex(g.get(10, 25)), '#000000');
 });
