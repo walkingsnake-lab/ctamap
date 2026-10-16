@@ -366,6 +366,8 @@ function createBoard({
       // Header clock (transit and ticker) and line-colored labels.
       hclock: board.headerClock !== false,
       lnc: board.lineNames === 'line',
+      // Third transit time one step dimmer than the second.
+      ts: board.timeSteps === true,
       hidden: bars.hidden,
       view,
       rows,
