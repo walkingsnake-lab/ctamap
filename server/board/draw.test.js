@@ -1336,3 +1336,18 @@ test('weather strip: Tom Thumb temperature at x0 and condition word ending at x6
     assert.equal(ink(f, 0, 63, 22, 26, draw.C.dimHead)[0], 0, 'nothing above row 27');
   }
 });
+
+test('timeSteps (ts): the third time a step dimmer than the second', () => {
+  const rows = [{ ln: 'RD', lbl: 'HOWARD', t: [min(2), min(9), min(14)], s: [0, 0, 0], a: 0 },
+    { ln: 'RD', lbl: '95TH', t: [min(3), min(8), min(13)], s: [1, 1, 1], a: 0 }];
+  const [top0, top1] = draw.rowTops(2, true, false);
+  const on = draw.renderTransit({ ...payload(rows), ts: true });
+  const off = draw.renderTransit(payload(rows));
+  // "14" / "13" end on column 63; the middle time sits left of them.
+  assert.ok(count(on, draw.C.dimAmber2, 57, top0, 63, top0 + 4) > 0);
+  assert.equal(count(on, draw.C.dimAmber, 57, top0, 63, top0 + 4), 0);
+  assert.ok(count(on, draw.C.dimAmber, 40, top0, 56, top0 + 4) > 0);
+  assert.ok(count(on, draw.C.schDim2, 57, top1, 63, top1 + 4) > 0);
+  assert.ok(count(off, draw.C.dimAmber, 57, top0, 63, top0 + 4) > 0);
+  assert.equal(count(off, draw.C.dimAmber2, 0, 0, 63, 31), 0);
+});

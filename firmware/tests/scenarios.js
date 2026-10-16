@@ -69,6 +69,7 @@ async function build() {
   // Options: no header clock, line-colored labels (dest and chrono), ticker header.
   const mo = payloadFrom('morse-2026-10-03-2316.json', 'MORSE');
   add('options: no header clock, line-colored names (dest)', { ...mo, hclock: false, lnc: true }, [{ screen: 'transit' }, { screen: 'ticker' }]);
+  add('options: time dim steps (dest)', { ...mo, ts: true }, [{ screen: 'transit' }, { screen: 'transit', now: mo.now + 75 }]);
   add('options: line-colored names (chrono)', { ...cl, lnc: true }, [{ screen: 'transit' }]);
   add('options: no header clock (chrono)', { ...cl, hclock: false }, [{ screen: 'transit' }, { screen: 'ticker' }]);
   add('chrono clark/lake weather + warning', payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { wx: WX, warn: { kind: 'svr', lvl: 'warning' } }), [{ screen: 'transit' }]);

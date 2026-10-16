@@ -269,6 +269,7 @@
       <button data-v="white">White</button>
       <button data-v="line">Line color</button>
     </div>
+    <div class="row"><span>Dim each later time a step more</span><label class="switch"><input type="checkbox" id="timeSteps"><span></span></label></div>
     <div class="row" id="wxRow"><span>Weather strip</span><label class="switch"><input type="checkbox" id="showWeather"><span></span></label></div>
     <div class="row" id="hdivRow"><span>Line under header</span><label class="switch"><input type="checkbox" id="headerDivider"><span></span></label></div>
     <p class="hint" id="rowsHint"></p>
@@ -433,6 +434,7 @@
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
     $('showHeader').checked = board.showHeader;
     $('headerClock').checked = board.headerClock !== false;
+    $('timeSteps').checked = board.timeSteps === true;
     pressed('lineNames', board.lineNames || 'white');
     pressed('tempUnit', board.tempUnit === 'C' ? 'C' : 'F');
     $('showWeather').checked = board.showWeather;
@@ -558,6 +560,7 @@
   $('bbPre').addEventListener('change', (e) => save({ bbPre: Number(e.target.value) }));
   $('bbFinal').addEventListener('change', (e) => save({ bbFinal: Number(e.target.value) }));
   $('headerClock').addEventListener('change', (e) => save({ headerClock: e.target.checked }));
+  $('timeSteps').addEventListener('change', (e) => save({ timeSteps: e.target.checked }));
   $('radarFor').addEventListener('change', (e) => save({ radarFor: Number(e.target.value) }));
   $('bright').addEventListener('click', (e) => {
     const v = e.target.dataset.v; if (!v) return;

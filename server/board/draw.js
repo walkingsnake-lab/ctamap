@@ -204,8 +204,8 @@
 
     const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
     const C = {
-      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600',
-      sch: '#6a6a6a', schDim: '#2e2e2e', grey: '#8f8f8f', divider: '#333333',
+      label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600', dimAmber2: '#332300',
+      sch: '#6a6a6a', schDim: '#2e2e2e', schDim2: '#151515', grey: '#8f8f8f', divider: '#333333',
       head: '#808080', dimHead: '#555555', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
     };
@@ -380,7 +380,8 @@
 
     // Lay out one row's times: right-aligned group, 3px gaps tightening to 2px
     // when the row is full. Returns cells (right-to-left order not assumed).
-    function layoutCells(r, now) {
+    // steps: the third time a step dimmer than the second (state timeSteps).
+    function layoutCells(r, now, steps) {
       const texts = r.t.map((t, k) => timeText(t, now, k === 0));
       const widthAt = (gap) => texts.reduce((w, txt, i) => w + measure('small', txt) + (i ? gap : 0), 0);
       const labelEnd = 5 + measure('small', r.lbl) - 1;
@@ -391,7 +392,8 @@
         const sch = r.s && r.s[k];
         cells[k] = {
           id: slotKey(r, k), t: r.t[k], text: texts[k], right: x, alpha: 1, roll: null,
-          color: sch ? (k ? C.schDim : C.sch) : (k ? C.dimAmber : C.amber),
+          color: sch ? [C.sch, C.schDim, steps ? C.schDim2 : C.schDim][Math.min(k, 2)]
+            : [C.amber, C.dimAmber, steps ? C.dimAmber2 : C.dimAmber][Math.min(k, 2)],
         };
         x -= measure('small', texts[k]) + gap;
       }
@@ -417,7 +419,7 @@
         stale: p.stale,
         rows: rows.map((r, i) => ({
           key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
-          cells: layoutCells(r, now),
+          cells: layoutCells(r, now, p.ts === true),
         })),
       };
     }

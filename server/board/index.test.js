@@ -595,9 +595,10 @@ test('auto: main screens, alternating, alert jump, and baseball teams/priority',
   b = await get();
   assert.deepEqual([b.mlb.games.length, b.mlb.all], [2, true]);
   // Header clock and line-colored names.
-  await post({ headerClock: false, lineNames: 'line' });
+  assert.equal(b.ts, false);
+  await post({ headerClock: false, lineNames: 'line', timeSteps: true });
   b = await get();
-  assert.deepEqual([b.hclock, b.lnc], [false, true]);
+  assert.deepEqual([b.hclock, b.lnc, b.ts], [false, true, true]);
   await s.close();
 });
 
