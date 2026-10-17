@@ -120,15 +120,11 @@ class TestBoardFrame(unittest.TestCase):
             self.assertEqual(self.draw_board(self.p, screen, logos=self.logos), ref_pixels(ref), screen)
 
     def test_a_full_glyph_cache_draws_the_rest_pixel_by_pixel(self):
-        old = device.GLYPH_CACHE
-        device.GLYPH_CACHE = 5
-        try:
-            for screen in ('transit', 'ticker', 'baseball'):
-                ref = draw.render(self.p, draw.Frame(), screen=screen, now=self.now, logos=self.logos)
-                self.assertEqual(self.draw_board(self.p, screen, logos=self.logos), ref_pixels(ref), screen)
-                self.assertLessEqual(len(self.bf.glyphs), 5)
-        finally:
-            device.GLYPH_CACHE = old
+        self.bf = device.BoardFrame(FakeBitmap(), [0] * 256, glyph_cache=5)
+        for screen in ('transit', 'ticker', 'baseball'):
+            ref = draw.render(self.p, draw.Frame(), screen=screen, now=self.now, logos=self.logos)
+            self.assertEqual(self.draw_board(self.p, screen, logos=self.logos), ref_pixels(ref), screen)
+            self.assertLessEqual(len(self.bf.glyphs), 5)
 
     def test_radar_brightness_rewrites_the_radar_slots(self):
         data = bytes((i % 11) for i in range(2048))

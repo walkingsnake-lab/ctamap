@@ -19,18 +19,20 @@ SCREENS = ('transit', 'ticker', 'weather', 'baseball')
 # (MemoryError with 37 KB free), so frames are read into these instead.
 RADAR_SLOTS = 6          # the loop's length (contract: up to 6 frames)
 RADAR_BYTES = 64 * 32 // 2   # packed: 4 bits a pixel (device.RADAR_PACKED)
-# Team logos (logo layout), same reason: 4 slots hold the game on screen and
-# the next one in the rotation, fetched ahead so a rotation shows no gap.
-LOGO_SLOTS = 4
+# Team logos (logo layout), same reason: at least 4 slots, for the game on
+# screen and the next one in the rotation, fetched ahead so a rotation shows
+# no gap. matrix.py gives a big board (S3) more; logos stay until their slot
+# is needed, so with enough slots a rotation never refetches.
+LOGO_SLOTS = 4  # without matrix.py's buffers (tests)
 LOGO_BYTES = 24 * 12 * 3
 BLINK_START_WINDOW_MS = 150
 FAR = 10 ** 9  # "no animation coming"
 
 
 def _slots(bufs, n, size):
-    """The preallocated buffers (matrix.py, made before the big imports),
-    or fresh ones (tests, or if matrix.py's sizes drift from these)."""
-    if bufs and len(bufs) == n and all(len(b) == size for b in bufs):
+    """The preallocated buffers (matrix.py, made before the big imports; at
+    least n), or n fresh ones (tests, or if matrix.py's sizes drift)."""
+    if bufs and len(bufs) >= n and all(len(b) == size for b in bufs):
         return list(bufs)
     return [bytearray(size) for _ in range(n)]
 
@@ -43,6 +45,7 @@ class Player:
         self.radar_frames = {}   # frame id -> one of the slot buffers
         self.radar_free = _slots(radar_bufs, RADAR_SLOTS, RADAR_BYTES)
         self.logos = {}          # logo id -> one of the logo slot buffers
+        self.logo_order = []     # logo ids, least recently wanted first
         self.logo_free = _slots(logo_bufs, LOGO_SLOTS, LOGO_BYTES)
         self.page = 0
         self.page_start = 0
@@ -117,7 +120,12 @@ class Player:
     def _keep_logos(self, want):
         for k in list(self.logos):
             if k not in want:
-                self.logo_free.append(self.logos.pop(k))
+                self._drop_logo(k)
+
+    def _drop_logo(self, k):
+        self.logo_free.append(self.logos.pop(k))
+        if k in self.logo_order:
+            self.logo_order.remove(k)
 
     def wanted_logos(self, now):
         """Logo ids for the game on screen, then the next one in the
@@ -141,13 +149,28 @@ class Player:
         return any(g.get('st') == 'live' for g in (self.p.get('mlb') or {}).get('games') or [])
 
     def missing_logos(self, now):
-        """Logos to fetch: only while the baseball screen is up. Frees the
-        slots of logos the current and next game don't use."""
+        """Logos to fetch: only while the baseball screen is up. Frees only
+        as many slots as the fetches need, least recently wanted first, never
+        the current or next game's (the M4's 4 slots end up holding just
+        those; the S3's keep earlier games' too)."""
         if self.screen != 'baseball':
             return []
         want = self.wanted_logos(now)
-        self._keep_logos(want)
-        return [i for i in want if i not in self.logos]
+        order = self.logo_order
+        for k in want:
+            if k in order:
+                order.remove(k)
+            order.append(k)
+        if len(order) > len(self.logos) + len(want):
+            self.logo_order = order = [k for k in order if k in self.logos or k in want]
+        missing = [i for i in want if i not in self.logos]
+        need = len(missing) - len(self.logo_free)
+        for k in [k for k in order if k in self.logos and k not in want]:
+            if need <= 0:
+                break
+            self._drop_logo(k)
+            need -= 1
+        return missing
 
     def take_logo_slot(self):
         return self.logo_free.pop() if self.logo_free else None
@@ -158,6 +181,8 @@ class Player:
     def add_logo(self, lid, buf):
         """buf: a buffer from take_logo_slot(), now holding logo lid."""
         self.logos[lid] = buf
+        if lid not in self.logo_order:
+            self.logo_order.append(lid)
 
     def auto_screen(self, now):
         """The screen the server wants now: its `screen`, except that on the

@@ -130,6 +130,15 @@ test('health rides on the version check and shows on the control API', async () 
   r = (await s.req('/board/secret123/api/health')).body.home;
   assert.equal(r.started, 'POWER_ON');
   assert.equal(r.lastCrash, 'MemoryError:player:312:quiet_ms');
+  // Which hardware and firmware build sent it; anything but plain letters is dropped.
+  await s.req('/board/version?b=home&hu=3&hd=adafruit_matrixportal_s3&hv=639b791_dirty', h);
+  r = (await s.req('/board/secret123/api/health')).body.home;
+  assert.equal(r.hardware, 'adafruit_matrixportal_s3');
+  assert.equal(r.firmware, '639b791_dirty');
+  await s.req('/board/version?b=home&hu=4&hd=matrixportal_m4&hv=%3Cx%3E', h);
+  r = (await s.req('/board/secret123/api/health')).body.home;
+  assert.equal(r.hardware, 'matrixportal_m4');
+  assert.equal(r.firmware, undefined);
   await s.close();
 });
 

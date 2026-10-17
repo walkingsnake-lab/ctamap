@@ -1,9 +1,10 @@
-# Matrix Portal M4 hardware: drawing to the HUB75 matrix (built by matrix.py), the ESP32 WiFi co-processor,
-# the UP/DOWN buttons, the status NeoPixel, and the watchdog. Only imported on the board; the
-# rest of boardlib runs under CPython for tests.
+# Matrix Portal hardware (M4 and S3): drawing to the HUB75 matrix (built by matrix.py),
+# WiFi (the M4's ESP32 co-processor or the S3's own radio), the UP/DOWN buttons, the
+# status NeoPixel, and the watchdog. Only imported on the board; the rest of boardlib
+# runs under CPython for tests.
 #
-# Libraries (copy to CIRCUITPY/lib, or `circup install`): adafruit_esp32spi,
-# adafruit_requests, adafruit_connection_manager.
+# Libraries (copy to CIRCUITPY/lib, or `circup install`): adafruit_requests,
+# adafruit_connection_manager, and on the M4 adafruit_esp32spi.
 
 import gc
 import time
@@ -28,7 +29,7 @@ LOGO_COLORS = 64  # per logo; the server caps each logo at this (mlb-logos.js MA
 LOGO_POSITIONS = 2  # away (top band) and home
 FREE_FIRST = LOGO_FIRST + LOGO_POSITIONS * LOGO_COLORS  # 139
 COLOR_RESET = 190  # at a frame start past this slot, forget allocated colors (65 left for one frame)
-LOGO_CACHE = 4     # indexed logos kept (current game + next, by position)
+LOGO_CACHE = 4     # indexed logos kept, by position (M4; Display matches the board's logo slots)
 RADAR_PACKED = 64 * 32 // 2  # a radar frame as the board stores it: 4 bits a pixel (values 0-10)
 GLYPH_CACHE = 96  # glyph bitmaps kept for arrayblit, per font, codepoint, and palette slot
 GLYPH_BYTES = 40  # bytes per cached glyph (w * h); bigger glyphs (clock digits) draw pixel by pixel
@@ -113,18 +114,19 @@ def _pack(rgb):
 READ_CHUNK = 256  # bytes per socket read; the ESP32 socket allocates a temp copy of each
 
 
-def read_into(r, buf):
+def read_into(r, buf, size=READ_CHUNK):
     """Fill buf from an adafruit_requests Response body. Uses the library's
     _readinto (private, but it's what iter_content uses) so nothing the size
     of buf is allocated; falls back to small iter_content chunks. Reads are
-    capped at READ_CHUNK: esp32spi's recv_into allocates a bytes of each
-    read's size, so one 2 KB read needs a 2 KB block all the same."""
+    capped at size (the radio's read_chunk): esp32spi's recv_into allocates
+    a bytes of each read's size, so one 2 KB read needs a 2 KB block all the
+    same."""
     mv = memoryview(buf)
     got = 0
     readinto = getattr(r, '_readinto', None)
     if readinto is not None:
         while got < len(buf):
-            n = readinto(mv[got:got + READ_CHUNK])
+            n = readinto(mv[got:got + size])
             if not n:
                 break
             got += n
@@ -164,7 +166,9 @@ class BoardFrame(draw.Frame):
     """draw.Frame drawing into a palette-indexed displayio Bitmap. Colors get
     palette slots as they're used; brightness scales the palette."""
 
-    def __init__(self, bitmap, palette, gamma=1, bit_depth=5):
+    def __init__(self, bitmap, palette, gamma=1, bit_depth=5, glyph_cache=GLYPH_CACHE, logo_cache=LOGO_CACHE):
+        """logo_cache: the board's logo slots (matrix.logo_slots; more on the
+        S3). glyph_cache: for tests (a small one exercises the full-cache path)."""
         self.lut = gamma_lut(gamma)
         # Smallest 8-bit value that survives quantization (RGB565, then the
         # top bit_depth bits; red and blue only have 5).
@@ -181,7 +185,8 @@ class BoardFrame(draw.Frame):
         self.next = FREE_FIRST
         self.k = 1
         self.glyphs = IntTable(GLYPH_SLOTS)   # int key (see GLYPH_CACHE) -> index into glyph_pool
-        self.glyph_pool = [bytearray(GLYPH_BYTES) for _ in range(GLYPH_CACHE)]
+        self.glyph_pool = [bytearray(GLYPH_BYTES) for _ in range(min(glyph_cache, GLYPH_CACHE))]
+        self.logo_cache_max = logo_cache
         self.font_ids = {}
         self.fresh = []          # (0xRRGGBB, slot) allocated since the last commit
         self.committed_k = None  # brightness the palette was last written for
@@ -212,7 +217,7 @@ class BoardFrame(draw.Frame):
         key = (lid, pos)
         ent = self.logo_cache.get(key)
         if ent is None:
-            if len(self.logo_cache) >= LOGO_CACHE:
+            if len(self.logo_cache) >= self.logo_cache_max:
                 self.logo_cache = {}
             base = LOGO_FIRST + pos * LOGO_COLORS
             cols = []  # 0xRRGGBB
@@ -277,7 +282,7 @@ class BoardFrame(draw.Frame):
             return self.glyph_pool[n]
         w, h = d[o + 1], d[o + 2]
         n = len(self.glyphs)
-        if n >= GLYPH_CACHE or n >= len(self.glyph_pool) or w * h > GLYPH_BYTES:
+        if n >= len(self.glyph_pool) or w * h > GLYPH_BYTES:
             return None
         data = self.glyph_pool[n]
         for r in range(h):
@@ -388,7 +393,8 @@ class Display:
         group = displayio.Group()
         group.append(displayio.TileGrid(self.bitmap, pixel_shader=self.palette))
         self.display.root_group = group
-        self.frame = BoardFrame(self.bitmap, self.palette, gamma, bit_depth)
+        self.frame = BoardFrame(self.bitmap, self.palette, gamma, bit_depth,
+                                logo_cache=max(LOGO_CACHE, len(getattr(mx, 'logos', ()))))
         self.last_ms = 0
         self.max_ms = 0
 
@@ -500,18 +506,118 @@ def status_led():
     return _led[0]
 
 
-class Net:
-    """Board endpoints over the ESP32 co-processor (contract.md)."""
+def _text(n):
+    return n.decode('utf-8') if isinstance(n, bytes) else n
 
-    def __init__(self, url, board_id, token):
-        from adafruit_esp32spi import adafruit_esp32spi
+
+class Esp32SpiRadio:
+    """WiFi on the Matrix Portal M4: an ESP32 co-processor over SPI
+    (adafruit_esp32spi). Its quirks shape Net.connect: after a reset it
+    answers before its radio is ready, a failed join leaves it reporting
+    'No such ssid' until disconnected, and it can wedge until reset."""
+
+    kind = 'esp32spi'
+    read_chunk = READ_CHUNK  # esp32spi allocates a temp bytes per read, sized to it
+
+    def __init__(self, esp=None):
+        if esp is None:
+            from adafruit_esp32spi import adafruit_esp32spi
+            spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+            esp = adafruit_esp32spi.ESP_SPIcontrol(
+                spi, DigitalInOut(board.ESP_CS), DigitalInOut(board.ESP_BUSY), DigitalInOut(board.ESP_RESET))
+        self.esp = esp
+        self.target = esp  # what adafruit_connection_manager builds sockets on
+
+    @property
+    def mac(self):
+        b = getattr(self.esp, 'MAC_address_actual', None) or bytes(reversed(self.esp.MAC_address))
+        return bytes(b)
+
+    def rssi(self):
+        return self.esp.rssi
+
+    def connected_ssid(self):
+        if self.esp.is_connected:
+            return _text(self.esp.ap_info.ssid)
+        return None
+
+    def scan(self):
+        """SSIDs the radio sees (one per access point)."""
+        for ap in self.esp.scan_networks():
+            yield _text(ap.ssid if hasattr(ap, 'ssid') else ap['ssid'])
+
+    def disconnect(self):
+        self.esp.disconnect()
+
+    def join(self, ssid, password):
+        self.esp.connect_AP(ssid, password)
+
+    def reset(self):
+        self.esp.reset()
+
+
+class NativeRadio:
+    """WiFi on the chip itself (Matrix Portal S3: CircuitPython's wifi
+    module). No co-processor to wedge or warm up; Net.connect's resets and
+    scans still work, they just rarely matter."""
+
+    kind = 'native'
+    read_chunk = 1024  # native sockets read straight into the buffer
+    JOIN_TIMEOUT_S = 8  # under the watchdog, which is fed before each try
+
+    def __init__(self, radio=None):
+        if radio is None:
+            import wifi
+            radio = wifi.radio
+        self.radio = radio
+        self.target = radio
+
+    @property
+    def mac(self):
+        return bytes(self.radio.mac_address)
+
+    def rssi(self):
+        ap = self.radio.ap_info
+        return ap.rssi if ap else None
+
+    def connected_ssid(self):
+        ap = self.radio.ap_info  # None while not joined
+        return _text(ap.ssid) if ap else None
+
+    def scan(self):
+        try:
+            for n in self.radio.start_scanning_networks():
+                yield _text(n.ssid)
+        finally:
+            self.radio.stop_scanning_networks()
+
+    def disconnect(self):
+        pass  # connect() replaces any current join; nothing sticks like on the ESP32
+
+    def join(self, ssid, password):
+        self.radio.connect(ssid, password, timeout=self.JOIN_TIMEOUT_S)
+
+    def reset(self):
+        self.radio.enabled = False
+        time.sleep(0.5)
+        self.radio.enabled = True
+
+
+def make_radio():
+    """The M4 has an ESP32 co-processor (its ESP_CS pin); boards without
+    one (the S3) have WiFi on the chip."""
+    return Esp32SpiRadio() if hasattr(board, 'ESP_CS') else NativeRadio()
+
+
+class Net:
+    """Board endpoints (contract.md) over either radio (make_radio)."""
+
+    def __init__(self, url, board_id, token, radio=None):
         import adafruit_connection_manager
         import adafruit_requests
-        spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-        self.esp = adafruit_esp32spi.ESP_SPIcontrol(
-            spi, DigitalInOut(board.ESP_CS), DigitalInOut(board.ESP_BUSY), DigitalInOut(board.ESP_RESET))
-        pool = adafruit_connection_manager.get_radio_socketpool(self.esp)
-        ssl = adafruit_connection_manager.get_radio_ssl_context(self.esp)
+        self.radio = radio or make_radio()
+        pool = adafruit_connection_manager.get_radio_socketpool(self.radio.target)
+        ssl = adafruit_connection_manager.get_radio_ssl_context(self.radio.target)
         self.requests = adafruit_requests.Session(pool, ssl)
         self._pool = pool
         self._close_all = adafruit_connection_manager.connection_manager_close_all
@@ -522,17 +628,16 @@ class Net:
 
     @property
     def mac(self):
-        b = getattr(self.esp, 'MAC_address_actual', None) or bytes(reversed(self.esp.MAC_address))
-        return ':'.join('%02x' % x for x in b)
+        return ':'.join('%02x' % x for x in self.radio.mac)
 
     def connect(self, networks, status_cb):
         """Try each (ssid, password) in order, networks the radio can see
         first. Returns ('ok', ssid), ('portal', mac) if a network answered
         with a captive portal, or ('nowifi', None)."""
         portal = False
-        # After a soft reboot the ESP32 is usually still joined: skip the
+        # After a soft reboot the radio is usually still joined: skip the
         # scan (its result list is the biggest allocation before the first
-        # request, and the heap is tight at boot).
+        # request, and the M4's heap is tight at boot).
         ssid = self._connected_ssid()
         if ssid and any(n[0] == ssid for n in networks) and self.ping():
             print('[wifi] %s: still connected' % ssid)
@@ -554,7 +659,7 @@ class Net:
         return ('portal', self.mac) if portal else ('nowifi', None)
 
     def _reset_radio(self, why):
-        """Hardware-reset the ESP32. After failed joins it can keep
+        """Reset the radio. The M4's ESP32, after failed joins, can keep
         reporting 'No such ssid' for visible networks, then stop answering
         commands (BrokenPipeError) until it's reset."""
         print('[wifi] resetting radio: %s' % why)
@@ -562,24 +667,21 @@ class Net:
             self._close_all(self._pool)  # sockets from before the reset are dead
         except Exception:  # noqa: BLE001
             pass
-        self.esp.reset()
+        self.radio.reset()
 
     def _connected_ssid(self):
         try:
-            if self.esp.is_connected:
-                n = self.esp.ap_info.ssid
-                return n.decode('utf-8') if isinstance(n, bytes) else n
+            return self.radio.connected_ssid()
         except Exception:  # noqa: BLE001 - treat as not connected
-            pass
-        return None
+            return None
 
     def _warm_up(self, wanted, status_cb):
         """After a reset the ESP32 answers before its radio is ready, and
         every join fails with 'No such ssid'. Scan until it sees any network
-        (up to WARMUP_S). A failed scan means the ESP32 is wedged: reset it
+        (up to WARMUP_S). A failed scan means the radio is wedged: reset it
         and keep scanning. Returns which of the wanted SSIDs it sees.
         Only those are kept and logged: a busy building shows dozens of
-        networks, and listing them all ran the boot heap out of memory."""
+        networks, and listing them all ran the M4's boot heap out of memory."""
         end = time.monotonic() + WARMUP_S
         while True:
             status_cb('connecting', None)  # feeds the watchdog
@@ -587,10 +689,8 @@ class Net:
             try:
                 found = 0
                 names = []
-                for ap in self.esp.scan_networks():
+                for n in self.radio.scan():
                     found += 1
-                    n = ap.ssid if hasattr(ap, 'ssid') else ap['ssid']
-                    n = n.decode('utf-8') if isinstance(n, bytes) else n
                     if n in wanted and n not in names:
                         names.append(n)
             except Exception as e:  # noqa: BLE001
@@ -609,17 +709,17 @@ class Net:
     def _join(self, ssid, password, status_cb):
         """Join one network, with a few tries (a hotspot can drop out of a
         scan now and then). status_cb feeds the watchdog before each try.
-        Always disconnects first: a failed join leaves the ESP32's status at
-        'No such ssid', and without a disconnect the next join (even to a
-        visible network) reports it too."""
+        Always disconnects first: on the M4 a failed join leaves the ESP32's
+        status at 'No such ssid', and without a disconnect the next join
+        (even to a visible network) reports it too."""
         for attempt in range(JOIN_TRIES):
             status_cb('connecting', ssid)
             try:
-                self.esp.disconnect()
+                self.radio.disconnect()
             except Exception:  # noqa: BLE001 - not connected: nothing to drop
                 pass
             try:
-                self.esp.connect_AP(ssid, password)
+                self.radio.join(ssid, password)
                 return True
             except Exception as e:  # noqa: BLE001
                 print('[wifi] %s: try %d/%d: %r' % (ssid, attempt + 1, JOIN_TRIES, e))
@@ -659,7 +759,7 @@ class Net:
         return self._json('/board/version?b=' + self.board_id + health)
 
     def rssi(self):
-        return self.esp.rssi
+        return self.radio.rssi()
 
     def update(self, boot, screen=None):
         """screen: a button-pressed screen whose sections to send."""
@@ -672,7 +772,7 @@ class Net:
             size = r.headers.get('content-length')
             if size != str(len(buf)):
                 raise ValueError('logo is %s bytes' % size)
-            read_into(r, buf)
+            read_into(r, buf, self.radio.read_chunk)
         finally:
             r.close()
 
@@ -685,12 +785,12 @@ class Net:
             size = r.headers.get('content-length')
             if size != str(len(buf)):
                 raise ValueError('radar frame is %s bytes' % size)
-            read_into(r, buf)
+            read_into(r, buf, self.radio.read_chunk)
         finally:
             r.close()
 
 
-WATCHDOG_S = 16  # the SAMD51's maximum
+WATCHDOG_S = 16  # the M4's (SAMD51) maximum; the S3 allows more, but one request fits in 16 s
 
 
 class Watchdog:

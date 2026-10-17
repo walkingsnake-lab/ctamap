@@ -154,14 +154,14 @@ class Buttons:
         return self.held['down']
 
 
-def make(wifi=('ok',), buttons=False):
+def make(wifi=('ok',), buttons=False, **kw):
     clock = Clock()
     holder = []
     server = Server(clock, holder)
     server.wifi = list(wifi)
     display = Display(clock)
     btn = Buttons() if buttons else None
-    board = app.Board(server, display, clock, [('home', 'pw'), ('phone', 'pw')], buttons=btn, log=lambda *a: None)
+    board = app.Board(server, display, clock, [('home', 'pw'), ('phone', 'pw')], buttons=btn, log=lambda *a: None, **kw)
     holder.append(board)
     statuses = []
     orig = board._status
@@ -351,6 +351,38 @@ class TestBoardLoop(unittest.TestCase):
         self.assertEqual({id(b) for b in board.player.logos.values()} | {id(b) for b in board.player.logo_free}, pool)
         for lid, buf in board.player.logos.items():
             self.assertEqual(buf[0], sum(lid.encode()) % 251 + 1, 'slot %s holds stale data' % lid)
+
+    def test_a_big_board_keeps_earlier_games_logos(self):
+        # The S3 (32 slots, matrix.logo_slots): once the rotation has come
+        # around, every logo stays, so later rotations fetch nothing. The
+        # M4's 4 slots refetch as the rotation comes back.
+        teams = [('CHC', 'STL'), ('CWS', 'CLE'), ('NYY', 'BOS')]
+
+        def games(now):
+            return [{'id': i + 1, 'st': 'pre', 'start': now + 3600,
+                     'away': {'ab': a, 'c': '#2a5bd8', 'r': 0, 'lg': a + '-1', 'bd': '#204882'},
+                     'home': {'ab': h, 'c': '#d62a2a', 'r': 0, 'lg': h + '-1', 'bd': '#c12626'}}
+                    for i, (a, h) in enumerate(teams)]
+        fetched = {}
+        for slots in (4, 32):
+            board, server, clock, _, _, _ = make(logo_bufs=[bytearray(player.LOGO_BYTES) for _ in range(slots)])
+            server.layout = 'logos'
+            server.screen = 'baseball'
+            server.games = games
+            board.connect()
+            run_for(board, clock, 10 * 60 * 1000, every=50)  # ten one-minute game turns
+            fetched[slots] = [c['name'] for c in server.calls if c['name'].startswith('logo')]
+            self.assertLessEqual(len(board.player.logos), slots)
+            for lid, buf in board.player.logos.items():
+                self.assertEqual(buf[0], sum(lid.encode()) % 251 + 1, 'slot %s holds stale data' % lid)
+        self.assertEqual(sorted(fetched[32]), sorted('logo:' + t + '-1' for pair in teams for t in pair), 'each logo once')
+        self.assertGreater(len(fetched[4]), len(fetched[32]))
+
+    def test_health_names_the_hardware_and_firmware(self):
+        board, server, clock, _, _, _ = make(hardware='adafruit_matrixportal_s3', firmware='639b791')
+        board.connect()
+        run_for(board, clock, 15000)
+        self.assertIn('&hd=adafruit_matrixportal_s3&hv=639b791', server.health[-1])
 
     def test_a_draw_memory_error_skips_the_frame_instead_of_crashing(self):
         board, server, clock, display, _, _ = make()
