@@ -8,9 +8,10 @@ const fs = require('fs');
 const path = require('path');
 const { packFonts } = require('../../server/board/fonts');
 const icons = require('../../server/board/icons');
+const { redLine } = require('./env');
 
 const out = process.argv[2] || path.join(__dirname, 'clock-faces.html');
-const env = { fonts: packFonts(), icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE } };
+const env = { fonts: packFonts(), icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE }, redLine: redLine() };
 const html = fs.readFileSync(path.join(__dirname, 'page.html'), 'utf8')
   .replace('/*__ENV__*/null', () => JSON.stringify(env))
   .replace('/*__FACES__*/', () => fs.readFileSync(path.join(__dirname, 'faces.js'), 'utf8'));

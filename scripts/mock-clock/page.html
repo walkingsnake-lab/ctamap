@@ -56,7 +56,7 @@ footer p { max-width: 75ch; margin: 0 0 6px; }
 
 <header class="intro wrap">
   <h1>Board clock faces</h1>
-  <p class="lede">Round 1 for the v2 clock screen, with no M4 memory limits. Drawn with the board's own fonts and icons, colors cut to the panel's 5 bits per channel. Weather and train numbers are made up.</p>
+  <p class="lede">Round 2 for the v2 clock screen: seven creative faces, plus A1 from round 1 as the basic option. No M4 memory limits. Drawn with the board's own fonts, colors cut to the panel's 5 bits per channel. Weather and train numbers are made up. Try 60× to see the minute changes.</p>
 </header>
 
 <div class="bar">
@@ -91,10 +91,8 @@ const ENV = /*__ENV__*/null;
 (function () {
   const { FACES, render } = self.ClockFaces;
   const GROUPS = {
-    A: ['31px dial, info on the right', 'The v2 spec layout. The right half is the same on all seven, so only the dial changes.'],
-    B: ['The whole panel is the clock', 'No room for anything else.'],
-    C: ['Not hands', 'Other ways to show the time.'],
-    D: ['What goes on the right', 'Same dial (A2), different right half.'],
+    KEEP: ['Basic', 'Kept from round 1.'],
+    R2: ['Creative', 'Round 2. Most of these tie back to the CTA or Chicago.'],
   };
   const S = 10, W = 64, H = 32;
 
@@ -113,12 +111,12 @@ const ENV = /*__ENV__*/null;
   for (const key of Object.keys(GROUPS)) {
     const sec = document.createElement('section');
     sec.className = 'group';
-    sec.innerHTML = `<div class="group-head"><h2><b>${key}</b>${GROUPS[key][0]}</h2><p>${GROUPS[key][1]}</p></div><div class="grid"></div>`;
+    sec.innerHTML = `<div class="group-head"><h2>${GROUPS[key][0]}</h2><p>${GROUPS[key][1]}</p></div><div class="grid"></div>`;
     const grid = sec.querySelector('.grid');
     for (const face of FACES.filter((f) => f.group === key)) {
       const fig = document.createElement('figure');
-      const [code, ...rest] = face.title.split(' ');
-      fig.innerHTML = `<canvas width="${W * S}" height="${H * S}" role="img" aria-label="${face.title} mockup"></canvas><figcaption><h3><span>${code}</span>${rest.join(' ')}</h3><p></p></figcaption>`;
+      const m = face.title.match(/^([A-D]\d) (.*)$/);
+      fig.innerHTML = `<canvas width="${W * S}" height="${H * S}" role="img" aria-label="${face.title} mockup"></canvas><figcaption><h3>${m ? `<span>${m[1]}</span>${m[2]}` : face.title}</h3><p></p></figcaption>`;
       fig.querySelector('p').textContent = face.note;
       grid.appendChild(fig);
       panels.push({ face, ctx: fig.querySelector('canvas').getContext('2d'), last: null });
