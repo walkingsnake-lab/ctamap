@@ -1,6 +1,7 @@
 # Board firmware (CircuitPython)
 
-Runs on the Adafruit Matrix Portal M4 driving the 64x32 panel. The server does
+Runs on the Adafruit Matrix Portal S3 or M4 driving the 64x32 panel (one
+codebase: the board is detected at boot). The server does
 all fetching and formatting (`server/board/`, API in `docs/board/contract.md`);
 the board draws what it receives.
 
@@ -8,13 +9,19 @@ the board draws what it receives.
 
 1. **CircuitPython 9.x.** Plug the Matrix Portal into your computer over USB-C,
    double-tap its RESET button (a `MATRIXBOOT` drive appears), and drag the
-   Matrix Portal M4 `.uf2` from circuitpython.org/board/matrixportal_m4 onto it.
-   It restarts as a `CIRCUITPY` drive.
-2. **Libraries: nothing to install.** CircuitPython's Matrix Portal M4 build
-   has `adafruit_esp32spi`, `adafruit_requests`, `adafruit_connection_manager`
+   `.uf2` for your board onto it: circuitpython.org/board/matrixportal_m4 or
+   circuitpython.org/board/adafruit_matrixportal_s3. It restarts as a
+   `CIRCUITPY` drive. Keep every board on the same CircuitPython major version:
+   one `.mpy` build runs on both, but only on the version its `mpy-cross` came
+   from.
+2. **Libraries.** M4: nothing to install. Its CircuitPython build has
+   `adafruit_esp32spi`, `adafruit_requests`, `adafruit_connection_manager`
    and `neopixel` frozen into its firmware (flash, no RAM for their code), and
    frozen modules are found before `CIRCUITPY/lib/`, so copies in `lib/` are
-   never imported. They can be deleted.
+   never imported. They can be deleted. S3: WiFi is built in (no
+   `adafruit_esp32spi`). If the serial console shows an `ImportError` for
+   `adafruit_requests` or `adafruit_connection_manager`, install them with
+   `circup install adafruit_requests adafruit_connection_manager`.
 3. **This code.** The board can't compile the larger `.py` files itself (it
    runs out of memory), so build them to `.mpy` first. Download CircuitPython's
    `mpy-cross` for your computer and CircuitPython version from
@@ -72,8 +79,9 @@ the loop itself is stuck.
 | `boardlib/control.py` | UP/DOWN buttons (cycle transit, ticker, weather, baseball): last action wins against the phone. |
 | `boardlib/crash.py` | Why the board (re)started: `code.py` saves a crash to `microcontroller.nvm` before reloading, and the next run sends it and its start reason with the health report. |
 | `boardlib/status.py` | WIFI / WIFI OK / PORTAL / NO WIFI / NO SERVER screens. |
-| `boardlib/matrix.py` | The big fixed allocations (matrix, bitmap, palette, radar and logo slots), made first in `code.py` while the heap is whole. |
-| `boardlib/device.py` | Hardware only: the matrix (palette-indexed bitmap, `bitmaptools` fills and glyph and radar copies), ESP32 WiFi + HTTPS, buttons, status NeoPixel, watchdog. |
+| `boardlib/matrix.py` | The big fixed allocations (matrix, bitmap, palette, radar and logo slots), made first in `code.py` while the heap is whole. Logo slots follow the heap: 4 on the M4, 32 on the S3. |
+| `boardlib/device.py` | Hardware only: the matrix (palette-indexed bitmap, `bitmaptools` fills and glyph and radar copies), WiFi + HTTPS (`Esp32SpiRadio` on the M4, `NativeRadio` on the S3, behind one `Net`), buttons, status NeoPixel, watchdog. |
+| `boardlib/version.py` | The firmware build, sent with the health report. `dev` in the repo; `scripts/build-firmware.js` stamps the commit. |
 | `tests/` | Run by `npm test` (needs `python3`): pixel parity with draw.js through both the plain frame and the board's bitmap frame (with stand-ins for the CircuitPython modules), and the main loop against a simulated server, clock, and buttons. |
 
 ## Rules

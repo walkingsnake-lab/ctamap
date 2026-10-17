@@ -40,7 +40,7 @@ LED_FOR_STATUS = {'connecting': 'connecting', 'ok': 'connecting', 'portal': 'por
 
 class Board:
     def __init__(self, net, display, clock, networks, buttons=None, watchdog=None, log=print, mem_free=None, largest_block=None,
-                 started='', crash='', led=None, radar_bufs=None, logo_bufs=None):
+                 started='', crash='', led=None, radar_bufs=None, logo_bufs=None, hardware='', firmware=''):
         self.net = net
         self.display = display
         self.clock = clock
@@ -68,6 +68,8 @@ class Board:
         self.mem_free = mem_free     # () -> bytes free, for health reports
         self.largest_block = largest_block  # () -> largest allocatable block
         self.last_error = ''         # '<job>:<ExceptionName>' of the latest failure
+        self.hardware = hardware     # board.board_id, e.g. matrixportal_m4
+        self.firmware = firmware     # version.FIRMWARE (the build's commit)
         self.health_q = ''
         self.health_at = None
         self.oom_streak = 0
@@ -185,7 +187,8 @@ class Board:
     def health_query(self, ms):
         """Health fields for the version check (contract: /board/version),
         rebuilt at most once a minute: free memory, skipped draws, fetch
-        budget, uptime, failed fetches, reconnects, last error, WiFi signal."""
+        budget, uptime, failed fetches, reconnects, last error, WiFi signal,
+        hardware, firmware build."""
         if self.health_at is None or ms - self.health_at >= HEALTH_EVERY:
             self.health_at = ms
             q = '&hu=%d&hb=%d&ho=%d&hf=%d&hr=%d' % (
@@ -206,6 +209,10 @@ class Board:
                 q += '&hs=' + self.started
             if self.crash:
                 q += '&hc=' + self.crash
+            if self.hardware:
+                q += '&hd=' + self.hardware
+            if self.firmware:
+                q += '&hv=' + self.firmware
             self.health_q = q
         return self.health_q
 
@@ -432,9 +439,14 @@ def run(mx, mem=None):
     if hw.led and started == 'WATCHDOG':
         hw.led.set('watchdog')  # white for a moment: the loop hung last time
         hw.clock.sleep_ms(WATCHDOG_LED_MS)
+    import board as board_mod
+    from . import version
+    hardware = getattr(board_mod, 'board_id', '')
+    print('[board] %s, firmware %s, %s radio, heap %d at boot, %d logo slots' % (
+        hardware, version.FIRMWARE, hw.net.radio.kind, mx.heap, len(mx.logos)))
     board = Board(hw.net, hw.display, hw.clock, networks, buttons=hw.buttons, watchdog=hw.watchdog,
                   mem_free=hw.mem_free, largest_block=hw.largest_block, started=started, crash=crash,
-                  led=hw.led, radar_bufs=mx.radar, logo_bufs=mx.logos)
+                  led=hw.led, radar_bufs=mx.radar, logo_bufs=mx.logos, hardware=hardware, firmware=version.FIRMWARE)
     mem.append(('board', free()))
     # Where the heap goes: free bytes after each stage, and what each cost.
     # Printed before WiFi too, so a boot that fails while connecting still
