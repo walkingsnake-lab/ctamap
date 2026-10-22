@@ -58,6 +58,8 @@ def main(path):
     fails = []
     count = 0
     for s in scenarios:
+        if s.get('s3only'):
+            continue  # draw.py (the M4) is frozen: newer scenarios check only the S3's draw.cpp
         if 'renders' in s:
             frames = {k: bytes(v) for k, v in s['frames'].items()} if s.get('frames') else None
             logos = {k: bytes(v) for k, v in s['logos'].items()} if s.get('logos') else None

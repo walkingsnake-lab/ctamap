@@ -44,11 +44,18 @@ async function radarFrames() {
 // Each scenario: { name, payload, frames?, renders: [{ opts, px }] } for static
 // renders, or { name, steps: [{ payload, now, t, blink, px }] } for the
 // transit animator (one animator across the steps).
+//
+// Two renderers are checked against these: firmware-s3's draw.cpp (the S3,
+// current) and firmware's draw.py (the M4, frozen). A scenario for a draw.js
+// change made after the freeze gets `s3only: true`, and so does an existing
+// one whose pixels such a change alters: draw.py skips those.
 async function build() {
   const S = [];
   const arrays = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.from(v)])) : undefined);
-  const add = (name, payload, optsList, frames, logos) => {
+  // extra: { s3only: true } for scenarios the frozen M4 renderer skips.
+  const add = (name, payload, optsList, frames, logos, extra = {}) => {
     S.push({
+      ...extra,
       name, payload,
       frames: arrays(frames),
       logos: arrays(logos),

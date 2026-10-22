@@ -37,6 +37,12 @@ test('S3 firmware draw.cpp matches draw.js pixel for pixel', { skip: !CXX && 'no
   assert.match(r.stdout, /, 0 differ/);
 });
 
+test('S3 firmware main loop (tests/app_test.cpp)', { skip: !CXX && 'no C++ compiler' }, () => {
+  const bin = compile('app_test.cpp', ['app.cpp', 'player.cpp']);
+  const r = spawnSync(bin, [], { encoding: 'utf8', maxBuffer: 1 << 24 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
 test('S3 firmware assets are current (run node scripts/build-firmware-assets.js)', () => {
   assert.equal(fs.readFileSync(assets.OUT_CPP, 'utf8'), assets.buildCpp());
 });
