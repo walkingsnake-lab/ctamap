@@ -10,6 +10,7 @@ Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the desi
 |---|---|
 | Panel | 64x32, 4mm pitch, HUB75. Black acrylic diffuser recommended. |
 | Controller | **Decided: Matrix Portal M4** (starter kit, purchased Oct 3, 2026; includes panel, diffuser, 5V 2.4A supply). 192 KB RAM, WiFi via ESP32 co-processor over SPI: keep JSON payloads small, use PCF fonts, fetch only between animations. |
+| Controller (S3) | **Matrix Portal S3** (ordered Oct 17, 2026): the design reference from here on, with the M4 kept as a supported tier. ESP32-S3, ~2 MB heap (PSRAM), WiFi on the chip. Same firmware (one `.mpy` build); `device.py` picks the radio, `matrix.py` sizes the logo slots by heap (4 on the M4, 32 on the S3). Health reports the hardware and firmware build. |
 | Input | **Phone/web control** (primary, see §10) plus built-in UP/DOWN buttons to switch screens. No extra hardware. |
 | Power | Kit supply is 5V 2.4A; panel can draw ~4A all-white. See §9. |
 

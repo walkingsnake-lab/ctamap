@@ -2,7 +2,10 @@
 'use strict';
 // Builds what goes on the board's CIRCUITPY drive into firmware/build/:
 // code.py, and boardlib compiled to .mpy (the M4 runs out of memory
-// compiling the larger .py files itself).
+// compiling the larger .py files itself). The same build runs on the M4 and
+// the S3 (.mpy files are bytecode), as long as both run the CircuitPython
+// major version mpy-cross came from. boardlib/version.py is stamped with the
+// commit, which the board sends with its health report.
 //
 //   node scripts/build-firmware.js [path/to/mpy-cross]
 //
@@ -17,7 +20,17 @@ const { spawnSync } = require('child_process');
 const FIRMWARE = path.join(__dirname, '..', 'firmware');
 const OUT = path.join(FIRMWARE, 'build');
 
-function build(mpyCross) {
+// The commit the build comes from ('_dirty' with uncommitted changes), or
+// 'dev' outside git. Letters, digits and _ only: the health report's charset.
+function firmwareVersion() {
+  const opts = { cwd: FIRMWARE, encoding: 'utf8' };
+  const head = spawnSync('git', ['rev-parse', '--short', 'HEAD'], opts);
+  if (head.status !== 0) return 'dev';
+  const dirty = spawnSync('git', ['status', '--porcelain', '--', '.'], opts).stdout.trim() !== '';
+  return head.stdout.trim() + (dirty ? '_dirty' : '');
+}
+
+function build(mpyCross, version = firmwareVersion()) {
   const v = spawnSync(mpyCross, ['--version'], { encoding: 'utf8' });
   if (v.error || v.status !== 0) throw new Error(`can't run ${mpyCross}; pass the path to CircuitPython's mpy-cross`);
   if (!/CircuitPython/.test(v.stdout)) throw new Error(`${mpyCross} is not CircuitPython's mpy-cross: ${v.stdout.trim()}`);
@@ -33,17 +46,23 @@ function build(mpyCross) {
       continue;
     }
     const dest = path.join(OUT, 'boardlib', name.replace(/\.py$/, '.mpy'));
-    const r = spawnSync(mpyCross, ['-s', `boardlib/${name}`, '-o', dest, src], { encoding: 'utf8' });
+    let from = src;
+    if (name === 'version.py') {
+      from = path.join(OUT, 'version.py');
+      fs.writeFileSync(from, fs.readFileSync(src, 'utf8').replace(/^FIRMWARE = .*$/m, `FIRMWARE = '${version}'`));
+    }
+    const r = spawnSync(mpyCross, ['-s', `boardlib/${name}`, '-o', dest, from], { encoding: 'utf8' });
+    if (from !== src) fs.rmSync(from);
     if (r.status !== 0) throw new Error(`mpy-cross failed on ${name}:\n${r.stderr}`);
     files.push([path.basename(dest), fs.statSync(dest).size]);
   }
-  return { version: v.stdout.trim(), files };
+  return { version: v.stdout.trim(), firmware: version, files };
 }
 
 if (require.main === module) {
   try {
-    const { version, files } = build(process.argv[2] || process.env.MPY_CROSS || 'mpy-cross');
-    console.log(version);
+    const { version, firmware, files } = build(process.argv[2] || process.env.MPY_CROSS || 'mpy-cross');
+    console.log(`${version}; firmware ${firmware}`);
     for (const [name, size] of files) console.log(`  boardlib/${name.padEnd(12)} ${size} bytes`);
     console.log(`Copy everything in ${path.relative(process.cwd(), OUT)}/ to CIRCUITPY, and delete any boardlib/*.py there except __init__.py (a .py wins over its .mpy).`);
   } catch (e) {
@@ -52,4 +71,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { build, OUT };
+module.exports = { build, firmwareVersion, OUT };

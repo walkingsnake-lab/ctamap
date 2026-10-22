@@ -1,6 +1,7 @@
-"""device.Net.connect against a fake ESP32 with the failure modes seen on
-the board: after a failed join it reports 'No such ssid' for every network
-until disconnected, and a wedged radio fails scans until hardware-reset."""
+"""device.Net.connect against a fake ESP32 (the M4) with the failure modes
+seen on the board: after a failed join it reports 'No such ssid' for every
+network until disconnected, and a wedged radio fails scans until
+hardware-reset. Also against a fake native radio (the S3's wifi.radio)."""
 
 import os
 import sys
@@ -47,9 +48,9 @@ class FakeESP:
         self.is_connected = True
 
 
-def make_net(esp):
+def make_net(esp, radio=None):
     net = device.Net.__new__(device.Net)
-    net.esp = esp
+    net.radio = radio or device.Esp32SpiRadio(esp)
     net._pool = object()
     net._close_all = lambda pool: None
     net.ping = lambda: True
@@ -116,6 +117,102 @@ class TestConnect(unittest.TestCase):
         net = make_net(esp)
         self.assertEqual(net.connect([('Gone', 'pw')], lambda *a: None), ('nowifi', None))
         self.assertEqual(esp.resets, 1)
+
+
+class FakeWifiRadio:
+    """CircuitPython's wifi.radio on the S3: connect() raises
+    ConnectionError for a missing network; ap_info is None until joined;
+    scans must be stopped before joining."""
+
+    def __init__(self, visible, scan_fails=0):
+        self.visible = visible
+        self.scan_fails = scan_fails
+        self.scanning = False
+        self.joins = []
+        self.toggles = 0
+        self.ap_info = None
+        self.mac_address = bytes([0xf4, 0x12, 0xfa, 0x00, 0x01, 0x02])
+        self._enabled = True
+
+    def start_scanning_networks(self):
+        if self.scan_fails:
+            self.scan_fails -= 1
+            raise RuntimeError('Wifi scan failed')
+        self.scanning = True
+        return iter([types.SimpleNamespace(ssid=s, rssi=-50) for s in self.visible])
+
+    def stop_scanning_networks(self):
+        self.scanning = False
+
+    def connect(self, ssid, password, timeout=None):
+        assert not self.scanning, 'join while a scan is running'
+        self.joins.append(ssid)
+        if ssid not in self.visible:
+            raise ConnectionError('No network with that ssid')
+        self.ap_info = types.SimpleNamespace(ssid=ssid, rssi=-58)
+
+    @property
+    def enabled(self):
+        return self._enabled
+
+    @enabled.setter
+    def enabled(self, v):
+        if not v:
+            self.toggles += 1
+            self.ap_info = None
+        self._enabled = v
+
+
+class TestNativeConnect(unittest.TestCase):
+    def setUp(self):
+        self._sleep = device.time.sleep
+        device.time.sleep = lambda s: None
+
+    def tearDown(self):
+        device.time.sleep = self._sleep
+
+    def net(self, radio):
+        return make_net(None, device.NativeRadio(radio))
+
+    def test_joins_a_visible_network_after_a_missing_one(self):
+        radio = FakeWifiRadio(['JakeAtHome2.4', 'Neighbor'])
+        net = self.net(radio)
+        nets = [('Jacob’s iPhone', 'pw'), ('JakeAtHome2.4', 'pw')]
+        self.assertEqual(net.connect(nets, lambda *a: None), ('ok', 'JakeAtHome2.4'))
+        self.assertEqual(radio.joins, ['JakeAtHome2.4'], 'visible networks go first')
+        self.assertFalse(radio.scanning, 'the scan is stopped')
+        self.assertEqual(net.rssi(), -58)
+
+    def test_still_connected_skips_the_scan_and_join(self):
+        radio = FakeWifiRadio(['JakeAtHome2.4'])
+        radio.ap_info = types.SimpleNamespace(ssid='JakeAtHome2.4', rssi=-60)
+        net = self.net(radio)
+        radio.start_scanning_networks = None  # a scan would fail the test
+        self.assertEqual(net.connect([('JakeAtHome2.4', 'pw')], lambda *a: None), ('ok', 'JakeAtHome2.4'))
+        self.assertEqual(radio.joins, [])
+
+    def test_a_failed_scan_resets_the_radio_and_recovers(self):
+        radio = FakeWifiRadio(['JakeAtHome2.4'], scan_fails=1)
+        net = self.net(radio)
+        self.assertEqual(net.connect([('JakeAtHome2.4', 'pw')], lambda *a: None), ('ok', 'JakeAtHome2.4'))
+        self.assertEqual(radio.toggles, 1)
+        self.assertTrue(radio.enabled)
+
+    def test_portal_reports_the_mac(self):
+        radio = FakeWifiRadio(['Work Visitor'])
+        net = self.net(radio)
+        net.ping = lambda: False
+        self.assertEqual(net.connect([('Work Visitor', '')], lambda *a: None), ('portal', 'f4:12:fa:00:01:02'))
+
+    def test_no_network_resets_the_radio_for_the_next_round(self):
+        radio = FakeWifiRadio(['Neighbor'])
+        net = self.net(radio)
+        self.assertEqual(net.connect([('Gone', 'pw')], lambda *a: None), ('nowifi', None))
+        self.assertEqual(radio.toggles, 1)
+        self.assertEqual(len(radio.joins), device.JOIN_TRIES)
+
+    def test_reads_in_bigger_chunks_than_the_esp32(self):
+        self.assertGreater(device.NativeRadio.read_chunk, device.Esp32SpiRadio.read_chunk)
 
 
 if __name__ == '__main__':
