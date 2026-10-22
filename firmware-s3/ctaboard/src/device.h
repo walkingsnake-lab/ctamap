@@ -27,6 +27,11 @@ struct Settings {
   double gamma = 1.0;   // extra gamma on top of the driver's CIE curve; 1 = none
   int status_led = 2;   // 2: every state; 1: no fetch light; 0: off
   bool tls_verify = true;
+  // Panel driver. clk_phase: false = data latched on the falling clock edge
+  // (the driver's default, true, showed this P3 panel 1 px left with stray
+  // pixels). double_buffer: draw into a back buffer and flip it in.
+  bool clk_phase = false;
+  bool double_buffer = true;
 };
 
 // The panel: frames are drawn into a draw::Frame, then copied to the DMA
@@ -45,6 +50,8 @@ class Panel : public app::Display {
   int rotation_;
   uint8_t lut_[256];
   bool use_lut_;
+  bool clk_phase_, double_buffer_;
+  int64_t flipped_at_ = 0;  // us; when the last back buffer was flipped in
 };
 
 class WifiNet : public app::Net {

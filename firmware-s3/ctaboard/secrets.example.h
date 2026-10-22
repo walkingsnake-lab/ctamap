@@ -21,6 +21,15 @@
 // their screen order.
 #define MATRIX_ROTATION 0
 
+// Panel clock edge: 0 = falling, 1 = rising (the driver's default). The wrong
+// one for a panel shifts the picture a pixel and shows stray pixels; the
+// default shifted this P3 panel 1 px left, so this is 0. Try 1 if yours is off.
+#define MATRIX_CLK_PHASE 0
+
+// Draw each frame into a back buffer and flip it in (1), or draw straight
+// onto the panel (0). Try 0 if frames still glitch with the clock edge right.
+#define MATRIX_DOUBLE_BUFFER 1
+
 // Extra gamma on top of the panel driver's own brightness curve. 1.0 = none
 // (the driver's curve is usually right). Try 1.2 if dim colors look washed out.
 #define MATRIX_GAMMA 1.0

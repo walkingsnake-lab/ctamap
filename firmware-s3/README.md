@@ -40,6 +40,15 @@ What you should see: `WIFI <network>`, `WIFI OK`, then the transit screen.
 `PORTAL` with the MAC address means the network wants a login page; `NO
 WIFI` means none of the networks could be joined (it retries).
 
+### If the picture glitches
+
+- **Shifted a pixel, or stray flickering pixels:** the panel latches data on
+  the other clock edge. Flip `MATRIX_CLK_PHASE` (0 or 1) in `secrets.h`.
+- **Glitches that remain with the clock edge right:** try
+  `MATRIX_DOUBLE_BUFFER 0` (draws straight onto the panel, as the driver test
+  sketch did).
+- The serial log's first lines show the refresh rate and both settings.
+
 ### Going back to CircuitPython
 
 Press RESET, wait for the NeoPixel to turn purple, press RESET again: the

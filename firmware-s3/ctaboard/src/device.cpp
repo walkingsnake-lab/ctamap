@@ -42,26 +42,42 @@ static const uint8_t FLOOR = 5;
 
 // ---- panel ----
 
-Panel::Panel(const Settings &s) : rotation_(s.rotation), use_lut_(s.gamma != 1.0) {
+Panel::Panel(const Settings &s)
+    : rotation_(s.rotation), use_lut_(s.gamma != 1.0), clk_phase_(s.clk_phase), double_buffer_(s.double_buffer) {
   for (int v = 0; v < 256; v++) lut_[v] = (uint8_t)(pow(v / 255.0, s.gamma) * 255 + 0.5);
 }
 
 bool Panel::begin() {
   HUB75_I2S_CFG::i2s_pins pins = {kR1, kG1, kB1, kR2, kG2, kB2, kA, kB, kC, kD, kE, kLat, kOe, kClk};
   HUB75_I2S_CFG cfg(64, 32, 1, pins);
-  cfg.double_buff = true;  // draw into the back buffer, then flip: no half-drawn frames
+  cfg.double_buff = double_buffer_;  // draw into the back buffer, then flip: no half-drawn frames
+  cfg.clkphase = clk_phase_;
   dma_ = new MatrixPanel_I2S_DMA(cfg);
   if (!dma_->begin()) return false;
   dma_->setBrightness8(255);  // brightness is the payload's, applied by the renderer
   dma_->clearScreen();
-  dma_->flipDMABuffer();
-  dma_->clearScreen();
+  if (double_buffer_) {
+    dma_->flipDMABuffer();
+    delay(20);
+    dma_->clearScreen();
+    flipped_at_ = esp_timer_get_time();
+  }
   return true;
 }
 
 int Panel::refresh_rate() const { return dma_ ? dma_->calculated_refresh_rate : 0; }
 
 void Panel::show(const std::function<void(draw::Frame &)> &fn) {
+  if (double_buffer_) {
+    // A flip takes effect at the end of the panel's current refresh. Until
+    // then the buffer we'd draw into next is still on screen, and drawing
+    // into it shows as flickering stray pixels: wait out one refresh since
+    // the last flip (the driver's double-buffer example does the same).
+    int rate = dma_->calculated_refresh_rate > 0 ? dma_->calculated_refresh_rate : 60;
+    int64_t period = 1000000 / rate + 1000;
+    int64_t since = esp_timer_get_time() - flipped_at_;
+    if (since < period) delayMicroseconds((uint32_t)(period - since));
+  }
   int64_t t0 = esp_timer_get_time();
   frame_.clear();
   fn(frame_);
@@ -88,7 +104,10 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
       dma_->drawPixelRGB888(dx, dy, r, g, b);
     }
   }
-  dma_->flipDMABuffer();
+  if (double_buffer_) {
+    dma_->flipDMABuffer();
+    flipped_at_ = esp_timer_get_time();
+  }
   last_ms = (long)((esp_timer_get_time() - t0) / 1000);
   if (last_ms > max_ms) max_ms = last_ms;
 }

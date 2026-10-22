@@ -12,6 +12,14 @@
 #error "Copy secrets.example.h to secrets.h (in this folder) and fill it in. See README.md."
 #endif
 
+// Settings added after the first secrets.h: defaults for older copies.
+#ifndef MATRIX_CLK_PHASE
+#define MATRIX_CLK_PHASE 0
+#endif
+#ifndef MATRIX_DOUBLE_BUFFER
+#define MATRIX_DOUBLE_BUFFER 1
+#endif
+
 // The loop task's stack (Arduino's default is 8 KB): payload parsing and
 // the transit view are a few levels deep.
 #ifdef SET_LOOP_TASK_STACK_SIZE
@@ -40,6 +48,8 @@ void setup() {
   settings.gamma = MATRIX_GAMMA;
   settings.status_led = STATUS_LED;
   settings.tls_verify = TLS_VERIFY;
+  settings.clk_phase = MATRIX_CLK_PHASE;
+  settings.double_buffer = MATRIX_DOUBLE_BUFFER;
 
   std::string started = device::start_reason();
   Serial.printf("[board] Matrix Portal S3, started by %s\n", started.c_str());
@@ -55,7 +65,8 @@ void setup() {
 
   panel = new device::Panel(settings);
   if (!panel->begin()) Serial.println("[board] panel init failed");
-  Serial.printf("[board] panel refresh %d Hz\n", panel->refresh_rate());
+  Serial.printf("[board] panel refresh %d Hz (clock phase %d, double buffer %d)\n", panel->refresh_rate(),
+                MATRIX_CLK_PHASE, MATRIX_DOUBLE_BUFFER);
 
   watchdog = new device::Watchdog(16);
   net = new device::WifiNet(settings);
