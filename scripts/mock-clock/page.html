@@ -1,0 +1,173 @@
+<title>Board Clock Faces</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500&family=Red+Hat+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky control bar over a grid of LED panels, grouped A-D, one note under each panel.
+   Single dark look on purpose: it's a preview of an LED panel, like the board's control page. */
+:root {
+  --bg: #0b0b0b;
+  --surface: #121211;
+  --line: #262624;
+  --fg: #dcdcd6;
+  --muted: #8d8c85;
+  --amber: #ffb000;
+  --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "Barlow", system-ui, -apple-system, sans-serif;
+  --mono: "Red Hat Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1240px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.intro { padding-block: 28px 8px; }
+h1 { font: 600 2rem/1.1 var(--display); letter-spacing: 0.01em; margin: 0 0 6px; text-wrap: balance; }
+.lede { color: var(--muted); max-width: 68ch; margin: 0; }
+
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.bar .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-block: 10px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button, .toggle { font: 500 0.8rem/1 var(--mono); color: var(--muted); background: transparent; border: 0; padding: 8px 11px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { color: #111; background: var(--amber); }
+.toggle { border: 1px solid var(--line); border-radius: 6px; }
+.toggle[aria-pressed="true"] { color: var(--amber); border-color: var(--amber); }
+button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.now { font: 500 0.95rem/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--fg); margin-left: auto; }
+.lbl { font: 500 0.7rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ctl { display: flex; align-items: center; gap: 8px; }
+
+section.group { padding-block: 26px 4px; }
+.group-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-bottom: 14px; }
+.group-head h2 { font: 600 1.3rem/1.2 var(--display); margin: 0; }
+.group-head h2 b { color: var(--amber); font-weight: 600; margin-right: 6px; }
+.group-head p { margin: 0; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 22px 20px; }
+figure { margin: 0; min-width: 0; }
+canvas { display: block; width: 100%; max-width: 100%; aspect-ratio: 2 / 1; background: #080808; border-radius: 4px; }
+figcaption { padding-top: 10px; }
+figcaption h3 { font: 600 1.05rem/1.2 var(--display); margin: 0 0 3px; letter-spacing: 0.01em; }
+figcaption h3 span { font-family: var(--mono); font-size: 0.8rem; color: var(--amber); margin-right: 6px; font-weight: 500; }
+figcaption p { margin: 0; color: var(--muted); font-size: 0.9rem; max-width: 60ch; }
+footer { padding-block: 30px 40px; color: var(--muted); font-size: 0.85rem; }
+footer p { max-width: 75ch; margin: 0 0 6px; }
+@media (max-width: 520px) { .now { margin-left: 0; width: 100%; } h1 { font-size: 1.7rem; } }
+</style>
+
+<header class="intro wrap">
+  <h1>Board clock faces</h1>
+  <p class="lede">Round 2 for the v2 clock screen: seven creative faces, plus A1 from round 1 as the basic option. No M4 memory limits. Drawn with the board's own fonts, colors cut to the panel's 5 bits per channel. Weather and train numbers are made up. Try 60× to see the minute changes.</p>
+</header>
+
+<div class="bar">
+  <div class="wrap">
+    <div class="ctl"><span class="lbl">Time</span>
+      <div class="seg" role="group" aria-label="Time speed">
+        <button id="sp1" data-speed="1" aria-pressed="true">Live</button>
+        <button id="sp60" data-speed="60" aria-pressed="false">60×</button>
+        <button id="sp600" data-speed="600" aria-pressed="false">600×</button>
+      </div>
+    </div>
+    <button id="night" class="toggle" aria-pressed="false">Night 40%</button>
+    <button id="pause" class="toggle" aria-pressed="false">Pause</button>
+    <div class="now" id="now">--:--:--</div>
+  </div>
+</div>
+
+<main class="wrap" id="groups"></main>
+
+<footer class="wrap">
+  <p>The preview maps the panel's duty cycle straight to screen brightness, so dim and anti-aliased LEDs look darker here than they will behind the diffuser.</p>
+  <p>Night 40% scales everything with no minimum floors, so anything that vanishes there would need a floor on the board.</p>
+</footer>
+
+<script>
+const ENV = /*__ENV__*/null;
+</script>
+<script>
+/*__FACES__*/
+</script>
+<script>
+(function () {
+  const { FACES, render } = self.ClockFaces;
+  const GROUPS = {
+    KEEP: ['Basic', 'Kept from round 1.'],
+    R2: ['Creative', 'Round 2. Most of these tie back to the CTA or Chicago.'],
+  };
+  const S = 10, W = 64, H = 32;
+
+  // Unlit LED grid, drawn once and copied under every frame.
+  const base = document.createElement('canvas');
+  base.width = W * S; base.height = H * S;
+  (function () {
+    const g = base.getContext('2d');
+    g.fillStyle = '#080808'; g.fillRect(0, 0, base.width, base.height);
+    g.fillStyle = '#0f0f0f';
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { g.beginPath(); g.arc(x * S + S / 2, y * S + S / 2, S * 0.42, 0, Math.PI * 2); g.fill(); }
+  })();
+
+  const root = document.getElementById('groups');
+  const panels = [];
+  for (const key of Object.keys(GROUPS)) {
+    const sec = document.createElement('section');
+    sec.className = 'group';
+    sec.innerHTML = `<div class="group-head"><h2>${GROUPS[key][0]}</h2><p>${GROUPS[key][1]}</p></div><div class="grid"></div>`;
+    const grid = sec.querySelector('.grid');
+    for (const face of FACES.filter((f) => f.group === key)) {
+      const fig = document.createElement('figure');
+      const m = face.title.match(/^([A-D]\d) (.*)$/);
+      fig.innerHTML = `<canvas width="${W * S}" height="${H * S}" role="img" aria-label="${face.title} mockup"></canvas><figcaption><h3>${m ? `<span>${m[1]}</span>${m[2]}` : face.title}</h3><p></p></figcaption>`;
+      fig.querySelector('p').textContent = face.note;
+      grid.appendChild(fig);
+      panels.push({ face, ctx: fig.querySelector('canvas').getContext('2d'), last: null });
+    }
+    root.appendChild(sec);
+  }
+
+  let speed = 1, night = false, paused = false;
+  let anchorReal = Date.now(), anchorSim = Date.now();
+  const simNow = () => (paused ? anchorSim : anchorSim + (Date.now() - anchorReal) * speed);
+  function reanchor() { anchorSim = simNow(); anchorReal = Date.now(); }
+
+  document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => {
+    reanchor(); speed = Number(b.dataset.speed);
+    if (speed === 1 && !paused) anchorSim = Date.now();
+    document.querySelectorAll('[data-speed]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+  }));
+  const nightBtn = document.getElementById('night');
+  nightBtn.addEventListener('click', () => { night = !night; nightBtn.setAttribute('aria-pressed', String(night)); });
+  const pauseBtn = document.getElementById('pause');
+  pauseBtn.addEventListener('click', () => { anchorSim = simNow(); anchorReal = Date.now(); paused = !paused; pauseBtn.setAttribute('aria-pressed', String(paused)); pauseBtn.textContent = paused ? 'Resume' : 'Pause'; });
+
+  const nowEl = document.getElementById('now');
+  const q5 = (v) => Math.round(Math.max(0, Math.min(255, v))) & 0xf8;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+
+  let lastPaint = 0;
+  function frame(ts) {
+    requestAnimationFrame(frame);
+    if (ts - lastPaint < (reduce.matches ? 250 : 40)) return;
+    lastPaint = ts;
+    const d = new Date(simNow());
+    nowEl.textContent = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    const k = night ? 0.4 : 1;
+    for (const p of panels) {
+      const led = render(p.face, d, ENV);
+      const px = led.px, out = new Uint8Array(px.length);
+      let sig = 2166136261;
+      for (let i = 0; i < px.length; i++) { out[i] = q5(px[i] * k); sig = Math.imul(sig ^ out[i], 16777619); }
+      if (sig === p.last) continue;
+      p.last = sig;
+      const g = p.ctx;
+      g.drawImage(base, 0, 0);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 3, r = out[i], gg = out[i + 1], b = out[i + 2];
+        if (!(r | gg | b)) continue;
+        g.fillStyle = `rgb(${r},${gg},${b})`;
+        g.beginPath(); g.arc(x * S + S / 2, y * S + S / 2, S * 0.42, 0, Math.PI * 2); g.fill();
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
