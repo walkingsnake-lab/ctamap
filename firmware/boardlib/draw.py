@@ -261,8 +261,8 @@ LINE = {
 # Index digits in the chronological view: Brown and Purple brightened.
 
 C = {
-    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'radarSub': hexc('#666666'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'),
-    'sch': hexc('#6a6a6a'), 'schDim': hexc('#2e2e2e'), 'grey': hexc('#8f8f8f'),
+    'label': hexc('#d8d8d8'), 'clock': hexc('#cccccc'), 'radarTime': hexc('#7a7a7a'), 'radarAmpm': hexc('#8f8f8f'), 'radarSub': hexc('#666666'), 'wxText': hexc('#8f8f8f'), 'amber': hexc('#ffb000'), 'dimAmber': hexc('#664600'), 'dimAmber2': hexc('#332300'),
+    'sch': hexc('#6a6a6a'), 'schDim': hexc('#2e2e2e'), 'schDim2': hexc('#151515'), 'grey': hexc('#8f8f8f'),
     'divider': hexc('#333333'), 'head': hexc('#808080'), 'dimHead': hexc('#555555'), 'index': hexc('#2d2d2d'), 'white': hexc('#ffffff'),
     'red': hexc('#ff2020'), 'watch': hexc('#ffd800'), 'warnSevere': hexc('#ff8000'), 'warnTornado': hexc('#ff2020'),
     'noTrains': hexc('#6c6c6c'), 'indicator': hexc('#3a3a3a'),
@@ -583,7 +583,8 @@ def draw_time_cell(f, text, right, top, color, roll):
         f.pop_clip()
 
 
-def layout_cells(r, now):
+# steps: the third time a step dimmer than the second (payload ts).
+def layout_cells(r, now, steps=False):
     texts = [time_text(t, now, k == 0) for k, t in enumerate(r['t'])]
 
     def width_at(gap):
@@ -600,9 +601,9 @@ def layout_cells(r, now):
     for k in range(len(texts) - 1, -1, -1):
         sch = rs and rs[k]
         if sch:
-            color = C['schDim'] if k else C['sch']
+            color = C['sch'] if k == 0 else C['schDim2'] if steps and k >= 2 else C['schDim']
         else:
-            color = C['dimAmber'] if k else C['amber']
+            color = C['amber'] if k == 0 else C['dimAmber2'] if steps and k >= 2 else C['dimAmber']
         cells[k] = {'id': slot_key(r, k), 't': r['t'][k], 'text': texts[k], 'right': x,
                     'alpha': 1, 'roll': None, 'color': color}
         x -= measure('small', texts[k]) + gap
@@ -620,7 +621,7 @@ def build_transit_view(p, now):
         'clock': p.get('hclock') is not False, 'lnc': p.get('lnc') is True,
         'stale': p.get('stale'), 'tzo': p.get('tzo', 0),
         'rows': [{'key': r['ln'] + ':' + r['lbl'], 'ln': r['ln'], 'lbl': r['lbl'], 'a': r.get('a'),
-                  'num': None, 'numRoll': None, 'top': tops[i], 'alpha': 1, 'cells': layout_cells(r, now)}
+                  'num': None, 'numRoll': None, 'top': tops[i], 'alpha': 1, 'cells': layout_cells(r, now, p.get('ts') is True)}
                  for i, r in enumerate(rows)],
     }
 

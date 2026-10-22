@@ -102,6 +102,9 @@ function defaultBoard(stations) {
     lineNames: 'white',
     // Transit and ticker header: the clock at the right.
     headerClock: true,
+    // Transit times: third time dimmer than the second (100/40/20%) instead
+    // of both later times at 40%.
+    timeSteps: false,
     // Radar screen: show a clock and AM/PM (off: current conditions instead).
     radarTime: true,
     // The radar clock: 'frame' (the frame's time, dim) or 'now' (the current
@@ -179,6 +182,7 @@ function validatePatch(patch, stations) {
       case 'radarCond':
       case 'tempShadow':
       case 'headerClock':
+      case 'timeSteps':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;

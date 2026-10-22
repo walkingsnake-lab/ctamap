@@ -105,8 +105,8 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Labels | white `#d8d8d8` |
 | **Clocks** | 80% white `#cccccc` (overnight, no-games); the transit header clock uses the transit dark grey `#555555`, the ticker's the header grey `#808080` |
 | First arrival time | amber `#ffb000` |
-| Later times | dim amber `#664600` (~40% of the first time; at ~61% it was hard to tell apart on the panel) |
-| Schedule-based times (`isSch`), first / later | grey `#6a6a6a` / `#2e2e2e` (instead of amber; same width, so digit rolls are unaffected). The first is about half the light of the white labels so it reads as grey on the panel (`#b0b0b0` looked white); later ones are about 40% of the first, the same step as amber to dim amber |
+| Later times | dim amber `#664600` (~40% of the first time; at ~61% it was hard to tell apart on the panel). With **time dim steps** on (per board, `timeSteps`), the third time drops to `#332300` (20%), so the three read 100/40/20% |
+| Schedule-based times (`isSch`), first / later | grey `#6a6a6a` / `#2e2e2e` (instead of amber; same width, so digit rolls are unaffected). The first is about half the light of the white labels so it reads as grey on the panel (`#b0b0b0` looked white); later ones are about 40% of the first, the same step as amber to dim amber; with time dim steps the third is `#151515` |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
 | Dividers (header line, weather screens) | `#333333` |
 | CTA alert block | the line color at 20% behind a full-color "!" |
@@ -123,7 +123,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ## 5. Screen 1: Transit station
 
 ### Rows
-- 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest). Times are 3px apart, tightening to 2px when the row is full, so long names like `KIMBALL` and `COTTAGE` always fit.
+- 3px line-color block, Tom Thumb label (uppercase), **3 times**, right-aligned as a group, not in columns (amber first, dim the rest; optionally the third dimmer still, see §4). Times are 3px apart, tightening to 2px when the row is full, so long names like `KIMBALL` and `COTTAGE` always fit.
 - **Schedule-based predictions** (`isSch`, e.g. southbound trains at Morse that haven't left the Howard terminal) are shown, with the time in grey instead of amber. `isFlt` (possible fault) predictions are shown normally.
 - **Trains ending at this station** are not shown (Terminal Arrival at Howard; "63rd Street" trains at Ashland/63rd, which only shows Harlem trains).
 - **Minutes round up**, like CTA's own predictions: `DUE` within 60 s (when CTA flags the train as approaching), then 2, 3, …; never 1.
@@ -349,6 +349,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
 - **Transit layout:** station on top (header) or key on top (station line at the bottom). **Header and weather strip:** independent on/off toggles per board (see §5 for how many rows each combination fits; the key layout has no weather strip).
 - **Header clock** (transit and ticker) on/off, and **destination names** in white or the line's color (Brown and Purple read dim as text in their true colors).
+- **Time dim steps** (Transit): the third arrival time at 20% instead of 40% (default off).
 - **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.
 
 ### Behavior
@@ -378,7 +379,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 
 ## 12. Open questions
 
-- On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors, Tom Thumb `M`/`N` legibility (3px wide; may need widening like `W`), 3x5 bolt legibility.
+- On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors (incl. the 20% third time at night), Tom Thumb `M`/`N` legibility (3px wide; may need widening like `W`), 3x5 bolt legibility.
 - Whether the work visitor WiFi has a captive portal (check with a phone).
 - Measure the real fetch time on the board to set the scheduler's fetch budget.
 - On-panel check: lowercase `m` legibility (diffuser glow between the humps), and whether `4m` needs a 2px gap.
