@@ -240,6 +240,7 @@ struct RenderOpts {
   std::optional<double> t;
   NumRoller *roller = nullptr;
   const Rolls *nums = nullptr;  // fixed clock rolls (tests)
+  bool apply_bright = true;     // false: the display dims in hardware (payload `bright`)
 };
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);

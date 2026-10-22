@@ -51,6 +51,12 @@ class Display {
  public:
   virtual ~Display() {}
   virtual void show(const std::function<void(draw::Frame &)> &fn) = 0;
+  // The payload's brightness (0-1). True when the display dims in hardware,
+  // so frames are drawn at full brightness; false: the renderer scales them.
+  virtual bool set_brightness(double k) {
+    (void)k;
+    return false;
+  }
 };
 
 class Clock {

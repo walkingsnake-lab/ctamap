@@ -104,6 +104,8 @@ void Board::wait(long long ms_total) {
 void Board::apply(const Value &p, long long st, long long ms) {
   sync(p["now"].num(), st, ms);
   player.set_payload(p, (double)ms);
+  double b = p["bright"].is_null() ? 100 : p["bright"].num();
+  player.hw_bright = display->set_brightness(std::max(0.0, std::min(100.0, b)) / 100);
   player.set_screen(override_.resolve(player.auto_screen(now(ms)), json::str(p["v"])), (double)ms);
   update_job.interval_ms = (double)(player.live_game() ? LIVE_EVERY : UPDATE_EVERY);
 }

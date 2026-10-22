@@ -1997,7 +1997,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   g_roller = nullptr;
   g_nums = nullptr;
   if (o.roller) o.roller->end();  // the Player calls begin(); render() ends the frame
-  apply_brightness(f, p["bright"]);
+  if (o.apply_bright) apply_brightness(f, p["bright"]);
   return f;
 }
 

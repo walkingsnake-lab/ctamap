@@ -25,7 +25,9 @@ struct Settings {
   std::string board_id = "home";
   std::string token;
   int rotation = 0;     // 0, or 180 when the panel is mounted upside down
-  int curve = color::CIRCUITPY;  // color curve (color.h)
+  int curve = color::CIRCUITPY;        // color curve at full brightness (color.h)
+  int night_curve = color::GAMMA26;    // color curve while dimmed (night)
+  bool hw_dim = true;                  // dim in hardware (full color steps) or scale colors
   int status_led = 2;   // 2: every state; 1: no fetch light; 0: off
   bool tls_verify = true;
   // Panel driver. clk_phase: false = data latched on the falling clock edge
@@ -44,14 +46,22 @@ class Panel : public app::Display {
   void show(const std::function<void(draw::Frame &)> &fn) override;
   long last_ms = 0, max_ms = 0;  // draw time, for the serial report
   int refresh_rate() const;
-  void set_curve(int curve) { pipe_.set_curve(curve); }
-  int curve() const { return pipe_.curve(); }
+  bool set_brightness(double k) override;
+  // Brightness k (0-1) with the day curve at full brightness and the night
+  // curve below it; hw: dim in hardware (else the renderer scales colors).
+  void dim(double k, bool hw);
+  void set_curves(int day, int night);
+  int day_curve() const { return day_curve_; }
+  int night_curve() const { return night_curve_; }
 
  private:
   MatrixPanel_I2S_DMA *dma_ = nullptr;
   draw::Frame frame_;
   int rotation_;
   color::Pipeline pipe_;
+  int day_curve_, night_curve_;
+  bool hw_dim_;
+  int oe_ = 255;  // the driver's brightness (output-enable window), 0-255
   bool clk_phase_, double_buffer_;
   int64_t flipped_at_ = 0;  // us; when the last back buffer was flipped in
 };

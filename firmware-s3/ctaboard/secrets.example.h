@@ -30,14 +30,22 @@
 // onto the panel (0). Try 0 if frames still glitch with the clock edge right.
 #define MATRIX_DOUBLE_BUFFER 1
 
-// Color curve (src/color.h): 0 = the panel driver's own curve, 1 = gamma 2.2,
-// 2 = the CircuitPython firmware's look (gamma 2.2 + its 6-bit truncation),
-// 3 = gamma 2.6. Pick one on the panel with MATRIX_CALIBRATE.
+// Color curves (src/color.h): 0 = the panel driver's own curve, 1 = gamma
+// 2.2, 2 = the CircuitPython firmware's look (gamma 2.2 + its 6-bit
+// truncation), 3 = gamma 2.6. MATRIX_CURVE at full brightness, the night one
+// whenever the board is dimmed. Pick them on the panel with MATRIX_CALIBRATE.
 #define MATRIX_CURVE 2
+#define MATRIX_NIGHT_CURVE 3
+
+// How the board dims (night, or a fixed level from the phone): 1 = in
+// hardware (shorter lit time; colors keep every step, the dimmest elements
+// get very faint); 0 = scale the colors (dim elements stay visible, but
+// colors lose steps).
+#define MATRIX_HW_DIM 1
 
 // 1: show the color calibration pattern instead of the board (no WiFi).
-// UP steps through the curves, DOWN toggles night brightness; the serial log
-// names each. Set back to 0 when done.
+// UP steps through the curves; DOWN steps through day, night by scaling, and
+// night in hardware. The serial log names each. Set back to 0 when done.
 #define MATRIX_CALIBRATE 0
 
 // Status NeoPixel (behind the panel): 2 = every state, including blue during

@@ -27,6 +27,12 @@
 #ifndef MATRIX_CALIBRATE
 #define MATRIX_CALIBRATE 0
 #endif
+#ifndef MATRIX_NIGHT_CURVE
+#define MATRIX_NIGHT_CURVE 3  // gamma 2.6
+#endif
+#ifndef MATRIX_HW_DIM
+#define MATRIX_HW_DIM 1
+#endif
 
 // The loop task's stack (Arduino's default is 8 KB): payload parsing and
 // the transit view are a few levels deep.
@@ -54,6 +60,8 @@ void setup() {
   settings.token = BOARD_TOKEN;
   settings.rotation = MATRIX_ROTATION;
   settings.curve = MATRIX_CURVE;
+  settings.night_curve = MATRIX_NIGHT_CURVE;
+  settings.hw_dim = MATRIX_HW_DIM;
   settings.status_led = STATUS_LED;
   settings.tls_verify = TLS_VERIFY;
   settings.clk_phase = MATRIX_CLK_PHASE;
@@ -78,9 +86,10 @@ void setup() {
 
   if (MATRIX_CALIBRATE) {
     // Color calibration: no WiFi, just the pattern. UP: next curve; DOWN:
-    // night (40%) on/off. Put the curve you like in MATRIX_CURVE.
+    // day / night by scaling / night in hardware. Put your picks in
+    // MATRIX_CURVE, MATRIX_NIGHT_CURVE and MATRIX_HW_DIM.
     buttons = new device::Buttons();
-    Serial.println("[calibrate] UP: next curve, DOWN: night on/off");
+    Serial.println("[calibrate] UP: next curve, DOWN: day / night scaled / night hardware");
     return;
   }
 
@@ -103,16 +112,18 @@ void setup() {
 
 static void calibrate_loop() {
   static control::Debounce up, down;
-  static bool night = false, first = true;
+  static int curve = MATRIX_CURVE, mode = calibrate::DAY;
+  static bool first = true;
   long long ms = sys_clock.ms();
   bool u = up.update(buttons->up(), (double)ms), d = down.update(buttons->down(), (double)ms);
-  if (u) panel->set_curve((panel->curve() + 1) % color::N_CURVES);
-  if (d) night = !night;
+  if (u) curve = (curve + 1) % color::N_CURVES;
+  if (d) mode = (mode + 1) % calibrate::N_MODES;
   if (u || d || first) {
     first = false;
-    panel->show([&](draw::Frame &f) { calibrate::draw_pattern(f, panel->curve(), night); });
-    Serial.printf("[calibrate] MATRIX_CURVE %d: %s%s\n", panel->curve(), color::curve_name(panel->curve()),
-                  night ? ", night (40%)" : "");
+    panel->set_curves(curve, curve);
+    panel->dim(mode == calibrate::DAY ? 1.0 : 0.4, mode == calibrate::NIGHT_HARDWARE);
+    panel->show([&](draw::Frame &f) { calibrate::draw_pattern(f, curve, mode); });
+    Serial.printf("[calibrate] curve %d: %s; %s\n", curve, color::curve_name(curve), calibrate::mode_name(mode));
   }
   delay(10);
 }

@@ -98,7 +98,10 @@ S3.
 - Color: the renderer scales pixels by the payload's `bright`, then
   `src/color.cpp` maps each color through the chosen curve (`MATRIX_CURVE`)
   and inverts the DMA driver's own CIE curve, so the panel shows exactly
-  that curve. The default reproduces the CircuitPython firmware's look.
+  that curve: `MATRIX_CURVE` at full brightness, `MATRIX_NIGHT_CURVE` while
+  dimmed. With `MATRIX_HW_DIM 1` the board dims in hardware (the driver's
+  output-enable window, `k^2.2` of full so night is as dark as before) and
+  draws frames at full brightness, so colors keep every step.
   `MATRIX_CALIBRATE 1` shows a pattern for choosing on the panel.
 - Not verifiable here: speed, memory, WiFi, and TLS on the real S3. Those get
   checked on hardware from the serial log.

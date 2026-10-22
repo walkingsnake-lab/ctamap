@@ -36,7 +36,36 @@ static const int kNeoPixel = 4;
 // ---- panel ----
 
 Panel::Panel(const Settings &s)
-    : rotation_(s.rotation), pipe_(s.curve), clk_phase_(s.clk_phase), double_buffer_(s.double_buffer) {}
+    : rotation_(s.rotation), pipe_(s.curve), day_curve_(s.curve), night_curve_(s.night_curve), hw_dim_(s.hw_dim),
+      clk_phase_(s.clk_phase), double_buffer_(s.double_buffer) {}
+
+void Panel::set_curves(int day, int night) {
+  day_curve_ = day;
+  night_curve_ = night;
+}
+
+bool Panel::set_brightness(double k) {
+  dim(k, hw_dim_);
+  return hw_dim_;
+}
+
+void Panel::dim(double k, bool hw) {
+  int curve = k < 1 ? night_curve_ : day_curve_;
+  if (curve != pipe_.curve()) pipe_.set_curve(curve);
+  // In hardware, the driver shortens every row's lit window by the same
+  // fraction for every color bit, so colors keep all their steps. The level
+  // matches the light the renderer's scaling gave under gamma 2.2 (k^2.2:
+  // 40% is about 13% of full), so night stays as dark as it was.
+  int oe = 255;
+  if (hw) {
+    oe = (int)floor(pow(k, 2.2) * 255 + 0.5);
+    if (k > 0 && oe < 1) oe = 1;
+  }
+  if (oe != oe_ && dma_) {
+    dma_->setBrightness8((uint8_t)oe);
+    oe_ = oe;
+  }
+}
 
 bool Panel::begin() {
   HUB75_I2S_CFG::i2s_pins pins = {kR1, kG1, kB1, kR2, kG2, kB2, kA, kB, kC, kD, kE, kLat, kOe, kClk};
@@ -45,7 +74,7 @@ bool Panel::begin() {
   cfg.clkphase = clk_phase_;
   dma_ = new MatrixPanel_I2S_DMA(cfg);
   if (!dma_->begin()) return false;
-  dma_->setBrightness8(255);  // brightness is the payload's, applied by the renderer
+  dma_->setBrightness8((uint8_t)oe_);  // full until the first payload's brightness
   dma_->clearScreen();
   if (double_buffer_) {
     dma_->flipDMABuffer();

@@ -86,6 +86,7 @@ struct Server : app::Net {
   int alert = 0;
   int tornado = 0;
   std::string layout = "classic";
+  int bright = 100;
   std::function<long long()> latency = [] { return LATENCY; };
   std::function<std::string(long long)> rows_fn;  // JSON array of rows
 
@@ -153,7 +154,7 @@ struct Server : app::Net {
                                         (layout == "logos" ? "\"STL-1\"" : "null") + ",\"bd\":\"#c12626\"}}]";
     std::string scr = radar_on && visit == "null" ? "weather" : screen;
     return "{\"v\":" + jnum(v) + ",\"now\":" + jnum(now) + ",\"tzo\":-18000,\"age\":3,\"screen\":\"" + scr +
-           "\",\"bright\":100,\"header\":\"MORSE\",\"view\":\"dest\",\"rows\":" + rows + ",\"ticker\":" + ticker +
+           "\",\"bright\":" + jnum(bright) + ",\"header\":\"MORSE\",\"view\":\"dest\",\"rows\":" + rows + ",\"ticker\":" + ticker +
            ",\"wx\":" + (tornado ? "{\"icon\":\"storm\",\"temp\":70,\"word\":\"STORMS\"}" : "null") +
            ",\"warn\":" + (tornado ? "{\"kind\":\"tor\",\"lvl\":\"warning\"}" : "null") +
            ",\"radar\":{\"on\":" + (radar_on ? "true" : "false") + ",\"visit\":" + visit + ",\"frames\":" + frames +
@@ -218,12 +219,21 @@ struct Server : app::Net {
 struct SimDisplay : app::Display {
   SimClock *clock;
   long frames = 0;
+  bool hw = false;   // dims in hardware (like the S3's panel)
+  double k = -1;     // last brightness set
+  int max_px = 0;    // brightest channel in the last frame
   explicit SimDisplay(SimClock *c) : clock(c) {}
   void show(const std::function<void(draw::Frame &)> &fn) override {
     draw::Frame f;
     fn(f);
     frames++;
+    max_px = 0;
+    for (uint8_t v : f.px) max_px = std::max(max_px, (int)v);
     clock->t += 20;  // render cost
+  }
+  bool set_brightness(double kk) override {
+    k = kk;
+    return hw;
   }
 };
 
@@ -792,6 +802,24 @@ static void test_led_red_while_reconnecting_after_repeated_failures() {
   CHECK(r.led.state == "off", "");
 }
 
+static void test_brightness_in_hardware_or_in_the_colors() {
+  // A display that dims in hardware gets the payload's brightness and full
+  // brightness frames; one that doesn't gets frames scaled by the renderer.
+  int max_hw = 0, max_sw = 0;
+  for (bool hw : {true, false}) {
+    Rig r;
+    r.display.hw = hw;
+    r.server.bright = 40;
+    r.board->connect();
+    r.run_for(5000);
+    CHECK(r.display.k == 0.4, "%f", r.display.k);
+    CHECK(r.board->player.hw_bright == hw, "");
+    (hw ? max_hw : max_sw) = r.display.max_px;
+  }
+  CHECK(max_hw == 0xd8 || max_hw == 0xff || max_hw > 200, "full-brightness frame: %d", max_hw);
+  CHECK(max_sw <= (int)(255 * 0.4 + 1), "scaled frame: %d", max_sw);
+}
+
 int main() {
   struct T {
     const char *name;
@@ -830,6 +858,7 @@ int main() {
       T_(test_led_connecting_portal_and_offline),
       T_(test_led_dim_red_after_a_failure_until_a_request_succeeds),
       T_(test_led_red_while_reconnecting_after_repeated_failures),
+      T_(test_brightness_in_hardware_or_in_the_colors),
 #undef T_
   };
   int n = 0;
