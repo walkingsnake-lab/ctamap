@@ -1,9 +1,14 @@
-# Matrix Portal M4 hardware: drawing to the HUB75 matrix (built by matrix.py), the ESP32 WiFi co-processor,
-# the UP/DOWN buttons, the status NeoPixel, and the watchdog. Only imported on the board; the
-# rest of boardlib runs under CPython for tests.
+# Matrix Portal hardware: drawing to the HUB75 matrix (built by matrix.py), WiFi, the UP/DOWN
+# buttons, the status NeoPixel, and the watchdog. Only imported on the board; the rest of
+# boardlib runs under CPython for tests.
 #
-# Libraries (copy to CIRCUITPY/lib, or `circup install`): adafruit_esp32spi,
-# adafruit_requests, adafruit_connection_manager.
+# Runs on both Matrix Portals. The M4 reaches WiFi through its ESP32 co-processor over SPI
+# (adafruit_esp32spi); the S3 has WiFi built in (the `wifi` module), wrapped by NativeRadio
+# so Net drives both the same way. Pin names (MTX_*, BUTTON_UP/DOWN, NEOPIXEL) are the same.
+#
+# Libraries: adafruit_requests and adafruit_connection_manager (frozen into the M4 build;
+# on the S3, `circup install adafruit_requests adafruit_connection_manager`), plus
+# adafruit_esp32spi on the M4 (frozen).
 
 import gc
 import time
@@ -500,18 +505,85 @@ def status_led():
     return _led[0]
 
 
+class NativeRadio:
+    """The S3's built-in WiFi (wifi.radio) behind the subset of the
+    ESP_SPIcontrol interface that Net uses, so the join, retry and portal
+    logic is shared with the M4."""
+
+    def __init__(self, radio):
+        self.radio = radio
+
+    @property
+    def is_connected(self):
+        return bool(self.radio.connected)
+
+    @property
+    def ap_info(self):
+        return self.radio.ap_info
+
+    @property
+    def MAC_address_actual(self):
+        return bytes(self.radio.mac_address)
+
+    @property
+    def rssi(self):
+        ap = self.radio.ap_info
+        return ap.rssi if ap else None
+
+    def scan_networks(self):
+        """A list (not the scan iterator), so the scan is stopped before
+        anything joins."""
+        found = []
+        try:
+            for ap in self.radio.start_scanning_networks():
+                found.append(ap)
+        finally:
+            self.radio.stop_scanning_networks()
+        return found
+
+    def connect_AP(self, ssid, password):
+        self.radio.connect(ssid, password, timeout=JOIN_TIMEOUT_S)
+
+    def disconnect(self):
+        self.radio.stop_station()
+
+    def reset(self):
+        """Power-cycle the radio (the M4's equivalent is a hardware reset
+        of the ESP32)."""
+        self.radio.enabled = False
+        self.radio.enabled = True
+
+
+JOIN_TIMEOUT_S = 10  # S3 join timeout, under the 16 s watchdog
+
+
+def radio():
+    """('s3', NativeRadio) when the firmware has built-in WiFi, else
+    ('m4', the ESP32 co-processor over SPI)."""
+    try:
+        import wifi
+    except ImportError:
+        wifi = None
+    if wifi is not None:
+        return 's3', NativeRadio(wifi.radio)
+    from adafruit_esp32spi import adafruit_esp32spi
+    spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
+    return 'm4', adafruit_esp32spi.ESP_SPIcontrol(
+        spi, DigitalInOut(board.ESP_CS), DigitalInOut(board.ESP_BUSY), DigitalInOut(board.ESP_RESET))
+
+
 class Net:
-    """Board endpoints over the ESP32 co-processor (contract.md)."""
+    """Board endpoints over WiFi (contract.md)."""
 
     def __init__(self, url, board_id, token):
-        from adafruit_esp32spi import adafruit_esp32spi
         import adafruit_connection_manager
         import adafruit_requests
-        spi = busio.SPI(board.SCK, board.MOSI, board.MISO)
-        self.esp = adafruit_esp32spi.ESP_SPIcontrol(
-            spi, DigitalInOut(board.ESP_CS), DigitalInOut(board.ESP_BUSY), DigitalInOut(board.ESP_RESET))
-        pool = adafruit_connection_manager.get_radio_socketpool(self.esp)
-        ssl = adafruit_connection_manager.get_radio_ssl_context(self.esp)
+        self.kind, self.esp = radio()
+        print('[board] %s (%s WiFi)' % (getattr(board, 'board_id', '?'), 'built-in' if self.kind == 's3' else 'ESP32'))
+        # get_radio_socketpool/ssl_context take either: wifi.radio, or the ESP32.
+        r = self.esp.radio if self.kind == 's3' else self.esp
+        pool = adafruit_connection_manager.get_radio_socketpool(r)
+        ssl = adafruit_connection_manager.get_radio_ssl_context(r)
         self.requests = adafruit_requests.Session(pool, ssl)
         self._pool = pool
         self._close_all = adafruit_connection_manager.connection_manager_close_all
@@ -554,9 +626,10 @@ class Net:
         return ('portal', self.mac) if portal else ('nowifi', None)
 
     def _reset_radio(self, why):
-        """Hardware-reset the ESP32. After failed joins it can keep
-        reporting 'No such ssid' for visible networks, then stop answering
-        commands (BrokenPipeError) until it's reset."""
+        """Reset the radio (M4: hardware-reset the ESP32; S3: power-cycle
+        wifi.radio). After failed joins the ESP32 can keep reporting 'No
+        such ssid' for visible networks, then stop answering commands
+        (BrokenPipeError) until it's reset."""
         print('[wifi] resetting radio: %s' % why)
         try:
             self._close_all(self._pool)  # sockets from before the reset are dead
@@ -690,7 +763,7 @@ class Net:
             r.close()
 
 
-WATCHDOG_S = 16  # the SAMD51's maximum
+WATCHDOG_S = 16  # the M4's (SAMD51's) maximum; the S3 allows more, but one value keeps them alike
 
 
 class Watchdog:

@@ -1,20 +1,27 @@
 # Board firmware (CircuitPython)
 
-Runs on the Adafruit Matrix Portal M4 driving the 64x32 panel. The server does
+Runs on the Adafruit Matrix Portal M4 or S3 driving the 64x32 panel. The same
+files run on both: `device.py` uses the S3's built-in WiFi when the `wifi`
+module exists, and the M4's ESP32 co-processor otherwise (the serial log says
+which at startup). The server does
 all fetching and formatting (`server/board/`, API in `docs/board/contract.md`);
 the board draws what it receives.
 
 ## Setting up the board
 
 1. **CircuitPython 9.x.** Plug the Matrix Portal into your computer over USB-C,
-   double-tap its RESET button (a `MATRIXBOOT` drive appears), and drag the
-   Matrix Portal M4 `.uf2` from circuitpython.org/board/matrixportal_m4 onto it.
-   It restarts as a `CIRCUITPY` drive.
-2. **Libraries: nothing to install.** CircuitPython's Matrix Portal M4 build
-   has `adafruit_esp32spi`, `adafruit_requests`, `adafruit_connection_manager`
-   and `neopixel` frozen into its firmware (flash, no RAM for their code), and
-   frozen modules are found before `CIRCUITPY/lib/`, so copies in `lib/` are
-   never imported. They can be deleted.
+   double-tap its RESET button (a `…BOOT` drive appears), and drag the `.uf2`
+   for your board onto it: circuitpython.org/board/matrixportal_m4 or
+   circuitpython.org/board/adafruit_matrixportal_s3. It restarts as a
+   `CIRCUITPY` drive. Stay on 9.x: the `.mpy` files are built for it.
+2. **Libraries.**
+   - **M4: nothing to install.** Its build has `adafruit_esp32spi`,
+     `adafruit_requests`, `adafruit_connection_manager` and `neopixel` frozen
+     into its firmware (flash, no RAM for their code), and frozen modules are
+     found before `CIRCUITPY/lib/`, so copies in `lib/` are never imported.
+   - **S3:** `circup install adafruit_requests adafruit_connection_manager`
+     (or copy them from the 9.x library bundle into `CIRCUITPY/lib/`).
+     `adafruit_esp32spi` isn't needed.
 3. **This code.** The board can't compile the larger `.py` files itself (it
    runs out of memory), so build them to `.mpy` first. Download CircuitPython's
    `mpy-cross` for your computer and CircuitPython version from
@@ -26,7 +33,9 @@ the board draws what it receives.
    is imported instead of its `.mpy`.
 4. **Settings.** Copy `settings.toml.example` to `CIRCUITPY/settings.toml` and
    fill in your WiFi networks (tried in order) and `BOARD_TOKEN` (the same
-   value as the Fly secret).
+   value as the Fly secret). On the S3, don't add `CIRCUITPY_WIFI_SSID` /
+   `CIRCUITPY_WIFI_PASSWORD`: those turn on CircuitPython's web workflow,
+   which joins WiFi on its own before `code.py` runs.
 5. **Watch the serial console** (https://code.circuitpython.org, Mu, or PuTTY
    on the board's COM port at 115200). Once a minute the board prints its
    fetch budget, last and slowest draw time, counters, and free memory. Send
@@ -73,7 +82,7 @@ the loop itself is stuck.
 | `boardlib/crash.py` | Why the board (re)started: `code.py` saves a crash to `microcontroller.nvm` before reloading, and the next run sends it and its start reason with the health report. |
 | `boardlib/status.py` | WIFI / WIFI OK / PORTAL / NO WIFI / NO SERVER screens. |
 | `boardlib/matrix.py` | The big fixed allocations (matrix, bitmap, palette, radar and logo slots), made first in `code.py` while the heap is whole. |
-| `boardlib/device.py` | Hardware only: the matrix (palette-indexed bitmap, `bitmaptools` fills and glyph and radar copies), ESP32 WiFi + HTTPS, buttons, status NeoPixel, watchdog. |
+| `boardlib/device.py` | Hardware only: the matrix (palette-indexed bitmap, `bitmaptools` fills and glyph and radar copies), WiFi + HTTPS (M4: ESP32 over SPI; S3: built-in, through `NativeRadio`), buttons, status NeoPixel, watchdog. |
 | `tests/` | Run by `npm test` (needs `python3`): pixel parity with draw.js through both the plain frame and the board's bitmap frame (with stand-ins for the CircuitPython modules), and the main loop against a simulated server, clock, and buttons. |
 
 ## Rules
@@ -88,5 +97,5 @@ the loop itself is stuck.
   `math.floor`/`math.ceil` convert to float first.
 - Clock text uses the payload's `tzo` (Chicago's UTC offset); there is no
   time zone database on the board.
-- Not verifiable here: speed and memory on the real M4, the exact ESP32 and
-  matrix pin behavior. Those get checked on hardware from the serial log.
+- Not verifiable here: speed and memory on the real M4 or S3, the exact ESP32,
+  `wifi.radio` and matrix pin behavior. Those get checked on hardware from the serial log.
