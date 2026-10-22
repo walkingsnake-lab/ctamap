@@ -12,6 +12,7 @@
 #include <string>
 
 #include "app.h"
+#include "color.h"
 #include "draw.h"
 
 class MatrixPanel_I2S_DMA;
@@ -24,7 +25,7 @@ struct Settings {
   std::string board_id = "home";
   std::string token;
   int rotation = 0;     // 0, or 180 when the panel is mounted upside down
-  double gamma = 1.0;   // extra gamma on top of the driver's CIE curve; 1 = none
+  int curve = color::CIRCUITPY;  // color curve (color.h)
   int status_led = 2;   // 2: every state; 1: no fetch light; 0: off
   bool tls_verify = true;
   // Panel driver. clk_phase: false = data latched on the falling clock edge
@@ -43,13 +44,14 @@ class Panel : public app::Display {
   void show(const std::function<void(draw::Frame &)> &fn) override;
   long last_ms = 0, max_ms = 0;  // draw time, for the serial report
   int refresh_rate() const;
+  void set_curve(int curve) { pipe_.set_curve(curve); }
+  int curve() const { return pipe_.curve(); }
 
  private:
   MatrixPanel_I2S_DMA *dma_ = nullptr;
   draw::Frame frame_;
   int rotation_;
-  uint8_t lut_[256];
-  bool use_lut_;
+  color::Pipeline pipe_;
   bool clk_phase_, double_buffer_;
   int64_t flipped_at_ = 0;  // us; when the last back buffer was flipped in
 };

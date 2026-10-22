@@ -33,19 +33,10 @@ static const int8_t kLat = 47, kOe = 14, kClk = 2;
 static const int kButtonUp = 6, kButtonDown = 7;
 static const int kNeoPixel = 4;
 
-// The driver's brightness curve (CIE 1931, 8-bit table in its cie_luts.h)
-// turns inputs 0-4 off; 5 is the first visible step. A color that would
-// fall below it has its brightest channel lifted to it and the others
-// dropped, so dim elements never vanish at night or pick up a tint (the
-// same rule as firmware/boardlib/device.py correct()).
-static const uint8_t FLOOR = 5;
-
 // ---- panel ----
 
 Panel::Panel(const Settings &s)
-    : rotation_(s.rotation), use_lut_(s.gamma != 1.0), clk_phase_(s.clk_phase), double_buffer_(s.double_buffer) {
-  for (int v = 0; v < 256; v++) lut_[v] = (uint8_t)(pow(v / 255.0, s.gamma) * 255 + 0.5);
-}
+    : rotation_(s.rotation), pipe_(s.curve), clk_phase_(s.clk_phase), double_buffer_(s.double_buffer) {}
 
 bool Panel::begin() {
   HUB75_I2S_CFG::i2s_pins pins = {kR1, kG1, kB1, kR2, kG2, kB2, kA, kB, kC, kD, kE, kLat, kOe, kClk};
@@ -86,19 +77,7 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
     for (int x = 0; x < 64; x++) {
       int i = (y * 64 + x) * 3;
       uint8_t r = px[i], g = px[i + 1], b = px[i + 2];
-      if (r | g | b) {
-        uint8_t cr = use_lut_ ? lut_[r] : r, cg = use_lut_ ? lut_[g] : g, cb = use_lut_ ? lut_[b] : b;
-        uint8_t m = cr > cg ? (cr > cb ? cr : cb) : (cg > cb ? cg : cb);
-        if (m < FLOOR) {
-          uint8_t top = r > g ? (r > b ? r : b) : (g > b ? g : b);
-          cr = r == top ? FLOOR : 0;
-          cg = g == top ? FLOOR : 0;
-          cb = b == top ? FLOOR : 0;
-        }
-        r = cr;
-        g = cg;
-        b = cb;
-      }
+      pipe_.map(r, g, b);  // the chosen curve, compensated for the driver's own (color.h)
       int dx = rotation_ == 180 ? 63 - x : x;
       int dy = rotation_ == 180 ? 31 - y : y;
       dma_->drawPixelRGB888(dx, dy, r, g, b);

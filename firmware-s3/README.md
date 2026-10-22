@@ -79,6 +79,7 @@ S3.
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
 | `ctaboard/src/sched.h`, `control.h` | Requests in animation gaps; buttons vs. the phone (`sched.py`, `control.py`). |
 | `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws. |
+| `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |
 | `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, NeoPixel, watchdog. The only code that includes Arduino headers. |
 | `ctaboard/src/assets.h` | Fonts, icons, glyphs. **Generated** by `node scripts/build-firmware-assets.js`. |
 | `ctaboard/src/certs.h` | Root certificates for HTTPS. **Generated** by `node scripts/build-firmware-certs.js`. |
@@ -94,9 +95,10 @@ S3.
 - Mirror Python's semantics where the port depends on them: floor division
   and modulo are `draw::fdiv` / `draw::fmod_floor`; Python truthiness is
   `json::Value::truthy()`; `x is None` is an empty `std::optional`.
-- Brightness: the renderer scales pixels by the payload's `bright`, then
-  `device.cpp` lifts colors the driver's CIE curve would turn off (inputs
-  below 5) to its first visible step. `MATRIX_GAMMA` adds gamma on top
-  (default 1.0: none).
+- Color: the renderer scales pixels by the payload's `bright`, then
+  `src/color.cpp` maps each color through the chosen curve (`MATRIX_CURVE`)
+  and inverts the DMA driver's own CIE curve, so the panel shows exactly
+  that curve. The default reproduces the CircuitPython firmware's look.
+  `MATRIX_CALIBRATE 1` shows a pattern for choosing on the panel.
 - Not verifiable here: speed, memory, WiFi, and TLS on the real S3. Those get
   checked on hardware from the serial log.

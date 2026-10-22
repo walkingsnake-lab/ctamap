@@ -43,6 +43,12 @@ test('S3 firmware main loop (tests/app_test.cpp)', { skip: !CXX && 'no C++ compi
   assert.equal(r.status, 0, r.stdout + r.stderr);
 });
 
+test('S3 firmware color pipeline (tests/color_test.cpp)', { skip: !CXX && 'no C++ compiler' }, () => {
+  const bin = compile('color_test.cpp', ['color.cpp', 'calibrate.cpp']);
+  const r = spawnSync(bin, [], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
 test('S3 firmware assets are current (run node scripts/build-firmware-assets.js)', () => {
   assert.equal(fs.readFileSync(assets.OUT_CPP, 'utf8'), assets.buildCpp());
 });
