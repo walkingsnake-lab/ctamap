@@ -90,7 +90,8 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - Custom glyphs at private-use codepoints:
   - `min`: one 11px glyph with a 5-wide m.
   - Inline **bolt** (3x5) and **funnel** (4x5): used in the weather strip tag **and** next to AM/PM on the radar.
-  - **Alert circle** (5x5): red circle with a white "!" for the ticker index column.
+  - **Alert circle** (5x5): red circle with a white "!": the ticker index column and after the label on transit rows.
+  - **Cut mark** (3x1, `CUT`): two dots on the baseline (an ellipsis with one dot less), after a transit label shortened to make room for the alert circle.
 - **Digits are tabular** in every font (one shared cell width), so a rolling digit never shifts its neighbors. Spaces are 2px (small) and 3px (5x7).
 - The **alert circle** is two glyphs drawn at the same origin: a red disc with the "!" pixels left blank, and a white "!". Fonts are one color per glyph.
 - Codepoints for custom glyphs are in `server/board/glyphs.js`. The fonts are built by `scripts/build-fonts.js` into `server/board/fonts/` (BDF); the board build converts them to PCF.
@@ -109,9 +110,8 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Schedule-based times (`isSch`), first / later | grey `#6a6a6a` / `#2e2e2e` (instead of amber; same width, so digit rolls are unaffected). The first is about half the light of the white labels so it reads as grey on the panel (`#b0b0b0` looked white); later ones are about 40% of the first, the same step as amber to dim amber; with time dim steps the third is `#151515` |
 | Secondary text (station name, high/low) | grey `#8f8f8f` |
 | Dividers (header line, weather screens) | `#333333` |
-| CTA alert block | the line color at 20% behind a full-color "!" |
 | Shoreline | `#34485e` |
-| Ticker alert circle | red `#ff2020` with white `#ffffff` "!" |
+| Alert circle (transit and ticker) | red `#ff2020` with white `#ffffff` "!" |
 
 - **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from Open-Meteo). Every dim element has a **minimum floor** so it never drops to black at night.
 - **Radar rain fills** render at ~65%; **ticker row fills** at 55%. Text stays full brightness.
@@ -180,12 +180,12 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Switching is immediate both ways:** chronological as soon as destinations exceed max rows, back as soon as they fit. If short-turns make it flip too often, raise `CHRONO_HOLD` in `arrivals.js` (a hold time before switching back; the mechanism is built, set to 0).
 - **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
 - **Time format:** digits + lowercase `m` with the font's own **1px gap** (`4m`, `12m`); `DUE` stays bare. Labels are fitted against the widest time (`99m`), so they have up to 43px.
-- **Line ID: a line-colored position digit** (1–5, Tom Thumb, columns 0–2), then a 1px gap, the 3px line-color block (columns 4–6), and the label at x9. The digit is the block's exact color for every line (Brown and Purple were briefly brightened for thin strokes; matching the block won out). When a train departs, each digit rolls down (2→1) as the list slides up. Alerts show the same dimmed block and `!` (the digit stays). No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
+- **Line ID: a line-colored position digit** (1–5, Tom Thumb, columns 0–2), then a 1px gap, the 3px line-color block (columns 4–6), and the label at x9. The digit is the block's exact color for every line (Brown and Purple were briefly brightened for thin strokes; matching the block won out). When a train departs, each digit rolls down (2→1) as the list slides up. Alerts show the label and red alert circle as on destination rows (the digit and block stay; at 43px there's room for the whole name). No run numbers. (Also tried: inverted digits on 3px and 5px blocks, white digits on 5px blocks at full and 55% color.)
 - Same row counts and geometry as destination rows; the header (or key) follows its setting; the weather strip and station line are always off (4 rows with the header or key, 5 without). The server sends 2 extra trains below the cap so the board can bring the next one in between updates.
 - **Departure:** the first row slides up under the header while fading, the list slides up one row pitch with it (0.5 s ease), the next train turns amber, and a new train slides in at the bottom. Per-digit roll still applies within a row (`12m`→`11m` rolls only the 2).
 - **Trains swapping order** between updates: rows are keyed by run number, so the two rows just slide past each other.
 - **Switching views** cross-fades: the old rows fade out, then the new ones fade in.
-- **CTA alerts:** same static block as destination rows.
+- **CTA alerts:** label and red alert circle, as on destination rows.
 - **Accepted trade-off:** infrequent lines can drop off the screen when frequent ones fill all rows.
 
 ### Weather strip (optional)
@@ -195,7 +195,9 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 
 ### CTA alerts
 - **Which alerts:** major alerts only (CTA severity `major`, or flagged MajorAlert). A sample on Oct 4 had 7 active alerts (a 2029 station closure across 5 lines, a schedule change, a station bypass, elevators, and an Orange/Green minor delay) and none of them blink.
-- Affected rows' color blocks drop to **20% of the line color with a 1px "!" over them in the full line color** (middle column of the 3x5 block: 3px stem, 1px gap, 1px dot; `ALERT_BANG` in `server/board/icons.js`). **Static, no blink.** That's the whole indicator; no alert text is shown (details are on the phone). (Replaced a 1 s blink between the block and the bare "!" in Oct 2026. Also tried: a white "!" on the block (lost on Yellow), a knocked-out "!" (reads as a U), 30% and 15% dims; at night dimming Brown, Purple, and Green blocks mostly drop out at 15–20%, leaving the bare "!".)
+- Affected rows keep their color block and show the label followed, 2px later, by the **ticker's red alert circle** (white "!"), so both screens use one glyph. **Static, no blink.** That's the whole indicator; no alert text is shown (details are on the phone).
+- **Fitting:** the label and circle are fitted against the **widest** times the row's count can reach (the first time `DUE`, the rest two digits, 2px apart), with 2px clear before the times, so the label never changes length as the times count down. The whole name shows when it fits (in practice with two times or fewer, and always in the chronological view); otherwise it's cut and ends with the two-dot cut mark: with three times `KIMB‥`, `HOWA‥`, `COTT‥`, `LIND‥`; `LOOP`, `95TH` and `O'HARE` stay whole. The server sends the fitted label as `al` (contract, Row); a row's count only changes with an update, so a departure between updates keeps the shorter label until the next one.
+- (Replaced, Oct 25 2026: the block at 20% of the line color under a 1px full-color "!" (`ALERT_BANG`, still used by the frozen M4), barely noticeable on the panel; before that a 1 s blink between the block and the bare "!". Also mocked and declined: a line-color band behind the row, a red label, red times, the alert circle in place of the block, and the block running on under the label as an underline.)
 - CTA alerts are per line, so **every row of the affected line is marked, both directions**. Marking only one direction would need parsing the alert text; not planned for v1.
 
 ### Destination labels

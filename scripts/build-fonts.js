@@ -180,6 +180,12 @@ function buildSmall() {
     '..#..',
   ]), 0));
 
+  // Two-dot cut mark (an ellipsis with one dot less) on the baseline, after a
+  // transit label shortened to make room for the alert circle.
+  f.glyphs.set(G.CUT, glyph('cut', G.CUT, art([
+    '#.#',
+  ]), 0));
+
   // Clock for schedule-based arrivals in the ticker index column (5px wide).
   f.glyphs.set(G.CLOCK, glyph('clock', G.CLOCK, art([
     '.###.',

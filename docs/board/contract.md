@@ -164,7 +164,8 @@ Train Tracker `rt` values map to `ln`: `Red`→`RD`, `Blue`→`BL`, `Brn`→`BR`
 | `lbl` | Label, uppercase, fitted. |
 | `t` | Up to 3 arrival times (epoch), ascending. |
 | `s` | Parallel to `t`: `1` if that time is schedule-based (`isSch`), drawn grey instead of amber. |
-| `a` | `1` if the line has an active **major** CTA alert: the block drops to 20% of the line color with a full-color "!" over it (static); see *CTA alerts* below. |
+| `a` | `1` if the line has an active **major** CTA alert: the row shows `al` instead of `lbl`, then the red alert circle (static); see *CTA alerts* below. The frozen M4 ignores `al` and dims the block to 20% under a full-color "!" instead. |
+| `al` | With `a` `1` only: the label to draw before the alert circle, uppercase. Fitted so the label, a 2px gap, the 5px circle and a 2px gap fit before the **widest** times the row's count can reach (the first `DUE`, the rest two digits, 2px apart; chronological rows: `99m`), so it never changes length as the times count down. The whole name when it fits (typically with two times or fewer); otherwise cut and ended with the two-dot `CUT` glyph (U+E009), e.g. `KIMB‥`. |
 | `rn` | `chrono` only: Train Tracker run number (string). The board keys rows by it, so trains keep their identity when they swap order. |
 
 #### Ticker item (`ticker[]`)

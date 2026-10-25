@@ -53,8 +53,13 @@ async function build() {
   const S = [];
   const arrays = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Array.from(v)])) : undefined);
   // extra: { s3only: true } for scenarios the frozen M4 renderer skips.
+  // Transit rows on a line with a CTA alert changed after the freeze (the
+  // label, shortened if needed, then the red alert circle; the M4 still dims
+  // the block under a "!"), so any scenario with one is S3 only.
+  const alerted = (p) => (p.rows || []).some((r) => r.a);
   const add = (name, payload, optsList, frames, logos, extra = {}) => {
     S.push({
+      ...(alerted(payload) ? { s3only: true } : {}),
       ...extra,
       name, payload,
       frames: arrays(frames),
@@ -97,6 +102,11 @@ async function build() {
   add('key layout chrono', payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { key: true, alerts: ['GR'] }), [{ screen: 'transit' }]);
   add('key layout 3 rows no clock dim', { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { key: true }), rows: payloadFrom('belmont-2026-10-03-2316.json', null).rows.slice(0, 3), hclock: false, bright: 40 }, [{ screen: 'transit' }]);
   add('dest belmont alerts blink + dim', payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { alerts: ['BR'], bright: 40 }), [{ screen: 'transit', blink: true }, { screen: 'transit', blink: false }]);
+  // Alert labels: cut to fit the circle with three times (HOWA, KIMB), whole
+  // with fewer (95TH, LOOP); line-colored names; header hidden.
+  const ba = payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { alerts: ['RD', 'BR'] });
+  add('dest alert labels', ba, [{ screen: 'transit' }, { screen: 'transit', now: ba.now + 75 }]);
+  add('dest alert labels, line-colored names', { ...ba, lnc: true, header: null }, [{ screen: 'transit' }]);
   for (const warn of [{ kind: 'tor', lvl: 'warning' }, { kind: 'svr', lvl: 'watch' }, { kind: 'tor', lvl: 'watch' }]) {
     add(`weather strip ${warn.kind} ${warn.lvl}`, payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: { ...WX, icon: 'storm', word: 'STORMS', temp: -10 }, warn }), [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
   }
@@ -372,6 +382,7 @@ async function build() {
   const seq = (name, steps) => {
     const anim = draw.createTransitAnimator();
     S.push({
+      ...(steps.some((s) => alerted(s.p)) ? { s3only: true } : {}),
       name,
       steps: steps.map((s) => {
         const p = { ...base, now: s.now, ...s.p };

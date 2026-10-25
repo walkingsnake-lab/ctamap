@@ -213,6 +213,13 @@
     const TIME_GAP = 3;   // px between arrival times...
     const TIGHT_GAP = 2;  // ...tightened when the row is full
     const LABEL_GAP = 3;  // min px between the label and the times
+    // A line with a major alert: its label (the payload's `al`, shortened to
+    // make room when needed) and the red alert circle ALERT_ICON_GAP px after it.
+    const ALERT_ICON_GAP = 2;
+    const alertText = (r) => (r.al != null ? r.al : r.lbl);
+    const alertIconX = (r, x) => { const t = alertText(r); return t ? x + measure('small', t) + ALERT_ICON_GAP : x; };
+    // Rightmost column the row's label (and alert circle) reaches.
+    const labelEnd = (r, x) => (r.a ? alertIconX(r, x) + 4 : x + measure('small', r.lbl) - 1);
     const TAG_GAP = 3;    // px between warning icon and word
     const ROLL_DIST = 6;  // px a digit travels during a roll (5px glyph + 1px gap)
     const scaleColor = (hexc, k) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(hexc.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('');
@@ -384,8 +391,7 @@
     function layoutCells(r, now, steps) {
       const texts = r.t.map((t, k) => timeText(t, now, k === 0));
       const widthAt = (gap) => texts.reduce((w, txt, i) => w + measure('small', txt) + (i ? gap : 0), 0);
-      const labelEnd = 5 + measure('small', r.lbl) - 1;
-      const gap = 63 - widthAt(TIME_GAP) + 1 - labelEnd - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
+      const gap = 63 - widthAt(TIME_GAP) + 1 - labelEnd(r, 5) - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
       const cells = new Array(texts.length);
       let x = 63;
       for (let k = texts.length - 1; k >= 0; k--) {
@@ -418,7 +424,7 @@
         warn: p.warn,
         stale: p.stale,
         rows: rows.map((r, i) => ({
-          key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, top: tops[i], alpha: 1,
+          key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, top: tops[i], alpha: 1,
           cells: layoutCells(r, now, p.ts === true),
         })),
       };
@@ -457,7 +463,7 @@
           seenKey.add(key);
           const sch = r.s && r.s[0];
           return {
-            key, ln: r.ln, lbl: r.lbl, a: r.a, num: i + 1, top: tops[i], alpha: 1,
+            key, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: i + 1, top: tops[i], alpha: 1,
             cells: [{
               id: key, t: r.t[0], text: chronoText(r.t[0], now, due), right: 63, alpha: 1, roll: null,
               color: sch ? (i ? C.schDim : C.sch) : (i ? C.dimAmber : C.amber),
@@ -472,11 +478,8 @@
     // Chronological rows: digit in columns 0-2, the 3px line-color block at
     // CHRONO_BLOCK_X (1px gap), the label 2px after it.
     const CHRONO_BLOCK_X = 4, CHRONO_LABEL_X = 9;
-    // A line with a major alert: its block at ALERT_DIM of the line color
-    // with the "!" (ALERT_BANG) over it in the full color. Static.
-    const ALERT_DIM = 0.2;
-    const LINE_ALERT = Object.fromEntries(Object.entries(LINE).map(([k, c]) => [k, scaleColor(c, ALERT_DIM)]));
-    // lnc: labels in the line's color instead of white.
+    // lnc: labels in the line's color instead of white. A line with a major
+    // alert: the alert label, then the ticker's red alert circle. Static.
     function drawViewRow(f, row, lnc) {
       const top = Math.round(row.top);
       const chrono = row.num != null;
@@ -484,14 +487,14 @@
       // Chronological view: the row's position as a digit in the block's
       // exact color, before the block.
       if (chrono) drawTimeCell(f, String(row.num), 2, top, line, row.numRoll);
-      const bx = chrono ? CHRONO_BLOCK_X : 0;
+      f.fill(chrono ? CHRONO_BLOCK_X : 0, top, 3, 5, line);
+      const lx = chrono ? CHRONO_LABEL_X : 5;
+      f.text('small', row.a ? alertText(row) : row.lbl, lx, top + 5, fade(lnc ? LINE[row.ln] : C.label, row.alpha));
       if (row.a) {
-        f.fill(bx, top, 3, 5, fade(LINE_ALERT[row.ln], row.alpha));
-        icons.ALERT_BANG.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.fill(bx + i, top + j, 1, 1, line); }));
-      } else {
-        f.fill(bx, top, 3, 5, line);
+        const ix = alertIconX(row, lx);
+        f.text('small', s(G.ALERT_DISC), ix, top + 5, fade(C.red, row.alpha));
+        f.text('small', s(G.ALERT_MARK), ix, top + 5, fade(C.white, row.alpha));
       }
-      f.text('small', row.lbl, chrono ? CHRONO_LABEL_X : 5, top + 5, fade(lnc ? LINE[row.ln] : C.label, row.alpha));
       for (const cell of row.cells) {
         const a = cell.alpha * row.alpha;
         if (a <= 0) continue;
@@ -678,7 +681,7 @@
             }
             // Position numbers roll when a row moves up (2 -> 1).
             if (r.num != null && st.num != null && st.num !== r.num && !isNewRow) st.numRoll = { from: String(st.num), start: t };
-            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, num: r.num, mode: target.mode });
+            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: r.num, mode: target.mode });
             matchCells(st, r.cells, t, isNewRow);
           }
 
@@ -704,7 +707,7 @@
             const numP = st.numRoll ? (t - st.numRoll.start) / ROLL_MS : 1;
             if (numP >= 1) st.numRoll = null;
             view.rows.push({
-              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, top: st.shownTop, alpha, cells,
+              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, al: st.al, top: st.shownTop, alpha, cells,
               num: st.num, numRoll: st.numRoll ? { from: st.numRoll.from, p: numP } : null,
             });
           }
