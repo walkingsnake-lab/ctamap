@@ -127,8 +127,9 @@ const ICONS = {
   ],
 };
 
-// Transit CTA alert: the row's 3x5 color block blinks between solid and this
-// 1px "!" (middle column), drawn in the line color.
+// Frozen M4 only (firmware/boardlib/draw.py): a CTA alert's 1px "!" over the
+// row's 3x5 block at 20%, in the line color. draw.js and the S3 show the
+// label and the red alert circle instead.
 const ALERT_BANG = [
   '.#.',
   '.#.',

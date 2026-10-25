@@ -5,6 +5,7 @@
 const { parseCtaTime } = require('./time');
 const { lineCode, shortDest, resolveDest, endsHere, LINE_ORDER } = require('./destinations');
 const { measure, fit, ligatures } = require('./fonts');
+const G = require('./glyphs');
 
 // Transit row geometry (x positions on the 64px panel).
 const LABEL_X = 5;       // after the 3px color block + 2px gap
@@ -32,6 +33,36 @@ const CHRONO_EXTRA = 2;
 const CHRONO_HOLD = 0;
 // Chrono labels are fitted against the widest single time ("99m" or "DUE").
 const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
+
+// Alerted rows (design spec §5, CTA alerts): the label, then the 5x5 alert
+// circle 2px after it, at least 2px clear of the times. The label (`al`) is
+// fitted against the widest times this row's count can reach, so it doesn't
+// change length as the times count down; when it's cut it ends with the
+// two-dot CUT glyph.
+const ALERT_ICON_PX = 5;
+const ALERT_ICON_GAP = 2;  // blank px between the label and the circle
+const ALERT_TIME_GAP = 2;  // blank px between the circle and the times
+const CUT = String.fromCodePoint(G.CUT);
+
+// Widest `n` times can be: the first may read DUE (later ones can't: one DUE
+// per destination), the rest two digits, at the tight 2px spacing.
+function widestTimesWidth(n) {
+  if (!n) return 0;
+  return Math.max(measure('small', 'DUE'), measure('small', '99'))
+    + (n - 1) * (measure('small', '99') + MIN_TIME_GAP);
+}
+
+// name: the full uppercase label. px: room from the label's x to the end of
+// the alert circle.
+function alertLabel(name, px) {
+  const room = px - ALERT_ICON_GAP - ALERT_ICON_PX;
+  const full = fit('small', name, Infinity);
+  if (measure('small', full) <= room) return full;
+  const chars = [...full];
+  while (chars.length && measure('small', chars.join('').trimEnd() + CUT) > room) chars.pop();
+  const cut = chars.join('').trimEnd();
+  return cut ? cut + CUT : '';
+}
 
 // The header, weather strip, and key are the most the board shows. When the
 // live destinations don't fit as rows, the weather strip goes first, then
@@ -180,24 +211,35 @@ function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}
   const shown = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
 
   const chronoLabelPx = RIGHT_X - LABEL_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
-  const rows = viewState.view === 'chrono' ? shown.slice(0, max + CHRONO_EXTRA).map((a) => ({
-    ln: a.ln,
-    lbl: fit('small', a.dest.toUpperCase(), chronoLabelPx),
-    t: [a.t],
-    s: [a.s],
-    a: alerts.has(a.ln) ? 1 : 0,
-    rn: a.rn != null ? String(a.rn) : undefined,
-  })) : ordered.slice(0, max).map((g) => {
+  const chronoAlertPx = RIGHT_X - ALERT_TIME_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
+  const rows = viewState.view === 'chrono' ? shown.slice(0, max + CHRONO_EXTRA).map((a) => {
+    const alerted = alerts.has(a.ln);
+    return {
+      ln: a.ln,
+      lbl: fit('small', a.dest.toUpperCase(), chronoLabelPx),
+      t: [a.t],
+      s: [a.s],
+      a: alerted ? 1 : 0,
+      ...(alerted ? { al: alertLabel(a.dest.toUpperCase(), chronoAlertPx) } : {}),
+      rn: a.rn != null ? String(a.rn) : undefined,
+    };
+  }) : ordered.slice(0, max).map((g) => {
     const items = g.items.slice(0, MAX_TIMES);
     const t = items.map((a) => a.t);
     const labelPx = RIGHT_X - LABEL_GAP - worstTimesWidth(t, now) - LABEL_X + 1;
-    return {
+    const alerted = alerts.has(g.ln);
+    const row = {
       ln: g.ln,
       lbl: fit('small', g.dest.toUpperCase(), labelPx),
       t,
       s: items.map((a) => a.s),
-      a: alerts.has(g.ln) ? 1 : 0,
+      a: alerted ? 1 : 0,
     };
+    if (alerted) {
+      const timesPx = Math.max(widestTimesWidth(t.length), worstTimesWidth(t, now));
+      row.al = alertLabel(g.dest.toUpperCase(), RIGHT_X - ALERT_TIME_GAP - timesPx - LABEL_X + 1);
+    }
+    return row;
   });
 
   // Ticker: the next individual arrivals among the shown destinations.
@@ -212,4 +254,4 @@ function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}
   return { view: viewState.view, viewState, rows, ticker, bars };
 }
 
-module.exports = { normalize, latchDue, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };
+module.exports = { normalize, latchDue, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };

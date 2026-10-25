@@ -3,7 +3,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD } = require('./arrivals');
+const { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD } = require('./arrivals');
+const G = require('./glyphs');
 const { parseCtaTime } = require('./time');
 const { measure } = require('./fonts');
 
@@ -197,6 +198,38 @@ test('active alerts flag every row and ticker item of that line', () => {
   const { rows, ticker } = run('belmont-2026-10-03-2316.json', base, { alerts: new Set(['BR']) });
   assert.deepEqual(rows.map((r) => r.a), [0, 0, 1, 1]);
   assert.ok(ticker.every((x) => x.a === (x.ln === 'BR' ? 1 : 0)));
+});
+
+test('alerted rows: label cut with the two dots to fit the alert circle against the widest times', () => {
+  const CUT = String.fromCodePoint(G.CUT);
+  const { rows } = run('belmont-2026-10-03-2316.json', base, { alerts: new Set(['RD', 'BR']) });
+  // Three times: room for 4 letters; two or fewer: the whole name.
+  assert.deepEqual(rows.map((r) => r.t.length), [3, 2, 3, 2]);
+  assert.deepEqual(rows.map((r) => r.al), ['HOWA' + CUT, '95TH', 'KIMB' + CUT, 'LOOP']);
+  assert.deepEqual(rows.map((r) => r.lbl), ['HOWARD', '95TH', 'KIMBALL', 'LOOP']); // lbl unchanged
+  // label, 2px, the 5px circle, 2px, the widest times: within the row.
+  for (const r of rows) assert.ok(5 + measure('small', r.al) + 2 + 5 + 2 + widestTimesWidth(r.t.length) <= 64);
+  // No alert, no `al`.
+  assert.ok(run('belmont-2026-10-03-2316.json').rows.every((r) => !('al' in r)));
+});
+
+test('alert labels: whole when the row has room, the cut never depends on the times shown', () => {
+  const CUT = String.fromCodePoint(G.CUT);
+  const px = (n) => 63 - 2 - widestTimesWidth(n) - 5 + 1;
+  assert.equal(alertLabel('KIMBALL', px(1)), 'KIMBALL');
+  assert.equal(alertLabel('KIMBALL', px(2)), 'KIMBALL');
+  assert.equal(alertLabel('COTTAGE', px(2)), 'COTTAGE');
+  assert.equal(alertLabel('KIMBALL', px(3)), 'KIMB' + CUT);
+  assert.equal(alertLabel('JEFF PK', px(3)), 'JEFF' + CUT); // no space before the dots
+  // Same label whether the three times are short or at their widest.
+  const t0 = 1_800_000_000;
+  const at = (offs) => format(offs.map((m, i) => ({ ln: 'BR', dest: 'Kimball', known: true, dir: 1, t: t0 + m, s: 0, rn: String(400 + i) })), base, { now: t0, alerts: new Set(['BR']) }).rows[0].al;
+  assert.equal(at([200, 300, 400]), at([30, 50 * 60, 90 * 60]));
+  // Chronological rows have room for the whole name.
+  const many = ['Howard', '95th', 'Kimball', 'Loop', 'Linden', 'Midway'].map((dest, i) => ({ ln: i < 2 ? 'RD' : 'BR', dest, known: true, dir: i, t: t0 + 60 * (i + 2), s: 0, rn: String(i) }));
+  const chrono = format(many, base, { now: t0, alerts: new Set(['BR']) });
+  assert.equal(chrono.view, 'chrono');
+  assert.ok(chrono.rows.filter((r) => r.a).every((r) => r.al === r.lbl));
 });
 
 test('arrivals more than 30 s past are dropped', () => {

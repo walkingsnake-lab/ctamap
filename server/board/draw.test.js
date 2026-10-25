@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const draw = require('./render');
 const { liveRows, easeInOut } = require('./draw');
+const { measure } = require('./fonts');
 
 const hex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
 const NOW = 1_800_000_000;
@@ -700,17 +701,23 @@ test('chrono: position digit in the block\'s exact color, then the block', () =>
   assert.equal(count(d, draw.LINE.BR, 0, 0, 2, 31), 15);
 });
 
-test('chrono: an alert puts the "!" over the dimmed block; the digit stays', () => {
-  const p = chronoPayload([{ ...chronoRow('GR', 'HARLEM', min(3), '1'), a: 1 }]);
+test('chrono: an alert puts the red alert circle after the label; the block and digit stay', () => {
+  const p = chronoPayload([{ ...chronoRow('GR', 'HARLEM', min(3), '1'), a: 1, al: 'HARLEM' }]);
   const plain = chronoPayload([chronoRow('GR', 'HARLEM', min(3), '1')]);
   const top = draw.rowTops(1, true, false)[0];
   const on = draw.renderTransit(p, { blink: true });
   const off = draw.renderTransit(p, { blink: false });
   assert.deepEqual([...on.px], [...off.px]);                       // static
-  assert.equal(count(on, draw.LINE.GR, 4, top, 6, top + 4), 4);    // 3px stem + dot
-  assert.equal(count(on, '#001f0c', 4, top, 6, top + 4), 11);      // the rest of the block at 20%
+  assert.equal(count(on, draw.LINE.GR, 4, top, 6, top + 4), 15);   // the block stays solid
+  const ix = 9 + measure('small', 'HARLEM') + 2;
+  assert.equal(count(on, draw.C.red, 0, top, ix - 1, top + 4), 0);
+  assert.equal(count(on, draw.C.red, ix, top, ix + 4, top + 4), 17);
+  assert.equal(count(on, draw.C.white, ix, top, ix + 4, top + 4), 4);
   const n = draw.renderTransit(plain);
   assert.equal(count(on, draw.LINE.GR, 0, top, 2, top + 4), count(n, draw.LINE.GR, 0, top, 2, top + 4));
+  // Without `al` (an older payload) the label itself is used.
+  const noAl = draw.renderTransit(chronoPayload([{ ...chronoRow('GR', 'HARLEM', min(3), '1'), a: 1 }]));
+  assert.deepEqual([...noAl.px], [...on.px]);
 });
 
 test('chrono animator: position digits roll down as the list slides up', () => {

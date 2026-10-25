@@ -12,4 +12,5 @@ module.exports = {
   CLOCK: 0xe006,       // small: 5x5 clock, replaces the ticker index for schedule-based arrivals
   UP: 0xe007,          // small: 5x5 up arrow (the day's high)
   DOWN: 0xe008,        // small: 5x5 down arrow (the day's low)
+  CUT: 0xe009,         // small: two dots on the baseline, after a name shortened to fit the alert circle
 };

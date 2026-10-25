@@ -157,6 +157,7 @@ struct ViewRow {
   std::string key, ln;
   ustr lbl;
   bool a = false;
+  std::optional<ustr> al;  // alert label (payload `al`), with `a`
   std::optional<int> num;
   std::optional<Roll> numRoll;
   double top = 0;
@@ -200,6 +201,7 @@ class TransitAnimator {
     std::string key, ln, mode;
     ustr lbl;
     bool a = false;
+    std::optional<ustr> al;
     double top = 0, shownTop = 0;
     std::optional<double> born, fromTop, moveStart, leaving;
     std::vector<CellP> cells;

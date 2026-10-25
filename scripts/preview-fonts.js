@@ -9,7 +9,8 @@ const path = require('path');
 const { Frame } = require('../server/board/raster');
 const { measure, ligatures } = require('../server/board/fonts');
 const G = require('../server/board/glyphs');
-const { ICONS, ALERT_BANG, drawIcon } = require('../server/board/icons');
+const { ICONS, drawIcon } = require('../server/board/icons');
+const { alertLabel, widestTimesWidth } = require('../server/board/arrivals');
 
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'previews');
 fs.mkdirSync(OUT, { recursive: true });
@@ -85,17 +86,20 @@ function drawWeatherRow(f, icon, temp, tag, top = 24, divider = true) {
   }
 }
 
-// `alert` rows draw the "!" blink state instead of the solid block.
+// `alert` rows show the label fitted as the server does (cut with the two
+// dots when needed), then the red alert circle 2px after it.
 function transitRows(f, rows, tops) {
   rows.forEach(([ln, label, times, alert], i) => {
     const top = tops[i];
     const base = top + 5;
+    f.fill(0, top, 3, 5, LINE[ln]);
+    const text = alert ? alertLabel(label, 63 - 2 - widestTimesWidth(times.length) - 5 + 1) : label;
+    f.text('small', text, 5, base, C.label);
     if (alert) {
-      ALERT_BANG.forEach((r, j) => [...r].forEach((c, k) => { if (c === '#') f.fill(k, top + j, 1, 1, LINE[ln]); }));
-    } else {
-      f.fill(0, top, 3, 5, LINE[ln]);
+      const ix = 5 + measure('small', text) + 2;
+      f.text('small', s(G.ALERT_DISC), ix, base, C.red);
+      f.text('small', s(G.ALERT_MARK), ix, base, C.white);
     }
-    f.text('small', label, 5, base, C.label);
     drawTimes(f, times, 63, base);
   });
 }
@@ -114,7 +118,7 @@ function transitRows(f, rows, tops) {
   save('mock-transit.png', f, 10);
 }
 
-// Transit with a Red Line alert: both Red rows in the "!" half of the blink.
+// Transit with a Red Line alert: Howard (three times) is cut, 95th fits.
 {
   const f = new Frame();
   f.text('small', 'MORSE', 0, 6, C.head);

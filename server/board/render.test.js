@@ -6,6 +6,8 @@ const path = require('path');
 const { render, rowTops, clockText, LINE, C } = require('./render');
 const { normalize, format } = require('./arrivals');
 const { parseCtaTime } = require('./time');
+const { measure } = require('./fonts');
+const G = require('./glyphs');
 
 const hex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tt-arrivals', name), 'utf8'));
@@ -86,22 +88,29 @@ test('transit: header without a band, line blocks, amber and grey times', () => 
   assert.ok(!colors.has(C.amber));
 });
 
-test('transit: an alerted line shows a "!" over its block at 20%, without blinking', () => {
+test('transit: an alerted line keeps its block; its label (cut to fit) is followed by the red alert circle', () => {
   const p = payload('belmont-2026-10-03-2316.json', {}, { alerts: new Set(['BR']) });
   const a = render(p);
   const b = render(p, { blink: true });
   assert.deepEqual([...a.px], [...b.px]);          // static
-  // Kimball is row 3: the dim block in columns 0 and 2, the "!" in column 1.
   const tops = rowTops(4, true, false);
-  const k = tops[2];
-  const dim = '#140b05';                           // #62361b at 20%
-  assert.equal(hex(a.get(0, k)), dim);
-  assert.equal(hex(a.get(2, k + 4)), dim);
-  assert.equal(hex(a.get(1, k)), LINE.BR);
-  assert.equal(hex(a.get(1, k + 3)), dim);         // the gap in the "!"
-  assert.equal(hex(a.get(1, k + 4)), LINE.BR);
-  // Red rows are unaffected.
-  assert.equal(hex(a.get(0, tops[0])), LINE.RD);
+  for (const [i, r] of p.rows.entries()) {
+    const k = tops[i];
+    for (let j = 0; j < 5; j++) assert.equal(hex(a.get(0, k + j)), LINE[r.ln], 'full block');
+    const reds = [];
+    for (let x = 0; x < 64; x++) for (let j = 0; j < 5; j++) if (hex(a.get(x, k + j)) === C.red) reds.push(x);
+    if (!r.a) { assert.equal(reds.length, 0); continue; }
+    // The circle starts 2px after the alert label: 17 red pixels, the "!" white.
+    const ix = 5 + measure('small', r.al) + 2;
+    assert.equal(reds.length, 17);
+    assert.equal(Math.min(...reds), ix);
+    assert.equal(Math.max(...reds), ix + 4);
+    assert.equal(hex(a.get(ix + 2, k)), C.white);
+    assert.equal(hex(a.get(ix + 2, k + 3)), C.red);  // the gap in the "!"
+  }
+  // Kimball (three times) is cut; Loop (two) stays whole.
+  assert.equal(p.rows[2].al, 'KIMB' + String.fromCodePoint(G.CUT));
+  assert.equal(p.rows[3].al, 'LOOP');
 });
 
 test('no rows -> overnight clock instead of the header', () => {

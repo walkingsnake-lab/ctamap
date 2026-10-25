@@ -618,6 +618,14 @@ static void draw_time_cell(Frame &f, const ustr &text, int right, int top, RGB c
   f.pop_clip();
 }
 
+// A line with a major alert: its label (the payload's `al`, shortened to make
+// room when needed) and the red alert circle ALERT_ICON_GAP px after it.
+// Mirrors alertText / alertIconX / labelEnd in draw.js.
+static const int ALERT_ICON_GAP = 2;
+static int alert_icon_x(const ustr &text, int x) {
+  return text.empty() ? x : x + measure(FONT_SMALL, text) + ALERT_ICON_GAP;
+}
+
 // steps: the third time a step dimmer than the second (payload ts).
 static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool steps = false) {
   std::vector<ustr> texts;
@@ -627,8 +635,11 @@ static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool ste
     for (size_t i = 0; i < texts.size(); i++) w += measure(FONT_SMALL, texts[i]) + (i ? gap : 0);
     return w;
   };
-  ustr lbl = vstr((*r.src)["lbl"]);
-  int label_end = 5 + measure(FONT_SMALL, lbl) - 1;
+  const Value &src = *r.src;
+  ustr lbl = vstr(src["lbl"]);
+  int label_end = src["a"].truthy()
+                      ? alert_icon_x(src["al"].is_null() ? lbl : vstr(src["al"]), 5) + 4
+                      : 5 + measure(FONT_SMALL, lbl) - 1;
   int gap = 63 - width_at(TIME_GAP) + 1 - label_end - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
   std::vector<ViewCell> cells(texts.size());
   int x = 63;
@@ -679,6 +690,7 @@ View build_transit_view(const Value &p, double now) {
     vr.lbl = vstr(r["lbl"]);
     vr.key = vr.ln + ":" + utf8(vr.lbl);
     vr.a = r["a"].truthy();
+    if (!r["al"].is_null()) vr.al = vstr(r["al"]);
     vr.top = tops[i];
     vr.alpha = 1;
     vr.cells = layout_cells(rows[i], now, p["ts"].is_true());
@@ -719,6 +731,7 @@ static View build_chrono_view(const Value &p, double now) {
     vr.ln = ln;
     vr.lbl = U(lbl);
     vr.a = r["a"].truthy();
+    if (!r["al"].is_null()) vr.al = vstr(r["al"]);
     vr.num = (int)i + 1;
     vr.top = tops[i];
     vr.alpha = 1;
@@ -737,26 +750,24 @@ static View build_chrono_view(const Value &p, double now) {
 // Chronological rows: digit in columns 0-2, the 3px line-color block at
 // CHRONO_BLOCK_X (1px gap), the label 2px after it.
 static const int CHRONO_BLOCK_X = 4, CHRONO_LABEL_X = 9;
-// A line with a major alert: its block at ALERT_DIM of the line color, the
-// "!" over it in the full color. Mirrors LINE_ALERT in draw.js.
-static const double ALERT_DIM = 0.2;
 
+// lnc: labels in the line's color instead of white. A line with a major
+// alert: the alert label, then the ticker's red alert circle. Static.
 static void draw_view_row(Frame &f, const ViewRow &row, bool lnc) {
   int top = (int)jsround(row.top);
   bool chrono = row.num.has_value();
   RGB lc = line_color(row.ln);
   RGB line = fade(lc, row.alpha);
   if (chrono) draw_time_cell(f, num_text(*row.num), 2, top, fade(lc, row.alpha), row.numRoll);
-  int bx = chrono ? CHRONO_BLOCK_X : 0;
+  f.fill(chrono ? CHRONO_BLOCK_X : 0, top, 3, 5, line);
+  int lx = chrono ? CHRONO_LABEL_X : 5;
+  const ustr &text = row.a && row.al ? *row.al : row.lbl;
+  f.text(FONT_SMALL, text, lx, top + 5, fade(lnc ? lc : C::label, row.alpha));
   if (row.a) {
-    f.fill(bx, top, 3, 5, fade(scale_color(lc, ALERT_DIM), row.alpha));
-    for (int j = 0; j < assets::ALERT_BANG_N; j++)
-      for (int i = 0; assets::ALERT_BANG[j][i]; i++)
-        if (assets::ALERT_BANG[j][i] == '#') f.fill(bx + i, top + j, 1, 1, line);
-  } else {
-    f.fill(bx, top, 3, 5, line);
+    int ix = alert_icon_x(text, lx);
+    f.text(FONT_SMALL, g(assets::G_ALERT_DISC), ix, top + 5, fade(C::red, row.alpha));
+    f.text(FONT_SMALL, g(assets::G_ALERT_MARK), ix, top + 5, fade(C::white, row.alpha));
   }
-  f.text(FONT_SMALL, row.lbl, chrono ? CHRONO_LABEL_X : 5, top + 5, fade(lnc ? lc : C::label, row.alpha));
   for (const ViewCell &cell : row.cells) {
     double a = cell.alpha * row.alpha;
     if (a <= 0) continue;
@@ -1023,6 +1034,7 @@ View TransitAnimator::step(const Value &p, double now, double t) {
     st->ln = r.ln;
     st->lbl = r.lbl;
     st->a = r.a;
+    st->al = r.al;
     st->num = r.num;
     st->mode = target.mode;
     match_cells(*st, r.cells, t, is_new_row);
@@ -1078,6 +1090,7 @@ View TransitAnimator::step(const Value &p, double now, double t) {
     vr.ln = st.ln;
     vr.lbl = st.lbl;
     vr.a = st.a;
+    vr.al = st.al;
     vr.top = st.shownTop;
     vr.alpha = alpha;
     vr.cells = cells;
