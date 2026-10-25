@@ -414,6 +414,13 @@ bool cold_boot() {
 long free_heap() { return (long)ESP.getFreeHeap(); }
 long largest_block() { return (long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT); }
 
+float chip_temp_c() {
+  // temperatureRead() (Arduino-ESP32) reads the S3's built-in sensor; single reads jitter by about 1 C.
+  float sum = 0;
+  for (int i = 0; i < 8; i++) sum += temperatureRead();
+  return sum / 8;
+}
+
 }  // namespace device
 
 #endif  // ARDUINO
