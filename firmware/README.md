@@ -1,11 +1,16 @@
 # Board firmware (CircuitPython)
 
-Runs on the Adafruit Matrix Portal M4 or S3 driving the 64x32 panel. The same
-files run on both: `device.py` uses the S3's built-in WiFi when the `wifi`
-module exists, and the M4's ESP32 co-processor otherwise (the serial log says
-which at startup). The server does
-all fetching and formatting (`server/board/`, API in `docs/board/contract.md`);
-the board draws what it receives.
+**Frozen for the Matrix Portal M4.** The S3 runs the C++ firmware in
+`firmware-s3/` (CircuitPython's matrix driver shimmers on the S3). This code
+stays working for the M4, but new rendering features land only in
+`firmware-s3/`: `draw.py` is no longer kept in step with `server/board/draw.js`
+(scenarios for later changes are tagged `s3only`). The server keeps payload
+changes additive so this firmware keeps working.
+
+Runs on the Adafruit Matrix Portal M4 (and the S3, though the S3 should use
+`firmware-s3/`) driving the 64x32 panel. The server does all fetching and
+formatting (`server/board/`, API in `docs/board/contract.md`); the board
+draws what it receives.
 
 ## Setting up the board
 
