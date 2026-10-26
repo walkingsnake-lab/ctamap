@@ -70,6 +70,8 @@ FOOT_Y = PANEL_BACK                          # foot face on the panel's insert b
 NUT_W, NUT_MOUTH, NUT_H, NUT_FLOAT = 5.7, 5.3, 2.7, 0.6
 NUT_CORNER = 5.5 / math.cos(math.pi / 6) / 2  # 3.175: nut centre to corner (corners point along the slot)
 S3_PILOT, S3_LEAD = 2.4, 0.5
+ROD_D, ROD_HEAD_D, ROD_HEAD_T = 4.3, 5.8, 0.6   # status-light rod (translucent PETG): shaft in the Ø4.5 tube, flush head
+ROD_GAP = 0.8                                    # rod tip above the LED's top (LED ~0.9 mm tall on the component face)
 
 
 def standoff(x, z, y0):
@@ -187,7 +189,11 @@ def back_plate3(window=True):
         cuts.append(Manifold.cylinder(S3_LEAD + 0.01, S3_PILOT / 2 + S3_LEAD, S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc - 0.01, hz_]))
     cuts.append(cyl_y(V.S3_BOOT_X, V.S3_BOOT_Z, btop + 0.5, y1 + 1, 2.6, 24))
     cuts.append(Manifold.cylinder(1.0, 1.3, 2.4, 32).rotate([-90, 0, 0]).translate([V.S3_BOOT_X, y1 - 1.0 + 0.001, V.S3_BOOT_Z]))
-    if window == 'open':                         # one colour, opaque: the tube opens in a Ø3 hole, 0.5 mm chamfer outside
+    if window == 'rod':                          # one colour, opaque, with a translucent rod down the tube (status_rod())
+        cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 + 1, ROD_D + 0.2, 32))
+        cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y1 - ROD_HEAD_T, y1 + 1, ROD_HEAD_D + 0.2, 48))
+        window = status_rod()
+    elif window == 'open':                       # one colour, opaque: the tube opens in a Ø3 hole, 0.5 mm chamfer outside
         cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 + 1, 3.0, 32))
         cuts.append(Manifold.cylinder(0.51, 1.5, 2.0, 32).rotate([-90, 0, 0]).translate([V.S3_NEO_X, y1 - 0.5, V.S3_NEO_Z]))
         window = None
@@ -242,6 +248,15 @@ def coupon_s3_pilots():
     return m
 
 
+def status_rod():
+    """Translucent light rod for the status LED, in case coordinates: flush head in the plate's outer recess, shaft down
+    the light tube to ROD_GAP above the LED. Print head down (the flush face on the bed), 100% infill."""
+    y1 = D - BACKL + (PLATE_T3 - PLATE_T)
+    tip = V.S3_PCB_Y + 1.6 + 0.9 + ROD_GAP
+    rod = cyl_y(V.S3_NEO_X, V.S3_NEO_Z, tip, y1, ROD_D, 32) + cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y1 - ROD_HEAD_T, y1, ROD_HEAD_D, 48)
+    return rod
+
+
 def boot_key3():
     """Boot key for a plate of PLATE_T3 (same as case2.boot_key() at 2 mm)"""
     reach = (D - BACKL + (PLATE_T3 - PLATE_T)) - (PCB_Y0 + 1.6 + 1.9) + 0.6
@@ -261,9 +276,11 @@ def to_bed_back_down(m):
 if __name__ == '__main__':
     import trimesh
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    p, _ = back_plate3(window='open')
+    p, rod = back_plate3(window='rod')
     t = to_bed_back_down(p); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/bar-backplate-v3.stl')
     print('plate', t.is_watertight, np.round(t.extents, 1).tolist())
+    t = to_bed_back_down(rod); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/bar-status-rod-translucent.stl')
+    print('rod', t.is_watertight, np.round(t.extents, 2).tolist())
     # template: panel-side face (y = PANEL_BACK) on the bed
     me = panel_template().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     t.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])); t.apply_translation([0, 0, -t.bounds[0][2]])

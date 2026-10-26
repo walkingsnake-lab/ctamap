@@ -16,7 +16,8 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Screen frame | `bar-screen-frame.stl` | black PETG (bezel look) or walnut | front face down |
 | Frame glue guide | `bar-frame-glue-guide.stl` | any PLA | as exported |
 | Diffuser | `bar-diffuser-white-grid15.stl` (0.2 face), or `bar-diffuser-face03.stl` (0.3 face, for translucent grey); split files for two colors | white or translucent grey + black PETG | face down; first layer = face |
-| Back plate | `bar-backplate-v3.stl` (one piece; the status light shows through a Ø3 hole) | PETG, one opaque color (black hides the insides best) | outer face down |
+| Back plate | `bar-backplate-v3.stl` (one piece) | PETG, one opaque color (black hides the insides best) | outer face down |
+| Status-light rod | `bar-status-rod-translucent.stl` (flush head, shaft down the light tube to 0.8 mm above the LED) | translucent PETG, 100% infill | head down |
 | Insert check (print first) | `check-panel-insert-template.stl` | any PLA | as exported; that face goes on the panel |
 | Encoder collar | `bar-encoder-collar-backdown.stl` | walnut, or translucent PETG for the glow | flange-top down |
 | USB-C bezel | `bar-usb-bezel.stl` | black or walnut | flange face down |
@@ -54,7 +55,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
    - Power cable: fold the extra back and forth in ~3.5 cm lengths with the spare plug and wrap one hook-and-loop tie round it. Set the bundle wherever it fits behind the panel; if it shifts, strap it under the plate's tie-down bridge (middle, above the ribbon).
 5. Plate onto the panel: 4 x M3 x 8 down the standoff tubes into the panel's inserts (2 mm hex key). Dress the cables now; nothing moves after this.
 6. Slide the whole module in from the back (tongues into the top grooves). Push it forward until the diffuser seats on the frame, then 2 x M3 x 10 from below; the boss slots take up any depth error.
-7. USB-C bezel in (snug, or a drop of CA); plug in.
+7. Status-light rod into its hole from the back, head flush (snug; a drop of CA if it's loose). USB-C bezel in (snug, or a drop of CA); plug in.
 - To flash: hold the Boot key in through the plate, plug in USB-C, upload, then replug. OTA updates are a later firmware job.
 - To service: unplug USB-C, take out the two bottom screws, slide the module out as one piece.
 
