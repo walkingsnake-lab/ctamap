@@ -16,8 +16,11 @@ v3:
   the diffuser seats on the frame, then tighten. The nut slot is closed at the back, and its mouth narrows to
   5.3 mm so a pushed-in nut snaps past it and can't walk back out.
 - S3 posts: Ø2.4 pilot with a 0.5 mm 45-deg lead-in.
-- No pills: venting is only the hidden chimney gaps along the top and bottom edges (inside the 4 mm back lip),
-  widened from 2.5 to 3.5 mm, so nothing inside shows. PILLS = True brings the v2 pills back.
+- Tray: the plate fills the bore (0.2 mm clearance all round, no edge gaps) with a 6 mm inward skirt, so its
+  edge is stiff and the shell locates it along the whole outline (v2's open gaps left the edges flexing).
+- Venting: 45-deg louver bands, inlet along the bottom and outlet along the top (a chimney ~85 mm tall). The slots
+  rise going inward, so from eye level or above you see a blade, not the inside. ~1,300 mm2 in, ~1,000 out
+  (face area). LOUVERS = False seals it; PILLS = True brings the v2 pills back.
 - The shell is unchanged (same tongue grooves, same drilled screw holes).
 Run: python3 plate3.py <outdir>
 """
@@ -28,7 +31,17 @@ import case2 as V
 from case import *
 
 PILLS = False
-GAP3 = 3.5                                   # chimney gaps, top and bottom
+GAP3 = 0.0                                   # plate fills the bore (0.2 mm clearance all round); no edge gaps
+SKIRT_D, SKIRT_T = 6.0, 2.0                  # inward perimeter skirt: stiffens the edge, bears on the bore all round
+SKIRT_NOTCH = 16.0                           # top skirt cut back around the encoder (x within +/- this)
+LOUVERS = True
+LV_H, LV_PITCH, LV_DEPTH = 2.5, 4.5, 5.0     # slot height on the outer face, row pitch, band depth (slots rise 45 deg inward)
+# louver rows: (outer-face z centre, [x segments]); bottom = inlet, top = outlet; segments dodge the bosses, standoffs,
+# S3 light tube and post ribs, keyhole cups and the encoder
+LV_BOTTOM = [(7.5, [(-84, -49), (-31, 31), (49, 96)]), (12.0, [(-84, -49), (-31, 31), (49, 96)]),
+             (16.5, [(-84, -49), (-31, 31), (49, 96)]), (21.0, [(-31, 31), (49, 80)])]
+LV_TOP = [(97.0, [(-98, -49), (-31, -17), (17, 31), (49, 98)]), (92.5, [(-98, -49), (-31, -17), (17, 31), (49, 98)]),
+          (88.0, [(-80, -49), (-31, -17), (17, 31), (49, 80)]), (83.5, [(-80, -49), (49, 80)])]
 # panel inserts used (case x, z - ZC), from the panel-back photo (DESIGN-HISTORY, panel in normal orientation, PI IN on the right
 # seen from the front); the 4th corner (-88, -26) is under the S3. All six estimates go on the template.
 INSERTS_ALL = [(-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)]
@@ -55,6 +68,22 @@ def back_plate3(window=True):
     p = prism_y(rr_cs(BORE_HX - 0.2, hz, BORE_R - 0.2), y0, y1)
     for sx in (-1, 1):                                                   # tongues reach up across the top gap (as v2)
         p = p + box(sx * TONGUE_X - TONGUE_W / 2, sx * TONGUE_X + TONGUE_W / 2, y0, y1, ZC + hz - 0.5, ZC + BORE_HZ + 1.0)
+    # perimeter skirt
+    ring = rr_cs(BORE_HX - 0.2, hz, BORE_R - 0.2) - rr_cs(BORE_HX - 0.2 - SKIRT_T, hz - SKIRT_T, BORE_R - 0.2 - SKIRT_T)
+    skirt = prism_y(ring, y0 - SKIRT_D, y0 + 0.01) - box(-SKIRT_NOTCH, SKIRT_NOTCH, y0 - SKIRT_D - 1, y0 - 0.5, ZC, ZC + 60)
+    p = p + skirt
+    if LOUVERS:
+        cuts = []
+        for rows in (LV_BOTTOM, LV_TOP):
+            for zc, segs in rows:
+                for xa, xb in segs:
+                    p = p + box(xa - 2.0, xb + 2.0, y1 - LV_DEPTH, y0 + 0.01, zc - LV_H / 2 - 1.5, zc + LV_H / 2 + LV_DEPTH + 1.5)
+                    r = LV_H / 2
+                    def slab(y, dz):
+                        cs = CrossSection.square([xb - xa - 2 * r, 0.01], center=True).offset(r, JT, circular_segments=16).translate([(xa + xb) / 2, zc + dz])
+                        return prism_y(cs, y, y + 0.01)
+                    cuts.append(Manifold.batch_hull([slab(y1 + 0.5, -0.5), slab(y1 - LV_DEPTH - 0.5, LV_DEPTH + 0.5)]))
+        louver_cuts = Manifold.batch_boolean(cuts, ADD)
     # bottom bosses: y-slot screw hole, closed nut slot with a narrowed mouth
     nut_end = SCREW_Y + NUT_FLOAT + NUT_CORNER                           # nut centre can reach SCREW_Y + 0.6
     mouth_end = SCREW_Y - NUT_FLOAT - NUT_CORNER                         # and SCREW_Y - 0.6 before it meets the mouth
@@ -86,6 +115,8 @@ def back_plate3(window=True):
             st = CrossSection.square([0.01, (V.PILL_Z1 - V.PILL_Z0) - 4.4], center=True).offset(2.2, JT, circular_segments=SEG).translate([x, (V.PILL_Z0 + V.PILL_Z1) / 2])
             vents.append(prism_y(st, y0 - 1, y1 + 1))
         p = p - Manifold.batch_boolean(vents, ADD)
+    if LOUVERS:
+        p = p - louver_cuts
     # status light tube and window (as v2)
     tube_end = PCB_Y0 + 1.6 + 1.5
     p = p + cyl_y(V.S3_NEO_X, V.S3_NEO_Z, tube_end, y0 + 0.01, 7.0, 48)
