@@ -228,3 +228,12 @@ First assembly of v2: the plate rocked and sat unevenly, the bottom screws spun,
 - 76 cm³ (69 before; the continuous bands cost ~10% more print time).
 - Status light: a translucent PETG rod (`bar-status-rod-translucent.stl`, Ø4.3 shaft, Ø5.8 x 0.6 flush head) runs down the plate's light tube to 0.8 mm above the S3's LED, replacing the open Ø3 hole: a flush glowing dot, no dust. Printed rods scatter light at the layer lines, so it glows softer than the open hole. `window='open'` restores the hole.
 - Keyholes are kept (wall hanging); they disappear in renders with the dark panel behind them, not in the part.
+
+## Shell v4 (Oct 25)
+The first walnut shell was a prototype and was scrapped, so the shell was open to change.
+- **Depth 63 → 69 mm (`D`)**: room for the stock cables. The panel, frame, knob, USB-C and S3 stay where they were; the plate sits 6 mm further back (its standoffs, S3 posts, light tube and rod, and the Boot key grow with it). The ribbon now has ~10.7 mm to fold behind the S3's plug, so the plate's ribbon pocket is gone. The frame glue guide and the plinth are regenerated for the depth.
+- **Top snap**: the plate's tongues get a 0.7 mm bump (gentle lead-in toward the front, steep back face); the shell's tongue grooves get a 0.5 mm dimple in their roof at the seated position (0.7 mm of wall left over it). Sliding in, the bump rides 0.4 mm into the groove roof (the top wall flexes) for the last ~6 mm, then drops into the dimple. Checked: seated with no overlap.
+- **Four screws from below** (x ±40 and ±52, `SCREW_XS`): twice the clamp holding the module back. Bottom louvers re-spaced around the new bosses (slots 3.5 mm tall now, still hidden by the 5 mm rise): ~870 mm² in, ~1,280 mm² out (the top centre group now runs the full width between the keyholes, since the band no longer reaches the encoder).
+- S3 posts Ø6 (they're ~22 mm long now).
+- Layer scan: every layer of the v4 shell is one continuous piece.
+- Not done: flush screw heads underneath. The counterbores leave the M3 button heads ~0.6 mm proud, below the 3.5 mm bumper feet; deepening them would leave ~0.6 mm of floor under each head.

@@ -19,7 +19,7 @@ RC = BORE_R + WALL                                # outer corner radius 14
 ZC = H / 2
 LT, LB = 12.0, 3.0                                # front lip past the face: 12 at the top, 3 at the bottom
 LEDGE_IN, LEDGE_T = 1.5, 1.2                      # face ledge: 1.5 mm inward, 1.2 thick, 45-deg chamfer behind it
-D = 63.0
+D = 69.0                                          # 63 in v1-v3; v4 adds 6 mm behind the panel for the stock cables
 BACKL, PLATE_T = 4.0, 2.0                         # back lip, back plate
 Y_FACE = LT                                       # diffuser front face
 PANEL_BACK = Y_FACE + STACK + PT                  # 28.2
@@ -33,6 +33,7 @@ NEO_X, NEO_Z = -96.5, ZC + 30.6                   # status NeoPixel (estimate fr
 FEET = [(sx * 84.0, fy) for sx in (-1, 1) for fy in (18.0, 52.0)]
 FOOT_D, FOOT_DEPTH = 13.2, 1.5                    # recesses for 3M SJ5312 (12.7 mm) bumpers
 SCREW_X, SCREW_Y = 40.0, D - BACKL - PLATE_T - 3.5   # back plate screws from below
+SCREW_XS = (40.0, 52.0)                          # v4: two pairs (x = +/-40 and +/-52)
 KEY_X, KEY_Z = 40.0, ZC + 30.0                    # wall keyholes
 TONGUE_X, TONGUE_W = 40.0, 30.0
 SEG = 64

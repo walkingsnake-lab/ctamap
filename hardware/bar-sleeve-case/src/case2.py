@@ -31,6 +31,8 @@ RIM_IN = 1.2                              # how far the rim reaches in from the 
 RIM_PEAK = Y_FACE - (RIM_IN - 0.9)        # 11.7: peak; the diffuser's front edge (bore - 0.9) meets the back slope at y = 12
 BACKDOWN = False                         # True: shell prints back-down (layers square to the case); screen rim is a glued-in frame
 GRILLES = False
+DETENT = True                             # v4: top snap (dimples in the tongue grooves; bumps on plate3's tongues)
+DET_W, DET_DEPTH = 20.0, 0.5
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
 CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the bezel's plug fills
@@ -171,13 +173,17 @@ def shell2():
         cuts.append(Manifold.extrude(teardrop_cs(FOOT_D / 2, fx, fy), FOOT_DEPTH + 1).translate([0, 0, -1]))
     # back plate screws from below
     for sx in (-1, 1):
+      for scx in SCREW_XS:
         z0 = 1.0 + SKIN_T if SKINS else -1          # skin at the counterbore floor; drill through with a 3.4 mm bit
-        cuts.append(Manifold.extrude(teardrop_cs(1.7, sx * SCREW_X, SCREW_Y, seg=32), WALL + 1 - z0).translate([0, 0, z0]))
-        cuts.append(Manifold.extrude(teardrop_cs(3.2, sx * SCREW_X, SCREW_Y, seg=48), 2.0).translate([0, 0, -1]))
+        cuts.append(Manifold.extrude(teardrop_cs(1.7, sx * scx, SCREW_Y, seg=32), WALL + 1 - z0).translate([0, 0, z0]))
+        cuts.append(Manifold.extrude(teardrop_cs(3.2, sx * scx, SCREW_Y, seg=48), 2.0).translate([0, 0, -1]))
     # tongue grooves (as v1)
     yp0 = D - BACKL - PLATE_T
     for sx in (-1, 1):
         cuts.append(box(sx * TONGUE_X - TONGUE_W / 2 - 0.3, sx * TONGUE_X + TONGUE_W / 2 + 0.3, yp0 - 0.3, D + 1, H - WALL - 0.01, H - WALL + 1.3))
+        if DETENT:                                  # v4: dimple in the groove roof where the plate's tongue bump seats
+            cuts.append(box(sx * TONGUE_X - DET_W / 2 - 1, sx * TONGUE_X + DET_W / 2 + 1, yp0 + 0.0, yp0 + PLATE_T + 0.1,
+                            H - WALL + 1.3 - 0.01, H - WALL + 1.3 + DET_DEPTH))
     return s - Manifold.batch_boolean(cuts, ADD)
 
 
@@ -327,7 +333,7 @@ def export_backdown(out):
             me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
             t.apply_transform(mat); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/{name}')
             print(name, t.is_watertight, np.round(t.extents, 1).tolist())
-        put(shell2(), down, 'bar-shell-v3-walnut-backdown.stl')
+        put(shell2(), down, 'bar-shell-v4-walnut-backdown.stl')
         up = trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])         # y = FRAME_Y0 (front face) on the bed
         put(screen_frame(), up, 'bar-screen-frame.stl')
         put(frame_guide(), up, 'bar-frame-glue-guide.stl')
@@ -346,17 +352,6 @@ if __name__ == '__main__':
     t.export(f'{out}/bar-shell-v2-walnut-frontdown.stl')
     print('shell watertight', t.is_watertight, 'size', np.round(t.extents, 1).tolist(), 'vol cm3', round(t.volume / 1000, 1))
     import trimesh
-    p, w = back_plate2()
-    back_down = trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0])
-    def place(m):
-        me = m.to_mesh(); tt = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False); tt.apply_transform(back_down); return tt
-    tp, tw = place(p), place(w)
-    dz2 = -tp.bounds[0][2]
-    for tt in (tp, tw): tt.apply_translation([0, 0, dz2])
-    tp.export(f'{out}/bar-backplate-v2-petg.stl'); tw.export(f'{out}/bar-status-window-v2-translucent.stl')
-    print('plate watertight', tp.is_watertight, 'size', np.round(tp.extents, 1).tolist())
-    pt, _ = back_plate2(window=False); tt = place(pt); tt.apply_translation([0, 0, -tt.bounds[0][2]])
-    tt.export(f'{out}/bar-backplate-v2-translucent.stl'); print('translucent plate watertight', tt.is_watertight)
     g = drill_guide().mirror([0, 0, 1])                                  # arm flat on the bed, plug up
     me = g.to_mesh(); tg = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     tg.apply_translation([0, 0, -tg.bounds[0][2]]); tg.export(f'{out}/bar-sensor-drill-guide.stl')

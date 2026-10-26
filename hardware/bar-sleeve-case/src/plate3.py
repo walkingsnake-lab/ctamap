@@ -22,7 +22,8 @@ v3:
 - Power cable: the stock cable's extra (~45 cm plus its spare plug) is folded and tied into its own bundle
   (~50 x 28 x 20 mm) and placed wherever it fits behind the panel; one optional tie-down bridge above the ribbon.
   Bolted to the panel, any push from the bundle is internal (taken by the standoff screws), not on the shell.
-- Ribbon bay: a 1.2 mm pocket behind the S3's IDC plug gives the ribbon's fold ~5.9 mm instead of 4.7.
+- v4 (shell 6 mm deeper): the plate sits further back, so the ribbon has ~10 mm to fold behind the S3's plug (no
+  pocket needed); four bottom screws (x +/-40, +/-52); a snap bump on each top tongue seats in a dimple in the shell's groove.
 - Venting: one continuous louver band along the bottom (inlet) and one along the top (outlet), a chimney ~85 mm
   tall; three rows of slots each in a regular, left-right symmetric pattern. The slots rise 45 deg going inward, so
   from eye level or above you see a blade, not the inside. ~970 mm2 in, ~790 out (face area).
@@ -44,14 +45,15 @@ PLATE_T3 = 2.0                               # 2 mm (as v2): bolted to the panel
 SKIRT_D, SKIRT_T = 6.0, 2.0                  # inward perimeter skirt: stiffens the edge, bears on the bore all round
 SKIRT_NOTCH = 16.0                           # top skirt cut back around the encoder (x within +/- this)
 LOUVERS = True
-LV_H, LV_PITCH, LV_DEPTH = 3.0, 5.0, 5.0     # slot height on the outer face, row pitch, band depth (slots rise 45 deg inward)
+LV_H, LV_PITCH, LV_DEPTH = 3.5, 5.0, 5.0     # slot height on the outer face, row pitch, band depth (slots rise 45 deg inward;
+                                             # the 5 mm rise still hides a 3.5 mm slot from eye level)
 LV_CH = 1.5                                  # 45-deg chamfer on the bands' inner edges
 # one continuous band along the bottom (inlet) and one along the top (outlet), each with three rows of slots in a regular,
 # left-right symmetric pattern; the gaps fall at the bottom bosses and centre standoff (bottom) and at the keyholes and
 # encoder (top)
-LV_BOTTOM_X = [(-86.0, -49.0), (-31.0, -13.0), (13.0, 31.0), (49.0, 86.0)]
-LV_TOP_X = [(-80.0, -49.0), (-31.0, -17.0), (17.0, 31.0), (49.0, 80.0)]
-LV_BOTTOM_Z = [7.5, 12.5, 17.5]
+LV_BOTTOM_X = [(-86.0, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0)]   # gaps at the bosses (+/-40, +/-52) and centre standoff
+LV_TOP_X = [(-80.0, -49.0), (-31.0, 31.0), (49.0, 80.0)]                      # gaps at the keyholes
+LV_BOTTOM_Z = [7.25, 12.25, 17.25]
 LV_TOP_Z = [87.0, 92.0, 97.0]
 ENC_NOTCH = (15.0, 95.0)                     # top band stays below z 95 within |x| < 15 (the encoder board)
 # panel inserts used (case x, z - ZC), from the panel-back photo (DESIGN-HISTORY, panel in normal orientation, PI IN on the right
@@ -64,12 +66,15 @@ STANDOFFS = [(-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)]   # 4th: 
 TIE_BRIDGE = (-17.0, 17.0, 63.0, 78.0)      # one bridge above the ribbon, beside the power socket: x0, x1, z0, z1
 STRAP_H = 2.2                                # strap gap under the bridge (a 12-14 mm tie threads through anywhere along it)
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the plate
-BAY = (-54.0, -28.0, 24.0, 62.0)           # x0, x1, z0, z1 (the plug spans z ~24-58)
+BAY = None                                 # v4: the 6 mm deeper case leaves the ribbon ~10 mm to fold; no pocket needed
 SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 9.0, 6.4, 3.0, 3.6   # no washer: the M3 button head (Ø5.7) seats on the floor
 FOOT_Y = PANEL_BACK                          # foot face on the panel's insert bosses
 NUT_W, NUT_MOUTH, NUT_H, NUT_FLOAT = 5.7, 5.3, 2.7, 0.6
 NUT_CORNER = 5.5 / math.cos(math.pi / 6) / 2  # 3.175: nut centre to corner (corners point along the slot)
 S3_PILOT, S3_LEAD = 2.4, 0.5
+S3_POST_D = 6.0                                  # posts are ~22 mm long in the deeper case
+BUMP_W, BUMP_H = 20.0, 0.7                       # top snap: the tongue sits 0.3 below the groove roof, so the bump rides
+                                                 # 0.4 into the roof while sliding (the top wall flexes) and drops into the 0.5 dimple
 ROD_D, ROD_HEAD_D, ROD_HEAD_T = 4.3, 5.8, 0.6   # status-light rod (translucent PETG): shaft in the Ø4.5 tube, flush head
 ROD_GAP = 0.8                                    # rod tip above the LED's top (LED ~0.9 mm tall on the component face)
 
@@ -87,11 +92,20 @@ def back_plate3(window=True):
     y0 = y1 - PLATE_T3
     hz = BORE_HZ - 0.2 - GAP3
     p = prism_y(rr_cs(BORE_HX - 0.2, hz, BORE_R - 0.2), y0, y1)
-    for sx in (-1, 1):                                                   # tongues reach up across the top gap (as v2)
-        p = p + box(sx * TONGUE_X - TONGUE_W / 2, sx * TONGUE_X + TONGUE_W / 2, y0, y1, ZC + hz - 0.5, ZC + BORE_HZ + 1.0)
+    t_top = ZC + BORE_HZ + 1.0
+    for sx in (-1, 1):                                                   # tongues reach up into the shell's top grooves
+        p = p + box(sx * TONGUE_X - TONGUE_W / 2, sx * TONGUE_X + TONGUE_W / 2, y0, y1, ZC + hz - 0.5, t_top)
+        if V.DETENT:                                                     # snap bump: gentle lead-in toward the front, steeper back face
+            pts = [(y0 + 0.2, t_top - 0.01), (y0 + 0.8, t_top + BUMP_H), (y0 + 1.3, t_top + BUMP_H), (y0 + 1.6, t_top - 0.01)]
+            cs = CrossSection([pts])
+            if cs.area() <= 0:
+                cs = CrossSection([pts[::-1]])
+            p = p + prism_x(cs, sx * TONGUE_X - BUMP_W / 2, sx * TONGUE_X + BUMP_W / 2)
     # perimeter skirt
     ring = rr_cs(BORE_HX - 0.2, hz, BORE_R - 0.2) - rr_cs(BORE_HX - 0.2 - SKIRT_T, hz - SKIRT_T, BORE_R - 0.2 - SKIRT_T)
-    skirt = prism_y(ring, y0 - SKIRT_D, y0 + 0.01) - box(-SKIRT_NOTCH, SKIRT_NOTCH, y0 - SKIRT_D - 1, y0 - 0.5, ZC, ZC + 60)
+    skirt = prism_y(ring, y0 - SKIRT_D, y0 + 0.01)
+    if y0 - SKIRT_D < KY + 12.7 + 1.0:                                   # skirt reaches the encoder board: cut it back there
+        skirt = skirt - box(-SKIRT_NOTCH, SKIRT_NOTCH, y0 - SKIRT_D - 1, y0 - 0.5, ZC, ZC + 60)
     p = p + skirt
     inner_cs = rr_cs(BORE_HX - 0.2 - SKIRT_T, hz - SKIRT_T, BORE_R - 0.2 - SKIRT_T)
     y_in = y1 - LV_DEPTH                                                  # bands stand 3 mm off the plate's inner face
@@ -117,12 +131,12 @@ def back_plate3(window=True):
     if LOUVERS:
         p = p + band(zbot, LV_BOTTOM_Z[-1] + LV_H / 2 + LV_DEPTH + 1.5)
         top = band(LV_TOP_Z[0] - LV_H / 2 - 1.5, ztop)
-        nx, nz = ENC_NOTCH
-        top = top - rrect_y(-nx, nx, nz, ztop + 10, 3.0, y_in - 1, y0 - 0.5)
+        if y_in < KY + 12.7 + 1.0:                                       # band reaches the encoder board: cut it back there
+            nx, nz = ENC_NOTCH
+            top = top - rrect_y(-nx, nx, nz, ztop + 10, 3.0, y_in - 1, y0 - 0.5)
         p = p + top
     # solids first; every hole and slot is cut at the end, so nothing added later fills them
-    for sx in (-1, 1):                                                   # bottom bosses (rounded)
-        x = sx * SCREW_X
+    for x in [sx * scx for sx in (-1, 1) for scx in SCREW_XS]:           # bottom bosses (rounded)
         p = p + rrect_z(x - 5, x + 5, SCREW_Y - 4.5, y1, 2.0, WALL + 0.2, WALL + 12.0)
     for x, z in STANDOFFS:
         p = p + standoff(x, z, y0)
@@ -137,7 +151,7 @@ def back_plate3(window=True):
     hxs = [h[0] for h in V.S3_HOLES]; hzs = [h[1] for h in V.S3_HOLES]
     p = p + rrect_y(min(hxs) - 3.7, max(hxs) + 3.7, min(hzs) - 3.7, max(hzs) + 3.7, 3.7, y0 - 3.0, y0 + 0.01)
     for hx, hz_ in V.S3_HOLES:
-        p = p + cyl_y(hx, hz_, yc, y0 + 0.01, 5.0, 32)
+        p = p + cyl_y(hx, hz_, yc, y0 + 0.01, S3_POST_D, 32)
     btop = yc + 1.9                                                      # Boot guide tube
     p = p + cyl_y(V.S3_BOOT_X, V.S3_BOOT_Z, btop + 1.0, y0 + 0.01, 5.0, 32)
     RZ, RW = ZC - 5.0, 20.3                                              # ribbon hooks (as v2)
@@ -163,8 +177,7 @@ def back_plate3(window=True):
             cuts.append(prism_y(st, y0 - 1, y1 + 1))
     nut_end = SCREW_Y + NUT_FLOAT + NUT_CORNER                           # bottom bosses: y-slot screw hole, closed nut slot
     mouth_end = SCREW_Y - NUT_FLOAT - NUT_CORNER                         # with a narrowed mouth and a lead-in
-    for sx in (-1, 1):
-        x = sx * SCREW_X
+    for x in [sx * scx for sx in (-1, 1) for scx in SCREW_XS]:
         yb = SCREW_Y - 4.5
         slot = CrossSection.square([0.01, 2 * NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, SCREW_Y])
         cuts.append(Manifold.extrude(slot, 20).translate([0, 0, WALL - 1]))
@@ -181,8 +194,9 @@ def back_plate3(window=True):
         kh = CrossSection.circle(4.0, 48).translate([x, KEY_Z]) + CrossSection.square([4.2, 10.0]).translate([x - 2.1, KEY_Z])
         cuts.append(prism_y(kh, y0 - 1, y1 + 1))
     cuts.append(box(bx0 + 2, bx1 - 2, y0 - STRAP_H, y0 + 0.02, bz0 - 1, bz1 + 1))   # tie-down bridge gap
-    bx0_, bx1_, bz0_, bz1_ = BAY                                          # ribbon bay behind the S3's plug
-    cuts.append(box(bx0_, bx1_, y0 - 1, y1 - 0.8, bz0_, bz1_))
+    if BAY:                                                              # ribbon bay behind the S3's plug (v3 only)
+        bx0_, bx1_, bz0_, bz1_ = BAY
+        cuts.append(box(bx0_, bx1_, y0 - 1, y1 - 0.8, bz0_, bz1_))
     cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, tube_end - 1, y0 + 0.5, 4.5, 48))
     for hx, hz_ in V.S3_HOLES:                                           # S3 pilots, Ø2.4 with a 0.5 mm lead-in
         cuts.append(cyl_y(hx, hz_, yc - 1, yc + 8.0, S3_PILOT, 24))
