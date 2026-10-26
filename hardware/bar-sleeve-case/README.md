@@ -5,7 +5,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 ## Fixed decisions
 - Slanted hood (12 mm lip at the top, 3 mm at the bottom): non-negotiable.
 - Shell in Bambu PLA Wood (walnut), printed back-down, front lapped flat afterwards.
-- No grilles in the shell. The back plate (v3) is a tray that fills the bore, with louver bands along its bottom (inlet) and top (outlet); the slots rise 45° inward, so nothing inside shows from eye level or above. Typical draw ~2-5 W; check with the S3's chip-temperature log.
+- No grilles in the shell. The back plate (v3) is a tray that fills the bore, with one louver band along its bottom (inlet) and one along its top (outlet), slots in a regular symmetric pattern rising 45° inward, so nothing inside shows from eye level or above. Typical draw ~2-5 W; check with the S3's chip-temperature log.
 - Every opening the shell needs prints closed by a 0.4 mm skin and is cut or drilled out, and each cut edge is covered: knob hole (collar), USB-C (bezel), screw holes (screw heads). Every print layer is one continuous loop, so nothing in the geometry causes banding.
 - The S3 mounts on the back plate, so its USB-C, status-light tube and Boot tube line up by construction. USB-C opening sized for the largest spec plug housing, so any compliant cable seats. USB-C height accepted as is.
 
@@ -51,7 +51,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 2. Push an M3 nut into each bottom boss's slot (it snaps past the narrowed mouth).
 3. S3 onto the plate's posts with 4 x M2.5 x 8.
 4. Snap the diffuser onto the panel. Ribbon from the S3's IDC to the panel's PI IN, clipped into the plate's hooks; panel power to the S3's terminals; encoder STEMMA QT cable to the S3.
-   - Power cable: fold the extra back and forth in ~3.5 cm lengths with the spare plug and wrap one hook-and-loop tie round it. Set the bundle wherever it fits behind the panel; if it shifts, strap it to one of the plate's two tie-down loops (middle, above the ribbon).
+   - Power cable: fold the extra back and forth in ~3.5 cm lengths with the spare plug and wrap one hook-and-loop tie round it. Set the bundle wherever it fits behind the panel; if it shifts, strap it under the plate's tie-down bridge (middle, above the ribbon).
 5. Plate onto the panel: 4 x M3 x 8 down the standoff tubes into the panel's inserts (2 mm hex key). Dress the cables now; nothing moves after this.
 6. Slide the whole module in from the back (tongues into the top grooves). Push it forward until the diffuser seats on the frame, then 2 x M3 x 10 from below; the boss slots take up any depth error.
 7. USB-C bezel in (snug, or a drop of CA); plug in.

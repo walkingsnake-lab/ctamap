@@ -20,12 +20,15 @@ v3:
   edge is stiff and the shell locates it along the whole outline (v2's open gaps left the edges flexing).
 - 2 mm plate (as v2); a 4th standoff at the panel's bottom-centre insert ties the middle of the plate to the panel.
 - Power cable: the stock cable's extra (~45 cm plus its spare plug) is folded and tied into its own bundle
-  (~50 x 28 x 20 mm) and placed wherever it fits behind the panel; two optional tie-down loops above the ribbon, beside the power socket.
+  (~50 x 28 x 20 mm) and placed wherever it fits behind the panel; one optional tie-down bridge above the ribbon.
   Bolted to the panel, any push from the bundle is internal (taken by the standoff screws), not on the shell.
 - Ribbon bay: a 1.2 mm pocket behind the S3's IDC plug gives the ribbon's fold ~5.9 mm instead of 4.7.
-- Venting: 45-deg louver bands, inlet along the bottom and outlet along the top (a chimney ~85 mm tall). The slots
-  rise going inward, so from eye level or above you see a blade, not the inside. ~1,300 mm2 in, ~1,000 out
-  (face area). LOUVERS = False seals it; PILLS = True brings the v2 pills back.
+- Venting: one continuous louver band along the bottom (inlet) and one along the top (outlet), a chimney ~85 mm
+  tall; three rows of slots each in a regular, left-right symmetric pattern. The slots rise 45 deg going inward, so
+  from eye level or above you see a blade, not the inside. ~970 mm2 in, ~790 out (face area).
+  LOUVERS = False seals it; PILLS = True brings the v2 pills back.
+- Clean inside face: chamfered bands, rounded bosses, stadium keyhole bumps, one rounded pad under the S3's posts,
+  one tie-down bridge. All holes and slots are cut after all solids are added.
 - The shell is unchanged (same tongue grooves, same drilled screw holes).
 Run: python3 plate3.py <outdir>
 """
@@ -41,26 +44,27 @@ PLATE_T3 = 2.0                               # 2 mm (as v2): bolted to the panel
 SKIRT_D, SKIRT_T = 6.0, 2.0                  # inward perimeter skirt: stiffens the edge, bears on the bore all round
 SKIRT_NOTCH = 16.0                           # top skirt cut back around the encoder (x within +/- this)
 LOUVERS = True
-LV_H, LV_PITCH, LV_DEPTH = 2.5, 4.5, 5.0     # slot height on the outer face, row pitch, band depth (slots rise 45 deg inward)
-# louver rows: (outer-face z centre, [x segments]); bottom = inlet, top = outlet; segments dodge the bosses, standoffs,
-# S3 light tube and post ribs, keyhole cups and the encoder
-LV_BOTTOM = [(7.5, [(-84, -49), (-31, 31), (49, 96)]), (12.0, [(-84, -49), (-31, 31), (49, 96)]),
-             (16.5, [(-84, -49), (-31, 31), (49, 96)]), (21.0, [(-31, 31), (49, 80)])]
-for _row in LV_BOTTOM:                       # split the middle segment around the bottom-centre standoff
-    _row[1][:] = [seg for a, b in _row[1] for seg in (((a, -2.0), (16.0, b)) if a < 7 < b else ((a, b),))]
-LV_TOP = [(97.0, [(-98, -49), (-31, -17), (17, 31), (49, 98)]), (92.5, [(-98, -49), (-31, -17), (17, 31), (49, 98)]),
-          (88.0, [(-80, -49), (-31, -17), (17, 31), (49, 80)]), (83.5, [(-80, -49), (49, 80)])]
+LV_H, LV_PITCH, LV_DEPTH = 3.0, 5.0, 5.0     # slot height on the outer face, row pitch, band depth (slots rise 45 deg inward)
+LV_CH = 1.5                                  # 45-deg chamfer on the bands' inner edges
+# one continuous band along the bottom (inlet) and one along the top (outlet), each with three rows of slots in a regular,
+# left-right symmetric pattern; the gaps fall at the bottom bosses and centre standoff (bottom) and at the keyholes and
+# encoder (top)
+LV_BOTTOM_X = [(-86.0, -49.0), (-31.0, -13.0), (13.0, 31.0), (49.0, 86.0)]
+LV_TOP_X = [(-80.0, -49.0), (-31.0, -17.0), (17.0, 31.0), (49.0, 80.0)]
+LV_BOTTOM_Z = [7.5, 12.5, 17.5]
+LV_TOP_Z = [87.0, 92.0, 97.0]
+ENC_NOTCH = (15.0, 95.0)                     # top band stays below z 95 within |x| < 15 (the encoder board)
 # panel inserts used (case x, z - ZC), from the panel-back photo (DESIGN-HISTORY, panel in normal orientation, PI IN on the right
 # seen from the front); the 4th corner (-88, -26) is under the S3. All six estimates go on the template.
 INSERTS_ALL = [(-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)]
 STANDOFFS = [(-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)]   # 4th: bottom-centre insert, ties the plate's middle
 # power cable: the stock cable (~50 cm, often 4 wires and a spare plug) is folded and tied into its own bundle
-# (~50 x 28 x 20 mm) and placed wherever it fits; nothing prescribes its spot. Two optional tie-down loops in the open
-# areas (x, z0, z1): a strap threads through a loop (tunnel along z) and round the bundle
-TIE_LOOPS = [(-14.0, 64.0, 82.0), (14.0, 64.0, 82.0)]   # two, above the ribbon beside the power socket
-STRAP_W, STRAP_H = 14.0, 2.2
+# (~50 x 28 x 20 mm) and placed wherever it fits; nothing prescribes its spot. An optional tie-down bridge on the plate:
+# a strap threads under it and round the bundle
+TIE_BRIDGE = (-17.0, 17.0, 63.0, 78.0)      # one bridge above the ribbon, beside the power socket: x0, x1, z0, z1
+STRAP_H = 2.2                                # strap gap under the bridge (a 12-14 mm tie threads through anywhere along it)
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the plate
-BAY = (-54.0, -28.0, 20.0, 62.0)           # x0, x1, z0, z1
+BAY = (-54.0, -28.0, 24.0, 62.0)           # x0, x1, z0, z1 (the plug spans z ~24-58)
 SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 9.0, 6.4, 3.0, 3.6   # no washer: the M3 button head (Ø5.7) seats on the floor
 FOOT_Y = PANEL_BACK                          # foot face on the panel's insert bosses
 NUT_W, NUT_MOUTH, NUT_H, NUT_FLOAT = 5.7, 5.3, 2.7, 0.6
@@ -87,95 +91,113 @@ def back_plate3(window=True):
     ring = rr_cs(BORE_HX - 0.2, hz, BORE_R - 0.2) - rr_cs(BORE_HX - 0.2 - SKIRT_T, hz - SKIRT_T, BORE_R - 0.2 - SKIRT_T)
     skirt = prism_y(ring, y0 - SKIRT_D, y0 + 0.01) - box(-SKIRT_NOTCH, SKIRT_NOTCH, y0 - SKIRT_D - 1, y0 - 0.5, ZC, ZC + 60)
     p = p + skirt
+    inner_cs = rr_cs(BORE_HX - 0.2 - SKIRT_T, hz - SKIRT_T, BORE_R - 0.2 - SKIRT_T)
+    y_in = y1 - LV_DEPTH                                                  # bands stand 3 mm off the plate's inner face
+
+    def band(zb0, zb1):
+        pts = [(y0 + 0.01, zb0), (y_in + LV_CH, zb0), (y_in, zb0 + LV_CH), (y_in, zb1 - LV_CH), (y_in + LV_CH, zb1), (y0 + 0.01, zb1)]
+        cs = CrossSection([pts])
+        if cs.area() <= 0:                                               # clockwise comes back empty: use the other winding
+            cs = CrossSection([pts[::-1]])
+        return prism_x(cs, -BORE_HX, BORE_HX) ^ prism_y(inner_cs, y_in - 1, y0 + 1)
+
+    def rrect_y(x0, x1, z0, z1, r, ya, yb):                               # rounded rectangle in (x, z), along y
+        cs = CrossSection.square([x1 - x0 - 2 * r, z1 - z0 - 2 * r], center=True).offset(r, JT, circular_segments=24).translate([(x0 + x1) / 2, (z0 + z1) / 2])
+        return prism_y(cs, ya, yb)
+
+    def rrect_z(x0, x1, ya, yb, r, z0, z1):                               # rounded rectangle in (x, y), along z
+        cs = CrossSection.square([x1 - x0 - 2 * r, yb - ya - 2 * r], center=True).offset(r, JT, circular_segments=24).translate([(x0 + x1) / 2, (ya + yb) / 2])
+        return Manifold.extrude(cs, z1 - z0).translate([0, 0, z0])
+
+    zbot = ZC - hz
+    ztop = ZC + hz
+    rows = [(z, LV_BOTTOM_X) for z in LV_BOTTOM_Z] + [(z, LV_TOP_X) for z in LV_TOP_Z]
     if LOUVERS:
-        cuts = []
-        for rows in (LV_BOTTOM, LV_TOP):
-            for zc, segs in rows:
-                for xa, xb in segs:
-                    p = p + box(xa - 2.0, xb + 2.0, y1 - LV_DEPTH, y0 + 0.01, zc - LV_H / 2 - 1.5, zc + LV_H / 2 + LV_DEPTH + 1.5)
-                    r = LV_H / 2
-                    def slab(y, dz):
-                        cs = CrossSection.square([xb - xa - 2 * r, 0.01], center=True).offset(r, JT, circular_segments=16).translate([(xa + xb) / 2, zc + dz])
-                        return prism_y(cs, y, y + 0.01)
-                    cuts.append(Manifold.batch_hull([slab(y1 + 0.5, -0.5), slab(y1 - LV_DEPTH - 0.5, LV_DEPTH + 0.5)]))
-        louver_cuts = Manifold.batch_boolean(cuts, ADD)
-    # bottom bosses: y-slot screw hole, closed nut slot with a narrowed mouth
-    nut_end = SCREW_Y + NUT_FLOAT + NUT_CORNER                           # nut centre can reach SCREW_Y + 0.6
-    mouth_end = SCREW_Y - NUT_FLOAT - NUT_CORNER                         # and SCREW_Y - 0.6 before it meets the mouth
-    for sx in (-1, 1):
+        p = p + band(zbot, LV_BOTTOM_Z[-1] + LV_H / 2 + LV_DEPTH + 1.5)
+        top = band(LV_TOP_Z[0] - LV_H / 2 - 1.5, ztop)
+        nx, nz = ENC_NOTCH
+        top = top - rrect_y(-nx, nx, nz, ztop + 10, 3.0, y_in - 1, y0 - 0.5)
+        p = p + top
+    # solids first; every hole and slot is cut at the end, so nothing added later fills them
+    for sx in (-1, 1):                                                   # bottom bosses (rounded)
         x = sx * SCREW_X
-        yb = SCREW_Y - 4.5
-        b = box(x - 5, x + 5, yb, y1, WALL + 0.2, WALL + 12.0)
-        slot = CrossSection.square([0.01, 2 * NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, SCREW_Y])
-        b = b - Manifold.extrude(slot, 20).translate([0, 0, WALL - 1])
-        nz0 = WALL + 4.0
-        b = b - box(x - NUT_W / 2, x + NUT_W / 2, mouth_end, nut_end, nz0, nz0 + NUT_H)
-        b = b - box(x - NUT_MOUTH / 2, x + NUT_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + NUT_H)
-        # lead-in on the mouth so the nut can be pushed in with a screwdriver tip
-        b = b - Manifold.batch_hull([box(x - NUT_W / 2 - 0.4, x + NUT_W / 2 + 0.4, yb - 1, yb, nz0 - 0.2, nz0 + NUT_H + 0.2),
-                                     box(x - NUT_MOUTH / 2, x + NUT_MOUTH / 2, yb + 0.6, yb + 0.61, nz0, nz0 + NUT_H)])
-        p = p + b
+        p = p + rrect_z(x - 5, x + 5, SCREW_Y - 4.5, y1, 2.0, WALL + 0.2, WALL + 12.0)
     for x, z in STANDOFFS:
         p = p + standoff(x, z, y0)
-        p = p - cyl_y(x, ZC + z, y0 - 1, y1 + 1, SO_BORE, 48)                # tube opens on the outer face
-    for sx in (-1, 1):                                                   # keyhole cups and keyholes (as v2)
+    for sx in (-1, 1):                                                   # keyhole bumps (stadiums)
         x = sx * KEY_X
-        p = p + box(x - 7, x + 7, y0 - 6, y0 + 0.01, KEY_Z - 7, KEY_Z + 15)
-        p = p - box(x - 5.5, x + 5.5, y0 - 4.5, y0 + 0.02, KEY_Z - 5.5, KEY_Z + 13.5)
-        kh = CrossSection.circle(4.0, 48).translate([x, KEY_Z]) + CrossSection.square([4.2, 10.0]).translate([x - 2.1, KEY_Z])
-        p = p - prism_y(kh, y0 - 1, y1 + 1)
-    if PILLS:
-        vents = []
-        for x in V.PILL_XS:
-            st = CrossSection.square([0.01, (V.PILL_Z1 - V.PILL_Z0) - 4.4], center=True).offset(2.2, JT, circular_segments=SEG).translate([x, (V.PILL_Z0 + V.PILL_Z1) / 2])
-            vents.append(prism_y(st, y0 - 1, y1 + 1))
-        p = p - Manifold.batch_boolean(vents, ADD)
-    if LOUVERS:
-        p = p - louver_cuts
-    # tie-down loops (open both ends)
-    for lx, lz0, lz1 in TIE_LOOPS:
-        lp = box(lx - STRAP_W / 2 - 2, lx + STRAP_W / 2 + 2, y0 - STRAP_H - 1.8, y0 + 0.01, lz0, lz1)
-        lp = lp - box(lx - STRAP_W / 2, lx + STRAP_W / 2, y0 - STRAP_H, y0 + 0.02, lz0 - 1, lz1 + 1)
-        p = p + lp
-    # ribbon bay behind the S3's plug
-    bx0, bx1, bz0, bz1 = BAY
-    p = p - box(bx0, bx1, y0 - 1, y1 - 0.8, bz0, bz1)
-    # status light tube and window (as v2)
-    tube_end = PCB_Y0 + 1.6 + 1.5
+        p = p + rrect_y(x - 7, x + 7, KEY_Z - 7, KEY_Z + 15, 6.9, y0 - 6, y0 + 0.01)
+    bx0, bx1, bz0, bz1 = TIE_BRIDGE                                      # tie-down bridge
+    p = p + rrect_z(bx0, bx1, y0 - STRAP_H - 1.8, y0 + 0.01, 0.9, bz0, bz1)
+    tube_end = PCB_Y0 + 1.6 + 1.5                                        # status light tube
     p = p + cyl_y(V.S3_NEO_X, V.S3_NEO_Z, tube_end, y0 + 0.01, 7.0, 48)
-    p = p - cyl_y(V.S3_NEO_X, V.S3_NEO_Z, tube_end - 1, y0 + 0.5, 4.5, 48)
-    if window == 'open':                         # one colour, opaque: the tube opens in a Ø3 hole, 0.5 mm chamfer outside
-        p = p - cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 + 1, 3.0, 32)
-        p = p - Manifold.cylinder(0.51, 1.5, 2.0, 32).rotate([-90, 0, 0]).translate([V.S3_NEO_X, y1 - 0.5, V.S3_NEO_Z])
-        window = None
-    elif window:
-        p = p - cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 + 0.4, y1 + 1, 6.0, 48)
-        window = cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 + 0.4, y1, 5.9, 48)
-    else:
-        p = p - cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 - 0.6, 4.5, 48)
-        window = None
-    # S3 posts: Ø2.4 pilot, 0.5 mm 45-deg lead-in at the board face
-    yc = V.S3_PCB_Y + 1.6
+    yc = V.S3_PCB_Y + 1.6                                                # S3: one rounded pad under the four posts, then the posts
+    hxs = [h[0] for h in V.S3_HOLES]; hzs = [h[1] for h in V.S3_HOLES]
+    p = p + rrect_y(min(hxs) - 3.7, max(hxs) + 3.7, min(hzs) - 3.7, max(hzs) + 3.7, 3.7, y0 - 3.0, y0 + 0.01)
     for hx, hz_ in V.S3_HOLES:
         p = p + cyl_y(hx, hz_, yc, y0 + 0.01, 5.0, 32)
-        p = p - cyl_y(hx, hz_, yc - 1, yc + 8.0, S3_PILOT, 24)
-        p = p - Manifold.cylinder(S3_LEAD + 0.01, S3_PILOT / 2 + S3_LEAD, S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc - 0.01, hz_])
-    (x1, z1), (x2, z2), (x3, z3), (x4, z4) = V.S3_HOLES
-    for (ax, az), (bx_, bz) in (((x1, z1), (x2, z2)), ((x4, z4), (x3, z3)), ((x1, z1), (x4, z4)), ((x2, z2), (x3, z3))):
-        p = p + box(min(ax, bx_) - 1.2, max(ax, bx_) + 1.2, y0 - 7.0, y0 + 0.01, min(az, bz) - 1.2, max(az, bz) + 1.2)
-    # Boot guide tube (as v2)
-    btop = yc + 1.9
+    btop = yc + 1.9                                                      # Boot guide tube
     p = p + cyl_y(V.S3_BOOT_X, V.S3_BOOT_Z, btop + 1.0, y0 + 0.01, 5.0, 32)
-    p = p - cyl_y(V.S3_BOOT_X, V.S3_BOOT_Z, btop + 0.5, y1 + 1, 2.6, 24)
-    p = p - Manifold.cylinder(1.0, 1.3, 2.4, 32).rotate([-90, 0, 0]).translate([V.S3_BOOT_X, y1 - 1.0 + 0.001, V.S3_BOOT_Z])
-    # ribbon hooks (as v2)
-    RZ, RW = ZC - 5.0, 20.3
+    RZ, RW = ZC - 5.0, 20.3                                              # ribbon hooks (as v2)
     for hx in (-22.5, 22.5):
         for side in (-1, 1):
             zp = RZ + side * (RW / 2 + 1.5)
             p = p + box(hx - 2, hx + 2, y0 - 4.5, y0 + 0.01, zp - 1.0, zp + 1.0)
             p = p + Manifold.batch_hull([box(hx - 2, hx + 2, y0 - 4.5, y0 - 1.5, zp - 1.0, zp + 1.0),
                                          box(hx - 2, hx + 2, y0 - 4.5, y0 - 4.49, zp - side * 3.0 - 0.01, zp - side * 3.0 + 0.01)])
+    # ---- cuts
+    cuts = []
+    if LOUVERS:
+        r = LV_H / 2
+        for zc, segs in rows:
+            for xa, xb in segs:
+                def slab(y, dz):
+                    cs = CrossSection.square([xb - xa - 2 * r, 0.01], center=True).offset(r, JT, circular_segments=16).translate([(xa + xb) / 2, zc + dz])
+                    return prism_y(cs, y, y + 0.01)
+                cuts.append(Manifold.batch_hull([slab(y1 + 0.5, -0.5), slab(y_in - 0.5, LV_DEPTH + 0.5)]))
+    if PILLS:
+        for x in V.PILL_XS:
+            st = CrossSection.square([0.01, (V.PILL_Z1 - V.PILL_Z0) - 4.4], center=True).offset(2.2, JT, circular_segments=SEG).translate([x, (V.PILL_Z0 + V.PILL_Z1) / 2])
+            cuts.append(prism_y(st, y0 - 1, y1 + 1))
+    nut_end = SCREW_Y + NUT_FLOAT + NUT_CORNER                           # bottom bosses: y-slot screw hole, closed nut slot
+    mouth_end = SCREW_Y - NUT_FLOAT - NUT_CORNER                         # with a narrowed mouth and a lead-in
+    for sx in (-1, 1):
+        x = sx * SCREW_X
+        yb = SCREW_Y - 4.5
+        slot = CrossSection.square([0.01, 2 * NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, SCREW_Y])
+        cuts.append(Manifold.extrude(slot, 20).translate([0, 0, WALL - 1]))
+        nz0 = WALL + 4.0
+        cuts.append(box(x - NUT_W / 2, x + NUT_W / 2, mouth_end, nut_end, nz0, nz0 + NUT_H))
+        cuts.append(box(x - NUT_MOUTH / 2, x + NUT_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + NUT_H))
+        cuts.append(Manifold.batch_hull([box(x - NUT_W / 2 - 0.4, x + NUT_W / 2 + 0.4, yb - 1, yb, nz0 - 0.2, nz0 + NUT_H + 0.2),
+                                         box(x - NUT_MOUTH / 2, x + NUT_MOUTH / 2, yb + 0.6, yb + 0.61, nz0, nz0 + NUT_H)]))
+    for x, z in STANDOFFS:                                               # standoff tubes, open on the outer face
+        cuts.append(cyl_y(x, ZC + z, FOOT_Y + SO_FLOOR, y1 + 1, SO_BORE, 48))
+    for sx in (-1, 1):                                                   # keyhole: head pocket (stadium) and the keyhole
+        x = sx * KEY_X
+        cuts.append(rrect_y(x - 5.5, x + 5.5, KEY_Z - 5.5, KEY_Z + 13.5, 5.45, y0 - 4.5, y0 + 0.02))
+        kh = CrossSection.circle(4.0, 48).translate([x, KEY_Z]) + CrossSection.square([4.2, 10.0]).translate([x - 2.1, KEY_Z])
+        cuts.append(prism_y(kh, y0 - 1, y1 + 1))
+    cuts.append(box(bx0 + 2, bx1 - 2, y0 - STRAP_H, y0 + 0.02, bz0 - 1, bz1 + 1))   # tie-down bridge gap
+    bx0_, bx1_, bz0_, bz1_ = BAY                                          # ribbon bay behind the S3's plug
+    cuts.append(box(bx0_, bx1_, y0 - 1, y1 - 0.8, bz0_, bz1_))
+    cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, tube_end - 1, y0 + 0.5, 4.5, 48))
+    for hx, hz_ in V.S3_HOLES:                                           # S3 pilots, Ø2.4 with a 0.5 mm lead-in
+        cuts.append(cyl_y(hx, hz_, yc - 1, yc + 8.0, S3_PILOT, 24))
+        cuts.append(Manifold.cylinder(S3_LEAD + 0.01, S3_PILOT / 2 + S3_LEAD, S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc - 0.01, hz_]))
+    cuts.append(cyl_y(V.S3_BOOT_X, V.S3_BOOT_Z, btop + 0.5, y1 + 1, 2.6, 24))
+    cuts.append(Manifold.cylinder(1.0, 1.3, 2.4, 32).rotate([-90, 0, 0]).translate([V.S3_BOOT_X, y1 - 1.0 + 0.001, V.S3_BOOT_Z]))
+    if window == 'open':                         # one colour, opaque: the tube opens in a Ø3 hole, 0.5 mm chamfer outside
+        cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 + 1, 3.0, 32))
+        cuts.append(Manifold.cylinder(0.51, 1.5, 2.0, 32).rotate([-90, 0, 0]).translate([V.S3_NEO_X, y1 - 0.5, V.S3_NEO_Z]))
+        window = None
+    elif window:
+        cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 + 0.4, y1 + 1, 6.0, 48))
+        window = cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 + 0.4, y1, 5.9, 48)
+    else:
+        cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 - 0.6, 4.5, 48))
+        window = None
+    p = p - Manifold.batch_boolean(cuts, ADD)
     return p, window
 
 

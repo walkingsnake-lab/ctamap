@@ -221,3 +221,8 @@ First assembly of v2: the plate rocked and sat unevenly, the bottom screws spun,
 - Back to a 2 mm plate (69 cm³); the 4-point bolting keeps it rigid. Boot key back to `bar-boot-key.stl`; the ribbon-bay pocket is 1.2 mm (plug to plate 5.9 mm).
 - Standoffs slimmed to Ø9 with a Ø6.4 tube and no washer (the M3 button head, Ø5.7, seats on the 3 mm floor); floor hole Ø3.6 (±0.3 mm), since the template confirms the insert positions first.
 - Print settings: 0.24 mm layers, 4 walls, 4 top/bottom layers, 15% gyroid instead of solid. Target ~2.5-3 h.
+
+### Plate v3, round 5: clean-up (Oct 25)
+- The inside face read as a lot of unrelated rectangles (separate louver blocks, square keyhole cups, rib frame, loop boxes). Now: one continuous band along the bottom and one along the top (3 mm off the plate, 45° chamfers on the inner edges, cut back over the encoder), slots in three regular rows per band, mirrored left-right (3 x 3 mm on a 5 mm pitch; ~970 mm² in, ~790 out); rounded bottom bosses; stadium keyhole bumps (keyholes kept for wall hanging); one rounded pad under the S3's posts instead of the rib frame; one tie-down bridge (x -17..17, z 63-78) instead of two loops.
+- The script adds every solid first and cuts every hole and slot at the end, so no later feature fills a nut slot, tube or louver.
+- 76 cm³ (69 before; the continuous bands cost ~10% more print time).
