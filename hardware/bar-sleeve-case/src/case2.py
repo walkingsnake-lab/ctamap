@@ -36,7 +36,8 @@ DET_W, DET_DEPTH = 20.0, 0.5
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
 CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the bezel's plug fills
-SKIN_T = 0.4                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop
+SKIN_T = 0.8                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop;
+                                          # two 0.4-nozzle lines (0.4 was thinner than one line and the slicer dropped it)
 SL_W, SL_PITCH = 1.5, 4.0                 # slots (GRILLES = True only)
 SENSOR_X, SENSOR_Y, SENSOR_D = 55.0, 42.0, 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
 TOP_SL = dict(xc=57.0, n=16, y0=30.5, y1=46.5)
