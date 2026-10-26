@@ -80,6 +80,10 @@ Scripts are bundled via `build.js` (esbuild) into `dist/bundle.min.js`. Run `npm
 
 PRs use `claude/<feature>-<id>` branch names. Recent work has focused on direction logic (loop/junction handling) and station label display.
 
+## Hardware (`hardware/`)
+
+3D-printed enclosures for the LED board: parametric Python CAD (manifold3d + trimesh) and the STLs generated from it. Not part of the app; excluded from the Docker image. The current case is [`hardware/bar-sleeve-case/`](hardware/bar-sleeve-case/README.md) (build sheet, print settings, assembly). Regenerate STLs from `src/` rather than editing them; check banding changes with `src/layerscan.py`.
+
 ## LED Board (`server/board/`)
 
 The server fetches and formats everything for a 64x32 LED matrix board; the board only draws what it receives. Full design: [`docs/board/design-spec.md`](docs/board/design-spec.md). The API contract (endpoints, `/board/update` JSON, radar frame format) will live in `docs/board/contract.md`; once it exists, it is the source of truth, and changes to the API must update it in the same PR.
