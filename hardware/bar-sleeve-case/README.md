@@ -6,7 +6,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 - Slanted hood (12 mm lip at the top, 3 mm at the bottom): non-negotiable.
 - Shell in Bambu PLA Wood (walnut), printed back-down, front lapped flat afterwards.
 - No grilles in the shell. The back plate (v3) is a tray that fills the bore, with one louver band along its bottom (inlet) and one along its top (outlet), slots in a regular symmetric pattern rising 45° inward, so nothing inside shows from eye level or above. Typical draw ~2-5 W; check with the S3's chip-temperature log.
-- Every opening the shell needs prints closed by a 0.8 mm skin (two lines; 0.4 was dropped by the slicer) and is cut or drilled out, and each cut edge is covered: knob hole (collar), USB-C (bezel), screw holes (screw heads). Every print layer is one continuous loop, so nothing in the geometry causes banding.
+- Every opening the shell needs prints closed by a 0.5 mm skin (just over one nozzle line; 0.4 was dropped by the slicer) and is cut or drilled out, and each cut edge is covered: knob hole (collar), USB-C (bezel), screw holes (screw heads). Every print layer is one continuous loop, so nothing in the geometry causes banding.
 - The S3 mounts on the back plate, so its USB-C, status-light tube and Boot tube line up by construction. USB-C opening sized for the largest spec plug housing, so any compliant cable seats. USB-C height accepted as is.
 
 ## Build set (`stl/`)
