@@ -20,10 +20,10 @@ v3:
   edge is stiff and the shell locates it along the whole outline (v2's open gaps left the edges flexing).
 - 3 mm plate, grown outward into the back lip (the lip goes from 4 to 3 mm), so it is ~3.4x stiffer at no cost
   in cable space; a 4th standoff at the panel's bottom-centre insert ties the middle of the plate to the panel.
-- Cable tray above the S3 for the stock panel power cable: the socket sits a couple of cm from the S3's terminals,
-  so ~45 cm of a ~50 cm cable plus its spare plug is stored, folded in ~3.5 cm passes (~35 x 10 x 10 mm bundle)
-  and strapped with a hook-and-loop tie through two pairs of slots in the tray walls (it runs behind the bundle,
-  out both walls and round the front).
+- Power-cable shelf for the stock panel cable: the socket sits a couple of cm from the S3's terminals, so ~45 cm
+  of a ~50 cm cable plus its spare plug is stored. Folded in ~3.5 cm passes, 4 wires of ~2.2 mm, about half air:
+  a ~50 x 28 x 20 mm bundle. It sits on a shelf in the open block above the ribbon, beside the power socket, held
+  by a hook-and-loop tie through two loops on the plate (behind the bundle, round its front).
 - Ribbon bay: a 2.2 mm pocket behind the S3's IDC plug gives the ribbon's fold ~7 mm instead of 4.7.
 - Venting: 45-deg louver bands, inlet along the bottom and outlet along the top (a chimney ~85 mm tall). The slots
   rise going inward, so from eye level or above you see a blade, not the inside. ~1,300 mm2 in, ~1,000 out
@@ -56,12 +56,16 @@ LV_TOP = [(97.0, [(-98, -49), (-31, -17), (17, 31), (49, 98)]), (92.5, [(-98, -4
 # seen from the front); the 4th corner (-88, -26) is under the S3. All six estimates go on the template.
 INSERTS_ALL = [(-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)]
 STANDOFFS = [(-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)]   # 4th: bottom-centre insert, ties the plate's middle
-# cable tray for the stock panel power cable (~50 cm, the socket sits a couple of cm from the S3's terminals, so ~45 cm
-# plus the spare plug get stored): a trough above the S3, under the top-left standoff, with strap slots in its walls
-TRAY_X0, TRAY_X1 = -99.0, -42.0
-TRAY_Z0, TRAY_Z1 = 64.5, 82.0              # walls 2 mm; inside 66.5..80
-TRAY_Y = 47.0                              # wall front edge (10 mm deep from the plate)
-STRAP_XS, STRAP_W, STRAP_H = (-82.0, -60.0), 14.0, 2.2
+# power-cable shelf for the stock panel cable (~50 cm, often 4 wires and a spare plug; the socket sits a couple of cm
+# from the S3's terminals, so ~45 cm is stored). Realistic bundle: ~13 passes x 4 wires of ~2.2 mm, about half air,
+# ~50 x 28 x 20 mm with the plug. It sits in the open block above the ribbon, beside the panel's power socket: a shelf
+# with a low front lip, and two strap loops on the plate (the strap runs behind the bundle and round its front)
+SHELF_X = (-28.0, 28.0)
+SHELF_Z = 65.0                             # shelf top face: clears the ribbon hooks and the power plug below
+SHELF_Y = 34.0                             # front edge: 23 mm deep, room for a ~20 mm bundle
+LIP_H = 7.0
+STRAP_XS, STRAP_W, STRAP_H = (-14.0, 14.0), 14.0, 2.2
+STRAP_Z = (72.0, 92.0)
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the 3 mm plate
 BAY = (-54.0, -28.0, 20.0, 62.0)           # x0, x1, z0, z1
 SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 11.0, 8.0, 3.0, 4.2
@@ -135,12 +139,13 @@ def back_plate3(window=True):
         p = p - Manifold.batch_boolean(vents, ADD)
     if LOUVERS:
         p = p - louver_cuts
-    # power-cable tray: floor is the plate; top wall stops short of the keyhole cup, the standoff closes that corner
-    p = p + box(TRAY_X0, TRAY_X1, TRAY_Y, y0 + 0.01, TRAY_Z0, TRAY_Z0 + 2.0)
-    p = p + box(TRAY_X0, -49.5, TRAY_Y, y0 + 0.01, TRAY_Z1 - 2.0, TRAY_Z1)
-    p = p + box(TRAY_X0, TRAY_X0 + 2.0, TRAY_Y, y0 + 0.01, TRAY_Z0, TRAY_Z1)
-    for sx_ in STRAP_XS:                     # strap slots through both walls at the floor: the strap runs behind the bundle,
-        p = p - box(sx_ - STRAP_W / 2, sx_ + STRAP_W / 2, y0 - STRAP_H, y0 + 0.02, TRAY_Z0 - 1, TRAY_Z1 + 1)   # out both walls, round the front
+    # power-cable shelf, lip and strap loops (loops open at both ends, so the strap threads straight through)
+    p = p + box(SHELF_X[0], SHELF_X[1], SHELF_Y, y0 + 0.01, SHELF_Z - 2.0, SHELF_Z)
+    p = p + box(SHELF_X[0], SHELF_X[1], SHELF_Y, SHELF_Y + 2.0, SHELF_Z - 2.0, SHELF_Z + LIP_H)
+    for sx_ in STRAP_XS:
+        lp = box(sx_ - STRAP_W / 2 - 2, sx_ + STRAP_W / 2 + 2, y0 - STRAP_H - 1.8, y0 + 0.01, STRAP_Z[0], STRAP_Z[1])
+        lp = lp - box(sx_ - STRAP_W / 2, sx_ + STRAP_W / 2, y0 - STRAP_H, y0 + 0.02, STRAP_Z[0] - 1, STRAP_Z[1] + 1)
+        p = p + lp
     # ribbon bay behind the S3's plug
     bx0, bx1, bz0, bz1 = BAY
     p = p - box(bx0, bx1, y0 - 1, y1 - 0.8, bz0, bz1)

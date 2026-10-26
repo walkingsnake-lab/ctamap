@@ -207,7 +207,8 @@ First assembly of v2: the plate rocked and sat unevenly, the bottom screws spun,
 
 ### Plate v3, round 3: stock cables (Oct 25)
 - Assembly showed the real space problem: the stock panel power cable (~50 cm, often with a second plug for chaining) wadded behind the panel, and the stiff ribbon. The panel's power socket sits a couple of cm from the S3's terminals, so ~45 cm plus a plug has to be stored. Jake prefers keeping the stock cables (no cutting, crimping or splicing).
-- Cable tray above the S3 (x -99..-42, z 64.5..82, 10 mm deep, under the top-left standoff): holds the power cable folded in ~3.5 cm passes (~35 x 10 x 10 mm) plus the spare plug, strapped with a hook-and-loop tie through slots in both walls at the floor. The whole module is assembled on the bench (plate bolted to the panel), so the cable is folded and strapped in the open.
+- Cable storage, sized honestly: a stock cable is often 4 wires of ~2.2 mm; ~45 cm folded in 3.5 cm passes is ~13 passes x 4 wires, about half air, so ~50 x 28 x 20 mm with the spare plug (~23 cm³). A first tray above the S3 (13.5 x 10 mm inside) was far too small and was dropped.
+- Shelf in the open block above the ribbon, beside the panel's power socket: x -28..28, top face z 65, 23 mm deep (front edge y 34) with a 7 mm lip, and two strap loops on the plate (14 x 2.2 mm, open both ends). Checked: a 50 x 28 x 20 mm bundle on it clears the plate, the panel, the power plug (estimated) and the encoder. The whole module is assembled on the bench, so the cable is folded and strapped in the open.
 - Plate 3 mm (grown outward into the back lip, 4 -> 3 mm recess): ~3.4x stiffer, no cable space lost. Boot key 1 mm longer (`bar-boot-key-v3.stl`).
 - 4th standoff at the panel's bottom-centre insert (+7, -36) so the plate's middle is tied to the panel; bottom louver segments split around it.
 - Ribbon bay: 2.2 mm pocket behind the S3's IDC plug (plug top to plate 4.7 -> 6.9 mm).

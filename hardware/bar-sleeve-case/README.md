@@ -25,7 +25,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Tilt plinth (optional) | `bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 | Coupons | `coupon-v3-front-corner-backdown.stl`, `coupon-v3-frame-corner.stl`, `coupon-v3-usb-buttons-backdown.stl`, `coupon-v4-plate-boss.stl`, `coupon-v4-s3-pilots.stl` | as the parts | as exported |
 - Still to design, after the encoder arrives: the knob (current coin style; shaft hole ~14 mm deep plus a recess for the M7 nut), and the optional sensor shelf/keeper (hangs from the encoder board's holes; the back plate needs nothing for it).
-- Hardware: 2 x M3 x 10 + nuts (plate to shell, from below), 4 x M3 x 8 + 4 washers (plate to the panel's inserts), 1-2 hook-and-loop cable ties ~12 mm wide (power-cable tray), 4 x M2.5 x 8 (S3 to plate posts, self-tapping into a Ø2.4 pilot), the encoder's M7 nut, 4 x SJ5312 bumpers (+4 for the plinth), gel or medium CA glue.
+- Hardware: 2 x M3 x 10 + nuts (plate to shell, from below), 4 x M3 x 8 + 4 washers (plate to the panel's inserts), 2 hook-and-loop cable ties ~12 mm wide (power-cable shelf), 4 x M2.5 x 8 (S3 to plate posts, self-tapping into a Ø2.4 pilot), the encoder's M7 nut, 4 x SJ5312 bumpers (+4 for the plinth), gel or medium CA glue.
 - Alternate (`stl/alternate-frontdown/`): the front-down shell v2 with a built-in rim and its collar and drill guide. No lapping or glue, but its layer lines lean 4.7°.
 
 ## Print settings
@@ -51,7 +51,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 2. Push an M3 nut into each bottom boss's slot (it snaps past the narrowed mouth).
 3. S3 onto the plate's posts with 4 x M2.5 x 8.
 4. Snap the diffuser onto the panel. Ribbon from the S3's IDC to the panel's PI IN, clipped into the plate's hooks; panel power to the S3's terminals; encoder STEMMA QT cable to the S3.
-   - Power cable: fold the extra back and forth in ~3.5 cm lengths, lay it with the spare plug in the tray above the S3, and strap it: the tie goes in through one wall's slot at the floor, behind the bundle, out the other wall, and round the front.
+   - Power cable: fold the extra back and forth in ~3.5 cm lengths with the spare plug, set the bundle on the shelf in the middle of the plate (above the ribbon), and strap it: each tie threads through a loop on the plate, behind the bundle, and closes round its front.
 5. Plate onto the panel: 4 x M3 x 8 + washer down the standoff tubes into the panel's inserts (2 mm hex key). Dress the cables now; nothing moves after this.
 6. Slide the whole module in from the back (tongues into the top grooves). Push it forward until the diffuser seats on the frame, then 2 x M3 x 10 from below; the boss slots take up any depth error.
 7. USB-C bezel in (snug, or a drop of CA); plug in.
