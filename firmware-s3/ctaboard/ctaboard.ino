@@ -33,6 +33,9 @@
 #ifndef MATRIX_HW_DIM
 #define MATRIX_HW_DIM 1
 #endif
+#ifndef KNOB_REVERSE
+#define KNOB_REVERSE 0
+#endif
 
 // The loop task's stack (Arduino's default is 8 KB): payload parsing and
 // the transit view are a few levels deep.
@@ -45,6 +48,7 @@ static device::Panel *panel;
 static device::WifiNet *net;
 static device::SysClock sys_clock;
 static device::Buttons *buttons;
+static device::Knob *knob;
 static device::Watchdog *watchdog;
 static device::StatusLed *led;
 static app::Board *board;
@@ -97,10 +101,13 @@ void setup() {
   net = new device::WifiNet(settings);
   net->feed = [] { watchdog->feed(); };
   buttons = new device::Buttons();
+  // The knob (optional): turn to choose a screen, rest to switch.
+  knob = new device::Knob(KNOB_REVERSE);
+  knob->begin();
 
   board = new app::Board(net, panel, &sys_clock, settings.networks, buttons, watchdog,
                          [](const std::string &s) { Serial.println(s.c_str()); }, started,
-                         started == "PANIC" ? "PANIC" : "", led);
+                         started == "PANIC" ? "PANIC" : "", led, knob);
   board->mem_free = device::free_heap;
   board->largest_block = device::largest_block;
   Serial.printf("[board] memory free %ld, largest block %ld\n", device::free_heap(), device::largest_block());

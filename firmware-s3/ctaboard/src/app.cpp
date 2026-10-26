@@ -18,8 +18,8 @@ static std::string led_for_status(const std::string &kind) {
 }
 
 Board::Board(Net *n, Display *d, Clock *c, Networks nets, Buttons *b, Watchdog *w,
-             std::function<void(const std::string &)> lg, std::string st, std::string cr, Led *l)
-    : net(n), display(d), clock(c), networks(std::move(nets)), buttons(b), watchdog(w), led(l), log(std::move(lg)),
+             std::function<void(const std::string &)> lg, std::string st, std::string cr, Led *l, Knob *k)
+    : net(n), display(d), clock(c), networks(std::move(nets)), buttons(b), watchdog(w), led(l), knob(k), log(std::move(lg)),
       version_job("version", VERSION_EVERY, 20000, [this](double ms) { return do_version(ms); }),
       update_job("update", UPDATE_EVERY, 30000, [this](double ms) { return do_update(ms); }),
       radar_job("radar", RADAR_EVERY, 120000, [this](double ms) { return do_radar(ms); }),
@@ -111,6 +111,17 @@ void Board::apply(const Value &p, long long st, long long ms) {
 }
 
 bool Board::draw_frame(long long ms, long long n) {
+  if (chooser.open) {
+    display->show([&](draw::Frame &f) {
+      draw::RenderOpts o;
+      o.screen = "chooser";
+      o.chooser_pos = chooser.pos((double)ms);
+      o.chooser_commit = chooser.committing;
+      o.apply_bright = !player.hw_bright;
+      draw::render(player.p, f, o);
+    });
+    return true;
+  }
   display->show([&](draw::Frame &f) { player.draw(f, (double)ms, n); });
   return true;
 }
@@ -187,6 +198,11 @@ void Board::step() {
   long long ms = clock->ms();
   if (watchdog) watchdog->feed();
   do_buttons(ms);
+  do_knob(ms);
+  if (chooser.rested((double)ms)) {
+    commit_choice(ms);
+    ms = clock->ms();
+  }
 
   long long n = now(ms);
   if (player.has_p) {
@@ -199,8 +215,10 @@ void Board::step() {
     // fetch now rather than drop it on stale data.
     sched.due_now(&update_job, (double)ms);
   }
-  bool busy = player.busy((double)ms);
-  double quiet = std::max(0.0, player.quiet_ms((double)ms, n) - (double)draw::fmod_floor(now_ms(ms), 1000));
+  // While the chooser is open only overdue requests run: a request freezes
+  // the panel, and the turn should feel immediate.
+  bool busy = player.busy((double)ms) || chooser.open;
+  double quiet = chooser.open ? 0.0 : std::max(0.0, player.quiet_ms((double)ms, n) - (double)draw::fmod_floor(now_ms(ms), 1000));
   sched::Job *job = sched.pick((double)ms, busy, quiet);
   if (job && !job->overdue((double)ms) && !player.at_blink_start((double)ms)) job = nullptr;  // wait for the blink to turn on
   if (job) {
@@ -252,7 +270,7 @@ void Board::step() {
   // Redraw every ~33 ms while animating; otherwise only when something on
   // screen can have changed.
   n = now(ms);
-  std::optional<std::string> key = player.frame_key((double)ms, n);
+  std::optional<std::string> key = chooser.open ? chooser.frame_key((double)ms) : player.frame_key((double)ms, n);
   if (last_draw_ < 0 || (!key ? ms - last_draw_ >= 33 : key != last_key_)) {
     if (draw_frame(ms, n)) {
       last_draw_ = ms;
@@ -283,6 +301,57 @@ void Board::do_buttons(long long ms) {
     // The payload only has the old screen's data: fetch the new one now.
     update_job.due_at = (double)ms - update_job.deadline_ms;
   }
+}
+
+void Board::do_knob(long long ms) {
+  // Clicks are read even before the first payload so they don't pile up.
+  if (!knob) return;
+  int c = knob->clicks();
+  if (!c || !player.has_p) return;
+  const Value &k = player.p["knob"];
+  int n = (int)k["ring"].size();
+  if (n < 1) return;  // a server without the knob ring
+  chooser.turn(c, (int)k["at"].num(0), n, (double)ms);
+}
+
+void Board::commit_choice(long long ms) {
+  // Twist and rest: the chooser has rested. Back on the starting screen it
+  // just closes; otherwise the selection goes to the server, which answers
+  // with the update for its screen. The amber frame holds while it's sent.
+  const Value &ring = player.p["knob"]["ring"];
+  if (chooser.cancelled() || chooser.selected() >= (int)ring.size()) {
+    chooser.close();
+    return;
+  }
+  std::string cat = json::str(ring[chooser.selected()]);
+  chooser.committing = true;
+  draw_frame(ms, now(ms));
+  if (watchdog) watchdog->feed();
+  fetching();
+  long long st = clock->ms();
+  Value p;
+  job_err_.clear();
+  bool ok = net->select(cat, p, job_err_);
+  long long ended = clock->ms();
+  stats.fetches++;
+  chooser.close();
+  if (ok) {
+    say("[board] knob: " + cat);
+    apply(p, st, ended);
+    fails = 0;
+    led_base = "ok";
+    update_job.due_at = (double)(ended + (long long)update_job.interval_ms);
+    radar_job.due_at = 0;
+    logo_job.due_at = 0;
+  } else {
+    std::string reason = job_err_.empty() ? "Error" : job_err_;
+    say("[board] select failed: " + reason);
+    stats.fails++;
+    last_error = "select:" + reason;
+    fails++;
+    led_base = "failing";
+  }
+  led_update();
 }
 
 }  // namespace app

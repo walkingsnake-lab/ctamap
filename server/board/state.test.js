@@ -221,3 +221,26 @@ test('tempUnit: default F, C allowed; validated', () => {
   assert.equal(store.get('home').tempUnit, 'C');
   assert.throws(() => store.update('home', { tempUnit: 'K' }), /tempUnit must be one of F, C/);
 });
+
+test('knob: the ring opens categories; TRANSIT opens the transit screen last chosen, SPORTS baseball', () => {
+  const { knobOf, KNOB_RING } = require('./state');
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  assert.deepEqual(KNOB_RING, ['auto', 'transit', 'weather', 'sports']);
+  assert.deepEqual(knobOf(store.get('home')), { ring: KNOB_RING, at: 0 });
+  const v = store.get('home').v;
+  assert.equal(store.select('home', 'sports').screen, 'baseball');
+  assert.equal(store.get('home').v, v + 1);
+  assert.equal(knobOf(store.get('home')).at, 3);
+  assert.equal(store.select('home', 'transit').screen, 'transit');
+  // The ticker is a transit view: chosen on the phone, TRANSIT reopens it.
+  store.update('home', { screen: 'ticker' });
+  assert.equal(knobOf(store.get('home')).at, 1);
+  store.select('home', 'weather');
+  assert.equal(store.select('home', 'transit').screen, 'ticker');
+  store.update('home', { screen: 'transit' });
+  store.select('home', 'auto');
+  assert.equal(store.select('home', 'transit').screen, 'transit');
+  assert.throws(() => store.select('home', 'baseball'), ValidationError);
+  assert.throws(() => store.update('home', { transitScreen: 'ticker' }), ValidationError);
+  assert.equal(store.select('nope', 'auto'), null);
+});

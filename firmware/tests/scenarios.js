@@ -430,6 +430,16 @@ async function build() {
     ].filter((r) => r.t.length);
     seq('anim key layout row leaves', [{ p: { key: 1, rows: rowsAt(false) }, now: NOW, t: 0 }, ...ts(1000, 1400, 14).map((t) => ({ p: { key: 1, rows: rowsAt(true) }, now: NOW + 60, t }))]);
   }
+  // Knob chooser (S3 only): the wheel resting, mid-slide, wrapped, and committed.
+  {
+    const ring = ['auto', 'transit', 'weather', 'sports'];
+    const p = { now: NOW, tzo: tzOffset(NOW), bright: 100, knob: { ring, at: 1 } };
+    const at = (pos, commit) => ({ screen: 'chooser', chooser: commit ? { pos, commit: true } : { pos } });
+    add('knob chooser', p, [at(0), at(1), at(2), at(3), at(-1), at(1.55), at(2.4), at(2.5), at(-0.3), at(7), at(2, true)], undefined, undefined, { s3only: true });
+    add('knob chooser five entries', { ...p, knob: { ring: [...ring, 'clock'], at: 0 } }, [at(0), at(4.2), at(3, true)], undefined, undefined, { s3only: true });
+    add('knob chooser dimmed', { ...p, bright: 40 }, [at(2), at(2, true)], undefined, undefined, { s3only: true });
+    add('knob chooser no ring', { ...p, knob: null }, [at(0)], undefined, undefined, { s3only: true });
+  }
   // Chronological departure: slide, digits roll, next train slides in.
   {
     const row = (ln, lbl, t, rn) => ({ ln, lbl, t: [t], s: [0], a: 0, rn });

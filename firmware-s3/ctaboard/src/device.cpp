@@ -9,6 +9,7 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <Wire.h>
 #include <esp_arduino_version.h>
 #include <esp_heap_caps.h>
 #include <esp_idf_version.h>
@@ -218,7 +219,8 @@ app::ConnectResult WifiNet::connect(const app::Networks &networks, const app::St
 
 // One GET. Fills body (JSON) or bytes (binary, exactly `size` of them).
 static bool http_get(const Settings &s, const std::string &path, bool auth, std::string *body, size_t size,
-                     std::vector<uint8_t> *bytes, std::string &err, const std::function<void()> &feed) {
+                     std::vector<uint8_t> *bytes, std::string &err, const std::function<void()> &feed,
+                     bool post = false) {
   WiFiClientSecure client;
   if (s.tls_verify) client.setCACert(ROOT_CAS);
   else client.setInsecure();
@@ -230,7 +232,7 @@ static bool http_get(const Settings &s, const std::string &path, bool auth, std:
     return false;
   }
   if (auth && !s.token.empty()) http.addHeader("X-Board-Token", s.token.c_str());
-  int code = http.GET();
+  int code = post ? http.POST("") : http.GET();
   if (feed) feed();  // the body read gets its own watchdog period
   if (code != 200) {
     err = code < 0 ? "Conn" + std::to_string(-code) : "HTTP" + std::to_string(code);
@@ -265,10 +267,10 @@ static bool http_get(const Settings &s, const std::string &path, bool auth, std:
   return ok;
 }
 
-bool WifiNet::get_json(const std::string &path, bool auth, json::Value &out, std::string &err) {
+bool WifiNet::get_json(const std::string &path, bool auth, json::Value &out, std::string &err, bool post) {
   if (feed) feed();
   std::string body;
-  if (!http_get(s_, path, auth, &body, 0, nullptr, err, feed)) return false;
+  if (!http_get(s_, path, auth, &body, 0, nullptr, err, feed, post)) return false;
   std::string perr;
   if (!json::parse(body, out, &perr)) {
     err = "JSON";
@@ -307,6 +309,10 @@ bool WifiNet::logo(const std::string &id, std::vector<uint8_t> &out, std::string
   return get_bytes("/board/logo/" + id + "?b=" + s_.board_id, 24 * 12 * 3, out, err);
 }
 
+bool WifiNet::select(const std::string &category, json::Value &out, std::string &err) {
+  return get_json("/board/select?b=" + s_.board_id + "&s=" + category, true, out, err, true);
+}
+
 // ---- clock, buttons ----
 
 long long SysClock::ms() { return esp_timer_get_time() / 1000; }
@@ -320,6 +326,53 @@ Buttons::Buttons() {
 }
 bool Buttons::up() { return digitalRead(kButtonUp) == LOW; }
 bool Buttons::down() { return digitalRead(kButtonDown) == LOW; }
+
+// ---- knob ----
+// The 5880's seesaw firmware at its default address, on the STEMMA QT port
+// (Wire's default pins on this board). It counts detents itself, so clicks
+// made while a request blocks the loop arrive afterwards, not lost.
+
+static const uint8_t SEESAW_ADDR = 0x36;
+static const uint8_t SEESAW_STATUS = 0x00, SEESAW_STATUS_HW_ID = 0x01;
+static const uint8_t SEESAW_ENCODER = 0x11, SEESAW_ENCODER_DELTA = 0x40;
+static const uint32_t KNOB_POLL_MS = 20;
+
+bool Knob::read(uint8_t base, uint8_t reg, uint8_t *buf, size_t n) {
+  Wire.beginTransmission(SEESAW_ADDR);
+  Wire.write(base);
+  Wire.write(reg);
+  if (Wire.endTransmission() != 0) return false;
+  delayMicroseconds(250);  // the seesaw needs a moment to prepare the reply
+  if (Wire.requestFrom((int)SEESAW_ADDR, (int)n) != (int)n) return false;
+  for (size_t i = 0; i < n; i++) buf[i] = (uint8_t)Wire.read();
+  return true;
+}
+
+bool Knob::begin() {
+  Wire.begin();
+  uint8_t id = 0;
+  on_ = read(SEESAW_STATUS, SEESAW_STATUS_HW_ID, &id, 1);
+  if (on_) {
+    uint8_t d[4];
+    read(SEESAW_ENCODER, SEESAW_ENCODER_DELTA, d, 4);  // drop turns from before startup
+    Serial.printf("[knob] encoder found (seesaw id 0x%02x)\n", id);
+  } else {
+    Serial.println("[knob] no encoder on the STEMMA QT port");
+  }
+  return on_;
+}
+
+int Knob::clicks() {
+  if (!on_) return 0;
+  uint32_t now = millis();
+  if (now - polled_ < KNOB_POLL_MS) return 0;
+  polled_ = now;
+  uint8_t d[4];
+  if (!read(SEESAW_ENCODER, SEESAW_ENCODER_DELTA, d, 4)) return 0;
+  int32_t delta = (int32_t)(((uint32_t)d[0] << 24) | ((uint32_t)d[1] << 16) | ((uint32_t)d[2] << 8) | d[3]);
+  // The seesaw counts down clockwise; KNOB_REVERSE flips it.
+  return reverse_ ? delta : -delta;
+}
 
 // ---- status LED ----
 // Very dim: it sits behind the panel and shouldn't light up the wall at night.

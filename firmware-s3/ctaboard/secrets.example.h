@@ -48,6 +48,11 @@
 // night in hardware. The serial log names each. Set back to 0 when done.
 #define MATRIX_CALIBRATE 0
 
+// The knob (Adafruit 5880 encoder on the STEMMA QT port), if fitted: turning
+// clockwise moves right through AUTO, TRANSIT, WEATHER, SPORTS. Set to 1 if
+// it goes the wrong way.
+#define KNOB_REVERSE 0
+
 // Status NeoPixel (behind the panel): 2 = every state, including blue during
 // each request; 1 = errors and connecting only; 0 = always off.
 #define STATUS_LED 2

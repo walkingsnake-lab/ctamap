@@ -6,7 +6,7 @@
 //   Net      - connect / version / update / radar / logo; false on failure
 //   Display  - show(fn): fn fills a fresh frame, then it's shown
 //   Clock    - ms(): monotonic milliseconds; sleep_ms()
-//   Buttons, Watchdog, Led - optional
+//   Buttons, Knob, Watchdog, Led - optional
 #pragma once
 
 #include <stdint.h>
@@ -44,6 +44,13 @@ class Net {
   virtual bool update(bool boot, const std::string &screen, Value &out, std::string &err) = 0;
   virtual bool radar(const std::string &id, std::vector<uint8_t> &out, std::string &err) = 0;
   virtual bool logo(const std::string &id, std::vector<uint8_t> &out, std::string &err) = 0;
+  // The knob chose a category (/board/select): out is the update for its screen.
+  virtual bool select(const std::string &category, Value &out, std::string &err) {
+    (void)category;
+    (void)out;
+    err = "Unsupported";
+    return false;
+  }
   virtual bool rssi(int &out) { (void)out; return false; }
 };
 
@@ -71,6 +78,14 @@ class Buttons {
   virtual ~Buttons() {}
   virtual bool up() = 0;
   virtual bool down() = 0;
+};
+
+// The rotary encoder (spec §10, "Knob"): clicks since the last call,
+// + clockwise.
+class Knob {
+ public:
+  virtual ~Knob() {}
+  virtual int clicks() = 0;
 };
 
 class Watchdog {
@@ -102,7 +117,7 @@ class Board {
  public:
   Board(Net *net, Display *display, Clock *clock, Networks networks, Buttons *buttons = nullptr,
         Watchdog *watchdog = nullptr, std::function<void(const std::string &)> log = nullptr,
-        std::string started = "", std::string crash = "", Led *led = nullptr);
+        std::string started = "", std::string crash = "", Led *led = nullptr, Knob *knob = nullptr);
 
   Net *net;
   Display *display;
@@ -111,6 +126,7 @@ class Board {
   Buttons *buttons;
   Watchdog *watchdog;
   Led *led;
+  Knob *knob;
   std::function<void(const std::string &)> log;
   std::function<long()> mem_free;       // bytes free, for health reports
   std::function<long()> largest_block;  // largest allocatable block
@@ -118,6 +134,7 @@ class Board {
 
   player::Player player;
   control::ScreenOverride override_;
+  control::Chooser chooser;
   sched::Scheduler sched;
   sched::Job version_job, update_job, radar_job, logo_job;
   Stats stats;
@@ -157,6 +174,8 @@ class Board {
   void fetching();
   void led_update();
   void do_buttons(long long ms);
+  void do_knob(long long ms);
+  void commit_choice(long long ms);
   void say(const std::string &s) {
     if (log) log(s);
   }

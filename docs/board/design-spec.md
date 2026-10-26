@@ -10,7 +10,7 @@ Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the desi
 |---|---|
 | Panel | 64x32, 4mm pitch, HUB75. Black acrylic diffuser recommended. |
 | Controller | **Decided: Matrix Portal M4** (starter kit, purchased Oct 3, 2026; includes panel, diffuser, 5V 2.4A supply). 192 KB RAM, WiFi via ESP32 co-processor over SPI: keep JSON payloads small, use PCF fonts, fetch only between animations. |
-| Input | **Phone/web control** (primary, see §10) plus built-in UP/DOWN buttons to switch screens. No extra hardware. |
+| Input | **Phone/web control** (primary, see §10) plus, on the S3, a **knob** (Adafruit 5880 rotary encoder on STEMMA QT; see §10, *Knob*) to switch screens. The built-in UP/DOWN buttons still work where the case leaves them reachable. |
 | Power | Kit supply is 5V 2.4A; panel can draw ~4A all-white. See §9. |
 
 ---
@@ -28,6 +28,7 @@ Animation is deliberately limited so the board's network pauses (CircuitPython i
 - **Tornado warning blink** on the weather strip and weather screens: 1 s on, 1 s off. (CTA line alerts are static: see §5.)
 - **Ticker page slide.**
 - **Radar loop.**
+- **Knob chooser slide** (S3; §10, *Knob*): 180 ms per click, only while someone is turning the knob.
 
 No blinking colons, no scrolling text, and no alert text screens anywhere. Alerts are shown only as indicators (see §5, §6, §7).
 
@@ -361,6 +362,18 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - **Buttons vs. phone: last action wins.** A button press sets a local override and records the current server version. The local override holds until the server version changes (a phone change), then the board follows the server again.
 - **Watchdog:** the board's hardware watchdog (16 s, the M4's maximum) resets it if the loop hangs. The loop feeds it every pass and before each request. A watchdog reset is not a cold boot, so it doesn't reset brightness.
 - Possible optimization to test on the board: keep the HTTPS connection open between requests to avoid repeating the TLS handshake, which would make version checks nearly free.
+
+### Knob (S3)
+Decided Oct 25, 2026. An Adafruit 5880 I2C rotary encoder (seesaw, on the STEMMA QT port) is the board's physical control: the bar sleeve case covers the S3's UP/DOWN buttons. The buttons still work where they're reachable (wedge), and a board without the knob runs as before. Mockup: [`mockups/knob/sheet.png`](mockups/knob/sheet.png) (`node scripts/mock-knob.js`, drawn by `renderChooser` in `draw.js`).
+
+- **Ring:** categories, not screens, so it stays short as screens are added: **AUTO · TRANSIT · WEATHER · SPORTS**, wrapping both ways. The server sends the ring (payload `knob`), so new categories need no firmware change; CLOCK joins when a face is built (v2 plan: one Sports category over every league, the leagues and teams set on the phone). Each category opens its variant as set on the phone: TRANSIT opens rows or the ticker, whichever was chosen last (the ticker becomes a transit view mode on the phone page); SPORTS opens the baseball screen.
+- **Twist and rest:** the first click opens the chooser on the screen the board is on, and each click moves one entry (clockwise to the right), with a 180 ms ease-out slide. 1 s after the last click it commits: the selection turns amber and its neighbors drop out, held through one request, then the new screen appears. Resting back on the starting entry closes the chooser with no request (cancel).
+- **Look:** a blank panel with a sideways wheel across the top. The selection is 5x7 label white `#d8d8d8`, centered on baseline 7; its neighbors are Tom Thumb 38 px either side, fading to `#555555` with distance and clipped at the panel edges. Row 9 has one 3x1 pip per entry, 2 px apart, centered: the selection amber, the rest `#3a3a3a`. Rows 10–31 stay dark. (Also mocked: a two-level chooser with a press into each category's variants, rejected as too complex; an underline that drains during the rest; pips at the bottom; the wheel over the dimmed screen.)
+- **Writes through:** the commit is `POST /board/select`, which sets the screen on the server as the phone would (it persists, the phone page shows it, and it ends any button override) and answers with the new screen's update, so a commit is one request.
+- **Press:** does nothing yet; to be decided.
+- **Scheduling:** while the chooser is open only overdue requests run. The encoder counts clicks itself, so turns made during a request arrive after it, not lost.
+- **Settings:** `KNOB_REVERSE` in `secrets.h` flips the direction.
+- **Open:** on the panel, whether the 1 px `#3a3a3a` pips and the `#555555` neighbors survive the diffuser and the night floor; confirm one count per detent and the direction on hardware.
 
 ### Access
 - **Secret URL, no login.** The control page lives at an unguessable path (e.g. `/board/<random>`), with the path stored as a Fly secret (`BOARD_CONTROL_PATH`). Anyone with the link has control; acceptable for a hobby board. Rotate the secret if the link leaks.

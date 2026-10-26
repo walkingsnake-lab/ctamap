@@ -40,6 +40,16 @@ What you should see: `WIFI <network>`, `WIFI OK`, then the transit screen.
 `PORTAL` with the MAC address means the network wants a login page; `NO
 WIFI` means none of the networks could be joined (it retries).
 
+### The knob (optional)
+
+An Adafruit 5880 I2C rotary encoder plugged into the STEMMA QT port (any
+STEMMA QT / Qwiic cable, no soldering). Turn it to choose AUTO, TRANSIT,
+WEATHER or SPORTS; rest about a second and the board switches (design spec
+§10, "Knob"). The serial log says `[knob] encoder found` or `[knob] no
+encoder on the STEMMA QT port` at startup, and `[board] knob: <category>`
+after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
+`secrets.h`. Without a knob the board runs as before.
+
 ### If the picture glitches
 
 - **Shifted a pixel, or stray flickering pixels:** the panel latches data on
@@ -77,10 +87,10 @@ S3.
 | `ctaboard/src/draw.*` | Renderer and transit animator: a line-by-line port of `firmware/boardlib/draw.py`. Must stay pixel-identical to `server/board/draw.js`. |
 | `ctaboard/src/json.*` | Small JSON tree with Python dict semantics, so the port reads payloads exactly as `draw.py` does. |
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
-| `ctaboard/src/sched.h`, `control.h` | Requests in animation gaps; buttons vs. the phone (`sched.py`, `control.py`). |
+| `ctaboard/src/sched.h`, `control.h` | Requests in animation gaps; buttons vs. the phone (`sched.py`, `control.py`); the knob's chooser (twist and rest, S3 only). |
 | `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws. |
 | `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |
-| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, NeoPixel, watchdog. The only code that includes Arduino headers. |
+| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C), NeoPixel, watchdog. The only code that includes Arduino headers. |
 | `ctaboard/src/assets.h` | Fonts, icons, glyphs. **Generated** by `node scripts/build-firmware-assets.js`. |
 | `ctaboard/src/certs.h` | Root certificates for HTTPS. **Generated** by `node scripts/build-firmware-certs.js`. |
 | `tests/` | Run by `npm test` (needs g++ or clang++): `parity` renders every scenario in `firmware/tests/scenarios.js` and compares pixels with draw.js; `app_test` runs the main loop against a simulated server, clock, and buttons. |

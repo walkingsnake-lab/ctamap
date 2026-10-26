@@ -1989,6 +1989,33 @@ std::optional<BaseballTexts> baseball_texts(const Value &p, double now) {
   return bt;
 }
 
+// ---- knob chooser (renderChooser) ----
+
+static const double CHOOSER_PITCH = 38;
+
+static void render_chooser(const Value &p, Frame &f, double pos, bool commit) {
+  const Value &ring = p["knob"]["ring"];
+  int n = (int)ring.size();
+  if (!n) return;
+  int sel = (int)fmod_floor((long long)jsround(pos), n);
+  for (int k = 0; k < n; k++) {
+    double d = k - pos - n * std::floor((k - pos + n / 2.0) / n);  // wrapped into [-n/2, n/2)
+    double ad = std::abs(d);
+    if (ad > 1.6) continue;
+    bool big = ad < 0.5;
+    if (commit && !big) continue;
+    std::string s = json::str(ring[k]);
+    for (char &ch : s)
+      if (ch >= 'a' && ch <= 'z') ch = (char)(ch - 'a' + 'A');
+    ustr name = U(s);
+    Font font = big ? FONT_5X7 : FONT_SMALL;
+    RGB color = big && commit ? C::amber : lerp_color(C::label, C::dimHead, std::min(1.0, ad));
+    f.text(font, name, (int)jsround(32 + d * CHOOSER_PITCH - measure(font, name) / 2.0), big ? 7 : 6, color);
+  }
+  int x0 = 32 - (int)fdiv(n * 5 - 2, 2);
+  for (int i = 0; i < n; i++) f.fill(x0 + i * 5, 9, 3, 1, i == sel ? C::amber : C::indicator);
+}
+
 // ---- whole screen ----
 
 static void apply_brightness(Frame &f, const Value &bright) {
@@ -2003,7 +2030,8 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   if (!o.screen && !p["screen"].truthy()) screen = "";
   g_roller = o.roller;
   g_nums = o.nums;
-  if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
+  if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
+  else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
   else render_transit(p, f, o.now, o.blink, o.view);

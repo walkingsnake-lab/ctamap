@@ -243,6 +243,9 @@ struct RenderOpts {
   NumRoller *roller = nullptr;
   const Rolls *nums = nullptr;  // fixed clock rolls (tests)
   bool apply_bright = true;     // false: the display dims in hardware (payload `bright`)
+  // Knob chooser (screen "chooser"): wheel position and commit (draw.js opts.chooser).
+  std::optional<double> chooser_pos;
+  bool chooser_commit = false;
 };
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);
