@@ -187,3 +187,18 @@ First shell print (v1, back-down): scaly front rim, a band at every dot-hole row
 - Known: the bottom wall's front edge runs along the layers, so the layer area steps ~15 % twice at about 54 mm of print height. A faint line may show about 9 mm behind the front edge on the top and ends. Front-down spreads this out instead.
 - Seam: Bambu's "Back" puts it toward the case top in this orientation. Rotate Z 180°+45° (225°, or 135°) so the bottom-right corner faces the back of the plate, and check in Preview. Brim on the back rim (outer, 5 mm, 0.1 gap).
 - Coupons: `coupon-v3-front-corner-backdown.stl` (the top 16 mm of the print at the top-left front corner: lapping test) and `coupon-v3-frame-corner.stl` (the matching frame piece for a glue test).
+
+## Back plate v3: bolted to the panel (Oct 25)
+First assembly of v2: the plate rocked and sat unevenly, the bottom screws spun, the S3 screws were hard to start, and the cables showed through the pills.
+- Causes: the hold-down posts' foam pushed the plate outward, and only the two bottom screws resisted it; the top tongues sit in grooves open to the back, so they stop up/down but not in/out, and the top swung out. Nothing set the plate's depth. The bottom nut slots were 9 mm long and open toward the panel, so a nut slid off the screw axis. The S3 pilot was Ø2.2 (prints ~Ø2.05) for M2.5 machine screws, with no lead-in.
+- Constraint: the module slides through the whole bore, so nothing can stick inward from the shell's walls; fixes go on the plate.
+- Options considered: hook-in top pockets (needs a new shell, ~1 mm skin left in a 2.5 mm wall); snap latches (new shell, PETG creeps under the foam load, release through hidden gaps); bolting the plate to the panel (chosen: plate-only, the finished shell is unchanged).
+- `plate3.py`:
+  - Three standoffs (Ø11, Ø8 tube, 3 mm floor with a Ø4.2 hole) from the plate to the panel's brass M3 inserts at (-88, +31), (+88, +31), (+88, -26); M3 x 8 + washer from the outer face. Three points set the plane; the foam posts are gone. The plate is rigidly parallel to the panel.
+  - Bottom bosses: screw hole is a 3.5 x 4.7 y-slot and the nut floats ±0.6 mm along a closed slot whose mouth narrows to 5.3 mm (the nut snaps past it and can't walk out). The module is pushed onto the frame and then screwed, so the slot absorbs the frame/panel/standoff stack error.
+  - S3 posts: Ø2.4 pilot, 0.5 mm 45° lead-in.
+  - Solid plate: no pills; chimney gaps widened 2.5 → 3.5 mm. Estimate: transit ~1.5-3 W, ticker ~5 W; the case surface sheds most of it, and the gaps add a chimney. Check with the S3's chip temperature log against v2; `PILLS = True` restores the pills.
+  - Checks: one piece; no overlap with the shell seated or along a 12 mm slide-in; clear of the panel slab, the S3 board, its IDC/plug envelope and the encoder zone.
+- `check-panel-insert-template.stl`: 1.2 mm frame on the panel outline with Ø3.4 holes at all six insert estimates, Ø11 foot rings, an arrow tab on the PI IN side. Lay it on the panel's back (bed face down on the panel); if an M3 drops into each used insert, print the plate.
+- Coupons: `coupon-v4-plate-boss.stl` (one boss, screw it through the real shell's floor hole with a nut in), `coupon-v4-s3-pilots.stl` (Ø2.3 / 2.4 / 2.5, marked by 1-3 notches).
+- Cables: a 15 cm 2x8 female-female IDC ribbon replaces the 30 cm one (the run is ~14 cm: fold at the S3, ~11 cm across, down to PI IN); the panel power lead can be cut short and re-terminated with crimped M3 forks.
