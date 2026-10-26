@@ -89,6 +89,8 @@ struct Server : app::Net {
   int bright = 100;
   std::function<long long()> latency = [] { return LATENCY; };
   std::function<std::string(long long)> rows_fn;  // JSON array of rows
+  bool knob_ring = true;                          // send the knob's ring (payload `knob`)
+  std::vector<std::string> selects;               // categories the knob chose
 
   explicit Server(SimClock *c) : clock(c) {}
 
@@ -153,13 +155,15 @@ struct Server : app::Net {
                                         ",\"bd\":\"#204882\"},\"home\":{\"ab\":\"STL\",\"c\":\"#d62a2a\",\"r\":0,\"lg\":" +
                                         (layout == "logos" ? "\"STL-1\"" : "null") + ",\"bd\":\"#c12626\"}}]";
     std::string scr = radar_on && visit == "null" ? "weather" : screen;
+    int at = screen == "transit" || screen == "ticker" ? 1 : screen == "weather" ? 2 : screen == "baseball" ? 3 : 0;
+    std::string knob = knob_ring ? ",\"knob\":{\"ring\":[\"auto\",\"transit\",\"weather\",\"sports\"],\"at\":" + jnum(at) + "}" : "";
     return "{\"v\":" + jnum(v) + ",\"now\":" + jnum(now) + ",\"tzo\":-18000,\"age\":3,\"screen\":\"" + scr +
            "\",\"bright\":" + jnum(bright) + ",\"header\":\"MORSE\",\"view\":\"dest\",\"rows\":" + rows + ",\"ticker\":" + ticker +
            ",\"wx\":" + (tornado ? "{\"icon\":\"storm\",\"temp\":70,\"word\":\"STORMS\"}" : "null") +
            ",\"warn\":" + (tornado ? "{\"kind\":\"tor\",\"lvl\":\"warning\"}" : "null") +
            ",\"radar\":{\"on\":" + (radar_on ? "true" : "false") + ",\"visit\":" + visit + ",\"frames\":" + frames +
            ",\"ft\":" + ft + ",\"timeBox\":[40,0,24,22],\"split\":false},\"mlb\":{\"layout\":\"" + layout +
-           "\",\"games\":" + game_list + "}}";
+           "\",\"games\":" + game_list + "}" + knob + "}";
   }
 
   app::ConnectResult connect(const app::Networks &networks, const app::StatusFn &status) override {
@@ -183,6 +187,15 @@ struct Server : app::Net {
   bool update(bool boot, const std::string &scr, Value &out, std::string &err) override {
     if (!call(boot ? "update-boot" : "update", err)) return false;
     update_screens.push_back(scr);
+    out = parse(payload());
+    return true;
+  }
+
+  bool select(const std::string &cat, Value &out, std::string &err) override {
+    if (!call("select:" + cat, err)) return false;
+    selects.push_back(cat);
+    screen = cat == "sports" ? "baseball" : cat == "auto" ? "transit" : cat;
+    v++;
     out = parse(payload());
     return true;
   }
@@ -222,10 +235,12 @@ struct SimDisplay : app::Display {
   bool hw = false;   // dims in hardware (like the S3's panel)
   double k = -1;     // last brightness set
   int max_px = 0;    // brightest channel in the last frame
+  draw::Frame last;  // the last frame shown
   explicit SimDisplay(SimClock *c) : clock(c) {}
   void show(const std::function<void(draw::Frame &)> &fn) override {
     draw::Frame f;
     fn(f);
+    last = f;
     frames++;
     max_px = 0;
     for (uint8_t v : f.px) max_px = std::max(max_px, (int)v);
@@ -241,6 +256,15 @@ struct SimButtons : app::Buttons {
   bool held_up = false, held_down = false;
   bool up() override { return held_up; }
   bool down() override { return held_down; }
+};
+
+struct SimKnob : app::Knob {
+  int pending = 0;
+  int clicks() override {
+    int c = pending;
+    pending = 0;
+    return c;
+  }
 };
 
 struct SimLed : app::Led {
@@ -261,17 +285,18 @@ struct Rig {
   Server server{&clock};
   SimDisplay display{&clock};
   SimButtons btn;
+  SimKnob knob;
   SimLed led{&clock};
   std::vector<std::string> statuses;
   std::vector<std::string> led_during;  // LED state while each request blocks
   std::unique_ptr<app::Board> board;
 
   explicit Rig(std::vector<std::string> wifi = {"ok"}, bool buttons = false, bool with_led = false,
-               long long start_ms = 0, std::string started = "", std::string crash = "") {
+               long long start_ms = 0, std::string started = "", std::string crash = "", bool with_knob = false) {
     clock.t = start_ms;
     server.wifi = wifi;
     board.reset(new app::Board(&server, &display, &clock, {{"home", "pw"}, {"phone", "pw"}}, buttons ? &btn : nullptr,
-                               nullptr, nullptr, started, crash, with_led ? &led : nullptr));
+                               nullptr, nullptr, started, crash, with_led ? &led : nullptr, with_knob ? &knob : nullptr));
     server.board = board.get();
     board->on_status = [this](const std::string &k) { statuses.push_back(k); };
   }
@@ -820,6 +845,93 @@ static void test_brightness_in_hardware_or_in_the_colors() {
   CHECK(max_sw <= (int)(255 * 0.4 + 1), "scaled frame: %d", max_sw);
 }
 
+
+// ---- knob ----
+
+static Rig *knob_rig() {
+  Rig *r = new Rig({"ok"}, false, false, 0, "", "", true);
+  r->board->connect();
+  r->run_for(5000);
+  return r;
+}
+
+static bool amber(const draw::Frame &f, int x, int y) { return f.get(x, y) == draw::C::amber; }
+
+static void test_knob_twist_and_rest_selects_once() {
+  std::unique_ptr<Rig> r(knob_rig());
+  size_t before = r->server.calls.size();
+  long long opened = r->clock.t;
+  r->knob.pending = 1;
+  r->run_for(300);
+  CHECK(r->board->chooser.open, "the first click opens the chooser");
+  // Pips start at x23, 5 apart: WEATHER (2) is the selection.
+  CHECK(amber(r->display.last, 33, 9) && !amber(r->display.last, 28, 9), "WEATHER's pip");
+  CHECK(r->board->player.screen == "transit", "nothing switches while turning: %s", r->board->player.screen.c_str());
+  r->knob.pending = 1;
+  r->run_for(600);
+  CHECK(r->board->chooser.open, "still turning");
+  CHECK(r->server.selects.empty(), "no commit before the rest");
+  r->run_for(1500);
+  CHECK(!r->board->chooser.open, "closed after committing");
+  CHECK(r->server.selects == std::vector<std::string>({"sports"}), "%zu", r->server.selects.size());
+  CHECK(r->board->player.screen == "baseball", "%s", r->board->player.screen.c_str());
+  // Nothing else ran while the chooser was open (the version check waited).
+  for (size_t i = before; i < r->server.calls.size(); i++) {
+    const Call &c = r->server.calls[i];
+    if (c.name.compare(0, 7, "select:") == 0) break;
+    CHECK(c.ms < opened, "%s at %lld while choosing", c.name.c_str(), c.ms);
+  }
+  // The select's payload is the new screen's: no extra update right after.
+  long long sel = r->server.times("select:")[0];
+  r->run_for(5000);
+  for (long long t : r->server.times("update")) CHECK(t < sel || t > sel + 5000, "update at %lld", t);
+}
+
+static void test_knob_back_to_the_start_cancels() {
+  std::unique_ptr<Rig> r(knob_rig());
+  r->knob.pending = 1;
+  r->run_for(300);
+  r->knob.pending = -1;
+  r->run_for(2000);
+  CHECK(!r->board->chooser.open, "");
+  CHECK(r->server.count("select:") == 0, "%d", r->server.count("select:"));
+  CHECK(r->board->player.screen == "transit", "%s", r->board->player.screen.c_str());
+  CHECK(!amber(r->display.last, 28, 9), "the transit screen is back");
+}
+
+static void test_knob_wraps_around_the_ring() {
+  std::unique_ptr<Rig> r(knob_rig());
+  r->knob.pending = -2;  // TRANSIT, AUTO, then around to SPORTS
+  r->run_for(2000);
+  CHECK(r->server.selects == std::vector<std::string>({"sports"}), "%s", r->server.selects.empty() ? "" : r->server.selects[0].c_str());
+  r->knob.pending = 2;  // SPORTS, AUTO, TRANSIT... from SPORTS: AUTO then TRANSIT
+  r->run_for(2000);
+  CHECK(r->server.selects.size() == 2 && r->server.selects[1] == "transit", "%zu", r->server.selects.size());
+}
+
+static void test_knob_select_failure_keeps_the_screen() {
+  std::unique_ptr<Rig> r(knob_rig());
+  r->server.fail_next = 1;
+  r->knob.pending = 1;
+  r->run_for(2000);
+  CHECK(!r->board->chooser.open, "");
+  CHECK(r->board->player.screen == "transit", "%s", r->board->player.screen.c_str());
+  CHECK(r->board->last_error == "select:OSError", "%s", r->board->last_error.c_str());
+  r->knob.pending = 1;  // works again next time
+  r->run_for(2000);
+  CHECK(r->board->player.screen == "weather", "%s", r->board->player.screen.c_str());
+}
+
+static void test_knob_waits_for_the_ring() {
+  // A server without the ring: turns are ignored.
+  Rig r({"ok"}, false, false, 0, "", "", true);
+  r.server.knob_ring = false;
+  r.board->connect();
+  r.knob.pending = 1;
+  r.run_for(2000);
+  CHECK(!r.board->chooser.open && r.server.count("select:") == 0, "");
+}
+
 int main() {
   struct T {
     const char *name;
@@ -859,6 +971,11 @@ int main() {
       T_(test_led_dim_red_after_a_failure_until_a_request_succeeds),
       T_(test_led_red_while_reconnecting_after_repeated_failures),
       T_(test_brightness_in_hardware_or_in_the_colors),
+      T_(test_knob_twist_and_rest_selects_once),
+      T_(test_knob_back_to_the_start_cancels),
+      T_(test_knob_wraps_around_the_ring),
+      T_(test_knob_select_failure_keeps_the_screen),
+      T_(test_knob_waits_for_the_ring),
 #undef T_
   };
   int n = 0;

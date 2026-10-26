@@ -1,6 +1,7 @@
 // Matrix Portal S3 hardware: the HUB75 panel (through the
 // ESP32-HUB75-MatrixPanel-DMA library), WiFi + HTTPS, the UP/DOWN buttons,
-// the status NeoPixel, and the watchdog. The C++ counterpart of
+// the knob (Adafruit 5880 rotary encoder on the STEMMA QT port), the status
+// NeoPixel, and the watchdog. The C++ counterpart of
 // firmware/boardlib/device.py. Board-only: everything else builds natively
 // for tests, and the rest of the firmware takes this hardware through the
 // interfaces in app.h.
@@ -74,6 +75,7 @@ class WifiNet : public app::Net {
   bool update(bool boot, const std::string &screen, json::Value &out, std::string &err) override;
   bool radar(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
   bool logo(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
+  bool select(const std::string &category, json::Value &out, std::string &err) override;
   bool rssi(int &out) override;
   std::string mac() const;
   std::function<void()> feed;  // watchdog feed, before each request and while joining
@@ -83,7 +85,7 @@ class WifiNet : public app::Net {
   bool ping();
   bool join(const std::string &ssid, const std::string &password, const app::StatusFn &status);
   void reset_radio(const char *why);
-  bool get_json(const std::string &path, bool auth, json::Value &out, std::string &err);
+  bool get_json(const std::string &path, bool auth, json::Value &out, std::string &err, bool post = false);
   bool get_bytes(const std::string &path, size_t size, std::vector<uint8_t> &out, std::string &err);
 };
 
@@ -98,6 +100,21 @@ class Buttons : public app::Buttons {
   Buttons();
   bool up() override;
   bool down() override;
+};
+
+// Adafruit 5880 (seesaw I2C rotary encoder) on the STEMMA QT port. begin()
+// finds it; without one, clicks() is always 0 and the board runs as before.
+class Knob : public app::Knob {
+ public:
+  explicit Knob(bool reverse = false) : reverse_(reverse) {}
+  bool begin();
+  int clicks() override;
+
+ private:
+  bool reverse_;
+  bool on_ = false;
+  uint32_t polled_ = 0;
+  bool read(uint8_t base, uint8_t reg, uint8_t *buf, size_t n);
 };
 
 class StatusLed : public app::Led {

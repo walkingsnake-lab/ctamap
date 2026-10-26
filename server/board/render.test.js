@@ -198,3 +198,31 @@ test('key layout: key on rows 1-5, station and clock unlit under a line on row 2
   const g = render({ ...p, header: null });
   assert.equal(hex(g.get(10, 25)), '#000000');
 });
+
+test('knob chooser: wheel across the top, one pip per entry, the selection amber; commit drops the neighbors', () => {
+  const p = { bright: 100, knob: { ring: ['auto', 'transit', 'weather', 'sports'], at: 1 } };
+  const at = (pos, commit) => render(p, { screen: 'chooser', chooser: { pos, commit } });
+  const lit = (f, y0, y1) => { const xs = []; for (let x = 0; x < 64; x++) for (let y = y0; y <= y1; y++) if (f.get(x, y).some((v) => v)) { xs.push(x); break; } return xs; };
+  const pipColors = (f) => [23, 28, 33, 38].map((x) => hex(f.get(x, 9)));
+  let f = at(2);
+  assert.deepEqual(pipColors(f), [C.indicator, C.indicator, C.amber, C.indicator]);
+  assert.deepEqual(lit(f, 9, 9), [23, 24, 25, 28, 29, 30, 33, 34, 35, 38, 39, 40]);
+  // WEATHER in 5x7, centered, on rows 1-6, label white.
+  const w = measure('5x7', 'WEATHER');
+  const x0 = Math.round(32 - w / 2);
+  const mid = lit(f, 1, 7).filter((x) => x >= x0 && x < x0 + w);
+  assert.equal(mid[0], x0);
+  assert.ok(lit(f, 0, 0).length === 0 && lit(f, 10, 31).length === 0, 'rows 0 and 10-31 dark');
+  // Neighbors clipped at the edges, darker than the selection.
+  assert.ok(lit(f, 1, 6).some((x) => x < 6) && lit(f, 1, 6).some((x) => x > 58));
+  // Wraps both ways: -1 and 3 are both SPORTS.
+  assert.deepEqual(at(-1).px, at(3).px);
+  assert.deepEqual(pipColors(at(-1)), [C.indicator, C.indicator, C.indicator, C.amber]);
+  // Commit: only the selection, in amber; the pips stay.
+  f = at(2, true);
+  assert.ok(lit(f, 1, 6).every((x) => x >= x0 && x < x0 + w));
+  assert.ok(lit(f, 1, 6).length && lit(f, 1, 6).every((x) => [1, 2, 3, 4, 5, 6].every((y) => !f.get(x, y).some((v) => v) || hex(f.get(x, y)) === C.amber)));
+  assert.deepEqual(pipColors(f), [C.indicator, C.indicator, C.amber, C.indicator]);
+  // No ring: blank.
+  assert.equal(lit(render({ bright: 100 }, { screen: 'chooser', chooser: { pos: 0 } }), 0, 31).length, 0);
+});

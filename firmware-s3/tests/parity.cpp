@@ -109,6 +109,10 @@ int main(int argc, char **argv) {
         ro.logos = has_logos ? &logos : nullptr;
         if (!o["t"].is_null()) ro.t = o["t"].num();
         ro.nums = o["nums"].is_null() ? nullptr : &nums;
+        if (!o["chooser"].is_null()) {
+          ro.chooser_pos = o["chooser"]["pos"].num(0);
+          ro.chooser_commit = o["chooser"]["commit"].truthy();
+        }
         Frame f;
         draw::render(s["payload"], f, ro);
         count++;

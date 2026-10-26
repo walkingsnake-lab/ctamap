@@ -979,3 +979,27 @@ test('update: NWS forecasts drive the 5-day layout over Open-Meteo\'s days', asy
   assert.deepEqual(days.map((x) => [x.icon, x.hi]), [['pcloudy_day', 83], ['sun', 81], ['rain', 67], ['rain', 64], ['rain', 58]]);
   await s.close();
 });
+
+test('select: the knob sets a category and gets the new screen\'s update back', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const h = (method = 'POST') => ({ method, headers: { 'X-Board-Token': 'tok' } });
+  assert.equal((await s.req('/board/select?b=home&s=weather', { method: 'POST' })).status, 401);
+  assert.equal((await s.req('/board/select?b=home&s=weather', h('GET'))).status, 405);
+  assert.equal((await s.req('/board/select?b=nope&s=weather', h())).status, 404);
+  const bad = await s.req('/board/select?b=home&s=baseball', h());
+  assert.equal(bad.status, 400);
+  assert.match(bad.body.detail, /auto, transit, weather, sports/);
+  // Every update carries the ring and the chosen screen's place on it.
+  let b = (await s.req('/board/update?b=home', h('GET'))).body;
+  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports'], at: 0 });
+  const v = b.v;
+  b = (await s.req('/board/select?b=home&s=sports', h())).body;
+  assert.deepEqual([b.screen, b.for, b.knob.at, b.v], ['baseball', 'baseball', 3, v + 1]);
+  assert.ok(b.mlb && !('rows' in b), 'only the baseball sections');
+  assert.equal(s.store.get('home').screen, 'baseball');
+  b = (await s.req('/board/select?b=home&s=transit', h())).body;
+  assert.deepEqual([b.screen, b.knob.at], ['transit', 1]);
+  assert.ok('rows' in b && !('mlb' in b));
+  await s.close();
+});

@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -30,7 +30,7 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'radar', 'logo']);
+const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo']);
 const MAX_SHEET = 8 * 1024 * 1024; // uploaded logo sheet (PNG)
 
 function send(res, status, body) {
@@ -355,6 +355,8 @@ function createBoard({
       stale: stale ? 1 : 0,
       screen,
       rot: rotOf(board, screen),
+      // The knob's ring and where the chosen screen sits on it (S3 chooser).
+      knob: knobOf(board),
       bright: resolveBright(board.bright, w, now),
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
@@ -428,6 +430,24 @@ function createBoard({
       const body = await update(board, id, parsed.query.boot === '1');
       const shown = SCREENS.includes(parsed.query.s) ? parsed.query.s : body.screen;
       return send(res, 200, sectionsFor(body, shown));
+    }
+
+    // The knob chose a category (s, one of knob.ring): the same as choosing
+    // its screen on the phone (bumps v). Answers with the combined update for
+    // the new screen, so the board needs no second request.
+    if (first === 'select' && rest.length === 0) {
+      if (method !== 'POST') return send(res, 405, { err: 'method' });
+      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      const id = String(parsed.query.b || '');
+      let board;
+      try { board = store.select(id, String(parsed.query.s || '')); }
+      catch (e) {
+        if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+        throw e;
+      }
+      if (!board) return send(res, 404, { err: 'unknown_board' });
+      const body = await update(board, id, false);
+      return send(res, 200, sectionsFor(body, body.screen));
     }
 
     // One radar frame for the board's station: 2048 bytes, immutable;

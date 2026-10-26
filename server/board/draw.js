@@ -1530,6 +1530,40 @@
       return { key: `${g.id}:${g.st}`, texts };
     }
 
+    // Knob chooser (spec §10, "Knob"): the payload's knob.ring as a sideways
+    // wheel across the top of a blank panel. The selection is in 5x7 on
+    // baseline 7, centered; its neighbors are Tom Thumb on baseline 6,
+    // CHOOSER_PITCH px either side, fading to dark grey with distance and
+    // clipped at the panel edges. Row 9 has one 3x1 pip per entry, the
+    // selection amber. opts.chooser: {pos, commit}. pos is the wheel position
+    // as an entry index: fractional mid-slide, and any integer offset (it
+    // wraps). commit: only the selection, in amber (held while the board
+    // asks the server for the new screen).
+    const CHOOSER_PITCH = 38;
+    function renderChooser(p, opts) {
+      const f = newFrame();
+      const ring = (p.knob && p.knob.ring) || [];
+      const n = ring.length;
+      if (!n) return f;
+      const c = opts.chooser || {};
+      const pos = c.pos || 0;
+      const sel = ((Math.round(pos) % n) + n) % n;
+      for (let k = 0; k < n; k++) {
+        const d = k - pos - n * Math.floor((k - pos + n / 2) / n); // wrapped into [-n/2, n/2)
+        const ad = Math.abs(d);
+        if (ad > 1.6) continue;
+        const big = ad < 0.5;
+        if (c.commit && !big) continue;
+        const name = String(ring[k]).toUpperCase();
+        const font = big ? '5x7' : 'small';
+        const color = big && c.commit ? C.amber : lerpColor(C.label, C.dimHead, Math.min(1, ad));
+        f.text(font, name, Math.round(32 + d * CHOOSER_PITCH - measure(font, name) / 2), big ? 7 : 6, color);
+      }
+      const x0 = 32 - Math.floor((n * 5 - 2) / 2);
+      for (let i = 0; i < n; i++) f.fill(x0 + i * 5, 9, 3, 1, i === sel ? C.amber : C.indicator);
+      return f;
+    }
+
     function applyBrightness(f, bright) {
       const k = Math.max(0, Math.min(100, bright == null ? 100 : bright)) / 100;
       if (k === 1) return f;
@@ -1545,7 +1579,7 @@
       NR = o.roller || o.nums ? { roller: o.roller, rolls: o.nums } : null;
       let f;
       try {
-        f = screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
+        f = screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
           : screen === 'baseball' ? renderBaseball(p, o) : renderTransit(p, o);
       } finally { NR = null; }
       return applyBrightness(f, p.bright);
@@ -1591,7 +1625,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller,
     };

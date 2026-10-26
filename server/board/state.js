@@ -17,6 +17,14 @@ const DEFAULT_MAPID = '40100'; // Morse
 
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball'];
 const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
+// The knob's ring (design spec §10, "Knob"): categories, each opening one
+// screen. TRANSIT opens the transit-family screen last chosen (transitScreen:
+// rows or ticker); SPORTS opens the baseball screen.
+const KNOB_RING = ['auto', 'transit', 'weather', 'sports'];
+const CATEGORY_OF = { auto: 'auto', transit: 'transit', ticker: 'transit', weather: 'weather', baseball: 'sports' };
+const knobScreen = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'sports' ? 'baseball' : cat);
+// The ring and where the board's chosen screen sits on it (payload `knob`).
+const knobOf = (board) => ({ ring: KNOB_RING, at: Math.max(0, KNOB_RING.indexOf(CATEGORY_OF[board.screen] || 'auto')) });
 // Auto mode and screen options (design spec §10). Defaults reproduce the
 // behavior before these were settings.
 const AUTO_SCREENS = ['transit', 'ticker'];
@@ -79,6 +87,9 @@ function defaultBoard(stations) {
     // "trains to / min" key on top, station and clock under a line at the bottom).
     transitLayout: 'header',
     screen: 'auto',
+    // The transit-family screen the knob's TRANSIT opens: the last of
+    // transit and ticker chosen. Kept by the store, not set directly.
+    transitScreen: 'transit',
     bright: 'auto',
     // Auto: the main screens (both: alternate every autoEvery s).
     autoScreens: ['transit'],
@@ -335,10 +346,19 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       // with all destinations unless the patch sets rows too.
       if (fields.station && fields.station.mapid !== board.station.mapid && !fields.rows) fields.rows = [];
       Object.assign(board, fields);
+      if (fields.screen === 'transit' || fields.screen === 'ticker') board.transitScreen = fields.screen;
       board.v = (board.v || 0) + 1;
       state.boards[id] = board;
       save();
       return board;
+    },
+
+    // The knob chose a category on its ring: set the screen it opens. Same
+    // as a phone change (bumps v).
+    select(id, cat) {
+      if (!KNOB_RING.includes(cat)) throw new ValidationError(`s must be one of ${KNOB_RING.join(', ')}`);
+      if (!Object.hasOwn(state.boards, id)) return null;
+      return this.update(id, { screen: knobScreen(state.boards[id], cat) });
     },
 
     // Board restart: brightness goes back to auto (so a board left off comes
@@ -354,4 +374,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, KNOB_RING, knobOf, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };
