@@ -237,3 +237,4 @@ The first walnut shell was a prototype and was scrapped, so the shell was open t
 - S3 posts Ø6 (they're ~22 mm long now).
 - Layer scan: every layer of the v4 shell is one continuous piece.
 - Not done: flush screw heads underneath. The counterbores leave the M3 button heads ~0.6 mm proud, below the 3.5 mm bumper feet; deepening them would leave ~0.6 mm of floor under each head.
+- Feet (Oct 25): the front foot recesses' teardrop points reached past the bottom front edge (tip at y 8.7, edge at 9) and showed as a notch from the front. Front feet moved from y 18 to 22 (tip ~3.5 mm inside the edge), back feet from 52 to D - 11 = 58 to keep the stance; the plinth's pegs follow.

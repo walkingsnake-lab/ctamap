@@ -30,7 +30,8 @@ KY = PANEL_BACK + 1.0 + 12.7                      # encoder centre: its board cl
 ENC_HOLE = 24.0                                   # collar insert hole (insert designed when the encoder arrives)
 GR_PITCH, GR_R = 3.2, 0.8
 NEO_X, NEO_Z = -96.5, ZC + 30.6                   # status NeoPixel (estimate from Adafruit's photo)
-FEET = [(sx * 84.0, fy) for sx in (-1, 1) for fy in (18.0, 52.0)]
+FEET = [(sx * 84.0, fy) for sx in (-1, 1) for fy in (22.0, D - 11.0)]   # front pair 22 mm back: the recess teardrop's point
+                                                  # (toward the front) stops ~3.5 mm inside the bottom front edge (y 9)
 FOOT_D, FOOT_DEPTH = 13.2, 1.5                    # recesses for 3M SJ5312 (12.7 mm) bumpers
 SCREW_X, SCREW_Y = 40.0, D - BACKL - PLATE_T - 3.5   # back plate screws from below
 SCREW_XS = (40.0, 52.0)                          # v4: two pairs (x = +/-40 and +/-52)
