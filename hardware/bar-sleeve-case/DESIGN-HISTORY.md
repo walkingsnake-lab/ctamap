@@ -238,3 +238,10 @@ The first walnut shell was a prototype and was scrapped, so the shell was open t
 - Layer scan: every layer of the v4 shell is one continuous piece.
 - Not done: flush screw heads underneath. The counterbores leave the M3 button heads ~0.6 mm proud, below the 3.5 mm bumper feet; deepening them would leave ~0.6 mm of floor under each head.
 - Feet (Oct 25): the front foot recesses' teardrop points reached past the bottom front edge (tip at y 8.7, edge at 9) and showed as a notch from the front. Front feet moved from y 18 to 22 (tip ~3.5 mm inside the edge), back feet from 52 to D - 11 = 58 to keep the stance; the plinth's pegs follow.
+
+## Light sensor (Oct 26)
+- Hole: a single Ø2 hole drilled through the guide (was Ø4), no lens or rod: barely visible, no extra part. The chip, ~5 mm under the 2.5 mm wall, sees a ~±10° cone straight up (a patch of ceiling), which is enough for room brightness at the VEML7700's high gain and ignores the screen's own glow.
+- `sensor.py` -> `bar-sensor-bracket.stl`: Adafruit VEML7700 (4162, flat; board 25.4 x 17.78, holes and chip from Adafruit's board file) on a carrier, two arms to pads under the 5880 encoder board's right-hand corner holes (M2.5 x 8 up through, nuts on top). Nothing attaches to the shell; the plate needs nothing.
+- Encoder board height is the one estimate: 7.9-9.3 mm below the case top (collar deck vs stack notes). Designed at 9.3 with the sensor 5.9 mm under the wall, so at 7.9 its sockets still clear the wall by 0.25 mm. Checked against the shell, plate (seated and sliding in), panel, encoder body, its socket, pins and nuts.
+- Assembly order fixed: the panel's top edge (z 103.15) is above the encoder board's underside (~99.4), so the panel can't slide past a mounted encoder. Panel first, then the encoder (with the sensor) from the open back, then the plate. The v3 build sheet's "bolt the plate to the panel on the bench, slide the module in" was not possible and is replaced.
+- Firmware and control page support (brightness from the sensor) is a separate PR.
