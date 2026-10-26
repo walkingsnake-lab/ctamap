@@ -20,10 +20,9 @@ v3:
   edge is stiff and the shell locates it along the whole outline (v2's open gaps left the edges flexing).
 - 3 mm plate, grown outward into the back lip (the lip goes from 4 to 3 mm), so it is ~3.4x stiffer at no cost
   in cable space; a 4th standoff at the panel's bottom-centre insert ties the middle of the plate to the panel.
-- Power-cable shelf for the stock panel cable: the socket sits a couple of cm from the S3's terminals, so ~45 cm
-  of a ~50 cm cable plus its spare plug is stored. Folded in ~3.5 cm passes, 4 wires of ~2.2 mm, about half air:
-  a ~50 x 28 x 20 mm bundle. It sits on a shelf in the open block above the ribbon, beside the power socket, held
-  by a hook-and-loop tie through two loops on the plate (behind the bundle, round its front).
+- Power cable: the stock cable's extra (~45 cm plus its spare plug) is folded and tied into its own bundle
+  (~50 x 28 x 20 mm) and placed wherever it fits behind the panel; five optional tie-down loops in the open areas.
+  Bolted to the panel, any push from the bundle is internal (taken by the standoff screws), not on the shell.
 - Ribbon bay: a 2.2 mm pocket behind the S3's IDC plug gives the ribbon's fold ~7 mm instead of 4.7.
 - Venting: 45-deg louver bands, inlet along the bottom and outlet along the top (a chimney ~85 mm tall). The slots
   rise going inward, so from eye level or above you see a blade, not the inside. ~1,300 mm2 in, ~1,000 out
@@ -56,16 +55,11 @@ LV_TOP = [(97.0, [(-98, -49), (-31, -17), (17, 31), (49, 98)]), (92.5, [(-98, -4
 # seen from the front); the 4th corner (-88, -26) is under the S3. All six estimates go on the template.
 INSERTS_ALL = [(-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)]
 STANDOFFS = [(-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)]   # 4th: bottom-centre insert, ties the plate's middle
-# power-cable shelf for the stock panel cable (~50 cm, often 4 wires and a spare plug; the socket sits a couple of cm
-# from the S3's terminals, so ~45 cm is stored). Realistic bundle: ~13 passes x 4 wires of ~2.2 mm, about half air,
-# ~50 x 28 x 20 mm with the plug. It sits in the open block above the ribbon, beside the panel's power socket: a shelf
-# with a low front lip, and two strap loops on the plate (the strap runs behind the bundle and round its front)
-SHELF_X = (-28.0, 28.0)
-SHELF_Z = 65.0                             # shelf top face: clears the ribbon hooks and the power plug below
-SHELF_Y = 34.0                             # front edge: 23 mm deep, room for a ~20 mm bundle
-LIP_H = 7.0
-STRAP_XS, STRAP_W, STRAP_H = (-14.0, 14.0), 14.0, 2.2
-STRAP_Z = (72.0, 92.0)
+# power cable: the stock cable (~50 cm, often 4 wires and a spare plug) is folded and tied into its own bundle
+# (~50 x 28 x 20 mm) and placed wherever it fits; nothing prescribes its spot. Optional tie-down loops in the open
+# areas (x, z0, z1): a strap threads through a loop (tunnel along z) and round the bundle
+TIE_LOOPS = [(-14.0, 64.0, 82.0), (14.0, 64.0, 82.0), (62.0, 62.0, 80.0), (-20.0, 29.0, 39.0), (62.0, 29.0, 39.0)]
+STRAP_W, STRAP_H = 14.0, 2.2
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the 3 mm plate
 BAY = (-54.0, -28.0, 20.0, 62.0)           # x0, x1, z0, z1
 SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 11.0, 8.0, 3.0, 4.2
@@ -139,12 +133,10 @@ def back_plate3(window=True):
         p = p - Manifold.batch_boolean(vents, ADD)
     if LOUVERS:
         p = p - louver_cuts
-    # power-cable shelf, lip and strap loops (loops open at both ends, so the strap threads straight through)
-    p = p + box(SHELF_X[0], SHELF_X[1], SHELF_Y, y0 + 0.01, SHELF_Z - 2.0, SHELF_Z)
-    p = p + box(SHELF_X[0], SHELF_X[1], SHELF_Y, SHELF_Y + 2.0, SHELF_Z - 2.0, SHELF_Z + LIP_H)
-    for sx_ in STRAP_XS:
-        lp = box(sx_ - STRAP_W / 2 - 2, sx_ + STRAP_W / 2 + 2, y0 - STRAP_H - 1.8, y0 + 0.01, STRAP_Z[0], STRAP_Z[1])
-        lp = lp - box(sx_ - STRAP_W / 2, sx_ + STRAP_W / 2, y0 - STRAP_H, y0 + 0.02, STRAP_Z[0] - 1, STRAP_Z[1] + 1)
+    # tie-down loops (open both ends)
+    for lx, lz0, lz1 in TIE_LOOPS:
+        lp = box(lx - STRAP_W / 2 - 2, lx + STRAP_W / 2 + 2, y0 - STRAP_H - 1.8, y0 + 0.01, lz0, lz1)
+        lp = lp - box(lx - STRAP_W / 2, lx + STRAP_W / 2, y0 - STRAP_H, y0 + 0.02, lz0 - 1, lz1 + 1)
         p = p + lp
     # ribbon bay behind the S3's plug
     bx0, bx1, bz0, bz1 = BAY
@@ -153,7 +145,11 @@ def back_plate3(window=True):
     tube_end = PCB_Y0 + 1.6 + 1.5
     p = p + cyl_y(V.S3_NEO_X, V.S3_NEO_Z, tube_end, y0 + 0.01, 7.0, 48)
     p = p - cyl_y(V.S3_NEO_X, V.S3_NEO_Z, tube_end - 1, y0 + 0.5, 4.5, 48)
-    if window:
+    if window == 'open':                         # one colour, opaque: the tube opens in a Ø3 hole, 0.5 mm chamfer outside
+        p = p - cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 + 1, 3.0, 32)
+        p = p - Manifold.cylinder(0.51, 1.5, 2.0, 32).rotate([-90, 0, 0]).translate([V.S3_NEO_X, y1 - 0.5, V.S3_NEO_Z])
+        window = None
+    elif window:
         p = p - cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 + 0.4, y1 + 1, 6.0, 48)
         window = cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 + 0.4, y1, 5.9, 48)
     else:
@@ -244,15 +240,9 @@ def to_bed_back_down(m):
 if __name__ == '__main__':
     import trimesh
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    p, w = back_plate3()
-    tp, tw = to_bed_back_down(p), to_bed_back_down(w)
-    dz = -tp.bounds[0][2]
-    for t in (tp, tw):
-        t.apply_translation([0, 0, dz])
-    tp.export(f'{out}/bar-backplate-v3-petg.stl'); tw.export(f'{out}/bar-status-window-v3-translucent.stl')
-    print('plate', tp.is_watertight, np.round(tp.extents, 1).tolist())
-    pt, _ = back_plate3(window=False)
-    t = to_bed_back_down(pt); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/bar-backplate-v3-translucent.stl')
+    p, _ = back_plate3(window='open')
+    t = to_bed_back_down(p); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/bar-backplate-v3.stl')
+    print('plate', t.is_watertight, np.round(t.extents, 1).tolist())
     # template: panel-side face (y = PANEL_BACK) on the bed
     me = panel_template().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     t.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])); t.apply_translation([0, 0, -t.bounds[0][2]])
