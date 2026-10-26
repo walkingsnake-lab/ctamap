@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env
 .git/
+
+# 3D-printed case: STLs and CAD scripts, not part of the app
+hardware/
