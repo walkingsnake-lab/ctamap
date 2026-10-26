@@ -21,7 +21,7 @@ v3:
 - 3 mm plate, grown outward into the back lip (the lip goes from 4 to 3 mm), so it is ~3.4x stiffer at no cost
   in cable space; a 4th standoff at the panel's bottom-centre insert ties the middle of the plate to the panel.
 - Power cable: the stock cable's extra (~45 cm plus its spare plug) is folded and tied into its own bundle
-  (~50 x 28 x 20 mm) and placed wherever it fits behind the panel; five optional tie-down loops in the open areas.
+  (~50 x 28 x 20 mm) and placed wherever it fits behind the panel; two optional tie-down loops above the ribbon, beside the power socket.
   Bolted to the panel, any push from the bundle is internal (taken by the standoff screws), not on the shell.
 - Ribbon bay: a 2.2 mm pocket behind the S3's IDC plug gives the ribbon's fold ~7 mm instead of 4.7.
 - Venting: 45-deg louver bands, inlet along the bottom and outlet along the top (a chimney ~85 mm tall). The slots
@@ -56,9 +56,9 @@ LV_TOP = [(97.0, [(-98, -49), (-31, -17), (17, 31), (49, 98)]), (92.5, [(-98, -4
 INSERTS_ALL = [(-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)]
 STANDOFFS = [(-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)]   # 4th: bottom-centre insert, ties the plate's middle
 # power cable: the stock cable (~50 cm, often 4 wires and a spare plug) is folded and tied into its own bundle
-# (~50 x 28 x 20 mm) and placed wherever it fits; nothing prescribes its spot. Optional tie-down loops in the open
+# (~50 x 28 x 20 mm) and placed wherever it fits; nothing prescribes its spot. Two optional tie-down loops in the open
 # areas (x, z0, z1): a strap threads through a loop (tunnel along z) and round the bundle
-TIE_LOOPS = [(-14.0, 64.0, 82.0), (14.0, 64.0, 82.0), (62.0, 62.0, 80.0), (-20.0, 29.0, 39.0), (62.0, 29.0, 39.0)]
+TIE_LOOPS = [(-14.0, 64.0, 82.0), (14.0, 64.0, 82.0)]   # two, above the ribbon beside the power socket
 STRAP_W, STRAP_H = 14.0, 2.2
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the 3 mm plate
 BAY = (-54.0, -28.0, 20.0, 62.0)           # x0, x1, z0, z1

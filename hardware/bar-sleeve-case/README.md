@@ -51,7 +51,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 2. Push an M3 nut into each bottom boss's slot (it snaps past the narrowed mouth).
 3. S3 onto the plate's posts with 4 x M2.5 x 8.
 4. Snap the diffuser onto the panel. Ribbon from the S3's IDC to the panel's PI IN, clipped into the plate's hooks; panel power to the S3's terminals; encoder STEMMA QT cable to the S3.
-   - Power cable: fold the extra back and forth in ~3.5 cm lengths with the spare plug and wrap one hook-and-loop tie round it. Set the bundle wherever it fits behind the panel; if it shifts, strap it to the nearest of the plate's five tie-down loops.
+   - Power cable: fold the extra back and forth in ~3.5 cm lengths with the spare plug and wrap one hook-and-loop tie round it. Set the bundle wherever it fits behind the panel; if it shifts, strap it to one of the plate's two tie-down loops (middle, above the ribbon).
 5. Plate onto the panel: 4 x M3 x 8 + washer down the standoff tubes into the panel's inserts (2 mm hex key). Dress the cables now; nothing moves after this.
 6. Slide the whole module in from the back (tongues into the top grooves). Push it forward until the diffuser seats on the frame, then 2 x M3 x 10 from below; the boss slots take up any depth error.
 7. USB-C bezel in (snug, or a drop of CA); plug in.
