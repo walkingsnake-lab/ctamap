@@ -20,12 +20,12 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Insert check (print first) | `check-panel-insert-template.stl` | any PLA | as exported; that face goes on the panel |
 | Encoder collar | `bar-encoder-collar-backdown.stl` | walnut, or translucent PETG for the glow | flange-top down |
 | USB-C bezel | `bar-usb-bezel.stl` | black or walnut | flange face down |
-| Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
+| Boot key | `bar-boot-key-v3.stl` (1 mm longer for the 3 mm plate) | PETG or PLA | flat |
 | Sensor drill guide (optional) | `bar-sensor-drill-guide-backdown.stl` | any PLA | as exported |
 | Tilt plinth (optional) | `bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 | Coupons | `coupon-v3-front-corner-backdown.stl`, `coupon-v3-frame-corner.stl`, `coupon-v3-usb-buttons-backdown.stl`, `coupon-v4-plate-boss.stl`, `coupon-v4-s3-pilots.stl` | as the parts | as exported |
 - Still to design, after the encoder arrives: the knob (current coin style; shaft hole ~14 mm deep plus a recess for the M7 nut), and the optional sensor shelf/keeper (hangs from the encoder board's holes; the back plate needs nothing for it).
-- Hardware: 2 x M3 x 10 + nuts (plate to shell, from below), 3 x M3 x 8 + 3 washers (plate to the panel's inserts), 4 x M2.5 x 8 (S3 to plate posts, self-tapping into a Ø2.4 pilot), the encoder's M7 nut, 4 x SJ5312 bumpers (+4 for the plinth), gel or medium CA glue.
+- Hardware: 2 x M3 x 10 + nuts (plate to shell, from below), 4 x M3 x 8 + 4 washers (plate to the panel's inserts), 1-2 hook-and-loop cable ties ~12 mm wide (power-cable tray), 4 x M2.5 x 8 (S3 to plate posts, self-tapping into a Ø2.4 pilot), the encoder's M7 nut, 4 x SJ5312 bumpers (+4 for the plinth), gel or medium CA glue.
 - Alternate (`stl/alternate-frontdown/`): the front-down shell v2 with a built-in rim and its collar and drill guide. No lapping or glue, but its layer lines lean 4.7°.
 
 ## Print settings
@@ -51,7 +51,8 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 2. Push an M3 nut into each bottom boss's slot (it snaps past the narrowed mouth).
 3. S3 onto the plate's posts with 4 x M2.5 x 8.
 4. Snap the diffuser onto the panel. Ribbon from the S3's IDC to the panel's PI IN, clipped into the plate's hooks; panel power to the S3's terminals; encoder STEMMA QT cable to the S3.
-5. Plate onto the panel: 3 x M3 x 8 + washer down the standoff tubes into the panel's inserts (2 mm hex key). Dress the cables now; nothing moves after this.
+   - Power cable: fold the extra back and forth in ~3.5 cm lengths, lay it with the spare plug in the tray above the S3, and strap it: the tie goes in through one wall's slot at the floor, behind the bundle, out the other wall, and round the front.
+5. Plate onto the panel: 4 x M3 x 8 + washer down the standoff tubes into the panel's inserts (2 mm hex key). Dress the cables now; nothing moves after this.
 6. Slide the whole module in from the back (tongues into the top grooves). Push it forward until the diffuser seats on the frame, then 2 x M3 x 10 from below; the boss slots take up any depth error.
 7. USB-C bezel in (snug, or a drop of CA); plug in.
 - To flash: hold the Boot key in through the plate, plug in USB-C, upload, then replug. OTA updates are a later firmware job.
@@ -59,8 +60,8 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 
 ## Key geometry (case frame: x right seen from the front, y back from the top front edge, z up from the bottom)
 - Outer 217 x 110.3 x 63 mm; wall 2.5; corners R14; panel bore 212 x 105.3.
-- Diffuser face at y 12; panel back at y 28.2; back plate y 57-59 (4 mm inside the rim).
-- Panel inserts used by the v3 standoffs (case x, z from ZC): (-88, +31), (+88, +31), (+88, -26), photo estimates ±1 mm, panel in normal orientation (PI IN on the right seen from the front). The fourth corner insert sits under the S3. Check with the template before printing the plate; correct `STANDOFFS` in `plate3.py` if needed.
+- Diffuser face at y 12; panel back at y 28.2; back plate y 57-60 (v3, 3 mm; 3 mm inside the rim).
+- Panel inserts used by the v3 standoffs (case x, z from ZC): (-88, +31), (+88, +31), (+88, -26), (+7, -36), photo estimates ±1 mm, panel in normal orientation (PI IN on the right seen from the front). The fourth corner insert sits under the S3. Check with the template before printing the plate; correct `STANDOFFS` in `plate3.py` if needed.
 - S3 from Adafruit's board file, component side facing the plate, board edge 2 mm inside the left wall (x -104):
   - USB-C at z = ZC (55.15), y 40.9; Down/Up/Reset at ZC -10.3 / -20.1 / -29.9.
   - Status LED at (-91.8, ZC-32.8); Boot at (-89.4, ZC-20.3); M2.5 holes at x -96.38 / -55.74, z ZC-7.62 / ZC-27.31.

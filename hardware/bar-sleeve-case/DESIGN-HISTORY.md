@@ -204,3 +204,12 @@ First assembly of v2: the plate rocked and sat unevenly, the bottom screws spun,
 - `check-panel-insert-template.stl`: 1.2 mm frame on the panel outline with Ø3.4 holes at all six insert estimates, Ø11 foot rings, an arrow tab on the PI IN side. Lay it on the panel's back (bed face down on the panel); if an M3 drops into each used insert, print the plate.
 - Coupons: `coupon-v4-plate-boss.stl` (one boss, screw it through the real shell's floor hole with a nut in), `coupon-v4-s3-pilots.stl` (Ø2.3 / 2.4 / 2.5, marked by 1-3 notches).
 - Cables: a 15 cm 2x8 female-female IDC ribbon replaces the 30 cm one (the run is ~14 cm: fold at the S3, ~11 cm across, down to PI IN); the panel power lead can be cut short and re-terminated with crimped M3 forks.
+
+### Plate v3, round 3: stock cables (Oct 25)
+- Assembly showed the real space problem: the stock panel power cable (~50 cm, often with a second plug for chaining) wadded behind the panel, and the stiff ribbon. The panel's power socket sits a couple of cm from the S3's terminals, so ~45 cm plus a plug has to be stored. Jake prefers keeping the stock cables (no cutting, crimping or splicing).
+- Cable tray above the S3 (x -99..-42, z 64.5..82, 10 mm deep, under the top-left standoff): holds the power cable folded in ~3.5 cm passes (~35 x 10 x 10 mm) plus the spare plug, strapped with a hook-and-loop tie through slots in both walls at the floor. The whole module is assembled on the bench (plate bolted to the panel), so the cable is folded and strapped in the open.
+- Plate 3 mm (grown outward into the back lip, 4 -> 3 mm recess): ~3.4x stiffer, no cable space lost. Boot key 1 mm longer (`bar-boot-key-v3.stl`).
+- 4th standoff at the panel's bottom-centre insert (+7, -36) so the plate's middle is tied to the panel; bottom louver segments split around it.
+- Ribbon bay: 2.2 mm pocket behind the S3's IDC plug (plug top to plate 4.7 -> 6.9 mm).
+- With the plate bolted to the panel, cable pressure is an internal load between plate and panel (taken by the standoff screws), not a push on the shell.
+- Shell unchanged. A deeper shell (+5-8 mm) is the fallback if the tray proves too tight on the bench; everything is parametric on `D`.
