@@ -140,6 +140,7 @@ std::string start_reason();  // POWER_ON, RESET_PIN, SOFTWARE, PANIC, WATCHDOG, 
 bool cold_boot();            // power-on or the RESET button (not a crash or watchdog restart)
 long free_heap();
 long largest_block();
+float chip_temp_c();  // ESP32-S3 internal sensor: die temperature in C (mean of 8 reads; tracks the air around the board)
 
 }  // namespace device
 

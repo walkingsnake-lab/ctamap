@@ -146,9 +146,9 @@ void loop() {
     const app::Stats &st = board->stats;
     Serial.printf(
         "[board] fetch budget %d ms, draw %ld ms (max %ld), fetches %ld, forced %ld, draws %ld, fails %ld, "
-        "reconnects %ld, mem free %ld, largest block %ld\n",
+        "reconnects %ld, mem free %ld, largest block %ld, chip %.1f C\n",
         (int)board->sched.budget_ms, panel->last_ms, panel->max_ms, st.fetches, st.forced, st.draws, st.fails,
-        st.reconnects, device::free_heap(), device::largest_block());
+        st.reconnects, device::free_heap(), device::largest_block(), device::chip_temp_c());
     panel->max_ms = 0;
     last_report = ms;
   }

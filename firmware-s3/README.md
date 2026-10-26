@@ -33,7 +33,9 @@ steady at 8-bit color.
    appears), pick the port under Tools → Port, click Upload, then press
    RESET when it says "Done uploading".
 6. **Serial log:** Tools → Serial Monitor at 115200 baud. Once a minute the
-   board prints its fetch budget, draw time, counters, and free memory. Send
+   board prints its fetch budget, draw time, counters, free memory, and the
+   chip's temperature (`chip … C`, the S3's built-in sensor; useful for comparing
+   enclosure venting: it reads the die, so compare runs, not absolute numbers). Send
    those lines back when something looks off.
 
 What you should see: `WIFI <network>`, `WIFI OK`, then the transit screen.
