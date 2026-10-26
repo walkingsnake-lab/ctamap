@@ -215,3 +215,9 @@ First assembly of v2: the plate rocked and sat unevenly, the bottom screws spun,
 - With the plate bolted to the panel, cable pressure is an internal load between plate and panel (taken by the standoff screws), not a push on the shell.
 - One-piece, single-colour plate (`bar-backplate-v3.stl`): the status light tube opens in a Ø3 hole with a 0.5 mm chamfer.
 - Shell unchanged. A deeper shell (+5-8 mm) is the fallback if a PLA dry-fit with the stock cables still feels crammed; everything is parametric on `D`.
+
+### Plate v3, round 4: print time (Oct 25)
+- The 3 mm plate printed solid took over 4 hours (85 cm³; v2 was 50). Breakdown: flat plate 57 cm³, louver bands 11, the four standoffs only 6.
+- Back to a 2 mm plate (69 cm³); the 4-point bolting keeps it rigid. Boot key back to `bar-boot-key.stl`; the ribbon-bay pocket is 1.2 mm (plug to plate 5.9 mm).
+- Standoffs slimmed to Ø9 with a Ø6.4 tube and no washer (the M3 button head, Ø5.7, seats on the 3 mm floor); floor hole Ø3.6 (±0.3 mm), since the template confirms the insert positions first.
+- Print settings: 0.24 mm layers, 4 walls, 4 top/bottom layers, 15% gyroid instead of solid. Target ~2.5-3 h.

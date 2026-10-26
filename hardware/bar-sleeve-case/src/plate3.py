@@ -7,10 +7,10 @@ Why (v2 problems found on the first build):
 - The S3's M2.5 machine screws had to cut their own thread in a Ø2.2 pilot (printed ~Ø2.05) with no lead-in.
 
 v3:
-- Three standoffs screw the plate to the panel's own brass M3 inserts (M3 x 8 + washer down a Ø8 tube from the
-  outer face). The plate is rigidly parallel to the panel; the foam posts are gone. Three points set the plane
-  exactly; the fourth left insert sits under the S3. Positions are photo estimates (±1 mm), so the feet have
-  Ø4.2 holes (±0.6 mm) and panel_template() checks them before the plate is printed.
+- Three standoffs screw the plate to the panel's own brass M3 inserts (M3 x 8 down a Ø6.4 tube from the
+  outer face, no washer). The plate is rigidly parallel to the panel; the foam posts are gone. Three points set the plane
+  exactly; the fourth left insert sits under the S3. Positions are photo estimates (±1 mm): panel_template() checks them before the plate
+  is printed (correct STANDOFFS if needed); the feet's Ø3.6 holes then allow ±0.3 mm.
 - Bottom screws now only stop the module sliding out. The boss hole is a y-slot and the nut floats ±0.6 mm along
   the slot, so the stack error between frame, panel and plate is taken up there: push the module forward until
   the diffuser seats on the frame, then tighten. The nut slot is closed at the back, and its mouth narrows to
@@ -18,12 +18,11 @@ v3:
 - S3 posts: Ø2.4 pilot with a 0.5 mm 45-deg lead-in.
 - Tray: the plate fills the bore (0.2 mm clearance all round, no edge gaps) with a 6 mm inward skirt, so its
   edge is stiff and the shell locates it along the whole outline (v2's open gaps left the edges flexing).
-- 3 mm plate, grown outward into the back lip (the lip goes from 4 to 3 mm), so it is ~3.4x stiffer at no cost
-  in cable space; a 4th standoff at the panel's bottom-centre insert ties the middle of the plate to the panel.
+- 2 mm plate (as v2); a 4th standoff at the panel's bottom-centre insert ties the middle of the plate to the panel.
 - Power cable: the stock cable's extra (~45 cm plus its spare plug) is folded and tied into its own bundle
   (~50 x 28 x 20 mm) and placed wherever it fits behind the panel; two optional tie-down loops above the ribbon, beside the power socket.
   Bolted to the panel, any push from the bundle is internal (taken by the standoff screws), not on the shell.
-- Ribbon bay: a 2.2 mm pocket behind the S3's IDC plug gives the ribbon's fold ~7 mm instead of 4.7.
+- Ribbon bay: a 1.2 mm pocket behind the S3's IDC plug gives the ribbon's fold ~5.9 mm instead of 4.7.
 - Venting: 45-deg louver bands, inlet along the bottom and outlet along the top (a chimney ~85 mm tall). The slots
   rise going inward, so from eye level or above you see a blade, not the inside. ~1,300 mm2 in, ~1,000 out
   (face area). LOUVERS = False seals it; PILLS = True brings the v2 pills back.
@@ -38,7 +37,7 @@ from case import *
 
 PILLS = False
 GAP3 = 0.0                                   # plate fills the bore (0.2 mm clearance all round); no edge gaps
-PLATE_T3 = 3.0                               # 3 mm plate, grown outward into the back lip (lip 4 -> 3 mm): no cable space lost
+PLATE_T3 = 2.0                               # 2 mm (as v2): bolted to the panel, it doesn't need more; 3 mm cost ~25% more print time
 SKIRT_D, SKIRT_T = 6.0, 2.0                  # inward perimeter skirt: stiffens the edge, bears on the bore all round
 SKIRT_NOTCH = 16.0                           # top skirt cut back around the encoder (x within +/- this)
 LOUVERS = True
@@ -62,7 +61,7 @@ TIE_LOOPS = [(-14.0, 64.0, 82.0), (14.0, 64.0, 82.0)]   # two, above the ribbon 
 STRAP_W, STRAP_H = 14.0, 2.2
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the 3 mm plate
 BAY = (-54.0, -28.0, 20.0, 62.0)           # x0, x1, z0, z1
-SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 11.0, 8.0, 3.0, 4.2
+SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 9.0, 6.4, 3.0, 3.6   # no washer: the M3 button head (Ø5.7) seats on the floor
 FOOT_Y = PANEL_BACK                          # foot face on the panel's insert bosses
 NUT_W, NUT_MOUTH, NUT_H, NUT_FLOAT = 5.7, 5.3, 2.7, 0.6
 NUT_CORNER = 5.5 / math.cos(math.pi / 6) / 2  # 3.175: nut centre to corner (corners point along the slot)
@@ -72,7 +71,7 @@ S3_PILOT, S3_LEAD = 2.4, 0.5
 def standoff(x, z, y0):
     zc = ZC + z
     post = cyl_y(x, zc, FOOT_Y, y0 + 0.01, SO_OD, 48)
-    post = post - cyl_y(x, zc, FOOT_Y + SO_FLOOR, D, SO_BORE, 48)         # tube for the screw, washer and key
+    post = post - cyl_y(x, zc, FOOT_Y + SO_FLOOR, D, SO_BORE, 48)         # tube for the screw head and the key
     post = post - cyl_y(x, zc, FOOT_Y - 1, FOOT_Y + SO_FLOOR + 0.1, SO_HOLE, 32)
     return post
 
@@ -247,8 +246,6 @@ if __name__ == '__main__':
     me = panel_template().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     t.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])); t.apply_translation([0, 0, -t.bounds[0][2]])
     t.export(f'{out}/check-panel-insert-template.stl'); print('template', t.is_watertight, np.round(t.extents, 1).tolist())
-    me = boot_key3().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
-    t.apply_translation(-t.bounds[0]); t.export(f'{out}/bar-boot-key-v3.stl'); print('key', t.is_watertight)
     me = coupon_s3_pilots().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     t.export(f'{out}/coupon-v4-s3-pilots.stl'); print('pilot coupon', t.is_watertight)
     # boss coupon: the plate's bottom-left corner around one boss; screw it through the real shell's floor hole
