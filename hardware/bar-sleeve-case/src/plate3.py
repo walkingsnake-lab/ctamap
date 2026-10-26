@@ -59,7 +59,7 @@ STANDOFFS = [(-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)]   # 4th: 
 # areas (x, z0, z1): a strap threads through a loop (tunnel along z) and round the bundle
 TIE_LOOPS = [(-14.0, 64.0, 82.0), (14.0, 64.0, 82.0)]   # two, above the ribbon beside the power socket
 STRAP_W, STRAP_H = 14.0, 2.2
-# room for the ribbon's fold behind the S3's IDC plug: pocket into the 3 mm plate
+# room for the ribbon's fold behind the S3's IDC plug: pocket into the plate
 BAY = (-54.0, -28.0, 20.0, 62.0)           # x0, x1, z0, z1
 SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 9.0, 6.4, 3.0, 3.6   # no washer: the M3 button head (Ø5.7) seats on the floor
 FOOT_Y = PANEL_BACK                          # foot face on the panel's insert bosses
@@ -221,7 +221,7 @@ def coupon_s3_pilots():
 
 
 def boot_key3():
-    """v2 key, 1 mm longer for the 3 mm plate"""
+    """Boot key for a plate of PLATE_T3 (same as case2.boot_key() at 2 mm)"""
     reach = (D - BACKL + (PLATE_T3 - PLATE_T)) - (PCB_Y0 + 1.6 + 1.9) + 0.6
     rod = Manifold.cube([reach, 1.6, 1.6]).rotate([45, 0, 0]).translate([0, 0, 1.13])
     grip = Manifold.cube([2.0, 10.0, 2.26]).translate([-2.0, -5.0, 0])
