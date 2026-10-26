@@ -213,4 +213,4 @@ First assembly of v2: the plate rocked and sat unevenly, the bottom screws spun,
 - 4th standoff at the panel's bottom-centre insert (+7, -36) so the plate's middle is tied to the panel; bottom louver segments split around it.
 - Ribbon bay: 2.2 mm pocket behind the S3's IDC plug (plug top to plate 4.7 -> 6.9 mm).
 - With the plate bolted to the panel, cable pressure is an internal load between plate and panel (taken by the standoff screws), not a push on the shell.
-- Shell unchanged. A deeper shell (+5-8 mm) is the fallback if the tray proves too tight on the bench; everything is parametric on `D`.
+- Shell unchanged. A deeper shell (+5-8 mm) is the fallback if the cable shelf proves too tight on the bench; everything is parametric on `D`.
