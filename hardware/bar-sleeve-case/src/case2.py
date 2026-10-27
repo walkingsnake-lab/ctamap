@@ -36,6 +36,8 @@ DET_W, DET_DEPTH = 20.0, 0.5
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
 SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open instead of drilling it
+SENSOR_POCKET = True                      # blind Ø2 pocket from inside, 0.8 mm short of the outside: marks the optional sensor
+                                          # hole; drill through from inside only if the sensor is fitted
 GLUED_FRAME = True                        # back-down only: plain sleeve + glued screen_frame(); False = built-in rim (as front-down)
 CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the bezel's plug fills
 SKIN_T = 0.5                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop;
@@ -152,6 +154,8 @@ def shell2():
     # encoder / collar hole: teardrop toward the back
     ztop = H - SKIN_T if SKINS else H + 1          # skin: blind from inside, cut out along the pocket wall (the collar flange hides the edge)
     cuts.append(Manifold.extrude(teardrop_cs(ENC_HOLE / 2, 0, KY, seg=SEG), ztop - (H - WALL - 1)).translate([0, 0, H - WALL - 1]))
+    if SENSOR_POCKET and not SENSOR_PRINTED:       # blind pocket from inside: invisible outside, guides the bit when drilled
+        cuts.append(Manifold.extrude(teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24), WALL - 0.8 + 1).translate([0, 0, H - WALL - 1]))
     if SENSOR_PRINTED:                             # Ø2 light-sensor hole through the top (teardrop toward the print's up)
         cuts.append(Manifold.extrude(teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24), WALL + 2).translate([0, 0, H - WALL - 1]))
     # USB-C: straight-through opening for the plug housing, 0.5 mm chamfer outside;
@@ -351,7 +355,8 @@ def export_backdown(out):
 
 def export_open(out, backdown):
     """Main build (Oct 26): built-in screen rim, the openings printed open (no skins, bezel or glued frame); the cut-out
-    skins and glued rim still banded on wood PLA. The light-sensor hole stays optional: drilled Ø2 through drill_guide().
+    skins and glued rim still banded on wood PLA. The light-sensor hole stays optional: a blind Ø2 pocket from inside,
+    drilled through from inside only if the sensor is fitted.
     Back-down is the main shell; front-down is kept as an alternate."""
     import trimesh
     global SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN
@@ -380,17 +385,7 @@ if __name__ == '__main__':
     os.makedirs(alt, exist_ok=True)
     export_open(out, backdown=True)
     export_open(alt, backdown=False)
-    def guide(path, backdown):                    # sensor drill guide: plug keyed into the knob hole, Ø2 bore over the spot
-        global BACKDOWN
-        saved = BACKDOWN; BACKDOWN = backdown
-        try:
-            me = drill_guide().mirror([0, 0, 1]).to_mesh(); tg = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
-            tg.apply_translation([0, 0, -tg.bounds[0][2]]); tg.export(path); print(path.split('/')[-1], tg.is_watertight)
-        finally:
-            BACKDOWN = saved
-    guide(f'{out}/bar-sensor-drill-guide-backdown.stl', True)
-    guide(f'{alt}/bar-sensor-drill-guide.stl', False)
     k = boot_key(); me = k.to_mesh(); tk = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     tk.apply_translation(-tk.bounds[0]); tk.export(f'{out}/bar-boot-key.stl'); print('key', tk.is_watertight, np.round(tk.extents, 1).tolist())
-    # export_backdown() and port_bezel() still make the skinned back-down shell, glued frame, glue guide, drill guide and
+    # drill_guide(), export_backdown() and port_bezel() still make the drill guide, skinned back-down shell, glued frame, glue guide and
     # USB-C bezel (GLUED_FRAME/SKINS = True); they are no longer part of the build set
