@@ -350,12 +350,13 @@ def export_backdown(out):
 
 
 def export_open(out, backdown):
-    """Main build (Oct 26): built-in screen rim, every opening printed open (no skins, bezel or glued frame); the cut-out
-    skins and glued rim still banded on wood PLA. Back-down is the main shell; front-down is kept as an alternate."""
+    """Main build (Oct 26): built-in screen rim, the openings printed open (no skins, bezel or glued frame); the cut-out
+    skins and glued rim still banded on wood PLA. The light-sensor hole stays optional: drilled Ø2 through drill_guide().
+    Back-down is the main shell; front-down is kept as an alternate."""
     import trimesh
     global SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN
     saved = SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN
-    SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN = False, False, True, False, backdown
+    SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN = False, False, False, False, backdown   # sensor hole: drilled, optional
     try:
         m = shell2()
         if backdown:
@@ -379,6 +380,16 @@ if __name__ == '__main__':
     os.makedirs(alt, exist_ok=True)
     export_open(out, backdown=True)
     export_open(alt, backdown=False)
+    def guide(path, backdown):                    # sensor drill guide: plug keyed into the knob hole, Ø2 bore over the spot
+        global BACKDOWN
+        saved = BACKDOWN; BACKDOWN = backdown
+        try:
+            me = drill_guide().mirror([0, 0, 1]).to_mesh(); tg = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
+            tg.apply_translation([0, 0, -tg.bounds[0][2]]); tg.export(path); print(path.split('/')[-1], tg.is_watertight)
+        finally:
+            BACKDOWN = saved
+    guide(f'{out}/bar-sensor-drill-guide-backdown.stl', True)
+    guide(f'{alt}/bar-sensor-drill-guide.stl', False)
     k = boot_key(); me = k.to_mesh(); tk = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     tk.apply_translation(-tk.bounds[0]); tk.export(f'{out}/bar-boot-key.stl'); print('key', tk.is_watertight, np.round(tk.extents, 1).tolist())
     # export_backdown() and port_bezel() still make the skinned back-down shell, glued frame, glue guide, drill guide and

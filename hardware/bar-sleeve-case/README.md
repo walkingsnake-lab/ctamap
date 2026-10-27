@@ -5,7 +5,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 ## Fixed decisions
 - Slanted hood (12 mm lip at the top, 3 mm at the bottom): non-negotiable.
 - Shell in Bambu PLA Wood (walnut), printed back-down, front lapped flat afterwards (the sloped front prints as a fine staircase). The screen rim is part of the shell: two 45° slopes, no supports, no glued frame.
-- Openings print open: knob hole, USB-C, four screw holes and the Ø2 light-sensor hole. They cause small bands in wood PLA; the cut-out skins and glued frame tried before banded too, so the simpler build won.
+- Openings print open: knob hole, USB-C and the four screw holes. The light-sensor hole is optional: drilled Ø2 through the drill guide. They cause small bands in wood PLA; the cut-out skins and glued frame tried before banded too, so the simpler build won.
 - No grilles in the shell. The back plate (v3) is a tray that fills the bore, with one louver band along its bottom (inlet) and one along its top (outlet), slots in a regular symmetric pattern rising 45° inward, so nothing inside shows from eye level or above. Typical draw ~2-5 W; check with the S3's chip-temperature log.
 - The S3 mounts on the back plate, so its USB-C, status-light tube and Boot tube line up by construction. USB-C opening sized for the largest spec plug housing (13.65 x 8.0 with a 0.5 mm chamfer), so any compliant cable seats.
 
@@ -20,12 +20,13 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Encoder collar | `bar-encoder-collar-backdown.stl` | walnut, or translucent PETG for the glow | flange-top down |
 | Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots under the skirt), then `bar-knob.stl` (the middle size) or the winner. Pebble, Ø30 x 12.7, grip flutes round the side, rounded shoulder, domed top | white PLA, or any | as exported (upright, skirt on the bed), no supports |
 | Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
+| Sensor drill guide (optional) | `bar-sensor-drill-guide-backdown.stl` (keys into the knob hole; Ø2 bore over the spot) | any PLA | as exported |
 | Sensor bracket (optional) | `bar-sensor-bracket.stl` (VEML7700 under the Ø2 hole, hung from the encoder board) | PETG or PLA | as exported, flat side down |
 | Tilt plinth (optional) | `bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 | Coupons | `coupon-v4-plate-boss.stl`, `coupon-v4-s3-pilots.stl` | as the parts | as exported |
 - Optional light sensor: Adafruit VEML7700 (4162, flat), 10 cm STEMMA QT cable, 2 x M2.5 x 8 + 2 M2.5 nuts, 2-4 x M2.5 x 6. Firmware support (brightness from the sensor) is a separate change.
 - Hardware: 4 x M3 x 10 + 4 M3 nuts (plate to shell, from below), 4 x M3 x 8 (plate to the panel's inserts, no washers), 4 x M2.5 x 8 (S3 to plate posts, self-tapping into a Ø2.4 pilot), the encoder's M7 nut, 4 x SJ5312 bumpers (+4 for the plinth), 1-2 hook-and-loop cable ties ~12 mm wide (power-cable bundle). Metric hex keys: 1.5 mm (M2.5) and 2 mm (M3; its long arm must reach ~34 mm down the standoff tubes).
-- Alternate (`stl/alternate-frontdown/`): the same shell printed front-down (front rim flat on the bed, no lapping; layer lines lean 4.7°) with its collar. `case2.py` can still make the skinned shell, glued frame, glue guide, drill guide and USB-C bezel (`GLUED_FRAME`, `SKINS`).
+- Alternate (`stl/alternate-frontdown/`): the same shell printed front-down (front rim flat on the bed, no lapping; layer lines lean 4.7°) with its collar and drill guide. `case2.py` can still make the skinned shell, glued frame, glue guide, drill guide and USB-C bezel (`GLUED_FRAME`, `SKINS`).
 
 ## Print settings
 - Shell:
@@ -38,7 +39,8 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 - Collar in translucent PETG: 100% infill. Small parts (key, rod): print beside a larger part.
 
 ## Finishing the shell
-1. Clean up the openings: deburr the knob hole, USB-C opening, screw holes and sensor hole (a deburring tool, or a 2 mm bit by hand for the sensor hole).
+1. Clean up the openings: deburr the knob hole, USB-C opening and screw holes.
+   - Optional light sensor: drill Ø2 (a 2 mm or 5/64" bit) through the drill guide, keyed in the knob hole, before fitting the collar. Slowly; wood PLA melts if the bit runs fast.
 2. Lap the front flat on 220, then 400, paper taped to glass, in figure-eights. Deburr the edges.
 3. Scrape the seam, sand along it with a flexible pad, and feather.
 4. Scuff the outside evenly (grey Scotch-Brite or 400 wet), then finish with Danish oil or wax. Mask the bore, knob hole, USB-C opening, tongue grooves and foot recesses first. Lay oily rags flat to dry.
@@ -63,7 +65,7 @@ The panel can't slide past a mounted encoder (its top edge is ~4 mm above the en
 - S3 from Adafruit's board file, component side facing the plate, board edge 2 mm inside the left wall (x -104):
   - USB-C at z = ZC (55.15), y 40.9; Down/Up/Reset at ZC -10.3 / -20.1 / -29.9.
   - Status LED at (-91.8, ZC-32.8); Boot at (-89.4, ZC-20.3); M2.5 holes at x -96.38 / -55.74, z ZC-7.62 / ZC-27.31.
-- Knob hole Ø24 teardrop (tip to the front) at x 0, y 41.9; light-sensor hole Ø2 at x +55, y 42.
+- Knob hole Ø24 teardrop (tip to the front) at x 0, y 41.9; light-sensor hole Ø2 at x +55, y 42 (drilled, optional).
 - Firmware: PR #431 logs the chip temperature once a minute (optional now).
 
 ## CAD sources (`src/`)
