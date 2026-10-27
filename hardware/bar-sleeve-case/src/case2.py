@@ -35,7 +35,8 @@ DETENT = True                             # v4: top snap (dimples in the tongue 
 DET_W, DET_DEPTH = 20.0, 0.5
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
-SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open (front-down build) instead of drilling it
+SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open instead of drilling it
+GLUED_FRAME = True                        # back-down only: plain sleeve + glued screen_frame(); False = built-in rim (as front-down)
 CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the bezel's plug fills
 SKIN_T = 0.5                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop;
                                           # just over one 0.4-nozzle line (~0.42): at 0.4 the slicer dropped it
@@ -130,10 +131,11 @@ def slot_z(x, y0, y1, z0, z1):
 def shell2():
     s = outer_body() - inner_front_chamfer()
     bore_cs = rr_cs(BORE_HX, BORE_HZ, BORE_R)
-    if BACKDOWN:                                   # plain sleeve; the screen rim is screen_frame(), glued in
+    if BACKDOWN:
         s = s - inner_back_chamfer()
+    if BACKDOWN and GLUED_FRAME:                   # plain sleeve; the screen rim is screen_frame(), glued in
         cuts = [prism_y(bore_cs, -50, D + 1)]
-    else:
+    else:                                          # built-in rim: two 45-deg slopes, prints either way up without supports
         lo = rr_cs(BORE_HX - RIM_IN, BORE_HZ - RIM_IN, BORE_R - RIM_IN)
         y_a, y_b = RIM_PEAK - RIM_IN, RIM_PEAK + RIM_IN
         cuts = [prism_y(bore_cs, -50, y_a),
@@ -347,33 +349,37 @@ def export_backdown(out):
         BACKDOWN = False
 
 
-def export_frontdown(out):
-    """Main build (Oct 26): front-down, built-in screen rim, every opening printed open (no skins, no bezel, no glued
-    frame). The cut-out skins and the glued rim still banded on wood PLA, so they were dropped."""
-    global SKINS, SKIN_USB, SENSOR_PRINTED
-    saved = SKINS, SKIN_USB, SENSOR_PRINTED
-    SKINS, SKIN_USB, SENSOR_PRINTED = False, False, True
+def export_open(out, backdown):
+    """Main build (Oct 26): built-in screen rim, every opening printed open (no skins, bezel or glued frame); the cut-out
+    skins and glued rim still banded on wood PLA. Back-down is the main shell; front-down is kept as an alternate."""
+    import trimesh
+    global SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN
+    saved = SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN
+    SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN = False, False, True, False, backdown
     try:
-        t = to_print(shell2())
+        m = shell2()
+        if backdown:
+            me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
+            t.apply_transform(trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0]))   # y = D on the bed
+            name = 'bar-shell-v4-walnut-backdown.stl'
+        else:
+            t = to_print(m)
+            name = 'bar-shell-v4-walnut-frontdown.stl'
         t.apply_translation([0, 0, -t.bounds[0][2]])
-        t.export(f'{out}/bar-shell-v4-walnut-frontdown.stl')
-        print('bar-shell-v4-walnut-frontdown.stl', t.is_watertight, np.round(t.extents, 1).tolist(), 'vol cm3', round(t.volume / 1000, 1))
+        t.export(f'{out}/{name}')
+        print(name, t.is_watertight, np.round(t.extents, 1).tolist(), 'vol cm3', round(t.volume / 1000, 1))
     finally:
-        SKINS, SKIN_USB, SENSOR_PRINTED = saved
+        SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN = saved
 
 
 if __name__ == '__main__':
     import os, trimesh
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    alt = f'{out}/alternate-backdown'
+    alt = f'{out}/alternate-frontdown'
     os.makedirs(alt, exist_ok=True)
-    export_frontdown(out)
+    export_open(out, backdown=True)
+    export_open(alt, backdown=False)
     k = boot_key(); me = k.to_mesh(); tk = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     tk.apply_translation(-tk.bounds[0]); tk.export(f'{out}/bar-boot-key.stl'); print('key', tk.is_watertight, np.round(tk.extents, 1).tolist())
-    # alternate: back-down shell (skins cut out after printing), glued screen frame and guide, drill guide, USB bezel
-    export_backdown(alt)
-    b = port_bezel()
-    me = b.to_mesh(); tb = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
-    tb.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, [0, 1, 0]))   # -x (outer face) -> -z (bed)
-    tb.apply_translation(-tb.bounds[0]); tb.export(f'{alt}/bar-usb-bezel.stl')
-    print('bezel watertight', tb.is_watertight, 'size', np.round(tb.extents, 2).tolist())
+    # export_backdown() and port_bezel() still make the skinned back-down shell, glued frame, glue guide, drill guide and
+    # USB-C bezel (GLUED_FRAME/SKINS = True); they are no longer part of the build set
