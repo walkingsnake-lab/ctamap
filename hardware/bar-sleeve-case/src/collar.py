@@ -64,6 +64,7 @@ if __name__ == '__main__':
     t = export(collar(), f'{out}/bar-encoder-collar.stl')
     print('collar (front-down shell) watertight', t.is_watertight)
     TIP_BACK = False
-    t = export(collar(), f'{out}/bar-encoder-collar-backdown.stl')
+    import os; os.makedirs(f'{out}/alternate-backdown', exist_ok=True)
+    t = export(collar(), f'{out}/alternate-backdown/bar-encoder-collar-backdown.stl')
     print('collar (back-down shell) watertight', t.is_watertight)
     TIP_BACK = True
