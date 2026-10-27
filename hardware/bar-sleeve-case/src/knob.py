@@ -1,14 +1,14 @@
-"""Knob for the 5880 encoder on the bar sleeve case. Main style (Oct 26): a floating disc, Ø36, softly domed on top with
-fine grip ridges round its edge, on a Ø18 hub that comes down over the encoder's nut to 1 mm above the collar. The
-earlier reeded coin (Ø27, flat top) is still here as coin(). Dimensions from Adafruit's CAD model of the 5880 (EC11-style): the body clamps up against the
+"""Knob for the 5880 encoder on the bar sleeve case. Main style (Oct 26): a pebble, Ø30 x 12.7, smooth sides, a big
+rounded shoulder blending (tangent) into a gently domed top, with its skirt down over the encoder's nut to 1 mm above
+the collar. Also here: disc() (floating Ø36 disc with grip ridges) and coin() (reeded Ø27 coin, flat top). Dimensions from Adafruit's CAD model of the 5880 (EC11-style): the body clamps up against the
 collar's deck, so, measured from the case top: deck top +1.6, M7 nut (~2 mm, plus an optional washer) to ~+4.1,
 bushing top +6.0, 6 mm shaft round to +7.2, then a D-flat 1.55 mm from the axis to the tip at +13.7.
 - The knob seats when its bore's ceiling meets the shaft tip, which puts the skirt 1 mm above the collar (the push
   switch travels ~0.5 mm, so a press never bottoms the skirt on the collar).
 - Fit set: three knobs with the bore 0.1 mm apart (Ø6.05 / 6.15 / 6.25, flat 1.50 / 1.55 / 1.60); one, two or three dots
   on the skirt's underside mark them. Keep the one that pushes on snugly and doesn't wobble.
-- The disc prints upright (hub on the bed) with supports under the disc only (that face looks down at the case);
-  the coin prints top face down, no supports.
+- The pebble prints upright (skirt on the bed) with no supports: the cavity ceilings are 45° cones, so nothing bridges
+  except the Ø6 bore top. The disc prints upright with supports under the disc; the coin prints top face down.
 Knob coordinates: axis at the origin, z from the case top up. Run: python3 knob.py <outdir>
 """
 import math, sys
@@ -72,7 +72,7 @@ def _arc(cx, cz, r, a0, a1, n=8):
     return [(cx + r * math.cos(math.radians(a0 + (a1 - a0) * i / n)), cz + r * math.sin(math.radians(a0 + (a1 - a0) * i / n))) for i in range(n + 1)]
 
 
-def knob(bore_d=6.15, flat=1.55, marks=2):
+def disc(bore_d=6.15, flat=1.55, marks=2):
     """floating disc: dome on top, rim rounds, grip ridges on the edge, hub over the nut"""
     top = TIP_Z + TOP_T
     rr = DISC_R - 1.5
@@ -96,8 +96,45 @@ def knob(bore_d=6.15, flat=1.55, marks=2):
     return k
 
 
+PEB_R, SHOULDER_R, SHOULDER_END = 15.0, 5.0, 75.0      # radius, shoulder round, where the shoulder hands over to the dome (deg)
+
+
+def pebble_cuts(bore_d, flat, z_from):
+    """as bore_cuts, but every ceiling a 45° cone so it prints upright without bridging (the D starts at +8.5, still
+    5 mm of flat engagement; the shaft's flat starts at +7.2)"""
+    br = bore_d / 2
+    nut_cone = Manifold.cylinder(NUT_R - BUSH_R, NUT_R, BUSH_R, SEG).translate([0, 0, NUT_TOP])
+    bush_top = NUT_TOP + (NUT_R - BUSH_R)
+    bush_cone = Manifold.cylinder(BUSH_R - br, BUSH_R, br, 64).translate([0, 0, bush_top])
+    d0 = bush_top + (BUSH_R - br)
+    c = cyl(NUT_R, z_from, NUT_TOP + 0.01) + nut_cone + cyl(BUSH_R, z_from, bush_top + 0.01) + bush_cone + cyl(br, z_from, d0 + 0.01, seg=48)
+    dcs = CrossSection.circle(br, 48) ^ CrossSection.square([2 * br + 2, br + flat + 1]).translate([-br - 1, -br - 1])
+    c = c + Manifold.extrude(dcs, TIP_Z - d0).translate([0, 0, d0])
+    return c
+
+
+def knob(bore_d=6.15, flat=1.55, marks=2):
+    """pebble: smooth side, shoulder round handing over tangentially to a shallow dome"""
+    top = TIP_Z + TOP_T
+    a = math.radians(SHOULDER_END)
+    r_e = PEB_R - SHOULDER_R + SHOULDER_R * math.cos(a)
+    k = (1 / math.tan(a)) / (2 * r_e)                       # dome z = top - k r^2, slope matched to the shoulder
+    zc = top - k * r_e ** 2 - SHOULDER_R * math.sin(a)      # shoulder centre height
+    dome = [(r, top - k * r * r) for r in np.linspace(0, r_e, 16)]
+    prof = [(0, SKIRT_Z), (PEB_R - 1.0, SKIRT_Z)] + _arc(PEB_R - 1.0, SKIRT_Z + 1.0, 1.0, -90, 0, 6) \
+        + _arc(PEB_R - SHOULDER_R, zc, SHOULDER_R, 0, SHOULDER_END, 14) + dome[::-1][1:]
+    cs = CrossSection([prof])
+    if cs.area() <= 0:
+        cs = CrossSection([prof[::-1]])
+    m = Manifold.revolve(cs, 192) - pebble_cuts(bore_d, flat, SKIRT_Z - 1)
+    for j in range(marks):                                                    # fit marks under the skirt
+        ang = math.radians(90 + (j - (marks - 1) / 2) * 14)
+        m = m - Manifold.sphere(0.5, 16).translate([(PEB_R - 3.0) * math.cos(ang), (PEB_R - 3.0) * math.sin(ang), SKIRT_Z])
+    return m
+
+
 def to_bed(m):
-    """upright: hub on the bed"""
+    """upright: skirt (or hub) on the bed"""
     return m.translate([0, 0, -SKIRT_Z])
 
 
@@ -109,7 +146,7 @@ def to_bed_coin(m):
 if __name__ == '__main__':
     import trimesh
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    parts = [to_bed(knob(d, f, i + 1)).translate([i * (2 * DISC_R + 6), 0, 0]) for i, (d, f) in enumerate(FITS)]
+    parts = [to_bed(knob(d, f, i + 1)).translate([i * (2 * PEB_R + 6), 0, 0]) for i, (d, f) in enumerate(FITS)]
     def save(m, name):
         me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
         t.export(f'{out}/{name}'); print(name, t.is_watertight, np.round(t.extents, 1).tolist())
