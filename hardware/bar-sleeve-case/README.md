@@ -18,7 +18,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Status-light rod | `bar-status-rod-translucent.stl` (flush head, shaft down the light tube to 0.8 mm above the LED) | translucent PETG, 100% infill | head down |
 | Insert check (print first) | `check-panel-insert-template.stl` | any PLA | as exported; that face goes on the panel |
 | Encoder collar | `bar-encoder-collar-backdown.stl` | walnut, or translucent PETG for the glow | flange-top down |
-| Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots underneath), then `bar-knob.stl` (the middle size) or the winner | white PLA, or any | as exported (top face down), no supports |
+| Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots under the hub), then `bar-knob.stl` (the middle size) or the winner. Floating disc, Ø36, domed top, grip ridges | white PLA, or any | as exported (upright, hub on the bed); supports under the disc only (tree, build plate only) |
 | Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
 | Sensor bracket (optional) | `bar-sensor-bracket.stl` (VEML7700 under the Ø2 hole, hung from the encoder board) | PETG or PLA | as exported, flat side down |
 | Tilt plinth (optional) | `bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
