@@ -1,5 +1,5 @@
-"""Knob for the 5880 encoder on the bar sleeve case. Main style (Oct 26): a pebble, Ø30 x 12.7, smooth sides, a big
-rounded shoulder blending (tangent) into a gently domed top, with its skirt down over the encoder's nut to 1 mm above
+"""Knob for the 5880 encoder on the bar sleeve case. Main style (Oct 26): a pebble, Ø30 x 12.7, 40 grip flutes round the side
+band, a big rounded shoulder blending (tangent) into a gently domed top, with its skirt down over the encoder's nut to 1 mm above
 the collar. Also here: disc() (floating Ø36 disc with grip ridges) and coin() (reeded Ø27 coin, flat top). Dimensions from Adafruit's CAD model of the 5880 (EC11-style): the body clamps up against the
 collar's deck, so, measured from the case top: deck top +1.6, M7 nut (~2 mm, plus an optional washer) to ~+4.1,
 bushing top +6.0, 6 mm shaft round to +7.2, then a D-flat 1.55 mm from the axis to the tip at +13.7.
@@ -97,6 +97,7 @@ def disc(bore_d=6.15, flat=1.55, marks=2):
 
 
 PEB_R, SHOULDER_R, SHOULDER_END = 15.0, 5.0, 75.0      # radius, shoulder round, where the shoulder hands over to the dome (deg)
+FLUTES, FLUTE_R, FLUTE_D = 40, 1.0, 0.6                # grip flutes on the side band, below the shoulder (says "turn me")
 
 
 def pebble_cuts(bore_d, flat, z_from):
@@ -127,6 +128,11 @@ def knob(bore_d=6.15, flat=1.55, marks=2):
     if cs.area() <= 0:
         cs = CrossSection([prof[::-1]])
     m = Manifold.revolve(cs, 192) - pebble_cuts(bore_d, flat, SKIRT_Z - 1)
+    z_lo, z_hi = SKIRT_Z + 1.2, zc - 0.2                    # straight side band, between the base round and the shoulder
+    flutes = [Manifold.cylinder(z_hi - z_lo, FLUTE_R, FLUTE_R, 16)
+              .translate([(PEB_R + FLUTE_R - FLUTE_D) * math.cos(2 * math.pi * i / FLUTES), (PEB_R + FLUTE_R - FLUTE_D) * math.sin(2 * math.pi * i / FLUTES), z_lo])
+              for i in range(FLUTES)]
+    m = m - Manifold.batch_boolean(flutes, manifold3d.OpType.Add)
     for j in range(marks):                                                    # fit marks under the skirt
         ang = math.radians(90 + (j - (marks - 1) / 2) * 14)
         m = m - Manifold.sphere(0.5, 16).translate([(PEB_R - 3.0) * math.cos(ang), (PEB_R - 3.0) * math.sin(ang), SKIRT_Z])
