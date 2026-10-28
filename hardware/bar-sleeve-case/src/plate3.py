@@ -98,14 +98,14 @@ KH_ENTRY, KH_SLOT, KH_TRAVEL = 8.0, 4.2, 6.0
 KH_POCKET_R = KH_ENTRY / 2 + 0.75                 # 4.75: pocket half width and end radius
 KH_WALL, KH_POCKET_D, KH_BUMP_D = 1.5, 4.5, 6.0
 # wall stand-off: the keyhole screws hold the top 2 mm off the wall (heads set 8 mm out). At the bottom, a printed spacer
-# disc glued into a shallow recess on the outer face (the bed side) carries the same round bumper as the case feet
-# (0.5 in x 0.15 in: 12.7 x 3.81 mm), so the bottom stands out 2 mm too. The gap around the rim is the inlet (bottom)
-# and outlet (top) on a wall.
+# disc glued flat on the outer face (the bed side), inside a thin circle outline that marks its spot, carries the same round
+# bumper as the case feet (0.5 in x 0.15 in: 12.7 x 3.81 mm), so the bottom stands out 2 mm too. The gap around the rim is
+# the inlet (bottom) and outlet (top) on a wall.
 WB_X, WB_Z = 46.0, WALL + 7.0                     # x +/-46 (solid plate between the bottom louvers and bosses), z 9.5
 WB_GAP, WB_PAD_H = 2.0, 0.15 * 25.4               # wall gap; bumper height
-WB_RECESS_D, WB_RECESS_T = 13.4, 0.4              # locating recess for the spacer
+WB_RING_D, WB_RING_W, WB_RING_T = 13.4, 0.6, 0.4  # circle outline: inner diameter (the spacer sits inside it), width, depth
 WB_SPACER_D = 13.0
-WB_SPACER_T = BACKL + WB_GAP - WB_PAD_H + WB_RECESS_T   # 2.59: 2.19 stands proud of the plate
+WB_SPACER_T = BACKL + WB_GAP - WB_PAD_H           # 2.19, glued flat on the plate
 ROD_D, ROD_HEAD_D, ROD_HEAD_T = 4.3, 5.8, 0.6   # status-light rod (translucent PETG): shaft in the Ø4.5 tube, flush head
 ROD_GAP = 0.8                                    # rod tip above the LED's top (LED ~0.9 mm tall on the component face)
 
@@ -295,8 +295,9 @@ def back_plate3(window=True):
         kh = CrossSection.circle(KH_ENTRY / 2, 48).translate([x, KEY_Z]) + CrossSection.square([KH_SLOT, KH_TRAVEL]).translate([x - KH_SLOT / 2, KEY_Z])
         cuts.append(prism_y(kh, y0 - 1, y1 + 1))
     cuts.append(box(bx0 + TIE_WALL, bx1 - TIE_WALL, y0 - STRAP_H, y0 + 0.02, bz0 - 1, bz1 + 1))   # tie-down bridge gap
-    for sx in (-1, 1):                                                   # wall-spacer recesses (outer face)
-        cuts.append(cyl_y(sx * WB_X, WB_Z, y1 - WB_RECESS_T, y1 + 1, WB_RECESS_D, 64))
+    for sx in (-1, 1):                                                   # wall-spacer circle outlines (outer face)
+        cuts.append(cyl_y(sx * WB_X, WB_Z, y1 - WB_RING_T, y1 + 1, WB_RING_D + 2 * WB_RING_W, 64)
+                    - cyl_y(sx * WB_X, WB_Z, y1 - WB_RING_T - 1, y1 + 2, WB_RING_D, 64))
     if BAY:                                                              # ribbon bay behind the S3's plug (v3 only)
         bx0_, bx1_, bz0_, bz1_ = BAY
         cuts.append(box(bx0_, bx1_, y0 - 1, y1 - 0.8, bz0_, bz1_))
