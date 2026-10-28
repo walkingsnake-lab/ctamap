@@ -24,6 +24,7 @@ import numpy as np
 import manifold3d
 from manifold3d import Manifold, CrossSection
 from case import *          # parameters and helpers from v1
+import panel
 
 K = (LT - LB) / H                         # front slope: y_front(z) = K * (H - z)
 CH_F = 0.45                               # front rim chamfers (leaves ~1.6 mm of rim on the bed)
@@ -199,7 +200,22 @@ def shell2():
 
 GAP = 2.5                                  # chimney gaps between the back plate and the shell, top and bottom
 PILL_Z0, PILL_Z1 = ZC - 35.0, ZC + 20.0     # taller pills; tops stay below the keyhole cups (ZC + 23)
-PILL_XS = [(i - 5) * 9.0 for i in range(11)]  # 11 pills (the outer pair would sit under the S3's posts)
+PILL_R, PILL_STEP = 2.2, 9.0
+_PILL_LIM = -max(hx for hx, _ in S3_HOLES) - 5.7              # stay 1 mm clear of the S3's post-and-rib frame
+PILL_XS = [k * PILL_STEP for k in range(-20, 21) if abs(k * PILL_STEP) <= _PILL_LIM]   # P3: 11 pills, -45..45
+
+
+def pill_span(x):
+    """z range of the pill at x: PILL_Z0..PILL_Z1, shortened to keep 2 mm clear of any v2 hold-down post it lines up
+    with (P3: none do)"""
+    z0, z1 = PILL_Z0, PILL_Z1
+    for px, pz in POSTS:
+        if abs(px - x) < POST_D / 2 + PILL_R + 1.0:
+            if pz < ZC:
+                z0 = max(z0, pz + POST_D / 2 + 2.0)
+            else:
+                z1 = min(z1, pz - POST_D / 2 - 2.0)
+    return z0, z1
 
 
 def back_plate2(window=True):
@@ -217,8 +233,8 @@ def back_plate2(window=True):
         b = b - cyl_z(x, SCREW_Y, WALL - 1, WALL + 13, 3.3, 32)              # the plate's edge stands on the bed, no overhang
         b = b - box(x - 2.9, x + 2.9, SCREW_Y - 6, SCREW_Y + 3.0, WALL + 4.0, WALL + 6.7)
         p = p + b
-    for px, pz in ((-75, ZC + 43), (75, ZC + 43), (-60, ZC - 43), (60, ZC - 43)):
-        p = p + cyl_y(px, pz, PANEL_BACK + 0.5, y0 + 0.01, 8.0, 48)
+    for px, pz in POSTS:
+        p = p + cyl_y(px, pz, PANEL_BACK + 0.5, y0 + 0.01, POST_D, 48)
     for sx in (-1, 1):
         x = sx * KEY_X
         p = p + box(x - 7, x + 7, y0 - 6, y0 + 0.01, KEY_Z - 7, KEY_Z + 15)
@@ -227,7 +243,8 @@ def back_plate2(window=True):
         p = p - prism_y(kh, y0 - 1, y1 + 1)
     vents = []
     for x in PILL_XS:
-        st = CrossSection.square([0.01, (PILL_Z1 - PILL_Z0) - 4.4], center=True).offset(2.2, JT, circular_segments=SEG).translate([x, (PILL_Z0 + PILL_Z1) / 2])
+        z0, z1 = pill_span(x)
+        st = CrossSection.square([0.01, (z1 - z0) - 2 * PILL_R], center=True).offset(PILL_R, JT, circular_segments=SEG).translate([x, (z0 + z1) / 2])
         vents.append(prism_y(st, y0 - 1, y1 + 1))
     p = p - Manifold.batch_boolean(vents, ADD)
     tube_end = PCB_Y0 + 1.6 + 1.5
@@ -255,7 +272,7 @@ def back_plate2(window=True):
     p = p - Manifold.cylinder(1.0, 1.3, 2.4, 32).rotate([-90, 0, 0]).translate([S3_BOOT_X, y1 - 1.0 + 0.001, S3_BOOT_Z])
     # ribbon hooks: two pairs on the bars between pills; the 20.3 mm ribbon runs flat along the plate at about ZC - 5
     RZ, RW = ZC - 5.0, 20.3
-    for hx in (-22.5, 22.5):
+    for hx in panel.P['hooks']:
         for side in (-1, 1):
             zp = RZ + side * (RW / 2 + 1.5)
             p = p + box(hx - 2, hx + 2, y0 - 4.5, y0 + 0.01, zp - 1.0, zp + 1.0)

@@ -73,6 +73,7 @@ Parametric Python (manifold3d + trimesh); every STL in `stl/` is generated from 
 
 | Script | Makes |
 |---|---|
+| `panel.py` | Panel profiles (`PANEL=p3` default, `PANEL=p25`): outline, thickness, LED pitch and diffuser rib, panel inserts and plate standoffs, ribbon hooks, tie-down bridge. Everything panel-sized derives from it |
 | `case.py` | Shared parameters and helpers (v1 shell and plate, kept as the base) |
 | `case2.py` | Shell v4 back-down (main) and front-down (alternate), both with the built-in rim and open holes; Boot key; the older skinned shell, glued frame, glue guide, drill guide and USB-C bezel behind flags |
 | `plate3.py` | Back plate v3 (bolted to the panel), status-light rod, insert template, boss and S3-pilot coupons |
@@ -95,6 +96,18 @@ python3 diffuser.py ../stl/bar-diffuser-white-grid15.stl
 python3 plinth.py ../stl 8
 python3 layerscan.py ../stl/bar-shell-v4-walnut-backdown.stl /tmp/scan.npy
 ```
+
+### Other panels
+Set `PANEL` to build for another profile; with no `PANEL` the P3 STLs are unchanged.
+
+```bash
+PANEL=p25 python3 case2.py ../stl-p25   # and the same for every other script above
+```
+
+- **P2.5** (Waveshare RGB-Matrix-P2.5-64x32, 160 x 80): case 185 x 94.3 x 69. Same S3, knob, USB-C, depth and screws. The S3 covers more of the smaller plate, so the bottom louver rows behind its posts are dropped (one row left there), the left ribbon hook moves to x -13.5 and the tie-down bridge narrows and drops 4 mm.
+- **Not measured yet:** P2.5 thickness (14.5 assumed), insert positions (the P3 layout kept at the same distances from the panel edges), PI IN and power socket positions. Print `check-panel-insert-template.stl` from the P2.5 build on the real panel and correct `inserts` / `standoffs` in `panel.py` before printing the plate.
+- P2.5 diffuser ribs are 0.45 mm: two lines from a 0.2 mm nozzle; too thin for a 0.4.
+- **P4** (256 x 128) has no profile: the case (~277 mm) and diffuser (~275 mm) exceed the X2D's 256 mm bed, so it needs split parts first (Enclosure Notes, "P4 approach").
 
 `hardware/` is in `.dockerignore`, so none of this ships to Fly.
 

@@ -1,4 +1,4 @@
-"""One-piece white diffuser for the bar sleeve case (Waveshare P3 64x32, 192 x 96 mm).
+"""One-piece white diffuser for the bar sleeve case (panel profile from panel.py: P3 default, PANEL=p25).
 Same face/grid/skirt as the grid15 diffuser that fit (0.2 mm face, 1.5 mm grid, skirts on
 all four sides with 0.15 mm clearance, 0.2 mm snap bumps on left/right/bottom); the flange
 is a rounded rectangle that fills the case opening (fits the bore with 0.3 mm all round).
@@ -7,15 +7,16 @@ import sys
 import manifold3d
 import numpy as np
 from manifold3d import Manifold, CrossSection
+import panel
 
-PW, PH = 192.0, 96.0
+PW, PH = panel.P['w'], panel.P['h']
 SKIN = float(sys.argv[2]) if len(sys.argv) > 2 else 0.2   # face skin (0.2 white; 0.3 for translucent grey)
 GRID_H = 1.5                        # grid behind the skin
 SK_T, SK_D, CLR, BUMP = 1.2, 3.0, 0.15, 0.2
 FT = 1.2                            # flange thickness
-PITCH, RIB = 3.0, 0.6
+PITCH, RIB = panel.P['pitch'], panel.P['rib']
 OUT = CLR + SK_T                    # skirt outline past the panel edge (1.35)
-BORE_HX, BORE_HZ, BORE_R = 106.0, 52.65, 11.5   # case opening (bore) half sizes and corner radius
+BORE_HX, BORE_HZ, BORE_R = panel.BORE_HX, panel.BORE_HZ, panel.BORE_R   # case opening (bore) half sizes and corner radius
 FL_HX, FL_HZ, FL_R = BORE_HX - 0.3, BORE_HZ - 0.3, BORE_R - 0.3      # flange back edge: 0.3 mm clear of the bore
 BEV = 0.6                                        # flange front edge 0.6 mm smaller: clears the ledge chamfer, seats on its flat
 
@@ -65,10 +66,10 @@ def diffuser(grid=True):
         d = d + (b ^ box(xc - 3, xc + 3, -hy - CLR, -hy - CLR + BUMP, 0, 20))
     if grid:
         ribs = []
-        for i in range(1, 64):
+        for i in range(1, panel.COLS):
             x = -hx + i * PITCH
             ribs.append(box(x - RIB / 2, x + RIB / 2, -hy + 0.29, hy - 0.29, zg0, zg1))
-        for j in range(1, 32):
+        for j in range(1, panel.ROWS):
             y = -hy + j * PITCH
             ribs.append(box(-hx + 0.29, hx - 0.29, y - RIB / 2, y + RIB / 2, zg0, zg1))
         d = d + Manifold.batch_boolean(ribs, manifold3d.OpType.Add)

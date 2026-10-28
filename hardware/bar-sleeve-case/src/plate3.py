@@ -38,6 +38,7 @@ import numpy as np
 from manifold3d import Manifold, CrossSection
 import case2 as V
 from case import *
+import panel
 
 PILLS = False
 GAP3 = 0.0                                   # plate fills the bore (0.2 mm clearance all round); no edge gaps
@@ -51,19 +52,20 @@ LV_CH = 1.5                                  # 45-deg chamfer on the bands' inne
 # one continuous band along the bottom (inlet) and one along the top (outlet), each with three rows of slots in a regular,
 # left-right symmetric pattern; the gaps fall at the bottom bosses and centre standoff (bottom) and at the keyholes and
 # encoder (top)
-LV_BOTTOM_X = [(-86.0, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0)]   # gaps at the bosses (+/-40, +/-52) and centre standoff
-LV_TOP_X = [(-80.0, -49.0), (-31.0, 31.0), (49.0, 80.0)]                      # gaps at the keyholes
+LV_BOTTOM_X = [(-86.0 - DX, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0 + DX)]   # gaps at the bosses (+/-40, +/-52) and centre standoff
+LV_TOP_X = [(-80.0 - DX, -49.0), (-31.0, 31.0), (49.0, 80.0 + DX)]            # gaps at the keyholes
 LV_BOTTOM_Z = [7.25, 12.25, 17.25]
-LV_TOP_Z = [87.0, 92.0, 97.0]
-ENC_NOTCH = (15.0, 95.0)                     # top band stays below z 95 within |x| < 15 (the encoder board)
+LV_TOP_Z = [87.0 + 2 * DZ, 92.0 + 2 * DZ, 97.0 + 2 * DZ]   # follow the plate's top edge
+ENC_NOTCH = (15.0, 95.0 + 2 * DZ)                     # top band stays below z 95 within |x| < 15 (the encoder board)
 # panel inserts used (case x, z - ZC), from the panel-back photo (DESIGN-HISTORY, panel in normal orientation, PI IN on the right
 # seen from the front); the 4th corner (-88, -26) is under the S3. All six estimates go on the template.
-INSERTS_ALL = [(-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)]
-STANDOFFS = [(-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)]   # 4th: bottom-centre insert, ties the plate's middle
+INSERTS_ALL = list(panel.P['inserts'])
+STANDOFFS = list(panel.P['standoffs'])     # P3: three corners + the bottom-centre insert, which ties the plate's middle
 # power cable: the stock cable (~50 cm, often 4 wires and a spare plug) is folded and tied into its own bundle
 # (~50 x 28 x 20 mm) and placed wherever it fits; nothing prescribes its spot. An optional tie-down bridge on the plate:
 # a strap threads under it and round the bundle
-TIE_BRIDGE = (-17.0, 17.0, 63.0, 78.0)      # one bridge above the ribbon, beside the power socket: x0, x1, z0, z1
+_tb = panel.P['tie_bridge']
+TIE_BRIDGE = (_tb[0], _tb[1], _tb[2] + DZ, _tb[3] + DZ)   # one bridge above the ribbon, beside the power socket: x0, x1, z0, z1
 STRAP_H = 2.2                                # strap gap under the bridge (a 12-14 mm tie threads through anywhere along it)
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the plate
 BAY = None                                 # v4: the 6 mm deeper case leaves the ribbon ~10 mm to fold; no pocket needed
@@ -77,6 +79,23 @@ BUMP_W, BUMP_H = 20.0, 0.7                       # top snap: the tongue sits 0.3
                                                  # 0.4 into the roof while sliding (the top wall flexes) and drops into the 0.5 dimple
 ROD_D, ROD_HEAD_D, ROD_HEAD_T = 4.3, 5.8, 0.6   # status-light rod (translucent PETG): shaft in the Ø4.5 tube, flush head
 ROD_GAP = 0.8                                    # rod tip above the LED's top (LED ~0.9 mm tall on the component face)
+
+
+def louver_segments(zc, segs):
+    """A louver row's x segments, minus the S3's post pad wherever the slot would cut into a post's root.
+    P3: the rows stay below the posts, nothing changes."""
+    hxs = [h[0] for h in V.S3_HOLES]; hzs = [h[1] for h in V.S3_HOLES]
+    px0, px1 = min(hxs) - 3.7 - 1.0, max(hxs) + 3.7 + 1.0
+    r = LV_H / 2
+    s_lo, s_hi = zc - r - 0.5, zc + LV_DEPTH + r + 0.5                   # the slot rises LV_DEPTH going inward
+    if not any(s_lo < hz + S3_POST_D / 2 and s_hi > hz - S3_POST_D / 2 for hz in hzs):
+        return segs
+    out = []
+    for xa, xb in segs:
+        for a, b in ((xa, min(xb, px0)), (max(xa, px1), xb)):
+            if b - a >= 2 * r + 4.0:                                     # drop stubs too short to be a slot
+                out.append((a, b))
+    return out
 
 
 def standoff(x, z, y0):
@@ -155,7 +174,7 @@ def back_plate3(window=True):
     btop = yc + 1.9                                                      # Boot guide tube
     p = p + cyl_y(V.S3_BOOT_X, V.S3_BOOT_Z, btop + 1.0, y0 + 0.01, 5.0, 32)
     RZ, RW = ZC - 5.0, 20.3                                              # ribbon hooks (as v2)
-    for hx in (-22.5, 22.5):
+    for hx in panel.P['hooks']:
         for side in (-1, 1):
             zp = RZ + side * (RW / 2 + 1.5)
             p = p + box(hx - 2, hx + 2, y0 - 4.5, y0 + 0.01, zp - 1.0, zp + 1.0)
@@ -166,7 +185,7 @@ def back_plate3(window=True):
     if LOUVERS:
         r = LV_H / 2
         for zc, segs in rows:
-            for xa, xb in segs:
+            for xa, xb in louver_segments(zc, segs):
                 def slab(y, dz):
                     cs = CrossSection.square([xb - xa - 2 * r, 0.01], center=True).offset(r, JT, circular_segments=16).translate([(xa + xb) / 2, zc + dz])
                     return prism_y(cs, y, y + 0.01)
