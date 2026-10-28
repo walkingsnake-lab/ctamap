@@ -243,13 +243,19 @@ def back_plate3(window=True):
         p = p + cyl_y(hx, hz_, yc, y0 + 0.01, S3_POST_D, 32)
     btop = yc + 1.9                                                      # Boot guide tube
     p = p + cyl_y(V.S3_BOOT_X, V.S3_BOOT_Z, btop + 1.0, y0 + 0.01, 5.0, 32)
-    RZ, RW = ZC - 5.0, 20.3                                              # ribbon hooks (as v2)
+    # ribbon hooks: the 20.3 mm ribbon (with its fold, ~2.5 mm thick) slides under a lip on each side. v2's hooks left 1.5 mm
+    # under the lip, 0.5 mm beside the ribbon and 1.5 mm of overlap; now 3 mm, 1 mm and 3 mm, on sturdier 5 x 3 mm posts
+    RZ, RW = ZC - 5.0, 20.3
+    HK_W, HK_T, HK_GAP, HK_LIP, HK_SIDE, HK_LIP_T = 5.0, 3.0, 3.0, 3.0, 1.0, 1.5
     for hx in panel.P['hooks']:
         for side in (-1, 1):
-            zp = RZ + side * (RW / 2 + 1.5)
-            p = p + box(hx - 2, hx + 2, y0 - 4.5, y0 + 0.01, zp - 1.0, zp + 1.0)
-            p = p + Manifold.batch_hull([box(hx - 2, hx + 2, y0 - 4.5, y0 - 1.5, zp - 1.0, zp + 1.0),
-                                         box(hx - 2, hx + 2, y0 - 4.5, y0 - 4.49, zp - side * 3.0 - 0.01, zp - side * 3.0 + 0.01)])
+            zi = RZ + side * (RW / 2 + HK_SIDE)                         # post's inner face
+            zo = zi + side * HK_T                                       # post's outer face
+            ya, yb = y0 - HK_GAP - HK_LIP_T, y0 - HK_GAP                # lip: HK_GAP off the plate, HK_LIP_T thick
+            p = p + box(hx - HK_W / 2, hx + HK_W / 2, ya, y0 + 0.01, min(zi, zo), max(zi, zo))
+            tip = zi - side * (HK_SIDE + HK_LIP)                        # lip reaches HK_LIP over the ribbon's edge
+            p = p + Manifold.batch_hull([box(hx - HK_W / 2, hx + HK_W / 2, ya, yb, min(zi, zo), max(zi, zo)),   # 45-deg underside: prints unsupported
+                                         box(hx - HK_W / 2, hx + HK_W / 2, ya, ya + 0.01, tip - 0.005, tip + 0.005)])
     # ---- cuts
     cuts = []
     if LOUVERS:
@@ -321,6 +327,7 @@ def back_plate3(window=True):
             b0, b1 = sorted((af, af + (da if af > amap(V.LT_A0) else -da)))
             cuts.append(prism_y(V.sector_cs(cx, cz, r_in - V.LT_SW, rp + 2.0, b0, b1, 6), y0 - SKIRT_D - 1, y1 + 1))
     p = p - Manifold.batch_boolean(cuts, ADD)
+    p = max(p.decompose(), key=lambda m: m.volume())                    # drop zero-volume slivers left by the latch slot cuts
     return p, window
 
 
