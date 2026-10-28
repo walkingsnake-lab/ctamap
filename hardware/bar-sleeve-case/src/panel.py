@@ -34,7 +34,7 @@ PROFILES = {
         w=160.0, h=80.0, t=14.5,         # outline from Waveshare's spec table; thickness ASSUMED (= P3), measure
         pitch=2.5, rib=0.45,             # 0.45 rib = two lines from a 0.2 nozzle (crisp). On a 0.4 it's one bead, and a print
                                          # (classic walls, Oct 28) came out wavy and uneven: the P2.5 diffuser needs the 0.2
-        faces={'white': 0.1},            # whole diffuser on the 0.2 nozzle: its 0.1 first layer = the face, one layer
+        faces={'white': 0.14},           # whole diffuser on the 0.2 nozzle, first layer set to 0.14 (its max): one-layer face
         # inserts from the listing photo of the panel back (Oct 27), scaled to the 160 x 80 outline (+/-1 mm): six on the
         # top and bottom rails, point-symmetric; (-63.5, -33.5) is under the S3. Check with the insert template.
         inserts=((-63.5, 33.5), (63.5, 33.5), (-63.5, -33.5), (63.5, -33.5), (-12.9, 33.5), (12.9, -33.5)),
