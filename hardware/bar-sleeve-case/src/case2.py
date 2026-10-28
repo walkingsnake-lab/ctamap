@@ -34,6 +34,21 @@ BACKDOWN = False                         # True: shell prints back-down (layers 
 GRILLES = False
 DETENT = True                             # v4: top snap (dimples in the tongue grooves; bumps on plate3's tongues)
 DET_W, DET_DEPTH = 20.0, 0.5
+# Corner latches (both top corners): the tongue snap's spring was the shell's top wall, which also let it pop out. The
+# shell can't be ribbed inside (the diffuser flange fills the bore all the way back), so the catch goes where the shell
+# is already stiff, the R11.5 corner arcs: a dimple in each top corner's wall, and a springy PETG finger cut into the
+# plate's corner (skirt included) with a bump that clicks into it. 30-deg lead-in, ~50-deg back face: it takes a firm pull,
+# or a press on the finger from the back, to release.
+LATCH = True
+LT_A0, LT_A1 = 10.0, 80.0                 # finger: attached at LT_A0 (side), free at LT_A1 (top), degrees from the side
+LT_FW, LT_SW = 3.0, 1.0                   # finger width (radial; the 2 mm skirt + 1 mm of plate), slot width
+LT_BUMP_A = (50.0, 74.0)                  # bump's angular span on the finger
+LT_H = 0.8                                # bump height; 0.6 of it is interference (the plate is 0.2 inside the bore)
+# bump profile along y, relative to the plate's inner face y0: (dy, height)
+LT_BUMP = [(-5.0, 0.0), (-3.6, LT_H), (-2.8, LT_H), (-2.1, 0.0)]
+LT_DIMPLE = [(-5.6, 0.0), (-3.9, 0.7), (-2.6, 0.7), (-2.0, 0.0)]   # in the bore wall (0.7 deep: 1.8 mm of wall left)
+LT_DIMPLE_A = (46.0, 78.0)
+PLATE_Y0 = D - BACKL - PLATE_T            # the plate's inner face, seated
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
 SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open instead of drilling it
@@ -110,6 +125,34 @@ def inner_front_chamfer():
     for (x, z) in rr_cs(BORE_HX, BORE_HZ, BORE_R).to_polygons()[0]:
         pts.append((x, front_y(z) + CH_F, z))
     return Manifold.hull_points(np.array(pts))
+
+
+def sector_cs(cx, cz, r0, r1, a0, a1, n=24):
+    """annular sector in the (x, z) plane; angles in degrees from +x toward +z"""
+    a = np.radians(np.linspace(a0, a1, n))
+    outer = [(cx + r1 * math.cos(t), cz + r1 * math.sin(t)) for t in a]
+    inner = [(cx + r0 * math.cos(t), cz + r0 * math.sin(t)) for t in a[::-1]]
+    cs = CrossSection([outer + inner])
+    return cs if cs.area() > 0 else CrossSection([(outer + inner)[::-1]])
+
+
+def corner_arcs():
+    """top-right and top-left corner centres and their angle maps (side end at 0 deg)"""
+    cx, cz = BORE_HX - BORE_R, ZC + BORE_HZ - BORE_R
+    return [((cx, cz), lambda t: t), ((-cx, cz), lambda t: 180.0 - t)]
+
+
+def radial_sweep(centre, r_base, profile, angles, y_ref):
+    """solid on an arc: at each y station (y_ref + dy) it spans r_base - 0.5 .. r_base + h, over the given angles"""
+    (cx, cz), amap = centre
+    a0, a1 = sorted((amap(angles[0]), amap(angles[1])))
+    def sl(dy, h):
+        return prism_y(sector_cs(cx, cz, r_base - 0.5, r_base + max(h, 0.01), a0, a1), y_ref + dy, y_ref + dy + 0.001)
+    return Manifold.batch_boolean([Manifold.batch_hull([sl(*p), sl(*q)]) for p, q in zip(profile, profile[1:])], ADD)
+
+
+def latch_dimples():
+    return Manifold.batch_boolean([radial_sweep(c, BORE_R, LT_DIMPLE, LT_DIMPLE_A, PLATE_Y0) for c in corner_arcs()], ADD)
 
 
 def teardrop_cs(r, cx, cy, trunc=None, seg=64):
@@ -195,6 +238,8 @@ def shell2():
         if DETENT:                                  # v4: dimple in the groove roof where the plate's tongue bump seats
             cuts.append(box(sx * TONGUE_X - DET_W / 2 - 1, sx * TONGUE_X + DET_W / 2 + 1, yp0 + 0.0, yp0 + PLATE_T + 0.1,
                             H - WALL + 1.3 - 0.01, H - WALL + 1.3 + DET_DEPTH))
+    if LATCH:
+        cuts.append(latch_dimples())
     return s - Manifold.batch_boolean(cuts, ADD)
 
 

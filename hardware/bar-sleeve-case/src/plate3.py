@@ -188,6 +188,9 @@ def back_plate3(window=True):
         skirt = skirt - box(-SKIRT_NOTCH, SKIRT_NOTCH, y0 - SKIRT_D - 1, y0 - 0.5, ZC, ZC + 60)
     p = p + skirt
     p = p + corner_flange(y0, hz)
+    if V.LATCH:                                                          # corner latch bumps (case2.LATCH)
+        rp = BORE_R - 0.2
+        p = p + Manifold.batch_boolean([V.radial_sweep(c, rp, V.LT_BUMP, V.LT_BUMP_A, y0) for c in V.corner_arcs()], ADD)
     inner_cs = rr_cs(BORE_HX - 0.2 - SKIRT_T, hz - SKIRT_T, BORE_R - 0.2 - SKIRT_T)
     y_in = y1 - LV_DEPTH                                                  # bands stand 3 mm off the plate's inner face
 
@@ -304,6 +307,16 @@ def back_plate3(window=True):
     else:
         cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 - 0.6, 4.5, 48))
         window = None
+    if V.LATCH:                                                          # free the corner fingers: an arc slot inside each
+        rp = BORE_R - 0.2                                                # and a radial cut at its free end
+        r_in = rp - V.LT_FW
+        da = math.degrees(V.LT_SW / rp)
+        for (cx, cz), amap in V.corner_arcs():
+            a0, a1 = sorted((amap(V.LT_A0), amap(V.LT_A1)))
+            cuts.append(prism_y(V.sector_cs(cx, cz, r_in - V.LT_SW, r_in, a0, a1), y0 - SKIRT_D - 1, y1 + 1))
+            af = amap(V.LT_A1)
+            b0, b1 = sorted((af, af + (da if af > amap(V.LT_A0) else -da)))
+            cuts.append(prism_y(V.sector_cs(cx, cz, r_in - V.LT_SW, rp + 2.0, b0, b1, 6), y0 - SKIRT_D - 1, y1 + 1))
     p = p - Manifold.batch_boolean(cuts, ADD)
     return p, window
 
@@ -397,3 +410,16 @@ if __name__ == '__main__':
     region = box(sx_ - 8, sx_ + 8, 0, D + 1, ZC + sz_ - 8, ZC + sz_ + 8)
     c = to_bed_back_down(p ^ region); c.apply_translation([0, 0, -c.bounds[0][2]])
     c.export(f'{out}/coupon-v4-standoff-funnel.stl'); print('funnel coupon', c.is_watertight, np.round(c.extents, 1).tolist())
+    if V.LATCH:   # latch coupons: the shell's top-right corner and the plate's, to try the click before the full prints
+        saved = V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME, V.BACKDOWN
+        V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME, V.BACKDOWN = False, False, False, False, True
+        try:
+            sh = V.shell2()
+        finally:
+            V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME, V.BACKDOWN = saved
+        (lcx, lcz), _ = V.corner_arcs()[0]
+        reg = box(lcx - 14, lcx + 20, V.PLATE_Y0 - 12, D + 1, lcz - 14, lcz + 20)
+        c = to_bed_back_down(sh ^ reg); c.apply_translation([0, 0, -c.bounds[0][2]])
+        c.export(f'{out}/coupon-v4-latch-shell.stl'); print('latch shell coupon', c.is_watertight, np.round(c.extents, 1).tolist())
+        c = to_bed_back_down(p ^ reg); c.apply_translation([0, 0, -c.bounds[0][2]])
+        c.export(f'{out}/coupon-v4-latch-plate.stl'); print('latch plate coupon', c.is_watertight, np.round(c.extents, 1).tolist())
