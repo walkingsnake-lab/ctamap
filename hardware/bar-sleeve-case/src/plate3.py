@@ -45,6 +45,13 @@ GAP3 = 0.0                                   # plate fills the bore (0.2 mm clea
 PLATE_T3 = 2.0                               # 2 mm (as v2): bolted to the panel, it doesn't need more; 3 mm cost ~25% more print time
 SKIRT_D, SKIRT_T = 6.0, 2.0                  # inward perimeter skirt: stiffens the edge, bears on the bore all round
 SKIRT_NOTCH = 16.0                           # top skirt cut back around the encoder (x within +/- this)
+# S3 corner (lower left seen from the front): its panel insert sits under the S3, so there is no standoff and the corner
+# flexed. The skirt deepens there into an L-flange (edge stiffness ~ depth^3: 16 vs 6 mm is ~19x), up the left edge to
+# the top-left standoff and along the bottom to just short of the nearest boss, with 45-deg tapers back to SKIRT_D, plus
+# a rib from the top-left standoff to the flange so the flange hangs off the standoff directly.
+CF_CLEAR = 2.4                               # flange tip to the S3's tallest edge parts (USB-C, buttons: 3.5 mm)
+                                             # and 2.5 to a plugged cable's housing (7 mm thick, centred on the port)
+CF_RIB_T = 2.0
 LOUVERS = True
 LV_H, LV_PITCH, LV_DEPTH = 3.5, 5.0, 5.0     # slot height on the outer face, row pitch, band depth (slots rise 45 deg inward;
                                              # the 5 mm rise still hides a 3.5 mm slot from eye level)
@@ -89,6 +96,39 @@ WB_X, WB_Z = 46.0, WALL + 6.5                     # x +/-46 (solid plate between
 WB_RING_D, WB_RING_W, WB_RING_T = 8.4, 0.6, 0.4  # ring groove: inner diameter, width, depth
 ROD_D, ROD_HEAD_D, ROD_HEAD_T = 4.3, 5.8, 0.6   # status-light rod (translucent PETG): shaft in the Ø4.5 tube, flush head
 ROD_GAP = 0.8                                    # rod tip above the LED's top (LED ~0.9 mm tall on the component face)
+
+
+def corner_flange(y0, hz):
+    """Deep skirt (L-flange) and rib at the S3 corner; see CF_CLEAR."""
+    y_front = max(V.S3_PCB_Y + 1.6 + 3.5 + CF_CLEAR,                     # S3 edge parts (USB-C, buttons)
+                  PORT_Y + 3.5 + 2.5)                                    # a spec-max USB-C plug housing: P3 y 46.9, 16 mm deep
+    depth = y0 - y_front
+    if depth <= SKIRT_D + 1:
+        return Manifold()
+    tl = [(x, z) for x, z in STANDOFFS if x < 0 and z > 0]
+    if not tl:
+        return Manifold()
+    sx, sz = max(tl, key=lambda q: q[1]); z_full = ZC + sz              # top-left standoff
+    x_end = -max(SCREW_XS) - 5.0 - 1.0                                   # 1 mm short of the nearest boss
+    x_full = x_end - (depth - SKIRT_D)                                   # 45-deg taper in x
+    z_end = z_full + (depth - SKIRT_D)                                   # 45-deg taper in z
+    zbot = ZC - hz
+    yd = y0 - SKIRT_D
+    # bottom run: taper in (x, y), extruded over all z, kept to the bottom band
+    cs_b = CrossSection([[(-500, y_front - 1), (x_full, y_front - 1), (x_end, yd), (x_end, y0 + 1), (-500, y0 + 1)]])
+    if cs_b.area() <= 0:
+        cs_b = CrossSection([[(-500, y_front - 1), (-500, y0 + 1), (x_end, y0 + 1), (x_end, yd), (x_full, y_front - 1)]])
+    rb = Manifold.extrude(cs_b, 400).translate([0, 0, -200]) ^ box(-500, 500, -500, 500, -10, zbot + 12)
+    # left run: taper in (z, y), along x, kept to the left band
+    cs_l = CrossSection([[(y_front - 1, -100), (y0 + 1, -100), (y0 + 1, z_end), (yd, z_end), (y_front - 1, z_full)]])
+    if cs_l.area() <= 0:
+        cs_l = CrossSection([[(y_front - 1, -100), (y_front - 1, z_full), (yd, z_end), (y0 + 1, z_end), (y0 + 1, -100)]])
+    rl = prism_x(cs_l, -500, -BORE_HX + 12)
+    ring = rr_cs(BORE_HX - 0.2, hz, BORE_R - 0.2) - rr_cs(BORE_HX - 0.2 - SKIRT_T, hz - SKIRT_T, BORE_R - 0.2 - SKIRT_T)
+    deep = prism_y(ring, y_front, y0 + 0.01) ^ (rb + rl)
+    x_in = -(BORE_HX - 0.2 - SKIRT_T)                                    # flange inner face
+    rib = box(x_in - 0.5, sx - SO_OD / 2 + 0.5, y_front, y0 + 0.01, z_full - CF_RIB_T / 2, z_full + CF_RIB_T / 2)
+    return deep + rib
 
 
 def louver_segments(zc, segs):
@@ -136,6 +176,7 @@ def back_plate3(window=True):
     if y0 - SKIRT_D < KY + 12.7 + 1.0:                                   # skirt reaches the encoder board: cut it back there
         skirt = skirt - box(-SKIRT_NOTCH, SKIRT_NOTCH, y0 - SKIRT_D - 1, y0 - 0.5, ZC, ZC + 60)
     p = p + skirt
+    p = p + corner_flange(y0, hz)
     inner_cs = rr_cs(BORE_HX - 0.2 - SKIRT_T, hz - SKIRT_T, BORE_R - 0.2 - SKIRT_T)
     y_in = y1 - LV_DEPTH                                                  # bands stand 3 mm off the plate's inner face
 

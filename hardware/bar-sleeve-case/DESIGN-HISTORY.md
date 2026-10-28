@@ -264,3 +264,11 @@ The first walnut shell was a prototype and was scrapped, so the shell was open t
 - Sensor hole marker (same day): a blind Ø2 pocket from inside the top wall, 0.8 mm short of the outside. Invisible outside; it guides a 2 mm bit from inside when the sensor is fitted, so the drill guide is dropped from the build set (`drill_guide()` stays in `case2.py`). It only notches the inner wall; layer scan unchanged.
 - `stl/skinned-shell-parts/` (same day): screen frame, frame glue guide (57 mm, for the 69 mm shell) and USB-C bezel, for a v4 shell already printed with skins. Checked against the skinned back-down v4 shell (USB skin cut out): frame, guide and bezel clear; the guide holds the frame's back face at y 12; the diffuser seats on the frame.
 - Screen frame fit (same day): at 0.15 mm per side the frame bowed on one side in a printed shell (printed bores come out undersize, and wood PLA shrinks ~0.3%, about 0.3 mm per side on 212 mm). Frames at 0.30 and 0.45 mm per side replace it in `stl/skinned-shell-parts/`.
+
+## Oct 27: panel profiles, P2.5, plate v3 refinements
+
+- `src/panel.py` holds everything panel-specific; `PANEL=p25` builds for the Waveshare P2.5 64x32 (README, "Other panels"). P3 output stays as built unless noted below.
+- Keyholes (both panels): the smallest usable size (Ø8 entry, 4.2 slot, 6 mm travel; bump 12.5 x 18.5, was 14 x 22), so the top louver rows grow 2.5 mm at each keyhole.
+- Wall stand-off (both): with the rim flat on a wall the louvers vented into a sealed 4 mm pocket. The keyhole screws now hold the top 2 mm out (heads 8 mm off the wall) and two 6 mm rubber bumpers in rings at the bottom of the plate's outer face hold the bottom; the rim gap is the inlet and outlet.
+- Diffuser (both): two parts per colour set, face = first layer: white (0.2, 0.4 nozzle) or translucent (0.4, 0.6 nozzle), plus one black part for the rest.
+- S3 corner (both): the corner over the S3 has no standoff (its insert is under the board) and flexed on the first v3 plate. The skirt deepens there into an L-flange, 16 mm instead of 6 (~19x stiffer as an edge beam), up the left edge to the top-left standoff and along the bottom to 1 mm short of the nearest boss, with 45-degree tapers, and a rib ties the top-left standoff to it. Its depth is set by the S3's edge parts and a plugged USB-C housing (2.5 mm clear).
