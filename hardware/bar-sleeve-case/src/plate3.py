@@ -336,6 +336,6 @@ if __name__ == '__main__':
     me = coupon_s3_pilots().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     t.export(f'{out}/coupon-v4-s3-pilots.stl'); print('pilot coupon', t.is_watertight)
     # boss coupon: the plate's bottom-left corner around one boss; screw it through the real shell's floor hole
-    region = box(-SCREW_X - 9, -SCREW_X + 9, 40, D, 0, 18)
+    region = box(-SCREW_XS[0] - 9, -SCREW_XS[0] + 9, 40, D, 0, 18)
     c = to_bed_back_down(p ^ region); c.apply_translation([0, 0, -c.bounds[0][2]])
     c.export(f'{out}/coupon-v4-plate-boss.stl'); print('boss coupon', c.is_watertight, np.round(c.extents, 1).tolist())

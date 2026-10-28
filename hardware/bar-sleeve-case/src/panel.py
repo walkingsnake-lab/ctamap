@@ -24,6 +24,7 @@ PROFILES = {
         s3_back=0.0,                     # extra gap between the panel back and the S3's bottom socket (the case deepens by it)
         sensor_x=55.0,                   # optional light sensor (hole in the case top, board hung from the encoder)
         key_x=40.0,                      # plate v3 keyholes (x +/-)
+        screw_xs=(40.0, 52.0),           # screws from below into the plate's bosses (x +/-): stop the insert sliding out
         posts=((-75, 43), (75, 43), (-60, -43), (60, -43)),   # plate v2 only: foam hold-downs (x, z - ZC)
         assumed=(),
     ),
@@ -37,9 +38,9 @@ PROFILES = {
         standoffs=((-63.5, 33.5), (63.5, 33.5), (63.5, -33.5)),   # three corners; no centre one: the bottom louvers run through
         tie_bridge=(-9.0, 17.0, 59.0, 74.0),   # narrowed (moved ribbon hook) and lowered 4 mm (clears the top louver band)
         hooks=(-13.5, 22.5),             # left hook moved clear of the S3's IDC plug
-        # louvers: one unbroken run per row, between the bottom bosses (+/-40) and between the keyhole bumps (+/-45.25);
-        # the bottom rows behind the S3's posts are still cut back (plate3.louver_segments)
-        lv_bottom_x=((-31.0, 31.0),),
+        # louvers: one unbroken run per row, between the bottom bosses (+/-46) and clear of the S3's lower posts (x -39.7) and between the keyhole
+        # bumps (+/-45.25); the bottom rows behind the S3's posts are still cut back (plate3.louver_segments)
+        lv_bottom_x=((-35.0, 35.0),),
         lv_top_x=((-45.0, 45.0),),
         headers=((40.1, -1.2), (-40.1, -1.2)),   # from the photo; PO OUT sits under the S3's bottom socket (see README)
         # PO OUT sits under the S3's bottom socket, so the S3 (and the case) moves back by the header's height above the
@@ -47,6 +48,7 @@ PROFILES = {
         s3_back=9.0,
         sensor_x=40.0,                   # moved in: at 55 its bracket hits the top-right standoff (x 63.5)
         key_x=51.5,                      # keyholes beside the corner standoffs, so the top louvers run unbroken between them
+        screw_xs=(46.0,),                # one pair (the plate bolts to the panel; these only stop the insert sliding out)
         posts=((-60, 35), (60, 35), (-14, -36), (60, -36)),   # plate v2 only (placeholders)
         assumed=('thickness', 'inserts and headers (photo, +/-1 mm)', 'header height above the rails'),
     ),
