@@ -73,7 +73,11 @@ STANDOFFS = list(panel.P['standoffs'])     # P3: three corners + the bottom-cent
 # (~50 x 28 x 20 mm) and placed wherever it fits; nothing prescribes its spot. An optional tie-down bridge on the plate:
 # a strap threads under it and round the bundle
 _tb = panel.P['tie_bridge']
-TIE_BRIDGE = (_tb[0], _tb[1], _tb[2] + DZ, _tb[3] + DZ)   # one bridge above the ribbon, beside the power socket: x0, x1, z0, z1
+# one tie loop above the ribbon, beside the power socket, centred in the profile's tie_bridge area. It was the whole area
+# (34 x 15 mm on P3); a strap only needs its own width: a 16 mm opening (12-14 mm straps) under an 8 mm long bridge
+TIE_OPEN, TIE_LEN, TIE_WALL = 16.0, 8.0, 2.0
+_tcx, _tcz = (_tb[0] + _tb[1]) / 2, (_tb[2] + _tb[3]) / 2 + DZ
+TIE_BRIDGE = (_tcx - TIE_OPEN / 2 - TIE_WALL, _tcx + TIE_OPEN / 2 + TIE_WALL, _tcz - TIE_LEN / 2, _tcz + TIE_LEN / 2)   # x0, x1, z0, z1
 STRAP_H = 2.2                                # strap gap under the bridge (a 12-14 mm tie threads through anywhere along it)
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the plate
 BAY = None                                 # v4: the 6 mm deeper case leaves the ribbon ~10 mm to fold; no pocket needed
@@ -290,7 +294,7 @@ def back_plate3(window=True):
         cuts.append(rrect_y(x - r, x + r, KEY_Z - r, KEY_Z + KH_TRAVEL + r, r - 0.05, y0 - KH_POCKET_D, y0 + 0.02))
         kh = CrossSection.circle(KH_ENTRY / 2, 48).translate([x, KEY_Z]) + CrossSection.square([KH_SLOT, KH_TRAVEL]).translate([x - KH_SLOT / 2, KEY_Z])
         cuts.append(prism_y(kh, y0 - 1, y1 + 1))
-    cuts.append(box(bx0 + 2, bx1 - 2, y0 - STRAP_H, y0 + 0.02, bz0 - 1, bz1 + 1))   # tie-down bridge gap
+    cuts.append(box(bx0 + TIE_WALL, bx1 - TIE_WALL, y0 - STRAP_H, y0 + 0.02, bz0 - 1, bz1 + 1))   # tie-down bridge gap
     for sx in (-1, 1):                                                   # wall-spacer recesses (outer face)
         cuts.append(cyl_y(sx * WB_X, WB_Z, y1 - WB_RECESS_T, y1 + 1, WB_RECESS_D, 64))
     if BAY:                                                              # ribbon bay behind the S3's plug (v3 only)
