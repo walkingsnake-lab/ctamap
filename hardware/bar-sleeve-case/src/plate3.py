@@ -46,12 +46,13 @@ PLATE_T3 = 2.0                               # 2 mm (as v2): bolted to the panel
 SKIRT_D, SKIRT_T = 6.0, 2.0                  # inward perimeter skirt: stiffens the edge, bears on the bore all round
 SKIRT_NOTCH = 16.0                           # top skirt cut back around the encoder (x within +/- this)
 # S3 corner (lower left seen from the front): its panel insert sits under the S3, so there is no standoff and the corner
-# flexed. The skirt deepens there into an L-flange (edge stiffness ~ depth^3: 16 vs 6 mm is ~19x), up the left edge to
+# flexed. The skirt deepens there into an L-flange (edge stiffness ~ depth^3: 10 vs 6 mm is ~4.6x), up the left edge to
 # the top-left standoff and along the bottom to just short of the nearest boss, with 45-deg tapers back to SKIRT_D, plus
 # a rib from the top-left standoff to the flange so the flange hangs off the standoff directly.
 CF_CLEAR = 2.4                               # flange tip to the S3's tallest edge parts (USB-C, buttons: 3.5 mm)
                                              # and 2.5 to a plugged cable's housing (7 mm thick, centred on the port)
 CF_RIB_T = 2.0
+CF_DEPTH = 10.0                              # 16 fitted but read as a wall; 10 does most of the job with the rib
 LOUVERS = True
 LV_H, LV_PITCH, LV_DEPTH = 3.5, 5.0, 5.0     # slot height on the outer face, row pitch, band depth (slots rise 45 deg inward;
                                              # the 5 mm rise still hides a 3.5 mm slot from eye level)
@@ -104,7 +105,8 @@ ROD_GAP = 0.8                                    # rod tip above the LED's top (
 def corner_flange(y0, hz):
     """Deep skirt (L-flange) and rib at the S3 corner; see CF_CLEAR."""
     y_front = max(V.S3_PCB_Y + 1.6 + 3.5 + CF_CLEAR,                     # S3 edge parts (USB-C, buttons)
-                  PORT_Y + 3.5 + 2.5)                                    # a spec-max USB-C plug housing: P3 y 46.9, 16 mm deep
+                  PORT_Y + 3.5 + 2.5,                                    # a spec-max USB-C plug housing (P3 y 46.9)
+                  y0 - CF_DEPTH)                                         # and no deeper than CF_DEPTH
     depth = y0 - y_front
     if depth <= SKIRT_D + 1:
         return Manifold()
