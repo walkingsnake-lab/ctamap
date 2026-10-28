@@ -52,8 +52,8 @@ LV_CH = 1.5                                  # 45-deg chamfer on the bands' inne
 # one continuous band along the bottom (inlet) and one along the top (outlet), each with three rows of slots in a regular,
 # left-right symmetric pattern; the gaps fall at the bottom bosses and centre standoff (bottom) and at the keyholes and
 # encoder (top)
-LV_BOTTOM_X = [(-86.0 - DX, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0 + DX)]   # gaps at the bosses (+/-40, +/-52) and centre standoff
-LV_TOP_X = [(-80.0 - DX, -49.0), (-31.0, 31.0), (49.0, 80.0 + DX)]            # gaps at the keyholes
+LV_BOTTOM_X = list(panel.P['lv_bottom_x'])   # P3: gaps at the bosses (+/-40, +/-52) and centre standoff
+LV_TOP_X = list(panel.P['lv_top_x'])         # P3: gaps at the keyholes
 LV_BOTTOM_Z = [7.25, 12.25, 17.25]
 LV_TOP_Z = [87.0 + 2 * DZ, 92.0 + 2 * DZ, 97.0 + 2 * DZ]   # follow the plate's top edge
 ENC_NOTCH = (15.0, 95.0 + 2 * DZ)                     # top band stays below z 95 within |x| < 15 (the encoder board)
@@ -93,7 +93,7 @@ def louver_segments(zc, segs):
     out = []
     for xa, xb in segs:
         for a, b in ((xa, min(xb, px0)), (max(xa, px1), xb)):
-            if b - a >= 2 * r + 4.0:                                     # drop stubs too short to be a slot
+            if (a, b) == (xa, xb) or b - a >= 2 * r + 4.0:               # untouched, or a clipped piece long enough to keep
                 out.append((a, b))
     return out
 

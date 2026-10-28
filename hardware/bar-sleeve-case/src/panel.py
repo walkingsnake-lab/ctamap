@@ -17,6 +17,10 @@ PROFILES = {
         standoffs=((-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)),   # plate v3 bolts to these
         tie_bridge=(-17.0, 17.0, 63.0, 78.0),   # plate v3 tie-down bridge: x0, x1, z0, z1 (z in the P3 case, moves by DZ)
         hooks=(-22.5, 22.5),             # ribbon hooks on the plate (x), on bars between the louvers / pills
+        # plate v3 louver rows (x segments): gaps at the bottom bosses (+/-40, +/-52) and centre standoff, and at the keyholes
+        lv_bottom_x=((-86.0, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0)),
+        lv_top_x=((-80.0, -49.0), (-31.0, 31.0), (49.0, 80.0)),
+        headers=((63.0, 2.5), (-63.0, 2.5)),   # PI IN, PO OUT centres (x, z - ZC), vertical 2x8 shrouds
         posts=((-75, 43), (75, 43), (-60, -43), (60, -43)),   # plate v2 only: foam hold-downs (x, z - ZC)
         assumed=(),
     ),
@@ -24,14 +28,19 @@ PROFILES = {
         name='Waveshare P2.5 64x32',
         w=160.0, h=80.0, t=14.5,         # outline from Waveshare's spec table; thickness ASSUMED (= P3), measure
         pitch=2.5, rib=0.45,             # 0.45 rib = two lines from a 0.2 nozzle; too thin for a 0.4
-        # inserts ASSUMED: the P3 layout kept at the same distances from the panel edges. Print the insert template
-        # (plate3.py) on the real panel and correct these before printing the plate. (-72, -18) is under the S3.
-        inserts=((-72.0, 23.0), (72.0, 23.0), (-72.0, -18.0), (72.0, -18.0), (-14.0, 30.0), (7.0, -28.0)),
-        standoffs=((-72.0, 23.0), (72.0, 23.0), (72.0, -18.0), (7.0, -28.0)),
+        # inserts from the listing photo of the panel back (Oct 27), scaled to the 160 x 80 outline (+/-1 mm): six on the
+        # top and bottom rails, point-symmetric; (-63.5, -33.5) is under the S3. Check with the insert template.
+        inserts=((-63.5, 33.5), (63.5, 33.5), (-63.5, -33.5), (63.5, -33.5), (-12.9, 33.5), (12.9, -33.5)),
+        standoffs=((-63.5, 33.5), (63.5, 33.5), (63.5, -33.5), (12.9, -33.5)),
         tie_bridge=(-9.0, 17.0, 59.0, 74.0),   # narrowed (moved ribbon hook) and lowered 4 mm (clears the top louver band)
         hooks=(-13.5, 22.5),             # left hook moved clear of the S3's IDC plug
+        # louvers: the bottom centre gap widens for the standoff at x 12.9; the outer slots shrink to stubs between the
+        # bosses or keyholes and the corner standoffs (x 63.5)
+        lv_bottom_x=((-77.0, -71.0), (-31.0, -21.0), (21.0, 31.0), (71.0, 77.0)),
+        lv_top_x=((-56.0, -49.0), (-31.0, 31.0), (49.0, 56.0)),
+        headers=((40.1, -1.2), (-40.1, -1.2)),   # from the photo; PO OUT sits under the S3's bottom socket (see README)
         posts=((-60, 35), (60, 35), (-14, -36), (60, -36)),   # plate v2 only (placeholders)
-        assumed=('thickness', 'inserts', 'PI IN and power socket positions (ribbon and cable routes)'),
+        assumed=('thickness', 'inserts and headers (photo, +/-1 mm)', 'header height above the rails'),
     ),
 }
 
