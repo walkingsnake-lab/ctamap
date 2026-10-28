@@ -22,6 +22,7 @@ PROFILES = {
         lv_top_x=((-80.0, -49.0), (-31.0, 31.0), (49.0, 80.0)),
         headers=((63.0, 2.5), (-63.0, 2.5)),   # PI IN, PO OUT centres (x, z - ZC), vertical 2x8 shrouds
         s3_back=0.0,                     # extra gap between the panel back and the S3's bottom socket (the case deepens by it)
+        sensor_x=55.0,                   # optional light sensor (hole in the case top, board hung from the encoder)
         posts=((-75, 43), (75, 43), (-60, -43), (60, -43)),   # plate v2 only: foam hold-downs (x, z - ZC)
         assumed=(),
     ),
@@ -43,6 +44,7 @@ PROFILES = {
         # PO OUT sits under the S3's bottom socket, so the S3 (and the case) moves back by the header's height above the
         # insert faces. 9.0 = worst case (a 9 mm shroud on a PCB flush with the rails): set it to the measured height
         s3_back=9.0,
+        sensor_x=40.0,                   # moved in: at 55 its bracket hits the top-right standoff (x 63.5)
         posts=((-60, 35), (60, 35), (-14, -36), (60, -36)),   # plate v2 only (placeholders)
         assumed=('thickness', 'inserts and headers (photo, +/-1 mm)', 'header height above the rails'),
     ),

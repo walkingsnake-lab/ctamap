@@ -44,7 +44,7 @@ CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the beze
 SKIN_T = 0.5                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop;
                                           # just over one 0.4-nozzle line (~0.42): at 0.4 the slicer dropped it
 SL_W, SL_PITCH = 1.5, 4.0                 # slots (GRILLES = True only)
-SENSOR_X, SENSOR_Y, SENSOR_D = 55.0, 42.0, 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
+SENSOR_X, SENSOR_Y, SENSOR_D = panel.P['sensor_x'], 42.0, 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
 TOP_SL = dict(xc=57.0, n=16, y0=30.5, y1=46.5)
 BOT_SL = dict(xs=[50.0 + 4.0 * i for i in range(7)], y0=TOP_SL['y0'] + 9.0, y1=TOP_SL['y1'] + 9.0)  # +9: same layers
 BTN_Z0, BTN_Z1 = PORT_Z - 35.0, PORT_Z - 8.8  # Down (-10.3), Up (-20.1), Reset (-29.9) sit below the USB-C   # Down (+9.9), Up (+19.8), Reset (+29.7) on the S3 edge
