@@ -31,12 +31,19 @@ RIM_IN = 1.2                              # how far the rim reaches in from the 
 RIM_PEAK = Y_FACE - (RIM_IN - 0.9)        # 11.7: peak; the diffuser's front edge (bore - 0.9) meets the back slope at y = 12
 BACKDOWN = False                         # True: shell prints back-down (layers square to the case); screen rim is a glued-in frame
 GRILLES = False
+DETENT = True                             # v4: top snap (dimples in the tongue grooves; bumps on plate3's tongues)
+DET_W, DET_DEPTH = 20.0, 0.5
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
+SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open instead of drilling it
+SENSOR_POCKET = True                      # blind Ø2 pocket from inside, 0.8 mm short of the outside: marks the optional sensor
+                                          # hole; drill through from inside only if the sensor is fitted
+GLUED_FRAME = True                        # back-down only: plain sleeve + glued screen_frame(); False = built-in rim (as front-down)
 CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the bezel's plug fills
-SKIN_T = 0.4                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop
+SKIN_T = 0.5                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop;
+                                          # just over one 0.4-nozzle line (~0.42): at 0.4 the slicer dropped it
 SL_W, SL_PITCH = 1.5, 4.0                 # slots (GRILLES = True only)
-SENSOR_X, SENSOR_Y, SENSOR_D = 55.0, 42.0, 4.0   # light-sensor hole, drilled through drill_guide()
+SENSOR_X, SENSOR_Y, SENSOR_D = 55.0, 42.0, 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
 TOP_SL = dict(xc=57.0, n=16, y0=30.5, y1=46.5)
 BOT_SL = dict(xs=[50.0 + 4.0 * i for i in range(7)], y0=TOP_SL['y0'] + 9.0, y1=TOP_SL['y1'] + 9.0)  # +9: same layers
 BTN_Z0, BTN_Z1 = PORT_Z - 35.0, PORT_Z - 8.8  # Down (-10.3), Up (-20.1), Reset (-29.9) sit below the USB-C   # Down (+9.9), Up (+19.8), Reset (+29.7) on the S3 edge
@@ -126,10 +133,11 @@ def slot_z(x, y0, y1, z0, z1):
 def shell2():
     s = outer_body() - inner_front_chamfer()
     bore_cs = rr_cs(BORE_HX, BORE_HZ, BORE_R)
-    if BACKDOWN:                                   # plain sleeve; the screen rim is screen_frame(), glued in
+    if BACKDOWN:
         s = s - inner_back_chamfer()
+    if BACKDOWN and GLUED_FRAME:                   # plain sleeve; the screen rim is screen_frame(), glued in
         cuts = [prism_y(bore_cs, -50, D + 1)]
-    else:
+    else:                                          # built-in rim: two 45-deg slopes, prints either way up without supports
         lo = rr_cs(BORE_HX - RIM_IN, BORE_HZ - RIM_IN, BORE_R - RIM_IN)
         y_a, y_b = RIM_PEAK - RIM_IN, RIM_PEAK + RIM_IN
         cuts = [prism_y(bore_cs, -50, y_a),
@@ -146,6 +154,10 @@ def shell2():
     # encoder / collar hole: teardrop toward the back
     ztop = H - SKIN_T if SKINS else H + 1          # skin: blind from inside, cut out along the pocket wall (the collar flange hides the edge)
     cuts.append(Manifold.extrude(teardrop_cs(ENC_HOLE / 2, 0, KY, seg=SEG), ztop - (H - WALL - 1)).translate([0, 0, H - WALL - 1]))
+    if SENSOR_POCKET and not SENSOR_PRINTED:       # blind pocket from inside: invisible outside, guides the bit when drilled
+        cuts.append(Manifold.extrude(teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24), WALL - 0.8 + 1).translate([0, 0, H - WALL - 1]))
+    if SENSOR_PRINTED:                             # Ø2 light-sensor hole through the top (teardrop toward the print's up)
+        cuts.append(Manifold.extrude(teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24), WALL + 2).translate([0, 0, H - WALL - 1]))
     # USB-C: straight-through opening for the plug housing, 0.5 mm chamfer outside;
     # relief behind the edge buttons (its top edge at 45 deg for printing)
     def stad(w_y, h_z, r=1.5):            # rounded rectangle (r 1.5 clears a square-cornered spec-max housing)
@@ -171,13 +183,17 @@ def shell2():
         cuts.append(Manifold.extrude(teardrop_cs(FOOT_D / 2, fx, fy), FOOT_DEPTH + 1).translate([0, 0, -1]))
     # back plate screws from below
     for sx in (-1, 1):
+      for scx in SCREW_XS:
         z0 = 1.0 + SKIN_T if SKINS else -1          # skin at the counterbore floor; drill through with a 3.4 mm bit
-        cuts.append(Manifold.extrude(teardrop_cs(1.7, sx * SCREW_X, SCREW_Y, seg=32), WALL + 1 - z0).translate([0, 0, z0]))
-        cuts.append(Manifold.extrude(teardrop_cs(3.2, sx * SCREW_X, SCREW_Y, seg=48), 2.0).translate([0, 0, -1]))
+        cuts.append(Manifold.extrude(teardrop_cs(1.7, sx * scx, SCREW_Y, seg=32), WALL + 1 - z0).translate([0, 0, z0]))
+        cuts.append(Manifold.extrude(teardrop_cs(3.2, sx * scx, SCREW_Y, seg=48), 2.0).translate([0, 0, -1]))
     # tongue grooves (as v1)
     yp0 = D - BACKL - PLATE_T
     for sx in (-1, 1):
         cuts.append(box(sx * TONGUE_X - TONGUE_W / 2 - 0.3, sx * TONGUE_X + TONGUE_W / 2 + 0.3, yp0 - 0.3, D + 1, H - WALL - 0.01, H - WALL + 1.3))
+        if DETENT:                                  # v4: dimple in the groove roof where the plate's tongue bump seats
+            cuts.append(box(sx * TONGUE_X - DET_W / 2 - 1, sx * TONGUE_X + DET_W / 2 + 1, yp0 + 0.0, yp0 + PLATE_T + 0.1,
+                            H - WALL + 1.3 - 0.01, H - WALL + 1.3 + DET_DEPTH))
     return s - Manifold.batch_boolean(cuts, ADD)
 
 
@@ -327,7 +343,7 @@ def export_backdown(out):
             me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
             t.apply_transform(mat); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/{name}')
             print(name, t.is_watertight, np.round(t.extents, 1).tolist())
-        put(shell2(), down, 'bar-shell-v3-walnut-backdown.stl')
+        put(shell2(), down, 'bar-shell-v4-walnut-backdown.stl')
         up = trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])         # y = FRAME_Y0 (front face) on the bed
         put(screen_frame(), up, 'bar-screen-frame.stl')
         put(frame_guide(), up, 'bar-frame-glue-guide.stl')
@@ -337,35 +353,39 @@ def export_backdown(out):
         BACKDOWN = False
 
 
-if __name__ == '__main__':
-    out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    s = shell2()
-    t = to_print(s)
-    dz = -t.bounds[0][2]
-    t.apply_translation([0, 0, dz])
-    t.export(f'{out}/bar-shell-v2-walnut-frontdown.stl')
-    print('shell watertight', t.is_watertight, 'size', np.round(t.extents, 1).tolist(), 'vol cm3', round(t.volume / 1000, 1))
+def export_open(out, backdown):
+    """Main build (Oct 26): built-in screen rim, the openings printed open (no skins, bezel or glued frame); the cut-out
+    skins and glued rim still banded on wood PLA. The light-sensor hole stays optional: a blind Ø2 pocket from inside,
+    drilled through from inside only if the sensor is fitted.
+    Back-down is the main shell; front-down is kept as an alternate."""
     import trimesh
-    p, w = back_plate2()
-    back_down = trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0])
-    def place(m):
-        me = m.to_mesh(); tt = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False); tt.apply_transform(back_down); return tt
-    tp, tw = place(p), place(w)
-    dz2 = -tp.bounds[0][2]
-    for tt in (tp, tw): tt.apply_translation([0, 0, dz2])
-    tp.export(f'{out}/bar-backplate-v2-petg.stl'); tw.export(f'{out}/bar-status-window-v2-translucent.stl')
-    print('plate watertight', tp.is_watertight, 'size', np.round(tp.extents, 1).tolist())
-    pt, _ = back_plate2(window=False); tt = place(pt); tt.apply_translation([0, 0, -tt.bounds[0][2]])
-    tt.export(f'{out}/bar-backplate-v2-translucent.stl'); print('translucent plate watertight', tt.is_watertight)
-    g = drill_guide().mirror([0, 0, 1])                                  # arm flat on the bed, plug up
-    me = g.to_mesh(); tg = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
-    tg.apply_translation([0, 0, -tg.bounds[0][2]]); tg.export(f'{out}/bar-sensor-drill-guide.stl')
-    print('guide watertight', tg.is_watertight, 'size', np.round(tg.extents, 1).tolist())
+    global SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN
+    saved = SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN
+    SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN = False, False, False, False, backdown   # sensor hole: drilled, optional
+    try:
+        m = shell2()
+        if backdown:
+            me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
+            t.apply_transform(trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0]))   # y = D on the bed
+            name = 'bar-shell-v4-walnut-backdown.stl'
+        else:
+            t = to_print(m)
+            name = 'bar-shell-v4-walnut-frontdown.stl'
+        t.apply_translation([0, 0, -t.bounds[0][2]])
+        t.export(f'{out}/{name}')
+        print(name, t.is_watertight, np.round(t.extents, 1).tolist(), 'vol cm3', round(t.volume / 1000, 1))
+    finally:
+        SKINS, SKIN_USB, SENSOR_PRINTED, GLUED_FRAME, BACKDOWN = saved
+
+
+if __name__ == '__main__':
+    import os, trimesh
+    out = sys.argv[1] if len(sys.argv) > 1 else '.'
+    alt = f'{out}/alternate-frontdown'
+    os.makedirs(alt, exist_ok=True)
+    export_open(out, backdown=True)
+    export_open(alt, backdown=False)
     k = boot_key(); me = k.to_mesh(); tk = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     tk.apply_translation(-tk.bounds[0]); tk.export(f'{out}/bar-boot-key.stl'); print('key', tk.is_watertight, np.round(tk.extents, 1).tolist())
-    export_backdown(out)
-    b = port_bezel()
-    me = b.to_mesh(); tb = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
-    tb.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, [0, 1, 0]))   # -x (outer face) -> -z (bed)
-    tb.apply_translation(-tb.bounds[0]); tb.export(f'{out}/bar-usb-bezel.stl')
-    print('bezel watertight', tb.is_watertight, 'size', np.round(tb.extents, 2).tolist())
+    # drill_guide(), export_backdown() and port_bezel() still make the drill guide, skinned back-down shell, glued frame, glue guide and
+    # USB-C bezel (GLUED_FRAME/SKINS = True); they are no longer part of the build set
