@@ -79,10 +79,7 @@ def diffuser(grid=True, skin=None):
 
 # Two-colour builds: the face is the first layer (white or translucent), everything above it is one black part. Load both
 # STLs as one object with two parts (same frame) and give each its filament.
-VARIANTS = {                        # name: face thickness = first-layer height
-    'white': 0.2,                   # 0.2 layer, 0.4 nozzle
-    'translucent': 0.4,             # one 0.4 layer, 0.6 nozzle (the face stack is 0.2 thicker; the plate's stack float takes it)
-}
+VARIANTS = dict(panel.P['faces'])   # name: face thickness = the print's first-layer height (one layer), per panel profile
 
 
 def split(skin):

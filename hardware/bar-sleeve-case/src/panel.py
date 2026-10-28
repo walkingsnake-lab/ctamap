@@ -11,6 +11,7 @@ PROFILES = {
         name='Waveshare P3 64x32',
         w=192.0, h=96.0, t=14.5,         # outline, thickness (measured)
         pitch=3.0, rib=0.6,              # diffuser grid: LED pitch, rib width (0.4 nozzle)
+        faces={'white': 0.2, 'translucent': 0.4},   # diffuser face = one first layer: 0.2 (0.4 nozzle), 0.4 (0.6 nozzle)
         # brass M3 inserts on the panel back (x, z - ZC), photo estimates checked with the insert template;
         # (-88, -26) is under the S3
         inserts=((-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)),
@@ -32,6 +33,8 @@ PROFILES = {
         name='Waveshare P2.5 64x32',
         w=160.0, h=80.0, t=14.5,         # outline from Waveshare's spec table; thickness ASSUMED (= P3), measure
         pitch=2.5, rib=0.45,             # 0.45 rib = two lines from a 0.2 nozzle; too thin for a 0.4
+        # whole diffuser on the 0.2 nozzle: its profiles start with a 0.1 first layer, so the face is 0.1 (one layer)
+        faces={'white': 0.1},
         # inserts from the listing photo of the panel back (Oct 27), scaled to the 160 x 80 outline (+/-1 mm): six on the
         # top and bottom rails, point-symmetric; (-63.5, -33.5) is under the S3. Check with the insert template.
         inserts=((-63.5, 33.5), (63.5, 33.5), (-63.5, -33.5), (63.5, -33.5), (-12.9, 33.5), (12.9, -33.5)),
