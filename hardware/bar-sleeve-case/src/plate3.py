@@ -82,6 +82,11 @@ BUMP_W, BUMP_H = 20.0, 0.7                       # top snap: the tongue sits 0.3
 KH_ENTRY, KH_SLOT, KH_TRAVEL = 8.0, 4.2, 6.0
 KH_POCKET_R = KH_ENTRY / 2 + 0.75                 # 4.75: pocket half width and end radius
 KH_WALL, KH_POCKET_D, KH_BUMP_D = 1.5, 4.5, 6.0
+# wall stand-off: the keyhole screws hold the top 2 mm off the wall (heads set 8 mm out); two stick-on rubber bumpers
+# (~8 mm, 6 mm tall) on the outer face at the bottom hold it there (6 mm - 4 mm rim recess). The gap around the rim is
+# the inlet (bottom) and outlet (top) on a wall. Faint rings on the outer face (the bed side) mark their spots.
+WB_X, WB_Z = 46.0, WALL + 6.5                     # x +/-46 (solid plate between the bottom louvers and bosses), z 9
+WB_RING_D, WB_RING_W, WB_RING_T = 8.4, 0.6, 0.4  # ring groove: inner diameter, width, depth
 ROD_D, ROD_HEAD_D, ROD_HEAD_T = 4.3, 5.8, 0.6   # status-light rod (translucent PETG): shaft in the Ø4.5 tube, flush head
 ROD_GAP = 0.8                                    # rod tip above the LED's top (LED ~0.9 mm tall on the component face)
 
@@ -220,6 +225,9 @@ def back_plate3(window=True):
         kh = CrossSection.circle(KH_ENTRY / 2, 48).translate([x, KEY_Z]) + CrossSection.square([KH_SLOT, KH_TRAVEL]).translate([x - KH_SLOT / 2, KEY_Z])
         cuts.append(prism_y(kh, y0 - 1, y1 + 1))
     cuts.append(box(bx0 + 2, bx1 - 2, y0 - STRAP_H, y0 + 0.02, bz0 - 1, bz1 + 1))   # tie-down bridge gap
+    for sx in (-1, 1):                                                   # wall-bumper locating rings (outer face)
+        cuts.append(cyl_y(sx * WB_X, WB_Z, y1 - WB_RING_T, y1 + 1, WB_RING_D + 2 * WB_RING_W, 64)
+                    - cyl_y(sx * WB_X, WB_Z, y1 - WB_RING_T - 1, y1 + 2, WB_RING_D, 64))
     if BAY:                                                              # ribbon bay behind the S3's plug (v3 only)
         bx0_, bx1_, bz0_, bz1_ = BAY
         cuts.append(box(bx0_, bx1_, y0 - 1, y1 - 0.8, bz0_, bz1_))
