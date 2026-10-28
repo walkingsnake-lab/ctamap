@@ -76,7 +76,10 @@ TIE_BRIDGE = (_tb[0], _tb[1], _tb[2] + DZ, _tb[3] + DZ)   # one bridge above the
 STRAP_H = 2.2                                # strap gap under the bridge (a 12-14 mm tie threads through anywhere along it)
 # room for the ribbon's fold behind the S3's IDC plug: pocket into the plate
 BAY = None                                 # v4: the 6 mm deeper case leaves the ribbon ~10 mm to fold; no pocket needed
-SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 9.0, 6.4, 3.0, 3.6   # no washer: the M3 button head (Ø5.7) seats on the floor
+SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 9.0, 6.4, 3.0, 3.6   # no washer
+# funnel floor: a 90-deg cone from the bore down to the hole (1.4 mm deep). A screw dropped down the tube lands on the
+# cone and slides into the hole; an M3 x 8 countersunk head (Ø6 or less) self-centres in it. Prints as a 45-deg roof.
+SO_CONE_H = (SO_BORE - SO_HOLE) / 2
 FOOT_Y = PANEL_BACK                          # foot face on the panel's insert bosses
 NUT_W, NUT_MOUTH, NUT_H, NUT_FLOAT = 5.7, 5.3, 2.7, 0.6
 NUT_CORNER = 5.5 / math.cos(math.pi / 6) / 2  # 3.175: nut centre to corner (corners point along the slot)
@@ -153,7 +156,13 @@ def standoff(x, z, y0):
     post = cyl_y(x, zc, FOOT_Y, y0 + 0.01, SO_OD, 48)
     post = post - cyl_y(x, zc, FOOT_Y + SO_FLOOR, D, SO_BORE, 48)         # tube for the screw head and the key
     post = post - cyl_y(x, zc, FOOT_Y - 1, FOOT_Y + SO_FLOOR + 0.1, SO_HOLE, 32)
+    post = post - so_cone(x, zc)
     return post
+
+
+def so_cone(x, zc):
+    y_top = FOOT_Y + SO_FLOOR
+    return Manifold.cylinder(SO_CONE_H + 0.01, SO_HOLE / 2, SO_BORE / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([x, y_top - SO_CONE_H, zc])
 
 
 def back_plate3(window=True):
@@ -259,6 +268,7 @@ def back_plate3(window=True):
                                          box(x - NUT_MOUTH / 2, x + NUT_MOUTH / 2, yb + 0.6, yb + 0.61, nz0, nz0 + NUT_H)]))
     for x, z in STANDOFFS:                                               # standoff tubes, open on the outer face
         cuts.append(cyl_y(x, ZC + z, FOOT_Y + SO_FLOOR, y1 + 1, SO_BORE, 48))
+        cuts.append(so_cone(x, ZC + z))
     for sx in (-1, 1):                                                   # keyhole: head pocket (stadium) and the keyhole
         x = sx * KEY_X
         r = KH_POCKET_R
@@ -380,3 +390,8 @@ if __name__ == '__main__':
     region = box(-SCREW_XS[0] - 9, -SCREW_XS[0] + 9, 40, D, 0, 18)
     c = to_bed_back_down(p ^ region); c.apply_translation([0, 0, -c.bounds[0][2]])
     c.export(f'{out}/coupon-v4-plate-boss.stl'); print('boss coupon', c.is_watertight, np.round(c.extents, 1).tolist())
+    # funnel coupon: one standoff (top right) on a patch of plate; drop an M3 x 8 countersunk down it, screw it into an insert
+    sx_, sz_ = max(STANDOFFS, key=lambda q: (q[0], q[1]))
+    region = box(sx_ - 8, sx_ + 8, 0, D + 1, ZC + sz_ - 8, ZC + sz_ + 8)
+    c = to_bed_back_down(p ^ region); c.apply_translation([0, 0, -c.bounds[0][2]])
+    c.export(f'{out}/coupon-v4-standoff-funnel.stl'); print('funnel coupon', c.is_watertight, np.round(c.extents, 1).tolist())
