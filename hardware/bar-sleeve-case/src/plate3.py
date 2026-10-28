@@ -93,11 +93,15 @@ BUMP_W, BUMP_H = 20.0, 0.7                       # top snap: the tongue sits 0.3
 KH_ENTRY, KH_SLOT, KH_TRAVEL = 8.0, 4.2, 6.0
 KH_POCKET_R = KH_ENTRY / 2 + 0.75                 # 4.75: pocket half width and end radius
 KH_WALL, KH_POCKET_D, KH_BUMP_D = 1.5, 4.5, 6.0
-# wall stand-off: the keyhole screws hold the top 2 mm off the wall (heads set 8 mm out); two stick-on rubber bumpers
-# (~8 mm, 6 mm tall) on the outer face at the bottom hold it there (6 mm - 4 mm rim recess). The gap around the rim is
-# the inlet (bottom) and outlet (top) on a wall. Faint rings on the outer face (the bed side) mark their spots.
-WB_X, WB_Z = 46.0, WALL + 6.5                     # x +/-46 (solid plate between the bottom louvers and bosses), z 9
-WB_RING_D, WB_RING_W, WB_RING_T = 8.4, 0.6, 0.4  # ring groove: inner diameter, width, depth
+# wall stand-off: the keyhole screws hold the top 2 mm off the wall (heads set 8 mm out). At the bottom, a printed spacer
+# disc glued into a shallow recess on the outer face (the bed side) carries the same round bumper as the case feet
+# (0.5 in x 0.15 in: 12.7 x 3.81 mm), so the bottom stands out 2 mm too. The gap around the rim is the inlet (bottom)
+# and outlet (top) on a wall.
+WB_X, WB_Z = 46.0, WALL + 7.0                     # x +/-46 (solid plate between the bottom louvers and bosses), z 9.5
+WB_GAP, WB_PAD_H = 2.0, 0.15 * 25.4               # wall gap; bumper height
+WB_RECESS_D, WB_RECESS_T = 13.4, 0.4              # locating recess for the spacer
+WB_SPACER_D = 13.0
+WB_SPACER_T = BACKL + WB_GAP - WB_PAD_H + WB_RECESS_T   # 2.59: 2.19 stands proud of the plate
 ROD_D, ROD_HEAD_D, ROD_HEAD_T = 4.3, 5.8, 0.6   # status-light rod (translucent PETG): shaft in the Ø4.5 tube, flush head
 ROD_GAP = 0.8                                    # rod tip above the LED's top (LED ~0.9 mm tall on the component face)
 
@@ -281,9 +285,8 @@ def back_plate3(window=True):
         kh = CrossSection.circle(KH_ENTRY / 2, 48).translate([x, KEY_Z]) + CrossSection.square([KH_SLOT, KH_TRAVEL]).translate([x - KH_SLOT / 2, KEY_Z])
         cuts.append(prism_y(kh, y0 - 1, y1 + 1))
     cuts.append(box(bx0 + 2, bx1 - 2, y0 - STRAP_H, y0 + 0.02, bz0 - 1, bz1 + 1))   # tie-down bridge gap
-    for sx in (-1, 1):                                                   # wall-bumper locating rings (outer face)
-        cuts.append(cyl_y(sx * WB_X, WB_Z, y1 - WB_RING_T, y1 + 1, WB_RING_D + 2 * WB_RING_W, 64)
-                    - cyl_y(sx * WB_X, WB_Z, y1 - WB_RING_T - 1, y1 + 2, WB_RING_D, 64))
+    for sx in (-1, 1):                                                   # wall-spacer recesses (outer face)
+        cuts.append(cyl_y(sx * WB_X, WB_Z, y1 - WB_RECESS_T, y1 + 1, WB_RECESS_D, 64))
     if BAY:                                                              # ribbon bay behind the S3's plug (v3 only)
         bx0_, bx1_, bz0_, bz1_ = BAY
         cuts.append(box(bx0_, bx1_, y0 - 1, y1 - 0.8, bz0_, bz1_))
@@ -362,6 +365,13 @@ def coupon_s3_pilots():
     return m
 
 
+def wall_spacer():
+    """Disc glued into the plate's recess; the bumper sticks on its face. Print 2, flat, 100% infill."""
+    m = Manifold.cylinder(WB_SPACER_T, WB_SPACER_D / 2, WB_SPACER_D / 2, 64)
+    return m - (Manifold.cylinder(0.41, WB_SPACER_D / 2 + 1, WB_SPACER_D / 2 + 1, 64) -
+                Manifold.cylinder(0.41, WB_SPACER_D / 2 - 0.4, WB_SPACER_D / 2 + 0.01, 64)).translate([0, 0, WB_SPACER_T - 0.4])   # 0.4 chamfer on the top edge
+
+
 def status_rod():
     """Translucent light rod for the status LED, in case coordinates: flush head in the plate's outer recess, shaft down
     the light tube to ROD_GAP above the LED. Print head down (the flush face on the bed), 100% infill."""
@@ -399,6 +409,8 @@ if __name__ == '__main__':
     me = panel_template().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     t.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])); t.apply_translation([0, 0, -t.bounds[0][2]])
     t.export(f'{out}/check-panel-insert-template.stl'); print('template', t.is_watertight, np.round(t.extents, 1).tolist())
+    me = wall_spacer().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
+    t.export(f'{out}/bar-wall-spacer.stl'); print('wall spacer', t.is_watertight, np.round(t.extents, 2).tolist())
     me = coupon_s3_pilots().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     t.export(f'{out}/coupon-v4-s3-pilots.stl'); print('pilot coupon', t.is_watertight)
     # boss coupon: the plate's bottom-left corner around one boss; screw it through the real shell's floor hole
