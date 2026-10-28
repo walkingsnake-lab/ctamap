@@ -39,7 +39,7 @@ FEET = [(sx * (84.0 + DX), fy) for sx in (-1, 1) for fy in (22.0, D - 11.0)]   #
 FOOT_D, FOOT_DEPTH = 13.2, 1.5                    # recesses for 3M SJ5312 (12.7 mm) bumpers
 SCREW_X, SCREW_Y = 40.0, D - BACKL - PLATE_T - 3.5   # back plate screws from below
 SCREW_XS = (40.0, 52.0)                          # v4: two pairs (x = +/-40 and +/-52)
-KEY_X, KEY_Z = 40.0, ZC + 30.0 + DZ               # wall keyholes
+KEY_X, KEY_Z = panel.P['key_x'], ZC + 30.0 + DZ    # wall keyholes
 TONGUE_X, TONGUE_W = 40.0, 30.0
 POSTS = [(px, ZC + pz) for px, pz in panel.P['posts']]   # plate v2 hold-downs (x, z)
 POST_D = 8.0

@@ -13,7 +13,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Part | File | Material | Print |
 |---|---|---|---|
 | Shell | `bar-shell-v4-walnut-backdown.stl` (69 mm deep) | PLA Wood, 0.4 nozzle | as exported (back rim down), no supports |
-| Diffuser | `bar-diffuser-white-grid15.stl` (0.2 face), or `bar-diffuser-face03.stl` (0.3 face, for translucent grey); split files for two colors | white or translucent grey + black PETG | face down; first layer = face |
+| Diffuser | Two parts, loaded as one object: `bar-diffuser-white-face.stl` + `bar-diffuser-white-grid-black.stl` (0.2 face: 0.2 first layer, 0.4 nozzle), or `bar-diffuser-translucent-face.stl` + `bar-diffuser-translucent-grid-black.stl` (0.4 face: one 0.4 first layer, 0.6 nozzle) | face: white or translucent; the rest: black PETG | face down; the face part is the first layer |
 | Back plate | `bar-backplate-v3.stl` (one piece) | PETG, one opaque color (black hides the insides best) | outer face down |
 | Status-light rod | `bar-status-rod-translucent.stl` (flush head, shaft down the light tube to 0.8 mm above the LED) | translucent PETG, 100% infill | head down |
 | Insert check (print first) | `check-panel-insert-template.stl` | any PLA | as exported; that face goes on the panel |
@@ -80,7 +80,7 @@ Parametric Python (manifold3d + trimesh); every STL in `stl/` is generated from 
 | `sensor.py` | Light-sensor bracket: `python3 sensor.py <outdir>` |
 | `knob.py` | Knob and its three-size fit set: `python3 knob.py <outdir>` |
 | `collar.py` | Encoder collars for both shells |
-| `diffuser.py` | Diffuser: `python3 diffuser.py <out.stl> [face thickness, default 0.2]` |
+| `diffuser.py` | Diffuser: `python3 diffuser.py <outdir>/` writes the two-colour sets; `python3 diffuser.py <out.stl> [face thickness]` one piece. The 0.4 face makes the stack 0.2 mm thicker; the plate's snap and screw slots take it up |
 | `plinth.py` | Tilt plinth: `python3 plinth.py <outdir> [degrees]` |
 | `layerscan.py` | Slices a print-oriented STL in 0.2 mm layers and reports separate pieces and path length per layer (the banding check) |
 
@@ -92,7 +92,7 @@ python3 plate3.py ../stl         # v3 plate, light rod, insert template, coupons
 python3 sensor.py ../stl         # light-sensor bracket
 python3 knob.py ../stl           # knob + fit set
 python3 collar.py ../stl
-python3 diffuser.py ../stl/bar-diffuser-white-grid15.stl
+python3 diffuser.py ../stl/        # two-colour sets (white 0.2 and translucent 0.4 face + black rest); <file>.stl [face] = one piece
 python3 plinth.py ../stl 8
 python3 layerscan.py ../stl/bar-shell-v4-walnut-backdown.stl /tmp/scan.npy
 ```

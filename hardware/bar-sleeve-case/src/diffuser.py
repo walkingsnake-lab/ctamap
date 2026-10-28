@@ -10,7 +10,7 @@ from manifold3d import Manifold, CrossSection
 import panel
 
 PW, PH = panel.P['w'], panel.P['h']
-SKIN = float(sys.argv[2]) if len(sys.argv) > 2 else 0.2   # face skin (0.2 white; 0.3 for translucent grey)
+SKIN = float(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[1].endswith('.stl') else 0.2   # one-piece face skin
 GRID_H = 1.5                        # grid behind the skin
 SK_T, SK_D, CLR, BUMP = 1.2, 3.0, 0.15, 0.2
 FT = 1.2                            # flange thickness
@@ -30,7 +30,8 @@ def rrect(hx, hy, r, z0, z1, n=48):
     return Manifold.extrude(cs, z1 - z0).translate([0, 0, z0])
 
 
-def diffuser(grid=True):
+def diffuser(grid=True, skin=None):
+    SKIN = globals()['SKIN'] if skin is None else skin
     hx, hy = PW / 2, PH / 2
     o = OUT
     zg0, zg1 = SKIN - 0.01, SKIN + GRID_H
@@ -76,9 +77,38 @@ def diffuser(grid=True):
     return d
 
 
+# Two-colour builds: the face is the first layer (white or translucent), everything above it is one black part. Load both
+# STLs as one object with two parts (same frame) and give each its filament.
+VARIANTS = {                        # name: face thickness = first-layer height
+    'white': 0.2,                   # 0.2 layer, 0.4 nozzle
+    'translucent': 0.4,             # one 0.4 layer, 0.6 nozzle (the face stack is 0.2 thicker; the plate's stack float takes it)
+}
+
+
+def split(skin):
+    d = diffuser(skin=skin)
+    lo = d.bounding_box()
+    cut = box(lo[0] - 1, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, skin)
+    return d ^ cut, d - cut
+
+
+def export_split(outdir, suffix=''):
+    import trimesh
+    for name, skin in VARIANTS.items():
+        for part, m in zip(('face', 'grid-black'), split(skin)):
+            me = m.to_mesh()
+            t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=True)
+            path = f'{outdir}/bar-diffuser-{name}-{part}{suffix}.stl'
+            t.export(path)
+            print(path.split('/')[-1], t.is_watertight, np.round(t.bounds, 2).tolist())
+
+
 import manifold3d
 if __name__ == '__main__':
     out = sys.argv[1]
+    if out.endswith('/') or not out.endswith('.stl'):    # a folder: the two-colour sets
+        export_split(out.rstrip('/'), sys.argv[2] if len(sys.argv) > 2 else '')
+        sys.exit()
     m = diffuser()
     mesh = m.to_mesh()
     import trimesh
