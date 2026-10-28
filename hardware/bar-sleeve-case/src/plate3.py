@@ -77,6 +77,11 @@ S3_PILOT, S3_LEAD = 2.4, 0.5
 S3_POST_D = 6.0                                  # posts are ~22 mm long in the deeper case
 BUMP_W, BUMP_H = 20.0, 0.7                       # top snap: the tongue sits 0.3 below the groove roof, so the bump rides
                                                  # 0.4 into the roof while sliding (the top wall flexes) and drops into the 0.5 dimple
+# keyholes, as small as stays usable: Ø8 entry for a head up to ~7.6 mm (#6, #8 or M4 pan head), 4.2 slot for the shank,
+# 6 mm travel (the head sits fully off the entry); the head pocket clears it by 0.75 a side, the bump wall is 1.5
+KH_ENTRY, KH_SLOT, KH_TRAVEL = 8.0, 4.2, 6.0
+KH_POCKET_R = KH_ENTRY / 2 + 0.75                 # 4.75: pocket half width and end radius
+KH_WALL, KH_POCKET_D, KH_BUMP_D = 1.5, 4.5, 6.0
 ROD_D, ROD_HEAD_D, ROD_HEAD_T = 4.3, 5.8, 0.6   # status-light rod (translucent PETG): shaft in the Ø4.5 tube, flush head
 ROD_GAP = 0.8                                    # rod tip above the LED's top (LED ~0.9 mm tall on the component face)
 
@@ -161,7 +166,8 @@ def back_plate3(window=True):
         p = p + standoff(x, z, y0)
     for sx in (-1, 1):                                                   # keyhole bumps (stadiums)
         x = sx * KEY_X
-        p = p + rrect_y(x - 7, x + 7, KEY_Z - 7, KEY_Z + 15, 6.9, y0 - 6, y0 + 0.01)
+        rb = KH_POCKET_R + KH_WALL
+        p = p + rrect_y(x - rb, x + rb, KEY_Z - rb, KEY_Z + KH_TRAVEL + rb, rb - 0.1, y0 - KH_BUMP_D, y0 + 0.01)
     bx0, bx1, bz0, bz1 = TIE_BRIDGE                                      # tie-down bridge
     p = p + rrect_z(bx0, bx1, y0 - STRAP_H - 1.8, y0 + 0.01, 0.9, bz0, bz1)
     tube_end = PCB_Y0 + 1.6 + 1.5                                        # status light tube
@@ -209,8 +215,9 @@ def back_plate3(window=True):
         cuts.append(cyl_y(x, ZC + z, FOOT_Y + SO_FLOOR, y1 + 1, SO_BORE, 48))
     for sx in (-1, 1):                                                   # keyhole: head pocket (stadium) and the keyhole
         x = sx * KEY_X
-        cuts.append(rrect_y(x - 5.5, x + 5.5, KEY_Z - 5.5, KEY_Z + 13.5, 5.45, y0 - 4.5, y0 + 0.02))
-        kh = CrossSection.circle(4.0, 48).translate([x, KEY_Z]) + CrossSection.square([4.2, 10.0]).translate([x - 2.1, KEY_Z])
+        r = KH_POCKET_R
+        cuts.append(rrect_y(x - r, x + r, KEY_Z - r, KEY_Z + KH_TRAVEL + r, r - 0.05, y0 - KH_POCKET_D, y0 + 0.02))
+        kh = CrossSection.circle(KH_ENTRY / 2, 48).translate([x, KEY_Z]) + CrossSection.square([KH_SLOT, KH_TRAVEL]).translate([x - KH_SLOT / 2, KEY_Z])
         cuts.append(prism_y(kh, y0 - 1, y1 + 1))
     cuts.append(box(bx0 + 2, bx1 - 2, y0 - STRAP_H, y0 + 0.02, bz0 - 1, bz1 + 1))   # tie-down bridge gap
     if BAY:                                                              # ribbon bay behind the S3's plug (v3 only)

@@ -19,7 +19,7 @@ PROFILES = {
         hooks=(-22.5, 22.5),             # ribbon hooks on the plate (x), on bars between the louvers / pills
         # plate v3 louver rows (x segments): gaps at the bottom bosses (+/-40, +/-52) and centre standoff, and at the keyholes
         lv_bottom_x=((-86.0, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0)),
-        lv_top_x=((-80.0, -49.0), (-31.0, 31.0), (49.0, 80.0)),
+        lv_top_x=((-80.0, -46.5), (-33.5, 33.5), (46.5, 80.0)),
         headers=((63.0, 2.5), (-63.0, 2.5)),   # PI IN, PO OUT centres (x, z - ZC), vertical 2x8 shrouds
         s3_back=0.0,                     # extra gap between the panel back and the S3's bottom socket (the case deepens by it)
         sensor_x=55.0,                   # optional light sensor (hole in the case top, board hung from the encoder)
@@ -39,7 +39,7 @@ PROFILES = {
         # louvers: the bottom centre gap widens for the standoff at x 12.9; the outer slots shrink to stubs between the
         # bosses or keyholes and the corner standoffs (x 63.5)
         lv_bottom_x=((-77.0, -71.0), (-31.0, -21.0), (21.0, 31.0), (71.0, 77.0)),
-        lv_top_x=((-56.0, -49.0), (-31.0, 31.0), (49.0, 56.0)),
+        lv_top_x=((-56.0, -46.5), (-33.5, 33.5), (46.5, 56.0)),
         headers=((40.1, -1.2), (-40.1, -1.2)),   # from the photo; PO OUT sits under the S3's bottom socket (see README)
         # PO OUT sits under the S3's bottom socket, so the S3 (and the case) moves back by the header's height above the
         # insert faces. 9.0 = worst case (a 9 mm shroud on a PCB flush with the rails): set it to the measured height
