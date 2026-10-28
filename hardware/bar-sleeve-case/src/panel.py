@@ -32,8 +32,9 @@ PROFILES = {
     'p25': dict(                         # Waveshare RGB-Matrix-P2.5-64x32, SKU 23707 (standard) / 33839 (GOB)
         name='Waveshare P2.5 64x32',
         w=160.0, h=80.0, t=14.5,         # outline from Waveshare's spec table; thickness ASSUMED (= P3), measure
-        pitch=2.5, rib=0.45,             # 0.45 rib: one bead from a 0.4 nozzle (slicer test Oct 28: every rib printed, 0.45-0.62 wide)
-        faces={'white': 0.2},            # whole diffuser on 0.4 nozzles at 0.2 layers: the face is one 0.2 first layer
+        pitch=2.5, rib=0.45,             # 0.45 rib = two lines from a 0.2 nozzle (crisp). On a 0.4 it's one bead, and a print
+                                         # (classic walls, Oct 28) came out wavy and uneven: the P2.5 diffuser needs the 0.2
+        faces={'white': 0.1},            # whole diffuser on the 0.2 nozzle: its 0.1 first layer = the face, one layer
         # inserts from the listing photo of the panel back (Oct 27), scaled to the 160 x 80 outline (+/-1 mm): six on the
         # top and bottom rails, point-symmetric; (-63.5, -33.5) is under the S3. Check with the insert template.
         inserts=((-63.5, 33.5), (63.5, 33.5), (-63.5, -33.5), (63.5, -33.5), (-12.9, 33.5), (12.9, -33.5)),
