@@ -21,6 +21,7 @@ PROFILES = {
         lv_bottom_x=((-86.0, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0)),
         lv_top_x=((-80.0, -49.0), (-31.0, 31.0), (49.0, 80.0)),
         headers=((63.0, 2.5), (-63.0, 2.5)),   # PI IN, PO OUT centres (x, z - ZC), vertical 2x8 shrouds
+        s3_back=0.0,                     # extra gap between the panel back and the S3's bottom socket (the case deepens by it)
         posts=((-75, 43), (75, 43), (-60, -43), (60, -43)),   # plate v2 only: foam hold-downs (x, z - ZC)
         assumed=(),
     ),
@@ -39,6 +40,9 @@ PROFILES = {
         lv_bottom_x=((-77.0, -71.0), (-31.0, -21.0), (21.0, 31.0), (71.0, 77.0)),
         lv_top_x=((-56.0, -49.0), (-31.0, 31.0), (49.0, 56.0)),
         headers=((40.1, -1.2), (-40.1, -1.2)),   # from the photo; PO OUT sits under the S3's bottom socket (see README)
+        # PO OUT sits under the S3's bottom socket, so the S3 (and the case) moves back by the header's height above the
+        # insert faces. 9.0 = worst case (a 9 mm shroud on a PCB flush with the rails): set it to the measured height
+        s3_back=9.0,
         posts=((-60, 35), (60, 35), (-14, -36), (60, -36)),   # plate v2 only (placeholders)
         assumed=('thickness', 'inserts and headers (photo, +/-1 mm)', 'header height above the rails'),
     ),

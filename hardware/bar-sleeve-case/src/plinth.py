@@ -10,7 +10,7 @@ import case as C
 
 TILT = float(sys.argv[2]) if len(sys.argv) > 2 else 8.0
 TB = 3.0                          # world thickness reference under the case's back edge
-HX, Y0, Y1, R = 101.0 + C.DX, 14.0, 58.0, 10.0
+HX, Y0, Y1, R = 101.0 + C.DX, 14.0, 58.0 + C.S3_BACK, 10.0
 PEG_D, PEG_H = 12.8, 1.3           # into the 13.2 x 1.5 recesses
 PEG_EDGE = 1.5
 BOT_X = 88.0 + C.DX
