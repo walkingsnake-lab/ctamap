@@ -85,6 +85,11 @@ SO_OD, SO_BORE, SO_FLOOR, SO_HOLE = 9.0, 6.4, 3.0, 3.6   # no washer
 # funnel floor: a 90-deg cone from the bore down to the hole (1.4 mm deep). A screw dropped down the tube lands on the
 # cone and slides into the hole; an M3 x 8 countersunk head (Ø6 or less) self-centres in it. Prints as a 45-deg roof.
 SO_CONE_H = (SO_BORE - SO_HOLE) / 2
+# corner foot (panel.P['corner_foot']): the panel corner under the S3 has no standoff, so pushing on the screen there
+# flexed. A rigid foot from the plate bears on the panel's frame at its bottom edge (push only, not bolted). Its tip is
+# FOOT_GAP short of the standoff feet's plane: shim it (tape, felt) if the frame sits lower than the insert faces
+FOOT_GAP = 0.0
+STATUS_D, STATUS_CH = 2.0, 0.5                     # status light: plain hole (the translucent rod didn't carry the light)
 FOOT_Y = PANEL_BACK                          # foot face on the panel's insert bosses
 NUT_W, NUT_MOUTH, NUT_H, NUT_FLOAT = 5.7, 5.3, 2.7, 0.6
 NUT_CORNER = 5.5 / math.cos(math.pi / 6) / 2  # 3.175: nut centre to corner (corners point along the slot)
@@ -232,6 +237,9 @@ def back_plate3(window=True):
         p = p + rrect_z(x - 5, x + 5, SCREW_Y - 4.5, y1, 2.0, WALL + 0.2, WALL + 12.0)
     for x, z in STANDOFFS:
         p = p + standoff(x, z, y0)
+    fx0, fx1, fz0, fz1 = panel.P['corner_foot']                         # corner foot under/beside the S3
+    zedge = ZC - PANEL_Z
+    p = p + rrect_y(fx0, fx1, zedge + fz0, zedge + fz1, min(0.8, (fz1 - fz0) / 2 - 0.05), FOOT_Y + FOOT_GAP, y0 + 0.01)
     for sx in (-1, 1):                                                   # keyhole bumps (stadiums)
         x = sx * KEY_X
         rb = KH_POCKET_R + KH_WALL
@@ -311,9 +319,9 @@ def back_plate3(window=True):
         cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 + 1, ROD_D + 0.2, 32))
         cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y1 - ROD_HEAD_T, y1 + 1, ROD_HEAD_D + 0.2, 48))
         window = status_rod()
-    elif window == 'open':                       # one colour, opaque: the tube opens in a Ø3 hole, 0.5 mm chamfer outside
-        cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 + 1, 3.0, 32))
-        cuts.append(Manifold.cylinder(0.51, 1.5, 2.0, 32).rotate([-90, 0, 0]).translate([V.S3_NEO_X, y1 - 0.5, V.S3_NEO_Z]))
+    elif window == 'open':                       # one colour, opaque: the tube opens in a small hole, chamfered outside
+        cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 - 1, y1 + 1, STATUS_D, 32))
+        cuts.append(Manifold.cylinder(STATUS_CH + 0.01, STATUS_D / 2, STATUS_D / 2 + STATUS_CH, 32).rotate([-90, 0, 0]).translate([V.S3_NEO_X, y1 - STATUS_CH, V.S3_NEO_Z]))
         window = None
     elif window:
         cuts.append(cyl_y(V.S3_NEO_X, V.S3_NEO_Z, y0 + 0.4, y1 + 1, 6.0, 48))
@@ -412,11 +420,9 @@ def to_bed_back_down(m):
 if __name__ == '__main__':
     import trimesh
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    p, rod = back_plate3(window='rod')
+    p, _ = back_plate3(window='open')
     t = to_bed_back_down(p); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/bar-backplate-v3.stl')
     print('plate', t.is_watertight, np.round(t.extents, 1).tolist())
-    t = to_bed_back_down(rod); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/bar-status-rod-translucent.stl')
-    print('rod', t.is_watertight, np.round(t.extents, 2).tolist())
     # template: panel-side face (y = PANEL_BACK) on the bed
     me = panel_template().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     t.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])); t.apply_translation([0, 0, -t.bounds[0][2]])

@@ -18,7 +18,6 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Standoff funnel coupon (optional) | `coupon-v4-standoff-funnel.stl` | as the plate | as exported: drop an M3 x 8 countersunk down the tube and check it finds the hole and seats |
 | Diffuser | Two parts, loaded as one object: `bar-diffuser-white-face.stl` + `bar-diffuser-white-grid-black.stl` (0.2 face: 0.2 first layer, 0.4 nozzle), or `bar-diffuser-translucent-face.stl` + `bar-diffuser-translucent-grid-black.stl` (0.4 face: one 0.4 first layer, 0.6 nozzle) | face: white or translucent; the rest: black PETG | face down; the face part is the first layer |
 | Back plate | `bar-backplate-v3.stl` (one piece) | PETG, one opaque color (black hides the insides best) | outer face down |
-| Status-light rod | `bar-status-rod-translucent.stl` (flush head, shaft down the light tube to 0.8 mm above the LED) | translucent PETG, 100% infill | head down |
 | Insert check (print first) | `check-panel-insert-template.stl` | any PLA | as exported; that face goes on the panel |
 | Encoder collar | `bar-encoder-collar-backdown.stl` (0.4 mm clearance); `bar-encoder-collar-fit-set.stl` has 0.3 / 0.4 / 0.5 (1 / 2 / 3 notches) if unsure | walnut, or translucent PETG for the glow | flange-top down |
 | Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots under the skirt), then `bar-knob.stl` (the middle size) or the winner. Pebble, Ø30 x 12.7, grip flutes round the side, rounded shoulder, domed top | white PLA, or any | as exported (upright, skirt on the bed), no supports |
@@ -39,7 +38,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
   - Outer brim 5 mm with a 0.1 mm gap; Z hop 0.6 mm.
   - Plate washed with dish soap, then glue stick; bed 55-60 °C; door closed; no supports.
 - Back plate (PETG): 0.24 mm layers, 4 walls, 4 top + 4 bottom layers, 15% infill (gyroid), monotonic bottom surface, textured PEI, elephant foot 0.15, Z hop, dried PETG; Bambu PETG profile. Not solid: bolted to the panel, it doesn't need it, and solid adds most of the print time.
-- Collar in translucent PETG: 100% infill. Small parts (key, rod): print beside a larger part.
+- Collar in translucent PETG: 100% infill. Small parts (key, spacers): print beside a larger part.
 
 ## Finishing the shell
 1. Clean up the openings: deburr the knob hole, USB-C opening and screw holes.
@@ -57,7 +56,7 @@ The panel can't slide past a mounted encoder (its top edge is ~4 mm above the en
 5. Cables, with the plate held just behind the case: ribbon from the S3's IDC to the panel's PI IN, clipped into the plate's hooks; panel power to the S3's terminals; encoder STEMMA QT cable (its left-hand socket) to the S3.
    - Power cable: fold the extra back and forth in ~3.5 cm lengths with the spare plug and wrap one hook-and-loop tie round it. Set the bundle wherever it fits behind the panel; if it shifts, thread the tie through the plate's tie loop (middle, above the ribbon; 16 mm opening for a 12-14 mm tie).
 6. Plate in, tongues into the top grooves; it gets stiffer for the last few mm and clicks as the tongue bumps drop into their dimples. 4 x M3 x 8 countersunk down the standoff tubes into the panel's inserts (2 mm hex key), then 4 x M3 x 10 from below; the boss slots take up any depth error.
-7. Status-light rod into its hole from the back, head flush (snug; a drop of CA if it's loose). Plug in USB-C.
+7. Plug in USB-C. (The status light shows through a plain Ø2 hole in the plate; a translucent rod didn't carry the light.)
 - To flash: hold the Boot key in through the plate, plug in USB-C, upload, then replug. OTA updates are a later firmware job.
 - To service: unplug USB-C; take out the four screws from below and the four in the standoff tubes; ease the plate out (the S3 comes with it, still cabled). To get the panel out, take off the encoder's top nut and lift the encoder out first.
 
@@ -79,7 +78,7 @@ Parametric Python (manifold3d + trimesh); every STL in `stl/` is generated from 
 | `panel.py` | Panel profiles (`PANEL=p3` default, `PANEL=p25`): outline, thickness, LED pitch and diffuser rib, panel inserts and plate standoffs, ribbon hooks, tie-down bridge. Everything panel-sized derives from it |
 | `case.py` | Shared parameters and helpers (v1 shell and plate, kept as the base) |
 | `case2.py` | Shell v4 back-down (main) and front-down (alternate), both with the built-in rim and open holes; Boot key; the older skinned shell, glued frame, glue guide, drill guide and USB-C bezel behind flags |
-| `plate3.py` | Back plate v3 (bolted to the panel), status-light rod, insert template, boss and S3-pilot coupons |
+| `plate3.py` | Back plate v3 (bolted to the panel, corner foot under the S3), insert template, wall spacer, coupons |
 | `sensor.py` | Light-sensor bracket: `python3 sensor.py <outdir>` |
 | `knob.py` | Knob and its three-size fit set: `python3 knob.py <outdir>` |
 | `collar.py` | Encoder collars for both shells |
@@ -91,7 +90,7 @@ Parametric Python (manifold3d + trimesh); every STL in `stl/` is generated from 
 cd hardware/bar-sleeve-case/src
 pip install -r ../requirements.txt
 python3 case2.py ../stl          # back-down shell and Boot key; front-down shell into ../stl/alternate-frontdown/
-python3 plate3.py ../stl         # v3 plate, light rod, insert template, coupons
+python3 plate3.py ../stl         # v3 plate, insert template, wall spacer, coupons
 python3 sensor.py ../stl         # light-sensor bracket
 python3 knob.py ../stl           # knob + fit set
 python3 collar.py ../stl

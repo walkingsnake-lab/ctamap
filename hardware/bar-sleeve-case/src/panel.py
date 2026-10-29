@@ -26,6 +26,9 @@ PROFILES = {
         sensor_x=55.0,                   # optional light sensor (hole in the case top, board hung from the encoder)
         key_x=40.0,                      # plate v3 keyholes (x +/-)
         screw_xs=(40.0, 52.0),           # screws from below into the plate's bosses (x +/-): stop the insert sliding out
+        # push foot for the corner under the S3 (no standoff there): x0, x1 and z0, z1 above the panel's bottom edge. A post
+        # beside the S3, in the gap between the panel's left edge and the first louver slot; the S3 is 11.8 mm above the edge
+        corner_foot=(-95.0, -89.0, 0.5, 10.3),
         posts=((-75, 43), (75, 43), (-60, -43), (60, -43)),   # plate v2 only: foam hold-downs (x, z - ZC)
         assumed=(),
     ),
@@ -52,6 +55,8 @@ PROFILES = {
         sensor_x=40.0,                   # moved in: at 55 its bracket hits the top-right standoff (x 63.5)
         key_x=51.5,                      # keyholes beside the corner standoffs, so the top louvers run unbroken between them
         screw_xs=(46.0,),                # one pair (the plate bolts to the panel; these only stop the insert sliding out)
+        # push foot: a blade under the S3 (only 3.8 mm between its edge and the panel's), clear of the screw boss
+        corner_foot=(-78.0, -56.0, 0.5, 2.9),
         posts=((-60, 35), (60, 35), (-14, -36), (60, -36)),   # plate v2 only (placeholders)
         assumed=('thickness', 'inserts and headers (photo, +/-1 mm)', 'header height above the rails'),
     ),
