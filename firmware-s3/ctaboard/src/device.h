@@ -36,6 +36,9 @@ struct Settings {
   // pixels). double_buffer: draw into a back buffer and flip it in.
   bool clk_phase = false;
   bool double_buffer = true;
+  // Which color each HUB75 data line (R, G, B, in that order) lights on this panel: "RGB" normally; some panels
+  // are wired "RBG" (green and blue swapped) or another order. Applied by reassigning the data pins, so it costs nothing.
+  const char *color_order = "RGB";
 };
 
 // The panel: frames are drawn into a draw::Frame, then copied to the DMA
@@ -64,6 +67,7 @@ class Panel : public app::Display {
   bool hw_dim_;
   int oe_ = 255;  // the driver's brightness (output-enable window), 0-255
   bool clk_phase_, double_buffer_;
+  std::string color_order_;
   int64_t flipped_at_ = 0;  // us; when the last back buffer was flipped in
 };
 

@@ -59,7 +59,11 @@ after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
 - **Glitches that remain with the clock edge right:** try
   `MATRIX_DOUBLE_BUFFER 0` (draws straight onto the panel, as the driver test
   sketch did).
-- The serial log's first lines show the refresh rate and both settings.
+- **Wrong colors (green shows as blue, blue as green):** the panel's color
+  lines are wired in another order. Set `MATRIX_COLOR_ORDER "RBG"` in
+  `secrets.h` (red/green swapped: `"GRB"`; red/blue: `"BGR"`). It reassigns the
+  data pins, so the picture and timing are otherwise unchanged.
+- The serial log's first lines show the refresh rate and these settings.
 
 ### Going back to CircuitPython
 

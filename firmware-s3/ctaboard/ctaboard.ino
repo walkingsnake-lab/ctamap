@@ -33,6 +33,9 @@
 #ifndef MATRIX_HW_DIM
 #define MATRIX_HW_DIM 1
 #endif
+#ifndef MATRIX_COLOR_ORDER
+#define MATRIX_COLOR_ORDER "RGB"
+#endif
 #ifndef KNOB_REVERSE
 #define KNOB_REVERSE 0
 #endif
@@ -70,6 +73,7 @@ void setup() {
   settings.tls_verify = TLS_VERIFY;
   settings.clk_phase = MATRIX_CLK_PHASE;
   settings.double_buffer = MATRIX_DOUBLE_BUFFER;
+  settings.color_order = MATRIX_COLOR_ORDER;
 
   std::string started = device::start_reason();
   Serial.printf("[board] Matrix Portal S3, started by %s\n", started.c_str());
@@ -85,8 +89,8 @@ void setup() {
 
   panel = new device::Panel(settings);
   if (!panel->begin()) Serial.println("[board] panel init failed");
-  Serial.printf("[board] panel refresh %d Hz (clock phase %d, double buffer %d)\n", panel->refresh_rate(),
-                MATRIX_CLK_PHASE, MATRIX_DOUBLE_BUFFER);
+  Serial.printf("[board] panel refresh %d Hz (clock phase %d, double buffer %d, colors %s)\n", panel->refresh_rate(),
+                MATRIX_CLK_PHASE, MATRIX_DOUBLE_BUFFER, MATRIX_COLOR_ORDER);
 
   if (MATRIX_CALIBRATE) {
     // Color calibration: no WiFi, just the pattern. UP: next curve; DOWN:

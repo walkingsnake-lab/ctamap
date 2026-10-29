@@ -38,7 +38,7 @@ static const int kNeoPixel = 4;
 
 Panel::Panel(const Settings &s)
     : rotation_(s.rotation), pipe_(s.curve), day_curve_(s.curve), night_curve_(s.night_curve), hw_dim_(s.hw_dim),
-      clk_phase_(s.clk_phase), double_buffer_(s.double_buffer) {}
+      clk_phase_(s.clk_phase), double_buffer_(s.double_buffer), color_order_(s.color_order ? s.color_order : "RGB") {}
 
 void Panel::set_curves(int day, int night) {
   day_curve_ = day;
@@ -68,8 +68,28 @@ void Panel::dim(double k, bool hw) {
   }
 }
 
+// The data pins for red, green and blue, given which color each line (R, G, B) lights on the panel.
+// An order that isn't R, G and B once each falls back to RGB.
+static void color_pins(const std::string &order, const int8_t lines[3], int8_t out[3]) {
+  static const char kColors[3] = {'R', 'G', 'B'};
+  bool ok = order.size() == 3;
+  for (int c = 0; ok && c < 3; c++) {
+    size_t i = order.find(kColors[c]);
+    if (i == std::string::npos) ok = false;
+    else out[c] = lines[i];
+  }
+  if (!ok) {
+    Serial.printf("[board] MATRIX_COLOR_ORDER \"%s\" isn't R, G and B once each; using RGB\n", order.c_str());
+    for (int c = 0; c < 3; c++) out[c] = lines[c];
+  }
+}
+
 bool Panel::begin() {
-  HUB75_I2S_CFG::i2s_pins pins = {kR1, kG1, kB1, kR2, kG2, kB2, kA, kB, kC, kD, kE, kLat, kOe, kClk};
+  const int8_t top[3] = {kR1, kG1, kB1}, bottom[3] = {kR2, kG2, kB2};
+  int8_t t[3], b[3];
+  color_pins(color_order_, top, t);
+  color_pins(color_order_, bottom, b);
+  HUB75_I2S_CFG::i2s_pins pins = {t[0], t[1], t[2], b[0], b[1], b[2], kA, kB, kC, kD, kE, kLat, kOe, kClk};
   HUB75_I2S_CFG cfg(64, 32, 1, pins);
   cfg.double_buff = double_buffer_;  // draw into the back buffer, then flip: no half-drawn frames
   cfg.clkphase = clk_phase_;
