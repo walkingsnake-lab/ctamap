@@ -22,7 +22,7 @@ sleeve's), and it stiffens the sleeve from inside along the whole depth.
   sleeve, with a 3 mm ramp at the leading end.
 Shell: the v4 shell with 3.5 mm walls, the USB-C opening mirrored to the right wall, no tongue grooves, latches or detents.
 The collar follows the wall (bar-encoder-collar-v5).
-Run: python3 drawer.py <outdir>   (PANEL=p25 for the P2.5)
+Run: python3 drawer.py <outdir>   (PANEL=p25 for the P2.5; TRAY_NOZZLE=0.6 for a tray tuned for a 0.6 nozzle)
 """
 import math, os, sys
 os.environ.setdefault('CASE_WALL', '3.5')   # thicker sleeve walls (2.5 -> 3.5: ~2.7x stiffer); set before case.py loads
@@ -106,6 +106,13 @@ CLEAT_HW = min(75.0, min(S3_BOOT[0] - 2.4, S3_NEO[0] - 1.5) - 3.0)    # half len
 # nut boss: diameter, height, nut across flats. A press fit: the nuts stay in for good (no rattle without the cleat) and
 # double as pull points: thread two M3 screws in a few turns to draw the tray out
 CB_D, CB_H, CB_NUT = 10.0, 3.5, 5.45
+STATUS_D = P3.STATUS_D                          # status-light hole (2 mm)
+
+# 0.6 nozzle tray (TRAY_NOZZLE=0.6): wider crush-rib base (a 1.2 base is under two lines and prints as a vague wave), a
+# little more room in the press-fit nut pockets (rounder corners) and the status hole (small holes close up)
+TRAY_NOZZLE = float(os.environ.get('TRAY_NOZZLE', '0.4'))
+if TRAY_NOZZLE >= 0.6:
+    CR_W, CB_NUT, STATUS_D = 2.0, 5.5, 2.3
 
 # light sensor (VEML7700, sensor.py's board frame and position) on the tray: chip side up under the top wall, its STEMMA QT
 # sockets (4.25 tall) 0.35 under the wall; 4 x M2.5 x 6 up through the board into pillars hanging from the wall
@@ -242,8 +249,8 @@ def tray():
         cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y0, CB_NUT / math.cos(math.pi / 6), 6))
     nx, nz = _xz(S3_NEO)
     cuts.append(cyl_y(nx, nz, tube_end - 1, Y0 + 0.5, 4.5, 48))
-    cuts.append(cyl_y(nx, nz, Y0 - 1, Y1 + 1, P3.STATUS_D, 32))
-    cuts.append(Manifold.cylinder(P3.STATUS_CH + 0.01, P3.STATUS_D / 2, P3.STATUS_D / 2 + P3.STATUS_CH, 32).rotate([-90, 0, 0]).translate([nx, Y1 - P3.STATUS_CH, nz]))
+    cuts.append(cyl_y(nx, nz, Y0 - 1, Y1 + 1, STATUS_D, 32))
+    cuts.append(Manifold.cylinder(P3.STATUS_CH + 0.01, STATUS_D / 2, STATUS_D / 2 + P3.STATUS_CH, 32).rotate([-90, 0, 0]).translate([nx, Y1 - P3.STATUS_CH, nz]))
     for hx, hz_ in S3_HOLES:
         cuts.append(cyl_y(hx, hz_, yc - 1, yc + 8.0, P3.S3_PILOT, 24))
         cuts.append(Manifold.cylinder(P3.S3_LEAD + 0.01, P3.S3_PILOT / 2 + P3.S3_LEAD, P3.S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc - 0.01, hz_]))
@@ -350,6 +357,10 @@ if __name__ == '__main__':
         me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
         t.apply_transform(mat); t.apply_translation([0, 0, -t.bounds[0][2]]); t.export(f'{out}/{name}')
         print(name, t.is_watertight, np.round(t.extents, 1).tolist())
+    if TRAY_NOZZLE >= 0.6:                         # tray and its coupon only
+        cs, ct = fit_coupon(sh, tr)
+        put(tr, 'bar-drawer-tray-n06.stl'); put(ct, 'coupon-v5-drawer-fit-tray-n06.stl')
+        sys.exit()
     put(sh, 'bar-shell-v5-walnut-backdown.stl')
     put(tr, 'bar-drawer-tray.stl')                 # back face down, walls up
     cs, ct = fit_coupon(sh, tr)
