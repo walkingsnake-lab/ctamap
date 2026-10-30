@@ -12,7 +12,8 @@ from manifold3d import Manifold, CrossSection
 
 SEG = 128
 HOLE_R = 12.0                    # shell ENC_HOLE / 2
-CL = 0.2                         # clearance in the hole
+CL = 0.4                         # clearance in the hole. 0.2 was too tight: the back-down shell prints this hole on its
+                                 # side in wood PLA, which comes out undersize (the screen frame needed 0.30-0.45 too)
 WALL = 2.5
 FL_R, FL_T, FL_CH = 17.5, 1.6, 0.45
 PLUG_BOT = -2.4                  # 0.1 short of the wall's inner face
@@ -59,6 +60,22 @@ def export(m, path, flip=True):
     return t
 
 
+def fit_set(cls=(0.3, 0.4, 0.5)):
+    """back-down collars at three clearances side by side; 1, 2, 3 notches in the flange rim mark them"""
+    global CL
+    saved, parts = CL, []
+    try:
+        for i, c in enumerate(cls):
+            CL = c
+            m = collar()
+            for k in range(i + 1):
+                m = m - Manifold.cube([1.2, 1.6, 10]).translate([-0.6 + (k - i / 2) * 2.4, -FL_R - 0.4, -5])   # notches at -y
+            parts.append(m.translate([i * (2 * FL_R + 4), 0, 0]))
+    finally:
+        CL = saved
+    return Manifold.batch_boolean(parts, manifold3d.OpType.Add)
+
+
 if __name__ == '__main__':
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
     import os; os.makedirs(f'{out}/alternate-frontdown', exist_ok=True)
@@ -67,4 +84,6 @@ if __name__ == '__main__':
     TIP_BACK = False
     t = export(collar(), f'{out}/bar-encoder-collar-backdown.stl')
     print('collar (back-down shell) watertight', t.is_watertight)
+    t = export(fit_set(), f'{out}/bar-encoder-collar-fit-set.stl')
+    print('collar fit set (0.3 / 0.4 / 0.5, 1-3 notches)', t.is_watertight)
     TIP_BACK = True

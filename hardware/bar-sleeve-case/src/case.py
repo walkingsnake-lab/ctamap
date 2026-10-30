@@ -1,4 +1,5 @@
-"""Bar sleeve case for the Waveshare P3 64x32 + white diffuser + Matrix Portal S3 (on its ribbon).
+"""Bar sleeve case for a 64x32 HUB75 panel (profiles in panel.py: P3 default, PANEL=p25) + white diffuser
++ Matrix Portal S3 (on its ribbon).
 Shell (black walnut wood PLA) and back plate (PETG) with a separate status-window insert.
 Case frame: x right (seen from the front), y back (top front edge at y = 0), z up (shell bottom at z = 0). Units mm.
 Run: python3 case.py <outdir>   -> shell, back plate, status window STLs + a summary.
@@ -7,36 +8,41 @@ import math, sys
 import numpy as np
 import manifold3d
 from manifold3d import Manifold, CrossSection
+import panel
 
 # ---------------- parameters ----------------
-PANEL_X, PANEL_Z, PT = 96.0, 48.0, 14.5          # panel half sizes, thickness
+PANEL_X, PANEL_Z, PT = panel.P['w'] / 2, panel.P['h'] / 2, panel.P['t']   # panel half sizes, thickness
 STACK = 1.7                                       # diffuser face 0.2 + grid 1.5 in front of the LEDs
 WALL = 2.5
-BORE_HX, BORE_HZ, BORE_R = 106.0, 52.65, 11.5     # opening for the diffuser flange (+0.3 mm all round)
+BORE_HX, BORE_HZ, BORE_R = panel.BORE_HX, panel.BORE_HZ, panel.BORE_R   # opening for the diffuser flange (+0.3 mm all round)
+DX, DZ = panel.DX, panel.DZ                       # bore size vs P3 (0 for P3): moves the positions below
 HW = BORE_HX + WALL                               # outer half width 108.5
 H = 2 * (BORE_HZ + WALL)                          # 110.3
 RC = BORE_R + WALL                                # outer corner radius 14
 ZC = H / 2
 LT, LB = 12.0, 3.0                                # front lip past the face: 12 at the top, 3 at the bottom
 LEDGE_IN, LEDGE_T = 1.5, 1.2                      # face ledge: 1.5 mm inward, 1.2 thick, 45-deg chamfer behind it
-D = 69.0                                          # 63 in v1-v3; v4 adds 6 mm behind the panel for the stock cables
+S3_BACK = panel.P['s3_back']                      # extra panel-to-S3 gap (0 for P3)
+D = 69.0 + S3_BACK                                # 63 in v1-v3; v4 adds 6 mm behind the panel for the stock cables
 BACKL, PLATE_T = 4.0, 2.0                         # back lip, back plate
 Y_FACE = LT                                       # diffuser front face
 PANEL_BACK = Y_FACE + STACK + PT                  # 28.2
-PCB_Y0 = PANEL_BACK + 1.0 + 8.5                   # Portal PCB front face (bottom socket toward the panel)
+PCB_Y0 = PANEL_BACK + 1.0 + 8.5 + S3_BACK         # Portal PCB front face (bottom socket toward the panel, 1 mm + S3_BACK off it)
 PORT_Y = PCB_Y0 + 1.6 + 1.6                       # USB-C centre depth (top-mounted)
 PORT_Z = ZC                                       # USB-C at mid-height (cradle sets the Portal to match)
 KY = PANEL_BACK + 1.0 + 12.7                      # encoder centre: its board clears the panel back
 ENC_HOLE = 24.0                                   # collar insert hole (insert designed when the encoder arrives)
 GR_PITCH, GR_R = 3.2, 0.8
 NEO_X, NEO_Z = -96.5, ZC + 30.6                   # status NeoPixel (estimate from Adafruit's photo)
-FEET = [(sx * 84.0, fy) for sx in (-1, 1) for fy in (22.0, D - 11.0)]   # front pair 22 mm back: the recess teardrop's point
+FEET = [(sx * (84.0 + DX), fy) for sx in (-1, 1) for fy in (22.0, D - 11.0)]   # front pair 22 mm back: the recess teardrop's point
                                                   # (toward the front) stops ~3.5 mm inside the bottom front edge (y 9)
 FOOT_D, FOOT_DEPTH = 13.2, 1.5                    # recesses for 3M SJ5312 (12.7 mm) bumpers
 SCREW_X, SCREW_Y = 40.0, D - BACKL - PLATE_T - 3.5   # back plate screws from below
-SCREW_XS = (40.0, 52.0)                          # v4: two pairs (x = +/-40 and +/-52)
-KEY_X, KEY_Z = 40.0, ZC + 30.0                    # wall keyholes
+SCREW_XS = tuple(panel.P['screw_xs'])            # v4 P3: two pairs (x = +/-40 and +/-52); P2.5: one pair
+KEY_X, KEY_Z = panel.P['key_x'], ZC + 30.0 + DZ    # wall keyholes
 TONGUE_X, TONGUE_W = 40.0, 30.0
+POSTS = [(px, ZC + pz) for px, pz in panel.P['posts']]   # plate v2 hold-downs (x, z)
+POST_D = 8.0
 SEG = 64
 
 JT = manifold3d.JoinType.Round
@@ -175,8 +181,8 @@ def back_plate():
         b = b - box(x - 2.9, x + 2.9, SCREW_Y - 6, SCREW_Y + 3.0, WALL + 4.0, WALL + 6.7)
         p = p + b
     # hold-down posts: press the panel's frame band forward (0.5 mm short for a foam dot)
-    for px, pz in ((-75, ZC + 43), (75, ZC + 43), (-60, ZC - 43), (60, ZC - 43)):
-        p = p + cyl_y(px, pz, PANEL_BACK + 0.5, y0 + 0.01, 8.0, 48)
+    for px, pz in POSTS:
+        p = p + cyl_y(px, pz, PANEL_BACK + 0.5, y0 + 0.01, POST_D, 48)
     # keyhole cups (keep screw heads off the electronics), then the keyholes
     for sx in (-1, 1):
         x = sx * KEY_X

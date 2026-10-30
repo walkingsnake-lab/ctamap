@@ -24,6 +24,7 @@ import numpy as np
 import manifold3d
 from manifold3d import Manifold, CrossSection
 from case import *          # parameters and helpers from v1
+import panel
 
 K = (LT - LB) / H                         # front slope: y_front(z) = K * (H - z)
 CH_F = 0.45                               # front rim chamfers (leaves ~1.6 mm of rim on the bed)
@@ -33,6 +34,21 @@ BACKDOWN = False                         # True: shell prints back-down (layers 
 GRILLES = False
 DETENT = True                             # v4: top snap (dimples in the tongue grooves; bumps on plate3's tongues)
 DET_W, DET_DEPTH = 20.0, 0.5
+# Corner latches (both top corners): the tongue snap's spring was the shell's top wall, which also let it pop out. The
+# shell can't be ribbed inside (the diffuser flange fills the bore all the way back), so the catch goes where the shell
+# is already stiff, the R11.5 corner arcs: a dimple in each top corner's wall, and a springy PETG finger cut into the
+# plate's corner (skirt included) with a bump that clicks into it. 30-deg lead-in, ~50-deg back face: it takes a firm pull,
+# or a press on the finger from the back, to release.
+LATCH = True
+LT_A0, LT_A1 = 10.0, 80.0                 # finger: attached at LT_A0 (side), free at LT_A1 (top), degrees from the side
+LT_FW, LT_SW = 3.0, 1.0                   # finger width (radial; the 2 mm skirt + 1 mm of plate), slot width
+LT_BUMP_A = (50.0, 74.0)                  # bump's angular span on the finger
+LT_H = 0.8                                # bump height; 0.6 of it is interference (the plate is 0.2 inside the bore)
+# bump profile along y, relative to the plate's inner face y0: (dy, height)
+LT_BUMP = [(-5.0, 0.0), (-3.6, LT_H), (-2.8, LT_H), (-2.1, 0.0)]
+LT_DIMPLE = [(-5.6, 0.0), (-3.9, 0.7), (-2.6, 0.7), (-2.0, 0.0)]   # in the bore wall (0.7 deep: 1.8 mm of wall left)
+LT_DIMPLE_A = (46.0, 78.0)
+PLATE_Y0 = D - BACKL - PLATE_T            # the plate's inner face, seated
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
 SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open instead of drilling it
@@ -43,7 +59,7 @@ CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the beze
 SKIN_T = 0.5                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop;
                                           # just over one 0.4-nozzle line (~0.42): at 0.4 the slicer dropped it
 SL_W, SL_PITCH = 1.5, 4.0                 # slots (GRILLES = True only)
-SENSOR_X, SENSOR_Y, SENSOR_D = 55.0, 42.0, 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
+SENSOR_X, SENSOR_Y, SENSOR_D = panel.P['sensor_x'], 42.0, 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
 TOP_SL = dict(xc=57.0, n=16, y0=30.5, y1=46.5)
 BOT_SL = dict(xs=[50.0 + 4.0 * i for i in range(7)], y0=TOP_SL['y0'] + 9.0, y1=TOP_SL['y1'] + 9.0)  # +9: same layers
 BTN_Z0, BTN_Z1 = PORT_Z - 35.0, PORT_Z - 8.8  # Down (-10.3), Up (-20.1), Reset (-29.9) sit below the USB-C   # Down (+9.9), Up (+19.8), Reset (+29.7) on the S3 edge
@@ -109,6 +125,34 @@ def inner_front_chamfer():
     for (x, z) in rr_cs(BORE_HX, BORE_HZ, BORE_R).to_polygons()[0]:
         pts.append((x, front_y(z) + CH_F, z))
     return Manifold.hull_points(np.array(pts))
+
+
+def sector_cs(cx, cz, r0, r1, a0, a1, n=24):
+    """annular sector in the (x, z) plane; angles in degrees from +x toward +z"""
+    a = np.radians(np.linspace(a0, a1, n))
+    outer = [(cx + r1 * math.cos(t), cz + r1 * math.sin(t)) for t in a]
+    inner = [(cx + r0 * math.cos(t), cz + r0 * math.sin(t)) for t in a[::-1]]
+    cs = CrossSection([outer + inner])
+    return cs if cs.area() > 0 else CrossSection([(outer + inner)[::-1]])
+
+
+def corner_arcs():
+    """top-right and top-left corner centres and their angle maps (side end at 0 deg)"""
+    cx, cz = BORE_HX - BORE_R, ZC + BORE_HZ - BORE_R
+    return [((cx, cz), lambda t: t), ((-cx, cz), lambda t: 180.0 - t)]
+
+
+def radial_sweep(centre, r_base, profile, angles, y_ref):
+    """solid on an arc: at each y station (y_ref + dy) it spans r_base - 0.5 .. r_base + h, over the given angles"""
+    (cx, cz), amap = centre
+    a0, a1 = sorted((amap(angles[0]), amap(angles[1])))
+    def sl(dy, h):
+        return prism_y(sector_cs(cx, cz, r_base - 0.5, r_base + max(h, 0.01), a0, a1), y_ref + dy, y_ref + dy + 0.001)
+    return Manifold.batch_boolean([Manifold.batch_hull([sl(*p), sl(*q)]) for p, q in zip(profile, profile[1:])], ADD)
+
+
+def latch_dimples():
+    return Manifold.batch_boolean([radial_sweep(c, BORE_R, LT_DIMPLE, LT_DIMPLE_A, PLATE_Y0) for c in corner_arcs()], ADD)
 
 
 def teardrop_cs(r, cx, cy, trunc=None, seg=64):
@@ -194,12 +238,29 @@ def shell2():
         if DETENT:                                  # v4: dimple in the groove roof where the plate's tongue bump seats
             cuts.append(box(sx * TONGUE_X - DET_W / 2 - 1, sx * TONGUE_X + DET_W / 2 + 1, yp0 + 0.0, yp0 + PLATE_T + 0.1,
                             H - WALL + 1.3 - 0.01, H - WALL + 1.3 + DET_DEPTH))
+    if LATCH:
+        cuts.append(latch_dimples())
     return s - Manifold.batch_boolean(cuts, ADD)
 
 
 GAP = 2.5                                  # chimney gaps between the back plate and the shell, top and bottom
 PILL_Z0, PILL_Z1 = ZC - 35.0, ZC + 20.0     # taller pills; tops stay below the keyhole cups (ZC + 23)
-PILL_XS = [(i - 5) * 9.0 for i in range(11)]  # 11 pills (the outer pair would sit under the S3's posts)
+PILL_R, PILL_STEP = 2.2, 9.0
+_PILL_LIM = -max(hx for hx, _ in S3_HOLES) - 5.7              # stay 1 mm clear of the S3's post-and-rib frame
+PILL_XS = [k * PILL_STEP for k in range(-20, 21) if abs(k * PILL_STEP) <= _PILL_LIM]   # P3: 11 pills, -45..45
+
+
+def pill_span(x):
+    """z range of the pill at x: PILL_Z0..PILL_Z1, shortened to keep 2 mm clear of any v2 hold-down post it lines up
+    with (P3: none do)"""
+    z0, z1 = PILL_Z0, PILL_Z1
+    for px, pz in POSTS:
+        if abs(px - x) < POST_D / 2 + PILL_R + 1.0:
+            if pz < ZC:
+                z0 = max(z0, pz + POST_D / 2 + 2.0)
+            else:
+                z1 = min(z1, pz - POST_D / 2 - 2.0)
+    return z0, z1
 
 
 def back_plate2(window=True):
@@ -217,8 +278,8 @@ def back_plate2(window=True):
         b = b - cyl_z(x, SCREW_Y, WALL - 1, WALL + 13, 3.3, 32)              # the plate's edge stands on the bed, no overhang
         b = b - box(x - 2.9, x + 2.9, SCREW_Y - 6, SCREW_Y + 3.0, WALL + 4.0, WALL + 6.7)
         p = p + b
-    for px, pz in ((-75, ZC + 43), (75, ZC + 43), (-60, ZC - 43), (60, ZC - 43)):
-        p = p + cyl_y(px, pz, PANEL_BACK + 0.5, y0 + 0.01, 8.0, 48)
+    for px, pz in POSTS:
+        p = p + cyl_y(px, pz, PANEL_BACK + 0.5, y0 + 0.01, POST_D, 48)
     for sx in (-1, 1):
         x = sx * KEY_X
         p = p + box(x - 7, x + 7, y0 - 6, y0 + 0.01, KEY_Z - 7, KEY_Z + 15)
@@ -227,7 +288,8 @@ def back_plate2(window=True):
         p = p - prism_y(kh, y0 - 1, y1 + 1)
     vents = []
     for x in PILL_XS:
-        st = CrossSection.square([0.01, (PILL_Z1 - PILL_Z0) - 4.4], center=True).offset(2.2, JT, circular_segments=SEG).translate([x, (PILL_Z0 + PILL_Z1) / 2])
+        z0, z1 = pill_span(x)
+        st = CrossSection.square([0.01, (z1 - z0) - 2 * PILL_R], center=True).offset(PILL_R, JT, circular_segments=SEG).translate([x, (z0 + z1) / 2])
         vents.append(prism_y(st, y0 - 1, y1 + 1))
     p = p - Manifold.batch_boolean(vents, ADD)
     tube_end = PCB_Y0 + 1.6 + 1.5
@@ -255,7 +317,7 @@ def back_plate2(window=True):
     p = p - Manifold.cylinder(1.0, 1.3, 2.4, 32).rotate([-90, 0, 0]).translate([S3_BOOT_X, y1 - 1.0 + 0.001, S3_BOOT_Z])
     # ribbon hooks: two pairs on the bars between pills; the 20.3 mm ribbon runs flat along the plate at about ZC - 5
     RZ, RW = ZC - 5.0, 20.3
-    for hx in (-22.5, 22.5):
+    for hx in panel.P['hooks']:
         for side in (-1, 1):
             zp = RZ + side * (RW / 2 + 1.5)
             p = p + box(hx - 2, hx + 2, y0 - 4.5, y0 + 0.01, zp - 1.0, zp + 1.0)
