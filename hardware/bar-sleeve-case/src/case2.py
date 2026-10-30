@@ -176,6 +176,9 @@ def slot_z(x, y0, y1, z0, z1):
     return Manifold.extrude(cs, z1 - z0).translate([0, 0, z0])
 
 
+SEAMLESS_RIM = False     # v5 (drawer.configure_shell) sets it; off keeps the v4 STLs byte-identical
+
+
 def shell2():
     s = outer_body() - inner_front_chamfer()
     bore_cs = rr_cs(BORE_HX, BORE_HZ, BORE_R)
@@ -186,10 +189,16 @@ def shell2():
     else:                                          # built-in rim: two 45-deg slopes, prints either way up without supports
         lo = rr_cs(BORE_HX - RIM_IN, BORE_HZ - RIM_IN, BORE_R - RIM_IN)
         y_a, y_b = RIM_PEAK - RIM_IN, RIM_PEAK + RIM_IN
-        cuts = [prism_y(bore_cs, -50, y_a),
-                Manifold.batch_hull([prism_y(bore_cs, y_a - 0.001, y_a), prism_y(lo, RIM_PEAK, RIM_PEAK + 0.001)]),   # front slope
-                Manifold.batch_hull([prism_y(lo, RIM_PEAK - 0.001, RIM_PEAK), prism_y(bore_cs, y_b, y_b + 0.001)]),   # back slope = diffuser seat
-                prism_y(bore_cs, y_b - 0.001, D + 1)]
+        if SEAMLESS_RIM:
+            # two convex hulls meeting on one shared face at the peak: the bore and its slope in one piece each, so no
+            # thin overlaps at y_a / y_b (they left sliver triangles, non-manifold once the STL rounds to float32)
+            cuts = [Manifold.batch_hull([prism_y(bore_cs, -50, y_a), prism_y(lo, RIM_PEAK - 0.001, RIM_PEAK)]),   # front slope
+                    Manifold.batch_hull([prism_y(lo, RIM_PEAK, RIM_PEAK + 0.001), prism_y(bore_cs, y_b, D + 1)])]  # back slope = diffuser seat
+        else:
+            cuts = [prism_y(bore_cs, -50, y_a),
+                    Manifold.batch_hull([prism_y(bore_cs, y_a - 0.001, y_a), prism_y(lo, RIM_PEAK, RIM_PEAK + 0.001)]),   # front slope
+                    Manifold.batch_hull([prism_y(lo, RIM_PEAK - 0.001, RIM_PEAK), prism_y(bore_cs, y_b, y_b + 0.001)]),   # back slope = diffuser seat
+                    prism_y(bore_cs, y_b - 0.001, D + 1)]
     # slots (optional)
     for sx in ((-1, 1) if GRILLES else ()):
         for i in range(TOP_SL['n']):

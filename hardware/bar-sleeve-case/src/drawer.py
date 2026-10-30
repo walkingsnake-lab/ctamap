@@ -82,6 +82,7 @@ BTN_Z0, BTN_Z1 = PORT_Z + 8.8, PORT_Z + 35.0
 def configure_shell():
     """the v4 shell for the drawer"""
     V.TONGUES, V.DETENT, V.LATCH = False, False, False
+    V.SEAMLESS_RIM = True
     V.USB_SIDE = +1
     V.PORT_Z = PORT_Z
     V.BTN_Z0, V.BTN_Z1 = BTN_Z0, BTN_Z1
@@ -92,6 +93,7 @@ def configure_shell():
 LV_H, LV_PITCH, LV_DEPTH, LV_CH = 3.5, 5.0, 5.0, 1.5
 LV_ROWS = 3
 HOOK_RW = 20.3
+TIE_OPEN, TIE_GAP, TIE_BAR, TIE_LEN, TIE_EXIT = 14.0, 3.0, 2.0, 6.0, 3.0   # tie loop: tunnel width, depth, bar, length, end room
 
 # French cleat (cleat.py): the case cleat bolts to the tray's back between the louver bands, 2 x M3 into nuts in bosses inside
 CLEAT_T = 12.0                                  # cleat depth = tray back to wall (the rim sits CLEAT_T - BACKL off the wall)
@@ -116,6 +118,7 @@ def tray():
     outer = rr_cs(BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL, BORE_R - TRAY_CL)
     inner = rr_cs(BORE_HX - TRAY_CL - TRAY_WT, BORE_HZ - TRAY_CL - TRAY_WT, BORE_R - TRAY_CL - TRAY_WT)
     t = prism_y(outer, Y0, Y1) + (prism_y(outer, YF, Y0 + 0.01) - prism_y(inner, YF - 1, Y0 + 0.02))
+    inner_ov = rr_cs(BORE_HX - TRAY_CL - TRAY_WT + 0.3, BORE_HZ - TRAY_CL - TRAY_WT + 0.3, BORE_R - TRAY_CL - TRAY_WT + 0.3)
     hz = BORE_HZ - TRAY_CL - TRAY_WT                       # inner half height
     zin0, zin1 = ZC - hz, ZC + hz
     xin = BORE_HX - TRAY_CL - TRAY_WT
@@ -137,10 +140,10 @@ def tray():
         cs = CrossSection([pts])
         if cs.area() <= 0:
             cs = CrossSection([pts[::-1]])
-        return prism_x(cs, -xin, xin) ^ prism_y(inner, y_in - 1, Y0 + 1)
+        return prism_x(cs, -xin - 0.5, xin + 0.5) ^ prism_y(inner_ov, y_in - 1, Y0 + 1)   # overlaps the walls: no touching seams
     zb_rows = [zin0 + 2.5 + LV_H / 2 + i * LV_PITCH for i in range(LV_ROWS)]
     zt_rows = [zin1 - 2.5 - LV_H / 2 - i * LV_PITCH for i in range(LV_ROWS)][::-1]
-    t = t + band(zin0, zb_rows[-1] + LV_H / 2 + LV_DEPTH + 1.5) + band(zt_rows[0] - LV_H / 2 - 1.5, zin1)
+    t = t + band(zin0 - 0.5, zb_rows[-1] + LV_H / 2 + LV_DEPTH + 1.5) + band(zt_rows[0] - LV_H / 2 - 1.5, zin1 + 0.5)   # into the walls
     # bottom screw bosses (plate v3's, now standing on the tray's bottom wall)
     for x in [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]:
         t = t + rrect_z(x - 5, x + 5, C.SCREW_Y - 4.5, Y0 + 0.01, 2.0, zin0 - 0.01, WALL + 12.0)
@@ -179,9 +182,15 @@ def tray():
             t = t + box(hx - 2.5, hx + 2.5, ya, Y0 + 0.01, min(zi, zo), max(zi, zo))
             tip = zi - side * 4.0
             t = t + Manifold.batch_hull([box(hx - 2.5, hx + 2.5, ya, yb, min(zi, zo), max(zi, zo)), box(hx - 2.5, hx + 2.5, ya, ya + 0.01, tip - 0.005, tip + 0.005)])
-    # tie loop for the power-cable bundle, above the ribbon
-    tz = RZ + HOOK_RW / 2 + 12.0
-    t = t + rrect_z(-10.0, 10.0, Y0 - 2.2 - 1.8, Y0 + 0.01, 0.9, tz - 4.0, tz + 4.0)
+    # tie loop for the power-cable bundle (12 mm hook-and-loop strap): a bar over a tunnel running up and down the back wall,
+    # in the clear patch above the ribbon, between the ribbon hook and the S3's connector, below the top louver band, with
+    # TIE_EXIT free at each end so the strap can turn out over the bundle
+    tx0, tx1 = hook_xs[0] + 2.5 + 1.0, S3_EDGE - 63.8 - 1.0
+    tx = (tx0 + tx1) / 2
+    band_lo = zt_rows[0] - LV_H / 2 - 1.5
+    tz = (RZ + HOOK_RW / 2 + band_lo) / 2
+    assert band_lo - (RZ + HOOK_RW / 2) >= TIE_LEN + 2 * TIE_EXIT and tx1 - tx0 >= TIE_OPEN + 4, 'no room for the tie loop'
+    t = t + rrect_z(tx - TIE_OPEN / 2 - 2.0, tx + TIE_OPEN / 2 + 2.0, Y0 - TIE_GAP - TIE_BAR, Y0 + 0.01, 0.9, tz - TIE_LEN / 2, tz + TIE_LEN / 2)
     # ---- cuts
     cuts = []
     r = LV_H / 2
@@ -208,7 +217,10 @@ def tray():
             def slab(y, dz, xa=xa, xb=xb, zc=zc):
                 cs = CrossSection.square([xb - xa - 2 * r, 0.01], center=True).offset(r, JT, circular_segments=16).translate([(xa + xb) / 2, zc + dz])
                 return prism_y(cs, y, y + 0.01)
-            cuts.append(Manifold.batch_hull([slab(Y1 + 0.5, -0.5), slab(y_in - 0.5, LV_DEPTH + 0.5)]))
+            sl = Manifold.batch_hull([slab(Y1 + 0.5, -0.5), slab(y_in - 0.5, LV_DEPTH + 0.5)])
+            # the top row's slot rises into the top wall near its inner end: stop it 0.6 under the wall (a slot roof
+            # grazing the wall's face left a zero-thickness sheet, non-manifold in the STL)
+            cuts.append(sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6))
     # screw slots and nut pockets (plate v3)
     nut_end = C.SCREW_Y + P3.NUT_FLOAT + P3.NUT_CORNER
     mouth_end = C.SCREW_Y - P3.NUT_FLOAT - P3.NUT_CORNER
@@ -222,7 +234,7 @@ def tray():
     for x, z in CORNERS:
         cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, Y1 + 1, P3.SO_BORE, 48))
         cuts.append(P3.so_cone(x, ZC + z))
-    cuts.append(box(-10.0 + 2, 10.0 - 2, Y0 - 2.2, Y0 + 0.02, tz - 5, tz + 5))      # tie loop gap
+    cuts.append(box(tx - TIE_OPEN / 2, tx + TIE_OPEN / 2, Y0 - TIE_GAP, Y0 + 0.02, tz - TIE_LEN, tz + TIE_LEN))   # tie tunnel
     for cx, cz in CLEAT_SCREWS:                                                     # cleat screw holes, nut pockets open inward
         cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y1 + 1, 3.4, 24))
         cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y0, CB_NUT / math.cos(math.pi / 6), 6))
