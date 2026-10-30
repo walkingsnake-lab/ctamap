@@ -49,9 +49,8 @@ PROFILES = {
         lv_bottom_x=((-35.0, 35.0),),
         lv_top_x=((-45.0, 45.0),),
         headers=((40.1, -1.2), (-40.1, -1.2)),   # from the photo; PO OUT sits under the S3's bottom socket (see README)
-        # PO OUT sits under the S3's bottom socket, so the S3 (and the case) moves back by the header's height above the
-        # insert faces. 9.0 = worst case (a 9 mm shroud on a PCB flush with the rails): set it to the measured height
-        s3_back=9.0,
+        # PO OUT sits under the S3's bottom socket; the S3 would move back by the header's height above the insert faces
+        s3_back=0.0,                     # PO OUT sits below the frame top (a ruler across the frame clears it, Oct 29)
         sensor_x=40.0,                   # moved in: at 55 its bracket hits the top-right standoff (x 63.5)
         key_x=51.5,                      # keyholes beside the corner standoffs, so the top louvers run unbroken between them
         screw_xs=(46.0,),                # one pair (the plate bolts to the panel; these only stop the insert sliding out)

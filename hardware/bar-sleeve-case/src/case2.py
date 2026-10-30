@@ -40,6 +40,8 @@ DET_W, DET_DEPTH = 20.0, 0.5
 # plate's corner (skirt included) with a bump that clicks into it. 30-deg lead-in, ~50-deg back face: it takes a firm pull,
 # or a press on the finger from the back, to release.
 LATCH = True
+TONGUES = True                            # plate v3's top tongue grooves (off for the drawer)
+USB_SIDE = -1                             # -1: USB-C on the left wall (v1-v4); +1: on the right (the drawer: S3 turned 180 deg)
 LT_A0, LT_A1 = 10.0, 80.0                 # finger: attached at LT_A0 (side), free at LT_A1 (top), degrees from the side
 LT_FW, LT_SW = 3.0, 1.0                   # finger width (radial; the 2 mm skirt + 1 mm of plate), slot width
 LT_BUMP_A = (50.0, 74.0)                  # bump's angular span on the finger
@@ -221,7 +223,10 @@ def shell2():
         btn = Manifold.batch_hull([rel(PORT_Y - 7.0, PORT_Y + 4.5, deep, inner), rel(PORT_Y - 7.0 - (inner - deep), PORT_Y + 4.5, inner - 0.01, inner)])
     else:
         btn = Manifold.batch_hull([rel(PORT_Y - 7.0, PORT_Y + 4.5, deep, inner), rel(PORT_Y - 7.0, PORT_Y + 4.5 + (inner - deep), inner - 0.01, inner)])
-    cuts += [port, port_ch, btn]
+    usb_cuts = [port, port_ch, btn]
+    if USB_SIDE > 0:                               # mirrored to the right wall
+        usb_cuts = [m.mirror([1, 0, 0]) for m in usb_cuts]
+    cuts += usb_cuts
     # feet recesses (full teardrop toward the back: no flat roof to curl and catch the nozzle; the point shows ~3 mm past the bumper, underneath)
     for fx, fy in FEET:
         cuts.append(Manifold.extrude(teardrop_cs(FOOT_D / 2, fx, fy), FOOT_DEPTH + 1).translate([0, 0, -1]))
@@ -233,7 +238,7 @@ def shell2():
         cuts.append(Manifold.extrude(teardrop_cs(3.2, sx * scx, SCREW_Y, seg=48), 2.0).translate([0, 0, -1]))
     # tongue grooves (as v1)
     yp0 = D - BACKL - PLATE_T
-    for sx in (-1, 1):
+    for sx in ((-1, 1) if TONGUES else ()):
         cuts.append(box(sx * TONGUE_X - TONGUE_W / 2 - 0.3, sx * TONGUE_X + TONGUE_W / 2 + 0.3, yp0 - 0.3, D + 1, H - WALL - 0.01, H - WALL + 1.3))
         if DETENT:                                  # v4: dimple in the groove roof where the plate's tongue bump seats
             cuts.append(box(sx * TONGUE_X - DET_W / 2 - 1, sx * TONGUE_X + DET_W / 2 + 1, yp0 + 0.0, yp0 + PLATE_T + 0.1,
