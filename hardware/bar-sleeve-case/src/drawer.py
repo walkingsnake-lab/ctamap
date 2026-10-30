@@ -105,14 +105,17 @@ CLEAT_SCREWS = [(sx * 50.0, CLEAT_ZTOP - CLEAT_ATT / 2) for sx in (-1, 1)]
 CLEAT_HW = min(75.0, min(S3_BOOT[0] - 2.4, S3_NEO[0] - 1.5) - 3.0)    # half length: clear of the Boot and status holes
 # nut boss: diameter, height, nut across flats. A press fit: the nuts stay in for good (no rattle without the cleat) and
 # double as pull points: thread two M3 screws in a few turns to draw the tray out
-CB_D, CB_H, CB_NUT = 10.0, 3.5, 5.45
+CB_D, CB_H, CB_NUT = 10.0, 3.5, 5.7             # 5.45 was too tight in translucent PETG (Oct 30): now a firm push fit
+# bottom-boss nut slots: inside the deep tray a nut can't be malleted past a narrowed mouth (plate v3's 5.3), so the mouth
+# only just retains it (pushed in with a finger or screwdriver) and the pocket has room (5.7 -> 5.9, height 2.7 -> 2.9)
+BN_W, BN_MOUTH, BN_H = 5.9, 5.55, 2.9
 STATUS_D = P3.STATUS_D                          # status-light hole (2 mm)
 
 # 0.6 nozzle tray (TRAY_NOZZLE=0.6): wider crush-rib base (a 1.2 base is under two lines and prints as a vague wave), a
 # little more room in the press-fit nut pockets (rounder corners) and the status hole (small holes close up)
 TRAY_NOZZLE = float(os.environ.get('TRAY_NOZZLE', '0.4'))
 if TRAY_NOZZLE >= 0.6:
-    CR_W, CB_NUT, STATUS_D = 2.0, 5.5, 2.3
+    CR_W, CB_NUT, STATUS_D = 2.0, 5.75, 2.3
 
 # light sensor (VEML7700, sensor.py's board frame and position) on the tray: chip side up under the top wall, its STEMMA QT
 # sockets (4.25 tall) 0.35 under the wall; 4 x M2.5 x 6 up through the board into pillars hanging from the wall
@@ -238,8 +241,8 @@ def tray():
         slot = CrossSection.square([0.01, 2 * P3.NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, C.SCREW_Y])
         cuts.append(Manifold.extrude(slot, 20).translate([0, 0, -1]))
         nz0 = WALL + 4.0
-        cuts.append(box(x - P3.NUT_W / 2, x + P3.NUT_W / 2, mouth_end, nut_end, nz0, nz0 + P3.NUT_H))
-        cuts.append(box(x - P3.NUT_MOUTH / 2, x + P3.NUT_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + P3.NUT_H))
+        cuts.append(box(x - BN_W / 2, x + BN_W / 2, mouth_end, nut_end, nz0, nz0 + BN_H))
+        cuts.append(box(x - BN_MOUTH / 2, x + BN_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + BN_H))
     for x, z in CORNERS:
         cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, Y1 + 1, P3.SO_BORE, 48))
         cuts.append(P3.so_cone(x, ZC + z))

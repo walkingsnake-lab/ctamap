@@ -129,7 +129,7 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
   together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.
 - Print: shell back-down as v4; tray back face down, walls up, no supports. For a 0.6 nozzle use `bar-drawer-tray-n06.stl`
   with `coupon-v5-drawer-fit-tray-n06.stl` (`TRAY_NOZZLE=0.6`): crush ribs on a 2.0 base (1.2 is under two 0.6 lines), nut
-  pockets 5.5, status hole 2.3 (prints near 2). 0.3 mm layers, 3 walls, 3 top / 3 bottom, 15% gyroid.
+  pockets 5.75, status hole 2.3 (prints near 2). 0.3 mm layers, 3 walls, 3 top / 3 bottom, 15% gyroid.
 - Wall mount (`src/cleat.py` -> `bar-cleat-case.stl`, `bar-cleat-wall.stl`): a French cleat, both pieces 12 mm deep. The case
   cleat bolts to the tray's back between the louver bands (2 x M3 x 10 from the wall side, nuts dropped into the bosses inside
   the tray before the S3 goes in). The wall cleat takes 2 x #8 / 4 mm countersunk screws (or anchors); its face holds the tray
