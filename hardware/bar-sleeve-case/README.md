@@ -128,7 +128,7 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
 - Print `coupon-v5-drawer-fit-shell.stl` (walnut) and `coupon-v5-drawer-fit-tray.stl` (tray filament) first and slide them
   together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.
 - Status light: glue `bar-status-window.stl` (Ø5.7 x 1, translucent PETG, flat) into the round pocket on the tray's back
-  (a dot of CA or clear glue at the rim). The Boot key goes in at the funnel below it.
+  (a dot of CA or clear glue at the rim). The Boot key goes in at the funnel below it, marked by two dots.
 - Print: shell back-down as v4; tray back face down, walls up, no supports. For a 0.6 nozzle use `bar-drawer-tray-n06.stl`
   with `coupon-v5-drawer-fit-tray-n06.stl` (`TRAY_NOZZLE=0.6`): crush ribs on a 2.0 base (1.2 is under two 0.6 lines), nut
   pockets 5.75, status hole 2.3 (prints near 2). 0.3 mm layers, 3 walls, 3 top / 3 bottom, 15% gyroid.

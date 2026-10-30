@@ -114,12 +114,13 @@ STATUS_D = P3.STATUS_D                          # (v5 now uses the window below)
 # the full light tube; Boot: a 45-deg funnel round its hole that reads as "press here" and guides the key
 WIN_D, WIN_T, WIN_CL = 6.0, 1.0, 0.15           # pocket diameter, depth; window disc clearance a side
 BOOT_FUNNEL_D = 7.0                             # funnel diameter at the back face (45 deg down to the 2.6 hole)
+BOOT_DOT_D, BOOT_DOT_DEPTH = 1.4, 0.4           # two dots beside the Boot funnel (outboard side), stacked like a colon
 
 # 0.6 nozzle tray (TRAY_NOZZLE=0.6): wider crush-rib base (a 1.2 base is under two lines and prints as a vague wave), a
 # little more room in the press-fit nut pockets (rounder corners) and the status hole (small holes close up)
 TRAY_NOZZLE = float(os.environ.get('TRAY_NOZZLE', '0.4'))
 if TRAY_NOZZLE >= 0.6:
-    CR_W, CB_NUT = 2.0, 5.75
+    CR_W, CB_NUT, BOOT_DOT_D = 2.0, 5.75, 1.8
 
 # light sensor (VEML7700, sensor.py's board frame and position) on the tray: chip side up under the top wall, its STEMMA QT
 # sockets (4.25 tall) 0.35 under the wall; 4 x M2.5 x 6 up through the board into pillars hanging from the wall
@@ -264,6 +265,8 @@ def tray():
     cuts.append(cyl_y(bx, bz, btop + 0.5, Y1 + 1, 2.6, 24))
     fd = (BOOT_FUNNEL_D - 2.6) / 2                                              # 45 deg: as deep as it is wide
     cuts.append(Manifold.cylinder(fd + 0.01, 1.3, BOOT_FUNNEL_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([bx, Y1 - fd, bz]))
+    for dz in (-1.5, 1.5):
+        cuts.append(cyl_y(bx + BOOT_FUNNEL_D / 2 + 2.2, bz + dz, Y1 - BOOT_DOT_DEPTH, Y1 + 1, BOOT_DOT_D, 24))
     # top wall: slot open to the front edge past the encoder body; light hole and sensor pilots
     ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
     cuts.append(box(-ENC_SLOT, ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
