@@ -108,15 +108,17 @@ snug sleeve can't tilt, so the top needs no tabs or latches; the two screws from
 look; only the USB-C opening moves (low on the right) and the tongue grooves go.
 
 - Stiffness: the sleeve's walls are 3.5 mm (v4 2.5; `CASE_WALL` sets it) and the tray's 2.5. Bending stiffness goes with wall
-  thickness cubed, so ~2.7x and ~2x. Crush ribs (0.45 mm) on the tray's outside take up the clearance so the two walls brace
-  each other instead of sliding. The encoder collar and sensor bracket follow the thicker wall (`-v5` STLs).
+  thickness cubed, so ~2.7x and ~2x. Crush ribs on the tray's outside (0.35 mm tall, 0.1 mm into the sleeve, ramped at the leading end) take up the clearance so the two walls brace
+  each other instead of sliding. The encoder collar follows the thicker wall (`bar-encoder-collar-v5.stl`).
 
 - The panel sits turned 180° (input header on the left): set `MATRIX_ROTATION 180` in `secrets.h`. The S3 is turned 180° too,
   on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
-- Top wall: slots open to the front edge past the knob encoder and the light sensor. Right wall: a slot for the USB-C plug and
+- Top wall: one slot open to the front edge, only as wide as the knob encoder's body (18.7 mm). The light sensor rides on the
+  tray: screwed under the top wall (4 x M2.5 x 6 into the pillars, chip up) below a Ø4 hole lined up with the sleeve's Ø2
+  light hole; no bracket. Right wall: a slot for the USB-C plug and
   the S3's edge buttons. Back: full-width louver bands, Boot and status-light holes, one pair of ribbon hooks, a tie loop, two
   nut bosses for the French cleat. No keyholes.
-- Order: diffuser and panel into the sleeve; encoder (with the sensor bracket) from the back; S3 onto the tray; tray in;
+- Order: diffuser and panel into the sleeve; encoder from the back; S3 and sensor onto the tray; tray in;
   4 x M3 x 8 countersunk down the post tubes into the panel; 2 x M3 x 10 + nuts from below (one pair, x +/-46, both panels).
 - Print `coupon-v5-drawer-fit-shell.stl` (walnut) and `coupon-v5-drawer-fit-tray.stl` (tray filament) first and slide them
   together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.

@@ -10,16 +10,18 @@ sleeve's), and it stiffens the sleeve from inside along the whole depth.
 - The panel sits turned 180 deg in the case (MATRIX_ROTATION 180 in secrets.h): its input header is on the left. The S3 is
   turned 180 deg too, on the right, USB-C low on the right wall, centred between the panel's right-hand posts, so all four
   corner inserts get a bolted post (funnel tubes as plate v3). Boot and the status LED still face the back.
-- Top wall: open slots from the front edge past the encoder's body and the light sensor (both hang from the sleeve's top),
-  so the tray slides in past them. Right wall: a slot (open to the front edge) for the USB-C plug and the S3's
+- Top wall: one open slot from the front edge past the knob encoder's body (it hangs from the sleeve's top), only as wide as
+  the body. The light sensor rides on the tray, screwed under the top wall below a closed hole lined up with the sleeve's
+  light hole (no bracket). Right wall: a slot (open to the front edge) for the USB-C plug and the S3's
   edge buttons.
 - Back: two full-width louver bands (intake bottom, exhaust top); Boot hole, status-light hole (plain, 2 mm), ribbon hooks,
   tie loop, two nut bosses for the French cleat (cleat.py). No keyholes.
 - Stiffness: the sleeve's walls are 3.5 mm (CASE_WALL; v4 2.5) and the tray's 2.5 (v4 plate skirt 2.0): a thin wall's bending
   stiffness goes with thickness cubed (~2.7x and ~2x). Crush ribs on the tray's outside (CR_H) take out the clearance so the
-  two walls brace each other along their length instead of sliding.
+  two walls brace each other along their length instead of sliding. They're kept gentle for the wood PLA: 0.1 mm into the
+  sleeve, with a 3 mm ramp at the leading end.
 Shell: the v4 shell with 3.5 mm walls, the USB-C opening mirrored to the right wall, no tongue grooves, latches or detents.
-The collar and the sensor bracket follow the wall (bar-encoder-collar-v5, bar-sensor-bracket-v5).
+The collar follows the wall (bar-encoder-collar-v5).
 Run: python3 drawer.py <outdir>   (PANEL=p25 for the P2.5)
 """
 import math, os, sys
@@ -42,7 +44,7 @@ TRAY_CL = 0.25                                  # tray outside to the sleeve's b
 TRAY_WT = 2.5                                   # 2 -> 2.5: ~2x stiffer; 0.55 mm left past the diffuser skirt top and bottom
 # crush ribs on the tray's outside, along the slide direction: they stand CR_H proud of the wall, CR_H - TRAY_CL into the
 # sleeve, and shave down as the tray goes in, so the two walls brace each other along their length with no play
-CR_H, CR_W = 0.45, 1.2
+CR_H, CR_W, CR_RAMP = 0.35, 1.2, 3.0           # 0.1 into the sleeve: gentle on wood PLA (raise CR_H if the coupon wobbles)
 FLANGE_BACK = Y_FACE + 1.2                      # diffuser flange's back face (FT 1.2)
 YF = FLANGE_BACK                                # tray front edge: on the flange
 Y1 = D - BACKL                                  # tray back, outer face (as plate v3: 4 mm inside the rim)
@@ -101,6 +103,14 @@ CLEAT_SCREWS = [(sx * 50.0, CLEAT_ZTOP - CLEAT_ATT / 2) for sx in (-1, 1)]
 CLEAT_HW = min(75.0, min(S3_BOOT[0] - 2.4, S3_NEO[0] - 1.5) - 3.0)    # half length: clear of the Boot and status holes
 CB_D, CB_H, CB_NUT = 10.0, 3.5, 5.6             # nut boss: diameter, height, nut across flats (snug)
 
+# light sensor (VEML7700, sensor.py's board frame and position) on the tray: chip side up under the top wall, its STEMMA QT
+# sockets (4.25 tall) 0.35 under the wall; 4 x M2.5 x 6 up through the board into pillars hanging from the wall
+SEN_GAP = 4.6
+SEN_TOP = H - WALL - TRAY_CL - TRAY_WT - SEN_GAP     # board's top (chip side)
+SEN_HOLE = 4.0                                  # hole in the tray's top wall over the chip (the sleeve's 2 mm hole sets the view)
+ENC_HALF = 11.8 / 2 * math.sqrt(2)              # encoder body (11.8 square, turned 45 deg): half diagonal
+ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
+
 
 def tray():
     outer = rr_cs(BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL, BORE_R - TRAY_CL)
@@ -147,6 +157,13 @@ def tray():
     t = t + cyl_y(*_xz(S3_NEO), tube_end, Y0 + 0.01, 7.0, 48)
     btop = yc + 1.9
     t = t + cyl_y(*_xz(S3_BOOT), btop + 1.0, Y0 + 0.01, 5.0, 32)
+    # light-sensor pillars: 5 mm wide, pointed (45 deg) on the back side, so printed back face down their underside is a
+    # roof, not a flat overhang (a gusset there would hit the board's STEMMA QT sockets)
+    import sensor as SN
+    zw = H - WALL - TRAY_CL - TRAY_WT
+    for x, y in SN.SH:
+        prof = CrossSection([[(x - 2.5, y - 2.5), (x + 2.5, y - 2.5), (x + 2.5, y), (x, y + 2.5), (x - 2.5, y)]])
+        t = t + Manifold.extrude(prof, zw + 0.01 - SEN_TOP).translate([0, 0, SEN_TOP])
     # cleat nut bosses
     for cx, cz in CLEAT_SCREWS:
         t = t + cyl_y(cx, cz, Y0 - CB_H, Y0 + 0.01, CB_D, 48)
@@ -219,11 +236,12 @@ def tray():
     bx, bz = _xz(S3_BOOT)
     cuts.append(cyl_y(bx, bz, btop + 0.5, Y1 + 1, 2.6, 24))
     cuts.append(Manifold.cylinder(1.0, 1.3, 2.4, 32).rotate([-90, 0, 0]).translate([bx, Y1 - 1.0 + 0.001, bz]))
-    # top-wall slots, open to the front edge, past the encoder body and the light sensor (+ their bracket)
-    import sensor as SN
+    # top wall: slot open to the front edge past the encoder body; light hole and sensor pilots
     ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
-    cuts.append(box(-13.5, 13.5, YF - 1, KY + 14.0, ztw, H))   # encoder board (25.4 square) and its nuts
-    cuts.append(box(SN.SB_X0 - 1.5, SN.SB_X1 + 1.5, YF - 1, SN.SB_Y1 + 1.5, ztw, H))
+    cuts.append(box(-ENC_SLOT, ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
+    cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
+    for x, y in SN.SH:
+        cuts.append(cyl_z(x, y, SEN_TOP - 1, SEN_TOP + SEN_GAP + 1.0, 2.4, 24))
     # right wall: window for the USB-C plug and the edge buttons
     # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
     cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
@@ -240,19 +258,21 @@ def crush_ribs():
     ribs = []
 
     def rib(c0, c1, axis, sign):
-        # triangle in the (x, z) plane at the wall: base CR_W along the wall, apex CR_H out
-        if axis == 'z':                                          # on the top (+1) / bottom (-1) wall, at x = c0
-            z = ZC + sign * oz
-            pts = [(c0 - CR_W / 2, z - sign * 0.3), (c0 + CR_W / 2, z - sign * 0.3), (c0, z + sign * CR_H)]
-        else:                                                    # on the right (+1) / left (-1) wall, at z = c0
-            x = sign * ox
-            pts = [(x - sign * 0.3, c0 - CR_W / 2), (x - sign * 0.3, c0 + CR_W / 2), (x + sign * CR_H, c0)]
-        cs = CrossSection([pts])
-        if cs.area() <= 0:
-            cs = CrossSection([pts[::-1]])
-        return prism_y(cs, y_a, y_b)
+        # triangle in the (x, z) plane at the wall: base CR_W along the wall, apex CR_H out; ramps up over CR_RAMP at the
+        # leading (front) end so it eases into the sleeve
+        def tri(h):
+            if axis == 'z':                                      # on the top (+1) / bottom (-1) wall, at x = c0
+                z = ZC + sign * oz
+                pts = [(c0 - CR_W / 2, z - sign * 0.3), (c0 + CR_W / 2, z - sign * 0.3), (c0, z + sign * h)]
+            else:                                                # on the right (+1) / left (-1) wall, at z = c0
+                x = sign * ox
+                pts = [(x - sign * 0.3, c0 - CR_W / 2), (x - sign * 0.3, c0 + CR_W / 2), (x + sign * h, c0)]
+            cs = CrossSection([pts])
+            return cs if cs.area() > 0 else CrossSection([pts[::-1]])
+        ramp = Manifold.batch_hull([prism_y(tri(0.0), y_a, y_a + 0.01), prism_y(tri(CR_H), y_a + CR_RAMP, y_a + CR_RAMP + 0.01)])
+        return prism_y(tri(CR_H), y_a + CR_RAMP, y_b) + ramp
     xs = [-0.75 * (ox - BORE_R), -0.3 * (ox - BORE_R), 0.3 * (ox - BORE_R), 0.75 * (ox - BORE_R)]
-    top_block = [(-13.5 - 2, 13.5 + 2), (SN.SB_X0 - 3.5, SN.SB_X1 + 3.5)]
+    top_block = [(-ENC_SLOT - 2, ENC_SLOT + 2)]
     for x in xs:
         ribs.append(rib(x, None, 'z', -1))
         if not any(a < x < b for a, b in top_block):
@@ -284,10 +304,22 @@ def s3_envelope():
                                    comp(55.8, 61.0, 1.8, 7.0, 7.0), comp(55.8, 61.0, 37.5, 42.7, 7.0)], ADD)
 
 
+def sensor_envelope():
+    """the light sensor on the tray, for fit checks: board, sockets, chip, screw heads underneath"""
+    import sensor as SN
+    b = SEN_TOP - 1.6
+    parts = [box(SN.SB_X0, SN.SB_X1, SN.SB_Y0, SN.SB_Y1, b, SEN_TOP),
+             box(SN.SX - 1.0, SN.SX + 1.0, SN.SY - 1.0, SN.SY + 1.0, SEN_TOP, SEN_TOP + 0.85)]
+    parts += [box(SN.sb(bx0, 6)[0], SN.sb(bx1, 6)[0], SN.sb(0, 11.8)[1], SN.sb(0, 6)[1], SEN_TOP, SEN_TOP + 4.25) for bx0, bx1 in ((0.5, 4.8), (20.6, 24.9))]
+    parts += [cyl_z(x, y, b - 1.8, b, 4.6, 24) for x, y in SN.SH]
+    return Manifold.batch_boolean(parts, ADD)
+
+
 def fit_coupon(sh, tr):
     """the sleeve's and the tray's top-right corner, 25 mm deep: slide one into the other to tune TRAY_CL"""
     cx, cz = BORE_HX - BORE_R, ZC + BORE_HZ - BORE_R
-    reg = box(cx - 20, HW + 1, Y1 - 25, D + 1, cz - 20, H + 1)
+    x0 = min(cx - 20, 0.75 * (BORE_HX - TRAY_CL - BORE_R) - 4)          # takes in the nearest top crush rib
+    reg = box(x0, HW + 1, Y1 - 25, D + 1, cz - 20, H + 1)
     return sh ^ reg, tr ^ reg
 
 
@@ -307,10 +339,8 @@ if __name__ == '__main__':
     put(sh, 'bar-shell-v5-walnut-backdown.stl')
     put(tr, 'bar-drawer-tray.stl')                 # back face down, walls up
     cs, ct = fit_coupon(sh, tr)
-    import collar as CO, sensor as SN                    # both follow the 3.5 mm wall
+    import collar as CO                                  # follows the 3.5 mm wall
     CO.TIP_BACK = False
     t = CO.export(CO.collar(), f'{out}/bar-encoder-collar-v5.stl'); print('bar-encoder-collar-v5.stl', t.is_watertight)
-    me = SN.bracket().to_mesh(); tb = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
-    tb.apply_translation([0, 0, -tb.bounds[0][2]]); tb.export(f'{out}/bar-sensor-bracket-v5.stl'); print('bar-sensor-bracket-v5.stl', tb.is_watertight)
     put(cs, 'coupon-v5-drawer-fit-shell.stl'); put(ct, 'coupon-v5-drawer-fit-tray.stl')
     print(dict(D=D, S3_edge=round(S3_EDGE, 2), s3_z0=round(S3_Z0 - ZC, 2), port_z=round(PORT_Z - ZC, 2), corners=CORNERS))
