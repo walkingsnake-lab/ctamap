@@ -114,7 +114,7 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
 - The panel sits turned 180° (input header on the left): set `MATRIX_ROTATION 180` in `secrets.h`. The S3 is turned 180° too,
   on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
 - Top wall: one slot open to the front edge, only as wide as the knob encoder's body (18.7 mm). The light sensor rides on the
-  tray: screwed under the top wall (4 x M2.5 x 6 into the pillars, chip up) below a Ø4 hole lined up with the sleeve's Ø2
+  tray: screwed under the top wall (4 x M2.5 x 5 into short pillars, chip up, its sockets in channels in the wall) below a Ø4 hole lined up with the sleeve's Ø2
   light hole; no bracket. Right wall: a slot for the USB-C plug and
   the S3's edge buttons. Back: full-width louver bands, Boot and status-light holes, one pair of ribbon hooks, a tie loop, two
   nut bosses for the French cleat. No keyholes.

@@ -123,8 +123,13 @@ if TRAY_NOZZLE >= 0.6:
     CR_W, CB_NUT, BOOT_DOT_D = 2.0, 5.75, 1.8
 
 # light sensor (VEML7700, sensor.py's board frame and position) on the tray: chip side up under the top wall, its STEMMA QT
-# sockets (4.25 tall) 0.35 under the wall; 4 x M2.5 x 6 up through the board into pillars hanging from the wall
-SEN_GAP = 4.6
+# sockets (4.25 tall) 0.35 under the channels in the wall; 4 x M2.5 x 5 up through the board into pillars hanging from it
+# The pillars are short cantilevers off a wall that prints vertical; at 4.6 long their ridges printed poorly (Oct 30), so
+# the sockets now sit in SEN_POCKET-deep channels in the wall (running out past the board's ends for the plugs), the board
+# rises by that much and the pillars shrink to 2.9. The chip also ends up closer to the light hole (a wider view).
+SEN_POCKET = 1.7                                # channel depth into the 2.5 mm top wall (0.8 left)
+SEN_PLUG = 8.0                                  # channel run past each socket, outward, for the plug
+SEN_GAP = 4.6 - SEN_POCKET
 SEN_TOP = H - WALL - TRAY_CL - TRAY_WT - SEN_GAP     # board's top (chip side)
 SEN_HOLE = 4.0                                  # hole in the tray's top wall over the chip (the sleeve's 2 mm hole sets the view)
 ENC_HALF = 11.8 / 2 * math.sqrt(2)              # encoder body (11.8 square, turned 45 deg): half diagonal
@@ -272,7 +277,13 @@ def tray():
     cuts.append(box(-ENC_SLOT, ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
     cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
     for x, y in SN.SH:
-        cuts.append(cyl_z(x, y, SEN_TOP - 1, SEN_TOP + SEN_GAP + 1.0, 2.4, 24))
+        cuts.append(cyl_z(x, y, SEN_TOP - 1, SEN_TOP + SEN_GAP + 1.6, 2.4, 24))   # M2.5 x 5 (x 6 reaches 0.1 short of the end)
+    zw = H - WALL - TRAY_CL - TRAY_WT
+    (_, sy0), (_, sy1) = SN.sb(0, 11.8), SN.sb(0, 6)
+    for (bx0, bx1), out in (((0.5, 4.8), -1), ((20.6, 24.9), 1)):           # socket channels, open toward each board end
+        xa, xb = SN.sb(bx0, 0)[0], SN.sb(bx1, 0)[0]
+        xa, xb = (xa - SEN_PLUG, xb + 0.5) if out < 0 else (xa - 0.5, xb + SEN_PLUG)
+        cuts.append(box(xa, xb, sy0 - 0.5, sy1 + 0.5, zw - 1, zw + SEN_POCKET))
     # right wall: window for the USB-C plug and the edge buttons
     # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
     cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
