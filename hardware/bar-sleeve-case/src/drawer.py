@@ -109,13 +109,17 @@ CB_D, CB_H, CB_NUT = 10.0, 3.5, 5.7             # 5.45 was too tight in transluc
 # bottom-boss nut slots: inside the deep tray a nut can't be malleted past a narrowed mouth (plate v3's 5.3), so the mouth
 # only just retains it (pushed in with a finger or screwdriver) and the pocket has room (5.7 -> 5.9, height 2.7 -> 2.9)
 BN_W, BN_MOUTH, BN_H = 5.9, 5.55, 2.9
-STATUS_D = P3.STATUS_D                          # status-light hole (2 mm)
+STATUS_D = P3.STATUS_D                          # (v5 now uses the window below)
+# status light: a round pocket in the back face for a glued-in window disc (bar-status-window.stl, translucent), lit through
+# the full light tube; Boot: a 45-deg funnel round its hole that reads as "press here" and guides the key
+WIN_D, WIN_T, WIN_CL = 6.0, 1.0, 0.15           # pocket diameter, depth; window disc clearance a side
+BOOT_FUNNEL_D = 7.0                             # funnel diameter at the back face (45 deg down to the 2.6 hole)
 
 # 0.6 nozzle tray (TRAY_NOZZLE=0.6): wider crush-rib base (a 1.2 base is under two lines and prints as a vague wave), a
 # little more room in the press-fit nut pockets (rounder corners) and the status hole (small holes close up)
 TRAY_NOZZLE = float(os.environ.get('TRAY_NOZZLE', '0.4'))
 if TRAY_NOZZLE >= 0.6:
-    CR_W, CB_NUT, STATUS_D = 2.0, 5.75, 2.3
+    CR_W, CB_NUT = 2.0, 5.75
 
 # light sensor (VEML7700, sensor.py's board frame and position) on the tray: chip side up under the top wall, its STEMMA QT
 # sockets (4.25 tall) 0.35 under the wall; 4 x M2.5 x 6 up through the board into pillars hanging from the wall
@@ -251,15 +255,15 @@ def tray():
         cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y1 + 1, 3.4, 24))
         cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y0, CB_NUT / math.cos(math.pi / 6), 6))
     nx, nz = _xz(S3_NEO)
-    cuts.append(cyl_y(nx, nz, tube_end - 1, Y0 + 0.5, 4.5, 48))
-    cuts.append(cyl_y(nx, nz, Y0 - 1, Y1 + 1, STATUS_D, 32))
-    cuts.append(Manifold.cylinder(P3.STATUS_CH + 0.01, STATUS_D / 2, STATUS_D / 2 + P3.STATUS_CH, 32).rotate([-90, 0, 0]).translate([nx, Y1 - P3.STATUS_CH, nz]))
+    cuts.append(cyl_y(nx, nz, tube_end - 1, Y1 - WIN_T + 0.01, 4.5, 48))     # light tube straight through to the window
+    cuts.append(cyl_y(nx, nz, Y1 - WIN_T, Y1 + 1, WIN_D, 48))                  # window pocket (flat roof: a 0.75 mm ring)
     for hx, hz_ in S3_HOLES:
         cuts.append(cyl_y(hx, hz_, yc - 1, yc + 8.0, P3.S3_PILOT, 24))
         cuts.append(Manifold.cylinder(P3.S3_LEAD + 0.01, P3.S3_PILOT / 2 + P3.S3_LEAD, P3.S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc - 0.01, hz_]))
     bx, bz = _xz(S3_BOOT)
     cuts.append(cyl_y(bx, bz, btop + 0.5, Y1 + 1, 2.6, 24))
-    cuts.append(Manifold.cylinder(1.0, 1.3, 2.4, 32).rotate([-90, 0, 0]).translate([bx, Y1 - 1.0 + 0.001, bz]))
+    fd = (BOOT_FUNNEL_D - 2.6) / 2                                              # 45 deg: as deep as it is wide
+    cuts.append(Manifold.cylinder(fd + 0.01, 1.3, BOOT_FUNNEL_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([bx, Y1 - fd, bz]))
     # top wall: slot open to the front edge past the encoder body; light hole and sensor pilots
     ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
     cuts.append(box(-ENC_SLOT, ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
@@ -366,6 +370,9 @@ if __name__ == '__main__':
         sys.exit()
     put(sh, 'bar-shell-v5-walnut-backdown.stl')
     put(tr, 'bar-drawer-tray.stl')                 # back face down, walls up
+    win = Manifold.cylinder(WIN_T, WIN_D / 2 - WIN_CL, WIN_D / 2 - WIN_CL, 64)
+    me = win.to_mesh(); tw = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False); tw.export(f'{out}/bar-status-window.stl')
+    print('bar-status-window.stl', tw.is_watertight)
     cs, ct = fit_coupon(sh, tr)
     import collar as CO                                  # follows the 3.5 mm wall
     CO.TIP_BACK = False
