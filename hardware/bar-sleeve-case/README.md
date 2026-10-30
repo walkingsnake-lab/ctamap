@@ -33,7 +33,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 ## Print settings
 - Shell:
   - Bambu PLA Wood profile; filament dried (~8 h at 50-55 °C) and flow-calibrated.
-  - 0.2 mm layers throughout (no variable layer height), 3 walls, elephant foot 0.15.
+  - 0.2 mm base layers with variable layer height (smooths the hood ramp and the rim slopes), 3 walls (v5's 3.5 mm walls: 4 on a 0.4 nozzle, 3 on a 0.6), elephant foot 0.15. The faint bands it leaves read as wood grain once sanded and oiled.
   - Seam: rotate Z 225° (or 135°) so the bottom-right corner faces the back of the plate, then Seam position "Back" and scarf seam; check in Preview.
   - Outer brim 5 mm with a 0.1 mm gap; Z hop 0.6 mm.
   - Plate washed with dish soap, then glue stick; bed 55-60 °C; door closed; no supports.
