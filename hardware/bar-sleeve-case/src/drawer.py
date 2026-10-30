@@ -14,10 +14,15 @@ sleeve's), and it stiffens the sleeve from inside along the whole depth.
   edge buttons.
 - Back: two full-width louver bands (intake bottom, exhaust top); Boot hole, status-light hole (plain, 2 mm), ribbon hooks,
   tie loop. No keyholes: wall mounting is a separate French-cleat accessory (to come).
-Shell: the v4 shell with the USB-C opening mirrored to the right wall, no tongue grooves, latches or detents.
+- Stiffness: the sleeve's walls are 3.5 mm (CASE_WALL; v4 2.5) and the tray's 2.5 (v4 plate skirt 2.0): a thin wall's bending
+  stiffness goes with thickness cubed (~2.7x and ~2x). Crush ribs on the tray's outside (CR_H) take out the clearance so the
+  two walls brace each other along their length instead of sliding.
+Shell: the v4 shell with 3.5 mm walls, the USB-C opening mirrored to the right wall, no tongue grooves, latches or detents.
+The collar and the sensor bracket follow the wall (bar-encoder-collar-v5, bar-sensor-bracket-v5).
 Run: python3 drawer.py <outdir>   (PANEL=p25 for the P2.5)
 """
-import math, sys
+import math, os, sys
+os.environ.setdefault('CASE_WALL', '3.5')   # thicker sleeve walls (2.5 -> 3.5: ~2.7x stiffer); set before case.py loads
 import numpy as np
 from manifold3d import Manifold, CrossSection
 import case as C
@@ -28,7 +33,10 @@ from case import box, rr_cs, prism_y, prism_x, cyl_y, cyl_z, ZC, H, D, WALL, HW,
     PANEL_X, PANEL_Z, PANEL_BACK, PCB_Y0, PORT_Y, Y_FACE, BACKL, PLATE_T, KY
 
 TRAY_CL = 0.25                                  # tray outside to the sleeve's bore, a side (tune with the fit coupon)
-TRAY_WT = 2.0
+TRAY_WT = 2.5                                   # 2 -> 2.5: ~2x stiffer; 0.55 mm left past the diffuser skirt top and bottom
+# crush ribs on the tray's outside, along the slide direction: they stand CR_H proud of the wall, CR_H - TRAY_CL into the
+# sleeve, and shave down as the tray goes in, so the two walls brace each other along their length with no play
+CR_H, CR_W = 0.45, 1.2
 FLANGE_BACK = Y_FACE + 1.2                      # diffuser flange's back face (FT 1.2)
 YF = FLANGE_BACK                                # tray front edge: on the flange
 Y1 = D - BACKL                                  # tray back, outer face (as plate v3: 4 mm inside the rim)
@@ -192,13 +200,47 @@ def tray():
     # top-wall slots, open to the front edge, past the encoder body and the light sensor (+ their bracket)
     import sensor as SN
     ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
-    cuts.append(box(-10.0, 10.0, YF - 1, KY + 10.0, ztw, H))
+    cuts.append(box(-13.5, 13.5, YF - 1, KY + 14.0, ztw, H))   # encoder board (25.4 square) and its nuts
     cuts.append(box(SN.SB_X0 - 1.5, SN.SB_X1 + 1.5, YF - 1, SN.SB_Y1 + 1.5, ztw, H))
     # right wall: window for the USB-C plug and the edge buttons
     # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
     cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
     t = t - Manifold.batch_boolean(cuts, ADD)
+    t = t + crush_ribs()
     return max(t.decompose(), key=lambda m: m.volume())
+
+
+def crush_ribs():
+    """triangular ribs on the tray's outside, running front to back, clear of the wall slots"""
+    import sensor as SN
+    ox, oz = BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL                # tray outside half sizes
+    y_a, y_b = YF + 4.0, Y0 - 1.0
+    ribs = []
+
+    def rib(c0, c1, axis, sign):
+        # triangle in the (x, z) plane at the wall: base CR_W along the wall, apex CR_H out
+        if axis == 'z':                                          # on the top (+1) / bottom (-1) wall, at x = c0
+            z = ZC + sign * oz
+            pts = [(c0 - CR_W / 2, z - sign * 0.3), (c0 + CR_W / 2, z - sign * 0.3), (c0, z + sign * CR_H)]
+        else:                                                    # on the right (+1) / left (-1) wall, at z = c0
+            x = sign * ox
+            pts = [(x - sign * 0.3, c0 - CR_W / 2), (x - sign * 0.3, c0 + CR_W / 2), (x + sign * CR_H, c0)]
+        cs = CrossSection([pts])
+        if cs.area() <= 0:
+            cs = CrossSection([pts[::-1]])
+        return prism_y(cs, y_a, y_b)
+    xs = [-0.75 * (ox - BORE_R), -0.3 * (ox - BORE_R), 0.3 * (ox - BORE_R), 0.75 * (ox - BORE_R)]
+    top_block = [(-13.5 - 2, 13.5 + 2), (SN.SB_X0 - 3.5, SN.SB_X1 + 3.5)]
+    for x in xs:
+        ribs.append(rib(x, None, 'z', -1))
+        if not any(a < x < b for a, b in top_block):
+            ribs.append(rib(x, None, 'z', +1))
+    zs = [ZC - 0.5 * (oz - BORE_R), ZC + 0.5 * (oz - BORE_R)]
+    for z in zs:
+        ribs.append(rib(z, None, 'x', -1))
+        if not (PORT_Z - 9.5 < z < BTN_Z1 + 3.0):
+            ribs.append(rib(z, None, 'x', +1))
+    return Manifold.batch_boolean(ribs, ADD)
 
 
 def _xz(p):
@@ -243,5 +285,10 @@ if __name__ == '__main__':
     put(sh, 'bar-shell-v5-walnut-backdown.stl')
     put(tr, 'bar-drawer-tray.stl')                 # back face down, walls up
     cs, ct = fit_coupon(sh, tr)
+    import collar as CO, sensor as SN                    # both follow the 3.5 mm wall
+    CO.TIP_BACK = False
+    t = CO.export(CO.collar(), f'{out}/bar-encoder-collar-v5.stl'); print('bar-encoder-collar-v5.stl', t.is_watertight)
+    me = SN.bracket().to_mesh(); tb = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
+    tb.apply_translation([0, 0, -tb.bounds[0][2]]); tb.export(f'{out}/bar-sensor-bracket-v5.stl'); print('bar-sensor-bracket-v5.stl', tb.is_watertight)
     put(cs, 'coupon-v5-drawer-fit-shell.stl'); put(ct, 'coupon-v5-drawer-fit-tray.stl')
     print(dict(D=D, S3_edge=round(S3_EDGE, 2), s3_z0=round(S3_Z0 - ZC, 2), port_z=round(PORT_Z - ZC, 2), corners=CORNERS))

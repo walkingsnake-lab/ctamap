@@ -102,9 +102,13 @@ python3 layerscan.py ../stl/bar-shell-v4-walnut-backdown.stl /tmp/scan.npy
 
 ### v5 drawer (in testing)
 `src/drawer.py` -> `stl/v5-drawer/` (P3; `PANEL=p25` for the P2.5). The flat back plate becomes a rigid tray that slides into the
-sleeve from the back: four walls 2 mm thick, 0.25 mm inside the bore, running forward to the diffuser's flange. A deep tray in a
+sleeve from the back: four walls 2.5 mm thick, 0.25 mm inside the bore, running forward to the diffuser's flange. A deep tray in a
 snug sleeve can't tilt, so the top needs no tabs or latches; the two screws from below stop it sliding out. The sleeve keeps its
 look; only the USB-C opening moves (low on the right) and the tongue grooves go.
+
+- Stiffness: the sleeve's walls are 3.5 mm (v4 2.5; `CASE_WALL` sets it) and the tray's 2.5. Bending stiffness goes with wall
+  thickness cubed, so ~2.7x and ~2x. Crush ribs (0.45 mm) on the tray's outside take up the clearance so the two walls brace
+  each other instead of sliding. The encoder collar and sensor bracket follow the thicker wall (`-v5` STLs).
 
 - The panel sits turned 180° (input header on the left): set `MATRIX_ROTATION 180` in `secrets.h`. The S3 is turned 180° too,
   on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
@@ -114,7 +118,7 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
 - Order: diffuser and panel into the sleeve; encoder (with the sensor bracket) from the back; S3 onto the tray; tray in;
   4 x M3 x 8 countersunk down the post tubes into the panel; 2 x M3 x 10 + nuts from below.
 - Print `coupon-v5-drawer-fit-shell.stl` (walnut) and `coupon-v5-drawer-fit-tray.stl` (tray filament) first and slide them
-  together: snug with no wobble is right. Change `TRAY_CL` in `drawer.py` if not.
+  together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.
 - Print: shell back-down as v4; tray back face down, walls up, no supports.
 
 ### Other panels
