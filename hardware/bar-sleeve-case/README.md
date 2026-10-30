@@ -78,6 +78,8 @@ Parametric Python (manifold3d + trimesh); every STL in `stl/` is generated from 
 | `panel.py` | Panel profiles (`PANEL=p3` default, `PANEL=p25`): outline, thickness, LED pitch and diffuser rib, panel inserts and plate standoffs, ribbon hooks, tie-down bridge. Everything panel-sized derives from it |
 | `case.py` | Shared parameters and helpers (v1 shell and plate, kept as the base) |
 | `case2.py` | Shell v4 back-down (main) and front-down (alternate), both with the built-in rim and open holes; Boot key; the older skinned shell, glued frame, glue guide, drill guide and USB-C bezel behind flags |
+| `drawer.py` | v5 drawer: the tray and the v5 shell (USB-C on the right, no tongue grooves), fit coupons |
+| `cleat.py` | v5 French cleat: case cleat (bolts to the tray) and wall cleat |
 | `plate3.py` | Back plate v3 (bolted to the panel, corner foot under the S3), insert template, wall spacer, coupons |
 | `sensor.py` | Light-sensor bracket: `python3 sensor.py <outdir>` |
 | `knob.py` | Knob and its three-size fit set: `python3 knob.py <outdir>` |
@@ -98,6 +100,38 @@ python3 diffuser.py ../stl/        # two-colour sets (white 0.2 and translucent 
 python3 plinth.py ../stl 8
 python3 layerscan.py ../stl/bar-shell-v4-walnut-backdown.stl /tmp/scan.npy
 ```
+
+### v5 drawer (in testing)
+`src/drawer.py` -> `stl/v5-drawer/` (P3; `PANEL=p25` for the P2.5). The flat back plate becomes a rigid tray that slides into the
+sleeve from the back: four walls 2.5 mm thick, 0.25 mm inside the bore, running forward to the diffuser's flange. A deep tray in a
+snug sleeve can't tilt, so the top needs no tabs or latches; the two screws from below stop it sliding out. The sleeve keeps its
+look; only the USB-C opening moves (low on the right) and the tongue grooves go.
+
+- Stiffness: the sleeve's walls are 3.5 mm (v4 2.5; `CASE_WALL` sets it) and the tray's 2.5. Bending stiffness goes with wall
+  thickness cubed, so ~2.7x and ~2x. Crush ribs on the tray's outside (0.35 mm tall, 0.1 mm into the sleeve, ramped at the leading end) take up the clearance so the two walls brace
+  each other instead of sliding. The encoder collar follows the thicker wall (`bar-encoder-collar-v5.stl`).
+
+- The panel sits turned 180° (input header on the left): set `MATRIX_ROTATION 180` in `secrets.h`. The S3 is turned 180° too,
+  on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
+- Top wall: one slot open to the front edge, only as wide as the knob encoder's body (18.7 mm). The light sensor rides on the
+  tray: screwed under the top wall (4 x M2.5 x 6 into the pillars, chip up) below a Ø4 hole lined up with the sleeve's Ø2
+  light hole; no bracket. Right wall: a slot for the USB-C plug and
+  the S3's edge buttons. Back: full-width louver bands, Boot and status-light holes, one pair of ribbon hooks, a tie loop, two
+  nut bosses for the French cleat. No keyholes.
+- Order: diffuser and panel into the sleeve; encoder from the back; S3 and sensor onto the tray; tray in;
+  4 x M3 x 8 countersunk down the post tubes into the panel; 2 x M3 x 10 + nuts from below (one pair, x +/-46, both panels).
+- Cables between the tray and the sleeve: the ribbon (S3 -> panel input) must be at least ~15 cm (20 cm comfortable) so the
+  tray comes fully out still cabled; chain STEMMA QT S3 -> sensor -> encoder, so only the sensor-to-encoder cable (15-20 cm)
+  crosses. Panel power runs from the S3's terminals through the tie loop (above the ribbon) to the panel. Leave the cleat
+  nuts out unless the cleat is fitted (they'd rattle).
+- Print `coupon-v5-drawer-fit-shell.stl` (walnut) and `coupon-v5-drawer-fit-tray.stl` (tray filament) first and slide them
+  together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.
+- Print: shell back-down as v4; tray back face down, walls up, no supports.
+- Wall mount (`src/cleat.py` -> `bar-cleat-case.stl`, `bar-cleat-wall.stl`): a French cleat, both pieces 12 mm deep. The case
+  cleat bolts to the tray's back between the louver bands (2 x M3 x 10 from the wall side, nuts dropped into the bosses inside
+  the tray before the S3 goes in). The wall cleat takes 2 x #8 / 4 mm countersunk screws (or anchors); its face holds the tray
+  back, so the case hangs plumb with no bottom spacer. The rim sits 8 mm off the wall, both louver bands open. To hang: lift
+  ~12 mm above the resting spot, push to the wall, drop onto the bevel. Print both wall face down, no supports, PETG.
 
 ### Other panels
 Set `PANEL` to build for another profile; with no `PANEL` the P3 STLs are unchanged.

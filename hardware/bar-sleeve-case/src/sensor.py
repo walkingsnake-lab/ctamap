@@ -50,12 +50,13 @@ def bracket():
     # carrier: a frame under the sensor, top at the sensor's underside
     carrier = box(SB_X0 + 0.5, SB_X1 - 0.5, SB_Y0 + 0.5, SB_Y1 - 0.5, Z0, SB_BOT)
     carrier = carrier - box(SB_X0 + 6.5, SB_X1 - 6.5, SB_Y0 + 5.5, SB_Y1 - 5.5, Z0 - 1, SB_BOT + 1)
-    arms = [Manifold.batch_hull([cyl_z(x, y, Z0, EB_BOT, 4.5, 32), cyl_z(SB_X0 + 3.0, cy, Z0, EB_BOT, 4.5, 32)])
+    arms = [Manifold.batch_hull([cyl_z(x, y, Z0, EB_BOT, 4.5, 32), cyl_z(SB_X0 + 3.0, cy, Z0, min(EB_BOT, SB_BOT), 4.5, 32)])
             for (x, y), cy in zip(EH, (SB_Y0 + 3.0, SB_Y1 - 3.0))]
     b = Manifold.batch_boolean(pads + arms + [carrier], C.ADD)
     holes = [cyl_z(x, y, Z0 - 1, EB_BOT + 1, 2.8, 24) for x, y in EH]
     holes += [cyl_z(x, y, Z0 - 1, SB_BOT + 1, PILOT, 24) for x, y in SH]
     holes += [Manifold.cylinder(0.51, PILOT / 2, PILOT / 2 + 0.5, 24).translate([x, y, SB_BOT - 0.5]) for x, y in SH]   # lead-in
+    holes.append(box(SB_X0 - 0.3, SB_X1 + 0.3, SB_Y0 - 0.3, SB_Y1 + 0.3, SB_BOT, SB_BOT + 20))   # nothing above the carrier under the board
     return b - Manifold.batch_boolean(holes, C.ADD)
 
 

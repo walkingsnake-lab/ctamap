@@ -4,7 +4,7 @@ Shell (black walnut wood PLA) and back plate (PETG) with a separate status-windo
 Case frame: x right (seen from the front), y back (top front edge at y = 0), z up (shell bottom at z = 0). Units mm.
 Run: python3 case.py <outdir>   -> shell, back plate, status window STLs + a summary.
 """
-import math, sys
+import math, os, sys
 import numpy as np
 import manifold3d
 from manifold3d import Manifold, CrossSection
@@ -13,7 +13,7 @@ import panel
 # ---------------- parameters ----------------
 PANEL_X, PANEL_Z, PT = panel.P['w'] / 2, panel.P['h'] / 2, panel.P['t']   # panel half sizes, thickness
 STACK = 1.7                                       # diffuser face 0.2 + grid 1.5 in front of the LEDs
-WALL = 2.5
+WALL = float(os.environ.get('CASE_WALL', '2.5'))   # sleeve wall; the v5 drawer build uses 3.5 (drawer.py sets it)
 BORE_HX, BORE_HZ, BORE_R = panel.BORE_HX, panel.BORE_HZ, panel.BORE_R   # opening for the diffuser flange (+0.3 mm all round)
 DX, DZ = panel.DX, panel.DZ                       # bore size vs P3 (0 for P3): moves the positions below
 HW = BORE_HX + WALL                               # outer half width 108.5
