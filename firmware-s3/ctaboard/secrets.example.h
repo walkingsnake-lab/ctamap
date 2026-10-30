@@ -26,6 +26,11 @@
 // default shifted this P3 panel 1 px left, so this is 0. Try 1 if yours is off.
 #define MATRIX_CLK_PHASE 0
 
+// Which color each data line (R, G, B) lights on your panel. "RGB" for most;
+// if green shows as blue and blue as green (some P2.5 panels), use "RBG".
+// Other swaps: red/green "GRB", red/blue "BGR".
+#define MATRIX_COLOR_ORDER "RGB"
+
 // Draw each frame into a back buffer and flip it in (1), or draw straight
 // onto the panel (0). Try 0 if frames still glitch with the clock edge right.
 #define MATRIX_DOUBLE_BUFFER 1
