@@ -5,7 +5,8 @@ gave when the screen was pushed. A deep tray inside a snug sleeve can't tilt (it
 sleeve's), and it stiffens the sleeve from inside along the whole depth.
 
 - Tray: back + four walls (TRAY_WT thick, TRAY_CL inside the sleeve's bore) running forward to the diffuser's flange, so the
-  flange is held between the screen rim and the tray's front edge. Two screws from below (as plate v3) stop it sliding out.
+  flange is held between the screen rim and the tray's front edge. One pair of screws from below (x +/-46, both panels)
+  stops it sliding out.
 - The panel sits turned 180 deg in the case (MATRIX_ROTATION 180 in secrets.h): its input header is on the left. The S3 is
   turned 180 deg too, on the right, USB-C low on the right wall, centred between the panel's right-hand posts, so all four
   corner inserts get a bolted post (funnel tubes as plate v3). Boot and the status LED still face the back.
@@ -13,7 +14,7 @@ sleeve's), and it stiffens the sleeve from inside along the whole depth.
   so the tray slides in past them. Right wall: a slot (open to the front edge) for the USB-C plug and the S3's
   edge buttons.
 - Back: two full-width louver bands (intake bottom, exhaust top); Boot hole, status-light hole (plain, 2 mm), ribbon hooks,
-  tie loop. No keyholes: wall mounting is a separate French-cleat accessory (to come).
+  tie loop, two nut bosses for the French cleat (cleat.py). No keyholes.
 - Stiffness: the sleeve's walls are 3.5 mm (CASE_WALL; v4 2.5) and the tray's 2.5 (v4 plate skirt 2.0): a thin wall's bending
   stiffness goes with thickness cubed (~2.7x and ~2x). Crush ribs on the tray's outside (CR_H) take out the clearance so the
   two walls brace each other along their length instead of sliding.
@@ -31,6 +32,11 @@ import plate3 as P3
 import panel
 from case import box, rr_cs, prism_y, prism_x, cyl_y, cyl_z, ZC, H, D, WALL, HW, BORE_HX, BORE_HZ, BORE_R, JT, ADD, SEG, \
     PANEL_X, PANEL_Z, PANEL_BACK, PCB_Y0, PORT_Y, Y_FACE, BACKL, PLATE_T, KY
+
+# one pair of screws from below on both panels: with the tray boxed in by the sleeve they only stop it sliding out
+SCREW_XS_V5 = (46.0,)
+for _m in (C, V, P3):
+    _m.SCREW_XS = SCREW_XS_V5
 
 TRAY_CL = 0.25                                  # tray outside to the sleeve's bore, a side (tune with the fit coupon)
 TRAY_WT = 2.5                                   # 2 -> 2.5: ~2x stiffer; 0.55 mm left past the diffuser skirt top and bottom
@@ -85,6 +91,16 @@ LV_H, LV_PITCH, LV_DEPTH, LV_CH = 3.5, 5.0, 5.0, 1.5
 LV_ROWS = 3
 HOOK_RW = 20.3
 
+# French cleat (cleat.py): the case cleat bolts to the tray's back between the louver bands, 2 x M3 into nuts in bosses inside
+CLEAT_T = 12.0                                  # cleat depth = tray back to wall (the rim sits CLEAT_T - BACKL off the wall)
+CLEAT_ATT = 14.0                                # case cleat's face on the tray (above its bevel)
+_hz = BORE_HZ - TRAY_CL - TRAY_WT
+CLEAT_ZTOP = ZC + _hz - 2.5 - LV_H - (LV_ROWS - 1) * LV_PITCH - 0.5 - 1.0   # 1 mm under the lowest top louver's opening
+CLEAT_ZBOT = ZC - _hz + 2.5 + LV_H + (LV_ROWS - 1) * LV_PITCH - 0.5 + 1.0   # 1 mm over the highest bottom louver's opening
+CLEAT_SCREWS = [(sx * 50.0, CLEAT_ZTOP - CLEAT_ATT / 2) for sx in (-1, 1)]
+CLEAT_HW = min(75.0, min(S3_BOOT[0] - 2.4, S3_NEO[0] - 1.5) - 3.0)    # half length: clear of the Boot and status holes
+CB_D, CB_H, CB_NUT = 10.0, 3.5, 5.6             # nut boss: diameter, height, nut across flats (snug)
+
 
 def tray():
     outer = rr_cs(BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL, BORE_R - TRAY_CL)
@@ -131,6 +147,9 @@ def tray():
     t = t + cyl_y(*_xz(S3_NEO), tube_end, Y0 + 0.01, 7.0, 48)
     btop = yc + 1.9
     t = t + cyl_y(*_xz(S3_BOOT), btop + 1.0, Y0 + 0.01, 5.0, 32)
+    # cleat nut bosses
+    for cx, cz in CLEAT_SCREWS:
+        t = t + cyl_y(cx, cz, Y0 - CB_H, Y0 + 0.01, CB_D, 48)
     # ribbon hooks: one pair on the ribbon's run from the S3's connector to the panel input (left)
     idc_x = S3_EDGE - 57.0
     pi_x = min(h[0] for h in HEADERS)
@@ -187,6 +206,9 @@ def tray():
         cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, Y1 + 1, P3.SO_BORE, 48))
         cuts.append(P3.so_cone(x, ZC + z))
     cuts.append(box(-10.0 + 2, 10.0 - 2, Y0 - 2.2, Y0 + 0.02, tz - 5, tz + 5))      # tie loop gap
+    for cx, cz in CLEAT_SCREWS:                                                     # cleat screw holes, nut pockets open inward
+        cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y1 + 1, 3.4, 24))
+        cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y0, CB_NUT / math.cos(math.pi / 6), 6))
     nx, nz = _xz(S3_NEO)
     cuts.append(cyl_y(nx, nz, tube_end - 1, Y0 + 0.5, 4.5, 48))
     cuts.append(cyl_y(nx, nz, Y0 - 1, Y1 + 1, P3.STATUS_D, 32))
