@@ -122,8 +122,9 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
   4 x M3 x 8 countersunk down the post tubes into the panel; 2 x M3 x 10 + nuts from below (one pair, x +/-46, both panels).
 - Cables between the tray and the sleeve: the ribbon (S3 -> panel input) must be at least ~15 cm (20 cm comfortable) so the
   tray comes fully out still cabled; chain STEMMA QT S3 -> sensor -> encoder, so only the sensor-to-encoder cable (15-20 cm)
-  crosses. Panel power runs from the S3's terminals through the tie loop (above the ribbon) to the panel. Leave the cleat
-  nuts out unless the cleat is fitted (they'd rattle).
+  crosses. Panel power runs from the S3's terminals through the tie loop (above the ribbon) to the panel. Press the two
+  cleat nuts into their bosses for good (press fit): they take the cleat, and two M3 screws threaded in a few turns pull the
+  tray out.
 - Print `coupon-v5-drawer-fit-shell.stl` (walnut) and `coupon-v5-drawer-fit-tray.stl` (tray filament) first and slide them
   together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.
 - Print: shell back-down as v4; tray back face down, walls up, no supports.

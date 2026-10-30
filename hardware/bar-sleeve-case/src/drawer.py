@@ -103,7 +103,9 @@ CLEAT_ZTOP = ZC + _hz - 2.5 - LV_H - (LV_ROWS - 1) * LV_PITCH - 0.5 - 1.0   # 1 
 CLEAT_ZBOT = ZC - _hz + 2.5 + LV_H + (LV_ROWS - 1) * LV_PITCH - 0.5 + 1.0   # 1 mm over the highest bottom louver's opening
 CLEAT_SCREWS = [(sx * 50.0, CLEAT_ZTOP - CLEAT_ATT / 2) for sx in (-1, 1)]
 CLEAT_HW = min(75.0, min(S3_BOOT[0] - 2.4, S3_NEO[0] - 1.5) - 3.0)    # half length: clear of the Boot and status holes
-CB_D, CB_H, CB_NUT = 10.0, 3.5, 5.6             # nut boss: diameter, height, nut across flats (snug)
+# nut boss: diameter, height, nut across flats. A press fit: the nuts stay in for good (no rattle without the cleat) and
+# double as pull points: thread two M3 screws in a few turns to draw the tray out
+CB_D, CB_H, CB_NUT = 10.0, 3.5, 5.45
 
 # light sensor (VEML7700, sensor.py's board frame and position) on the tray: chip side up under the top wall, its STEMMA QT
 # sockets (4.25 tall) 0.35 under the wall; 4 x M2.5 x 6 up through the board into pillars hanging from the wall
