@@ -38,10 +38,11 @@ PROFILES = {
         pitch=2.5, rib=0.45,             # 0.45 rib = two lines from a 0.2 nozzle (crisp). On a 0.4 it's one bead, and a print
                                          # (classic walls, Oct 28) came out wavy and uneven: the P2.5 diffuser needs the 0.2
         faces={'white': 0.14},           # whole diffuser on the 0.2 nozzle, first layer set to 0.14 (its max): one-layer face
-        # inserts from the listing photo of the panel back (Oct 27), scaled to the 160 x 80 outline (+/-1 mm): six on the
-        # top and bottom rails, point-symmetric; (-63.5, -33.5) is under the S3. Check with the insert template.
-        inserts=((-63.5, 33.5), (63.5, 33.5), (-63.5, -33.5), (63.5, -33.5), (-12.9, 33.5), (12.9, -33.5)),
-        standoffs=((-63.5, 33.5), (63.5, 33.5), (63.5, -33.5)),   # three corners; no centre one: the bottom louvers run through
+        # inserts: corners confirmed Oct 31 with check_corners.py (an M3 dropped into all four at 125 x 64.5 mm); the
+        # listing-photo estimate (+/-63.5, +/-33.5) was 1-1.3 mm too far out. The two middle ones are from a photo of the
+        # panel back (+/-0.5 mm; the drawer tray doesn't use them). Six on the top and bottom rails, point-symmetric
+        inserts=((-62.5, 32.25), (62.5, 32.25), (-62.5, -32.25), (62.5, -32.25), (-12.0, 32.25), (12.0, -32.25)),
+        standoffs=((-62.5, 32.25), (62.5, 32.25), (62.5, -32.25)),   # three corners; no centre one: the bottom louvers run through
         tie_bridge=(-9.0, 17.0, 59.0, 74.0),   # narrowed (moved ribbon hook) and lowered 4 mm (clears the top louver band)
         hooks=(-13.5, 22.5),             # left hook moved clear of the S3's IDC plug
         # louvers: one unbroken run per row, between the bottom bosses (+/-46) and clear of the S3's lower posts (x -39.7) and between the keyhole
@@ -57,7 +58,7 @@ PROFILES = {
         # push foot: a blade under the S3 (only 3.8 mm between its edge and the panel's), clear of the screw boss
         corner_foot=(-78.0, -56.0, 0.5, 2.9),
         posts=((-60, 35), (60, 35), (-14, -36), (60, -36)),   # plate v2 only (placeholders)
-        assumed=('thickness', 'inserts and headers (photo, +/-1 mm)', 'header height above the rails'),
+        assumed=('thickness', 'headers (photo, +/-1 mm)', 'header height above the rails'),
     ),
 }
 
