@@ -24,6 +24,10 @@ steady at 8-bit color.
 2. **Settings:** in `firmware-s3/ctaboard/`, copy `secrets.example.h` to
    `secrets.h` and fill in your WiFi networks and `BOARD_TOKEN` (the same
    value as the Fly secret). `secrets.h` is never committed.
+   - **`BOARD_ID`:** give each physical board its own (`home`, `office`, …).
+     Boards sharing an ID share one config and show the same thing. A new ID
+     adds itself on the server the first time it connects, as a copy of
+     `home`; then pick it in the control page's board menu to change it.
 3. **Open** `firmware-s3/ctaboard/ctaboard.ino`. The folder and the sketch
    must keep the same name.
 4. **Board settings** (Tools menu):

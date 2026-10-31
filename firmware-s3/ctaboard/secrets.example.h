@@ -13,6 +13,8 @@
   }
 
 #define BOARD_URL "https://ctamap.fly.dev"
+// One ID per physical board: boards sharing an ID show the same thing. A new
+// ID adds itself on the server (as a copy of "home") the first time it connects.
 #define BOARD_ID "home"
 // Same value as the BOARD_TOKEN Fly secret.
 #define BOARD_TOKEN "..."

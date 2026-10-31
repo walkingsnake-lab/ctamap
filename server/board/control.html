@@ -59,7 +59,10 @@
   #status { position: sticky; bottom: 12px; margin-top: 16px; padding: 10px 12px; border-radius: 9px; background: #1c1c1c; border: 1px solid #333; font-size: 14px; min-height: 20px; }
   #status:empty { display: none; }
   #status.err { color: var(--err); border-color: #5a2a2a; }
-  #boardPick { margin-bottom: 4px; }
+  #boardPick { margin-bottom: 8px; }
+  input#label { text-transform: none; }
+  .danger { color: var(--err); border-color: #5a2a2a; }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); }
   /* Settings tabs: one screen's settings at a time. */
   .tabs { display: flex; gap: 4px; margin-top: 18px; overflow-x: auto; scrollbar-width: none; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; }
   .tabs::-webkit-scrollbar { display: none; }
@@ -85,7 +88,7 @@
     <h1>Board</h1>
     <a id="simLink" href="sim">Simulator</a>
   </header>
-  <select id="boardPick" hidden aria-label="Board"></select>
+  <select id="boardPick" aria-label="Board"></select>
   <img id="preview" class="preview" alt="What the board is showing">
   <p class="caption" id="caption"></p>
 
@@ -163,7 +166,7 @@
     <button role="tab" data-tab="ticker">Ticker</button>
     <button role="tab" data-tab="weather">Weather</button>
     <button role="tab" data-tab="baseball">Baseball</button>
-    <button role="tab" data-tab="health">Health</button>
+    <button role="tab" data-tab="health">Board</button>
   </nav>
 
   <section data-tab="weather">
@@ -293,6 +296,18 @@
   </section>
 
   <section data-tab="health">
+    <h2>This board</h2>
+    <label class="field" for="label">Name</label>
+    <input type="text" id="label" maxlength="24" autocomplete="off" placeholder="e.g. Kitchen">
+    <div class="row"><span>Board ID</span><code id="boardIdShow"></code></div>
+    <p class="hint" id="idHint"></p>
+    <div class="row"><span>Copy settings from</span>
+      <select id="copyFrom" aria-label="Copy settings from" style="width:auto"></select></div>
+    <p class="hint">Copies every setting except the name. Brightness goes back to Auto.</p>
+    <div class="row"><span></span><button class="small danger" id="delBoard">Delete board</button></div>
+  </section>
+
+  <section data-tab="health">
     <h2>Board health</h2>
     <div id="health"><p class="hint">No report yet. The board sends one about once a minute.</p></div>
   </section>
@@ -307,8 +322,13 @@
   const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
   const LINE_NAME = { RD: 'Red', BL: 'Blue', BR: 'Brown', GR: 'Green', OR: 'Orange', PR: 'Purple', PK: 'Pink', YL: 'Yellow' };
   const params = new URLSearchParams(location.search);
-  let boardId = params.get('b') || 'home';
-  let board = null, stations = [], dests = [], hasWx = false, hidden = [];
+  // Which board: ?b= (a home-screen shortcut per board), else the last one
+  // used on this device, else the first board (settled in init).
+  const lastBoard = () => { try { return localStorage.getItem('board'); } catch (e) { return null; } };
+  let boardId = params.get('b') || lastBoard();
+  let board = null, boards = [], stations = [], dests = [], hasWx = false, hidden = [];
+  const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
+  const go = (id) => { const q = new URLSearchParams(location.search); q.set('b', id); location.search = q; };
 
   let statusTimer = null;
   function setStatus(msg, err) {
@@ -333,6 +353,7 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
       });
       if (board.station.mapid !== before) await loadDests();
+      if (patch.label !== undefined || patch.station) await loadBoards();
       render();
       setStatus('Saved. The board picks it up within about 15 seconds.');
       refreshPreview();
@@ -397,7 +418,32 @@
   // The weather row only takes space when there's weather to show.
   function maxRows() { return (board.showHeader ? 4 : 5) - (board.showWeather && hasWx ? 2 : 0); }
 
+  // ---- boards ----
+  const boardName = (b) => b.label || b.id;
+  function renderBoards() {
+    const now = Date.now() / 1000;
+    const opts = boards.map((b) => new Option(`${boardName(b)} · ${b.station}${b.seen && now - b.seen > 180 ? ' · offline' : ''}`, b.id));
+    opts.push(new Option('+ Add a board…', '__add'));
+    $('boardPick').replaceChildren(...opts);
+    $('boardPick').value = boardId;
+    if (document.activeElement !== $('label')) $('label').value = board.label || '';
+    $('boardIdShow').textContent = boardId;
+    const me = boards.find((b) => b.id === boardId);
+    $('idHint').textContent = (me && me.seen ? '' : 'No board has checked in with this ID yet. ')
+      + `To point a board here, set BOARD_ID to "${boardId}" in its secrets.h (S3) or settings.toml (M4). A board with a new ID adds itself as a copy of "home".`;
+    const others = boards.filter((b) => b.id !== boardId);
+    $('copyFrom').closest('.row').hidden = !others.length;
+    $('copyFrom').closest('.row').nextElementSibling.hidden = !others.length;
+    $('copyFrom').replaceChildren(new Option('Choose…', ''), ...others.map((b) => new Option(boardName(b), b.id)));
+    $('delBoard').closest('.row').hidden = !others.length;
+  }
+  async function loadBoards() {
+    try { boards = await api('api/boards'); } catch (e) { return; }
+    if (board) renderBoards();
+  }
+
   function render() {
+    renderBoards();
     if (!board) return;
     pressed('screen', board.screen);
     const auto = board.screen === 'auto';
@@ -634,10 +680,40 @@
   $('radarCond').addEventListener('change', (e) => save({ radarCond: e.target.checked }));
   $('radarBright').addEventListener('change', (e) => save({ radarBright: Number(e.target.value) }));
   $('allDest').addEventListener('change', (e) => save({ rows: e.target.checked ? [] : dests.map((d) => d.key) }));
-  $('boardPick').addEventListener('change', (e) => {
-    boardId = e.target.value;
-    const q = new URLSearchParams(location.search); q.set('b', boardId);
-    location.search = q;
+  $('boardPick').addEventListener('change', async (e) => {
+    if (e.target.value !== '__add') return go(e.target.value);
+    e.target.value = boardId;
+    const id = (prompt('New board ID (a-z, 0-9, -). It starts as a copy of this board.') || '').trim().toLowerCase();
+    if (!id) return;
+    if (!BOARD_ID_RE.test(id)) return setStatus('Board IDs are 1-32 characters of a-z, 0-9, and -.', true);
+    try {
+      await api('api/boards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, from: boardId }) });
+      go(id);
+    } catch (err) { setStatus(err.message, true); }
+  });
+  $('label').addEventListener('change', (e) => save({ label: e.target.value }));
+  $('label').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+  $('copyFrom').addEventListener('change', async (e) => {
+    const from = e.target.value;
+    if (!from) return;
+    const src = boards.find((b) => b.id === from);
+    if (!confirm(`Replace this board's settings with ${boardName(src)}'s?`)) { e.target.value = ''; return; }
+    setStatus('Saving…');
+    try {
+      board = await api(`api/boards/copy?b=${enc(boardId)}&from=${enc(from)}`, { method: 'POST' });
+      await Promise.all([loadDests(), loadBoards()]);
+      render();
+      setStatus('Copied. The board picks it up within about 15 seconds.');
+      refreshPreview();
+    } catch (err) { render(); setStatus(err.message, true); }
+  });
+  $('delBoard').addEventListener('click', async () => {
+    if (!confirm(`Delete board "${boardName({ id: boardId, label: board.label })}"? If a board is still running with this ID, it adds itself back as a copy of "home".`)) return;
+    try {
+      const left = await api(`api/boards?b=${enc(boardId)}`, { method: 'DELETE' });
+      try { localStorage.removeItem('board'); } catch (e) { /* private mode */ }
+      go(left[0].id);
+    } catch (err) { setStatus(err.message, true); }
   });
 
   // ---- health ----
@@ -682,25 +758,29 @@
 
   // ---- start ----
   async function init() {
-    $('simLink').href = 'sim?b=' + enc(boardId);
-    const [all, list] = await Promise.all([api('api/state'), api('api/stations')]);
+    const [all, list, bl] = await Promise.all([api('api/state'), api('api/stations'), api('api/boards')]);
     stations = list;
+    boards = bl;
     $('station').replaceChildren(...stations.map((s) => new Option(s.desc, s.mapid)));
-    const ids = Object.keys(all.boards || {});
-    if (ids.length > 1) {
-      $('boardPick').hidden = false;
-      $('boardPick').replaceChildren(...ids.map((id) => new Option(`Board: ${id}`, id)));
+    const all_ = all.boards || {};
+    // A remembered board that's since been deleted falls back to the first.
+    if (!boardId || (!params.get('b') && !all_[boardId])) boardId = Object.keys(all_)[0];
+    $('simLink').href = 'sim?b=' + enc(boardId);
+    board = all_[boardId];
+    if (!board) {
+      $('boardPick').replaceChildren(...boards.map((b) => new Option(boardName(b), b.id)), new Option(`(no board "${boardId}")`, boardId));
       $('boardPick').value = boardId;
+      setStatus(`No board named "${boardId}". Pick one above.`, true);
+      return;
     }
-    board = all.boards[boardId];
-    if (!board) { setStatus(`No board named "${boardId}".`, true); return; }
+    try { localStorage.setItem('board', boardId); } catch (e) { /* private mode */ }
     await loadDests();
     render();
     refreshPreview();
     setInterval(refreshPreview, 10000);
     loadHealth();
-    setInterval(loadHealth, 30000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); } });
+    setInterval(() => { loadHealth(); loadBoards(); }, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); loadBoards(); } });
   }
   init().catch((e) => setStatus('Could not load: ' + e.message, true));
 })();

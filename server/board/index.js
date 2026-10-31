@@ -267,6 +267,23 @@ function createBoard({
   // In memory only: after a restart the view is chosen fresh.
   const views = new Map();
 
+  // The control page's board list: who each board is, where it points, and
+  // when it last checked in (null: not since the server started).
+  const seenAt = new Map(); // board id -> last version check or update, epoch s
+  function boardList() {
+    return store.ids().map((id) => {
+      const b = store.get(id);
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, seen: seenAt.get(id) ?? null };
+    });
+  }
+  // A removed board's live state (health, test alerts, chrono views).
+  function forget(id) {
+    healthOf.delete(id);
+    seenAt.delete(id);
+    tests.delete(id);
+    for (const k of [...views.keys()]) if (k.startsWith(`${id}:`)) views.delete(k);
+  }
+
   async function update(board, id, boot, preview = {}) {
     if (boot) board = store.boot(id);
     if (preview.mapid && preview.mapid !== board.station.mapid) {
@@ -418,6 +435,7 @@ function createBoard({
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
       noteHealth(String(parsed.query.b), parsed.query, nowSecs());
+      seenAt.set(String(parsed.query.b), nowSecs());
       return send(res, 200, { v: board.v, now: nowSecs() });
     }
 
@@ -425,8 +443,11 @@ function createBoard({
       if (method !== 'GET') return send(res, 405, { err: 'method' });
       if (!authed(req)) return send(res, 401, { err: 'bad_token' });
       const id = String(parsed.query.b || '');
-      const board = store.get(id);
+      // A board ID the server hasn't seen (a newly flashed board) is added
+      // as a copy of the default board, so a second board needs no setup here.
+      const board = store.get(id) || store.register(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
+      seenAt.set(id, nowSecs());
       const body = await update(board, id, parsed.query.boot === '1');
       const shown = SCREENS.includes(parsed.query.s) ? parsed.query.s : body.screen;
       return send(res, 200, sectionsFor(body, shown));
@@ -504,6 +525,42 @@ function createBoard({
           const i = key.indexOf(':');
           return { key, ln: key.slice(0, i), name: key.slice(i + 1), live: live.has(key) ? 1 : 0 };
         }));
+      }
+      // Boards: GET the list; POST {id, from?, label?} to add one (a copy of
+      // board `from`, or the defaults); DELETE ?b=<id> to remove one.
+      if (sub === 'api/boards') {
+        if (method === 'GET') return send(res, 200, boardList());
+        try {
+          if (method === 'POST') {
+            const body = await readJson(req);
+            if (!body || typeof body !== 'object') throw new ValidationError('body must be an object');
+            const from = body.from == null ? null : String(body.from);
+            store.create(String(body.id || ''), { from, label: body.label ?? '' });
+            return send(res, 200, boardList());
+          }
+          if (method === 'DELETE') {
+            const id = String(parsed.query.b || '');
+            if (!store.remove(id)) return send(res, 404, { err: 'unknown_board' });
+            forget(id);
+            return send(res, 200, boardList());
+          }
+        } catch (e) {
+          if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+          throw e;
+        }
+        return send(res, 405, { err: 'method' });
+      }
+      // Copy another board's settings onto this one (?b=<id>&from=<other>).
+      if (sub === 'api/boards/copy') {
+        if (method !== 'POST') return send(res, 405, { err: 'method' });
+        let board;
+        try { board = store.copy(String(parsed.query.b || ''), String(parsed.query.from || '')); }
+        catch (e) {
+          if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+          throw e;
+        }
+        if (!board) return send(res, 404, { err: 'unknown_board' });
+        return send(res, 200, board);
       }
       if (sub === 'api/health') {
         if (method !== 'GET') return send(res, 405, { err: 'method' });
