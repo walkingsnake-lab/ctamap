@@ -144,6 +144,7 @@ class Board {
   bool online = false;
   std::string last_error;  // '<job>:<reason>' of the latest failure
   std::string started, crash;
+  std::string hardware, firmware;  // health: `hd` board model, `hv` build (contract: /board/version)
   std::string led_base = "connecting";
 
   long long now_ms(long long ms) const { return epoch_ms + (ms - sync_ms); }

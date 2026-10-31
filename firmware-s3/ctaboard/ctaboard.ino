@@ -14,6 +14,15 @@
 #error "Copy secrets.example.h to secrets.h (in this folder) and fill it in. See README.md."
 #endif
 
+// The build's commit, written by `node scripts/stamp-firmware-version.js`
+// (gitignored). Unstamped builds report "dev".
+#if __has_include("version.h")
+#include "version.h"
+#endif
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "dev"
+#endif
+
 // Settings added after the first secrets.h: defaults for older copies.
 #ifndef MATRIX_CLK_PHASE
 #define MATRIX_CLK_PHASE 0
@@ -76,7 +85,7 @@ void setup() {
   settings.color_order = MATRIX_COLOR_ORDER;
 
   std::string started = device::start_reason();
-  Serial.printf("[board] Matrix Portal S3, started by %s\n", started.c_str());
+  Serial.printf("[board] Matrix Portal S3, firmware %s, started by %s\n", FIRMWARE_VERSION, started.c_str());
 
   led = new device::StatusLed(settings.status_led);
   if (started == "WATCHDOG") {
@@ -112,6 +121,8 @@ void setup() {
   board = new app::Board(net, panel, &sys_clock, settings.networks, buttons, watchdog,
                          [](const std::string &s) { Serial.println(s.c_str()); }, started,
                          started == "PANIC" ? "PANIC" : "", led, knob);
+  board->hardware = "adafruit_matrixportal_s3";
+  board->firmware = FIRMWARE_VERSION;
   board->mem_free = device::free_heap;
   board->largest_block = device::largest_block;
   Serial.printf("[board] memory free %ld, largest block %ld\n", device::free_heap(), device::largest_block());

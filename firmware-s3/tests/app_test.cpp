@@ -543,6 +543,19 @@ static void test_health_uptime_counts_from_this_run_and_names_the_last_crash() {
   CHECK(sent.find("&hc=Panic") != std::string::npos, "%s", sent.c_str());
 }
 
+static void test_health_names_the_hardware_and_firmware_build() {
+  Rig r;
+  r.board->hardware = "adafruit_matrixportal_s3";
+  r.board->firmware = "a1b2c3d";
+  r.board->connect();
+  r.run_for(70000);
+  std::string sent;
+  for (const std::string &h : r.server.health)
+    if (!h.empty()) sent = h;
+  CHECK(sent.find("&hd=adafruit_matrixportal_s3") != std::string::npos, "%s", sent.c_str());
+  CHECK(sent.find("&hv=a1b2c3d") != std::string::npos, "%s", sent.c_str());
+}
+
 static void test_live_games_update_faster() {
   Rig r;
   r.board->connect();
@@ -949,6 +962,7 @@ int main() {
       T_(test_a_button_press_fetches_the_new_screens_sections_right_away),
       T_(test_health_rides_on_the_version_check_once_a_minute),
       T_(test_health_uptime_counts_from_this_run_and_names_the_last_crash),
+      T_(test_health_names_the_hardware_and_firmware_build),
       T_(test_live_games_update_faster),
       T_(test_buttons_override_until_the_phone_changes_something),
       T_(test_status_screens_and_retry),

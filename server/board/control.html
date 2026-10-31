@@ -731,8 +731,11 @@
     const now = Date.now() / 1000;
     const late = now - h.at > 180;
     const kb = (b) => `${(b / 1024).toFixed(1)} KB`;
+    const HARDWARE = { adafruit_matrixportal_s3: 'Matrix Portal S3', matrixportal_m4: 'Matrix Portal M4' };
     const rows = [
       ['Last report', ago(now - h.at) + ' ago' + (late ? ' (offline?)' : '')],
+      h.hardware && ['Board', HARDWARE[h.hardware] || h.hardware],
+      h.firmware && ['Firmware', h.firmware === 'dev' ? 'unstamped build' : h.firmware.replace('_dirty', ' (uncommitted changes)')],
       ['Running for', ago(h.uptime)],
       h.memFree != null && ['Free memory', kb(h.memFree) + (h.minMem != null ? ` (lowest ${kb(h.minMem)})` : '')],
       h.largestBlock != null && ['Largest free block', kb(h.largestBlock)],
