@@ -471,7 +471,13 @@
   // A board you hand to someone gets its own token (in its secrets.h) and an
   // owner link that controls only that board.
   const KEY_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
-  const randomText = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (x) => KEY_ALPHABET[x % KEY_ALPHABET.length]).join('');
+  // Uniform picks from KEY_ALPHABET (bytes past the last whole multiple are skipped).
+  function randomText(n) {
+    const lim = 256 - (256 % KEY_ALPHABET.length);
+    let out = '';
+    while (out.length < n) for (const x of crypto.getRandomValues(new Uint8Array(n))) if (x < lim && out.length < n) out += KEY_ALPHABET[x % KEY_ALPHABET.length];
+    return out;
+  }
   function renderKeys(me) {
     if (SCOPE) return;
     const link = me && me.link;
@@ -497,6 +503,7 @@
       $('keyOut').hidden = false;
       $('keyOut').textContent = [
         '// secrets.h for this board (the token is shown only now)',
+        `#define BOARD_URL "${location.origin}"`,
         `#define BOARD_ID "${boardId}"`,
         `#define BOARD_TOKEN "${k.token}"`,
         `#define SETUP_NAME "${name}"`,

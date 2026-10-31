@@ -36,7 +36,14 @@
 // that it's a generic build (contract: "Firmware"). Keep the format.
 const char BUILD_MARK[] = "CTABOARD-BUILD:" FIRMWARE_VERSION ":" BUILD_KIND ";";
 
-// Settings added after the first secrets.h: defaults for older copies.
+// Settings added after the first secrets.h, or left out of a short one (the
+// control page's key block): defaults. BOARD_ID and BOARD_TOKEN have none.
+#ifndef BOARD_URL
+#define BOARD_URL "https://ctamap.fly.dev"
+#endif
+#ifndef WIFI_NETWORKS
+#define WIFI_NETWORKS {}  // none: WiFi is entered on the board's setup network
+#endif
 #ifndef MATRIX_ROTATION
 #define MATRIX_ROTATION 0
 #endif

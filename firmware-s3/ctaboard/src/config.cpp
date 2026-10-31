@@ -256,7 +256,9 @@ std::string setup_page(const Config &c, const std::string &ssid, const std::vect
 std::string saved_page(const std::string &ssid) {
   return std::string(PAGE_HEAD) + "<h1>Saved</h1><p class=note>The board is joining " + html_escape(ssid) +
          ". This setup network closes now; reconnect your phone to your usual WiFi.</p>"
-         "<p>If the password was wrong, the setup network comes back in about a minute.</p></main></body></html>";
+         "<p>If the password was wrong, the setup network comes back in about a minute.</p>"
+         "<p>Then use the owner link that came with the board (the second code on its label) to choose its "
+         "station and screens.</p></main></body></html>";
 }
 
 }  // namespace config

@@ -82,6 +82,7 @@ struct Server : app::Net {
   std::vector<std::string> health, update_screens;
   std::function<std::string(long long)> games;  // JSON array of games
   std::vector<std::string> wifi = {"ok"};
+  size_t joins_on = 0;  // which saved network an "ok" joins
   std::string visit = "null";
   int alert = 0;
   int tornado = 0;
@@ -175,7 +176,7 @@ struct Server : app::Net {
     }
     std::string result = wifi.size() > 1 ? wifi.front() : wifi[0];
     if (wifi.size() > 1) wifi.erase(wifi.begin());
-    if (result == "ok") return {"ok", networks[0].first};
+    if (result == "ok") return {"ok", networks[std::min(joins_on, networks.size() - 1)].first};
     return {result, result == "portal" ? "aa:bb:cc:dd:ee:ff" : ""};
   }
 
@@ -463,6 +464,16 @@ static void test_setup_reopens_when_the_new_network_fails_and_clears_after_a_joi
   r2.board->fresh_wifi = true;
   r2.board->connect();
   CHECK(su2.runs.empty() && su2.joins == 1, "%zu %d", su2.runs.size(), su2.joins);
+  // An older saved network joined instead: the new one isn't marked as working.
+  Rig r3;
+  SimSetup su3;
+  su3.server = &r3.server;
+  su3.clock = &r3.clock;
+  r3.board->setup = &su3;
+  r3.board->fresh_wifi = true;
+  r3.server.joins_on = 1;
+  r3.board->connect();
+  CHECK(r3.board->online && su3.joins == 0 && su3.runs.empty() && !r3.board->fresh_wifi, "%d", su3.joins);
 }
 
 static void test_ota_installs_an_offered_build_between_animations() {

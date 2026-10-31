@@ -22,6 +22,11 @@ test('keys: only the hash is kept, and keys survive a restart', () => {
   assert.equal(again.check('kitchen', token), true);
   assert.equal(again.idForLink(link), 'kitchen');
   assert.equal(again.idForLink('../../etc/passwd'), null);
+  // IDs come from URLs: inherited object properties aren't boards.
+  for (const id of ['__proto__', 'constructor', 'toString']) {
+    assert.equal(again.check(id, 'x'), null, id);
+    assert.equal(again.linkOf(id), null, id);
+  }
   again.remove('kitchen');
   assert.equal(again.idForLink(link), null);
   assert.equal(again.check('kitchen', token), null);

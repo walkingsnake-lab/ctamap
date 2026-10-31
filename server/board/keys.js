@@ -30,6 +30,9 @@ function createKeys({ dir, log = console } = {}) {
     if (e.code !== 'ENOENT') log.error(`[board] keys file unreadable (${e.message}); boards fall back to the shared token`);
   }
   const byLink = new Map(Object.entries(keys).map(([id, k]) => [k.link, id]));
+  // Board IDs come from request URLs: only the file's own entries count
+  // (not `__proto__`, `constructor`, ...).
+  const keyOf = (id) => (Object.hasOwn(keys, id) ? keys[id] : null);
 
   function save() {
     fs.mkdirSync(dir, { recursive: true });
@@ -44,7 +47,7 @@ function createKeys({ dir, log = console } = {}) {
     // A new token and link for board `id` (replacing any it had). The token
     // is returned only here: it goes into that board's flash.
     issue(id, now = Math.floor(Date.now() / 1000)) {
-      const old = keys[id];
+      const old = keyOf(id);
       if (old) byLink.delete(old.link);
       const token = random(24);
       const link = random(16);
@@ -56,7 +59,7 @@ function createKeys({ dir, log = console } = {}) {
 
     // A new control link (the old one stops working); the token stays.
     relink(id) {
-      const k = keys[id];
+      const k = keyOf(id);
       if (!k) return null;
       byLink.delete(k.link);
       k.link = random(16);
@@ -67,18 +70,18 @@ function createKeys({ dir, log = console } = {}) {
 
     // true / false for a keyed board; null when the board has no key (use the shared token).
     check(id, given) {
-      const k = keys[id];
+      const k = keyOf(id);
       if (!k) return null;
       const a = sha(given || '');
       const b = Buffer.from(k.sha, 'hex');
       return given != null && a.length === b.length && crypto.timingSafeEqual(a, b);
     },
 
-    linkOf: (id) => (keys[id] ? keys[id].link : null),
+    linkOf: (id) => (keyOf(id) ? keyOf(id).link : null),
     idForLink: (link) => (LINK_RE.test(String(link)) ? byLink.get(link) ?? null : null),
 
     remove(id) {
-      if (!keys[id]) return;
+      if (!keyOf(id)) return;
       byLink.delete(keys[id].link);
       delete keys[id];
       save();

@@ -86,7 +86,11 @@ void Board::connect(bool boot) {
       }
     } else {
       offline_since.reset();
-      if (fresh_wifi && setup) setup->joined();
+      // The new network is first in the list: it worked only if it's the one joined.
+      if (fresh_wifi && setup) {
+        if (!networks.empty() && cr.detail == networks[0].first) setup->joined();
+        else say("[setup] the new network didn't join; online on " + cr.detail);
+      }
       fresh_wifi = false;
     }
     if (cr.result == "ok") {
