@@ -266,7 +266,8 @@ struct BaseballTexts {
 };
 std::optional<BaseballTexts> baseball_texts(const Value &p, double now);
 
-// Status screens (firmware/boardlib/status.py).
+// Status screens (firmware/boardlib/status.py, plus the S3's "updating"
+// and "nosetup").
 void render_status(Frame &f, const std::string &kind, const std::string &detail);
 
 }  // namespace draw

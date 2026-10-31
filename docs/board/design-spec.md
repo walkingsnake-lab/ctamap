@@ -372,8 +372,19 @@ Decided Oct 25, 2026. An Adafruit 5880 I2C rotary encoder (seesaw, on the STEMMA
 - **Writes through:** the commit is `POST /board/select`, which sets the screen on the server as the phone would (it persists, the phone page shows it, and it ends any button override) and answers with the new screen's update, so a commit is one request.
 - **Press:** does nothing yet; to be decided.
 - **Scheduling:** while the chooser is open only overdue requests run. The encoder counts clicks itself, so turns made during a request arrive after it, not lost.
-- **Settings:** `KNOB_REVERSE` in `secrets.h` flips the direction.
+- **Settings:** `KNOB_REVERSE` in `secrets.h` flips the direction (saved to flash by a setup build; see *OTA updates*).
 - **Open:** on the panel, whether the 1 px `#3a3a3a` pips and the `#555555` neighbors survive the diffuser and the night floor; confirm one count per detent and the direction on hardware.
+
+### OTA updates (S3)
+Decided Oct 30, 2026, with more boards and other owners in mind: nobody should need the Arduino IDE after the first USB flash.
+
+- **Settings in flash, not in the build.** WiFi networks, server, board ID, token, and panel tuning live in the board's NVS. A **setup build** (compiled with `secrets.h`, flashed over USB once) saves them; the **generic build** (no `secrets.h`) reads them, so one build runs on every board and carries no secrets. A board with no settings shows `NO SETUP`.
+- **Pull from the server**, not a LAN push (ArduinoOTA): works wherever the board has WiFi, hotspot and work networks included, over the HTTPS and token it already uses. The server stores uploaded builds; `/board/version` offers a board the build it should run; the board downloads it into its unused app slot (the default TinyUF2 partitions have two 2 MB slots), checks its SHA-256, and restarts into it.
+- **Channels:** `beta` and `stable`. Each board follows one, is pinned to a build, or is off (control page, Board tab). The owner's boards go on Beta; a build moves to Stable once it has run well there. Updates are automatic: owners who never open the control page still get fixes.
+- **Install moment:** in an animation gap (or after waiting 2 min); the panel shows `UPDATING` and the percentage. It takes 10–30 s.
+- **Trial and rollback:** the new build is kept once it has had a good update and run a minute; it rolls back to the previous slot if it can't reach the server within 5 min or restarts more than 3 times first, and isn't reinstalled until the control page's Try again. Rolling back is done by the firmware itself (the Arduino core marks every new build valid at boot, so the bootloader's own rollback never triggers).
+- **Left alone:** boards running `dev` or `_dirty` builds (someone's test build); the M4.
+- **Later:** CI publishing straight to Beta (today CI builds the generic `.bin` as an artifact and the owner uploads it); a browser-based first install with WiFi entry (ESP Web Tools + Improv), so a new owner needs no IDE at all; per-board tokens before boards of different owners share one server (today every board shares `BOARD_TOKEN`).
 
 ### Access
 - **Secret URL, no login.** The control page lives at an unguessable path (e.g. `/board/<random>`), with the path stored as a Fly secret (`BOARD_CONTROL_PATH`). Anyone with the link has control; acceptable for a hobby board. Rotate the secret if the link leaks.

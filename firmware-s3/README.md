@@ -23,7 +23,11 @@ steady at 8-bit color.
      Install All for its dependencies).
 2. **Settings:** in `firmware-s3/ctaboard/`, copy `secrets.example.h` to
    `secrets.h` and fill in your WiFi networks and `BOARD_TOKEN` (the same
-   value as the Fly secret). `secrets.h` is never committed.
+   value as the Fly secret). `secrets.h` is never committed. A build with
+   `secrets.h` is a **setup build**: on startup it saves these settings to the
+   board's flash, where they stay through OTA updates (see
+   [OTA updates](#ota-updates)). Edit `secrets.h` and flash again over USB to
+   change them.
    - **`BOARD_ID`:** give each physical board its own (`home`, `office`, …).
      Boards sharing an ID share one config and show the same thing. A new ID
      adds itself on the server the first time it connects, as a copy of
@@ -33,6 +37,10 @@ steady at 8-bit color.
 4. **Board settings** (Tools menu):
    - Board: **Adafruit MatrixPortal ESP32-S3**
    - USB CDC On Boot: **Enabled** (for the serial log)
+   - Partition Scheme: **TinyUF2 8MB (2MB APP/3.7MB FATFS)**, the default
+     (two app slots, which OTA updates need)
+   - Erase All Flash Before Sketch Upload: **Disabled**, the default (enabled
+     wipes the saved settings)
 5. **Stamp the build:** run `node scripts/stamp-firmware-version.js` from the
    repo root before each upload. It writes `ctaboard/version.h` (gitignored)
    with the commit, so the control page's Health tab shows which build the
@@ -48,8 +56,53 @@ steady at 8-bit color.
    those lines back when something looks off.
 
 What you should see: `WIFI <network>`, `WIFI OK`, then the transit screen.
+The serial log's first lines name the build (`setup` or `generic`) and where
+the settings came from (`[setup] board home, 3 networks, settings from
+secrets.h` the first time, `flash` after that). `NO SETUP` on the panel means
+a generic build on a board whose flash has no settings: flash a setup build
+once.
 `PORTAL` with the MAC address means the network wants a login page; `NO
 WIFI` means none of the networks could be joined (it retries).
+
+## OTA updates
+
+Once a board has run a setup build, new firmware can reach it over WiFi:
+
+1. **Get a generic build** (no `secrets.h` compiled in):
+   - **CI:** every push to `main` that touches `firmware-s3/` builds one
+     (Actions → "S3 firmware" → the run's `ctaboard-<commit>` artifact; unzip
+     it for `ctaboard.ino.bin`).
+   - **Or locally:** move `secrets.h` out of `ctaboard/`, run `node
+     scripts/stamp-firmware-version.js` on a clean commit, then Sketch →
+     Export Compiled Binary; the file is `ctaboard/build/…/ctaboard.ino.bin`
+     (not the `merged` one). Move `secrets.h` back.
+2. **Upload it** on the control page: Board tab → Firmware updates → Upload
+   .bin. It goes to **Beta**. The server refuses setup builds (they contain
+   your passwords), unstamped or `_dirty` builds, merged images, and anything
+   that isn't this firmware for the S3.
+3. **Boards follow their channel** (Updates, per board): Stable (default),
+   Beta, a pinned build, or Off. Put your own boards on Beta; once a build
+   has run well, press **Stable** on it so everyone else's boards get it.
+4. **The board installs it** within a minute, between animations: the panel
+   shows `UPDATING` and the percentage, then it restarts into the new build.
+   The Health rows show the new Firmware commit.
+
+Safety:
+- The download goes into the unused app slot and is checked (SHA-256) before
+  the board switches to it; a failed download changes nothing and is retried
+  in 10 minutes.
+- The new build is on **trial**: kept once it has reached the server and run
+  a minute; rolled back to the previous build if it can't reach the server
+  within 5 minutes or restarts more than 3 times first. A rolled-back build
+  isn't installed again until you press **Try again** on the control page.
+- A board running an unstamped (`dev`) or `_dirty` build is never updated, so
+  test builds flashed over USB stay put. A test build from a clean commit
+  *is* replaced by its channel's build: set that board's Updates to Off
+  while testing.
+- USB always works: flashing over USB puts that build back in charge.
+
+Serial log lines start with `[ota]`: the running slot at startup, each
+install, and the trial's outcome.
 
 ### The knob (optional)
 
@@ -103,13 +156,15 @@ S3.
 | `ctaboard/src/json.*` | Small JSON tree with Python dict semantics, so the port reads payloads exactly as `draw.py` does. |
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
 | `ctaboard/src/sched.h`, `control.h` | Requests in animation gaps; buttons vs. the phone (`sched.py`, `control.py`); the knob's chooser (twist and rest, S3 only). |
-| `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws. |
+| `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. |
+| `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build. |
+| `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |
 | `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |
-| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C), NeoPixel, watchdog. The only code that includes Arduino headers. |
+| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C), NeoPixel, watchdog, settings and OTA state in NVS, OTA slot writes. The only code that includes Arduino headers. |
 | `ctaboard/src/assets.h` | Fonts, icons, glyphs. **Generated** by `node scripts/build-firmware-assets.js`. |
 | `ctaboard/src/certs.h` | Root certificates for HTTPS. **Generated** by `node scripts/build-firmware-certs.js`. |
 | `ctaboard/version.h` | The build's commit, for health. **Generated** by `node scripts/stamp-firmware-version.js`; gitignored. |
-| `tests/` | Run by `npm test` (needs g++ or clang++): `parity` renders every scenario in `firmware/tests/scenarios.js` and compares pixels with draw.js; `app_test` runs the main loop against a simulated server, clock, and buttons. |
+| `tests/` | Run by `npm test` (needs g++ or clang++): `parity` renders every scenario in `firmware/tests/scenarios.js` and compares pixels with draw.js; `app_test` runs the main loop against a simulated server, clock, and buttons (OTA installs and trials included); `config_test` checks settings in flash and the OTA status screens. |
 
 ## Rules
 

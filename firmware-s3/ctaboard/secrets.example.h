@@ -1,5 +1,10 @@
 // Board settings. Copy this file to secrets.h (same folder) and fill it in.
 // secrets.h is never committed (.gitignore).
+//
+// A build with secrets.h is a setup build: flashed over USB, it saves these
+// settings to the board's flash, where they stay. OTA updates install the
+// generic build (no secrets.h), which reads them from flash. To change a
+// setting, edit this file and flash a setup build over USB again.
 
 #pragma once
 

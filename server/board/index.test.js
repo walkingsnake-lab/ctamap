@@ -1065,3 +1065,71 @@ test('control API: list, add (copy or defaults), label, and delete boards', asyn
   assert.equal((await s.req('/board/secret123/api/boards', { method: 'PUT' })).status, 405);
   await s.close();
 });
+
+// ---- OTA firmware (contract: "Firmware") ----
+
+function fakeBuild(v, kind = 'generic') {
+  const b = Buffer.alloc(4096, 0x11);
+  b[0] = 0xe9;
+  b.writeUInt16LE(9, 12); // ESP32-S3
+  b.write(`CTABOARD-BUILD:${v}:${kind};`, 1000, 'latin1');
+  return b;
+}
+
+test('firmware: upload on the control page, offered to an S3 in its version check, downloaded by the board', async () => {
+  const s = await serve();
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const build = fakeBuild('aaaaaaa');
+  let r = await s.req('/board/secret123/api/firmware?channel=stable', { method: 'POST', body: build });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.channels.stable, 'aaaaaaa');
+  const sha = r.body.builds[0].sha;
+  // A setup build (secrets.h compiled in) is refused.
+  r = await s.req('/board/secret123/api/firmware', { method: 'POST', body: fakeBuild('bbbbbbb', 'setup') });
+  assert.equal(r.status, 400);
+  assert.match(r.body.detail, /secrets\.h/);
+  // The S3 running another committed build gets the offer; health records its OTA note.
+  r = await s.req('/board/version?b=home&hu=60&hd=adafruit_matrixportal_s3&hv=1234567&hx=error:Short', h);
+  assert.deepEqual(r.body.fw, { v: 'aaaaaaa', size: 4096, sha, n: 0 });
+  assert.equal((await s.req('/board/secret123/api/health')).body.home.ota, 'error:Short');
+  // Running it, a test build, or the M4: no offer.
+  for (const q of ['hv=aaaaaaa&hd=adafruit_matrixportal_s3', 'hv=dev&hd=adafruit_matrixportal_s3', 'hv=1234567']) {
+    r = await s.req(`/board/version?b=home&hu=61&${q}`, h);
+    assert.ok(!('fw' in r.body), q);
+  }
+  // Off, and "Try again" bumps n.
+  s.store.update('home', { fw: 'off' });
+  r = await s.req('/board/version?b=home&hu=62&hd=adafruit_matrixportal_s3&hv=1234567', h);
+  assert.ok(!('fw' in r.body));
+  s.store.update('home', { fw: 'stable', fwRetry: 1 });
+  r = await s.req('/board/version?b=home&hu=63&hd=adafruit_matrixportal_s3&hv=1234567', h);
+  assert.equal(r.body.fw.n, 1);
+  // The download: token, board, and build checked; exact bytes.
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/firmware?b=home&v=aaaaaaa`)).status, 401);
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/firmware?b=home&v=fffffff`, h)).status, 404);
+  const dl = await fetch(`http://127.0.0.1:${s.port}/board/firmware?b=home&v=aaaaaaa`, h);
+  assert.equal(dl.status, 200);
+  assert.equal(dl.headers.get('content-length'), '4096');
+  assert.deepEqual(Buffer.from(await dl.arrayBuffer()), build);
+  await s.close();
+});
+
+test('firmware: channels move, pinned and channel builds can\'t be deleted', async () => {
+  const s = await serve();
+  await s.req('/board/secret123/api/firmware?channel=beta', { method: 'POST', body: fakeBuild('aaaaaaa') });
+  await s.req('/board/secret123/api/firmware', { method: 'POST', body: fakeBuild('bbbbbbb') });
+  let r = await s.req('/board/secret123/api/firmware/channel', { method: 'POST', body: JSON.stringify({ channel: 'stable', v: 'bbbbbbb' }) });
+  assert.deepEqual(r.body.channels, { beta: 'aaaaaaa', stable: 'bbbbbbb' });
+  r = await s.req('/board/secret123/api/firmware?v=aaaaaaa', { method: 'DELETE' });
+  assert.equal(r.status, 400);
+  await s.req('/board/secret123/api/firmware/channel', { method: 'POST', body: JSON.stringify({ channel: 'beta', v: null }) });
+  s.store.update('home', { fw: 'aaaaaaa' });
+  r = await s.req('/board/secret123/api/firmware?v=aaaaaaa', { method: 'DELETE' });
+  assert.equal(r.status, 400);
+  assert.match(r.body.detail, /pinned/);
+  s.store.update('home', { fw: 'stable' });
+  r = await s.req('/board/secret123/api/firmware?v=aaaaaaa', { method: 'DELETE' });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.builds.map((b) => b.v), ['bbbbbbb']);
+  await s.close();
+});

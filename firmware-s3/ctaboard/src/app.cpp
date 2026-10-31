@@ -14,6 +14,7 @@ namespace app {
 static std::string led_for_status(const std::string &kind) {
   if (kind == "portal") return "portal";
   if (kind == "nowifi" || kind == "noserver") return "offline";
+  if (kind == "updating") return "fetch";
   return "connecting";  // connecting, ok
 }
 
@@ -76,6 +77,7 @@ void Board::connect(bool boot) {
         update_job.due_at = (double)(ms + (long long)update_job.interval_ms);
         version_job.due_at = (double)(ms + VERSION_EVERY);
         online = true;
+        reached_server = true;
         fails = 0;
         led_base = "ok";
         led_update();
@@ -86,6 +88,7 @@ void Board::connect(bool boot) {
     } else {
       status(cr.result, cr.result == "portal" ? cr.detail : "");
     }
+    trial_check(clock->ms());
     wait(RETRY_WIFI_MS[std::min(round, 3)]);
     round++;
   }
@@ -95,6 +98,7 @@ void Board::wait(long long ms_total) {
   long long end = clock->ms() + ms_total;
   while (clock->ms() < end) {
     if (watchdog) watchdog->feed();
+    trial_check(clock->ms());
     clock->sleep_ms(std::min(1000LL, end - clock->ms()));
   }
 }
@@ -144,6 +148,8 @@ std::string Board::health_query(long long ms) {
     if (!crash.empty()) q += "&hc=" + crash;
     if (!hardware.empty()) q += "&hd=" + hardware;
     if (!firmware.empty()) q += "&hv=" + firmware;
+    std::string ox = ota_health();
+    if (!ox.empty()) q += "&hx=" + ox;
     health_q_ = q;
   }
   return health_q_;
@@ -154,6 +160,18 @@ sched::Result Board::do_version(double ms) {
   Value r;
   if (!net->version(health_query((long long)ms), r, job_err_)) return sched::FAIL;
   sync(r["now"].num(), (long long)ms, clock->ms());
+  // An OTA offer (contract: /board/version `fw`); absent when there's nothing to install.
+  const Value &fw = r["fw"];
+  if (fw.is_obj() && fw["v"].is_str() && fw["size"].num() > 0 && fw["sha"].is_str()) {
+    FirmwareOffer o;
+    o.v = fw["v"].s;
+    o.size = (long long)fw["size"].num();
+    o.sha = fw["sha"].s;
+    o.retry = (long)fw["n"].num(0);
+    offer = o;
+  } else {
+    offer.reset();
+  }
   if (!player.has_p || json::str(r["v"]) != json::str(player.p["v"])) update_job.due_at = 0;  // settings changed: fetch now
   return sched::OK;
 }
@@ -165,6 +183,7 @@ sched::Result Board::do_update(double ms) {
   Value p;
   if (!net->update(false, override_.screen ? *override_.screen : "", p, job_err_)) return sched::FAIL;
   apply(p, (long long)ms, clock->ms());
+  reached_server = true;
   return sched::OK;
 }
 
@@ -267,6 +286,9 @@ void Board::step() {
     }
     ms = clock->ms();
   }
+  trial_check(ms);
+  maybe_install(ms, busy);
+  ms = clock->ms();
   led_update();
 
   // Redraw every ~33 ms while animating; otherwise only when something on
@@ -280,6 +302,102 @@ void Board::step() {
       stats.draws++;
     }
   }
+}
+
+// ---- OTA updates (ota.h) ----
+
+bool Board::wants_install() const {
+  if (!ota || !offer || firmware.empty() || offer->v == firmware) return false;
+  if (!ota->trial().empty()) return false;  // one at a time: this build is still on trial
+  return ota::mark(offer->v, offer->retry) != ota->bad();
+}
+
+void Board::maybe_install(long long ms, bool busy) {
+  if (!wants_install()) {
+    wanted_since_.reset();
+    return;
+  }
+  if (!wanted_since_) wanted_since_ = ms;
+  if (ms < install_after_ || chooser.open) return;
+  // The install blocks the loop for a while: start it between animations,
+  // or anyway once it has waited long enough.
+  if (busy && ms - *wanted_since_ < ota::WAIT_FOR_GAP_MS) return;
+  install();
+}
+
+void Board::install() {
+  // Download into the unused slot, check it, restart into it. The panel
+  // shows UPDATING and the percentage; on failure the board carries on and
+  // tries again after ota::RETRY_MS.
+  FirmwareOffer o = *offer;
+  say("[ota] installing " + o.v + " (" + std::to_string(o.size) + " bytes) over " + firmware);
+  if (led) led->set("fetch");
+  status("updating", "0");
+  std::string err;
+  bool ok = ota->begin(o.size, err);
+  if (ok) {
+    long long got = 0;
+    int shown = 0;
+    ok = net->firmware(o.v, o.size, [&](const uint8_t *d, size_t n) {
+      if (!ota->write(d, n)) {
+        err = "Write";
+        return false;
+      }
+      got += (long long)n;
+      int pct = (int)(got * 100 / o.size);
+      if (pct >= shown + 5 || got == o.size) {
+        shown = pct;
+        status("updating", std::to_string(pct));  // also feeds the watchdog
+      } else if (watchdog) {
+        watchdog->feed();
+      }
+      return true;
+    }, err);
+    if (ok) ok = ota->finish(o, err);
+  }
+  if (ok) {
+    say("[ota] " + o.v + " installed; restarting into it");
+    status("updating", "100");
+    ota->restart();
+    return;  // the board restarts; tests carry on
+  }
+  ota->abort();
+  if (err.empty()) err = "Error";
+  say("[ota] install of " + o.v + " failed: " + err);
+  stats.fails++;
+  last_error = "firmware:" + err;
+  ota_err_ = err;
+  install_after_ = clock->ms() + ota::RETRY_MS;
+  led_base = "failing";
+  last_draw_ = -1;  // redraw the screen over the status
+}
+
+void Board::trial_check(long long ms) {
+  if (!ota) return;
+  // Only this build's own trial; one just installed waits for its restart.
+  std::string t = ota->trial();
+  if (t.empty() || t != firmware) return;
+  long long up = ms - run_start_;
+  if (reached_server && up >= ota::KEEP_AFTER_MS) {
+    say("[ota] " + t + " reached the server and ran " + std::to_string(up / 1000) + " s: keeping it");
+    ota->keep();
+  } else if (!reached_server && up >= ota::GIVE_UP_MS) {
+    say("[ota] " + t + " hasn't reached the server in " + std::to_string(up / 1000) + " s: rolling back");
+    ota->roll_back("noserver");
+  }
+}
+
+std::string Board::ota_health() const {
+  // `hx` (contract: /board/version): the trial, a rolled-back offer, or the
+  // last failed install this run.
+  if (!ota) return "";
+  std::string t = ota->trial();
+  if (!t.empty()) return "trial:" + t;
+  if (!ota_err_.empty()) return "error:" + ota_err_;
+  // Still offered, but this board rolled it back: it won't install it again
+  // until the control page's "Try again".
+  if (offer && ota::mark(offer->v, offer->retry) == ota->bad()) return "rolledback:" + offer->v;
+  return "";
 }
 
 void Board::fetching() {
@@ -340,6 +458,7 @@ void Board::commit_choice(long long ms) {
   if (ok) {
     say("[board] knob: " + cat);
     apply(p, st, ended);
+    reached_server = true;
     fails = 0;
     led_base = "ok";
     update_job.due_at = (double)(ended + (long long)update_job.interval_ms);
