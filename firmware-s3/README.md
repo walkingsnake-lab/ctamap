@@ -33,10 +33,15 @@ steady at 8-bit color.
 4. **Board settings** (Tools menu):
    - Board: **Adafruit MatrixPortal ESP32-S3**
    - USB CDC On Boot: **Enabled** (for the serial log)
-5. **Upload:** hold BOOT, tap RESET, release BOOT (upload mode; no drive
+5. **Stamp the build:** run `node scripts/stamp-firmware-version.js` from the
+   repo root before each upload. It writes `ctaboard/version.h` (gitignored)
+   with the commit, so the control page's Health tab shows which build the
+   board runs (`_dirty` with uncommitted changes). Without it the board
+   reports `dev`; after a pull, re-run it or the Health tab shows the old commit.
+6. **Upload:** hold BOOT, tap RESET, release BOOT (upload mode; no drive
    appears), pick the port under Tools → Port, click Upload, then press
    RESET when it says "Done uploading".
-6. **Serial log:** Tools → Serial Monitor at 115200 baud. Once a minute the
+7. **Serial log:** Tools → Serial Monitor at 115200 baud. Once a minute the
    board prints its fetch budget, draw time, counters, free memory, and the
    chip's temperature (`chip … C`, the S3's built-in sensor; useful for comparing
    enclosure venting: it reads the die, so compare runs, not absolute numbers). Send
@@ -103,6 +108,7 @@ S3.
 | `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C), NeoPixel, watchdog. The only code that includes Arduino headers. |
 | `ctaboard/src/assets.h` | Fonts, icons, glyphs. **Generated** by `node scripts/build-firmware-assets.js`. |
 | `ctaboard/src/certs.h` | Root certificates for HTTPS. **Generated** by `node scripts/build-firmware-certs.js`. |
+| `ctaboard/version.h` | The build's commit, for health. **Generated** by `node scripts/stamp-firmware-version.js`; gitignored. |
 | `tests/` | Run by `npm test` (needs g++ or clang++): `parity` renders every scenario in `firmware/tests/scenarios.js` and compares pixels with draw.js; `app_test` runs the main loop against a simulated server, clock, and buttons. |
 
 ## Rules

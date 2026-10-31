@@ -249,6 +249,8 @@ function createBoard({
     const safe = (v) => typeof v === 'string' && /^[A-Za-z0-9_:]{1,64}$/.test(v);
     if (safe(q.he)) h.lastError = q.he;
     if (safe(q.hs)) h.started = q.hs;
+    if (safe(q.hd)) h.hardware = q.hd;
+    if (safe(q.hv)) h.firmware = q.hv;
     const prev = healthOf.get(id);
     // The crash that ended a run, sent by the run after it. Kept after
     // later restarts that weren't crashes, until another crash replaces it.

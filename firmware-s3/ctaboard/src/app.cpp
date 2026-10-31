@@ -142,6 +142,8 @@ std::string Board::health_query(long long ms) {
     if (!last_error.empty()) q += "&he=" + last_error;
     if (!started.empty()) q += "&hs=" + started;
     if (!crash.empty()) q += "&hc=" + crash;
+    if (!hardware.empty()) q += "&hd=" + hardware;
+    if (!firmware.empty()) q += "&hv=" + firmware;
     health_q_ = q;
   }
   return health_q_;
