@@ -6,7 +6,7 @@
 //   Net      - connect / version / update / radar / logo; false on failure
 //   Display  - show(fn): fn fills a fresh frame, then it's shown
 //   Clock    - ms(): monotonic milliseconds; sleep_ms()
-//   Buttons, Knob, Watchdog, Led - optional
+//   Buttons, Knob, Watchdog, Led, Ota - optional
 #pragma once
 
 #include <stdint.h>
@@ -20,6 +20,7 @@
 #include "control.h"
 #include "draw.h"
 #include "json.h"
+#include "ota.h"
 #include "player.h"
 #include "sched.h"
 
@@ -28,6 +29,16 @@ namespace app {
 using json::Value;
 using Networks = std::vector<std::pair<std::string, std::string>>;  // (ssid, password), tried in order
 using StatusFn = std::function<void(const std::string &kind, const std::string &detail)>;
+
+// A build the server offers (/board/version `fw`, contract).
+struct FirmwareOffer {
+  std::string v;     // the build's version (short commit)
+  long long size = 0;
+  std::string sha;   // SHA-256, lowercase hex
+  long retry = 0;    // bumped by the control page's "Try again"
+};
+
+using ChunkFn = std::function<bool(const uint8_t *data, size_t n)>;  // false: stop
 
 struct ConnectResult {
   std::string result;  // "ok", "portal", or "nowifi"
@@ -52,6 +63,14 @@ class Net {
     return false;
   }
   virtual bool rssi(int &out) { (void)out; return false; }
+  // Streams build `v` (exactly `size` bytes) to chunk, in order.
+  virtual bool firmware(const std::string &v, long long size, const ChunkFn &chunk, std::string &err) {
+    (void)v;
+    (void)size;
+    (void)chunk;
+    err = "Unsupported";
+    return false;
+  }
 };
 
 class Display {
@@ -94,6 +113,23 @@ class Watchdog {
   virtual void feed() = 0;
 };
 
+// Writes a downloaded build into the unused app slot and runs the trial
+// (ota.h). On the board: device::Ota.
+class Ota {
+ public:
+  virtual ~Ota() {}
+  virtual bool begin(long long size, std::string &err) = 0;
+  virtual bool write(const uint8_t *data, size_t n) = 0;
+  // Checks the SHA-256, makes the new slot the boot slot, and starts its trial.
+  virtual bool finish(const FirmwareOffer &offer, std::string &err) = 0;
+  virtual void abort() = 0;
+  virtual void restart() = 0;
+  virtual std::string trial() = 0;  // the build on trial, "" if none
+  virtual std::string bad() = 0;    // ota::mark of the last rolled-back offer
+  virtual void keep() = 0;          // the build on trial proved itself
+  virtual void roll_back(const std::string &why) = 0;  // back to the previous slot (restarts)
+};
+
 class Led {
  public:
   virtual ~Led() {}
@@ -127,6 +163,7 @@ class Board {
   Watchdog *watchdog;
   Led *led;
   Knob *knob;
+  Ota *ota = nullptr;  // OTA updates (set after construction); none: offers are ignored
   std::function<void(const std::string &)> log;
   std::function<long()> mem_free;       // bytes free, for health reports
   std::function<long()> largest_block;  // largest allocatable block
@@ -147,6 +184,9 @@ class Board {
   std::string hardware, firmware;  // health: `hd` board model, `hv` build (contract: /board/version)
   std::string led_base = "connecting";
 
+  std::optional<FirmwareOffer> offer;  // the build the server offers, from the last version check
+  bool reached_server = false;         // a good update this run (the trial's test)
+
   long long now_ms(long long ms) const { return epoch_ms + (ms - sync_ms); }
   long long now(long long ms) const { return draw::fdiv(now_ms(ms), 1000); }  // epoch seconds
 
@@ -162,6 +202,15 @@ class Board {
   std::optional<long long> health_at_;
   long long run_start_;
   std::string job_err_;
+  long long install_after_ = 0;           // ms: next install attempt allowed
+  std::optional<long long> wanted_since_;  // ms: when the current offer first wanted installing
+  std::string ota_err_;                    // the last failed install this run
+
+  bool wants_install() const;
+  void maybe_install(long long ms, bool busy);
+  void install();
+  void trial_check(long long ms);
+  std::string ota_health() const;
 
   void sync(double server_now, long long started, long long ended);
   void status(const std::string &kind, const std::string &detail = "");

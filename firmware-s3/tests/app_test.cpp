@@ -91,6 +91,8 @@ struct Server : app::Net {
   std::function<std::string(long long)> rows_fn;  // JSON array of rows
   bool knob_ring = true;                          // send the knob's ring (payload `knob`)
   std::vector<std::string> selects;               // categories the knob chose
+  std::string fw;                                 // version check's `fw` offer (JSON object), "" for none
+  int fw_fail = 0;                                // fail the next firmware downloads halfway
 
   explicit Server(SimClock *c) : clock(c) {}
 
@@ -180,7 +182,24 @@ struct Server : app::Net {
   bool version(const std::string &h, Value &out, std::string &err) override {
     if (!call("version", err)) return false;
     health.push_back(h);
-    out = parse("{\"v\":" + jnum(v) + ",\"now\":" + jnum((long long)floor(now())) + "}");
+    out = parse("{\"v\":" + jnum(v) + ",\"now\":" + jnum((long long)floor(now())) + (fw.empty() ? "" : ",\"fw\":" + fw) + "}");
+    return true;
+  }
+
+  bool firmware(const std::string &ver, long long size, const app::ChunkFn &chunk, std::string &err) override {
+    if (!call("firmware:" + ver, err)) return false;
+    std::vector<uint8_t> buf(4096, 0xab);
+    for (long long got = 0; got < size;) {
+      if (fw_fail && got >= size / 2) {
+        fw_fail--;
+        err = "Short";
+        return false;
+      }
+      size_t n = (size_t)std::min<long long>(4096, size - got);
+      clock->t += 50;  // download time
+      if (!chunk(buf.data(), n)) return false;
+      got += (long long)n;
+    }
     return true;
   }
 
@@ -280,6 +299,48 @@ struct SimLed : app::Led {
   }
 };
 
+// OTA slot: what was written, and the trial state the board would keep in flash.
+struct SimOta : app::Ota {
+  std::string trial_, bad_;
+  long long size = 0, written = 0;
+  int begun = 0, finished = 0, aborted = 0, restarts = 0, kept = 0, rollbacks = 0;
+  bool fail_finish = false;
+  std::string rolled_why;
+  bool begin(long long sz, std::string &) override {
+    begun++;
+    size = sz;
+    written = 0;
+    return true;
+  }
+  bool write(const uint8_t *, size_t n) override {
+    written += (long long)n;
+    return true;
+  }
+  bool finish(const app::FirmwareOffer &o, std::string &err) override {
+    if (fail_finish || written != size) {
+      err = "SHA";
+      return false;
+    }
+    finished++;
+    trial_ = o.v;
+    return true;
+  }
+  void abort() override { aborted++; }
+  void restart() override { restarts++; }
+  std::string trial() override { return trial_; }
+  std::string bad() override { return bad_; }
+  void keep() override {
+    kept++;
+    trial_.clear();
+  }
+  void roll_back(const std::string &why) override {
+    rollbacks++;
+    rolled_why = why;
+    bad_ = ota::mark(trial_, 0);
+    trial_.clear();
+  }
+};
+
 struct Rig {
   SimClock clock;
   Server server{&clock};
@@ -317,6 +378,129 @@ static long long max_gap(const std::vector<long long> &t) {
 }
 
 // ---- tests ----
+
+static const char *OFFER = "{\"v\":\"bbbbbbb\",\"size\":300000,\"sha\":\"00\",\"n\":0}";
+
+static std::string last_health(const Rig &r) {
+  std::string sent;
+  for (const std::string &h : r.server.health)
+    if (!h.empty()) sent = h;
+  return sent;
+}
+
+static void test_ota_installs_an_offered_build_between_animations() {
+  Rig r;
+  SimOta o;
+  r.board->ota = &o;
+  r.board->firmware = "aaaaaaa";
+  r.board->connect();
+  r.server.fw = OFFER;
+  r.run_for(60000);
+  CHECK(o.begun == 1, "%d", o.begun);
+  CHECK(o.written == 300000, "%lld", o.written);
+  CHECK(o.finished == 1 && o.restarts == 1, "%d %d", o.finished, o.restarts);
+  CHECK(r.server.count("firmware:bbbbbbb") == 1, "");
+  bool updating = false;
+  for (const std::string &st : r.statuses) updating = updating || st == "updating";
+  CHECK(updating, "shows UPDATING");
+  for (const Call &c : r.server.calls)
+    if (c.name.compare(0, 9, "firmware:") == 0) CHECK(!c.busy, "installs between animations");
+}
+
+static void test_ota_leaves_the_running_build_alone() {
+  Rig r;
+  SimOta o;
+  r.board->ota = &o;
+  r.board->firmware = "bbbbbbb";
+  r.board->connect();
+  r.server.fw = OFFER;  // the build it already runs
+  r.run_for(60000);
+  CHECK(o.begun == 0 && r.server.count("firmware:") == 0, "");
+  Rig r2;
+  SimOta o2;
+  r2.board->ota = &o2;
+  r2.board->firmware = "aaaaaaa";
+  r2.board->connect();  // no offer
+  r2.run_for(60000);
+  CHECK(o2.begun == 0, "");
+}
+
+static void test_ota_failed_download_carries_on_and_retries_later() {
+  Rig r;
+  SimOta o;
+  r.board->ota = &o;
+  r.board->firmware = "aaaaaaa";
+  r.board->connect();
+  r.server.fw = OFFER;
+  r.server.fw_fail = 1;
+  r.run_for(5 * 60000);
+  CHECK(o.begun == 1 && o.aborted == 1 && o.restarts == 0, "%d %d %d", o.begun, o.aborted, o.restarts);
+  CHECK(r.server.count("update") > 5, "keeps running");
+  CHECK(last_health(r).find("&hx=error:Short") != std::string::npos, "%s", last_health(r).c_str());
+  CHECK(last_health(r).find("&he=firmware:Short") != std::string::npos, "%s", last_health(r).c_str());
+  r.run_for(ota::RETRY_MS);
+  CHECK(o.begun == 2 && o.restarts == 1, "%d %d", o.begun, o.restarts);
+}
+
+static void test_ota_trial_build_is_kept_once_it_has_reached_the_server() {
+  Rig r;
+  SimOta o;
+  o.trial_ = "bbbbbbb";
+  r.board->ota = &o;
+  r.board->firmware = "bbbbbbb";
+  r.board->connect();
+  r.run_for(30000);
+  CHECK(o.kept == 0, "not before a minute");
+  CHECK(last_health(r).find("&hx=trial:bbbbbbb") != std::string::npos, "%s", last_health(r).c_str());
+  r.run_for(40000);
+  CHECK(o.kept == 1 && o.rollbacks == 0, "%d %d", o.kept, o.rollbacks);
+}
+
+static void test_ota_trial_build_that_cant_reach_the_server_rolls_back() {
+  std::vector<std::string> wifi(12, "nowifi");
+  wifi.push_back("ok");
+  Rig r(wifi);
+  SimOta o;
+  o.trial_ = "bbbbbbb";
+  r.board->ota = &o;
+  r.board->firmware = "bbbbbbb";
+  r.board->connect();
+  CHECK(o.rollbacks == 1 && o.rolled_why == "noserver", "%d %s", o.rollbacks, o.rolled_why.c_str());
+  CHECK(o.kept == 0, "");
+  CHECK(o.bad_ == "bbbbbbb_0", "%s", o.bad_.c_str());
+}
+
+static void test_ota_rolled_back_offer_waits_for_try_again() {
+  Rig r;
+  SimOta o;
+  o.bad_ = "bbbbbbb_0";
+  r.board->ota = &o;
+  r.board->firmware = "aaaaaaa";
+  r.board->connect();
+  r.server.fw = OFFER;
+  r.run_for(130000);
+  CHECK(o.begun == 0, "not reinstalled");
+  CHECK(last_health(r).find("&hx=rolledback:bbbbbbb") != std::string::npos, "%s", last_health(r).c_str());
+  r.server.fw = "{\"v\":\"bbbbbbb\",\"size\":300000,\"sha\":\"00\",\"n\":1}";  // Try again
+  r.run_for(60000);
+  CHECK(o.begun == 1 && o.restarts == 1, "%d %d", o.begun, o.restarts);
+}
+
+static void test_ota_boot_counts_trial_starts() {
+  ota::State s;
+  s.trial = "bbbbbbb";
+  CHECK(ota::on_boot(s, "bbbbbbb") == ota::RUN && s.boots == 1, "");
+  CHECK(ota::on_boot(s, "bbbbbbb") == ota::RUN, "");
+  CHECK(ota::on_boot(s, "bbbbbbb") == ota::RUN, "");
+  CHECK(ota::on_boot(s, "bbbbbbb") == ota::ROLL_BACK, "a crash loop goes back");
+  s.retry = 2;
+  ota::rolled_back(s);
+  CHECK(s.trial.empty() && s.bad == "bbbbbbb_2", "%s", s.bad.c_str());
+  ota::State u;
+  u.trial = "bbbbbbb";
+  u.prev = "ota_0";
+  CHECK(ota::on_boot(u, "ccccccc") == ota::RUN && u.trial.empty() && u.prev.empty(), "a USB flash ends the trial");
+}
 
 static void test_a_held_train_stays_due_until_the_server_drops_it() {
   // The CTA pushes a due train's time later (held at a station). The board
@@ -990,6 +1174,13 @@ int main() {
       T_(test_knob_wraps_around_the_ring),
       T_(test_knob_select_failure_keeps_the_screen),
       T_(test_knob_waits_for_the_ring),
+      T_(test_ota_installs_an_offered_build_between_animations),
+      T_(test_ota_leaves_the_running_build_alone),
+      T_(test_ota_failed_download_carries_on_and_retries_later),
+      T_(test_ota_trial_build_is_kept_once_it_has_reached_the_server),
+      T_(test_ota_trial_build_that_cant_reach_the_server_rolls_back),
+      T_(test_ota_rolled_back_offer_waits_for_try_again),
+      T_(test_ota_boot_counts_trial_starts),
 #undef T_
   };
   int n = 0;

@@ -7,16 +7,21 @@
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include <HTTPClient.h>
+#include <Preferences.h>
+#include <Update.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <Wire.h>
 #include <esp_arduino_version.h>
 #include <esp_heap_caps.h>
 #include <esp_idf_version.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 #include <math.h>
+#include <mbedtls/sha256.h>
 
 #include <algorithm>
 
@@ -34,11 +39,47 @@ static const int8_t kLat = 47, kOe = 14, kClk = 2;
 static const int kButtonUp = 6, kButtonDown = 7;
 static const int kNeoPixel = 4;
 
+// ---- settings ----
+
+Settings settings_from(const config::Config &c) {
+  Settings s;
+  s.networks = c.networks;
+  s.url = c.url;
+  s.board_id = c.board_id;
+  s.token = c.token;
+  s.rotation = c.rotation;
+  s.curve = c.curve;
+  s.night_curve = c.night_curve;
+  s.hw_dim = c.hw_dim;
+  s.status_led = c.status_led;
+  s.tls_verify = c.tls_verify;
+  s.clk_phase = c.clk_phase;
+  s.double_buffer = c.double_buffer;
+  s.color_order = c.color_order;
+  return s;
+}
+
+std::string nvs_get(const char *key) {
+  Preferences p;
+  if (!p.begin("ctaboard", true)) return "";  // read-only; fails when the namespace doesn't exist yet
+  std::string v = p.isKey(key) ? p.getString(key, "").c_str() : "";
+  p.end();
+  return v;
+}
+
+bool nvs_put(const char *key, const std::string &value) {
+  Preferences p;
+  if (!p.begin("ctaboard", false)) return false;
+  bool ok = p.putString(key, value.c_str()) == value.size();
+  p.end();
+  return ok;
+}
+
 // ---- panel ----
 
 Panel::Panel(const Settings &s)
     : rotation_(s.rotation), pipe_(s.curve), day_curve_(s.curve), night_curve_(s.night_curve), hw_dim_(s.hw_dim),
-      clk_phase_(s.clk_phase), double_buffer_(s.double_buffer), color_order_(s.color_order ? s.color_order : "RGB") {}
+      clk_phase_(s.clk_phase), double_buffer_(s.double_buffer), color_order_(s.color_order.empty() ? "RGB" : s.color_order) {}
 
 void Panel::set_curves(int day, int night) {
   day_curve_ = day;
@@ -287,6 +328,65 @@ static bool http_get(const Settings &s, const std::string &path, bool auth, std:
   return ok;
 }
 
+bool WifiNet::firmware(const std::string &v, long long size, const app::ChunkFn &chunk, std::string &err) {
+  // GET /board/firmware (contract): the build, streamed to chunk in 4 KB
+  // pieces. A stall longer than HTTP_TIMEOUT_MS fails it; the watchdog is
+  // fed after every piece, so the whole download may take longer.
+  if (feed) feed();
+  WiFiClientSecure client;
+  if (s_.tls_verify) client.setCACert(ROOT_CAS);
+  else client.setInsecure();
+  HTTPClient http;
+  http.setConnectTimeout(HTTP_CONNECT_MS);
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  std::string path = "/board/firmware?b=" + s_.board_id + "&v=" + v;
+  if (!http.begin(client, (s_.url + path).c_str())) {
+    err = "Begin";
+    return false;
+  }
+  if (!s_.token.empty()) http.addHeader("X-Board-Token", s_.token.c_str());
+  int code = http.GET();
+  if (feed) feed();
+  if (code != 200) {
+    err = code < 0 ? "Conn" + std::to_string(-code) : "HTTP" + std::to_string(code);
+    http.end();
+    return false;
+  }
+  if ((long long)http.getSize() != size) {
+    err = "Size" + std::to_string(http.getSize() < 0 ? 0 : http.getSize());
+    http.end();
+    return false;
+  }
+  std::vector<uint8_t> buf(4096);
+  auto *stream = http.getStreamPtr();
+  long long got = 0;
+  uint32_t last = millis();
+  bool ok = true;
+  while (got < size) {
+    size_t want = (size_t)std::min<long long>((long long)buf.size(), size - got);
+    int n = stream->read(buf.data(), want);
+    if (n > 0) {
+      got += n;
+      last = millis();
+      if (feed) feed();
+      if (!chunk(buf.data(), (size_t)n)) {
+        if (err.empty()) err = "Stopped";
+        ok = false;
+        break;
+      }
+    } else if (millis() - last > (uint32_t)HTTP_TIMEOUT_MS || !stream->connected()) {
+      if (stream->available() > 0) continue;
+      err = "Short";
+      ok = false;
+      break;
+    } else {
+      delay(1);
+    }
+  }
+  http.end();
+  return ok;
+}
+
 bool WifiNet::get_json(const std::string &path, bool auth, json::Value &out, std::string &err, bool post) {
   if (feed) feed();
   std::string body;
@@ -331,6 +431,137 @@ bool WifiNet::logo(const std::string &id, std::vector<uint8_t> &out, std::string
 
 bool WifiNet::select(const std::string &category, json::Value &out, std::string &err) {
   return get_json("/board/select?b=" + s_.board_id + "&s=" + category, true, out, err, true);
+}
+
+// ---- OTA ----
+
+Ota::Ota(const std::string &running) : running_(running) { load(); }
+
+Ota::~Ota() {
+  if (sha_) {
+    mbedtls_sha256_free((mbedtls_sha256_context *)sha_);
+    delete (mbedtls_sha256_context *)sha_;
+  }
+}
+
+void Ota::load() {
+  Preferences p;
+  if (!p.begin("ota", true)) return;  // never written
+  st_.trial = p.getString("trial", "").c_str();
+  st_.prev = p.getString("prev", "").c_str();
+  st_.boots = p.getInt("boots", 0);
+  st_.retry = p.getLong("retry", 0);
+  st_.bad = p.getString("bad", "").c_str();
+  p.end();
+}
+
+void Ota::save() {
+  Preferences p;
+  if (!p.begin("ota", false)) {
+    Serial.println("[ota] can't save state");
+    return;
+  }
+  p.putString("trial", st_.trial.c_str());
+  p.putString("prev", st_.prev.c_str());
+  p.putInt("boots", st_.boots);
+  p.putLong("retry", st_.retry);
+  p.putString("bad", st_.bad.c_str());
+  p.end();
+}
+
+std::string Ota::slot() const {
+  const esp_partition_t *p = esp_ota_get_running_partition();
+  return p ? p->label : "?";
+}
+
+ota::BootAction Ota::boot() {
+  bool had = !st_.trial.empty();
+  ota::BootAction a = ota::on_boot(st_, running_);
+  if (had || !st_.trial.empty()) save();
+  if (!st_.trial.empty())
+    Serial.printf("[ota] %s on trial in %s: start %d of %d\n", st_.trial.c_str(), slot().c_str(), st_.boots, ota::MAX_TRIAL_BOOTS);
+  return a;
+}
+
+bool Ota::begin(long long size, std::string &err) {
+  if (!esp_ota_get_next_update_partition(NULL)) {
+    err = "NoSlot";  // a partition scheme without a second app slot
+    return false;
+  }
+  if (!Update.begin((size_t)size, U_FLASH)) {
+    err = "Begin" + std::to_string((int)Update.getError());
+    return false;
+  }
+  if (!sha_) sha_ = new mbedtls_sha256_context;
+  mbedtls_sha256_init((mbedtls_sha256_context *)sha_);
+  mbedtls_sha256_starts((mbedtls_sha256_context *)sha_, 0);
+  open_ = true;
+  return true;
+}
+
+bool Ota::write(const uint8_t *data, size_t n) {
+  if (!open_) return false;
+  mbedtls_sha256_update((mbedtls_sha256_context *)sha_, data, n);
+  return Update.write(const_cast<uint8_t *>(data), n) == n;
+}
+
+bool Ota::finish(const app::FirmwareOffer &offer, std::string &err) {
+  if (!open_) {
+    err = "NotOpen";
+    return false;
+  }
+  uint8_t digest[32];
+  mbedtls_sha256_finish((mbedtls_sha256_context *)sha_, digest);
+  char hex[65];
+  for (int i = 0; i < 32; i++) snprintf(hex + i * 2, 3, "%02x", digest[i]);
+  if (offer.sha != hex) {
+    err = "SHA";
+    return false;
+  }
+  std::string prev = slot();
+  if (!Update.end(true)) {  // checks the image and makes its slot the boot slot
+    err = "End" + std::to_string((int)Update.getError());
+    open_ = false;
+    return false;
+  }
+  open_ = false;
+  st_.trial = offer.v;
+  st_.prev = prev;
+  st_.boots = 0;
+  st_.retry = offer.retry;
+  save();
+  return true;
+}
+
+void Ota::abort() {
+  if (open_) Update.abort();
+  open_ = false;
+}
+
+void Ota::restart() {
+  delay(200);
+  ESP.restart();
+}
+
+void Ota::keep() {
+  ota::kept(st_);
+  save();
+  esp_ota_mark_app_valid_cancel_rollback();  // in case the bootloader also checks (no-op otherwise)
+}
+
+void Ota::roll_back(const std::string &why) {
+  std::string prev = st_.prev, trial = st_.trial;
+  const esp_partition_t *p = prev.empty() ? nullptr
+      : esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, prev.c_str());
+  ota::rolled_back(st_);
+  save();
+  Serial.printf("[ota] rolling back %s (%s) to %s\n", trial.c_str(), why.c_str(), p ? prev.c_str() : "nothing");
+  if (!p || esp_ota_set_boot_partition(p) != ESP_OK) {
+    Serial.println("[ota] no previous build to go back to; keeping this one");
+    return;
+  }
+  delay(200);
+  ESP.restart();
 }
 
 // ---- clock, buttons ----

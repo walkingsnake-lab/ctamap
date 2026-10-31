@@ -55,6 +55,9 @@ const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
 const MAX_BOARDS = 8;
 const LABEL_MAX = 24;
 const MAX_ROWS = 24; // Clark/Lake can have 18 destinations
+// OTA updates (firmware.js): a channel, a pinned build (its short commit), or off.
+const FW_CHANNELS = ['stable', 'beta', 'off'];
+const FW_PIN_RE = /^[0-9a-f]{7,40}$/;
 
 class ValidationError extends Error {}
 
@@ -159,6 +162,12 @@ function defaultBoard(stations) {
     gameEvery: 60,
     // Ticker row fill: the line color at this percent.
     tickerFill: 55,
+    // OTA updates (S3): follow the 'stable' or 'beta' channel, a pinned
+    // build (its commit), or 'off'. fwRetry is the control page's "Try
+    // again" count: a board that rolled a build back installs it again only
+    // after it changes.
+    fw: 'stable',
+    fwRetry: 0,
   };
 }
 
@@ -278,6 +287,16 @@ function validatePatch(patch, stations) {
         out[key] = val;
         break;
       }
+      case 'fw':
+        if (!(FW_CHANNELS.includes(val) || (typeof val === 'string' && FW_PIN_RE.test(val)))) {
+          throw new ValidationError(`fw must be one of ${FW_CHANNELS.join(', ')}, or a build's commit`);
+        }
+        out.fw = val;
+        break;
+      case 'fwRetry':
+        if (!Number.isInteger(val) || val < 0 || val > 1e6) throw new ValidationError('fwRetry must be an integer 0-1000000');
+        out.fwRetry = val;
+        break;
       case 'radarFor':
         if (!Number.isInteger(val) || val < 10 || val > 600) throw new ValidationError('radarFor must be 10-600 seconds');
         out.radarFor = val;

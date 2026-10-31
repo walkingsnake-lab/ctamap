@@ -1,7 +1,7 @@
 // Matrix Portal S3 hardware: the HUB75 panel (through the
 // ESP32-HUB75-MatrixPanel-DMA library), WiFi + HTTPS, the UP/DOWN buttons,
 // the knob (Adafruit 5880 rotary encoder on the STEMMA QT port), the status
-// NeoPixel, and the watchdog. The C++ counterpart of
+// NeoPixel, the watchdog, settings in flash (NVS), and OTA installs. The C++ counterpart of
 // firmware/boardlib/device.py. Board-only: everything else builds natively
 // for tests, and the rest of the firmware takes this hardware through the
 // interfaces in app.h.
@@ -14,7 +14,9 @@
 
 #include "app.h"
 #include "color.h"
+#include "config.h"
 #include "draw.h"
+#include "ota.h"
 
 class MatrixPanel_I2S_DMA;
 
@@ -38,8 +40,15 @@ struct Settings {
   bool double_buffer = true;
   // Which color each HUB75 data line (R, G, B, in that order) lights on this panel: "RGB" normally; some panels
   // are wired "RBG" (green and blue swapped) or another order. Applied by reassigning the data pins, so it costs nothing.
-  const char *color_order = "RGB";
+  std::string color_order = "RGB";
 };
+
+// The runtime settings from the saved ones (config.h).
+Settings settings_from(const config::Config &c);
+
+// Settings in flash (NVS namespace "ctaboard"): "" when missing.
+std::string nvs_get(const char *key);
+bool nvs_put(const char *key, const std::string &value);
 
 // The panel: frames are drawn into a draw::Frame, then copied to the DMA
 // back buffer and flipped in, so a frame never shows half drawn.
@@ -81,6 +90,7 @@ class WifiNet : public app::Net {
   bool logo(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
   bool select(const std::string &category, json::Value &out, std::string &err) override;
   bool rssi(int &out) override;
+  bool firmware(const std::string &v, long long size, const app::ChunkFn &chunk, std::string &err) override;
   std::string mac() const;
   std::function<void()> feed;  // watchdog feed, before each request and while joining
 
@@ -91,6 +101,34 @@ class WifiNet : public app::Net {
   void reset_radio(const char *why);
   bool get_json(const std::string &path, bool auth, json::Value &out, std::string &err, bool post = false);
   bool get_bytes(const std::string &path, size_t size, std::vector<uint8_t> &out, std::string &err);
+};
+
+// OTA installs into the unused app slot, and the trial (ota.h), with its
+// state in NVS (namespace "ota"). Needs a partition scheme with two app
+// slots: the board's default, "TinyUF2 8MB (2MB APP/3.7MB FATFS)".
+class Ota : public app::Ota {
+ public:
+  explicit Ota(const std::string &running);
+  ~Ota() override;
+  ota::BootAction boot();  // at startup: counts a trial build's starts
+  bool begin(long long size, std::string &err) override;
+  bool write(const uint8_t *data, size_t n) override;
+  bool finish(const app::FirmwareOffer &offer, std::string &err) override;
+  void abort() override;
+  void restart() override;
+  std::string trial() override { return st_.trial; }
+  std::string bad() override { return st_.bad; }
+  void keep() override;
+  void roll_back(const std::string &why) override;
+  std::string slot() const;  // the running app slot's label
+
+ private:
+  std::string running_;
+  ota::State st_;
+  void *sha_ = nullptr;  // mbedtls_sha256_context
+  bool open_ = false;
+  void load();
+  void save();
 };
 
 class SysClock : public app::Clock {
