@@ -45,7 +45,7 @@ jobs:
           arduino-cli core list
           arduino-cli lib list
 
-      - name: Stamp and build (generic: no secrets.h)
+      - name: "Stamp and build (generic, no secrets.h)"
         run: |
           test ! -e firmware-s3/ctaboard/secrets.h
           node scripts/stamp-firmware-version.js
