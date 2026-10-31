@@ -1133,3 +1133,70 @@ test('firmware: channels move, pinned and channel builds can\'t be deleted', asy
   assert.deepEqual(r.body.builds.map((b) => b.v), ['bbbbbbb']);
   await s.close();
 });
+
+// ---- board keys and per-board control links (contract: "Board keys") ----
+
+test('board keys: a keyed board must use its own token; others keep the shared one', async () => {
+  const s = await serve();
+  s.store.create('kitchen', { from: 'home' });
+  const shared = { headers: { 'X-Board-Token': 'tok' } };
+  assert.equal((await s.req('/board/version?b=kitchen', shared)).status, 200);
+  const k = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  assert.equal(k.status, 200);
+  assert.match(k.body.token, /^[A-Za-z0-9_-]{32}$/);
+  assert.match(k.body.link, /^[A-Za-z0-9_-]{22}$/);
+  const own = { headers: { 'X-Board-Token': k.body.token } };
+  for (const p of ['version', 'update']) {
+    assert.equal((await s.req(`/board/${p}?b=kitchen`, shared)).status, 401, p);
+    assert.equal((await s.req(`/board/${p}?b=kitchen`, own)).status, 200, p);
+  }
+  // Its token opens nothing else, and the owner's boards still take the shared token.
+  assert.equal((await s.req('/board/version?b=home', own)).status, 401);
+  assert.equal((await s.req('/board/version?b=home', shared)).status, 200);
+  // A new key replaces the old token.
+  const k2 = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  assert.equal((await s.req('/board/version?b=kitchen', own)).status, 401);
+  assert.equal((await s.req('/board/version?b=kitchen', { headers: { 'X-Board-Token': k2.body.token } })).status, 200);
+  // Removing the key goes back to the shared token; the link stops working.
+  await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'DELETE' });
+  assert.equal((await s.req('/board/version?b=kitchen', shared)).status, 200);
+  assert.equal((await s.req(`/board/c/${k2.body.link}/api/state`)).status, 404);
+  await s.close();
+});
+
+test('per-board link: the control page for that board only, without the owner\'s controls', async () => {
+  const s = await serve();
+  s.store.create('kitchen', { from: 'home', label: 'Kitchen' });
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  const c = `/board/c/${key.link}`;
+  // The page knows its board.
+  const page = await fetch(`http://127.0.0.1:${s.port}${c}/`);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /window\.BOARD_SCOPE = "kitchen"/);
+  // Reads and writes go to its board whatever `b` says.
+  assert.deepEqual(Object.keys((await s.req(`${c}/api/state`)).body.boards), ['kitchen']);
+  let r = await s.req(`${c}/api/state?b=home`, { method: 'POST', body: JSON.stringify({ screen: 'ticker' }) });
+  assert.equal(r.status, 200);
+  assert.equal(s.store.get('kitchen').screen, 'ticker');
+  assert.equal(s.store.get('home').screen, 'auto');
+  assert.deepEqual((await s.req(`${c}/api/boards`)).body.map((b) => b.id), ['kitchen']);
+  assert.equal((await s.req(`${c}/api/boards`)).body[0].link, undefined);
+  // Updates: stable or off only.
+  assert.equal((await s.req(`${c}/api/state`, { method: 'POST', body: JSON.stringify({ fw: 'off' }) })).status, 200);
+  assert.equal((await s.req(`${c}/api/state`, { method: 'POST', body: JSON.stringify({ fw: 'beta' }) })).status, 400);
+  // Owner-only endpoints aren't there.
+  for (const [p, m] of [['api/boards', 'POST'], ['api/boards?b=home', 'DELETE'], ['api/boards/copy?from=home', 'POST'], ['api/boards/key', 'POST'],
+    ['api/firmware', 'GET'], ['api/logos', 'GET'], ['api/raw/mlb', 'GET']]) {
+    assert.equal((await s.req(`${c}/${p}`, { method: m })).status, 404, `${m} ${p}`);
+  }
+  // The owner sees the link; a new link retires the old one.
+  assert.equal((await s.req('/board/secret123/api/boards')).body.find((b) => b.id === 'kitchen').link, key.link);
+  const { body: nl } = await s.req('/board/secret123/api/boards/link?b=kitchen', { method: 'POST' });
+  assert.equal((await s.req(`${c}/api/state`)).status, 404);
+  assert.equal((await s.req(`/board/c/${nl.link}/api/state`)).status, 200);
+  // Deleting the board revokes its link and key.
+  await s.req('/board/secret123/api/boards?b=kitchen', { method: 'DELETE' });
+  assert.equal((await s.req(`/board/c/${nl.link}/api/state`)).status, 404);
+  assert.equal((await s.req('/board/c/not-a-real-link-at-all00/api/state')).status, 404);
+  await s.close();
+});

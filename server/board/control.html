@@ -62,6 +62,9 @@
   #boardPick { margin-bottom: 8px; }
   input#label { text-transform: none; }
   .danger { color: var(--err); border-color: #5a2a2a; }
+  /* A board's owner link (/board/c/<link>/): this board only, no admin controls. */
+  body.owner .admin { display: none !important; }
+  pre.keys { white-space: pre-wrap; word-break: break-all; font-size: 13px; background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; margin: 8px 0 0; user-select: all; }
   #fwBuilds li { flex-wrap: wrap; }
   #fwBuilds li .nm { text-transform: none; letter-spacing: 0; }
   #fwBuilds li button { width: auto; padding: 0 10px; font-size: 14px; }
@@ -92,7 +95,7 @@
     <h1>Board</h1>
     <a id="simLink" href="sim">Simulator</a>
   </header>
-  <select id="boardPick" aria-label="Board"></select>
+  <select id="boardPick" class="admin" aria-label="Board"></select>
   <img id="preview" class="preview" alt="What the board is showing">
   <p class="caption" id="caption"></p>
 
@@ -250,15 +253,15 @@
     <div class="row"><span>Each game shows for</span>
       <select id="gameEvery" aria-label="Each game shows for" style="width:auto"><option value="30">30 sec</option><option value="45">45 sec</option><option value="60">1 min</option><option value="90">90 sec</option><option value="120">2 min</option></select></div>
     <div class="row"><span class="nw">Logo brightness</span><input type="range" id="logoBright" min="10" max="100" step="5" style="flex:1;margin:0"><span id="logoBrightV" class="nw"></span></div>
-    <div class="row"><span class="nw">Whole sheet</span><label class="small file">Upload PNG<input type="file" id="logoSheet" accept="image/png"></label></div>
-    <div class="row"><span class="nw">One team</span>
+    <div class="row admin"><span class="nw">Whole sheet</span><label class="small file">Upload PNG<input type="file" id="logoSheet" accept="image/png"></label></div>
+    <div class="row admin"><span class="nw">One team</span>
       <span class="grp">
         <select id="logoTeam" aria-label="Team" style="width:auto"></select>
         <input type="number" id="logoCrop" min="0" max="12" placeholder="row" aria-label="Crop row (0-12, blank = default)">
         <label class="small file" style="padding:10px 12px">Upload<input type="file" id="logoOne" accept="image/*"></label>
       </span>
     </div>
-    <p class="hint" id="logoStatus"></p>
+    <p class="hint admin" id="logoStatus"></p>
   </section>
 
   <section data-tab="transit">
@@ -304,11 +307,16 @@
     <label class="field" for="label">Name</label>
     <input type="text" id="label" maxlength="24" autocomplete="off" placeholder="e.g. Kitchen">
     <div class="row"><span>Board ID</span><code id="boardIdShow"></code></div>
-    <p class="hint" id="idHint"></p>
-    <div class="row"><span>Copy settings from</span>
+    <p class="hint admin" id="idHint"></p>
+    <div class="admin">
+      <div class="row"><span>Owner link</span><span class="grp" id="keyBtns"></span></div>
+      <p class="hint" id="keyHint"></p>
+      <pre class="keys" id="keyOut" hidden></pre>
+    </div>
+    <div class="row admin"><span>Copy settings from</span>
       <select id="copyFrom" aria-label="Copy settings from" style="width:auto"></select></div>
-    <p class="hint">Copies every setting except the name. Brightness goes back to Auto.</p>
-    <div class="row"><span></span><button class="small danger" id="delBoard">Delete board</button></div>
+    <p class="hint admin">Copies every setting except the name. Brightness goes back to Auto.</p>
+    <div class="row admin"><span></span><button class="small danger" id="delBoard">Delete board</button></div>
   </section>
 
   <section data-tab="health">
@@ -317,10 +325,10 @@
     <div class="row"><span>Updates</span><select id="fwTrack" aria-label="Updates" style="width:auto"></select></div>
     <p class="hint" id="fwHint"></p>
     <div class="row" id="fwRetryRow" hidden><span class="hint" id="fwRetryText" style="margin:0"></span><button class="small" id="fwRetry">Try again</button></div>
-    <label class="field">Builds (shared by every board)</label>
-    <ul id="fwBuilds"></ul>
-    <div class="row"><span class="nw">Add a build</span><label class="small file">Upload .bin<input type="file" id="fwFile" accept=".bin,application/octet-stream"></label></div>
-    <p class="hint">ctaboard.ino.bin from a build without secrets.h, or the CI build. A new build goes to Beta; make it Stable once it has run well.</p>
+    <label class="field admin">Builds (shared by every board)</label>
+    <ul id="fwBuilds" class="admin"></ul>
+    <div class="row admin"><span class="nw">Add a build</span><label class="small file">Upload .bin<input type="file" id="fwFile" accept=".bin,application/octet-stream"></label></div>
+    <p class="hint admin">ctaboard.ino.bin from a build without secrets.h, or the CI build. A new build goes to Beta; make it Stable once it has run well.</p>
   </section>
 
   <section data-tab="health">
@@ -341,7 +349,11 @@
   // Which board: ?b= (a home-screen shortcut per board), else the last one
   // used on this device, else the first board (settled in init).
   const lastBoard = () => { try { return localStorage.getItem('board'); } catch (e) { return null; } };
-  let boardId = params.get('b') || lastBoard();
+  // An owner link's page (/board/c/<link>/) is for one board; the server sets
+  // BOARD_SCOPE and forces every request to that board.
+  const SCOPE = window.BOARD_SCOPE || null;
+  if (SCOPE) document.body.classList.add('owner');
+  let boardId = SCOPE || params.get('b') || lastBoard();
   let board = null, boards = [], stations = [], dests = [], hasWx = false, hidden = [];
   const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
   const go = (id) => { const q = new URLSearchParams(location.search); q.set('b', id); location.search = q; };
@@ -452,6 +464,68 @@
     $('copyFrom').closest('.row').nextElementSibling.hidden = !others.length;
     $('copyFrom').replaceChildren(new Option('Choose…', ''), ...others.map((b) => new Option(boardName(b), b.id)));
     $('delBoard').closest('.row').hidden = !others.length;
+    renderKeys(me);
+  }
+
+  // ---- owner link and board token (keys.js) ----
+  // A board you hand to someone gets its own token (in its secrets.h) and an
+  // owner link that controls only that board.
+  const KEY_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+  // Uniform picks from KEY_ALPHABET (bytes past the last whole multiple are skipped).
+  function randomText(n) {
+    const lim = 256 - (256 % KEY_ALPHABET.length);
+    let out = '';
+    while (out.length < n) for (const x of crypto.getRandomValues(new Uint8Array(n))) if (x < lim && out.length < n) out += KEY_ALPHABET[x % KEY_ALPHABET.length];
+    return out;
+  }
+  function renderKeys(me) {
+    if (SCOPE) return;
+    const link = me && me.link;
+    const btn = (label, fn, cls = 'small') => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.addEventListener('click', fn); return b; };
+    if (link) {
+      const url = `${location.origin}/board/c/${link}/`;
+      const a = document.createElement('a');
+      a.href = url; a.textContent = 'Open'; a.target = '_blank'; a.className = 'small'; a.style.textDecoration = 'none';
+      $('keyBtns').replaceChildren(a, btn('Copy', () => navigator.clipboard.writeText(url).then(() => setStatus('Owner link copied.'))), btn('New link', relink), btn('Remove key', removeKey, 'small danger'));
+      $('keyHint').textContent = 'This board has its own token. The owner link controls only this board; New link makes the old one stop working.';
+    } else {
+      $('keyBtns').replaceChildren(btn('Give it its own key', issueKey));
+      $('keyHint').textContent = 'Uses the shared BOARD_TOKEN, and only your control page reaches it. Give a board its own key before it goes to someone else.';
+    }
+  }
+  async function issueKey() {
+    const me = boards.find((b) => b.id === boardId);
+    if (me && me.link && !confirm('A new key replaces the old token: the board stops connecting until it gets the new one. Continue?')) return;
+    try {
+      const k = await api(`api/boards/key?b=${enc(boardId)}`, { method: 'POST' });
+      const name = `Board-${randomText(4).toUpperCase()}`;
+      const pass = randomText(10);
+      $('keyOut').hidden = false;
+      $('keyOut').textContent = [
+        '// secrets.h for this board (the token is shown only now)',
+        `#define BOARD_URL "${location.origin}"`,
+        `#define BOARD_ID "${boardId}"`,
+        `#define BOARD_TOKEN "${k.token}"`,
+        `#define SETUP_NAME "${name}"`,
+        `#define SETUP_PASSWORD "${pass}"`,
+        `#define WIFI_NETWORKS {}`,
+        '',
+        `Owner link: ${location.origin}/board/c/${k.link}/`,
+        `Setup WiFi QR: WIFI:T:WPA;S:${name};P:${pass};;`,
+      ].join('\n');
+      await loadBoards();
+      setStatus('Key issued. Copy the block now: the token isn\'t shown again.');
+    } catch (err) { setStatus(err.message, true); }
+  }
+  async function relink() {
+    if (!confirm('Make a new owner link? The old one stops working.')) return;
+    try { await api(`api/boards/link?b=${enc(boardId)}`, { method: 'POST' }); await loadBoards(); setStatus('New owner link made.'); }
+    catch (err) { setStatus(err.message, true); }
+  }
+  async function removeKey() {
+    if (!confirm('Put this board back on the shared token? Its owner link stops working, and the board needs the shared token in its secrets.h.')) return;
+    try { await api(`api/boards/key?b=${enc(boardId)}`, { method: 'DELETE' }); $('keyOut').hidden = true; await loadBoards(); setStatus('Back on the shared token.'); }
+    catch (err) { setStatus(err.message, true); }
   }
   async function loadBoards() {
     try { boards = await api('api/boards'); } catch (e) { return; }
@@ -689,7 +763,7 @@
     if (file) await uploadLogo(file, `?team=${enc($('logoTeam').value)}${crop !== '' ? `&crop=${enc(crop)}` : ''}`);
     e.target.value = '';
   });
-  loadLogoStatus();
+  if (!SCOPE) loadLogoStatus();
   $('radarCorner').addEventListener('click', (e) => {
     const v = e.target.dataset.v;
     if (v) save(v === 'temp' ? { radarTime: false } : { radarTime: true, radarClock: v });
@@ -743,7 +817,8 @@
     const running = health && health.firmware;
     $('fwRunning').textContent = running || '–';
     const track = board.fw || 'stable';
-    const opts = [
+    // An owner chooses only between automatic updates and none.
+    const opts = SCOPE ? [new Option('Automatic', track === 'off' ? 'stable' : track), new Option('Off', 'off')] : [
       new Option(`Stable${ch.stable ? ` (${ch.stable})` : ' (none yet)'}`, 'stable'),
       new Option(`Beta${ch.beta ? ` (${ch.beta})` : ' (none yet)'}`, 'beta'),
       ...fwStatus.builds.map((b) => new Option(`Stay on ${b.v}`, b.v)),
@@ -879,13 +954,13 @@
       setStatus(`No board named "${boardId}". Pick one above.`, true);
       return;
     }
-    try { localStorage.setItem('board', boardId); } catch (e) { /* private mode */ }
+    if (!SCOPE) try { localStorage.setItem('board', boardId); } catch (e) { /* private mode */ }
     await loadDests();
     render();
     refreshPreview();
     setInterval(refreshPreview, 10000);
     loadHealth();
-    loadFirmware();
+    if (!SCOPE) loadFirmware();
     setInterval(() => { loadHealth(); loadBoards(); }, 30000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); loadBoards(); } });
   }

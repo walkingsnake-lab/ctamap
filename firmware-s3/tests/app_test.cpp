@@ -82,6 +82,7 @@ struct Server : app::Net {
   std::vector<std::string> health, update_screens;
   std::function<std::string(long long)> games;  // JSON array of games
   std::vector<std::string> wifi = {"ok"};
+  size_t joins_on = 0;  // which saved network an "ok" joins
   std::string visit = "null";
   int alert = 0;
   int tornado = 0;
@@ -175,7 +176,7 @@ struct Server : app::Net {
     }
     std::string result = wifi.size() > 1 ? wifi.front() : wifi[0];
     if (wifi.size() > 1) wifi.erase(wifi.begin());
-    if (result == "ok") return {"ok", networks[0].first};
+    if (result == "ok") return {"ok", networks[std::min(joins_on, networks.size() - 1)].first};
     return {result, result == "portal" ? "aa:bb:cc:dd:ee:ff" : ""};
   }
 
@@ -341,6 +342,21 @@ struct SimOta : app::Ota {
   }
 };
 
+// The setup network: records each opening; "the user" then fixes WiFi.
+struct SimSetup : app::Setup {
+  Server *server = nullptr;
+  std::vector<std::string> runs;
+  int joins = 0;
+  long long at = -1;
+  SimClock *clock = nullptr;
+  void run(const std::string &why) override {
+    runs.push_back(why);
+    at = clock->t;
+    server->wifi = {"ok"};
+  }
+  void joined() override { joins++; }
+};
+
 struct Rig {
   SimClock clock;
   Server server{&clock};
@@ -386,6 +402,78 @@ static std::string last_health(const Rig &r) {
   for (const std::string &h : r.server.health)
     if (!h.empty()) sent = h;
   return sent;
+}
+
+static void test_setup_opens_right_away_with_no_networks() {
+  // run() restarts the board; here "the user" saves a network and it returns.
+  Rig r;
+  r.board->networks.clear();
+  struct OneShot : app::Setup {
+    app::Board *b;
+    std::vector<std::string> runs;
+    void run(const std::string &why) override { runs.push_back(why); b->networks = {{"home", "pw"}}; }
+  } os;
+  os.b = r.board.get();
+  r.board->setup = &os;
+  r.board->connect();
+  CHECK(os.runs.size() == 1 && os.runs[0] == "nowifi", "%zu", os.runs.size());
+  CHECK(r.board->online, "");
+}
+
+static void test_setup_opens_after_ten_minutes_without_wifi() {
+  std::vector<std::string> wifi(40, "nowifi");
+  Rig r(wifi);
+  SimSetup su;
+  su.server = &r.server;
+  su.clock = &r.clock;
+  r.board->setup = &su;
+  r.board->connect();
+  CHECK(su.runs.size() == 1 && su.runs[0] == "nowifi", "%zu", su.runs.size());
+  CHECK(su.at >= app::SETUP_AFTER_MS && su.at < app::SETUP_AFTER_MS + 120000, "%lld", su.at);
+  CHECK(su.joins == 0, "not a new network");
+}
+
+static void test_setup_never_opens_while_the_server_is_down() {
+  std::vector<std::string> wifi(60, "ok");
+  Rig r(wifi);
+  SimSetup su;
+  su.server = &r.server;
+  su.clock = &r.clock;
+  r.board->setup = &su;
+  r.server.fail_next = 40;  // WiFi joins, every update fails
+  r.board->connect();
+  CHECK(su.runs.empty(), "%zu", su.runs.size());
+  CHECK(r.clock.t > app::SETUP_AFTER_MS, "%lld", r.clock.t);
+}
+
+static void test_setup_reopens_when_the_new_network_fails_and_clears_after_a_join() {
+  Rig r({"nowifi", "ok"});
+  SimSetup su;
+  su.server = &r.server;
+  su.clock = &r.clock;
+  r.board->setup = &su;
+  r.board->fresh_wifi = true;
+  r.board->connect();
+  CHECK(su.runs.size() == 1 && su.runs[0] == "badwifi", "%zu", su.runs.size());
+  CHECK(su.joins == 0 && !r.board->fresh_wifi, "");
+  Rig r2;
+  SimSetup su2;
+  su2.server = &r2.server;
+  su2.clock = &r2.clock;
+  r2.board->setup = &su2;
+  r2.board->fresh_wifi = true;
+  r2.board->connect();
+  CHECK(su2.runs.empty() && su2.joins == 1, "%zu %d", su2.runs.size(), su2.joins);
+  // An older saved network joined instead: the new one isn't marked as working.
+  Rig r3;
+  SimSetup su3;
+  su3.server = &r3.server;
+  su3.clock = &r3.clock;
+  r3.board->setup = &su3;
+  r3.board->fresh_wifi = true;
+  r3.server.joins_on = 1;
+  r3.board->connect();
+  CHECK(r3.board->online && su3.joins == 0 && su3.runs.empty() && !r3.board->fresh_wifi, "%d", su3.joins);
 }
 
 static void test_ota_installs_an_offered_build_between_animations() {
@@ -1174,6 +1262,10 @@ int main() {
       T_(test_knob_wraps_around_the_ring),
       T_(test_knob_select_failure_keeps_the_screen),
       T_(test_knob_waits_for_the_ring),
+      T_(test_setup_opens_right_away_with_no_networks),
+      T_(test_setup_opens_after_ten_minutes_without_wifi),
+      T_(test_setup_never_opens_while_the_server_is_down),
+      T_(test_setup_reopens_when_the_new_network_fails_and_clears_after_a_join),
       T_(test_ota_installs_an_offered_build_between_animations),
       T_(test_ota_leaves_the_running_build_alone),
       T_(test_ota_failed_download_carries_on_and_retries_later),
