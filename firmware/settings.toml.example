@@ -8,6 +8,8 @@ WIFI_SSID_3 = "Jake's iPhone"
 WIFI_PASSWORD_3 = "..."
 
 BOARD_URL = "https://ctamap.fly.dev"
+# One ID per physical board: boards sharing an ID show the same thing. A new
+# ID adds itself on the server (as a copy of "home") the first time it connects.
 BOARD_ID = "home"
 # Same value as the BOARD_TOKEN Fly secret.
 BOARD_TOKEN = "..."

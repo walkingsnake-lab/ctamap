@@ -238,7 +238,7 @@ function fakeTracker(data) {
 test('update: auth, unknown board, and no Train Tracker data yet', async () => {
   const s = await serve({ tracker: fakeTracker(null), mlb: fakeMlb([{ id: 7, st: 'pre', start: 1, away: {}, home: {} }]) });
   assert.equal((await s.req('/board/update?b=home')).status, 401);
-  assert.equal((await s.req('/board/update?b=x', { headers: { 'X-Board-Token': 'tok' } })).status, 404);
+  assert.equal((await s.req('/board/update?b=Bad_ID', { headers: { 'X-Board-Token': 'tok' } })).status, 404);
   assert.equal((await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).status, 200);
   // Everything but the trains still works; transit says NO DATA.
   const r = await s.req(FULL);
@@ -1001,5 +1001,59 @@ test('select: the knob sets a category and gets the new screen\'s update back', 
   b = (await s.req('/board/select?b=home&s=transit', h())).body;
   assert.deepEqual([b.screen, b.knob.at], ['transit', 1]);
   assert.ok('rows' in b && !('mlb' in b));
+  await s.close();
+});
+
+test('a new board ID registers itself on its first update, as a copy of home', async () => {
+  const s = await serve();
+  const T = { headers: { 'X-Board-Token': 'tok' } };
+  await s.req('/board/secret123/api/state?b=home', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ station: { mapid: '40380' }, tickerHold: 12 }) });
+  // Without the token nothing is created.
+  assert.equal((await s.req('/board/update?b=office')).status, 401);
+  assert.equal(s.store.get('office'), null);
+  // The version check alone doesn't create a board.
+  assert.equal((await s.req('/board/version?b=office', T)).status, 404);
+  const r = await s.req('/board/update?b=office', T);
+  assert.equal(r.status, 200);
+  const office = s.store.get('office');
+  assert.deepEqual([office.station.mapid, office.tickerHold, office.v, office.bright], ['40380', 12, 1, 'auto']);
+  // From then on the two boards are independent.
+  await s.req('/board/secret123/api/state?b=office', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ station: { mapid: '40100' } }) });
+  assert.equal(s.store.get('home').station.mapid, '40380');
+  assert.equal(s.store.get('office').station.mapid, '40100');
+  await s.close();
+});
+
+test('control API: list, add (copy or defaults), label, and delete boards', async () => {
+  const s = await serve();
+  const J = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  await s.req('/board/secret123/api/state?b=home', J('POST', { station: { mapid: '40380' }, label: 'Kitchen' }));
+  let r = await s.req('/board/secret123/api/boards');
+  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'auto', seen: null }]);
+  r = await s.req('/board/secret123/api/boards', J('POST', { id: 'desk', from: 'home', label: 'Desk' }));
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.map((b) => [b.id, b.label, b.mapid]), [['home', 'Kitchen', '40380'], ['desk', 'Desk', '40380']]);
+  r = await s.req('/board/secret123/api/boards', J('POST', { id: 'bare' }));
+  assert.equal(r.body[2].mapid, '40100'); // defaults: Morse
+  for (const bad of [{ id: 'desk' }, { id: 'Bad ID' }, { id: 'x', from: 'nope' }, { id: 'y', label: 'x'.repeat(25) }]) {
+    assert.equal((await s.req('/board/secret123/api/boards', J('POST', bad))).status, 400, JSON.stringify(bad));
+  }
+  // Copy settings onto an existing board; its name stays.
+  r = await s.req('/board/secret123/api/boards/copy?b=bare&from=home', { method: 'POST' });
+  assert.deepEqual([r.status, r.body.station.mapid, r.body.label, r.body.v], [200, '40380', '', 2]);
+  assert.equal((await s.req('/board/secret123/api/boards/copy?b=bare&from=bare', { method: 'POST' })).status, 400);
+  assert.equal((await s.req('/board/secret123/api/boards/copy?b=nope&from=home', { method: 'POST' })).status, 404);
+  // Seen after a version check.
+  await s.req('/board/version?b=desk', { headers: { 'X-Board-Token': 'tok' } });
+  r = await s.req('/board/secret123/api/boards');
+  assert.ok(r.body.find((b) => b.id === 'desk').seen > 0);
+  // Delete; the last board stays.
+  assert.equal((await s.req('/board/secret123/api/boards?b=desk', { method: 'DELETE' })).status, 200);
+  assert.equal((await s.req('/board/secret123/api/boards?b=desk', { method: 'DELETE' })).status, 404);
+  assert.equal((await s.req('/board/secret123/api/boards?b=bare', { method: 'DELETE' })).status, 200);
+  r = await s.req('/board/secret123/api/boards?b=home', { method: 'DELETE' });
+  assert.equal(r.status, 400);
+  assert.match(r.body.detail, /only board/);
+  assert.equal((await s.req('/board/secret123/api/boards', { method: 'PUT' })).status, 405);
   await s.close();
 });

@@ -52,6 +52,8 @@ const SPEEDS = {
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
 const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
+const MAX_BOARDS = 8;
+const LABEL_MAX = 24;
 const MAX_ROWS = 24; // Clark/Lake can have 18 destinations
 
 class ValidationError extends Error {}
@@ -75,6 +77,9 @@ function defaultBoard(stations) {
   const st = stations.get(DEFAULT_MAPID);
   return {
     v: 1,
+    // A name for people (the control page's board picker); the board itself
+    // goes by its ID. Empty: the picker shows the ID.
+    label: '',
     station: { mapid: DEFAULT_MAPID, name: st ? st.short : 'MORSE' },
     rows: [],
     showHeader: true,
@@ -179,6 +184,10 @@ function validatePatch(patch, stations) {
         out.station = { mapid: st.mapid, name };
         break;
       }
+      case 'label':
+        if (typeof val !== 'string' || val.trim().length > LABEL_MAX) throw new ValidationError(`label must be a string of up to ${LABEL_MAX} characters`);
+        out.label = val.trim();
+        break;
       case 'rows':
         if (!Array.isArray(val) || val.length > MAX_ROWS || !val.every((r) => typeof r === 'string' && ROW_RE.test(r))) {
           throw new ValidationError(`rows must be up to ${MAX_ROWS} strings like "RD:Howard"`);
@@ -331,15 +340,72 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
 
   load();
 
+  const has = (id) => Object.hasOwn(state.boards, id);
+  const validId = (id) => {
+    if (!BOARD_ID_RE.test(id)) throw new ValidationError('board id must be 1-32 chars of a-z, 0-9, -');
+  };
+
+  // A new board: a copy of board `from` (its settings, station and filter
+  // included), or the defaults. Starts at v 1 with brightness on auto.
+  function create(id, { from = null, label = '' } = {}) {
+    validId(id);
+    if (has(id)) throw new ValidationError(`board "${id}" already exists`);
+    if (Object.keys(state.boards).length >= MAX_BOARDS) throw new ValidationError(`at most ${MAX_BOARDS} boards`);
+    if (from != null && !has(from)) throw new ValidationError(`unknown board to copy: ${from}`);
+    const fields = validatePatch({ label }, stations);
+    const board = from != null ? JSON.parse(JSON.stringify(state.boards[from])) : defaultBoard(stations);
+    Object.assign(board, fields, { v: 1, bright: 'auto' });
+    state.boards[id] = board;
+    save();
+    return board;
+  }
+
   return {
     file,
-    get: (id) => (Object.hasOwn(state.boards, id) ? state.boards[id] : null),
+    get: (id) => (has(id) ? state.boards[id] : null),
     all: () => state,
+    ids: () => Object.keys(state.boards),
+    create,
+
+    // A board asked for an ID the server doesn't know yet (a newly flashed
+    // board): add it as a copy of the default board (else the first one), so
+    // it shows what the existing board shows until it's changed on the phone.
+    // Null for an invalid ID or when the board limit is reached.
+    register(id) {
+      if (has(id)) return state.boards[id];
+      if (!BOARD_ID_RE.test(id) || Object.keys(state.boards).length >= MAX_BOARDS) return null;
+      const from = has(DEFAULT_BOARD_ID) ? DEFAULT_BOARD_ID : Object.keys(state.boards)[0] ?? null;
+      const board = create(id, { from });
+      log.warn(`[board] new board "${id}" registered${from ? ` (settings copied from "${from}")` : ''}`);
+      return board;
+    },
+
+    // Replace board `id`'s settings with a copy of board `from`'s (its name
+    // stays). Bumps v so the board refetches.
+    copy(id, from) {
+      if (!has(id)) return null;
+      if (!has(from) || from === id) throw new ValidationError(`unknown board to copy: ${from}`);
+      const prev = state.boards[id];
+      const board = JSON.parse(JSON.stringify(state.boards[from]));
+      Object.assign(board, { label: prev.label || '', v: (prev.v || 0) + 1, bright: 'auto' });
+      state.boards[id] = board;
+      save();
+      return board;
+    },
+
+    // Remove a board. False if it doesn't exist; the last board can't go.
+    remove(id) {
+      if (!has(id)) return false;
+      if (Object.keys(state.boards).length === 1) throw new ValidationError("can't delete the only board");
+      delete state.boards[id];
+      save();
+      return true;
+    },
 
     // Apply a validated partial update; creates the board from defaults if
     // it doesn't exist yet. Always bumps v so the board refetches.
     update(id, patch) {
-      if (!BOARD_ID_RE.test(id)) throw new ValidationError('board id must be 1-32 chars of a-z, 0-9, -');
+      validId(id);
       const fields = validatePatch(patch, stations);
       const board = Object.hasOwn(state.boards, id) ? state.boards[id] : defaultBoard(stations);
       // A destination filter belongs to its station: a new station starts
@@ -374,4 +440,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, SCREENS, KNOB_RING, knobOf, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, KNOB_RING, knobOf, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };
