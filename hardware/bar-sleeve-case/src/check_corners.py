@@ -4,8 +4,8 @@ and the tray can be regenerated with them. The corners are symmetric, so the fra
 
 Run: python3 check_corners.py <out.stl> [W H CX CZ]
   W, H    panel outline (default 160 x 80, the P2.5)
-  CX, CZ  insert centre offsets from the panel centre (default 67.5, 37.5: Jake's ruler measurement of the P2.5,
-          135 x 75 mm centre to centre, Oct 31)
+  CX, CZ  insert centre offsets from the panel centre (default 62.5, 32.25: from a photo of the 135 x 75 check frame on the P2.5,
+          125 x 64.5 mm centre to centre, Oct 31; the ruler reading 135 x 75 was too wide)
 """
 import sys
 import numpy as np
@@ -43,7 +43,7 @@ def frame(w, h, cx, cz):
 
 if __name__ == '__main__':
     out = sys.argv[1] if len(sys.argv) > 1 else 'check-p25-corner-inserts.stl'
-    w, h, cx, cz = (float(v) for v in sys.argv[2:6]) if len(sys.argv) >= 6 else (160.0, 80.0, 67.5, 37.5)
+    w, h, cx, cz = (float(v) for v in sys.argv[2:6]) if len(sys.argv) >= 6 else (160.0, 80.0, 62.5, 32.25)
     m, corners = frame(w, h, cx, cz)
     me = m.to_mesh()
     t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
