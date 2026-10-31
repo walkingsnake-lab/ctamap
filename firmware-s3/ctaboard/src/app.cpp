@@ -63,9 +63,32 @@ void Board::connect(bool boot) {
   // Blocks until online: tries each network, shows status screens, retries
   // after 10, 20, 30 s, then every minute. Then fetches an update; boot=1
   // only after a real restart (it resets the phone's brightness override).
+  // WiFi setup: with no networks saved, the setup network opens right away;
+  // after a network entered on the setup page fails once, or none has
+  // joined for SETUP_AFTER_MS, it opens again (a new router or password).
+  // noserver doesn't count: WiFi works, the server is down.
   int round = 0;
+  std::optional<long long> offline_since;
   while (true) {
+    if (setup && networks.empty()) setup->run("nowifi");
     ConnectResult cr = net->connect(networks, [this](const std::string &k, const std::string &d) { status(k, d); });
+    if (cr.result != "ok") {
+      long long t = clock->ms();
+      if (!offline_since) offline_since = t;
+      if (setup && fresh_wifi) {
+        fresh_wifi = false;
+        say("[setup] the new network didn't join; reopening setup");
+        setup->run("badwifi");
+      } else if (setup && t - *offline_since >= SETUP_AFTER_MS) {
+        say("[setup] no network joined for " + std::to_string((t - *offline_since) / 60000) + " min; opening setup");
+        offline_since.reset();
+        setup->run("nowifi");
+      }
+    } else {
+      offline_since.reset();
+      if (fresh_wifi && setup) setup->joined();
+      fresh_wifi = false;
+    }
     if (cr.result == "ok") {
       status("ok", cr.detail);
       long long st = clock->ms();

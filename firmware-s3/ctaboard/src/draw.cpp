@@ -2079,6 +2079,10 @@ void render_status(Frame &f, const std::string &kind, const std::string &detail)
     // OTA install (S3 only): detail is the percent downloaded.
     center(f, FONT_5X7, U"UPDATING", 13, C::label);
     center(f, FONT_SMALL, first(d, 4) + U"%", 22, C::amber);
+  } else if (kind == "setup") {
+    // WiFi setup: detail is the board's own network to join (also on its label).
+    center(f, FONT_5X7, U"SETUP WIFI", 13, C::amber);
+    center(f, FONT_SMALL, first(U(detail), 16), 22, C::label);
   } else if (kind == "nosetup") {
     // No settings in flash (a generic build on a board never set up): detail says what's missing.
     center(f, FONT_5X7, U"NO SETUP", 13, C::amber);

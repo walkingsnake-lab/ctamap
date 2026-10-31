@@ -64,6 +64,31 @@ once.
 `PORTAL` with the MAC address means the network wants a login page; `NO
 WIFI` means none of the networks could be joined (it retries).
 
+## A board for someone else
+
+1. **Key:** on the control page, pick the board (or add it), Board tab →
+   Owner link → **Give it its own key**. Copy the block it shows: the board's
+   own token (shown only once), a setup network name and password, the
+   owner link, and the text for the setup WiFi QR code.
+2. **Flash** a setup build with that block as its `secrets.h`
+   (`WIFI_NETWORKS {}`: their WiFi goes in on the board).
+3. **Label** the board with two QR codes: the setup WiFi text
+   (`WIFI:T:WPA;S:…;P:…;;`, which phones join from the camera) and the owner
+   link.
+4. **They plug it in:** with no WiFi saved, the panel shows `SETUP WIFI` and
+   the network name. They scan the first QR, the setup page opens (or go to
+   any web address), pick their network and enter its password. The board
+   restarts and joins it. A wrong password brings the setup network back
+   within about a minute, with a message.
+5. **They scan the owner link** to control their board: that board only, no
+   access to yours, updates Automatic or Off.
+
+The setup network also opens on its own after 10 minutes without joining any
+saved network (a new router or password), and gives up after 15 minutes
+with no phone on it to retry the saved networks (a router back after a power
+cut). Holding the knob (or UP) for 2 seconds while the board starts opens it
+on demand. Up to 8 networks are kept, the newest tried first.
+
 ## OTA updates
 
 Once a board has run a setup build, new firmware can reach it over WiFi:
@@ -157,10 +182,10 @@ S3.
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
 | `ctaboard/src/sched.h`, `control.h` | Requests in animation gaps; buttons vs. the phone (`sched.py`, `control.py`); the knob's chooser (twist and rest, S3 only). |
 | `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. |
-| `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build. |
+| `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |
 | `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |
-| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C), NeoPixel, watchdog, settings and OTA state in NVS, OTA slot writes. The only code that includes Arduino headers. |
+| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C, turns and its push button), NeoPixel, watchdog, settings and OTA state in NVS, OTA slot writes, the WiFi setup network (`SetupPortal`). The only code that includes Arduino headers. |
 | `ctaboard/src/assets.h` | Fonts, icons, glyphs. **Generated** by `node scripts/build-firmware-assets.js`. |
 | `ctaboard/src/certs.h` | Root certificates for HTTPS. **Generated** by `node scripts/build-firmware-certs.js`. |
 | `ctaboard/version.h` | The build's commit, for health. **Generated** by `node scripts/stamp-firmware-version.js`; gitignored. |

@@ -70,6 +70,12 @@ const char BUILD_MARK[] = "CTABOARD-BUILD:" FIRMWARE_VERSION ":" BUILD_KIND ";";
 #ifndef TLS_VERIFY
 #define TLS_VERIFY 1
 #endif
+#ifndef SETUP_NAME
+#define SETUP_NAME ""  // the setup network: "" for Board-<last 4 hex of the MAC>
+#endif
+#ifndef SETUP_PASSWORD
+#define SETUP_PASSWORD ""  // 8+ characters for WPA2; "" for an open setup network
+#endif
 
 // The loop task's stack (Arduino's default is 8 KB): payload parsing and
 // the transit view are a few levels deep.
@@ -87,6 +93,7 @@ static device::Knob *knob;
 static device::Watchdog *watchdog;
 static device::StatusLed *led;
 static device::Ota *ota_slot;
+static device::SetupPortal *portal;
 static app::Board *board;
 static long long last_report = 0;
 static bool no_setup = false;
@@ -109,6 +116,8 @@ static config::Config built_config() {
   c.double_buffer = MATRIX_DOUBLE_BUFFER;
   c.color_order = MATRIX_COLOR_ORDER;
   c.knob_reverse = KNOB_REVERSE;
+  c.setup_name = SETUP_NAME;
+  c.setup_pass = SETUP_PASSWORD;
   return c;
 }
 #endif
@@ -190,12 +199,29 @@ void setup() {
   knob = new device::Knob(cfg.knob_reverse);
   knob->begin();
 
+  // WiFi setup without USB (device.h SetupPortal): opens by itself with no
+  // networks saved or none joined for 10 min; holding the knob (or UP) for
+  // 2 s while the board starts opens it on demand.
+  portal = new device::SetupPortal(&cfg, panel, [] { watchdog->feed(); });
+  if (buttons->up() || knob->pressed()) {
+    uint32_t t0 = millis();
+    bool held = true;
+    while (held && millis() - t0 < 2000) {
+      watchdog->feed();
+      delay(50);
+      held = buttons->up() || knob->pressed();
+    }
+    if (held) portal->run("asked");  // restarts
+  }
+
   board = new app::Board(net, panel, &sys_clock, settings.networks, buttons, watchdog,
                          [](const std::string &s) { Serial.println(s.c_str()); }, started,
                          started == "PANIC" ? "PANIC" : "", led, knob);
   board->hardware = "adafruit_matrixportal_s3";
   board->firmware = FIRMWARE_VERSION;
   board->ota = ota_slot;
+  board->setup = portal;
+  board->fresh_wifi = device::nvs_get("fresh") == "1";
   board->mem_free = device::free_heap;
   board->largest_block = device::largest_block;
   Serial.printf("[board] memory free %ld, largest block %ld\n", device::free_heap(), device::largest_block());

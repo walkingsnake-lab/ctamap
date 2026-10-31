@@ -15,6 +15,7 @@ const { createRadar, packFrame } = require('./radar');
 const { createTestRadar } = require('./test-radar');
 const { createMlb, prioritize } = require('./mlb');
 const { createLogos } = require('./mlb-logos');
+const { createKeys } = require('./keys');
 const { createFirmware, FirmwareError, CHANNELS: FW_CHANNELS, MAX_BYTES: MAX_FIRMWARE } = require('./firmware');
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
@@ -31,7 +32,15 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo', 'firmware']);
+const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo', 'firmware', 'c']);
+// What a per-board control link (/board/c/<link>/) may reach: the control
+// page and simulator for its own board. Owner-only endpoints (the board
+// list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
+// answer 404 there.
+const SCOPED_OK = new Set(['', 'api/destinations', 'api/boards', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png']);
+// Settings a per-board link may not change: the update channel (a buyer
+// stays on stable, or turns updates off).
+const SCOPED_FW = ['stable', 'off'];
 const MAX_SHEET = 8 * 1024 * 1024; // uploaded logo sheet (PNG)
 
 function send(res, status, body) {
@@ -123,6 +132,7 @@ function createBoard({
   nwsForecast = null,
   radar = null,
   mlb = null,
+  keys = null,    // per-board tokens and control links (keys.js); default beside the board state
   logos = null,   // prepared team logos (mlb-logos.js); default beside the board state
   firmware = null, // OTA builds (firmware.js); default beside the board state
   alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
@@ -149,7 +159,14 @@ function createBoard({
     const lg = ['classic', 'logos', 'bands'].includes(q.bblayout) ? q.bblayout : null;
     return { mapid, showHeader: flag(q.header), showWeather: flag(q.weather), radarTime: flag(q.rtime), baseballLayout: lg };
   }
-  const authed = (req) => !token || sameSecret(req.headers['x-board-token'], token);
+  if (!keys) keys = createKeys({ dir: path.dirname(store.file), log });
+  // A board with its own key (keys.js) must send that token; the others,
+  // the shared BOARD_TOKEN (or nothing, when it isn't set).
+  const authed = (req, id) => {
+    const own = keys.check(String(id || ''), req.headers['x-board-token']);
+    if (own !== null) return own;
+    return !token || sameSecret(req.headers['x-board-token'], token);
+  };
   if (!tracker) tracker = createTracker({ log }).start();
   if (!weather) weather = createWeather({ log, cacheFile: path.join(path.dirname(store.file), 'board-weather.json') }).start();
   if (!nws) nws = createNws({ log }).start();
@@ -281,11 +298,12 @@ function createBoard({
   function boardList() {
     return store.ids().map((id) => {
       const b = store.get(id);
-      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, seen: seenAt.get(id) ?? null };
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, seen: seenAt.get(id) ?? null, ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
     });
   }
   // A removed board's live state (health, test alerts, chrono views).
   function forget(id) {
+    keys.remove(id);
     healthOf.delete(id);
     seenAt.delete(id);
     tests.delete(id);
@@ -439,7 +457,7 @@ function createBoard({
 
     if (first === 'version' && rest.length === 0) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
-      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
       noteHealth(String(parsed.query.b), parsed.query, nowSecs());
@@ -453,7 +471,7 @@ function createBoard({
     // An OTA build (contract: "Firmware"): streamed, exactly `size` bytes.
     if (first === 'firmware' && rest.length === 0) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
-      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       if (!store.get(String(parsed.query.b || ''))) return send(res, 404, { err: 'unknown_board' });
       const f = firmware.file(String(parsed.query.v || ''));
       if (!f) return send(res, 404, { err: 'unknown_build' });
@@ -466,7 +484,7 @@ function createBoard({
 
     if (first === 'update' && rest.length === 0) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
-      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       const id = String(parsed.query.b || '');
       // A board ID the server hasn't seen (a newly flashed board) is added
       // as a copy of the default board, so a second board needs no setup here.
@@ -483,7 +501,7 @@ function createBoard({
     // the new screen, so the board needs no second request.
     if (first === 'select' && rest.length === 0) {
       if (method !== 'POST') return send(res, 405, { err: 'method' });
-      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       const id = String(parsed.query.b || '');
       let board;
       try { board = store.select(id, String(parsed.query.s || '')); }
@@ -500,7 +518,7 @@ function createBoard({
     // pk=4: packed to 1024 (radar.packFrame), as the board stores them.
     if (first === 'radar' && rest.length === 1) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
-      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
       const bytes = radar.frame(board.station.mapid, rest[0]) || testRadar.frame(rest[0]);
@@ -510,13 +528,25 @@ function createBoard({
     // One team logo crop: 24 x 12 RGB (864 bytes), immutable (the id carries a hash).
     if (first === 'logo' && rest.length === 1) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
-      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       return sendLogo(res, logos.bytes(rest[0]));
     }
 
     // ---- control endpoints, under the secret path ----
-    if (controlPath && first && sameSecret(first, controlPath)) {
-      const sub = rest.join('/');
+    // The owner's control path (every board), or a per-board link
+    // (/board/c/<link>/: that board only, `b` forced to it).
+    let scope = null;
+    let ctl = null;
+    if (controlPath && first && sameSecret(first, controlPath)) ctl = rest;
+    else if (first === 'c' && rest.length >= 1 && (scope = keys.idForLink(rest[0])) && store.get(scope)) ctl = rest.slice(1);
+    if (ctl) {
+      const sub = ctl.join('/');
+      const isSimFile = ctl[0] === 'api' && (ctl[1] === 'radar' || ctl[1] === 'logo') && ctl.length === 3;
+      if (scope) {
+        if (!SCOPED_OK.has(sub) && !isSimFile) return send(res, 404, { err: 'not_found' });
+        if (sub === 'api/boards' && method !== 'GET') return send(res, 404, { err: 'not_found' });
+        parsed.query.b = scope;
+      }
 
       // Phone control page. Relative URLs need the trailing slash.
       if (sub === '') {
@@ -527,7 +557,8 @@ function createBoard({
           return;
         }
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-        res.end(CONTROL_HTML);
+        // A per-board link's page knows its board and hides the owner's controls.
+        res.end(scope ? CONTROL_HTML.toString('utf8').replace('<script>', `<script>window.BOARD_SCOPE = ${JSON.stringify(scope)};</script>\n<script>`) : CONTROL_HTML);
         return;
       }
 
@@ -554,7 +585,7 @@ function createBoard({
       // Boards: GET the list; POST {id, from?, label?} to add one (a copy of
       // board `from`, or the defaults); DELETE ?b=<id> to remove one.
       if (sub === 'api/boards') {
-        if (method === 'GET') return send(res, 200, boardList());
+        if (method === 'GET') return send(res, 200, scope ? boardList().filter((b) => b.id === scope).map((b) => ({ ...b, link: undefined })) : boardList());
         try {
           if (method === 'POST') {
             const body = await readJson(req);
@@ -587,16 +618,35 @@ function createBoard({
         if (!board) return send(res, 404, { err: 'unknown_board' });
         return send(res, 200, board);
       }
+      // Board keys (keys.js), owner only. POST api/boards/key?b=<id>: a new
+      // token and control link for that board (the token is shown once and
+      // goes into its flash; a board running with the old one gets 401s);
+      // DELETE: back to the shared token, link revoked. POST
+      // api/boards/link?b=<id>: a new control link, the old one stops working.
+      if (sub === 'api/boards/key' || sub === 'api/boards/link') {
+        const id = String(parsed.query.b || '');
+        if (!store.get(id)) return send(res, 404, { err: 'unknown_board' });
+        if (sub === 'api/boards/key' && method === 'POST') return send(res, 200, { id, ...keys.issue(id) });
+        if (sub === 'api/boards/key' && method === 'DELETE') { keys.remove(id); return send(res, 200, { id, link: null }); }
+        if (sub === 'api/boards/link' && method === 'POST') {
+          const link = keys.relink(id);
+          return link ? send(res, 200, { id, link }) : send(res, 400, { err: 'invalid', detail: 'this board has no key; give it one first' });
+        }
+        return send(res, 405, { err: 'method' });
+      }
       if (sub === 'api/health') {
         if (method !== 'GET') return send(res, 405, { err: 'method' });
-        return send(res, 200, Object.fromEntries(healthOf));
+        return send(res, 200, scope ? (healthOf.has(scope) ? { [scope]: healthOf.get(scope) } : {}) : Object.fromEntries(healthOf));
       }
       if (sub === 'api/state') {
-        if (method === 'GET') return send(res, 200, store.all());
+        if (method === 'GET') return send(res, 200, scope ? { boards: { [scope]: store.get(scope) } } : store.all());
         if (method === 'POST') {
           const id = String(parsed.query.b || '');
           try {
             const patch = await readJson(req);
+            if (scope && patch && patch.fw !== undefined && !SCOPED_FW.includes(patch.fw)) {
+              throw new ValidationError(`fw must be one of ${SCOPED_FW.join(', ')}`);
+            }
             return send(res, 200, store.update(id, patch));
           } catch (e) {
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
