@@ -23,7 +23,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots under the skirt), then `bar-knob.stl` (the middle size) or the winner. Pebble, Ø30 x 12.7, grip flutes round the side, rounded shoulder, domed top | white PLA, or any | as exported (upright, skirt on the bed), no supports |
 | Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
 | Sensor bracket (optional) | `bar-sensor-bracket.stl` (VEML7700 under the Ø2 hole, hung from the encoder board) | PETG or PLA | as exported, flat side down |
-| Sensor grille drill guide (optional) | `bar-sensor-grille-guide-5hole.stl` or `-4hole.stl` (keys into the knob hole; 8 mm bores for a 1.5 mm bit) | any PLA | as exported (top face down, plug up) |
+| Sensor grille drill guide (optional) | `bar-sensor-grille-guide-plug-fit-set.stl` first (crush-rib plugs, 1-3 notches = rib r 11.8 / 11.9 / 12.0; pick the one that pushes in firmly), then `bar-sensor-grille-guide-5hole.stl` or `-4hole.stl` (1.0 mm bit; regenerate with the winning `RIB_R`). Run the bit through the guide once before use | any PLA | as exported (top face down, plug up) |
 | Tilt plinth (optional) | `bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 | Coupons | `coupon-v4-plate-boss.stl`, `coupon-v4-s3-pilots.stl` | as the parts | as exported |
 - Optional light sensor: Adafruit VEML7700 (4162, flat), 10 cm STEMMA QT cable, 2 x M2.5 x 8 + 2 M2.5 nuts, 2-4 x M2.5 x 6. Firmware support (brightness from the sensor) is a separate change.
