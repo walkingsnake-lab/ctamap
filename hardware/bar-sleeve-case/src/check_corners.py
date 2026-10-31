@@ -7,6 +7,7 @@ Profile mode adds a Ø7 window over every other insert, so only the right way up
 symmetric top to bottom), and an arrow tab on the PI IN side.
 
 Run: PANEL=p3 python3 check_corners.py <out.stl>        corners and guides from panel.py
+     CORNERS='[(x, z), ...]' GUIDES='[...]' PANEL=p3 ...  try other positions before changing panel.py
      python3 check_corners.py <out.stl> W H CX CZ        symmetric corners at (+/-CX, +/-CZ), no guides
 History: the P2.5 frame (125 x 64.5 mm, Oct 31) confirmed its corners after a ruler reading of 135 x 75 proved too
 wide; check-p25-corner-inserts.stl is that frame.
@@ -78,6 +79,11 @@ if __name__ == '__main__':
         w, h = P['w'], P['h']
         corners = corners_of(P['inserts'])
         guides = [q for q in P['inserts'] if q not in corners]
+        import ast, os
+        if os.environ.get('CORNERS'):
+            corners = [tuple(q) for q in ast.literal_eval(os.environ['CORNERS'])]
+        if os.environ.get('GUIDES'):
+            guides = [tuple(q) for q in ast.literal_eval(os.environ['GUIDES'])]
         arrow = P['headers'][0][0]                                       # PI IN
     m = frame(w, h, corners, guides, arrow)
     me = m.to_mesh()
