@@ -23,6 +23,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots under the skirt), then `bar-knob.stl` (the middle size) or the winner. Pebble, Ø30 x 12.7, grip flutes round the side, rounded shoulder, domed top | white PLA, or any | as exported (upright, skirt on the bed), no supports |
 | Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
 | Sensor bracket (optional) | `bar-sensor-bracket.stl` (VEML7700 under the Ø2 hole, hung from the encoder board) | PETG or PLA | as exported, flat side down |
+| Sensor grille drill guide (optional) | `bar-sensor-grille-guide-5hole.stl` or `-4hole.stl` (keys into the knob hole; 8 mm bores for a 1.5 mm bit) | any PLA | as exported (top face down, plug up) |
 | Tilt plinth (optional) | `bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 | Coupons | `coupon-v4-plate-boss.stl`, `coupon-v4-s3-pilots.stl` | as the parts | as exported |
 - Optional light sensor: Adafruit VEML7700 (4162, flat), 10 cm STEMMA QT cable, 2 x M2.5 x 8 + 2 M2.5 nuts, 2-4 x M2.5 x 6. Firmware support (brightness from the sensor) is a separate change.
@@ -80,6 +81,7 @@ Parametric Python (manifold3d + trimesh); every STL in `stl/` is generated from 
 | `case2.py` | Shell v4 back-down (main) and front-down (alternate), both with the built-in rim and open holes; Boot key; the older skinned shell, glued frame, glue guide, drill guide and USB-C bezel behind flags |
 | `plate3.py` | Back plate v3 (bolted to the panel, corner foot under the S3), insert template, wall spacer, coupons |
 | `sensor.py` | Light-sensor bracket: `python3 sensor.py <outdir>` |
+| `grille_guide.py` | Light-sensor grille drill guides (5- and 4-hole): `python3 grille_guide.py <outdir> [bit_mm]` |
 | `knob.py` | Knob and its three-size fit set: `python3 knob.py <outdir>` |
 | `collar.py` | Encoder collars for both shells |
 | `diffuser.py` | Diffuser: `python3 diffuser.py <outdir>/` writes the two-colour sets; `python3 diffuser.py <out.stl> [face thickness]` one piece. The 0.4 face makes the stack 0.2 mm thicker; the plate's snap and screw slots take it up |
@@ -92,6 +94,7 @@ pip install -r ../requirements.txt
 python3 case2.py ../stl          # back-down shell and Boot key; front-down shell into ../stl/alternate-frontdown/
 python3 plate3.py ../stl         # v3 plate, insert template, wall spacer, coupons
 python3 sensor.py ../stl         # light-sensor bracket
+python3 grille_guide.py ../stl   # light-sensor grille drill guides
 python3 knob.py ../stl           # knob + fit set
 python3 collar.py ../stl
 python3 diffuser.py ../stl/        # two-colour sets (white 0.2 and translucent 0.4 face + black rest); <file>.stl [face] = one piece
