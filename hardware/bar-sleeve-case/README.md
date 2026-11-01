@@ -23,7 +23,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots under the skirt), then `bar-knob.stl` (the middle size) or the winner. Pebble, Ø30 x 12.7, grip flutes round the side, rounded shoulder, domed top | white PLA, or any | as exported (upright, skirt on the bed), no supports |
 | Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
 | Sensor bracket (optional) | `bar-sensor-bracket.stl` (VEML7700 under the Ø2 hole, hung from the encoder board) | PETG or PLA | as exported, flat side down |
-| Sensor grille drill guide (optional) | `bar-sensor-grille-guide-plug-fit-set.stl` first (crush-rib plugs, 1-3 notches = rib r 11.8 / 11.9 / 12.0; pick the one that pushes in firmly), then `bar-sensor-grille-guide-5hole.stl` or `-4hole.stl` (1.0 mm bit; regenerate with the winning `RIB_R`). Run the bit through the guide once before use | any PLA | as exported (top face down, plug up) |
+| Sensor grille drill guide (optional) | `bar-sensor-grille-guide-plug-fit-set.stl` first (crush-rib plugs, 1-3 notches = rib r 12.05 / 12.15 / 12.25; pick the one that pushes in firmly), then `bar-sensor-grille-guide-5hole.stl` or `-4hole.stl` (1/16" = 1.59 mm bit; regenerate with the winning `RIB_R`, or another bit size). The plug sets left-right; a fence over the case's back face sets rotation: push the guide back against it while drilling. Run the bit through the guide once before use | any PLA | as exported (top face down, plug and fence up) |
 | Tilt plinth (optional) | `bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 | Coupons | `coupon-v4-plate-boss.stl`, `coupon-v4-s3-pilots.stl` | as the parts | as exported |
 - Optional light sensor: Adafruit VEML7700 (4162, flat), 10 cm STEMMA QT cable, 2 x M2.5 x 8 + 2 M2.5 nuts, 2-4 x M2.5 x 6. Auto brightness follows it (`firmware-s3/README.md`, "The light sensor").
@@ -117,8 +117,9 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
 - The panel sits turned 180° (input header on the left): set `MATRIX_ROTATION 180` in `secrets.h`. The S3 is turned 180° too,
   on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
 - Top wall: one slot open to the front edge, only as wide as the knob encoder's body (18.7 mm). The light sensor rides on the
-  tray: screwed under the top wall (4 x M2.5 x 5 into short pillars, chip up, its sockets in channels in the wall) below a Ø4 hole lined up with the sleeve's Ø2
-  light hole; no bracket. Right wall: a slot for the USB-C plug and
+  tray: screwed under the top wall (4 x M2.5 x 5 into short pillars, chip up, its sockets in channels in the wall) below a Ø8.3 hole lined up with the sleeve's
+  light-sensor pocket (a blind Ø7.5 recess inside the top wall, 0.8 mm skin left; the 5-hole 1/16" grille from `grille_guide.py`, Ø6.47, drills
+  through that skin; `case2.GRILLE_BIT` / `GRILLE_WEB` size all three); no bracket. Right wall: a slot for the USB-C plug and
   the S3's edge buttons. Back: full-width louver bands, Boot and status-light holes, one pair of ribbon hooks, a tie loop, two
   nut bosses for the French cleat. No keyholes.
 - Order: diffuser and panel into the sleeve; encoder from the back; S3 and sensor onto the tray; tray in;

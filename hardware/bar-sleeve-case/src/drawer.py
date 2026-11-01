@@ -137,8 +137,8 @@ SEN_POCKET = 1.7                                # channel depth into the 2.5 mm 
 SEN_PLUG = 8.0                                  # channel run past each socket, outward, for the plug
 SEN_GAP = 4.6 - SEN_POCKET
 SEN_TOP = H - WALL - TRAY_CL - TRAY_WT - SEN_GAP     # board's top (chip side)
-SEN_HOLE = 6.5                                  # hole in the tray's top wall over the chip: clears the sleeve's drilled grille
-                                                # (grille_guide.py: the 5-hole pattern with a 1.0 bit spans Ø4.7) with ~0.9 a side
+SEN_HOLE = round(V.GRILLE_SPAN + 1.8, 2)        # hole in the tray's top wall over the chip: clears the sleeve's drilled grille
+                                                # (case2.GRILLE_SPAN: 5 holes, 1/16" bit, Ø6.47) with ~0.9 a side -> 8.27
 ENC_HALF = 11.8 / 2 * math.sqrt(2)              # encoder body (11.8 square, turned 45 deg): half diagonal
 ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
 
