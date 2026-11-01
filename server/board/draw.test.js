@@ -435,6 +435,20 @@ test('radar with no frames yet draws the clock at the current time (no crash)', 
   }
 });
 
+test('weather icons are static on every layout, whatever the icon clock', () => {
+  const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
+  const days = ['sun', 'rain', 'storm', 'snow', 'fog'].map((icon, i) => ({ d: ['SA', 'SU', 'MO', 'TU', 'WE'][i], hi: 60 + i, icon }));
+  const hours = ['rain', 'storm', 'pcloudy_day', 'moon'].map((icon, i) => ({ h: `${i * 2 + 2}P`, t: 60 + i, icon }));
+  const wx = { icon: 'rain', temp: 57, word: 'RAIN', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 80 };
+  // iconAnim as an older server sent it: now ignored.
+  const rad = (w) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w, iconAnim: ['now', '5day', 'hourly', 'radar'] });
+  for (const w of [wx, { ...wx, days }, { ...wx, hours }]) {
+    const at = (iconT) => Array.from(draw.render({ now, bright: 100, warn: null, radar: rad(w) }, { screen: 'weather', now, frames: {}, iconT }).px);
+    const still = at(0);
+    for (const t of [150, 400, 900, 1700, 2300]) assert.deepEqual(at(t), still, `iconT ${t}`);
+  }
+});
+
 test('weather screen: radar screen with no frames shows big temp, details, and rain chance', () => {
   const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
   const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
