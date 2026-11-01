@@ -132,6 +132,17 @@ test('a saved radar screen loads as weather (renamed)', () => {
   assert.throws(() => createStore({ dir, log: quiet }).update('home', { screen: 'radar' }), /screen must be/);
 });
 
+test('retired animated-icon settings are dropped from a saved state', () => {
+  const dir = tmpDir();
+  createStore({ dir, log: quiet }).update('home', { screen: 'weather' });
+  const file = path.join(dir, 'board-state.json');
+  const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+  Object.assign(saved.boards.home, { iconsNow: 'animated', icons5day: 'static', iconsHourly: 'animated', iconsRadar: 'animated' });
+  fs.writeFileSync(file, JSON.stringify(saved));
+  const home = createStore({ dir, log: quiet }).get('home');
+  for (const key of ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar']) assert.equal(Object.hasOwn(home, key), false);
+});
+
 test('writes are atomic: no temp file left behind', () => {
   const dir = tmpDir();
   const store = createStore({ dir, log: quiet });

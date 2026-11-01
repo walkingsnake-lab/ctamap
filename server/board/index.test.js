@@ -540,7 +540,7 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'transit'); // no automatic switching unless radar visits are on
-  assert.deepEqual({ ...b.radar, temp: undefined, icon: undefined }, { ...state, visit: null, showTime: true, tempShadow: false, temp: undefined, icon: undefined, iconAnim: ['now', '5day', 'hourly', 'radar'] });
+  assert.deepEqual({ ...b.radar, temp: undefined, icon: undefined }, { ...state, visit: null, showTime: true, tempShadow: false, temp: undefined, icon: undefined });
   assert.equal((await fetch(`${base}/board/radar/40100-202610041600?b=home`)).status, 401);
   const r = await fetch(`${base}/board/radar/40100-202610041600?b=home`, h);
   assert.equal(r.status, 200);
@@ -1442,18 +1442,11 @@ test('firmware: CI publishes signed builds to beta with its own token, nothing e
   await off.close();
 });
 
-test('weather icons: animated by default, per layout; static ones leave radar.iconAnim', async () => {
+test('weather icons are static: no radar.iconAnim, and the old per-layout settings are rejected', async () => {
   const now = Math.floor(Date.now() / 1000);
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
   const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
-  assert.deepEqual((await s.req(FULL)).body.radar.iconAnim, ['now', '5day', 'hourly', 'radar']);
-  let r = await post({ icons5day: 'static', iconsRadar: 'static' });
-  assert.equal(r.status, 200);
-  assert.equal(r.body.icons5day, 'static');
-  assert.deepEqual((await s.req(FULL)).body.radar.iconAnim, ['now', 'hourly']);
-  await post({ iconsNow: 'static', iconsHourly: 'static' });
   assert.equal((await s.req(FULL)).body.radar.iconAnim, undefined);
-  r = await post({ iconsNow: 'spinning' });
-  assert.equal(r.status, 400);
+  for (const key of ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar']) assert.equal((await post({ [key]: 'animated' })).status, 400);
   await s.close();
 });

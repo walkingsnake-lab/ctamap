@@ -138,79 +138,9 @@ const ICONS = {
   ],
 };
 
-// ---- animated icons (S3) ----
-// Per icon, frames of [ms, rows], cycled while a weather layout's icons are
-// animated (control page, per layout). Frame 0 is always the static icon,
-// so "static" is the animation at rest. Gentle on purpose: the only hard
-// blink on the board means a tornado warning, so nothing here flashes
-// faster than the storm bolt's flicker.
-
-const W8 = 8;
-const blank = () => Array.from({ length: W8 }, () => '.'.repeat(W8));
-// Pixels of `rows` whose code is in `codes`, moved by (dx, dy), clipped.
-function layer(rows, codes, dx = 0, dy = 0) {
-  const out = blank().map((r) => [...r]);
-  rows.forEach((row, j) => [...row].forEach((c, i) => {
-    const x = i + dx, y = j + dy;
-    if (codes.includes(c) && x >= 0 && x < W8 && y >= 0 && y < W8) out[y][x] = c;
-  }));
-  return out.map((r) => r.join(''));
-}
-// Layers over each other, later on top.
-function over(...layers) {
-  const out = blank().map((r) => [...r]);
-  for (const l of layers) l.forEach((row, j) => [...row].forEach((c, i) => { if (c !== '.') out[j][i] = c; }));
-  return out.map((r) => r.join(''));
-}
-// rows with pixels at the given [x, y] set to code.
-function plus(rows, code, ...pts) {
-  const out = rows.map((r) => [...r]);
-  for (const [x, y] of pts) out[y][x] = code;
-  return out.map((r) => r.join(''));
-}
-// Rows j0..j1 of rows moved by dx (the rest unchanged).
-function shiftRows(rows, j0, j1, dx) {
-  return rows.map((row, j) => {
-    if (j < j0 || j > j1) return row;
-    return [...row].map((_, i) => (i - dx >= 0 && i - dx < W8 ? row[i - dx] : '.')).join('');
-  });
-}
-// A slanted 2px rain streak pair per drop column pair, its top on row r
-// (the static icons have it on row 5).
-function rainRows(rows, r, code = 'B', cols = [[1, 0], [4, 3], [7, 6]]) {
-  const out = rows.map((row, j) => (j >= 4 ? [...row].map((c) => (c === code ? '.' : c)).join('') : row));
-  return plus(out, code, ...cols.flatMap(([a, b]) => [[a, r], [b, r + 1]]).filter(([, y]) => y < W8));
-}
-
-const I = ICONS;
-const SUN_CARD = ['...YY...', '........', '...YY...', 'Y.YYYY.Y', 'Y.YYYY.Y', '...YY...', '........', '...YY...'];
-const SUN_DIAG = ['........', '.Y....Y.', '...YY...', '..YYYY..', '..YYYY..', '...YY...', '.Y....Y.', '........'];
-const cloudOver = (rows, light, dx) => over(layer(rows, light), layer(rows, 'CD', dx));
-const ICON_ANIM = {
-  // Rays twinkle: the diagonals, then the straight rays, drop out briefly.
-  sun: [[1400, I.sun], [220, SUN_CARD], [220, SUN_DIAG], [220, SUN_CARD]],
-  // Two stars twinkle beside the moon.
-  moon: [[1800, I.moon], [260, plus(I.moon, 'M', [6, 2])], [1000, I.moon], [260, plus(I.moon, 'M', [5, 5])]],
-  // The cloud drifts a pixel over the sun or moon and back.
-  pcloudy_day: [[1500, I.pcloudy_day], [1500, cloudOver(I.pcloudy_day, 'Y', -1)]],
-  pcloudy_night: [[1500, I.pcloudy_night], [1500, cloudOver(I.pcloudy_night, 'M', -1)]],
-  // The top puffs billow a pixel left and back.
-  cloudy: [[1500, I.cloudy], [1500, shiftRows(I.cloudy, 0, 2, -1)]],
-  // Drops fall: the streaks step down a row, then start again under the cloud.
-  rain: [[180, I.rain], [180, rainRows(I.rain, 6)], [180, rainRows(I.rain, 4)]],
-  ice: [[180, I.ice], [180, rainRows(I.ice, 6, 'B', [[1, 0]])], [180, rainRows(I.ice, 4, 'B', [[1, 0]])]],
-  // The flake floats down a pixel and back.
-  snow: [[900, I.snow], [900, layer(I.snow, 'S', 0, 1)]],
-  // The bolt flickers.
-  storm: [[1600, I.storm], [150, layer(I.storm, 'GK')], [120, I.storm], [150, layer(I.storm, 'GK')]],
-  tsnow: [[1600, I.tsnow], [150, layer(I.tsnow, 'GKS')], [120, I.tsnow], [150, layer(I.tsnow, 'GKS')]],
-  // The fog lines drift apart and back.
-  fog: [[1200, I.fog], [1200, shiftRows(shiftRows(I.fog, 1, 1, 1), 5, 5, 1)]],
-};
-
 // Overnight owl (transit screen, no trains; CTA calls its overnight service
-// Owl): 13 x 15, perched on a line left of the big clock. Frames as in
-// ICON_ANIM, frame 0 the static owl; it mostly sits still, blinks now and
+// Owl): 13 x 15, perched on a line left of the big clock. Frames of
+// [ms, rows], cycled on the board's icon clock; frame 0 is the static owl; it mostly sits still, blinks now and
 // then, and glances right once a cycle. No hard on/off rhythm, since a 1 s
 // blink means a tornado warning. Pupils are unlit.
 const OWL_PALETTE = {
@@ -278,4 +208,4 @@ function drawIcon(frame, name, x, y) {
   }));
 }
 
-module.exports = { ICONS, PALETTE, ALERT_BANG, ICON_ANIM, OWL, iconForCode, drawIcon };
+module.exports = { ICONS, PALETTE, ALERT_BANG, OWL, iconForCode, drawIcon };

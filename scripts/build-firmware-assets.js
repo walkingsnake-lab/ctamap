@@ -104,18 +104,6 @@ function buildCpp() {
     lines.push(`  {"${k}", "${rows.join('')}"},`);
   }
   lines.push('};', `static const int ICONS_N = ${Object.keys(icons.ICONS).length};`, '');
-  // Animated icons (icons.js ICON_ANIM): each icon's frames in order, with
-  // how long each shows (ms). S3 only: assets.py doesn't carry them.
-  lines.push('struct IconFrame { const char *name; uint16_t ms; const char *px; };', 'static const IconFrame ICON_FRAMES[] = {');
-  let nFrames = 0;
-  for (const [k, frames] of Object.entries(icons.ICON_ANIM)) {
-    for (const [ms, rows] of frames) {
-      if (rows.length !== 8 || rows.some((r) => r.length !== 8)) throw new Error(`icon ${k} frame is not 8 x 8`);
-      lines.push(`  {"${k}", ${ms}, "${rows.join('')}"},`);
-      nFrames++;
-    }
-  }
-  lines.push('};', `static const int ICON_FRAMES_N = ${nFrames};`, '');
   // Overnight owl (icons.js OWL): its palette and frames (13 x 15, row by
   // row), with how long each shows (ms). S3 only.
   lines.push('static const IconColor OWL_PALETTE[] = {');

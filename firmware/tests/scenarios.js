@@ -572,33 +572,6 @@ async function build() {
       ...ts(1000, 1500, 12).map((t) => ({ p: { view: 'chrono', rows: [row('RD', 'HOWARD', min(4), '801'), row('RD', 'HOWARD', min(9), '802')] }, now: NOW, t })),
     ]);
   }
-  // Animated weather icons (S3 only): every icon through its cycle on the
-  // conditions screen, the 5-day and hourly columns (each offset by its x),
-  // the radar corner, and a layout that isn't listed (static).
-  {
-    const t = 1791140000;
-    const icons = require(path.join(B, 'icons'));
-    const base = { now: t, tzo: tzOffset(t), bright: 100, warn: null };
-    const wxs = { temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51, feels: 61, wind: 'NW 12', pop: 20 };
-    const all = ['now', '5day', 'hourly', 'radar'];
-    const rad = (w, extra) => ({ ...base, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w, iconAnim: all, ...extra } });
-    for (const name of Object.keys(icons.ICON_ANIM)) {
-      const total = icons.ICON_ANIM[name].reduce((a, [ms]) => a + ms, 0);
-      const ts = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => Math.floor((k * total) / 8) + 7);
-      add(`animated icon ${name}`, rad({ ...wxs, icon: name }), ts.map((iconT) => ({ screen: 'weather', iconT })), undefined, undefined, { s3only: true });
-    }
-    const days = ['sun', 'rain', 'storm', 'snow', 'fog'].map((icon, i) => ({ d: ['SA', 'SU', 'MO', 'TU', 'WE'][i], hi: 60 + i, icon }));
-    const hours = ['rain', 'rain', 'pcloudy_day', 'moon'].map((icon, i) => ({ h: `${i * 2 + 2}P`, t: 60 + i, icon }));
-    const steps = [0, 150, 400, 900, 1700, 2300].map((iconT) => ({ screen: 'weather', iconT }));
-    add('animated icons 5-day', rad({ ...wxs, icon: 'rain', days }), steps, undefined, undefined, { s3only: true });
-    add('animated icons hourly', rad({ ...wxs, icon: 'storm', hours }), steps, undefined, undefined, { s3only: true });
-    add('animated icons 5-day static when not listed', rad({ ...wxs, icon: 'rain', days }, { iconAnim: ['now', 'hourly'] }), steps, undefined, undefined, { s3only: true });
-    const [key, { bytes, loc }] = Object.entries(rf)[0];
-    const rt = radar.timeOf(key.split('-')[1]);
-    const ids = ['a', 'b', 'c'];
-    const corner = { ...base, now: rt, tzo: tzOffset(rt), radar: { on: true, frames: ids, ft: ids.map((_, i) => rt - (2 - i) * 360), timeBox: loc.timeBox, split: loc.split, showTime: false, temp: 63, icon: 'rain', iconAnim: ['radar'] } };
-    add('animated icon radar corner', corner, [0, 190, 380].map((iconT) => ({ screen: 'weather', idx: 2, iconT })), Object.fromEntries(ids.map((id) => [id, bytes])), undefined, { s3only: true });
-  }
   // Screen change slide (S3 only): the new screen pushes the old one's last
   // frame off sideways, both ways, dimmed too (the slide is after brightness).
   {
@@ -610,6 +583,9 @@ async function build() {
     const dim = { ...p, bright: 40 };
     const fromDim = Array.from(draw.render(dim, { screen: 'transit' }).px);
     add('screen slide dimmed transit to weather', dim, [100, 250].map((t) => ({ screen: 'weather', slide: { from: fromDim, t, dir: 1 } })), undefined, undefined, { s3only: true });
+    // Screen change fade (S3 only; phone and auto changes): out to black, then in.
+    add('screen fade ticker to transit', p, [0, 40, 100, 124, 125, 170, 249, 250, 400].map((t) => ({ screen: 'transit', fade: { from, t } })), undefined, undefined, { s3only: true });
+    add('screen fade dimmed transit to weather', dim, [60, 190].map((t) => ({ screen: 'weather', fade: { from: fromDim, t } })), undefined, undefined, { s3only: true });
   }
   return S;
 }

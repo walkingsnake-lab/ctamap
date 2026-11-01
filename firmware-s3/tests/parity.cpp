@@ -125,6 +125,12 @@ int main(int argc, char **argv) {
           ro.slide_t = o["slide"]["t"].num(0);
           ro.slide_dir = o["slide"]["dir"].is_null() ? 1 : (int)o["slide"]["dir"].num();
         }
+        std::vector<uint8_t> fade_from;
+        if (!o["fade"].is_null()) {
+          for (const Value &v : o["fade"]["from"].a) fade_from.push_back((uint8_t)v.num());
+          ro.fade_from = fade_from.data();
+          ro.fade_t = o["fade"]["t"].num(0);
+        }
         Frame f;
         draw::render(s["payload"], f, ro);
         count++;
