@@ -11,7 +11,54 @@ visibly shimmers on the S3. This firmware uses the
 driver, where the S3's display hardware streams the panel data on its own:
 steady at 8-bit color.
 
+## Setting up a board (one command)
+
+`scripts/setup-board.js` sets up a board without the Arduino IDE: the CI
+build, the board's own key, its settings, one flash, and a printable label.
+
+Once, on your computer:
+- `npm install` in the repo (the label's QR codes need `qrcode`).
+- `pip install esptool esp-idf-nvs-partition-gen`.
+- The GitHub CLI (`gh auth login`), so the script can fetch the CI build.
+- `export BOARD_CONTROL_PATH=…` (the Fly secret); for your own boards also
+  `BOARD_TOKEN`.
+
+Then, with the board on USB:
+
+```sh
+node scripts/setup-board.js --id kitchen --label "Kitchen"            # a board for someone else
+node scripts/setup-board.js --id den --shared --wifi "home=password"  # one of yours
+```
+
+It asks you to put the board in upload mode (hold BOOT, tap RESET, release
+BOOT), flashes, and says to press RESET. Then:
+- **For someone else** (the default): the board gets its own token and owner
+  link (the Board keys below) and no WiFi, so it opens its setup network.
+  Print `~/board-labels/<id>-label.html` and stick it on the back: one QR joins
+  the setup network, the other opens the owner link. The label is the only
+  copy of the setup password and owner link, so keep the file until the
+  board ships (it's kept outside the repo so it can't reach git or the
+  server image). Don't pass `--wifi` here: the owner could
+  read that password out of flash.
+- **Yours** (`--shared`): the shared `BOARD_TOKEN`, and the networks you give
+  with `--wifi` (repeatable; the first is tried first).
+
+What it flashes: the CI build of the commit on the Stable channel if CI
+still has it (90 days), else the newest build on `main`; `--firmware
+<ctaboard.ino.merged.bin>` for another one. Only up to the end of the app is
+written, so the board's TinyUF2 recovery loader (double-tap RESET for the
+`MATRXS3BOOT` drive) stays. The settings partition is replaced: WiFi entered
+on the board, OTA trial state and any old settings go.
+
+Running it again on a board that already has a key needs `--rekey`: the
+board gets a new token and owner link, and the old ones stop working (an old
+label becomes useless). `--dry-run` does everything except change the server
+or flash.
+
 ## Setting up (Arduino IDE)
+
+For working on the firmware. To set up a board for use, the script above is
+quicker.
 
 1. **Arduino IDE 2.x**, with:
    - **Boards:** add
@@ -64,7 +111,9 @@ once.
 `PORTAL` with the MAC address means the network wants a login page; `NO
 WIFI` means none of the networks could be joined (it retries).
 
-## A board for someone else
+## A board for someone else (by hand)
+
+`scripts/setup-board.js` (above) does all of this in one command. By hand:
 
 1. **Key:** on the control page, pick the board (or add it), Board tab →
    Owner link → **Give it its own key**. Copy the block it shows: the board's

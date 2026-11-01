@@ -5,3 +5,6 @@ dist/
 firmware-s3/ctaboard/secrets.h
 firmware-s3/ctaboard/version.h
 firmware-s3/ctaboard/build/
+# scripts/setup-board.js labels (they carry owner links)
+setup-out/
+firmware/settings.toml
