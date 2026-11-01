@@ -105,8 +105,8 @@ function duskFrame(ms, T, opt = {}) {
 // ---- boats ----
 // Sailboat (:00 and :30): a white sail on rows 21-24 in front of the city and a brown hull on rows
 // 25-26 (deck row 6 px, keel row 4 px). Speedboat (:15 and :45), loosely the Seadog: a 14 px yellow
-// hull, a row of blue and white passengers on row 24, the deck on 25 with the bow raked forward, a
-// white bottom on 26, and a white spray plume behind. Both sit above the text rows (27-31), so the
+// hull, a row of blue and white passengers on row 24, the yellow-orange deck on 25 with the bow
+// raked forward, an orange hull side on 26, and a white spray plume behind. Both sit above the text rows (27-31), so the
 // row of water between the skyline and the text keeps them fully visible. Leading edge at x0.
 const SAIL = ['..#...', '..##..', '..###.', '..####'];
 const HULLS = { brown: ['#8a4a24', '#5a2e16'], red: ['#c02a20', '#7a1a14'] };
@@ -118,10 +118,10 @@ function boat(f, x0, dir, hull = HULLS.brown) {
 }
 const SEADOG = [
   '..pqpqpqpqpqp.',    // 24: passengers
-  'YYYYYYYYYYYYYY',    // 25: deck (bow at dx 0)
-  '.WWWWWWWWWWWW.',    // 26: white bottom
+  'YYYYYYYYYYYYYY',    // 25: yellow-orange deck (bow at dx 0)
+  '.OOOOOOOOOOOO.',    // 26: orange hull side
 ];
-const SEADOG_C = { Y: '#ffc020', p: '#3a5aa8', q: '#d8dce4', W: '#e8ecf0' };
+const SEADOG_C = { Y: '#ffb020', p: '#3a5aa8', q: '#d8dce4', O: '#d86a10' };
 function speedboat(f, x0, dir) {
   const n = SEADOG[0].length;
   const put = (dx, y, c) => { const x = dir < 0 ? x0 + dx : x0 + n - 1 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
