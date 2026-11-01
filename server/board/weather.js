@@ -101,10 +101,10 @@ const wmo = (cond) => {
   return c == null ? null : WMO_OF[c] ?? 3;
 };
 
-// WeatherAPI conditions WMO can't tell apart, by WeatherAPI code: the
-// obscurations keep the fog icon with their own word, and thundersnow gets
+// WeatherAPI conditions WMO can't tell apart, by WeatherAPI code: mist and
+// the obscurations keep the fog icon with their own word, and thundersnow gets
 // its own icon (WMO only has thunderstorms).
-const WA_FOG = { 1012: 'HAZE', 1015: 'DUST', 1018: 'DUST', 1021: 'DUST', 1024: 'DUST', 1027: 'DUST', 1033: 'SMOKE', 1036: 'SMOKE', 1039: 'SMOG', 1042: 'SMOG', 1045: 'DUST', 1048: 'DUST' };
+const WA_FOG = { 1012: 'HAZE', 1015: 'DUST', 1018: 'DUST', 1021: 'DUST', 1024: 'DUST', 1027: 'DUST', 1030: 'MIST', 1033: 'SMOKE', 1036: 'SMOKE', 1039: 'SMOG', 1042: 'SMOG', 1045: 'DUST', 1048: 'DUST' };
 const THUNDERSNOW = new Set([1279, 1282]);
 
 // "06:51 AM" on "2026-10-04" (Chicago) -> epoch seconds, or null
@@ -183,7 +183,7 @@ function windText(speed, dir) {
 
 // WMO weather code -> icon and condition word. Words are the contract's
 // placeholder list (an open decision). `wa`, WeatherAPI's code when known,
-// refines what WMO lumps together: haze, smoke, dust and smog (fog icon,
+// refines what WMO lumps together: mist, haze, smoke, dust and smog (fog icon,
 // their own word) and thundersnow (its own icon).
 function condition(code, isDay, wa) {
   if (THUNDERSNOW.has(wa)) return ['tsnow', 'THNDRSNOW'];

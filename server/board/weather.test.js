@@ -51,7 +51,7 @@ test('WeatherAPI codes: all 60 translate to WMO codes the icons know', () => {
   const at = (code, isDay = 1) => { const j = clone(MORSE); j.current.condition.code = code; j.current.is_day = isDay; return toWx(parse(j)); };
   const cases = [
     [1000, 1, 'sun', 'SUNNY'], [1000, 0, 'moon', 'CLEAR'], [1003, 0, 'pcloudy_night', 'PT CLOUDY'], [1009, 1, 'cloudy', 'CLOUDY'],
-    [1030, 1, 'fog', 'FOG'], [1135, 1, 'fog', 'FOG'], [1147, 1, 'fog', 'FOG'],
+    [1135, 1, 'fog', 'FOG'], [1147, 1, 'fog', 'FOG'],
     [1063, 1, 'rain', 'RAIN'], [1153, 1, 'rain', 'RAIN'], [1195, 1, 'rain', 'RAIN'], [1246, 1, 'rain', 'RAIN'],
     [1072, 1, 'ice', 'FRZ RAIN'], [1201, 1, 'ice', 'FRZ RAIN'], [1204, 1, 'ice', 'FRZ RAIN'], [1237, 1, 'ice', 'FRZ RAIN'],
     [1066, 1, 'snow', 'SNOW'], [1117, 1, 'snow', 'SNOW'], [1225, 1, 'snow', 'SNOW'], [1258, 1, 'snow', 'SNOW'],
@@ -64,9 +64,9 @@ test('WeatherAPI codes: all 60 translate to WMO codes the icons know', () => {
   }
 });
 
-test('haze, smoke, dust and smog: the fog icon with their own word; thundersnow: its own icon', () => {
+test('mist, haze, smoke, dust and smog: the fog icon with their own word; thundersnow: its own icon', () => {
   const at = (code, isDay = 1) => { const j = clone(MORSE); j.current.condition.code = code; j.current.is_day = isDay; return toWx(parse(j)); };
-  const words = { 1012: 'HAZE', 1015: 'DUST', 1018: 'DUST', 1021: 'DUST', 1024: 'DUST', 1027: 'DUST', 1033: 'SMOKE', 1036: 'SMOKE', 1039: 'SMOG', 1042: 'SMOG', 1045: 'DUST', 1048: 'DUST' };
+  const words = { 1012: 'HAZE', 1015: 'DUST', 1018: 'DUST', 1021: 'DUST', 1024: 'DUST', 1027: 'DUST', 1030: 'MIST', 1033: 'SMOKE', 1036: 'SMOKE', 1039: 'SMOG', 1042: 'SMOG', 1045: 'DUST', 1048: 'DUST' };
   assert.deepEqual(WA_FOG, words);
   for (const [code, word] of Object.entries(words)) for (const day of [1, 0]) {
     const wx = at(Number(code), day);
