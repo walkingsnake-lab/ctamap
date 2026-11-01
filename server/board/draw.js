@@ -1695,7 +1695,7 @@
     const SAIL = ['..#...', '..##..', '..###.', '..####'];
     const BOLT = [[21, 0], [21, 1], [20, 2], [21, 3], [22, 3], [23, 3], [23, 4], [24, 5], [23, 6], [24, 7], [25, 7], [25, 8], [25, 9]];
     const BOLT_BRANCH = [[20, 1], [19, 2], [18, 3], [18, 4], [17, 5]];
-    const CLOUD_W = 128, CLOUD_STEP = 4000;
+    const CLOUD_W = 128, CLOUD_STEP = 4000, RIPPLE_MS = 500, WHEEL_TURN_MS = 30000;
     const SAIL_STEP = 800, SPEED_STEP = 150, SPEED_WAIT = 4000, QUARTER = 900000, STRIKE_EVERY = 30000;
 
     function skyAt(stops, y) {
@@ -1844,8 +1844,8 @@
       const wp = s.lit ? { leg: SK.wheelNight } : SK.wheel[s.whl || 0];
       for (const [x, y] of SKY.legs) f.fill(x, y, 1, 1, wp.leg);
       f.fill(SKY.bar[0], SKY.bar[1], SKY.bar[2], 1, wp.leg);
-      const turn = (ms % 60000) * 0.006;
-      for (const [x, y, deg] of SKY.rim) f.fill(x, y, 1, 1, s.lit ? hsvHex((deg + turn) % 360, 0.6, 0.85) : wp.rim);
+      const turn = (ms % WHEEL_TURN_MS) * (360 / WHEEL_TURN_MS);
+      for (const [x, y, deg] of SKY.rim) f.fill(x, y, 1, 1, s.lit ? hsvHex((deg + turn) % 360, 0.7, 0.9) : wp.rim);
       f.fill(SKY.CX - 1, SKY.CY - 1, 2, 2, wp.leg);
 
       // Text: the temperature (or a watch or warning in its place) bottom
@@ -1859,10 +1859,13 @@
       const lw = ws ? measure('small', ws.glyph) + TAG_GAP - 1 + measure('small', wword) : tempStr ? measure('small', tempStr) : 0;
       const quiet = (x, y) => y >= S + 2 && ((lw && x <= lw) || x >= 63 - cw);   // text rows plus a 1 px margin
 
-      // Water: a two-color gradient, ripples drifting sideways (alternate
-      // rows opposite ways, 1 px every 1.5 s), the glitter path at sunset and
-      // glints under the sun or moon; all kept off the text.
-      const shim = Math.floor(ms / 1500);
+      // Water: a two-color gradient, ripples gliding sideways (alternate rows
+      // opposite ways, 1 px every 500 ms, drawn with sub-pixel coverage so the
+      // ends fade in and out rather than step), the glitter path at sunset and
+      // glints under the sun or moon; all kept off the text. The pattern
+      // repeats every 990 px (9, 10 and 11 px gaps), so the clock is taken
+      // modulo that to keep the numbers small.
+      const glide = (ms % (RIPPLE_MS * 990)) / RIPPLE_MS;
       const ripple = hex(s.wat[2]);
       const pathRgb = s.gl && s.gl.p > 0 ? mixRgb(ripple, hex(s.gl.c), s.gl.p / 100) : null;
       for (let y = S + 1; y < 32; y++) {
@@ -1870,10 +1873,11 @@
         const dir = y % 2 ? 1 : -1, len = y - S <= 2 ? 2 : 3, gap = 9 + (y % 3);
         for (let x = 0; x < 64; x++) {
           if (quiet(x, y)) continue;
-          const ph = (((x - dir * shim + y * 5) % gap) + gap) % gap;
-          if (ph >= len) continue;
+          const u = x - dir * glide + y * 5, a = u - gap * Math.floor(u / gap);
+          const cov = Math.max(0, Math.min(a + 1, len) - a) + Math.max(0, a + 1 - gap);   // this pixel's share of a dash
+          if (cov <= 0) continue;
           const onPath = pathRgb && Math.abs(x + 0.5 - s.gl.x) < 1.5 + (y - S) * 0.8;
-          f.set(x, y, onPath ? pathRgb : ripple);
+          f.set(x, y, mixRgb(f.get(x, y), onPath ? pathRgb : ripple, Math.min(1, cov)));
         }
       }
       if (s.gl) {

@@ -363,8 +363,9 @@ std::optional<std::string> Player::frame_key(double ms, long long now) {
     return key + buf;
   }
   if (screen == "clock") {
-    // The skyline moves on a 100 ms tick: redraw ten times a second.
-    snprintf(buf, sizeof buf, "|%lld|%zu", (long long)floor(wall_ms / 100), clouds.size());
+    // The skyline glides (sub-pixel ripples, the turning wheel): redraw
+    // twenty times a second.
+    snprintf(buf, sizeof buf, "|%lld|%zu", (long long)floor(wall_ms / 50), clouds.size());
     return key + buf;
   }
   return key;
