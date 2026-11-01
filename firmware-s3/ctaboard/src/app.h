@@ -184,8 +184,9 @@ const long long RADAR_EVERY = 3000;     // one missing radar frame per run
 const long long LOGO_EVERY = 3000;      // one missing team logo per run
 const long long SKY_EVERY = 3000;       // the skyline's cloud strip, when the payload names a new one
 // What this firmware draws beyond the original screens (health `hk`, contract):
-// the server sends the clock screen only to boards that report `skyline`.
-const char *const CAPS = "skyline";
+// the server sends the clock screen only to boards that report `skyline`,
+// and its seventies face only to those that also report `seventies`.
+const char *const CAPS = "skyline:seventies";
 const int FAILS_BEFORE_RECONNECT = 3;
 const long long SETUP_AFTER_MS = 600000;  // no network joined this long: open the setup network
 const long long HEALTH_EVERY = 60000;  // ms between health snapshots sent with the version check

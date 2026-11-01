@@ -1397,6 +1397,35 @@ test('clock screen: other screens leave the skyline out; the knob can choose CLO
   await s.close();
 });
 
+test('clock screen, seventies face: only for firmware that reports it; others keep the skyline', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(om)) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  s.store.update('home', { screen: 'clock', clockFace: 'seventies' });
+  // Firmware with the skyline only: the skyline face, with its section.
+  let b = (await s.req('/board/update?b=home&hk=skyline', h)).body;
+  assert.equal(b.screen, 'clock');
+  assert.equal(b.cface, 'skyline');
+  assert.equal(b.skyline.face, 'skyline');
+  // Firmware with the seventies face: no skyline section to parse.
+  b = (await s.req('/board/update?b=home&hk=skyline:seventies', h)).body;
+  assert.equal(b.cface, 'seventies');
+  assert.equal(b.skyline, null);
+  const sel = await s.req('/board/select?b=home&s=clock&hk=skyline:seventies', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(sel.body.cface, 'seventies');
+  // Other screens leave cface out.
+  s.store.update('home', { screen: 'transit' });
+  assert.equal((await s.req('/board/update?b=home&hk=skyline:seventies', h)).body.cface, undefined);
+  // Back to the skyline face.
+  s.store.update('home', { screen: 'clock', clockFace: 'skyline' });
+  b = (await s.req('/board/update?b=home&hk=skyline:seventies', h)).body;
+  assert.equal(b.cface, 'skyline');
+  assert.equal(b.skyline.face, 'skyline');
+  await s.close();
+});
+
 test('clock screen: decided per request from the update\'s own hk, so it never flaps', async () => {
   const { parse } = require('./weather');
   const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));

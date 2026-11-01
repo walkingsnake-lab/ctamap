@@ -1720,6 +1720,36 @@
       const u = 1 - (t - 0.15) / 1.2;
       return u * u;
     }
+    // ---- clock screen: seventies face (design spec §16; contract "Seventies") ----
+    // The time in the VCR digits, each lit pixel colored by its row (the
+    // bands stay put while digits roll through them), and three stripes
+    // along the bottom that turn up the right edge. Integer geometry only.
+    const S70 = { colors: ['#ffc23a', '#ff7414', '#d2361a'], top: 5, base: 16, right: 52, cx: 54, cy: 21, radii: [3, 6, 9] };
+    const s70Band = (y) => S70.colors[y < S70.top + 4 ? 0 : y < S70.top + 7 ? 1 : 2];
+    function renderSeventies(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const f = newFrame();
+      const { cx, cy } = S70;
+      S70.radii.forEach((r, i) => {
+        const c = S70.colors[i];
+        f.fill(0, cy + r - 1, cx, 2, c);
+        f.fill(cx + r - 1, 0, 2, cy, c);
+        const lo = (2 * r - 2) * (2 * r - 2), hi = (2 * r + 2) * (2 * r + 2);
+        for (let y = cy; y < 32; y++) for (let x = cx; x < 64; x++) {
+          const u = 2 * (x - cx) + 1, v = 2 * (y - cy) + 1, d = u * u + v * v;
+          if (d > lo && d <= hi) f.fill(x, y, 1, 1, c);
+        }
+      });
+      // Centered in columns 0-52, drawn white, then banded by row.
+      rollText(f, 'vcr', 'svt.clock', clockText(now), (str) => Math.floor((S70.right + 1 - measure('vcr', str)) / 2), S70.base, '#ffffff');
+      for (let y = S70.top; y < S70.base; y++) {
+        const band = hex(s70Band(y));
+        for (let x = 0; x <= S70.right; x++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) f.set(x, y, band); }
+      }
+      return f;
+    }
+
     // Which skyline is on screen, and the crossfade from the last one. The
     // board and the simulator keep one: set() with each payload's skyline
     // (live: the clock screen is showing; off it, a new skyline is taken at
@@ -2044,7 +2074,7 @@
       let f;
       try {
         f = screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
-          : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderSkyline(p, o) : renderTransit(p, o);
+          : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? (p.cface === 'seventies' ? renderSeventies(p, o) : renderSkyline(p, o)) : renderTransit(p, o);
       } finally { NR = null; ICON_T = null; }
       applyBrightness(f, p.bright);
       if (o.slide && o.slide.from) slideFrames(o.slide.from, f, slideOffset(o.slide.t || 0), o.slide.dir == null ? 1 : o.slide.dir);
@@ -2092,7 +2122,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderSkyline, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderSkyline, renderSeventies, S70, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };

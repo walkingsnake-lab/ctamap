@@ -64,7 +64,7 @@ const SECTIONS = {
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
-  clock: ['skyline'],
+  clock: ['skyline', 'cface'],
 };
 function sectionsFor(body, screen) {
   const out = { ...body, for: screen };
@@ -322,8 +322,15 @@ function createBoard({
   // another board under the same ID reports without it. Health's `hk` is
   // the fallback for the simulator and control page. Others get transit
   // instead, and no CLOCK on the knob's ring.
-  const hasSkyline = (hk) => typeof hk === 'string' && hk.split(':').includes('skyline');
-  const clockOk = (id, q = {}) => { if (hasSkyline(q.hk)) return true; const h = healthOf.get(id); return !!(h && h.caps && h.caps.includes('skyline')); };
+  // The seventies face works the same way (`hk=skyline:seventies`); a board
+  // without it gets the skyline face.
+  const capOk = (id, q, cap) => {
+    if (typeof q.hk === 'string' && q.hk.split(':').includes(cap)) return true;
+    const h = healthOf.get(id);
+    return !!(h && h.caps && h.caps.includes(cap));
+  };
+  const clockOk = (id, q = {}) => capOk(id, q, 'skyline');
+  const seventiesOk = (id, q = {}) => capOk(id, q, 'seventies');
   const forBoard = (body, clock) => (body.screen === 'clock' && !clock ? { ...body, screen: 'transit' } : body);
 
   // Last transit view per board and station, for the chrono hysteresis.
@@ -355,7 +362,7 @@ function createBoard({
   // The skyline face's parameters, or null without weather or a station.
   function skylineOf(board, w, wd, st, now) {
     if (!w || !st) return null;
-    try { return { face: board.clockFace || 'skyline', ...toSkyline(w, {
+    try { return { face: 'skyline', ...toSkyline(w, {
       lat: st.lat, lon: st.lon, now, temp: wd && board.showTemp !== false ? wd.temp : null,
       boats: board.boats !== false, drift: board.cloudDrift || 'slow', wheel: board.wheelSpeed || 'normal',
       ripple: board.rippleSpeed || 'normal', twinkle: board.twinkle !== false, fall: board.rainSpeed || 'normal',
@@ -363,7 +370,9 @@ function createBoard({
     catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
-  async function update(board, id, boot, preview = {}, clock = clockOk(id)) {
+  async function update(board, id, boot, preview = {}, clock = clockOk(id), seventies = seventiesOk(id)) {
+    // The clock screen's face: the seventies face only for firmware that draws it.
+    const face = board.clockFace === 'seventies' && seventies ? 'seventies' : 'skyline';
     if (boot) board = store.boot(id);
     if (preview.mapid && preview.mapid !== board.station.mapid) {
       const st = stationById.get(preview.mapid);
@@ -498,8 +507,10 @@ function createBoard({
         // Precip brightness, percent (absent = 100).
         ...(board.radarBright != null && board.radarBright !== 100 ? { rb: board.radarBright } : {}),
       },
-      // Clock screen, skyline face: drawing parameters (skyline.js; contract "Skyline").
-      skyline: skylineOf(board, w, wd, st, skyNow),
+      // Clock screen: which face, and the skyline face's drawing parameters
+      // (skyline.js; contract "Skyline"; null on the seventies face).
+      cface: face,
+      skyline: face === 'skyline' ? skylineOf(board, w, wd, st, skyNow) : null,
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
@@ -563,7 +574,7 @@ function createBoard({
       if (!board) return send(res, 404, { err: 'unknown_board' });
       seenAt.set(id, nowSecs());
       const clock = clockOk(id, parsed.query);
-      const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, clock), clock);
+      const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, clock, seventiesOk(id, parsed.query)), clock);
       const asked = parsed.query.s === 'clock' && !clock ? 'transit' : parsed.query.s;
       const shown = SCREENS.includes(asked) ? asked : body.screen;
       return send(res, 200, sectionsFor(body, shown));
@@ -584,7 +595,7 @@ function createBoard({
       }
       if (!board) return send(res, 404, { err: 'unknown_board' });
       const clock = clockOk(id, parsed.query);
-      const body = forBoard(await update(board, id, false, {}, clock), clock);
+      const body = forBoard(await update(board, id, false, {}, clock, seventiesOk(id, parsed.query)), clock);
       return send(res, 200, sectionsFor(body, body.screen));
     }
 

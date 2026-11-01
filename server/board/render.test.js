@@ -226,3 +226,28 @@ test('knob chooser: wheel across the top, one pip per entry, the selection amber
   // No ring: blank.
   assert.equal(lit(render({ bright: 100 }, { screen: 'chooser', chooser: { pos: 0 } }), 0, 31).length, 0);
 });
+
+test('clock screen, seventies face: VCR digits banded by row, stripes along the bottom and up the right edge', () => {
+  const t = Date.parse('2026-11-02T03:42:00Z') / 1000;  // 9:42 PM in Chicago
+  const p = { now: t, tzo: -21600, screen: 'clock', cface: 'seventies', bright: 100, skyline: null };
+  const f = render(p);
+  const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+  // Stripes: the inner one on rows 23-24 and columns 56-57, sunflower; the outer on row 30 and column 63, rust.
+  assert.equal(hex(f.get(0, 23)), '#ffc23a');
+  assert.equal(hex(f.get(56, 0)), '#ffc23a');
+  assert.equal(hex(f.get(0, 30)), '#d2361a');
+  assert.equal(hex(f.get(63, 0)), '#d2361a');
+  // Digits: every lit pixel in rows 5-15, columns 0-52, takes its row's band.
+  const bands = { 5: '#ffc23a', 9: '#ff7414', 12: '#d2361a' };
+  let lit = 0;
+  for (let y = 0; y < 23; y++) for (let x = 0; x <= 52; x++) {
+    const c = f.get(x, y);
+    if (!(c[0] || c[1] || c[2])) continue;
+    lit++;
+    assert.ok(y >= 5 && y <= 15, `lit outside the digit rows at ${x},${y}`);
+    assert.equal(hex(c), bands[y >= 12 ? 12 : y >= 9 ? 9 : 5], `${x},${y}`);
+  }
+  assert.ok(lit > 100, 'the time is drawn');
+  // Without cface the clock screen is still the skyline.
+  assert.notEqual(hex(render({ ...p, cface: undefined }).get(0, 23)), '#ffc23a');
+});

@@ -9,6 +9,7 @@
 //   board-small.bdf  Tom Thumb 3x5, proportional, + bolt, funnel, alert circle, arrows
 //   board-5x7.bdf    X11 5x7, proportional, + "tt" ligature, "min" glyph
 //   board-clock.bdf  X11 9x15 Bold, digits + square-dot colon (monospace)
+//   board-vcr.bdf    8x11 digits + colon after VCR OSD Neue (clock screen, seventies face)
 //
 // Rules (see docs/board/design-spec.md §3):
 //   - Proportional: each glyph is trimmed to its ink columns, advance = ink + 1.
@@ -350,10 +351,49 @@ function buildClock() {
   return f;
 }
 
+// ---- vcr: 8x11 digits after VCR OSD Neue ----
+// The seventies clock face's digits, redrawn from VCR OSD Neue by Elli Sho
+// (dafont, "100% free"; the author asks for credit). Only digits, colon and
+// space: 2px strokes, one-pixel cut corners, slashed zero. Tabular 8px
+// digits with a 2px gap (advance 10); the colon is 2x2 dots, 2px from the
+// top and bottom of the digits, with the same 2px gap (advance 4).
+
+const VCR = {
+  0: ['.######.', '########', '##....##', '##...###', '##..####', '##.##.##', '####..##', '###...##', '##....##', '########', '.######.'],
+  1: ['...##...', '..###...', '.####...', '.####...', '...##...', '...##...', '...##...', '...##...', '...##...', '.######.', '.######.'],
+  2: ['.######.', '########', '##....##', '......##', '..######', '.######.', '###.....', '##......', '##......', '########', '########'],
+  3: ['.######.', '########', '##....##', '.....###', '...####.', '...####.', '.....###', '......##', '##....##', '########', '.######.'],
+  4: ['....###.', '...####.', '..#####.', '.###.##.', '###..##.', '##...##.', '########', '########', '.....##.', '.....##.', '.....##.'],
+  5: ['########', '########', '##......', '#######.', '########', '......##', '......##', '##....##', '###..###', '.######.', '..####..'],
+  6: ['..#####.', '.#######', '###...##', '##......', '######..', '#######.', '##...###', '##....##', '###..###', '.#######', '..#####.'],
+  7: ['########', '########', '......##', '.....###', '....###.', '...###..', '...##...', '...##...', '...##...', '...##...', '...##...'],
+  8: ['.######.', '########', '##....##', '##....##', '########', '.######.', '########', '##....##', '##....##', '.######.', '..####..'],
+  9: ['.######.', '########', '##....##', '##....##', '########', '.#######', '......##', '##....##', '###..###', '.######.', '..####..'],
+};
+
+function buildVcr() {
+  const f = loadBDF(path.join(SRC, '9x15B.bdf'));  // for its header; every glyph is replaced
+  f.glyphs = new Map();
+  for (let d = 0; d <= 9; d++) f.glyphs.set(0x30 + d, glyph(`digit${d}`, 0x30 + d, art(VCR[d]), 0, 10));
+  f.glyphs.set(58, glyph('colon', 58, art(['..', '..', '##', '##', '..', '..', '..', '##', '##', '..', '..']), 0, 4));
+  f.glyphs.set(32, glyph('space', 32, art(['........']), 0, 10));
+  rename(f, '-ctamap-BoardVcr-Bold-R-Normal--11-110-75-75-C-100-ISO10646-1',
+    'Board VCR font: digits redrawn after VCR OSD Neue by Elli Sho (dafont, 100% free; credit requested).');
+  setHeader(f, 'SPACING', '"C"');
+  for (const [k, v] of [['FOUNDRY', '"ctamap"'], ['FAMILY_NAME', '"BoardVcr"'], ['PIXEL_SIZE', '11'], ['POINT_SIZE', '110'],
+    ['AVERAGE_WIDTH', '100'], ['FONT_DESCENT', '0'], ['FONT_ASCENT', '11'], ['X_HEIGHT', '11'], ['CAP_HEIGHT', '11'],
+    ['COPYRIGHT', '"Digits after VCR OSD Neue by Elli Sho"']]) setHeader(f, k, v);
+  f.header = f.header.filter((l) => !l.startsWith('_XMBDFED_INFO'));
+  const props = f.header.indexOf('ENDPROPERTIES') - f.header.findIndex((l) => l.startsWith('STARTPROPERTIES ')) - 1;
+  setHeader(f, 'STARTPROPERTIES', String(props));
+  fixBoundingBox(f);
+  return f;
+}
+
 // ---- main ----
 
 fs.mkdirSync(OUT, { recursive: true });
-const fonts = { 'board-small.bdf': buildSmall(), 'board-5x7.bdf': build5x7(), 'board-clock.bdf': buildClock() };
+const fonts = { 'board-small.bdf': buildSmall(), 'board-5x7.bdf': build5x7(), 'board-clock.bdf': buildClock(), 'board-vcr.bdf': buildVcr() };
 for (const [name, font] of Object.entries(fonts)) {
   fs.writeFileSync(path.join(OUT, name), writeBDF(font));
   console.log(`${name}: ${font.glyphs.size} glyphs`);

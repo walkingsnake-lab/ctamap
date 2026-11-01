@@ -102,6 +102,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Coverage** (Tom Thumb and 5x7): printable ASCII, Latin-1 (accented letters, `°`, `£`, `¿`, …), and the punctuation phones substitute (curly quotes, en and em dashes, `…`, `•`, `€`). Tom Thumb lacks curly quotes and dashes, so its quotes are copies of the straight ones and its dashes are 4px and 5px bars. X11 5x7 fits most accented capitals into the 7-row cell by dropping the accent (É draws as E; Ä and Å keep theirs); the lowercase keep theirs. The frozen M4 has ASCII only.
 - Codepoints for custom glyphs are in `server/board/glyphs.js`. The fonts are built by `scripts/build-fonts.js` into `server/board/fonts/` (BDF); the board build converts them to PCF.
 - X11 **9x15 Bold** for the large overnight clock, with a custom **2x2 square-dot colon** centered on the 10px digit height (the stock X11 colon is drawn for text and drops a pixel below the digits).
+- **VCR** (8x11, `vcr`): digits, colon and space only, for the clock screen's seventies face (§16). Redrawn after **VCR OSD Neue** by Elli Sho (dafont, 100% free; the author asks for credit, given in the control page's footer): 2px strokes, one-pixel cut corners, slashed zero. Tabular 8px digits with a 2px gap; the colon is 2x2 dots on digit rows 2-3 and 7-8.
 
 ---
 
@@ -651,3 +652,12 @@ This screen is an exception to Minimal animation (§2), like the skyline face: i
 - How many presets; the call-to-action screen's wording and look.
 - On the panel: the split-flap flap colors at the night floor, the marquee's 1 px bulbs through the diffuser, white on Pink and Yellow crawl bands.
 
+## 16. Clock screen: seventies face
+
+Built Nov 1, 2026: the clock screen's second face (phone page, Clock: Face **Seventies**), S3 only. Picked from the round 3 clock mockups (`scripts/mock-clock/`).
+
+- **Time:** `h:mm` (12-hour, no AM/PM) in the VCR digits (§3), centered in columns 0-52, digits on rows 5-15. Each lit pixel takes its row's color: sunflower `#ffc23a` (rows 5-8), orange `#ff7414` (9-11), rust `#d2361a` (12-15), so the bands stay put while digits roll through them.
+- **Stripes:** three 2 px stripes in the same colors, sunflower inside, run along the bottom (rows 23-24, 26-27, 29-30) and turn up the right edge (columns 56-57, 59-60, 62-63) on quarter circles around (54, 21). Exact pixels: contract, *Seventies*.
+- **Motion:** the minute roll only (`svt.clock`, the same per-digit roll as every clock).
+- **Fallback:** a board whose firmware doesn't report `seventies` gets the skyline face.
+- **Power:** the stripes are about 330 lit pixels at full color; more than the transit screen, well under the ticker.

@@ -173,7 +173,7 @@
   </section>
 
   <footer class="credits" aria-label="Data sources">
-    <p>Weather by <a href="https://www.weatherapi.com/" target="_blank" rel="noopener">WeatherAPI.com</a>. Forecasts and alerts from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>. Radar: NOAA MRMS via the <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a>. Arrivals and alerts: data provided by CTA; not affiliated with or endorsed by the Chicago Transit Authority.</p>
+    <p>Weather by <a href="https://www.weatherapi.com/" target="_blank" rel="noopener">WeatherAPI.com</a>. Forecasts and alerts from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>. Radar: NOAA MRMS via the <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a>. Arrivals and alerts: data provided by CTA; not affiliated with or endorsed by the Chicago Transit Authority. Seventies clock digits after VCR OSD Neue by Elli Sho.</p>
     <p>Weather information displayed here is provided for general informational purposes only. Forecasts and conditions are probabilistic and may not be accurate for your specific location or time. This data should not be used as the sole basis for decisions involving personal safety, aviation, marine navigation, emergency planning, or other safety-critical activities. Always consult official meteorological services and relevant authorities for decisions where accuracy is critical.</p>
   </footer>
  </div>
@@ -245,8 +245,10 @@
     <label class="field">Face</label>
     <div class="seg" id="clockFace">
       <button data-v="skyline">Skyline</button>
+      <button data-v="seventies">Seventies</button>
     </div>
-    <p class="hint">The skyline from the lake across Navy Pier, drawn for the weather and the time of day. Temperature bottom left (a watch or warning takes its place), clock bottom right.</p>
+    <p class="hint" id="clockFaceHint"></p>
+    <div id="skylineOpts">
     <div class="row"><span>Cloud drift</span>
       <select id="cloudDrift" aria-label="Cloud drift" style="width:auto"><option value="off">Off</option><option value="slow">Slow</option><option value="normal">Normal</option></select></div>
     <p class="hint">How fast the clouds move: still, 1 px every 16 s, or 1 px every 4 s.</p>
@@ -263,6 +265,7 @@
     <div class="row"><span>Twinkling stars</span><label class="switch"><input type="checkbox" id="twinkle"><span></span></label></div>
     <div class="row"><span>Show temperature</span><label class="switch"><input type="checkbox" id="showTemp"><span></span></label></div>
     <p class="hint">Off: the clock alone. A watch or warning still shows bottom left.</p>
+    </div>
   </section>
 
   <section data-tab="baseball">
@@ -601,7 +604,7 @@
     const bbText = teams.length ? ` Baseball takes over during ${[teams.includes('cubs') && 'Cubs', teams.includes('sox') && 'White Sox', teams.includes('post') && 'postseason'].filter(Boolean).join(', ')} games.` : ' Baseball never takes over.';
     const wvText = wv === 'off' ? '' : ` The weather screen shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min${wv === 'rain' ? ' while it\'s raining' : ''}.`;
     const ajText = board.alertJump === 'warning' ? ' During NWS warnings it stays on the weather screen.' : board.alertJump === 'all' ? ' During NWS watches and warnings it stays on the weather screen.' : '';
-    $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : board.screen === 'clock' ? 'The skyline clock face. Needs an S3 with clock firmware; other boards show Transit.' : 'Stays on this screen until you change it.')
+    $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : board.screen === 'clock' ? 'The clock face (set under Clock). Needs an S3 with clock firmware; other boards show Transit.' : 'Stays on this screen until you change it.')
       : `Auto ${mainText}.${bbText}${wvText}${ajText}`;
     const fixed = Number.isInteger(board.bright);
     pressed('bright', fixed ? 'fixed' : board.bright);
@@ -631,7 +634,12 @@
       : 'Station and clock on top, weather strip at the bottom.';
     const bl = board.baseballLayout || 'classic';
     pressed('bbLayout', bl);
-    pressed('clockFace', board.clockFace || 'skyline');
+    const face = board.clockFace || 'skyline';
+    pressed('clockFace', face);
+    $('skylineOpts').hidden = face !== 'skyline';
+    $('clockFaceHint').textContent = face === 'skyline'
+      ? 'The skyline from the lake across Navy Pier, drawn for the weather and the time of day. Temperature bottom left (a watch or warning takes its place), clock bottom right.'
+      : 'The time in VCR digits banded sunflower, orange and rust, with three stripes sweeping along the bottom and up the right edge. Digits roll at each minute. Boards without firmware for it show the skyline.';
     $('boats').checked = board.boats !== false;
     $('cloudDrift').value = board.cloudDrift || 'slow';
     $('wheelSpeed').value = board.wheelSpeed || 'normal';
