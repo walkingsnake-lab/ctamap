@@ -54,14 +54,19 @@ PLATE_Y0 = D - BACKL - PLATE_T            # the plate's inner face, seated
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
 SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open instead of drilling it
-SENSOR_POCKET = True                      # blind Ø2 pocket from inside, 0.8 mm short of the outside: marks the optional sensor
-                                          # hole; drill through from inside only if the sensor is fitted
+SENSOR_POCKET = True                      # blind pocket from inside (Ø SENSOR_POCKET_D), 0.8 mm short of the outside: the grille is
+                                          # drilled through that skin from outside with grille_guide.py, only if the sensor is fitted
 GLUED_FRAME = True                        # back-down only: plain sleeve + glued screen_frame(); False = built-in rim (as front-down)
 CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the bezel's plug fills
 SKIN_T = 0.5                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop;
                                           # just over one 0.4-nozzle line (~0.42): at 0.4 the slicer dropped it
 SL_W, SL_PITCH = 1.5, 4.0                 # slots (GRILLES = True only)
 SENSOR_X, SENSOR_Y, SENSOR_D = panel.P['sensor_x'], 42.0, 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
+# light-sensor grille (grille_guide.py): 5 holes, dice-five, bit + GRILLE_WEB apart. Its span sizes the blind pocket
+# inside the top wall (the bores only cross the 0.8 mm skin, ~0.5 mm margin a side for guide placement) and the tray's hole
+GRILLE_BIT, GRILLE_WEB = 1.59, 0.85                # 1/16" bit
+GRILLE_SPAN = 2 * (GRILLE_BIT + GRILLE_WEB + GRILLE_BIT / 2)   # 6.47: corner holes' outer edges, across
+SENSOR_POCKET_D = round(GRILLE_SPAN + 1.0, 2)      # 7.47
 TOP_SL = dict(xc=57.0, n=16, y0=30.5, y1=46.5)
 BOT_SL = dict(xs=[50.0 + 4.0 * i for i in range(7)], y0=TOP_SL['y0'] + 9.0, y1=TOP_SL['y1'] + 9.0)  # +9: same layers
 BTN_Z0, BTN_Z1 = PORT_Z - 35.0, PORT_Z - 8.8  # Down (-10.3), Up (-20.1), Reset (-29.9) sit below the USB-C   # Down (+9.9), Up (+19.8), Reset (+29.7) on the S3 edge
@@ -210,7 +215,7 @@ def shell2():
     ztop = H - SKIN_T if SKINS else H + 1          # skin: blind from inside, cut out along the pocket wall (the collar flange hides the edge)
     cuts.append(Manifold.extrude(teardrop_cs(ENC_HOLE / 2, 0, KY, seg=SEG), ztop - (H - WALL - 1)).translate([0, 0, H - WALL - 1]))
     if SENSOR_POCKET and not SENSOR_PRINTED:       # blind pocket from inside: invisible outside, guides the bit when drilled
-        cuts.append(Manifold.extrude(teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24), WALL - 0.8 + 1).translate([0, 0, H - WALL - 1]))
+        cuts.append(Manifold.extrude(teardrop_cs(SENSOR_POCKET_D / 2, SENSOR_X, SENSOR_Y, seg=48), WALL - 0.8 + 1).translate([0, 0, H - WALL - 1]))
     if SENSOR_PRINTED:                             # Ø2 light-sensor hole through the top (teardrop toward the print's up)
         cuts.append(Manifold.extrude(teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24), WALL + 2).translate([0, 0, H - WALL - 1]))
     # USB-C: straight-through opening for the plug housing, 0.5 mm chamfer outside;

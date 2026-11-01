@@ -14,6 +14,8 @@ case top over the VEML7700 (case2.SENSOR_X/Y) instead of one Ø2 hole.
   the bore is then exactly the bit. SLAB (6 mm) + the 2.5 mm wall = 8.5 mm, well within a 1/16" jobber bit's ~19 mm
   flutes.
 - Pitch follows the bit: webs between holes WEB (0.85 mm) wide, so the grille stays as small as the bit allows.
+  Bit and web live in case2 (GRILLE_BIT, GRILLE_WEB): the shell's inside pocket and the drawer tray's hole are sized
+  from the same numbers, so the bores only cross the pocket's 0.8 mm skin. Wall 2.5 (v4) or 3.5 (v5) both work.
     '5': dice five, centre + 4 corners;  '4': square.
 Run: python3 grille_guide.py <outdir> [bit_mm]     (default bit 1.59 = 1/16")
 """
@@ -31,7 +33,7 @@ FENCE_GAP = 0.15           # fence's inner face behind the case's back face
 FENCE_T, FENCE_DROP = 2.5, 6.0
 FENCE_X = (-12.0, 62.0)
 RIB_W, RIB_N = 1.0, 12     # rib width, count on a 30° grid; only those within 40° of ±x are kept
-WEB = 0.85                 # wall left between neighbouring holes
+WEB = V.GRILLE_WEB         # wall left between neighbouring holes (0.85)
 SX, SY = V.SENSOR_X, V.SENSOR_Y - V.KY     # sensor spot relative to the knob-hole centre
 
 
@@ -69,7 +71,7 @@ def plug(rib_r=RIB_R):
     return p + Manifold.batch_boolean(ribs, manifold3d.OpType.Add)
 
 
-def guide(name, bit=1.59, rib_r=RIB_R):
+def guide(name, bit=V.GRILLE_BIT, rib_r=RIB_R):
     """Frame: knob-hole centre at the origin on the case top (z = 0), z up."""
     yb = V.D - V.KY                                            # case back face, from the knob-hole centre
     strip = CrossSection.square([FENCE_X[1] - FENCE_X[0], 1.0]).translate([FENCE_X[0], yb - 1.0])
@@ -113,7 +115,7 @@ def check(name, bit):
 if __name__ == '__main__':
     import trimesh
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    bit = float(sys.argv[2]) if len(sys.argv) > 2 else 1.59
+    bit = float(sys.argv[2]) if len(sys.argv) > 2 else V.GRILLE_BIT
     flip = trimesh.transformations.rotation_matrix(math.pi, [1, 0, 0])     # top face on the bed, plug up (a rotation, not a mirror)
 
     def put(m, fn, info=''):
