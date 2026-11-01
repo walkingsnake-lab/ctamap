@@ -1564,6 +1564,321 @@
       return f;
     }
 
+    // ---- clock screen: skyline face (design spec §14; contract "Skyline") ----
+    // The skyline seen from the lake across Navy Pier, drawn in layers from
+    // the payload's `skyline` values; the board never interprets weather.
+    // Everything here is plain arithmetic and an integer hash (no Math.cos,
+    // atan2 or random) so firmware ports can match it pixel for pixel.
+    // `o.ms` is the animation clock, epoch milliseconds (boats and lightning
+    // are scheduled on the wall clock); it defaults to now.
+    const SKY = (() => {
+      const W = 64, SHORE = 25, CX = 32, CY = 17, R = 6, SPREAD = 5;
+      // 0 sky, 1 background mass, 2 tower (only towers and mass right of the
+      // wheel get windows).
+      const role = new Uint8Array(64 * 32);
+      const rect = (x, w, t, r) => { for (let y = Math.max(0, t); y <= SHORE; y++) for (let i = x; i < x + w; i++) if (i >= 0 && i < W) role[y * W + i] = r; };
+      const top = (rows) => SHORE + 1 - rows;
+      // Background mass: the Loop to the left, Streeterville to the right. [x, width, rows]
+      [[0, 4, 7], [8, 3, 9], [19, 3, 8], [22, 3, 10], [28, 3, 7], [36, 3, 6], [39, 4, 9], [43, 3, 11], [46, 4, 8], [50, 3, 10], [57, 4, 9], [61, 3, 7]]
+        .forEach(([x, w, h]) => rect(x, w, top(h), 1));
+      rect(1, 1, top(9), 2); rect(2, 4, top(15), 2); rect(6, 2, top(13), 2); rect(8, 2, top(9), 2);   // Willis, setbacks down to the right
+      rect(11, 4, top(17), 2);                                                                         // Aon
+      rect(15, 5, top(21), 2);                                                                         // St. Regis
+      rect(23, 5, top(10), 2); rect(24, 4, top(13), 2); rect(24, 3, top(16), 2);                       // Trump
+      rect(29, 7, top(15), 2); rect(30, 5, top(17), 2);                                                // Lake Point Tower, 2 rows above the rim
+      { const t = top(17), steps = [4, 6, 8];                                                           // Hancock: 4-6-8 steps around x 53
+        for (let y = t; y <= SHORE; y++) { const w = steps[Math.min(2, Math.floor((y - t) * 3 / (SHORE - t + 1)))]; for (let i = 53 - w / 2; i < 53 + w / 2; i++) role[y * W + i] = 2; } }
+      const isB = (x, y) => x >= 0 && x < W && y >= 0 && y <= SHORE && role[y * W + x] !== 0;
+      // Antennas [x, top row, roof row, beacon]: Willis's two, Hancock's twin with beacons.
+      const ants = [[2, top(18), top(15), 0], [4, top(17), top(15), 0], [51, top(22), top(17), 1], [54, top(22), top(17), 1]];
+      // Window slots: even columns, odd rows, under another building pixel,
+      // clear of the pier (x 19-44, rows 19 and below) and the wheel.
+      // [x, y, threshold 0-999, bright]
+      const wins = [];
+      for (let y = 1; y <= SHORE; y++) for (let x = 0; x < W; x++) {
+        const r = role[y * W + x];
+        if (!r || (r === 1 && x < 38) || (x >= 19 && x <= 44 && y >= SHORE - 6)) continue;
+        const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
+        if (dx * dx + dy * dy < 49 || x % 2 !== 0 || y % 2 !== 1 || !isB(x, y - 1)) continue;
+        wins.push([x, y, ih(x, y, 5) % 1000, ih(x, y, 9) % 10 < 3]);
+      }
+      // Stars: the first 14 hash positions in the top 14 rows that miss the
+      // buildings, the moon's spot and the wheel. [x, y, bright, twinkles, phase 0-999, period ms]
+      const stars = [];
+      for (let i = 0; stars.length < 14 && i < 1000; i++) {
+        const x = ih(i, 1, 3) % W, y = ih(i, 2, 3) % 14;
+        const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
+        if (isB(x, y) || (x > 35 && x < 49 && y < 11) || dx * dx + dy * dy < 90.25 || stars.some((s) => s[0] === x && s[1] === y)) continue;
+        stars.push([x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 === 1, ih(i, 5, 3) % 1000, [4000, 6000, 12000][stars.length % 3]]);
+      }
+      // Wheel: hard-edged shapes, a pixel on when at least half covered (6x6
+      // samples). Legs (A-frame from the hub to the pier), crossbar on row
+      // 24, rim (rows 11-22) with each pixel's position around it (0-360,
+      // a pseudo-angle: monotonic, no trig), 2x2 hub.
+      const seg = (ax, ay, bx, by, px, py) => {
+        const vx = bx - ax, vy = by - ay, t = Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy)));
+        const ex = px - (ax + t * vx), ey = py - (ay + t * vy);
+        return ex * ex + ey * ey < 0.25;
+      };
+      const cover = (test) => {
+        const out = [];
+        for (let y = CY - R - 2; y <= SHORE; y++) for (let x = CX - R - 2; x <= CX + R + 1; x++) {
+          let hit = 0;
+          for (let j = 0; j < 6; j++) for (let i = 0; i < 6; i++) if (test(x + (i + 0.5) / 6, y + (j + 0.5) / 6)) hit++;
+          if (hit * 2 >= 36) out.push([x, y]);
+        }
+        return out;
+      };
+      const legs = cover((x, y) => { const dx = x - CX, dy = y - CY; return dx * dx + dy * dy > 0.36 && (seg(CX, CY, CX - SPREAD, SHORE + 1, x, y) || seg(CX, CY, CX + SPREAD, SHORE + 1, x, y)); });
+      const kb = (SHORE - 1 + 0.5 - CY) / (SHORE + 1 - CY);
+      const bar = [Math.round(CX - SPREAD * kb), SHORE - 1, Math.round(2 * SPREAD * kb)];
+      const rim = cover((x, y) => { const dx = x - CX, dy = y - CY, d2 = dx * dx + dy * dy; return d2 >= (R - 1) * (R - 1) && d2 <= R * R; })
+        .map(([x, y]) => {
+          const dx = x + 0.5 - CX, dy = y + 0.5 - CY, ax = Math.abs(dx), ay = Math.abs(dy);
+          const pa = dy >= 0 ? (dx >= 0 ? dy / (ax + ay) : 1 + ax / (ax + ay)) : (dx < 0 ? 2 + ay / (ax + ay) : 3 + ax / (ax + ay));
+          return [x, y, pa * 90];
+        });
+      return { W, SHORE, CX, CY, role, isB, ants, wins, stars, legs, bar, rim };
+    })();
+    // Integer hash (32-bit, wraps the same in JS and C++).
+    function ih(a, b, c) {
+      let h = (Math.imul(a >>> 0, 0x9E3779B1) ^ Math.imul(b >>> 0, 0x85EBCA77) ^ Math.imul(c >>> 0, 0xC2B2AE3D)) >>> 0;
+      h = Math.imul(h ^ (h >>> 15), 0x2C1B3C6D) >>> 0;
+      h = Math.imul(h ^ (h >>> 12), 0x297A2D39) >>> 0;
+      return (h ^ (h >>> 15)) >>> 0;
+    }
+    const mixHex = (a, b, k) => { const A = hex(a), B = hex(b); return '#' + A.map((v, i) => Math.max(0, Math.min(255, Math.round(v + (B[i] - v) * k))).toString(16).padStart(2, '0')).join(''); };
+    const mixRgb = (A, B, k) => A.map((v, i) => Math.max(0, Math.min(255, Math.round(v + (B[i] - v) * k))));
+    const sstep01 = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+    // Smooth 0 -> 1 -> 0 over one period (a smoothstepped triangle wave):
+    // the twinkles and beacon pulses, without trig.
+    const wave = (ph) => { const u = ph - Math.floor(ph), tri = u < 0.5 ? u * 2 : 2 - u * 2; return tri * tri * (3 - 2 * tri); };
+    const hsvHex = (h, s, v) => {
+      const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+      return '#' + [f(5), f(3), f(1)].map((c) => Math.round(c * 255).toString(16).padStart(2, '0')).join('');
+    };
+    const SK = {
+      wheel: [{ leg: '#565c68', rim: '#dce0e6' }, { leg: '#4a505c', rim: '#eef0f4' }, { leg: '#262a32', rim: '#262a32' }],
+      wheelNight: '#4a4a66', pier: { day: ['#6a6460', '#2e2a2c'], night: ['#2a2834', '#14121a'], bulb: '#c09050' },
+      win: ['#8a5c20', '#ffb050'], beacon: ['#401010', '#ff2020'], moon: '#a89c70',
+      rain: { day: ['#5a7aaa', '#3a5070'], night: ['#2c4468', '#1e3050'] }, snow: ['#8a909c', '#e8ecf2'],
+      sail: '#e8ecf0', hull: ['#8a4a24', '#5a2e16'],
+      seadog: { Y: '#ffb020', p: '#3a5aa8', q: '#d8dce4', O: '#d86a10' }, spray: '#f4f8fc',
+      glow: '#8a80b0', boltSoft: '#b8b0e8',
+    };
+    // Shown when there's no weather yet: a plain clear night.
+    const SKY_NONE = { sky: [[0, '#000006'], [25, '#0c1430']], wat: ['#030816', '#02050f', '#0e1a36'], lit: 1, win: 100, stars: 14, sun: null, moon: null, gl: null, whl: 0, fog: null, roof: null, pcp: null, storm: 0, boats: 0, temp: null };
+    const SEADOG = ['..pqpqpqpqpqp.', 'YYYYYYYYYYYYYY', '.OOOOOOOOOOOO.'];
+    const SAIL = ['..#...', '..##..', '..###.', '..####'];
+    const BOLT = [[21, 0], [21, 1], [20, 2], [21, 3], [22, 3], [23, 3], [23, 4], [24, 5], [23, 6], [24, 7], [25, 7], [25, 8], [25, 9]];
+    const BOLT_BRANCH = [[20, 1], [19, 2], [18, 3], [18, 4], [17, 5]];
+    const SAIL_STEP = 800, SPEED_STEP = 150, SPEED_WAIT = 4000, QUARTER = 900000, STRIKE_EVERY = 30000;
+
+    function skyAt(stops, y) {
+      if (y <= stops[0][0]) return stops[0][1];
+      for (let i = 1; i < stops.length; i++) if (y <= stops[i][0]) { const [y0, c0] = stops[i - 1], [y1, c1] = stops[i]; return mixHex(c0, c1, (y - y0) / (y1 - y0)); }
+      return stops[stops.length - 1][1];
+    }
+    // 7 px soft-edged disc centered on (cx, cy), hidden by buildings;
+    // `lit(dx, dy)` keeps part of it (the moon's phase).
+    function skyDisc(f, cx, cy, color, lit) {
+      const c = 3.5, rgb = hex(color);
+      for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
+        const X = cx - 3 + x, Y = cy - 3 + y;
+        if (Y < 0 || Y > SKY.SHORE || X < 0 || X >= 64 || SKY.isB(X, Y)) continue;
+        let hit = 0;
+        for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
+          const dx = x + (i + 0.5) / 8 - c, dy = y + (j + 0.5) / 8 - c;
+          if (dx * dx + dy * dy <= c * c && (!lit || lit(dx, dy, c))) hit++;
+        }
+        const k = hit / 64;
+        if (k > 0.08) f.set(X, Y, mixRgb(f.get(X, Y), rgb, k));
+      }
+    }
+    // Lightning at ms, or null: a strike every 20-40 s (one per 30 s slot,
+    // 0-10 s in), rising over 0.6 s and fading over 2.4 s.
+    function strikeLevel(ms) {
+      const slot = Math.floor(ms / STRIKE_EVERY), start = slot * STRIKE_EVERY + (ih(slot, 7, 7) % 10000);
+      const t = (ms - start) / 1000;
+      if (t < 0 || t >= 3) return 0;
+      if (t < 0.6) return sstep01(0, 0.6, t);
+      const u = 1 - (t - 0.6) / 2.4;
+      return u * u;
+    }
+    // Where the quarter-hour boat is at ms: {kind, x0, dir} or null.
+    // Sailboat on :00 (heading left) and :30 (right), 1 px per 800 ms;
+    // speedboat on :15 and :45, out to the left at 1 px per 150 ms, turning
+    // around off the panel for 4 s and coming back to the right.
+    function boatAt(ms) {
+      const q = Math.floor(ms / QUARTER), qi = q % 4, e = ms - q * QUARTER;
+      if (qi === 0 || qi === 2) {
+        const step = Math.floor(e / SAIL_STEP);
+        if (step > 70) return null;
+        return qi === 0 ? { kind: 'sail', x0: 64 - step, dir: -1 } : { kind: 'sail', x0: -6 + step, dir: 1 };
+      }
+      const span = 87, leg = span * SPEED_STEP;
+      if (e < leg) return { kind: 'speed', x0: 64 - Math.floor(e / SPEED_STEP), dir: -1 };
+      const e2 = e - leg - SPEED_WAIT;
+      if (e2 >= 0 && e2 < leg) return { kind: 'speed', x0: -14 + Math.floor(e2 / SPEED_STEP), dir: 1 };
+      return null;
+    }
+    function drawBoat(f, b, wat) {
+      const S = SKY.SHORE;
+      if (b.kind === 'sail') {
+        const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + 5 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+        SAIL.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch === '#') put(dx, S - 4 + dy, SK.sail); }));
+        for (let dx = 0; dx < 6; dx++) put(dx, S, SK.hull[0]);
+        for (let dx = 1; dx < 5; dx++) put(dx, S + 1, SK.hull[1]);
+        return;
+      }
+      const n = SEADOG[0].length;
+      const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + n - 1 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+      SEADOG.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch !== '.') put(dx, S - 1 + dy, SK.seadog[ch]); }));
+      // Spray plume behind the stern, fading out: 9 / 6 / 3 px on rows 26 / 25 / 24.
+      for (const [y, len] of [[S + 1, 9], [S, 6], [S - 1, 3]]) {
+        for (let i = 0; i < len; i++) {
+          const x = b.dir < 0 ? b.x0 + n + i : b.x0 - 1 - i;
+          if (x >= 0 && x < 64) f.set(x, y, mixRgb(f.get(x, y), hex(SK.spray), 0.95 * (1 - i / len)));
+        }
+      }
+    }
+
+    function renderSkyline(p, opts) {
+      const o = opts || {};
+      const s = p.skyline || SKY_NONE;
+      const now = o.now != null ? o.now : p.now;
+      const ms = o.ms != null ? o.ms : Math.floor(now * 1000);
+      const f = newFrame();
+      const S = SKY.SHORE, night = (s.win || 0) / 100;
+
+      // Sky; buildings stay black (LEDs off).
+      for (let y = 0; y <= S; y++) {
+        const c = hex(skyAt(s.sky, y));
+        for (let x = 0; x < 64; x++) if (!SKY.role[y * 64 + x]) f.set(x, y, c);
+      }
+      if (s.sun) skyDisc(f, s.sun.x, s.sun.y, s.sun.c);
+      // Stars twinkle (some), then the moon at its phase: the lit part is
+      // past the terminator, an ellipse whose half-width follows the lit
+      // fraction (cos of the phase angle = 1 - 2 * lit).
+      for (let i = 0; i < Math.min(s.stars || 0, SKY.stars.length); i++) {
+        const [x, y, bright, tw, ph, per] = SKY.stars[i];
+        const k = tw ? 0.25 + 0.75 * wave(ms / per + ph / 1000) : 1;
+        f.set(x, y, mixRgb(f.get(x, y), hex(bright ? '#ffffff' : '#5a6070'), k));
+      }
+      if (s.moon) {
+        const cosv = 1 - 2 * s.moon.fr / 100, waxing = s.moon.ph < 50;
+        skyDisc(f, 41, 5, SK.moon, (dx, dy, c) => { const w = Math.sqrt(Math.max(0, c * c - dy * dy)); return waxing ? dx > w * cosv : dx < -w * cosv; });
+      }
+      // Windows come on one at a time as `win` rises.
+      const lim = Math.round(450 * night);
+      for (const [x, y, th, bright] of SKY.wins) if (th < lim) f.fill(x, y, 1, 1, SK.win[bright ? 1 : 0]);
+      // Snow on the roofs: the top pixel of every building column.
+      if (s.roof) for (let x = 0; x < 64; x++) for (let y = 0; y <= S; y++) if (SKY.role[y * 64 + x]) { f.fill(x, y, 1, 1, s.roof); break; }
+      // Fog: everything fades toward it with height (strongest at the top).
+      if (s.fog) {
+        const fc = hex(s.fog);
+        for (let y = 0; y <= S; y++) { const k = Math.max(0, Math.min(1, (21 - y) / 18)) * 0.85; if (k) for (let x = 0; x < 64; x++) f.set(x, y, mixRgb(f.get(x, y), fc, k)); }
+      }
+      // Lightning: a soft glow in the cloud deck with a faint bolt inside it.
+      const lv = s.storm ? strikeLevel(ms) : 0;
+      if (lv > 0) {
+        const gc = hex(SK.glow);
+        for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
+          if (SKY.role[y * 64 + x]) continue;
+          const ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = Math.sqrt(ex * ex + ey * ey);
+          const a = lv * 0.45 * (1 - sstep01(0.3, 1, d));
+          if (a > 0.01) f.set(x, y, mixRgb(f.get(x, y), gc, a));
+        }
+        const put = (x, y, c) => { if (x >= 0 && x < 64 && y >= 0 && !SKY.role[y * 64 + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.3)), 0.35 * lv)); };
+        const core = new Set(BOLT.map(([x, y]) => y * 64 + x));
+        for (const [x, y] of BOLT) for (const X of [x - 1, x + 1]) if (!core.has(y * 64 + X)) put(X, y, '#7060c0');
+        for (const [x, y] of BOLT_BRANCH) put(x, y, '#9a8ae0');
+        for (const [x, y] of BOLT) put(x, y, '#ffffff');
+      }
+      // Antennas (unlit) and the Hancock beacons: dark red to bright red over 4 s.
+      const beacon = mixHex(SK.beacon[0], SK.beacon[1], wave(ms / 4000));
+      for (const [x, t, roof, b] of SKY.ants) { f.fill(x, t, 1, roof - t, '#000000'); if (b && s.lit) f.fill(x, t, 1, 1, beacon); }
+      // The wheel: white rim and darker frame by day, a slow pastel rainbow
+      // (one turn a minute) at night.
+      const wp = s.lit ? { leg: SK.wheelNight } : SK.wheel[s.whl || 0];
+      for (const [x, y] of SKY.legs) f.fill(x, y, 1, 1, wp.leg);
+      f.fill(SKY.bar[0], SKY.bar[1], SKY.bar[2], 1, wp.leg);
+      const turn = (ms % 60000) * 0.006;
+      for (const [x, y, deg] of SKY.rim) f.fill(x, y, 1, 1, s.lit ? hsvHex((deg + turn) % 360, 0.6, 0.85) : wp.rim);
+      f.fill(SKY.CX - 1, SKY.CY - 1, 2, 2, wp.leg);
+
+      // Text: the temperature (or a watch or warning in its place) bottom
+      // left, the clock bottom right, over the water.
+      const clock = clockText(now);
+      const cw = measure('small', clock);
+      const warn = p.warn;
+      const ws = warn ? warnStyle(warn) : null;
+      const wword = warn ? (warn.lvl === 'warning' ? 'WARNING' : 'WATCH') : '';
+      const tempStr = s.temp != null ? `${s.temp}°` : '';
+      const lw = ws ? measure('small', ws.glyph) + TAG_GAP - 1 + measure('small', wword) : tempStr ? measure('small', tempStr) : 0;
+      const quiet = (x, y) => y >= S + 2 && ((lw && x <= lw) || x >= 63 - cw);   // text rows plus a 1 px margin
+
+      // Water: a two-color gradient, ripples drifting sideways (alternate
+      // rows opposite ways, 1 px every 1.5 s), the glitter path at sunset and
+      // glints under the sun or moon; all kept off the text.
+      const shim = Math.floor(ms / 1500);
+      const ripple = hex(s.wat[2]);
+      const pathRgb = s.gl && s.gl.p > 0 ? mixRgb(ripple, hex(s.gl.c), s.gl.p / 100) : null;
+      for (let y = S + 1; y < 32; y++) {
+        f.fill(0, y, 64, 1, mixHex(s.wat[0], s.wat[1], (y - S - 1) / (32 - S - 2)));
+        const dir = y % 2 ? 1 : -1, len = y - S <= 2 ? 2 : 3, gap = 9 + (y % 3);
+        for (let x = 0; x < 64; x++) {
+          if (quiet(x, y)) continue;
+          const ph = (((x - dir * shim + y * 5) % gap) + gap) % gap;
+          if (ph >= len) continue;
+          const onPath = pathRgb && Math.abs(x + 0.5 - s.gl.x) < 1.5 + (y - S) * 0.8;
+          f.set(x, y, onPath ? pathRgb : ripple);
+        }
+      }
+      if (s.gl) {
+        const slot = Math.floor(ms / 200), n = 1 + (ih(slot, 1, 11) % 3), gc = hex(s.gl.c);
+        for (let i = 0; i < n; i++) {
+          const x = s.gl.x - 5 + (ih(slot, i, 12) % 11), y = S + 1 + (ih(slot, i, 13) % (31 - S));
+          if (x >= 0 && x < 64 && !quiet(x, y)) f.set(x, y, gc);
+        }
+      }
+      // Navy Pier: deck on row 25 (snow-covered when the roofs are), darker
+      // face on 26, string lights at night.
+      f.fill(24, S, 16, 1, s.roof || mixHex(SK.pier.day[0], SK.pier.night[0], night));
+      f.fill(24, S + 1, 16, 1, mixHex(SK.pier.day[1], SK.pier.night[1], night));
+      if (s.lit) for (let x = 24; x <= 39; x += 3) f.fill(x, S, 1, 1, SK.pier.bulb);
+      // The quarter-hour boat.
+      const b = s.boats ? boatAt(ms) : null;
+      if (b) drawBoat(f, b, s.wat);
+      // Rain (slanted streaks, 1 px down every 200 ms, drifting left) or
+      // snow (1 px down every 700 ms, wobbling a pixel), rows 0-25.
+      if (s.pcp && s.pcp.n > 0) {
+        if (s.pcp.k === 'r') {
+          const c1 = hex(mixHex(SK.rain.day[0], SK.rain.night[0], night)), c2 = hex(mixHex(SK.rain.day[1], SK.rain.night[1], night));
+          const step = Math.floor(ms / 200);
+          for (let i = 0; i < s.pcp.n; i++) {
+            const y = (ih(i, 32, 4) % (S + 1) + step) % (S + 1);
+            const x = (((ih(i, 31, 4) % 64 - Math.floor(step / 2)) % 64) + 64) % 64;
+            f.set(x, y, c1);
+            if (y > 0 && x + 1 < 64) f.set(x + 1, y - 1, c2);
+          }
+        } else {
+          const step = Math.floor(ms / 700);
+          for (let i = 0; i < s.pcp.n; i++) {
+            const y = (ih(i, 22, 4) % (S + 1) + step) % (S + 1);
+            const side = Math.floor((ms + (ih(i, 23, 4) % 2000)) / 2000) % 2;
+            const x = (ih(i, 21, 4) % 64 + side) % 64;
+            f.fill(x, y, 1, 1, SK.snow[ih(i, 24, 4) % 10 < 4 ? 1 : 0]);
+          }
+        }
+      }
+      if (ws) {
+        if (!(ws.blinks && o.blink)) f.text('small', wword, f.text('small', ws.glyph, 0, 32, ws.color) + TAG_GAP - 1, 32, ws.color);
+      } else if (tempStr) f.text('small', tempStr, 0, 32, C.label);
+      f.text('small', clock, 64 - cw, 32, C.label);
+      return f;
+    }
+
     function applyBrightness(f, bright) {
       const k = Math.max(0, Math.min(100, bright == null ? 100 : bright)) / 100;
       if (k === 1) return f;
@@ -1580,7 +1895,7 @@
       let f;
       try {
         f = screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
-          : screen === 'baseball' ? renderBaseball(p, o) : renderTransit(p, o);
+          : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderSkyline(p, o) : renderTransit(p, o);
       } finally { NR = null; }
       return applyBrightness(f, p.bright);
     }
@@ -1625,7 +1940,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderSkyline, SKY, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller,
     };

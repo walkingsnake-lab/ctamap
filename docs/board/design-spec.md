@@ -432,7 +432,7 @@ Same frame as the baseball Bands layout: 12-row team-color bands (abbreviation l
 
 ## 14. Clock screen: skyline face (designed, not built)
 
-Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: the skyline seen from the lake across Navy Pier, with the Centennial Wheel front and center, drawn for the current weather and time of day. Mockups: [`mockups/weather/lake/`](mockups/weather/lake/sheet.png) (`sheet.png` has every state, `night-motion.png` the animation), made by `node scripts/mock-weather-lake.js`. The mock is the pixel reference for the scene; where it differs from this section (text at the top, Auto text mode, reflections, the fixed sunset spot), this section wins. Not in `draw.js` yet.
+Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: the skyline seen from the lake across Navy Pier, with the Centennial Wheel front and center, drawn for the current weather and time of day. Mockups: [`mockups/weather/lake/`](mockups/weather/lake/sheet.png) (`sheet.png` has every state, `night-motion.png` the animation), made by `node scripts/mock-weather-lake.js`. The mock is the pixel reference for the scene; where it differs from this section (text at the top, Auto text mode, reflections, the fixed sunset spot), this section wins. Drawn by `draw.js` `renderSkyline` (clouds still to come).
 
 **Clock screen.** A new screen, `clock`, added beside Transit, Ticker, Weather and Baseball (no v2 screen framework needed). Its look is a per-board **clock face** option (`clockFace` on the phone): `skyline` first; analog, split-flap and nixie join as they're built. The knob ring gets CLOCK, which opens the chosen face. Auto never shows Clock (for now); it's chosen directly, from the phone or the knob. The skyline face still shows the weather (state and temperature); it just lives under Clock rather than Weather.
 
@@ -597,4 +597,4 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 - On the panel: the near-floor colors above, whether the moon is dim enough, and whether glints read as sparkle or noise.
 - Moon crescents: a plain sliver, earthshine (the unlit part as a faint disc, likely lost to overnight dimming), or a brightened sliver.
 - Sunset sun height: how much of the disc shows above the skyline at the low and high ends of its x range (it crosses different buildings through the year).
-- Mocks: `mock-skyline-dusk.js` (sky, lights, boat) is current; `mock-weather-lake.js` still draws the weather states with the text at the top and has no glints or cloud strip. `draw.js` takes over as the reference once built.
+- Reference: `draw.js` `renderSkyline` (previews: `node scripts/preview-skyline.js` → `previews/skyline-*.png`; live in the simulator's Clock panel). The mock scripts are design history; where they differ, `draw.js` wins.
