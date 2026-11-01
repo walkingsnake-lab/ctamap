@@ -37,6 +37,7 @@ struct FirmwareOffer {
   long long size = 0;
   std::string sha;   // SHA-256, lowercase hex
   long retry = 0;    // bumped by the control page's "Try again"
+  std::string sig;   // ECDSA P-256 signature of the build (hex DER); checked against src/signing_key.h
 };
 
 using ChunkFn = std::function<bool(const uint8_t *data, size_t n)>;  // false: stop
@@ -134,6 +135,7 @@ class Ota {
   virtual std::string bad() = 0;    // ota::mark of the last rolled-back offer
   virtual void keep() = 0;          // the build on trial proved itself
   virtual void roll_back(const std::string &why) = 0;  // back to the previous slot (restarts)
+  virtual bool can_verify() { return true; }  // a signing key is built in (else nothing is installed)
 };
 
 // The board's own setup network and page (WiFi setup without USB). On the

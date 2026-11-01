@@ -3,8 +3,11 @@
 // flash (NVS) and does the flash writes.
 //
 // The server offers a build in /board/version (`fw`, contract). The board
-// downloads it into the unused app slot, checks its SHA-256, and restarts
-// into it. The new build is on trial until it proves itself:
+// downloads it into the unused app slot, checks its SHA-256 and its
+// signature (ECDSA P-256, against the public key built in from
+// src/signing_key.h), and restarts into it. Unsigned offers are ignored,
+// and a build without a key installs nothing. The new build is on trial
+// until it proves itself:
 //   - kept once it has had a good /board/update and run KEEP_AFTER_MS;
 //   - rolled back (restart into the previous slot) if it hasn't reached the
 //     server within GIVE_UP_MS, or if it restarts more than MAX_TRIAL_BOOTS
@@ -14,7 +17,10 @@
 // page's "Try again").
 #pragma once
 
+#include <stdint.h>
+
 #include <string>
+#include <vector>
 
 namespace ota {
 
@@ -65,6 +71,24 @@ inline void kept(State &s) {
   s.trial.clear();
   s.prev.clear();
   s.boots = 0;
+}
+
+// Hex (either case) to bytes; false on an odd length or a non-hex digit.
+inline bool from_hex(const std::string &hex, std::vector<uint8_t> &out) {
+  out.clear();
+  if (hex.size() % 2) return false;
+  auto nib = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+  };
+  for (size_t i = 0; i < hex.size(); i += 2) {
+    int hi = nib(hex[i]), lo = nib(hex[i + 1]);
+    if (hi < 0 || lo < 0) return false;
+    out.push_back((uint8_t)(hi * 16 + lo));
+  }
+  return true;
 }
 
 }  // namespace ota

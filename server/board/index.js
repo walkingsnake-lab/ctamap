@@ -32,7 +32,7 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo', 'firmware', 'c']);
+const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo', 'firmware', 'firmware-upload', 'c']);
 // What a per-board control link (/board/c/<link>/) may reach: the control
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
@@ -135,6 +135,7 @@ function createBoard({
   keys = null,    // per-board tokens and control links (keys.js); default beside the board state
   logos = null,   // prepared team logos (mlb-logos.js); default beside the board state
   firmware = null, // OTA builds (firmware.js); default beside the board state
+  deployToken = process.env.FIRMWARE_DEPLOY_TOKEN || '', // CI's token for /board/firmware-upload (beta only)
   alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
   stations = require('./stations.json'),
   log = console,
@@ -542,6 +543,22 @@ function createBoard({
       return sendLogo(res, logos.bytes(rest[0]));
     }
 
+    // CI publishes each signed build of main to beta (contract: "Firmware").
+    // Its own token, good for this only; off unless FIRMWARE_DEPLOY_TOKEN is set.
+    if (first === 'firmware-upload' && rest.length === 0) {
+      if (!deployToken) return send(res, 404, { err: 'not_found' });
+      if (method !== 'POST') return send(res, 405, { err: 'method' });
+      if (!sameSecret(req.headers['x-deploy-token'], deployToken)) return send(res, 401, { err: 'bad_token' });
+      try {
+        const body = await readBody(req, MAX_FIRMWARE + 64 * 1024);
+        const st = firmware.upload(body, { sig: req.headers['x-firmware-signature'] || null, channel: 'beta', pinned: pinnedBuilds() });
+        return send(res, 200, { beta: st.channels.beta });
+      } catch (e) {
+        if (e instanceof FirmwareError || e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+        throw e;
+      }
+    }
+
     // ---- control endpoints, under the secret path ----
     // The owner's control path (every board), or a per-board link
     // (/board/c/<link>/: that board only, `b` forced to it).
@@ -711,7 +728,8 @@ function createBoard({
           if (method === 'POST') {
             const body = await readBody(req, MAX_FIRMWARE + 64 * 1024);
             const channel = parsed.query.channel ? String(parsed.query.channel) : null;
-            return send(res, 200, firmware.upload(body, { channel, pinned: pinnedBuilds() }));
+            const sig = req.headers['x-firmware-signature'] || null;
+            return send(res, 200, firmware.upload(body, { sig, channel, pinned: pinnedBuilds() }));
           }
           if (method === 'DELETE') return send(res, 200, firmware.remove(String(parsed.query.v || ''), pinnedBuilds()));
         } catch (e) {

@@ -111,73 +111,6 @@ once.
 `PORTAL` with the MAC address means the network wants a login page; `NO
 WIFI` means none of the networks could be joined (it retries).
 
-## A board for someone else (by hand)
-
-`scripts/setup-board.js` (above) does all of this in one command. By hand:
-
-1. **Key:** on the control page, pick the board (or add it), Board tab →
-   Owner link → **Give it its own key**. Copy the block it shows: the board's
-   own token (shown only once), a setup network name and password, the
-   owner link, and the text for the setup WiFi QR code.
-2. **Flash** a setup build with that block as its `secrets.h`
-   (`WIFI_NETWORKS {}`: their WiFi goes in on the board).
-3. **Label** the board with two QR codes: the setup WiFi text
-   (`WIFI:T:WPA;S:…;P:…;;`, which phones join from the camera) and the owner
-   link.
-4. **They plug it in:** with no WiFi saved, the panel shows `SETUP WIFI` and
-   the network name. They scan the first QR, the setup page opens (or go to
-   any web address), pick their network and enter its password. The board
-   restarts and joins it. A wrong password brings the setup network back
-   within about a minute, with a message.
-5. **They scan the owner link** to control their board: that board only, no
-   access to yours, updates Automatic or Off.
-
-The setup network also opens on its own after 10 minutes without joining any
-saved network (a new router or password), and gives up after 15 minutes
-with no phone on it to retry the saved networks (a router back after a power
-cut). Holding the knob (or UP) for 2 seconds while the board starts opens it
-on demand. Up to 8 networks are kept, the newest tried first.
-
-## OTA updates
-
-Once a board has run a setup build, new firmware can reach it over WiFi:
-
-1. **Get a generic build** (no `secrets.h` compiled in):
-   - **CI:** every push to `main` that touches `firmware-s3/` builds one
-     (Actions → "S3 firmware" → the run's `ctaboard-<commit>` artifact; unzip
-     it for `ctaboard.ino.bin`).
-   - **Or locally:** move `secrets.h` out of `ctaboard/`, run `node
-     scripts/stamp-firmware-version.js` on a clean commit, then Sketch →
-     Export Compiled Binary; the file is `ctaboard/build/…/ctaboard.ino.bin`
-     (not the `merged` one). Move `secrets.h` back.
-2. **Upload it** on the control page: Board tab → Firmware updates → Upload
-   .bin. It goes to **Beta**. The server refuses setup builds (they contain
-   your passwords), unstamped or `_dirty` builds, merged images, and anything
-   that isn't this firmware for the S3.
-3. **Boards follow their channel** (Updates, per board): Stable (default),
-   Beta, a pinned build, or Off. Put your own boards on Beta; once a build
-   has run well, press **Stable** on it so everyone else's boards get it.
-4. **The board installs it** within a minute, between animations: the panel
-   shows `UPDATING` and the percentage, then it restarts into the new build.
-   The Health rows show the new Firmware commit.
-
-Safety:
-- The download goes into the unused app slot and is checked (SHA-256) before
-  the board switches to it; a failed download changes nothing and is retried
-  in 10 minutes.
-- The new build is on **trial**: kept once it has reached the server and run
-  a minute; rolled back to the previous build if it can't reach the server
-  within 5 minutes or restarts more than 3 times first. A rolled-back build
-  isn't installed again until you press **Try again** on the control page.
-- A board running an unstamped (`dev`) or `_dirty` build is never updated, so
-  test builds flashed over USB stay put. A test build from a clean commit
-  *is* replaced by its channel's build: set that board's Updates to Off
-  while testing.
-- USB always works: flashing over USB puts that build back in charge.
-
-Serial log lines start with `[ota]`: the running slot at startup, each
-install, and the trial's outcome.
-
 ### The knob (optional)
 
 An Adafruit 5880 I2C rotary encoder plugged into the STEMMA QT port (any
@@ -221,6 +154,97 @@ Press RESET, wait for the NeoPixel to turn purple, press RESET again: the
 drive appears, use Open Installer on circuitpython.org for the Matrix Portal
 S3.
 
+## A board for someone else (by hand)
+
+`scripts/setup-board.js` (above) does all of this in one command. By hand:
+
+1. **Key:** on the control page, pick the board (or add it), Board tab →
+   Owner link → **Give it its own key**. Copy the block it shows: the board's
+   own token (shown only once), a setup network name and password, the
+   owner link, and the text for the setup WiFi QR code.
+2. **Flash** a setup build with that block as its `secrets.h`
+   (`WIFI_NETWORKS {}`: their WiFi goes in on the board).
+3. **Label** the board with two QR codes: the setup WiFi text
+   (`WIFI:T:WPA;S:…;P:…;;`, which phones join from the camera) and the owner
+   link.
+4. **They plug it in:** with no WiFi saved, the panel shows `SETUP WIFI` and
+   the network name. They scan the first QR, the setup page opens (or go to
+   any web address), pick their network and enter its password. The board
+   restarts and joins it. A wrong password brings the setup network back
+   within about a minute, with a message.
+5. **They scan the owner link** to control their board: that board only, no
+   access to yours, updates Automatic or Off.
+
+The setup network also opens on its own after 10 minutes without joining any
+saved network (a new router or password), and gives up after 15 minutes
+with no phone on it to retry the saved networks (a router back after a power
+cut). Holding the knob (or UP) for 2 seconds while the board starts opens it
+on demand. Up to 8 networks are kept, the newest tried first.
+
+## OTA updates
+
+Once a board has run a setup build, new firmware can reach it over WiFi:
+
+1. **CI builds, signs and publishes it to Beta** on every merge to `main`
+   that touches `firmware-s3/` (once the signing key is set up: "Signed
+   builds" below). Nothing to do.
+2. **Or by hand:** a generic build (no `secrets.h`; Sketch → Export Compiled
+   Binary on a clean, stamped commit, the `.bin` that isn't `merged`), signed
+   with `node scripts/sign-firmware.js <ctaboard.ino.bin>` (needs the
+   signing key on your computer). On the control page: Board tab → Firmware
+   updates → Upload, picking the `.bin` and its `.sig` together. It goes to
+   **Beta**. The server refuses unsigned builds, setup builds (they contain
+   your passwords), unstamped or `_dirty` builds, merged images, and anything
+   that isn't this firmware for the S3.
+3. **Boards follow their channel** (Updates, per board): Stable (default),
+   Beta, a pinned build, or Off. Put your own boards on Beta; once a build
+   has run well, press **Stable** on it so everyone else's boards get it.
+4. **The board installs it** within a minute, between animations: the panel
+   shows `UPDATING` and the percentage, then it restarts into the new build.
+   The Health rows show the new Firmware commit.
+
+Safety:
+- The download goes into the unused app slot and is checked (SHA-256) before
+  the board switches to it; a failed download changes nothing and is retried
+  in 10 minutes.
+- The new build is on **trial**: kept once it has reached the server and run
+  a minute; rolled back to the previous build if it can't reach the server
+  within 5 minutes or restarts more than 3 times first. A rolled-back build
+  isn't installed again until you press **Try again** on the control page.
+- A board running an unstamped (`dev`) or `_dirty` build is never updated, so
+  test builds flashed over USB stay put. A test build from a clean commit
+  *is* replaced by its channel's build: set that board's Updates to Off
+  while testing.
+- USB always works: flashing over USB puts that build back in charge.
+
+Serial log lines start with `[ota]`: the running slot at startup, each
+install, and the trial's outcome.
+
+## Signed builds
+
+Every OTA build is signed, and boards install only builds signed with the
+key built into them, so even someone who took over the server couldn't push
+firmware to anyone's board. Set up once, on your computer:
+
+```sh
+node scripts/firmware-key.js --github
+```
+
+- Makes the signing key, `~/.ctaboard/firmware-signing-key.pem`. **Back it
+  up** (a password manager). If it's lost, boards can only get builds
+  signed with a new key over USB.
+- Writes the public key into the repo: `firmware-s3/firmware-signing.pub.pem`
+  and `firmware-s3/ctaboard/src/signing_key.h`. Commit both and merge.
+- With `--github` (needs `gh`): creates the `firmware-release` environment,
+  usable only from `main`, holding the key and a new deploy token. A workflow
+  edited on another branch can't read them. It prints a `fly secrets set
+  FIRMWARE_DEPLOY_TOKEN=…` command; run it so the server accepts CI's uploads.
+
+Until then, the server takes no builds and boards install none: the
+repo's key is empty. Boards flashed before signing existed (#440–#445)
+install the first signed build like any other and check signatures from
+then on.
+
 ## Status LED
 
 | Color | Means |
@@ -249,6 +273,7 @@ S3.
 | `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |
 | `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C, turns and its push button), NeoPixel, watchdog, settings and OTA state in NVS, OTA slot writes, the WiFi setup network (`SetupPortal`). The only code that includes Arduino headers. |
 | `ctaboard/src/assets.h` | Fonts, icons, glyphs. **Generated** by `node scripts/build-firmware-assets.js`. |
+| `ctaboard/src/signing_key.h` | The public key OTA builds must be signed with. **Generated** by `node scripts/firmware-key.js`; empty until the key exists (then no OTA build installs). |
 | `ctaboard/src/certs.h` | Root certificates for HTTPS. **Generated** by `node scripts/build-firmware-certs.js`. |
 | `ctaboard/version.h` | The build's commit, for health. **Generated** by `node scripts/stamp-firmware-version.js`; gitignored. |
 | `tests/` | Run by `npm test` (needs g++ or clang++): `parity` renders every scenario in `firmware/tests/scenarios.js` and compares pixels with draw.js; `app_test` runs the main loop against a simulated server, clock, and buttons (OTA installs and trials included); `config_test` checks settings in flash and the OTA status screens. |

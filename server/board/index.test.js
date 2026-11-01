@@ -1119,6 +1119,14 @@ test('control API: list, add (copy or defaults), label, and delete boards', asyn
 
 // ---- OTA firmware (contract: "Firmware") ----
 
+const { createFirmware } = require('./firmware');
+const crypto = require('crypto');
+const FW_KEY = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+const fwSig = (buf) => crypto.sign('sha256', buf, FW_KEY.privateKey).toString('hex');
+// A board server with a firmware store that trusts the test key.
+const serveFw = (opts = {}) => serve({ firmware: createFirmware({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-fw-')), log: quiet, publicKey: FW_KEY.publicKey }), ...opts });
+const signed = (buf) => ({ method: 'POST', body: buf, headers: { 'X-Firmware-Signature': fwSig(buf) } });
+
 function fakeBuild(v, kind = 'generic') {
   const b = Buffer.alloc(4096, 0x11);
   b[0] = 0xe9;
@@ -1128,20 +1136,22 @@ function fakeBuild(v, kind = 'generic') {
 }
 
 test('firmware: upload on the control page, offered to an S3 in its version check, downloaded by the board', async () => {
-  const s = await serve();
+  const s = await serveFw();
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const build = fakeBuild('aaaaaaa');
-  let r = await s.req('/board/secret123/api/firmware?channel=stable', { method: 'POST', body: build });
+  let r = await s.req('/board/secret123/api/firmware?channel=stable', signed(build));
   assert.equal(r.status, 200);
   assert.equal(r.body.channels.stable, 'aaaaaaa');
   const sha = r.body.builds[0].sha;
   // A setup build (secrets.h compiled in) is refused.
-  r = await s.req('/board/secret123/api/firmware', { method: 'POST', body: fakeBuild('bbbbbbb', 'setup') });
+  r = await s.req('/board/secret123/api/firmware', signed(fakeBuild('bbbbbbb', 'setup')));
   assert.equal(r.status, 400);
   assert.match(r.body.detail, /secrets\.h/);
   // The S3 running another committed build gets the offer; health records its OTA note.
   r = await s.req('/board/version?b=home&hu=60&hd=adafruit_matrixportal_s3&hv=1234567&hx=error:Short', h);
-  assert.deepEqual(r.body.fw, { v: 'aaaaaaa', size: 4096, sha, n: 0 });
+  const { sig, ...rest } = r.body.fw;
+  assert.deepEqual(rest, { v: 'aaaaaaa', size: 4096, sha, n: 0 });
+  assert.ok(crypto.verify('sha256', build, FW_KEY.publicKey, Buffer.from(sig, 'hex')), 'the offer carries a signature the board can check');
   assert.equal((await s.req('/board/secret123/api/health')).body.home.ota, 'error:Short');
   // Running it, a test build, or the M4: no offer.
   for (const q of ['hv=aaaaaaa&hd=adafruit_matrixportal_s3', 'hv=dev&hd=adafruit_matrixportal_s3', 'hv=1234567']) {
@@ -1166,9 +1176,9 @@ test('firmware: upload on the control page, offered to an S3 in its version chec
 });
 
 test('firmware: channels move, pinned and channel builds can\'t be deleted', async () => {
-  const s = await serve();
-  await s.req('/board/secret123/api/firmware?channel=beta', { method: 'POST', body: fakeBuild('aaaaaaa') });
-  await s.req('/board/secret123/api/firmware', { method: 'POST', body: fakeBuild('bbbbbbb') });
+  const s = await serveFw();
+  await s.req('/board/secret123/api/firmware?channel=beta', signed(fakeBuild('aaaaaaa')));
+  await s.req('/board/secret123/api/firmware', signed(fakeBuild('bbbbbbb')));
   let r = await s.req('/board/secret123/api/firmware/channel', { method: 'POST', body: JSON.stringify({ channel: 'stable', v: 'bbbbbbb' }) });
   assert.deepEqual(r.body.channels, { beta: 'aaaaaaa', stable: 'bbbbbbb' });
   r = await s.req('/board/secret123/api/firmware?v=aaaaaaa', { method: 'DELETE' });
@@ -1250,4 +1260,28 @@ test('per-board link: the control page for that board only, without the owner\'s
   assert.equal((await s.req(`/board/c/${nl.link}/api/state`)).status, 404);
   assert.equal((await s.req('/board/c/not-a-real-link-at-all00/api/state')).status, 404);
   await s.close();
+});
+
+test('firmware: CI publishes signed builds to beta with its own token, nothing else', async () => {
+  const s = await serveFw({ deployToken: 'deploy123' });
+  const build = fakeBuild('ccccccc');
+  const post = (headers, body = build) => fetch(`http://127.0.0.1:${s.port}/board/firmware-upload`, { method: 'POST', body, headers });
+  assert.equal((await post({ 'X-Deploy-Token': 'nope', 'X-Firmware-Signature': fwSig(build) })).status, 401);
+  assert.equal((await post({ 'X-Deploy-Token': 'tok', 'X-Firmware-Signature': fwSig(build) })).status, 401); // the board token isn't it
+  assert.equal((await post({ 'X-Deploy-Token': 'deploy123' })).status, 400); // unsigned
+  const ok = await post({ 'X-Deploy-Token': 'deploy123', 'X-Firmware-Signature': fwSig(build) });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { beta: 'ccccccc' });
+  const st = (await s.req('/board/secret123/api/firmware')).body;
+  assert.equal(st.channels.beta, 'ccccccc');
+  assert.equal(st.channels.stable, null); // never stable
+  // The offer carries the signature for the board to check.
+  s.store.update('home', { fw: 'beta' });
+  const v = await s.req('/board/version?b=home&hu=1&hd=adafruit_matrixportal_s3&hv=1234567', { headers: { 'X-Board-Token': 'tok' } });
+  assert.ok(crypto.verify('sha256', build, FW_KEY.publicKey, Buffer.from(v.body.fw.sig, 'hex')));
+  await s.close();
+  // Off without a deploy token.
+  const off = await serveFw();
+  assert.equal((await fetch(`http://127.0.0.1:${off.port}/board/firmware-upload`, { method: 'POST', body: build, headers: { 'X-Deploy-Token': '' } })).status, 404);
+  await off.close();
 });
