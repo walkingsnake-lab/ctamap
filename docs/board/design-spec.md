@@ -633,7 +633,7 @@ Picked per message; nothing else is set per message (each style fixes its own co
 2. **Split-flap:** 10 × 3 small flaps (the date flaps of the split-flap clock mockup, `mockups/clock/r2-flap.png`: 5 × 10 px, Tom Thumb, uppercase, 30 characters); rows flip in one after another when the message appears.
 3. **Typewriter:** 5x7 amber (or green phosphor), typed out once when the message appears, then a blinking block cursor.
 4. **Big word:** 5x7 at 2x (about 5 characters), with gradient and sparkle variants; a countdown variant uses the 9x15 clock digits over a Tom Thumb label.
-5. **Icon + text:** a 13 px pixel icon (heart, cake, house, coffee, …) with a 2-frame idle loop (heartbeat, candle flicker), text beside it (about 47 px wide).
+5. **Icon + text:** a 13 px pixel icon with a 2-frame idle loop (heartbeat, candle flicker), text beside it (about 47 px wide). Each icon is its own style in the picker (Heart, Cake, House, Coffee, …), so the style is still the only choice per message.
 6. **Speech bubble:** a pigeon in the bottom left says the message (about 9 characters a line, 2 lines) and pecks now and then.
 7. **Marquee:** chasing bulbs around the edge, two lines inside.
 8. **Credits roll:** the note drifts up 1 px at a time with faded top and bottom edges, then the sender line.
@@ -647,7 +647,7 @@ This screen is an exception to Minimal animation (§2), like the skyline face: i
 - Text field, style picker, presets, and a **live preview** of the draft in the chosen style, rendered as you type (debounced), alongside the board preview.
 
 ### Open
-- Where icon + text gets its icon, since nothing else is set per message: an icon picker as part of the style, or a leading emoji (❤️ → heart) mapped to an icon.
+- Which icons ship first, beyond heart, cake, house and coffee.
 - What the countdown variant counts down to, if it isn't just text.
 - How many presets; the call-to-action screen's wording and look.
 - On the panel: the split-flap flap colors at the night floor, the marquee's 1 px bulbs through the diffuser, white on Pink and Yellow crawl bands.
