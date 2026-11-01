@@ -419,6 +419,13 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
         if (!b) continue;
         for (const [k, v] of Object.entries(defaults)) if (!Object.hasOwn(b, k)) b[k] = Array.isArray(v) ? [...v] : v;
       }
+      // The split-flap message style was removed (Nov 2026): saved ones load as notes.
+      const unflap = (m) => (m && m.style === 'flap' ? { ...m, style: 'note' } : m);
+      for (const b of Object.values(state.boards)) {
+        if (!b) continue;
+        b.msg = unflap(b.msg);
+        if (Array.isArray(b.msgPresets)) b.msgPresets = b.msgPresets.map(unflap);
+      }
       // 54th/Cermak's short name was 54th.
       for (const b of Object.values(state.boards)) if (b && Array.isArray(b.rows)) b.rows = b.rows.map((r) => (r === 'PK:54th' ? 'PK:54/Crmk' : r));
     } catch (e) {

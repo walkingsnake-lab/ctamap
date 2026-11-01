@@ -2540,12 +2540,10 @@ static void render_seventies(const Value &p, Frame &f, std::optional<double> now
 // Mirrors renderAnnounce() and MSG in draw.js: the server sends the lines
 // already laid out for the style (messageLayout); this only draws them.
 static const int MSG_BASES[4][3] = {{0, 0, 0}, {19, 0, 0}, {14, 24, 0}, {9, 19, 29}};
-static const int MSG_SMALL_LINES = 5, FLAP_COLS = 10, FLAP_ROWS = 3, FLAP_X = 2, FLAP_PITCH = 6, FLAP_ROW_PITCH = 11;
-static const double FLAP_WAIT = 300, FLAP_ROW_EVERY = 300, FLAP_FLIP = 150;
+static const int MSG_SMALL_LINES = 5;
 static const double TYPE_WAIT = 400, TYPE_CHAR = 90, TYPE_BLINK = 530;
 static const int BIG_TOP = 7, BIG_GRAD = 14;
-static constexpr RGB MSG_TEXT = C::label, FLAP_TOP = hexc(0x1f1f1f), FLAP_BOT = hexc(0x171717), FLAP_FOLD = hexc(0x2a2a2a), FLAP_SPLIT = hexc(0x565656),
-                     MSG_TYPE = C::amber, MSG_CURSOR = hexc(0xcc8d00), BIG_FROM = hexc(0xff3060), BIG_TO = hexc(0xffb000), MSG_CTA = C::head;
+static constexpr RGB MSG_TEXT = C::label, MSG_TYPE = C::amber, MSG_CURSOR = hexc(0xcc8d00), BIG_FROM = hexc(0xff3060), BIG_TO = hexc(0xffb000), MSG_CTA = C::head;
 
 static int msg_x(Font font, const ustr &s) { return (int)fdiv(64 - measure(font, s), 2); }
 
@@ -2565,48 +2563,6 @@ static void draw_note(Frame &f, const std::vector<ustr> &lines, bool sm) {
   }
   int n = std::min((int)lines.size(), 3);
   for (int i = 0; i < n; i++) f.text(FONT_5X7, lines[i], msg_x(FONT_5X7, lines[i]), MSG_BASES[n][i], MSG_TEXT);
-}
-
-// One Tom Thumb glyph on a flap at (x, y), unbroken on tile rows 2-6: rows
-// 0-2 on the top flap, the rest on the bottom flap, darkened on its first
-// row (the split).
-static void flap_glyph(Frame &f, char32_t ch, int x, int y, bool top_part) {
-  int o = glyph(FONT_SMALL, ch);
-  if (o < 0) return;
-  const uint8_t *d = assets::FONT_DATA[FONT_SMALL];
-  int w = d[o + 1], h = d[o + 2], yo = d[o + 4] - 128;
-  int top = 5 - (yo + h), ox = x + (int)fdiv(5 - w, 2);
-  for (int r = 0; r < h; r++) {
-    int j = top + r;
-    if (j < 0 || j > 5 || top_part != (j < 3)) continue;
-    RGB color = j == 3 ? FLAP_SPLIT : MSG_TEXT;
-    int bits = glyph_row(d, o, r);
-    for (int c = 0; c < w; c++)
-      if ((bits >> (w - 1 - c)) & 1) f.set(ox + c, y + 2 + j, color);
-  }
-}
-
-static void draw_flaps(Frame &f, const std::vector<ustr> &lines, std::optional<double> t) {
-  int n = std::min((int)lines.size(), FLAP_ROWS);
-  int first = (int)fdiv(FLAP_ROWS - n, 2);
-  for (int r = 0; r < FLAP_ROWS; r++) {
-    int i = r - first;
-    ustr line = i >= 0 && i < n ? lines[i].substr(0, std::min((size_t)FLAP_COLS, lines[i].size())) : ustr();
-    int pad = (int)fdiv(FLAP_COLS - (int)line.size(), 2);
-    double start = FLAP_WAIT + i * FLAP_ROW_EVERY;
-    // 0 blank, 1 flipping, 2 settled
-    int state = line.empty() || (t && *t < start) ? 0 : (t && *t < start + FLAP_FLIP) ? 1 : 2;
-    for (int c = 0; c < FLAP_COLS; c++) {
-      int x = FLAP_X + c * FLAP_PITCH, y = r * FLAP_ROW_PITCH;
-      f.fill(x, y, 5, 5, FLAP_TOP);
-      f.fill(x, y + 6, 5, 4, FLAP_BOT);
-      int k = c - pad;
-      if (state == 0 || k < 0 || k >= (int)line.size()) continue;
-      flap_glyph(f, line[k], x, y, true);
-      if (state == 1) f.fill(x, y + 4, 5, 1, FLAP_FOLD);
-      else flap_glyph(f, line[k], x, y, false);
-    }
-  }
 }
 
 static long long typed_total(const std::vector<ustr> &lines) {
@@ -2672,15 +2628,13 @@ static void render_announce(const Value &p, Frame &f, std::optional<double> t) {
     return;
   }
   std::vector<ustr> lines = msg_lines(m);
-  if (m["style"].eq("flap")) draw_flaps(f, lines, t);
-  else if (m["style"].eq("type")) draw_typed(f, lines, t);
+  if (m["style"].eq("type")) draw_typed(f, lines, t);
   else if (m["style"].eq("big")) draw_big(f, lines[0]);
   else draw_note(f, lines, m["sm"].truthy());
 }
 
 double message_intro_ms(const Value &m) {
   if (!has_message(m)) return 0;
-  if (m["style"].eq("flap")) return FLAP_WAIT + (std::min((int)m["lines"].size(), FLAP_ROWS) - 1) * FLAP_ROW_EVERY + FLAP_FLIP;
   if (m["style"].eq("type")) return TYPE_WAIT + typed_total(msg_lines(m)) * TYPE_CHAR;
   return 0;
 }

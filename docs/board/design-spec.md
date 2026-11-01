@@ -610,7 +610,7 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 
 ---
 
-## 15. Announce screen (four styles built)
+## 15. Announce screen (three styles built)
 
 Designed Nov 1, 2026 as the Message screen; built Nov 1, 2026 as **Announce** (the name the knob and phone use). The owner puts a short note on their own board: "Dinner at 7", "Welcome home!". Mockups of all nine styles: [`mockups/messages/sheet.png`](mockups/messages/sheet.png), made by `node scripts/mock-messages.js`. Payload and pixels: contract, *Announce*.
 
@@ -631,23 +631,24 @@ Designed Nov 1, 2026 as the Message screen; built Nov 1, 2026 as **Announce** (t
 Picked per message; each style fixes its own colors. Built:
 
 1. **Note:** 5x7 text, wrapped and centered, up to 3 lines; when it doesn't fit, uppercase Tom Thumb up to 5 lines.
-2. **Split-flap:** 10 × 3 flaps (5 × 10 px, Tom Thumb, uppercase, 30 characters). The letters run unbroken; the bottom flap's first row is dark and shows them dimmed, marking the split (no unlit gap through the letters; changed from the mockup Nov 1). Rows flip in one after another when the message appears.
-3. **Typewriter:** 5x7 amber from the left edge, typed out once when the message appears (90 ms a character), then a blinking block cursor.
-4. **Big word:** 5x7 at 2x (about 5 characters), shaded pink to amber.
+2. **Typewriter:** 5x7 amber from the left edge, typed out once when the message appears (90 ms a character), then a blinking block cursor.
+3. **Big word:** 5x7 at 2x (about 5 characters), shaded pink to amber.
+
+**Split-flap** (10 × 3 small flaps) was built and removed the same day (Nov 1, 2026): it didn't look good on the panel, with or without a gap at the split. Saved split-flap messages load as notes.
 
 Not built yet, in order: **icon + text** (13 px icon with a 2-frame idle loop: heart, cake, house, coffee; each its own style), **speech bubble** (a pigeon), **marquee** (chasing bulbs), **credits roll**, **crawl**. Also from the mockups, not built: the big word's sparkle and countdown variants, the typewriter's green phosphor.
 
 This screen is an exception to Minimal animation (§2), like the skyline face: it has no times to protect. The intro replays when the screen is shown and when a new message arrives, not on every update.
 
 ### Phone page
-- An **Announce** tab: a preview of the draft drawn by the board's renderer (tap to replay its intro), the text field, a fit line ("Fits Note · 2 of 3 lines"), the four styles as tiles drawn with the draft (or a sample when it doesn't fit), **Show on board** (sets the message and the screen; "On the board ✓" when it's already up), **Save as preset**, and the presets list.
+- An **Announce** tab: a preview of the draft drawn by the board's renderer (tap to replay its intro), the text field, a fit line ("Fits Note · 2 of 3 lines"), the three styles as tiles drawn with the draft (or a sample when it doesn't fit), **Show on board** (sets the message and the screen; "On the board ✓" when it's already up), **Save as preset**, and the presets list.
 - While Announce is on the board, edits go up about a second after typing stops.
 - Announce is also in the Screen picker (now two rows of four).
 
 ### Open
 - Which icons ship first, beyond heart, cake, house and coffee.
 - What the countdown variant counts down to, if it isn't just text.
-- On the panel: the flap fills and the dimmed split row at the night floor, the marquee's 1 px bulbs through the diffuser, white on Pink and Yellow crawl bands.
+- On the panel: the marquee's 1 px bulbs through the diffuser, white on Pink and Yellow crawl bands.
 
 ## 16. Clock screen: seventies face
 

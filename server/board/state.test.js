@@ -358,15 +358,15 @@ test('announce: msg is {text, style}, cleaned, fitting its style; a new one gets
   assert.equal(store.update('home', { msg: null }).msg, null);
   for (const bad of [
     { msg: 'hi' }, { msg: { text: 'hi', style: 'marquee' } }, { msg: { text: '\u{1F382}', style: 'note' } },
-    { msg: { text: 'Unbelievable', style: 'flap' } }, { msg: { text: 'x'.repeat(161), style: 'note' } }, { msg: { text: 5, style: 'note' } },
+    { msg: { text: 'Dinner at 7', style: 'flap' } }, { msg: { text: 'Hooray for everyone', style: 'big' } }, { msg: { text: 'x'.repeat(161), style: 'note' } }, { msg: { text: 5, style: 'note' } },
   ]) assert.throws(() => store.update('home', bad), ValidationError, JSON.stringify(bad));
 });
 
 test('announce: presets are up to 8 messages that each fit', () => {
   const { MAX_PRESETS } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
-  const b = store.update('home', { msgPresets: [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'flap' }] });
-  assert.deepEqual(b.msgPresets, [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'flap' }]);
+  const b = store.update('home', { msgPresets: [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'type' }] });
+  assert.deepEqual(b.msgPresets, [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'type' }]);
   assert.throws(() => store.update('home', { msgPresets: Array(MAX_PRESETS + 1).fill({ text: 'Hi', style: 'note' }) }), ValidationError);
   assert.throws(() => store.update('home', { msgPresets: [{ text: 'Hooray!!', style: 'big' }] }), ValidationError);
   assert.throws(() => store.update('home', { msgPresets: {} }), ValidationError);
@@ -380,6 +380,18 @@ test('announce: the knob ring gets ANNOUNCE for boards that draw it, and selecti
   assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true }).at, 5);
   assert.deepEqual(knobOf(store.get('home')), { ring: ['auto', 'transit', 'weather', 'sports'], at: 0 }, 'not on the ring: AUTO');
   assert.throws(() => store.select('home', 'cycle'), ValidationError);
+});
+
+test('announce: split-flap messages and presets saved before it was removed load as notes', () => {
+  const dir = tmpDir();
+  const store = createStore({ dir, log: quiet });
+  const raw = JSON.parse(fs.readFileSync(store.file, 'utf8'));
+  raw.boards.home.msg = { text: 'Go Cubs', style: 'flap', id: 3 };
+  raw.boards.home.msgPresets = [{ text: 'Dinner\nat 7', style: 'flap' }, { text: 'Yay!', style: 'big' }];
+  fs.writeFileSync(store.file, JSON.stringify(raw));
+  const again = createStore({ dir, log: quiet });
+  assert.deepEqual(again.get('home').msg, { text: 'Go Cubs', style: 'note', id: 3 });
+  assert.deepEqual(again.get('home').msgPresets, [{ text: 'Dinner\nat 7', style: 'note' }, { text: 'Yay!', style: 'big' }]);
 });
 
 test('announce: boards saved before it get no message and no presets', () => {

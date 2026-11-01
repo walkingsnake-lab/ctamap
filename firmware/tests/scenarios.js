@@ -588,9 +588,9 @@ async function build() {
     add('seventies roll per digit', s70('2026-11-02T03:42:00Z'), roll('9:41'), undefined, undefined, { s3only: true });
     add('seventies roll width change', s70('2026-11-01T19:00:00Z'), roll('12:59'), undefined, undefined, { s3only: true });
   }
-  // Announce screen (S3 only): the four styles, their intros (flaps
-  // flipping in, the typewriter typing and its cursor blinking), the call to
-  // action with no message, and dimmed.
+  // Announce screen (S3 only): the three styles, the typewriter's intro
+  // (typing, then its cursor blinking), the call to action with no message,
+  // a removed style drawn as a note, and dimmed.
   {
     const ann = (text, style, extra = {}) => ({ now: NOW, tzo: tzOffset(NOW), screen: 'announce', bright: 100, msg: { id: 7, style, ...draw.messageLayout(text, style) }, ...extra });
     const at = (...ts) => [{ screen: 'announce' }, ...ts.map((t) => ({ screen: 'announce', t }))];
@@ -600,15 +600,13 @@ async function build() {
     add('announce note three lines', ann('Grab milk on the way home please', 'note'), at(), undefined, undefined, s3);
     add('announce note small text', ann('Leaving at 8:15 for the game. Meet at the north end of the Addison platform.', 'note'), at(), undefined, undefined, s3);
     add('announce note blank line and punctuation', ann('\u2018Caf\u00e9\u2019 \u2014 7\u2026\n\nBring \u20ac', 'note'), at(), undefined, undefined, s3);
-    add('announce split-flap', ann('Dinner at 7 pm\nbring wine', 'flap'), at(0, 299, 300, 449, 450, 700, 1050, 1200), undefined, undefined, s3);
-    add('announce split-flap one row', ann('Go Cubs', 'flap'), at(0, 350, 500), undefined, undefined, s3);
-    add('announce split-flap accents', ann('\u00e9t\u00e9 \u00e0 6h', 'flap'), at(), undefined, undefined, s3);
+    add('announce unknown style draws as a note', { ...ann('Go Cubs', 'note'), msg: { id: 2, style: 'flap', lines: ['Go Cubs'] } }, at(0), undefined, undefined, s3);
     add('announce typewriter', ann('Gone to the gym. Back by 6.', 'type'), at(0, 399, 400, 490, 1300, 2830, 2831, 3359, 3360, 3890), undefined, undefined, s3);
     add('announce typewriter blank line', ann('Hi\n\nback soon', 'type'), at(0, 750, 1000), undefined, undefined, s3);
     add('announce big word', ann('Yay!', 'big'), at(0), undefined, undefined, s3);
     add('announce big word widest', ann('HELLO', 'big'), at(), undefined, undefined, s3);
     add('announce big word descender', ann('yup', 'big'), at(), undefined, undefined, s3);
-    add('announce dimmed', ann('Dinner at 7 pm\nbring wine', 'flap', { bright: 40 }), at(), undefined, undefined, s3);
+    add('announce dimmed', ann('Dinner at 7\nbring wine', 'type', { bright: 40 }), at(), undefined, undefined, s3);
   }
   // Chronological departure: slide, digits roll, next train slides in.
   {

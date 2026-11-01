@@ -1751,23 +1751,21 @@
     }
 
     // ---- announce screen (design spec §15; contract "Announce") ----
-    // A short note from the phone in one of four styles: note, split-flap,
-    // typewriter, big word. The server lays the text out (messageLayout) and
-    // sends the lines; the board only draws them. opts.t: ms since the
-    // message appeared, for its intro (flaps flip in row by row, the
-    // typewriter types); absent: the settled frame. Integer geometry only.
-    const MSG_STYLES = ['note', 'flap', 'type', 'big'];
+    // A short note from the phone in one of three styles: note, typewriter,
+    // big word. The server lays the text out (messageLayout) and sends the
+    // lines; the board only draws them. opts.t: ms since the message
+    // appeared, for its intro (the typewriter types); absent: the settled
+    // frame. Integer geometry only.
+    const MSG_STYLES = ['note', 'type', 'big'];
     const MSG_MAX = 160;  // characters, after cleaning
     const MSG = {
       bases: { 1: [19], 2: [14, 24], 3: [9, 19, 29] },  // 5x7 lines (note, typewriter)
       smallLines: 5,
-      flapCols: 10, flapRows: 3, flapX: 2, flapPitch: 6, flapRowPitch: 11,
-      flapWait: 300, flapRowEvery: 300, flapFlip: 150,
       typeWrap: 59, typeWait: 400, typeChar: 90, typeBlink: 530,
       bigTop: 7, bigGrad: 14,
     };
     const MSG_C = {
-      text: C.label, flapTop: '#1f1f1f', flapBot: '#171717', flapFold: '#2a2a2a', flapSplit: '#565656',
+      text: C.label,
       type: C.amber, cursor: '#cc8d00', bigFrom: '#ff3060', bigTo: '#ffb000', cta: C.head,
     };
     // Punctuation phones substitute (curly quotes, dashes, ellipsis, ...):
@@ -1785,13 +1783,13 @@
       }
       return out.split('\n').map((l) => l.replace(/ +/g, ' ').trim()).join('\n').replace(/^\n+|\n+$/g, '');
     }
-    // Uppercase for Tom Thumb and the flaps; letters whose capital the font
+    // Uppercase for Tom Thumb; letters whose capital the font
     // lacks are dropped.
     const msgUpper = (s) => [...s.toUpperCase()].filter((ch) => ch === '\n' || fonts.small[ch.codePointAt(0)]).join('');
-    // Word-wrap to lines at most maxW wide (pixels in `font`, or characters
-    // when font is null); \n forces a break. Null when one word is too wide.
+    // Word-wrap to lines at most maxW px wide in `font`; \n forces a break.
+    // Null when one word is too wide.
     function wrapMessage(text, font, maxW) {
-      const width = (str) => (font ? measure(font, str) : [...str].length);
+      const width = (str) => measure(font, str);
       const lines = [];
       for (const para of text.split('\n')) {
         let cur = '';
@@ -1808,8 +1806,7 @@
     }
     // The lines a style draws for `text` (payload `msg`), or null when it
     // doesn't fit on one screen. Note: 5x7, up to 3 lines, else Tom Thumb
-    // (uppercase) up to 5 (`sm`). Split-flap: 10 characters by 3 rows,
-    // uppercase. Typewriter: 5x7, 3 lines, room for the cursor. Big word:
+    // (uppercase) up to 5 (`sm`). Typewriter: 5x7, 3 lines, room for the cursor. Big word:
     // one line of 5x7 at 2x.
     function messageLayout(text, style) {
       const t = cleanMessage(text);
@@ -1820,10 +1817,6 @@
         if (big) return { lines: big };
         const sm = upto(wrapMessage(msgUpper(t), 'small', 64), MSG.smallLines);
         return sm ? { lines: sm, sm: 1 } : null;
-      }
-      if (style === 'flap') {
-        const lines = upto(wrapMessage(msgUpper(t), null, MSG.flapCols), MSG.flapRows);
-        return lines ? { lines } : null;
       }
       if (style === 'type') {
         const lines = upto(wrapMessage(t, '5x7', MSG.typeWrap), 3);
@@ -1844,49 +1837,6 @@
       }
       const n = Math.min(lines.length, 3);
       for (let i = 0; i < n; i++) f.text('5x7', lines[i], msgX('5x7', lines[i]), MSG.bases[n][i], MSG_C.text);
-    }
-    // One Tom Thumb glyph on a flap at (x, y), unbroken on tile rows 2-6
-    // (a descender on row 7), centered by its ink width: rows 0-2 on the top
-    // flap, the rest on the bottom flap, whose first row (the split) shows
-    // them darkened. part: 'top' or 'bot'.
-    function flapGlyph(f, ch, x, y, part) {
-      const g = fonts.small[ch.codePointAt(0)];
-      if (!g) return;
-      const [, w, h, , yo] = g;
-      const top = 5 - (yo + h), ox = x + Math.floor((5 - w) / 2);
-      for (let r = 0; r < h; r++) {
-        const j = top + r;
-        if (j < 0 || j > 5 || (part === 'top') !== (j < 3)) continue;
-        const rgb = hex(j === 3 ? MSG_C.flapSplit : MSG_C.text);
-        const bits = g[5 + r];
-        for (let c = 0; c < w; c++) if ((bits >> (w - 1 - c)) & 1) f.set(ox + c, y + 2 + j, rgb);
-      }
-    }
-    // Split-flap: 10 x 3 tiles (5 x 10 px: top flap rows 0-4, bottom flap
-    // rows 5-9 with its first row left dark: the split, without a gap in
-    // the letters). The text's rows flip in one after another; a flipping
-    // row shows its new top while the old top flap (blank) folds down over
-    // the split.
-    function drawFlaps(f, lines, t) {
-      const n = Math.min(lines.length, MSG.flapRows);
-      const first = Math.floor((MSG.flapRows - n) / 2);
-      for (let r = 0; r < MSG.flapRows; r++) {
-        const i = r - first;
-        const line = i >= 0 && i < n ? [...lines[i]].slice(0, MSG.flapCols) : [];
-        const pad = Math.floor((MSG.flapCols - line.length) / 2);
-        const start = MSG.flapWait + i * MSG.flapRowEvery;
-        const state = !line.length || t < start ? 'blank' : t < start + MSG.flapFlip ? 'flip' : 'done';
-        for (let c = 0; c < MSG.flapCols; c++) {
-          const x = MSG.flapX + c * MSG.flapPitch, y = r * MSG.flapRowPitch;
-          f.fill(x, y, 5, 5, MSG_C.flapTop);
-          f.fill(x, y + 6, 5, 4, MSG_C.flapBot);
-          const ch = line[c - pad];
-          if (state === 'blank' || ch == null) continue;
-          flapGlyph(f, ch, x, y, 'top');
-          if (state === 'flip') f.fill(x, y + 4, 5, 1, MSG_C.flapFold);
-          else flapGlyph(f, ch, x, y, 'bot');
-        }
-      }
     }
     // Typewriter: amber 5x7 from the left edge, typed one character every
     // typeChar ms (a line break counts as one), a block cursor after the last
@@ -1944,8 +1894,7 @@
         return f;
       }
       const t = o.t != null ? o.t : Infinity;
-      if (m.style === 'flap') drawFlaps(f, m.lines, t);
-      else if (m.style === 'type') drawTyped(f, m.lines, t);
+      if (m.style === 'type') drawTyped(f, m.lines, t);
       else if (m.style === 'big') drawBig(f, m.lines[0]);
       else drawNote(f, m.lines, !!m.sm);
       return f;
@@ -1954,7 +1903,6 @@
     // board redraws every frame until then.
     function messageIntroMs(m) {
       if (!m || !m.lines || !m.lines.length) return 0;
-      if (m.style === 'flap') return MSG.flapWait + (Math.min(m.lines.length, MSG.flapRows) - 1) * MSG.flapRowEvery + MSG.flapFlip;
       if (m.style === 'type') return MSG.typeWait + typedTotal(m.lines) * MSG.typeChar;
       return 0;
     }

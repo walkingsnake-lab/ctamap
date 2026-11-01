@@ -1466,10 +1466,9 @@ test('messageLayout: line breaks force a new line; emoji and private-use glyphs 
   assert.equal(draw.messageLayout('', 'big'), null);
 });
 
-test('messageLayout: split-flap is 10 characters by 3 rows, uppercase; typewriter leaves room for the cursor; big word is one 2x line', () => {
-  assert.deepEqual(draw.messageLayout('Dinner at 7 pm\nbring wine', 'flap'), { lines: ['DINNER AT', '7 PM', 'BRING WINE'] });
-  assert.equal(draw.messageLayout('Unbelievable', 'flap'), null, 'an 11-letter word');
-  assert.equal(draw.messageLayout('a b c d e f g h i j k l m n o p', 'flap'), null, 'four rows');
+test('messageLayout: typewriter leaves room for the cursor; big word is one 2x line; split-flap is gone', () => {
+  assert.deepEqual(draw.MSG_STYLES, ['note', 'type', 'big']);
+  assert.equal(draw.messageLayout('Dinner at 7', 'flap'), null, 'removed Nov 2026');
   const typed = draw.messageLayout('Gone to the gym. Back by 6.', 'type');
   assert.ok(typed.lines.every((l) => measure('5x7', l) + 1 + 4 <= 64), 'the cursor fits after every line');
   assert.deepEqual(draw.messageLayout('Yay!', 'big'), { lines: ['Yay!'] });
@@ -1489,27 +1488,6 @@ test('announce: no message shows a call to action; a note is centered', () => {
   for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y).some((v) => v)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
   assert.ok(Math.abs(x0 - (63 - x1)) <= 1, `centered: ${x0}..${x1}`);
   assert.deepEqual(hex(f.get(x0, litRows(f).find((y) => f.get(x0, y).some((v) => v)))), '#d8d8d8');
-});
-
-test('announce split-flap: blank flaps first, rows flip in one after another, then settle', () => {
-  const p = msgPayload('Dinner at 7 pm\nbring wine', 'flap');
-  const text = (f) => { let n = 0; for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (hex(f.get(x, y)) === '#d8d8d8') n++; return n; };
-  const at = (t) => draw.render(p, { t });
-  assert.equal(text(at(0)), 0, 'all blank');
-  assert.ok(text(at(350)) > 0 && text(at(350)) < text(at(450)), 'row 1 mid-flip shows its top half only');
-  assert.ok(text(at(450)) < text(at(1200)));
-  assert.equal(text(at(1200)), text(draw.render(p)), 'settled');
-  assert.equal(draw.messageIntroMs(p.msg), 300 + 2 * 300 + 150);
-  // Flap fills on every tile, text or not.
-  assert.equal(hex(at(0).get(2, 0)), '#1f1f1f');
-  assert.equal(hex(at(0).get(2, 4)), '#1f1f1f', 'no gap: the top flap runs to row 4');
-  assert.equal(hex(at(0).get(2, 5)), '#000000', 'the split: the bottom flap\'s first row is dark');
-  assert.equal(hex(at(0).get(2, 6)), '#171717');
-  // Letters run unbroken across the split, darkened on it.
-  const settled = draw.render(p);
-  const count = (y, c) => { let n = 0; for (let x = 0; x < 64; x++) if (hex(settled.get(x, y)) === c) n++; return n; };
-  assert.ok(count(4, '#d8d8d8') > 0 && count(5, '#565656') > 0 && count(6, '#d8d8d8') > 0, 'glyph rows 2, 3 (dimmed), 4 on tile rows 4, 5, 6');
-  assert.equal(count(5, '#d8d8d8'), 0);
 });
 
 test('announce typewriter: types one character every 90 ms, cursor steady while typing, then blinking', () => {

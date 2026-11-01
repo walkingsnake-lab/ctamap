@@ -1505,7 +1505,7 @@ test('announce screen: only for firmware that reports it (hk=...:announce); the 
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const get = async (q = '') => (await s.req('/board/update?b=home' + q, h)).body;
-  s.store.update('home', { screen: 'announce', msg: { text: 'Dinner at 7 pm\nbring wine', style: 'flap' } });
+  s.store.update('home', { screen: 'announce', msg: { text: 'Dinner at 7\nbring wine', style: 'type' } });
 
   // Firmware without it: transit, no ANNOUNCE on the knob, no msg.
   let b = await get('&hk=skyline');
@@ -1519,17 +1519,17 @@ test('announce screen: only for firmware that reports it (hk=...:announce); the 
   assert.equal(b.for, 'announce');
   assert.equal(b.rows, undefined, 'transit sections stay home');
   assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports', 'clock', 'announce'], at: 5 });
-  assert.deepEqual(b.msg, { id: s.store.get('home').msg.id, style: 'flap', lines: ['DINNER AT', '7 PM', 'BRING WINE'] });
+  assert.deepEqual(b.msg, { id: s.store.get('home').msg.id, style: 'type', lines: ['Dinner at 7', 'bring wine'] });
   // Other screens leave it out; the simulator's copy keeps it.
   s.store.update('home', { screen: 'transit' });
   assert.equal((await get('&hk=skyline:seventies:announce')).msg, undefined);
-  assert.equal((await s.req(FULL)).body.msg.style, 'flap');
+  assert.equal((await s.req(FULL)).body.msg.style, 'type');
 
   // The knob can choose ANNOUNCE.
   const sel = await s.req('/board/select?b=home&s=announce&hk=skyline:seventies:announce', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
   assert.equal(sel.status, 200);
   assert.equal(sel.body.screen, 'announce');
-  assert.equal(sel.body.msg.lines.length, 3);
+  assert.equal(sel.body.msg.lines.length, 2);
 
   // No message yet: the board gets msg null (its call to action).
   s.store.update('home', { msg: null });
