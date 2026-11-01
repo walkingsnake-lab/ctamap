@@ -125,7 +125,7 @@ test('boats: the sailboat on :00 and :30, the speedboat out and back on :15 and 
   assert.equal(boatAt(q + 5 * 60000), null);
   // Drawn only when the payload allows boats.
   const sky = toSkyline({ temp: 52, code: 0, clouds: 5 }, { ...PLACE, now: q / 1000, temp: 52 });
-  const hull = (f) => { let n = 0; for (let x = 0; x < 64; x++) if (px(f, x, 25) === '#8a4a24') n++; return n; };
+  const hull = (f) => { let n = 0; for (let x = 0; x < 64; x++) if (px(f, x, 25) === '#c02828') n++; return n; };
   assert.equal(hull(draw({}, q / 1000, { ms: q + 20000, sky })), 6);
   assert.equal(hull(draw({}, q / 1000, { ms: q + 20000, sky: { ...sky, boats: 0 } })), 0);
 });
@@ -154,13 +154,24 @@ test('lightning: about every 20-40 s, rising over 0.15 s and fading by 1.35 s', 
   assert.equal(sum(draw({}, NIGHT, { ms: peak, sky: calm })), sum(draw({}, NIGHT, { ms: starts[0] - 1000, sky: calm })));
 });
 
-test('rain falls 1 px every 200 ms, staying above the water', () => {
-  const sky = toSkyline({ temp: 52, code: 63, clouds: 100 }, { ...PLACE, now: DAY, temp: 52 });
+test('rain falls 1 px every 200 ms, past the shore into the water, never over the text', () => {
+  const sky = toSkyline({ temp: 52, code: 65, clouds: 100 }, { ...PLACE, now: DAY, temp: 52 });
   const a = draw({}, DAY, { ms: DAY * 1000, sky }), b = draw({}, DAY, { ms: DAY * 1000 + 200, sky });
   let diff = 0;
   for (let y = 0; y <= 25; y++) for (let x = 0; x < 64; x++) if (px(a, x, y) !== px(b, x, y)) diff++;
   assert.ok(diff > 0, 'streaks moved');
-  for (let y = 26; y < 32; y++) for (let x = 0; x < 64; x++) assert.notEqual(px(a, x, y), '#5a7aaa');
+  // Against the same moment without rain: some streaks in the water rows, none in the text boxes.
+  const lw = measure('small', '52°'), cw = measure('small', clockText(DAY));
+  let water = 0;
+  for (let t = 0; t < 6000; t += 250) {
+    const ms = DAY * 1000 + t, wet = draw({}, DAY, { ms, sky }), dry = draw({}, DAY, { ms, sky: { ...sky, pcp: null } });
+    for (let y = 26; y < 32; y++) for (let x = 0; x < 64; x++) {
+      if (px(wet, x, y) === px(dry, x, y)) continue;
+      water++;
+      assert.ok(!(y >= 27 && (x <= lw || x >= 63 - cw)), `rain over the text at ${x},${y}`);
+    }
+  }
+  assert.ok(water > 20, `rain reaches the water (${water} px)`);
 });
 
 test('rain glides along its own line: straight down or 45° with the wind, sub-pixel between steps', () => {
@@ -217,8 +228,8 @@ test('motion settings: a still wheel, still ripples, steady stars; rain speed', 
     for (let y = 0; y <= 25; y++) for (let x = 0; x < 64; x++) if (px(a, x, y) !== px(b, x, y)) out.push(`${x},${y}`);
     return out.join(' ');
   };
-  assert.equal(r(400, DAY * 1000 + 200), r(200, DAY * 1000 + 100));
-  assert.notEqual(r(100, DAY * 1000 + 100), r(200, DAY * 1000 + 100));
+  assert.equal(r(400, 200), r(200, 100), "both step 0, halfway");
+  assert.notEqual(r(100, 100), r(200, 100));
 });
 
 test('no weather yet: a plain night with the clock', () => {

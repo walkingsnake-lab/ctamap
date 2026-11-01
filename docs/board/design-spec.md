@@ -467,7 +467,7 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 - **Sun (day):** a 7 px soft-edged disc `#ffd040` at x 38–44, rows 2–8.
 - **Sun (sunset):** drawn behind the city, low on the skyline, at the day's sunset bearing. Real bearings run from about 238° (December) to 302° (June), which at the skyline's 1.3 px per degree would put the sun off the panel at both ends, so the sun has its own scale: x = 32 + (bearing − 270) × 0.8, which spans x 6–58 over the year. Left of the wheel in winter, right in summer.
 - **Moon:** the day sun's spot and size, `#a89c70` (kept dimmer than the text), at its real phase, with soft edges. Shown all night whenever at least 3% is lit; it ignores moonrise and moonset (a deliberate simplification).
-- **Stars:** 14, about half twinkling (4, 6 or 12 s cycles). They stay off the buildings and the moon, and at least 3.5 px clear of the wheel's rim (a star beside the rim read as part of the wheel).
+- **Stars:** 14, about half twinkling (4, 6 or 12 s cycles). They stay off the buildings and the moon, out from between the Hancock antennas (a star there blurred what they were), and at least 3.5 px clear of the wheel's rim (a star beside the rim read as part of the wheel). Bright ones are a soft `#a8aebc`, not white; dim ones `#5a6070`.
 
 ### Water
 - A two-color gradient with faint ripple dashes drifting sideways, alternate rows in opposite directions, 1 px every 1.5 s.
@@ -577,9 +577,9 @@ Ambient and slow, on a 100 ms tick:
 | Water | ripples glide 1 px every 500 ms, drawn with sub-pixel coverage (the dash ends fade in and out); per board `rippleSpeed`: still, 1000, 500, 250 ms |
 | Glitter path | at sunset, the ripples under the sun take its color; only while the sun shows over the buildings (no sparkles: they were distracting) |
 | Clouds | strip scrolls 1 px every 16 s by default; per board `cloudDrift`: off (still), slow (16 s), normal (4 s) |
-| Rain | 2 px streaks gliding 1 px every 200 ms along their own line (sub-pixel: the head fades in, the tail out), straight down, or 45° with a cross wind of 8 mph or more; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background). Per board `rainSpeed`: 400, 200, 100 ms |
-| Snow | 1 px down every 700 ms (3.5× the rain step), a 1 px sideways step about every 2 s per flake; 6 / 12 / 20 flakes |
-| Lightning | a strike every 20–40 s (from the hash): a patch of the cloud deck (about 22 × 8 px, toward `#8a80b0`, peak 70%) lights up from inside, with the bolt (1 px core, flat violet edges, one branch, ending above the Trump roof; a touch of lavender `#b8b0e8`, peak 80%) inside it. Rises over 0.15 s, fades over 1.2 s: a quick flash that still eases in and out (the first version, 45% / 35% over 3 s, was too subtle). Mockup: [`storm.png`](mockups/weather/lake/storm.png), row BOTH |
+| Rain | 2 px streaks gliding 1 px every 200 ms along their own line (sub-pixel: the head fades in, the tail out), straight down, or 45° with a cross wind of 8 mph or more; each streak falls past the shore to its own row of water (26–31), skipping the text boxes, so nothing ends along the waterline; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background). Per board `rainSpeed`: 400, 200, 100 ms |
+| Snow | 1 px down every 700 ms (3.5× the rain step), into the water like the rain, a 1 px sideways step about every 2 s per flake; 6 / 12 / 20 flakes |
+| Lightning | a strike every 20–40 s (from the hash): the whole sky flashes toward `#8a80b0` (peak 35%), brightest in a patch of the cloud deck (about 22 × 8 px, peak 80%), with the bolt (1 px core, flat violet edges, one branch, ending above the Trump roof; a touch of lavender `#b8b0e8`, peak 80%) inside it. Rises over 0.15 s, fades over 1.2 s: a quick flash that still eases in and out (the first version, 45% / 35% over 3 s, was too subtle). Mockup: [`storm.png`](mockups/weather/lake/storm.png), row BOTH |
 | Boats (day) | sailboat on :00 and :30, speedboat round trip on :15 and :45 (below) |
 
 - This screen is the exception to Minimal animation (§2): it has no times to protect, apart from the clock, which only changes at the minute.
@@ -588,7 +588,7 @@ Ambient and slow, on a 100 ms tick:
 ### Boats
 A boat crosses the lake **at every quarter hour**, by day only, alternating: the sailboat on :00 and :30, the speedboat on :15 and :45. Mockups: [`boat.png`](mockups/weather/lake/boat.png), [`speedboat.png`](mockups/weather/lake/speedboat.png).
 
-- **Sailboat:** a white sail `#e8ecf0` on rows 21–24 (mast on the leading side), in front of the city; a brown hull on rows 25–26 (6 px deck row `#8a4a24`, 4 px keel row `#5a2e16`). Starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Left on :00, right on :30.
+- **Sailboat:** a white sail `#e8ecf0` on rows 21–24 (mast on the leading side), in front of the city; a red hull on rows 25–26 (6 px deck row `#c02828`, 4 px keel row `#7a1818`). Starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Left on :00, right on :30.
 - **Speedboat** (loosely the Seadog tour boat): three rows: blue and white passengers (row 24), a 14 px yellow deck `#ffc020` with the bow raked forward (row 25) and a white bottom (row 26), with a white spray plume trailing behind (9 / 6 / 3 px on rows 26 / 25 / 24, fading out). No helm or windshield. Fast: 1 px every 150 ms, about 13 s across including the plume. It runs out left, **turns around off-panel**, waits about 4 s, and comes back heading right; one round trip of about 30 s.
 - Both sit entirely above the text rows, so they never hide behind it; they pass in front of the pier and wheel and are drawn from the board's clock, so no fetch is needed.
 - **When:** sun above 0°, no rain, snow, fog or thunderstorm, and 40°F or warmer. The server sends `boats` true or false.

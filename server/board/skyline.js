@@ -44,7 +44,9 @@ const KEYS = [
   { el: 1, sky: [[0, '#1a1440'], [9, '#5a2a5a'], [17, '#c0503a'], [23, '#f08a30'], [25, '#ffb848']], water: ['#3a2030', '#2a1424', '#7a3a3a'] }, // sunset
   { el: -3, sky: [[0, '#0e1040'], [12, '#30285e'], [20, '#80406a'], [25, '#c86a50']], water: ['#201830', '#140e22', '#4a3048'] },             // dusk
   { el: -6, sky: [[0, '#06103a'], [18, '#22306a'], [25, '#4a4a88']], water: ['#141a3a', '#0c1028', '#283060'] },                             // end of civil twilight
-  { el: -10, sky: [[0, '#000006'], [25, '#0c1430']], water: ['#030816', '#02050f', '#0e1a36'] },                                              // night
+  // Night: pure blue at panel levels 4-10 (was 0-3, which banded black to
+  // blue); one channel only, so the steps never shift hue.
+  { el: -10, sky: [[0, '#000034'], [25, '#000049']], water: ['#030816', '#02050f', '#0e1a36'] },                                              // night
 ];
 function clearSky(el) {
   if (el >= KEYS[0].el) return KEYS[0];
@@ -56,20 +58,27 @@ function clearSky(el) {
 }
 
 // ---- other weather: a day and a night look, blended across 1° to -6° ----
-// The night snow sky (city light off the snow clouds) stays well above the
-// panel's bottom levels, a warm grey whose channels step nearly together: a
-// dimmer one (levels 0-5) broke into black, magenta and red bands on the board.
+// Night colors follow one rule for the panel (S3 night curve, gamma 2.6):
+// every channel is either off or at level 3 or more, and dark colors stay
+// near neutral so the channels step together. Below that, a grey breaks into
+// black, magenta and red bands (each channel rounds to a whole level on a
+// different row) and the lowest levels are the first to go unsteady when the
+// board dims. Night skies: overcast 3-8 (the city's glow on the clouds), rain
+// 3-6, storm 3-5 (darkest, so lightning stands out), fog a flat 7, snow 5-15
+// with the lake tinted toward it (4-3, ripples 6). Cloud decks run 3 (thick)
+// to the sky's brightest; rain and storm by day keep the same floor. The
+// other night water stays dark (its ripples are meant to be faint).
 const LOOKS = {
   overcast: { day: { sky: [[0, '#4a525e'], [25, '#6a727e']], water: ['#262e38', '#1c222a', '#38424e'] },
-    night: { sky: [[0, '#0c0a0e'], [25, '#2a2226']], water: ['#08070a', '#050406', '#141218'] } },
-  rain: { day: { sky: [[0, '#262c34'], [25, '#3c444e']], water: ['#141c26', '#0e141c', '#222c3a'] },
-    night: { sky: [[0, '#08080e'], [25, '#1e1a24']], water: ['#06070c', '#040508', '#10121c'] } },
+    night: { sky: [[0, '#2e2e2e'], [25, '#434040']], water: ['#08070a', '#050406', '#141218'] } },
+  rain: { day: { sky: [[0, '#2e3238'], [25, '#3c444e']], water: ['#141c26', '#0e141c', '#222c3a'] },
+    night: { sky: [[0, '#2e2e2e'], [25, '#3c3c40']], water: ['#06070c', '#040508', '#10121c'] } },
   snow: { day: { sky: [[0, '#5a606a'], [25, '#7c828c']], water: ['#2c323a', '#22272e', '#3c444e'], roof: '#c8ced8' },
-    night: { sky: [[0, '#3a3436'], [25, '#564a4c']], water: ['#0c0a0e', '#08070a', '#1a1620'], roof: '#7a7280' } },
+    night: { sky: [[0, '#3a3436'], [25, '#564a4c']], water: ['#342e2e', '#2e2e2e', '#3c3838'], roof: '#7a7280' } },
   fog: { day: { sky: [[0, '#747a82'], [25, '#747a82']], water: ['#5a6068', '#4e545c', '#6a7078'] },
-    night: { sky: [[0, '#14161c'], [25, '#14161c']], water: ['#0c0e14', '#08090e', '#181b22'] } },
-  storm: { day: { sky: [[0, '#1c2028'], [25, '#30363e']], water: ['#10161e', '#0a0e14', '#1c2430'] },
-    night: { sky: [[0, '#0a0a14'], [25, '#1a1626']], water: ['#05050a', '#030306', '#10101a'] } },
+    night: { sky: [[0, '#404043'], [25, '#404043']], water: ['#0c0e14', '#08090e', '#181b22'] } },
+  storm: { day: { sky: [[0, '#2e2e34'], [25, '#30363e']], water: ['#10161e', '#0a0e14', '#1c2430'] },
+    night: { sky: [[0, '#2e2e2e'], [25, '#343438']], water: ['#05050a', '#030306', '#10101a'] } },
 };
 const CLEAR_FAMILY = new Set(['clear', 'partly', 'mostly']);
 
@@ -107,9 +116,9 @@ const WISP_KEYS = [[6, '#eef2f8'], [1, '#ffc8a8'], [-3, '#8a6a80'], [-6, '#4a404
 const STRIPS = {
   partly: { id: 'p1', a: [35, 70] },
   mostly: { id: 'm1', a: [38, 72] },
-  overcast: { id: 'o1', day: ['#78808c', '#3e4652'], night: ['#3a3034', '#141016'] },
-  rain: { id: 'r1', day: ['#525a66', '#1e232a'], night: ['#2a2630', '#0e0c12'] },
-  storm: { id: 's1', day: ['#3a3e4a', '#14161c'], night: ['#2a2638', '#08080e'] },
+  overcast: { id: 'o1', day: ['#78808c', '#3e4652'], night: ['#464343', '#2e2e2e'] },
+  rain: { id: 'r1', day: ['#525a66', '#2e3034'], night: ['#3c3c40', '#2e2e2e'] },
+  storm: { id: 's1', day: ['#3a3e4a', '#2e2e32'], night: ['#3c3843', '#2e2e2e'] },
 };
 function keyed(keys, el) {
   if (el >= keys[0][0]) return keys[0][1];

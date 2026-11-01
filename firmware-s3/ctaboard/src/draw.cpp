@@ -2178,7 +2178,7 @@ static Geometry build() {
     double dx = x + 0.5 - CX, dy = y + 0.5 - CY;
     bool dup = false;
     for (const Star &s : g.stars) dup = dup || (s.x == x && s.y == y);
-    if (g.isB(x, y) || (x > 35 && x < 49 && y < 11) || dx * dx + dy * dy < 90.25 || dup) continue;
+    if (g.isB(x, y) || (x > 35 && x < 49 && y < 11) || (x >= 50 && x <= 55 && y < 10) || dx * dx + dy * dy < 90.25 || dup) continue;  // not between the Hancock antennas
     g.stars.push_back({x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 == 1, ih(i, 5, 3) % 1000, pers[g.stars.size() % 3]});
   }
   g.legs = cover([](double x, double y) {
@@ -2208,8 +2208,8 @@ const RGB WHEEL_NIGHT = hexc(0x4a4a66), PIER_DAY0 = hexc(0x6a6460), PIER_DAY1 = 
           PIER_NIGHT1 = hexc(0x14121a), PIER_BULB = hexc(0xc09050), WIN_DIM = hexc(0x8a5c20), WIN_BRIGHT = hexc(0xffb050),
           BEACON0 = hexc(0x401010), BEACON1 = hexc(0xff2020), MOON = hexc(0xa89c70), RAIN_DAY0 = hexc(0x5a7aaa),
           RAIN_DAY1 = hexc(0x3a5070), RAIN_NIGHT0 = hexc(0x2c4468), RAIN_NIGHT1 = hexc(0x1e3050), SNOW0 = hexc(0x8a909c),
-          SNOW1 = hexc(0xe8ecf2), SAIL = hexc(0xe8ecf0), HULL0 = hexc(0x8a4a24), HULL1 = hexc(0x5a2e16), SPRAY = hexc(0xf4f8fc),
-          GLOW = hexc(0x8a80b0), BOLT_SOFT = hexc(0xb8b0e8), STAR_BRIGHT = hexc(0xffffff), STAR_DIM = hexc(0x5a6070);
+          SNOW1 = hexc(0xe8ecf2), SAIL = hexc(0xe8ecf0), HULL0 = hexc(0xc02828), HULL1 = hexc(0x7a1818), SPRAY = hexc(0xf4f8fc),
+          GLOW = hexc(0x8a80b0), BOLT_SOFT = hexc(0xb8b0e8), STAR_BRIGHT = hexc(0xa8aebc), STAR_DIM = hexc(0x5a6070);
 const char *const SEADOG[3] = {"..pqpqpqpqpqp.", "YYYYYYYYYYYYYY", ".OOOOOOOOOOOO."};
 const char *const SAILS[4] = {"..#...", "..##..", "..###.", "..####"};
 const int BOLT[][2] = {{21, 0}, {21, 1}, {20, 2}, {21, 3}, {22, 3}, {23, 3}, {23, 4}, {24, 5}, {23, 6}, {24, 7}, {25, 7}, {25, 8}, {25, 9}};
@@ -2397,7 +2397,7 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       for (int x = 0; x < 64; x++) {
         if (G.role[y * 64 + x]) continue;
         double ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = std::sqrt(ex * ex + ey * ey);
-        double a = lv * 0.7 * (1 - sstep01(0.3, 1, d));
+        double a = lv * (0.35 + 0.45 * (1 - sstep01(0.3, 1, d)));  // whole sky 35%, the patch 80%
         if (a > 0.01) f.set(x, y, mix_rgb(f.get(x, y), sky::GLOW, a));
       }
     auto put = [&](int x, int y, RGB c) {
@@ -2472,13 +2472,15 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       double rem = std::fmod(ms, fall), fr = rem / fall;
       long long step = (long long)((ms - rem) / fall);
       for (int i = 0; i < n; i++) {
-        int hy = (int)((ih(i, 32, 4) % (S + 1) + step) % (S + 1));
+        int land = S + 1 + (int)(ih(i, 33, 4) % (31 - S)), cyc = land + 1;  // falls to its own row of water
+        int hy = (int)((ih(i, 32, 4) % cyc + step) % cyc);
         int hx = (int)fmod_floor((long long)(ih(i, 31, 4) % 64) + sl * (step % 64), 64);
         for (int j = -1; j <= 1; j++) {
           int y = hy + j;
           double d = fr - j;
-          if (y < 0 || y > S) continue;
+          if (y < 0 || y > land) continue;
           int x = (int)fmod_floor((long long)(hx + sl * j), 64);
+          if (quiet(x, y)) continue;
           RGB c = d <= 0 ? c1 : d <= 1 ? mix_rgb(c1, c2, d) : c2;
           double a = d <= 0 ? 1 + d : d <= 1 ? 1 : 2 - d;
           if (a > 0) f.set(x, y, mix_rgb(f.get(x, y), c, a));
@@ -2487,9 +2489,11 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
     } else {
       long long step = (long long)std::floor(ms / (fall * 3.5));
       for (int i = 0; i < n; i++) {
-        int y = (int)((ih(i, 22, 4) % (S + 1) + step) % (S + 1));
+        int cyc = S + 2 + (int)(ih(i, 25, 4) % (31 - S));
+        int y = (int)((ih(i, 22, 4) % cyc + step) % cyc);
         long long side = fmod_floor(fdiv((long long)ms + (long long)(ih(i, 23, 4) % 2000), 2000), 2);
         int x = (int)((ih(i, 21, 4) % 64 + side) % 64);
+        if (quiet(x, y)) continue;
         f.fill(x, y, 1, 1, ih(i, 24, 4) % 10 < 4 ? sky::SNOW1 : sky::SNOW0);
       }
     }
