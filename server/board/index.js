@@ -15,6 +15,7 @@ const { createRadar, packFrame } = require('./radar');
 const { createTestRadar } = require('./test-radar');
 const { createMlb, prioritize } = require('./mlb');
 const { createLogos } = require('./mlb-logos');
+const { createFirmware, FirmwareError, CHANNELS: FW_CHANNELS, MAX_BYTES: MAX_FIRMWARE } = require('./firmware');
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
 const fs = require('fs');
@@ -30,7 +31,7 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo']);
+const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo', 'firmware']);
 const MAX_SHEET = 8 * 1024 * 1024; // uploaded logo sheet (PNG)
 
 function send(res, status, body) {
@@ -123,6 +124,7 @@ function createBoard({
   radar = null,
   mlb = null,
   logos = null,   // prepared team logos (mlb-logos.js); default beside the board state
+  firmware = null, // OTA builds (firmware.js); default beside the board state
   alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
   stations = require('./stations.json'),
   log = console,
@@ -156,6 +158,9 @@ function createBoard({
   const testRadar = createTestRadar();
   if (!mlb) mlb = createMlb({ log }).start();
   if (!logos) logos = createLogos({ dir: resolveDir(log), log });
+  if (!firmware) firmware = createFirmware({ dir: path.dirname(store.file), log });
+  // Builds boards are pinned to (state `fw`): never pruned or deleted.
+  const pinnedBuilds = () => store.ids().map((id) => store.get(id).fw).filter((f) => f && !FW_CHANNELS.includes(f) && f !== 'off');
 
   // Logo and band layouts: each side gets its band color (the logo's, or the
   // team color) and, in the logo layout, its logo id (fetched once by the
@@ -249,6 +254,9 @@ function createBoard({
     const safe = (v) => typeof v === 'string' && /^[A-Za-z0-9_:]{1,64}$/.test(v);
     if (safe(q.he)) h.lastError = q.he;
     if (safe(q.hs)) h.started = q.hs;
+    if (safe(q.hd)) h.hardware = q.hd;
+    if (safe(q.hv)) h.firmware = q.hv;
+    if (safe(q.hx)) h.ota = q.hx;
     const prev = healthOf.get(id);
     // The crash that ended a run, sent by the run after it. Kept after
     // later restarts that weren't crashes, until another crash replaces it.
@@ -266,6 +274,23 @@ function createBoard({
   // Last transit view per board and station, for the chrono hysteresis.
   // In memory only: after a restart the view is chosen fresh.
   const views = new Map();
+
+  // The control page's board list: who each board is, where it points, and
+  // when it last checked in (null: not since the server started).
+  const seenAt = new Map(); // board id -> last version check or update, epoch s
+  function boardList() {
+    return store.ids().map((id) => {
+      const b = store.get(id);
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, seen: seenAt.get(id) ?? null };
+    });
+  }
+  // A removed board's live state (health, test alerts, chrono views).
+  function forget(id) {
+    healthOf.delete(id);
+    seenAt.delete(id);
+    tests.delete(id);
+    for (const k of [...views.keys()]) if (k.startsWith(`${id}:`)) views.delete(k);
+  }
 
   async function update(board, id, boot, preview = {}) {
     if (boot) board = store.boot(id);
@@ -418,15 +443,36 @@ function createBoard({
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
       noteHealth(String(parsed.query.b), parsed.query, nowSecs());
-      return send(res, 200, { v: board.v, now: nowSecs() });
+      seenAt.set(String(parsed.query.b), nowSecs());
+      // An OTA offer when this S3 should run another build (firmware.js).
+      let fw = null;
+      try { fw = firmware.offer(board, parsed.query); } catch (e) { log.error('[board] firmware offer:', e.message); }
+      return send(res, 200, fw ? { v: board.v, now: nowSecs(), fw } : { v: board.v, now: nowSecs() });
+    }
+
+    // An OTA build (contract: "Firmware"): streamed, exactly `size` bytes.
+    if (first === 'firmware' && rest.length === 0) {
+      if (method !== 'GET') return send(res, 405, { err: 'method' });
+      if (!authed(req)) return send(res, 401, { err: 'bad_token' });
+      if (!store.get(String(parsed.query.b || ''))) return send(res, 404, { err: 'unknown_board' });
+      const f = firmware.file(String(parsed.query.v || ''));
+      if (!f) return send(res, 404, { err: 'unknown_build' });
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': f.size, 'Cache-Control': 'no-store' });
+      const stream = fs.createReadStream(f.path);
+      stream.on('error', (e) => { log.error('[board] firmware read failed:', e.message); res.destroy(); });
+      stream.pipe(res);
+      return;
     }
 
     if (first === 'update' && rest.length === 0) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
       if (!authed(req)) return send(res, 401, { err: 'bad_token' });
       const id = String(parsed.query.b || '');
-      const board = store.get(id);
+      // A board ID the server hasn't seen (a newly flashed board) is added
+      // as a copy of the default board, so a second board needs no setup here.
+      const board = store.get(id) || store.register(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
+      seenAt.set(id, nowSecs());
       const body = await update(board, id, parsed.query.boot === '1');
       const shown = SCREENS.includes(parsed.query.s) ? parsed.query.s : body.screen;
       return send(res, 200, sectionsFor(body, shown));
@@ -505,6 +551,42 @@ function createBoard({
           return { key, ln: key.slice(0, i), name: key.slice(i + 1), live: live.has(key) ? 1 : 0 };
         }));
       }
+      // Boards: GET the list; POST {id, from?, label?} to add one (a copy of
+      // board `from`, or the defaults); DELETE ?b=<id> to remove one.
+      if (sub === 'api/boards') {
+        if (method === 'GET') return send(res, 200, boardList());
+        try {
+          if (method === 'POST') {
+            const body = await readJson(req);
+            if (!body || typeof body !== 'object') throw new ValidationError('body must be an object');
+            const from = body.from == null ? null : String(body.from);
+            store.create(String(body.id || ''), { from, label: body.label ?? '' });
+            return send(res, 200, boardList());
+          }
+          if (method === 'DELETE') {
+            const id = String(parsed.query.b || '');
+            if (!store.remove(id)) return send(res, 404, { err: 'unknown_board' });
+            forget(id);
+            return send(res, 200, boardList());
+          }
+        } catch (e) {
+          if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+          throw e;
+        }
+        return send(res, 405, { err: 'method' });
+      }
+      // Copy another board's settings onto this one (?b=<id>&from=<other>).
+      if (sub === 'api/boards/copy') {
+        if (method !== 'POST') return send(res, 405, { err: 'method' });
+        let board;
+        try { board = store.copy(String(parsed.query.b || ''), String(parsed.query.from || '')); }
+        catch (e) {
+          if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+          throw e;
+        }
+        if (!board) return send(res, 404, { err: 'unknown_board' });
+        return send(res, 200, board);
+      }
       if (sub === 'api/health') {
         if (method !== 'GET') return send(res, 405, { err: 'method' });
         return send(res, 200, Object.fromEntries(healthOf));
@@ -559,6 +641,36 @@ function createBoard({
           status = ab ? logos.uploadOne(ab, body, crop) : logos.uploadSheet(body);
         } catch (e) { return send(res, 400, { err: 'invalid', detail: e.message }); }
         return send(res, 200, status);
+      }
+      // OTA builds: GET the builds and channels; POST a .bin (raw body) to
+      // add one, with ?channel=beta|stable to point that channel at it;
+      // DELETE ?v=<build> to remove one.
+      if (sub === 'api/firmware') {
+        try {
+          if (method === 'GET') return send(res, 200, firmware.status());
+          if (method === 'POST') {
+            const body = await readBody(req, MAX_FIRMWARE + 64 * 1024);
+            const channel = parsed.query.channel ? String(parsed.query.channel) : null;
+            return send(res, 200, firmware.upload(body, { channel, pinned: pinnedBuilds() }));
+          }
+          if (method === 'DELETE') return send(res, 200, firmware.remove(String(parsed.query.v || ''), pinnedBuilds()));
+        } catch (e) {
+          if (e instanceof FirmwareError || e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+          throw e;
+        }
+        return send(res, 405, { err: 'method' });
+      }
+      // Point a channel at a build: {channel: beta|stable, v: <build> | null}.
+      if (sub === 'api/firmware/channel') {
+        if (method !== 'POST') return send(res, 405, { err: 'method' });
+        try {
+          const body = await readJson(req);
+          if (!body || typeof body !== 'object') throw new ValidationError('body must be an object');
+          return send(res, 200, firmware.setChannel(String(body.channel || ''), body.v == null ? null : String(body.v)));
+        } catch (e) {
+          if (e instanceof FirmwareError || e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+          throw e;
+        }
       }
       // A logo crop for the simulator (the path is the credential).
       if (rest[0] === 'api' && rest[1] === 'logo' && rest.length === 3) {

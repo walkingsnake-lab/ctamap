@@ -1,5 +1,10 @@
 // Board settings. Copy this file to secrets.h (same folder) and fill it in.
 // secrets.h is never committed (.gitignore).
+//
+// A build with secrets.h is a setup build: flashed over USB, it saves these
+// settings to the board's flash, where they stay. OTA updates install the
+// generic build (no secrets.h), which reads them from flash. To change a
+// setting, edit this file and flash a setup build over USB again.
 
 #pragma once
 
@@ -13,6 +18,8 @@
   }
 
 #define BOARD_URL "https://ctamap.fly.dev"
+// One ID per physical board: boards sharing an ID show the same thing. A new
+// ID adds itself on the server (as a copy of "home") the first time it connects.
 #define BOARD_ID "home"
 // Same value as the BOARD_TOKEN Fly secret.
 #define BOARD_TOKEN "..."
@@ -25,6 +32,11 @@
 // one for a panel shifts the picture a pixel and shows stray pixels; the
 // default shifted this P3 panel 1 px left, so this is 0. Try 1 if yours is off.
 #define MATRIX_CLK_PHASE 0
+
+// Which color each data line (R, G, B) lights on your panel. "RGB" for most;
+// if green shows as blue and blue as green (some P2.5 panels), use "RBG".
+// Other swaps: red/green "GRB", red/blue "BGR".
+#define MATRIX_COLOR_ORDER "RGB"
 
 // Draw each frame into a back buffer and flip it in (1), or draw straight
 // onto the panel (0). Try 0 if frames still glitch with the clock edge right.

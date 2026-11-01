@@ -59,7 +59,14 @@
   #status { position: sticky; bottom: 12px; margin-top: 16px; padding: 10px 12px; border-radius: 9px; background: #1c1c1c; border: 1px solid #333; font-size: 14px; min-height: 20px; }
   #status:empty { display: none; }
   #status.err { color: var(--err); border-color: #5a2a2a; }
-  #boardPick { margin-bottom: 4px; }
+  #boardPick { margin-bottom: 8px; }
+  input#label { text-transform: none; }
+  .danger { color: var(--err); border-color: #5a2a2a; }
+  #fwBuilds li { flex-wrap: wrap; }
+  #fwBuilds li .nm { text-transform: none; letter-spacing: 0; }
+  #fwBuilds li button { width: auto; padding: 0 10px; font-size: 14px; }
+  #fwBuilds li button[aria-pressed="true"] { background: var(--accent); color: #111; border-color: var(--accent); }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); }
   /* Settings tabs: one screen's settings at a time. */
   .tabs { display: flex; gap: 4px; margin-top: 18px; overflow-x: auto; scrollbar-width: none; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; }
   .tabs::-webkit-scrollbar { display: none; }
@@ -85,7 +92,7 @@
     <h1>Board</h1>
     <a id="simLink" href="sim">Simulator</a>
   </header>
-  <select id="boardPick" hidden aria-label="Board"></select>
+  <select id="boardPick" aria-label="Board"></select>
   <img id="preview" class="preview" alt="What the board is showing">
   <p class="caption" id="caption"></p>
 
@@ -163,7 +170,7 @@
     <button role="tab" data-tab="ticker">Ticker</button>
     <button role="tab" data-tab="weather">Weather</button>
     <button role="tab" data-tab="baseball">Baseball</button>
-    <button role="tab" data-tab="health">Health</button>
+    <button role="tab" data-tab="health">Board</button>
   </nav>
 
   <section data-tab="weather">
@@ -293,6 +300,30 @@
   </section>
 
   <section data-tab="health">
+    <h2>This board</h2>
+    <label class="field" for="label">Name</label>
+    <input type="text" id="label" maxlength="24" autocomplete="off" placeholder="e.g. Kitchen">
+    <div class="row"><span>Board ID</span><code id="boardIdShow"></code></div>
+    <p class="hint" id="idHint"></p>
+    <div class="row"><span>Copy settings from</span>
+      <select id="copyFrom" aria-label="Copy settings from" style="width:auto"></select></div>
+    <p class="hint">Copies every setting except the name. Brightness goes back to Auto.</p>
+    <div class="row"><span></span><button class="small danger" id="delBoard">Delete board</button></div>
+  </section>
+
+  <section data-tab="health">
+    <h2>Firmware updates</h2>
+    <div class="row"><span>Running</span><code id="fwRunning">–</code></div>
+    <div class="row"><span>Updates</span><select id="fwTrack" aria-label="Updates" style="width:auto"></select></div>
+    <p class="hint" id="fwHint"></p>
+    <div class="row" id="fwRetryRow" hidden><span class="hint" id="fwRetryText" style="margin:0"></span><button class="small" id="fwRetry">Try again</button></div>
+    <label class="field">Builds (shared by every board)</label>
+    <ul id="fwBuilds"></ul>
+    <div class="row"><span class="nw">Add a build</span><label class="small file">Upload .bin<input type="file" id="fwFile" accept=".bin,application/octet-stream"></label></div>
+    <p class="hint">ctaboard.ino.bin from a build without secrets.h, or the CI build. A new build goes to Beta; make it Stable once it has run well.</p>
+  </section>
+
+  <section data-tab="health">
     <h2>Board health</h2>
     <div id="health"><p class="hint">No report yet. The board sends one about once a minute.</p></div>
   </section>
@@ -307,8 +338,13 @@
   const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
   const LINE_NAME = { RD: 'Red', BL: 'Blue', BR: 'Brown', GR: 'Green', OR: 'Orange', PR: 'Purple', PK: 'Pink', YL: 'Yellow' };
   const params = new URLSearchParams(location.search);
-  let boardId = params.get('b') || 'home';
-  let board = null, stations = [], dests = [], hasWx = false, hidden = [];
+  // Which board: ?b= (a home-screen shortcut per board), else the last one
+  // used on this device, else the first board (settled in init).
+  const lastBoard = () => { try { return localStorage.getItem('board'); } catch (e) { return null; } };
+  let boardId = params.get('b') || lastBoard();
+  let board = null, boards = [], stations = [], dests = [], hasWx = false, hidden = [];
+  const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
+  const go = (id) => { const q = new URLSearchParams(location.search); q.set('b', id); location.search = q; };
 
   let statusTimer = null;
   function setStatus(msg, err) {
@@ -333,6 +369,7 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch),
       });
       if (board.station.mapid !== before) await loadDests();
+      if (patch.label !== undefined || patch.station) await loadBoards();
       render();
       setStatus('Saved. The board picks it up within about 15 seconds.');
       refreshPreview();
@@ -397,8 +434,34 @@
   // The weather row only takes space when there's weather to show.
   function maxRows() { return (board.showHeader ? 4 : 5) - (board.showWeather && hasWx ? 2 : 0); }
 
+  // ---- boards ----
+  const boardName = (b) => b.label || b.id;
+  function renderBoards() {
+    const now = Date.now() / 1000;
+    const opts = boards.map((b) => new Option(`${boardName(b)} · ${b.station}${b.seen && now - b.seen > 180 ? ' · offline' : ''}`, b.id));
+    opts.push(new Option('+ Add a board…', '__add'));
+    $('boardPick').replaceChildren(...opts);
+    $('boardPick').value = boardId;
+    if (document.activeElement !== $('label')) $('label').value = board.label || '';
+    $('boardIdShow').textContent = boardId;
+    const me = boards.find((b) => b.id === boardId);
+    $('idHint').textContent = (me && me.seen ? '' : 'No board has checked in with this ID yet. ')
+      + `To point a board here, set BOARD_ID to "${boardId}" in its secrets.h (S3) or settings.toml (M4). A board with a new ID adds itself as a copy of "home".`;
+    const others = boards.filter((b) => b.id !== boardId);
+    $('copyFrom').closest('.row').hidden = !others.length;
+    $('copyFrom').closest('.row').nextElementSibling.hidden = !others.length;
+    $('copyFrom').replaceChildren(new Option('Choose…', ''), ...others.map((b) => new Option(boardName(b), b.id)));
+    $('delBoard').closest('.row').hidden = !others.length;
+  }
+  async function loadBoards() {
+    try { boards = await api('api/boards'); } catch (e) { return; }
+    if (board) renderBoards();
+  }
+
   function render() {
+    renderBoards();
     if (!board) return;
+    renderFirmware();
     pressed('screen', board.screen);
     const auto = board.screen === 'auto';
     $('autoOpts').hidden = !auto;
@@ -634,10 +697,124 @@
   $('radarCond').addEventListener('change', (e) => save({ radarCond: e.target.checked }));
   $('radarBright').addEventListener('change', (e) => save({ radarBright: Number(e.target.value) }));
   $('allDest').addEventListener('change', (e) => save({ rows: e.target.checked ? [] : dests.map((d) => d.key) }));
-  $('boardPick').addEventListener('change', (e) => {
-    boardId = e.target.value;
-    const q = new URLSearchParams(location.search); q.set('b', boardId);
-    location.search = q;
+  $('boardPick').addEventListener('change', async (e) => {
+    if (e.target.value !== '__add') return go(e.target.value);
+    e.target.value = boardId;
+    const id = (prompt('New board ID (a-z, 0-9, -). It starts as a copy of this board.') || '').trim().toLowerCase();
+    if (!id) return;
+    if (!BOARD_ID_RE.test(id)) return setStatus('Board IDs are 1-32 characters of a-z, 0-9, and -.', true);
+    try {
+      await api('api/boards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, from: boardId }) });
+      go(id);
+    } catch (err) { setStatus(err.message, true); }
+  });
+  $('label').addEventListener('change', (e) => save({ label: e.target.value }));
+  $('label').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+  $('copyFrom').addEventListener('change', async (e) => {
+    const from = e.target.value;
+    if (!from) return;
+    const src = boards.find((b) => b.id === from);
+    if (!confirm(`Replace this board's settings with ${boardName(src)}'s?`)) { e.target.value = ''; return; }
+    setStatus('Saving…');
+    try {
+      board = await api(`api/boards/copy?b=${enc(boardId)}&from=${enc(from)}`, { method: 'POST' });
+      await Promise.all([loadDests(), loadBoards()]);
+      render();
+      setStatus('Copied. The board picks it up within about 15 seconds.');
+      refreshPreview();
+    } catch (err) { render(); setStatus(err.message, true); }
+  });
+  $('delBoard').addEventListener('click', async () => {
+    if (!confirm(`Delete board "${boardName({ id: boardId, label: board.label })}"? If a board is still running with this ID, it adds itself back as a copy of "home".`)) return;
+    try {
+      const left = await api(`api/boards?b=${enc(boardId)}`, { method: 'DELETE' });
+      try { localStorage.removeItem('board'); } catch (e) { /* private mode */ }
+      go(left[0].id);
+    } catch (err) { setStatus(err.message, true); }
+  });
+
+  // ---- firmware updates (OTA) ----
+  let fwStatus = { builds: [], channels: {} };
+  let health = null;  // this board's latest report
+  const fwDate = (t) => new Date(t * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  function renderFirmware() {
+    if (!board) return;
+    const ch = fwStatus.channels || {};
+    const running = health && health.firmware;
+    $('fwRunning').textContent = running || '–';
+    const track = board.fw || 'stable';
+    const opts = [
+      new Option(`Stable${ch.stable ? ` (${ch.stable})` : ' (none yet)'}`, 'stable'),
+      new Option(`Beta${ch.beta ? ` (${ch.beta})` : ' (none yet)'}`, 'beta'),
+      ...fwStatus.builds.map((b) => new Option(`Stay on ${b.v}`, b.v)),
+      new Option('Off', 'off'),
+    ];
+    if (!opts.some((o) => o.value === track)) opts.push(new Option(`Stay on ${track} (deleted)`, track));
+    $('fwTrack').replaceChildren(...opts);
+    $('fwTrack').value = track;
+    const ota = (health && health.ota) || '';
+    const [kind, what] = [ota.split(':')[0], ota.split(':').slice(1).join(':')];
+    let hint;
+    if (health && health.hardware && health.hardware !== 'adafruit_matrixportal_s3') hint = 'Only the Matrix Portal S3 updates over the air.';
+    else if (running && !/^[0-9a-f]{7,40}$/.test(running)) hint = 'Running a test build (unstamped or uncommitted): it isn\'t updated automatically.';
+    else if (kind === 'trial') hint = `Trying ${what}: it's kept once it reaches the server and runs a minute, and rolled back if it can't.`;
+    else if (kind === 'error') hint = `The last install failed (${what}). The board tries again every 10 minutes.`;
+    else if (track === 'off') hint = 'This board keeps whatever it runs now.';
+    else hint = 'The board installs a new build within a minute of it being offered, between animations. It shows UPDATING while it downloads.';
+    $('fwHint').textContent = hint;
+    $('fwRetryRow').hidden = kind !== 'rolledback';
+    $('fwRetryText').textContent = `${what} was rolled back: it couldn't reach the server, or kept restarting.`;
+    $('fwBuilds').replaceChildren(...fwStatus.builds.map((b) => {
+      const li = document.createElement('li');
+      const nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = b.v;
+      const sm = document.createElement('small');
+      sm.textContent = `${fwDate(b.at)} · ${(b.size / 1024).toFixed(0)} KB`;
+      nm.append(sm);
+      const btn = (label, onClick, pressedNow) => {
+        const x = document.createElement('button');
+        x.textContent = label;
+        if (pressedNow != null) x.setAttribute('aria-pressed', String(pressedNow));
+        x.addEventListener('click', onClick);
+        return x;
+      };
+      const setCh = (c) => async () => {
+        try { fwStatus = await api('api/firmware/channel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: c, v: ch[c] === b.v ? null : b.v }) }); renderFirmware(); setStatus('Saved. Boards on that channel update within a minute.'); }
+        catch (err) { setStatus(err.message, true); }
+      };
+      const del = btn('✕', async () => {
+        if (!confirm(`Delete build ${b.v}?`)) return;
+        try { fwStatus = await api('api/firmware?v=' + enc(b.v), { method: 'DELETE' }); renderFirmware(); }
+        catch (err) { setStatus(err.message, true); }
+      });
+      del.setAttribute('aria-label', `Delete ${b.v}`);
+      li.append(nm, btn('Beta', setCh('beta'), ch.beta === b.v), btn('Stable', setCh('stable'), ch.stable === b.v), del);
+      return li;
+    }));
+    if (!fwStatus.builds.length) {
+      const li = document.createElement('li');
+      li.className = 'off';
+      li.textContent = 'No builds uploaded yet.';
+      $('fwBuilds').replaceChildren(li);
+    }
+  }
+  async function loadFirmware() {
+    try { fwStatus = await api('api/firmware'); } catch (e) { return; }
+    renderFirmware();
+  }
+  $('fwTrack').addEventListener('change', (e) => save({ fw: e.target.value }));
+  $('fwRetry').addEventListener('click', () => save({ fwRetry: (board.fwRetry || 0) + 1 }));
+  $('fwFile').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setStatus('Uploading build…');
+    try {
+      fwStatus = await api('api/firmware?channel=beta', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+      renderFirmware();
+      setStatus(`Uploaded ${fwStatus.channels.beta} to Beta.`);
+    } catch (err) { setStatus(err.message, true); }
   });
 
   // ---- health ----
@@ -651,12 +828,17 @@
     let all;
     try { all = await api('api/health'); } catch (e) { return; }
     const h = all[boardId];
+    health = h || null;
+    renderFirmware();
     if (!h) return;
     const now = Date.now() / 1000;
     const late = now - h.at > 180;
     const kb = (b) => `${(b / 1024).toFixed(1)} KB`;
+    const HARDWARE = { adafruit_matrixportal_s3: 'Matrix Portal S3', matrixportal_m4: 'Matrix Portal M4' };
     const rows = [
       ['Last report', ago(now - h.at) + ' ago' + (late ? ' (offline?)' : '')],
+      h.hardware && ['Board', HARDWARE[h.hardware] || h.hardware],
+      h.firmware && ['Firmware', h.firmware === 'dev' ? 'unstamped build' : h.firmware.replace('_dirty', ' (uncommitted changes)')],
       ['Running for', ago(h.uptime)],
       h.memFree != null && ['Free memory', kb(h.memFree) + (h.minMem != null ? ` (lowest ${kb(h.minMem)})` : '')],
       h.largestBlock != null && ['Largest free block', kb(h.largestBlock)],
@@ -682,25 +864,30 @@
 
   // ---- start ----
   async function init() {
-    $('simLink').href = 'sim?b=' + enc(boardId);
-    const [all, list] = await Promise.all([api('api/state'), api('api/stations')]);
+    const [all, list, bl] = await Promise.all([api('api/state'), api('api/stations'), api('api/boards')]);
     stations = list;
+    boards = bl;
     $('station').replaceChildren(...stations.map((s) => new Option(s.desc, s.mapid)));
-    const ids = Object.keys(all.boards || {});
-    if (ids.length > 1) {
-      $('boardPick').hidden = false;
-      $('boardPick').replaceChildren(...ids.map((id) => new Option(`Board: ${id}`, id)));
+    const all_ = all.boards || {};
+    // A remembered board that's since been deleted falls back to the first.
+    if (!boardId || (!params.get('b') && !all_[boardId])) boardId = Object.keys(all_)[0];
+    $('simLink').href = 'sim?b=' + enc(boardId);
+    board = all_[boardId];
+    if (!board) {
+      $('boardPick').replaceChildren(...boards.map((b) => new Option(boardName(b), b.id)), new Option(`(no board "${boardId}")`, boardId));
       $('boardPick').value = boardId;
+      setStatus(`No board named "${boardId}". Pick one above.`, true);
+      return;
     }
-    board = all.boards[boardId];
-    if (!board) { setStatus(`No board named "${boardId}".`, true); return; }
+    try { localStorage.setItem('board', boardId); } catch (e) { /* private mode */ }
     await loadDests();
     render();
     refreshPreview();
     setInterval(refreshPreview, 10000);
     loadHealth();
-    setInterval(loadHealth, 30000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); } });
+    loadFirmware();
+    setInterval(() => { loadHealth(); loadBoards(); }, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); loadBoards(); } });
   }
   init().catch((e) => setStatus('Could not load: ' + e.message, true));
 })();

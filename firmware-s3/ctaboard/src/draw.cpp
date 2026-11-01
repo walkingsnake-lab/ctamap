@@ -2075,6 +2075,14 @@ void render_status(Frame &f, const std::string &kind, const std::string &detail)
   } else if (kind == "noserver") {
     center(f, FONT_5X7, U"NO SERVER", 13, C::red);
     center(f, FONT_SMALL, first(detail.empty() ? U"RETRYING" : d, 15), 22, C::grey);
+  } else if (kind == "updating") {
+    // OTA install (S3 only): detail is the percent downloaded.
+    center(f, FONT_5X7, U"UPDATING", 13, C::label);
+    center(f, FONT_SMALL, first(d, 4) + U"%", 22, C::amber);
+  } else if (kind == "nosetup") {
+    // No settings in flash (a generic build on a board never set up): detail says what's missing.
+    center(f, FONT_5X7, U"NO SETUP", 13, C::amber);
+    center(f, FONT_SMALL, U"SEE README", 22, C::grey);
   }
 }
 

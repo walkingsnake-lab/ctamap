@@ -244,3 +244,41 @@ test('knob: the ring opens categories; TRANSIT opens the transit screen last cho
   assert.throws(() => store.update('home', { transitScreen: 'ticker' }), ValidationError);
   assert.equal(store.select('nope', 'auto'), null);
 });
+
+test('boards: create copies or defaults, register copies home, remove keeps one', () => {
+  const dir = tmpDir();
+  const store = createStore({ dir, log: quiet });
+  store.update('home', { station: { mapid: '40380' }, bright: 30, label: '  Kitchen ' });
+  assert.equal(store.get('home').label, 'Kitchen');
+  const copy = store.create('desk', { from: 'home', label: 'Desk' });
+  assert.deepEqual([copy.station.mapid, copy.bright, copy.v, copy.label], ['40380', 'auto', 1, 'Desk']);
+  // A copy, not a shared object.
+  store.update('desk', { rows: ['BL:Forest'] });
+  assert.deepEqual(store.get('home').rows, []);
+  assert.equal(store.create('bare').station.mapid, '40100');
+  assert.throws(() => store.create('desk'), ValidationError);
+  assert.throws(() => store.create('Nope!'), ValidationError);
+  assert.throws(() => store.create('z', { from: 'missing' }), ValidationError);
+  // register: existing boards come back as is; new ones copy home.
+  assert.equal(store.register('desk'), store.get('desk'));
+  assert.equal(store.register('office').station.mapid, '40380');
+  assert.equal(store.register('Bad_ID'), null);
+  // Limit.
+  for (let i = store.ids().length; i < 8; i++) store.create(`b${i}`);
+  assert.equal(store.register('one-more'), null);
+  assert.throws(() => store.create('one-more'), /at most 8/);
+  // Remove; survives a restart.
+  assert.equal(store.remove('bare'), true);
+  assert.equal(store.remove('bare'), false);
+  const again = createStore({ dir, log: quiet });
+  assert.equal(again.get('bare'), null);
+  assert.equal(again.get('desk').label, 'Desk');
+  for (const id of again.ids().filter((i) => i !== 'home')) again.remove(id);
+  assert.throws(() => again.remove('home'), /only board/);
+});
+
+test('an older board without a label loads with an empty one', () => {
+  const dir = tmpDir();
+  fs.writeFileSync(path.join(dir, 'board-state.json'), JSON.stringify({ boards: { home: { v: 3, station: { mapid: '40100', name: 'MORSE' }, rows: [], screen: 'auto', bright: 'auto' } } }));
+  assert.equal(createStore({ dir, log: quiet }).get('home').label, '');
+});

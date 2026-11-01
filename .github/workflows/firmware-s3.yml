@@ -1,0 +1,69 @@
+# Builds the S3 firmware (firmware-s3/) the way the Arduino IDE does, without
+# secrets.h: the generic build that OTA updates install. Each run keeps the
+# .bin as an artifact (ctaboard-<commit>), ready to upload on the control
+# page's Board tab. Also catches firmware that no longer compiles.
+name: S3 firmware
+
+on:
+  push:
+    branches: [main]
+    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', '.github/workflows/firmware-s3.yml']
+  pull_request:
+    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', '.github/workflows/firmware-s3.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # README "Setting up": Adafruit MatrixPortal ESP32-S3, USB CDC On Boot
+      # enabled, the default TinyUF2 partitions (two 2 MB app slots for OTA).
+      FQBN: esp32:esp32:adafruit_matrixportal_esp32s3:CDCOnBoot=cdc,PartitionScheme=tinyuf2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The pushed commit itself (not a PR merge commit), so the stamp
+          # names a commit on a branch.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install the ESP32 core and libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib install "ESP32 HUB75 LED MATRIX PANEL DMA Display" "Adafruit GFX Library"
+          arduino-cli core list
+          arduino-cli lib list
+
+      - name: "Stamp and build (generic, no secrets.h)"
+        run: |
+          test ! -e firmware-s3/ctaboard/secrets.h
+          node scripts/stamp-firmware-version.js
+          arduino-cli compile --fqbn "$FQBN" --warnings default --output-dir build firmware-s3/ctaboard
+
+      - name: Check the build mark the server reads
+        id: mark
+        run: |
+          v=$(sed -n 's/.*FIRMWARE_VERSION "\(.*\)"/\1/p' firmware-s3/ctaboard/version.h)
+          grep -a -c "CTABOARD-BUILD:${v}:generic;" build/ctaboard.ino.bin
+          ls -l build/ctaboard.ino.bin
+          size=$(stat -c %s build/ctaboard.ino.bin)
+          test "$size" -le 2097152
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Built **$v**: ctaboard.ino.bin, $size bytes (app slot: 2097152)." >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ctaboard-${{ steps.mark.outputs.version }}
+          path: build/ctaboard.ino.bin
+          retention-days: 30
