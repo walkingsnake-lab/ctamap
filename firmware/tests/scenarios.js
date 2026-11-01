@@ -199,31 +199,39 @@ async function build() {
     add('rolls no-games clock', { ...nt, mlb: { games: [] } }, nums({ 'big.clock': '11:15' }).map((n) => ({ screen: 'baseball', nums: n })), undefined, undefined, s3);
     add('rolls weather strip temperature', hdr, nums({ 'wx.temp': '62°' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
     add('rolls weather strip temperature width change', hdr, nums({ 'wx.temp': '9°' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
-    const wxs = { icon: 'pcloudy_day', temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51, feels: 61, wind: 'NW 12', pop: 20 };
+    const wxs = { icon: 'pcloudy_day', temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51, feels: 61, wind: 'NW 12', pop: 20, rl: 1 };
     const wp = (w, extra) => ({ now: rt, tzo: tzOffset(rt), bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w, ...extra } });
-    add('rolls weather screen numbers', wp(wxs), nums({ 'wx.big': '62', 'wx.feels': 'FEELS 59°', 'wx.hl': 'H 68° L 51°', 'wx.pop': '10%' }).map((n) => ({ screen: 'weather', nums: n })), undefined, undefined, s3);
-    add('rolls weather screen numbers width change + shadow', wp({ ...wxs, temp: 100 }, { tempShadow: true }), nums({ 'wx.big': '99', 'wx.pop': '100%' }).map((n) => ({ screen: 'weather', nums: n })), undefined, undefined, s3);
+    add('rolls weather screen numbers', wp(wxs), nums({ 'wx.top': '62', 'wx.feels': '59°', 'wx.pop': '10%' }).map((n) => ({ screen: 'weather', nums: n })), undefined, undefined, s3);
+    add('rolls weather screen numbers width change + shadow', wp({ ...wxs, temp: 100 }, { tempShadow: true }), nums({ 'wx.top': '99', 'wx.pop': '100%' }).map((n) => ({ screen: 'weather', nums: n })), undefined, undefined, s3);
     const fd = [['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']].map(([d, hi, icon]) => ({ d, hi, icon }));
     add('rolls top bar temperature', wp({ ...wxs, days: fd }, { tempShadow: true }), nums({ 'wx.top': '62' }).map((n) => ({ screen: 'weather', nums: n })), undefined, undefined, s3);
   }
-  // Weather screen (radar screen with no frames): every warning, cold/hot
-  // extremes (minus bar, word skipped for 3-digit temps, high/low losing its
-  // degree signs), and a response without the extras.
+  // Weather screen conditions (radar screen with no frames; the readout,
+  // S3 only since the frozen M4 keeps the old layout): every warning, with
+  // and without the RAIN line (rl), cold/hot extremes, every sky color,
+  // celsius, the longest word, and a response without the extras.
   {
     const t = 1791140000;
-    const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
+    const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20, rl: 1 };
     const wxCases = [
       ['normal', wx, null],
+      ['no rain line', { ...wx, rl: undefined }, null],
+      ['rain line without pop', { ...wx, pop: null }, null],
       ['svr watch', wx, { kind: 'svr', lvl: 'watch' }],
       ['svr warning', wx, { kind: 'svr', lvl: 'warning' }],
       ['tor watch', wx, { kind: 'tor', lvl: 'watch' }],
       ['tor warning', wx, { kind: 'tor', lvl: 'warning' }],
-      ['cold', { icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -31, wind: 'NW 22', pop: 100 }, null],
-      ['hot', { icon: 'sun', temp: 101, word: 'PT CLOUDY', hi: 103, lo: 82, feels: 112, wind: 'CALM', pop: 0 }, null],
+      ['cold', { icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -31, wind: 'NW 22', pop: 100, rl: 1 }, null],
+      ['hot', { icon: 'sun', temp: 101, word: 'SUNNY', hi: 103, lo: 82, feels: 112, wind: 'CALM', pop: 0 }, null],
+      ['rain', { icon: 'rain', temp: 41, word: 'RAIN', hi: 44, lo: 38, feels: 34, wind: 'E 18', pop: 90, rl: 1 }, null],
+      ['ice', { icon: 'ice', temp: 31, word: 'FRZ RAIN', hi: 33, lo: 28, feels: 22, wind: 'NE 15', pop: 80, rl: 1 }, null],
+      ['night', { icon: 'moon', temp: 72, word: 'CLEAR', hi: 84, lo: 68, feels: 72, wind: 'S 5', pop: 0 }, null],
+      ['thundersnow', { icon: 'tsnow', temp: 30, word: 'THNDRSNOW', hi: 32, lo: 25, feels: 19, wind: 'N 25', pop: 100, rl: 1 }, null],
+      ['celsius', { icon: 'cloudy', temp: 11, word: 'CLOUDY', hi: 13, lo: 6, feels: 9, wind: 'W 8', pop: 30, rl: 1, c: 1 }, null],
       ['no extras', { icon: 'moon', temp: 48, word: 'CLEAR', hi: 61, lo: 44, feels: null, wind: null, pop: null }, null],
     ];
     for (const [name, w, warn] of wxCases) {
-      add(`weather screen ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
+      add(`weather screen ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }], undefined, undefined, { s3only: true });
     }
     // 5-day layout: wx with `days`; three-character highs draw tight; fewer
     // than five days; a warning falls back to the conditions layout.
@@ -262,7 +270,7 @@ async function build() {
       ['5-day', { ...cWx, days: days([['SA', -1, 'snow'], ['SU', 4, 'sun'], ['MO', 12, 'rain'], ['TU', 22, 'cloudy'], ['WE', 38, 'sun']]) }],
       ['hourly', { ...cWx, hours: hrs([['3P', 'snow', -1], ['6P', 'cloudy', -5], ['9P', 'moon', -9], ['12A', 'moon', -11]]) }],
     ]) {
-      add(`weather celsius ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, tempShadow: true, wx: w } }, [{ screen: 'weather' }]);
+      add(`weather celsius ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, tempShadow: true, wx: w } }, [{ screen: 'weather' }], undefined, undefined, name === 'conditions' ? { s3only: true } : {});
     }
     // Rain bars: rain and snow, falling now (drop or flake) or due, a title
     // too wide for its mark, every level, and warnings in the title row.

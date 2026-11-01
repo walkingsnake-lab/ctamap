@@ -215,13 +215,15 @@ function transitRows(f, rows, tops) {
   save('mock-weather-rows.png', rowsF, 10);
 }
 
-// Weather screen (radar screen without rain), drawn by draw.js: normal and
-// with each warning/watch on the bottom line (made-up conditions).
+// Weather screen conditions (radar screen without rain), drawn by draw.js:
+// with the RAIN line, dry (three lines), and a watch and a warning in the
+// top bar (made-up conditions).
 {
   const { render } = require('../server/board/render');
-  const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
-  const storm = { ...wx, icon: 'storm', word: 'STORMS', pop: 80 };
-  const states = [[wx, null], [storm, { kind: 'svr', lvl: 'watch' }], [storm, { kind: 'svr', lvl: 'warning' }], [storm, { kind: 'tor', lvl: 'warning' }]];
+  const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20, rl: 1 };
+  const dry = { icon: 'moon', temp: 72, word: 'CLEAR', hi: 84, lo: 68, feels: 72, wind: 'S 5', pop: 0 };
+  const storm = { ...wx, icon: 'storm', word: 'STORMS', feels: 91, temp: 84, hi: 89, lo: 70, pop: 80 };
+  const states = [[wx, null], [dry, null], [storm, { kind: 'svr', lvl: 'watch' }], [storm, { kind: 'tor', lvl: 'warning' }]];
   const f = new Frame(64 * 2 + 4, 32 * 2 + 4);
   states.forEach(([w, warn], i) => {
     const panel = render({ now: 0, bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: null, split: false, wx: w } }, { screen: 'weather' });

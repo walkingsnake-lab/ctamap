@@ -232,6 +232,16 @@ function toScreenWx(w) {
   };
 }
 
+// The conditions screen's RAIN line, with a buffer so a chance hovering
+// around one value doesn't make the readout jump between three and four
+// lines: shown from RAIN_ON %, hidden again below RAIN_OFF %. `on`: whether
+// it showed last time for this board and station.
+const RAIN_ON = 20, RAIN_OFF = 10;
+function rainLine(on, pop) {
+  if (pop == null) return false;
+  return pop >= (on ? RAIN_OFF : RAIN_ON);
+}
+
 // Parsed weather -> the 5-day layout's days: [{d: 'SA', icon, hi}], day
 // icons (a daily code has no night), or null without forecast data. Days
 // and hours from NWS (nws-forecast.js) carry their icon instead of a code.
@@ -391,4 +401,4 @@ function createWeather({ key = process.env.WEATHERAPI_KEY || '', fetch = null, c
   return w;
 }
 
-module.exports = { url, parse, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };
+module.exports = { url, parse, rainLine, RAIN_ON, RAIN_OFF, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };
