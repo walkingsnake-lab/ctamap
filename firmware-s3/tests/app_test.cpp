@@ -56,9 +56,7 @@ struct SimClock : app::Clock {
 struct Call {
   std::string name;
   long long ms;
-  bool has_state = false;
-  bool busy = false;
-  double quiet = 0, budget = 0, phase = 0;
+  bool busy = false;  // an animation was running when it went out
 };
 
 static Value parse(const std::string &s) {
@@ -110,12 +108,7 @@ struct Server : app::Net {
     Call rec{name, clock->t};
     if (board && board->player.has_p) {
       long long ms = clock->t;
-      rec.has_state = true;
       rec.busy = board->player.busy((double)ms);
-      rec.quiet = board->player.quiet_ms((double)ms, board->now(ms));
-      rec.budget = board->sched.budget_ms;
-      rec.phase = fmod(ms - board->player.blink_shift, 2000);
-      if (rec.phase < 0) rec.phase += 2000;
     }
     calls.push_back(rec);
     if (deferred) owed += latency();
@@ -339,8 +332,6 @@ struct SimWatchdog : app::Watchdog {
   void feed() override { last = clock->t; }
 };
 
-// Every Rig gets the worker while this is set (main runs a second pass).
-static bool g_async = false;
 
 struct SimButtons : app::Buttons {
   bool held_up = false, held_down = false;
@@ -437,7 +428,7 @@ struct Rig {
   SimKnob knob;
   SimLed led{&clock};
   std::vector<std::string> statuses;
-  std::vector<std::string> led_during;  // LED state while each request blocks
+  std::vector<std::string> led_during;  // LED state during each request
   SimWorker worker{&server, &clock};
   std::unique_ptr<app::Board> board;
 
@@ -448,7 +439,7 @@ struct Rig {
     board.reset(new app::Board(&server, &display, &clock, {{"home", "pw"}, {"phone", "pw"}}, buttons ? &btn : nullptr,
                                nullptr, nullptr, started, crash, with_led ? &led : nullptr, with_knob ? &knob : nullptr));
     server.board = board.get();
-    if (g_async) board->worker = &worker;
+    board->worker = &worker;
     board->on_status = [this](const std::string &k) { statuses.push_back(k); };
   }
 
@@ -733,27 +724,6 @@ static void test_a_held_train_stays_due_until_the_server_drops_it() {
     CHECK(gaps == 0, "offset %d: the held train vanished on stale data", off);
     CHECK(late == 0, "offset %d: it stayed after the server dropped it", off);
   }
-}
-
-static void test_fetches_land_in_gaps_and_data_stays_fresh() {
-  if (g_async) return;  // gaps only matter while requests block the loop (see test_worker_*)
-  Rig r;
-  r.board->connect();
-  CHECK(r.server.calls[0].name == "update-boot", "%s", r.server.calls[0].name.c_str());
-  r.run_for(10 * 60 * 1000);
-  int fetches = 0, in_gap = 0;
-  for (size_t i = 1; i < r.server.calls.size(); i++) {
-    const Call &c = r.server.calls[i];
-    if (!c.has_state) continue;
-    fetches++;
-    if (!c.busy && c.quiet >= c.budget) in_gap++;
-  }
-  CHECK(fetches > 50, "%d", fetches);
-  CHECK(in_gap >= fetches - r.board->stats.forced, "%d of %d in gaps", in_gap, fetches);
-  CHECK(r.board->stats.forced <= 2, "%ld forced", r.board->stats.forced);
-  CHECK(max_gap(r.server.times("update")) <= 62000, "%lld", max_gap(r.server.times("update")));
-  CHECK(max_gap(r.server.times("version")) <= 32000, "%lld", max_gap(r.server.times("version")));
-  CHECK(r.board->sched.budget_ms >= 1500 && r.board->sched.budget_ms <= 2200, "%f", r.board->sched.budget_ms);
 }
 
 static void test_settings_change_shows_up_fast() {
@@ -1076,38 +1046,6 @@ static void test_line_alerts_dont_blink() {
   CHECK(!r.board->player.blinking(), "");
 }
 
-static void test_fetches_start_as_the_alert_blink_turns_on() {
-  if (g_async) return;  // with the worker a request doesn't freeze the blink
-  Rig r;
-  r.server.tornado = 1;
-  r.board->connect();
-  r.run_for(5 * 60 * 1000);
-  int fetches = 0, off_beat = 0;
-  for (size_t i = 1; i < r.server.calls.size(); i++) {
-    const Call &c = r.server.calls[i];
-    if (!c.has_state) continue;
-    fetches++;
-    if (!(c.phase >= 1000 && c.phase < 1200)) off_beat++;
-  }
-  CHECK(fetches > 30, "%d", fetches);
-  CHECK(off_beat <= r.board->stats.forced, "%d off beat, %ld forced", off_beat, r.board->stats.forced);
-  CHECK(r.board->stats.forced <= 2, "%ld", r.board->stats.forced);
-  CHECK(max_gap(r.server.times("update")) <= 62000, "");
-}
-
-static void test_blink_restarts_off_after_a_fetch() {
-  if (g_async) return;  // with the worker a request doesn't freeze the blink
-  Rig r;
-  r.server.tornado = 1;
-  r.board->connect();
-  r.run_for(40000);
-  player::Player &p = r.board->player;
-  CHECK(p.blinking(), "");
-  double ended = p.blink_shift;
-  CHECK(!p.blink_on(ended + 10), "");
-  CHECK(p.blink_on(ended + 1010), "");
-}
-
 static void test_time_follows_the_server() {
   Rig r;
   r.board->connect();
@@ -1197,35 +1135,6 @@ static void test_no_visits_without_rain_or_when_off() {
   r.run_for(5 * 60 * 1000);
   CHECK(r.board->player.screen == "transit", "");
   CHECK(r.server.count("radar") == 0, "");
-}
-
-static void test_quiet_until_the_next_minute_boundary() {
-  long long now = T0;
-  Value p = parse("{\"now\":" + jnum(now) + ",\"tzo\":0,\"header\":null,\"view\":\"dest\",\"wx\":null,"
-                  "\"rows\":[{\"ln\":\"RD\",\"lbl\":\"HOWARD\",\"t\":[" + jnum(now + 125) + "],\"s\":[0],\"a\":0}]}");
-  // 125 s out shows 3; it becomes 2 at 120 s out, i.e. in 5 s.
-  CHECK(player::transit_quiet_ms(p, now) == 5000, "%f", player::transit_quiet_ms(p, now));
-  // At DUE (40 s out), the next change is the drop 30 s after arrival.
-  CHECK(player::transit_quiet_ms(p, now + 85) == 70000, "%f", player::transit_quiet_ms(p, now + 85));
-}
-
-static void test_the_cached_quiet_time_matches_a_fresh_one_every_second() {
-  long long now = T0;
-  std::string rows = "[{\"ln\":\"RD\",\"lbl\":\"HOWARD\",\"t\":[" + jnum(now + 125) + "," + jnum(now + 400) + "," +
-                     jnum(now + 700) + "],\"s\":[0,0,1],\"a\":0},{\"ln\":\"RD\",\"lbl\":\"95TH\",\"t\":[" +
-                     jnum(now + 15) + "," + jnum(now + 290) + "],\"s\":[0,0],\"a\":0},{\"ln\":\"PR\",\"lbl\":\"LINDEN\",\"t\":[" +
-                     jnum(now + 61) + "],\"s\":[1],\"a\":0}]";
-  for (const char *view : {"dest", "chrono"}) {
-    player::Player pl;
-    pl.set_payload(parse("{\"now\":" + jnum(now) + ",\"tzo\":0,\"header\":null,\"view\":\"" + view +
-                         "\",\"wx\":null,\"rows\":" + rows + "}"),
-                   0);
-    int bad = 0;
-    for (int s = 0; s < 800; s++)
-      if (pl.quiet_ms(0, now + s) != player::transit_quiet_ms(pl.p, now + s)) bad++;
-    CHECK(bad == 0, "%s: %d", view, bad);
-    CHECK(pl.quiet_ms(0, now + 800) == player::FAR, "every train gone");
-  }
 }
 
 static void test_led_blue_during_each_request_and_off_between() {
@@ -1454,7 +1363,7 @@ static void test_knob_twist_and_rest_selects_once() {
   r->run_for(600);
   CHECK(r->board->chooser.open, "still turning");
   CHECK(r->server.selects.empty(), "no commit before the rest");
-  r->run_for(1500 + (g_async ? LATENCY : 0));
+  r->run_for(1500 + LATENCY);
   CHECK(!r->board->chooser.open, "closed after committing");
   CHECK(r->server.selects == std::vector<std::string>({"sports"}), "%zu", r->server.selects.size());
   CHECK(r->board->player.screen == "baseball", "%s", r->board->player.screen.c_str());
@@ -1496,12 +1405,12 @@ static void test_knob_select_failure_keeps_the_screen() {
   std::unique_ptr<Rig> r(knob_rig());
   r->server.fail_next = 1;
   r->knob.pending = 1;
-  r->run_for(2000 + (g_async ? LATENCY : 0));
+  r->run_for(2000 + LATENCY);
   CHECK(!r->board->chooser.open, "");
   CHECK(r->board->player.screen == "transit", "%s", r->board->player.screen.c_str());
   CHECK(r->board->last_error == "select:OSError", "%s", r->board->last_error.c_str());
   r->knob.pending = 1;  // works again next time
-  r->run_for(2000 + (g_async ? LATENCY : 0));
+  r->run_for(2000 + LATENCY);
   CHECK(r->board->player.screen == "weather", "%s", r->board->player.screen.c_str());
 }
 
@@ -1578,7 +1487,6 @@ static void test_knob_choice_slides_the_way_the_knob_turned() {
 // ---- the network worker (S3): requests off the draw loop ----
 
 static void test_worker_animations_never_wait_for_a_request() {
-  if (!g_async) return;
   Rig r;
   r.server.screen = "ticker";  // a slide every few seconds
   r.server.tornado = 1;        // and a blink
@@ -1599,11 +1507,9 @@ static void test_worker_animations_never_wait_for_a_request() {
   }
   CHECK(worst <= 60, "%lld ms without a frame mid-animation", worst);
   CHECK(during > 100, "%d frames drawn while a request was out", during);
-  CHECK(r.board->stats.forced == 0, "%ld", r.board->stats.forced);
 }
 
 static void test_worker_keeps_data_fresh_one_request_at_a_time() {
-  if (!g_async) return;
   Rig r;
   r.board->connect();
   r.run_for(10 * 60 * 1000);
@@ -1617,7 +1523,6 @@ static void test_worker_keeps_data_fresh_one_request_at_a_time() {
 }
 
 static void test_worker_a_hung_request_lets_the_watchdog_restart_the_board() {
-  if (!g_async) return;
   Rig r;
   SimWatchdog wd(&r.clock);
   r.board->watchdog = &wd;
@@ -1639,7 +1544,6 @@ static void test_worker_a_hung_request_lets_the_watchdog_restart_the_board() {
 }
 
 static void test_worker_knob_commit_waits_for_the_request_out() {
-  if (!g_async) return;
   std::unique_ptr<Rig> r(knob_rig());
   r->server.latency = [] { return 4000LL; };  // a slow request
   // Start a request, then turn: the choice goes out after it lands.
@@ -1655,6 +1559,18 @@ static void test_worker_knob_commit_waits_for_the_request_out() {
   CHECK(!r->board->chooser.open, "");
 }
 
+static void test_without_a_worker_requests_block_but_still_run() {
+  // The worker's task couldn't start: requests run inline on the loop.
+  Rig r;
+  r.board->worker = nullptr;
+  r.board->connect();
+  r.run_for(5 * 60 * 1000);
+  CHECK(r.worker.started == 0, "%d", r.worker.started);
+  CHECK(!r.board->in_flight(), "");
+  CHECK(max_gap(r.server.times("update")) <= UPDATE_GAP_MAX, "%lld", max_gap(r.server.times("update")));
+  CHECK(max_gap(r.server.times("version")) <= 13000, "%lld", max_gap(r.server.times("version")));
+}
+
 int main() {
   struct T {
     const char *name;
@@ -1666,7 +1582,6 @@ int main() {
       T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_ten_times_a_second),
       T_(test_cloud_strips_only_on_the_clock_screen),
       T_(test_clock_screen_draws_the_skyline),
-      T_(test_fetches_land_in_gaps_and_data_stays_fresh),
       T_(test_settings_change_shows_up_fast),
       T_(test_radar_frames_only_on_the_radar_screen_and_once_each),
       T_(test_radar_frames_stay_current_over_many_loops),
@@ -1683,8 +1598,6 @@ int main() {
       T_(test_first_retries_come_quickly),
       T_(test_reconnects_after_repeated_failures),
       T_(test_line_alerts_dont_blink),
-      T_(test_fetches_start_as_the_alert_blink_turns_on),
-      T_(test_blink_restarts_off_after_a_fetch),
       T_(test_time_follows_the_server),
       T_(test_syncs_never_set_the_clock_back_while_it_is_right),
       T_(test_a_drifting_clock_is_pulled_back_in),
@@ -1692,8 +1605,6 @@ int main() {
       T_(test_auto_visits_the_radar_on_a_timer_and_prefetches_frames),
       T_(test_buttons_beat_the_timer),
       T_(test_no_visits_without_rain_or_when_off),
-      T_(test_quiet_until_the_next_minute_boundary),
-      T_(test_the_cached_quiet_time_matches_a_fresh_one_every_second),
       T_(test_led_blue_during_each_request_and_off_between),
       T_(test_led_connecting_portal_and_offline),
       T_(test_led_dim_red_after_a_failure_until_a_request_succeeds),
@@ -1728,19 +1639,17 @@ int main() {
       T_(test_worker_keeps_data_fresh_one_request_at_a_time),
       T_(test_worker_a_hung_request_lets_the_watchdog_restart_the_board),
       T_(test_worker_knob_commit_waits_for_the_request_out),
+      T_(test_without_a_worker_requests_block_but_still_run),
 #undef T_
   };
   int n = 0, total = 0;
-  for (int pass = 0; pass < 2; pass++) {
-    g_async = pass == 1;
-    for (const T &t : tests) {
-      g_test = std::string(t.name) + (g_async ? " [worker]" : "");
-      int before = g_failed;
-      total++;
-      t.fn();
-      if (g_failed == before) n++;
-      else printf("  in %s\n", g_test.c_str());
-    }
+  for (const T &t : tests) {
+    g_test = t.name;
+    int before = g_failed;
+    total++;
+    t.fn();
+    if (g_failed == before) n++;
+    else printf("  in %s\n", g_test.c_str());
   }
   printf("%d of %d tests passed (%d checks, %d failed)\n", n, total, g_checks, g_failed);
   return g_failed ? 1 : 0;

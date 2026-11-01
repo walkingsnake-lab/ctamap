@@ -209,7 +209,7 @@ std::string Board::health_query(long long ms) {
     health_at_ = ms;
     char buf[160];
     snprintf(buf, sizeof buf, "&hu=%lld&hb=%lld&ho=0&hf=%ld&hr=%ld", (ms - run_start_) / 1000,
-             (long long)sched.budget_ms, stats.fails, stats.reconnects);
+             (long long)sched.fetch_ms, stats.fails, stats.reconnects);
     std::string q = buf;
     if (mem_free) q += "&hm=" + std::to_string(mem_free());
     if (largest_block) q += "&hl=" + std::to_string(largest_block());
@@ -349,14 +349,14 @@ sched::Result Board::do_radar(double) {
 void Board::launch(Flight f) {
   f.job = pending_job_;  // null: the knob's select
   f.started = pending_job_ ? pending_start_ : clock->ms();
-  f.forced = pending_job_ && pending_forced_;
   flight_ = std::move(f);
   fetching();
   if (worker) {
     worker->start([this] { flight_->ok = flight_->work(); });
     return;
   }
-  // No worker: the request blocks the loop here, as on the M4.
+  // No worker (its task couldn't start): the request blocks the loop here,
+  // and animations pause until it's back.
   flight_->ok = flight_->work();
   land(clock->ms());
 }
@@ -398,11 +398,7 @@ sched::Result Board::after_job(Flight &f, sched::Result result, long long ended)
     fails++;
     led_base = "failing";
   }
-  // Blocking only: a long pause froze the blink; restart it off so the
-  // pause reads as one long "on".
-  if (!worker && player.blinking() && ended - st > 300) player.blink_restart((double)ended);
   stats.fetches++;
-  if (f.forced) stats.forced++;
   sched.ran(job, (double)st, (double)ended, result != sched::FAIL);
   if (result == sched::MORE) {
     // More of a set to fetch (radar frames, logos). While that screen is
@@ -453,27 +449,14 @@ void Board::step() {
   bool anim = player.busy((double)ms) || sliding(ms);
   if (!flight_) {
     // While the chooser is open only overdue requests run, so the commit
-    // goes out the moment the knob rests. Without a worker a request also
-    // freezes the panel, so it waits for an animation gap.
-    bool busy = worker ? chooser.open : anim || chooser.open;
-    double quiet = chooser.open ? 0.0
-                   : worker     ? 1e18
-                                : std::max(0.0, player.quiet_ms((double)ms, n) - (double)draw::fmod_floor(now_ms(ms), 1000));
-    sched::Job *job = sched.pick((double)ms, busy, quiet);
-    if (!worker && job && !job->overdue((double)ms) && !player.at_blink_start((double)ms)) job = nullptr;  // wait for the blink to turn on
+    // goes out the moment the knob rests.
+    sched::Job *job = sched.pick((double)ms, chooser.open);
     if (job) {
-      if (!worker && player.blinking()) {
-        // Show the lit frame now; the pause will hold it.
-        draw_frame(ms, n);
-        last_draw_ = ms;
-      }
       long long st = clock->ms();
       job_err_.clear();
-      bool forced = job->overdue((double)st) && (busy || quiet < sched.budget_ms);
       // A job either skips or launches a Flight; launch() reads these.
       pending_job_ = job;
       pending_start_ = st;
-      pending_forced_ = forced;
       sched::Result result = job->run((double)st);
       pending_job_ = nullptr;
       if (result == sched::SKIP) job->due_at = (double)clock->ms() + job->interval_ms;

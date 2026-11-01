@@ -267,14 +267,9 @@ void Player::draw(draw::Frame &frame, double ms, long long now) {
   draw::render(p, frame, o);
 }
 
-// ---- alert blink vs. network fetches ----
-// A fetch freezes the animations for longer than one blink phase. To make
-// that read as one slightly long "on" phase, fetches start right as the
-// blink turns on, and the blink restarts (off) when the fetch ends.
+// ---- alert blink ----
 
-bool Player::blink_on(double ms) const {
-  return fmod_floor((long long)floor((ms - blink_shift) / draw::BLINK_MS), 2) == 1;
-}
+bool Player::blink_on(double ms) const { return fmod_floor((long long)floor(ms / draw::BLINK_MS), 2) == 1; }
 
 bool Player::blinking() const {
   if (!has_p || (screen != "transit" && screen != "weather" && screen != "clock")) return false;
@@ -285,12 +280,6 @@ bool Player::blinking() const {
   return tornado && p["wx"].truthy();
 }
 
-bool Player::at_blink_start(double ms) const {
-  if (!blinking()) return true;
-  double phase = pymod(ms - blink_shift, 2 * draw::BLINK_MS);
-  return draw::BLINK_MS <= phase && phase < draw::BLINK_MS + BLINK_START_WINDOW_MS;
-}
-
 int Player::radar_idx(double ms) const {
   return draw::radar_loop_idx(p["radar"]["frames"], &radar_frames, ms - loop_start, draw::timing(p));
 }
@@ -299,15 +288,6 @@ bool Player::rain_bars(double ms) const {
   // True while the rain bars show in the radar loop's turn.
   const Value &rn = p["radar"]["wx"]["rain"];
   return draw::rain_bars_turn(rn, loop_len(), draw::timing(p), ms - loop_start);
-}
-
-double Player::rain_period(double) const {
-  // ms in one full turn: the loops, then the bars.
-  const Value &rn = p["radar"]["wx"]["rain"];
-  int n = loop_len();
-  draw::Timing tm = draw::timing(p);
-  double cycle = std::max(1, n - 1) * tm.radarFrame + tm.radarHold;
-  return (rn["loops"].truthy() ? rn["loops"].num() : 0) * cycle + (rn["alt"].truthy() ? rn["alt"].num() : 0) * 1000;
 }
 
 int Player::loop_len() const {
@@ -370,7 +350,7 @@ std::optional<std::string> Player::frame_key(double ms, long long now) {
   return key;
 }
 
-// ---- timing for the scheduler ----
+// ---- animation ----
 
 bool Player::busy(double ms) const {
   if (!has_p) return false;
@@ -399,48 +379,6 @@ bool Player::screen_busy(double ms) const {
   return transit_busy(anim, ms);
 }
 
-double Player::quiet_ms(double ms, long long now) {
-  // ms until the next animation starts (0 while one runs). A clock on
-  // screen rolls at the top of every minute.
-  if (!has_p) return FAR;
-  if (busy(ms)) return 0;
-  double q = screen_quiet_ms(ms, now);
-  if (nums.clock()) q = std::min(q, (double)(60 - fmod_floor(now, 60)) * 1000);
-  return q;
-}
-
-double Player::screen_quiet_ms(double ms, long long now) {
-  if (screen == "ticker") {
-    if (draw::ticker_pages(p, (double)now) < 2) return FAR;
-    return std::max(0.0, draw::timing(p).pageHold - (ms - page_start));
-  }
-  if (screen == "baseball") return FAR;  // rolls follow fetched changes; the rotation swaps without animating
-  if (screen == "clock") return FAR;     // ambient motion only: no times to protect (spec §14)
-  if (screen == "weather") {
-    int n = loop_len();
-    if (n < 2 && !rain_bars(ms)) return FAR;
-    draw::Timing tm = draw::timing(p);
-    if (rain_bars(ms)) {
-      // Bars show between two loop turns: the next turn starts the loop again.
-      double period = rain_period(ms);
-      return period - pymod(ms - loop_start, period);
-    }
-    double cycle = (n - 1) * tm.radarFrame + tm.radarHold;
-    return cycle - pymod(ms - loop_start, cycle);
-  }
-  if (quiet_gen_ != gen || (now != quiet_now_ && 0 <= quiet_at_ && quiet_at_ <= now)) {
-    // A new payload, or the cached change is here. Before it, no shown time
-    // changes and no train drops off, so the answer holds; at it, recompute
-    // once per second.
-    quiet_gen_ = gen;
-    quiet_now_ = now;
-    std::optional<long long> at = transit_next_change(p, now);
-    quiet_at_ = at ? *at : -1;
-  }
-  if (quiet_at_ < 0) return FAR;
-  return std::max(0.0, (double)(quiet_at_ - now) * 1000);
-}
-
 bool transit_busy(const draw::TransitAnimator &anim, double t) {
   // True while any transit row or time is fading, moving, rolling, or
   // easing color (mirrors the timing in TransitAnimator::step).
@@ -460,32 +398,6 @@ bool transit_busy(const draw::TransitAnimator &anim, double t) {
     }
   }
   return false;
-}
-
-std::optional<long long> transit_next_change(const Value &p, long long now) {
-  // Epoch second when a shown time next changes (a roll) or a train drops
-  // off (a fade): the next minute boundary of any visible arrival.
-  draw::View view = draw::build_transit_view(p, (double)now);
-  std::optional<long long> best;
-  for (const draw::ViewRow &row : view.rows)
-    for (const draw::ViewCell &c : row.cells) {
-      long long t = (long long)c.t;
-      long long m = draw::minutes_until(c.t, (double)now);
-      long long at;
-      if (m > 1) {
-        at = t - 60 * (m - 1);  // when ceil((t - now) / 60) drops to m - 1
-      } else {
-        at = t + draw::DROP_GRACE;  // DUE until it drops off
-        if (at <= now) at += draw::HOLD_MAX;  // held for a fresh payload (draw.is_shown)
-      }
-      if (!best || at < *best) best = at;
-    }
-  return best;
-}
-
-double transit_quiet_ms(const Value &p, long long now) {
-  std::optional<long long> at = transit_next_change(p, now);
-  return at ? std::max(0.0, (double)(*at - now) * 1000) : FAR;
 }
 
 }  // namespace player
