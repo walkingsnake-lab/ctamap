@@ -25,11 +25,13 @@ Board::Board(Net *n, Display *d, Clock *c, Networks nets, Buttons *b, Watchdog *
       update_job("update", UPDATE_EVERY, 30000, [this](double ms) { return do_update(ms); }),
       radar_job("radar", RADAR_EVERY, 120000, [this](double ms) { return do_radar(ms); }),
       logo_job("logo", LOGO_EVERY, 120000, [this](double ms) { return do_logo(ms); }),
+      sky_job("sky", SKY_EVERY, 60000, [this](double ms) { return do_sky(ms); }),
       started(std::move(st)), crash(std::move(cr)) {
   sched.add(&version_job);
   sched.add(&update_job);
   sched.add(&radar_job);
   sched.add(&logo_job);
+  sched.add(&sky_job);
   // Uptime counts from this run.
   run_start_ = clock->ms();
 }
@@ -139,6 +141,7 @@ void Board::apply(const Value &p, long long st, long long ms) {
   player.hw_bright = display->set_brightness(std::max(0.0, std::min(100.0, b)) / 100);
   player.set_screen(override_.resolve(player.auto_screen(now(ms)), json::str(p["v"])), (double)ms);
   update_job.interval_ms = (double)(player.live_game() ? LIVE_EVERY : UPDATE_EVERY);
+  if (player.missing_cloud()) sky_job.due_at = 0;  // a new sky: fetch its clouds in the next gap
 }
 
 bool Board::draw_frame(long long ms, long long n) {
@@ -153,6 +156,7 @@ bool Board::draw_frame(long long ms, long long n) {
     });
     return true;
   }
+  player.wall_ms = (double)now_ms(ms);
   display->show([&](draw::Frame &f) { player.draw(f, (double)ms, n); });
   return true;
 }
@@ -175,6 +179,7 @@ std::string Board::health_query(long long ms) {
     if (!crash.empty()) q += "&hc=" + crash;
     if (!hardware.empty()) q += "&hd=" + hardware;
     if (!firmware.empty()) q += "&hv=" + firmware;
+    q += std::string("&hk=") + CAPS;
     std::string ox = ota_health();
     if (!ox.empty()) q += "&hx=" + ox;
     health_q_ = q;
@@ -224,6 +229,22 @@ sched::Result Board::do_logo(double ms) {
   if (!net->logo(missing[0], buf, job_err_)) return sched::FAIL;
   player.add_logo(missing[0], std::move(buf));
   return missing.size() > 1 ? sched::MORE : sched::OK;
+}
+
+sched::Result Board::do_sky(double) {
+  // The skyline's cloud strip (1664 bytes, immutable id), while the clock
+  // screen shows and the payload names one not on hand.
+  std::optional<std::string> id = player.missing_cloud();
+  if (!id) return sched::SKIP;
+  fetching();
+  std::vector<uint8_t> buf;
+  if (!net->sky(*id, buf, job_err_)) return sched::FAIL;
+  if (buf.size() != 1664) {
+    job_err_ = "BadSize";
+    return sched::FAIL;
+  }
+  player.add_cloud(*id, std::move(buf));
+  return sched::OK;
 }
 
 sched::Result Board::do_radar(double) {
@@ -321,6 +342,7 @@ void Board::step() {
   // Redraw every ~33 ms while animating; otherwise only when something on
   // screen can have changed.
   n = now(ms);
+  player.wall_ms = (double)now_ms(ms);
   std::optional<std::string> key = chooser.open ? chooser.frame_key((double)ms) : player.frame_key((double)ms, n);
   if (last_draw_ < 0 || (!key ? ms - last_draw_ >= 33 : key != last_key_)) {
     if (draw_frame(ms, n)) {

@@ -14,8 +14,11 @@
 
 namespace control {
 
-static const char *const SCREENS[] = {"transit", "ticker", "weather", "baseball"};
-static const int N_SCREENS = 4;
+// The buttons step through these (this firmware draws the clock screen,
+// so it's in the cycle; the server only resolves `clock` for boards that
+// report the `skyline` capability, which this build does).
+static const char *const SCREENS[] = {"transit", "ticker", "weather", "baseball", "clock"};
+static const int N_SCREENS = 5;
 
 class ScreenOverride {
  public:

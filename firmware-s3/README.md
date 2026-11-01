@@ -177,11 +177,11 @@ S3.
 | Path | What |
 |---|---|
 | `ctaboard/ctaboard.ino` | Entry point: reads `secrets.h`, wires up the hardware, runs the loop. |
-| `ctaboard/src/draw.*` | Renderer and transit animator: a line-by-line port of `firmware/boardlib/draw.py`. Must stay pixel-identical to `server/board/draw.js`. |
+| `ctaboard/src/draw.*` | Renderer and transit animator: a line-by-line port of `firmware/boardlib/draw.py`. Must stay pixel-identical to `server/board/draw.js`. The clock screen's skyline face (`render_skyline`, S3 only) ports `renderSkyline` from draw.js directly (draw.py is frozen). |
 | `ctaboard/src/json.*` | Small JSON tree with Python dict semantics, so the port reads payloads exactly as `draw.py` does. |
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
 | `ctaboard/src/sched.h`, `control.h` | Requests in animation gaps; buttons vs. the phone (`sched.py`, `control.py`); the knob's chooser (twist and rest, S3 only). |
-| `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. |
+| `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. The `sky` job fetches the skyline's cloud strip (`/board/sky/<id>`) while the clock screen shows; health reports `hk=skyline` so the server sends the clock screen to this build. |
 | `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |
 | `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |

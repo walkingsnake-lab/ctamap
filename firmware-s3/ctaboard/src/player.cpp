@@ -126,6 +126,22 @@ std::vector<std::string> Player::missing_logos(long long now) {
   return out;
 }
 
+std::optional<std::string> Player::missing_cloud() const {
+  // The clock screen's skyline draws the server's cloud strip (contract
+  // "Cloud strips"); fetched only while that screen shows.
+  if (!has_p || screen != "clock") return std::nullopt;
+  const Value &cl = p["skyline"]["cl"];
+  if (!cl.truthy() || !cl["id"].is_str()) return std::nullopt;
+  std::string id = json::str(cl["id"]);
+  if (id.empty() || clouds.count(id)) return std::nullopt;
+  return id;
+}
+
+void Player::add_cloud(const std::string &id, std::vector<uint8_t> bytes) {
+  clouds.clear();  // one strip at a time: a new sky replaces the old one
+  clouds[id] = std::move(bytes);
+}
+
 std::string Player::auto_screen(long long now) const {
   // The server's `screen`, except that on the auto screen `rot` alternates
   // the main screens every `every` s, and the weather screen is visited for
@@ -224,6 +240,15 @@ void Player::draw(draw::Frame &frame, double ms, long long now) {
     draw::render(p, frame, o);
     return;
   }
+  if (screen == "clock") {
+    // Skyline face: ambient motion on the wall clock (boats on the quarter hour).
+    o.screen = "clock";
+    o.ms = wall_ms;
+    o.clouds = &clouds;
+    o.blink = blink_on(ms);
+    draw::render(p, frame, o);
+    return;
+  }
   if (screen == "weather") {
     o.screen = "weather";
     o.idx = radar_idx(ms);
@@ -250,10 +275,10 @@ bool Player::blink_on(double ms) const {
 }
 
 bool Player::blinking() const {
-  if (!has_p || (screen != "transit" && screen != "weather")) return false;
+  if (!has_p || (screen != "transit" && screen != "weather" && screen != "clock")) return false;
   const Value &w = p["warn"];
   bool tornado = w["kind"].eq("tor") && w["lvl"].eq("warning");
-  if (screen == "weather") return tornado;
+  if (screen == "weather" || screen == "clock") return tornado;  // the clock's warning label blinks too
   // Line alerts are static; only the weather strip's tornado tag blinks.
   return tornado && p["wx"].truthy();
 }
@@ -332,6 +357,11 @@ std::optional<std::string> Player::frame_key(double ms, long long now) {
     snprintf(buf, sizeof buf, "|%zu", logos.size());
     return key + buf;
   }
+  if (screen == "clock") {
+    // The skyline moves on a 100 ms tick: redraw ten times a second.
+    snprintf(buf, sizeof buf, "|%lld|%zu", (long long)floor(wall_ms / 100), clouds.size());
+    return key + buf;
+  }
   return key;
 }
 
@@ -380,6 +410,7 @@ double Player::screen_quiet_ms(double ms, long long now) {
     return std::max(0.0, draw::timing(p).pageHold - (ms - page_start));
   }
   if (screen == "baseball") return FAR;  // rolls follow fetched changes; the rotation swaps without animating
+  if (screen == "clock") return FAR;     // ambient motion only: no times to protect (spec §14)
   if (screen == "weather") {
     int n = loop_len();
     if (n < 2 && !rain_bars(ms)) return FAR;
