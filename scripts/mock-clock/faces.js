@@ -991,35 +991,61 @@
   const band = (v) => C70[Math.min(2, Math.floor(v * 3))];
   const grad = (v) => (v < 0.5 ? mix(C70[0], C70[1], v * 2) : mix(C70[1], C70[2], (v - 0.5) * 2));
 
+  // Hand-drawn rounded digit bitmaps (rows top to bottom, '#' lit).
+  const ROUND = {
+    w: 8, h: 12, colon: [3, 8],
+    0: ['..####..', '.######.', '##....##', '##....##', '##....##', '##....##', '##....##', '##....##', '##....##', '##....##', '.######.', '..####..'],
+    1: ['...##...', '..###...', '.####...', '...##...', '...##...', '...##...', '...##...', '...##...', '...##...', '...##...', '...##...', '...##...'],
+    2: ['..####..', '.######.', '##....##', '......##', '.....##.', '....###.', '...###..', '..###...', '.###....', '###.....', '########', '########'],
+    3: ['..####..', '.######.', '##....##', '......##', '......##', '...####.', '...####.', '......##', '......##', '##....##', '.######.', '..####..'],
+    4: ['....###.', '...####.', '..##.##.', '.##..##.', '##...##.', '##...##.', '########', '########', '.....##.', '.....##.', '.....##.', '.....##.'],
+    5: ['########', '########', '##......', '##......', '######..', '#######.', '......##', '......##', '......##', '##....##', '.######.', '..####..'],
+    6: ['..#####.', '.######.', '##......', '##......', '##.###..', '#######.', '###...##', '##....##', '##....##', '##....##', '.######.', '..####..'],
+    7: ['########', '########', '......##', '.....##.', '.....##.', '....##..', '....##..', '...##...', '...##...', '..##....', '..##....', '..##....'],
+    8: ['..####..', '.######.', '##....##', '##....##', '##....##', '.######.', '.######.', '##....##', '##....##', '##....##', '.######.', '..####..'],
+  };
+  ROUND[9] = ROUND[6].map((r) => [...r].reverse().join('')).reverse();
+  const LIGHT = {
+    w: 6, h: 11, colon: [3, 7],
+    0: ['.####.', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '#....#', '.####.'],
+    1: ['..#...', '.##...', '#.#...', '..#...', '..#...', '..#...', '..#...', '..#...', '..#...', '..#...', '..#...'],
+    2: ['.####.', '#....#', '.....#', '.....#', '....#.', '...#..', '..#...', '.#....', '#.....', '#.....', '######'],
+    3: ['.####.', '#....#', '.....#', '.....#', '.....#', '..###.', '.....#', '.....#', '.....#', '#....#', '.####.'],
+    4: ['....#.', '...##.', '..#.#.', '.#..#.', '#...#.', '#...#.', '######', '....#.', '....#.', '....#.', '....#.'],
+    5: ['######', '#.....', '#.....', '#.....', '#####.', '.....#', '.....#', '.....#', '.....#', '#....#', '.####.'],
+    6: ['.####.', '#.....', '#.....', '#.....', '#.###.', '##...#', '#....#', '#....#', '#....#', '#....#', '.####.'],
+    7: ['######', '.....#', '.....#', '....#.', '....#.', '...#..', '...#..', '..#...', '..#...', '..#...', '..#...'],
+    8: ['.####.', '#....#', '#....#', '#....#', '#....#', '.####.', '#....#', '#....#', '#....#', '#....#', '.####.'],
+  };
+  LIGHT[9] = LIGHT[6].map((r) => [...r].reverse().join('')).reverse();
+
+  // H:MM in a bitmap font, centered on cx, top row y0; color(v) per row (0..1).
+  function bitmapTime(f, t, F, { gap, cx, y0, dot, color }) {
+    const hh = String(t.h12), mm = String(t.m).padStart(2, '0');
+    const total = (hh.length + 2) * F.w + (hh.length + 1) * gap + dot + gap;
+    let x = Math.round(cx - (total - 1) / 2);
+    const digit = (ch) => { F[ch].forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.plot(x + i, y0 + j, color(j / (F.h - 1))); })); x += F.w + gap; };
+    [...hh].forEach(digit);
+    for (const r of F.colon) f.fill(x, y0 + r, dot, dot, color(r / (F.h - 1)));
+    x += dot + gap;
+    [...mm].forEach(digit);
+  }
+
   const S70 = [
     {
-      id: 's70-chunky', group: 'S70', title: 'Chunky',
-      note: 'Fat 3 px round-ended strokes on squared-off curves (Cooper/Avant Garde territory), banded sunflower, orange and rust top to bottom.',
+      id: 's70-round', group: 'S70', title: 'Rounded',
+      note: '8 x 12 hand-drawn digits with 2 px strokes and rounded corners (VAG Rounded territory), banded sunflower, orange and rust like the original. Same weight as the 9x15 bold, a size smaller.',
       draw(f, t) {
         stripes70(f, 54, 21, [3, 6, 9]);
-        const L = time70(f, t, { w: 10, h: 19, inset: 1.2, gap: 2, colonW: 3, x0: t.h12 > 9 ? 0 : 6, y0: 1, paint: (d, v) => (d <= 1.25 ? band(v) : null) });
-        L.colon((x, y) => { f.fill(x, y + 5, 3, 3, band(6 / 18)); f.fill(x, y + 12, 3, 3, band(13 / 18)); });
-        L.rest();
+        bitmapTime(f, t, ROUND, { gap: 2, cx: 26, y0: 5, dot: 2, color: band });
       },
     },
     {
-      id: 's70-disco', group: 'S70', title: 'Disco outline',
-      note: 'A thin sunflower stroke inside an orange outline, like 70s inline lettering. Lighter on the panel than Chunky, and echoes the stripes.',
+      id: 's70-round-light', group: 'S70', title: 'Rounded light',
+      note: '6 x 11 digits with 1 px strokes and rounded corners. Lighter and smaller, leaving more black around the stripes; banded the same way.',
       draw(f, t) {
         stripes70(f, 54, 21, [3, 6, 9]);
-        const L = time70(f, t, { w: 11, h: 20, inset: 2.2, gap: 1, colonW: 3, x0: t.h12 > 9 ? 0 : 6, y0: 0, paint: (d) => (d <= 0.6 ? C70[0] : d > 1.5 && d <= 2.3 ? C70[1] : null) });
-        L.colon((x, y) => { f.fill(x + 1, y + 6, 1, 1, C70[0]); f.fill(x + 1, y + 13, 1, 1, C70[0]); for (const [dx, dy] of [[0, 0], [2, 0], [1, -1], [1, 1]]) { f.plot(x + dx, y + 6 + dy, C70[1]); f.plot(x + dx, y + 13 + dy, C70[1]); } });
-        L.rest();
-      },
-    },
-    {
-      id: 's70-tall', group: 'S70', title: 'Tall gradient',
-      note: 'Tall, narrow 2 px strokes with a smooth sunset fade from sunflower to rust. The narrow cells leave room to keep the stripes wide.',
-      draw(f, t) {
-        stripes70(f, 54, 21, [3, 6, 9]);
-        const L = time70(f, t, { w: 8, h: 21, inset: 0.8, gap: 3, colonW: 2, x0: t.h12 > 9 ? 2 : 8, y0: 0, paint: (d, v) => (d <= 0.8 ? grad(v) : null) });
-        L.colon((x, y) => { f.fill(x, y + 6, 2, 2, grad(0.3)); f.fill(x, y + 13, 2, 2, grad(0.65)); });
-        L.rest();
+        bitmapTime(f, t, LIGHT, { gap: 2, cx: 26, y0: 5, dot: 1, color: band });
       },
     },
   ];
