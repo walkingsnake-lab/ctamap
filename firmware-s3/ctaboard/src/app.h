@@ -245,7 +245,9 @@ class Board {
   void connect(bool boot = true);
   void step();
   bool in_flight() const { return flight_.has_value(); }
-  bool sliding(long long ms) const { return trans_ == SLIDE && ms - trans_start_ < draw::SCREEN_SLIDE_MS; }
+  bool sliding(long long ms) const { return trans_ == SLIDE && ms - trans_start_ < slide_ms_; }
+  double slide_ms() const { return slide_ms_; }
+  long long trans_start() const { return trans_start_; }
   bool fading(long long ms) const { return trans_ == FADE && ms - trans_start_ < draw::SCREEN_FADE_MS; }
   bool transitioning(long long ms) const { return sliding(ms) || fading(ms); }
   int slide_dir() const { return slide_dir_; }
@@ -297,6 +299,7 @@ class Board {
   // Screen, or one of these); a change of that slides (knob, buttons) or
   // fades (anything else) the new screen in over a copy of it.
   static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3;
+  static constexpr double SCREEN_SLIDE_QUICK_MS = 250;  // a slide that interrupts a running one
   enum Trans { NO_TRANS, SLIDE, FADE };
   uint8_t last_px_[draw::Frame::W * draw::Frame::H * 3] = {};
   uint8_t slide_px_[draw::Frame::W * draw::Frame::H * 3] = {};
@@ -304,9 +307,10 @@ class Board {
   Trans trans_ = NO_TRANS;
   long long trans_start_ = -1;
   int slide_dir_ = 1;
+  double slide_ms_ = draw::SCREEN_SLIDE_MS;  // this slide's length (quicker when it interrupts one)
   long long chooser_travel_ = 0;  // where the knob's last turn went (ring steps, + clockwise)
   int button_dir_ = 0;            // a button press waiting for its frame: -1 UP, +1 DOWN
-  void shown(int what, const draw::Frame &f, long long ms);
+  void shown(int what, long long ms);
   void launch(Flight f);
   void land(long long ended);
 

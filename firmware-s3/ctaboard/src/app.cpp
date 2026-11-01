@@ -63,7 +63,8 @@ void Board::status(const std::string &kind, const std::string &detail) {
   long long ms = clock->ms();
   display->show([&](draw::Frame &f) {
     draw::render_status(f, kind, detail);
-    shown(SHOWN_STATUS, f, ms);
+    shown(SHOWN_STATUS, ms);
+    memcpy(last_px_, f.px, sizeof last_px_);
   });
 }
 
@@ -154,29 +155,35 @@ void Board::apply(const Value &p, long long st, long long ms) {
   if (player.missing_cloud()) sky_job.due_at = 0;  // a new sky: fetch its clouds next
 }
 
-void Board::shown(int what, const draw::Frame &f, long long ms) {
+void Board::shown(int what, long long ms) {
   // A different screen than the last frame's (spec §2, "Screen change"). The
   // first frame ever, status screens, and the knob's chooser (a turn should
-  // answer at once) just appear. A change the knob or a button made slides
-  // in over the old frame, the way it was turned or pressed (UP from the
-  // left, DOWN from the right); any other (the phone, the auto rotation,
-  // leaving a status screen) fades through black.
-  if (what != shown_ && shown_ != SHOWN_NONE && what != SHOWN_STATUS && what != SHOWN_CHOOSER) {
-    memcpy(slide_px_, last_px_, sizeof slide_px_);
-    trans_start_ = ms;
-    if (shown_ == SHOWN_CHOOSER) {
-      trans_ = SLIDE;
-      slide_dir_ = chooser_travel_ < 0 ? -1 : 1;
-    } else if (button_dir_) {
-      trans_ = SLIDE;
-      slide_dir_ = button_dir_;
+  // answer at once) just appear, cutting any transition short. A change the
+  // knob or a button made slides in over the old frame, the way it was
+  // turned or pressed (UP from the left, DOWN from the right); any other
+  // (the phone, the auto rotation, leaving a status screen) fades through
+  // black. A change during a transition starts from what's on the panel
+  // (last_px_ is the shown frame, mid-transition included), so it never
+  // snaps; a slide that interrupts one runs quicker (SCREEN_SLIDE_QUICK_MS),
+  // so presses in a row read as one fast run.
+  if (what != shown_ && shown_ != SHOWN_NONE) {
+    if (what == SHOWN_STATUS || what == SHOWN_CHOOSER) {
+      trans_ = NO_TRANS;
     } else {
-      trans_ = FADE;
+      bool chained = transitioning(ms);
+      memcpy(slide_px_, last_px_, sizeof slide_px_);
+      trans_start_ = ms;
+      if (shown_ == SHOWN_CHOOSER || button_dir_) {
+        trans_ = SLIDE;
+        slide_dir_ = shown_ == SHOWN_CHOOSER ? (chooser_travel_ < 0 ? -1 : 1) : button_dir_;
+        slide_ms_ = chained ? SCREEN_SLIDE_QUICK_MS : draw::SCREEN_SLIDE_MS;
+      } else {
+        trans_ = FADE;
+      }
     }
   }
   button_dir_ = 0;  // a press is for the frame right after it
   shown_ = what;
-  memcpy(last_px_, f.px, sizeof last_px_);
 }
 
 bool Board::draw_frame(long long ms, long long n) {
@@ -195,11 +202,17 @@ bool Board::draw_frame(long long ms, long long n) {
     } else {
       player.draw(f, (double)ms, n);
     }
-    // shown() keeps this frame's own pixels for the next change (and starts
-    // a slide or fade, which begins on the old frame: t = 0); then that.
-    shown(what, f, ms);
-    if (sliding(ms)) draw::slide_frames(slide_px_, f, draw::slide_offset((double)(ms - trans_start_)), slide_dir_);
-    else if (fading(ms)) draw::fade_frames(slide_px_, f, (double)(ms - trans_start_));
+    // shown() starts a slide or fade on a change (from the last shown frame:
+    // t = 0); then that; then this frame, as shown, is kept for the next.
+    shown(what, ms);
+    if (sliding(ms)) {
+      // A quick slide runs the same curve faster.
+      double t = (double)(ms - trans_start_) * draw::SCREEN_SLIDE_MS / slide_ms_;
+      draw::slide_frames(slide_px_, f, draw::slide_offset(t), slide_dir_);
+    } else if (fading(ms)) {
+      draw::fade_frames(slide_px_, f, (double)(ms - trans_start_));
+    }
+    memcpy(last_px_, f.px, sizeof last_px_);
   });
   return true;
 }

@@ -1512,6 +1512,66 @@ static void test_buttons_slide_the_way_pressed() {
   CHECK(r.board->fading(r.clock.t), "");
 }
 
+static void test_presses_in_a_row_chain_quick_slides_without_a_jump() {
+  Rig r({"ok"}, true);
+  r.board->connect();
+  r.run_for(5000);
+  // Until the new screen's first frame is drawn, keeping the frame shown
+  // just before it.
+  auto press_down = [&](draw::Frame &prev) {
+    r.btn.held_down = true;
+    std::string was = S(r.board);
+    for (;;) {
+      draw::Frame cur = r.display.last;
+      long f0 = r.display.frames;
+      r.board->step();
+      r.clock.sleep_ms(5);
+      if (S(r.board) != was && r.display.frames != f0) {
+        prev = cur;
+        break;
+      }
+    }
+    r.btn.held_down = false;
+  };
+  draw::Frame prev;
+  press_down(prev);  // transit -> ticker: a full slide
+  CHECK(r.board->sliding(r.clock.t) && r.board->slide_ms() == draw::SCREEN_SLIDE_MS, "%g", r.board->slide_ms());
+  r.run_for(150);  // mid-slide
+  press_down(prev);  // ticker -> weather, before the first slide is done
+  CHECK(S(r.board) == "weather", "%s", S(r.board).c_str());
+  CHECK(r.board->sliding(r.clock.t) && r.board->slide_dir() == 1, "");
+  CHECK(r.board->slide_ms() < draw::SCREEN_SLIDE_MS, "a slide that interrupts one is quicker: %g", r.board->slide_ms());
+  // It starts from what was on the panel (the half-slid frame), not the
+  // ticker on its own: no snap.
+  CHECK(memcmp(prev.px, r.display.last.px, sizeof prev.px) == 0, "the interrupting slide starts on the shown frame");
+  r.run_for((long long)r.board->slide_ms() + 50);
+  CHECK(!r.board->sliding(r.clock.t), "");
+  // Once settled, the next press is a full slide again.
+  r.run_for(1000);
+  press_down(prev);
+  CHECK(r.board->slide_ms() == draw::SCREEN_SLIDE_MS, "%g", r.board->slide_ms());
+}
+
+static void test_a_turn_mid_slide_shows_the_chooser_at_once() {
+  std::unique_ptr<Rig> r(knob_rig());
+  r->knob.pending = 1;
+  r->run_for(1100);
+  while (r->board->chooser.open) {
+    r->board->step();
+    r->clock.sleep_ms(5);
+  }
+  CHECK(r->board->sliding(r->clock.t), "");
+  r->run_for(100);
+  r->knob.pending = 1;  // turned again mid-slide
+  long seen = r->display.frames;
+  while (r->display.frames == seen || !r->board->chooser.open) {
+    r->board->step();
+    r->clock.sleep_ms(5);
+  }
+  CHECK(r->clock.t - r->board->trans_start() < draw::SCREEN_SLIDE_MS, "still inside the old slide's time");
+  CHECK(r->board->chooser.open && !r->board->transitioning(r->clock.t), "the chooser cuts the slide short");
+}
+
 static void test_knob_choice_slides_the_way_the_knob_turned() {
   std::unique_ptr<Rig> r(knob_rig());
   r->knob.pending = 1;  // clockwise to WEATHER
@@ -1716,6 +1776,8 @@ int main() {
       T_(test_ota_boot_counts_trial_starts),
       T_(test_phone_screen_change_fades),
       T_(test_buttons_slide_the_way_pressed),
+      T_(test_presses_in_a_row_chain_quick_slides_without_a_jump),
+      T_(test_a_turn_mid_slide_shows_the_chooser_at_once),
       T_(test_knob_choice_slides_the_way_the_knob_turned),
       T_(test_worker_animations_never_wait_for_a_request),
       T_(test_worker_keeps_data_fresh_one_request_at_a_time),
