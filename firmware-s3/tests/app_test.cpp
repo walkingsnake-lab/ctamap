@@ -452,6 +452,9 @@ struct Rig {
   }
 };
 
+// The screen on show, by name.
+static std::string S(const std::unique_ptr<app::Board> &b) { return screen::name(b->player.screen); }
+
 static long long max_gap(const std::vector<long long> &t) {
   long long g = 0;
   for (size_t i = 1; i < t.size(); i++) g = std::max(g, t[i] - t[i - 1]);
@@ -733,11 +736,11 @@ static void test_settings_change_shows_up_fast() {
   r.server.v = 2;
   r.server.screen = "ticker";
   long long changed_at = r.clock.t;
-  while (r.board->player.screen != "ticker" && r.clock.t - changed_at < 30000) {
+  while (S(r.board) != "ticker" && r.clock.t - changed_at < 30000) {
     r.board->step();
     r.clock.sleep_ms(5);
   }
-  CHECK(r.board->player.screen == "ticker", "phone change took too long");
+  CHECK(S(r.board) == "ticker", "phone change took too long");
   CHECK(r.board->player.p["v"].num() == 2, "");
 }
 
@@ -749,7 +752,7 @@ static void test_radar_frames_only_on_the_radar_screen_and_once_each() {
   r.server.radar_on = true;
   r.server.v = 2;
   r.run_for(90000);
-  CHECK(r.board->player.screen == "weather", "%s", r.board->player.screen.c_str());
+  CHECK(S(r.board) == "weather", "%s", S(r.board).c_str());
   std::set<std::string> names;
   for (const Call &c : r.server.calls)
     if (c.name.compare(0, 5, "radar") == 0) names.insert(c.name);
@@ -793,7 +796,7 @@ static void test_logos_only_on_the_baseball_screen_and_once_each() {
   r.server.screen = "baseball";
   r.server.v = 2;
   r.run_for(90000);
-  CHECK(r.board->player.screen == "baseball", "");
+  CHECK(S(r.board) == "baseball", "");
   std::vector<std::string> got;
   for (const Call &c : r.server.calls)
     if (c.name.compare(0, 4, "logo") == 0) got.push_back(c.name);
@@ -852,7 +855,7 @@ static void test_a_button_press_fetches_the_new_screens_sections_right_away() {
     r.clock.sleep_ms(5);
   }
   CHECK(r.server.update_screens.size() > before, "no update after the press");
-  CHECK(r.server.update_screens.back() == r.board->player.screen, "");
+  CHECK(r.server.update_screens.back() == S(r.board), "");
   CHECK(r.server.update_screens.back() == "ticker", "%s", r.server.update_screens.back().c_str());
 }
 
@@ -918,7 +921,7 @@ static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_ten_times
   r.server.screen = "clock";
   r.board->connect();
   r.run_for(5000);
-  CHECK(r.board->player.screen == "clock", "%s", r.board->player.screen.c_str());
+  CHECK(S(r.board) == "clock", "%s", S(r.board).c_str());
   r.run_for(60000);
   CHECK(r.server.count("sky:p1") == 1, "%d", r.server.count("sky:p1"));
   CHECK(r.board->player.clouds.count("p1") == 1, "");
@@ -995,16 +998,16 @@ static void test_buttons_override_until_the_phone_changes_something() {
     r.run_for(200);
   };
   press(true);
-  CHECK(r.board->player.screen == "ticker", "%s", r.board->player.screen.c_str());
+  CHECK(S(r.board) == "ticker", "%s", S(r.board).c_str());
   r.run_for(70000);  // several updates, same version
-  CHECK(r.board->player.screen == "ticker", "%s", r.board->player.screen.c_str());
+  CHECK(S(r.board) == "ticker", "%s", S(r.board).c_str());
   press(false);
-  CHECK(r.board->player.screen == "transit", "%s", r.board->player.screen.c_str());
+  CHECK(S(r.board) == "transit", "%s", S(r.board).c_str());
   press(false);
-  CHECK(r.board->player.screen == "clock", "UP wraps around to the last screen: %s", r.board->player.screen.c_str());
+  CHECK(S(r.board) == "clock", "UP wraps around to the last screen: %s", S(r.board).c_str());
   r.server.v = 5;  // a phone change: the board follows the server again
   r.run_for(30000);
-  CHECK(r.board->player.screen == "transit", "%s", r.board->player.screen.c_str());
+  CHECK(S(r.board) == "transit", "%s", S(r.board).c_str());
 }
 
 static void test_status_screens_and_retry() {
@@ -1103,7 +1106,7 @@ static void test_auto_visits_the_radar_on_a_timer_and_prefetches_frames() {
   for (int i = 0; i < 10 * 60 * 1000 / 50; i++) {
     r.board->step();
     long long phase = draw::fmod_floor(r.board->now(r.clock.t), 240);
-    const std::string &s = r.board->player.screen;
+    const std::string &s = S(r.board);
     if (phase >= 3 && phase < 57 && s != "weather") wrong++;
     if (phase >= 63 && phase < 237 && s != "transit") wrong++;
     r.clock.sleep_ms(50);
@@ -1121,10 +1124,10 @@ static void test_buttons_beat_the_timer() {
   r.btn.held_down = true;
   r.run_for(2500);
   r.btn.held_down = false;
-  std::string pressed = r.board->player.screen;
+  std::string pressed = S(r.board);
   CHECK(r.board->override_.screen.has_value(), "");
   r.run_for(200000);
-  CHECK(r.board->player.screen == pressed, "%s", r.board->player.screen.c_str());
+  CHECK(S(r.board) == pressed, "%s", S(r.board).c_str());
 }
 
 static void test_no_visits_without_rain_or_when_off() {
@@ -1133,7 +1136,7 @@ static void test_no_visits_without_rain_or_when_off() {
   r.server.visit = "{\"every\":240,\"for\":60}";
   r.board->connect();
   r.run_for(5 * 60 * 1000);
-  CHECK(r.board->player.screen == "transit", "");
+  CHECK(S(r.board) == "transit", "");
   CHECK(r.server.count("radar") == 0, "");
 }
 
@@ -1358,7 +1361,7 @@ static void test_knob_twist_and_rest_selects_once() {
   CHECK(r->board->chooser.open, "the first click opens the chooser");
   // Pips start at x23, 5 apart: WEATHER (2) is the selection.
   CHECK(amber(r->display.last, 33, 9) && !amber(r->display.last, 28, 9), "WEATHER's pip");
-  CHECK(r->board->player.screen == "transit", "nothing switches while turning: %s", r->board->player.screen.c_str());
+  CHECK(S(r->board) == "transit", "nothing switches while turning: %s", S(r->board).c_str());
   r->knob.pending = 1;
   r->run_for(600);
   CHECK(r->board->chooser.open, "still turning");
@@ -1366,7 +1369,7 @@ static void test_knob_twist_and_rest_selects_once() {
   r->run_for(1500 + LATENCY);
   CHECK(!r->board->chooser.open, "closed after committing");
   CHECK(r->server.selects == std::vector<std::string>({"sports"}), "%zu", r->server.selects.size());
-  CHECK(r->board->player.screen == "baseball", "%s", r->board->player.screen.c_str());
+  CHECK(S(r->board) == "baseball", "%s", S(r->board).c_str());
   // Nothing else ran while the chooser was open (the version check waited).
   for (size_t i = before; i < r->server.calls.size(); i++) {
     const Call &c = r->server.calls[i];
@@ -1387,7 +1390,7 @@ static void test_knob_back_to_the_start_cancels() {
   r->run_for(2000);
   CHECK(!r->board->chooser.open, "");
   CHECK(r->server.count("select:") == 0, "%d", r->server.count("select:"));
-  CHECK(r->board->player.screen == "transit", "%s", r->board->player.screen.c_str());
+  CHECK(S(r->board) == "transit", "%s", S(r->board).c_str());
   CHECK(!amber(r->display.last, 28, 9), "the transit screen is back");
 }
 
@@ -1407,11 +1410,11 @@ static void test_knob_select_failure_keeps_the_screen() {
   r->knob.pending = 1;
   r->run_for(2000 + LATENCY);
   CHECK(!r->board->chooser.open, "");
-  CHECK(r->board->player.screen == "transit", "%s", r->board->player.screen.c_str());
+  CHECK(S(r->board) == "transit", "%s", S(r->board).c_str());
   CHECK(r->board->last_error == "select:OSError", "%s", r->board->last_error.c_str());
   r->knob.pending = 1;  // works again next time
   r->run_for(2000 + LATENCY);
-  CHECK(r->board->player.screen == "weather", "%s", r->board->player.screen.c_str());
+  CHECK(S(r->board) == "weather", "%s", S(r->board).c_str());
 }
 
 static void test_knob_waits_for_the_ring() {
@@ -1431,7 +1434,7 @@ static void test_screen_change_slides() {
   draw::Frame before = r.display.last;
   r.server.v = 2;
   r.server.screen = "ticker";
-  while (r.board->player.screen != "ticker") {
+  while (S(r.board) != "ticker") {
     r.board->step();
     r.clock.sleep_ms(5);
   }
@@ -1456,7 +1459,7 @@ static void test_screen_change_slides() {
   // Back to transit: an earlier screen, from the left.
   r.server.v = 3;
   r.server.screen = "transit";
-  while (r.board->player.screen != "transit") {
+  while (S(r.board) != "transit") {
     r.board->step();
     r.clock.sleep_ms(5);
   }
@@ -1471,7 +1474,7 @@ static void test_knob_choice_slides_the_way_the_knob_turned() {
     r->board->step();
     r->clock.sleep_ms(5);
   }
-  CHECK(r->board->player.screen == "weather", "%s", r->board->player.screen.c_str());
+  CHECK(S(r->board) == "weather", "%s", S(r->board).c_str());
   CHECK(r->board->sliding(r->clock.t) && r->board->slide_dir() == 1, "%d", r->board->slide_dir());
   r->run_for(2000);
   r->knob.pending = -1;  // back to TRANSIT
@@ -1480,7 +1483,7 @@ static void test_knob_choice_slides_the_way_the_knob_turned() {
     r->board->step();
     r->clock.sleep_ms(5);
   }
-  CHECK(r->board->player.screen == "transit", "%s", r->board->player.screen.c_str());
+  CHECK(S(r->board) == "transit", "%s", S(r->board).c_str());
   CHECK(r->board->sliding(r->clock.t) && r->board->slide_dir() == -1, "%d", r->board->slide_dir());
 }
 
@@ -1555,7 +1558,7 @@ static void test_worker_knob_commit_waits_for_the_request_out() {
   r->knob.pending = 1;
   r->run_for(10000);
   CHECK(r->server.selects == std::vector<std::string>({"weather"}), "%zu", r->server.selects.size());
-  CHECK(r->board->player.screen == "weather", "%s", r->board->player.screen.c_str());
+  CHECK(S(r->board) == "weather", "%s", S(r->board).c_str());
   CHECK(!r->board->chooser.open, "");
 }
 

@@ -15,10 +15,12 @@
 
 #include "draw.h"
 #include "json.h"
+#include "screen.h"
 
 namespace player {
 
 using json::Value;
+using screen::Screen;
 
 const int RADAR_SLOTS = 6;  // the loop's length (contract: up to 6 frames)
 const int LOGO_SLOTS = 4;   // the game on screen and the next one
@@ -36,7 +38,7 @@ class Player {
   int page = 0;
   double page_start = 0;
   double loop_start = 0;
-  std::string screen = "transit";
+  Screen screen = Screen::Transit;
   draw::NumRoller nums;  // header and radar clock rolls
   draw::Frames clouds;   // the skyline's cloud strip on hand: id -> 1664 packed bytes (one kept)
   double wall_ms = 0;    // epoch ms, set by the Board before drawing (the skyline's animation clock)
@@ -54,9 +56,9 @@ class Player {
   std::optional<std::string> missing_cloud() const;
   void add_cloud(const std::string &id, std::vector<uint8_t> bytes);
   void add_logo(const std::string &lid, std::vector<uint8_t> bytes) { logos[lid] = std::move(bytes); }
-  std::string auto_screen(long long now) const;
+  Screen auto_screen(long long now) const;
   bool wants_frames() const;
-  void set_screen(const std::string &s, double ms);
+  void set_screen(Screen s, double ms);
 
   // ---- drawing ----
   void draw(draw::Frame &frame, double ms, long long now);
@@ -67,7 +69,7 @@ class Player {
   int radar_idx(double ms) const;
   bool rain_bars(double ms) const;
   bool awaiting_drop(long long now) const;
-  std::optional<std::string> frame_key(double ms, long long now);
+  std::optional<screen::FrameKey> frame_key(double ms, long long now);
 
   // ---- animation ----
   bool busy(double ms) const;

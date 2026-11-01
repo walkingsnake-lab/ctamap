@@ -63,7 +63,7 @@ void Board::status(const std::string &kind, const std::string &detail) {
   long long ms = clock->ms();
   display->show([&](draw::Frame &f) {
     draw::render_status(f, kind, detail);
-    shown("status", f, ms);
+    shown(SHOWN_STATUS, f, ms);
   });
 }
 
@@ -149,37 +149,29 @@ void Board::apply(const Value &p, long long st, long long ms) {
   ab_min_.reset();
   if (ab.is_obj() && ab["min"].is_num()) ab_min_ = std::max(0.0, std::min(100.0, ab["min"].num()));
   apply_bright(ms);
-  player.set_screen(override_.resolve(player.auto_screen(now(ms)), json::str(p["v"])), (double)ms);
+  player.set_screen(override_.resolve(player.auto_screen(now(ms)), p["v"].num()), (double)ms);
   update_job.interval_ms = (double)(player.live_game() ? LIVE_EVERY : UPDATE_EVERY);
   if (player.missing_cloud()) sky_job.due_at = 0;  // a new sky: fetch its clouds in the next gap
 }
 
-// Screens in the order they slide: a later one comes in from the right,
-// an earlier one from the left (the knob ring's order).
-static int screen_order(const std::string &s) {
-  static const char *const ORDER[] = {"transit", "ticker", "weather", "baseball", "clock"};
-  for (int i = 0; i < 5; i++)
-    if (s == ORDER[i]) return i;
-  return -1;
-}
-
-void Board::shown(const std::string &what, const draw::Frame &f, long long ms) {
+void Board::shown(int what, const draw::Frame &f, long long ms) {
   // A different screen than the last frame's: slide it in over that frame
   // (spec §2, "Screen change"). The first frame ever, status screens, and
   // the knob's chooser (a turn should answer at once) just appear; leaving
-  // them slides. Leaving the chooser follows the knob's turn.
-  if (what != shown_ && !shown_.empty() && what != "status" && what != "chooser") {
+  // them slides. Leaving the chooser follows the knob's turn; otherwise a
+  // later screen (screen.h order) comes in from the right.
+  if (what != shown_ && shown_ != SHOWN_NONE && what != SHOWN_STATUS && what != SHOWN_CHOOSER) {
     memcpy(slide_px_, last_px_, sizeof slide_px_);
     slide_start_ = ms;
-    if (shown_ == "chooser") slide_dir_ = chooser_travel_ < 0 ? -1 : 1;
-    else slide_dir_ = screen_order(what) < screen_order(shown_) ? -1 : 1;
+    if (shown_ == SHOWN_CHOOSER) slide_dir_ = chooser_travel_ < 0 ? -1 : 1;
+    else slide_dir_ = what < shown_ ? -1 : 1;
   }
   shown_ = what;
   memcpy(last_px_, f.px, sizeof last_px_);
 }
 
 bool Board::draw_frame(long long ms, long long n) {
-  std::string what = chooser.open ? "chooser" : player.screen;
+  int what = chooser.open ? SHOWN_CHOOSER : (int)player.screen;
   if (chooser.open) chooser_travel_ = chooser.target - chooser.start;
   player.wall_ms = (double)now_ms(ms);  // the skyline's animation clock
   display->show([&](draw::Frame &f) {
@@ -271,7 +263,7 @@ sched::Result Board::do_update(double) {
   // The server sends only the shown screen's sections; while a button press
   // overrides the screen, ask for that one.
   Flight f;
-  std::string scr = override_.screen ? *override_.screen : "";
+  std::string scr = override_.screen ? screen::name(*override_.screen) : "";
   f.work = [this, scr] { return net->update(false, scr, flight_->v, flight_->err); };
   f.finish = [this](long long ended) {
     apply(flight_->v, flight_->started, ended);
@@ -403,7 +395,7 @@ sched::Result Board::after_job(Flight &f, sched::Result result, long long ended)
   if (result == sched::MORE) {
     // More of a set to fetch (radar frames, logos). While that screen is
     // showing, go again right away; while prefetching, take the next gap.
-    bool showing = player.screen == (job == &radar_job ? "weather" : "baseball");
+    bool showing = player.screen == (job == &radar_job ? Screen::Weather : Screen::Baseball);
     job->due_at = showing ? (double)ended - job->deadline_ms : (double)ended;
   }
   return result;
@@ -439,7 +431,7 @@ void Board::step() {
   if (player.has_p) {
     // Timed radar visits: follow the server's schedule unless a button
     // press is overriding it.
-    player.set_screen(override_.resolve(player.auto_screen(n), json::str(player.p["v"])), (double)ms);
+    player.set_screen(override_.resolve(player.auto_screen(n), player.p["v"].num()), (double)ms);
   }
   if (fails == 0 && player.awaiting_drop(n)) {
     // A train is due to drop but the payload is older than that moment:
@@ -473,8 +465,8 @@ void Board::step() {
   // screen can have changed.
   n = now(ms);
   player.wall_ms = (double)now_ms(ms);
-  std::optional<std::string> key = chooser.open ? chooser.frame_key((double)ms) : player.frame_key((double)ms, n);
-  if (sliding(ms) || (!chooser.open && player.screen != shown_) || (chooser.open && shown_ != "chooser")) key.reset();
+  std::optional<screen::FrameKey> key = chooser.open ? chooser.frame_key((double)ms) : player.frame_key((double)ms, n);
+  if (sliding(ms) || (chooser.open ? SHOWN_CHOOSER : (int)player.screen) != shown_) key.reset();
   if (last_draw_ < 0 || (!key ? ms - last_draw_ >= 33 : key != last_key_)) {
     if (draw_frame(ms, n)) {
       last_draw_ = ms;
@@ -636,8 +628,7 @@ void Board::do_buttons(long long ms) {
   if (up_.update(buttons->up(), (double)ms)) stp = -1;
   if (down_.update(buttons->down(), (double)ms)) stp = 1;
   if (stp) {
-    std::string s = override_.press(stp, player.screen, json::str(player.p["v"]));
-    player.set_screen(s, (double)ms);
+    player.set_screen(override_.press(stp, player.screen, player.p["v"].num()), (double)ms);
     radar_job.due_at = 0;
     // The payload only has the old screen's data: fetch the new one now.
     update_job.due_at = (double)ms - update_job.deadline_ms;

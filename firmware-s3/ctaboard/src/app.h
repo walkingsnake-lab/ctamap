@@ -31,6 +31,7 @@
 namespace app {
 
 using json::Value;
+using screen::Screen;
 using Networks = std::vector<std::pair<std::string, std::string>>;  // (ssid, password), tried in order
 using StatusFn = std::function<void(const std::string &kind, const std::string &detail)>;
 
@@ -251,7 +252,7 @@ class Board {
  private:
   control::Debounce up_, down_;
   long long last_draw_ = -1;
-  std::optional<std::string> last_key_;
+  std::optional<screen::FrameKey> last_key_;
   std::string health_q_;
   std::optional<long long> health_at_;
   long long run_start_;
@@ -290,16 +291,17 @@ class Board {
   long long pending_start_ = 0;
   bool stuck_said_ = false;
 
-  // Screen-change slide: the last frame shown and what it showed
-  // ("chooser", "status", or the player's screen); a change of that slides
-  // the new screen in over a copy of it.
+  // Screen-change slide: the last frame shown and what it showed (a Screen,
+  // or one of these); a change of that slides the new screen in over a
+  // copy of it.
+  static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3;
   uint8_t last_px_[draw::Frame::W * draw::Frame::H * 3] = {};
   uint8_t slide_px_[draw::Frame::W * draw::Frame::H * 3] = {};
-  std::string shown_;
+  int shown_ = SHOWN_NONE;
   long long slide_start_ = -1;
   int slide_dir_ = 1;
   long long chooser_travel_ = 0;  // where the knob's last turn went (ring steps, + clockwise)
-  void shown(const std::string &what, const draw::Frame &f, long long ms);
+  void shown(int what, const draw::Frame &f, long long ms);
   void launch(Flight f);
   void land(long long ended);
 
