@@ -484,6 +484,27 @@ static const IconFrame ICON_FRAMES[] = {
 };
 static const int ICON_FRAMES_N = 32;
 
+static const IconColor OWL_PALETTE[] = {
+  {'B', 110, 74, 42},
+  {'b', 168, 135, 92},
+  {'W', 216, 200, 168},
+  {'Y', 255, 208, 64},
+  {'O', 208, 128, 48},
+};
+static const int OWL_PALETTE_N = 5;
+static const int OWL_W = 13, OWL_H = 15;
+struct OwlFrame { uint16_t ms; const char *px; };
+static const OwlFrame OWL_FRAMES[] = {
+  {4000, ".B.........B..BB.......BB..BBBBBBBBBBB.BBWWWBBBWWWBBBWYYYWBWYYYWBBWY.YWBWY.YWBBWYYYWOWYYYWBBBWWWBOBWWWBBBBbbbbbbbbbBBBbbBbbbbBbbbBBbbbbbBbbbBbBBbBbbbbbbbbbB.BbbbBbbbBbB...BBBBBBBBB....OOO...OOO.."},
+  {150, ".B.........B..BB.......BB..BBBBBBBBBBB.BBWWWBBBWWWBBBWBBBWBWBBBWBBWWWWWBWWWWWBBWBBBWOWBBBWBBBWWWBOBWWWBBBBbbbbbbbbbBBBbbBbbbbBbbbBBbbbbbBbbbBbBBbBbbbbbbbbbB.BbbbBbbbBbB...BBBBBBBBB....OOO...OOO.."},
+  {3000, ".B.........B..BB.......BB..BBBBBBBBBBB.BBWWWBBBWWWBBBWYYYWBWYYYWBBWY.YWBWY.YWBBWYYYWOWYYYWBBBWWWBOBWWWBBBBbbbbbbbbbBBBbbBbbbbBbbbBBbbbbbBbbbBbBBbBbbbbbbbbbB.BbbbBbbbBbB...BBBBBBBBB....OOO...OOO.."},
+  {1600, ".B.........B..BB.......BB..BBBBBBBBBBB.BBWWWBBBWWWBBBWYYYWBWYYYWBBWYY.WBWYY.WBBWYYYWOWYYYWBBBWWWBOBWWWBBBBbbbbbbbbbBBBbbBbbbbBbbbBBbbbbbBbbbBbBBbBbbbbbbbbbB.BbbbBbbbBbB...BBBBBBBBB....OOO...OOO.."},
+  {300, ".B.........B..BB.......BB..BBBBBBBBBBB.BBWWWBBBWWWBBBWYYYWBWYYYWBBWY.YWBWY.YWBBWYYYWOWYYYWBBBWWWBOBWWWBBBBbbbbbbbbbBBBbbBbbbbBbbbBBbbbbbBbbbBbBBbBbbbbbbbbbB.BbbbBbbbBbB...BBBBBBBBB....OOO...OOO.."},
+  {150, ".B.........B..BB.......BB..BBBBBBBBBBB.BBWWWBBBWWWBBBWBBBWBWBBBWBBWWWWWBWWWWWBBWBBBWOWBBBWBBBWWWBOBWWWBBBBbbbbbbbbbBBBbbBbbbbBbbbBBbbbbbBbbbBbBBbBbbbbbbbbbB.BbbbBbbbBbB...BBBBBBBBB....OOO...OOO.."},
+  {2200, ".B.........B..BB.......BB..BBBBBBBBBBB.BBWWWBBBWWWBBBWYYYWBWYYYWBBWY.YWBWY.YWBBWYYYWOWYYYWBBBWWWBOBWWWBBBBbbbbbbbbbBBBbbBbbbbBbbbBBbbbbbBbbbBbBBbBbbbbbbbbbB.BbbbBbbbBbB...BBBBBBBBB....OOO...OOO.."},
+};
+static const int OWL_FRAMES_N = 7;
+
 static const char *const ALERT_BANG[] = {".#.", ".#.", ".#.", "...", ".#."};
 static const int ALERT_BANG_N = 5;
 

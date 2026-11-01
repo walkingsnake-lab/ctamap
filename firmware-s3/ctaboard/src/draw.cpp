@@ -485,7 +485,8 @@ static bool same_shape(Font font, const ustr &a, const ustr &b) {
 // `pos`, or centered on the panel (draw.js xOf: () => x, rightAt, centerX).
 enum Align { LEFT, RIGHT, CENTER };
 static int align_x(Font font, const ustr &s, Align a, int pos) {
-  return a == LEFT ? pos : a == RIGHT ? pos - measure(font, s) + 1 : (int)fdiv(64 - measure(font, s), 2);
+  // CENTER: centered in columns pos-63 (pos 0: the whole panel).
+  return a == LEFT ? pos : a == RIGHT ? pos - measure(font, s) + 1 : pos + (int)fdiv(64 - pos - measure(font, s), 2);
 }
 
 // Text that rolls when it changes. Pixel-identical to rollTextWith() in
@@ -829,14 +830,45 @@ static void draw_view_row(Frame &f, const ViewRow &row, bool lnc) {
   }
 }
 
+// Overnight owl (draw.js owlRows): its frame at icon-clock ms t, or the
+// static owl (frame 0) without a clock.
+int owl_frame(std::optional<double> t) {
+  if (!t) return 0;
+  long long total = 0;
+  for (int i = 0; i < assets::OWL_FRAMES_N; i++) total += assets::OWL_FRAMES[i].ms;
+  long long k = fmod_floor((long long)floor(*t), total);
+  for (int i = 0; i < assets::OWL_FRAMES_N; i++) {
+    if (k < assets::OWL_FRAMES[i].ms) return i;
+    k -= assets::OWL_FRAMES[i].ms;
+  }
+  return 0;
+}
+
+static RGB owl_color(char code) {
+  for (int i = 0; i < assets::OWL_PALETTE_N; i++)
+    if (assets::OWL_PALETTE[i].code == code)
+      return RGB{assets::OWL_PALETTE[i].r, assets::OWL_PALETTE[i].g, assets::OWL_PALETTE[i].b};
+  return RGB{};
+}
+
+// No trains (draw.js drawOvernight): the owl on a line at the left, the
+// big clock and NO TRAINS centered in x 16-63.
+static const int OWL_X = 2, OWL_PANEL = 16;
 static void draw_overnight(Frame &f, const View &view, double now) {
   ustr clock = clock_text(now, view.tzo);
   ustr nt = view.stale ? U"NO DATA" : U"NO TRAINS";
-  int block_h = 10 + 3 + 5;
-  int area_h = view.wx ? 26 : 32;
-  int top = (int)fdiv(area_h - block_h, 2);
-  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, 0, top + 10, C::clock);
-  f.text(FONT_SMALL, nt, (int)fdiv(64 - measure(FONT_SMALL, nt), 2), top + 18, C::noTrains);
+  int bottom = view.wx ? 25 : 31;
+  f.fill(0, bottom, 64, 1, C::perch);
+  const char *px = assets::OWL_FRAMES[owl_frame(g_icon_t)].px;
+  int oy = bottom - assets::OWL_H;
+  for (int j = 0; j < assets::OWL_H; j++)
+    for (int i = 0; i < assets::OWL_W; i++) {
+      char c = px[j * assets::OWL_W + i];
+      if (c != '.') f.fill(OWL_X + i, oy + j, 1, 1, owl_color(c));
+    }
+  int top = view.wx ? 3 : 5;
+  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, OWL_PANEL, top + 10, C::clock);
+  f.text(FONT_SMALL, nt, align_x(FONT_SMALL, nt, CENTER, OWL_PANEL), top + 18, C::noTrains);
 }
 
 static void draw_stale(Frame &f, const Value &p) {

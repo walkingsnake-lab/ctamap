@@ -116,6 +116,18 @@ function buildCpp() {
     }
   }
   lines.push('};', `static const int ICON_FRAMES_N = ${nFrames};`, '');
+  // Overnight owl (icons.js OWL): its palette and frames (13 x 15, row by
+  // row), with how long each shows (ms). S3 only.
+  lines.push('static const IconColor OWL_PALETTE[] = {');
+  for (const [k, v] of Object.entries(icons.OWL.palette)) lines.push(`  {'${k}', ${parseInt(v.slice(1, 3), 16)}, ${parseInt(v.slice(3, 5), 16)}, ${parseInt(v.slice(5, 7), 16)}},`);
+  lines.push('};', `static const int OWL_PALETTE_N = ${Object.keys(icons.OWL.palette).length};`);
+  const ow = icons.OWL.frames[0][1][0].length, oh = icons.OWL.frames[0][1].length;
+  lines.push(`static const int OWL_W = ${ow}, OWL_H = ${oh};`, 'struct OwlFrame { uint16_t ms; const char *px; };', 'static const OwlFrame OWL_FRAMES[] = {');
+  for (const [ms, rows] of icons.OWL.frames) {
+    if (rows.length !== oh || rows.some((r) => r.length !== ow)) throw new Error(`owl frame is not ${ow} x ${oh}`);
+    lines.push(`  {${ms}, "${rows.join('')}"},`);
+  }
+  lines.push('};', `static const int OWL_FRAMES_N = ${icons.OWL.frames.length};`, '');
   lines.push(`static const char *const ALERT_BANG[] = {${icons.ALERT_BANG.map((r) => `"${r}"`).join(', ')}};`);
   lines.push(`static const int ALERT_BANG_N = ${icons.ALERT_BANG.length};`, '');
   // G_ prefix: the ESP32's headers define MIN/MAX macros.

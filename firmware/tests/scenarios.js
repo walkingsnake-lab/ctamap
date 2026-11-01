@@ -137,10 +137,15 @@ async function build() {
   }
   // Overnight.
   const night = { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE'), rows: [], ticker: [] };
-  add('overnight', night, [{ screen: 'transit' }]);
-  add('overnight weather', { ...night, wx: WX }, [{ screen: 'transit' }]);
-  add('no data', { ...night, stale: 1 }, [{ screen: 'transit' }]);
-  add('no data weather', { ...night, stale: 1, wx: WX }, [{ screen: 'transit' }]);
+  // The overnight owl came after the freeze (the M4 keeps the plain clock).
+  const owl = { s3only: true };
+  add('overnight', night, [{ screen: 'transit' }], undefined, undefined, owl);
+  add('overnight weather', { ...night, wx: WX }, [{ screen: 'transit' }], undefined, undefined, owl);
+  add('no data', { ...night, stale: 1 }, [{ screen: 'transit' }], undefined, undefined, owl);
+  add('no data weather', { ...night, stale: 1, wx: WX }, [{ screen: 'transit' }], undefined, undefined, owl);
+  // The owl's frames on the icon clock (open, blink, glance; wraps around).
+  add('overnight owl frames', night, [0, 4050, 7300, 9000, 11400, 15000].map((iconT) => ({ screen: 'transit', iconT })), undefined, undefined, owl);
+  add('overnight owl frames no data', { ...night, stale: 1, wx: WX }, [4050, 7300].map((iconT) => ({ screen: 'transit', iconT })), undefined, undefined, owl);
   add('stale', { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE'), stale: 1 }, [{ screen: 'transit' }, { screen: 'ticker' }, { screen: 'ticker', page: 1, slide: 0.5 }]);
   // Rolls via explicit roll state are covered by the animator sequences below.
 
@@ -177,7 +182,7 @@ async function build() {
     add('rolls header clock width change', hdr, nums({ 'hdr.clock': '12:59' }).map((n) => ({ screen: 'transit', nums: n })));
     add('rolls ticker header clock', hdr, nums({ 'hdr.clock': '11:15' }).map((n) => ({ screen: 'ticker', nums: n })));
     const nt = { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE'), rows: [], ticker: [], wx: WX };
-    add('rolls overnight clock stays still', nt, nums({ 'night.clock': '11:15' }).map((n) => ({ screen: 'transit', nums: n })));
+    add('rolls overnight clock stays still', nt, nums({ 'night.clock': '11:15' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, { s3only: true });
     const [key, { bytes, loc }] = Object.entries(rf)[0];
     const rt = radar.timeOf(key.split('-')[1]);
     const ids = ['a', 'b', 'c'];

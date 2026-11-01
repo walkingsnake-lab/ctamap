@@ -33,6 +33,7 @@ class Player {
   std::optional<double> bright;  // percent the renderer scales by (Board); none: the payload's
   long gen = 0;  // bumped with every payload
   draw::TransitAnimator anim;
+  bool night = false;  // the last transit frame had no rows: the overnight owl
   draw::Frames radar_frames;  // frame id -> bytes
   draw::Logos logos;          // logo id -> 24 x 12 RGB
   int page = 0;

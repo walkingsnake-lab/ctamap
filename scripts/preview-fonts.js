@@ -179,15 +179,10 @@ function transitRows(f, rows, tops) {
   save('mock-ticker.png', f, 10);
 }
 
-// Overnight clock with the weather row.
+// Overnight: the owl beside the clock (drawn by draw.js, the reference).
 {
-  const f = new Frame();
-  const clock = '12:34';
-  const w = measure('clock', clock);
-  f.text('clock', clock, Math.floor((64 - w) / 2), 13, C.clock);
-  const nt = 'NO TRAINS';
-  f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), 20, dim(C.label, 0.5));
-  drawWeatherRow(f, 'storm', '54\u00b0', [G.FUNNEL, 'WARNING', C.red]);
+  const now = Date.UTC(2026, 9, 4, 5, 34) / 1000;
+  const f = require('../server/board/render').render({ v: 1, now, tzo: -18000, screen: 'transit', bright: 100, rows: [], ticker: [] });
   save('mock-overnight.png', f, 10);
 }
 
