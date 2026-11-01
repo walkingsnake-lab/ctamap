@@ -2178,7 +2178,7 @@ static Geometry build() {
     double dx = x + 0.5 - CX, dy = y + 0.5 - CY;
     bool dup = false;
     for (const Star &s : g.stars) dup = dup || (s.x == x && s.y == y);
-    if (g.isB(x, y) || (x > 35 && x < 49 && y < 11) || dx * dx + dy * dy < 90.25 || dup) continue;
+    if (g.isB(x, y) || (x > 35 && x < 49 && y < 11) || (x >= 50 && x <= 55 && y < 10) || dx * dx + dy * dy < 90.25 || dup) continue;  // not between the Hancock antennas
     g.stars.push_back({x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 == 1, ih(i, 5, 3) % 1000, pers[g.stars.size() % 3]});
   }
   g.legs = cover([](double x, double y) {
@@ -2209,7 +2209,7 @@ const RGB WHEEL_NIGHT = hexc(0x4a4a66), PIER_DAY0 = hexc(0x6a6460), PIER_DAY1 = 
           BEACON0 = hexc(0x401010), BEACON1 = hexc(0xff2020), MOON = hexc(0xa89c70), RAIN_DAY0 = hexc(0x5a7aaa),
           RAIN_DAY1 = hexc(0x3a5070), RAIN_NIGHT0 = hexc(0x2c4468), RAIN_NIGHT1 = hexc(0x1e3050), SNOW0 = hexc(0x8a909c),
           SNOW1 = hexc(0xe8ecf2), SAIL = hexc(0xe8ecf0), HULL0 = hexc(0xc02828), HULL1 = hexc(0x7a1818), SPRAY = hexc(0xf4f8fc),
-          GLOW = hexc(0x8a80b0), BOLT_SOFT = hexc(0xb8b0e8), STAR_BRIGHT = hexc(0xffffff), STAR_DIM = hexc(0x5a6070);
+          GLOW = hexc(0x8a80b0), BOLT_SOFT = hexc(0xb8b0e8), STAR_BRIGHT = hexc(0xa8aebc), STAR_DIM = hexc(0x5a6070);
 const char *const SEADOG[3] = {"..pqpqpqpqpqp.", "YYYYYYYYYYYYYY", ".OOOOOOOOOOOO."};
 const char *const SAILS[4] = {"..#...", "..##..", "..###.", "..####"};
 const int BOLT[][2] = {{21, 0}, {21, 1}, {20, 2}, {21, 3}, {22, 3}, {23, 3}, {23, 4}, {24, 5}, {23, 6}, {24, 7}, {25, 7}, {25, 8}, {25, 9}};

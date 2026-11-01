@@ -1634,12 +1634,12 @@
         wins.push([x, y, ih(x, y, 5) % 1000, ih(x, y, 9) % 10 < 3]);
       }
       // Stars: the first 14 hash positions in the top 14 rows that miss the
-      // buildings, the moon's spot and the wheel. [x, y, bright, twinkles, phase 0-999, period ms]
+      // buildings, the moon's spot, the Hancock antennas and the wheel. [x, y, bright, twinkles, phase 0-999, period ms]
       const stars = [];
       for (let i = 0; stars.length < 14 && i < 1000; i++) {
         const x = ih(i, 1, 3) % W, y = ih(i, 2, 3) % 14;
         const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
-        if (isB(x, y) || (x > 35 && x < 49 && y < 11) || dx * dx + dy * dy < 90.25 || stars.some((s) => s[0] === x && s[1] === y)) continue;
+        if (isB(x, y) || (x > 35 && x < 49 && y < 11) || (x >= 50 && x <= 55 && y < 10) || dx * dx + dy * dy < 90.25 || stars.some((s) => s[0] === x && s[1] === y)) continue;
         stars.push([x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 === 1, ih(i, 5, 3) % 1000, [4000, 6000, 12000][stars.length % 3]]);
       }
       // Wheel: hard-edged shapes, a pixel on when at least half covered (6x6
@@ -1795,7 +1795,7 @@
       for (let i = 0; i < Math.min(s.stars || 0, SKY.stars.length); i++) {
         const [x, y, bright, tw, ph, per] = SKY.stars[i];
         const k = tw && s.twk !== 0 ? 0.25 + 0.75 * wave(ms / per + ph / 1000) : 1;
-        f.set(x, y, mixRgb(f.get(x, y), hex(bright ? '#ffffff' : '#5a6070'), k));
+        f.set(x, y, mixRgb(f.get(x, y), hex(bright ? '#a8aebc' : '#5a6070'), k));
       }
       if (s.moon) {
         const cosv = 1 - 2 * s.moon.fr / 100, waxing = s.moon.ph < 50;

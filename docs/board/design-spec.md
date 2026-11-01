@@ -467,7 +467,7 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 - **Sun (day):** a 7 px soft-edged disc `#ffd040` at x 38–44, rows 2–8.
 - **Sun (sunset):** drawn behind the city, low on the skyline, at the day's sunset bearing. Real bearings run from about 238° (December) to 302° (June), which at the skyline's 1.3 px per degree would put the sun off the panel at both ends, so the sun has its own scale: x = 32 + (bearing − 270) × 0.8, which spans x 6–58 over the year. Left of the wheel in winter, right in summer.
 - **Moon:** the day sun's spot and size, `#a89c70` (kept dimmer than the text), at its real phase, with soft edges. Shown all night whenever at least 3% is lit; it ignores moonrise and moonset (a deliberate simplification).
-- **Stars:** 14, about half twinkling (4, 6 or 12 s cycles). They stay off the buildings and the moon, and at least 3.5 px clear of the wheel's rim (a star beside the rim read as part of the wheel).
+- **Stars:** 14, about half twinkling (4, 6 or 12 s cycles). They stay off the buildings and the moon, out from between the Hancock antennas (a star there blurred what they were), and at least 3.5 px clear of the wheel's rim (a star beside the rim read as part of the wheel). Bright ones are a soft `#a8aebc`, not white; dim ones `#5a6070`.
 
 ### Water
 - A two-color gradient with faint ripple dashes drifting sideways, alternate rows in opposite directions, 1 px every 1.5 s.

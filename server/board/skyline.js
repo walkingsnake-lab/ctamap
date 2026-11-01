@@ -44,7 +44,9 @@ const KEYS = [
   { el: 1, sky: [[0, '#1a1440'], [9, '#5a2a5a'], [17, '#c0503a'], [23, '#f08a30'], [25, '#ffb848']], water: ['#3a2030', '#2a1424', '#7a3a3a'] }, // sunset
   { el: -3, sky: [[0, '#0e1040'], [12, '#30285e'], [20, '#80406a'], [25, '#c86a50']], water: ['#201830', '#140e22', '#4a3048'] },             // dusk
   { el: -6, sky: [[0, '#06103a'], [18, '#22306a'], [25, '#4a4a88']], water: ['#141a3a', '#0c1028', '#283060'] },                             // end of civil twilight
-  { el: -10, sky: [[0, '#000006'], [25, '#0c1430']], water: ['#030816', '#02050f', '#0e1a36'] },                                              // night
+  // Night: pure blue at panel levels 4-10 (was 0-3, which banded black to
+  // blue); one channel only, so the steps never shift hue.
+  { el: -10, sky: [[0, '#000034'], [25, '#000049']], water: ['#030816', '#02050f', '#0e1a36'] },                                              // night
 ];
 function clearSky(el) {
   if (el >= KEYS[0].el) return KEYS[0];
