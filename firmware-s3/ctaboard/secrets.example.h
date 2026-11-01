@@ -9,7 +9,8 @@
 #pragma once
 
 // WiFi networks, tried in order; networks the board can see go first.
-// Put the phone hotspot last.
+// Put the phone hotspot last. For a board going to someone else, leave it
+// empty ({}): they enter their WiFi on the board's setup network.
 #define WIFI_NETWORKS                \
   {                                  \
     {"home-network", "password"},    \
@@ -21,8 +22,16 @@
 // One ID per physical board: boards sharing an ID show the same thing. A new
 // ID adds itself on the server (as a copy of "home") the first time it connects.
 #define BOARD_ID "home"
-// Same value as the BOARD_TOKEN Fly secret.
+// Same value as the BOARD_TOKEN Fly secret, or the board's own token (control
+// page, Board tab: "Give it its own key", which writes this whole block).
 #define BOARD_TOKEN "..."
+
+// The board's setup network, where WiFi is entered without USB: it opens
+// with no networks saved, after 10 min without joining one, or when the knob
+// (or UP) is held for 2 s at power-on. "" names it Board-<last 4 of the MAC>;
+// a password of 8+ characters makes it WPA2 (put both on the label).
+#define SETUP_NAME ""
+#define SETUP_PASSWORD ""
 
 // 0, or 180 when the panel is mounted upside down. The UP/DOWN buttons keep
 // their screen order.

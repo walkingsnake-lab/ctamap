@@ -131,6 +131,25 @@ class Ota : public app::Ota {
   void save();
 };
 
+// WiFi setup without USB: the board's own network (config::setup_ssid,
+// WPA2 with setup_pass when it's 8+ characters) and a setup page that
+// every address leads to (a captive portal: phones open it on joining).
+// Saving a network writes it to flash and restarts the board. With saved
+// networks, it gives up after SETUP_IDLE_MS without a phone joined and
+// restarts to try them again (a router back after a power cut).
+class SetupPortal : public app::Setup {
+ public:
+  SetupPortal(config::Config *cfg, Panel *panel, std::function<void()> feed);
+  void run(const std::string &why) override;  // doesn't return: restarts the board
+  void joined() override;                     // clears the "new network" flag
+  std::string ssid() const;
+
+ private:
+  config::Config *cfg_;
+  Panel *panel_;
+  std::function<void()> feed_;
+};
+
 class SysClock : public app::Clock {
  public:
   long long ms() override;
@@ -151,9 +170,11 @@ class Knob : public app::Knob {
   explicit Knob(bool reverse = false) : reverse_(reverse) {}
   bool begin();
   int clicks() override;
+  bool pressed();  // the knob's push button, held now
 
  private:
   bool reverse_;
+  bool button_ = false;  // push button set up as an input
   bool on_ = false;
   uint32_t polled_ = 0;
   bool read(uint8_t base, uint8_t reg, uint8_t *buf, size_t n);

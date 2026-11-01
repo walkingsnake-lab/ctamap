@@ -69,6 +69,8 @@ static void usable() {
   CHECK(!config::usable(c, &why) && !why.empty(), "");
   c = sample();
   c.networks.clear();
+  CHECK(config::usable(c), "no WiFi yet is fine: the setup network opens");
+  c.url.clear();
   CHECK(!config::usable(c), "");
 }
 
@@ -94,7 +96,46 @@ static void choose() {
   CHECK(c.source == config::NONE && !c.why.empty(), "");
   c = config::choose(nullptr, "garbage", "");
   CHECK(c.source == config::NONE, "");
+  // A setup build without networks (a board for someone else) keeps the
+  // networks entered on the setup page, even when the rest changes.
+  config::Config maker = sample();
+  maker.networks.clear();
+  config::Config flashed = maker;
+  config::add_network(flashed, "their-wifi", "password1");
+  maker.token = "new";
+  c = config::choose(&maker, config::to_json(flashed), "stale");
+  CHECK(c.source == config::FROM_BUILD && c.write && c.cfg.token == "new", "");
+  CHECK(c.cfg.networks.size() == 1 && c.cfg.networks[0].first == "their-wifi", "%zu", c.cfg.networks.size());
   CHECK(config::fingerprint("a") != config::fingerprint("b") && config::fingerprint("a").size() == 8, "");
+}
+
+static void wifi_setup() {
+  config::Config c;
+  CHECK(config::setup_ssid(c, "7f3a") == "Board-7F3A", "%s", config::setup_ssid(c, "7f3a").c_str());
+  c.setup_name = "Board-QX4P";
+  CHECK(config::setup_ssid(c, "7f3a") == "Board-QX4P", "");
+  CHECK(config::setup_pass_ok("abcdefgh") && !config::setup_pass_ok("short") && !config::setup_pass_ok(""), "");
+  std::string why;
+  CHECK(config::check_network("home", "", &why), "open network");
+  CHECK(config::check_network("home", "12345678"), "");
+  CHECK(!config::check_network("", "12345678", &why) && !why.empty(), "");
+  CHECK(!config::check_network("home", "1234567"), "too short");
+  CHECK(!config::check_network(std::string(33, 'x'), ""), "name too long");
+  CHECK(!config::check_network("home", std::string(64, 'x')), "password too long");
+  // New networks go first; same name replaces; at most MAX_NETWORKS.
+  c.networks = {{"a", "1"}, {"b", "2"}};
+  config::add_network(c, "b", "new");
+  CHECK(c.networks.size() == 2 && c.networks[0].first == "b" && c.networks[0].second == "new" && c.networks[1].first == "a", "");
+  for (int i = 0; i < 12; i++) config::add_network(c, "n" + std::to_string(i), "");
+  CHECK(c.networks.size() == config::MAX_NETWORKS && c.networks[0].first == "n11", "%zu", c.networks.size());
+  // Network names are anyone's: escaped on the page.
+  std::string page = config::setup_page(c, "Board-QX4P", {"<script>x</script>", "Joe's \"wifi\""}, "Couldn't join <b>", true);
+  CHECK(page.find("<script>x") == std::string::npos, "seen names escaped");
+  CHECK(page.find("&lt;script&gt;x&lt;/script&gt;") != std::string::npos, "");
+  CHECK(page.find("Joe&#39;s &quot;wifi&quot;") != std::string::npos, "");
+  CHECK(page.find("Couldn&#39;t join &lt;b&gt;") != std::string::npos && page.find("note bad") != std::string::npos, "");
+  CHECK(page.find("action=/save") != std::string::npos && page.find("name=p") != std::string::npos, "");
+  CHECK(config::saved_page("<x>").find("&lt;x&gt;") != std::string::npos, "");
 }
 
 static int lit(const draw::Frame &f, int y0, int y1) {
@@ -113,6 +154,9 @@ static void status_screens() {
   draw::render_status(b, "updating", "4");
   CHECK(lit(a, 0, 15) > 20, "UPDATING");
   CHECK(lit(a, 16, 32) > lit(b, 16, 32), "the percentage is drawn");
+  draw::Frame s;
+  draw::render_status(s, "setup", "Board-QX4P");
+  CHECK(lit(s, 0, 15) > 20 && lit(s, 16, 32) > 20, "SETUP WIFI and the network name");
   draw::Frame c;
   draw::render_status(c, "nosetup", "");
   CHECK(lit(c, 0, 15) > 20 && lit(c, 16, 32) > 20, "NO SETUP");
@@ -123,6 +167,7 @@ int main() {
   missing_fields_keep_defaults();
   usable();
   choose();
+  wifi_setup();
   status_screens();
   printf("%d checks, %d failed\n", g_checks, g_failed);
   return g_failed ? 1 : 0;

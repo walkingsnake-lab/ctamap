@@ -386,6 +386,12 @@ Decided Oct 30, 2026, with more boards and other owners in mind: nobody should n
 - **Left alone:** boards running `dev` or `_dirty` builds (someone's test build); the M4.
 - **Later:** CI publishing straight to Beta (today CI builds the generic `.bin` as an artifact and the owner uploads it); a browser-based first install with WiFi entry (ESP Web Tools + Improv), so a new owner needs no IDE at all; per-board tokens before boards of different owners share one server (today every board shares `BOARD_TOKEN`).
 
+### Boards for other people (keys and WiFi setup)
+Decided Oct 31, 2026.
+
+- **Own token, own link:** a board for someone else gets its own token (a buyer could read a shared token out of flash) and a control link, `/board/c/<link>/`, that controls only that board: no other boards, firmware builds, logos, or keys; updates Automatic or Off. The maker's boards keep the shared token. Issued from the control page (Board tab → Owner link), which writes the board's `secrets.h` block.
+- **WiFi without USB:** the board opens its own network (`SETUP WIFI` and the name on the panel; WPA2, password on the label as a WiFi QR) with a setup page every address leads to. Chosen over Improv/Web Bluetooth because iPhones can't do Web Bluetooth. Opens with no networks saved, after 10 min joining none, after a just-entered network fails, or when the knob is held at power-on; closes after 15 min with no phone on it when it has networks to retry.
+
 ### Access
 - **Secret URL, no login.** The control page lives at an unguessable path (e.g. `/board/<random>`), with the path stored as a Fly secret (`BOARD_CONTROL_PATH`). Anyone with the link has control; acceptable for a hobby board. Rotate the secret if the link leaks.
 

@@ -130,6 +130,17 @@ class Ota {
   virtual void roll_back(const std::string &why) = 0;  // back to the previous slot (restarts)
 };
 
+// The board's own setup network and page (WiFi setup without USB). On the
+// board: device::SetupPortal, whose run() restarts the board when it's done.
+class Setup {
+ public:
+  virtual ~Setup() {}
+  // why: "nowifi" (none saved, or none joined for SETUP_AFTER_MS),
+  // "badwifi" (the network just entered didn't join), "asked" (held at power-on).
+  virtual void run(const std::string &why) = 0;
+  virtual void joined() {}  // online: a network entered on the page worked
+};
+
 class Led {
  public:
   virtual ~Led() {}
@@ -142,6 +153,7 @@ const long long LIVE_EVERY = 10000;     // combined update while a live game is 
 const long long RADAR_EVERY = 3000;     // one missing radar frame per run
 const long long LOGO_EVERY = 3000;      // one missing team logo per run
 const int FAILS_BEFORE_RECONNECT = 3;
+const long long SETUP_AFTER_MS = 600000;  // no network joined this long: open the setup network
 const long long HEALTH_EVERY = 60000;  // ms between health snapshots sent with the version check
 const long long RETRY_WIFI_MS[] = {10000, 20000, 30000, 60000};  // waits between rounds, then every minute
 
@@ -164,6 +176,8 @@ class Board {
   Led *led;
   Knob *knob;
   Ota *ota = nullptr;  // OTA updates (set after construction); none: offers are ignored
+  Setup *setup = nullptr;  // WiFi setup network; none: keep retrying forever
+  bool fresh_wifi = false;  // the first network was just entered on the setup page
   std::function<void(const std::string &)> log;
   std::function<long()> mem_free;       // bytes free, for health reports
   std::function<long()> largest_block;  // largest allocatable block

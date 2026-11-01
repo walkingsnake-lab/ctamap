@@ -6,8 +6,10 @@
 
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
+#include <DNSServer.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
+#include <WebServer.h>
 #include <Update.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
@@ -564,6 +566,133 @@ void Ota::roll_back(const std::string &why) {
   ESP.restart();
 }
 
+// ---- WiFi setup ----
+
+static const uint32_t SETUP_IDLE_MS = 15 * 60 * 1000;  // no phone joined this long: retry the saved networks
+
+SetupPortal::SetupPortal(config::Config *cfg, Panel *panel, std::function<void()> feed)
+    : cfg_(cfg), panel_(panel), feed_(std::move(feed)) {}
+
+std::string SetupPortal::ssid() const {
+  uint8_t mac[6];
+  WiFi.macAddress(mac);
+  char suffix[5];
+  snprintf(suffix, sizeof suffix, "%02x%02x", mac[4], mac[5]);
+  return config::setup_ssid(*cfg_, suffix);
+}
+
+void SetupPortal::joined() { nvs_put("fresh", ""); }
+
+// Networks nearby, strongest first, each once, hidden ones left out.
+static std::vector<std::string> scan_names() {
+  std::vector<std::pair<int, std::string>> found;
+  int n = WiFi.scanNetworks();
+  for (int i = 0; i < n; i++) {
+    std::string name = WiFi.SSID(i).c_str();
+    if (name.empty()) continue;
+    bool dup = false;
+    for (auto &f : found)
+      if (f.second == name) dup = true;
+    if (!dup) found.push_back({WiFi.RSSI(i), name});
+  }
+  WiFi.scanDelete();
+  std::sort(found.begin(), found.end(), [](const auto &a, const auto &b) { return a.first > b.first; });
+  std::vector<std::string> out;
+  for (auto &f : found) out.push_back(f.second);
+  return out;
+}
+
+void SetupPortal::run(const std::string &why) {
+  std::string name = ssid();
+  bool locked = config::setup_pass_ok(cfg_->setup_pass);
+  Serial.printf("[setup] opening setup network %s (%s, %s)\n", name.c_str(), locked ? "WPA2" : "open", why.c_str());
+  panel_->show([&](draw::Frame &f) { draw::render_status(f, "setup", name); });
+
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_AP_STA);  // the station side scans while the network is up
+  delay(100);
+  std::vector<std::string> seen = scan_names();
+  WiFi.softAP(name.c_str(), locked ? cfg_->setup_pass.c_str() : nullptr);
+  delay(100);
+  IPAddress ip = WiFi.softAPIP();
+  DNSServer dns;
+  dns.setErrorReplyCode(DNSReplyCode::NoError);
+  dns.start(53, "*", ip);  // every name points here, so phones show the page
+  WebServer web(80);
+  std::string note = why == "badwifi" ? "Couldn't join " + (cfg_->networks.empty() ? std::string("that network") : cfg_->networks[0].first) +
+                                            ". Check the password and try again."
+                     : why == "nowifi" && !cfg_->networks.empty() ? "The board couldn't join any saved network. Choose one."
+                                                                   : "";
+  bool bad = why == "badwifi" || (why == "nowifi" && !cfg_->networks.empty());
+  auto page = [&]() {
+    web.sendHeader("Cache-Control", "no-store");
+    web.send(200, "text/html; charset=utf-8", config::setup_page(*cfg_, name, seen, note, bad).c_str());
+  };
+  bool done = false;
+  std::string chosen;
+  web.on("/", HTTP_GET, page);
+  web.on("/scan", HTTP_GET, [&]() {
+    seen = scan_names();
+    web.sendHeader("Location", "/");
+    web.send(302, "text/plain", "");
+  });
+  web.on("/save", HTTP_POST, [&]() {
+    std::string other = web.arg("o").c_str(), pick = web.arg("s").c_str(), pass = web.arg("p").c_str();
+    std::string ssid = other.empty() ? pick : other;
+    std::string err;
+    if (!config::check_network(ssid, pass, &err)) {
+      note = err;
+      bad = true;
+      page();
+      return;
+    }
+    config::Config next = *cfg_;
+    config::add_network(next, ssid, pass);
+    if (!nvs_put("cfg", config::to_json(next)) || !nvs_put("fresh", "1")) {
+      note = "Couldn't save on the board. Try again.";
+      bad = true;
+      page();
+      return;
+    }
+    *cfg_ = next;
+    chosen = ssid;
+    web.sendHeader("Cache-Control", "no-store");
+    web.send(200, "text/html; charset=utf-8", config::saved_page(ssid).c_str());
+    done = true;
+  });
+  // Phones probe a known address on joining (Apple's hotspot-detect,
+  // Android's generate_204); anything but the expected answer opens the page.
+  web.onNotFound([&]() {
+    web.sendHeader("Location", String("http://") + ip.toString() + "/");
+    web.send(302, "text/plain", "");
+  });
+  web.begin();
+
+  uint32_t idle_since = millis();
+  uint32_t finished = 0;
+  while (true) {
+    if (feed_) feed_();
+    dns.processNextRequest();
+    web.handleClient();
+    if (WiFi.softAPgetStationNum() > 0) idle_since = millis();
+    if (done && !finished) finished = millis();
+    if (finished && millis() - finished > 1500) {  // let the saved page reach the phone
+      Serial.printf("[setup] saved %s; restarting to join it\n", chosen.c_str());
+      break;
+    }
+    if (!cfg_->networks.empty() && millis() - idle_since > SETUP_IDLE_MS) {
+      Serial.println("[setup] nobody joined; restarting to try the saved networks");
+      break;
+    }
+    delay(5);
+  }
+  web.stop();
+  dns.stop();
+  WiFi.softAPdisconnect(true);
+  delay(200);
+  ESP.restart();
+}
+
 // ---- clock, buttons ----
 
 long long SysClock::ms() { return esp_timer_get_time() / 1000; }
@@ -597,6 +726,37 @@ bool Knob::read(uint8_t base, uint8_t reg, uint8_t *buf, size_t n) {
   if (Wire.requestFrom((int)SEESAW_ADDR, (int)n) != (int)n) return false;
   for (size_t i = 0; i < n; i++) buf[i] = (uint8_t)Wire.read();
   return true;
+}
+
+// The push button: seesaw GPIO 24, an input with its pull-up (low when pressed).
+static const uint8_t SEESAW_GPIO = 0x01, SEESAW_GPIO_DIRCLR = 0x03, SEESAW_GPIO_BULK = 0x04, SEESAW_GPIO_SET = 0x05,
+                     SEESAW_GPIO_PULLEN = 0x0B;
+static const uint32_t KNOB_BUTTON = 1UL << 24;
+
+static bool seesaw_write32(uint8_t base, uint8_t reg, uint32_t v) {
+  Wire.beginTransmission(SEESAW_ADDR);
+  Wire.write(base);
+  Wire.write(reg);
+  Wire.write((uint8_t)(v >> 24));
+  Wire.write((uint8_t)(v >> 16));
+  Wire.write((uint8_t)(v >> 8));
+  Wire.write((uint8_t)v);
+  return Wire.endTransmission() == 0;
+}
+
+bool Knob::pressed() {
+  if (!on_) return false;
+  if (!button_) {
+    button_ = seesaw_write32(SEESAW_GPIO, SEESAW_GPIO_DIRCLR, KNOB_BUTTON) &&
+              seesaw_write32(SEESAW_GPIO, SEESAW_GPIO_PULLEN, KNOB_BUTTON) &&
+              seesaw_write32(SEESAW_GPIO, SEESAW_GPIO_SET, KNOB_BUTTON);
+    delay(5);
+    if (!button_) return false;
+  }
+  uint8_t d[4];
+  if (!read(SEESAW_GPIO, SEESAW_GPIO_BULK, d, 4)) return false;
+  uint32_t bits = ((uint32_t)d[0] << 24) | ((uint32_t)d[1] << 16) | ((uint32_t)d[2] << 8) | d[3];
+  return !(bits & KNOB_BUTTON);
 }
 
 bool Knob::begin() {
