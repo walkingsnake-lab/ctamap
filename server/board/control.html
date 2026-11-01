@@ -157,10 +157,7 @@
       <button data-v="off">Off</button>
     </div>
     <input type="range" id="level" min="5" max="100" step="5" aria-label="Brightness level" hidden>
-    <div id="brightAuto" hidden>
-      <div class="row"><span class="nw" id="brightMaxL" style="min-width:6.2em">Day</span><input type="range" id="brightMax" min="5" max="100" step="5" aria-label="Brightest auto brightness" style="flex:1;margin:0"><span id="brightMaxV" class="nw"></span></div>
-      <div class="row"><span class="nw" id="brightMinL" style="min-width:6.2em">Night</span><input type="range" id="brightMin" min="5" max="100" step="5" aria-label="Darkest auto brightness" style="flex:1;margin:0"><span id="brightMinV" class="nw"></span></div>
-    </div>
+    <div class="row" id="brightAuto" hidden><span class="nw" id="brightMinL">Night</span><input type="range" id="brightMin" min="5" max="100" step="5" aria-label="Darkest auto brightness" style="flex:1;margin:0"><span id="brightMinV" class="nw"></span></div>
     <p class="hint" id="brightHint"></p>
   </section>
 
@@ -584,10 +581,9 @@
     $('level').hidden = !fixed;
     if (fixed) $('level').value = board.bright;
     $('brightAuto').hidden = board.bright !== 'auto';
-    for (const [k, d] of [['brightMin', 40], ['brightMax', 100]]) {
-      if (document.activeElement === $(k)) continue;
-      $(k).value = board[k] || d;
-      $(k + 'V').textContent = `${board[k] || d}%`;
+    if (document.activeElement !== $('brightMin')) {
+      $('brightMin').value = board.brightMin || 40;
+      $('brightMinV').textContent = `${board.brightMin || 40}%`;
     }
     renderBrightHint();
     $('station').value = board.station.mapid;
@@ -727,10 +723,8 @@
     save({ bright: v === 'fixed' ? (Number.isInteger(board.bright) ? board.bright : 60) : v });
   });
   $('level').addEventListener('change', (e) => save({ bright: Number(e.target.value) }));
-  for (const k of ['brightMin', 'brightMax']) {
-    $(k).addEventListener('input', (e) => { $(k + 'V').textContent = `${e.target.value}%`; });
-    $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
-  }
+  $('brightMin').addEventListener('input', (e) => { $('brightMinV').textContent = `${e.target.value}%`; });
+  $('brightMin').addEventListener('change', (e) => save({ brightMin: Number(e.target.value) }));
   $('station').addEventListener('change', (e) => save({ station: { mapid: e.target.value } }));
   const saveName = () => save({ station: { mapid: board.station.mapid, name: $('name').value } });
   $('saveName').addEventListener('click', saveName);
@@ -922,13 +916,12 @@
   // Auto follows the light sensor on a board that reports one (health `lux`).
   function renderBrightHint() {
     if (!board) return;
-    const max = board.brightMax || 100, min = Math.min(board.brightMin || 40, max);
+    const min = board.brightMin || 40;
     const lux = health && health.lux != null ? health.lux : null;
-    // With a sensor the two levels are the bright-room and dark-room ends of its range.
-    $('brightMaxL').textContent = lux != null ? 'Bright room' : 'Day';
+    // With a sensor the night level is its dark-room level.
     $('brightMinL').textContent = lux != null ? 'Dark room' : 'Night';
     $('brightHint').textContent = board.bright === 'auto'
-      ? (lux != null ? `Follows the light sensor (${fmtLux(lux)} now), from ${max}% in a bright room to ${min}% in the dark.` : `${max}% from sunrise to sunset, ${min}% at night.`)
+      ? (lux != null ? `Follows the light sensor (${fmtLux(lux)} now): full in a bright room, ${min}% in the dark.` : `Full from sunrise to sunset, ${min}% at night.`)
       : Number.isInteger(board.bright) ? `${board.bright}%` : 'Panel off until you change this or the board restarts.';
   }
   const fmtLux = (l) => `${l < 10 ? l.toFixed(2) : Math.round(l)} lx`;
@@ -1004,7 +997,10 @@
     setInterval(refreshPreview, 10000);
     loadHealth();
     if (!SCOPE) loadFirmware();
-    setInterval(() => { loadHealth(); loadBoards(); }, 30000);
+    // Health every 10 s (the board reports with each version check), so the
+    // light sensor's reading is current while tuning it; the board list every 30 s.
+    setInterval(() => { if (!document.hidden) loadHealth(); }, 10000);
+    setInterval(loadBoards, 30000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); loadBoards(); } });
   }
   init().catch((e) => setStatus('Could not load: ' + e.message, true));

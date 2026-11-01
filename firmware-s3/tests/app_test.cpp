@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "../ctaboard/src/app.h"
+#include "../ctaboard/src/color.h"
 #include "../ctaboard/src/draw.h"
 #include "../ctaboard/src/json.h"
 #include "../ctaboard/src/player.h"
@@ -268,10 +269,10 @@ struct SimDisplay : app::Display {
     for (uint8_t v : f.px) max_px = std::max(max_px, (int)v);
     clock->t += 20;  // render cost
   }
-  bool set_brightness(double kk) override {
+  double set_brightness(double kk) override {
     k = kk;
     ks.push_back({clock->t, kk});
-    return hw;
+    return hw ? color::hw_dim(kk).share : kk;
   }
 };
 
@@ -1150,11 +1151,10 @@ static void test_light_level_follows_log_lux_between_the_ends() {
   CHECK(light::level(light::DARK_LUX, 40) == 40, "");
   CHECK(light::level(1, 40) == 70, "halfway in log lux: %f", light::level(1, 40));
   CHECK(light::level(light::BRIGHT_LUX, 40) == 100, "");
-  CHECK(light::level(5000, 40, 80) == 80, "capped at the brightest level");
-  CHECK(light::level(1, 90, 80) == 80, "darkest above brightest: brightest");
+  CHECK(light::level(5000, 40) == 100, "");
 }
 
-static const char *AB = "{\"min\":40,\"max\":100}";
+static const char *AB = "{\"min\":40}";
 
 static Rig *light_rig(SimLight &l, bool hw = true) {
   Rig *r = new Rig;
@@ -1195,11 +1195,14 @@ static void test_light_sensor_sets_auto_brightness_and_fades() {
   CHECK(r->display.k > 0.4 && r->display.k < 1, "fading up: %f", r->display.k);
   r->run_for(3000);
   CHECK(r->display.k == 1, "bright room: %f", r->display.k);
-  // The phone's range moves it without the hold.
-  r->server.ab = "{\"min\":40,\"max\":80}";
+  // The phone's dark-room level moves it without the hold.
+  l.lux = 0.01;
+  r->run_for(10000);
+  CHECK(r->display.k == 0.4, "%f", r->display.k);
+  r->server.ab = "{\"min\":20}";
   r->server.v++;
   r->run_for(15000);
-  CHECK(fabs(r->display.k - 0.8) < 1e-9, "brightest level: %f", r->display.k);
+  CHECK(fabs(r->display.k - 0.2) < 1e-9, "dark-room level: %f", r->display.k);
 }
 
 static void test_light_sensor_gives_way_to_fixed_and_to_a_missing_sensor() {
@@ -1232,10 +1235,34 @@ static void test_light_sensor_reports_lux_with_health() {
   r->run_for(70000);
   std::string h = last_health(*r);
   CHECK(h.find("&ha=0.42") != std::string::npos, "%s", h.c_str());
+  // The reading is current on every check, not once a minute with the rest.
+  l.lux = 5;
+  r->run_for(35000);
+  h = last_health(*r);
+  size_t at = h.find("&ha=");
+  double lx = at == std::string::npos ? 0 : atof(h.c_str() + at + 4);
+  CHECK(lx > 4.5 && lx <= 5, "fresh within ~30 s: %s", h.c_str());
   Rig none;
   none.board->connect();
   none.run_for(70000);
   CHECK(last_health(none).find("&ha=") == std::string::npos, "no sensor, no reading");
+}
+
+static void test_low_levels_dim_in_hardware_then_in_the_colors() {
+  // Below the window's floor (~28%) a hardware-dimmed display draws scaled
+  // frames for the rest; at the default night level (40%) it doesn't.
+  Rig r;
+  r.display.hw = true;
+  r.server.bright = 10;
+  r.board->connect();
+  r.run_for(5000);
+  double share = 0.1 / pow(color::HW_MIN_OE / 255.0, 1 / 2.2);
+  CHECK(!r.board->player.hw_bright, "");
+  CHECK(r.display.max_px > 0 && r.display.max_px <= (int)(255 * share + 1), "scaled frame: %d", r.display.max_px);
+  r.server.bright = 40;
+  r.server.v++;
+  r.run_for(15000);
+  CHECK(r.board->player.hw_bright && r.display.max_px > 200, "full frame: %d", r.display.max_px);
 }
 
 static void test_light_sensor_scales_colors_without_hardware_dimming() {
@@ -1378,6 +1405,7 @@ int main() {
       T_(test_light_sensor_gives_way_to_fixed_and_to_a_missing_sensor),
       T_(test_light_sensor_reports_lux_with_health),
       T_(test_light_sensor_scales_colors_without_hardware_dimming),
+      T_(test_low_levels_dim_in_hardware_then_in_the_colors),
       T_(test_knob_twist_and_rest_selects_once),
       T_(test_knob_back_to_the_start_cancels),
       T_(test_knob_wraps_around_the_ring),
