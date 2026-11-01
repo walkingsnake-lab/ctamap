@@ -1,12 +1,11 @@
 'use strict';
 // NWS forecasts for the board's location (its station): the weather screen's
-// 5-day and hourly layouts, today's high/low, and the rain chance. Open-Meteo
-// (weather.js) still gives current conditions, the rain bars, snow mode, and
-// sunrise/sunset; withForecast() lays these fields over its data.
+// 5-day and hourly layouts, today's high/low, and the rain chance. WeatherAPI
+// (weather.js) still gives current conditions, snow mode, and sunrise/sunset;
+// withForecast() lays these fields over its data.
 //
 // NWS forecasts are edited by forecasters, and each period's icon goes with
-// its rain chance, where Open-Meteo's daily code is the worst hour of one
-// model run. Icons are used as NWS sends them (no rain-chance threshold).
+// its rain chance, where a model's daily code is the worst hour of one run. Icons are used as NWS sends them (no rain-chance threshold).
 // Contract "Weather row"; fixtures: fixtures/nws-forecast/.
 
 const { createLocationPoller, fetchJson } = require('./location-poller');
@@ -69,9 +68,9 @@ function parse(raw) {
   return { periods: periodsOf(raw && raw.forecast, '12-hour'), hours: periodsOf(raw && raw.hourly, 'hourly') };
 }
 
-// Parsed Open-Meteo weather + parsed NWS forecast at `now` -> the weather
+// Parsed WeatherAPI weather + parsed NWS forecast at `now` -> the weather
 // with NWS's hourly slots, rain chance, days, and today's high/low. Each
-// field keeps Open-Meteo's value when NWS has nothing for it (no data, or
+// field keeps WeatherAPI's value when NWS has nothing for it (no data, or
 // the data has aged past it): today's high once the day period is over
 // (NWS drops "This Afternoon" in the evening), for one.
 function withForecast(w, f, now) {

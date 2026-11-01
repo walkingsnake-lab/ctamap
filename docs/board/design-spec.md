@@ -74,7 +74,7 @@ A small cooperative scheduler lines up network requests with animation gaps:
 | CTA service alerts | CTA Customer Alerts API | **Major alerts only** (CTA severity `major`): no minor delays, planned work, schedule changes, long-term closures, or elevator outages; lines on screen only. Used **only to flag affected lines** (no alert text shown). |
 | Weather warnings/watches | NWS alerts for the configured point | Only severe thunderstorm and tornado warnings/watches. Shown as icons/tags only (no alert text). |
 | Radar | NOAA **MRMS** lowest composite reflectivity (`lcref`) via Iowa Environmental Mesonet | Palette-indexed PNG + `.wld`, 2-min updates, archive available. dBZ = index × 0.5 − 32 (verified against IEM's lookup table). Full CONUS frames (7000 × 3500); decoded as a stream, only the rows around the station. Do **not** use the raw NEXRAD composite: it shows bird/insect returns on clear nights. |
-| Weather | Open-Meteo (no key) | Current temp, weather code, `is_day`, sunrise/sunset, rain bars. |
+| Weather | WeatherAPI.com (`WEATHERAPI_KEY`, free plan; one fetch per 0.1° grid cell) | Current temp, condition, `is_day`, feels-like, wind, sunrise/sunset. No 15-minute data, so no rain bars. Credit and disclaimer on the control page. |
 | Forecast | NWS `api.weather.gov` (no key) | Today's high/low, rain chance, 5-day and hourly icons and temperatures (forecaster-edited; icons used as NWS sends them). |
 
 ---
@@ -114,7 +114,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Shoreline | `#34485e` |
 | Alert circle (transit and ticker) | red `#ff2020` with white `#ffffff` "!" |
 
-- **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from Open-Meteo). Every dim element has a **minimum floor** so it never drops to black at night.
+- **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from WeatherAPI). Every dim element has a **minimum floor** so it never drops to black at night.
 - **Radar rain fills** render at ~65%; **ticker row fills** at 55%. Text stays full brightness.
 - Rule of thumb from the session: **lit strokes on dark survive; dark strokes on lit don't** (diffuser glow fills them in).
 - **Clock colons are steady** on every clock. The big clocks (overnight, no-games) use `#cccccc`; the transit and ticker header clocks match their station names (`#555555` transit, `#808080` ticker); the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#8f8f8f`) so it doesn't read as the current time.
@@ -244,14 +244,14 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 ## 7. Screen 3: Weather (radar while raining)
 
 - **Weather by default, radar when rain is in the box** (count of colored pixels, with separate on/off thresholds so it doesn't flicker in and out). The screen is `weather` (formerly `radar`); the payload's `radar` object, the radar frame endpoint, and the radar visit/time settings keep their names since they're about the radar loop. Timed visits on the auto screen still only happen while it rains, so they always show the radar.
-- **Weather layout** (Open-Meteo; exact pixels in `contract.md`, Radar): big temperature in the 9x15 Bold digits with a 3x3 ring degree sign, icon top right with the dim condition word under it, divider on row 18, then `FEELS 53°` + wind (`NW 12`) and `H 63° L 49°` + rain chance (a small blue drop + `20%`, the highest hourly chance over the next 6 hours). A **watch or warning replaces the high/low line** with the glyph and `TSTORM WATCH` / `TSTORM WARNING` / `TORNADO WATCH` / `TORNADO WARN` in the warning colors (tornado warning blinks). Preview: `docs/board/previews/mock-weather-screen.png`.
+- **Weather layout** (WeatherAPI, forecasts from NWS; exact pixels in `contract.md`, Radar): big temperature in the 9x15 Bold digits with a 3x3 ring degree sign, icon top right with the dim condition word under it, divider on row 18, then `FEELS 53°` + wind (`NW 12`) and `H 63° L 49°` + rain chance (a small blue drop + `20%`, the highest hourly chance over the next 6 hours). A **watch or warning replaces the high/low line** with the glyph and `TSTORM WATCH` / `TSTORM WARNING` / `TORNADO WATCH` / `TORNADO WARN` in the warning colors (tornado warning blinks). Preview: `docs/board/previews/mock-weather-screen.png`.
 - **Hourly layout** (`wxView` `hourly` on the phone): today's top bar, then the weather 2, 4, 6 and 8 hours ahead in four columns (time, icon, temperature). With rain bars on (`wxRain`), it's the dry state. Preview: `docs/board/previews/mock-weather-hourly.png`.
 - **Rain bars** (per board, `wxRain` on the phone: Radar loop, Rain bars (never the loop), or Both: the radar loop plays 1, 2, 3, or 5 full loops, then the bars show for 10–60 s, repeating while the radar box and the forecast both have rain): while rain or snow is falling or due in the next 2 hours, the weather screen shows today's top bar (as in the 5-day layout), a title (`RAIN IN 25 MIN`, `RAIN NEXT 2 HRS`, `ENDS IN 60 MIN`, `BREAK IN 30 MIN`, or `SNOW …`) with a drop or flake standing in for the word on titles that don't say RAIN or SNOW (`ENDS IN`, `BREAK IN`), and eight 15-minute bars on a fixed square-root intensity scale in three blue (or grey, for snow) levels, `1H` / `2H` under the axis. Dry, it shows the conditions, 5-day or hourly layout. Preview: `docs/board/previews/mock-weather-rain.png`.
 - **Top bar warnings** (5-day, hourly and rain bars): the temperature shadow follows the board's setting, and an NWS watch or warning takes over the high/low line (glyph + `WATCH` / `WARN`; a tornado warning blinks); the layout below it stays.
 - **5-day layout** (per board, `wxView` on the phone: Conditions or 5-day): today on top (icon, then the temperature in 5x7 white with a 1px shadow in its temperature color, the high and low right as `↑63 ↓49` with dim arrows), then the next five days in 13px columns split by thin vertical dividers: two-letter weekday, icon, and the high colored blue (cold) to red (hot). A watch or warning switches back to the conditions layout while it's on, since only that has a line for it. Preview: `docs/board/previews/mock-weather-5day.png`.
 - **Configurable location**; crop centered on it (~1.5 mi/pixel).
 - **Pipeline (server):** crop → palette index to dBZ → average linear reflectivity per LED block → levels (15/25/35/45/55 dBZ: dim green, green, yellow, orange, red) → despeckle (drop pixels with <2 colored neighbors) → small indexed image.
-- **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when Open-Meteo reports a snow weather code, or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/15/20 dBZ, from the Feb 2, 2022 storm) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
+- **Snow (v1):** the whole frame switches to a 3-level snow palette (light blue, pale blue, white) when WeatherAPI reports snow (or thundersnow), or ≤ 32°F without freezing rain. Snow gets its own thresholds (provisional 10/15/20 dBZ, from the Feb 2, 2022 storm) because dry snow reflects much less than rain. A rain/snow line inside the box, and mixed precip, render as one type. Details in `contract.md`.
 - **Loop:** 6 frames, 6 min apart (30 min end to end; the newest at most ~8 min old; IEM only archives even minutes), 0.5 s each, **holds on the last frame** for 4 s. Network requests happen during the hold, except while the loop is still filling in on screen: then the missing frames are fetched back to back, newest first. Until every frame is on hand the screen holds on the newest one downloaded (so it never goes black or plays backward); the last frame to land restarts the loop from the oldest. The conditions screen shows until the first frame arrives. Frame step (0.3–1 s) and hold (2–8 s) are adjustable per board on the phone.
 - **Water masked black** (mask generated per location from coastline data), with a faint shoreline along its edge.
 - **Layout per station** (`server/board/locations/`, built by `scripts/build-locations.js` from Natural Earth's Lake Michigan outline): full width with the time over the lake when the time's area is all water (114 of 144 stations), otherwise the split layout (radar left 39 columns, a gray `#333333` line on the panel's left edge, time right 24). The time stack is **top-aligned** (rows 2–19) in both.
@@ -486,7 +486,7 @@ The server picks the state; the board never interprets weather codes.
 | −6° to 0° | twilight (civil twilight, morning and evening) |
 | below −6° | night |
 
-**Weather** comes from Open-Meteo's current `weather_code` and `cloud_cover` (add `cloud_cover` to the current request; additive, so the M4 is unaffected), first match wins:
+**Weather** comes from the current condition code and cloud cover (WeatherAPI's `current.cloud`, which the forecast request already returns; additive, so the M4 is unaffected), first match wins:
 
 | Condition | State |
 |---|---|
@@ -499,7 +499,7 @@ The server picks the state; the board never interprets weather codes.
 | 20–50% | Partly cloudy |
 | under 20% | Clear |
 
-- Codes 0–3 (clear through overcast) are ignored; cloud cover sets the cloud state instead, since Open-Meteo has no "mostly cloudy" code.
+- Codes 0–3 (clear through overcast) are ignored; cloud cover sets the cloud state instead, since WMO codes have no "mostly cloudy".
 - Sunrise, sunset and twilight looks apply only to Clear, Partly and Mostly cloudy. Under Overcast, Rain, Snow, Fog or Thunderstorm, sun above 0° uses the day variant and below 0° the night variant.
 - Precipitation intensity (light / moderate / heavy) comes from the code: 51/53/55, 61/63/65, 71/73/75, 80/81/82, with 56/57/66/67 and 77/85/86 as light / heavy pairs.
 
@@ -574,7 +574,7 @@ Ambient and slow, on a 100 ms tick:
 - Memory is not a constraint on the S3 (2 MB PSRAM): the cloud strip (1.7 KB), the city layer and the scene buffers can all stay resident.
 - Buildings stay true black. The S3's color pipeline (`color.cpp`, `levels()`) already leaves black pixels off and lifts every other pixel to the floor (§4), so no mask is needed.
 - Closest to the floor: the top of the night sky (`#000006`, effectively off already), night water ripples (`#0e1a36`), the dim window amber (`#8a5c20`) and the beacons' dark end (`#401010`).
-- Order of work: the shared city definition and the server's state, sun and moon code first (with tests on recorded Open-Meteo fixtures); then `draw.js` with `s3only` scenarios per state; then the port to `draw.cpp` against the parity test.
+- Order of work: the shared city definition and the server's state, sun and moon code first (with tests on WeatherAPI fixtures); then `draw.js` with `s3only` scenarios per state; then the port to `draw.cpp` against the parity test.
 
 ### Open
 - On the panel: the near-floor colors above, whether the moon is dim enough, and whether glints read as sparkle or noise.

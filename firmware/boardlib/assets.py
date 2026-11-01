@@ -54,6 +54,7 @@ ICONS = {
     'ice': b'...CC....CCCCCC.CCCCCCCC.DDDDDD..........B...W..B...WWW......W..',
     'snow': b'...S.....S.S.S....SSS...SSSSSSS...SSS....S.S.S.....S............',
     'storm': b'..GGGG...GGGGGG.GGGGGGGG.KKKKKK....LL.....LL.......LL.....L.....',
+    'tsnow': b'..GGGG...GGGGGG.GGGGGGGG.KKKKKK...LL..S..LL..SSS..LL..S..L......',
     'fog': b'........FFFFFF............EEEEEE........FFFFFF..................',
 }
 
