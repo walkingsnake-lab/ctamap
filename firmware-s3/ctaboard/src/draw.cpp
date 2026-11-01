@@ -2259,9 +2259,9 @@ double strike_level(double ms) {
   long long slot = (long long)std::floor(ms / sky::STRIKE_EVERY);
   double start = (double)(slot * sky::STRIKE_EVERY + (long long)(ih(slot, 7, 7) % 10000));
   double t = (ms - start) / 1000;
-  if (t < 0 || t >= 3) return 0;
-  if (t < 0.6) return sstep01(0, 0.6, t);
-  double u = 1 - (t - 0.6) / 2.4;
+  if (t < 0 || t >= 1.35) return 0;
+  if (t < 0.15) return sstep01(0, 0.15, t);
+  double u = 1 - (t - 0.15) / 1.2;
   return u * u;
 }
 
@@ -2397,11 +2397,11 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       for (int x = 0; x < 64; x++) {
         if (G.role[y * 64 + x]) continue;
         double ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = std::sqrt(ex * ex + ey * ey);
-        double a = lv * 0.45 * (1 - sstep01(0.3, 1, d));
+        double a = lv * 0.7 * (1 - sstep01(0.3, 1, d));
         if (a > 0.01) f.set(x, y, mix_rgb(f.get(x, y), sky::GLOW, a));
       }
     auto put = [&](int x, int y, RGB c) {
-      if (x >= 0 && x < 64 && y >= 0 && !G.role[y * 64 + x]) f.set(x, y, mix_rgb(f.get(x, y), mix_rgb(c, sky::BOLT_SOFT, 0.3), 0.35 * lv));
+      if (x >= 0 && x < 64 && y >= 0 && !G.role[y * 64 + x]) f.set(x, y, mix_rgb(f.get(x, y), mix_rgb(c, sky::BOLT_SOFT, 0.15), 0.8 * lv));
     };
     auto in_core = [](int x, int y) { for (const auto &b : sky::BOLT) if (b[0] == x && b[1] == y) return true; return false; };
     for (const auto &b : sky::BOLT)

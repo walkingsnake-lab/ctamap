@@ -1728,13 +1728,13 @@
       }
     }
     // Lightning at ms, or null: a strike every 20-40 s (one per 30 s slot,
-    // 0-10 s in), rising over 0.6 s and fading over 2.4 s.
+    // 0-10 s in), rising over 0.15 s and fading over 1.2 s.
     function strikeLevel(ms) {
       const slot = Math.floor(ms / STRIKE_EVERY), start = slot * STRIKE_EVERY + (ih(slot, 7, 7) % 10000);
       const t = (ms - start) / 1000;
-      if (t < 0 || t >= 3) return 0;
-      if (t < 0.6) return sstep01(0, 0.6, t);
-      const u = 1 - (t - 0.6) / 2.4;
+      if (t < 0 || t >= 1.35) return 0;
+      if (t < 0.15) return sstep01(0, 0.15, t);
+      const u = 1 - (t - 0.15) / 1.2;
       return u * u;
     }
     // Where the quarter-hour boat is at ms: {kind, x0, dir} or null.
@@ -1828,17 +1828,17 @@
         const fc = hex(s.fog);
         for (let y = 0; y <= S; y++) { const k = Math.max(0, Math.min(1, (21 - y) / 18)) * 0.85; if (k) for (let x = 0; x < 64; x++) f.set(x, y, mixRgb(f.get(x, y), fc, k)); }
       }
-      // Lightning: a soft glow in the cloud deck with a faint bolt inside it.
+      // Lightning: a glow in the cloud deck with the bolt inside it.
       const lv = s.storm ? strikeLevel(ms) : 0;
       if (lv > 0) {
         const gc = hex(SK.glow);
         for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
           if (SKY.role[y * 64 + x]) continue;
           const ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = Math.sqrt(ex * ex + ey * ey);
-          const a = lv * 0.45 * (1 - sstep01(0.3, 1, d));
+          const a = lv * 0.7 * (1 - sstep01(0.3, 1, d));
           if (a > 0.01) f.set(x, y, mixRgb(f.get(x, y), gc, a));
         }
-        const put = (x, y, c) => { if (x >= 0 && x < 64 && y >= 0 && !SKY.role[y * 64 + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.3)), 0.35 * lv)); };
+        const put = (x, y, c) => { if (x >= 0 && x < 64 && y >= 0 && !SKY.role[y * 64 + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.15)), 0.8 * lv)); };
         const core = new Set(BOLT.map(([x, y]) => y * 64 + x));
         for (const [x, y] of BOLT) for (const X of [x - 1, x + 1]) if (!core.has(y * 64 + X)) put(X, y, '#7060c0');
         for (const [x, y] of BOLT_BRANCH) put(x, y, '#9a8ae0');

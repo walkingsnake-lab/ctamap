@@ -327,7 +327,7 @@ The clock screen's skyline face (design spec §14). The server turns the weather
 | `fog` | Fog color (the city fades into it with height), or `null`. |
 | `roof` | Snow on roof edges and the pier: its color, or `null`. |
 | `pcp` | Precipitation: `{k, n, sl}`, `r` rain or `s` snow, how many streaks or flakes are on screen, and (rain) the slant: `0` straight down, `-1` / `1` 45° left / right (the wind across the view, 8 mph or more; storms without wind data `-1`); or `null`. Rain streaks move 1 px every `fall` ms along their own line with sub-pixel coverage; snow falls 1 px every `fall × 3.5` ms. |
-| `storm` | `1`: lightning, a soft glow in the cloud deck with a faint bolt, every 20–40 s. |
+| `storm` | `1`: lightning every 20–40 s, a glow in the cloud deck with the bolt inside, rising over 0.15 s and fading over 1.2 s. |
 | `boats` | `1`: the quarter-hour boats run (daytime, dry, 40°F or warmer). |
 | `temp` | Temperature in the board's unit, or `null` (also when the board's `showTemp` is off). A top-level `warn` replaces it on screen. |
 | `wheel` | Ms per turn of the night rainbow (`wheelSpeed`: 0 still, 60000, 30000, 15000). Absent: 30000. |

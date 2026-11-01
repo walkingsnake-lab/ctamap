@@ -130,7 +130,7 @@ test('boats: the sailboat on :00 and :30, the speedboat out and back on :15 and 
   assert.equal(hull(draw({}, q / 1000, { ms: q + 20000, sky: { ...sky, boats: 0 } })), 0);
 });
 
-test('lightning: soft, about every 20-40 s, rising over 0.6 s and fading by 3 s', () => {
+test('lightning: about every 20-40 s, rising over 0.15 s and fading by 1.35 s', () => {
   const t0 = NIGHT * 1000;
   const starts = [];
   let prev = 0;
@@ -145,7 +145,8 @@ test('lightning: soft, about every 20-40 s, rising over 0.6 s and fading by 3 s'
     assert.ok(gap >= 20 && gap <= 40, `gap ${gap} s`);
   }
   // Drawn only in a storm.
-  const peak = starts[0] + 600;
+  const peak = starts[0] + 150;
+  assert.equal(strikeLevel(starts[0] + 1400), 0, 'over within 1.4 s');
   const sum = (f) => { let n = 0; for (let y = 0; y < 10; y++) for (let x = 12; x < 32; x++) if (!SKY.role[y * 64 + x]) n += f.get(x, y).reduce((a, b) => a + b, 0); return n; };
   const storm = toSkyline({ temp: 52, code: 95, clouds: 100 }, { ...PLACE, now: NIGHT, temp: 52 });
   assert.ok(sum(draw({}, NIGHT, { ms: peak, sky: storm })) > sum(draw({}, NIGHT, { ms: starts[0] - 1000, sky: storm })) * 1.2);

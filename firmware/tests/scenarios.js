@@ -520,7 +520,7 @@ async function build() {
       let s0 = NIGHT * 1000;
       while (draw.strikeLevel(s0) === 0) s0 += 100;
       const [p, clouds] = sky({ code: 95, clouds: 100 }, NIGHT);
-      add('skyline lightning', p, [0, 200, 600, 1200, 2400, 2900, 3100].map((dt) => ({ screen: 'clock', ms: s0 + dt })), undefined, undefined, { s3only: true, clouds });
+      add('skyline lightning', p, [0, 50, 100, 200, 400, 800, 1300].map((dt) => ({ screen: 'clock', ms: s0 + dt })), undefined, undefined, { s3only: true, clouds });
     }
     {
       const [p, clouds] = sky({ code: 65, clouds: 100 }, DAY);
