@@ -49,6 +49,7 @@ const STATES = [
   { id: 'b-rain', temp: 36, icon: 'rain', word: 'RAIN', feels: 29, wind: 'E 18', hi: 39, lo: 33, pop: 90, sun: ['SUNSET', '4:42'] },
   { id: 'c-night', temp: 72, icon: 'moon', word: 'CLEAR', feels: 72, wind: 'S 5', hi: 84, lo: 68, pop: 0, sun: ['SUNRISE', '5:31'] },
   { id: 'd-cold', temp: -12, icon: 'snow', word: 'SNOW', feels: -27, wind: 'NW 22', hi: -5, lo: -14, pop: 60, sun: ['SUNSET', '4:31'] },
+  { id: 'f-dry', temp: 64, icon: 'sun', word: 'SUNNY', feels: 64, wind: 'W 8', hi: 68, lo: 51, pop: 0, sun: ['SUNSET', '4:44'] },
   { id: 'e-warning', temp: 84, icon: 'storm', word: 'STORMS', feels: 91, wind: 'SW 31', hi: 89, lo: 70, pop: 80, sun: ['SUNSET', '8:12'], warn: { kind: 'tor', lvl: 'warning' } },
 ];
 
@@ -108,7 +109,22 @@ const VARIANTS = [
     line(f, 'RAIN', `${w.pop}%`, 32, w.pop ? C.blue : C.label);
     return f;
   } },
+  { id: '5-color-auto', title: 'COLOR, RAIN ONLY WHEN LIKELY', fn: (w) => final(w) },
 ];
+
+// The pick (Nov 1): the color readout, with the RAIN line only while there's
+// a chance of rain. Without it the other three lines take the 3-line rhythm
+// (rows 11-15, 18-22, 25-29, the first on the 5-day's weekday row), so the
+// screen never shows an empty slot.
+function final(w) {
+  const f = topBar(w);
+  const bases = w.pop > 0 ? [14, 20, 26, 32] : [16, 23, 30];
+  line(f, 'SKY', w.word, bases[0], KIND[w.icon] || C.value);
+  line(f, 'FEELS', `${w.feels}°`, bases[1], tempColor(w.feels));
+  line(f, 'WIND', `${w.wind} MPH`, bases[2]);
+  if (w.pop > 0) line(f, 'RAIN', `${w.pop}%`, bases[3], C.blue);
+  return f;
+}
 
 const frames = VARIANTS.map((V) => STATES.map((w) => {
   const f = V.fn(w);
@@ -128,4 +144,19 @@ frames.forEach((row, r) => row.forEach((f, c) => {
   }
 }));
 fs.writeFileSync(path.join(OUT, 'sheet.png'), PNG.sync.write(sheet));
+
+// The pick on its own sheet.
+const pick = frames[frames.length - 1];
+const one = new PNG({ width: STATES.length * (fw + GAP) + GAP, height: fh + 2 * GAP });
+one.data.fill(24);
+for (let i = 3; i < one.data.length; i += 4) one.data[i] = 255;
+pick.forEach((f, c) => {
+  const img = PNG.sync.read(f.toPNG(SC));
+  const ox = GAP + c * (fw + GAP);
+  for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) {
+    const si = (y * fw + x) * 4, di = ((GAP + y) * one.width + ox + x) * 4;
+    for (let k = 0; k < 4; k++) one.data[di + k] = img.data[si + k];
+  }
+});
+fs.writeFileSync(path.join(OUT, 'pick.png'), PNG.sync.write(one));
 console.log(`wrote ${OUT}`);
