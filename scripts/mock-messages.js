@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// Message screen mockups: seven ways the board could show a short note sent
+// Message screen mockups: nine ways the board could show a short note sent
 // from the phone, each as a strip of key frames. Not in draw.js yet.
 // Colors cut to the panel's 5 bits per channel. Made-up messages.
 //   node scripts/mock-messages.js   -> docs/board/mockups/messages/sheet.png
@@ -235,10 +235,47 @@ function bubble(l1, l2, { peck = false } = {}) {
   return f;
 }
 
+// ---- 8. Credits roll: the whole note drifts up, edges fade ----
+function credits(text, off, { col = C.label, from = '- SAM' } = {}) {
+  const f = new Frame();
+  const lines = wrap('5x7', text, 62);
+  // Lines 10 px apart starting below the panel, then the sender; off = px scrolled.
+  const items = lines.map((l) => ['5x7', l, col]).concat([['small', from, C.dark]]);
+  items.forEach(([font, l, c], i) => {
+    const base = 40 + i * 10 - off;
+    const y0 = base - 7;
+    if (base < 0 || y0 > 31) return;
+    ctext(f, font, l, 32, base, c);
+  });
+  // Fade the top and bottom 3 rows so lines arrive and leave softly.
+  for (let y = 0; y < 32; y++) {
+    const k = y < 3 ? (y + 1) / 4 : y > 28 ? (32 - y) / 4 : 1;
+    if (k < 1) for (let x = 0; x < 64; x++) f.set(x, y, f.get(x, y).map((v) => Math.round(v * k)));
+  }
+  return f;
+}
+
+// ---- 9. Crawl: a still headline over a lower-third band that crawls ----
+function crawl(head, body, off, { ln = 'BL', icon = null } = {}) {
+  const f = new Frame();
+  if (icon) {
+    const ic = ICONS[icon];
+    sprite(f, ic.rows, 2, 3, ic.pal);
+    f.text('5x7', head, 18, 13, C.white);
+  } else ctext(f, '5x7', head, 32, 13, C.white);
+  f.fill(0, 20, 64, 12, scale(LINE[ln], 0.55));
+  f.fill(0, 20, 64, 1, scale(LINE[ln], 0.9));
+  const w = measure('5x7', body) + 12;
+  f.withClip(0, 21, 63, 31, () => {
+    for (let x = 64 - off; x < 64; x += w) f.text('5x7', body, x, 29, C.white);
+  });
+  return f;
+}
+
 // ---- sheet ----
 const LONG = 'Leaving at 8:15 for the game. Meet at the north end of the Addison platform.';
 const ROWS = [
-  ['1  NOTE: WRAPPED TEXT, PAGES SLIDE UP (NO SCROLLING)', [
+  ['1  NOTE: WRAPPED TEXT, PAGES SLIDE UP', [
     ['ONE LINE', note('Dinner at 7')],
     ['TWO + SENDER', note('Grab milk on the way home', { from: '- SAM' })],
     ['LONG: PAGE 1', note(LONG)],
@@ -285,6 +322,19 @@ const ROWS = [
     ['SAYS', bubble('Dinner', 'at 7? Coo.')],
     ['PECK', bubble('Dinner', 'at 7? Coo.', { peck: true })],
     ['ANOTHER', bubble('Take out', 'the trash')],
+  ]],
+  ['8  CREDITS ROLL: THE NOTE DRIFTS UP 1 PX AT A TIME, EDGES FADE', [
+    ['ARRIVING', credits(LONG, 14)],
+    ['', credits(LONG, 30)],
+    ['', credits(LONG, 46)],
+    ['', credits(LONG, 62)],
+    ['SENDER LAST', credits(LONG, 84)],
+  ]],
+  ['9  CRAWL: STILL HEADLINE, THE DETAILS CRAWL ALONG A BAND', [
+    ['HEADLINE', crawl('Game day', 'Leaving at 8:15, meet at the north end of Addison', 0)],
+    ['CRAWLING', crawl('Game day', 'Leaving at 8:15, meet at the north end of Addison', 50)],
+    ['', crawl('Game day', 'Leaving at 8:15, meet at the north end of Addison', 140)],
+    ['WITH ICON', crawl('Sam', 'Happy birthday! Dinner at Lula at 7, we have the back table', 90, { ln: 'PK', icon: 'cake' })],
   ]],
 ];
 
