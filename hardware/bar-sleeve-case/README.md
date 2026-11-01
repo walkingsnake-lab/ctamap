@@ -34,7 +34,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 ## Print settings
 - Shell:
   - Bambu PLA Wood profile; filament dried (~8 h at 50-55 °C) and flow-calibrated.
-  - 0.2 mm layers throughout (no variable layer height), 3 walls, elephant foot 0.15.
+  - 0.2 mm base layers with variable layer height (smooths the hood ramp and the rim slopes), 3 walls (v5's 3.5 mm walls: 4 on a 0.4 nozzle, 3 on a 0.6), elephant foot 0.15. The faint bands it leaves read as wood grain once sanded and oiled.
   - Seam: rotate Z 225° (or 135°) so the bottom-right corner faces the back of the plate, then Seam position "Back" and scarf seam; check in Preview.
   - Outer brim 5 mm with a 0.1 mm gap; Z hop 0.6 mm.
   - Plate washed with dish soap, then glue stick; bed 55-60 °C; door closed; no supports.
@@ -64,7 +64,7 @@ The panel can't slide past a mounted encoder (its top edge is ~4 mm above the en
 ## Key geometry (case frame: x right seen from the front, y back from the top front edge, z up from the bottom)
 - Outer 217 x 110.3 x 69 mm (v4; 63 before); wall 2.5; corners R14; panel bore 212 x 105.3.
 - Diffuser face at y 12; panel back at y 28.2; back plate y 63-65 (4 mm inside the rim). Screws from below at x ±40 and ±52, y 59.5. Top snap: a 0.7 mm bump on each tongue, a 0.5 mm dimple in each groove roof (0.7 mm of wall left over it).
-- Panel inserts used by the v3 standoffs (case x, z from ZC): (-88, +31), (+88, +31), (+88, -26), (+7, -36), photo estimates ±1 mm, panel in normal orientation (PI IN on the right seen from the front). The fourth corner insert sits under the S3. Check with the template before printing the plate; correct `STANDOFFS` in `plate3.py` if needed.
+- Panel inserts used by the v3 standoffs (case x, z from ZC): (-87.25, +31), (+87.25, +31), (+87.25, -29), (+12, -36), panel in normal orientation (PI IN on the right seen from the front). The corners were confirmed Oct 31 with `stl/v5-drawer/check-p3-corner-inserts.stl` (`src/check_corners.py`, third frame: all four screws start); the earlier estimate put the corners at x ±88 and the lower row at -26, and the centre insert at +7. The middle inserts are from photos (±0.5 mm). The fourth corner insert sits under the S3.
 - S3 from Adafruit's board file, component side facing the plate, board edge 2 mm inside the left wall (x -104):
   - USB-C at z = ZC (55.15), y 40.9; Down/Up/Reset at ZC -10.3 / -20.1 / -29.9.
   - Status LED at (-91.8, ZC-32.8); Boot at (-89.4, ZC-20.3); M2.5 holes at x -96.38 / -55.74, z ZC-7.62 / ZC-27.31.
@@ -79,6 +79,8 @@ Parametric Python (manifold3d + trimesh); every STL in `stl/` is generated from 
 | `panel.py` | Panel profiles (`PANEL=p3` default, `PANEL=p25`): outline, thickness, LED pitch and diffuser rib, panel inserts and plate standoffs, ribbon hooks, tie-down bridge. Everything panel-sized derives from it |
 | `case.py` | Shared parameters and helpers (v1 shell and plate, kept as the base) |
 | `case2.py` | Shell v4 back-down (main) and front-down (alternate), both with the built-in rim and open holes; Boot key; the older skinned shell, glued frame, glue guide, drill guide and USB-C bezel behind flags |
+| `drawer.py` | v5 drawer: the tray and the v5 shell (USB-C on the right, no tongue grooves), fit coupons |
+| `cleat.py` | v5 French cleat: case cleat (bolts to the tray) and wall cleat |
 | `plate3.py` | Back plate v3 (bolted to the panel, corner foot under the S3), insert template, wall spacer, coupons |
 | `sensor.py` | Light-sensor bracket: `python3 sensor.py <outdir>` |
 | `grille_guide.py` | Light-sensor grille drill guides (5- and 4-hole): `python3 grille_guide.py <outdir> [bit_mm]` |
@@ -102,6 +104,43 @@ python3 plinth.py ../stl 8
 python3 layerscan.py ../stl/bar-shell-v4-walnut-backdown.stl /tmp/scan.npy
 ```
 
+### v5 drawer (in testing)
+`src/drawer.py` -> `stl/v5-drawer/` (P3; `PANEL=p25` for the P2.5). The flat back plate becomes a rigid tray that slides into the
+sleeve from the back: four walls 2.5 mm thick, 0.25 mm inside the bore, running forward to the diffuser's flange. A deep tray in a
+snug sleeve can't tilt, so the top needs no tabs or latches; the two screws from below stop it sliding out. The sleeve keeps its
+look; only the USB-C opening moves (low on the right) and the tongue grooves go.
+
+- Stiffness: the sleeve's walls are 3.5 mm (v4 2.5; `CASE_WALL` sets it) and the tray's 2.5. Bending stiffness goes with wall
+  thickness cubed, so ~2.7x and ~2x. Crush ribs on the tray's outside (0.35 mm tall, 0.1 mm into the sleeve, ramped at the leading end) take up the clearance so the two walls brace
+  each other instead of sliding. The encoder collar follows the thicker wall (`bar-encoder-collar-v5.stl`).
+
+- The panel sits turned 180° (input header on the left): set `MATRIX_ROTATION 180` in `secrets.h`. The S3 is turned 180° too,
+  on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
+- Top wall: one slot open to the front edge, only as wide as the knob encoder's body (18.7 mm). The light sensor rides on the
+  tray: screwed under the top wall (4 x M2.5 x 5 into short pillars, chip up, its sockets in channels in the wall) below a Ø4 hole lined up with the sleeve's Ø2
+  light hole; no bracket. Right wall: a slot for the USB-C plug and
+  the S3's edge buttons. Back: full-width louver bands, Boot and status-light holes, one pair of ribbon hooks, a tie loop, two
+  nut bosses for the French cleat. No keyholes.
+- Order: diffuser and panel into the sleeve; encoder from the back; S3 and sensor onto the tray; tray in;
+  4 x M3 x 8 countersunk down the post tubes into the panel; 2 x M3 x 10 + nuts from below (one pair, x +/-46, both panels).
+- Cables between the tray and the sleeve: the ribbon (S3 -> panel input) must be at least ~15 cm (20 cm comfortable) so the
+  tray comes fully out still cabled; chain STEMMA QT S3 -> sensor -> encoder, so only the sensor-to-encoder cable (15-20 cm)
+  crosses. Panel power runs from the S3's terminals through the tie loop (above the ribbon) to the panel. Press the two
+  cleat nuts into their bosses for good (press fit): they take the cleat, and two M3 screws threaded in a few turns pull the
+  tray out.
+- Print `coupon-v5-drawer-fit-shell.stl` (walnut) and `coupon-v5-drawer-fit-tray.stl` (tray filament) first and slide them
+  together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.
+- Status light: glue `bar-status-window.stl` (Ø5.7 x 1, translucent PETG, flat) into the round pocket on the tray's back
+  (a dot of CA or clear glue at the rim). The Boot key goes in at the funnel below it, marked by two dots.
+- Print: shell back-down as v4; tray back face down, walls up, no supports. For a 0.6 nozzle use `bar-drawer-tray-n06.stl`
+  with `coupon-v5-drawer-fit-tray-n06.stl` (`TRAY_NOZZLE=0.6`): crush ribs on a 2.0 base (1.2 is under two 0.6 lines), nut
+  pockets 5.75, status hole 2.3 (prints near 2). 0.3 mm layers, 3 walls, 3 top / 3 bottom, 15% gyroid.
+- Wall mount (`src/cleat.py` -> `bar-cleat-case.stl`, `bar-cleat-wall.stl`): a French cleat, both pieces 12 mm deep. The case
+  cleat bolts to the tray's back between the louver bands (2 x M3 x 10 from the wall side, nuts dropped into the bosses inside
+  the tray before the S3 goes in). The wall cleat takes 2 x #8 / 4 mm countersunk screws (or anchors); its face holds the tray
+  back, so the case hangs plumb with no bottom spacer. The rim sits 8 mm off the wall, both louver bands open. To hang: lift
+  ~12 mm above the resting spot, push to the wall, drop onto the bevel. Print both wall face down, no supports, PETG.
+
 ### Other panels
 Set `PANEL` to build for another profile; with no `PANEL` the P3 STLs are unchanged.
 
@@ -109,9 +148,10 @@ Set `PANEL` to build for another profile; with no `PANEL` the P3 STLs are unchan
 PANEL=p25 python3 case2.py ../stl-p25   # and the same for every other script above
 ```
 
-- **P2.5** (Waveshare RGB-Matrix-P2.5-64x32, 160 x 80): case 185 x 94.3 x 78 (9 mm deeper than P3, see PO OUT below). Same S3, knob, USB-C and screws. Panel back (listing photo, scaled to the outline, ±1 mm): six M3 inserts on the top and bottom rails at x ±63.5, z ±33.5 plus (-12.9, +33.5) and (+12.9, -33.5); PI IN at x +40, PO OUT at x -40, both z ≈ -1; power socket near the centre. The plate bolts to three corner inserts (no centre one) and takes one pair of screws from below (x ±46, 2 x M3 x 10 + nuts). Keyholes sit beside the top corner posts (x ±51.5, wall screws 103 mm apart), so each louver row is one run: top -45..45, bottom -35..35. The left ribbon hook moves to x -13.5; the tie loop sits 4 mm right of centre and lower. The optional light sensor moves to x 40 (at 55 its bracket hits the top-right standoff).
-- **PO OUT vs the S3:** the header sits under the S3's unused bottom socket (they overlap ~0.5 mm in x). `s3_back` in the profile moves the S3 back from the panel and deepens the case by the same amount, so the ribbon keeps its 10.7 mm fold room behind the S3's plug. It's 9.0 now, the worst case (a 9 mm shroud on a PCB flush with the rails). Measure how far PO OUT stands above the brass insert faces and set `s3_back` to that: the case gets shallower by the difference.
-- **Not measured yet:** P2.5 thickness (14.5 assumed), the photo positions, PO OUT's height above the insert faces (sets `s3_back`). Print `check-panel-insert-template.stl` from the P2.5 build on the real panel and correct `inserts` / `standoffs` in `panel.py` before printing the plate.
+- **P2.5** (Waveshare RGB-Matrix-P2.5-64x32, 160 x 80): v5 shell 187 x 96.3 x 69 (the same depth as the P3: PO OUT stays below the insert faces, see below). Same S3, knob, USB-C and screws. Panel back: six M3 inserts on the top and bottom rails, corners at x ±62.5, z ±32.25 (125 x 64.5 mm, confirmed Oct 31 with `stl/v5-drawer-p25/check-p25-corner-inserts.stl`; the listing-photo estimate of ±63.5, ±33.5 was 1-1.3 mm too wide) plus about (-12, +32.25) and (+12, -32.25) (photo); PI IN at x +40, PO OUT at x -40, both z ≈ -1; power socket near the centre. The plate bolts to three corner inserts (no centre one) and takes one pair of screws from below (x ±46, 2 x M3 x 10 + nuts). Keyholes sit beside the top corner posts (x ±51.5, wall screws 103 mm apart), so each louver row is one run: top -45..45, bottom -35..35. The left ribbon hook moves to x -13.5; the tie loop sits 4 mm right of centre and lower. The optional light sensor moves to x 40 (at 55 its bracket hits the top-right standoff).
+- **PO OUT vs the S3:** the header sits under the S3's unused bottom socket (they overlap ~0.5 mm in x), but it doesn't rise above the panel's insert faces (a ruler across the frame clears it, Oct 29), so `s3_back` is 0 and the case needs no extra depth.
+- **STLs:** `stl/v5-drawer-p25/` holds the P2.5 drawer set (shell, tray for 0.4 and 0.6 nozzles, fit coupons, collar, status window, cleats, corner check frame), built with `PANEL=p25`.
+- **Not measured yet:** P2.5 thickness (14.5 assumed). The corner inserts are confirmed (above); `src/check_corners.py` makes the check frame (`PANEL=p3 python3 check_corners.py out.stl`, or `W H CX CZ` for a symmetric panel).
 - P2.5 diffuser: print it on the 0.2 nozzle (each 0.45 mm rib is two of its lines; on a 0.4 nozzle the single-bead ribs printed wavy and uneven, even with classic walls). The face is 0.14 mm: set the profile's initial layer height to 0.14 (the most a 0.2 nozzle takes) so it stays one layer; a face thicker than the first layer slices as two layers and loses translucency.
 - **P4** (256 x 128) has no profile: the case (~277 mm) and diffuser (~275 mm) exceed the X2D's 256 mm bed, so it needs split parts first (Enclosure Notes, "P4 approach").
 

@@ -340,7 +340,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 A small page on the fly.dev server, saved to the phone home screen. The server holds the board's state; the board reads it and draws what it's told.
 
 ### Controls
-- **Screen:** Auto, Transit, Ticker, Weather (radar while raining), Baseball. Auto settings (defaults reproduce the original behavior):
+- **Screen:** Auto, Transit, Ticker, Weather (radar while raining), Baseball, Clock (S3 only; face per board, §14). Auto settings (defaults reproduce the original behavior):
   - **Auto shows:** Transit and/or Ticker; with both, they alternate every 30 s–10 min (default: Transit only).
   - **Weather visits:** Off (default), While raining, or Always; every N min for M s.
   - **Jump to weather for NWS alerts:** Off (default), Warnings, or Watches too; stays on the weather screen while the alert is on, over baseball.
@@ -366,7 +366,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 ### Knob (S3)
 Decided Oct 25, 2026. An Adafruit 5880 I2C rotary encoder (seesaw, on the STEMMA QT port) is the board's physical control: the bar sleeve case covers the S3's UP/DOWN buttons. The buttons still work where they're reachable (wedge), and a board without the knob runs as before. Mockup: [`mockups/knob/sheet.png`](mockups/knob/sheet.png) (`node scripts/mock-knob.js`, drawn by `renderChooser` in `draw.js`).
 
-- **Ring:** categories, not screens, so it stays short as screens are added: **AUTO · TRANSIT · WEATHER · SPORTS**, wrapping both ways. The server sends the ring (payload `knob`), so new categories need no firmware change; CLOCK joins when a face is built (v2 plan: one Sports category over every league, the leagues and teams set on the phone). Each category opens its variant as set on the phone: TRANSIT opens rows or the ticker, whichever was chosen last (the ticker becomes a transit view mode on the phone page); SPORTS opens the baseball screen.
+- **Ring:** categories, not screens, so it stays short as screens are added: **AUTO · TRANSIT · WEATHER · SPORTS**, wrapping both ways. The server sends the ring (payload `knob`), so new categories need no firmware change; CLOCK joins with the Clock screen (§14) and opens the board's chosen face (v2 plan: one Sports category over every league, the leagues and teams set on the phone). Each category opens its variant as set on the phone: TRANSIT opens rows or the ticker, whichever was chosen last (the ticker becomes a transit view mode on the phone page); SPORTS opens the baseball screen.
 - **Twist and rest:** the first click opens the chooser on the screen the board is on, and each click moves one entry (clockwise to the right), with a 180 ms ease-out slide. 1 s after the last click it commits: the selection turns amber and its neighbors drop out, held through one request, then the new screen appears. Resting back on the starting entry closes the chooser with no request (cancel).
 - **Look:** a blank panel with a sideways wheel across the top. The selection is 5x7 label white `#d8d8d8`, centered on baseline 7; its neighbors are Tom Thumb 38 px either side, fading to `#555555` with distance and clipped at the panel edges. Row 9 has one 3x1 pip per entry, 2 px apart, centered: the selection amber, the rest `#3a3a3a`. Rows 10–31 stay dark. (Also mocked: a two-level chooser with a press into each category's variants, rejected as too complex; an underline that drains during the rest; pips at the bottom; the wheel over the dimmed screen.)
 - **Writes through:** the commit is `POST /board/select`, which sets the screen on the server as the phone would (it persists, the phone page shows it, and it ends any button override) and answers with the new screen's update, so a commit is one request.
@@ -431,45 +431,78 @@ Same frame as the baseball Bands layout: 12-row team-color bands (abbreviation l
 
 ---
 
-## 14. Skyline screen (designed, not built)
+## 14. Clock screen: skyline face (designed, not built)
 
-Designed Oct 17, 2026. An ambient weather screen: the skyline seen from the lake across Navy Pier, with the Centennial Wheel front and center, drawn for the current weather and time of day. Mockups: [`mockups/weather/lake/`](mockups/weather/lake/sheet.png) (`sheet.png` has every state, `options.png` the settings, `night-motion.png` the animation), made by `node scripts/mock-weather-lake.js`, which is also the pixel reference for everything below. Not in `draw.js` yet.
+Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: the skyline seen from the lake across Navy Pier, with the Centennial Wheel front and center, drawn for the current weather and time of day. Mockups: [`mockups/weather/lake/`](mockups/weather/lake/sheet.png) (`sheet.png` has every state, `night-motion.png` the animation), made by `node scripts/mock-weather-lake.js`. The mock is the pixel reference for the scene; where it differs from this section (text at the top, Auto text mode, reflections, the fixed sunset spot), this section wins. Not in `draw.js` yet.
+
+**Clock screen.** A new screen, `clock`, added beside Transit, Ticker, Weather and Baseball (no v2 screen framework needed). Its look is a per-board **clock face** option (`clockFace` on the phone): `skyline` first; analog, split-flap and nixie join as they're built. The knob ring gets CLOCK, which opens the chosen face. Auto never shows Clock (for now); it's chosen directly, from the phone or the knob. The skyline face still shows the weather (state and temperature); it just lives under Clock rather than Weather.
+
+**S3 only.** Rendering features go only into `firmware-s3/` (the M4 is frozen), so the scenarios are tagged `s3only`. The phone page doesn't offer Clock for a board whose health reports M4 hardware, and the server never sends `clock` to one (it falls back to Transit), since the frozen M4 doesn't know the screen.
 
 ### View
 - The viewer is on the lake on Navy Pier's axis (41.8917, -87.590), facing west. Each landmark's x is its real bearing at 1.3 px per degree (pier axis = x 32). Heights are real angular heights at 2.4 rows per degree, about 1.8× vertical exaggeration.
 - Rows 0–26 are sky and city (the shore is row 26); rows 27–31 are the lake.
 - Left to right: Willis (far left and small, since it's 4 km away), Aon, St. Regis (the closest supertall, so it looks tallest, as in photos from the lake), Trump, Lake Point Tower (directly behind the wheel), Hancock. Background mass fills the gaps: the Loop on the left, Streeterville on the right. Only Willis and Hancock are drawn to be recognized; the rest are plain slabs, to keep the focal points few.
 - **Willis** is seen from the southeast, so its setbacks step down to the right (floors 66 / 108 / 90 / 66, 1 / 4 / 2 / 2 px wide). From due south only one setback shows, and it reads as a generic tower.
-- **Hancock** has symmetric 4-6-8 px steps around x 53 and twin antennas of equal height. With the clock on, the antennas are 2 rows shorter so the clock fits above the beacons.
+- **Hancock** has symmetric 4-6-8 px steps around x 53 and twin antennas of equal height, at full height (the text no longer sits above them).
 
 ### Buildings and lights
 - Every building, background included, and every antenna mast is unlit (black) day and night. By day they're a silhouette against the sky; at night only the windows draw the city.
-- **Night windows:** 45% of window slots (even columns, odd rows) are lit, 30% of those bright amber `#ffb050`, the rest `#8a5c20`. Background mass gets windows only right of the wheel. No windows around the pier (x 19–44, rows 20 and below) or behind the wheel, so the pier's string lights are the only amber there.
-- **Hancock beacons:** red, night only, pulsing together (a smooth 4 s fade to near off). Not a hard blink, since a red 1 s blink means a tornado warning (§2).
+- **Night windows:** 45% of window slots (even columns, odd rows) are lit, 30% of those bright amber `#ffb050`, the rest `#8a5c20`, from a fixed seed so the pattern never changes. Background mass gets windows only right of the wheel. No windows around the pier (x 19–44, rows 20 and below) or behind the wheel, so the pier's string lights are the only amber there.
+- **Hancock beacons:** red, night only, pulsing together: a smooth 4 s cosine between dark red `#401010` and bright red `#ff2020`, never off. Not a hard blink, since a red 1 s blink means a tornado warning (§2).
 
 ### Centennial Wheel and Navy Pier
 - **Wheel:** a 12 px hard-edged rim (rows 12–23) centered on the x 32 pixel boundary, a 2×2 hub, A-frame legs from the hub to the pier (feet 5 px either side of center), and a crossbar on row 25. No spokes and no gondolas: the rim on its A-frame is what reads as the wheel. Hard edges throughout.
-- **By day** the wheel takes the color with the most contrast against what's behind its upper rim, clouds included: grey `#8a92a2` on blue or dark skies, light `#dce0e6` on mid greys, dark `#262a32` on bright skies.
+- **By day** the wheel takes the color with the most contrast against the sky behind its upper rim: grey `#8a92a2` on blue or dark skies, light `#dce0e6` on mid greys, dark `#262a32` on bright skies. Clouds drift, so the server picks the color once per cloud strip from the strip's average over the rim rows; it doesn't change as clouds pass.
 - **At night** the rim is rainbow LEDs, the hues turning around it once every 12 s; legs and hub dim `#4a4a66`.
 - **Pier:** a flat deck 8 px either side of the wheel's axis (x 24–39): a lit top row (`#6a6460` by day, `#2a2834` at night) and a darker face on row 27. At night, string-light bulbs every 3 px (x 24, 27 … 39) in `#c09050`.
 - Also tried and declined: flags on the pier, the Grand Ballroom dome, a pier running toward the viewer in perspective, gondolas, 6 or 8 spokes, a soft-edged rim.
 
 ### Sky
-- **Sun:** a 7 px soft-edged disc `#ffd040` at x 38–44, rows 2–8 (between the wheel and the clock).
-- **Sunset:** the sun sets behind the skyline, hidden by the buildings, placed by the day's sunset bearing (left of the wheel in winter, right of it in summer; the mock shows summer), with a glitter path on the water below it.
-- **Moon:** the same spot and size, `#a89c70` (kept dimmer than the clock), at its real phase, with soft edges.
-- **Stars:** 14, about half twinkling (4, 6 or 12 s cycles). They stay off the buildings, the label corners and the moon, and at least 3.5 px clear of the wheel's rim (a star beside the rim read as part of the wheel).
+- **Sun (day):** a 7 px soft-edged disc `#ffd040` at x 38–44, rows 2–8.
+- **Sun (sunset):** drawn behind the city, low on the skyline, at the day's sunset bearing. Real bearings run from about 238° (December) to 302° (June), which at the skyline's 1.3 px per degree would put the sun off the panel at both ends, so the sun has its own scale: x = 32 + (bearing − 270) × 0.8, which spans x 6–58 over the year. Left of the wheel in winter, right in summer.
+- **Moon:** the day sun's spot and size, `#a89c70` (kept dimmer than the text), at its real phase, with soft edges. Shown all night whenever at least 3% is lit; it ignores moonrise and moonset (a deliberate simplification).
+- **Stars:** 14, about half twinkling (4, 6 or 12 s cycles). They stay off the buildings and the moon, and at least 3.5 px clear of the wheel's rim (a star beside the rim read as part of the wheel).
 
 ### Water
 - A two-color gradient with faint ripple dashes drifting sideways, alternate rows in opposite directions, 1 px every 1.5 s.
-- **Reflections are optional, off by default** (per board). When on, rows 22–26 are mirrored into the lake, with fixed 1 px offsets alternating by row and a few fixed gaps. Reflections never move (moving ones read as blinking lights); only the ripples do. The wheel's rim reflects as plain structure, not as its changing rainbow.
+- **Glints:** single water pixels under the sun (day, sunset) or the moon (night) brighten for 200 ms, 1–3 at a time, in a band 5 px either side of the sun's or moon's x (sunset: the glitter path, `#ffd080`; day: `#c8d8f0`; moon: `#a89c70`, scaled by the lit fraction). Positions and timing come from a hash of the tick, so `draw.js` and `draw.cpp` agree.
+- Ripples, glints and the glitter path stay out of the text boxes plus 1 px, so nothing moves beside the digits. A winter sunset (sun at x 6) puts the glitter path under the temperature, where it's hidden; accepted.
+- Reflections: dropped for now (they'd sit under the text). Mocked in `options.png` if revisited.
 
 ### Temperature and clock
-- Temperature top left (from x 0), clock top right (flush to x 63), Tom Thumb, label white `#d8d8d8` when lit. The clock is optional (default on). No drop shadows.
-- **Text mode** (per board):
-  - **Auto** (default): each block (temperature, clock) checks the average brightness of the sky behind it and uses unlit (black) digits on a bright sky, lit digits on a dark one. Hysteresis keeps drifting clouds from flipping it: dark above luma 120, back to lit below 100. The two blocks decide independently.
-  - **Lit, top:** the wisps fade out near the two top corners so the text stays on clear sky.
-  - **Lit, bottom:** over the water (baseline 32). Always readable, and the sky is entirely free.
+- Always at the bottom, over the water (baseline 32, rows 27–31), in lit white `#d8d8d8`, Tom Thumb. Temperature from x 0; clock flush to x 63. No drop shadows, no AM/PM (as on the other clock faces).
+- Widest cases, measured with `fonts.js`: `-12°` / `100°` 14 px (x 0–13), `12:59` 17 px (x 46–63). The pier is x 24–39, so they never collide.
+- The clock is always on: this is a clock face. Temperature is always on too.
+
+### Choosing the state
+The server picks the state; the board never interprets weather codes.
+
+**Time of day** comes from the sun's elevation, computed on the server (NOAA solar position formula, no dependencies):
+
+| Sun elevation | Look |
+|---|---|
+| above 6° | day |
+| 0° to 6° | sunrise (morning) or sunset (evening) |
+| −6° to 0° | twilight (civil twilight, morning and evening) |
+| below −6° | night |
+
+**Weather** comes from Open-Meteo's current `weather_code` and `cloud_cover` (add `cloud_cover` to the current request; additive, so the M4 is unaffected), first match wins:
+
+| Condition | State |
+|---|---|
+| code 95–99 | Thunderstorm |
+| code 51–67, 80–82 (drizzle, rain, freezing rain, showers) | Rain |
+| code 71–77, 85–86 | Snow |
+| code 45, 48 | Fog |
+| cloud cover over 85% | Overcast |
+| 50–85% | Mostly cloudy |
+| 20–50% | Partly cloudy |
+| under 20% | Clear |
+
+- Codes 0–3 (clear through overcast) are ignored; cloud cover sets the cloud state instead, since Open-Meteo has no "mostly cloudy" code.
+- Sunrise, sunset and twilight looks apply only to Clear, Partly and Mostly cloudy. Under Overcast, Rain, Snow, Fog or Thunderstorm, sun above 0° uses the day variant and below 0° the night variant.
+- Precipitation intensity (light / moderate / heavy) comes from the code: 51/53/55, 61/63/65, 71/73/75, 80/81/82, with 56/57/66/67 and 77/85/86 as light / heavy pairs.
 
 ### Weather states
 
@@ -495,28 +528,57 @@ Designed Oct 17, 2026. An ambient weather screen: the skyline seen from the lake
 
 Also tried for clouds: puffy cumulus (soft-edged, then pixel art with three flat tones; both declined), broken cirrus streaks (declined: they read as dashed lines), and soft-edged wisps (the alternative to the two flat tints).
 
+### Rendering: who draws what
+The scene is drawn in layers, back to front. The server renders what's expensive and changes rarely; the board draws only what moves.
+
+| Layer | Drawn by | Notes |
+|---|---|---|
+| Sky gradient | board | from 2–4 color stops in the payload |
+| Sun, moon | board | position, phase from the payload |
+| Cloud strip | server | scrolls on the board (below) |
+| City silhouette, windows, wheel frame, pier | board | fixed geometry: generated into `assets.h` by `build-firmware-assets.js` from one JS definition that `draw.js` also uses |
+| Fog, snow on roofs | board | from the state |
+| Rain, snow, lightning | board | |
+| Wheel rim, beacons, stars, string lights | board | |
+| Water, ripples, glints | board | |
+| Temperature, clock | board | |
+
+**Cloud strip:**
+- The server renders the clouds as a strip 128 px wide and 27 rows tall (rows 0–26) that tiles seamlessly (the noise wraps at 128), indexed at 4 bits per pixel (transparent plus up to 15 shades, enough for the overcast deck's texture): about 1.7 KB.
+- Fetched like a radar frame, by id; the payload carries the strip's id and palette, and the board refetches only when the id changes (a new state, or the cloud cover crossing a threshold).
+- The board draws it at x offset `floor(now / 4) % 128` (1 px every 4 s, from wall-clock time so every renderer agrees), behind the city, so clouds pass behind the buildings.
+- Night wisps and decks use the same strip with a night palette.
+
+**Payload** (`skyline` object; exact fields in `contract.md`): state, day/night variant, sky stops, water colors, wheel day color, sun x/y and visibility, moon phase, cloud strip id and palette, precipitation kind and intensity, lightning on/off, temperature text.
+
+**Determinism:** every random element (twinkle phases, rain and snow positions, glints, lightning timing) comes from a hash of the tick and a fixed seed, never a running random generator, so `draw.js`, `draw.cpp` and the parity test agree pixel for pixel.
+
 ### Animation
 Ambient and slow, on a 100 ms tick:
 
 | Element | Motion |
 |---|---|
 | Wheel rim (night) | rainbow turns once every 12 s |
-| Beacons (night) | pulse, 4 s |
-| Stars (night) | twinkle, 4–12 s |
+| Beacons (night) | `#401010` ↔ `#ff2020`, smooth 4 s cosine |
+| Stars (night) | twinkle, 4–12 s cycles |
 | Water | ripples drift 1 px every 1.5 s |
-| Clouds | drift 1 px every 4 s |
-| Rain, snow | fall (speeds not designed yet) |
+| Glints | 1–3 at a time, 200 ms each, under the sun or moon |
+| Clouds | strip scrolls 1 px every 4 s |
+| Rain | 1 px down per tick, 1 px left every 2 ticks (slanted), 2 px streaks; 12 / 24 / 40 streaks for light / moderate / heavy |
+| Snow | 1 px down every 400 ms, a 1 px sideways step about every 1.2 s per flake; 10 / 20 / 30 flakes |
+| Lightning | a strike every 8–20 s (from the hash), shown 100 ms on, 100 ms off, 100 ms on |
 
-- This screen is the exception to Minimal animation (§2): it has no times to protect. Each fetch freezes it for about a second; fetches still go in the scheduler's gaps.
-- Cost on the board: about 50 pixels per tick (rim, stars, beacons) and about 320 every 1.5 s (water).
+- This screen is the exception to Minimal animation (§2): it has no times to protect, apart from the clock, which only changes at the minute.
+- Fetches still go in the scheduler's gaps, and the scene holds still while one runs. How long a fetch stalls the S3's loop needs measuring on hardware.
 
-### Board requirements
-- Buildings stay true black (LEDs off) and are exempt from the brightness floor (§4). Everything else keeps its floor through the ~40% overnight dimming, so the scene around the buildings never goes dark.
-- Closest to the floor: the top of the night sky (`#000006`, effectively off already), night water ripples (`#0e1a36`), and the dim window amber (`#8a5c20`).
+### Board requirements (S3)
+- Memory is not a constraint on the S3 (2 MB PSRAM): the cloud strip (1.7 KB), the city layer and the scene buffers can all stay resident.
+- Buildings stay true black. The S3's color pipeline (`color.cpp`, `levels()`) already leaves black pixels off and lifts every other pixel to the floor (§4), so no mask is needed.
+- Closest to the floor: the top of the night sky (`#000006`, effectively off already), night water ripples (`#0e1a36`), the dim window amber (`#8a5c20`) and the beacons' dark end (`#401010`).
+- Order of work: the shared city definition and the server's state, sun and moon code first (with tests on recorded Open-Meteo fixtures); then `draw.js` with `s3only` scenarios per state; then the port to `draw.cpp` against the parity test.
 
 ### Open
-- On the panel: whether 3×5 unlit digits survive the diffuser glow (§4: dark strokes on lit fill in). Sunset will likely need dark digits once seen on the board.
-- On the panel: the near-floor colors above, and whether the moon is dim enough.
+- On the panel: the near-floor colors above, whether the moon is dim enough, and whether glints read as sparkle or noise.
 - Moon crescents: a plain sliver, earthshine (the unlit part as a faint disc, likely lost to overnight dimming), or a brightened sliver.
-- Mapping Open-Meteo weather codes, `is_day` and the sunrise/sunset times to the states, and how long twilight lasts.
-- The payload (state, sun bearing, moon phase, temperature) and the renderer's memory cost on the board.
+- Sunset sun height: how much of the disc shows above the skyline at the low and high ends of its x range (it crosses different buildings through the year).
+- Mock update: `mock-weather-lake.js` still draws the text at the top and has no glints, moving sunset sun or cloud strip. Update it or let `draw.js` take over as the reference.

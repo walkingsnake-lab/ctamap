@@ -12,14 +12,16 @@ PROFILES = {
         w=192.0, h=96.0, t=14.5,         # outline, thickness (measured)
         pitch=3.0, rib=0.6,              # diffuser grid: LED pitch, rib width (0.4 nozzle)
         faces={'white': 0.2, 'translucent': 0.4},   # diffuser face = one first layer: 0.2 (0.4 nozzle), 0.4 (0.6 nozzle)
-        # brass M3 inserts on the panel back (x, z - ZC), photo estimates checked with the insert template;
-        # (-88, -26) is under the S3
-        inserts=((-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)),
-        standoffs=((-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)),   # plate v3 bolts to these
+        # brass M3 inserts on the panel back (x, z - ZC). Corners confirmed Oct 31 with check_corners.py: the v3 frame
+        # fits all four (v2 at +/-88 / +86.5 only took one end's pair at a time). x +/-87.25 on both rows (174.5 mm end
+        # to end), z +31 / -29 (estimated -26). The middle two are from photos (+/-0.5 mm). (-87.25, -29) is under the
+        # S3 in plate v3
+        inserts=((-87.25, 31.0), (87.25, 31.0), (-87.25, -29.0), (87.25, -29.0), (-12.7, 38.0), (12.0, -36.0)),
+        standoffs=((-87.25, 31.0), (87.25, 31.0), (87.25, -29.0), (12.0, -36.0)),   # plate v3 bolts to these
         tie_bridge=(-17.0, 17.0, 63.0, 78.0),   # plate v3 tie-down bridge: x0, x1, z0, z1 (z in the P3 case, moves by DZ)
         hooks=(-22.5, 22.5),             # ribbon hooks on the plate (x), on bars between the louvers / pills
         # plate v3 louver rows (x segments): gaps at the bottom bosses (+/-40, +/-52) and centre standoff, and at the keyholes
-        lv_bottom_x=((-86.0, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0)),
+        lv_bottom_x=((-86.0, -61.0), (-31.0, -13.0), (18.0, 31.0), (61.0, 86.0)),   # gap 13..18 clears the centre standoff (x 12)
         lv_top_x=((-80.0, -46.5), (-33.5, 33.5), (46.5, 80.0)),
         headers=((63.0, 2.5), (-63.0, 2.5)),   # PI IN, PO OUT centres (x, z - ZC), vertical 2x8 shrouds
         s3_back=0.0,                     # extra gap between the panel back and the S3's bottom socket (the case deepens by it)
@@ -38,10 +40,11 @@ PROFILES = {
         pitch=2.5, rib=0.45,             # 0.45 rib = two lines from a 0.2 nozzle (crisp). On a 0.4 it's one bead, and a print
                                          # (classic walls, Oct 28) came out wavy and uneven: the P2.5 diffuser needs the 0.2
         faces={'white': 0.14},           # whole diffuser on the 0.2 nozzle, first layer set to 0.14 (its max): one-layer face
-        # inserts from the listing photo of the panel back (Oct 27), scaled to the 160 x 80 outline (+/-1 mm): six on the
-        # top and bottom rails, point-symmetric; (-63.5, -33.5) is under the S3. Check with the insert template.
-        inserts=((-63.5, 33.5), (63.5, 33.5), (-63.5, -33.5), (63.5, -33.5), (-12.9, 33.5), (12.9, -33.5)),
-        standoffs=((-63.5, 33.5), (63.5, 33.5), (63.5, -33.5)),   # three corners; no centre one: the bottom louvers run through
+        # inserts: corners confirmed Oct 31 with check_corners.py (an M3 dropped into all four at 125 x 64.5 mm); the
+        # listing-photo estimate (+/-63.5, +/-33.5) was 1-1.3 mm too far out. The two middle ones are from a photo of the
+        # panel back (+/-0.5 mm; the drawer tray doesn't use them). Six on the top and bottom rails, point-symmetric
+        inserts=((-62.5, 32.25), (62.5, 32.25), (-62.5, -32.25), (62.5, -32.25), (-12.0, 32.25), (12.0, -32.25)),
+        standoffs=((-62.5, 32.25), (62.5, 32.25), (62.5, -32.25)),   # three corners; no centre one: the bottom louvers run through
         tie_bridge=(-9.0, 17.0, 59.0, 74.0),   # narrowed (moved ribbon hook) and lowered 4 mm (clears the top louver band)
         hooks=(-13.5, 22.5),             # left hook moved clear of the S3's IDC plug
         # louvers: one unbroken run per row, between the bottom bosses (+/-46) and clear of the S3's lower posts (x -39.7) and between the keyhole
@@ -49,16 +52,15 @@ PROFILES = {
         lv_bottom_x=((-35.0, 35.0),),
         lv_top_x=((-45.0, 45.0),),
         headers=((40.1, -1.2), (-40.1, -1.2)),   # from the photo; PO OUT sits under the S3's bottom socket (see README)
-        # PO OUT sits under the S3's bottom socket, so the S3 (and the case) moves back by the header's height above the
-        # insert faces. 9.0 = worst case (a 9 mm shroud on a PCB flush with the rails): set it to the measured height
-        s3_back=9.0,
+        # PO OUT sits under the S3's bottom socket; the S3 would move back by the header's height above the insert faces
+        s3_back=0.0,                     # PO OUT sits below the frame top (a ruler across the frame clears it, Oct 29)
         sensor_x=40.0,                   # moved in: at 55 its bracket hits the top-right standoff (x 63.5)
         key_x=51.5,                      # keyholes beside the corner standoffs, so the top louvers run unbroken between them
         screw_xs=(46.0,),                # one pair (the plate bolts to the panel; these only stop the insert sliding out)
         # push foot: a blade under the S3 (only 3.8 mm between its edge and the panel's), clear of the screw boss
         corner_foot=(-78.0, -56.0, 0.5, 2.9),
         posts=((-60, 35), (60, 35), (-14, -36), (60, -36)),   # plate v2 only (placeholders)
-        assumed=('thickness', 'inserts and headers (photo, +/-1 mm)', 'header height above the rails'),
+        assumed=('thickness', 'headers (photo, +/-1 mm)', 'header height above the rails'),
     ),
 }
 
