@@ -2349,7 +2349,8 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
     auto it = clouds->find(json::str(s["cl"]["id"]));
     if (it != clouds->end() && it->second.size() >= (size_t)(sky::CLOUD_W * 26 / 2)) {
       const std::vector<uint8_t> &cb = it->second;
-      long long off = fmod_floor((long long)std::floor(ms / sky::CLOUD_STEP), sky::CLOUD_W);
+      double step = s["cl"]["step"].is_null() ? (double)sky::CLOUD_STEP : s["cl"]["step"].num();
+      long long off = step > 0 ? fmod_floor((long long)std::floor(ms / step), sky::CLOUD_W) : 0;
       const Value &pal = s["cl"]["pal"];
       const Value &al = s["cl"]["a"];
       RGB pc[16];

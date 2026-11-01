@@ -577,7 +577,7 @@ Ambient and slow, on a 100 ms tick:
 | Stars (night) | twinkle, 4–12 s cycles |
 | Water | ripples drift 1 px every 1.5 s |
 | Glints | 1–3 at a time, 200 ms each, under the sun or moon |
-| Clouds | strip scrolls 1 px every 4 s |
+| Clouds | strip scrolls 1 px every 16 s by default; per board `cloudDrift`: off (still), slow (16 s), normal (4 s) |
 | Rain | 1 px down every 200 ms, 1 px left every second step (slanted), 2 px streaks; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background) |
 | Snow | 1 px down every 700 ms, a 1 px sideways step about every 2 s per flake; 6 / 12 / 20 flakes |
 | Lightning | a strike every 20–40 s (from the hash): a soft patch of the cloud deck (about 22 × 8 px, toward `#8a80b0`, peak 45%) lights up from inside, with the bolt (1 px core, flat violet edges, one branch, ending above the Trump roof; softened toward lavender `#b8b0e8`, peak 35%) inside it. Rises over 0.6 s, fades over 2.4 s. Nothing snaps on or off: the storm stays in the background. Mockup: [`storm.png`](mockups/weather/lake/storm.png), row BOTH |

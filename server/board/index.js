@@ -337,7 +337,7 @@ function createBoard({
   // The skyline face's parameters, or null without weather or a station.
   function skylineOf(board, w, wd, st, now) {
     if (!w || !st) return null;
-    try { return { face: board.clockFace || 'skyline', ...toSkyline(w, { lat: st.lat, lon: st.lon, now, temp: wd ? wd.temp : null, boats: board.boats !== false }) }; }
+    try { return { face: board.clockFace || 'skyline', ...toSkyline(w, { lat: st.lat, lon: st.lon, now, temp: wd ? wd.temp : null, boats: board.boats !== false, drift: board.cloudDrift || 'slow' }) }; }
     catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
