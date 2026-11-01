@@ -2397,7 +2397,7 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       for (int x = 0; x < 64; x++) {
         if (G.role[y * 64 + x]) continue;
         double ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = std::sqrt(ex * ex + ey * ey);
-        double a = lv * 0.7 * (1 - sstep01(0.3, 1, d));
+        double a = lv * (0.35 + 0.45 * (1 - sstep01(0.3, 1, d)));  // whole sky 35%, the patch 80%
         if (a > 0.01) f.set(x, y, mix_rgb(f.get(x, y), sky::GLOW, a));
       }
     auto put = [&](int x, int y, RGB c) {
@@ -2472,13 +2472,15 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       double rem = std::fmod(ms, fall), fr = rem / fall;
       long long step = (long long)((ms - rem) / fall);
       for (int i = 0; i < n; i++) {
-        int hy = (int)((ih(i, 32, 4) % (S + 1) + step) % (S + 1));
+        int land = S + 1 + (int)(ih(i, 33, 4) % (31 - S)), cyc = land + 1;  // falls to its own row of water
+        int hy = (int)((ih(i, 32, 4) % cyc + step) % cyc);
         int hx = (int)fmod_floor((long long)(ih(i, 31, 4) % 64) + sl * (step % 64), 64);
         for (int j = -1; j <= 1; j++) {
           int y = hy + j;
           double d = fr - j;
-          if (y < 0 || y > S) continue;
+          if (y < 0 || y > land) continue;
           int x = (int)fmod_floor((long long)(hx + sl * j), 64);
+          if (quiet(x, y)) continue;
           RGB c = d <= 0 ? c1 : d <= 1 ? mix_rgb(c1, c2, d) : c2;
           double a = d <= 0 ? 1 + d : d <= 1 ? 1 : 2 - d;
           if (a > 0) f.set(x, y, mix_rgb(f.get(x, y), c, a));
@@ -2487,9 +2489,11 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
     } else {
       long long step = (long long)std::floor(ms / (fall * 3.5));
       for (int i = 0; i < n; i++) {
-        int y = (int)((ih(i, 22, 4) % (S + 1) + step) % (S + 1));
+        int cyc = S + 2 + (int)(ih(i, 25, 4) % (31 - S));
+        int y = (int)((ih(i, 22, 4) % cyc + step) % cyc);
         long long side = fmod_floor(fdiv((long long)ms + (long long)(ih(i, 23, 4) % 2000), 2000), 2);
         int x = (int)((ih(i, 21, 4) % 64 + side) % 64);
+        if (quiet(x, y)) continue;
         f.fill(x, y, 1, 1, ih(i, 24, 4) % 10 < 4 ? sky::SNOW1 : sky::SNOW0);
       }
     }
