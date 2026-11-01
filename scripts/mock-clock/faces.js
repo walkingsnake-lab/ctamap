@@ -713,6 +713,231 @@
   ];
   FACES.push(...R2);
 
+  // ================================================================ round 3
+  // Time only, one look each. Helpers work on ink masks cropped to the
+  // drawn pixels, so faces place glyphs by their ink, not font metrics.
+  function mask(env, font, s) {
+    const tmp = new Led(env, 120, 40);
+    tmp.text(font, s, 2, 30, '#ffffff');
+    let x0 = 999, y0 = 999, x1 = -1, y1 = -1;
+    for (let y = 0; y < tmp.h; y++) for (let x = 0; x < tmp.w; x++) if (tmp.get(x, y)[0]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    if (x1 < 0) return { w: 0, h: 0, on: () => false };
+    return { w: x1 - x0 + 1, h: y1 - y0 + 1, on: (x, y) => x >= 0 && y >= 0 && x <= x1 - x0 && y <= y1 - y0 && tmp.get(x + x0, y + y0)[0] > 0 };
+  }
+  // Clock-font digits all share one ink box ('1' would otherwise crop narrow).
+  function digitMask(env, font, ch) {
+    const m = mask(env, font, ch), ref = mask(env, font, '0');
+    if (!ch.trim()) return { w: ref.w, h: ref.h, on: () => false };
+    const tmp = new Led(env, 30, 40); tmp.text(font, ch, 2, 30, '#ffffff');
+    const r = new Led(env, 30, 40); r.text(font, '0', 2, 30, '#ffffff');
+    let x0 = 99, y0 = 99;
+    for (let y = 0; y < 40; y++) for (let x = 0; x < 30; x++) if (r.get(x, y)[0]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); }
+    return { w: ref.w, h: ref.h, on: (x, y) => x >= 0 && y >= 0 && x < ref.w && y < ref.h && tmp.get(x + x0, y + y0)[0] > 0 };
+  }
+  function drawMask(f, m, ox, oy, color, a = 1) { for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) if (m.on(x, y)) f.plot(ox + x, oy + y, color, a); }
+  const scale = (c, k) => rgb(c).map((v) => v * k);
+  const hash = (n) => { let x = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b); x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35); x ^= x >>> 16; return (x >>> 0) / 4294967296; };
+  // Big time as one row of masks: 'H', 'HH', ':' , 'MM'. Returns placed items.
+  function timeRow(f, t, font, { gap = 2, colonGap = 2, cx = 31.5, lead = false } = {}) {
+    const hh = lead ? String(t.h12).padStart(2, '0') : String(t.h12), mm = String(t.m).padStart(2, '0');
+    const ds = [...hh].map((c) => digitMask(f.env, font, c)), dm = [...mm].map((c) => digitMask(f.env, font, c)), col = mask(f.env, font, ':');
+    const dw = ds[0].w, wH = ds.length * dw + (ds.length - 1) * gap, wM = 2 * dw + gap;
+    const total = wH + colonGap + col.w + colonGap + wM;
+    let x = Math.round(cx - (total - 1) / 2); const items = [];
+    ds.forEach((m, i) => { items.push({ m, x, kind: 'h', i }); x += dw + gap; });
+    x += colonGap - gap; items.push({ m: col, x, kind: ':' }); x += col.w + colonGap;
+    dm.forEach((m, i) => { items.push({ m, x, kind: 'm', i }); x += dw + gap; });
+    return items;
+  }
+
+  // ---- seven-segment digits (VFD)
+  const SEG7 = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg' };
+  function seg7(f, ch, x, y, w, h, th, on, off, skew) {
+    const lit = ch === ' ' ? '' : SEG7[ch], mid = Math.floor((h - th) / 2);
+    const P = (px, py, c) => f.plot(Math.round(px + (h - 1 - py) * skew), y + py, c);
+    const hseg = (s, py) => { for (let j = 0; j < th; j++) for (let i = 1 + (j === 0 || j === th - 1 ? 1 : 0) * 0; i < w - 1; i++) P(x + i + (j !== Math.floor(th / 2) ? 0 : 0), py + j, lit.includes(s) ? on : off); };
+    const vseg = (s, px, py0, py1) => { for (let j = py0; j <= py1; j++) for (let i = 0; i < th; i++) P(x + px + i, j, lit.includes(s) ? on : off); };
+    hseg('a', 0); hseg('g', mid); hseg('d', h - th);
+    vseg('f', 0, 1, mid - 1); vseg('b', w - th, 1, mid - 1);
+    vseg('e', 0, mid + th, h - th - 1); vseg('c', w - th, mid + th, h - th - 1);
+  }
+
+  // ---- drum strip for the odometer: digits 0..9 down a 12 x 180 strip
+  const DRUM_PITCH = 18;
+  let drumCache = null;
+  function drumStrip(env) {
+    if (drumCache && drumCache.env === env) return drumCache.m;
+    const m = Array.from({ length: 10 }, (_, d) => digitMask(env, 'clock', String(d)));
+    drumCache = { env, m };
+    return m;
+  }
+  function drum(f, x0, w, value, ink) {
+    const ms = drumStrip(f.env), R = 17, cy = 15.5, dm = ms[0];
+    for (let y = 0; y < 32; y++) {
+      const off = y - cy, th = Math.asin(clamp(off / R, -1, 1)), shade = Math.cos(th);
+      const sy = value * DRUM_PITCH + R * th; // strip coordinate, digit d centered at d*pitch
+      const k = Math.floor(sy / DRUM_PITCH + 0.5), local = sy - k * DRUM_PITCH, d = ((k % 10) + 10) % 10;
+      const gy = Math.round(local + (dm.h - 1) / 2);
+      for (let x = 0; x < w; x++) {
+        f.plot(x0 + x, y, scale('#1c1a17', shade * shade));
+        const gx = x - Math.floor((w - dm.w) / 2);
+        if (ms[d].on(gx, gy)) f.plot(x0 + x, y, scale(ink, Math.pow(shade, 3)));
+      }
+    }
+  }
+  const easeInOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+
+  const R3 = [
+    {
+      id: 'r3-vfd', group: 'R3', title: 'VFD',
+      note: 'A 1980s vacuum-fluorescent alarm clock: slanted seven-segment digits in blue-green, every unlit segment still faintly visible (so the leading digit reads as a ghost 8). AM/PM indicators top right. Fully static.',
+      draw(f, t) {
+        const on = '#52f5d2', off = '#0e2e28';
+        const hh = String(t.h12).padStart(2, ' '), mm = String(t.m).padStart(2, '0');
+        const W = 11, H = 22, Y = 8, xs = [3, 16, 36, 49];
+        [hh[0], hh[1], mm[0], mm[1]].forEach((c, i) => seg7(f, c, xs[i], Y, W, H, 2, on, off, 0.1));
+        f.fill(32, 13, 2, 2, on); f.fill(31, 22, 2, 2, on);
+        f.text('small', 'AM', 46, 5, t.ampm === 'AM' ? on : off);
+        f.text('small', 'PM', 56, 5, t.ampm === 'PM' ? on : off);
+      },
+    },
+    {
+      id: 'r3-marquee', group: 'R3', title: 'Marquee',
+      note: 'Theater-marquee bulbs: the 3x5 digits blown up to round 3x3 bulbs (the 1 trimmed to its two lit columns so 12:59 fits) on a 4 px grid over faintly glowing empty sockets, with a chase of single bulbs running around the border (one step every 0.25 s). The chase is the only motion.',
+      draw(f, t) {
+        const bulb = '#ffd27a', socket = '#160e04', P = 4;
+        const cols = [];
+        const hh = String(t.h12), mm = String(t.m).padStart(2, '0');
+        const gap = () => cols.push(() => false);
+        const put = (ch) => {
+          const m = digitMask(f.env, 'small', ch);
+          for (let c = 0; c < (ch === '1' ? 2 : 3); c++) cols.push((r) => m.on(c, r));
+        };
+        [...hh].forEach((ch, i) => { if (i) gap(); put(ch); });
+        gap(); cols.push((r) => r === 1 || r === 3); gap();
+        [...mm].forEach((ch, i) => { if (i) gap(); put(ch); });
+        const ox = Math.round(31.5 - (cols.length * P - 2) / 2), oy = 6;
+        cols.forEach((on, gx) => { for (let r = 0; r < 5; r++) {
+          const x = ox + gx * P, y = oy + r * P, lit = on(r), c = lit ? bulb : socket;
+          for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) f.plot(x + i, y + j, c, (i === 1 || j === 1) ? 1 : (lit ? 0.3 : 0));
+        } });
+        const step = Math.floor((t.s * 1000 + t.ms) / 250);
+        for (let i = 0; i < 32; i++) for (const [y, dir] of [[1, 1], [30, -1]]) {
+          f.plot(i * 2 + (y === 1 ? 0 : 1), y, (i * dir + step + 64) % 4 === 0 ? '#fff0c8' : '#4a3210');
+        }
+      },
+    },
+    {
+      id: 'r3-odometer', group: 'R3', title: 'Odometer',
+      note: 'Four number drums seen through a window: the neighbors above and below curl away and darken like a real cylinder. At each minute the changed drums roll forward (0.5 s); at 12:59 the hour drums spin all the way round.',
+      draw(f, t) {
+        const ink = '#f2e6cc', nxt = parts(new Date(t.d.getTime() + 60000));
+        const ds = (p) => [Math.floor(p.h12 / 10), p.h12 % 10, Math.floor(p.m / 10), p.m % 10];
+        const a = ds(t), b = ds(nxt), msLeft = 60000 - msInMinute(t), k = msLeft < 500 ? easeInOut(1 - msLeft / 500) : 0;
+        const xs = [2, 15, 37, 50];
+        a.forEach((d, i) => {
+          let to = b[i]; if (to < d) to += 10;
+          drum(f, xs[i], 12, d + (to - d) * k, i === 0 && d === 0 && k === 0 ? '#5a5448' : ink);
+        });
+        f.fill(31, 11, 2, 2, '#ffb000'); f.fill(31, 19, 2, 2, '#ffb000');
+      },
+    },
+    {
+      id: 'r3-seventies', group: 'R3', title: 'Seventies',
+      note: 'Supergraphics: three stripes in sunflower, orange and rust run along the bottom and sweep up the right edge; the digits are banded in the same three colors, top to bottom. Fully static.',
+      draw(f, t) {
+        const COL = ['#ffc23a', '#ff7414', '#d2361a'];
+        const cx = 51, cy = 17;
+        [6, 9, 12].forEach((r, i) => {
+          f.fill(0, cy + r - 1, cx, 2, COL[i]);
+          f.fill(cx + r - 1, 0, 2, cy, COL[i]);
+          ring(f, cx - 0.5, cy - 0.5, r - 0.5 + 0.5, 2, COL[i], 0.25, 0.5);
+        });
+        const items = timeRow(f, t, 'clock', { gap: 3, colonGap: 3, cx: 23 });
+        for (const it of items) for (let y = 0; y < it.m.h; y++) for (let x = 0; x < it.m.w; x++) if (it.m.on(x, y)) f.plot(it.x + x, 3 + y, COL[Math.min(2, Math.floor(y / 5))]);
+      },
+    },
+    {
+      id: 'r3-neon', group: 'R3', title: 'Neon sign',
+      note: 'A pink neon time in a cyan tube frame, each stroke with a soft halo. Every few minutes one digit stutters for half a second, like a tired transformer; otherwise static.',
+      draw(f, t) {
+        const pink = '#ff3fa4', core = '#ffc2e4', cyan = '#2fd6ff';
+        const halo = (x, y, c, a) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) f.plot(x + dx, y + dy, c, a * (dx && dy ? 0.12 : 0.22)); };
+        // frame: rounded rect tube
+        const fr = rectPath(2, 2, 61, 29).filter(([x, y]) => !((x < 4 || x > 59) && (y < 4 || y > 27)) || (x === 3 && y === 3) || (x === 60 && y === 3) || (x === 3 && y === 28) || (x === 60 && y === 28));
+        const fr2 = fr.filter(([x, y]) => !((x === 2 || x === 61) && (y === 3 || y === 28)) && !((y === 2 || y === 29) && (x === 3 || x === 60)));
+        for (const [x, y] of fr2) halo(x, y, cyan, 1);
+        for (const [x, y] of fr2) f.plot(x, y, cyan);
+        const items = timeRow(f, t, 'clock', { gap: 3, colonGap: 3 });
+        const slot = Math.floor(t.d.getTime() / 500), r = hash(Math.floor(slot / 6)), digits = items.filter((it) => it.kind !== ':');
+        const victim = r < 0.12 ? digits[Math.floor(hash(slot) * digits.length)] : null;
+        for (const it of items) {
+          const k = it === victim && slot % 2 ? 0.25 : 1;
+          for (let y = 0; y < it.m.h; y++) for (let x = 0; x < it.m.w; x++) if (it.m.on(x, y)) halo(it.x + x, 9 + y, pink, k);
+        }
+        for (const it of items) {
+          const k = it === victim && slot % 2 ? 0.25 : 1;
+          drawMask(f, it.m, it.x, 9, scale(it.kind === ':' ? cyan : pink, k));
+          // a brighter core where the stroke is two pixels thick
+          for (let y = 0; y < it.m.h; y++) for (let x = 0; x < it.m.w; x++) if (it.m.on(x, y) && it.m.on(x + 1, y) && it.kind !== ':') f.plot(it.x + x, 9 + y, scale(core, k), 0.55);
+        }
+      },
+    },
+    {
+      id: 'r3-bauhaus', group: 'R3', title: 'Bauhaus',
+      note: 'Primary-color composition: the hour inside a red disc, minutes in white beside it, a yellow bar underneath and a small blue square in the corner. Fully static; the layout is the same at every hour.',
+      draw(f, t) {
+        disc(f, 13.5, 15.5, 13.2, '#e3301c');
+        const hm = mask(f.env, 'clock', String(t.h12));
+        drawMask(f, hm, Math.round(13.5 - (hm.w - 1) / 2), Math.round(15.5 - (hm.h - 1) / 2), '#fff6e6');
+        const mm = mask(f.env, 'clock', String(t.m).padStart(2, '0'));
+        drawMask(f, mm, 34, 6, '#fff6e6');
+        f.fill(34, 24, 30, 3, '#ffc412');
+        f.fill(58, 0, 6, 6, '#2b5ce0');
+      },
+    },
+    {
+      id: 'r3-fireflies', group: 'R3', title: 'Fireflies',
+      note: 'The 5x7 digits at double size, every LED in them pulsing on its own slow beat (3–7 s), with a few loose fireflies drifting around them. Ambient motion, nothing sharp.',
+      draw(f, t) {
+        const now = t.d.getTime() / 1000, col = '#d4ff52';
+        const items = timeRow(f, t, '5x7', { gap: 1, colonGap: 1 });
+        const x0 = items[0].x, last = items[items.length - 1], span = (last.x + last.m.w - x0) * 2;
+        const ox = Math.round(32 - span / 2);
+        for (const it of items) for (let y = 0; y < it.m.h; y++) for (let x = 0; x < it.m.w; x++) if (it.m.on(x, y)) {
+          for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
+            const px = ox + (it.x - x0 + x) * 2 + i, py = 9 + y * 2 + j, id = px * 64 + py;
+            const per = 3 + hash(id) * 4, ph = hash(id + 7);
+            f.plot(px, py, scale(col, 0.45 + 0.55 * Math.pow(0.5 + 0.5 * Math.sin(TAU * (now / per + ph)), 2)));
+          }
+        }
+        for (let i = 0; i < 6; i++) {
+          const ax = hash(i * 3 + 1), ay = hash(i * 3 + 2), sp = 0.02 + hash(i * 3 + 3) * 0.03;
+          const x = 31.5 + 30 * Math.sin(TAU * (now * sp + ax)) , y = 15.5 + 14 * Math.sin(TAU * (now * sp * 1.7 + ay));
+          const k = Math.max(0, Math.sin(TAU * (now / (4 + i) + ax))) * 0.7;
+          f.plot(Math.round(x), Math.round(y), scale('#8cff3a', k));
+        }
+      },
+    },
+    {
+      id: 'r3-terminal', group: 'R3', title: 'Terminal',
+      note: 'Green-phosphor CRT: a prompt line, the time in the big digits with alternate rows dimmed like scanlines and a faint bloom, and a block cursor blinking once a second.',
+      draw(f, t) {
+        const g = '#3dff72';
+        f.text('small', '> TIME', 1, 6, scale(g, 0.55));
+        const items = timeRow(f, t, 'clock', { gap: 2, colonGap: 3, cx: 26 });
+        const Y = 11;
+        for (const it of items) for (let y = 0; y < it.m.h; y++) for (let x = 0; x < it.m.w; x++) if (it.m.on(x, y)) {
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) f.plot(it.x + x + dx, Y + y + dy, g, 0.08);
+        }
+        for (const it of items) for (let y = 0; y < it.m.h; y++) for (let x = 0; x < it.m.w; x++) if (it.m.on(x, y)) f.plot(it.x + x, Y + y, scale(g, (Y + y) % 2 ? 0.6 : 1));
+        const last = items[items.length - 1], cx0 = last.x + last.m.w + 3;
+        if (t.ms < 500) for (let y = 0; y < 15; y++) f.fill(cx0, Y + y, 6, 1, scale(g, (Y + y) % 2 ? 0.6 : 1));
+      },
+    },
+  ];
+  FACES.push(...R3);
+
   // Mock data for the weather/train bits (made up).
   const MOCK = {
     wx: { temp: 54, hi: 63, lo: 49, icon: 'pcloudy_day', sunrise: 7 + 6 / 60, sunset: 18 + 12 / 60 },
