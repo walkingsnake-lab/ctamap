@@ -61,9 +61,10 @@ SO_D = P3.SO_OD
 S3_EDGE = BORE_HX - TRAY_CL - TRAY_WT - 0.4     # board edge 0.4 mm inside the tray's right wall
 _right = sorted([z for x, z in CORNERS if x > 0])
 _z0, _z1 = _right[0] + SO_D / 2 + 0.6, _right[1] - SO_D / 2 - 0.6   # free band between the right-hand posts (rel ZC)
-# board centred in the band, unless the profile pins it (P3: kept where it was before its corner inserts were
-# corrected, so the shell's USB-C slot doesn't move); either way it must fit the band
-_mid = panel.P.get('drawer_s3_mid', (_z0 + _z1) / 2)
+# board as low in the band as S3_LOW allows, so the USB-C plug (near the board's bottom edge) sits well below the case's
+# centre; S3_LOW above the band's floor leaves the board ~1.8 mm clear of the lower post (the band already keeps 0.6)
+S3_LOW = 1.2
+_mid = panel.P.get('drawer_s3_mid', _z0 + S3_LOW + 44.45 / 2)
 assert _z0 <= _mid - 44.45 / 2 and _mid + 44.45 / 2 <= _z1, ('S3 outside the band between the right-hand posts', _z0, _z1, _mid)
 S3_Z0 = ZC + _mid - 44.45 / 2                   # board's bottom edge
 USB_BY = V.S3_USB_BY

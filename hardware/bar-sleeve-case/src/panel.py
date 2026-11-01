@@ -18,7 +18,6 @@ PROFILES = {
         # S3 in plate v3
         inserts=((-87.25, 31.0), (87.25, 31.0), (-87.25, -29.0), (87.25, -29.0), (-12.7, 38.0), (12.0, -36.0)),
         standoffs=((-87.25, 31.0), (87.25, 31.0), (87.25, -29.0), (12.0, -36.0)),   # plate v3 bolts to these
-        drawer_s3_mid=-2.5,              # drawer: S3 centre (z - ZC) as before the insert fix, so the v5 shell is unchanged
         tie_bridge=(-17.0, 17.0, 63.0, 78.0),   # plate v3 tie-down bridge: x0, x1, z0, z1 (z in the P3 case, moves by DZ)
         hooks=(-22.5, 22.5),             # ribbon hooks on the plate (x), on bars between the louvers / pills
         # plate v3 louver rows (x segments): gaps at the bottom bosses (+/-40, +/-52) and centre standoff, and at the keyholes
