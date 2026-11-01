@@ -531,7 +531,7 @@ The server picks the state; the board never interprets weather codes.
 | Rain night | dim streaks over the lit city |
 | Snow night | pink-orange sky (streetlight glow on snow clouds), flakes, grey roof edges |
 | Fog night | windows and wheel through the fog, beacons on top |
-| Thunderstorm | dark deck, rain, and pixel-art lightning striking the Trump roof: a 1 px white core stepping down with sideways jogs, flat violet edges, one branch; no glow or sky flash |
+| Thunderstorm | dark deck, rain, and quiet lightning: a soft glow in the cloud deck with a faint pixel-art bolt inside it (below) |
 
 Also tried for clouds: puffy cumulus (soft-edged, then pixel art with three flat tones; both declined), broken cirrus streaks (declined: they read as dashed lines), and soft-edged wisps (the alternative to the two flat tints).
 
@@ -573,7 +573,7 @@ Ambient and slow, on a 100 ms tick:
 | Clouds | strip scrolls 1 px every 4 s |
 | Rain | 1 px down every 200 ms, 1 px left every second step (slanted), 2 px streaks; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background) |
 | Snow | 1 px down every 700 ms, a 1 px sideways step about every 2 s per flake; 6 / 12 / 20 flakes |
-| Lightning | a strike every 8–20 s (from the hash), shown 100 ms on, 100 ms off, 100 ms on |
+| Lightning | a strike every 20–40 s (from the hash): a soft patch of the cloud deck (about 22 × 8 px, toward `#8a80b0`, peak 45%) lights up from inside, with the bolt (1 px core, flat violet edges, one branch, ending above the Trump roof; softened toward lavender `#b8b0e8`, peak 35%) inside it. Rises over 0.6 s, fades over 2.4 s. Nothing snaps on or off: the storm stays in the background. Mockup: [`storm.png`](mockups/weather/lake/storm.png), row BOTH |
 | Boats (day) | sailboat on :00 and :30, speedboat round trip on :15 and :45 (below) |
 
 - This screen is the exception to Minimal animation (§2): it has no times to protect, apart from the clock, which only changes at the minute.
