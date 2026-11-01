@@ -111,6 +111,9 @@ test('health rides on the version check and shows on the control API', async () 
     at: 0, since: 0, uptime: 3600, budget: 1100, oom: 2, fails: 5, reconnects: 1, memFree: 26000, largestBlock: 4032, rssi: -61,
     lastError: 'radar:MemoryError', minMem: 26000, restarts: 0, lastRestart: null,
   });
+  // A light sensor's reading (lux).
+  await s.req('/board/version?b=home&hu=3700&hb=1100&ho=2&hf=5&hr=1&ha=0.42', h);
+  assert.equal((await s.req('/board/secret123/api/health')).body.home.lux, 0.42);
   // Uptime going backwards is a restart; the lowest free memory is kept;
   // an error string that isn't plain letters is dropped.
   await s.req('/board/version?b=home&hu=30&hb=1000&ho=0&hf=0&hr=0&hm=28000&he=%3Cscript%3E', h);
@@ -493,6 +496,25 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   w.sunset = now - 1;
   b = (await s.req(FULL)).body;
   assert.equal(b.bright, 40);
+  assert.deepEqual(b.ab, { min: 40, max: 100 });
+  // Darkest and brightest set the night and day levels and the light sensor's range.
+  s.store.update('home', { brightMin: 20, brightMax: 80 });
+  b = (await s.req(FULL)).body;
+  assert.equal(b.bright, 20);
+  assert.deepEqual(b.ab, { min: 20, max: 80 });
+  w.sunset = now + 3600;
+  assert.equal((await s.req(FULL)).body.bright, 80);
+  // Darkest above brightest: both at brightest.
+  s.store.update('home', { brightMin: 90 });
+  b = (await s.req(FULL)).body;
+  assert.deepEqual([b.bright, b.ab], [80, { min: 80, max: 80 }]);
+  w.sunset = now - 1;
+  assert.equal((await s.req(FULL)).body.bright, 80);
+  // Fixed or off: the sensor doesn't apply.
+  s.store.update('home', { bright: 70 });
+  b = (await s.req(FULL)).body;
+  assert.equal(b.bright, 70);
+  assert.equal(b.ab, null);
   assert.equal(b.warn, null);
   await s.close();
 });

@@ -195,6 +195,7 @@ void Player::draw(draw::Frame &frame, double ms, long long now) {
   o.now = (double)now;
   o.roller = &nums;
   o.apply_bright = !hw_bright;
+  o.bright = bright;
   if (screen == "ticker") {
     int pages = draw::ticker_pages(p, (double)now);
     if (page >= pages) page = 0;
