@@ -345,7 +345,7 @@ if (require.main === module) {
   console.log(`wrote ${STATES.length} states, sheet.png, options.png, night-motion.png to ${path.relative(process.cwd(), OUT)}`);
 }
 module.exports = {
-  STATES, render, setTick, buildSkyline, OPT, sheet,
+  STATES, render, setTick, buildSkyline, OPT, sheet, scene, lightning,
   // pieces for the other skyline mocks (mock-skyline-dusk.js)
   W, H, SHORE, rgb, hex, mix, ramp, sstep, hash2, paint, disc, stars, wheel, wheelForDay, water, pier, antennas, label,
   getRole: () => role, getAnts: () => ants, isB, SUN, BLUE, NIGHT_SKY, DAY_WATER, NIGHT_WATER, WHEEL_NIGHT, PIER_DAY, PIER_NIGHT, CX, CY, R,

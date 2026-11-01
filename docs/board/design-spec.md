@@ -573,16 +573,18 @@ Ambient and slow, on a 100 ms tick:
 | Rain | 1 px down per tick, 1 px left every 2 ticks (slanted), 2 px streaks; 12 / 24 / 40 streaks for light / moderate / heavy |
 | Snow | 1 px down every 400 ms, a 1 px sideways step about every 1.2 s per flake; 10 / 20 / 30 flakes |
 | Lightning | a strike every 8–20 s (from the hash), shown 100 ms on, 100 ms off, 100 ms on |
-| Boat (day) | crosses at each quarter hour (below) |
+| Boats (day) | sailboat on :00 and :30, speedboat round trip on :15 and :45 (below) |
 
 - This screen is the exception to Minimal animation (§2): it has no times to protect, apart from the clock, which only changes at the minute.
 - Fetches still go in the scheduler's gaps, and the scene holds still while one runs. How long a fetch stalls the S3's loop needs measuring on hardware.
 
-### Boat
-- A sailboat crosses the lake **at every quarter hour** (:00, :15, :30, :45), by day only. Mockup: [`boat.png`](mockups/weather/lake/boat.png).
-- **Look:** a white sail `#e8ecf0` on rows 22–25 (mast on the leading side), in front of the city; a colored hull on rows 26–27 (6 px deck row, 4 px keel row) so it stands out against the sail and still shows above the text when it passes behind the temperature or clock.
-- **Crossing:** starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Direction alternates by quarter (left on :00 and :30, right on :15 and :45). It passes in front of the pier and wheel and behind the text.
-- **When:** sun above 0°, and no rain, snow, fog or thunderstorm, and 40°F or warmer. The server sends `boats` true or false; the board times the crossing from its own clock.
+### Boats
+A boat crosses the lake **at every quarter hour**, by day only, alternating: the sailboat on :00 and :30, the speedboat on :15 and :45. Mockups: [`boat.png`](mockups/weather/lake/boat.png), [`speedboat.png`](mockups/weather/lake/speedboat.png).
+
+- **Sailboat:** a white sail `#e8ecf0` on rows 22–25 (mast on the leading side), in front of the city; a colored hull on rows 26–27 (6 px deck row, 4 px keel row) so it stands out against the sail and still shows above the text when it passes behind the temperature or clock. Starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Left on :00, right on :30.
+- **Speedboat** (loosely the Seadog tour boat): a 14 px yellow hull `#ffc020` with a white bottom stripe, blue and white passenger rows along the deck, a raised helm with a windshield toward the stern, rows 23–27, and a white spray plume trailing behind (9 / 6 / 3 px on rows 27 / 26 / 25, fading out). Fast: 1 px every 150 ms, about 13 s across including the plume. It runs out left, **turns around off-panel**, waits about 4 s, and comes back heading right; one round trip of about 30 s.
+- Both pass in front of the pier and wheel and behind the text, and are drawn from the board's clock, so no fetch is needed.
+- **When:** sun above 0°, no rain, snow, fog or thunderstorm, and 40°F or warmer. The server sends `boats` true or false.
 
 ### Board requirements (S3)
 - Memory is not a constraint on the S3 (2 MB PSRAM): the cloud strip (1.7 KB), the city layer and the scene buffers can all stay resident.
@@ -594,5 +596,6 @@ Ambient and slow, on a 100 ms tick:
 - On the panel: the near-floor colors above, whether the moon is dim enough, and whether glints read as sparkle or noise.
 - Moon crescents: a plain sliver, earthshine (the unlit part as a faint disc, likely lost to overnight dimming), or a brightened sliver.
 - Sunset sun height: how much of the disc shows above the skyline at the low and high ends of its x range (it crosses different buildings through the year).
-- Hull color: brown (`#8a4a24` / `#5a2e16`) or red (`#c02a20` / `#7a1a14`), both in `boat.png`.
+- Sailboat hull color: brown (`#8a4a24` / `#5a2e16`) or red (`#c02a20` / `#7a1a14`), both in `boat.png`.
+- Text placement: over the water (current) or one line in the top left (`topleft.png`, `topleft-dim.png`).
 - Mocks: `mock-skyline-dusk.js` (sky, lights, boat) is current; `mock-weather-lake.js` still draws the weather states with the text at the top and has no glints or cloud strip. `draw.js` takes over as the reference once built.

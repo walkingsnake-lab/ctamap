@@ -113,19 +113,25 @@ function boat(f, x0, dir, hull = HULLS.brown) {
   for (let dx = 1; dx < 5; dx++) put(dx, 27, hull[1]);
 }
 
-// Speedboat (yellow-orange): a low hull with a raked bow on rows 26-27, a windshield and seat on
-// row 25, and white wake trailing behind it on the water (fading over 5 px). Leading edge at x0.
-const SPEED = [
-  ['...ww...', '#c8d4e0'],     // row 25: windshield (light) and the driver
-  ['.YYYYYYY', '#ffb020'],     // row 26: deck, bow raked
-  ['..OOOOOO', '#d86a10'],     // row 27: hull side
+// Speedboat, loosely the Seadog: a long low yellow hull (14 px) with a white bottom stripe, blue
+// passenger rows along the deck, a raised helm with a windshield toward the stern, and a white spray
+// plume trailing behind. Rows 23-27; leading edge (the bow) at x0. It crosses fast, turns around
+// off-panel and comes back the other way a few seconds later.
+const SEADOG = [
+  '..........yy..',    // 23: top of the helm
+  '.........ywwy.',    // 24: windshield
+  '..pqpqpqpYYYYy',    // 25: passengers, helm
+  'YYYYYYYYYYYYYY',    // 26: deck (bow at dx 0)
+  '.WWWWWWWWWWWW.',    // 27: white bottom
 ];
+const SEADOG_C = { y: '#e8a810', Y: '#ffc020', w: '#c8d8e8', p: '#3a5aa8', q: '#d8dce4', W: '#e8ecf0' };
 function speedboat(f, x0, dir) {
-  const put = (dx, y, c) => { const x = dir < 0 ? x0 + dx : x0 + 7 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
-  put(4, 25, '#2a2a30');                                           // driver
-  SPEED.forEach(([row, c], dy) => [...row].forEach((ch, dx) => { if (ch !== '.' && !(dy === 0 && dx === 4)) put(dx, 25 + dy, c); }));
-  [0.9, 0.7, 0.5, 0.3, 0.15].forEach((k, i) => put(8 + i, 27, mix('#1a3a68', '#f0f4f8', k)));   // wake on the water row
-  [0.6, 0.35].forEach((k, i) => put(8 + i, 26, mix('#1a3a68', '#f0f4f8', k)));                   // spray just behind the stern
+  const n = SEADOG[0].length;
+  const put = (dx, y, c) => { const x = dir < 0 ? x0 + dx : x0 + n - 1 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
+  SEADOG.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch !== '.') put(dx, 23 + dy, SEADOG_C[ch]); }));
+  // Spray plume behind the stern: longest on the water row, shorter above, fading out.
+  const plume = [[27, 9], [26, 6], [25, 3]];
+  for (const [y, len] of plume) for (let i = 0; i < len; i++) put(n + i, y, mix(y === 27 ? '#1a3a68' : '#3a6eb0', '#f4f8fc', 0.95 * (1 - i / len)));
 }
 
 if (require.main === module) {
@@ -147,7 +153,7 @@ if (require.main === module) {
   }
   fs.writeFileSync(path.join(OUT, 'boat.png'), L.sheet(cells, 2, 6));
   const sp = [];
-  for (const [x0, dir, t] of [[48, -1, 'SPEEDBOAT  HEADING LEFT'], [6, -1, 'SPEEDBOAT  BEHIND THE TEMP'], [28, 1, 'SPEEDBOAT  PAST THE PIER'], [44, 1, 'SPEEDBOAT  BEHIND THE CLOCK']]) {
+  for (const [x0, dir, t] of [[44, -1, 'SEADOG  OUTBOUND, LEFT'], [4, -1, 'SEADOG  BEHIND THE TEMP'], [22, 1, 'SEADOG  BACK, PAST THE PIER'], [40, 1, 'SEADOG  BEHIND THE CLOCK']]) {
     const d = duskFrame(day, 0);
     speedboat(d.f, x0, dir);
     L.label(d.f, '52°', '2:15');
