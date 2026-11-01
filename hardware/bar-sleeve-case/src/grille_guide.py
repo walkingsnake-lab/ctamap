@@ -11,11 +11,11 @@ case top over the VEML7700 (case2.SENSOR_X/Y) instead of one Ø2 hole.
 - One flat slab (top and bottom parallel), so it prints top face down with the plug up and no supports; the ribs
   print vertical. It sits flat on the case top, so the bores are square to it. Use it before the collar goes in.
 - Bores are printed at the bit size: small FDM holes print undersize, so run the bit through the guide once first;
-  the bore is then exactly the bit. SLAB (6 mm) + the 2.5 mm wall = 8.5 mm, within a 1.0 mm jobber bit's ~12 mm
-  flutes. Below 1 mm use a pin vise, not a power drill.
+  the bore is then exactly the bit. SLAB (6 mm) + the 2.5 mm wall = 8.5 mm, well within a 1/16" jobber bit's ~19 mm
+  flutes.
 - Pitch follows the bit: webs between holes WEB (0.85 mm) wide, so the grille stays as small as the bit allows.
     '5': dice five, centre + 4 corners;  '4': square.
-Run: python3 grille_guide.py <outdir> [bit_mm]     (default bit 1.0)
+Run: python3 grille_guide.py <outdir> [bit_mm]     (default bit 1.59 = 1/16")
 """
 import math, sys
 import numpy as np
@@ -69,7 +69,7 @@ def plug(rib_r=RIB_R):
     return p + Manifold.batch_boolean(ribs, manifold3d.OpType.Add)
 
 
-def guide(name, bit=1.0, rib_r=RIB_R):
+def guide(name, bit=1.59, rib_r=RIB_R):
     """Frame: knob-hole centre at the origin on the case top (z = 0), z up."""
     yb = V.D - V.KY                                            # case back face, from the knob-hole centre
     strip = CrossSection.square([FENCE_X[1] - FENCE_X[0], 1.0]).translate([FENCE_X[0], yb - 1.0])
@@ -113,7 +113,7 @@ def check(name, bit):
 if __name__ == '__main__':
     import trimesh
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    bit = float(sys.argv[2]) if len(sys.argv) > 2 else 1.0
+    bit = float(sys.argv[2]) if len(sys.argv) > 2 else 1.59
     flip = trimesh.transformations.rotation_matrix(math.pi, [1, 0, 0])     # top face on the bed, plug up (a rotation, not a mirror)
 
     def put(m, fn, info=''):
