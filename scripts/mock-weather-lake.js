@@ -75,7 +75,7 @@ function buildSkyline() {
   // on, the antennas are 2 rows shorter so the clock fits above the beacons.
   { const t = top(17), steps = [4, 6, 8];
     for (let y = t; y <= SHORE; y++) { const w = steps[Math.min(2, Math.floor((y - t) * 3 / (SHORE - t + 1)))]; for (let i = 53 - w / 2; i < 53 + w / 2; i++) role[y][i] = 'tower'; }
-    const ah = OPT.clock ? 20 : 22; ants.push([51, top(ah), t, true], [54, top(ah), t, true]); }
+    const ah = OPT.clock && OPT.text !== 'bottom' ? 20 : 22; ants.push([51, top(ah), t, true], [54, top(ah), t, true]); }
 }
 const isB = (x, y) => x >= 0 && x < W && y >= 0 && y < H && role[y][x] !== null;
 
@@ -157,7 +157,7 @@ function stars(f, n) {
   prng = 3;
   for (let i = 0; i < n; i++) {
     const x = Math.floor(r2() * W), y = Math.floor(r2() * 14), bright = r2() < 0.3, tw = r2() < 0.5, ph = r2(), per = [40, 60, 120][i % 3];
-    if (isB(x, y) || (x < 14 && y < 7) || (x > 35 && x < 49 && y < 11) || (OPT.clock && x > 44 && y < 8)) continue;
+    if (isB(x, y) || (x > 35 && x < 49 && y < 11) || (OPT.text !== 'bottom' && ((x < 14 && y < 7) || (OPT.clock && x > 44 && y < 8)))) continue;
     if (Math.hypot(x + 0.5 - CX, y + 0.5 - CY) < R + 3.5) continue;   // never next to the wheel
     const k = tw ? 0.25 + 0.75 * (0.5 + 0.5 * Math.cos(2 * Math.PI * (T / per + ph))) : 1;
     f.fill(x, y, 1, 1, mix(hex(f.get(x, y)), bright ? '#ffffff' : '#5a6070', k));
@@ -344,4 +344,9 @@ if (require.main === module) {
   fs.writeFileSync(path.join(OUT, 'night-motion.png'), sheet(motion, 2, 6));
   console.log(`wrote ${STATES.length} states, sheet.png, options.png, night-motion.png to ${path.relative(process.cwd(), OUT)}`);
 }
-module.exports = { STATES, render, setTick, buildSkyline, OPT };
+module.exports = {
+  STATES, render, setTick, buildSkyline, OPT, sheet,
+  // pieces for the other skyline mocks (mock-skyline-dusk.js)
+  W, H, SHORE, rgb, hex, mix, ramp, sstep, hash2, paint, disc, stars, wheel, wheelForDay, water, pier, antennas, label,
+  getRole: () => role, getAnts: () => ants, isB, SUN, BLUE, NIGHT_SKY, DAY_WATER, NIGHT_WATER, WHEEL_NIGHT, PIER_DAY, PIER_NIGHT, CX, CY, R,
+};
