@@ -10,7 +10,7 @@ Run: PANEL=p3 python3 check_corners.py <out.stl>        corners and guides from 
      CORNERS='[(x, z), ...]' GUIDES='[...]' PANEL=p3 ...  try other positions before changing panel.py
      python3 check_corners.py <out.stl> W H CX CZ        symmetric corners at (+/-CX, +/-CZ), no guides
 History: the P2.5 frame (125 x 64.5 mm, Oct 31) confirmed its corners after a ruler reading of 135 x 75 proved too
-wide; check-p25-corner-inserts.stl is that frame.
+wide; stl/v5-drawer-p25/check-p25-corner-inserts.stl is that frame.
 """
 import sys
 import numpy as np
