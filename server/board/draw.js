@@ -207,7 +207,7 @@
       label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600', dimAmber2: '#332300',
       sch: '#6a6a6a', schDim: '#2e2e2e', schDim2: '#151515', grey: '#8f8f8f', divider: '#333333',
       head: '#808080', dimHead: '#555555', index: '#2d2d2d', white: '#ffffff', red: '#ff2020',
-      watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a',
+      watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a', perch: '#4a4a4a',
     };
 
     const TIME_GAP = 3;   // px between arrival times...
@@ -328,6 +328,8 @@
     const rollText = (f, font, name, text, xOf, base, color) => rollTextWith(f, font, takeRoll(name, text), text, xOf, base, color);
     const rightAt = (font, right) => (str) => right - measure(font, str) + 1;
     const centerX = (font) => (str) => Math.floor((64 - measure(font, str)) / 2);
+    // Centered in columns x0-63.
+    const centerIn = (font, x0) => (str) => x0 + Math.floor((64 - x0 - measure(font, str)) / 2);
 
     // Station name + clock on rows 1-5, flush to the screen edges, both in
     // `color` (the transit screen's dark grey, or the ticker's header grey).
@@ -524,14 +526,34 @@
       }
     }
 
+    // Overnight owl (icons.js OWL): its frame at icon-clock ms t, or the
+    // static owl (frame 0) without a clock.
+    function owlRows(t) {
+      const fr = icons.OWL.frames;
+      if (t == null) return fr[0][1];
+      const total = fr.reduce((a, [ms]) => a + ms, 0);
+      let k = ((Math.floor(t) % total) + total) % total;
+      for (const [ms, rows] of fr) { if (k < ms) return rows; k -= ms; }
+      return fr[0][1];
+    }
+
+    // No trains: the owl on a line along row 31 (or row 25 above the weather
+    // strip), at the left; the big clock and NO TRAINS centered in x 16-63.
+    // The owl blinks and glances on the S3's icon clock.
+    const OWL_X = 2, OWL_PANEL = 16;
     function drawOvernight(f, p, now) {
       const clock = clockText(now);
       const nt = p.stale ? 'NO DATA' : 'NO TRAINS';
-      const blockH = 10 + 3 + 5; // 10px digits, gap, label
-      const areaH = p.wx ? 26 : 32;
-      const top = Math.floor((areaH - blockH) / 2);
-      rollText(f, 'clock', 'big.clock', clock, centerX('clock'), top + 10, C.clock);
-      f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), top + 18, C.noTrains);
+      const bottom = p.wx ? 25 : 31;
+      f.fill(0, bottom, 64, 1, C.perch);
+      const rows = owlRows(ICON_T);
+      const oy = bottom - rows.length;
+      rows.forEach((row, j) => [...row].forEach((c, i) => {
+        if (c !== '.') f.fill(OWL_X + i, oy + j, 1, 1, icons.OWL.palette[c]);
+      }));
+      const top = p.wx ? 3 : 5;
+      rollText(f, 'clock', 'big.clock', clock, centerIn('clock', OWL_PANEL), top + 10, C.clock);
+      f.text('small', nt, centerIn('small', OWL_PANEL)(nt), top + 18, C.noTrains);
     }
 
     // Stale train data (the server hasn't reached Train Tracker for a while):

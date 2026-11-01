@@ -266,9 +266,11 @@ void Player::draw(draw::Frame &frame, double ms, long long now) {
     return;
   }
   draw::View view = anim.step(p, (double)now, ms);
+  night = view.rows.empty();
   o.screen = "transit";
   o.view = &view;
   o.blink = blink_on(ms);
+  o.icon_t = ms;  // the overnight owl blinks on the icon clock
   draw::render(p, frame, o);
 }
 
@@ -357,6 +359,8 @@ std::optional<screen::FrameKey> Player::frame_key(double ms, long long now) {
       k.v[5] = (long long)clouds.size();
       break;
     case Screen::Transit:
+      // The overnight owl: redraw when its frame changes.
+      if (night) k.v[4] = draw::owl_frame(ms);
       break;
   }
   return k;

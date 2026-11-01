@@ -1107,6 +1107,20 @@ static void test_idle_screens_redraw_only_when_something_changes() {
   CHECK(per_s < 2 && per_s > 0.9, "%f per s", per_s);
 }
 
+static void test_overnight_owl_redraws_when_it_blinks() {
+  // No trains: the owl's frames (blinks, a glance) add redraws to the
+  // once-a-second idle rate, without drawing every frame.
+  Rig r;
+  r.server.rows_fn = [](long long) { return std::string("[]"); };
+  r.board->connect();
+  r.run_for(5000);
+  CHECK(r.board->player.night, "");
+  long start = r.display.frames;
+  r.run_for(5 * 60 * 1000);
+  double per_s = (r.display.frames - start) / 300.0;
+  CHECK(per_s > 1.5 && per_s < 3, "%f per s", per_s);
+}
+
 static void test_auto_visits_the_radar_on_a_timer_and_prefetches_frames() {
   Rig r;
   r.server.radar_on = true;
@@ -1623,6 +1637,7 @@ int main() {
       T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_times_a_second),
       T_(test_cloud_strips_only_on_the_clock_screen),
       T_(test_clock_screen_draws_the_skyline),
+      T_(test_overnight_owl_redraws_when_it_blinks),
       T_(test_other_screens_keep_the_dim_color_floor),
       T_(test_settings_change_shows_up_fast),
       T_(test_radar_frames_only_on_the_radar_screen_and_once_each),

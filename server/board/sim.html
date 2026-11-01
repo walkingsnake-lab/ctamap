@@ -285,7 +285,7 @@
     // Transit: rolls, fades, and slides come from the animator.
     const view = transitAnim.step(p, n, t);
     const blink = Math.floor(t / D.BLINK_MS) % 2 === 1;
-    paintTransit(rolled('transit', t, { full, o: { now: n, blink, view } }));
+    paintTransit(rolled('transit', t, { full, o: { now: n, blink, view, iconT: t } }));
 
     // Ticker: hold each page, then slide up to the next, looping.
     const pages = D.tickerPages(p, n);

@@ -99,7 +99,7 @@ constexpr RGB label = hexc(0xd8d8d8), clock = hexc(0xcccccc), radarTime = hexc(0
               head = hexc(0x808080), dimHead = hexc(0x555555), index = hexc(0x2d2d2d),
               white = hexc(0xffffff), red = hexc(0xff2020), watch = hexc(0xffd800),
               warnSevere = hexc(0xff8000), warnTornado = hexc(0xff2020), noTrains = hexc(0x6c6c6c),
-              indicator = hexc(0x3a3a3a);
+              indicator = hexc(0x3a3a3a), perch = hexc(0x4a4a4a);
 }
 RGB line_color(const std::string &ln);
 RGB scale_color(RGB c, double k);
@@ -273,6 +273,8 @@ struct RenderOpts {
 const double SCREEN_SLIDE_MS = 450;
 const int SLIDE_GAP = 4;
 int slide_offset(double t);  // px the new screen has come in, 0..64 + SLIDE_GAP
+// Overnight owl: its frame (assets::OWL_FRAMES) at icon-clock ms t; 0 without one.
+int owl_frame(std::optional<double> t);
 void slide_frames(const uint8_t *from, Frame &f, int d, int dir);
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);

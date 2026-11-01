@@ -208,6 +208,43 @@ const ICON_ANIM = {
   fog: [[1200, I.fog], [1200, shiftRows(shiftRows(I.fog, 1, 1, 1), 5, 5, 1)]],
 };
 
+// Overnight owl (transit screen, no trains; CTA calls its overnight service
+// Owl): 13 x 15, perched on a line left of the big clock. Frames as in
+// ICON_ANIM, frame 0 the static owl; it mostly sits still, blinks now and
+// then, and glances right once a cycle. No hard on/off rhythm, since a 1 s
+// blink means a tornado warning. Pupils are unlit.
+const OWL_PALETTE = {
+  B: '#6e4a2a', // body
+  b: '#a8875c', // chest
+  W: '#d8c8a8', // face disc
+  Y: '#ffd040', // eyes
+  O: '#d08030', // beak, feet
+};
+const OWL_OPEN = [
+  '.B.........B.',
+  '.BB.......BB.',
+  '.BBBBBBBBBBB.',
+  'BBWWWBBBWWWBB',
+  'BWYYYWBWYYYWB',
+  'BWY.YWBWY.YWB',
+  'BWYYYWOWYYYWB',
+  'BBWWWBOBWWWBB',
+  'BBbbbbbbbbbBB',
+  'BbbBbbbbBbbbB',
+  'BbbbbbBbbbBbB',
+  'BbBbbbbbbbbbB',
+  '.BbbbBbbbBbB.',
+  '..BBBBBBBBB..',
+  '..OOO...OOO..',
+];
+const owlEyes = (r4, r5, r6) => OWL_OPEN.map((r, j) => (j === 4 ? r4 : j === 5 ? r5 : j === 6 ? r6 : r));
+const OWL_BLINK = owlEyes('BWBBBWBWBBBWB', 'BWWWWWBWWWWWB', 'BWBBBWOWBBBWB');
+const OWL_LOOK = owlEyes('BWYYYWBWYYYWB', 'BWYY.WBWYY.WB', 'BWYYYWOWYYYWB');
+const OWL = {
+  palette: OWL_PALETTE,
+  frames: [[4000, OWL_OPEN], [150, OWL_BLINK], [3000, OWL_OPEN], [1600, OWL_LOOK], [300, OWL_OPEN], [150, OWL_BLINK], [2200, OWL_OPEN]],
+};
+
 // Frozen M4 only (firmware/boardlib/draw.py): a CTA alert's 1px "!" over the
 // row's 3x5 block at 20%, in the line color. draw.js and the S3 show the
 // label and the red alert circle instead.
@@ -241,4 +278,4 @@ function drawIcon(frame, name, x, y) {
   }));
 }
 
-module.exports = { ICONS, PALETTE, ALERT_BANG, ICON_ANIM, iconForCode, drawIcon };
+module.exports = { ICONS, PALETTE, ALERT_BANG, ICON_ANIM, OWL, iconForCode, drawIcon };
