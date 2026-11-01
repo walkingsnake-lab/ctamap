@@ -571,8 +571,8 @@ Ambient and slow, on a 100 ms tick:
 | Water | ripples drift 1 px every 1.5 s |
 | Glints | 1–3 at a time, 200 ms each, under the sun or moon |
 | Clouds | strip scrolls 1 px every 4 s |
-| Rain | 1 px down per tick, 1 px left every 2 ticks (slanted), 2 px streaks; 12 / 24 / 40 streaks for light / moderate / heavy |
-| Snow | 1 px down every 400 ms, a 1 px sideways step about every 1.2 s per flake; 10 / 20 / 30 flakes |
+| Rain | 1 px down every 200 ms, 1 px left every second step (slanted), 2 px streaks; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background) |
+| Snow | 1 px down every 700 ms, a 1 px sideways step about every 2 s per flake; 6 / 12 / 20 flakes |
 | Lightning | a strike every 8–20 s (from the hash), shown 100 ms on, 100 ms off, 100 ms on |
 | Boats (day) | sailboat on :00 and :30, speedboat round trip on :15 and :45 (below) |
 
