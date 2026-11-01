@@ -1,0 +1,42 @@
+# Runs the test suites on every PR and every push to main: npm test (the
+# board server, the reference renderer, the firmware parity and main-loop
+# tests in C++, the setup script) and the frozen M4 firmware's Python tests.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22  # as in the Dockerfile
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: |
+          npm ci
+          # The settings-image test decodes a real NVS image (setup-board.test.js).
+          pip install esp-idf-nvs-partition-gen
+          g++ --version | head -1
+
+      - name: npm test
+        run: timeout -k 5 600 npm test
+
+      - name: M4 firmware (Python)
+        run: timeout -k 5 300 python3 -m unittest discover -s firmware/tests -p 'test_*.py'
