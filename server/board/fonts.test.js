@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { measure, fit, ligatures, getFont } = require('./fonts');
+const { measure, fit, ligatures, getFont, hasGlyph } = require('./fonts');
 const G = require('./glyphs');
 
 const glyph = (font, ch) => getFont(font).glyphs.get(typeof ch === 'number' ? ch : ch.codePointAt(0));
@@ -86,6 +86,14 @@ test('fit truncates to the pixel width and drops missing glyphs', () => {
   const s = fit('small', 'JEFFERSON PARK', 20);
   assert.ok(measure('small', s) <= 20);
   assert.ok('JEFFERSON PARK'.startsWith(s));
-  assert.equal(fit('small', 'A–B', 64), 'AB');
+  assert.equal(fit('small', 'A✓B', 64), 'AB');
   assert.equal(fit('small', 'AB CD', measure('small', 'AB C') - 1), 'AB');
+});
+
+test('text fonts cover Latin-1 and the punctuation phones type', () => {
+  const want = [...'é ñ ü É Ñ ¿ ¡ ° £ ’ ‘ “ ” – — … • €'.replace(/ /g, '')];
+  for (const name of ['small', '5x7']) for (const ch of want) assert.ok(hasGlyph(name, ch.codePointAt(0)), `${name} ${ch}`);
+  // Curly quotes take the straight quote's width; the no-break space the space's.
+  assert.equal(measure('small', 'don’t'), measure('small', "don't"));
+  assert.equal(measure('5x7', 'a\u00a0b'), measure('5x7', 'a b'));
 });
