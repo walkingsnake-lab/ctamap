@@ -97,6 +97,7 @@ static device::WifiNet *net;
 static device::SysClock sys_clock;
 static device::Buttons *buttons;
 static device::Knob *knob;
+static device::LightSensor *light_sensor;
 static device::Watchdog *watchdog;
 static device::StatusLed *led;
 static device::Ota *ota_slot;
@@ -205,6 +206,9 @@ void setup() {
   // The knob (optional): turn to choose a screen, rest to switch.
   knob = new device::Knob(cfg.knob_reverse);
   knob->begin();
+  // The light sensor (optional), chained off the knob: auto brightness follows it.
+  light_sensor = new device::LightSensor();
+  bool has_light = light_sensor->begin();
 
   // WiFi setup without USB (device.h SetupPortal): opens by itself with no
   // networks saved or none joined for 10 min; holding the knob (or UP) for
@@ -228,6 +232,7 @@ void setup() {
   board->firmware = FIRMWARE_VERSION;
   board->ota = ota_slot;
   board->setup = portal;
+  if (has_light) board->light = light_sensor;
   board->fresh_wifi = device::nvs_get("fresh") == "1";
   board->mem_free = device::free_heap;
   board->largest_block = device::largest_block;
