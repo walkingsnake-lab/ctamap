@@ -85,6 +85,9 @@ static int glyph(Font font, uint32_t cp) {
   if (cp >= assets::LOW0 && cp < assets::LOW0 + 224) {
     t = assets::FONT_LOW[font];
     i = (cp - assets::LOW0) << 1;
+  } else if (cp >= assets::PUNCT0 && cp < assets::PUNCT0 + assets::PUNCT_N) {
+    t = assets::FONT_PUNCT[font];
+    i = (cp - assets::PUNCT0) << 1;
   } else if (cp >= assets::PUA && cp < assets::PUA + 16) {
     t = assets::FONT_PUA[font];
     i = (cp - assets::PUA) << 1;

@@ -79,7 +79,7 @@ the loop itself is stuck.
 | `code.py` | Entry point; restarts cleanly after a crash. |
 | `build/` | Output of `node scripts/build-firmware.js` (not committed): what goes on `CIRCUITPY`. |
 | `boardlib/draw.py` | Renderer: a line-by-line port of `server/board/draw.js`. Must stay pixel-identical. |
-| `boardlib/assets.py` | Fonts, icons, glyph codepoints. **Generated** by `node scripts/build-firmware-assets.js`; never edit by hand. |
+| `boardlib/assets.py` | Fonts, icons, glyph codepoints (ASCII plus the custom glyphs). Frozen with the firmware; no longer generated. |
 | `boardlib/app.py` | Main loop: connecting (status screens), the scheduled jobs (version check every 10 s, update every 30 s or on a settings change, radar frames while the radar shows), buttons, redraws. |
 | `boardlib/player.py` | What to draw at each moment (transit animator, ticker paging, radar loop, blink) and when the next animation starts. |
 | `boardlib/sched.py` | Runs network requests in animation gaps; forces them past a deadline; learns the request time. |
