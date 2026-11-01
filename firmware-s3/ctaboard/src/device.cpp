@@ -169,14 +169,13 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
   frame_.clear();
   fn(frame_);
   const uint8_t *px = frame_.px;
+  const bool flip = rotation_ == 180;
   for (int y = 0; y < 32; y++) {
-    for (int x = 0; x < 64; x++) {
-      int i = (y * 64 + x) * 3;
-      uint8_t r = px[i], g = px[i + 1], b = px[i + 2];
+    int dy = flip ? 31 - y : y;
+    for (int x = 0; x < 64; x++, px += 3) {
+      uint8_t r = px[0], g = px[1], b = px[2];
       pipe_.map(r, g, b);  // the chosen curve, compensated for the driver's own (color.h)
-      int dx = rotation_ == 180 ? 63 - x : x;
-      int dy = rotation_ == 180 ? 31 - y : y;
-      dma_->drawPixelRGB888(dx, dy, r, g, b);
+      dma_->drawPixelRGB888(flip ? 63 - x : x, dy, r, g, b);
     }
   }
   if (double_buffer_) {
@@ -246,7 +245,9 @@ bool WifiNet::join(const std::string &ssid, const std::string &password, const a
 app::ConnectResult WifiNet::connect(const app::Networks &networks, const app::StatusFn &status) {
   // Try each (ssid, password) in order, networks the radio can see first.
   // ok with the network's name, portal (with the MAC) if a network answered
-  // with a captive portal, or nowifi.
+  // with a captive portal, or nowifi. A kept connection from before is
+  // closed: after a failure or on a new network it can't be trusted.
+  drop();
   if (WiFi.status() == WL_CONNECTED) {
     std::string cur = WiFi.SSID().c_str();
     for (const auto &n : networks)
@@ -283,61 +284,100 @@ app::ConnectResult WifiNet::connect(const app::Networks &networks, const app::St
   return portal ? app::ConnectResult{"portal", mac()} : app::ConnectResult{"nowifi", ""};
 }
 
-// One GET. Fills body (JSON) or bytes (binary, exactly `size` of them).
-static bool http_get(const Settings &s, const std::string &path, bool auth, std::string *body, size_t size,
-                     std::vector<uint8_t> *bytes, std::string &err, const std::function<void()> &feed,
-                     bool post = false) {
+struct WifiNet::Conn {
   WiFiClientSecure client;
-  if (s.tls_verify) client.setCACert(ROOT_CAS);
-  else client.setInsecure();
   HTTPClient http;
-  http.setConnectTimeout(HTTP_CONNECT_MS);
-  http.setTimeout(HTTP_TIMEOUT_MS);
-  if (!http.begin(client, (s.url + path).c_str())) {
-    err = "Begin";
-    return false;
+};
+
+WifiNet::Conn &WifiNet::conn() {
+  if (!conn_) {
+    conn_ = new Conn();
+    if (s_.tls_verify) conn_->client.setCACert(ROOT_CAS);
+    else conn_->client.setInsecure();
+    conn_->http.setReuse(true);
+    conn_->http.setConnectTimeout(HTTP_CONNECT_MS);
+    conn_->http.setTimeout(HTTP_TIMEOUT_MS);
   }
-  if (auth && !s.token.empty()) http.addHeader("X-Board-Token", s.token.c_str());
-  int code = post ? http.POST("") : http.GET();
-  if (feed) feed();  // the body read gets its own watchdog period
-  if (code != 200) {
-    err = code < 0 ? "Conn" + std::to_string(-code) : "HTTP" + std::to_string(code);
-    http.end();
-    return false;
-  }
-  bool ok = true;
-  if (body) {
-    *body = http.getString().c_str();
-  } else {
-    int len = http.getSize();
-    if (len != (int)size) {
-      err = "Size" + std::to_string(len < 0 ? 0 : len);
-      ok = false;
-    } else {
-      bytes->assign(size, 0);
-      auto *stream = http.getStreamPtr();
-      size_t got = 0;
-      uint32_t start = millis();
-      while (got < size && millis() - start < (uint32_t)HTTP_TIMEOUT_MS) {
-        int n = stream->read(bytes->data() + got, size - got);
-        if (n > 0) got += n;
-        else delay(1);
-      }
-      if (got != size) {
-        err = "Short";
+  return *conn_;
+}
+
+void WifiNet::drop() {
+  if (!conn_) return;
+  conn_->http.end();
+  conn_->client.stop();
+}
+
+// One request on the kept connection. Fills doc (JSON, parsed straight
+// from the response) or bytes (binary, exactly `size` of them). A kept
+// connection that has gone stale (closed by the server, Fly's proxy, or a
+// router) fails the first try; that one is retried on a new connection.
+bool WifiNet::request(const std::string &path, bool auth, bool post, json::Value *doc, size_t size,
+                      std::vector<uint8_t> *bytes, std::string &err) {
+  for (int attempt = 0;; attempt++) {
+    if (feed) feed();
+    Conn &c = conn();
+    bool reused = c.client.connected();
+    if (!reused) connects++;
+    if (!c.http.begin(c.client, (s_.url + path).c_str())) {
+      err = "Begin";
+      drop();
+      return false;
+    }
+    if (auth && !s_.token.empty()) c.http.addHeader("X-Board-Token", s_.token.c_str());
+    int code = post ? c.http.POST("") : c.http.GET();
+    if (feed) feed();  // the body read gets its own watchdog period
+    if (code < 0 && reused && attempt == 0) {
+      drop();
+      continue;
+    }
+    if (code != 200) {
+      err = code < 0 ? "Conn" + std::to_string(-code) : "HTTP" + std::to_string(code);
+      drop();
+      return false;
+    }
+    bool ok = true;
+    if (doc) {
+      String s = c.http.getString();
+      if (!json::parse(s.c_str(), s.length(), *doc)) {
+        err = "JSON";
         ok = false;
       }
+    } else {
+      int len = c.http.getSize();
+      if (len != (int)size) {
+        err = "Size" + std::to_string(len < 0 ? 0 : len);
+        ok = false;
+      } else {
+        bytes->assign(size, 0);
+        auto *stream = c.http.getStreamPtr();
+        size_t got = 0;
+        uint32_t start = millis();
+        while (got < size && millis() - start < (uint32_t)HTTP_TIMEOUT_MS) {
+          int n = stream->read(bytes->data() + got, size - got);
+          if (n > 0) got += n;
+          else delay(1);
+        }
+        if (got != size) {
+          err = "Short";
+          ok = false;
+        }
+      }
     }
+    // A clean answer leaves the connection open for the next request; after
+    // anything else its state is unknown, so it's closed.
+    if (ok) c.http.end();
+    else drop();
+    return ok;
   }
-  http.end();
-  return ok;
 }
 
 bool WifiNet::firmware(const std::string &v, long long size, const app::ChunkFn &chunk, std::string &err) {
   // GET /board/firmware (contract): the build, streamed to chunk in 4 KB
   // pieces. A stall longer than HTTP_TIMEOUT_MS fails it; the watchdog is
-  // fed after every piece, so the whole download may take longer.
+  // fed after every piece, so the whole download may take longer. It gets
+  // its own connection; the kept one is closed first to free its memory.
   if (feed) feed();
+  drop();
   WiFiClientSecure client;
   if (s_.tls_verify) client.setCACert(ROOT_CAS);
   else client.setInsecure();
@@ -393,20 +433,11 @@ bool WifiNet::firmware(const std::string &v, long long size, const app::ChunkFn 
 }
 
 bool WifiNet::get_json(const std::string &path, bool auth, json::Value &out, std::string &err, bool post) {
-  if (feed) feed();
-  std::string body;
-  if (!http_get(s_, path, auth, &body, 0, nullptr, err, feed, post)) return false;
-  std::string perr;
-  if (!json::parse(body, out, &perr)) {
-    err = "JSON";
-    return false;
-  }
-  return true;
+  return request(path, auth, post, &out, 0, nullptr, err);
 }
 
 bool WifiNet::get_bytes(const std::string &path, size_t size, std::vector<uint8_t> &out, std::string &err) {
-  if (feed) feed();
-  return http_get(s_, path, true, nullptr, size, &out, err, feed);
+  return request(path, true, false, nullptr, size, &out, err);
 }
 
 bool WifiNet::ping() {
@@ -992,6 +1023,7 @@ bool cold_boot() {
 
 long free_heap() { return (long)ESP.getFreeHeap(); }
 long largest_block() { return (long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT); }
+long psram_size() { return (long)ESP.getPsramSize(); }
 
 float chip_temp_c() {
   // temperatureRead() (Arduino-ESP32) reads the S3's built-in sensor; single reads jitter by about 1 C.

@@ -97,12 +97,22 @@ class WifiNet : public app::Net {
   bool firmware(const std::string &v, long long size, const app::ChunkFn &chunk, std::string &err) override;
   std::string mac() const;
   std::function<void()> feed;  // watchdog feed, before each request and while joining
+  long connects = 0;           // new HTTPS connections (TLS handshakes), for the serial report
 
  private:
   Settings s_;
+  // One HTTPS connection, kept open between requests (HTTP/1.1 keep-alive)
+  // so most requests skip the TLS handshake. One task uses it at a time:
+  // the network worker, or the loop while connecting.
+  struct Conn;
+  Conn *conn_ = nullptr;
+  Conn &conn();
+  void drop();  // close the kept connection
   bool ping();
   bool join(const std::string &ssid, const std::string &password, const app::StatusFn &status);
   void reset_radio(const char *why);
+  bool request(const std::string &path, bool auth, bool post, json::Value *doc, size_t size,
+               std::vector<uint8_t> *bytes, std::string &err);
   bool get_json(const std::string &path, bool auth, json::Value &out, std::string &err, bool post = false);
   bool get_bytes(const std::string &path, size_t size, std::vector<uint8_t> &out, std::string &err);
 };
@@ -239,6 +249,7 @@ std::string start_reason();  // POWER_ON, RESET_PIN, SOFTWARE, PANIC, WATCHDOG, 
 bool cold_boot();            // power-on or the RESET button (not a crash or watchdog restart)
 long free_heap();
 long largest_block();
+long psram_size();  // bytes of PSRAM the build can use: 0 when the board option leaves it off
 float chip_temp_c();  // ESP32-S3 internal sensor: die temperature in C (mean of 8 reads; tracks the air around the board)
 
 }  // namespace device
