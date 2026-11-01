@@ -303,6 +303,14 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   assert.equal(store.get('home').screen, 'clock');
 });
 
+test('cloud drift setting: slow by default, off/slow/normal', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  assert.equal(store.get('home').cloudDrift, 'slow');
+  store.update('home', { cloudDrift: 'off' });
+  assert.equal(store.get('home').cloudDrift, 'off');
+  assert.throws(() => store.update('home', { cloudDrift: 'fast' }), ValidationError);
+});
+
 test('boats setting: on by default, a boolean', () => {
   const store = createStore({ dir: tmpDir(), log: quiet });
   assert.equal(store.get('home').boats, true);

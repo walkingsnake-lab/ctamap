@@ -578,7 +578,7 @@ Ambient and slow, on a 100 ms tick:
 | Stars (night) | twinkle, 4–12 s cycles |
 | Water | ripples drift 1 px every 1.5 s |
 | Glints | 1–3 at a time, 200 ms each, under the sun or moon |
-| Clouds | strip scrolls 1 px every 4 s |
+| Clouds | strip scrolls 1 px every 16 s by default; per board `cloudDrift`: off (still), slow (16 s), normal (4 s) |
 | Rain | 1 px down every 200 ms, 1 px left every second step (slanted), 2 px streaks; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background) |
 | Snow | 1 px down every 700 ms, a 1 px sideways step about every 2 s per flake; 6 / 12 / 20 flakes |
 | Lightning | a strike every 20–40 s (from the hash): a soft patch of the cloud deck (about 22 × 8 px, toward `#8a80b0`, peak 45%) lights up from inside, with the bolt (1 px core, flat violet edges, one branch, ending above the Trump roof; softened toward lavender `#b8b0e8`, peak 35%) inside it. Rises over 0.6 s, fades over 2.4 s. Nothing snaps on or off: the storm stays in the background. Mockup: [`storm.png`](mockups/weather/lake/storm.png), row BOTH |
@@ -598,6 +598,7 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 ### Board requirements (S3)
 - Memory is not a constraint on the S3 (2 MB PSRAM): the cloud strip (1.7 KB), the city layer and the scene buffers can all stay resident.
 - **No dim-color floor on this screen** (found on the panel, Nov 1): the floor (§4) lifts any pixel too dark for the panel to its brightest channel at the bottom step. On the skyline that turned the whole night sky and water into one flat blue and night clouds into a patchwork of pure red, blue and tan. Skyline frames opt out (`Frame::floor = false`, `color.cpp` `levels(..., floor)`): pixels too dark for the panel go black (the night sky is black on the panel), and channels just under the bottom step round to it instead of truncating, so a dim near-grey cloud stays grey while a dim red (the beacon) stays red. Everything brighter is unchanged; other screens keep the floor.
+- **Full-depth color at every brightness** (also seen on the panel): the S3 uses its "CircuitPython look" curve (gamma 2.2 with 565 / 6-bit truncation, to match the old board) only at 100% and its night curve (gamma 2.6, full depth) below. At 100% the truncation collapsed the skyline's dark gradients into a few flat colors while dimmed it looked right. Skyline frames always use the night curve (`device.cpp` `scene_pipe_`), so they look the same at every brightness.
 - On the panel's CircuitPython-look curve the bottom step is a channel value of about 53 (gamma 2.2 level 8): night colors below it vanish (sky, water, thin clouds), colors at it show at the step.
 - Built: server parameters (`skyline.js`, `sun.js`), cloud strips (`clouds.js`, `GET /board/sky/<id>`), the reference renderer (`draw.js` `renderSkyline`), and the S3 port (`draw.cpp` `render_skyline`, pixel-identical over the `skyline *` scenarios, all `s3only`). The S3 fetches the strip only on the clock screen, redraws ten times a second there, lets fetches run any time (no times to protect), and reports `hk=skyline`. The buttons' screen cycle includes Clock on the S3.
 

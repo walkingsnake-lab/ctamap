@@ -82,12 +82,13 @@ bool nvs_put(const char *key, const std::string &value) {
 // ---- panel ----
 
 Panel::Panel(const Settings &s)
-    : rotation_(s.rotation), pipe_(s.curve), day_curve_(s.curve), night_curve_(s.night_curve), hw_dim_(s.hw_dim),
+    : rotation_(s.rotation), pipe_(s.curve), scene_pipe_(s.night_curve), day_curve_(s.curve), night_curve_(s.night_curve), hw_dim_(s.hw_dim),
       clk_phase_(s.clk_phase), double_buffer_(s.double_buffer), color_order_(s.color_order.empty() ? "RGB" : s.color_order) {}
 
 void Panel::set_curves(int day, int night) {
   day_curve_ = day;
   night_curve_ = night;
+  if (scene_pipe_.curve() != night) scene_pipe_.set_curve(night);
 }
 
 double Panel::set_brightness(double k) {
@@ -174,7 +175,10 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
     int dy = flip ? 31 - y : y;
     for (int x = 0; x < 64; x++, px += 3) {
       uint8_t r = px[0], g = px[1], b = px[2];
-      pipe_.map(r, g, b, frame_.floor);  // the chosen curve, compensated for the driver's own (color.h)
+      // The chosen curve, compensated for the driver's own (color.h). The
+      // skyline (floor = false) always takes the night curve: the day one's
+      // 565 / 6-bit truncation flattens its dark gradients into a few colors.
+      (frame_.floor ? pipe_ : scene_pipe_).map(r, g, b, frame_.floor);
       dma_->drawPixelRGB888(flip ? 63 - x : x, dy, r, g, b);
     }
   }
@@ -455,7 +459,9 @@ bool WifiNet::version(const std::string &health, json::Value &out, std::string &
 }
 
 bool WifiNet::update(bool boot, const std::string &screen, json::Value &out, std::string &err) {
-  return get_json("/board/update?b=" + s_.board_id + (boot ? "&boot=1" : "") + (screen.empty() ? "" : "&s=" + screen),
+  // hk on every update: the server decides the clock screen per request (contract).
+  return get_json("/board/update?b=" + s_.board_id + (boot ? "&boot=1" : "") + (screen.empty() ? "" : "&s=" + screen) +
+                      "&hk=" + app::CAPS,
                   true, out, err);
 }
 
@@ -474,7 +480,7 @@ bool WifiNet::logo(const std::string &id, std::vector<uint8_t> &out, std::string
 }
 
 bool WifiNet::select(const std::string &category, json::Value &out, std::string &err) {
-  return get_json("/board/select?b=" + s_.board_id + "&s=" + category, true, out, err, true);
+  return get_json("/board/select?b=" + s_.board_id + "&s=" + category + "&hk=" + app::CAPS, true, out, err, true);
 }
 
 // ---- OTA ----

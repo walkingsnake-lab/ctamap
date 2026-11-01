@@ -18,6 +18,8 @@ const DEFAULT_MAPID = '40100'; // Morse
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock'];
 // Clock screen faces (design spec §14). Only the skyline so far.
 const CLOCK_FACES = ['skyline'];
+// Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
+const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
 const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
 // The knob's ring (design spec §10, "Knob"): categories, each opening one
 // screen. TRANSIT opens the transit-family screen last chosen (transitScreen:
@@ -172,6 +174,7 @@ function defaultBoard(stations) {
     // Clock screen face (CLOCK_FACES), and the skyline face's quarter-hour boats.
     clockFace: 'skyline',
     boats: true,
+    cloudDrift: 'slow',
     wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
@@ -315,8 +318,9 @@ function validatePatch(patch, stations) {
       case 'icons5day':
       case 'iconsHourly':
       case 'iconsRadar':
-      case 'clockFace': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES }[key] || ICON_STYLES;
+      case 'clockFace':
+      case 'cloudDrift': {
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS }[key] || ICON_STYLES;
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;

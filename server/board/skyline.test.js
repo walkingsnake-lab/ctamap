@@ -154,7 +154,7 @@ test('clouds: a strip and its colors per kind; none when clear, foggy or snowing
   assert.equal(sky({ code: 45, clouds: 100 }, AFTERNOON).cl, null);
   assert.equal(sky({ code: 73, clouds: 100 }, AFTERNOON).cl, null);
   const p = sky({ code: 2, clouds: 35 }, AFTERNOON).cl;
-  assert.deepEqual(p, { id: 'p1', pal: ['', '#eef2f8', '#eef2f8'], a: [0, 35, 70] });
+  assert.deepEqual(p, { id: 'p1', pal: ['', '#eef2f8', '#eef2f8'], a: [0, 35, 70], step: 16000 });
   assert.equal(sky({ code: 3, clouds: 70 }, AFTERNOON).cl.id, 'm1');
   // Wisps take the light: warm at sunset, the city's glow at night (same strip).
   const ps = sky({ code: 2, clouds: 35 }, SUNSET).cl, pn = sky({ code: 2, clouds: 35 }, NIGHT).cl;
@@ -174,6 +174,14 @@ test('the wheel color accounts for the clouds behind its rim', () => {
   // Overcast day: a mid-grey deck behind the rim -> the lighter variant.
   assert.equal(sky({ code: 3, clouds: 95 }, AFTERNOON).whl, 1);
   assert.equal(sky({ code: 0, clouds: 5 }, AFTERNOON).whl, 0);
+});
+
+test('cloud drift: 16 s a pixel by default, 4 s normal, still when off', () => {
+  const at = (drift) => toSkyline({ temp: 60, code: 2, clouds: 35 }, { ...PLACE, now: AFTERNOON, temp: 60, ...(drift ? { drift } : {}) }).cl.step;
+  assert.equal(at(), 16000);
+  assert.equal(at('slow'), 16000);
+  assert.equal(at('normal'), 4000);
+  assert.equal(at('off'), 0);
 });
 
 test('boats can be turned off per board', () => {
