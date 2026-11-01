@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { url, parse, cellPoint, stationCells, WMO_OF, WA_FOG, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS } = require('./weather');
+const { url, parse, rainLine, RAIN_ON, RAIN_OFF, cellPoint, stationCells, WMO_OF, WA_FOG, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS } = require('./weather');
 const { measure } = require('./fonts');
 const { ICONS } = require('./icons');
 const { createNws } = require('./nws');
@@ -461,4 +461,19 @@ test('cloud cover (%) comes through for the skyline face; null when missing', ()
   assert.equal(parse({ ...MORSE, current: { ...MORSE.current, cloud: 64 } }).clouds, 64);
   const { cloud, ...rest } = MORSE.current;
   assert.equal(parse({ ...MORSE, current: rest }).clouds, null);
+});
+
+test('rainLine: the RAIN line shows from 20% and hides again only below 10%', () => {
+  assert.deepEqual([RAIN_ON, RAIN_OFF], [20, 10]);
+  // Off: needs 20.
+  assert.equal(rainLine(false, 19), false);
+  assert.equal(rainLine(false, 20), true);
+  assert.equal(rainLine(undefined, 30), true); // first update for a board
+  // On: stays through the buffer, goes below 10.
+  assert.equal(rainLine(true, 15), true);
+  assert.equal(rainLine(true, 10), true);
+  assert.equal(rainLine(true, 9), false);
+  // No rain chance at all: off either way.
+  assert.equal(rainLine(true, null), false);
+  assert.equal(rainLine(false, null), false);
 });

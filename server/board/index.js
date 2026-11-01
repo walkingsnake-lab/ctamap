@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir, knobOf } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, inUnit, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
+const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
@@ -329,6 +329,10 @@ function createBoard({
   // Last transit view per board and station, for the chrono hysteresis.
   // In memory only: after a restart the view is chosen fresh.
   const views = new Map();
+  // Whether the conditions screen showed its RAIN line last time, per
+  // `${board id}:${mapid}` (weather.js rainLine(): the buffer between 10%
+  // and 20%). In memory only, like the views.
+  const rainLines = new Map();
 
   // The control page's board list: who each board is, where it points, and
   // when it last checked in (null: not since the server started).
@@ -345,7 +349,7 @@ function createBoard({
     healthOf.delete(id);
     seenAt.delete(id);
     tests.delete(id);
-    for (const k of [...views.keys()]) if (k.startsWith(`${id}:`)) views.delete(k);
+    for (const m of [views, rainLines]) for (const k of [...m.keys()]) if (k.startsWith(`${id}:`)) m.delete(k);
   }
 
   // The skyline face's parameters, or null without weather or a station.
@@ -427,7 +431,11 @@ function createBoard({
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && wd ? toDays(wd) : null;
     const hours = board.wxView === 'hourly' && wd ? toHours(wd) : null;
-    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(rain ? { rain } : {}) } };
+    // The conditions screen's RAIN line (`rl`), buffered per board and station.
+    const rlKey = `${id}:${board.station.mapid}`;
+    const rl = wd ? rainLine(rainLines.get(rlKey), wd.pop) : false;
+    if (wd) rainLines.set(rlKey, rl);
+    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(rl ? { rl: 1 } : {}), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(rain ? { rain } : {}) } };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }

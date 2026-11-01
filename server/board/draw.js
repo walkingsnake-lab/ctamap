@@ -254,10 +254,9 @@
     // times; each is drawn under a name ('hdr.clock', 'rad.clock',
     // 'big.clock'). Current-conditions numbers roll when a new payload
     // changes them (S3): the weather strip's temperature ('wx.temp'), and on
-    // the weather screen the big temperature ('wx.big'), feels-like
-    // ('wx.feels'), high/low ('wx.hl'), rain chance ('wx.pop'), and the top
-    // bar's temperature ('wx.top'). Forecast columns and the radar corner
-    // don't.
+    // the weather screen the top bar's temperature ('wx.top'), feels-like
+    // ('wx.feels') and rain chance ('wx.pop'). Forecast columns and the radar
+    // corner don't.
     // During render(), NR holds either a roller (createNumRoller: the board
     // and the simulator, which notice changes as they draw) or fixed rolls
     // ({name: {from, p}}: tests and parity scenarios).
@@ -837,72 +836,56 @@
     const ampmText = (t) => (/PM/i.test(ampmFmt.format(new Date(t * 1000))) ? 'PM' : 'AM');
 
     // ---- weather screen (design spec §7) ----
-    // The radar screen without rain (no frames): big temperature (9x15 Bold
-    // digits, ink rows 4-13, 3x3 ring degree), icon top right and the dim
-    // condition word under it, divider on row 18, then two Tom Thumb lines:
-    // feels-like + wind (rows 20-24), high/low + rain chance (rows 26-30).
-    // An NWS warning or watch replaces the high/low line.
+    // Current conditions (the weather screen without radar frames or a
+    // forecast layout): the forecast layouts' top bar (icon, temperature,
+    // high/low; a watch or warning takes over the high/low) on rows 0-7, then
+    // a readout: label left in grey, value right-aligned to x63 in its color,
+    // dot leaders between (every other column, 2px clear of both). Lines:
+    // SKY (the condition word, colored by kind), FEELS (on the temperature
+    // scale), WIND (with MPH), and RAIN (blue) while the payload's `rl` says
+    // so (the server shows it from 20% and hides it below 10%). Four lines
+    // sit on rows 9-13, 15-19, 21-25, 27-31; three on rows 11-15, 18-22,
+    // 25-29 (the first on the 5-day's weekday row).
+    // Mockup: docs/board/mockups/weather/readout/pick.png.
     const WX_BLUE = '#1e90ff';
     const WX_DROP = ['.#.', '###', '###', '.#.'];
-    const WARN_TEXT = { svr: { watch: 'TSTORM WATCH', warning: 'TSTORM WARNING' }, tor: { watch: 'TORNADO WATCH', warning: 'TORNADO WARN' } };
+    // Condition word colors by icon; anything else is label white.
+    const SKY_COLOR = { rain: '#4aa0ff', ice: '#4aa0ff', snow: '#c8e8ff', tsnow: '#c8e8ff', sun: '#ffc800', moon: '#ffe47a' };
     // Temperature shadow (optional): 1px down-right at 20%, its color blended
     // from cold blue to hot red along these stops (°F).
     const TEMP_STOPS = [[-10, '#3050ff'], [20, '#40a0ff'], [40, '#30d0d0'], [55, '#40d040'], [70, '#ffd000'], [85, '#ff8000'], [100, '#ff2020']];
+    // The same scale for text (feels-like): the cold end lifted, since the
+    // deep blue is the board's dimmest color.
+    const TEXT_TEMP_STOPS = [[-10, '#6080ff'], [20, '#60b0ff'], ...TEMP_STOPS.slice(2)];
     // TEMP_STOPS are °F; c: the temperature is °C (wx.c), converted back
     // with integer math so the board matches.
-    function tempColor(t, c) {
+    function tempColor(t, c, stops = TEMP_STOPS) {
       if (c) t = Math.floor(t * 9 / 5) + 32;
-      if (t <= TEMP_STOPS[0][0]) return TEMP_STOPS[0][1];
-      for (let i = 1; i < TEMP_STOPS.length; i++) {
-        const [t1, c1] = TEMP_STOPS[i];
-        if (t <= t1) { const [t0, c0] = TEMP_STOPS[i - 1]; return lerpColor(c0, c1, (t - t0) / (t1 - t0)); }
+      if (t <= stops[0][0]) return stops[0][1];
+      for (let i = 1; i < stops.length; i++) {
+        const [t1, c1] = stops[i];
+        if (t <= t1) { const [t0, c0] = stops[i - 1]; return lerpColor(c0, c1, (t - t0) / (t1 - t0)); }
       }
-      return TEMP_STOPS[TEMP_STOPS.length - 1][1];
+      return stops[stops.length - 1][1];
     }
-
-    function drawWeatherScreen(f, wx, warn, blink, shadow) {
-      // Temperature; a 5x2 bar for the minus (the clock font has digits only).
-      // Returns the degree sign's right edge.
-      const drawTemp = (dx, dy, color) => {
-        let x = dx;
-        if (wx.temp < 0) { f.fill(x, 8 + dy, 5, 2, color); x += 7; }
-        const at = x;
-        x = rollText(f, 'clock', 'wx.big', String(Math.abs(wx.temp)), () => at, 14 + dy, color);
-        f.fill(x, 4 + dy, 3, 1, color); f.fill(x, 6 + dy, 3, 1, color);
-        f.fill(x, 5 + dy, 1, 1, color); f.fill(x + 2, 5 + dy, 1, 1, color);
-        return x + 2;
-      };
-      if (shadow) drawTemp(1, 1, scaleColor(tempColor(wx.temp, wx.c), 0.2));
-      const tempRight = drawTemp(0, 0, C.label) + (shadow ? 1 : 0);
-      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 55, 1);
-      // Word right-aligned under the icon, unless a 3-digit temperature reaches it.
-      if (wx.word && 63 - measure('small', wx.word) + 1 > tempRight + 2) rtext(f, 'small', wx.word, 63, 16, C.wxText);
-      f.fill(0, 18, 64, 1, C.divider);
-      if (wx.feels != null) rollText(f, 'small', 'wx.feels', `FEELS ${wx.feels}°`, () => 0, 25, C.grey);
-      if (wx.wind) rtext(f, 'small', wx.wind, 63, 25, C.label);
-      if (warn) {
-        const ws = warnStyle(warn);
-        if (!(ws.blinks && blink)) {
-          const gx = f.text('small', ws.glyph, 0, 31, ws.color);
-          f.text('small', WARN_TEXT[warn.kind][warn.lvl], gx + TAG_GAP - 1, 31, ws.color);
-        }
-        return;
-      }
-      // Rain chance right-aligned with the drop 2px before it; high/low left,
-      // losing its degree signs if it would come within 3px of the drop.
-      let popLeft = 64;
-      if (wx.pop != null) {
-        const t = `${wx.pop}%`;
-        const px = 63 - measure('small', t) + 1;
-        rollText(f, 'small', 'wx.pop', t, rightAt('small', 63), 31, C.label);
-        WX_DROP.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(px - 5 + i, 27 + j, 1, 1, WX_BLUE); }));
-        popLeft = px - 5;
-      }
-      if (wx.hi != null && wx.lo != null) {
-        let hl = `H ${wx.hi}° L ${wx.lo}°`;
-        if (measure('small', hl) + 3 > popLeft) hl = `H ${wx.hi} L ${wx.lo}`;
-        rollText(f, 'small', 'wx.hl', hl, () => 0, 31, C.grey);
-      }
+    const CON_LINES4 = [14, 20, 26, 32];   // baselines
+    const CON_LINES3 = [16, 23, 30];
+    // One readout line; the value rolls under `name` (null: no roll).
+    function drawReadout(f, label, name, value, base, color) {
+      const lx = f.text('small', label, 0, base, C.head);
+      const vx = 63 - measure('small', value) + 1;
+      for (let x = lx + 1 + ((lx + 1) % 2 ? 0 : 1); x < vx - 2; x += 2) f.fill(x, base - 1, 1, 1, C.divider);
+      if (name) rollText(f, 'small', name, value, rightAt('small', 63), base, color);
+      else f.text('small', value, vx, base, color);
+    }
+    function drawConditions(f, wx, top) {
+      drawTopBar(f, wx, top);
+      const lines = [['SKY', null, wx.word || '', SKY_COLOR[wx.icon] || C.label]];
+      if (wx.feels != null) lines.push(['FEELS', 'wx.feels', `${wx.feels}°`, tempColor(wx.feels, wx.c, TEXT_TEMP_STOPS)]);
+      if (wx.wind) lines.push(['WIND', null, wx.wind === 'CALM' ? 'CALM' : `${wx.wind} MPH`, C.label]);
+      if (wx.rl && wx.pop != null) lines.push(['RAIN', 'wx.pop', `${wx.pop}%`, WX_BLUE]);
+      const bases = lines.length === 4 ? CON_LINES4 : CON_LINES3;
+      lines.forEach(([label, name, value, color], i) => drawReadout(f, label, name, value, bases[i], color));
     }
 
     // ---- 5-day layout (wxView '5day'; mockup docs/board/mockups/weather/5day-final) ----
@@ -1108,7 +1091,7 @@
         if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, top);
         else if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
         else if (r.wx.days && r.wx.days.length) drawFiveDay(f, r.wx, top);
-        else drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow);
+        else drawConditions(f, r.wx, top);
         return f;
       }
       const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;

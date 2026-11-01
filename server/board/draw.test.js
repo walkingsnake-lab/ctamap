@@ -449,60 +449,92 @@ test('weather icons are static on every layout, whatever the icon clock', () => 
   }
 });
 
-test('weather screen: radar screen with no frames shows big temp, details, and rain chance', () => {
+test('weather conditions: the top bar, then SKY / FEELS / WIND / RAIN as a readout with dot leaders', () => {
   const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
-  const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 20 };
+  const wx = { icon: 'pcloudy_day', temp: 57, word: 'PT CLOUDY', hi: 63, lo: 49, feels: 55, wind: 'NW 12', pop: 20, rl: 1 };
   const rad = (w, extra = {}) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w, ...extra });
   const f = draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
-  assert.ok(count(f, draw.C.label, 1, 4, 22, 13) > 40, 'big temperature + degree ring');
-  assert.equal(hex(f.get(56, 2)), '#ffc800', 'icon top right');
-  assert.ok(count(f, draw.C.wxText, 29, 11, 63, 15) > 15, 'dim condition word');
-  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 18)), draw.C.divider, `divider col ${x}`);
-  assert.ok(count(f, draw.C.grey, 0, 20, 40, 24) > 15, 'FEELS');
-  assert.ok(count(f, draw.C.label, 40, 20, 63, 24) > 10, 'wind');
-  assert.ok(count(f, draw.C.grey, 0, 26, 45, 30) > 15, 'high/low');
-  assert.equal(count(f, '#1e90ff', 45, 27, 52, 30), 8, 'drop');
+  // The 5-day screen's top bar, pixel for pixel.
+  const five = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, days: [{ d: 'SA', hi: 60, icon: 'sun' }] }) }, { screen: 'weather', now, frames: {} });
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 64; x++) assert.deepEqual(f.get(x, y), five.get(x, y), `top bar ${x},${y}`);
+  // Four lines, rows 9-13 / 15-19 / 21-25 / 27-31: labels grey from x0.
+  for (const top of [9, 15, 21, 27]) {
+    assert.ok(count(f, draw.C.head, 0, top, 22, top + 4) > 8, `label at row ${top}`);
+    assert.ok(count(f, draw.C.head, 0, top - 1, 63, top - 1) === 0, `nothing grey above row ${top}`);
+  }
+  assert.ok(count(f, draw.C.label, 30, 9, 63, 13) > 25, 'SKY: the word in label white (partly cloudy has no color)');
+  assert.equal(f.get(63, 9).some((v) => v), true, 'values end at x63');
+  assert.ok(count(f, '#1e90ff', 48, 27, 63, 31) > 10, 'RAIN in blue');
+  assert.ok(count(f, draw.C.label, 30, 21, 63, 25) > 25, 'WIND with MPH');
+  // Leaders: every other column (odd x), on the row above the baseline.
+  for (const row of [13, 19, 25, 31]) {
+    let dots = 0;
+    for (let x = 0; x < 64; x++) if (hex(f.get(x, row)) === draw.C.divider) { assert.equal(x % 2, 1, `dot at odd x (${x}, ${row})`); dots++; }
+    assert.ok(dots >= 2, `leaders on row ${row}`);
+  }
   assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0, 'no radar clock');
-  // Missing extras leave their spots empty.
-  const bare = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, feels: null, wind: null, pop: null }) }, { screen: 'weather', now, frames: {} });
-  assert.equal(count(bare, draw.C.grey, 0, 20, 63, 24) + count(bare, draw.C.label, 0, 20, 63, 24), 0);
-  assert.equal(count(bare, '#1e90ff', 0, 19, 63, 31), 0);
+  // No rl: three lines on rows 11-15 / 18-22 / 25-29, no rain anywhere.
+  const three = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rl: undefined }) }, { screen: 'weather', now, frames: {} });
+  for (const top of [11, 18, 25]) assert.ok(count(three, draw.C.head, 0, top, 22, top + 4) > 8, `3-line label at row ${top}`);
+  assert.equal(count(three, draw.C.head, 0, 9, 22, 10) + count(three, draw.C.head, 0, 30, 22, 31), 0);
+  assert.equal(count(three, '#1e90ff', 0, 8, 63, 31), 0, 'no RAIN line');
+  // rl without a pop draws nothing for it.
+  const noPop = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, pop: null }) }, { screen: 'weather', now, frames: {} });
+  assert.deepEqual(noPop.px, three.px);
+  // Missing extras drop their lines; the rest keep the 3-line rows.
+  const bare = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, feels: null, wind: null, pop: null, rl: undefined }) }, { screen: 'weather', now, frames: {} });
+  assert.ok(count(bare, draw.C.head, 0, 11, 22, 15) > 8, 'SKY on the first 3-line row');
+  assert.equal(count(bare, draw.C.head, 0, 16, 63, 31), 0, 'nothing below');
   // Frames (rain in the box) bring the radar back.
   const withFrames = draw.render({ now, bright: 100, warn: null, radar: rad(wx, { on: true, frames: ['a'], ft: [now] }) }, { screen: 'weather', now, frames: { a: new Uint8Array(2048) } });
-  assert.equal(count(withFrames, draw.C.divider, 0, 18, 63, 18), 0);
   assert.ok(count(withFrames, draw.C.radarTime, 40, 6, 63, 12) > 15, 'radar clock');
 });
 
-test('weather screen: a watch or warning replaces the high/low line; tornado warning blinks', () => {
+test('weather conditions: a watch or warning takes over the top bar\'s high/low; the readout stays', () => {
   const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
-  const wx = { icon: 'storm', temp: 57, word: 'STORMS', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 90 };
+  const wx = { icon: 'storm', temp: 57, word: 'STORMS', hi: 63, lo: 49, feels: 53, wind: 'NW 12', pop: 90, rl: 1 };
   const rad = { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx };
   const cases = [['svr', 'watch', draw.C.watch], ['svr', 'warning', draw.C.warnSevere], ['tor', 'watch', draw.C.watch], ['tor', 'warning', draw.C.warnTornado]];
   for (const [kind, lvl, color] of cases) {
     const f = draw.render({ now, bright: 100, warn: { kind, lvl }, radar: rad }, { screen: 'weather', now, frames: {} });
-    assert.ok(count(f, color, 0, 26, 63, 30) > 30, `${kind} ${lvl} tag`);
-    assert.equal(count(f, draw.C.grey, 0, 26, 63, 30), 0, `${kind} ${lvl}: no high/low`);
-    assert.equal(count(f, '#1e90ff', 0, 26, 63, 31), 0, `${kind} ${lvl}: no rain chance`);
-    for (let y = 26; y <= 30; y++) assert.deepEqual(f.get(63, y), [0, 0, 0], 'fits the panel');
+    assert.ok(count(f, color, 30, 0, 63, 7) > 15, `${kind} ${lvl} tag in the top bar`);
+    assert.equal(count(f, color, 0, 8, 63, 31), 0, `${kind} ${lvl}: the readout keeps its colors`);
+    assert.ok(count(f, '#1e90ff', 48, 27, 63, 31) > 10, `${kind} ${lvl}: RAIN still shown`);
     const off = draw.render({ now, bright: 100, warn: { kind, lvl }, radar: rad }, { screen: 'weather', now, frames: {}, blink: true });
-    assert.equal(count(off, color, 0, 26, 63, 30) > 0, !(kind === 'tor' && lvl === 'warning'), `${kind} ${lvl} blink`);
+    assert.equal(count(off, color, 30, 0, 63, 7) > 0, !(kind === 'tor' && lvl === 'warning'), `${kind} ${lvl} blink`);
   }
 });
 
-test('weather screen extremes: minus bar, 3-digit temp drops the word, high/low drops degrees to fit', () => {
+test('weather conditions colors and extremes: the sky by kind, feels-like on the lifted temperature scale, CALM, long words', () => {
   const now = Date.UTC(2026, 9, 4, 16, 48) / 1000;
   const rad = (wx) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx });
-  const cold = draw.render({ now, bright: 100, warn: null, radar: rad({ icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -31, wind: 'NW 22', pop: 100 }) }, { screen: 'weather', now, frames: {} });
-  assert.equal(count(cold, draw.C.label, 0, 8, 4, 9), 10, 'minus bar at the left edge');
-  assert.equal(count(cold, draw.C.label, 0, 4, 4, 7) + count(cold, draw.C.label, 0, 10, 4, 13), 0);
-  const hot = draw.render({ now, bright: 100, warn: null, radar: rad({ icon: 'sun', temp: 101, word: 'PT CLOUDY', hi: 103, lo: 82, feels: 112, wind: 'CALM', pop: 0 }) }, { screen: 'weather', now, frames: {} });
-  assert.equal(count(hot, draw.C.wxText, 0, 11, 63, 15), 0, 'word skipped');
-  // -21° low with 100%: degree signs dropped, 3px clear of the drop.
-  let lastGrey = -1;
-  for (let x = 0; x < 64; x++) for (let y = 26; y <= 30; y++) if (hex(cold.get(x, y)) === draw.C.grey) lastGrey = x;
-  let firstBlue = 64;
-  for (let x = 63; x >= 0; x--) for (let y = 26; y <= 31; y++) if (hex(cold.get(x, y)) === '#1e90ff') firstBlue = x;
-  assert.ok(firstBlue - lastGrey >= 3, `gap ${firstBlue - lastGrey}`);
+  const at = (wx) => draw.render({ now, bright: 100, warn: null, radar: rad(wx) }, { screen: 'weather', now, frames: {} });
+  const base = { icon: 'snow', temp: -12, word: 'SNOW', hi: -3, lo: -21, feels: -27, wind: 'NW 22', pop: 5 };
+  const cold = at(base);
+  assert.ok(count(cold, '#c8e8ff', 40, 11, 63, 15) > 10, 'SNOW pale blue');
+  assert.ok(count(cold, '#6080ff', 40, 18, 63, 22) > 10, 'feels -27 at the lifted cold end');
+  for (const [icon, color] of [['rain', '#4aa0ff'], ['sun', '#ffc800'], ['moon', '#ffe47a']]) {
+    assert.ok(count(at({ ...base, icon, word: 'X' }), color, 40, 11, 63, 15) > 3, `${icon} word color`);
+  }
+  // Celsius: the color follows the °F value (11°C = 51°F, between cyan and green).
+  const c = at({ ...base, feels: 11, c: 1 });
+  let warmish = 0;
+  for (let x = 40; x < 64; x++) for (let y = 18; y <= 22; y++) { const [r, g] = c.get(x, y); if (g > 150 && r < 100) warmish++; }
+  assert.ok(warmish > 5, 'celsius colored by its °F value');
+  // CALM has no MPH; the value hugs x63 either way.
+  const calm = at({ ...base, wind: 'CALM' });
+  let left = 64;
+  for (let x = 0; x < 64; x++) for (let y = 25; y <= 29; y++) if (hex(calm.get(x, y)) === draw.C.label) left = Math.min(left, x);
+  assert.ok(left > 45, `CALM alone (starts at ${left})`);
+  // The longest word still clears its label by 2px.
+  const long = at({ ...base, icon: 'tsnow', word: 'THNDRSNOW' });
+  let labelEnd = -1, wordStart = 64;
+  for (let x = 0; x < 64; x++) for (let y = 11; y <= 15; y++) {
+    const h = hex(long.get(x, y));
+    if (h === draw.C.head) labelEnd = Math.max(labelEnd, x);
+    if (h === '#c8e8ff') wordStart = Math.min(wordStart, x);
+  }
+  assert.ok(wordStart - labelEnd > 2, `gap ${wordStart - labelEnd}`);
 });
 
 test('weather 5-day: today on top, five day columns between dividers; the top bar follows the shadow setting and carries a warning', () => {
@@ -1339,12 +1371,12 @@ const FIVE_DAYS = [['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['T
 
 test('number rolls: the big clocks and the weather screen numbers roll mid-change, then settle', () => {
   const t = 1791140000 - (1791140000 % 60) + 59;
-  const wx = { icon: 'sun', temp: 63, word: 'SUNNY', feels: 61, wind: 'NW 12', hi: 69, lo: 51, pop: 20 };
+  const wx = { icon: 'sun', temp: 63, word: 'SUNNY', feels: 61, wind: 'NW 12', hi: 69, lo: 51, pop: 20, rl: 1 };
   const cases = [
     ['overnight clock', { now: t, tzo: -18000, screen: 'transit', bright: 100, header: null, rows: [], wx: null }, 'transit', (pl) => pl, (n) => n + 1],
     ['no games clock', { now: t, tzo: -18000, screen: 'baseball', bright: 100, mlb: { games: [] } }, 'baseball', (pl) => pl, (n) => n + 1],
     ['weather numbers', { now: t, tzo: -18000, screen: 'weather', bright: 100, warn: null, radar: { on: false, frames: [], wx } }, 'weather',
-      (pl) => ({ ...pl, radar: { ...pl.radar, wx: { ...wx, temp: 64, feels: 62, hi: 70, pop: 30 } } }), (n) => n],
+      (pl) => ({ ...pl, radar: { ...pl.radar, wx: { ...wx, temp: 64, pop: 30 } } }), (n) => n],
     ['top bar temperature', { now: t, tzo: -18000, screen: 'weather', bright: 100, warn: null, radar: { on: false, frames: [], wx: { ...wx, days: FIVE_DAYS } } }, 'weather',
       (pl) => ({ ...pl, radar: { ...pl.radar, wx: { ...pl.radar.wx, temp: 64 } } }), (n) => n],
   ];
@@ -1361,7 +1393,17 @@ test('number rolls: the big clocks and the weather screen numbers roll mid-chang
     assert.notDeepEqual(mid.px, done.px, `${name}: mid-roll`);
     assert.notDeepEqual(mid.px, first.px, `${name}: mid-roll`);
     assert.deepEqual(done.px, draw.render(q, { screen, now: n2 }).px, `${name}: settles`);
-  }
+  }  // Feels-like rolls too; its color follows the new value from the start
+  // (one step along the temperature scale), so only the roll is checked.
+  const r = draw.createNumRoller();
+  const wp = (w) => ({ now: t, tzo: -18000, screen: 'weather', bright: 100, warn: null, radar: { on: false, frames: [], wx: w } });
+  const frame = (ms, pl) => { r.begin(ms); const f = draw.render(pl, { screen: 'weather', now: t, roller: r }); r.end(); return f; };
+  frame(0, wp(wx));
+  frame(1000, wp({ ...wx, feels: 62 }));
+  const mid = frame(1000 + draw.ROLL_MS / 2, wp({ ...wx, feels: 62 }));
+  const done = frame(1000 + draw.ROLL_MS + 1, wp({ ...wx, feels: 62 }));
+  assert.notDeepEqual(mid.px, done.px, 'feels mid-roll');
+  assert.deepEqual(done.px, draw.render(wp({ ...wx, feels: 62 }), { screen: 'weather', now: t }).px, 'feels settles');
 });
 
 test('number rolls: texts new to the screen just appear; reset drops rolls', () => {

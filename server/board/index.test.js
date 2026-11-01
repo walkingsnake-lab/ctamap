@@ -684,6 +684,26 @@ test('update: weather screen gets conditions always, radar frames only while rai
   await s.close();
 });
 
+test('update: the conditions RAIN line (rl) is buffered per board and station', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8')));
+  let pop = 15;
+  const weather = { get: async () => ({ ...w, pop }) };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather });
+  const rl = async () => (await s.req(FULL)).body.radar.wx.rl;
+  assert.equal(await rl(), undefined); // 15%: not yet
+  pop = 25; assert.equal(await rl(), 1); // shows from 20%
+  pop = 12; assert.equal(await rl(), 1); // stays through the buffer
+  pop = 9; assert.equal(await rl(), undefined); // gone below 10%
+  pop = 15; assert.equal(await rl(), undefined); // and needs 20% again
+  // A new station starts fresh.
+  pop = 12;
+  s.store.update('home', { station: { mapid: 40900, name: 'HOWARD' } });
+  assert.equal(await rl(), undefined);
+  await s.close();
+});
+
 test('update: the 5-day setting sends the next days with the weather screen conditions', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');

@@ -1239,73 +1239,22 @@ static void render_ticker(const Value &p, Frame &f, std::optional<double> now_o,
 static const RGB WX_BLUE = hexc(0x1e90ff);
 static const char *const WX_DROP[] = {".#.", "###", "###", ".#."};
 
-static ustr warn_text(const Value &warn) {
-  bool tor = warn["kind"].eq("tor");
-  bool warning = warn["lvl"].eq("warning");
-  if (tor) return warning ? U"TORNADO WARN" : U"TORNADO WATCH";
-  return warning ? U"TSTORM WARNING" : U"TSTORM WATCH";
-}
+// Temperature scale (F): the shadow and forecast highs use TEMP_STOPS; text
+// (feels-like) the same scale with the cold end lifted.
+struct TempStop { double t; uint32_t c; };
+static const TempStop TEMP_STOPS[7] = {
+    {-10, 0x3050ff}, {20, 0x40a0ff}, {40, 0x30d0d0}, {55, 0x40d040}, {70, 0xffd000}, {85, 0xff8000}, {100, 0xff2020}};
+static const TempStop TEXT_TEMP_STOPS[7] = {
+    {-10, 0x6080ff}, {20, 0x60b0ff}, {40, 0x30d0d0}, {55, 0x40d040}, {70, 0xffd000}, {85, 0xff8000}, {100, 0xff2020}};
 
-static RGB temp_color(double t, const Value &c) {
-  static const struct { double t; uint32_t c; } STOPS[] = {
-      {-10, 0x3050ff}, {20, 0x40a0ff}, {40, 0x30d0d0}, {55, 0x40d040}, {70, 0xffd000}, {85, 0xff8000}, {100, 0xff2020}};
-  // STOPS are F; c: the temperature is C (wx 'c').
+static RGB temp_color(double t, const Value &c, const TempStop *stops = TEMP_STOPS) {
+  // Stops are F; c: the temperature is C (wx 'c').
   if (c.truthy()) t = floor(t * 9 / 5) + 32;
-  if (t <= STOPS[0].t) return hexc(STOPS[0].c);
+  if (t <= stops[0].t) return hexc(stops[0].c);
   for (int i = 1; i < 7; i++) {
-    if (t <= STOPS[i].t) return lerp_color(hexc(STOPS[i - 1].c), hexc(STOPS[i].c), (t - STOPS[i - 1].t) / (STOPS[i].t - STOPS[i - 1].t));
+    if (t <= stops[i].t) return lerp_color(hexc(stops[i - 1].c), hexc(stops[i].c), (t - stops[i - 1].t) / (stops[i].t - stops[i - 1].t));
   }
-  return hexc(STOPS[6].c);
-}
-
-static void draw_weather_screen(Frame &f, const Value &wx, const Value *warn, bool blink, bool shadow) {
-  double temp = wx["temp"].num();
-  auto draw_temp = [&](int dx, int dy, RGB color) {
-    int x = dx;
-    if (temp < 0) {
-      f.fill(x, 8 + dy, 5, 2, color);
-      x += 7;
-    }
-    x = roll_named(f, FONT_CLOCK, "wx.big", U(json::num_str(fabs(temp), wx["temp"].is_int)), LEFT, x, 14 + dy, color);
-    f.fill(x, 4 + dy, 3, 1, color);
-    f.fill(x, 6 + dy, 3, 1, color);
-    f.fill(x, 5 + dy, 1, 1, color);
-    f.fill(x + 2, 5 + dy, 1, 1, color);
-    return x + 2;
-  };
-  if (shadow) draw_temp(1, 1, scale_color(temp_color(temp, wx["c"]), 0.2));
-  int temp_right = draw_temp(0, 0, C::label) + (shadow ? 1 : 0);
-  int icon = icon_index(wx["icon"]);
-  if (icon >= 0) draw_icon(f, icon, 55, 1);
-  const Value &word = wx["word"];
-  if (word.truthy() && 63 - measure(FONT_SMALL, vstr(word)) + 1 > temp_right + 2)
-    rtext(f, FONT_SMALL, vstr(word), 63, 16, C::wxText);
-  f.fill(0, 18, 64, 1, C::divider);
-  if (!wx["feels"].is_null()) roll_named(f, FONT_SMALL, "wx.feels", U"FEELS " + vstr(wx["feels"]) + U"°", LEFT, 0, 25, C::grey);
-  if (wx["wind"].truthy()) rtext(f, FONT_SMALL, vstr(wx["wind"]), 63, 25, C::label);
-  if (warn) {
-    WarnStyle ws = warn_style(*warn);
-    if (!(ws.blinks && blink)) {
-      int gx = f.text(FONT_SMALL, ws.glyph, 0, 31, ws.color);
-      f.text(FONT_SMALL, warn_text(*warn), gx + TAG_GAP - 1, 31, ws.color);
-    }
-    return;
-  }
-  int pop_left = 64;
-  if (!wx["pop"].is_null()) {
-    ustr t = vstr(wx["pop"]) + U"%";
-    int px = 63 - measure(FONT_SMALL, t) + 1;
-    roll_named(f, FONT_SMALL, "wx.pop", t, RIGHT, 63, 31, C::label);
-    for (int j = 0; j < 4; j++)
-      for (int i = 0; WX_DROP[j][i]; i++)
-        if (WX_DROP[j][i] == '#') f.fill(px - 5 + i, 27 + j, 1, 1, WX_BLUE);
-    pop_left = px - 5;
-  }
-  if (!wx["hi"].is_null() && !wx["lo"].is_null()) {
-    ustr hl = U"H " + vstr(wx["hi"]) + U"° L " + vstr(wx["lo"]) + U"°";
-    if (measure(FONT_SMALL, hl) + 3 > pop_left) hl = U"H " + vstr(wx["hi"]) + U" L " + vstr(wx["lo"]);
-    roll_named(f, FONT_SMALL, "wx.hl", hl, LEFT, 0, 31, C::grey);
-  }
+  return hexc(stops[6].c);
 }
 
 // ---- 5-day layout ----
@@ -1386,6 +1335,45 @@ static void draw_top_bar(Frame &f, const Value &wx, bool shadow, const Value *wa
     int hx = fd_left(*parts);
     for (const Part &p : *parts) hx = p.n ? draw_temp_text(f, p.t, hx, 7, p.c) : f.text(FONT_SMALL, p.t, hx, 7, p.c);
   }
+}
+
+// ---- current conditions (draw.js drawConditions) ----
+// The top bar, then a readout: label in grey from x0, value right-aligned to
+// x63 in its color, dot leaders between on odd columns. SKY / FEELS / WIND,
+// and RAIN while the payload's 'rl' is set: four lines on baselines 14, 20,
+// 26, 32, otherwise three on 16, 23, 30.
+
+static RGB sky_color(const Value &icon) {
+  if (icon.eq("rain") || icon.eq("ice")) return hexc(0x4aa0ff);
+  if (icon.eq("snow") || icon.eq("tsnow")) return hexc(0xc8e8ff);
+  if (icon.eq("sun")) return hexc(0xffc800);
+  if (icon.eq("moon")) return hexc(0xffe47a);
+  return C::label;
+}
+
+static void draw_readout(Frame &f, const ustr &label, const char *name, const ustr &value, int base, RGB color) {
+  int lx = f.text(FONT_SMALL, label, 0, base, C::head);
+  int vx = 63 - measure(FONT_SMALL, value) + 1;
+  for (int x = lx + 1 + ((lx + 1) % 2 ? 0 : 1); x < vx - 2; x += 2) f.fill(x, base - 1, 1, 1, C::divider);
+  if (name) roll_named(f, FONT_SMALL, name, value, RIGHT, 63, base, color);
+  else f.text(FONT_SMALL, value, vx, base, color);
+}
+
+static void draw_conditions(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  draw_top_bar(f, wx, shadow, warn, blink);
+  struct Line { ustr label; const char *name; ustr value; RGB color; };
+  Line lines[4];
+  int n = 0;
+  lines[n++] = {U"SKY", nullptr, wx["word"].truthy() ? vstr(wx["word"]) : ustr(), sky_color(wx["icon"])};
+  if (!wx["feels"].is_null())
+    lines[n++] = {U"FEELS", "wx.feels", vstr(wx["feels"]) + U"°", temp_color(wx["feels"].num(), wx["c"], TEXT_TEMP_STOPS)};
+  if (wx["wind"].truthy()) {
+    ustr w = vstr(wx["wind"]);
+    lines[n++] = {U"WIND", nullptr, w == U"CALM" ? w : w + U" MPH", C::label};
+  }
+  if (wx["rl"].truthy() && !wx["pop"].is_null()) lines[n++] = {U"RAIN", "wx.pop", vstr(wx["pop"]) + U"%", WX_BLUE};
+  static const int B4[] = {14, 20, 26, 32}, B3[] = {16, 23, 30};
+  for (int i = 0; i < n; i++) draw_readout(f, lines[i].label, lines[i].name, lines[i].value, n == 4 ? B4[i] : B3[i], lines[i].color);
 }
 
 static void draw_five_day(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
@@ -1536,7 +1524,7 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
     if (wx["rain"].truthy() && wx["rain"]["h"].truthy()) draw_rain_bars(f, wx, shadow, warnp, blink);
     else if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
     else if (wx["days"].truthy()) draw_five_day(f, wx, shadow, warnp, blink);
-    else draw_weather_screen(f, wx, warnp, blink, shadow);
+    else draw_conditions(f, wx, shadow, warnp, blink);
     return;
   }
   const std::vector<uint8_t> *data = nullptr;
