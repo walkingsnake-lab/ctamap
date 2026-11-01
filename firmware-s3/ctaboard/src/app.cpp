@@ -151,7 +151,7 @@ void Board::apply(const Value &p, long long st, long long ms) {
   apply_bright(ms);
   player.set_screen(override_.resolve(player.auto_screen(now(ms)), p["v"].num()), (double)ms);
   update_job.interval_ms = (double)(player.live_game() ? LIVE_EVERY : UPDATE_EVERY);
-  if (player.missing_cloud()) sky_job.due_at = 0;  // a new sky: fetch its clouds in the next gap
+  if (player.missing_cloud()) sky_job.due_at = 0;  // a new sky: fetch its clouds next
 }
 
 void Board::shown(int what, const draw::Frame &f, long long ms) {
@@ -394,7 +394,8 @@ sched::Result Board::after_job(Flight &f, sched::Result result, long long ended)
   sched.ran(job, (double)st, (double)ended, result != sched::FAIL);
   if (result == sched::MORE) {
     // More of a set to fetch (radar frames, logos). While that screen is
-    // showing, go again right away; while prefetching, take the next gap.
+    // showing, go again ahead of other due jobs; while prefetching, take
+    // its turn with them.
     bool showing = player.screen == (job == &radar_job ? Screen::Weather : Screen::Baseball);
     job->due_at = showing ? (double)ended - job->deadline_ms : (double)ended;
   }

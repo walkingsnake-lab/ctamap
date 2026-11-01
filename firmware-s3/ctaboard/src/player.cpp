@@ -160,11 +160,13 @@ Screen Player::auto_screen(long long now) const {
       if (scr[i].str_or("") == base_name) in = true;
     if (in) s = screen::from(scr[(size_t)fmod_floor(fdiv(now, (long long)rot["every"].num()), (long long)scr.size())].str_or(""));
   }
+  // Visits interrupt only these screens, by name: one this build doesn't
+  // know (or a non-string) draws as transit but gets no visits, as in draw.js.
+  bool visited = !(has_p && ps.truthy() && !ps.is_str()) &&
+                 (base_name == "transit" || base_name == "ticker" || base_name == "baseball");
   const Value &r = p["radar"];
   const Value &v = r["visit"];
-  if ((base != Screen::Transit && base != Screen::Ticker && base != Screen::Baseball) || !v.truthy() ||
-      !(v["every"].num(0) > 0) || !(r["on"].truthy() || v["always"].truthy()))
-    return s;
+  if (!visited || !v.truthy() || !(v["every"].num(0) > 0) || !(r["on"].truthy() || v["always"].truthy())) return s;
   return fmod_floor(now, (long long)v["every"].num()) < (long long)v["for"].num() ? Screen::Weather : s;
 }
 

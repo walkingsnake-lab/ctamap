@@ -310,7 +310,8 @@ void WifiNet::drop() {
 // One request on the kept connection. Fills doc (JSON, parsed straight
 // from the response) or bytes (binary, exactly `size` of them). A kept
 // connection that has gone stale (closed by the server, Fly's proxy, or a
-// router) fails the first try; that one is retried on a new connection.
+// router) fails while sending; that is retried once on a new connection.
+// A read timeout isn't: the server may already have the request.
 bool WifiNet::request(const std::string &path, bool auth, bool post, json::Value *doc, size_t size,
                       std::vector<uint8_t> *bytes, std::string &err) {
   for (int attempt = 0;; attempt++) {
@@ -326,7 +327,9 @@ bool WifiNet::request(const std::string &path, bool auth, bool post, json::Value
     if (auth && !s_.token.empty()) c.http.addHeader("X-Board-Token", s_.token.c_str());
     int code = post ? c.http.POST("") : c.http.GET();
     if (feed) feed();  // the body read gets its own watchdog period
-    if (code < 0 && reused && attempt == 0) {
+    bool unsent = code == HTTPC_ERROR_SEND_HEADER_FAILED || code == HTTPC_ERROR_SEND_PAYLOAD_FAILED ||
+                  code == HTTPC_ERROR_NOT_CONNECTED || code == HTTPC_ERROR_CONNECTION_LOST;
+    if (unsent && reused && attempt == 0) {
       drop();
       continue;
     }

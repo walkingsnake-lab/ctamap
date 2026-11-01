@@ -1,9 +1,10 @@
 // Network jobs (design spec §2, "Scheduler").
 //
 // Requests run on the network worker (app.h Worker), off the draw loop, so
-// they never pause an animation; jobs simply run when due, one at a time,
-// most overdue first. While the knob's chooser is open only overdue jobs
-// run, so the commit goes out the moment the knob rests.
+// they never pause an animation; jobs simply run when due, one at a time.
+// A job past its deadline goes first, then the one due longest. While the
+// knob's chooser is open only overdue jobs run, so the commit goes out the
+// moment the knob rests.
 //
 // (The M4's CircuitPython firmware, firmware/boardlib/sched.py, blocks the
 // loop on every request and fits them into animation gaps instead.)
@@ -42,13 +43,17 @@ class Scheduler {
 
   void due_now(Job *job, double ms) { job->due_at = std::min(job->due_at, ms); }
 
-  // The job to run now, or null: the one longest past due (only an overdue
-  // one when only_overdue).
+  // The job to run now, or null: the earliest-due overdue job, else
+  // (unless only_overdue) the earliest-due due job.
   Job *pick(double ms, bool only_overdue) const {
-    Job *best = nullptr;
-    for (Job *j : jobs)
-      if (ms >= j->due_at && (!only_overdue || j->overdue(ms)) && (!best || j->due_at < best->due_at)) best = j;
-    return best;
+    Job *over = nullptr, *due = nullptr;
+    for (Job *j : jobs) {
+      if (ms < j->due_at) continue;
+      if (j->overdue(ms) && (!over || j->due_at < over->due_at)) over = j;
+      if (!due || j->due_at < due->due_at) due = j;
+    }
+    if (over || only_overdue) return over;
+    return due;
   }
 
   // Record a run: reschedule, and track the request time.

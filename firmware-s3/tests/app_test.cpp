@@ -1,8 +1,8 @@
 // The board's main loop (src/app.cpp) against a simulated server, clock,
 // display, and buttons: the C++ twin of firmware/tests/test_app.py, with the
-// same scenarios. Requests take simulated time, so these check the
-// scheduling the board depends on: fetches land in animation gaps, data
-// stays fresh, settings changes show up fast, radar frames and logos are
+// same scenarios. Requests take simulated time on a simulated worker, so
+// these check the scheduling the board depends on: animations never wait
+// for a request, data stays fresh, settings changes show up fast, radar frames and logos are
 // fetched only when needed, and buttons follow "last action wins".
 //   app_test   (exit status 0 when every test passes)
 
@@ -1584,6 +1584,34 @@ static void test_without_a_worker_requests_block_but_still_run() {
   CHECK(max_gap(r.server.times("version")) <= 13000, "%lld", max_gap(r.server.times("version")));
 }
 
+static void test_unknown_screen_names_draw_as_transit_without_visits() {
+  // A screen this build doesn't know draws as transit, but (as in draw.js)
+  // only transit, ticker and baseball by name get weather visits.
+  long long now = T0 - draw::fmod_floor(T0, 240);  // inside a visit
+  const std::string tail = ",\"radar\":{\"on\":true,\"visit\":{\"every\":240,\"for\":60}}}";
+  player::Player pl;
+  pl.set_payload(parse("{\"now\":" + jnum(now) + ",\"screen\":\"ticker\"" + tail), 0);
+  CHECK(pl.auto_screen(now) == screen::Screen::Weather, "ticker gets visits");
+  pl.set_payload(parse("{\"now\":" + jnum(now) + ",\"screen\":\"nfl\"" + tail), 0);
+  CHECK(pl.auto_screen(now) == screen::Screen::Transit, "%s", screen::name(pl.auto_screen(now)));
+  pl.set_payload(parse("{\"now\":" + jnum(now) + ",\"screen\":7" + tail), 0);
+  CHECK(pl.auto_screen(now) == screen::Screen::Transit, "%s", screen::name(pl.auto_screen(now)));
+  pl.set_payload(parse("{\"now\":" + jnum(now) + ",\"screen\":\"\"" + tail), 0);
+  CHECK(pl.auto_screen(now) == screen::Screen::Weather, "empty is transit, visits included");
+}
+
+static void test_overdue_jobs_go_before_older_due_ones() {
+  auto none = [](double) { return sched::OK; };
+  sched::Job a("logo", 3000, 120000, none, 0), b("version", 10000, 20000, none, 5000);
+  sched::Scheduler s;
+  s.add(&a);
+  s.add(&b);
+  CHECK(s.pick(10000, false) == &a, "earliest due when none is overdue");
+  CHECK(s.pick(10000, true) == nullptr, "nothing overdue");
+  CHECK(s.pick(30000, false) == &b, "the overdue one first");
+  CHECK(s.pick(30000, true) == &b, "");
+}
+
 int main() {
   struct T {
     const char *name;
@@ -1619,6 +1647,8 @@ int main() {
       T_(test_auto_visits_the_radar_on_a_timer_and_prefetches_frames),
       T_(test_buttons_beat_the_timer),
       T_(test_no_visits_without_rain_or_when_off),
+      T_(test_unknown_screen_names_draw_as_transit_without_visits),
+      T_(test_overdue_jobs_go_before_older_due_ones),
       T_(test_led_blue_during_each_request_and_off_between),
       T_(test_led_connecting_portal_and_offline),
       T_(test_led_dim_red_after_a_failure_until_a_request_succeeds),

@@ -1,5 +1,5 @@
-// What the board shows at each moment, and when its next animation starts.
-// A port of firmware/boardlib/player.py (same names).
+// What the board shows at each moment, and whether it's animating.
+// Ported from firmware/boardlib/player.py (most names follow it).
 //
 // busy(ms) says whether an animation is running right now: the board
 // redraws every frame while it is, and starts an OTA install (which blocks
