@@ -247,6 +247,10 @@ struct RenderOpts {
   // Knob chooser (screen "chooser"): wheel position and commit (draw.js opts.chooser).
   std::optional<double> chooser_pos;
   bool chooser_commit = false;
+  // Clock screen (skyline face): the animation clock in epoch ms (null: now x 1000)
+  // and the cloud strips on hand (strip id -> 1664 packed bytes).
+  std::optional<double> ms;
+  const Frames *clouds = nullptr;
   // Screen-change slide (draw.js opts.slide): the old screen's last shown
   // pixels, ms into the slide, and the direction (1: the new screen comes
   // in from the right; -1: from the left).
@@ -265,6 +269,15 @@ int slide_offset(double t);  // px the new screen has come in, 0..64 + SLIDE_GAP
 void slide_frames(const uint8_t *from, Frame &f, int d, int dir);
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);
+
+// Skyline face: where the quarter-hour boat is at epoch ms (draw.js boatAt),
+// and the lightning level 0-1 (strikeLevel).
+struct Boat {
+  bool sail;  // false: the speedboat
+  int x0, dir;
+};
+std::optional<Boat> boat_at(double ms);
+double strike_level(double ms);
 
 int ticker_pages(const Value &p, double now);
 int radar_on_hand(const Value &ids, const Frames *frames);

@@ -2069,6 +2069,423 @@ static void render_chooser(const Value &p, Frame &f, double pos, bool commit) {
   for (int i = 0; i < n; i++) f.fill(x0 + i * 5, 9, 3, 1, i == sel ? C::amber : C::indicator);
 }
 
+// ---- clock screen: skyline face (design spec §14; contract "Skyline") ----
+// Mirrors renderSkyline() and SKY in draw.js line for line. Plain
+// arithmetic and an integer hash only, so the pixels match draw.js exactly.
+
+static uint32_t ih(long long a, long long b, long long c) {
+  uint32_t h = ((uint32_t)a * 0x9E3779B1u) ^ ((uint32_t)b * 0x85EBCA77u) ^ ((uint32_t)c * 0xC2B2AE3Du);
+  h = (h ^ (h >> 15)) * 0x2C1B3C6Du;
+  h = (h ^ (h >> 12)) * 0x297A2D39u;
+  return h ^ (h >> 15);
+}
+
+static RGB mix_rgb(RGB a, RGB b, double k) {
+  auto ch = [k](int v, int w) { double r = jsround(v + (w - v) * k); return (uint8_t)(r < 0 ? 0 : r > 255 ? 255 : r); };
+  return RGB{ch(a.r, b.r), ch(a.g, b.g), ch(a.b, b.b)};
+}
+static double sstep01(double a, double b, double v) {
+  double t = std::max(0.0, std::min(1.0, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+static double wave(double ph) {
+  double u = ph - std::floor(ph), tri = u < 0.5 ? u * 2 : 2 - u * 2;
+  return tri * tri * (3 - 2 * tri);
+}
+static RGB hsv_rgb(double h, double s, double v) {
+  auto f = [&](double n) { double k = std::fmod(n + h / 60, 6); return v - v * s * std::max(0.0, std::min(std::min(k, 4 - k), 1.0)); };
+  return RGB{(uint8_t)jsround(f(5) * 255), (uint8_t)jsround(f(3) * 255), (uint8_t)jsround(f(1) * 255)};
+}
+
+namespace sky {
+const int W = 64, SHORE = 25, CX = 32, CY = 17, R = 6, SPREAD = 5;
+struct Win { int x, y; uint32_t th; bool bright; };
+struct Star { int x, y; bool bright, tw; uint32_t ph; double per; };
+struct Ant { int x, t, roof; bool beacon; };
+struct RimPx { int x, y; double deg; };
+struct Geometry {
+  uint8_t role[64 * 32] = {0};
+  std::vector<Ant> ants;
+  std::vector<Win> wins;
+  std::vector<Star> stars;
+  std::vector<std::pair<int, int>> legs;
+  int bar[3] = {0, 0, 0};
+  std::vector<RimPx> rim;
+  bool isB(int x, int y) const { return x >= 0 && x < W && y >= 0 && y <= SHORE && role[y * W + x] != 0; }
+};
+
+static void rect(Geometry &g, int x, int w, int t, uint8_t r) {
+  for (int y = std::max(0, t); y <= SHORE; y++)
+    for (int i = x; i < x + w; i++)
+      if (i >= 0 && i < W) g.role[y * W + i] = r;
+}
+static int top(int rows) { return SHORE + 1 - rows; }
+static bool seg(double ax, double ay, double bx, double by, double px, double py) {
+  double vx = bx - ax, vy = by - ay;
+  double t = std::max(0.0, std::min(1.0, ((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy)));
+  double ex = px - (ax + t * vx), ey = py - (ay + t * vy);
+  return ex * ex + ey * ey < 0.25;
+}
+template <typename F>
+static std::vector<std::pair<int, int>> cover(F test) {
+  std::vector<std::pair<int, int>> out;
+  for (int y = CY - R - 2; y <= SHORE; y++)
+    for (int x = CX - R - 2; x <= CX + R + 1; x++) {
+      int hit = 0;
+      for (int j = 0; j < 6; j++)
+        for (int i = 0; i < 6; i++)
+          if (test(x + (i + 0.5) / 6, y + (j + 0.5) / 6)) hit++;
+      if (hit * 2 >= 36) out.push_back({x, y});
+    }
+  return out;
+}
+
+static Geometry build() {
+  Geometry g;
+  static const int mass[][3] = {{0, 4, 7}, {8, 3, 9}, {19, 3, 8}, {22, 3, 10}, {28, 3, 7}, {36, 3, 6},
+                                {39, 4, 9}, {43, 3, 11}, {46, 4, 8}, {50, 3, 10}, {57, 4, 9}, {61, 3, 7}};
+  for (const auto &m : mass) rect(g, m[0], m[1], top(m[2]), 1);
+  rect(g, 1, 1, top(9), 2); rect(g, 2, 4, top(15), 2); rect(g, 6, 2, top(13), 2); rect(g, 8, 2, top(9), 2);  // Willis
+  rect(g, 11, 4, top(17), 2);                                                                                 // Aon
+  rect(g, 15, 5, top(21), 2);                                                                                 // St. Regis
+  rect(g, 23, 5, top(10), 2); rect(g, 24, 4, top(13), 2); rect(g, 24, 3, top(16), 2);                         // Trump
+  rect(g, 29, 7, top(15), 2); rect(g, 30, 5, top(17), 2);                                                     // Lake Point Tower
+  {
+    int t = top(17), steps[3] = {4, 6, 8};                                                                    // Hancock
+    for (int y = t; y <= SHORE; y++) {
+      int w = steps[std::min(2, (int)fdiv((y - t) * 3, SHORE - t + 1))];
+      for (int i = 53 - w / 2; i < 53 + w / 2; i++) g.role[y * W + i] = 2;
+    }
+  }
+  g.ants = {{2, top(18), top(15), false}, {4, top(17), top(15), false}, {51, top(22), top(17), true}, {54, top(22), top(17), true}};
+  for (int y = 1; y <= SHORE; y++)
+    for (int x = 0; x < W; x++) {
+      int r = g.role[y * W + x];
+      if (!r || (r == 1 && x < 38) || (x >= 19 && x <= 44 && y >= SHORE - 6)) continue;
+      double dx = x + 0.5 - CX, dy = y + 0.5 - CY;
+      if (dx * dx + dy * dy < 49 || x % 2 != 0 || y % 2 != 1 || !g.isB(x, y - 1)) continue;
+      g.wins.push_back({x, y, ih(x, y, 5) % 1000, ih(x, y, 9) % 10 < 3});
+    }
+  static const double pers[3] = {4000, 6000, 12000};
+  for (int i = 0; g.stars.size() < 14 && i < 1000; i++) {
+    int x = (int)(ih(i, 1, 3) % W), y = (int)(ih(i, 2, 3) % 14);
+    double dx = x + 0.5 - CX, dy = y + 0.5 - CY;
+    bool dup = false;
+    for (const Star &s : g.stars) dup = dup || (s.x == x && s.y == y);
+    if (g.isB(x, y) || (x > 35 && x < 49 && y < 11) || dx * dx + dy * dy < 90.25 || dup) continue;
+    g.stars.push_back({x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 == 1, ih(i, 5, 3) % 1000, pers[g.stars.size() % 3]});
+  }
+  g.legs = cover([](double x, double y) {
+    double dx = x - CX, dy = y - CY;
+    return dx * dx + dy * dy > 0.36 && (seg(CX, CY, CX - SPREAD, SHORE + 1, x, y) || seg(CX, CY, CX + SPREAD, SHORE + 1, x, y));
+  });
+  double kb = (SHORE - 1 + 0.5 - CY) / (double)(SHORE + 1 - CY);
+  g.bar[0] = (int)jsround(CX - SPREAD * kb); g.bar[1] = SHORE - 1; g.bar[2] = (int)jsround(2 * SPREAD * kb);
+  for (const auto &p : cover([](double x, double y) {
+         double dx = x - CX, dy = y - CY, d2 = dx * dx + dy * dy;
+         return d2 >= (R - 1) * (R - 1) && d2 <= R * R;
+       })) {
+    double dx = p.first + 0.5 - CX, dy = p.second + 0.5 - CY, ax = std::abs(dx), ay = std::abs(dy);
+    double pa = dy >= 0 ? (dx >= 0 ? dy / (ax + ay) : 1 + ax / (ax + ay)) : (dx < 0 ? 2 + ay / (ax + ay) : 3 + ax / (ax + ay));
+    g.rim.push_back({p.first, p.second, pa * 90});
+  }
+  return g;
+}
+static const Geometry &geo() {
+  static const Geometry g = build();
+  return g;
+}
+
+const RGB WHEEL_LEG[3] = {hexc(0x565c68), hexc(0x4a505c), hexc(0x262a32)};
+const RGB WHEEL_RIM[3] = {hexc(0xdce0e6), hexc(0xeef0f4), hexc(0x262a32)};
+const RGB WHEEL_NIGHT = hexc(0x4a4a66), PIER_DAY0 = hexc(0x6a6460), PIER_DAY1 = hexc(0x2e2a2c), PIER_NIGHT0 = hexc(0x2a2834),
+          PIER_NIGHT1 = hexc(0x14121a), PIER_BULB = hexc(0xc09050), WIN_DIM = hexc(0x8a5c20), WIN_BRIGHT = hexc(0xffb050),
+          BEACON0 = hexc(0x401010), BEACON1 = hexc(0xff2020), MOON = hexc(0xa89c70), RAIN_DAY0 = hexc(0x5a7aaa),
+          RAIN_DAY1 = hexc(0x3a5070), RAIN_NIGHT0 = hexc(0x2c4468), RAIN_NIGHT1 = hexc(0x1e3050), SNOW0 = hexc(0x8a909c),
+          SNOW1 = hexc(0xe8ecf2), SAIL = hexc(0xe8ecf0), HULL0 = hexc(0x8a4a24), HULL1 = hexc(0x5a2e16), SPRAY = hexc(0xf4f8fc),
+          GLOW = hexc(0x8a80b0), BOLT_SOFT = hexc(0xb8b0e8), STAR_BRIGHT = hexc(0xffffff), STAR_DIM = hexc(0x5a6070);
+const char *const SEADOG[3] = {"..pqpqpqpqpqp.", "YYYYYYYYYYYYYY", ".OOOOOOOOOOOO."};
+const char *const SAILS[4] = {"..#...", "..##..", "..###.", "..####"};
+const int BOLT[][2] = {{21, 0}, {21, 1}, {20, 2}, {21, 3}, {22, 3}, {23, 3}, {23, 4}, {24, 5}, {23, 6}, {24, 7}, {25, 7}, {25, 8}, {25, 9}};
+const int BOLT_BRANCH[][2] = {{20, 1}, {19, 2}, {18, 3}, {18, 4}, {17, 5}};
+const long long CLOUD_W = 128, CLOUD_STEP = 4000, SAIL_STEP = 800, SPEED_STEP = 150, SPEED_WAIT = 4000, QUARTER = 900000,
+                STRIKE_EVERY = 30000;
+
+static RGB seadog_color(char ch) {
+  return ch == 'Y' ? hexc(0xffb020) : ch == 'p' ? hexc(0x3a5aa8) : ch == 'q' ? hexc(0xd8dce4) : hexc(0xd86a10);
+}
+
+// The payload's sky stops sampled at row y (draw.js skyAt).
+static RGB sky_at(const Value &stops, int y) {
+  if (y <= stops[0][0].num()) return hexs(json::str(stops[0][1]));
+  for (size_t i = 1; i < stops.size(); i++) {
+    if (y <= stops[i][0].num()) {
+      double y0 = stops[i - 1][0].num(), y1 = stops[i][0].num();
+      return mix_rgb(hexs(json::str(stops[i - 1][1])), hexs(json::str(stops[i][1])), (y - y0) / (y1 - y0));
+    }
+  }
+  return hexs(json::str(stops[stops.size() - 1][1]));
+}
+
+template <typename L>
+static void disc(Frame &f, int cx, int cy, RGB color, L lit) {
+  const Geometry &G = geo();
+  const double c = 3.5;
+  for (int y = 0; y < 7; y++)
+    for (int x = 0; x < 7; x++) {
+      int X = cx - 3 + x, Y = cy - 3 + y;
+      if (Y < 0 || Y > SHORE || X < 0 || X >= 64 || G.isB(X, Y)) continue;
+      int hit = 0;
+      for (int j = 0; j < 8; j++)
+        for (int i = 0; i < 8; i++) {
+          double dx = x + (i + 0.5) / 8 - c, dy = y + (j + 0.5) / 8 - c;
+          if (dx * dx + dy * dy <= c * c && lit(dx, dy, c)) hit++;
+        }
+      double k = hit / 64.0;
+      if (k > 0.08) f.set(X, Y, mix_rgb(f.get(X, Y), color, k));
+    }
+}
+
+}  // namespace sky
+
+double strike_level(double ms) {
+  long long slot = (long long)std::floor(ms / sky::STRIKE_EVERY);
+  double start = (double)(slot * sky::STRIKE_EVERY + (long long)(ih(slot, 7, 7) % 10000));
+  double t = (ms - start) / 1000;
+  if (t < 0 || t >= 3) return 0;
+  if (t < 0.6) return sstep01(0, 0.6, t);
+  double u = 1 - (t - 0.6) / 2.4;
+  return u * u;
+}
+
+std::optional<Boat> boat_at(double ms) {
+  long long m = (long long)ms;
+  long long q = fdiv(m, sky::QUARTER), qi = fmod_floor(q, 4), e = m - q * sky::QUARTER;
+  if (qi == 0 || qi == 2) {
+    long long step = fdiv(e, sky::SAIL_STEP);
+    if (step > 70) return std::nullopt;
+    return qi == 0 ? Boat{true, (int)(64 - step), -1} : Boat{true, (int)(-6 + step), 1};
+  }
+  long long leg = 87 * sky::SPEED_STEP;
+  if (e < leg) return Boat{false, (int)(64 - fdiv(e, sky::SPEED_STEP)), -1};
+  long long e2 = e - leg - sky::SPEED_WAIT;
+  if (e2 >= 0 && e2 < leg) return Boat{false, (int)(-14 + fdiv(e2, sky::SPEED_STEP)), 1};
+  return std::nullopt;
+}
+
+static void draw_boat(Frame &f, const Boat &b) {
+  const int S = sky::SHORE;
+  if (b.sail) {
+    auto put = [&](int dx, int y, RGB c) { int x = b.dir < 0 ? b.x0 + dx : b.x0 + 5 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+    for (int dy = 0; dy < 4; dy++)
+      for (int dx = 0; sky::SAILS[dy][dx]; dx++)
+        if (sky::SAILS[dy][dx] == '#') put(dx, S - 4 + dy, sky::SAIL);
+    for (int dx = 0; dx < 6; dx++) put(dx, S, sky::HULL0);
+    for (int dx = 1; dx < 5; dx++) put(dx, S + 1, sky::HULL1);
+    return;
+  }
+  const int n = 14;
+  auto put = [&](int dx, int y, RGB c) { int x = b.dir < 0 ? b.x0 + dx : b.x0 + n - 1 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+  for (int dy = 0; dy < 3; dy++)
+    for (int dx = 0; sky::SEADOG[dy][dx]; dx++)
+      if (sky::SEADOG[dy][dx] != '.') put(dx, S - 1 + dy, sky::seadog_color(sky::SEADOG[dy][dx]));
+  const int plume[3][2] = {{S + 1, 9}, {S, 6}, {S - 1, 3}};
+  for (const auto &pl : plume)
+    for (int i = 0; i < pl[1]; i++) {
+      int x = b.dir < 0 ? b.x0 + n + i : b.x0 - 1 - i;
+      if (x >= 0 && x < 64) f.set(x, pl[0], mix_rgb(f.get(x, pl[0]), sky::SPRAY, 0.95 * (1 - (double)i / pl[1])));
+    }
+}
+
+static const Value &sky_none() {
+  static Value v;
+  static bool built = false;
+  if (!built) {
+    json::parse(std::string("{\"sky\":[[0,\"#000006\"],[25,\"#0c1430\"]],\"wat\":[\"#030816\",\"#02050f\",\"#0e1a36\"],\"lit\":1,\"win\":100,"
+                            "\"stars\":14,\"sun\":null,\"moon\":null,\"gl\":null,\"whl\":0,\"fog\":null,\"roof\":null,\"pcp\":null,"
+                            "\"storm\":0,\"boats\":0,\"temp\":null}"),
+                v);
+    built = true;
+  }
+  return v;
+}
+
+static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o, bool blink,
+                           const Frames *clouds) {
+  const sky::Geometry &G = sky::geo();
+  const Value &s = p["skyline"].truthy() ? p["skyline"] : sky_none();
+  double now = now_o.has_value() ? *now_o : p["now"].num();
+  double ms = ms_o.has_value() ? *ms_o : std::floor(now * 1000);
+  const int S = sky::SHORE;
+  double night = s["win"].num(0) / 100;
+
+  for (int y = 0; y <= S; y++) {
+    RGB c = sky::sky_at(s["sky"], y);
+    for (int x = 0; x < 64; x++)
+      if (!G.role[y * 64 + x]) f.set(x, y, c);
+  }
+  if (s["sun"].truthy()) sky::disc(f, (int)s["sun"]["x"].num(), (int)s["sun"]["y"].num(), hexs(json::str(s["sun"]["c"])), [](double, double, double) { return true; });
+  int nstars = std::min((int)s["stars"].num(0), (int)G.stars.size());
+  for (int i = 0; i < nstars; i++) {
+    const sky::Star &st = G.stars[i];
+    double k = st.tw ? 0.25 + 0.75 * wave(ms / st.per + st.ph / 1000.0) : 1;
+    f.set(st.x, st.y, mix_rgb(f.get(st.x, st.y), st.bright ? sky::STAR_BRIGHT : sky::STAR_DIM, k));
+  }
+  if (s["moon"].truthy()) {
+    double cosv = 1 - 2 * s["moon"]["fr"].num() / 100;
+    bool waxing = s["moon"]["ph"].num() < 50;
+    sky::disc(f, 41, 5, sky::MOON, [&](double dx, double dy, double c) {
+      double w = std::sqrt(std::max(0.0, c * c - dy * dy));
+      return waxing ? dx > w * cosv : dx < -w * cosv;
+    });
+  }
+  // Clouds: the server's strip, scrolled 1 px every 4 s, behind the city.
+  if (s["cl"].truthy() && clouds) {
+    auto it = clouds->find(json::str(s["cl"]["id"]));
+    if (it != clouds->end() && it->second.size() >= (size_t)(sky::CLOUD_W * 26 / 2)) {
+      const std::vector<uint8_t> &cb = it->second;
+      long long off = fmod_floor((long long)std::floor(ms / sky::CLOUD_STEP), sky::CLOUD_W);
+      const Value &pal = s["cl"]["pal"];
+      const Value &al = s["cl"]["a"];
+      RGB pc[16];
+      bool has[16] = {false};
+      for (size_t i = 0; i < pal.size() && i < 16; i++) {
+        std::string c = json::str(pal[i]);
+        if (pal[i].is_str() && !c.empty()) { pc[i] = hexs(c); has[i] = true; }
+      }
+      for (int y = 0; y <= S; y++)
+        for (int x = 0; x < 64; x++) {
+          if (G.role[y * 64 + x]) continue;
+          long long i = y * sky::CLOUD_W + (x + off) % sky::CLOUD_W;
+          int n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
+          if (n && has[n]) f.set(x, y, mix_rgb(f.get(x, y), pc[n], al[n].num() / 100));
+        }
+    }
+  }
+  int lim = (int)jsround(450 * night);
+  for (const sky::Win &w : G.wins)
+    if ((int)w.th < lim) f.fill(w.x, w.y, 1, 1, w.bright ? sky::WIN_BRIGHT : sky::WIN_DIM);
+  if (s["roof"].truthy()) {
+    RGB rc = hexs(json::str(s["roof"]));
+    for (int x = 0; x < 64; x++)
+      for (int y = 0; y <= S; y++)
+        if (G.role[y * 64 + x]) { f.fill(x, y, 1, 1, rc); break; }
+  }
+  if (s["fog"].truthy()) {
+    RGB fc = hexs(json::str(s["fog"]));
+    for (int y = 0; y <= S; y++) {
+      double k = std::max(0.0, std::min(1.0, (21 - y) / 18.0)) * 0.85;
+      if (k)
+        for (int x = 0; x < 64; x++) f.set(x, y, mix_rgb(f.get(x, y), fc, k));
+    }
+  }
+  double lv = s["storm"].truthy() ? strike_level(ms) : 0;
+  if (lv > 0) {
+    for (int y = 0; y <= S; y++)
+      for (int x = 0; x < 64; x++) {
+        if (G.role[y * 64 + x]) continue;
+        double ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = std::sqrt(ex * ex + ey * ey);
+        double a = lv * 0.45 * (1 - sstep01(0.3, 1, d));
+        if (a > 0.01) f.set(x, y, mix_rgb(f.get(x, y), sky::GLOW, a));
+      }
+    auto put = [&](int x, int y, RGB c) {
+      if (x >= 0 && x < 64 && y >= 0 && !G.role[y * 64 + x]) f.set(x, y, mix_rgb(f.get(x, y), mix_rgb(c, sky::BOLT_SOFT, 0.3), 0.35 * lv));
+    };
+    auto in_core = [](int x, int y) { for (const auto &b : sky::BOLT) if (b[0] == x && b[1] == y) return true; return false; };
+    for (const auto &b : sky::BOLT)
+      for (int X : {b[0] - 1, b[0] + 1})
+        if (!in_core(X, b[1])) put(X, b[1], hexc(0x7060c0));
+    for (const auto &b : sky::BOLT_BRANCH) put(b[0], b[1], hexc(0x9a8ae0));
+    for (const auto &b : sky::BOLT) put(b[0], b[1], hexc(0xffffff));
+  }
+  RGB beacon = mix_rgb(sky::BEACON0, sky::BEACON1, wave(ms / 4000));
+  for (const sky::Ant &a : G.ants) {
+    f.fill(a.x, a.t, 1, a.roof - a.t, hexc(0x000000));
+    if (a.beacon && s["lit"].truthy()) f.fill(a.x, a.t, 1, 1, beacon);
+  }
+  bool lit = s["lit"].truthy();
+  int whl = clampi((int)s["whl"].num(0), 0, 2);
+  RGB leg = lit ? sky::WHEEL_NIGHT : sky::WHEEL_LEG[whl];
+  for (const auto &l : G.legs) f.fill(l.first, l.second, 1, 1, leg);
+  f.fill(G.bar[0], G.bar[1], G.bar[2], 1, leg);
+  double turn = std::fmod(ms, 60000.0) * 0.006;
+  for (const sky::RimPx &r : G.rim) f.fill(r.x, r.y, 1, 1, lit ? hsv_rgb(std::fmod(r.deg + turn, 360.0), 0.6, 0.85) : sky::WHEEL_RIM[whl]);
+  f.fill(sky::CX - 1, sky::CY - 1, 2, 2, leg);
+
+  ustr clock = clock_text(now, p["tzo"].num());
+  int cw = measure(FONT_SMALL, clock);
+  const Value &warn = p["warn"];
+  bool has_warn = warn.truthy();
+  WarnStyle ws;
+  if (has_warn) ws = warn_style(warn);
+  ustr wword = has_warn ? (warn["lvl"].eq("warning") ? U"WARNING" : U"WATCH") : U"";
+  ustr temp_str = s["temp"].is_null() ? U"" : vstr(s["temp"]) + U"°";
+  int lw = has_warn ? measure(FONT_SMALL, ws.glyph) + TAG_GAP - 1 + measure(FONT_SMALL, wword) : !temp_str.empty() ? measure(FONT_SMALL, temp_str) : 0;
+  auto quiet = [&](int x, int y) { return y >= S + 2 && ((lw && x <= lw) || x >= 63 - cw); };
+
+  long long shim = (long long)std::floor(ms / 1500);
+  RGB ripple = hexs(json::str(s["wat"][2]));
+  const Value &gl = s["gl"];
+  bool path = gl.truthy() && gl["p"].num() > 0;
+  RGB path_rgb = path ? mix_rgb(ripple, hexs(json::str(gl["c"])), gl["p"].num() / 100) : RGB{};
+  for (int y = S + 1; y < 32; y++) {
+    f.fill(0, y, 64, 1, mix_rgb(hexs(json::str(s["wat"][0])), hexs(json::str(s["wat"][1])), (double)(y - S - 1) / (32 - S - 2)));
+    int dir = y % 2 ? 1 : -1, len = y - S <= 2 ? 2 : 3, gap = 9 + (y % 3);
+    for (int x = 0; x < 64; x++) {
+      if (quiet(x, y)) continue;
+      long long ph = fmod_floor(x - dir * shim + y * 5, gap);
+      if (ph >= len) continue;
+      bool on_path = path && std::abs(x + 0.5 - gl["x"].num()) < 1.5 + (y - S) * 0.8;
+      f.set(x, y, on_path ? path_rgb : ripple);
+    }
+  }
+  if (gl.truthy()) {
+    long long slot = (long long)std::floor(ms / 200);
+    int n = 1 + (int)(ih(slot, 1, 11) % 3);
+    RGB gc = hexs(json::str(gl["c"]));
+    for (int i = 0; i < n; i++) {
+      int x = (int)gl["x"].num() - 5 + (int)(ih(slot, i, 12) % 11), y = S + 1 + (int)(ih(slot, i, 13) % (31 - S));
+      if (x >= 0 && x < 64 && !quiet(x, y)) f.set(x, y, gc);
+    }
+  }
+  f.fill(24, S, 16, 1, s["roof"].truthy() ? hexs(json::str(s["roof"])) : mix_rgb(sky::PIER_DAY0, sky::PIER_NIGHT0, night));
+  f.fill(24, S + 1, 16, 1, mix_rgb(sky::PIER_DAY1, sky::PIER_NIGHT1, night));
+  if (lit)
+    for (int x = 24; x <= 39; x += 3) f.fill(x, S, 1, 1, sky::PIER_BULB);
+  if (s["boats"].truthy()) {
+    std::optional<Boat> b = boat_at(ms);
+    if (b) draw_boat(f, *b);
+  }
+  const Value &pcp = s["pcp"];
+  if (pcp.truthy() && pcp["n"].num() > 0) {
+    int n = (int)pcp["n"].num();
+    if (pcp["k"].eq("r")) {
+      RGB c1 = mix_rgb(sky::RAIN_DAY0, sky::RAIN_NIGHT0, night), c2 = mix_rgb(sky::RAIN_DAY1, sky::RAIN_NIGHT1, night);
+      long long step = (long long)std::floor(ms / 200);
+      for (int i = 0; i < n; i++) {
+        int y = (int)((ih(i, 32, 4) % (S + 1) + step) % (S + 1));
+        int x = (int)fmod_floor((long long)(ih(i, 31, 4) % 64) - fdiv(step, 2), 64);
+        f.set(x, y, c1);
+        if (y > 0 && x + 1 < 64) f.set(x + 1, y - 1, c2);
+      }
+    } else {
+      long long step = (long long)std::floor(ms / 700);
+      for (int i = 0; i < n; i++) {
+        int y = (int)((ih(i, 22, 4) % (S + 1) + step) % (S + 1));
+        long long side = fmod_floor(fdiv((long long)ms + (long long)(ih(i, 23, 4) % 2000), 2000), 2);
+        int x = (int)((ih(i, 21, 4) % 64 + side) % 64);
+        f.fill(x, y, 1, 1, ih(i, 24, 4) % 10 < 4 ? sky::SNOW1 : sky::SNOW0);
+      }
+    }
+  }
+  if (has_warn) {
+    if (!(ws.blinks && blink)) f.text(FONT_SMALL, wword, f.text(FONT_SMALL, ws.glyph, 0, 32, ws.color) + TAG_GAP - 1, 32, ws.color);
+  } else if (!temp_str.empty()) {
+    f.text(FONT_SMALL, temp_str, 0, 32, C::label);
+  }
+  f.text(FONT_SMALL, clock, 64 - cw, 32, C::label);
+}
+
 // ---- whole screen ----
 
 static void apply_brightness(Frame &f, double b) {
@@ -2088,6 +2505,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
+  else if (screen == "clock") render_skyline(p, f, o.now, o.ms, o.blink, o.clouds);
   else render_transit(p, f, o.now, o.blink, o.view);
   g_roller = nullptr;
   g_nums = nullptr;

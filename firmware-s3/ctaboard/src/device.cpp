@@ -430,6 +430,11 @@ bool WifiNet::radar(const std::string &id, std::vector<uint8_t> &out, std::strin
   return get_bytes("/board/radar/" + id + "?b=" + s_.board_id + "&pk=4", 1024, out, err);
 }
 
+bool WifiNet::sky(const std::string &id, std::vector<uint8_t> &out, std::string &err) {
+  // The skyline's cloud strip: 128 x 26, 4 bits a pixel, 1664 bytes.
+  return get_bytes("/board/sky/" + id + "?b=" + s_.board_id, 1664, out, err);
+}
+
 bool WifiNet::logo(const std::string &id, std::vector<uint8_t> &out, std::string &err) {
   return get_bytes("/board/logo/" + id + "?b=" + s_.board_id, 24 * 12 * 3, out, err);
 }

@@ -43,6 +43,8 @@ class Player {
   double blink_shift = 0;  // ms; blink phase 0 (off) starts here
   std::string screen = "transit";
   draw::NumRoller nums;  // header and radar clock rolls
+  draw::Frames clouds;   // the skyline's cloud strip on hand: id -> 1664 packed bytes (one kept)
+  double wall_ms = 0;    // epoch ms, set by the Board before drawing (the skyline's animation clock)
 
   // ---- inputs ----
   void set_payload(const Value &payload, double ms);
@@ -53,6 +55,9 @@ class Player {
   bool live_game() const;
   std::vector<std::string> missing_logos(long long now);
   bool has_logo_slot() const { return (int)logos.size() < LOGO_SLOTS; }
+  // Skyline face: the cloud strip the payload names, when it isn't on hand.
+  std::optional<std::string> missing_cloud() const;
+  void add_cloud(const std::string &id, std::vector<uint8_t> bytes);
   void add_logo(const std::string &lid, std::vector<uint8_t> bytes) { logos[lid] = std::move(bytes); }
   std::string auto_screen(long long now) const;
   bool wants_frames() const;

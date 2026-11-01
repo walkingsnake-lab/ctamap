@@ -19,6 +19,8 @@ const { createKeys } = require('./keys');
 const { createFirmware, FirmwareError, CHANNELS: FW_CHANNELS, MAX_BYTES: MAX_FIRMWARE } = require('./firmware');
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
+const { toSkyline } = require('./skyline');
+const { stripBytes } = require('./clouds');
 const fs = require('fs');
 const path = require('path');
 const { render, assets, autoScreen } = require('./render');
@@ -32,7 +34,7 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo', 'firmware', 'firmware-upload', 'c']);
+const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky', 'logo', 'firmware', 'firmware-upload', 'c']);
 // What a per-board control link (/board/c/<link>/) may reach: the control
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
@@ -55,12 +57,13 @@ function send(res, status, body) {
 // are on (the board switches to it by itself); otherwise only `on`. While
 // Auto alternates screens (rot), every rotation screen's sections ride
 // along. The simulator's copy (api/update) stays whole.
-const SCREENS = ['transit', 'ticker', 'weather', 'baseball'];
+const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock'];
 const SECTIONS = {
   transit: ['header', 'key', 'hidden', 'view', 'rows', 'wx'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
+  clock: ['skyline'],
 };
 function sectionsFor(body, screen) {
   const out = { ...body, for: screen };
@@ -283,6 +286,9 @@ function createBoard({
     if (safe(q.hv)) h.firmware = q.hv;
     if (safe(q.hx)) h.ota = q.hx;
     const prev = healthOf.get(id);
+    // What the firmware can draw beyond the original screens, colon-separated
+    // (`skyline`: the clock screen's skyline face). Sent with every report.
+    if (safe(q.hk)) h.caps = q.hk.split(':');
     // The crash that ended a run, sent by the run after it. Kept after
     // later restarts that weren't crashes, until another crash replaces it.
     if (safe(q.hc)) h.lastCrash = q.hc;
@@ -295,6 +301,13 @@ function createBoard({
     h.since = prev ? prev.since : now;
     healthOf.set(id, h);
   }
+
+  // The clock screen needs firmware that draws it: a board whose health
+  // reports the `skyline` capability. Others get transit instead, and no
+  // CLOCK on the knob's ring. (Until a board's first health report after a
+  // server restart, about a minute, it counts as unable.)
+  const clockOk = (id) => { const h = healthOf.get(id); return !!(h && h.caps && h.caps.includes('skyline')); };
+  const forBoard = (body, id) => (body.screen === 'clock' && !clockOk(id) ? { ...body, screen: 'transit' } : body);
 
   // Last transit view per board and station, for the chrono hysteresis.
   // In memory only: after a restart the view is chosen fresh.
@@ -316,6 +329,13 @@ function createBoard({
     seenAt.delete(id);
     tests.delete(id);
     for (const k of [...views.keys()]) if (k.startsWith(`${id}:`)) views.delete(k);
+  }
+
+  // The skyline face's parameters, or null without weather or a station.
+  function skylineOf(board, w, wd, st, now) {
+    if (!w || !st) return null;
+    try { return { face: board.clockFace || 'skyline', ...toSkyline(w, { lat: st.lat, lon: st.lon, now, temp: wd ? wd.temp : null, boats: board.boats !== false }) }; }
+    catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
   async function update(board, id, boot, preview = {}) {
@@ -411,7 +431,7 @@ function createBoard({
       screen,
       rot: rotOf(board, screen),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board),
+      knob: knobOf(board, { clock: clockOk(id) }),
       bright: resolveBright(board, w, now),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),
@@ -445,6 +465,8 @@ function createBoard({
         // Weather layouts whose icons animate (S3; absent: all static).
         ...(iconAnimOf(board).length ? { iconAnim: iconAnimOf(board) } : {}),
       },
+      // Clock screen, skyline face: drawing parameters (skyline.js; contract "Skyline").
+      skyline: skylineOf(board, w, wd, st, now),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
@@ -507,8 +529,9 @@ function createBoard({
       const board = store.get(id) || store.register(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
       seenAt.set(id, nowSecs());
-      const body = await update(board, id, parsed.query.boot === '1');
-      const shown = SCREENS.includes(parsed.query.s) ? parsed.query.s : body.screen;
+      const body = forBoard(await update(board, id, parsed.query.boot === '1'), id);
+      const asked = parsed.query.s === 'clock' && !clockOk(id) ? 'transit' : parsed.query.s;
+      const shown = SCREENS.includes(asked) ? asked : body.screen;
       return send(res, 200, sectionsFor(body, shown));
     }
 
@@ -526,8 +549,19 @@ function createBoard({
         throw e;
       }
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      const body = await update(board, id, false);
+      const body = forBoard(await update(board, id, false), id);
       return send(res, 200, sectionsFor(body, body.screen));
+    }
+
+    // A cloud strip for the skyline face (contract "Cloud strips"): 1664
+    // bytes, immutable (the id names the shape).
+    if (first === 'sky' && rest.length === 1) {
+      if (method !== 'GET') return send(res, 405, { err: 'method' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
+      if (!store.get(String(parsed.query.b || ''))) return send(res, 404, { err: 'unknown_board' });
+      const bytes = stripBytes(rest[0]);
+      if (!bytes) return send(res, 404, { err: 'unknown_strip' });
+      return sendFrame(res, bytes);
     }
 
     // One radar frame for the board's station: 2048 bytes, immutable;
@@ -573,7 +607,7 @@ function createBoard({
     else if (first === 'c' && rest.length >= 1 && (scope = keys.idForLink(rest[0])) && store.get(scope)) ctl = rest.slice(1);
     if (ctl) {
       const sub = ctl.join('/');
-      const isSimFile = ctl[0] === 'api' && (ctl[1] === 'radar' || ctl[1] === 'logo') && ctl.length === 3;
+      const isSimFile = ctl[0] === 'api' && (ctl[1] === 'radar' || ctl[1] === 'logo' || ctl[1] === 'sky') && ctl.length === 3;
       if (scope) {
         if (!SCOPED_OK.has(sub) && !isSimFile) return send(res, 404, { err: 'not_found' });
         if (sub === 'api/boards' && method !== 'GET') return send(res, 404, { err: 'not_found' });
@@ -699,6 +733,12 @@ function createBoard({
         return send(res, 200, await update(board, id, false, preview));
       }
 
+      // Cloud strip for the simulator.
+      if (rest[0] === 'api' && rest[1] === 'sky' && rest.length === 3) {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        return sendFrame(res, stripBytes(rest[2]));
+      }
+
       // Radar frame for the simulator (the path is the credential); `mapid`
       // for a previewed station.
       if (rest[0] === 'api' && rest[1] === 'radar' && rest.length === 3) {
@@ -814,7 +854,7 @@ function createBoard({
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
-        const screen = ['transit', 'ticker', 'weather', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
+        const screen = ['transit', 'ticker', 'weather', 'baseball', 'clock'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid) || testRadar.frame(fid); if (b) frames[fid] = b; }
@@ -825,6 +865,7 @@ function createBoard({
           blink: parsed.query.blink === '1',
           frames,
           logos: logoBytes(body),
+          clouds: body.skyline && body.skyline.cl ? { [body.skyline.cl.id]: stripBytes(body.skyline.cl.id) } : {},
         });
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
         res.end(frame.toPNG(scale));

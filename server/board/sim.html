@@ -98,6 +98,10 @@
       <figcaption><span>Baseball</span><span id="gameState"></span></figcaption>
       <canvas id="baseball" width="640" height="320" aria-label="Baseball screen"></canvas>
     </figure>
+    <figure id="fig-clock">
+      <figcaption><span>Clock</span><span id="clockState"></span></figcaption>
+      <canvas id="clock" width="640" height="320" aria-label="Clock screen"></canvas>
+    </figure>
   </div>
   <div class="bar">
     <span>board <b id="board"></b></span>
@@ -162,6 +166,7 @@
   const paintTicker = ledCanvas($('ticker'));
   const paintWeather = ledCanvas($('weather'));
   const paintBaseball = ledCanvas($('baseball'));
+  const paintClock = ledCanvas($('clock'));
 
   // Radar frames are immutable: fetch each ID once, keep the ones in use.
   const radarFrames = {};
@@ -178,6 +183,15 @@
       // The frame that completes the set restarts the loop at its oldest.
       if (ids.every((k) => radarFrames[k])) loopStart = performance.now();
     }
+  }
+
+  // Cloud strips (skyline face) are immutable: fetch each once.
+  const cloudStrips = {};
+  async function syncClouds() {
+    const id = p && p.skyline && p.skyline.cl && p.skyline.cl.id;
+    if (!id || cloudStrips[id]) return;
+    const r = await fetch(`api/sky/${encodeURIComponent(id)}`);
+    if (r.ok) cloudStrips[id] = new Uint8Array(await r.arrayBuffer());
   }
 
   // Team logo crops are immutable too (ids carry a hash): fetch each once.
@@ -235,6 +249,7 @@
       $('bright').textContent = p.bright;
       syncRadarFrames().catch(() => {});
       syncLogos().catch(() => {});
+      syncClouds().catch(() => {});
       setStatus('');
     } catch (e) {
       setStatus('update failed: ' + e.message);
@@ -264,7 +279,7 @@
     if (shown !== lastShown) {
       lastShown = shown;
       $('screen').textContent = shown;
-      for (const k of ['transit', 'ticker', 'weather', 'baseball']) $('fig-' + k).classList.toggle('active', shown === k);
+      for (const k of ['transit', 'ticker', 'weather', 'baseball', 'clock']) $('fig-' + k).classList.toggle('active', shown === k);
     }
 
     // Transit: rolls, fades, and slides come from the animator.
@@ -304,6 +319,10 @@
     const pick = D.pickGame((p.mlb && p.mlb.games) || [], n, tm.game, !!(p.mlb && p.mlb.all));
     const anyLive = ((p.mlb && p.mlb.games) || []).some((g) => g.st === 'live');
     $('gameState').textContent = !pick.of ? 'no games' : `${anyLive ? 'live game' : 'game'} ${pick.pos + 1} of ${pick.of}`;
+
+    // Clock (skyline face): ambient motion on the wall clock (boats on the quarter hour).
+    paintClock(rolled('clock', t, { full, o: { now: n, ms: Math.floor(n * 1000), blink, clouds: cloudStrips } }));
+    $('clockState').textContent = p.skyline ? p.skyline.st : 'no weather yet';
   }
 
   let lastShown = null;

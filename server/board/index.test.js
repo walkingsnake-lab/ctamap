@@ -1262,6 +1262,82 @@ test('per-board link: the control page for that board only, without the owner\'s
   await s.close();
 });
 
+test('clock screen: only for boards whose firmware draws it (hk=skyline); the skyline section rides with it', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const w = parse({ ...om, current: { ...om.current, cloud: 30 } });
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const get = async (q = '') => (await s.req('/board/update?b=home' + q, h)).body;
+  s.store.update('home', { screen: 'clock' });
+
+  // No capability reported yet: transit instead, no CLOCK on the knob.
+  let b = await get();
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.for, 'transit');
+  assert.equal(b.skyline, undefined);
+  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports']);
+  assert.equal((await get('&s=clock')).for, 'transit', 'a press asking for clock gets transit too');
+
+  // The S3 firmware reports it can draw the skyline.
+  await s.req('/board/version?b=home&hu=60&hk=skyline', h);
+  b = await get();
+  assert.equal(b.screen, 'clock');
+  assert.equal(b.for, 'clock');
+  assert.equal(b.rows, undefined, 'transit sections stay home');
+  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports', 'clock'], at: 4 });
+  assert.equal(b.skyline.face, 'skyline');
+  assert.equal(b.skyline.st, 'partly');
+  assert.equal(b.skyline.temp, 63);
+  assert.ok(Array.isArray(b.skyline.sky) && b.skyline.sky.length >= 2);
+  assert.equal(b.skyline.wat.length, 3);
+  // A later report without hk (e.g. older firmware after a rollback) turns it off again.
+  await s.req('/board/version?b=home&hu=90', h);
+  assert.equal((await get()).screen, 'transit');
+
+  // The simulator's copy keeps the screen and the whole payload.
+  const full = (await s.req(FULL)).body;
+  assert.equal(full.screen, 'clock');
+  assert.equal(full.skyline.face, 'skyline');
+  await s.close();
+});
+
+test('clock screen: other screens leave the skyline out; the knob can choose CLOCK', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(om)) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  await s.req('/board/version?b=home&hu=60&hk=skyline', h);
+  assert.equal((await s.req('/board/update?b=home', h)).body.skyline, undefined);
+  const r = await s.req('/board/select?b=home&s=clock', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.screen, 'clock');
+  assert.equal(r.body.skyline.st, 'clear', 'the fixture: sunny, 0% cloud');
+  assert.equal(s.store.get('home').screen, 'clock');
+  await s.close();
+});
+
+test('cloud strips: the board fetches one by id with its token; the simulator by its path', async () => {
+  const s = await serve();
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  assert.equal((await fetchRaw(s, '/board/sky/o1?b=home')).status, 401);
+  const ok = await fetchRaw(s, '/board/sky/o1?b=home', h);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.bytes.length, 1664);
+  assert.match(ok.headers.get('cache-control'), /immutable/);
+  assert.equal((await fetchRaw(s, '/board/sky/zz?b=home', h)).status, 404);
+  const sim = await fetchRaw(s, '/board/secret123/api/sky/p1');
+  assert.equal(sim.status, 200);
+  assert.equal(sim.bytes.length, 1664);
+  await s.close();
+});
+async function fetchRaw(s, p, init = {}) {
+  const r = await fetch(`http://127.0.0.1:${s.port}${p}`, init);
+  return { status: r.status, headers: r.headers, bytes: new Uint8Array(await r.arrayBuffer()) };
+}
+
 test('firmware: CI publishes signed builds to beta with its own token, nothing else', async () => {
   const s = await serveFw({ deployToken: 'deploy123' });
   const build = fakeBuild('ccccccc');

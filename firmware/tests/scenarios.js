@@ -10,6 +10,8 @@ const draw = require(path.join(B, 'render'));
 const { normalize, format } = require(path.join(B, 'arrivals'));
 const { parseCtaTime, tzOffset } = require(path.join(B, 'time'));
 const radar = require(path.join(B, 'radar'));
+const { toSkyline } = require(path.join(B, 'skyline'));
+const { stripBytes } = require(path.join(B, 'clouds'));
 
 const quiet = { warn() {}, error() {} };
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(B, 'fixtures', 'tt-arrivals', name), 'utf8'));
@@ -58,13 +60,15 @@ async function build() {
   // the block under a "!"), so any scenario with one is S3 only.
   const alerted = (p) => (p.rows || []).some((r) => r.a);
   const add = (name, payload, optsList, frames, logos, extra = {}) => {
+    const { clouds, ...rest } = extra;
     S.push({
       ...(alerted(payload) ? { s3only: true } : {}),
-      ...extra,
+      ...rest,
       name, payload,
       frames: arrays(frames),
       logos: arrays(logos),
-      renders: optsList.map((o) => ({ opts: o, px: hexOf(draw.render(payload, { ...o, frames, logos })) })),
+      ...(clouds ? { clouds: arrays(clouds) } : {}),
+      renders: optsList.map((o) => ({ opts: o, px: hexOf(draw.render(payload, { ...o, frames, logos, clouds })) })),
     });
   };
 
@@ -452,6 +456,73 @@ async function build() {
     add('knob chooser five entries', { ...p, knob: { ring: [...ring, 'clock'], at: 0 } }, [at(0), at(4.2), at(3, true)], undefined, undefined, { s3only: true });
     add('knob chooser dimmed', { ...p, bright: 40 }, [at(2), at(2, true)], undefined, undefined, { s3only: true });
     add('knob chooser no ring', { ...p, knob: null }, [at(0)], undefined, undefined, { s3only: true });
+  }
+  // Clock screen, skyline face (S3 only): every weather kind by day and night,
+  // dusk, warnings, boats, lightning, rain and snow in motion, clouds drifting,
+  // dimmed, and no weather yet. Parameters from the server's skyline.js.
+  {
+    const PLACE = { lat: 41.8917, lon: -87.590 };
+    const at = (iso) => Date.parse(iso) / 1000;
+    const DAY = at('2026-10-31T19:05:00Z'), NIGHT = at('2026-11-01T02:42:00Z');
+    const sky = (w, now, extra = {}) => {
+      const skyline = toSkyline({ temp: 52, ...w }, { ...PLACE, now, temp: extra.temp != null ? extra.temp : 52, boats: extra.boats !== false });
+      const clouds = skyline.cl ? { [skyline.cl.id]: stripBytes(skyline.cl.id) } : undefined;
+      return [{ now, tzo: tzOffset(now), screen: 'clock', bright: extra.bright || 100, warn: extra.warn || null, skyline }, clouds];
+    };
+    const ms = (now, ...dts) => dts.map((dt) => ({ screen: 'clock', ms: now * 1000 + dt }));
+    const kinds = [['clear', { code: 0, clouds: 5 }], ['partly', { code: 2, clouds: 35 }], ['mostly', { code: 3, clouds: 70 }], ['overcast', { code: 3, clouds: 95 }],
+      ['rain', { code: 63, clouds: 100 }], ['snow', { code: 73, clouds: 100 }], ['fog', { code: 45, clouds: 100 }], ['storm', { code: 95, clouds: 100 }]];
+    for (const [name, w] of kinds) {
+      for (const [when, now] of [['day', DAY], ['night', NIGHT]]) {
+        const [p, clouds] = sky(w, now, { temp: name === 'snow' ? 28 : 52 });
+        add(`skyline ${name} ${when}`, p, [{ screen: 'clock' }, ...ms(now, 1300, 4000, 61234)], undefined, undefined, { s3only: true, clouds });
+      }
+    }
+    // Clouds present in the payload but the strip not fetched yet: plain sky.
+    { const [p] = sky({ code: 3, clouds: 95 }, DAY); add('skyline overcast strip not fetched', p, [{ screen: 'clock' }], undefined, undefined, { s3only: true }); }
+    for (let m = 0; m <= 110; m += 20) {
+      const t = at('2026-10-31T22:00:00Z') + m * 60;
+      const [p, clouds] = sky({ code: 2, clouds: 30 }, t);
+      add(`skyline dusk +${m} min`, p, [{ screen: 'clock' }], undefined, undefined, { s3only: true, clouds });
+    }
+    for (const [name, warn] of [['severe watch', { kind: 'svr', lvl: 'watch' }], ['severe warning', { kind: 'svr', lvl: 'warning' }], ['tornado watch', { kind: 'tor', lvl: 'watch' }], ['tornado warning', { kind: 'tor', lvl: 'warning' }]]) {
+      const [p, clouds] = sky({ code: 95, clouds: 100 }, NIGHT, { warn });
+      add(`skyline ${name}`, p, [{ screen: 'clock' }, { screen: 'clock', blink: true }], undefined, undefined, { s3only: true, clouds });
+    }
+    {
+      const q = at('2026-10-31T19:00:00Z');
+      const [p] = sky({ code: 0, clouds: 0, temp: 60 }, q, { temp: 60 });
+      add('skyline sailboat', p, ms(q, 0, 800, 20000, 40000, 55000, 30 * 60000 + 5000, 30 * 60000 + 50000), undefined, undefined, { s3only: true });
+      const [p2] = sky({ code: 0, clouds: 0, temp: 60 }, q + 900, { temp: 60 });
+      add('skyline speedboat', p2, ms(q + 900, 0, 1500, 9000, 14000, 13050 + 4000 + 300, 13050 + 4000 + 7000, 13050 + 4000 + 12900), undefined, undefined, { s3only: true });
+      const [p3] = sky({ code: 0, clouds: 0, temp: 60 }, q, { temp: 60, boats: false });
+      add('skyline boats off', p3, ms(q, 20000), undefined, undefined, { s3only: true });
+      const [p4] = sky({ code: 0, clouds: 0, temp: 20 }, q, { temp: 20 });
+      add('skyline cold, no boats', p4, ms(q, 20000), undefined, undefined, { s3only: true });
+    }
+    {
+      // A strike near NIGHT: rising, peak, fading.
+      let s0 = NIGHT * 1000;
+      while (draw.strikeLevel(s0) === 0) s0 += 100;
+      const [p, clouds] = sky({ code: 95, clouds: 100 }, NIGHT);
+      add('skyline lightning', p, [0, 200, 600, 1200, 2400, 2900, 3100].map((dt) => ({ screen: 'clock', ms: s0 + dt })), undefined, undefined, { s3only: true, clouds });
+    }
+    {
+      const [p, clouds] = sky({ code: 65, clouds: 100 }, DAY);
+      add('skyline heavy rain falling', p, ms(DAY, 0, 200, 400, 1000, 7777), undefined, undefined, { s3only: true, clouds });
+      const [p2, c2] = sky({ code: 75, clouds: 100 }, NIGHT, { temp: 18 });
+      add('skyline heavy snow falling', p2, ms(NIGHT, 0, 700, 2100, 9999), undefined, undefined, { s3only: true, clouds: c2 });
+    }
+    { const [p, clouds] = sky({ code: 2, clouds: 35 }, NIGHT, { bright: 40 }); add('skyline dimmed', p, [{ screen: 'clock' }], undefined, undefined, { s3only: true, clouds }); }
+    {
+      const p = { now: NIGHT, tzo: tzOffset(NIGHT), screen: 'clock', bright: 100, warn: null, skyline: null };
+      add('skyline no weather yet', p, [{ screen: 'clock' }, ...ms(NIGHT, 5000)], undefined, undefined, { s3only: true });
+      const [pc] = sky({ code: 0, clouds: 0 }, NIGHT, { temp: -12 });
+      add('skyline negative temperature', pc, [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+      const t = at('2026-11-01T05:59:00Z');
+      const [pw] = sky({ code: 0, clouds: 0 }, t, { temp: 100 });
+      add('skyline widest text', pw, [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    }
   }
   // Chronological departure: slide, digits roll, next train slides in.
   {

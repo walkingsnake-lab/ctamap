@@ -89,6 +89,8 @@ int main(int argc, char **argv) {
     if (s.has("renders")) {
       draw::Frames frames = byte_map(s["frames"]);
       draw::Logos logos = byte_map(s["logos"]);
+      draw::Frames clouds = byte_map(s["clouds"]);
+      bool has_clouds = s["clouds"].truthy();
       bool has_frames = s["frames"].truthy();
       bool has_logos = s["logos"].truthy();
       for (const Value &r : s["renders"].a) {
@@ -108,6 +110,8 @@ int main(int argc, char **argv) {
         ro.rolls = o["rolls"].is_null() ? nullptr : &rolls;
         ro.logos = has_logos ? &logos : nullptr;
         if (!o["t"].is_null()) ro.t = o["t"].num();
+        if (!o["ms"].is_null()) ro.ms = o["ms"].num();
+        ro.clouds = has_clouds ? &clouds : nullptr;
         ro.nums = o["nums"].is_null() ? nullptr : &nums;
         if (!o["chooser"].is_null()) {
           ro.chooser_pos = o["chooser"]["pos"].num(0);

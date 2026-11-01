@@ -90,6 +90,7 @@ class WifiNet : public app::Net {
   bool version(const std::string &health, json::Value &out, std::string &err) override;
   bool update(bool boot, const std::string &screen, json::Value &out, std::string &err) override;
   bool radar(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
+  bool sky(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
   bool logo(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
   bool select(const std::string &category, json::Value &out, std::string &err) override;
   bool rssi(int &out) override;

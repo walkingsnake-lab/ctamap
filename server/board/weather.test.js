@@ -455,3 +455,10 @@ test('tempUnit C: every displayed temperature converted; F untouched', () => {
   assert.deepEqual([c.days[0].hi, Math.round(c.days[0].lo), c.hrs[0].temp], [0, -20, 10]);
   assert.equal(w.temp, 63.4); // original left alone (radar snow mode reads °F)
 });
+
+test('cloud cover (%) comes through for the skyline face; null when missing', () => {
+  assert.equal(parse(MORSE).clouds, 0);
+  assert.equal(parse({ ...MORSE, current: { ...MORSE.current, cloud: 64 } }).clouds, 64);
+  const { cloud, ...rest } = MORSE.current;
+  assert.equal(parse({ ...MORSE, current: rest }).clouds, null);
+});

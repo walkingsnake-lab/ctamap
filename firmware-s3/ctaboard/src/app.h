@@ -61,6 +61,13 @@ class Net {
   virtual bool update(bool boot, const std::string &screen, Value &out, std::string &err) = 0;
   virtual bool radar(const std::string &id, std::vector<uint8_t> &out, std::string &err) = 0;
   virtual bool logo(const std::string &id, std::vector<uint8_t> &out, std::string &err) = 0;
+  // A cloud strip for the skyline face (/board/sky/<id>): 1664 bytes.
+  virtual bool sky(const std::string &id, std::vector<uint8_t> &out, std::string &err) {
+    (void)id;
+    (void)out;
+    err = "Unsupported";
+    return false;
+  }
   // The knob chose a category (/board/select): out is the update for its screen.
   virtual bool select(const std::string &category, Value &out, std::string &err) {
     (void)category;
@@ -175,6 +182,10 @@ const long long UPDATE_EVERY = 30000;   // combined update (spec: ~30 s)
 const long long LIVE_EVERY = 10000;     // combined update while a live game is on screen
 const long long RADAR_EVERY = 3000;     // one missing radar frame per run
 const long long LOGO_EVERY = 3000;      // one missing team logo per run
+const long long SKY_EVERY = 3000;       // the skyline's cloud strip, when the payload names a new one
+// What this firmware draws beyond the original screens (health `hk`, contract):
+// the server sends the clock screen only to boards that report `skyline`.
+const char *const CAPS = "skyline";
 const int FAILS_BEFORE_RECONNECT = 3;
 const long long SETUP_AFTER_MS = 600000;  // no network joined this long: open the setup network
 const long long HEALTH_EVERY = 60000;  // ms between health snapshots sent with the version check
@@ -214,7 +225,7 @@ class Board {
   control::ScreenOverride override_;
   control::Chooser chooser;
   sched::Scheduler sched;
-  sched::Job version_job, update_job, radar_job, logo_job;
+  sched::Job version_job, update_job, radar_job, logo_job, sky_job;
   Stats stats;
   long long epoch_ms = 0, sync_ms = 0;
   bool synced = false;
@@ -311,6 +322,7 @@ class Board {
   sched::Result do_update(double ms);
   sched::Result do_logo(double ms);
   sched::Result do_radar(double ms);
+  sched::Result do_sky(double ms);
   sched::Result after_job(Flight &f, sched::Result r, long long ended);
   void after_select(Flight &f, long long ended);
   void fetching();

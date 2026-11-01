@@ -97,6 +97,7 @@ struct Server : app::Net {
   std::vector<std::string> selects;               // categories the knob chose
   std::string fw;                                 // version check's `fw` offer (JSON object), "" for none
   int fw_fail = 0;                                // fail the next firmware downloads halfway
+  std::string cloud = "p1";                       // the skyline's cloud strip id, "" for a clear sky
 
   bool deferred = false;  // on the SimWorker: requests take time without moving the loop's clock
   long long owed = 0;     // simulated time the deferred requests took
@@ -173,7 +174,7 @@ struct Server : app::Net {
            ",\"warn\":" + (tornado ? "{\"kind\":\"tor\",\"lvl\":\"warning\"}" : "null") +
            ",\"radar\":{\"on\":" + (radar_on ? "true" : "false") + ",\"visit\":" + visit + ",\"frames\":" + frames +
            ",\"ft\":" + ft + ",\"timeBox\":[40,0,24,22],\"split\":false},\"mlb\":{\"layout\":\"" + layout +
-           "\",\"games\":" + game_list + "}" + knob + "}";
+           "\",\"games\":" + game_list + "}" + knob + skyline() + "}";
   }
 
   app::ConnectResult connect(const app::Networks &networks, const app::StatusFn &status) override {
@@ -224,6 +225,23 @@ struct Server : app::Net {
     screen = cat == "sports" ? "baseball" : cat == "auto" ? "transit" : cat;
     v++;
     out = parse(payload());
+    return true;
+  }
+
+  // The clock screen's skyline section (contract "Skyline"), with a cloud
+  // strip unless `cloud` is empty.
+  std::string skyline() const {
+    if (screen != "clock") return "";
+    std::string cl = cloud.empty() ? "null" : "{\"id\":\"" + cloud + "\",\"pal\":[\"\",\"#eef2f8\",\"#eef2f8\"],\"a\":[0,35,70]}";
+    return ",\"skyline\":{\"face\":\"skyline\",\"st\":\"partly\",\"sky\":[[0,\"#08245a\"],[25,\"#3a6eb0\"]],"
+           "\"wat\":[\"#0a2a52\",\"#06203f\",\"#1a3a68\"],\"lit\":0,\"win\":0,\"stars\":0,\"sun\":{\"x\":41,\"y\":5,\"c\":\"#ffd040\"},"
+           "\"moon\":null,\"gl\":{\"x\":41,\"c\":\"#c8d8f0\",\"p\":0},\"whl\":0,\"fog\":null,\"roof\":null,\"pcp\":null,"
+           "\"storm\":0,\"boats\":1,\"temp\":61,\"cl\":" + cl + "}";
+  }
+
+  bool sky(const std::string &id, std::vector<uint8_t> &out, std::string &err) override {
+    if (!call("sky:" + id, err)) return false;
+    out.assign(1664, 0x12);
     return true;
   }
 
@@ -915,6 +933,70 @@ static void test_health_names_the_hardware_and_firmware_build() {
   CHECK(sent.find("&hv=a1b2c3d") != std::string::npos, "%s", sent.c_str());
 }
 
+static void test_health_reports_the_skyline_capability() {
+  Rig r;
+  r.board->connect();
+  r.run_for(70000);
+  std::string sent;
+  for (const std::string &h : r.server.health)
+    if (!h.empty()) sent = h;
+  CHECK(sent.find("&hk=skyline") != std::string::npos, "%s", sent.c_str());
+}
+
+static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_ten_times_a_second() {
+  Rig r;
+  r.server.screen = "clock";
+  r.board->connect();
+  r.run_for(5000);
+  CHECK(r.board->player.screen == "clock", "%s", r.board->player.screen.c_str());
+  r.run_for(60000);
+  CHECK(r.server.count("sky:p1") == 1, "%d", r.server.count("sky:p1"));
+  CHECK(r.board->player.clouds.count("p1") == 1, "");
+  CHECK(!r.board->player.missing_cloud(), "");
+  // Ambient motion: about ten frames a second, with fetches still landing.
+  long start = r.display.frames;
+  r.run_for(30000);
+  double per_s = (r.display.frames - start) / 30.0;
+  CHECK(per_s > 7 && per_s < 12, "%f per s", per_s);
+  CHECK(r.server.count("update") >= 2, "%d updates", r.server.count("update"));
+  // A new sky: the new strip replaces the old one.
+  r.server.cloud = "o1";
+  r.server.v++;
+  r.run_for(30000);
+  CHECK(r.server.count("sky:o1") == 1, "%d", r.server.count("sky:o1"));
+  CHECK(r.board->player.clouds.size() == 1 && r.board->player.clouds.count("o1") == 1, "");
+  // A clear sky fetches nothing.
+  r.server.cloud = "";
+  r.server.v++;
+  int before = r.server.count("sky:");
+  r.run_for(30000);
+  CHECK(r.server.count("sky:") == before, "");
+}
+
+static void test_cloud_strips_only_on_the_clock_screen() {
+  Rig r;
+  r.board->connect();
+  r.run_for(60000);
+  CHECK(r.server.count("sky:") == 0, "%d", r.server.count("sky:"));
+}
+
+static void test_clock_screen_draws_the_skyline() {
+  Rig r;
+  r.server.screen = "clock";
+  r.board->connect();
+  r.run_for(10000);
+  // Buildings are black, the sky is blue, the temperature is on the bottom left.
+  draw::RGB building = r.display.last.get(16, 10);  // St. Regis
+  draw::RGB sky = r.display.last.get(40, 0);
+  CHECK(building == draw::RGB{}, "St. Regis lit (%d,%d,%d)", building.r, building.g, building.b);
+  CHECK(sky.b > sky.r && sky.b > 40, "sky (%d,%d,%d)", sky.r, sky.g, sky.b);
+  int lit = 0;
+  for (int y = 27; y <= 31; y++)
+    for (int x = 0; x < 10; x++)
+      if (r.display.last.get(x, y) == draw::hexc(0xd8d8d8)) lit++;
+  CHECK(lit > 8, "temperature drawn (%d px)", lit);
+}
+
 static void test_live_games_update_faster() {
   Rig r;
   r.board->connect();
@@ -949,7 +1031,7 @@ static void test_buttons_override_until_the_phone_changes_something() {
   press(false);
   CHECK(r.board->player.screen == "transit", "%s", r.board->player.screen.c_str());
   press(false);
-  CHECK(r.board->player.screen == "baseball", "UP wraps around: %s", r.board->player.screen.c_str());
+  CHECK(r.board->player.screen == "clock", "UP wraps around to the last screen: %s", r.board->player.screen.c_str());
   r.server.v = 5;  // a phone change: the board follows the server again
   r.run_for(30000);
   CHECK(r.board->player.screen == "transit", "%s", r.board->player.screen.c_str());
@@ -1580,6 +1662,10 @@ int main() {
   } tests[] = {
 #define T_(f) {#f, f}
       T_(test_a_held_train_stays_due_until_the_server_drops_it),
+      T_(test_health_reports_the_skyline_capability),
+      T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_ten_times_a_second),
+      T_(test_cloud_strips_only_on_the_clock_screen),
+      T_(test_clock_screen_draws_the_skyline),
       T_(test_fetches_land_in_gaps_and_data_stays_fresh),
       T_(test_settings_change_shows_up_fast),
       T_(test_radar_frames_only_on_the_radar_screen_and_once_each),
