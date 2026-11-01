@@ -162,6 +162,64 @@ test('rain falls 1 px every 200 ms, staying above the water', () => {
   for (let y = 26; y < 32; y++) for (let x = 0; x < 64; x++) assert.notEqual(px(a, x, y), '#5a7aaa');
 });
 
+test('rain glides along its own line: straight down or 45° with the wind, sub-pixel between steps', () => {
+  const base = toSkyline({ temp: 52, code: 63, clouds: 100 }, { ...PLACE, now: DAY, temp: 52 });
+  const t0 = DAY * 1000;                                   // a multiple of 200 ms
+  for (const sl of [0, 1, -1]) {
+    for (let i = 0; i < 6; i++) {
+      // One drop at a time (n: 1 draws drop 0; seed the clock so drops differ).
+      const sky = { ...base, sun: null, gl: null, boats: 0, pcp: { k: 'r', n: 1, sl } };
+      const drop = (ms) => {
+        const a = draw({}, DAY, { ms, sky }), b = draw({}, DAY, { ms, sky: { ...sky, pcp: null } });
+        const out = [];
+        for (let y = 0; y <= 25; y++) for (let x = 0; x < 64; x++) if (px(a, x, y) !== px(b, x, y)) out.push([x, y]);
+        return out;
+      };
+      const t = t0 + i * 5000;
+      const f0 = drop(t), half = drop(t + 100), f1 = drop(t + 200);
+      for (const pxs of [f0, half, f1]) {
+        const key = ([x, y]) => (sl === 0 ? x : ((x - sl * y) % 64 + 64) % 64);
+        assert.equal(new Set(pxs.map(key)).size <= 1, true, `sl ${sl}: pixels off the line ${JSON.stringify(pxs)}`);
+      }
+      assert.notDeepEqual(JSON.stringify(half), JSON.stringify(f0) + 'x');
+      // A full step later the head has moved one pixel along the line.
+      if (f0.length >= 2 && f1.length >= 2) {
+        const head = (pxs) => pxs.reduce((m, p) => (p[1] > m[1] ? p : m));
+        const [h0, h1] = [head(f0), head(f1)];
+        if (h1[1] > h0[1]) assert.deepEqual([((h1[0] - h0[0]) % 64 + 64) % 64, h1[1] - h0[1]], [(sl + 64) % 64, 1]);
+      }
+    }
+  }
+  // Sub-pixel: halfway between steps the streak differs from both ends.
+  const sky = { ...base, sun: null, gl: null, boats: 0 };
+  const a = draw({}, DAY, { ms: t0, sky }), h = draw({}, DAY, { ms: t0 + 100, sky }), b = draw({}, DAY, { ms: t0 + 200, sky });
+  assert.notDeepEqual([...h.px], [...a.px]); assert.notDeepEqual([...h.px], [...b.px]);
+});
+
+test('motion settings: a still wheel, still ripples, steady stars; rain speed', () => {
+  const night = toSkyline({ temp: 52, code: 0, clouds: 0 }, { ...PLACE, now: NIGHT, temp: 52 });
+  const rim = (sky, ms) => SKY.rim.map(([x, y]) => px(draw({}, NIGHT, { ms, sky }), x, y)).join();
+  const t = NIGHT * 1000;
+  assert.equal(rim({ ...night, wheel: 0 }, t), rim({ ...night, wheel: 0 }, t + 7000), 'wheel off: still');
+  assert.notEqual(rim({ ...night, wheel: 15000 }, t), rim({ ...night, wheel: 15000 }, t + 1000));
+  const water = (sky, ms) => { const f = draw({}, NIGHT, { ms, sky }); const o = []; for (let y = 27; y < 32; y++) for (let x = 20; x < 40; x++) o.push(px(f, x, y)); return o.join(); };
+  assert.equal(water({ ...night, rip: 0, gl: null }, t), water({ ...night, rip: 0, gl: null }, t + 3000), 'ripples off: still');
+  assert.notEqual(water({ ...night, rip: 250, gl: null }, t), water({ ...night, rip: 250, gl: null }, t + 125));
+  const stars = (sky, ms) => { const f = draw({}, NIGHT, { ms, sky }); return SKY.stars.map(([x, y]) => px(f, x, y)).join(); };
+  assert.equal(stars({ ...night, twk: 0 }, t), stars({ ...night, twk: 0 }, t + 1700), 'twinkle off: steady');
+  assert.notEqual(stars(night, t), stars(night, t + 1700));
+  // Rain at 400 ms a pixel is halfway at 200 ms where the default is a full step on.
+  const rain = toSkyline({ temp: 52, code: 63, clouds: 100 }, { ...PLACE, now: DAY, temp: 52 });
+  const r = (fall, ms) => {
+    const sky = { ...rain, sun: null, gl: null, boats: 0, fall }, a = draw({}, DAY, { ms, sky }), b = draw({}, DAY, { ms, sky: { ...sky, pcp: null } });
+    const out = [];
+    for (let y = 0; y <= 25; y++) for (let x = 0; x < 64; x++) if (px(a, x, y) !== px(b, x, y)) out.push(`${x},${y}`);
+    return out.join(' ');
+  };
+  assert.equal(r(400, DAY * 1000 + 200), r(200, DAY * 1000 + 100));
+  assert.notEqual(r(100, DAY * 1000 + 100), r(200, DAY * 1000 + 100));
+});
+
 test('no weather yet: a plain night with the clock', () => {
   const f = draw({}, NIGHT, { sky: null });
   assert.equal(px(f, 40, 0), '#000006');

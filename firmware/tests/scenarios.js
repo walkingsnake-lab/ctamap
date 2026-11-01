@@ -528,6 +528,24 @@ async function build() {
       const [p2, c2] = sky({ code: 75, clouds: 100 }, NIGHT, { temp: 18 });
       add('skyline heavy snow falling', p2, ms(NIGHT, 0, 700, 2100, 9999), undefined, undefined, { s3only: true, clouds: c2 });
     }
+    // Rain slanting with the wind (right, left) and straight down, mid-step
+    // (sub-pixel) and on steps; rain and snow at the speed settings.
+    for (const [name, wind] of [['slant right', { windSpeed: 15, windDir: 180 }], ['slant left', { windSpeed: 15, windDir: 0 }], ['straight', { windSpeed: 15, windDir: 270 }]]) {
+      const [p, clouds] = sky({ code: 63, clouds: 100, ...wind }, DAY);
+      add(`skyline rain ${name}`, p, ms(DAY, 0, 50, 100, 150, 200, 12850), undefined, undefined, { s3only: true, clouds });
+    }
+    for (const [name, fall] of [['slow', 400], ['fast', 100]]) {
+      const [p, clouds] = sky({ code: 65, clouds: 100, windSpeed: 20, windDir: 10 }, DAY);
+      add(`skyline rain ${name}`, { ...p, skyline: { ...p.skyline, fall } }, ms(DAY, 0, 75, 333, 1000), undefined, undefined, { s3only: true, clouds });
+      const [p2, c2] = sky({ code: 75, clouds: 100 }, NIGHT, { temp: 18 });
+      add(`skyline snow ${name}`, { ...p2, skyline: { ...p2.skyline, fall } }, ms(NIGHT, 0, 350, 1400, 9999), undefined, undefined, { s3only: true, clouds: c2 });
+    }
+    // Wheel and ripples still, slow and fast; stars not twinkling.
+    for (const [name, wheel, rip] of [['still', 0, 0], ['slow', 60000, 1000], ['fast', 15000, 250]]) {
+      const [p] = sky({ code: 0, clouds: 0 }, NIGHT);
+      add(`skyline wheel and ripples ${name}`, { ...p, skyline: { ...p.skyline, wheel, rip } }, ms(NIGHT, 0, 125, 7000, 61234), undefined, undefined, { s3only: true });
+    }
+    { const [p] = sky({ code: 0, clouds: 0 }, NIGHT); add('skyline stars still', { ...p, skyline: { ...p.skyline, twk: 0 } }, ms(NIGHT, 0, 900, 2500), undefined, undefined, { s3only: true }); }
     { const [p, clouds] = sky({ code: 2, clouds: 35 }, NIGHT, { bright: 40 }); add('skyline dimmed', p, [{ screen: 'clock' }], undefined, undefined, { s3only: true, clouds }); }
     {
       const p = { now: NIGHT, tzo: tzOffset(NIGHT), screen: 'clock', bright: 100, warn: null, skyline: null };

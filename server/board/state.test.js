@@ -311,6 +311,19 @@ test('cloud drift setting: slow by default, off/slow/normal', () => {
   assert.throws(() => store.update('home', { cloudDrift: 'fast' }), ValidationError);
 });
 
+test('skyline motion and temperature settings: defaults and allowed values', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  const b = store.get('home');
+  assert.deepEqual([b.wheelSpeed, b.rippleSpeed, b.twinkle, b.rainSpeed, b.showTemp], ['normal', 'normal', true, 'normal', true]);
+  store.update('home', { wheelSpeed: 'off', rippleSpeed: 'fast', twinkle: false, rainSpeed: 'slow', showTemp: false });
+  const c = store.get('home');
+  assert.deepEqual([c.wheelSpeed, c.rippleSpeed, c.twinkle, c.rainSpeed, c.showTemp], ['off', 'fast', false, 'slow', false]);
+  assert.throws(() => store.update('home', { rainSpeed: 'off' }), ValidationError, 'rain always falls');
+  assert.throws(() => store.update('home', { wheelSpeed: 'spin' }), ValidationError);
+  assert.throws(() => store.update('home', { twinkle: 1 }), ValidationError);
+  assert.throws(() => store.update('home', { showTemp: 'yes' }), ValidationError);
+});
+
 test('boats setting: on by default, a boolean', () => {
   const store = createStore({ dir: tmpDir(), log: quiet });
   assert.equal(store.get('home').boats, true);

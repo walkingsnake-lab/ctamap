@@ -20,6 +20,9 @@ const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock'];
 const CLOCK_FACES = ['skyline'];
 // Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
 const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
+const WHEEL_SPEEDS = ['off', 'slow', 'normal', 'fast'];
+const RIPPLE_SPEEDS = ['off', 'slow', 'normal', 'fast'];
+const RAIN_SPEEDS = ['slow', 'normal', 'fast'];
 const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
 // The knob's ring (design spec §10, "Knob"): categories, each opening one
 // screen. TRANSIT opens the transit-family screen last chosen (transitScreen:
@@ -175,6 +178,14 @@ function defaultBoard(stations) {
     clockFace: 'skyline',
     boats: true,
     cloudDrift: 'slow',
+    // Skyline motion: wheel rainbow and ripple speed (off is still), star
+    // twinkle, rain/snow speed; and whether the temperature shows (a watch
+    // or warning shows either way).
+    wheelSpeed: 'normal',
+    rippleSpeed: 'normal',
+    twinkle: true,
+    rainSpeed: 'normal',
+    showTemp: true,
     wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
@@ -240,6 +251,8 @@ function validatePatch(patch, stations) {
       case 'headerClock':
       case 'timeSteps':
       case 'boats':
+      case 'twinkle':
+      case 'showTemp':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;
@@ -319,8 +332,11 @@ function validatePatch(patch, stations) {
       case 'iconsHourly':
       case 'iconsRadar':
       case 'clockFace':
-      case 'cloudDrift': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS }[key] || ICON_STYLES;
+      case 'cloudDrift':
+      case 'wheelSpeed':
+      case 'rippleSpeed':
+      case 'rainSpeed': {
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key] || ICON_STYLES;
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;

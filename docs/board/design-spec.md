@@ -474,7 +474,7 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 ### Water
 - A two-color gradient with faint ripple dashes drifting sideways, alternate rows in opposite directions, 1 px every 1.5 s.
 - **Glints:** single water pixels under the sun (day, sunset) or the moon (night) brighten for 200 ms, 1–3 at a time, in a band 5 px either side of the sun's or moon's x (sunset: the glitter path, `#ffd080`; day: `#c8d8f0`; moon: `#a89c70`, scaled by the lit fraction). Positions and timing come from a hash of the tick, so `draw.js` and `draw.cpp` agree.
-- Ripples, glints and the glitter path stay out of the text boxes plus 1 px, so nothing moves beside the digits. A winter sunset (sun at x 6) puts the glitter path under the temperature, where it's hidden; accepted.
+- Ripples and the glitter path stay out of the text boxes plus 1 px, so nothing moves beside the digits. A winter sunset (sun at x 6) puts the glitter path under the temperature, where it's hidden; accepted.
 - Reflections: dropped for now (they'd sit under the text). Mocked in `options.png` if revisited.
 
 ### Temperature and clock
@@ -555,7 +555,7 @@ The scene is drawn in layers, back to front. The server renders what's expensive
 | Fog, snow on roofs | board | from the state |
 | Rain, snow, lightning | board | |
 | Wheel rim, beacons, stars, string lights | board | |
-| Water, ripples, glints | board | |
+| Water, ripples, glitter path | board | |
 | Temperature, clock | board | |
 
 **Cloud strip:**
@@ -566,21 +566,21 @@ The scene is drawn in layers, back to front. The server renders what's expensive
 
 **Payload** (`skyline` object; exact fields in `contract.md`): drawing parameters, not a state name. The server turns the state into: sky stops, water colors, wheel day color, lights on/off, window and star levels, sun x/y and visibility, moon phase, cloud strip id and palette, fog level, roof snow color, precipitation kind and intensity, lightning on/off, boats allowed, temperature text. The board has no per-state branches: it draws the layers from these values, so `draw.cpp` stays small and a new look needs only a server change.
 
-**Determinism:** every random element (twinkle phases, rain and snow positions, glints, lightning timing) comes from a hash of the tick and a fixed seed, never a running random generator, so `draw.js`, `draw.cpp` and the parity test agree pixel for pixel.
+**Determinism:** every random element (twinkle phases, rain and snow positions, lightning timing) comes from a hash of the tick and a fixed seed, never a running random generator, so `draw.js`, `draw.cpp` and the parity test agree pixel for pixel.
 
 ### Animation
 Ambient and slow, on a 100 ms tick:
 
 | Element | Motion |
 |---|---|
-| Wheel rim (night) | soft rainbow (saturation 70%, value 90%) turns once every 30 s |
+| Wheel rim (night) | soft rainbow (saturation 70%, value 90%) turns once every 30 s; per board `wheelSpeed`: still, 60 s, 30 s, 15 s |
 | Beacons (night) | `#401010` ↔ `#ff2020`, smooth 4 s cosine |
-| Stars (night) | twinkle, 4–12 s cycles |
-| Water | ripples glide 1 px every 500 ms, drawn with sub-pixel coverage (the dash ends fade in and out) |
-| Glints | 1–3 at a time, 200 ms each, under the sun or moon |
+| Stars (night) | twinkle, 4–12 s cycles; per board `twinkle` off holds them steady |
+| Water | ripples glide 1 px every 500 ms, drawn with sub-pixel coverage (the dash ends fade in and out); per board `rippleSpeed`: still, 1000, 500, 250 ms |
+| Glitter path | at sunset, the ripples under the sun take its color; only while the sun shows over the buildings (no sparkles: they were distracting) |
 | Clouds | strip scrolls 1 px every 16 s by default; per board `cloudDrift`: off (still), slow (16 s), normal (4 s) |
-| Rain | 1 px down every 200 ms, 1 px left every second step (slanted), 2 px streaks; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background) |
-| Snow | 1 px down every 700 ms, a 1 px sideways step about every 2 s per flake; 6 / 12 / 20 flakes |
+| Rain | 2 px streaks gliding 1 px every 200 ms along their own line (sub-pixel: the head fades in, the tail out), straight down, or 45° with a cross wind of 8 mph or more; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background). Per board `rainSpeed`: 400, 200, 100 ms |
+| Snow | 1 px down every 700 ms (3.5× the rain step), a 1 px sideways step about every 2 s per flake; 6 / 12 / 20 flakes |
 | Lightning | a strike every 20–40 s (from the hash): a soft patch of the cloud deck (about 22 × 8 px, toward `#8a80b0`, peak 45%) lights up from inside, with the bolt (1 px core, flat violet edges, one branch, ending above the Trump roof; softened toward lavender `#b8b0e8`, peak 35%) inside it. Rises over 0.6 s, fades over 2.4 s. Nothing snaps on or off: the storm stays in the background. Mockup: [`storm.png`](mockups/weather/lake/storm.png), row BOTH |
 | Boats (day) | sailboat on :00 and :30, speedboat round trip on :15 and :45 (below) |
 
@@ -603,7 +603,7 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 - Built: server parameters (`skyline.js`, `sun.js`), cloud strips (`clouds.js`, `GET /board/sky/<id>`), the reference renderer (`draw.js` `renderSkyline`), and the S3 port (`draw.cpp` `render_skyline`, pixel-identical over the `skyline *` scenarios, all `s3only`). The S3 fetches the strip only on the clock screen, redraws twenty times a second there, lets fetches run any time (no times to protect), and reports `hk=skyline`. The buttons' screen cycle includes Clock on the S3.
 
 ### Open
-- On the panel: the near-floor colors above, whether the moon is dim enough, and whether glints read as sparkle or noise.
+- On the panel: the near-floor colors above, and whether the moon is dim enough. (Glints read as noise on the panel and were removed.) The night snow sky was raised to levels 5–15 after the old one (0–5) banded into black, magenta and red.
 - Moon crescents: a plain sliver, earthshine (the unlit part as a faint disc, likely lost to overnight dimming), or a brightened sliver.
 - Sunset sun height: how much of the disc shows above the skyline at the low and high ends of its x range (it crosses different buildings through the year).
 - Reference: `draw.js` `renderSkyline` (previews: `node scripts/preview-skyline.js` → `previews/skyline-*.png`; live in the simulator's Clock panel). The mock scripts are design history; where they differ, `draw.js` wins.
