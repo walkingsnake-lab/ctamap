@@ -77,7 +77,7 @@ test('ripples and glints stay off the text and its 1 px margin', () => {
   }
 });
 
-test('night: windows lit to the payload level, beacons pulse but never go dark, the wheel turns pastel', () => {
+test('night: windows lit to the payload level, beacons pulse but never go dark, the wheel turns smoothly', () => {
   const f = draw({}, NIGHT);
   const lit = SKY.wins.filter(([x, y]) => px(f, x, y) !== '#000000').length;
   assert.ok(lit > SKY.wins.length * 0.3 && lit < SKY.wins.length * 0.6, `${lit} of ${SKY.wins.length} windows`);
@@ -85,12 +85,17 @@ test('night: windows lit to the payload level, beacons pulse but never go dark, 
   for (let ms = 0; ms < 4000; ms += 250) assert.ok(beacon(NIGHT * 1000 + ms)[0] >= 0x40, 'beacon stays at least dark red');
   const rim = SKY.rim.map(([x, y]) => px(f, x, y));
   assert.ok(new Set(rim).size > 8, 'rainbow around the rim');
-  // Slow: a second later each rim pixel has shifted only a little (one turn a minute).
+  // Smooth: one turn every 30 s is 12 degrees of hue a second, which moves a
+  // channel at most 255 * 0.9 * 0.7 / 60 * 12 (about 32) levels; a jump past
+  // that would mean the rim stepped rather than turned.
   const g = draw({}, NIGHT, { ms: NIGHT * 1000 + 1000 });
+  let moved = 0;
   for (const [x, y] of SKY.rim) {
     const d = Math.max(...f.get(x, y).map((v, i) => Math.abs(v - g.get(x, y)[i])));
-    assert.ok(d <= 24, `rim ${x},${y} jumped ${d} in a second`);
+    assert.ok(d <= 33, `rim ${x},${y} jumped ${d} in a second`);
+    if (d > 0) moved++;
   }
+  assert.ok(moved > SKY.rim.length / 2, 'noticeably turning: most of the rim changes within a second');
 });
 
 test('windows switch on in a fixed order (the lit set only grows)', () => {

@@ -351,8 +351,9 @@ std::optional<screen::FrameKey> Player::frame_key(double ms, long long now) {
       k.v[4] = (long long)logos.size();
       break;
     case Screen::Clock:
-      // The skyline moves on a 100 ms tick: redraw ten times a second.
-      k.v[4] = (long long)floor(wall_ms / 100);
+      // The skyline glides (sub-pixel ripples, the turning wheel): redraw
+      // twenty times a second.
+      k.v[4] = (long long)floor(wall_ms / 50);
       k.v[5] = (long long)clouds.size();
       break;
     case Screen::Transit:

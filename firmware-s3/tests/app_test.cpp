@@ -916,7 +916,7 @@ static void test_health_reports_the_skyline_capability() {
   CHECK(sent.find("&hk=skyline") != std::string::npos, "%s", sent.c_str());
 }
 
-static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_ten_times_a_second() {
+static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_times_a_second() {
   Rig r;
   r.server.screen = "clock";
   r.board->connect();
@@ -926,11 +926,11 @@ static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_ten_times
   CHECK(r.server.count("sky:p1") == 1, "%d", r.server.count("sky:p1"));
   CHECK(r.board->player.clouds.count("p1") == 1, "");
   CHECK(!r.board->player.missing_cloud(), "");
-  // Ambient motion: about ten frames a second, with fetches still landing.
+  // Ambient motion: about twenty frames a second, with fetches still landing.
   long start = r.display.frames;
   r.run_for(30000);
   double per_s = (r.display.frames - start) / 30.0;
-  CHECK(per_s > 7 && per_s < 12, "%f per s", per_s);
+  CHECK(per_s > 15 && per_s < 24, "%f per s", per_s);
   CHECK(r.server.count("update") >= 2, "%d updates", r.server.count("update"));
   // A new sky: the new strip replaces the old one.
   r.server.cloud = "o1";
@@ -1620,7 +1620,7 @@ int main() {
 #define T_(f) {#f, f}
       T_(test_a_held_train_stays_due_until_the_server_drops_it),
       T_(test_health_reports_the_skyline_capability),
-      T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_ten_times_a_second),
+      T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_times_a_second),
       T_(test_cloud_strips_only_on_the_clock_screen),
       T_(test_clock_screen_draws_the_skyline),
       T_(test_other_screens_keep_the_dim_color_floor),

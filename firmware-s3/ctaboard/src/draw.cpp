@@ -2212,6 +2212,7 @@ const char *const SEADOG[3] = {"..pqpqpqpqpqp.", "YYYYYYYYYYYYYY", ".OOOOOOOOOOO
 const char *const SAILS[4] = {"..#...", "..##..", "..###.", "..####"};
 const int BOLT[][2] = {{21, 0}, {21, 1}, {20, 2}, {21, 3}, {22, 3}, {23, 3}, {23, 4}, {24, 5}, {23, 6}, {24, 7}, {25, 7}, {25, 8}, {25, 9}};
 const int BOLT_BRANCH[][2] = {{20, 1}, {19, 2}, {18, 3}, {18, 4}, {17, 5}};
+const long long RIPPLE_MS = 500, WHEEL_TURN_MS = 30000;
 const long long CLOUD_W = 128, CLOUD_STEP = 4000, SAIL_STEP = 800, SPEED_STEP = 150, SPEED_WAIT = 4000, QUARTER = 900000,
                 STRIKE_EVERY = 30000;
 
@@ -2417,8 +2418,8 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
   RGB leg = lit ? sky::WHEEL_NIGHT : sky::WHEEL_LEG[whl];
   for (const auto &l : G.legs) f.fill(l.first, l.second, 1, 1, leg);
   f.fill(G.bar[0], G.bar[1], G.bar[2], 1, leg);
-  double turn = std::fmod(ms, 60000.0) * 0.006;
-  for (const sky::RimPx &r : G.rim) f.fill(r.x, r.y, 1, 1, lit ? hsv_rgb(std::fmod(r.deg + turn, 360.0), 0.6, 0.85) : sky::WHEEL_RIM[whl]);
+  double turn = std::fmod(ms, (double)sky::WHEEL_TURN_MS) * (360.0 / sky::WHEEL_TURN_MS);
+  for (const sky::RimPx &r : G.rim) f.fill(r.x, r.y, 1, 1, lit ? hsv_rgb(std::fmod(r.deg + turn, 360.0), 0.7, 0.9) : sky::WHEEL_RIM[whl]);
   f.fill(sky::CX - 1, sky::CY - 1, 2, 2, leg);
 
   ustr clock = clock_text(now, p["tzo"].num());
@@ -2432,7 +2433,7 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
   int lw = has_warn ? measure(FONT_SMALL, ws.glyph) + TAG_GAP - 1 + measure(FONT_SMALL, wword) : !temp_str.empty() ? measure(FONT_SMALL, temp_str) : 0;
   auto quiet = [&](int x, int y) { return y >= S + 2 && ((lw && x <= lw) || x >= 63 - cw); };
 
-  long long shim = (long long)std::floor(ms / 1500);
+  double glide = std::fmod(ms, (double)(sky::RIPPLE_MS * 990)) / sky::RIPPLE_MS;  // ripples: 1 px every 500 ms, sub-pixel
   RGB ripple = hexs(json::str(s["wat"][2]));
   const Value &gl = s["gl"];
   bool path = gl.truthy() && gl["p"].num() > 0;
@@ -2442,10 +2443,11 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
     int dir = y % 2 ? 1 : -1, len = y - S <= 2 ? 2 : 3, gap = 9 + (y % 3);
     for (int x = 0; x < 64; x++) {
       if (quiet(x, y)) continue;
-      long long ph = fmod_floor(x - dir * shim + y * 5, gap);
-      if (ph >= len) continue;
+      double u = x - dir * glide + y * 5, a = u - gap * std::floor(u / gap);
+      double cov = std::max(0.0, std::min(a + 1, (double)len) - a) + std::max(0.0, a + 1 - gap);
+      if (cov <= 0) continue;
       bool on_path = path && std::abs(x + 0.5 - gl["x"].num()) < 1.5 + (y - S) * 0.8;
-      f.set(x, y, on_path ? path_rgb : ripple);
+      f.set(x, y, mix_rgb(f.get(x, y), on_path ? path_rgb : ripple, std::min(1.0, cov)));
     }
   }
   if (gl.truthy()) {

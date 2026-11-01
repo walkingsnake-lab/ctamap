@@ -461,7 +461,7 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 ### Centennial Wheel and Navy Pier
 - **Wheel:** a 12 px hard-edged rim (rows 11–22) centered on the x 32 pixel boundary, a 2×2 hub, A-frame legs from the hub to the pier (feet 5 px either side of center), and a crossbar on row 24. No spokes and no gondolas: the rim on its A-frame is what reads as the wheel. Hard edges throughout.
 - **By day** the rim is white and the frame (legs, hub, crossbar) a darker grey, so the two read apart: rim `#dce0e6` with frame `#565c68` on blue, dark or mid-grey skies; rim `#eef0f4` with frame `#4a505c` on mid greys; all `#262a32` on bright skies (fog, snow). Clouds drift, so the server picks the color once per cloud strip from the strip's average over the rim rows; it doesn't change as clouds pass.
-- **At night** the rim is rainbow LEDs, soft and slow: pastel hues (saturation 60%, value 85%) turning around it once every 60 s, so the colors drift rather than spin; legs and hub dim `#4a4a66`. The rim, beacons and pier bulbs switch on when the sun drops below 0.5° (the real wheel lights at dusk).
+- **At night** the rim is rainbow LEDs, soft and slow: soft hues (saturation 70%, value 90%) turning around it once every 30 s, smoothly (the panel redraws the skyline 20 times a second); legs and hub dim `#4a4a66`. The rim, beacons and pier bulbs switch on when the sun drops below 0.5° (the real wheel lights at dusk).
 - **Pier:** a flat deck 8 px either side of the wheel's axis (x 24–39): a lit top row on row 25 (`#6a6460` by day, `#2a2834` at night) and a darker face on row 26. At night, string-light bulbs every 3 px (x 24, 27 … 39) in `#c09050`.
 - Also tried and declined: flags on the pier, the Grand Ballroom dome, a pier running toward the viewer in perspective, gondolas, 6 or 8 spokes, a soft-edged rim.
 
@@ -573,10 +573,10 @@ Ambient and slow, on a 100 ms tick:
 
 | Element | Motion |
 |---|---|
-| Wheel rim (night) | pastel rainbow turns once every 60 s |
+| Wheel rim (night) | soft rainbow (saturation 70%, value 90%) turns once every 30 s |
 | Beacons (night) | `#401010` ↔ `#ff2020`, smooth 4 s cosine |
 | Stars (night) | twinkle, 4–12 s cycles |
-| Water | ripples drift 1 px every 1.5 s |
+| Water | ripples glide 1 px every 500 ms, drawn with sub-pixel coverage (the dash ends fade in and out) |
 | Glints | 1–3 at a time, 200 ms each, under the sun or moon |
 | Clouds | strip scrolls 1 px every 16 s by default; per board `cloudDrift`: off (still), slow (16 s), normal (4 s) |
 | Rain | 1 px down every 200 ms, 1 px left every second step (slanted), 2 px streaks; 8 / 16 / 26 streaks for light / moderate / heavy (slowed and thinned so the storm stays in the background) |
@@ -600,7 +600,7 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 - **No dim-color floor on this screen** (found on the panel, Nov 1): the floor (§4) lifts any pixel too dark for the panel to its brightest channel at the bottom step. On the skyline that turned the whole night sky and water into one flat blue and night clouds into a patchwork of pure red, blue and tan. Skyline frames opt out (`Frame::floor = false`, `color.cpp` `levels(..., floor)`): pixels too dark for the panel go black (the night sky is black on the panel), and channels just under the bottom step round to it instead of truncating, so a dim near-grey cloud stays grey while a dim red (the beacon) stays red. Everything brighter is unchanged; other screens keep the floor.
 - **Full-depth color at every brightness** (also seen on the panel): the S3 uses its "CircuitPython look" curve (gamma 2.2 with 565 / 6-bit truncation, to match the old board) only at 100% and its night curve (gamma 2.6, full depth) below. At 100% the truncation collapsed the skyline's dark gradients into a few flat colors while dimmed it looked right. Skyline frames always use the night curve (`device.cpp` `scene_pipe_`), so they look the same at every brightness.
 - On the panel's CircuitPython-look curve the bottom step is a channel value of about 53 (gamma 2.2 level 8): night colors below it vanish (sky, water, thin clouds), colors at it show at the step.
-- Built: server parameters (`skyline.js`, `sun.js`), cloud strips (`clouds.js`, `GET /board/sky/<id>`), the reference renderer (`draw.js` `renderSkyline`), and the S3 port (`draw.cpp` `render_skyline`, pixel-identical over the `skyline *` scenarios, all `s3only`). The S3 fetches the strip only on the clock screen, redraws ten times a second there, lets fetches run any time (no times to protect), and reports `hk=skyline`. The buttons' screen cycle includes Clock on the S3.
+- Built: server parameters (`skyline.js`, `sun.js`), cloud strips (`clouds.js`, `GET /board/sky/<id>`), the reference renderer (`draw.js` `renderSkyline`), and the S3 port (`draw.cpp` `render_skyline`, pixel-identical over the `skyline *` scenarios, all `s3only`). The S3 fetches the strip only on the clock screen, redraws twenty times a second there, lets fetches run any time (no times to protect), and reports `hk=skyline`. The buttons' screen cycle includes Clock on the S3.
 
 ### Open
 - On the panel: the near-floor colors above, whether the moon is dim enough, and whether glints read as sparkle or noise.
