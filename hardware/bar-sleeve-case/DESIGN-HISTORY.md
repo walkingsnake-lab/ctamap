@@ -303,3 +303,10 @@ The first walnut shell was a prototype and was scrapped, so the shell was open t
 - P2.5: corners (±62.5, ±32.25), 125 x 64.5 mm (was ±63.5, ±33.5). A ruler reading of 135 x 75 sent the first frame the wrong way; a photo of it on the panel, scaled to its outline, gave the fix.
 - P3: corners x ±87.25 on both rows (174.5 mm end to end), z +31 / -29 (was ±88, +31 / -26); middle inserts about (-12.7, +38) and (+12, -36). Three frames: the photo of the first found the -29 row; on the second, either end's pair threaded in but not both, so the ends were ~1.5 mm too far apart, and the inserts at each end share an x.
 - The funnels stay. If a post still fights on a print, the fallback is a flexure neck at each post's base (lean ~0.5-1 mm), not float at the screw: a countersunk head in a cone always centres.
+
+## Drawer tray tweaks (Oct 31)
+
+- Sensor hole in the tray's top wall Ø4 -> Ø6.5, so it clears the grille the drill guide (`grille_guide.py`, now merged from main) drills through the sleeve: the 5-hole pattern with a 1.0 bit spans Ø4.7, leaving ~0.9 a side for the chip's view. The guide works on the v5 shell as is (same knob hole and sensor spot; 6 mm slab + 3.5 wall = 9.5 mm of a 1.0 bit's ~12 mm flutes).
+- Top louver rows split in the middle by a 6 mm bar (`LV_SPLIT`): the full-width slots left the band flexible. The bottom rows were already broken up by the screw bosses.
+- Crush ribs 0.35 -> 0.45 mm proud (0.2 into the sleeve instead of 0.1): the tray was a touch loose. Fit coupons regenerated.
+- S3 on the P3 stays pinned (`drawer_s3_mid` -2.5) so the printed v5 shell's USB-C slot still lines up; centring it between the corrected posts would move it 1.5 mm up and need a new shell.

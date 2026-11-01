@@ -44,7 +44,7 @@ TRAY_CL = 0.25                                  # tray outside to the sleeve's b
 TRAY_WT = 2.5                                   # 2 -> 2.5: ~2x stiffer; 0.55 mm left past the diffuser skirt top and bottom
 # crush ribs on the tray's outside, along the slide direction: they stand CR_H proud of the wall, CR_H - TRAY_CL into the
 # sleeve, and shave down as the tray goes in, so the two walls brace each other along their length with no play
-CR_H, CR_W, CR_RAMP = 0.35, 1.2, 3.0           # 0.1 into the sleeve: gentle on wood PLA (raise CR_H if the coupon wobbles)
+CR_H, CR_W, CR_RAMP = 0.45, 1.2, 3.0           # 0.2 into the sleeve (0.35 / 0.1 printed a touch loose, Oct 31; raise CR_H if the coupon wobbles)
 FLANGE_BACK = Y_FACE + 1.2                      # diffuser flange's back face (FT 1.2)
 YF = FLANGE_BACK                                # tray front edge: on the flange
 Y1 = D - BACKL                                  # tray back, outer face (as plate v3: 4 mm inside the rim)
@@ -96,6 +96,7 @@ def configure_shell():
 # ---- tray ----
 LV_H, LV_PITCH, LV_DEPTH, LV_CH = 3.5, 5.0, 5.0, 1.5
 LV_ROWS = 3
+LV_SPLIT = 6.0                                  # bar across the middle of the top louvers: full-width slots left the band flexible
 HOOK_RW = 20.3
 TIE_OPEN, TIE_GAP, TIE_BAR, TIE_LEN, TIE_EXIT = 14.0, 3.0, 2.0, 6.0, 3.0   # tie loop: tunnel width, depth, bar, length, end room
 
@@ -135,7 +136,8 @@ SEN_POCKET = 1.7                                # channel depth into the 2.5 mm 
 SEN_PLUG = 8.0                                  # channel run past each socket, outward, for the plug
 SEN_GAP = 4.6 - SEN_POCKET
 SEN_TOP = H - WALL - TRAY_CL - TRAY_WT - SEN_GAP     # board's top (chip side)
-SEN_HOLE = 4.0                                  # hole in the tray's top wall over the chip (the sleeve's 2 mm hole sets the view)
+SEN_HOLE = 6.5                                  # hole in the tray's top wall over the chip: clears the sleeve's drilled grille
+                                                # (grille_guide.py: the 5-hole pattern with a 1.0 bit spans Ø4.7) with ~0.9 a side
 ENC_HALF = 11.8 / 2 * math.sqrt(2)              # encoder body (11.8 square, turned 45 deg): half diagonal
 ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
 
@@ -236,6 +238,8 @@ def tray():
         lo, hi = zc - r - 0.5, zc + LV_DEPTH + r + 0.5                      # the slot rises LV_DEPTH going inward
         if any(lo < hz_ + P3.S3_POST_D / 2 + 3.7 and hi > hz_ - P3.S3_POST_D / 2 - 3.7 for hz_ in hzs):
             segs = minus(segs, *pad)
+        if zc > ZC:                                                          # top rows: a bar in the middle
+            segs = minus(segs, -LV_SPLIT / 2, LV_SPLIT / 2)
         if zc < ZC:                                                          # bottom rows: gaps at the screw bosses
             for scx in C.SCREW_XS:
                 segs = minus(minus(segs, -scx - 6.5, -scx + 6.5), scx - 6.5, scx + 6.5)
