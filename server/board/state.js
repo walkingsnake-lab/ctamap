@@ -99,11 +99,9 @@ function defaultBoard(stations) {
     // transit and ticker chosen. Kept by the store, not set directly.
     transitScreen: 'transit',
     bright: 'auto',
-    // Auto brightness's levels, percent: brightMax from sunrise to sunset,
-    // brightMin overnight. On a board with a light sensor, its range instead
-    // (bright room to dark room). brightMin above brightMax counts as brightMax.
+    // Auto brightness's night level, percent (full from sunrise to sunset). On
+    // a board with a light sensor, its dark-room level (a bright room is full).
     brightMin: 40,
-    brightMax: 100,
     // Auto: the main screens (both: alternate every autoEvery s).
     autoScreens: ['transit'],
     autoEvery: 60,
@@ -223,10 +221,6 @@ function validatePatch(patch, stations) {
       case 'brightMin':
         if (!Number.isInteger(val) || val < 5 || val > 100) throw new ValidationError('brightMin must be an integer 5-100');
         out.brightMin = val;
-        break;
-      case 'brightMax':
-        if (!Number.isInteger(val) || val < 5 || val > 100) throw new ValidationError('brightMax must be an integer 5-100');
-        out.brightMax = val;
         break;
       case 'logoBright':
         if (!Number.isInteger(val) || val < 10 || val > 100) throw new ValidationError('logoBright must be 10-100');

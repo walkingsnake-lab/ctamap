@@ -139,10 +139,7 @@ void Board::apply(const Value &p, long long st, long long ms) {
   payload_bright_ = std::max(0.0, std::min(100.0, b));
   const Value &ab = p["ab"];
   ab_min_.reset();
-  if (ab.is_obj() && ab["min"].is_num()) {
-    ab_min_ = std::max(0.0, std::min(100.0, ab["min"].num()));
-    ab_max_ = ab["max"].is_num() ? std::max(0.0, std::min(100.0, ab["max"].num())) : 100;
-  }
+  if (ab.is_obj() && ab["min"].is_num()) ab_min_ = std::max(0.0, std::min(100.0, ab["min"].num()));
   apply_bright(ms);
   player.set_screen(override_.resolve(player.auto_screen(now(ms)), json::str(p["v"])), (double)ms);
   update_job.interval_ms = (double)(player.live_game() ? LIVE_EVERY : UPDATE_EVERY);
@@ -167,7 +164,7 @@ bool Board::draw_frame(long long ms, long long n) {
 
 std::string Board::health_query(long long ms) {
   // Health fields for the version check (contract: /board/version), rebuilt
-  // at most once a minute.
+  // at most once a minute (the light reading excepted).
   if (!health_at_ || ms - *health_at_ >= HEALTH_EVERY) {
     health_at_ = ms;
     char buf[160];
@@ -183,14 +180,16 @@ std::string Board::health_query(long long ms) {
     if (!crash.empty()) q += "&hc=" + crash;
     if (!hardware.empty()) q += "&hd=" + hardware;
     if (!firmware.empty()) q += "&hv=" + firmware;
-    if (light && sense_.live(ms)) {
-      char lx[24];
-      snprintf(lx, sizeof lx, "&ha=%.3g", sense_.lux());
-      q += lx;
-    }
     std::string ox = ota_health();
     if (!ox.empty()) q += "&hx=" + ox;
     health_q_ = q;
+  }
+  // The light sensor's reading rides on every check (every ~10 s), fresh,
+  // so the phone can be used to tune it.
+  if (light && sense_.live(ms)) {
+    char lx[24];
+    snprintf(lx, sizeof lx, "&ha=%.3g", sense_.lux());
+    return health_q_ + lx;
   }
   return health_q_;
 }
@@ -360,7 +359,7 @@ void Board::apply_bright(long long ms) {
   // Before the first payload the panel stays at full.
   if (!player.has_p) return;
   bool sensed = ab_min_ && light && sense_.live(ms);
-  double want = sensed ? sense_.target(*ab_min_, ab_max_, ms) : payload_bright_;
+  double want = sensed ? sense_.target(*ab_min_, ms) : payload_bright_;
   if (!fade_.has() || want != fade_.target()) {
     // The sensor's changes fade; the phone's (fixed, off, back to auto) are immediate.
     fade_.set(want, ms, sensed && fade_.has() ? light::FADE_MS : 0);
@@ -374,9 +373,11 @@ void Board::apply_bright(long long ms) {
   if (applied_ && std::fabs(v - *applied_) < 0.25 && v != fade_.target()) return;
   if (applied_ && v == *applied_) return;
   applied_ = v;
-  player.hw_bright = display->set_brightness(v / 100);
-  player.bright = v;
-  if (!player.hw_bright) last_key_.reset();  // the renderer dims: redraw at the new level
+  double share = display->set_brightness(v / 100);
+  bool was_scaled = !player.hw_bright;
+  player.hw_bright = share >= 1;
+  player.bright = share * 100;
+  if (was_scaled || !player.hw_bright) last_key_.reset();  // the renderer's scale changed: redraw
 }
 
 // ---- OTA updates (ota.h) ----

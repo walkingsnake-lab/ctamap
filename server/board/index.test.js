@@ -496,20 +496,15 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   w.sunset = now - 1;
   b = (await s.req(FULL)).body;
   assert.equal(b.bright, 40);
-  assert.deepEqual(b.ab, { min: 40, max: 100 });
-  // Darkest and brightest set the night and day levels and the light sensor's range.
-  s.store.update('home', { brightMin: 20, brightMax: 80 });
+  assert.deepEqual(b.ab, { min: 40 });
+  // The night level is also the light sensor's dark-room level; day stays full.
+  s.store.update('home', { brightMin: 20 });
   b = (await s.req(FULL)).body;
   assert.equal(b.bright, 20);
-  assert.deepEqual(b.ab, { min: 20, max: 80 });
+  assert.deepEqual(b.ab, { min: 20 });
   w.sunset = now + 3600;
-  assert.equal((await s.req(FULL)).body.bright, 80);
-  // Darkest above brightest: both at brightest.
-  s.store.update('home', { brightMin: 90 });
-  b = (await s.req(FULL)).body;
-  assert.deepEqual([b.bright, b.ab], [80, { min: 80, max: 80 }]);
+  assert.equal((await s.req(FULL)).body.bright, 100);
   w.sunset = now - 1;
-  assert.equal((await s.req(FULL)).body.bright, 80);
   // Fixed or off: the sensor doesn't apply.
   s.store.update('home', { bright: 70 });
   b = (await s.req(FULL)).body;

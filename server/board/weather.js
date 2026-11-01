@@ -309,12 +309,12 @@ function testRain(kind, now) {
   return toRain({ q15 }, now);
 }
 
-// 'auto' brightness: `day` from sunrise to sunset, `night` overnight (the
-// board's brightMax and brightMin). Uses the day's times even slightly stale
-// (a few minutes off at midnight is fine).
-function autoBright(w, now, night = NIGHT_BRIGHT, day = 100) {
-  if (!w) return day;
-  return now >= w.sunrise && now < w.sunset ? day : Math.min(night, day);
+// 'auto' brightness: full from sunrise to sunset, `night` overnight (the
+// board's brightMin). Uses the day's times even slightly stale (a few minutes
+// off at midnight is fine).
+function autoBright(w, now, night = NIGHT_BRIGHT) {
+  if (!w) return 100;
+  return now >= w.sunrise && now < w.sunset ? 100 : night;
 }
 
 // WeatherAPI per grid cell, every 10 min while a board is asking. Without

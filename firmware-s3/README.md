@@ -143,8 +143,8 @@ after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
 
 An Adafruit VEML7700 (4162 flat, or 5378 right-angle) chained off the knob's
 second STEMMA QT socket. With the phone's brightness on Auto it follows the
-room: the Bright room level at `BRIGHT_LUX` and above, the Dark room level
-at `DARK_LUX` and below, linear in log lux between (`src/light.h`). A change
+room: full at `BRIGHT_LUX` and above, the phone's Dark room level at
+`DARK_LUX` and below, linear in log lux between (`src/light.h`). A change
 must last 5 s before the level moves, then it fades over 2 s. The serial log
 says `[light] VEML7700 found` or `[light] no light sensor` at startup, and
 `[light] <lux> lx: <level>%` each time the level moves; the control page's
@@ -220,7 +220,10 @@ S3.
   that curve: `MATRIX_CURVE` at full brightness, `MATRIX_NIGHT_CURVE` while
   dimmed. With `MATRIX_HW_DIM 1` the board dims in hardware (the driver's
   output-enable window, `k^2.2` of full so night is as dark as before) and
-  draws frames at full brightness, so colors keep every step.
+  draws frames at full brightness, so colors keep every step. The window
+  stops at `color::HW_MIN_OE` (16, about 28%), where its steps get coarse;
+  below that the renderer scales the colors for the rest (`color::hw_dim`).
+  The default night level, 40%, stays entirely in hardware.
   `MATRIX_CALIBRATE 1` shows a pattern for choosing on the panel.
 - Not verifiable here: speed, memory, WiFi, and TLS on the real S3. Those get
   checked on hardware from the serial log.

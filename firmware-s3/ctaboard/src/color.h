@@ -22,6 +22,7 @@
 // Platform independent: tested natively (firmware-s3/tests/color_test.cpp).
 #pragma once
 
+#include <math.h>
 #include <stdint.h>
 
 namespace color {
@@ -30,6 +31,26 @@ enum Curve { DRIVER = 0, GAMMA22 = 1, CIRCUITPY = 2, GAMMA26 = 3 };
 const int N_CURVES = 4;
 
 const char *curve_name(int curve);
+
+// Dimming in hardware: the driver shortens every row's lit window (its
+// output-enable, OE 0-255) by the same fraction for every color bit, so
+// colors keep all their steps. Brightness k (0-1) gives k^2.2 of full light,
+// matching what the renderer's scaling gives under gamma 2.2. Low windows
+// step coarsely (OE 1, 2, 3 are 2x and 1.5x jumps in light), so the window
+// stops at HW_MIN_OE (k about 0.28) and the renderer scales the colors for
+// the rest: `share`, the factor it multiplies by (1: the window did it all).
+const int HW_MIN_OE = 16;
+struct HwDim {
+  int oe;
+  double share;
+};
+inline HwDim hw_dim(double k, int min_oe = HW_MIN_OE) {
+  if (k <= 0) return {0, 1};
+  if (k > 1) k = 1;
+  double kf = pow(min_oe / 255.0, 1 / 2.2);  // the window's floor, as brightness
+  if (k < kf) return {min_oe, k / kf};
+  return {(int)floor(pow(k, 2.2) * 255 + 0.5), 1};
+}
 
 // The driver's 8-bit CIE table: input 0-255 -> output level 0-255.
 int cie8(int v);
