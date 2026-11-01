@@ -12,14 +12,16 @@ PROFILES = {
         w=192.0, h=96.0, t=14.5,         # outline, thickness (measured)
         pitch=3.0, rib=0.6,              # diffuser grid: LED pitch, rib width (0.4 nozzle)
         faces={'white': 0.2, 'translucent': 0.4},   # diffuser face = one first layer: 0.2 (0.4 nozzle), 0.4 (0.6 nozzle)
-        # brass M3 inserts on the panel back (x, z - ZC), photo estimates checked with the insert template;
-        # (-88, -26) is under the S3
-        inserts=((-88.0, 31.0), (88.0, 31.0), (-88.0, -26.0), (88.0, -26.0), (-14.0, 38.0), (7.0, -36.0)),
-        standoffs=((-88.0, 31.0), (88.0, 31.0), (88.0, -26.0), (7.0, -36.0)),   # plate v3 bolts to these
+        # brass M3 inserts on the panel back (x, z - ZC). Corners confirmed Oct 31 with check_corners.py (v2 fits all
+        # four): the +z row is at +31 as estimated, the other row at -29 (estimated -26) and its +x insert at 86.5. The
+        # middle two are from the same photos (+/-0.5 mm). (-88, -29) is under the S3 in plate v3
+        inserts=((-88.0, 31.0), (88.0, 31.0), (-88.0, -29.0), (86.5, -29.0), (-12.7, 38.0), (12.0, -36.0)),
+        standoffs=((-88.0, 31.0), (88.0, 31.0), (86.5, -29.0), (12.0, -36.0)),   # plate v3 bolts to these
+        drawer_s3_mid=-2.5,              # drawer: S3 centre (z - ZC) as before the insert fix, so the v5 shell is unchanged
         tie_bridge=(-17.0, 17.0, 63.0, 78.0),   # plate v3 tie-down bridge: x0, x1, z0, z1 (z in the P3 case, moves by DZ)
         hooks=(-22.5, 22.5),             # ribbon hooks on the plate (x), on bars between the louvers / pills
         # plate v3 louver rows (x segments): gaps at the bottom bosses (+/-40, +/-52) and centre standoff, and at the keyholes
-        lv_bottom_x=((-86.0, -61.0), (-31.0, -13.0), (13.0, 31.0), (61.0, 86.0)),
+        lv_bottom_x=((-86.0, -61.0), (-31.0, -13.0), (18.0, 31.0), (61.0, 86.0)),   # gap 13..18 clears the centre standoff (x 12)
         lv_top_x=((-80.0, -46.5), (-33.5, 33.5), (46.5, 80.0)),
         headers=((63.0, 2.5), (-63.0, 2.5)),   # PI IN, PO OUT centres (x, z - ZC), vertical 2x8 shrouds
         s3_back=0.0,                     # extra gap between the panel back and the S3's bottom socket (the case deepens by it)
