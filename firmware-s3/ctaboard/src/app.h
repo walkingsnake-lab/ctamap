@@ -7,6 +7,10 @@
 //   Display  - show(fn): fn fills a fresh frame, then it's shown
 //   Clock    - ms(): monotonic milliseconds; sleep_ms()
 //   Buttons, Knob, Watchdog, Led, Ota - optional
+//   Worker   - optional: runs requests off the draw loop (the S3's other
+//              core), so animations never pause for the network. Without
+//              one, requests block the loop as on the M4 and the scheduler
+//              fits them into animation gaps.
 #pragma once
 
 #include <stdint.h>
@@ -149,6 +153,17 @@ class Setup {
   virtual void joined() {}  // online: a network entered on the page worked
 };
 
+// Runs one piece of network work at a time off the draw loop. start() hands
+// it over (only when the last one is done); done() turns true once it has
+// finished, and everything the work wrote is then safe to read. On the
+// board: device::NetWorker, a task on core 0.
+class Worker {
+ public:
+  virtual ~Worker() {}
+  virtual void start(std::function<void()> work) = 0;
+  virtual bool done() = 0;
+};
+
 class Led {
  public:
   virtual ~Led() {}
@@ -163,6 +178,7 @@ const long long LOGO_EVERY = 3000;      // one missing team logo per run
 const int FAILS_BEFORE_RECONNECT = 3;
 const long long SETUP_AFTER_MS = 600000;  // no network joined this long: open the setup network
 const long long HEALTH_EVERY = 60000;  // ms between health snapshots sent with the version check
+const long long WORK_STUCK_MS = 45000;  // a request running this long: stop feeding the watchdog (it resets the board)
 const long long RETRY_WIFI_MS[] = {10000, 20000, 30000, 60000};  // waits between rounds, then every minute
 
 struct Stats {
@@ -186,6 +202,8 @@ class Board {
   Ota *ota = nullptr;  // OTA updates (set after construction); none: offers are ignored
   Setup *setup = nullptr;  // WiFi setup network; none: keep retrying forever
   Light *light = nullptr;  // light sensor (set after construction); none: the payload's brightness
+
+  Worker *worker = nullptr;  // requests off the draw loop; none: they block it
   bool fresh_wifi = false;  // the first network was just entered on the setup page
   std::function<void(const std::string &)> log;
   std::function<long()> mem_free;       // bytes free, for health reports
@@ -215,6 +233,9 @@ class Board {
 
   void connect(bool boot = true);
   void step();
+  bool in_flight() const { return flight_.has_value(); }
+  bool sliding(long long ms) const { return slide_start_ >= 0 && ms - slide_start_ < draw::SCREEN_SLIDE_MS; }
+  int slide_dir() const { return slide_dir_; }
   std::string health_query(long long ms);
 
  private:
@@ -240,6 +261,40 @@ class Board {
   void do_light(long long ms);
   void apply_bright(long long ms);
 
+  // A request on its way: work() runs on the worker (network calls only,
+  // into this struct); land() then finishes it on the loop.
+  struct Flight {
+    sched::Job *job = nullptr;  // null: the knob's select
+    long long started = 0;
+    bool forced = false;  // overdue, and not in a gap (stats)
+    std::function<bool()> work;
+    std::function<sched::Result(long long ended)> finish;  // after a good work()
+    bool ok = false;
+    std::string err;
+    std::string id;     // radar frame / logo id, or the knob's category
+    int left = 0;       // more of a set still missing after this one
+    Value v;            // JSON answer
+    std::vector<uint8_t> bytes;  // binary answer
+  };
+  std::optional<Flight> flight_;
+  sched::Job *pending_job_ = nullptr;  // the job whose run() is launching
+  long long pending_start_ = 0;
+  bool pending_forced_ = false;
+  bool stuck_said_ = false;
+
+  // Screen-change slide: the last frame shown and what it showed
+  // ("chooser", "status", or the player's screen); a change of that slides
+  // the new screen in over a copy of it.
+  uint8_t last_px_[draw::Frame::W * draw::Frame::H * 3] = {};
+  uint8_t slide_px_[draw::Frame::W * draw::Frame::H * 3] = {};
+  std::string shown_;
+  long long slide_start_ = -1;
+  int slide_dir_ = 1;
+  long long chooser_travel_ = 0;  // where the knob's last turn went (ring steps, + clockwise)
+  void shown(const std::string &what, const draw::Frame &f, long long ms);
+  void launch(Flight f);
+  void land(long long ended);
+
   bool wants_install() const;
   void maybe_install(long long ms, bool busy);
   void install();
@@ -251,10 +306,13 @@ class Board {
   void wait(long long ms_total);
   void apply(const Value &p, long long started, long long ms);
   bool draw_frame(long long ms, long long now);
+  // Each job either skips (nothing to fetch) or launches a Flight.
   sched::Result do_version(double ms);
   sched::Result do_update(double ms);
   sched::Result do_logo(double ms);
   sched::Result do_radar(double ms);
+  sched::Result after_job(Flight &f, sched::Result r, long long ended);
+  void after_select(Flight &f, long long ended);
   void fetching();
   void led_update();
   void do_buttons(long long ms);

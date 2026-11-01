@@ -10,6 +10,7 @@
 
 #ifdef ARDUINO
 
+#include <atomic>
 #include <functional>
 #include <string>
 
@@ -206,6 +207,8 @@ class StatusLed : public app::Led {
   std::string state_;
 };
 
+// The loop's watchdog. feed() from any other task (the network worker,
+// through WifiNet::feed) does nothing: only the loop proves it isn't hung.
 class Watchdog : public app::Watchdog {
  public:
   explicit Watchdog(int seconds = 16);
@@ -213,6 +216,22 @@ class Watchdog : public app::Watchdog {
 
  private:
   bool on_ = false;
+  void *owner_ = nullptr;  // TaskHandle_t of the task that created it
+};
+
+// Runs the board's requests on core 0 (beside the WiFi stack) while the
+// loop keeps drawing on core 1 (app.h Worker). One request at a time.
+class NetWorker : public app::Worker {
+ public:
+  bool begin();  // starts the task; false: no worker, requests block the loop
+  void start(std::function<void()> work) override;
+  bool done() override { return done_.load(std::memory_order_acquire); }
+
+ private:
+  static void task(void *arg);
+  std::function<void()> work_;
+  void *go_ = nullptr;  // SemaphoreHandle_t
+  std::atomic<bool> done_{true};
 };
 
 std::string start_reason();  // POWER_ON, RESET_PIN, SOFTWARE, PANIC, WATCHDOG, BROWNOUT, ...

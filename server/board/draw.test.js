@@ -1312,11 +1312,42 @@ test('clock rolls: a changed clock rolls from the frame it changes, then settles
   const done = frame(1000 + draw.ROLL_MS + 1, t + 1);
   assert.notDeepEqual(mid.px, done.px);
   assert.deepEqual(done.px, draw.render(p, { screen: 'transit', now: t + 1 }).px);
-  // Temperatures and the overnight clock don't roll.
+  // The weather strip's temperature rolls when it changes (S3), and the
+  // big overnight clock is a rolling clock too.
   frame(5000, t + 5, { ...p, wx: { ...p.wx, temp: 64 } });
-  assert.equal(r.busy(5100), false);
+  assert.equal(r.busy(5100), true);
+  assert.equal(r.busy(5000 + draw.ROLL_MS + 1), false);
   frame(6000, t + 6, { ...p, rows: [] });
-  assert.equal(r.clock(), false);
+  assert.equal(r.clock(), true);
+});
+
+const FIVE_DAYS = [['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']].map(([d, hi, icon]) => ({ d, hi, icon }));
+
+test('number rolls: the big clocks and the weather screen numbers roll mid-change, then settle', () => {
+  const t = 1791140000 - (1791140000 % 60) + 59;
+  const wx = { icon: 'sun', temp: 63, word: 'SUNNY', feels: 61, wind: 'NW 12', hi: 69, lo: 51, pop: 20 };
+  const cases = [
+    ['overnight clock', { now: t, tzo: -18000, screen: 'transit', bright: 100, header: null, rows: [], wx: null }, 'transit', (pl) => pl, (n) => n + 1],
+    ['no games clock', { now: t, tzo: -18000, screen: 'baseball', bright: 100, mlb: { games: [] } }, 'baseball', (pl) => pl, (n) => n + 1],
+    ['weather numbers', { now: t, tzo: -18000, screen: 'weather', bright: 100, warn: null, radar: { on: false, frames: [], wx } }, 'weather',
+      (pl) => ({ ...pl, radar: { ...pl.radar, wx: { ...wx, temp: 64, feels: 62, hi: 70, pop: 30 } } }), (n) => n],
+    ['top bar temperature', { now: t, tzo: -18000, screen: 'weather', bright: 100, warn: null, radar: { on: false, frames: [], wx: { ...wx, days: FIVE_DAYS } } }, 'weather',
+      (pl) => ({ ...pl, radar: { ...pl.radar, wx: { ...pl.radar.wx, temp: 64 } } }), (n) => n],
+  ];
+  for (const [name, p, screen, change, later] of cases) {
+    const r = draw.createNumRoller();
+    const frame = (ms, now, pl) => { r.begin(ms); const f = draw.render(pl, { screen, now, roller: r }); r.end(); return f; };
+    frame(0, t, p);
+    const q = change(p), n2 = later(t);
+    const first = frame(1000, n2, q);
+    assert.deepEqual(first.px, draw.render(p, { screen, now: t }).px, `${name}: starts on the old frame`);
+    assert.equal(r.busy(1000), true, name);
+    const mid = frame(1000 + draw.ROLL_MS / 2, n2, q);
+    const done = frame(1000 + draw.ROLL_MS + 1, n2, q);
+    assert.notDeepEqual(mid.px, done.px, `${name}: mid-roll`);
+    assert.notDeepEqual(mid.px, first.px, `${name}: mid-roll`);
+    assert.deepEqual(done.px, draw.render(q, { screen, now: n2 }).px, `${name}: settles`);
+  }
 });
 
 test('number rolls: texts new to the screen just appear; reset drops rolls', () => {

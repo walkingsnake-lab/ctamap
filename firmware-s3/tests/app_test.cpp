@@ -28,6 +28,7 @@ using json::Value;
 
 static const long long T0 = 1791140000;  // epoch seconds at the start of each simulation
 static const long long LATENCY = 1500;   // ms per request
+static const long long UPDATE_GAP_MAX = 30000 + 2 * LATENCY + 1000;  // with the worker: the interval, plus a request waiting for the one out
 
 // ---- a tiny test runner ----
 
@@ -97,6 +98,9 @@ struct Server : app::Net {
   std::string fw;                                 // version check's `fw` offer (JSON object), "" for none
   int fw_fail = 0;                                // fail the next firmware downloads halfway
 
+  bool deferred = false;  // on the SimWorker: requests take time without moving the loop's clock
+  long long owed = 0;     // simulated time the deferred requests took
+
   explicit Server(SimClock *c) : clock(c) {}
 
   double now() const { return T0 + clock->t / 1000.0; }
@@ -113,7 +117,8 @@ struct Server : app::Net {
       if (rec.phase < 0) rec.phase += 2000;
     }
     calls.push_back(rec);
-    clock->t += latency();
+    if (deferred) owed += latency();
+    else clock->t += latency();
     if (fail_next) {
       fail_next--;
       err = "OSError";
@@ -288,6 +293,37 @@ struct SimLight : app::Light {
   }
 };
 
+// The S3's network worker: the request "runs" when it starts (on this
+// thread) but takes its latency in simulated time while the loop keeps
+// stepping; done() turns true once that time has passed.
+struct SimWorker : app::Worker {
+  Server *server;
+  SimClock *clock;
+  long long ready = -1;
+  bool hang = false;  // never finishes
+  int started = 0;
+  SimWorker(Server *s, SimClock *c) : server(s), clock(c) {}
+  void start(std::function<void()> work) override {
+    started++;
+    server->deferred = true;
+    server->owed = 0;
+    work();
+    server->deferred = false;
+    ready = clock->t + server->owed;
+  }
+  bool done() override { return !hang && clock->t >= ready; }
+};
+
+struct SimWatchdog : app::Watchdog {
+  SimClock *clock;
+  long long last = 0;
+  explicit SimWatchdog(SimClock *c) : clock(c) {}
+  void feed() override { last = clock->t; }
+};
+
+// Every Rig gets the worker while this is set (main runs a second pass).
+static bool g_async = false;
+
 struct SimButtons : app::Buttons {
   bool held_up = false, held_down = false;
   bool up() override { return held_up; }
@@ -384,6 +420,7 @@ struct Rig {
   SimLed led{&clock};
   std::vector<std::string> statuses;
   std::vector<std::string> led_during;  // LED state while each request blocks
+  SimWorker worker{&server, &clock};
   std::unique_ptr<app::Board> board;
 
   explicit Rig(std::vector<std::string> wifi = {"ok"}, bool buttons = false, bool with_led = false,
@@ -393,6 +430,7 @@ struct Rig {
     board.reset(new app::Board(&server, &display, &clock, {{"home", "pw"}, {"phone", "pw"}}, buttons ? &btn : nullptr,
                                nullptr, nullptr, started, crash, with_led ? &led : nullptr, with_knob ? &knob : nullptr));
     server.board = board.get();
+    if (g_async) board->worker = &worker;
     board->on_status = [this](const std::string &k) { statuses.push_back(k); };
   }
 
@@ -680,6 +718,7 @@ static void test_a_held_train_stays_due_until_the_server_drops_it() {
 }
 
 static void test_fetches_land_in_gaps_and_data_stays_fresh() {
+  if (g_async) return;  // gaps only matter while requests block the loop (see test_worker_*)
   Rig r;
   r.board->connect();
   CHECK(r.server.calls[0].name == "update-boot", "%s", r.server.calls[0].name.c_str());
@@ -956,6 +995,7 @@ static void test_line_alerts_dont_blink() {
 }
 
 static void test_fetches_start_as_the_alert_blink_turns_on() {
+  if (g_async) return;  // with the worker a request doesn't freeze the blink
   Rig r;
   r.server.tornado = 1;
   r.board->connect();
@@ -974,6 +1014,7 @@ static void test_fetches_start_as_the_alert_blink_turns_on() {
 }
 
 static void test_blink_restarts_off_after_a_fetch() {
+  if (g_async) return;  // with the worker a request doesn't freeze the blink
   Rig r;
   r.server.tornado = 1;
   r.board->connect();
@@ -1144,7 +1185,7 @@ static void test_led_dim_red_after_a_failure_until_a_request_succeeds() {
   for (size_t i = n; i < r.led.log.size(); i++)
     if (r.led.log[i] != "fetch") names.push_back(r.led.log[i]);
   CHECK(names.size() >= 2 && names[0] == "failing" && names[1] == "off", "");
-  CHECK(r.led.state == "off", "");
+  CHECK(r.led.state == (r.board->in_flight() ? "fetch" : "off"), "%s", r.led.state.c_str());
 }
 
 static void test_led_red_while_reconnecting_after_repeated_failures() {
@@ -1331,7 +1372,7 @@ static void test_knob_twist_and_rest_selects_once() {
   r->run_for(600);
   CHECK(r->board->chooser.open, "still turning");
   CHECK(r->server.selects.empty(), "no commit before the rest");
-  r->run_for(1500);
+  r->run_for(1500 + (g_async ? LATENCY : 0));
   CHECK(!r->board->chooser.open, "closed after committing");
   CHECK(r->server.selects == std::vector<std::string>({"sports"}), "%zu", r->server.selects.size());
   CHECK(r->board->player.screen == "baseball", "%s", r->board->player.screen.c_str());
@@ -1373,12 +1414,12 @@ static void test_knob_select_failure_keeps_the_screen() {
   std::unique_ptr<Rig> r(knob_rig());
   r->server.fail_next = 1;
   r->knob.pending = 1;
-  r->run_for(2000);
+  r->run_for(2000 + (g_async ? LATENCY : 0));
   CHECK(!r->board->chooser.open, "");
   CHECK(r->board->player.screen == "transit", "%s", r->board->player.screen.c_str());
   CHECK(r->board->last_error == "select:OSError", "%s", r->board->last_error.c_str());
   r->knob.pending = 1;  // works again next time
-  r->run_for(2000);
+  r->run_for(2000 + (g_async ? LATENCY : 0));
   CHECK(r->board->player.screen == "weather", "%s", r->board->player.screen.c_str());
 }
 
@@ -1390,6 +1431,146 @@ static void test_knob_waits_for_the_ring() {
   r.knob.pending = 1;
   r.run_for(2000);
   CHECK(!r.board->chooser.open && r.server.count("select:") == 0, "");
+}
+
+static void test_screen_change_slides() {
+  Rig r;
+  r.board->connect();
+  r.run_for(15000);
+  draw::Frame before = r.display.last;
+  r.server.v = 2;
+  r.server.screen = "ticker";
+  while (r.board->player.screen != "ticker") {
+    r.board->step();
+    r.clock.sleep_ms(5);
+  }
+  // The switch's frame (drawn in the same step) starts the slide on the old
+  // screen; the ticker comes after transit, so from the right.
+  long long t0 = r.clock.t;
+  CHECK(r.board->sliding(t0), "");
+  CHECK(r.board->slide_dir() == 1, "%d", r.board->slide_dir());
+  long frames = r.display.frames;
+  r.run_for(200);
+  draw::Frame mid = r.display.last;
+  r.run_for(300);
+  CHECK(!r.board->sliding(r.clock.t), "");
+  CHECK(r.display.frames - frames >= 8, "%ld frames in the slide", r.display.frames - frames);
+  draw::Frame after = r.display.last;
+  int vs_before = 0, vs_after = 0;
+  for (size_t i = 0; i < sizeof mid.px; i++) {
+    if (mid.px[i] != before.px[i]) vs_before++;
+    if (mid.px[i] != after.px[i]) vs_after++;
+  }
+  CHECK(vs_before > 0 && vs_after > 0, "mid-slide shows both: %d / %d", vs_before, vs_after);
+  // Back to transit: an earlier screen, from the left.
+  r.server.v = 3;
+  r.server.screen = "transit";
+  while (r.board->player.screen != "transit") {
+    r.board->step();
+    r.clock.sleep_ms(5);
+  }
+  CHECK(r.board->sliding(r.clock.t) && r.board->slide_dir() == -1, "%d", r.board->slide_dir());
+}
+
+static void test_knob_choice_slides_the_way_the_knob_turned() {
+  std::unique_ptr<Rig> r(knob_rig());
+  r->knob.pending = 1;  // clockwise to WEATHER
+  r->run_for(1100);
+  while (r->board->chooser.open) {
+    r->board->step();
+    r->clock.sleep_ms(5);
+  }
+  CHECK(r->board->player.screen == "weather", "%s", r->board->player.screen.c_str());
+  CHECK(r->board->sliding(r->clock.t) && r->board->slide_dir() == 1, "%d", r->board->slide_dir());
+  r->run_for(2000);
+  r->knob.pending = -1;  // back to TRANSIT
+  r->run_for(1100);
+  while (r->board->chooser.open) {
+    r->board->step();
+    r->clock.sleep_ms(5);
+  }
+  CHECK(r->board->player.screen == "transit", "%s", r->board->player.screen.c_str());
+  CHECK(r->board->sliding(r->clock.t) && r->board->slide_dir() == -1, "%d", r->board->slide_dir());
+}
+
+// ---- the network worker (S3): requests off the draw loop ----
+
+static void test_worker_animations_never_wait_for_a_request() {
+  if (!g_async) return;
+  Rig r;
+  r.server.screen = "ticker";  // a slide every few seconds
+  r.server.tornado = 1;        // and a blink
+  r.board->connect();
+  long long last = r.clock.t, worst = 0;
+  long frames = r.display.frames;
+  int during = 0;
+  for (int i = 0; i < 10 * 60 * 1000 / 5; i++) {
+    r.board->step();
+    if (r.display.frames != frames) {
+      frames = r.display.frames;
+      last = r.clock.t;
+      if (r.board->in_flight()) during++;
+    } else if (r.board->player.busy((double)r.clock.t)) {
+      worst = std::max(worst, r.clock.t - last);
+    }
+    r.clock.sleep_ms(5);
+  }
+  CHECK(worst <= 60, "%lld ms without a frame mid-animation", worst);
+  CHECK(during > 100, "%d frames drawn while a request was out", during);
+  CHECK(r.board->stats.forced == 0, "%ld", r.board->stats.forced);
+}
+
+static void test_worker_keeps_data_fresh_one_request_at_a_time() {
+  if (!g_async) return;
+  Rig r;
+  r.board->connect();
+  r.run_for(10 * 60 * 1000);
+  std::vector<long long> t;
+  for (const Call &c : r.server.calls) t.push_back(c.ms);
+  long long closest = 1LL << 40;
+  for (size_t i = 1; i < t.size(); i++) closest = std::min(closest, t[i] - t[i - 1]);
+  CHECK(closest >= LATENCY, "two requests %lld ms apart", closest);
+  CHECK(max_gap(r.server.times("update")) <= UPDATE_GAP_MAX, "%lld", max_gap(r.server.times("update")));
+  CHECK(max_gap(r.server.times("version")) <= 13000, "%lld", max_gap(r.server.times("version")));
+}
+
+static void test_worker_a_hung_request_lets_the_watchdog_restart_the_board() {
+  if (!g_async) return;
+  Rig r;
+  SimWatchdog wd(&r.clock);
+  r.board->watchdog = &wd;
+  r.board->connect();
+  r.run_for(5000);
+  r.server.latency = [] { return 0LL; };
+  r.worker.hang = true;
+  while (!r.board->in_flight()) {
+    r.board->step();
+    r.clock.sleep_ms(5);
+  }
+  long long hung_at = r.clock.t;
+  r.run_for(30000);
+  CHECK(wd.last >= r.clock.t - 50, "still fed while the request is young");
+  r.run_for(30000);
+  CHECK(wd.last >= hung_at + app::WORK_STUCK_MS - 100 && wd.last < hung_at + app::WORK_STUCK_MS + 100,
+        "last fed %lld ms after the hang", wd.last - hung_at);
+  CHECK(r.display.frames > 0, "");
+}
+
+static void test_worker_knob_commit_waits_for_the_request_out() {
+  if (!g_async) return;
+  std::unique_ptr<Rig> r(knob_rig());
+  r->server.latency = [] { return 4000LL; };  // a slow request
+  // Start a request, then turn: the choice goes out after it lands.
+  r->board->update_job.due_at = 0;
+  while (!r->board->in_flight()) {
+    r->board->step();
+    r->clock.sleep_ms(5);
+  }
+  r->knob.pending = 1;
+  r->run_for(10000);
+  CHECK(r->server.selects == std::vector<std::string>({"weather"}), "%zu", r->server.selects.size());
+  CHECK(r->board->player.screen == "weather", "%s", r->board->player.screen.c_str());
+  CHECK(!r->board->chooser.open, "");
 }
 
 int main() {
@@ -1455,16 +1636,26 @@ int main() {
       T_(test_ota_trial_build_that_cant_reach_the_server_rolls_back),
       T_(test_ota_rolled_back_offer_waits_for_try_again),
       T_(test_ota_boot_counts_trial_starts),
+      T_(test_screen_change_slides),
+      T_(test_knob_choice_slides_the_way_the_knob_turned),
+      T_(test_worker_animations_never_wait_for_a_request),
+      T_(test_worker_keeps_data_fresh_one_request_at_a_time),
+      T_(test_worker_a_hung_request_lets_the_watchdog_restart_the_board),
+      T_(test_worker_knob_commit_waits_for_the_request_out),
 #undef T_
   };
-  int n = 0;
-  for (const T &t : tests) {
-    g_test = t.name;
-    int before = g_failed;
-    t.fn();
-    if (g_failed == before) n++;
-    else printf("  in %s\n", t.name);
+  int n = 0, total = 0;
+  for (int pass = 0; pass < 2; pass++) {
+    g_async = pass == 1;
+    for (const T &t : tests) {
+      g_test = std::string(t.name) + (g_async ? " [worker]" : "");
+      int before = g_failed;
+      total++;
+      t.fn();
+      if (g_failed == before) n++;
+      else printf("  in %s\n", g_test.c_str());
+    }
   }
-  printf("%d of %zu tests passed (%d checks, %d failed)\n", n, sizeof tests / sizeof tests[0], g_checks, g_failed);
+  printf("%d of %d tests passed (%d checks, %d failed)\n", n, total, g_checks, g_failed);
   return g_failed ? 1 : 0;
 }

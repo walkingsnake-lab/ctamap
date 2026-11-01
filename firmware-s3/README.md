@@ -250,7 +250,7 @@ then on.
 | Color | Means |
 |---|---|
 | off | Running normally |
-| blue | A request is in progress (animations pause until it returns) |
+| blue | A request is in progress (on the network task: animations keep running) |
 | yellow | Joining WiFi |
 | amber | Captive portal |
 | red | No WiFi, or the server isn't answering |
@@ -271,7 +271,7 @@ then on.
 | `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |
 | `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |
-| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C, turns and its push button), NeoPixel, watchdog, settings and OTA state in NVS, OTA slot writes, the WiFi setup network (`SetupPortal`). The only code that includes Arduino headers. |
+| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS (requests on a core-0 task, `NetWorker`), buttons, the knob (seesaw over I2C, turns and its push button), NeoPixel, watchdog, settings and OTA state in NVS, OTA slot writes, the WiFi setup network (`SetupPortal`). The only code that includes Arduino headers. |
 | `ctaboard/src/assets.h` | Fonts, icons, glyphs. **Generated** by `node scripts/build-firmware-assets.js`. |
 | `ctaboard/src/signing_key.h` | The public key OTA builds must be signed with. **Generated** by `node scripts/firmware-key.js`; empty until the key exists (then no OTA build installs). |
 | `ctaboard/src/certs.h` | Root certificates for HTTPS. **Generated** by `node scripts/build-firmware-certs.js`. |

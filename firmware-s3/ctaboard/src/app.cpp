@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+#include <string.h>
+
 #include <algorithm>
 
 namespace app {
@@ -56,7 +58,11 @@ void Board::status(const std::string &kind, const std::string &detail) {
   if (on_status) on_status(kind);
   led_base = led_for_status(kind);
   if (led) led->set(led_base);
-  display->show([&](draw::Frame &f) { draw::render_status(f, kind, detail); });
+  long long ms = clock->ms();
+  display->show([&](draw::Frame &f) {
+    draw::render_status(f, kind, detail);
+    shown("status", f, ms);
+  });
 }
 
 void Board::connect(bool boot) {
@@ -145,9 +151,35 @@ void Board::apply(const Value &p, long long st, long long ms) {
   update_job.interval_ms = (double)(player.live_game() ? LIVE_EVERY : UPDATE_EVERY);
 }
 
+// Screens in the order they slide: a later one comes in from the right,
+// an earlier one from the left (the knob ring's order).
+static int screen_order(const std::string &s) {
+  static const char *const ORDER[] = {"transit", "ticker", "weather", "baseball", "clock"};
+  for (int i = 0; i < 5; i++)
+    if (s == ORDER[i]) return i;
+  return -1;
+}
+
+void Board::shown(const std::string &what, const draw::Frame &f, long long ms) {
+  // A different screen than the last frame's: slide it in over that frame
+  // (spec §2, "Screen change"). The first frame ever, status screens, and
+  // the knob's chooser (a turn should answer at once) just appear; leaving
+  // them slides. Leaving the chooser follows the knob's turn.
+  if (what != shown_ && !shown_.empty() && what != "status" && what != "chooser") {
+    memcpy(slide_px_, last_px_, sizeof slide_px_);
+    slide_start_ = ms;
+    if (shown_ == "chooser") slide_dir_ = chooser_travel_ < 0 ? -1 : 1;
+    else slide_dir_ = screen_order(what) < screen_order(shown_) ? -1 : 1;
+  }
+  shown_ = what;
+  memcpy(last_px_, f.px, sizeof last_px_);
+}
+
 bool Board::draw_frame(long long ms, long long n) {
-  if (chooser.open) {
-    display->show([&](draw::Frame &f) {
+  std::string what = chooser.open ? "chooser" : player.screen;
+  if (chooser.open) chooser_travel_ = chooser.target - chooser.start;
+  display->show([&](draw::Frame &f) {
+    if (chooser.open) {
       draw::RenderOpts o;
       o.screen = "chooser";
       o.chooser_pos = chooser.pos((double)ms);
@@ -155,10 +187,14 @@ bool Board::draw_frame(long long ms, long long n) {
       o.apply_bright = !player.hw_bright;
       o.bright = player.bright;
       draw::render(player.p, f, o);
-    });
-    return true;
-  }
-  display->show([&](draw::Frame &f) { player.draw(f, (double)ms, n); });
+    } else {
+      player.draw(f, (double)ms, n);
+    }
+    // shown() keeps this frame's own pixels for the next change (and starts
+    // a slide, which begins on the old frame: t = 0); then the slide.
+    shown(what, f, ms);
+    if (sliding(ms)) draw::slide_frames(slide_px_, f, draw::slide_offset((double)(ms - slide_start_)), slide_dir_);
+  });
   return true;
 }
 
@@ -194,37 +230,51 @@ std::string Board::health_query(long long ms) {
   return health_q_;
 }
 
+// Jobs run in two halves. The first (here, on the loop) decides what to ask
+// for and launches a Flight; its work() makes the request (on the worker, or
+// inline without one) and touches only the Flight; finish() applies the
+// answer back on the loop.
+
 sched::Result Board::do_version(double ms) {
-  fetching();
-  Value r;
-  if (!net->version(health_query((long long)ms), r, job_err_)) return sched::FAIL;
-  sync(r["now"].num(), (long long)ms, clock->ms());
-  // An OTA offer (contract: /board/version `fw`); absent when there's nothing to install.
-  const Value &fw = r["fw"];
-  if (fw.is_obj() && fw["v"].is_str() && fw["size"].num() > 0 && fw["sha"].is_str()) {
-    FirmwareOffer o;
-    o.v = fw["v"].s;
-    o.size = (long long)fw["size"].num();
-    o.sha = fw["sha"].s;
-    o.retry = (long)fw["n"].num(0);
-    o.sig = fw["sig"].str_or("");
-    offer = o;
-  } else {
-    offer.reset();
-  }
-  if (!player.has_p || json::str(r["v"]) != json::str(player.p["v"])) update_job.due_at = 0;  // settings changed: fetch now
-  return sched::OK;
+  Flight f;
+  std::string h = health_query((long long)ms);
+  f.work = [this, h] { return net->version(h, flight_->v, flight_->err); };
+  f.finish = [this](long long ended) {
+    const Value &r = flight_->v;
+    sync(r["now"].num(), flight_->started, ended);
+    // An OTA offer (contract: /board/version `fw`); absent when there's nothing to install.
+    const Value &fw = r["fw"];
+    if (fw.is_obj() && fw["v"].is_str() && fw["size"].num() > 0 && fw["sha"].is_str()) {
+      FirmwareOffer o;
+      o.v = fw["v"].s;
+      o.size = (long long)fw["size"].num();
+      o.sha = fw["sha"].s;
+      o.retry = (long)fw["n"].num(0);
+      o.sig = fw["sig"].str_or("");
+      offer = o;
+    } else {
+      offer.reset();
+    }
+    if (!player.has_p || json::str(r["v"]) != json::str(player.p["v"])) update_job.due_at = 0;  // settings changed: fetch now
+    return sched::OK;
+  };
+  launch(std::move(f));
+  return sched::STARTED;
 }
 
-sched::Result Board::do_update(double ms) {
+sched::Result Board::do_update(double) {
   // The server sends only the shown screen's sections; while a button press
   // overrides the screen, ask for that one.
-  fetching();
-  Value p;
-  if (!net->update(false, override_.screen ? *override_.screen : "", p, job_err_)) return sched::FAIL;
-  apply(p, (long long)ms, clock->ms());
-  reached_server = true;
-  return sched::OK;
+  Flight f;
+  std::string scr = override_.screen ? *override_.screen : "";
+  f.work = [this, scr] { return net->update(false, scr, flight_->v, flight_->err); };
+  f.finish = [this](long long ended) {
+    apply(flight_->v, flight_->started, ended);
+    reached_server = true;
+    return sched::OK;
+  };
+  launch(std::move(f));
+  return sched::STARTED;
 }
 
 sched::Result Board::do_logo(double ms) {
@@ -232,11 +282,16 @@ sched::Result Board::do_logo(double ms) {
   // game on screen and the next one.
   std::vector<std::string> missing = player.missing_logos(now((long long)ms));
   if (missing.empty() || !player.has_logo_slot()) return sched::SKIP;
-  fetching();
-  std::vector<uint8_t> buf;
-  if (!net->logo(missing[0], buf, job_err_)) return sched::FAIL;
-  player.add_logo(missing[0], std::move(buf));
-  return missing.size() > 1 ? sched::MORE : sched::OK;
+  Flight f;
+  f.id = missing[0];
+  f.left = (int)missing.size() - 1;
+  f.work = [this] { return net->logo(flight_->id, flight_->bytes, flight_->err); };
+  f.finish = [this](long long) {
+    player.add_logo(flight_->id, std::move(flight_->bytes));
+    return flight_->left > 0 ? sched::MORE : sched::OK;
+  };
+  launch(std::move(f));
+  return sched::STARTED;
 }
 
 sched::Result Board::do_radar(double) {
@@ -244,11 +299,88 @@ sched::Result Board::do_radar(double) {
   if (!player.wants_frames()) return sched::SKIP;
   std::vector<std::string> missing = player.missing_frames();
   if (missing.empty() || !player.has_slot()) return sched::SKIP;
+  Flight f;
+  f.id = missing[0];
+  f.left = (int)missing.size() - 1;
+  f.work = [this] { return net->radar(flight_->id, flight_->bytes, flight_->err); };
+  f.finish = [this](long long ended) {
+    // The payload may have moved on while the frame was on its way.
+    if (player.wants_frames()) {
+      std::vector<std::string> still = player.missing_frames();
+      if (std::find(still.begin(), still.end(), flight_->id) != still.end() && player.has_slot())
+        player.add_frame(flight_->id, std::move(flight_->bytes), (double)ended);
+    }
+    return flight_->left > 0 ? sched::MORE : sched::OK;
+  };
+  launch(std::move(f));
+  return sched::STARTED;
+}
+
+void Board::launch(Flight f) {
+  f.job = pending_job_;  // null: the knob's select
+  f.started = pending_job_ ? pending_start_ : clock->ms();
+  f.forced = pending_job_ && pending_forced_;
+  flight_ = std::move(f);
   fetching();
-  std::vector<uint8_t> buf;
-  if (!net->radar(missing[0], buf, job_err_)) return sched::FAIL;
-  player.add_frame(missing[0], std::move(buf), (double)clock->ms());
-  return missing.size() > 1 ? sched::MORE : sched::OK;
+  if (worker) {
+    worker->start([this] { flight_->ok = flight_->work(); });
+    return;
+  }
+  // No worker: the request blocks the loop here, as on the M4.
+  flight_->ok = flight_->work();
+  land(clock->ms());
+}
+
+void Board::land(long long ended) {
+  // The request is back: finish it on the loop. flight_ stays set while
+  // finish() reads it.
+  Flight &f = *flight_;
+  if (f.job) {
+    sched::Result r = f.ok ? f.finish(ended) : sched::FAIL;
+    if (r == sched::FAIL) job_err_ = f.err;
+    after_job(f, r, ended);
+    flight_.reset();
+    if (fails >= FAILS_BEFORE_RECONNECT) {
+      say("[board] " + std::to_string(fails) + " failures in a row; reconnecting");
+      online = false;
+      fails = 0;
+      stats.reconnects++;
+      connect(false);
+    }
+  } else {
+    after_select(f, ended);
+    flight_.reset();
+  }
+  led_update();
+}
+
+sched::Result Board::after_job(Flight &f, sched::Result result, long long ended) {
+  sched::Job *job = f.job;
+  long long st = f.started;
+  if (result == sched::OK || result == sched::MORE) {
+    fails = 0;
+    led_base = "ok";
+  } else {
+    std::string reason = job_err_.empty() ? "Error" : job_err_;
+    say("[board] " + job->name + " failed: " + reason);
+    stats.fails++;
+    last_error = job->name + ":" + reason;
+    fails++;
+    led_base = "failing";
+  }
+  // Blocking only: a long pause froze the blink; restart it off so the
+  // pause reads as one long "on".
+  if (!worker && player.blinking() && ended - st > 300) player.blink_restart((double)ended);
+  stats.fetches++;
+  if (f.forced) stats.forced++;
+  sched.ran(job, (double)st, (double)ended, result != sched::FAIL);
+  if (result == sched::MORE) {
+    // More of a set to fetch (radar frames, logos). While that screen is
+    // showing, go again right away; while prefetching, take the next gap.
+    bool showing = player.screen == (job == &radar_job ? "weather" : "baseball");
+    job->due_at = showing ? (double)ended - job->deadline_ms : (double)ended;
+  }
+  return result;
 }
 
 // ---- loop ----
@@ -257,10 +389,22 @@ void Board::step() {
   // Buttons, at most one network job, and a redraw when something on screen
   // can have changed.
   long long ms = clock->ms();
-  if (watchdog) watchdog->feed();
+  // A request that never comes back (a hung TLS read on the worker) would
+  // leave the board showing old data forever: stop feeding the watchdog,
+  // and it restarts the board.
+  bool stuck = flight_ && ms - flight_->started >= WORK_STUCK_MS;
+  if (watchdog && !stuck) watchdog->feed();
+  if (stuck && !stuck_said_) {
+    stuck_said_ = true;
+    say("[board] a request has run " + std::to_string((ms - flight_->started) / 1000) + " s; letting the watchdog restart");
+  }
+  if (flight_ && worker && worker->done()) {
+    land(clock->ms());
+    ms = clock->ms();
+  }
   do_buttons(ms);
   do_knob(ms);
-  if (chooser.rested((double)ms)) {
+  if (chooser.rested((double)ms) && !flight_) {
     commit_choice(ms);
     ms = clock->ms();
   }
@@ -276,58 +420,38 @@ void Board::step() {
     // fetch now rather than drop it on stale data.
     sched.due_now(&update_job, (double)ms);
   }
-  // While the chooser is open only overdue requests run: a request freezes
-  // the panel, and the turn should feel immediate.
-  bool busy = player.busy((double)ms) || chooser.open;
-  double quiet = chooser.open ? 0.0 : std::max(0.0, player.quiet_ms((double)ms, n) - (double)draw::fmod_floor(now_ms(ms), 1000));
-  sched::Job *job = sched.pick((double)ms, busy, quiet);
-  if (job && !job->overdue((double)ms) && !player.at_blink_start((double)ms)) job = nullptr;  // wait for the blink to turn on
-  if (job) {
-    if (player.blinking()) {
-      // Show the lit frame now; the pause will hold it.
-      draw_frame(ms, n);
-      last_draw_ = ms;
-    }
-    long long st = clock->ms();
-    job_err_.clear();
-    sched::Result result = job->run((double)st);
-    if (result == sched::OK || result == sched::MORE) {
-      fails = 0;  // a skipped job proves nothing about the network
-      led_base = "ok";
-    } else if (result == sched::FAIL) {
-      std::string reason = job_err_.empty() ? "Error" : job_err_;
-      say("[board] " + job->name + " failed: " + reason);
-      stats.fails++;
-      last_error = job->name + ":" + reason;
-      fails++;
-      led_base = "failing";
-    }
-    long long ended = clock->ms();
-    if (player.blinking() && ended - st > 300) player.blink_restart((double)ended);
-    if (result == sched::SKIP) {
-      job->due_at = (double)ended + job->interval_ms;
-    } else {
-      stats.fetches++;
-      if (job->overdue((double)st) && (busy || quiet < sched.budget_ms)) stats.forced++;
-      sched.ran(job, (double)st, (double)ended, result != sched::FAIL);
-      if (result == sched::MORE) {
-        // More of a set to fetch (radar frames, logos). While that screen is
-        // showing, go again right away; while prefetching, take the next gap.
-        bool showing = player.screen == (job == &radar_job ? "weather" : "baseball");
-        job->due_at = showing ? (double)ended - job->deadline_ms : (double)ended;
+  bool anim = player.busy((double)ms) || sliding(ms);
+  if (!flight_) {
+    // While the chooser is open only overdue requests run, so the commit
+    // goes out the moment the knob rests. Without a worker a request also
+    // freezes the panel, so it waits for an animation gap.
+    bool busy = worker ? chooser.open : anim || chooser.open;
+    double quiet = chooser.open ? 0.0
+                   : worker     ? 1e18
+                                : std::max(0.0, player.quiet_ms((double)ms, n) - (double)draw::fmod_floor(now_ms(ms), 1000));
+    sched::Job *job = sched.pick((double)ms, busy, quiet);
+    if (!worker && job && !job->overdue((double)ms) && !player.at_blink_start((double)ms)) job = nullptr;  // wait for the blink to turn on
+    if (job) {
+      if (!worker && player.blinking()) {
+        // Show the lit frame now; the pause will hold it.
+        draw_frame(ms, n);
+        last_draw_ = ms;
       }
+      long long st = clock->ms();
+      job_err_.clear();
+      bool forced = job->overdue((double)st) && (busy || quiet < sched.budget_ms);
+      // A job either skips or launches a Flight; launch() reads these.
+      pending_job_ = job;
+      pending_start_ = st;
+      pending_forced_ = forced;
+      sched::Result result = job->run((double)st);
+      pending_job_ = nullptr;
+      if (result == sched::SKIP) job->due_at = (double)clock->ms() + job->interval_ms;
+      ms = clock->ms();
     }
-    if (fails >= FAILS_BEFORE_RECONNECT) {
-      say("[board] " + std::to_string(fails) + " failures in a row; reconnecting");
-      online = false;
-      fails = 0;
-      stats.reconnects++;
-      connect(false);
-    }
-    ms = clock->ms();
   }
   trial_check(ms);
-  maybe_install(ms, busy);
+  if (!flight_) maybe_install(ms, anim);
   ms = clock->ms();
   led_update();
   do_light(ms);
@@ -336,6 +460,7 @@ void Board::step() {
   // screen can have changed.
   n = now(ms);
   std::optional<std::string> key = chooser.open ? chooser.frame_key((double)ms) : player.frame_key((double)ms, n);
+  if (sliding(ms) || (!chooser.open && player.screen != shown_) || (chooser.open && shown_ != "chooser")) key.reset();
   if (last_draw_ < 0 || (!key ? ms - last_draw_ >= 33 : key != last_key_)) {
     if (draw_frame(ms, n)) {
       last_draw_ = ms;
@@ -481,12 +606,14 @@ std::string Board::ota_health() const {
 }
 
 void Board::fetching() {
-  // Blue while a request blocks the loop; step() sets the LED back after.
+  // Blue while a request is on its way; land() sets the LED back after.
   if (led) led->set("fetch");
 }
 
 void Board::led_update() {
-  if (led) led->set(led_base == "ok" ? "off" : led_base);
+  if (!led) return;
+  if (flight_) led->set("fetch");
+  else led->set(led_base == "ok" ? "off" : led_base);
 }
 
 void Board::do_buttons(long long ms) {
@@ -505,7 +632,9 @@ void Board::do_buttons(long long ms) {
 
 void Board::do_knob(long long ms) {
   // Clicks are read even before the first payload so they don't pile up.
-  if (!knob) return;
+  // While a choice is being sent they wait in the encoder, as they would
+  // behind a blocking request.
+  if (!knob || chooser.committing) return;
   int c = knob->clicks();
   if (!c || !player.has_p) return;
   const Value &k = player.p["knob"];
@@ -523,21 +652,22 @@ void Board::commit_choice(long long ms) {
     chooser.close();
     return;
   }
-  std::string cat = json::str(ring[chooser.selected()]);
   chooser.committing = true;
-  draw_frame(ms, now(ms));
+  if (!worker) draw_frame(ms, now(ms));  // the amber frame, before the request blocks
   if (watchdog) watchdog->feed();
-  fetching();
-  long long st = clock->ms();
-  Value p;
   job_err_.clear();
-  bool ok = net->select(cat, p, job_err_);
-  long long ended = clock->ms();
+  Flight f;
+  f.id = json::str(ring[chooser.selected()]);
+  f.work = [this] { return net->select(flight_->id, flight_->v, flight_->err); };
+  launch(std::move(f));
+}
+
+void Board::after_select(Flight &f, long long ended) {
   stats.fetches++;
   chooser.close();
-  if (ok) {
-    say("[board] knob: " + cat);
-    apply(p, st, ended);
+  if (f.ok) {
+    say("[board] knob: " + f.id);
+    apply(f.v, f.started, ended);
     reached_server = true;
     fails = 0;
     led_base = "ok";
@@ -545,14 +675,14 @@ void Board::commit_choice(long long ms) {
     radar_job.due_at = 0;
     logo_job.due_at = 0;
   } else {
-    std::string reason = job_err_.empty() ? "Error" : job_err_;
+    std::string reason = f.err.empty() ? "Error" : f.err;
     say("[board] select failed: " + reason);
     stats.fails++;
     last_error = "select:" + reason;
     fails++;
     led_base = "failing";
   }
-  led_update();
+  last_draw_ = -1;  // the new screen (or the old one back) right away
 }
 
 }  // namespace app

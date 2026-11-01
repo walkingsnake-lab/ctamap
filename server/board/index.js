@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir, knobOf } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf, ICON_SETTINGS } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -216,6 +216,9 @@ function createBoard({
     pageHold: (b.tickerHold || 8) * 1000, slide: b.tickerSlide || 1200,
     radarFrame: b.radarFrame || 500, radarHold: (b.radarHold || 4) * 1000, game: b.gameEvery || 60,
   });
+  // Weather layouts whose icons animate (contract: radar.iconAnim), in a
+  // fixed order. A setting not yet saved counts as animated (the default).
+  const iconAnimOf = (b) => Object.entries(ICON_SETTINGS).filter(([k]) => b[k] !== 'static').map(([, layout]) => layout);
   // Weather visits apply only on the auto screen, and only if turned on;
   // `always` visits even without rain (current conditions).
   const visitOf = (b) => (b.screen === 'auto' && (b.wxVisit === 'rain' || b.wxVisit === 'always') && b.radarEvery > 0
@@ -439,6 +442,8 @@ function createBoard({
         ...(board.radarCond === true ? { cond: true } : {}),
         // Precip brightness, percent (absent = 100).
         ...(board.radarBright != null && board.radarBright !== 100 ? { rb: board.radarBright } : {}),
+        // Weather layouts whose icons animate (S3; absent: all static).
+        ...(iconAnimOf(board).length ? { iconAnim: iconAnimOf(board) } : {}),
       },
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }

@@ -102,6 +102,7 @@ static device::Watchdog *watchdog;
 static device::StatusLed *led;
 static device::Ota *ota_slot;
 static device::SetupPortal *portal;
+static device::NetWorker *net_worker;
 static app::Board *board;
 static long long last_report = 0;
 static bool no_setup = false;
@@ -233,6 +234,10 @@ void setup() {
   board->ota = ota_slot;
   board->setup = portal;
   if (has_light) board->light = light_sensor;
+  // Requests on core 0, so animations never pause for the network.
+  net_worker = new device::NetWorker();
+  if (net_worker->begin()) board->worker = net_worker;
+  else Serial.println("[board] no network worker: requests pause the panel");
   board->fresh_wifi = device::nvs_get("fresh") == "1";
   board->mem_free = device::free_heap;
   board->largest_block = device::largest_block;
