@@ -1,6 +1,7 @@
 // Matrix Portal S3 hardware: the HUB75 panel (through the
 // ESP32-HUB75-MatrixPanel-DMA library), WiFi + HTTPS, the UP/DOWN buttons,
-// the knob (Adafruit 5880 rotary encoder on the STEMMA QT port), the status
+// the knob (Adafruit 5880 rotary encoder on the STEMMA QT port), the light
+// sensor (VEML7700, chained off the knob), the status
 // NeoPixel, the watchdog, settings in flash (NVS), and OTA installs. The C++ counterpart of
 // firmware/boardlib/device.py. Board-only: everything else builds natively
 // for tests, and the rest of the firmware takes this hardware through the
@@ -179,6 +180,19 @@ class Knob : public app::Knob {
   bool on_ = false;
   uint32_t polled_ = 0;
   bool read(uint8_t base, uint8_t reg, uint8_t *buf, size_t n);
+};
+
+// The light sensor (optional): an Adafruit VEML7700 (4162, or the
+// right-angle 5378) chained off the knob's second STEMMA QT socket. Auto
+// brightness follows it (light.h); without it, sunrise and sunset.
+class LightSensor : public app::Light {
+ public:
+  bool begin();
+  bool read(double &lux) override;
+
+ private:
+  bool on_ = false;
+  uint32_t ready_at_ = 0;  // millis: the first integration is done
 };
 
 class StatusLed : public app::Led {

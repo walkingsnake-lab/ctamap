@@ -289,7 +289,7 @@
     },
     {
       id: 'a7-sun-dial', group: 'R1', title: 'A7 24-hour sun dial',
-      note: 'One hand, 24 hours, noon at the top. The rim is lit dim yellow between sunrise and sunset (Open-Meteo), blue at night; the tip is a sun or moon. Digital time on the right since one hand is imprecise.',
+      note: 'One hand, 24 hours, noon at the top. The rim is lit dim yellow between sunrise and sunset (WeatherAPI), blue at night; the tip is a sun or moon. Digital time on the right since one hand is imprecise.',
       draw(f, t, wx) {
         const h24 = t.h + t.m / 60 + t.s / 3600;
         const toF = (h) => ((h / 24) + 0.5) % 1;

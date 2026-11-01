@@ -207,7 +207,7 @@ function transitRows(f, rows, tops) {
   const words = {
     sun: ['72°', 'SUNNY'], moon: ['58°', 'CLEAR'], pcloudy_day: ['66°', 'PT CLOUDY'],
     pcloudy_night: ['55°', 'PT CLOUDY'], cloudy: ['48°', 'CLOUDY'], rain: ['51°', 'RAIN'],
-    ice: ['31°', 'FRZ RAIN'], snow: ['24°', 'SNOW'], storm: ['79°', 'STORMS'], fog: ['44°', 'FOG'],
+    ice: ['31°', 'FRZ RAIN'], snow: ['24°', 'SNOW'], storm: ['79°', 'STORMS'], tsnow: ['30°', 'THNDRSNOW'], fog: ['44°', 'FOG'],
   };
   const rowsF = new Frame(64, names.length * 10);
   names.forEach((n, i) => drawWeatherRow(rowsF, n, words[n][0], words[n][1], 1 + i * 10, false));

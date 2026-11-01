@@ -62,6 +62,10 @@
   #boardPick { margin-bottom: 8px; }
   input#label { text-transform: none; }
   .danger { color: var(--err); border-color: #5a2a2a; }
+  /* Data credits and WeatherAPI's required disclaimer: always visible. */
+  .credits { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 14px 2px 0; }
+  .credits p { margin: 0 0 8px; }
+  .credits a { color: var(--muted); }
   /* A board's owner link (/board/c/<link>/): this board only, no admin controls. */
   body.owner .admin { display: none !important; }
   pre.keys { white-space: pre-wrap; word-break: break-all; font-size: 13px; background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; margin: 8px 0 0; user-select: all; }
@@ -153,6 +157,10 @@
       <button data-v="off">Off</button>
     </div>
     <input type="range" id="level" min="5" max="100" step="5" aria-label="Brightness level" hidden>
+    <div id="brightAuto" hidden>
+      <div class="row"><span class="nw" id="brightMaxL" style="min-width:6.2em">Day</span><input type="range" id="brightMax" min="5" max="100" step="5" aria-label="Brightest auto brightness" style="flex:1;margin:0"><span id="brightMaxV" class="nw"></span></div>
+      <div class="row"><span class="nw" id="brightMinL" style="min-width:6.2em">Night</span><input type="range" id="brightMin" min="5" max="100" step="5" aria-label="Darkest auto brightness" style="flex:1;margin:0"><span id="brightMinV" class="nw"></span></div>
+    </div>
     <p class="hint" id="brightHint"></p>
   </section>
 
@@ -165,6 +173,11 @@
       <button id="saveName">Save</button>
     </div>
   </section>
+
+  <footer class="credits" aria-label="Data sources">
+    <p>Weather by <a href="https://www.weatherapi.com/" target="_blank" rel="noopener">WeatherAPI.com</a>. Forecasts and alerts from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>. Radar: NOAA MRMS via the <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a>. Arrivals and alerts: data provided by CTA; not affiliated with or endorsed by the Chicago Transit Authority.</p>
+    <p>Weather information displayed here is provided for general informational purposes only. Forecasts and conditions are probabilistic and may not be accurate for your specific location or time. This data should not be used as the sole basis for decisions involving personal safety, aviation, marine navigation, emergency planning, or other safety-critical activities. Always consult official meteorological services and relevant authorities for decisions where accuracy is critical.</p>
+  </footer>
  </div>
 
  <div class="col col-side">
@@ -190,6 +203,10 @@
       <button data-v="hourly">Hourly</button>
     </div>
     <p class="hint" id="wxViewHint"></p>
+    <!-- Rain bars need 15-minute precipitation, which the weather source
+         (WeatherAPI) doesn't send; the server treats 'bars' and 'both' as
+         'radar' without it. Shown again once a source has it. -->
+    <div id="wxRainGroup" hidden>
     <div class="seg" id="wxRain">
       <button data-v="radar">Radar loop</button>
       <button data-v="bars">Rain bars</button>
@@ -200,6 +217,7 @@
       <select id="wxRainEvery" aria-label="Rain bars show for" style="width:auto"><option value="10">10 sec</option><option value="15">15 sec</option><option value="20">20 sec</option><option value="30">30 sec</option><option value="45">45 sec</option><option value="60">60 sec</option></select></div>
     <div class="row" id="wxRainLoopsRow"><span>Radar loops first</span>
       <select id="wxRainLoops" aria-label="Full radar loops before the bars" style="width:auto"><option value="1">1 loop</option><option value="2">2 loops</option><option value="3">3 loops</option><option value="5">5 loops</option></select></div>
+    </div>
     <div class="row"><span>Temperature shadow</span><label class="switch"><input type="checkbox" id="tempShadow"><span></span></label></div>
     <p class="hint">A faint shadow behind the big temperature, colored from blue (cold) to red (hot).</p>
   </section>
@@ -565,8 +583,13 @@
     pressed('bright', fixed ? 'fixed' : board.bright);
     $('level').hidden = !fixed;
     if (fixed) $('level').value = board.bright;
-    $('brightHint').textContent = board.bright === 'auto' ? 'Full from sunrise to sunset, 40% at night.'
-      : fixed ? `${board.bright}%` : 'Panel off until you change this or the board restarts.';
+    $('brightAuto').hidden = board.bright !== 'auto';
+    for (const [k, d] of [['brightMin', 40], ['brightMax', 100]]) {
+      if (document.activeElement === $(k)) continue;
+      $(k).value = board[k] || d;
+      $(k + 'V').textContent = `${board[k] || d}%`;
+    }
+    renderBrightHint();
     $('station').value = board.station.mapid;
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
     $('showHeader').checked = board.showHeader;
@@ -704,6 +727,10 @@
     save({ bright: v === 'fixed' ? (Number.isInteger(board.bright) ? board.bright : 60) : v });
   });
   $('level').addEventListener('change', (e) => save({ bright: Number(e.target.value) }));
+  for (const k of ['brightMin', 'brightMax']) {
+    $(k).addEventListener('input', (e) => { $(k + 'V').textContent = `${e.target.value}%`; });
+    $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
+  }
   $('station').addEventListener('change', (e) => save({ station: { mapid: e.target.value } }));
   const saveName = () => save({ station: { mapid: board.station.mapid, name: $('name').value } });
   $('saveName').addEventListener('click', saveName);
@@ -897,6 +924,20 @@
     } catch (err) { setStatus(err.message, true); }
   });
 
+  // Auto follows the light sensor on a board that reports one (health `lux`).
+  function renderBrightHint() {
+    if (!board) return;
+    const max = board.brightMax || 100, min = Math.min(board.brightMin || 40, max);
+    const lux = health && health.lux != null ? health.lux : null;
+    // With a sensor the two levels are the bright-room and dark-room ends of its range.
+    $('brightMaxL').textContent = lux != null ? 'Bright room' : 'Day';
+    $('brightMinL').textContent = lux != null ? 'Dark room' : 'Night';
+    $('brightHint').textContent = board.bright === 'auto'
+      ? (lux != null ? `Follows the light sensor (${fmtLux(lux)} now), from ${max}% in a bright room to ${min}% in the dark.` : `${max}% from sunrise to sunset, ${min}% at night.`)
+      : Number.isInteger(board.bright) ? `${board.bright}%` : 'Panel off until you change this or the board restarts.';
+  }
+  const fmtLux = (l) => `${l < 10 ? l.toFixed(2) : Math.round(l)} lx`;
+
   // ---- health ----
   function ago(s) {
     if (s < 90) return `${Math.round(s)} s`;
@@ -910,6 +951,7 @@
     const h = all[boardId];
     health = h || null;
     renderFirmware();
+    renderBrightHint();
     if (!h) return;
     const now = Date.now() / 1000;
     const late = now - h.at > 180;
@@ -930,6 +972,7 @@
       h.lastCrash && ['Last crash', h.lastCrash.replace(/:/g, ' ')],
       h.lastError && ['Last error', h.lastError.replace(':', ': ')],
       h.rssi != null && ['WiFi signal', `${h.rssi} dBm`],
+      h.lux != null && ['Light sensor', fmtLux(h.lux)],
       ['Fetch time', `${(h.budget / 1000).toFixed(1)} s`],
     ].filter(Boolean);
     $('health').replaceChildren(...rows.map(([k, v]) => {

@@ -110,7 +110,7 @@ async function build() {
   for (const warn of [{ kind: 'tor', lvl: 'warning' }, { kind: 'svr', lvl: 'watch' }, { kind: 'tor', lvl: 'watch' }]) {
     add(`weather strip ${warn.kind} ${warn.lvl}`, payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: { ...WX, icon: 'storm', word: 'STORMS', temp: -10 }, warn }), [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
   }
-  for (const icon of ['sun', 'moon', 'cloudy', 'rain', 'ice', 'snow', 'fog', 'pcloudy_night']) {
+  for (const icon of ['sun', 'moon', 'cloudy', 'rain', 'ice', 'snow', 'fog', 'pcloudy_night', 'tsnow']) {
     add(`weather icon ${icon}`, payloadFrom('morse-2026-10-03-2316.json', null, { wx: { ...WX, icon, word: 'X', temp: 100 } }), [{ screen: 'transit' }]);
   }
   // Full rows: times tighten to 2px gaps (KIMBALL, COTTAGE with DUE + two 2-digit times).

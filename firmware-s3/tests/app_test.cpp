@@ -88,6 +88,7 @@ struct Server : app::Net {
   int tornado = 0;
   std::string layout = "classic";
   int bright = 100;
+  std::string ab = "null";  // auto brightness range (light sensor), raw JSON
   std::function<long long()> latency = [] { return LATENCY; };
   std::function<std::string(long long)> rows_fn;  // JSON array of rows
   bool knob_ring = true;                          // send the knob's ring (payload `knob`)
@@ -161,7 +162,7 @@ struct Server : app::Net {
     int at = screen == "transit" || screen == "ticker" ? 1 : screen == "weather" ? 2 : screen == "baseball" ? 3 : 0;
     std::string knob = knob_ring ? ",\"knob\":{\"ring\":[\"auto\",\"transit\",\"weather\",\"sports\"],\"at\":" + jnum(at) + "}" : "";
     return "{\"v\":" + jnum(v) + ",\"now\":" + jnum(now) + ",\"tzo\":-18000,\"age\":3,\"screen\":\"" + scr +
-           "\",\"bright\":" + jnum(bright) + ",\"header\":\"MORSE\",\"view\":\"dest\",\"rows\":" + rows + ",\"ticker\":" + ticker +
+           "\",\"bright\":" + jnum(bright) + ",\"ab\":" + ab + ",\"header\":\"MORSE\",\"view\":\"dest\",\"rows\":" + rows + ",\"ticker\":" + ticker +
            ",\"wx\":" + (tornado ? "{\"icon\":\"storm\",\"temp\":70,\"word\":\"STORMS\"}" : "null") +
            ",\"warn\":" + (tornado ? "{\"kind\":\"tor\",\"lvl\":\"warning\"}" : "null") +
            ",\"radar\":{\"on\":" + (radar_on ? "true" : "false") + ",\"visit\":" + visit + ",\"frames\":" + frames +
@@ -254,6 +255,7 @@ struct SimDisplay : app::Display {
   long frames = 0;
   bool hw = false;   // dims in hardware (like the S3's panel)
   double k = -1;     // last brightness set
+  std::vector<std::pair<long long, double>> ks;  // every brightness set, with the time
   int max_px = 0;    // brightest channel in the last frame
   draw::Frame last;  // the last frame shown
   explicit SimDisplay(SimClock *c) : clock(c) {}
@@ -268,7 +270,20 @@ struct SimDisplay : app::Display {
   }
   bool set_brightness(double kk) override {
     k = kk;
+    ks.push_back({clock->t, kk});
     return hw;
+  }
+};
+
+struct SimLight : app::Light {
+  double lux = 1;
+  bool ok = true;
+  int reads = 0;
+  bool read(double &out) override {
+    reads++;
+    if (!ok) return false;
+    out = lux;
+    return true;
   }
 };
 
@@ -1162,6 +1177,107 @@ static void test_brightness_in_hardware_or_in_the_colors() {
   CHECK(max_sw <= (int)(255 * 0.4 + 1), "scaled frame: %d", max_sw);
 }
 
+static void test_light_level_follows_log_lux_between_the_ends() {
+  CHECK(light::level(0.01, 40) == 40, "dark: %f", light::level(0.01, 40));
+  CHECK(light::level(light::DARK_LUX, 40) == 40, "");
+  CHECK(light::level(1, 40) == 70, "halfway in log lux: %f", light::level(1, 40));
+  CHECK(light::level(light::BRIGHT_LUX, 40) == 100, "");
+  CHECK(light::level(5000, 40, 80) == 80, "capped at the brightest level");
+  CHECK(light::level(1, 90, 80) == 80, "darkest above brightest: brightest");
+}
+
+static const char *AB = "{\"min\":40,\"max\":100}";
+
+static Rig *light_rig(SimLight &l, bool hw = true) {
+  Rig *r = new Rig;
+  r->display.hw = hw;
+  r->board->light = &l;
+  r->server.ab = AB;
+  r->board->connect();
+  return r;
+}
+
+static void test_light_sensor_sets_auto_brightness_and_fades() {
+  SimLight l;
+  l.lux = 0.01;  // dark room
+  std::unique_ptr<Rig> r(light_rig(l));
+  r->run_for(5000);
+  CHECK(r->display.k == 0.4, "dark room: the darkest level: %f", r->display.k);
+  // The payload's level first, then a fade of about 2 s through the levels between.
+  auto &ks = r->display.ks;
+  CHECK(ks.front().second == 1, "%f", ks.front().second);
+  long long t0 = -1, t1 = -1;
+  int between = 0;
+  for (auto &e : ks) {
+    if (e.second < 1 && t0 < 0) t0 = e.first;
+    if (e.second == 0.4 && t1 < 0) t1 = e.first;
+    if (e.second < 1 && e.second > 0.4) between++;
+  }
+  CHECK(between > 20, "a gradual fade: %d steps", between);
+  CHECK(t1 - t0 >= 1800 && t1 - t0 <= 2100, "fade time: %lld ms", t1 - t0);
+  // A passing shadow or a flash doesn't move it.
+  l.lux = 10;
+  r->run_for(3000);
+  l.lux = 0.01;
+  r->run_for(10000);
+  CHECK(r->display.k == 0.4, "brief change ignored: %f", r->display.k);
+  // Lights on: after the hold, it fades up.
+  l.lux = 10;
+  r->run_for(7000);
+  CHECK(r->display.k > 0.4 && r->display.k < 1, "fading up: %f", r->display.k);
+  r->run_for(3000);
+  CHECK(r->display.k == 1, "bright room: %f", r->display.k);
+  // The phone's range moves it without the hold.
+  r->server.ab = "{\"min\":40,\"max\":80}";
+  r->server.v++;
+  r->run_for(15000);
+  CHECK(fabs(r->display.k - 0.8) < 1e-9, "brightest level: %f", r->display.k);
+}
+
+static void test_light_sensor_gives_way_to_fixed_and_to_a_missing_sensor() {
+  SimLight l;
+  l.lux = 0.01;
+  std::unique_ptr<Rig> r(light_rig(l));
+  r->run_for(8000);
+  CHECK(r->display.k == 0.4, "%f", r->display.k);
+  // Fixed on the phone (no `ab`): the payload's level.
+  r->server.ab = "null";
+  r->server.bright = 70;
+  r->server.v++;
+  r->run_for(15000);
+  CHECK(fabs(r->display.k - 0.7) < 1e-9, "fixed: %f", r->display.k);
+  // Back to auto, then the sensor stops answering: the payload's level.
+  r->server.ab = AB;
+  r->server.bright = 100;
+  r->server.v++;
+  r->run_for(20000);
+  CHECK(r->display.k == 0.4, "auto again: %f", r->display.k);
+  l.ok = false;
+  r->run_for(12000);
+  CHECK(r->display.k == 1, "sensor gone: %f", r->display.k);
+}
+
+static void test_light_sensor_reports_lux_with_health() {
+  SimLight l;
+  l.lux = 0.42;
+  std::unique_ptr<Rig> r(light_rig(l));
+  r->run_for(70000);
+  std::string h = last_health(*r);
+  CHECK(h.find("&ha=0.42") != std::string::npos, "%s", h.c_str());
+  Rig none;
+  none.board->connect();
+  none.run_for(70000);
+  CHECK(last_health(none).find("&ha=") == std::string::npos, "no sensor, no reading");
+}
+
+static void test_light_sensor_scales_colors_without_hardware_dimming() {
+  SimLight l;
+  l.lux = 0.01;
+  std::unique_ptr<Rig> r(light_rig(l, false));
+  r->run_for(8000);
+  CHECK(r->display.max_px <= (int)(255 * 0.4 + 1), "scaled frame: %d", r->display.max_px);
+}
+
 
 // ---- knob ----
 
@@ -1289,6 +1405,11 @@ int main() {
       T_(test_led_dim_red_after_a_failure_until_a_request_succeeds),
       T_(test_led_red_while_reconnecting_after_repeated_failures),
       T_(test_brightness_in_hardware_or_in_the_colors),
+      T_(test_light_level_follows_log_lux_between_the_ends),
+      T_(test_light_sensor_sets_auto_brightness_and_fades),
+      T_(test_light_sensor_gives_way_to_fixed_and_to_a_missing_sensor),
+      T_(test_light_sensor_reports_lux_with_health),
+      T_(test_light_sensor_scales_colors_without_hardware_dimming),
       T_(test_knob_twist_and_rest_selects_once),
       T_(test_knob_back_to_the_start_cancels),
       T_(test_knob_wraps_around_the_ring),

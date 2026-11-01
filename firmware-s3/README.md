@@ -121,6 +121,19 @@ encoder on the STEMMA QT port` at startup, and `[board] knob: <category>`
 after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
 `secrets.h`. Without a knob the board runs as before.
 
+### The light sensor (optional)
+
+An Adafruit VEML7700 (4162 flat, or 5378 right-angle) chained off the knob's
+second STEMMA QT socket. With the phone's brightness on Auto it follows the
+room: the Bright room level at `BRIGHT_LUX` and above, the Dark room level
+at `DARK_LUX` and below, linear in log lux between (`src/light.h`). A change
+must last 5 s before the level moves, then it fades over 2 s. The serial log
+says `[light] VEML7700 found` or `[light] no light sensor` at startup, and
+`[light] <lux> lx: <level>%` each time the level moves; the control page's
+Health tab shows the reading. The lux end points are guesses for the bar
+sleeve case's 2 mm hole: tune them from those readings. Without a sensor (or
+if it stops answering for 10 s) Auto is sunrise and sunset, as before.
+
 ### If the picture glitches
 
 - **Shifted a pixel, or stray flickering pixels:** the panel latches data on

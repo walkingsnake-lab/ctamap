@@ -32,6 +32,7 @@ class Player {
   Value p;
   bool has_p = false;
   bool hw_bright = false;  // the display dims in hardware: draw at full brightness
+  std::optional<double> bright;  // percent the Board chose (light sensor); none: the payload's
   long gen = 0;  // bumped with every payload
   draw::TransitAnimator anim;
   draw::Frames radar_frames;  // frame id -> bytes

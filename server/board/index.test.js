@@ -111,6 +111,9 @@ test('health rides on the version check and shows on the control API', async () 
     at: 0, since: 0, uptime: 3600, budget: 1100, oom: 2, fails: 5, reconnects: 1, memFree: 26000, largestBlock: 4032, rssi: -61,
     lastError: 'radar:MemoryError', minMem: 26000, restarts: 0, lastRestart: null,
   });
+  // A light sensor's reading (lux).
+  await s.req('/board/version?b=home&hu=3700&hb=1100&ho=2&hf=5&hr=1&ha=0.42', h);
+  assert.equal((await s.req('/board/secret123/api/health')).body.home.lux, 0.42);
   // Uptime going backwards is a restart; the lowest free memory is kept;
   // an error string that isn't plain letters is dropped.
   await s.req('/board/version?b=home&hu=30&hb=1000&ho=0&hf=0&hr=0&hm=28000&he=%3Cscript%3E', h);
@@ -222,6 +225,24 @@ test('raw arrivals capture reports upstream failures as 502', async () => {
   assert.equal(r.status, 502);
   assert.equal(r.body.err, 'upstream');
   await s.close();
+});
+
+test('raw weather capture: the station cell\'s WeatherAPI response, behind the control path', async () => {
+  const asked = [];
+  const weather = { get: async () => null, raw: async (lat, lon) => { asked.push([lat, lon]); return { current: { temp_f: 50 } }; } };
+  const s = await serve({ weather });
+  const r = await s.req('/board/secret123/api/raw/weather?mapid=40100');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { current: { temp_f: 50 } });
+  assert.deepEqual(asked, [[42.008362, -87.665909]]); // the station; createWeather maps it to its cell
+  assert.equal((await s.req('/board/secret123/api/raw/weather?mapid=99999')).status, 400);
+  assert.equal((await s.req('/board/wrong/api/raw/weather?mapid=40100')).status, 404);
+  await s.close();
+  const down = await serve({ weather: { get: async () => null, raw: async () => { throw new Error('HTTP 403'); } } });
+  const d = await down.req('/board/secret123/api/raw/weather?mapid=40100');
+  assert.equal(d.status, 502);
+  assert.equal(d.body.err, 'upstream');
+  await down.close();
 });
 
 // ---- /board/update ----
@@ -441,7 +462,7 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   const json = JSON.parse(fs.readFileSync(fx('tt-arrivals/clark-lake-2026-10-03-2317.json'), 'utf8'));
   const arrivals = normalize(json, { log: quiet });
   const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
-  const w = { ...parse(JSON.parse(fs.readFileSync(fx('open-meteo/morse-2026-10-04-1045.json'), 'utf8'))), sunrise: now - 100, sunset: now + 100 };
+  const w = { ...parse(JSON.parse(fs.readFileSync(fx('weatherapi/morse-cell-2026-10-04-1045.json'), 'utf8'))), sunrise: now - 100, sunset: now + 100 };
   const weather = fakeWeather(w);
   // The recorded Orange/Green minor delay, rated major so it blinks.
   const xml = fs.readFileSync(fx('cta-alerts/2026-10-04-1057.xml'), 'utf8').replace('<SeverityCSS>minor</SeverityCSS>', '<SeverityCSS>major</SeverityCSS>');
@@ -475,6 +496,25 @@ test('update: weather row, auto brightness, and alert flags', async () => {
   w.sunset = now - 1;
   b = (await s.req(FULL)).body;
   assert.equal(b.bright, 40);
+  assert.deepEqual(b.ab, { min: 40, max: 100 });
+  // Darkest and brightest set the night and day levels and the light sensor's range.
+  s.store.update('home', { brightMin: 20, brightMax: 80 });
+  b = (await s.req(FULL)).body;
+  assert.equal(b.bright, 20);
+  assert.deepEqual(b.ab, { min: 20, max: 80 });
+  w.sunset = now + 3600;
+  assert.equal((await s.req(FULL)).body.bright, 80);
+  // Darkest above brightest: both at brightest.
+  s.store.update('home', { brightMin: 90 });
+  b = (await s.req(FULL)).body;
+  assert.deepEqual([b.bright, b.ab], [80, { min: 80, max: 80 }]);
+  w.sunset = now - 1;
+  assert.equal((await s.req(FULL)).body.bright, 80);
+  // Fixed or off: the sensor doesn't apply.
+  s.store.update('home', { bright: 70 });
+  b = (await s.req(FULL)).body;
+  assert.equal(b.bright, 70);
+  assert.equal(b.ab, null);
   assert.equal(b.warn, null);
   await s.close();
 });
@@ -613,9 +653,9 @@ test('auto: main screens, alternating, alert jump, and baseball teams/priority',
 test('update: weather screen gets conditions always, radar frames only while rain is in the box', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
-  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8')));
+  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8')));
   const h = { headers: { 'X-Board-Token': 'tok' } };
-  const screenWx = { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51, feels: null, wind: null, pop: null };
+  const screenWx = { icon: 'sun', temp: 63, word: 'SUNNY', hi: 69, lo: 51, feels: 63, wind: 'NW 9', pop: 10 };
   let s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
   s.store.update('home', { showWeather: false });
   let b = (await s.req(FULL)).body;
@@ -652,9 +692,8 @@ test('update: weather screen gets conditions always, radar frames only while rai
 test('update: the 5-day setting sends the next days with the weather screen conditions', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
-  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
-  const mid = raw.daily.time[0];
-  const w = parse({ ...raw, daily: { ...raw.daily, time: [0, 1, 2].map((i) => mid + i * 86400), temperature_2m_max: [68.9, 71.4, 66], temperature_2m_min: [51, 55, 50], weather_code: [0, 61, 2] } });
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const w = parse(raw); // Monday light rain 71.4, Tuesday partly cloudy 66
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
   assert.equal((await s.req(FULL)).body.radar.wx.days, undefined); // conditions by default
   s.store.update('home', { wxView: '5day' });
@@ -670,11 +709,13 @@ test('update: the 5-day setting sends the next days with the weather screen cond
 test('update: rain bars replace the radar loop while precipitation is due, when the board asks for them', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
-  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
   const t0 = Math.ceil(now / 900) * 900;
   const time = [], precipitation = [];
   for (let i = 0; i < 12; i++) { time.push(t0 + i * 900); precipitation.push(i >= 2 && i <= 5 ? 0.5 : 0); }
-  const w = parse({ ...raw, minutely_15: { time, precipitation, snowfall: precipitation.map(() => 0) } });
+  // 15-minute data as a source that has it would give (WeatherAPI doesn't).
+  const steps = (p) => time.map((t, i) => ({ t, p: p[i], s: 0 }));
+  const w = { ...parse(raw), q15: steps(precipitation) };
   const radarOn = { on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar(radarOn) });
   let b = (await s.req(FULL)).body.radar;
@@ -696,7 +737,7 @@ test('update: rain bars replace the radar loop while precipitation is due, when 
   await s.close();
   // Bars mode never sends the radar loop, even when the forecast is dry but
   // the radar box has rain.
-  const dry0 = parse({ ...raw, minutely_15: { time, precipitation: time.map(() => 0), snowfall: time.map(() => 0) } });
+  const dry0 = { ...parse(raw), q15: steps(time.map(() => 0)) };
   const s0 = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(dry0), radar: fakeRadar(radarOn) });
   s0.store.update('home', { wxRain: 'bars' });
   b = (await s0.req(FULL)).body.radar;
@@ -708,7 +749,7 @@ test('update: rain bars replace the radar loop while precipitation is due, when 
   assert.equal(b.wx.rain, undefined);
   await s0.close();
   // Dry forecast: no bars; 'bars' never sends the loop, 'both' and 'radar' do.
-  const dry = parse({ ...raw, minutely_15: { time, precipitation: precipitation.map(() => 0), snowfall: precipitation.map(() => 0) } });
+  const dry = { ...parse(raw), q15: steps(precipitation.map(() => 0)) };
   const s2 = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(dry), radar: fakeRadar(radarOn) });
   s2.store.update('home', { wxRain: 'bars' });
   b = (await s2.req(FULL)).body.radar;
@@ -719,13 +760,29 @@ test('update: rain bars replace the radar loop while precipitation is due, when 
   await s2.close();
 });
 
+test('update: without 15-minute data (WeatherAPI), rain bars settings still get the radar loop', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8')));
+  assert.deepEqual(w.q15, []);
+  const radarOn = { on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar(radarOn) });
+  for (const wxRain of ['radar', 'bars', 'both']) {
+    s.store.update('home', { wxRain });
+    const b = (await s.req(FULL)).body.radar;
+    assert.deepEqual(b.frames, ['x'], wxRain);
+    assert.equal(b.wx.rain, undefined, wxRain);
+  }
+  await s.close();
+});
+
 test('update: the hourly setting sends the four hourly columns with the weather screen conditions', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
-  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
   const h0 = Math.floor(now / 3600) * 3600;
   const time = Array.from({ length: 13 }, (_, i) => h0 + i * 3600);
-  const w = parse({ ...raw, hourly: { time, temperature_2m: time.map((_, i) => 50 + i), weather_code: time.map(() => 3), is_day: time.map(() => 1), precipitation_probability: [] } });
+  const w = { ...parse(raw), hrs: time.map((t, i) => ({ time: t, temp: 50 + i, code: 3, isDay: true })) };
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
   assert.equal((await s.req(FULL)).body.radar.wx.hours, undefined);
   s.store.update('home', { wxView: 'hourly' });
@@ -739,7 +796,7 @@ test('update: the hourly setting sends the four hourly columns with the weather 
 test('simulator test rain bars: forced whatever the setting, expires and clears like the other tests', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
-  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
   const radarOn = { on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(raw)), radar: fakeRadar(radarOn) });
   const post = async (body) => {
@@ -779,7 +836,7 @@ test('simulator test rain bars: forced whatever the setting, expires and clears 
 test('simulator preview: header and weather toggles without changing the board', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
-  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8')));
+  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8')));
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
   let b = (await s.req('/board/secret123/api/update?b=home')).body;
   assert.equal(b.header, 'MORSE');
@@ -965,13 +1022,12 @@ test('baseball logo layout: payload carries logo ids and band colors; the board 
   await s.close();
 });
 
-test('update: NWS forecasts drive the 5-day layout over Open-Meteo\'s days', async () => {
+test('update: NWS forecasts drive the 5-day layout over WeatherAPI\'s days', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
   const nf = require('./nws-forecast');
-  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
-  const mid = raw.daily.time[0];
-  const w = parse({ ...raw, daily: { ...raw.daily, time: [0, 1, 2].map((i) => mid + i * 86400), temperature_2m_max: [68.9, 71.4, 66], temperature_2m_min: [51, 55, 50], weather_code: [0, 61, 2] } });
+  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const w = parse(raw);
   // The Morse NWS fixtures, moved by whole days so the recorded Sunday is today.
   const nws = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'nws-forecast', f), 'utf8'));
   const f = nf.parse({ forecast: nws('morse-2026-10-11-1406-forecast.json'), hourly: nws('morse-2026-10-11-1404-hourly.json') });
@@ -1196,7 +1252,7 @@ test('per-board link: the control page for that board only, without the owner\'s
   assert.equal((await s.req(`${c}/api/state`, { method: 'POST', body: JSON.stringify({ fw: 'beta' }) })).status, 400);
   // Owner-only endpoints aren't there.
   for (const [p, m] of [['api/boards', 'POST'], ['api/boards?b=home', 'DELETE'], ['api/boards/copy?from=home', 'POST'], ['api/boards/key', 'POST'],
-    ['api/firmware', 'GET'], ['api/logos', 'GET'], ['api/raw/mlb', 'GET']]) {
+    ['api/firmware', 'GET'], ['api/logos', 'GET'], ['api/raw/mlb', 'GET'], ['api/raw/weather?mapid=40100', 'GET']]) {
     assert.equal((await s.req(`${c}/${p}`, { method: m })).status, 404, `${m} ${p}`);
   }
   // The owner sees the link; a new link retires the old one.
