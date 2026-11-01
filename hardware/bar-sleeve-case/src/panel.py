@@ -12,11 +12,12 @@ PROFILES = {
         w=192.0, h=96.0, t=14.5,         # outline, thickness (measured)
         pitch=3.0, rib=0.6,              # diffuser grid: LED pitch, rib width (0.4 nozzle)
         faces={'white': 0.2, 'translucent': 0.4},   # diffuser face = one first layer: 0.2 (0.4 nozzle), 0.4 (0.6 nozzle)
-        # brass M3 inserts on the panel back (x, z - ZC). Corners confirmed Oct 31 with check_corners.py (v2 fits all
-        # four): the +z row is at +31 as estimated, the other row at -29 (estimated -26) and its +x insert at 86.5. The
-        # middle two are from the same photos (+/-0.5 mm). (-88, -29) is under the S3 in plate v3
-        inserts=((-88.0, 31.0), (88.0, 31.0), (-88.0, -29.0), (86.5, -29.0), (-12.7, 38.0), (12.0, -36.0)),
-        standoffs=((-88.0, 31.0), (88.0, 31.0), (86.5, -29.0), (12.0, -36.0)),   # plate v3 bolts to these
+        # brass M3 inserts on the panel back (x, z - ZC). Corners confirmed Oct 31 with check_corners.py: the v3 frame
+        # fits all four (v2 at +/-88 / +86.5 only took one end's pair at a time). x +/-87.25 on both rows (174.5 mm end
+        # to end), z +31 / -29 (estimated -26). The middle two are from photos (+/-0.5 mm). (-87.25, -29) is under the
+        # S3 in plate v3
+        inserts=((-87.25, 31.0), (87.25, 31.0), (-87.25, -29.0), (87.25, -29.0), (-12.7, 38.0), (12.0, -36.0)),
+        standoffs=((-87.25, 31.0), (87.25, 31.0), (87.25, -29.0), (12.0, -36.0)),   # plate v3 bolts to these
         drawer_s3_mid=-2.5,              # drawer: S3 centre (z - ZC) as before the insert fix, so the v5 shell is unchanged
         tie_bridge=(-17.0, 17.0, 63.0, 78.0),   # plate v3 tie-down bridge: x0, x1, z0, z1 (z in the P3 case, moves by DZ)
         hooks=(-22.5, 22.5),             # ribbon hooks on the plate (x), on bars between the louvers / pills

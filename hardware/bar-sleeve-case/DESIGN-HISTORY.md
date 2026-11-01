@@ -295,3 +295,11 @@ The first walnut shell was a prototype and was scrapped, so the shell was open t
 - Status light vs Boot (Oct 30): the two back holes looked alike. Status light: a Ø6 x 1 mm pocket in the back face, lit through the full Ø4.5 light tube, for a glued-in translucent window disc (`bar-status-window.stl`, Ø5.7 x 1). Boot: a 45-degree funnel, Ø7 at the face down to the Ø2.6 hole, that reads as "press here" and guides the key. Both are recesses in the bed face, so they print crisp.
 - Boot marker (Oct 30): two Ø1.4 x 0.4 dots (Ø1.8 on the 0.6-nozzle tray) beside the Boot funnel, outboard, stacked like a colon.
 - Sensor pillars (Oct 30): the 4.6 mm cantilevered pillars printed poorly (the first ridge line hangs off the wall). The sockets now sit in 1.7 mm channels in the tray's top wall, running out past the board's ends for the plugs, so the board rises 1.7 mm and the pillars are 2.9 long; the chip is also 1.7 mm closer to the light hole. Screws M2.5 x 5.
+
+## Panel inserts checked (Oct 31)
+
+- The photo estimates of both panels' inserts were off by 1-3 mm. The plates' posts used to bend enough to hide it; the funnel floors and countersunk heads (self-centring) and the stiffer S3 corner took that slack away, so the screws stopped lining up.
+- `src/check_corners.py` makes a flat frame on the panel outline with Ø3.4 holes at the corner inserts (Ø7 windows over the others on the P3, so it only fits one way up, and an arrow tab on PI IN). It confirms positions in one print before a tray print.
+- P2.5: corners (±62.5, ±32.25), 125 x 64.5 mm (was ±63.5, ±33.5). A ruler reading of 135 x 75 sent the first frame the wrong way; a photo of it on the panel, scaled to its outline, gave the fix.
+- P3: corners x ±87.25 on both rows (174.5 mm end to end), z +31 / -29 (was ±88, +31 / -26); middle inserts about (-12.7, +38) and (+12, -36). Three frames: the photo of the first found the -29 row; on the second, either end's pair threaded in but not both, so the ends were ~1.5 mm too far apart, and the inserts at each end share an x.
+- The funnels stay. If a post still fights on a print, the fallback is a flexure neck at each post's base (lean ~0.5-1 mm), not float at the screw: a countersunk head in a cone always centres.
