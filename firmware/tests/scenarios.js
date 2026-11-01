@@ -184,6 +184,19 @@ async function build() {
     add('rolls radar current time', rp(), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
     add('rolls radar current time + conditions', rp({ cond: true, temp: 63 }), nums({ 'rad.clock': '3:59' }).map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
     add('rolls radar frame time stays put', rp({ clock: 'frame' }), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
+    // S3 only: the big clocks and current-conditions numbers roll too.
+    const s3 = { s3only: true };
+    add('rolls big overnight clock', nt, nums({ 'big.clock': '11:15' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
+    add('rolls big overnight clock width change', nt, nums({ 'big.clock': '9:59' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
+    add('rolls no-games clock', { ...nt, mlb: { games: [] } }, nums({ 'big.clock': '11:15' }).map((n) => ({ screen: 'baseball', nums: n })), undefined, undefined, s3);
+    add('rolls weather strip temperature', hdr, nums({ 'wx.temp': '62°' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
+    add('rolls weather strip temperature width change', hdr, nums({ 'wx.temp': '9°' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
+    const wxs = { icon: 'pcloudy_day', temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51, feels: 61, wind: 'NW 12', pop: 20 };
+    const wp = (w, extra) => ({ now: rt, tzo: tzOffset(rt), bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w, ...extra } });
+    add('rolls weather screen numbers', wp(wxs), nums({ 'wx.big': '62', 'wx.feels': 'FEELS 59°', 'wx.hl': 'H 68° L 51°', 'wx.pop': '10%' }).map((n) => ({ screen: 'weather', nums: n })), undefined, undefined, s3);
+    add('rolls weather screen numbers width change + shadow', wp({ ...wxs, temp: 100 }, { tempShadow: true }), nums({ 'wx.big': '99', 'wx.pop': '100%' }).map((n) => ({ screen: 'weather', nums: n })), undefined, undefined, s3);
+    const fd = [['SA', 71, 'sun'], ['SU', 78, 'sun'], ['MO', 66, 'rain'], ['TU', 52, 'cloudy'], ['WE', 60, 'pcloudy_day']].map(([d, hi, icon]) => ({ d, hi, icon }));
+    add('rolls top bar temperature', wp({ ...wxs, days: fd }, { tempShadow: true }), nums({ 'wx.top': '62' }).map((n) => ({ screen: 'weather', nums: n })), undefined, undefined, s3);
   }
   // Weather screen (radar screen with no frames): every warning, cold/hot
   // extremes (minus bar, word skipped for 3-digit temps, high/low losing its
@@ -525,6 +538,45 @@ async function build() {
       { p: { rows: [{ ln: 'RD', lbl: 'HOWARD', t: [min(4), min(9)], s: [0, 0], a: 0 }] }, now: NOW, t: 0 },
       ...ts(1000, 1500, 12).map((t) => ({ p: { view: 'chrono', rows: [row('RD', 'HOWARD', min(4), '801'), row('RD', 'HOWARD', min(9), '802')] }, now: NOW, t })),
     ]);
+  }
+  // Animated weather icons (S3 only): every icon through its cycle on the
+  // conditions screen, the 5-day and hourly columns (each offset by its x),
+  // the radar corner, and a layout that isn't listed (static).
+  {
+    const t = 1791140000;
+    const icons = require(path.join(B, 'icons'));
+    const base = { now: t, tzo: tzOffset(t), bright: 100, warn: null };
+    const wxs = { temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51, feels: 61, wind: 'NW 12', pop: 20 };
+    const all = ['now', '5day', 'hourly', 'radar'];
+    const rad = (w, extra) => ({ ...base, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w, iconAnim: all, ...extra } });
+    for (const name of Object.keys(icons.ICON_ANIM)) {
+      const total = icons.ICON_ANIM[name].reduce((a, [ms]) => a + ms, 0);
+      const ts = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => Math.floor((k * total) / 8) + 7);
+      add(`animated icon ${name}`, rad({ ...wxs, icon: name }), ts.map((iconT) => ({ screen: 'weather', iconT })), undefined, undefined, { s3only: true });
+    }
+    const days = ['sun', 'rain', 'storm', 'snow', 'fog'].map((icon, i) => ({ d: ['SA', 'SU', 'MO', 'TU', 'WE'][i], hi: 60 + i, icon }));
+    const hours = ['rain', 'rain', 'pcloudy_day', 'moon'].map((icon, i) => ({ h: `${i * 2 + 2}P`, t: 60 + i, icon }));
+    const steps = [0, 150, 400, 900, 1700, 2300].map((iconT) => ({ screen: 'weather', iconT }));
+    add('animated icons 5-day', rad({ ...wxs, icon: 'rain', days }), steps, undefined, undefined, { s3only: true });
+    add('animated icons hourly', rad({ ...wxs, icon: 'storm', hours }), steps, undefined, undefined, { s3only: true });
+    add('animated icons 5-day static when not listed', rad({ ...wxs, icon: 'rain', days }, { iconAnim: ['now', 'hourly'] }), steps, undefined, undefined, { s3only: true });
+    const [key, { bytes, loc }] = Object.entries(rf)[0];
+    const rt = radar.timeOf(key.split('-')[1]);
+    const ids = ['a', 'b', 'c'];
+    const corner = { ...base, now: rt, tzo: tzOffset(rt), radar: { on: true, frames: ids, ft: ids.map((_, i) => rt - (2 - i) * 360), timeBox: loc.timeBox, split: loc.split, showTime: false, temp: 63, icon: 'rain', iconAnim: ['radar'] } };
+    add('animated icon radar corner', corner, [0, 190, 380].map((iconT) => ({ screen: 'weather', idx: 2, iconT })), Object.fromEntries(ids.map((id) => [id, bytes])), undefined, { s3only: true });
+  }
+  // Screen change slide (S3 only): the new screen pushes the old one's last
+  // frame off sideways, both ways, dimmed too (the slide is after brightness).
+  {
+    const p = payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX });
+    const from = Array.from(draw.render(p, { screen: 'ticker' }).px);
+    const at = (t, dir) => ({ screen: 'transit', slide: { from, t, dir } });
+    add('screen slide ticker to transit from the right', p, [0, 60, 150, 225, 300, 449, 450, 900].map((t) => at(t, 1)), undefined, undefined, { s3only: true });
+    add('screen slide ticker to transit from the left', p, [0, 60, 225, 449].map((t) => at(t, -1)), undefined, undefined, { s3only: true });
+    const dim = { ...p, bright: 40 };
+    const fromDim = Array.from(draw.render(dim, { screen: 'transit' }).px);
+    add('screen slide dimmed transit to weather', dim, [100, 250].map((t) => ({ screen: 'weather', slide: { from: fromDim, t, dir: 1 } })), undefined, undefined, { s3only: true });
   }
   return S;
 }

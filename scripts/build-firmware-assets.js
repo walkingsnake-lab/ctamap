@@ -142,6 +142,18 @@ function buildCpp() {
     lines.push(`  {"${k}", "${rows.join('')}"},`);
   }
   lines.push('};', `static const int ICONS_N = ${Object.keys(icons.ICONS).length};`, '');
+  // Animated icons (icons.js ICON_ANIM): each icon's frames in order, with
+  // how long each shows (ms). S3 only: assets.py doesn't carry them.
+  lines.push('struct IconFrame { const char *name; uint16_t ms; const char *px; };', 'static const IconFrame ICON_FRAMES[] = {');
+  let nFrames = 0;
+  for (const [k, frames] of Object.entries(icons.ICON_ANIM)) {
+    for (const [ms, rows] of frames) {
+      if (rows.length !== 8 || rows.some((r) => r.length !== 8)) throw new Error(`icon ${k} frame is not 8 x 8`);
+      lines.push(`  {"${k}", ${ms}, "${rows.join('')}"},`);
+      nFrames++;
+    }
+  }
+  lines.push('};', `static const int ICON_FRAMES_N = ${nFrames};`, '');
   lines.push(`static const char *const ALERT_BANG[] = {${icons.ALERT_BANG.map((r) => `"${r}"`).join(', ')}};`);
   lines.push(`static const int ALERT_BANG_N = ${icons.ALERT_BANG.length};`, '');
   // G_ prefix: the ESP32's headers define MIN/MAX macros.

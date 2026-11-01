@@ -1,13 +1,15 @@
 // Network scheduler (design spec §2, "Scheduler"). A port of
 // firmware/boardlib/sched.py.
 //
-// Each HTTPS request blocks the main loop for a second or so (the panel
-// stays lit: the DMA keeps refreshing it, but animations pause), so
-// requests run in animation gaps:
+// Without a worker (app.h), each HTTPS request blocks the main loop for a
+// second or so (the panel stays lit: the DMA keeps refreshing it, but
+// animations pause), so requests run in animation gaps:
 //   - a job runs when it's due and the next animation is at least the fetch
 //     budget away (and nothing is animating);
 //   - past its deadline it runs anyway (a brief pause beats stale times).
 // The fetch budget starts at 2 s and follows the measured request time.
+// With a worker, requests don't pause anything: the board passes busy=false
+// and an endless quiet time, so jobs simply run when due, one at a time.
 #pragma once
 
 #include <algorithm>
@@ -17,7 +19,7 @@
 
 namespace sched {
 
-enum Result { OK, SKIP, MORE, FAIL };
+enum Result { OK, SKIP, MORE, FAIL, STARTED };  // STARTED: the job launched a request (app.h Flight)
 
 struct Job {
   std::string name;

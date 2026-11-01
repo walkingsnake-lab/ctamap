@@ -4,6 +4,7 @@
 // truncation, computed independently in Python.
 //   color_test   (exit status 0 when every check passes)
 
+#include <math.h>
 #include <stdio.h>
 
 #include "../ctaboard/src/color.h"
@@ -76,6 +77,25 @@ int main() {
     uint8_t r = 0, g = 0, b = 0;
     p.map(r, g, b);
     CHECK(r == 0 && g == 0 && b == 0, "%d", curve);
+  }
+
+  // Hardware dimming: the window down to its floor, then the renderer's share.
+  color::HwDim d = color::hw_dim(1);
+  CHECK(d.oe == 255 && d.share == 1, "%d %f", d.oe, d.share);
+  d = color::hw_dim(0.4);  // the default night level: all in hardware
+  CHECK(d.oe == 34 && d.share == 1, "%d %f", d.oe, d.share);
+  d = color::hw_dim(0.1);
+  CHECK(d.oe == color::HW_MIN_OE && fabs(d.share - 0.1 / pow(16 / 255.0, 1 / 2.2)) < 1e-9, "%d %f", d.oe, d.share);
+  d = color::hw_dim(0);
+  CHECK(d.oe == 0 && d.share == 1, "off: %d %f", d.oe, d.share);
+  // Continuous across the floor: the light (window x share^2.2) only grows with k.
+  double prev = 0;
+  for (int i = 1; i <= 1000; i++) {
+    color::HwDim e = color::hw_dim(i / 1000.0);
+    double light = e.oe / 255.0 * pow(e.share, 2.2);
+    CHECK(light >= prev - 1e-9, "k %d: %f < %f", i, light, prev);
+    CHECK(e.oe >= color::HW_MIN_OE, "k %d: oe %d", i, e.oe);
+    prev = light;
   }
 
   printf("color: %d checks, %d failed\n", checks, failed);

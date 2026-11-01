@@ -10,8 +10,11 @@ const { createNws } = require('./nws');
 const { modeFor } = require('./radar');
 
 // WeatherAPI forecast.json for Morse's grid cell, Sunday Oct 4 2026 10:45 CDT
-// (see fixtures/README.md: assembled, not recorded).
+// (see fixtures/README.md: assembled, not recorded; its fields are checked
+// against REAL below).
 const MORSE = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+// Recorded: Morse's cell, Saturday Oct 31 2026 11:34 PM CDT, the night DST ends.
+const REAL = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-31-2334.json'), 'utf8'));
 const quiet = { warn() {}, error() {} };
 const clone = (x) => JSON.parse(JSON.stringify(x));
 // Morse's coordinates, and the cell key the poller stores them under.
@@ -27,6 +30,33 @@ test('Morse, Sunday morning: clear and 63°', () => {
   assert.deepEqual(w.q15, []); // no 15-minute data from WeatherAPI
   assert.throws(() => parse({}), /WeatherAPI/);
   assert.throws(() => parse({ current: MORSE.current, forecast: { forecastday: [] } }), /WeatherAPI/);
+});
+
+test('recorded: Saturday night, overcast and 58°, the night DST ends', () => {
+  const w = parse(REAL);
+  assert.deepEqual(toScreenWx(w), { icon: 'cloudy', temp: 58, word: 'CLOUDY', hi: 63, lo: 55, feels: 54, wind: 'SE 5', pop: 17 });
+  assert.equal(w.isDay, false);
+  assert.equal(w.time, Date.UTC(2026, 10, 1, 4, 15) / 1000); // 11:15 PM CDT
+  assert.equal(w.sunrise, Date.UTC(2026, 9, 31, 12, 22) / 1000); // "07:22 AM" CDT
+  assert.equal(w.sunset, Date.UTC(2026, 9, 31, 22, 46) / 1000);  // "05:46 PM" CDT
+  // Days after today, named by WeatherAPI's date_epoch (UTC midnight).
+  assert.deepEqual(toDays(w), [{ d: 'SU', icon: 'cloudy', hi: 66 }, { d: 'MO', icon: 'cloudy', hi: 61 }]);
+  // Hourly slots from the 11 PM hour run through the repeated 1 AM: time
+  // labels follow the real hours (2 h after 1 AM CDT is 2 AM CST).
+  assert.equal(w.hrs[0].time, Date.UTC(2026, 10, 1, 4) / 1000);
+  assert.ok(w.hrs.every((h, i) => !i || h.time - w.hrs[i - 1].time === 3600));
+  assert.deepEqual(toHours(w).map((x) => [x.h, x.icon, x.t]), [['1A', 'cloudy', 58], ['2A', 'cloudy', 57], ['4A', 'cloudy', 58], ['6A', 'cloudy', 59]]);
+  assert.equal(autoBright(w, w.time), NIGHT_BRIGHT);
+  assert.equal(modeFor(w), 'rain');
+});
+
+test('the assembled fixture uses only fields the recorded response has', () => {
+  const missing = (a, b, at) => Object.keys(a).filter((k) => !(k in b)).map((k) => at + k);
+  const [fa, fr] = [MORSE.forecast.forecastday[0], REAL.forecast.forecastday[0]];
+  assert.deepEqual([
+    ...missing(MORSE, REAL, ''), ...missing(MORSE.location, REAL.location, 'location.'), ...missing(MORSE.current, REAL.current, 'current.'),
+    ...missing(fa, fr, 'forecastday.'), ...missing(fa.day, fr.day, 'day.'), ...missing(fa.astro, fr.astro, 'astro.'), ...missing(fa.hour[0], fr.hour[0], 'hour.'),
+  ], []);
 });
 
 test('WMO codes map to the board icons, with night variants', () => {
@@ -118,9 +148,8 @@ test('auto brightness: full from sunrise to sunset, dimmer overnight', () => {
   assert.equal(autoBright(w, w.time), 100);
   assert.equal(autoBright(w, w.sunrise - 1), NIGHT_BRIGHT);
   assert.equal(autoBright(w, w.sunrise), 100);
-  // The board's night and day levels.
-  assert.deepEqual([autoBright(w, w.sunrise - 1, 25, 80), autoBright(w, w.time, 25, 80), autoBright(null, w.time, 25, 80)], [25, 80, 80]);
-  assert.equal(autoBright(w, w.sunrise - 1, 90, 80), 80);
+  // The board's night level; day stays full.
+  assert.deepEqual([autoBright(w, w.sunrise - 1, 25), autoBright(w, w.time, 25), autoBright(null, w.time, 25)], [25, 100, 100]);
   assert.equal(autoBright(w, w.sunset), NIGHT_BRIGHT);
   assert.equal(autoBright(null, w.time), 100); // no data yet
 });

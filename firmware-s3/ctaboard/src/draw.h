@@ -251,7 +251,22 @@ struct RenderOpts {
   // and the cloud strips on hand (strip id -> 1664 packed bytes).
   std::optional<double> ms;
   const Frames *clouds = nullptr;
+  // Screen-change slide (draw.js opts.slide): the old screen's last shown
+  // pixels, ms into the slide, and the direction (1: the new screen comes
+  // in from the right; -1: from the left).
+  const uint8_t *slide_from = nullptr;
+  double slide_t = 0;
+  int slide_dir = 1;
+  // Animated weather icons (draw.js opts.iconT): ms on the board's clock.
+  std::optional<double> icon_t;
 };
+
+// Screen change: the new screen pushes the old one's last frame off
+// sideways, SLIDE_GAP unlit columns between them.
+const double SCREEN_SLIDE_MS = 450;
+const int SLIDE_GAP = 4;
+int slide_offset(double t);  // px the new screen has come in, 0..64 + SLIDE_GAP
+void slide_frames(const uint8_t *from, Frame &f, int d, int dir);
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);
 

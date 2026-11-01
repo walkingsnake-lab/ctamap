@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir, knobOf } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf, ICON_SETTINGS } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -34,7 +34,7 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky', 'logo', 'firmware', 'c']);
+const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky', 'logo', 'firmware', 'firmware-upload', 'c']);
 // What a per-board control link (/board/c/<link>/) may reach: the control
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
@@ -138,6 +138,7 @@ function createBoard({
   keys = null,    // per-board tokens and control links (keys.js); default beside the board state
   logos = null,   // prepared team logos (mlb-logos.js); default beside the board state
   firmware = null, // OTA builds (firmware.js); default beside the board state
+  deployToken = process.env.FIRMWARE_DEPLOY_TOKEN || '', // CI's token for /board/firmware-upload (beta only)
   alerts = null, // the shared CTA alerts poller (server.js); none in tests unless given
   stations = require('./stations.json'),
   log = console,
@@ -194,13 +195,12 @@ function createBoard({
     return { ...g, away: side(g.away), home: side(g.home) };
   }
 
-  // 'auto' brightness: the board's brightMax from sunrise to sunset (and until
-  // weather data arrives), brightMin overnight. A board with a light sensor
-  // follows the sensor instead, between the two (`ab`).
-  const dayOf = (b) => b.brightMax || 100;
-  const nightOf = (b) => Math.min(b.brightMin || NIGHT_BRIGHT, dayOf(b));
-  const resolveBright = (b, w, now) => (b.bright === 'off' ? 0 : b.bright === 'auto' ? autoBright(w, now, nightOf(b), dayOf(b)) : b.bright);
-  const autoBrightOf = (b) => (b.bright === 'auto' ? { min: nightOf(b), max: dayOf(b) } : null);
+  // 'auto' brightness: full from sunrise to sunset (and until weather data
+  // arrives), the board's brightMin overnight. A board with a light sensor
+  // follows the sensor instead, from brightMin in the dark to full (`ab`).
+  const nightOf = (b) => b.brightMin || NIGHT_BRIGHT;
+  const resolveBright = (b, w, now) => (b.bright === 'off' ? 0 : b.bright === 'auto' ? autoBright(w, now, nightOf(b)) : b.bright);
+  const autoBrightOf = (b) => (b.bright === 'auto' ? { min: nightOf(b) } : null);
   // 'auto': the weather screen while a matching NWS alert is on (alertJump),
   // else baseball while a game is on, else the first Auto screen. The board
   // alternates Auto screens (rot) and makes timed weather visits
@@ -219,6 +219,9 @@ function createBoard({
     pageHold: (b.tickerHold || 8) * 1000, slide: b.tickerSlide || 1200,
     radarFrame: b.radarFrame || 500, radarHold: (b.radarHold || 4) * 1000, game: b.gameEvery || 60,
   });
+  // Weather layouts whose icons animate (contract: radar.iconAnim), in a
+  // fixed order. A setting not yet saved counts as animated (the default).
+  const iconAnimOf = (b) => Object.entries(ICON_SETTINGS).filter(([k]) => b[k] !== 'static').map(([, layout]) => layout);
   // Weather visits apply only on the auto screen, and only if turned on;
   // `always` visits even without rain (current conditions).
   const visitOf = (b) => (b.screen === 'auto' && (b.wxVisit === 'rain' || b.wxVisit === 'always') && b.radarEvery > 0
@@ -459,6 +462,8 @@ function createBoard({
         ...(board.radarCond === true ? { cond: true } : {}),
         // Precip brightness, percent (absent = 100).
         ...(board.radarBright != null && board.radarBright !== 100 ? { rb: board.radarBright } : {}),
+        // Weather layouts whose icons animate (S3; absent: all static).
+        ...(iconAnimOf(board).length ? { iconAnim: iconAnimOf(board) } : {}),
       },
       // Clock screen, skyline face: drawing parameters (skyline.js; contract "Skyline").
       skyline: skylineOf(board, w, wd, st, now),
@@ -575,6 +580,22 @@ function createBoard({
       if (method !== 'GET') return send(res, 405, { err: 'method' });
       if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       return sendLogo(res, logos.bytes(rest[0]));
+    }
+
+    // CI publishes each signed build of main to beta (contract: "Firmware").
+    // Its own token, good for this only; off unless FIRMWARE_DEPLOY_TOKEN is set.
+    if (first === 'firmware-upload' && rest.length === 0) {
+      if (!deployToken) return send(res, 404, { err: 'not_found' });
+      if (method !== 'POST') return send(res, 405, { err: 'method' });
+      if (!sameSecret(req.headers['x-deploy-token'], deployToken)) return send(res, 401, { err: 'bad_token' });
+      try {
+        const body = await readBody(req, MAX_FIRMWARE + 64 * 1024);
+        const st = firmware.upload(body, { sig: req.headers['x-firmware-signature'] || null, channel: 'beta', pinned: pinnedBuilds() });
+        return send(res, 200, { beta: st.channels.beta });
+      } catch (e) {
+        if (e instanceof FirmwareError || e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+        throw e;
+      }
     }
 
     // ---- control endpoints, under the secret path ----
@@ -752,7 +773,8 @@ function createBoard({
           if (method === 'POST') {
             const body = await readBody(req, MAX_FIRMWARE + 64 * 1024);
             const channel = parsed.query.channel ? String(parsed.query.channel) : null;
-            return send(res, 200, firmware.upload(body, { channel, pinned: pinnedBuilds() }));
+            const sig = req.headers['x-firmware-signature'] || null;
+            return send(res, 200, firmware.upload(body, { sig, channel, pinned: pinnedBuilds() }));
           }
           if (method === 'DELETE') return send(res, 200, firmware.remove(String(parsed.query.v || ''), pinnedBuilds()));
         } catch (e) {

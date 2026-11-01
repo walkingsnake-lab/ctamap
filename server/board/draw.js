@@ -240,17 +240,38 @@
 
     // `color`: draw every lit pixel in that one color (a mono icon) instead
     // of the icon's own palette.
-    function drawIcon(f, name, x, y, color) {
-      icons.ICONS[name].forEach((row, j) => [...row].forEach((c, i) => {
+    // anim: ms on the board's clock while this layout's icons are animated
+    // (S3; icons.js ICON_ANIM), else null/undefined for the static icon.
+    // Each icon's cycle is offset by its x (53 ms a pixel) so a row of the
+    // same icon doesn't move in lockstep.
+    function iconRows(name, anim, x) {
+      const fr = icons.ICON_ANIM && icons.ICON_ANIM[name];
+      if (anim == null || !fr) return icons.ICONS[name];
+      const total = fr.reduce((a, [ms]) => a + ms, 0);
+      let k = (((Math.floor(anim) + x * 53) % total) + total) % total;
+      for (const [ms, rows] of fr) { if (k < ms) return rows; k -= ms; }
+      return fr[0][1];
+    }
+    function drawIcon(f, name, x, y, color, anim) {
+      iconRows(name, anim, x).forEach((row, j) => [...row].forEach((c, i) => {
         if (c !== '.') f.fill(x + i, y + j, 1, 1, color || icons.PALETTE[c]);
       }));
     }
+    // The icon clock for a weather layout ('now', '5day', 'hourly',
+    // 'radar'): opts.iconT while the payload's radar.iconAnim lists it.
+    let ICON_T = null, ICON_ANIMATED = [];
+    const iconAt = (layout) => (ICON_T != null && ICON_ANIMATED.includes(layout) ? ICON_T : null);
 
     // ---- clock rolls ----
-    // The header clock (transit, ticker) and the radar's current time roll
-    // at each minute like arrival times; each is drawn under a name
-    // ('hdr.clock', 'rad.clock'). The big overnight and no-games clocks
-    // don't roll.
+    // The header clock (transit, ticker), the radar's current time, and the
+    // big overnight and no-games clocks roll at each minute like arrival
+    // times; each is drawn under a name ('hdr.clock', 'rad.clock',
+    // 'big.clock'). Current-conditions numbers roll when a new payload
+    // changes them (S3): the weather strip's temperature ('wx.temp'), and on
+    // the weather screen the big temperature ('wx.big'), feels-like
+    // ('wx.feels'), high/low ('wx.hl'), rain chance ('wx.pop'), and the top
+    // bar's temperature ('wx.top'). Forecast columns and the radar corner
+    // don't.
     // During render(), NR holds either a roller (createNumRoller: the board
     // and the simulator, which notice changes as they draw) or fixed rolls
     // ({name: {from, p}}: tests and parity scenarios).
@@ -306,6 +327,7 @@
     }
     const rollText = (f, font, name, text, xOf, base, color) => rollTextWith(f, font, takeRoll(name, text), text, xOf, base, color);
     const rightAt = (font, right) => (str) => right - measure(font, str) + 1;
+    const centerX = (font) => (str) => Math.floor((64 - measure(font, str)) / 2);
 
     // Station name + clock on rows 1-5, flush to the screen edges, both in
     // `color` (the transit screen's dark grey, or the ticker's header grey).
@@ -331,7 +353,7 @@
     // temperature stays.
     function drawWeather(f, wx, warn, blink) {
       const base = 32;
-      f.text('small', `${wx.temp}°`, 0, base, C.dimHead);
+      rollText(f, 'small', 'wx.temp', `${wx.temp}°`, () => 0, base, C.dimHead);
       if (warn) {
         const { glyph, color, blinks } = warnStyle(warn);
         if (blinks && blink) return;
@@ -508,7 +530,7 @@
       const blockH = 10 + 3 + 5; // 10px digits, gap, label
       const areaH = p.wx ? 26 : 32;
       const top = Math.floor((areaH - blockH) / 2);
-      f.text('clock', clock, Math.floor((64 - measure('clock', clock)) / 2), top + 10, C.clock);
+      rollText(f, 'clock', 'big.clock', clock, centerX('clock'), top + 10, C.clock);
       f.text('small', nt, Math.floor((64 - measure('small', nt)) / 2), top + 18, C.noTrains);
     }
 
@@ -836,18 +858,19 @@
       const drawTemp = (dx, dy, color) => {
         let x = dx;
         if (wx.temp < 0) { f.fill(x, 8 + dy, 5, 2, color); x += 7; }
-        x = f.text('clock', String(Math.abs(wx.temp)), x, 14 + dy, color);
+        const at = x;
+        x = rollText(f, 'clock', 'wx.big', String(Math.abs(wx.temp)), () => at, 14 + dy, color);
         f.fill(x, 4 + dy, 3, 1, color); f.fill(x, 6 + dy, 3, 1, color);
         f.fill(x, 5 + dy, 1, 1, color); f.fill(x + 2, 5 + dy, 1, 1, color);
         return x + 2;
       };
       if (shadow) drawTemp(1, 1, scaleColor(tempColor(wx.temp, wx.c), 0.2));
       const tempRight = drawTemp(0, 0, C.label) + (shadow ? 1 : 0);
-      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 55, 1);
+      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, 55, 1, null, iconAt('now'));
       // Word right-aligned under the icon, unless a 3-digit temperature reaches it.
       if (wx.word && 63 - measure('small', wx.word) + 1 > tempRight + 2) rtext(f, 'small', wx.word, 63, 16, C.wxText);
       f.fill(0, 18, 64, 1, C.divider);
-      if (wx.feels != null) f.text('small', `FEELS ${wx.feels}°`, 0, 25, C.grey);
+      if (wx.feels != null) rollText(f, 'small', 'wx.feels', `FEELS ${wx.feels}°`, () => 0, 25, C.grey);
       if (wx.wind) rtext(f, 'small', wx.wind, 63, 25, C.label);
       if (warn) {
         const ws = warnStyle(warn);
@@ -863,14 +886,14 @@
       if (wx.pop != null) {
         const t = `${wx.pop}%`;
         const px = 63 - measure('small', t) + 1;
-        f.text('small', t, px, 31, C.label);
+        rollText(f, 'small', 'wx.pop', t, rightAt('small', 63), 31, C.label);
         WX_DROP.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(px - 5 + i, 27 + j, 1, 1, WX_BLUE); }));
         popLeft = px - 5;
       }
       if (wx.hi != null && wx.lo != null) {
         let hl = `H ${wx.hi}° L ${wx.lo}°`;
         if (measure('small', hl) + 3 > popLeft) hl = `H ${wx.hi} L ${wx.lo}`;
-        f.text('small', hl, 0, 31, C.grey);
+        rollText(f, 'small', 'wx.hl', hl, () => 0, 31, C.grey);
       }
     }
 
@@ -921,15 +944,15 @@
     // high/low line: glyph + WATCH / WARN in its color, right-aligned to x62;
     // a tornado warning blinks (hidden on the blink's "on" phase).
     function drawTopBar(f, wx, top) {
-      const { shadow, warn, blink } = top || {};
-      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
+      const { shadow, warn, blink, layout } = top || {};
+      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0, null, iconAt(layout || 'now'));
       // The optional 1px shadow down and right in the temperature's color
       // (20%, as on the conditions screen), under the white temperature.
       if (shadow) {
         const sh = scaleColor(tempColor(wx.temp, wx.c), 0.2);
-        f.text('small', '°', f.text('5x7', String(wx.temp), FD_TEMP_X + 1, 8, sh), 7, sh);
+        f.text('small', '°', rollText(f, '5x7', 'wx.top', String(wx.temp), () => FD_TEMP_X + 1, 8, sh), 7, sh);
       }
-      const x = f.text('5x7', String(wx.temp), FD_TEMP_X, 7, C.label);
+      const x = rollText(f, '5x7', 'wx.top', String(wx.temp), () => FD_TEMP_X, 7, C.label);
       f.text('small', '°', x, 6, C.label);
       // Right edge of the temperature's ink (the 2px degree sign), shadow
       // included.
@@ -965,7 +988,7 @@
       wx.days.slice(0, 5).forEach((d, i) => {
         const cx = i * FD_PITCH + 6;
         ctext(f, 'small', d.d, cx, 15, C.grey);
-        if (icons.ICONS[d.icon]) drawIcon(f, d.icon, cx - 4, 17);
+        if (icons.ICONS[d.icon]) drawIcon(f, d.icon, cx - 4, 17, null, iconAt('5day'));
         drawDayTemp(f, String(d.hi), cx, 31, tempColor(d.hi, wx.c));
       });
     }
@@ -980,7 +1003,7 @@
       wx.hours.slice(0, 4).forEach((h, i) => {
         const cx = i * 16 + 7;
         ctext(f, 'small', h.h, cx, 15, C.grey);
-        if (icons.ICONS[h.icon]) drawIcon(f, h.icon, cx - 4, 17);
+        if (icons.ICONS[h.icon]) drawIcon(f, h.icon, cx - 4, 17, null, iconAt('hourly'));
         drawDayTemp(f, String(h.t), cx, 31, tempColor(h.t, wx.c));
       });
     }
@@ -1074,9 +1097,9 @@
       if (((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
         // The forecast layouts' top bar carries a warning on its high/low line.
         const top = { shadow: !!r.tempShadow, warn: p.warn, blink: o.blink };
-        if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, top);
-        else if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
-        else if (r.wx.days && r.wx.days.length) drawFiveDay(f, r.wx, top);
+        if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, { ...top, layout: 'now' });
+        else if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, { ...top, layout: 'hourly' });
+        else if (r.wx.days && r.wx.days.length) drawFiveDay(f, r.wx, { ...top, layout: '5day' });
         else drawWeatherScreen(f, r.wx, p.warn, o.blink, r.tempShadow);
         return f;
       }
@@ -1133,7 +1156,7 @@
         if (icon) clear([x0, top + 4, x0 + 7, top + 11]);
         clear(textBox('small', t, x0 + (icon ? 10 : 0), top + 10));
         drawIndicator();
-        if (icon) drawIcon(f, icon, x0, top + 4);
+        if (icon) drawIcon(f, icon, x0, top + 4, null, iconAt('radar'));
         f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
         if (ws) drawWarnTag();
         return f;
@@ -1342,7 +1365,7 @@
       const clock = clockText(now);
       const label = 'NO GAMES';
       const top = Math.floor((32 - 18) / 2);
-      f.text('clock', clock, Math.floor((64 - measure('clock', clock)) / 2), top + 10, C.clock);
+      rollText(f, 'clock', 'big.clock', clock, centerX('clock'), top + 10, C.clock);
       f.text('small', label, Math.floor((64 - measure('small', label)) / 2), top + 18, C.noTrains);
     }
 
@@ -1902,18 +1925,48 @@
       return f;
     }
 
+    // Screen change (S3): the new screen pushes the old one's last frame
+    // off the panel sideways over SCREEN_SLIDE_MS, SLIDE_GAP unlit columns
+    // between them. dir 1: the new screen comes in from the right (a later
+    // screen); -1: from the left. slideOffset(t) is how far it has come,
+    // 0..64 + SLIDE_GAP px, t ms into the slide.
+    const SCREEN_SLIDE_MS = 450, SLIDE_GAP = 4;
+    const slideOffset = (t) => Math.round(easeInOut(Math.max(0, Math.min(1, t / SCREEN_SLIDE_MS))) * (64 + SLIDE_GAP));
+    function slideFrames(from, f, d, dir) {
+      const w = f.w, h = f.h, cur = f.px.slice();
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          // Which frame, and which of its columns, lands on column x (none: the gap).
+          let src = null, sx = 0;
+          if (dir >= 0) {
+            if (x < w - d) { src = from; sx = x + d; } else if (x >= w - d + SLIDE_GAP) { src = cur; sx = x - (w - d + SLIDE_GAP); }
+          } else if (x >= d) { src = from; sx = x - d; } else if (x < d - SLIDE_GAP) { src = cur; sx = x + w - (d - SLIDE_GAP); }
+          const i = (y * w + x) * 3, j = (y * w + sx) * 3;
+          f.px[i] = src ? src[j] : 0; f.px[i + 1] = src ? src[j + 1] : 0; f.px[i + 2] = src ? src[j + 2] : 0;
+        }
+      }
+      return f;
+    }
+
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock
-    // rolls (see takeRoll).
+    // rolls (see takeRoll). opts.slide ({from: the old screen's pixels, t:
+    // ms into the slide, dir}): the screen-change slide, after brightness
+    // (from is a shown frame). opts.iconT: ms on the board's clock for
+    // animated weather icons (layouts listed in radar.iconAnim; S3).
     function render(p, opts) {
       const o = opts || {};
       const screen = o.screen || p.screen;
       NR = o.roller || o.nums ? { roller: o.roller, rolls: o.nums } : null;
+      ICON_T = o.iconT != null ? o.iconT : null;
+      ICON_ANIMATED = (p.radar && p.radar.iconAnim) || [];
       let f;
       try {
         f = screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
           : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderSkyline(p, o) : renderTransit(p, o);
-      } finally { NR = null; }
-      return applyBrightness(f, p.bright);
+      } finally { NR = null; ICON_T = null; ICON_ANIMATED = []; }
+      applyBrightness(f, p.bright);
+      if (o.slide && o.slide.from) slideFrames(o.slide.from, f, slideOffset(o.slide.t || 0), o.slide.dir == null ? 1 : o.slide.dir);
+      return f;
     }
 
     // Time texts per transit slot at `now`, keyed for change detection.
@@ -1958,7 +2011,7 @@
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, renderChooser, renderSkyline, SKY, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
-      ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller,
+      ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, iconRows,
     };
   }
 

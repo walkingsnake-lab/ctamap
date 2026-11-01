@@ -111,6 +111,49 @@ once.
 `PORTAL` with the MAC address means the network wants a login page; `NO
 WIFI` means none of the networks could be joined (it retries).
 
+### The knob (optional)
+
+An Adafruit 5880 I2C rotary encoder plugged into the STEMMA QT port (any
+STEMMA QT / Qwiic cable, no soldering). Turn it to choose AUTO, TRANSIT,
+WEATHER or SPORTS; rest about a second and the board switches (design spec
+§10, "Knob"). The serial log says `[knob] encoder found` or `[knob] no
+encoder on the STEMMA QT port` at startup, and `[board] knob: <category>`
+after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
+`secrets.h`. Without a knob the board runs as before.
+
+### The light sensor (optional)
+
+An Adafruit VEML7700 (4162 flat, or 5378 right-angle) chained off the knob's
+second STEMMA QT socket. With the phone's brightness on Auto it follows the
+room: full at `BRIGHT_LUX` and above, the phone's Dark room level at
+`DARK_LUX` and below, linear in log lux between (`src/light.h`). A change
+must last 5 s before the level moves, then it fades over 2 s. The serial log
+says `[light] VEML7700 found` or `[light] no light sensor` at startup, and
+`[light] <lux> lx: <level>%` each time the level moves; the control page's
+Health tab shows the reading. The lux end points are guesses for the bar
+sleeve case's 2 mm hole: tune them from those readings. Without a sensor (or
+if it stops answering for 10 s) Auto is sunrise and sunset, as before.
+
+### If the picture glitches
+
+- **Shifted a pixel, or stray flickering pixels:** the panel latches data on
+  the other clock edge. Flip `MATRIX_CLK_PHASE` (0 or 1) in `secrets.h`.
+- **Glitches that remain with the clock edge right:** try
+  `MATRIX_DOUBLE_BUFFER 0` (draws straight onto the panel, as the driver test
+  sketch did).
+- **Wrong colors (green shows as blue, blue as green):** the panel's color
+  lines are wired in another order. Set `MATRIX_COLOR_ORDER "RBG"` in
+  `secrets.h` (red/green swapped: `"GRB"`; red/blue: `"BGR"`). It reassigns the
+  data pins, so the picture and timing are otherwise unchanged.
+- The serial log's first lines show the refresh rate and these settings.
+
+### Going back to CircuitPython
+
+Press RESET, wait for the NeoPixel to turn purple, press RESET again: the
+`MATRXS3BOOT` drive appears. Drag the CircuitPython `.uf2` onto it. If no
+drive appears, use Open Installer on circuitpython.org for the Matrix Portal
+S3.
+
 ## A board for someone else (by hand)
 
 `scripts/setup-board.js` (above) does all of this in one command. By hand:
@@ -142,16 +185,15 @@ on demand. Up to 8 networks are kept, the newest tried first.
 
 Once a board has run a setup build, new firmware can reach it over WiFi:
 
-1. **Get a generic build** (no `secrets.h` compiled in):
-   - **CI:** every push to `main` that touches `firmware-s3/` builds one
-     (Actions → "S3 firmware" → the run's `ctaboard-<commit>` artifact; unzip
-     it for `ctaboard.ino.bin`).
-   - **Or locally:** move `secrets.h` out of `ctaboard/`, run `node
-     scripts/stamp-firmware-version.js` on a clean commit, then Sketch →
-     Export Compiled Binary; the file is `ctaboard/build/…/ctaboard.ino.bin`
-     (not the `merged` one). Move `secrets.h` back.
-2. **Upload it** on the control page: Board tab → Firmware updates → Upload
-   .bin. It goes to **Beta**. The server refuses setup builds (they contain
+1. **CI builds, signs and publishes it to Beta** on every merge to `main`
+   that touches `firmware-s3/` (once the signing key is set up: "Signed
+   builds" below). Nothing to do.
+2. **Or by hand:** a generic build (no `secrets.h`; Sketch → Export Compiled
+   Binary on a clean, stamped commit, the `.bin` that isn't `merged`), signed
+   with `node scripts/sign-firmware.js <ctaboard.ino.bin>` (needs the
+   signing key on your computer). On the control page: Board tab → Firmware
+   updates → Upload, picking the `.bin` and its `.sig` together. It goes to
+   **Beta**. The server refuses unsigned builds, setup builds (they contain
    your passwords), unstamped or `_dirty` builds, merged images, and anything
    that isn't this firmware for the S3.
 3. **Boards follow their channel** (Updates, per board): Stable (default),
@@ -178,55 +220,37 @@ Safety:
 Serial log lines start with `[ota]`: the running slot at startup, each
 install, and the trial's outcome.
 
-### The knob (optional)
+## Signed builds
 
-An Adafruit 5880 I2C rotary encoder plugged into the STEMMA QT port (any
-STEMMA QT / Qwiic cable, no soldering). Turn it to choose AUTO, TRANSIT,
-WEATHER or SPORTS; rest about a second and the board switches (design spec
-§10, "Knob"). The serial log says `[knob] encoder found` or `[knob] no
-encoder on the STEMMA QT port` at startup, and `[board] knob: <category>`
-after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
-`secrets.h`. Without a knob the board runs as before.
+Every OTA build is signed, and boards install only builds signed with the
+key built into them, so even someone who took over the server couldn't push
+firmware to anyone's board. Set up once, on your computer:
 
-### The light sensor (optional)
+```sh
+node scripts/firmware-key.js --github
+```
 
-An Adafruit VEML7700 (4162 flat, or 5378 right-angle) chained off the knob's
-second STEMMA QT socket. With the phone's brightness on Auto it follows the
-room: the Bright room level at `BRIGHT_LUX` and above, the Dark room level
-at `DARK_LUX` and below, linear in log lux between (`src/light.h`). A change
-must last 5 s before the level moves, then it fades over 2 s. The serial log
-says `[light] VEML7700 found` or `[light] no light sensor` at startup, and
-`[light] <lux> lx: <level>%` each time the level moves; the control page's
-Health tab shows the reading. The lux end points are guesses for the bar
-sleeve case's 2 mm hole: tune them from those readings. Without a sensor (or
-if it stops answering for 10 s) Auto is sunrise and sunset, as before.
+- Makes the signing key, `~/.ctaboard/firmware-signing-key.pem`. **Back it
+  up** (a password manager). If it's lost, boards can only get builds
+  signed with a new key over USB.
+- Writes the public key into the repo: `firmware-s3/firmware-signing.pub.pem`
+  and `firmware-s3/ctaboard/src/signing_key.h`. Commit both and merge.
+- With `--github` (needs `gh`): creates the `firmware-release` environment,
+  usable only from `main`, holding the key and a new deploy token. A workflow
+  edited on another branch can't read them. It prints a `fly secrets set
+  FIRMWARE_DEPLOY_TOKEN=…` command; run it so the server accepts CI's uploads.
 
-### If the picture glitches
-
-- **Shifted a pixel, or stray flickering pixels:** the panel latches data on
-  the other clock edge. Flip `MATRIX_CLK_PHASE` (0 or 1) in `secrets.h`.
-- **Glitches that remain with the clock edge right:** try
-  `MATRIX_DOUBLE_BUFFER 0` (draws straight onto the panel, as the driver test
-  sketch did).
-- **Wrong colors (green shows as blue, blue as green):** the panel's color
-  lines are wired in another order. Set `MATRIX_COLOR_ORDER "RBG"` in
-  `secrets.h` (red/green swapped: `"GRB"`; red/blue: `"BGR"`). It reassigns the
-  data pins, so the picture and timing are otherwise unchanged.
-- The serial log's first lines show the refresh rate and these settings.
-
-### Going back to CircuitPython
-
-Press RESET, wait for the NeoPixel to turn purple, press RESET again: the
-`MATRXS3BOOT` drive appears. Drag the CircuitPython `.uf2` onto it. If no
-drive appears, use Open Installer on circuitpython.org for the Matrix Portal
-S3.
+Until then, the server takes no builds and boards install none: the
+repo's key is empty. Boards flashed before signing existed (#440–#445)
+install the first signed build like any other and check signatures from
+then on.
 
 ## Status LED
 
 | Color | Means |
 |---|---|
 | off | Running normally |
-| blue | A request is in progress (animations pause until it returns) |
+| blue | A request is in progress (on the network task: animations keep running) |
 | yellow | Joining WiFi |
 | amber | Captive portal |
 | red | No WiFi, or the server isn't answering |
@@ -247,8 +271,9 @@ S3.
 | `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |
 | `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |
-| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS, buttons, the knob (seesaw over I2C, turns and its push button), NeoPixel, watchdog, settings and OTA state in NVS, OTA slot writes, the WiFi setup network (`SetupPortal`). The only code that includes Arduino headers. |
+| `ctaboard/src/device.*` | Hardware only: DMA panel, WiFi + HTTPS (requests on a core-0 task, `NetWorker`), buttons, the knob (seesaw over I2C, turns and its push button), NeoPixel, watchdog, settings and OTA state in NVS, OTA slot writes, the WiFi setup network (`SetupPortal`). The only code that includes Arduino headers. |
 | `ctaboard/src/assets.h` | Fonts, icons, glyphs. **Generated** by `node scripts/build-firmware-assets.js`. |
+| `ctaboard/src/signing_key.h` | The public key OTA builds must be signed with. **Generated** by `node scripts/firmware-key.js`; empty until the key exists (then no OTA build installs). |
 | `ctaboard/src/certs.h` | Root certificates for HTTPS. **Generated** by `node scripts/build-firmware-certs.js`. |
 | `ctaboard/version.h` | The build's commit, for health. **Generated** by `node scripts/stamp-firmware-version.js`; gitignored. |
 | `tests/` | Run by `npm test` (needs g++ or clang++): `parity` renders every scenario in `firmware/tests/scenarios.js` and compares pixels with draw.js; `app_test` runs the main loop against a simulated server, clock, and buttons (OTA installs and trials included); `config_test` checks settings in flash and the OTA status screens. |
@@ -269,7 +294,10 @@ S3.
   that curve: `MATRIX_CURVE` at full brightness, `MATRIX_NIGHT_CURVE` while
   dimmed. With `MATRIX_HW_DIM 1` the board dims in hardware (the driver's
   output-enable window, `k^2.2` of full so night is as dark as before) and
-  draws frames at full brightness, so colors keep every step.
+  draws frames at full brightness, so colors keep every step. The window
+  stops at `color::HW_MIN_OE` (16, about 28%), where its steps get coarse;
+  below that the renderer scales the colors for the rest (`color::hw_dim`).
+  The default night level, 40%, stays entirely in hardware.
   `MATRIX_CALIBRATE 1` shows a pattern for choosing on the panel.
 - Not verifiable here: speed, memory, WiFi, and TLS on the real S3. Those get
   checked on hardware from the serial log.

@@ -22,18 +22,23 @@ Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the desi
 - Optional shared token on board endpoints (`BOARD_TOKEN` Fly secret) to keep randoms off the CTA quota.
 
 ### Minimal animation
-Animation is deliberately limited so the board's network pauses (CircuitPython is single-threaded, and each HTTPS request through the M4's WiFi co-processor blocks the display for roughly a second or more) are invisible. The only animations are:
-- **Per-digit roll** when an arrival time changes, and the same roll for the **header clock** (transit, ticker) and the radar's **current time** at each minute. Only the changed digits move while the clock keeps its shape; a width change (`9:59`→`10:00`) rolls the whole clock. Nothing rolls across a screen change. The big overnight and no-games clocks, the radar's frame time, and temperatures and other weather numbers don't roll (board memory). Clock minute rollovers count as animations for the scheduler. Reference: `createNumRoller()` in `server/board/draw.js`.
+Animation was deliberately limited on the M4 so its network pauses (CircuitPython is single-threaded, and each HTTPS request through the M4's WiFi co-processor blocks the display for roughly a second or more) were invisible. On the S3, requests run on the other core (see *Scheduler*), so nothing pauses; the list below is still the whole set of animations, and anything marked S3 doesn't exist on the frozen M4:
+- **Per-digit roll** when an arrival time changes, and the same roll for the **header clock** (transit, ticker) and the radar's **current time** at each minute. Only the changed digits move while the clock keeps its shape; a width change (`9:59`→`10:00`) rolls the whole clock. Nothing rolls across a screen change. The radar's frame time doesn't roll. Clock minute rollovers count as animations for the scheduler. Reference: `createNumRoller()` in `server/board/draw.js`.
+- **S3:** the big overnight and no-games clocks roll too, and so do current-conditions numbers when a new payload changes them: the weather strip's temperature, and on the weather screen the big temperature, feels-like, high/low, rain chance, and the top bar's temperature. Forecast columns and the radar corner don't. (The M4 skipped these for memory.)
 - **Transit transitions:** a departing train fades out in place, the next time eases to amber, and rows fade in/out and slide (all under 1.2 s, at the same moments as digit rolls).
+- **Screen change (S3):** the new screen pushes the old one's last frame off sideways over 0.45 s (ease in-out), with a 4px unlit gap between them: a later screen in the order transit, ticker, weather, baseball, clock comes in from the right, an earlier one from the left; leaving the knob's chooser follows the way the knob turned. Status screens and the chooser itself appear at once (a turn should answer immediately). Reference: `slideFrames()` in `draw.js`, `Board::shown()` in `firmware-s3/ctaboard/src/app.cpp`.
 - **Tornado warning blink** on the weather strip and weather screens: 1 s on, 1 s off. (CTA line alerts are static: see §5.)
 - **Ticker page slide.**
 - **Radar loop.**
+- **Animated weather icons (S3, per layout on the phone):** rain falls, snow floats, clouds drift, the sun's rays and the moon's stars twinkle, fog lines drift, and a storm's bolt flickers (the only fast change, about a third of a second every two; slower than the tornado blink so the two don't read alike). Frames in `ICON_ANIM` in `server/board/icons.js`; frame 0 is the static icon.
 - **Knob chooser slide** (S3; §10, *Knob*): 180 ms per click, only while someone is turning the knob.
 
 No blinking colons, no scrolling text, and no alert text screens anywhere. Alerts are shown only as indicators (see §5, §6, §7).
 
 ### Scheduler (board main loop)
-A small cooperative scheduler lines up network requests with animation gaps:
+**S3:** the board's requests run on a network task on core 0 (beside the WiFi stack) while the loop keeps drawing on core 1 (`device::NetWorker`, `app::Worker`). One request is out at a time; jobs simply run when due, and nothing on the panel waits for them. A request still out after 45 s (`WORK_STUCK_MS`) stops the loop feeding the watchdog, which restarts the board, so a hung TLS read can't leave stale times up forever. Without the worker (it failed to start, or the M4) the rules below apply.
+
+On the M4, a small cooperative scheduler lines up network requests with animation gaps:
 - **Animation timeline:** the board tracks when its next animation will start: next digit roll (computed from arrival timestamps), next list slide (chronological view), next ticker slide, radar frame steps, and screen switches.
 - **Network jobs:** each job (version check, combined update, radar frame) has a **due time** and a **deadline**.
 - **Each loop pass:** if a job is due and the next animation is at least the **fetch budget** away, run it now; otherwise wait for the next gap.
@@ -114,7 +119,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | Shoreline | `#34485e` |
 | Alert circle (transit and ticker) | red `#ff2020` with white `#ffffff` "!" |
 
-- **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from WeatherAPI); both levels set per board on the phone. An S3 with the optional light sensor (VEML7700) follows the room instead, between the same two levels (§10). Every dim element has a **minimum floor** so it never drops to black at night.
+- **Global brightness:** 100% sunrise to sunset, ~40% overnight (times from WeatherAPI); the night level is set per board on the phone. An S3 with the optional light sensor (VEML7700) follows the room instead, from full down to the night level (§10). Every dim element has a **minimum floor** so it never drops to black at night.
 - **Radar rain fills** render at ~65%; **ticker row fills** at 55%. Text stays full brightness.
 - Rule of thumb from the session: **lit strokes on dark survive; dark strokes on lit don't** (diffuser glow fills them in).
 - **Clock colons are steady** on every clock. The big clocks (overnight, no-games) use `#cccccc`; the transit and ticker header clocks match their station names (`#555555` transit, `#808080` ticker); the radar's frame time is dimmed (`#7a7a7a`, AM/PM `#8f8f8f`) so it doesn't read as the current time.
@@ -345,13 +350,14 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
   - **Weather visits:** Off (default), While raining, or Always; every N min for M s.
   - **Jump to weather for NWS alerts:** Off (default), Warnings, or Watches too; stays on the weather screen while the alert is on, over baseball.
   - **Baseball takes over for:** Cubs, White Sox, Postseason (default all); pregame window 0–2 h (default 30 min), final 0–60 min (default 15); during live games show live games (default), Cubs/Sox first, or all games.
-- **Brightness:** Auto, fixed level, or Off. Auto has a **Day** and a **Night** level (defaults 100% and 40%). On a board with the light sensor, Auto follows the room instead and the two become **Bright room** and **Dark room**: linear in log lux between them, moving only once a change has lasted 5 s (a passing shadow doesn't dim it), then fading over 2 s. The phone's Fixed and Off still win. Health shows the sensor's reading, for tuning the lux end points in `light.h`.
+- **Brightness:** Auto, fixed level, or Off. Auto is full by day and has a **Night** level (default 40%). On a board with the light sensor, Auto follows the room instead, from full in a bright room to the **Dark room** level (the same setting): linear in log lux between them, moving only once a change has lasted 5 s (a passing shadow doesn't dim it), then fading over 2 s. The phone's Fixed and Off still win. Health shows the sensor's reading, for tuning the lux end points in `light.h`.
 - **Temperature unit:** °F (default) or °C, per board, for every weather display (weather strip, weather screen, radar corner). The server converts; temperature colors still follow the °F scale. Wind stays mph.
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
 - **Transit layout:** station on top (header) or key on top (station line at the bottom). **Header and weather strip:** independent on/off toggles per board (see §5 for how many rows each combination fits; the key layout has no weather strip).
 - **Header clock** (transit and ticker) on/off, and **destination names** in white or the line's color (Brown and Purple read dim as text in their true colors).
+- **Weather icons** (Weather): Animated or Static, kept per layout (conditions, 5-day, hourly) and for the radar corner's icon (shown when its corner is set to Weather). Default Animated; the frozen M4 always draws them static.
 - **Time dim steps** (Transit): the third arrival time at 20% instead of 40% (default off).
 - **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.
 
@@ -384,7 +390,8 @@ Decided Oct 30, 2026, with more boards and other owners in mind: nobody should n
 - **Install moment:** in an animation gap (or after waiting 2 min); the panel shows `UPDATING` and the percentage. It takes 10–30 s.
 - **Trial and rollback:** the new build is kept once it has had a good update and run a minute; it rolls back to the previous slot if it can't reach the server within 5 min or restarts more than 3 times first, and isn't reinstalled until the control page's Try again. Rolling back is done by the firmware itself (the Arduino core marks every new build valid at boot, so the bootloader's own rollback never triggers).
 - **Left alone:** boards running `dev` or `_dirty` builds (someone's test build); the M4.
-- **Later:** CI publishing straight to Beta (today CI builds the generic `.bin` as an artifact and the owner uploads it); a browser-based first install with WiFi entry (ESP Web Tools + Improv), so a new owner needs no IDE at all; per-board tokens before boards of different owners share one server (today every board shares `BOARD_TOKEN`).
+- **Signed (Oct 31, 2026):** builds are signed with a key only the owner's computer and a main-only GitHub environment hold; the server and the board each check the signature, so a compromised server can't push firmware. CI signs and publishes each build of `main` to Beta with a deploy token that can do nothing else.
+- **Later (some done since):** CI publishing straight to Beta (today CI builds the generic `.bin` as an artifact and the owner uploads it); a browser-based first install with WiFi entry (ESP Web Tools + Improv), so a new owner needs no IDE at all; per-board tokens before boards of different owners share one server (today every board shares `BOARD_TOKEN`).
 
 ### Boards for other people (keys and WiFi setup)
 Decided Oct 31, 2026.

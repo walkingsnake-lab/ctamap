@@ -158,10 +158,7 @@
       <button data-v="off">Off</button>
     </div>
     <input type="range" id="level" min="5" max="100" step="5" aria-label="Brightness level" hidden>
-    <div id="brightAuto" hidden>
-      <div class="row"><span class="nw" id="brightMaxL" style="min-width:6.2em">Day</span><input type="range" id="brightMax" min="5" max="100" step="5" aria-label="Brightest auto brightness" style="flex:1;margin:0"><span id="brightMaxV" class="nw"></span></div>
-      <div class="row"><span class="nw" id="brightMinL" style="min-width:6.2em">Night</span><input type="range" id="brightMin" min="5" max="100" step="5" aria-label="Darkest auto brightness" style="flex:1;margin:0"><span id="brightMinV" class="nw"></span></div>
-    </div>
+    <div class="row" id="brightAuto" hidden><span class="nw" id="brightMinL">Night</span><input type="range" id="brightMin" min="5" max="100" step="5" aria-label="Darkest auto brightness" style="flex:1;margin:0"><span id="brightMinV" class="nw"></span></div>
     <p class="hint" id="brightHint"></p>
   </section>
 
@@ -205,6 +202,9 @@
       <button data-v="hourly">Hourly</button>
     </div>
     <p class="hint" id="wxViewHint"></p>
+    <div class="row"><span>Icons</span>
+      <select id="wxIcons" aria-label="Weather screen icons" style="width:auto"><option value="animated">Animated</option><option value="static">Static</option></select></div>
+    <p class="hint">Each layout keeps its own choice. Animated: rain falls, clouds drift, the sun's rays twinkle (Matrix Portal S3).</p>
     <!-- Rain bars need 15-minute precipitation, which the weather source
          (WeatherAPI) doesn't send; the server treats 'bars' and 'both' as
          'radar' without it. Shown again once a source has it. -->
@@ -235,6 +235,8 @@
     </div>
     <p class="hint" id="radarCornerHint"></p>
     <div class="row" id="radarCondRow"><span>Temperature under the clock</span><label class="switch"><input type="checkbox" id="radarCond"><span></span></label></div>
+    <div class="row" id="radarIconsRow"><span>Weather icon</span>
+      <select id="radarIcons" aria-label="Radar corner icon" style="width:auto"><option value="animated">Animated</option><option value="static">Static</option></select></div>
     <div class="row"><span>Radar brightness</span>
       <select id="radarBright" aria-label="Radar brightness" style="width:auto"><option value="40">40%</option><option value="50">50%</option><option value="60">60%</option><option value="70">70%</option><option value="80">80%</option><option value="90">90%</option><option value="100">100%</option><option value="120">120%</option><option value="150">150%</option></select></div>
     <div class="row"><span>Loop speed</span>
@@ -358,8 +360,8 @@
     <div class="row" id="fwRetryRow" hidden><span class="hint" id="fwRetryText" style="margin:0"></span><button class="small" id="fwRetry">Try again</button></div>
     <label class="field admin">Builds (shared by every board)</label>
     <ul id="fwBuilds" class="admin"></ul>
-    <div class="row admin"><span class="nw">Add a build</span><label class="small file">Upload .bin<input type="file" id="fwFile" accept=".bin,application/octet-stream"></label></div>
-    <p class="hint admin">ctaboard.ino.bin from a build without secrets.h, or the CI build. A new build goes to Beta; make it Stable once it has run well.</p>
+    <div class="row admin"><span class="nw">Add a build</span><label class="small file">Upload .bin + .sig<input type="file" id="fwFile" multiple accept=".bin,.sig,application/octet-stream"></label></div>
+    <p class="hint admin" id="fwUploadHint">CI publishes each build of main to Beta by itself. To add one by hand, pick ctaboard.ino.bin and its .sig together (the CI artifacts, or node scripts/sign-firmware.js). Make a build Stable once it has run well.</p>
   </section>
 
   <section data-tab="health">
@@ -597,10 +599,9 @@
     $('level').hidden = !fixed;
     if (fixed) $('level').value = board.bright;
     $('brightAuto').hidden = board.bright !== 'auto';
-    for (const [k, d] of [['brightMin', 40], ['brightMax', 100]]) {
-      if (document.activeElement === $(k)) continue;
-      $(k).value = board[k] || d;
-      $(k + 'V').textContent = `${board[k] || d}%`;
+    if (document.activeElement !== $('brightMin')) {
+      $('brightMin').value = board.brightMin || 40;
+      $('brightMinV').textContent = `${board.brightMin || 40}%`;
     }
     renderBrightHint();
     $('station').value = board.station.mapid;
@@ -649,6 +650,9 @@
     $('radarCondRow').hidden = corner === 'temp' || corner === 'age' || corner === 'none';
     $('tempShadow').checked = board.tempShadow === true;
     pressed('wxView', board.wxView === '5day' || board.wxView === 'hourly' ? board.wxView : 'now');
+    $('wxIcons').value = board[wxIconsKey()] === 'static' ? 'static' : 'animated';
+    $('radarIcons').value = board.iconsRadar === 'static' ? 'static' : 'animated';
+    $('radarIconsRow').hidden = corner !== 'temp';
     const wr = board.wxRain === 'bars' || board.wxRain === 'both' ? board.wxRain : 'radar';
     pressed('wxRain', wr);
     $('wxRainEveryRow').style.display = wr === 'both' ? '' : 'none';
@@ -742,10 +746,8 @@
     save({ bright: v === 'fixed' ? (Number.isInteger(board.bright) ? board.bright : 60) : v });
   });
   $('level').addEventListener('change', (e) => save({ bright: Number(e.target.value) }));
-  for (const k of ['brightMin', 'brightMax']) {
-    $(k).addEventListener('input', (e) => { $(k + 'V').textContent = `${e.target.value}%`; });
-    $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
-  }
+  $('brightMin').addEventListener('input', (e) => { $('brightMinV').textContent = `${e.target.value}%`; });
+  $('brightMin').addEventListener('change', (e) => save({ brightMin: Number(e.target.value) }));
   $('station').addEventListener('change', (e) => save({ station: { mapid: e.target.value } }));
   const saveName = () => save({ station: { mapid: board.station.mapid, name: $('name').value } });
   $('saveName').addEventListener('click', saveName);
@@ -758,6 +760,10 @@
   $('wxRainLoops').addEventListener('change', (e) => save({ wxRainLoops: Number(e.target.value) }));
   $('wxRain').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxRain: v }); });
   $('wxView').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxView: v }); });
+  // Icons: the setting of the layout picked above (iconsNow, icons5day, iconsHourly).
+  function wxIconsKey() { return board.wxView === '5day' ? 'icons5day' : board.wxView === 'hourly' ? 'iconsHourly' : 'iconsNow'; }
+  $('wxIcons').addEventListener('change', (e) => save({ [wxIconsKey()]: e.target.value }));
+  $('radarIcons').addEventListener('change', (e) => save({ iconsRadar: e.target.value }));
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
   $('clockFace').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ clockFace: v }); });
   $('boats').addEventListener('change', (e) => save({ boats: e.target.checked }));
@@ -880,6 +886,7 @@
     else if (kind === 'error') hint = `The last install failed (${what}). The board tries again every 10 minutes.`;
     else if (track === 'off') hint = 'This board keeps whatever it runs now.';
     else hint = 'The board installs a new build within a minute of it being offered, between animations. It shows UPDATING while it downloads.';
+    if (!SCOPE && fwStatus.signing === false) hint = 'No signing key yet: the server takes no builds and boards install none. Run node scripts/firmware-key.js --github (README, "Signed builds").';
     $('fwHint').textContent = hint;
     $('fwRetryRow').hidden = kind !== 'rolledback';
     $('fwRetryText').textContent = `${what} was rolled back: it couldn't reach the server, or kept restarting.`;
@@ -889,7 +896,7 @@
       nm.className = 'nm';
       nm.textContent = b.v;
       const sm = document.createElement('small');
-      sm.textContent = `${fwDate(b.at)} · ${(b.size / 1024).toFixed(0)} KB`;
+      sm.textContent = `${fwDate(b.at)} · ${(b.size / 1024).toFixed(0)} KB${b.signed ? '' : ' · unsigned: only boards from before signing install it'}`;
       nm.append(sm);
       const btn = (label, onClick, pressedNow) => {
         const x = document.createElement('button');
@@ -925,12 +932,16 @@
   $('fwTrack').addEventListener('change', (e) => save({ fw: e.target.value }));
   $('fwRetry').addEventListener('click', () => save({ fwRetry: (board.fwRetry || 0) + 1 }));
   $('fwFile').addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
+    const files = [...(e.target.files || [])];
     e.target.value = '';
-    if (!file) return;
+    if (!files.length) return;
+    const bin = files.find((f) => !f.name.endsWith('.sig'));
+    const sigFile = files.find((f) => f.name.endsWith('.sig'));
+    if (!bin || !sigFile) return setStatus('Pick both files: ctaboard.ino.bin and ctaboard.ino.bin.sig.', true);
     setStatus('Uploading build…');
     try {
-      fwStatus = await api('api/firmware?channel=beta', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+      const sig = (await sigFile.text()).trim();
+      fwStatus = await api('api/firmware?channel=beta', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Firmware-Signature': sig }, body: bin });
       renderFirmware();
       setStatus(`Uploaded ${fwStatus.channels.beta} to Beta.`);
     } catch (err) { setStatus(err.message, true); }
@@ -939,13 +950,12 @@
   // Auto follows the light sensor on a board that reports one (health `lux`).
   function renderBrightHint() {
     if (!board) return;
-    const max = board.brightMax || 100, min = Math.min(board.brightMin || 40, max);
+    const min = board.brightMin || 40;
     const lux = health && health.lux != null ? health.lux : null;
-    // With a sensor the two levels are the bright-room and dark-room ends of its range.
-    $('brightMaxL').textContent = lux != null ? 'Bright room' : 'Day';
+    // With a sensor the night level is its dark-room level.
     $('brightMinL').textContent = lux != null ? 'Dark room' : 'Night';
     $('brightHint').textContent = board.bright === 'auto'
-      ? (lux != null ? `Follows the light sensor (${fmtLux(lux)} now), from ${max}% in a bright room to ${min}% in the dark.` : `${max}% from sunrise to sunset, ${min}% at night.`)
+      ? (lux != null ? `Follows the light sensor (${fmtLux(lux)} now): full in a bright room, ${min}% in the dark.` : `Full from sunrise to sunset, ${min}% at night.`)
       : Number.isInteger(board.bright) ? `${board.bright}%` : 'Panel off until you change this or the board restarts.';
   }
   const fmtLux = (l) => `${l < 10 ? l.toFixed(2) : Math.round(l)} lx`;
@@ -1021,7 +1031,10 @@
     setInterval(refreshPreview, 10000);
     loadHealth();
     if (!SCOPE) loadFirmware();
-    setInterval(() => { loadHealth(); loadBoards(); }, 30000);
+    // Health every 10 s (the board reports with each version check), so the
+    // light sensor's reading is current while tuning it; the board list every 30 s.
+    setInterval(() => { if (!document.hidden) loadHealth(); }, 10000);
+    setInterval(loadBoards, 30000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); loadBoards(); } });
   }
   init().catch((e) => setStatus('Could not load: ' + e.message, true));

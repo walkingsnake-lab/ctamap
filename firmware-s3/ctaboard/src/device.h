@@ -10,6 +10,7 @@
 
 #ifdef ARDUINO
 
+#include <atomic>
 #include <functional>
 #include <string>
 
@@ -60,10 +61,11 @@ class Panel : public app::Display {
   void show(const std::function<void(draw::Frame &)> &fn) override;
   long last_ms = 0, max_ms = 0;  // draw time, for the serial report
   int refresh_rate() const;
-  bool set_brightness(double k) override;
+  double set_brightness(double k) override;
   // Brightness k (0-1) with the day curve at full brightness and the night
-  // curve below it; hw: dim in hardware (else the renderer scales colors).
-  void dim(double k, bool hw);
+  // curve below it; hw: dim in hardware (color::hw_dim). Returns the share
+  // the renderer scales colors by (k without hw; 1 when hardware did it all).
+  double dim(double k, bool hw);
   void set_curves(int day, int night);
   int day_curve() const { return day_curve_; }
   int night_curve() const { return night_curve_; }
@@ -122,6 +124,7 @@ class Ota : public app::Ota {
   std::string bad() override { return st_.bad; }
   void keep() override;
   void roll_back(const std::string &why) override;
+  bool can_verify() override;
   std::string slot() const;  // the running app slot's label
 
  private:
@@ -205,6 +208,8 @@ class StatusLed : public app::Led {
   std::string state_;
 };
 
+// The loop's watchdog. feed() from any other task (the network worker,
+// through WifiNet::feed) does nothing: only the loop proves it isn't hung.
 class Watchdog : public app::Watchdog {
  public:
   explicit Watchdog(int seconds = 16);
@@ -212,6 +217,22 @@ class Watchdog : public app::Watchdog {
 
  private:
   bool on_ = false;
+  void *owner_ = nullptr;  // TaskHandle_t of the task that created it
+};
+
+// Runs the board's requests on core 0 (beside the WiFi stack) while the
+// loop keeps drawing on core 1 (app.h Worker). One request at a time.
+class NetWorker : public app::Worker {
+ public:
+  bool begin();  // starts the task; false: no worker, requests block the loop
+  void start(std::function<void()> work) override;
+  bool done() override { return done_.load(std::memory_order_acquire); }
+
+ private:
+  static void task(void *arg);
+  std::function<void()> work_;
+  void *go_ = nullptr;  // SemaphoreHandle_t
+  std::atomic<bool> done_{true};
 };
 
 std::string start_reason();  // POWER_ON, RESET_PIN, SOFTWARE, PANIC, WATCHDOG, BROWNOUT, ...

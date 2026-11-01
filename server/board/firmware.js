@@ -10,6 +10,14 @@
 // `fw`); /board/version offers it the build it should run, and
 // /board/firmware serves it.
 //
+// Builds are signed (ECDSA P-256 over SHA-256 of the .bin, a hex DER
+// signature): CI signs with the private key, which only the
+// firmware-release GitHub environment holds; the public key is
+// firmware-s3/firmware-signing.pub.pem (scripts/firmware-key.js). An
+// upload must carry a valid signature, and the board checks it again
+// before switching to a build (device.cpp Ota::finish). Without a public
+// key in the repo, no upload is accepted.
+//
 // Only generic builds are accepted: the firmware embeds a build mark
 // (`CTABOARD-BUILD:<version>:<generic|setup>;`, ctaboard.ino), and a setup
 // build has secrets.h compiled in (WiFi passwords, the token), so it must
@@ -29,6 +37,26 @@ const ESP32S3_CHIP_ID = 9;           // esp_image_header_t.chip_id
 const MARK_RE = /CTABOARD-BUILD:([A-Za-z0-9_]{1,48}):(generic|setup);/;
 const VERSION_RE = /^[0-9a-f]{7,40}$/;
 const HARDWARE = 'adafruit_matrixportal_s3';
+const PUBLIC_KEY_FILE = path.join(__dirname, '..', '..', 'firmware-s3', 'firmware-signing.pub.pem');
+const SIG_RE = /^[0-9a-f]{16,200}$/;
+
+// The public key builds are signed with, or null when the repo has none yet.
+function loadPublicKey(file = PUBLIC_KEY_FILE) {
+  let pem;
+  try { pem = fs.readFileSync(file, 'utf8'); } catch (e) { return null; }
+  if (!pem.includes('BEGIN PUBLIC KEY')) return null;
+  const key = crypto.createPublicKey(pem);
+  if (key.asymmetricKeyType !== 'ec' || key.asymmetricKeyDetails.namedCurve !== 'prime256v1') {
+    throw new Error(`${file}: not an ECDSA P-256 public key`);
+  }
+  return key;
+}
+
+// Whether `sig` (hex DER) is a signature of `buf` by `key`.
+function verifySignature(buf, sig, key) {
+  if (!key || typeof sig !== 'string' || !SIG_RE.test(sig)) return false;
+  try { return crypto.verify('sha256', buf, key, Buffer.from(sig, 'hex')); } catch (e) { return false; }
+}
 
 class FirmwareError extends Error {}
 
@@ -57,7 +85,8 @@ function inspect(buf) {
   return { v };
 }
 
-function createFirmware({ dir, log = console } = {}) {
+function createFirmware({ dir, log = console, publicKey = loadPublicKey() } = {}) {
+  if (!publicKey) log.warn('[board] no firmware signing key (firmware-s3/firmware-signing.pub.pem): OTA uploads are refused until scripts/firmware-key.js makes one');
   const root = path.join(dir, SUBDIR);
   const file = path.join(root, FILE_NAME);
   let state = { builds: {}, channels: { beta: null, stable: null } };
@@ -93,25 +122,29 @@ function createFirmware({ dir, log = console } = {}) {
 
   function status() {
     const builds = Object.entries(state.builds)
-      .map(([v, b]) => ({ v, size: b.size, sha: b.sha, at: b.at }))
+      .map(([v, b]) => ({ v, size: b.size, sha: b.sha, at: b.at, signed: !!b.sig }))
       .sort((a, b) => b.at - a.at);
-    return { builds, channels: { ...state.channels } };
+    return { builds, channels: { ...state.channels }, signing: !!publicKey };
   }
 
   return {
     status,
     has: (v) => Object.hasOwn(state.builds, v),
 
-    // Store an uploaded build; `channel` (beta, stable, or null) then points at it.
-    upload(buf, { channel = null, pinned = [], now = Math.floor(Date.now() / 1000) } = {}) {
+    // Store an uploaded build with its signature (hex); `channel` (beta,
+    // stable, or null) then points at it.
+    upload(buf, { sig = null, channel = null, pinned = [], now = Math.floor(Date.now() / 1000) } = {}) {
       if (channel != null && !CHANNELS.includes(channel)) throw new FirmwareError(`channel must be one of ${CHANNELS.join(', ')}`);
       const { v } = inspect(buf);
+      if (!publicKey) throw new FirmwareError('no signing key yet: run node scripts/firmware-key.js (firmware-s3/README.md, "Signed builds")');
+      if (!sig) throw new FirmwareError('unsigned: upload the build with its .sig (the CI artifact has both)');
+      if (!verifySignature(buf, String(sig).trim().toLowerCase(), publicKey)) throw new FirmwareError('the signature doesn\'t match this build and the repo\'s signing key');
       const sha = crypto.createHash('sha256').update(buf).digest('hex');
       fs.mkdirSync(root, { recursive: true });
       const tmp = `${binOf(v)}.${process.pid}.tmp`;
       fs.writeFileSync(tmp, buf);
       fs.renameSync(tmp, binOf(v));
-      state.builds[v] = { size: buf.length, sha, at: now };
+      state.builds[v] = { size: buf.length, sha, at: now, sig: String(sig).trim().toLowerCase() };
       if (channel) state.channels[channel] = v;
       prune(pinned);
       save();
@@ -155,11 +188,11 @@ function createFirmware({ dir, log = console } = {}) {
       if (!VERSION_RE.test(running)) return null;
       const t = this.target(board.fw || 'stable');
       if (!t || t.v === running) return null;
-      return { v: t.v, size: t.size, sha: t.sha, n: board.fwRetry || 0 };
+      return { v: t.v, size: t.size, sha: t.sha, n: board.fwRetry || 0, ...(t.sig ? { sig: t.sig } : {}) };
     },
 
     file: (v) => (Object.hasOwn(state.builds, v) ? { path: binOf(v), size: state.builds[v].size } : null),
   };
 }
 
-module.exports = { createFirmware, inspect, FirmwareError, CHANNELS, MAX_BYTES, MAX_BUILDS, VERSION_RE };
+module.exports = { createFirmware, inspect, loadPublicKey, verifySignature, PUBLIC_KEY_FILE, FirmwareError, CHANNELS, MAX_BYTES, MAX_BUILDS, VERSION_RE };

@@ -18,7 +18,6 @@ test('a fresh store starts with the home board at Morse and writes the file', ()
   assert.equal(home.screen, 'auto');
   assert.equal(home.bright, 'auto');
   assert.equal(home.brightMin, 40);
-  assert.equal(home.brightMax, 100);
   assert.equal(home.wxVisit, 'off');
   assert.equal(home.radarEvery, 4);
   assert.equal(home.radarFor, 60);
@@ -87,8 +86,7 @@ test('invalid updates are rejected and change nothing', () => {
     { brightMin: 0 },
     { brightMin: 101 },
     { brightMin: 'dim' },
-    { brightMax: 4 },
-    { brightMax: 100.5 },
+    { brightMax: 80 },
     { showHeader: 'yes' },
     { v: 99 },
   ];
