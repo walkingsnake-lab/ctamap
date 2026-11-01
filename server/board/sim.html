@@ -48,7 +48,7 @@
     <span class="note" id="previewNote"></span>
   </div>
   <div class="tests" id="tests">
-    <span>Test alerts, game, and radar (board too, 10 min):</span>
+    <span>Tests (board too, 10 min):</span>
     <span id="testLines"></span>
     <select id="testWarn" aria-label="Test weather alert">
       <option value="">No weather alert</option>
@@ -77,6 +77,32 @@
       <option value="continues">Bars: rain next 2 hrs</option>
       <option value="snow">Bars: snow in 40 min</option>
       <option value="snow now">Bars: snow next 2 hrs</option>
+    </select>
+    <select id="testWx" aria-label="Test weather state">
+      <option value="">Real weather</option>
+      <option value="clear">Weather: clear</option>
+      <option value="partly">Weather: partly cloudy</option>
+      <option value="mostly">Weather: mostly cloudy</option>
+      <option value="overcast">Weather: overcast</option>
+      <option value="fog">Weather: fog</option>
+      <option value="rain light">Weather: light rain</option>
+      <option value="rain">Weather: rain</option>
+      <option value="rain heavy">Weather: heavy rain</option>
+      <option value="ice">Weather: freezing rain</option>
+      <option value="snow light">Weather: light snow</option>
+      <option value="snow">Weather: snow</option>
+      <option value="snow heavy">Weather: heavy snow</option>
+      <option value="storm">Weather: thunderstorm</option>
+    </select>
+    <select id="testTod" aria-label="Test time of day">
+      <option value="">Real time of day</option>
+      <option value="day">Sky: midday</option>
+      <option value="sunrise">Sky: sunrise</option>
+      <option value="golden">Sky: golden hour</option>
+      <option value="sunset">Sky: sunset</option>
+      <option value="dusk">Sky: dusk</option>
+      <option value="twilight">Sky: twilight</option>
+      <option value="night">Sky: night</option>
     </select>
     <button class="chip" id="testClear">Clear</button>
     <span id="testLeft"></span>
@@ -322,7 +348,8 @@
 
     // Clock (skyline face): ambient motion on the wall clock (boats on the quarter hour).
     paintClock(rolled('clock', t, { full, o: { now: n, ms: Math.floor(n * 1000), blink, clouds: cloudStrips } }));
-    $('clockState').textContent = p.skyline ? p.skyline.st : 'no weather yet';
+    const tod = test.weather && test.weather.tod;
+    $('clockState').textContent = p.skyline ? p.skyline.st + (tod ? ` (test sky: ${tod}; clock shows the real time)` : '') : 'no weather yet';
   }
 
   let lastShown = null;
@@ -388,7 +415,7 @@
 
   // ---- test alerts ----
   const TEST_LINES = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
-  let test = { lines: [], warn: null, game: null, radar: null, bars: null, left: 0 };
+  let test = { lines: [], warn: null, game: null, radar: null, bars: null, weather: null, left: 0 };
   function renderTest() {
     for (const b of $('testLines').children) {
       const on = test.lines.includes(b.dataset.ln);
@@ -399,6 +426,8 @@
     $('testGame').value = test.game || '';
     $('testRadar').value = test.radar || '';
     $('testBars').value = test.bars || '';
+    $('testWx').value = (test.weather && test.weather.kind) || '';
+    $('testTod').value = (test.weather && test.weather.tod) || '';
     $('testLeft').textContent = test.left > 0 ? `clears in ${Math.ceil(test.left / 60)} min` : '';
   }
   async function setTest(next) {
@@ -420,7 +449,10 @@
   $('testGame').addEventListener('change', (e) => setTest({ ...test, game: e.target.value || null }));
   $('testRadar').addEventListener('change', (e) => setTest({ ...test, radar: e.target.value || null }));
   $('testBars').addEventListener('change', (e) => setTest({ ...test, bars: e.target.value || null }));
-  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null, game: null, radar: null, bars: null }));
+  const setWx = (k, v) => { const wx = { kind: null, tod: null, ...test.weather, [k]: v || null }; setTest({ ...test, weather: wx.kind || wx.tod ? wx : null }); };
+  $('testWx').addEventListener('change', (e) => setWx('kind', e.target.value));
+  $('testTod').addEventListener('change', (e) => setWx('tod', e.target.value));
+  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null, game: null, radar: null, bars: null, weather: null }));
   const pollTest = () => fetch('api/test?b=' + encodeURIComponent(board), { cache: 'no-store' }).then((r) => r.json()).then((t) => { test = t; renderTest(); }).catch(() => {});
   pollTest();
   setInterval(pollTest, 15000);

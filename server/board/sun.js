@@ -36,4 +36,24 @@ function moonPhase(t) {
   return { phase, lit: (1 - Math.cos(2 * Math.PI * phase)) / 2 };
 }
 
-module.exports = { sunPos, moonPhase, SYNODIC };
+// The time within 12 hours of `t` (either side) when the sun's elevation is
+// `target` degrees, rising (`dir` 1) or setting (-1), nearest `t`; or with
+// `target` 'max' / 'min', solar noon / midnight. Epoch seconds, to the
+// minute, or null when the sun never reaches it (polar day or night). For
+// the simulator's test times of day.
+function sunTime(t, lat, lon, target, dir = -1) {
+  const STEP = 60, t0 = t - 12 * 3600, n = (24 * 3600) / STEP;
+  let best = null, bestEl = target === 'min' ? Infinity : -Infinity;
+  let prev = sunPos(t0, lat, lon).el;
+  for (let i = 1; i <= n; i++) {
+    const ti = t0 + i * STEP, el = sunPos(ti, lat, lon).el;
+    if (target === 'max' || target === 'min') {
+      if (target === 'max' ? el > bestEl : el < bestEl) { bestEl = el; best = ti; }
+    } else if ((dir > 0 ? prev < target && el >= target : prev > target && el <= target)
+      && (best == null || Math.abs(ti - t) < Math.abs(best - t))) best = ti;
+    prev = el;
+  }
+  return best;
+}
+
+module.exports = { sunPos, moonPhase, sunTime, SYNODIC };

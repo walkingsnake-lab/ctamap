@@ -903,7 +903,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, bars: null, left: 0 });
+  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, bars: null, weather: null, left: 0 });
   let r = await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' } });
   assert.equal(r.status, 200);
   const t = await r.json();
@@ -924,6 +924,58 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   assert.ok(c.rows.every((x) => x.a === 0));
   assert.equal(c.warn, null);
   await s.close();
+});
+
+test('simulator test weather: a forced state and time of day reach every weather display, without real weather', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const upd = async () => (await s.req('/board/secret123/api/update?b=home')).body;
+  // No WEATHERAPI_KEY here: no weather at all.
+  assert.equal((await upd()).skyline, null);
+  let r = await post({ weather: { kind: 'snow heavy', tod: 'night' } });
+  assert.deepEqual((await r.json()).weather, { kind: 'snow heavy', tod: 'night' });
+  let b = await upd();
+  assert.deepEqual([b.skyline.st, b.skyline.pcp, b.skyline.lit], ['snow', { k: 's', n: 20 }, 1]);
+  assert.deepEqual([b.radar.wx.icon, b.radar.wx.word, b.radar.wx.temp], ['snow', 'SNOW', 24]);
+  assert.equal(b.wx.word, 'SNOW');
+  assert.equal(b.radar.wx.days, undefined);
+  // Clear at midday: the sun is up; at night the moon icon.
+  await post({ weather: { kind: 'clear', tod: 'day' } });
+  b = await upd();
+  assert.equal(b.skyline.st, 'clear');
+  assert.ok(b.skyline.sun);
+  assert.equal(b.radar.wx.icon, 'sun');
+  await post({ weather: { kind: 'clear', tod: 'night' } });
+  b = await upd();
+  assert.equal(b.radar.wx.icon, 'moon');
+  assert.equal(b.skyline.sun, null);
+  assert.ok(b.skyline.win > 99);
+  // The 5-day layout gets made-up days around the state.
+  s.store.update('home', { wxView: '5day' });
+  await post({ weather: { kind: 'storm' } });
+  b = await upd();
+  assert.equal(b.skyline.storm, 1);
+  assert.equal(b.radar.wx.days.length, 5);
+  assert.ok(b.radar.wx.days.every((d) => d.icon === 'storm'));
+  // Bad input is rejected; an empty set clears.
+  assert.equal((await post({ weather: { kind: 'hail' } })).status, 400);
+  assert.equal((await post({ weather: { tod: 'noon' } })).status, 400);
+  assert.equal((await post({ weather: 'snow' })).status, 400);
+  await post({});
+  assert.equal((await upd()).skyline, null);
+  await s.close();
+});
+
+test('sunTime: the moment the sun reaches an elevation, rising or setting, near a time', () => {
+  const { sunPos, sunTime } = require('./sun');
+  const lat = 42.0, lon = -87.67, t = Date.UTC(2026, 10, 1, 18) / 1000; // Nov 1, noon CST
+  const set = sunTime(t, lat, lon, 1, -1), rise = sunTime(t, lat, lon, 1, 1);
+  assert.ok(Math.abs(sunPos(set, lat, lon).el - 1) < 0.2 && set > t);
+  assert.ok(Math.abs(sunPos(rise, lat, lon).el - 1) < 0.2 && rise < t);
+  assert.ok(sunPos(sunTime(t, lat, lon, 'max'), lat, lon).el > 30);
+  assert.ok(sunPos(sunTime(t, lat, lon, 'min'), lat, lon).el < -50);
+  assert.equal(sunTime(t, lat, lon, 80, -1), null);
 });
 
 test('baseball: auto shows it during a game, weather warnings or not', async () => {
