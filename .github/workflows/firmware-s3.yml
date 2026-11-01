@@ -4,14 +4,19 @@
 # control page's Board tab, and ctaboard.ino.merged.bin, which
 # scripts/setup-board.js flashes onto new boards. Also catches firmware that
 # no longer compiles.
+#
+# On main, `publish` signs the build and puts it on the server's beta
+# channel (firmware-s3/README.md, "Signed builds"). It runs in the
+# firmware-release environment, which only main can use and which holds
+# the signing key and the deploy token; without them it skips, with a warning.
 name: S3 firmware
 
 on:
   push:
     branches: [main]
-    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', '.github/workflows/firmware-s3.yml']
+    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', '.github/workflows/firmware-s3.yml']
   pull_request:
-    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', '.github/workflows/firmware-s3.yml']
+    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', '.github/workflows/firmware-s3.yml']
   workflow_dispatch:
 
 permissions:
@@ -20,6 +25,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.mark.outputs.version }}
     env:
       # README "Setting up": Adafruit MatrixPortal ESP32-S3, USB CDC On Boot
       # enabled, the default TinyUF2 partitions (two 2 MB app slots for OTA).
@@ -71,3 +78,60 @@ jobs:
             build/ctaboard.ino.bin
             build/ctaboard.ino.merged.bin
           retention-days: 90
+
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: firmware-release
+    env:
+      BOARD_URL: https://ctamap.fly.dev
+      FIRMWARE_SIGNING_KEY: ${{ secrets.FIRMWARE_SIGNING_KEY }}
+      FIRMWARE_DEPLOY_TOKEN: ${{ secrets.FIRMWARE_DEPLOY_TOKEN }}
+    steps:
+      - name: Check the secrets
+        id: ready
+        run: |
+          if [ -z "$FIRMWARE_SIGNING_KEY" ] || [ -z "$FIRMWARE_DEPLOY_TOKEN" ]; then
+            echo "::warning::firmware-release has no signing key or deploy token: not published (run node scripts/firmware-key.js --github)"
+            echo "go=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.ready.outputs.go == '1'
+
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.go == '1'
+        with:
+          node-version: 20
+
+      - uses: actions/download-artifact@v4
+        if: steps.ready.outputs.go == '1'
+        with:
+          name: ctaboard-${{ needs.build.outputs.version }}
+          path: build
+
+      - name: Sign (checked against the repo's public key)
+        if: steps.ready.outputs.go == '1'
+        run: node scripts/sign-firmware.js build/ctaboard.ino.bin
+
+      - uses: actions/upload-artifact@v4
+        if: steps.ready.outputs.go == '1'
+        with:
+          name: ctaboard-${{ needs.build.outputs.version }}-signature
+          path: build/ctaboard.ino.bin.sig
+          retention-days: 90
+
+      - name: Publish to beta
+        if: steps.ready.outputs.go == '1'
+        run: |
+          code=$(curl -sS -o response.json -w '%{http_code}' -X POST "$BOARD_URL/board/firmware-upload" \
+            -H "X-Deploy-Token: $FIRMWARE_DEPLOY_TOKEN" \
+            -H "X-Firmware-Signature: $(tr -d '\n' < build/ctaboard.ino.bin.sig)" \
+            -H 'Content-Type: application/octet-stream' \
+            --data-binary @build/ctaboard.ino.bin)
+          cat response.json; echo
+          test "$code" = 200
+          echo "Published **${{ needs.build.outputs.version }}** to beta." >> "$GITHUB_STEP_SUMMARY"

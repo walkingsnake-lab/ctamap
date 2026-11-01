@@ -5,7 +5,11 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createFirmware, inspect, FirmwareError, MAX_BUILDS } = require('./firmware');
+const { createFirmware, inspect, FirmwareError, MAX_BUILDS, loadPublicKey, verifySignature } = require('./firmware');
+
+// A test signing key (the real one never leaves its owner's computer and CI).
+const { privateKey: KEY, publicKey: PUB } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+const signOf = (buf, key = KEY) => crypto.sign('sha256', buf, key).toString('hex');
 
 const quiet = { warn() {}, error() {} };
 
@@ -45,26 +49,26 @@ test('inspect: refuses anything that could hurt a board or leak secrets', () => 
 
 test('upload stores the build with its SHA-256; channels point at builds', () => {
   const dir = tmp();
-  const fw = createFirmware({ dir, log: quiet });
+  const fw = createFirmware({ dir, log: quiet, publicKey: PUB });
   const buf = fakeBuild('a1b2c3d');
-  let st = fw.upload(buf, { channel: 'beta', now: 100 });
+  let st = fw.upload(buf, { sig: signOf(buf), channel: 'beta', now: 100 });
   assert.equal(st.channels.beta, 'a1b2c3d');
   assert.equal(st.channels.stable, null);
-  assert.deepEqual(st.builds, [{ v: 'a1b2c3d', size: 4096, sha: crypto.createHash('sha256').update(buf).digest('hex'), at: 100 }]);
+  assert.deepEqual(st.builds, [{ v: 'a1b2c3d', size: 4096, sha: crypto.createHash('sha256').update(buf).digest('hex'), at: 100, signed: true }]);
   assert.deepEqual(fs.readFileSync(fw.file('a1b2c3d').path), buf);
   st = fw.setChannel('stable', 'a1b2c3d');
   assert.equal(st.channels.stable, 'a1b2c3d');
   assert.throws(() => fw.setChannel('stable', 'fffffff'), /unknown build/);
   assert.throws(() => fw.setChannel('nightly', 'a1b2c3d'), /channel/);
   // Survives a restart.
-  const again = createFirmware({ dir, log: quiet });
+  const again = createFirmware({ dir, log: quiet, publicKey: PUB });
   assert.deepEqual(again.status(), fw.status());
 });
 
 test('remove keeps builds a channel or a board uses', () => {
-  const fw = createFirmware({ dir: tmp(), log: quiet });
-  fw.upload(fakeBuild('aaaaaaa'), { channel: 'stable', now: 1 });
-  fw.upload(fakeBuild('bbbbbbb'), { now: 2 });
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  fw.upload(fakeBuild('aaaaaaa'), { sig: signOf(fakeBuild('aaaaaaa')), channel: 'stable', now: 1 });
+  fw.upload(fakeBuild('bbbbbbb'), { sig: signOf(fakeBuild('bbbbbbb')), now: 2 });
   assert.throws(() => fw.remove('aaaaaaa'), /stable build/);
   assert.throws(() => fw.remove('bbbbbbb', ['bbbbbbb']), /pinned/);
   const p = fw.file('bbbbbbb').path;
@@ -73,10 +77,10 @@ test('remove keeps builds a channel or a board uses', () => {
 });
 
 test('old builds are pruned, except channel and pinned ones', () => {
-  const fw = createFirmware({ dir: tmp(), log: quiet });
-  fw.upload(fakeBuild('0000000'), { channel: 'stable', now: 0 });
-  fw.upload(fakeBuild('1111111'), { now: 1 });
-  for (let i = 2; i <= MAX_BUILDS + 1; i++) fw.upload(fakeBuild(`${i}`.repeat(7)), { now: i, pinned: ['1111111'] });
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  fw.upload(fakeBuild('0000000'), { sig: signOf(fakeBuild('0000000')), channel: 'stable', now: 0 });
+  fw.upload(fakeBuild('1111111'), { sig: signOf(fakeBuild('1111111')), now: 1 });
+  for (let i = 2; i <= MAX_BUILDS + 1; i++) { const b = fakeBuild(`${i}`.repeat(7)); fw.upload(b, { sig: signOf(b), now: i, pinned: ['1111111'] }); }
   const vs = fw.status().builds.map((b) => b.v);
   assert.equal(vs.length, MAX_BUILDS);
   assert.ok(vs.includes('0000000') && vs.includes('1111111'));
@@ -84,11 +88,11 @@ test('old builds are pruned, except channel and pinned ones', () => {
 });
 
 test('offer: an S3 running a committed build gets its channel\'s or pinned build', () => {
-  const fw = createFirmware({ dir: tmp(), log: quiet });
-  fw.upload(fakeBuild('aaaaaaa'), { channel: 'stable', now: 1 });
-  fw.upload(fakeBuild('bbbbbbb'), { channel: 'beta', now: 2 });
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  fw.upload(fakeBuild('aaaaaaa'), { sig: signOf(fakeBuild('aaaaaaa')), channel: 'stable', now: 1 });
+  fw.upload(fakeBuild('bbbbbbb'), { sig: signOf(fakeBuild('bbbbbbb')), channel: 'beta', now: 2 });
   const t = fw.target('stable');
-  assert.deepEqual(fw.offer({ fw: 'stable', fwRetry: 3 }, { ...S3, hv: '1234567' }), { v: 'aaaaaaa', size: 4096, sha: t.sha, n: 3 });
+  assert.deepEqual(fw.offer({ fw: 'stable', fwRetry: 3 }, { ...S3, hv: '1234567' }), { v: 'aaaaaaa', size: 4096, sha: t.sha, n: 3, sig: t.sig });
   assert.equal(fw.offer({ fw: 'beta' }, { ...S3, hv: '1234567' }).v, 'bbbbbbb');
   assert.equal(fw.offer({}, { ...S3, hv: '1234567' }).v, 'aaaaaaa'); // default: stable
   assert.equal(fw.offer({ fw: 'aaaaaaa' }, { ...S3, hv: 'bbbbbbb' }).v, 'aaaaaaa'); // pinned: back down
@@ -99,4 +103,36 @@ test('offer: an S3 running a committed build gets its channel\'s or pinned build
   assert.equal(fw.offer({ fw: 'stable' }, { ...S3, hv: 'dev' }), null); // someone's test build
   assert.equal(fw.offer({ fw: 'stable' }, { ...S3, hv: '1234567_dirty' }), null);
   assert.equal(fw.offer({ fw: 'stable' }, S3), null);
+});
+
+test('signatures: uploads need a valid one by the repo key; offers carry it', () => {
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  const buf = fakeBuild('aaaaaaa');
+  assert.throws(() => fw.upload(buf, {}), /unsigned/);
+  assert.throws(() => fw.upload(buf, { sig: 'zz' }), /doesn't match/);
+  assert.throws(() => fw.upload(buf, { sig: signOf(fakeBuild('bbbbbbb')) }), /doesn't match/); // another build's
+  const other = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey;
+  assert.throws(() => fw.upload(buf, { sig: signOf(buf, other) }), /doesn't match/); // another key
+  const sig = signOf(buf);
+  fw.upload(buf, { sig: sig.toUpperCase(), channel: 'stable', now: 1 });
+  assert.equal(fw.offer({ fw: 'stable' }, { hd: 'adafruit_matrixportal_s3', hv: '1234567' }).sig, sig);
+  assert.equal(fw.status().builds[0].signed, true);
+  assert.equal(fw.status().signing, true);
+  // Without a public key in the repo, nothing is accepted.
+  const none = createFirmware({ dir: tmp(), log: quiet, publicKey: null });
+  assert.throws(() => none.upload(buf, { sig }), /no signing key/);
+  assert.equal(none.status().signing, false);
+});
+
+test('signatures: the repo key file, and what the board checks', () => {
+  const dir = tmp();
+  assert.equal(loadPublicKey(path.join(dir, 'missing.pem')), null);
+  fs.writeFileSync(path.join(dir, 'k.pem'), PUB.export({ type: 'spki', format: 'pem' }));
+  const k = loadPublicKey(path.join(dir, 'k.pem'));
+  const buf = fakeBuild('aaaaaaa');
+  assert.ok(verifySignature(buf, signOf(buf), k));
+  assert.ok(!verifySignature(Buffer.concat([buf, Buffer.from([0])]), signOf(buf), k));
+  const rsa = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey;
+  fs.writeFileSync(path.join(dir, 'rsa.pem'), rsa.export({ type: 'spki', format: 'pem' }));
+  assert.throws(() => loadPublicKey(path.join(dir, 'rsa.pem')), /P-256/);
 });

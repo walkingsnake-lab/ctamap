@@ -195,6 +195,7 @@ sched::Result Board::do_version(double ms) {
     o.size = (long long)fw["size"].num();
     o.sha = fw["sha"].s;
     o.retry = (long)fw["n"].num(0);
+    o.sig = fw["sig"].str_or("");
     offer = o;
   } else {
     offer.reset();
@@ -335,6 +336,7 @@ void Board::step() {
 
 bool Board::wants_install() const {
   if (!ota || !offer || firmware.empty() || offer->v == firmware) return false;
+  if (offer->sig.empty() || !ota->can_verify()) return false;  // unsigned, or no key: never installed (health says so)
   if (!ota->trial().empty()) return false;  // one at a time: this build is still on trial
   return ota::mark(offer->v, offer->retry) != ota->bad();
 }
@@ -421,6 +423,8 @@ std::string Board::ota_health() const {
   std::string t = ota->trial();
   if (!t.empty()) return "trial:" + t;
   if (!ota_err_.empty()) return "error:" + ota_err_;
+  if (offer && offer->v != firmware && !ota->can_verify()) return "nokey:" + offer->v;
+  if (offer && offer->v != firmware && offer->sig.empty()) return "unsigned:" + offer->v;
   // Still offered, but this board rolled it back: it won't install it again
   // until the control page's "Try again".
   if (offer && ota::mark(offer->v, offer->retry) == ota->bad()) return "rolledback:" + offer->v;

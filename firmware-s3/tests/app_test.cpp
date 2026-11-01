@@ -305,8 +305,8 @@ struct SimOta : app::Ota {
   std::string trial_, bad_;
   long long size = 0, written = 0;
   int begun = 0, finished = 0, aborted = 0, restarts = 0, kept = 0, rollbacks = 0;
-  bool fail_finish = false;
-  std::string rolled_why;
+  bool fail_finish = false, key = true;
+  std::string rolled_why, sig;
   bool begin(long long sz, std::string &) override {
     begun++;
     size = sz;
@@ -323,12 +323,14 @@ struct SimOta : app::Ota {
       return false;
     }
     finished++;
+    sig = o.sig;
     trial_ = o.v;
     return true;
   }
   void abort() override { aborted++; }
   void restart() override { restarts++; }
   std::string trial() override { return trial_; }
+  bool can_verify() override { return key; }
   std::string bad() override { return bad_; }
   void keep() override {
     kept++;
@@ -395,7 +397,7 @@ static long long max_gap(const std::vector<long long> &t) {
 
 // ---- tests ----
 
-static const char *OFFER = "{\"v\":\"bbbbbbb\",\"size\":300000,\"sha\":\"00\",\"n\":0}";
+static const char *OFFER = "{\"v\":\"bbbbbbb\",\"size\":300000,\"sha\":\"00\",\"n\":0,\"sig\":\"3045\"}";
 
 static std::string last_health(const Rig &r) {
   std::string sent;
@@ -495,6 +497,36 @@ static void test_ota_installs_an_offered_build_between_animations() {
     if (c.name.compare(0, 9, "firmware:") == 0) CHECK(!c.busy, "installs between animations");
 }
 
+static void test_ota_passes_the_signature_and_ignores_unsigned_offers() {
+  Rig r;
+  SimOta o;
+  r.board->ota = &o;
+  r.board->firmware = "aaaaaaa";
+  r.board->connect();
+  r.server.fw = "{\"v\":\"bbbbbbb\",\"size\":300000,\"sha\":\"00\",\"n\":0}";  // no sig
+  r.run_for(130000);
+  CHECK(o.begun == 0 && r.server.count("firmware:") == 0, "unsigned: not downloaded");
+  CHECK(last_health(r).find("&hx=unsigned:bbbbbbb") != std::string::npos, "%s", last_health(r).c_str());
+  r.server.fw = OFFER;
+  r.run_for(60000);
+  CHECK(o.finished == 1 && o.sig == "3045", "the signature reaches the slot's check: %s", o.sig.c_str());
+  // A build without a signing key installs nothing, and says so.
+  Rig r2;
+  SimOta o2;
+  o2.key = false;
+  r2.board->ota = &o2;
+  r2.board->firmware = "aaaaaaa";
+  r2.board->connect();
+  r2.server.fw = OFFER;
+  r2.run_for(130000);
+  CHECK(o2.begun == 0, "");
+  CHECK(last_health(r2).find("&hx=nokey:bbbbbbb") != std::string::npos, "%s", last_health(r2).c_str());
+  // Hex signatures to bytes.
+  std::vector<uint8_t> b;
+  CHECK(ota::from_hex("3045aB", b) && b.size() == 3 && b[0] == 0x30 && b[2] == 0xab, "");
+  CHECK(!ota::from_hex("304", b) && !ota::from_hex("zz", b), "");
+}
+
 static void test_ota_leaves_the_running_build_alone() {
   Rig r;
   SimOta o;
@@ -569,7 +601,7 @@ static void test_ota_rolled_back_offer_waits_for_try_again() {
   r.run_for(130000);
   CHECK(o.begun == 0, "not reinstalled");
   CHECK(last_health(r).find("&hx=rolledback:bbbbbbb") != std::string::npos, "%s", last_health(r).c_str());
-  r.server.fw = "{\"v\":\"bbbbbbb\",\"size\":300000,\"sha\":\"00\",\"n\":1}";  // Try again
+  r.server.fw = "{\"v\":\"bbbbbbb\",\"size\":300000,\"sha\":\"00\",\"n\":1,\"sig\":\"3045\"}";  // Try again
   r.run_for(60000);
   CHECK(o.begun == 1 && o.restarts == 1, "%d %d", o.begun, o.restarts);
 }
@@ -1267,6 +1299,7 @@ int main() {
       T_(test_setup_never_opens_while_the_server_is_down),
       T_(test_setup_reopens_when_the_new_network_fails_and_clears_after_a_join),
       T_(test_ota_installs_an_offered_build_between_animations),
+      T_(test_ota_passes_the_signature_and_ignores_unsigned_offers),
       T_(test_ota_leaves_the_running_build_alone),
       T_(test_ota_failed_download_carries_on_and_retries_later),
       T_(test_ota_trial_build_is_kept_once_it_has_reached_the_server),

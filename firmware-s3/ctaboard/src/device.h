@@ -120,6 +120,7 @@ class Ota : public app::Ota {
   std::string bad() override { return st_.bad; }
   void keep() override;
   void roll_back(const std::string &why) override;
+  bool can_verify() override;
   std::string slot() const;  // the running app slot's label
 
  private:

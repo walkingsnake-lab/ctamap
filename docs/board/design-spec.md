@@ -384,7 +384,8 @@ Decided Oct 30, 2026, with more boards and other owners in mind: nobody should n
 - **Install moment:** in an animation gap (or after waiting 2 min); the panel shows `UPDATING` and the percentage. It takes 10–30 s.
 - **Trial and rollback:** the new build is kept once it has had a good update and run a minute; it rolls back to the previous slot if it can't reach the server within 5 min or restarts more than 3 times first, and isn't reinstalled until the control page's Try again. Rolling back is done by the firmware itself (the Arduino core marks every new build valid at boot, so the bootloader's own rollback never triggers).
 - **Left alone:** boards running `dev` or `_dirty` builds (someone's test build); the M4.
-- **Later:** CI publishing straight to Beta (today CI builds the generic `.bin` as an artifact and the owner uploads it); a browser-based first install with WiFi entry (ESP Web Tools + Improv), so a new owner needs no IDE at all; per-board tokens before boards of different owners share one server (today every board shares `BOARD_TOKEN`).
+- **Signed (Oct 31, 2026):** builds are signed with a key only the owner's computer and a main-only GitHub environment hold; the server and the board each check the signature, so a compromised server can't push firmware. CI signs and publishes each build of `main` to Beta with a deploy token that can do nothing else.
+- **Later (some done since):** CI publishing straight to Beta (today CI builds the generic `.bin` as an artifact and the owner uploads it); a browser-based first install with WiFi entry (ESP Web Tools + Improv), so a new owner needs no IDE at all; per-board tokens before boards of different owners share one server (today every board shares `BOARD_TOKEN`).
 
 ### Boards for other people (keys and WiFi setup)
 Decided Oct 31, 2026.

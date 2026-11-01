@@ -327,8 +327,8 @@
     <div class="row" id="fwRetryRow" hidden><span class="hint" id="fwRetryText" style="margin:0"></span><button class="small" id="fwRetry">Try again</button></div>
     <label class="field admin">Builds (shared by every board)</label>
     <ul id="fwBuilds" class="admin"></ul>
-    <div class="row admin"><span class="nw">Add a build</span><label class="small file">Upload .bin<input type="file" id="fwFile" accept=".bin,application/octet-stream"></label></div>
-    <p class="hint admin">ctaboard.ino.bin from a build without secrets.h, or the CI build. A new build goes to Beta; make it Stable once it has run well.</p>
+    <div class="row admin"><span class="nw">Add a build</span><label class="small file">Upload .bin + .sig<input type="file" id="fwFile" multiple accept=".bin,.sig,application/octet-stream"></label></div>
+    <p class="hint admin" id="fwUploadHint">CI publishes each build of main to Beta by itself. To add one by hand, pick ctaboard.ino.bin and its .sig together (the CI artifacts, or node scripts/sign-firmware.js). Make a build Stable once it has run well.</p>
   </section>
 
   <section data-tab="health">
@@ -836,6 +836,7 @@
     else if (kind === 'error') hint = `The last install failed (${what}). The board tries again every 10 minutes.`;
     else if (track === 'off') hint = 'This board keeps whatever it runs now.';
     else hint = 'The board installs a new build within a minute of it being offered, between animations. It shows UPDATING while it downloads.';
+    if (!SCOPE && fwStatus.signing === false) hint = 'No signing key yet: the server takes no builds and boards install none. Run node scripts/firmware-key.js --github (README, "Signed builds").';
     $('fwHint').textContent = hint;
     $('fwRetryRow').hidden = kind !== 'rolledback';
     $('fwRetryText').textContent = `${what} was rolled back: it couldn't reach the server, or kept restarting.`;
@@ -845,7 +846,7 @@
       nm.className = 'nm';
       nm.textContent = b.v;
       const sm = document.createElement('small');
-      sm.textContent = `${fwDate(b.at)} · ${(b.size / 1024).toFixed(0)} KB`;
+      sm.textContent = `${fwDate(b.at)} · ${(b.size / 1024).toFixed(0)} KB${b.signed ? '' : ' · unsigned: only boards from before signing install it'}`;
       nm.append(sm);
       const btn = (label, onClick, pressedNow) => {
         const x = document.createElement('button');
@@ -881,12 +882,16 @@
   $('fwTrack').addEventListener('change', (e) => save({ fw: e.target.value }));
   $('fwRetry').addEventListener('click', () => save({ fwRetry: (board.fwRetry || 0) + 1 }));
   $('fwFile').addEventListener('change', async (e) => {
-    const file = e.target.files && e.target.files[0];
+    const files = [...(e.target.files || [])];
     e.target.value = '';
-    if (!file) return;
+    if (!files.length) return;
+    const bin = files.find((f) => !f.name.endsWith('.sig'));
+    const sigFile = files.find((f) => f.name.endsWith('.sig'));
+    if (!bin || !sigFile) return setStatus('Pick both files: ctaboard.ino.bin and ctaboard.ino.bin.sig.', true);
     setStatus('Uploading build…');
     try {
-      fwStatus = await api('api/firmware?channel=beta', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
+      const sig = (await sigFile.text()).trim();
+      fwStatus = await api('api/firmware?channel=beta', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Firmware-Signature': sig }, body: bin });
       renderFirmware();
       setStatus(`Uploaded ${fwStatus.channels.beta} to Beta.`);
     } catch (err) { setStatus(err.message, true); }

@@ -23,11 +23,13 @@
 #include <esp_task_wdt.h>
 #include <esp_timer.h>
 #include <math.h>
+#include <mbedtls/pk.h>
 #include <mbedtls/sha256.h>
 
 #include <algorithm>
 
 #include "certs.h"
+#include "signing_key.h"
 
 namespace device {
 
@@ -520,6 +522,27 @@ bool Ota::finish(const app::FirmwareOffer &offer, std::string &err) {
     err = "SHA";
     return false;
   }
+  // Signed by the key CI holds (scripts/firmware-key.js)? Checked before the
+  // new slot can become the boot slot.
+  if (FIRMWARE_SIGNING_KEY[0] == '\0') {
+    err = "NoKey";  // a build from before the signing key existed: OTA stays off
+    return false;
+  }
+  std::vector<uint8_t> sig;
+  if (!ota::from_hex(offer.sig, sig) || sig.empty()) {
+    err = "Signature";
+    return false;
+  }
+  mbedtls_pk_context pk;
+  mbedtls_pk_init(&pk);
+  bool good = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)FIRMWARE_SIGNING_KEY,
+                                          sizeof FIRMWARE_SIGNING_KEY) == 0 &&
+              mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, digest, sizeof digest, sig.data(), sig.size()) == 0;
+  mbedtls_pk_free(&pk);
+  if (!good) {
+    err = "Signature";
+    return false;
+  }
   std::string prev = slot();
   if (!Update.end(true)) {  // checks the image and makes its slot the boot slot
     err = "End" + std::to_string((int)Update.getError());
@@ -534,6 +557,8 @@ bool Ota::finish(const app::FirmwareOffer &offer, std::string &err) {
   save();
   return true;
 }
+
+bool Ota::can_verify() { return FIRMWARE_SIGNING_KEY[0] != '\0'; }
 
 void Ota::abort() {
   if (open_) Update.abort();
