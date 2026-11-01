@@ -59,14 +59,14 @@ if (require.main === module) {
     ['RAIN +1 S', frame({ code: 63, clouds: 100 }, DAY, { ms: DAY * 1000 + 1000 })],
   ];
   const sp = stormPeak(NIGHT);
-  for (const dt of [-200, 300, 600, 1500]) motion.push([`STRIKE ${(dt / 1000 + 0.6).toFixed(1)} S`, frame({ code: 95, clouds: 100 }, NIGHT, { ms: sp + dt })]);
+  for (const dt of [-100, 0, 300, 800]) motion.push([`STRIKE ${(dt / 1000 + 0.15).toFixed(2)} S`, frame({ code: 95, clouds: 100 }, NIGHT, { ms: sp + dt })]);
   fs.writeFileSync(path.join(OUT, 'skyline-motion.png'), sheet(motion, 2, 6));
   console.log('wrote skyline-states.png, skyline-dusk.png, skyline-motion.png to', path.relative(process.cwd(), OUT));
 }
 
-// A moment 0.6 s into a lightning strike near `now` (its peak).
+// A moment 0.15 s into a lightning strike near `now` (its peak).
 function stormPeak(now) {
   const { strikeLevel } = require('../server/board/render');
-  for (let ms = now * 1000; ms < now * 1000 + 60000; ms += 100) if (strikeLevel(ms) >= 0.99) return ms;
+  for (let ms = now * 1000; ms < now * 1000 + 60000; ms += 10) if (strikeLevel(ms) >= 0.99) return ms;
   return now * 1000;
 }

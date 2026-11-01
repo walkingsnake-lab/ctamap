@@ -306,8 +306,9 @@ The clock screen's skyline face (design spec §14). The server turns the weather
 
 ```json
 {"face": "skyline", "st": "clear", "sky": [[0, "#08245a"], [18, "#1a4a8e"], [25, "#3a6eb0"]], "wat": ["#0a2a52", "#06203f", "#1a3a68"],
- "lit": 0, "win": 0, "stars": 0, "sun": {"x": 41, "y": 5, "c": "#ffd040"}, "moon": null, "gl": {"x": 41, "c": "#c8d8f0", "p": 0},
- "whl": 0, "fog": null, "roof": null, "pcp": null, "storm": 0, "boats": 1, "temp": 52}
+ "lit": 0, "win": 0, "stars": 0, "sun": {"x": 41, "y": 5, "c": "#ffd040"}, "moon": null, "gl": null,
+ "whl": 0, "fog": null, "roof": null, "pcp": null, "storm": 0, "boats": 1, "temp": 52,
+ "wheel": 30000, "rip": 500, "twk": 1, "fall": 200}
 ```
 
 | Field | Meaning |
@@ -321,14 +322,18 @@ The clock screen's skyline face (design spec §14). The server turns the weather
 | `stars` | Stars to draw (0–14), the first `stars` of the fixed list. |
 | `sun` | `{x, y, c}`: the sun's center and color, or `null` (night, mornings, cloudy skies). Low suns sit behind the buildings. |
 | `moon` | `{ph, fr}`: phase (0–99, 0 new, 50 full) and lit percent, or `null`. Drawn at the day sun's spot. |
-| `gl` | Glints on the water: `{x, c, p}`, the column they gather around, their color, and the glitter path's strength at sunset (0–100; 0: scattered glints only). `null`: none. |
+| `gl` | The glitter path at sunset: `{x, c, p}`, its column, color and strength (1–100): the ripples within `1.5 + (y - 25) * 0.8` px of `x` take `c` mixed in at `p`%. Sent only while the low sun shows over the buildings (at least 4 px of its disc); `null` otherwise. (Builds before the options update also scatter 1–3 sparkles around `x` while it's sent; current builds draw none.) |
 | `whl` | The wheel by day: `0` white rim with a `#565c68` frame, `1` `#eef0f4` rim with a `#4a505c` frame, `2` all `#262a32`. |
 | `fog` | Fog color (the city fades into it with height), or `null`. |
 | `roof` | Snow on roof edges and the pier: its color, or `null`. |
-| `pcp` | Precipitation: `{k, n}`, `r` rain or `s` snow, and how many streaks or flakes are on screen; or `null`. |
-| `storm` | `1`: lightning, a soft glow in the cloud deck with a faint bolt, every 20–40 s. |
+| `pcp` | Precipitation: `{k, n, sl}`, `r` rain or `s` snow, how many streaks or flakes are on screen, and (rain) the slant: `0` straight down, `-1` / `1` 45° left / right (the wind across the view, 8 mph or more; storms without wind data `-1`); or `null`. Rain streaks move 1 px every `fall` ms along their own line with sub-pixel coverage; snow falls 1 px every `fall × 3.5` ms. |
+| `storm` | `1`: lightning every 20–40 s, a glow in the cloud deck with the bolt inside, rising over 0.15 s and fading over 1.2 s. |
 | `boats` | `1`: the quarter-hour boats run (daytime, dry, 40°F or warmer). |
-| `temp` | Temperature in the board's unit, or `null`. A top-level `warn` replaces it on screen. |
+| `temp` | Temperature in the board's unit, or `null` (also when the board's `showTemp` is off). A top-level `warn` replaces it on screen. |
+| `wheel` | Ms per turn of the night rainbow (`wheelSpeed`: 0 still, 60000, 30000, 15000). Absent: 30000. |
+| `rip` | Ms per pixel for the ripples (`rippleSpeed`: 0 still, 1000, 500, 250). Absent: 500. |
+| `twk` | `0`: the stars hold steady (`twinkle` off). Absent or `1`: they twinkle. |
+| `fall` | Ms per pixel for rain (`rainSpeed`: 400, 200, 100); snow takes 3.5×. Absent: 200. |
 | `cl` | Clouds: `{id, pal, a}`, or `null` (clear, fog, snow). `id` names a strip (see *Cloud strips*: shapes only, fetched once and kept); `pal[i]` and `a[i]` are index `i`'s color and opacity in percent (index 0 is clear, `pal[0]` empty). The board draws each sky pixel (not buildings) as the mix of what's there and `pal[i]` at `a[i]`, reading the strip at column `(x + floor(ms / step)) % 128` so the clouds drift left 1 px every `step` ms (`cl.step`: 16000 slow, 4000 normal, 0 still, from the board's `cloudDrift`; absent: 4000). Until the strip is on hand it draws no clouds. Today: `p1` partly cloudy and `m1` mostly cloudy (wisps, indexes 1-2), `o1` overcast, `r1` rain, `s1` storm (decks, indexes 1-15 thin to thick). |
 
 ### `GET /board/firmware?b=<id>&v=<build>`
@@ -432,7 +437,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 | `GET /board/<secret>/api/raw/weather?mapid=<id>` | Raw WeatherAPI `forecast.json` response for a station's grid cell (fetched now, not from the cache; the response has no key in it), for recording test fixtures. Owner only. `400` for an unknown `mapid`, `502` if WeatherAPI fails or `WEATHERAPI_KEY` isn't set. |
 
-POST rules: allowed fields are `label` (up to 24 characters, trimmed; empty for none), `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `headerDivider`, `wxDivider`, `transitLayout`, `radarTime`, `radarClock`, `radarCond`, `tempUnit`, `radarBright`, `wxView`, `wxRain`, `wxRainEvery`, `wxRainLoops`, `radarEvery`, `radarFor`, `screen`, `brightMin`, the Auto and screen options (`autoScreens`, `autoEvery`, `wxVisit`, `alertJump`, `bbTeams`, `bbPre`, `bbFinal`, `bbPriority`, `lineNames`, `headerClock`, `timeSteps`; see the state table), `bright`, `baseballLayout`, `logoBright`, the speed settings (`tickerHold` s: 5, 6, 8, 10, 12, 15; `tickerSlide` ms: 800, 1200, 1600, 2000; `radarFrame` ms: 300, 400, 500, 700, 1000; `radarHold` s: 2, 3, 4, 6, 8; `gameEvery` s: 30, 45, 60, 90, 120), `wxRainLoops` (1, 2, 3, 5), `tickerFill` (25–80), `clockFace` (`skyline`), `boats` (bool), `cloudDrift` (`off`, `slow`, `normal`), `fw` and `fwRetry` (state table); anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be a board endpoint's name (`ping`, `version`, `update`, `select`, `radar`, `sky`, `logo`, `firmware`, `firmware-upload`, `c`) or contain `/`; if it is or does, control endpoints are disabled.
+POST rules: allowed fields are `label` (up to 24 characters, trimmed; empty for none), `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `headerDivider`, `wxDivider`, `transitLayout`, `radarTime`, `radarClock`, `radarCond`, `tempUnit`, `radarBright`, `wxView`, `wxRain`, `wxRainEvery`, `wxRainLoops`, `radarEvery`, `radarFor`, `screen`, `brightMin`, the Auto and screen options (`autoScreens`, `autoEvery`, `wxVisit`, `alertJump`, `bbTeams`, `bbPre`, `bbFinal`, `bbPriority`, `lineNames`, `headerClock`, `timeSteps`; see the state table), `bright`, `baseballLayout`, `logoBright`, the speed settings (`tickerHold` s: 5, 6, 8, 10, 12, 15; `tickerSlide` ms: 800, 1200, 1600, 2000; `radarFrame` ms: 300, 400, 500, 700, 1000; `radarHold` s: 2, 3, 4, 6, 8; `gameEvery` s: 30, 45, 60, 90, 120), `wxRainLoops` (1, 2, 3, 5), `tickerFill` (25–80), `clockFace` (`skyline`), `boats` (bool), `cloudDrift` (`off`, `slow`, `normal`), `wheelSpeed` and `rippleSpeed` (`off`, `slow`, `normal`, `fast`), `rainSpeed` (`slow`, `normal`, `fast`), `twinkle` and `showTemp` (bool), `fw` and `fwRetry` (state table); anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be a board endpoint's name (`ping`, `version`, `update`, `select`, `radar`, `sky`, `logo`, `firmware`, `firmware-upload`, `c`) or contain `/`; if it is or does, control endpoints are disabled.
 
 ---
 
@@ -480,6 +485,11 @@ Settings added after a board's state was saved load with these defaults (today's
 | `clockFace` | The clock screen's face: `skyline` (default, the only one). Sent as `skyline.face`. |
 | `boats` | Skyline face: the quarter-hour boats (default `true`). `false` sends `skyline.boats` 0. |
 | `cloudDrift` | Skyline face: how fast the clouds drift, `off` (still), `slow` (default, 1 px every 16 s) or `normal` (1 px every 4 s). Sent as `skyline.cl.step`. |
+| `wheelSpeed` | Skyline face: the night rainbow, `off` (still), `slow`, `normal` (default), `fast`. Sent as `skyline.wheel`. |
+| `rippleSpeed` | Skyline face: the ripples, `off` (still), `slow`, `normal` (default), `fast`. Sent as `skyline.rip`. |
+| `rainSpeed` | Skyline face: rain and snow, `slow`, `normal` (default), `fast`. Sent as `skyline.fall`. |
+| `twinkle` | Skyline face: stars twinkle (default `true`). Sent as `skyline.twk`. |
+| `showTemp` | Skyline face: the temperature bottom left (default `true`; `false` sends `skyline.temp` null, a watch or warning still shows). |
 | `logoBright` | 10–100, default 90: logo and band brightness in the `logos`/`bands` layouts, sent as `mlb.dim`. |
 | `tickerHold`, `tickerSlide`, `radarFrame`, `radarHold`, `gameEvery` | Speed settings (allowed values under the POST rules above), sent to the board as `anim`. Defaults 8 s, 1200 ms, 500 ms, 4 s, 60 s. |
 | `tickerFill` | Ticker row fill percent (25–80, default 55), sent as `tickerFill`. |

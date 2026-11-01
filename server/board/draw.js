@@ -1703,7 +1703,7 @@
     const SAIL = ['..#...', '..##..', '..###.', '..####'];
     const BOLT = [[21, 0], [21, 1], [20, 2], [21, 3], [22, 3], [23, 3], [23, 4], [24, 5], [23, 6], [24, 7], [25, 7], [25, 8], [25, 9]];
     const BOLT_BRANCH = [[20, 1], [19, 2], [18, 3], [18, 4], [17, 5]];
-    const CLOUD_W = 128, CLOUD_STEP = 4000, RIPPLE_MS = 500, WHEEL_TURN_MS = 30000;
+    const CLOUD_W = 128, CLOUD_STEP = 4000, RIPPLE_MS = 500, WHEEL_TURN_MS = 30000, RAIN_MS = 200;
     const SAIL_STEP = 800, SPEED_STEP = 150, SPEED_WAIT = 4000, QUARTER = 900000, STRIKE_EVERY = 30000;
 
     function skyAt(stops, y) {
@@ -1728,13 +1728,13 @@
       }
     }
     // Lightning at ms, or null: a strike every 20-40 s (one per 30 s slot,
-    // 0-10 s in), rising over 0.6 s and fading over 2.4 s.
+    // 0-10 s in), rising over 0.15 s and fading over 1.2 s.
     function strikeLevel(ms) {
       const slot = Math.floor(ms / STRIKE_EVERY), start = slot * STRIKE_EVERY + (ih(slot, 7, 7) % 10000);
       const t = (ms - start) / 1000;
-      if (t < 0 || t >= 3) return 0;
-      if (t < 0.6) return sstep01(0, 0.6, t);
-      const u = 1 - (t - 0.6) / 2.4;
+      if (t < 0 || t >= 1.35) return 0;
+      if (t < 0.15) return sstep01(0, 0.15, t);
+      const u = 1 - (t - 0.15) / 1.2;
       return u * u;
     }
     // Where the quarter-hour boat is at ms: {kind, x0, dir} or null.
@@ -1794,7 +1794,7 @@
       // fraction (cos of the phase angle = 1 - 2 * lit).
       for (let i = 0; i < Math.min(s.stars || 0, SKY.stars.length); i++) {
         const [x, y, bright, tw, ph, per] = SKY.stars[i];
-        const k = tw ? 0.25 + 0.75 * wave(ms / per + ph / 1000) : 1;
+        const k = tw && s.twk !== 0 ? 0.25 + 0.75 * wave(ms / per + ph / 1000) : 1;
         f.set(x, y, mixRgb(f.get(x, y), hex(bright ? '#ffffff' : '#5a6070'), k));
       }
       if (s.moon) {
@@ -1828,17 +1828,17 @@
         const fc = hex(s.fog);
         for (let y = 0; y <= S; y++) { const k = Math.max(0, Math.min(1, (21 - y) / 18)) * 0.85; if (k) for (let x = 0; x < 64; x++) f.set(x, y, mixRgb(f.get(x, y), fc, k)); }
       }
-      // Lightning: a soft glow in the cloud deck with a faint bolt inside it.
+      // Lightning: a glow in the cloud deck with the bolt inside it.
       const lv = s.storm ? strikeLevel(ms) : 0;
       if (lv > 0) {
         const gc = hex(SK.glow);
         for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
           if (SKY.role[y * 64 + x]) continue;
           const ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = Math.sqrt(ex * ex + ey * ey);
-          const a = lv * 0.45 * (1 - sstep01(0.3, 1, d));
+          const a = lv * 0.7 * (1 - sstep01(0.3, 1, d));
           if (a > 0.01) f.set(x, y, mixRgb(f.get(x, y), gc, a));
         }
-        const put = (x, y, c) => { if (x >= 0 && x < 64 && y >= 0 && !SKY.role[y * 64 + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.3)), 0.35 * lv)); };
+        const put = (x, y, c) => { if (x >= 0 && x < 64 && y >= 0 && !SKY.role[y * 64 + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.15)), 0.8 * lv)); };
         const core = new Set(BOLT.map(([x, y]) => y * 64 + x));
         for (const [x, y] of BOLT) for (const X of [x - 1, x + 1]) if (!core.has(y * 64 + X)) put(X, y, '#7060c0');
         for (const [x, y] of BOLT_BRANCH) put(x, y, '#9a8ae0');
@@ -1852,7 +1852,9 @@
       const wp = s.lit ? { leg: SK.wheelNight } : SK.wheel[s.whl || 0];
       for (const [x, y] of SKY.legs) f.fill(x, y, 1, 1, wp.leg);
       f.fill(SKY.bar[0], SKY.bar[1], SKY.bar[2], 1, wp.leg);
-      const turn = (ms % WHEEL_TURN_MS) * (360 / WHEEL_TURN_MS);
+      // Wheel speed: s.wheel ms a turn (0: still).
+      const turnMs = s.wheel != null ? s.wheel : WHEEL_TURN_MS;
+      const turn = turnMs > 0 ? (ms % turnMs) * (360 / turnMs) : 0;
       for (const [x, y, deg] of SKY.rim) f.fill(x, y, 1, 1, s.lit ? hsvHex((deg + turn) % 360, 0.7, 0.9) : wp.rim);
       f.fill(SKY.CX - 1, SKY.CY - 1, 2, 2, wp.leg);
 
@@ -1873,7 +1875,9 @@
       // glints under the sun or moon; all kept off the text. The pattern
       // repeats every 990 px (9, 10 and 11 px gaps), so the clock is taken
       // modulo that to keep the numbers small.
-      const glide = (ms % (RIPPLE_MS * 990)) / RIPPLE_MS;
+      // Ripple speed: s.rip ms a pixel (0: still).
+      const ripMs = s.rip != null ? s.rip : RIPPLE_MS;
+      const glide = ripMs > 0 ? (ms % (ripMs * 990)) / ripMs : 0;
       const ripple = hex(s.wat[2]);
       const pathRgb = s.gl && s.gl.p > 0 ? mixRgb(ripple, hex(s.gl.c), s.gl.p / 100) : null;
       for (let y = S + 1; y < 32; y++) {
@@ -1888,13 +1892,6 @@
           f.set(x, y, mixRgb(f.get(x, y), onPath ? pathRgb : ripple, Math.min(1, cov)));
         }
       }
-      if (s.gl) {
-        const slot = Math.floor(ms / 200), n = 1 + (ih(slot, 1, 11) % 3), gc = hex(s.gl.c);
-        for (let i = 0; i < n; i++) {
-          const x = s.gl.x - 5 + (ih(slot, i, 12) % 11), y = S + 1 + (ih(slot, i, 13) % (31 - S));
-          if (x >= 0 && x < 64 && !quiet(x, y)) f.set(x, y, gc);
-        }
-      }
       // Navy Pier: deck on row 25 (snow-covered when the roofs are), darker
       // face on 26, string lights at night.
       f.fill(24, S, 16, 1, s.roof || mixHex(SK.pier.day[0], SK.pier.night[0], night));
@@ -1903,20 +1900,31 @@
       // The quarter-hour boat.
       const b = s.boats ? boatAt(ms) : null;
       if (b) drawBoat(f, b, s.wat);
-      // Rain (slanted streaks, 1 px down every 200 ms, drifting left) or
-      // snow (1 px down every 700 ms, wobbling a pixel), rows 0-25.
+      // Rain: 2 px streaks moving 1 px every s.fall ms (200 by default)
+      // along their own line, straight down (pcp.sl 0) or 45° left or right
+      // (-1, 1), with sub-pixel coverage so they glide rather than step: a
+      // pixel d px behind a streak's head position fades in ahead (d -1..0),
+      // goes from the head color to the tail's (0..1), then fades out
+      // (1..2). Snow falls 3.5x slower, wobbling a pixel. Rows 0-25.
       if (s.pcp && s.pcp.n > 0) {
+        const fall = s.fall > 0 ? s.fall : RAIN_MS;
         if (s.pcp.k === 'r') {
           const c1 = hex(mixHex(SK.rain.day[0], SK.rain.night[0], night)), c2 = hex(mixHex(SK.rain.day[1], SK.rain.night[1], night));
-          const step = Math.floor(ms / 200);
+          const sl = s.pcp.sl || 0, rem = ms % fall, step = (ms - rem) / fall, fr = rem / fall;
           for (let i = 0; i < s.pcp.n; i++) {
-            const y = (ih(i, 32, 4) % (S + 1) + step) % (S + 1);
-            const x = (((ih(i, 31, 4) % 64 - Math.floor(step / 2)) % 64) + 64) % 64;
-            f.set(x, y, c1);
-            if (y > 0 && x + 1 < 64) f.set(x + 1, y - 1, c2);
+            const hy = (ih(i, 32, 4) % (S + 1) + step) % (S + 1);
+            const hx = (((ih(i, 31, 4) % 64 + sl * (step % 64)) % 64) + 64) % 64;
+            for (let j = -1; j <= 1; j++) {             // j px ahead of the head pixel
+              const y = hy + j, d = fr - j;
+              if (y < 0 || y > S) continue;
+              const x = (((hx + sl * j) % 64) + 64) % 64;
+              const c = d <= 0 ? c1 : d <= 1 ? mixRgb(c1, c2, d) : c2;
+              const a = d <= 0 ? 1 + d : d <= 1 ? 1 : 2 - d;
+              if (a > 0) f.set(x, y, mixRgb(f.get(x, y), c, a));
+            }
           }
         } else {
-          const step = Math.floor(ms / 700);
+          const step = Math.floor(ms / (fall * 3.5));
           for (let i = 0; i < s.pcp.n; i++) {
             const y = (ih(i, 22, 4) % (S + 1) + step) % (S + 1);
             const side = Math.floor((ms + (ih(i, 23, 4) % 2000)) / 2000) % 2;

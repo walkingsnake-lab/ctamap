@@ -61,11 +61,11 @@ test('the sky blends continuously through dusk (no jumps between minutes)', () =
   }
 });
 
-test('afternoon: sun at the day spot, glints under it, white wheel, lights off, boats out', () => {
+test('afternoon: sun at the day spot, no glitter path, white wheel, lights off, boats out', () => {
   const s = sky({}, AFTERNOON);
   assert.equal(s.st, 'clear');
   assert.deepEqual([s.sun.x, s.sun.y], [41, 5]);
-  assert.deepEqual(s.gl, { x: 41, c: '#c8d8f0', p: 0 });
+  assert.equal(s.gl, null);
   assert.equal(s.whl, 0);
   assert.equal(s.lit, 0);
   assert.equal(s.win, 0);
@@ -75,14 +75,18 @@ test('afternoon: sun at the day spot, glints under it, white wheel, lights off, 
   assert.equal(s.temp, 52);
 });
 
-test('sunset: the sun sits low at its bearing on the sun scale, with the glitter path', () => {
+test('sunset: the sun sits low at its bearing on the sun scale; the glitter path only while it shows', () => {
   const s = sky({}, SUNSET);
   // Bearing ~250° -> x = 32 + (250 - 270) * 0.8 = 16; elevation ~0.2° -> row ~21.
   assert.ok(s.sun.x >= 14 && s.sun.x <= 18, `x ${s.sun.x}`);
   assert.ok(s.sun.y >= 20 && s.sun.y <= 21, `y ${s.sun.y}`);
-  assert.equal(s.gl.x, s.sun.x);
-  assert.ok(s.gl.p > 50, `glitter ${s.gl.p}`);
+  assert.equal(s.gl, null, 'behind St. Regis: no reflection of a hidden sun');
   assert.equal(s.lit, 1, 'the wheel lights at dusk');
+  // May 1, 7:35 PM: the sun sets over the gap right of the wheel, in view.
+  const may = sky({}, at('2026-05-02T00:35:00Z'));
+  assert.deepEqual([may.sun.x, may.sun.y], [47, 17]);
+  assert.equal(may.gl.x, may.sun.x);
+  assert.ok(may.gl.p > 50, `glitter ${may.gl.p}`);
 });
 
 test('dusk: windows coming on, a few stars not yet, sun gone', () => {
@@ -98,7 +102,7 @@ test('night: every window, all stars, the moon at its phase', () => {
   assert.equal(s.win, 100);
   assert.equal(s.stars, 14);
   assert.ok(s.moon && s.moon.fr >= 3);
-  assert.equal(s.gl.x, 41);
+  assert.equal(s.gl, null, 'no glints under the moon');
   assert.equal(s.lit, 1);
 });
 
@@ -115,18 +119,18 @@ test('overcast, rain and snow hide the sun, moon and stars; precipitation by int
       assert.equal(s.sun, null); assert.equal(s.moon, null); assert.equal(s.stars, 0);
     }
   }
-  assert.deepEqual(sky({ code: 61, clouds: 100 }, AFTERNOON).pcp, { k: 'r', n: 8 });
-  assert.deepEqual(sky({ code: 65, clouds: 100 }, AFTERNOON).pcp, { k: 'r', n: 26 });
+  assert.deepEqual(sky({ code: 61, clouds: 100 }, AFTERNOON).pcp, { k: 'r', n: 8, sl: 0 });
+  assert.deepEqual(sky({ code: 65, clouds: 100 }, AFTERNOON).pcp, { k: 'r', n: 26, sl: 0 });
   assert.deepEqual(sky({ code: 73, clouds: 100 }, AFTERNOON).pcp, { k: 's', n: 12 });
   assert.equal(sky({ code: 3, clouds: 100 }, AFTERNOON).pcp, null);
   const storm = sky({ code: 95, clouds: 100 }, NIGHT);
   assert.equal(storm.storm, 1);
-  assert.deepEqual(storm.pcp, { k: 'r', n: 16 });
+  assert.deepEqual(storm.pcp, { k: 'r', n: 16, sl: -1 }, 'storms slant left without wind data');
 });
 
 test('snow puts snow on the roofs (grey at night); fog sends its color and a dark wheel', () => {
   assert.equal(sky({ code: 73, clouds: 100 }, AFTERNOON).roof, '#c8ced8');
-  assert.equal(sky({ code: 73, clouds: 100 }, NIGHT).roof, '#5a5260');
+  assert.equal(sky({ code: 73, clouds: 100 }, NIGHT).roof, '#7a7280');
   assert.equal(sky({ code: 0 }, AFTERNOON).roof, null);
   const fog = sky({ code: 45, clouds: 100 }, AFTERNOON);
   assert.equal(fog.fog, '#747a82');
@@ -187,4 +191,26 @@ test('cloud drift: 16 s a pixel by default, 4 s normal, still when off', () => {
 test('boats can be turned off per board', () => {
   assert.equal(toSkyline({ temp: 60, code: 0, clouds: 0 }, { ...PLACE, now: AFTERNOON, temp: 60, boats: false }).boats, 0);
   assert.equal(toSkyline({ temp: 60, code: 0, clouds: 0 }, { ...PLACE, now: AFTERNOON, temp: 60 }).boats, 1);
+});
+
+test('rain slants 45° with a cross wind of 8 mph or more (north is right), else falls straight', () => {
+  const sl = (windSpeed, windDir, code = 63) => sky({ code, clouds: 100, windSpeed, windDir }, AFTERNOON).pcp.sl;
+  assert.equal(sl(15, 180), 1, 'south wind blows north: right');
+  assert.equal(sl(15, 0), -1, 'north wind: left');
+  assert.equal(sl(25, 270), 0, 'west wind blows at the viewer: straight');
+  assert.equal(sl(6, 0), 0, 'light wind: straight');
+  assert.equal(sl(10, 45), 0, 'NE at 10 mph: 7.1 across, straight');
+  assert.equal(sl(12, 135), 1, 'SE at 12 mph: 8.5 across, right');
+  assert.equal(sl(3, 180, 95), 0, 'a calm storm falls straight');
+});
+
+test('motion settings map to ms per pixel or turn; defaults when unset', () => {
+  const opts = (o) => toSkyline({ temp: 60, code: 0, clouds: 0 }, { ...PLACE, now: NIGHT, temp: 60, ...o });
+  const d = opts({});
+  assert.deepEqual([d.wheel, d.rip, d.twk, d.fall], [30000, 500, 1, 200]);
+  assert.deepEqual([opts({ wheel: 'off' }).wheel, opts({ wheel: 'slow' }).wheel, opts({ wheel: 'fast' }).wheel], [0, 60000, 15000]);
+  assert.deepEqual([opts({ ripple: 'off' }).rip, opts({ ripple: 'slow' }).rip, opts({ ripple: 'fast' }).rip], [0, 1000, 250]);
+  assert.equal(opts({ twinkle: false }).twk, 0);
+  assert.deepEqual([opts({ fall: 'slow' }).fall, opts({ fall: 'fast' }).fall], [400, 100]);
+  assert.equal(opts({ wheel: 'bogus' }).wheel, 30000);
 });

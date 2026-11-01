@@ -252,6 +252,17 @@
     <p class="hint">How fast the clouds move: still, 1 px every 16 s, or 1 px every 4 s.</p>
     <div class="row"><span>Boats on the quarter hour</span><label class="switch"><input type="checkbox" id="boats"><span></span></label></div>
     <p class="hint">A sailboat on :00 and :30, a speedboat out and back on :15 and :45, by day in fair weather.</p>
+    <div class="row"><span>Wheel speed</span>
+      <select id="wheelSpeed" aria-label="Wheel speed" style="width:auto"><option value="off">Still</option><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option></select></div>
+    <p class="hint">The rainbow around the wheel at night: still, a turn every 60 s, 30 s or 15 s.</p>
+    <div class="row"><span>Ripple speed</span>
+      <select id="rippleSpeed" aria-label="Ripple speed" style="width:auto"><option value="off">Still</option><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option></select></div>
+    <div class="row"><span>Rain and snow speed</span>
+      <select id="rainSpeed" aria-label="Rain and snow speed" style="width:auto"><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option></select></div>
+    <p class="hint">Rain slants with the wind when it blows across the view (8 mph or more), else falls straight down.</p>
+    <div class="row"><span>Twinkling stars</span><label class="switch"><input type="checkbox" id="twinkle"><span></span></label></div>
+    <div class="row"><span>Show temperature</span><label class="switch"><input type="checkbox" id="showTemp"><span></span></label></div>
+    <p class="hint">Off: the clock alone. A watch or warning still shows bottom left.</p>
   </section>
 
   <section data-tab="baseball">
@@ -623,6 +634,11 @@
     pressed('clockFace', board.clockFace || 'skyline');
     $('boats').checked = board.boats !== false;
     $('cloudDrift').value = board.cloudDrift || 'slow';
+    $('wheelSpeed').value = board.wheelSpeed || 'normal';
+    $('rippleSpeed').value = board.rippleSpeed || 'normal';
+    $('rainSpeed').value = board.rainSpeed || 'normal';
+    $('twinkle').checked = board.twinkle !== false;
+    $('showTemp').checked = board.showTemp !== false;
     for (const [k, d] of [['tickerHold', 8], ['tickerSlide', 1200], ['radarFrame', 500], ['radarHold', 4], ['gameEvery', 60]]) $(k).value = String(board[k] || d);
     $('tickerFill').value = board.tickerFill || 55;
     $('tickerFillV').textContent = `${board.tickerFill || 55}%`;
@@ -760,6 +776,8 @@
   $('clockFace').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ clockFace: v }); });
   $('boats').addEventListener('change', (e) => save({ boats: e.target.checked }));
   $('cloudDrift').addEventListener('change', (e) => save({ cloudDrift: e.target.value }));
+  for (const k of ['wheelSpeed', 'rippleSpeed', 'rainSpeed']) $(k).addEventListener('change', (e) => save({ [k]: e.target.value }));
+  for (const k of ['twinkle', 'showTemp']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('tickerFill').addEventListener('input', (e) => { $('tickerFillV').textContent = `${e.target.value}%`; });
   $('tickerFill').addEventListener('change', (e) => save({ tickerFill: Number(e.target.value) }));

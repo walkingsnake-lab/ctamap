@@ -56,13 +56,16 @@ function clearSky(el) {
 }
 
 // ---- other weather: a day and a night look, blended across 1° to -6° ----
+// The night snow sky (city light off the snow clouds) stays well above the
+// panel's bottom levels, a warm grey whose channels step nearly together: a
+// dimmer one (levels 0-5) broke into black, magenta and red bands on the board.
 const LOOKS = {
   overcast: { day: { sky: [[0, '#4a525e'], [25, '#6a727e']], water: ['#262e38', '#1c222a', '#38424e'] },
     night: { sky: [[0, '#0c0a0e'], [25, '#2a2226']], water: ['#08070a', '#050406', '#141218'] } },
   rain: { day: { sky: [[0, '#262c34'], [25, '#3c444e']], water: ['#141c26', '#0e141c', '#222c3a'] },
     night: { sky: [[0, '#08080e'], [25, '#1e1a24']], water: ['#06070c', '#040508', '#10121c'] } },
   snow: { day: { sky: [[0, '#5a606a'], [25, '#7c828c']], water: ['#2c323a', '#22272e', '#3c444e'], roof: '#c8ced8' },
-    night: { sky: [[0, '#140e14'], [25, '#3a282a']], water: ['#0c0a0e', '#08070a', '#1a1620'], roof: '#5a5260' } },
+    night: { sky: [[0, '#3a3436'], [25, '#564a4c']], water: ['#0c0a0e', '#08070a', '#1a1620'], roof: '#7a7280' } },
   fog: { day: { sky: [[0, '#747a82'], [25, '#747a82']], water: ['#5a6068', '#4e545c', '#6a7078'] },
     night: { sky: [[0, '#14161c'], [25, '#14161c']], water: ['#0c0e14', '#08090e', '#181b22'] } },
   storm: { day: { sky: [[0, '#1c2028'], [25, '#30363e']], water: ['#10161e', '#0a0e14', '#1c2430'] },
@@ -143,10 +146,35 @@ function bandLuma(sky, cl, rows) {
 // Weather (parsed by weather.js, °F), the place, the time and the temperature
 // to show (board unit, rounded) -> the payload's `skyline`. `boats: false`
 // (the board's setting) keeps the boats off.
-// Cloud drift, ms per pixel (0: still), by the board's cloudDrift setting.
+// Motion settings (state.js) -> ms per pixel, or per turn for the wheel
+// (0: still). Snow falls 3.5x slower than rain (the renderer's factor).
 const DRIFT_MS = { off: 0, slow: 16000, normal: 4000 };
+const WHEEL_MS = { off: 0, slow: 60000, normal: 30000, fast: 15000 };
+const RIPPLE_MS = { off: 0, slow: 1000, normal: 500, fast: 250 };
+const FALL_MS = { slow: 400, normal: 200, fast: 100 };
+const pick = (table, key, def) => (table[key] != null ? table[key] : table[def]);
 
-function toSkyline(w, { lat, lon, now, temp, boats = true, drift = 'slow' }) {
+// Whether at least 4 pixels of the sun's disc (radius 3.5) clear the skyline.
+function sunShows(cx, cy) {
+  const { SKY } = require('./render');
+  let n = 0;
+  for (let y = cy - 3; y <= cy + 3; y++) for (let x = cx - 3; x <= cx + 3; x++) {
+    if ((x - cx) ** 2 + (y - cy) ** 2 > 3.5 * 3.5 || y < 0 || y > SKY.SHORE || x < 0 || x > 63 || SKY.isB(x, y)) continue;
+    if (!SKY.ants.some(([ax, t, roof]) => ax === x && y >= t && y < roof)) n++;
+  }
+  return n >= 4;
+}
+
+// Rain slant: the wind's component across the view (the board looks west,
+// so north is to the right) at 8 mph or more slants the streaks 45° with it;
+// calmer, they fall straight down. Without wind, storms slant left.
+function rainSlant(w, kind) {
+  if (typeof w.windSpeed !== 'number' || typeof w.windDir !== 'number') return kind === 'storm' ? -1 : 0;
+  const across = -w.windSpeed * Math.cos(w.windDir * Math.PI / 180);   // + toward the north (right)
+  return across >= 8 ? 1 : across <= -8 ? -1 : 0;
+}
+
+function toSkyline(w, { lat, lon, now, temp, boats = true, drift = 'slow', wheel = 'normal', ripple = 'normal', twinkle = true, fall = 'normal' }) {
   const { el, az } = sunPos(now, lat, lon);
   const { kind, lvl } = weatherKind(w.code, w.clouds);
   const night = sstep(1, -6, el);                 // 0 day .. 1 night
@@ -177,19 +205,21 @@ function toSkyline(w, { lat, lon, now, temp, boats = true, drift = 'slow' }) {
 
   // Glints on the water: under the sun by day, the glitter path at sunset
   // (p: its strength, 0-100), under the moon at night.
-  let gl = null;
-  if (sun && el > 8) gl = { x: sun.x, c: '#c8d8f0', p: 0 };
-  else if (sun) gl = { x: sun.x, c: '#ffd080', p: Math.round(100 * sstep(-2, 1, el) * sstep(8, 4, el)) };
-  else if (moon) gl = { x: SUN_DAY[0], c: mix('#000000', '#a89c70', mp.lit), p: 0 };
+  // The glitter path: the ripples under a low sun take its color, only while
+  // the sun shows over the buildings (no reflection of a hidden sun). The
+  // glint sparkles are gone; `gl` stays for the path (and older firmware,
+  // which sparkles wherever it's sent, so it's sent only with a path).
+  const p = sun ? Math.round(100 * sstep(-2, 1, el) * sstep(8, 4, el)) : 0;
+  const gl = p > 0 && sunShows(sun.x, sun.y) ? { x: sun.x, c: '#ffd080', p } : null;
 
   // The wheel by day: white rim with a darker frame, lighter on mid greys,
   // all dark on bright skies (fog, snow) so it keeps its contrast.
   const cl0 = cloudsFor(kind, el, night);
-  const cl = cl0 && { ...cl0, step: DRIFT_MS[drift] != null ? DRIFT_MS[drift] : DRIFT_MS.slow };
+  const cl = cl0 && { ...cl0, step: pick(DRIFT_MS, drift, 'slow') };
   const behind = bandLuma(look.sky, cl, RIM_TOP);
   const whl = kind === 'fog' || kind === 'snow' ? 2 : behind < 75 ? 0 : behind < 135 ? 1 : 2;
 
-  const wet = kind === 'rain' || kind === 'storm' ? { k: 'r', n: RAIN_N[lvl - 1] } : kind === 'snow' ? { k: 's', n: SNOW_N[lvl - 1] } : null;
+  const wet = kind === 'rain' || kind === 'storm' ? { k: 'r', n: RAIN_N[lvl - 1], sl: rainSlant(w, kind) } : kind === 'snow' ? { k: 's', n: SNOW_N[lvl - 1] } : null;
   const tempF = typeof w.temp === 'number' ? w.temp : null;
 
   return {
@@ -210,6 +240,10 @@ function toSkyline(w, { lat, lon, now, temp, boats = true, drift = 'slow' }) {
     boats: boats && el > 0 && (clearish || kind === 'overcast') && tempF != null && tempF >= 40 ? 1 : 0,
     cl,                                            // clouds: strip id (GET /board/sky/<id>) and its colors
     temp: temp == null ? null : Math.round(temp),
+    wheel: pick(WHEEL_MS, wheel, 'normal'),        // ms a turn of the night rainbow (0: still)
+    rip: pick(RIPPLE_MS, ripple, 'normal'),        // ms a pixel for the ripples (0: still)
+    twk: twinkle ? 1 : 0,                          // stars twinkle
+    fall: pick(FALL_MS, fall, 'normal'),           // ms a pixel for rain (snow: 3.5x)
   };
 }
 

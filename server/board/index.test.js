@@ -1344,6 +1344,12 @@ test('clock screen: only for boards whose firmware draws it (hk=skyline); the sk
   assert.equal(b.skyline.temp, 63);
   assert.ok(Array.isArray(b.skyline.sky) && b.skyline.sky.length >= 2);
   assert.equal(b.skyline.wat.length, 3);
+  assert.deepEqual([b.skyline.wheel, b.skyline.rip, b.skyline.twk, b.skyline.fall], [30000, 500, 1, 200], 'motion defaults');
+  // The board's skyline settings reach the payload; hiding the temperature sends none.
+  s.store.update('home', { wheelSpeed: 'off', rippleSpeed: 'fast', twinkle: false, rainSpeed: 'slow', showTemp: false });
+  b = await get();
+  assert.deepEqual([b.skyline.wheel, b.skyline.rip, b.skyline.twk, b.skyline.fall, b.skyline.temp], [0, 250, 0, 400, null]);
+  s.store.update('home', { showTemp: true });
   // A later report without hk (e.g. older firmware after a rollback) turns it off again.
   await s.req('/board/version?b=home&hu=90', h);
   assert.equal((await get()).screen, 'transit');
