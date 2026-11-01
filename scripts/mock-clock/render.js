@@ -27,7 +27,7 @@ function toFrame(led) {
 }
 
 fs.mkdirSync(OUT, { recursive: true });
-const SHEETS = { 'sheet.png': ['KEEP', 'R1'], 'sheet-round2.png': ['KEEP', 'R2'], 'sheet-round3.png': ['R3'] };
+const SHEETS = { 'sheet.png': ['KEEP', 'R1'], 'sheet-round2.png': ['KEEP', 'R2'], 'sheet-round3.png': ['R3'], 'sheet-seventies.png': ['S70'] };
 const frames = new Map(FACES.map((face) => {
   const f = toFrame(render(face, when(face), env));
   fs.writeFileSync(path.join(OUT, `${face.id}.png`), f.toPNG(10));

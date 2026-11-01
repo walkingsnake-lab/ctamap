@@ -938,6 +938,93 @@
   ];
   FACES.push(...R3);
 
+  // ---- Seventies type: digits as centerline paths (unit box, y down) with
+  // squared-off superellipse curves, stroked at any weight. No font file.
+  function sq(cx, cy, rx, ry, d0, d1, n = 2.6, step = 6) {
+    const p = 2 / n, pw = (v) => Math.sign(v) * Math.pow(Math.abs(v), p), pts = [];
+    const k = Math.max(2, Math.ceil(Math.abs(d1 - d0) / step));
+    for (let i = 0; i <= k; i++) { const a = (d0 + (d1 - d0) * i / k) * Math.PI / 180; pts.push([cx + rx * pw(Math.sin(a)), cy - ry * pw(Math.cos(a))]); }
+    return pts;
+  }
+  const flip = (polys) => polys.map((pl) => pl.map(([x, y]) => [1 - x, 1 - y]));
+  const SIX = [[[0.5, 0.36], [0, 0.68]].concat(sq(0.5, 0.68, 0.5, 0.32, 270, 630)).slice(0, 0), [[0.82, 0]].concat([[0.3, 0.4]]), sq(0.5, 0.68, 0.5, 0.32, 0, 360)];
+  const D70 = {
+    0: [sq(0.5, 0.5, 0.5, 0.5, 0, 360)],
+    1: [[[0.22, 0.2], [0.62, 0], [0.62, 1]]],
+    2: [sq(0.5, 0.28, 0.5, 0.28, 270, 450).concat([[0, 1], [1, 1]])],
+    3: [[[0, 0], [1, 0], [0.4, 0.4]].concat(sq(0.5, 0.69, 0.5, 0.31, 0, 250))],
+    4: [[[0.72, 1], [0.72, 0], [0, 0.68], [1, 0.68]]],
+    5: [[[1, 0], [0.04, 0], [0, 0.44]].concat(sq(0.5, 0.69, 0.5, 0.31, 300, 610))],
+    6: SIX.slice(1),
+    7: [[[0, 0], [1, 0], [0.32, 1]]],
+    8: [sq(0.5, 0.24, 0.4, 0.24, 0, 360), sq(0.5, 0.74, 0.5, 0.26, 0, 360)],
+    9: flip(SIX.slice(1)),
+  };
+  // Distance field of a digit in a w x h cell; the path sits `inset` px in.
+  function digitField(ch, w, h, inset) {
+    const polys = D70[ch] || [], sx = w - 1 - 2 * inset, sy = h - 1 - 2 * inset;
+    const segs = [];
+    for (const pl of polys) for (let i = 1; i < pl.length; i++) segs.push([inset + pl[i - 1][0] * sx, inset + pl[i - 1][1] * sy, inset + pl[i][0] * sx, inset + pl[i][1] * sy]);
+    return (x, y) => { let d = 99; for (const g of segs) d = Math.min(d, segDist(x, y, ...g)); return d; };
+  }
+  // Lay out H:MM in cells; paint(x, y, d, row) decides each pixel's color.
+  function time70(f, t, { w, h, inset, gap, colonW, x0, y0, paint }) {
+    const hh = String(t.h12), mm = String(t.m).padStart(2, '0');
+    let x = x0;
+    const cell = (ch) => {
+      const fd = digitField(ch, w, h, inset);
+      for (let y = 0; y < h; y++) for (let i = 0; i < w; i++) { const c = paint(fd(i, y), y / (h - 1)); if (c) f.plot(x + i, y0 + y, c); }
+      x += w + gap;
+    };
+    [...hh].forEach(cell);
+    return { cell, colon: (draw) => { draw(x, y0); x += colonW + gap; }, rest: () => [...mm].forEach(cell), end: () => x - gap };
+  }
+  const C70 = ['#ffc23a', '#ff7414', '#d2361a'];
+  function stripes70(f, cx, cy, radii) {
+    radii.forEach((r, i) => {
+      f.fill(0, cy + r - 1, cx, 2, C70[i]);
+      f.fill(cx + r - 1, 0, 2, cy, C70[i]);
+      ring(f, cx - 0.5, cy - 0.5, r, 2, C70[i], 0.25, 0.5);
+    });
+  }
+  const mix = (a, b, k) => rgb(a).map((v, i) => v + (rgb(b)[i] - v) * k);
+  const band = (v) => C70[Math.min(2, Math.floor(v * 3))];
+  const grad = (v) => (v < 0.5 ? mix(C70[0], C70[1], v * 2) : mix(C70[1], C70[2], (v - 0.5) * 2));
+
+  const S70 = [
+    {
+      id: 's70-chunky', group: 'S70', title: 'Chunky',
+      note: 'Fat 3 px round-ended strokes on squared-off curves (Cooper/Avant Garde territory), banded sunflower, orange and rust top to bottom.',
+      draw(f, t) {
+        stripes70(f, 54, 21, [3, 6, 9]);
+        const L = time70(f, t, { w: 10, h: 19, inset: 1.2, gap: 2, colonW: 3, x0: t.h12 > 9 ? 0 : 6, y0: 1, paint: (d, v) => (d <= 1.25 ? band(v) : null) });
+        L.colon((x, y) => { f.fill(x, y + 5, 3, 3, band(6 / 18)); f.fill(x, y + 12, 3, 3, band(13 / 18)); });
+        L.rest();
+      },
+    },
+    {
+      id: 's70-disco', group: 'S70', title: 'Disco outline',
+      note: 'A thin sunflower stroke inside an orange outline, like 70s inline lettering. Lighter on the panel than Chunky, and echoes the stripes.',
+      draw(f, t) {
+        stripes70(f, 54, 21, [3, 6, 9]);
+        const L = time70(f, t, { w: 11, h: 20, inset: 2.2, gap: 1, colonW: 3, x0: t.h12 > 9 ? 0 : 6, y0: 0, paint: (d) => (d <= 0.6 ? C70[0] : d > 1.5 && d <= 2.3 ? C70[1] : null) });
+        L.colon((x, y) => { f.fill(x + 1, y + 6, 1, 1, C70[0]); f.fill(x + 1, y + 13, 1, 1, C70[0]); for (const [dx, dy] of [[0, 0], [2, 0], [1, -1], [1, 1]]) { f.plot(x + dx, y + 6 + dy, C70[1]); f.plot(x + dx, y + 13 + dy, C70[1]); } });
+        L.rest();
+      },
+    },
+    {
+      id: 's70-tall', group: 'S70', title: 'Tall gradient',
+      note: 'Tall, narrow 2 px strokes with a smooth sunset fade from sunflower to rust. The narrow cells leave room to keep the stripes wide.',
+      draw(f, t) {
+        stripes70(f, 54, 21, [3, 6, 9]);
+        const L = time70(f, t, { w: 8, h: 21, inset: 0.8, gap: 3, colonW: 2, x0: t.h12 > 9 ? 2 : 8, y0: 0, paint: (d, v) => (d <= 0.8 ? grad(v) : null) });
+        L.colon((x, y) => { f.fill(x, y + 6, 2, 2, grad(0.3)); f.fill(x, y + 13, 2, 2, grad(0.65)); });
+        L.rest();
+      },
+    },
+  ];
+  FACES.push(...S70);
+
   // Mock data for the weather/train bits (made up).
   const MOCK = {
     wx: { temp: 54, hi: 63, lo: 49, icon: 'pcloudy_day', sunrise: 7 + 6 / 60, sunset: 18 + 12 / 60 },
