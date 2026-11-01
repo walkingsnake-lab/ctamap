@@ -7,7 +7,7 @@ case top over the VEML7700 (case2.SENSOR_X/Y) instead of one Ø2 hole.
       0.1 mm gap is 0.08 deg.
     left-right: crush ribs on the knob-hole plug, only on the left and right sides (ribs front and back would fight
       the fence). The knob hole's printed size varies (v1 guide at RIB_R 11.9 still twisted), so print the plug fit
-      set first and use the rib radius that pushes in firmly (RIB_R; 1-3 notches = 11.95 / 12.05 / 12.15).
+      set first and use the rib radius that pushes in firmly (RIB_R; 1-3 notches = 12.05 / 12.15 / 12.25).
 - One flat slab (top and bottom parallel), so it prints top face down with the plug up and no supports; the ribs
   print vertical. It sits flat on the case top, so the bores are square to it. Use it before the collar goes in.
 - Bores are printed at the bit size: small FDM holes print undersize, so run the bit through the guide once first;
@@ -26,7 +26,7 @@ import case2 as V
 SLAB = 6.0                 # guide thickness = bore length
 PLUG_D = 2.4               # plug depth into the knob hole (wall 2.5)
 PLUG_CL = 0.5              # plug body clearance; the ribs take up the rest
-RIB_R = 12.05              # rib crest radius (nominal hole r 12.0); set from the fit set
+RIB_R = 12.15              # rib crest radius (nominal hole r 12.0); set from the fit set
 FENCE_GAP = 0.15           # fence's inner face behind the case's back face
 FENCE_T, FENCE_DROP = 2.5, 6.0
 FENCE_X = (-12.0, 62.0)
@@ -91,7 +91,7 @@ def guide(name, bit=1.59, rib_r=RIB_R):
     return g - V.box(-16, -12, -2, 2, -0.01, 1.2)
 
 
-def fit_set(rs=(11.95, 12.05, 12.15)):
+def fit_set(rs=(12.05, 12.15, 12.25)):
     """plug coupons (plug + 2 mm disc) at three rib radii; 1-3 notches in the disc rim mark them"""
     parts = []
     for i, rr in enumerate(rs):
@@ -125,4 +125,4 @@ if __name__ == '__main__':
         print(fn, t.is_watertight, np.round(t.extents, 1).tolist(), info)
     for name in ('5', '4'):
         put(guide(name, bit), f'bar-sensor-grille-guide-{name}hole.stl', check(name, bit))
-    put(fit_set(), 'bar-sensor-grille-guide-plug-fit-set.stl', 'ribs 11.95 / 12.05 / 12.15 (1-3 notches)')
+    put(fit_set(), 'bar-sensor-grille-guide-plug-fit-set.stl', 'ribs 12.05 / 12.15 / 12.25 (1-3 notches)')
