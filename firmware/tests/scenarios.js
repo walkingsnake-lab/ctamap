@@ -149,6 +149,9 @@ async function build() {
   tk.ticker[1] = { ...tk.ticker[1], a: 1 };
   add('ticker', tk, [0, 1, 2].flatMap((page) => [0, 0.3, 0.5, 0.8].map((slide) => ({ screen: 'ticker', page, slide }))));
   add('ticker no header', { ...tk, header: null }, [{ screen: 'ticker' }, { screen: 'ticker', now: tk.now + 400 }]);
+  // Latin-1 and General Punctuation glyphs (S3 only: the M4's fonts are ASCII).
+  const ext = { ...tk, header: 'É—“Ñ”…€', ticker: tk.ticker.map((x, i) => (i === 0 ? { ...x, d: 'Café’s' } : i === 2 ? { ...x, d: '¿Qué–ño?' } : x)) };
+  add('extended glyphs', ext, [{ screen: 'ticker' }, { screen: 'ticker', page: 1 }], undefined, undefined, { s3only: true });
   // Transit header hidden to fit; the ticker keeps its own.
   add('ticker header kept', { ...tk, header: null, tickerHeader: 'MORSE' }, [{ screen: 'ticker' }]);
   add('ticker fill 30%', { ...tk, tickerFill: 30 }, [{ screen: 'ticker' }, { screen: 'ticker', page: 1, slide: 0.5 }]);

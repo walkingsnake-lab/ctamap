@@ -85,6 +85,9 @@ static int glyph(Font font, uint32_t cp) {
   if (cp >= assets::LOW0 && cp < assets::LOW0 + 224) {
     t = assets::FONT_LOW[font];
     i = (cp - assets::LOW0) << 1;
+  } else if (cp >= assets::PUNCT0 && cp < assets::PUNCT0 + assets::PUNCT_N) {
+    t = assets::FONT_PUNCT[font];
+    i = (cp - assets::PUNCT0) << 1;
   } else if (cp >= assets::PUA && cp < assets::PUA + 16) {
     t = assets::FONT_PUA[font];
     i = (cp - assets::PUA) << 1;
@@ -117,6 +120,7 @@ int measure(Font font, const ustr &s) {
 
 void Frame::clear() {
   for (int i = 0; i < W * H * 3; i++) px[i] = 0;
+  floor = true;
   clip_.on = false;
   clips_.clear();
 }
@@ -2313,6 +2317,10 @@ static const Value &sky_none() {
 static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o, bool blink,
                            const Frames *clouds) {
   const sky::Geometry &G = sky::geo();
+  // The scene's dark sky, water and night clouds would all be lifted to one
+  // primary at the panel's floor (a flat blue sky, a patchwork of red and
+  // blue clouds): let them go black instead (color.h).
+  f.floor = false;
   const Value &s = p["skyline"].truthy() ? p["skyline"] : sky_none();
   double now = now_o.has_value() ? *now_o : p["now"].num();
   double ms = ms_o.has_value() ? *ms_o : std::floor(now * 1000);

@@ -1,7 +1,9 @@
 'use strict';
-// Every glyph and icon in the packed firmware assets (assets.py, read by
-// draw.glyph / glyph_row) decodes back to exactly the server's fonts and
-// icons. Parity tests only cover glyphs their scenarios happen to draw.
+// Every glyph and icon in the M4's packed assets (assets.py, read by
+// draw.glyph / glyph_row) decodes back to exactly the server's glyph or icon
+// at that code. assets.py is frozen with the M4 firmware: the server's fonts
+// and icons may grow (the S3 gets them), but what the M4 has must not change
+// under it. Parity tests only cover glyphs their scenarios happen to draw.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
@@ -28,17 +30,16 @@ pal = {chr(k): list(v) for k, v in assets.ICON_PALETTE.items()}
 print(json.dumps({'fonts': fonts, 'icons': icons, 'pal': pal}))
 `;
 
-test('packed fonts and icons decode to the server data, every glyph', () => {
+test('frozen M4 fonts and icons still match the server data, every glyph', () => {
   const r = spawnSync('python3', ['-c', PY], { encoding: 'utf8', timeout: 60000 });
   assert.equal(r.status, 0, r.stderr);
   const got = JSON.parse(r.stdout);
   const want = packFonts();
   assert.deepEqual(Object.keys(got.fonts).sort(), Object.keys(want).sort());
   for (const name of Object.keys(want)) {
-    assert.equal(Object.keys(got.fonts[name]).length, Object.keys(want[name]).length, `${name}: glyph count`);
-    for (const [cp, g] of Object.entries(want[name])) assert.deepEqual(got.fonts[name][cp], g, `${name} ${cp}`);
+    for (const [cp, g] of Object.entries(got.fonts[name])) assert.deepEqual(g, want[name][cp], `${name} ${cp}`);
   }
-  for (const [k, rows] of Object.entries(icons.ICONS)) assert.equal(got.icons[k], rows.join(''), `icon ${k}`);
+  for (const [k, px] of Object.entries(got.icons)) assert.equal(px, icons.ICONS[k] && icons.ICONS[k].join(''), `icon ${k}`);
   const hex = (v) => [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16));
-  for (const [k, v] of Object.entries(icons.PALETTE)) assert.deepEqual(got.pal[k], hex(v), `palette ${k}`);
+  for (const [k, v] of Object.entries(got.pal)) assert.deepEqual(v, icons.PALETTE[k] && hex(icons.PALETTE[k]), `palette ${k}`);
 });

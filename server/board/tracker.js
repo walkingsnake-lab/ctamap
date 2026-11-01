@@ -36,7 +36,7 @@ function createTracker({
         const err = json && json.ctatt && json.ctatt.errCd;
         if (err !== undefined && String(err) !== '0') throw new Error(`errCd ${err}: ${json.ctatt.errNm}`);
         const t = now();
-        e.arrivals = latchDue(e.arrivals, normalize(json, { log, unknown }), t);
+        e.arrivals = latchDue(e.arrivals, normalize(json, { log, unknown, now: t }), t);
         e.fetchedAt = t;
         e.failures = 0;
       } catch (err) {

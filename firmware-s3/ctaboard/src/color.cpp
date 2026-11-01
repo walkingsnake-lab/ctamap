@@ -54,10 +54,25 @@ void Pipeline::set_curve(int curve) {
   }
 }
 
-void Pipeline::levels(uint8_t &r, uint8_t &g, uint8_t &b) const {
+void Pipeline::levels(uint8_t &r, uint8_t &g, uint8_t &b, bool floor) const {
   if (!(r | g | b)) return;
   uint8_t lr = lv_[r], lg = lv_[g], lb = lv_[b];
   uint8_t m = lr > lg ? (lr > lb ? lr : lb) : (lg > lb ? lg : lb);
+  if (!floor) {
+    // The frame opted out of the floor (the skyline). Too dark for the
+    // panel: off. Otherwise round each channel at the bottom step to the
+    // nearest step instead of truncating it, so a dim near-grey stays grey
+    // rather than keeping only its strongest channel (a dark cloud read as
+    // red or blue). A channel well under half a step still drops out, so a
+    // deliberately colored dim pixel (the dark red beacon) keeps its hue.
+    if (m < floor_) {
+      r = g = b = 0;
+      return;
+    }
+    if (lr < floor_ && lr * 2 >= floor_) lr = floor_;
+    if (lg < floor_ && lg * 2 >= floor_) lg = floor_;
+    if (lb < floor_ && lb * 2 >= floor_) lb = floor_;
+  }
   if (m < floor_) {
     // Would go fully dark: lift the brightest channel to the floor and drop
     // the rest, so dim elements never vanish or pick up a tint.
@@ -71,8 +86,8 @@ void Pipeline::levels(uint8_t &r, uint8_t &g, uint8_t &b) const {
   b = lb & mask_[2];
 }
 
-void Pipeline::map(uint8_t &r, uint8_t &g, uint8_t &b) const {
-  levels(r, g, b);
+void Pipeline::map(uint8_t &r, uint8_t &g, uint8_t &b, bool floor) const {
+  levels(r, g, b, floor);
   r = inv_[r];
   g = inv_[g];
   b = inv_[b];

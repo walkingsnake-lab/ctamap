@@ -100,6 +100,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
   - **Cut mark** (3x1, `CUT`): two dots on the baseline (an ellipsis with one dot less), after a transit label shortened to make room for the alert circle.
 - **Digits are tabular** in every font (one shared cell width), so a rolling digit never shifts its neighbors. Spaces are 2px (small) and 3px (5x7).
 - The **alert circle** is two glyphs drawn at the same origin: a red disc with the "!" pixels left blank, and a white "!". Fonts are one color per glyph.
+- **Coverage** (Tom Thumb and 5x7): printable ASCII, Latin-1 (accented letters, `°`, `£`, `¿`, …), and the punctuation phones substitute (curly quotes, en and em dashes, `…`, `•`, `€`). Tom Thumb lacks curly quotes and dashes, so its quotes are copies of the straight ones and its dashes are 4px and 5px bars. X11 5x7 fits most accented capitals into the 7-row cell by dropping the accent (É draws as E; Ä and Å keep theirs); the lowercase keep theirs. The frozen M4 has ASCII only.
 - Codepoints for custom glyphs are in `server/board/glyphs.js`. The fonts are built by `scripts/build-fonts.js` into `server/board/fonts/` (BDF); the board build converts them to PCF.
 - X11 **9x15 Bold** for the large overnight clock, with a custom **2x2 square-dot colon** centered on the 10px digit height (the stock X11 colon is drawn for text and drops a pixel below the digits).
 
@@ -596,8 +597,8 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 
 ### Board requirements (S3)
 - Memory is not a constraint on the S3 (2 MB PSRAM): the cloud strip (1.7 KB), the city layer and the scene buffers can all stay resident.
-- Buildings stay true black. The S3's color pipeline (`color.cpp`, `levels()`) already leaves black pixels off and lifts every other pixel to the floor (§4), so no mask is needed.
-- Closest to the floor: the top of the night sky (`#000006`, effectively off already), night water ripples (`#0e1a36`), the dim window amber (`#8a5c20`) and the beacons' dark end (`#401010`).
+- **No dim-color floor on this screen** (found on the panel, Nov 1): the floor (§4) lifts any pixel too dark for the panel to its brightest channel at the bottom step. On the skyline that turned the whole night sky and water into one flat blue and night clouds into a patchwork of pure red, blue and tan. Skyline frames opt out (`Frame::floor = false`, `color.cpp` `levels(..., floor)`): pixels too dark for the panel go black (the night sky is black on the panel), and channels just under the bottom step round to it instead of truncating, so a dim near-grey cloud stays grey while a dim red (the beacon) stays red. Everything brighter is unchanged; other screens keep the floor.
+- On the panel's CircuitPython-look curve the bottom step is a channel value of about 53 (gamma 2.2 level 8): night colors below it vanish (sky, water, thin clouds), colors at it show at the step.
 - Built: server parameters (`skyline.js`, `sun.js`), cloud strips (`clouds.js`, `GET /board/sky/<id>`), the reference renderer (`draw.js` `renderSkyline`), and the S3 port (`draw.cpp` `render_skyline`, pixel-identical over the `skyline *` scenarios, all `s3only`). The S3 fetches the strip only on the clock screen, redraws ten times a second there, lets fetches run any time (no times to protect), and reports `hk=skyline`. The buttons' screen cycle includes Clock on the S3.
 
 ### Open

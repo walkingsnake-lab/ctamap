@@ -71,6 +71,35 @@ int main() {
     drv.map(r, g, b);
     CHECK(color::cie8(r) == color::cie8(v), "%d", v);
   }
+  // A frame without the floor (the skyline): colors too dark for the panel go
+  // black instead of being lifted to one primary; brighter ones are unchanged.
+  {
+    struct Dark { uint8_t r, g, b; };
+    const Dark night[] = {{0x0c, 0x14, 0x30}, {0x1a, 0x16, 0x1b}, {0x2a, 0x26, 0x30}, {0x03, 0x08, 0x16}};
+    color::Pipeline p(color::CIRCUITPY);
+    for (const Dark &d : night) {
+      uint8_t r = d.r, g = d.g, b = d.b, fr = d.r, fg = d.g, fb = d.b;
+      p.levels(r, g, b, false);
+      p.levels(fr, fg, fb);
+      CHECK(r == 0 && g == 0 && b == 0, "no floor: #%02x%02x%02x -> (%d, %d, %d)", d.r, d.g, d.b, r, g, b);
+      CHECK(fr + fg + fb > 0, "with the floor it's lifted: #%02x%02x%02x", d.r, d.g, d.b);
+    }
+    // Just above the bottom step a dim near-grey stays grey (every channel at
+    // the step) instead of keeping only its strongest one; a dim red stays red.
+    uint8_t r = 0x34, g = 0x2d, b = 0x32;
+    p.levels(r, g, b, false);
+    CHECK(r == 8 && g == 8 && b == 8, "dim grey stays grey: (%d, %d, %d)", r, g, b);
+    r = 0x40; g = 0x10; b = 0x10;
+    p.levels(r, g, b, false);
+    CHECK(r == 8 && g == 0 && b == 0, "dark red beacon stays red: (%d, %d, %d)", r, g, b);
+    for (int v = 80; v < 256; v += 7) {
+      uint8_t a = (uint8_t)v, b2 = (uint8_t)(v * 3 / 4), c = 0, a2 = a, bb = b2, c2 = 0;  // every lit channel clearly above the bottom step
+      p.levels(a, b2, c, false);
+      p.levels(a2, bb, c2);
+      CHECK(a == a2 && b2 == bb && c == c2, "bright colors don't care: %d", v);
+    }
+  }
+
   // Black stays black on every curve.
   for (int curve = 0; curve < color::N_CURVES; curve++) {
     color::Pipeline p(curve);

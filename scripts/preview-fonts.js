@@ -33,7 +33,13 @@ const s = (cp) => String.fromCodePoint(cp);
 function sheet(fontName, lineHeight, baselineOffset, extra, chars) {
   const lines = [];
   if (chars) lines.push(chars);
-  else for (let c = 32; c < 127; c += 24) lines.push(Array.from({ length: Math.min(24, 127 - c) }, (_, i) => String.fromCharCode(c + i)).join(' '));
+  else {
+    for (let c = 32; c < 127; c += 24) lines.push(Array.from({ length: Math.min(24, 127 - c) }, (_, i) => String.fromCharCode(c + i)).join(' '));
+    // Latin-1 (no soft hyphen), then the General Punctuation glyphs.
+    const latin = Array.from({ length: 95 }, (_, i) => String.fromCharCode(0xa1 + i)).filter((ch) => ch !== '\u00ad');
+    for (let i = 0; i < latin.length; i += 24) lines.push(latin.slice(i, i + 24).join(' '));
+    lines.push('‘ ’ ‚ “ ” „ – — • … €  don’t “quoted” A–B A—B');
+  }
   if (extra) lines.push(extra);
   const width = Math.max(...lines.map((l) => measure(fontName, l))) + 4;
   const f = new Frame(width, lines.length * lineHeight + 2);

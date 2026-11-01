@@ -2,7 +2,7 @@
 // Train Tracker arrivals -> the `rows` and `ticker` parts of /board/update.
 // Rules: docs/board/design-spec.md §5–6 and docs/board/contract.md.
 
-const { parseCtaTime } = require('./time');
+const { parseCtaTime, wallSeconds } = require('./time');
 const { lineCode, shortDest, resolveDest, endsHere, LINE_ORDER } = require('./destinations');
 const { measure, fit, ligatures } = require('./fonts');
 const G = require('./glyphs');
@@ -119,9 +119,20 @@ function worstTimesWidth(times, now, horizon = 60, gap = MIN_TIME_GAP) {
 }
 
 // Raw Train Tracker JSON -> normalized arrivals for this station.
-function normalize(json, { log = console, unknown = new Set() } = {}) {
+// Arrival times are taken relative to the response's timestamp (tmst) on
+// CTA's wall clock and added to `now` (the fetch time; tmst when not given),
+// so DST changes can't shift them (see wallSeconds).
+function normalize(json, { log = console, unknown = new Set(), now } = {}) {
   const c = json && json.ctatt;
   if (!c) throw new Error('not a Train Tracker response');
+  const tmstWall = wallSeconds(c.tmst);
+  const anchor = now != null ? now : parseCtaTime(c.tmst);
+  const arrival = (arrT) => {
+    const w = wallSeconds(arrT);
+    if (w == null) return null;
+    if (tmstWall == null || anchor == null) return parseCtaTime(arrT);
+    return Math.round(anchor + w - tmstWall);
+  };
   let etas = c.eta || [];
   if (!Array.isArray(etas)) etas = [etas];
   const out = [];
@@ -130,7 +141,7 @@ function normalize(json, { log = console, unknown = new Set() } = {}) {
     // trains at Ashland/63rd).
     if (endsHere(e)) continue;
     const ln = lineCode(e.rt);
-    const t = parseCtaTime(e.arrT);
+    const t = arrival(e.arrT);
     if (!ln || t == null) continue;
     const dest = shortDest(resolveDest(e.destNm, e.staId));
     if (!dest.known && !unknown.has(e.destNm)) {

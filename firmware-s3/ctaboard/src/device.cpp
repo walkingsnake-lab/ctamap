@@ -174,7 +174,7 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
     int dy = flip ? 31 - y : y;
     for (int x = 0; x < 64; x++, px += 3) {
       uint8_t r = px[0], g = px[1], b = px[2];
-      pipe_.map(r, g, b);  // the chosen curve, compensated for the driver's own (color.h)
+      pipe_.map(r, g, b, frame_.floor);  // the chosen curve, compensated for the driver's own (color.h)
       dma_->drawPixelRGB888(flip ? 63 - x : x, dy, r, g, b);
     }
   }
