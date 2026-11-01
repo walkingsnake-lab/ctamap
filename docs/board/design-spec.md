@@ -36,7 +36,7 @@ Animation was deliberately limited on the M4 so its network pauses (CircuitPytho
 No blinking colons, no scrolling text, and no alert text screens anywhere. Alerts are shown only as indicators (see §5, §6, §7).
 
 ### Scheduler (board main loop)
-**S3:** the board's requests run on a network task on core 0 (beside the WiFi stack) while the loop keeps drawing on core 1 (`device::NetWorker`, `app::Worker`). One request is out at a time; jobs simply run when due, and nothing on the panel waits for them. A request still out after 45 s (`WORK_STUCK_MS`) stops the loop feeding the watchdog, which restarts the board, so a hung TLS read can't leave stale times up forever. Without the worker (it failed to start, or the M4) the rules below apply.
+**S3:** the board's requests run on a network task on core 0 (beside the WiFi stack) while the loop keeps drawing on core 1 (`device::NetWorker`, `app::Worker`). One request is out at a time; jobs simply run when due, and nothing on the panel waits for them. A request still out after 45 s (`WORK_STUCK_MS`) stops the loop feeding the watchdog, which restarts the board, so a hung TLS read can't leave stale times up forever. The S3 keeps its HTTPS connection open between requests, so most skip the TLS handshake. If the worker fails to start, requests run inline and pause animations while they're out; the S3 doesn't fit them into gaps.
 
 On the M4, a small cooperative scheduler lines up network requests with animation gaps:
 - **Animation timeline:** the board tracks when its next animation will start: next digit roll (computed from arrival timestamps), next list slide (chronological view), next ticker slide, radar frame steps, and screen switches.
@@ -100,6 +100,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
   - **Cut mark** (3x1, `CUT`): two dots on the baseline (an ellipsis with one dot less), after a transit label shortened to make room for the alert circle.
 - **Digits are tabular** in every font (one shared cell width), so a rolling digit never shifts its neighbors. Spaces are 2px (small) and 3px (5x7).
 - The **alert circle** is two glyphs drawn at the same origin: a red disc with the "!" pixels left blank, and a white "!". Fonts are one color per glyph.
+- **Coverage** (Tom Thumb and 5x7): printable ASCII, Latin-1 (accented letters, `°`, `£`, `¿`, …), and the punctuation phones substitute (curly quotes, en and em dashes, `…`, `•`, `€`). Tom Thumb lacks curly quotes and dashes, so its quotes are copies of the straight ones and its dashes are 4px and 5px bars. X11 5x7 fits most accented capitals into the 7-row cell by dropping the accent (É draws as E; Ä and Å keep theirs); the lowercase keep theirs. The frozen M4 has ASCII only.
 - Codepoints for custom glyphs are in `server/board/glyphs.js`. The fonts are built by `scripts/build-fonts.js` into `server/board/fonts/` (BDF); the board build converts them to PCF.
 - X11 **9x15 Bold** for the large overnight clock, with a custom **2x2 square-dot colon** centered on the 10px digit height (the stock X11 colon is drawn for text and drops a pixel below the digits).
 
@@ -362,7 +363,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.
 
 ### Behavior
-- **Latency:** the board checks `/board/version` about every 10 s (scheduled in animation gaps, see §2) and fetches the full update right away when the version changes. Phone changes show up within ~10–15 s.
+- **Latency:** the board checks `/board/version` about every 10 s (on the M4, scheduled in animation gaps, see §2) and fetches the full update right away when the version changes. Phone changes show up within ~10–15 s.
 - **The chosen screen is permanent:** Auto, Transit, Ticker, Weather, or Baseball stays until changed on the phone, including across board restarts. A forced screen ignores the auto rules (no baseball takeover, no radar visits); forced Baseball with no game on shows the clock and `NO GAMES`. On boot the board sends a boot flag on its first request; the server resets **brightness** to Auto (so a board left off comes back lit) and bumps the version. Screen, station, and filter config persist across restarts.
 - **Persistence:** state lives in a small JSON file on a Fly volume, so deploys and server restarts don't wipe config.
 - **Buttons vs. phone: last action wins.** A button press sets a local override and records the current server version. The local override holds until the server version changes (a phone change), then the board follows the server again.
@@ -420,7 +421,7 @@ Decided Oct 31, 2026.
 
 - On-panel checks: yellow rows, `Cottage` width, dimming factors, dim-color floors (incl. the 20% third time at night), Tom Thumb `M`/`N` legibility (3px wide; may need widening like `W`), 3x5 bolt legibility.
 - Whether the work visitor WiFi has a captive portal (check with a phone).
-- Measure the real fetch time on the board to set the scheduler's fetch budget.
+- Measure the real fetch time on the M4 to set its scheduler's fetch budget (the S3 reports its average request time as `hb`).
 - On-panel check: lowercase `m` legibility (diffuser glow between the humps), and whether `4m` needs a 2px gap.
 - Chronological view: whether it flips too often at short-turn stations (if so, raise `CHRONO_HOLD`).
 

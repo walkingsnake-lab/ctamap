@@ -7,10 +7,9 @@
 //   Display  - show(fn): fn fills a fresh frame, then it's shown
 //   Clock    - ms(): monotonic milliseconds; sleep_ms()
 //   Buttons, Knob, Watchdog, Led, Ota - optional
-//   Worker   - optional: runs requests off the draw loop (the S3's other
-//              core), so animations never pause for the network. Without
-//              one, requests block the loop as on the M4 and the scheduler
-//              fits them into animation gaps.
+//   Worker   - runs requests off the draw loop (the S3's other core), so
+//              animations never pause for the network. Without one (its
+//              task couldn't start), requests block the loop.
 #pragma once
 
 #include <stdint.h>
@@ -32,6 +31,7 @@
 namespace app {
 
 using json::Value;
+using screen::Screen;
 using Networks = std::vector<std::pair<std::string, std::string>>;  // (ssid, password), tried in order
 using StatusFn = std::function<void(const std::string &kind, const std::string &detail)>;
 
@@ -193,7 +193,7 @@ const long long WORK_STUCK_MS = 45000;  // a request running this long: stop fee
 const long long RETRY_WIFI_MS[] = {10000, 20000, 30000, 60000};  // waits between rounds, then every minute
 
 struct Stats {
-  long fetches = 0, forced = 0, draws = 0, fails = 0, reconnects = 0;
+  long fetches = 0, draws = 0, fails = 0, reconnects = 0;
 };
 
 class Board {
@@ -214,7 +214,7 @@ class Board {
   Setup *setup = nullptr;  // WiFi setup network; none: keep retrying forever
   Light *light = nullptr;  // light sensor (set after construction); none: the payload's brightness
 
-  Worker *worker = nullptr;  // requests off the draw loop; none: they block it
+  Worker *worker = nullptr;  // requests off the draw loop (set after construction); none: they block it
   bool fresh_wifi = false;  // the first network was just entered on the setup page
   std::function<void(const std::string &)> log;
   std::function<long()> mem_free;       // bytes free, for health reports
@@ -252,7 +252,7 @@ class Board {
  private:
   control::Debounce up_, down_;
   long long last_draw_ = -1;
-  std::optional<std::string> last_key_;
+  std::optional<screen::FrameKey> last_key_;
   std::string health_q_;
   std::optional<long long> health_at_;
   long long run_start_;
@@ -277,7 +277,6 @@ class Board {
   struct Flight {
     sched::Job *job = nullptr;  // null: the knob's select
     long long started = 0;
-    bool forced = false;  // overdue, and not in a gap (stats)
     std::function<bool()> work;
     std::function<sched::Result(long long ended)> finish;  // after a good work()
     bool ok = false;
@@ -290,19 +289,19 @@ class Board {
   std::optional<Flight> flight_;
   sched::Job *pending_job_ = nullptr;  // the job whose run() is launching
   long long pending_start_ = 0;
-  bool pending_forced_ = false;
   bool stuck_said_ = false;
 
-  // Screen-change slide: the last frame shown and what it showed
-  // ("chooser", "status", or the player's screen); a change of that slides
-  // the new screen in over a copy of it.
+  // Screen-change slide: the last frame shown and what it showed (a Screen,
+  // or one of these); a change of that slides the new screen in over a
+  // copy of it.
+  static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3;
   uint8_t last_px_[draw::Frame::W * draw::Frame::H * 3] = {};
   uint8_t slide_px_[draw::Frame::W * draw::Frame::H * 3] = {};
-  std::string shown_;
+  int shown_ = SHOWN_NONE;
   long long slide_start_ = -1;
   int slide_dir_ = 1;
   long long chooser_travel_ = 0;  // where the knob's last turn went (ring steps, + clockwise)
-  void shown(const std::string &what, const draw::Frame &f, long long ms);
+  void shown(int what, const draw::Frame &f, long long ms);
   void launch(Flight f);
   void land(long long ended);
 

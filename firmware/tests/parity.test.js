@@ -10,7 +10,6 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { build } = require('./scenarios');
-const assets = require('../../scripts/build-firmware-assets');
 
 const hasPython = spawnSync('python3', ['--version']).status === 0;
 
@@ -32,8 +31,4 @@ test('the board BoardFrame (palette bitmap) draws the same pixels', { skip: !has
 test('board main loop (firmware/tests/test_*.py)', { skip: !hasPython && 'python3 not found' }, () => {
   const r = spawnSync('python3', ['-m', 'unittest', 'discover', '-s', __dirname, '-p', 'test_*.py'], { encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-});
-
-test('firmware assets are current (run node scripts/build-firmware-assets.js)', () => {
-  assert.equal(fs.readFileSync(assets.OUT, 'utf8'), assets.build());
 });

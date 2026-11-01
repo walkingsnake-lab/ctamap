@@ -14,7 +14,10 @@
 //   - Proportional: each glyph is trimmed to its ink columns, advance = ink + 1.
 //   - Digits stay tabular (shared cell width) so rolling digits don't shift.
 //   - Spaces: 2px small, 3px 5x7.
-//   - Only printable ASCII is kept, plus the custom glyphs.
+//   - Kept: printable ASCII, Latin-1 (accented letters, ° £ ¿ ...), and the
+//     punctuation phones type (smart quotes, dashes, …, •, €), plus the
+//     custom glyphs. Tom Thumb lacks the smart quotes and dashes; they're
+//     added below.
 
 const fs = require('fs');
 const path = require('path');
@@ -89,6 +92,21 @@ function keepOnly(font, codes) {
 }
 
 const ascii = new Set(Array.from({ length: 95 }, (_, i) => 32 + i));
+// Latin-1 without the soft hyphen (U+00AD, invisible in text), and the
+// General Punctuation characters phones substitute for ASCII ones. The S3's
+// packed fonts cover U+0020-U+00FF and U+2010-U+20AF (build-firmware-assets.js).
+const PUNCT = [0x2013, 0x2014, 0x2018, 0x2019, 0x201a, 0x201c, 0x201d, 0x201e, 0x2022, 0x2026, 0x20ac];
+const text = new Set([...ascii, ...Array.from({ length: 96 }, (_, i) => 0xa0 + i).filter((c) => c !== 0xad), ...PUNCT]);
+
+// No-break space: the same blank advance as the space.
+function nbsp(font) {
+  font.glyphs.set(0xa0, { ...font.glyphs.get(32), name: 'nbsp', code: 0xa0 });
+}
+
+// A copy of an existing glyph at another codepoint.
+function alias(font, from, to, name) {
+  font.glyphs.set(to, { ...font.glyphs.get(from), name, code: to });
+}
 
 function setHeader(font, key, value) {
   const i = font.header.findIndex((l) => l.startsWith(key + ' '));
@@ -118,8 +136,28 @@ function rename(font, family, note) {
 
 function buildSmall() {
   const f = loadBDF(path.join(SRC, 'tom-thumb.bdf'));
-  keepOnly(f, ascii);
+  keepOnly(f, text);
   makeProportional(f, 2);
+  nbsp(f);
+
+  // Smart quotes and dashes (missing from Tom Thumb). At 3x5 curly quotes
+  // can't be told from straight ones, so they're copies; the dashes step up
+  // from the 3px hyphen.
+  alias(f, 39, 0x2018, 'quoteleft');
+  alias(f, 39, 0x2019, 'quoteright');
+  alias(f, 44, 0x201a, 'quotesinglbase');
+  alias(f, 34, 0x201c, 'quotedblleft');
+  alias(f, 34, 0x201d, 'quotedblright');
+  f.glyphs.set(0x201e, glyph('quotedblbase', 0x201e, art([
+    '#.#',
+    '#.#',
+  ]), 0));
+  f.glyphs.set(0x2013, glyph('endash', 0x2013, art([
+    '####',
+  ]), 2));
+  f.glyphs.set(0x2014, glyph('emdash', 0x2014, art([
+    '#####',
+  ]), 2));
 
   // W and w widened to 5px (stock 3px versions read as H and u).
   f.glyphs.set(87, glyph('W', 87, art([
@@ -221,8 +259,9 @@ function buildSmall() {
 
 function build5x7() {
   const f = loadBDF(path.join(SRC, '5x7.bdf'));
-  keepOnly(f, ascii);
+  keepOnly(f, text);
   makeProportional(f, 3);
+  nbsp(f);
 
   // 5x7 glyphs are 7 rows (yoff -1, bottom row is descent).
   f.glyphs.set(87, glyph('W', 87, art([
