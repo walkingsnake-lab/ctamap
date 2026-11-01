@@ -1,5 +1,5 @@
-// Line-by-line port of firmware/boardlib/draw.py; see draw.h. Sections and
-// function names follow draw.py.
+// The renderer; see draw.h. Pixel parity is with draw.js; most sections
+// and function names still follow the frozen draw.py it was ported from.
 
 #include "draw.h"
 

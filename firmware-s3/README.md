@@ -97,7 +97,10 @@ quicker.
    appears), pick the port under Tools → Port, click Upload, then press
    RESET when it says "Done uploading".
 7. **Serial log:** Tools → Serial Monitor at 115200 baud. Once a minute the
-   board prints its fetch budget, draw time, counters, free memory, and the
+   board prints its average request time, new HTTPS connections that minute
+   (the board keeps one open between requests, so this should stay near
+   zero; a count close to the number of requests means the server side is
+   closing it), draw time, counters, free memory, and the
    chip's temperature (`chip … C`, the S3's built-in sensor; useful for comparing
    enclosure venting: it reads the die, so compare runs, not absolute numbers). Send
    those lines back when something looks off.
@@ -263,10 +266,11 @@ then on.
 | Path | What |
 |---|---|
 | `ctaboard/ctaboard.ino` | Entry point: reads `secrets.h`, wires up the hardware, runs the loop. |
-| `ctaboard/src/draw.*` | Renderer and transit animator: a line-by-line port of `firmware/boardlib/draw.py`. Must stay pixel-identical to `server/board/draw.js`. The clock screen's skyline face (`render_skyline`, S3 only) ports `renderSkyline` from draw.js directly (draw.py is frozen). |
-| `ctaboard/src/json.*` | Small JSON tree with Python dict semantics, so the port reads payloads exactly as `draw.py` does. |
+| `ctaboard/src/draw.*` | Renderer and transit animator. Must stay pixel-identical to `server/board/draw.js`, the reference. Ported from the frozen `firmware/boardlib/draw.py`, so most names follow it; the skyline face (`render_skyline`) and new work port draw.js directly. |
+| `ctaboard/src/json.*` | Small JSON tree with Python dict semantics, so the renderer reads payloads exactly as `draw.py` did. |
+| `ctaboard/src/screen.h` | The screens as an enum (names only at the JSON boundary) and the redraw key. |
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
-| `ctaboard/src/sched.h`, `control.h` | Requests in animation gaps; buttons vs. the phone (`sched.py`, `control.py`); the knob's chooser (twist and rest, S3 only). |
+| `ctaboard/src/sched.h`, `control.h` | Network jobs, run when due one at a time on the worker; buttons vs. the phone (`control.py`); the knob's chooser (twist and rest, S3 only). |
 | `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. The `sky` job fetches the skyline's cloud strip (`/board/sky/<id>`) while the clock screen shows; health reports `hk=skyline` so the server sends the clock screen to this build. |
 | `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |
@@ -282,7 +286,8 @@ then on.
 
 - **draw.js is the reference.** Change it first, then mirror the change in
   `draw.cpp`; `npm test` fails until they match. `draw.py` (the M4) is
-  frozen: tag new scenarios `s3only` (see `firmware/tests/scenarios.js`).
+  frozen: tag new scenarios `s3only` (see `firmware/tests/scenarios.js`),
+  and don't keep `draw.cpp` shaped like it.
 - Everything except `device.cpp` and the `.ino` is plain C++17 with no
   Arduino headers, so it builds natively for the tests.
 - Mirror Python's semantics where the port depends on them: floor division

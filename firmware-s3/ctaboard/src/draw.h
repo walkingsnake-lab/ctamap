@@ -1,11 +1,13 @@
-// Board drawing for the Matrix Portal S3: a line-by-line port of
-// firmware/boardlib/draw.py, itself a port of server/board/draw.js (the
-// reference renderer). Given the same payload, time, and animation state,
-// it must produce the same pixels; firmware-s3/tests/parity checks that
-// against draw.js. Change draw.js first, then mirror it in draw.py and here.
+// Board drawing for the Matrix Portal S3. server/board/draw.js is the
+// reference renderer: given the same payload, time, and animation state,
+// this must produce the same pixels, and firmware-s3/tests/parity checks
+// that against draw.js. Change draw.js first, then mirror it here.
 //
-// Function names follow draw.py (snake_case), so a change there is easy to
-// find here. Differences from draw.py, all deliberate:
+// It began as a line-by-line port of firmware/boardlib/draw.py (the M4's,
+// now frozen), so older code follows draw.py's snake_case names; newer
+// code (the skyline) ports draw.js directly. Follow draw.js, not draw.py,
+// when changing or restructuring it. Deliberate differences from the
+// Python:
 //   - Payloads are json::Value (Python dict semantics, see json.h).
 //   - Text is std::u32string (one element per character, like a Python
 //     str); payload strings are UTF-8 and converted with U().

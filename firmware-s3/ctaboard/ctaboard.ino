@@ -105,6 +105,7 @@ static device::SetupPortal *portal;
 static device::NetWorker *net_worker;
 static app::Board *board;
 static long long last_report = 0;
+static long last_connects = 0;
 static bool no_setup = false;
 
 #if SETUP_BUILD
@@ -241,7 +242,8 @@ void setup() {
   board->fresh_wifi = device::nvs_get("fresh") == "1";
   board->mem_free = device::free_heap;
   board->largest_block = device::largest_block;
-  Serial.printf("[board] memory free %ld, largest block %ld\n", device::free_heap(), device::largest_block());
+  Serial.printf("[board] memory free %ld, largest block %ld, PSRAM %ld\n", device::free_heap(), device::largest_block(),
+                device::psram_size());
 
   board->connect(device::cold_boot());
   Serial.printf("[board] online: memory free %ld\n", device::free_heap());
@@ -286,10 +288,11 @@ void loop() {
   if (ms - last_report > 60000) {
     const app::Stats &st = board->stats;
     Serial.printf(
-        "[board] fetch budget %d ms, draw %ld ms (max %ld), fetches %ld, forced %ld, draws %ld, fails %ld, "
+        "[board] fetch %d ms, new connections %ld, draw %ld ms (max %ld), fetches %ld, draws %ld, fails %ld, "
         "reconnects %ld, mem free %ld, largest block %ld, chip %.1f C\n",
-        (int)board->sched.budget_ms, panel->last_ms, panel->max_ms, st.fetches, st.forced, st.draws, st.fails,
-        st.reconnects, device::free_heap(), device::largest_block(), device::chip_temp_c());
+        (int)board->sched.fetch_ms, net->connects - last_connects, panel->last_ms, panel->max_ms, st.fetches,
+        st.draws, st.fails, st.reconnects, device::free_heap(), device::largest_block(), device::chip_temp_c());
+    last_connects = net->connects;
     panel->max_ms = 0;
     last_report = ms;
   }

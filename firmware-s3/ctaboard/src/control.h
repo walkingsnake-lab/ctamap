@@ -10,33 +10,30 @@
 #include <math.h>
 
 #include <optional>
-#include <string>
+
+#include "screen.h"
 
 namespace control {
 
-// The buttons step through these (this firmware draws the clock screen,
-// so it's in the cycle; the server only resolves `clock` for boards that
-// report the `skyline` capability, which this build does).
-static const char *const SCREENS[] = {"transit", "ticker", "weather", "baseball", "clock"};
-static const int N_SCREENS = 5;
+using screen::Screen;
 
+// The buttons step through every screen (screen.h; this firmware draws the
+// clock screen, so it's in the cycle: the server only resolves `clock` for
+// boards that report the `skyline` capability, which this build does).
 class ScreenOverride {
  public:
-  std::optional<std::string> screen;
-  std::string at_v;
+  std::optional<Screen> screen;
+  double at_v = 0;
 
   // step: +1 (DOWN) or -1 (UP). Returns the new screen. server_v: the
-  // payload's `v`, as str().
-  std::string press(int step, const std::string &current, const std::string &server_v) {
-    int i = 0;
-    for (int k = 0; k < N_SCREENS; k++)
-      if (current == SCREENS[k]) i = k;
-    screen = SCREENS[((i + step) % N_SCREENS + N_SCREENS) % N_SCREENS];
+  // payload's settings version `v`.
+  Screen press(int step, Screen current, double server_v) {
+    screen = screen::step(current, step);
     at_v = server_v;
     return *screen;
   }
 
-  std::string resolve(const std::string &server_screen, const std::string &server_v) {
+  Screen resolve(Screen server_screen, double server_v) {
     if (screen && server_v != at_v) screen.reset();  // a phone change wins
     return screen ? *screen : server_screen;
   }
@@ -121,9 +118,13 @@ class Chooser {
     committing = false;
   }
   // Redraw key: none while sliding (every frame), else the still frame's state.
-  std::optional<std::string> frame_key(double ms) const {
+  std::optional<screen::FrameKey> frame_key(double ms) const {
     if (sliding(ms)) return std::nullopt;
-    return "chooser|" + std::to_string(target) + "|" + (committing ? "1" : "0");
+    screen::FrameKey k;
+    k.v[0] = -1;  // not a Screen
+    k.v[1] = target;
+    k.v[2] = committing;
+    return k;
   }
 };
 
