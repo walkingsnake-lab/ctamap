@@ -592,6 +592,9 @@ async function build() {
     const dim = { ...p, bright: 40 };
     const fromDim = Array.from(draw.render(dim, { screen: 'transit' }).px);
     add('screen slide dimmed transit to weather', dim, [100, 250].map((t) => ({ screen: 'weather', slide: { from: fromDim, t, dir: 1 } })), undefined, undefined, { s3only: true });
+    // Screen change fade (S3 only; phone and auto changes): out to black, then in.
+    add('screen fade ticker to transit', p, [0, 40, 100, 124, 125, 170, 249, 250, 400].map((t) => ({ screen: 'transit', fade: { from, t } })), undefined, undefined, { s3only: true });
+    add('screen fade dimmed transit to weather', dim, [60, 190].map((t) => ({ screen: 'weather', fade: { from: fromDim, t } })), undefined, undefined, { s3only: true });
   }
   return S;
 }
