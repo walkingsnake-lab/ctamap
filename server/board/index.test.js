@@ -1319,6 +1319,28 @@ test('clock screen: other screens leave the skyline out; the knob can choose CLO
   await s.close();
 });
 
+test('clock screen: decided per request from the update\'s own hk, so it never flaps', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(om)) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  s.store.update('home', { screen: 'clock' });
+  // No health report at all (e.g. right after a server restart): the update's hk is enough.
+  let b = (await s.req('/board/update?b=home&hk=skyline', h)).body;
+  assert.equal(b.screen, 'clock');
+  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports', 'clock']);
+  // Another board under the same ID reports health without hk: the S3's own requests still get clock.
+  await s.req('/board/version?b=home&hu=60', h);
+  for (let i = 0; i < 5; i++) assert.equal((await s.req('/board/update?b=home&hk=skyline', h)).body.screen, 'clock');
+  assert.equal((await s.req('/board/update?b=home', h)).body.screen, 'transit', 'a board without hk gets transit');
+  // A button press asking for clock, and the knob choosing it.
+  assert.equal((await s.req('/board/update?b=home&hk=skyline&s=clock', h)).body.for, 'clock');
+  const sel = await s.req('/board/select?b=home&s=clock&hk=skyline', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(sel.body.screen, 'clock');
+  await s.close();
+});
+
 test('cloud strips: the board fetches one by id with its token; the simulator by its path', async () => {
   const s = await serve();
   const h = { headers: { 'X-Board-Token': 'tok' } };

@@ -483,6 +483,13 @@ async function build() {
     }
     // Clouds present in the payload but the strip not fetched yet: plain sky.
     { const [p] = sky({ code: 3, clouds: 95 }, DAY); add('skyline overcast strip not fetched', p, [{ screen: 'clock' }], undefined, undefined, { s3only: true }); }
+    // Cloud drift settings: still, slow (16 s a pixel) and normal (4 s), and a payload without step (4 s).
+    for (const [name, step] of [['off', 0], ['slow', 16000], ['normal', 4000], ['unset', undefined]]) {
+      const [p, clouds] = sky({ code: 2, clouds: 40 }, DAY);
+      const cl = { ...p.skyline.cl };
+      if (step === undefined) delete cl.step; else cl.step = step;
+      add(`skyline cloud drift ${name}`, { ...p, skyline: { ...p.skyline, cl } }, ms(DAY, 0, 3999, 4000, 16000, 64000), undefined, undefined, { s3only: true, clouds });
+    }
     for (let m = 0; m <= 110; m += 20) {
       const t = at('2026-10-31T22:00:00Z') + m * 60;
       const [p, clouds] = sky({ code: 2, clouds: 30 }, t);

@@ -1799,7 +1799,9 @@
       // strip has been fetched (o.clouds: {id: bytes}).
       const cb = s.cl && o.clouds && o.clouds[s.cl.id];
       if (cb) {
-        const off = Math.floor(ms / CLOUD_STEP) % CLOUD_W;
+        // cl.step: ms per pixel of drift (0: still; absent: the original 4 s).
+        const step = s.cl.step != null ? s.cl.step : CLOUD_STEP;
+        const off = step > 0 ? Math.floor(ms / step) % CLOUD_W : 0;
         const pal = s.cl.pal.map((c) => (c ? hex(c) : null));
         for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
           if (SKY.role[y * 64 + x]) continue;

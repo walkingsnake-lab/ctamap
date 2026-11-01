@@ -252,6 +252,9 @@
       <button data-v="skyline">Skyline</button>
     </div>
     <p class="hint">The skyline from the lake across Navy Pier, drawn for the weather and the time of day. Temperature bottom left (a watch or warning takes its place), clock bottom right.</p>
+    <div class="row"><span>Cloud drift</span>
+      <select id="cloudDrift" aria-label="Cloud drift" style="width:auto"><option value="off">Off</option><option value="slow">Slow</option><option value="normal">Normal</option></select></div>
+    <p class="hint">How fast the clouds move: still, 1 px every 16 s, or 1 px every 4 s.</p>
     <div class="row"><span>Boats on the quarter hour</span><label class="switch"><input type="checkbox" id="boats"><span></span></label></div>
     <p class="hint">A sailboat on :00 and :30, a speedboat out and back on :15 and :45, by day in fair weather.</p>
   </section>
@@ -624,6 +627,7 @@
     pressed('bbLayout', bl);
     pressed('clockFace', board.clockFace || 'skyline');
     $('boats').checked = board.boats !== false;
+    $('cloudDrift').value = board.cloudDrift || 'slow';
     for (const [k, d] of [['tickerHold', 8], ['tickerSlide', 1200], ['radarFrame', 500], ['radarHold', 4], ['gameEvery', 60]]) $(k).value = String(board[k] || d);
     $('tickerFill').value = board.tickerFill || 55;
     $('tickerFillV').textContent = `${board.tickerFill || 55}%`;
@@ -767,6 +771,7 @@
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
   $('clockFace').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ clockFace: v }); });
   $('boats').addEventListener('change', (e) => save({ boats: e.target.checked }));
+  $('cloudDrift').addEventListener('change', (e) => save({ cloudDrift: e.target.value }));
   for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('tickerFill').addEventListener('input', (e) => { $('tickerFillV').textContent = `${e.target.value}%`; });
   $('tickerFill').addEventListener('change', (e) => save({ tickerFill: Number(e.target.value) }));

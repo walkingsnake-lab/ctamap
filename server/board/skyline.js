@@ -143,7 +143,10 @@ function bandLuma(sky, cl, rows) {
 // Weather (parsed by weather.js, °F), the place, the time and the temperature
 // to show (board unit, rounded) -> the payload's `skyline`. `boats: false`
 // (the board's setting) keeps the boats off.
-function toSkyline(w, { lat, lon, now, temp, boats = true }) {
+// Cloud drift, ms per pixel (0: still), by the board's cloudDrift setting.
+const DRIFT_MS = { off: 0, slow: 16000, normal: 4000 };
+
+function toSkyline(w, { lat, lon, now, temp, boats = true, drift = 'slow' }) {
   const { el, az } = sunPos(now, lat, lon);
   const { kind, lvl } = weatherKind(w.code, w.clouds);
   const night = sstep(1, -6, el);                 // 0 day .. 1 night
@@ -181,7 +184,8 @@ function toSkyline(w, { lat, lon, now, temp, boats = true }) {
 
   // The wheel by day: white rim with a darker frame, lighter on mid greys,
   // all dark on bright skies (fog, snow) so it keeps its contrast.
-  const cl = cloudsFor(kind, el, night);
+  const cl0 = cloudsFor(kind, el, night);
+  const cl = cl0 && { ...cl0, step: DRIFT_MS[drift] != null ? DRIFT_MS[drift] : DRIFT_MS.slow };
   const behind = bandLuma(look.sky, cl, RIM_TOP);
   const whl = kind === 'fog' || kind === 'snow' ? 2 : behind < 75 ? 0 : behind < 135 ? 1 : 2;
 
