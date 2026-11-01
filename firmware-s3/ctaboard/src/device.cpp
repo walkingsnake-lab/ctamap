@@ -88,27 +88,28 @@ void Panel::set_curves(int day, int night) {
   night_curve_ = night;
 }
 
-bool Panel::set_brightness(double k) {
-  dim(k, hw_dim_);
-  return hw_dim_;
+double Panel::set_brightness(double k) {
+  return dim(k, hw_dim_);
 }
 
-void Panel::dim(double k, bool hw) {
+double Panel::dim(double k, bool hw) {
   int curve = k < 1 ? night_curve_ : day_curve_;
   if (curve != pipe_.curve()) pipe_.set_curve(curve);
-  // In hardware, the driver shortens every row's lit window by the same
-  // fraction for every color bit, so colors keep all their steps. The level
-  // matches the light the renderer's scaling gave under gamma 2.2 (k^2.2:
-  // 40% is about 13% of full), so night stays as dark as it was.
+  // In hardware down to the window's floor, the renderer below it
+  // (color::hw_dim). 40% is about 13% of full light, so night stays as dark
+  // as it was, and entirely in hardware.
   int oe = 255;
+  double share = k;
   if (hw) {
-    oe = (int)floor(pow(k, 2.2) * 255 + 0.5);
-    if (k > 0 && oe < 1) oe = 1;
+    color::HwDim d = color::hw_dim(k);
+    oe = d.oe;
+    share = d.share;
   }
   if (oe != oe_ && dma_) {
     dma_->setBrightness8((uint8_t)oe);
     oe_ = oe;
   }
+  return share;
 }
 
 // The data pins for red, green and blue, given which color each line (R, G, B) lights on the panel.
@@ -790,6 +791,9 @@ int Knob::clicks() {
 // and 800 ms integration: the most sensitive setting (0.0036 lx a count, up
 // to ~236 lx), since the case's 2 mm hole passes only a few percent of the
 // room's light. It integrates continuously; a read returns the last result.
+// Each read checks the setting first: a sensor unplugged and plugged back in
+// powers up at its defaults (x1, 100 ms: readings ~16x low), so it's set
+// again and the next integration awaited.
 
 static const uint8_t VEML_ADDR = 0x10;
 static const uint8_t VEML_CONF = 0x00, VEML_ALS = 0x04, VEML_ID = 0x07;
@@ -807,25 +811,33 @@ static bool veml_read16(uint8_t reg, uint16_t &out) {
   return true;
 }
 
+static bool veml_configure() {
+  Wire.beginTransmission(VEML_ADDR);
+  Wire.write(VEML_CONF);
+  Wire.write((uint8_t)(VEML_GAIN2_IT800 & 0xff));
+  Wire.write((uint8_t)(VEML_GAIN2_IT800 >> 8));
+  return Wire.endTransmission() == 0;
+}
+
 bool LightSensor::begin() {
   Wire.begin();  // already started by the knob; harmless again
   uint16_t id = 0;
-  on_ = veml_read16(VEML_ID, id) && (id & 0xff) == 0x81;
-  if (on_) {
-    Wire.beginTransmission(VEML_ADDR);
-    Wire.write(VEML_CONF);
-    Wire.write((uint8_t)(VEML_GAIN2_IT800 & 0xff));
-    Wire.write((uint8_t)(VEML_GAIN2_IT800 >> 8));
-    on_ = Wire.endTransmission() == 0;
-    ready_at_ = millis() + VEML_FIRST_MS;
-  }
+  on_ = veml_read16(VEML_ID, id) && (id & 0xff) == 0x81 && veml_configure();
+  ready_at_ = millis() + VEML_FIRST_MS;
   Serial.println(on_ ? "[light] VEML7700 found; auto brightness follows it" : "[light] no light sensor");
   return on_;
 }
 
 bool LightSensor::read(double &lux) {
   if (!on_ || (int32_t)(millis() - ready_at_) < 0) return false;
-  uint16_t counts;
+  uint16_t conf, counts;
+  if (!veml_read16(VEML_CONF, conf)) return false;
+  if (conf != VEML_GAIN2_IT800) {
+    Serial.printf("[light] sensor setting was 0x%04x (replugged?); setting it again\n", conf);
+    veml_configure();
+    ready_at_ = millis() + VEML_FIRST_MS;
+    return false;
+  }
   if (!veml_read16(VEML_ALS, counts)) return false;
   lux = counts * VEML_LUX_PER_COUNT;
   return true;
