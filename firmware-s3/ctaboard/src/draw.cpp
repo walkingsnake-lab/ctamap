@@ -2018,8 +2018,7 @@ static void render_chooser(const Value &p, Frame &f, double pos, bool commit) {
 
 // ---- whole screen ----
 
-static void apply_brightness(Frame &f, const Value &bright) {
-  double b = bright.is_null() ? 100 : bright.num();
+static void apply_brightness(Frame &f, double b) {
   double k = std::max(0.0, std::min(100.0, b)) / 100;
   if (k == 1) return;
   for (int i = 0; i < Frame::W * Frame::H * 3; i++) f.px[i] = (uint8_t)jsround(f.px[i] * k);
@@ -2038,7 +2037,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   g_roller = nullptr;
   g_nums = nullptr;
   if (o.roller) o.roller->end();  // the Player calls begin(); render() ends the frame
-  if (o.apply_bright) apply_brightness(f, p["bright"]);
+  if (o.apply_bright) apply_brightness(f, o.bright ? *o.bright : p["bright"].is_null() ? 100 : p["bright"].num());
   return f;
 }
 

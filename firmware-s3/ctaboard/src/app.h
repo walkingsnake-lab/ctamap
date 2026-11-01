@@ -20,6 +20,7 @@
 #include "control.h"
 #include "draw.h"
 #include "json.h"
+#include "light.h"
 #include "ota.h"
 #include "player.h"
 #include "sched.h"
@@ -107,6 +108,13 @@ class Knob {
   virtual int clicks() = 0;
 };
 
+// The light sensor (device::LightSensor): lux, false when it can't be read.
+class Light {
+ public:
+  virtual ~Light() {}
+  virtual bool read(double &lux) = 0;
+};
+
 class Watchdog {
  public:
   virtual ~Watchdog() {}
@@ -177,6 +185,7 @@ class Board {
   Knob *knob;
   Ota *ota = nullptr;  // OTA updates (set after construction); none: offers are ignored
   Setup *setup = nullptr;  // WiFi setup network; none: keep retrying forever
+  Light *light = nullptr;  // light sensor (set after construction); none: the payload's brightness
   bool fresh_wifi = false;  // the first network was just entered on the setup page
   std::function<void(const std::string &)> log;
   std::function<long()> mem_free;       // bytes free, for health reports
@@ -219,6 +228,18 @@ class Board {
   long long install_after_ = 0;           // ms: next install attempt allowed
   std::optional<long long> wanted_since_;  // ms: when the current offer first wanted installing
   std::string ota_err_;                    // the last failed install this run
+
+  // Brightness (light.h): the payload's level, or with `ab` and a live
+  // sensor, the sensor's level between ab.min and 100.
+  double payload_bright_ = 100;
+  std::optional<double> ab_min_;
+  double ab_max_ = 100;
+  light::Sense sense_;
+  light::Fade fade_;
+  std::optional<double> applied_;   // percent last sent to the display
+  long long light_read_ = -1000000;  // ms of the last sensor reading
+  void do_light(long long ms);
+  void apply_bright(long long ms);
 
   bool wants_install() const;
   void maybe_install(long long ms, bool busy);

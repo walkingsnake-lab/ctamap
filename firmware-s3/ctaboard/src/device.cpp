@@ -785,6 +785,52 @@ int Knob::clicks() {
   return reverse_ ? delta : -delta;
 }
 
+// ---- light sensor ----
+// VEML7700 at its fixed address, on the same I2C bus as the knob. Gain x2
+// and 800 ms integration: the most sensitive setting (0.0036 lx a count, up
+// to ~236 lx), since the case's 2 mm hole passes only a few percent of the
+// room's light. It integrates continuously; a read returns the last result.
+
+static const uint8_t VEML_ADDR = 0x10;
+static const uint8_t VEML_CONF = 0x00, VEML_ALS = 0x04, VEML_ID = 0x07;
+static const uint16_t VEML_GAIN2_IT800 = (0b01 << 11) | (0b0011 << 6);  // power on (ALS_SD 0)
+static const double VEML_LUX_PER_COUNT = 0.0036;
+static const uint32_t VEML_FIRST_MS = 900;  // one integration, plus a margin
+
+static bool veml_read16(uint8_t reg, uint16_t &out) {
+  Wire.beginTransmission(VEML_ADDR);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return false;  // repeated start
+  if (Wire.requestFrom((int)VEML_ADDR, 2) != 2) return false;
+  uint8_t lo = (uint8_t)Wire.read(), hi = (uint8_t)Wire.read();
+  out = (uint16_t)(lo | (hi << 8));
+  return true;
+}
+
+bool LightSensor::begin() {
+  Wire.begin();  // already started by the knob; harmless again
+  uint16_t id = 0;
+  on_ = veml_read16(VEML_ID, id) && (id & 0xff) == 0x81;
+  if (on_) {
+    Wire.beginTransmission(VEML_ADDR);
+    Wire.write(VEML_CONF);
+    Wire.write((uint8_t)(VEML_GAIN2_IT800 & 0xff));
+    Wire.write((uint8_t)(VEML_GAIN2_IT800 >> 8));
+    on_ = Wire.endTransmission() == 0;
+    ready_at_ = millis() + VEML_FIRST_MS;
+  }
+  Serial.println(on_ ? "[light] VEML7700 found; auto brightness follows it" : "[light] no light sensor");
+  return on_;
+}
+
+bool LightSensor::read(double &lux) {
+  if (!on_ || (int32_t)(millis() - ready_at_) < 0) return false;
+  uint16_t counts;
+  if (!veml_read16(VEML_ALS, counts)) return false;
+  lux = counts * VEML_LUX_PER_COUNT;
+  return true;
+}
+
 // ---- status LED ----
 // Very dim: it sits behind the panel and shouldn't light up the wall at night.
 
