@@ -111,6 +111,7 @@
       <button data-v="ticker">Ticker</button>
       <button data-v="weather">Weather</button>
       <button data-v="baseball">Baseball</button>
+      <button data-v="clock">Clock</button>
     </div>
     <p class="hint" id="screenHint">Auto stays on the transit screen.</p>
     <div id="autoOpts" hidden>
@@ -573,7 +574,7 @@
     const bbText = teams.length ? ` Baseball takes over during ${[teams.includes('cubs') && 'Cubs', teams.includes('sox') && 'White Sox', teams.includes('post') && 'postseason'].filter(Boolean).join(', ')} games.` : ' Baseball never takes over.';
     const wvText = wv === 'off' ? '' : ` The weather screen shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min${wv === 'rain' ? ' while it\'s raining' : ''}.`;
     const ajText = board.alertJump === 'warning' ? ' During NWS warnings it stays on the weather screen.' : board.alertJump === 'all' ? ' During NWS watches and warnings it stays on the weather screen.' : '';
-    $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : 'Stays on this screen until you change it.')
+    $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : board.screen === 'clock' ? 'The skyline clock face. Needs an S3 with clock firmware; other boards show Transit.' : 'Stays on this screen until you change it.')
       : `Auto ${mainText}.${bbText}${wvText}${ajText}`;
     const fixed = Number.isInteger(board.bright);
     pressed('bright', fixed ? 'fixed' : board.bright);

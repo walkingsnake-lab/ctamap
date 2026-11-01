@@ -15,16 +15,23 @@ const FILE_NAME = 'board-state.json';
 const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
-const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball'];
+const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock'];
+// Clock screen faces (design spec §14). Only the skyline so far.
+const CLOCK_FACES = ['skyline'];
 const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
 // The knob's ring (design spec §10, "Knob"): categories, each opening one
 // screen. TRANSIT opens the transit-family screen last chosen (transitScreen:
-// rows or ticker); SPORTS opens the baseball screen.
+// rows or ticker); SPORTS opens the baseball screen. CLOCK (the clock screen,
+// its face set on the phone) joins the end of the ring on boards that can
+// draw it (knobOf's `clock`).
 const KNOB_RING = ['auto', 'transit', 'weather', 'sports'];
-const CATEGORY_OF = { auto: 'auto', transit: 'transit', ticker: 'transit', weather: 'weather', baseball: 'sports' };
+const CATEGORY_OF = { auto: 'auto', transit: 'transit', ticker: 'transit', weather: 'weather', baseball: 'sports', clock: 'clock' };
 const knobScreen = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'sports' ? 'baseball' : cat);
 // The ring and where the board's chosen screen sits on it (payload `knob`).
-const knobOf = (board) => ({ ring: KNOB_RING, at: Math.max(0, KNOB_RING.indexOf(CATEGORY_OF[board.screen] || 'auto')) });
+const knobOf = (board, { clock = false } = {}) => {
+  const ring = clock ? [...KNOB_RING, 'clock'] : KNOB_RING;
+  return { ring, at: Math.max(0, ring.indexOf(CATEGORY_OF[board.screen] || 'auto')) };
+};
 // Auto mode and screen options (design spec §10). Defaults reproduce the
 // behavior before these were settings.
 const AUTO_SCREENS = ['transit', 'ticker'];
@@ -148,6 +155,8 @@ function defaultBoard(stations) {
     // while both apply).
     wxRain: 'radar',
     wxRainEvery: 15,
+    // Clock screen face (CLOCK_FACES).
+    clockFace: 'skyline',
     wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
@@ -281,8 +290,9 @@ function validatePatch(patch, stations) {
       case 'radarClock':
       case 'wxView':
       case 'tempUnit':
-      case 'wxRain': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS }[key];
+      case 'wxRain':
+      case 'clockFace': {
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;
@@ -441,7 +451,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     // The knob chose a category on its ring: set the screen it opens. Same
     // as a phone change (bumps v).
     select(id, cat) {
-      if (!KNOB_RING.includes(cat)) throw new ValidationError(`s must be one of ${KNOB_RING.join(', ')}`);
+      if (!KNOB_RING.includes(cat) && cat !== 'clock') throw new ValidationError(`s must be one of ${[...KNOB_RING, 'clock'].join(', ')}`);
       if (!Object.hasOwn(state.boards, id)) return null;
       return this.update(id, { screen: knobScreen(state.boards[id], cat) });
     },
@@ -459,4 +469,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, KNOB_RING, knobOf, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };

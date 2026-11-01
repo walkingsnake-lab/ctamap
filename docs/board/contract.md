@@ -34,7 +34,7 @@ Anything else (HTML, redirect, non-200) means a portal.
 ### `GET /board/version?b=<id>[&hu=…]`
 Polled ~every 10 s.
 
-**Health** (optional query fields, refreshed by the board about once a minute): `hu` uptime (s), `hm` free memory (bytes), `hl` largest single allocatable block (bytes; the fragmentation measure), `ho` draws skipped on `MemoryError`, `hb` fetch budget (ms), `hf` failed fetches, `hr` WiFi reconnects, `hw` WiFi RSSI (dBm), `he` last error as `<job>:<ExceptionName>` (letters, digits, `_`, `:` only; anything else is dropped), `hs` what started the current run (`SUPERVISOR_RELOAD` after a crash, `AUTO_RELOAD`, or the chip's reset reason: `POWER_ON`, `WATCHDOG`, `BROWNOUT`, `RESET_PIN`, ...), `hc` the crash that ended the previous run as `<ExceptionName>:<file>:<line>:<function>` (same characters; sent through the run after it), `hd` the hardware (`adafruit_matrixportal_s3`), `hv` the firmware build (the short commit it was built from, plus `_dirty` with uncommitted changes, or `dev` when unstamped; same characters), `hx` the S3's OTA state (see **Firmware**): `trial:<build>` while a newly installed build is on trial, `error:<reason>` after a failed install this run, `rolledback:<build>` while the offered build is one this board rolled back (same characters). Uptime counts from the start of the current run, so a crash reload counts as a restart. The server keeps the latest report per board in memory, plus the lowest free memory and a restart count (uptime going backwards) since the server started; the control page shows them (`api/health`).
+**Health** (optional query fields, refreshed by the board about once a minute): `hu` uptime (s), `hm` free memory (bytes), `hl` largest single allocatable block (bytes; the fragmentation measure), `ho` draws skipped on `MemoryError`, `hb` fetch budget (ms), `hf` failed fetches, `hr` WiFi reconnects, `hw` WiFi RSSI (dBm), `he` last error as `<job>:<ExceptionName>` (letters, digits, `_`, `:` only; anything else is dropped), `hs` what started the current run (`SUPERVISOR_RELOAD` after a crash, `AUTO_RELOAD`, or the chip's reset reason: `POWER_ON`, `WATCHDOG`, `BROWNOUT`, `RESET_PIN`, ...), `hc` the crash that ended the previous run as `<ExceptionName>:<file>:<line>:<function>` (same characters; sent through the run after it), `hd` the hardware (`adafruit_matrixportal_s3`), `hv` the firmware build (the short commit it was built from, plus `_dirty` with uncommitted changes, or `dev` when unstamped; same characters), `hx` the S3's OTA state (see **Firmware**): `trial:<build>` while a newly installed build is on trial, `error:<reason>` after a failed install this run, `rolledback:<build>` while the offered build is one this board rolled back (same characters). Uptime counts from the start of the current run, so a crash reload counts as a restart. The server keeps the latest report per board in memory, plus the lowest free memory and a restart count (uptime going backwards) since the server started; the control page shows them (`api/health`). `hk` capabilities beyond the original screens, colon-separated (`skyline`: the firmware draws the clock screen's skyline face); sent with every report, so a rollback to a build without it turns the clock screen off again.
 
 ```json
 {"v":42,"now":1759546800}
@@ -47,7 +47,7 @@ Polled ~every 10 s.
 ### `GET /board/update?b=<id>[&boot=1][&s=<screen>]`
 The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB (typically 0.5–0.75 KB with sections).
 
-**Sections.** To keep JSON parsing light on the board's fragmenting heap, this endpoint sends only what one screen draws, named by `for`: the payload's `screen`, or `s` (`transit`, `ticker`, `weather`, `baseball`) when a button press on the board overrides it. The board fetches right away after a press, asking for the new screen. Fields kept only for their screen: transit `header`, `key`, `hidden`, `view`, `rows`, `wx`; ticker `ticker`, `tickerHeader`, `tickerFill`; baseball `mlb`. `radar` is whole on the weather screen and whenever `radar.visit` is set (the board switches to it by itself); otherwise it's just `{on, visit: null}`. Everything else is always sent. The simulator's `api/update` returns the whole payload.
+**Sections.** To keep JSON parsing light on the board's fragmenting heap, this endpoint sends only what one screen draws, named by `for`: the payload's `screen`, or `s` (`transit`, `ticker`, `weather`, `baseball`, `clock`) when a button press on the board overrides it. The board fetches right away after a press, asking for the new screen. Fields kept only for their screen: transit `header`, `key`, `hidden`, `view`, `rows`, `wx`; ticker `ticker`, `tickerHeader`, `tickerFill`; baseball `mlb`; clock `skyline`. `radar` is whole on the weather screen and whenever `radar.visit` is set (the board switches to it by itself); otherwise it's just `{on, visit: null}`. Everything else is always sent. The simulator's `api/update` returns the whole payload.
 
 **New boards.** An authed update for an unknown but valid ID (1–32 chars of `a-z`, `0-9`, `-`) creates that board as a copy of board `home` (or the first board, if `home` is gone): station, filter, screen and every setting, with `v` 1 and `bright` `auto`. From then on it's configured separately. At most 8 boards; past that, or for an invalid ID, it's `404`. Only `/board/update` creates boards; `/board/version`, `/board/select` and the frame endpoints answer `404` for an unknown ID.
 
@@ -93,10 +93,10 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB (typically 0.5�
 | `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int \| null | Seconds since the arrivals data was last fetched successfully, or `null` when the server hasn't reached Train Tracker since it started (the update is still sent, with no rows). The server keeps serving last-good data when CTA fails. |
 | `stale` | int | `1` when there's no arrivals data or it's more than 3 minutes old (`STALE_S` in `index.js`): the transit and ticker screens draw a red (`#ff2020`) line along the top edge (row 0, full width), and the overnight layout says `NO DATA` instead of `NO TRAINS`. Otherwise `0`. |
-| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `weather` (radar loop while raining; see *Radar*), `baseball`. `auto` resolves to `weather` while an NWS alert matching the board's `alertJump` is on (over baseball), else `baseball` while `mlb.games` is non-empty, else the board's first Auto screen (`autoScreens[0]`, `transit` by default); `rot` alternates the Auto screens and timed weather visits ride on top, see `rot` and `radar.visit`. A local button press overrides it until `v` changes. Firmware before the baseball port draws `transit` for `baseball`. |
+| `screen` | string | Screen to show, **already resolved** from auto rules: `transit`, `ticker`, `weather` (radar loop while raining; see *Radar*), `baseball`, `clock` (see *Skyline*; only for a board whose health reports the `skyline` capability, otherwise `transit`; Auto never resolves to it). `auto` resolves to `weather` while an NWS alert matching the board's `alertJump` is on (over baseball), else `baseball` while `mlb.games` is non-empty, else the board's first Auto screen (`autoScreens[0]`, `transit` by default); `rot` alternates the Auto screens and timed weather visits ride on top, see `rot` and `radar.visit`. A local button press overrides it until `v` changes. Firmware before the baseball port draws `transit` for `baseball`. |
 | `bright` | int | Global brightness 0–100, already resolved: `auto` is 100 from sunrise to sunset and 40 overnight (WeatherAPI times for the station's grid cell; 100 until weather data arrives), or the fixed level, or 0 for off. |
 | `rot` | object \| null | Auto alternating its screens: `{screens, every}` (`screens`: 2+ of `transit`, `ticker`; `every` s). Set only on the auto screen when `screen` is one of `screens`. The board (and simulator) shows `screens[floor(now / every) % screens.length]`, epoch-aligned (`autoScreen()` / `auto_screen()`); the board's `/board/update` then carries every rotation screen's sections. |
-| `knob` | object | The knob's ring (design spec §10, *Knob*): `{ring, at}`. `ring` lists categories in dial order, today `auto`, `transit`, `weather`, `sports`; the board shows each in uppercase. `at` is where the board's chosen screen sits on it (`ticker` counts as `transit`, `baseball` as `sports`), so a turn starts from there. Always sent. The S3 draws it as the chooser (`draw.js` `renderChooser`) and commits with `/board/select`; the M4 ignores it. |
+| `knob` | object | The knob's ring (design spec §10, *Knob*): `{ring, at}`. `ring` lists categories in dial order, today `auto`, `transit`, `weather`, `sports`, plus `clock` at the end on boards with the `skyline` capability; the board shows each in uppercase. `at` is where the board's chosen screen sits on it (`ticker` counts as `transit`, `baseball` as `sports`), so a turn starts from there. Always sent. The S3 draws it as the chooser (`draw.js` `renderChooser`) and commits with `/board/select`; the M4 ignores it. |
 | `hclock` | bool | Clock at the right of the transit and ticker headers (state `headerClock`). |
 | `lnc` | bool | Transit and chronological labels in the line's color instead of white (state `lineNames`). |
 | `ts` | bool | Transit (destination rows): the third time in `#332300` (20% amber; schedule-based `#151515`) instead of the second time's `#664600` / `#2e2e2e` (state `timeSteps`). Default `false`. |
@@ -113,6 +113,7 @@ The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB (typically 0.5�
 | `radar` | object | Radar state (see below). |
 | `anim` | object | Speed settings, from the board's state: `{pageHold, slide, radarFrame, radarHold, game}`. Ticker page hold and slide (ms), radar loop frame step and the hold on the newest frame (ms), and baseball rotation per game (s). Defaults 8000, 1200, 500, 4000, 60 (`timing()` in `draw.js` fills in any missing one). |
 | `tickerFill` | int | Ticker row fill: the line color at this percent behind the white text (25–80, default 55). |
+| `skyline` | object \| null | Clock screen, skyline face: drawing parameters (see *Skyline*), or `null` without weather data. Sent only with `for` `clock`. |
 | `mlb` | object | Baseball: `{layout, dim?, all?, games: [...]}` (`all: true`: rotate every game, live or not, state `bbPriority: 'all'`), the layout and the games to show now (see *Baseball* below). Always present; `games` is empty when there's nothing on. |
 
 All screens' data is always included so a button press switches screens without a fetch.
@@ -299,6 +300,37 @@ When `on` is false, `frames` and `ft` are empty and `timeBox` may be `null`.
 - **Logo loading:** in `logos` the board draws the `bands` layout (abbreviations in the logo slots, none in the score boxes) until every logo the game uses (`lg` not null) has loaded, so they appear together, not one at a time; a side with `lg` null never loads and doesn't hold the others back. In `logos` pregame the abbreviation in the score box is drawn 1px left of the box's center (x29).
 - **Logo and band layouts:** 12-row team bands (away rows 0–11, home 12–23) to x37 in `bd` at `dim`; `logos` draws the 24 x 12 logo crop at the left (also at `dim`), `bands` the abbreviation in the same ink (white, or black on a light band). Scores are centered in the band's box at x30: white, or black (unlit) on a light band (drawn band luma above 140), amber for the score flash and the final's winner (the loser stays white). Pregame: the abbreviation in the score box (`logos`), records in the panel, `TODAY` bottom left. Infield centered on row 8, inning on baseline 21. Divider row 24 and the bottom line are shared with `classic`.
 
+#### Skyline (`skyline`)
+The clock screen's skyline face (design spec §14). The server turns the weather and the sun into drawing values; the board draws its layers from them and never interprets weather codes or the time of day. Computed by `server/board/skyline.js` (sun and moon: `sun.js`).
+
+```json
+{"face": "skyline", "st": "clear", "sky": [[0, "#08245a"], [18, "#1a4a8e"], [25, "#3a6eb0"]], "wat": ["#0a2a52", "#06203f", "#1a3a68"],
+ "lit": 0, "win": 0, "stars": 0, "sun": {"x": 41, "y": 5, "c": "#ffd040"}, "moon": null, "gl": {"x": 41, "c": "#c8d8f0", "p": 0},
+ "whl": 0, "fog": null, "roof": null, "pcp": null, "storm": 0, "boats": 1, "temp": 52}
+```
+
+| Field | Meaning |
+|---|---|
+| `face` | The board's clock face (state `clockFace`); `skyline` is the only one. |
+| `st` | Weather kind (`clear`, `partly`, `mostly`, `overcast`, `rain`, `snow`, `fog`, `storm`), for the simulator and logs. The board doesn't branch on it. |
+| `sky` | Sky gradient: `[row, color]` stops from row 0 down to the horizon (row 25). Each row is the linear mix of the stops around it, channels rounded (`Math.round`). Blended by the server from the sun's exact elevation, so it changes a little with every update. |
+| `wat` | Water: top row color, bottom row color, ripple color. |
+| `lit` | `1` once the sun is below 0.5°: the wheel's rim turns to its slow pastel rainbow, the Hancock beacons pulse, the pier's bulbs light. |
+| `win` | Percent of the night window pattern lit (0–100); each window has a fixed threshold, so the lit set only grows. |
+| `stars` | Stars to draw (0–14), the first `stars` of the fixed list. |
+| `sun` | `{x, y, c}`: the sun's center and color, or `null` (night, mornings, cloudy skies). Low suns sit behind the buildings. |
+| `moon` | `{ph, fr}`: phase (0–99, 0 new, 50 full) and lit percent, or `null`. Drawn at the day sun's spot. |
+| `gl` | Glints on the water: `{x, c, p}`, the column they gather around, their color, and the glitter path's strength at sunset (0–100; 0: scattered glints only). `null`: none. |
+| `whl` | The wheel by day: `0` white rim with a `#565c68` frame, `1` `#eef0f4` rim with a `#4a505c` frame, `2` all `#262a32`. |
+| `fog` | Fog color (the city fades into it with height), or `null`. |
+| `roof` | Snow on roof edges and the pier: its color, or `null`. |
+| `pcp` | Precipitation: `{k, n}`, `r` rain or `s` snow, and how many streaks or flakes are on screen; or `null`. |
+| `storm` | `1`: lightning, a soft glow in the cloud deck with a faint bolt, every 20–40 s. |
+| `boats` | `1`: the quarter-hour boats run (daytime, dry, 40°F or warmer). |
+| `temp` | Temperature in the board's unit, or `null`. A top-level `warn` replaces it on screen. |
+
+Clouds (a server-rendered strip the board scrolls) come in a later change.
+
 ### `GET /board/firmware?b=<id>&v=<build>`
 An OTA build, streamed: `Content-Type: application/octet-stream`, `Content-Length` = the build's size, `Cache-Control: no-store`. Token required. `404` for an unknown board (`unknown_board`) or build (`unknown_build`).
 
@@ -311,7 +343,7 @@ An OTA build, streamed: `Content-Type: application/octet-stream`, `Content-Lengt
 - **Trial:** the new build is kept once it has had a good `/board/update` and run 60 s. It's rolled back (the previous slot becomes the boot slot again, and the board restarts) if it hasn't reached the server within 5 min, or if it starts more than 3 times before being kept (a crash loop). The board then won't install that build again while `n` is unchanged (`hx=rolledback:<build>`); the control page's **Try again** bumps `fwRetry`. Rules: `firmware-s3/ctaboard/src/ota.h`.
 
 ### `POST /board/select?b=<id>&s=<category>`
-The knob chose a category on its ring (`knob.ring`). The server sets the board's `screen` the same way the phone would (bumps `v`), so the choice persists, the phone page shows it, and it ends any button override: `auto` → `auto`, `transit` → the transit-family screen last chosen (`transit` or `ticker`, state `transitScreen`), `weather` → `weather`, `sports` → `baseball`. The response is `/board/update`'s payload for the new screen (sections for `screen`), so the board needs no second request. Empty body. 400 `invalid` for a category not on the ring, 401 without the token, 404 for an unknown board, 405 for anything but POST.
+The knob chose a category on its ring (`knob.ring`). The server sets the board's `screen` the same way the phone would (bumps `v`), so the choice persists, the phone page shows it, and it ends any button override: `auto` → `auto`, `transit` → the transit-family screen last chosen (`transit` or `ticker`, state `transitScreen`), `weather` → `weather`, `sports` → `baseball`, `clock` → `clock`. The response is `/board/update`'s payload for the new screen (sections for `screen`), so the board needs no second request. Empty body. 400 `invalid` for a category not on the ring, 401 without the token, 404 for an unknown board, 405 for anything but POST.
 
 ### `GET /board/logo/<logoId>?b=<id>`
 One team logo crop for the logo layout.

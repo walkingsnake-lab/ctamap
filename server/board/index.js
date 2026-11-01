@@ -19,6 +19,7 @@ const { createKeys } = require('./keys');
 const { createFirmware, FirmwareError, CHANNELS: FW_CHANNELS, MAX_BYTES: MAX_FIRMWARE } = require('./firmware');
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
+const { toSkyline } = require('./skyline');
 const fs = require('fs');
 const path = require('path');
 const { render, assets, autoScreen } = require('./render');
@@ -55,12 +56,13 @@ function send(res, status, body) {
 // are on (the board switches to it by itself); otherwise only `on`. While
 // Auto alternates screens (rot), every rotation screen's sections ride
 // along. The simulator's copy (api/update) stays whole.
-const SCREENS = ['transit', 'ticker', 'weather', 'baseball'];
+const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock'];
 const SECTIONS = {
   transit: ['header', 'key', 'hidden', 'view', 'rows', 'wx'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
+  clock: ['skyline'],
 };
 function sectionsFor(body, screen) {
   const out = { ...body, for: screen };
@@ -275,6 +277,9 @@ function createBoard({
     if (safe(q.hv)) h.firmware = q.hv;
     if (safe(q.hx)) h.ota = q.hx;
     const prev = healthOf.get(id);
+    // What the firmware can draw beyond the original screens, colon-separated
+    // (`skyline`: the clock screen's skyline face). Sent with every report.
+    if (safe(q.hk)) h.caps = q.hk.split(':');
     // The crash that ended a run, sent by the run after it. Kept after
     // later restarts that weren't crashes, until another crash replaces it.
     if (safe(q.hc)) h.lastCrash = q.hc;
@@ -287,6 +292,13 @@ function createBoard({
     h.since = prev ? prev.since : now;
     healthOf.set(id, h);
   }
+
+  // The clock screen needs firmware that draws it: a board whose health
+  // reports the `skyline` capability. Others get transit instead, and no
+  // CLOCK on the knob's ring. (Until a board's first health report after a
+  // server restart, about a minute, it counts as unable.)
+  const clockOk = (id) => { const h = healthOf.get(id); return !!(h && h.caps && h.caps.includes('skyline')); };
+  const forBoard = (body, id) => (body.screen === 'clock' && !clockOk(id) ? { ...body, screen: 'transit' } : body);
 
   // Last transit view per board and station, for the chrono hysteresis.
   // In memory only: after a restart the view is chosen fresh.
@@ -308,6 +320,13 @@ function createBoard({
     seenAt.delete(id);
     tests.delete(id);
     for (const k of [...views.keys()]) if (k.startsWith(`${id}:`)) views.delete(k);
+  }
+
+  // The skyline face's parameters, or null without weather or a station.
+  function skylineOf(board, w, wd, st, now) {
+    if (!w || !st) return null;
+    try { return { face: board.clockFace || 'skyline', ...toSkyline(w, { lat: st.lat, lon: st.lon, now, temp: wd ? wd.temp : null }) }; }
+    catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
   async function update(board, id, boot, preview = {}) {
@@ -403,7 +422,7 @@ function createBoard({
       screen,
       rot: rotOf(board, screen),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board),
+      knob: knobOf(board, { clock: clockOk(id) }),
       bright: resolveBright(board.bright, w, now),
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
@@ -433,6 +452,8 @@ function createBoard({
         // Precip brightness, percent (absent = 100).
         ...(board.radarBright != null && board.radarBright !== 100 ? { rb: board.radarBright } : {}),
       },
+      // Clock screen, skyline face: drawing parameters (skyline.js; contract "Skyline").
+      skyline: skylineOf(board, w, wd, st, now),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
@@ -495,8 +516,9 @@ function createBoard({
       const board = store.get(id) || store.register(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
       seenAt.set(id, nowSecs());
-      const body = await update(board, id, parsed.query.boot === '1');
-      const shown = SCREENS.includes(parsed.query.s) ? parsed.query.s : body.screen;
+      const body = forBoard(await update(board, id, parsed.query.boot === '1'), id);
+      const asked = parsed.query.s === 'clock' && !clockOk(id) ? 'transit' : parsed.query.s;
+      const shown = SCREENS.includes(asked) ? asked : body.screen;
       return send(res, 200, sectionsFor(body, shown));
     }
 
@@ -514,7 +536,7 @@ function createBoard({
         throw e;
       }
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      const body = await update(board, id, false);
+      const body = forBoard(await update(board, id, false), id);
       return send(res, 200, sectionsFor(body, body.screen));
     }
 

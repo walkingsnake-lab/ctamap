@@ -1234,3 +1234,61 @@ test('per-board link: the control page for that board only, without the owner\'s
   assert.equal((await s.req('/board/c/not-a-real-link-at-all00/api/state')).status, 404);
   await s.close();
 });
+
+test('clock screen: only for boards whose firmware draws it (hk=skyline); the skyline section rides with it', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  // Cloud cover comes from the weather source (being replaced separately); set it here.
+  const w = { ...parse(om), clouds: 30 };
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const get = async (q = '') => (await s.req('/board/update?b=home' + q, h)).body;
+  s.store.update('home', { screen: 'clock' });
+
+  // No capability reported yet: transit instead, no CLOCK on the knob.
+  let b = await get();
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.for, 'transit');
+  assert.equal(b.skyline, undefined);
+  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports']);
+  assert.equal((await get('&s=clock')).for, 'transit', 'a press asking for clock gets transit too');
+
+  // The S3 firmware reports it can draw the skyline.
+  await s.req('/board/version?b=home&hu=60&hk=skyline', h);
+  b = await get();
+  assert.equal(b.screen, 'clock');
+  assert.equal(b.for, 'clock');
+  assert.equal(b.rows, undefined, 'transit sections stay home');
+  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports', 'clock'], at: 4 });
+  assert.equal(b.skyline.face, 'skyline');
+  assert.equal(b.skyline.st, 'partly');
+  assert.equal(b.skyline.temp, 63);
+  assert.ok(Array.isArray(b.skyline.sky) && b.skyline.sky.length >= 2);
+  assert.equal(b.skyline.wat.length, 3);
+  // A later report without hk (e.g. older firmware after a rollback) turns it off again.
+  await s.req('/board/version?b=home&hu=90', h);
+  assert.equal((await get()).screen, 'transit');
+
+  // The simulator's copy keeps the screen and the whole payload.
+  const full = (await s.req(FULL)).body;
+  assert.equal(full.screen, 'clock');
+  assert.equal(full.skyline.face, 'skyline');
+  await s.close();
+});
+
+test('clock screen: other screens leave the skyline out; the knob can choose CLOCK', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(om)) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  await s.req('/board/version?b=home&hu=60&hk=skyline', h);
+  assert.equal((await s.req('/board/update?b=home', h)).body.skyline, undefined);
+  const r = await s.req('/board/select?b=home&s=clock', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.screen, 'clock');
+  assert.equal(r.body.skyline.st, 'clear', 'no cloud cover in the fixture: code 0 is clear');
+  assert.equal(s.store.get('home').screen, 'clock');
+  await s.close();
+});

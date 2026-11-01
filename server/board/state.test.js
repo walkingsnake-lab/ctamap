@@ -282,3 +282,18 @@ test('an older board without a label loads with an empty one', () => {
   fs.writeFileSync(path.join(dir, 'board-state.json'), JSON.stringify({ boards: { home: { v: 3, station: { mapid: '40100', name: 'MORSE' }, rows: [], screen: 'auto', bright: 'auto' } } }));
   assert.equal(createStore({ dir, log: quiet }).get('home').label, '');
 });
+
+test('clock screen and its face are settings; the knob ring adds CLOCK when the board can draw it', () => {
+  const { knobOf, KNOB_RING, CLOCK_FACES } = require('./state');
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  assert.equal(store.get('home').clockFace, 'skyline');
+  assert.deepEqual(CLOCK_FACES, ['skyline']);
+  store.update('home', { screen: 'clock' });
+  assert.equal(store.get('home').screen, 'clock');
+  assert.throws(() => store.update('home', { clockFace: 'nixie' }), ValidationError);
+  assert.deepEqual(knobOf(store.get('home')), { ring: KNOB_RING, at: 0 }, 'without CLOCK the ring falls back to AUTO');
+  assert.deepEqual(knobOf(store.get('home'), { clock: true }), { ring: [...KNOB_RING, 'clock'], at: 4 });
+  store.select('home', 'weather');
+  store.select('home', 'clock');
+  assert.equal(store.get('home').screen, 'clock');
+});
