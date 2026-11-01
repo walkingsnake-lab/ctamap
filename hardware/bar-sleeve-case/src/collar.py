@@ -14,9 +14,10 @@ SEG = 128
 HOLE_R = 12.0                    # shell ENC_HOLE / 2
 CL = 0.4                         # clearance in the hole. 0.2 was too tight: the back-down shell prints this hole on its
                                  # side in wood PLA, which comes out undersize (the screen frame needed 0.30-0.45 too)
-WALL = 2.5
+import os
+WALL = float(os.environ.get('CASE_WALL', '2.5'))
 FL_R, FL_T, FL_CH = 17.5, 1.6, 0.45
-PLUG_BOT = -2.4                  # 0.1 short of the wall's inner face
+PLUG_BOT = -(WALL - 0.1)                  # 0.1 short of the wall's inner face
 DECK_BOT = -1.4                  # encoder body top sits here (deck 3.0 thick to the flange top)
 POCKET_R = 9.0                   # clears the 12 mm body's corners (8.5) at any angle
 BUSH_R = 3.7                     # M7 bushing

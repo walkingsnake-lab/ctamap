@@ -40,6 +40,8 @@ DET_W, DET_DEPTH = 20.0, 0.5
 # plate's corner (skirt included) with a bump that clicks into it. 30-deg lead-in, ~50-deg back face: it takes a firm pull,
 # or a press on the finger from the back, to release.
 LATCH = True
+TONGUES = True                            # plate v3's top tongue grooves (off for the drawer)
+USB_SIDE = -1                             # -1: USB-C on the left wall (v1-v4); +1: on the right (the drawer: S3 turned 180 deg)
 LT_A0, LT_A1 = 10.0, 80.0                 # finger: attached at LT_A0 (side), free at LT_A1 (top), degrees from the side
 LT_FW, LT_SW = 3.0, 1.0                   # finger width (radial; the 2 mm skirt + 1 mm of plate), slot width
 LT_BUMP_A = (50.0, 74.0)                  # bump's angular span on the finger
@@ -174,6 +176,9 @@ def slot_z(x, y0, y1, z0, z1):
     return Manifold.extrude(cs, z1 - z0).translate([0, 0, z0])
 
 
+SEAMLESS_RIM = False     # v5 (drawer.configure_shell) sets it; off keeps the v4 STLs byte-identical
+
+
 def shell2():
     s = outer_body() - inner_front_chamfer()
     bore_cs = rr_cs(BORE_HX, BORE_HZ, BORE_R)
@@ -184,10 +189,16 @@ def shell2():
     else:                                          # built-in rim: two 45-deg slopes, prints either way up without supports
         lo = rr_cs(BORE_HX - RIM_IN, BORE_HZ - RIM_IN, BORE_R - RIM_IN)
         y_a, y_b = RIM_PEAK - RIM_IN, RIM_PEAK + RIM_IN
-        cuts = [prism_y(bore_cs, -50, y_a),
-                Manifold.batch_hull([prism_y(bore_cs, y_a - 0.001, y_a), prism_y(lo, RIM_PEAK, RIM_PEAK + 0.001)]),   # front slope
-                Manifold.batch_hull([prism_y(lo, RIM_PEAK - 0.001, RIM_PEAK), prism_y(bore_cs, y_b, y_b + 0.001)]),   # back slope = diffuser seat
-                prism_y(bore_cs, y_b - 0.001, D + 1)]
+        if SEAMLESS_RIM:
+            # two convex hulls meeting on one shared face at the peak: the bore and its slope in one piece each, so no
+            # thin overlaps at y_a / y_b (they left sliver triangles, non-manifold once the STL rounds to float32)
+            cuts = [Manifold.batch_hull([prism_y(bore_cs, -50, y_a), prism_y(lo, RIM_PEAK - 0.001, RIM_PEAK)]),   # front slope
+                    Manifold.batch_hull([prism_y(lo, RIM_PEAK, RIM_PEAK + 0.001), prism_y(bore_cs, y_b, D + 1)])]  # back slope = diffuser seat
+        else:
+            cuts = [prism_y(bore_cs, -50, y_a),
+                    Manifold.batch_hull([prism_y(bore_cs, y_a - 0.001, y_a), prism_y(lo, RIM_PEAK, RIM_PEAK + 0.001)]),   # front slope
+                    Manifold.batch_hull([prism_y(lo, RIM_PEAK - 0.001, RIM_PEAK), prism_y(bore_cs, y_b, y_b + 0.001)]),   # back slope = diffuser seat
+                    prism_y(bore_cs, y_b - 0.001, D + 1)]
     # slots (optional)
     for sx in ((-1, 1) if GRILLES else ()):
         for i in range(TOP_SL['n']):
@@ -221,7 +232,10 @@ def shell2():
         btn = Manifold.batch_hull([rel(PORT_Y - 7.0, PORT_Y + 4.5, deep, inner), rel(PORT_Y - 7.0 - (inner - deep), PORT_Y + 4.5, inner - 0.01, inner)])
     else:
         btn = Manifold.batch_hull([rel(PORT_Y - 7.0, PORT_Y + 4.5, deep, inner), rel(PORT_Y - 7.0, PORT_Y + 4.5 + (inner - deep), inner - 0.01, inner)])
-    cuts += [port, port_ch, btn]
+    usb_cuts = [port, port_ch, btn]
+    if USB_SIDE > 0:                               # mirrored to the right wall
+        usb_cuts = [m.mirror([1, 0, 0]) for m in usb_cuts]
+    cuts += usb_cuts
     # feet recesses (full teardrop toward the back: no flat roof to curl and catch the nozzle; the point shows ~3 mm past the bumper, underneath)
     for fx, fy in FEET:
         cuts.append(Manifold.extrude(teardrop_cs(FOOT_D / 2, fx, fy), FOOT_DEPTH + 1).translate([0, 0, -1]))
@@ -233,7 +247,7 @@ def shell2():
         cuts.append(Manifold.extrude(teardrop_cs(3.2, sx * scx, SCREW_Y, seg=48), 2.0).translate([0, 0, -1]))
     # tongue grooves (as v1)
     yp0 = D - BACKL - PLATE_T
-    for sx in (-1, 1):
+    for sx in ((-1, 1) if TONGUES else ()):
         cuts.append(box(sx * TONGUE_X - TONGUE_W / 2 - 0.3, sx * TONGUE_X + TONGUE_W / 2 + 0.3, yp0 - 0.3, D + 1, H - WALL - 0.01, H - WALL + 1.3))
         if DETENT:                                  # v4: dimple in the groove roof where the plate's tongue bump seats
             cuts.append(box(sx * TONGUE_X - DET_W / 2 - 1, sx * TONGUE_X + DET_W / 2 + 1, yp0 + 0.0, yp0 + PLATE_T + 0.1,

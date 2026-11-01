@@ -3,5 +3,6 @@ dist/
 .env
 .vercel
 firmware-s3/ctaboard/secrets.h
+__pycache__/
 firmware-s3/ctaboard/version.h
 firmware-s3/ctaboard/build/
