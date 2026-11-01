@@ -311,6 +311,44 @@ function testRain(kind, now) {
   return toRain({ q15 }, now);
 }
 
+// Test weather states for the simulator: the current conditions forced to
+// one state (WMO code and cloud cover, as parse() would give them, and a
+// temperature in °F that suits it). Each maps to one skyline kind and level
+// (skyline.js weatherKind()) and one weather icon and word (condition()).
+const TEST_WX = {
+  clear: { code: 0, clouds: 5, temp: 72 },
+  partly: { code: 2, clouds: 35, temp: 68 },
+  mostly: { code: 2, clouds: 70, temp: 64 },
+  overcast: { code: 3, clouds: 100, temp: 58 },
+  fog: { code: 45, clouds: 100, temp: 50 },
+  'rain light': { code: 61, clouds: 100, temp: 55, pop: 70 },
+  rain: { code: 63, clouds: 100, temp: 54, pop: 90 },
+  'rain heavy': { code: 65, clouds: 100, temp: 52, pop: 100 },
+  ice: { code: 66, clouds: 100, temp: 31, pop: 80 },
+  'snow light': { code: 71, clouds: 100, temp: 29, pop: 60 },
+  snow: { code: 73, clouds: 100, temp: 27, pop: 90 },
+  'snow heavy': { code: 75, clouds: 100, temp: 24, pop: 100 },
+  storm: { code: 95, clouds: 100, temp: 78, pop: 90 },
+};
+// Parsed weather (or null) with its current conditions replaced by test
+// state `kind` (null: kept) and `isDay` set. Real forecast data (days,
+// hours, sun times) is kept; without real weather it's made up around the
+// state, so the simulator shows every layout without a WEATHERAPI_KEY.
+function testWeather(kind, base, now, isDay) {
+  const s = TEST_WX[kind];
+  if (!s) return base ? { ...base, isDay } : null;
+  const day = (i) => ({ time: now + i * 86400, code: s.code, wa: null, hi: s.temp + [4, -2, 5, 1, -3][i - 1], lo: s.temp - [9, 12, 8, 10, 13][i - 1] });
+  const b = base || {
+    sunrise: now - 6 * 3600, sunset: now + 6 * 3600, windSpeed: 9, windDir: 300, q15: [],
+    days: [1, 2, 3, 4, 5].map(day),
+    hrs: Array.from({ length: 9 }, (_, i) => ({ time: now + i * 3600, temp: s.temp + (i % 3) - 1, code: s.code, wa: null, isDay })),
+  };
+  return {
+    ...b, time: now, code: s.code, wa: null, isDay, clouds: s.clouds,
+    temp: s.temp, feels: s.temp < 50 ? s.temp - 6 : s.temp, hi: s.temp + 6, lo: s.temp - 9, pop: s.pop || 10,
+  };
+}
+
 // 'auto' brightness: full from sunrise to sunset, `night` overnight (the
 // board's brightMin). Uses the day's times even slightly stale (a few minutes
 // off at midnight is fine).
@@ -353,4 +391,4 @@ function createWeather({ key = process.env.WEATHERAPI_KEY || '', fetch = null, c
   return w;
 }
 
-module.exports = { url, parse, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };
+module.exports = { url, parse, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };

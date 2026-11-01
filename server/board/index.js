@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir, knobOf, ICON_SETTINGS } = requ
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, inUnit, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, autoBright, NIGHT_BRIGHT } = require('./weather');
+const { createWeather, inUnit, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
@@ -20,6 +20,7 @@ const { createFirmware, FirmwareError, CHANNELS: FW_CHANNELS, MAX_BYTES: MAX_FIR
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
 const { toSkyline } = require('./skyline');
+const { sunPos, sunTime } = require('./sun');
 const { stripBytes } = require('./clouds');
 const fs = require('fs');
 const path = require('path');
@@ -248,6 +249,17 @@ function createBoard({
     if (st === 'final') return { ...g, away: { ...g.away, w: 93 }, home: { ...g.home, l: 75 } };
     return { ...g, inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] };
   }
+  // Test times of day (simulator): the sun's elevation (degrees) and whether
+  // it's rising (1) or setting (-1), or solar noon / midnight. The skyline
+  // face draws its sky, sun, moon and lights for that moment of today; the
+  // clock still shows the real time.
+  const TEST_TOD = { day: ['max'], sunrise: [1, 1], golden: [6, -1], sunset: [1, -1], dusk: [-3, -1], twilight: [-6, -1], night: ['min'] };
+  // The moment `tod` stands for, near `now`, at a station (now if the sun
+  // never gets there, e.g. a 'golden' hour in polar winter; not in Chicago).
+  function testSkyNow(tod, st, now) {
+    const [target, dir] = TEST_TOD[tod] || [];
+    return (target != null && sunTime(now, st.lat, st.lon, target, dir)) || now;
+  }
   function validateTest(body) {
     if (!body || typeof body !== 'object') throw new ValidationError('body must be an object');
     const lines = body.lines == null ? [] : body.lines;
@@ -262,7 +274,12 @@ function createBoard({
     if (rad && !testRadar.KINDS.includes(rad)) throw new ValidationError(`radar must be one of ${testRadar.KINDS.join(', ')}`);
     const bars = body.bars == null ? null : body.bars;
     if (bars && !Object.keys(TEST_RAIN).includes(bars)) throw new ValidationError(`bars must be one of ${Object.keys(TEST_RAIN).join(', ')}`);
-    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, bars };
+    const wb = body.weather == null ? null : body.weather;
+    if (wb != null && typeof wb !== 'object') throw new ValidationError('weather must be {kind, tod}');
+    const kind = wb && wb.kind != null ? wb.kind : null, tod = wb && wb.tod != null ? wb.tod : null;
+    if (kind != null && !Object.keys(TEST_WX).includes(kind)) throw new ValidationError(`weather.kind must be one of ${Object.keys(TEST_WX).join(', ')}`);
+    if (tod != null && !Object.keys(TEST_TOD).includes(tod)) throw new ValidationError(`weather.tod must be one of ${Object.keys(TEST_TOD).join(', ')}`);
+    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, bars, weather: kind || tod ? { kind, tod } : null };
   }
 
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
@@ -362,6 +379,13 @@ function createBoard({
     // rain chance) laid over them.
     let w = base;
     try { w = withForecast(base, fc, now); } catch (e) { log.error('[board] nws-forecast:', e.message); }
+    // Test weather from the simulator (expires with the test alerts): the
+    // current conditions forced to one state and/or the sky at a test time
+    // of day, on every weather display.
+    const test = activeTest(id, now);
+    const tw = test && test.weather && st ? test.weather : null;
+    const skyNow = tw && tw.tod ? testSkyNow(tw.tod, st, now) : now;
+    if (tw) w = testWeather(tw.kind, w, now, tw.tod || !w ? sunPos(skyNow, st.lat, st.lon).el > -0.83 : w.isDay);
     const stale = !data || now - data.fetchedAt > STALE_S;
     // The row cap only reserves space for the weather row when there's
     // weather to show.
@@ -375,7 +399,6 @@ function createBoard({
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
     catch (e) { log.error('[board] radar:', e.message); }
     // Test radar loop from the simulator (expires with the test alerts).
-    const test = activeTest(id, nowSecs());
     if (test && test.radar && st) {
       try { radarState = { ...radarState, ...(await testRadar.want(test.radar, st, nowSecs())) }; }
       catch (e) { log.error('[board] test radar:', e.message); }
@@ -469,7 +492,7 @@ function createBoard({
         ...(iconAnimOf(board).length ? { iconAnim: iconAnimOf(board) } : {}),
       },
       // Clock screen, skyline face: drawing parameters (skyline.js; contract "Skyline").
-      skyline: skylineOf(board, w, wd, st, now),
+      skyline: skylineOf(board, w, wd, st, skyNow),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
@@ -819,13 +842,13 @@ function createBoard({
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
             throw e;
           }
-          if (t.lines.length || t.warn || t.game || t.radar || t.bars) tests.set(id, { ...t, until: now + TEST_S });
+          if (t.lines.length || t.warn || t.game || t.radar || t.bars || t.weather) tests.set(id, { ...t, until: now + TEST_S });
           else tests.delete(id);
         } else if (method !== 'GET') {
           return send(res, 405, { err: 'method' });
         }
         const t = activeTest(id, now);
-        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, bars: t.bars || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, bars: null, left: 0 });
+        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, bars: t.bars || null, weather: t.weather || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, bars: null, weather: null, left: 0 });
       }
 
       // Station list for the simulator's picker.
