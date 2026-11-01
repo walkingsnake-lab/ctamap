@@ -32,7 +32,7 @@ Animation was deliberately limited on the M4 so its network pauses (CircuitPytho
 - **Radar loop.**
 - **Knob chooser slide** (S3; §10, *Knob*): 180 ms per click, only while someone is turning the knob.
 
-No blinking colons and no alert text screens anywhere. Alerts are shown only as indicators (see §5, §6, §7). Scrolling text is avoided by preference, not ruled out: the message screen offers two scrolling looks (§15).
+No blinking colons and no alert text screens anywhere. Alerts are shown only as indicators (see §5, §6, §7). Scrolling text is avoided by preference, not ruled out: the announce screen's planned credits and crawl styles scroll (§15).
 
 ### Scheduler (board main loop)
 **S3:** the board's requests run on a network task on core 0 (beside the WiFi stack) while the loop keeps drawing on core 1 (`device::NetWorker`, `app::Worker`). One request is out at a time; jobs simply run when due, and nothing on the panel waits for them. A request still out after 45 s (`WORK_STUCK_MS`) stops the loop feeding the watchdog, which restarts the board, so a hung TLS read can't leave stale times up forever. The S3 keeps its HTTPS connection open between requests, so most skip the TLS handshake. If the worker fails to start, requests run inline and pause animations while they're out; the S3 doesn't fit them into gaps.
@@ -372,7 +372,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 ### Knob (S3)
 Decided Oct 25, 2026. An Adafruit 5880 I2C rotary encoder (seesaw, on the STEMMA QT port) is the board's physical control: the bar sleeve case covers the S3's UP/DOWN buttons. The buttons still work where they're reachable (wedge), and a board without the knob runs as before. Mockup: [`mockups/knob/sheet.png`](mockups/knob/sheet.png) (`node scripts/mock-knob.js`, drawn by `renderChooser` in `draw.js`).
 
-- **Ring:** categories, not screens, so it stays short as screens are added: **AUTO · TRANSIT · WEATHER · SPORTS**, wrapping both ways. The server sends the ring (payload `knob`), so new categories need no firmware change; CLOCK joins with the Clock screen (§14) and opens the board's chosen face, MESSAGE with the Message screen (§15) (v2 plan: one Sports category over every league, the leagues and teams set on the phone). Each category opens its variant as set on the phone: TRANSIT opens rows or the ticker, whichever was chosen last (the ticker becomes a transit view mode on the phone page); SPORTS opens the baseball screen.
+- **Ring:** categories, not screens, so it stays short as screens are added: **AUTO · TRANSIT · WEATHER · SPORTS**, wrapping both ways. The server sends the ring (payload `knob`), so new categories need no firmware change; CLOCK joins with the Clock screen (§14) and opens the board's chosen face, then ANNOUNCE with the Announce screen (§15) (v2 plan: one Sports category over every league, the leagues and teams set on the phone). Each category opens its variant as set on the phone: TRANSIT opens rows or the ticker, whichever was chosen last (the ticker becomes a transit view mode on the phone page); SPORTS opens the baseball screen.
 - **Twist and rest:** the first click opens the chooser on the screen the board is on, and each click moves one entry (clockwise to the right), with a 180 ms ease-out slide. 1 s after the last click it commits: the selection turns amber and its neighbors drop out, held through one request, then the new screen appears. Resting back on the starting entry closes the chooser with no request (cancel).
 - **Look:** a blank panel with a sideways wheel across the top. The selection is 5x7 label white `#d8d8d8`, centered on baseline 7; its neighbors are Tom Thumb 38 px either side, fading to `#555555` with distance and clipped at the panel edges. Row 9 has one 3x1 pip per entry, 2 px apart, centered: the selection amber, the rest `#3a3a3a`. Rows 10–31 stay dark. (Also mocked: a two-level chooser with a press into each category's variants, rejected as too complex; an underline that drains during the rest; pips at the bottom; the wheel over the dimmed screen.)
 - **Writes through:** the commit is `POST /board/select`, which sets the screen on the server as the phone would (it persists, the phone page shows it, and it ends any button override) and answers with the new screen's update, so a commit is one request.
@@ -610,47 +610,44 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 
 ---
 
-## 15. Message screen (designed, not built)
+## 15. Announce screen (four styles built)
 
-Designed Nov 1, 2026. The owner puts a short note on their own board: "Dinner at 7", "Welcome home!". Mockups: [`mockups/messages/sheet.png`](mockups/messages/sheet.png), made by `node scripts/mock-messages.js`.
+Designed Nov 1, 2026 as the Message screen; built Nov 1, 2026 as **Announce** (the name the knob and phone use). The owner puts a short note on their own board: "Dinner at 7", "Welcome home!". Mockups of all nine styles: [`mockups/messages/sheet.png`](mockups/messages/sheet.png), made by `node scripts/mock-messages.js`. Payload and pixels: contract, *Announce*.
 
 ### Mode
-- **A new screen, `message`**, beside Transit, Ticker, Weather, Baseball and Clock. It shows only when chosen, from the phone or the knob. Auto never shows it, nothing rotates in or takes over, and like any screen chosen directly it ignores Auto's rules (no baseball takeover, no weather visits).
+- **A screen, `announce`**, chosen from the phone or the knob (ANNOUNCE, 39 px in 5x7, after CLOCK on the ring). Auto never shows it; like any screen chosen directly it ignores Auto's rules. (The chosen-screen redesign, "Control Page Redesign Decisions", lets interruptions cover it and lets it join a Cycle; neither exists yet.)
 - **Owner only:** set on the board's own control page (an owner link or the board's control link). No send links for other people.
-- **One message per board.** A new one replaces it. **No expiry:** it stays until replaced or another screen is chosen, and persists across restarts like the rest of the board's state.
-- **Saved presets:** a few per board, kept on the page to put back up with one tap.
-- **Knob:** MESSAGE is always in the ring. With no message set, the screen is a call to action to set one on the phone.
-- **S3 only**, like Clock (§14): the phone page doesn't offer it to an M4 and the server never sends `message` to one (it falls back to Transit).
+- **One message per board.** A new one replaces it. **No expiry:** it stays until replaced, and persists across restarts like the rest of the board's state. Choosing another screen keeps it for next time.
+- **Presets:** up to 8 per board, kept on the page; tap one to load it into the message.
+- **No message set:** the screen says `SET A MESSAGE` / `ON YOUR PHONE`.
+- **S3 only**, like Clock (§14): firmware reports `announce` in `hk`; the server never sends the screen to other boards (they get Transit) and leaves ANNOUNCE off their ring.
 
 ### Text
-- **One screen:** the text must fit the chosen style without paging. The server rejects text that doesn't fit (400, shown in the page's status bar, as with the header name).
-- Characters: printable ASCII, Latin-1 and the punctuation phones substitute (§3). Emoji are dropped.
+- **One screen:** the text must fit the chosen style without paging. The server rejects text that doesn't fit (400); the phone page disables styles it doesn't fit ("too long").
+- Characters: printable ASCII, Latin-1 and the punctuation phones substitute (curly quotes, dashes, ellipsis, bullet, euro). Anything else (emoji) is dropped. Line breaks force a new line. Up to 160 characters.
+- The server lays the text out (`messageLayout()` in `draw.js`, shared with the phone page) and sends the lines; the board only draws them.
 
 ### Styles
-Picked per message; nothing else is set per message (each style fixes its own colors). Built in this order:
+Picked per message; each style fixes its own colors. Built:
 
-1. **Note:** 5x7 text, wrapped and centered, up to 3 lines; a Tom Thumb variant fits about 5.
-2. **Split-flap:** 10 × 3 small flaps (the date flaps of the split-flap clock mockup, `mockups/clock/r2-flap.png`: 5 × 10 px, Tom Thumb, uppercase, 30 characters); rows flip in one after another when the message appears.
-3. **Typewriter:** 5x7 amber (or green phosphor), typed out once when the message appears, then a blinking block cursor.
-4. **Big word:** 5x7 at 2x (about 5 characters), with gradient and sparkle variants; a countdown variant uses the 9x15 clock digits over a Tom Thumb label.
-5. **Icon + text:** a 13 px pixel icon with a 2-frame idle loop (heartbeat, candle flicker), text beside it (about 47 px wide). Each icon is its own style in the picker (Heart, Cake, House, Coffee, …), so the style is still the only choice per message.
-6. **Speech bubble:** a pigeon in the bottom left says the message (about 9 characters a line, 2 lines) and pecks now and then.
-7. **Marquee:** chasing bulbs around the edge, two lines inside.
-8. **Credits roll:** the note drifts up 1 px at a time with faded top and bottom edges, then the sender line.
-9. **Crawl:** a still headline over a line-colored band whose text crawls.
+1. **Note:** 5x7 text, wrapped and centered, up to 3 lines; when it doesn't fit, uppercase Tom Thumb up to 5 lines.
+2. **Split-flap:** 10 × 3 flaps (5 × 10 px, Tom Thumb, uppercase, 30 characters). The letters run unbroken; the bottom flap's first row is dark and shows them dimmed, marking the split (no unlit gap through the letters; changed from the mockup Nov 1). Rows flip in one after another when the message appears.
+3. **Typewriter:** 5x7 amber from the left edge, typed out once when the message appears (90 ms a character), then a blinking block cursor.
+4. **Big word:** 5x7 at 2x (about 5 characters), shaded pink to amber.
 
-Credits roll and crawl scroll; they're kept as looks even with one-screen text.
+Not built yet, in order: **icon + text** (13 px icon with a 2-frame idle loop: heart, cake, house, coffee; each its own style), **speech bubble** (a pigeon), **marquee** (chasing bulbs), **credits roll**, **crawl**. Also from the mockups, not built: the big word's sparkle and countdown variants, the typewriter's green phosphor.
 
-This screen is an exception to Minimal animation (§2), like the skyline face: it has no times to protect.
+This screen is an exception to Minimal animation (§2), like the skyline face: it has no times to protect. The intro replays when the screen is shown and when a new message arrives, not on every update.
 
 ### Phone page
-- Text field, style picker, and presets. No separate draft preview: once set, the message shows in the existing board preview.
+- An **Announce** tab: a preview of the draft drawn by the board's renderer (tap to replay its intro), the text field, a fit line ("Fits Note · 2 of 3 lines"), the four styles as tiles drawn with the draft (or a sample when it doesn't fit), **Show on board** (sets the message and the screen; "On the board ✓" when it's already up), **Save as preset**, and the presets list.
+- While Announce is on the board, edits go up about a second after typing stops.
+- Announce is also in the Screen picker (now two rows of four).
 
 ### Open
 - Which icons ship first, beyond heart, cake, house and coffee.
 - What the countdown variant counts down to, if it isn't just text.
-- How many presets; the call-to-action screen's wording and look.
-- On the panel: the split-flap flap colors at the night floor, the marquee's 1 px bulbs through the diffuser, white on Pink and Yellow crawl bands.
+- On the panel: the flap fills and the dimmed split row at the night floor, the marquee's 1 px bulbs through the diffuser, white on Pink and Yellow crawl bands.
 
 ## 16. Clock screen: seventies face
 

@@ -1750,6 +1750,222 @@
       return f;
     }
 
+    // ---- announce screen (design spec §15; contract "Announce") ----
+    // A short note from the phone in one of four styles: note, split-flap,
+    // typewriter, big word. The server lays the text out (messageLayout) and
+    // sends the lines; the board only draws them. opts.t: ms since the
+    // message appeared, for its intro (flaps flip in row by row, the
+    // typewriter types); absent: the settled frame. Integer geometry only.
+    const MSG_STYLES = ['note', 'flap', 'type', 'big'];
+    const MSG_MAX = 160;  // characters, after cleaning
+    const MSG = {
+      bases: { 1: [19], 2: [14, 24], 3: [9, 19, 29] },  // 5x7 lines (note, typewriter)
+      smallLines: 5,
+      flapCols: 10, flapRows: 3, flapX: 2, flapPitch: 6, flapRowPitch: 11,
+      flapWait: 300, flapRowEvery: 300, flapFlip: 150,
+      typeWrap: 59, typeWait: 400, typeChar: 90, typeBlink: 530,
+      bigTop: 7, bigGrad: 14,
+    };
+    const MSG_C = {
+      text: C.label, flapTop: '#1f1f1f', flapBot: '#171717', flapFold: '#2a2a2a', flapSplit: '#565656',
+      type: C.amber, cursor: '#cc8d00', bigFrom: '#ff3060', bigTo: '#ffb000', cta: C.head,
+    };
+    // Punctuation phones substitute (curly quotes, dashes, ellipsis, ...):
+    // in both fonts, unlike the rest of their private-use and symbol glyphs.
+    const MSG_PUNCT = new Set([0x2013, 0x2014, 0x2018, 0x2019, 0x201a, 0x201c, 0x201d, 0x201e, 0x2022, 0x2026, 0x20ac]);
+    const msgChar = (cp) => (cp >= 0x20 && cp < 0x7f) || (cp >= 0xa0 && cp <= 0xff) || MSG_PUNCT.has(cp);
+    // The text as the board can draw it: characters outside the fonts (emoji)
+    // dropped, tabs as spaces, runs of spaces collapsed, lines trimmed, line
+    // breaks kept (they force a new line).
+    function cleanMessage(text) {
+      let out = '';
+      for (const ch of String(text == null ? '' : text).replace(/\r\n?/g, '\n').replace(/\t/g, ' ')) {
+        const cp = ch.codePointAt(0);
+        if (ch === '\n' || (msgChar(cp) && fonts['5x7'][cp] && fonts.small[cp])) out += ch;
+      }
+      return out.split('\n').map((l) => l.replace(/ +/g, ' ').trim()).join('\n').replace(/^\n+|\n+$/g, '');
+    }
+    // Uppercase for Tom Thumb and the flaps; letters whose capital the font
+    // lacks are dropped.
+    const msgUpper = (s) => [...s.toUpperCase()].filter((ch) => ch === '\n' || fonts.small[ch.codePointAt(0)]).join('');
+    // Word-wrap to lines at most maxW wide (pixels in `font`, or characters
+    // when font is null); \n forces a break. Null when one word is too wide.
+    function wrapMessage(text, font, maxW) {
+      const width = (str) => (font ? measure(font, str) : [...str].length);
+      const lines = [];
+      for (const para of text.split('\n')) {
+        let cur = '';
+        for (const word of para.split(' ')) {
+          if (!word) continue;
+          if (width(word) > maxW) return null;
+          const t = cur ? `${cur} ${word}` : word;
+          if (width(t) <= maxW) cur = t;
+          else { lines.push(cur); cur = word; }
+        }
+        lines.push(cur);
+      }
+      return lines;
+    }
+    // The lines a style draws for `text` (payload `msg`), or null when it
+    // doesn't fit on one screen. Note: 5x7, up to 3 lines, else Tom Thumb
+    // (uppercase) up to 5 (`sm`). Split-flap: 10 characters by 3 rows,
+    // uppercase. Typewriter: 5x7, 3 lines, room for the cursor. Big word:
+    // one line of 5x7 at 2x.
+    function messageLayout(text, style) {
+      const t = cleanMessage(text);
+      if (!t || [...t].length > MSG_MAX) return null;
+      const upto = (lines, n) => (lines && lines.length <= n ? lines : null);
+      if (style === 'note') {
+        const big = upto(wrapMessage(t, '5x7', 64), 3);
+        if (big) return { lines: big };
+        const sm = upto(wrapMessage(msgUpper(t), 'small', 64), MSG.smallLines);
+        return sm ? { lines: sm, sm: 1 } : null;
+      }
+      if (style === 'flap') {
+        const lines = upto(wrapMessage(msgUpper(t), null, MSG.flapCols), MSG.flapRows);
+        return lines ? { lines } : null;
+      }
+      if (style === 'type') {
+        const lines = upto(wrapMessage(t, '5x7', MSG.typeWrap), 3);
+        return lines ? { lines } : null;
+      }
+      if (style === 'big') return !t.includes('\n') && measure('5x7', t) * 2 <= 64 ? { lines: [t] } : null;
+      return null;
+    }
+
+    const msgX = (font, str) => Math.floor((64 - measure(font, str)) / 2);
+    const msgLen = (str) => [...str].length;
+    function drawNote(f, lines, sm) {
+      if (sm) {
+        const n = Math.min(lines.length, MSG.smallLines);
+        const top = Math.floor((32 - (n * 6 - 1)) / 2);
+        for (let i = 0; i < n; i++) f.text('small', lines[i], msgX('small', lines[i]), top + 5 + i * 6, MSG_C.text);
+        return;
+      }
+      const n = Math.min(lines.length, 3);
+      for (let i = 0; i < n; i++) f.text('5x7', lines[i], msgX('5x7', lines[i]), MSG.bases[n][i], MSG_C.text);
+    }
+    // One Tom Thumb glyph on a flap at (x, y), unbroken on tile rows 2-6
+    // (a descender on row 7), centered by its ink width: rows 0-2 on the top
+    // flap, the rest on the bottom flap, whose first row (the split) shows
+    // them darkened. part: 'top' or 'bot'.
+    function flapGlyph(f, ch, x, y, part) {
+      const g = fonts.small[ch.codePointAt(0)];
+      if (!g) return;
+      const [, w, h, , yo] = g;
+      const top = 5 - (yo + h), ox = x + Math.floor((5 - w) / 2);
+      for (let r = 0; r < h; r++) {
+        const j = top + r;
+        if (j < 0 || j > 5 || (part === 'top') !== (j < 3)) continue;
+        const rgb = hex(j === 3 ? MSG_C.flapSplit : MSG_C.text);
+        const bits = g[5 + r];
+        for (let c = 0; c < w; c++) if ((bits >> (w - 1 - c)) & 1) f.set(ox + c, y + 2 + j, rgb);
+      }
+    }
+    // Split-flap: 10 x 3 tiles (5 x 10 px: top flap rows 0-4, bottom flap
+    // rows 5-9 with its first row left dark: the split, without a gap in
+    // the letters). The text's rows flip in one after another; a flipping
+    // row shows its new top while the old top flap (blank) folds down over
+    // the split.
+    function drawFlaps(f, lines, t) {
+      const n = Math.min(lines.length, MSG.flapRows);
+      const first = Math.floor((MSG.flapRows - n) / 2);
+      for (let r = 0; r < MSG.flapRows; r++) {
+        const i = r - first;
+        const line = i >= 0 && i < n ? [...lines[i]].slice(0, MSG.flapCols) : [];
+        const pad = Math.floor((MSG.flapCols - line.length) / 2);
+        const start = MSG.flapWait + i * MSG.flapRowEvery;
+        const state = !line.length || t < start ? 'blank' : t < start + MSG.flapFlip ? 'flip' : 'done';
+        for (let c = 0; c < MSG.flapCols; c++) {
+          const x = MSG.flapX + c * MSG.flapPitch, y = r * MSG.flapRowPitch;
+          f.fill(x, y, 5, 5, MSG_C.flapTop);
+          f.fill(x, y + 6, 5, 4, MSG_C.flapBot);
+          const ch = line[c - pad];
+          if (state === 'blank' || ch == null) continue;
+          flapGlyph(f, ch, x, y, 'top');
+          if (state === 'flip') f.fill(x, y + 4, 5, 1, MSG_C.flapFold);
+          else flapGlyph(f, ch, x, y, 'bot');
+        }
+      }
+    }
+    // Typewriter: amber 5x7 from the left edge, typed one character every
+    // typeChar ms (a line break counts as one), a block cursor after the last
+    // one: steady while typing, then blinking.
+    function typedTotal(lines) {
+      const n = Math.min(lines.length, 3);
+      let total = n - 1;
+      for (let i = 0; i < n; i++) total += msgLen(lines[i]);
+      return total;
+    }
+    function drawTyped(f, lines, t) {
+      const n = Math.min(lines.length, 3);
+      const total = typedTotal(lines);
+      const typed = t < MSG.typeWait ? 0 : Math.min(total, Math.floor((t - MSG.typeWait) / MSG.typeChar));
+      let left = typed, lastX = 0, lastB = MSG.bases[n][0];
+      for (let i = 0; i < n && left >= 0; i++) {
+        const chars = [...lines[i]];
+        lastX = f.text('5x7', chars.slice(0, left).join(''), 0, MSG.bases[n][i], MSG_C.type);
+        lastB = MSG.bases[n][i];
+        left -= chars.length + 1;
+      }
+      const doneAt = MSG.typeWait + total * MSG.typeChar;
+      const on = typed < total || !Number.isFinite(t) || Math.floor((t - doneAt) / MSG.typeBlink) % 2 === 0;
+      if (on) f.fill(lastX, lastB - 7, 4, 7, MSG_C.cursor);
+    }
+    // Big word: 5x7 at 2x, centered, rows shaded from pink to amber.
+    function drawBig(f, str) {
+      const A = hex(MSG_C.bigFrom), B = hex(MSG_C.bigTo);
+      const grad = (y) => { const k = Math.max(0, Math.min(MSG.bigGrad, y)); return [0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * k / MSG.bigGrad)); };
+      const x0 = 32 - measure('5x7', str);
+      let x = 0;
+      for (const ch of str) {
+        const g = fonts['5x7'][ch.codePointAt(0)];
+        if (!g) continue;
+        const [dw, w, h, xo, yo] = g;
+        const top = 8 - (yo + h);
+        for (let r = 0; r < h; r++) {
+          const bits = g[5 + r];
+          for (let c = 0; c < w; c++) {
+            if (!((bits >> (w - 1 - c)) & 1)) continue;
+            const px = x + xo + c, py = top + r;
+            for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) f.set(x0 + px * 2 + dx, MSG.bigTop + py * 2 + dy, grad(py * 2 + dy));
+          }
+        }
+        x += dw;
+      }
+    }
+    function renderAnnounce(p, opts) {
+      const o = opts || {};
+      const f = newFrame();
+      const m = p.msg;
+      if (!m || !m.lines || !m.lines.length) {
+        // No message yet: a call to action.
+        for (const [str, base] of [['SET A MESSAGE', 15], ['ON YOUR PHONE', 22]]) f.text('small', str, msgX('small', str), base, MSG_C.cta);
+        return f;
+      }
+      const t = o.t != null ? o.t : Infinity;
+      if (m.style === 'flap') drawFlaps(f, m.lines, t);
+      else if (m.style === 'type') drawTyped(f, m.lines, t);
+      else if (m.style === 'big') drawBig(f, m.lines[0]);
+      else drawNote(f, m.lines, !!m.sm);
+      return f;
+    }
+    // How long a message's intro runs (ms; 0 for the still styles): the
+    // board redraws every frame until then.
+    function messageIntroMs(m) {
+      if (!m || !m.lines || !m.lines.length) return 0;
+      if (m.style === 'flap') return MSG.flapWait + (Math.min(m.lines.length, MSG.flapRows) - 1) * MSG.flapRowEvery + MSG.flapFlip;
+      if (m.style === 'type') return MSG.typeWait + typedTotal(m.lines) * MSG.typeChar;
+      return 0;
+    }
+    // After the intro, a number that changes whenever the frame does (the
+    // typewriter cursor's blink), for the board's redraw key.
+    function messageTick(m, t) {
+      if (!m || m.style !== 'type' || !m.lines || !m.lines.length) return 0;
+      const intro = messageIntroMs(m);
+      return t < intro ? -1 : Math.floor((t - intro) / MSG.typeBlink) % 2;
+    }
+
     // Which skyline is on screen, and the crossfade from the last one. The
     // board and the simulator keep one: set() with each payload's skyline
     // (live: the clock screen is showing; off it, a new skyline is taken at
@@ -2074,7 +2290,8 @@
       let f;
       try {
         f = screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
-          : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? (p.cface === 'seventies' ? renderSeventies(p, o) : renderSkyline(p, o)) : renderTransit(p, o);
+          : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? (p.cface === 'seventies' ? renderSeventies(p, o) : renderSkyline(p, o))
+          : screen === 'announce' ? renderAnnounce(p, o) : renderTransit(p, o);
       } finally { NR = null; ICON_T = null; }
       applyBrightness(f, p.bright);
       if (o.slide && o.slide.from) slideFrames(o.slide.from, f, slideOffset(o.slide.t || 0), o.slide.dir == null ? 1 : o.slide.dir);
@@ -2122,7 +2339,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderSkyline, renderSeventies, S70, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderSkyline, renderSeventies, S70, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };

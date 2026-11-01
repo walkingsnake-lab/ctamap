@@ -128,6 +128,10 @@
       <figcaption><span>Clock</span><span id="clockState"></span></figcaption>
       <canvas id="clock" width="640" height="320" aria-label="Clock screen"></canvas>
     </figure>
+    <figure id="fig-announce">
+      <figcaption><span>Announce</span><span id="msgState"></span></figcaption>
+      <canvas id="announce" width="640" height="320" aria-label="Announce screen (click to replay its intro)" title="Click to replay the intro"></canvas>
+    </figure>
   </div>
   <div class="bar">
     <span>board <b id="board"></b></span>
@@ -193,6 +197,10 @@
   const paintWeather = ledCanvas($('weather'));
   const paintBaseball = ledCanvas($('baseball'));
   const paintClock = ledCanvas($('clock'));
+  const paintAnnounce = ledCanvas($('announce'));
+  // Announce: the message's intro plays from when it appeared (a new id), or on a click.
+  let msgStart = performance.now(), msgId = null;
+  $('announce').addEventListener('click', () => { msgStart = performance.now(); });
 
   // Radar frames are immutable: fetch each ID once, keep the ones in use.
   const radarFrames = {};
@@ -309,7 +317,8 @@
     if (shown !== lastShown) {
       lastShown = shown;
       $('screen').textContent = shown;
-      for (const k of ['transit', 'ticker', 'weather', 'baseball', 'clock']) $('fig-' + k).classList.toggle('active', shown === k);
+      for (const k of ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce']) $('fig-' + k).classList.toggle('active', shown === k);
+      if (shown === 'announce') msgStart = t;
     }
 
     // Transit: rolls, fades, and slides come from the animator.
@@ -355,6 +364,12 @@
     paintClock(rolled('clock', t, { full, o: { now: n, ms: Math.floor(n * 1000), blink, clouds: cloudStrips, ...skyFade.view(t) } }));
     const tod = test.weather && test.weather.tod;
     $('clockState').textContent = p.skyline ? p.skyline.st + (tod ? ` (test sky: ${tod}; clock shows the real time)` : '') : 'no weather yet';
+
+    // Announce: the owner's message, its intro from when it appeared.
+    const id = p.msg ? p.msg.id : null;
+    if (id !== msgId) { msgId = id; msgStart = t; }
+    paintAnnounce(rolled('announce', t, { full, o: { now: n, t: t - msgStart } }));
+    $('msgState').textContent = p.msg ? p.msg.style : 'no message';
   }
 
   let lastShown = null;

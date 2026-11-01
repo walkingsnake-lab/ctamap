@@ -2536,6 +2536,161 @@ static void render_seventies(const Value &p, Frame &f, std::optional<double> now
   }
 }
 
+// ---- announce screen (design spec §15; contract "Announce") ----
+// Mirrors renderAnnounce() and MSG in draw.js: the server sends the lines
+// already laid out for the style (messageLayout); this only draws them.
+static const int MSG_BASES[4][3] = {{0, 0, 0}, {19, 0, 0}, {14, 24, 0}, {9, 19, 29}};
+static const int MSG_SMALL_LINES = 5, FLAP_COLS = 10, FLAP_ROWS = 3, FLAP_X = 2, FLAP_PITCH = 6, FLAP_ROW_PITCH = 11;
+static const double FLAP_WAIT = 300, FLAP_ROW_EVERY = 300, FLAP_FLIP = 150;
+static const double TYPE_WAIT = 400, TYPE_CHAR = 90, TYPE_BLINK = 530;
+static const int BIG_TOP = 7, BIG_GRAD = 14;
+static constexpr RGB MSG_TEXT = C::label, FLAP_TOP = hexc(0x1f1f1f), FLAP_BOT = hexc(0x171717), FLAP_FOLD = hexc(0x2a2a2a), FLAP_SPLIT = hexc(0x565656),
+                     MSG_TYPE = C::amber, MSG_CURSOR = hexc(0xcc8d00), BIG_FROM = hexc(0xff3060), BIG_TO = hexc(0xffb000), MSG_CTA = C::head;
+
+static int msg_x(Font font, const ustr &s) { return (int)fdiv(64 - measure(font, s), 2); }
+
+static std::vector<ustr> msg_lines(const Value &m) {
+  std::vector<ustr> out;
+  const Value &ls = m["lines"];
+  for (size_t i = 0; i < ls.size(); i++) out.push_back(vstr(ls[i]));
+  return out;
+}
+
+static void draw_note(Frame &f, const std::vector<ustr> &lines, bool sm) {
+  if (sm) {
+    int n = std::min((int)lines.size(), MSG_SMALL_LINES);
+    int top = (int)fdiv(32 - (n * 6 - 1), 2);
+    for (int i = 0; i < n; i++) f.text(FONT_SMALL, lines[i], msg_x(FONT_SMALL, lines[i]), top + 5 + i * 6, MSG_TEXT);
+    return;
+  }
+  int n = std::min((int)lines.size(), 3);
+  for (int i = 0; i < n; i++) f.text(FONT_5X7, lines[i], msg_x(FONT_5X7, lines[i]), MSG_BASES[n][i], MSG_TEXT);
+}
+
+// One Tom Thumb glyph on a flap at (x, y), unbroken on tile rows 2-6: rows
+// 0-2 on the top flap, the rest on the bottom flap, darkened on its first
+// row (the split).
+static void flap_glyph(Frame &f, char32_t ch, int x, int y, bool top_part) {
+  int o = glyph(FONT_SMALL, ch);
+  if (o < 0) return;
+  const uint8_t *d = assets::FONT_DATA[FONT_SMALL];
+  int w = d[o + 1], h = d[o + 2], yo = d[o + 4] - 128;
+  int top = 5 - (yo + h), ox = x + (int)fdiv(5 - w, 2);
+  for (int r = 0; r < h; r++) {
+    int j = top + r;
+    if (j < 0 || j > 5 || top_part != (j < 3)) continue;
+    RGB color = j == 3 ? FLAP_SPLIT : MSG_TEXT;
+    int bits = glyph_row(d, o, r);
+    for (int c = 0; c < w; c++)
+      if ((bits >> (w - 1 - c)) & 1) f.set(ox + c, y + 2 + j, color);
+  }
+}
+
+static void draw_flaps(Frame &f, const std::vector<ustr> &lines, std::optional<double> t) {
+  int n = std::min((int)lines.size(), FLAP_ROWS);
+  int first = (int)fdiv(FLAP_ROWS - n, 2);
+  for (int r = 0; r < FLAP_ROWS; r++) {
+    int i = r - first;
+    ustr line = i >= 0 && i < n ? lines[i].substr(0, std::min((size_t)FLAP_COLS, lines[i].size())) : ustr();
+    int pad = (int)fdiv(FLAP_COLS - (int)line.size(), 2);
+    double start = FLAP_WAIT + i * FLAP_ROW_EVERY;
+    // 0 blank, 1 flipping, 2 settled
+    int state = line.empty() || (t && *t < start) ? 0 : (t && *t < start + FLAP_FLIP) ? 1 : 2;
+    for (int c = 0; c < FLAP_COLS; c++) {
+      int x = FLAP_X + c * FLAP_PITCH, y = r * FLAP_ROW_PITCH;
+      f.fill(x, y, 5, 5, FLAP_TOP);
+      f.fill(x, y + 6, 5, 4, FLAP_BOT);
+      int k = c - pad;
+      if (state == 0 || k < 0 || k >= (int)line.size()) continue;
+      flap_glyph(f, line[k], x, y, true);
+      if (state == 1) f.fill(x, y + 4, 5, 1, FLAP_FOLD);
+      else flap_glyph(f, line[k], x, y, false);
+    }
+  }
+}
+
+static long long typed_total(const std::vector<ustr> &lines) {
+  int n = std::min((int)lines.size(), 3);
+  long long total = n - 1;
+  for (int i = 0; i < n; i++) total += (long long)lines[i].size();
+  return total;
+}
+
+static void draw_typed(Frame &f, const std::vector<ustr> &lines, std::optional<double> t) {
+  int n = std::min((int)lines.size(), 3);
+  long long total = typed_total(lines);
+  long long typed = !t ? total : *t < TYPE_WAIT ? 0 : std::min(total, (long long)floor((*t - TYPE_WAIT) / TYPE_CHAR));
+  long long left = typed;
+  int last_x = 0, last_b = MSG_BASES[n][0];
+  for (int i = 0; i < n && left >= 0; i++) {
+    ustr part = lines[i].substr(0, (size_t)std::min<long long>(left, (long long)lines[i].size()));
+    last_x = f.text(FONT_5X7, part, 0, MSG_BASES[n][i], MSG_TYPE);
+    last_b = MSG_BASES[n][i];
+    left -= (long long)lines[i].size() + 1;
+  }
+  double done_at = TYPE_WAIT + total * TYPE_CHAR;
+  bool on = typed < total || !t || ((long long)floor((*t - done_at) / TYPE_BLINK)) % 2 == 0;
+  if (on) f.fill(last_x, last_b - 7, 4, 7, MSG_CURSOR);
+}
+
+static RGB big_grad(int y) {
+  int k = clampi(y, 0, BIG_GRAD);
+  auto ch = [k](int a, int b) { return (uint8_t)jsround(a + (double)((b - a) * k) / BIG_GRAD); };
+  return RGB{ch(BIG_FROM.r, BIG_TO.r), ch(BIG_FROM.g, BIG_TO.g), ch(BIG_FROM.b, BIG_TO.b)};
+}
+
+static void draw_big(Frame &f, const ustr &s) {
+  const uint8_t *d = assets::FONT_DATA[FONT_5X7];
+  int x0 = 32 - measure(FONT_5X7, s);
+  int x = 0;
+  for (char32_t ch : s) {
+    int o = glyph(FONT_5X7, ch);
+    if (o < 0) continue;
+    int dw = d[o], w = d[o + 1], h = d[o + 2], xo = d[o + 3] - 128, yo = d[o + 4] - 128;
+    int top = 8 - (yo + h);
+    for (int r = 0; r < h; r++) {
+      int bits = glyph_row(d, o, r);
+      for (int c = 0; c < w; c++) {
+        if (!((bits >> (w - 1 - c)) & 1)) continue;
+        int px = x + xo + c, py = top + r;
+        for (int dy = 0; dy < 2; dy++)
+          for (int dx = 0; dx < 2; dx++) f.set(x0 + px * 2 + dx, BIG_TOP + py * 2 + dy, big_grad(py * 2 + dy));
+      }
+    }
+    x += dw;
+  }
+}
+
+static bool has_message(const Value &m) { return m.truthy() && m["lines"].size() > 0; }
+
+static void render_announce(const Value &p, Frame &f, std::optional<double> t) {
+  const Value &m = p["msg"];
+  if (!has_message(m)) {
+    // No message yet: a call to action.
+    f.text(FONT_SMALL, U"SET A MESSAGE", msg_x(FONT_SMALL, U"SET A MESSAGE"), 15, MSG_CTA);
+    f.text(FONT_SMALL, U"ON YOUR PHONE", msg_x(FONT_SMALL, U"ON YOUR PHONE"), 22, MSG_CTA);
+    return;
+  }
+  std::vector<ustr> lines = msg_lines(m);
+  if (m["style"].eq("flap")) draw_flaps(f, lines, t);
+  else if (m["style"].eq("type")) draw_typed(f, lines, t);
+  else if (m["style"].eq("big")) draw_big(f, lines[0]);
+  else draw_note(f, lines, m["sm"].truthy());
+}
+
+double message_intro_ms(const Value &m) {
+  if (!has_message(m)) return 0;
+  if (m["style"].eq("flap")) return FLAP_WAIT + (std::min((int)m["lines"].size(), FLAP_ROWS) - 1) * FLAP_ROW_EVERY + FLAP_FLIP;
+  if (m["style"].eq("type")) return TYPE_WAIT + typed_total(msg_lines(m)) * TYPE_CHAR;
+  return 0;
+}
+
+long long message_tick(const Value &m, double t) {
+  if (!has_message(m) || !m["style"].eq("type")) return 0;
+  double intro = message_intro_ms(m);
+  return t < intro ? -1 : ((long long)floor((t - intro) / TYPE_BLINK)) % 2;
+}
+
 // ---- whole screen ----
 
 static void apply_brightness(Frame &f, double b) {
@@ -2588,6 +2743,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
     if (json::str(p["cface"]) == "seventies") render_seventies(p, f, o.now);
     else render_skyline_faded(p, f, o);
   }
+  else if (screen == "announce") render_announce(p, f, o.t);
   else render_transit(p, f, o.now, o.blink, o.view);
   g_roller = nullptr;
   g_nums = nullptr;

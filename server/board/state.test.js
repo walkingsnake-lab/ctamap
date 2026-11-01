@@ -345,3 +345,51 @@ test('boats setting: on by default, a boolean', () => {
   assert.equal(store.get('home').boats, false);
   assert.throws(() => store.update('home', { boats: 'no' }), ValidationError);
 });
+
+test('announce: msg is {text, style}, cleaned, fitting its style; a new one gets a new id; null clears it', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  assert.equal(store.get('home').msg, null);
+  assert.deepEqual(store.get('home').msgPresets, []);
+  const b = store.update('home', { msg: { text: ' Dinner  at 7 \u{1F37D}', style: 'note' }, screen: 'announce' });
+  assert.deepEqual(b.msg, { text: 'Dinner at 7', style: 'note', id: b.v });
+  assert.equal(b.screen, 'announce');
+  const id = b.msg.id;
+  assert.ok(store.update('home', { msg: { text: 'Back by 6', style: 'type' } }).msg.id > id);
+  assert.equal(store.update('home', { msg: null }).msg, null);
+  for (const bad of [
+    { msg: 'hi' }, { msg: { text: 'hi', style: 'marquee' } }, { msg: { text: '\u{1F382}', style: 'note' } },
+    { msg: { text: 'Unbelievable', style: 'flap' } }, { msg: { text: 'x'.repeat(161), style: 'note' } }, { msg: { text: 5, style: 'note' } },
+  ]) assert.throws(() => store.update('home', bad), ValidationError, JSON.stringify(bad));
+});
+
+test('announce: presets are up to 8 messages that each fit', () => {
+  const { MAX_PRESETS } = require('./state');
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  const b = store.update('home', { msgPresets: [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'flap' }] });
+  assert.deepEqual(b.msgPresets, [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'flap' }]);
+  assert.throws(() => store.update('home', { msgPresets: Array(MAX_PRESETS + 1).fill({ text: 'Hi', style: 'note' }) }), ValidationError);
+  assert.throws(() => store.update('home', { msgPresets: [{ text: 'Hooray!!', style: 'big' }] }), ValidationError);
+  assert.throws(() => store.update('home', { msgPresets: {} }), ValidationError);
+});
+
+test('announce: the knob ring gets ANNOUNCE for boards that draw it, and selecting it shows the screen', () => {
+  const { knobOf } = require('./state');
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true }).ring, ['auto', 'transit', 'weather', 'sports', 'clock', 'announce']);
+  assert.equal(store.select('home', 'announce').screen, 'announce');
+  assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true }).at, 5);
+  assert.deepEqual(knobOf(store.get('home')), { ring: ['auto', 'transit', 'weather', 'sports'], at: 0 }, 'not on the ring: AUTO');
+  assert.throws(() => store.select('home', 'cycle'), ValidationError);
+});
+
+test('announce: boards saved before it get no message and no presets', () => {
+  const dir = tmpDir();
+  const store = createStore({ dir, log: quiet });
+  const raw = JSON.parse(fs.readFileSync(store.file, 'utf8'));
+  delete raw.boards.home.msg;
+  delete raw.boards.home.msgPresets;
+  fs.writeFileSync(store.file, JSON.stringify(raw));
+  const again = createStore({ dir, log: quiet });
+  assert.equal(again.get('home').msg, null);
+  assert.deepEqual(again.get('home').msgPresets, []);
+});
