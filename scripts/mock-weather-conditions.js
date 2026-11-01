@@ -36,7 +36,7 @@ const tempColor = (t) => ramp(TEMP, t);
 // draw.js palette.
 const C = {
   label: '#d8d8d8', grey: '#8f8f8f', dimHead: '#555555', divider: '#333333', white: '#ffffff', blue: '#1e90ff',
-  watch: '#ffd800', severe: '#ff8000', tornado: '#ff2020', arrow: '#4a4a4a',
+  watch: '#ffd800', severe: '#ff8000', tornado: '#ff2020', arrow: '#8f8f8f',
 };
 
 // ---------- drawing helpers ----------
@@ -153,7 +153,7 @@ function bigIcon(f, kind, ox, oy) {
     case 'cloudy': bigCloud(f, ox, oy, false, { dy: 1 }); break;
     case 'rain':
       bigCloud(f, ox, oy, true, { dy: -2 });
-      [[4, 13], [8, 12], [12, 13], [16, 12], [6, 15], [14, 15]].forEach(([x, y]) => { px(f, ox + x, oy + y, BIG.rain); px(f, ox + x - 1, oy + y + 1, BIG.rainDim); });
+      [[4, 13], [8, 12], [12, 13], [16, 12]].forEach(([x, y]) => { px(f, ox + x, oy + y, BIG.rain); px(f, ox + x, oy + y + 1, BIG.rain); });
       break;
     case 'snow':
       bigCloud(f, ox, oy, false, { dy: -2 });
@@ -161,8 +161,12 @@ function bigIcon(f, kind, ox, oy) {
       break;
     case 'storm':
       bigCloud(f, ox, oy, true, { dy: -2 });
-      sprite(f, ['..##', '.##.', '####', '.##.', '##..', '#...'], ox + 8, oy + 10, BIG.bolt);
-      [[4, 13], [15, 12]].forEach(([x, y]) => { px(f, ox + x, oy + y, BIG.rain); px(f, ox + x - 1, oy + y + 1, BIG.rainDim); });
+      {
+        const bolt = ['..##', '.##.', '####', '.##.', '##..', '#...'];
+        bolt.forEach((r, j) => [...r].forEach((ch, i) => { if (ch === '#') for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) px(f, ox + 8 + i + dx, oy + 10 + j + dy, '#000000'); }));
+        sprite(f, bolt, ox + 8, oy + 10, BIG.bolt);
+      }
+      [[3, 13], [16, 12]].forEach(([x, y]) => { px(f, ox + x, oy + y, BIG.rain); px(f, ox + x, oy + y + 1, BIG.rain); });
       break;
     default: bigCloud(f, ox, oy, false);
   }
@@ -191,17 +195,18 @@ const CONCEPTS = [];
 const concept = (id, title, note, fn) => CONCEPTS.push({ id, title, note, fn });
 
 // A. Hero icon: a large icon on the left with the big temperature beside it,
-// the condition word under the temperature, and one line below: high/low left,
+// the condition word under the temperature (feels-like below it when it
+// differs by 3° or more), and one line below: high/low left,
 // rain chance (or feels-like) right. No divider, three grey lines fewer.
-concept('A', 'A  HERO ICON', 'Large 18px icon + big temp; word (or feels-like) under it; one H/L + rain line', (f, w) => {
+concept('A', 'A  HERO ICON', 'Large 18px icon + big temp; word, then feels-like when it matters; H/L + rain line', (f, w) => {
   bigIcon(f, w.icon, 0, 0);
   // Temperature centered in x 20-63, ink rows 2-11.
   const tw = bigTempWidth(w.temp);
   bigTemp(f, w.temp, Math.min(63 - tw + 1, Math.round(42 - tw / 2)), 12, C.label);
   // The icon already names the condition, so feels-like takes the word's
   // place when it differs enough to matter.
-  if (showFeels(w)) ctext(f, 'small', `FEELS ${w.feels}°`, 42, 19, C.grey);
-  else ctext(f, 'small', w.word, 42, 19, C.grey);
+  ctext(f, 'small', w.word, 42, 19, C.label);
+  if (showFeels(w)) ctext(f, 'small', `FEELS ${w.feels}°`, 42, 25, C.grey);
   if (w.warn) {
     const ww = warnWidth(w.warn, true);
     warnTag(f, w.warn, Math.round(32 - ww / 2), 31, true);
@@ -227,7 +232,7 @@ concept('B', 'B  DAY RANGE', 'Temp in its temperature color; low→high bar with
   for (let x = xOf(w.lo); x <= xOf(w.hi); x++) f.fill(x, 21, 1, 3, dim(tempColor(lo + (x - x0) / (x1 - x0) * (hi - lo)), 0.7));
   if (showFeels(w)) { const fx = xOf(w.feels); f.fill(fx, 20, 1, 5, C.dimHead); }
   const nx = xOf(w.temp);
-  f.fill(nx, 19, 1, 7, C.white);
+  f.fill(nx, 19, 1, 6, C.white);
   if (w.warn) {
     const ww = warnWidth(w.warn, true);
     warnTag(f, w.warn, Math.round(32 - ww / 2), 31, true);
@@ -333,41 +338,41 @@ concept('E', 'E  WORDS', 'No icon: big temp, condition in 5x7 mixed case, one pl
   const tc = tempColor(w.temp);
   bigTemp(f, w.temp, 0, 12, C.label);
   // Right block: the condition, colored by kind, and feels-like under it.
-  const kindColor = { rain: '#4aa0ff', snow: '#c8e8ff', storm: '#ffd040', moon: '#ffe47a', sun: '#ffc800' }[w.icon] || C.label;
+  // Storms stay white: yellow is the watch color.
+  const kindColor = { rain: '#4aa0ff', snow: '#c8e8ff', moon: '#ffe47a', sun: '#ffc800' }[w.icon] || C.label;
   let word = w.mixed;
   const tw = bigTempWidth(w.temp);
   const room = 63 - (tw + 3) + 1;
   if (measure('5x7', word) > room) word = { 'Partly cloudy': 'Pt cloudy' }[word] || word;
-  rtext(f, '5x7', word, 63, 7, kindColor);
+  // Fit rule: a word that still doesn't fit falls back to the Tom Thumb word.
+  if (measure('5x7', word) > room) rtext(f, 'small', w.word, 63, 6, kindColor);
+  else rtext(f, '5x7', word, 63, 7, kindColor);
   if (showFeels(w)) rtext(f, 'small', `FEELS ${w.feels}°`, 63, 14, C.grey);
   else rtext(f, 'small', w.wind, 63, 14, C.grey);
-  f.fill(0, 17, 64, 1, C.divider);
+  f.fill(0, 18, 64, 1, C.divider);
   if (w.warn) {
-    const { glyph, color } = warnParts(w.warn);
-    const t = w.warn.kind === 'tor' ? 'Tornado warn' : 'Storm warn';
-    const gw = measure('small', glyph);
-    const tw2 = measure('5x7', t);
-    const x = Math.round(32 - (gw + 3 + tw2) / 2);
-    f.text('small', glyph, x, 27, color);
-    f.text('5x7', t, x + gw + 3, 28, color);
+    const ww = warnWidth(w.warn, true);
+    warnTag(f, w.warn, Math.round(32 - ww / 2), 28, true);
     return;
   }
   // Line: "High 63 · Low 49" in 5x7, or rain when likely.
   const line = w.pop >= 50 ? `Rain ${w.pop}%` : null;
   if (line && w.icon !== 'rain' && w.icon !== 'snow') {
-    sprite(f, DROP, 0, 21, C.blue);
-    f.text('5x7', line.replace('Rain ', ''), 5, 28, C.label);
+    sprite(f, DROP, 0, 23, C.blue);
+    f.text('5x7', line.replace('Rain ', ''), 5, 30, C.label);
   }
   const hl = `${w.hi}° / ${w.lo}°`;
   const hlx = 63 - measure('5x7', hl.replace(/°/g, '')) - 3;
   // High in its color, low in its color, small degree signs.
   let x = (line && w.icon !== 'rain' && w.icon !== 'snow') ? 32 : 0;
-  x = midTemp(f, w.hi, x, 28, tempColor(w.hi));
-  x = f.text('5x7', '/', x + 2, 28, C.dimHead);
-  midTemp(f, w.lo, x + 2, 28, tempColor(w.lo));
+  // Text temperatures: the cold end lifted so it survives night dimming.
+  const textTemp = (t) => (t <= 20 ? ramp([[-10, '#6080ff'], [20, '#60b0ff']], t) : tempColor(t));
+  x = midTemp(f, w.hi, x, 30, textTemp(w.hi));
+  x = f.text('5x7', '/', x + 2, 30, C.dimHead);
+  midTemp(f, w.lo, x + 2, 30, textTemp(w.lo));
   if (!(line && w.icon !== 'rain' && w.icon !== 'snow')) {
-    if (w.pop) pop(f, w.pop, 63, 28);
-    else rtext(f, 'small', w.wind, 63, 28, C.grey);
+    if (w.pop) pop(f, w.pop, 63, 29);
+    else rtext(f, 'small', w.wind, 63, 29, C.grey);
   }
   void tc; void hlx;
 });
