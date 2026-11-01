@@ -113,6 +113,21 @@ function boat(f, x0, dir, hull = HULLS.brown) {
   for (let dx = 1; dx < 5; dx++) put(dx, 27, hull[1]);
 }
 
+// Speedboat (yellow-orange): a low hull with a raked bow on rows 26-27, a windshield and seat on
+// row 25, and white wake trailing behind it on the water (fading over 5 px). Leading edge at x0.
+const SPEED = [
+  ['...ww...', '#c8d4e0'],     // row 25: windshield (light) and the driver
+  ['.YYYYYYY', '#ffb020'],     // row 26: deck, bow raked
+  ['..OOOOOO', '#d86a10'],     // row 27: hull side
+];
+function speedboat(f, x0, dir) {
+  const put = (dx, y, c) => { const x = dir < 0 ? x0 + dx : x0 + 7 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
+  put(4, 25, '#2a2a30');                                           // driver
+  SPEED.forEach(([row, c], dy) => [...row].forEach((ch, dx) => { if (ch !== '.' && !(dy === 0 && dx === 4)) put(dx, 25 + dy, c); }));
+  [0.9, 0.7, 0.5, 0.3, 0.15].forEach((k, i) => put(8 + i, 27, mix('#1a3a68', '#f0f4f8', k)));   // wake on the water row
+  [0.6, 0.35].forEach((k, i) => put(8 + i, 26, mix('#1a3a68', '#f0f4f8', k)));                   // spray just behind the stern
+}
+
 if (require.main === module) {
   Object.assign(L.OPT, { text: 'bottom', clock: true, reflect: false });
   L.buildSkyline();
@@ -131,6 +146,14 @@ if (require.main === module) {
     cells.push([t, d.f]);
   }
   fs.writeFileSync(path.join(OUT, 'boat.png'), L.sheet(cells, 2, 6));
-  console.log('wrote dusk.png, boat.png to', path.relative(process.cwd(), OUT));
+  const sp = [];
+  for (const [x0, dir, t] of [[48, -1, 'SPEEDBOAT  HEADING LEFT'], [6, -1, 'SPEEDBOAT  BEHIND THE TEMP'], [28, 1, 'SPEEDBOAT  PAST THE PIER'], [44, 1, 'SPEEDBOAT  BEHIND THE CLOCK']]) {
+    const d = duskFrame(day, 0);
+    speedboat(d.f, x0, dir);
+    L.label(d.f, '52°', '2:15');
+    sp.push([t, d.f]);
+  }
+  fs.writeFileSync(path.join(OUT, 'speedboat.png'), L.sheet(sp, 2, 6));
+  console.log('wrote dusk.png, boat.png, speedboat.png to', path.relative(process.cwd(), OUT));
 }
-module.exports = { sunPos, blend, duskFrame, boat, HULLS };
+module.exports = { sunPos, blend, duskFrame, boat, HULLS, speedboat };
