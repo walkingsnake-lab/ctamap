@@ -623,7 +623,7 @@ Designed Nov 1, 2026. The owner puts a short note on their own board: "Dinner at
 - **S3 only**, like Clock (§14): the phone page doesn't offer it to an M4 and the server never sends `message` to one (it falls back to Transit).
 
 ### Text
-- **One screen:** the text must fit the chosen style without paging. The page checks the fit live as you type; the server rejects text that doesn't fit (400, as with the header name).
+- **One screen:** the text must fit the chosen style without paging. The server rejects text that doesn't fit (400, shown in the page's status bar, as with the header name).
 - Characters: printable ASCII, Latin-1 and the punctuation phones substitute (§3). Emoji are dropped.
 
 ### Styles
@@ -644,7 +644,7 @@ Credits roll and crawl scroll; they're kept as looks even with one-screen text.
 This screen is an exception to Minimal animation (§2), like the skyline face: it has no times to protect.
 
 ### Phone page
-- Text field, style picker, presets, and a **live preview** of the draft in the chosen style, rendered as you type (debounced), alongside the board preview.
+- Text field, style picker, and presets. No separate draft preview: once set, the message shows in the existing board preview.
 
 ### Open
 - Which icons ship first, beyond heart, cake, house and coffee.
