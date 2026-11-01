@@ -1808,14 +1808,23 @@
       const cb = s.cl && o.clouds && o.clouds[s.cl.id];
       if (cb) {
         // cl.step: ms per pixel of drift (0: still; absent: the original 4 s).
+        // Sub-pixel, like the ripples: each pixel mixes its two strip columns
+        // (each laid over the sky) by the fraction of the step gone, so the
+        // clouds glide instead of jumping a pixel at a time.
         const step = s.cl.step != null ? s.cl.step : CLOUD_STEP;
-        const off = step > 0 ? Math.floor(ms / step) % CLOUD_W : 0;
+        const rem = step > 0 ? ms % step : 0, fr = step > 0 ? rem / step : 0;
+        const off = step > 0 ? ((ms - rem) / step) % CLOUD_W : 0;
         const pal = s.cl.pal.map((c) => (c ? hex(c) : null));
+        const at = (y, col) => { const i = y * CLOUD_W + (col % CLOUD_W); const n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15; return n && pal[n] ? n : 0; };
         for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
           if (SKY.role[y * 64 + x]) continue;
-          const i = y * CLOUD_W + ((x + off) % CLOUD_W);
-          const n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
-          if (n && pal[n]) f.set(x, y, mixRgb(f.get(x, y), pal[n], s.cl.a[n] / 100));
+          const n0 = at(y, x + off), n1 = fr > 0 ? at(y, x + off + 1) : 0;
+          if (!n0 && !n1) continue;
+          const bg = f.get(x, y);
+          const c0 = n0 ? mixRgb(bg, pal[n0], s.cl.a[n0] / 100) : bg;
+          if (fr === 0) { f.set(x, y, c0); continue; }
+          const c1 = n1 ? mixRgb(bg, pal[n1], s.cl.a[n1] / 100) : bg;
+          f.set(x, y, mixRgb(c0, c1, fr));
         }
       }
       // Windows come on one at a time as `win` rises.

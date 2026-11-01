@@ -2350,13 +2350,14 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       return waxing ? dx > w * cosv : dx < -w * cosv;
     });
   }
-  // Clouds: the server's strip, scrolled 1 px every 4 s, behind the city.
+  // Clouds: the server's strip, gliding left 1 px every cl.step ms (sub-pixel), behind the city.
   if (s["cl"].truthy() && clouds) {
     auto it = clouds->find(json::str(s["cl"]["id"]));
     if (it != clouds->end() && it->second.size() >= (size_t)(sky::CLOUD_W * 26 / 2)) {
       const std::vector<uint8_t> &cb = it->second;
       double step = s["cl"]["step"].is_null() ? (double)sky::CLOUD_STEP : s["cl"]["step"].num();
-      long long off = step > 0 ? fmod_floor((long long)std::floor(ms / step), sky::CLOUD_W) : 0;
+      double rem = step > 0 ? std::fmod(ms, step) : 0, fr = step > 0 ? rem / step : 0;
+      long long off = step > 0 ? fmod_floor((long long)((ms - rem) / step), sky::CLOUD_W) : 0;
       const Value &pal = s["cl"]["pal"];
       const Value &al = s["cl"]["a"];
       RGB pc[16];
@@ -2368,9 +2369,18 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       for (int y = 0; y <= S; y++)
         for (int x = 0; x < 64; x++) {
           if (G.role[y * 64 + x]) continue;
-          long long i = y * sky::CLOUD_W + (x + off) % sky::CLOUD_W;
-          int n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
-          if (n && has[n]) f.set(x, y, mix_rgb(f.get(x, y), pc[n], al[n].num() / 100));
+          auto at = [&](long long col) {
+            long long i = y * sky::CLOUD_W + col % sky::CLOUD_W;
+            int n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
+            return n && has[n] ? n : 0;
+          };
+          int n0 = at(x + off), n1 = fr > 0 ? at(x + off + 1) : 0;
+          if (!n0 && !n1) continue;
+          RGB bg = f.get(x, y);
+          RGB c0 = n0 ? mix_rgb(bg, pc[n0], al[n0].num() / 100) : bg;
+          if (fr == 0) { f.set(x, y, c0); continue; }
+          RGB c1 = n1 ? mix_rgb(bg, pc[n1], al[n1].num() / 100) : bg;
+          f.set(x, y, mix_rgb(c0, c1, fr));
         }
     }
   }

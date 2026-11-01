@@ -240,7 +240,7 @@ test('no weather yet: a plain night with the clock', () => {
   assert.ok(lit > 10);
 });
 
-test('clouds: drawn from the strip once it is on hand, scrolling 1 px every 4 s, behind the buildings', () => {
+test('clouds: drawn from the strip once it is on hand, gliding 1 px every 4 s, behind the buildings', () => {
   const { stripBytes } = require('./clouds');
   const sky = toSkyline({ temp: 52, code: 3, clouds: 95 }, { ...PLACE, now: DAY, temp: 52 });
   const clouds = { [sky.cl.id]: stripBytes(sky.cl.id) };
@@ -250,15 +250,24 @@ test('clouds: drawn from the strip once it is on hand, scrolling 1 px every 4 s,
   let changed = 0;
   for (let y = 0; y <= 25; y++) for (let x = 0; x < 64; x++) if (px(a, x, y) !== px(b, x, y)) { changed++; assert.equal(SKY.role[y * 64 + x], 0, 'clouds stay behind the buildings'); }
   assert.ok(changed > 300, `deck drawn (${changed} px)`);
-  const later = (ms) => render({ now: DAY, screen: 'clock', bright: 100, skyline: sky }, { screen: 'clock', now: DAY, ms, clouds });
+  const sky4 = { ...sky, cl: { ...sky.cl, step: 4000 } };
+  const later = (ms) => render({ now: DAY, screen: 'clock', bright: 100, skyline: sky4 }, { screen: 'clock', now: DAY, ms, clouds });
   const t0 = Math.floor(DAY / 4) * 4000;
-  assert.deepEqual([...later(t0).px], [...later(t0 + 3999).px].length ? [...later(t0).px] : [], 'still for 4 s');
-  // After 4 s, column x shows what column x+1 showed (on an open sky row).
-  const c0 = later(t0), c1 = later(t0 + 4000);
-  for (let x = 0; x < 20; x++) if (!SKY.role[2 * 64 + x] && !SKY.role[2 * 64 + x + 1]) assert.equal(px(c1, x, 2), px(c0, x + 1, 2));
+  // After 4 s, column x shows what column x+1 showed (on an open sky row);
+  // halfway, each channel sits between the two (sub-pixel glide).
+  const c0 = later(t0), c1 = later(t0 + 4000), half = later(t0 + 2000);
+  let between = 0;
+  for (let x = 0; x < 20; x++) {
+    if (SKY.role[2 * 64 + x] || SKY.role[2 * 64 + x + 1]) continue;
+    assert.equal(px(c1, x, 2), px(c0, x + 1, 2));
+    const [a, b, h] = [c0.get(x, 2), c0.get(x + 1, 2), half.get(x, 2)];
+    for (let k = 0; k < 3; k++) assert.ok(h[k] >= Math.min(a[k], b[k]) && h[k] <= Math.max(a[k], b[k]), `x ${x}: ${h} between ${a} and ${b}`);
+    if (px(c0, x, 2) !== px(c0, x + 1, 2) && px(half, x, 2) !== px(c0, x, 2) && px(half, x, 2) !== px(c0, x + 1, 2)) between++;
+  }
+  assert.ok(between > 0, 'in-between shades halfway');
 });
 
-test('cloud drift: still when off, 1 px per step otherwise', () => {
+test('cloud drift: still when off, gliding 1 px per step otherwise', () => {
   const { stripBytes } = require('./clouds');
   const base = toSkyline({ temp: 52, code: 2, clouds: 40 }, { ...PLACE, now: DAY, temp: 52 });
   const clouds = { [base.cl.id]: stripBytes(base.cl.id) };
@@ -266,7 +275,7 @@ test('cloud drift: still when off, 1 px per step otherwise', () => {
   const t0 = Math.floor(DAY / 64) * 64000;
   const sky = (f) => { const out = []; for (let y = 0; y <= 16; y++) for (let x = 0; x < 64; x++) if (!SKY.role[y * 64 + x]) out.push(px(f, x, y)); return out.join(); };
   assert.equal(sky(at(0, t0)), sky(at(0, t0 + 10 * 60000)), 'off: the clouds never move');
-  assert.equal(sky(at(16000, t0)), sky(at(16000, t0 + 15999)), 'slow: still for 16 s');
-  assert.notEqual(sky(at(16000, t0)), sky(at(16000, t0 + 16000)), 'slow: then a pixel');
+  assert.notEqual(sky(at(16000, t0)), sky(at(16000, t0 + 2000)), 'slow: moving between whole pixels');
+  assert.notEqual(sky(at(16000, t0)), sky(at(16000, t0 + 16000)), 'slow: a pixel every 16 s');
   assert.notEqual(sky(at(4000, t0)), sky(at(4000, t0 + 4000)), 'normal: a pixel every 4 s');
 });
