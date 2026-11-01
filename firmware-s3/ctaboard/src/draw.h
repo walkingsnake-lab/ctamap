@@ -60,6 +60,10 @@ class Frame {
   static const int W = 64;
   static const int H = 32;
   uint8_t px[W * H * 3];
+  // The panel's dim-color floor (color.h): false lets colors too dark for the
+  // panel go black instead of lifting them (the skyline face). Not a pixel:
+  // parity compares px only.
+  bool floor = true;
 
   Frame() { clear(); }
   void clear();

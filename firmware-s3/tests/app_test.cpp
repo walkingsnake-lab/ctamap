@@ -995,6 +995,16 @@ static void test_clock_screen_draws_the_skyline() {
     for (int x = 0; x < 10; x++)
       if (r.display.last.get(x, y) == draw::hexc(0xd8d8d8)) lit++;
   CHECK(lit > 8, "temperature drawn (%d px)", lit);
+  // Its dark sky goes black on the panel rather than lifted to the floor (color.h).
+  CHECK(!r.display.last.floor, "the skyline opts out of the floor");
+}
+
+static void test_other_screens_keep_the_dim_color_floor() {
+  Rig r;
+  r.board->connect();
+  r.run_for(10000);
+  CHECK(r.board->player.screen == "transit", "%s", r.board->player.screen.c_str());
+  CHECK(r.display.last.floor, "transit keeps the floor");
 }
 
 static void test_live_games_update_faster() {
@@ -1666,6 +1676,7 @@ int main() {
       T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_ten_times_a_second),
       T_(test_cloud_strips_only_on_the_clock_screen),
       T_(test_clock_screen_draws_the_skyline),
+      T_(test_other_screens_keep_the_dim_color_floor),
       T_(test_fetches_land_in_gaps_and_data_stays_fresh),
       T_(test_settings_change_shows_up_fast),
       T_(test_radar_frames_only_on_the_radar_screen_and_once_each),

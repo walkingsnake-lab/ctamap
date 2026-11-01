@@ -596,8 +596,8 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 
 ### Board requirements (S3)
 - Memory is not a constraint on the S3 (2 MB PSRAM): the cloud strip (1.7 KB), the city layer and the scene buffers can all stay resident.
-- Buildings stay true black. The S3's color pipeline (`color.cpp`, `levels()`) already leaves black pixels off and lifts every other pixel to the floor (§4), so no mask is needed.
-- Closest to the floor: the top of the night sky (`#000006`, effectively off already), night water ripples (`#0e1a36`), the dim window amber (`#8a5c20`) and the beacons' dark end (`#401010`).
+- **No dim-color floor on this screen** (found on the panel, Nov 1): the floor (§4) lifts any pixel too dark for the panel to its brightest channel at the bottom step. On the skyline that turned the whole night sky and water into one flat blue and night clouds into a patchwork of pure red, blue and tan. Skyline frames opt out (`Frame::floor = false`, `color.cpp` `levels(..., floor)`): pixels too dark for the panel go black (the night sky is black on the panel), and channels just under the bottom step round to it instead of truncating, so a dim near-grey cloud stays grey while a dim red (the beacon) stays red. Everything brighter is unchanged; other screens keep the floor.
+- On the panel's CircuitPython-look curve the bottom step is a channel value of about 53 (gamma 2.2 level 8): night colors below it vanish (sky, water, thin clouds), colors at it show at the step.
 - Built: server parameters (`skyline.js`, `sun.js`), cloud strips (`clouds.js`, `GET /board/sky/<id>`), the reference renderer (`draw.js` `renderSkyline`), and the S3 port (`draw.cpp` `render_skyline`, pixel-identical over the `skyline *` scenarios, all `s3only`). The S3 fetches the strip only on the clock screen, redraws ten times a second there, lets fetches run any time (no times to protect), and reports `hk=skyline`. The buttons' screen cycle includes Clock on the S3.
 
 ### Open

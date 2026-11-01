@@ -173,7 +173,7 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
     for (int x = 0; x < 64; x++) {
       int i = (y * 64 + x) * 3;
       uint8_t r = px[i], g = px[i + 1], b = px[i + 2];
-      pipe_.map(r, g, b);  // the chosen curve, compensated for the driver's own (color.h)
+      pipe_.map(r, g, b, frame_.floor);  // the chosen curve, compensated for the driver's own (color.h)
       int dx = rotation_ == 180 ? 63 - x : x;
       int dy = rotation_ == 180 ? 31 - y : y;
       dma_->drawPixelRGB888(dx, dy, r, g, b);

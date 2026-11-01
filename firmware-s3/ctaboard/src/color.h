@@ -17,7 +17,9 @@
 //   GAMMA26    gamma 2.6 (darker, more saturated)
 // Every curve keeps the dim-color floor: a color that would go fully dark
 // has its brightest channel lifted to the curve's floor (firmware/boardlib
-// device.py correct()).
+// device.py correct()). A frame can opt out (floor = false: the skyline's
+// dark sky, water and night clouds): such colors go black instead, since
+// lifting a gradient's every pixel to one primary at the floor floods it.
 //
 // Platform independent: tested natively (firmware-s3/tests/color_test.cpp).
 #pragma once
@@ -62,10 +64,10 @@ class Pipeline {
   int curve() const { return curve_; }
 
   // The light a color should be, as output levels (before the driver).
-  void levels(uint8_t &r, uint8_t &g, uint8_t &b) const;
+  void levels(uint8_t &r, uint8_t &g, uint8_t &b, bool floor = true) const;
   // The driver inputs for a color: levels() mapped through the inverse
   // CIE curve, so the driver's own curve turns them back into those levels.
-  void map(uint8_t &r, uint8_t &g, uint8_t &b) const;
+  void map(uint8_t &r, uint8_t &g, uint8_t &b, bool floor = true) const;
 
  private:
   int curve_ = CIRCUITPY;
