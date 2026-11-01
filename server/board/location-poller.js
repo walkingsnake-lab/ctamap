@@ -1,5 +1,5 @@
 'use strict';
-// Per-location cache for weather sources (Open-Meteo, NWS), polled every
+// Per-location cache for weather sources (WeatherAPI, NWS), polled every
 // `interval` s while a board has asked in the last `idle` s, so idle
 // locations cost no requests. Keeps the last good data on failure. Same
 // pattern as tracker.js.

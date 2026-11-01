@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { ICONS, PALETTE, ALERT_BANG, iconForCode } = require('./icons');
 
 // Icon names the contract's wx.icon allows (docs/board/contract.md).
-const CONTRACT_ICONS = ['sun', 'moon', 'pcloudy_day', 'pcloudy_night', 'cloudy', 'rain', 'ice', 'snow', 'storm', 'fog'];
+const CONTRACT_ICONS = ['sun', 'moon', 'pcloudy_day', 'pcloudy_night', 'cloudy', 'rain', 'ice', 'snow', 'storm', 'tsnow', 'fog'];
 
 test('icon set matches the contract', () => {
   assert.deepEqual(Object.keys(ICONS).sort(), [...CONTRACT_ICONS].sort());

@@ -272,9 +272,10 @@ static const Icon ICONS[] = {
   {"ice", "...CC....CCCCCC.CCCCCCCC.DDDDDD..........B...W..B...WWW......W.."},
   {"snow", "...S.....S.S.S....SSS...SSSSSSS...SSS....S.S.S.....S............"},
   {"storm", "..GGGG...GGGGGG.GGGGGGGG.KKKKKK....LL.....LL.......LL.....L....."},
+  {"tsnow", "..GGGG...GGGGGG.GGGGGGGG.KKKKKK...LL..S..LL..SSS..LL..S..L......"},
   {"fog", "........FFFFFF............EEEEEE........FFFFFF.................."},
 };
-static const int ICONS_N = 10;
+static const int ICONS_N = 11;
 
 static const char *const ALERT_BANG[] = {".#.", ".#.", ".#.", "...", ".#."};
 static const int ALERT_BANG_N = 5;

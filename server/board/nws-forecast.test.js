@@ -14,7 +14,7 @@ const F = parse({ forecast: FORECAST, hourly: HOURLY });
 const at = (iso) => Date.parse(iso) / 1000;
 const NOW = at('2026-10-11T14:10:00-05:00'); // Sunday afternoon
 
-// Open-Meteo stand-in: only the fields withForecast() replaces, with values
+// WeatherAPI stand-in: only the fields withForecast() replaces, with values
 // NWS doesn't have, so a test can tell which source a field came from.
 const OM = {
   temp: 70, code: 0, isDay: true, hi: 99, lo: 11, pop: 77,
@@ -62,12 +62,12 @@ test('withForecast: today\'s high/low and rain chance from NWS', () => {
   assert.strictEqual(w.hi, 71); // This Afternoon
   assert.strictEqual(w.lo, 63); // Tonight
   assert.strictEqual(toScreenWx(w).pop, 0);
-  // Current conditions stay Open-Meteo's.
+  // Current conditions stay WeatherAPI's.
   assert.strictEqual(w.temp, 70);
   assert.strictEqual(w.code, 0);
 });
 
-test('withForecast: evening, the day period is over: Open-Meteo high, NWS low', () => {
+test('withForecast: evening, the day period is over: WeatherAPI high, NWS low', () => {
   const w = withForecast(OM, F, at('2026-10-11T19:30:00-05:00'));
   assert.strictEqual(w.hi, 99);
   assert.strictEqual(w.lo, 63);
@@ -91,7 +91,7 @@ test('withForecast: rain chance is the highest of the next 6 NWS hours', () => {
   assert.strictEqual(withForecast(OM, F, at('2026-10-12T14:30:00-05:00')).pop, 6);
 });
 
-test('withForecast: no NWS data, or data that has run out, keeps Open-Meteo', () => {
+test('withForecast: no NWS data, or data that has run out, keeps WeatherAPI', () => {
   assert.strictEqual(withForecast(OM, null, NOW), OM);
   assert.strictEqual(withForecast(null, F, NOW), null);
   const late = withForecast(OM, F, at('2026-10-19T12:00:00-05:00'));

@@ -62,6 +62,10 @@
   #boardPick { margin-bottom: 8px; }
   input#label { text-transform: none; }
   .danger { color: var(--err); border-color: #5a2a2a; }
+  /* Data credits and WeatherAPI's required disclaimer: always visible. */
+  .credits { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 14px 2px 0; }
+  .credits p { margin: 0 0 8px; }
+  .credits a { color: var(--muted); }
   /* A board's owner link (/board/c/<link>/): this board only, no admin controls. */
   body.owner .admin { display: none !important; }
   pre.keys { white-space: pre-wrap; word-break: break-all; font-size: 13px; background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; margin: 8px 0 0; user-select: all; }
@@ -165,6 +169,11 @@
       <button id="saveName">Save</button>
     </div>
   </section>
+
+  <footer class="credits" aria-label="Data sources">
+    <p>Weather by <a href="https://www.weatherapi.com/" target="_blank" rel="noopener">WeatherAPI.com</a>. Forecasts and alerts from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>. Radar: NOAA MRMS via the <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a>. Arrivals and alerts: data provided by CTA; not affiliated with or endorsed by the Chicago Transit Authority.</p>
+    <p>Weather information displayed here is provided for general informational purposes only. Forecasts and conditions are probabilistic and may not be accurate for your specific location or time. This data should not be used as the sole basis for decisions involving personal safety, aviation, marine navigation, emergency planning, or other safety-critical activities. Always consult official meteorological services and relevant authorities for decisions where accuracy is critical.</p>
+  </footer>
  </div>
 
  <div class="col col-side">
@@ -190,6 +199,10 @@
       <button data-v="hourly">Hourly</button>
     </div>
     <p class="hint" id="wxViewHint"></p>
+    <!-- Rain bars need 15-minute precipitation, which the weather source
+         (WeatherAPI) doesn't send; the server treats 'bars' and 'both' as
+         'radar' without it. Shown again once a source has it. -->
+    <div id="wxRainGroup" hidden>
     <div class="seg" id="wxRain">
       <button data-v="radar">Radar loop</button>
       <button data-v="bars">Rain bars</button>
@@ -200,6 +213,7 @@
       <select id="wxRainEvery" aria-label="Rain bars show for" style="width:auto"><option value="10">10 sec</option><option value="15">15 sec</option><option value="20">20 sec</option><option value="30">30 sec</option><option value="45">45 sec</option><option value="60">60 sec</option></select></div>
     <div class="row" id="wxRainLoopsRow"><span>Radar loops first</span>
       <select id="wxRainLoops" aria-label="Full radar loops before the bars" style="width:auto"><option value="1">1 loop</option><option value="2">2 loops</option><option value="3">3 loops</option><option value="5">5 loops</option></select></div>
+    </div>
     <div class="row"><span>Temperature shadow</span><label class="switch"><input type="checkbox" id="tempShadow"><span></span></label></div>
     <p class="hint">A faint shadow behind the big temperature, colored from blue (cold) to red (hot).</p>
   </section>

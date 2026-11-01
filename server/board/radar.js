@@ -37,6 +37,9 @@ const SNOW_DBZ = [10, 15, 20];   // -> values 8..10 (provisional; the Feb 2, 202
 const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
 const FREEZING_CODES = new Set([56, 57, 66, 67]);
 const MARKER = 7;
+// WeatherAPI thundersnow codes: WMO calls them thunderstorms (95), but
+// they're snow (weather.js passes WeatherAPI's code as `wa`).
+const THUNDERSNOW = new Set([1279, 1282]);
 
 // Palette index -> linear reflectivity Z. IEM mrms_lcref: dBZ = index * 0.5
 // - 32 for 0..254; 255 is missing. Indices up to 65 (<= 0.5 dBZ) are drawn
@@ -126,10 +129,10 @@ function accumulator(geo) {
 }
 
 // Whole-frame rain/snow decision from the location's current weather
-// (contract "Snow mode"). w: parsed Open-Meteo (weather.js) or null.
+// (contract "Snow mode"). w: parsed WeatherAPI weather (weather.js) or null.
 function modeFor(w) {
   if (!w) return 'rain';
-  if (SNOW_CODES.has(w.code)) return 'snow';
+  if (SNOW_CODES.has(w.code) || THUNDERSNOW.has(w.wa)) return 'snow';
   if (w.temp <= 32 && !FREEZING_CODES.has(w.code)) return 'snow';
   return 'rain';
 }

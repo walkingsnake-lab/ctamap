@@ -115,6 +115,17 @@ const ICONS = {
     '...LL...',
     '..L.....',
   ],
+  // Thundersnow: the storm cloud and bolt, a snowflake beside it.
+  tsnow: [
+    '..GGGG..',
+    '.GGGGGG.',
+    'GGGGGGGG',
+    '.KKKKKK.',
+    '..LL..S.',
+    '.LL..SSS',
+    '..LL..S.',
+    '.L......',
+  ],
   fog: [
     '........',
     'FFFFFF..',
@@ -138,7 +149,7 @@ const ALERT_BANG = [
   '.#.',
 ];
 
-// Open-Meteo WMO weather code -> icon name. isDay picks sun/moon variants.
+// WMO weather code -> icon name. isDay picks sun/moon variants.
 function iconForCode(code, isDay) {
   if (code === 0 || code === 1) return isDay ? 'sun' : 'moon'; // clear, mainly clear
   if (code === 2) return isDay ? 'pcloudy_day' : 'pcloudy_night';

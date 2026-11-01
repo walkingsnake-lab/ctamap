@@ -320,17 +320,17 @@ function createBoard({
     const st = stationById.get(board.station.mapid);
     // Weather and warnings are nice-to-haves: a failure just leaves them off.
     const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
-    const [data, om, nwsAlerts, fc] = await Promise.all([
+    const [data, base, nwsAlerts, fc] = await Promise.all([
       tracker.get(board.station.mapid),
       st ? soft('weather', weather.get(st.lat, st.lon)) : null,
       st ? soft('nws', nws.get(st.lat, st.lon)) : null,
       st ? soft('nws-forecast', nwsForecast.get(st.lat, st.lon)) : null,
     ]);
     const now = nowSecs();
-    // Open-Meteo conditions with NWS's forecast fields (days, hours, hi/lo,
+    // WeatherAPI conditions with NWS's forecast fields (days, hours, hi/lo,
     // rain chance) laid over them.
-    let w = om;
-    try { w = withForecast(om, fc, now); } catch (e) { log.error('[board] nws-forecast:', e.message); }
+    let w = base;
+    try { w = withForecast(base, fc, now); } catch (e) { log.error('[board] nws-forecast:', e.message); }
     const stale = !data || now - data.fetchedAt > STALE_S;
     // The row cap only reserves space for the weather row when there's
     // weather to show.
@@ -355,13 +355,17 @@ function createBoard({
     // due in the next 2 hours. 'bars' never sends the radar loop; 'both'
     // sends both and the board alternates them (rain.loops radar loops, then
     // rain.alt s of bars) while both apply.
-    const barsOn = board.wxRain === 'bars' || board.wxRain === 'both';
-    let rain = barsOn && w ? toRain(w, now) : null;
     // Test rain bars (simulator): shown whatever the board's setting, and
     // replacing the radar loop unless it's alternating ('both').
     const testBars = test && test.bars ? testRain(test.bars, now) : null;
+    // Bars need 15-minute precipitation, which WeatherAPI doesn't send: without
+    // it (and no test bars), 'bars' and 'both' act as 'radar', so a board left
+    // on 'bars' still gets its radar loop.
+    const wxRain = (w && w.q15 && w.q15.length) || testBars ? board.wxRain : 'radar';
+    const barsOn = wxRain === 'bars' || wxRain === 'both';
+    let rain = barsOn && w ? toRain(w, now) : null;
     if (testBars) rain = testBars;
-    if (!radarState.on || board.wxRain === 'bars' || (testBars && board.wxRain !== 'both')) radarState = { ...radarState, frames: [], ft: [] };
+    if (!radarState.on || wxRain === 'bars' || (testBars && wxRain !== 'both')) radarState = { ...radarState, frames: [], ft: [] };
     // Both: the radar loop plays wxRainLoops full cycles, then the bars show
     // for alt s, repeating (draw.js rainBarsTurn()).
     if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15, loops: board.wxRainLoops || 2 };
@@ -804,6 +808,21 @@ function createBoard({
         const raw = mlb.raw ? mlb.raw() : null;
         if (!raw) return send(res, 503, { err: 'not_ready' });
         return send(res, 200, raw);
+      }
+
+      // Raw WeatherAPI response for a station's grid cell, for recording
+      // fixtures (the response carries no key).
+      if (sub === 'api/raw/weather') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const st = stationById.get(String(parsed.query.mapid || ''));
+        if (!st) return send(res, 400, { err: 'invalid', detail: `unknown mapid: ${parsed.query.mapid || ''}` });
+        if (!weather.raw) return send(res, 503, { err: 'not_ready' });
+        try {
+          return send(res, 200, await weather.raw(st.lat, st.lon));
+        } catch (e) {
+          log.error('[board] weather capture failed:', e.message);
+          return send(res, 502, { err: 'upstream', detail: e.message });
+        }
       }
 
       // Raw Train Tracker response for recording fixtures.

@@ -16,8 +16,8 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
 
 - `cta-alerts/` — CTA Customer Alerts (`alerts.aspx`, XML, the shared poller's URL).
   - `2026-10-04-1057.xml`: 7 alerts. Multi-line State/Lake closure (5 lines, `special-note`), Blue schedule change and Green 43rd bypass (`planned`; the bypass lists the station before the line), three elevator outages, and one Orange/Green `minor` delay.
-- `open-meteo/` — Open-Meteo forecasts for a station's coordinates (`weather.js` `url()`).
-  - `morse-2026-10-04-1045.json`: clear (code 0), day, 63.3°F, hi 68.9 / lo 51.0.
+- `weatherapi/` — WeatherAPI `forecast.json` responses for a station's grid cell (`weather.js` `url()`). Record new ones from `/board/<control path>/api/raw/weather?mapid=<id>`.
+  - `morse-cell-2026-10-04-1045.json`: Morse's cell, Sunday 10:46 AM. Sunny, 63.3°F (hi 68.9 / lo 51.0), feels 63.3, NW 8.7 mph, 10% rain chance at 2 PM; Monday light rain (71.4), Tuesday partly cloudy (66.0). **Not a recording**: the cloud session can't reach WeatherAPI and has no key, so it was assembled from WeatherAPI's documented field names and a published sample response, with values mirroring the Open-Meteo Morse recording it replaces. Replace with a capture from `api/raw/weather` once `WEATHERAPI_KEY` is set.
 - `nws/` — NWS `alerts/active?point=` responses.
   - `morse-2026-10-04-none.json`: no active alerts.
   - `svr-warning-expired-2026-10-03-jax.json`: from `alerts?event=Severe Thunderstorm Warning&limit=1` (past week). A Severe Thunderstorm Warning **expiration** statement (VTEC `/O.EXP./`, `ends` before `sent`), NWS Jacksonville. Tests derive in-effect warnings and watches from it.
