@@ -258,6 +258,14 @@ struct RenderOpts {
   // and the cloud strips on hand (strip id -> 1664 packed bytes).
   std::optional<double> ms;
   const Frames *clouds = nullptr;
+  // Skyline crossfade (draw.js opts.sky / skyFrom / skyK / skyBare): the
+  // skyline to draw in place of the payload's (null: the payload's), the one
+  // fading from (null: none), how far (0..1), and whether to draw that one
+  // without clouds (its strip just arrived).
+  const Value *sky = nullptr;
+  const Value *sky_from = nullptr;
+  double sky_k = 1;
+  bool sky_bare = false;
   // Screen-change slide (draw.js opts.slide): the old screen's last shown
   // pixels, ms into the slide, and the direction (1: the new screen comes
   // in from the right; -1: from the left).
@@ -287,6 +295,64 @@ const double SCREEN_FADE_MS = SCREEN_FADE_OUT_MS + SCREEN_FADE_IN_MS;
 void fade_frames(const uint8_t *from, Frame &f, double t);
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);
+
+// Which skyline is on screen and the crossfade from the last (draw.js
+// createSkylineFader; same rules): set() with each payload's skyline (live:
+// the clock screen shows; off it, taken at once), tick() every frame, then
+// view() into the render options. `has` says whether a cloud strip is on hand.
+const double SKY_FADE_MS = 4000;
+class SkylineFader {
+ public:
+  template <class Has>
+  void set(const Value &sk, double ms, Has has, bool live) {
+    (void)ms;
+    if (!started_ || !live) {
+      started_ = true;
+      cur_ = sk;
+      cur_bare_ = !ready(cur_, has);
+      fading_ = false;
+      from_ = Value();
+      has_pending_ = false;
+      return;
+    }
+    if (json::equal(sk, cur_)) has_pending_ = false;
+    else { pending_ = sk; has_pending_ = true; }
+  }
+  template <class Has>
+  void tick(double ms, Has has) {
+    if (fading_ && ms - start_ >= SKY_FADE_MS) { fading_ = false; from_ = Value(); }
+    if (fading_) return;
+    if (has_pending_ && ready(pending_, has)) {
+      from_ = std::move(cur_);
+      from_bare_ = cur_bare_;
+      cur_ = std::move(pending_);
+      pending_ = Value();
+      has_pending_ = false;
+      cur_bare_ = false;
+      start_ = ms;
+      fading_ = true;
+    } else if (started_ && cur_bare_ && ready(cur_, has)) {
+      from_ = cur_;
+      from_bare_ = true;
+      cur_bare_ = false;
+      start_ = ms;
+      fading_ = true;
+    }
+  }
+  // Fills o.sky / sky_from / sky_k / sky_bare (pointers into this fader).
+  void view(double ms, RenderOpts &o) const;
+  std::vector<std::string> wanted() const;  // strip ids still needed
+  bool started() const { return started_; }
+
+ private:
+  template <class Has>
+  static bool ready(const Value &sk, Has has) {
+    return !sk.truthy() || !sk["cl"].truthy() || has(json::str(sk["cl"]["id"]));
+  }
+  bool started_ = false, cur_bare_ = false, from_bare_ = false, has_pending_ = false, fading_ = false;
+  Value cur_, from_, pending_;
+  double start_ = 0;
+};
 
 // Skyline face: where the quarter-hour boat is at epoch ms (draw.js boatAt),
 // and the lightning level 0-1 (strikeLevel).

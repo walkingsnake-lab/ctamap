@@ -64,5 +64,7 @@ bool parse(const std::string &text, Value &out, std::string *err = nullptr);
 // shortest round-trip form, strings as themselves, null as "None".
 std::string str(const Value &v);
 std::string num_str(double n, bool is_int);
+// Deep equality, objects in document order (JSON.stringify(a) === JSON.stringify(b)).
+bool equal(const Value &a, const Value &b);
 
 }  // namespace json

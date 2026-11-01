@@ -302,7 +302,7 @@ When `on` is false, `frames` and `ft` are empty and `timeBox` may be `null`.
 - **Logo and band layouts:** 12-row team bands (away rows 0–11, home 12–23) to x37 in `bd` at `dim`; `logos` draws the 24 x 12 logo crop at the left (also at `dim`), `bands` the abbreviation in the same ink (white, or black on a light band). Scores are centered in the band's box at x30: white, or black (unlit) on a light band (drawn band luma above 140), amber for the score flash and the final's winner (the loser stays white). Pregame: the abbreviation in the score box (`logos`), records in the panel, `TODAY` bottom left. Infield centered on row 8, inning on baseline 21. Divider row 24 and the bottom line are shared with `classic`.
 
 #### Skyline (`skyline`)
-The clock screen's skyline face (design spec §14). The server turns the weather and the sun into drawing values; the board draws its layers from them and never interprets weather codes or the time of day. Computed by `server/board/skyline.js` (sun and moon: `sun.js`).
+The clock screen's skyline face (design spec §14). The server turns the weather and the sun into drawing values; the board draws its layers from them and never interprets weather codes or the time of day. When `skyline` changes while the clock screen shows, the board keeps drawing the old one until the new one's cloud strip is on hand, then crossfades over 4 s (keeping both strips until the fade ends). Computed by `server/board/skyline.js` (sun and moon: `sun.js`).
 
 ```json
 {"face": "skyline", "st": "clear", "sky": [[0, "#08245a"], [18, "#1a4a8e"], [25, "#3a6eb0"]], "wat": ["#0a2a52", "#06203f", "#1a3a68"],

@@ -1737,6 +1737,41 @@
       const u = 1 - (t - 0.15) / 1.2;
       return u * u;
     }
+    // Which skyline is on screen, and the crossfade from the last one. The
+    // board and the simulator keep one: set() with each payload's skyline
+    // (live: the clock screen is showing; off it, a new skyline is taken at
+    // once), tick() every frame, view() for the render options. On screen, a
+    // new skyline waits until its cloud strip is on hand (no bare-sky gap),
+    // and until a running fade ends (no jump), then fades in over 4 s. A
+    // strip that arrives for the skyline on screen fades its clouds in.
+    // has(id): whether that cloud strip is on hand. Mirrored by
+    // draw::SkylineFader in draw.cpp.
+    const SKY_FADE_MS = 4000;
+    function createSkylineFader() {
+      let started = false, cur = null, curBare = false, from = null, fromBare = false, start = 0, pending = null, fading = false;
+      const ready = (sk, has) => !sk || !sk.cl || has(sk.cl.id);
+      const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+      return {
+        set(sk, ms, has, live) {
+          const v = sk || null;
+          if (!started || !live) { started = true; cur = v; curBare = !ready(v, has); fading = false; from = null; pending = null; return; }
+          if (same(v, cur)) pending = null; else pending = v;
+        },
+        tick(ms, has) {
+          if (fading && ms - start >= SKY_FADE_MS) { fading = false; from = null; }
+          if (fading) return;
+          if (pending !== null && ready(pending, has)) { from = cur; fromBare = curBare; cur = pending; curBare = false; pending = null; start = ms; fading = true; }
+          else if (started && curBare && ready(cur, has)) { from = cur; fromBare = true; curBare = false; start = ms; fading = true; }
+        },
+        view(ms) {
+          const k = fading ? sstep01(0, 1, (ms - start) / SKY_FADE_MS) : 1;
+          return { sky: cur, skyFrom: fading ? from : null, skyBare: fading && fromBare, skyK: k };
+        },
+        // Strip ids still needed (on screen, fading from, waiting).
+        wanted() { return [cur, fading ? from : null, pending].filter((x) => x && x.cl && x.cl.id).map((x) => x.cl.id); },
+        started() { return started; },
+      };
+    }
     // Where the quarter-hour boat is at ms: {kind, x0, dir} or null.
     // Sailboat on :00 (heading left) and :30 (right), 1 px per 800 ms;
     // speedboat on :15 and :45, out to the left at 1 px per 150 ms, turning
@@ -1775,9 +1810,21 @@
       }
     }
 
+    // A change of skyline crossfades over SKY_FADE_MS (eased) rather than
+    // switching in one frame: opts.skyFrom (the skyline faded from), skyK
+    // (0..1, how far) and skyBare (draw skyFrom without clouds: the strip
+    // just arrived). opts.sky draws that skyline in place of the payload's
+    // (the one createSkylineFader has on screen). Both scenes are drawn whole
+    // and mixed pixel by pixel.
     function renderSkyline(p, opts) {
       const o = opts || {};
-      const s = p.skyline || SKY_NONE;
+      if (o.skyFrom !== undefined && o.skyFrom !== null && o.skyK != null && o.skyK < 1) {
+        const a = renderSkyline(p, { ...o, skyFrom: null, sky: o.skyFrom, clouds: o.skyBare ? null : o.clouds });
+        const b = renderSkyline(p, { ...o, skyFrom: null });
+        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) b.set(x, y, mixRgb(a.get(x, y), b.get(x, y), o.skyK));
+        return b;
+      }
+      const s = (o.sky !== undefined ? o.sky : p.skyline) || SKY_NONE;
       const now = o.now != null ? o.now : p.now;
       const ms = o.ms != null ? o.ms : Math.floor(now * 1000);
       const f = newFrame();
@@ -2062,7 +2109,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderSkyline, SKY, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderSkyline, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };
