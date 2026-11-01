@@ -1693,7 +1693,7 @@
       wheelNight: '#4a4a66', pier: { day: ['#6a6460', '#2e2a2c'], night: ['#2a2834', '#14121a'], bulb: '#c09050' },
       win: ['#8a5c20', '#ffb050'], beacon: ['#401010', '#ff2020'], moon: '#a89c70',
       rain: { day: ['#5a7aaa', '#3a5070'], night: ['#2c4468', '#1e3050'] }, snow: ['#8a909c', '#e8ecf2'],
-      sail: '#e8ecf0', hull: ['#8a4a24', '#5a2e16'],
+      sail: '#e8ecf0', hull: ['#c02828', '#7a1818'],
       seadog: { Y: '#ffb020', p: '#3a5aa8', q: '#d8dce4', O: '#d86a10' }, spray: '#f4f8fc',
       glow: '#8a80b0', boltSoft: '#b8b0e8',
     };

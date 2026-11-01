@@ -2208,7 +2208,7 @@ const RGB WHEEL_NIGHT = hexc(0x4a4a66), PIER_DAY0 = hexc(0x6a6460), PIER_DAY1 = 
           PIER_NIGHT1 = hexc(0x14121a), PIER_BULB = hexc(0xc09050), WIN_DIM = hexc(0x8a5c20), WIN_BRIGHT = hexc(0xffb050),
           BEACON0 = hexc(0x401010), BEACON1 = hexc(0xff2020), MOON = hexc(0xa89c70), RAIN_DAY0 = hexc(0x5a7aaa),
           RAIN_DAY1 = hexc(0x3a5070), RAIN_NIGHT0 = hexc(0x2c4468), RAIN_NIGHT1 = hexc(0x1e3050), SNOW0 = hexc(0x8a909c),
-          SNOW1 = hexc(0xe8ecf2), SAIL = hexc(0xe8ecf0), HULL0 = hexc(0x8a4a24), HULL1 = hexc(0x5a2e16), SPRAY = hexc(0xf4f8fc),
+          SNOW1 = hexc(0xe8ecf2), SAIL = hexc(0xe8ecf0), HULL0 = hexc(0xc02828), HULL1 = hexc(0x7a1818), SPRAY = hexc(0xf4f8fc),
           GLOW = hexc(0x8a80b0), BOLT_SOFT = hexc(0xb8b0e8), STAR_BRIGHT = hexc(0xffffff), STAR_DIM = hexc(0x5a6070);
 const char *const SEADOG[3] = {"..pqpqpqpqpqp.", "YYYYYYYYYYYYYY", ".OOOOOOOOOOOO."};
 const char *const SAILS[4] = {"..#...", "..##..", "..###.", "..####"};

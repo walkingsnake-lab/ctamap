@@ -588,7 +588,7 @@ Ambient and slow, on a 100 ms tick:
 ### Boats
 A boat crosses the lake **at every quarter hour**, by day only, alternating: the sailboat on :00 and :30, the speedboat on :15 and :45. Mockups: [`boat.png`](mockups/weather/lake/boat.png), [`speedboat.png`](mockups/weather/lake/speedboat.png).
 
-- **Sailboat:** a white sail `#e8ecf0` on rows 21–24 (mast on the leading side), in front of the city; a brown hull on rows 25–26 (6 px deck row `#8a4a24`, 4 px keel row `#5a2e16`). Starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Left on :00, right on :30.
+- **Sailboat:** a white sail `#e8ecf0` on rows 21–24 (mast on the leading side), in front of the city; a red hull on rows 25–26 (6 px deck row `#c02828`, 4 px keel row `#7a1818`). Starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Left on :00, right on :30.
 - **Speedboat** (loosely the Seadog tour boat): three rows: blue and white passengers (row 24), a 14 px yellow deck `#ffc020` with the bow raked forward (row 25) and a white bottom (row 26), with a white spray plume trailing behind (9 / 6 / 3 px on rows 26 / 25 / 24, fading out). No helm or windshield. Fast: 1 px every 150 ms, about 13 s across including the plume. It runs out left, **turns around off-panel**, waits about 4 s, and comes back heading right; one round trip of about 30 s.
 - Both sit entirely above the text rows, so they never hide behind it; they pass in front of the pier and wheel and are drawn from the board's clock, so no fetch is needed.
 - **When:** sun above 0°, no rain, snow, fog or thunderstorm, and 40°F or warmer. The server sends `boats` true or false.

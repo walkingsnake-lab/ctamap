@@ -125,7 +125,7 @@ test('boats: the sailboat on :00 and :30, the speedboat out and back on :15 and 
   assert.equal(boatAt(q + 5 * 60000), null);
   // Drawn only when the payload allows boats.
   const sky = toSkyline({ temp: 52, code: 0, clouds: 5 }, { ...PLACE, now: q / 1000, temp: 52 });
-  const hull = (f) => { let n = 0; for (let x = 0; x < 64; x++) if (px(f, x, 25) === '#8a4a24') n++; return n; };
+  const hull = (f) => { let n = 0; for (let x = 0; x < 64; x++) if (px(f, x, 25) === '#c02828') n++; return n; };
   assert.equal(hull(draw({}, q / 1000, { ms: q + 20000, sky })), 6);
   assert.equal(hull(draw({}, q / 1000, { ms: q + 20000, sky: { ...sky, boats: 0 } })), 0);
 });
