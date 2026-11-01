@@ -41,7 +41,8 @@ class Player {
   double loop_start = 0;
   Screen screen = Screen::Transit;
   draw::NumRoller nums;  // header and radar clock rolls
-  draw::Frames clouds;   // the skyline's cloud strip on hand: id -> 1664 packed bytes (one kept)
+  draw::Frames clouds;   // the skyline's cloud strips on hand: id -> 1664 packed bytes (those sky_fade still needs)
+  draw::SkylineFader sky_fade;  // the skyline on screen and the crossfade from the last
   double wall_ms = 0;    // epoch ms, set by the Board before drawing (the skyline's animation clock)
 
   // ---- inputs ----
@@ -56,6 +57,7 @@ class Player {
   // Skyline face: the cloud strip the payload names, when it isn't on hand.
   std::optional<std::string> missing_cloud() const;
   void add_cloud(const std::string &id, std::vector<uint8_t> bytes);
+  void prune_clouds();  // drop strips the skyline fader no longer needs
   void add_logo(const std::string &lid, std::vector<uint8_t> bytes) { logos[lid] = std::move(bytes); }
   Screen auto_screen(long long now) const;
   bool wants_frames() const;

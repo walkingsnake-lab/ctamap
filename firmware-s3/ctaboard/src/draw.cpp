@@ -2317,14 +2317,14 @@ static const Value &sky_none() {
   return v;
 }
 
-static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o, bool blink,
-                           const Frames *clouds) {
+static void render_skyline(const Value &p, const Value &sky, Frame &f, std::optional<double> now_o, std::optional<double> ms_o,
+                           bool blink, const Frames *clouds) {
   const sky::Geometry &G = sky::geo();
   // The scene's dark sky, water and night clouds would all be lifted to one
   // primary at the panel's floor (a flat blue sky, a patchwork of red and
   // blue clouds): let them go black instead (color.h).
   f.floor = false;
-  const Value &s = p["skyline"].truthy() ? p["skyline"] : sky_none();
+  const Value &s = sky.truthy() ? sky : sky_none();
   double now = now_o.has_value() ? *now_o : p["now"].num();
   double ms = ms_o.has_value() ? *ms_o : std::floor(now * 1000);
   const int S = sky::SHORE;
@@ -2350,13 +2350,14 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       return waxing ? dx > w * cosv : dx < -w * cosv;
     });
   }
-  // Clouds: the server's strip, scrolled 1 px every 4 s, behind the city.
+  // Clouds: the server's strip, gliding left 1 px every cl.step ms (sub-pixel), behind the city.
   if (s["cl"].truthy() && clouds) {
     auto it = clouds->find(json::str(s["cl"]["id"]));
     if (it != clouds->end() && it->second.size() >= (size_t)(sky::CLOUD_W * 26 / 2)) {
       const std::vector<uint8_t> &cb = it->second;
       double step = s["cl"]["step"].is_null() ? (double)sky::CLOUD_STEP : s["cl"]["step"].num();
-      long long off = step > 0 ? fmod_floor((long long)std::floor(ms / step), sky::CLOUD_W) : 0;
+      double rem = step > 0 ? std::fmod(ms, step) : 0, fr = step > 0 ? rem / step : 0;
+      long long off = step > 0 ? fmod_floor((long long)((ms - rem) / step), sky::CLOUD_W) : 0;
       const Value &pal = s["cl"]["pal"];
       const Value &al = s["cl"]["a"];
       RGB pc[16];
@@ -2368,9 +2369,18 @@ static void render_skyline(const Value &p, Frame &f, std::optional<double> now_o
       for (int y = 0; y <= S; y++)
         for (int x = 0; x < 64; x++) {
           if (G.role[y * 64 + x]) continue;
-          long long i = y * sky::CLOUD_W + (x + off) % sky::CLOUD_W;
-          int n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
-          if (n && has[n]) f.set(x, y, mix_rgb(f.get(x, y), pc[n], al[n].num() / 100));
+          auto at = [&](long long col) {
+            long long i = y * sky::CLOUD_W + col % sky::CLOUD_W;
+            int n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
+            return n && has[n] ? n : 0;
+          };
+          int n0 = at(x + off), n1 = fr > 0 ? at(x + off + 1) : 0;
+          if (!n0 && !n1) continue;
+          RGB bg = f.get(x, y);
+          RGB c0 = n0 ? mix_rgb(bg, pc[n0], al[n0].num() / 100) : bg;
+          if (fr == 0) { f.set(x, y, c0); continue; }
+          RGB c1 = n1 ? mix_rgb(bg, pc[n1], al[n1].num() / 100) : bg;
+          f.set(x, y, mix_rgb(c0, c1, fr));
         }
     }
   }
@@ -2514,6 +2524,36 @@ static void apply_brightness(Frame &f, double b) {
   for (int i = 0; i < Frame::W * Frame::H * 3; i++) f.px[i] = (uint8_t)jsround(f.px[i] * k);
 }
 
+// The skyline, crossfading from o.sky_from when a fade is running (draw.js
+// renderSkyline with opts.skyFrom): both scenes drawn whole, mixed by sky_k.
+static void render_skyline_faded(const Value &p, Frame &f, const RenderOpts &o) {
+  const Value &cur = o.sky ? *o.sky : p["skyline"];
+  if (o.sky_from && o.sky_from->truthy() && o.sky_k < 1) {
+    static Frame a;  // not on the stack: the loop task's is small
+    a.clear();
+    render_skyline(p, *o.sky_from, a, o.now, o.ms, o.blink, o.sky_bare ? nullptr : o.clouds);
+    render_skyline(p, cur, f, o.now, o.ms, o.blink, o.clouds);
+    for (int y = 0; y < Frame::H; y++)
+      for (int x = 0; x < Frame::W; x++) f.set(x, y, mix_rgb(a.get(x, y), f.get(x, y), o.sky_k));
+    return;
+  }
+  render_skyline(p, cur, f, o.now, o.ms, o.blink, o.clouds);
+}
+
+void SkylineFader::view(double ms, RenderOpts &o) const {
+  o.sky = &cur_;
+  o.sky_from = fading_ ? &from_ : nullptr;
+  o.sky_bare = fading_ && from_bare_;
+  o.sky_k = fading_ ? sstep01(0, 1, (ms - start_) / SKY_FADE_MS) : 1;
+}
+
+std::vector<std::string> SkylineFader::wanted() const {
+  std::vector<std::string> out;
+  for (const Value *v : {&cur_, fading_ ? &from_ : nullptr, has_pending_ ? &pending_ : nullptr})
+    if (v && v->truthy() && (*v)["cl"].truthy() && (*v)["cl"]["id"].is_str()) out.push_back(json::str((*v)["cl"]["id"]));
+  return out;
+}
+
 Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   std::string screen = o.screen ? o.screen : json::str(p["screen"]);
   if (!o.screen && !p["screen"].truthy()) screen = "";
@@ -2524,7 +2564,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
-  else if (screen == "clock") render_skyline(p, f, o.now, o.ms, o.blink, o.clouds);
+  else if (screen == "clock") render_skyline_faded(p, f, o);
   else render_transit(p, f, o.now, o.blink, o.view);
   g_roller = nullptr;
   g_nums = nullptr;

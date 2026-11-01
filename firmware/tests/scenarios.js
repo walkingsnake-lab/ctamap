@@ -488,12 +488,12 @@ async function build() {
     }
     // Clouds present in the payload but the strip not fetched yet: plain sky.
     { const [p] = sky({ code: 3, clouds: 95 }, DAY); add('skyline overcast strip not fetched', p, [{ screen: 'clock' }], undefined, undefined, { s3only: true }); }
-    // Cloud drift settings: still, slow (16 s a pixel) and normal (4 s), and a payload without step (4 s).
+    // Cloud drift settings: still, slow (16 s a pixel) and normal (4 s), and a payload without step (4 s); mid-step frames check the sub-pixel glide.
     for (const [name, step] of [['off', 0], ['slow', 16000], ['normal', 4000], ['unset', undefined]]) {
       const [p, clouds] = sky({ code: 2, clouds: 40 }, DAY);
       const cl = { ...p.skyline.cl };
       if (step === undefined) delete cl.step; else cl.step = step;
-      add(`skyline cloud drift ${name}`, { ...p, skyline: { ...p.skyline, cl } }, ms(DAY, 0, 3999, 4000, 16000, 64000), undefined, undefined, { s3only: true, clouds });
+      add(`skyline cloud drift ${name}`, { ...p, skyline: { ...p.skyline, cl } }, ms(DAY, 0, 1000, 2000, 3999, 4000, 8000, 16000, 64000), undefined, undefined, { s3only: true, clouds });
     }
     for (let m = 0; m <= 110; m += 20) {
       const t = at('2026-10-31T22:00:00Z') + m * 60;
@@ -546,6 +546,17 @@ async function build() {
       add(`skyline wheel and ripples ${name}`, { ...p, skyline: { ...p.skyline, wheel, rip } }, ms(NIGHT, 0, 125, 7000, 61234), undefined, undefined, { s3only: true });
     }
     { const [p] = sky({ code: 0, clouds: 0 }, NIGHT); add('skyline stars still', { ...p, skyline: { ...p.skyline, twk: 0 } }, ms(NIGHT, 0, 900, 2500), undefined, undefined, { s3only: true }); }
+    {
+      // Weather changes crossfade: clear day to rain (and its strip), partly
+      // cloudy's clouds fading in as the strip arrives, and dusk to night.
+      const [pa] = sky({ code: 0, clouds: 5 }, DAY);
+      const [pb, cb] = sky({ code: 63, clouds: 100 }, DAY);
+      add('skyline crossfade clear to rain', pb, [0, 0.1, 0.5, 0.9, 1].map((k) => ({ screen: 'clock', ms: DAY * 1000 + 777, skyFrom: pa.skyline, skyK: k })), undefined, undefined, { s3only: true, clouds: cb });
+      const [pp, cp] = sky({ code: 2, clouds: 35 }, DAY);
+      add('skyline crossfade clouds arriving', pp, [0.25, 0.75].map((k) => ({ screen: 'clock', ms: DAY * 1000, skyFrom: pp.skyline, skyBare: true, skyK: k })), undefined, undefined, { s3only: true, clouds: cp });
+      const [pn] = sky({ code: 0, clouds: 5 }, NIGHT);
+      add('skyline crossfade shown skyline in place of the payload', pn, [{ screen: 'clock', ms: NIGHT * 1000, sky: pa.skyline }, { screen: 'clock', ms: NIGHT * 1000, sky: null }], undefined, undefined, { s3only: true });
+    }
     { const [p, clouds] = sky({ code: 2, clouds: 35 }, NIGHT, { bright: 40 }); add('skyline dimmed', p, [{ screen: 'clock' }], undefined, undefined, { s3only: true, clouds }); }
     {
       const p = { now: NIGHT, tzo: tzOffset(NIGHT), screen: 'clock', bright: 100, warn: null, skyline: null };

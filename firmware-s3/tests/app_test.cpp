@@ -932,7 +932,7 @@ static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_ti
   double per_s = (r.display.frames - start) / 30.0;
   CHECK(per_s > 15 && per_s < 24, "%f per s", per_s);
   CHECK(r.server.count("update") >= 2, "%d updates", r.server.count("update"));
-  // A new sky: the new strip replaces the old one.
+  // A new sky: the new strip replaces the old one (once the crossfade is done).
   r.server.cloud = "o1";
   r.server.v++;
   r.run_for(30000);
@@ -944,6 +944,35 @@ static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_ti
   int before = r.server.count("sky:");
   r.run_for(30000);
   CHECK(r.server.count("sky:") == before, "");
+}
+
+static void test_clock_screen_crossfades_a_new_sky_once_its_strip_is_here() {
+  Rig r;
+  r.server.screen = "clock";
+  r.board->connect();
+  r.run_for(20000);
+  CHECK(r.board->player.clouds.count("p1") == 1, "");
+  draw::RenderOpts o;
+  r.board->player.sky_fade.view((double)r.clock.t, o);
+  CHECK(!o.sky_from && o.sky_k == 1, "settled");
+  // The sky changes: the old one stays up until the new strip lands, then fades out over 4 s.
+  r.server.cloud = "o1";
+  r.server.v++;
+  for (int i = 0; i < 6000 && !r.board->player.clouds.count("o1"); i++) {
+    r.board->player.sky_fade.view((double)r.clock.t, o);
+    CHECK(!o.sky_from, "no fade before the strip is here");
+    r.run_for(5);
+  }
+  CHECK(r.board->player.clouds.count("o1") == 1, "strip fetched");
+  r.run_for(2000);
+  r.board->player.sky_fade.view((double)r.clock.t, o);
+  CHECK(o.sky_from && o.sky_k > 0.2 && o.sky_k < 0.8, "fading (k %f)", o.sky_k);
+  CHECK((*o.sky_from)["cl"]["id"].eq("p1") && (*o.sky)["cl"]["id"].eq("o1"), "p1 -> o1");
+  CHECK(r.board->player.clouds.count("p1") == 1, "the old strip is kept while it fades out");
+  r.run_for(2500);
+  r.board->player.sky_fade.view((double)r.clock.t, o);
+  CHECK(!o.sky_from && o.sky_k == 1, "done after 4 s");
+  CHECK(r.board->player.clouds.size() == 1 && r.board->player.clouds.count("o1") == 1, "then dropped");
 }
 
 static void test_cloud_strips_only_on_the_clock_screen() {
@@ -1717,6 +1746,7 @@ int main() {
       T_(test_a_held_train_stays_due_until_the_server_drops_it),
       T_(test_health_reports_the_skyline_capability),
       T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_times_a_second),
+      T_(test_clock_screen_crossfades_a_new_sky_once_its_strip_is_here),
       T_(test_cloud_strips_only_on_the_clock_screen),
       T_(test_clock_screen_draws_the_skyline),
       T_(test_overnight_owl_redraws_when_it_blinks),

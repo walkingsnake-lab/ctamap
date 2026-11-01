@@ -213,6 +213,9 @@
 
   // Cloud strips (skyline face) are immutable: fetch each once.
   const cloudStrips = {};
+  const hasStrip = (id) => !!cloudStrips[id];
+  // A new skyline crossfades in once its strip is here, as on the board.
+  const skyFade = D.createSkylineFader();
   async function syncClouds() {
     const id = p && p.skyline && p.skyline.cl && p.skyline.cl.id;
     if (!id || cloudStrips[id]) return;
@@ -260,6 +263,7 @@
       if (!r.ok) throw new Error(body.err || r.status);
       if (p && body.stn !== p.stn) resetAnimation(); // new station: start fresh, like the board
       p = body;
+      skyFade.set(p.skyline || null, performance.now(), hasStrip, true);
       // The server's clock is whole seconds; adopt a new offset only on real
       // drift so the clock doesn't jitter by up to a second every poll.
       const off = p.now - Date.now() / 1000;
@@ -347,7 +351,8 @@
     $('gameState').textContent = !pick.of ? 'no games' : `${anyLive ? 'live game' : 'game'} ${pick.pos + 1} of ${pick.of}`;
 
     // Clock (skyline face): ambient motion on the wall clock (boats on the quarter hour).
-    paintClock(rolled('clock', t, { full, o: { now: n, ms: Math.floor(n * 1000), blink, clouds: cloudStrips } }));
+    skyFade.tick(t, hasStrip);
+    paintClock(rolled('clock', t, { full, o: { now: n, ms: Math.floor(n * 1000), blink, clouds: cloudStrips, ...skyFade.view(t) } }));
     const tod = test.weather && test.weather.tod;
     $('clockState').textContent = p.skyline ? p.skyline.st + (tod ? ` (test sky: ${tod}; clock shows the real time)` : '') : 'no weather yet';
   }

@@ -112,6 +112,10 @@ int main(int argc, char **argv) {
         if (!o["t"].is_null()) ro.t = o["t"].num();
         if (!o["ms"].is_null()) ro.ms = o["ms"].num();
         ro.clouds = has_clouds ? &clouds : nullptr;
+        if (o.has("sky")) ro.sky = &o["sky"];
+        if (!o["skyFrom"].is_null()) ro.sky_from = &o["skyFrom"];
+        if (!o["skyK"].is_null()) ro.sky_k = o["skyK"].num();
+        ro.sky_bare = o["skyBare"].truthy();
         ro.nums = o["nums"].is_null() ? nullptr : &nums;
         if (!o["chooser"].is_null()) {
           ro.chooser_pos = o["chooser"]["pos"].num(0);

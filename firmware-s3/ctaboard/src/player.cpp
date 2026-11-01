@@ -31,6 +31,8 @@ void Player::set_payload(const Value &payload, double ms) {
   p = payload;
   has_p = true;
   gen++;
+  // The skyline: a new one crossfades in on the clock screen (draw.js createSkylineFader).
+  sky_fade.set(p["skyline"], ms, [this](const std::string &id) { return clouds.count(id) > 0; }, screen == Screen::Clock);
   // Keep only frames still in the loop.
   const Value &ids = p["radar"]["frames"];
   std::vector<std::string> keep;
@@ -138,8 +140,18 @@ std::optional<std::string> Player::missing_cloud() const {
 }
 
 void Player::add_cloud(const std::string &id, std::vector<uint8_t> bytes) {
-  clouds.clear();  // one strip at a time: a new sky replaces the old one
+  // Keep the strips the skyline on screen, the one fading out, and the one
+  // waiting still use; drop the rest.
+  prune_clouds();
   clouds[id] = std::move(bytes);
+}
+
+void Player::prune_clouds() {
+  std::vector<std::string> want = sky_fade.wanted();
+  for (auto it = clouds.begin(); it != clouds.end();) {
+    if (!contains(want, it->first)) it = clouds.erase(it);
+    else ++it;
+  }
 }
 
 Screen Player::auto_screen(long long now) const {
@@ -250,6 +262,9 @@ void Player::draw(draw::Frame &frame, double ms, long long now) {
     // Skyline face: ambient motion on the wall clock (boats on the quarter hour).
     o.screen = "clock";
     o.ms = wall_ms;
+    sky_fade.tick(ms, [this](const std::string &id) { return clouds.count(id) > 0; });
+    prune_clouds();  // a finished fade frees the old strip
+    sky_fade.view(ms, o);
     o.clouds = &clouds;
     o.blink = blink_on(ms);
     draw::render(p, frame, o);

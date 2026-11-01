@@ -251,6 +251,27 @@ bool parse(const std::string &text, Value &out, std::string *err) {
   return parse(text.data(), text.size(), out, err);
 }
 
+bool equal(const Value &a, const Value &b) {
+  if (a.type != b.type) return false;
+  switch (a.type) {
+    case NUL: return true;
+    case BOOL: return a.b == b.b;
+    case NUM: return a.n == b.n;
+    case STR: return a.s == b.s;
+    case ARR:
+      if (a.a.size() != b.a.size()) return false;
+      for (size_t i = 0; i < a.a.size(); i++)
+        if (!equal(a.a[i], b.a[i])) return false;
+      return true;
+    case OBJ:
+      if (a.o.size() != b.o.size()) return false;
+      for (size_t i = 0; i < a.o.size(); i++)
+        if (a.o[i].first != b.o[i].first || !equal(a.o[i].second, b.o[i].second)) return false;
+      return true;
+  }
+  return false;
+}
+
 std::string num_str(double n, bool is_int) {
   char buf[40];
   if (is_int && fabs(n) < 9e15) {

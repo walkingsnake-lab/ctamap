@@ -240,7 +240,7 @@ test('no weather yet: a plain night with the clock', () => {
   assert.ok(lit > 10);
 });
 
-test('clouds: drawn from the strip once it is on hand, scrolling 1 px every 4 s, behind the buildings', () => {
+test('clouds: drawn from the strip once it is on hand, gliding 1 px every 4 s, behind the buildings', () => {
   const { stripBytes } = require('./clouds');
   const sky = toSkyline({ temp: 52, code: 3, clouds: 95 }, { ...PLACE, now: DAY, temp: 52 });
   const clouds = { [sky.cl.id]: stripBytes(sky.cl.id) };
@@ -250,15 +250,24 @@ test('clouds: drawn from the strip once it is on hand, scrolling 1 px every 4 s,
   let changed = 0;
   for (let y = 0; y <= 25; y++) for (let x = 0; x < 64; x++) if (px(a, x, y) !== px(b, x, y)) { changed++; assert.equal(SKY.role[y * 64 + x], 0, 'clouds stay behind the buildings'); }
   assert.ok(changed > 300, `deck drawn (${changed} px)`);
-  const later = (ms) => render({ now: DAY, screen: 'clock', bright: 100, skyline: sky }, { screen: 'clock', now: DAY, ms, clouds });
+  const sky4 = { ...sky, cl: { ...sky.cl, step: 4000 } };
+  const later = (ms) => render({ now: DAY, screen: 'clock', bright: 100, skyline: sky4 }, { screen: 'clock', now: DAY, ms, clouds });
   const t0 = Math.floor(DAY / 4) * 4000;
-  assert.deepEqual([...later(t0).px], [...later(t0 + 3999).px].length ? [...later(t0).px] : [], 'still for 4 s');
-  // After 4 s, column x shows what column x+1 showed (on an open sky row).
-  const c0 = later(t0), c1 = later(t0 + 4000);
-  for (let x = 0; x < 20; x++) if (!SKY.role[2 * 64 + x] && !SKY.role[2 * 64 + x + 1]) assert.equal(px(c1, x, 2), px(c0, x + 1, 2));
+  // After 4 s, column x shows what column x+1 showed (on an open sky row);
+  // halfway, each channel sits between the two (sub-pixel glide).
+  const c0 = later(t0), c1 = later(t0 + 4000), half = later(t0 + 2000);
+  let between = 0;
+  for (let x = 0; x < 20; x++) {
+    if (SKY.role[2 * 64 + x] || SKY.role[2 * 64 + x + 1]) continue;
+    assert.equal(px(c1, x, 2), px(c0, x + 1, 2));
+    const [a, b, h] = [c0.get(x, 2), c0.get(x + 1, 2), half.get(x, 2)];
+    for (let k = 0; k < 3; k++) assert.ok(h[k] >= Math.min(a[k], b[k]) && h[k] <= Math.max(a[k], b[k]), `x ${x}: ${h} between ${a} and ${b}`);
+    if (px(c0, x, 2) !== px(c0, x + 1, 2) && px(half, x, 2) !== px(c0, x, 2) && px(half, x, 2) !== px(c0, x + 1, 2)) between++;
+  }
+  assert.ok(between > 0, 'in-between shades halfway');
 });
 
-test('cloud drift: still when off, 1 px per step otherwise', () => {
+test('cloud drift: still when off, gliding 1 px per step otherwise', () => {
   const { stripBytes } = require('./clouds');
   const base = toSkyline({ temp: 52, code: 2, clouds: 40 }, { ...PLACE, now: DAY, temp: 52 });
   const clouds = { [base.cl.id]: stripBytes(base.cl.id) };
@@ -266,7 +275,75 @@ test('cloud drift: still when off, 1 px per step otherwise', () => {
   const t0 = Math.floor(DAY / 64) * 64000;
   const sky = (f) => { const out = []; for (let y = 0; y <= 16; y++) for (let x = 0; x < 64; x++) if (!SKY.role[y * 64 + x]) out.push(px(f, x, y)); return out.join(); };
   assert.equal(sky(at(0, t0)), sky(at(0, t0 + 10 * 60000)), 'off: the clouds never move');
-  assert.equal(sky(at(16000, t0)), sky(at(16000, t0 + 15999)), 'slow: still for 16 s');
-  assert.notEqual(sky(at(16000, t0)), sky(at(16000, t0 + 16000)), 'slow: then a pixel');
+  assert.notEqual(sky(at(16000, t0)), sky(at(16000, t0 + 2000)), 'slow: moving between whole pixels');
+  assert.notEqual(sky(at(16000, t0)), sky(at(16000, t0 + 16000)), 'slow: a pixel every 16 s');
   assert.notEqual(sky(at(4000, t0)), sky(at(4000, t0 + 4000)), 'normal: a pixel every 4 s');
+});
+
+test('skyline crossfade: k 0 draws the old scene, 1 the new, between mixes the two', () => {
+  const a = toSkyline({ temp: 52, code: 0, clouds: 5 }, { ...PLACE, now: DAY, temp: 52 });
+  const b = toSkyline({ temp: 52, code: 63, clouds: 100 }, { ...PLACE, now: DAY, temp: 52 });
+  const p = { now: DAY, screen: 'clock', bright: 100, skyline: b };
+  const r = (o) => render(p, { screen: 'clock', now: DAY, ms: DAY * 1000, ...o });
+  const old = r({ sky: a }), nu = r({});
+  assert.deepEqual([...r({ skyFrom: a, skyK: 0 }).px], [...old.px]);
+  assert.deepEqual([...r({ skyFrom: a, skyK: 1 }).px], [...nu.px]);
+  const mid = r({ skyFrom: a, skyK: 0.5 });
+  for (const [x, y] of [[40, 0], [10, 2], [60, 20], [30, 29]]) {
+    const [o, n, m] = [old.get(x, y), nu.get(x, y), mid.get(x, y)];
+    for (let i = 0; i < 3; i++) assert.equal(m[i], Math.round(o[i] + (n[i] - o[i]) * 0.5), `${x},${y}`);
+  }
+  // opts.sky draws that skyline in place of the payload's.
+  assert.deepEqual([...r({ sky: a }).px], [...render({ ...p, skyline: a }, { screen: 'clock', now: DAY, ms: DAY * 1000 }).px]);
+});
+
+test('skyline fader: waits for the strip and for a running fade, fades over 4 s, takes changes at once off screen', () => {
+  const { createSkylineFader, SKY_FADE_MS } = require('./render');
+  assert.equal(SKY_FADE_MS, 4000);
+  const strips = new Set();
+  const has = (id) => strips.has(id);
+  const A = { st: 'clear', cl: null }, B = { st: 'partly', cl: { id: 'p1' } }, C = { st: 'overcast', cl: { id: 'o1' } };
+  const f = createSkylineFader();
+  f.set(A, 0, has, true);
+  f.tick(0, has);
+  assert.deepEqual(f.view(0), { sky: A, skyFrom: null, skyBare: false, skyK: 1 });
+  // B's strip isn't here yet: A stays up, and the strip is wanted.
+  f.set(B, 1000, has, true);
+  f.tick(1000, has);
+  assert.equal(f.view(1000).sky, A);
+  assert.deepEqual(f.wanted(), ['p1']);
+  strips.add('p1');
+  f.tick(2000, has);
+  let v = f.view(2000);
+  assert.equal(v.sky, B); assert.equal(v.skyFrom, A); assert.equal(v.skyK, 0);
+  assert.equal(f.view(4000).skyK, 0.5, 'eased: halfway at half time');
+  assert.ok(f.view(2500).skyK < 0.125, 'eased in');
+  // C arrives mid-fade with its strip on hand: it waits for the fade to end.
+  strips.add('o1');
+  f.set(C, 3000, has, true);
+  f.tick(3000, has);
+  assert.equal(f.view(3000).sky, B);
+  assert.deepEqual(f.wanted().sort(), ['o1', 'p1']);
+  f.tick(2000 + SKY_FADE_MS, has);
+  v = f.view(2000 + SKY_FADE_MS);
+  assert.equal(v.sky, C); assert.equal(v.skyFrom, B); assert.equal(v.skyK, 0);
+  f.tick(20000, has);
+  assert.deepEqual(f.view(20000), { sky: C, skyFrom: null, skyBare: false, skyK: 1 });
+  // The same skyline again: nothing to do.
+  f.set({ ...C }, 21000, has, true);
+  f.tick(21000, has);
+  assert.equal(f.view(21000).skyFrom, null);
+  // Off the clock screen a new skyline is taken at once.
+  f.set(B, 22000, has, false);
+  f.tick(22000, has);
+  assert.deepEqual(f.view(22000), { sky: B, skyFrom: null, skyBare: false, skyK: 1 });
+  // A skyline whose strip isn't here: when it arrives, its clouds fade in.
+  const D = { st: 'mostly', cl: { id: 'm1' } };
+  f.set(D, 23000, has, false);
+  f.tick(23000, has);
+  assert.equal(f.view(23000).skyFrom, null);
+  strips.add('m1');
+  f.tick(24000, has);
+  v = f.view(26000);
+  assert.equal(v.sky, D); assert.equal(v.skyFrom, D); assert.equal(v.skyBare, true); assert.equal(v.skyK, 0.5);
 });
