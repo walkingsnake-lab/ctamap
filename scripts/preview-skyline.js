@@ -13,17 +13,19 @@ const fs = require('fs');
 const path = require('path');
 const { render } = require('../server/board/render');
 const { toSkyline } = require('../server/board/skyline');
+const { stripBytes } = require('../server/board/clouds');
 const { sheet } = require('./mock-weather-lake');
 
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'previews');
 const PLACE = { lat: 41.8917, lon: -87.590 };
 const at = (iso) => Date.parse(iso) / 1000;
-const DAY = at('2026-10-31T19:15:00Z'), NIGHT = at('2026-11-01T02:42:00Z');
+const DAY = at('2026-10-31T19:05:00Z'), NIGHT = at('2026-11-01T02:42:00Z');
 
 function frame(w, now, { ms, warn = null, temp = 52, blink = false } = {}) {
   const skyline = toSkyline({ temp, ...w }, { ...PLACE, now, temp });
   const p = { now, screen: 'clock', bright: 100, warn, skyline };
-  return render(p, { screen: 'clock', now, ms: ms != null ? ms : now * 1000 + 300, blink });
+  const clouds = skyline.cl ? { [skyline.cl.id]: stripBytes(skyline.cl.id) } : {};
+  return render(p, { screen: 'clock', now, ms: ms != null ? ms : now * 1000 + 300, blink, clouds });
 }
 const label = (now) => new Date((now - 5 * 3600) * 1000).toISOString().slice(11, 16);
 

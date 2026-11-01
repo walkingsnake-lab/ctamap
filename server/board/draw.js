@@ -1672,6 +1672,7 @@
     const SAIL = ['..#...', '..##..', '..###.', '..####'];
     const BOLT = [[21, 0], [21, 1], [20, 2], [21, 3], [22, 3], [23, 3], [23, 4], [24, 5], [23, 6], [24, 7], [25, 7], [25, 8], [25, 9]];
     const BOLT_BRANCH = [[20, 1], [19, 2], [18, 3], [18, 4], [17, 5]];
+    const CLOUD_W = 128, CLOUD_STEP = 4000;
     const SAIL_STEP = 800, SPEED_STEP = 150, SPEED_WAIT = 4000, QUARTER = 900000, STRIKE_EVERY = 30000;
 
     function skyAt(stops, y) {
@@ -1768,6 +1769,21 @@
       if (s.moon) {
         const cosv = 1 - 2 * s.moon.fr / 100, waxing = s.moon.ph < 50;
         skyDisc(f, 41, 5, SK.moon, (dx, dy, c) => { const w = Math.sqrt(Math.max(0, c * c - dy * dy)); return waxing ? dx > w * cosv : dx < -w * cosv; });
+      }
+      // Clouds: the server's strip (128 x 26, 4-bit indexes, packed high
+      // nibble first), scrolled 1 px every 4 s and wrapping, behind the city;
+      // each index has its color and opacity in the payload. None until the
+      // strip has been fetched (o.clouds: {id: bytes}).
+      const cb = s.cl && o.clouds && o.clouds[s.cl.id];
+      if (cb) {
+        const off = Math.floor(ms / CLOUD_STEP) % CLOUD_W;
+        const pal = s.cl.pal.map((c) => (c ? hex(c) : null));
+        for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
+          if (SKY.role[y * 64 + x]) continue;
+          const i = y * CLOUD_W + ((x + off) % CLOUD_W);
+          const n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
+          if (n && pal[n]) f.set(x, y, mixRgb(f.get(x, y), pal[n], s.cl.a[n] / 100));
+        }
       }
       // Windows come on one at a time as `win` rises.
       const lim = Math.round(450 * night);

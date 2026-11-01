@@ -552,7 +552,7 @@ The scene is drawn in layers, back to front. The server renders what's expensive
 
 **Cloud strip:**
 - The server renders the clouds as a strip 128 px wide and 27 rows tall (rows 0–26) that tiles seamlessly (the noise wraps at 128), indexed at 4 bits per pixel (transparent plus up to 15 shades, enough for the overcast deck's texture): about 1.7 KB.
-- Fetched like a radar frame, by id; the payload carries the strip's id and palette, and the board refetches only when the id changes (a new state, or the cloud cover crossing a threshold).
+- The strip has nothing to do with radar: its shape comes from the weather kind (cloud cover and code from WeatherAPI), generated on the server (`clouds.js`). The board downloads it once by id (`GET /board/sky/<id>`, 1664 bytes) and keeps it; the payload carries the id and each index's color and opacity, so dusk recolors the same strip without a new download. A new id comes only with a new kind of sky.
 - The board draws it at x offset `floor(now / 4) % 128` (1 px every 4 s, from wall-clock time so every renderer agrees), behind the city, so clouds pass behind the buildings.
 - Night wisps and decks use the same strip with a night palette.
 

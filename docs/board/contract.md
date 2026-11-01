@@ -328,8 +328,7 @@ The clock screen's skyline face (design spec §14). The server turns the weather
 | `storm` | `1`: lightning, a soft glow in the cloud deck with a faint bolt, every 20–40 s. |
 | `boats` | `1`: the quarter-hour boats run (daytime, dry, 40°F or warmer). |
 | `temp` | Temperature in the board's unit, or `null`. A top-level `warn` replaces it on screen. |
-
-Clouds (a server-rendered strip the board scrolls) come in a later change.
+| `cl` | Clouds: `{id, pal, a}`, or `null` (clear, fog, snow). `id` names a strip (see *Cloud strips*: shapes only, fetched once and kept); `pal[i]` and `a[i]` are index `i`'s color and opacity in percent (index 0 is clear, `pal[0]` empty). The board draws each sky pixel (not buildings) as the mix of what's there and `pal[i]` at `a[i]`, reading the strip at column `(x + floor(ms / 4000)) % 128` so the clouds drift left 1 px every 4 s. Until the strip is on hand it draws no clouds. Today: `p1` partly cloudy and `m1` mostly cloudy (wisps, indexes 1-2), `o1` overcast, `r1` rain, `s1` storm (decks, indexes 1-15 thin to thick). |
 
 ### `GET /board/firmware?b=<id>&v=<build>`
 An OTA build, streamed: `Content-Type: application/octet-stream`, `Content-Length` = the build's size, `Cache-Control: no-store`. Token required. `404` for an unknown board (`unknown_board`) or build (`unknown_build`).
@@ -352,6 +351,9 @@ One team logo crop for the logo layout.
 - **Format:** 864 bytes: 24 x 12 pixels, RGB, row by row from the top left. Undimmed; at most 64 distinct colors (the board draws into a 256-color palette).
 - The board fetches missing logos one per scheduler run while the baseball screen is up (`firmware/boardlib/app.py` `_logo`) and drops logos the payload no longer uses.
 - Logos come from the owner's uploads (`POST /board/<secret>/api/logos`); they're kept beside the board state and never committed (trademarks; the repo is public). Processing is only a resize and a crop: each 32px tile (or any image, area-averaged to 32px) is box-scaled to 24px and 12 rows are cut at the team's crop row (`OFFSET` in `server/board/mlb-logos.js`, or `crop=` on upload).
+
+### `GET /board/sky/<stripId>?b=<id>`
+A cloud strip for the skyline face: exactly 1664 bytes, `Cache-Control: immutable` (the id names a shape that never changes). 128 × 26 pixels (the sky, rows 0–25), row by row, two pixels per byte, high nibble first; each nibble is a palette index (0 clear) whose color comes from the payload's `skyline.cl`. Generated on the server from the weather kind (`clouds.js`); unrelated to radar. The board keeps the current strip and fetches a new one only when `skyline.cl.id` changes. `401` bad token, `404` unknown board or strip. The simulator reads the same bytes at `/board/<secret>/api/sky/<stripId>`.
 
 ### `GET /board/radar/<frameId>?b=<id>[&pk=4]`
 One radar frame for that board's location.
@@ -424,7 +426,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/raw/arrivals?mapid=<id>` | Raw Train Tracker `ttarrivals` response for a station, exactly as CTA sent it, for recording test fixtures. `400` for an unknown `mapid`, `502` if CTA fails. |
 | `GET /board/<secret>/api/raw/weather?mapid=<id>` | Raw WeatherAPI `forecast.json` response for a station's grid cell (fetched now, not from the cache; the response has no key in it), for recording test fixtures. Owner only. `400` for an unknown `mapid`, `502` if WeatherAPI fails or `WEATHERAPI_KEY` isn't set. |
 
-POST rules: allowed fields are `label` (up to 24 characters, trimmed; empty for none), `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `headerDivider`, `wxDivider`, `transitLayout`, `radarTime`, `radarClock`, `radarCond`, `tempUnit`, `radarBright`, `wxView`, `wxRain`, `wxRainEvery`, `wxRainLoops`, `radarEvery`, `radarFor`, `screen`, the Auto and screen options (`autoScreens`, `autoEvery`, `wxVisit`, `alertJump`, `bbTeams`, `bbPre`, `bbFinal`, `bbPriority`, `lineNames`, `headerClock`, `timeSteps`; see the state table), `bright`, `baseballLayout`, `logoBright`, the speed settings (`tickerHold` s: 5, 6, 8, 10, 12, 15; `tickerSlide` ms: 800, 1200, 1600, 2000; `radarFrame` ms: 300, 400, 500, 700, 1000; `radarHold` s: 2, 3, 4, 6, 8; `gameEvery` s: 30, 45, 60, 90, 120), `wxRainLoops` (1, 2, 3, 5), `tickerFill` (25–80), `fw` and `fwRetry` (state table); anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be a board endpoint's name (`ping`, `version`, `update`, `select`, `radar`, `logo`, `firmware`, `c`) or contain `/`; if it is or does, control endpoints are disabled.
+POST rules: allowed fields are `label` (up to 24 characters, trimmed; empty for none), `station` (`{mapid, name?}`; `name` defaults to the station's `short` and must fit 42px), `rows`, `showHeader`, `showWeather`, `headerDivider`, `wxDivider`, `transitLayout`, `radarTime`, `radarClock`, `radarCond`, `tempUnit`, `radarBright`, `wxView`, `wxRain`, `wxRainEvery`, `wxRainLoops`, `radarEvery`, `radarFor`, `screen`, the Auto and screen options (`autoScreens`, `autoEvery`, `wxVisit`, `alertJump`, `bbTeams`, `bbPre`, `bbFinal`, `bbPriority`, `lineNames`, `headerClock`, `timeSteps`; see the state table), `bright`, `baseballLayout`, `logoBright`, the speed settings (`tickerHold` s: 5, 6, 8, 10, 12, 15; `tickerSlide` ms: 800, 1200, 1600, 2000; `radarFrame` ms: 300, 400, 500, 700, 1000; `radarHold` s: 2, 3, 4, 6, 8; `gameEvery` s: 30, 45, 60, 90, 120), `wxRainLoops` (1, 2, 3, 5), `tickerFill` (25–80), `clockFace` (`skyline`), `boats` (bool), `fw` and `fwRetry` (state table); anything else is a `400`. `rows` holds up to 24 entries. Changing `station` to a different `mapid` resets `rows` to `[]` unless the same request sets `rows`. Posting to a board ID that doesn't exist creates it from defaults (IDs: 1–32 chars of `a-z`, `0-9`, `-`). `BOARD_CONTROL_PATH` must not be a board endpoint's name (`ping`, `version`, `update`, `select`, `radar`, `sky`, `logo`, `firmware`, `c`) or contain `/`; if it is or does, control endpoints are disabled.
 
 ---
 
@@ -469,6 +471,8 @@ POST rules: allowed fields are `label` (up to 24 characters, trimmed; empty for 
 | `timeSteps` | Transit times at 100/40/20% instead of 100/40/40% (default off). |
 Settings added after a board's state was saved load with these defaults (today's behavior). |
 | `baseballLayout` | `classic` (default), `logos`, or `bands`. Sent as `mlb.layout`. |
+| `clockFace` | The clock screen's face: `skyline` (default, the only one). Sent as `skyline.face`. |
+| `boats` | Skyline face: the quarter-hour boats (default `true`). `false` sends `skyline.boats` 0. |
 | `logoBright` | 10–100, default 90: logo and band brightness in the `logos`/`bands` layouts, sent as `mlb.dim`. |
 | `tickerHold`, `tickerSlide`, `radarFrame`, `radarHold`, `gameEvery` | Speed settings (allowed values under the POST rules above), sent to the board as `anim`. Defaults 8 s, 1200 ms, 500 ms, 4 s, 60 s. |
 | `tickerFill` | Ticker row fill percent (25–80, default 55), sent as `tickerFill`. |

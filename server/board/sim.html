@@ -185,6 +185,15 @@
     }
   }
 
+  // Cloud strips (skyline face) are immutable: fetch each once.
+  const cloudStrips = {};
+  async function syncClouds() {
+    const id = p && p.skyline && p.skyline.cl && p.skyline.cl.id;
+    if (!id || cloudStrips[id]) return;
+    const r = await fetch(`api/sky/${encodeURIComponent(id)}`);
+    if (r.ok) cloudStrips[id] = new Uint8Array(await r.arrayBuffer());
+  }
+
   // Team logo crops are immutable too (ids carry a hash): fetch each once.
   const logoBytes = {};
   async function syncLogos() {
@@ -240,6 +249,7 @@
       $('bright').textContent = p.bright;
       syncRadarFrames().catch(() => {});
       syncLogos().catch(() => {});
+      syncClouds().catch(() => {});
       setStatus('');
     } catch (e) {
       setStatus('update failed: ' + e.message);
@@ -311,7 +321,7 @@
     $('gameState').textContent = !pick.of ? 'no games' : `${anyLive ? 'live game' : 'game'} ${pick.pos + 1} of ${pick.of}`;
 
     // Clock (skyline face): ambient motion on the wall clock (boats on the quarter hour).
-    paintClock(rolled('clock', t, { full, o: { now: n, ms: Math.floor(n * 1000), blink } }));
+    paintClock(rolled('clock', t, { full, o: { now: n, ms: Math.floor(n * 1000), blink, clouds: cloudStrips } }));
     $('clockState').textContent = p.skyline ? p.skyline.st : 'no weather yet';
   }
 

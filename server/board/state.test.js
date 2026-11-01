@@ -297,3 +297,11 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   store.select('home', 'clock');
   assert.equal(store.get('home').screen, 'clock');
 });
+
+test('boats setting: on by default, a boolean', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  assert.equal(store.get('home').boats, true);
+  store.update('home', { boats: false });
+  assert.equal(store.get('home').boats, false);
+  assert.throws(() => store.update('home', { boats: 'no' }), ValidationError);
+});

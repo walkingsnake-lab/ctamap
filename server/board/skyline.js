@@ -8,6 +8,7 @@
 // sun) and scripts/mock-weather-lake.js (weather palettes).
 
 const { sunPos, moonPhase } = require('./sun');
+const clouds = require('./clouds');
 
 // ---- color helpers (hex strings, as the payload sends them) ----
 const rgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
@@ -96,9 +97,53 @@ const SUN_HORIZON_ROW = 21;       // sun's center row at 0° elevation
 const ROWS_PER_DEG = 2.4;
 const RIM_TOP = [11, 12, 13];     // rows behind the wheel's upper rim
 
+// ---- clouds: a strip (shapes, clouds.js) and its colors for this moment ----
+// Wisps take the light's color: white by day, warm at sunset, the city's
+// glow at night. Decks blend a day and a night pair, light (thin) to dark (thick).
+const WISP_KEYS = [[6, '#eef2f8'], [1, '#ffc8a8'], [-3, '#8a6a80'], [-6, '#4a4048']];
+const STRIPS = {
+  partly: { id: 'p1', a: [35, 70] },
+  mostly: { id: 'm1', a: [38, 72] },
+  overcast: { id: 'o1', day: ['#78808c', '#3e4652'], night: ['#3a3034', '#141016'] },
+  rain: { id: 'r1', day: ['#525a66', '#1e232a'], night: ['#2a2630', '#0e0c12'] },
+  storm: { id: 's1', day: ['#3a3e4a', '#14161c'], night: ['#2a2638', '#08080e'] },
+};
+function keyed(keys, el) {
+  if (el >= keys[0][0]) return keys[0][1];
+  for (let i = 1; i < keys.length; i++) if (el >= keys[i][0]) { const [e0, c0] = keys[i - 1], [e1, c1] = keys[i]; return mix(c0, c1, (e0 - el) / (e0 - e1)); }
+  return keys[keys.length - 1][1];
+}
+// {id, pal, a}: the strip and, per index, its color and opacity (%); index 0
+// is clear (empty color). Null for clear, fog and snow skies.
+function cloudsFor(kind, el, night) {
+  const S = STRIPS[kind];
+  if (!S) return null;
+  if (S.a) {
+    const c = keyed(WISP_KEYS, el);
+    return { id: S.id, pal: ['', c, c], a: [0, ...S.a] };
+  }
+  const light = mix(S.day[0], S.night[0], night), dark = mix(S.day[1], S.night[1], night);
+  const pal = [''], a = [0];
+  for (let i = 1; i <= clouds.DECK_LEVELS; i++) { pal.push(mix(light, dark, (i - 1) / (clouds.DECK_LEVELS - 1))); a.push(100); }
+  return { id: S.id, pal, a };
+}
+// Average luma of a sky row band with the clouds over it, across the whole
+// strip (the clouds drift, so this is what the wheel sees on average).
+function bandLuma(sky, cl, rows) {
+  let sum = 0, n = 0;
+  const px = cl ? clouds.strip(cl.id) : null;
+  for (const y of rows) {
+    const base = sample(sky, y);
+    if (!px) { sum += luma(base); n++; continue; }
+    for (let x = 0; x < clouds.W; x++) { const i = px[y * clouds.W + x]; sum += luma(i ? mix(base, cl.pal[i], cl.a[i] / 100) : base); n++; }
+  }
+  return sum / n;
+}
+
 // Weather (parsed by weather.js, °F), the place, the time and the temperature
-// to show (board unit, rounded) -> the payload's `skyline`.
-function toSkyline(w, { lat, lon, now, temp }) {
+// to show (board unit, rounded) -> the payload's `skyline`. `boats: false`
+// (the board's setting) keeps the boats off.
+function toSkyline(w, { lat, lon, now, temp, boats = true }) {
   const { el, az } = sunPos(now, lat, lon);
   const { kind, lvl } = weatherKind(w.code, w.clouds);
   const night = sstep(1, -6, el);                 // 0 day .. 1 night
@@ -136,7 +181,8 @@ function toSkyline(w, { lat, lon, now, temp }) {
 
   // The wheel by day: white rim with a darker frame, lighter on mid greys,
   // all dark on bright skies (fog, snow) so it keeps its contrast.
-  const behind = RIM_TOP.reduce((a, y) => a + luma(sample(look.sky, y)), 0) / RIM_TOP.length;
+  const cl = cloudsFor(kind, el, night);
+  const behind = bandLuma(look.sky, cl, RIM_TOP);
   const whl = kind === 'fog' || kind === 'snow' ? 2 : behind < 75 ? 0 : behind < 135 ? 1 : 2;
 
   const wet = kind === 'rain' || kind === 'storm' ? { k: 'r', n: RAIN_N[lvl - 1] } : kind === 'snow' ? { k: 's', n: SNOW_N[lvl - 1] } : null;
@@ -157,9 +203,10 @@ function toSkyline(w, { lat, lon, now, temp }) {
     roof: look.roof || null,
     pcp: wet,
     storm: kind === 'storm' ? 1 : 0,
-    boats: el > 0 && (clearish || kind === 'overcast') && tempF != null && tempF >= 40 ? 1 : 0,
+    boats: boats && el > 0 && (clearish || kind === 'overcast') && tempF != null && tempF >= 40 ? 1 : 0,
+    cl,                                            // clouds: strip id (GET /board/sky/<id>) and its colors
     temp: temp == null ? null : Math.round(temp),
   };
 }
 
-module.exports = { toSkyline, weatherKind, clearSky, mixSky, sample, KEYS, LOOKS, RAIN_N, SNOW_N };
+module.exports = { toSkyline, weatherKind, clearSky, mixSky, sample, cloudsFor, KEYS, LOOKS, STRIPS, RAIN_N, SNOW_N };

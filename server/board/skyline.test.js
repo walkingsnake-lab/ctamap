@@ -148,3 +148,35 @@ test('temperature is passed through rounded, in the board unit', () => {
   assert.equal(sky({}, AFTERNOON, { temp: 11.6 }).temp, 12);
   assert.equal(sky({}, AFTERNOON, { temp: null }).temp, null);
 });
+
+test('clouds: a strip and its colors per kind; none when clear, foggy or snowing', () => {
+  assert.equal(sky({ code: 0, clouds: 5 }, AFTERNOON).cl, null);
+  assert.equal(sky({ code: 45, clouds: 100 }, AFTERNOON).cl, null);
+  assert.equal(sky({ code: 73, clouds: 100 }, AFTERNOON).cl, null);
+  const p = sky({ code: 2, clouds: 35 }, AFTERNOON).cl;
+  assert.deepEqual(p, { id: 'p1', pal: ['', '#eef2f8', '#eef2f8'], a: [0, 35, 70] });
+  assert.equal(sky({ code: 3, clouds: 70 }, AFTERNOON).cl.id, 'm1');
+  // Wisps take the light: warm at sunset, the city's glow at night (same strip).
+  const ps = sky({ code: 2, clouds: 35 }, SUNSET).cl, pn = sky({ code: 2, clouds: 35 }, NIGHT).cl;
+  assert.equal(ps.id, 'p1'); assert.equal(pn.id, 'p1');
+  assert.notEqual(ps.pal[1], p.pal[1]);
+  assert.equal(pn.pal[1], '#4a4048');
+  const o = sky({ code: 3, clouds: 95 }, AFTERNOON).cl;
+  assert.equal(o.id, 'o1');
+  assert.equal(o.pal.length, 16);
+  assert.equal(o.pal[1], '#78808c'); assert.equal(o.pal[15], '#3e4652');
+  assert.ok(o.a.slice(1).every((v) => v === 100));
+  assert.equal(sky({ code: 63, clouds: 100 }, AFTERNOON).cl.id, 'r1');
+  assert.equal(sky({ code: 95, clouds: 100 }, NIGHT).cl.id, 's1');
+});
+
+test('the wheel color accounts for the clouds behind its rim', () => {
+  // Overcast day: a mid-grey deck behind the rim -> the lighter variant.
+  assert.equal(sky({ code: 3, clouds: 95 }, AFTERNOON).whl, 1);
+  assert.equal(sky({ code: 0, clouds: 5 }, AFTERNOON).whl, 0);
+});
+
+test('boats can be turned off per board', () => {
+  assert.equal(toSkyline({ temp: 60, code: 0, clouds: 0 }, { ...PLACE, now: AFTERNOON, temp: 60, boats: false }).boats, 0);
+  assert.equal(toSkyline({ temp: 60, code: 0, clouds: 0 }, { ...PLACE, now: AFTERNOON, temp: 60 }).boats, 1);
+});

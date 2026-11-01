@@ -1291,3 +1291,22 @@ test('clock screen: other screens leave the skyline out; the knob can choose CLO
   assert.equal(s.store.get('home').screen, 'clock');
   await s.close();
 });
+
+test('cloud strips: the board fetches one by id with its token; the simulator by its path', async () => {
+  const s = await serve();
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  assert.equal((await fetchRaw(s, '/board/sky/o1?b=home')).status, 401);
+  const ok = await fetchRaw(s, '/board/sky/o1?b=home', h);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.bytes.length, 1664);
+  assert.match(ok.headers.get('cache-control'), /immutable/);
+  assert.equal((await fetchRaw(s, '/board/sky/zz?b=home', h)).status, 404);
+  const sim = await fetchRaw(s, '/board/secret123/api/sky/p1');
+  assert.equal(sim.status, 200);
+  assert.equal(sim.bytes.length, 1664);
+  await s.close();
+});
+async function fetchRaw(s, p, init = {}) {
+  const r = await fetch(`http://127.0.0.1:${s.port}${p}`, init);
+  return { status: r.status, headers: r.headers, bytes: new Uint8Array(await r.arrayBuffer()) };
+}

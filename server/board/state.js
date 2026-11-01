@@ -155,8 +155,9 @@ function defaultBoard(stations) {
     // while both apply).
     wxRain: 'radar',
     wxRainEvery: 15,
-    // Clock screen face (CLOCK_FACES).
+    // Clock screen face (CLOCK_FACES), and the skyline face's quarter-hour boats.
     clockFace: 'skyline',
+    boats: true,
     wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
@@ -221,6 +222,7 @@ function validatePatch(patch, stations) {
       case 'tempShadow':
       case 'headerClock':
       case 'timeSteps':
+      case 'boats':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;

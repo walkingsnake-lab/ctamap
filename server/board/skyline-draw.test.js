@@ -164,3 +164,21 @@ test('no weather yet: a plain night with the clock', () => {
   for (let y = 27; y <= 31; y++) for (let x = 40; x < 64; x++) if (px(f, x, y) === '#d8d8d8') lit++;
   assert.ok(lit > 10);
 });
+
+test('clouds: drawn from the strip once it is on hand, scrolling 1 px every 4 s, behind the buildings', () => {
+  const { stripBytes } = require('./clouds');
+  const sky = toSkyline({ temp: 52, code: 3, clouds: 95 }, { ...PLACE, now: DAY, temp: 52 });
+  const clouds = { [sky.cl.id]: stripBytes(sky.cl.id) };
+  const without = draw({}, DAY, { sky });
+  const a = draw({}, DAY, { sky, ms: DAY * 1000 }), b = render({ now: DAY, screen: 'clock', bright: 100, skyline: sky }, { screen: 'clock', now: DAY, ms: DAY * 1000, clouds });
+  assert.deepEqual([...a.px], [...without.px], 'no strip yet: plain sky');
+  let changed = 0;
+  for (let y = 0; y <= 25; y++) for (let x = 0; x < 64; x++) if (px(a, x, y) !== px(b, x, y)) { changed++; assert.equal(SKY.role[y * 64 + x], 0, 'clouds stay behind the buildings'); }
+  assert.ok(changed > 300, `deck drawn (${changed} px)`);
+  const later = (ms) => render({ now: DAY, screen: 'clock', bright: 100, skyline: sky }, { screen: 'clock', now: DAY, ms, clouds });
+  const t0 = Math.floor(DAY / 4) * 4000;
+  assert.deepEqual([...later(t0).px], [...later(t0 + 3999).px].length ? [...later(t0).px] : [], 'still for 4 s');
+  // After 4 s, column x shows what column x+1 showed (on an open sky row).
+  const c0 = later(t0), c1 = later(t0 + 4000);
+  for (let x = 0; x < 20; x++) if (!SKY.role[2 * 64 + x] && !SKY.role[2 * 64 + x + 1]) assert.equal(px(c1, x, 2), px(c0, x + 1, 2));
+});

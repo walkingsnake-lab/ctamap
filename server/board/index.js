@@ -20,6 +20,7 @@ const { createFirmware, FirmwareError, CHANNELS: FW_CHANNELS, MAX_BYTES: MAX_FIR
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
 const { toSkyline } = require('./skyline');
+const { stripBytes } = require('./clouds');
 const fs = require('fs');
 const path = require('path');
 const { render, assets, autoScreen } = require('./render');
@@ -33,7 +34,7 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'logo', 'firmware', 'c']);
+const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky', 'logo', 'firmware', 'c']);
 // What a per-board control link (/board/c/<link>/) may reach: the control
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
@@ -325,7 +326,7 @@ function createBoard({
   // The skyline face's parameters, or null without weather or a station.
   function skylineOf(board, w, wd, st, now) {
     if (!w || !st) return null;
-    try { return { face: board.clockFace || 'skyline', ...toSkyline(w, { lat: st.lat, lon: st.lon, now, temp: wd ? wd.temp : null }) }; }
+    try { return { face: board.clockFace || 'skyline', ...toSkyline(w, { lat: st.lat, lon: st.lon, now, temp: wd ? wd.temp : null, boats: board.boats !== false }) }; }
     catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
@@ -540,6 +541,17 @@ function createBoard({
       return send(res, 200, sectionsFor(body, body.screen));
     }
 
+    // A cloud strip for the skyline face (contract "Cloud strips"): 1664
+    // bytes, immutable (the id names the shape).
+    if (first === 'sky' && rest.length === 1) {
+      if (method !== 'GET') return send(res, 405, { err: 'method' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
+      if (!store.get(String(parsed.query.b || ''))) return send(res, 404, { err: 'unknown_board' });
+      const bytes = stripBytes(rest[0]);
+      if (!bytes) return send(res, 404, { err: 'unknown_strip' });
+      return sendFrame(res, bytes);
+    }
+
     // One radar frame for the board's station: 2048 bytes, immutable;
     // pk=4: packed to 1024 (radar.packFrame), as the board stores them.
     if (first === 'radar' && rest.length === 1) {
@@ -567,7 +579,7 @@ function createBoard({
     else if (first === 'c' && rest.length >= 1 && (scope = keys.idForLink(rest[0])) && store.get(scope)) ctl = rest.slice(1);
     if (ctl) {
       const sub = ctl.join('/');
-      const isSimFile = ctl[0] === 'api' && (ctl[1] === 'radar' || ctl[1] === 'logo') && ctl.length === 3;
+      const isSimFile = ctl[0] === 'api' && (ctl[1] === 'radar' || ctl[1] === 'logo' || ctl[1] === 'sky') && ctl.length === 3;
       if (scope) {
         if (!SCOPED_OK.has(sub) && !isSimFile) return send(res, 404, { err: 'not_found' });
         if (sub === 'api/boards' && method !== 'GET') return send(res, 404, { err: 'not_found' });
@@ -693,6 +705,12 @@ function createBoard({
         return send(res, 200, await update(board, id, false, preview));
       }
 
+      // Cloud strip for the simulator.
+      if (rest[0] === 'api' && rest[1] === 'sky' && rest.length === 3) {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        return sendFrame(res, stripBytes(rest[2]));
+      }
+
       // Radar frame for the simulator (the path is the credential); `mapid`
       // for a previewed station.
       if (rest[0] === 'api' && rest[1] === 'radar' && rest.length === 3) {
@@ -807,7 +825,7 @@ function createBoard({
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
-        const screen = ['transit', 'ticker', 'weather', 'baseball'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
+        const screen = ['transit', 'ticker', 'weather', 'baseball', 'clock'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid) || testRadar.frame(fid); if (b) frames[fid] = b; }
@@ -818,6 +836,7 @@ function createBoard({
           blink: parsed.query.blink === '1',
           frames,
           logos: logoBytes(body),
+          clouds: body.skyline && body.skyline.cl ? { [body.skyline.cl.id]: stripBytes(body.skyline.cl.id) } : {},
         });
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
         res.end(frame.toPNG(scale));

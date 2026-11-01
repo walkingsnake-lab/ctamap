@@ -183,6 +183,7 @@
     <button role="tab" data-tab="ticker">Ticker</button>
     <button role="tab" data-tab="weather">Weather</button>
     <button role="tab" data-tab="baseball">Baseball</button>
+    <button role="tab" data-tab="clock">Clock</button>
     <button role="tab" data-tab="health">Board</button>
   </nav>
 
@@ -236,6 +237,17 @@
       <select id="radarFrame" aria-label="Loop speed" style="width:auto"><option value="300">Fast (0.3 s)</option><option value="400">Quicker (0.4 s)</option><option value="500">Normal (0.5 s)</option><option value="700">Slower (0.7 s)</option><option value="1000">Slow (1 s)</option></select></div>
     <div class="row"><span>Pause on the newest frame</span>
       <select id="radarHold" aria-label="Pause on the newest frame" style="width:auto"><option value="2">2 sec</option><option value="3">3 sec</option><option value="4">4 sec</option><option value="6">6 sec</option><option value="8">8 sec</option></select></div>
+  </section>
+
+  <section data-tab="clock">
+    <h2>Clock screen</h2>
+    <label class="field">Face</label>
+    <div class="seg" id="clockFace">
+      <button data-v="skyline">Skyline</button>
+    </div>
+    <p class="hint">The skyline from the lake across Navy Pier, drawn for the weather and the time of day. Temperature bottom left (a watch or warning takes its place), clock bottom right.</p>
+    <div class="row"><span>Boats on the quarter hour</span><label class="switch"><input type="checkbox" id="boats"><span></span></label></div>
+    <p class="hint">A sailboat on :00 and :30, a speedboat out and back on :15 and :45, by day in fair weather.</p>
   </section>
 
   <section data-tab="baseball">
@@ -431,7 +443,7 @@
       img.onload = () => { $('preview').src = img.src; };
       img.src = `sim.png?b=${enc(boardId)}&scale=8&t=${Date.now()}`;
       const scr = visitScreen(p);
-      if (!tabChosen) { showTab(['transit', 'ticker', 'weather', 'baseball'].includes(scr) ? scr : 'transit'); tabChosen = true; }
+      if (!tabChosen) { showTab(['transit', 'ticker', 'weather', 'baseball', 'clock'].includes(scr) ? scr : 'transit'); tabChosen = true; }
       const shown = scr === 'transit' && p.view === 'chrono' ? 'transit (one train per row)' : scr;
       $('caption').textContent = `Showing ${shown} · data ${p.age}s old`;
     } catch (e) {
@@ -600,6 +612,8 @@
       : 'Station and clock on top, weather strip at the bottom.';
     const bl = board.baseballLayout || 'classic';
     pressed('bbLayout', bl);
+    pressed('clockFace', board.clockFace || 'skyline');
+    $('boats').checked = board.boats !== false;
     for (const [k, d] of [['tickerHold', 8], ['tickerSlide', 1200], ['radarFrame', 500], ['radarHold', 4], ['gameEvery', 60]]) $(k).value = String(board[k] || d);
     $('tickerFill').value = board.tickerFill || 55;
     $('tickerFillV').textContent = `${board.tickerFill || 55}%`;
@@ -732,6 +746,8 @@
   $('wxRain').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxRain: v }); });
   $('wxView').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxView: v }); });
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
+  $('clockFace').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ clockFace: v }); });
+  $('boats').addEventListener('change', (e) => save({ boats: e.target.checked }));
   for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('tickerFill').addEventListener('input', (e) => { $('tickerFillV').textContent = `${e.target.value}%`; });
   $('tickerFill').addEventListener('change', (e) => save({ tickerFill: Number(e.target.value) }));
