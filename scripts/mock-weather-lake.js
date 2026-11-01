@@ -44,7 +44,7 @@ const OPT = { text: arg('text', 'auto'), clock: !arg('no-clock', false), reflect
 let T = 0, PHASE = 0, SHIM = 0, DRIFT = 0;
 function setTick(t) {
   T = t;
-  PHASE = (T * 3) % 360;             // rainbow: one turn every 12 s
+  PHASE = (T * 0.6) % 360;           // rainbow: one turn every 60 s (slow and subtle)
   SHIM = Math.floor(T / 15);         // water ripples: 1 px every 1.5 s
   DRIFT = T / 40;                    // clouds: 1 px every 4 s
 }
@@ -104,7 +104,7 @@ function wheel(f, pal) {
   cover(f, ...box, (x, y) => Math.hypot(x - CX, y - CY) > 0.6 && (segment(CX, CY, CX - SPREAD, SHORE + 1, 1)(x, y) || segment(CX, CY, CX + SPREAD, SHORE + 1, 1)(x, y)), pal.leg);
   { const by = 25, k = (by + 0.5 - CY) / (SHORE + 1 - CY); f.fill(Math.round(CX - SPREAD * k), by, Math.round(2 * SPREAD * k), 1, pal.leg); }
   cover(f, ...box, (x, y) => { const r = Math.hypot(x - CX, y - CY); return r >= R - 1 && r <= R; },
-    pal.rim === 'rainbow' ? (x, y) => hsv(((Math.atan2(y - CY, x - CX) * 180 / Math.PI) + 360 + PHASE) % 360, 0.85, 0.95) : pal.rim);
+    pal.rim === 'rainbow' ? (x, y) => hsv(((Math.atan2(y - CY, x - CX) * 180 / Math.PI) + 360 + PHASE) % 360, 0.6, 0.85) : pal.rim);
   f.fill(CX - 1, CY - 1, 2, 2, pal.hub);
 }
 // By day the wheel takes the color with the most contrast against what is behind its upper rim.

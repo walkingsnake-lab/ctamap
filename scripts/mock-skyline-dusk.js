@@ -8,8 +8,8 @@
 //           Oct 31, 2026, 5:00-6:50 PM CDT, every 10 min, clear. Sun elevation and bearing come
 //           from a NOAA-style solar position (the server would compute the same). Keyframe skies
 //           are blended by elevation; windows, stars, wheel lights and beacons come on with dusk.
-// boat.png  An occasional boat crossing the lake: a sailboat by day, running lights at night,
-//           including the moment it passes behind the clock.
+// boat.png  The quarter-hour sailboat (day only), brown and red hulls, including passing behind
+//           the text and in front of the pier.
 //
 // Pieces (skyline, wheel, water, text) come from mock-weather-lake.js. Text is at the bottom.
 
@@ -101,22 +101,16 @@ function duskFrame(ms, T) {
 }
 
 // ---- boat ----
-// A sailboat by day: white sail on rows 23-26 in front of the city, hull on row 27. At night a lit
-// tour boat (the dinner cruises out of Navy Pier): a row of amber cabin windows on row 26, a dark hull
-// on row 27 with the sidelight facing the viewer at the bow (red heading south/left, green heading
-// north/right), and a white masthead light. Drawn before the text, so it passes behind it.
+// A sailboat, by day only, crossing at each quarter hour: a white sail on rows 22-25 in front of the
+// city and a colored hull on rows 26-27 (deck row 6 px, keel row 4 px), so the hull still shows above
+// the text when it passes behind the temperature or the clock. Drawn before the text.
 const SAIL = ['..#...', '..##..', '..###.', '..####'];
-function boat(f, x0, dir, isNight) {
-  const put = (dx, y, c) => { const x = dir < 0 ? x0 + dx : x0 + 8 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
-  if (!isNight) {
-    SAIL.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch === '#') put(dx, 23 + dy, '#e8ecf0'); }));
-    for (let dx = 0; dx < 6; dx++) put(dx, 27, dx === 0 || dx === 5 ? '#8a8e96' : '#c8ccd2');
-  } else {
-    put(3, 24, '#e0e0e0');                                         // masthead
-    for (let dx = 1; dx <= 7; dx++) put(dx, 26, dx % 2 ? '#f0e4c0' : '#2a2834');   // cabin windows
-    for (let dx = 0; dx <= 8; dx++) put(dx, 27, '#2a2834');        // hull
-    put(0, 27, dir < 0 ? '#e02020' : '#20c040');                  // sidelight at the bow
-  }
+const HULLS = { brown: ['#8a4a24', '#5a2e16'], red: ['#c02a20', '#7a1a14'] };
+function boat(f, x0, dir, hull = HULLS.brown) {
+  const put = (dx, y, c) => { const x = dir < 0 ? x0 + dx : x0 + 5 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
+  SAIL.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch === '#') put(dx, 22 + dy, '#e8ecf0'); }));
+  for (let dx = 0; dx < 6; dx++) put(dx, 26, hull[0]);
+  for (let dx = 1; dx < 5; dx++) put(dx, 27, hull[1]);
 }
 
 if (require.main === module) {
@@ -128,16 +122,15 @@ if (require.main === module) {
   fs.writeFileSync(path.join(OUT, 'dusk.png'), L.sheet(frames.map((d) => [d.title, d.f]), 3, 6));
 
   const cells = [];
-  const day = Date.UTC(2026, 9, 31, 19, 30), eve = Date.UTC(2026, 9, 31, 25, 0);   // 2:30 PM, 8:00 PM CDT
-  for (const [ms, x0, dir, t] of [[day, 52, -1, 'DAY  SAILING LEFT'], [day, 30, -1, 'DAY  PAST THE PIER'], [day, 8, -1, 'DAY  BEHIND THE TEMP'],
-    [day, 48, 1, 'DAY  BEHIND THE CLOCK'], [eve, 3, -1, 'NIGHT  HEADING SOUTH'], [eve, 46, 1, 'NIGHT  HEADING NORTH']]) {
-    const local = new Date(ms + TZO * 3600000), hh = local.getUTCHours() % 12 || 12, mm = String(local.getUTCMinutes()).padStart(2, '0');
-    const d = duskFrame(ms, 0);
-    boat(d.f, x0, dir, d.el < -3);
-    L.label(d.f, '52°', `${hh}:${mm}`);                       // text back on top of the boat
+  const day = Date.UTC(2026, 9, 31, 19, 15);                 // 2:15 PM CDT
+  for (const [x0, dir, hull, t] of [[52, -1, 'brown', 'BROWN  SAILING LEFT'], [8, -1, 'brown', 'BROWN  BEHIND THE TEMP'],
+    [48, 1, 'red', 'RED  BEHIND THE CLOCK'], [30, -1, 'red', 'RED  PAST THE PIER']]) {
+    const d = duskFrame(day, 0);
+    boat(d.f, x0, dir, HULLS[hull]);
+    L.label(d.f, '52°', '2:15');                              // text back on top of the boat
     cells.push([t, d.f]);
   }
   fs.writeFileSync(path.join(OUT, 'boat.png'), L.sheet(cells, 2, 6));
   console.log('wrote dusk.png, boat.png to', path.relative(process.cwd(), OUT));
 }
-module.exports = { sunPos, blend, duskFrame, boat };
+module.exports = { sunPos, blend, duskFrame, boat, HULLS };

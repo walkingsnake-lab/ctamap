@@ -453,7 +453,7 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 ### Centennial Wheel and Navy Pier
 - **Wheel:** a 12 px hard-edged rim (rows 12–23) centered on the x 32 pixel boundary, a 2×2 hub, A-frame legs from the hub to the pier (feet 5 px either side of center), and a crossbar on row 25. No spokes and no gondolas: the rim on its A-frame is what reads as the wheel. Hard edges throughout.
 - **By day** the wheel takes the color with the most contrast against the sky behind its upper rim: grey `#8a92a2` on blue or dark skies, light `#dce0e6` on mid greys, dark `#262a32` on bright skies. Clouds drift, so the server picks the color once per cloud strip from the strip's average over the rim rows; it doesn't change as clouds pass.
-- **At night** the rim is rainbow LEDs, the hues turning around it once every 12 s; legs and hub dim `#4a4a66`.
+- **At night** the rim is rainbow LEDs, soft and slow: pastel hues (saturation 60%, value 85%) turning around it once every 60 s, so the colors drift rather than spin; legs and hub dim `#4a4a66`. The rim, beacons and pier bulbs switch on when the sun drops below 0.5° (the real wheel lights at dusk).
 - **Pier:** a flat deck 8 px either side of the wheel's axis (x 24–39): a lit top row (`#6a6460` by day, `#2a2834` at night) and a darker face on row 27. At night, string-light bulbs every 3 px (x 24, 27 … 39) in `#c09050`.
 - Also tried and declined: flags on the pier, the Grand Ballroom dome, a pier running toward the viewer in perspective, gondolas, 6 or 8 spokes, a soft-edged rim.
 
@@ -477,14 +477,21 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 ### Choosing the state
 The server picks the state; the board never interprets weather codes.
 
-**Time of day** comes from the sun's elevation, computed on the server (NOAA solar position formula, no dependencies):
+**Time of day** comes from the sun's elevation, computed on the server (NOAA low-precision solar position, no dependencies; prototype `sunPos` in `scripts/mock-skyline-dusk.js`). The sky doesn't snap between looks: the server blends keyframe skies by the exact elevation on every update (~30 s), so dusk deepens gradually. Mockup: [`dusk.png`](mockups/weather/lake/dusk.png) (Oct 31, 2026, 5:00–6:50 PM), the reference for these colors.
 
-| Sun elevation | Look |
-|---|---|
-| above 6° | day |
-| 0° to 6° | sunrise (morning) or sunset (evening) |
-| −6° to 0° | twilight (civil twilight, morning and evening) |
-| below −6° | night |
+| Sun elevation | Keyframe (clear) | Sky, top → horizon |
+|---|---|---|
+| 12° and up | day | `#08245a` → `#1a4a8e` (row 18) → `#3a6eb0` |
+| 6° | golden hour | `#14347a` → `#3a62a0` (14) → `#b89880` (22) → `#f0b868` |
+| 1° | sunset | `#1a1440` → `#5a2a5a` (9) → `#c0503a` (17) → `#f08a30` (23) → `#ffb848` |
+| −3° | dusk | `#0e1040` → `#30285e` (12) → `#80406a` (20) → `#c86a50` |
+| −6° | end of civil twilight | `#06103a` → `#22306a` (18) → `#4a4a88` |
+| −10° and below | night | `#000006` → `#0c1430` |
+
+- Between keyframes each row's color is mixed linearly by elevation; water colors blend the same way (values in the mock's `KEYS`).
+- **Mornings** use the same keyframes in reverse, except the sunrise sun isn't drawn (it rises behind the viewer, over the lake).
+- **City lights follow the sky:** windows switch on one at a time between 1° and −6° (each window has its own threshold from a hash, so the lit set only grows, reaching the full 45% at −6°); stars appear between −4° and −9° (0 → 14).
+- **Sun height:** at the skyline's real 2.4 rows per degree (center row 22 at the horizon, hidden by the buildings). Above ~8° it would leave the panel, so between 8° and 14° it slides to the day spot (x 38–44, rows 2–8). In late fall and winter it sets behind the Loop towers (on Oct 31 it's hidden behind Aon and St. Regis from about 5:15 PM), so the glow carries the sunset; in summer it sets right of the wheel over lower buildings.
 
 **Weather** comes from Open-Meteo's current `weather_code` and `cloud_cover` (add `cloud_cover` to the current request; additive, so the M4 is unaffected), first match wins:
 
@@ -500,7 +507,7 @@ The server picks the state; the board never interprets weather codes.
 | under 20% | Clear |
 
 - Codes 0–3 (clear through overcast) are ignored; cloud cover sets the cloud state instead, since Open-Meteo has no "mostly cloudy" code.
-- Sunrise, sunset and twilight looks apply only to Clear, Partly and Mostly cloudy. Under Overcast, Rain, Snow, Fog or Thunderstorm, sun above 0° uses the day variant and below 0° the night variant.
+- The dusk keyframes apply to Clear, Partly and Mostly cloudy. Overcast, Rain, Snow, Fog and Thunderstorm blend their own day and night variants across 1° to −6°.
 - Precipitation intensity (light / moderate / heavy) comes from the code: 51/53/55, 61/63/65, 71/73/75, 80/81/82, with 56/57/66/67 and 77/85/86 as light / heavy pairs.
 
 ### Weather states
@@ -548,7 +555,7 @@ The scene is drawn in layers, back to front. The server renders what's expensive
 - The board draws it at x offset `floor(now / 4) % 128` (1 px every 4 s, from wall-clock time so every renderer agrees), behind the city, so clouds pass behind the buildings.
 - Night wisps and decks use the same strip with a night palette.
 
-**Payload** (`skyline` object; exact fields in `contract.md`): state, day/night variant, sky stops, water colors, wheel day color, sun x/y and visibility, moon phase, cloud strip id and palette, precipitation kind and intensity, lightning on/off, temperature text.
+**Payload** (`skyline` object; exact fields in `contract.md`): drawing parameters, not a state name. The server turns the state into: sky stops, water colors, wheel day color, lights on/off, window and star levels, sun x/y and visibility, moon phase, cloud strip id and palette, fog level, roof snow color, precipitation kind and intensity, lightning on/off, boats allowed, temperature text. The board has no per-state branches: it draws the layers from these values, so `draw.cpp` stays small and a new look needs only a server change.
 
 **Determinism:** every random element (twinkle phases, rain and snow positions, glints, lightning timing) comes from a hash of the tick and a fixed seed, never a running random generator, so `draw.js`, `draw.cpp` and the parity test agree pixel for pixel.
 
@@ -557,7 +564,7 @@ Ambient and slow, on a 100 ms tick:
 
 | Element | Motion |
 |---|---|
-| Wheel rim (night) | rainbow turns once every 12 s |
+| Wheel rim (night) | pastel rainbow turns once every 60 s |
 | Beacons (night) | `#401010` ↔ `#ff2020`, smooth 4 s cosine |
 | Stars (night) | twinkle, 4–12 s cycles |
 | Water | ripples drift 1 px every 1.5 s |
@@ -566,9 +573,16 @@ Ambient and slow, on a 100 ms tick:
 | Rain | 1 px down per tick, 1 px left every 2 ticks (slanted), 2 px streaks; 12 / 24 / 40 streaks for light / moderate / heavy |
 | Snow | 1 px down every 400 ms, a 1 px sideways step about every 1.2 s per flake; 10 / 20 / 30 flakes |
 | Lightning | a strike every 8–20 s (from the hash), shown 100 ms on, 100 ms off, 100 ms on |
+| Boat (day) | crosses at each quarter hour (below) |
 
 - This screen is the exception to Minimal animation (§2): it has no times to protect, apart from the clock, which only changes at the minute.
 - Fetches still go in the scheduler's gaps, and the scene holds still while one runs. How long a fetch stalls the S3's loop needs measuring on hardware.
+
+### Boat
+- A sailboat crosses the lake **at every quarter hour** (:00, :15, :30, :45), by day only. Mockup: [`boat.png`](mockups/weather/lake/boat.png).
+- **Look:** a white sail `#e8ecf0` on rows 22–25 (mast on the leading side), in front of the city; a colored hull on rows 26–27 (6 px deck row, 4 px keel row) so it stands out against the sail and still shows above the text when it passes behind the temperature or clock.
+- **Crossing:** starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Direction alternates by quarter (left on :00 and :30, right on :15 and :45). It passes in front of the pier and wheel and behind the text.
+- **When:** sun above 0°, and no rain, snow, fog or thunderstorm, and 40°F or warmer. The server sends `boats` true or false; the board times the crossing from its own clock.
 
 ### Board requirements (S3)
 - Memory is not a constraint on the S3 (2 MB PSRAM): the cloud strip (1.7 KB), the city layer and the scene buffers can all stay resident.
@@ -580,4 +594,5 @@ Ambient and slow, on a 100 ms tick:
 - On the panel: the near-floor colors above, whether the moon is dim enough, and whether glints read as sparkle or noise.
 - Moon crescents: a plain sliver, earthshine (the unlit part as a faint disc, likely lost to overnight dimming), or a brightened sliver.
 - Sunset sun height: how much of the disc shows above the skyline at the low and high ends of its x range (it crosses different buildings through the year).
-- Mock update: `mock-weather-lake.js` still draws the text at the top and has no glints, moving sunset sun or cloud strip. Update it or let `draw.js` take over as the reference.
+- Hull color: brown (`#8a4a24` / `#5a2e16`) or red (`#c02a20` / `#7a1a14`), both in `boat.png`.
+- Mocks: `mock-skyline-dusk.js` (sky, lights, boat) is current; `mock-weather-lake.js` still draws the weather states with the text at the top and has no glints or cloud strip. `draw.js` takes over as the reference once built.
