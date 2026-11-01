@@ -113,6 +113,14 @@ int main(int argc, char **argv) {
           ro.chooser_pos = o["chooser"]["pos"].num(0);
           ro.chooser_commit = o["chooser"]["commit"].truthy();
         }
+        if (!o["iconT"].is_null()) ro.icon_t = o["iconT"].num();
+        std::vector<uint8_t> slide_from;
+        if (!o["slide"].is_null()) {
+          for (const Value &v : o["slide"]["from"].a) slide_from.push_back((uint8_t)v.num());
+          ro.slide_from = slide_from.data();
+          ro.slide_t = o["slide"]["t"].num(0);
+          ro.slide_dir = o["slide"]["dir"].is_null() ? 1 : (int)o["slide"]["dir"].num();
+        }
         Frame f;
         draw::render(s["payload"], f, ro);
         count++;

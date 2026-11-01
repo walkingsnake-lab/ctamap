@@ -200,6 +200,9 @@
       <button data-v="hourly">Hourly</button>
     </div>
     <p class="hint" id="wxViewHint"></p>
+    <div class="row"><span>Icons</span>
+      <select id="wxIcons" aria-label="Weather screen icons" style="width:auto"><option value="animated">Animated</option><option value="static">Static</option></select></div>
+    <p class="hint">Each layout keeps its own choice. Animated: rain falls, clouds drift, the sun's rays twinkle (Matrix Portal S3).</p>
     <!-- Rain bars need 15-minute precipitation, which the weather source
          (WeatherAPI) doesn't send; the server treats 'bars' and 'both' as
          'radar' without it. Shown again once a source has it. -->
@@ -230,6 +233,8 @@
     </div>
     <p class="hint" id="radarCornerHint"></p>
     <div class="row" id="radarCondRow"><span>Temperature under the clock</span><label class="switch"><input type="checkbox" id="radarCond"><span></span></label></div>
+    <div class="row" id="radarIconsRow"><span>Weather icon</span>
+      <select id="radarIcons" aria-label="Radar corner icon" style="width:auto"><option value="animated">Animated</option><option value="static">Static</option></select></div>
     <div class="row"><span>Radar brightness</span>
       <select id="radarBright" aria-label="Radar brightness" style="width:auto"><option value="40">40%</option><option value="50">50%</option><option value="60">60%</option><option value="70">70%</option><option value="80">80%</option><option value="90">90%</option><option value="100">100%</option><option value="120">120%</option><option value="150">150%</option></select></div>
     <div class="row"><span>Loop speed</span>
@@ -630,6 +635,9 @@
     $('radarCondRow').hidden = corner === 'temp' || corner === 'age' || corner === 'none';
     $('tempShadow').checked = board.tempShadow === true;
     pressed('wxView', board.wxView === '5day' || board.wxView === 'hourly' ? board.wxView : 'now');
+    $('wxIcons').value = board[wxIconsKey()] === 'static' ? 'static' : 'animated';
+    $('radarIcons').value = board.iconsRadar === 'static' ? 'static' : 'animated';
+    $('radarIconsRow').hidden = corner !== 'temp';
     const wr = board.wxRain === 'bars' || board.wxRain === 'both' ? board.wxRain : 'radar';
     pressed('wxRain', wr);
     $('wxRainEveryRow').style.display = wr === 'both' ? '' : 'none';
@@ -737,6 +745,10 @@
   $('wxRainLoops').addEventListener('change', (e) => save({ wxRainLoops: Number(e.target.value) }));
   $('wxRain').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxRain: v }); });
   $('wxView').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ wxView: v }); });
+  // Icons: the setting of the layout picked above (iconsNow, icons5day, iconsHourly).
+  function wxIconsKey() { return board.wxView === '5day' ? 'icons5day' : board.wxView === 'hourly' ? 'iconsHourly' : 'iconsNow'; }
+  $('wxIcons').addEventListener('change', (e) => save({ [wxIconsKey()]: e.target.value }));
+  $('radarIcons').addEventListener('change', (e) => save({ iconsRadar: e.target.value }));
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
   for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('tickerFill').addEventListener('input', (e) => { $('tickerFillV').textContent = `${e.target.value}%`; });

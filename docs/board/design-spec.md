@@ -22,18 +22,23 @@ Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the desi
 - Optional shared token on board endpoints (`BOARD_TOKEN` Fly secret) to keep randoms off the CTA quota.
 
 ### Minimal animation
-Animation is deliberately limited so the board's network pauses (CircuitPython is single-threaded, and each HTTPS request through the M4's WiFi co-processor blocks the display for roughly a second or more) are invisible. The only animations are:
-- **Per-digit roll** when an arrival time changes, and the same roll for the **header clock** (transit, ticker) and the radar's **current time** at each minute. Only the changed digits move while the clock keeps its shape; a width change (`9:59`→`10:00`) rolls the whole clock. Nothing rolls across a screen change. The big overnight and no-games clocks, the radar's frame time, and temperatures and other weather numbers don't roll (board memory). Clock minute rollovers count as animations for the scheduler. Reference: `createNumRoller()` in `server/board/draw.js`.
+Animation was deliberately limited on the M4 so its network pauses (CircuitPython is single-threaded, and each HTTPS request through the M4's WiFi co-processor blocks the display for roughly a second or more) were invisible. On the S3, requests run on the other core (see *Scheduler*), so nothing pauses; the list below is still the whole set of animations, and anything marked S3 doesn't exist on the frozen M4:
+- **Per-digit roll** when an arrival time changes, and the same roll for the **header clock** (transit, ticker) and the radar's **current time** at each minute. Only the changed digits move while the clock keeps its shape; a width change (`9:59`→`10:00`) rolls the whole clock. Nothing rolls across a screen change. The radar's frame time doesn't roll. Clock minute rollovers count as animations for the scheduler. Reference: `createNumRoller()` in `server/board/draw.js`.
+- **S3:** the big overnight and no-games clocks roll too, and so do current-conditions numbers when a new payload changes them: the weather strip's temperature, and on the weather screen the big temperature, feels-like, high/low, rain chance, and the top bar's temperature. Forecast columns and the radar corner don't. (The M4 skipped these for memory.)
 - **Transit transitions:** a departing train fades out in place, the next time eases to amber, and rows fade in/out and slide (all under 1.2 s, at the same moments as digit rolls).
+- **Screen change (S3):** the new screen pushes the old one's last frame off sideways over 0.45 s (ease in-out), with a 4px unlit gap between them: a later screen in the order transit, ticker, weather, baseball, clock comes in from the right, an earlier one from the left; leaving the knob's chooser follows the way the knob turned. Status screens and the chooser itself appear at once (a turn should answer immediately). Reference: `slideFrames()` in `draw.js`, `Board::shown()` in `firmware-s3/ctaboard/src/app.cpp`.
 - **Tornado warning blink** on the weather strip and weather screens: 1 s on, 1 s off. (CTA line alerts are static: see §5.)
 - **Ticker page slide.**
 - **Radar loop.**
+- **Animated weather icons (S3, per layout on the phone):** rain falls, snow floats, clouds drift, the sun's rays and the moon's stars twinkle, fog lines drift, and a storm's bolt flickers (the only fast change, about a third of a second every two; slower than the tornado blink so the two don't read alike). Frames in `ICON_ANIM` in `server/board/icons.js`; frame 0 is the static icon.
 - **Knob chooser slide** (S3; §10, *Knob*): 180 ms per click, only while someone is turning the knob.
 
 No blinking colons, no scrolling text, and no alert text screens anywhere. Alerts are shown only as indicators (see §5, §6, §7).
 
 ### Scheduler (board main loop)
-A small cooperative scheduler lines up network requests with animation gaps:
+**S3:** the board's requests run on a network task on core 0 (beside the WiFi stack) while the loop keeps drawing on core 1 (`device::NetWorker`, `app::Worker`). One request is out at a time; jobs simply run when due, and nothing on the panel waits for them. A request still out after 45 s (`WORK_STUCK_MS`) stops the loop feeding the watchdog, which restarts the board, so a hung TLS read can't leave stale times up forever. Without the worker (it failed to start, or the M4) the rules below apply.
+
+On the M4, a small cooperative scheduler lines up network requests with animation gaps:
 - **Animation timeline:** the board tracks when its next animation will start: next digit roll (computed from arrival timestamps), next list slide (chronological view), next ticker slide, radar frame steps, and screen switches.
 - **Network jobs:** each job (version check, combined update, radar frame) has a **due time** and a **deadline**.
 - **Each loop pass:** if a job is due and the next animation is at least the **fetch budget** away, run it now; otherwise wait for the next gap.
@@ -352,6 +357,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
 - **Transit layout:** station on top (header) or key on top (station line at the bottom). **Header and weather strip:** independent on/off toggles per board (see §5 for how many rows each combination fits; the key layout has no weather strip).
 - **Header clock** (transit and ticker) on/off, and **destination names** in white or the line's color (Brown and Purple read dim as text in their true colors).
+- **Weather icons** (Weather): Animated or Static, kept per layout (conditions, 5-day, hourly) and for the radar corner's icon (shown when its corner is set to Weather). Default Animated; the frozen M4 always draws them static.
 - **Time dim steps** (Transit): the third arrival time at 20% instead of 40% (default off).
 - **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.
 

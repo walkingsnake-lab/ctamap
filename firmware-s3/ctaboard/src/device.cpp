@@ -905,9 +905,10 @@ void StatusLed::set(const std::string &name_in) {
 }
 
 // ---- watchdog ----
-// Resets the board if the loop stops feeding it (a hung request). The loop
-// feeds it every pass, and the network before each request, so one request
-// gets the whole timeout.
+// Resets the board if the loop stops feeding it: a hung loop, or (with the
+// network worker) a request out longer than app::WORK_STUCK_MS. Without the
+// worker the loop feeds it every pass and the network before each request,
+// so one request gets the whole timeout.
 
 Watchdog::Watchdog(int seconds) {
 #if ESP_IDF_VERSION_MAJOR >= 5
@@ -920,11 +921,37 @@ Watchdog::Watchdog(int seconds) {
   esp_task_wdt_init(seconds, true);
 #endif
   on_ = esp_task_wdt_add(NULL) == ESP_OK;
+  owner_ = xTaskGetCurrentTaskHandle();
   if (!on_) Serial.println("[board] no watchdog");
 }
 
 void Watchdog::feed() {
-  if (on_) esp_task_wdt_reset();
+  if (on_ && xTaskGetCurrentTaskHandle() == (TaskHandle_t)owner_) esp_task_wdt_reset();
+}
+
+// ---- network worker ----
+
+static const uint32_t NET_STACK = 16 * 1024;  // TLS (mbedtls) needs about as much as the loop task's 16 KB
+
+bool NetWorker::begin() {
+  go_ = xSemaphoreCreateBinary();
+  if (!go_) return false;
+  return xTaskCreatePinnedToCore(task, "net", NET_STACK, this, 1, nullptr, 0) == pdPASS;
+}
+
+void NetWorker::start(std::function<void()> work) {
+  work_ = std::move(work);
+  done_.store(false, std::memory_order_release);
+  xSemaphoreGive((SemaphoreHandle_t)go_);
+}
+
+void NetWorker::task(void *arg) {
+  NetWorker *w = (NetWorker *)arg;
+  for (;;) {
+    if (xSemaphoreTake((SemaphoreHandle_t)w->go_, portMAX_DELAY) != pdTRUE) continue;
+    if (w->work_) w->work_();
+    w->done_.store(true, std::memory_order_release);
+  }
 }
 
 // ---- reset reason, memory ----

@@ -12,7 +12,7 @@ const { TZ } = require('./time');
 
 const draw = create({
   fonts: packFonts(),
-  icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG },
+  icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, ICON_ANIM: icons.ICON_ANIM },
   glyphs,
   tz: TZ,
   makeFrame: () => new Frame(),
@@ -22,7 +22,7 @@ const draw = create({
 function assets() {
   return {
     fonts: packFonts(),
-    icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG },
+    icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, ICON_ANIM: icons.ICON_ANIM },
     glyphs,
     tz: TZ,
   };

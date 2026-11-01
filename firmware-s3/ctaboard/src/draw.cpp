@@ -407,8 +407,39 @@ static RGB icon_color(char code) {
   return RGB{};
 }
 
-static void draw_icon(Frame &f, int icon, int x, int y) {
-  const char *px = assets::ICONS[icon].px;
+// Animated weather icons (S3; draw.js iconRows): while render() has an
+// icon clock and the payload's radar.iconAnim lists the layout being drawn,
+// the icon's frame at that time (offset 53 ms per pixel of x).
+static std::optional<double> g_icon_t;
+static const Value *g_icon_anim = nullptr;
+static std::optional<double> icon_at(const char *layout) {
+  if (!g_icon_t || !g_icon_anim) return std::nullopt;
+  for (const Value &v : g_icon_anim->a)
+    if (v.is_str() && v.s == layout) return g_icon_t;
+  return std::nullopt;
+}
+
+static const char *icon_px(int icon, std::optional<double> anim, int x) {
+  const char *name = assets::ICONS[icon].name;
+  if (!anim) return assets::ICONS[icon].px;
+  long long total = 0;
+  int first = -1;
+  for (int i = 0; i < assets::ICON_FRAMES_N; i++)
+    if (!strcmp(assets::ICON_FRAMES[i].name, name)) {
+      if (first < 0) first = i;
+      total += assets::ICON_FRAMES[i].ms;
+    }
+  if (first < 0 || total <= 0) return assets::ICONS[icon].px;
+  long long k = fmod_floor((long long)floor(*anim) + (long long)x * 53, total);
+  for (int i = first; i < assets::ICON_FRAMES_N && !strcmp(assets::ICON_FRAMES[i].name, name); i++) {
+    if (k < assets::ICON_FRAMES[i].ms) return assets::ICON_FRAMES[i].px;
+    k -= assets::ICON_FRAMES[i].ms;
+  }
+  return assets::ICON_FRAMES[first].px;
+}
+
+static void draw_icon(Frame &f, int icon, int x, int y, std::optional<double> anim = std::nullopt) {
+  const char *px = icon_px(icon, anim, x);
   for (int j = 0; j < 8; j++)
     for (int i = 0; i < 8; i++) {
       char c = px[j * 8 + i];
@@ -435,7 +466,9 @@ static std::optional<Roll> take_roll(const std::string &name, const ustr &text) 
 struct RollFont {
   int dist, t0, t1;
 };
-static RollFont roll_font(Font font) { return font == FONT_5X7 ? RollFont{7, -6, -1} : RollFont{6, -5, -1}; }
+static RollFont roll_font(Font font) {
+  return font == FONT_5X7 ? RollFont{7, -6, -1} : font == FONT_CLOCK ? RollFont{11, -10, -1} : RollFont{6, -5, -1};
+}
 
 static bool same_shape(Font font, const ustr &a, const ustr &b) {
   if (a.size() != b.size()) return false;
@@ -444,16 +477,23 @@ static bool same_shape(Font font, const ustr &a, const ustr &b) {
   return true;
 }
 
-// Text right-aligned at `right` that rolls when it changes. Pixel-identical
-// to rollTextWith() in draw.js. Returns x after the last advance.
-static int roll_text(Frame &f, Font font, const ustr &text, int right, int base, RGB color,
-                     const std::optional<Roll> &roll) {
-  int x = right - measure(font, text) + 1;
+// Where a rolling text goes: its left edge at `pos`, its right edge at
+// `pos`, or centered on the panel (draw.js xOf: () => x, rightAt, centerX).
+enum Align { LEFT, RIGHT, CENTER };
+static int align_x(Font font, const ustr &s, Align a, int pos) {
+  return a == LEFT ? pos : a == RIGHT ? pos - measure(font, s) + 1 : (int)fdiv(64 - measure(font, s), 2);
+}
+
+// Text that rolls when it changes. Pixel-identical to rollTextWith() in
+// draw.js. Returns x after the last advance.
+static int roll_text_at(Frame &f, Font font, const ustr &text, Align a, int pos, int base, RGB color,
+                        const std::optional<Roll> &roll) {
+  int x = align_x(font, text, a, pos);
   if (!roll) return f.text(font, text, x, base, color);
   const ustr &frm = roll->from;
   RollFont rf = roll_font(font);
   int up = (int)jsround(ease_in_out(roll->p) * rf.dist);
-  int fx = right - measure(font, frm) + 1;
+  int fx = align_x(font, frm, a, pos);
   f.push_clip(0, base + rf.t0, 63, base + rf.t1);
   if (fx == x && same_shape(font, text, frm)) {
     for (size_t i = 0; i < text.size(); i++) {
@@ -473,6 +513,16 @@ static int roll_text(Frame &f, Font font, const ustr &text, int right, int base,
   x = f.text(font, text, x, base - up + rf.dist, color);
   f.pop_clip();
   return x;
+}
+
+// Right-aligned at `right` (the header and radar clocks).
+static int roll_text(Frame &f, Font font, const ustr &text, int right, int base, RGB color,
+                     const std::optional<Roll> &roll) {
+  return roll_text_at(f, font, text, RIGHT, right, base, color, roll);
+}
+// Named rolls: the big clocks and current-conditions numbers (draw.js rollText).
+static int roll_named(Frame &f, Font font, const std::string &name, const ustr &text, Align a, int pos, int base, RGB color) {
+  return roll_text_at(f, font, text, a, pos, base, color, take_roll(name, text));
 }
 
 void NumRoller::begin(double ms) {
@@ -552,7 +602,7 @@ static WarnStyle warn_style(const Value &warn) {
 // Weather strip: one Tom Thumb line on rows 27-31. Mirrors drawWeather() in draw.js.
 static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blink) {
   int base = 32;
-  f.text(FONT_SMALL, vstr(wx["temp"]) + U"°", 0, base, C::dimHead);
+  roll_named(f, FONT_SMALL, "wx.temp", vstr(wx["temp"]) + U"°", LEFT, 0, base, C::dimHead);
   if (warn) {
     WarnStyle ws = warn_style(*warn);
     if (ws.blinks && blink) return;
@@ -781,7 +831,7 @@ static void draw_overnight(Frame &f, const View &view, double now) {
   int block_h = 10 + 3 + 5;
   int area_h = view.wx ? 26 : 32;
   int top = (int)fdiv(area_h - block_h, 2);
-  f.text(FONT_CLOCK, clock, (int)fdiv(64 - measure(FONT_CLOCK, clock), 2), top + 10, C::clock);
+  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, 0, top + 10, C::clock);
   f.text(FONT_SMALL, nt, (int)fdiv(64 - measure(FONT_SMALL, nt), 2), top + 18, C::noTrains);
 }
 
@@ -1208,7 +1258,7 @@ static void draw_weather_screen(Frame &f, const Value &wx, const Value *warn, bo
       f.fill(x, 8 + dy, 5, 2, color);
       x += 7;
     }
-    x = f.text(FONT_CLOCK, U(json::num_str(fabs(temp), wx["temp"].is_int)), x, 14 + dy, color);
+    x = roll_named(f, FONT_CLOCK, "wx.big", U(json::num_str(fabs(temp), wx["temp"].is_int)), LEFT, x, 14 + dy, color);
     f.fill(x, 4 + dy, 3, 1, color);
     f.fill(x, 6 + dy, 3, 1, color);
     f.fill(x, 5 + dy, 1, 1, color);
@@ -1218,12 +1268,12 @@ static void draw_weather_screen(Frame &f, const Value &wx, const Value *warn, bo
   if (shadow) draw_temp(1, 1, scale_color(temp_color(temp, wx["c"]), 0.2));
   int temp_right = draw_temp(0, 0, C::label) + (shadow ? 1 : 0);
   int icon = icon_index(wx["icon"]);
-  if (icon >= 0) draw_icon(f, icon, 55, 1);
+  if (icon >= 0) draw_icon(f, icon, 55, 1, icon_at("now"));
   const Value &word = wx["word"];
   if (word.truthy() && 63 - measure(FONT_SMALL, vstr(word)) + 1 > temp_right + 2)
     rtext(f, FONT_SMALL, vstr(word), 63, 16, C::wxText);
   f.fill(0, 18, 64, 1, C::divider);
-  if (!wx["feels"].is_null()) f.text(FONT_SMALL, U"FEELS " + vstr(wx["feels"]) + U"°", 0, 25, C::grey);
+  if (!wx["feels"].is_null()) roll_named(f, FONT_SMALL, "wx.feels", U"FEELS " + vstr(wx["feels"]) + U"°", LEFT, 0, 25, C::grey);
   if (wx["wind"].truthy()) rtext(f, FONT_SMALL, vstr(wx["wind"]), 63, 25, C::label);
   if (warn) {
     WarnStyle ws = warn_style(*warn);
@@ -1237,7 +1287,7 @@ static void draw_weather_screen(Frame &f, const Value &wx, const Value *warn, bo
   if (!wx["pop"].is_null()) {
     ustr t = vstr(wx["pop"]) + U"%";
     int px = 63 - measure(FONT_SMALL, t) + 1;
-    f.text(FONT_SMALL, t, px, 31, C::label);
+    roll_named(f, FONT_SMALL, "wx.pop", t, RIGHT, 63, 31, C::label);
     for (int j = 0; j < 4; j++)
       for (int i = 0; WX_DROP[j][i]; i++)
         if (WX_DROP[j][i] == '#') f.fill(px - 5 + i, 27 + j, 1, 1, WX_BLUE);
@@ -1246,7 +1296,7 @@ static void draw_weather_screen(Frame &f, const Value &wx, const Value *warn, bo
   if (!wx["hi"].is_null() && !wx["lo"].is_null()) {
     ustr hl = U"H " + vstr(wx["hi"]) + U"° L " + vstr(wx["lo"]) + U"°";
     if (measure(FONT_SMALL, hl) + 3 > pop_left) hl = U"H " + vstr(wx["hi"]) + U" L " + vstr(wx["lo"]);
-    f.text(FONT_SMALL, hl, 0, 31, C::grey);
+    roll_named(f, FONT_SMALL, "wx.hl", hl, LEFT, 0, 31, C::grey);
   }
 }
 
@@ -1293,15 +1343,17 @@ static int fd_left(const std::vector<Part> &parts) {
 }
 
 // Today on rows 0-7. Mirrors drawTopBar() in draw.js.
+static const char *g_top_layout = "now";  // the layout drawing the top bar (its icon's animation setting)
+
 static void draw_top_bar(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
   int icon = icon_index(wx["icon"]);
-  if (icon >= 0) draw_icon(f, icon, FD_ICON_X, 0);
+  if (icon >= 0) draw_icon(f, icon, FD_ICON_X, 0, icon_at(g_top_layout));
   ustr temp = vstr(wx["temp"]);
   if (shadow) {
     RGB sh = scale_color(temp_color(wx["temp"].num(), wx["c"]), 0.2);
-    f.text(FONT_SMALL, U"°", f.text(FONT_5X7, temp, FD_TEMP_X + 1, 8, sh), 7, sh);
+    f.text(FONT_SMALL, U"°", roll_named(f, FONT_5X7, "wx.top", temp, LEFT, FD_TEMP_X + 1, 8, sh), 7, sh);
   }
-  int x = f.text(FONT_5X7, temp, FD_TEMP_X, 7, C::label);
+  int x = roll_named(f, FONT_5X7, "wx.top", temp, LEFT, FD_TEMP_X, 7, C::label);
   f.text(FONT_SMALL, U"°", x, 6, C::label);
   int temp_right = x + 1 + (shadow ? 1 : 0);
   if (warn) {
@@ -1338,7 +1390,7 @@ static void draw_five_day(Frame &f, const Value &wx, bool shadow, const Value *w
     int cx = (int)i * FD_PITCH + 6;
     ctext(f, FONT_SMALL, vstr(d["d"]), cx, 15, C::grey);
     int icon = icon_index(d["icon"]);
-    if (icon >= 0) draw_icon(f, icon, cx - 4, 17);
+    if (icon >= 0) draw_icon(f, icon, cx - 4, 17, icon_at("5day"));
     draw_day_temp(f, vstr(d["hi"]), cx, 31, temp_color(d["hi"].num(), wx["c"]));
   }
 }
@@ -1352,7 +1404,7 @@ static void draw_hourly(Frame &f, const Value &wx, bool shadow, const Value *war
     int cx = (int)i * 16 + 7;
     ctext(f, FONT_SMALL, vstr(h["h"]), cx, 15, C::grey);
     int icon = icon_index(h["icon"]);
-    if (icon >= 0) draw_icon(f, icon, cx - 4, 17);
+    if (icon >= 0) draw_icon(f, icon, cx - 4, 17, icon_at("hourly"));
     draw_day_temp(f, vstr(h["t"]), cx, 31, temp_color(h["t"].num(), wx["c"]));
   }
 }
@@ -1474,6 +1526,7 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   const Value *warnp = p["warn"].truthy() ? &p["warn"] : nullptr;
   if (((!ids.truthy() || (frames && !radar_on_hand(ids, frames))) || bars_turn) && wx.truthy()) {
     bool shadow = r["tempShadow"].truthy();
+    g_top_layout = wx["rain"].truthy() && wx["rain"]["h"].truthy() ? "now" : wx["hours"].truthy() ? "hourly" : "5day";
     if (wx["rain"].truthy() && wx["rain"]["h"].truthy()) draw_rain_bars(f, wx, shadow, warnp, blink);
     else if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
     else if (wx["days"].truthy()) draw_five_day(f, wx, shadow, warnp, blink);
@@ -1549,7 +1602,7 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
     if (icon >= 0) clear4(x0, top + 4, x0 + 7, top + 11);
     clear(text_box(FONT_SMALL, ts, x0 + iw, top + 10));
     draw_indicator();
-    if (icon >= 0) draw_icon(f, icon, x0, top + 4);
+    if (icon >= 0) draw_icon(f, icon, x0, top + 4, icon_at("radar"));
     f.text(FONT_SMALL, ts, x0 + iw, top + 10, C::label);
     if (ws) draw_warn_tag();
     return;
@@ -1776,7 +1829,7 @@ static void draw_no_games(Frame &f, double now, double tzo) {
   ustr clock = clock_text(now, tzo);
   ustr label = U"NO GAMES";
   int top = (32 - 18) / 2;
-  f.text(FONT_CLOCK, clock, (int)fdiv(64 - measure(FONT_CLOCK, clock), 2), top + 10, C::clock);
+  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, 0, top + 10, C::clock);
   f.text(FONT_SMALL, label, (int)fdiv(64 - measure(FONT_SMALL, label), 2), top + 18, C::noTrains);
 }
 
@@ -2029,6 +2082,8 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   if (!o.screen && !p["screen"].truthy()) screen = "";
   g_roller = o.roller;
   g_nums = o.nums;
+  g_icon_t = o.icon_t;
+  g_icon_anim = p["radar"]["iconAnim"].is_arr() ? &p["radar"]["iconAnim"] : nullptr;
   if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
@@ -2036,9 +2091,40 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   else render_transit(p, f, o.now, o.blink, o.view);
   g_roller = nullptr;
   g_nums = nullptr;
+  g_icon_t.reset();
+  g_icon_anim = nullptr;
   if (o.roller) o.roller->end();  // the Player calls begin(); render() ends the frame
   if (o.apply_bright) apply_brightness(f, o.bright ? *o.bright : p["bright"].is_null() ? 100 : p["bright"].num());
+  if (o.slide_from) slide_frames(o.slide_from, f, slide_offset(o.slide_t), o.slide_dir);
   return f;
+}
+
+int slide_offset(double t) {
+  return (int)jsround(ease_in_out(std::max(0.0, std::min(1.0, t / SCREEN_SLIDE_MS))) * (64 + SLIDE_GAP));
+}
+
+void slide_frames(const uint8_t *from, Frame &f, int d, int dir) {
+  const int w = Frame::W, h = Frame::H;
+  uint8_t cur[Frame::W * Frame::H * 3];
+  memcpy(cur, f.px, sizeof cur);
+  for (int y = 0; y < h; y++)
+    for (int x = 0; x < w; x++) {
+      // Which frame, and which of its columns, lands on column x (none: the gap).
+      const uint8_t *src = nullptr;
+      int sx = 0;
+      if (dir >= 0) {
+        if (x < w - d) src = from, sx = x + d;
+        else if (x >= w - d + SLIDE_GAP) src = cur, sx = x - (w - d + SLIDE_GAP);
+      } else if (x >= d) {
+        src = from, sx = x - d;
+      } else if (x < d - SLIDE_GAP) {
+        src = cur, sx = x + w - (d - SLIDE_GAP);
+      }
+      int i = (y * w + x) * 3, j = (y * w + sx) * 3;
+      f.px[i] = src ? src[j] : 0;
+      f.px[i + 1] = src ? src[j + 1] : 0;
+      f.px[i + 2] = src ? src[j + 2] : 0;
+    }
 }
 
 // ---- status screens (firmware/boardlib/status.py) ----
