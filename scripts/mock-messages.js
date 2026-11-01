@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// Message screen mockups: ten ways the board could show a short note sent
+// Message screen mockups: seven ways the board could show a short note sent
 // from the phone, each as a strip of key frames. Not in draw.js yet.
 // Colors cut to the panel's 5 bits per channel. Made-up messages.
 //   node scripts/mock-messages.js   -> docs/board/mockups/messages/sheet.png
@@ -9,9 +9,6 @@ const fs = require('fs');
 const path = require('path');
 const { Frame } = require('../server/board/raster');
 const { packFonts } = require('../server/board/fonts');
-const draw = require('../server/board/render');
-const { normalize, format } = require('../server/board/arrivals');
-const { parseCtaTime, tzOffset } = require('../server/board/time');
 
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'mockups', 'messages');
 const F = packFonts();
@@ -97,29 +94,7 @@ function noteSmall(text) {
   return f;
 }
 
-// ---- 2. Line card: the ticker's rows carrying the message ----
-const ENVELOPE = ['WWWWW', 'WW.WW', 'W.W.W', 'WWWWW'];
-function lineCard(l1, l2, ln, { slide = 0, next = null, from = 'NOTE', clock = '7:42' } = {}) {
-  const f = new Frame();
-  f.text('small', from, 0, 6, C.grey);
-  rtext(f, 'small', clock, 63, 6, C.grey);
-  const rows = (a, b, line, dy) => [a, b].forEach((t, i) => {
-    const top = 7 + i * 13 + dy;
-    f.withClip(0, 7, 63, 31, () => {
-      f.fill(0, top, 5, 12, '#2d2d2d');
-      f.fill(5, top, 59, 12, scale(LINE[line], 0.55));
-      if (i === 0) sprite(f, ENVELOPE, 0, top + 4, { W: C.label });
-      else f.text('small', '2', 1, top + 9, C.label);
-      f.text('5x7', t, 7, top + 9, C.white);
-    });
-  });
-  const e = slide < 0.5 ? 2 * slide * slide : 1 - Math.pow(-2 * slide + 2, 2) / 2;
-  rows(l1, l2, ln, -Math.round(e * 26));
-  if (next) rows(next[0], next[1], next[2], 26 - Math.round(e * 26));
-  return f;
-}
-
-// ---- 3. Split-flap: 10 x 3 small flaps ----
+// ---- 2. Split-flap: 10 x 3 small flaps ----
 function flap(f, x, y, ch, { flipping = null, col = '#d8d8d8' } = {}) {
   // Tile 5 x 10: top flap rows 0-3, hinge row 4 unlit, bottom rows 5-9.
   // Glyph rows 0-1 on rows 2-3, rows 2-4 on rows 5-7.
@@ -160,7 +135,7 @@ function splitFlap(lines, state) {
   return f;
 }
 
-// ---- 4. Typewriter ----
+// ---- 3. Typewriter ----
 function typewriter(text, n, { col = C.amber, cursor = true } = {}) {
   const f = new Frame();
   const lines = wrap('5x7', text, 60);
@@ -177,7 +152,7 @@ function typewriter(text, n, { col = C.amber, cursor = true } = {}) {
   return f;
 }
 
-// ---- 5. Marquee bulbs ----
+// ---- 4. Marquee bulbs ----
 function marquee(l1, l2, phase) {
   const f = new Frame();
   const bulbs = [];
@@ -191,7 +166,7 @@ function marquee(l1, l2, phase) {
   return f;
 }
 
-// ---- 6. Big word ----
+// ---- 5. Big word ----
 const SUNSET = (y) => mix('#ff3060', '#ffb000', Math.min(1, y / 14));
 const SPARKS = [[[3, 4], [58, 7], [8, 26], [55, 27], [30, 2]], [[6, 8], [60, 3], [4, 22], [50, 29], [34, 30]]];
 function bigWord(s, colorAt, sparks = null) {
@@ -208,7 +183,7 @@ function countdown(n, label) {
   return f;
 }
 
-// ---- 7. Icon + text ----
+// ---- 6. Icon + text ----
 const ICONS = {
   heart: { pal: { R: '#ff2040', W: '#ffb0c0' }, rows: [
     '..RRR...RRR..', '.RRRRR.RRRRR.', 'RWRRRRRRRRRRR', 'RWRRRRRRRRRRR', 'RRRRRRRRRRRRR', 'RRRRRRRRRRRRR',
@@ -239,34 +214,7 @@ function iconText(icon, text, col = C.label) {
   return f;
 }
 
-// ---- 8. Train delivers it ----
-function train(f, x, ln) {
-  // Two cars of 24 px, 2 px coupler, facing right (front at x + 49).
-  for (let c = 0; c < 2; c++) {
-    const cx = x + c * 26;
-    f.fill(cx, 23, 24, 6, '#5a5a5a');
-    f.fill(cx, 23, 24, 1, '#7a7a7a');
-    for (let w = 2; w < 22; w += 4) f.fill(cx + w, 25, 2, 2, '#ffd890');
-    f.fill(cx, 28, 24, 1, LINE[ln]);
-    f.set(cx + 4, 29, hex('#3a3a3a')); f.set(cx + 5, 29, hex('#3a3a3a'));
-    f.set(cx + 18, 29, hex('#3a3a3a')); f.set(cx + 19, 29, hex('#3a3a3a'));
-    if (c === 0) f.fill(cx + 24, 26, 2, 1, '#3a3a3a');
-  }
-  f.set(x + 49, 24, [255, 240, 200]); f.set(x + 49, 25, [255, 240, 200]);
-}
-function trainDelivers(l1, l2, tx, ln) {
-  const f = new Frame();
-  for (let x = 0; x < 64; x++) f.set(x, 30, hex(x % 3 === 0 ? '#3a3a3a' : '#222222'));
-  const reveal = tx; // text shows only behind the train's tail
-  f.withClip(0, 0, Math.min(63, reveal - 1), 21, () => {
-    ctext(f, '5x7', l1, 32, 9, C.white);
-    ctext(f, '5x7', l2, 32, 19, C.amber);
-  });
-  train(f, tx, ln);
-  return f;
-}
-
-// ---- 9. Speech bubble (pigeon) ----
+// ---- 7. Speech bubble (pigeon) ----
 const PIGEON = [
   '..GG......', '.GGWG.....', '.GGGGO....', '..PNG.....', '..GGGGGG..', '.GDDDDGGGG', '..GDDDGGG.', '...GGGG...', '....O.O...'];
 const PIGEON_PECK = [
@@ -287,54 +235,6 @@ function bubble(l1, l2, { peck = false } = {}) {
   return f;
 }
 
-// ---- 10. Arrival: new-message intro, and the indicator on other screens ----
-function envelope(f, cx, top, open) {
-  const w = 19, h = 13, x0 = cx - 9, e = '#d8d8d8';
-  const line = (xa, ya, xb, yb, col) => {
-    const n = Math.max(Math.abs(xb - xa), Math.abs(yb - ya));
-    for (let i = 0; i <= n; i++) f.set(Math.round(xa + (xb - xa) * i / n), Math.round(ya + (yb - ya) * i / n), hex(col));
-  };
-  if (open) {
-    line(x0, top, x0 + 9, top - 6, C.amber); line(x0 + 9, top - 6, x0 + 18, top, C.amber);   // flap up
-    f.fill(x0 + 3, top - 4, 13, 9, '#000000');
-    f.fill(x0 + 3, top - 4, 13, 1, '#f0f0f0'); f.fill(x0 + 3, top - 4, 1, 9, '#f0f0f0'); f.fill(x0 + 15, top - 4, 1, 9, '#f0f0f0');
-    for (let i = 0; i < 3; i++) f.fill(x0 + 5, top - 2 + i * 2, i === 2 ? 5 : 9, 1, '#808080');
-    f.fill(x0 + 1, top + 3, w - 2, h - 4, '#000000');
-    line(x0, top + h - 1, x0 + 7, top + 5, e); line(x0 + 18, top + h - 1, x0 + 11, top + 5, e);
-    line(x0, top + 3, x0 + 18, top + 3, e);
-    line(x0, top + 3, x0, top + h - 1, e); line(x0 + 18, top + 3, x0 + 18, top + h - 1, e); line(x0, top + h - 1, x0 + 18, top + h - 1, e);
-  } else {
-    line(x0, top, x0 + 18, top, e); line(x0, top + h - 1, x0 + 18, top + h - 1, e);
-    line(x0, top, x0, top + h - 1, e); line(x0 + 18, top, x0 + 18, top + h - 1, e);
-    line(x0, top, x0 + 9, top + 7, C.amber); line(x0 + 9, top + 7, x0 + 18, top, C.amber);
-  }
-}
-function arrival(stage) {
-  const f = new Frame();
-  if (stage === 0) { envelope(f, 32, 6, false); ctext(f, 'small', 'NEW NOTE', 32, 28, C.amber); }
-  if (stage === 1) { envelope(f, 32, 11, true); ctext(f, 'small', 'FROM SAM', 32, 31, C.dark); }
-  return f;
-}
-
-// Transit screen with an unread-message mark in the header.
-const B = path.join(__dirname, '..', 'server', 'board');
-const json = JSON.parse(fs.readFileSync(path.join(B, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
-const now = parseCtaTime(json.ctatt.tmst);
-const r = format(normalize(json, { log: { warn() {}, error() {} } }), { rows: [], showHeader: true, showWeather: true, showKey: false }, { now, alerts: new Set() });
-const P = {
-  v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, header: 'MORSE', view: r.view, rows: r.rows, ticker: r.ticker,
-  wx: { icon: 'pcloudy_day', temp: 54, word: 'PT CLOUDY' }, warn: null,
-  radar: { on: false, frames: [], ft: [], timeBox: [0, 0, 0, 0], split: false, wx: { icon: 'pcloudy_day', temp: 54, word: 'PT CLOUDY', hi: 61, lo: 47, feels: 51, wind: 'NW 12', pop: 20 } },
-};
-function transitWithMark() {
-  const t = draw.render(P, { screen: 'transit' });
-  const f = new Frame();
-  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(x, y, t.get(x, y));
-  const x = measure('small', 'MORSE') + 3;
-  sprite(f, ENVELOPE, x, 2, { W: C.amber });
-  return f;
-}
-
 // ---- sheet ----
 const LONG = 'Leaving at 8:15 for the game. Meet at the north end of the Addison platform.';
 const ROWS = [
@@ -346,40 +246,34 @@ const ROWS = [
     ['PAGE 2', note(LONG, { page: 1 })],
     ['SMALL TEXT', noteSmall(LONG)],
   ]],
-  ['2  LINE CARD: THE TICKER\'S ROWS CARRY THE NOTE', [
-    ['RED', lineCard('Dinner at 7', 'Bring bread', 'RD', { from: 'SAM' })],
-    ['SLIDE TO NEXT', lineCard('Dinner at 7', 'Bring bread', 'RD', { from: 'SAM', slide: 0.5, next: ['and wine', '- S', 'RD'] })],
-    ['BLUE', lineCard('Happy', 'birthday!', 'BL', { from: 'MOM' })],
-    ['PURPLE', lineCard('Gone to', 'the gym', 'PR', { from: 'JAKE' })],
-  ]],
-  ['3  SPLIT-FLAP (MATCHES THE CLOCK FACE IN SPEC 16)', [
+  ['2  SPLIT-FLAP (MATCHES THE CLOCK FACE IN SPEC 16)', [
     ['BLANK', splitFlap(['DINNER', 'AT 7 PM', 'BRING WINE'], ['blank', 'blank', 'blank'])],
     ['ROW 1 FLIPS', splitFlap(['DINNER', 'AT 7 PM', 'BRING WINE'], ['flip', 'blank', 'blank'])],
     ['ROW 2 FLIPS', splitFlap(['DINNER', 'AT 7 PM', 'BRING WINE'], ['done', 'flip', 'blank'])],
     ['SETTLED', splitFlap(['DINNER', 'AT 7 PM', 'BRING WINE'], ['done', 'done', 'done'])],
     ['ANOTHER', splitFlap(['GO CUBS', 'BEER IN', 'THE FRIDGE'], ['done', 'done', 'done'])],
   ]],
-  ['4  TYPEWRITER: TYPES OUT, CURSOR BLINKS', [
+  ['3  TYPEWRITER: TYPES OUT, CURSOR BLINKS', [
     ['TYPING', typewriter('Gone to the gym. Back by 6.', 6)],
     ['TYPING', typewriter('Gone to the gym. Back by 6.', 17)],
     ['DONE', typewriter('Gone to the gym. Back by 6.', 99)],
     ['CURSOR OFF', typewriter('Gone to the gym. Back by 6.', 99, { cursor: false })],
     ['PHOSPHOR', typewriter('Gone to the gym. Back by 6.', 99, { col: '#40ff70' })],
   ]],
-  ['5  MARQUEE: CHASING BULBS', [
+  ['4  MARQUEE: CHASING BULBS', [
     ['PHASE 1', marquee('Welcome', 'home!', 0)],
     ['PHASE 2', marquee('Welcome', 'home!', 1)],
     ['PHASE 3', marquee('Welcome', 'home!', 2)],
     ['ANOTHER', marquee('Happy', 'anniversary', 0)],
   ]],
-  ['6  BIG WORD / COUNTDOWN', [
+  ['5  BIG WORD / COUNTDOWN', [
     ['SUNSET + SPARKLE', bigWord('Yay!', SUNSET, 1)],
     ['SPARKLE 2', bigWord('Yay!', SUNSET, 2)],
     ['AMBER', bigWord('BRB', () => C.amber)],
     ['LINE COLOR', bigWord('GO!', () => '#20c060')],
     ['COUNTDOWN', countdown('12', 'DAYS TO VACATION')],
   ]],
-  ['7  ICON + TEXT (ICON ANIMATES GENTLY)', [
+  ['6  ICON + TEXT (ICON ANIMATES GENTLY)', [
     ['HEART', iconText('heart', 'Love you!')],
     ['HEART BEAT', iconText('heartSmall', 'Love you!')],
     ['CAKE', iconText('cake', 'Happy bday, Sam!')],
@@ -387,23 +281,10 @@ const ROWS = [
     ['HOUSE', iconText('house', 'Home by 6')],
     ['COFFEE', iconText('coffee', 'Coffee is on')],
   ]],
-  ['8  THE TRAIN DELIVERS IT: TEXT APPEARS BEHIND THE CARS', [
-    ['ENTERING', trainDelivers('Running late', 'home at 7', -30, 'RD')],
-    ['PASSING', trainDelivers('Running late', 'home at 7', 2, 'RD')],
-    ['PASSING', trainDelivers('Running late', 'home at 7', 30, 'RD')],
-    ['LEAVING', trainDelivers('Running late', 'home at 7', 56, 'RD')],
-    ['DELIVERED', trainDelivers('Running late', 'home at 7', 80, 'RD')],
-  ]],
-  ['9  SPEECH BUBBLE: A PIGEON SAYS IT, PECKS NOW AND THEN', [
+  ['7  SPEECH BUBBLE: A PIGEON SAYS IT, PECKS NOW AND THEN', [
     ['SAYS', bubble('Dinner', 'at 7? Coo.')],
     ['PECK', bubble('Dinner', 'at 7? Coo.', { peck: true })],
     ['ANOTHER', bubble('Take out', 'the trash')],
-  ]],
-  ['10  ARRIVAL: INTRO, THEN ANY STYLE ABOVE; MARK ON OTHER SCREENS', [
-    ['NEW NOTE', arrival(0)],
-    ['OPENS', arrival(1)],
-    ['THE NOTE', note('Grab milk on the way home', { from: '- SAM' })],
-    ['UNREAD MARK', transitWithMark()],
   ]],
 ];
 
