@@ -1,10 +1,13 @@
 """Light-sensor grille drill guide for the v4 back-down shell: drills a small grille of straight holes through the
 case top over the VEML7700 (case2.SENSOR_X/Y) instead of one Ø2 hole.
 
-- Location: a plug fills the knob hole (2.4 of the 2.5 mm wall) with the hole's own teardrop, which fixes rotation.
-  Crush ribs on the plug press into the hole wall, so it sits with no play and stays put while you drill. The printed
-  knob hole comes out ~0.2-0.3 mm undersize (wood PLA, printed on its side; see collar.py), so print the plug fit set
-  first and use the rib radius that pushes in firmly by hand (RIB_R; 1-3 notches = 11.8 / 11.9 / 12.0).
+- Location, one feature per direction so they never fight:
+    rotation and front-back: a fence hooks down over the case's back face (the flat face printed on the bed, so it is
+      accurate whatever the hole came out at). Push the guide back against it while drilling. 74 mm long, so a
+      0.1 mm gap is 0.08 deg.
+    left-right: crush ribs on the knob-hole plug, only on the left and right sides (ribs front and back would fight
+      the fence). The knob hole's printed size varies (v1 guide at RIB_R 11.9 still twisted), so print the plug fit
+      set first and use the rib radius that pushes in firmly (RIB_R; 1-3 notches = 11.95 / 12.05 / 12.15).
 - One flat slab (top and bottom parallel), so it prints top face down with the plug up and no supports; the ribs
   print vertical. It sits flat on the case top, so the bores are square to it. Use it before the collar goes in.
 - Bores are printed at the bit size: small FDM holes print undersize, so run the bit through the guide once first;
@@ -23,8 +26,11 @@ import case2 as V
 SLAB = 6.0                 # guide thickness = bore length
 PLUG_D = 2.4               # plug depth into the knob hole (wall 2.5)
 PLUG_CL = 0.5              # plug body clearance; the ribs take up the rest
-RIB_R = 11.9               # rib crest radius (nominal hole r 12.0, printed ~11.7-11.8)
-RIB_W, RIB_N = 1.0, 12     # rib width, count (evenly spaced; those within 50° of the teardrop tip skipped)
+RIB_R = 12.05              # rib crest radius (nominal hole r 12.0); set from the fit set
+FENCE_GAP = 0.15           # fence's inner face behind the case's back face
+FENCE_T, FENCE_DROP = 2.5, 6.0
+FENCE_X = (-12.0, 62.0)
+RIB_W, RIB_N = 1.0, 12     # rib width, count on a 30° grid; only those within 40° of ±x are kept
 WEB = 0.85                 # wall left between neighbouring holes
 SX, SY = V.SENSOR_X, V.SENSOR_Y - V.KY     # sensor spot relative to the knob-hole centre
 
@@ -53,7 +59,7 @@ def plug(rib_r=RIB_R):
     ribs = []
     for i in range(RIB_N):
         a = 2 * math.pi * i / RIB_N
-        if abs(math.degrees(a) - 270) < 50:                    # skip the teardrop tip (-y): no circular wall there
+        if abs(math.cos(a)) < math.cos(math.radians(40)):      # left/right ribs only: the fence sets front-back
             continue
         depth = rib_r - (V.ENC_HOLE / 2 - PLUG_CL) + 0.3       # rib root sits 0.3 inside the plug body
         r = Manifold.cube([depth, RIB_W, PLUG_D - 0.6]).translate([rib_r - depth, -RIB_W / 2, -PLUG_D + 0.6])
@@ -65,8 +71,14 @@ def plug(rib_r=RIB_R):
 
 def guide(name, bit=1.0, rib_r=RIB_R):
     """Frame: knob-hole centre at the origin on the case top (z = 0), z up."""
-    body = Manifold.extrude(CrossSection.batch_hull([teardrop(14.5), CrossSection.circle(7.5, 64).translate([SX, SY])]), SLAB)
-    g = body + plug(rib_r)
+    yb = V.D - V.KY                                            # case back face, from the knob-hole centre
+    strip = CrossSection.square([FENCE_X[1] - FENCE_X[0], 1.0]).translate([FENCE_X[0], yb - 1.0])
+    body = Manifold.extrude(CrossSection.batch_hull([teardrop(14.5), CrossSection.circle(7.5, 64).translate([SX, SY]), strip]), SLAB)
+    f0 = yb + FENCE_GAP
+    fence = V.box(FENCE_X[0], FENCE_X[1], f0, f0 + FENCE_T, -FENCE_DROP, SLAB)
+    fence = fence - Manifold.cube([FENCE_X[1] - FENCE_X[0] + 2, 1.2, 1.2], center=True).rotate([45, 0, 0]).translate(
+        [(FENCE_X[0] + FENCE_X[1]) / 2, f0, 0])                # relief in the inside corner: clears the 0.45 edge chamfer
+    g = body + fence + plug(rib_r)
     r = bit / 2
     holes = []
     for dx, dy in pattern(name, bit):
@@ -79,7 +91,7 @@ def guide(name, bit=1.0, rib_r=RIB_R):
     return g - V.box(-16, -12, -2, 2, -0.01, 1.2)
 
 
-def fit_set(rs=(11.8, 11.9, 12.0)):
+def fit_set(rs=(11.95, 12.05, 12.15)):
     """plug coupons (plug + 2 mm disc) at three rib radii; 1-3 notches in the disc rim mark them"""
     parts = []
     for i, rr in enumerate(rs):
@@ -113,4 +125,4 @@ if __name__ == '__main__':
         print(fn, t.is_watertight, np.round(t.extents, 1).tolist(), info)
     for name in ('5', '4'):
         put(guide(name, bit), f'bar-sensor-grille-guide-{name}hole.stl', check(name, bit))
-    put(fit_set(), 'bar-sensor-grille-guide-plug-fit-set.stl', 'ribs 11.8 / 11.9 / 12.0 (1-3 notches)')
+    put(fit_set(), 'bar-sensor-grille-guide-plug-fit-set.stl', 'ribs 11.95 / 12.05 / 12.15 (1-3 notches)')
