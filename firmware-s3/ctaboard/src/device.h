@@ -75,6 +75,10 @@ class Panel : public app::Display {
   draw::Frame frame_;
   int rotation_;
   color::Pipeline pipe_;
+  // The skyline's curve at every brightness: the night curve (full depth,
+  // no 565 truncation), so its gradients don't collapse at 100% (frames with
+  // floor = false; color.h).
+  color::Pipeline scene_pipe_;
   int day_curve_, night_curve_;
   bool hw_dim_;
   int oe_ = 255;  // the driver's brightness (output-enable window), 0-255

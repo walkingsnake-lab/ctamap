@@ -44,8 +44,8 @@ Polled ~every 10 s.
 
 `fw` (S3 only, present only when there's something to install) offers an OTA build: `{"v": "a1b2c3d", "size": 1245184, "sha": "<SHA-256, hex>", "n": 0, "sig": "<signature, hex DER>"}` (`sig` absent for a build stored before signing). See **Firmware**.
 
-### `GET /board/update?b=<id>[&boot=1][&s=<screen>]`
-The combined update, polled ~every 30 s. Target size ≤ ~1.2 KB (typically 0.5–0.75 KB with sections).
+### `GET /board/update?b=<id>[&boot=1][&s=<screen>][&hk=<caps>]`
+The combined update, polled ~every 30 s. `hk` (S3): the same capabilities as the health field, sent on every update and select so the server decides the clock screen per request (it doesn't depend on the last health report, which is lost on a server restart and overwritten by any other board reporting under the same ID). Target size ≤ ~1.2 KB (typically 0.5–0.75 KB with sections).
 
 **Sections.** To keep JSON parsing light on the board's fragmenting heap, this endpoint sends only what one screen draws, named by `for`: the payload's `screen`, or `s` (`transit`, `ticker`, `weather`, `baseball`, `clock`) when a button press on the board overrides it. The board fetches right away after a press, asking for the new screen. Fields kept only for their screen: transit `header`, `key`, `hidden`, `view`, `rows`, `wx`; ticker `ticker`, `tickerHeader`, `tickerFill`; baseball `mlb`; clock `skyline`. `radar` is whole on the weather screen and whenever `radar.visit` is set (the board switches to it by itself); otherwise it's just `{on, visit: null}`. Everything else is always sent. The simulator's `api/update` returns the whole payload.
 
@@ -348,7 +348,7 @@ An OTA build, streamed: `Content-Type: application/octet-stream`, `Content-Lengt
 ### `POST /board/firmware-upload`
 CI's upload: a signed build (raw body, with `X-Firmware-Signature`) that becomes the `beta` build. `X-Deploy-Token` must match the `FIRMWARE_DEPLOY_TOKEN` Fly secret; this token can do nothing else. `{beta: <build>}`; `400` with a reason for anything `api/firmware` would refuse, `401` for a wrong token, `404` when `FIRMWARE_DEPLOY_TOKEN` isn't set.
 
-### `POST /board/select?b=<id>&s=<category>`
+### `POST /board/select?b=<id>&s=<category>[&hk=<caps>]`
 The knob chose a category on its ring (`knob.ring`). The server sets the board's `screen` the same way the phone would (bumps `v`), so the choice persists, the phone page shows it, and it ends any button override: `auto` → `auto`, `transit` → the transit-family screen last chosen (`transit` or `ticker`, state `transitScreen`), `weather` → `weather`, `sports` → `baseball`, `clock` → `clock`. The response is `/board/update`'s payload for the new screen (sections for `screen`), so the board needs no second request. Empty body. 400 `invalid` for a category not on the ring, 401 without the token, 404 for an unknown board, 405 for anything but POST.
 
 ### `GET /board/logo/<logoId>?b=<id>`

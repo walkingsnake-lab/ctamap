@@ -302,12 +302,15 @@ function createBoard({
     healthOf.set(id, h);
   }
 
-  // The clock screen needs firmware that draws it: a board whose health
-  // reports the `skyline` capability. Others get transit instead, and no
-  // CLOCK on the knob's ring. (Until a board's first health report after a
-  // server restart, about a minute, it counts as unable.)
-  const clockOk = (id) => { const h = healthOf.get(id); return !!(h && h.caps && h.caps.includes('skyline')); };
-  const forBoard = (body, id) => (body.screen === 'clock' && !clockOk(id) ? { ...body, screen: 'transit' } : body);
+  // The clock screen needs firmware that draws it. The S3 says so on every
+  // update and select (`hk=skyline`), so each request decides for itself:
+  // no flapping after a server restart (health lives in memory) or when
+  // another board under the same ID reports without it. Health's `hk` is
+  // the fallback for the simulator and control page. Others get transit
+  // instead, and no CLOCK on the knob's ring.
+  const hasSkyline = (hk) => typeof hk === 'string' && hk.split(':').includes('skyline');
+  const clockOk = (id, q = {}) => { if (hasSkyline(q.hk)) return true; const h = healthOf.get(id); return !!(h && h.caps && h.caps.includes('skyline')); };
+  const forBoard = (body, clock) => (body.screen === 'clock' && !clock ? { ...body, screen: 'transit' } : body);
 
   // Last transit view per board and station, for the chrono hysteresis.
   // In memory only: after a restart the view is chosen fresh.
@@ -338,7 +341,7 @@ function createBoard({
     catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
-  async function update(board, id, boot, preview = {}) {
+  async function update(board, id, boot, preview = {}, clock = clockOk(id)) {
     if (boot) board = store.boot(id);
     if (preview.mapid && preview.mapid !== board.station.mapid) {
       const st = stationById.get(preview.mapid);
@@ -431,7 +434,7 @@ function createBoard({
       screen,
       rot: rotOf(board, screen),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board, { clock: clockOk(id) }),
+      knob: knobOf(board, { clock }),
       bright: resolveBright(board, w, now),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),
@@ -529,8 +532,9 @@ function createBoard({
       const board = store.get(id) || store.register(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
       seenAt.set(id, nowSecs());
-      const body = forBoard(await update(board, id, parsed.query.boot === '1'), id);
-      const asked = parsed.query.s === 'clock' && !clockOk(id) ? 'transit' : parsed.query.s;
+      const clock = clockOk(id, parsed.query);
+      const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, clock), clock);
+      const asked = parsed.query.s === 'clock' && !clock ? 'transit' : parsed.query.s;
       const shown = SCREENS.includes(asked) ? asked : body.screen;
       return send(res, 200, sectionsFor(body, shown));
     }
@@ -549,7 +553,8 @@ function createBoard({
         throw e;
       }
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      const body = forBoard(await update(board, id, false), id);
+      const clock = clockOk(id, parsed.query);
+      const body = forBoard(await update(board, id, false, {}, clock), clock);
       return send(res, 200, sectionsFor(body, body.screen));
     }
 
