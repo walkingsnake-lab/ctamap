@@ -155,17 +155,26 @@ void Board::apply(const Value &p, long long st, long long ms) {
 }
 
 void Board::shown(int what, const draw::Frame &f, long long ms) {
-  // A different screen than the last frame's: slide it in over that frame
-  // (spec §2, "Screen change"). The first frame ever, status screens, and
-  // the knob's chooser (a turn should answer at once) just appear; leaving
-  // them slides. Leaving the chooser follows the knob's turn; otherwise a
-  // later screen (screen.h order) comes in from the right.
+  // A different screen than the last frame's (spec §2, "Screen change"). The
+  // first frame ever, status screens, and the knob's chooser (a turn should
+  // answer at once) just appear. A change the knob or a button made slides
+  // in over the old frame, the way it was turned or pressed (UP from the
+  // left, DOWN from the right); any other (the phone, the auto rotation,
+  // leaving a status screen) fades through black.
   if (what != shown_ && shown_ != SHOWN_NONE && what != SHOWN_STATUS && what != SHOWN_CHOOSER) {
     memcpy(slide_px_, last_px_, sizeof slide_px_);
-    slide_start_ = ms;
-    if (shown_ == SHOWN_CHOOSER) slide_dir_ = chooser_travel_ < 0 ? -1 : 1;
-    else slide_dir_ = what < shown_ ? -1 : 1;
+    trans_start_ = ms;
+    if (shown_ == SHOWN_CHOOSER) {
+      trans_ = SLIDE;
+      slide_dir_ = chooser_travel_ < 0 ? -1 : 1;
+    } else if (button_dir_) {
+      trans_ = SLIDE;
+      slide_dir_ = button_dir_;
+    } else {
+      trans_ = FADE;
+    }
   }
+  button_dir_ = 0;  // a press is for the frame right after it
   shown_ = what;
   memcpy(last_px_, f.px, sizeof last_px_);
 }
@@ -187,9 +196,10 @@ bool Board::draw_frame(long long ms, long long n) {
       player.draw(f, (double)ms, n);
     }
     // shown() keeps this frame's own pixels for the next change (and starts
-    // a slide, which begins on the old frame: t = 0); then the slide.
+    // a slide or fade, which begins on the old frame: t = 0); then that.
     shown(what, f, ms);
-    if (sliding(ms)) draw::slide_frames(slide_px_, f, draw::slide_offset((double)(ms - slide_start_)), slide_dir_);
+    if (sliding(ms)) draw::slide_frames(slide_px_, f, draw::slide_offset((double)(ms - trans_start_)), slide_dir_);
+    else if (fading(ms)) draw::fade_frames(slide_px_, f, (double)(ms - trans_start_));
   });
   return true;
 }
@@ -439,7 +449,7 @@ void Board::step() {
     // fetch now rather than drop it on stale data.
     sched.due_now(&update_job, (double)ms);
   }
-  bool anim = player.busy((double)ms) || sliding(ms);
+  bool anim = player.busy((double)ms) || transitioning(ms);
   if (!flight_) {
     // While the chooser is open only overdue requests run, so the commit
     // goes out the moment the knob rests.
@@ -467,7 +477,7 @@ void Board::step() {
   n = now(ms);
   player.wall_ms = (double)now_ms(ms);
   std::optional<screen::FrameKey> key = chooser.open ? chooser.frame_key((double)ms) : player.frame_key((double)ms, n);
-  if (sliding(ms) || (chooser.open ? SHOWN_CHOOSER : (int)player.screen) != shown_) key.reset();
+  if (transitioning(ms) || (chooser.open ? SHOWN_CHOOSER : (int)player.screen) != shown_) key.reset();
   if (last_draw_ < 0 || (!key ? ms - last_draw_ >= 33 : key != last_key_)) {
     if (draw_frame(ms, n)) {
       last_draw_ = ms;
@@ -629,6 +639,7 @@ void Board::do_buttons(long long ms) {
   if (up_.update(buttons->up(), (double)ms)) stp = -1;
   if (down_.update(buttons->down(), (double)ms)) stp = 1;
   if (stp) {
+    button_dir_ = stp;  // the new screen slides in from the way pressed
     player.set_screen(override_.press(stp, player.screen, player.p["v"].num()), (double)ms);
     radar_job.due_at = 0;
     // The payload only has the old screen's data: fetch the new one now.

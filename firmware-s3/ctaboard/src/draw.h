@@ -264,6 +264,10 @@ struct RenderOpts {
   const uint8_t *slide_from = nullptr;
   double slide_t = 0;
   int slide_dir = 1;
+  // Screen-change fade (draw.js opts.fade): the old screen's last shown
+  // pixels and ms into the fade. Used only without a slide.
+  const uint8_t *fade_from = nullptr;
+  double fade_t = 0;
   // Animated weather icons (draw.js opts.iconT): ms on the board's clock.
   std::optional<double> icon_t;
 };
@@ -276,6 +280,11 @@ int slide_offset(double t);  // px the new screen has come in, 0..64 + SLIDE_GAP
 // Overnight owl: its frame (assets::OWL_FRAMES) at icon-clock ms t; 0 without one.
 int owl_frame(std::optional<double> t);
 void slide_frames(const uint8_t *from, Frame &f, int d, int dir);
+// Screen change from the phone or the auto rotation: the old frame fades to
+// black, then the new one fades in (draw.js fadeFrames).
+const double SCREEN_FADE_OUT_MS = 125, SCREEN_FADE_IN_MS = 125;
+const double SCREEN_FADE_MS = SCREEN_FADE_OUT_MS + SCREEN_FADE_IN_MS;
+void fade_frames(const uint8_t *from, Frame &f, double t);
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);
 

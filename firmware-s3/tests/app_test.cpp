@@ -1451,7 +1451,7 @@ static void test_knob_waits_for_the_ring() {
   CHECK(!r.board->chooser.open && r.server.count("select:") == 0, "");
 }
 
-static void test_screen_change_slides() {
+static void test_phone_screen_change_fades() {
   Rig r;
   r.board->connect();
   r.run_for(15000);
@@ -1462,32 +1462,54 @@ static void test_screen_change_slides() {
     r.board->step();
     r.clock.sleep_ms(5);
   }
-  // The switch's frame (drawn in the same step) starts the slide on the old
-  // screen; the ticker comes after transit, so from the right.
-  long long t0 = r.clock.t;
-  CHECK(r.board->sliding(t0), "");
-  CHECK(r.board->slide_dir() == 1, "%d", r.board->slide_dir());
+  // A phone change: the switch's frame starts a fade (not a slide) on the
+  // old screen.
+  CHECK(r.board->fading(r.clock.t) && !r.board->sliding(r.clock.t), "");
   long frames = r.display.frames;
-  r.run_for(200);
-  draw::Frame mid = r.display.last;
-  r.run_for(300);
-  CHECK(!r.board->sliding(r.clock.t), "");
-  CHECK(r.display.frames - frames >= 8, "%ld frames in the slide", r.display.frames - frames);
-  draw::Frame after = r.display.last;
-  int vs_before = 0, vs_after = 0;
-  for (size_t i = 0; i < sizeof mid.px; i++) {
-    if (mid.px[i] != before.px[i]) vs_before++;
-    if (mid.px[i] != after.px[i]) vs_after++;
+  r.run_for(60);
+  draw::Frame out = r.display.last;  // fading out: the old screen, dimmer
+  int lit_before = 0, brighter = 0;
+  for (size_t i = 0; i < sizeof out.px; i++) {
+    lit_before += before.px[i] > 0;
+    if (out.px[i] > before.px[i]) brighter++;
   }
-  CHECK(vs_before > 0 && vs_after > 0, "mid-slide shows both: %d / %d", vs_before, vs_after);
-  // Back to transit: an earlier screen, from the left.
-  r.server.v = 3;
-  r.server.screen = "transit";
+  CHECK(lit_before > 0 && brighter == 0, "fading out never brightens: %d", brighter);
+  r.run_for(250);
+  CHECK(!r.board->fading(r.clock.t), "");
+  CHECK(r.display.frames - frames >= 5, "%ld frames in the fade", r.display.frames - frames);
+}
+
+static void test_buttons_slide_the_way_pressed() {
+  Rig r({"ok"}, true);
+  r.board->connect();
+  r.run_for(5000);
+  auto press = [&](bool down) {
+    (down ? r.btn.held_down : r.btn.held_up) = true;
+    std::string was = S(r.board);
+    while (S(r.board) == was) {
+      r.board->step();
+      r.clock.sleep_ms(5);
+    }
+  };
+  press(true);  // DOWN: transit -> ticker, from the right
+  CHECK(S(r.board) == "ticker" && r.board->sliding(r.clock.t) && r.board->slide_dir() == 1, "%d", r.board->slide_dir());
+  r.btn.held_down = false;
+  r.run_for(1000);
+  press(false);  // UP: back to transit, from the left
+  CHECK(S(r.board) == "transit" && r.board->sliding(r.clock.t) && r.board->slide_dir() == -1, "%d", r.board->slide_dir());
+  r.btn.held_up = false;
+  r.run_for(1000);
+  press(false);  // UP wraps to the last screen: still from the left (the press, not the order)
+  CHECK(S(r.board) == "clock" && r.board->sliding(r.clock.t) && r.board->slide_dir() == -1, "%d", r.board->slide_dir());
+  r.btn.held_up = false;
+  r.run_for(1000);
+  // A phone change after the presses fades.
+  r.server.v = 7;
   while (S(r.board) != "transit") {
     r.board->step();
     r.clock.sleep_ms(5);
   }
-  CHECK(r.board->sliding(r.clock.t) && r.board->slide_dir() == -1, "%d", r.board->slide_dir());
+  CHECK(r.board->fading(r.clock.t), "");
 }
 
 static void test_knob_choice_slides_the_way_the_knob_turned() {
@@ -1692,7 +1714,8 @@ int main() {
       T_(test_ota_trial_build_that_cant_reach_the_server_rolls_back),
       T_(test_ota_rolled_back_offer_waits_for_try_again),
       T_(test_ota_boot_counts_trial_starts),
-      T_(test_screen_change_slides),
+      T_(test_phone_screen_change_fades),
+      T_(test_buttons_slide_the_way_pressed),
       T_(test_knob_choice_slides_the_way_the_knob_turned),
       T_(test_worker_animations_never_wait_for_a_request),
       T_(test_worker_keeps_data_fresh_one_request_at_a_time),

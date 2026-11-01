@@ -1976,10 +1976,25 @@
       return f;
     }
 
+    // Screen change from the phone or the auto rotation (S3): the old
+    // screen's last frame fades to black over SCREEN_FADE_OUT_MS, then the
+    // new screen fades in over SCREEN_FADE_IN_MS (linear). The slide above
+    // is kept for the knob and the buttons. fadeFrames(from, f, t): t ms
+    // into the fade.
+    const SCREEN_FADE_OUT_MS = 125, SCREEN_FADE_IN_MS = 125, SCREEN_FADE_MS = SCREEN_FADE_OUT_MS + SCREEN_FADE_IN_MS;
+    function fadeFrames(from, f, t) {
+      const out = t < SCREEN_FADE_OUT_MS;
+      const k = out ? 1 - Math.max(0, t) / SCREEN_FADE_OUT_MS : Math.min(1, (t - SCREEN_FADE_OUT_MS) / SCREEN_FADE_IN_MS);
+      const src = out ? from : f.px;
+      for (let i = 0; i < f.px.length; i++) f.px[i] = Math.round(src[i] * k);
+      return f;
+    }
+
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock
     // rolls (see takeRoll). opts.slide ({from: the old screen's pixels, t:
     // ms into the slide, dir}): the screen-change slide, after brightness
-    // (from is a shown frame). opts.iconT: ms on the board's clock for
+    // (from is a shown frame). opts.fade ({from, t}): the screen-change
+    // fade, likewise. opts.iconT: ms on the board's clock for
     // animated weather icons (layouts listed in radar.iconAnim; S3).
     function render(p, opts) {
       const o = opts || {};
@@ -1994,6 +2009,7 @@
       } finally { NR = null; ICON_T = null; ICON_ANIMATED = []; }
       applyBrightness(f, p.bright);
       if (o.slide && o.slide.from) slideFrames(o.slide.from, f, slideOffset(o.slide.t || 0), o.slide.dir == null ? 1 : o.slide.dir);
+      else if (o.fade && o.fade.from) fadeFrames(o.fade.from, f, o.fade.t || 0);
       return f;
     }
 
@@ -2039,7 +2055,7 @@
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, renderChooser, renderSkyline, SKY, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
-      ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, iconRows,
+      ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames, iconRows,
     };
   }
 

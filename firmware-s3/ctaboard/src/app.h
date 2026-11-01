@@ -245,7 +245,9 @@ class Board {
   void connect(bool boot = true);
   void step();
   bool in_flight() const { return flight_.has_value(); }
-  bool sliding(long long ms) const { return slide_start_ >= 0 && ms - slide_start_ < draw::SCREEN_SLIDE_MS; }
+  bool sliding(long long ms) const { return trans_ == SLIDE && ms - trans_start_ < draw::SCREEN_SLIDE_MS; }
+  bool fading(long long ms) const { return trans_ == FADE && ms - trans_start_ < draw::SCREEN_FADE_MS; }
+  bool transitioning(long long ms) const { return sliding(ms) || fading(ms); }
   int slide_dir() const { return slide_dir_; }
   std::string health_query(long long ms);
 
@@ -291,16 +293,19 @@ class Board {
   long long pending_start_ = 0;
   bool stuck_said_ = false;
 
-  // Screen-change slide: the last frame shown and what it showed (a Screen,
-  // or one of these); a change of that slides the new screen in over a
-  // copy of it.
+  // Screen-change transition: the last frame shown and what it showed (a
+  // Screen, or one of these); a change of that slides (knob, buttons) or
+  // fades (anything else) the new screen in over a copy of it.
   static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3;
+  enum Trans { NO_TRANS, SLIDE, FADE };
   uint8_t last_px_[draw::Frame::W * draw::Frame::H * 3] = {};
   uint8_t slide_px_[draw::Frame::W * draw::Frame::H * 3] = {};
   int shown_ = SHOWN_NONE;
-  long long slide_start_ = -1;
+  Trans trans_ = NO_TRANS;
+  long long trans_start_ = -1;
   int slide_dir_ = 1;
   long long chooser_travel_ = 0;  // where the knob's last turn went (ring steps, + clockwise)
+  int button_dir_ = 0;            // a button press waiting for its frame: -1 UP, +1 DOWN
   void shown(int what, const draw::Frame &f, long long ms);
   void launch(Flight f);
   void land(long long ended);

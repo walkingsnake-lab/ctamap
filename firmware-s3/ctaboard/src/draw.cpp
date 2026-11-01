@@ -2557,6 +2557,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   if (o.roller) o.roller->end();  // the Player calls begin(); render() ends the frame
   if (o.apply_bright) apply_brightness(f, o.bright ? *o.bright : p["bright"].is_null() ? 100 : p["bright"].num());
   if (o.slide_from) slide_frames(o.slide_from, f, slide_offset(o.slide_t), o.slide_dir);
+  else if (o.fade_from) fade_frames(o.fade_from, f, o.fade_t);
   return f;
 }
 
@@ -2586,6 +2587,13 @@ void slide_frames(const uint8_t *from, Frame &f, int d, int dir) {
       f.px[i + 1] = src ? src[j + 1] : 0;
       f.px[i + 2] = src ? src[j + 2] : 0;
     }
+}
+
+void fade_frames(const uint8_t *from, Frame &f, double t) {
+  bool out = t < SCREEN_FADE_OUT_MS;
+  double k = out ? 1 - std::max(0.0, t) / SCREEN_FADE_OUT_MS : std::min(1.0, (t - SCREEN_FADE_OUT_MS) / SCREEN_FADE_IN_MS);
+  const uint8_t *src = out ? from : f.px;
+  for (int i = 0; i < Frame::W * Frame::H * 3; i++) f.px[i] = (uint8_t)jsround(src[i] * k);
 }
 
 // ---- status screens (firmware/boardlib/status.py) ----
