@@ -19,7 +19,7 @@ const OUT = path.join(__dirname, '..', 'docs', 'board', 'mockups', 'weather', 'l
 const arg = (name, def) => { const a = process.argv.find((s) => s === `--${name}` || s.startsWith(`--${name}=`)); return a ? (a.includes('=') ? a.split('=')[1] : true) : def; };
 
 // ---- color and noise helpers ----
-const W = 64, H = 32, SHORE = 26;                       // rows 0-26 sky and city, 27-31 lake
+const W = 64, H = 32, SHORE = 25;                       // rows 0-25 sky and city, 26-31 lake (row 26 keeps the text off the skyline)
 const rgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
 const hex = (a) => '#' + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
 const mix = (a, b, k) => hex(rgb(a).map((v, i) => v + (rgb(b)[i] - v) * k));
@@ -38,7 +38,7 @@ let prng = 1; const r2 = () => ((prng = (prng * 48271) % 2147483647) / 214748364
 const hsv = (h, s, v) => { const f = (n) => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); }; return hex([f(5), f(3), f(1)].map((c) => c * 255)); };
 
 // ---- options ----
-const OPT = { text: arg('text', 'auto'), clock: !arg('no-clock', false), reflect: !!arg('reflect', false) };
+const OPT = { text: arg('text', 'bottom'), clock: !arg('no-clock', false), reflect: !!arg('reflect', false) };
 
 // ---- animation clock: 100 ms ticks ----
 let T = 0, PHASE = 0, SHIM = 0, DRIFT = 0;
@@ -70,7 +70,7 @@ function buildSkyline() {
   rect(11, 4, top(17), 'tower');                                     // Aon (-15.3°)
   rect(15, 5, top(21), 'tower');                                     // St. Regis (-12.1°): the closest supertall, so the tallest-looking
   rect(23, 5, top(10), 'tower'); rect(24, 4, top(13), 'tower'); rect(24, 3, top(16), 'tower');   // Trump (-5.7°), setbacks
-  rect(29, 7, top(14) + 1, 'tower'); rect(30, 5, top(14), 'tower');  // Lake Point Tower (0°), right behind the wheel
+  rect(29, 7, top(15), 'tower'); rect(30, 5, top(17), 'tower');      // Lake Point Tower (0°), right behind the wheel; its top shows 2 rows above the rim
   // Hancock (16.2°): symmetric 4-6-8 steps around x 53, twin antennas with beacons. With the clock
   // on, the antennas are 2 rows shorter so the clock fits above the beacons.
   { const t = top(17), steps = [4, 6, 8];
@@ -96,20 +96,20 @@ const segment = (ax, ay, bx, by, w) => (px, py) => {
   return Math.hypot(px - (ax + t * dx), py - (ay + t * dy)) < w / 2;
 };
 
-// Centennial Wheel: 12 px hard rim (rows 12-23) centered on the x 32 / y 18 pixel boundary,
-// a 2x2 hub, A-frame legs from the hub to the pier (feet 5 px either side), and a crossbar on row 25.
-const CX = 32, CY = 18, R = 6, SPREAD = 5;
+// Centennial Wheel: 12 px hard rim (rows 11-22) centered on the x 32 / y 17 pixel boundary,
+// a 2x2 hub, A-frame legs from the hub to the pier (feet 5 px either side), and a crossbar on row 24.
+const CX = 32, CY = SHORE - 8, R = 6, SPREAD = 5;
 function wheel(f, pal) {
   const box = [CX - R - 2, CX + R + 1, CY - R - 2, SHORE];
   cover(f, ...box, (x, y) => Math.hypot(x - CX, y - CY) > 0.6 && (segment(CX, CY, CX - SPREAD, SHORE + 1, 1)(x, y) || segment(CX, CY, CX + SPREAD, SHORE + 1, 1)(x, y)), pal.leg);
-  { const by = 25, k = (by + 0.5 - CY) / (SHORE + 1 - CY); f.fill(Math.round(CX - SPREAD * k), by, Math.round(2 * SPREAD * k), 1, pal.leg); }
+  { const by = SHORE - 1, k = (by + 0.5 - CY) / (SHORE + 1 - CY); f.fill(Math.round(CX - SPREAD * k), by, Math.round(2 * SPREAD * k), 1, pal.leg); }
   cover(f, ...box, (x, y) => { const r = Math.hypot(x - CX, y - CY); return r >= R - 1 && r <= R; },
     pal.rim === 'rainbow' ? (x, y) => hsv(((Math.atan2(y - CY, x - CX) * 180 / Math.PI) + 360 + PHASE) % 360, 0.6, 0.85) : pal.rim);
   f.fill(CX - 1, CY - 1, 2, 2, pal.hub);
 }
 // By day the wheel takes the color with the most contrast against what is behind its upper rim.
-const WHEEL_DAY = { leg: '#6a7282', hub: '#6a7282', rim: '#8a92a2' };
-const WHEEL_LIGHT = { leg: '#b0b6c0', hub: '#b0b6c0', rim: '#dce0e6' };
+const WHEEL_DAY = { leg: '#565c68', hub: '#565c68', rim: '#dce0e6' };    // white rim, darker frame
+const WHEEL_LIGHT = { leg: '#4a505c', hub: '#4a505c', rim: '#eef0f4' };
 const WHEEL_DARK = { leg: '#262a32', hub: '#262a32', rim: '#262a32' };
 const WHEEL_NIGHT = { leg: '#4a4a66', hub: '#4a4a66', rim: 'rainbow' };
 function wheelForDay(f) {
@@ -133,8 +133,8 @@ function windows(f, density = 0.45) {
   for (let y = 0; y <= SHORE; y++) for (let x = 0; x < W; x++) {
     const r = role[y][x];
     if (!r || (r === 'fill' && x < 38)) continue;           // background mass is lit only right of the wheel
-    if (x >= 19 && x <= 44 && y >= 20) continue;
-    if (Math.hypot(x + 0.5 - 32, y + 0.5 - 18) < 7) continue;
+    if (x >= 19 && x <= 44 && y >= SHORE - 6) continue;
+    if (Math.hypot(x + 0.5 - CX, y + 0.5 - CY) < 7) continue;
     if (x % 2 === 0 && y % 2 === 1 && isB(x, y - 1) && rand() < density) f.fill(x, y, 1, 1, rand() < 0.3 ? '#ffb050' : '#8a5c20');
   }
 }
@@ -167,7 +167,7 @@ function stars(f, n) {
 // Water: a two-color gradient with faint ripple dashes drifting sideways (alternate rows in
 // opposite directions). Optional: reflections of the scene, fixed in place (only the water moves).
 function water(f, w) {
-  for (let y = SHORE + 1; y < H; y++) f.fill(0, y, W, 1, mix(w.top, w.bottom, (y - SHORE - 1) / 4));
+  for (let y = SHORE + 1; y < H; y++) f.fill(0, y, W, 1, mix(w.top, w.bottom, (y - SHORE - 1) / (H - SHORE - 2)));
   if (OPT.reflect) reflect(f, w.top);
   const base = rgb(w.top);
   for (let y = SHORE + 1; y < H; y++) {
@@ -182,7 +182,7 @@ function water(f, w) {
 function reflect(f, top) {
   const src = []; for (let y = SHORE - 4; y <= SHORE; y++) { const row = []; for (let x = 0; x < W; x++) row.push(f.get(x, y)); src.push(row); }
   for (let y = SHORE + 1; y < H; y++) {
-    const d = y - SHORE - 1, shift = (y % 2 ? 1 : -1) * (d > 0 ? 1 : 0), k = 0.5 - d * 0.08;
+    const d = Math.min(4, y - SHORE - 1), shift = (y % 2 ? 1 : -1) * (d > 0 ? 1 : 0), k = 0.5 - d * 0.08;
     for (let x = 0; x < W; x++) {
       const sx = Math.max(0, Math.min(W - 1, x + shift)), sy = SHORE - d;
       const onRim = Math.abs(Math.hypot(sx + 0.5 - CX, sy + 0.5 - CY) - (R - 0.5)) < 1;   // the rim reflects as plain structure
@@ -236,8 +236,8 @@ function fog(f, fogC, top = 4, bottom = 22) {
 // Pixel-art lightning: 1 px white core stepping down with sideways jogs, a flat violet edge on
 // each side, one violet branch; ends just above the Trump roof.
 function lightning(f) {
-  const core = [[22, 0], [21, 1], [21, 2], [20, 3], [21, 4], [22, 4], [23, 4], [23, 5], [24, 6], [23, 7], [24, 8], [25, 8], [25, 9], [25, 10]];
-  const branch = [[20, 2], [19, 3], [18, 4], [18, 5], [17, 6]];
+  const core = [[21, 0], [21, 1], [20, 2], [21, 3], [22, 3], [23, 3], [23, 4], [24, 5], [23, 6], [24, 7], [25, 7], [25, 8], [25, 9]];
+  const branch = [[20, 1], [19, 2], [18, 3], [18, 4], [17, 5]];
   const isCore = new Set(core.map(([x, y]) => x + ',' + y)), put = (x, y, c) => { if (y >= 0 && x >= 0 && x < W && !role[y][x]) f.fill(x, y, 1, 1, c); };
   for (const [x, y] of core) for (const X of [x - 1, x + 1]) if (!isCore.has(X + ',' + y)) put(X, y, '#7060c0');
   for (const [x, y] of branch) put(x, y, '#9a8ae0');
@@ -291,7 +291,7 @@ const STATES = [
     water: { top: '#5a6068', bottom: '#4e545c', ripple: '#6a7078' }, temp: '55°', clock: '8:10' }],
   ['sunrise', 'SUNRISE', { sky: ramp([[0, '#2a4a8a'], [14, '#8a86b8'], [22, '#e8a8a0'], [26, '#ffc8a0']]),
     water: { top: '#4a4a6a', bottom: '#3a3a58', ripple: '#8a7a8e' }, temp: '48°', clock: '6:58' }],
-  ['sunset', 'SUNSET', { sky: ramp([[0, '#1a1440'], [9, '#5a2a5a'], [17, '#c0503a'], [23, '#f08a30'], [26, '#ffb848']]), sun: [40, 11, true, '#fff0a0'],   // summer: northwest, setting behind low buildings right of the wheel
+  ['sunset', 'SUNSET', { sky: ramp([[0, '#1a1440'], [9, '#5a2a5a'], [17, '#c0503a'], [23, '#f08a30'], [26, '#ffb848']]), sun: [40, 10, true, '#fff0a0'],   // summer: northwest, setting behind low buildings right of the wheel
     clouds: (f) => deck(f, { seed: 21, sx: 11, sy: 2.2, cover: 0.62, light: '#ffb08a', dark: '#2a1236', ymax: 13 }),
     water: { top: '#3a2030', bottom: '#2a1424', ripple: '#7a3a3a', ripFn: (x, y) => Math.abs(x + 0.5 - 43.5) < 1.5 + (y - SHORE) * 0.8 ? '#e08a40' : '#7a3a3a' }, temp: '66°', clock: '6:12' }],
   ['twilight', 'TWILIGHT', { night: true, sky: ramp([[0, '#06103a'], [18, '#22306a'], [26, '#4a4a88']]), stars: 6,

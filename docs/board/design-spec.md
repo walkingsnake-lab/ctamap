@@ -440,21 +440,21 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 
 ### View
 - The viewer is on the lake on Navy Pier's axis (41.8917, -87.590), facing west. Each landmark's x is its real bearing at 1.3 px per degree (pier axis = x 32). Heights are real angular heights at 2.4 rows per degree, about 1.8× vertical exaggeration.
-- Rows 0–26 are sky and city (the shore is row 26); rows 27–31 are the lake.
-- Left to right: Willis (far left and small, since it's 4 km away), Aon, St. Regis (the closest supertall, so it looks tallest, as in photos from the lake), Trump, Lake Point Tower (directly behind the wheel), Hancock. Background mass fills the gaps: the Loop on the left, Streeterville on the right. Only Willis and Hancock are drawn to be recognized; the rest are plain slabs, to keep the focal points few.
+- Rows 0–25 are sky and city (the shore is row 25); rows 26–31 are the lake. Row 26 is a row of open water between the skyline and the text (rows 27–31), so the two never touch.
+- Left to right: Willis (far left and small, since it's 4 km away), Aon, St. Regis (the closest supertall, so it looks tallest, as in photos from the lake), Trump, Lake Point Tower (directly behind the wheel; its top shows 2 rows above the rim, rows 9–10, a short black block that frames the wheel), Hancock. Background mass fills the gaps: the Loop on the left, Streeterville on the right. Only Willis and Hancock are drawn to be recognized; the rest are plain slabs, to keep the focal points few.
 - **Willis** is seen from the southeast, so its setbacks step down to the right (floors 66 / 108 / 90 / 66, 1 / 4 / 2 / 2 px wide). From due south only one setback shows, and it reads as a generic tower.
 - **Hancock** has symmetric 4-6-8 px steps around x 53 and twin antennas of equal height, at full height (the text no longer sits above them).
 
 ### Buildings and lights
 - Every building, background included, and every antenna mast is unlit (black) day and night. By day they're a silhouette against the sky; at night only the windows draw the city.
-- **Night windows:** 45% of window slots (even columns, odd rows) are lit, 30% of those bright amber `#ffb050`, the rest `#8a5c20`, from a fixed seed so the pattern never changes. Background mass gets windows only right of the wheel. No windows around the pier (x 19–44, rows 20 and below) or behind the wheel, so the pier's string lights are the only amber there.
+- **Night windows:** 45% of window slots (even columns, odd rows) are lit, 30% of those bright amber `#ffb050`, the rest `#8a5c20`, from a fixed seed so the pattern never changes. Background mass gets windows only right of the wheel. No windows around the pier (x 19–44, rows 19 and below) or behind the wheel, so the pier's string lights are the only amber there.
 - **Hancock beacons:** red, night only, pulsing together: a smooth 4 s cosine between dark red `#401010` and bright red `#ff2020`, never off. Not a hard blink, since a red 1 s blink means a tornado warning (§2).
 
 ### Centennial Wheel and Navy Pier
-- **Wheel:** a 12 px hard-edged rim (rows 12–23) centered on the x 32 pixel boundary, a 2×2 hub, A-frame legs from the hub to the pier (feet 5 px either side of center), and a crossbar on row 25. No spokes and no gondolas: the rim on its A-frame is what reads as the wheel. Hard edges throughout.
-- **By day** the wheel takes the color with the most contrast against the sky behind its upper rim: grey `#8a92a2` on blue or dark skies, light `#dce0e6` on mid greys, dark `#262a32` on bright skies. Clouds drift, so the server picks the color once per cloud strip from the strip's average over the rim rows; it doesn't change as clouds pass.
+- **Wheel:** a 12 px hard-edged rim (rows 11–22) centered on the x 32 pixel boundary, a 2×2 hub, A-frame legs from the hub to the pier (feet 5 px either side of center), and a crossbar on row 24. No spokes and no gondolas: the rim on its A-frame is what reads as the wheel. Hard edges throughout.
+- **By day** the rim is white and the frame (legs, hub, crossbar) a darker grey, so the two read apart: rim `#dce0e6` with frame `#565c68` on blue, dark or mid-grey skies; rim `#eef0f4` with frame `#4a505c` on mid greys; all `#262a32` on bright skies (fog, snow). Clouds drift, so the server picks the color once per cloud strip from the strip's average over the rim rows; it doesn't change as clouds pass.
 - **At night** the rim is rainbow LEDs, soft and slow: pastel hues (saturation 60%, value 85%) turning around it once every 60 s, so the colors drift rather than spin; legs and hub dim `#4a4a66`. The rim, beacons and pier bulbs switch on when the sun drops below 0.5° (the real wheel lights at dusk).
-- **Pier:** a flat deck 8 px either side of the wheel's axis (x 24–39): a lit top row (`#6a6460` by day, `#2a2834` at night) and a darker face on row 27. At night, string-light bulbs every 3 px (x 24, 27 … 39) in `#c09050`.
+- **Pier:** a flat deck 8 px either side of the wheel's axis (x 24–39): a lit top row on row 25 (`#6a6460` by day, `#2a2834` at night) and a darker face on row 26. At night, string-light bulbs every 3 px (x 24, 27 … 39) in `#c09050`.
 - Also tried and declined: flags on the pier, the Grand Ballroom dome, a pier running toward the viewer in perspective, gondolas, 6 or 8 spokes, a soft-edged rim.
 
 ### Sky
@@ -471,8 +471,9 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 
 ### Temperature and clock
 - Always at the bottom, over the water (baseline 32, rows 27–31), in lit white `#d8d8d8`, Tom Thumb. Temperature from x 0; clock flush to x 63. No drop shadows, no AM/PM (as on the other clock faces).
-- Widest cases, measured with `fonts.js`: `-12°` / `100°` 14 px (x 0–13), `12:59` 17 px (x 46–63). The pier is x 24–39, so they never collide.
+- Widest cases, measured with `fonts.js`: `-12°` / `100°` 14 px (x 0–13), `12:59` 17 px (x 46–63). The pier sits on rows 25–26, above the text. (One line in the top left was also mocked, `topleft.png` and `topleft-dim.png`, and declined.)
 - The clock is always on: this is a clock face. Temperature is always on too.
+- **Watches and warnings** replace the temperature (the clock stays): the glyph (bolt for severe thunderstorm, funnel for tornado), 3 px, then `WATCH` or `WARNING`, in the warning colors (watch yellow `#ffd800`, severe warning orange `#ff8000`, tornado warning red `#ff2020`, blinking 1 s on, 1 s off as everywhere, §2). The widest, the funnel + `WARNING`, is 36 px (x 0–35), still 10 px clear of the widest clock. Mockup: [`warnings.png`](mockups/weather/lake/warnings.png).
 
 ### Choosing the state
 The server picks the state; the board never interprets weather codes.
@@ -491,7 +492,7 @@ The server picks the state; the board never interprets weather codes.
 - Between keyframes each row's color is mixed linearly by elevation; water colors blend the same way (values in the mock's `KEYS`).
 - **Mornings** use the same keyframes in reverse, except the sunrise sun isn't drawn (it rises behind the viewer, over the lake).
 - **City lights follow the sky:** windows switch on one at a time between 1° and −6° (each window has its own threshold from a hash, so the lit set only grows, reaching the full 45% at −6°); stars appear between −4° and −9° (0 → 14).
-- **Sun height:** at the skyline's real 2.4 rows per degree (center row 22 at the horizon, hidden by the buildings). Above ~8° it would leave the panel, so between 8° and 14° it slides to the day spot (x 38–44, rows 2–8). In late fall and winter it sets behind the Loop towers (on Oct 31 it's hidden behind Aon and St. Regis from about 5:15 PM), so the glow carries the sunset; in summer it sets right of the wheel over lower buildings.
+- **Sun height:** at the skyline's real 2.4 rows per degree (center row 21 at the horizon, hidden by the buildings). Above ~8° it would leave the panel, so between 8° and 14° it slides to the day spot (x 38–44, rows 2–8). In late fall and winter it sets behind the Loop towers (on Oct 31 it's hidden behind Aon and St. Regis from about 5:15 PM), so the glow carries the sunset; in summer it sets right of the wheel over lower buildings.
 
 **Weather** comes from Open-Meteo's current `weather_code` and `cloud_cover` (add `cloud_cover` to the current request; additive, so the M4 is unaffected), first match wins:
 
@@ -581,9 +582,9 @@ Ambient and slow, on a 100 ms tick:
 ### Boats
 A boat crosses the lake **at every quarter hour**, by day only, alternating: the sailboat on :00 and :30, the speedboat on :15 and :45. Mockups: [`boat.png`](mockups/weather/lake/boat.png), [`speedboat.png`](mockups/weather/lake/speedboat.png).
 
-- **Sailboat:** a white sail `#e8ecf0` on rows 22–25 (mast on the leading side), in front of the city; a colored hull on rows 26–27 (6 px deck row, 4 px keel row) so it stands out against the sail and still shows above the text when it passes behind the temperature or clock. Starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Left on :00, right on :30.
-- **Speedboat** (loosely the Seadog tour boat): a 14 px yellow hull `#ffc020` with a white bottom stripe, blue and white passenger rows along the deck, a raised helm with a windshield toward the stern, rows 23–27, and a white spray plume trailing behind (9 / 6 / 3 px on rows 27 / 26 / 25, fading out). Fast: 1 px every 150 ms, about 13 s across including the plume. It runs out left, **turns around off-panel**, waits about 4 s, and comes back heading right; one round trip of about 30 s.
-- Both pass in front of the pier and wheel and behind the text, and are drawn from the board's clock, so no fetch is needed.
+- **Sailboat:** a white sail `#e8ecf0` on rows 21–24 (mast on the leading side), in front of the city; a brown hull on rows 25–26 (6 px deck row `#8a4a24`, 4 px keel row `#5a2e16`). Starts off-panel at the quarter hour and moves 1 px every 800 ms (about 56 s edge to edge). Left on :00, right on :30.
+- **Speedboat** (loosely the Seadog tour boat): three rows: blue and white passengers (row 24), a 14 px yellow deck `#ffc020` with the bow raked forward (row 25) and a white bottom (row 26), with a white spray plume trailing behind (9 / 6 / 3 px on rows 26 / 25 / 24, fading out). No helm or windshield. Fast: 1 px every 150 ms, about 13 s across including the plume. It runs out left, **turns around off-panel**, waits about 4 s, and comes back heading right; one round trip of about 30 s.
+- Both sit entirely above the text rows, so they never hide behind it; they pass in front of the pier and wheel and are drawn from the board's clock, so no fetch is needed.
 - **When:** sun above 0°, no rain, snow, fog or thunderstorm, and 40°F or warmer. The server sends `boats` true or false.
 
 ### Board requirements (S3)
@@ -596,6 +597,4 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 - On the panel: the near-floor colors above, whether the moon is dim enough, and whether glints read as sparkle or noise.
 - Moon crescents: a plain sliver, earthshine (the unlit part as a faint disc, likely lost to overnight dimming), or a brightened sliver.
 - Sunset sun height: how much of the disc shows above the skyline at the low and high ends of its x range (it crosses different buildings through the year).
-- Sailboat hull color: brown (`#8a4a24` / `#5a2e16`) or red (`#c02a20` / `#7a1a14`), both in `boat.png`.
-- Text placement: over the water (current) or one line in the top left (`topleft.png`, `topleft-dim.png`).
 - Mocks: `mock-skyline-dusk.js` (sky, lights, boat) is current; `mock-weather-lake.js` still draws the weather states with the text at the top and has no glints or cloud strip. `draw.js` takes over as the reference once built.
