@@ -29,8 +29,19 @@ function parseCtaTime(s) {
   return Math.round(ms / 1000);
 }
 
+// The same timestamp as seconds on CTA's own wall clock, with no time zone
+// applied. Differences between two of these are what CTA means: across the
+// fall-back hour, Train Tracker adds minutes to the wall time without
+// switching offset (at 1:35 CDT a train 28 min out reads 02:03, which is
+// 01:03 CST), so its arrT can't be read as an absolute time.
+function wallSeconds(s) {
+  const m = RE.exec(String(s || '').trim());
+  if (!m) return null;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000;
+}
+
 // Chicago's UTC offset in seconds (e.g. -18000 in CDT) at epoch second t.
 // Sent to the board as `tzo`: CircuitPython has no time zone database.
 const tzOffset = (t) => offsetAt(t * 1000) / 1000;
 
-module.exports = { parseCtaTime, tzOffset, TZ };
+module.exports = { parseCtaTime, wallSeconds, tzOffset, TZ };

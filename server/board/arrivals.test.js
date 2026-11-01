@@ -368,3 +368,15 @@ test('tracker applies the DUE latch between fetches', async () => {
   assert.ok(Math.abs(first - (t - 30 + 70)) <= 1);
   assert.equal(second, t + 60);
 });
+
+test('arrival times survive the DST fall-back (CTA counts on its wall clock)', () => {
+  // Nov 1, 2026, 1:35 CDT: CTA says 7, 28 and 46 min; the last two read as
+  // 02:03 and 02:21 on the wall clock, which parse as CST (an hour too late).
+  const eta = (arrT, rn) => ({ staId: '40100', rt: 'Red', destNm: 'Howard', trDr: '1', arrT, isSch: '0', rn });
+  const json = { ctatt: { tmst: '2026-11-01T01:35:00', errCd: '0', eta: [eta('2026-11-01T01:42:00', '801'), eta('2026-11-01T02:03:00', '802'), eta('2026-11-01T02:21:00', '803')] } };
+  const now = Date.UTC(2026, 10, 1, 6, 35) / 1000; // 1:35 CDT
+  for (const opts of [{ now }, {}]) {
+    const arr = normalize(json, { log: quiet, ...opts });
+    assert.deepEqual(arr.map((a) => (a.t - now) / 60), [7, 28, 46]);
+  }
+});
