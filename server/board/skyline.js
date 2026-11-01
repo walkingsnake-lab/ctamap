@@ -69,11 +69,11 @@ const LOOKS = {
 };
 const CLEAR_FAMILY = new Set(['clear', 'partly', 'mostly']);
 
-// Open-Meteo current weather -> {kind, lvl}: kind one of clear, partly,
-// mostly, overcast, rain, snow, fog, storm; lvl 1-3 (light, moderate, heavy)
-// for rain and snow. Codes 0-3 defer to cloud cover (Open-Meteo has no
-// "mostly cloudy" code); without cloud cover they map 0-1 clear, 2 partly,
-// 3 overcast.
+// Current weather (WMO code, as weather.js maps WeatherAPI's; cloud cover %)
+// -> {kind, lvl}: kind one of clear, partly, mostly, overcast, rain, snow,
+// fog, storm; lvl 1-3 (light, moderate, heavy) for rain and snow. Codes 0-3
+// defer to cloud cover (WMO has no "mostly cloudy"); without cloud cover
+// they map 0-1 clear, 2 partly, 3 overcast.
 const RAIN_LVL = { 51: 1, 53: 2, 55: 3, 56: 1, 57: 3, 61: 1, 63: 2, 65: 3, 66: 1, 67: 3, 80: 1, 81: 2, 82: 3 };
 const SNOW_LVL = { 71: 1, 73: 2, 75: 3, 77: 1, 85: 1, 86: 3 };
 function weatherKind(code, clouds) {
@@ -96,7 +96,7 @@ const SUN_HORIZON_ROW = 21;       // sun's center row at 0° elevation
 const ROWS_PER_DEG = 2.4;
 const RIM_TOP = [11, 12, 13];     // rows behind the wheel's upper rim
 
-// Weather (parsed Open-Meteo, °F), the place, the time and the temperature
+// Weather (parsed by weather.js, °F), the place, the time and the temperature
 // to show (board unit, rounded) -> the payload's `skyline`.
 function toSkyline(w, { lat, lon, now, temp }) {
   const { el, az } = sunPos(now, lat, lon);

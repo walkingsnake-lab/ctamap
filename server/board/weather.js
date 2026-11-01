@@ -139,6 +139,8 @@ function parse(json) {
     feels: num(c.feelslike_f),
     windSpeed: num(c.wind_mph),
     windDir: num(c.wind_degree),
+    // Cloud cover, %: the skyline face's cloud states (skyline.js).
+    clouds: num(c.cloud),
     pop: maxPop(hours),
     days: forecastDays(fd),
     q15: [],

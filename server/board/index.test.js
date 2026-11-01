@@ -1237,9 +1237,8 @@ test('per-board link: the control page for that board only, without the owner\'s
 
 test('clock screen: only for boards whose firmware draws it (hk=skyline); the skyline section rides with it', async () => {
   const { parse } = require('./weather');
-  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
-  // Cloud cover comes from the weather source (being replaced separately); set it here.
-  const w = { ...parse(om), clouds: 30 };
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const w = parse({ ...om, current: { ...om.current, cloud: 30 } });
   const now = Math.floor(Date.now() / 1000);
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
@@ -1280,7 +1279,7 @@ test('clock screen: only for boards whose firmware draws it (hk=skyline); the sk
 test('clock screen: other screens leave the skyline out; the knob can choose CLOCK', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
-  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'open-meteo', 'morse-2026-10-04-1045.json'), 'utf8'));
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(om)) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   await s.req('/board/version?b=home&hu=60&hk=skyline', h);
@@ -1288,7 +1287,7 @@ test('clock screen: other screens leave the skyline out; the knob can choose CLO
   const r = await s.req('/board/select?b=home&s=clock', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
   assert.equal(r.status, 200);
   assert.equal(r.body.screen, 'clock');
-  assert.equal(r.body.skyline.st, 'clear', 'no cloud cover in the fixture: code 0 is clear');
+  assert.equal(r.body.skyline.st, 'clear', 'the fixture: sunny, 0% cloud');
   assert.equal(s.store.get('home').screen, 'clock');
   await s.close();
 });
