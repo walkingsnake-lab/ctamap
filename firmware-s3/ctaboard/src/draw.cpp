@@ -443,7 +443,7 @@ struct RollFont {
   int dist, t0, t1;
 };
 static RollFont roll_font(Font font) {
-  return font == FONT_5X7 ? RollFont{7, -6, -1} : font == FONT_CLOCK ? RollFont{11, -10, -1} : RollFont{6, -5, -1};
+  return font == FONT_5X7 ? RollFont{7, -6, -1} : font == FONT_CLOCK ? RollFont{11, -10, -1} : font == FONT_VCR ? RollFont{12, -11, -1} : RollFont{6, -5, -1};
 }
 
 static bool same_shape(Font font, const ustr &a, const ustr &b) {
@@ -455,9 +455,11 @@ static bool same_shape(Font font, const ustr &a, const ustr &b) {
 
 // Where a rolling text goes: its left edge at `pos`, its right edge at
 // `pos`, or centered on the panel (draw.js xOf: () => x, rightAt, centerX).
-enum Align { LEFT, RIGHT, CENTER };
+enum Align { LEFT, RIGHT, CENTER, SPAN };
 static int align_x(Font font, const ustr &s, Align a, int pos) {
   // CENTER: centered in columns pos-63 (pos 0: the whole panel).
+  // SPAN: centered in columns 0-pos.
+  if (a == SPAN) return (int)fdiv(pos + 1 - measure(font, s), 2);
   return a == LEFT ? pos : a == RIGHT ? pos - measure(font, s) + 1 : pos + (int)fdiv(64 - pos - measure(font, s), 2);
 }
 
@@ -2504,6 +2506,36 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
   f.text(FONT_SMALL, clock, 64 - cw, 32, C::label);
 }
 
+// ---- clock screen: seventies face (design spec §16; contract "Seventies") ----
+// Mirrors renderSeventies() and S70 in draw.js.
+static const RGB S70_COLORS[] = {hexc(0xffc23a), hexc(0xff7414), hexc(0xd2361a)};
+static const int S70_TOP = 5, S70_BASE = 16, S70_RIGHT = 52, S70_CX = 54, S70_CY = 21, S70_RADII[] = {3, 6, 9};
+
+static void render_seventies(const Value &p, Frame &f, std::optional<double> now_o) {
+  double now = now_o ? *now_o : p["now"].num(0);
+  for (int i = 0; i < 3; i++) {
+    int r = S70_RADII[i];
+    RGB c = S70_COLORS[i];
+    f.fill(0, S70_CY + r - 1, S70_CX, 2, c);
+    f.fill(S70_CX + r - 1, 0, 2, S70_CY, c);
+    int lo = (2 * r - 2) * (2 * r - 2), hi = (2 * r + 2) * (2 * r + 2);
+    for (int y = S70_CY; y < 32; y++)
+      for (int x = S70_CX; x < 64; x++) {
+        int u = 2 * (x - S70_CX) + 1, v = 2 * (y - S70_CY) + 1, d = u * u + v * v;
+        if (d > lo && d <= hi) f.fill(x, y, 1, 1, c);
+      }
+  }
+  // Centered in columns 0-52, drawn white, then banded by row.
+  roll_named(f, FONT_VCR, "svt.clock", clock_text(now, p["tzo"].num(0)), SPAN, S70_RIGHT, S70_BASE, hexc(0xffffff));
+  for (int y = S70_TOP; y < S70_BASE; y++) {
+    RGB band = S70_COLORS[y < S70_TOP + 4 ? 0 : y < S70_TOP + 7 ? 1 : 2];
+    for (int xx = 0; xx <= S70_RIGHT; xx++) {
+      RGB c = f.get(xx, y);
+      if (c.r || c.g || c.b) f.set(xx, y, band);
+    }
+  }
+}
+
 // ---- whole screen ----
 
 static void apply_brightness(Frame &f, double b) {
@@ -2552,7 +2584,10 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
-  else if (screen == "clock") render_skyline_faded(p, f, o);
+  else if (screen == "clock") {
+    if (json::str(p["cface"]) == "seventies") render_seventies(p, f, o.now);
+    else render_skyline_faded(p, f, o);
+  }
   else render_transit(p, f, o.now, o.blink, o.view);
   g_roller = nullptr;
   g_nums = nullptr;

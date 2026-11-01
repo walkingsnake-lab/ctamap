@@ -35,8 +35,9 @@ test('frozen M4 fonts and icons still match the server data, every glyph', () =>
   assert.equal(r.status, 0, r.stderr);
   const got = JSON.parse(r.stdout);
   const want = packFonts();
-  assert.deepEqual(Object.keys(got.fonts).sort(), Object.keys(want).sort());
-  for (const name of Object.keys(want)) {
+  // The server may add fonts the M4 never gets (vcr: the S3's seventies clock).
+  for (const name of Object.keys(got.fonts)) assert.ok(want[name], `font ${name}`);
+  for (const name of Object.keys(got.fonts)) {
     for (const [cp, g] of Object.entries(got.fonts[name])) assert.deepEqual(g, want[name][cp], `${name} ${cp}`);
   }
   for (const [k, px] of Object.entries(got.icons)) assert.equal(px, icons.ICONS[k] && icons.ICONS[k].join(''), `icon ${k}`);

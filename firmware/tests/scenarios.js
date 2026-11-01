@@ -576,6 +576,18 @@ async function build() {
       add('skyline widest text', pw, [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     }
   }
+  // Clock screen, seventies face (S3 only): one- and two-digit hours, the
+  // minute roll (per digit, and whole when the width changes), dimmed.
+  {
+    const s70 = (iso, extra = {}) => { const t = Date.parse(iso) / 1000; return { now: t, tzo: tzOffset(t), screen: 'clock', cface: 'seventies', bright: 100, warn: null, skyline: null, ...extra }; };
+    const ps = [0.25, 0.5, 0.75];
+    const roll = (from) => ps.map((p) => ({ screen: 'clock', nums: { 'svt.clock': { from, p } } }));
+    add('seventies 9:42', s70('2026-11-02T03:42:00Z'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('seventies 12:58', s70('2026-11-01T18:58:00Z'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('seventies 10:07 dimmed', s70('2026-11-01T16:07:00Z', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('seventies roll per digit', s70('2026-11-02T03:42:00Z'), roll('9:41'), undefined, undefined, { s3only: true });
+    add('seventies roll width change', s70('2026-11-01T19:00:00Z'), roll('12:59'), undefined, undefined, { s3only: true });
+  }
   // Chronological departure: slide, digits roll, next train slides in.
   {
     const row = (ln, lbl, t, rn) => ({ ln, lbl, t: [t], s: [0], a: 0, rn });
