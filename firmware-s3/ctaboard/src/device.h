@@ -60,10 +60,11 @@ class Panel : public app::Display {
   void show(const std::function<void(draw::Frame &)> &fn) override;
   long last_ms = 0, max_ms = 0;  // draw time, for the serial report
   int refresh_rate() const;
-  bool set_brightness(double k) override;
+  double set_brightness(double k) override;
   // Brightness k (0-1) with the day curve at full brightness and the night
-  // curve below it; hw: dim in hardware (else the renderer scales colors).
-  void dim(double k, bool hw);
+  // curve below it; hw: dim in hardware (color::hw_dim). Returns the share
+  // the renderer scales colors by (k without hw; 1 when hardware did it all).
+  double dim(double k, bool hw);
   void set_curves(int day, int night);
   int day_curve() const { return day_curve_; }
   int night_curve() const { return night_curve_; }

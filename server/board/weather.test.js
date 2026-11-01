@@ -118,9 +118,8 @@ test('auto brightness: full from sunrise to sunset, dimmer overnight', () => {
   assert.equal(autoBright(w, w.time), 100);
   assert.equal(autoBright(w, w.sunrise - 1), NIGHT_BRIGHT);
   assert.equal(autoBright(w, w.sunrise), 100);
-  // The board's night and day levels.
-  assert.deepEqual([autoBright(w, w.sunrise - 1, 25, 80), autoBright(w, w.time, 25, 80), autoBright(null, w.time, 25, 80)], [25, 80, 80]);
-  assert.equal(autoBright(w, w.sunrise - 1, 90, 80), 80);
+  // The board's night level; day stays full.
+  assert.deepEqual([autoBright(w, w.sunrise - 1, 25), autoBright(w, w.time, 25), autoBright(null, w.time, 25)], [25, 100, 100]);
   assert.equal(autoBright(w, w.sunset), NIGHT_BRIGHT);
   assert.equal(autoBright(null, w.time), 100); // no data yet
 });

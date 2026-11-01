@@ -192,13 +192,12 @@ function createBoard({
     return { ...g, away: side(g.away), home: side(g.home) };
   }
 
-  // 'auto' brightness: the board's brightMax from sunrise to sunset (and until
-  // weather data arrives), brightMin overnight. A board with a light sensor
-  // follows the sensor instead, between the two (`ab`).
-  const dayOf = (b) => b.brightMax || 100;
-  const nightOf = (b) => Math.min(b.brightMin || NIGHT_BRIGHT, dayOf(b));
-  const resolveBright = (b, w, now) => (b.bright === 'off' ? 0 : b.bright === 'auto' ? autoBright(w, now, nightOf(b), dayOf(b)) : b.bright);
-  const autoBrightOf = (b) => (b.bright === 'auto' ? { min: nightOf(b), max: dayOf(b) } : null);
+  // 'auto' brightness: full from sunrise to sunset (and until weather data
+  // arrives), the board's brightMin overnight. A board with a light sensor
+  // follows the sensor instead, from brightMin in the dark to full (`ab`).
+  const nightOf = (b) => b.brightMin || NIGHT_BRIGHT;
+  const resolveBright = (b, w, now) => (b.bright === 'off' ? 0 : b.bright === 'auto' ? autoBright(w, now, nightOf(b)) : b.bright);
+  const autoBrightOf = (b) => (b.bright === 'auto' ? { min: nightOf(b) } : null);
   // 'auto': the weather screen while a matching NWS alert is on (alertJump),
   // else baseball while a game is on, else the first Auto screen. The board
   // alternates Auto screens (rot) and makes timed weather visits

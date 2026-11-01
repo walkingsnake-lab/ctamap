@@ -79,12 +79,10 @@ class Display {
  public:
   virtual ~Display() {}
   virtual void show(const std::function<void(draw::Frame &)> &fn) = 0;
-  // The payload's brightness (0-1). True when the display dims in hardware,
-  // so frames are drawn at full brightness; false: the renderer scales them.
-  virtual bool set_brightness(double k) {
-    (void)k;
-    return false;
-  }
+  // Brightness k (0-1). Returns the share the renderer scales colors by:
+  // 1 when the display dims it all in hardware, k when it can't dim at all,
+  // or between (color::hw_dim: hardware down to a floor, then the colors).
+  virtual double set_brightness(double k) { return k; }
 };
 
 class Clock {
@@ -235,7 +233,6 @@ class Board {
   // sensor, the sensor's level between ab.min and 100.
   double payload_bright_ = 100;
   std::optional<double> ab_min_;
-  double ab_max_ = 100;
   light::Sense sense_;
   light::Fade fade_;
   std::optional<double> applied_;   // percent last sent to the display
