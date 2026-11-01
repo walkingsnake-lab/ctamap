@@ -411,39 +411,11 @@ static RGB icon_color(char code) {
   return RGB{};
 }
 
-// Animated weather icons (S3; draw.js iconRows): while render() has an
-// icon clock and the payload's radar.iconAnim lists the layout being drawn,
-// the icon's frame at that time (offset 53 ms per pixel of x).
+// The board's icon clock (RenderOpts::icon_t): drives the overnight owl.
 static std::optional<double> g_icon_t;
-static const Value *g_icon_anim = nullptr;
-static std::optional<double> icon_at(const char *layout) {
-  if (!g_icon_t || !g_icon_anim) return std::nullopt;
-  for (const Value &v : g_icon_anim->a)
-    if (v.is_str() && v.s == layout) return g_icon_t;
-  return std::nullopt;
-}
 
-static const char *icon_px(int icon, std::optional<double> anim, int x) {
-  const char *name = assets::ICONS[icon].name;
-  if (!anim) return assets::ICONS[icon].px;
-  long long total = 0;
-  int first = -1;
-  for (int i = 0; i < assets::ICON_FRAMES_N; i++)
-    if (!strcmp(assets::ICON_FRAMES[i].name, name)) {
-      if (first < 0) first = i;
-      total += assets::ICON_FRAMES[i].ms;
-    }
-  if (first < 0 || total <= 0) return assets::ICONS[icon].px;
-  long long k = fmod_floor((long long)floor(*anim) + (long long)x * 53, total);
-  for (int i = first; i < assets::ICON_FRAMES_N && !strcmp(assets::ICON_FRAMES[i].name, name); i++) {
-    if (k < assets::ICON_FRAMES[i].ms) return assets::ICON_FRAMES[i].px;
-    k -= assets::ICON_FRAMES[i].ms;
-  }
-  return assets::ICON_FRAMES[first].px;
-}
-
-static void draw_icon(Frame &f, int icon, int x, int y, std::optional<double> anim = std::nullopt) {
-  const char *px = icon_px(icon, anim, x);
+static void draw_icon(Frame &f, int icon, int x, int y) {
+  const char *px = assets::ICONS[icon].px;
   for (int j = 0; j < 8; j++)
     for (int i = 0; i < 8; i++) {
       char c = px[j * 8 + i];
@@ -1304,7 +1276,7 @@ static void draw_weather_screen(Frame &f, const Value &wx, const Value *warn, bo
   if (shadow) draw_temp(1, 1, scale_color(temp_color(temp, wx["c"]), 0.2));
   int temp_right = draw_temp(0, 0, C::label) + (shadow ? 1 : 0);
   int icon = icon_index(wx["icon"]);
-  if (icon >= 0) draw_icon(f, icon, 55, 1, icon_at("now"));
+  if (icon >= 0) draw_icon(f, icon, 55, 1);
   const Value &word = wx["word"];
   if (word.truthy() && 63 - measure(FONT_SMALL, vstr(word)) + 1 > temp_right + 2)
     rtext(f, FONT_SMALL, vstr(word), 63, 16, C::wxText);
@@ -1379,11 +1351,10 @@ static int fd_left(const std::vector<Part> &parts) {
 }
 
 // Today on rows 0-7. Mirrors drawTopBar() in draw.js.
-static const char *g_top_layout = "now";  // the layout drawing the top bar (its icon's animation setting)
 
 static void draw_top_bar(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
   int icon = icon_index(wx["icon"]);
-  if (icon >= 0) draw_icon(f, icon, FD_ICON_X, 0, icon_at(g_top_layout));
+  if (icon >= 0) draw_icon(f, icon, FD_ICON_X, 0);
   ustr temp = vstr(wx["temp"]);
   if (shadow) {
     RGB sh = scale_color(temp_color(wx["temp"].num(), wx["c"]), 0.2);
@@ -1426,7 +1397,7 @@ static void draw_five_day(Frame &f, const Value &wx, bool shadow, const Value *w
     int cx = (int)i * FD_PITCH + 6;
     ctext(f, FONT_SMALL, vstr(d["d"]), cx, 15, C::grey);
     int icon = icon_index(d["icon"]);
-    if (icon >= 0) draw_icon(f, icon, cx - 4, 17, icon_at("5day"));
+    if (icon >= 0) draw_icon(f, icon, cx - 4, 17);
     draw_day_temp(f, vstr(d["hi"]), cx, 31, temp_color(d["hi"].num(), wx["c"]));
   }
 }
@@ -1440,7 +1411,7 @@ static void draw_hourly(Frame &f, const Value &wx, bool shadow, const Value *war
     int cx = (int)i * 16 + 7;
     ctext(f, FONT_SMALL, vstr(h["h"]), cx, 15, C::grey);
     int icon = icon_index(h["icon"]);
-    if (icon >= 0) draw_icon(f, icon, cx - 4, 17, icon_at("hourly"));
+    if (icon >= 0) draw_icon(f, icon, cx - 4, 17);
     draw_day_temp(f, vstr(h["t"]), cx, 31, temp_color(h["t"].num(), wx["c"]));
   }
 }
@@ -1562,7 +1533,6 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   const Value *warnp = p["warn"].truthy() ? &p["warn"] : nullptr;
   if (((!ids.truthy() || (frames && !radar_on_hand(ids, frames))) || bars_turn) && wx.truthy()) {
     bool shadow = r["tempShadow"].truthy();
-    g_top_layout = wx["rain"].truthy() && wx["rain"]["h"].truthy() ? "now" : wx["hours"].truthy() ? "hourly" : "5day";
     if (wx["rain"].truthy() && wx["rain"]["h"].truthy()) draw_rain_bars(f, wx, shadow, warnp, blink);
     else if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
     else if (wx["days"].truthy()) draw_five_day(f, wx, shadow, warnp, blink);
@@ -1638,7 +1608,7 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
     if (icon >= 0) clear4(x0, top + 4, x0 + 7, top + 11);
     clear(text_box(FONT_SMALL, ts, x0 + iw, top + 10));
     draw_indicator();
-    if (icon >= 0) draw_icon(f, icon, x0, top + 4, icon_at("radar"));
+    if (icon >= 0) draw_icon(f, icon, x0, top + 4);
     f.text(FONT_SMALL, ts, x0 + iw, top + 10, C::label);
     if (ws) draw_warn_tag();
     return;
@@ -2543,7 +2513,6 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   g_roller = o.roller;
   g_nums = o.nums;
   g_icon_t = o.icon_t;
-  g_icon_anim = p["radar"]["iconAnim"].is_arr() ? &p["radar"]["iconAnim"] : nullptr;
   if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
@@ -2553,7 +2522,6 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   g_roller = nullptr;
   g_nums = nullptr;
   g_icon_t.reset();
-  g_icon_anim = nullptr;
   if (o.roller) o.roller->end();  // the Player calls begin(); render() ends the frame
   if (o.apply_bright) apply_brightness(f, o.bright ? *o.bright : p["bright"].is_null() ? 100 : p["bright"].num());
   if (o.slide_from) slide_frames(o.slide_from, f, slide_offset(o.slide_t), o.slide_dir);

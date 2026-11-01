@@ -257,7 +257,6 @@ void Player::draw(draw::Frame &frame, double ms, long long now) {
   }
   if (screen == Screen::Weather) {
     o.screen = "weather";
-    o.icon_t = ms;  // animated icons (the layouts in radar.iconAnim)
     o.idx = radar_idx(ms);
     o.frames = &radar_frames;
     o.blink = blink_on(ms);
@@ -343,9 +342,6 @@ std::optional<screen::FrameKey> Player::frame_key(double ms, long long now) {
       break;
     }
     case Screen::Weather:
-      // Animated icons change on their own clock: redraw every frame. They're
-      // ambient, so they don't count as busy.
-      if (p["radar"]["iconAnim"].size() > 0) return std::nullopt;
       k.v[4] = radar_idx(ms) * 2 + (rain_bars(ms) ? 1 : 0);
       k.v[5] = (long long)radar_frames.size();
       break;

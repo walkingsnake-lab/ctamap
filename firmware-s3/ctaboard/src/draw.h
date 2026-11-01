@@ -268,7 +268,7 @@ struct RenderOpts {
   // pixels and ms into the fade. Used only without a slide.
   const uint8_t *fade_from = nullptr;
   double fade_t = 0;
-  // Animated weather icons (draw.js opts.iconT): ms on the board's clock.
+  // The icon clock (draw.js opts.iconT), ms on the board's clock: the overnight owl.
   std::optional<double> icon_t;
 };
 

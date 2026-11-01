@@ -447,43 +447,6 @@ static const Icon ICONS[] = {
 };
 static const int ICONS_N = 11;
 
-struct IconFrame { const char *name; uint16_t ms; const char *px; };
-static const IconFrame ICON_FRAMES[] = {
-  {"sun", 1400, "...YY....Y....Y....YY...Y.YYYY.YY.YYYY.Y...YY....Y....Y....YY..."},
-  {"sun", 220, "...YY..............YY...Y.YYYY.YY.YYYY.Y...YY..............YY..."},
-  {"sun", 220, ".........Y....Y....YY.....YYYY....YYYY.....YY....Y....Y........."},
-  {"sun", 220, "...YY..............YY...Y.YYYY.YY.YYYY.Y...YY..............YY..."},
-  {"moon", 1800, "..MMMM...MMM....MMM.....MMM.....MMM.....MMM......MMM......MMMM.."},
-  {"moon", 260, "..MMMM...MMM....MMM...M.MMM.....MMM.....MMM......MMM......MMMM.."},
-  {"moon", 1000, "..MMMM...MMM....MMM.....MMM.....MMM.....MMM......MMM......MMMM.."},
-  {"moon", 260, "..MMMM...MMM....MMM.....MMM.....MMM.....MMM..M...MMM......MMMM.."},
-  {"pcloudy_day", 1500, "..YY.....YYYY....YYYY.....YY.CC.....CCCC..CCCCCC.CCCCCCC..DDDDD."},
-  {"pcloudy_day", 1500, "..YY.....YYYY....YYYY.....YYCC.....CCCC..CCCCCC.CCCCCCC..DDDDD.."},
-  {"pcloudy_night", 1500, ".MM.....MM......MM.......MM..CC.....CCCC..CCCCCC.CCCCCCC..DDDDD."},
-  {"pcloudy_night", 1500, ".MM.....MM......MM.......MM.CC.....CCCC..CCCCCC.CCCCCCC..DDDDD.."},
-  {"cloudy", 1500, "............CC...CC.CCC.CCCCCCCCCCCCCCCC.DDDDDD................."},
-  {"cloudy", 1500, "...........CC...CC.CCC..CCCCCCCCCCCCCCCC.DDDDDD................."},
-  {"rain", 180, "...CC....CCCCCC.CCCCCCCC.DDDDDD..........B..B..BB..B..B........."},
-  {"rain", 180, "...CC....CCCCCC.CCCCCCCC.DDDDDD..................B..B..BB..B..B."},
-  {"rain", 180, "...CC....CCCCCC.CCCCCCCC.DDDDDD..B..B..BB..B..B................."},
-  {"ice", 180, "...CC....CCCCCC.CCCCCCCC.DDDDDD..........B...W..B...WWW......W.."},
-  {"ice", 180, "...CC....CCCCCC.CCCCCCCC.DDDDDD..............W...B..WWW.B....W.."},
-  {"ice", 180, "...CC....CCCCCC.CCCCCCCC.DDDDDD..B......B....W......WWW......W.."},
-  {"snow", 900, "...S.....S.S.S....SSS...SSSSSSS...SSS....S.S.S.....S............"},
-  {"snow", 900, "...........S.....S.S.S....SSS...SSSSSSS...SSS....S.S.S.....S...."},
-  {"storm", 1600, "..GGGG...GGGGGG.GGGGGGGG.KKKKKK....LL.....LL.......LL.....L....."},
-  {"storm", 150, "..GGGG...GGGGGG.GGGGGGGG.KKKKKK................................."},
-  {"storm", 120, "..GGGG...GGGGGG.GGGGGGGG.KKKKKK....LL.....LL.......LL.....L....."},
-  {"storm", 150, "..GGGG...GGGGGG.GGGGGGGG.KKKKKK................................."},
-  {"tsnow", 1600, "..GGGG...GGGGGG.GGGGGGGG.KKKKKK...LL..S..LL..SSS..LL..S..L......"},
-  {"tsnow", 150, "..GGGG...GGGGGG.GGGGGGGG.KKKKKK.......S......SSS......S........."},
-  {"tsnow", 120, "..GGGG...GGGGGG.GGGGGGGG.KKKKKK...LL..S..LL..SSS..LL..S..L......"},
-  {"tsnow", 150, "..GGGG...GGGGGG.GGGGGGGG.KKKKKK.......S......SSS......S........."},
-  {"fog", 1200, "........FFFFFF............EEEEEE........FFFFFF.................."},
-  {"fog", 1200, ".........FFFFFF...........EEEEEE.........FFFFFF................."},
-};
-static const int ICON_FRAMES_N = 32;
-
 static const IconColor OWL_PALETTE[] = {
   {'B', 110, 74, 42},
   {'b', 168, 135, 92},

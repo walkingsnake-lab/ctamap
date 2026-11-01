@@ -47,10 +47,9 @@ const TRANSIT_LAYOUTS = ['header', 'key'];
 const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame time, current time, how long ago the frame is, or nothing
 const WX_VIEWS = ['now', '5day', 'hourly'];  // weather screen without rain: conditions, 5-day, or hourly
 const TEMP_UNITS = ['F', 'C'];  // temperatures on every weather display
-const ICON_STYLES = ['animated', 'static'];  // weather icons (animated: S3 only)
-// The weather layouts with icons, each with its own icon style setting
-// (payload radar.iconAnim names the animated ones).
-const ICON_SETTINGS = { iconsNow: 'now', icons5day: '5day', iconsHourly: 'hourly', iconsRadar: 'radar' };
+// Retired settings, dropped from saved state on load: per-layout animated
+// weather icons (removed Nov 2026; icons are always static).
+const RETIRED_KEYS = ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar'];
 const WX_RAINS = ['radar', 'bars', 'both'];  // weather screen with rain around: radar loop, rain bars, or both alternating
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
@@ -157,13 +156,6 @@ function defaultBoard(stations) {
     // (today on top, the next five days in columns), or 'hourly' (today on
     // top, 3/6/9/12 hours ahead in columns).
     wxView: 'now',
-    // Weather icons per layout: 'animated' (S3: rain falls, clouds drift,
-    // the sun's rays twinkle) or 'static'. iconsRadar: the radar corner's
-    // conditions icon.
-    iconsNow: 'animated',
-    icons5day: 'animated',
-    iconsHourly: 'animated',
-    iconsRadar: 'animated',
     // Weather screen while rain is around: 'radar' (the loop, while rain is
     // in the box), 'bars' (the next 2 hours in 15-minute bars, while the
     // forecast has rain; never the loop), or 'both' (alternate every
@@ -314,13 +306,9 @@ function validatePatch(patch, stations) {
       case 'wxView':
       case 'tempUnit':
       case 'wxRain':
-      case 'iconsNow':
-      case 'icons5day':
-      case 'iconsHourly':
-      case 'iconsRadar':
       case 'clockFace':
       case 'cloudDrift': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS }[key] || ICON_STYLES;
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;
@@ -376,6 +364,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
           if (!(b.radarEvery > 0)) b.radarEvery = 4;
         }
       }
+      for (const b of Object.values(state.boards)) if (b) for (const k of RETIRED_KEYS) delete b[k];
       // Settings added later: fill in their defaults (today's behavior).
       const defaults = defaultBoard(stations);
       for (const b of Object.values(state.boards)) {
@@ -497,4 +486,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, ICON_STYLES, ICON_SETTINGS };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };
