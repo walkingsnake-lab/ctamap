@@ -340,7 +340,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 A small page on the fly.dev server, saved to the phone home screen. The server holds the board's state; the board reads it and draws what it's told.
 
 ### Controls
-- **Screen:** Auto, Transit, Ticker, Weather (radar while raining), Baseball. Auto settings (defaults reproduce the original behavior):
+- **Screen:** Auto, Transit, Ticker, Weather (radar while raining), Baseball, Clock (S3 only; face per board, §14). Auto settings (defaults reproduce the original behavior):
   - **Auto shows:** Transit and/or Ticker; with both, they alternate every 30 s–10 min (default: Transit only).
   - **Weather visits:** Off (default), While raining, or Always; every N min for M s.
   - **Jump to weather for NWS alerts:** Off (default), Warnings, or Watches too; stays on the weather screen while the alert is on, over baseball.
@@ -366,7 +366,7 @@ A small page on the fly.dev server, saved to the phone home screen. The server h
 ### Knob (S3)
 Decided Oct 25, 2026. An Adafruit 5880 I2C rotary encoder (seesaw, on the STEMMA QT port) is the board's physical control: the bar sleeve case covers the S3's UP/DOWN buttons. The buttons still work where they're reachable (wedge), and a board without the knob runs as before. Mockup: [`mockups/knob/sheet.png`](mockups/knob/sheet.png) (`node scripts/mock-knob.js`, drawn by `renderChooser` in `draw.js`).
 
-- **Ring:** categories, not screens, so it stays short as screens are added: **AUTO · TRANSIT · WEATHER · SPORTS**, wrapping both ways. The server sends the ring (payload `knob`), so new categories need no firmware change; CLOCK joins when a face is built (v2 plan: one Sports category over every league, the leagues and teams set on the phone). Each category opens its variant as set on the phone: TRANSIT opens rows or the ticker, whichever was chosen last (the ticker becomes a transit view mode on the phone page); SPORTS opens the baseball screen.
+- **Ring:** categories, not screens, so it stays short as screens are added: **AUTO · TRANSIT · WEATHER · SPORTS**, wrapping both ways. The server sends the ring (payload `knob`), so new categories need no firmware change; CLOCK joins with the Clock screen (§14) and opens the board's chosen face (v2 plan: one Sports category over every league, the leagues and teams set on the phone). Each category opens its variant as set on the phone: TRANSIT opens rows or the ticker, whichever was chosen last (the ticker becomes a transit view mode on the phone page); SPORTS opens the baseball screen.
 - **Twist and rest:** the first click opens the chooser on the screen the board is on, and each click moves one entry (clockwise to the right), with a 180 ms ease-out slide. 1 s after the last click it commits: the selection turns amber and its neighbors drop out, held through one request, then the new screen appears. Resting back on the starting entry closes the chooser with no request (cancel).
 - **Look:** a blank panel with a sideways wheel across the top. The selection is 5x7 label white `#d8d8d8`, centered on baseline 7; its neighbors are Tom Thumb 38 px either side, fading to `#555555` with distance and clipped at the panel edges. Row 9 has one 3x1 pip per entry, 2 px apart, centered: the selection amber, the rest `#3a3a3a`. Rows 10–31 stay dark. (Also mocked: a two-level chooser with a press into each category's variants, rejected as too complex; an underline that drains during the rest; pips at the bottom; the wheel over the dimmed screen.)
 - **Writes through:** the commit is `POST /board/select`, which sets the screen on the server as the phone would (it persists, the phone page shows it, and it ends any button override) and answers with the new screen's update, so a commit is one request.
@@ -430,11 +430,13 @@ Same frame as the baseball Bands layout: 12-row team-color bands (abbreviation l
 
 ---
 
-## 14. Skyline screen (designed, not built)
+## 14. Clock screen: skyline face (designed, not built)
 
-Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient weather screen: the skyline seen from the lake across Navy Pier, with the Centennial Wheel front and center, drawn for the current weather and time of day. Mockups: [`mockups/weather/lake/`](mockups/weather/lake/sheet.png) (`sheet.png` has every state, `night-motion.png` the animation), made by `node scripts/mock-weather-lake.js`. The mock is the pixel reference for the scene; where it differs from this section (text at the top, Auto text mode, reflections, the fixed sunset spot), this section wins. Not in `draw.js` yet.
+Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: the skyline seen from the lake across Navy Pier, with the Centennial Wheel front and center, drawn for the current weather and time of day. Mockups: [`mockups/weather/lake/`](mockups/weather/lake/sheet.png) (`sheet.png` has every state, `night-motion.png` the animation), made by `node scripts/mock-weather-lake.js`. The mock is the pixel reference for the scene; where it differs from this section (text at the top, Auto text mode, reflections, the fixed sunset spot), this section wins. Not in `draw.js` yet.
 
-**S3 only.** Rendering features go only into `firmware-s3/` (the M4 is frozen), so the scenarios are tagged `s3only`, and the server never sends the skyline to a board whose health reports M4 hardware. Until the v2 screen framework exists, it ships as a fourth weather layout (`wxView` `skyline`, beside conditions, 5-day and hourly); radar takeovers and warnings behave as for the other layouts.
+**Clock screen.** A new screen, `clock`, added beside Transit, Ticker, Weather and Baseball (no v2 screen framework needed). Its look is a per-board **clock face** option (`clockFace` on the phone): `skyline` first; analog, split-flap and nixie join as they're built. The knob ring gets CLOCK, which opens the chosen face. The skyline face still shows the weather (state and temperature); it just lives under Clock rather than Weather.
+
+**S3 only.** Rendering features go only into `firmware-s3/` (the M4 is frozen), so the scenarios are tagged `s3only`. The phone page doesn't offer Clock for a board whose health reports M4 hardware, and the server never sends `clock` to one (it falls back to Transit), since the frozen M4 doesn't know the screen.
 
 ### View
 - The viewer is on the lake on Navy Pier's axis (41.8917, -87.590), facing west. Each landmark's x is its real bearing at 1.3 px per degree (pier axis = x 32). Heights are real angular heights at 2.4 rows per degree, about 1.8× vertical exaggeration.
@@ -470,7 +472,7 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient weather scree
 ### Temperature and clock
 - Always at the bottom, over the water (baseline 32, rows 27–31), in lit white `#d8d8d8`, Tom Thumb. Temperature from x 0; clock flush to x 63. No drop shadows, no AM/PM (as on the other clock faces).
 - Widest cases, measured with `fonts.js`: `-12°` / `100°` 14 px (x 0–13), `12:59` 17 px (x 46–63). The pier is x 24–39, so they never collide.
-- The clock is optional (default on); with it off, the right half of the lake animates fully.
+- The clock is always on: this is a clock face. Temperature is always on too.
 
 ### Choosing the state
 The server picks the state; the board never interprets weather codes.
@@ -579,3 +581,4 @@ Ambient and slow, on a 100 ms tick:
 - Moon crescents: a plain sliver, earthshine (the unlit part as a faint disc, likely lost to overnight dimming), or a brightened sliver.
 - Sunset sun height: how much of the disc shows above the skyline at the low and high ends of its x range (it crosses different buildings through the year).
 - Mock update: `mock-weather-lake.js` still draws the text at the top and has no glints, moving sunset sun or cloud strip. Update it or let `draw.js` take over as the reference.
+- Whether Auto can show Clock (e.g. alternating with Transit, or overnight when no trains run), or Clock is only chosen directly.
