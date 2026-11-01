@@ -630,7 +630,7 @@ Designed Nov 1, 2026. The owner puts a short note on their own board: "Dinner at
 Picked per message; nothing else is set per message (each style fixes its own colors). Built in this order:
 
 1. **Note:** 5x7 text, wrapped and centered, up to 3 lines; a Tom Thumb variant fits about 5.
-2. **Split-flap:** 10 × 3 small flaps (the §16-style flap, 5 × 10 px, Tom Thumb, uppercase, 30 characters); rows flip in one after another when the message appears.
+2. **Split-flap:** 10 × 3 small flaps (the date flaps of the split-flap clock mockup, `mockups/clock/r2-flap.png`: 5 × 10 px, Tom Thumb, uppercase, 30 characters); rows flip in one after another when the message appears.
 3. **Typewriter:** 5x7 amber (or green phosphor), typed out once when the message appears, then a blinking block cursor.
 4. **Big word:** 5x7 at 2x (about 5 characters), with gradient and sparkle variants; a countdown variant uses the 9x15 clock digits over a Tom Thumb label.
 5. **Icon + text:** a 13 px pixel icon (heart, cake, house, coffee, …) with a 2-frame idle loop (heartbeat, candle flicker), text beside it (about 47 px wide).
