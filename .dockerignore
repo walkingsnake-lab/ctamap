@@ -5,3 +5,9 @@ dist/
 
 # 3D-printed case: STLs and CAD scripts, not part of the app
 hardware/
+
+# Board setup labels (owner links, setup passwords) and local firmware
+# secrets: server.js serves any file under the app directory.
+setup-out/
+firmware-s3/ctaboard/secrets.h
+firmware/settings.toml

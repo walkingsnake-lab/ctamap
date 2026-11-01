@@ -1,7 +1,9 @@
 # Builds the S3 firmware (firmware-s3/) the way the Arduino IDE does, without
-# secrets.h: the generic build that OTA updates install. Each run keeps the
-# .bin as an artifact (ctaboard-<commit>), ready to upload on the control
-# page's Board tab. Also catches firmware that no longer compiles.
+# secrets.h: the generic build that OTA updates install. Each run keeps an
+# artifact (ctaboard-<commit>) with ctaboard.ino.bin, to upload on the
+# control page's Board tab, and ctaboard.ino.merged.bin, which
+# scripts/setup-board.js flashes onto new boards. Also catches firmware that
+# no longer compiles.
 name: S3 firmware
 
 on:
@@ -56,7 +58,7 @@ jobs:
         run: |
           v=$(sed -n 's/.*FIRMWARE_VERSION "\(.*\)"/\1/p' firmware-s3/ctaboard/version.h)
           grep -a -c "CTABOARD-BUILD:${v}:generic;" build/ctaboard.ino.bin
-          ls -l build/ctaboard.ino.bin
+          ls -l build/ctaboard.ino.bin build/ctaboard.ino.merged.bin
           size=$(stat -c %s build/ctaboard.ino.bin)
           test "$size" -le 2097152
           echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -65,5 +67,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ctaboard-${{ steps.mark.outputs.version }}
-          path: build/ctaboard.ino.bin
-          retention-days: 30
+          path: |
+            build/ctaboard.ino.bin
+            build/ctaboard.ino.merged.bin
+          retention-days: 90

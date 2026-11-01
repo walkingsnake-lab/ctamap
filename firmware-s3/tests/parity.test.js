@@ -14,19 +14,7 @@ const { spawnSync } = require('child_process');
 const { build } = require('../../firmware/tests/scenarios');
 const assets = require('../../scripts/build-firmware-assets');
 
-const SRC = path.join(__dirname, '..', 'ctaboard', 'src');
-const CXX = ['g++', 'clang++'].find((c) => spawnSync(c, ['--version']).status === 0);
-
-// Compiles the given test sources with the platform-independent firmware
-// sources into a temp binary. Returns its path.
-function compile(main, extra = []) {
-  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 's3-')), 'bin');
-  const srcs = [path.join(__dirname, main), ...['draw.cpp', 'json.cpp', ...extra].map((f) => path.join(SRC, f))];
-  const r = spawnSync(CXX, ['-std=c++17', '-O1', '-Wall', '-Wextra', '-Werror', '-o', out, ...srcs], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
-  return out;
-}
-module.exports = { compile, CXX };
+const { compile, CXX } = require('./cxx');
 
 test('S3 firmware draw.cpp matches draw.js pixel for pixel', { skip: !CXX && 'no C++ compiler' }, async () => {
   const bin = compile('parity.cpp');
