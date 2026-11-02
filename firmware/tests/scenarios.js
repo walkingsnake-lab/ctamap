@@ -614,6 +614,34 @@ async function build() {
     add('gradient roll per digit', face('2026-11-02T01:15:00Z', 'gradient'), [0.25, 0.5, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
     add('daynight roll', face('2026-11-01T19:00:00Z', 'daynight'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'dn.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
   }
+  // Announce screen (S3 only): the styles, the typewriter's intro (typing,
+  // then its cursor blinking), the credits roll's steps, edge fades, pause
+  // and loop, the call to action with no message, a removed style drawn as
+  // a note, and dimmed.
+  {
+    const ann = (text, style, extra = {}) => ({ now: NOW, tzo: tzOffset(NOW), screen: 'announce', bright: 100, msg: { id: 7, style, ...draw.messageLayout(text, style) }, ...extra });
+    const at = (...ts) => [{ screen: 'announce' }, ...ts.map((t) => ({ screen: 'announce', t }))];
+    const s3 = { s3only: true };
+    add('announce no message', { now: NOW, tzo: tzOffset(NOW), screen: 'announce', bright: 100, msg: null }, [{ screen: 'announce' }], undefined, undefined, s3);
+    add('announce note one line', ann('Dinner at 7', 'note'), at(0), undefined, undefined, s3);
+    add('announce note three lines', ann('Grab milk on the way home please', 'note'), at(), undefined, undefined, s3);
+    add('announce note small text', ann('Leaving at 8:15 for the game. Meet at the north end of the Addison platform.', 'note'), at(), undefined, undefined, s3);
+    add('announce note blank line and punctuation', ann('\u2018Caf\u00e9\u2019 \u2014 7\u2026\n\nBring \u20ac', 'note'), at(), undefined, undefined, s3);
+    add('announce unknown style draws as a note', { ...ann('Go Cubs', 'note'), msg: { id: 2, style: 'flap', lines: ['Go Cubs'] } }, at(0), undefined, undefined, s3);
+    add('announce typewriter', ann('Gone to the gym. Back by 6.', 'type'), at(0, 399, 400, 490, 1300, 2830, 2831, 3359, 3360, 3890), undefined, undefined, s3);
+    add('announce typewriter blank line', ann('Hi\n\nback soon', 'type'), at(0, 750, 1000), undefined, undefined, s3);
+    add('announce big word', ann('Yay!', 'big'), at(0), undefined, undefined, s3);
+    add('announce big word widest', ann('HELLO', 'big'), at(), undefined, undefined, s3);
+    add('announce big word descender', ann('yup', 'big'), at(), undefined, undefined, s3);
+    {
+      const long = 'Happy birthday, Sam! Dinner at Lula at 7. We have the back table.';
+      const travel = 40 + 2 + 10 * (draw.messageLayout(long, 'roll').lines.length - 1);
+      add('announce credits roll', ann(long, 'roll'), at(0, 150, 299, 300, 1500, 3000, 4650, 6000, 7500, 9000, travel * 150 - 1, travel * 150, travel * 150 + 1499, travel * 150 + 1500 + 1800), undefined, undefined, s3);
+      add('announce credits roll one line', ann('Thanks!', 'roll'), at(2400, 4050), undefined, undefined, s3);
+      add('announce credits roll accents and blank line', ann('\u00c9t\u00e9 \u2014 caf\u00e9\n\n\u00e0 6h', 'roll'), at(3000, 5100), undefined, undefined, s3);
+    }
+    add('announce dimmed', ann('Dinner at 7\nbring wine', 'type', { bright: 40 }), at(), undefined, undefined, s3);
+  }
   // Chronological departure: slide, digits roll, next train slides in.
   {
     const row = (ln, lbl, t, rn) => ({ ln, lbl, t: [t], s: [0], a: 0, rn });

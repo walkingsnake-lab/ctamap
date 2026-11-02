@@ -28,6 +28,8 @@ void Player::set_payload(const Value &payload, double ms) {
     page = 0;
     page_start = ms;
   }
+  // A new message replays its intro (draw.js messageIntroMs): flaps flip in, the typewriter types.
+  if (!has_p || !json::equal(payload["msg"]["id"], p["msg"]["id"])) msg_start = ms;
   p = payload;
   has_p = true;
   gen++;
@@ -195,6 +197,7 @@ void Player::set_screen(Screen s, double ms) {
     page = 0;
     page_start = ms;
     loop_start = ms;
+    msg_start = ms;
     anim = draw::TransitAnimator();
     bb_shown_.reset();
     bb_rolls_.clear();
@@ -267,6 +270,13 @@ void Player::draw(draw::Frame &frame, double ms, long long now) {
     sky_fade.view(ms, o);
     o.clouds = &clouds;
     o.blink = blink_on(ms);
+    draw::render(p, frame, o);
+    return;
+  }
+  if (screen == Screen::Announce) {
+    // The owner's message; its intro runs from when it appeared.
+    o.screen = "announce";
+    o.t = ms - msg_start;
     draw::render(p, frame, o);
     return;
   }
@@ -369,6 +379,10 @@ std::optional<screen::FrameKey> Player::frame_key(double ms, long long now) {
       k.v[4] = (long long)floor(wall_ms / 50);
       k.v[5] = (long long)clouds.size();
       break;
+    case Screen::Announce:
+      // The typewriter cursor's blink.
+      k.v[4] = draw::message_tick(p["msg"], ms - msg_start);
+      break;
     case Screen::Transit:
       // The overnight owl: redraw when its frame changes.
       if (night) k.v[4] = draw::owl_frame(ms);
@@ -396,6 +410,7 @@ bool Player::screen_busy(double ms) const {
       if (ms - kv.second.start < draw::ROLL_MS) return true;
     return false;
   }
+  if (screen == Screen::Announce) return ms - msg_start < draw::message_intro_ms(p["msg"]);
   if (screen == Screen::Weather) {
     int n = loop_len();
     if (n < 2 || rain_bars(ms)) return false;

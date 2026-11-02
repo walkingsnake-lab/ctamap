@@ -24,7 +24,7 @@ const { sunPos, sunTime, subsolar } = require('./sun');
 const { stripBytes } = require('./clouds');
 const fs = require('fs');
 const path = require('path');
-const { render, assets, autoScreen } = require('./render');
+const { render, assets, autoScreen, messageLayout } = require('./render');
 
 const SIM_HTML = fs.readFileSync(path.join(__dirname, 'sim.html'));
 const CONTROL_HTML = fs.readFileSync(path.join(__dirname, 'control.html'));
@@ -58,13 +58,14 @@ function send(res, status, body) {
 // are on (the board switches to it by itself); otherwise only `on`. While
 // Auto alternates screens (rot), every rotation screen's sections ride
 // along. The simulator's copy (api/update) stays whole.
-const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock'];
+const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 const SECTIONS = {
   transit: ['header', 'key', 'hidden', 'view', 'rows', 'wx'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
   clock: ['skyline', 'cface', 'cwx', 'dn', 'ginv'],
+  announce: ['msg'],
 };
 function sectionsFor(body, screen) {
   const out = { ...body, for: screen };
@@ -330,9 +331,22 @@ function createBoard({
     return !!(h && h.caps && h.caps.includes(cap));
   };
   const clockOk = (id, q = {}) => capOk(id, q, 'skyline');
-  const faceOk = (id, q = {}) => (face) => capOk(id, q, face);
-  const faceOf = (id) => faceOk(id);
-  const forBoard = (body, clock) => (body.screen === 'clock' && !clock ? { ...body, screen: 'transit' } : body);
+  // The announce screen likewise (`hk=...:announce`); others get transit.
+  const announceOk = (id, q = {}) => capOk(id, q, 'announce');
+  const canDraw = (screen, caps) => (screen === 'clock' ? caps.clock : screen === 'announce' ? caps.announce : true);
+  const forBoard = (body, caps) => (canDraw(body.screen, caps) ? body : { ...body, screen: 'transit' });
+  // caps.face(name): whether the firmware draws that clock face.
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) });
+
+  // The announce screen's message as the board draws it (draw.js
+  // messageLayout: the lines for its style), or null when none is set.
+  function msgOf(board) {
+    if (!board.msg) return null;
+    try {
+      const lay = messageLayout(board.msg.text, board.msg.style);
+      return lay ? { id: board.msg.id || 0, style: board.msg.style, ...lay } : null;
+    } catch (e) { log.error('[board] message:', e.message); return null; }
+  }
 
   // Last transit view per board and station, for the chrono hysteresis.
   // In memory only: after a restart the view is chosen fresh.
@@ -380,9 +394,9 @@ function createBoard({
     catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
-  async function update(board, id, boot, preview = {}, clock = clockOk(id), canDraw = faceOf(id)) {
+  async function update(board, id, boot, preview = {}, caps = capsOf(id)) {
     // The clock screen's face: one other than the skyline only for firmware that draws it.
-    const face = board.clockFace && board.clockFace !== 'skyline' && canDraw(board.clockFace) ? board.clockFace : 'skyline';
+    const face = board.clockFace && board.clockFace !== 'skyline' && caps.face(board.clockFace) ? board.clockFace : 'skyline';
     if (boot) board = store.boot(id);
     if (preview.mapid && preview.mapid !== board.station.mapid) {
       const st = stationById.get(preview.mapid);
@@ -485,7 +499,7 @@ function createBoard({
       screen,
       rot: rotOf(board, screen),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board, { clock }),
+      knob: knobOf(board, { clock: caps.clock, announce: caps.announce }),
       bright: resolveBright(board, w, now),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),
@@ -527,6 +541,8 @@ function createBoard({
       ...(face === 'daynight' ? { dn: dayNightOf(st, now) } : {}),
       // Gradient face: lit gradient digits on black (contract "Gradient").
       ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
+      // Announce screen: the message's lines for its style (contract "Announce").
+      msg: msgOf(board),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
@@ -589,9 +605,9 @@ function createBoard({
       const board = store.get(id) || store.register(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
       seenAt.set(id, nowSecs());
-      const clock = clockOk(id, parsed.query);
-      const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, clock, faceOk(id, parsed.query)), clock);
-      const asked = parsed.query.s === 'clock' && !clock ? 'transit' : parsed.query.s;
+      const caps = capsOf(id, parsed.query);
+      const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, caps), caps);
+      const asked = SCREENS.includes(parsed.query.s) && !canDraw(parsed.query.s, caps) ? 'transit' : parsed.query.s;
       const shown = SCREENS.includes(asked) ? asked : body.screen;
       return send(res, 200, sectionsFor(body, shown));
     }
@@ -610,8 +626,8 @@ function createBoard({
         throw e;
       }
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      const clock = clockOk(id, parsed.query);
-      const body = forBoard(await update(board, id, false, {}, clock, faceOk(id, parsed.query)), clock);
+      const caps = capsOf(id, parsed.query);
+      const body = forBoard(await update(board, id, false, {}, caps), caps);
       return send(res, 200, sectionsFor(body, body.screen));
     }
 
@@ -916,7 +932,7 @@ function createBoard({
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
-        const screen = ['transit', 'ticker', 'weather', 'baseball', 'clock'].includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
+        const screen = SCREENS.includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid) || testRadar.frame(fid); if (b) frames[fid] = b; }
