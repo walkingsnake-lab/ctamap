@@ -19,7 +19,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Diffuser | Two parts, loaded as one object: `bar-diffuser-white-face.stl` + `bar-diffuser-white-grid-black.stl` (0.2 face: 0.2 first layer, 0.4 nozzle), or `bar-diffuser-translucent-face.stl` + `bar-diffuser-translucent-grid-black.stl` (0.4 face: one 0.4 first layer, 0.6 nozzle) | face: white or translucent; the rest: black PETG | face down; the face part is the first layer |
 | Back plate | `bar-backplate-v3.stl` (one piece) | PETG, one opaque color (black hides the insides best) | outer face down |
 | Insert check (print first) | `check-panel-insert-template.stl` | any PLA | as exported; that face goes on the panel |
-| Encoder collar | `bar-encoder-collar-backdown.stl` (0.4 mm clearance); `bar-encoder-collar-fit-set.stl` has 0.3 / 0.4 / 0.5 (1 / 2 / 3 notches) if unsure | walnut, or translucent PETG for the glow | flange-top down |
+| Encoder collar | `bar-encoder-collar-backdown.stl` (0.4 mm clearance); `bar-encoder-collar-fit-set.stl` has 0.3 / 0.4 / 0.5 (1 / 2 / 3 notches) if unsure. **Crush-rib version** (recommended: the plain plug can wiggle in the hole, since the nut clamps the encoder to the collar, not to the case): `bar-encoder-collar-ribbed-fit-set.stl`, nine ribs on the plug's round part at crest r 12.05 / 12.15 / 12.25 (1 / 2 / 3 notches), 0.6 mm lead-in; pick the one that pushes in firmly by hand with no play. Then set `RIB_R` in `collar.py` to the winner to export a single collar | walnut, or translucent PETG for the glow | flange-top down |
 | Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots under the skirt), then `bar-knob.stl` (the middle size) or the winner. Pebble, Ø30 x 12.7, grip flutes round the side, rounded shoulder, domed top | white PLA, or any | as exported (upright, skirt on the bed), no supports |
 | Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
 | Sensor bracket (optional) | `bar-sensor-bracket.stl` (VEML7700 under the Ø2 hole, hung from the encoder board) | PETG or PLA | as exported, flat side down |
@@ -112,7 +112,7 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
 
 - Stiffness: the sleeve's walls are 3.5 mm (v4 2.5; `CASE_WALL` sets it) and the tray's 2.5. Bending stiffness goes with wall
   thickness cubed, so ~2.7x and ~2x. Crush ribs on the tray's outside (0.35 mm tall, 0.1 mm into the sleeve, ramped at the leading end) take up the clearance so the two walls brace
-  each other instead of sliding. The encoder collar follows the thicker wall (`bar-encoder-collar-v5.stl`).
+  each other instead of sliding. The encoder collar follows the thicker wall (`bar-encoder-collar-v5.stl`; crush-rib fit set `bar-encoder-collar-v5-ribbed-fit-set.stl`).
 
 - The panel sits turned 180° (input header on the left): set `MATRIX_ROTATION 180` in `secrets.h`. The S3 is turned 180° too,
   on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
