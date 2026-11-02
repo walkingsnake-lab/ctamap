@@ -1895,6 +1895,40 @@
       return f;
     }
 
+    // ---- clock screen: gradient face (design spec §19; contract "Gradient") ----
+    // A diagonal gradient across about three neighbors of a ten-color ring,
+    // sliding along the ring with the animation clock (o.ms): the colors flow
+    // across the panel, and which colors are on it changes as they go (each
+    // pair of neighbors close in hue, so no blend goes muddy). The time and
+    // date are knocked out of it (unlit). Integer math, ported line for line.
+    const GR = {
+      ring: ['#ffc24a', '#ff8a52', '#ff5f7e', '#e94fb8', '#a55cff', '#5a5cf2', '#3e9cff', '#3fd6c6', '#9be65a', '#ffe14a'],
+      span: 3,        // ring colors across the diagonal
+      step: 12000,    // ms to move one color along (two minutes around the ring)
+      dark: '#000000',
+    };
+    function gradientColor(x, y, ms) {
+      const n = GR.ring.length;
+      // Position on the diagonal, 0-1023, top left to bottom right.
+      const u = fdivI((x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+      const r = fdivI(ms * 256, GR.step) + fdivI(u * GR.span * 256, 1024);
+      const i = fdivI(r, 256) % n, t = r % 256;
+      return mixInt(hex(GR.ring[i]), hex(GR.ring[(i + 1) % n]), t);
+    }
+    function renderGradient(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
+      const f = newFrame();
+      for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(x, y, gradientColor(x, y, ms));
+      rollText(f, 'clock', 'grad.clock', clockText(now), centerX('clock'), 15, GR.dark);
+      const t = localDate(now, p.tzo);
+      const name = DAY_NAMES[t.wd], mon = MONTHS[t.m - 1];
+      const date = `${name[0]}${name.slice(1, 3).toLowerCase()} ${mon[0]}${mon.slice(1).toLowerCase()} ${t.d}`;
+      f.text('5x7', date, fdivI(64 - measure('5x7', date), 2), 26, GR.dark);
+      return f;
+    }
+
     // Which skyline is on screen, and the crossfade from the last one. The
     // board and the simulator keep one: set() with each payload's skyline
     // (live: the clock screen is showing; off it, a new skyline is taken at
@@ -2208,7 +2242,7 @@
     // The clock screen's face (payload cface; the skyline by default).
     function renderClock(p, o) {
       return p.cface === 'seventies' ? renderSeventies(p, o) : p.cface === 'analog' ? renderAnalog(p, o)
-        : p.cface === 'daynight' ? renderDayNight(p, o) : renderSkyline(p, o);
+        : p.cface === 'daynight' ? renderDayNight(p, o) : p.cface === 'gradient' ? renderGradient(p, o) : renderSkyline(p, o);
     }
 
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock
@@ -2273,7 +2307,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderSkyline, renderSeventies, renderAnalog, renderDayNight, localDate, sinD, S70, AN, DN, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderSkyline, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };

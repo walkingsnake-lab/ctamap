@@ -913,7 +913,7 @@ static void test_health_reports_the_skyline_capability() {
   std::string sent;
   for (const std::string &h : r.server.health)
     if (!h.empty()) sent = h;
-  CHECK(sent.find("&hk=skyline:seventies:analog:daynight") != std::string::npos, "%s", sent.c_str());
+  CHECK(sent.find("&hk=skyline:seventies:analog:daynight:gradient") != std::string::npos, "%s", sent.c_str());
 }
 
 static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_times_a_second() {

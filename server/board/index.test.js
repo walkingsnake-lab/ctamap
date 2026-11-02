@@ -1452,6 +1452,12 @@ test('clock screen, analog and day/night faces: their sections, only for firmwar
   assert.ok(Number.isInteger(b.dn.lon) && b.dn.lon >= -1800 && b.dn.lon <= 1800);
   assert.ok(Math.abs(b.dn.t - now) < 5);
   assert.deepEqual(b.dn.here, [16, 7], 'Morse (42.008 N, 87.666 W) on the 5.625° map');
+  s.store.update('home', { clockFace: 'gradient' });
+  assert.equal((await get(ALL)).cface, 'skyline', 'the gradient needs its own capability');
+  b = await get(ALL + ':gradient');
+  assert.equal(b.cface, 'gradient');
+  assert.equal(b.dn, undefined);
+  assert.equal(b.cwx, undefined);
   s.store.update('home', { screen: 'transit' });
   b = await get(ALL);
   assert.equal(b.dn, undefined, 'other screens leave it out');

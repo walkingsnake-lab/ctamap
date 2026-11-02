@@ -275,3 +275,16 @@ test('clock screen, day/night face: lit where the sun is up, dark on the far sid
   const night = [1, 3, 5].map((i, k) => Math.floor(parseInt(day.slice(i, i + 2), 16) * [104, 116, 140][k] / 256));
   assert.deepEqual(f.get(50, 10), night, 'Asia at midnight: its land color, dimmed toward blue');
 });
+
+test('clock screen, gradient face: the colors move with the clock, the time is knocked out', () => {
+  const t = Date.parse('2026-11-02T01:15:00Z') / 1000;
+  const p = { now: t, tzo: -21600, screen: 'clock', cface: 'gradient', bright: 100 };
+  const a = render(p, { ms: t * 1000 }), b = render(p, { ms: t * 1000 + 6000 });
+  assert.notDeepEqual(a.get(0, 0), b.get(0, 0), 'the gradient drifts');
+  assert.deepEqual(render(p, { ms: t * 1000 + 120000 }).get(5, 30), a.get(5, 30), 'and comes round in two minutes');
+  // Every pixel is lit except the text: some unlit pixels in the time's rows, none in the corners.
+  let dark = 0;
+  for (let y = 5; y <= 14; y++) for (let x = 0; x < 64; x++) { const c = a.get(x, y); if (!(c[0] || c[1] || c[2])) dark++; }
+  assert.ok(dark > 40, 'the time is cut out');
+  for (const [x, y] of [[0, 0], [63, 0], [0, 31], [63, 31]]) assert.ok(a.get(x, y).some((v) => v > 0), `corner ${x},${y} lit`);
+});

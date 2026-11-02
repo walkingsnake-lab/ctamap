@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include <algorithm>
 
@@ -2680,6 +2681,35 @@ static void render_daynight(const Value &p, Frame &f, std::optional<double> now_
   f.text(FONT_SMALL, date, 64 - measure(FONT_SMALL, date), 32, C::wxText);
 }
 
+// ---- clock screen: gradient face (design spec §19; contract "Gradient") ----
+// Mirrors renderGradient() and GR in draw.js.
+static const RGB GR_RING[] = {hexc(0xffc24a), hexc(0xff8a52), hexc(0xff5f7e), hexc(0xe94fb8), hexc(0xa55cff),
+                              hexc(0x5a5cf2), hexc(0x3e9cff), hexc(0x3fd6c6), hexc(0x9be65a), hexc(0xffe14a)};
+static const long long GR_N = 10, GR_SPAN = 3, GR_STEP = 12000;
+
+static RGB gradient_color(int x, int y, long long ms) {
+  long long u = fdiv((long long)(x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+  long long r = fdiv(ms * 256, GR_STEP) + fdiv(u * GR_SPAN * 256, 1024);
+  long long i = fmod_floor(fdiv(r, 256), GR_N), t = fmod_floor(r, 256);
+  RGB a = GR_RING[i], b = GR_RING[(i + 1) % GR_N];
+  return RGB{mix_int(a.r, b.r, t), mix_int(a.g, b.g, t), mix_int(a.b, b.b, t)};
+}
+
+static void render_gradient(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
+  double now = now_o ? *now_o : p["now"].num(0);
+  long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
+  for (int y = 0; y < 32; y++)
+    for (int x = 0; x < 64; x++) f.set(x, y, gradient_color(x, y, ms));
+  double tzo = p["tzo"].num(0);
+  roll_named(f, FONT_CLOCK, "grad.clock", clock_text(now, tzo), CENTER, 0, 15, RGB{});
+  LocalDate t = local_date(now, tzo);
+  std::string name = DAY_NAMES[t.wd], mon = MONTH_NAMES[t.m - 1];
+  for (size_t i = 1; i < name.size(); i++) name[i] = (char)tolower(name[i]);
+  for (size_t i = 1; i < mon.size(); i++) mon[i] = (char)tolower(mon[i]);
+  ustr date = U(name.substr(0, 3) + " " + mon + " " + std::to_string(t.d));
+  f.text(FONT_5X7, date, (int)fdiv(64 - measure(FONT_5X7, date), 2), 26, RGB{});
+}
+
 // ---- whole screen ----
 
 static void apply_brightness(Frame &f, double b) {
@@ -2733,6 +2763,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
     if (face == "seventies") render_seventies(p, f, o.now);
     else if (face == "analog") render_analog(p, f, o.now);
     else if (face == "daynight") render_daynight(p, f, o.now);
+    else if (face == "gradient") render_gradient(p, f, o.now, o.ms);
     else render_skyline_faded(p, f, o);
   }
   else render_transit(p, f, o.now, o.blink, o.view);
