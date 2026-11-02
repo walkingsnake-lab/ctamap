@@ -2543,6 +2543,8 @@ static const int MSG_BASES[4][3] = {{0, 0, 0}, {19, 0, 0}, {14, 24, 0}, {9, 19, 
 static const int MSG_SMALL_LINES = 5;
 static const double TYPE_WAIT = 400, TYPE_CHAR = 90, TYPE_BLINK = 530;
 static const int BIG_TOP = 7, BIG_GRAD = 14;
+static const double ROLL_STEP = 150, ROLL_PAUSE = 1500;
+static const int ROLL_START = 40, ROLL_PITCH = 10, ROLL_FADE = 3;
 static constexpr RGB MSG_TEXT = C::label, MSG_TYPE = C::amber, MSG_CURSOR = hexc(0xcc8d00), BIG_FROM = hexc(0xff3060), BIG_TO = hexc(0xffb000), MSG_CTA = C::head;
 
 static int msg_x(Font font, const ustr &s) { return (int)fdiv(64 - measure(font, s), 2); }
@@ -2617,6 +2619,25 @@ static void draw_big(Frame &f, const ustr &s) {
   }
 }
 
+// Credits roll; mirrors rollBase() / drawRoll() in draw.js.
+static int roll_base(int n, std::optional<double> t) {
+  if (!t) return (int)fdiv(32 - (ROLL_PITCH * (n - 1) + 9), 2) + 7;
+  long long travel = ROLL_START + 2 + ROLL_PITCH * (n - 1);
+  double cycle = travel * ROLL_STEP + ROLL_PAUSE;
+  double u = *t - floor(*t / cycle) * cycle;
+  return ROLL_START - (int)std::min(travel, (long long)floor(u / ROLL_STEP));
+}
+
+static void draw_roll(Frame &f, const std::vector<ustr> &lines, std::optional<double> t) {
+  int base = roll_base((int)lines.size(), t);
+  for (size_t i = 0; i < lines.size(); i++) f.text(FONT_5X7, lines[i], msg_x(FONT_5X7, lines[i]), base + (int)i * ROLL_PITCH, MSG_TEXT);
+  for (int i = 0; i < ROLL_FADE; i++) {
+    double k = (double)(i + 1) / (ROLL_FADE + 1);
+    for (int y : {i, 31 - i})
+      for (int x = 0; x < 64; x++) f.set(x, y, scale_color(f.get(x, y), k));
+  }
+}
+
 static bool has_message(const Value &m) { return m.truthy() && m["lines"].size() > 0; }
 
 static void render_announce(const Value &p, Frame &f, std::optional<double> t) {
@@ -2630,6 +2651,7 @@ static void render_announce(const Value &p, Frame &f, std::optional<double> t) {
   std::vector<ustr> lines = msg_lines(m);
   if (m["style"].eq("type")) draw_typed(f, lines, t);
   else if (m["style"].eq("big")) draw_big(f, lines[0]);
+  else if (m["style"].eq("roll")) draw_roll(f, lines, t);
   else draw_note(f, lines, m["sm"].truthy());
 }
 
@@ -2640,6 +2662,7 @@ double message_intro_ms(const Value &m) {
 }
 
 long long message_tick(const Value &m, double t) {
+  if (has_message(m) && m["style"].eq("roll")) return (long long)floor(t / ROLL_STEP);
   if (!has_message(m) || !m["style"].eq("type")) return 0;
   double intro = message_intro_ms(m);
   return t < intro ? -1 : ((long long)floor((t - intro) / TYPE_BLINK)) % 2;

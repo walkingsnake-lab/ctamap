@@ -1751,18 +1751,23 @@
     }
 
     // ---- announce screen (design spec §15; contract "Announce") ----
-    // A short note from the phone in one of three styles: note, typewriter,
-    // big word. The server lays the text out (messageLayout) and sends the
-    // lines; the board only draws them. opts.t: ms since the message
-    // appeared, for its intro (the typewriter types); absent: the settled
-    // frame. Integer geometry only.
-    const MSG_STYLES = ['note', 'type', 'big'];
+    // A short note from the phone in one of four styles: note, typewriter,
+    // big word, credits roll. The server lays the text out (messageLayout)
+    // and sends the lines; the board only draws them. opts.t: ms since the
+    // message appeared, for its motion (the typewriter types, the credits
+    // roll); absent: the settled frame. Integer geometry only.
+    const MSG_STYLES = ['note', 'type', 'big', 'roll'];
     const MSG_MAX = 160;  // characters, after cleaning
     const MSG = {
       bases: { 1: [19], 2: [14, 24], 3: [9, 19, 29] },  // 5x7 lines (note, typewriter)
       smallLines: 5,
       typeWrap: 59, typeWait: 400, typeChar: 90, typeBlink: 530,
       bigTop: 7, bigGrad: 14,
+      // Credits roll: 1 px up every rollStep ms from below the panel (first
+      // baseline rollStart) until the last line has left the top, then
+      // rollPause ms blank, looping; lines rollPitch apart; the top and
+      // bottom rollFade rows fade the text in and out. Up to rollLines lines.
+      rollStep: 150, rollPause: 1500, rollStart: 40, rollPitch: 10, rollFade: 3, rollLines: 16,
     };
     const MSG_C = {
       text: C.label,
@@ -1823,6 +1828,11 @@
         return lines ? { lines } : null;
       }
       if (style === 'big') return !t.includes('\n') && measure('5x7', t) * 2 <= 64 ? { lines: [t] } : null;
+      if (style === 'roll') {
+        // It scrolls, so it isn't held to one screen: any number of lines up to rollLines.
+        const lines = upto(wrapMessage(t, '5x7', 64), MSG.rollLines);
+        return lines ? { lines } : null;
+      }
       return null;
     }
 
@@ -1884,6 +1894,23 @@
         x += dw;
       }
     }
+    // Credits roll. Settled (no t): the block centered, as a still. Moving:
+    // the first baseline at rollStart minus the steps taken this pass.
+    function rollBase(n, t) {
+      if (!Number.isFinite(t)) return Math.floor((32 - (MSG.rollPitch * (n - 1) + 9)) / 2) + 7;
+      const travel = MSG.rollStart + 2 + MSG.rollPitch * (n - 1);  // steps until the last line's descender is off the top
+      const cycle = travel * MSG.rollStep + MSG.rollPause;
+      const u = t - Math.floor(t / cycle) * cycle;
+      return MSG.rollStart - Math.min(travel, Math.floor(u / MSG.rollStep));
+    }
+    function drawRoll(f, lines, t) {
+      const base = rollBase(lines.length, t);
+      lines.forEach((l, i) => f.text('5x7', l, msgX('5x7', l), base + i * MSG.rollPitch, MSG_C.text));
+      for (let i = 0; i < MSG.rollFade; i++) {
+        const k = (i + 1) / (MSG.rollFade + 1);
+        for (const y of [i, 31 - i]) for (let x = 0; x < 64; x++) f.set(x, y, f.get(x, y).map((v) => Math.round(v * k)));
+      }
+    }
     function renderAnnounce(p, opts) {
       const o = opts || {};
       const f = newFrame();
@@ -1896,6 +1923,7 @@
       const t = o.t != null ? o.t : Infinity;
       if (m.style === 'type') drawTyped(f, m.lines, t);
       else if (m.style === 'big') drawBig(f, m.lines[0]);
+      else if (m.style === 'roll') drawRoll(f, m.lines, t);
       else drawNote(f, m.lines, !!m.sm);
       return f;
     }
@@ -1907,8 +1935,10 @@
       return 0;
     }
     // After the intro, a number that changes whenever the frame does (the
-    // typewriter cursor's blink), for the board's redraw key.
+    // typewriter cursor's blink, each step of the credits roll), for the
+    // board's redraw key.
     function messageTick(m, t) {
+      if (m && m.style === 'roll' && m.lines && m.lines.length) return Math.floor(t / MSG.rollStep);
       if (!m || m.style !== 'type' || !m.lines || !m.lines.length) return 0;
       const intro = messageIntroMs(m);
       return t < intro ? -1 : Math.floor((t - intro) / MSG.typeBlink) % 2;

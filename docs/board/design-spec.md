@@ -32,7 +32,7 @@ Animation was deliberately limited on the M4 so its network pauses (CircuitPytho
 - **Radar loop.**
 - **Knob chooser slide** (S3; §10, *Knob*): 180 ms per click, only while someone is turning the knob.
 
-No blinking colons and no alert text screens anywhere. Alerts are shown only as indicators (see §5, §6, §7). Scrolling text is avoided by preference, not ruled out: the announce screen's planned credits and crawl styles scroll (§15).
+No blinking colons and no alert text screens anywhere. Alerts are shown only as indicators (see §5, §6, §7). Scrolling text is avoided by preference, not ruled out: the announce screen's credits roll (and the planned crawl) scroll (§15).
 
 ### Scheduler (board main loop)
 **S3:** the board's requests run on a network task on core 0 (beside the WiFi stack) while the loop keeps drawing on core 1 (`device::NetWorker`, `app::Worker`). One request is out at a time; jobs simply run when due, and nothing on the panel waits for them. A request still out after 45 s (`WORK_STUCK_MS`) stops the loop feeding the watchdog, which restarts the board, so a hung TLS read can't leave stale times up forever. The S3 keeps its HTTPS connection open between requests, so most skip the TLS handshake. If the worker fails to start, requests run inline and pause animations while they're out; the S3 doesn't fit them into gaps.
@@ -610,7 +610,7 @@ A boat crosses the lake **at every quarter hour**, by day only, alternating: the
 
 ---
 
-## 15. Announce screen (three styles built)
+## 15. Announce screen (four styles built)
 
 Designed Nov 1, 2026 as the Message screen; built Nov 1, 2026 as **Announce** (the name the knob and phone use). The owner puts a short note on their own board: "Dinner at 7", "Welcome home!". Mockups of all nine styles: [`mockups/messages/sheet.png`](mockups/messages/sheet.png), made by `node scripts/mock-messages.js`. Payload and pixels: contract, *Announce*.
 
@@ -623,7 +623,7 @@ Designed Nov 1, 2026 as the Message screen; built Nov 1, 2026 as **Announce** (t
 - **S3 only**, like Clock (§14): firmware reports `announce` in `hk`; the server never sends the screen to other boards (they get Transit) and leaves ANNOUNCE off their ring.
 
 ### Text
-- **One screen:** the text must fit the chosen style without paging. The server rejects text that doesn't fit (400); the phone page disables styles it doesn't fit ("too long").
+- **One screen:** the text must fit the chosen style without paging (the credits roll scrolls, so it takes up to 16 lines). The server rejects text that doesn't fit (400); the phone page disables styles it doesn't fit ("too long").
 - Characters: printable ASCII, Latin-1 and the punctuation phones substitute (curly quotes, dashes, ellipsis, bullet, euro). Anything else (emoji) is dropped. Line breaks force a new line. Up to 160 characters.
 - The server lays the text out (`messageLayout()` in `draw.js`, shared with the phone page) and sends the lines; the board only draws them.
 
@@ -633,15 +633,16 @@ Picked per message; each style fixes its own colors. Built:
 1. **Note:** 5x7 text, wrapped and centered, up to 3 lines; when it doesn't fit, uppercase Tom Thumb up to 5 lines.
 2. **Typewriter:** 5x7 amber from the left edge, typed out once when the message appears (90 ms a character), then a blinking block cursor.
 3. **Big word:** 5x7 at 2x (about 5 characters), shaded pink to amber.
+4. **Credits roll** (built Nov 1, 2026): 5x7 lines, centered, 10 px apart, rise from below the panel 1 px every 150 ms (about 7 px/s, a new line every 1.5 s) until the last one leaves the top, then 1.5 s blank, looping. The top and bottom 3 rows fade the text in and out. Whole-pixel steps at a steady pace: sub-pixel blending smears 5x7 text on the panel. The mockup's sender line isn't built (there's no sender field).
 
 **Split-flap** (10 × 3 small flaps) was built and removed the same day (Nov 1, 2026): it didn't look good on the panel, with or without a gap at the split. Saved split-flap messages load as notes.
 
-Not built yet, in order: **icon + text** (13 px icon with a 2-frame idle loop: heart, cake, house, coffee; each its own style), **speech bubble** (a pigeon), **marquee** (chasing bulbs), **credits roll**, **crawl**. Also from the mockups, not built: the big word's sparkle and countdown variants, the typewriter's green phosphor.
+Not built yet, in order: **icon + text** (13 px icon with a 2-frame idle loop: heart, cake, house, coffee; each its own style), **speech bubble** (a pigeon), **marquee** (chasing bulbs), **crawl**. Also from the mockups, not built: the big word's sparkle and countdown variants, the typewriter's green phosphor.
 
-This screen is an exception to Minimal animation (§2), like the skyline face: it has no times to protect. The intro replays when the screen is shown and when a new message arrives, not on every update.
+This screen is an exception to Minimal animation (§2), like the skyline face: it has no times to protect. The typewriter's intro, and the credits roll's pass, start over when the screen is shown and when a new message arrives, not on every update.
 
 ### Phone page
-- An **Announce** tab: a preview of the draft drawn by the board's renderer (tap to replay its intro), the text field, a fit line ("Fits Note · 2 of 3 lines"), the three styles as tiles drawn with the draft (or a sample when it doesn't fit), **Show on board** (sets the message and the screen; "On the board ✓" when it's already up), **Save as preset**, and the presets list.
+- An **Announce** tab: a preview of the draft drawn by the board's renderer (tap to replay its intro), the text field, a fit line ("Fits Note · 2 of 3 lines"), the four styles as tiles drawn with the draft (or a sample when it doesn't fit), **Show on board** (sets the message and the screen; "On the board ✓" when it's already up), **Save as preset**, and the presets list.
 - While Announce is on the board, edits go up about a second after typing stops.
 - Announce is also in the Screen picker (now two rows of four).
 

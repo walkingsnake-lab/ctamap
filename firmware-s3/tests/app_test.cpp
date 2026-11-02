@@ -950,6 +950,21 @@ static void test_announce_typewriter_animates_its_intro_then_redraws_only_for_th
   CHECK(replayed, "a new message types out again");
 }
 
+static void test_announce_credits_roll_redraws_once_per_step() {
+  Rig r;
+  r.server.screen = "announce";
+  r.server.msg = "{\"id\":3,\"style\":\"roll\",\"lines\":[\"Dinner at 7\",\"bring wine\"]}";
+  r.board->connect();
+  r.run_for(3000);
+  CHECK(S(r.board) == "announce", "%s", S(r.board).c_str());
+  CHECK(!r.board->player.busy((double)r.clock.t), "moves on the frame key, not every frame");
+  long f0 = r.display.frames;
+  r.run_for(15000);
+  // 1 px every 150 ms (~100 steps), plus a redraw at each new second.
+  long n = r.display.frames - f0;
+  CHECK(n >= 95 && n <= 125, "%ld frames in 15 s", n);
+}
+
 static void test_announce_still_styles_draw_once() {
   Rig r;
   r.server.screen = "announce";
@@ -1811,6 +1826,7 @@ int main() {
       T_(test_a_held_train_stays_due_until_the_server_drops_it),
       T_(test_health_reports_the_skyline_capability),
       T_(test_announce_typewriter_animates_its_intro_then_redraws_only_for_the_cursor),
+      T_(test_announce_credits_roll_redraws_once_per_step),
       T_(test_announce_still_styles_draw_once),
       T_(test_announce_without_a_message_asks_for_one),
       T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_times_a_second),

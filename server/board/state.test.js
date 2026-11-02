@@ -365,8 +365,8 @@ test('announce: msg is {text, style}, cleaned, fitting its style; a new one gets
 test('announce: presets are up to 8 messages that each fit', () => {
   const { MAX_PRESETS } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
-  const b = store.update('home', { msgPresets: [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'type' }] });
-  assert.deepEqual(b.msgPresets, [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'type' }]);
+  const b = store.update('home', { msgPresets: [{ text: 'Yay!', style: 'big' }, { text: 'Dinner\nat 7', style: 'type' }, { text: 'One\ntwo\nthree\nfour\nfive', style: 'roll' }] });
+  assert.deepEqual(b.msgPresets.map((m) => m.style), ['big', 'type', 'roll']);
   assert.throws(() => store.update('home', { msgPresets: Array(MAX_PRESETS + 1).fill({ text: 'Hi', style: 'note' }) }), ValidationError);
   assert.throws(() => store.update('home', { msgPresets: [{ text: 'Hooray!!', style: 'big' }] }), ValidationError);
   assert.throws(() => store.update('home', { msgPresets: {} }), ValidationError);

@@ -84,7 +84,7 @@
   textarea { width: 100%; font: inherit; color: var(--fg); background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; resize: vertical; margin-top: 12px; }
   .fit { color: var(--muted); font-size: 13px; margin: 6px 2px 0; min-height: 18px; }
   .fit.bad { color: var(--err); }
-  .styles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .styles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
   .styles button { font: inherit; font-size: 13px; color: var(--fg); background: #000; border: 2px solid #2a2a2a; border-radius: 10px; padding: 6px 6px 4px; cursor: pointer; text-align: left; }
   .styles button canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; margin-bottom: 4px; }
   .styles button[aria-pressed="true"] { border-color: var(--fg); }
@@ -275,6 +275,7 @@
       <button data-v="note"><canvas width="128" height="64"></canvas>Note</button>
       <button data-v="type"><canvas width="128" height="64"></canvas>Typewriter</button>
       <button data-v="big"><canvas width="128" height="64"></canvas>Big word</button>
+      <button data-v="roll"><canvas width="128" height="64"></canvas>Credits roll</button>
     </div>
     <div class="actions">
       <button class="primary" id="msgShow">Show on board</button>
@@ -758,7 +759,7 @@
   // The draft is drawn here with the board's own renderer (draw.js and its
   // fonts, loaded on first use), so the preview, the fit line and the
   // disabled styles agree with what the server accepts.
-  const MSG_NAMES = { note: 'Note', type: 'Typewriter', big: 'Big word' };
+  const MSG_NAMES = { note: 'Note', type: 'Typewriter', big: 'Big word', roll: 'Credits roll' };
   let D = null, drawLoading = null;
   function loadDraw() {
     if (D) return Promise.resolve(D);
@@ -798,7 +799,7 @@
     paintLed($('msgPreview'), D.render({ bright: dim ? 30 : 100, screen: 'announce', msg: m }, { t: dim ? undefined : t }));
     if (dim) return;
     // Keep animating the intro (and the typewriter's cursor) while the preview is on screen.
-    if (m && (t < D.messageIntroMs(m) || m.style === 'type') && $('msgPreview').offsetParent) introRaf = requestAnimationFrame(paintDraft);
+    if (m && (t < D.messageIntroMs(m) || m.style === 'type' || m.style === 'roll') && $('msgPreview').offsetParent) introRaf = requestAnimationFrame(paintDraft);
   }
   function replay() { introStart = performance.now(); if (D) paintDraft(); }
   function renderAnnounce() {
@@ -817,14 +818,14 @@
       b.querySelector('small')?.remove();
       if (b.disabled) { const sm = document.createElement('small'); sm.textContent = 'too long'; b.append(sm); }
       // The draft in each style that fits it; a sample in the others.
-      const sample = clean && fits[st] ? { text: draft.text, style: st } : { text: { note: 'Dinner at 7', type: 'Back by 6', big: 'Yay!' }[st], style: st };
+      const sample = clean && fits[st] ? { text: draft.text, style: st } : { text: { note: 'Dinner at 7', type: 'Back by 6', big: 'Yay!', roll: 'Thanks for coming!' }[st], style: st };
       paintLed(b.querySelector('canvas'), D.render({ bright: 100, screen: 'announce', msg: msgOf(sample) }));
     }
     const lay = fits[draft.style];
     const dropped = [...draft.text.replace(/\s/g, '')].length > [...clean.replace(/\s/g, '')].length;
     let fit = '';
     if (!clean) fit = draft.text.trim() ? 'The board can\'t show these characters (emoji).' : 'Type a message.';
-    else if (lay) fit = `Fits ${MSG_NAMES[draft.style]}` + (draft.style === 'big' ? '.' : `${lay.sm ? ' in small text' : ''} · ${lay.lines.length} of ${lay.sm ? 5 : 3} lines.`);
+    else if (lay) fit = `Fits ${MSG_NAMES[draft.style]}` + (draft.style === 'big' ? '.' : draft.style === 'roll' ? ` · ${lay.lines.length} line${lay.lines.length > 1 ? 's' : ''}, rolling up and repeating.` : `${lay.sm ? ' in small text' : ''} · ${lay.lines.length} of ${lay.sm ? 5 : 3} lines.`);
     else {
       const alt = Object.keys(MSG_NAMES).filter((st) => fits[st]).map((st) => MSG_NAMES[st]);
       fit = `Too long for ${MSG_NAMES[draft.style]}.` + (alt.length ? ` Fits ${alt.join(', ')}.` : ' Shorten it to fit.');
