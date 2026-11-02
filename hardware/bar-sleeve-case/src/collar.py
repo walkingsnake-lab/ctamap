@@ -19,7 +19,7 @@ WALL = float(os.environ.get('CASE_WALL', '2.5'))
 FL_R, FL_T, FL_CH = 17.5, 1.6, 0.45
 PLUG_BOT = -(WALL - 0.1)                  # 0.1 short of the wall's inner face
 DECK_BOT = -1.4                  # encoder body top sits here (deck 3.0 thick to the flange top)
-POCKET_R = 9.0                   # clears the 12 mm body's corners (8.5) at any angle
+POCKET_R = 9.8                   # clears the real body (~12.4 x 13.4 with its frame, corners r 9.13) plus print shrink; 9.0 jammed (Nov 2)
 BUSH_R = 3.7                     # M7 bushing
 RELIEF_R, RELIEF_TOP = 6.5, 0.2  # clears the body's anti-rotation tab wherever it sits
 RIB_R = None                     # crush-rib crest radius (nominal hole r 12.0); None = plain plug. Set from the ribbed fit set
