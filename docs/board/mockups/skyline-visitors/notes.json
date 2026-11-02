@@ -1,0 +1,42 @@
+[
+  {
+    "id": "freighter",
+    "title": "Lake freighter",
+    "note": "Long and slow (1 px every 1.5 s, about 2 min across), riding the shoreline like the sailboat. Spring to fall; by night, lit portholes and a red bow light."
+  },
+  {
+    "id": "tour",
+    "title": "Tour boat",
+    "note": "A two-deck architecture cruiser, 1 px every 500 ms. Warm-season days."
+  },
+  {
+    "id": "dinner",
+    "title": "Dinner cruise",
+    "note": "A long boat lit with two rows of windows and deck lights. Summer evenings, after dark."
+  },
+  {
+    "id": "tall-ship",
+    "title": "Tall ship",
+    "note": "A three-masted schooner under square sails, slower than the sailboat (1 px a second). Summer days."
+  },
+  {
+    "id": "plane",
+    "title": "Planes",
+    "note": "A jet crossing high: a fading contrail by day; at night a white strobe with a red light blinking. A few an hour; not under heavy cloud."
+  },
+  {
+    "id": "gulls",
+    "title": "Gulls",
+    "note": "Three gulls drifting over the water, each flapping on its own beat. Daytime."
+  },
+  {
+    "id": "helicopter",
+    "title": "Helicopter",
+    "note": "A news or tour chopper crossing the skyline slowly, its rotor flickering, a red beacon blinking at night."
+  },
+  {
+    "id": "fireworks",
+    "title": "Navy Pier fireworks",
+    "note": "Bursts over the pier on summer Wednesday and Saturday nights (about 9:30 and 10:15 PM, Memorial Day to Labor Day): a rising trail, a ring of sparks that spreads and fades, several colors over ten minutes."
+  }
+]
