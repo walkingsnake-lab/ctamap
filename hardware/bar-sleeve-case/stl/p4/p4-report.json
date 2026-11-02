@@ -1,0 +1,235 @@
+{
+ "parts": {
+  "p4-shell-top-walnut-backdown.stl": {
+   "watertight": true,
+   "extents": [
+    246.5,
+    246.5,
+    69.0
+   ],
+   "square": 246.5,
+   "spare_a_side": 4.8,
+   "volume_cm3": 97.3
+  },
+  "p4-shell-bottom-walnut-backdown.stl": {
+   "watertight": true,
+   "extents": [
+    247.4,
+    247.4,
+    64.6
+   ],
+   "square": 247.4,
+   "spare_a_side": 4.3,
+   "volume_cm3": 86.7
+  },
+  "p4-tray-left.stl": {
+   "watertight": true,
+   "extents": [
+    137.1,
+    146.2,
+    51.8
+   ],
+   "square": 146.2,
+   "spare_a_side": 54.9,
+   "volume_cm3": 97.4
+  },
+  "p4-tray-right.stl": {
+   "watertight": true,
+   "extents": [
+    137.1,
+    146.2,
+    51.8
+   ],
+   "square": 146.2,
+   "spare_a_side": 54.9,
+   "volume_cm3": 100.4
+  },
+  "p4-spine.stl": {
+   "watertight": true,
+   "extents": [
+    124.0,
+    14.0,
+    3.0
+   ],
+   "square": 124.0,
+   "spare_a_side": 66.0,
+   "volume_cm3": 5.1
+  },
+  "p4-bridge.stl": {
+   "watertight": true,
+   "extents": [
+    30.0,
+    14.0,
+    39.8
+   ],
+   "square": 30.0,
+   "spare_a_side": 113.0,
+   "volume_cm3": 2.3
+  },
+  "p4-diffuser-left-white.stl": {
+   "watertight": true,
+   "extents": [
+    128.0,
+    128.0,
+    0.2
+   ],
+   "square": 128.0,
+   "spare_a_side": 64.0,
+   "volume_cm3": 3.3
+  },
+  "p4-diffuser-left-black.stl": {
+   "watertight": true,
+   "extents": [
+    136.6,
+    145.2,
+    4.7
+   ],
+   "square": 145.2,
+   "spare_a_side": 55.4,
+   "volume_cm3": 14.4
+  },
+  "p4-diffuser-right-white.stl": {
+   "watertight": true,
+   "extents": [
+    128.0,
+    128.0,
+    0.2
+   ],
+   "square": 128.0,
+   "spare_a_side": 64.0,
+   "volume_cm3": 3.3
+  },
+  "p4-diffuser-right-black.stl": {
+   "watertight": true,
+   "extents": [
+    136.6,
+    145.2,
+    4.7
+   ],
+   "square": 145.2,
+   "spare_a_side": 55.4,
+   "volume_cm3": 14.4
+  },
+  "coupon-p4-seam-top.stl": {
+   "watertight": true,
+   "extents": [
+    4.7,
+    34.0,
+    31.4
+   ],
+   "square": 34.0,
+   "spare_a_side": 111.0,
+   "volume_cm3": 3.4
+  },
+  "coupon-p4-seam-bottom.stl": {
+   "watertight": true,
+   "extents": [
+    4.7,
+    30.0,
+    29.6
+   ],
+   "square": 30.0,
+   "spare_a_side": 113.0,
+   "volume_cm3": 2.8
+  },
+  "coupon-p4-diffuser-joint-left-white.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    30.0,
+    0.2
+   ],
+   "square": 30.0,
+   "spare_a_side": 113.0,
+   "volume_cm3": 0.1
+  },
+  "coupon-p4-diffuser-joint-left-black.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.6,
+    4.7
+   ],
+   "square": 38.6,
+   "spare_a_side": 108.7,
+   "volume_cm3": 0.6
+  },
+  "coupon-p4-diffuser-joint-right-white.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    30.0,
+    0.2
+   ],
+   "square": 30.0,
+   "spare_a_side": 113.0,
+   "volume_cm3": 0.1
+  },
+  "coupon-p4-diffuser-joint-right-black.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.6,
+    4.7
+   ],
+   "square": 38.6,
+   "spare_a_side": 108.7,
+   "volume_cm3": 0.6
+  },
+  "coupon-p4-drawer-fit-shell.stl": {
+   "watertight": true,
+   "extents": [
+    50.5,
+    35.0,
+    29.0
+   ],
+   "square": 50.5,
+   "spare_a_side": 102.8,
+   "volume_cm3": 7.7
+  },
+  "coupon-p4-drawer-fit-tray.stl": {
+   "watertight": true,
+   "extents": [
+    46.8,
+    31.7,
+    25.0
+   ],
+   "square": 46.8,
+   "spare_a_side": 104.6,
+   "volume_cm3": 8.6
+  }
+ },
+ "summary": {
+  "W": 280.8,
+  "H": 152.8,
+  "D": 69.0,
+  "ZS_above_centre": 2.0,
+  "lap": 4.0,
+  "bore": [
+   136.9,
+   72.9
+  ],
+  "S3_edge": 133.75,
+  "port_z": -41.44,
+  "corners": [
+   [
+    -120.0,
+    -56.0
+   ],
+   [
+    -120.0,
+    56.0
+   ],
+   [
+    120.0,
+    -56.0
+   ],
+   [
+    120.0,
+    56.0
+   ]
+  ],
+  "bridge_z": -56.0,
+  "spine_z": 45.7
+ }
+}
