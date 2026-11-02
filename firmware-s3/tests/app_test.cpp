@@ -96,6 +96,7 @@ struct Server : app::Net {
   std::string fw;                                 // version check's `fw` offer (JSON object), "" for none
   int fw_fail = 0;                                // fail the next firmware downloads halfway
   std::string cloud = "p1";                       // the skyline's cloud strip id, "" for a clear sky
+  std::string msg = "null";                       // the announce screen's message (payload `msg`), raw JSON
 
   bool deferred = false;  // on the SimWorker: requests take time without moving the loop's clock
   long long owed = 0;     // simulated time the deferred requests took
@@ -167,7 +168,7 @@ struct Server : app::Net {
            ",\"warn\":" + (tornado ? "{\"kind\":\"tor\",\"lvl\":\"warning\"}" : "null") +
            ",\"radar\":{\"on\":" + (radar_on ? "true" : "false") + ",\"visit\":" + visit + ",\"frames\":" + frames +
            ",\"ft\":" + ft + ",\"timeBox\":[40,0,24,22],\"split\":false},\"mlb\":{\"layout\":\"" + layout +
-           "\",\"games\":" + game_list + "}" + knob + skyline() + "}";
+           "\",\"games\":" + game_list + "}" + knob + skyline() + ",\"msg\":" + msg + "}";
   }
 
   app::ConnectResult connect(const app::Networks &networks, const app::StatusFn &status) override {
@@ -913,7 +914,86 @@ static void test_health_reports_the_skyline_capability() {
   std::string sent;
   for (const std::string &h : r.server.health)
     if (!h.empty()) sent = h;
-  CHECK(sent.find("&hk=skyline:seventies") != std::string::npos, "%s", sent.c_str());
+  CHECK(sent.find("&hk=skyline:seventies:announce") != std::string::npos, "%s", sent.c_str());
+}
+
+static void test_announce_typewriter_animates_its_intro_then_redraws_only_for_the_cursor() {
+  Rig r;
+  r.server.screen = "announce";
+  r.server.msg = "{\"id\":5,\"style\":\"type\",\"lines\":[\"Back by 6\"]}";
+  r.board->connect();
+  r.run_for(300);
+  CHECK(S(r.board) == "announce", "%s", S(r.board).c_str());
+  // Typing (400 ms wait + 9 characters at 90 ms): a frame every pass.
+  CHECK(r.board->player.busy((double)r.clock.t), "typing");
+  long f0 = r.display.frames;
+  r.run_for(800);
+  CHECK(r.display.frames - f0 > 20, "%ld frames while typing", r.display.frames - f0);
+  // Typed: still between cursor blinks (530 ms): a redraw per blink and per second (the frame key's clock).
+  r.run_for(1000);
+  CHECK(!r.board->player.busy((double)r.clock.t), "settled");
+  long f1 = r.display.frames;
+  r.run_for(5300);
+  long n = r.display.frames - f1;
+  CHECK(n >= 9 && n <= 17, "%ld frames in 5.3 s", n);
+  // The same message on the next update doesn't retype; a new one does.
+  r.server.v++;
+  r.run_for(12000);
+  CHECK(!r.board->player.busy((double)r.clock.t), "same id: no replay");
+  r.server.msg = "{\"id\":6,\"style\":\"type\",\"lines\":[\"Gone out\"]}";
+  r.server.v++;
+  bool replayed = false;
+  for (int i = 0; i < 4000 && !replayed; i++) {
+    r.run_for(5);
+    replayed = r.board->player.busy((double)r.clock.t);
+  }
+  CHECK(replayed, "a new message types out again");
+}
+
+static void test_announce_credits_roll_redraws_once_per_step() {
+  Rig r;
+  r.server.screen = "announce";
+  r.server.msg = "{\"id\":3,\"style\":\"roll\",\"lines\":[\"Dinner at 7\",\"bring wine\"]}";
+  r.board->connect();
+  r.run_for(3000);
+  CHECK(S(r.board) == "announce", "%s", S(r.board).c_str());
+  CHECK(!r.board->player.busy((double)r.clock.t), "moves on the frame key, not every frame");
+  long f0 = r.display.frames;
+  r.run_for(15000);
+  // 1 px every 150 ms (~100 steps), plus a redraw at each new second.
+  long n = r.display.frames - f0;
+  CHECK(n >= 95 && n <= 125, "%ld frames in 15 s", n);
+}
+
+static void test_announce_still_styles_draw_once() {
+  Rig r;
+  r.server.screen = "announce";
+  r.server.msg = "{\"id\":1,\"style\":\"note\",\"lines\":[\"Dinner at 7\"]}";
+  r.board->connect();
+  r.run_for(3000);
+  CHECK(S(r.board) == "announce", "%s", S(r.board).c_str());
+  CHECK(!r.board->player.busy((double)r.clock.t), "");
+  long f1 = r.display.frames;
+  r.run_for(20000);
+  // A new second or payload may redraw it; a note never animates.
+  CHECK(r.display.frames - f1 <= 25, "%ld frames", r.display.frames - f1);
+  int lit = 0;
+  for (int y = 0; y < 32; y++)
+    for (int x = 0; x < 64; x++)
+      if (r.display.last.get(x, y) == draw::hexc(0xd8d8d8)) lit++;
+  CHECK(lit > 30, "the note is drawn (%d px)", lit);
+}
+
+static void test_announce_without_a_message_asks_for_one() {
+  Rig r;
+  r.server.screen = "announce";
+  r.board->connect();
+  r.run_for(3000);
+  int lit = 0;
+  for (int y = 0; y < 32; y++)
+    for (int x = 0; x < 64; x++)
+      if (r.display.last.get(x, y) == draw::hexc(0x808080)) lit++;
+  CHECK(lit > 20, "call to action (%d px)", lit);
 }
 
 static void test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_times_a_second() {
@@ -1043,7 +1123,7 @@ static void test_buttons_override_until_the_phone_changes_something() {
   press(false);
   CHECK(S(r.board) == "transit", "%s", S(r.board).c_str());
   press(false);
-  CHECK(S(r.board) == "clock", "UP wraps around to the last screen: %s", S(r.board).c_str());
+  CHECK(S(r.board) == "announce", "UP wraps around to the last screen: %s", S(r.board).c_str());
   r.server.v = 5;  // a phone change: the board follows the server again
   r.run_for(30000);
   CHECK(S(r.board) == "transit", "%s", S(r.board).c_str());
@@ -1529,7 +1609,7 @@ static void test_buttons_slide_the_way_pressed() {
   r.btn.held_up = false;
   r.run_for(1000);
   press(false);  // UP wraps to the last screen: still from the left (the press, not the order)
-  CHECK(S(r.board) == "clock" && r.board->sliding(r.clock.t) && r.board->slide_dir() == -1, "%d", r.board->slide_dir());
+  CHECK(S(r.board) == "announce" && r.board->sliding(r.clock.t) && r.board->slide_dir() == -1, "%d", r.board->slide_dir());
   r.btn.held_up = false;
   r.run_for(1000);
   // A phone change after the presses fades.
@@ -1745,6 +1825,10 @@ int main() {
 #define T_(f) {#f, f}
       T_(test_a_held_train_stays_due_until_the_server_drops_it),
       T_(test_health_reports_the_skyline_capability),
+      T_(test_announce_typewriter_animates_its_intro_then_redraws_only_for_the_cursor),
+      T_(test_announce_credits_roll_redraws_once_per_step),
+      T_(test_announce_still_styles_draw_once),
+      T_(test_announce_without_a_message_asks_for_one),
       T_(test_clock_screen_fetches_its_cloud_strip_once_and_redraws_twenty_times_a_second),
       T_(test_clock_screen_crossfades_a_new_sky_once_its_strip_is_here),
       T_(test_cloud_strips_only_on_the_clock_screen),

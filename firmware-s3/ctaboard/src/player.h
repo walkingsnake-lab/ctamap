@@ -44,6 +44,7 @@ class Player {
   draw::Frames clouds;   // the skyline's cloud strips on hand: id -> 1664 packed bytes (those sky_fade still needs)
   draw::SkylineFader sky_fade;  // the skyline on screen and the crossfade from the last
   double wall_ms = 0;    // epoch ms, set by the Board before drawing (the skyline's animation clock)
+  double msg_start = 0;  // when the announce screen's message appeared (its intro plays from here)
 
   // ---- inputs ----
   void set_payload(const Value &payload, double ms);

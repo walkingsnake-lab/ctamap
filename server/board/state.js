@@ -10,12 +10,15 @@ const os = require('os');
 const path = require('path');
 const { measure } = require('./fonts');
 const { HEADER_NAME_PX } = require('./station-names');
+const { messageLayout, cleanMessage, MSG_STYLES, MSG_MAX } = require('./render');
 
 const FILE_NAME = 'board-state.json';
 const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
-const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock'];
+const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
+// Announce screen (design spec §15): saved presets per board.
+const MAX_PRESETS = 8;
 // Clock screen faces (design spec §14): the skyline, and the seventies
 // stripes with VCR digits.
 const CLOCK_FACES = ['skyline', 'seventies'];
@@ -28,14 +31,15 @@ const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
 // The knob's ring (design spec §10, "Knob"): categories, each opening one
 // screen. TRANSIT opens the transit-family screen last chosen (transitScreen:
 // rows or ticker); SPORTS opens the baseball screen. CLOCK (the clock screen,
-// its face set on the phone) joins the end of the ring on boards that can
-// draw it (knobOf's `clock`).
+// its face set on the phone) and ANNOUNCE (the owner's message) join the
+// end of the ring on boards that can draw them (knobOf's `clock`, `announce`).
 const KNOB_RING = ['auto', 'transit', 'weather', 'sports'];
-const CATEGORY_OF = { auto: 'auto', transit: 'transit', ticker: 'transit', weather: 'weather', baseball: 'sports', clock: 'clock' };
+const CATEGORY_OF = { auto: 'auto', transit: 'transit', ticker: 'transit', weather: 'weather', baseball: 'sports', clock: 'clock', announce: 'announce' };
+const EXTRA_RING = ['clock', 'announce'];
 const knobScreen = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'sports' ? 'baseball' : cat);
 // The ring and where the board's chosen screen sits on it (payload `knob`).
-const knobOf = (board, { clock = false } = {}) => {
-  const ring = clock ? [...KNOB_RING, 'clock'] : KNOB_RING;
+const knobOf = (board, { clock = false, announce = false } = {}) => {
+  const ring = [...KNOB_RING, ...(clock ? ['clock'] : []), ...(announce ? ['announce'] : [])];
   return { ring, at: Math.max(0, ring.indexOf(CATEGORY_OF[board.screen] || 'auto')) };
 };
 // Auto mode and screen options (design spec §10). Defaults reproduce the
@@ -167,6 +171,12 @@ function defaultBoard(stations) {
     // while both apply).
     wxRain: 'radar',
     wxRainEvery: 15,
+    // Announce screen (design spec §15): the message on it ({text, style,
+    // id}; null: none yet, the screen asks for one) and saved presets
+    // ({text, style}). id is the board's v when the message was set: a new
+    // one replays its intro on the board.
+    msg: null,
+    msgPresets: [],
     // Clock screen face (CLOCK_FACES), and the skyline face's quarter-hour boats.
     clockFace: 'skyline',
     boats: true,
@@ -200,6 +210,20 @@ function defaultBoard(stations) {
     fw: 'stable',
     fwRetry: 0,
   };
+}
+
+// A message for the announce screen: {text, style}, with the text cleaned
+// (characters outside the board's fonts dropped) and fitting the style on
+// one screen.
+function validMessage(m, where) {
+  if (!m || typeof m !== 'object' || Array.isArray(m)) throw new ValidationError(`${where} must be {text, style}`);
+  if (!MSG_STYLES.includes(m.style)) throw new ValidationError(`${where}.style must be one of ${MSG_STYLES.join(', ')}`);
+  if (typeof m.text !== 'string' || m.text.length > 4 * MSG_MAX) throw new ValidationError(`${where}.text must be a string`);
+  const text = cleanMessage(m.text);
+  if (!text) throw new ValidationError(`${where}.text is empty (the board can't draw emoji)`);
+  if ([...text].length > MSG_MAX) throw new ValidationError(`${where}.text is longer than ${MSG_MAX} characters`);
+  if (!messageLayout(text, m.style)) throw new ValidationError(`${where}.text doesn't fit the ${m.style} style on one screen`);
+  return { text, style: m.style };
 }
 
 // Validate a partial update and return the fields to apply. Throws
@@ -330,6 +354,13 @@ function validatePatch(patch, stations) {
         out[key] = val;
         break;
       }
+      case 'msg':
+        out.msg = val === null ? null : validMessage(val, 'msg');
+        break;
+      case 'msgPresets':
+        if (!Array.isArray(val) || val.length > MAX_PRESETS) throw new ValidationError(`msgPresets must be a list of up to ${MAX_PRESETS} messages`);
+        out.msgPresets = val.map((m, i) => validMessage(m, `msgPresets[${i}]`));
+        break;
       case 'fw':
         if (!(FW_CHANNELS.includes(val) || (typeof val === 'string' && FW_PIN_RE.test(val)))) {
           throw new ValidationError(`fw must be one of ${FW_CHANNELS.join(', ')}, or a build's commit`);
@@ -387,6 +418,13 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       for (const b of Object.values(state.boards)) {
         if (!b) continue;
         for (const [k, v] of Object.entries(defaults)) if (!Object.hasOwn(b, k)) b[k] = Array.isArray(v) ? [...v] : v;
+      }
+      // The split-flap message style was removed (Nov 2026): saved ones load as notes.
+      const unflap = (m) => (m && m.style === 'flap' ? { ...m, style: 'note' } : m);
+      for (const b of Object.values(state.boards)) {
+        if (!b) continue;
+        b.msg = unflap(b.msg);
+        if (Array.isArray(b.msgPresets)) b.msgPresets = b.msgPresets.map(unflap);
       }
       // 54th/Cermak's short name was 54th.
       for (const b of Object.values(state.boards)) if (b && Array.isArray(b.rows)) b.rows = b.rows.map((r) => (r === 'PK:54th' ? 'PK:54/Crmk' : r));
@@ -474,6 +512,8 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       // A destination filter belongs to its station: a new station starts
       // with all destinations unless the patch sets rows too.
       if (fields.station && fields.station.mapid !== board.station.mapid && !fields.rows) fields.rows = [];
+      // A new message replays its intro on the board: its id changes.
+      if (fields.msg) fields.msg.id = (board.v || 0) + 1;
       Object.assign(board, fields);
       if (fields.screen === 'transit' || fields.screen === 'ticker') board.transitScreen = fields.screen;
       board.v = (board.v || 0) + 1;
@@ -485,7 +525,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     // The knob chose a category on its ring: set the screen it opens. Same
     // as a phone change (bumps v).
     select(id, cat) {
-      if (!KNOB_RING.includes(cat) && cat !== 'clock') throw new ValidationError(`s must be one of ${[...KNOB_RING, 'clock'].join(', ')}`);
+      if (!KNOB_RING.includes(cat) && !EXTRA_RING.includes(cat)) throw new ValidationError(`s must be one of ${[...KNOB_RING, ...EXTRA_RING].join(', ')}`);
       if (!Object.hasOwn(state.boards, id)) return null;
       return this.update(id, { screen: knobScreen(state.boards[id], cat) });
     },
@@ -503,4 +543,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };

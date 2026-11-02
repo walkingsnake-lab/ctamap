@@ -73,6 +73,30 @@
   #fwBuilds li .nm { text-transform: none; letter-spacing: 0; }
   #fwBuilds li button { width: auto; padding: 0 10px; font-size: 14px; }
   #fwBuilds li button[aria-pressed="true"] { background: var(--accent); color: #111; border-color: var(--accent); }
+  /* Screen picker: two rows of four. */
+  .seg.grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .seg.grid button { border-bottom: 1px solid #333; }
+  .seg.grid button:nth-child(4n) { border-right: 0; }
+  .seg.grid button:nth-child(n+5) { border-bottom: 0; }
+  /* Announce: board renders in a black bezel, square LEDs at exact multiples. */
+  .bezel { background: #000; border-radius: 10px; padding: 8px; }
+  .bezel canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+  textarea { width: 100%; font: inherit; color: var(--fg); background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; resize: vertical; margin-top: 12px; }
+  .fit { color: var(--muted); font-size: 13px; margin: 6px 2px 0; min-height: 18px; }
+  .fit.bad { color: var(--err); }
+  .styles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .styles button { font: inherit; font-size: 13px; color: var(--fg); background: #000; border: 2px solid #2a2a2a; border-radius: 10px; padding: 6px 6px 4px; cursor: pointer; text-align: left; }
+  .styles button canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; margin-bottom: 4px; }
+  .styles button[aria-pressed="true"] { border-color: var(--fg); }
+  .styles button:disabled { cursor: default; color: #666; }
+  .styles button:disabled canvas { opacity: .35; }
+  .styles button small { display: block; color: var(--err); }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .actions .primary { flex: 1; font: inherit; font-weight: 600; color: #111; background: var(--fg); border: 0; border-radius: 9px; padding: 12px; cursor: pointer; }
+  .actions .primary:disabled { background: #333; color: #888; cursor: default; }
+  .actions .small:disabled { opacity: .4; cursor: default; }
+  #msgPresets li { cursor: pointer; }
+  #msgPresets li .nm { text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fg); }
   /* Settings tabs: one screen's settings at a time. */
   .tabs { display: flex; gap: 4px; margin-top: 18px; overflow-x: auto; scrollbar-width: none; position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0; }
@@ -105,13 +129,14 @@
 
   <section>
     <h2>Screen</h2>
-    <div class="seg" id="screen">
+    <div class="seg grid" id="screen">
       <button data-v="auto">Auto</button>
       <button data-v="transit">Transit</button>
       <button data-v="ticker">Ticker</button>
       <button data-v="weather">Weather</button>
       <button data-v="baseball">Baseball</button>
       <button data-v="clock">Clock</button>
+      <button data-v="announce">Announce</button>
     </div>
     <p class="hint" id="screenHint">Auto stays on the transit screen.</p>
     <div id="autoOpts" hidden>
@@ -185,6 +210,7 @@
     <button role="tab" data-tab="weather">Weather</button>
     <button role="tab" data-tab="baseball">Baseball</button>
     <button role="tab" data-tab="clock">Clock</button>
+    <button role="tab" data-tab="announce">Announce</button>
     <button role="tab" data-tab="health">Board</button>
   </nav>
 
@@ -238,6 +264,30 @@
       <select id="radarFrame" aria-label="Loop speed" style="width:auto"><option value="300">Fast (0.3 s)</option><option value="400">Quicker (0.4 s)</option><option value="500">Normal (0.5 s)</option><option value="700">Slower (0.7 s)</option><option value="1000">Slow (1 s)</option></select></div>
     <div class="row"><span>Pause on the newest frame</span>
       <select id="radarHold" aria-label="Pause on the newest frame" style="width:auto"><option value="2">2 sec</option><option value="3">3 sec</option><option value="4">4 sec</option><option value="6">6 sec</option><option value="8">8 sec</option></select></div>
+  </section>
+
+  <section data-tab="announce">
+    <h2>Announce</h2>
+    <div class="bezel"><canvas id="msgPreview" width="320" height="160" aria-label="The message as the board will show it (tap to replay)"></canvas></div>
+    <textarea id="msgText" rows="3" maxlength="300" placeholder="Dinner at 7" aria-label="Message" autocomplete="off"></textarea>
+    <p class="fit" id="msgFit"></p>
+    <div class="styles" id="msgStyles">
+      <button data-v="note"><canvas width="128" height="64"></canvas>Note</button>
+      <button data-v="type"><canvas width="128" height="64"></canvas>Typewriter</button>
+      <button data-v="big"><canvas width="128" height="64"></canvas>Big word</button>
+      <button data-v="roll"><canvas width="128" height="64"></canvas>Credits roll</button>
+    </div>
+    <div class="actions">
+      <button class="primary" id="msgShow">Show on board</button>
+      <button class="small" id="msgSave">Save as preset</button>
+    </div>
+    <p class="hint" id="msgHint"></p>
+  </section>
+
+  <section data-tab="announce">
+    <h2>Presets</h2>
+    <ul id="msgPresets"></ul>
+    <p class="hint" id="msgPresetsHint"></p>
   </section>
 
   <section data-tab="clock">
@@ -461,9 +511,9 @@
       img.onload = () => { $('preview').src = img.src; };
       img.src = `sim.png?b=${enc(boardId)}&scale=8&t=${Date.now()}`;
       const scr = visitScreen(p);
-      if (!tabChosen) { showTab(['transit', 'ticker', 'weather', 'baseball', 'clock'].includes(scr) ? scr : 'transit'); tabChosen = true; }
+      if (!tabChosen) { showTab(['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'].includes(scr) ? scr : 'transit'); tabChosen = true; }
       const shown = scr === 'transit' && p.view === 'chrono' ? 'transit (one train per row)' : scr;
-      $('caption').textContent = `Showing ${shown} · data ${p.age}s old`;
+      $('caption').textContent = `Showing ${shown} · ` + (p.age == null ? 'no train data yet' : `data ${p.age}s old`);
     } catch (e) {
       $('caption').textContent = 'Preview unavailable: ' + e.message;
     }
@@ -477,6 +527,7 @@
     tab = name;
     for (const b of $('tabs').querySelectorAll('button')) b.setAttribute('aria-selected', String(b.dataset.tab === name));
     for (const sec of document.querySelectorAll('.col-side section[data-tab]')) sec.hidden = sec.dataset.tab !== name;
+    if (name === 'announce') loadDraw().then(renderAnnounce).catch((e) => setStatus('Could not load the message preview: ' + e.message, true));
   }
   $('tabs').addEventListener('click', (e) => { const t = e.target.dataset.tab; if (t) showTab(t); });
   showTab('transit');
@@ -604,7 +655,7 @@
     const bbText = teams.length ? ` Baseball takes over during ${[teams.includes('cubs') && 'Cubs', teams.includes('sox') && 'White Sox', teams.includes('post') && 'postseason'].filter(Boolean).join(', ')} games.` : ' Baseball never takes over.';
     const wvText = wv === 'off' ? '' : ` The weather screen shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min${wv === 'rain' ? ' while it\'s raining' : ''}.`;
     const ajText = board.alertJump === 'warning' ? ' During NWS warnings it stays on the weather screen.' : board.alertJump === 'all' ? ' During NWS watches and warnings it stays on the weather screen.' : '';
-    $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : board.screen === 'clock' ? 'The clock face (set under Clock). Needs an S3 with clock firmware; other boards show Transit.' : 'Stays on this screen until you change it.')
+    $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : board.screen === 'clock' ? 'The clock face (set under Clock). Needs an S3 with clock firmware; other boards show Transit.' : board.screen === 'announce' ? 'Your message (set under Announce). Needs an S3 with announce firmware; other boards show Transit.' : 'Stays on this screen until you change it.')
       : `Auto ${mainText}.${bbText}${wvText}${ajText}`;
     const fixed = Number.isInteger(board.bright);
     pressed('bright', fixed ? 'fixed' : board.bright);
@@ -701,6 +752,122 @@
         : 'it hides the weather strip first, then the header (up to 5 rows). Past 5, it lists one train per row with the header and no weather strip.')
       + (hidden.length ? ` Hidden right now: ${hidden.map((h) => (h === 'header' && board.transitLayout === 'key' ? 'station line' : h === 'weather' ? 'weather strip' : h)).join(' and ')}.` : '');
     renderDests();
+    renderAnnounce();
+  }
+
+  // ---- announce ----
+  // The draft is drawn here with the board's own renderer (draw.js and its
+  // fonts, loaded on first use), so the preview, the fit line and the
+  // disabled styles agree with what the server accepts.
+  const MSG_NAMES = { note: 'Note', type: 'Typewriter', big: 'Big word', roll: 'Credits roll' };
+  let D = null, drawLoading = null;
+  function loadDraw() {
+    if (D) return Promise.resolve(D);
+    if (!drawLoading) drawLoading = (async () => {
+      await new Promise((ok, fail) => { const sc = document.createElement('script'); sc.src = 'draw.js'; sc.onload = ok; sc.onerror = () => fail(new Error('draw.js')); document.head.append(sc); });
+      D = window.BoardDraw.create(await api('sim-assets.json'));
+      return D;
+    })();
+    return drawLoading;
+  }
+  // Square LEDs on black, each `s` canvas pixels, with a 1-in-5 gap.
+  function paintLed(canvas, f) {
+    const s = canvas.width / 64, g = s >= 4 ? Math.round(s / 5) : 0, ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+      const [r, gg, b] = f.get(x, y);
+      ctx.fillStyle = r || gg || b ? `rgb(${r},${gg},${b})` : '#0d0d0d';
+      ctx.fillRect(x * s, y * s, s - g, s - g);
+    }
+  }
+  let draft = null;            // {text, style}: what's being edited
+  let introStart = 0, introRaf = 0, liveTimer = null, lastFit = null;
+  const msgOf = (m) => { const lay = m && D.messageLayout(m.text, m.style); return lay ? { id: 0, style: m.style, ...lay } : null; };
+  const sameMsg = (a, b) => !!a && !!b && a.style === b.style && D.cleanMessage(a.text) === D.cleanMessage(b.text);
+  const onBoard = () => board.screen === 'announce' && sameMsg(draft, board.msg);
+  const live = () => board.screen === 'announce' && !!board.msg;
+  // The draft preview, its intro played from introStart.
+  function paintDraft(ts) {
+    cancelAnimationFrame(introRaf);
+    let m = msgOf(draft);
+    const t = (ts != null ? ts : performance.now()) - introStart;
+    // A draft that doesn't fit: the last one that did, dimmed (not the empty screen).
+    if (m) lastFit = m;
+    const dim = !m && D.cleanMessage(draft.text) && lastFit;
+    if (dim) m = lastFit;
+    paintLed($('msgPreview'), D.render({ bright: dim ? 30 : 100, screen: 'announce', msg: m }, { t: dim ? undefined : t }));
+    if (dim) return;
+    // Keep animating the intro (and the typewriter's cursor) while the preview is on screen.
+    if (m && (t < D.messageIntroMs(m) || m.style === 'type' || m.style === 'roll') && $('msgPreview').offsetParent) introRaf = requestAnimationFrame(paintDraft);
+  }
+  function replay() { introStart = performance.now(); if (D) paintDraft(); }
+  function renderAnnounce() {
+    if (!D || !board) return;
+    if (!draft) {
+      draft = board.msg ? { text: board.msg.text, style: board.msg.style } : { text: '', style: 'note' };
+      $('msgText').value = draft.text;
+    }
+    const clean = D.cleanMessage(draft.text);
+    const fits = {};
+    for (const st of Object.keys(MSG_NAMES)) fits[st] = D.messageLayout(draft.text, st);
+    for (const b of $('msgStyles').querySelectorAll('button')) {
+      const st = b.dataset.v;
+      b.setAttribute('aria-pressed', String(st === draft.style));
+      b.disabled = !!clean && !fits[st];
+      b.querySelector('small')?.remove();
+      if (b.disabled) { const sm = document.createElement('small'); sm.textContent = 'too long'; b.append(sm); }
+      // The draft in each style that fits it; a sample in the others.
+      const sample = clean && fits[st] ? { text: draft.text, style: st } : { text: { note: 'Dinner at 7', type: 'Back by 6', big: 'Yay!', roll: 'Thanks for coming!' }[st], style: st };
+      paintLed(b.querySelector('canvas'), D.render({ bright: 100, screen: 'announce', msg: msgOf(sample) }));
+    }
+    const lay = fits[draft.style];
+    const dropped = [...draft.text.replace(/\s/g, '')].length > [...clean.replace(/\s/g, '')].length;
+    let fit = '';
+    if (!clean) fit = draft.text.trim() ? 'The board can\'t show these characters (emoji).' : 'Type a message.';
+    else if (lay) fit = `Fits ${MSG_NAMES[draft.style]}` + (draft.style === 'big' ? '.' : draft.style === 'roll' ? ` · ${lay.lines.length} line${lay.lines.length > 1 ? 's' : ''}, rolling up and repeating.` : `${lay.sm ? ' in small text' : ''} · ${lay.lines.length} of ${lay.sm ? 5 : 3} lines.`);
+    else {
+      const alt = Object.keys(MSG_NAMES).filter((st) => fits[st]).map((st) => MSG_NAMES[st]);
+      fit = `Too long for ${MSG_NAMES[draft.style]}.` + (alt.length ? ` Fits ${alt.join(', ')}.` : ' Shorten it to fit.');
+    }
+    if (clean && dropped) fit += ' Emoji are left out.';
+    $('msgFit').textContent = fit;
+    $('msgFit').className = 'fit' + (clean && !lay ? ' bad' : '');
+    const ok = !!lay;
+    $('msgShow').disabled = !ok || onBoard();
+    $('msgShow').textContent = onBoard() ? 'On the board ✓' : 'Show on board';
+    const presets = board.msgPresets || [];
+    $('msgSave').disabled = !ok || presets.length >= 8 || presets.some((pr) => sameMsg(pr, draft));
+    $('msgHint').textContent = live()
+      ? 'Live on the board: edits go up a second after you stop typing.'
+      : 'Shows only when chosen (here, the Screen picker or the knob) and stays until another screen is. Needs an S3 with announce firmware.';
+    $('msgPresets').replaceChildren(...presets.map((pr, i) => {
+      const li = document.createElement('li');
+      const nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = pr.text.replace(/\n/g, ' / ');
+      const sub = document.createElement('small');
+      sub.textContent = MSG_NAMES[pr.style] || pr.style;
+      nm.append(sub);
+      const del = document.createElement('button');
+      del.textContent = '×';
+      del.setAttribute('aria-label', 'Delete preset');
+      del.onclick = (e) => { e.stopPropagation(); save({ msgPresets: presets.filter((_, k) => k !== i) }); };
+      li.append(nm, del);
+      li.onclick = () => { draft = { text: pr.text, style: pr.style }; $('msgText').value = pr.text; draftChanged(); };
+      return li;
+    }));
+    $('msgPresetsHint').textContent = presets.length ? 'Tap one to load it into the message above.' : 'None yet. Save a message to put it back up with one tap.';
+    paintDraft();
+  }
+  // While the board shows a message, edits go up about a second after typing stops.
+  function draftChanged(restart = true) {
+    if (restart) introStart = performance.now();
+    renderAnnounce();
+    clearTimeout(liveTimer);
+    if (live() && !sameMsg(draft, board.msg) && D.messageLayout(draft.text, draft.style)) {
+      liveTimer = setTimeout(() => { if (live() && D.messageLayout(draft.text, draft.style) && !sameMsg(draft, board.msg)) save({ msg: { ...draft } }); }, 1000);
+    }
   }
 
   function renderDests() {
@@ -746,6 +913,14 @@
   }
 
   // ---- events ----
+  $('msgText').addEventListener('input', (e) => { draft.text = e.target.value; draftChanged(false); });
+  $('msgStyles').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (b && !b.disabled && draft) { draft.style = b.dataset.v; draftChanged(); }
+  });
+  $('msgPreview').addEventListener('click', replay);
+  $('msgShow').addEventListener('click', () => { clearTimeout(liveTimer); if (draft) save({ msg: { ...draft }, screen: 'announce' }); });
+  $('msgSave').addEventListener('click', () => { if (draft) save({ msgPresets: [...(board.msgPresets || []), { ...draft }] }); });
   $('screen').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !e.target.disabled) save({ screen: v }); });
   $('radarEvery').addEventListener('change', (e) => save({ radarEvery: Number(e.target.value) }));
   const autoMains = () => ['transit', 'ticker'].filter((k) => $(k === 'transit' ? 'autoTransit' : 'autoTicker').checked);

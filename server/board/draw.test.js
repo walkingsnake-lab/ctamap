@@ -1445,3 +1445,108 @@ test('timeSteps (ts): the third time a step dimmer than the second', () => {
   assert.ok(count(off, draw.C.dimAmber, 57, top0, 63, top0 + 4) > 0);
   assert.equal(count(off, draw.C.dimAmber2, 0, 0, 63, 31), 0);
 });
+
+// ---- announce screen (design spec §15) ----
+
+test('messageLayout: note wraps 5x7 to 3 lines, then Tom Thumb (uppercase) to 5, else does not fit', () => {
+  assert.deepEqual(draw.messageLayout('Dinner at 7', 'note'), { lines: ['Dinner at 7'] });
+  assert.deepEqual(draw.messageLayout('Grab milk on the way home please', 'note'), { lines: ['Grab milk on', 'the way home', 'please'] });
+  const long = draw.messageLayout('Leaving at 8:15 for the game. Meet at the north end of the Addison platform.', 'note');
+  assert.equal(long.sm, 1);
+  assert.ok(long.lines.length <= 5 && long.lines.every((l) => l === l.toUpperCase() && measure('small', l) <= 64));
+  assert.equal(draw.messageLayout('word '.repeat(60), 'note'), null);
+});
+
+test('messageLayout: line breaks force a new line; emoji and private-use glyphs are dropped; empty is null', () => {
+  assert.deepEqual(draw.messageLayout('Hi\nthere', 'note'), { lines: ['Hi', 'there'] });
+  assert.deepEqual(draw.messageLayout('  Cake \u{1F382}  time ', 'note'), { lines: ['Cake time'] });
+  assert.equal(draw.cleanMessage(`a${String.fromCodePoint(0xe002)}b\r\nc\td`), 'ab\nc d');
+  assert.equal(draw.cleanMessage('‘Hi’ — café…'), '‘Hi’ — café…', 'phone punctuation and Latin-1 stay');
+  assert.equal(draw.messageLayout('\u{1F382}', 'note'), null);
+  assert.equal(draw.messageLayout('', 'big'), null);
+});
+
+test('messageLayout: typewriter leaves room for the cursor; big word is one 2x line; split-flap is gone', () => {
+  assert.deepEqual(draw.MSG_STYLES, ['note', 'type', 'big', 'roll']);
+  assert.equal(draw.messageLayout('Dinner at 7', 'flap'), null, 'removed Nov 2026');
+  const typed = draw.messageLayout('Gone to the gym. Back by 6.', 'type');
+  assert.ok(typed.lines.every((l) => measure('5x7', l) + 1 + 4 <= 64), 'the cursor fits after every line');
+  assert.deepEqual(draw.messageLayout('Yay!', 'big'), { lines: ['Yay!'] });
+  assert.equal(draw.messageLayout('Hooray!!', 'big'), null);
+  assert.equal(draw.messageLayout('Go\nnow', 'big'), null);
+  assert.equal(draw.messageLayout('Hi', 'marquee'), null, 'styles not built yet');
+});
+
+const msgPayload = (text, style) => ({ bright: 100, screen: 'announce', msg: { id: 1, style, ...draw.messageLayout(text, style) } });
+const litRows = (f) => { const rows = new Set(); for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y).some((v) => v)) rows.add(y); return [...rows]; };
+
+test('announce: no message shows a call to action; a note is centered', () => {
+  const cta = draw.render({ bright: 100, screen: 'announce', msg: null });
+  assert.ok(litRows(cta).length > 0);
+  const f = draw.render(msgPayload('Dinner at 7', 'note'));
+  let x0 = 64, x1 = -1;
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y).some((v) => v)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+  assert.ok(Math.abs(x0 - (63 - x1)) <= 1, `centered: ${x0}..${x1}`);
+  assert.deepEqual(hex(f.get(x0, litRows(f).find((y) => f.get(x0, y).some((v) => v)))), '#d8d8d8');
+});
+
+test('announce typewriter: types one character every 90 ms, cursor steady while typing, then blinking', () => {
+  const p = msgPayload('Go!', 'type');
+  const amber = (f) => { let n = 0; for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (hex(f.get(x, y)) === '#ffb000') n++; return n; };
+  const cursor = (f) => { let n = 0; for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (hex(f.get(x, y)) === '#cc8d00') n++; return n; };
+  const at = (t) => draw.render(p, { t });
+  assert.equal(amber(at(0)), 0);
+  assert.equal(cursor(at(0)), 28, '4 x 7 block');
+  assert.ok(amber(at(400 + 90)) > 0 && amber(at(400 + 90)) < amber(at(400 + 180)));
+  const intro = draw.messageIntroMs(p.msg);
+  assert.equal(intro, 400 + 3 * 90);
+  assert.equal(cursor(at(intro)), 28);
+  assert.equal(cursor(at(intro + 530)), 0, 'blink off');
+  assert.equal(cursor(at(intro + 1060)), 28);
+  assert.deepEqual([draw.messageTick(p.msg, intro - 1), draw.messageTick(p.msg, intro), draw.messageTick(p.msg, intro + 530)], [-1, 0, 1]);
+  assert.equal(draw.messageTick(msgPayload('Hi', 'note').msg, 5000), 0, 'still styles never change');
+});
+
+test('messageLayout: credits roll scrolls, so it takes more than a screen (up to 16 lines of 5x7)', () => {
+  const long = 'Leaving at 8:15 for the game. Meet at the north end of the Addison platform, by the stairs.';
+  const lay = draw.messageLayout(long, 'roll');
+  assert.ok(lay.lines.length > 3 && !lay.sm);
+  assert.ok(lay.lines.every((l) => measure('5x7', l) <= 64));
+  assert.equal(draw.messageLayout(Array(17).fill('Hi').join('\n'), 'roll'), null, '17 lines');
+});
+
+test('announce credits roll: rises 1 px every 150 ms from below the panel, fades at the edges, pauses, loops', () => {
+  const p = msgPayload('Dinner at 7\nbring wine', 'roll');
+  const rows = (t) => litRows(draw.render(p, { t }));
+  assert.deepEqual(rows(0), [], 'starts below the panel');
+  // The first line's top row (baseline - 7) enters at the bottom after 2 + k steps.
+  const top = (t) => Math.min(...rows(t));
+  const a = top(20 * 150), b = top(21 * 150);
+  assert.equal(a - b, 1, 'one pixel per step');
+  assert.equal(top(20 * 150 + 149), a, 'no move between steps');
+  // Gone after the last line clears the top, then a blank pause, then it comes round again.
+  const travel = 40 + 2 + 10;
+  assert.deepEqual(rows(travel * 150), []);
+  assert.deepEqual(rows(travel * 150 + 1499), []);
+  assert.deepEqual(rows(travel * 150 + 1500), [], 'next pass starts below the panel');
+  assert.equal(top(travel * 150 + 1500 + 20 * 150), a, 'same as the first pass');
+  // Edge rows fade: a line crossing the bottom rows is dimmer than mid-panel.
+  const f = draw.render(p, { t: 7 * 150 });  // first line on rows 26-32
+  const lit = (y) => { for (let x = 0; x < 64; x++) { const c = f.get(x, y); if (c.some((v) => v)) return c[0]; } return 0; };
+  assert.ok(lit(31) > 0 && lit(31) < 0xd8 && lit(29) > lit(31), `fade ${lit(29)} > ${lit(31)}`);
+  // A still (no t): the block centered.
+  const still = litRows(draw.render(p));
+  assert.ok(Math.abs(still[0] - (31 - still[still.length - 1])) <= 2, still.join());
+  // The board redraws once per step.
+  assert.deepEqual([draw.messageTick(p.msg, 0), draw.messageTick(p.msg, 149), draw.messageTick(p.msg, 150)], [0, 0, 1]);
+  assert.equal(draw.messageIntroMs(p.msg), 0);
+});
+
+test('announce big word: 2x text, shaded pink at the top to amber at the bottom', () => {
+  const f = draw.render(msgPayload('HI', 'big'));
+  const rows = litRows(f);
+  assert.equal(rows.length % 2, 0, 'doubled rows');
+  const colorAt = (y) => { for (let x = 0; x < 64; x++) if (f.get(x, y).some((v) => v)) return f.get(x, y); return null; };
+  const top = colorAt(rows[0]), bot = colorAt(rows[rows.length - 1]);
+  assert.ok(top[1] < bot[1], 'greener (more amber) lower down');
+});

@@ -17,11 +17,11 @@ namespace screen {
 
 // In the order the buttons step through them and screens slide (a later
 // one comes in from the right): the knob ring's order.
-enum class Screen : uint8_t { Transit, Ticker, Weather, Baseball, Clock };
-const int N_SCREENS = 5;
+enum class Screen : uint8_t { Transit, Ticker, Weather, Baseball, Clock, Announce };
+const int N_SCREENS = 6;
 
 inline const char *name(Screen s) {
-  static const char *const NAMES[N_SCREENS] = {"transit", "ticker", "weather", "baseball", "clock"};
+  static const char *const NAMES[N_SCREENS] = {"transit", "ticker", "weather", "baseball", "clock", "announce"};
   return NAMES[(int)s];
 }
 

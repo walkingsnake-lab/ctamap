@@ -246,7 +246,7 @@ struct RenderOpts {
   std::optional<int> game;
   const Rolls *rolls = nullptr;
   const Logos *logos = nullptr;
-  std::optional<double> t;
+  std::optional<double> t;  // weather: ms into the radar loop; announce: ms since the message appeared (none: settled)
   NumRoller *roller = nullptr;
   const Rolls *nums = nullptr;  // fixed clock rolls (tests)
   bool apply_bright = true;     // false: the display dims in hardware (payload `bright`)
@@ -295,6 +295,12 @@ const double SCREEN_FADE_MS = SCREEN_FADE_OUT_MS + SCREEN_FADE_IN_MS;
 void fade_frames(const uint8_t *from, Frame &f, double t);
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);
+
+// Announce screen (draw.js messageIntroMs / messageTick): how long a message's
+// intro runs (ms; 0 for the still styles), and after it a number that changes
+// whenever the frame does (the typewriter cursor's blink; -1 during the intro).
+double message_intro_ms(const Value &m);
+long long message_tick(const Value &m, double t);
 
 // Which skyline is on screen and the crossfade from the last (draw.js
 // createSkylineFader; same rules): set() with each payload's skyline (live:

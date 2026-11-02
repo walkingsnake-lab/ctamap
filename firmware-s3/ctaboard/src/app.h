@@ -186,7 +186,7 @@ const long long SKY_EVERY = 3000;       // the skyline's cloud strip, when the p
 // What this firmware draws beyond the original screens (health `hk`, contract):
 // the server sends the clock screen only to boards that report `skyline`,
 // and its seventies face only to those that also report `seventies`.
-const char *const CAPS = "skyline:seventies";
+const char *const CAPS = "skyline:seventies:announce";
 const int FAILS_BEFORE_RECONNECT = 3;
 const long long SETUP_AFTER_MS = 600000;  // no network joined this long: open the setup network
 const long long HEALTH_EVERY = 60000;  // ms between health snapshots sent with the version check

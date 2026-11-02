@@ -1499,3 +1499,56 @@ test('weather icons are static: no radar.iconAnim, and the old per-layout settin
   for (const key of ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar']) assert.equal((await post({ [key]: 'animated' })).status, 400);
   await s.close();
 });
+
+test('announce screen: only for firmware that reports it (hk=...:announce); the msg section rides with it', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const get = async (q = '') => (await s.req('/board/update?b=home' + q, h)).body;
+  s.store.update('home', { screen: 'announce', msg: { text: 'Dinner at 7\nbring wine', style: 'type' } });
+
+  // Firmware without it: transit, no ANNOUNCE on the knob, no msg.
+  let b = await get('&hk=skyline');
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.msg, undefined);
+  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports', 'clock']);
+  assert.equal((await get('&hk=skyline&s=announce')).for, 'transit', 'a press asking for announce gets transit too');
+
+  b = await get('&hk=skyline:seventies:announce');
+  assert.equal(b.screen, 'announce');
+  assert.equal(b.for, 'announce');
+  assert.equal(b.rows, undefined, 'transit sections stay home');
+  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports', 'clock', 'announce'], at: 5 });
+  assert.deepEqual(b.msg, { id: s.store.get('home').msg.id, style: 'type', lines: ['Dinner at 7', 'bring wine'] });
+  // Other screens leave it out; the simulator's copy keeps it.
+  s.store.update('home', { screen: 'transit' });
+  assert.equal((await get('&hk=skyline:seventies:announce')).msg, undefined);
+  assert.equal((await s.req(FULL)).body.msg.style, 'type');
+
+  // The knob can choose ANNOUNCE.
+  const sel = await s.req('/board/select?b=home&s=announce&hk=skyline:seventies:announce', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(sel.status, 200);
+  assert.equal(sel.body.screen, 'announce');
+  assert.equal(sel.body.msg.lines.length, 2);
+
+  // No message yet: the board gets msg null (its call to action).
+  s.store.update('home', { msg: null });
+  assert.equal((await get('&hk=announce')).msg, null);
+  await s.close();
+});
+
+test('announce: the control page sets the message; a message that does not fit is a 400', async () => {
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) }) });
+  const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
+  let r = await post({ msg: { text: 'Yay!', style: 'big' }, screen: 'announce' });
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.msg.text, r.body.screen], ['Yay!', 'announce']);
+  r = await post({ msg: { text: 'Hooray for everyone', style: 'big' } });
+  assert.equal(r.status, 400);
+  assert.match(r.body.detail, /doesn't fit the big style/);
+  // sim.png draws it on request.
+  const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=announce&scale=1`);
+  assert.equal(png.status, 200);
+  assert.equal(png.headers.get('content-type'), 'image/png');
+  await s.close();
+});
