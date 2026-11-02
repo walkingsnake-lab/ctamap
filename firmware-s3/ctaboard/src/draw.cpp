@@ -2626,8 +2626,7 @@ static void render_analog(const Value &p, Frame &f, std::optional<double> now_o)
 // Mirrors renderDayNight() and DN in draw.js.
 static const int DN_ROWS = 26;
 static const long long DN_NIGHT12 = -2079LL * 10000;
-static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_SUN = hexc(0xffe060), DN_SUN_ARM = hexc(0xa07818),
-                 DN_HERE = hexc(0xffffff);
+static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_HERE = hexc(0xffffff);
 static const int DN_NIGHT_K[] = {104, 116, 140};
 static RGB world_color(char code) {
   for (int i = 0; i < assets::WORLD_PALETTE_N; i++)
@@ -2665,11 +2664,6 @@ static void render_daynight(const Value &p, Frame &f, std::optional<double> now_
         f.set(x, y, RGB{mix_int(n.r, d.r, k), mix_int(n.g, d.g, k), mix_int(n.b, d.b, k)});
       }
     }
-    long long sx = fdiv((lon10 + 1800) * 8, 450), sy = fdiv(6750 - dec10 * 8, 450);
-    const int arms[4][2] = {{0, -1}, {-1, 0}, {1, 0}, {0, 1}};
-    for (auto &a : arms)
-      if (sy + a[1] >= 0 && sy + a[1] < DN_ROWS) f.fill((int)fmod_floor(sx + a[0], 64), (int)(sy + a[1]), 1, 1, DN_SUN_ARM);
-    if (sy >= 0 && sy < DN_ROWS) f.fill((int)sx, (int)sy, 1, 1, DN_SUN);
     const Value &here = dn["here"];
     if (here.is_arr() && here.size() == 2 && here[1].num(0) < DN_ROWS) f.fill((int)here[0].num(0), (int)here[1].num(0), 1, 1, DN_HERE);
   }
