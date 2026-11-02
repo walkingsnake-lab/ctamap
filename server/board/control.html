@@ -251,6 +251,10 @@
       <button data-v="gradient">Gradient</button>
     </div>
     <p class="hint" id="clockFaceHint"></p>
+    <div id="gradientOpts">
+    <div class="row"><span>Lit digits on black</span><label class="switch"><input type="checkbox" id="gradInvert"><span></span></label></div>
+    <p class="hint">Off: the digits are cut out of the gradient. On: the digits carry the gradient and the rest is black.</p>
+    </div>
     <div id="skylineOpts">
     <div class="row"><span>Cloud drift</span>
       <select id="cloudDrift" aria-label="Cloud drift" style="width:auto"><option value="off">Off</option><option value="slow">Slow</option><option value="normal">Normal</option></select></div>
@@ -640,6 +644,8 @@
     const face = board.clockFace || 'skyline';
     pressed('clockFace', face);
     $('skylineOpts').hidden = face !== 'skyline';
+    $('gradientOpts').hidden = face !== 'gradient';
+    $('gradInvert').checked = board.gradInvert === true;
     $('clockFaceHint').textContent = {
       skyline: 'The skyline from the lake across Navy Pier, drawn for the weather and the time of day. Temperature bottom left (a watch or warning takes its place), clock bottom right.',
       seventies: 'The time in VCR digits banded sunflower, orange and rust, with three stripes sweeping along the bottom and up the right edge. Digits roll at each minute.',
@@ -792,7 +798,7 @@
   $('boats').addEventListener('change', (e) => save({ boats: e.target.checked }));
   $('cloudDrift').addEventListener('change', (e) => save({ cloudDrift: e.target.value }));
   for (const k of ['wheelSpeed', 'rippleSpeed', 'rainSpeed']) $(k).addEventListener('change', (e) => save({ [k]: e.target.value }));
-  for (const k of ['twinkle', 'showTemp']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
+  for (const k of ['twinkle', 'showTemp', 'gradInvert']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   for (const k of ['tickerHold', 'tickerSlide', 'radarFrame', 'radarHold', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('tickerFill').addEventListener('input', (e) => { $('tickerFillV').textContent = `${e.target.value}%`; });
   $('tickerFill').addEventListener('change', (e) => save({ tickerFill: Number(e.target.value) }));

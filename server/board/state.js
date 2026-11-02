@@ -180,6 +180,8 @@ function defaultBoard(stations) {
     twinkle: true,
     rainSpeed: 'normal',
     showTemp: true,
+    // Gradient clock face: lit gradient digits on black instead of digits cut out of the gradient.
+    gradInvert: false,
     wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
@@ -247,6 +249,7 @@ function validatePatch(patch, stations) {
       case 'boats':
       case 'twinkle':
       case 'showTemp':
+      case 'gradInvert':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;

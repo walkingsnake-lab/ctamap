@@ -1456,6 +1456,9 @@ test('clock screen, analog and day/night faces: their sections, only for firmwar
   assert.equal((await get(ALL)).cface, 'skyline', 'the gradient needs its own capability');
   b = await get(ALL + ':gradient');
   assert.equal(b.cface, 'gradient');
+  assert.equal(b.ginv, undefined, 'cut-out digits by default');
+  s.store.update('home', { gradInvert: true });
+  assert.equal((await get(ALL + ':gradient')).ginv, true);
   assert.equal(b.dn, undefined);
   assert.equal(b.cwx, undefined);
   s.store.update('home', { screen: 'transit' });

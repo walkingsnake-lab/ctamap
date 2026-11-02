@@ -64,7 +64,7 @@ const SECTIONS = {
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
-  clock: ['skyline', 'cface', 'cwx', 'dn'],
+  clock: ['skyline', 'cface', 'cwx', 'dn', 'ginv'],
 };
 function sectionsFor(body, screen) {
   const out = { ...body, for: screen };
@@ -525,6 +525,8 @@ function createBoard({
       ...(face === 'analog' ? { cwx: wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null } : {}),
       // Day/night face: the subsolar point and the board's spot (contract "Day/night").
       ...(face === 'daynight' ? { dn: dayNightOf(st, now) } : {}),
+      // Gradient face: lit gradient digits on black (contract "Gradient").
+      ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },

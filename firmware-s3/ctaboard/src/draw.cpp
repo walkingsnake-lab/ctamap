@@ -2728,18 +2728,14 @@ static void big_text(Frame &f, const ustr &s, int x, int top, RGB c) {
   for (char32_t ch : s) x = big_char(f, ch, x, top, c);
 }
 
-static void render_gradient(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
-  double now = now_o ? *now_o : p["now"].num(0);
-  long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
-  for (int y = 0; y < 32; y++)
-    for (int x = 0; x < 64; x++) f.set(x, y, gradient_color(x, y, ms));
+// The time, rolling at the minute (draw.js drawBigTime / bigRoll).
+static void draw_big_time(Frame &f, const Value &p, double now, RGB color) {
   ustr text = clock_text(now, p["tzo"].num(0));
   const int H = 5 * GR_SY, top = (int)fdiv(32 - H, 2);
   auto x_of = [](const ustr &s) { return (int)fdiv(64 - big_w(s), 2); };
   std::optional<Roll> roll = take_roll("grad.clock", text);
-  const RGB dark{};
   if (!roll) {
-    big_text(f, text, x_of(text), top, dark);
+    big_text(f, text, x_of(text), top, color);
     return;
   }
   int dist = H + GR_SY, up = (int)jsround(ease_in_out(roll->p) * dist);
@@ -2750,18 +2746,35 @@ static void render_gradient(const Value &p, Frame &f, std::optional<double> now_
   if (same) {
     int x = x_of(text);
     for (size_t i = 0; i < text.size(); i++) {
-      if (text[i] == from[i]) big_char(f, text[i], x, top, dark);
+      if (text[i] == from[i]) big_char(f, text[i], x, top, color);
       else {
-        big_char(f, from[i], x, top - up, dark);
-        big_char(f, text[i], x, top - up + dist, dark);
+        big_char(f, from[i], x, top - up, color);
+        big_char(f, text[i], x, top - up + dist, color);
       }
       x += big_w(text.substr(i, 1)) + GR_GAP;
     }
   } else {
-    big_text(f, from, x_of(from), top - up, dark);
-    big_text(f, text, x_of(text), top - up + dist, dark);
+    big_text(f, from, x_of(from), top - up, color);
+    big_text(f, text, x_of(text), top - up + dist, color);
   }
   f.pop_clip();
+}
+
+static void render_gradient(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
+  double now = now_o ? *now_o : p["now"].num(0);
+  long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
+  // Inverted (ginv): the digits carry the gradient on black, drawn as a
+  // mask and then colored.
+  if (p["ginv"].truthy()) {
+    draw_big_time(f, p, now, hexc(0xffffff));
+    for (int y = 0; y < 32; y++)
+      for (int x = 0; x < 64; x++)
+        if (f.get(x, y).r) f.set(x, y, gradient_color(x, y, ms));
+    return;
+  }
+  for (int y = 0; y < 32; y++)
+    for (int x = 0; x < 64; x++) f.set(x, y, gradient_color(x, y, ms));
+  draw_big_time(f, p, now, RGB{});
 }
 
 // ---- whole screen ----

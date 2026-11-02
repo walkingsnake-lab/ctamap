@@ -1943,29 +1943,43 @@
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
       const f = newFrame();
+      // Inverted (p.ginv): the digits carry the gradient on black. They're
+      // drawn as a mask, then every lit pixel takes its gradient color.
+      if (p.ginv) {
+        drawBigTime(f, p, now, '#ffffff');
+        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y)[0]) f.set(x, y, gradientColor(x, y, ms));
+        return f;
+      }
       for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(x, y, gradientColor(x, y, ms));
-      // The time, centered; at the minute it rolls like the other clocks
+      drawBigTime(f, p, now, GR.dark);
+      return f;
+    }
+    function drawBigTime(f, p, now, color) {
+      // The time, at the minute it rolls like the other clocks
       // (only changed characters when the shape holds, else the whole time).
       const text = clockText(now), H = 5 * GR.sy, top = fdivI(32 - H, 2);
       const xOf = (str) => fdivI(64 - bigW(str), 2);
       const roll = takeRoll('grad.clock', text);
-      if (!roll) { bigText(f, text, xOf(text), top, GR.dark); return f; }
+      if (!roll) bigText(f, text, xOf(text), top, color);
+      else bigRoll(f, text, roll, xOf, top, H, color);
+    }
+    // The time mid-roll (rollTextWith's rules, on the giant digits).
+    function bigRoll(f, text, roll, xOf, top, H, color) {
       const dist = H + GR.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
       f.withClip(0, top, 63, top + H - 1, () => {
         const a = [...text], b = [...from];
         if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(ch) === bigW(b[i]))) {
           let x = xOf(text);
           a.forEach((ch, i) => {
-            if (ch === b[i]) bigChar(f, ch, x, top, GR.dark);
-            else { bigChar(f, b[i], x, top - up, GR.dark); bigChar(f, ch, x, top - up + dist, GR.dark); }
+            if (ch === b[i]) bigChar(f, ch, x, top, color);
+            else { bigChar(f, b[i], x, top - up, color); bigChar(f, ch, x, top - up + dist, color); }
             x += bigW(ch) + GR.gap;  // one character's advance (bigW drops a trailing gap)
           });
         } else {
-          bigText(f, from, xOf(from), top - up, GR.dark);
-          bigText(f, text, xOf(text), top - up + dist, GR.dark);
+          bigText(f, from, xOf(from), top - up, color);
+          bigText(f, text, xOf(text), top - up + dist, color);
         }
       });
-      return f;
     }
 
     // Which skyline is on screen, and the crossfade from the last one. The

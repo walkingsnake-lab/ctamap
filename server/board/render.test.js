@@ -287,5 +287,12 @@ test('clock screen, gradient face: the colors move slowly with the clock, the gi
   for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) { const c = a.get(x, y); if (!(c[0] || c[1] || c[2])) dark++; }
   assert.ok(dark > 400, `the time is cut out (${dark} unlit)`);
   for (let x = 0; x < 64; x++) assert.ok(a.get(x, 0).some((v) => v > 0) && a.get(x, 31).some((v) => v > 0), 'rows 0 and 31 stay lit');
+  // Inverted: exactly those unlit pixels are lit, in the gradient's own colors; the rest is black.
+  const inv = render({ ...p, ginv: true }, { ms: t * 1000 });
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+    const c = a.get(x, y), d = inv.get(x, y);
+    if (c[0] || c[1] || c[2]) assert.deepEqual(d, [0, 0, 0], `${x},${y} black`);
+    else assert.ok(d.some((v) => v > 0), `${x},${y} lit`);
+  }
   for (const [x, y] of [[0, 0], [63, 0], [0, 31], [63, 31]]) assert.ok(a.get(x, y).some((v) => v > 0), `corner ${x},${y} lit`);
 });
