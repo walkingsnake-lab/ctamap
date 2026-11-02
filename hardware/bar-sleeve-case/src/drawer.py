@@ -400,5 +400,7 @@ if __name__ == '__main__':
     import collar as CO                                  # follows the 3.5 mm wall
     CO.TIP_BACK = False
     t = CO.export(CO.collar(), f'{out}/bar-encoder-collar-v5.stl'); print('bar-encoder-collar-v5.stl', t.is_watertight)
+    t = CO.export(CO.ribbed_fit_set(), f'{out}/bar-encoder-collar-v5-ribbed-fit-set.stl')
+    print('bar-encoder-collar-v5-ribbed-fit-set.stl', t.is_watertight)
     put(cs, 'coupon-v5-drawer-fit-shell.stl'); put(ct, 'coupon-v5-drawer-fit-tray.stl')
     print(dict(D=D, S3_edge=round(S3_EDGE, 2), s3_z0=round(S3_Z0 - ZC, 2), port_z=round(PORT_Z - ZC, 2), corners=CORNERS))
