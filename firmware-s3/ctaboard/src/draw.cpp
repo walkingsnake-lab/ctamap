@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 
 #include <algorithm>
 
@@ -2685,7 +2684,8 @@ static void render_daynight(const Value &p, Frame &f, std::optional<double> now_
 // Mirrors renderGradient() and GR in draw.js.
 static const RGB GR_RING[] = {hexc(0xffc24a), hexc(0xff8a52), hexc(0xff5f7e), hexc(0xe94fb8), hexc(0xa55cff),
                               hexc(0x5a5cf2), hexc(0x3e9cff), hexc(0x3fd6c6), hexc(0x9be65a), hexc(0xffe14a)};
-static const long long GR_N = 10, GR_SPAN = 3, GR_STEP = 12000;
+static const long long GR_N = 10, GR_SPAN = 3, GR_STEP = 360000;
+static const int GR_SX = 4, GR_SY = 6, GR_GAP = 3;
 
 static RGB gradient_color(int x, int y, long long ms) {
   long long u = fdiv((long long)(x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
@@ -2695,19 +2695,69 @@ static RGB gradient_color(int x, int y, long long ms) {
   return RGB{mix_int(a.r, b.r, t), mix_int(a.g, b.g, t), mix_int(a.b, b.b, t)};
 }
 
+// Giant block digits (draw.js GR_GLYPHS, bigW / bigChar / bigText): 3 x 5
+// digits, index 10 the 1 x 5 colon.
+static const char *const GR_GLYPHS[11][5] = {
+    {"###", "#.#", "#.#", "#.#", "###"}, {"##.", ".#.", ".#.", ".#.", "###"}, {"###", "..#", "###", "#..", "###"},
+    {"###", "..#", "###", "..#", "###"}, {"#.#", "#.#", "###", "..#", "..#"}, {"###", "#..", "###", "..#", "###"},
+    {"###", "#..", "###", "#.#", "###"}, {"###", "..#", "..#", "..#", "..#"}, {"###", "#.#", "###", "#.#", "###"},
+    {"###", "#.#", "###", "..#", "###"}, {".", "#", ".", "#", "."}};
+static int gr_index(char32_t ch) { return ch == U':' ? 10 : ch >= U'0' && ch <= U'9' ? (int)(ch - U'0') : -1; }
+static int big_w(const ustr &s) {
+  int w = -GR_GAP;
+  for (char32_t ch : s) {
+    int g = gr_index(ch);
+    if (g >= 0) w += (int)strlen(GR_GLYPHS[g][0]) * GR_SX + GR_GAP;
+  }
+  return w;
+}
+static int big_char(Frame &f, char32_t ch, int x, int top, RGB c) {
+  int g = gr_index(ch);
+  if (g < 0) return x;
+  int w = (int)strlen(GR_GLYPHS[g][0]);
+  for (int r = 0; r < 5; r++)
+    for (int i = 0; i < w; i++)
+      if (GR_GLYPHS[g][r][i] == '#') f.fill(x + i * GR_SX, top + r * GR_SY, GR_SX, GR_SY, c);
+  return x + w * GR_SX + GR_GAP;
+}
+static void big_text(Frame &f, const ustr &s, int x, int top, RGB c) {
+  for (char32_t ch : s) x = big_char(f, ch, x, top, c);
+}
+
 static void render_gradient(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
   double now = now_o ? *now_o : p["now"].num(0);
   long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
   for (int y = 0; y < 32; y++)
     for (int x = 0; x < 64; x++) f.set(x, y, gradient_color(x, y, ms));
-  double tzo = p["tzo"].num(0);
-  roll_named(f, FONT_CLOCK, "grad.clock", clock_text(now, tzo), CENTER, 0, 15, RGB{});
-  LocalDate t = local_date(now, tzo);
-  std::string name = DAY_NAMES[t.wd], mon = MONTH_NAMES[t.m - 1];
-  for (size_t i = 1; i < name.size(); i++) name[i] = (char)tolower(name[i]);
-  for (size_t i = 1; i < mon.size(); i++) mon[i] = (char)tolower(mon[i]);
-  ustr date = U(name.substr(0, 3) + " " + mon + " " + std::to_string(t.d));
-  f.text(FONT_5X7, date, (int)fdiv(64 - measure(FONT_5X7, date), 2), 26, RGB{});
+  ustr text = clock_text(now, p["tzo"].num(0));
+  const int H = 5 * GR_SY, top = (int)fdiv(32 - H, 2);
+  auto x_of = [](const ustr &s) { return (int)fdiv(64 - big_w(s), 2); };
+  std::optional<Roll> roll = take_roll("grad.clock", text);
+  const RGB dark{};
+  if (!roll) {
+    big_text(f, text, x_of(text), top, dark);
+    return;
+  }
+  int dist = H + GR_SY, up = (int)jsround(ease_in_out(roll->p) * dist);
+  const ustr &from = roll->from;
+  f.push_clip(0, top, 63, top + H - 1);
+  bool same = x_of(from) == x_of(text) && from.size() == text.size();
+  for (size_t i = 0; same && i < text.size(); i++) same = big_w(text.substr(i, 1)) == big_w(from.substr(i, 1));
+  if (same) {
+    int x = x_of(text);
+    for (size_t i = 0; i < text.size(); i++) {
+      if (text[i] == from[i]) big_char(f, text[i], x, top, dark);
+      else {
+        big_char(f, from[i], x, top - up, dark);
+        big_char(f, text[i], x, top - up + dist, dark);
+      }
+      x += big_w(text.substr(i, 1)) + GR_GAP;
+    }
+  } else {
+    big_text(f, from, x_of(from), top - up, dark);
+    big_text(f, text, x_of(text), top - up + dist, dark);
+  }
+  f.pop_clip();
 }
 
 // ---- whole screen ----

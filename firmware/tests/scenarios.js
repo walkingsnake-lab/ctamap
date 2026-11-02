@@ -605,9 +605,11 @@ async function build() {
     add('daynight December solstice dimmed', face('2026-12-21T23:59:00Z', 'daynight', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('daynight no sun data', face('2026-11-01T18:00:00Z', 'daynight', { dn: null }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     const gms = Date.parse('2026-11-02T01:15:00Z');
-    add('gradient over two minutes', face('2026-11-02T01:15:00Z', 'gradient'), [0, 4321, 12000, 30500, 61000, 95999, 119999].map((d) => ({ screen: 'clock', ms: gms + d })), undefined, undefined, { s3only: true });
+    add('gradient over the hour', face('2026-11-02T01:15:00Z', 'gradient'), [0, 43210, 360000, 1234567, 2160000, 3599999].map((d) => ({ screen: 'clock', ms: gms + d })), undefined, undefined, { s3only: true });
+    add('gradient 12:58 fills the width', face('2026-11-01T18:58:00Z', 'gradient'), [{ screen: 'clock', ms: gms }], undefined, undefined, { s3only: true });
     add('gradient dimmed, two-digit hour', face('2026-11-01T17:59:00Z', 'gradient', { bright: 40 }), [{ screen: 'clock', ms: Date.parse('2026-11-01T17:59:07Z') }], undefined, undefined, { s3only: true });
-    add('gradient roll', face('2026-11-01T19:00:00Z', 'gradient'), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: Date.parse('2026-11-01T19:00:00Z'), nums: { 'grad.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    add('gradient roll width change', face('2026-11-01T19:00:00Z', 'gradient'), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: Date.parse('2026-11-01T19:00:00Z'), nums: { 'grad.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    add('gradient roll per digit', face('2026-11-02T01:15:00Z', 'gradient'), [0.25, 0.5, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
     add('daynight roll', face('2026-11-01T19:00:00Z', 'daynight'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'dn.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
   }
   // Chronological departure: slide, digits roll, next train slides in.

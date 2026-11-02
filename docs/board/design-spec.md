@@ -682,10 +682,8 @@ Built Nov 1, 2026, after Tidbyt's day/night map, S3 only.
 
 ## 19. Clock screen: gradient face
 
-Built Nov 1, 2026, S3 only. A full-panel diagonal gradient with the time and date cut out of it.
+Built Nov 1, 2026, S3 only. A full-panel diagonal gradient with the time cut out of it in giant digits.
 
 - **Colors:** a ring of ten hues (marigold, tangerine, rose, magenta, violet, indigo, azure, aqua, lime, lemon); about three neighbors span the panel at once, so every blend stays clean (no muddy midpoints between opposite hues).
-- **Motion:** the ring slides one color every 12 s, so the colors flow from the bottom right to the top left and the combination on the panel changes continuously; once around in two minutes. The time rolls at each minute.
-- **Text:** knocked out (unlit): the time in the 9x15 bold digits (2 px strokes), the date in 5x7 (`Sun Nov 1`). Open: whether the 1 px strokes of the date survive the diffuser glow (§4: dark strokes on lit fill in); if not, the date goes or moves to bolder digits.
-- **Power:** every pixel lit, about the ticker's draw at full brightness.
-
+- **Motion:** the ring slides one color every 6 minutes, an hour around: the change is felt rather than seen. The time rolls at each minute.
+- **Time:** square 3 x 5 block digits (blockier than Tom Thumb: full-width tops and bottoms) blown up 4 x 6 (12 x 30 px, the colon 4 px wide), knocked out (unlit), 3 px apart; `12:59` fills the 64 px exactly. No date. Mostly black, a lot less light than a full gradient.

@@ -1897,14 +1897,17 @@
 
     // ---- clock screen: gradient face (design spec §19; contract "Gradient") ----
     // A diagonal gradient across about three neighbors of a ten-color ring,
-    // sliding along the ring with the animation clock (o.ms): the colors flow
-    // across the panel, and which colors are on it changes as they go (each
-    // pair of neighbors close in hue, so no blend goes muddy). The time and
-    // date are knocked out of it (unlit). Integer math, ported line for line.
+    // sliding along the ring with the animation clock (o.ms) so slowly that
+    // the change is felt rather than seen (an hour around the ring; each pair
+    // of neighbors close in hue, so no blend goes muddy). The time is knocked
+    // out of it (unlit) in giant block digits. Integer math, ported line for
+    // line.
     const GR = {
       ring: ['#ffc24a', '#ff8a52', '#ff5f7e', '#e94fb8', '#a55cff', '#5a5cf2', '#3e9cff', '#3fd6c6', '#9be65a', '#ffe14a'],
-      span: 3,        // ring colors across the diagonal
-      step: 12000,    // ms to move one color along (two minutes around the ring)
+      span: 3,         // ring colors across the diagonal
+      step: 360000,    // ms to move one color along (an hour around the ring)
+      sx: 4, sy: 6,    // 3 x 5 block digits blown up to 12 x 30
+      gap: 3,          // px between characters (12:59 fills the width exactly)
       dark: '#000000',
     };
     function gradientColor(x, y, ms) {
@@ -1915,17 +1918,50 @@
       const i = fdivI(r, 256) % n, t = r % 256;
       return mixInt(hex(GR.ring[i]), hex(GR.ring[(i + 1) % n]), t);
     }
+    // Giant block digits: each glyph pixel becomes an sx x sy block. Square
+    // 3 x 5 digits (a blockier cut than Tom Thumb's) and a 1 x 5 colon.
+    const GR_GLYPHS = {
+      0: ['###', '#.#', '#.#', '#.#', '###'], 1: ['##.', '.#.', '.#.', '.#.', '###'],
+      2: ['###', '..#', '###', '#..', '###'], 3: ['###', '..#', '###', '..#', '###'],
+      4: ['#.#', '#.#', '###', '..#', '..#'], 5: ['###', '#..', '###', '..#', '###'],
+      6: ['###', '#..', '###', '#.#', '###'], 7: ['###', '..#', '..#', '..#', '..#'],
+      8: ['###', '#.#', '###', '#.#', '###'], 9: ['###', '#.#', '###', '..#', '###'],
+      ':': ['.', '#', '.', '#', '.'],
+    };
+    const bigW = (str) => [...str].reduce((w, ch) => w + GR_GLYPHS[ch][0].length * GR.sx + GR.gap, -GR.gap);
+    function bigChar(f, ch, x, top, color) {
+      const g = GR_GLYPHS[ch];
+      g.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * GR.sx, top + r * GR.sy, GR.sx, GR.sy, color); }));
+      return x + g[0].length * GR.sx + GR.gap;
+    }
+    function bigText(f, str, x, top, color) { for (const ch of str) x = bigChar(f, ch, x, top, color); }
     function renderGradient(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
       const f = newFrame();
       for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(x, y, gradientColor(x, y, ms));
-      rollText(f, 'clock', 'grad.clock', clockText(now), centerX('clock'), 15, GR.dark);
-      const t = localDate(now, p.tzo);
-      const name = DAY_NAMES[t.wd], mon = MONTHS[t.m - 1];
-      const date = `${name[0]}${name.slice(1, 3).toLowerCase()} ${mon[0]}${mon.slice(1).toLowerCase()} ${t.d}`;
-      f.text('5x7', date, fdivI(64 - measure('5x7', date), 2), 26, GR.dark);
+      // The time, centered; at the minute it rolls like the other clocks
+      // (only changed characters when the shape holds, else the whole time).
+      const text = clockText(now), H = 5 * GR.sy, top = fdivI(32 - H, 2);
+      const xOf = (str) => fdivI(64 - bigW(str), 2);
+      const roll = takeRoll('grad.clock', text);
+      if (!roll) { bigText(f, text, xOf(text), top, GR.dark); return f; }
+      const dist = H + GR.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
+      f.withClip(0, top, 63, top + H - 1, () => {
+        const a = [...text], b = [...from];
+        if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(ch) === bigW(b[i]))) {
+          let x = xOf(text);
+          a.forEach((ch, i) => {
+            if (ch === b[i]) bigChar(f, ch, x, top, GR.dark);
+            else { bigChar(f, b[i], x, top - up, GR.dark); bigChar(f, ch, x, top - up + dist, GR.dark); }
+            x += bigW(ch) + GR.gap;
+          });
+        } else {
+          bigText(f, from, xOf(from), top - up, GR.dark);
+          bigText(f, text, xOf(text), top - up + dist, GR.dark);
+        }
+      });
       return f;
     }
 
