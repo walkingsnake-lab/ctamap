@@ -588,6 +588,32 @@ async function build() {
     add('seventies roll per digit', s70('2026-11-02T03:42:00Z'), roll('9:41'), undefined, undefined, { s3only: true });
     add('seventies roll width change', s70('2026-11-01T19:00:00Z'), roll('12:59'), undefined, undefined, { s3only: true });
   }
+  // Clock screen, analog and day/night faces (S3 only).
+  {
+    const { subsolar } = require(path.join(B, 'sun'));
+    const face = (iso, cface, extra = {}) => {
+      const t = Date.parse(iso) / 1000, sun = subsolar(t);
+      return { now: t, tzo: tzOffset(t), screen: 'clock', cface, bright: 100, warn: null, skyline: null,
+        cwx: { temp: 54, icon: 'pcloudy_day' }, dn: { dec: Math.round(sun.dec * 10), lon: Math.round(sun.lon * 10), t, here: [16, 7] }, ...extra };
+    };
+    add('analog 9:42:37 PM', face('2026-11-02T03:42:37Z', 'analog'), [{ screen: 'clock' }, { screen: 'clock', now: Date.parse('2026-11-02T03:43:05Z') / 1000 }], undefined, undefined, { s3only: true });
+    add('analog Wednesday, no weather', face('2026-09-30T15:07:59Z', 'analog', { cwx: null }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('analog 12:00 below freezing', face('2026-01-14T18:00:00Z', 'analog', { cwx: { temp: -12, icon: 'snow' } }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daynight evening', face('2026-11-02T03:42:00Z', 'daynight'), [{ screen: 'clock' }, { screen: 'clock', now: Date.parse('2026-11-02T05:42:00Z') / 1000 }], undefined, undefined, { s3only: true });
+    add('daynight noon', face('2026-11-01T18:00:00Z', 'daynight'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daynight June solstice', face('2026-06-21T13:30:00Z', 'daynight'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daynight December solstice dimmed', face('2026-12-21T23:59:00Z', 'daynight', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daynight no sun data', face('2026-11-01T18:00:00Z', 'daynight', { dn: null }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    const gms = Date.parse('2026-11-02T01:15:00Z');
+    add('gradient over the hour', face('2026-11-02T01:15:00Z', 'gradient'), [0, 43210, 360000, 1234567, 2160000, 3599999].map((d) => ({ screen: 'clock', ms: gms + d })), undefined, undefined, { s3only: true });
+    add('gradient 12:58 fills the width', face('2026-11-01T18:58:00Z', 'gradient'), [{ screen: 'clock', ms: gms }], undefined, undefined, { s3only: true });
+    add('gradient dimmed, two-digit hour', face('2026-11-01T17:59:00Z', 'gradient', { bright: 40 }), [{ screen: 'clock', ms: Date.parse('2026-11-01T17:59:07Z') }], undefined, undefined, { s3only: true });
+    add('gradient inverted', face('2026-11-02T01:15:00Z', 'gradient', { ginv: true }), [0, 1234567].map((d) => ({ screen: 'clock', ms: gms + d })), undefined, undefined, { s3only: true });
+    add('gradient inverted roll', face('2026-11-01T19:00:00Z', 'gradient', { ginv: true }), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    add('gradient roll width change', face('2026-11-01T19:00:00Z', 'gradient'), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: Date.parse('2026-11-01T19:00:00Z'), nums: { 'grad.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    add('gradient roll per digit', face('2026-11-02T01:15:00Z', 'gradient'), [0.25, 0.5, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
+    add('daynight roll', face('2026-11-01T19:00:00Z', 'daynight'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'dn.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+  }
   // Announce screen (S3 only): the styles, the typewriter's intro (typing,
   // then its cursor blinking), the credits roll's steps, edge fades, pause
   // and loop, the call to action with no message, a removed style drawn as

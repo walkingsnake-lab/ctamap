@@ -2536,6 +2536,247 @@ static void render_seventies(const Value &p, Frame &f, std::optional<double> now
   }
 }
 
+// ---- clock faces: shared date and integer trig (draw.js localDate, sinD) ----
+static const char *const DAY_NAMES[] = {"SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"};
+static const char *const MONTH_NAMES[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"};
+struct LocalDate {
+  long long wd, m, d, h, min, s;
+};
+static LocalDate local_date(double now, double tzo) {
+  long long lt = (long long)floor(now + tzo), days = fdiv(lt, 86400);
+  LocalDate r;
+  r.wd = fmod_floor(days + 4, 7);
+  long long z = days + 719468, era = fdiv(z, 146097), doe = z - era * 146097;
+  long long yoe = fdiv(doe - fdiv(doe, 1460) + fdiv(doe, 36524) - fdiv(doe, 146096), 365);
+  long long doy = doe - (365 * yoe + fdiv(yoe, 4) - fdiv(yoe, 100)), mp = fdiv(5 * doy + 2, 153);
+  r.d = doy - fdiv(153 * mp + 2, 5) + 1;
+  r.m = mp < 10 ? mp + 3 : mp - 9;
+  long long sec = lt - days * 86400;
+  r.h = fdiv(sec, 3600);
+  r.min = fdiv(sec, 60) % 60;
+  r.s = sec % 60;
+  return r;
+}
+static const int SIN1E4[] = {0, 175, 349, 523, 698, 872, 1045, 1219, 1392, 1564, 1736, 1908, 2079, 2250, 2419, 2588, 2756, 2924, 3090, 3256, 3420, 3584, 3746, 3907, 4067, 4226, 4384, 4540, 4695, 4848, 5000, 5150, 5299, 5446, 5592, 5736, 5878, 6018, 6157, 6293, 6428, 6561, 6691, 6820, 6947, 7071, 7193, 7314, 7431, 7547, 7660, 7771, 7880, 7986, 8090, 8192, 8290, 8387, 8480, 8572, 8660, 8746, 8829, 8910, 8988, 9063, 9135, 9205, 9272, 9336, 9397, 9455, 9511, 9563, 9613, 9659, 9703, 9744, 9781, 9816, 9848, 9877, 9903, 9925, 9945, 9962, 9976, 9986, 9994, 9998, 10000};
+static long long sin_d(long long deg) {
+  long long d = fmod_floor(deg, 360);
+  return d <= 90 ? SIN1E4[d] : d <= 180 ? SIN1E4[180 - d] : d <= 270 ? -SIN1E4[d - 180] : -SIN1E4[360 - d];
+}
+static long long cos_d(long long deg) { return sin_d(deg + 90); }
+
+// ---- clock screen: analog face (design spec §17; contract "Analog") ----
+// Mirrors renderAnalog() and AN in draw.js.
+static const int AN_CX = 15, AN_CY = 15, AN_RX = 48;
+static const int8_t AN_HOUR[] = {15,8,16,8,16,8,17,8,18,9,19,9,19,9,20,10,20,10,21,11,21,12,21,12,22,13,22,14,22,14,22,15,22,16,22,16,22,17,21,18,21,19,21,19,20,20,20,20,19,21,19,21,18,21,17,22,16,22,16,22,15,22,14,22,14,22,13,22,12,21,12,21,11,21,10,20,10,20,9,19,9,19,9,18,8,17,8,16,8,16,8,15,8,14,8,14,8,13,9,12,9,12,9,11,10,10,10,10,11,9,11,9,12,9,13,8,14,8,14,8};
+static const int8_t AN_MIN[] = {15,4,16,4,17,4,18,5,19,5,21,5,21,6,22,7,23,8,24,9,25,10,25,11,25,12,26,13,26,14,26,15,26,16,26,17,25,18,25,19,25,20,24,21,23,22,22,23,21,24,21,25,19,25,18,25,17,26,16,26,15,26,14,26,13,26,12,25,11,25,10,25,9,24,8,23,7,22,6,21,5,21,5,19,5,18,4,17,4,16,4,15,4,14,4,13,5,12,5,11,5,10,6,9,7,8,8,7,9,6,9,5,11,5,12,5,13,4,14,4};
+static const int8_t AN_SEC[] = {15,2,16,2,18,2,19,3,20,3,22,4,23,4,24,5,25,6,26,7,26,8,27,10,27,11,28,12,28,14,28,15,28,16,28,18,27,19,27,20,26,21,26,23,25,24,24,25,23,26,22,26,20,27,19,27,18,28,16,28,15,28,14,28,12,28,11,27,10,27,8,26,7,26,6,25,5,24,4,23,4,22,3,20,3,19,2,18,2,16,2,15,2,14,2,12,3,11,3,10,4,8,4,7,5,6,6,5,7,4,8,4,10,3,11,3,12,2,14,2};
+static const int8_t AN_TICKS[] = {15,2,1,15,3,1,22,4,0,26,8,0,28,15,1,27,15,1,26,21,0,22,26,0,15,28,1,15,27,1,8,26,0,4,22,0,2,15,1,3,15,1,4,8,0,8,4,0};
+
+static void bresenham(Frame &f, int x0, int y0, int x1, int y1, RGB c) {
+  int dx = std::abs(x1 - x0), dy = -std::abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  int err = dx + dy;
+  for (;;) {
+    f.fill(x0, y0, 1, 1, c);
+    if (x0 == x1 && y0 == y1) break;
+    int e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+static void midpoint_circle(Frame &f, int cx, int cy, int r, RGB c) {
+  int x = r, y = 0, err = 1 - r;
+  while (x >= y) {
+    const int pts[8][2] = {{x, y}, {y, x}, {-y, x}, {-x, y}, {-x, -y}, {-y, -x}, {y, -x}, {x, -y}};
+    for (auto &q : pts) f.fill(cx + q[0], cy + q[1], 1, 1, c);
+    y++;
+    if (err < 0) err += 2 * y + 1;
+    else {
+      x--;
+      err += 2 * (y - x) + 1;
+    }
+  }
+}
+static void render_analog(const Value &p, Frame &f, std::optional<double> now_o) {
+  double now = now_o ? *now_o : p["now"].num(0);
+  LocalDate t = local_date(now, p["tzo"].num(0));
+  midpoint_circle(f, AN_CX, AN_CY, 15, hexc(0x333333));
+  for (size_t i = 0; i < sizeof AN_TICKS; i += 3) f.fill(AN_TICKS[i], AN_TICKS[i + 1], 1, 1, AN_TICKS[i + 2] ? C::wxText : C::dimHead);
+  auto hand = [&](const int8_t *tab, long long i, RGB c) { bresenham(f, AN_CX, AN_CY, tab[i * 2], tab[i * 2 + 1], c); };
+  hand(AN_HOUR, (t.h % 12) * 5 + fdiv(t.min, 12), C::clock);
+  hand(AN_MIN, t.min, C::clock);
+  hand(AN_SEC, t.s, C::amber);
+  f.fill(AN_CX, AN_CY, 1, 1, C::clock);
+  ustr full = U(DAY_NAMES[t.wd]);
+  ustr day = measure(FONT_SMALL, full) <= 31 ? full : full.substr(0, 3);
+  f.text(FONT_SMALL, day, AN_RX - (int)fdiv(measure(FONT_SMALL, day), 2), 7, C::wxText);
+  ustr date = U(std::string(MONTH_NAMES[t.m - 1]) + " " + std::to_string(t.d));
+  f.text(FONT_5X7, date, AN_RX - (int)fdiv(measure(FONT_5X7, date), 2), 17, C::label);
+  const Value &w = p["cwx"];
+  if (w.truthy() && !w["temp"].is_null()) {
+    ustr temp = vstr(w["temp"]);
+    int tw = measure(FONT_5X7, temp) + 3, x0 = AN_RX - (int)fdiv(8 + 2 + tw, 2);
+    int icon = icon_index(w["icon"]);
+    if (icon >= 0) draw_icon(f, icon, x0, 22);
+    int x = f.text(FONT_5X7, temp, x0 + 10, 30, C::label);
+    f.text(FONT_SMALL, U"°", x, 28, C::label);
+  }
+}
+
+// ---- clock screen: day/night map face (design spec §18; contract "Day/night") ----
+// Mirrors renderDayNight() and DN in draw.js.
+static const int DN_ROWS = 26;
+static const long long DN_NIGHT12 = -2079LL * 10000;
+static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_SUN = hexc(0xffe060), DN_SUN_ARM = hexc(0xa07818),
+                 DN_HERE = hexc(0xffffff);
+static const int DN_NIGHT_K[] = {104, 116, 140};
+static RGB world_color(char code) {
+  for (int i = 0; i < assets::WORLD_PALETTE_N; i++)
+    if (assets::WORLD_PALETTE[i].code == code)
+      return RGB{assets::WORLD_PALETTE[i].r, assets::WORLD_PALETTE[i].g, assets::WORLD_PALETTE[i].b};
+  return RGB{};
+}
+static uint8_t mix_int(uint8_t n, uint8_t d, long long k) { return (uint8_t)(n + fdiv(((long long)d - n) * k, 256)); }
+
+static void render_daynight(const Value &p, Frame &f, std::optional<double> now_o) {
+  long long now = (long long)floor(now_o ? *now_o : p["now"].num(0));
+  const Value &dn = p["dn"];
+  if (dn.truthy()) {
+    long long lon10 = (long long)dn["lon"].num(0) - fdiv(now - (long long)dn["t"].num(0), 24);
+    lon10 = fmod_floor(lon10 + 1800, 3600) - 1800;
+    long long dec10 = (long long)dn["dec"].num(0);
+    long long dec_d = fdiv(dec10 + 5, 10), lon_d = fdiv(lon10 + 5, 10);
+    long long s_dec = sin_d(dec_d), c_dec = cos_d(dec_d);
+    for (int y = 0; y < DN_ROWS; y++) {
+      long long lat = (long long)jsround(84.375 - (y + 0.5) * 5.625);
+      long long sl = sin_d(lat) * s_dec, cl = cos_d(lat) * c_dec;
+      for (int x = 0; x < 64; x++) {
+        long long lon = (long long)jsround(-180 + (x + 0.5) * 5.625);
+        long long sv = sl + fdiv(cl * cos_d(lon - lon_d), 10000);
+        long long k = sv >= 0 ? 256 : sv <= DN_NIGHT12 ? 0 : 256 - fdiv(sv * 256, DN_NIGHT12);
+        char code = assets::WORLD[y][x];
+        RGB d, n;
+        if (code == '.') {
+          d = DN_SEA;
+          n = DN_NIGHT_SEA;
+        } else {
+          d = world_color(code);
+          n = RGB{(uint8_t)fdiv(d.r * DN_NIGHT_K[0], 256), (uint8_t)fdiv(d.g * DN_NIGHT_K[1], 256), (uint8_t)fdiv(d.b * DN_NIGHT_K[2], 256)};
+        }
+        f.set(x, y, RGB{mix_int(n.r, d.r, k), mix_int(n.g, d.g, k), mix_int(n.b, d.b, k)});
+      }
+    }
+    long long sx = fdiv((lon10 + 1800) * 8, 450), sy = fdiv(6750 - dec10 * 8, 450);
+    const int arms[4][2] = {{0, -1}, {-1, 0}, {1, 0}, {0, 1}};
+    for (auto &a : arms)
+      if (sy + a[1] >= 0 && sy + a[1] < DN_ROWS) f.fill((int)fmod_floor(sx + a[0], 64), (int)(sy + a[1]), 1, 1, DN_SUN_ARM);
+    if (sy >= 0 && sy < DN_ROWS) f.fill((int)sx, (int)sy, 1, 1, DN_SUN);
+    const Value &here = dn["here"];
+    if (here.is_arr() && here.size() == 2 && here[1].num(0) < DN_ROWS) f.fill((int)here[0].num(0), (int)here[1].num(0), 1, 1, DN_HERE);
+  }
+  LocalDate t = local_date((double)now, p["tzo"].num(0));
+  int x = roll_named(f, FONT_SMALL, "dn.clock", clock_text((double)now, p["tzo"].num(0)), LEFT, 0, 32, C::label);
+  f.text(FONT_SMALL, t.h < 12 ? U"AM" : U"PM", x + 2, 32, C::wxText);
+  ustr date = U(std::string(DAY_NAMES[t.wd]).substr(0, 3) + " " + MONTH_NAMES[t.m - 1] + " " + std::to_string(t.d));
+  f.text(FONT_SMALL, date, 64 - measure(FONT_SMALL, date), 32, C::wxText);
+}
+
+// ---- clock screen: gradient face (design spec §19; contract "Gradient") ----
+// Mirrors renderGradient() and GR in draw.js.
+static const RGB GR_RING[] = {hexc(0xffc24a), hexc(0xff8a52), hexc(0xff5f7e), hexc(0xe94fb8), hexc(0xa55cff),
+                              hexc(0x5a5cf2), hexc(0x3e9cff), hexc(0x3fd6c6), hexc(0x9be65a), hexc(0xffe14a)};
+static const long long GR_N = 10, GR_SPAN = 3, GR_STEP = 360000;
+static const int GR_SX = 4, GR_SY = 6, GR_GAP = 4;
+
+static RGB gradient_color(int x, int y, long long ms) {
+  long long u = fdiv((long long)(x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+  long long r = fdiv(ms * 256, GR_STEP) + fdiv(u * GR_SPAN * 256, 1024);
+  long long i = fmod_floor(fdiv(r, 256), GR_N), t = fmod_floor(r, 256);
+  RGB a = GR_RING[i], b = GR_RING[(i + 1) % GR_N];
+  return RGB{mix_int(a.r, b.r, t), mix_int(a.g, b.g, t), mix_int(a.b, b.b, t)};
+}
+
+// Giant block digits (draw.js GR_GLYPHS, bigW / bigChar / bigText): 3 x 5
+// digits, index 10 the 1 x 5 colon.
+static const char *const GR_GLYPHS[11][5] = {
+    {"###", "#.#", "#.#", "#.#", "###"}, {"##.", ".#.", ".#.", ".#.", "###"}, {"###", "..#", "###", "#..", "###"},
+    {"###", "..#", "###", "..#", "###"}, {"#.#", "#.#", "###", "..#", "..#"}, {"###", "#..", "###", "..#", "###"},
+    {"###", "#..", "###", "#.#", "###"}, {"###", "..#", "..#", "..#", "..#"}, {"###", "#.#", "###", "#.#", "###"},
+    {"###", "#.#", "###", "..#", "###"}, {".", "#", ".", "#", "."}};
+static int gr_index(char32_t ch) { return ch == U':' ? 10 : ch >= U'0' && ch <= U'9' ? (int)(ch - U'0') : -1; }
+// The colon sits closer: it starts 2 px back and leaves 2 px after it.
+static int big_lead(char32_t ch) { return ch == U':' ? -2 : 0; }
+static int big_gap(char32_t ch) { return ch == U':' ? GR_GAP - 2 : GR_GAP; }
+static int big_w(const ustr &s) {
+  int w = -GR_GAP;
+  for (char32_t ch : s) {
+    int g = gr_index(ch);
+    if (g >= 0) w += big_lead(ch) + (int)strlen(GR_GLYPHS[g][0]) * GR_SX + big_gap(ch);
+  }
+  return w;
+}
+static int big_char(Frame &f, char32_t ch, int x, int top, RGB c) {
+  int g = gr_index(ch);
+  if (g < 0) return x;
+  x += big_lead(ch);
+  int w = (int)strlen(GR_GLYPHS[g][0]);
+  for (int r = 0; r < 5; r++)
+    for (int i = 0; i < w; i++)
+      if (GR_GLYPHS[g][r][i] == '#') f.fill(x + i * GR_SX, top + r * GR_SY, GR_SX, GR_SY, c);
+  return x + w * GR_SX + big_gap(ch);
+}
+static void big_text(Frame &f, const ustr &s, int x, int top, RGB c) {
+  for (char32_t ch : s) x = big_char(f, ch, x, top, c);
+}
+
+// The time, rolling at the minute (draw.js drawBigTime / bigRoll).
+static void draw_big_time(Frame &f, const Value &p, double now, RGB color) {
+  ustr text = clock_text(now, p["tzo"].num(0));
+  const int H = 5 * GR_SY, top = (int)fdiv(32 - H, 2);
+  auto x_of = [](const ustr &s) { return (int)fdiv(64 - big_w(s), 2); };
+  std::optional<Roll> roll = take_roll("grad.clock", text);
+  if (!roll) {
+    big_text(f, text, x_of(text), top, color);
+    return;
+  }
+  int dist = H + GR_SY, up = (int)jsround(ease_in_out(roll->p) * dist);
+  const ustr &from = roll->from;
+  f.push_clip(0, top, 63, top + H - 1);
+  bool same = x_of(from) == x_of(text) && from.size() == text.size();
+  for (size_t i = 0; same && i < text.size(); i++) same = big_w(text.substr(i, 1)) == big_w(from.substr(i, 1));
+  if (same) {
+    int x = x_of(text);
+    for (size_t i = 0; i < text.size(); i++) {
+      if (text[i] == from[i]) big_char(f, text[i], x, top, color);
+      else {
+        big_char(f, from[i], x, top - up, color);
+        big_char(f, text[i], x, top - up + dist, color);
+      }
+      x += big_w(text.substr(i, 1)) + GR_GAP;
+    }
+  } else {
+    big_text(f, from, x_of(from), top - up, color);
+    big_text(f, text, x_of(text), top - up + dist, color);
+  }
+  f.pop_clip();
+}
+
+static void render_gradient(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
+  double now = now_o ? *now_o : p["now"].num(0);
+  long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
+  // Inverted (ginv): the digits carry the gradient on black, drawn as a
+  // mask and then colored.
+  if (p["ginv"].truthy()) {
+    draw_big_time(f, p, now, hexc(0xffffff));
+    for (int y = 0; y < 32; y++)
+      for (int x = 0; x < 64; x++)
+        if (f.get(x, y).r) f.set(x, y, gradient_color(x, y, ms));
+    return;
+  }
+  for (int y = 0; y < 32; y++)
+    for (int x = 0; x < 64; x++) f.set(x, y, gradient_color(x, y, ms));
+  draw_big_time(f, p, now, RGB{});
+}
+
 // ---- announce screen (design spec §15; contract "Announce") ----
 // Mirrors renderAnnounce() and MSG in draw.js: the server sends the lines
 // already laid out for the style (messageLayout); this only draws them.
@@ -2717,7 +2958,11 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
   else if (screen == "clock") {
-    if (json::str(p["cface"]) == "seventies") render_seventies(p, f, o.now);
+    std::string face = json::str(p["cface"]);
+    if (face == "seventies") render_seventies(p, f, o.now);
+    else if (face == "analog") render_analog(p, f, o.now);
+    else if (face == "daynight") render_daynight(p, f, o.now);
+    else if (face == "gradient") render_gradient(p, f, o.now, o.ms);
     else render_skyline_faded(p, f, o);
   }
   else if (screen == "announce") render_announce(p, f, o.t);

@@ -660,3 +660,30 @@ Built Nov 1, 2026: the clock screen's second face (phone page, Clock: Face **Sev
 - **Motion:** the minute roll only (`svt.clock`, the same per-digit roll as every clock).
 - **Fallback:** a board whose firmware doesn't report `seventies` gets the skyline face.
 - **Power:** the stripes are about 330 lit pixels at full color; more than the transit screen, well under the ticker.
+
+## 17. Clock screen: analog face
+
+Built Nov 1, 2026 from the Oct 17 mockup A1 (§14 *Clock faces*), S3 only.
+
+- **Dial:** 31 px on the left (a dim `#333333` circle, hour ticks with 12, 3, 6 and 9 longer). Hands from a 60-entry endpoint table drawn as aliased lines, so they step in whole pixels: hour (7 px) and minute (11 px) in `#cccccc`, a ticking amber seconds hand (13 px).
+- **Right column:** weekday (Tom Thumb; Wednesday shortens to WED, the only name wider than 31 px), date in 5x7 (`NOV 1`), and the current weather icon and temperature (board unit). Without weather the bottom line stays empty.
+- **Motion:** the seconds hand, once a second.
+
+## 18. Clock screen: day/night map face
+
+Built Nov 1, 2026, after Tidbyt's day/night map, S3 only.
+
+- **Map:** the world at 5.625° a pixel (64 x 26: 84° N to 62° S, Antarctica left off), land from Natural Earth 110m (`scripts/build-world.js`) colored from NASA's Blue Marble (lifted for the panel, snow capped at a soft grey-white, 24 colors). Blue sea. The night side keeps the map visible, dimmed and shifted toward blue; twilight fades over the 12° below the horizon.
+- **Sun and here:** a small yellow cross over the point where the sun is overhead; a white dot on the board's station (Chicago is x 16, y 7).
+- **Bottom rows:** the time (rolling) with AM/PM, and the date.
+- **Math:** whole degrees and a sine table, all integer, so the S3 matches `draw.js` pixel for pixel. The server sends the sun's position with each update; the board moves it on with the clock in between.
+- **Motion:** the terminator moves one pixel about every 22 minutes.
+
+## 19. Clock screen: gradient face
+
+Built Nov 1, 2026, S3 only. A full-panel diagonal gradient with the time cut out of it in giant digits.
+
+- **Colors:** a ring of ten hues (marigold, tangerine, rose, magenta, violet, indigo, azure, aqua, lime, lemon); about three neighbors span the panel at once, so every blend stays clean (no muddy midpoints between opposite hues).
+- **Motion:** the ring slides one color every 6 minutes, an hour around: the change is felt rather than seen. The time rolls at each minute.
+- **Time:** square 3 x 5 block digits (blockier than Tom Thumb: full-width tops and bottoms) blown up 4 x 6 (12 x 30 px, the colon 4 px wide), knocked out (unlit), 4 px apart (2 px either side of the colon); `12:59` fills the 64 px exactly. No date. Mostly black, a lot less light than a full gradient.
+- **Inverted** (phone: Lit digits on black, per board): the same digits carry the gradient on a black panel; the least light of any face.

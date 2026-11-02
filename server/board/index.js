@@ -20,7 +20,7 @@ const { createFirmware, FirmwareError, CHANNELS: FW_CHANNELS, MAX_BYTES: MAX_FIR
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
 const { toSkyline } = require('./skyline');
-const { sunPos, sunTime } = require('./sun');
+const { sunPos, sunTime, subsolar } = require('./sun');
 const { stripBytes } = require('./clouds');
 const fs = require('fs');
 const path = require('path');
@@ -64,7 +64,7 @@ const SECTIONS = {
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
-  clock: ['skyline', 'cface'],
+  clock: ['skyline', 'cface', 'cwx', 'dn', 'ginv'],
   announce: ['msg'],
 };
 function sectionsFor(body, screen) {
@@ -323,20 +323,20 @@ function createBoard({
   // another board under the same ID reports without it. Health's `hk` is
   // the fallback for the simulator and control page. Others get transit
   // instead, and no CLOCK on the knob's ring.
-  // The seventies face works the same way (`hk=skyline:seventies`); a board
-  // without it gets the skyline face.
+  // Each other face works the same way (`hk=skyline:seventies:analog:daynight:gradient`);
+  // a board without the chosen face gets the skyline face.
   const capOk = (id, q, cap) => {
     if (typeof q.hk === 'string' && q.hk.split(':').includes(cap)) return true;
     const h = healthOf.get(id);
     return !!(h && h.caps && h.caps.includes(cap));
   };
   const clockOk = (id, q = {}) => capOk(id, q, 'skyline');
-  const seventiesOk = (id, q = {}) => capOk(id, q, 'seventies');
   // The announce screen likewise (`hk=...:announce`); others get transit.
   const announceOk = (id, q = {}) => capOk(id, q, 'announce');
   const canDraw = (screen, caps) => (screen === 'clock' ? caps.clock : screen === 'announce' ? caps.announce : true);
   const forBoard = (body, caps) => (canDraw(body.screen, caps) ? body : { ...body, screen: 'transit' });
-  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), seventies: seventiesOk(id, q), announce: announceOk(id, q) });
+  // caps.face(name): whether the firmware draws that clock face.
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) });
 
   // The announce screen's message as the board draws it (draw.js
   // messageLayout: the lines for its style), or null when none is set.
@@ -374,6 +374,15 @@ function createBoard({
     for (const m of [views, rainLines]) for (const k of [...m.keys()]) if (k.startsWith(`${id}:`)) m.delete(k);
   }
 
+  // The day/night face's sun and spot: the subsolar point in tenths of a
+  // degree at `now` (t), and the station's pixel on the 5.625° map.
+  function dayNightOf(st, now) {
+    const sun = subsolar(now);
+    const here = st && st.lat <= 84.375 && st.lat > -61.875
+      ? [Math.min(63, Math.floor((st.lon + 180) / 5.625)), Math.floor((84.375 - st.lat) / 5.625)] : null;
+    return { dec: Math.round(sun.dec * 10), lon: Math.round(sun.lon * 10), t: Math.floor(now), here };
+  }
+
   // The skyline face's parameters, or null without weather or a station.
   function skylineOf(board, w, wd, st, now) {
     if (!w || !st) return null;
@@ -386,8 +395,8 @@ function createBoard({
   }
 
   async function update(board, id, boot, preview = {}, caps = capsOf(id)) {
-    // The clock screen's face: the seventies face only for firmware that draws it.
-    const face = board.clockFace === 'seventies' && caps.seventies ? 'seventies' : 'skyline';
+    // The clock screen's face: one other than the skyline only for firmware that draws it.
+    const face = board.clockFace && board.clockFace !== 'skyline' && caps.face(board.clockFace) ? board.clockFace : 'skyline';
     if (boot) board = store.boot(id);
     if (preview.mapid && preview.mapid !== board.station.mapid) {
       const st = stationById.get(preview.mapid);
@@ -526,6 +535,12 @@ function createBoard({
       // (skyline.js; contract "Skyline"; null on the seventies face).
       cface: face,
       skyline: face === 'skyline' ? skylineOf(board, w, wd, st, skyNow) : null,
+      // Analog face: the temperature and icon (contract "Analog"); null without weather.
+      ...(face === 'analog' ? { cwx: wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null } : {}),
+      // Day/night face: the subsolar point and the board's spot (contract "Day/night").
+      ...(face === 'daynight' ? { dn: dayNightOf(st, now) } : {}),
+      // Gradient face: lit gradient digits on black (contract "Gradient").
+      ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
       // Announce screen: the message's lines for its style (contract "Announce").
       msg: msgOf(board),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
