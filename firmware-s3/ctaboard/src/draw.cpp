@@ -2685,7 +2685,7 @@ static void render_daynight(const Value &p, Frame &f, std::optional<double> now_
 static const RGB GR_RING[] = {hexc(0xffc24a), hexc(0xff8a52), hexc(0xff5f7e), hexc(0xe94fb8), hexc(0xa55cff),
                               hexc(0x5a5cf2), hexc(0x3e9cff), hexc(0x3fd6c6), hexc(0x9be65a), hexc(0xffe14a)};
 static const long long GR_N = 10, GR_SPAN = 3, GR_STEP = 360000;
-static const int GR_SX = 4, GR_SY = 6, GR_GAP = 3;
+static const int GR_SX = 4, GR_SY = 6, GR_GAP = 4;
 
 static RGB gradient_color(int x, int y, long long ms) {
   long long u = fdiv((long long)(x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
@@ -2703,22 +2703,26 @@ static const char *const GR_GLYPHS[11][5] = {
     {"###", "#..", "###", "#.#", "###"}, {"###", "..#", "..#", "..#", "..#"}, {"###", "#.#", "###", "#.#", "###"},
     {"###", "#.#", "###", "..#", "###"}, {".", "#", ".", "#", "."}};
 static int gr_index(char32_t ch) { return ch == U':' ? 10 : ch >= U'0' && ch <= U'9' ? (int)(ch - U'0') : -1; }
+// The colon sits closer: it starts 2 px back and leaves 2 px after it.
+static int big_lead(char32_t ch) { return ch == U':' ? -2 : 0; }
+static int big_gap(char32_t ch) { return ch == U':' ? GR_GAP - 2 : GR_GAP; }
 static int big_w(const ustr &s) {
   int w = -GR_GAP;
   for (char32_t ch : s) {
     int g = gr_index(ch);
-    if (g >= 0) w += (int)strlen(GR_GLYPHS[g][0]) * GR_SX + GR_GAP;
+    if (g >= 0) w += big_lead(ch) + (int)strlen(GR_GLYPHS[g][0]) * GR_SX + big_gap(ch);
   }
   return w;
 }
 static int big_char(Frame &f, char32_t ch, int x, int top, RGB c) {
   int g = gr_index(ch);
   if (g < 0) return x;
+  x += big_lead(ch);
   int w = (int)strlen(GR_GLYPHS[g][0]);
   for (int r = 0; r < 5; r++)
     for (int i = 0; i < w; i++)
       if (GR_GLYPHS[g][r][i] == '#') f.fill(x + i * GR_SX, top + r * GR_SY, GR_SX, GR_SY, c);
-  return x + w * GR_SX + GR_GAP;
+  return x + w * GR_SX + big_gap(ch);
 }
 static void big_text(Frame &f, const ustr &s, int x, int top, RGB c) {
   for (char32_t ch : s) x = big_char(f, ch, x, top, c);

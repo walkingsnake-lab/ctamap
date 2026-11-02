@@ -1907,7 +1907,7 @@
       span: 3,         // ring colors across the diagonal
       step: 360000,    // ms to move one color along (an hour around the ring)
       sx: 4, sy: 6,    // 3 x 5 block digits blown up to 12 x 30
-      gap: 3,          // px between characters (12:59 fills the width exactly)
+      gap: 4,          // px between digits; 2 either side of the colon (12:59 fills the width exactly)
       dark: '#000000',
     };
     function gradientColor(x, y, ms) {
@@ -1928,11 +1928,14 @@
       8: ['###', '#.#', '###', '#.#', '###'], 9: ['###', '#.#', '###', '..#', '###'],
       ':': ['.', '#', '.', '#', '.'],
     };
-    const bigW = (str) => [...str].reduce((w, ch) => w + GR_GLYPHS[ch][0].length * GR.sx + GR.gap, -GR.gap);
+    // The colon sits closer: it starts 2 px back and leaves 2 px after it.
+    const bigLead = (ch) => (ch === ':' ? -2 : 0), bigGap = (ch) => (ch === ':' ? GR.gap - 2 : GR.gap);
+    const bigW = (str) => [...str].reduce((w, ch) => w + bigLead(ch) + GR_GLYPHS[ch][0].length * GR.sx + bigGap(ch), -GR.gap);
     function bigChar(f, ch, x, top, color) {
       const g = GR_GLYPHS[ch];
+      x += bigLead(ch);
       g.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * GR.sx, top + r * GR.sy, GR.sx, GR.sy, color); }));
-      return x + g[0].length * GR.sx + GR.gap;
+      return x + g[0].length * GR.sx + bigGap(ch);
     }
     function bigText(f, str, x, top, color) { for (const ch of str) x = bigChar(f, ch, x, top, color); }
     function renderGradient(p, opts) {
@@ -1955,7 +1958,7 @@
           a.forEach((ch, i) => {
             if (ch === b[i]) bigChar(f, ch, x, top, GR.dark);
             else { bigChar(f, b[i], x, top - up, GR.dark); bigChar(f, ch, x, top - up + dist, GR.dark); }
-            x += bigW(ch) + GR.gap;
+            x += bigW(ch) + GR.gap;  // one character's advance (bigW drops a trailing gap)
           });
         } else {
           bigText(f, from, xOf(from), top - up, GR.dark);

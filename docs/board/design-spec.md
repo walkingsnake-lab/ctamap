@@ -686,4 +686,4 @@ Built Nov 1, 2026, S3 only. A full-panel diagonal gradient with the time cut out
 
 - **Colors:** a ring of ten hues (marigold, tangerine, rose, magenta, violet, indigo, azure, aqua, lime, lemon); about three neighbors span the panel at once, so every blend stays clean (no muddy midpoints between opposite hues).
 - **Motion:** the ring slides one color every 6 minutes, an hour around: the change is felt rather than seen. The time rolls at each minute.
-- **Time:** square 3 x 5 block digits (blockier than Tom Thumb: full-width tops and bottoms) blown up 4 x 6 (12 x 30 px, the colon 4 px wide), knocked out (unlit), 3 px apart; `12:59` fills the 64 px exactly. No date. Mostly black, a lot less light than a full gradient.
+- **Time:** square 3 x 5 block digits (blockier than Tom Thumb: full-width tops and bottoms) blown up 4 x 6 (12 x 30 px, the colon 4 px wide), knocked out (unlit), 4 px apart (2 px either side of the colon); `12:59` fills the 64 px exactly. No date. Mostly black, a lot less light than a full gradient.
