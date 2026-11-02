@@ -3,15 +3,18 @@
 
 Shell (walnut PLA): the v5 sleeve, split into a top and a bottom half at ZS (2 mm above centre, so both halves print the
 same height). Only the two end walls are cut. The joint:
-- a 1 mm x 1 mm reveal round each end (end wall, front rim, hood side, back rim), so the seam sits in shadow;
+- a 1 mm x 1 mm reveal round each end (end wall, front rim, hood side, back rim). The halves meet at the reveal's lower
+  edge (ZJ), so the joint line sits in the groove's shadow and neither half has a sliver behind it;
 - a half-lap inside the wall: the inner half of the wall (WALL / 2) splits LAP lower than the outer half, so the top half
-  carries a lip down over the bottom half. Glue (medium CA) goes on the lap faces. The lap stops 1 mm behind the screen
-  face and 0.5 mm in front of the tray's back, so nothing of it shows in the hood or at the back rim.
+  carries a lip down into a pocket in the bottom half, with a glue gap (LAP_CL on its face and ends, LAP_ZCL under it,
+  so the outer band is the only z seat). Glue (medium CA) goes on the lap faces. The lap's ends are 45 deg (no flat
+  overhang back-down). The lap stops 1 mm behind the screen face and 0.5 mm in front of the tray's back, so nothing of
+  it shows in the hood or at the back rim.
 - Glue the halves back-down on a flat sheet (the back rims are one plane), so they can't step front-to-back; the lap
   keys them in and out. Lap the front and finish after gluing.
 Tray (black PETG): the v5 drawer tray, split at x = 0. Each half bolts to its two corner inserts (M3 x 8 countersunk down
 the funnel tubes) and takes one M3 x 10 from below. Two bridges cross the tray seam on the back face:
-- spine (top): a 3 mm bar on the cleat's two nuts (2 x M3 x 8). The French cleat bolts to the same nuts, so on a wall
+- spine (top): a 3 mm bar on the cleat's two nuts (2 x M3 x 8 countersunk, flush). The French cleat bolts to the same nuts, so on a wall
   the case cleat replaces the spine;
 - bridge (bottom): a plate and a funnel tube to the panel's bottom-centre insert (1 x M3 x 8 countersunk); the tube passes
   a notch half in each tray half, so it keys them.
@@ -46,6 +49,9 @@ REV_W, REV_D = 1.0, 1.0         # reveal: width (along z) and depth
 ZS = (H + LAP) / 2              # outer split height: top and bottom halves come out the same height
 LAP_Y0 = Y_FACE + 1.0           # lap only behind the screen face ...
 LAP_Y1 = DR.Y1 - 0.5            # ... and in front of the tray's back (the back rim shows the plain reveal)
+LAP_CL = 0.12                   # glue gap on the lip's outer face and its ends (medium CA)
+LAP_ZCL = 0.2                   # gap under the lip: the band at the reveal's lower edge is the only z seat
+ZJ = ZS - REV_W / 2             # where the halves meet outside: the reveal's lower edge, so the joint sits in its shadow
 BED = 256.0
 
 
@@ -72,14 +78,32 @@ def visible_layer(sh, d):
     return sh - deep
 
 
+def lap_prism(cl, zcl):
+    """the lap's extent in y and z (all x): from the joint height down to ZS - LAP, both ends chamfered 45 deg so neither
+    the top half's lip nor the bottom half's pocket roof is a flat overhang when printed back-down. cl / zcl shrink it
+    (the lip) inside the pocket."""
+    z0, z1 = ZS - LAP + zcl, ZJ + 0.01
+    e = cl * math.sqrt(2)
+    a = box(-HW - 1, HW + 1, LAP_Y0 + e, LAP_Y1 - e, z1 - 0.01, z1)
+    b = box(-HW - 1, HW + 1, LAP_Y0 + e + (z1 - z0), LAP_Y1 - e - (z1 - z0), z0, z0 + 0.01)
+    return (a + b).hull()
+
+
 def split_shell(sh):
+    """top and bottom halves. Outside, the halves meet at ZJ (the reveal's lower edge). Inside the wall, the top half's
+    lip (inner WALL / 2) runs down to ZS - LAP into a pocket in the bottom half, with LAP_CL / LAP_ZCL of glue gap."""
     reveal = visible_layer(sh, REV_D) ^ box(-HW - 1, HW + 1, -1, D + 1, ZS - REV_W / 2, ZS + REV_W / 2)
     s = sh - reveal
-    lip = s ^ outer_inset(WALL / 2) ^ box(-HW - 1, HW + 1, LAP_Y0, LAP_Y1, ZS - LAP, ZS + 0.01)   # the top half's lap lip
-    top = (s ^ box(-HW - 1, HW + 1, -50, D + 1, ZS, H + 10)) + lip
-    bot = (s ^ box(-HW - 1, HW + 1, -50, D + 1, -10, ZS)) - lip
-    big = lambda m: max(m.decompose(), key=lambda q: q.volume())
-    return big(top), big(bot)
+    pocket = s ^ outer_inset(WALL / 2) ^ lap_prism(0, 0)
+    lip = s ^ outer_inset(WALL / 2 + LAP_CL) ^ lap_prism(LAP_CL, LAP_ZCL)
+    top = (s ^ box(-HW - 1, HW + 1, -50, D + 1, ZJ, H + 10)) + lip
+    bot = (s ^ box(-HW - 1, HW + 1, -50, D + 1, -10, ZJ)) - pocket
+    out = []
+    for m in (top, bot):
+        parts = sorted(m.decompose(), key=lambda q: -q.volume())
+        assert all(q.volume() < 0.01 for q in parts[1:]), [q.volume() for q in parts[1:]]
+        out.append(parts[0])
+    return tuple(out)
 
 
 # ---------------------------------------------------------------- tray (drawer.tray for the P4, split at x = 0)
@@ -87,7 +111,9 @@ SEAM_BAR = 5.0                  # louvers stop this far either side of the tray 
 BRIDGE_X = 18.0                 # bottom band: louvers stop this far either side (bridge plate)
 BRIDGE_Z = ZC - 56.0            # panel's bottom-centre insert
 HOOK_X = -22.0                  # ribbon hooks: on the left half, clear of the seam
+HOOK_LIP = 4.0                  # hook lip reach = thickness (drawer.py's lip is 1.5 thick: a 21 deg overhang)
 SPINE_HW, SPINE_H, SPINE_T = 62.0, 14.0, 3.0
+CSK_D = 6.8                     # countersink at the spine's outer face (ISO 10642 M3 head: 6.72 max), 90 deg
 BRIDGE_HW, BRIDGE_H, BRIDGE_T = 15.0, 14.0, 3.0
 NOTCH_D = P3.SO_OD + 0.6        # each tray half's half-hole round the bridge tube
 
@@ -149,9 +175,9 @@ def tray_p4():
     pi_z = ZC + min(DR.HEADERS, key=lambda h: h[0])[1]
     for side in (-1, 1):
         zi = pi_z + side * (DR.HOOK_RW / 2 + 1.0); zo = zi + side * 3.0
-        ya, yb = Y0 - 3.0 - 1.5, Y0 - 3.0
+        ya, yb = Y0 - 3.0 - HOOK_LIP, Y0 - 3.0              # lip as thick as its reach: 45 deg underside, back-down
         t = t + box(HOOK_X - 2.5, HOOK_X + 2.5, ya, Y0 + 0.01, min(zi, zo), max(zi, zo))
-        tip = zi - side * 4.0
+        tip = zi - side * HOOK_LIP
         t = t + Manifold.batch_hull([box(HOOK_X - 2.5, HOOK_X + 2.5, ya, yb, min(zi, zo), max(zi, zo)), box(HOOK_X - 2.5, HOOK_X + 2.5, ya, ya + 0.01, tip - 0.005, tip + 0.005)])
     # tie loop for the power-cable bundle: right half, between the seam and the S3's connector, above the ribbon
     tx0, tx1 = SEAM_BAR + 4.0, DR.S3_EDGE - 63.8 - 1.0
@@ -247,8 +273,10 @@ def spine():
     zc = DR.CLEAT_SCREWS[0][1]
     cs = CrossSection.square([2 * SPINE_HW - 6, SPINE_H - 6], center=True).offset(3, JT, circular_segments=24).translate([0, zc])
     s = prism_y(cs, DR.Y1, DR.Y1 + SPINE_T)
-    for cx, cz in DR.CLEAT_SCREWS:
-        s = s - cyl_y(cx, cz, DR.Y1 - 1, DR.Y1 + SPINE_T + 1, 3.4, 24)
+    y_out = DR.Y1 + SPINE_T
+    for cx, cz in DR.CLEAT_SCREWS:                       # M3 x 8 countersunk: head flush, 1 mm inside the back rim
+        s = s - cyl_y(cx, cz, DR.Y1 - 1, y_out + 1, 3.4, 24)
+        s = s - Manifold.cylinder(CSK_D / 2 - 1.7 + 0.01, 1.7, CSK_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([cx, y_out - (CSK_D / 2 - 1.7), cz])
     return s
 
 
@@ -388,13 +416,16 @@ if __name__ == '__main__':
     spin45 = trimesh.transformations.rotation_matrix(math.pi / 4, [0, 0, 1])
     report = {}
 
-    def put(m, name, mat=None, diag=False, drop_axis=1):
+    def put(m, name, mat=None, diag=False, drop_axis=1, frame=None):
+        """frame: centre and drop on this part instead (a two-colour pair shares one frame, so its parts stay registered)"""
         t = to_tm(m)
-        if mat is not None:
-            t.apply_transform(mat)
-        if diag:
-            t.apply_transform(spin45)                         # pre-rotated 45 deg: drops onto the X2D's bed diagonally
-        t.apply_translation([-(t.bounds[0][0] + t.bounds[1][0]) / 2, -(t.bounds[0][1] + t.bounds[1][1]) / 2, -t.bounds[0][2]])
+        r = to_tm(frame) if frame is not None else t.copy()
+        for tt in {id(t): t, id(r): r}.values():
+            if mat is not None:
+                tt.apply_transform(mat)
+            if diag:
+                tt.apply_transform(spin45)                    # pre-rotated 45 deg: drops onto the X2D's bed diagonally
+        t.apply_translation([-(r.bounds[0][0] + r.bounds[1][0]) / 2, -(r.bounds[0][1] + r.bounds[1][1]) / 2, -r.bounds[0][2]])
         t.export(f'{out}/{name}')
         sq = bed_fit(m, drop_axis)
         report[name] = dict(watertight=bool(t.is_watertight), extents=np.round(t.extents, 1).tolist(), square=sq[0],
@@ -405,13 +436,15 @@ if __name__ == '__main__':
     put(P['tray_right'], 'p4-tray-right.stl', down)
     put(P['spine'], 'p4-spine.stl', down)
     put(P['bridge'], 'p4-bridge.stl', down)
+    pair = lambda d, side: d[(side, 'white')] + d[(side, 'black')]
     for (side, part), m in P['diffuser'].items():               # face down, z = 0 is the face: as exported
-        put(m, f'p4-diffuser-{side}-{part}.stl', None, drop_axis=2)
+        put(m, f'p4-diffuser-{side}-{part}.stl', None, drop_axis=2, frame=pair(P['diffuser'], side))
     # coupons
     ct, cb = seam_coupon(P['top'], P['bot'])
     put(ct, 'coupon-p4-seam-top.stl', down); put(cb, 'coupon-p4-seam-bottom.stl', down)
-    for (side, part), m in diffuser_joint_coupon(P['diffuser']).items():
-        put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2)
+    dj = diffuser_joint_coupon(P['diffuser'])
+    for (side, part), m in dj.items():
+        put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj, side))
     cs, ctr = DR.fit_coupon(P['shell'], P['tray'])
     put(cs, 'coupon-p4-drawer-fit-shell.stl', down); put(ctr, 'coupon-p4-drawer-fit-tray.stl', down)
     import json

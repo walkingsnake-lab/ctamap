@@ -154,7 +154,7 @@ PANEL=p25 python3 case2.py ../stl-p25   # and the same for every other script ab
 - **STLs:** `stl/v5-drawer-p25/` holds the P2.5 drawer set (shell, tray for 0.4 and 0.6 nozzles, fit coupons, collar, status window, cleats, corner check frame), built with `PANEL=p25`.
 - **Not measured yet:** P2.5 thickness (14.5 assumed). The corner inserts are confirmed (above); `src/check_corners.py` makes the check frame (`PANEL=p3 python3 check_corners.py out.stl`, or `W H CX CZ` for a symmetric panel).
 - P2.5 diffuser: print it on the 0.2 nozzle (each 0.45 mm rib is two of its lines; on a 0.4 nozzle the single-bead ribs printed wavy and uneven, even with classic walls). The face is 0.14 mm: set the profile's initial layer height to 0.14 (the most a 0.2 nozzle takes) so it stays one layer; a face thicker than the first layer slices as two layers and loses translucency.
-- **P4** (256 x 128) has no profile: the case (~277 mm) and diffuser (~275 mm) exceed the X2D's 256 mm bed, so it needs split parts first (Enclosure Notes, "P4 approach").
+- **P4** (256 x 128): the case (281 mm) and diffuser exceed the X2D's 256 mm bed, so it's built in split parts (shell top/bottom, tray and diffuser left/right): [P4-BUILD.md](P4-BUILD.md), `src/p4.py`, `stl/p4/`.
 
 `hardware/` is in `.dockerignore`, so none of this ships to Fly.
 
