@@ -16,9 +16,10 @@ const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock'];
-// Clock screen faces (design spec §14): the skyline, and the seventies
-// stripes with VCR digits.
-const CLOCK_FACES = ['skyline', 'seventies'];
+// Clock screen faces (design spec §14, §16-19): the skyline, the seventies
+// stripes with VCR digits, the analog dial, the day/night world map, and the
+// flowing gradient.
+const CLOCK_FACES = ['skyline', 'seventies', 'analog', 'daynight', 'gradient'];
 // Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
 const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
 const WHEEL_SPEEDS = ['off', 'slow', 'normal', 'fast'];
@@ -179,6 +180,8 @@ function defaultBoard(stations) {
     twinkle: true,
     rainSpeed: 'normal',
     showTemp: true,
+    // Gradient clock face: lit gradient digits on black instead of digits cut out of the gradient.
+    gradInvert: false,
     wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
@@ -246,6 +249,7 @@ function validatePatch(patch, stations) {
       case 'boats':
       case 'twinkle':
       case 'showTemp':
+      case 'gradInvert':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;

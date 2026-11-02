@@ -20,7 +20,7 @@ const { createFirmware, FirmwareError, CHANNELS: FW_CHANNELS, MAX_BYTES: MAX_FIR
 const { team } = require('./teams');
 const { tzOffset } = require('./time');
 const { toSkyline } = require('./skyline');
-const { sunPos, sunTime } = require('./sun');
+const { sunPos, sunTime, subsolar } = require('./sun');
 const { stripBytes } = require('./clouds');
 const fs = require('fs');
 const path = require('path');
@@ -64,7 +64,7 @@ const SECTIONS = {
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
-  clock: ['skyline', 'cface'],
+  clock: ['skyline', 'cface', 'cwx', 'dn', 'ginv'],
 };
 function sectionsFor(body, screen) {
   const out = { ...body, for: screen };
@@ -322,15 +322,16 @@ function createBoard({
   // another board under the same ID reports without it. Health's `hk` is
   // the fallback for the simulator and control page. Others get transit
   // instead, and no CLOCK on the knob's ring.
-  // The seventies face works the same way (`hk=skyline:seventies`); a board
-  // without it gets the skyline face.
+  // Each other face works the same way (`hk=skyline:seventies:analog:daynight:gradient`);
+  // a board without the chosen face gets the skyline face.
   const capOk = (id, q, cap) => {
     if (typeof q.hk === 'string' && q.hk.split(':').includes(cap)) return true;
     const h = healthOf.get(id);
     return !!(h && h.caps && h.caps.includes(cap));
   };
   const clockOk = (id, q = {}) => capOk(id, q, 'skyline');
-  const seventiesOk = (id, q = {}) => capOk(id, q, 'seventies');
+  const faceOk = (id, q = {}) => (face) => capOk(id, q, face);
+  const faceOf = (id) => faceOk(id);
   const forBoard = (body, clock) => (body.screen === 'clock' && !clock ? { ...body, screen: 'transit' } : body);
 
   // Last transit view per board and station, for the chrono hysteresis.
@@ -359,6 +360,15 @@ function createBoard({
     for (const m of [views, rainLines]) for (const k of [...m.keys()]) if (k.startsWith(`${id}:`)) m.delete(k);
   }
 
+  // The day/night face's sun and spot: the subsolar point in tenths of a
+  // degree at `now` (t), and the station's pixel on the 5.625° map.
+  function dayNightOf(st, now) {
+    const sun = subsolar(now);
+    const here = st && st.lat <= 84.375 && st.lat > -61.875
+      ? [Math.min(63, Math.floor((st.lon + 180) / 5.625)), Math.floor((84.375 - st.lat) / 5.625)] : null;
+    return { dec: Math.round(sun.dec * 10), lon: Math.round(sun.lon * 10), t: Math.floor(now), here };
+  }
+
   // The skyline face's parameters, or null without weather or a station.
   function skylineOf(board, w, wd, st, now) {
     if (!w || !st) return null;
@@ -370,9 +380,9 @@ function createBoard({
     catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
-  async function update(board, id, boot, preview = {}, clock = clockOk(id), seventies = seventiesOk(id)) {
-    // The clock screen's face: the seventies face only for firmware that draws it.
-    const face = board.clockFace === 'seventies' && seventies ? 'seventies' : 'skyline';
+  async function update(board, id, boot, preview = {}, clock = clockOk(id), canDraw = faceOf(id)) {
+    // The clock screen's face: one other than the skyline only for firmware that draws it.
+    const face = board.clockFace && board.clockFace !== 'skyline' && canDraw(board.clockFace) ? board.clockFace : 'skyline';
     if (boot) board = store.boot(id);
     if (preview.mapid && preview.mapid !== board.station.mapid) {
       const st = stationById.get(preview.mapid);
@@ -511,6 +521,12 @@ function createBoard({
       // (skyline.js; contract "Skyline"; null on the seventies face).
       cface: face,
       skyline: face === 'skyline' ? skylineOf(board, w, wd, st, skyNow) : null,
+      // Analog face: the temperature and icon (contract "Analog"); null without weather.
+      ...(face === 'analog' ? { cwx: wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null } : {}),
+      // Day/night face: the subsolar point and the board's spot (contract "Day/night").
+      ...(face === 'daynight' ? { dn: dayNightOf(st, now) } : {}),
+      // Gradient face: lit gradient digits on black (contract "Gradient").
+      ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
@@ -574,7 +590,7 @@ function createBoard({
       if (!board) return send(res, 404, { err: 'unknown_board' });
       seenAt.set(id, nowSecs());
       const clock = clockOk(id, parsed.query);
-      const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, clock, seventiesOk(id, parsed.query)), clock);
+      const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, clock, faceOk(id, parsed.query)), clock);
       const asked = parsed.query.s === 'clock' && !clock ? 'transit' : parsed.query.s;
       const shown = SCREENS.includes(asked) ? asked : body.screen;
       return send(res, 200, sectionsFor(body, shown));
@@ -595,7 +611,7 @@ function createBoard({
       }
       if (!board) return send(res, 404, { err: 'unknown_board' });
       const clock = clockOk(id, parsed.query);
-      const body = forBoard(await update(board, id, false, {}, clock, seventiesOk(id, parsed.query)), clock);
+      const body = forBoard(await update(board, id, false, {}, clock, faceOk(id, parsed.query)), clock);
       return send(res, 200, sectionsFor(body, body.screen));
     }
 

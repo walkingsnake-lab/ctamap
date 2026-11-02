@@ -1750,6 +1750,238 @@
       return f;
     }
 
+    // ---- clock faces: shared date and integer trig ----
+    // Local date from epoch seconds and the payload's UTC offset (no Date:
+    // the firmware ports this line for line). Weekday 0 = Sunday.
+    const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+    const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const fdivI = (a, b) => Math.floor(a / b);
+    function localDate(now, tzo) {
+      const lt = Math.floor(now + (tzo || 0)), days = fdivI(lt, 86400);
+      const wd = ((days + 4) % 7 + 7) % 7;
+      const z = days + 719468, era = fdivI(z, 146097), doe = z - era * 146097;
+      const yoe = fdivI(doe - fdivI(doe, 1460) + fdivI(doe, 36524) - fdivI(doe, 146096), 365);
+      const doy = doe - (365 * yoe + fdivI(yoe, 4) - fdivI(yoe, 100)), mp = fdivI(5 * doy + 2, 153);
+      const d = doy - fdivI(153 * mp + 2, 5) + 1, m = mp < 10 ? mp + 3 : mp - 9;
+      const sec = lt - days * 86400;
+      return { wd, m, d, h: fdivI(sec, 3600), min: fdivI(sec, 60) % 60, s: sec % 60 };
+    }
+    // sin(degrees) x 10000 for whole degrees 0-90; sinD/cosD for any degree.
+    const SIN1E4 = [0, 175, 349, 523, 698, 872, 1045, 1219, 1392, 1564, 1736, 1908, 2079, 2250, 2419, 2588, 2756, 2924, 3090, 3256, 3420, 3584, 3746, 3907, 4067, 4226, 4384, 4540, 4695, 4848, 5000, 5150, 5299, 5446, 5592, 5736, 5878, 6018, 6157, 6293, 6428, 6561, 6691, 6820, 6947, 7071, 7193, 7314, 7431, 7547, 7660, 7771, 7880, 7986, 8090, 8192, 8290, 8387, 8480, 8572, 8660, 8746, 8829, 8910, 8988, 9063, 9135, 9205, 9272, 9336, 9397, 9455, 9511, 9563, 9613, 9659, 9703, 9744, 9781, 9816, 9848, 9877, 9903, 9925, 9945, 9962, 9976, 9986, 9994, 9998, 10000];
+    function sinD(deg) {
+      const d = ((deg % 360) + 360) % 360;
+      return d <= 90 ? SIN1E4[d] : d <= 180 ? SIN1E4[180 - d] : d <= 270 ? -SIN1E4[d - 180] : -SIN1E4[360 - d];
+    }
+    const cosD = (deg) => sinD(deg + 90);
+
+    // ---- clock screen: analog face (design spec §17; contract "Analog") ----
+    // A 31 px dial on the left (the 60-entry endpoint tables below, lines
+    // drawn Bresenham, so hands step in whole pixels and the seconds hand
+    // ticks), the day, date and weather on the right.
+    const AN = {
+      cx: 15, cy: 15, rx: 48,
+      // Hand endpoints at each of 60 positions, clockwise from 12: hour (7 px), minute (11), second (13).
+      hour: '15,8,16,8,16,8,17,8,18,9,19,9,19,9,20,10,20,10,21,11,21,12,21,12,22,13,22,14,22,14,22,15,22,16,22,16,22,17,21,18,21,19,21,19,20,20,20,20,19,21,19,21,18,21,17,22,16,22,16,22,15,22,14,22,14,22,13,22,12,21,12,21,11,21,10,20,10,20,9,19,9,19,9,18,8,17,8,16,8,16,8,15,8,14,8,14,8,13,9,12,9,12,9,11,10,10,10,10,11,9,11,9,12,9,13,8,14,8,14,8',
+      min: '15,4,16,4,17,4,18,5,19,5,21,5,21,6,22,7,23,8,24,9,25,10,25,11,25,12,26,13,26,14,26,15,26,16,26,17,25,18,25,19,25,20,24,21,23,22,22,23,21,24,21,25,19,25,18,25,17,26,16,26,15,26,14,26,13,26,12,25,11,25,10,25,9,24,8,23,7,22,6,21,5,21,5,19,5,18,4,17,4,16,4,15,4,14,4,13,5,12,5,11,5,10,6,9,7,8,8,7,9,6,9,5,11,5,12,5,13,4,14,4',
+      sec: '15,2,16,2,18,2,19,3,20,3,22,4,23,4,24,5,25,6,26,7,26,8,27,10,27,11,28,12,28,14,28,15,28,16,28,18,27,19,27,20,26,21,26,23,25,24,24,25,23,26,22,26,20,27,19,27,18,28,16,28,15,28,14,28,12,28,11,27,10,27,8,26,7,26,6,25,5,24,4,23,4,22,3,20,3,19,2,18,2,16,2,15,2,14,2,12,3,11,3,10,4,8,4,7,5,6,6,5,7,4,8,4,10,3,11,3,12,2,14,2',
+      // Hour ticks: x, y, major (12, 3, 6 and 9 are two pixels long).
+      ticks: '15,2,1,15,3,1,22,4,0,26,8,0,28,15,1,27,15,1,26,21,0,22,26,0,15,28,1,15,27,1,8,26,0,4,22,0,2,15,1,3,15,1,4,8,0,8,4,0',
+    };
+    const nums = (str) => str.split(',').map(Number);
+    const AN_T = { hour: nums(AN.hour), min: nums(AN.min), sec: nums(AN.sec), ticks: nums(AN.ticks) };
+    function bresenham(f, x0, y0, x1, y1, color) {
+      const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+      let err = dx + dy;
+      for (;;) {
+        f.fill(x0, y0, 1, 1, color);
+        if (x0 === x1 && y0 === y1) break;
+        const e2 = 2 * err;
+        if (e2 >= dy) { err += dy; x0 += sx; }
+        if (e2 <= dx) { err += dx; y0 += sy; }
+      }
+    }
+    // Midpoint circle, radius r around (cx, cy).
+    function circle(f, cx, cy, r, color) {
+      let x = r, y = 0, err = 1 - r;
+      while (x >= y) {
+        for (const [a, b] of [[x, y], [y, x], [-y, x], [-x, y], [-x, -y], [-y, -x], [y, -x], [x, -y]]) f.fill(cx + a, cy + b, 1, 1, color);
+        y++;
+        if (err < 0) err += 2 * y + 1; else { x--; err += 2 * (y - x) + 1; }
+      }
+    }
+    function renderAnalog(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const f = newFrame();
+      const t = localDate(now, p.tzo);
+      circle(f, AN.cx, AN.cy, 15, '#333333');
+      const tk = AN_T.ticks;
+      for (let i = 0; i < tk.length; i += 3) f.fill(tk[i], tk[i + 1], 1, 1, tk[i + 2] ? C.wxText : C.dimHead);
+      const hand = (tab, i, color) => bresenham(f, AN.cx, AN.cy, tab[i * 2], tab[i * 2 + 1], color);
+      hand(AN_T.hour, (t.h % 12) * 5 + fdivI(t.min, 12), C.clock);
+      hand(AN_T.min, t.min, C.clock);
+      hand(AN_T.sec, t.s, C.amber);
+      f.fill(AN.cx, AN.cy, 1, 1, C.clock);
+      // Right: day (full name when it fits the 31 px column), date, weather.
+      const full = DAY_NAMES[t.wd], day = measure('small', full) <= 31 ? full : full.slice(0, 3);
+      f.text('small', day, AN.rx - fdivI(measure('small', day), 2), 7, C.wxText);
+      const date = `${MONTHS[t.m - 1]} ${t.d}`;
+      f.text('5x7', date, AN.rx - fdivI(measure('5x7', date), 2), 17, C.label);
+      const w = p.cwx;
+      if (w && w.temp != null) {
+        const temp = String(w.temp), tw = measure('5x7', temp) + 3, x0 = AN.rx - fdivI(8 + 2 + tw, 2);
+        if (w.icon && icons.ICONS[w.icon]) drawIcon(f, w.icon, x0, 22);
+        const x = f.text('5x7', temp, x0 + 10, 30, C.label);
+        f.text('small', '°', x, 28, C.label);
+      }
+      return f;
+    }
+
+    // ---- clock screen: day/night map face (design spec §18; contract "Day/night") ----
+    // The world (world.js, 5.625° pixels, 84.4° N to 61.9° S, land in Blue
+    // Marble colors) lit by the sun: day colors where the sun is up, fading
+    // through twilight to the night side (each color dimmed toward blue) 12°
+    // below the horizon. Integer math throughout (whole degrees,
+    // SIN1E4), so the firmware matches pixel for pixel. The time and date on
+    // the bottom rows.
+    const DN = {
+      rows: 26, deg: 5.625, top: 84.375,
+      sea: '#2c70b0', nightSea: '#143a5c',
+      // Night land: each channel x k / 256 (dimmer, a little bluer).
+      nightK: [104, 116, 140],
+      sun: '#ffe060', sunArm: '#a07818', here: '#ffffff',
+      // sin(-12°) x 1e8: full night at or below it.
+      night12: -2079 * 10000,
+    };
+    const DN_LAT = Array.from({ length: DN.rows }, (_, r) => Math.round(DN.top - (r + 0.5) * DN.deg));
+    const DN_LON = Array.from({ length: 64 }, (_, x) => Math.round(-180 + (x + 0.5) * DN.deg));
+    const mixInt = (n, d, k) => n.map((v, i) => v + fdivI((d[i] - v) * k, 256));
+    function renderDayNight(p, opts) {
+      const o = opts || {};
+      const now = Math.floor(o.now != null ? o.now : p.now);
+      const f = newFrame();
+      const dn = p.dn;
+      const world = icons.WORLD;
+      if (dn && world) {
+        // The subsolar longitude moves 15° an hour: tenths of a degree back from dn.t.
+        let lon10 = dn.lon - fdivI(now - dn.t, 24);
+        lon10 = ((lon10 + 1800) % 3600 + 3600) % 3600 - 1800;
+        const decD = fdivI(dn.dec + 5, 10), lonD = fdivI(lon10 + 5, 10);
+        const sDec = sinD(decD), cDec = cosD(decD);
+        const sea = [hex(DN.sea), hex(DN.nightSea)], land = {};
+        for (const [c, v] of Object.entries(icons.WORLD_PALETTE)) { const d = hex(v); land[c] = [d, d.map((ch, i) => fdivI(ch * DN.nightK[i], 256))]; }
+        for (let y = 0; y < DN.rows; y++) {
+          const lat = DN_LAT[y], sl = sinD(lat) * sDec, cl = cosD(lat) * cDec;
+          for (let x = 0; x < 64; x++) {
+            // sin(sun's altitude) x 1e8.
+            const s = sl + fdivI(cl * cosD(DN_LON[x] - lonD), 10000);
+            const k = s >= 0 ? 256 : s <= DN.night12 ? 0 : 256 - fdivI(s * 256, DN.night12);
+            const [dc, nc] = world[y][x] === '.' ? sea : land[world[y][x]];
+            f.set(x, y, mixInt(nc, dc, k));
+          }
+        }
+        // The sun over its subsolar point, and the board's own spot.
+        const sx = fdivI((lon10 + 1800) * 8, 450), sy = fdivI(6750 - dn.dec * 8, 450);
+        for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) if (sy + dy >= 0 && sy + dy < DN.rows) f.fill(((sx + dx) % 64 + 64) % 64, sy + dy, 1, 1, DN.sunArm);
+        if (sy >= 0 && sy < DN.rows) f.fill(sx, sy, 1, 1, DN.sun);
+        if (dn.here && dn.here[1] < DN.rows) f.fill(dn.here[0], dn.here[1], 1, 1, DN.here);
+      }
+      // Bottom rows: the time (rolling) left, the date right.
+      const t = localDate(now, p.tzo);
+      const x = rollText(f, 'small', 'dn.clock', clockText(now), () => 0, 32, C.label);
+      f.text('small', t.h < 12 ? 'AM' : 'PM', x + 2, 32, C.wxText);
+      const date = `${DAY_NAMES[t.wd].slice(0, 3)} ${MONTHS[t.m - 1]} ${t.d}`;
+      f.text('small', date, 64 - measure('small', date), 32, C.wxText);
+      return f;
+    }
+
+    // ---- clock screen: gradient face (design spec §19; contract "Gradient") ----
+    // A diagonal gradient across about three neighbors of a ten-color ring,
+    // sliding along the ring with the animation clock (o.ms) so slowly that
+    // the change is felt rather than seen (an hour around the ring; each pair
+    // of neighbors close in hue, so no blend goes muddy). The time is knocked
+    // out of it (unlit) in giant block digits. Integer math, ported line for
+    // line.
+    const GR = {
+      ring: ['#ffc24a', '#ff8a52', '#ff5f7e', '#e94fb8', '#a55cff', '#5a5cf2', '#3e9cff', '#3fd6c6', '#9be65a', '#ffe14a'],
+      span: 3,         // ring colors across the diagonal
+      step: 360000,    // ms to move one color along (an hour around the ring)
+      sx: 4, sy: 6,    // 3 x 5 block digits blown up to 12 x 30
+      gap: 4,          // px between digits; 2 either side of the colon (12:59 fills the width exactly)
+      dark: '#000000',
+    };
+    function gradientColor(x, y, ms) {
+      const n = GR.ring.length;
+      // Position on the diagonal, 0-1023, top left to bottom right.
+      const u = fdivI((x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+      const r = fdivI(ms * 256, GR.step) + fdivI(u * GR.span * 256, 1024);
+      const i = fdivI(r, 256) % n, t = r % 256;
+      return mixInt(hex(GR.ring[i]), hex(GR.ring[(i + 1) % n]), t);
+    }
+    // Giant block digits: each glyph pixel becomes an sx x sy block. Square
+    // 3 x 5 digits (a blockier cut than Tom Thumb's) and a 1 x 5 colon.
+    const GR_GLYPHS = {
+      0: ['###', '#.#', '#.#', '#.#', '###'], 1: ['##.', '.#.', '.#.', '.#.', '###'],
+      2: ['###', '..#', '###', '#..', '###'], 3: ['###', '..#', '###', '..#', '###'],
+      4: ['#.#', '#.#', '###', '..#', '..#'], 5: ['###', '#..', '###', '..#', '###'],
+      6: ['###', '#..', '###', '#.#', '###'], 7: ['###', '..#', '..#', '..#', '..#'],
+      8: ['###', '#.#', '###', '#.#', '###'], 9: ['###', '#.#', '###', '..#', '###'],
+      ':': ['.', '#', '.', '#', '.'],
+    };
+    // The colon sits closer: it starts 2 px back and leaves 2 px after it.
+    const bigLead = (ch) => (ch === ':' ? -2 : 0), bigGap = (ch) => (ch === ':' ? GR.gap - 2 : GR.gap);
+    const bigW = (str) => [...str].reduce((w, ch) => w + bigLead(ch) + GR_GLYPHS[ch][0].length * GR.sx + bigGap(ch), -GR.gap);
+    function bigChar(f, ch, x, top, color) {
+      const g = GR_GLYPHS[ch];
+      x += bigLead(ch);
+      g.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * GR.sx, top + r * GR.sy, GR.sx, GR.sy, color); }));
+      return x + g[0].length * GR.sx + bigGap(ch);
+    }
+    function bigText(f, str, x, top, color) { for (const ch of str) x = bigChar(f, ch, x, top, color); }
+    function renderGradient(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
+      const f = newFrame();
+      // Inverted (p.ginv): the digits carry the gradient on black. They're
+      // drawn as a mask, then every lit pixel takes its gradient color.
+      if (p.ginv) {
+        drawBigTime(f, p, now, '#ffffff');
+        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y)[0]) f.set(x, y, gradientColor(x, y, ms));
+        return f;
+      }
+      for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(x, y, gradientColor(x, y, ms));
+      drawBigTime(f, p, now, GR.dark);
+      return f;
+    }
+    function drawBigTime(f, p, now, color) {
+      // The time, at the minute it rolls like the other clocks
+      // (only changed characters when the shape holds, else the whole time).
+      const text = clockText(now), H = 5 * GR.sy, top = fdivI(32 - H, 2);
+      const xOf = (str) => fdivI(64 - bigW(str), 2);
+      const roll = takeRoll('grad.clock', text);
+      if (!roll) bigText(f, text, xOf(text), top, color);
+      else bigRoll(f, text, roll, xOf, top, H, color);
+    }
+    // The time mid-roll (rollTextWith's rules, on the giant digits).
+    function bigRoll(f, text, roll, xOf, top, H, color) {
+      const dist = H + GR.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
+      f.withClip(0, top, 63, top + H - 1, () => {
+        const a = [...text], b = [...from];
+        if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(ch) === bigW(b[i]))) {
+          let x = xOf(text);
+          a.forEach((ch, i) => {
+            if (ch === b[i]) bigChar(f, ch, x, top, color);
+            else { bigChar(f, b[i], x, top - up, color); bigChar(f, ch, x, top - up + dist, color); }
+            x += bigW(ch) + GR.gap;  // one character's advance (bigW drops a trailing gap)
+          });
+        } else {
+          bigText(f, from, xOf(from), top - up, color);
+          bigText(f, text, xOf(text), top - up + dist, color);
+        }
+      });
+    }
+
     // Which skyline is on screen, and the crossfade from the last one. The
     // board and the simulator keep one: set() with each payload's skyline
     // (live: the clock screen is showing; off it, a new skyline is taken at
@@ -2060,6 +2292,12 @@
       return f;
     }
 
+    // The clock screen's face (payload cface; the skyline by default).
+    function renderClock(p, o) {
+      return p.cface === 'seventies' ? renderSeventies(p, o) : p.cface === 'analog' ? renderAnalog(p, o)
+        : p.cface === 'daynight' ? renderDayNight(p, o) : p.cface === 'gradient' ? renderGradient(p, o) : renderSkyline(p, o);
+    }
+
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock
     // rolls (see takeRoll). opts.slide ({from: the old screen's pixels, t:
     // ms into the slide, dir}): the screen-change slide, after brightness
@@ -2074,7 +2312,7 @@
       let f;
       try {
         f = screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
-          : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? (p.cface === 'seventies' ? renderSeventies(p, o) : renderSkyline(p, o)) : renderTransit(p, o);
+          : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderClock(p, o) : renderTransit(p, o);
       } finally { NR = null; ICON_T = null; }
       applyBrightness(f, p.bright);
       if (o.slide && o.slide.from) slideFrames(o.slide.from, f, slideOffset(o.slide.t || 0), o.slide.dir == null ? 1 : o.slide.dir);
@@ -2122,7 +2360,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderSkyline, renderSeventies, S70, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderSkyline, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };
