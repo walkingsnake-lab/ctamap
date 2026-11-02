@@ -22,7 +22,7 @@ DECK_BOT = -1.4                  # encoder body top sits here (deck 3.0 thick to
 POCKET_R = 9.8                   # clears the real body (~12.4 x 13.4 with its frame, corners r 9.13) plus print shrink; 9.0 jammed (Nov 2)
 BUSH_R = 3.7                     # M7 bushing
 RELIEF_R, RELIEF_TOP = 6.5, 0.2  # clears the body's anti-rotation tab wherever it sits
-RIB_R = None                     # crush-rib crest radius (nominal hole r 12.0); None = plain plug. Set from the ribbed fit set
+RIB_R = 12.25                    # crush-rib crest radius (nominal hole r 12.0); None = plain plug. 12.25 (3 notches) won the fit set, Nov 2
 RIB_W, RIB_N, RIB_LEAD = 1.0, 12, 0.6   # rib width, count on a 30° grid (those near the teardrop tip are dropped), lead-in
 KEY = (1.3, 11.0, 14.3)          # half width, y0, y1 (shell notch: ±1.5, 11.5–14.5)
 
@@ -85,9 +85,10 @@ def export(m, path, flip=True):
 
 
 def fit_set(cls=(0.3, 0.4, 0.5)):
-    """back-down collars at three clearances side by side; 1, 2, 3 notches in the flange rim mark them"""
-    global CL
-    saved, parts = CL, []
+    """back-down plain collars (no ribs) at three clearances side by side; 1, 2, 3 notches in the flange rim mark them"""
+    global CL, RIB_R
+    saved, saved_r, parts = CL, RIB_R, []
+    RIB_R = None
     try:
         for i, c in enumerate(cls):
             CL = c
@@ -96,7 +97,7 @@ def fit_set(cls=(0.3, 0.4, 0.5)):
                 m = m - Manifold.cube([1.2, 1.6, 10]).translate([-0.6 + (k - i / 2) * 2.4, -FL_R - 0.4, -5])   # notches at -y
             parts.append(m.translate([i * (2 * FL_R + 4), 0, 0]))
     finally:
-        CL = saved
+        CL, RIB_R = saved, saved_r
     return Manifold.batch_boolean(parts, manifold3d.OpType.Add)
 
 
