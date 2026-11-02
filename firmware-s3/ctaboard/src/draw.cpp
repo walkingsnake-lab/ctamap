@@ -2626,8 +2626,15 @@ static void render_analog(const Value &p, Frame &f, std::optional<double> now_o)
 // Mirrors renderDayNight() and DN in draw.js.
 static const int DN_ROWS = 26;
 static const long long DN_NIGHT12 = -2079LL * 10000;
-static const RGB DN_DAY_LAND = hexc(0x3f8f2c), DN_DAY_SEA = hexc(0x0c3c90), DN_NIGHT_LAND = hexc(0x141a0c),
-                 DN_NIGHT_SEA = hexc(0x030a1c), DN_SUN = hexc(0xffe060), DN_SUN_ARM = hexc(0xa07818), DN_HERE = hexc(0xffffff);
+static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_SUN = hexc(0xffe060), DN_SUN_ARM = hexc(0xa07818),
+                 DN_HERE = hexc(0xffffff);
+static const int DN_NIGHT_K[] = {104, 116, 140};
+static RGB world_color(char code) {
+  for (int i = 0; i < assets::WORLD_PALETTE_N; i++)
+    if (assets::WORLD_PALETTE[i].code == code)
+      return RGB{assets::WORLD_PALETTE[i].r, assets::WORLD_PALETTE[i].g, assets::WORLD_PALETTE[i].b};
+  return RGB{};
+}
 static uint8_t mix_int(uint8_t n, uint8_t d, long long k) { return (uint8_t)(n + fdiv(((long long)d - n) * k, 256)); }
 
 static void render_daynight(const Value &p, Frame &f, std::optional<double> now_o) {
@@ -2646,8 +2653,15 @@ static void render_daynight(const Value &p, Frame &f, std::optional<double> now_
         long long lon = (long long)jsround(-180 + (x + 0.5) * 5.625);
         long long sv = sl + fdiv(cl * cos_d(lon - lon_d), 10000);
         long long k = sv >= 0 ? 256 : sv <= DN_NIGHT12 ? 0 : 256 - fdiv(sv * 256, DN_NIGHT12);
-        bool land = assets::WORLD[y][x] == '#';
-        RGB d = land ? DN_DAY_LAND : DN_DAY_SEA, n = land ? DN_NIGHT_LAND : DN_NIGHT_SEA;
+        char code = assets::WORLD[y][x];
+        RGB d, n;
+        if (code == '.') {
+          d = DN_SEA;
+          n = DN_NIGHT_SEA;
+        } else {
+          d = world_color(code);
+          n = RGB{(uint8_t)fdiv(d.r * DN_NIGHT_K[0], 256), (uint8_t)fdiv(d.g * DN_NIGHT_K[1], 256), (uint8_t)fdiv(d.b * DN_NIGHT_K[2], 256)};
+        }
         f.set(x, y, RGB{mix_int(n.r, d.r, k), mix_int(n.g, d.g, k), mix_int(n.b, d.b, k)});
       }
     }

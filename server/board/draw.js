@@ -1838,14 +1838,17 @@
     }
 
     // ---- clock screen: day/night map face (design spec §18; contract "Day/night") ----
-    // The world (world.js, 5.625° pixels, 84.4° N to 61.9° S) lit by the sun:
-    // full color where the sun is up, fading through twilight to the night
-    // colors 12° below the horizon. Integer math throughout (whole degrees,
+    // The world (world.js, 5.625° pixels, 84.4° N to 61.9° S, land in Blue
+    // Marble colors) lit by the sun: day colors where the sun is up, fading
+    // through twilight to the night side (each color dimmed toward blue) 12°
+    // below the horizon. Integer math throughout (whole degrees,
     // SIN1E4), so the firmware matches pixel for pixel. The time and date on
     // the bottom rows.
     const DN = {
       rows: 26, deg: 5.625, top: 84.375,
-      day: { land: '#3f8f2c', sea: '#0c3c90' }, night: { land: '#141a0c', sea: '#030a1c' },
+      sea: '#2c70b0', nightSea: '#143a5c',
+      // Night land: each channel x k / 256 (dimmer, a little bluer).
+      nightK: [104, 116, 140],
       sun: '#ffe060', sunArm: '#a07818', here: '#ffffff',
       // sin(-12°) x 1e8: full night at or below it.
       night12: -2079 * 10000,
@@ -1865,14 +1868,15 @@
         lon10 = ((lon10 + 1800) % 3600 + 3600) % 3600 - 1800;
         const decD = fdivI(dn.dec + 5, 10), lonD = fdivI(lon10 + 5, 10);
         const sDec = sinD(decD), cDec = cosD(decD);
-        const cols = { land: [hex(DN.day.land), hex(DN.night.land)], sea: [hex(DN.day.sea), hex(DN.night.sea)] };
+        const sea = [hex(DN.sea), hex(DN.nightSea)], land = {};
+        for (const [c, v] of Object.entries(icons.WORLD_PALETTE)) { const d = hex(v); land[c] = [d, d.map((ch, i) => fdivI(ch * DN.nightK[i], 256))]; }
         for (let y = 0; y < DN.rows; y++) {
           const lat = DN_LAT[y], sl = sinD(lat) * sDec, cl = cosD(lat) * cDec;
           for (let x = 0; x < 64; x++) {
             // sin(sun's altitude) x 1e8.
             const s = sl + fdivI(cl * cosD(DN_LON[x] - lonD), 10000);
             const k = s >= 0 ? 256 : s <= DN.night12 ? 0 : 256 - fdivI(s * 256, DN.night12);
-            const [dc, nc] = world[y][x] === '#' ? cols.land : cols.sea;
+            const [dc, nc] = world[y][x] === '.' ? sea : land[world[y][x]];
             f.set(x, y, mixInt(nc, dc, k));
           }
         }

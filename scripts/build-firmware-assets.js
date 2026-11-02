@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const { packFonts } = require('../server/board/fonts');
 const icons = require('../server/board/icons');
-const { WORLD } = require('../server/board/world');
+const { WORLD, WORLD_PALETTE } = require('../server/board/world');
 const glyphs = require('../server/board/glyphs');
 
 
@@ -117,10 +117,13 @@ function buildCpp() {
     lines.push(`  {${ms}, "${rows.join('')}"},`);
   }
   lines.push('};', `static const int OWL_FRAMES_N = ${icons.OWL.frames.length};`, '');
-  // The day/night clock face's world map (world.js): 64 x 26, '#' land. S3 only.
+  // The day/night clock face's world map (world.js): 64 x 26, letters index
+  // WORLD_PALETTE (land by day), '.' sea. S3 only.
   lines.push(`static const int WORLD_W = ${WORLD[0].length}, WORLD_H = ${WORLD.length};`, 'static const char *const WORLD[] = {');
   for (const r of WORLD) lines.push(`  "${r}",`);
-  lines.push('};', '');
+  lines.push('};', 'static const IconColor WORLD_PALETTE[] = {');
+  for (const [k, v] of Object.entries(WORLD_PALETTE)) lines.push(`  {'${k}', ${parseInt(v.slice(1, 3), 16)}, ${parseInt(v.slice(3, 5), 16)}, ${parseInt(v.slice(5, 7), 16)}},`);
+  lines.push('};', `static const int WORLD_PALETTE_N = ${Object.keys(WORLD_PALETTE).length};`, '');
   lines.push(`static const char *const ALERT_BANG[] = {${icons.ALERT_BANG.map((r) => `"${r}"`).join(', ')}};`);
   lines.push(`static const int ALERT_BANG_N = ${icons.ALERT_BANG.length};`, '');
   // G_ prefix: the ESP32's headers define MIN/MAX macros.
