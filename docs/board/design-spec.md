@@ -674,7 +674,7 @@ Built Nov 1, 2026 from the Oct 17 mockup A1 (§14 *Clock faces*), S3 only.
 Built Nov 1, 2026, after Tidbyt's day/night map, S3 only.
 
 - **Map:** the world at 5.625° a pixel (64 x 26: 84° N to 62° S, Antarctica left off), land from Natural Earth 110m (`scripts/build-world.js`) colored from NASA's Blue Marble (lifted for the panel, snow capped at a soft grey-white, 24 colors). Blue sea. The night side keeps the map visible, dimmed and shifted toward blue; twilight fades over the 12° below the horizon.
-- **Sun and here:** a small yellow cross over the point where the sun is overhead; a white dot on the board's station (Chicago is x 16, y 7).
+- **Here:** a white dot on the board's station (Chicago is x 16, y 7). No sun marker (removed Nov 1: it read as a speck of land).
 - **Bottom rows:** the time (rolling) with AM/PM, and the date.
 - **Math:** whole degrees and a sine table, all integer, so the S3 matches `draw.js` pixel for pixel. The server sends the sun's position with each update; the board moves it on with the clock in between.
 - **Motion:** the terminator moves one pixel about every 22 minutes.

@@ -1849,7 +1849,7 @@
       sea: '#2c70b0', nightSea: '#143a5c',
       // Night land: each channel x k / 256 (dimmer, a little bluer).
       nightK: [104, 116, 140],
-      sun: '#ffe060', sunArm: '#a07818', here: '#ffffff',
+      here: '#ffffff',
       // sin(-12°) x 1e8: full night at or below it.
       night12: -2079 * 10000,
     };
@@ -1880,10 +1880,7 @@
             f.set(x, y, mixInt(nc, dc, k));
           }
         }
-        // The sun over its subsolar point, and the board's own spot.
-        const sx = fdivI((lon10 + 1800) * 8, 450), sy = fdivI(6750 - dn.dec * 8, 450);
-        for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) if (sy + dy >= 0 && sy + dy < DN.rows) f.fill(((sx + dx) % 64 + 64) % 64, sy + dy, 1, 1, DN.sunArm);
-        if (sy >= 0 && sy < DN.rows) f.fill(sx, sy, 1, 1, DN.sun);
+        // The board's own spot.
         if (dn.here && dn.here[1] < DN.rows) f.fill(dn.here[0], dn.here[1], 1, 1, DN.here);
       }
       // Bottom rows: the time (rolling) left, the date right.
