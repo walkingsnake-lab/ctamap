@@ -129,6 +129,11 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
   crosses. Panel power runs from the S3's terminals through the tie loop (above the ribbon) to the panel. Press the two
   cleat nuts into their bosses for good (press fit): they take the cleat, and two M3 screws threaded in a few turns pull the
   tray out.
+- Light-sensor grille (optional): `stl/v5-drawer/bar-sensor-grille-guide-v5-5hole.stl` (`CASE_WALL=3.5 python3 grille_guide.py <outdir>`),
+  any PLA, top face down. Its plug is 3.4 deep for the 3.5 wall, with ribs at r 12.25 (the size that won the collar's ribbed fit set),
+  so no plug fit set is needed. Use it on the empty sleeve, collar out: plug in the knob hole, fence over the back face, push the
+  guide back against the fence and drill the five holes with a 1/16" (1.59) bit; run the bit through the guide once first. The bit
+  only cuts the pocket's 0.8 mm skin (checked against the model). Deburr inside lightly.
 - Print `coupon-v5-drawer-fit-shell.stl` (walnut) and `coupon-v5-drawer-fit-tray.stl` (tray filament) first and slide them
   together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.
 - Status light: glue `bar-status-window.stl` (Ø5.7 x 1, translucent PETG, flat) into the round pocket on the tray's back

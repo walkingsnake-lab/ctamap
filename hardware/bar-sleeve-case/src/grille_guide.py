@@ -1,4 +1,4 @@
-"""Light-sensor grille drill guide for the v4 back-down shell: drills a small grille of straight holes through the
+"""Light-sensor grille drill guide for the back-down shells (v4, and v5 with CASE_WALL=3.5): drills a small grille of straight holes through the
 case top over the VEML7700 (case2.SENSOR_X/Y) instead of one Ø2 hole.
 
 - Location, one feature per direction so they never fight:
@@ -26,9 +26,11 @@ from manifold3d import Manifold, CrossSection
 import case2 as V
 
 SLAB = 6.0                 # guide thickness = bore length
-PLUG_D = 2.4               # plug depth into the knob hole (wall 2.5)
+import case as C
+V5 = C.WALL > 3.0          # v5 drawer sleeve (CASE_WALL=3.5)
+PLUG_D = C.WALL - 0.1      # plug depth into the knob hole: 2.4 (v4), 3.4 (v5)
 PLUG_CL = 0.5              # plug body clearance; the ribs take up the rest
-RIB_R = 12.15              # rib crest radius (nominal hole r 12.0); set from the fit set
+RIB_R = 12.25 if V5 else 12.15   # rib crest radius (nominal hole r 12.0); v5: 12.25 won the collar's ribbed fit set
 FENCE_GAP = 0.15           # fence's inner face behind the case's back face
 FENCE_T, FENCE_DROP = 2.5, 6.0
 FENCE_X = (-12.0, 62.0)
@@ -125,6 +127,9 @@ if __name__ == '__main__':
         t.apply_translation([0, 0, -t.bounds[0][2]])
         t.export(f'{out}/{fn}')
         print(fn, t.is_watertight, np.round(t.extents, 1).tolist(), info)
+    if V5:                 # one guide: the v5 sleeve's pocket is sized for the 5-hole grille; ribs from the collar fit set
+        put(guide('5', bit), 'bar-sensor-grille-guide-v5-5hole.stl', check('5', bit))
+        sys.exit()
     for name in ('5', '4'):
         put(guide(name, bit), f'bar-sensor-grille-guide-{name}hole.stl', check(name, bit))
     put(fit_set(), 'bar-sensor-grille-guide-plug-fit-set.stl', 'ribs 12.05 / 12.15 / 12.25 (1-3 notches)')
