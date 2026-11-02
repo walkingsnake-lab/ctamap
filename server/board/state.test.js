@@ -303,7 +303,7 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   const { knobOf, KNOB_RING, CLOCK_FACES } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
   assert.equal(store.get('home').clockFace, 'skyline');
-  assert.deepEqual(CLOCK_FACES, ['skyline', 'seventies']);
+  assert.deepEqual(CLOCK_FACES, ['skyline', 'seventies', 'analog', 'daynight']);
   store.update('home', { clockFace: 'seventies' });
   assert.equal(store.get('home').clockFace, 'seventies');
   store.update('home', { clockFace: 'skyline' });

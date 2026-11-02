@@ -16,9 +16,9 @@ const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock'];
-// Clock screen faces (design spec §14): the skyline, and the seventies
-// stripes with VCR digits.
-const CLOCK_FACES = ['skyline', 'seventies'];
+// Clock screen faces (design spec §14, §16-18): the skyline, the seventies
+// stripes with VCR digits, the analog dial, and the day/night world map.
+const CLOCK_FACES = ['skyline', 'seventies', 'analog', 'daynight'];
 // Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
 const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
 const WHEEL_SPEEDS = ['off', 'slow', 'normal', 'fast'];

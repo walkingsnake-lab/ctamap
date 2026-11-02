@@ -251,3 +251,24 @@ test('clock screen, seventies face: VCR digits banded by row, stripes along the 
   // Without cface the clock screen is still the skyline.
   assert.notEqual(hex(render({ ...p, cface: undefined }).get(0, 23)), '#ffc23a');
 });
+
+test('clock faces: localDate matches the calendar (weekday, month, day, time) across years and offsets', () => {
+  const { localDate } = require('./render');
+  for (const iso of ['1970-01-01T00:00:00Z', '2000-02-29T12:34:56Z', '2026-11-02T03:42:37Z', '2026-12-31T23:59:59Z', '2028-02-29T05:00:00Z', '2100-03-01T00:00:00Z']) {
+    for (const tzo of [0, -21600, -18000, 19800]) {
+      const t = Date.parse(iso) / 1000, d = new Date((t + tzo) * 1000);
+      assert.deepEqual(localDate(t, tzo), { wd: d.getUTCDay(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), h: d.getUTCHours(), min: d.getUTCMinutes(), s: d.getUTCSeconds() }, `${iso} ${tzo}`);
+    }
+  }
+});
+
+test('clock screen, day/night face: lit where the sun is up, dark on the far side, Chicago marked', () => {
+  const { subsolar } = require('./sun');
+  const t = Date.parse('2026-11-01T18:00:00Z') / 1000, sun = subsolar(t);
+  const p = { now: t, tzo: -21600, screen: 'clock', cface: 'daynight', bright: 100, dn: { dec: Math.round(sun.dec * 10), lon: Math.round(sun.lon * 10), t, here: [16, 7] } };
+  const f = render(p);
+  const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+  assert.equal(hex(f.get(16, 7)), '#ffffff', 'Chicago');
+  assert.equal(hex(f.get(10, 14)), '#0c3c90', 'the Pacific off Mexico at noon: day sea');
+  assert.equal(hex(f.get(50, 10)), '#141a0c', 'Asia at midnight: night land');
+});

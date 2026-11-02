@@ -1426,6 +1426,38 @@ test('clock screen, seventies face: only for firmware that reports it; others ke
   await s.close();
 });
 
+test('clock screen, analog and day/night faces: their sections, only for firmware that draws them', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(om)) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const get = async (hk) => (await s.req(`/board/update?b=home&hk=${hk}`, h)).body;
+  const ALL = 'skyline:seventies:analog:daynight';
+  s.store.update('home', { screen: 'clock', clockFace: 'analog' });
+  let b = await get('skyline');
+  assert.equal(b.cface, 'skyline', 'older firmware keeps the skyline');
+  assert.equal(b.cwx, undefined);
+  b = await get(ALL);
+  assert.equal(b.cface, 'analog');
+  assert.equal(b.skyline, null);
+  assert.deepEqual(Object.keys(b.cwx).sort(), ['icon', 'temp']);
+  assert.equal(typeof b.cwx.temp, 'number');
+  assert.equal(b.dn, undefined);
+  s.store.update('home', { clockFace: 'daynight' });
+  b = await get(ALL);
+  assert.equal(b.cface, 'daynight');
+  assert.equal(b.cwx, undefined);
+  assert.ok(Number.isInteger(b.dn.dec) && Math.abs(b.dn.dec) <= 235, 'declination in tenths of a degree');
+  assert.ok(Number.isInteger(b.dn.lon) && b.dn.lon >= -1800 && b.dn.lon <= 1800);
+  assert.ok(Math.abs(b.dn.t - now) < 5);
+  assert.deepEqual(b.dn.here, [16, 7], 'Morse (42.008 N, 87.666 W) on the 5.625° map');
+  s.store.update('home', { screen: 'transit' });
+  b = await get(ALL);
+  assert.equal(b.dn, undefined, 'other screens leave it out');
+  await s.close();
+});
+
 test('clock screen: decided per request from the update\'s own hk, so it never flaps', async () => {
   const { parse } = require('./weather');
   const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));

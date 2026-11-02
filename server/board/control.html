@@ -246,6 +246,8 @@
     <div class="seg" id="clockFace">
       <button data-v="skyline">Skyline</button>
       <button data-v="seventies">Seventies</button>
+      <button data-v="analog">Analog</button>
+      <button data-v="daynight">Day/Night</button>
     </div>
     <p class="hint" id="clockFaceHint"></p>
     <div id="skylineOpts">
@@ -637,9 +639,12 @@
     const face = board.clockFace || 'skyline';
     pressed('clockFace', face);
     $('skylineOpts').hidden = face !== 'skyline';
-    $('clockFaceHint').textContent = face === 'skyline'
-      ? 'The skyline from the lake across Navy Pier, drawn for the weather and the time of day. Temperature bottom left (a watch or warning takes its place), clock bottom right.'
-      : 'The time in VCR digits banded sunflower, orange and rust, with three stripes sweeping along the bottom and up the right edge. Digits roll at each minute. Boards without firmware for it show the skyline.';
+    $('clockFaceHint').textContent = {
+      skyline: 'The skyline from the lake across Navy Pier, drawn for the weather and the time of day. Temperature bottom left (a watch or warning takes its place), clock bottom right.',
+      seventies: 'The time in VCR digits banded sunflower, orange and rust, with three stripes sweeping along the bottom and up the right edge. Digits roll at each minute.',
+      analog: 'A dial with hour, minute and ticking seconds hands; the day, date and current weather beside it.',
+      daynight: 'The world lit by the sun: daylight, twilight and night, with the sun over the point where it is overhead and a white dot on the board\'s station. Time and date below.',
+    }[face] + (face === 'skyline' ? '' : ' Boards without firmware for it show the skyline.');
     $('boats').checked = board.boats !== false;
     $('cloudDrift').value = board.cloudDrift || 'slow';
     $('wheelSpeed').value = board.wheelSpeed || 'normal';

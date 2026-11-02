@@ -7,12 +7,13 @@ const { create } = require('./draw');
 const { Frame } = require('./raster');
 const { packFonts } = require('./fonts');
 const icons = require('./icons');
+const { WORLD } = require('./world');
 const glyphs = require('./glyphs');
 const { TZ } = require('./time');
 
 const draw = create({
   fonts: packFonts(),
-  icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL },
+  icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL, WORLD },
   glyphs,
   tz: TZ,
   makeFrame: () => new Frame(),
@@ -22,7 +23,7 @@ const draw = create({
 function assets() {
   return {
     fonts: packFonts(),
-    icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL },
+    icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL, WORLD },
     glyphs,
     tz: TZ,
   };

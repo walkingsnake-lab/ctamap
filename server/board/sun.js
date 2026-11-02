@@ -28,6 +28,21 @@ function sunPos(t, lat, lon) {
   return { el, az };
 }
 
+// The point on Earth with the sun overhead at epoch seconds `t`: declination
+// and longitude in degrees (east positive, -180 to 180). Same series as sunPos.
+function subsolar(t) {
+  const n = t / 86400 + 2440587.5 - 2451545.0;
+  const L = (((280.460 + 0.9856474 * n) % 360) + 360) % 360;
+  const g = (357.528 + 0.9856003 * n) * RAD;
+  const lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * RAD;
+  const eps = (23.439 - 0.0000004 * n) * RAD;
+  const ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)) / RAD;
+  const dec = Math.asin(Math.sin(eps) * Math.sin(lam)) / RAD;
+  const gmst = (((18.697374558 + 24.06570982441908 * n) % 24) + 24) % 24;
+  const lon = ((((ra - gmst * 15) % 360) + 540) % 360) - 180;
+  return { dec, lon };
+}
+
 // Moon at epoch seconds `t`: phase 0-1 (0 new, 0.25 first quarter, 0.5 full,
 // 0.75 last quarter) and the lit fraction of the disc, 0-1.
 function moonPhase(t) {
@@ -56,4 +71,4 @@ function sunTime(t, lat, lon, target, dir = -1) {
   return best;
 }
 
-module.exports = { sunPos, moonPhase, sunTime, SYNODIC };
+module.exports = { sunPos, subsolar, moonPhase, sunTime, SYNODIC };
