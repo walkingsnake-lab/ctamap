@@ -2,8 +2,9 @@
 // Radar fallback (contract "Radar", design spec §7): when NOAA's MRMS files
 // on AWS can't give a frame (radar-mrms.js), the same mosaic from NWS's map
 // service (mapservices.weather.noaa.gov, "radar_base_reflectivity_time":
-// MRMS MergedBaseReflectivityQC, a 4-hour window of frames every ~6-8
-// minutes).
+// MRMS MergedBaseReflectivityQC, ~2 hours of frames every ~6-8 minutes).
+// That's base reflectivity, not the main source's hybrid-scan product: it
+// reads ~1.5 dB weaker, so radar.js never mixes the two in one loop.
 //
 // It only serves rendered colors, not dBZ, so a frame is asked for exactly
 // on the MRMS grid (0.01°, same pixel centers) around the wanted stations

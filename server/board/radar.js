@@ -1,18 +1,19 @@
 'use strict';
 // Radar frames for the board (design spec §7, contract "Radar"): NOAA MRMS
-// base reflectivity (MergedBaseReflectivityQC), from NOAA's own files on
+// seamless hybrid-scan reflectivity (SeamlessHSR), from NOAA's own files on
 // AWS (radar-mrms.js), cropped around each board's station and reduced to a
 // 64x32 indexed frame.
 //
 // When AWS can't give a frame, NWS's map service stands in for it
-// (radar-nws.js): the same mosaic as a small crop around the stations, its
-// colors read back as dBZ.
+// (radar-nws.js): MRMS base reflectivity (the only product it serves) as a
+// small crop around the stations, its colors read back as dBZ.
 //
 // Pipeline per frame: stream-decode only the rows around the station
 // (radar-png.js) -> lcref-style index (dBZ = index * 0.5 - 32) -> average
 // linear reflectivity per LED block -> levels (rain or snow) -> despeckle
-// -> location marker. (The index scale is IEM's lcref palette, the board's
-// first source; its archive frames are still the test fixtures.)
+// -> location marker. (The index scale is IEM's lcref palette, made from
+// the same SeamlessHSR files: the board's first source, and its archive
+// frames are still the test fixtures.)
 // Memory: one source frame is decoded at a time and never held; each
 // processed frame is 2048 bytes.
 
@@ -222,7 +223,7 @@ function get(url, timeout = 20000) {
 }
 
 // The main source: the MRMS file nearest the slot, from AWS.
-const fetchFrame = createMrmsSource({ get, timeOf });
+const fetchFrame = createMrmsSource({ get });
 
 // ---- frame store and poller ----
 
@@ -355,8 +356,12 @@ function createRadar({
       const l = locs.get(mapid);
       l.wantedAt = now();
       const oldest = timeOf(slots()[0]);
-      const frames = [...l.frames.values()].filter((f) => f.t >= oldest).sort((a, b) => a.t - b.t);
-      const latest = frames[frames.length - 1];
+      const inLoop = [...l.frames.values()].filter((f) => f.t >= oldest).sort((a, b) => a.t - b.t);
+      const latest = inLoop[inLoop.length - 1];
+      // One source per loop: the fallback draws a different product (base
+      // reflectivity, ~1.5 dB weaker), so a loop mixing them would pulse.
+      // While the sources change over, the loop is just the newest's frames.
+      const frames = latest ? inLoop.filter((f) => f.src === latest.src) : inLoop;
       if (!latest) l.on = false;
       else if (latest !== l.judged) {
         // Hysteresis on the newest frame's precip pixel count.

@@ -173,9 +173,12 @@ test('poller: the main source failing falls back to NWS; both missing stays quie
   assert.equal(warns.filter((m) => /using NWS/.test(m)).length, 1);
   await radar.pass();
   assert.equal(warns.filter((m) => /using NWS/.test(m)).length, 1, 'said once');
-  // AWS back: its frames again, and it says so.
+  // AWS back: its frames again, and it says so. The loop is one source's:
+  // the newest frame's.
   aws = 'up';
   await radar.pass();
+  r = radar.want('99999', SPOT.lat, SPOT.lon);
+  assert.deepEqual(r.frames, ['99999-202611032136', '99999-202611032142'], 'the newest frame is NWS\'s: the 21:30 AWS frame waits');
   assert.equal(calls[calls.length - 1], 'aws:202611032130');
   assert.equal(warns.filter((m) => /MRMS on AWS is back/.test(m)).length, 1);
   // AWS doesn't have the newest slot yet (its normal lag): wait for it,
@@ -218,4 +221,32 @@ test('poller: a custom fetch has no fallback unless given one', async () => {
   radar.want('99999', SPOT.lat, SPOT.lon);
   await radar.pass();
   assert.equal(calls, 1);
+});
+
+test('loop: one source at a time, the newest frame\'s', async () => {
+  let t = R.timeOf('202611032142') + 120;
+  let main = 'up';
+  const radar = R.createRadar({
+    now: () => t, log: quiet,
+    fetch: async () => {
+      if (main === 'down') throw new Error('HTTP 503');
+      return { ...(await gribSource()), src: 'mrms' };
+    },
+    fallback: async (at, geos) => ({ wld: N.windowOf(geos).wld, png: fs.createReadStream(NWS_PNG), rgbIndex: N.rgbIndex(), src: 'nws' }),
+  });
+  const want = () => radar.want('99999', SPOT.lat, SPOT.lon).frames.map((id) => id.slice(-4));
+  for (let i = 0; i < 6; i++) { want(); await radar.pass(); }
+  assert.deepEqual(want(), ['2112', '2118', '2124', '2130', '2136', '2142']);
+  // AWS fails: the new slot comes from NWS, and the loop starts over with it.
+  main = 'down';
+  t += 360;
+  want();
+  await radar.pass();
+  assert.deepEqual(want(), ['2148']);
+  // AWS back with the next slot: the loop is AWS's again (the NWS frame drops out).
+  main = 'up';
+  t += 360;
+  want();
+  await radar.pass();
+  assert.deepEqual(want(), ['2124', '2130', '2136', '2142', '2154']);
 });

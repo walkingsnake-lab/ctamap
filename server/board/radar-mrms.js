@@ -1,13 +1,15 @@
 'use strict';
 // The radar's main source (contract "Radar", design spec §7): NOAA's own
 // MRMS files on AWS (NOAA Open Data Dissemination, bucket noaa-mrms-pds),
-// MergedBaseReflectivityQC: the quality-controlled base reflectivity mosaic
-// radar.weather.gov shows, every 2 minutes, about a minute after its time,
-// on a 0.01° grid (7000 x 3500 for CONUS).
+// SeamlessHSR: the seamless hybrid-scan reflectivity mosaic (each spot from
+// the lowest radar beam not blocked by terrain), every 2 minutes on the even
+// minute, about a minute after its time, on a 0.01° grid (7000 x 3500 for
+// CONUS). It's the product IEM's lcref frames are made from (index =
+// floor((dBZ + 32) * 2)), the board's first source, so frames are the same.
 //
 // Each file is gzipped GRIB2 whose data section is a 16-bit grayscale PNG
 // (data representation template 5.41): value = (R + X * 2^E) / 10^D, with
-// -999 for missing and -99 for no radar coverage. The file is streamed
+// -999 for no radar coverage and -99 for no echo. The file is streamed
 // through gunzip, the GRIB headers are read, and the PNG goes to
 // radar-png.js, which reads only the rows around the stations and then
 // stops the download. Values become the pipeline's lcref-style indices
@@ -17,42 +19,12 @@ const zlib = require('zlib');
 const { PassThrough } = require('stream');
 
 const BUCKET = 'https://noaa-mrms-pds.s3.amazonaws.com';
-const PRODUCT = 'MergedBaseReflectivityQC_00.50';
-const NEAR_S = 90;          // a file within 90 s of the slot stands in for it (files come every ~2 min)
+const PRODUCT = 'SeamlessHSR_00.00';
 const MAX_HEADER = 1 << 20; // GRIB sections before the data, at most (they're ~200 bytes)
 
-const pad = (n, w = 2) => String(n).padStart(w, '0');
-const dayOf = (t) => { const d = new Date(t * 1000); return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`; };
-const hmsOf = (t) => { const d = new Date(t * 1000); return `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`; };
-const keyPrefix = (t) => `CONUS/${PRODUCT}/${dayOf(t)}/MRMS_${PRODUCT}_${dayOf(t)}-`;
-const KEY_RE = /_(\d{8})-(\d{6})\.grib2\.gz$/;
-const timeOfKey = (key) => {
-  const m = KEY_RE.exec(key);
-  if (!m) return null;
-  const [d, h] = m.slice(1);
-  return Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8), +h.slice(0, 2), +h.slice(2, 4), +h.slice(4, 6)) / 1000;
-};
-
-// The bucket listing that holds the files near time t (S3 ListObjectsV2):
-// the day's folder, from NEAR_S before t (from the day's start just after
-// midnight UTC).
-function listUrl(t) {
-  const from = t - NEAR_S - 1;
-  const q = { 'list-type': '2', prefix: `CONUS/${PRODUCT}/${dayOf(t)}/`, 'max-keys': '4' };
-  if (dayOf(from) === dayOf(t)) q['start-after'] = keyPrefix(from) + hmsOf(from);
-  return `${BUCKET}/?${new URLSearchParams(q)}`;
-}
-const fileUrl = (key) => `${BUCKET}/${key}`;
-
-// The listed file nearest t, within NEAR_S: { key, t } or null.
-function nearestKey(xml, t) {
-  let best = null;
-  for (const m of String(xml).matchAll(/<Key>([^<]+)<\/Key>/g)) {
-    const kt = timeOfKey(m[1]);
-    if (kt != null && Math.abs(kt - t) <= NEAR_S && (!best || Math.abs(kt - t) < Math.abs(best.t - t))) best = { key: m[1], t: kt };
-  }
-  return best;
-}
+// The file for a slot stamp (YYYYMMDDHHMM, UTC; files are named to the second, :00).
+const fileKey = (stamp) => `CONUS/${PRODUCT}/${stamp.slice(0, 8)}/MRMS_${PRODUCT}_${stamp.slice(0, 8)}-${stamp.slice(8, 12)}00.grib2.gz`;
+const fileUrl = (stamp) => `${BUCKET}/${fileKey(stamp)}`;
 
 // GRIB2 sign-magnitude integers (negative: top bit set).
 const smInt16 = (b, o) => { const v = b.readUInt16BE(o); return v & 0x8000 ? -(v & 0x7fff) : v; };
@@ -97,14 +69,16 @@ function wldOf(grid) {
   return { dx: grid.dx, dy: -grid.dy, x0: Math.round(lon * 1e6) / 1e6, y0: grid.lat1 };
 }
 
-// 16-bit packed value -> lcref-style index: 255 for missing / no coverage
-// (below -90 dBZ), else round((dBZ + 32) * 2) within 0..254.
+// 16-bit packed value -> lcref-style index: 255 for no coverage / no echo
+// (below -90 dBZ), else floor((dBZ + 32) * 2) within 0..254, as IEM made
+// its lcref frames. (The small epsilon keeps 0.1-dB steps that are exact
+// in decimal from flooring a step low in binary.)
 function gray16Lut({ R, E, D }) {
   const lut = new Uint8Array(65536);
   const e = Math.pow(2, E), d = Math.pow(10, D);
   for (let x = 0; x < 65536; x++) {
     const v = (R + x * e) / d;
-    lut[x] = v < -90 ? 255 : Math.max(0, Math.min(254, Math.round((v + 32) * 2)));
+    lut[x] = v < -90 ? 255 : Math.max(0, Math.min(254, Math.floor((v + 32) * 2 + 1e-9)));
   }
   return lut;
 }
@@ -150,23 +124,13 @@ function openGrib(gz) {
   });
 }
 
-// fetch(stamp) for createRadar: the file nearest the slot from the bucket.
-// get(url) resolves to a response stream (radar.js get()).
-function createMrmsSource({ get, timeOf }) {
+// fetch(stamp) for createRadar: the slot's file from the bucket (a 404
+// until it's there). get(url) resolves to a response stream (radar.js get()).
+function createMrmsSource({ get }) {
   return async function fetch(stamp) {
-    const t = timeOf(stamp);
-    const res = await get(listUrl(t));
-    const chunks = [];
-    for await (const c of res) chunks.push(c);
-    const hit = nearestKey(Buffer.concat(chunks).toString('utf8'), t);
-    if (!hit) {
-      const e = new Error('no MRMS file near the slot');
-      e.status = 404;
-      throw e;
-    }
-    const src = await openGrib(await get(fileUrl(hit.key)));
-    return { ...src, src: 'mrms', at: hit.t };
+    const src = await openGrib(await get(fileUrl(stamp)));
+    return { ...src, src: 'mrms' };
   };
 }
 
-module.exports = { createMrmsSource, openGrib, parseHeader, gray16Lut, wldOf, listUrl, fileUrl, nearestKey, timeOfKey, PRODUCT, BUCKET, NEAR_S };
+module.exports = { createMrmsSource, openGrib, parseHeader, gray16Lut, wldOf, fileKey, fileUrl, PRODUCT, BUCKET };
