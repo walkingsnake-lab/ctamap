@@ -40,7 +40,7 @@ const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky',
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
 // answer 404 there.
-const SCOPED_OK = new Set(['', 'api/destinations', 'api/boards', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png']);
+const SCOPED_OK = new Set(['', 'api/destinations', 'api/boards', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png']);
 // Settings a per-board link may not change: the update channel (a buyer
 // stays on stable, or turns updates off).
 const SCOPED_FW = ['stable', 'off'];
@@ -300,6 +300,8 @@ function createBoard({
     if (safe(q.hd)) h.hardware = q.hd;
     if (safe(q.hv)) h.firmware = q.hv;
     if (safe(q.hx)) h.ota = q.hx;
+    // The newest WiFi wipe the board has applied (keys.transfer's stamp).
+    if (q.hz != null && Number.isFinite(Number(q.hz))) h.wiped = Number(q.hz);
     const prev = healthOf.get(id);
     // What the firmware can draw beyond the original screens, colon-separated
     // (`skyline`: the clock screen's skyline face). Sent with every report.
@@ -364,7 +366,7 @@ function createBoard({
   function boardList() {
     return store.ids().map((id) => {
       const b = store.get(id);
-      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, seen: seenAt.get(id) ?? null, ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', seen: seenAt.get(id) ?? null, ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
     });
   }
   // A removed board's live state (health, test alerts, chrono views).
@@ -601,8 +603,10 @@ function createBoard({
       seenAt.set(String(parsed.query.b), nowSecs());
       // An OTA offer when this S3 should run another build (firmware.js).
       let fw = null;
-      try { fw = firmware.offer(board, parsed.query); } catch (e) { log.error('[board] firmware offer:', e.message); }
-      return send(res, 200, fw ? { v: board.v, now: nowSecs(), fw } : { v: board.v, now: nowSecs() });
+      try { fw = firmware.offer(board, parsed.query, nowSecs()); } catch (e) { log.error('[board] firmware offer:', e.message); }
+      // A new owner's transfer: the board forgets its saved WiFi once per stamp (contract "Board keys").
+      const wipe = keys.wipeOf(String(parsed.query.b));
+      return send(res, 200, { v: board.v, now: nowSecs(), ...(fw ? { fw } : {}), ...(wipe ? { wipe } : {}) });
     }
 
     // An OTA build (contract: "Firmware"): streamed, exactly `size` bytes.
@@ -790,6 +794,22 @@ function createBoard({
       // goes into its flash; a board running with the old one gets 401s);
       // DELETE: back to the shared token, link revoked. POST
       // api/boards/link?b=<id>: a new control link, the old one stops working.
+      // A new owner (contract "Board keys"): POST api/boards/transfer?b=<id>
+      // gives a keyed board a new control link (the old one stops working),
+      // resets its settings to the defaults (name and firmware setting kept),
+      // and tells the board to forget its saved WiFi. Also from the board's
+      // own link, to hand it on.
+      if (sub === 'api/boards/transfer') {
+        if (method !== 'POST') return send(res, 405, { err: 'method' });
+        const id = String(parsed.query.b || '');
+        if (!store.get(id)) return send(res, 404, { err: 'unknown_board' });
+        const t = keys.transfer(id, nowSecs());
+        if (!t) return send(res, 400, { err: 'invalid', detail: 'this board has no key; give it one first' });
+        store.reset(id);
+        tests.delete(id);
+        log.warn(`[board] board "${id}" transferred to a new owner`);
+        return send(res, 200, { id, link: t.link, wipe: t.wipe });
+      }
       if (sub === 'api/boards/key' || sub === 'api/boards/link') {
         const id = String(parsed.query.b || '');
         if (!store.get(id)) return send(res, 404, { err: 'unknown_board' });

@@ -656,6 +656,27 @@ std::string SetupPortal::ssid() const {
 
 void SetupPortal::joined() { nvs_put("fresh", ""); }
 
+long long SetupPortal::wiped() { return atoll(nvs_get("wiped").c_str()); }
+
+// A new owner: the stamp is saved first, so a board that loses power midway
+// never wipes the next owner's networks again for the same stamp.
+void SetupPortal::forget(long long stamp) {
+  if (!nvs_put("wiped", std::to_string(stamp))) {
+    Serial.println("[setup] couldn't save the wipe stamp; keeping saved WiFi");
+    return;
+  }
+  config::Config next = *cfg_;
+  next.networks.clear();
+  if (!nvs_put("cfg", config::to_json(next))) {
+    Serial.println("[setup] couldn't save settings; keeping saved WiFi");
+    return;
+  }
+  nvs_put("fresh", "");
+  *cfg_ = next;
+  Serial.printf("[setup] saved WiFi forgotten (new owner, %lld)\n", stamp);
+  run("reset");
+}
+
 // Networks nearby, strongest first, each once, hidden ones left out.
 static std::vector<std::string> scan_names() {
   std::vector<std::pair<int, std::string>> found;
@@ -695,6 +716,7 @@ void SetupPortal::run(const std::string &why) {
   std::string note = why == "badwifi" ? "Couldn't join " + (cfg_->networks.empty() ? std::string("that network") : cfg_->networks[0].first) +
                                             ". Check the password and try again."
                      : why == "nowifi" && !cfg_->networks.empty() ? "The board couldn't join any saved network. Choose one."
+                     : why == "reset"                              ? "This board has a new owner. Choose your network."
                                                                    : "";
   bool bad = why == "badwifi" || (why == "nowifi" && !cfg_->networks.empty());
   auto page = [&]() {
@@ -708,6 +730,23 @@ void SetupPortal::run(const std::string &why) {
     seen = scan_names();
     web.sendHeader("Location", "/");
     web.send(302, "text/plain", "");
+  });
+  // Forget every saved network (handing the board on): someone on the
+  // setup network, so next to the board, asked.
+  web.on("/forget", HTTP_POST, [&]() {
+    config::Config next = *cfg_;
+    next.networks.clear();
+    if (!nvs_put("cfg", config::to_json(next))) {
+      note = "Couldn't save on the board. Try again.";
+      bad = true;
+      page();
+      return;
+    }
+    nvs_put("fresh", "");
+    *cfg_ = next;
+    note = "Saved networks forgotten.";
+    bad = false;
+    page();
   });
   web.on("/save", HTTP_POST, [&]() {
     std::string other = web.arg("o").c_str(), pick = web.arg("s").c_str(), pass = web.arg("p").c_str();

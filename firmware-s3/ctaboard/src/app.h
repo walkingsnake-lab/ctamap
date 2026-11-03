@@ -161,6 +161,11 @@ class Setup {
   // "badwifi" (the network just entered didn't join), "asked" (held at power-on).
   virtual void run(const std::string &why) = 0;
   virtual void joined() {}  // online: a network entered on the page worked
+  // A new owner (the server's /board/version `wipe`, a stamp that only
+  // grows): forget the saved networks, remember `stamp` as applied, and
+  // open the setup network (why "reset"). On the board it doesn't return.
+  virtual void forget(long long stamp) { (void)stamp; }
+  virtual long long wiped() { return 0; }  // the newest stamp applied, 0 if none
 };
 
 // Runs one piece of network work at a time off the draw loop. start() hands

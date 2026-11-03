@@ -1167,7 +1167,7 @@ test('control API: list, add (copy or defaults), label, and delete boards', asyn
   const J = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   await s.req('/board/secret123/api/state?b=home', J('POST', { station: { mapid: '40380' }, label: 'Kitchen' }));
   let r = await s.req('/board/secret123/api/boards');
-  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'auto', seen: null }]);
+  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'auto', fw: 'stable', seen: null }]);
   r = await s.req('/board/secret123/api/boards', J('POST', { id: 'desk', from: 'home', label: 'Desk' }));
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.map((b) => [b.id, b.label, b.mapid]), [['home', 'Kitchen', '40380'], ['desk', 'Desk', '40380']]);
@@ -1203,7 +1203,7 @@ const crypto = require('crypto');
 const FW_KEY = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
 const fwSig = (buf) => crypto.sign('sha256', buf, FW_KEY.privateKey).toString('hex');
 // A board server with a firmware store that trusts the test key.
-const serveFw = (opts = {}) => serve({ firmware: createFirmware({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-fw-')), log: quiet, publicKey: FW_KEY.publicKey }), ...opts });
+const serveFw = (opts = {}) => serve({ firmware: createFirmware({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-fw-')), log: quiet, publicKey: FW_KEY.publicKey, stableWindow: () => true }), ...opts });
 const signed = (buf) => ({ method: 'POST', body: buf, headers: { 'X-Firmware-Signature': fwSig(buf) } });
 
 function fakeBuild(v, kind = 'generic') {
@@ -1213,6 +1213,20 @@ function fakeBuild(v, kind = 'generic') {
   b.write(`CTABOARD-BUILD:${v}:${kind};`, 1000, 'latin1');
   return b;
 }
+
+test('firmware: outside the overnight window a stable board gets no offer; beta still does', async () => {
+  const s = await serve({ firmware: createFirmware({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-fw-')), log: quiet, publicKey: FW_KEY.publicKey, stableWindow: () => false }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  assert.equal((await s.req('/board/secret123/api/firmware?channel=stable', signed(fakeBuild('aaaaaaa')))).status, 200);
+  assert.equal((await s.req('/board/secret123/api/firmware?channel=beta', signed(fakeBuild('bbbbbbb')))).status, 200);
+  const q = '/board/version?b=home&hu=60&hd=adafruit_matrixportal_s3&hv=1234567';
+  assert.ok(!('fw' in (await s.req(q, h)).body));
+  s.store.update('home', { fw: 'beta' });
+  assert.equal((await s.req(q, h)).body.fw.v, 'bbbbbbb');
+  s.store.update('home', { fw: 'aaaaaaa' });
+  assert.equal((await s.req(q, h)).body.fw.v, 'aaaaaaa', 'pinned: right away');
+  await s.close();
+});
 
 test('firmware: upload on the control page, offered to an S3 in its version check, downloaded by the board', async () => {
   const s = await serveFw();
@@ -1301,6 +1315,54 @@ test('board keys: a keyed board must use its own token; others keep the shared o
   await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'DELETE' });
   assert.equal((await s.req('/board/version?b=kitchen', shared)).status, 200);
   assert.equal((await s.req(`/board/c/${k2.body.link}/api/state`)).status, 404);
+  await s.close();
+});
+
+test('transfer: a keyed board gets a new link, default settings, and a WiFi wipe stamp', async () => {
+  const s = await serve();
+  s.store.create('kitchen', { from: 'home', label: 'Kitchen' });
+  s.store.update('kitchen', { screen: 'ticker', station: { mapid: '40380' }, fw: 'off' });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  // Only for a keyed board.
+  let r = await s.req('/board/secret123/api/boards/transfer?b=kitchen', { method: 'POST' });
+  assert.equal(r.status, 400);
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  const own = { headers: { 'X-Board-Token': key.token } };
+  assert.ok(!('wipe' in (await s.req('/board/version?b=kitchen', own)).body), 'no wipe before a transfer');
+  const v0 = s.store.get('kitchen').v;
+  r = await s.req('/board/secret123/api/boards/transfer?b=kitchen', { method: 'POST' });
+  assert.equal(r.status, 200);
+  assert.match(r.body.link, /^[A-Za-z0-9_-]{22}$/);
+  assert.notEqual(r.body.link, key.link);
+  assert.ok(Math.abs(r.body.wipe - Date.now() / 1000) < 5);
+  // The old link is dead, the new one works; the token is unchanged.
+  assert.equal((await s.req(`/board/c/${key.link}/api/state`)).status, 404);
+  assert.equal((await s.req(`/board/c/${r.body.link}/api/state`)).status, 200);
+  // Settings back to the defaults; its name and firmware setting stay.
+  const b = s.store.get('kitchen');
+  assert.equal(b.screen, 'auto');
+  assert.notEqual(b.station.mapid, '40380');
+  assert.equal(b.label, 'Kitchen');
+  assert.equal(b.fw, 'off');
+  assert.ok(b.v > v0);
+  // The board hears the stamp on every version check, and reports applying it.
+  const vr = (await s.req('/board/version?b=kitchen&hu=5&hz=' + r.body.wipe, own)).body;
+  assert.equal(vr.wipe, r.body.wipe);
+  assert.equal((await s.req('/board/secret123/api/health')).body.kitchen.wiped, r.body.wipe);
+  // A second transfer always gets a newer stamp, even within the same second, and survives a new token.
+  const r2 = await s.req('/board/secret123/api/boards/transfer?b=kitchen', { method: 'POST' });
+  assert.ok(r2.body.wipe > r.body.wipe);
+  const { body: key2 } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  assert.equal((await s.req('/board/version?b=kitchen', { headers: { 'X-Board-Token': key2.token } })).body.wipe, r2.body.wipe);
+  // The board's own link can hand it on (then it stops working itself).
+  const r3 = await s.req(`/board/c/${key2.link}/api/boards/transfer?b=home`, { method: 'POST' });
+  assert.equal(r3.status, 200);
+  assert.equal(r3.body.id, 'kitchen', 'a link reaches its own board only');
+  assert.equal((await s.req(`/board/c/${key2.link}/`)).status, 404);
+  // The maker's boards never get a wipe.
+  assert.ok(!('wipe' in (await s.req('/board/version?b=home', h)).body));
+  // The board list carries each board's firmware setting (the fleet table).
+  assert.deepEqual((await s.req('/board/secret123/api/boards')).body.map((x) => [x.id, x.fw]), [['home', 'stable'], ['kitchen', 'off']]);
   await s.close();
 });
 

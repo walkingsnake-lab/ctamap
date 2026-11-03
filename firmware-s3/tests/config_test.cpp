@@ -136,6 +136,10 @@ static void wifi_setup() {
   CHECK(page.find("Couldn&#39;t join &lt;b&gt;") != std::string::npos && page.find("note bad") != std::string::npos, "");
   CHECK(page.find("action=/save") != std::string::npos && page.find("name=p") != std::string::npos, "");
   CHECK(config::saved_page("<x>").find("&lt;x&gt;") != std::string::npos, "");
+  // Saved networks can be forgotten (handing the board on); with none saved, there's nothing to forget.
+  CHECK(page.find("action=/forget") != std::string::npos, "");
+  config::Config none;
+  CHECK(config::setup_page(none, "Board-QX4P", {}, "", false).find("action=/forget") == std::string::npos, "");
 }
 
 static int lit(const draw::Frame &f, int y0, int y1) {

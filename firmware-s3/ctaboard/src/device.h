@@ -161,6 +161,8 @@ class SetupPortal : public app::Setup {
   SetupPortal(config::Config *cfg, Panel *panel, std::function<void()> feed);
   void run(const std::string &why) override;  // doesn't return: restarts the board
   void joined() override;                     // clears the "new network" flag
+  void forget(long long stamp) override;      // a new owner: forget saved WiFi, then run("reset")
+  long long wiped() override;                 // the newest wipe stamp applied (flash "wiped")
   std::string ssid() const;
 
  private:
