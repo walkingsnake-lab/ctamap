@@ -67,6 +67,25 @@ rep('cleat bosses (now 4.5 tall) vs S3', ov(tray ^ near, s3), ov(tray ^ near, s3
 rep('post feet in front of the panel back at nominal (mm; the tray edge then stands this far off the flange, harmless)',
     round(C.PANEL_BACK - DR.P3.FOOT_Y, 2), C.PANEL_BACK - DR.P3.FOOT_Y > 0)
 
+# ---- post screws (M3 x 8 flanged button head, floating on the flat floor)
+fl = 6.9
+worst_core, worst_tube, min_bear = 0.0, 0.0, 1e9
+for x, z in DR.CORNERS:
+    zc = C.ZC + z
+    for a in range(0, 360, 30):
+        dx, dz = 0.7 * math.cos(math.radians(a)), 0.7 * math.sin(math.radians(a))
+        y_seat = DR.P3.FOOT_Y + DR.P3.SO_FLOOR
+        core = cyl_y(x + dx, zc + dz, y_seat - 8.0, y_seat, 3.0, 24) ^ box(-500, 500, y_seat - 8.0, y_seat - 0.01, -500, 500)
+        flange = cyl_y(x + dx, zc + dz, y_seat + 0.01, y_seat + 1.6, fl, 48)
+        worst_core = max(worst_core, ov(core, tray)); worst_tube = max(worst_tube, ov(flange, tray))
+    ring = cyl_y(x + 0.7, zc, y_seat - 0.1, y_seat - 0.05, fl, 64)          # just under the seat face (coplanar slices read short)
+    min_bear = min(min_bear, ov(ring, tray) / 0.05)
+rep('post screw core through the floor at 0.7 mm off centre, any direction (overlap)', worst_core, worst_core < 1e-3)
+rep('post screw flange (Ø6.9) clear of the tube wall at 0.7 off centre', worst_tube, worst_tube < 1e-3)
+rep('post screw flange bearing on the floor at 0.7 off centre (mm^2)', round(min_bear, 1), min_bear > 10)
+posts = Manifold.batch_boolean([DR.P3.standoff(x, z, DR.Y0) for x, z in DR.CORNERS], C.ADD)
+rep('posts (Ø11) vs S3', ov(posts, s3), ov(posts, s3) < 1e-3)
+
 # ---- encoder rails
 enc = SN.envelopes()
 hw = 12.7
@@ -137,9 +156,10 @@ if base:
     a0, a1 = louver_area(old, DR.Y1 - DR.LV_DEPTH + 0.6), louver_area(tray, DR.Y1 - DR.LV_DEPTH + 0.6)
     rep(f'top louver band open through: {a0:.0f} -> {a1:.0f} mm^2 ({100 * (a0 - a1) / a0:.1f}% less)', round(a1))
     back = box(-500, 500, DR.Y1 - 0.6, 500, -500, 500) - Manifold.batch_boolean(
-        [cyl_y(cx, cz, DR.Y1 - 1, DR.Y1 + 1, 4.5, 32) for cx, cz in DR.CLEAT_SCREWS], C.ADD)   # cleat holes: Ø3.4 -> pilot + lead-in
+        [cyl_y(cx, cz, DR.Y1 - 1, DR.Y1 + 1, 4.5, 32) for cx, cz in DR.CLEAT_SCREWS]     # cleat holes: Ø3.4 -> pilot + lead-in
+        + [cyl_y(x, C.ZC + z, DR.Y1 - 1, DR.Y1 + 1, DR.POST_BORE + 0.6, 48) for x, z in DR.CORNERS], C.ADD)   # post tubes: Ø6.4 -> 8.6
     d = ((old ^ back) - (tray ^ back)).volume() + ((tray ^ back) - (old ^ back)).volume()
-    rep('tray back face (outer 0.6 mm, cleat holes aside) vs the base tray (mm^3 different)', round(d, 3), d < 0.05)
+    rep('tray back face (outer 0.6 mm; cleat holes and post tube openings aside) vs the base tray (mm^3 different)', round(d, 3), d < 0.05)
 
 # ---- status window, collar
 w = DR.status_window()

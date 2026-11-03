@@ -157,6 +157,16 @@ P3.FOOT_Y = PANEL_BACK - POST_LONG
 # forward by as much, so their screws land in the middle of the shell's stadium holes
 BOT_Y = C.SCREW_Y - POST_LONG
 
+# Post screws (Nov 3): the countersunk heads centred themselves in a 90 deg cone, so the four screws had no float at all,
+# while the panel can sit ~0.45 off centre in the bore and the PETG tray shrinks (~0.2-0.5 %, so ~0.2-0.4 at each corner):
+# with two parts located separately and four screws pulling them together, "close but not quite" was the result. Now:
+# M3 x 8 flanged button heads (ISO 7380-2, flange ~6.9) on a flat floor with a POST_HOLE hole: +/-0.7 mm of float, the
+# flange acting as the washer. A plain button head over an M3 washer dropped down the tube first works the same.
+# The S3's place between the right-hand posts stays where the 9 mm posts put it (SO_D above), so the shell is unchanged.
+POST_OD, POST_BORE, POST_HOLE = 11.0, 8.6, 4.5   # hole: +/-0.7 for an M3 with room for print facets; bore: a 6.9 flange 0.7 off centre, +0.15 a side
+P3.SO_OD, P3.SO_BORE, P3.SO_HOLE = POST_OD, POST_BORE, POST_HOLE
+P3.so_cone = lambda x, zc: Manifold()            # flat floor: no countersink cone
+
 # Encoder rails (Nov 3): the encoder's pocket in the collar is round and nothing keys its body, so a loosened nut let the
 # body turn until its board's corner reached the panel (~4.9 deg). Two rails hang from the tray's top wall beside the
 # board's side edges (it's a 25.4 square) and stop it at ~3.5 deg, on the tray. Square the board by eye when tightening.
@@ -607,6 +617,14 @@ def sensor_plugs():
     return Manifold.batch_boolean(out, ADD)
 
 
+def post_test(z_tube=8.0):
+    """one post, short: the flat floor (printed as a bridge back-down, like the tray's) and the hole, on a small base"""
+    x, z = CORNERS[0]
+    y0 = P3.FOOT_Y + P3.SO_FLOOR + z_tube
+    p = P3.standoff(x, z, y0) + (box(x - 8, x + 8, y0, y0 + 2.0, ZC + z - 8, ZC + z + 8) - cyl_y(x, ZC + z, y0 - 1, y0 + 3, POST_BORE, 48))
+    return p
+
+
 def test_pieces(tr):
     """the fits that are new and unconfirmed, as small pieces of the real tray (case frame; they print back-down like it):
     top: the top wall from the knob slot to past the sensor, with the encoder rails (slide the real encoder board between
@@ -632,7 +650,7 @@ def test_pieces(tr):
             cuts.append(box(mx - 0.5, mx + 0.5, Y0 - 1, Y1 + 1, 13.0, 15.0))
     pil = blk - Manifold.batch_boolean(cuts, ADD)
     big = lambda m: max(m.decompose(), key=lambda p: p.volume())
-    return dict(top=big(top), window=big(win), window_part=status_window(), pilots=pil)
+    return dict(top=big(top), window=big(win), window_part=status_window(), pilots=pil, post=post_test())
 
 
 def test_plate(tr):
@@ -644,7 +662,7 @@ def test_plate(tr):
         me = m.to_mesh(); return trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     p = test_pieces(tr)
     items = [(tm(p['top']), None, True), (tm(p['window']), tm(p['window_part']), True), (tm(p['pilots']), None, True),
-             (tm(sled()), None, False)]
+             (tm(p['post']), None, True), (tm(sled()), None, False)]
     petg, wins, x = [], [], 0.0
     for m, w, rot in items:
         for g in (m, w):
@@ -703,6 +721,10 @@ if __name__ == '__main__':
     t = CO.export(CO.collar(), f'{out}/bar-encoder-collar-v5.stl'); print('bar-encoder-collar-v5.stl', t.is_watertight)
     t = tm(sled(), np.eye(4)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/bar-sensor-sled.stl')   # plate down
     print('bar-sensor-sled.stl', t.is_watertight, np.round(t.extents, 1).tolist())
+    _mod = sys.modules[__name__]
+    _mod.FASTEN, _saved = 'insert', _mod.FASTEN
+    put(tray(), 'bar-drawer-tray-inserts.stl')                      # the same tray with heat-set insert holes (later)
+    _mod.FASTEN = _saved
     P, W = test_plate(tr)
     P.export(f'{out}/test-plate-v5.stl'); W.export(f'{out}/test-plate-v5-window.stl')
     print('test-plate-v5.stl', P.is_watertight, np.round(P.extents, 1).tolist(), '+ window', W.is_watertight)
