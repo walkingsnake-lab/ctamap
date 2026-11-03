@@ -254,6 +254,20 @@ struct RenderOpts {
   // Knob chooser (screen "chooser"): wheel position and commit (draw.js opts.chooser).
   std::optional<double> chooser_pos;
   bool chooser_commit = false;
+  // Peek chooser (screen "peek"; draw.js opts.peek): the view (ring index k,
+  // variant vi), the bar's drop in rows, and the slide from another view
+  // (draw.js peek.slide: its k and vi, ms in, vertical or sideways, dir).
+  // view / slide_view: the views' payloads already built by peek_view()
+  // (null: built here). Weather in a peek: the newest frame on hand, still.
+  struct Peek {
+    int k = 0, vi = 0, drop = 0;
+    bool slide = false;
+    int slide_k = 0, slide_vi = 0, slide_dir = 1;
+    double slide_t = 0;
+    bool slide_y = false;
+    const Value *view = nullptr, *slide_view = nullptr;
+  };
+  std::optional<Peek> peek;
   // Clock screen (skyline face): the animation clock in epoch ms (null: now x 1000)
   // and the cloud strips on hand (strip id -> 1664 packed bytes).
   std::optional<double> ms;
@@ -295,6 +309,22 @@ const double SCREEN_FADE_MS = SCREEN_FADE_OUT_MS + SCREEN_FADE_IN_MS;
 void fade_frames(const uint8_t *from, Frame &f, double t);
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);
+
+// ---- peek chooser (draw.js renderPeek, PEEK) ----
+const double PEEK_X_MS = 270, PEEK_Y_MS = 300, PEEK_UP_MS = 240, PEEK_DOWN_MS = 390;
+const int PEEK_BAND = 11;
+// A variant's payload and screen (draw.js peekView): `own` when the
+// payload had to change (weather, clock), `v` holds it then.
+struct PeekView {
+  std::string screen;
+  bool own = false;
+  Value v;
+  const Value &payload(const Value &p) const { return own ? v : p; }
+};
+PeekView peek_view(const Value &p, int k, int vi);
+std::string peek_screen(const Value &p, int k, int vi);  // just the screen, no copy
+int peek_shift(bool y, double t);  // px slid at t ms: 0..64 across, 0..32 down
+int peek_drop(bool up, double t);  // rows the bar has dropped at t ms (rising: up)
 
 // Announce screen (draw.js messageIntroMs / messageTick): how long a message's
 // intro runs (ms; 0 for the still styles), and after it a number that changes
