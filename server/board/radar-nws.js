@@ -1,22 +1,23 @@
 'use strict';
-// Radar fallback (contract "Radar", design spec §7): when IEM's archive
-// can't give a frame, the same MRMS mosaic from NWS's map service
-// (mapservices.weather.noaa.gov, "radar_base_reflectivity_time": MRMS
-// MergedBaseReflectivityQC, a 4-hour window of frames every ~6-8 minutes).
+// Radar fallback (contract "Radar", design spec §7): when NOAA's MRMS files
+// on AWS can't give a frame (radar-mrms.js), the same mosaic from NWS's map
+// service (mapservices.weather.noaa.gov, "radar_base_reflectivity_time":
+// MRMS MergedBaseReflectivityQC, a 4-hour window of frames every ~6-8
+// minutes).
 //
 // It only serves rendered colors, not dBZ, so a frame is asked for exactly
-// on the IEM grid (0.01°, same pixel centers) around the wanted stations
+// on the MRMS grid (0.01°, same pixel centers) around the wanted stations
 // (a few hundred pixels, not CONUS), nearest-neighbor, and each color is
 // turned back into dBZ with the service's color ramp: linear between the
 // anchors below, one color per 0.5 dBZ. The ramp was measured against the
 // raw MRMS files of the same times (Nov 3, 2026; every channel within 0.5
 // of the linear fit from -10 to 56 dBZ). The colors are then handed to the
-// IEM pipeline as lcref palette indices (dBZ = index * 0.5 - 32).
+// pipeline as lcref-style indices (dBZ = index * 0.5 - 32).
 
 const https = require('https');
 
 const SERVICE = 'https://mapservices.weather.noaa.gov/eventdriven/rest/services/radar/radar_base_reflectivity_time/ImageServer';
-// IEM's lcref grid: pixel centers from (-129.995, 54.995), 0.01°.
+// The MRMS CONUS grid: pixel centers from (-129.995, 54.995), 0.01°.
 const GRID = { dx: 0.01, dy: -0.01, x0: -129.995, y0: 54.995 };
 const NEAR_S = 180;          // a catalog frame within 3 min of the slot stands in for it
 const CATALOG_S = 60;        // catalog cached this long
@@ -70,7 +71,7 @@ function rgbIndex(unknown = null) {
   };
 }
 
-// The pixel window of the IEM grid covering every geometry (radar.js
+// The pixel window of the MRMS grid covering every geometry (radar.js
 // geometry() on GRID), one pixel of margin. Returns the request's box (its
 // outer edges, degrees), size, and the window's own world file.
 function windowOf(geos) {

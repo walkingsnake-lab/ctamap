@@ -101,11 +101,10 @@ test('snow mode from the weather: snow codes, or freezing without freezing rain'
   assert.equal(R.modeFor({ code: 61, temp: 40 }), 'rain');
 });
 
-test('stamps and archive URLs', () => {
+test('stamps', () => {
   const t = Date.UTC(2026, 9, 4, 16, 0) / 1000;
   assert.equal(R.stampOf(t), '202610041600');
   assert.equal(R.timeOf('202610041600'), t);
-  assert.equal(R.frameUrl('202610041600', 'png'), 'https://mesonet.agron.iastate.edu/archive/data/2026/10/04/GIS/mrms/lcref_202610041600.png');
 });
 
 test('poller: newest frame first, then backfill; 404s retried later; on/off hysteresis', async () => {

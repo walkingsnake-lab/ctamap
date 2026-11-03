@@ -1,7 +1,8 @@
 'use strict';
-// Streaming decoder for MRMS radar frames (8-bit palette PNGs, 7000 x 3500
-// for CONUS; and the NWS map service's small 8-bit RGB crops, whose colors
-// the caller maps to indices with `rgbIndex`). A full decode with pngjs takes ~150 MB (it expands to RGBA);
+// Streaming decoder for radar frames: MRMS's own 16-bit grayscale PNGs
+// (inside its GRIB2 files, 7000 x 3500 for CONUS; the caller maps values to
+// indices with `gray16`), IEM-style 8-bit palette PNGs (test fixtures), and
+// the NWS map service's small 8-bit RGB crops (colors mapped with `rgbIndex`). A full decode with pngjs takes ~150 MB (it expands to RGBA);
 // the Fly VM has 256 MB shared with the map. This reads the PNG as it
 // arrives, inflates IDAT with Node's zlib, unfilters one row at a time, and
 // hands only the wanted rows to the caller as palette indices. It stops (and
@@ -36,9 +37,10 @@ function unfilter(type, row, prev, bpp = 1) {
 // indices; the array is reused, so copy what you keep.
 // An 8-bit RGB PNG (color type 2) needs rgbIndex(rgb) -> index, called with
 // each pixel's color as 0xRRGGBB, or -1 for the tRNS (transparent) color;
-// its rows are handed over as those indices.
+// a 16-bit grayscale PNG (color type 0) needs gray16, a Uint8Array(65536)
+// of value -> index. Their rows are handed over as those indices.
 // Resolves with { width, height, palette } (palette: Buffer of RGB triples).
-function decodeRows(source, { y0 = 0, y1 = Infinity, onRow, rgbIndex = null }) {
+function decodeRows(source, { y0 = 0, y1 = Infinity, onRow, rgbIndex = null, gray16 = null }) {
   return new Promise((resolve, reject) => {
     let buf = Buffer.alloc(0);
     let sigOk = false, header = null, palette = null;
@@ -68,7 +70,10 @@ function decodeRows(source, { y0 = 0, y1 = Infinity, onRow, rgbIndex = null }) {
         unfilter(cur[0], row, prev.subarray(1), bpp);
         if (y >= y0 && y <= y1) {
           if (bpp === 1) onRow(y, row);
-          else {
+          else if (gray16) {
+            for (let x = 0; x < header.width; x++) out[x] = gray16[(row[2 * x] << 8) | row[2 * x + 1]];
+            onRow(y, out);
+          } else {
             for (let x = 0; x < header.width; x++) {
               const c = (row[3 * x] << 16) | (row[3 * x + 1] << 8) | row[3 * x + 2];
               let k = cache.get(c);
@@ -87,11 +92,13 @@ function decodeRows(source, { y0 = 0, y1 = Infinity, onRow, rgbIndex = null }) {
     function chunk(type, data) {
       if (type === 'IHDR') {
         header = { width: data.readUInt32BE(0), height: data.readUInt32BE(4), depth: data[8], color: data[9], interlace: data[12] };
-        const rgb = header.color === 2 && typeof rgbIndex === 'function';
-        if (header.depth !== 8 || (header.color !== 3 && !rgb) || header.interlace !== 0) {
-          throw new Error(`expected an 8-bit palette PNG${rgbIndex ? ' or RGB PNG' : ''}, got depth ${header.depth} color ${header.color} interlace ${header.interlace}`);
+        const rgb = header.depth === 8 && header.color === 2 && typeof rgbIndex === 'function';
+        const g16 = header.depth === 16 && header.color === 0 && gray16 instanceof Uint8Array && gray16.length === 65536;
+        if (!((header.depth === 8 && header.color === 3) || rgb || g16) || header.interlace !== 0) {
+          throw new Error(`expected an 8-bit palette PNG${rgbIndex ? ' or RGB PNG' : ''}${gray16 ? ' or 16-bit gray PNG' : ''}, got depth ${header.depth} color ${header.color} interlace ${header.interlace}`);
         }
         if (rgb) { bpp = 3; out = new Uint8Array(header.width); }
+        if (g16) { bpp = 2; out = new Uint8Array(header.width); }
         cur = Buffer.alloc(header.width * bpp + 1);
         prev = Buffer.alloc(header.width * bpp + 1);
         inflate = zlib.createInflate();

@@ -6,12 +6,15 @@ const path = require('path');
 const { Readable } = require('stream');
 const R = require('./radar');
 const N = require('./radar-nws');
+const M = require('./radar-mrms');
 const { decodeRows } = require('./radar-png');
 
 const FX = path.join(__dirname, 'fixtures', 'radar-nws');
 const SPOT = { lat: 32.0, lon: -93.0 }; // northwest Louisiana, rain to 53 dBZ at 21:44 UTC Nov 3, 2026
 const NWS_PNG = path.join(FX, 'bref-20261103-214420-32.0n-93.0w.png');
-const TRUTH = path.join(FX, 'mrms-bref-20261103-214420-32.0n-93.0w');
+// The raw MRMS file of the same time (the main source's), for the truth.
+const GRIB = path.join(__dirname, 'fixtures', 'mrms-aws', 'MRMS_MergedBaseReflectivityQC_00.50_20261103-214420.grib2.gz');
+const gribSource = () => M.openGrib(fs.createReadStream(GRIB));
 const CATALOG = JSON.parse(fs.readFileSync(path.join(FX, 'catalog-20261103-2150.json'), 'utf8'));
 const quiet = { warn() {}, error() {} };
 
@@ -40,11 +43,11 @@ test('colors: transparent is no echo, near misses snap, colors past the ramp are
   assert.equal(R.dbzOf(ix(0xff9f00)), 45.5);
 });
 
-test('window: the IEM grid around the stations, one pixel of margin', () => {
+test('window: the MRMS grid around the stations, one pixel of margin', () => {
   const geo = R.geometry(N.GRID, SPOT.lat, SPOT.lon, 64);
   const w = N.windowOf([geo]);
   assert.deepEqual(w, { bbox: [-93.84, 31.65, -92.18, 32.37], size: [166, 72], wld: { dx: 0.01, dy: -0.01, x0: -93.835, y0: 32.365 } });
-  // Its pixel centers are IEM's: the window's first pixel is a grid pixel.
+  // Its pixel centers are MRMS's: the window's first pixel is a grid pixel.
   assert.ok(Math.abs(((w.wld.x0 - N.GRID.x0) / 0.01) - Math.round((w.wld.x0 - N.GRID.x0) / 0.01)) < 1e-6);
   // The station still lands on the marker LED in the window's own coordinates.
   const g2 = R.geometry(w.wld, SPOT.lat, SPOT.lon, 64);
@@ -85,10 +88,11 @@ test('decoder: an RGB crop with a transparent color comes back as indices', asyn
 });
 
 test('a frame from NWS matches one from the raw MRMS data of the same time', async () => {
-  // Truth: MRMS MergedBaseReflectivityQC 2026-11-03 21:44:20 (the product the
-  // service draws), the same window, as an lcref-style palette PNG.
+  // Truth: the raw MRMS MergedBaseReflectivityQC file of 2026-11-03 21:44:20
+  // (the product the service draws), through the main source's decoder.
   const loc = [{ key: 'x', ...SPOT, width: 64 }];
-  const truth = (await R.crops(fs.createReadStream(`${TRUTH}.png`), R.parseWld(fs.readFileSync(`${TRUTH}.wld`, 'utf8')), loc)).get('x');
+  const g = await gribSource();
+  const truth = (await R.crops(g.png, g.wld, loc, { gray16: g.gray16 })).get('x');
   const win = N.windowOf([R.geometry(N.GRID, SPOT.lat, SPOT.lon, 64)]);
   const unknown = new Set();
   const got = (await R.crops(fs.createReadStream(NWS_PNG), win.wld, loc, N.rgbIndex(unknown))).get('x');
@@ -137,31 +141,31 @@ test('source: catalog cached, nearest frame exported, nothing near the slot is a
   assert.match(warns[0], /#ff00ff/);
 });
 
-test('poller: IEM failing falls back to NWS; both missing stays quiet', async () => {
+test('poller: the main source failing falls back to NWS; both missing stays quiet', async () => {
   let t = R.timeOf('202611032142') + 120;
   const errors = [], warns = [];
   const log = { warn: (m) => warns.push(m), error: (...a) => errors.push(a.join(' ')) };
-  let iem = 'down';
+  let aws = 'down';
   const calls = [];
   const radar = R.createRadar({
     now: () => t, log,
     fetch: async (stamp) => {
-      calls.push(`iem:${stamp}`);
-      if (iem === 'down') throw new Error('connect ECONNREFUSED');
-      if (iem === '404') { const e = new Error('HTTP 404'); e.status = 404; throw e; }
-      return { wld: R.parseWld(fs.readFileSync(`${TRUTH}.wld`, 'utf8')), png: fs.createReadStream(`${TRUTH}.png`) };
+      calls.push(`aws:${stamp}`);
+      if (aws === 'down') throw new Error('connect ECONNREFUSED');
+      if (aws === '404') { const e = new Error('HTTP 404'); e.status = 404; throw e; }
+      return { ...(await gribSource()), src: 'mrms' };
     },
     fallback: async (at, geos) => {
       calls.push(`nws:${at}`);
       assert.equal(geos.length, 1);
       assert.equal(geos[0].width, R.SPLIT_W); // a station without a location file: the split layout
-      if (iem === '404') { const e = new Error('no NWS frame near the slot'); e.status = 404; throw e; }
+      if (aws === '404') { const e = new Error('no NWS frame near the slot'); e.status = 404; throw e; }
       return { wld: N.windowOf(geos).wld, png: fs.createReadStream(NWS_PNG), rgbIndex: N.rgbIndex(), src: 'nws' };
     },
   });
   radar.want('99999', SPOT.lat, SPOT.lon);
   await radar.pass();
-  assert.deepEqual(calls, ['iem:202611032142', `nws:${R.timeOf('202611032142')}`]);
+  assert.deepEqual(calls, ['aws:202611032142', `nws:${R.timeOf('202611032142')}`]);
   let r = radar.want('99999', SPOT.lat, SPOT.lon);
   assert.deepEqual(r.frames, ['99999-202611032142']);
   assert.equal(radar.frame('99999', r.frames[0]).length, 2048);
@@ -169,33 +173,33 @@ test('poller: IEM failing falls back to NWS; both missing stays quiet', async ()
   assert.equal(warns.filter((m) => /using NWS/.test(m)).length, 1);
   await radar.pass();
   assert.equal(warns.filter((m) => /using NWS/.test(m)).length, 1, 'said once');
-  // IEM back: its frames again, and it says so.
-  iem = 'up';
+  // AWS back: its frames again, and it says so.
+  aws = 'up';
   await radar.pass();
-  assert.equal(calls[calls.length - 1], 'iem:202611032130');
-  assert.equal(warns.filter((m) => /IEM is back/.test(m)).length, 1);
-  // IEM hasn't archived the newest slot yet (its normal lag): wait for IEM,
+  assert.equal(calls[calls.length - 1], 'aws:202611032130');
+  assert.equal(warns.filter((m) => /MRMS on AWS is back/.test(m)).length, 1);
+  // AWS doesn't have the newest slot yet (its normal lag): wait for it,
   // no fallback, a quiet retry later.
-  iem = '404';
+  aws = '404';
   t += 360;
   radar.want('99999', SPOT.lat, SPOT.lon); // the board is still asking
   let n = calls.length;
   await radar.pass();
-  assert.deepEqual(calls.slice(n), ['iem:202611032148']);
+  assert.deepEqual(calls.slice(n), ['aws:202611032148']);
   assert.equal(errors.length, 0);
-  // Still missing a step later (IEM stalled): NWS is asked; neither has it: quiet.
+  // Still missing a step later (stalled): NWS is asked; neither has it: quiet.
   t += 360;
   radar.want('99999', SPOT.lat, SPOT.lon);
   n = calls.length;
-  await radar.pass(); // the new newest slot (21:54): IEM only
-  await radar.pass(); // 21:48, now overdue: IEM, then NWS
-  assert.deepEqual(calls.slice(n), ['iem:202611032154', 'iem:202611032148', `nws:${R.timeOf('202611032148')}`]);
+  await radar.pass(); // the new newest slot (21:54): AWS only
+  await radar.pass(); // 21:48, now overdue: AWS, then NWS
+  assert.deepEqual(calls.slice(n), ['aws:202611032154', 'aws:202611032148', `nws:${R.timeOf('202611032148')}`]);
   assert.equal(errors.length, 0);
   r = radar.want('99999', SPOT.lat, SPOT.lon);
   assert.ok(!r.frames.includes('99999-202611032148'));
 });
 
-test('poller: IEM down and NWS missing the slot is logged', async () => {
+test('poller: AWS down and NWS missing the slot is logged', async () => {
   const errors = [];
   const radar = R.createRadar({
     now: () => R.timeOf('202611032142') + 120, log: { warn() {}, error: (...a) => errors.push(a.join(' ')) },
@@ -205,7 +209,7 @@ test('poller: IEM down and NWS missing the slot is logged', async () => {
   radar.want('99999', SPOT.lat, SPOT.lon);
   await radar.pass();
   assert.equal(errors.length, 1);
-  assert.match(errors[0], /IEM: HTTP 503; NWS: no NWS frame/);
+  assert.match(errors[0], /AWS: HTTP 503; NWS: no NWS frame/);
 });
 
 test('poller: a custom fetch has no fallback unless given one', async () => {
