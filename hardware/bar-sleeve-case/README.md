@@ -129,7 +129,7 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
   4 x M3 x 8 countersunk down the post tubes into the panel; 2 x M3 x 10 + nuts from below (one pair, x +/-46, both panels).
 
 #### Assembly fixes (Nov 3)
-Three things fought back in the first P4 assembly; all three trays (P3, P2.5, P4) and collars changed. Check with
+Three things fought back in the first v5 drawer (P3) assembly; the fixes are in all three trays (P3, P2.5, P4) and the collars. Check with
 `python3 check_fixes.py` (and `PANEL=p4`, `PANEL=p25`): nut path, screws at full float, sled seated and swung in, louver area.
 
 - **Bottom nuts** (`NUT_STYLE`, default `hex`). The side-loaded slot passed a nut only within ~1° of square (its 5.55 mouth,
