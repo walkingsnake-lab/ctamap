@@ -656,6 +656,50 @@ std::string SetupPortal::ssid() const {
 
 void SetupPortal::joined() { nvs_put("fresh", ""); }
 
+long long SetupPortal::wiped() {
+  if (wiped_ < 0) wiped_ = atoll(nvs_get("wiped").c_str());
+  return wiped_;
+}
+
+// "newnet" names the network last entered on the setup page, until the
+// board's first check-in without a newer wipe stamp: it's the new owner's
+// when the board was given away while offline, so a wipe keeps it.
+void SetupPortal::checked_in() {
+  if (newnet_ < 0) newnet_ = nvs_get("newnet").empty() ? 0 : 1;
+  if (newnet_ == 1 && nvs_put("newnet", "")) newnet_ = 0;
+}
+
+// A new owner: the stamp is saved first, so a board that loses power midway
+// never wipes the next owner's networks again for the same stamp.
+void SetupPortal::forget(long long stamp) {
+  if (!nvs_put("wiped", std::to_string(stamp))) {
+    if (wipe_failed_ != stamp) Serial.println("[setup] couldn't save the wipe stamp; keeping saved WiFi");
+    wipe_failed_ = stamp;
+    return;
+  }
+  wiped_ = stamp;
+  std::string keep = nvs_get("newnet");
+  config::Config next = *cfg_;
+  next.networks.clear();
+  for (auto &n : cfg_->networks)
+    if (!keep.empty() && n.first == keep) next.networks.push_back(n);
+  if (!nvs_put("cfg", config::to_json(next))) {
+    Serial.println("[setup] couldn't save settings; keeping saved WiFi");
+    return;
+  }
+  nvs_put("fresh", "");
+  nvs_put("newnet", "");
+  newnet_ = 0;
+  *cfg_ = next;
+  if (!next.networks.empty()) {
+    Serial.printf("[setup] new owner (%lld): kept %s, forgot the rest; restarting\n", stamp, keep.c_str());
+    delay(200);
+    ESP.restart();
+  }
+  Serial.printf("[setup] saved WiFi forgotten (new owner, %lld)\n", stamp);
+  run("reset");
+}
+
 // Networks nearby, strongest first, each once, hidden ones left out.
 static std::vector<std::string> scan_names() {
   std::vector<std::pair<int, std::string>> found;
@@ -695,6 +739,7 @@ void SetupPortal::run(const std::string &why) {
   std::string note = why == "badwifi" ? "Couldn't join " + (cfg_->networks.empty() ? std::string("that network") : cfg_->networks[0].first) +
                                             ". Check the password and try again."
                      : why == "nowifi" && !cfg_->networks.empty() ? "The board couldn't join any saved network. Choose one."
+                     : why == "reset"                              ? "This board has a new owner. Choose your network."
                                                                    : "";
   bool bad = why == "badwifi" || (why == "nowifi" && !cfg_->networks.empty());
   auto page = [&]() {
@@ -709,6 +754,29 @@ void SetupPortal::run(const std::string &why) {
     web.sendHeader("Location", "/");
     web.send(302, "text/plain", "");
   });
+  // Forget every saved network (handing the board on): someone on the
+  // setup network, so next to the board, asked. Only on a password-locked
+  // setup network: on an open one, a passer-by could strand the board.
+  web.on("/forget", HTTP_POST, [&]() {
+    if (!locked) {
+      web.sendHeader("Location", "/");
+      web.send(302, "text/plain", "");
+      return;
+    }
+    config::Config next = *cfg_;
+    next.networks.clear();
+    if (!nvs_put("cfg", config::to_json(next))) {
+      note = "Couldn't save on the board. Try again.";
+      bad = true;
+      page();
+      return;
+    }
+    nvs_put("fresh", "");
+    *cfg_ = next;
+    note = "Saved networks forgotten.";
+    bad = false;
+    page();
+  });
   web.on("/save", HTTP_POST, [&]() {
     std::string other = web.arg("o").c_str(), pick = web.arg("s").c_str(), pass = web.arg("p").c_str();
     std::string ssid = other.empty() ? pick : other;
@@ -721,7 +789,7 @@ void SetupPortal::run(const std::string &why) {
     }
     config::Config next = *cfg_;
     config::add_network(next, ssid, pass);
-    if (!nvs_put("cfg", config::to_json(next)) || !nvs_put("fresh", "1")) {
+    if (!nvs_put("cfg", config::to_json(next)) || !nvs_put("fresh", "1") || !nvs_put("newnet", ssid)) {
       note = "Couldn't save on the board. Try again.";
       bad = true;
       page();

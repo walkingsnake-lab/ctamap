@@ -99,6 +99,7 @@ struct Server : app::Net {
   std::vector<std::string> variants;
   std::string tscreen = "transit", wx_view = "now", face = "skyline";
   std::string fw;                                 // version check's `fw` offer (JSON object), "" for none
+  long long wipe = 0;                             // version check's `wipe` stamp (a new owner), 0 for none
   int fw_fail = 0;                                // fail the next firmware downloads halfway
   std::string cloud = "p1";                       // the skyline's cloud strip id, "" for a clear sky
   std::string msg = "null";                       // the announce screen's message (payload `msg`), raw JSON
@@ -211,7 +212,8 @@ struct Server : app::Net {
   bool version(const std::string &h, Value &out, std::string &err) override {
     if (!call("version", err)) return false;
     health.push_back(h);
-    out = parse("{\"v\":" + jnum(v) + ",\"now\":" + jnum((long long)floor(now())) + (fw.empty() ? "" : ",\"fw\":" + fw) + "}");
+    out = parse("{\"v\":" + jnum(v) + ",\"now\":" + jnum((long long)floor(now())) + (fw.empty() ? "" : ",\"fw\":" + fw) +
+                (wipe ? ",\"wipe\":" + jnum(wipe) : "") + "}");
     return true;
   }
 
@@ -575,6 +577,44 @@ static void test_setup_reopens_when_the_new_network_fails_and_clears_after_a_joi
   r3.server.joins_on = 1;
   r3.board->connect();
   CHECK(r3.board->online && su3.joins == 0 && su3.runs.empty() && !r3.board->fresh_wifi, "%d", su3.joins);
+}
+
+static void test_a_new_owner_wipe_forgets_wifi_once_per_stamp() {
+  // The server's `wipe` stamp (a transfer): forget(stamp) once; the same
+  // stamp again does nothing, a newer one forgets again. The applied stamp
+  // rides on the health report (hz).
+  struct Wipes : app::Setup {
+    std::vector<long long> forgot;
+    long long applied = 0;
+    int checkins = 0;
+    void run(const std::string &) override {}
+    void forget(long long stamp) override { forgot.push_back(stamp); applied = stamp; }
+    long long wiped() override { return applied; }
+    void checked_in() override { checkins++; }
+  } su;
+  Rig r;
+  r.board->setup = &su;
+  r.board->connect();
+  r.run_for(30000);
+  CHECK(su.forgot.empty(), "no stamp, no wipe");
+  CHECK(su.checkins > 0, "each check-in without a newer stamp says so (a just-entered network stops being new)");
+  int before = su.checkins;
+  r.server.wipe = 1793400000;
+  r.run_for(30000);
+  CHECK(su.forgot.size() == 1 && su.forgot[0] == 1793400000, "%zu", su.forgot.size());
+  CHECK(su.checkins - before <= 3, "not while a newer stamp waits");
+  r.run_for(90000);
+  CHECK(su.forgot.size() == 1, "the same stamp again: nothing (%zu)", su.forgot.size());
+  CHECK(last_health(r).find("&hz=1793400000") != std::string::npos, "%s", last_health(r).c_str());
+  r.server.wipe = 1793400100;
+  r.run_for(30000);
+  CHECK(su.forgot.size() == 2 && su.forgot[1] == 1793400100, "%zu", su.forgot.size());
+  // Without a setup network (no Setup), the stamp is ignored.
+  Rig r2;
+  r2.server.wipe = 1793400000;
+  r2.board->connect();
+  r2.run_for(30000);
+  CHECK(r2.board->online, "");
 }
 
 static void test_ota_installs_an_offered_build_between_animations() {
@@ -2037,6 +2077,7 @@ int main() {
       T_(test_peek_prefetches_radar_frames_and_clouds),
       T_(test_peek_survives_a_long_burst_of_turns_and_presses),
       T_(test_setup_opens_right_away_with_no_networks),
+      T_(test_a_new_owner_wipe_forgets_wifi_once_per_stamp),
       T_(test_setup_opens_after_ten_minutes_without_wifi),
       T_(test_setup_never_opens_while_the_server_is_down),
       T_(test_setup_reopens_when_the_new_network_fails_and_clears_after_a_join),

@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createFirmware, inspect, FirmwareError, MAX_BUILDS, loadPublicKey, verifySignature } = require('./firmware');
+const { createFirmware, inStableWindow, inspect, FirmwareError, MAX_BUILDS, loadPublicKey, verifySignature } = require('./firmware');
 
 // A test signing key (the real one never leaves its owner's computer and CI).
 const { privateKey: KEY, publicKey: PUB } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
@@ -88,7 +88,7 @@ test('old builds are pruned, except channel and pinned ones', () => {
 });
 
 test('offer: an S3 running a committed build gets its channel\'s or pinned build', () => {
-  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB, stableWindow: () => true });
   fw.upload(fakeBuild('aaaaaaa'), { sig: signOf(fakeBuild('aaaaaaa')), channel: 'stable', now: 1 });
   fw.upload(fakeBuild('bbbbbbb'), { sig: signOf(fakeBuild('bbbbbbb')), channel: 'beta', now: 2 });
   const t = fw.target('stable');
@@ -105,8 +105,33 @@ test('offer: an S3 running a committed build gets its channel\'s or pinned build
   assert.equal(fw.offer({ fw: 'stable' }, S3), null);
 });
 
-test('signatures: uploads need a valid one by the repo key; offers carry it', () => {
+test('offer: stable installs only overnight in Chicago; beta and pinned builds any time', () => {
   const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  fw.upload(fakeBuild('aaaaaaa'), { sig: signOf(fakeBuild('aaaaaaa')), channel: 'stable', now: 1 });
+  fw.upload(fakeBuild('bbbbbbb'), { sig: signOf(fakeBuild('bbbbbbb')), channel: 'beta', now: 2 });
+  const at = (y, m, d, h, min = 0) => Date.UTC(y, m - 1, d, h, min) / 1000; // UTC
+  const q = { ...S3, hv: '1234567' };
+  // Nov 3, 2026 (CST, UTC-6): 1:59 no, 2:00 yes, 4:59 yes, 5:00 no.
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 11, 3, 7, 59)), null);
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 11, 3, 8, 0)).v, 'aaaaaaa');
+  assert.equal(fw.offer({}, q, at(2026, 11, 3, 10, 59)).v, 'aaaaaaa'); // default: stable
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 11, 3, 11, 0)), null);
+  // July (CDT, UTC-5): 2:30 AM is 7:30 UTC.
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 7, 1, 7, 30)).v, 'aaaaaaa');
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 7, 1, 6, 30)), null);
+  // Midday: beta and a pinned build still come right away.
+  const noon = at(2026, 11, 3, 18);
+  assert.equal(fw.offer({ fw: 'beta' }, q, noon).v, 'bbbbbbb');
+  assert.equal(fw.offer({ fw: 'aaaaaaa' }, q, noon).v, 'aaaaaaa');
+  // Midday, just started (uptime under 2 min): stable too, before anyone is watching.
+  assert.equal(fw.offer({ fw: 'stable' }, { ...q, hu: '45' }, noon).v, 'aaaaaaa');
+  assert.equal(fw.offer({ fw: 'stable' }, { ...q, hu: '600' }, noon), null);
+  assert.equal(inStableWindow(at(2026, 11, 3, 9)), true);
+  assert.equal(inStableWindow(noon), false);
+});
+
+test('signatures: uploads need a valid one by the repo key; offers carry it', () => {
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB, stableWindow: () => true });
   const buf = fakeBuild('aaaaaaa');
   assert.throws(() => fw.upload(buf, {}), /unsigned/);
   assert.throws(() => fw.upload(buf, { sig: 'zz' }), /doesn't match/);

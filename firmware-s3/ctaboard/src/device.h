@@ -161,12 +161,18 @@ class SetupPortal : public app::Setup {
   SetupPortal(config::Config *cfg, Panel *panel, std::function<void()> feed);
   void run(const std::string &why) override;  // doesn't return: restarts the board
   void joined() override;                     // clears the "new network" flag
+  void forget(long long stamp) override;      // a new owner: forget saved WiFi (but a just-entered one), restart
+  long long wiped() override;                 // the newest wipe stamp applied (flash "wiped", cached)
+  void checked_in() override;                 // clears flash "newnet" (once)
   std::string ssid() const;
 
  private:
   config::Config *cfg_;
   Panel *panel_;
   std::function<void()> feed_;
+  long long wiped_ = -1;      // flash "wiped", read once
+  long long wipe_failed_ = 0;  // a stamp whose save failed (logged once)
+  int newnet_ = -1;            // flash "newnet" is set: -1 unknown, 0 no, 1 yes
 };
 
 class SysClock : public app::Clock {

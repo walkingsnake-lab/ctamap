@@ -230,6 +230,7 @@ static const char *PAGE_HEAD =
     "select,input{width:100%;box-sizing:border-box;font:inherit;color:#e4e4e4;background:#141414;border:1px solid #333;border-radius:9px;padding:11px}"
     "button{width:100%;margin-top:18px;font:inherit;font-weight:600;padding:12px;border:0;border-radius:9px;background:#ffb000;color:#111}"
     ".note{color:#e4e4e4;background:#1c1c1c;border:1px solid #333;border-radius:9px;padding:10px}.bad{border-color:#5a2a2a;color:#ff6b6b}"
+    "button.quiet{background:#1c1c1c;color:#e4e4e4;border:1px solid #333;font-weight:400}"
     "a{color:#8f8f8f}</style></head><body><main>";
 
 std::string setup_page(const Config &c, const std::string &ssid, const std::vector<std::string> &seen,
@@ -249,6 +250,10 @@ std::string setup_page(const Config &c, const std::string &ssid, const std::vect
     o += "<p>Already saved: ";
     for (size_t i = 0; i < c.networks.size(); i++) o += (i ? ", " : "") + html_escape(c.networks[i].first);
     o += ". A new network is tried first.</p>";
+    if (setup_pass_ok(c.setup_pass))
+      o += "<form method=post action=/forget onsubmit=\"return confirm('Forget every saved network?')\">"
+         "<button class=quiet>Forget saved networks</button></form>"
+         "<p>Giving the board away? Its control page's Give away also makes the new owner a link.</p>";
   }
   return o + "</main></body></html>";
 }

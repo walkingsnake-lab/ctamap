@@ -245,6 +245,7 @@ std::string Board::health_query(long long ms) {
     q += std::string("&hk=") + CAPS;
     std::string ox = ota_health();
     if (!ox.empty()) q += "&hx=" + ox;
+    if (setup && setup->wiped() > 0) q += "&hz=" + std::to_string(setup->wiped());
     health_q_ = q;
   }
   // The light sensor's reading rides on every check (every ~10 s), fresh,
@@ -283,6 +284,14 @@ sched::Result Board::do_version(double ms) {
       offer.reset();
     }
     if (!player.has_p || json::str(r["v"]) != json::str(player.p["v"])) update_job.due_at = 0;  // settings changed: fetch now
+    // A new owner: forget the saved WiFi, once per stamp (contract "Board keys").
+    long long wipe = (long long)r["wipe"].num(0);
+    if (setup && wipe > setup->wiped()) {
+      say("[setup] the board has a new owner; forgetting saved WiFi");
+      setup->forget(wipe);
+    } else if (setup) {
+      setup->checked_in();
+    }
     return sched::OK;
   };
   launch(std::move(f));

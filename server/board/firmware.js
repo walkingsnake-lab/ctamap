@@ -26,12 +26,21 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { tzOffset } = require('./time');
 
 const FILE_NAME = 'firmware.json';
 const SUBDIR = 'firmware';
 const MAX_BYTES = 2 * 1024 * 1024;   // the app slot in the default partition scheme (TinyUF2 8MB: 2 MB)
 const MAX_BUILDS = 8;                // older builds not in a channel or pinned are pruned
 const CHANNELS = ['beta', 'stable'];
+// Boards on stable install only overnight, Chicago time [from, to) hours, so
+// nobody watches one restart; beta and pinned builds install right away.
+const STABLE_HOURS = [2, 5];
+const BOOT_S = 120;
+const inStableWindow = (now) => {
+  const h = new Date((now + tzOffset(now)) * 1000).getUTCHours();
+  return h >= STABLE_HOURS[0] && h < STABLE_HOURS[1];
+};
 const ESP_IMAGE_MAGIC = 0xe9;
 const ESP32S3_CHIP_ID = 9;           // esp_image_header_t.chip_id
 const MARK_RE = /CTABOARD-BUILD:([A-Za-z0-9_]{1,48}):(generic|setup);/;
@@ -85,7 +94,8 @@ function inspect(buf) {
   return { v };
 }
 
-function createFirmware({ dir, log = console, publicKey = loadPublicKey() } = {}) {
+// stableWindow(now): whether stable installs are allowed at epoch second now.
+function createFirmware({ dir, log = console, publicKey = loadPublicKey(), stableWindow = inStableWindow } = {}) {
   if (!publicKey) log.warn('[board] no firmware signing key (firmware-s3/firmware-signing.pub.pem): OTA uploads are refused until scripts/firmware-key.js makes one');
   const root = path.join(dir, SUBDIR);
   const file = path.join(root, FILE_NAME);
@@ -182,11 +192,17 @@ function createFirmware({ dir, log = console, publicKey = loadPublicKey() } = {}
     // The offer for /board/version (`fw`), or null: only for an S3 running a
     // committed build (a board running `dev` or `_dirty` is someone's test
     // build and is left alone), and only when it isn't already running it.
-    offer(board, q) {
+    // A board on stable gets it only in the overnight window (STABLE_HOURS),
+    // or in its first minutes after starting (BOOT_S of uptime, `hu`): a
+    // board unplugged every night still updates, while nobody watches it yet.
+    offer(board, q, now = Math.floor(Date.now() / 1000)) {
       if (q.hd !== HARDWARE) return null;
       const running = String(q.hv || '');
       if (!VERSION_RE.test(running)) return null;
-      const t = this.target(board.fw || 'stable');
+      const fw = board.fw || 'stable';
+      const justStarted = q.hu != null && Number(q.hu) >= 0 && Number(q.hu) < BOOT_S;
+      if (fw === 'stable' && !stableWindow(now) && !justStarted) return null;
+      const t = this.target(fw);
       if (!t || t.v === running) return null;
       return { v: t.v, size: t.size, sha: t.sha, n: board.fwRetry || 0, ...(t.sig ? { sig: t.sig } : {}) };
     },
@@ -195,4 +211,4 @@ function createFirmware({ dir, log = console, publicKey = loadPublicKey() } = {}
   };
 }
 
-module.exports = { createFirmware, inspect, loadPublicKey, verifySignature, PUBLIC_KEY_FILE, FirmwareError, CHANNELS, MAX_BYTES, MAX_BUILDS, VERSION_RE };
+module.exports = { createFirmware, inStableWindow, STABLE_HOURS, inspect, loadPublicKey, verifySignature, PUBLIC_KEY_FILE, FirmwareError, CHANNELS, MAX_BYTES, MAX_BUILDS, VERSION_RE };

@@ -187,6 +187,18 @@ with no phone on it to retry the saved networks (a router back after a power
 cut). Holding the knob (or UP) for 2 seconds while the board starts opens it
 on demand. Up to 8 networks are kept, the newest tried first.
 
+**A new owner** (gift, resale): Board tab → Give it away → **New owner…** on
+your control page, or the same button on the board's own owner link. It
+makes a new owner link (the old one stops working) and resets the board's
+settings; the token stays. From your page the board also forgets its WiFi
+at its next check-in (keeping a network the new owner already entered, if
+it was handed over offline) and opens its setup network, so the new owner
+sets it up as in step 4 with the new link in place of the label's. From an
+owner link there's no remote wipe (an old link mustn't strand the next
+owner); the setup page's **Forget saved networks** (password-locked setup
+networks only) clears it for someone next to the board. An owner link can
+also make itself a **New link**, which revokes every copy of the old one.
+
 ## OTA updates
 
 Once a board has run a setup build, new firmware can reach it over WiFi:
@@ -205,9 +217,11 @@ Once a board has run a setup build, new firmware can reach it over WiFi:
 3. **Boards follow their channel** (Updates, per board): Stable (default),
    Beta, a pinned build, or Off. Put your own boards on Beta; once a build
    has run well, press **Stable** on it so everyone else's boards get it.
-4. **The board installs it** within a minute, between animations: the panel
-   shows `UPDATING` and the percentage, then it restarts into the new build.
-   The Health rows show the new Firmware commit.
+4. **The board installs it** between animations: the panel shows `UPDATING`
+   and the percentage, then it restarts into the new build. Beta and pinned
+   builds go within a minute; **Stable only between 2 and 5 AM** Chicago time,
+   so buyers never see a restart. The Health rows show the new Firmware
+   commit, and Board tab → All boards shows every board's build at a glance.
 
 Safety:
 - The download goes into the unused app slot and is checked (SHA-256) before

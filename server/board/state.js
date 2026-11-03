@@ -516,6 +516,19 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       return board;
     },
 
+    // A new owner: back to the default settings. The board keeps its name
+    // (the maker's) and its firmware setting (fw, fwRetry: a rolled-back
+    // build stays marked bad); v grows so the board refetches.
+    reset(id) {
+      if (!has(id)) return null;
+      const prev = state.boards[id];
+      const board = defaultBoard(stations);
+      Object.assign(board, { label: prev.label || '', fw: prev.fw || board.fw, fwRetry: prev.fwRetry || 0, v: (prev.v || 0) + 1 });
+      state.boards[id] = board;
+      save();
+      return board;
+    },
+
     // Remove a board. False if it doesn't exist; the last board can't go.
     remove(id) {
       if (!has(id)) return false;

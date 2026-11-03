@@ -72,6 +72,10 @@
   body.nosports .sports { display: none !important; }
   pre.keys { white-space: pre-wrap; word-break: break-all; font-size: 13px; background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; margin: 8px 0 0; user-select: all; }
   #fwBuilds li { flex-wrap: wrap; }
+  #fleet li { cursor: pointer; align-items: flex-start; }
+  #fleet li .nm small { display: block; margin: 2px 0 0; }
+  #fleet li .st { color: var(--muted); font-size: 14px; text-align: right; white-space: nowrap; }
+  #fleet li .st.bad { color: var(--err); }
   #fwBuilds li .nm { text-transform: none; letter-spacing: 0; }
   #fwBuilds li button { width: auto; padding: 0 10px; font-size: 14px; }
   #fwBuilds li button[aria-pressed="true"] { background: var(--accent); color: #111; border-color: var(--accent); }
@@ -421,7 +425,18 @@
     <div class="row admin"><span>Copy settings from</span>
       <select id="copyFrom" aria-label="Copy settings from" style="width:auto"></select></div>
     <p class="hint admin">Copies every setting except the name. Brightness goes back to Auto.</p>
+    <div class="row" id="relinkRow" hidden><span>Owner link</span><button class="small" id="relinkOwn">New link</button></div>
+    <p class="hint" id="relinkHint" hidden>Makes a new link to this page; the old one (and every copy of it) stops working.</p>
+    <div class="row" id="giveRow" hidden><span>Give it away</span><button class="small danger" id="giveAway">New owner…</button></div>
+    <p class="hint" id="giveHint" hidden></p>
+    <pre class="keys" id="giveOut" hidden></pre>
     <div class="row admin"><span></span><button class="small danger" id="delBoard">Delete board</button></div>
+  </section>
+
+  <section data-tab="health" class="admin">
+    <h2>All boards</h2>
+    <ul id="fleet"></ul>
+    <p class="hint">Tap a board to open it. Stable builds install overnight (2–5 AM); Beta and pinned builds right away.</p>
   </section>
 
   <section data-tab="health">
@@ -571,6 +586,63 @@
     $('copyFrom').replaceChildren(new Option('Choose…', ''), ...others.map((b) => new Option(boardName(b), b.id)));
     $('delBoard').closest('.row').hidden = !others.length;
     renderKeys(me);
+    // Give away: a keyed board only (its link page, or the maker's page for a keyed board).
+    const keyed = SCOPE || (me && me.link);
+    $('giveRow').hidden = !keyed;
+    $('giveHint').hidden = !keyed;
+    $('relinkRow').hidden = !SCOPE;
+    $('relinkHint').hidden = !SCOPE;
+    $('giveHint').textContent = SCOPE
+      ? 'For a new owner: makes a new owner link for them and resets every setting. This page stops working. To clear your WiFi from the board, hold its knob (or UP) while plugging it in, then Forget saved networks on its setup page.'
+      : 'Makes a new owner link (the old one stops working), resets its settings, and an S3 forgets its WiFi on its next check-in (keeping a network the new owner already entered). Its token and firmware setting stay.';
+    renderFleet();
+  }
+  async function giveAway() {
+    if (!confirm(SCOPE ? 'Give this board to a new owner? Its settings are reset and this page stops working.' : 'Transfer this board to a new owner? Its owner link changes, its settings are reset, and it forgets its WiFi.')) return;
+    try {
+      const t = await api(`api/boards/transfer?b=${enc(boardId)}`, { method: 'POST' });
+      const url = `${location.origin}/board/c/${t.link}/`;
+      $('giveOut').hidden = false;
+      $('giveOut').textContent = SCOPE
+        ? `New owner link (give this to the new owner):\n${url}\n\nAt their place the board opens its setup network after about 10 minutes without WiFi (or at once if held at power-on). They join it (the WiFi code on the board's label) and pick their network.`
+        : `New owner link (give this to the new owner):\n${url}\n\nIf the board is online it forgets its WiFi now and opens its setup network; otherwise it opens it at their place after about 10 minutes without WiFi. They join it (the WiFi code on the board's label) and pick their network.`;
+      if (navigator.share) navigator.share({ title: 'Board owner link', url }).catch(() => {});
+      if (!SCOPE) { await loadBoards(); board = (await api('api/state')).boards[boardId]; await loadDests(); render(); refreshPreview(); }
+      setStatus(SCOPE ? 'Done. Copy the new link now: this page no longer controls the board.' : 'Transferred. Copy the new owner link.');
+    } catch (err) { setStatus(err.message, true); }
+  }
+  // The maker's fleet: every board's build, update setting, last check-in and trouble.
+  let healthAll = {};
+  function renderFleet() {
+    if (SCOPE) return;
+    const now = Date.now() / 1000;
+    const ch = (fwStatus && fwStatus.channels) || {};
+    $('fleet').replaceChildren(...boards.map((b) => {
+      const h = healthAll[b.id] || null;
+      const li = document.createElement('li');
+      const nm = document.createElement('span'); nm.className = 'nm';
+      nm.textContent = boardName(b);
+      const sub = document.createElement('small');
+      const want = b.fw === 'off' ? null : ch[b.fw] || (/^[0-9a-f]{7,40}$/.test(b.fw) ? b.fw : null);
+      const running = h && h.firmware;
+      const parts = [b.link ? 'owner link' : 'yours', running ? `runs ${running}` : null,
+        b.fw === 'off' ? 'updates off' : b.fw === 'stable' || b.fw === 'beta' ? b.fw : `pinned ${b.fw}`,
+        running && /^[0-9a-f]{7,40}$/.test(running) && want && running !== want ? `${want} waiting${b.fw === 'stable' ? ' for 2–5 AM' : ''}` : null,
+        b.wiping ? 'WiFi reset pending' : null].filter(Boolean);
+      sub.textContent = parts.join(' · ');
+      nm.append(sub);
+      const st = document.createElement('span'); st.className = 'st';
+      const ota = (h && h.ota) || '';
+      const offline = !b.seen || now - b.seen > 180;
+      const trouble = ota.startsWith('rolledback:') ? `rolled back ${ota.split(':')[1]}`
+        : ota.startsWith('error:') ? 'install failed'
+        : h && h.restarts ? `${h.restarts} restart${h.restarts > 1 ? 's' : ''}` : '';
+      st.textContent = (b.seen ? (offline ? `offline ${ago(now - b.seen)}` : 'online') : 'not seen') + (trouble ? ` · ${trouble}` : '');
+      if (offline || ota.startsWith('rolledback:') || ota.startsWith('error:')) st.classList.add('bad');
+      li.append(nm, st);
+      li.addEventListener('click', () => { if (b.id !== boardId) go(b.id); });
+      return li;
+    }));
   }
 
   // ---- owner link and board token (keys.js) ----
@@ -1065,6 +1137,17 @@
       refreshPreview();
     } catch (err) { render(); setStatus(err.message, true); }
   });
+  $('giveAway').addEventListener('click', giveAway);
+  $('relinkOwn').addEventListener('click', async () => {
+    if (!confirm('Make a new link to this page? This link, and every copy of it, stops working.')) return;
+    try {
+      const r = await api(`api/boards/link?b=${enc(boardId)}`, { method: 'POST' });
+      const url = `${location.origin}/board/c/${r.link}/`;
+      $('giveOut').hidden = false;
+      $('giveOut').textContent = `Your new link (save it; this page stops working):\n${url}`;
+      setStatus('New link made. Open it and add it to your home screen.');
+    } catch (err) { setStatus(err.message, true); }
+  });
   $('delBoard').addEventListener('click', async () => {
     if (!confirm(`Delete board "${boardName({ id: boardId, label: board.label })}"? If a board is still running with this ID, it adds itself back as a copy of "home".`)) return;
     try {
@@ -1102,6 +1185,7 @@
     else if (kind === 'trial') hint = `Trying ${what}: it's kept once it reaches the server and runs a minute, and rolled back if it can't.`;
     else if (kind === 'error') hint = `The last install failed (${what}). The board tries again every 10 minutes.`;
     else if (track === 'off') hint = 'This board keeps whatever it runs now.';
+    else if (track === 'stable' || SCOPE) hint = 'New builds install overnight, between 2 and 5 AM, so the board never restarts while you\'re watching.';
     else hint = 'The board installs a new build within a minute of it being offered, between animations. It shows UPDATING while it downloads.';
     if (!SCOPE && fwStatus.signing === false) hint = 'No signing key yet: the server takes no builds and boards install none. Run node scripts/firmware-key.js --github (README, "Signed builds").';
     $('fwHint').textContent = hint;
@@ -1145,6 +1229,7 @@
   async function loadFirmware() {
     try { fwStatus = await api('api/firmware'); } catch (e) { return; }
     renderFirmware();
+    renderFleet();
   }
   $('fwTrack').addEventListener('change', (e) => save({ fw: e.target.value }));
   $('fwRetry').addEventListener('click', () => save({ fwRetry: (board.fwRetry || 0) + 1 }));
@@ -1189,6 +1274,8 @@
     try { all = await api('api/health'); } catch (e) { return; }
     const h = all[boardId];
     health = h || null;
+    healthAll = all || {};
+    renderFleet();
     renderFirmware();
     renderBrightHint();
     if (!h) return;
