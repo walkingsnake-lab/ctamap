@@ -141,9 +141,12 @@ void Board::wait(long long ms_total) {
 
 // ---- jobs ----
 
-void Board::apply(const Value &p, long long st, long long ms) {
-  sync(p["now"].num(), st, ms);
-  player.set_payload(p, (double)ms);
+void Board::apply(Value &in, long long st, long long ms) {
+  // The payload moves into the player (it's consumed): one tree in memory,
+  // not two.
+  sync(in["now"].num(), st, ms);
+  player.set_payload(std::move(in), (double)ms);
+  const Value &p = player.p;
   double b = p["bright"].is_null() ? 100 : p["bright"].num();
   payload_bright_ = std::max(0.0, std::min(100.0, b));
   const Value &ab = p["ab"];

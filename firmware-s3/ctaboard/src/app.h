@@ -340,7 +340,7 @@ class Board {
   void sync(double server_now, long long started, long long ended);
   void status(const std::string &kind, const std::string &detail = "");
   void wait(long long ms_total);
-  void apply(const Value &p, long long started, long long ms);
+  void apply(Value &p, long long started, long long ms);  // moves p into the player
   bool draw_frame(long long ms, long long now);
   // Each job either skips (nothing to fetch) or launches a Flight.
   sched::Result do_version(double ms);
