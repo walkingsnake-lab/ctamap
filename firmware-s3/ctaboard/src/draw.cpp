@@ -2102,13 +2102,8 @@ static const char *const *peek_icon(const std::string &cat) {
 }
 
 static RGB peek_color(const Value &p, const std::string &cat) {
-  if (cat == "transit") {
-    std::string ln = json::str(p["knob"]["ln"]);
-    static const char *const known[] = {"RD", "BL", "BR", "GR", "OR", "PR", "PK", "YL"};
-    for (const char *k : known)
-      if (ln == k) return line_color(ln);
-    return line_color("RD");
-  }
+  (void)p;
+  if (cat == "transit") return line_color("RD");  // always Red Line red, whatever the station
   if (cat == "weather") return PEEK_WEATHER;
   if (cat == "clock") return PEEK_CLOCK;
   if (cat == "announce") return PEEK_ANNOUNCE;

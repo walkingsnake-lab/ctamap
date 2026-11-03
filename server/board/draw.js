@@ -1602,7 +1602,8 @@
       cycle: ['..###.#', '.#...##', '#...###', '#.....#', '###...#', '##...#.', '#.###..'],
     };
     const PEEK_COLORS = { weather: '#ffd040', clock: '#f0e2c8', announce: '#40e090', cycle: '#3fd0e8' };
-    const peekColor = (p, cat) => (cat === 'transit' ? LINE[p.knob && p.knob.ln] || LINE.RD : PEEK_COLORS[cat] || C.label);
+    // Transit is always Red Line red, whatever the station.
+    const peekColor = (p, cat) => (cat === 'transit' ? LINE.RD : PEEK_COLORS[cat] || C.label);
     // Ease-out cubic, 0..1.
     const peekEase = (k) => { const c = Math.max(0, Math.min(1, k)); return 1 - (1 - c) * (1 - c) * (1 - c); };
     // The cycle symbol (the phone's two arrows, anti-aliased): 16 levels of

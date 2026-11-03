@@ -1624,7 +1624,7 @@ test('peek: firmware that draws the peek chooser gets every section, each varian
   assert.deepEqual(b.knob, {
     ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 0,
     vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline', 'seventies', 'analog', 'daynight', 'gradient'], [], []],
-    sel: [0, 0, 2, 0, 0], ln: 'RD',
+    sel: [0, 0, 2, 0, 0],
   });
   // Only the faces the firmware draws.
   const less = (await s.req('/board/update?b=home&hk=skyline:peek', h)).body;

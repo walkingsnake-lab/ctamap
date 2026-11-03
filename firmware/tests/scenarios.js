@@ -510,7 +510,7 @@ async function build() {
     add('peek radar none on hand', rain, [pk(1, 0), pk(1, 3)], {}, undefined, { s3only: true });
     add('peek radar two on hand', rain, [pk(1, 0), pk(1, 1)], { a: rbytes, b: rbytes }, undefined, { s3only: true });
     add('peek skyline strip not fetched', p, [pk(2, 0)], undefined, undefined, { s3only: true });
-    add('peek three entries, blue line', { ...p, knob: { ring: ['transit', 'weather', 'cycle'], at: 0, vars: [vars[0], vars[1], []], sel: [0, 0, 0], ln: 'BL' } },
+    add('peek three entries, red at a blue line station', { ...p, knob: { ring: ['transit', 'weather', 'cycle'], at: 0, vars: [vars[0], vars[1], []], sel: [0, 0, 0], ln: 'BL' } },
       [pk(0, 1), pk(2, 0)], frames, undefined, { s3only: true });
     add('peek dimmed', { ...p, bright: 40 }, [pk(0, 0), pk(2, 3)], frames, undefined, { s3only: true, clouds });
     add('peek no knob variants', { ...p, knob: { ring, at: 0 } }, [pk(1, 0), pk(2, 0)], frames, undefined, { s3only: true });
