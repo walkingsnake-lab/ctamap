@@ -161,6 +161,17 @@ Three things fought back in the first v5 drawer (P3) assembly; the fixes are in 
   ribs, the v4 ones and the plug fit sets included; they don't affect the plug's fit.) Meanwhile, without a reprint: lay the shell
   top-down across two supports with the knob hole between them; the encoder drops into the collar's pocket and stays there
   while one hand threads the nut from below.
+- **With parts printed before Nov 3** (no reprint):
+  - Bottom nuts (side slot): hold the nut by its flats in needle-nose pliers, jaws parallel to the slot walls, and push it
+    straight in; then a short strip of painter's tape over the slot's mouth keeps it in (the screw comes up from below,
+    clear of the tape). Do the nuts last, just before the tray goes in: front-up on the bench the slot faces up.
+  - Light sensor (pillars): fit it before the S3 goes on its posts. With the S3 off there's ~95 mm of clear line from the
+    tray's bottom wall up to the pillars: stand the tray on its bottom wall, open front toward you, and drive up with a
+    magnetized 1.5 mm hex bit in a short handle. Put the screws through the board first and offer it up on them. Running
+    a screw into each pillar once beforehand makes them easier. With the S3 already on, use the short arm of a 1.5 mm
+    L-key and turn it in part-turns.
+  - Encoder (plain collar): lay the shell top-down across two supports with the knob hole between them, back opening
+    level; drop the encoder into the collar's pocket from inside and thread the nut from underneath.
 - Renders: [img/fix-bottom-nuts.png](img/fix-bottom-nuts.png), [img/fix-sensor-sled.png](img/fix-sensor-sled.png), [img/fix-encoder-collar.png](img/fix-encoder-collar.png).
 - **Coupons first:** `coupon-*-nut-seat-tray.stl` (PETG, back-down as exported) + `coupon-*-nut-seat-shell.stl` (walnut):
   drop a nut in, press it, stack the two and run an M3 x 10 up through both. `coupon-*-sensor-hooks-tray.stl` (PETG) with the
