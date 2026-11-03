@@ -151,8 +151,7 @@ def tray_p4():
     zb_rows = [zin0 + 2.5 + LV_H / 2 + i * LV_PITCH for i in range(LV_ROWS)]
     zt_rows = [zin1 - 2.5 - LV_H / 2 - i * LV_PITCH for i in range(LV_ROWS)][::-1]
     t = t + band(zin0 - 0.5, zb_rows[-1] + LV_H / 2 + LV_DEPTH + 1.5) + band(zt_rows[0] - LV_H / 2 - 1.5, zin1 + 0.5)
-    for x in [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]:                       # bottom screw bosses
-        t = t + rrect_z(x - 5, x + 5, C.SCREW_Y - 4.5, Y0 + 0.01, 2.0, zin0 - 0.01, WALL + 12.0)
+    t = t + DR.bottom_bosses(zin0)                                                       # bottom screw bosses
     for x, z in DR.CORNERS:                                                             # corner posts
         t = t + P3.standoff(x, z, Y0)
     yc = PCB_Y0 + 1.6                                                                   # S3: pad, posts, light and Boot tubes
@@ -165,10 +164,7 @@ def tray_p4():
     btop = yc + 1.9
     t = t + cyl_y(*DR.S3_BOOT, btop + 1.0, Y0 + 0.01, 5.0, 32)
     import sensor as SN
-    zw = H - WALL - TRAY_CL - TRAY_WT
-    for x, y in SN.SH:                                                                  # light-sensor pillars
-        prof = CrossSection([[(x - 2.5, y - 2.5), (x + 2.5, y - 2.5), (x + 2.5, y), (x, y + 2.5), (x - 2.5, y)]])
-        t = t + Manifold.extrude(prof, zw + 0.01 - DR.SEN_TOP).translate([0, 0, DR.SEN_TOP])
+    t = t + DR.sensor_mount()                                                           # light-sensor mount
     for cx, cz in DR.CLEAT_SCREWS:                                                      # cleat / spine nut bosses
         t = t + cyl_y(cx, cz, Y0 - DR.CB_H, Y0 + 0.01, DR.CB_D, 48)
     # ribbon hooks on the left half, on the ribbon's run from the S3's connector to the panel input
@@ -217,15 +213,7 @@ def tray_p4():
                 return prism_y(cs, y, y + 0.01)
             sl = Manifold.batch_hull([slab(Y1 + 0.5, -0.5), slab(y_in - 0.5, LV_DEPTH + 0.5)])
             cuts.append(sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6))
-    nut_end = C.SCREW_Y + P3.NUT_FLOAT + P3.NUT_CORNER                                  # bottom screw slots + nut pockets
-    mouth_end = C.SCREW_Y - P3.NUT_FLOAT - P3.NUT_CORNER
-    for x in [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]:
-        yb = C.SCREW_Y - 4.5
-        slot = CrossSection.square([0.01, 2 * P3.NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, C.SCREW_Y])
-        cuts.append(Manifold.extrude(slot, 20).translate([0, 0, -1]))
-        nz0 = WALL + 4.0
-        cuts.append(box(x - DR.BN_W / 2, x + DR.BN_W / 2, mouth_end, nut_end, nz0, nz0 + DR.BN_H))
-        cuts.append(box(x - DR.BN_MOUTH / 2, x + DR.BN_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + DR.BN_H))
+    cuts += DR.bottom_nut_cuts()                                                        # bottom screw holes + nut pockets
     for x, z in DR.CORNERS:
         cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, Y1 + 1, P3.SO_BORE, 48))
         cuts.append(P3.so_cone(x, ZC + z))
@@ -248,13 +236,7 @@ def tray_p4():
     ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0                                            # top wall: encoder slot, light hole
     cuts.append(box(-DR.ENC_SLOT, DR.ENC_SLOT, YF - 1, KY + DR.ENC_HALF + 1.5, ztw, H))
     cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, DR.SEN_HOLE, 32))
-    for x, y in SN.SH:
-        cuts.append(cyl_z(x, y, DR.SEN_TOP - 1, DR.SEN_TOP + DR.SEN_GAP + 1.6, 2.4, 24))
-    (_, sy0), (_, sy1) = SN.sb(0, 11.8), SN.sb(0, 6)
-    for (bx0, bx1), out in (((0.5, 4.8), -1), ((20.6, 24.9), 1)):
-        xa, xb = SN.sb(bx0, 0)[0], SN.sb(bx1, 0)[0]
-        xa, xb = (xa - DR.SEN_PLUG, xb + 0.5) if out < 0 else (xa - 0.5, xb + DR.SEN_PLUG)
-        cuts.append(box(xa, xb, sy0 - 0.5, sy1 + 0.5, zw - 1, zw + DR.SEN_POCKET))
+    cuts += DR.sensor_cuts()
     cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, C.PORT_Y + 5.0, DR.PORT_Z - 7.5, DR.BTN_Z1 + 1.0))  # USB-C + buttons window
     cuts.append(cyl_y(0, BRIDGE_Z, Y0 - 10, Y1 + 1, NOTCH_D, 48))                       # bridge tube notch (half in each half)
     t = t - Manifold.batch_boolean(cuts, ADD)

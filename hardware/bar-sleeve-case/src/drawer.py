@@ -175,8 +175,7 @@ def tray():
     zt_rows = [zin1 - 2.5 - LV_H / 2 - i * LV_PITCH for i in range(LV_ROWS)][::-1]
     t = t + band(zin0 - 0.5, zb_rows[-1] + LV_H / 2 + LV_DEPTH + 1.5) + band(zt_rows[0] - LV_H / 2 - 1.5, zin1 + 0.5)   # into the walls
     # bottom screw bosses (plate v3's, now standing on the tray's bottom wall)
-    for x in [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]:
-        t = t + rrect_z(x - 5, x + 5, C.SCREW_Y - 4.5, Y0 + 0.01, 2.0, zin0 - 0.01, WALL + 12.0)
+    t = t + bottom_bosses(zin0)
     # panel posts at the four corner inserts
     for x, z in CORNERS:
         t = t + P3.standoff(x, z, Y0)
@@ -190,13 +189,9 @@ def tray():
     t = t + cyl_y(*_xz(S3_NEO), tube_end, Y0 + 0.01, 7.0, 48)
     btop = yc + 1.9
     t = t + cyl_y(*_xz(S3_BOOT), btop + 1.0, Y0 + 0.01, 5.0, 32)
-    # light-sensor pillars: 5 mm wide, pointed (45 deg) on the back side, so printed back face down their underside is a
-    # roof, not a flat overhang (a gusset there would hit the board's STEMMA QT sockets)
+    # light sensor mount (pillars or sled hooks)
     import sensor as SN
-    zw = H - WALL - TRAY_CL - TRAY_WT
-    for x, y in SN.SH:
-        prof = CrossSection([[(x - 2.5, y - 2.5), (x + 2.5, y - 2.5), (x + 2.5, y), (x, y + 2.5), (x - 2.5, y)]])
-        t = t + Manifold.extrude(prof, zw + 0.01 - SEN_TOP).translate([0, 0, SEN_TOP])
+    t = t + sensor_mount()
     # cleat nut bosses
     for cx, cz in CLEAT_SCREWS:
         t = t + cyl_y(cx, cz, Y0 - CB_H, Y0 + 0.01, CB_D, 48)
@@ -253,16 +248,8 @@ def tray():
             # the top row's slot rises into the top wall near its inner end: stop it 0.6 under the wall (a slot roof
             # grazing the wall's face left a zero-thickness sheet, non-manifold in the STL)
             cuts.append(sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6))
-    # screw slots and nut pockets (plate v3)
-    nut_end = C.SCREW_Y + P3.NUT_FLOAT + P3.NUT_CORNER
-    mouth_end = C.SCREW_Y - P3.NUT_FLOAT - P3.NUT_CORNER
-    for x in [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]:
-        yb = C.SCREW_Y - 4.5
-        slot = CrossSection.square([0.01, 2 * P3.NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, C.SCREW_Y])
-        cuts.append(Manifold.extrude(slot, 20).translate([0, 0, -1]))
-        nz0 = WALL + 4.0
-        cuts.append(box(x - BN_W / 2, x + BN_W / 2, mouth_end, nut_end, nz0, nz0 + BN_H))
-        cuts.append(box(x - BN_MOUTH / 2, x + BN_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + BN_H))
+    # bottom screw holes and nut pockets
+    cuts += bottom_nut_cuts()
     for x, z in CORNERS:
         cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, Y1 + 1, P3.SO_BORE, 48))
         cuts.append(P3.so_cone(x, ZC + z))
@@ -286,6 +273,62 @@ def tray():
     ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
     cuts.append(box(-ENC_SLOT, ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
     cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
+    cuts += sensor_cuts()
+    # right wall: window for the USB-C plug and the edge buttons
+    # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
+    cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
+    t = t - Manifold.batch_boolean(cuts, ADD)
+    t = t + crush_ribs()
+    return max(t.decompose(), key=lambda m: m.volume())
+
+
+# ---- parts shared by tray() and p4.tray_p4()
+def _rrect_z(x0, x1, ya, yb, r, z0, z1):
+    cs = CrossSection.square([x1 - x0 - 2 * r, yb - ya - 2 * r], center=True).offset(r, JT, circular_segments=24).translate([(x0 + x1) / 2, (ya + yb) / 2])
+    return Manifold.extrude(cs, z1 - z0).translate([0, 0, z0])
+
+
+def bottom_xs():
+    return [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]
+
+
+def bottom_bosses(zin0):
+    """screw bosses on the tray's bottom wall, one per screw from below"""
+    return Manifold.batch_boolean([_rrect_z(x - 5, x + 5, C.SCREW_Y - 4.5, Y0 + 0.01, 2.0, zin0 - 0.01, WALL + 12.0)
+                                   for x in bottom_xs()], ADD)
+
+
+def bottom_nut_cuts():
+    """plate v3's y-slot screw hole and a side-loaded nut slot with a narrowed mouth"""
+    cuts = []
+    nut_end = C.SCREW_Y + P3.NUT_FLOAT + P3.NUT_CORNER
+    mouth_end = C.SCREW_Y - P3.NUT_FLOAT - P3.NUT_CORNER
+    for x in bottom_xs():
+        yb = C.SCREW_Y - 4.5
+        slot = CrossSection.square([0.01, 2 * P3.NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, C.SCREW_Y])
+        cuts.append(Manifold.extrude(slot, 20).translate([0, 0, -1]))
+        nz0 = WALL + 4.0
+        cuts.append(box(x - BN_W / 2, x + BN_W / 2, mouth_end, nut_end, nz0, nz0 + BN_H))
+        cuts.append(box(x - BN_MOUTH / 2, x + BN_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + BN_H))
+    return cuts
+
+
+def sensor_mount():
+    """light-sensor pillars: 5 mm wide, pointed (45 deg) on the back side, so printed back face down their underside is a
+    roof, not a flat overhang (a gusset there would hit the board's STEMMA QT sockets)"""
+    import sensor as SN
+    zw = H - WALL - TRAY_CL - TRAY_WT
+    out = []
+    for x, y in SN.SH:
+        prof = CrossSection([[(x - 2.5, y - 2.5), (x + 2.5, y - 2.5), (x + 2.5, y), (x, y + 2.5), (x - 2.5, y)]])
+        out.append(Manifold.extrude(prof, zw + 0.01 - SEN_TOP).translate([0, 0, SEN_TOP]))
+    return Manifold.batch_boolean(out, ADD)
+
+
+def sensor_cuts():
+    """pilots in the pillars and the STEMMA QT socket channels in the top wall"""
+    import sensor as SN
+    cuts = []
     for x, y in SN.SH:
         cuts.append(cyl_z(x, y, SEN_TOP - 1, SEN_TOP + SEN_GAP + 1.6, 2.4, 24))   # M2.5 x 5 (x 6 reaches 0.1 short of the end)
     zw = H - WALL - TRAY_CL - TRAY_WT
@@ -294,12 +337,7 @@ def tray():
         xa, xb = SN.sb(bx0, 0)[0], SN.sb(bx1, 0)[0]
         xa, xb = (xa - SEN_PLUG, xb + 0.5) if out < 0 else (xa - 0.5, xb + SEN_PLUG)
         cuts.append(box(xa, xb, sy0 - 0.5, sy1 + 0.5, zw - 1, zw + SEN_POCKET))
-    # right wall: window for the USB-C plug and the edge buttons
-    # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
-    cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
-    t = t - Manifold.batch_boolean(cuts, ADD)
-    t = t + crush_ribs()
-    return max(t.decompose(), key=lambda m: m.volume())
+    return cuts
 
 
 def crush_ribs():
