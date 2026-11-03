@@ -77,9 +77,9 @@ One print with every fit that's new and not yet confirmed on a real print (Nov 3
    between the fingers.
 2. Lap the front flat on 220, then 400, paper taped to glass, in figure-eights. Deburr the edges.
 3. Scrape the seam, sand along it with a flexible pad, and feather.
-4. Scuff the outside evenly (grey Scotch-Brite or 400 wet), then Danish oil or wax. **Mask first:** the bore, the knob hole,
-   the USB-C opening, the foot recesses, the two screw holes and the sensor pinhole (once the finish has cured, twist the
-   2 mm bit through the pinhole again). Lay oily rags flat to dry.
+4. Scuff the outside evenly (grey Scotch-Brite or 400 wet), then Danish oil or wax. Mask the bore, the knob hole, the USB-C
+   opening, the foot recesses and the two screw holes first. Lay oily rags flat to dry. Once the finish has cured, twist the
+   2 mm bit through the sensor pinhole by hand to clear any oil or wax in it.
 5. A shell printed before Nov 3 has round screw holes underneath: file each to about 3.4 x 4.2 mm, long along the case's
    depth (the tray needs ±0.4 mm of play front to back there).
 
