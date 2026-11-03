@@ -59,6 +59,9 @@ for dy in (DR.SCREW_FLOAT,):
     ring = cyl_z(x, C.SCREW_Y + dy, 1.0, 1.05, 5.7, 64)
     rep(f'head bearing on the counterbore floor at float {dy:+.1f} (mm^2 of the {math.pi * 2.85 ** 2 - math.pi * 1.5 ** 2:.0f} a centred head has on a plain hole)', round(ov(ring, shell) / 0.05, 2), ov(ring, shell) > 0)
 
+wall = (C.SCREW_Y - DR.BOSS_FRONT) - (C.SCREW_Y - (CB := DR.CB_NUT / 2 / math.cos(math.pi / 6)) * (0.5 + math.cos(math.pi / 6)))
+rep('boss wall in front of the seat peak (mm)', round(-wall, 2), -wall >= 1.5)
+
 # ---- sensor sled
 sl = DR.sled()
 env = DR.sensor_envelope()
@@ -82,7 +85,7 @@ sweep = {th: ov(pose(assy, th), tray) for th in range(0, 25, 2)}
 th_ok = max([th for th in sweep if all(sweep[t] < 1e-3 for t in sweep if t <= th)])
 rep(f'swing-in clear from {th_ok} deg to seated (overlap by angle: { {k: v for k, v in sweep.items() if v > 0} })', th_ok, th_ok >= 10)
 # entry: at th_ok, tabs slide in along the sled's own plane from 4 mm out
-TH_IN = 12                                                      # the tilt the build sheet says to use
+TH_IN = 10                                                      # the tilt the build sheet says to use
 a = math.radians(TH_IN)
 entry = max(ov(pose(assy, TH_IN, -d * math.cos(a), -d * math.sin(a)), tray) for d in np.arange(0, 6.01, 0.25))
 rep(f'tabs slide into the hooks at {TH_IN} deg (from 6 mm out)', entry, entry < 1e-3)
@@ -111,8 +114,7 @@ if not P4:
 # louver open area in the top band, at the band's face (sled vs pillars)
 
 
-def louver_area(t):
-    y = DR.Y1 - DR.LV_DEPTH + 0.6
+def louver_area(t, y):
     zw = DR._zw()
     slab = box(-C.HW, C.HW, y, y + 0.05, zw - 20, zw)
     solid = (t ^ slab).volume() / 0.05
@@ -124,8 +126,9 @@ sv = DR.SENSOR_MOUNT
 DR.SENSOR_MOUNT = 'pillars'
 t_old = p4.tray_p4() if P4 else DR.tray()
 DR.SENSOR_MOUNT = sv
-a_new, a_old = louver_area(tray), louver_area(t_old)
-rep(f'top louver open area at the band face: {a_old:.0f} -> {a_new:.0f} mm^2 ({100 * (a_old - a_new) / a_old:.1f}% less)', round(a_new, 0), True)
+for where, y in (('band face', DR.Y1 - DR.LV_DEPTH + 0.6), ('back face', DR.Y1 - 0.1)):
+    a_new, a_old = louver_area(tray, y), louver_area(t_old, y)
+    rep(f'top louver open area at the {where}: {a_old:.0f} -> {a_new:.0f} mm^2 ({100 * (a_old - a_new) / a_old:.1f}% less)', round(a_new, 0), True)
 
 # ---- collar retainer
 CO.TIP_BACK = False

@@ -147,15 +147,16 @@ ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
 # Bottom nuts (Nov 3): the side-loaded slot above passed a nut only within ~1 deg of square and then let it walk out
 # (its 5.55 mouth is clearance, not grip, for a 5.32-5.5 nut). NUT_STYLE 'hex': a hex pocket open to the top of the boss,
 # the cleat bosses' press fit (CB_NUT), corners along y so it prints with a 60 deg roof back-down. Drop the nut in and pull
-# it home with an M3 threaded up from below (or press it with a screwdriver tip); tightening only seats it further.
+# it home with a flat screwdriver tip, turning it square as it goes in; tightening only seats it further.
 # The tray's +/- y float moves to the shell's holes (stadiums, SCREW_FLOAT): the nut is now fixed in the tray.
 # 'slot' = the v5 slot, for comparison.
 NUT_STYLE = os.environ.get('NUT_STYLE', 'hex')
 SCREW_FLOAT = 0.4                               # 0.6 left the head no bearing at the slot's far end; 0.4 keeps 0.15 there
 BOSS_TOP = WALL + 8.5                           # hex boss top (12.0 at the 3.5 wall): 1 mm over the M3 x 10's tip
-BOSS_FRONT = 5.5                                # boss face this far in front of the screw (5.7 hex corner wall 2.2)
+BOSS_FRONT = 6.5                                # boss face this far in front of the screw (the seat's 45 deg peak reaches 4.5)
 NUT_SEAT = 2.9                                  # press-fit seat height (nut 2.4)
 NUT_CHIMNEY = 6.1                               # loose hex above the seat, up through the bottom louver band
+NUT_LEAD = 0.8                                  # lead-in from the chimney to the seat (~14 deg a face): it squares the nut as it's pressed
 
 # Light sensor (Nov 3): SENSOR_MOUNT 'sled'. The four pillars needed a driver aimed up at the top wall from 27-40 mm
 # inside the tray's open front. Now the sensor screws chip up onto a flat sled on the bench (2-4 x M2.5 x 5 down from the
@@ -333,10 +334,18 @@ def bottom_bosses(zin0):
                                    for x in bottom_xs()], ADD)
 
 
-def hex_z(x, y, flats, z0, z1):
-    """hex prism, axis z, corners along y"""
-    return Manifold.cylinder(z1 - z0, flats / 2 / math.cos(math.pi / 6), flats / 2 / math.cos(math.pi / 6), 6) \
-        .rotate([0, 0, 90]).translate([x, y, z0])
+def hex_z(x, y, flats, z0, z1, peak=False):
+    """hex prism, axis z, corners along y. peak: a 45 deg roof over the corner toward the print's up (-y, back-down):
+    the hex's own faces there are only 30 deg above horizontal"""
+    R = flats / 2 / math.cos(math.pi / 6)
+    m = Manifold.cylinder(z1 - z0, R, R, 6).rotate([0, 0, 90]).translate([x, y, z0])
+    if peak:
+        a, b = R * math.cos(math.pi / 6), R / 2
+        tri = CrossSection([[(x - a, y - b), (x + a, y - b), (x, y - b - a)]])
+        if tri.area() <= 0:
+            tri = CrossSection([[(x - a, y - b), (x, y - b - a), (x + a, y - b)]])
+        m = m + Manifold.extrude(tri, z1 - z0).translate([0, 0, z0])
+    return m
 
 
 def nut_z0():
@@ -344,9 +353,10 @@ def nut_z0():
 
 
 def hex_nut_cuts():
-    """round M3 clearance up through the floor; a press-fit hex seat (CB_NUT, 0.5 deeper than the nut) and above it a
-    loose hex chimney (NUT_CHIMNEY across flats) up through the bottom louver band, which stands over the back of the
-    seat: the nut drops down the chimney (it can't turn in it), then is pressed or drawn into the seat"""
+    """round M3 clearance up through the floor; a press-fit hex seat (CB_NUT, NUT_SEAT tall) and above it a loose hex
+    chimney (NUT_CHIMNEY across flats) up through the bottom louver band, which stands over the back of the seat: the nut
+    drops down the chimney (it can't turn more than ~14 deg in it) onto a NUT_LEAD-tall lead-in, then is pressed into the
+    seat, turned square (a 5.5 nut enters the 5.7 seat within ~4 deg). Both have a 45 deg peak toward the print's up."""
     cuts = []
     hz = BORE_HZ - TRAY_CL - TRAY_WT
     zin0 = ZC - hz
@@ -354,10 +364,10 @@ def hex_nut_cuts():
     z_seat1 = nut_z0() + NUT_SEAT
     for x in bottom_xs():
         cuts.append(cyl_z(x, C.SCREW_Y, -1, nut_z0() + 0.01, 3.4, 24))
-        cuts.append(hex_z(x, C.SCREW_Y, CB_NUT, nut_z0(), z_seat1 + 0.01))
-        r0, r1 = CB_NUT / 2 / math.cos(math.pi / 6), NUT_CHIMNEY / 2 / math.cos(math.pi / 6)
-        cuts.append(Manifold.cylinder(r1 - r0 + 0.01, r0, r1 + 0.01, 6).rotate([0, 0, 90]).translate([x, C.SCREW_Y, z_seat1]))
-        cuts.append(hex_z(x, C.SCREW_Y, NUT_CHIMNEY, z_seat1 + (r1 - r0), band_top + 1.0))
+        cuts.append(hex_z(x, C.SCREW_Y, CB_NUT, nut_z0(), z_seat1 + 0.01, peak=True))
+        cuts.append(Manifold.batch_hull([hex_z(x, C.SCREW_Y, CB_NUT, z_seat1, z_seat1 + 0.01, peak=True),
+                                         hex_z(x, C.SCREW_Y, NUT_CHIMNEY, z_seat1 + NUT_LEAD, z_seat1 + NUT_LEAD + 0.01, peak=True)]))
+        cuts.append(hex_z(x, C.SCREW_Y, NUT_CHIMNEY, z_seat1 + NUT_LEAD, band_top + 1.0, peak=True))
     return cuts
 
 
@@ -444,7 +454,7 @@ def sled():
     boss = cyl_z(sx, sy, zs1 - 0.01, zw - 0.1, SLED_BOSS_D, 40)
     s = Manifold.batch_boolean([body, boss] + tabs, ADD)
     holes = [cyl_z(x, y, zs0 - 1, zs1 + 1, P3.S3_PILOT, 24) for x, y in SN.SH]                   # board screws, self-tapping
-    holes += [Manifold.cylinder(0.41, P3.S3_PILOT / 2 + 0.4, P3.S3_PILOT / 2, 24).translate([x, y, zs1 - 0.4]) for x, y in SN.SH]
+    holes += [Manifold.cylinder(0.31, P3.S3_PILOT / 2, P3.S3_PILOT / 2 + 0.3, 24).translate([x, y, zs1 - 0.3]) for x, y in SN.SH]
     holes.append(cyl_z(sx, sy, zs0 - 1, zw + 1, SLED_PILOT, 24))                                 # front screw from outside
     holes.append(Manifold.cylinder(0.41, SLED_PILOT / 2, SLED_PILOT / 2 + 0.4, 24).translate([sx, sy, zw - 0.1 - 0.4]))
     s = s - Manifold.batch_boolean(holes, ADD)

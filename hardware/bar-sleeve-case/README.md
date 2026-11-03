@@ -136,25 +136,29 @@ Three things fought back in the first v5 drawer (P3) assembly; the fixes are in 
   0.7 mm deep, no lead-in) and then let it walk out (5.55 is clearance for a 5.32-5.5 nut; any grip came from the print
   running small, and the first forced pass shaved it off). Now each bottom boss has a press-fit hex seat (5.7, the cleat
   pockets' fit; 5.75 on the 0.6-nozzle tray) under a loose hex chimney (6.1) that runs up through the bottom louver band (the
-  band stands over the back of the seat). Drop the nut down the chimney (it can't turn in it), then press it into the seat
-  with a screwdriver tip, or hold it down and draw it in with an M3 x 10 from below through the tray floor. Tightening only
-  seats it further. The tray's ±0.4 y float moved to the shell: its two screw holes and counterbores are stadiums along y
+  band stands over the back of the seat). Drop the nut down the chimney (it can turn only ~14° in it), then press it into
+  the seat with a flat screwdriver tip, turning it slightly until it drops square (a 5.5 nut enters the 5.7 seat within
+  ~4°; the 0.8 mm lead-in helps). Tightening only seats it further. Both the seat and the chimney have a 45° peak over
+  the corner that faces the print's top (a plain hex roof there is only 30° above horizontal). The seat prints on its side,
+  unlike the cleat pockets, so its grip is untested: print the nut-seat coupon before a tray. The tray's ±0.4 y float moved to the shell: its two screw holes and counterbores are stadiums along y
   (underneath, out of sight). A shell printed before this has round holes (±0.2): file them to about 3.4 x 4.2 mm, or the
   tray can bind against its own screws.
 - **Light sensor** (`SENSOR_MOUNT`, default `sled`). The four pillars needed a driver aimed up at the top wall from 27-40 mm
   inside the tray. Now: `bar-sensor-sled.stl` (PETG, plate down). On the bench, the VEML7700 goes chip up onto the sled with
   2-4 x M2.5 x 5 driven down from the chip side into its pilots (the board's own holes). Plug its STEMMA QT cables in. With
-  the tray front-up, lower the sled tilted about 12° (front down) so its two back tabs go into the two hooks on the top
+  the tray front-up, lower the sled tilted about 10° (front down) so its two back tabs go into the two hooks on the top
   louver band, swing the front up to the top wall, and drive one M2.5 x 6 from **outside** the tray's top wall (the
   counterbore by the light hole) into the sled's boss. The board, chip and sockets sit exactly where the pillars held them.
-  Checked: clear from 18° tilt to seated, tabs enter at 12° from 6 mm out. The hooks cost the top louver band 7.9 % of its
-  open area on the P3 (5.5 % P4, 10.9 % P2.5). To service: one screw, swing it out.
+  Checked: clear from 18° tilt to seated, tabs enter at 10° from 6 mm out (on the P2.5 a 12° approach grazes the top-right
+  post with a QT plug). The hooks cost the top louver band 12.4 % of its open area at the tray's back face on the P3
+  (7.9 % at the band's inner face; P4 8.6 %, P2.5 19.3 %); the bottom intake band is unchanged. To service: one screw, swing it out.
 - **Encoder collar** (`RET_R`). Nothing held the encoder up until its nut was on. Three ribs in the collar's bore (crest
   r 3.40, 0.9 wide, the top 1 mm, over a 0.4 lead-in) take the M7 thread when the encoder is pushed straight up (it can't be
   twisted in: its board would hit the panel), so it hangs on its own while the nut and knob go on from the top. The nut still
   does all the clamping. Hold the collar's flange with a thumb while pushing. Print the collar in PETG (wood PLA ribs chip
   rather than deform). Fit set: `bar-encoder-collar-v5-retainer-fit-set.stl` (crest r 3.30 / 3.40 / 3.50, 1-3 notches): pick
-  the one that holds the encoder by itself and still lets the nut run down. Meanwhile, without a reprint: lay the shell
+  the one that holds the encoder by itself and still lets the nut run down. (Every collar `collar.py` makes now has the
+  ribs, the v4 ones and the plug fit sets included; they don't affect the plug's fit.) Meanwhile, without a reprint: lay the shell
   top-down across two supports with the knob hole between them; the encoder drops into the collar's pocket and stays there
   while one hand threads the nut from below.
 - Renders: [img/fix-bottom-nuts.png](img/fix-bottom-nuts.png), [img/fix-sensor-sled.png](img/fix-sensor-sled.png), [img/fix-encoder-collar.png](img/fix-encoder-collar.png).

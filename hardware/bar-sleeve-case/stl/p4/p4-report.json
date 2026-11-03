@@ -31,7 +31,7 @@
    ],
    "square": 146.2,
    "spare_a_side": 54.9,
-   "volume_cm3": 97.3
+   "volume_cm3": 97.4
   },
   "p4-tray-right.stl": {
    "watertight": true,
@@ -42,7 +42,7 @@
    ],
    "square": 146.2,
    "spare_a_side": 54.9,
-   "volume_cm3": 101.1
+   "volume_cm3": 101.2
   },
   "p4-spine.stl": {
    "watertight": true,
