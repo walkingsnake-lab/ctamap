@@ -1167,7 +1167,7 @@ test('control API: list, add (copy or defaults), label, and delete boards', asyn
   const J = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   await s.req('/board/secret123/api/state?b=home', J('POST', { station: { mapid: '40380' }, label: 'Kitchen' }));
   let r = await s.req('/board/secret123/api/boards');
-  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'auto', seen: null }]);
+  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'auto', seen: null, sports: true }]);
   r = await s.req('/board/secret123/api/boards', J('POST', { id: 'desk', from: 'home', label: 'Desk' }));
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.map((b) => [b.id, b.label, b.mapid]), [['home', 'Kitchen', '40380'], ['desk', 'Desk', '40380']]);
@@ -1301,6 +1301,59 @@ test('board keys: a keyed board must use its own token; others keep the shared o
   await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'DELETE' });
   assert.equal((await s.req('/board/version?b=kitchen', shared)).status, 200);
   assert.equal((await s.req(`/board/c/${k2.body.link}/api/state`)).status, 404);
+  await s.close();
+});
+
+test('baseball is the maker\'s only: a keyed board gets no games, screen, logos, or baseball settings', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const game = { id: 7, st: 'live', start: now - 3600, away: { ab: 'CHC', c: '#2a5bd8', r: 1 }, home: { ab: 'STL', c: '#d62a2a', r: 0 }, inn: 3, half: 'T', b: 0, s: 0, o: 0, on: [0, 0, 0] };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), mlb: fakeMlb([game]), logos: fakeLogos({ CHC: '#0e3386' }) });
+  s.store.update('home', { screen: 'baseball', baseballLayout: 'logos' });
+  s.store.create('kitchen', { from: 'home' }); // a copy keeps the baseball screen
+  const shared = { headers: { 'X-Board-Token': 'tok' } };
+  // Before it has a key, it's one of the maker's boards.
+  assert.equal((await s.req('/board/update?b=kitchen', shared)).body.screen, 'baseball');
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  const own = { headers: { 'X-Board-Token': key.token } };
+  // Keyed: the baseball screen falls back to transit, and no takeover on auto.
+  let b = (await s.req('/board/update?b=kitchen', own)).body;
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.mlb, undefined);
+  s.store.update('kitchen', { screen: 'auto' });
+  b = (await s.req(`/board/secret123/api/update?b=kitchen`)).body;
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.mlb, undefined, 'the simulator copy has no games either');
+  // A test game doesn't bring it back.
+  await s.req('/board/secret123/api/test?b=kitchen', { method: 'POST', body: JSON.stringify({ game: 'live' }) });
+  assert.equal((await s.req('/board/update?b=kitchen', own)).body.mlb, undefined);
+  // The maker's board is unchanged.
+  b = (await s.req('/board/update?b=home', shared)).body;
+  assert.equal(b.screen, 'baseball');
+  assert.equal(b.mlb.games.length, 1);
+  // Baseball settings are refused, from its link and from the maker's page.
+  const c = `/board/c/${key.link}`;
+  for (const patch of [{ screen: 'baseball' }, { bbTeams: ['cubs'] }, { baseballLayout: 'bands' }, { logoBright: 50 }, { gameEvery: 30 }]) {
+    for (const p of [`${c}/api/state`, '/board/secret123/api/state?b=kitchen']) {
+      const r = await s.req(p, { method: 'POST', body: JSON.stringify(patch) });
+      assert.equal(r.status, 400, `${p} ${JSON.stringify(patch)}`);
+      assert.match(r.body.detail, /baseball/);
+    }
+  }
+  assert.equal((await s.req(`${c}/api/state`, { method: 'POST', body: JSON.stringify({ screen: 'ticker' }) })).status, 200);
+  assert.equal((await s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify({ bbTeams: ['cubs'] }) })).status, 200);
+  // Logos are the maker's boards' only.
+  const logo = async (id, h) => (await fetch(`http://127.0.0.1:${s.port}/board/logo/CHC-1?b=${id}`, h)).status;
+  assert.equal(await logo('kitchen', own), 404);
+  assert.equal(await logo('home', shared), 200);
+  // The board list says which boards have baseball (the page hides it on the others).
+  const list = (await s.req('/board/secret123/api/boards')).body;
+  assert.deepEqual(list.map((x) => [x.id, x.sports]), [['home', true], ['kitchen', false]]);
+  assert.equal((await s.req(`${c}/api/boards`)).body[0].sports, false);
+  // sim.png asked for the baseball screen draws the board's own screen instead.
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}${c}/sim.png?screen=baseball&scale=1`)).status, 200);
+  // Without the key it's the maker's again.
+  await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'DELETE' });
+  assert.equal((await s.req('/board/secret123/api/state?b=kitchen', { method: 'POST', body: JSON.stringify({ screen: 'baseball' }) })).status, 200);
   await s.close();
 });
 

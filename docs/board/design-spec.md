@@ -274,6 +274,8 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 
 ## 8. Screen 4: Baseball
 
+The maker's own boards only: the MLB Stats API is for personal, non-commercial use, so boards set up for other people (with their own key) have no baseball screen, takeover, or settings (contract: "Board keys").
+
 ### Data
 - **Source:** MLB Stats API (`statsapi.mlb.com`, free, no key, unofficial).
 - **One request:** `/api/v1/schedule?sportId=1&startDate=<yesterday>&endDate=<today>&hydrate=linescore` (Chicago dates, so a late game survives midnight). The hydrated linescore carries everything the screen draws: runs, inning and half, inning state, balls/strikes/outs, runners (`offense.first/second/third`), and each team's `leagueRecord`. No per-game live feed.
