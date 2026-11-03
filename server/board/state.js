@@ -48,16 +48,15 @@ const variantOf = (board, cat) => (cat === 'transit' ? board.transitScreen || 't
   : cat === 'clock' ? board.clockFace || 'skyline' : null);
 // The ring and where the board's chosen screen sits on it (payload `knob`).
 // `vars` and `sel`: each entry's variants and the one it opens on (index;
-// 0 for a variant the board can't draw). `ln`: the station's first line, the
-// transit icon's color.
-// Only peek-capable boards (`peek`) get vars, sel and ln.
-const knobOf = (board, { clock = false, announce = false, peek = false, faces = ['skyline'], ln = null } = {}) => {
+// 0 for a variant the board can't draw).
+// Only peek-capable boards (`peek`) get vars and sel.
+const knobOf = (board, { clock = false, announce = false, peek = false, faces = ['skyline'] } = {}) => {
   const ring = ['transit', 'weather', ...(clock ? ['clock'] : []), ...(announce ? ['announce'] : []), 'cycle'];
   const at = Math.max(0, ring.indexOf(CATEGORY_OF[board.screen]));
   if (!peek) return { ring, at };
   const vars = ring.map((c) => variantsOf(c, faces));
   const sel = ring.map((c, i) => Math.max(0, vars[i].indexOf(variantOf(board, c))));
-  return { ring, at, vars, sel, ...(ln ? { ln } : {}) };
+  return { ring, at, vars, sel };
 };
 // Auto mode and screen options (design spec §10). Defaults reproduce the
 // behavior before these were settings.

@@ -173,6 +173,17 @@ function createBoard({
     if (own !== null) return own;
     return !token || sameSecret(req.headers['x-board-token'], token);
   };
+  // Baseball (MLB Stats API: personal, non-commercial use only) is for the
+  // maker's own boards. A board with its own key (one set up for someone
+  // else) gets no baseball screen, takeover, games, logos, or settings.
+  const sportsOn = (id) => !keys.has(String(id || ''));
+  const SPORTS_FIELDS = ['baseballLayout', 'bbTeams', 'bbPre', 'bbFinal', 'bbPriority', 'gameEvery', 'logoBright'];
+  function checkSportsPatch(id, patch) {
+    if (sportsOn(id) || !patch || typeof patch !== 'object') return;
+    if (patch.screen === 'baseball' || SPORTS_FIELDS.some((k) => patch[k] !== undefined)) {
+      throw new ValidationError('baseball is not available on this board');
+    }
+  }
   if (!tracker) tracker = createTracker({ log }).start();
   if (!weather) weather = createWeather({ log, cacheFile: path.join(path.dirname(store.file), 'board-weather.json') }).start();
   if (!nws) nws = createNws({ log }).start();
@@ -377,7 +388,7 @@ function createBoard({
   function boardList() {
     return store.ids().map((id) => {
       const b = store.get(id);
-      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, sports: sportsOn(id), ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
     });
   }
   // A removed board's live state (health, test alerts, chrono views).
@@ -430,6 +441,10 @@ function createBoard({
       board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
     }
     for (const k of ['showHeader', 'showWeather', 'radarTime', 'baseballLayout']) if (preview[k] != null) board = { ...board, [k]: preview[k] };
+    // A board without baseball that was left on (or copied with) the
+    // baseball screen shows transit instead.
+    const sports = sportsOn(id);
+    if (!sports && board.screen === 'baseball') board = { ...board, screen: 'transit' };
     const st = stationById.get(board.station.mapid);
     // Weather and warnings are nice-to-haves: a failure just leaves them off.
     const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
@@ -509,14 +524,14 @@ function createBoard({
     if (test) for (const ln of test.lines) alertLines.add(ln);
     let games = [];
     const bbTeams = board.bbTeams || ['cubs', 'sox', 'post'];
-    try {
+    if (sports) try {
       games = mlb.get(board.screen === 'baseball' ? 'forced' : 'auto', {
         teams: board.screen === 'baseball' ? ['cubs', 'sox', 'post'] : bbTeams,
         pre: (board.bbPre != null ? board.bbPre : 30) * 60, final: (board.bbFinal != null ? board.bbFinal : 15) * 60,
       });
       games = prioritize(games, board.bbPriority, bbTeams);
     } catch (e) { log.error('[board] mlb:', e.message); }
-    if (test && test.game) games = [testGame(test.game, now), ...games];
+    if (sports && test && test.game) games = [testGame(test.game, now), ...games];
     const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
     const screen = resolveScreen(board, games.length > 0, warn);
     const viewKey = `${id}:${board.station.mapid}`;
@@ -532,7 +547,7 @@ function createBoard({
       screen,
       rot: rotOf(board, screen),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)), ln: st && st.lines ? st.lines[0] : null }),
+      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)) }),
       bright: resolveBright(board, w, now),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),
@@ -579,9 +594,12 @@ function createBoard({
       // Peek chooser (caps.peek): what the other variants draw from, so the
       // board can draw any of them while the knob turns (contract "Peek").
       ...(caps.peek ? { pv: { ...peekOf(board, w, wd, st, skyNow, now, caps), radar: allFrames } } : {}),
-      mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
-        ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
-        : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
+      // Baseball: on the maker's boards only (sportsOn); absent on the others.
+      ...(sports ? {
+        mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
+          ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
+          : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
+      } : {}),
     };
   }
 
@@ -695,6 +713,7 @@ function createBoard({
     if (first === 'logo' && rest.length === 1) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
       if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
+      if (!sportsOn(parsed.query.b)) return send(res, 404, { err: 'not_found' });
       return sendLogo(res, logos.bytes(rest[0]));
     }
 
@@ -846,6 +865,7 @@ function createBoard({
             if (scope && patch && patch.fw !== undefined && !SCOPED_FW.includes(patch.fw)) {
               throw new ValidationError(`fw must be one of ${SCOPED_FW.join(', ')}`);
             }
+            checkSportsPatch(id, patch);
             return send(res, 200, store.update(id, patch));
           } catch (e) {
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
@@ -987,7 +1007,8 @@ function createBoard({
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
-        const screen = SCREENS.includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
+        const asked = SCREENS.includes(parsed.query.screen) && (parsed.query.screen !== 'baseball' || body.mlb) ? parsed.query.screen : null;
+        const screen = asked || autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid) || testRadar.frame(fid); if (b) frames[fid] = b; }

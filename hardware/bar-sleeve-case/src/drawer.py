@@ -93,6 +93,7 @@ def configure_shell():
     V.BTN_Z0, V.BTN_Z1 = BTN_Z0, BTN_Z1
     V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME = False, False, True, False   # light-sensor hole printed open (Ø2.1), Nov 2
     V.SENSOR_ROUND = True                          # round, not a teardrop: reads as a pinhole; ream with a 2 mm bit
+    V.SCREW_FLOAT = SCREW_FLOAT if NUT_STYLE == 'hex' else 0.0
 
 
 # ---- tray ----
@@ -143,6 +144,36 @@ SEN_HOLE = round(V.GRILLE_SPAN + 1.8, 2)        # hole in the tray's top wall ov
 ENC_HALF = 11.8 / 2 * math.sqrt(2)              # encoder body (11.8 square, turned 45 deg): half diagonal
 ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
 
+# Bottom nuts (Nov 3): the side-loaded slot above passed a nut only within ~1 deg of square and then let it walk out
+# (its 5.55 mouth is clearance, not grip, for a 5.32-5.5 nut). NUT_STYLE 'hex': a hex pocket open to the top of the boss,
+# the cleat bosses' press fit (CB_NUT), corners along y so it prints with a 60 deg roof back-down. Drop the nut in and pull
+# it home with a flat screwdriver tip, turning it square as it goes in; tightening only seats it further.
+# The tray's +/- y float moves to the shell's holes (stadiums, SCREW_FLOAT): the nut is now fixed in the tray.
+# 'slot' = the v5 slot, for comparison.
+NUT_STYLE = os.environ.get('NUT_STYLE', 'hex')
+SCREW_FLOAT = 0.4                               # 0.6 left the head no bearing at the slot's far end; 0.4 keeps 0.15 there
+BOSS_TOP = WALL + 8.5                           # hex boss top (12.0 at the 3.5 wall): 1 mm over the M3 x 10's tip
+BOSS_FRONT = 6.5                                # boss face this far in front of the screw (the seat's 45 deg peak reaches 4.5)
+NUT_SEAT = 2.9                                  # press-fit seat height (nut 2.4)
+NUT_CHIMNEY = 6.1                               # loose hex above the seat, up through the bottom louver band
+NUT_LEAD = 0.8                                  # lead-in from the chimney to the seat (~14 deg a face): it squares the nut as it's pressed
+
+# Light sensor (Nov 3): SENSOR_MOUNT 'sled'. The four pillars needed a driver aimed up at the top wall from 27-40 mm
+# inside the tray's open front. Now the sensor screws chip up onto a flat sled on the bench (2-4 x M2.5 x 5 down from the
+# chip side, straight driver); the sled's two back tabs swing into two hooks on the top louver band's face, then one
+# M2.5 x 6 from OUTSIDE the tray's top wall (counterbored, under the sleeve) pulls the sled's front boss up to the wall.
+# The board sits where it did (SEN_TOP), its sockets in the same channels. 'pillars' = the v5 mount.
+SENSOR_MOUNT = os.environ.get('SENSOR_MOUNT', 'sled')
+SLED_T = 2.0                                    # sled plate under the board
+SLED_X_M, SLED_Y0 = 0.5, 31.0                   # margin past the board's ends; sled front edge (y)
+SLED_TAB_W, SLED_GRIP = 4.4, 2.0                # back tabs: width, depth into the hooks
+SLED_CL = 0.25                                  # tab clearance in the hook's slot (top and bottom; 0.2 a side in x)
+HOOK_FLARE = 0.8                                # 45 deg flare at the slot's mouth
+HOOK_WALL, HOOK_FRONT, HOOK_LIP = 1.2, 57.0, 1.25   # hook cheeks either side of the slot, hook front face (y), lip under the tab
+SLED_SCREW = (48.0, 34.5)                       # front screw: 3.6 mm of web to the light hole, 10 mm from the nearest crush rib
+SLED_BOSS_D, SLED_PILOT = 6.0, 2.4
+SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray's top (button head 4.4-4.7 x 1.4-1.6), 0.7 wall left
+
 
 def tray():
     outer = rr_cs(BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL, BORE_R - TRAY_CL)
@@ -175,8 +206,7 @@ def tray():
     zt_rows = [zin1 - 2.5 - LV_H / 2 - i * LV_PITCH for i in range(LV_ROWS)][::-1]
     t = t + band(zin0 - 0.5, zb_rows[-1] + LV_H / 2 + LV_DEPTH + 1.5) + band(zt_rows[0] - LV_H / 2 - 1.5, zin1 + 0.5)   # into the walls
     # bottom screw bosses (plate v3's, now standing on the tray's bottom wall)
-    for x in [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]:
-        t = t + rrect_z(x - 5, x + 5, C.SCREW_Y - 4.5, Y0 + 0.01, 2.0, zin0 - 0.01, WALL + 12.0)
+    t = t + bottom_bosses(zin0)
     # panel posts at the four corner inserts
     for x, z in CORNERS:
         t = t + P3.standoff(x, z, Y0)
@@ -190,13 +220,9 @@ def tray():
     t = t + cyl_y(*_xz(S3_NEO), tube_end, Y0 + 0.01, 7.0, 48)
     btop = yc + 1.9
     t = t + cyl_y(*_xz(S3_BOOT), btop + 1.0, Y0 + 0.01, 5.0, 32)
-    # light-sensor pillars: 5 mm wide, pointed (45 deg) on the back side, so printed back face down their underside is a
-    # roof, not a flat overhang (a gusset there would hit the board's STEMMA QT sockets)
+    # light sensor mount (pillars or sled hooks)
     import sensor as SN
-    zw = H - WALL - TRAY_CL - TRAY_WT
-    for x, y in SN.SH:
-        prof = CrossSection([[(x - 2.5, y - 2.5), (x + 2.5, y - 2.5), (x + 2.5, y), (x, y + 2.5), (x - 2.5, y)]])
-        t = t + Manifold.extrude(prof, zw + 0.01 - SEN_TOP).translate([0, 0, SEN_TOP])
+    t = t + sensor_mount()
     # cleat nut bosses
     for cx, cz in CLEAT_SCREWS:
         t = t + cyl_y(cx, cz, Y0 - CB_H, Y0 + 0.01, CB_D, 48)
@@ -242,6 +268,8 @@ def tray():
             segs = minus(segs, *pad)
         if zc > ZC:                                                          # top rows: a bar in the middle
             segs = minus(segs, -LV_SPLIT / 2, LV_SPLIT / 2)
+            for g0, g1 in louver_gaps(zc, r):                                # and gaps at the sensor sled's hooks
+                segs = minus(segs, g0, g1)
         if zc < ZC:                                                          # bottom rows: gaps at the screw bosses
             for scx in C.SCREW_XS:
                 segs = minus(minus(segs, -scx - 6.5, -scx + 6.5), scx - 6.5, scx + 6.5)
@@ -253,16 +281,8 @@ def tray():
             # the top row's slot rises into the top wall near its inner end: stop it 0.6 under the wall (a slot roof
             # grazing the wall's face left a zero-thickness sheet, non-manifold in the STL)
             cuts.append(sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6))
-    # screw slots and nut pockets (plate v3)
-    nut_end = C.SCREW_Y + P3.NUT_FLOAT + P3.NUT_CORNER
-    mouth_end = C.SCREW_Y - P3.NUT_FLOAT - P3.NUT_CORNER
-    for x in [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]:
-        yb = C.SCREW_Y - 4.5
-        slot = CrossSection.square([0.01, 2 * P3.NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, C.SCREW_Y])
-        cuts.append(Manifold.extrude(slot, 20).translate([0, 0, -1]))
-        nz0 = WALL + 4.0
-        cuts.append(box(x - BN_W / 2, x + BN_W / 2, mouth_end, nut_end, nz0, nz0 + BN_H))
-        cuts.append(box(x - BN_MOUTH / 2, x + BN_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + BN_H))
+    # bottom screw holes and nut pockets
+    cuts += bottom_nut_cuts()
     for x, z in CORNERS:
         cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, Y1 + 1, P3.SO_BORE, 48))
         cuts.append(P3.so_cone(x, ZC + z))
@@ -286,20 +306,202 @@ def tray():
     ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
     cuts.append(box(-ENC_SLOT, ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
     cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
-    for x, y in SN.SH:
-        cuts.append(cyl_z(x, y, SEN_TOP - 1, SEN_TOP + SEN_GAP + 1.6, 2.4, 24))   # M2.5 x 5 (x 6 reaches 0.1 short of the end)
-    zw = H - WALL - TRAY_CL - TRAY_WT
-    (_, sy0), (_, sy1) = SN.sb(0, 11.8), SN.sb(0, 6)
-    for (bx0, bx1), out in (((0.5, 4.8), -1), ((20.6, 24.9), 1)):           # socket channels, open toward each board end
-        xa, xb = SN.sb(bx0, 0)[0], SN.sb(bx1, 0)[0]
-        xa, xb = (xa - SEN_PLUG, xb + 0.5) if out < 0 else (xa - 0.5, xb + SEN_PLUG)
-        cuts.append(box(xa, xb, sy0 - 0.5, sy1 + 0.5, zw - 1, zw + SEN_POCKET))
+    cuts += sensor_cuts()
     # right wall: window for the USB-C plug and the edge buttons
     # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
     cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
     t = t - Manifold.batch_boolean(cuts, ADD)
     t = t + crush_ribs()
     return max(t.decompose(), key=lambda m: m.volume())
+
+
+# ---- tray parts kept apart (other trays, e.g. the P4's split one, reuse them)
+def _rrect_z(x0, x1, ya, yb, r, z0, z1):
+    cs = CrossSection.square([x1 - x0 - 2 * r, yb - ya - 2 * r], center=True).offset(r, JT, circular_segments=24).translate([(x0 + x1) / 2, (ya + yb) / 2])
+    return Manifold.extrude(cs, z1 - z0).translate([0, 0, z0])
+
+
+def bottom_xs():
+    return [sx * scx for sx in (-1, 1) for scx in C.SCREW_XS]
+
+
+def bottom_bosses(zin0):
+    """screw bosses on the tray's bottom wall, one per screw from below"""
+    if NUT_STYLE == 'hex':
+        return Manifold.batch_boolean([_rrect_z(x - 5, x + 5, C.SCREW_Y - BOSS_FRONT, Y0 + 0.01, 2.0, zin0 - 0.01, BOSS_TOP)
+                                       for x in bottom_xs()], ADD)
+    return Manifold.batch_boolean([_rrect_z(x - 5, x + 5, C.SCREW_Y - 4.5, Y0 + 0.01, 2.0, zin0 - 0.01, WALL + 12.0)
+                                   for x in bottom_xs()], ADD)
+
+
+def hex_z(x, y, flats, z0, z1, peak=False):
+    """hex prism, axis z, corners along y. peak: a 45 deg roof over the corner toward the print's up (-y, back-down):
+    the hex's own faces there are only 30 deg above horizontal"""
+    R = flats / 2 / math.cos(math.pi / 6)
+    m = Manifold.cylinder(z1 - z0, R, R, 6).rotate([0, 0, 90]).translate([x, y, z0])
+    if peak:
+        a, b = R * math.cos(math.pi / 6), R / 2
+        tri = CrossSection([[(x - a, y - b), (x + a, y - b), (x, y - b - a)]])
+        if tri.area() <= 0:
+            tri = CrossSection([[(x - a, y - b), (x, y - b - a), (x + a, y - b)]])
+        m = m + Manifold.extrude(tri, z1 - z0).translate([0, 0, z0])
+    return m
+
+
+def nut_z0():
+    return WALL + 4.0                           # nut seat, as the v5 slot
+
+
+def hex_nut_cuts():
+    """round M3 clearance up through the floor; a press-fit hex seat (CB_NUT, NUT_SEAT tall) and above it a loose hex
+    chimney (NUT_CHIMNEY across flats) up through the bottom louver band, which stands over the back of the seat: the nut
+    drops down the chimney (it can't turn more than ~14 deg in it) onto a NUT_LEAD-tall lead-in, then is pressed into the
+    seat, turned square (a 5.5 nut enters the 5.7 seat within ~4 deg). Both have a 45 deg peak toward the print's up."""
+    cuts = []
+    hz = BORE_HZ - TRAY_CL - TRAY_WT
+    zin0 = ZC - hz
+    band_top = zin0 + 2.5 + LV_H / 2 + (LV_ROWS - 1) * LV_PITCH + LV_H / 2 + LV_DEPTH + 1.5
+    z_seat1 = nut_z0() + NUT_SEAT
+    for x in bottom_xs():
+        cuts.append(cyl_z(x, C.SCREW_Y, -1, nut_z0() + 0.01, 3.4, 24))
+        cuts.append(hex_z(x, C.SCREW_Y, CB_NUT, nut_z0(), z_seat1 + 0.01, peak=True))
+        cuts.append(Manifold.batch_hull([hex_z(x, C.SCREW_Y, CB_NUT, z_seat1, z_seat1 + 0.01, peak=True),
+                                         hex_z(x, C.SCREW_Y, NUT_CHIMNEY, z_seat1 + NUT_LEAD, z_seat1 + NUT_LEAD + 0.01, peak=True)]))
+        cuts.append(hex_z(x, C.SCREW_Y, NUT_CHIMNEY, z_seat1 + NUT_LEAD, band_top + 1.0, peak=True))
+    return cuts
+
+
+def bottom_nut_cuts():
+    """NUT_STYLE 'hex': hex_nut_cuts(); 'slot': plate v3's y-slot screw hole and a side-loaded nut slot with a narrowed mouth"""
+    if NUT_STYLE == 'hex':
+        return hex_nut_cuts()
+    cuts = []
+    nut_end = C.SCREW_Y + P3.NUT_FLOAT + P3.NUT_CORNER
+    mouth_end = C.SCREW_Y - P3.NUT_FLOAT - P3.NUT_CORNER
+    for x in bottom_xs():
+        yb = C.SCREW_Y - 4.5
+        slot = CrossSection.square([0.01, 2 * P3.NUT_FLOAT], center=True).offset(1.75, JT, circular_segments=24).translate([x, C.SCREW_Y])
+        cuts.append(Manifold.extrude(slot, 20).translate([0, 0, -1]))
+        nz0 = WALL + 4.0
+        cuts.append(box(x - BN_W / 2, x + BN_W / 2, mouth_end, nut_end, nz0, nz0 + BN_H))
+        cuts.append(box(x - BN_MOUTH / 2, x + BN_MOUTH / 2, yb - 1, mouth_end + 0.01, nz0, nz0 + BN_H))
+    return cuts
+
+
+def _zw():
+    return H - WALL - TRAY_CL - TRAY_WT                        # top wall's inner face
+
+
+def sled_z():
+    """sled plate bottom and top (the top is the board's underside)"""
+    top = SEN_TOP - 1.6
+    return top - SLED_T, top
+
+
+def hook_xs():
+    import sensor as SN
+    return [SN.SX - 9.5, SN.SX + 9.5]                  # far enough apart that the louver piece between their gaps stays
+
+
+def hook_half():
+    return SLED_TAB_W / 2 + 0.2 + HOOK_WALL
+
+
+def hook_bottom():
+    return sled_z()[0] - SLED_CL - HOOK_LIP
+
+
+def louver_gaps(zc, r):
+    """extra gaps in a top louver row (centre zc, slot half height r) where the sensor hooks stand on the band's face"""
+    if SENSOR_MOUNT != 'sled':
+        return []
+    lo, hi = zc + LV_DEPTH + 0.5 - r, zc + LV_DEPTH + 0.5 + r          # the slot's inner end, where the hooks are
+    if hi < hook_bottom() or lo > _zw():
+        return []
+    return [(hx - hook_half() - 0.6, hx + hook_half() + 0.6) for hx in hook_xs()]
+
+
+def sled_hooks():
+    """two hooks on the top louver band's front face: a block from the top wall down past the tab, merged into the band
+    (y_in) so every face that points at the bed when printed back-down sits on the band; a slot open to the front holds
+    the sled's tab (SLED_GRIP deep, SLED_CL over and under it, cheeks either side locate it in x)"""
+    zw, y_in = _zw(), Y1 - LV_DEPTH
+    zs0, zs1 = sled_z()
+    out = []
+    for hx in hook_xs():
+        hw = hook_half()
+        blk = box(hx - hw, hx + hw, HOOK_FRONT, y_in + 0.5, hook_bottom(), zw + 0.01)
+        slot = box(hx - SLED_TAB_W / 2 - 0.2, hx + SLED_TAB_W / 2 + 0.2, HOOK_FRONT - 1, HOOK_FRONT + SLED_GRIP + 0.3,
+                   zs0 - SLED_CL, zs1 + SLED_CL)
+        # mouth flared 45 deg top and bottom (HOOK_FLARE): the tilted tab enters, and the sled can swing ~20 deg
+        f = HOOK_FLARE
+        flare = Manifold.batch_hull([box(hx - SLED_TAB_W / 2 - 0.2, hx + SLED_TAB_W / 2 + 0.2, HOOK_FRONT - 0.01, HOOK_FRONT,
+                                         zs0 - SLED_CL - f, zs1 + SLED_CL + f),
+                                     box(hx - SLED_TAB_W / 2 - 0.2, hx + SLED_TAB_W / 2 + 0.2, HOOK_FRONT + f, HOOK_FRONT + f + 0.01,
+                                         zs0 - SLED_CL, zs1 + SLED_CL)])
+        out.append(blk - slot - flare)
+    return Manifold.batch_boolean(out, ADD)
+
+
+def sled():
+    """the sensor's sled, in place (case frame). Prints plate down, boss up."""
+    import sensor as SN
+    zs0, zs1 = sled_z()
+    zw = _zw()
+    body = box(SN.SB_X0 - SLED_X_M, SN.SB_X1 + SLED_X_M, SLED_Y0, SN.SB_Y1 + 0.8, zs0, zs1)
+    tabs = [box(hx - SLED_TAB_W / 2, hx + SLED_TAB_W / 2, SN.SB_Y1 + 0.5, HOOK_FRONT + SLED_GRIP, zs0, zs1) for hx in hook_xs()]
+    sx, sy = SLED_SCREW
+    boss = cyl_z(sx, sy, zs1 - 0.01, zw - 0.1, SLED_BOSS_D, 40)
+    s = Manifold.batch_boolean([body, boss] + tabs, ADD)
+    holes = [cyl_z(x, y, zs0 - 1, zs1 + 1, P3.S3_PILOT, 24) for x, y in SN.SH]                   # board screws, self-tapping
+    holes += [Manifold.cylinder(0.31, P3.S3_PILOT / 2, P3.S3_PILOT / 2 + 0.3, 24).translate([x, y, zs1 - 0.3]) for x, y in SN.SH]
+    holes.append(cyl_z(sx, sy, zs0 - 1, zw + 1, SLED_PILOT, 24))                                 # front screw from outside
+    holes.append(Manifold.cylinder(0.41, SLED_PILOT / 2, SLED_PILOT / 2 + 0.4, 24).translate([sx, sy, zw - 0.1 - 0.4]))
+    s = s - Manifold.batch_boolean(holes, ADD)
+    # tab tips: 0.6 x 45 deg off both edges, so they find the hook's slot while the sled is still tilted
+    tip = HOOK_FRONT + SLED_GRIP
+    for zc, sgn in ((zs1, 1), (zs0, -1)):
+        tri = CrossSection([[(tip + 0.01, zc + sgn * 0.01), (tip - 0.6, zc + sgn * 0.01), (tip + 0.01, zc - sgn * 0.61)]])
+        if tri.area() < 0 or tri.area() == 0:
+            tri = CrossSection([[(tip + 0.01, zc + sgn * 0.01), (tip + 0.01, zc - sgn * 0.61), (tip - 0.6, zc + sgn * 0.01)]])
+        s = s - prism_x(tri, SN.SB_X0 - 5, SN.SB_X1 + 5)
+    return s
+
+
+def sensor_mount():
+    """SENSOR_MOUNT 'sled': the hooks (the sled is a separate part). 'pillars': light-sensor pillars, 5 mm wide, pointed
+    (45 deg) on the back side, so printed back face down their underside is a roof, not a flat overhang (a gusset there
+    would hit the board's STEMMA QT sockets)"""
+    import sensor as SN
+    if SENSOR_MOUNT == 'sled':
+        return sled_hooks()
+    zw = H - WALL - TRAY_CL - TRAY_WT
+    out = []
+    for x, y in SN.SH:
+        prof = CrossSection([[(x - 2.5, y - 2.5), (x + 2.5, y - 2.5), (x + 2.5, y), (x, y + 2.5), (x - 2.5, y)]])
+        out.append(Manifold.extrude(prof, zw + 0.01 - SEN_TOP).translate([0, 0, SEN_TOP]))
+    return Manifold.batch_boolean(out, ADD)
+
+
+def sensor_cuts():
+    """pilots in the pillars and the STEMMA QT socket channels in the top wall"""
+    import sensor as SN
+    cuts = []
+    if SENSOR_MOUNT == 'sled':                  # front screw: counterbore in the tray's outer top, clearance through
+        sx, sy = SLED_SCREW
+        zo = _zw() + TRAY_WT
+        cuts.append(cyl_z(sx, sy, zo - SLED_CB_DEPTH, zo + 1, SLED_CB_D, 40))
+        cuts.append(cyl_z(sx, sy, _zw() - 1, zo, SLED_CLEAR, 24))
+    else:
+        for x, y in SN.SH:
+            cuts.append(cyl_z(x, y, SEN_TOP - 1, SEN_TOP + SEN_GAP + 1.6, 2.4, 24))   # M2.5 x 5 (x 6 reaches 0.1 short of the end)
+    zw = H - WALL - TRAY_CL - TRAY_WT
+    (_, sy0), (_, sy1) = SN.sb(0, 11.8), SN.sb(0, 6)
+    for (bx0, bx1), out in (((0.5, 4.8), -1), ((20.6, 24.9), 1)):           # socket channels, open toward each board end
+        xa, xb = SN.sb(bx0, 0)[0], SN.sb(bx1, 0)[0]
+        xa, xb = (xa - SEN_PLUG, xb + 0.5) if out < 0 else (xa - 0.5, xb + SEN_PLUG)
+        cuts.append(box(xa, xb, sy0 - 0.5, sy1 + 0.5, zw - 1, zw + SEN_POCKET))
+    return cuts
 
 
 def crush_ribs():
@@ -363,8 +565,58 @@ def sensor_envelope():
     parts = [box(SN.SB_X0, SN.SB_X1, SN.SB_Y0, SN.SB_Y1, b, SEN_TOP),
              box(SN.SX - 1.0, SN.SX + 1.0, SN.SY - 1.0, SN.SY + 1.0, SEN_TOP, SEN_TOP + 0.85)]
     parts += [box(SN.sb(bx0, 6)[0], SN.sb(bx1, 6)[0], SN.sb(0, 11.8)[1], SN.sb(0, 6)[1], SEN_TOP, SEN_TOP + 4.25) for bx0, bx1 in ((0.5, 4.8), (20.6, 24.9))]
-    parts += [cyl_z(x, y, b - 1.8, b, 4.6, 24) for x, y in SN.SH]
+    if SENSOR_MOUNT == 'sled':                                          # heads on the chip side, into the sled
+        parts += [cyl_z(x, y, SEN_TOP, SEN_TOP + 1.6, 4.6, 24) for x, y in SN.SH]
+    else:
+        parts += [cyl_z(x, y, b - 1.8, b, 4.6, 24) for x, y in SN.SH]
     return Manifold.batch_boolean(parts, ADD)
+
+
+def sensor_plugs():
+    """STEMMA QT plugs in the sensor's two sockets (plugged on the bench), for fit checks: out past each board end"""
+    import sensor as SN
+    out = []
+    for (bx0, bx1), sgn in (((0.5, 4.8), -1), ((20.6, 24.9), 1)):
+        xa, xb = SN.sb(bx0, 6)[0], SN.sb(bx1, 6)[0]
+        ya, yb = SN.sb(0, 11.6)[1], SN.sb(0, 6.2)[1]
+        x0, x1 = (xa - 6.0, xa + 1.5) if sgn < 0 else (xb - 1.5, xb + 6.0)
+        out.append(box(x0, x1, ya, yb, SEN_TOP + 0.2, SEN_TOP + 4.0))
+    return Manifold.batch_boolean(out, ADD)
+
+
+def fix_coupons(sh, tr, side=1):
+    """Nov 3 fixes, small pieces to print first (case frame; export them back-down like the tray):
+    nut: the tray's bottom boss (hex seat, chimney through the louver band) and the shell's underside round its screw
+    (stadium hole and counterbore): drop a nut in, press it, put the two together and run an M3 x 10 up through both.
+    hooks: the tray's top corner over the sensor (hooks on the louver band, socket channels, light hole, front screw
+    counterbore): print with the sled and swing the sled in."""
+    x = side * max(C.SCREW_XS)
+    zin0 = ZC - (BORE_HZ - TRAY_CL - TRAY_WT)
+    band_top = zin0 + 2.5 + LV_H / 2 + (LV_ROWS - 1) * LV_PITCH + LV_H / 2 + LV_DEPTH + 1.5
+    nut_tray = tr ^ box(x - 12, x + 12, C.SCREW_Y - 9, Y1 + 1, -5, band_top + 3)
+    nut_shell = sh ^ box(x - 12, x + 12, C.SCREW_Y - 9, D + 1, -1, WALL + 0.6)
+    import sensor as SN
+    zw = _zw()
+    hooks = tr ^ box(SN.SB_X0 - 8, SN.SB_X1 + 8, SLED_Y0 - 6, Y1 + 1, zw - 16, H)
+    return dict(nut_tray=max(nut_tray.decompose(), key=lambda m: m.volume()),
+                nut_shell=max(nut_shell.decompose(), key=lambda m: m.volume()),
+                hooks=max(hooks.decompose(), key=lambda m: m.volume()))
+
+
+def export_fixes(out, sh, tr, put, prefix):
+    """the sled, the fix coupons and the collar (bore retainer) with its fit set"""
+    import trimesh
+    me = sled().to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
+    t.apply_translation(-t.bounds[0]); t.export(f'{out}/bar-sensor-sled.stl')         # plate down, boss up
+    print('bar-sensor-sled.stl', t.is_watertight, np.round(t.extents, 1).tolist())
+    cp = fix_coupons(sh, tr)
+    put(cp['nut_tray'], f'coupon-{prefix}-nut-seat-tray.stl')
+    put(cp['nut_shell'], f'coupon-{prefix}-nut-seat-shell.stl')
+    put(cp['hooks'], f'coupon-{prefix}-sensor-hooks-tray.stl')
+    import collar as CO
+    CO.TIP_BACK = False
+    t = CO.export(CO.retainer_fit_set(), f'{out}/bar-encoder-collar-v5-retainer-fit-set.stl')
+    print('bar-encoder-collar-v5-retainer-fit-set.stl', t.is_watertight)
 
 
 def fit_coupon(sh, tr):
@@ -404,4 +656,5 @@ if __name__ == '__main__':
     t = CO.export(CO.ribbed_fit_set(), f'{out}/bar-encoder-collar-v5-ribbed-fit-set.stl')
     print('bar-encoder-collar-v5-ribbed-fit-set.stl', t.is_watertight)
     put(cs, 'coupon-v5-drawer-fit-shell.stl'); put(ct, 'coupon-v5-drawer-fit-tray.stl')
+    export_fixes(out, sh, tr, put, 'v5')
     print(dict(D=D, S3_edge=round(S3_EDGE, 2), s3_z0=round(S3_Z0 - ZC, 2), port_z=round(PORT_Z - ZC, 2), corners=CORNERS))

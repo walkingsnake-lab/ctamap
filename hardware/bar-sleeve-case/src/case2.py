@@ -164,6 +164,9 @@ def latch_dimples():
     return Manifold.batch_boolean([radial_sweep(c, BORE_R, LT_DIMPLE, LT_DIMPLE_A, PLATE_Y0) for c in corner_arcs()], ADD)
 
 
+SCREW_FLOAT = 0.0                # +/- y float of the screws from below (0: round holes)
+
+
 def teardrop_cs(r, cx, cy, trunc=None, seg=64):
     """circle with a 45-deg point toward +y (the print's up); optionally truncated flat at cy + trunc"""
     a = r * math.cos(math.pi / 4)
@@ -252,8 +255,11 @@ def shell2():
     for sx in (-1, 1):
       for scx in SCREW_XS:
         z0 = 1.0 + SKIN_T if SKINS else -1          # skin at the counterbore floor; drill through with a 3.4 mm bit
-        cuts.append(Manifold.extrude(teardrop_cs(1.7, sx * scx, SCREW_Y, seg=32), WALL + 1 - z0).translate([0, 0, z0]))
-        cuts.append(Manifold.extrude(teardrop_cs(3.2, sx * scx, SCREW_Y, seg=48), 2.0).translate([0, 0, -1]))
+        f = SCREW_FLOAT                             # stadium along y when the tray's float lives here (drawer, nut fixed in the tray)
+        hole = teardrop_cs(1.7, sx * scx, SCREW_Y - f, seg=32) + teardrop_cs(1.7, sx * scx, SCREW_Y + f, seg=32)
+        cb = teardrop_cs(3.2, sx * scx, SCREW_Y - f, seg=48) + teardrop_cs(3.2, sx * scx, SCREW_Y + f, seg=48)
+        cuts.append(Manifold.extrude(hole.hull(), WALL + 1 - z0).translate([0, 0, z0]))
+        cuts.append(Manifold.extrude(cb.hull(), 2.0).translate([0, 0, -1]))
     # tongue grooves (as v1)
     yp0 = D - BACKL - PLATE_T
     for sx in ((-1, 1) if TONGUES else ()):
