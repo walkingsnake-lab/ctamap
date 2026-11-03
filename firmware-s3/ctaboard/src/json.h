@@ -30,6 +30,10 @@ struct Value {
   std::string s;        // UTF-8
   std::vector<Value> a;
   std::vector<std::pair<std::string, Value>> o;  // in document order
+  // An overlay (the peek chooser's views): members not in `o` are looked up
+  // in base, so a view changes a few members without copying the payload.
+  // Not owned; base must outlive this value.
+  const Value *base = nullptr;
 
   bool is_null() const { return type == NUL; }
   bool is_num() const { return type == NUM; }
