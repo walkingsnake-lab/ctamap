@@ -276,6 +276,8 @@ When `on` is false, `frames` and `ft` are empty and `timeBox` may be `null`.
 
 #### Baseball (`mlb`)
 
+Only on the maker's own boards (no key; see **Board keys**). A keyed board's payload has no `mlb` at all, and its `screen` is never `baseball`.
+
 ```json
 "mlb": {"games": [
   {"id": 849829, "st": "live", "start": 1759510800,
@@ -431,6 +433,7 @@ A board set up for someone else gets **its own token** and **its own control lin
 
 - **Token:** the board sends it as `X-Board-Token`, like the shared one. A board with a key accepts only its own token on every board endpoint (`version`, `update`, `select`, `radar`, `logo`, `firmware`, keyed by `b`); the shared token no longer works for it, and its token works for no other board. Only the token's SHA-256 is stored. An unknown board ID still needs the shared token to register.
 - **Control link:** `/board/c/<link>/` (22 characters of `A-Z a-z 0-9 _ -`) opens the control page for that one board. Every request under it is about that board whatever `b` says. It reaches the page, the simulator, and `api/state`, `api/update`, `api/destinations`, `api/stations`, `api/health`, `api/boards` (GET, its own entry without `link`), `api/test`, and the simulator's frame and logo files; everything else (adding, copying, deleting boards; keys; firmware builds; logos; raw captures) is `404`. Its `fw` may only be set to `stable` or `off`. The page is served with `window.BOARD_SCOPE` set to the board's ID and hides the maker's controls.
+- **No baseball:** the MLB Stats API is for personal, non-commercial use, so baseball is the maker's boards' only. A keyed board gets no `mlb` in its payload, no baseball takeover on auto, and `transit` in place of a `baseball` screen it was left on (or copied with); `GET /board/logo/…` is `404` for it; and `POST api/state` with `screen: "baseball"` or any baseball setting (`baseballLayout`, `bbTeams`, `bbPre`, `bbFinal`, `bbPriority`, `gameEvery`, `logoBright`) is `400`, from its control link and from the maker's page. Removing the key brings baseball back. `api/boards` says which boards have it (`sports`), and the control page hides the Baseball screen and tab on the others.
 - **Storage:** `board-keys.json` beside the board state (`{boards: {<id>: {sha, link, at}}}`, mode 600), never in `board-state.json`, which the maker's page reads whole. Deleting a board deletes its key.
 
 ## Control endpoints
@@ -448,7 +451,7 @@ All under the secret path `/board/<BOARD_CONTROL_PATH>/`. No token header: the p
 | `GET /board/<secret>/api/stations` | Station list for pickers: `[{mapid, desc, short}]`, sorted by `desc`. |
 | `GET /board/<secret>/api/state` | Full state JSON (all boards). |
 | `GET /board/<secret>/api/health` | Latest health report per board (see `/board/version`): `{<id>: {at, uptime, memFree, largestBlock, minMem, oom, budget, fails, reconnects, rssi, lastError, started, lastCrash, hardware, firmware, ota, restarts, lastRestart, since}}`; `lastCrash` stays until a newer crash replaces it. In memory only. |
-| `GET /board/<secret>/api/boards` | Board list for the control page's picker: `[{id, label, station, mapid, screen, seen, link?}]` in creation order; `link` (the control link's secret) only for boards with a key. `station` is the header name; `seen` is the last `/board/version` or `/board/update` (epoch s), `null` if none since the server started. |
+| `GET /board/<secret>/api/boards` | Board list for the control page's picker: `[{id, label, station, mapid, screen, seen, sports, link?}]` in creation order; `sports`: the board can show baseball (no key); `link` (the control link's secret) only for boards with a key. `station` is the header name; `seen` is the last `/board/version` or `/board/update` (epoch s), `null` if none since the server started. |
 | `POST /board/<secret>/api/boards` | Add a board: body `{id, from?, label?}`. With `from`, a copy of that board's settings (brightness reset to auto); without, the defaults. Returns the new list. `400` for a bad or taken ID, an unknown `from`, a bad label, or more than 8 boards. |
 | `DELETE /board/<secret>/api/boards?b=<id>` | Remove a board (and its in-memory health and test alerts). Returns the new list. `404` if unknown; `400` for the only board. A board still running with that ID re-adds itself on its next update. |
 | `POST /board/<secret>/api/boards/copy?b=<id>&from=<other>` | Replace board `b`'s settings with a copy of board `from`'s; `b` keeps its `label`, `bright` goes to auto, `v` is bumped. Returns `b`'s full state. `404` if `b` is unknown; `400` if `from` is unknown or the same board. |

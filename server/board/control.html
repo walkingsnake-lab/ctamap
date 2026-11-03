@@ -68,6 +68,8 @@
   .credits a { color: var(--muted); }
   /* A board's owner link (/board/c/<link>/): this board only, no admin controls. */
   body.owner .admin { display: none !important; }
+  /* Baseball is the maker's own boards' only (api/boards `sports`). */
+  body.nosports .sports { display: none !important; }
   pre.keys { white-space: pre-wrap; word-break: break-all; font-size: 13px; background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; margin: 8px 0 0; user-select: all; }
   #fwBuilds li { flex-wrap: wrap; }
   #fwBuilds li .nm { text-transform: none; letter-spacing: 0; }
@@ -134,7 +136,7 @@
       <button data-v="transit">Transit</button>
       <button data-v="ticker">Ticker</button>
       <button data-v="weather">Weather</button>
-      <button data-v="baseball">Baseball</button>
+      <button data-v="baseball" class="sports">Baseball</button>
       <button data-v="clock">Clock</button>
       <button data-v="announce">Announce</button>
     </div>
@@ -208,7 +210,7 @@
     <button role="tab" data-tab="transit">Transit</button>
     <button role="tab" data-tab="ticker">Ticker</button>
     <button role="tab" data-tab="weather">Weather</button>
-    <button role="tab" data-tab="baseball">Baseball</button>
+    <button role="tab" data-tab="baseball" class="sports">Baseball</button>
     <button role="tab" data-tab="clock">Clock</button>
     <button role="tab" data-tab="announce">Announce</button>
     <button role="tab" data-tab="health">Board</button>
@@ -326,7 +328,7 @@
     </div>
   </section>
 
-  <section data-tab="baseball">
+  <section data-tab="baseball" class="sports">
     <h2>Baseball screen</h2>
     <div class="seg" id="bbLayout">
       <button data-v="classic">Classic</button>
@@ -639,6 +641,11 @@
   function render() {
     renderBoards();
     if (!board) return;
+    // A board set up for someone else has no baseball (the server refuses its settings).
+    const me = boards.find((x) => x.id === boardId);
+    const sports = !me || me.sports !== false;
+    document.body.classList.toggle('nosports', !sports);
+    if (!sports && tab === 'baseball') showTab('transit');
     renderFirmware();
     pressed('screen', board.screen);
     const auto = board.screen === 'auto';
@@ -660,7 +667,7 @@
     const teams = board.bbTeams || ['cubs', 'sox', 'post'];
     const names = { transit: 'transit', ticker: 'the ticker' };
     const mainText = mains.length > 1 ? `switches between transit and the ticker every ${$('autoEvery').selectedOptions[0].text}` : `stays on ${names[mains[0]]}`;
-    const bbText = teams.length ? ` Baseball takes over during ${[teams.includes('cubs') && 'Cubs', teams.includes('sox') && 'White Sox', teams.includes('post') && 'postseason'].filter(Boolean).join(', ')} games.` : ' Baseball never takes over.';
+    const bbText = !sports ? '' : teams.length ? ` Baseball takes over during ${[teams.includes('cubs') && 'Cubs', teams.includes('sox') && 'White Sox', teams.includes('post') && 'postseason'].filter(Boolean).join(', ')} games.` : ' Baseball never takes over.';
     const wvText = wv === 'off' ? '' : ` The weather screen shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min${wv === 'rain' ? ' while it\'s raining' : ''}.`;
     const ajText = board.alertJump === 'warning' ? ' During NWS warnings it stays on the weather screen.' : board.alertJump === 'all' ? ' During NWS watches and warnings it stays on the weather screen.' : '';
     $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : board.screen === 'clock' ? 'The clock face (set under Clock). Needs an S3 with clock firmware; other boards show Transit.' : board.screen === 'announce' ? 'Your message (set under Announce). Needs an S3 with announce firmware; other boards show Transit.' : 'Stays on this screen until you change it.')
