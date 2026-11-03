@@ -203,6 +203,8 @@ def tray_p4():
             segs = minus(segs, *pad)
         if zc > ZC:
             segs = minus(segs, -SEAM_BAR, SEAM_BAR)
+            for g0, g1 in DR.louver_gaps(zc, r):                                        # sensor sled hooks
+                segs = minus(segs, g0, g1)
         else:
             segs = minus(segs, -BRIDGE_X, BRIDGE_X)
             for scx in C.SCREW_XS:
@@ -429,6 +431,10 @@ if __name__ == '__main__':
         put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj, side))
     cs, ctr = DR.fit_coupon(P['shell'], P['tray'])
     put(cs, 'coupon-p4-drawer-fit-shell.stl', down); put(ctr, 'coupon-p4-drawer-fit-tray.stl', down)
+    DR.export_fixes(out, P['shell'], P['tray'], lambda m, name: put(m, name, down), 'p4')
+    import collar as CO
+    CO.TIP_BACK = False
+    t = CO.export(CO.collar(), f'{out}/bar-encoder-collar-v5.stl'); print('bar-encoder-collar-v5.stl', t.is_watertight)
     import json
     for k, v in report.items():
         print(k, v)

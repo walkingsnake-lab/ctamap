@@ -9,7 +9,7 @@
    ],
    "square": 246.3,
    "spare_a_side": 4.8,
-   "volume_cm3": 97.2
+   "volume_cm3": 97.3
   },
   "p4-shell-bottom-walnut-backdown.stl": {
    "watertight": true,
@@ -31,7 +31,7 @@
    ],
    "square": 146.2,
    "spare_a_side": 54.9,
-   "volume_cm3": 97.5
+   "volume_cm3": 97.3
   },
   "p4-tray-right.stl": {
    "watertight": true,
@@ -42,7 +42,7 @@
    ],
    "square": 146.2,
    "spare_a_side": 54.9,
-   "volume_cm3": 100.4
+   "volume_cm3": 101.1
   },
   "p4-spine.stl": {
    "watertight": true,
@@ -197,6 +197,39 @@
    "square": 46.8,
    "spare_a_side": 104.6,
    "volume_cm3": 8.6
+  },
+  "coupon-p4-nut-seat-tray.stl": {
+   "watertight": true,
+   "extents": [
+    24.0,
+    28.5,
+    14.5
+   ],
+   "square": 28.5,
+   "spare_a_side": 113.8,
+   "volume_cm3": 3.1
+  },
+  "coupon-p4-nut-seat-shell.stl": {
+   "watertight": true,
+   "extents": [
+    24.0,
+    3.5,
+    18.5
+   ],
+   "square": 24.0,
+   "spare_a_side": 116.0,
+   "volume_cm3": 1.5
+  },
+  "coupon-p4-sensor-hooks-tray.stl": {
+   "watertight": true,
+   "extents": [
+    41.4,
+    18.9,
+    40.0
+   ],
+   "square": 41.4,
+   "spare_a_side": 107.3,
+   "volume_cm3": 6.2
   }
  },
  "summary": {
