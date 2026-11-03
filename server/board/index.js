@@ -519,7 +519,7 @@ function createBoard({
       screen,
       rot: rotOf(board, screen),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)), ln: st && st.lines ? st.lines[0] : null }),
+      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)) }),
       bright: resolveBright(board, w, now),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),

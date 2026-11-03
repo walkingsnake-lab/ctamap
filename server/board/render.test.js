@@ -252,14 +252,14 @@ test('peek chooser: the chosen variant itself, drawn from pv, under the category
   // The bar: five icons 12 px apart from x4, the chosen one in its color, the rest at 30%.
   let f = peek({ k: 0, vi: 0 });
   for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 21)), '#000000', 'row 21 black');
-  const cats = p.knob.ring, colorOf = (c) => (c === 'transit' ? LINE.BL : PEEK_COLORS[c]);
+  const cats = p.knob.ring, colorOf = (c) => (c === 'transit' ? LINE.RD : PEEK_COLORS[c]); // red at a Blue Line station too
   cats.forEach((cat, i) => {
     const [dx, dy] = [...PEEK_ICONS[cat].join('')].reduce((a, ch, n) => (a || ch !== '#' ? a : [n % 7, Math.floor(n / 7)]), null);
     assert.equal(hex(f.get(4 + i * PEEK.pitch + dx, 23 + dy)), i === 0 ? colorOf(cat) : scale(colorOf(cat), 0.3), cat);
   });
   // Underline under the chosen icon; its variants as dots beside it (two for transit).
-  for (let x = 4; x < 11; x++) assert.equal(hex(f.get(x, 31)), LINE.BL);
-  assert.equal(hex(f.get(12, 25)), LINE.BL);
+  for (let x = 4; x < 11; x++) assert.equal(hex(f.get(x, 31)), LINE.RD);
+  assert.equal(hex(f.get(12, 25)), LINE.RD);
   assert.equal(hex(f.get(12, 27)), C.indicator);
   // Clock with three faces, the third chosen: dots on rows 24, 26, 28.
   f = peek({ k: 2, vi: 2 });
@@ -284,7 +284,7 @@ test('peek chooser: the chosen variant itself, drawn from pv, under the category
   // The bar drops away: fully dropped is the bare view.
   assert.ok(rowsEqual(peek({ k: 0, vi: 0, drop: PEEK.band }), render(p, { screen: 'transit', now }), 0, 31));
   f = peek({ k: 0, vi: 0, drop: 4 });
-  assert.equal(hex(f.get(5, 27)), LINE.BL, 'the icons have moved down 4 rows');
+  assert.equal(hex(f.get(5, 27)), LINE.RD, 'the icons have moved down 4 rows');
   assert.equal(hex(f.get(7, 31)), '#000000', 'the underline is off the panel');
 
   // Raining: the radar, still, on the newest frame on hand; missing frames
