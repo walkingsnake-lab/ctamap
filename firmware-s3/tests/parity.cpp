@@ -122,6 +122,23 @@ int main(int argc, char **argv) {
           ro.chooser_commit = o["chooser"]["commit"].truthy();
         }
         if (!o["iconT"].is_null()) ro.icon_t = o["iconT"].num();
+        if (!o["peek"].is_null()) {
+          const Value &pk = o["peek"];
+          draw::RenderOpts::Peek k;
+          k.k = (int)pk["k"].num(0);
+          k.vi = (int)pk["vi"].num(0);
+          k.drop = (int)pk["drop"].num(0);
+          if (!pk["slide"].is_null()) {
+            const Value &sl = pk["slide"];
+            k.slide = !sl["t"].is_null();
+            k.slide_k = (int)sl["k"].num(0);
+            k.slide_vi = (int)sl["vi"].num(0);
+            k.slide_t = sl["t"].num(0);
+            k.slide_y = sl["axis"].eq("y");
+            k.slide_dir = sl["dir"].num(1) < 0 ? -1 : 1;
+          }
+          ro.peek = k;
+        }
         std::vector<uint8_t> slide_from;
         if (!o["slide"].is_null()) {
           for (const Value &v : o["slide"]["from"].a) slide_from.push_back((uint8_t)v.num());

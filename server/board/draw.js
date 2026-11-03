@@ -1073,7 +1073,9 @@
       const r = p.radar || {};
       const ids = r.frames || [];
       // -1 when there are no frames yet (the clock then shows the current time).
-      const idx = !ids.length ? -1 : o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
+      // Peek (opts.peek): the newest frame on hand, still; -1 with none yet.
+      const newestOnHand = () => { for (let i = ids.length - 1; i >= 0; i--) if (o.frames && o.frames[ids[i]]) return i; return -1; };
+      const idx = !ids.length ? -1 : o.peek ? newestOnHand() : o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
       const f = newFrame();
       // No frames (no rain in the box, or none processed yet), or none
       // downloaded yet: the weather screen.
@@ -1085,7 +1087,9 @@
       // passes ms since its loop started.
       const loopT = o.t != null ? o.t : (o.now != null ? o.now : p.now) * 1000;
       const barsTurn = rainBarsTurn(rn, ids.length, timing(p), loopT);
-      if (((!ids.length || (o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
+      // A peek never falls back for frames still downloading: it shows the
+      // empty radar, its frame indicator filling in as they land.
+      if (((!ids.length || (!o.peek && o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
         // The forecast layouts' top bar carries a warning on its high/low line.
         const top = { shadow: !!r.tempShadow, warn: p.warn, blink: o.blink };
         if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, top);
@@ -1121,7 +1125,7 @@
       if (ids.length) clear([indX, top, right, top + 1]);
       const drawIndicator = () => {
         let x = indX;
-        ids.forEach((_, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : C.indicator); x += segW + segGap; });
+        ids.forEach((id, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : C.indicator); x += segW + segGap; });
       };
       const ws = p.warn ? warnStyle(p.warn) : null;
       const hideWarn = ws && ws.blinks && o.blink;
@@ -1578,6 +1582,116 @@
       return f;
     }
 
+    // ---- peek chooser (spec §10, "Knob"; contract "Peek") ----
+    // While the knob turns, the panel shows the chosen category's variant
+    // itself, drawn from the payload's sections and `pv`, with the icon bar
+    // over rows 21-31: one 7x7 icon per ring entry in its category color
+    // (30% when not chosen), an underline under the chosen one, and its
+    // variants as a column of dots beside it. opts.peek: {k, vi} the view
+    // (ring index, variant index); slide: {k, vi, t, axis, dir} the view it
+    // is sliding away from (t ms in; axis 'x' for a category, 'y' for a
+    // variant; dir +1 the new view enters from the right or below); drop:
+    // rows the bar has dropped (0 up, PEEK.band gone).
+    const PEEK = { xMs: 270, yMs: 300, upMs: 240, downMs: 390, band: 11, top: 21, pitch: 12 };
+    const PEEK_LOADED = '#6a6a6a';
+    const PEEK_ICONS = {
+      transit: ['.#####.', '#.....#', '#.....#', '#######', '##...##', '.#####.', '#.....#'],
+      weather: ['...#...', '.#...#.', '..###..', '#.###.#', '..###..', '.#...#.', '...#...'],
+      clock: ['..###..', '.#...#.', '#..#..#', '#..##.#', '#.....#', '.#...#.', '..###..'],
+      announce: ['#######', '#.....#', '#.###.#', '#.....#', '#######', '.##....', '.#.....'],
+      cycle: ['..###.#', '.#...##', '#...###', '#.....#', '###...#', '##...#.', '#.###..'],
+    };
+    const PEEK_COLORS = { weather: '#ffd040', clock: '#f0e2c8', announce: '#40e090', cycle: '#3fd0e8' };
+    const peekColor = (p, cat) => (cat === 'transit' ? LINE[p.knob && p.knob.ln] || LINE.RD : PEEK_COLORS[cat] || C.label);
+    // Ease-out cubic, 0..1.
+    const peekEase = (k) => { const c = Math.max(0, Math.min(1, k)); return 1 - (1 - c) * (1 - c) * (1 - c); };
+    // The cycle symbol (the phone's two arrows, anti-aliased): 16 levels of
+    // cyan in a 20x20 box at x22, y6.
+    const CYCLE_ART = ['0000028cffffc8206400', '00008effffffffe9f600', '001bffe844448efff800', '00bff810000009fffb00', '08ff600000006efffd00',
+      '2ef80000000000258b00', '8fe10000000000000000', 'cf800000000000000000', 'ff400000000000000000', 'ff4000000000000000ee',
+      'ee0000000000000004ff', '000000000000000004ff', '000000000000000008fc', '00000000000000001ef8', '00b85200000000008fe2',
+      '00dfffe600000006ff80', '00bfff900000018ffb00', '008fffe844448effb100', '006f9effffffffe80000', '0046028cffffc8200000'];
+    function drawCycleArt(f) {
+      const c = hex(PEEK_COLORS.cycle);
+      CYCLE_ART.forEach((row, j) => [...row].forEach((ch, i) => {
+        const lv = parseInt(ch, 16);
+        if (lv) f.set(22 + i, 6 + j, c.map((v) => Math.round(v * lv / 15)));
+      }));
+    }
+    // A variant's payload and screen: the chosen ring entry `k` with variant
+    // `vi`, its data taken from `pv` (forecast lists, clock faces).
+    function peekView(p, k, vi) {
+      const kn = p.knob || {}, cat = (kn.ring || [])[k], v = ((kn.vars || [])[k] || [])[vi], pv = p.pv || {};
+      if (cat === 'transit') return { p, screen: v === 'ticker' ? 'ticker' : 'transit' };
+      if (cat === 'weather') {
+        // The radar view: every kept frame (pv.radar), rain or not. The
+        // others: the radar loop only while rain is in the box (radar.on).
+        const r = p.radar || {}, all = pv.radar || {};
+        const frames = v === 'radar' ? all.frames || r.frames || [] : r.on ? r.frames || [] : [];
+        const ft = v === 'radar' ? all.ft || r.ft || [] : r.on ? r.ft || [] : [];
+        let wx = r.wx || null;
+        if (wx) {
+          wx = { ...wx };
+          delete wx.days; delete wx.hours;
+          if (v === 'radar') delete wx.rain;
+          if (v === '5day' && pv.days) wx.days = pv.days;
+          if (v === 'hourly' && pv.hours) wx.hours = pv.hours;
+        }
+        return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
+      }
+      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv }, screen: 'clock' };
+      if (cat === 'announce') return { p, screen: 'announce' };
+      return { p, screen: 'cycle' };
+    }
+    function drawPeekView(p, k, vi, o) {
+      const { p: q, screen } = peekView(p, k, vi);
+      if (screen === 'cycle') { const f = newFrame(); drawCycleArt(f); return f; }
+      const oo = { ...o, peek: true, screen };
+      return screen === 'ticker' ? renderTicker(q, oo) : screen === 'weather' ? renderWeather(q, oo) : screen === 'clock' ? renderClock(q, oo)
+        : screen === 'announce' ? renderAnnounce(q, oo) : renderTransit(q, oo);
+    }
+    function drawPeekBar(f, p, k, vi, drop) {
+      const kn = p.knob || {}, ring = kn.ring || [], n = ring.length;
+      const sh = (y) => y + drop;
+      f.fill(0, sh(PEEK.top), 64, PEEK.band, '#000000');
+      const x0 = Math.floor(32 - (n * PEEK.pitch - 5) / 2);
+      ring.forEach((cat, i) => {
+        const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
+        if (!rows) return;
+        const c = i === k ? col : scaleColor(col, 0.3);
+        rows.forEach((r, j) => [...r].forEach((ch, x) => { if (ch === '#') f.fill(x0 + i * PEEK.pitch + x, sh(23 + j), 1, 1, c); }));
+      });
+      const ix = x0 + k * PEEK.pitch, col = peekColor(p, ring[k]);
+      f.fill(ix, sh(31), 7, 1, col);
+      const nv = ((kn.vars || [])[k] || []).length;
+      if (nv > 1) for (let j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, j === vi ? col : C.indicator);
+    }
+    // Slide offset in px (0..64 across, 0..32 down) at t ms.
+    const peekShift = (axis, t) => Math.round(peekEase(t / (axis === 'x' ? PEEK.xMs : PEEK.yMs)) * (axis === 'x' ? 64 : 32));
+    // Rows the bar has dropped at t ms: rising (up) from gone to 0, or falling.
+    const peekDrop = (up, t) => Math.round((up ? 1 - peekEase(t / PEEK.upMs) : peekEase(t / PEEK.downMs)) * PEEK.band);
+    function renderPeek(p, opts) {
+      const o = opts || {}, pk = o.peek || {};
+      const k = pk.k || 0, vi = pk.vi || 0, drop = Math.max(0, Math.min(PEEK.band, pk.drop || 0));
+      const f = drawPeekView(p, k, vi, o);
+      const sl = pk.slide;
+      if (sl && sl.t != null) {
+        const axis = sl.axis === 'y' ? 'y' : 'x', dir = sl.dir < 0 ? -1 : 1, sh = peekShift(axis, sl.t);
+        if (sh < (axis === 'x' ? 64 : 32)) {
+          const from = drawPeekView(p, sl.k || 0, sl.vi || 0, o), cur = f.px.slice();
+          for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+            let src = from.px, sx = x, sy = y;
+            if (axis === 'x') { sx = x + dir * sh; if (sx < 0 || sx >= 64) { src = cur; sx = ((sx % 64) + 64) % 64; } }
+            else { sy = y + dir * sh; if (sy < 0 || sy >= 32) { src = cur; sy = ((sy % 32) + 32) % 32; } }
+            const i = (y * 64 + x) * 3, j = (sy * 64 + sx) * 3;
+            f.px[i] = src[j]; f.px[i + 1] = src[j + 1]; f.px[i + 2] = src[j + 2];
+          }
+        }
+      }
+      if (drop < PEEK.band) drawPeekBar(f, p, k, vi, drop);
+      return f;
+    }
+
     // ---- clock screen: skyline face (design spec §14; contract "Skyline") ----
     // The skyline seen from the lake across Navy Pier, drawn in layers from
     // the payload's `skyline` values; the board never interprets weather.
@@ -1849,7 +1963,7 @@
       sea: '#2c70b0', nightSea: '#143a5c',
       // Night land: each channel x k / 256 (dimmer, a little bluer).
       nightK: [104, 116, 140],
-      sun: '#ffe060', sunArm: '#a07818', here: '#ffffff',
+      here: '#ffffff',
       // sin(-12°) x 1e8: full night at or below it.
       night12: -2079 * 10000,
     };
@@ -1880,10 +1994,7 @@
             f.set(x, y, mixInt(nc, dc, k));
           }
         }
-        // The sun over its subsolar point, and the board's own spot.
-        const sx = fdivI((lon10 + 1800) * 8, 450), sy = fdivI(6750 - dn.dec * 8, 450);
-        for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) if (sy + dy >= 0 && sy + dy < DN.rows) f.fill(((sx + dx) % 64 + 64) % 64, sy + dy, 1, 1, DN.sunArm);
-        if (sy >= 0 && sy < DN.rows) f.fill(sx, sy, 1, 1, DN.sun);
+        // The board's own spot.
         if (dn.here && dn.here[1] < DN.rows) f.fill(dn.here[0], dn.here[1], 1, 1, DN.here);
       }
       // Bottom rows: the time (rolling) left, the date right.
@@ -2505,7 +2616,7 @@
       ICON_T = o.iconT != null ? o.iconT : null;
       let f;
       try {
-        f = screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
+        f = screen === 'peek' ? renderPeek(p, o) : screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
           : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderClock(p, o)
           : screen === 'announce' ? renderAnnounce(p, o) : renderTransit(p, o);
       } finally { NR = null; ICON_T = null; }
@@ -2555,7 +2666,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderSkyline, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderPeek, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekShift, peekDrop, renderSkyline, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };

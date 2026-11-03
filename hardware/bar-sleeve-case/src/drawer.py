@@ -91,7 +91,8 @@ def configure_shell():
     V.USB_SIDE = +1
     V.PORT_Z = PORT_Z
     V.BTN_Z0, V.BTN_Z1 = BTN_Z0, BTN_Z1
-    V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME = False, False, False, False
+    V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME = False, False, True, False   # light-sensor hole printed open (Ø2.1), Nov 2
+    V.SENSOR_ROUND = True                          # round, not a teardrop: reads as a pinhole; ream with a 2 mm bit
 
 
 # ---- tray ----
@@ -400,5 +401,7 @@ if __name__ == '__main__':
     import collar as CO                                  # follows the 3.5 mm wall
     CO.TIP_BACK = False
     t = CO.export(CO.collar(), f'{out}/bar-encoder-collar-v5.stl'); print('bar-encoder-collar-v5.stl', t.is_watertight)
+    t = CO.export(CO.ribbed_fit_set(), f'{out}/bar-encoder-collar-v5-ribbed-fit-set.stl')
+    print('bar-encoder-collar-v5-ribbed-fit-set.stl', t.is_watertight)
     put(cs, 'coupon-v5-drawer-fit-shell.stl'); put(ct, 'coupon-v5-drawer-fit-tray.stl')
     print(dict(D=D, S3_edge=round(S3_EDGE, 2), s3_z0=round(S3_Z0 - ZC, 2), port_z=round(PORT_Z - ZC, 2), corners=CORNERS))

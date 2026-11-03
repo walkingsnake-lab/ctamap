@@ -54,6 +54,8 @@ PLATE_Y0 = D - BACKL - PLATE_T            # the plate's inner face, seated
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
 SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open instead of drilling it
+SENSOR_ROUND = False                      # printed hole round instead of a teardrop: fine at Ø2.1 (the top sags ~0.1); twist a 2 mm bit
+                                          # through it by hand after printing for a crisp round pinhole
 SENSOR_POCKET = True                      # blind pocket from inside (Ø SENSOR_POCKET_D), 0.8 mm short of the outside: the grille is
                                           # drilled through that skin from outside with grille_guide.py, only if the sensor is fitted
 GLUED_FRAME = True                        # back-down only: plain sleeve + glued screen_frame(); False = built-in rim (as front-down)
@@ -217,7 +219,9 @@ def shell2():
     if SENSOR_POCKET and not SENSOR_PRINTED:       # blind pocket from inside: invisible outside, guides the bit when drilled
         cuts.append(Manifold.extrude(teardrop_cs(SENSOR_POCKET_D / 2, SENSOR_X, SENSOR_Y, seg=48), WALL - 0.8 + 1).translate([0, 0, H - WALL - 1]))
     if SENSOR_PRINTED:                             # Ø2 light-sensor hole through the top (teardrop toward the print's up)
-        cuts.append(Manifold.extrude(teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24), WALL + 2).translate([0, 0, H - WALL - 1]))
+        cs = (CrossSection.circle(SENSOR_D / 2 + 0.05, 48).translate([SENSOR_X, SENSOR_Y]) if SENSOR_ROUND
+              else teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24))
+        cuts.append(Manifold.extrude(cs, WALL + 2).translate([0, 0, H - WALL - 1]))
     # USB-C: straight-through opening for the plug housing, 0.5 mm chamfer outside;
     # relief behind the edge buttons (its top edge at 45 deg for printing)
     def stad(w_y, h_z, r=1.5):            # rounded rectangle (r 1.5 clears a square-cornered spec-max housing)

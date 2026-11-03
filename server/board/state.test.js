@@ -238,27 +238,55 @@ test('tempUnit: default F, C allowed; validated', () => {
   assert.throws(() => store.update('home', { tempUnit: 'K' }), /tempUnit must be one of F, C/);
 });
 
-test('knob: the ring opens categories; TRANSIT opens the transit screen last chosen, SPORTS baseball', () => {
+test('knob: the ring opens categories; TRANSIT opens the transit screen last chosen, CYCLE the auto screen', () => {
   const { knobOf, KNOB_RING } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
-  assert.deepEqual(KNOB_RING, ['auto', 'transit', 'weather', 'sports']);
-  assert.deepEqual(knobOf(store.get('home')), { ring: KNOB_RING, at: 0 });
+  assert.deepEqual(KNOB_RING, ['transit', 'weather', 'cycle']);
+  assert.deepEqual(knobOf(store.get('home')), { ring: KNOB_RING, at: 2 });
   const v = store.get('home').v;
-  assert.equal(store.select('home', 'sports').screen, 'baseball');
+  assert.equal(store.select('home', 'weather').screen, 'weather');
   assert.equal(store.get('home').v, v + 1);
-  assert.equal(knobOf(store.get('home')).at, 3);
+  assert.equal(knobOf(store.get('home')).at, 1);
   assert.equal(store.select('home', 'transit').screen, 'transit');
   // The ticker is a transit view: chosen on the phone, TRANSIT reopens it.
   store.update('home', { screen: 'ticker' });
-  assert.equal(knobOf(store.get('home')).at, 1);
+  assert.equal(knobOf(store.get('home')).at, 0);
   store.select('home', 'weather');
   assert.equal(store.select('home', 'transit').screen, 'ticker');
   store.update('home', { screen: 'transit' });
-  store.select('home', 'auto');
+  assert.equal(store.select('home', 'cycle').screen, 'auto');
   assert.equal(store.select('home', 'transit').screen, 'transit');
+  // Sports is chosen on the phone only; the knob then opens on TRANSIT.
+  assert.throws(() => store.select('home', 'sports'), ValidationError);
+  store.update('home', { screen: 'baseball' });
+  assert.equal(knobOf(store.get('home')).at, 0);
   assert.throws(() => store.select('home', 'baseball'), ValidationError);
   assert.throws(() => store.update('home', { transitScreen: 'ticker' }), ValidationError);
-  assert.equal(store.select('nope', 'auto'), null);
+  assert.equal(store.select('nope', 'cycle'), null);
+});
+
+test('knob: peek boards get each category\'s variants and the one it opens on; select can set the variant', () => {
+  const { knobOf } = require('./state');
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  const faces = ['skyline', 'seventies', 'analog'];
+  store.update('home', { screen: 'ticker', wxView: 'hourly', clockFace: 'analog' });
+  assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true, peek: true, faces, ln: 'RD' }), {
+    ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 0,
+    vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], faces, [], []], sel: [1, 2, 2, 0, 0], ln: 'RD',
+  });
+  // A face the board can't draw opens on the first.
+  store.update('home', { clockFace: 'gradient' });
+  assert.equal(knobOf(store.get('home'), { clock: true, peek: true, faces }).sel[2], 0);
+  // The variant comes with the category.
+  assert.equal(store.select('home', 'transit', 'transit').screen, 'transit');
+  assert.equal(store.get('home').transitScreen, 'transit');
+  let b = store.select('home', 'weather', '5day');
+  assert.deepEqual([b.screen, b.wxView], ['weather', '5day']);
+  b = store.select('home', 'clock', 'daynight');
+  assert.deepEqual([b.screen, b.clockFace], ['clock', 'daynight']);
+  assert.throws(() => store.select('home', 'clock', 'nixie'), /v must be one of/);
+  assert.throws(() => store.select('home', 'weather', 'ticker'), ValidationError);
+  assert.throws(() => store.select('home', 'cycle', 'auto'), /cycle has no variants/);
 });
 
 test('boards: create copies or defaults, register copies home, remove keeps one', () => {
@@ -314,8 +342,8 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   store.update('home', { screen: 'clock' });
   assert.equal(store.get('home').screen, 'clock');
   assert.throws(() => store.update('home', { clockFace: 'nixie' }), ValidationError);
-  assert.deepEqual(knobOf(store.get('home')), { ring: KNOB_RING, at: 0 }, 'without CLOCK the ring falls back to AUTO');
-  assert.deepEqual(knobOf(store.get('home'), { clock: true }), { ring: [...KNOB_RING, 'clock'], at: 4 });
+  assert.deepEqual(knobOf(store.get('home')), { ring: KNOB_RING, at: 0 }, 'without CLOCK the ring falls back to TRANSIT');
+  assert.deepEqual(knobOf(store.get('home'), { clock: true }), { ring: ['transit', 'weather', 'clock', 'cycle'], at: 2 });
   store.select('home', 'weather');
   store.select('home', 'clock');
   assert.equal(store.get('home').screen, 'clock');
@@ -379,11 +407,11 @@ test('announce: presets are up to 8 messages that each fit', () => {
 test('announce: the knob ring gets ANNOUNCE for boards that draw it, and selecting it shows the screen', () => {
   const { knobOf } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
-  assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true }).ring, ['auto', 'transit', 'weather', 'sports', 'clock', 'announce']);
+  assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true }).ring, ['transit', 'weather', 'clock', 'announce', 'cycle']);
   assert.equal(store.select('home', 'announce').screen, 'announce');
-  assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true }).at, 5);
-  assert.deepEqual(knobOf(store.get('home')), { ring: ['auto', 'transit', 'weather', 'sports'], at: 0 }, 'not on the ring: AUTO');
-  assert.throws(() => store.select('home', 'cycle'), ValidationError);
+  assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true }).at, 3);
+  assert.deepEqual(knobOf(store.get('home')), { ring: ['transit', 'weather', 'cycle'], at: 0 }, 'not on the ring: TRANSIT');
+  assert.throws(() => store.select('home', 'sports'), ValidationError);
 });
 
 test('announce: split-flap messages and presets saved before it was removed load as notes', () => {

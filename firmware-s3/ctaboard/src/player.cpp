@@ -35,10 +35,8 @@ void Player::set_payload(const Value &payload, double ms) {
   gen++;
   // The skyline: a new one crossfades in on the clock screen (draw.js createSkylineFader).
   sky_fade.set(p["skyline"], ms, [this](const std::string &id) { return clouds.count(id) > 0; }, screen == Screen::Clock);
-  // Keep only frames still in the loop.
-  const Value &ids = p["radar"]["frames"];
-  std::vector<std::string> keep;
-  for (size_t i = 0; i < ids.size(); i++) keep.push_back(json::str(ids[i]));
+  // Keep only frames still in the loop (or, for the peek chooser, kept by the server).
+  std::vector<std::string> keep = frame_ids();
   for (auto it = radar_frames.begin(); it != radar_frames.end();) {
     if (!contains(keep, it->first)) it = radar_frames.erase(it);
     else ++it;
@@ -49,15 +47,26 @@ void Player::set_payload(const Value &payload, double ms) {
   keep_logos(game_logos(all));
 }
 
+std::vector<std::string> Player::frame_ids() const {
+  // The loop's frames, oldest first; with the peek chooser (pv.radar), every
+  // frame the server keeps, so the radar view can be peeked at any time.
+  std::vector<std::string> out;
+  const Value &pr = p["pv"]["radar"]["frames"];
+  const Value &ids = pr.truthy() ? pr : p["radar"]["frames"];
+  for (size_t i = 0; i < ids.size(); i++) out.push_back(json::str(ids[i]));
+  const Value &own = p["radar"]["frames"];
+  for (size_t i = 0; i < own.size(); i++)
+    if (!contains(out, json::str(own[i]))) out.push_back(json::str(own[i]));
+  return out;
+}
+
 std::vector<std::string> Player::missing_frames() const {
   // Newest first: the loop plays the frames on hand, so it starts with the current one.
   std::vector<std::string> out;
   if (!has_p) return out;
-  const Value &ids = p["radar"]["frames"];
-  for (int i = (int)ids.size() - 1; i >= 0; i--) {
-    std::string id = json::str(ids[i]);
-    if (!radar_frames.count(id)) out.push_back(id);
-  }
+  std::vector<std::string> ids = frame_ids();
+  for (int i = (int)ids.size() - 1; i >= 0; i--)
+    if (!radar_frames.count(ids[i])) out.push_back(ids[i]);
   return out;
 }
 
@@ -132,13 +141,17 @@ std::vector<std::string> Player::missing_logos(long long now) {
 
 std::optional<std::string> Player::missing_cloud() const {
   // The clock screen's skyline draws the server's cloud strip (contract
-  // "Cloud strips"); fetched only while that screen shows.
-  if (!has_p || screen != Screen::Clock) return std::nullopt;
-  const Value &cl = p["skyline"]["cl"];
-  if (!cl.truthy() || !cl["id"].is_str()) return std::nullopt;
-  std::string id = json::str(cl["id"]);
-  if (id.empty() || clouds.count(id)) return std::nullopt;
-  return id;
+  // "Cloud strips"); fetched while that screen shows, and with the peek
+  // chooser, whenever pv names one (so the skyline peeks with its clouds).
+  if (!has_p) return std::nullopt;
+  for (const Value *sky : {screen == Screen::Clock ? &p["skyline"] : nullptr, &p["pv"]["skyline"]}) {
+    if (!sky) continue;
+    const Value &cl = (*sky)["cl"];
+    if (!cl.truthy() || !cl["id"].is_str()) continue;
+    std::string id = json::str(cl["id"]);
+    if (!id.empty() && !clouds.count(id)) return id;
+  }
+  return std::nullopt;
 }
 
 void Player::add_cloud(const std::string &id, std::vector<uint8_t> bytes) {
@@ -150,6 +163,8 @@ void Player::add_cloud(const std::string &id, std::vector<uint8_t> bytes) {
 
 void Player::prune_clouds() {
   std::vector<std::string> want = sky_fade.wanted();
+  const Value &pc = p["pv"]["skyline"]["cl"]["id"];
+  if (pc.is_str()) want.push_back(pc.s);
   for (auto it = clouds.begin(); it != clouds.end();) {
     if (!contains(want, it->first)) it = clouds.erase(it);
     else ++it;
@@ -185,9 +200,11 @@ Screen Player::auto_screen(long long now) const {
 }
 
 bool Player::wants_frames() const {
-  // Radar frames are needed on the radar screen, and ahead of visits.
+  // Radar frames are needed on the radar screen, ahead of visits, and for
+  // the peek chooser (pv.radar) at any time.
   if (screen == Screen::Weather) return true;
   const Value &r = p["radar"];
+  if (has_p && p["pv"]["radar"]["frames"].truthy()) return true;
   return has_p && r["on"].truthy() && r["visit"].truthy();
 }
 

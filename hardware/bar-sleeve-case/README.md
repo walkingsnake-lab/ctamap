@@ -19,7 +19,7 @@ Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) di
 | Diffuser | Two parts, loaded as one object: `bar-diffuser-white-face.stl` + `bar-diffuser-white-grid-black.stl` (0.2 face: 0.2 first layer, 0.4 nozzle), or `bar-diffuser-translucent-face.stl` + `bar-diffuser-translucent-grid-black.stl` (0.4 face: one 0.4 first layer, 0.6 nozzle) | face: white or translucent; the rest: black PETG | face down; the face part is the first layer |
 | Back plate | `bar-backplate-v3.stl` (one piece) | PETG, one opaque color (black hides the insides best) | outer face down |
 | Insert check (print first) | `check-panel-insert-template.stl` | any PLA | as exported; that face goes on the panel |
-| Encoder collar | `bar-encoder-collar-backdown.stl` (0.4 mm clearance); `bar-encoder-collar-fit-set.stl` has 0.3 / 0.4 / 0.5 (1 / 2 / 3 notches) if unsure | walnut, or translucent PETG for the glow | flange-top down |
+| Encoder collar | `bar-encoder-collar-backdown.stl` (crush ribs at r 12.15, the fit-set winner; 0.4 mm body clearance); `bar-encoder-collar-fit-set.stl` has 0.3 / 0.4 / 0.5 (1 / 2 / 3 notches) if unsure. **Crush-rib version** (recommended: the plain plug can wiggle in the hole, since the nut clamps the encoder to the collar, not to the case): `bar-encoder-collar-ribbed-fit-set.stl`, nine ribs on the plug's round part at crest r 12.05 / 12.15 / 12.25 (1 / 2 / 3 notches), 0.6 mm lead-in; pick the one that pushes in firmly by hand with no play. 12.15 (2 notches) is snug on the v5 shell and is `RIB_R`'s default; 12.25 went in but took too much force (Nov 2) | walnut, or translucent PETG for the glow | flange-top down |
 | Knob | `bar-knob-fit-set.stl` (three bore sizes, marked 1-3 dots under the skirt), then `bar-knob.stl` (the middle size) or the winner. Pebble, Ø30 x 12.7, grip flutes round the side, rounded shoulder, domed top | white PLA, or any | as exported (upright, skirt on the bed), no supports |
 | Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
 | Sensor bracket (optional) | `bar-sensor-bracket.stl` (VEML7700 under the Ø2 hole, hung from the encoder board) | PETG or PLA | as exported, flat side down |
@@ -112,14 +112,17 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
 
 - Stiffness: the sleeve's walls are 3.5 mm (v4 2.5; `CASE_WALL` sets it) and the tray's 2.5. Bending stiffness goes with wall
   thickness cubed, so ~2.7x and ~2x. Crush ribs on the tray's outside (0.35 mm tall, 0.1 mm into the sleeve, ramped at the leading end) take up the clearance so the two walls brace
-  each other instead of sliding. The encoder collar follows the thicker wall (`bar-encoder-collar-v5.stl`).
+  each other instead of sliding. The encoder collar follows the thicker wall (`bar-encoder-collar-v5.stl`; crush-rib fit set `bar-encoder-collar-v5-ribbed-fit-set.stl`).
 
 - The panel sits turned 180° (input header on the left): set `MATRIX_ROTATION 180` in `secrets.h`. The S3 is turned 180° too,
   on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
 - Top wall: one slot open to the front edge, only as wide as the knob encoder's body (18.7 mm). The light sensor rides on the
   tray: screwed under the top wall (4 x M2.5 x 5 into short pillars, chip up, its sockets in channels in the wall) below a Ø8.3 hole lined up with the sleeve's
-  light-sensor pocket (a blind Ø7.5 recess inside the top wall, 0.8 mm skin left; the 5-hole 1/16" grille from `grille_guide.py`, Ø6.47, drills
-  through that skin; `case2.GRILLE_BIT` / `GRILLE_WEB` size all three); no bracket. Right wall: a slot for the USB-C plug and
+  light-sensor hole. The P3 v5 sleeve prints that hole open (round Ø2.1, `SENSOR_PRINTED` + `SENSOR_ROUND` in
+  `configure_shell()`; Nov 2; it prints ~Ø1.9 with a slight sag at the print's top: twist a 2 mm or 5/64" bit through it by
+  hand from the outside, then break the edge lightly with a larger bit turned between the fingers, before oiling): one small hole interrupts ~10 layers once, where a printed grille would interrupt ~30 with webs thinner
+  than two lines. Older v5 sleeves have a blind Ø7.5 pocket instead (0.8 mm skin left), drilled with the 5-hole grille guide below
+  (`case2.GRILLE_BIT` / `GRILLE_WEB`); no bracket. Right wall: a slot for the USB-C plug and
   the S3's edge buttons. Back: full-width louver bands, Boot and status-light holes, one pair of ribbon hooks, a tie loop, two
   nut bosses for the French cleat. No keyholes.
 - Order: diffuser and panel into the sleeve; encoder from the back; S3 and sensor onto the tray; tray in;
@@ -129,6 +132,11 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
   crosses. Panel power runs from the S3's terminals through the tie loop (above the ribbon) to the panel. Press the two
   cleat nuts into their bosses for good (press fit): they take the cleat, and two M3 screws threaded in a few turns pull the
   tray out.
+- Light-sensor grille (optional): `stl/v5-drawer/bar-sensor-grille-guide-v5-5hole.stl` (`CASE_WALL=3.5 python3 grille_guide.py <outdir>`),
+  any PLA, top face down. Its plug is 3.4 deep for the 3.5 wall, with ribs at r 12.15 (the size that is snug for the collar),
+  so no plug fit set is needed. Use it on the empty sleeve, collar out: plug in the knob hole, fence over the back face, push the
+  guide back against the fence and drill the five holes with a 1/16" (1.59) bit; run the bit through the guide once first. The bit
+  only cuts the pocket's 0.8 mm skin (checked against the model). Deburr inside lightly.
 - Print `coupon-v5-drawer-fit-shell.stl` (walnut) and `coupon-v5-drawer-fit-tray.stl` (tray filament) first and slide them
   together: the ribs should press in with firm hand force, no wobble. Change `CR_H` (rib height) or `TRAY_CL` in `drawer.py` if not.
 - Status light: glue `bar-status-window.stl` (Ø5.7 x 1, translucent PETG, flat) into the round pocket on the tray's back

@@ -479,8 +479,10 @@ bool WifiNet::logo(const std::string &id, std::vector<uint8_t> &out, std::string
   return get_bytes("/board/logo/" + id + "?b=" + s_.board_id, 24 * 12 * 3, out, err);
 }
 
-bool WifiNet::select(const std::string &category, json::Value &out, std::string &err) {
-  return get_json("/board/select?b=" + s_.board_id + "&s=" + category + "&hk=" + app::CAPS, true, out, err, true);
+bool WifiNet::select(const std::string &category, const std::string &variant, json::Value &out, std::string &err) {
+  // Category and variant ids are plain lowercase words (contract: knob.ring, knob.vars).
+  std::string v = variant.empty() ? "" : "&v=" + variant;
+  return get_json("/board/select?b=" + s_.board_id + "&s=" + category + v + "&hk=" + app::CAPS, true, out, err, true);
 }
 
 // ---- OTA ----
@@ -817,6 +819,10 @@ static bool seesaw_write32(uint8_t base, uint8_t reg, uint32_t v) {
 
 bool Knob::pressed() {
   if (!on_) return false;
+  // Every loop pass asks; the I2C bus is read at most every KNOB_POLL_MS.
+  uint32_t now = millis();
+  if (press_polled_ && now - press_polled_ < KNOB_POLL_MS) return press_;
+  press_polled_ = now ? now : 1;
   if (!button_) {
     button_ = seesaw_write32(SEESAW_GPIO, SEESAW_GPIO_DIRCLR, KNOB_BUTTON) &&
               seesaw_write32(SEESAW_GPIO, SEESAW_GPIO_PULLEN, KNOB_BUTTON) &&
@@ -827,7 +833,8 @@ bool Knob::pressed() {
   uint8_t d[4];
   if (!read(SEESAW_GPIO, SEESAW_GPIO_BULK, d, 4)) return false;
   uint32_t bits = ((uint32_t)d[0] << 24) | ((uint32_t)d[1] << 16) | ((uint32_t)d[2] << 8) | d[3];
-  return !(bits & KNOB_BUTTON);
+  press_ = !(bits & KNOB_BUTTON);
+  return press_;
 }
 
 bool Knob::begin() {

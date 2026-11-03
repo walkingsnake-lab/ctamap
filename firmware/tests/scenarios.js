@@ -473,6 +473,48 @@ async function build() {
     add('knob chooser dimmed', { ...p, bright: 40 }, [at(2), at(2, true)], undefined, undefined, { s3only: true });
     add('knob chooser no ring', { ...p, knob: null }, [at(0)], undefined, undefined, { s3only: true });
   }
+  // Peek chooser (S3 only): every variant under the icon bar, slides both
+  // ways, the bar's drop, the radar view and the radar while frames are
+  // still landing, a skyline with its clouds, three entries, dimmed.
+  {
+    const p0 = payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX });
+    const t = p0.now;
+    const { bytes: rbytes, loc } = rf['40100-202008102100'];
+    const wx = { ...WX, feels: 61, wind: 'NW 12', pop: 20 };
+    const days = [['SU', 63, 'sun'], ['MO', 58, 'pcloudy_day'], ['TU', 52, 'rain'], ['WE', 49, 'cloudy'], ['TH', 55, 'sun']].map(([d, hi, icon]) => ({ d, hi, icon }));
+    const hours = [['1P', 52, 'pcloudy_day'], ['3P', 50, 'rain'], ['5P', 49, 'cloudy'], ['7P', 50, 'moon']].map(([h, tt, icon]) => ({ h, t: tt, icon }));
+    const skyline = toSkyline({ temp: 52, code: 2, clouds: 35 }, { lat: 41.8917, lon: -87.590, now: t, temp: 52 });
+    const ids = ['a', 'b', 'c'], ft = [t - 720, t - 360, t - 60];
+    const ring = ['transit', 'weather', 'clock', 'announce', 'cycle'];
+    const vars = [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline', 'seventies', 'analog', 'daynight', 'gradient'], [], []];
+    const p = {
+      ...p0, tickerHeader: 'MORSE', radar: { on: false, frames: [], ft: [], timeBox: loc.timeBox, split: loc.split, wx },
+      msg: { id: 1, style: 'note', ...draw.messageLayout('Dinner at 7\nbring wine', 'note') },
+      pv: { days, hours, skyline, cwx: { temp: 52, icon: 'pcloudy_day' }, dn: { dec: -150, lon: 1200, t, here: [16, 7] }, radar: { frames: ids, ft } },
+      knob: { ring, at: 0, vars, sel: [0, 0, 0, 0, 0], ln: 'RD' },
+    };
+    const pk = (k, vi, extra = {}) => ({ screen: 'peek', peek: { k, vi, ...extra } });
+    const every = []; vars.forEach((v, k) => (v.length ? v : [null]).forEach((_, vi) => every.push(pk(k, vi))));
+    const frames = { a: rbytes, b: rbytes, c: rbytes };
+    const clouds = skyline.cl ? { [skyline.cl.id]: stripBytes(skyline.cl.id) } : undefined;
+    add('peek every variant', p, every, frames, undefined, { s3only: true, clouds });
+    add('peek slides', p, [
+      pk(1, 0, { slide: { k: 0, vi: 0, t: 0, axis: 'x', dir: 1 } }), pk(1, 0, { slide: { k: 0, vi: 0, t: 40, axis: 'x', dir: 1 } }),
+      pk(1, 0, { slide: { k: 0, vi: 0, t: 135, axis: 'x', dir: 1 } }), pk(0, 0, { slide: { k: 1, vi: 0, t: 90, axis: 'x', dir: -1 } }),
+      pk(4, 0, { slide: { k: 0, vi: 0, t: 100, axis: 'x', dir: -1 } }), pk(2, 2, { slide: { k: 2, vi: 1, t: 60, axis: 'y', dir: 1 } }),
+      pk(2, 1, { slide: { k: 2, vi: 2, t: 200, axis: 'y', dir: -1 } }), pk(1, 0, { slide: { k: 0, vi: 0, t: 999, axis: 'x', dir: 1 } }),
+    ], frames, undefined, { s3only: true, clouds });
+    add('peek bar drop', p, [1, 3, 6, 10, 11, 14].map((drop) => pk(2, 0, { drop })), frames, undefined, { s3only: true, clouds });
+    // Raining: the newest frame on hand, still; none yet: the empty radar.
+    const rain = { ...p, radar: { ...p.radar, on: true, frames: ids, ft } };
+    add('peek radar none on hand', rain, [pk(1, 0), pk(1, 3)], {}, undefined, { s3only: true });
+    add('peek radar two on hand', rain, [pk(1, 0), pk(1, 1)], { a: rbytes, b: rbytes }, undefined, { s3only: true });
+    add('peek skyline strip not fetched', p, [pk(2, 0)], undefined, undefined, { s3only: true });
+    add('peek three entries, blue line', { ...p, knob: { ring: ['transit', 'weather', 'cycle'], at: 0, vars: [vars[0], vars[1], []], sel: [0, 0, 0], ln: 'BL' } },
+      [pk(0, 1), pk(2, 0)], frames, undefined, { s3only: true });
+    add('peek dimmed', { ...p, bright: 40 }, [pk(0, 0), pk(2, 3)], frames, undefined, { s3only: true, clouds });
+    add('peek no knob variants', { ...p, knob: { ring, at: 0 } }, [pk(1, 0), pk(2, 0)], frames, undefined, { s3only: true });
+  }
   // Clock screen, skyline face (S3 only): every weather kind by day and night,
   // dusk, warnings, boats, lightning, rain and snow in motion, clouds drifting,
   // dimmed, and no weather yet. Parameters from the server's skyline.js.

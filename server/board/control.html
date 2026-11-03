@@ -226,6 +226,7 @@
       <button data-v="now">Conditions</button>
       <button data-v="5day">5-day</button>
       <button data-v="hourly">Hourly</button>
+      <button data-v="radar">Radar</button>
     </div>
     <p class="hint" id="wxViewHint"></p>
     <!-- Rain bars need 15-minute precipitation, which the weather source
@@ -736,7 +737,7 @@
     $('radarBright').value = String(board.radarBright || 100);
     $('radarCondRow').hidden = corner === 'temp' || corner === 'age' || corner === 'none';
     $('tempShadow').checked = board.tempShadow === true;
-    pressed('wxView', board.wxView === '5day' || board.wxView === 'hourly' ? board.wxView : 'now');
+    pressed('wxView', ['5day', 'hourly', 'radar'].includes(board.wxView) ? board.wxView : 'now');
     const wr = board.wxRain === 'bars' || board.wxRain === 'both' ? board.wxRain : 'radar';
     pressed('wxRain', wr);
     $('wxRainEveryRow').style.display = wr === 'both' ? '' : 'none';
@@ -752,6 +753,8 @@
       ? 'Today on top, the next five days\' highs below. A weather warning or watch shows on the high/low line.'
       : board.wxView === 'hourly'
       ? 'Today on top, then the weather 2, 4, 6 and 8 hours ahead. A weather warning or watch shows on the high/low line.'
+      : board.wxView === 'radar'
+      ? 'The radar loop all the time: rain and snow when there is some, the empty map when it\'s dry. Rain bars don\'t show.'
       : 'The big temperature, feels-like, wind, high/low, and rain chance.';
     $('radarCornerHint').textContent = corner === 'frame'
       ? 'The radar frame\'s time (dim), with AM/PM and any weather warning icon under it.'

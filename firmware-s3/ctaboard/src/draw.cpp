@@ -1506,14 +1506,25 @@ bool rain_bars_turn(const Value &rn, int n, const Timing &tm, double t) {
   return pos >= loop_ms;
 }
 
+static const RGB PEEK_LOADED = hexc(0x6a6a6a);
+
 static void render_weather(const Value &p, Frame &f, std::optional<double> now, std::optional<int> idx_o,
-                           const Frames *frames, bool blink, std::optional<double> t_o) {
+                           const Frames *frames, bool blink, std::optional<double> t_o, bool peek = false) {
   const Value &r = p["radar"];
   const Value &ids = r["frames"];
   int nids = (int)ids.size();
+  auto on_hand = [&](int i) { return frames && frames->count(json::str(ids[i])) > 0; };
   int idx;
   if (!ids.truthy()) idx = -1;
-  else if (idx_o) idx = std::max(0, std::min(nids - 1, *idx_o));
+  else if (peek) {
+    // Peek: the newest frame on hand, still; -1 with none yet.
+    idx = -1;
+    for (int i = nids - 1; i >= 0; i--)
+      if (on_hand(i)) {
+        idx = i;
+        break;
+      }
+  } else if (idx_o) idx = std::max(0, std::min(nids - 1, *idx_o));
   else idx = nids - 1;
   const Value &wx = r["wx"];
   const Value &rn = wx.truthy() ? wx["rain"] : Value::null_value();
@@ -1521,7 +1532,9 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   double loop_t = t_o ? *t_o : clock * 1000;
   bool bars_turn = rain_bars_turn(rn, nids, timing(p), loop_t);
   const Value *warnp = p["warn"].truthy() ? &p["warn"] : nullptr;
-  if (((!ids.truthy() || (frames && !radar_on_hand(ids, frames))) || bars_turn) && wx.truthy()) {
+  // A peek never falls back for frames still downloading: it shows the
+  // empty radar, its frame indicator filling in as they land.
+  if (((!ids.truthy() || (!peek && frames && !radar_on_hand(ids, frames))) || bars_turn) && wx.truthy()) {
     bool shadow = r["tempShadow"].truthy();
     if (wx["rain"].truthy() && wx["rain"]["h"].truthy()) draw_rain_bars(f, wx, shadow, warnp, blink);
     else if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
@@ -1571,7 +1584,7 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   auto draw_indicator = [&]() {
     int x = ind_x;
     for (int i = 0; i < nids; i++) {
-      f.fill(x, top, seg_w, 2, i == idx ? C::amber : C::indicator);
+      f.fill(x, top, seg_w, 2, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : C::indicator);
       x += seg_w + seg_gap;
     }
   };
@@ -2063,6 +2076,243 @@ static void render_chooser(const Value &p, Frame &f, double pos, bool commit) {
   }
   int x0 = 32 - (int)fdiv(n * 5 - 2, 2);
   for (int i = 0; i < n; i++) f.fill(x0 + i * 5, 9, 3, 1, i == sel ? C::amber : C::indicator);
+}
+
+
+// ---- peek chooser (renderPeek, PEEK) ----
+// The chosen category's variant itself, drawn from the payload's sections
+// and `pv`, under the icon bar on rows 21-31. Mirrors draw.js.
+
+static const int PEEK_TOP = 21, PEEK_PITCH = 12;
+static const char *const PEEK_ICON_TRANSIT[] = {".#####.", "#.....#", "#.....#", "#######", "##...##", ".#####.", "#.....#"};
+static const char *const PEEK_ICON_WEATHER[] = {"...#...", ".#...#.", "..###..", "#.###.#", "..###..", ".#...#.", "...#..."};
+static const char *const PEEK_ICON_CLOCK[] = {"..###..", ".#...#.", "#..#..#", "#..##.#", "#.....#", ".#...#.", "..###.."};
+static const char *const PEEK_ICON_ANNOUNCE[] = {"#######", "#.....#", "#.###.#", "#.....#", "#######", ".##....", ".#....."};
+static const char *const PEEK_ICON_CYCLE[] = {"..###.#", ".#...##", "#...###", "#.....#", "###...#", "##...#.", "#.###.."};
+static const RGB PEEK_WEATHER = hexc(0xffd040), PEEK_CLOCK = hexc(0xf0e2c8), PEEK_ANNOUNCE = hexc(0x40e090),
+                 PEEK_CYCLE = hexc(0x3fd0e8);
+
+static const char *const *peek_icon(const std::string &cat) {
+  if (cat == "transit") return PEEK_ICON_TRANSIT;
+  if (cat == "weather") return PEEK_ICON_WEATHER;
+  if (cat == "clock") return PEEK_ICON_CLOCK;
+  if (cat == "announce") return PEEK_ICON_ANNOUNCE;
+  if (cat == "cycle") return PEEK_ICON_CYCLE;
+  return nullptr;
+}
+
+static RGB peek_color(const Value &p, const std::string &cat) {
+  if (cat == "transit") {
+    std::string ln = json::str(p["knob"]["ln"]);
+    static const char *const known[] = {"RD", "BL", "BR", "GR", "OR", "PR", "PK", "YL"};
+    for (const char *k : known)
+      if (ln == k) return line_color(ln);
+    return line_color("RD");
+  }
+  if (cat == "weather") return PEEK_WEATHER;
+  if (cat == "clock") return PEEK_CLOCK;
+  if (cat == "announce") return PEEK_ANNOUNCE;
+  if (cat == "cycle") return PEEK_CYCLE;
+  return C::label;
+}
+
+static double peek_ease(double k) {
+  double c = std::max(0.0, std::min(1.0, k));
+  return 1 - (1 - c) * (1 - c) * (1 - c);
+}
+
+int peek_shift(bool y, double t) { return (int)jsround(peek_ease(t / (y ? PEEK_Y_MS : PEEK_X_MS)) * (y ? 32 : 64)); }
+
+int peek_drop(bool up, double t) {
+  return (int)jsround((up ? 1 - peek_ease(t / PEEK_UP_MS) : peek_ease(t / PEEK_DOWN_MS)) * PEEK_BAND);
+}
+
+// The cycle symbol (the phone's two arrows, anti-aliased): 16 levels of
+// cyan in a 20x20 box at x22, y6.
+static const char *const CYCLE_ART[] = {
+    "0000028cffffc8206400", "00008effffffffe9f600", "001bffe844448efff800", "00bff810000009fffb00", "08ff600000006efffd00",
+    "2ef80000000000258b00", "8fe10000000000000000", "cf800000000000000000", "ff400000000000000000", "ff4000000000000000ee",
+    "ee0000000000000004ff", "000000000000000004ff", "000000000000000008fc", "00000000000000001ef8", "00b85200000000008fe2",
+    "00dfffe600000006ff80", "00bfff900000018ffb00", "008fffe844448effb100", "006f9effffffffe80000", "0046028cffffc8200000"};
+
+static void draw_cycle_art(Frame &f) {
+  for (int j = 0; j < 20; j++)
+    for (int i = 0; i < 20; i++) {
+      char ch = CYCLE_ART[j][i];
+      int lv = ch >= 'a' ? ch - 'a' + 10 : ch - '0';
+      if (lv)
+        f.set(22 + i, 6 + j, RGB{(uint8_t)jsround(PEEK_CYCLE.r * lv / 15.0), (uint8_t)jsround(PEEK_CYCLE.g * lv / 15.0),
+                                 (uint8_t)jsround(PEEK_CYCLE.b * lv / 15.0)});
+    }
+}
+
+// Object member to write (added at the end when missing), and removal.
+static Value &member(Value &o, const char *key) {
+  if (o.type != json::OBJ) {
+    o = Value();
+    o.type = json::OBJ;
+  }
+  for (auto &kv : o.o)
+    if (kv.first == key) return kv.second;
+  o.o.emplace_back(key, Value());
+  return o.o.back().second;
+}
+static void drop_member(Value &o, const char *key) {
+  for (auto it = o.o.begin(); it != o.o.end(); ++it)
+    if (it->first == key) {
+      o.o.erase(it);
+      return;
+    }
+}
+static Value str_value(const std::string &s) {
+  Value v;
+  v.type = json::STR;
+  v.s = s;
+  return v;
+}
+
+std::string peek_screen(const Value &p, int k, int vi) {
+  const Value &kn = p["knob"], &c = kn["ring"][k], &vv = kn["vars"][k][vi];
+  std::string cat = c.is_str() ? c.s : "";
+  if (cat == "transit") return vv.eq("ticker") ? "ticker" : "transit";
+  if (cat == "weather" || cat == "clock" || cat == "announce") return cat;
+  return "cycle";
+}
+
+PeekView peek_view(const Value &p, int k, int vi) {
+  PeekView out;
+  out.screen = peek_screen(p, k, vi);
+  const Value &kn = p["knob"];
+  std::string cat = kn["ring"][k].is_str() ? kn["ring"][k].s : "";
+  const Value &vv = kn["vars"][k][vi];
+  std::string v = vv.is_str() ? vv.s : "";
+  const Value &pv = p["pv"];
+  if (cat == "weather") {
+    // The radar view: every kept frame (pv.radar), rain or not. The
+    // others: the radar loop only while rain is in the box (radar.on).
+    out.own = true;
+    out.v = p;
+    const Value &r = p["radar"], &all = pv["radar"];
+    bool radar_view = v == "radar";
+    Value frames, ft;
+    frames.type = ft.type = json::ARR;
+    if (radar_view) {
+      frames = all["frames"].truthy() ? all["frames"] : r["frames"].truthy() ? r["frames"] : frames;
+      ft = all["ft"].truthy() ? all["ft"] : r["ft"].truthy() ? r["ft"] : ft;
+    } else if (r["on"].truthy()) {
+      if (r["frames"].truthy()) frames = r["frames"];
+      if (r["ft"].truthy()) ft = r["ft"];
+    }
+    Value &nr = member(out.v, "radar");
+    member(nr, "frames") = frames;
+    member(nr, "ft") = ft;
+    if (r["wx"].truthy()) {
+      Value &wx = member(nr, "wx");
+      drop_member(wx, "days");
+      drop_member(wx, "hours");
+      if (radar_view) drop_member(wx, "rain");
+      if (v == "5day" && pv["days"].truthy()) member(wx, "days") = pv["days"];
+      if (v == "hourly" && pv["hours"].truthy()) member(wx, "hours") = pv["hours"];
+    } else {
+      member(nr, "wx") = Value();
+    }
+    return out;
+  }
+  if (cat == "clock") {
+    out.own = true;
+    out.v = p;
+    member(out.v, "cface") = str_value(v.empty() ? "skyline" : v);
+    for (const char *key : {"skyline", "cwx", "dn"}) member(out.v, key) = pv[key].truthy() ? pv[key] : Value();
+    Value g;
+    g.type = json::BOOL;
+    g.b = pv["ginv"].truthy();
+    member(out.v, "ginv") = g;
+    return out;
+  }
+  return out;
+}
+
+static void render_clock(const Value &p, Frame &f, const RenderOpts &o);
+static void render_announce(const Value &p, Frame &f, std::optional<double> t);
+
+static void draw_peek_view(const Value &q, const std::string &screen, Frame &f, const RenderOpts &o) {
+  f.clear();
+  if (screen == "cycle") draw_cycle_art(f);
+  else if (screen == "ticker") render_ticker(q, f, o.now, o.page, o.slide);
+  else if (screen == "weather") render_weather(q, f, o.now, o.idx, o.frames, o.blink, o.t, true);
+  else if (screen == "clock") render_clock(q, f, o);
+  else if (screen == "announce") render_announce(q, f, o.t);
+  else render_transit(q, f, o.now, o.blink, o.view);
+}
+
+static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop) {
+  const Value &kn = p["knob"], &ring = kn["ring"];
+  int n = (int)ring.size();
+  auto sh = [&](int y) { return y + drop; };
+  f.fill(0, sh(PEEK_TOP), 64, PEEK_BAND, RGB{0, 0, 0});
+  int x0 = (int)std::floor(32 - (n * PEEK_PITCH - 5) / 2.0);
+  for (int i = 0; i < n; i++) {
+    std::string cat = ring[i].is_str() ? ring[i].s : "";
+    const char *const *rows = peek_icon(cat);
+    if (!rows) continue;
+    RGB col = peek_color(p, cat);
+    RGB c = i == k ? col : scale_color(col, 0.3);
+    for (int j = 0; j < 7; j++)
+      for (int x = 0; x < 7; x++)
+        if (rows[j][x] == '#') f.fill(x0 + i * PEEK_PITCH + x, sh(23 + j), 1, 1, c);
+  }
+  int ix = x0 + k * PEEK_PITCH;
+  std::string kc = ring[k].is_str() ? ring[k].s : "";
+  RGB col = peek_color(p, kc);
+  f.fill(ix, sh(31), 7, 1, col);
+  int nv = (int)kn["vars"][k].size();
+  if (nv > 1)
+    for (int j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, j == vi ? col : C::indicator);
+}
+
+static void render_peek(const Value &p, Frame &f, const RenderOpts &o) {
+  RenderOpts::Peek pk = o.peek ? *o.peek : RenderOpts::Peek{};
+  int drop = std::max(0, std::min(PEEK_BAND, pk.drop));
+  RenderOpts vo = o;  // the views: no skyline crossfade, the peek's own frames
+  vo.sky = nullptr;
+  vo.sky_from = nullptr;
+  vo.peek.reset();
+  if (pk.view) draw_peek_view(*pk.view, peek_screen(p, pk.k, pk.vi), f, vo);
+  else {
+    PeekView pv = peek_view(p, pk.k, pk.vi);
+    draw_peek_view(pv.payload(p), pv.screen, f, vo);
+  }
+  if (pk.slide) {
+    int sh = peek_shift(pk.slide_y, pk.slide_t);
+    if (sh < (pk.slide_y ? 32 : 64)) {
+      static Frame from;
+      static uint8_t cur[Frame::W * Frame::H * 3];
+      if (pk.slide_view) draw_peek_view(*pk.slide_view, peek_screen(p, pk.slide_k, pk.slide_vi), from, vo);
+      else {
+        PeekView fv = peek_view(p, pk.slide_k, pk.slide_vi);
+        draw_peek_view(fv.payload(p), fv.screen, from, vo);
+      }
+      memcpy(cur, f.px, sizeof cur);
+      int dir = pk.slide_dir < 0 ? -1 : 1;
+      for (int y = 0; y < 32; y++)
+        for (int x = 0; x < 64; x++) {
+          const uint8_t *src = from.px;
+          int sx = x, sy = y;
+          if (!pk.slide_y) {
+            sx = x + dir * sh;
+            if (sx < 0 || sx >= 64) src = cur, sx = (int)fmod_floor(sx, 64);
+          } else {
+            sy = y + dir * sh;
+            if (sy < 0 || sy >= 32) src = cur, sy = (int)fmod_floor(sy, 32);
+          }
+          int i = (y * 64 + x) * 3, j = (sy * 64 + sx) * 3;
+          f.px[i] = src[j];
+          f.px[i + 1] = src[j + 1];
+          f.px[i + 2] = src[j + 2];
+        }
+    }
+  }
+  if (drop < PEEK_BAND) draw_peek_bar(f, p, pk.k, pk.vi, drop);
 }
 
 // ---- clock screen: skyline face (design spec §14; contract "Skyline") ----
@@ -2626,8 +2876,7 @@ static void render_analog(const Value &p, Frame &f, std::optional<double> now_o)
 // Mirrors renderDayNight() and DN in draw.js.
 static const int DN_ROWS = 26;
 static const long long DN_NIGHT12 = -2079LL * 10000;
-static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_SUN = hexc(0xffe060), DN_SUN_ARM = hexc(0xa07818),
-                 DN_HERE = hexc(0xffffff);
+static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_HERE = hexc(0xffffff);
 static const int DN_NIGHT_K[] = {104, 116, 140};
 static RGB world_color(char code) {
   for (int i = 0; i < assets::WORLD_PALETTE_N; i++)
@@ -2665,11 +2914,6 @@ static void render_daynight(const Value &p, Frame &f, std::optional<double> now_
         f.set(x, y, RGB{mix_int(n.r, d.r, k), mix_int(n.g, d.g, k), mix_int(n.b, d.b, k)});
       }
     }
-    long long sx = fdiv((lon10 + 1800) * 8, 450), sy = fdiv(6750 - dec10 * 8, 450);
-    const int arms[4][2] = {{0, -1}, {-1, 0}, {1, 0}, {0, 1}};
-    for (auto &a : arms)
-      if (sy + a[1] >= 0 && sy + a[1] < DN_ROWS) f.fill((int)fmod_floor(sx + a[0], 64), (int)(sy + a[1]), 1, 1, DN_SUN_ARM);
-    if (sy >= 0 && sy < DN_ROWS) f.fill((int)sx, (int)sy, 1, 1, DN_SUN);
     const Value &here = dn["here"];
     if (here.is_arr() && here.size() == 2 && here[1].num(0) < DN_ROWS) f.fill((int)here[0].num(0), (int)here[1].num(0), 1, 1, DN_HERE);
   }
@@ -2947,24 +3191,27 @@ std::vector<std::string> SkylineFader::wanted() const {
   return out;
 }
 
+static void render_clock(const Value &p, Frame &f, const RenderOpts &o) {
+  std::string face = json::str(p["cface"]);
+  if (face == "seventies") render_seventies(p, f, o.now);
+  else if (face == "analog") render_analog(p, f, o.now);
+  else if (face == "daynight") render_daynight(p, f, o.now);
+  else if (face == "gradient") render_gradient(p, f, o.now, o.ms);
+  else render_skyline_faded(p, f, o);
+}
+
 Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   std::string screen = o.screen ? o.screen : json::str(p["screen"]);
   if (!o.screen && !p["screen"].truthy()) screen = "";
   g_roller = o.roller;
   g_nums = o.nums;
   g_icon_t = o.icon_t;
-  if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
+  if (screen == "peek") render_peek(p, f, o);
+  else if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
-  else if (screen == "clock") {
-    std::string face = json::str(p["cface"]);
-    if (face == "seventies") render_seventies(p, f, o.now);
-    else if (face == "analog") render_analog(p, f, o.now);
-    else if (face == "daynight") render_daynight(p, f, o.now);
-    else if (face == "gradient") render_gradient(p, f, o.now, o.ms);
-    else render_skyline_faded(p, f, o);
-  }
+  else if (screen == "clock") render_clock(p, f, o);
   else if (screen == "announce") render_announce(p, f, o.t);
   else render_transit(p, f, o.now, o.blink, o.view);
   g_roller = nullptr;
