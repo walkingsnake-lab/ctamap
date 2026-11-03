@@ -93,7 +93,7 @@ def configure_shell():
     V.BTN_Z0, V.BTN_Z1 = BTN_Z0, BTN_Z1
     V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME = False, False, True, False   # light-sensor hole printed open (Ø2.1), Nov 2
     V.SENSOR_ROUND = True                          # round, not a teardrop: reads as a pinhole; ream with a 2 mm bit
-    V.SCREW_FLOAT = SCREW_FLOAT if NUT_STYLE == 'hex' else 0.0
+    V.SCREW_FLOAT = 0.0 if NUT_STYLE == 'slot' else SCREW_FLOAT
 
 
 # ---- tray ----
@@ -150,9 +150,16 @@ ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
 # it home with a flat screwdriver tip, turning it square as it goes in; tightening only seats it further.
 # The tray's +/- y float moves to the shell's holes (stadiums, SCREW_FLOAT): the nut is now fixed in the tray.
 # 'slot' = the v5 slot, for comparison.
-NUT_STYLE = os.environ.get('NUT_STYLE', 'hex')
+# Nov 3, later: the hex seat was still clearance (grip only if the print ran small) and, with no roof, a loose nut got
+# pushed up its chimney by the screw starting from below, out of reach once the tray was in. NUT_STYLE 'tap' (default):
+# no nuts. The M3 x 10 threads straight into a TAP_D pilot in a solid boss (7.3 mm of PETG engaged); fine for two screws
+# that rarely come out. 'insert': a hole for an M3 heat-set insert (INSERT_D x INSERT_L) pressed in from below, for later.
+NUT_STYLE = os.environ.get('NUT_STYLE', 'tap')
+TAP_D = float(os.environ.get('TAP_D', '2.8'))   # M3 thread-forming pilot (prints a little small, horizontal); fit set 2.6 / 2.8 / 3.0
+TAP_LEAD = 0.4                                  # 45 deg lead-in where the screw enters the tray's floor
+INSERT_D, INSERT_L = 4.0, 6.0                   # M3 heat-set insert (4.6 OD x 5.7 long class)
 SCREW_FLOAT = 0.4                               # 0.6 left the head no bearing at the slot's far end; 0.4 keeps 0.15 there
-BOSS_TOP = WALL + 8.5                           # hex boss top (12.0 at the 3.5 wall): 1 mm over the M3 x 10's tip
+BOSS_TOP = WALL + 9.0                           # boss top (12.5 at the 3.5 wall): the pilot stops 0.8 under it, 0.7 past an M3 x 10's tip
 BOSS_FRONT = 6.5                                # boss face this far in front of the screw (the seat's 45 deg peak reaches 4.5)
 NUT_SEAT = 2.9                                  # press-fit seat height (nut 2.4)
 NUT_CHIMNEY = 6.1                               # loose hex above the seat, up through the bottom louver band
@@ -170,6 +177,7 @@ SLED_TAB_W, SLED_GRIP = 4.4, 2.0                # back tabs: width, depth into t
 SLED_CL = 0.25                                  # tab clearance in the hook's slot (top and bottom; 0.2 a side in x)
 HOOK_FLARE = 0.8                                # 45 deg flare at the slot's mouth
 HOOK_WALL, HOOK_FRONT, HOOK_LIP = 1.2, 57.0, 1.25   # hook cheeks either side of the slot, hook front face (y), lip under the tab
+LV_BLIND = 1.5                                  # louver slots behind the hooks end this far behind the band's inner face (1 mm past the hook)
 SLED_SCREW = (48.0, 34.5)                       # front screw: 3.6 mm of web to the light hole, 10 mm from the nearest crush rib
 SLED_BOSS_D, SLED_PILOT = 6.0, 2.4
 SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray's top (button head 4.4-4.7 x 1.4-1.6), 0.7 wall left
@@ -268,8 +276,6 @@ def tray():
             segs = minus(segs, *pad)
         if zc > ZC:                                                          # top rows: a bar in the middle
             segs = minus(segs, -LV_SPLIT / 2, LV_SPLIT / 2)
-            for g0, g1 in louver_gaps(zc, r):                                # and gaps at the sensor sled's hooks
-                segs = minus(segs, g0, g1)
         if zc < ZC:                                                          # bottom rows: gaps at the screw bosses
             for scx in C.SCREW_XS:
                 segs = minus(minus(segs, -scx - 6.5, -scx + 6.5), scx - 6.5, scx + 6.5)
@@ -280,7 +286,11 @@ def tray():
             sl = Manifold.batch_hull([slab(Y1 + 0.5, -0.5), slab(y_in - 0.5, LV_DEPTH + 0.5)])
             # the top row's slot rises into the top wall near its inner end: stop it 0.6 under the wall (a slot roof
             # grazing the wall's face left a zero-thickness sheet, non-manifold in the STL)
-            cuts.append(sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6))
+            sl = sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6)
+            if zc > ZC:                                                      # blind behind the sensor sled's hooks
+                for g0, g1 in louver_gaps(zc, r):
+                    sl = sl - box(g0, g1, Y0 - 20, y_in + LV_BLIND, -5, H + 5)
+            cuts.append(sl)
     # bottom screw holes and nut pockets
     cuts += bottom_nut_cuts()
     for x, z in CORNERS:
@@ -327,6 +337,9 @@ def bottom_xs():
 
 def bottom_bosses(zin0):
     """screw bosses on the tray's bottom wall, one per screw from below"""
+    if NUT_STYLE in ('tap', 'insert'):                   # solid, 10 wide, 5 mm in front of the screw
+        return Manifold.batch_boolean([_rrect_z(x - 5, x + 5, C.SCREW_Y - 5.0, Y0 + 0.01, 2.0, zin0 - 0.01, BOSS_TOP)
+                                       for x in bottom_xs()], ADD)
     if NUT_STYLE == 'hex':
         return Manifold.batch_boolean([_rrect_z(x - 5, x + 5, C.SCREW_Y - BOSS_FRONT, Y0 + 0.01, 2.0, zin0 - 0.01, BOSS_TOP)
                                        for x in bottom_xs()], ADD)
@@ -371,8 +384,31 @@ def hex_nut_cuts():
     return cuts
 
 
+def tray_floor_z():
+    """the tray's outer bottom face (it rests on the shell's floor, TRAY_CL above it)"""
+    return ZC - (BORE_HZ - TRAY_CL)
+
+
+def tap_cuts():
+    """'tap': a blind TAP_D pilot up through the floor into the boss, 45 deg lead-in at the floor's outer face.
+    'insert': an INSERT_D x INSERT_L hole from below for a heat-set insert, M3 clearance on past it"""
+    cuts = []
+    z0 = tray_floor_z()
+    for x in bottom_xs():
+        if NUT_STYLE == 'insert':
+            cuts.append(cyl_z(x, C.SCREW_Y, z0 - 1, z0 + INSERT_L, INSERT_D, 32))
+            cuts.append(cyl_z(x, C.SCREW_Y, z0 - 1, BOSS_TOP - 0.8, 3.4, 24))
+            continue
+        cuts.append(cyl_z(x, C.SCREW_Y, z0 - 1, BOSS_TOP - 0.8, TAP_D, 24))
+        cuts.append(Manifold.cylinder(TAP_LEAD + 0.01, TAP_D / 2 + TAP_LEAD + 0.01, TAP_D / 2, 24).translate([x, C.SCREW_Y, z0 - 0.01]))
+    return cuts
+
+
 def bottom_nut_cuts():
-    """NUT_STYLE 'hex': hex_nut_cuts(); 'slot': plate v3's y-slot screw hole and a side-loaded nut slot with a narrowed mouth"""
+    """NUT_STYLE 'tap' / 'insert': tap_cuts(); 'hex': hex_nut_cuts(); 'slot': plate v3's y-slot screw hole and a
+    side-loaded nut slot with a narrowed mouth"""
+    if NUT_STYLE in ('tap', 'insert'):
+        return tap_cuts()
     if NUT_STYLE == 'hex':
         return hex_nut_cuts()
     cuts = []
@@ -412,7 +448,8 @@ def hook_bottom():
 
 
 def louver_gaps(zc, r):
-    """extra gaps in a top louver row (centre zc, slot half height r) where the sensor hooks stand on the band's face"""
+    """x ranges of a top louver row (centre zc, slot half height r) behind the sensor hooks: there the slot stops
+    LV_BLIND short of the band's inner face (blind), so the hook's root stays whole and the back face looks as before"""
     if SENSOR_MOUNT != 'sled':
         return []
     lo, hi = zc + LV_DEPTH + 0.5 - r, zc + LV_DEPTH + 0.5 + r          # the slot's inner end, where the hooks are
@@ -586,14 +623,14 @@ def sensor_plugs():
 
 def fix_coupons(sh, tr, side=1):
     """Nov 3 fixes, small pieces to print first (case frame; export them back-down like the tray):
-    nut: the tray's bottom boss (hex seat, chimney through the louver band) and the shell's underside round its screw
-    (stadium hole and counterbore): drop a nut in, press it, put the two together and run an M3 x 10 up through both.
+    boss: the tray's bottom boss (threaded pilot) and the shell's underside round its screw (stadium hole and
+    counterbore): put the two together and run an M3 x 10 up through both, at both ends of the stadium.
     hooks: the tray's top corner over the sensor (hooks on the louver band, socket channels, light hole, front screw
     counterbore): print with the sled and swing the sled in."""
     x = side * max(C.SCREW_XS)
     zin0 = ZC - (BORE_HZ - TRAY_CL - TRAY_WT)
     band_top = zin0 + 2.5 + LV_H / 2 + (LV_ROWS - 1) * LV_PITCH + LV_H / 2 + LV_DEPTH + 1.5
-    nut_tray = tr ^ box(x - 12, x + 12, C.SCREW_Y - 9, Y1 + 1, -5, band_top + 3)
+    nut_tray = tr ^ box(x - 12, x + 12, C.SCREW_Y - 9, Y1 + 1, -5, (band_top + 3) if NUT_STYLE == 'hex' else BOSS_TOP + 3)
     nut_shell = sh ^ box(x - 12, x + 12, C.SCREW_Y - 9, D + 1, -1, WALL + 0.6)
     import sensor as SN
     zw = _zw()
@@ -610,13 +647,28 @@ def export_fixes(out, sh, tr, put, prefix):
     t.apply_translation(-t.bounds[0]); t.export(f'{out}/bar-sensor-sled.stl')         # plate down, boss up
     print('bar-sensor-sled.stl', t.is_watertight, np.round(t.extents, 1).tolist())
     cp = fix_coupons(sh, tr)
-    put(cp['nut_tray'], f'coupon-{prefix}-nut-seat-tray.stl')
-    put(cp['nut_shell'], f'coupon-{prefix}-nut-seat-shell.stl')
+    put(cp['nut_tray'], f'coupon-{prefix}-screw-boss-tray.stl')
+    put(cp['nut_shell'], f'coupon-{prefix}-screw-boss-shell.stl')
     put(cp['hooks'], f'coupon-{prefix}-sensor-hooks-tray.stl')
-    import collar as CO
-    CO.TIP_BACK = False
-    t = CO.export(CO.retainer_fit_set(), f'{out}/bar-encoder-collar-v5-retainer-fit-set.stl')
-    print('bar-encoder-collar-v5-retainer-fit-set.stl', t.is_watertight)
+    put(pilot_fit_set(), f'coupon-{prefix}-m3-pilot-fit-set.stl')
+
+
+def pilot_fit_set(ds=(2.6, 2.8, 3.0)):
+    """three blind M3 pilots in a block that prints like the tray's bosses (back face down, the pilots horizontal, same
+    lead-in); 1-3 notches on the top edge mark them. Drive an M3 x 10 into each: keep the one that threads in firmly
+    without the block splitting, and set TAP_D to it"""
+    z0, depth = tray_floor_z(), 7.5
+    w = 12.0 * len(ds)
+    blk = box(0, w, Y1 - 10, Y1, z0, z0 + depth + 3)
+    cuts = []
+    for i, d in enumerate(ds):
+        x = 6.0 + 12.0 * i
+        cuts.append(cyl_z(x, Y1 - 5, z0 - 1, z0 + depth, d, 24))
+        cuts.append(Manifold.cylinder(TAP_LEAD + 0.01, d / 2 + TAP_LEAD + 0.01, d / 2, 24).translate([x, Y1 - 5, z0 - 0.01]))
+        for k in range(i + 1):
+            nx = x + (k - i / 2) * 2.0
+            cuts.append(box(nx - 0.5, nx + 0.5, Y1 - 10.5, Y1 - 9.3, z0 - 1, z0 + depth + 4))
+    return blk - Manifold.batch_boolean(cuts, ADD)
 
 
 def fit_coupon(sh, tr):

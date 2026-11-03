@@ -25,8 +25,9 @@ RELIEF_R, RELIEF_TOP = 6.5, 0.2  # clears the body's anti-rotation tab wherever 
 # bore retainer: RET_N thin ribs in the deck's bore that the bushing's M7 thread bites into when the encoder is pushed
 # straight up, so it hangs on its own while the nut and knob go on from the top. The nut still does all the clamping.
 # RET_R is the ribs' crest radius (thread major r 3.5); None = plain bore. The bore's bottom edge gets a BORE_CH lead-in.
-RET_R, RET_N, RET_W, RET_LEAD = 3.40, 3, 0.9, 0.3   # 0.9 wide: two lines at a 0.4 nozzle (0.6 is under one); fit set 3.30/3.40/3.50
-BORE_CH = 0.4                                     # deck above the relief is 1.4: 0.4 lead-in + 1.0 of ribs
+RET_R, RET_N, RET_W, RET_LEAD = None, 3, 0.9, 0.3   # off (Nov 3, later): still two hands, wears on service, needs PETG;
+                                                  # flip the shell instead (README). 3.40 was the trial value; fit set 3.30/3.40/3.50
+BORE_CH = 0.4                                     # lead-in at the bore's bottom: the bushing finds the bore when pushed up
 RIB_R = 12.15                    # crush-rib crest radius (nominal hole r 12.0); None = plain plug. 12.15 (2 notches): snug; 12.25 took too much force (Nov 2)
 RIB_W, RIB_N, RIB_LEAD = 1.0, 12, 0.6   # rib width, count on a 30° grid (those near the teardrop tip are dropped), lead-in
 KEY = (1.3, 11.0, 14.3)          # half width, y0, y1 (shell notch: ±1.5, 11.5–14.5)

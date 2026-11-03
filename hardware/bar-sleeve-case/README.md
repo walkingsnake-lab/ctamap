@@ -126,56 +126,56 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
   the S3's edge buttons. Back: full-width louver bands, Boot and status-light holes, one pair of ribbon hooks, a tie loop, two
   nut bosses for the French cleat. No keyholes.
 - Order: diffuser and panel into the sleeve; encoder from the back; S3 and sensor onto the tray; tray in;
-  4 x M3 x 8 countersunk down the post tubes into the panel; 2 x M3 x 10 + nuts from below (one pair, x +/-46, both panels).
+  4 x M3 x 8 countersunk down the post tubes into the panel; 2 x M3 x 10 from below, threaded into the tray's bosses (one pair, x +/-46, both panels; no nuts).
 
 #### Assembly fixes (Nov 3)
-Three things fought back in the first v5 drawer (P3) assembly; the fixes are in both trays (P3, P2.5) and the collars. Check with
-`python3 check_fixes.py` (and `PANEL=p25`): nut path, screws at full float, sled seated and swung in, louver area.
+Three things fought back in the first v5 drawer (P3) assembly. Fixed in both trays (P3, P2.5); first tried in #485 and
+revised after an independent review of whether each change actually made assembly easier. Check with
+`python3 check_fixes.py` (and `PANEL=p25`): screws at full float, thread engagement, sled seated and swung in, louver area,
+back face unchanged.
 
-- **Bottom nuts** (`NUT_STYLE`, default `hex`). The side-loaded slot passed a nut only within ~1° of square (its 5.55 mouth,
-  0.7 mm deep, no lead-in) and then let it walk out (5.55 is clearance for a 5.32-5.5 nut; any grip came from the print
-  running small, and the first forced pass shaved it off). Now each bottom boss has a press-fit hex seat (5.7, the cleat
-  pockets' fit; 5.75 on the 0.6-nozzle tray) under a loose hex chimney (6.1) that runs up through the bottom louver band (the
-  band stands over the back of the seat). Drop the nut down the chimney (it can turn only ~14° in it), then press it into
-  the seat with a flat screwdriver tip, turning it slightly until it drops square (a 5.5 nut enters the 5.7 seat within
-  ~4°; the 0.8 mm lead-in helps). Tightening only seats it further. Both the seat and the chimney have a 45° peak over
-  the corner that faces the print's top (a plain hex roof there is only 30° above horizontal). The seat prints on its side,
-  unlike the cleat pockets, so its grip is untested: print the nut-seat coupon before a tray. The tray's ±0.4 y float moved to the shell: its two screw holes and counterbores are stadiums along y
-  (underneath, out of sight). A shell printed before this has round holes (±0.2): file them to about 3.4 x 4.2 mm, or the
-  tray can bind against its own screws.
-- **Light sensor** (`SENSOR_MOUNT`, default `sled`). The four pillars needed a driver aimed up at the top wall from 27-40 mm
-  inside the tray. Now: `bar-sensor-sled.stl` (PETG, plate down). On the bench, the VEML7700 goes chip up onto the sled with
-  2-4 x M2.5 x 5 driven down from the chip side into its pilots (the board's own holes). Plug its STEMMA QT cables in. With
-  the tray front-up, lower the sled tilted about 10° (front down) so its two back tabs go into the two hooks on the top
-  louver band, swing the front up to the top wall, and drive one M2.5 x 6 from **outside** the tray's top wall (the
-  counterbore by the light hole) into the sled's boss. The board, chip and sockets sit exactly where the pillars held them.
-  Checked: clear from 18° tilt to seated, tabs enter at 10° from 6 mm out (on the P2.5 a 12° approach grazes the top-right
-  post with a QT plug). The hooks cost the top louver band 12.4 % of its open area at the tray's back face on the P3
-  (7.9 % at the band's inner face; P2.5 19.3 %); the bottom intake band is unchanged. To service: one screw, swing it out.
-- **Encoder collar** (`RET_R`). Nothing held the encoder up until its nut was on. Three ribs in the collar's bore (crest
-  r 3.40, 0.9 wide, the top 1 mm, over a 0.4 lead-in) take the M7 thread when the encoder is pushed straight up (it can't be
-  twisted in: its board would hit the panel), so it hangs on its own while the nut and knob go on from the top. The nut still
-  does all the clamping. Hold the collar's flange with a thumb while pushing. Print the collar in PETG (wood PLA ribs chip
-  rather than deform). Fit set: `bar-encoder-collar-v5-retainer-fit-set.stl` (crest r 3.30 / 3.40 / 3.50, 1-3 notches): pick
-  the one that holds the encoder by itself and still lets the nut run down. (Every collar `collar.py` makes now has the
-  ribs, the v4 ones and the plug fit sets included; they don't affect the plug's fit.) Meanwhile, without a reprint: lay the shell
-  top-down across two supports with the knob hole between them; the encoder drops into the collar's pocket and stays there
-  while one hand threads the nut from below.
+- **Bottom screws: no nuts** (`NUT_STYLE`, default `tap`). The side slot passed a nut only within ~1° of square and then let
+  it walk out (its 5.55 mouth is clearance for a 5.32-5.5 nut). #485's top-loaded hex seat was still clearance, and with no
+  roof a loose nut got pushed up its chimney by the screw starting from below, out of reach once the tray was in. Now each
+  bottom boss is solid with a Ø2.8 pilot (`TAP_D`), and the 2 x M3 x 10 from below thread straight into it: 6.9 mm of PETG
+  engaged, the tip 0.7 mm short of the pilot's end. Nothing to fit beforehand. PETG threads wear if a screw goes in and out
+  many times; for two screws that come out only for service that's fine, and a stripped boss takes the next size of pilot
+  or a heat-set insert (`NUT_STYLE=insert`: a Ø4.0 x 6 hole from below for an M3 insert, when there's an iron for it). The
+  first time, drive each screw in slowly and back it out once before the final tightening. Snug, not tight: stop when the
+  head seats. The tray's ±0.4 y float lives in the shell: its two screw holes and counterbores are stadiums along y
+  (underneath, out of sight). A shell printed before Nov 3 has round holes (±0.2): file them to about 3.4 x 4.2 mm along the
+  case's depth, or the tray can bind against its own screws. Coupons: `coupon-v5-m3-pilot-fit-set.stl` (pilots 2.6 / 2.8
+  / 3.0, 1-3 notches, prints like the tray: drive an M3 x 10 into each and keep the one that threads in firmly without
+  splitting; set `TAP_D` to it if it isn't 2.8), then `coupon-v5-screw-boss-tray.stl` (PETG) +
+  `coupon-v5-screw-boss-shell.stl` (walnut): stack them and run an M3 x 10 up through both at each end of the slot.
+- **Light sensor on a sled** (`SENSOR_MOUNT`, default `sled`). The four pillars needed a driver aimed up at the top wall from
+  27-40 mm inside the tray. Now: `bar-sensor-sled.stl` (PETG, plate down). On the bench, the VEML7700 goes chip up onto the
+  sled with 2-4 x M2.5 x 5 driven down from the chip side (run one into each pilot first if they're stiff). Plug its STEMMA QT
+  cables in. With the tray front-up, lower the sled tilted about 10° (front down) so its two back tabs go into the two hooks
+  on the top louver band, swing the front up to the top wall, and, holding it there with a finger, drive one M2.5 x 6 from
+  **outside** the tray's top wall (the counterbore by the light hole) into the sled's boss. The board, chip and sockets sit
+  exactly where the pillars held them. Checked: clear from 18° tilt to seated, tabs enter at 10° from 6 mm out (on the
+  P2.5 a 12° approach grazes the top-right post with a QT plug). The louver slots behind the hooks stop 1.5 mm short of the
+  band's inner face (blind), so the back looks exactly as before; those slot sections don't vent, which costs the top band
+  7.1 % of its open area on the P3 (9.2 % P2.5). The bottom intake band is unchanged. To service: one screw, swing it out.
+  Coupon: `coupon-v5-sensor-hooks-tray.stl` (PETG) with the sled.
+- **Encoder: flip the shell.** Nothing holds the encoder up until its nut is on, and it can't be twisted in (its board would
+  hit the panel). Lay the shell top-down across two supports (books, blocks) with the knob hole between them and the back
+  opening level, so the panel can't slide; drop the encoder into the collar's pocket from inside (NeoPixel toward the
+  front) and it stays there by gravity while one hand threads the M7 nut on from underneath; turn the shell back over and
+  push the knob on. #485's retainer ribs in the collar's bore were dropped (`RET_R` None): they still needed two hands,
+  wore with each service, and needed a PETG collar. The bore keeps a 0.4 mm lead-in at its bottom, so the bushing finds it.
+  Any collar material works.
 - **With parts printed before Nov 3** (no reprint):
   - Bottom nuts (side slot): hold the nut by its flats in needle-nose pliers, jaws parallel to the slot walls, and push it
     straight in; then a short strip of painter's tape over the slot's mouth keeps it in (the screw comes up from below,
     clear of the tape). Do the nuts last, just before the tray goes in: front-up on the bench the slot faces up.
-  - Light sensor (pillars): fit it before the S3 goes on its posts. With the S3 off there's ~95 mm of clear line from the
-    tray's bottom wall up to the pillars: stand the tray on its bottom wall, open front toward you, and drive up with a
-    magnetized 1.5 mm hex bit in a short handle. Put the screws through the board first and offer it up on them. Running
-    a screw into each pillar once beforehand makes them easier. With the S3 already on, use the short arm of a 1.5 mm
-    L-key and turn it in part-turns.
-  - Encoder (plain collar): lay the shell top-down across two supports with the knob hole between them, back opening
-    level; drop the encoder into the collar's pocket from inside and thread the nut from underneath.
-- Renders: [img/fix-bottom-nuts.png](img/fix-bottom-nuts.png), [img/fix-sensor-sled.png](img/fix-sensor-sled.png), [img/fix-encoder-collar.png](img/fix-encoder-collar.png).
-- **Coupons first:** `coupon-*-nut-seat-tray.stl` (PETG, back-down as exported) + `coupon-*-nut-seat-shell.stl` (walnut):
-  drop a nut in, press it, stack the two and run an M3 x 10 up through both. `coupon-*-sensor-hooks-tray.stl` (PETG) with the
-  sled: swing the sled in and drive the front screw.
+  - Light sensor (pillars): fit it before the S3 goes on its posts. Stand the tray upside down on its top wall, open front
+    toward you: the board rests on the pillars, the screws sit in their holes by gravity, and you drive downward. Running a
+    screw into each pillar once beforehand makes them easier.
+  - Encoder: flip the shell as above (it works with any collar).
+- Renders: [img/fix-bottom-screws.png](img/fix-bottom-screws.png), [img/fix-sensor-sled.png](img/fix-sensor-sled.png),
+  [img/fix-back-unchanged.png](img/fix-back-unchanged.png).
 - Cables between the tray and the sleeve: the ribbon (S3 -> panel input) must be at least ~15 cm (20 cm comfortable) so the
   tray comes fully out still cabled; chain STEMMA QT S3 -> sensor -> encoder, so only the sensor-to-encoder cable (15-20 cm)
   crosses. Panel power runs from the S3's terminals through the tie loop (above the ribbon) to the panel. Press the two
@@ -191,7 +191,7 @@ Three things fought back in the first v5 drawer (P3) assembly; the fixes are in 
 - Status light: glue `bar-status-window.stl` (Ø5.7 x 1, translucent PETG, flat) into the round pocket on the tray's back
   (a dot of CA or clear glue at the rim). The Boot key goes in at the funnel below it, marked by two dots.
 - Print: shell back-down as v4; tray back face down, walls up, no supports. For a 0.6 nozzle use `bar-drawer-tray-n06.stl`
-  with `coupon-v5-drawer-fit-tray-n06.stl` (`TRAY_NOZZLE=0.6`): crush ribs on a 2.0 base (1.2 is under two 0.6 lines), nut
+  with `coupon-v5-drawer-fit-tray-n06.stl` (`TRAY_NOZZLE=0.6`): crush ribs on a 2.0 base (1.2 is under two 0.6 lines), cleat nut
   pockets 5.75, status hole 2.3 (prints near 2). 0.3 mm layers, 3 walls, 3 top / 3 bottom, 15% gyroid.
 - Wall mount (`src/cleat.py` -> `bar-cleat-case.stl`, `bar-cleat-wall.stl`): a French cleat, both pieces 12 mm deep. The case
   cleat bolts to the tray's back between the louver bands (2 x M3 x 10 from the wall side, nuts dropped into the bosses inside
@@ -206,7 +206,7 @@ Set `PANEL` to build for another profile; with no `PANEL` the P3 STLs are unchan
 PANEL=p25 python3 case2.py ../stl-p25   # and the same for every other script above
 ```
 
-- **P2.5** (Waveshare RGB-Matrix-P2.5-64x32, 160 x 80): v5 shell 187 x 96.3 x 69 (the same depth as the P3: PO OUT stays below the insert faces, see below). Same S3, knob, USB-C and screws. Panel back: six M3 inserts on the top and bottom rails, corners at x ±62.5, z ±32.25 (125 x 64.5 mm, confirmed Oct 31 with `stl/v5-drawer-p25/check-p25-corner-inserts.stl`; the listing-photo estimate of ±63.5, ±33.5 was 1-1.3 mm too wide) plus about (-12, +32.25) and (+12, -32.25) (photo); PI IN at x +40, PO OUT at x -40, both z ≈ -1; power socket near the centre. The plate bolts to three corner inserts (no centre one) and takes one pair of screws from below (x ±46, 2 x M3 x 10 + nuts). Keyholes sit beside the top corner posts (x ±51.5, wall screws 103 mm apart), so each louver row is one run: top -45..45, bottom -35..35. The left ribbon hook moves to x -13.5; the tie loop sits 4 mm right of centre and lower. The optional light sensor moves to x 40 (at 55 its bracket hits the top-right standoff).
+- **P2.5** (Waveshare RGB-Matrix-P2.5-64x32, 160 x 80): v5 shell 187 x 96.3 x 69 (the same depth as the P3: PO OUT stays below the insert faces, see below). Same S3, knob, USB-C and screws. Panel back: six M3 inserts on the top and bottom rails, corners at x ±62.5, z ±32.25 (125 x 64.5 mm, confirmed Oct 31 with `stl/v5-drawer-p25/check-p25-corner-inserts.stl`; the listing-photo estimate of ±63.5, ±33.5 was 1-1.3 mm too wide) plus about (-12, +32.25) and (+12, -32.25) (photo); PI IN at x +40, PO OUT at x -40, both z ≈ -1; power socket near the centre. The plate bolts to three corner inserts (no centre one) and takes one pair of screws from below (x ±46, 2 x M3 x 10, threaded into the tray's bosses). Keyholes sit beside the top corner posts (x ±51.5, wall screws 103 mm apart), so each louver row is one run: top -45..45, bottom -35..35. The left ribbon hook moves to x -13.5; the tie loop sits 4 mm right of centre and lower. The optional light sensor moves to x 40 (at 55 its bracket hits the top-right standoff).
 - **PO OUT vs the S3:** the header sits under the S3's unused bottom socket (they overlap ~0.5 mm in x), but it doesn't rise above the panel's insert faces (a ruler across the frame clears it, Oct 29), so `s3_back` is 0 and the case needs no extra depth.
 - **STLs:** `stl/v5-drawer-p25/` holds the P2.5 drawer set (shell, tray for 0.4 and 0.6 nozzles, fit coupons, collar, status window, cleats, corner check frame), built with `PANEL=p25`.
 - **Not measured yet:** P2.5 thickness (14.5 assumed). The corner inserts are confirmed (above); `src/check_corners.py` makes the check frame (`PANEL=p3 python3 check_corners.py out.stl`, or `W H CX CZ` for a symmetric panel).

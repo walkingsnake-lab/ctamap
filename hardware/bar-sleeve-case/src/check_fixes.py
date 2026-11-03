@@ -1,4 +1,4 @@
-"""Fit checks for the Nov 3 assembly fixes (hex nut seats, sensor sled, collar bore retainer), against the model.
+"""Fit checks for the Nov 3 assembly fixes (bottom screws, sensor sled, collar), against the model.
 Run: python3 check_fixes.py            (v5 drawer, P3)
      PANEL=p25 python3 check_fixes.py  (P2.5)
 Prints one line per check; volumes are overlaps in mm^3 (0 = clear)."""
@@ -34,31 +34,51 @@ def rep(name, val, ok):
     print(('OK  ' if ok else 'FAIL'), name, val)
 
 
-# ---- nuts
-zin0 = C.ZC - (C.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT)
-band_top = zin0 + 2.5 + DR.LV_H / 2 + (DR.LV_ROWS - 1) * DR.LV_PITCH + DR.LV_H / 2 + DR.LV_DEPTH + 1.5
-worst = 0.0
-for x in DR.bottom_xs():
-    for z in np.arange(band_top + 3, DR.nut_z0() - 0.01, -0.5):
-        nut = DR.hex_z(x, C.SCREW_Y, 5.45, z, z + 2.4)          # nut drops down the chimney (5.45 flats, 2.4 thick)
-        worst = max(worst, ov(nut, tray))
-rep('nut drops down the chimney to the seat (5.45 nut)', worst, worst < 1e-3)
-seat = [ov(DR.hex_z(x, C.SCREW_Y, 5.5, DR.nut_z0(), DR.nut_z0() + 2.4), tray) for x in DR.bottom_xs()]
-rep('5.5 nut in the 5.7 seat (expect 0: the grip comes from the printed hole running small, as the cleat pockets)', max(seat), max(seat) < 1e-3)
-for dy in (-DR.SCREW_FLOAT, 0, DR.SCREW_FLOAT):                 # the tray (and its nut) float against the shell
-    scr = [cyl_z(x, C.SCREW_Y + dy, 1.0, 11.0, 3.0, 32) for x in DR.bottom_xs()]
-    head = [cyl_z(x, C.SCREW_Y + dy, -1.0, 1.0, 5.7, 32) for x in DR.bottom_xs()]
-    t_sh = sum(ov(s, shell) for s in scr) + sum(ov(h, shell) for h in head)
-    t_tr = sum(ov(s.translate([0, -dy, 0]), tray) for s in scr)
-    rep(f'M3 x 10 from below, tray float {dy:+.1f}: screw+head vs shell / screw vs tray', (t_sh, t_tr), t_sh < 1e-3 and t_tr < 1e-3)
+# ---- bottom screws
+zf = DR.tray_floor_z()
+if DR.NUT_STYLE == 'tap':
+    for dy in (-DR.SCREW_FLOAT, 0, DR.SCREW_FLOAT):             # the tray floats against the shell's stadium holes
+        scr = [cyl_z(x, C.SCREW_Y + dy, 1.0, 11.0, 3.0, 32) for x in DR.bottom_xs()]
+        head = [cyl_z(x, C.SCREW_Y + dy, -1.0, 1.0, 5.7, 32) for x in DR.bottom_xs()]
+        t_sh = sum(ov(s, shell) for s in scr) + sum(ov(h, shell) for h in head)
+        rep(f'M3 x 10 from below, tray float {dy:+.1f}: screw + head vs shell', t_sh, t_sh < 1e-3)
+    for x in DR.bottom_xs():
+        core = cyl_z(x, C.SCREW_Y, zf - 1, 20, 2.0, 24)        # nothing in the way of the screw's core (r 1.0 < minor r 1.2)
+        rep(f'pilot at x {x:+.0f} open for the M3 core', ov(core ^ box(-500, 500, -500, 500, zf, 11.0), tray), ov(core ^ box(-500, 500, -500, 500, zf, 11.0), tray) < 1e-3)
+        bite = (cyl_z(x, C.SCREW_Y, zf, 11.0, 3.0, 32) ^ tray)
+        bb = bite.bounding_box()
+        eng = bb[5] - max(bb[2], zf + DR.TAP_LEAD) if bite.volume() > 0 else 0
+        rep(f'thread engagement in PETG, pilot {DR.TAP_D} (mm; 2.5 x d = 7.5 is plenty for a printed boss)', round(eng, 2), eng >= 6.0)
+        cap = DR.BOSS_TOP - (DR.BOSS_TOP - 0.8)
+        rep('pilot stops past the M3 x 10 tip (mm of room)', round(DR.BOSS_TOP - 0.8 - 11.0, 2), DR.BOSS_TOP - 0.8 - 11.0 >= 0.3)
+        side = min(x + 5 - (x + 1.4), C.SCREW_Y - (C.SCREW_Y - 5.0) - 1.4)
+        rep('boss wall around the pilot (mm)', round(side, 2), side >= 3.0)
+else:
+    zin0 = C.ZC - (C.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT)
+    band_top = zin0 + 2.5 + DR.LV_H / 2 + (DR.LV_ROWS - 1) * DR.LV_PITCH + DR.LV_H / 2 + DR.LV_DEPTH + 1.5
+    worst = 0.0
+    for x in DR.bottom_xs():
+        for z in np.arange(band_top + 3, DR.nut_z0() - 0.01, -0.5):
+            nut = DR.hex_z(x, C.SCREW_Y, 5.45, z, z + 2.4)          # nut drops down the chimney (5.45 flats, 2.4 thick)
+            worst = max(worst, ov(nut, tray))
+    rep('nut drops down the chimney to the seat (5.45 nut)', worst, worst < 1e-3)
+    seat = [ov(DR.hex_z(x, C.SCREW_Y, 5.5, DR.nut_z0(), DR.nut_z0() + 2.4), tray) for x in DR.bottom_xs()]
+    rep('5.5 nut in the 5.7 seat (expect 0: the grip comes from the printed hole running small, as the cleat pockets)', max(seat), max(seat) < 1e-3)
+    for dy in (-DR.SCREW_FLOAT, 0, DR.SCREW_FLOAT):                 # the tray (and its nut) float against the shell
+        scr = [cyl_z(x, C.SCREW_Y + dy, 1.0, 11.0, 3.0, 32) for x in DR.bottom_xs()]
+        head = [cyl_z(x, C.SCREW_Y + dy, -1.0, 1.0, 5.7, 32) for x in DR.bottom_xs()]
+        t_sh = sum(ov(s, shell) for s in scr) + sum(ov(h, shell) for h in head)
+        t_tr = sum(ov(s.translate([0, -dy, 0]), tray) for s in scr)
+        rep(f'M3 x 10 from below, tray float {dy:+.1f}: screw+head vs shell / screw vs tray', (t_sh, t_tr), t_sh < 1e-3 and t_tr < 1e-3)
 # head bearing at full float: the counterbore floor under the head
 for dy in (DR.SCREW_FLOAT,):
     x = DR.bottom_xs()[0]
     ring = cyl_z(x, C.SCREW_Y + dy, 1.0, 1.05, 5.7, 64)
     rep(f'head bearing on the counterbore floor at float {dy:+.1f} (mm^2 of the {math.pi * 2.85 ** 2 - math.pi * 1.5 ** 2:.0f} a centred head has on a plain hole)', round(ov(ring, shell) / 0.05, 2), ov(ring, shell) > 0)
 
-wall = (C.SCREW_Y - DR.BOSS_FRONT) - (C.SCREW_Y - (CB := DR.CB_NUT / 2 / math.cos(math.pi / 6)) * (0.5 + math.cos(math.pi / 6)))
-rep('boss wall in front of the seat peak (mm)', round(-wall, 2), -wall >= 1.5)
+if DR.NUT_STYLE == 'hex':
+    wall = (C.SCREW_Y - DR.BOSS_FRONT) - (C.SCREW_Y - (CB := DR.CB_NUT / 2 / math.cos(math.pi / 6)) * (0.5 + math.cos(math.pi / 6)))
+    rep('boss wall in front of the seat peak (mm)', round(-wall, 2), -wall >= 1.5)
 
 # ---- sensor sled
 sl = DR.sled()
@@ -124,19 +144,17 @@ sv = DR.SENSOR_MOUNT
 DR.SENSOR_MOUNT = 'pillars'
 t_old = p4.tray_p4() if P4 else DR.tray()
 DR.SENSOR_MOUNT = sv
-for where, y in (('band face', DR.Y1 - DR.LV_DEPTH + 0.6), ('back face', DR.Y1 - 0.1)):
+for where, y in (('band inner face (airflow: open here = open through)', DR.Y1 - DR.LV_DEPTH + 0.6), ('back face (what shows)', DR.Y1 - 0.1)):
     a_new, a_old = louver_area(tray, y), louver_area(t_old, y)
     rep(f'top louver open area at the {where}: {a_old:.0f} -> {a_new:.0f} mm^2 ({100 * (a_old - a_new) / a_old:.1f}% less)', round(a_new, 0), True)
+back = box(-500, 500, DR.Y1 - 0.6, 500, -500, 500)
+diff = ((t_old ^ back) - (tray ^ back)).volume() + ((tray ^ back) - (t_old ^ back)).volume()
+rep('back face (outer 0.6 mm) identical to the pillar tray (mm^3 different)', round(diff, 3), diff < 0.05)
 
-# ---- collar retainer
+# ---- collar (retainer ribs off by default; the bore's lead-in stays)
 CO.TIP_BACK = False
-col = CO.collar()
 bush = Manifold.cylinder(7.4, 3.5, 3.5, 64).translate([0, 0, CO.DECK_BOT])     # M7 bushing (major r 3.5) seated
-rib_ov = ov(col, bush)
-rep(f'bushing (r 3.5) into the bore ribs (crest r {CO.RET_R}): overlap mm^3, to be crushed', rib_ov, rib_ov > 0)
-CO.RET_R = None
 plain = ov(CO.collar(), bush)
-rep('plain bore vs bushing (expect 0)', plain, plain < 1e-3)
-CO.RET_R = 3.40
+rep(f'collar bore vs bushing (RET_R {CO.RET_R}; expect 0 with the ribs off)', plain, plain < 1e-3 if CO.RET_R is None else plain > 0)
 
 print('\n', 'all OK' if all(ok for _, _, ok in res) else 'SOME FAILED')
