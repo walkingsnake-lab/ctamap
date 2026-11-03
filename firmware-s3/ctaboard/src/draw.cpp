@@ -2157,13 +2157,6 @@ static Value &member(Value &o, const char *key) {
   o.o.emplace_back(key, Value());
   return o.o.back().second;
 }
-static void drop_member(Value &o, const char *key) {
-  for (auto it = o.o.begin(); it != o.o.end(); ++it)
-    if (it->first == key) {
-      o.o.erase(it);
-      return;
-    }
-}
 static Value str_value(const std::string &s) {
   Value v;
   v.type = json::STR;
@@ -2179,7 +2172,20 @@ std::string peek_screen(const Value &p, int k, int vi) {
   return "cycle";
 }
 
+// An object overlaying `base`: its own members win, the rest come from base.
+static Value overlay(const Value &base) {
+  Value v;
+  v.type = json::OBJ;
+  v.base = base.is_obj() ? &base : nullptr;
+  return v;
+}
+
 PeekView peek_view(const Value &p, int k, int vi) {
+  // Weather and clock views are overlays on the payload: only the members
+  // they change are their own (a few small arrays and objects), the rest is
+  // read through from p. So a view costs a few hundred bytes, not a copy of
+  // the payload, and p must outlive it (the Board rebuilds views on every
+  // new payload). Null members stand in for draw.js's deleted ones.
   PeekView out;
   out.screen = peek_screen(p, k, vi);
   const Value &kn = p["knob"];
@@ -2191,7 +2197,7 @@ PeekView peek_view(const Value &p, int k, int vi) {
     // The radar view: every kept frame (pv.radar), rain or not. The
     // others: the radar loop only while rain is in the box (radar.on).
     out.own = true;
-    out.v = p;
+    out.v = overlay(p);
     const Value &r = p["radar"], &all = pv["radar"];
     bool radar_view = v == "radar";
     Value frames, ft;
@@ -2204,15 +2210,15 @@ PeekView peek_view(const Value &p, int k, int vi) {
       if (r["ft"].truthy()) ft = r["ft"];
     }
     Value &nr = member(out.v, "radar");
+    nr = overlay(r);
     member(nr, "frames") = frames;
     member(nr, "ft") = ft;
     if (r["wx"].truthy()) {
       Value &wx = member(nr, "wx");
-      drop_member(wx, "days");
-      drop_member(wx, "hours");
-      if (radar_view) drop_member(wx, "rain");
-      if (v == "5day" && pv["days"].truthy()) member(wx, "days") = pv["days"];
-      if (v == "hourly" && pv["hours"].truthy()) member(wx, "hours") = pv["hours"];
+      wx = overlay(r["wx"]);
+      member(wx, "days") = v == "5day" && pv["days"].truthy() ? pv["days"] : Value();
+      member(wx, "hours") = v == "hourly" && pv["hours"].truthy() ? pv["hours"] : Value();
+      if (radar_view) member(wx, "rain") = Value();
     } else {
       member(nr, "wx") = Value();
     }
@@ -2220,9 +2226,10 @@ PeekView peek_view(const Value &p, int k, int vi) {
   }
   if (cat == "clock") {
     out.own = true;
-    out.v = p;
+    out.v = overlay(p);
     member(out.v, "cface") = str_value(v.empty() ? "skyline" : v);
-    for (const char *key : {"skyline", "cwx", "dn"}) member(out.v, key) = pv[key].truthy() ? pv[key] : Value();
+    // Each face's object read through from pv (the skyline's is large).
+    for (const char *key : {"skyline", "cwx", "dn"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
     Value g;
     g.type = json::BOOL;
     g.b = pv["ginv"].truthy();

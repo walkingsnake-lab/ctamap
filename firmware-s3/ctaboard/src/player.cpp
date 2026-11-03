@@ -20,7 +20,7 @@ static double pymod(double a, double b) { return a - floor(a / b) * b; }
 
 // ---- inputs ----
 
-void Player::set_payload(const Value &payload, double ms) {
+void Player::set_payload(Value &&payload, double ms) {
   // A new station: start transit and the ticker fresh. Animating from the
   // old station's rows to the new one's overlapped them mid-fade.
   if (has_p && json::str(payload["stn"]) != json::str(p["stn"])) {
@@ -30,7 +30,7 @@ void Player::set_payload(const Value &payload, double ms) {
   }
   // A new message replays its intro (draw.js messageIntroMs): flaps flip in, the typewriter types.
   if (!has_p || !json::equal(payload["msg"]["id"], p["msg"]["id"])) msg_start = ms;
-  p = payload;
+  p = std::move(payload);
   has_p = true;
   gen++;
   // The skyline: a new one crossfades in on the clock screen (draw.js createSkylineFader).

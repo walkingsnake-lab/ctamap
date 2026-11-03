@@ -19,7 +19,7 @@ bool Value::truthy() const {
     case NUM: return n != 0;
     case STR: return !s.empty();
     case ARR: return !a.empty();
-    case OBJ: return !o.empty();
+    case OBJ: return !o.empty() || (base && base->truthy());
   }
   return false;
 }
@@ -28,6 +28,7 @@ const Value &Value::operator[](const char *key) const {
   if (type == OBJ) {
     for (const auto &kv : o)
       if (kv.first == key) return kv.second;
+    if (base) return (*base)[key];
   }
   return null_value();
 }
@@ -41,7 +42,7 @@ bool Value::has(const char *key) const {
   if (type != OBJ) return false;
   for (const auto &kv : o)
     if (kv.first == key) return true;
-  return false;
+  return base && base->has(key);
 }
 
 // ---- parser ----

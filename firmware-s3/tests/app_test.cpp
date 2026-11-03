@@ -1688,6 +1688,32 @@ static void test_peek_prefetches_radar_frames_and_clouds() {
   CHECK(S(r->board) == "transit", "%s", S(r->board).c_str());
 }
 
+static void test_peek_survives_a_long_burst_of_turns_and_presses() {
+  // Turning and pressing fast for a while, payloads landing in between: the
+  // views stay overlays on the payload (no copies piling up), and the knob
+  // still commits afterwards.
+  std::unique_ptr<Rig> r(peek_rig());
+  unsigned seed = 7;
+  auto rnd = [&](int n) {
+    seed = seed * 1103515245u + 12345u;
+    return (int)((seed >> 16) % (unsigned)n);
+  };
+  for (int i = 0; i < 400; i++) {
+    int what = rnd(4);
+    if (what == 0) r->knob.pending = rnd(7) - 3;
+    else if (what == 1) r->knob.down = !r->knob.down;
+    r->run_for(30 + rnd(400));
+  }
+  r->knob.down = false;
+  r->run_for(4000 + LATENCY);
+  CHECK(!r->board->peek.open, "closed after the burst");
+  size_t before = r->server.selects.size();
+  r->knob.pending = 1;
+  r->run_for(2500 + LATENCY);
+  CHECK(r->server.selects.size() == before + 1, "still commits: %zu -> %zu", before, r->server.selects.size());
+  CHECK(!r->board->peek.open, "");
+}
+
 static void test_phone_screen_change_fades() {
   Rig r;
   r.board->connect();
@@ -2009,6 +2035,7 @@ int main() {
       T_(test_peek_hold_and_turn_steps_variants_both_ways),
       T_(test_peek_press_on_a_live_screen_steps_its_variant),
       T_(test_peek_prefetches_radar_frames_and_clouds),
+      T_(test_peek_survives_a_long_burst_of_turns_and_presses),
       T_(test_setup_opens_right_away_with_no_networks),
       T_(test_setup_opens_after_ten_minutes_without_wifi),
       T_(test_setup_never_opens_while_the_server_is_down),
