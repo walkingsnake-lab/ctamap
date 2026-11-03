@@ -167,7 +167,9 @@ void Board::shown(int what, long long ms) {
   // snaps; a slide that interrupts one runs quicker (SCREEN_SLIDE_QUICK_MS),
   // so presses in a row read as one fast run.
   if (what != shown_ && shown_ != SHOWN_NONE) {
-    if (what == SHOWN_STATUS || what == SHOWN_CHOOSER) {
+    // The peek chooser shows the views themselves: no transition into it,
+    // and none out of it (the chosen view is already on the panel).
+    if (what == SHOWN_STATUS || what == SHOWN_CHOOSER || what == SHOWN_PEEK || shown_ == SHOWN_PEEK) {
       trans_ = NO_TRANS;
     } else {
       bool chained = transitioning(ms);
@@ -187,7 +189,7 @@ void Board::shown(int what, long long ms) {
 }
 
 bool Board::draw_frame(long long ms, long long n) {
-  int what = chooser.open ? SHOWN_CHOOSER : (int)player.screen;
+  int what = chooser.open ? SHOWN_CHOOSER : peek.open ? SHOWN_PEEK : (int)player.screen;
   if (chooser.open) chooser_travel_ = chooser.target - chooser.start;
   player.wall_ms = (double)now_ms(ms);  // the skyline's animation clock
   display->show([&](draw::Frame &f) {
@@ -199,6 +201,8 @@ bool Board::draw_frame(long long ms, long long n) {
       o.apply_bright = !player.hw_bright;
       o.bright = player.bright;
       draw::render(player.p, f, o);
+    } else if (peek.open) {
+      draw_peek(f, ms, n);
     } else {
       player.draw(f, (double)ms, n);
     }
@@ -450,6 +454,15 @@ void Board::step() {
     commit_choice(ms);
     ms = clock->ms();
   }
+  // The peek chooser at rest: the bar drops away, and unless the knob came
+  // back to where it started, the choice goes out as soon as nothing else
+  // is in flight. It closes once the bar is gone and the answer is in.
+  if (peek.rested((double)ms)) peek.close((double)ms, !peek.cancelled());
+  if (peek.open && peek.committing && !peek.sent && !flight_) {
+    send_peek();
+    ms = clock->ms();
+  }
+  if (peek.open && peek.closing && !peek.committing && (double)ms - peek.closed_at >= draw::PEEK_DOWN_MS) peek.open = false;
 
   long long n = now(ms);
   if (player.has_p) {
@@ -463,9 +476,10 @@ void Board::step() {
     sched.due_now(&update_job, (double)ms);
   }
   bool anim = player.busy((double)ms) || transitioning(ms);
-  if (!flight_) {
+  if (!flight_ && !(peek.committing && !peek.sent)) {
     // While the chooser is open only overdue requests run, so the commit
-    // goes out the moment the knob rests.
+    // goes out the moment the knob rests. (The peek chooser lets them run:
+    // the radar frames it shows may still be on their way.)
     sched::Job *job = sched.pick((double)ms, chooser.open);
     if (job) {
       long long st = clock->ms();
@@ -489,8 +503,10 @@ void Board::step() {
   // screen can have changed.
   n = now(ms);
   player.wall_ms = (double)now_ms(ms);
-  std::optional<screen::FrameKey> key = chooser.open ? chooser.frame_key((double)ms) : player.frame_key((double)ms, n);
-  if (transitioning(ms) || (chooser.open ? SHOWN_CHOOSER : (int)player.screen) != shown_) key.reset();
+  std::optional<screen::FrameKey> key = chooser.open ? chooser.frame_key((double)ms)
+                                       : peek.open   ? std::nullopt  // live views: every frame
+                                                     : player.frame_key((double)ms, n);
+  if (transitioning(ms) || (chooser.open ? SHOWN_CHOOSER : peek.open ? SHOWN_PEEK : (int)player.screen) != shown_) key.reset();
   if (last_draw_ < 0 || (!key ? ms - last_draw_ >= 33 : key != last_key_)) {
     if (draw_frame(ms, n)) {
       last_draw_ = ms;
@@ -551,7 +567,7 @@ void Board::maybe_install(long long ms, bool busy) {
     return;
   }
   if (!wanted_since_) wanted_since_ = ms;
-  if (ms < install_after_ || chooser.open) return;
+  if (ms < install_after_ || chooser.open || peek.open) return;
   // The install blocks the loop for a while: start it between animations,
   // or anyway once it has waited long enough.
   if (busy && ms - *wanted_since_ < ota::WAIT_FOR_GAP_MS) return;
@@ -663,14 +679,108 @@ void Board::do_buttons(long long ms) {
 void Board::do_knob(long long ms) {
   // Clicks are read even before the first payload so they don't pile up.
   // While a choice is being sent they wait in the encoder, as they would
-  // behind a blocking request.
-  if (!knob || chooser.committing) return;
+  // behind a blocking request. The push button: a debounced press, and its
+  // release.
+  if (!knob) return;
+  bool raw = knob->pressed();
+  bool down = knob_press_.update(raw, (double)ms), up = false;
+  if (down) knob_held_ = true;
+  else if (knob_held_ && !raw) {
+    knob_held_ = false;
+    up = true;
+  }
+  if (chooser.committing || (peek.open && peek.committing)) return;
   int c = knob->clicks();
-  if (!c || !player.has_p) return;
+  if (!player.has_p) return;
   const Value &k = player.p["knob"];
   int n = (int)k["ring"].size();
   if (n < 1) return;  // a server without the knob ring
-  chooser.turn(c, (int)k["at"].num(0), n, (double)ms);
+  if (!peek_mode()) {
+    if (c) chooser.turn(c, (int)k["at"].num(0), n, (double)ms);
+    return;
+  }
+  // Peek: a turn or a press opens it on the screen the board is on (a
+  // press there then steps to the next variant on release).
+  if ((c || down) && (!peek.open || peek.closing)) open_peek(ms);
+  if (!peek.open) return;
+  if (down) peek.press((double)ms);
+  if (c) peek.turn(c, (double)ms);
+  if (up) peek.release((double)ms);
+}
+
+void Board::open_peek(long long ms) {
+  const Value &k = player.p["knob"];
+  std::vector<int> counts, sels;
+  for (size_t i = 0; i < k["ring"].size(); i++) {
+    counts.push_back((int)k["vars"][i].size());
+    sels.push_back((int)k["sel"][i].num(0));
+  }
+  peek.start(counts, sels, (int)k["at"].num(0), (double)ms);
+}
+
+void Board::send_peek() {
+  // The choice, with its variant: the server answers with the update for
+  // the new screen.
+  const Value &k = player.p["knob"];
+  const Value &vv = k["vars"][peek.k][peek.vi()];
+  Flight f;
+  f.id = json::str(k["ring"][peek.k]);
+  f.variant = vv.is_str() ? vv.s : "";
+  peek.sent = true;
+  if (watchdog) watchdog->feed();
+  job_err_.clear();
+  f.work = [this] { return net->select(flight_->id, flight_->variant, flight_->v, flight_->err); };
+  launch(std::move(f));
+}
+
+const Value &Board::peek_payload(int k, int vi) {
+  // Built once per payload; only the views on screen are kept (a weather
+  // or clock view is a copy of the payload).
+  if (peek_gen_ != player.gen) {
+    peek_views_.clear();
+    peek_gen_ = player.gen;
+  }
+  int key = k * 32 + vi;
+  auto it = peek_views_.find(key);
+  if (it == peek_views_.end()) {
+    int keep[2] = {peek.k * 32 + peek.vi(), peek.slide_k * 32 + peek.slide_vi};
+    for (auto e = peek_views_.begin(); e != peek_views_.end();) {
+      if (e->first != keep[0] && e->first != keep[1]) e = peek_views_.erase(e);
+      else ++e;
+    }
+    it = peek_views_.emplace(key, draw::peek_view(player.p, k, vi)).first;
+  }
+  return it->second.payload(player.p);
+}
+
+void Board::draw_peek(draw::Frame &f, long long ms, long long n) {
+  draw::RenderOpts o;
+  o.screen = "peek";
+  o.apply_bright = !player.hw_bright;
+  o.bright = player.bright;
+  o.now = (double)n;
+  o.ms = player.wall_ms;  // the skyline's animation clock
+  o.frames = &player.radar_frames;
+  o.clouds = &player.clouds;
+  draw::RenderOpts::Peek pk;
+  pk.k = peek.k;
+  pk.vi = peek.vi();
+  double t = (double)ms;
+  pk.drop = peek.closing ? draw::peek_drop(false, t - peek.closed_at) : draw::peek_drop(true, t - peek.opened);
+  if (peek.slide && t - peek.slide_t0 < (peek.slide_y ? draw::PEEK_Y_MS : draw::PEEK_X_MS)) {
+    pk.slide = true;
+    pk.slide_k = peek.slide_k;
+    pk.slide_vi = peek.slide_vi;
+    pk.slide_t = t - peek.slide_t0;
+    pk.slide_y = peek.slide_y;
+    pk.slide_dir = peek.slide_dir;
+    pk.slide_view = &peek_payload(peek.slide_k, peek.slide_vi);
+  } else {
+    peek.slide = false;
+  }
+  pk.view = &peek_payload(pk.k, pk.vi);
+  o.peek = pk;
+  draw::render(player.p, f, o);
 }
 
 void Board::commit_choice(long long ms) {
@@ -688,15 +798,16 @@ void Board::commit_choice(long long ms) {
   job_err_.clear();
   Flight f;
   f.id = json::str(ring[chooser.selected()]);
-  f.work = [this] { return net->select(flight_->id, flight_->v, flight_->err); };
+  f.work = [this] { return net->select(flight_->id, "", flight_->v, flight_->err); };
   launch(std::move(f));
 }
 
 void Board::after_select(Flight &f, long long ended) {
   stats.fetches++;
   chooser.close();
+  peek.committing = false;  // the peek closes once its bar is gone
   if (f.ok) {
-    say("[board] knob: " + f.id);
+    say("[board] knob: " + f.id + (f.variant.empty() ? "" : " " + f.variant));
     apply(f.v, f.started, ended);
     reached_server = true;
     fails = 0;

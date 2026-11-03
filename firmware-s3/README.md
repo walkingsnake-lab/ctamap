@@ -117,11 +117,14 @@ WIFI` means none of the networks could be joined (it retries).
 ### The knob (optional)
 
 An Adafruit 5880 I2C rotary encoder plugged into the STEMMA QT port (any
-STEMMA QT / Qwiic cable, no soldering). Turn it to choose AUTO, TRANSIT,
-WEATHER or SPORTS; rest about a second and the board switches (design spec
-§10, "Knob"). The serial log says `[knob] encoder found` or `[knob] no
-encoder on the STEMMA QT port` at startup, and `[board] knob: <category>`
-after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
+STEMMA QT / Qwiic cable, no soldering). It's the peek chooser (design spec
+§10, "Knob"): turn it to move along the icon bar (Transit, Weather, Clock,
+Announce, Cycle) and the panel shows that screen itself; press to step to its
+next variant (rows or ticker, the weather views, the clock faces), or hold it
+down and turn to step either way. Rest about a second and the bar drops away
+on the chosen screen. The serial log says `[knob] encoder found` or `[knob] no
+encoder on the STEMMA QT port` at startup, and `[board] knob: <category>
+<variant>` after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
 `secrets.h`. Without a knob the board runs as before.
 
 ### The light sensor (optional)
@@ -270,7 +273,7 @@ then on.
 | `ctaboard/src/json.*` | Small JSON tree with Python dict semantics, so the renderer reads payloads exactly as `draw.py` did. |
 | `ctaboard/src/screen.h` | The screens as an enum (names only at the JSON boundary) and the redraw key. |
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
-| `ctaboard/src/sched.h`, `control.h` | Network jobs, run when due one at a time on the worker; buttons vs. the phone (`control.py`); the knob's chooser (twist and rest, S3 only). |
+| `ctaboard/src/sched.h`, `control.h` | Network jobs, run when due one at a time on the worker; buttons vs. the phone (`control.py`); the knob's choosers (the old wheel, and the peek chooser: twist, press, hold and turn, rest; S3 only). |
 | `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. The `sky` job fetches the skyline's cloud strip (`/board/sky/<id>`) while the clock screen shows; health reports `hk=skyline` so the server sends the clock screen to this build. |
 | `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |

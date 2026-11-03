@@ -93,6 +93,11 @@ struct Server : app::Net {
   std::function<std::string(long long)> rows_fn;  // JSON array of rows
   bool knob_ring = true;                          // send the knob's ring (payload `knob`)
   std::vector<std::string> selects;               // categories the knob chose
+  // Peek chooser (contract "Peek"): the ring with variants, and pv. The
+  // variants the knob chose (empty: none), and each category's current one.
+  bool peek = false;
+  std::vector<std::string> variants;
+  std::string tscreen = "transit", wx_view = "now", face = "skyline";
   std::string fw;                                 // version check's `fw` offer (JSON object), "" for none
   int fw_fail = 0;                                // fail the next firmware downloads halfway
   std::string cloud = "p1";                       // the skyline's cloud strip id, "" for a clear sky
@@ -162,13 +167,34 @@ struct Server : app::Net {
     std::string scr = radar_on && visit == "null" ? "weather" : screen;
     int at = screen == "transit" || screen == "ticker" ? 1 : screen == "weather" ? 2 : screen == "baseball" ? 3 : 0;
     std::string knob = knob_ring ? ",\"knob\":{\"ring\":[\"auto\",\"transit\",\"weather\",\"sports\"],\"at\":" + jnum(at) + "}" : "";
+    std::string pv;
+    if (peek) {
+      // Ring transit, weather, clock, announce, cycle; every section and pv.
+      auto idx = [](const std::vector<std::string> &l, const std::string &s) {
+        for (size_t i = 0; i < l.size(); i++)
+          if (l[i] == s) return (int)i;
+        return 0;
+      };
+      int pat = screen == "transit" || screen == "ticker" ? 0 : screen == "weather" ? 1 : screen == "clock" ? 2 : screen == "announce" ? 3 : 4;
+      knob = ",\"knob\":{\"ring\":[\"transit\",\"weather\",\"clock\",\"announce\",\"cycle\"],\"at\":" + jnum(pat) +
+             ",\"vars\":[[\"transit\",\"ticker\"],[\"now\",\"5day\",\"hourly\",\"radar\"],[\"skyline\",\"seventies\",\"analog\"],[],[]],\"sel\":[" +
+             jnum(idx({"transit", "ticker"}, tscreen)) + "," + jnum(idx({"now", "5day", "hourly", "radar"}, wx_view)) + "," +
+             jnum(idx({"skyline", "seventies", "analog"}, face)) + ",0,0],\"ln\":\"RD\"}";
+      std::string pf = "[", pft = "[";
+      for (int k = 2; k >= 0; k--) {
+        pf += std::string(pf.size() > 1 ? "," : "") + "\"40100-" + jnum(now / 360 * 360 - k * 360) + "\"";
+        pft += std::string(pft.size() > 1 ? "," : "") + jnum(now / 360 * 360 - k * 360);
+      }
+      pv = ",\"cface\":\"" + face + "\",\"pv\":{\"days\":[{\"d\":\"SU\",\"hi\":60,\"icon\":\"sun\"}],\"hours\":[{\"h\":\"1P\",\"t\":50,\"icon\":\"sun\"}],"
+           "\"skyline\":" + skyline(true) + ",\"cwx\":{\"temp\":60,\"icon\":\"sun\"},\"radar\":{\"frames\":" + pf + "],\"ft\":" + pft + "]}}";
+    }
     return "{\"v\":" + jnum(v) + ",\"now\":" + jnum(now) + ",\"tzo\":-18000,\"age\":3,\"screen\":\"" + scr +
            "\",\"bright\":" + jnum(bright) + ",\"ab\":" + ab + ",\"header\":\"MORSE\",\"view\":\"dest\",\"rows\":" + rows + ",\"ticker\":" + ticker +
            ",\"wx\":" + (tornado ? "{\"icon\":\"storm\",\"temp\":70,\"word\":\"STORMS\"}" : "null") +
            ",\"warn\":" + (tornado ? "{\"kind\":\"tor\",\"lvl\":\"warning\"}" : "null") +
            ",\"radar\":{\"on\":" + (radar_on ? "true" : "false") + ",\"visit\":" + visit + ",\"frames\":" + frames +
            ",\"ft\":" + ft + ",\"timeBox\":[40,0,24,22],\"split\":false},\"mlb\":{\"layout\":\"" + layout +
-           "\",\"games\":" + game_list + "}" + knob + skyline() + ",\"msg\":" + msg + "}";
+           "\",\"games\":" + game_list + "}" + knob + skyline() + pv + ",\"msg\":" + msg + "}";
   }
 
   app::ConnectResult connect(const app::Networks &networks, const app::StatusFn &status) override {
@@ -213,10 +239,14 @@ struct Server : app::Net {
     return true;
   }
 
-  bool select(const std::string &cat, Value &out, std::string &err) override {
+  bool select(const std::string &cat, const std::string &var, Value &out, std::string &err) override {
     if (!call("select:" + cat, err)) return false;
     selects.push_back(cat);
-    screen = cat == "sports" ? "baseball" : cat == "auto" ? "transit" : cat;
+    variants.push_back(var);
+    if (cat == "transit" && !var.empty()) tscreen = var;
+    if (cat == "weather" && !var.empty()) wx_view = var;
+    if (cat == "clock" && !var.empty()) face = var;
+    screen = cat == "sports" ? "baseball" : cat == "auto" || cat == "cycle" ? "transit" : cat == "transit" ? tscreen : cat;
     v++;
     out = parse(payload());
     return true;
@@ -224,10 +254,10 @@ struct Server : app::Net {
 
   // The clock screen's skyline section (contract "Skyline"), with a cloud
   // strip unless `cloud` is empty.
-  std::string skyline() const {
-    if (screen != "clock") return "";
+  std::string skyline(bool any = false) const {
+    if (screen != "clock" && !any) return "";
     std::string cl = cloud.empty() ? "null" : "{\"id\":\"" + cloud + "\",\"pal\":[\"\",\"#eef2f8\",\"#eef2f8\"],\"a\":[0,35,70]}";
-    return ",\"skyline\":{\"face\":\"skyline\",\"st\":\"partly\",\"sky\":[[0,\"#08245a\"],[25,\"#3a6eb0\"]],"
+    return std::string(any ? "" : ",\"skyline\":") + "{\"face\":\"skyline\",\"st\":\"partly\",\"sky\":[[0,\"#08245a\"],[25,\"#3a6eb0\"]],"
            "\"wat\":[\"#0a2a52\",\"#06203f\",\"#1a3a68\"],\"lit\":0,\"win\":0,\"stars\":0,\"sun\":{\"x\":41,\"y\":5,\"c\":\"#ffd040\"},"
            "\"moon\":null,\"gl\":{\"x\":41,\"c\":\"#c8d8f0\",\"p\":0},\"whl\":0,\"fog\":null,\"roof\":null,\"pcp\":null,"
            "\"storm\":0,\"boats\":1,\"temp\":61,\"cl\":" + cl + "}";
@@ -342,6 +372,8 @@ struct SimButtons : app::Buttons {
 
 struct SimKnob : app::Knob {
   int pending = 0;
+  bool down = false;
+  bool pressed() override { return down; }
   int clicks() override {
     int c = pending;
     pending = 0;
@@ -1560,6 +1592,102 @@ static void test_knob_waits_for_the_ring() {
   CHECK(!r.board->chooser.open && r.server.count("select:") == 0, "");
 }
 
+// ---- peek chooser (contract "Peek") ----
+
+static Rig *peek_rig() {
+  Rig *r = new Rig({"ok"}, false, false, 0, "", "", true);
+  r->server.peek = true;
+  r->board->connect();
+  r->run_for(5000);
+  return r;
+}
+
+static draw::RGB px(const std::unique_ptr<Rig> &r, int x, int y) { return r->display.last.get(x, y); }
+static const draw::RGB SUN = draw::hexc(0xffd040), CLOCK_C = draw::hexc(0xf0e2c8);
+
+// Press the knob for `hold` ms, then let go.
+static void press(const std::unique_ptr<Rig> &r, long long hold = 120) {
+  r->knob.down = true;
+  r->run_for(hold);
+  r->knob.down = false;
+}
+
+static void test_peek_turn_shows_the_view_press_steps_the_variant_rest_commits() {
+  std::unique_ptr<Rig> r(peek_rig());
+  r->knob.pending = 1;
+  r->run_for(400);
+  CHECK(r->board->peek.open && !r->board->chooser.open, "the peek chooser, not the wheel");
+  CHECK(r->board->peek.k == 1 && r->board->peek.vi() == 0, "weather, conditions: %d %d", r->board->peek.k, r->board->peek.vi());
+  // The bar is up: the sun icon (x16, rows 23-29) lit in its color, the underline under it.
+  CHECK(px(r, 19, 23) == SUN && px(r, 16, 31) == SUN, "weather lit");
+  CHECK(S(r->board) == "transit", "nothing switches while turning: %s", S(r->board).c_str());
+  press(r);
+  r->run_for(400);
+  CHECK(r->board->peek.vi() == 1, "a press steps to 5-day: %d", r->board->peek.vi());
+  CHECK(r->server.selects.empty(), "no commit before the rest");
+  r->run_for(1200 + LATENCY);
+  CHECK(r->server.selects == std::vector<std::string>({"weather"}), "%zu", r->server.selects.size());
+  CHECK(r->server.variants == std::vector<std::string>({"5day"}), "%s", r->server.variants.empty() ? "" : r->server.variants[0].c_str());
+  r->run_for(600);
+  CHECK(!r->board->peek.open, "closed once the bar dropped and the answer landed");
+  CHECK(S(r->board) == "weather", "%s", S(r->board).c_str());
+}
+
+static void test_peek_back_to_the_start_cancels() {
+  std::unique_ptr<Rig> r(peek_rig());
+  r->knob.pending = 1;
+  r->run_for(300);
+  r->knob.pending = -1;
+  r->run_for(1300);
+  CHECK(r->board->peek.closing && !r->board->peek.committing, "dropping, nothing to send");
+  r->run_for(600);
+  CHECK(!r->board->peek.open, "");
+  CHECK(r->server.count("select:") == 0, "%d", r->server.count("select:"));
+  CHECK(S(r->board) == "transit", "%s", S(r->board).c_str());
+}
+
+static void test_peek_hold_and_turn_steps_variants_both_ways() {
+  std::unique_ptr<Rig> r(peek_rig());
+  r->knob.pending = 2;  // transit -> clock
+  r->run_for(400);
+  CHECK(r->board->peek.k == 2, "%d", r->board->peek.k);
+  CHECK(px(r, 31, 31) == CLOCK_C, "clock's underline at x28");
+  r->knob.down = true;
+  r->run_for(100);
+  r->knob.pending = -1;  // held: back one face, wrapping to analog
+  r->run_for(300);
+  CHECK(r->board->peek.vi() == 2, "analog: %d", r->board->peek.vi());
+  r->run_for(1500);
+  CHECK(r->server.selects.empty(), "no commit while held");
+  r->knob.down = false;  // let go after turning: no extra step
+  r->run_for(300);
+  CHECK(r->board->peek.vi() == 2, "%d", r->board->peek.vi());
+  r->run_for(1500 + LATENCY);
+  CHECK(r->server.variants == std::vector<std::string>({"analog"}), "%zu", r->server.variants.size());
+}
+
+static void test_peek_press_on_a_live_screen_steps_its_variant() {
+  std::unique_ptr<Rig> r(peek_rig());
+  press(r);
+  r->run_for(300);
+  CHECK(r->board->peek.open && r->board->peek.k == 0 && r->board->peek.vi() == 1, "transit, ticker");
+  r->run_for(1500 + LATENCY);
+  CHECK(r->server.selects == std::vector<std::string>({"transit"}) && r->server.variants[0] == "ticker", "");
+  r->run_for(600);
+  CHECK(S(r->board) == "ticker", "%s", S(r->board).c_str());
+}
+
+static void test_peek_prefetches_radar_frames_and_clouds() {
+  // On the transit screen, a peek board still fetches what the radar view
+  // and the skyline need, so they're on hand before the knob turns.
+  std::unique_ptr<Rig> r(peek_rig());
+  r->run_for(20000);
+  CHECK(r->server.count("radar:") >= 3, "radar frames: %d", r->server.count("radar:"));
+  CHECK(r->server.count("sky:") == 1, "the cloud strip: %d", r->server.count("sky:"));
+  CHECK(r->board->player.clouds.count("p1") == 1, "kept");
+  CHECK(S(r->board) == "transit", "%s", S(r->board).c_str());
+}
+
 static void test_phone_screen_change_fades() {
   Rig r;
   r.board->connect();
@@ -1876,6 +2004,11 @@ int main() {
       T_(test_knob_wraps_around_the_ring),
       T_(test_knob_select_failure_keeps_the_screen),
       T_(test_knob_waits_for_the_ring),
+      T_(test_peek_turn_shows_the_view_press_steps_the_variant_rest_commits),
+      T_(test_peek_back_to_the_start_cancels),
+      T_(test_peek_hold_and_turn_steps_variants_both_ways),
+      T_(test_peek_press_on_a_live_screen_steps_its_variant),
+      T_(test_peek_prefetches_radar_frames_and_clouds),
       T_(test_setup_opens_right_away_with_no_networks),
       T_(test_setup_opens_after_ten_minutes_without_wifi),
       T_(test_setup_never_opens_while_the_server_is_down),
