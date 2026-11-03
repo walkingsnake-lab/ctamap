@@ -1624,13 +1624,20 @@
       const kn = p.knob || {}, cat = (kn.ring || [])[k], v = ((kn.vars || [])[k] || [])[vi], pv = p.pv || {};
       if (cat === 'transit') return { p, screen: v === 'ticker' ? 'ticker' : 'transit' };
       if (cat === 'weather') {
-        const r = p.radar || {};
-        if (!r.wx) return { p, screen: 'weather' };
-        const wx = { ...r.wx };
-        delete wx.days; delete wx.hours;
-        if (v === '5day' && pv.days) wx.days = pv.days;
-        if (v === 'hourly' && pv.hours) wx.hours = pv.hours;
-        return { p: { ...p, radar: { ...r, wx } }, screen: 'weather' };
+        // The radar view: every kept frame (pv.radar), rain or not. The
+        // others: the radar loop only while rain is in the box (radar.on).
+        const r = p.radar || {}, all = pv.radar || {};
+        const frames = v === 'radar' ? all.frames || r.frames || [] : r.on ? r.frames || [] : [];
+        const ft = v === 'radar' ? all.ft || r.ft || [] : r.on ? r.ft || [] : [];
+        let wx = r.wx || null;
+        if (wx) {
+          wx = { ...wx };
+          delete wx.days; delete wx.hours;
+          if (v === 'radar') delete wx.rain;
+          if (v === '5day' && pv.days) wx.days = pv.days;
+          if (v === 'hourly' && pv.hours) wx.hours = pv.hours;
+        }
+        return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }
       if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };

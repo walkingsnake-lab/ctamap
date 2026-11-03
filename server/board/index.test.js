@@ -1623,7 +1623,7 @@ test('peek: firmware that draws the peek chooser gets every section, each varian
   assert.equal(b.pv.ginv, undefined, 'gradient not inverted');
   assert.deepEqual(b.knob, {
     ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 0,
-    vars: [['transit', 'ticker'], ['now', '5day', 'hourly'], ['skyline', 'seventies', 'analog', 'daynight', 'gradient'], [], []],
+    vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline', 'seventies', 'analog', 'daynight', 'gradient'], [], []],
     sel: [0, 0, 2, 0, 0], ln: 'RD',
   });
   // Only the faces the firmware draws.
@@ -1640,5 +1640,30 @@ test('peek: firmware that draws the peek chooser gets every section, each varian
   const old = (await s.req('/board/update?b=home&hk=skyline', h)).body;
   assert.equal(old.pv, undefined);
   assert.deepEqual(Object.keys(old.knob), ['ring', 'at']);
+  await s.close();
+});
+
+test('radar view (wxView radar): the frames ride along when dry too; peek boards get every kept frame in pv.radar', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const dry = { on: false, frames: ['40100-a', '40100-b'], ft: [now - 400, now - 40], timeBox: [40, 0, 24, 22], split: false };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(dry) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  s.store.update('home', { screen: 'weather' });
+  // Conditions: dry, so no frames (the weather layout).
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual(b.radar.frames, []);
+  // Radar view: the loop whatever the weather.
+  s.store.update('home', { wxView: 'radar' });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual([b.radar.on, b.radar.frames], [false, ['40100-a', '40100-b']]);
+  assert.deepEqual(b.radar.ft, dry.ft);
+  // Peek: every kept frame in pv.radar, whatever the view; the weather variants include radar.
+  s.store.update('home', { wxView: 'now' });
+  b = (await s.req('/board/update?b=home&hk=skyline:peek', h)).body;
+  assert.deepEqual(b.radar.frames, []);
+  assert.deepEqual(b.pv.radar, { frames: dry.frames, ft: dry.ft });
+  assert.deepEqual(b.knob.vars[1], ['now', '5day', 'hourly', 'radar']);
+  const sel = await s.req('/board/select?b=home&s=weather&v=radar&hk=skyline:peek', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.deepEqual([sel.body.radar.frames, sel.body.knob.sel[1]], [dry.frames, 3]);
   await s.close();
 });

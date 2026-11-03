@@ -297,6 +297,19 @@ test('peek chooser: the chosen variant itself, drawn from pv, under the category
   f = render(pr, { screen: 'peek', now, frames: { a: bytes, b: bytes }, peek: { k: 1, vi: 0 } });
   assert.deepEqual(seg(f), ['#6a6a6a', C.amber, C.indicator]);
   assert.notEqual(hex(f.get(0, 10)), '#000000', 'the newest frame on hand is drawn');
+
+  // The radar view: every kept frame from pv.radar, dry or not; the other
+  // views ignore frames while it's dry (radar.on false).
+  const pd = { ...p, radar: { ...radar, on: false, frames: ['a', 'b'], ft: [now - 400, now - 40] },
+    pv: { ...p.pv, radar: { frames: ['a', 'b'], ft: [now - 400, now - 40] } },
+    knob: { ...p.knob, vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline'], [], []] } };
+  const empty = new Uint8Array(2048);
+  empty[3 * 64 + 5] = 6;
+  f = render(pd, { screen: 'peek', now, frames: { a: empty, b: empty }, peek: { k: 1, vi: 3 } });
+  assert.deepEqual([60, 63].map((x) => hex(f.get(x, 2))), ['#6a6a6a', C.amber], 'the radar loop, still on the newest');
+  assert.notEqual(hex(f.get(5, 3)), '#000000', 'the shoreline');
+  f = render(pd, { screen: 'peek', now, frames: { a: empty, b: empty }, peek: { k: 1, vi: 0 } });
+  assert.ok(rowsEqual(f, render({ ...p, radar: { ...radar, wx } }, { screen: 'weather', now }), 0, 20), 'conditions while dry');
 });
 
 test('clock screen, seventies face: VCR digits banded by row, stripes along the bottom and up the right edge', () => {

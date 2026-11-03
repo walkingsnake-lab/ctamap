@@ -272,7 +272,7 @@ test('knob: peek boards get each category\'s variants and the one it opens on; s
   store.update('home', { screen: 'ticker', wxView: 'hourly', clockFace: 'analog' });
   assert.deepEqual(knobOf(store.get('home'), { clock: true, announce: true, peek: true, faces, ln: 'RD' }), {
     ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 0,
-    vars: [['transit', 'ticker'], ['now', '5day', 'hourly'], faces, [], []], sel: [1, 2, 2, 0, 0], ln: 'RD',
+    vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], faces, [], []], sel: [1, 2, 2, 0, 0], ln: 'RD',
   });
   // A face the board can't draw opens on the first.
   store.update('home', { clockFace: 'gradient' });

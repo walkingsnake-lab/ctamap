@@ -471,7 +471,13 @@ function createBoard({
     const barsOn = wxRain === 'bars' || wxRain === 'both';
     let rain = barsOn && w ? toRain(w, now) : null;
     if (testBars) rain = testBars;
-    if (!radarState.on || wxRain === 'bars' || (testBars && wxRain !== 'both')) radarState = { ...radarState, frames: [], ft: [] };
+    // The radar view (wxView 'radar') keeps its frames whatever the weather
+    // (an empty map when dry) and never shows rain bars.
+    const radarView = board.wxView === 'radar';
+    if (radarView) rain = null;
+    // Every kept frame, rain or not, for the peek chooser's radar view.
+    const allFrames = { frames: radarState.frames, ft: radarState.ft };
+    if (!radarView && (!radarState.on || wxRain === 'bars' || (testBars && wxRain !== 'both'))) radarState = { ...radarState, frames: [], ft: [] };
     // Both: the radar loop plays wxRainLoops full cycles, then the bars show
     // for alt s, repeating (draw.js rainBarsTurn()).
     if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15, loops: board.wxRainLoops || 2 };
@@ -559,7 +565,7 @@ function createBoard({
       msg: msgOf(board),
       // Peek chooser (caps.peek): what the other variants draw from, so the
       // board can draw any of them while the knob turns (contract "Peek").
-      ...(caps.peek ? { pv: peekOf(board, w, wd, st, skyNow, now, caps) } : {}),
+      ...(caps.peek ? { pv: { ...peekOf(board, w, wd, st, skyNow, now, caps), radar: allFrames } } : {}),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },

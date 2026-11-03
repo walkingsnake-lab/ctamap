@@ -70,7 +70,10 @@ const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
 const TRANSIT_LAYOUTS = ['header', 'key'];
 const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame time, current time, how long ago the frame is, or nothing
-const WX_VIEWS = ['now', '5day', 'hourly'];  // weather screen without rain: conditions, 5-day, or hourly
+// The weather screen's view: conditions, 5-day, or hourly (the radar loop
+// takes over while rain is in the box), or the radar, always (an empty map
+// when dry).
+const WX_VIEWS = ['now', '5day', 'hourly', 'radar'];
 const TEMP_UNITS = ['F', 'C'];  // temperatures on every weather display
 // Retired settings, dropped from saved state on load: per-layout animated
 // weather icons (removed Nov 2026; icons are always static).
