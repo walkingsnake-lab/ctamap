@@ -91,7 +91,8 @@ def configure_shell():
     V.USB_SIDE = +1
     V.PORT_Z = PORT_Z
     V.BTN_Z0, V.BTN_Z1 = BTN_Z0, BTN_Z1
-    V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME = False, False, False, False
+    V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME = False, False, True, False   # light-sensor hole printed open (Ø2.1), Nov 2
+    V.SENSOR_ROUND = True                          # round, not a teardrop: reads as a pinhole; ream with a 2 mm bit
 
 
 # ---- tray ----

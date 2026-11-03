@@ -118,8 +118,11 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
   on the right, centred between the panel's right-hand posts, so all four corner inserts get a bolted post (funnel tubes).
 - Top wall: one slot open to the front edge, only as wide as the knob encoder's body (18.7 mm). The light sensor rides on the
   tray: screwed under the top wall (4 x M2.5 x 5 into short pillars, chip up, its sockets in channels in the wall) below a Ø8.3 hole lined up with the sleeve's
-  light-sensor pocket (a blind Ø7.5 recess inside the top wall, 0.8 mm skin left; the 5-hole 1/16" grille from `grille_guide.py`, Ø6.47, drills
-  through that skin; `case2.GRILLE_BIT` / `GRILLE_WEB` size all three); no bracket. Right wall: a slot for the USB-C plug and
+  light-sensor hole. The P3 v5 sleeve prints that hole open (round Ø2.1, `SENSOR_PRINTED` + `SENSOR_ROUND` in
+  `configure_shell()`; Nov 2; it prints ~Ø1.9 with a slight sag at the print's top: twist a 2 mm or 5/64" bit through it by
+  hand from the outside, then break the edge lightly with a larger bit turned between the fingers, before oiling): one small hole interrupts ~10 layers once, where a printed grille would interrupt ~30 with webs thinner
+  than two lines. Older v5 sleeves have a blind Ø7.5 pocket instead (0.8 mm skin left), drilled with the 5-hole grille guide below
+  (`case2.GRILLE_BIT` / `GRILLE_WEB`); no bracket. Right wall: a slot for the USB-C plug and
   the S3's edge buttons. Back: full-width louver bands, Boot and status-light holes, one pair of ribbon hooks, a tie loop, two
   nut bosses for the French cleat. No keyholes.
 - Order: diffuser and panel into the sleeve; encoder from the back; S3 and sensor onto the tray; tray in;
