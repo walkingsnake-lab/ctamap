@@ -34,24 +34,28 @@ Files are in `stl/v5-drawer/` unless they start with `stl/`.
 ## Test plate
 One print with every fit that's new and not yet confirmed on a real print (Nov 3). Print it with the tray's settings
 (below), then:
-1. **Status window** (the small square piece): the translucent disc should be clean and flush, with no black bleeding
-   into it. That's the AMS swap the tray will do.
-2. **Cleat pilots** (three bosses, 1-3 notches = Ø2.8 / 2.9 / 3.0): drive an M3 x 10 into each. Keep the one that threads in
-   firmly without the boss splitting. The tray has 2.9 (`TAP_D_V` in `src/drawer.py`): if another wins, change it and
+The plate has four pieces: the long top strip, a small piece of the tray's back (status window and Boot funnel), a block
+of three bosses, and the light-sensor sled (a real one: keep it for the build).
+1. **Status window** (on the small back piece, beside the Boot funnel): the translucent disc should be clean and flush,
+   with no black bleeding into it. That's the AMS swap the tray will do.
+2. **Cleat pilots** (three bosses, 1-3 notches = Ø2.8 / 2.9 / 3.0): drive an M3 x 10 into each, from the flat side, through
+   a 4 mm spacer (a scrap of plastic or a stack of washers: the cleat is 4 mm thick there), or let the tip come out 3.5 mm
+   the far side. Keep the one that threads in firmly without the boss splitting. The tray has 2.9 (`TAP_D_V` in `src/drawer.py`): if another wins, change it and
    regenerate. (The bottom screws' pilots are settled: Ø3.0, the fit set's best.)
 3. **Top strip** (the long piece: the tray's top wall over the encoder and the sensor):
    - **Encoder rails:** set the encoder's board between the two rails at the left end. It should go in with a little play
-     (~0.7 mm a side) and, turned, stop after a few degrees.
+     (~0.7 mm a side) and, turned, stop at about 3.5°.
    - **Sensor sled:** tilt the sled about 10° (front down), put its two back tabs into the two hooks, swing the front up to
      the wall and drive an M2.5 x 6 in from the outside face (the counterbore beside the big hole). The tabs should slide
      in without force and not rattle.
 
 ## Hardware
-- **Screws:** 4 x M3 x 8 countersunk (tray posts into the panel's inserts; the post tubes end in 90° funnels that seat the
-  heads, no washers), 2 x M3 x 10 button head (from below, threaded into the tray), 4 x M2.5 x 8 (S3 onto its posts,
-  self-tapping), the encoder's M7 nut and washer.
+- **Screws** (button heads unless noted; the hex keys below fit them): 4 x M3 x 8 **countersunk** (tray posts into the
+  panel's inserts; the post tubes end in 90° funnels that seat the heads, no washers), 2 x M3 x 10 (from below, threaded
+  into the tray), 4 x M2.5 x 8 (S3 onto its posts, self-tapping), the encoder's M7 nut and washer.
 - **Light sensor (optional):** Adafruit VEML7700 (4162, flat), 2-4 x M2.5 x 5 (sensor onto the sled), 1 x M2.5 x 6 (sled,
-  from outside the tray).
+  from outside the tray). Button heads: the M2.5 x 6 sits in a 1.8 mm counterbore under the sleeve, and a socket cap
+  (~2.5 tall) would stand proud and jam the tray.
 - **Wall cleat (optional):** 2 x M3 x 10 (case cleat into the tray), 2 x #8 / 4 mm countersunk wood screws or anchors.
 - **Cables:** the panel's 16-pin ribbon (at least 15 cm, 20 cm comfortable, so the tray comes out still cabled) and its
   power leads; STEMMA QT: S3 → sensor 10 cm and sensor → encoder 15-20 cm, or one 20-30 cm S3 → encoder without the sensor;
@@ -99,14 +103,17 @@ The panel goes in first; the encoder after it (its board hangs where the panel s
    seats on the rim.
 5. **Encoder (flip the shell):** lay the shell top-down across two supports (books, blocks) with the knob hole between them
    and the case's depth level. Check the panel is still fully forward. From inside, drop the encoder into the collar's
-   pocket, shaft first, NeoPixel toward the front, its board square to the case's sides (the tray's rails allow ~3°). Gravity
+   pocket, shaft first, NeoPixel toward the front, its board's edges square to the case's sides (by eye: the tray's rails
+   pass either side of the board and allow ~3.5°). Gravity
    holds it while you thread the M7 nut and washer on from outside and snug it. Turn the shell back over **face down or onto
    its side, never onto its back** (the panel could slide out). Push the knob on until it stops on the shaft tip.
 6. **Encoder cable:** plug the QT cable from the S3 (or the sensor) into either socket under the encoder's board **now**: the
-   socket faces into the tray's space and can't be reached once the tray is in.
+   socket faces into the tray's space and can't be reached once the tray is in. Let the cable drop straight down from the
+   plug, not along the board's edge: the tray's rails slide in just above it.
 7. **Tray in:** ribbon to the panel's PI IN (left, seen from the front), clipped into the tray's ribbon hooks; power leads to
-   the panel. Slide the tray in (its rails pass either side of the encoder's board: if it stops there, the board is turned;
-   square it) and push it fully forward. 4 x M3 x 8 countersunk down the post tubes into the panel (2 mm key). Then the
+   the panel. Slide the tray in and push it fully forward. Its rails pass either side of the encoder's board; if the tray
+   stops there, the board is turned: pull the tray back, take the knob off, loosen the M7 nut a turn, square the board,
+   snug the nut and put the knob back. 4 x M3 x 8 countersunk down the post tubes into the panel (2 mm key). Then the
    2 x M3 x 10 from below into the tray: the first time, drive each in slowly, back it out once, then drive it home and stop
    when the head seats (snug, not tight: the head bears on the walnut).
 8. **Firmware:** the panel sits turned 180° in this case: `MATRIX_ROTATION 180` in `secrets.h`. Plug in USB-C.
@@ -129,8 +136,9 @@ above the resting spot, push to the wall, drop onto the bevel.
 
 ## Heat-set inserts (later)
 Every screw into the tray (the 2 from below and the 2 for the cleat) threads into a plain pilot. With a heat-set iron:
-`FASTEN=insert python3 drawer.py ../stl/v5-drawer`, reprint the tray, and press M3 inserts (5.7 long, 4.6-5.0 OD class) into
-the Ø4.0 x 6 holes from the side the screw comes in (underneath; the back face). Nothing else changes.
+`FASTEN=insert python3 drawer.py ../stl/v5-drawer` (it rewrites that folder's set with insert holes; for the P2.5,
+`PANEL=p25 FASTEN=insert python3 drawer.py ../stl/v5-drawer-p25`), reprint the tray, and press M3 x 5.7 inserts with a
+4.6 mm OD into the Ø4.0 x 6 holes from the side the screw comes in (underneath; the back face). Nothing else changes.
 
 ## Watch for
 - **Heat:** typical draw (1-3 W) is fine. Sustained full-white at daytime brightness can push the inside toward ~55 °C in a warm
@@ -143,12 +151,13 @@ the Ø4.0 x 6 holes from the side the screw comes in (underneath; the back face)
 ## Key geometry (P3; case frame: x right seen from the front, y back from the front edge, z up from the bottom)
 - Outer 219 x 112.3 x 69 mm; walls 3.5; bore 212 x 105.3, corners R11.5; ZC (panel centre) z 56.15.
 - Diffuser face y 12, its flange's back y 13.2 (the tray's front edge); panel back y 28.2, the tray's post feet y 27.9 (0.3 mm
-  long on purpose: a short post would pull the panel off the diffuser; a long one leaves the tray edge just off the flange).
+  long on purpose: a short post would pull the panel off the diffuser; a long one leaves the tray edge just off the flange,
+  so seated the tray sits 0.3 back and its bottom bosses are 0.3 forward in the model to land on the shell's holes).
   Tray back y 63-65, 4 mm inside the rim.
 - Panel turned 180° (input on the left seen from the front); posts at its corner inserts x ±87.25, z ZC +29 / -31.
 - Screws from below at x ±46, y 59.5 (shell holes ±0.4 long in y); cleat screws at x ±50, z ZC +25.4.
 - Knob at x 0, y 41.9; light-sensor pinhole at x +55, y 42. Encoder board 25.4 square at z 103.0-104.6; tray rails at
-  x ±13.4..15.0.
+  x ±13.4..15.0, reaching 0.75 mm down past the board's top face.
 - S3 on the right, turned 180°: board edge x 102.85, bottom edge z ZC -24.7; USB-C at z ZC -16.45, y 40.9; status LED at
   (90.7, z 72.5), Boot at (88.3, z 60.0).
 

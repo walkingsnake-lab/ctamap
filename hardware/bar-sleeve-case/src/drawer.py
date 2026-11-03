@@ -112,7 +112,7 @@ CLEAT_ZBOT = ZC - _hz + 2.5 + LV_H + (LV_ROWS - 1) * LV_PITCH - 0.5 + 1.0   # 1 
 CLEAT_SCREWS = [(sx * 50.0, CLEAT_ZTOP - CLEAT_ATT / 2) for sx in (-1, 1)]
 CLEAT_HW = min(75.0, min(S3_BOOT[0] - 2.4, S3_NEO[0] - 1.5) - 3.0)    # half length: clear of the Boot and status holes
 # cleat boss: diameter, height. The cleat's M3 x 10s thread into it (FASTEN below) and so can two M3s threaded in a few
-# turns to draw the tray out. 4.5 tall: with the 2 mm back an M3 x 10 through the cleat's 4 mm engages 6 mm, tip 0.5 short
+# turns to draw the tray out. 4.5 tall: with the 2 mm back an M3 x 10 through the cleat's 4 mm engages ~5.3 mm, tip 0.5 short
 CB_D, CB_H = 10.0, 4.5
 # status light: a translucent window printed into the back face (bar-drawer-tray-window.stl, the tray's second part on the
 # AMS, about 4 layers of swaps), lit through the full light tube; Boot: a 45-deg funnel round its hole that reads as
@@ -153,11 +153,16 @@ BOSS_TOP = WALL + 9.0                           # bottom boss top (12.5 at the 3
 # stands off the flange (harmless: the tray floats in y). POST_LONG puts the error on the harmless side.
 POST_LONG = 0.3
 P3.FOOT_Y = PANEL_BACK - POST_LONG
+# seated, the tray then sits POST_LONG further back than in the model (its edge off the flange): the bottom bosses move
+# forward by as much, so their screws land in the middle of the shell's stadium holes
+BOT_Y = C.SCREW_Y - POST_LONG
 
 # Encoder rails (Nov 3): the encoder's pocket in the collar is round and nothing keys its body, so a loosened nut let the
-# body turn until its board's corner reached the panel (~4.7 deg). Two rails hang from the tray's top wall beside the
-# board's side edges (it's a 25.4 square) and stop it at ~3 deg, on the tray. Square the board by eye when tightening.
+# body turn until its board's corner reached the panel (~4.9 deg). Two rails hang from the tray's top wall beside the
+# board's side edges (it's a 25.4 square) and stop it at ~3.5 deg, on the tray. Square the board by eye when tightening.
 RAIL_CL, RAIL_W = 0.7, 1.6                      # gap to the board's edge a side; rail thickness
+RAIL_LAP = 0.75                                 # how far the rails reach down past the board's top face (of its 1.57): they stop
+                                                # 0.8 over its underside, clear of the QT plugs leaving under the board
 
 # Light sensor (Nov 3): SENSOR_MOUNT 'sled'. The four pillars needed a driver aimed up at the top wall from 27-40 mm
 # inside the tray's open front. Now the sensor screws chip up onto a flat sled on the bench (2-4 x M2.5 x 5 down from the
@@ -330,7 +335,7 @@ def bottom_xs():
 
 def bottom_bosses(zin0):
     """screw bosses on the tray's bottom wall, one per screw from below: solid, 10 wide, 5 mm in front of the screw"""
-    return Manifold.batch_boolean([_rrect_z(x - 5, x + 5, C.SCREW_Y - 5.0, Y0 + 0.01, 2.0, zin0 - 0.01, BOSS_TOP)
+    return Manifold.batch_boolean([_rrect_z(x - 5, x + 5, BOT_Y - 5.0, Y0 + 0.01, 2.0, zin0 - 0.01, BOSS_TOP)
                                    for x in bottom_xs()], ADD)
 
 
@@ -346,11 +351,11 @@ def bottom_nut_cuts():
     z0 = tray_floor_z()
     for x in bottom_xs():
         if FASTEN == 'insert':
-            cuts.append(cyl_z(x, C.SCREW_Y, z0 - 1, z0 + INSERT_L, INSERT_D, 32))
-            cuts.append(cyl_z(x, C.SCREW_Y, z0 - 1, BOSS_TOP - 0.8, 3.4, 24))
+            cuts.append(cyl_z(x, BOT_Y, z0 - 1, z0 + INSERT_L, INSERT_D, 32))
+            cuts.append(cyl_z(x, BOT_Y, z0 - 1, BOSS_TOP - 0.8, 3.4, 24))
             continue
-        cuts.append(cyl_z(x, C.SCREW_Y, z0 - 1, BOSS_TOP - 0.8, TAP_D, 24))
-        cuts.append(Manifold.cylinder(TAP_LEAD + 0.01, TAP_D / 2 + TAP_LEAD + 0.01, TAP_D / 2, 24).translate([x, C.SCREW_Y, z0 - 0.01]))
+        cuts.append(cyl_z(x, BOT_Y, z0 - 1, BOSS_TOP - 0.8, TAP_D, 24))
+        cuts.append(Manifold.cylinder(TAP_LEAD + 0.01, TAP_D / 2 + TAP_LEAD + 0.01, TAP_D / 2, 24).translate([x, BOT_Y, z0 - 0.01]))
     return cuts
 
 
@@ -381,14 +386,14 @@ def rail_xs():
 
 
 def enc_rails():
-    """two rails from the top wall down to 0.4 over the board's underside, beside its side edges, from 1 mm behind the
+    """two rails from the top wall down to RAIL_LAP past the board's top face, beside its side edges, from 1 mm behind the
     board's front edge (clear of the panel) back to the top louver band, merged into it (nothing overhangs back-down).
     Their front ends are cut back 45 deg on the inside so a slightly turned board is guided straight as the tray slides in."""
     hw, (by0, by1), (bz0, bz1) = enc_board()
     zw, y_in = _zw(), Y1 - LV_DEPTH
     out = []
     for xa, xb in rail_xs():
-        r = box(min(xa, xb), max(xa, xb), by0 + 1.0, y_in + 0.5, bz0 + 0.4, zw + 0.01)
+        r = box(min(xa, xb), max(xa, xb), by0 + 1.0, y_in + 0.5, bz1 - RAIL_LAP, zw + 0.01)
         sgn = 1 if xb > xa else -1                    # from the face toward the board (xa) into the rail
         y0 = by0 + 1.0
         pts = [(xa - sgn * 0.2, y0 - 0.1), (xa + sgn * 1.0, y0 - 0.1), (xa - sgn * 0.2, y0 + 1.2)]
@@ -434,7 +439,7 @@ def louver_gaps(zc, r):
     out = []
     if SENSOR_MOUNT == 'sled' and not (hi < hook_bottom() or lo > _zw()):
         out += [(hx - hook_half() - 0.6, hx + hook_half() + 0.6) for hx in hook_xs()]
-    if not (hi < enc_board()[2][0] + 0.4 or lo > _zw()):              # and the encoder rails
+    if not (hi < enc_board()[2][1] - RAIL_LAP or lo > _zw()):          # and the encoder rails
         out += [(min(xa, xb) - 0.6, max(xa, xb) + 0.6) for xa, xb in rail_xs()]
     return out
 

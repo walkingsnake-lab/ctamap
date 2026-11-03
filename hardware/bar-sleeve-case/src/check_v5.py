@@ -32,6 +32,8 @@ def rep(name, val, ok=True):
 
 # ---- bottom screws (M3 x 10 from below, threaded into the tray)
 zf = DR.tray_floor_z()
+SEAT = DR.POST_LONG                                           # seated, the tray sits this far back of the model (posts long)
+rep('bottom screws land in the middle of the shell holes when seated (mm off)', round(DR.BOT_Y + SEAT - C.SCREW_Y, 3), abs(DR.BOT_Y + SEAT - C.SCREW_Y) < 1e-6)
 for dy in (-DR.SCREW_FLOAT, 0, DR.SCREW_FLOAT):                  # the tray floats in y against the shell's stadium holes
     scr = [cyl_z(x, C.SCREW_Y + dy, 1.0, 11.0, 3.0, 32) for x in DR.bottom_xs()]
     head = [cyl_z(x, C.SCREW_Y + dy, -1.0, 1.0, 5.7, 32) for x in DR.bottom_xs()]
@@ -40,9 +42,9 @@ for dy in (-DR.SCREW_FLOAT, 0, DR.SCREW_FLOAT):                  # the tray floa
 x = DR.bottom_xs()[1]
 ring = cyl_z(x, C.SCREW_Y + DR.SCREW_FLOAT, 1.0, 1.05, 5.7, 64)
 rep('bottom screw head bearing on the counterbore floor at full float (mm^2; 18 centred on a round hole)', round(ov(ring, shell) / 0.05, 1), ov(ring, shell) > 0)
-core = cyl_z(x, C.SCREW_Y, zf, 11.0, 2.0, 24)
+core = cyl_z(x, DR.BOT_Y, zf, 11.0, 2.0, 24)
 rep(f'bottom pilot (Ø{DR.TAP_D}) open for the M3 core', ov(core, tray), ov(core, tray) < 1e-3)
-bite = cyl_z(x, C.SCREW_Y, zf, 11.0, 3.0, 32) ^ tray
+bite = cyl_z(x, DR.BOT_Y, zf, 11.0, 3.0, 32) ^ tray
 bb = bite.bounding_box()
 rep('bottom thread engagement in PETG (mm)', round(bb[5] - max(bb[2], zf + DR.TAP_LEAD), 2), bb[5] - bb[2] >= 6.0)
 rep('bottom pilot runs past the screw tip (mm)', round(DR.BOSS_TOP - 0.8 - 11.0, 2), DR.BOSS_TOP - 0.8 - 11.0 >= 0.3)
@@ -67,7 +69,11 @@ rep('post feet in front of the panel back at nominal (mm; the tray edge then sta
 
 # ---- encoder rails
 enc = SN.envelopes()
-encm = enc['enc_pcb'] + enc['enc_body'] + enc['enc_qt'] + enc['enc_pins']
+hw = 12.7
+plugs_e = Manifold.batch_boolean([box(sx * 7.7, sx * (hw + 7.0), KY - 3.0, KY + 3.0, SN.EB_BOT - 2.96, SN.EB_BOT) for sx in (-1, 1)], C.ADD)
+encm = enc['enc_pcb'] + enc['enc_body'] + enc['enc_qt'] + enc['enc_pins'] + plugs_e    # with its QT plugs, out past the edges
+rails_bot = SN.EB_TOP - DR.RAIL_LAP
+rep('rails clear the encoder QT plugs by (mm)', round(rails_bot - SN.EB_BOT, 2), rails_bot - SN.EB_BOT >= 0.7)
 rep('encoder (board, body, sockets, pins) vs tray, seated', ov(encm, tray), ov(encm, tray) < 1e-3)
 worst = max(ov(encm, tray.translate([0, dy, 0])) for dy in np.arange(0, 56, 2.0))
 rep('tray slides in past the encoder (0-54 mm out)', worst, worst < 1e-3)
