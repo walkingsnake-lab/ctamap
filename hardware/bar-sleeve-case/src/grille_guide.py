@@ -30,7 +30,7 @@ import case as C
 V5 = C.WALL > 3.0          # v5 drawer sleeve (CASE_WALL=3.5)
 PLUG_D = C.WALL - 0.1      # plug depth into the knob hole: 2.4 (v4), 3.4 (v5)
 PLUG_CL = 0.5              # plug body clearance; the ribs take up the rest
-RIB_R = 12.25 if V5 else 12.15   # rib crest radius (nominal hole r 12.0); v5: 12.25 won the collar's ribbed fit set
+RIB_R = 12.15                # rib crest radius (nominal hole r 12.0); v5: 12.15, snug for the collar on the v5 shell
 FENCE_GAP = 0.15           # fence's inner face behind the case's back face
 FENCE_T, FENCE_DROP = 2.5, 6.0
 FENCE_X = (-12.0, 62.0)

@@ -130,7 +130,7 @@ look; only the USB-C opening moves (low on the right) and the tongue grooves go.
   cleat nuts into their bosses for good (press fit): they take the cleat, and two M3 screws threaded in a few turns pull the
   tray out.
 - Light-sensor grille (optional): `stl/v5-drawer/bar-sensor-grille-guide-v5-5hole.stl` (`CASE_WALL=3.5 python3 grille_guide.py <outdir>`),
-  any PLA, top face down. Its plug is 3.4 deep for the 3.5 wall, with ribs at r 12.25 (the size that won the collar's ribbed fit set),
+  any PLA, top face down. Its plug is 3.4 deep for the 3.5 wall, with ribs at r 12.15 (the size that is snug for the collar),
   so no plug fit set is needed. Use it on the empty sleeve, collar out: plug in the knob hole, fence over the back face, push the
   guide back against the fence and drill the five holes with a 1/16" (1.59) bit; run the bit through the guide once first. The bit
   only cuts the pocket's 0.8 mm skin (checked against the model). Deburr inside lightly.
