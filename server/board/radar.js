@@ -4,6 +4,10 @@
 // Mesonet archive, cropped around each board's station and reduced to a
 // 64x32 indexed frame.
 //
+// When IEM can't give a frame, NWS's map service stands in for it
+// (radar-nws.js): a small crop around the stations, its colors read back
+// as dBZ.
+//
 // Pipeline per frame: stream-decode only the rows around the station
 // (radar-png.js) -> palette index to dBZ -> average linear reflectivity per
 // LED block -> levels (rain or snow) -> despeckle -> location marker.
@@ -12,6 +16,7 @@
 
 const https = require('https');
 const { decodeRows } = require('./radar-png');
+const { createNwsSource, GRID: NWS_GRID } = require('./radar-nws');
 
 const BASE = 'https://mesonet.agron.iastate.edu/archive/data';
 const W = 64, H = 32;
@@ -182,12 +187,13 @@ function toFrame(dbz, geo, mode, loc = null) {
 
 // Decode one source frame for several locations at once.
 // locs: [{ key, lat, lon, width }]. Returns Map key -> dBZ grid + geometry.
-async function crops(png, wld, locs) {
+// rgbIndex: for an RGB source (the NWS fallback), its colors -> lcref indices.
+async function crops(png, wld, locs, rgbIndex = null) {
   const accs = locs.map((l) => ({ key: l.key, acc: accumulator(geometry(wld, l.lat, l.lon, l.width)) }));
   const y0 = Math.min(...accs.map((a) => a.acc.geo.y0));
   const y1 = Math.max(...accs.map((a) => a.acc.geo.y1));
   await decodeRows(png, {
-    y0, y1,
+    y0, y1, rgbIndex,
     onRow: (y, row) => { for (const a of accs) if (y >= a.acc.geo.y0 && y <= a.acc.geo.y1) a.acc.row(y, row); },
   });
   return new Map(accs.map((a) => [a.key, { dbz: a.acc.dbz(), geo: a.acc.geo }]));
@@ -237,6 +243,9 @@ function withTimeout(promise, ms, what) {
 // of the loop), and only while a board has asked recently.
 function createRadar({
   fetch = fetchFrame,
+  // Stand-in source when fetch fails: (t, geometries) -> { wld, png, rgbIndex }
+  // (radar-nws.js). Default: NWS's map service, with the default fetch only.
+  fallback,
   weather = null,          // weather.js poller, for snow mode
   now = () => Date.now() / 1000,
   lag = 120,               // s before a frame is expected in the archive
@@ -249,6 +258,12 @@ function createRadar({
   const locs = new Map();     // mapid -> { lat, lon, wantedAt, frames: Map(stamp -> frame), on }
   const missing = new Map();  // stamp -> retry-after time
   let timer = null, busy = null;
+  let nws = null;
+  if (fallback === undefined && fetch === fetchFrame) {
+    nws = createNwsSource({ get, now, log });
+    fallback = nws.fetch;
+  }
+  let onFallback = false;     // the last frame came from the fallback (logged on change)
 
   // Loop slots, oldest first, ending at the latest 6-minute time expected
   // to exist.
@@ -257,16 +272,41 @@ function createRadar({
     return Array.from({ length: LOOP }, (_, i) => newest - (LOOP - 1 - i) * STEP).map(stampOf);
   }
 
+  // One source frame: IEM's, else the fallback's. A slot IEM simply
+  // hasn't archived yet (404 within a step of when it's due) waits for IEM,
+  // so normal frames all come from one source; an error, or a slot still
+  // missing a step later (IEM stalled), goes to the fallback. Both failing
+  // throws the fallback's error (a 404 when neither has the slot).
+  async function source(stamp, list) {
+    try {
+      const src = await fetch(stamp);
+      if (onFallback) { onFallback = false; log.warn('[board] radar: IEM is back'); }
+      return src;
+    } catch (e) {
+      if (!fallback || (e.status === 404 && now() - timeOf(stamp) < lag + STEP)) throw e;
+      const geos = list.map((l) => geometry(NWS_GRID, l.lat, l.lon, l.width));
+      const src = await fallback(timeOf(stamp), geos).catch((f) => {
+        if (e.status !== 404 && f.status === 404) f.status = 0; // IEM's real failure still gets logged
+        f.message = `IEM: ${e.message}; NWS: ${f.message}`;
+        throw f;
+      });
+      if (!onFallback && e.status !== 404) { onFallback = true; log.warn(`[board] radar: IEM failed (${e.message}); using NWS's map service`); }
+      return src;
+    }
+  }
+
   async function processStamp(stamp, wanted) {
-    const { wld, png } = await fetch(stamp);
     const list = wanted.map(([key, l]) => ({ key, lat: l.lat, lon: l.lon, width: loadLocation(key).width }));
-    const out = await crops(png, wld, list);
+    const src = await source(stamp, list);
+    let out;
+    try { out = await crops(src.png, src.wld, list, src.rgbIndex || null); }
+    finally { if (nws) nws.flushUnknown(); }
     for (const [key, l] of wanted) {
       const w = weather ? await weather.get(l.lat, l.lon, { wait: 0 }).catch(() => null) : null;
       const mode = modeFor(w);
       const { dbz, geo } = out.get(key);
       const f = toFrame(dbz, geo, mode, loadLocation(key));
-      l.frames.set(stamp, { id: `${key}-${stamp}${mode === 'snow' ? 's' : ''}`, t: timeOf(stamp), mode, ...f });
+      l.frames.set(stamp, { id: `${key}-${stamp}${mode === 'snow' ? 's' : ''}`, t: timeOf(stamp), mode, src: src.src || 'iem', ...f });
       // Keep the newest KEEP frames.
       const old = [...l.frames.keys()].sort().slice(0, -KEEP);
       for (const s of old) l.frames.delete(s);

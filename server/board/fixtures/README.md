@@ -33,6 +33,11 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
   - `lcref_202202021800.*`: Feb 2, 2022 snowstorm, noon CST. Chicago crop averages 11–18 dBZ.
   - `lcref_202610041600.*`: Oct 4, 2026, clear at Chicago. New-style `.wld` origin (-129.995, 54.995).
 
+- `radar-nws/` — NWS map service (`radar-nws.js`), Nov 3, 2026, recorded from the cloud session.
+  - `catalog-20261103-2150.json`: `query` for CONUS items (`catalogUrl()`), 17 frames 19:40–21:50 UTC.
+  - `bref-20261103-214420-32.0n-93.0w.png`: `exportImage` locked to the 21:44:20 UTC item (objectid 262765637), the window for a station at 32.0 N, 93.0 W (northwest Louisiana; rain to 53 dBZ). 166 × 72, 8-bit RGB with a tRNS background.
+  - `mrms-bref-20261103-214420-32.0n-93.0w.png` + `.wld`: the truth for it. **Derived, not a recording**: the raw MRMS file of the same time (`noaa-mrms-pds` on AWS, `CONUS/MergedBaseReflectivityQC_00.50/20261103/MRMS_MergedBaseReflectivityQC_00.50_20261103-214420.grib2.gz`, GRIB2 PNG-packed), cropped to the same window and written as an lcref-style palette PNG (index = (dBZ + 32) × 2, 255 missing) so the IEM pipeline reads it.
+
 - `mlb/` — MLB Stats API schedule responses (`mlb.js` `url()`, `hydrate=linescore`). Record new ones from `/board/<control path>/api/raw/mlb`.
   - `schedule-2026-10-03-alds-final.json`: ALDS Game 1, White Sox 3 at Guardians 0, final (postseason `leagueRecord` 1-0 / 0-1). **Not a byte-for-byte recording**: the cloud session couldn't reach the API directly, so it was assembled from a fetched copy of the game object (field names and values as returned; the date wrapper and a trimmed `defense` block filled in). Replace with a capture from `api/raw/mlb` when convenient.
 
