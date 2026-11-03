@@ -1219,8 +1219,16 @@ test('firmware: outside the overnight window a stable board gets no offer; beta 
   const h = { headers: { 'X-Board-Token': 'tok' } };
   assert.equal((await s.req('/board/secret123/api/firmware?channel=stable', signed(fakeBuild('aaaaaaa')))).status, 200);
   assert.equal((await s.req('/board/secret123/api/firmware?channel=beta', signed(fakeBuild('bbbbbbb')))).status, 200);
-  const q = '/board/version?b=home&hu=60&hd=adafruit_matrixportal_s3&hv=1234567';
+  const q = '/board/version?b=home&hu=600&hd=adafruit_matrixportal_s3&hv=1234567';
   assert.ok(!('fw' in (await s.req(q, h)).body));
+  // Just started (unplugged overnight, say): offered anyway, before anyone watches.
+  assert.equal((await s.req(q.replace('hu=600', 'hu=30'), h)).body.fw.v, 'aaaaaaa');
+  // A rollback note outlives the reports without an offer, while that build is still the target.
+  await s.req(q.replace('hu=600', 'hu=700') + '&hx=rolledback:aaaaaaa', h);
+  await s.req(q.replace('hu=600', 'hu=760'), h);
+  assert.equal((await s.req('/board/secret123/api/health')).body.home.ota, 'rolledback:aaaaaaa');
+  await s.req('/board/version?b=home&hu=800&hd=adafruit_matrixportal_s3&hv=aaaaaaa', h);
+  assert.equal((await s.req('/board/secret123/api/health')).body.home.ota, undefined, 'running it now: gone');
   s.store.update('home', { fw: 'beta' });
   assert.equal((await s.req(q, h)).body.fw.v, 'bbbbbbb');
   s.store.update('home', { fw: 'aaaaaaa' });
@@ -1345,20 +1353,30 @@ test('transfer: a keyed board gets a new link, default settings, and a WiFi wipe
   assert.equal(b.label, 'Kitchen');
   assert.equal(b.fw, 'off');
   assert.ok(b.v > v0);
-  // The board hears the stamp on every version check, and reports applying it.
-  const vr = (await s.req('/board/version?b=kitchen&hu=5&hz=' + r.body.wipe, own)).body;
-  assert.equal(vr.wipe, r.body.wipe);
+  // The board hears the stamp on every version check until it reports applying it.
+  assert.equal((await s.req('/board/version?b=kitchen&hu=5', own)).body.wipe, r.body.wipe);
+  await s.req('/board/version?b=kitchen&hu=6&hz=' + r.body.wipe, own);
   assert.equal((await s.req('/board/secret123/api/health')).body.kitchen.wiped, r.body.wipe);
-  // A second transfer always gets a newer stamp, even within the same second, and survives a new token.
+  assert.ok(!('wipe' in (await s.req('/board/version?b=kitchen&hu=7', own)).body), 'applied: dropped, so a reflash is never wiped again');
+  // A second transfer gets a newer stamp, even within the same second; a new token (a reflash) drops it.
   const r2 = await s.req('/board/secret123/api/boards/transfer?b=kitchen', { method: 'POST' });
   assert.ok(r2.body.wipe > r.body.wipe);
   const { body: key2 } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
-  assert.equal((await s.req('/board/version?b=kitchen', { headers: { 'X-Board-Token': key2.token } })).body.wipe, r2.body.wipe);
-  // The board's own link can hand it on (then it stops working itself).
-  const r3 = await s.req(`/board/c/${key2.link}/api/boards/transfer?b=home`, { method: 'POST' });
+  assert.ok(!('wipe' in (await s.req('/board/version?b=kitchen', { headers: { 'X-Board-Token': key2.token } })).body));
+  // The board's own link can make itself a new link (revoking a leaked one) ...
+  const nl = await s.req(`/board/c/${key2.link}/api/boards/link?b=home`, { method: 'POST' });
+  assert.equal(nl.status, 200);
+  assert.equal(nl.body.id, 'kitchen');
+  assert.equal((await s.req(`/board/c/${key2.link}/`)).status, 404);
+  // ... and hand the board on: a new link and default settings, but no WiFi wipe from a link.
+  const r3 = await s.req(`/board/c/${nl.body.link}/api/boards/transfer?b=home`, { method: 'POST' });
   assert.equal(r3.status, 200);
   assert.equal(r3.body.id, 'kitchen', 'a link reaches its own board only');
-  assert.equal((await s.req(`/board/c/${key2.link}/`)).status, 404);
+  assert.equal(r3.body.wipe, undefined);
+  assert.ok(!('wipe' in (await s.req('/board/version?b=kitchen', { headers: { 'X-Board-Token': key2.token } })).body));
+  assert.equal((await s.req(`/board/c/${nl.body.link}/`)).status, 404);
+  // Key endpoints stay the maker's.
+  assert.equal((await s.req(`/board/c/${r3.body.link}/api/boards/key`, { method: 'POST' })).status, 404);
   // The maker's boards never get a wipe.
   assert.ok(!('wipe' in (await s.req('/board/version?b=home', h)).body));
   // The board list carries each board's firmware setting (the fleet table).

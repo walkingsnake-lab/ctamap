@@ -423,6 +423,8 @@
     <div class="row admin"><span>Copy settings from</span>
       <select id="copyFrom" aria-label="Copy settings from" style="width:auto"></select></div>
     <p class="hint admin">Copies every setting except the name. Brightness goes back to Auto.</p>
+    <div class="row" id="relinkRow" hidden><span>Owner link</span><button class="small" id="relinkOwn">New link</button></div>
+    <p class="hint" id="relinkHint" hidden>Makes a new link to this page; the old one (and every copy of it) stops working.</p>
     <div class="row" id="giveRow" hidden><span>Give it away</span><button class="small danger" id="giveAway">New owner…</button></div>
     <p class="hint" id="giveHint" hidden></p>
     <pre class="keys" id="giveOut" hidden></pre>
@@ -586,20 +588,24 @@
     const keyed = SCOPE || (me && me.link);
     $('giveRow').hidden = !keyed;
     $('giveHint').hidden = !keyed;
+    $('relinkRow').hidden = !SCOPE;
+    $('relinkHint').hidden = !SCOPE;
     $('giveHint').textContent = SCOPE
-      ? 'For a new owner: makes a new owner link for them, resets every setting, and the board forgets its WiFi so they can set up theirs. This page stops working.'
-      : 'Makes a new owner link (the old one stops working), resets its settings, and the board forgets its WiFi on its next check-in. Its token and firmware setting stay.';
+      ? 'For a new owner: makes a new owner link for them and resets every setting. This page stops working. To clear your WiFi from the board, hold its knob (or UP) while plugging it in, then Forget saved networks on its setup page.'
+      : 'Makes a new owner link (the old one stops working), resets its settings, and an S3 forgets its WiFi on its next check-in (keeping a network the new owner already entered). Its token and firmware setting stay.';
     renderFleet();
   }
   async function giveAway() {
-    if (!confirm(SCOPE ? 'Give this board to a new owner? This page stops working, and the board forgets its WiFi.' : 'Transfer this board to a new owner? Its owner link changes and the board forgets its WiFi.')) return;
+    if (!confirm(SCOPE ? 'Give this board to a new owner? Its settings are reset and this page stops working.' : 'Transfer this board to a new owner? Its owner link changes, its settings are reset, and it forgets its WiFi.')) return;
     try {
       const t = await api(`api/boards/transfer?b=${enc(boardId)}`, { method: 'POST' });
       const url = `${location.origin}/board/c/${t.link}/`;
       $('giveOut').hidden = false;
-      $('giveOut').textContent = `New owner link (give this to the new owner):\n${url}\n\nThe board opens its setup network the next time it checks in. They join it (the WiFi code on the board's label) and pick their network.`;
+      $('giveOut').textContent = SCOPE
+        ? `New owner link (give this to the new owner):\n${url}\n\nAt their place the board opens its setup network after about 10 minutes without WiFi (or at once if held at power-on). They join it (the WiFi code on the board's label) and pick their network.`
+        : `New owner link (give this to the new owner):\n${url}\n\nIf the board is online it forgets its WiFi now and opens its setup network; otherwise it opens it at their place after about 10 minutes without WiFi. They join it (the WiFi code on the board's label) and pick their network.`;
       if (navigator.share) navigator.share({ title: 'Board owner link', url }).catch(() => {});
-      if (!SCOPE) { await loadBoards(); board = (await api('api/state')).boards[boardId]; render(); }
+      if (!SCOPE) { await loadBoards(); board = (await api('api/state')).boards[boardId]; await loadDests(); render(); refreshPreview(); }
       setStatus(SCOPE ? 'Done. Copy the new link now: this page no longer controls the board.' : 'Transferred. Copy the new owner link.');
     } catch (err) { setStatus(err.message, true); }
   }
@@ -619,7 +625,8 @@
       const running = h && h.firmware;
       const parts = [b.link ? 'owner link' : 'yours', running ? `runs ${running}` : null,
         b.fw === 'off' ? 'updates off' : b.fw === 'stable' || b.fw === 'beta' ? b.fw : `pinned ${b.fw}`,
-        running && want && running !== want ? `${want} waiting` : null].filter(Boolean);
+        running && /^[0-9a-f]{7,40}$/.test(running) && want && running !== want ? `${want} waiting${b.fw === 'stable' ? ' for 2–5 AM' : ''}` : null,
+        b.wiping ? 'WiFi reset pending' : null].filter(Boolean);
       sub.textContent = parts.join(' · ');
       nm.append(sub);
       const st = document.createElement('span'); st.className = 'st';
@@ -1124,6 +1131,16 @@
     } catch (err) { render(); setStatus(err.message, true); }
   });
   $('giveAway').addEventListener('click', giveAway);
+  $('relinkOwn').addEventListener('click', async () => {
+    if (!confirm('Make a new link to this page? This link, and every copy of it, stops working.')) return;
+    try {
+      const r = await api(`api/boards/link?b=${enc(boardId)}`, { method: 'POST' });
+      const url = `${location.origin}/board/c/${r.link}/`;
+      $('giveOut').hidden = false;
+      $('giveOut').textContent = `Your new link (save it; this page stops working):\n${url}`;
+      setStatus('New link made. Open it and add it to your home screen.');
+    } catch (err) { setStatus(err.message, true); }
+  });
   $('delBoard').addEventListener('click', async () => {
     if (!confirm(`Delete board "${boardName({ id: boardId, label: board.label })}"? If a board is still running with this ID, it adds itself back as a copy of "home".`)) return;
     try {

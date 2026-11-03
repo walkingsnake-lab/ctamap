@@ -162,10 +162,13 @@ class Setup {
   virtual void run(const std::string &why) = 0;
   virtual void joined() {}  // online: a network entered on the page worked
   // A new owner (the server's /board/version `wipe`, a stamp that only
-  // grows): forget the saved networks, remember `stamp` as applied, and
-  // open the setup network (why "reset"). On the board it doesn't return.
+  // grows): remember `stamp` as applied, forget the saved networks except
+  // one entered on the setup page since the last check-in (the new owner's,
+  // when the board was offline at the transfer), and restart, into the setup
+  // network (why "reset") if none is left. On the board it doesn't return.
   virtual void forget(long long stamp) { (void)stamp; }
   virtual long long wiped() { return 0; }  // the newest stamp applied, 0 if none
+  virtual void checked_in() {}  // a version check with no newer stamp: a network entered on the page is no longer new
 };
 
 // Runs one piece of network work at a time off the draw loop. start() hands

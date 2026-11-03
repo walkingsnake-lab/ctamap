@@ -123,6 +123,9 @@ test('offer: stable installs only overnight in Chicago; beta and pinned builds a
   const noon = at(2026, 11, 3, 18);
   assert.equal(fw.offer({ fw: 'beta' }, q, noon).v, 'bbbbbbb');
   assert.equal(fw.offer({ fw: 'aaaaaaa' }, q, noon).v, 'aaaaaaa');
+  // Midday, just started (uptime under 2 min): stable too, before anyone is watching.
+  assert.equal(fw.offer({ fw: 'stable' }, { ...q, hu: '45' }, noon).v, 'aaaaaaa');
+  assert.equal(fw.offer({ fw: 'stable' }, { ...q, hu: '600' }, noon), null);
   assert.equal(inStableWindow(at(2026, 11, 3, 9)), true);
   assert.equal(inStableWindow(noon), false);
 });

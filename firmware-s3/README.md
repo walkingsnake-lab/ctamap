@@ -189,11 +189,15 @@ on demand. Up to 8 networks are kept, the newest tried first.
 
 **A new owner** (gift, resale): Board tab → Give it away → **New owner…** on
 your control page, or the same button on the board's own owner link. It
-makes a new owner link (the old one stops working), resets the board's
-settings, and the board forgets its WiFi at its next check-in and opens its
-setup network, so the new owner sets it up as in step 4 with the new link in
-place of the label's. The token stays. The setup page also has **Forget
-saved networks** for someone standing next to the board.
+makes a new owner link (the old one stops working) and resets the board's
+settings; the token stays. From your page the board also forgets its WiFi
+at its next check-in (keeping a network the new owner already entered, if
+it was handed over offline) and opens its setup network, so the new owner
+sets it up as in step 4 with the new link in place of the label's. From an
+owner link there's no remote wipe (an old link mustn't strand the next
+owner); the setup page's **Forget saved networks** (password-locked setup
+networks only) clears it for someone next to the board. An owner link can
+also make itself a **New link**, which revokes every copy of the old one.
 
 ## OTA updates
 

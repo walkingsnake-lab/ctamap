@@ -36,6 +36,7 @@ const CHANNELS = ['beta', 'stable'];
 // Boards on stable install only overnight, Chicago time [from, to) hours, so
 // nobody watches one restart; beta and pinned builds install right away.
 const STABLE_HOURS = [2, 5];
+const BOOT_S = 120;
 const inStableWindow = (now) => {
   const h = new Date((now + tzOffset(now)) * 1000).getUTCHours();
   return h >= STABLE_HOURS[0] && h < STABLE_HOURS[1];
@@ -191,13 +192,16 @@ function createFirmware({ dir, log = console, publicKey = loadPublicKey(), stabl
     // The offer for /board/version (`fw`), or null: only for an S3 running a
     // committed build (a board running `dev` or `_dirty` is someone's test
     // build and is left alone), and only when it isn't already running it.
-    // A board on stable gets it only in the overnight window (STABLE_HOURS).
+    // A board on stable gets it only in the overnight window (STABLE_HOURS),
+    // or in its first minutes after starting (BOOT_S of uptime, `hu`): a
+    // board unplugged every night still updates, while nobody watches it yet.
     offer(board, q, now = Math.floor(Date.now() / 1000)) {
       if (q.hd !== HARDWARE) return null;
       const running = String(q.hv || '');
       if (!VERSION_RE.test(running)) return null;
       const fw = board.fw || 'stable';
-      if (fw === 'stable' && !stableWindow(now)) return null;
+      const justStarted = q.hu != null && Number(q.hu) >= 0 && Number(q.hu) < BOOT_S;
+      if (fw === 'stable' && !stableWindow(now) && !justStarted) return null;
       const t = this.target(fw);
       if (!t || t.v === running) return null;
       return { v: t.v, size: t.size, sha: t.sha, n: board.fwRetry || 0, ...(t.sig ? { sig: t.sig } : {}) };

@@ -286,6 +286,8 @@ sched::Result Board::do_version(double ms) {
     if (setup && wipe > setup->wiped()) {
       say("[setup] the board has a new owner; forgetting saved WiFi");
       setup->forget(wipe);
+    } else if (setup) {
+      setup->checked_in();
     }
     return sched::OK;
   };

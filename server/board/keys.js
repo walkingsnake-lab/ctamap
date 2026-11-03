@@ -22,7 +22,7 @@ const random = (bytes) => crypto.randomBytes(bytes).toString('base64url');
 
 function createKeys({ dir, log = console } = {}) {
   const file = path.join(dir, FILE_NAME);
-  let keys = {}; // board id -> { sha (hex), link, at, wipe? }
+  let keys = {}; // board id -> { sha (hex), link, at, wipe? (pending stamp), last? (newest stamp made) }
   try {
     const s = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (s && typeof s.boards === 'object') keys = s.boards;
@@ -51,8 +51,9 @@ function createKeys({ dir, log = console } = {}) {
       if (old) byLink.delete(old.link);
       const token = random(24);
       const link = random(16);
-      // A pending WiFi wipe outlives a new token: the board compares stamps.
-      keys[id] = { sha: sha(token).toString('hex'), link, at: now, ...(old && old.wipe ? { wipe: old.wipe } : {}) };
+      // A new token means a reflash, which clears the board's WiFi anyway: no
+      // pending wipe carries over (the last stamp does, so stamps keep growing).
+      keys[id] = { sha: sha(token).toString('hex'), link, at: now, ...(old && old.last ? { last: old.last } : {}) };
       byLink.set(link, id);
       save();
       return { token, link };
@@ -79,20 +80,28 @@ function createKeys({ dir, log = console } = {}) {
     },
 
     // A new owner (transfer): a new control link (the old one stops working)
-    // and a WiFi wipe stamped `now`. The board forgets its saved networks
-    // once for each stamp newer than the last one it applied, so the stamp
-    // only ever grows (never reused, even across a new token).
-    transfer(id, now = Math.floor(Date.now() / 1000)) {
+    // and, with `wipe`, a WiFi wipe stamped `now`. The board forgets its
+    // saved networks once for each stamp newer than the last one it applied
+    // (so stamps only grow), and the stamp is dropped once the board reports
+    // it applied (applied()), so a later reflash isn't wiped again.
+    transfer(id, { now = Math.floor(Date.now() / 1000), wipe = true } = {}) {
       const k = keyOf(id);
       if (!k) return null;
       byLink.delete(k.link);
       k.link = random(16);
-      k.wipe = Math.max(now, (k.wipe || 0) + 1);
+      if (wipe) k.wipe = k.last = Math.max(now, (k.last || 0) + 1);
       byLink.set(k.link, id);
       save();
-      return { link: k.link, wipe: k.wipe };
+      return { link: k.link, wipe: wipe ? k.wipe : null };
     },
     wipeOf: (id) => (keyOf(id) && keyOf(id).wipe) || 0,
+    // The board reports the newest stamp it has applied (health hz).
+    applied(id, stamp) {
+      const k = keyOf(id);
+      if (!k || !k.wipe || !(stamp >= k.wipe)) return;
+      delete k.wipe;
+      save();
+    },
 
     linkOf: (id) => (keyOf(id) ? keyOf(id).link : null),
     idForLink: (link) => (LINK_RE.test(String(link)) ? byLink.get(link) ?? null : null),

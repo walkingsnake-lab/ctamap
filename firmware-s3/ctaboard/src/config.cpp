@@ -250,9 +250,10 @@ std::string setup_page(const Config &c, const std::string &ssid, const std::vect
     o += "<p>Already saved: ";
     for (size_t i = 0; i < c.networks.size(); i++) o += (i ? ", " : "") + html_escape(c.networks[i].first);
     o += ". A new network is tried first.</p>";
-    o += "<form method=post action=/forget onsubmit=\"return confirm('Forget every saved network?')\">"
+    if (setup_pass_ok(c.setup_pass))
+      o += "<form method=post action=/forget onsubmit=\"return confirm('Forget every saved network?')\">"
          "<button class=quiet>Forget saved networks</button></form>"
-         "<p>Giving the board away? Use Give away on its control page instead: it also makes a new owner link.</p>";
+         "<p>Giving the board away? Its control page's Give away also makes the new owner a link.</p>";
   }
   return o + "</main></body></html>";
 }

@@ -586,18 +586,23 @@ static void test_a_new_owner_wipe_forgets_wifi_once_per_stamp() {
   struct Wipes : app::Setup {
     std::vector<long long> forgot;
     long long applied = 0;
+    int checkins = 0;
     void run(const std::string &) override {}
     void forget(long long stamp) override { forgot.push_back(stamp); applied = stamp; }
     long long wiped() override { return applied; }
+    void checked_in() override { checkins++; }
   } su;
   Rig r;
   r.board->setup = &su;
   r.board->connect();
   r.run_for(30000);
   CHECK(su.forgot.empty(), "no stamp, no wipe");
+  CHECK(su.checkins > 0, "each check-in without a newer stamp says so (a just-entered network stops being new)");
+  int before = su.checkins;
   r.server.wipe = 1793400000;
   r.run_for(30000);
   CHECK(su.forgot.size() == 1 && su.forgot[0] == 1793400000, "%zu", su.forgot.size());
+  CHECK(su.checkins - before <= 3, "not while a newer stamp waits");
   r.run_for(90000);
   CHECK(su.forgot.size() == 1, "the same stamp again: nothing (%zu)", su.forgot.size());
   CHECK(last_health(r).find("&hz=1793400000") != std::string::npos, "%s", last_health(r).c_str());
