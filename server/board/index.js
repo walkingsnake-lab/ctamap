@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir, knobOf } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -336,7 +336,9 @@ function createBoard({
   const canDraw = (screen, caps) => (screen === 'clock' ? caps.clock : screen === 'announce' ? caps.announce : true);
   const forBoard = (body, caps) => (canDraw(body.screen, caps) ? body : { ...body, screen: 'transit' });
   // caps.face(name): whether the firmware draws that clock face.
-  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) });
+  // `peek` (`hk=...:peek`): the firmware draws the peek chooser, so it gets
+  // every screen's sections and every variant's data (`pv`).
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f), peek: capOk(id, q, 'peek') });
 
   // The announce screen's message as the board draws it (draw.js
   // messageLayout: the lines for its style), or null when none is set.
@@ -392,6 +394,18 @@ function createBoard({
       ripple: board.rippleSpeed || 'normal', twinkle: board.twinkle !== false, fall: board.rainSpeed || 'normal',
     }) }; }
     catch (e) { log.error('[board] skyline:', e.message); return null; }
+  }
+
+  // Every variant's data for the peek chooser: both forecast layouts, and
+  // each clock face the board draws (the skyline's parameters, the analog
+  // face's weather, the day/night face's sun, the gradient's inversion).
+  function peekOf(board, w, wd, st, skyNow, now, caps) {
+    const faces = {};
+    if (caps.clock) faces.skyline = skylineOf(board, w, wd, st, skyNow);
+    if (caps.face('analog')) faces.cwx = wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null;
+    if (caps.face('daynight')) faces.dn = dayNightOf(st, now);
+    if (caps.face('gradient') && board.gradInvert === true) faces.ginv = true;
+    return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...faces };
   }
 
   async function update(board, id, boot, preview = {}, caps = capsOf(id)) {
@@ -499,7 +513,7 @@ function createBoard({
       screen,
       rot: rotOf(board, screen),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board, { clock: caps.clock, announce: caps.announce }),
+      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)), ln: st && st.lines ? st.lines[0] : null }),
       bright: resolveBright(board, w, now),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),
@@ -543,6 +557,9 @@ function createBoard({
       ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
       // Announce screen: the message's lines for its style (contract "Announce").
       msg: msgOf(board),
+      // Peek chooser (caps.peek): what the other variants draw from, so the
+      // board can draw any of them while the knob turns (contract "Peek").
+      ...(caps.peek ? { pv: peekOf(board, w, wd, st, skyNow, now, caps) } : {}),
       mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
         ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
         : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
@@ -609,7 +626,7 @@ function createBoard({
       const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, caps), caps);
       const asked = SCREENS.includes(parsed.query.s) && !canDraw(parsed.query.s, caps) ? 'transit' : parsed.query.s;
       const shown = SCREENS.includes(asked) ? asked : body.screen;
-      return send(res, 200, sectionsFor(body, shown));
+      return send(res, 200, caps.peek ? { ...body, for: shown } : sectionsFor(body, shown));
     }
 
     // The knob chose a category (s, one of knob.ring): the same as choosing
@@ -620,7 +637,7 @@ function createBoard({
       if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       const id = String(parsed.query.b || '');
       let board;
-      try { board = store.select(id, String(parsed.query.s || '')); }
+      try { board = store.select(id, String(parsed.query.s || ''), parsed.query.v != null ? String(parsed.query.v) : undefined); }
       catch (e) {
         if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
         throw e;
@@ -628,7 +645,7 @@ function createBoard({
       if (!board) return send(res, 404, { err: 'unknown_board' });
       const caps = capsOf(id, parsed.query);
       const body = forBoard(await update(board, id, false, {}, caps), caps);
-      return send(res, 200, sectionsFor(body, body.screen));
+      return send(res, 200, caps.peek ? { ...body, for: body.screen } : sectionsFor(body, body.screen));
     }
 
     // A cloud strip for the skyline face (contract "Cloud strips"): 1664

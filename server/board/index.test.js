@@ -1120,18 +1120,25 @@ test('select: the knob sets a category and gets the new screen\'s update back', 
   assert.equal((await s.req('/board/select?b=nope&s=weather', h())).status, 404);
   const bad = await s.req('/board/select?b=home&s=baseball', h());
   assert.equal(bad.status, 400);
-  assert.match(bad.body.detail, /auto, transit, weather, sports/);
+  assert.match(bad.body.detail, /transit, weather, cycle/);
+  assert.equal((await s.req('/board/select?b=home&s=sports', h())).status, 400, 'sports is phone-only');
   // Every update carries the ring and the chosen screen's place on it.
   let b = (await s.req('/board/update?b=home', h('GET'))).body;
-  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports'], at: 0 });
+  assert.deepEqual(b.knob, { ring: ['transit', 'weather', 'cycle'], at: 2 });
   const v = b.v;
-  b = (await s.req('/board/select?b=home&s=sports', h())).body;
-  assert.deepEqual([b.screen, b.for, b.knob.at, b.v], ['baseball', 'baseball', 3, v + 1]);
-  assert.ok(b.mlb && !('rows' in b), 'only the baseball sections');
-  assert.equal(s.store.get('home').screen, 'baseball');
+  b = (await s.req('/board/select?b=home&s=weather', h())).body;
+  assert.deepEqual([b.screen, b.for, b.knob.at, b.v], ['weather', 'weather', 1, v + 1]);
+  assert.ok(b.radar && !('rows' in b), 'only the weather sections');
+  assert.equal(s.store.get('home').screen, 'weather');
   b = (await s.req('/board/select?b=home&s=transit', h())).body;
-  assert.deepEqual([b.screen, b.knob.at], ['transit', 1]);
+  assert.deepEqual([b.screen, b.knob.at], ['transit', 0]);
   assert.ok('rows' in b && !('mlb' in b));
+  // CYCLE opens the auto screen (the rotation, for now).
+  assert.equal((await s.req('/board/select?b=home&s=cycle', h())).status, 200);
+  assert.equal(s.store.get('home').screen, 'auto');
+  // Baseball chosen on the phone: the knob opens on TRANSIT.
+  s.store.update('home', { screen: 'baseball' });
+  assert.equal((await s.req('/board/update?b=home', h('GET'))).body.knob.at, 0);
   await s.close();
 });
 
@@ -1349,7 +1356,7 @@ test('clock screen: only for boards whose firmware draws it (hk=skyline); the sk
   assert.equal(b.screen, 'transit');
   assert.equal(b.for, 'transit');
   assert.equal(b.skyline, undefined);
-  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports']);
+  assert.deepEqual(b.knob.ring, ['transit', 'weather', 'cycle']);
   assert.equal((await get('&s=clock')).for, 'transit', 'a press asking for clock gets transit too');
 
   // The S3 firmware reports it can draw the skyline.
@@ -1358,7 +1365,7 @@ test('clock screen: only for boards whose firmware draws it (hk=skyline); the sk
   assert.equal(b.screen, 'clock');
   assert.equal(b.for, 'clock');
   assert.equal(b.rows, undefined, 'transit sections stay home');
-  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports', 'clock'], at: 4 });
+  assert.deepEqual(b.knob, { ring: ['transit', 'weather', 'clock', 'cycle'], at: 2 });
   assert.equal(b.skyline.face, 'skyline');
   assert.equal(b.skyline.st, 'partly');
   assert.equal(b.skyline.temp, 63);
@@ -1477,7 +1484,7 @@ test('clock screen: decided per request from the update\'s own hk, so it never f
   // No health report at all (e.g. right after a server restart): the update's hk is enough.
   let b = (await s.req('/board/update?b=home&hk=skyline', h)).body;
   assert.equal(b.screen, 'clock');
-  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports', 'clock']);
+  assert.deepEqual(b.knob.ring, ['transit', 'weather', 'clock', 'cycle']);
   // Another board under the same ID reports health without hk: the S3's own requests still get clock.
   await s.req('/board/version?b=home&hu=60', h);
   for (let i = 0; i < 5; i++) assert.equal((await s.req('/board/update?b=home&hk=skyline', h)).body.screen, 'clock');
@@ -1552,14 +1559,14 @@ test('announce screen: only for firmware that reports it (hk=...:announce); the 
   let b = await get('&hk=skyline');
   assert.equal(b.screen, 'transit');
   assert.equal(b.msg, undefined);
-  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports', 'clock']);
+  assert.deepEqual(b.knob.ring, ['transit', 'weather', 'clock', 'cycle']);
   assert.equal((await get('&hk=skyline&s=announce')).for, 'transit', 'a press asking for announce gets transit too');
 
   b = await get('&hk=skyline:seventies:announce');
   assert.equal(b.screen, 'announce');
   assert.equal(b.for, 'announce');
   assert.equal(b.rows, undefined, 'transit sections stay home');
-  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports', 'clock', 'announce'], at: 5 });
+  assert.deepEqual(b.knob, { ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 3 });
   assert.deepEqual(b.msg, { id: s.store.get('home').msg.id, style: 'type', lines: ['Dinner at 7', 'bring wine'] });
   // Other screens leave it out; the simulator's copy keeps it.
   s.store.update('home', { screen: 'transit' });
@@ -1591,5 +1598,47 @@ test('announce: the control page sets the message; a message that does not fit i
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=announce&scale=1`);
   assert.equal(png.status, 200);
   assert.equal(png.headers.get('content-type'), 'image/png');
+  await s.close();
+});
+
+test('peek: firmware that draws the peek chooser gets every section, each variant\'s data and the knob\'s variants', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(om)) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const HK = 'skyline:seventies:analog:daynight:gradient:announce:peek';
+  s.store.update('home', { screen: 'transit', clockFace: 'analog', msg: { text: 'Hi', style: 'note' } });
+  const res = await s.req(`/board/update?b=home&hk=${HK}`, h);
+  const b = res.body;
+  assert.equal(b.for, 'transit');
+  // Every screen's sections, not just the shown one's.
+  for (const k of ['rows', 'ticker', 'msg', 'cface']) assert.ok(k in b, k);
+  assert.ok(b.radar.timeBox, 'the whole radar section');
+  // Every variant's data: both forecast layouts and each face.
+  assert.ok('days' in b.pv && 'hours' in b.pv);
+  assert.equal(b.pv.skyline.face, 'skyline');
+  assert.equal(b.pv.cwx.temp, b.cwx.temp);
+  assert.deepEqual(Object.keys(b.pv.dn).sort(), ['dec', 'here', 'lon', 't']);
+  assert.equal(b.pv.ginv, undefined, 'gradient not inverted');
+  assert.deepEqual(b.knob, {
+    ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 0,
+    vars: [['transit', 'ticker'], ['now', '5day', 'hourly'], ['skyline', 'seventies', 'analog', 'daynight', 'gradient'], [], []],
+    sel: [0, 0, 2, 0, 0], ln: 'RD',
+  });
+  // Only the faces the firmware draws.
+  const less = (await s.req('/board/update?b=home&hk=skyline:peek', h)).body;
+  assert.deepEqual(less.knob.vars[2], ['skyline']);
+  assert.equal(less.pv.dn, undefined);
+  // The knob picks a variant with its category.
+  const sel = await s.req(`/board/select?b=home&s=clock&v=daynight&hk=${HK}`, { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(sel.status, 200);
+  assert.deepEqual([sel.body.screen, sel.body.cface, sel.body.knob.sel[2]], ['clock', 'daynight', 3]);
+  assert.ok('rows' in sel.body, 'still every section');
+  assert.equal((await s.req(`/board/select?b=home&s=clock&v=nixie&hk=${HK}`, { method: 'POST', headers: { 'X-Board-Token': 'tok' } })).status, 400);
+  // Boards without peek are unchanged: sections, no pv, no variants.
+  const old = (await s.req('/board/update?b=home&hk=skyline', h)).body;
+  assert.equal(old.pv, undefined);
+  assert.deepEqual(Object.keys(old.knob), ['ring', 'at']);
   await s.close();
 });

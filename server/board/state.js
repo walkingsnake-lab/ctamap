@@ -31,17 +31,33 @@ const RAIN_SPEEDS = ['slow', 'normal', 'fast'];
 const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
 // The knob's ring (design spec §10, "Knob"): categories, each opening one
 // screen. TRANSIT opens the transit-family screen last chosen (transitScreen:
-// rows or ticker); SPORTS opens the baseball screen. CLOCK (the clock screen,
-// its face set on the phone) and ANNOUNCE (the owner's message) join the
-// end of the ring on boards that can draw them (knobOf's `clock`, `announce`).
-const KNOB_RING = ['auto', 'transit', 'weather', 'sports'];
-const CATEGORY_OF = { auto: 'auto', transit: 'transit', ticker: 'transit', weather: 'weather', baseball: 'sports', clock: 'clock', announce: 'announce' };
+// rows or ticker); CYCLE opens the auto screen (the rotation; to be rebuilt
+// as Cycle). CLOCK (the clock screen) and ANNOUNCE (the owner's message)
+// join on boards that can draw them (knobOf's `clock`, `announce`). Sports
+// is chosen on the phone only.
+const KNOB_RING = ['transit', 'weather', 'cycle'];
+const CATEGORY_OF = { auto: 'cycle', transit: 'transit', ticker: 'transit', weather: 'weather', clock: 'clock', announce: 'announce' };
 const EXTRA_RING = ['clock', 'announce'];
-const knobScreen = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'sports' ? 'baseball' : cat);
+const knobScreen = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'cycle' ? 'auto' : cat);
+// Each category's variants, as the knob steps through them with a press
+// (peek chooser): transit's screens, the weather views, the clock faces the
+// board draws (`faces`).
+const variantsOf = (cat, faces) => (cat === 'transit' ? ['transit', 'ticker'] : cat === 'weather' ? WX_VIEWS
+  : cat === 'clock' ? faces : []);
+const variantOf = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'weather' ? board.wxView || 'now'
+  : cat === 'clock' ? board.clockFace || 'skyline' : null);
 // The ring and where the board's chosen screen sits on it (payload `knob`).
-const knobOf = (board, { clock = false, announce = false } = {}) => {
-  const ring = [...KNOB_RING, ...(clock ? ['clock'] : []), ...(announce ? ['announce'] : [])];
-  return { ring, at: Math.max(0, ring.indexOf(CATEGORY_OF[board.screen] || 'auto')) };
+// `vars` and `sel`: each entry's variants and the one it opens on (index;
+// 0 for a variant the board can't draw). `ln`: the station's first line, the
+// transit icon's color.
+// Only peek-capable boards (`peek`) get vars, sel and ln.
+const knobOf = (board, { clock = false, announce = false, peek = false, faces = ['skyline'], ln = null } = {}) => {
+  const ring = ['transit', 'weather', ...(clock ? ['clock'] : []), ...(announce ? ['announce'] : []), 'cycle'];
+  const at = Math.max(0, ring.indexOf(CATEGORY_OF[board.screen]));
+  if (!peek) return { ring, at };
+  const vars = ring.map((c) => variantsOf(c, faces));
+  const sel = ring.map((c, i) => Math.max(0, vars[i].indexOf(variantOf(board, c))));
+  return { ring, at, vars, sel, ...(ln ? { ln } : {}) };
 };
 // Auto mode and screen options (design spec §10). Defaults reproduce the
 // behavior before these were settings.
@@ -526,12 +542,22 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       return board;
     },
 
-    // The knob chose a category on its ring: set the screen it opens. Same
-    // as a phone change (bumps v).
-    select(id, cat) {
+    // The knob chose a category on its ring: set the screen it opens, and
+    // with `v` (one of the category's variants) the variant too: transit's
+    // screen, the weather view, the clock face. Same as a phone change
+    // (bumps v).
+    select(id, cat, v) {
       if (!KNOB_RING.includes(cat) && !EXTRA_RING.includes(cat)) throw new ValidationError(`s must be one of ${[...KNOB_RING, ...EXTRA_RING].join(', ')}`);
+      const vars = variantsOf(cat, CLOCK_FACES);
+      if (v != null && !vars.includes(v)) throw new ValidationError(vars.length ? `v must be one of ${vars.join(', ')}` : `${cat} has no variants`);
       if (!Object.hasOwn(state.boards, id)) return null;
-      return this.update(id, { screen: knobScreen(state.boards[id], cat) });
+      const fields = { screen: knobScreen(state.boards[id], cat) };
+      if (v != null) {
+        if (cat === 'transit') fields.screen = v;
+        else if (cat === 'weather') fields.wxView = v;
+        else if (cat === 'clock') fields.clockFace = v;
+      }
+      return this.update(id, fields);
     },
 
     // Board restart: brightness goes back to auto (so a board left off comes
