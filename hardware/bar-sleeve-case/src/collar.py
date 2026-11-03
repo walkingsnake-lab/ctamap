@@ -22,7 +22,7 @@ DECK_BOT = -1.4                  # encoder body top sits here (deck 3.0 thick to
 POCKET_R = 9.8                   # clears the real body (~12.4 x 13.4 with its frame, corners r 9.13) plus print shrink; 9.0 jammed (Nov 2)
 BUSH_R = 3.7                     # M7 bushing
 RELIEF_R, RELIEF_TOP = 6.5, 0.2  # clears the body's anti-rotation tab wherever it sits
-RIB_R = 12.25                    # crush-rib crest radius (nominal hole r 12.0); None = plain plug. 12.25 (3 notches) won the fit set, Nov 2
+RIB_R = 12.15                    # crush-rib crest radius (nominal hole r 12.0); None = plain plug. 12.15 (2 notches): snug; 12.25 took too much force (Nov 2)
 RIB_W, RIB_N, RIB_LEAD = 1.0, 12, 0.6   # rib width, count on a 30° grid (those near the teardrop tip are dropped), lead-in
 KEY = (1.3, 11.0, 14.3)          # half width, y0, y1 (shell notch: ±1.5, 11.5–14.5)
 
