@@ -767,7 +767,10 @@ if __name__ == '__main__':
     put(tray(), 'bar-drawer-tray-inserts.stl')                      # the same tray with heat-set insert holes (later)
     _mod.FASTEN = _saved
     P, W = test_plate(tr)
-    P.export(f'{out}/test-plate-v5.stl'); W.export(f'{out}/test-plate-v5-window.stl')
-    t = retest_plate(); t.export(f'{out}/test-plate-v5c.stl'); print('test-plate-v5c.stl', t.is_watertight, np.round(t.extents, 1).tolist())
+    os.makedirs(f'{out}/../archive/fit-tests', exist_ok=True)     # the fits are settled: the test plate lives with the archive
+    tp = f'{out}/../archive/fit-tests/' + ('p25' if panel.KEY == 'p25' else 'p3')
+    os.makedirs(tp, exist_ok=True)
+    P.export(f'{tp}/test-plate-v5.stl'); W.export(f'{tp}/test-plate-v5-window.stl')
+    t = retest_plate(); t.export(f'{tp}/test-plate-v5c.stl'); print('test plates ->', tp, t.is_watertight)
     print('test-plate-v5.stl', P.is_watertight, np.round(P.extents, 1).tolist(), '+ window', W.is_watertight)
     print(dict(D=D, S3_edge=round(S3_EDGE, 2), s3_z0=round(S3_Z0 - ZC, 2), port_z=round(PORT_Z - ZC, 2), corners=CORNERS))
