@@ -44,7 +44,7 @@ const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky',
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
 // answer 404 there.
-const SCOPED_OK = new Set(['', 'api/destinations', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png']);
+const SCOPED_OK = new Set(['', 'api/destinations', 'api/rain', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png']);
 // Settings a per-board link may not change: the update channel (a buyer
 // stays on stable, or turns updates off).
 const SCOPED_FW = ['stable', 'off'];
@@ -59,9 +59,10 @@ function send(res, status, body) {
 // "Sections"): less JSON to parse on a heap that fragments. `for` names that
 // screen: the payload's `screen`, or `s` when a button press overrides it.
 // radar rides along whole on the weather screen and whenever timed visits
-// are on (the board switches to it by itself); otherwise only `on`. While
-// Auto alternates screens (rot), every rotation screen's sections ride
-// along. The simulator's copy (api/update) stays whole.
+// are on (the board switches to it by itself) or the weather screen takes
+// a turn in the Cycle; otherwise only `on`. While Cycle takes turns (rot),
+// every one of its screens' sections ride along. The simulator's copy
+// (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 const SECTIONS = {
   transit: ['header', 'key', 'hidden', 'view', 'rows', 'wx'],
@@ -75,7 +76,7 @@ function sectionsFor(body, screen) {
   const out = { ...body, for: screen };
   const keep = new Set([screen, ...(body.rot && body.rot.screens.includes(screen) ? body.rot.screens : [])]);
   for (const [sc, keys] of Object.entries(SECTIONS)) if (!keep.has(sc)) for (const k of keys) delete out[k];
-  if (screen !== 'weather' && body.radar && !body.radar.visit) out.radar = { on: body.radar.on, visit: null };
+  if (!keep.has('weather') && body.radar && !body.radar.visit) out.radar = { on: body.radar.on, visit: null };
   return out;
 }
 
@@ -218,27 +219,38 @@ function createBoard({
   const nightOf = (b) => b.brightMin || NIGHT_BRIGHT;
   const resolveBright = (b, w, now) => (b.bright === 'off' ? 0 : b.bright === 'auto' ? autoBright(w, now, nightOf(b)) : b.bright);
   const autoBrightOf = (b) => (b.bright === 'auto' ? { min: nightOf(b) } : null);
-  // 'auto': the weather screen while a matching NWS alert is on (alertJump),
-  // else baseball while a game is on, else the first Auto screen. The board
-  // alternates Auto screens (rot) and makes timed weather visits
-  // (radar.visit) on top.
-  const alertJumps = (b, warn) => !!warn && (b.alertJump === 'all' || (b.alertJump === 'warning' && warn.lvl === 'warning'));
-  const resolveScreen = (b, games, warn) => {
+  // 'auto' is the Cycle: baseball while a game is on (the maker's boards),
+  // else the first of its screens this board can draw; the board takes
+  // turns through them (rot) itself. (alertJump is retired: no jump.)
+  const cycleOf = (b, caps, sports) => (Array.isArray(b.cycle) ? b.cycle : ['transit', 'weather'])
+    .filter((sc) => canDraw(sc, caps) && (sc !== 'baseball' || sports));
+  const resolveScreen = (b, games, cyc) => {
     if (b.screen !== 'auto') return b.screen;
-    if (alertJumps(b, warn)) return 'weather';
     if (games) return 'baseball';
-    return (b.autoScreens && b.autoScreens[0]) || 'transit';
+    return cyc[0] || 'transit';
   };
-  const rotOf = (b, screen) => (b.screen === 'auto' && b.autoScreens && b.autoScreens.length > 1 && b.autoScreens.includes(screen)
-    ? { screens: b.autoScreens, every: b.autoEvery || 60 } : null);
+  const rotOf = (b, screen, cyc) => (b.screen === 'auto' && cyc.length > 1 && cyc.includes(screen)
+    ? { screens: cyc, every: b.autoEvery || 60 } : null);
   // Speed settings (contract "anim"): ms, baseball rotation in s.
   const animOf = (b) => ({
     pageHold: (b.tickerHold || 8) * 1000, slide: b.tickerSlide || 1200,
     radarFrame: b.radarFrame || 500, radarHold: (b.radarHold || 4) * 1000, game: b.gameEvery || 60,
   });
-  // Weather visits apply only on the auto screen, and only if turned on;
-  // `always` visits even without rain (current conditions).
-  const visitOf = (b) => (b.screen === 'auto' && (b.wxVisit === 'rain' || b.wxVisit === 'always') && b.radarEvery > 0
+  // Rain nearby (radar.visit): on any chosen screen but weather, if turned
+  // on and not held off from the phone (holds); `always` visits even
+  // without rain (current conditions).
+  // Holds, per board, in memory: {until} ("Back to <screen> now": no
+  // visit until the next one is due) or {rain: true} ("Stop until the rain
+  // passes": none until the radar box is dry). The board picks the change
+  // up with its next update.
+  const holds = new Map();
+  const holdOf = (id, now, raining) => {
+    const h = holds.get(id);
+    if (h && (h.rain ? raining : now < h.until)) return h.rain ? 'rain' : 'visit';
+    holds.delete(id);
+    return null;
+  };
+  const visitOf = (b) => (b.screen !== 'weather' && (b.wxVisit === 'rain' || b.wxVisit === 'always') && b.radarEvery > 0
     ? { every: b.radarEvery * 60, for: Math.min(b.radarFor || 60, b.radarEvery * 60), ...(b.wxVisit === 'always' ? { always: true } : {}) } : null);
   const NO_RADAR = { on: false, frames: [], ft: [], timeBox: null, split: false };
 
@@ -478,7 +490,7 @@ function createBoard({
     // The key layout has no weather strip: the station line takes rows 25-31.
     const keyLayout = board.transitLayout === 'key';
     const wx = board.showWeather && !keyLayout && wd ? toWx(wd) : null;
-    const cfg = { ...board, showWeather: !!wx, showKey: keyLayout };
+    const cfg = { ...board, showWeather: !!wx, showKey: keyLayout, lines: st ? st.lines : null };
     let radarState = NO_RADAR;
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
     catch (e) { log.error('[board] radar:', e.message); }
@@ -537,7 +549,9 @@ function createBoard({
     } catch (e) { log.error('[board] mlb:', e.message); }
     if (sports && test && test.game) games = [testGame(test.game, now), ...games];
     const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
-    const screen = resolveScreen(board, games.length > 0, warn);
+    const cyc = cycleOf(board, caps, sports);
+    const screen = resolveScreen(board, games.length > 0, cyc);
+    const held = holdOf(id, now, !!radarState.on);
     const viewKey = `${id}:${board.station.mapid}`;
     const { view, viewState, rows, ticker, bars } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
@@ -549,7 +563,7 @@ function createBoard({
       age: data ? Math.max(0, Math.round(now - data.fetchedAt)) : null,
       stale: stale ? 1 : 0,
       screen,
-      rot: rotOf(board, screen),
+      rot: rotOf(board, screen, cyc),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
       knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)) }),
       bright: resolveBright(board, w, now),
@@ -576,7 +590,7 @@ function createBoard({
       anim: animOf(board),
       tickerFill: board.tickerFill || 55,
       radar: {
-        ...radarState, visit: visitOf(board), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: wd ? toWx(wd).temp : null, icon: wd ? toWx(wd).icon : null,
+        ...radarState, visit: held ? null : visitOf(board), ...(held ? { held } : {}), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: wd ? toWx(wd).temp : null, icon: wd ? toWx(wd).icon : null,
         // Radar clock: the current time instead of the frame's; conditions under it.
         ...(board.radarClock && board.radarClock !== 'frame' ? { clock: board.radarClock } : {}),
         ...(board.radarCond === true ? { cond: true } : {}),
@@ -866,6 +880,25 @@ function createBoard({
         if (method !== 'GET') return send(res, 405, { err: 'method' });
         return send(res, 200, scope ? (healthOf.has(scope) ? { [scope]: healthOf.get(scope) } : {}) : Object.fromEntries(healthOf));
       }
+      // Rain nearby from the phone: POST {hold: 'visit'} ends the visit now
+      // (the radar comes back at the next one), {hold: 'rain'} stops it until
+      // the rain passes, {hold: null} lets it run again.
+      if (sub === 'api/rain') {
+        if (method !== 'POST') return send(res, 405, { err: 'method' });
+        const id = String(parsed.query.b || '');
+        const board = store.get(id);
+        if (!board) return send(res, 404, { err: 'unknown_board' });
+        let body;
+        try { body = await readJson(req); } catch (e) { if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message }); throw e; }
+        const h = body && body.hold;
+        if (![null, 'visit', 'rain'].includes(h ?? null)) return send(res, 400, { err: 'invalid', detail: 'hold must be visit, rain, or null' });
+        const now = nowSecs();
+        const every = (board.radarEvery || 4) * 60;
+        if (h === 'visit') holds.set(id, { until: Math.floor(now / every) * every + every });
+        else if (h === 'rain') holds.set(id, { rain: true });
+        else holds.delete(id);
+        return send(res, 200, { hold: h ?? null });
+      }
       if (sub === 'api/state') {
         if (method === 'GET') return send(res, 200, scope ? { boards: { [scope]: store.get(scope) } } : store.all());
         if (method === 'POST') {
@@ -1065,7 +1098,7 @@ function createBoard({
           clouds: body.skyline && body.skyline.cl ? { [body.skyline.cl.id]: stripBytes(body.skyline.cl.id) } : {},
         });
         res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
-        res.end(frame.toPNG(scale));
+        res.end(parsed.query.led === 'square' ? frame.toSquarePNG(scale) : frame.toPNG(scale));
         return;
       }
 

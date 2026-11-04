@@ -1587,6 +1587,66 @@ static void test_knob_twist_and_rest_selects_once() {
   for (long long t : r->server.times("update")) CHECK(t < sel || t > sel + 5000, "update at %lld", t);
 }
 
+static void test_knob_first_turn_only_ends_a_rain_visit() {
+  // Rain nearby (spec §10, "Interruptions"): during a visit the first turn
+  // ends it (back to the chosen screen until the next visit); the next turn
+  // opens the chooser.
+  std::unique_ptr<Rig> r(knob_rig());
+  r->server.radar_on = true;
+  r->server.visit = "{\"every\":240,\"for\":60}";
+  r->board->sched.due_now(&r->board->update_job, (double)r->clock.t);
+  while (!(draw::fmod_floor(r->board->now(r->clock.t), 240) >= 5 && draw::fmod_floor(r->board->now(r->clock.t), 240) < 20))
+    r->run_for(500);
+  CHECK(S(r->board) == "weather", "visiting: %s", S(r->board).c_str());
+  r->knob.pending = 1;
+  r->run_for(300);
+  CHECK(!r->board->chooser.open, "the first turn doesn't open the chooser");
+  CHECK(S(r->board) == "transit", "the visit ended: %s", S(r->board).c_str());
+  r->run_for(20000);
+  CHECK(S(r->board) == "transit", "and stays ended: %s", S(r->board).c_str());
+  CHECK(r->server.count("select:") == 0, "%d", r->server.count("select:"));
+  r->knob.pending = 1;
+  r->run_for(300);
+  CHECK(r->board->chooser.open, "the next turn opens it");
+  r->run_for(3000);
+  // The next visit comes as usual.
+  while (draw::fmod_floor(r->board->now(r->clock.t), 240) >= 3) r->run_for(500);
+  r->run_for(3000);
+  CHECK(S(r->board) == "weather", "the next visit: %s", S(r->board).c_str());
+}
+
+static void test_rain_visits_interrupt_the_clock_too() {
+  long long now = T0 - draw::fmod_floor(T0, 240);  // inside a visit
+  const std::string tail = ",\"radar\":{\"on\":true,\"visit\":{\"every\":240,\"for\":60}}}";
+  player::Player pl;
+  for (const char *sc : {"clock", "announce"}) {
+    pl.set_payload(parse("{\"now\":" + jnum(now) + ",\"screen\":\"" + sc + "\"" + tail), 0);
+    CHECK(pl.auto_screen(now) == screen::Screen::Weather, "%s gets visits", sc);
+    CHECK(pl.visiting(now), "%s", sc);
+  }
+  pl.visit_skip_until = now + 60;
+  CHECK(pl.auto_screen(now) == screen::Screen::Announce, "skipped");
+  CHECK(!pl.visiting(now), "");
+  // The Cycle's weather turn isn't a visit, and wants frames.
+  pl.visit_skip_until = 0;
+  pl.set_payload(parse("{\"now\":" + jnum(now) + ",\"screen\":\"transit\",\"rot\":{\"screens\":[\"weather\",\"transit\"],\"every\":60}"
+                       ",\"radar\":{\"on\":false,\"visit\":null}}"), 0);
+  CHECK(pl.auto_screen(now) == screen::Screen::Weather, "the weather turn");
+  CHECK(!pl.visiting(now), "not a visit");
+  CHECK(pl.wants_frames(), "frames ahead of the weather turn");
+}
+
+static void test_knob_turns_an_off_panel_back_on() {
+  std::unique_ptr<Rig> r(knob_rig());
+  r->server.bright = 0;
+  r->board->sched.due_now(&r->board->update_job, (double)r->clock.t);
+  r->run_for(2000);
+  r->knob.pending = 1;
+  r->run_for(300 + LATENCY);
+  CHECK(!r->board->chooser.open, "no chooser on a dark panel");
+  CHECK(r->server.selects.size() == 1 && r->server.selects[0] == "transit", "%zu", r->server.selects.size());
+}
+
 static void test_knob_back_to_the_start_cancels() {
   std::unique_ptr<Rig> r(knob_rig());
   r->knob.pending = 1;
@@ -2067,6 +2127,9 @@ int main() {
       T_(test_low_levels_dim_in_hardware_then_in_the_colors),
       T_(test_knob_twist_and_rest_selects_once),
       T_(test_knob_back_to_the_start_cancels),
+      T_(test_knob_first_turn_only_ends_a_rain_visit),
+      T_(test_rain_visits_interrupt_the_clock_too),
+      T_(test_knob_turns_an_off_panel_back_on),
       T_(test_knob_wraps_around_the_ring),
       T_(test_knob_select_failure_keeps_the_screen),
       T_(test_knob_waits_for_the_ring),

@@ -334,7 +334,7 @@ test('update: speed settings and ticker fill are sent as anim (ms) and tickerFil
   await s.close();
 });
 
-test('update: boot=1 resets brightness, keeps the screen, and bumps v; settings flow through', async () => {
+test('update: boot=1 keeps the screen and brightness (Off too) and bumps v; settings flow through', async () => {
   const tracker = fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) });
   const s = await serve({ tracker });
   s.store.update('home', { screen: 'ticker', bright: 'off', showHeader: false });
@@ -347,7 +347,7 @@ test('update: boot=1 resets brightness, keeps the screen, and bumps v; settings 
   assert.deepEqual(b.rows, []);
   b = (await s.req('/board/update?b=home&boot=1', h)).body;
   assert.equal(b.screen, 'ticker');
-  assert.equal(b.bright, 100);
+  assert.equal(b.bright, 0); // Off stays off through a restart
   assert.equal(b.v, 3);
   await s.close();
 });
@@ -565,7 +565,7 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
   await s.close();
 });
 
-test('radar visits: off by default, then on a timer for auto only', async () => {
+test('Rain nearby: off by default, then on a timer on any screen but weather; holds from the phone', async () => {
   const now = Math.floor(Date.now() / 1000);
   const state = { on: true, frames: ['40100-202610041600'], ft: [now - 60], timeBox: [40, 0, 24, 32], split: true };
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(state, {}) });
@@ -580,17 +580,35 @@ test('radar visits: off by default, then on a timer for auto only', async () => 
   // The visit can't outlast its cycle.
   await post({ radarEvery: 1, radarFor: 120 });
   assert.deepEqual((await get()).radar.visit, { every: 60, for: 60 });
-  // A forced screen ignores visits.
+  // Any chosen screen gets visits, but the weather screen (it shows the radar).
   await post({ screen: 'ticker' });
-  const b = await get();
-  assert.equal(b.screen, 'ticker');
-  assert.equal(b.radar.visit, null);
+  let b = await get();
+  assert.deepEqual([b.screen, b.radar.visit], ['ticker', { every: 60, for: 60 }]);
+  await post({ screen: 'clock' });
+  assert.deepEqual((await get()).radar.visit, { every: 60, for: 60 });
+  await post({ screen: 'weather' });
+  assert.equal((await get()).radar.visit, null);
+  await post({ screen: 'transit', radarEvery: 4 });
+  // Holds: "Back to Transit now" ends this visit; "Stop until the rain passes".
+  const rain = (body) => s.req('/board/secret123/api/rain?b=home', { method: 'POST', body: JSON.stringify(body) });
+  assert.equal((await rain({ hold: 'later' })).status, 400);
+  assert.equal((await rain({ hold: 'visit' })).status, 200);
+  b = await get();
+  assert.deepEqual([b.radar.visit, b.radar.held], [null, 'visit']);
+  assert.equal((await rain({ hold: null })).status, 200);
+  assert.deepEqual((await get()).radar.visit, { every: 240, for: 120 });
+  await rain({ hold: 'rain' });
+  assert.equal((await get()).radar.held, 'rain');
+  state.on = false; // dry: the hold ends with the rain
+  assert.equal((await get()).radar.held, undefined);
+  state.on = true;
+  assert.deepEqual((await get()).radar.visit, { every: 240, for: 120 });
   assert.equal((await post({ radarEvery: 61 })).status, 400);
   assert.equal((await post({ radarFor: 5 })).status, 400);
   await s.close();
 });
 
-test('auto: main screens, alternating, alert jump, and baseball teams/priority', async () => {
+test('Cycle: its screens take turns, baseball takes over, the alert jump is retired; baseball teams/priority', async () => {
   const now = Math.floor(Date.now() / 1000);
   const live = (id, away, home) => ({ id, st: 'live', start: now - 3600, inn: 3, half: 'T', away: { ab: away, c: '#000000', r: 1 }, home: { ab: home, c: '#000000', r: 0 } });
   let games = [];
@@ -604,27 +622,34 @@ test('auto: main screens, alternating, alert jump, and baseball teams/priority',
   // Defaults: transit, no rotation.
   let b = await get();
   assert.deepEqual([b.screen, b.rot, b.hclock, b.lnc], ['transit', null, true, false]);
-  // Ticker as the only Auto screen; then both alternate.
-  await post({ autoScreens: ['ticker'] });
-  assert.equal((await get()).screen, 'ticker');
-  await post({ autoScreens: ['transit', 'ticker'], autoEvery: 120 });
+  // The Cycle (screen 'auto'): transit and weather by default.
+  await post({ screen: 'auto' });
   b = await get();
-  assert.deepEqual([b.screen, b.rot], ['transit', { screens: ['transit', 'ticker'], every: 120 }]);
-  // The board's copy carries both screens' sections while alternating.
-  const board = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual([b.screen, b.rot], ['transit', { screens: ['transit', 'weather'], every: 60 }]);
+  await post({ cycle: ['ticker', 'transit'], autoEvery: 120 });
+  b = await get();
+  assert.deepEqual([b.screen, b.rot], ['ticker', { screens: ['ticker', 'transit'], every: 120 }]);
+  // The board's copy carries every Cycle screen's sections.
+  let board = (await s.req('/board/update?b=home', h)).body;
   assert.ok('rows' in board && 'ticker' in board);
-  // Alert jump: watches only with 'all'; warnings with either; over baseball.
+  // A board without clock firmware cycles only through what it draws.
+  await post({ cycle: ['clock', 'weather', 'transit'] });
+  board = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual([board.screen, board.rot], ['weather', { screens: ['weather', 'transit'], every: 120 }]);
+  assert.ok(board.radar.frames, 'radar rides along for the weather turn');
+  board = (await s.req('/board/update?b=home&hk=skyline', h)).body;
+  assert.deepEqual(board.rot.screens, ['clock', 'weather', 'transit']);
+  for (const bad of [['transit'], ['transit', 'transit'], ['transit', 'radar'], 'transit']) assert.equal((await post({ cycle: bad })).status, 400, JSON.stringify(bad));
+  // Baseball takes over the Cycle during a game; NWS alerts no longer jump.
   games = [live(1, 'CHC', 'STL')];
-  warn = 'watch';
-  await post({ alertJump: 'warning' });
-  assert.equal((await get()).screen, 'baseball');
-  await post({ alertJump: 'all' });
-  assert.equal((await get()).screen, 'weather');
   warn = 'warning';
-  await post({ alertJump: 'warning' });
+  await post({ alertJump: 'all' });
   b = await get();
-  assert.deepEqual([b.screen, b.rot], ['weather', null]);
+  assert.deepEqual([b.screen, b.rot], ['baseball', null]);
+  games = [];
+  assert.equal((await get()).screen, 'weather'); // the simulator's copy: no clock firmware reported
   warn = null;
+  games = [live(1, 'CHC', 'STL')];
   // Baseball teams and windows reach the poller; a forced Baseball screen shows all.
   await post({ bbTeams: ['sox'], bbPre: 60, bbFinal: 5 });
   await get();
@@ -1007,12 +1032,14 @@ test('baseball: auto shows it during a game, weather warnings or not', async () 
   const h = { headers: { 'X-Board-Token': 'tok' } };
 
   let s = await serve({ tracker: tracker(), mlb: fakeMlb([]) });
+  s.store.update('home', { screen: 'auto' });
   let b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'transit');
   assert.deepEqual(b.mlb, { layout: 'classic', games: [] });
   await s.close();
 
   s = await serve({ tracker: tracker(), mlb: fakeMlb([game]) });
+  s.store.update('home', { screen: 'auto' });
   b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'baseball');
   assert.deepEqual(b.mlb.games, [game]);
@@ -1035,6 +1062,7 @@ test('baseball: the simulator test game goes first in the list, in the chosen st
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await post({ game: 'extra' })).status, 400);
+  s.store.update('home', { screen: 'auto' });
   for (const st of ['pre', 'live', 'final']) {
     const r = await post({ game: st });
     assert.equal((await r.json()).game, st);
@@ -1124,7 +1152,7 @@ test('select: the knob sets a category and gets the new screen\'s update back', 
   assert.equal((await s.req('/board/select?b=home&s=sports', h())).status, 400, 'sports is phone-only');
   // Every update carries the ring and the chosen screen's place on it.
   let b = (await s.req('/board/update?b=home', h('GET'))).body;
-  assert.deepEqual(b.knob, { ring: ['transit', 'weather', 'cycle'], at: 2 });
+  assert.deepEqual(b.knob, { ring: ['transit', 'weather', 'cycle'], at: 0 });
   const v = b.v;
   b = (await s.req('/board/select?b=home&s=weather', h())).body;
   assert.deepEqual([b.screen, b.for, b.knob.at, b.v], ['weather', 'weather', 1, v + 1]);
@@ -1133,9 +1161,13 @@ test('select: the knob sets a category and gets the new screen\'s update back', 
   b = (await s.req('/board/select?b=home&s=transit', h())).body;
   assert.deepEqual([b.screen, b.knob.at], ['transit', 0]);
   assert.ok('rows' in b && !('mlb' in b));
-  // CYCLE opens the auto screen (the rotation, for now).
+  // CYCLE opens the Cycle (screen 'auto').
   assert.equal((await s.req('/board/select?b=home&s=cycle', h())).status, 200);
   assert.equal(s.store.get('home').screen, 'auto');
+  // A board that's off: any knob choice turns it back on (Auto).
+  s.store.update('home', { bright: 'off' });
+  await s.req('/board/select?b=home&s=transit', h());
+  assert.equal(s.store.get('home').bright, 'auto');
   // Baseball chosen on the phone: the knob opens on TRANSIT.
   s.store.update('home', { screen: 'baseball' });
   assert.equal((await s.req('/board/update?b=home', h('GET'))).body.knob.at, 0);
@@ -1167,7 +1199,7 @@ test('control API: list, add (copy or defaults), label, and delete boards', asyn
   const J = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   await s.req('/board/secret123/api/state?b=home', J('POST', { station: { mapid: '40380' }, label: 'Kitchen' }));
   let r = await s.req('/board/secret123/api/boards');
-  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'auto', fw: 'stable', seen: null, sports: true }]);
+  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'transit', fw: 'stable', seen: null, sports: true }]);
   r = await s.req('/board/secret123/api/boards', J('POST', { id: 'desk', from: 'home', label: 'Desk' }));
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.map((b) => [b.id, b.label, b.mapid]), [['home', 'Kitchen', '40380'], ['desk', 'Desk', '40380']]);
@@ -1348,7 +1380,7 @@ test('transfer: a keyed board gets a new link, default settings, and a WiFi wipe
   assert.equal((await s.req(`/board/c/${r.body.link}/api/state`)).status, 200);
   // Settings back to the defaults; its name and firmware setting stay.
   const b = s.store.get('kitchen');
-  assert.equal(b.screen, 'auto');
+  assert.equal(b.screen, 'transit');
   assert.notEqual(b.station.mapid, '40380');
   assert.equal(b.label, 'Kitchen');
   assert.equal(b.fw, 'off');
@@ -1451,7 +1483,7 @@ test('per-board link: the control page for that board only, without the owner\'s
   let r = await s.req(`${c}/api/state?b=home`, { method: 'POST', body: JSON.stringify({ screen: 'ticker' }) });
   assert.equal(r.status, 200);
   assert.equal(s.store.get('kitchen').screen, 'ticker');
-  assert.equal(s.store.get('home').screen, 'auto');
+  assert.equal(s.store.get('home').screen, 'transit');
   assert.deepEqual((await s.req(`${c}/api/boards`)).body.map((b) => b.id), ['kitchen']);
   assert.equal((await s.req(`${c}/api/boards`)).body[0].link, undefined);
   // Updates: stable or off only.
