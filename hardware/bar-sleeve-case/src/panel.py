@@ -25,6 +25,9 @@ PROFILES = {
         lv_top_x=((-80.0, -46.5), (-33.5, 33.5), (46.5, 80.0)),
         headers=((63.0, 2.5), (-63.0, 2.5)),   # PI IN, PO OUT centres (x, z - ZC), vertical 2x8 shrouds
         s3_back=0.0,                     # extra gap between the panel back and the S3's bottom socket (the case deepens by it)
+        # S3 3.1 mm above the drawer's default: its STEMMA QT plug (side entry on the board's bottom edge) sat on the
+        # lower-right post (check_v5.py); its top edge now stays 0.7 under the upper-right post
+        drawer_s3_mid=0.6,
         sensor_x=55.0,                   # optional light sensor (hole in the case top, board hung from the encoder)
         key_x=40.0,                      # plate v3 keyholes (x +/-)
         screw_xs=(40.0, 52.0),           # screws from below into the plate's bosses (x +/-): stop the insert sliding out
