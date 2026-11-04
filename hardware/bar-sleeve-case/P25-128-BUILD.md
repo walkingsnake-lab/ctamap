@@ -56,7 +56,10 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
 4. **Chain (bench):** both panels turned 180°, butted, the S3 ribbon into A's input, a short ribbon from A's output to
    B's input. Light both and note which columns land on which panel (the firmware's mapping; nothing printed depends on
    it). Check the power leads reach panel A from where the S3 sits on panel B (~25 cm).
-5. As the single P2.5: the panel thickness (14.5) is assumed, not measured.
+5. **Power socket position:** measure its centre from the panel's centre, panel in its normal orientation (data in on
+   the right) seen from the front, and run `python3 check_bar128_power.py <frames> x,z`. On panel B the S3 sits over
+   the left side of the panel: a socket more than ~13 mm left of centre puts its plug under the S3 (map below).
+6. As the single P2.5: the panel thickness (14.5) is assumed, not measured.
 
 ## Parts (`stl/p25-128x32/`)
 | Part | File | Material | Print |
@@ -123,11 +126,18 @@ chain is S3 → A → B. The A → B ribbon and the S3 → A run both clear the 
 the halves and trays have no overhangs the single P2.5 shell and tray don't already have. The lap adds 5 mm² at 43-45°
 on half A, and the open seam ends of both halves print plain vertical walls.
 
+**Power sockets (Nov 4), `check_bar128_power.py`:** each panel's 4-pin socket with a seated VH-class plug (20 x 10,
+5 mm past the housing) and its wires turning flat behind it (12 mm), pin row along x or z, swept over the panel back
+against the S3, the encoder, both trays, the splice plates and the data plugs in use. Panel A: clear anywhere a
+socket can be (only the spots touching a data plug fail). Panel B: clear from ~13 mm left of centre rightward
+(normal orientation, seen from the front), including where the P3's socket is (13 left, 2 up); from ~15-20 mm left
+of centre the plug is under the S3. The same holds for the single P2.5 build, whose S3 sits in the same place.
+
 ## Open
 - **Firmware and server are 64 x 32.** `firmware-s3` sets up the matrix as one 64 x 32 panel (`device.cpp`,
   `HUB75_I2S_CFG(64, 32, 1, …)`), and `server/board/` lays everything out for 64 wide. A 128-wide board needs a chain of 2
   there and its own layouts: separate work from the case.
 - The joint rib, the splice hole and the lap clearance come from the test pieces.
 - Which columns land on which panel with S3 → A → B (firmware mapping, bench), and the power lead to panel A.
-- Power-connector positions on the P2.5 aren't modelled (as the single build); the leads have the whole open space
-  behind both panels.
+- The P2.5's power-socket position (see "Before printing" 5) and whether its stock power cable has a second plug: if it
+  does, one cable can feed both panels (the sockets are 160 mm apart, the plug spacing has to reach).
