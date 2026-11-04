@@ -17,14 +17,16 @@
 //    repo: it holds the owner link): a QR code that
 //    joins the board's setup network, and one for the owner link.
 //
-// Needs: Python with `pip install esptool esp-idf-nvs-partition-gen`; the
-// GitHub CLI (gh) unless --firmware is given; BOARD_CONTROL_PATH (and
+// The control page's Set up a board does the same from Chrome, with
+// nothing to install; this script is the fallback (and for scripting).
+//
+// Needs: Python with `pip install esptool`; the GitHub CLI (gh) unless
+// --firmware is given; BOARD_CONTROL_PATH (and
 // BOARD_TOKEN with --shared) in the environment, or --control / --token.
 // The board's token is never written to disk outside a temp folder that's
 // deleted afterwards. --dry-run does everything except changing the server
 // and flashing (a placeholder token goes into the image).
 
-const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -32,119 +34,22 @@ const readline = require('readline');
 const { spawnSync } = require('child_process');
 const { parseArgs } = require('util');
 
-const ROOT = path.join(__dirname, '..');
 const REPO = 'walkingsnake-lab/ctamap';
 const WORKFLOW = 'firmware-s3.yml';
 const DEFAULT_SERVER = 'https://ctamap.fly.dev';
-const BOARD_ID_RE = /^[a-z0-9-]{1,32}$/;
-const MARK_RE = /CTABOARD-BUILD:([A-Za-z0-9_]{1,48}):(generic|setup);/;
-const ESP32S3_CHIP_ID = 9;
+const { BOARD_ID_RE } = require('../server/board/setup-image');
 
-// ---- settings (must match config::to_json in firmware-s3/ctaboard/src/config.cpp) ----
-
-// The firmware's defaults (ctaboard.ino), tuned for the P3 panel the boards use.
-const PANEL_DEFAULTS = {
-  rotation: 0, curve: 2, night_curve: 3, hw_dim: true, status_led: 2, tls_verify: true,
-  clk_phase: false, double_buffer: true, color_order: 'RGB', knob_reverse: false,
-};
-const FIELDS = ['networks', 'url', 'board_id', 'token', 'rotation', 'curve', 'night_curve', 'hw_dim', 'status_led',
-  'tls_verify', 'clk_phase', 'double_buffer', 'color_order', 'knob_reverse', 'setup_name', 'setup_pass'];
-
-function boardConfig({ id, token, url = DEFAULT_SERVER, networks = [], setupName = '', setupPass = '', panel = {} }) {
-  const c = { networks, url, board_id: id, token, ...PANEL_DEFAULTS, ...panel, setup_name: setupName, setup_pass: setupPass };
-  return JSON.stringify(Object.fromEntries(FIELDS.map((k) => [k, c[k]])));
-}
+// The settings, the settings image, the build checks and the label are
+// shared with the control page's Set up a board (server/board/setup-image.js).
+const S = require('../server/board/setup-image');
+const { boardConfig, randomText, setupNetwork, partitions, appImageEnd, inspectMerged, flashPlan, PANEL_DEFAULTS, FIELDS, hex } = S;
 
 // "ssid=password" (password may be empty for an open network); WiFi limits as on the setup page.
 function parseWifi(s) {
   const i = s.indexOf('=');
-  const ssid = i < 0 ? s : s.slice(0, i);
-  const pass = i < 0 ? '' : s.slice(i + 1);
-  if (!ssid || Buffer.byteLength(ssid) > 32) throw new Error(`--wifi ${s}: the network name must be 1-32 bytes`);
-  if (pass && (pass.length < 8 || pass.length > 63)) throw new Error(`--wifi ${ssid}: WiFi passwords are 8-63 characters (empty for an open network)`);
-  return [ssid, pass];
+  try { return S.checkWifi(i < 0 ? s : s.slice(0, i), i < 0 ? '' : s.slice(i + 1)); }
+  catch (e) { throw new Error(`--wifi ${s}: ${e.message.replace(/^WiFi [^:]*: /, '')}`); }
 }
-
-// Setup network name and WPA2 password, from an alphabet without look-alikes.
-const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
-function randomText(n, rand = crypto.randomBytes) {
-  const lim = 256 - (256 % ALPHABET.length);
-  let out = '';
-  while (out.length < n) for (const x of rand(n)) if (x < lim && out.length < n) out += ALPHABET[x % ALPHABET.length];
-  return out;
-}
-const setupNetwork = (rand) => ({ name: `Board-${randomText(4, rand).toUpperCase()}`, pass: randomText(10, rand) });
-
-// ---- the build ----
-
-// Partition table at 0x8000 of a merged image (esp_partition_info_t, 32 bytes each).
-function partitions(img) {
-  const out = [];
-  for (let at = 0x8000; at + 32 <= img.length && at < 0x9000; at += 32) {
-    if (img[at] !== 0xaa || img[at + 1] !== 0x50) break; // end (0xFF) or the MD5 entry (0xEB 0xEB)
-    out.push({
-      type: img[at + 2], subtype: img[at + 3], offset: img.readUInt32LE(at + 4), size: img.readUInt32LE(at + 8),
-      label: img.toString('latin1', at + 12, at + 28).replace(/\0.*$/s, ''),
-    });
-  }
-  return out;
-}
-
-// Where an ESP32 app image starting at `off` ends: the header, its segments,
-// the checksum padded to 16 bytes, and the SHA-256 when appended
-// (esp_image_format.h).
-function appImageEnd(img, off) {
-  const segments = img[off + 1];
-  let p = off + 24;
-  for (let i = 0; i < segments; i++) {
-    if (p + 8 > img.length) throw new Error('the app image is cut short');
-    p += 8 + img.readUInt32LE(p + 4);
-  }
-  p = off + Math.ceil((p - off + 1) / 16) * 16;
-  if (img[off + 23] === 1) p += 32;
-  if (p > img.length) throw new Error('the app image is cut short');
-  return p;
-}
-
-// Checks a merged image (bootloader + partition table + app, as the CI
-// builds it) and returns what flashing needs: its version, the NVS
-// partition the settings go in, and where the app ends. arduino-esp32 pads
-// the merged image with 0xFF to the whole 8 MB, past the TinyUF2
-// recovery loader at 0x410000: only the part up to the app's end is flashed,
-// so that loader (and the rest of flash) stays.
-function inspectMerged(img) {
-  if (!Buffer.isBuffer(img) || img.length < 0x10000 + 64 || img[0] !== 0xe9) {
-    throw new Error('not a merged image: use ctaboard.ino.merged.bin (the CI artifact has it)');
-  }
-  if (img.readUInt16LE(12) !== ESP32S3_CHIP_ID) throw new Error('not built for the ESP32-S3 (pick Adafruit MatrixPortal ESP32-S3)');
-  const parts = partitions(img);
-  const nvs = parts.find((p) => p.type === 1 && p.subtype === 2);
-  const slots = parts.filter((p) => p.type === 0 && (p.subtype === 0x10 || p.subtype === 0x11));
-  if (!nvs) throw new Error('no partition table with an NVS partition at 0x8000');
-  if (slots.length < 2) throw new Error('the partition table has no two OTA app slots: build with PartitionScheme=tinyuf2');
-  if (img[slots[0].offset] !== 0xe9) throw new Error(`no app image at ${hex(slots[0].offset)}`);
-  const end = appImageEnd(img, slots[0].offset);
-  if (end - slots[0].offset > slots[0].size) throw new Error('the app is bigger than its slot');
-  const m = img.toString('latin1').match(MARK_RE);
-  if (!m) throw new Error('not a CTA board build (no build mark)');
-  if (m[2] === 'setup') throw new Error('built with secrets.h: use the generic (CI) build');
-  if (!/^[0-9a-f]{7,40}$/.test(m[1])) throw new Error(`build ${m[1]} isn't from a clean commit: use the CI build`);
-  return { version: m[1], nvs: { offset: nvs.offset, size: nvs.size }, end };
-}
-
-// The image up to the app's end, in pieces around the NVS partition, plus
-// the settings in it: one esptool pass, with no piece overwriting another.
-function flashPlan(img, nvsImage, nvs, end) {
-  if (nvsImage.length !== nvs.size) throw new Error(`the settings image is ${nvsImage.length} bytes; the NVS partition is ${nvs.size}`);
-  const after = nvs.offset + nvs.size;
-  return [
-    { offset: 0, data: img.subarray(0, nvs.offset), name: 'bootloader + partition table' },
-    { offset: nvs.offset, data: nvsImage, name: 'settings' },
-    { offset: after, data: img.subarray(after, end), name: 'boot slot + app' },
-  ].filter((p) => p.data.length);
-}
-
-const hex = (n) => '0x' + n.toString(16);
 
 // ---- tools ----
 
@@ -161,26 +66,10 @@ function findEsptool() {
   return null;
 }
 
-function findNvsGen() {
-  for (const py of ['python3', 'python']) {
-    const r = run(py, ['-m', 'esp_idf_nvs_partition_gen', '--help']);
-    if (r.status === 0) return py;
-  }
-  return null;
-}
-
 // The settings as an NVS image (namespace "ctaboard", key "cfg": what
-// Preferences reads in device.cpp nvs_get).
-function buildNvs(py, cfgJson, size, dir) {
-  const cfgFile = path.join(dir, 'cfg.json');
-  const csv = path.join(dir, 'nvs.csv');
-  const out = path.join(dir, 'nvs.bin');
-  fs.writeFileSync(cfgFile, cfgJson, { mode: 0o600 });
-  fs.writeFileSync(csv, `key,type,encoding,value\nctaboard,namespace,,\ncfg,file,string,${cfgFile}\n`);
-  const r = run(py, ['-m', 'esp_idf_nvs_partition_gen', 'generate', csv, out, hex(size)]);
-  if (r.status !== 0) throw new Error(`building the settings image failed:\n${r.stdout}${r.stderr}`);
-  return fs.readFileSync(out);
-}
+// Preferences reads in device.cpp nvs_get), the same bytes ESP-IDF's
+// nvs_partition_gen makes.
+const buildNvs = (cfgJson, size) => Buffer.from(S.nvsImage({ value: cfgJson, size }));
 
 // The CI build to flash: the artifact for the server's stable build if CI
 // still has it, else the newest successful build on main.
@@ -222,24 +111,9 @@ function controlApi(server, control) {
 async function labelHtml({ id, label, setupName, setupPass, ownerUrl }) {
   let QRCode;
   try { QRCode = require('qrcode'); } catch (e) { throw new Error('the qrcode package is missing: run npm install'); }
-  const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
-  // WiFi QR text (phones join from the camera); ; , : \ " escaped per the format.
-  const wq = (s) => s.replace(/([\\;,:"])/g, '\\$1');
-  const wifiQr = `WIFI:T:WPA;S:${wq(setupName)};P:${wq(setupPass)};;`;
   const svg = (text) => QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
-  const [wifiSvg, ownerSvg] = await Promise.all([svg(wifiQr), ownerUrl ? svg(ownerUrl) : null]);
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(label || id)} label</title><style>
-body{font:14px/1.35 -apple-system,system-ui,sans-serif;margin:24px;color:#111}
-.label{display:flex;gap:28px;border:1px dashed #999;padding:16px;width:max-content}
-.qr{width:150px}.qr svg{width:150px;height:150px}.qr b{display:block;margin:6px 0 2px}
-code{font-size:13px;white-space:nowrap}@media print{body{margin:0}.label{border:0}.hint{display:none}}
-</style></head><body>
-<p class="hint">Board <b>${esc(id)}</b>${label ? ` (${esc(label)})` : ''}. Print and stick on the back. The owner link is a secret: anyone with it controls this board.</p>
-<div class="label">
-<div class="qr">${wifiSvg}<b>1. Set up WiFi</b>Scan to join <code>${esc(setupName)}</code><br>Password <code>${esc(setupPass)}</code></div>
-${ownerSvg ? `<div class="qr">${ownerSvg}<b>2. Your board</b>Scan to choose its station and screens</div>` : ''}
-</div></body></html>
-`;
+  const [wifi, owner] = await Promise.all([svg(S.wifiQrText(setupName, setupPass)), ownerUrl ? svg(ownerUrl) : null]);
+  return S.labelPage([{ id, label, setupName, setupPass, ownerUrl, qr: { wifi, owner } }]);
 }
 
 // ---- main ----
@@ -286,8 +160,7 @@ async function main(argv) {
 
   // Tools first, so nothing changes on the server if one is missing.
   const esptool = findEsptool();
-  const py = findNvsGen();
-  if (!esptool || !py) throw new Error('needs esptool and the NVS image tool: pip install esptool esp-idf-nvs-partition-gen');
+  if (!esptool) throw new Error('needs esptool: pip install esptool');
   const api = controlApi(o.server, control);
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'board-setup-'));
   try {
@@ -331,7 +204,7 @@ async function main(argv) {
     // 3. Settings.
     const net = setupNetwork();
     const cfg = boardConfig({ id: o.id, token, url: o.server, networks, setupName: net.name, setupPass: net.pass });
-    const nvsImage = buildNvs(py, cfg, nvs.size, tmp);
+    const nvsImage = buildNvs(cfg, nvs.size);
     const plan = flashPlan(img, nvsImage, nvs, end);
 
     // 4. Flash.

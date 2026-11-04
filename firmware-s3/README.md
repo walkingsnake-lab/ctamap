@@ -11,6 +11,37 @@ visibly shimmers on the S3. This firmware uses the
 driver, where the S3's display hardware streams the panel data on its own:
 steady at 8-bit color.
 
+## Setting up a board (from the control page)
+
+On your control page in **Chrome or Edge on a computer**: Board tab → All
+boards → **Set up a board…**. Nothing to install.
+
+1. **The board:** a name (the ID follows it), **Someone else** (its own
+   token and owner link, printed on the label) or **Me** (its own token,
+   your features, optional WiFi), its **station**, which board's other
+   settings it starts from, and the firmware (Stable unless you pick
+   another).
+2. **Flash it:** plug the board in by USB, hold BOOT, tap RESET, let go of
+   BOOT, click **Flash** and pick its port. The page checks it's an
+   ESP32-S3, adds the board on the server with its token, and writes the
+   build and the board's settings in one pass (everything up to the app's
+   end, so the TinyUF2 recovery loader stays).
+3. **Done:** press RESET. Print the label (the only copy of the setup
+   password and owner link). **Set up another** keeps the station, starting
+   settings and firmware for the next board; **Print all labels** prints the
+   session's labels on one page.
+
+If flashing fails after the board was added, fix the problem (cable, upload
+mode) and click **Flash** again: the same token and label are used.
+
+Each region is read back and checked after writing. Unlike the script below,
+the page gives your own boards (**Me**) their own token too, instead of the
+shared `BOARD_TOKEN`.
+
+It needs a build with a **boot image**, which CI publishes with every build
+of `main` (`scripts/split-merged.js`); older builds can only be flashed with
+the script below.
+
 ## Setting up a board (one command)
 
 `scripts/setup-board.js` sets up a board without the Arduino IDE: the CI
@@ -18,7 +49,7 @@ build, the board's own key, its settings, one flash, and a printable label.
 
 Once, on your computer:
 - `npm install` in the repo (the label's QR codes need `qrcode`).
-- `pip install esptool esp-idf-nvs-partition-gen`.
+- `pip install esptool`.
 - The GitHub CLI (`gh auth login`), so the script can fetch the CI build.
 - `export BOARD_CONTROL_PATH=…` (the Fly secret); for your own boards also
   `BOARD_TOKEN`.

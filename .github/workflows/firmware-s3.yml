@@ -3,10 +3,12 @@
 # artifact (ctaboard-<commit>) with ctaboard.ino.bin, to upload on the
 # control page's Board tab, and ctaboard.ino.merged.bin, which
 # scripts/setup-board.js flashes onto new boards. Also catches firmware that
-# no longer compiles.
+# no longer compiles, and checks the merged image splits into the boot image.
 #
-# On main, `publish` signs the build and puts it on the server's beta
-# channel (firmware-s3/README.md, "Signed builds"). It runs in the
+# On main, `publish` signs the build and its boot image (the merged image
+# before the app, scripts/split-merged.js) and puts both on the server: the
+# build on the beta channel (firmware-s3/README.md, "Signed builds"), the
+# boot image beside it for the control page's Set up a board. It runs in the
 # firmware-release environment, which only main can use and which holds
 # the signing key and the deploy token; without them it skips, with a warning.
 name: S3 firmware
@@ -14,9 +16,9 @@ name: S3 firmware
 on:
   push:
     branches: [main]
-    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', '.github/workflows/firmware-s3.yml']
+    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', 'scripts/split-merged.js', 'server/board/setup-image.js', 'server/board/firmware.js', '.github/workflows/firmware-s3.yml']
   pull_request:
-    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', '.github/workflows/firmware-s3.yml']
+    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', 'scripts/split-merged.js', 'server/board/setup-image.js', 'server/board/firmware.js', '.github/workflows/firmware-s3.yml']
   workflow_dispatch:
 
 permissions:
@@ -68,6 +70,7 @@ jobs:
           ls -l build/ctaboard.ino.bin build/ctaboard.ino.merged.bin
           size=$(stat -c %s build/ctaboard.ino.bin)
           test "$size" -le 2097152
+          node scripts/split-merged.js build/ctaboard.ino.merged.bin build/ctaboard.ino.bin
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Built **$v**: ctaboard.ino.bin, $size bytes (app slot: 2097152)." >> "$GITHUB_STEP_SUMMARY"
 
@@ -113,15 +116,24 @@ jobs:
           name: ctaboard-${{ needs.build.outputs.version }}
           path: build
 
+      - name: Boot image for Set up a board (checked against the app)
+        if: steps.ready.outputs.go == '1'
+        run: node scripts/split-merged.js build/ctaboard.ino.merged.bin build/ctaboard.ino.bin
+
       - name: Sign (checked against the repo's public key)
         if: steps.ready.outputs.go == '1'
-        run: node scripts/sign-firmware.js build/ctaboard.ino.bin
+        run: |
+          node scripts/sign-firmware.js build/ctaboard.ino.bin
+          node scripts/sign-firmware.js build/ctaboard.ino.boot.bin
 
       - uses: actions/upload-artifact@v4
         if: steps.ready.outputs.go == '1'
         with:
           name: ctaboard-${{ needs.build.outputs.version }}-signature
-          path: build/ctaboard.ino.bin.sig
+          path: |
+            build/ctaboard.ino.bin.sig
+            build/ctaboard.ino.boot.bin
+            build/ctaboard.ino.boot.bin.sig
           retention-days: 90
 
       - name: Publish to beta
@@ -134,4 +146,11 @@ jobs:
             --data-binary @build/ctaboard.ino.bin)
           cat response.json; echo
           test "$code" = 200
-          echo "Published **${{ needs.build.outputs.version }}** to beta." >> "$GITHUB_STEP_SUMMARY"
+          code=$(curl -sS -o response.json -w '%{http_code}' -X POST "$BOARD_URL/board/firmware-upload?boot=${{ needs.build.outputs.version }}" \
+            -H "X-Deploy-Token: $FIRMWARE_DEPLOY_TOKEN" \
+            -H "X-Firmware-Signature: $(tr -d '\n' < build/ctaboard.ino.boot.bin.sig)" \
+            -H 'Content-Type: application/octet-stream' \
+            --data-binary @build/ctaboard.ino.boot.bin)
+          cat response.json; echo
+          test "$code" = 200
+          echo "Published **${{ needs.build.outputs.version }}** to beta (with its boot image)." >> "$GITHUB_STEP_SUMMARY"

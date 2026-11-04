@@ -29,6 +29,10 @@ const { render, assets, autoScreen, messageLayout } = require('./render');
 const SIM_HTML = fs.readFileSync(path.join(__dirname, 'sim.html'));
 const CONTROL_HTML = fs.readFileSync(path.join(__dirname, 'control.html'));
 const DRAW_JS = fs.readFileSync(path.join(__dirname, 'draw.js'));
+// Set up a board (maker's page only): the shared setup code, and the
+// flashing and QR tools bundled by build.js (absent until npm run build).
+const SETUP_IMAGE_JS = fs.readFileSync(path.join(__dirname, 'setup-image.js'));
+const SETUP_TOOLS_FILE = path.join(__dirname, '..', '..', 'dist', 'setup-tools.min.js');
 const SIM_ASSETS = JSON.stringify(assets());
 
 const MAX_BODY = 8 * 1024;
@@ -176,7 +180,7 @@ function createBoard({
   // Baseball (MLB Stats API: personal, non-commercial use only) is for the
   // maker's own boards. A board with its own key (one set up for someone
   // else) gets no baseball screen, takeover, games, logos, or settings.
-  const sportsOn = (id) => !keys.has(String(id || ''));
+  const sportsOn = (id) => !keys.has(String(id || '')) || keys.mine(String(id || ''));
   const SPORTS_FIELDS = ['baseballLayout', 'bbTeams', 'bbPre', 'bbFinal', 'bbPriority', 'gameEvery', 'logoBright'];
   function checkSportsPatch(id, patch) {
     if (sportsOn(id) || !patch || typeof patch !== 'object') return;
@@ -388,7 +392,7 @@ function createBoard({
   function boardList() {
     return store.ids().map((id) => {
       const b = store.get(id);
-      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, sports: sportsOn(id), ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, sports: sportsOn(id), ...(keys.mine(id) ? { mine: true } : {}), ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
     });
   }
   // A removed board's live state (health, test alerts, chrono views).
@@ -725,7 +729,13 @@ function createBoard({
       if (!sameSecret(req.headers['x-deploy-token'], deployToken)) return send(res, 401, { err: 'bad_token' });
       try {
         const body = await readBody(req, MAX_FIRMWARE + 64 * 1024);
-        const st = firmware.upload(body, { sig: req.headers['x-firmware-signature'] || null, channel: 'beta', pinned: pinnedBuilds() });
+        const sig = req.headers['x-firmware-signature'] || null;
+        // ?boot=<build>: that build's boot image (after the build itself).
+        if (parsed.query.boot != null) {
+          firmware.attachBoot(String(parsed.query.boot), body, { sig });
+          return send(res, 200, { boot: String(parsed.query.boot) });
+        }
+        const st = firmware.upload(body, { sig, channel: 'beta', pinned: pinnedBuilds() });
         return send(res, 200, { beta: st.channels.beta });
       } catch (e) {
         if (e instanceof FirmwareError || e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
@@ -844,7 +854,7 @@ function createBoard({
       if (sub === 'api/boards/key' || sub === 'api/boards/link') {
         const id = String(parsed.query.b || '');
         if (!store.get(id)) return send(res, 404, { err: 'unknown_board' });
-        if (sub === 'api/boards/key' && method === 'POST') return send(res, 200, { id, ...keys.issue(id) });
+        if (sub === 'api/boards/key' && method === 'POST') return send(res, 200, { id, ...keys.issue(id, { mine: parsed.query.mine === '1' }) });
         if (sub === 'api/boards/key' && method === 'DELETE') { keys.remove(id); return send(res, 200, { id, link: null }); }
         if (sub === 'api/boards/link' && method === 'POST') {
           const link = keys.relink(id);
@@ -936,6 +946,28 @@ function createBoard({
         }
         return send(res, 405, { err: 'method' });
       }
+      // A build's boot image (POST, raw body + X-Firmware-Signature), and
+      // what Set up a board flashes: the boot image and the app, i.e. the
+      // merged image up to the app's end (GET api/firmware/image?v=).
+      if (sub === 'api/firmware/boot' || sub === 'api/firmware/image') {
+        const v = String(parsed.query.v || '');
+        try {
+          if (sub === 'api/firmware/boot' && method === 'POST') {
+            return send(res, 200, firmware.attachBoot(v, await readBody(req, 0x20000), { sig: req.headers['x-firmware-signature'] || null }));
+          }
+          if (sub === 'api/firmware/image' && method === 'GET') {
+            const img = firmware.image(v);
+            if (!img) return send(res, 404, { err: 'not_found', detail: firmware.has(v) ? `build ${v} has no boot image` : `unknown build: ${v}` });
+            res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': img.length, 'Cache-Control': 'no-store' });
+            res.end(img);
+            return;
+          }
+        } catch (e) {
+          if (e instanceof FirmwareError || e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+          throw e;
+        }
+        return send(res, 405, { err: 'method' });
+      }
       // Point a channel at a build: {channel: beta|stable, v: <build> | null}.
       if (sub === 'api/firmware/channel') {
         if (method !== 'POST') return send(res, 405, { err: 'method' });
@@ -989,6 +1021,17 @@ function createBoard({
         if (method !== 'GET') return send(res, 405, { err: 'method' });
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(SIM_HTML);
+        return;
+      }
+      // Set up a board's scripts (scoped links never reach these: not in SCOPED_OK).
+      if (sub === 'setup-image.js' || sub === 'setup-tools.js') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        let js = SETUP_IMAGE_JS;
+        if (sub === 'setup-tools.js') {
+          try { js = fs.readFileSync(SETUP_TOOLS_FILE); } catch (e) { return send(res, 404, { err: 'not_found', detail: 'not built: run npm run build' }); }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache' });
+        res.end(js);
         return;
       }
       // draw.js and the fonts/icons it needs, for the simulator page.
