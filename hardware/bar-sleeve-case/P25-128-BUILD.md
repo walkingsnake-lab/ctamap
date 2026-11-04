@@ -83,8 +83,12 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 - **Other:** 4 bumpers 12.7 x 3.8 (at the ends); medium CA glue; the encoder's M7 nut.
 - **Cables:** S3 → panel A's input: a 16-pin IDC ribbon, **35 cm minimum, 40 comfortable** (seated it runs ~27 cm from the
   S3 on tray B to A's input; the rest lets tray B come out still cabled, as the single build's 15 cm does). The P2.5's
-  stock ribbon is too short for this run. A's output → B's input (headers 80 mm apart): the stock ribbon, folded. Power:
-  a lead to each panel from the S3's terminals (or one cable with two plugs, if the panel's has them).
+  stock ribbon is too short for this run. A's output → B's input (headers 80 mm apart): the stock ribbon, folded.
+- **Power: the panel's stock cable, both plugs** (it has two). Forks into the S3's terminals, the nearer plug into panel
+  B (the same run as the single P2.5 build), the far plug into panel A. Between the plugs it runs flat on the panel backs
+  just above or just below the A → B data ribbon (straight across at socket height the two data plugs are in the way):
+  ~160 mm socket to socket plus the drops, so it needs **~18-20 cm or more between the plugs**. Tie up any spare as the
+  single build does.
 - **Power:** two panels can draw about twice one at full white. A 5 V / 3 A USB-C supply runs the transit screens; cap the
   brightness, or feed the panels from a separate 5 V supply.
 
@@ -100,15 +104,15 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 1. **Shell:** bumpers into the four recesses; collar into the knob hole (over panel B).
 2. **Panels, face down on a towel:** snap each diffuser onto its panel (A's wide-rib edge toward the joint; its skirtless
    edge meets B's). Butt the panels, screw both splice plates on (round hole on A, 2 x M3 x 6 each), check the rows across
-   the seam, tighten. Plug the power leads into both panels, the short ribbon from A's output to B's input, and the long
-   ribbon into A's input (red stripe = pin 1).
+   the seam, tighten. Plug the power cable's two plugs into both panels (the far one into A, its run above or below the
+   short ribbon), the short ribbon from A's output to B's input, and the long ribbon into A's input (red stripe = pin 1).
 3. **Panels in:** shell face down, the joined panels in from the back until both bezels seat on the rim (panel B on the
    knob side).
 4. **Encoder:** as the P2.5 build, steps 5-6 (QT cable into the encoder before tray B).
-5. **Tray A first:** lay the long ribbon and panel A's power lead along the panel backs toward the joint and out through
+5. **Tray A first:** lay the long ribbon and the power cable's forked end along the panel backs toward the joint and out through
    the right half's back opening (tray B isn't in yet), so tray A slides in over them without pinching them. Tray A in,
    2 x M3 x 8 flanged into its outer posts.
-6. **Tray B on the bench, then in:** the long ribbon into the S3's IDC header and the power leads into its terminals
+6. **Tray B on the bench, then in:** the long ribbon into the S3's IDC header and the power cable's forks into its terminals
    while the S3 is loose (as the P2.5 build), then the S3 onto its posts. Fold the spare ribbon into tray A's empty space
    behind panel A as tray B goes in. 2 x M3 x 8 flanged into its outer posts. In both trays the inner posts stand on the
    plates, no screw. Then the four M3 x 10 from below.
@@ -143,5 +147,4 @@ panel B the plug's edge is ~20 mm from the S3's. Seated, the sockets sit at case
   there and its own layouts: separate work from the case.
 - The joint rib, the splice hole and the lap clearance come from the test pieces.
 - Which columns land on which panel with S3 → A → B (firmware mapping, bench), and the power lead to panel A.
-- Whether the P2.5's stock power cable has a second plug: if it does, one cable can feed both panels (the sockets are
-  160 mm apart, so the plug spacing has to reach that plus slack).
+- The length of cable between the stock power cable's two plugs: ~18-20 cm or more (measure before the build).
