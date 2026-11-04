@@ -3,10 +3,12 @@
 # artifact (ctaboard-<commit>) with ctaboard.ino.bin, to upload on the
 # control page's Board tab, and ctaboard.ino.merged.bin, which
 # scripts/setup-board.js flashes onto new boards. Also catches firmware that
-# no longer compiles.
+# no longer compiles, and checks the merged image splits into the boot image.
 #
-# On main, `publish` signs the build and puts it on the server's beta
-# channel (firmware-s3/README.md, "Signed builds"). It runs in the
+# On main, `publish` signs the build and its boot image (the merged image
+# before the app, scripts/split-merged.js) and puts both on the server: the
+# build on the beta channel (firmware-s3/README.md, "Signed builds"), the
+# boot image beside it for the control page's Set up a board. It runs in the
 # firmware-release environment, which only main can use and which holds
 # the signing key and the deploy token; without them it skips, with a warning.
 name: S3 firmware
@@ -14,9 +16,9 @@ name: S3 firmware
 on:
   push:
     branches: [main]
-    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', '.github/workflows/firmware-s3.yml']
+    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', 'scripts/split-merged.js', 'server/board/setup-image.js', 'server/board/firmware.js', '.github/workflows/firmware-s3.yml']
   pull_request:
-    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', '.github/workflows/firmware-s3.yml']
+    paths: ['firmware-s3/**', 'scripts/stamp-firmware-version.js', 'scripts/sign-firmware.js', 'scripts/split-merged.js', 'server/board/setup-image.js', 'server/board/firmware.js', '.github/workflows/firmware-s3.yml']
   workflow_dispatch:
 
 permissions:

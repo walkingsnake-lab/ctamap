@@ -52,7 +52,9 @@
 
   // Setup network name and WPA2 password, from an alphabet without look-alikes.
   const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
-  const cryptoRand = (n) => globalThis.crypto.getRandomValues(new Uint8Array(n));
+  // Web Crypto (browsers, Node 19+), else Node's (Node 18 has it only under require).
+  const webcrypto = globalThis.crypto || (typeof require === 'function' ? require('crypto').webcrypto : null);
+  const cryptoRand = (n) => webcrypto.getRandomValues(new Uint8Array(n));
   function randomText(n, rand = cryptoRand) {
     const lim = 256 - (256 % ALPHABET.length);
     let out = '';

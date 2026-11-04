@@ -111,6 +111,11 @@ function inspectBoot(buf) {
   if (!nvs || slots.length < 2) throw new FirmwareError('no partition table with an NVS partition and two OTA app slots');
   if (slots[0].offset !== buf.length) throw new FirmwareError(`the boot image must end where the first app slot starts (${slots[0].offset} bytes; got ${buf.length})`);
   if (slots[0].size < MAX_BYTES) throw new FirmwareError('the first app slot is smaller than an app build may be');
+  // The initial OTA data (arduino-esp32's boot_app0) must be there and pick
+  // a slot: erased, the bootloader would start the TinyUF2 factory app.
+  const ota = parts.find((p) => p.type === 1 && p.subtype === 0);
+  if (!ota || ota.offset + 32 > buf.length) throw new FirmwareError('no OTA data partition in the boot image');
+  if (buf.readUInt32LE(ota.offset) === 0xffffffff) throw new FirmwareError('the OTA data is erased: the boot image has no boot_app0');
   return { nvs, app: slots[0] };
 }
 

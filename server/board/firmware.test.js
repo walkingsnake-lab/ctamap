@@ -177,6 +177,7 @@ function fakeBoot({ chip = 9, appAt = 0x10000, appSize = 0x200000 } = {}) {
   };
   entry(0, 1, 2, 0x9000, 0x5000, 'nvs'); entry(1, 1, 0, 0xe000, 0x2000, 'otadata');
   entry(2, 0, 0x10, appAt, appSize, 'ota_0'); entry(3, 0, 0x11, appAt + appSize, appSize, 'ota_1');
+  b.writeUInt32LE(1, 0xe000); // boot_app0: ota_seq 1 (ota_0)
   return b;
 }
 // A real-shaped app image (header, segments, checksum padding, SHA-256), so
@@ -217,6 +218,8 @@ test('boot image: checked, signed, and with the app makes the image a new board 
   bad(fakeBoot({ appSize: 0x100000 }), /smaller than an app build/);
   const noTable = fakeBoot(); noTable.fill(0xff, 0x8000, 0x9000);
   bad(noTable, /no partition table/);
+  const erased = fakeBoot(); erased.fill(0xff, 0xe000, 0x10000);
+  bad(erased, /OTA data is erased/);
   // Removing the build removes its boot image too.
   fw.setChannel('stable', null);
   fw.remove('aaaaaaa');

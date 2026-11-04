@@ -1811,7 +1811,8 @@ test('firmware: boot images (CI or the page) and the setup image, maker only', a
   app = Buffer.concat([app, Buffer.alloc(Math.ceil((app.length + 1) / 16) * 16 - app.length, 0), Buffer.alloc(32, 0x5a)]);
   const boot = Buffer.alloc(0x10000, 0xff);
   boot[0] = 0xe9; boot.writeUInt16LE(9, 12);
-  [[1, 2, 0x9000, 0x5000, 'nvs'], [0, 0x10, 0x10000, 0x200000, 'ota_0'], [0, 0x11, 0x210000, 0x200000, 'ota_1']].forEach(([t, st, off, size, label], i) => {
+  boot.writeUInt32LE(1, 0xe000); // boot_app0
+  [[1, 2, 0x9000, 0x5000, 'nvs'], [1, 0, 0xe000, 0x2000, 'otadata'], [0, 0x10, 0x10000, 0x200000, 'ota_0'], [0, 0x11, 0x210000, 0x200000, 'ota_1']].forEach(([t, st, off, size, label], i) => {
     const at = 0x8000 + i * 32;
     boot[at] = 0xaa; boot[at + 1] = 0x50; boot[at + 2] = t; boot[at + 3] = st;
     boot.writeUInt32LE(off, at + 4); boot.writeUInt32LE(size, at + 8); boot.fill(0, at + 12, at + 28); boot.write(label, at + 12, 'latin1');

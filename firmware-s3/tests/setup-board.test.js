@@ -44,6 +44,7 @@ function mergedImage({ mark = 'CTABOARD-BUILD:a1b2c3d:generic;', chip = 9, pad =
       partitionEntry(0, 0x10, 0x10000, 0x200000, 'ota_0'), partitionEntry(0, 0x11, 0x210000, 0x200000, 'ota_1'),
       partitionEntry(0, 0, 0x410000, 0x40000, 'uf2'), partitionEntry(1, 0x81, 0x450000, 0x3b0000, 'ffat')]
       .forEach((e, i) => e.copy(img, 0x8000 + i * 32));
+    img.writeUInt32LE(1, 0xe000); // boot_app0: ota_seq 1
   }
   const app = appImage(mark);
   app.copy(img, 0x10000);

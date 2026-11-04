@@ -34,6 +34,10 @@ boards → **Set up a board…**. Nothing to install.
 If flashing fails after the board was added, fix the problem (cable, upload
 mode) and click **Flash** again: the same token and label are used.
 
+Each region is read back and checked after writing. Unlike the script below,
+the page gives your own boards (**Me**) their own token too, instead of the
+shared `BOARD_TOKEN`.
+
 It needs a build with a **boot image**, which CI publishes with every build
 of `main` (`scripts/split-merged.js`); older builds can only be flashed with
 the script below.

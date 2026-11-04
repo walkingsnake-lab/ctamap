@@ -490,6 +490,7 @@
         <label class="field">For</label>
         <div class="seg" id="sWho"><button data-v="other" aria-pressed="true">Someone else</button><button data-v="mine">Me</button></div>
         <p class="hint" id="sWhoHint"></p>
+        <div class="row" id="sKnownRow" hidden><span class="hint warn" id="sKnownText" style="margin:0"></span><label class="switch"><input type="checkbox" id="sReplace"><span></span></label></div>
         <label class="field" for="sStation">Station</label>
         <select id="sStation"></select>
         <label class="field" for="sFrom">Other settings from</label>
@@ -1419,12 +1420,19 @@
   // page's memory (it goes into the board's flash and the label never shows it).
   const setupDlg = $('setup');
   const setup = { who: 'other', done: [], last: null, pending: null, busy: false };
-  const loadScript = (src) => new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) return resolve();
-    const el = document.createElement('script');
-    el.src = src; el.onload = resolve; el.onerror = () => reject(new Error(`couldn't load ${src}`));
-    document.head.append(el);
-  });
+  // One load per script; a failed one is forgotten so the next call tries again.
+  const scripts = new Map();
+  const loadScript = (src) => {
+    if (!scripts.has(src)) {
+      scripts.set(src, new Promise((resolve, reject) => {
+        const el = document.createElement('script');
+        el.src = src; el.onload = resolve;
+        el.onerror = () => { el.remove(); scripts.delete(src); reject(new Error(src === 'setup-tools.js' ? 'the flashing tools aren\'t on the server (npm run build)' : `couldn't load ${src}`)); };
+        document.head.append(el);
+      }));
+    }
+    return scripts.get(src);
+  };
   const slug = (s) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
   // The next free ID like this one: kitchen -> kitchen-2.
   function nextId(id) {
@@ -1453,7 +1461,7 @@
     $('sGo').disabled = !ok.length || !('serial' in navigator);
   }
   async function openSetup() {
-    if (!fwStatus || !fwStatus.builds.length) await loadFirmware();
+    await loadFirmware(); // a boot image CI just published shows up
     $('setupNoSerial').hidden = 'serial' in navigator;
     $('sStation').replaceChildren(...stations.map((s) => new Option(s.desc, s.mapid)));
     $('sStation').value = board ? board.station.mapid : stations[0].mapid;
@@ -1464,7 +1472,8 @@
     $('sId').dataset.auto = '1';
     $('sLog').textContent = ''; $('sLog').hidden = true; $('sProgress').hidden = true;
     $('sDone').hidden = true; $('sBoard').hidden = false; $('sFlash').hidden = false;
-    setup.pending = null;
+    setup.pending = null; setup.knownFor = null;
+    $('sKnownRow').hidden = true;
     renderSetupWho();
     setupBuilds();
     setupDlg.showModal();
@@ -1474,9 +1483,25 @@
   $('setupOpen').addEventListener('click', openSetup);
   $('setupClose').addEventListener('click', () => { if (!setup.busy) setupDlg.close(); });
   setupDlg.addEventListener('cancel', (e) => { if (setup.busy) e.preventDefault(); });
-  $('sWho').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !setup.busy) { setup.who = v; renderSetupWho(); } });
-  $('sLabel').addEventListener('input', () => { if ($('sId').dataset.auto) $('sId').value = nextId(slug($('sLabel').value) || ''); });
-  $('sId').addEventListener('input', () => { delete $('sId').dataset.auto; });
+  $('sWho').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !setup.busy) { setup.who = v; renderSetupWho(); renderKnown(); } });
+  // An ID that's already on the server: setting it up again replaces its
+  // token (asked here, not in a dialog after Flash: the port picker needs
+  // the click's fresh user activation), and starts from its own station and name.
+  function renderKnown() {
+    const known = boards.find((b) => b.id === $('sId').value.trim().toLowerCase());
+    const retry = setup.pending && known && setup.pending.id === known.id && setup.pending.who === setup.who;
+    $('sKnownRow').hidden = !known || retry;
+    if (!known || retry) return;
+    $('sKnownText').textContent = `${known.id} is already on the server. Replace its token? A board running ${known.id} now, its owner link and its label stop working until it's flashed with the new one.`;
+    $('sReplace').checked = false;
+    if (setup.knownFor !== known.id) {
+      setup.knownFor = known.id;
+      if (stations.some((st) => st.mapid === known.mapid)) $('sStation').value = known.mapid;
+      if (!$('sLabel').value) $('sLabel').value = known.label || '';
+    }
+  }
+  $('sLabel').addEventListener('input', () => { if ($('sId').dataset.auto) { $('sId').value = nextId(slug($('sLabel').value) || ''); renderKnown(); } });
+  $('sId').addEventListener('input', () => { delete $('sId').dataset.auto; renderKnown(); });
 
   async function runSetup() {
     if (setup.busy) return;
@@ -1484,16 +1509,20 @@
     const id = $('sId').value.trim().toLowerCase();
     if (!BOARD_ID_RE.test(id)) return slog('The board ID must be 1-32 characters of a-z, 0-9, -.');
     const known = boards.find((b) => b.id === id);
-    // The same board again after a failed flash keeps its token; otherwise a
-    // board that already has a key gets a new one only if you say so.
-    const retry = setup.pending && setup.pending.id === id ? setup.pending : null;
-    if (known && !retry && !confirm(`${id} is already on the server. Setting it up again gives it a new token: a board running ${id} now (and its label) stops working until it's flashed with this one. Continue?`)) return;
+    // The same board again after a failed flash keeps its token (if it's
+    // still for the same person); a board already on the server gets a new
+    // one only if the switch above says so.
+    const retry = setup.pending && setup.pending.id === id && setup.pending.who === setup.who ? setup.pending : null;
+    if (known && !retry && !$('sReplace').checked) return slog(`${id} is already on the server: turn on Replace its token, or pick another ID.`);
     let networks = [];
     if (setup.who === 'mine' && $('sSsid').value) {
       try { await loadScript('setup-image.js'); networks = [BoardSetup.checkWifi($('sSsid').value, $('sPass').value)]; } catch (e) { return slog(e.message); }
     }
     let port;
-    try { port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }, { usbVendorId: 0x239a }] }); } catch (e) { return slog('No port picked.'); }
+    // In upload mode the S3 shows up as Espressif's USB serial (303a); the
+    // running app's own port (Adafruit, 239a) can't be flashed from here.
+    try { port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] }); }
+    catch (e) { return slog(e.name === 'NotFoundError' ? 'No port picked. Not in the list? Put the board in upload mode (hold BOOT, tap RESET, let go of BOOT) and click Flash again.' : `Couldn't open the port picker: ${e.message}`); }
     setup.busy = true;
     $('sGo').disabled = true; $('setupClose').disabled = true;
     $('sLog').textContent = '';
@@ -1510,17 +1539,19 @@
       const info = BoardSetup.inspectMerged(img);
       slog('Connecting to the board…');
       transport = new SetupTools.Transport(port, false);
-      const loader = new SetupTools.ESPLoader({ transport, baudrate: 921600, terminal: { clean() {}, writeLine() {}, write() {} } });
+      // Native USB ignores the baud rate; asking for a faster one only makes
+      // esptool-js reopen the port (which can reset the chip).
+      const loader = new SetupTools.ESPLoader({ transport, baudrate: 115200, terminal: { clean() {}, writeLine: (l) => { if (/warn|error|unable|fail/i.test(l)) slog(l); }, write() {} } });
       const chip = await loader.main();
       if (!/ESP32-S3/i.test(chip)) throw new Error(`that's an ${chip}, not the Matrix Portal S3`);
       slog(`Found ${chip}.`);
       // The server: the board, its station and name, and its token.
       let key = retry && retry.key;
+      if (!boards.some((b) => b.id === id)) await api('api/boards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, from: $('sFrom').value, label }) });
+      await api(`api/state?b=${enc(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, station: { mapid: $('sStation').value } }) });
       if (!key) {
-        if (!known) await api('api/boards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, from: $('sFrom').value, label }) });
-        await api(`api/state?b=${enc(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, station: { mapid: $('sStation').value } }) });
         key = await api(`api/boards/key?b=${enc(id)}${setup.who === 'mine' ? '&mine=1' : ''}`, { method: 'POST' });
-        slog(`Added ${id} on the server with its own token.`);
+        slog(`${known ? 'Gave' : 'Added'} ${id} ${known ? 'a new token' : 'on the server with its own token'}.`);
       }
       const net = (retry && retry.net) || BoardSetup.setupNetwork();
       setup.pending = { id, key, net, who: setup.who, label };
@@ -1533,11 +1564,14 @@
       await loader.writeFlash({
         fileArray: plan.map((p) => ({ data: p.data, address: p.offset })),
         flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep', eraseAll: false, compress: true,
-        reportProgress: (i, written) => { prog.value = (before[i] + Math.min(written, plan[i].data.length)) / total; },
+        // Each region is read back (MD5) and checked; a bad write throws.
+        calculateMD5Hash: SetupTools.md5,
+        // Progress comes in compressed bytes of the region's compressed size.
+        reportProgress: (i, written, of) => { prog.value = (before[i] + (of ? Math.min(1, written / of) : 1) * plan[i].data.length) / total; },
       });
       prog.value = 1;
       try { await loader.after('hard_reset'); } catch (e) { /* native USB: RESET by hand */ }
-      slog('Flashed.');
+      slog('Flashed and checked.');
       const ownerUrl = setup.who === 'other' ? `${location.origin}/board/c/${key.link}/` : null;
       const svg = (text) => SetupTools.QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
       const qr = { wifi: await svg(BoardSetup.wifiQrText(net.name, net.pass)), owner: ownerUrl ? await svg(ownerUrl) : null };
@@ -1548,6 +1582,7 @@
       loadBoards();
     } catch (e) {
       slog(`Stopped: ${e.message || e}`);
+      loadBoards(); // the board may have been added before it stopped
       if (setup.pending) slog('The board is on the server with its token: fix the problem and click Flash again (the same token and label are used).');
     } finally {
       try { if (transport) await transport.disconnect(); } catch (e) { /* already closed */ }
@@ -1591,6 +1626,7 @@
     $('sLabel').value = '';
     $('sId').value = nextId(prev.id);
     $('sId').dataset.auto = '1';
+    renderKnown();
     $('sLabel').focus();
   });
   setupDlg.addEventListener('close', () => { if (setup.done.length) loadBoards(); });
