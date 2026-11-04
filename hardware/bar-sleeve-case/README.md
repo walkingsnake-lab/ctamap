@@ -178,7 +178,7 @@ the back face). Nothing else changes.
   (90.7, z 72.5), Boot at (88.3, z 60.0).
 
 Renders: [screws and encoder rails](img/fix-bottom-screws.png), [sensor sled](img/fix-sensor-sled.png),
-[back face](img/fix-back-unchanged.png), [test plate](img/test-plate.png).
+[back face](img/fix-back-unchanged.png), [test plate](img/test-plate.png), [post floor layers](img/post-floor.png).
 
 ## CAD sources (`src/`)
 Parametric Python (manifold3d + trimesh); every STL is generated from these.
