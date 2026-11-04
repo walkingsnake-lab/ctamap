@@ -86,6 +86,19 @@ rep('post screw flange bearing at 0.7 off centre (mm^2; the seat layer is two st
 posts = Manifold.batch_boolean([DR.P3.standoff(x, z, DR.Y0) for x, z in DR.CORNERS], C.ADD)
 rep('posts (Ø11) vs S3', ov(posts, s3), ov(posts, s3) < 1e-3)
 
+# ---- the S3's STEMMA QT plug: CONN1 (Adafruit board file, bx 11.43) enters from the board's bottom edge as mounted,
+# on its component side, right over the lower-right post. JST SH plug 5.0 x 2.9, 2.5 out past the socket; its four
+# wires (a 4 x 1 bundle) bent straight back toward the tray's wall at r 1.5.
+qy = C.PCB_Y0 + 1.6
+(xa, za), (xb, zb) = DR.s3(11.48 - 2.5, 0.454 - 2.5), DR.s3(11.48 + 2.5, 2.0)
+qplug = box(min(xa, xb), max(xa, xb), qy + 0.05, qy + 2.9, min(za, zb), max(za, zb))
+qr = min(za, zb)                                                 # the plug's rear face
+(xa, _), (xb, _) = DR.s3(11.48 - 2.0, 0), DR.s3(11.48 + 2.0, 0)
+qbend = box(min(xa, xb), max(xa, xb), qy + 0.5, qy + 4.0, qr - 2.5, qr)
+qgap = next((d / 20 for d in range(0, 200) if ov(qplug.translate([0, 0, -d / 20]), tray) > 1e-3), 10.0)
+rep('S3 QT plug clear of the tray below it (mm)', qgap, qgap >= 1.0)
+rep("its wires bent back vs the tray (mm^3; under 0.5: resting on a post's flank)", ov(qbend, tray), ov(qbend, tray) < 0.5)
+
 # ---- encoder rails
 enc = SN.envelopes()
 hw = 12.7

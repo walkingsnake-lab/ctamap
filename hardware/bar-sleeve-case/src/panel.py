@@ -25,6 +25,9 @@ PROFILES = {
         lv_top_x=((-80.0, -46.5), (-33.5, 33.5), (46.5, 80.0)),
         headers=((63.0, 2.5), (-63.0, 2.5)),   # PI IN, PO OUT centres (x, z - ZC), vertical 2x8 shrouds
         s3_back=0.0,                     # extra gap between the panel back and the S3's bottom socket (the case deepens by it)
+        # S3 3.1 mm above the drawer's default: its STEMMA QT plug (side entry on the board's bottom edge) sat on the
+        # lower-right post (check_v5.py); its top edge now stays 0.7 under the upper-right post
+        drawer_s3_mid=0.6,
         sensor_x=55.0,                   # optional light sensor (hole in the case top, board hung from the encoder)
         key_x=40.0,                      # plate v3 keyholes (x +/-)
         screw_xs=(40.0, 52.0),           # screws from below into the plate's bosses (x +/-): stop the insert sliding out
@@ -62,6 +65,37 @@ PROFILES = {
         posts=((-60, 35), (60, 35), (-14, -36), (60, -36)),   # plate v2 only (placeholders)
         assumed=('thickness', 'headers (photo, +/-1 mm)', 'header height above the rails'),
     ),
+    'p4': dict(                          # Waveshare RGB-Matrix-P4-64x32 (SMD2121, 1/16 scan). Built by p4.py (split parts)
+        name='Waveshare P4 64x32',
+        w=256.0, h=128.0, t=14.5,        # outline; housing 12 mm deep (2D drawing) + LED board ~2.5 (ASSUMED, measure)
+        hood=(16.0, 4.0),                # front lip top / bottom: the P3's 12 / 3 scaled 4/3, so the front's slant matches the P3 (4.5 deg)
+        pitch=4.0, rib=0.8,              # 0.8 = two 0.4-nozzle lines; SMD2121 leaves ~1.9 mm between packages
+        faces={'white': 0.2},
+        # inserts from Waveshare's 2D drawing (RGB-Matrix-P4-64x32-2D.dwg): M3 on Ø8.5 bosses, x -120 / 0 / +120, z +/-56,
+        # normal orientation (data in on the right seen from the front). p4.py turns the panel 180 deg like the v5 drawer
+        inserts=((-120.0, 56.0), (120.0, 56.0), (-120.0, -56.0), (120.0, -56.0), (0.0, 56.0), (0.0, -56.0)),
+        standoffs=((-120.0, 56.0), (120.0, 56.0), (-120.0, -56.0), (120.0, -56.0), (0.0, -56.0)),
+        tie_bridge=(-17.0, 17.0, 63.0, 78.0),   # plate v3 only (p4.py has its own tray)
+        hooks=(-22.5, 22.5),             # plate v3 only
+        lv_bottom_x=((-110.0, -20.0), (20.0, 110.0)),
+        lv_top_x=((-110.0, -20.0), (20.0, 110.0)),
+        # data in / data out centres (x, z - ZC), vertical 2x8 shrouds: from the product photo scaled to the drawing's
+        # inserts (+/-1 mm). Power (VH4) is at about (-21.7, +7.3)
+        headers=((80.8, 0.0), (-81.2, 0.0)),
+        s3_back=0.0,
+        # S3 5.5 mm above the drawer's lowest place: its STEMMA QT plug enters from the board's bottom edge, right over
+        # the lower-right post (p4_cables.py); the buttons' relief stops 3.5 above Reset, below the shell's joint
+        drawer_s3_mid=-22.0, drawer_btn_top=41.6,
+        sensor_x=55.0,
+        key_x=40.0,
+        screw_xs=(46.0,),
+        corner_foot=(-95.0, -89.0, 0.5, 10.3),  # plate v3 only
+        posts=((-75, 43), (75, 43), (-60, -43), (60, -43)),   # plate v2 only (placeholders)
+        # bore pads: an 8 mm bezel all round (the diffuser's flange, black). The diffuser's front edge sits 0.9 inside the
+        # bore (as P3), so the pads are 8.9; the rim covers 1.2 of it, ~7.7 mm shows
+        bore_pad=(8.9, 8.9),
+        assumed=('thickness (housing 12 per drawing + board 2.5)', 'headers (photo, +/-1 mm)', 'header height'),
+    ),
 }
 
 # Two P2.5 panels side by side (128 x 32, bar128.py): one 320 x 80 "panel" for the parts that span both (shell, diffuser).
@@ -84,9 +118,11 @@ if KEY not in PROFILES:
 P = PROFILES[KEY]
 COLS, ROWS = P.get('cols', 64), 32       # pixels
 
-# case opening (bore): the same borders past the panel edge for every panel
+# case opening (bore): the same borders past the panel edge for every panel, unless the profile sets bore_pad (P4: an
+# 8 mm bezel all round)
 BORE_PAD_X, BORE_PAD_Z, BORE_R = 10.0, 4.65, 11.5
-BORE_HX = P['w'] / 2 + BORE_PAD_X        # P3: 106
-BORE_HZ = P['h'] / 2 + BORE_PAD_Z        # P3: 52.65
+_PX, _PZ = P.get('bore_pad', (BORE_PAD_X, BORE_PAD_Z))
+BORE_HX = P['w'] / 2 + _PX               # P3: 106
+BORE_HZ = P['h'] / 2 + _PZ               # P3: 52.65
 DX = BORE_HX - (192.0 / 2 + BORE_PAD_X)  # 0 for P3
 DZ = BORE_HZ - (96.0 / 2 + BORE_PAD_Z)   # 0 for P3

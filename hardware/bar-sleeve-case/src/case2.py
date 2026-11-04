@@ -64,7 +64,7 @@ SKIN_T = 0.5                              # outer skin (cut / drilled out after 
                                           # just over one 0.4-nozzle line (~0.42): at 0.4 the slicer dropped it
 SL_W, SL_PITCH = 1.5, 4.0                 # slots (GRILLES = True only)
 KNOB_X = 0.0                              # encoder / collar hole (x); bar128.py moves it onto panel B
-SENSOR_X, SENSOR_Y, SENSOR_D = panel.P['sensor_x'], 42.0, 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
+SENSOR_X, SENSOR_Y, SENSOR_D = panel.P['sensor_x'], 42.0 + (LT - 12.0), 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
 # light-sensor grille (grille_guide.py): 5 holes, dice-five, bit + GRILLE_WEB apart. Its span sizes the blind pocket
 # inside the top wall (the bores only cross the 0.8 mm skin, ~0.5 mm margin a side for guide placement) and the tray's hole
 GRILLE_BIT, GRILLE_WEB = 1.59, 0.85                # 1/16" bit

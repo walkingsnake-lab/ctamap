@@ -6,7 +6,7 @@ bolted to the panel's four corner inserts. Built for the Waveshare P3 64x32 (thi
 back plate) is archived in [ARCHIVE-v4.md](ARCHIVE-v4.md).
 
 ## Fixed decisions
-- Slanted hood (12 mm lip at the top, 3 mm at the bottom): non-negotiable.
+- Slanted hood (12 mm lip at the top, 3 mm at the bottom; the P4 scales it to 16 / 4): non-negotiable.
 - Shell in Bambu PLA Wood (walnut), printed back-down without supports, front lapped flat afterwards. The screen rim is part of
   the shell. Openings print open (knob hole, USB-C, the two screw holes underneath, the Ø2 light-sensor pinhole).
 - No grilles in the shell: the tray's back has two louver bands (intake along the bottom, exhaust along the top), slots
@@ -62,8 +62,9 @@ if it's ever wanted: `stl/coupon-marks-ladder.stl` (`img/marks-ladder.png`): lin
   (~2.5 tall) would stand proud and jam the tray.
 - **Wall cleat (optional):** 2 x M3 x 10 (case cleat into the tray), 2 x #8 / 4 mm countersunk wood screws or anchors.
 - **Cables:** the panel's 16-pin ribbon (at least 15 cm, 20 cm comfortable, so the tray comes out still cabled) and its
-  power leads; STEMMA QT: S3 → sensor 10 cm and sensor → encoder 15-20 cm, or one 20-30 cm S3 → encoder without the sensor;
-  a data-capable USB-C cable and a 5 V / 3 A USB-C supply.
+  power leads; STEMMA QT: S3 → sensor 15 cm (its route up from the S3's bottom edge is 10-11 cm, so a 10 cm only just
+  reaches) and sensor → encoder 15-20 cm, or one 20-30 cm S3 → encoder without the sensor; a data-capable USB-C cable and a
+  5 V / 3 A USB-C supply.
 - **Other:** 4 round black bumpers 12.7 x 3.8 mm (3M SJ5312 size; +4 for the plinth); 1-2 hook-and-loop ties ~12 mm wide.
 - **Tools:** hex keys 1.5 mm (M2.5) and 2 mm (M3; its long arm reaches the ~34 mm down the post tubes); pliers or a small
   wrench for the M7 nut; a 2 mm (or 5/64") drill bit, turned by hand.
@@ -90,15 +91,18 @@ if it's ever wanted: `stl/coupon-marks-ladder.stl` (`img/marks-ladder.png`): lin
    2 mm bit through the sensor pinhole by hand to clear any oil or wax in it.
 5. A shell printed before Nov 3 has round screw holes underneath: file each to about 3.4 x 4.2 mm, long along the case's
    depth (the tray needs ±0.4 mm of play front to back there).
+6. Shells and trays from before Nov 4 go together, not with the new ones: the S3 sat 3.1 mm lower (its STEMMA QT plug
+   pressed on the lower-right post), and the shell's USB-C and button openings moved up with it.
 
 ## Assembly
 The panel goes in first; the encoder after it (its board hangs where the panel slides); the tray last.
 
 1. **Shell:** bumpers into the four recesses underneath; collar into the knob hole (its crush ribs make it a firm push).
-2. **Tray, on the bench, front up.** Plug the ribbon into the S3's IDC header and the panel's power leads into its screw
-   terminals **while the S3 is loose**: on its posts both face the tray's back wall. Then the S3 onto its posts, 4 x M2.5 x 8.
-   Plug a STEMMA QT cable into the S3 (to the sensor, or straight to the encoder). Fold the spare power cable in ~3.5 cm
-   lengths and tie it; thread the tie through the tray's tie loop (above the ribbon) if the bundle wanders.
+2. **Tray, on the bench, front up.** Plug the ribbon into the S3's IDC header, a STEMMA QT cable into its QT socket (to the
+   sensor, or straight to the encoder) and the panel's power leads into its screw terminals **while the S3 is loose**: on its
+   posts all three face the tray's back wall, and the QT socket (on the board's bottom edge, near the USB-C end) sits 2 mm
+   over the lower-right post. Bend the QT cable straight back off the plug. Then the S3 onto its posts, 4 x M2.5 x 8.
+   Fold the spare power cable in ~3.5 cm lengths and tie it; thread the tie through the tray's tie loop (above the ribbon) if the bundle wanders.
 3. **Light sensor (optional), on the bench:** the VEML7700 chip up onto the sled, 2-4 x M2.5 x 5 down from the chip side.
    Plug in the cable from the S3 and the one that will go to the encoder. With the tray still front up, tilt the sled about
    10° (front down), put its two back tabs into the two hooks on the top louver band, swing the front up to the top wall,
@@ -211,8 +215,7 @@ python3 check_v5.py              # PANEL=p25 for the P2.5
 - **128 x 32 from two P2.5 panels** (347 x 96.3 x 69): [P25-128-BUILD.md](P25-128-BUILD.md), `src/bar128.py`,
   `stl/p25-128x32/`. Shell split left/right at the panel joint (both halves on one plate), a diffuser and a tray per panel,
   splice plates across the joint. Test pieces first; not printed yet.
-- **P4** (256 x 128): too big for the X2D's bed in one piece; a split design is on the `claude/p4-bar-sleeve-2026-11-02`
-  branch (not printed).
+- **P4** (256 x 128): the case (281 mm) and diffuser exceed the X2D's 256 mm bed, so it's built in split parts (shell top/bottom, tray and diffuser left/right): [P4-BUILD.md](P4-BUILD.md), `src/p4.py`, `stl/p4/`.
 
 ## Archive
 `stl/archive/v4/`: the v4 build ([ARCHIVE-v4.md](ARCHIVE-v4.md)). `stl/archive/fit-tests/`: fit sets and coupons whose

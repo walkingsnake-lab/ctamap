@@ -9,6 +9,7 @@ symmetric top to bottom), and an arrow tab on the PI IN side.
 Run: PANEL=p3 python3 check_corners.py <out.stl>        corners and guides from panel.py
      CORNERS='[(x, z), ...]' GUIDES='[...]' PANEL=p3 ...  try other positions before changing panel.py
      python3 check_corners.py <out.stl> W H CX CZ        symmetric corners at (+/-CX, +/-CZ), no guides
+     EXTRA='[(x, z), ...]' python3 check_corners.py ...  the same plus more holes (P4: EXTRA='[(0, 56), (0, -56)]')
 History: the P2.5 frame (125 x 64.5 mm, Oct 31) confirmed its corners after a ruler reading of 135 x 75 proved too
 wide; stl/v5-drawer-p25/check-p25-corner-inserts.stl is that frame.
 """
@@ -73,6 +74,9 @@ if __name__ == '__main__':
         w, h, cx, cz = (float(v) for v in sys.argv[2:6])
         corners = [(sx * cx, sz * cz) for sx in (-1, 1) for sz in (-1, 1)]
         guides, arrow = [], None
+        import ast, os
+        if os.environ.get('EXTRA'):                                      # more holes, e.g. the P4's centre inserts
+            corners += [tuple(q) for q in ast.literal_eval(os.environ['EXTRA'])]
     else:
         import panel
         P = panel.P
