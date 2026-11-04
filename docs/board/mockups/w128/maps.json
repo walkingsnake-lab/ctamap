@@ -1,0 +1,23 @@
+[
+ {
+  "kind": "map",
+  "id": "map-world",
+  "title": "Whole world, stretched",
+  "desc": "The same latitudes as the 64 map (84° N to 62° S) over all 32 rows, 2.8 degrees a column: every continent but Antarctica, about 1.6 times wider than true.",
+  "note": ""
+ },
+ {
+  "kind": "map",
+  "id": "map-band",
+  "title": "Mild stretch, 72° N to 48° S",
+  "desc": "Rows of 3.75°: about a third wider than true. Drops Greenland's north and the tips of South America and New Zealand.",
+  "note": ""
+ },
+ {
+  "kind": "map",
+  "id": "map-true",
+  "title": "True shape, 66° N to 24° S",
+  "desc": "Square pixels, so nothing is stretched, but only a 90° band fits: most of Australia, southern Africa and southern South America fall off the bottom.",
+  "note": ""
+ }
+]
