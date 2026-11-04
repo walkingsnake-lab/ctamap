@@ -192,6 +192,9 @@ python3 check_v5.py              # PANEL=p25 for the P2.5
   centre one) and takes the same pair of screws from below (x ±46). The light sensor sits at x 40. Print its diffuser on the
   0.2 nozzle with a 0.14 first layer (the 0.14 face stays one layer; on a 0.4 nozzle its single-bead ribs printed wavy). Its
   panel thickness (14.5) is assumed, not measured.
+- **128 x 32 from two P2.5 panels** (347 x 96.3 x 69): [P25-128-BUILD.md](P25-128-BUILD.md), `src/bar128.py`,
+  `stl/p25-128x32/`. Shell split left/right at the panel joint (both halves on one plate), a diffuser and a tray per panel,
+  splice plates across the joint. Test pieces first; not printed yet.
 - **P4** (256 x 128): too big for the X2D's bed in one piece; a split design is on the `claude/p4-bar-sleeve-2026-11-02`
   branch (not printed).
 

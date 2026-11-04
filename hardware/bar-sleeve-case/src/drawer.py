@@ -53,7 +53,7 @@ Y0 = Y1 - PLATE_T                               # tray back, inner face
 # the panel turned 180 deg: inserts and headers point-mirrored
 INSERTS = [(-x, -z) for x, z in panel.P['inserts']]
 CORNERS = [max([q for q in INSERTS if q[0] * sx > 0 and q[1] * sz > 0], key=lambda q: (abs(q[0]), abs(q[1]))) for sx in (-1, 1) for sz in (-1, 1)]
-HEADERS = [(-x, -z) for x, z in panel.P['headers']]   # [PO OUT (right), PI IN (left)] after the turn
+HEADERS = [(-x, -z) for x, z in panel.P['headers']]   # [PI IN (left), PO OUT (right)] after the turn
 SO_D = P3.SO_OD
 
 # S3, turned 180 deg in its plane: USB edge on the right; board point (bx from the USB edge, by from the edge that is
@@ -213,7 +213,11 @@ SLED_BOSS_D, SLED_PILOT = 6.0, 2.4
 SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray's top (button head 4.4-4.7 x 1.4-1.6), 0.7 wall left
 
 
-def tray():
+def tray(blank=False, post_dy=None):
+    """the v5 tray. blank: no S3, light tube, Boot, encoder slot and rails, light sensor or USB-C window (bar128.py's
+    tray A, which carries none of them). post_dy: {(x, z): dy} moves those posts' feet back by dy (bar128.py: the inner
+    posts stand on its splice plates)."""
+    post_dy = post_dy or {}
     outer = rr_cs(BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL, BORE_R - TRAY_CL)
     inner = rr_cs(BORE_HX - TRAY_CL - TRAY_WT, BORE_HZ - TRAY_CL - TRAY_WT, BORE_R - TRAY_CL - TRAY_WT)
     t = prism_y(outer, Y0, Y1) + (prism_y(outer, YF, Y0 + 0.01) - prism_y(inner, YF - 1, Y0 + 0.02))
@@ -247,21 +251,23 @@ def tray():
     t = t + bottom_bosses(zin0)
     # panel posts at the four corner inserts
     for x, z in CORNERS:
-        t = t + P3.standoff(x, z, Y0)
+        with _foot(post_dy.get((x, z), 0.0)):
+            t = t + P3.standoff(x, z, Y0)
     # S3: pad and posts, status-light tube, Boot tube
     yc = PCB_Y0 + 1.6
     hxs = [h[0] for h in S3_HOLES]; hzs = [h[1] for h in S3_HOLES]
-    t = t + rrect_y(min(hxs) - 3.7, max(hxs) + 3.7, min(hzs) - 3.7, max(hzs) + 3.7, 3.7, Y0 - 3.0, Y0 + 0.01)
-    for hx, hz_ in S3_HOLES:
-        t = t + cyl_y(hx, hz_, yc, Y0 + 0.01, P3.S3_POST_D, 32)
     tube_end = yc + 1.5
-    t = t + cyl_y(*_xz(S3_NEO), tube_end, Y0 + 0.01, 7.0, 48)
     btop = yc + 1.9
-    t = t + cyl_y(*_xz(S3_BOOT), btop + 1.0, Y0 + 0.01, 5.0, 32)
-    # light sensor mount (pillars or sled hooks)
     import sensor as SN
-    t = t + sensor_mount()
-    t = t + enc_rails()
+    if not blank:
+        t = t + rrect_y(min(hxs) - 3.7, max(hxs) + 3.7, min(hzs) - 3.7, max(hzs) + 3.7, 3.7, Y0 - 3.0, Y0 + 0.01)
+        for hx, hz_ in S3_HOLES:
+            t = t + cyl_y(hx, hz_, yc, Y0 + 0.01, P3.S3_POST_D, 32)
+        t = t + cyl_y(*_xz(S3_NEO), tube_end, Y0 + 0.01, 7.0, 48)
+        t = t + cyl_y(*_xz(S3_BOOT), btop + 1.0, Y0 + 0.01, 5.0, 32)
+        # light sensor mount (pillars or sled hooks)
+        t = t + sensor_mount()
+        t = t + enc_rails()
     # cleat nut bosses
     for cx, cz in CLEAT_SCREWS:
         t = t + cyl_y(cx, cz, Y0 - CB_H, Y0 + 0.01, CB_D, 48)
@@ -303,7 +309,7 @@ def tray():
     for zc in zb_rows + zt_rows:
         segs = [(-x_lim, x_lim)]
         lo, hi = zc - r - 0.5, zc + LV_DEPTH + r + 0.5                      # the slot rises LV_DEPTH going inward
-        if any(lo < hz_ + P3.S3_POST_D / 2 + 3.7 and hi > hz_ - P3.S3_POST_D / 2 - 3.7 for hz_ in hzs):
+        if not blank and any(lo < hz_ + P3.S3_POST_D / 2 + 3.7 and hi > hz_ - P3.S3_POST_D / 2 - 3.7 for hz_ in hzs):
             segs = minus(segs, *pad)
         if zc > ZC:                                                          # top rows: a bar in the middle
             segs = minus(segs, -LV_SPLIT / 2, LV_SPLIT / 2)
@@ -318,17 +324,22 @@ def tray():
             # the top row's slot rises into the top wall near its inner end: stop it 0.6 under the wall (a slot roof
             # grazing the wall's face left a zero-thickness sheet, non-manifold in the STL)
             sl = sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6)
-            if zc > ZC:                                                      # blind behind the sensor sled's hooks
+            if zc > ZC and not blank:                                        # blind behind the sensor sled's hooks
                 for g0, g1 in louver_gaps(zc, r):
                     sl = sl - box(g0, g1, Y0 - 20, y_in + LV_BLIND, -5, H + 5)
             cuts.append(sl)
     # bottom screw holes and nut pockets
     cuts += bottom_nut_cuts()
     for x, z in CORNERS:
-        cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, Y1 + 1, P3.SO_BORE, 48))
-        cuts.append(P3.so_cone(x, ZC + z))
+        with _foot(post_dy.get((x, z), 0.0)):
+            cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, Y1 + 1, P3.SO_BORE, 48))
+            cuts.append(P3.so_cone(x, ZC + z))
     cuts.append(box(tx - TIE_OPEN / 2, tx + TIE_OPEN / 2, Y0 - TIE_GAP, Y0 + 0.02, tz - TIE_LEN, tz + TIE_LEN))   # tie tunnel
     cuts += cleat_cuts()                                                            # cleat screws: pilots (or insert holes)
+    if blank:
+        t = t - Manifold.batch_boolean(cuts, ADD)
+        t = t + crush_ribs()
+        return max(t.decompose(), key=lambda m: m.volume())
     nx, nz = _xz(S3_NEO)
     cuts.append(cyl_y(nx, nz, tube_end - 1, Y1 - WIN_T + 0.01, 4.5, 48))     # light tube straight through to the window
     cuts.append(cyl_y(nx, nz, Y1 - WIN_T, Y1 + 1, WIN_D, 48))                  # window pocket (flat roof: a 0.75 mm ring)
@@ -352,6 +363,18 @@ def tray():
     t = t - Manifold.batch_boolean(cuts, ADD)
     t = t + crush_ribs()
     return max(t.decompose(), key=lambda m: m.volume())
+
+
+class _foot:
+    """with _foot(dy): P3.FOOT_Y moved back by dy for the posts built inside the block"""
+    def __init__(self, dy):
+        self.dy = dy
+
+    def __enter__(self):
+        P3.FOOT_Y += self.dy
+
+    def __exit__(self, *a):
+        P3.FOOT_Y -= self.dy
 
 
 # ---- tray parts kept apart (other trays, e.g. the P4's split one, reuse them)
