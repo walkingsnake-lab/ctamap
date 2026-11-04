@@ -119,7 +119,8 @@ CB_D, CB_H = 10.0, 4.5
 # "press here" and guides the key
 WIN_D, WIN_T = 6.0, 1.0                         # window diameter, depth
 BOOT_FUNNEL_D = 7.0                             # funnel diameter at the back face (45 deg down to the 2.6 hole)
-BOOT_DOT_D, BOOT_DOT_DEPTH = 1.4, 0.4           # two dots beside the Boot funnel (outboard side), stacked like a colon
+BOOT_DOTS = False                               # two dots beside the Boot funnel: dropped Nov 3 (they didn't read as a label)
+BOOT_DOT_D, BOOT_DOT_DEPTH = 1.4, 0.4
 
 # light sensor (VEML7700, sensor.py's board frame and position) on the tray: chip side up under the top wall, its STEMMA QT
 # sockets (4.25 tall) 0.35 under the channels in the wall; 4 x M2.5 x 5 up through the board into pillars hanging from it
@@ -141,8 +142,8 @@ ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
 # regenerate and reprint the tray; nothing else changes. (The nut slot and #485's hex seat are in DESIGN-HISTORY.)
 FASTEN = os.environ.get('FASTEN', 'tap')
 TAP_D = 3.0                                     # bottom pilots, horizontal in the print: the fit set's best (#3 of 2.6 / 2.8 / 3.0, Nov 3)
-TAP_D_V = 2.9                                   # cleat pilots, vertical in the print (round holes come out closer to size):
-                                                # check with the test plate's pilot block (2.8 / 2.9 / 3.0)
+TAP_D_V = 3.3                                   # cleat pilots, vertical in the print: 2.8 / 2.9 / 3.0 all printed too tight to
+                                                # drive an M3 (Nov 3; 3.0 went furthest); retest 3.2 / 3.3 / 3.4 (test-plate-v5b)
 TAP_LEAD = 0.4                                  # 45 deg lead-in where the screw enters
 INSERT_D, INSERT_L = 4.0, 6.0                   # M3 heat-set insert, 4.6-5.0 OD x 5.7 long class
 SCREW_FLOAT = 0.4                               # the tray's +/- y float, in the shell's stadium holes (0.6 left the head no bearing)
@@ -166,11 +167,29 @@ BOT_Y = C.SCREW_Y - POST_LONG
 POST_OD, POST_BORE, POST_HOLE = 11.0, 8.6, 4.5   # hole: +/-0.7 for an M3 with room for print facets; bore: a 6.9 flange 0.7 off centre, +0.15 a side
 P3.SO_OD, P3.SO_BORE, P3.SO_HOLE = POST_OD, POST_BORE, POST_HOLE
 P3.so_cone = lambda x, zc: Manifold()            # flat floor: no countersink cone
+# The floor prints as a bridge over the tube (back-down), and a bridge with a round hole in it sagged into strands round the
+# hole (test plate, Nov 3). Sequential bridging: its first layer (the screw's seat) is cut as a slot the hole's width,
+# running across the whole tube, so every strand spans wall to wall; the second layer as a square the hole's size,
+# bridging the other way over the first; the round hole starts above. BRIDGE_LH is the tray's layer height.
+BRIDGE_LH = 0.24
+
+
+def floor_bridge_cuts(x, zc):
+    ys = P3.FOOT_Y + P3.SO_FLOOR                        # the floor's tube-side face (the screw's seat; its bottom in print)
+    h = POST_HOLE / 2
+    bore = cyl_y(x, zc, ys - 2 * BRIDGE_LH - 0.01, ys + 0.01, POST_BORE, 48)
+    slot = box(x - h, x + h, ys - BRIDGE_LH, ys + 0.01, zc - POST_BORE, zc + POST_BORE) ^ bore
+    sq = box(x - h, x + h, ys - 2 * BRIDGE_LH, ys - BRIDGE_LH + 0.01, zc - h, zc + h)
+    return slot + sq
+
+
+_standoff0 = P3.standoff
+P3.standoff = lambda x, z, y0: _standoff0(x, z, y0) - floor_bridge_cuts(x, ZC + z)
 
 # Encoder rails (Nov 3): the encoder's pocket in the collar is round and nothing keys its body, so a loosened nut let the
 # body turn until its board's corner reached the panel (~4.9 deg). Two rails hang from the tray's top wall beside the
 # board's side edges (it's a 25.4 square) and stop it at ~3.5 deg, on the tray. Square the board by eye when tightening.
-RAIL_CL, RAIL_W = 0.7, 1.6                      # gap to the board's edge a side; rail thickness
+RAIL_CL, RAIL_W = 0.45, 1.6                     # gap to the board's edge a side (0.7 had a little too much play, Nov 3); rail thickness
 RAIL_LAP = 0.75                                 # how far the rails reach down past the board's top face (of its 1.57): they stop
                                                 # 0.8 over its underside, clear of the QT plugs leaving under the board
 
@@ -318,7 +337,7 @@ def tray():
     cuts.append(cyl_y(bx, bz, btop + 0.5, Y1 + 1, 2.6, 24))
     fd = (BOOT_FUNNEL_D - 2.6) / 2                                              # 45 deg: as deep as it is wide
     cuts.append(Manifold.cylinder(fd + 0.01, 1.3, BOOT_FUNNEL_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([bx, Y1 - fd, bz]))
-    for dz in (-1.5, 1.5):
+    for dz in ((-1.5, 1.5) if BOOT_DOTS else ()):
         cuts.append(cyl_y(bx + BOOT_FUNNEL_D / 2 + 2.2, bz + dz, Y1 - BOOT_DOT_DEPTH, Y1 + 1, BOOT_DOT_D, 24))
     # top wall: slot open to the front edge past the encoder body; light hole and sensor pilots
     ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
@@ -638,8 +657,15 @@ def test_pieces(tr):
     nx, nz = _xz(S3_NEO)
     bx, bz = _xz(S3_BOOT)
     win = tr ^ box(min(nx, bx) - 9, max(nx, bx) + 11, Y1 - 5.0, Y1 + 1, min(nz, bz) - 8, max(nz, bz) + 8)
-    cuts, ds = [], (2.8, 2.9, 3.0)
-    blk = box(0, 36, Y0, Y1, 0, 14)
+    pil = pilot_block((TAP_D_V - 0.1, TAP_D_V, TAP_D_V + 0.1))
+    big = lambda m: max(m.decompose(), key=lambda p: p.volume())
+    return dict(top=big(top), window=big(win), window_part=status_window(), pilots=pil, post=post_test())
+
+
+def pilot_block(ds):
+    """cleat bosses with vertical pilots of the sizes ds, 1-3 notches"""
+    cuts = []
+    blk = box(0, 12.0 * len(ds), Y0, Y1, 0, 14)
     for i, d in enumerate(ds):
         x = 6.0 + 12.0 * i
         blk = blk + cyl_y(x, 7.0, Y0 - CB_H, Y0 + 0.01, CB_D, 48)
@@ -648,9 +674,22 @@ def test_pieces(tr):
         for k in range(i + 1):
             mx = x + (k - i / 2) * 2.0
             cuts.append(box(mx - 0.5, mx + 0.5, Y0 - 1, Y1 + 1, 13.0, 15.0))
-    pil = blk - Manifold.batch_boolean(cuts, ADD)
-    big = lambda m: max(m.decompose(), key=lambda p: p.volume())
-    return dict(top=big(top), window=big(win), window_part=status_window(), pilots=pil, post=post_test())
+    return blk - Manifold.batch_boolean(cuts, ADD)
+
+
+def retest_plate():
+    """the second round (Nov 3): the cleat pilots at 3.2 / 3.3 / 3.4 and the post with the sequentially bridged floor"""
+    import trimesh
+    down = trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0])
+    out, x = [], 0.0
+    for m in (pilot_block((3.2, 3.3, 3.4)), post_test()):
+        me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
+        t.apply_transform(down)
+        mn, mx = t.bounds
+        t.apply_translation([x - mn[0], -mn[1], -mn[2]])
+        out.append(t)
+        x += (mx[0] - mn[0]) + 8.0
+    return trimesh.util.concatenate(out)
 
 
 def test_plate(tr):
@@ -727,5 +766,6 @@ if __name__ == '__main__':
     _mod.FASTEN = _saved
     P, W = test_plate(tr)
     P.export(f'{out}/test-plate-v5.stl'); W.export(f'{out}/test-plate-v5-window.stl')
+    t = retest_plate(); t.export(f'{out}/test-plate-v5b.stl'); print('test-plate-v5b.stl', t.is_watertight, np.round(t.extents, 1).tolist())
     print('test-plate-v5.stl', P.is_watertight, np.round(P.extents, 1).tolist(), '+ window', W.is_watertight)
     print(dict(D=D, S3_edge=round(S3_EDGE, 2), s3_z0=round(S3_Z0 - ZC, 2), port_z=round(PORT_Z - ZC, 2), corners=CORNERS))

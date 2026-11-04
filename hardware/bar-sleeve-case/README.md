@@ -32,24 +32,30 @@ Files are in `stl/v5-drawer/` unless they start with `stl/`.
 | Tilt plinth (optional) | `stl/bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 
 ## Test plate
-One print with every fit that's new and not yet confirmed on a real print (Nov 3). Print it with the tray's settings
+**Round 2 (`test-plate-v5b.stl`, black PETG, ~60 x 16 mm):** the cleat pilots at Ø3.2 / 3.3 / 3.4 (1-3 notches; round 1's
+2.8 / 2.9 / 3.0 were all too tight) and the post with its re-done floor. Same checks as items 2 and 4 below. Round 1 passed
+the window, the rails (now 0.25 mm closer a side) and the sled.
+
+**Round 1:** one print with every fit that's new and not yet confirmed on a real print (Nov 3). Print it with the tray's settings
 (below). It has five pieces: the long top strip, a small piece of the tray's back (status window and Boot funnel), a block
 of three bosses, one short post, and the light-sensor sled (a real one: keep it for the build). Then:
 1. **Status window** (on the small back piece, beside the Boot funnel): the translucent disc should be clean and flush,
    with no black bleeding into it. That's the AMS swap the tray will do.
 2. **Cleat pilots** (three bosses, 1-3 notches = Ø2.8 / 2.9 / 3.0): drive an M3 x 10 into each, from the flat side, through
    a 4 mm spacer (a scrap of plastic or a stack of washers: the cleat is 4 mm thick there), or let the tip come out 3.5 mm
-   the far side. Keep the one that threads in firmly without the boss splitting. The tray has 2.9 (`TAP_D_V` in `src/drawer.py`): if another wins, change it and
-   regenerate. (The bottom screws' pilots are settled: Ø3.0, the fit set's best.)
+   the far side. Keep the one that threads in firmly without the boss splitting. The tray has 3.3 (`TAP_D_V` in
+   `src/drawer.py`): if another wins, change it and regenerate. (The bottom screws' pilots are settled: Ø3.0, the fit set's best.)
 3. **Top strip** (the long piece: the tray's top wall over the encoder and the sensor):
    - **Encoder rails:** set the encoder's board between the two rails at the left end. It should go in with a little play
-     (~0.7 mm a side) and, turned, stop at about 3.5°.
+     (~0.45 mm a side) and, turned, stop at about 2.3°.
    - **Sensor sled:** tilt the sled about 10° (front down), put its two back tabs into the two hooks, swing the front up to
      the wall and drive an M2.5 x 6 in from the outside face (the counterbore beside the big hole). The tabs should slide
      in without force and not rattle.
-4. **Post** (the short round one): its floor prints as a bridge, the way the tray's four post floors will. Check the floor's
-   inside face is flat enough to seat a screw, then drop an M3 x 8 flanged button head down the tube: the flange should sit
-   flat on the floor and the screw should slide ~0.7 mm every way in the hole.
+4. **Post** (the short round one): its floor prints as a bridge, the way the tray's four post floors will. Its first layer
+   is a slot running across the tube and its second a square (sequential bridging: every strand is anchored at both
+   ends, so nothing sags round a hole), then the round hole. Check the inside is clean, then drop an M3 x 8 flanged button
+   head down the tube: the flange should sit flat on the two strips either side of the slot and the screw should slide
+   ~0.7 mm every way.
 
 ## Hardware
 - **Screws** (button heads; the hex keys below fit them): 4 x M3 x 8 **flanged** button head (ISO 7380-2, flange ~Ø6.9;
@@ -118,12 +124,13 @@ The panel goes in first; the encoder after it (its board hangs where the panel s
    stops there, the board is turned: pull the tray back, take the knob off, loosen the M7 nut a turn, square the board,
    snug the nut and put the knob back. Drop the 4 x M3 x 8 flanged button heads down the post tubes (with plain button
    heads, drop an M3 washer down each tube first: it lies flat on the floor) and start all four **loosely**, a few turns
-   each, so the tray can settle where the panel's inserts want it; then tighten them (2 mm key). Then the
+   each, so the tray can settle where the panel's inserts want it; then snug them (2 mm key, short arm: the heads bear on
+   two narrow printed strips). Then the
    2 x M3 x 10 from below into the tray: the first time, drive each in slowly, back it out once, then drive it home and stop
    when the head seats (snug, not tight: the head bears on the walnut).
 8. **Firmware:** the panel sits turned 180° in this case: `MATRIX_ROTATION 180` in `secrets.h`. Plug in USB-C.
 
-- **Flashing:** hold the Boot key in through the funnel on the back (beside the two dots), plug in USB-C, upload, replug.
+- **Flashing:** hold the Boot key in through the funnel on the back, plug in USB-C, upload, replug.
 - **Placement:** on a shelf, keep ~1 cm behind the case: pushed flat against a wall the rim's 4 mm recess seals both louver
   bands. Or bolt the case cleat on: it stands 8 mm off the rim. Keep it out of direct sun (dark walnut PLA softens at
   ~55-60 °C).
@@ -160,12 +167,13 @@ the back face). Nothing else changes.
   so seated the tray sits 0.3 back and its bottom bosses are 0.3 forward in the model to land on the shell's holes).
   Tray back y 63-65, 4 mm inside the rim.
 - Panel turned 180° (input on the left seen from the front); posts at its corner inserts x ±87.25, z ZC +29 / -31: Ø11
-  posts, Ø8.6 tubes, a 3 mm flat floor with a Ø4.5 hole (±0.7 mm of float for the screw; the flange is the washer). The
+  posts, Ø8.6 tubes, a 3 mm flat floor with a Ø4.5 hole (±0.7 mm of float for the screw; the flange is the washer; the
+  floor's first two layers are a slot and a square so it bridges cleanly). The
   panel can sit ~0.45 mm off centre in the bore and the PETG tray shrinks ~0.2-0.4 mm at each corner; the old countersunk
   cones had no float at all.
 - Screws from below at x ±46, y 59.5 (shell holes ±0.4 long in y); cleat screws at x ±50, z ZC +25.4.
 - Knob at x 0, y 41.9; light-sensor pinhole at x +55, y 42. Encoder board 25.4 square at z 103.0-104.6; tray rails at
-  x ±13.4..15.0, reaching 0.75 mm down past the board's top face.
+  x ±13.15..14.75 (0.45 mm off its edges), reaching 0.75 mm down past the board's top face.
 - S3 on the right, turned 180°: board edge x 102.85, bottom edge z ZC -24.7; USB-C at z ZC -16.45, y 40.9; status LED at
   (90.7, z 72.5), Boot at (88.3, z 60.0).
 

@@ -44,9 +44,9 @@ ring = cyl_z(x, C.SCREW_Y + DR.SCREW_FLOAT, 1.0, 1.05, 5.7, 64)
 rep('bottom screw head bearing on the counterbore floor at full float (mm^2; 18 centred on a round hole)', round(ov(ring, shell) / 0.05, 1), ov(ring, shell) > 0)
 core = cyl_z(x, DR.BOT_Y, zf, 11.0, 2.0, 24)
 rep(f'bottom pilot (Ø{DR.TAP_D}) open for the M3 core', ov(core, tray), ov(core, tray) < 1e-3)
-bite = cyl_z(x, DR.BOT_Y, zf, 11.0, 3.0, 32) ^ tray
-bb = bite.bounding_box()
-rep('bottom thread engagement in PETG (mm)', round(bb[5] - max(bb[2], zf + DR.TAP_LEAD), 2), bb[5] - bb[2] >= 6.0)
+ring = (cyl_z(x, DR.BOT_Y, zf, 11.0, DR.TAP_D + 1.0, 32) - cyl_z(x, DR.BOT_Y, zf - 1, 12, DR.TAP_D + 0.1, 32)) ^ tray
+bb = ring.bounding_box()                                       # PETG round the pilot, along the screw's length
+rep('bottom thread engagement in PETG (mm)', round(bb[5] - max(bb[2], zf + DR.TAP_LEAD), 2), bb[5] - max(bb[2], zf + DR.TAP_LEAD) >= 6.0)
 rep('bottom pilot runs past the screw tip (mm)', round(DR.BOSS_TOP - 0.8 - 11.0, 2), DR.BOSS_TOP - 0.8 - 11.0 >= 0.3)
 
 # ---- cleat screws (M3 x 10 from the wall side through the case cleat's 4 mm, threaded into the tray's bosses)
@@ -55,9 +55,9 @@ for cx, cz in DR.CLEAT_SCREWS:
     head_y = DR.Y1 + CL.CBORE_LEFT
     scr = cyl_y(cx, cz, head_y - 10.0, head_y, 2.0, 24)               # the core
     rep(f'cleat screw at x {cx:+.0f}: core vs tray and cleat', ov(scr, tray) + ov(scr, cc), ov(scr, tray) + ov(scr, cc) < 1e-3)
-    bite = cyl_y(cx, cz, head_y - 10.0, head_y, 3.0, 32) ^ tray
-    bb = bite.bounding_box()
-    rep(f'cleat thread engagement in PETG (mm), pilot Ø{DR.TAP_D_V}', round(bb[4] - DR.TAP_LEAD - bb[1], 2), bb[4] - bb[1] >= 5.0)
+    ring = (cyl_y(cx, cz, head_y - 10.0, head_y, DR.TAP_D_V + 1.0, 32) - cyl_y(cx, cz, head_y - 11, head_y + 1, DR.TAP_D_V + 0.1, 32)) ^ tray
+    bb = ring.bounding_box()
+    rep(f'cleat thread engagement in PETG (mm), pilot Ø{DR.TAP_D_V}', round(bb[4] - DR.TAP_LEAD - bb[1], 2), bb[4] - DR.TAP_LEAD - bb[1] >= 5.0)
     rep('cleat screw tip inside the boss (mm short of its inner end)', round((head_y - 10.0) - (DR.Y0 - DR.CB_H), 2), head_y - 10.0 >= DR.Y0 - DR.CB_H)
 s3 = DR.s3_envelope()
 near = Manifold.batch_boolean([box(cx - 8, cx + 8, DR.Y0 - DR.CB_H - 1, DR.Y1, cz - 8, cz + 8) for cx, cz in DR.CLEAT_SCREWS], C.ADD)
@@ -82,7 +82,7 @@ for x, z in DR.CORNERS:
     min_bear = min(min_bear, ov(ring, tray) / 0.05)
 rep('post screw core through the floor at 0.7 mm off centre, any direction (overlap)', worst_core, worst_core < 1e-3)
 rep('post screw flange (Ø6.9) clear of the tube wall at 0.7 off centre', worst_tube, worst_tube < 1e-3)
-rep('post screw flange bearing on the floor at 0.7 off centre (mm^2)', round(min_bear, 1), min_bear > 10)
+rep('post screw flange bearing at 0.7 off centre (mm^2; the seat layer is two strips beside the bridging slot: ~25 MPa at snug)', round(min_bear, 1), min_bear > 8)
 posts = Manifold.batch_boolean([DR.P3.standoff(x, z, DR.Y0) for x, z in DR.CORNERS], C.ADD)
 rep('posts (Ø11) vs S3', ov(posts, s3), ov(posts, s3) < 1e-3)
 
@@ -157,9 +157,10 @@ if base:
     rep(f'top louver band open through: {a0:.0f} -> {a1:.0f} mm^2 ({100 * (a0 - a1) / a0:.1f}% less)', round(a1))
     back = box(-500, 500, DR.Y1 - 0.6, 500, -500, 500) - Manifold.batch_boolean(
         [cyl_y(cx, cz, DR.Y1 - 1, DR.Y1 + 1, 4.5, 32) for cx, cz in DR.CLEAT_SCREWS]     # cleat holes: Ø3.4 -> pilot + lead-in
-        + [cyl_y(x, C.ZC + z, DR.Y1 - 1, DR.Y1 + 1, DR.POST_BORE + 0.6, 48) for x, z in DR.CORNERS], C.ADD)   # post tubes: Ø6.4 -> 8.6
+        + [cyl_y(x, C.ZC + z, DR.Y1 - 1, DR.Y1 + 1, DR.POST_BORE + 0.6, 48) for x, z in DR.CORNERS]   # post tubes: Ø6.4 -> 8.6
+        + [cyl_y(DR.S3_BOOT[0] + DR.BOOT_FUNNEL_D / 2 + 2.2, DR.S3_BOOT[1] + dz, DR.Y1 - 1, DR.Y1 + 1, 2.4, 24) for dz in (-1.5, 1.5)], C.ADD)   # Boot dots dropped
     d = ((old ^ back) - (tray ^ back)).volume() + ((tray ^ back) - (old ^ back)).volume()
-    rep('tray back face (outer 0.6 mm; cleat holes and post tube openings aside) vs the base tray (mm^3 different)', round(d, 3), d < 0.05)
+    rep('tray back face (outer 0.6 mm; cleat holes, post tube openings and the dropped Boot dots aside) vs the base tray (mm^3 different)', round(d, 3), d < 0.05)
 
 # ---- status window, collar
 w = DR.status_window()
