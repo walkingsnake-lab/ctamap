@@ -1,19 +1,27 @@
 'use strict';
 // Radar frames for the board (design spec §7, contract "Radar"): NOAA MRMS
-// lowest-elevation composite reflectivity from the Iowa Environmental
-// Mesonet archive, cropped around each board's station and reduced to a
+// seamless hybrid-scan reflectivity (SeamlessHSR), from NOAA's own files on
+// AWS (radar-mrms.js), cropped around each board's station and reduced to a
 // 64x32 indexed frame.
 //
+// When AWS can't give a frame, NWS's map service stands in for it
+// (radar-nws.js): MRMS base reflectivity (the only product it serves) as a
+// small crop around the stations, its colors read back as dBZ.
+//
 // Pipeline per frame: stream-decode only the rows around the station
-// (radar-png.js) -> palette index to dBZ -> average linear reflectivity per
-// LED block -> levels (rain or snow) -> despeckle -> location marker.
+// (radar-png.js) -> lcref-style index (dBZ = index * 0.5 - 32) -> average
+// linear reflectivity per LED block -> levels (rain or snow) -> despeckle
+// -> location marker. (The index scale is IEM's lcref palette, made from
+// the same SeamlessHSR files: the board's first source, and its archive
+// frames are still the test fixtures.)
 // Memory: one source frame is decoded at a time and never held; each
 // processed frame is 2048 bytes.
 
 const https = require('https');
 const { decodeRows } = require('./radar-png');
+const { createNwsSource, GRID: NWS_GRID } = require('./radar-nws');
+const { createMrmsSource } = require('./radar-mrms');
 
-const BASE = 'https://mesonet.agron.iastate.edu/archive/data';
 const W = 64, H = 32;
 const KM_PER_LED = 1.5 * 1.609344;      // ~1.5 mi per LED
 const SPLIT_W = 39;                      // radar width in the split layout: cols 0-38, gray divider at 39, time panel 40-63
@@ -23,7 +31,7 @@ const SPLIT_TIME_BOX = [40, 0, W - 40, H];
 // rows 2-19 + margin). Built per station by scripts/build-locations.js.
 const FULL_TIME_BOX = [40, 0, 24, 22];
 const SHORE = 6;
-// Loop slots (IEM's archive only has frames at even minutes): the latest
+// Loop slots (MRMS files come every 2 minutes): the latest
 // 6-minute time expected to exist and the 6-minute slots before it, 30
 // minutes end to end. Each 6-minute step adds exactly one new frame and
 // drops the oldest, so the board downloads one frame per step.
@@ -51,7 +59,6 @@ const dbzOf = (index) => (index === 255 ? null : index * 0.5 - 32);
 // "YYYYMMDDHHMM" (UTC) for an epoch second.
 const stampOf = (t) => new Date(t * 1000).toISOString().replace(/[-:T]/g, '').slice(0, 12);
 const timeOf = (stamp) => Date.UTC(+stamp.slice(0, 4), +stamp.slice(4, 6) - 1, +stamp.slice(6, 8), +stamp.slice(8, 10), +stamp.slice(10, 12)) / 1000;
-const frameUrl = (stamp, ext) => `${BASE}/${stamp.slice(0, 4)}/${stamp.slice(4, 6)}/${stamp.slice(6, 8)}/GIS/mrms/lcref_${stamp}.${ext}`;
 
 // ESRI world file: x scale, 2 rotations, y scale, then the center of the
 // top-left pixel. (IEM's older files give -130.0/55.0, newer -129.995/54.995.)
@@ -182,12 +189,16 @@ function toFrame(dbz, geo, mode, loc = null) {
 
 // Decode one source frame for several locations at once.
 // locs: [{ key, lat, lon, width }]. Returns Map key -> dBZ grid + geometry.
-async function crops(png, wld, locs) {
+// pixels: how a non-palette source's pixels become indices: { gray16 } for
+// MRMS's 16-bit PNG, { rgbIndex } (or the function itself) for the NWS
+// fallback's colors.
+async function crops(png, wld, locs, pixels = null) {
+  const { rgbIndex = null, gray16 = null } = typeof pixels === 'function' ? { rgbIndex: pixels } : pixels || {};
   const accs = locs.map((l) => ({ key: l.key, acc: accumulator(geometry(wld, l.lat, l.lon, l.width)) }));
   const y0 = Math.min(...accs.map((a) => a.acc.geo.y0));
   const y1 = Math.max(...accs.map((a) => a.acc.geo.y1));
   await decodeRows(png, {
-    y0, y1,
+    y0, y1, rgbIndex, gray16,
     onRow: (y, row) => { for (const a of accs) if (y >= a.acc.geo.y0 && y <= a.acc.geo.y1) a.acc.row(y, row); },
   });
   return new Map(accs.map((a) => [a.key, { dbz: a.acc.dbz(), geo: a.acc.geo }]));
@@ -211,13 +222,8 @@ function get(url, timeout = 20000) {
   });
 }
 
-async function fetchFrame(stamp) {
-  const wldRes = await get(frameUrl(stamp, 'wld'));
-  const chunks = [];
-  for await (const c of wldRes) chunks.push(c);
-  const wld = parseWld(Buffer.concat(chunks).toString('utf8'));
-  return { wld, png: await get(frameUrl(stamp, 'png')) };
-}
+// The main source: the MRMS file nearest the slot, from AWS.
+const fetchFrame = createMrmsSource({ get });
 
 // ---- frame store and poller ----
 
@@ -237,6 +243,9 @@ function withTimeout(promise, ms, what) {
 // of the loop), and only while a board has asked recently.
 function createRadar({
   fetch = fetchFrame,
+  // Stand-in source when fetch fails: (t, geometries) -> { wld, png, rgbIndex }
+  // (radar-nws.js). Default: NWS's map service, with the default fetch only.
+  fallback,
   weather = null,          // weather.js poller, for snow mode
   now = () => Date.now() / 1000,
   lag = 120,               // s before a frame is expected in the archive
@@ -249,6 +258,12 @@ function createRadar({
   const locs = new Map();     // mapid -> { lat, lon, wantedAt, frames: Map(stamp -> frame), on }
   const missing = new Map();  // stamp -> retry-after time
   let timer = null, busy = null;
+  let nws = null;
+  if (fallback === undefined && fetch === fetchFrame) {
+    nws = createNwsSource({ get, now, log });
+    fallback = nws.fetch;
+  }
+  let onFallback = false;     // the last frame came from the fallback (logged on change)
 
   // Loop slots, oldest first, ending at the latest 6-minute time expected
   // to exist.
@@ -257,16 +272,41 @@ function createRadar({
     return Array.from({ length: LOOP }, (_, i) => newest - (LOOP - 1 - i) * STEP).map(stampOf);
   }
 
+  // One source frame: the main source's (AWS), else the fallback's. A slot
+  // the main source simply doesn't have yet (404 within a step of when it's
+  // due) waits for it, so normal frames all come from one source; an error,
+  // or a slot still missing a step later (stalled), goes to the fallback.
+  // Both failing throws the fallback's error (a 404 when neither has it).
+  async function source(stamp, list) {
+    try {
+      const src = await fetch(stamp);
+      if (onFallback) { onFallback = false; log.warn('[board] radar: MRMS on AWS is back'); }
+      return src;
+    } catch (e) {
+      if (!fallback || (e.status === 404 && now() - timeOf(stamp) < lag + STEP)) throw e;
+      const geos = list.map((l) => geometry(NWS_GRID, l.lat, l.lon, l.width));
+      const src = await fallback(timeOf(stamp), geos).catch((f) => {
+        if (e.status !== 404 && f.status === 404) f.status = 0; // the main source's real failure still gets logged
+        f.message = `AWS: ${e.message}; NWS: ${f.message}`;
+        throw f;
+      });
+      if (!onFallback && e.status !== 404) { onFallback = true; log.warn(`[board] radar: MRMS on AWS failed (${e.message}); using NWS's map service`); }
+      return src;
+    }
+  }
+
   async function processStamp(stamp, wanted) {
-    const { wld, png } = await fetch(stamp);
     const list = wanted.map(([key, l]) => ({ key, lat: l.lat, lon: l.lon, width: loadLocation(key).width }));
-    const out = await crops(png, wld, list);
+    const src = await source(stamp, list);
+    let out;
+    try { out = await crops(src.png, src.wld, list, { rgbIndex: src.rgbIndex || null, gray16: src.gray16 || null }); }
+    finally { if (nws) nws.flushUnknown(); }
     for (const [key, l] of wanted) {
       const w = weather ? await weather.get(l.lat, l.lon, { wait: 0 }).catch(() => null) : null;
       const mode = modeFor(w);
       const { dbz, geo } = out.get(key);
       const f = toFrame(dbz, geo, mode, loadLocation(key));
-      l.frames.set(stamp, { id: `${key}-${stamp}${mode === 'snow' ? 's' : ''}`, t: timeOf(stamp), mode, ...f });
+      l.frames.set(stamp, { id: `${key}-${stamp}${mode === 'snow' ? 's' : ''}`, t: timeOf(stamp), mode, src: src.src || 'mrms', ...f });
       // Keep the newest KEEP frames.
       const old = [...l.frames.keys()].sort().slice(0, -KEEP);
       for (const s of old) l.frames.delete(s);
@@ -316,8 +356,12 @@ function createRadar({
       const l = locs.get(mapid);
       l.wantedAt = now();
       const oldest = timeOf(slots()[0]);
-      const frames = [...l.frames.values()].filter((f) => f.t >= oldest).sort((a, b) => a.t - b.t);
-      const latest = frames[frames.length - 1];
+      const inLoop = [...l.frames.values()].filter((f) => f.t >= oldest).sort((a, b) => a.t - b.t);
+      const latest = inLoop[inLoop.length - 1];
+      // One source per loop: the fallback draws a different product (base
+      // reflectivity, ~1.5 dB weaker), so a loop mixing them would pulse.
+      // While the sources change over, the loop is just the newest's frames.
+      const frames = latest ? inLoop.filter((f) => f.src === latest.src) : inLoop;
       if (!latest) l.on = false;
       else if (latest !== l.judged) {
         // Hysteresis on the newest frame's precip pixel count.
@@ -359,5 +403,5 @@ function packFrame(bytes) {
 
 module.exports = { packFrame,
   parseWld, geometry, accumulator, modeFor, toFrame, crops, createRadar, fetchFrame,
-  ledCenter, loadLocation, stampOf, timeOf, frameUrl, dbzOf, W, H, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX, SHORE, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
+  ledCenter, loadLocation, stampOf, timeOf, dbzOf, W, H, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX, SHORE, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
 };
