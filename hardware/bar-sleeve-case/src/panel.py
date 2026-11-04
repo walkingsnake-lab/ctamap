@@ -65,6 +65,7 @@ PROFILES = {
     'p4': dict(                          # Waveshare RGB-Matrix-P4-64x32 (SMD2121, 1/16 scan). Built by p4.py (split parts)
         name='Waveshare P4 64x32',
         w=256.0, h=128.0, t=14.5,        # outline; housing 12 mm deep (2D drawing) + LED board ~2.5 (ASSUMED, measure)
+        hood=(16.0, 4.0),                # front lip top / bottom: the P3's 12 / 3 scaled 4/3, so the front's slant matches the P3 (4.5 deg)
         pitch=4.0, rib=0.8,              # 0.8 = two 0.4-nozzle lines; SMD2121 leaves ~1.9 mm between packages
         faces={'white': 0.2},
         # inserts from Waveshare's 2D drawing (RGB-Matrix-P4-64x32-2D.dwg): M3 on Ø8.5 bosses, x -120 / 0 / +120, z +/-56,

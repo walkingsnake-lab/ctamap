@@ -20,10 +20,11 @@ HW = BORE_HX + WALL                               # outer half width 108.5
 H = 2 * (BORE_HZ + WALL)                          # 110.3
 RC = BORE_R + WALL                                # outer corner radius 14
 ZC = H / 2
-LT, LB = 12.0, 3.0                                # front lip past the face: 12 at the top, 3 at the bottom
+LT, LB = panel.P.get('hood', (12.0, 3.0))         # front lip past the face: 12 at the top, 3 at the bottom (P4: x 4/3)
 LEDGE_IN, LEDGE_T = 1.5, 1.2                      # face ledge: 1.5 mm inward, 1.2 thick, 45-deg chamfer behind it
 S3_BACK = panel.P['s3_back']                      # extra panel-to-S3 gap (0 for P3)
-D = 69.0 + S3_BACK                                # 63 in v1-v3; v4 adds 6 mm behind the panel for the stock cables
+D = 69.0 + S3_BACK + (LT - 12.0)                   # 63 in v1-v3; v4 adds 6 mm behind the panel for the stock cables;
+                                                  # a longer hood adds its extra length, so everything behind the face keeps its room
 BACKL, PLATE_T = 4.0, 2.0                         # back lip, back plate
 Y_FACE = LT                                       # diffuser front face
 PANEL_BACK = Y_FACE + STACK + PT                  # 28.2
@@ -34,7 +35,7 @@ KY = PANEL_BACK + 1.0 + 12.7                      # encoder centre: its board cl
 ENC_HOLE = 24.0                                   # collar insert hole (insert designed when the encoder arrives)
 GR_PITCH, GR_R = 3.2, 0.8
 NEO_X, NEO_Z = -96.5, ZC + 30.6                   # status NeoPixel (estimate from Adafruit's photo)
-FEET = [(sx * (84.0 + DX), fy) for sx in (-1, 1) for fy in (22.0, D - 11.0)]   # front pair 22 mm back: the recess teardrop's point
+FEET = [(sx * (84.0 + DX), fy) for sx in (-1, 1) for fy in (22.0 + (LT - LB - 9.0), D - 11.0)]   # front pair 22 mm back: the recess teardrop's point
                                                   # (toward the front) stops ~3.5 mm inside the bottom front edge (y 9)
 FOOT_D, FOOT_DEPTH = 13.2, 1.5                    # recesses for 3M SJ5312 (12.7 mm) bumpers
 SCREW_X, SCREW_Y = 40.0, D - BACKL - PLATE_T - 3.5   # back plate screws from below

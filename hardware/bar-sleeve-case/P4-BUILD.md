@@ -2,7 +2,7 @@
 
 The v5 drawer bar sleeve for a **Waveshare RGB-Matrix-P4-64x32** (256 x 128 mm), split into parts that fit the X2D's 256 x 256 mm bed. Walnut PLA shell in two halves, black PETG tray in two halves, two-colour diffuser in two halves with an 8 mm black bezel. Everything else is the v5 drawer (README, "v5 drawer"). Source: `src/p4.py` (+ the `p4` profile in `src/panel.py`); STLs: `stl/p4/`.
 
-**Case:** 281 x 153 x 69 mm (W x H x D). Screen window ~256 x 128 with ~7.7 mm of black bezel showing.
+**Case:** 281 x 153 x 73 mm (W x H x D). Screen window ~256 x 128 with ~7.7 mm of black bezel showing. The hood is the P3's scaled to the panel (16 mm at the top, 4 at the bottom, vs 12 / 3), so the front's slant matches the P3 (4.5°); everything behind the face moved back 4 mm with it, and the bed footprint doesn't change (depth is print height).
 
 ## Decisions
 - **Shell split into top and bottom halves** at 2 mm above centre (both halves about the same height). Only the two end walls are cut. A 1 x 1 mm reveal wraps each end (outside, front rim, hood side, back rim); the halves meet at its lower edge, so the joint line sits in the groove's shadow. Inside the wall, a half-lap: the inner 1.75 mm of the wall carries on 3.5 mm lower as a lip on the top half, into a pocket in the bottom half, with a 0.12 mm glue gap on its face and ends and 0.2 mm under it (the outer band is the only seat, which keeps the reveal even). The lip's ends are 45° so neither half has a flat overhang. The lap stays 1 mm behind the screen face and 0.5 mm in front of the tray's back, so it never shows.
@@ -25,8 +25,8 @@ The v5 drawer bar sleeve for a **Waveshare RGB-Matrix-P4-64x32** (256 x 128 mm),
 ## Parts (`stl/p4/`)
 | Part | File | Material | Print |
 |---|---|---|---|
-| Shell top | `p4-shell-top-walnut-backdown.stl` | PLA Wood | back rim down, already turned 45° on the bed (246.3 mm square, 4.8 mm a side) |
-| Shell bottom | `p4-shell-bottom-walnut-backdown.stl` | PLA Wood | same (247.4 mm square, 4.3 mm a side) |
+| Shell top | `p4-shell-top-walnut-backdown.stl` | PLA Wood | back rim down, already turned 45° on the bed (246.3 mm square, 4.8 mm a side, 73 mm tall) |
+| Shell bottom | `p4-shell-bottom-walnut-backdown.stl` | PLA Wood | same (247.4 mm square, 4.3 mm a side, 67 mm tall) |
 | Diffuser, left / right | `p4-diffuser-left-white.stl` + `p4-diffuser-left-black.stl`; same for right | white + black PETG | face down; load the pair as one object with two parts (they share one frame, so don't move either part on its own); the white part is the first layer |
 | Tray, left / right | `p4-tray-left.stl`, `p4-tray-right.stl` | black PETG | back face down, walls up |
 | Spine | `p4-spine.stl` | black PETG | flat, as exported (countersinks on the bed) |

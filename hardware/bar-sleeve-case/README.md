@@ -3,7 +3,7 @@
 Walnut wood PLA sleeve with a slanted shade hood, white (or translucent grey) diffuser with a fused grid, black PETG back plate that carries the Matrix Portal S3. Printed back-down (layer lines square to the case), with the screen rim built in and every opening printed open. Future builds may use other colors of PLA. Full design history: [DESIGN-HISTORY.md](DESIGN-HISTORY.md).
 
 ## Fixed decisions
-- Slanted hood (12 mm lip at the top, 3 mm at the bottom): non-negotiable.
+- Slanted hood (12 mm lip at the top, 3 mm at the bottom; the P4 scales it to 16 / 4): non-negotiable.
 - Shell in Bambu PLA Wood (walnut), printed back-down, front lapped flat afterwards (the sloped front prints as a fine staircase). The screen rim is part of the shell: two 45° slopes, no supports, no glued frame.
 - Openings print open: knob hole, USB-C and the four screw holes. The light-sensor hole is optional: a blind Ø2 pocket inside the top marks it (nothing shows outside); drill through only if you fit the sensor. They cause small bands in wood PLA; the cut-out skins and glued frame tried before banded too, so the simpler build won.
 - No grilles in the shell. The back plate (v3) is a tray that fills the bore, with one louver band along its bottom (inlet) and one along its top (outlet), slots in a regular symmetric pattern rising 45° inward, so nothing inside shows from eye level or above. Typical draw ~2-5 W; check with the S3's chip-temperature log.
