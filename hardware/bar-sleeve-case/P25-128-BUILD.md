@@ -9,6 +9,9 @@ panels"). Source: `src/bar128.py` (+ the `p25x2` profile in `src/panel.py`), che
 **Case:** 347 x 96.3 x 69 mm (W x H x D). Bore 340 x 89.3; the bezel shows 10 mm at the ends, 4.65 top and bottom, as the
 single P2.5. Panel A is the left one seen from the front, panel B the right one.
 
+Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout drawn with the board's fonts):
+[front](img/bar128-render-front.png), [back](img/bar128-render-back.png), [seam close-up](img/bar128-render-seam.png).
+
 ## Decisions
 - **Split left/right at the panel joint.** One piece needs 313 mm even turned 45° on the bed; the P4's top/bottom split
   still needs 279. Halves cut at x = 0 fit flat, both on one plate (177 x 203 with the lap lip).
@@ -30,6 +33,11 @@ single P2.5. Panel A is the left one seen from the front, panel B the right one.
   bolts to its two outer corner inserts and takes its pair of screws from below. The two inner posts of each stand on the
   splice plates as open tubes round the plates' screw heads: they push, they don't bolt.
 - **Panels turned 180°** as in the single build (data in on the left of each panel seen from the front).
+- **Data chain: S3 → panel A's input, A's output → B's input** (Nov 4). Seen from the front the four headers sit at
+  x -120.1 (A in), -39.9 (A out), +39.9 (B in) and +120.1 (B out). B's output is directly under the S3, as in the single
+  build (where it's unused): a plug fits in the 9.5 mm under the board, but its ribbon has no way out (toward A the S3's
+  own panel socket fills the gap down to 1 mm off the housing; the other way ends at the end wall). So B's output stays
+  empty and the S3 feeds A, which puts the short run between the two inner headers.
 
 ## Before printing: test pieces (`stl/p25-128x32/coupons/`)
 1. **Seam lap** — `coupon-128-seam-A-walnut.stl` + `-B-walnut.stl` (walnut, as exported, the 34 mm cut face on the bed): a
@@ -45,9 +53,9 @@ single P2.5. Panel A is the left one seen from the front, panel B the right one.
    panels butted face down, round hole over A's inner corner insert, slot over B's, 2 x M3 x 6 button heads. Use the
    snuggest one an M3 passes through freely (`SPLICE_HOLE=<it>`). Also check: it sits flat on both bosses (nothing on the
    housings between them stands proud), and the rows still line up with it tightened.
-4. **Chain order (bench):** both panels turned 180°, S3 to panel B's input. Check which panel shows the first 64 columns
-   and how long the panel-to-panel ribbon has to be (B's output to A's input: about 25-30 cm; the short ~10 cm run between
-   the two inner headers only if the chain goes the other way). This decides the ribbon, not the print.
+4. **Chain (bench):** both panels turned 180°, butted, the S3 ribbon into A's input, a short ribbon from A's output to
+   B's input. Light both and note which columns land on which panel (the firmware's mapping; nothing printed depends on
+   it). Check the power leads reach panel A from where the S3 sits on panel B (~25 cm).
 5. As the single P2.5: the panel thickness (14.5) is assumed, not measured.
 
 ## Parts (`stl/p25-128x32/`)
@@ -70,8 +78,10 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 - **Screws:** 4 x M3 x 8 flanged button head (the four outer posts, as the P2.5), 4 x M3 x 6 button head (splice plates),
   4 x M3 x 10 (from below, two per tray), 4 x M2.5 x 8 (S3). Light sensor and cleats as the README (cleats: per tray).
 - **Other:** 4 bumpers 12.7 x 3.8 (at the ends); medium CA glue; the encoder's M7 nut.
-- **Cables:** S3 → panel B's input: the P2.5's 16-pin ribbon (15 cm minimum, 20 comfortable). Panel to panel: a second
-  16-pin ribbon, length from the bench check. Power: a lead to each panel from the S3's terminals.
+- **Cables:** S3 → panel A's input: a 16-pin IDC ribbon, **35 cm minimum, 40 comfortable** (seated it runs ~27 cm from the
+  S3 on tray B to A's input; the rest lets tray B come out still cabled, as the single build's 15 cm does). The P2.5's
+  stock ribbon is too short for this run. A's output → B's input (headers 80 mm apart): the stock ribbon, folded. Power:
+  a lead to each panel from the S3's terminals (or one cable with two plugs, if the panel's has them).
 - **Power:** two panels can draw about twice one at full white. A 5 V / 3 A USB-C supply runs the transit screens; cap the
   brightness, or feed the panels from a separate 5 V supply.
 
@@ -87,23 +97,37 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 1. **Shell:** bumpers into the four recesses; collar into the knob hole (over panel B).
 2. **Panels, face down on a towel:** snap each diffuser onto its panel (A's wide-rib edge toward the joint; its skirtless
    edge meets B's). Butt the panels, screw both splice plates on (round hole on A, 2 x M3 x 6 each), check the rows across
-   the seam, tighten. Plug the power leads into both panels and the panel-to-panel ribbon.
+   the seam, tighten. Plug the power leads into both panels, the short ribbon from A's output to B's input, and the long
+   ribbon into A's input (red stripe = pin 1).
 3. **Panels in:** shell face down, the joined panels in from the back until both bezels seat on the rim (panel B on the
    knob side).
-4. **Encoder, ribbon, tray B, tray A:** as the P2.5 build, steps 5-7, for tray B (S3 side). Tray A goes in the same way,
-   no S3. In each tray only the two outer posts take a screw (M3 x 8 flanged); the inner ones stand on the plates. Then
-   the four M3 x 10 from below.
-5. **Firmware:** see Open.
-
+4. **Encoder:** as the P2.5 build, steps 5-6 (QT cable into the encoder before tray B).
+5. **Tray A first:** lay the long ribbon and panel A's power lead along the panel backs toward the joint and out through
+   the right half's back opening (tray B isn't in yet), so tray A slides in over them without pinching them. Tray A in,
+   2 x M3 x 8 flanged into its outer posts.
+6. **Tray B on the bench, then in:** the long ribbon into the S3's IDC header and the power leads into its terminals
+   while the S3 is loose (as the P2.5 build), then the S3 onto its posts. Fold the spare ribbon into tray A's empty space
+   behind panel A as tray B goes in. 2 x M3 x 8 flanged into its outer posts. In both trays the inner posts stand on the
+   plates, no screw. Then the four M3 x 10 from below.
+7. **Firmware:** see Open.
 ## Checked (model, Nov 3)
 `check_bar128.py`: nothing collides when seated except the trays' crush ribs and the 0.3 mm post feet (as the P2.5);
 the splice screw heads clear the open posts with the tray 0.7 off any way; the knob, sensor, USB-C and the four screws from
 below line up between the shell and the trays (0.00 mm); every part is watertight and fits the bed (largest 177.3 x 96.3).
 The P2.5 and P3 builds are unchanged (same volumes; `check_v5.py` all OK for the P2.5).
 
+**Rechecked Nov 4:** a clean rebuild reproduces every committed STL byte for byte and `check_bar128.py` passes again.
+The 65 mm³ of S3 envelope it reports inside tray B is the same as the single P2.5 tray's (the envelope's boxy outline at
+the posts), not new. Cabling, against the model's S3 and header positions: B's output is unusable (above), so the data
+chain is S3 → A → B. The A → B ribbon and the S3 → A run both clear the trays, the splice plates and the S3. Printing:
+the halves and trays have no overhangs the single P2.5 shell and tray don't already have. The lap adds 5 mm² at 43-45°
+on half A, and the open seam ends of both halves print plain vertical walls.
+
 ## Open
 - **Firmware and server are 64 x 32.** `firmware-s3` sets up the matrix as one 64 x 32 panel (`device.cpp`,
   `HUB75_I2S_CFG(64, 32, 1, …)`), and `server/board/` lays everything out for 64 wide. A 128-wide board needs a chain of 2
   there and its own layouts: separate work from the case.
 - The joint rib, the splice hole and the lap clearance come from the test pieces.
-- Chain order and the panel-to-panel ribbon length (bench).
+- Which columns land on which panel with S3 → A → B (firmware mapping, bench), and the power lead to panel A.
+- Power-connector positions on the P2.5 aren't modelled (as the single build); the leads have the whole open space
+  behind both panels.

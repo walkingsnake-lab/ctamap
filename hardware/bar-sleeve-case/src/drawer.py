@@ -53,7 +53,7 @@ Y0 = Y1 - PLATE_T                               # tray back, inner face
 # the panel turned 180 deg: inserts and headers point-mirrored
 INSERTS = [(-x, -z) for x, z in panel.P['inserts']]
 CORNERS = [max([q for q in INSERTS if q[0] * sx > 0 and q[1] * sz > 0], key=lambda q: (abs(q[0]), abs(q[1]))) for sx in (-1, 1) for sz in (-1, 1)]
-HEADERS = [(-x, -z) for x, z in panel.P['headers']]   # [PO OUT (right), PI IN (left)] after the turn
+HEADERS = [(-x, -z) for x, z in panel.P['headers']]   # [PI IN (left), PO OUT (right)] after the turn
 SO_D = P3.SO_OD
 
 # S3, turned 180 deg in its plane: USB edge on the right; board point (bx from the USB edge, by from the edge that is
