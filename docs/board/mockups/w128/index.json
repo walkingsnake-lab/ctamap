@@ -1,0 +1,86 @@
+[
+ {
+  "kind": "redrawn",
+  "id": "transit-rows",
+  "title": "Transit rows",
+  "desc": "Full CTA names, up to five times a row, and the weather moved into the header so it no longer takes a row.",
+  "note": ""
+ },
+ {
+  "kind": "redrawn",
+  "id": "transit-split",
+  "title": "Transit, by direction",
+  "desc": "Belmont split north | south, two times or more per line. The station and clock move to the bottom.",
+  "note": "Real Belmont times (Oct 3, 11:16 PM, no Purple)."
+ },
+ {
+  "kind": "redrawn",
+  "id": "ticker",
+  "title": "Ticker",
+  "desc": "The next train big, then the following times small after THEN. At 64 the ticker shows one time per row.",
+  "note": ""
+ },
+ {
+  "kind": "redrawn",
+  "id": "chrono",
+  "title": "Chronological, two columns",
+  "desc": "Eight trains instead of four, with full names (FOREST PK, 54/CERMAK).",
+  "note": "Real Clark/Lake times."
+ },
+ {
+  "kind": "redrawn",
+  "id": "seven-day",
+  "title": "7-day forecast",
+  "desc": "Seven columns with highs and lows; the 64 screen shows five days and highs only.",
+  "note": "NWS gives seven days already."
+ },
+ {
+  "kind": "redrawn",
+  "id": "hourly",
+  "title": "Hourly, 24 hours",
+  "desc": "Eight 3-hour steps under a top bar with room for the condition and feels-like.",
+  "note": "The server builds 4 slots today (HOUR_STEPS); the NWS hourly feed covers more."
+ },
+ {
+  "kind": "redrawn",
+  "id": "radar",
+  "title": "Radar, 128 wide",
+  "desc": "A real MRMS frame (the Aug 10, 2020 derecho) cropped 128 LEDs wide: about 190 mi of the region instead of 95. The station sits right of center; the time stack moves over the lake.",
+  "note": "Each station needs a new water mask at 128 (built here from the lake outline)."
+ },
+ {
+  "kind": "redrawn",
+  "id": "line-score",
+  "title": "Baseball line score",
+  "desc": "Runs by inning, R H E, then the count, outs, pitch count and bases.",
+  "note": "The innings come in the linescore the server already fetches; the pitch count would need a field added."
+ },
+ {
+  "kind": "redrawn",
+  "id": "note",
+  "title": "Message note",
+  "desc": "About 21 characters a line in 5x7 instead of 10.",
+  "note": ""
+ },
+ {
+  "kind": "pair",
+  "id": "pair-transit-weather",
+  "title": "Transit | weather",
+  "desc": "Morse arrivals and the weather screen, both unchanged.",
+  "note": "The two screens touch at the seam: the times end at column 63, the icon starts at 64."
+ },
+ {
+  "kind": "pair",
+  "id": "pair-skyline-transit",
+  "title": "Skyline | transit",
+  "desc": "An ambient screen on one panel, arrivals with the weather strip on the other.",
+  "note": ""
+ },
+ {
+  "kind": "pair",
+  "id": "pair-two-games",
+  "title": "Two games",
+  "desc": "The classic baseball layout twice.",
+  "note": ""
+ }
+]
