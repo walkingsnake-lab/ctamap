@@ -45,6 +45,7 @@ class Player {
   draw::SkylineFader sky_fade;  // the skyline on screen and the crossfade from the last
   double wall_ms = 0;    // epoch ms, set by the Board before drawing (the skyline's animation clock)
   double msg_start = 0;  // when the announce screen's message appeared (its intro plays from here)
+  long long visit_skip_until = 0;  // epoch s: no Rain nearby visit before then (the knob ended one)
 
   // ---- inputs ----
   void set_payload(const Value &payload, double ms) { set_payload(Value(payload), ms); }
@@ -63,6 +64,8 @@ class Player {
   void prune_clouds();  // drop strips the skyline fader no longer needs
   void add_logo(const std::string &lid, std::vector<uint8_t> bytes) { logos[lid] = std::move(bytes); }
   Screen auto_screen(long long now) const;
+  // A Rain nearby visit is showing now (the screen would be another without it).
+  bool visiting(long long now) const;
   bool wants_frames() const;
   void set_screen(Screen s, double ms);
 

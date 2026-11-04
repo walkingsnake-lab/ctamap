@@ -62,7 +62,11 @@ const knobOf = (board, { clock = false, announce = false, peek = false, faces = 
 // behavior before these were settings.
 const AUTO_SCREENS = ['transit', 'ticker'];
 const AUTO_EVERY = [30, 60, 120, 300, 600];   // s per screen when Auto alternates
-const WX_VISITS = ['off', 'rain', 'always'];  // weather visits: never, while raining, always
+const WX_VISITS = ['off', 'rain', 'always'];  // Rain nearby: never, while raining, always (always: no page control)
+// Cycle (screen 'auto'; design spec §10): the screens it takes turns
+// between, each for autoEvery s, in this order.
+const CYCLE_SCREENS = ['transit', 'ticker', 'weather', 'clock', 'announce', 'baseball'];
+const CYCLE_MAX = 6;
 const ALERT_JUMPS = ['off', 'warning', 'all']; // jump to weather: never, NWS warnings, watches too
 const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
@@ -133,7 +137,7 @@ function defaultBoard(stations) {
     // Transit layout: 'header' (station and clock on top) or 'key' (a
     // "trains to / min" key on top, station and clock under a line at the bottom).
     transitLayout: 'header',
-    screen: 'auto',
+    screen: 'transit',
     // The transit-family screen the knob's TRANSIT opens: the last of
     // transit and ticker chosen. Kept by the store, not set directly.
     transitScreen: 'transit',
@@ -141,16 +145,20 @@ function defaultBoard(stations) {
     // Auto brightness's night level, percent (full from sunrise to sunset). On
     // a board with a light sensor, its dark-room level (a bright room is full).
     brightMin: 40,
-    // Auto: the main screens (both: alternate every autoEvery s).
+    // Retired (Nov 2026): Auto's main screens, replaced by `cycle`. Still
+    // accepted; nothing reads it.
     autoScreens: ['transit'],
+    // Cycle (screen 'auto'): its screens in order, each shown autoEvery s.
+    cycle: ['transit', 'weather'],
     autoEvery: 60,
-    // Auto: visit the weather screen for `radarFor` s every `radarEvery`
-    // min: 'off', 'rain' (while rain is in the box), or 'always'.
+    // Rain nearby (an interruption): the radar for `radarFor` s every
+    // `radarEvery` min on any chosen screen but weather: 'off', 'rain'
+    // (while rain is in the box), or 'always'.
     wxVisit: 'off',
     radarEvery: 4,
     radarFor: 60,
-    // Auto: jump to the weather screen while an NWS alert is active:
-    // 'off', 'warning', or 'all' (watches too). Overrides baseball.
+    // Retired (Nov 2026): jump to the weather screen for NWS alerts. Still
+    // accepted; nothing reads it.
     alertJump: 'off',
     // Baseball: which games take over Auto, their windows, and which
     // games rotate while one is live ('live': live only; 'favorite': live
@@ -159,6 +167,10 @@ function defaultBoard(stations) {
     bbPre: 30,
     bbFinal: 15,
     bbPriority: 'live',
+    // Lines & destinations: lines turned off at this station (codes), and
+    // whether trains of lines that don't serve it (reroutes) show.
+    hideLines: [],
+    otherLines: true,
     // Transit and chrono labels: 'white' or 'line' (the line's color).
     lineNames: 'white',
     // Transit and ticker header: the clock at the right.
@@ -292,6 +304,7 @@ function validatePatch(patch, stations) {
       case 'twinkle':
       case 'showTemp':
       case 'gradInvert':
+      case 'otherLines':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;
         break;
@@ -338,6 +351,22 @@ function validatePatch(patch, stations) {
           throw new ValidationError(`autoScreens must be a non-empty list of ${AUTO_SCREENS.join(', ')}`);
         }
         out.autoScreens = AUTO_SCREENS.filter((v) => val.includes(v));
+        break;
+      case 'cycle':
+        if (!Array.isArray(val) || val.length < 2 || val.length > CYCLE_MAX || !val.every((v) => CYCLE_SCREENS.includes(v)) || new Set(val).size !== val.length) {
+          throw new ValidationError(`cycle must be 2-${CYCLE_MAX} different screens from ${CYCLE_SCREENS.join(', ')}`);
+        }
+        out.cycle = [...val];
+        break;
+      case 'hideLines':
+        if (!Array.isArray(val) || !val.every((v) => LINE_CODES.includes(v)) || new Set(val).size !== val.length) {
+          throw new ValidationError(`hideLines must be a list of ${LINE_CODES.join(', ')}`);
+        }
+        out.hideLines = LINE_CODES.filter((v) => val.includes(v));
+        break;
+      case 'transitScreen':
+        if (!AUTO_SCREENS.includes(val)) throw new ValidationError(`transitScreen must be one of ${AUTO_SCREENS.join(', ')}`);
+        out.transitScreen = val;
         break;
       case 'bbTeams':
         if (!Array.isArray(val) || !val.every((v) => BB_TEAMS.includes(v)) || new Set(val).size !== val.length) {
@@ -435,6 +464,15 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
         }
       }
       for (const b of Object.values(state.boards)) if (b) for (const k of RETIRED_KEYS) delete b[k];
+      // Auto became Cycle (Nov 2026). Auto alternating transit and the ticker
+      // is a cycle of the two; Auto on one screen is that screen chosen (its
+      // weather visits carry on as Rain nearby, now on any screen).
+      for (const b of Object.values(state.boards)) {
+        if (!b || Object.hasOwn(b, 'cycle')) continue;
+        const mains = Array.isArray(b.autoScreens) && b.autoScreens.length ? b.autoScreens : ['transit'];
+        b.cycle = mains.length > 1 ? ['transit', 'ticker'] : ['transit', 'weather'];
+        if (b.screen === 'auto' && mains.length < 2) b.screen = mains[0];
+      }
       // Settings added later: fill in their defaults (today's behavior).
       const defaults = defaultBoard(stations);
       for (const b of Object.values(state.boards)) {
@@ -567,6 +605,8 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       if (v != null && !vars.includes(v)) throw new ValidationError(vars.length ? `v must be one of ${vars.join(', ')}` : `${cat} has no variants`);
       if (!Object.hasOwn(state.boards, id)) return null;
       const fields = { screen: knobScreen(state.boards[id], cat) };
+      // A knob turn turns a board that's off back on (Auto).
+      if (state.boards[id].bright === 'off') fields.bright = 'auto';
       if (v != null) {
         if (cat === 'transit') fields.screen = v;
         else if (cat === 'weather') fields.wxView = v;
@@ -575,12 +615,11 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       return this.update(id, fields);
     },
 
-    // Board restart: brightness goes back to auto (so a board left off comes
-    // back lit); the chosen screen, station, rows, and toggles persist. Bumps v.
+    // Board restart: everything persists, Off included (Off stays off until
+    // it's changed on the phone or the knob turns). Bumps v.
     boot(id) {
       if (!Object.hasOwn(state.boards, id)) return null;
       const board = state.boards[id];
-      board.bright = 'auto';
       board.v += 1;
       save();
       return board;
@@ -588,4 +627,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };

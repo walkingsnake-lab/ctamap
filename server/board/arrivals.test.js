@@ -173,6 +173,17 @@ test('the configured row list filters and orders destinations', () => {
   assert.ok(ticker.every((x) => (x.ln === 'BR' && x.d === 'Loop') || (x.ln === 'RD' && x.d === '95th')));
 });
 
+test('Lines & destinations: lines turned off, and other lines (reroutes) hidden', () => {
+  // Belmont (Red, Brown, Purple): Brown off leaves no Brown rows or ticker entries.
+  let { rows, ticker } = run('belmont-2026-10-03-2316.json', { ...base, hideLines: ['BR'] });
+  assert.ok(rows.length && rows.every((r) => r.ln !== 'BR') && ticker.every((x) => x.ln !== 'BR'));
+  // A Red train at a station listed as Brown/Purple only: an other line.
+  ({ rows } = run('belmont-2026-10-03-2316.json', { ...base, otherLines: false, lines: ['BR', 'PR'] }));
+  assert.ok(rows.length && rows.every((r) => r.ln === 'BR' || r.ln === 'PR'));
+  ({ rows } = run('belmont-2026-10-03-2316.json', { ...base, otherLines: true, lines: ['BR', 'PR'] }));
+  assert.ok(rows.some((r) => r.ln === 'RD'));
+});
+
 test('unknown destinations get their own row after the configured ones, and are logged once', () => {
   const json = load('morse-2026-10-03-2316.json');
   json.ctatt.eta[1].destNm = 'Granville';

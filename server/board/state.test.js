@@ -15,7 +15,8 @@ test('a fresh store starts with the home board at Morse and writes the file', ()
   const home = store.get('home');
   assert.equal(home.v, 1);
   assert.deepEqual(home.station, { mapid: '40100', name: 'MORSE' });
-  assert.equal(home.screen, 'auto');
+  assert.equal(home.screen, 'transit');
+  assert.deepEqual([home.cycle, home.hideLines, home.otherLines], [['transit', 'weather'], [], true]);
   assert.equal(home.bright, 'auto');
   assert.equal(home.brightMin, 40);
   assert.equal(home.wxVisit, 'off');
@@ -34,6 +35,28 @@ test('an older state file: radar visits migrate and new settings get their defau
     const b = createStore({ dir, log: quiet }).get('home');
     assert.deepEqual([b.wxVisit, b.radarEvery, b.radarFor], [visit, interval, 90]);
     assert.deepEqual([b.autoScreens, b.bbTeams, b.headerClock, b.tickerHold], [['transit'], ['cubs', 'sox', 'post'], true, 8]);
+  }
+});
+
+test('an older state file: Auto becomes the chosen screen or the Cycle', () => {
+  const dir = tmpDir();
+  const old = (screen, autoScreens) => ({ v: 3, station: { mapid: '40100', name: 'MORSE' }, rows: [], screen, bright: 'auto', autoScreens });
+  fs.writeFileSync(path.join(dir, 'board-state.json'), JSON.stringify({ boards: {
+    one: old('auto', ['ticker']), both: old('auto', ['transit', 'ticker']), wx: old('weather', ['transit']),
+  } }));
+  const store = createStore({ dir, log: quiet });
+  assert.deepEqual([store.get('one').screen, store.get('one').cycle], ['ticker', ['transit', 'weather']]);
+  assert.deepEqual([store.get('both').screen, store.get('both').cycle], ['auto', ['transit', 'ticker']]);
+  assert.deepEqual([store.get('wx').screen, store.get('wx').cycle], ['weather', ['transit', 'weather']]);
+});
+
+test('Cycle, lines and the transit screen: validation', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  const b = store.update('home', { cycle: ['clock', 'transit', 'announce'], hideLines: ['PR', 'BR'], otherLines: false, transitScreen: 'ticker' });
+  assert.deepEqual([b.cycle, b.hideLines, b.otherLines, b.transitScreen, b.screen], [['clock', 'transit', 'announce'], ['BR', 'PR'], false, 'ticker', 'transit']);
+  for (const bad of [{ cycle: ['transit'] }, { cycle: ['a', 'b'] }, { cycle: ['transit', 'transit'] }, { cycle: Array(7).fill(0).map((_, i) => ['transit', 'ticker', 'weather', 'clock', 'announce', 'baseball', 'auto'][i]) },
+    { hideLines: ['XX'] }, { hideLines: ['RD', 'RD'] }, { otherLines: 'no' }, { transitScreen: 'weather' }]) {
+    assert.throws(() => store.update('home', bad), ValidationError, JSON.stringify(bad));
   }
 });
 
@@ -102,12 +125,12 @@ test('rows accept an ordered destination list', () => {
   assert.deepEqual(b.rows, ['RD:Howard', 'RD:95th']);
 });
 
-test('boot resets brightness but keeps the chosen screen and config', () => {
+test('boot keeps brightness (Off too), the chosen screen and config', () => {
   const store = createStore({ dir: tmpDir(), log: quiet });
-  store.update('home', { screen: 'ticker', bright: 30, showHeader: false });
+  store.update('home', { screen: 'ticker', bright: 'off', showHeader: false });
   const b = store.boot('home');
   assert.equal(b.screen, 'ticker');
-  assert.equal(b.bright, 'auto');
+  assert.equal(b.bright, 'off');
   assert.equal(b.showHeader, false);
   assert.equal(b.v, 3);
   assert.equal(store.boot('nope'), null);
@@ -242,7 +265,7 @@ test('knob: the ring opens categories; TRANSIT opens the transit screen last cho
   const { knobOf, KNOB_RING } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
   assert.deepEqual(KNOB_RING, ['transit', 'weather', 'cycle']);
-  assert.deepEqual(knobOf(store.get('home')), { ring: KNOB_RING, at: 2 });
+  assert.deepEqual(knobOf(store.get('home')), { ring: KNOB_RING, at: 0 });
   const v = store.get('home').v;
   assert.equal(store.select('home', 'weather').screen, 'weather');
   assert.equal(store.get('home').v, v + 1);
@@ -261,7 +284,9 @@ test('knob: the ring opens categories; TRANSIT opens the transit screen last cho
   store.update('home', { screen: 'baseball' });
   assert.equal(knobOf(store.get('home')).at, 0);
   assert.throws(() => store.select('home', 'baseball'), ValidationError);
-  assert.throws(() => store.update('home', { transitScreen: 'ticker' }), ValidationError);
+  // The phone's Transit page sets which one TRANSIT means without switching.
+  store.update('home', { screen: 'weather', transitScreen: 'ticker' });
+  assert.equal(store.select('home', 'transit').screen, 'ticker');
   assert.equal(store.select('nope', 'cycle'), null);
 });
 

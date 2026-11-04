@@ -37,6 +37,21 @@ encoder rails (0.45 mm a side), the sensor sled and hooks, the post floor (seque
 Ø3.0 and the cleat pilots Ø3.1 (3.0 too tight to drive, 3.2 too loose). The test plate is regenerated with the tray
 (`drawer.py`), so after a filament or setting change it can be printed again to recheck.
 
+## Underside markings (in progress, not on the shells yet)
+Two label recesses on the shell's underside, one layout for P3 and P2.5 (`src/marks.py`; previews
+`img/underside-marks-p3-labels.png`, `-p25-labels.png`):
+- Regulatory label, 1 x 2 5/8 in: product and model, "Contains FCC ID: ...", the Part 15 statement. The same on every board,
+  so it's ordered printed (polyester, permanent adhesive: a permanently affixed nameplate per 47 CFR 2.925(d)).
+- Setup sticker, 1/2 x 1 3/4 in: the board's setup-network QR code, name and password, printed per board.
+
+The recesses (0.5 deep, 0.4 mm a side past the label, front edge chamfered 45° so it doesn't bridge) give the labels a smooth
+floor on the wood and keep their edges out of reach. Debossed lettering (model and FCC ID) is optional and off: `MARK_TEXT=1`.
+
+Test print, in the shell's filament, as exported (standing on the L-foot; seam at the back): `stl/coupon-marks-wall.stl`, the
+underside wall with the real layout. Stick real labels in; check the fit and the recesses' front edges. For the lettering,
+if it's ever wanted: `stl/coupon-marks-ladder.stl` (`img/marks-ladder.png`): lines 1-3 DejaVu at caps 3.35 / 3.75 / 4.6 mm;
+4-7 all caps at 3.75 in DejaVu, Atkinson Hyperlegible, B612, OCR-B (`fonts/`); pick with `MARK_FONT` / `MARK_CAPS`.
+
 ## Hardware
 - **Screws** (button heads; the hex keys below fit them): 4 x M3 x 8 **flanged** button head (ISO 7380-2, flange ~Ø6.9;
   tray posts into the panel's inserts: not in the Hantof kit, buy a small pack; or a plain M3 x 8 button head over an M3
@@ -171,6 +186,7 @@ Parametric Python (manifold3d + trimesh); every STL is generated from these.
 | `panel.py` | Panel profiles (`PANEL=p3` default, `PANEL=p25`): outline, inserts, headers. Everything panel-sized derives from it |
 | `case.py`, `case2.py`, `plate3.py`, `sensor.py` | Shared geometry and helpers (the v4 shell and plate live on here); `case2.py` also writes the Boot key |
 | `collar.py`, `knob.py`, `diffuser.py`, `plinth.py` | Collar shape (v5's is written by `drawer.py`), knob, diffuser two-colour sets, plinth |
+| `marks.py` | Underside markings: label recesses, and optional debossed lettering sized to the nozzle (`MARK_TEXT=1`, `MARK_FONT`, `MARK_CAPS`, `MARK_MODEL`); `preview`, `check` (every panel), `coupon` |
 | `layerscan.py` | Slices a print-oriented STL in 0.2 mm layers and reports pieces and path length per layer (the banding check) |
 | `grille_guide.py`, `check_corners.py` | Archived tools: sensor grille drill guide (older shells with a blind pocket), insert check frame |
 
@@ -192,6 +208,9 @@ python3 check_v5.py              # PANEL=p25 for the P2.5
   centre one) and takes the same pair of screws from below (x ±46). The light sensor sits at x 40. Print its diffuser on the
   0.2 nozzle with a 0.14 first layer (the 0.14 face stays one layer; on a 0.4 nozzle its single-bead ribs printed wavy). Its
   panel thickness (14.5) is assumed, not measured.
+- **128 x 32 from two P2.5 panels** (347 x 96.3 x 69): [P25-128-BUILD.md](P25-128-BUILD.md), `src/bar128.py`,
+  `stl/p25-128x32/`. Shell split left/right at the panel joint (both halves on one plate), a diffuser and a tray per panel,
+  splice plates across the joint. Test pieces first; not printed yet.
 - **P4** (256 x 128): the case (281 mm) and diffuser exceed the X2D's 256 mm bed, so it's built in split parts (shell top/bottom, tray and diffuser left/right): [P4-BUILD.md](P4-BUILD.md), `src/p4.py`, `stl/p4/`.
 
 ## Archive

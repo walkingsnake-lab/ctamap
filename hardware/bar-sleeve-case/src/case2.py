@@ -63,6 +63,7 @@ CUT_H, CUT_W, CUT_R = 15.6, 10.2, 2.1     # the cut-out opening (z x y) the beze
 SKIN_T = 0.5                              # outer skin (cut / drilled out after printing) so the outer wall stays one loop;
                                           # just over one 0.4-nozzle line (~0.42): at 0.4 the slicer dropped it
 SL_W, SL_PITCH = 1.5, 4.0                 # slots (GRILLES = True only)
+KNOB_X = 0.0                              # encoder / collar hole (x); bar128.py moves it onto panel B
 SENSOR_X, SENSOR_Y, SENSOR_D = panel.P['sensor_x'], 42.0 + (LT - 12.0), 2.0   # light-sensor hole (Ø2, a 2 mm or 5/64" bit), drilled through drill_guide()
 # light-sensor grille (grille_guide.py): 5 holes, dice-five, bit + GRILLE_WEB apart. Its span sizes the blind pocket
 # inside the top wall (the bores only cross the 0.8 mm skin, ~0.5 mm margin a side for guide placement) and the tray's hole
@@ -218,7 +219,7 @@ def shell2():
             cuts.append(slot_z(sx * x, BOT_SL['y0'], BOT_SL['y1'], -1, WALL + 1))
     # encoder / collar hole: teardrop toward the back
     ztop = H - SKIN_T if SKINS else H + 1          # skin: blind from inside, cut out along the pocket wall (the collar flange hides the edge)
-    cuts.append(Manifold.extrude(teardrop_cs(ENC_HOLE / 2, 0, KY, seg=SEG), ztop - (H - WALL - 1)).translate([0, 0, H - WALL - 1]))
+    cuts.append(Manifold.extrude(teardrop_cs(ENC_HOLE / 2, KNOB_X, KY, seg=SEG), ztop - (H - WALL - 1)).translate([0, 0, H - WALL - 1]))
     if SENSOR_POCKET and not SENSOR_PRINTED:       # blind pocket from inside: invisible outside, guides the bit when drilled
         cuts.append(Manifold.extrude(teardrop_cs(SENSOR_POCKET_D / 2, SENSOR_X, SENSOR_Y, seg=48), WALL - 0.8 + 1).translate([0, 0, H - WALL - 1]))
     if SENSOR_PRINTED:                             # Ø2 light-sensor hole through the top (teardrop toward the print's up)

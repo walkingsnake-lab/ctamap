@@ -829,6 +829,18 @@ const AUTO_CASES = [
   [{ screen: 'ticker', rot: { screens: ['transit', 'ticker'], every: 120 }, radar: { on: true, visit: { every: 240, for: 60 } } }, 130, 'ticker'],
   [{ screen: 'weather', rot: null }, 0, 'weather'],
 ];
+test('autoScreen: Rain nearby visits the clock and announce screens too; the knob can end one', () => {
+  const { autoScreen } = require('./draw');
+  const t = 1_800_000_000 - (1_800_000_000 % 240);
+  const radar = { on: true, visit: { every: 240, for: 60 } };
+  for (const screen of ['clock', 'announce', 'transit']) assert.equal(autoScreen({ screen, radar }, t + 10), 'weather', screen);
+  assert.equal(autoScreen({ screen: 'clock', radar }, t + 10, t + 240), 'clock'); // skipped until the next one
+  assert.equal(autoScreen({ screen: 'clock', radar }, t + 240, t + 240), 'weather');
+  // The Cycle takes turns through any screens.
+  const rot = { screens: ['clock', 'weather', 'announce'], every: 60 };
+  assert.deepEqual([0, 60, 120, 180].map((o) => autoScreen({ screen: 'clock', rot }, t + o)), ['clock', 'weather', 'announce', 'clock']);
+});
+
 test('autoScreen: Auto rotation and always-on weather visits (table shared with the board)', () => {
   const { autoScreen } = require('./draw');
   const base = 1_800_000_000 - (1_800_000_000 % 240);

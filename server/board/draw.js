@@ -2686,19 +2686,22 @@
   }
 
   // Which screen the board shows now. The payload's `screen` is the base.
-  // On the auto screen, `rot` alternates the main screens every `every` s,
-  // and (radar.visit set) the weather screen is visited for `for` seconds at
-  // the start of every `every`-second cycle while rain is in the box (or
-  // always, visit.always). Both are epoch-aligned. Mirrored by player.py's
-  // auto_screen().
-  function autoScreen(p, now) {
+  // In the Cycle, `rot` takes turns through its screens every `every` s,
+  // and (radar.visit set: Rain nearby) the weather screen is visited for
+  // `for` seconds at the start of every `every`-second cycle while rain is
+  // in the box (or always, visit.always), on any base screen but weather.
+  // Both are epoch-aligned. `skipUntil` (epoch s): no visit before then (the
+  // knob ended one). Mirrored by the S3's Player::auto_screen(); the frozen
+  // player.py visits only transit, ticker and baseball.
+  const VISITED = ['transit', 'ticker', 'baseball', 'clock', 'announce'];
+  function autoScreen(p, now, skipUntil = 0) {
     let screen = p.screen;
     const rot = p.rot;
     if (rot && rot.screens && rot.screens.length > 1 && rot.every > 0 && rot.screens.includes(screen)) {
       screen = rot.screens[Math.floor(Math.floor(now) / rot.every) % rot.screens.length];
     }
     const r = p.radar;
-    if (!['transit', 'ticker', 'baseball'].includes(p.screen) || !r || !r.visit || !(r.visit.every > 0) || !(r.on || r.visit.always)) return screen;
+    if (!VISITED.includes(p.screen) || !r || !r.visit || !(r.visit.every > 0) || !(r.on || r.visit.always) || now < skipUntil) return screen;
     return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : screen;
   }
 

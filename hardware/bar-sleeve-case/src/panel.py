@@ -95,11 +95,25 @@ PROFILES = {
     ),
 }
 
+# Two P2.5 panels side by side (128 x 32, bar128.py): one 320 x 80 "panel" for the parts that span both (shell, diffuser).
+# Panel A's centre at x -80, B's at +80 (panel frame, before the 180 deg turn); each keeps the P2.5's own inserts and
+# headers. The trays are built per panel with the plain 'p25' profile (bar128.py), so the plate-v3 fields below are the
+# P2.5's, unused.
+def _pair(pts):
+    return tuple((cx + x, z) for cx in (-80.0, 80.0) for x, z in pts)
+
+
+PROFILES['p25x2'] = dict(PROFILES['p25'], name='2 x Waveshare P2.5 64x32 (128 x 32)', w=320.0, cols=128,
+                         inserts=_pair(PROFILES['p25']['inserts']), headers=_pair(PROFILES['p25']['headers']),
+                         standoffs=_pair(PROFILES['p25']['standoffs']),
+                         sensor_x=120.0,          # the P2.5 tray's sensor (x 40 on panel B)
+                         screw_xs=(34.0, 126.0))  # each tray's pair from below (x +/-46 about its panel)
+
 KEY = os.environ.get('PANEL', 'p3').lower()
 if KEY not in PROFILES:
     raise SystemExit(f'PANEL={KEY!r}: use one of {", ".join(PROFILES)}')
 P = PROFILES[KEY]
-COLS, ROWS = 64, 32                      # pixels (all profiles)
+COLS, ROWS = P.get('cols', 64), 32       # pixels
 
 # case opening (bore): the same borders past the panel edge for every panel, unless the profile sets bore_pad (P4: an
 # 8 mm bezel all round)
