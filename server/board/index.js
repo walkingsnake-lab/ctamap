@@ -34,6 +34,8 @@ const DRAW_JS = fs.readFileSync(path.join(__dirname, 'draw.js'));
 const SETUP_IMAGE_JS = fs.readFileSync(path.join(__dirname, 'setup-image.js'));
 const SETUP_TOOLS_FILE = path.join(__dirname, '..', '..', 'dist', 'setup-tools.min.js');
 const SIM_ASSETS = JSON.stringify(assets());
+// The control page's picker tiles (scripts/build-control-tiles.js).
+const CONTROL_TILES = fs.readFileSync(path.join(__dirname, 'control-tiles.json'));
 
 const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
@@ -44,7 +46,7 @@ const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky',
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
 // answer 404 there.
-const SCOPED_OK = new Set(['', 'api/destinations', 'api/rain', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png']);
+const SCOPED_OK = new Set(['', 'api/destinations', 'api/rain', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png', 'tiles.json']);
 // Settings a per-board link may not change: the update channel (a buyer
 // stays on stable, or turns updates off).
 const SCOPED_FW = ['stable', 'off'];
@@ -1067,6 +1069,13 @@ function createBoard({
         }
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache' });
         res.end(js);
+        return;
+      }
+      // The control page's picker tiles: fixed sample renders (base64 PNGs).
+      if (sub === 'tiles.json') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' });
+        res.end(CONTROL_TILES);
         return;
       }
       // draw.js and the fonts/icons it needs, for the simulator page.

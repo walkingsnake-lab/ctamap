@@ -249,8 +249,8 @@
 
   <p class="sh" id="tShowsH">Shows</p>
   <div class="grp" role="radiogroup" aria-labelledby="tShowsH" id="tShows">
-    <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="transit"><canvas class="thumb" width="64" height="32"></canvas><span class="grow">Rows<span class="s">One row per destination</span></span><span class="ck" data-icon="check"></span></button></div>
-    <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="ticker"><canvas class="thumb" width="64" height="32"></canvas><span class="grow">Ticker<span class="s">Station-sign style, two at a time</span></span><span class="ck" data-icon="check"></span></button></div>
+    <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="transit"><img class="thumb" alt="" data-static="rows"><span class="grow">Rows<span class="s">One row per destination</span></span><span class="ck" data-icon="check"></span></button></div>
+    <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="ticker"><img class="thumb" alt="" data-static="ticker"><span class="grow">Ticker<span class="s">Station-sign style, two at a time</span></span><span class="ck" data-icon="check"></span></button></div>
   </div>
 
   <p class="sh">Station</p>
@@ -269,8 +269,8 @@
   <p class="sh" id="layH">Rows</p>
   <div class="grp">
     <div class="tiles" role="radiogroup" aria-labelledby="layH" id="transitLayout">
-      <button role="radio" data-v="header"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Station on top</span></button>
-      <button role="radio" data-v="key"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Key on top</span></button>
+      <button role="radio" data-v="header"><img alt="" data-static="layout-header"><span class="lab"><span class="rd" data-icon="dotck"></span>Station on top</span></button>
+      <button role="radio" data-v="key"><img alt="" data-static="layout-key"><span class="lab"><span class="rd" data-icon="dotck"></span>Key on top</span></button>
     </div>
     <div class="c" id="wxRow"><label for="showWeather" class="grow">Weather at the bottom</label><input type="checkbox" class="sw" id="showWeather"></div>
     <div class="c" id="hdivRow"><label for="headerDivider" class="grow">Divider under the top line</label><input type="checkbox" class="sw" id="headerDivider"></div>
@@ -328,10 +328,10 @@
   <p class="sh" id="wvH">Shows</p>
   <div class="grp">
     <div class="tiles" role="radiogroup" aria-labelledby="wvH" id="wxView">
-      <button role="radio" data-v="now"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Conditions</span></button>
-      <button role="radio" data-v="5day"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>5-day</span></button>
-      <button role="radio" data-v="hourly"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Hourly</span></button>
-      <button role="radio" data-v="radar"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Radar</span></button>
+      <button role="radio" data-v="now"><img alt="" data-static="wx-now"><span class="lab"><span class="rd" data-icon="dotck"></span>Conditions</span></button>
+      <button role="radio" data-v="5day"><img alt="" data-static="wx-5day"><span class="lab"><span class="rd" data-icon="dotck"></span>5-day</span></button>
+      <button role="radio" data-v="hourly"><img alt="" data-static="wx-hourly"><span class="lab"><span class="rd" data-icon="dotck"></span>Hourly</span></button>
+      <button role="radio" data-v="radar"><img alt="" data-static="wx-radar"><span class="lab"><span class="rd" data-icon="dotck"></span>Radar</span></button>
     </div>
     <div class="c"><label for="tempShadow" class="grow">Color behind the temperature</label><input type="checkbox" class="sw" id="tempShadow"></div>
   </div>
@@ -372,11 +372,11 @@
   <p class="sh" id="faceH">Face</p>
   <div class="grp">
     <div class="tiles" role="radiogroup" aria-labelledby="faceH" id="clockFace">
-      <button role="radio" data-v="skyline"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Skyline</span></button>
-      <button role="radio" data-v="seventies"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Seventies</span></button>
-      <button role="radio" data-v="analog"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Analog</span></button>
-      <button role="radio" data-v="daynight"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Day/night</span></button>
-      <button role="radio" data-v="gradient"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Gradient</span></button>
+      <button role="radio" data-v="skyline"><img alt="" data-static="face-skyline"><span class="lab"><span class="rd" data-icon="dotck"></span>Skyline</span></button>
+      <button role="radio" data-v="seventies"><img alt="" data-static="face-seventies"><span class="lab"><span class="rd" data-icon="dotck"></span>Seventies</span></button>
+      <button role="radio" data-v="analog"><img alt="" data-static="face-analog"><span class="lab"><span class="rd" data-icon="dotck"></span>Analog</span></button>
+      <button role="radio" data-v="daynight"><img alt="" data-static="face-daynight"><span class="lab"><span class="rd" data-icon="dotck"></span>Day/night</span></button>
+      <button role="radio" data-v="gradient"><img alt="" data-static="face-gradient"><span class="lab"><span class="rd" data-icon="dotck"></span>Gradient</span></button>
     </div>
   </div>
   <p class="ft" id="faceFt"></p>
@@ -805,38 +805,38 @@
   }
   const imgUrl = (q) => `sim.png?b=${enc(boardId)}&led=square&${q}&t=${Date.now()}`;
   function swapImg(img, url) { const n = new Image(); n.onload = () => { img.src = n.src; }; n.src = url; }
-  // Thumbnails (1x) per screen: the last loaded image, for rows rebuilt since.
-  const thumbSrc = {};
+  // Tiles and thumbnails: fixed sample renders (tiles.json, made by
+  // scripts/build-control-tiles.js), the same whatever the board is doing.
+  // Announce's is the board's own message, drawn here.
+  let TILES = {};
+  const tileSrc = (name) => (TILES[name] ? `data:image/png;base64,${TILES[name]}` : '');
+  const tileOf = (sc) => (sc === 'transit' ? (board.transitScreen === 'ticker' ? 'ticker' : 'rows') : sc === 'ticker' ? 'ticker'
+    : sc === 'weather' ? `wx-${WX_NAME[board.wxView] ? board.wxView : 'now'}` : sc === 'clock' ? `face-${FACE_NAME[board.clockFace] ? board.clockFace : 'skyline'}` : null);
   function thumbImg(sc, cls = 'thumb', alt = '') {
-    const img = el('img', { class: cls, alt, 'data-thumb': sc });
-    if (thumbSrc[sc]) img.src = thumbSrc[sc];
-    return img;
+    if (sc === 'announce') {
+      // data-k: what it shows, so a rebuilt list redraws it only when that changes.
+      const c = el('canvas', { class: cls, width: 64, height: 32, 'aria-label': alt || null, 'data-k': `${D ? 1 : 0}:${board.msg ? board.msg.style + board.msg.text : ''}` });
+      if (D && board.msg) try { paintLed(c, D.render({ bright: 100, screen: 'announce', msg: msgOf({ text: board.msg.text, style: board.msg.style }) }, { t: 1e6 })); } catch (e) { /* drawn blank */ }
+      else { const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 64, 32); }
+      return c;
+    }
+    return el('img', { class: cls, alt, src: tileSrc(tileOf(sc)) || null, 'data-tile-of': sc });
   }
+  function paintStatic() { for (const img of qa('img[data-static]')) if (TILES[img.dataset.static] && !img.src) img.src = tileSrc(img.dataset.static); }
   async function refresh() {
     try {
       pay = await api('api/update?b=' + enc(boardId));
       swapImg($('preview'), imgUrl('scale=5'));
       render();
       refreshPages();
-      if (D) renderTiles();
     } catch (e) {
       $('homeStat').textContent = 'Preview unavailable: ' + e.message;
     }
   }
-  // The open page's preview and the Home thumbnails.
-  let thumbsAt = 0;
+  // The open page's preview: live, what the board shows with these settings.
   function refreshPages() {
     if (!board) return;
     for (const img of qa('img[data-prev]')) if (!img.closest('.view').hidden) swapImg(img, imgUrl(`scale=5&screen=${img.dataset.prev === 'transit' ? board.transitScreen || 'transit' : img.dataset.prev}`));
-    if (nowS() - thumbsAt > 30) {
-      thumbsAt = nowS();
-      const scs = [...new Set(qa('img[data-thumb]').map((i) => i.dataset.thumb))];
-      for (const sc of scs) {
-        const n = new Image();
-        n.onload = () => { thumbSrc[sc] = n.src; for (const img of qa(`img[data-thumb="${sc}"]`)) img.src = n.src; };
-        n.src = imgUrl(`scale=1&screen=${sc}`);
-      }
-    }
   }
 
   // ---- render ----
@@ -957,7 +957,7 @@
     });
     // Rebuild only when a row changed: a tap that lands while its row is
     // replaced (iOS) never becomes a click.
-    const html = items.map((e) => e.outerHTML).join('').replace(/ src="[^"]*"/g, ''); // thumbnails refresh in place
+    const html = items.map((e) => e.outerHTML).join('');
     if (html !== $('screens').dataset.html) { $('screens').replaceChildren(...items); $('screens').dataset.html = html; }
   }
   function renderBrightness() {
@@ -1017,7 +1017,7 @@
     }
   }
 
-  // ---- variant tiles (2x) and thumbnails (1x), drawn here with draw.js ----
+  // ---- draw.js on the phone: the Announce draft, its styles and presets, the header fit ----
   let D = null, drawLoading = null;
   function loadDraw() {
     if (D) return Promise.resolve(D);
@@ -1038,25 +1038,6 @@
       ctx.fillStyle = r || gg || b ? `rgb(${r},${gg},${b})` : '#0d0d0d';
       ctx.fillRect(x * s, y * s, s - g, s - g);
     }
-  }
-  function tile(canvas, p, screen) {
-    try { paintLed(canvas, D.render({ ...p, bright: 100 }, { screen, t: 0 })); }
-    catch (e) { const ctx = canvas.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-  }
-  function renderTiles() {
-    if (!D || !pay) return;
-    const p = pay, pv = p.pv || {};
-    const cv = (group, v) => $(group).querySelector(`[data-v="${v}"] canvas`);
-    tile(qa('#tShows [data-v="transit"] canvas')[0], p, 'transit');
-    tile(qa('#tShows [data-v="ticker"] canvas')[0], p, 'ticker');
-    tile(cv('transitLayout', 'header'), { ...p, key: 0, header: board.station.name }, 'transit');
-    tile(cv('transitLayout', 'key'), { ...p, key: 1, header: board.station.name, wx: null }, 'transit');
-    const wx = (p.radar && p.radar.wx) || null;
-    const strip = (w) => (w ? (() => { const o = { ...w }; delete o.days; delete o.hours; delete o.rain; return o; })() : null);
-    const wxFor = (v) => (!wx ? null : v === '5day' ? { ...strip(wx), days: wx && (wx.days || pv.days) } : v === 'hourly' ? { ...strip(wx), hours: wx && (wx.hours || pv.hours) } : strip(wx));
-    for (const v of ['now', '5day', 'hourly']) tile(cv('wxView', v), { ...p, radar: { ...p.radar, frames: [], ft: [], wx: wxFor(v) } }, 'weather');
-    tile(cv('wxView', 'radar'), { ...p, radar: { ...p.radar, wx: null } }, 'weather');
-    for (const f of Object.keys(FACE_NAME)) tile(cv('clockFace', f), { ...p, cface: f, skyline: p.skyline || pv.skyline || null, cwx: p.cwx || pv.cwx || null, dn: p.dn || pv.dn || null, ginv: board.gradInvert === true }, 'clock');
   }
 
   // ---- Transit ----
@@ -1724,7 +1705,8 @@
     showView();
     refresh();
     loadHealth();
-    loadDraw().then(() => { renderTiles(); renderNameFit(); if (view() === 'announce') renderAnnounce(); }).catch(() => {});
+    api('tiles.json').then((t) => { TILES = t; paintStatic(); renderScreens(); renderCycle(); }).catch(() => {});
+    loadDraw().then(() => { renderNameFit(); renderScreens(); renderCycle(); if (view() === 'announce') renderAnnounce(); }).catch(() => {});
     if (!SCOPE) { loadFirmware(); loadLogoStatus(); }
     setInterval(() => { if (!document.hidden) refresh(); }, 10000);
     setInterval(() => { if (!document.hidden) { loadHealth(); loadBoards(); } }, 10000);
