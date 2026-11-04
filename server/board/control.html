@@ -176,6 +176,9 @@
     #app > .view[data-view="home"] { display: block !important; position: sticky; top: 16px; grid-column: 1; grid-row: 1; }
     #app > .view:not([data-view="home"]) { grid-column: 2; grid-row: 1; }
     #app > .view:not([data-view="home"]) .back-home { visibility: hidden; }
+    /* The row (or the cog) whose page is open on the right. */
+    #screens .c.t.open { background: var(--fill); }
+    #screens .c.t.open .gear, .nav.home a.nb.open { color: var(--fg); background: var(--fill); border-radius: 10px; }
   }
 </style>
 </head>
@@ -188,7 +191,7 @@
     <button class="title" id="boardTitle" aria-haspopup="dialog"><span id="boardName">Board</span>
       <svg class="admin" width="13" height="8" viewBox="0 0 16 10" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity:.45;margin-top:3px"><path d="M2 2l6 6 6-6"/></svg>
     </button>
-    <a class="nb end" href="#board" aria-label="Board settings" data-icon="gear24"></a>
+    <a class="nb end" id="boardGear" href="#board" aria-label="Board settings" data-icon="gear24"></a>
   </div>
   <div class="prev" id="homePrev"><img id="preview" alt="What the board is showing now"><div class="over" id="prevOver" hidden><span id="prevOverText"></span></div></div>
   <a class="ft stat" id="homeStat" role="status" href="#status"></a>
@@ -692,11 +695,14 @@
     if (v === 'announce') loadDraw().then(renderAnnounce).catch((e) => toast(`Couldn't load the preview: ${e.message}`, true));
     if (v === 'status') loadHealth();
     if (v === 'give') renderGive();
+    if (board) renderScreens();
+    $('boardGear').classList.toggle('open', desktop.matches && ['board', 'fleet', 'status', 'updates', 'builds', 'owner', 'give', 'logos'].includes(v));
     refreshPages();
   }
   window.addEventListener('hashchange', showView);
-  // Desktop: the right column always has a page.
-  if (matchMedia('(min-width: 900px)').matches && view() === 'home') history.replaceState(null, '', '#transit');
+  // Desktop: the right column always has a page: the chosen screen's (set in init).
+  const desktop = matchMedia('(min-width: 900px)');
+  const pageOf = (sc) => (sc === 'auto' ? 'cycle' : sc === 'ticker' ? 'transit' : sc === 'baseball' ? 'sports' : sc);
 
   // ---- toast ----
   let toastTimer = null, toastAct = null;
@@ -920,7 +926,7 @@
     const cat = (sc) => (sc === 'ticker' ? 'transit' : sc);
     const target = switching && !switching.failed ? cat(switching.to) : null;
     const chosen = cat(switching ? switching.from : board.screen);
-    $('screens').replaceChildren(...rows.map((sc) => {
+    const items = rows.map((sc) => {
       const can = sc === 'auto' || canDraw(sc);
       const on = chosen === sc;
       const thumb = sc === 'auto' ? cycleThumb() : thumbImg(sc === 'transit' ? board.transitScreen || 'transit' : sc);
@@ -934,8 +940,15 @@
       if (target === sc && !on) pick.insertAdjacentHTML('beforeend', ICON.spin);
       else if (on) pick.insertAdjacentHTML('beforeend', ICON.check);
       const gear = el('a', { class: 'nb end gear', href: '#' + (sc === 'auto' ? 'cycle' : sc === 'baseball' ? 'sports' : sc), 'aria-label': `${SCREEN_NAME[sc]} settings`, html: ICON.gear22 });
-      return el('div', { class: 'c t' }, pick, gear);
-    }));
+      // Desktop: mark the row whose page is open on the right.
+      const open = desktop.matches && (view() === pageOf(sc) || (sc === 'transit' && ['station', 'lines'].includes(view())));
+      if (open) gear.setAttribute('aria-current', 'page');
+      return el('div', { class: 'c t' + (open ? ' open' : '') }, pick, gear);
+    });
+    // Rebuild only when a row changed: a tap that lands while its row is
+    // replaced (iOS) never becomes a click.
+    const html = items.map((e) => e.outerHTML).join('').replace(/ src="[^"]*"/g, ''); // thumbnails refresh in place
+    if (html !== $('screens').dataset.html) { $('screens').replaceChildren(...items); $('screens').dataset.html = html; }
   }
   function renderBrightness() {
     const fixed = Number.isInteger(board.bright);
@@ -1683,6 +1696,7 @@
     if (!board) { toast(`No board named "${boardId}".`, true, 'Open the first', () => go(Object.keys(all_)[0])); return; }
     if (!SCOPE) try { localStorage.setItem('board', boardId); } catch (e) { /* private mode */ }
     await loadDests();
+    if (desktop.matches && view() === 'home') history.replaceState(null, '', '#' + pageOf(board.screen));
     render();
     showView();
     refresh();
