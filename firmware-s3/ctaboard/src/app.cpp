@@ -248,14 +248,18 @@ std::string Board::health_query(long long ms) {
     if (setup && setup->wiped() > 0) q += "&hz=" + std::to_string(setup->wiped());
     health_q_ = q;
   }
+  // A rain visit the knob ended (`hq`: no visit before then, epoch s) rides
+  // on every check while it lasts, so the server and the phone know.
+  std::string out = health_q_;
+  if (player.visit_skip_until > now(ms)) out += "&hq=" + std::to_string(player.visit_skip_until);
   // The light sensor's reading rides on every check (every ~10 s), fresh,
   // so the phone can be used to tune it.
   if (light && sense_.live(ms)) {
     char lx[24];
     snprintf(lx, sizeof lx, "&ha=%.3g", sense_.lux());
-    return health_q_ + lx;
+    out += lx;
   }
-  return health_q_;
+  return out;
 }
 
 // Jobs run in two halves. The first (here, on the loop) decides what to ask
@@ -729,6 +733,7 @@ void Board::do_knob(long long ms) {
     player.visit_skip_until = (draw::fdiv(nw, every) + 1) * every;
     say("[board] knob: ended the rain visit");
     player.set_screen(player.auto_screen(nw), (double)ms);
+    sched.due_now(&version_job, (double)ms);  // tell the server (hq) now
     return;
   }
   if (!peek_mode()) {

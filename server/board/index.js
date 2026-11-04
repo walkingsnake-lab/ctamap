@@ -219,16 +219,12 @@ function createBoard({
   const nightOf = (b) => b.brightMin || NIGHT_BRIGHT;
   const resolveBright = (b, w, now) => (b.bright === 'off' ? 0 : b.bright === 'auto' ? autoBright(w, now, nightOf(b)) : b.bright);
   const autoBrightOf = (b) => (b.bright === 'auto' ? { min: nightOf(b) } : null);
-  // 'auto' is the Cycle: baseball while a game is on (the maker's boards),
-  // else the first of its screens this board can draw; the board takes
-  // turns through them (rot) itself. (alertJump is retired: no jump.)
+  // 'auto' is the Cycle: the first of its screens this board can draw; the
+  // board takes turns through them (rot) itself. Nothing takes it over
+  // (ballgames and the NWS alert jump are retired).
   const cycleOf = (b, caps, sports) => (Array.isArray(b.cycle) ? b.cycle : ['transit', 'weather'])
     .filter((sc) => canDraw(sc, caps) && (sc !== 'baseball' || sports));
-  const resolveScreen = (b, games, cyc) => {
-    if (b.screen !== 'auto') return b.screen;
-    if (games) return 'baseball';
-    return cyc[0] || 'transit';
-  };
+  const resolveScreen = (b, cyc) => (b.screen === 'auto' ? cyc[0] || 'transit' : b.screen);
   const rotOf = (b, screen, cyc) => (b.screen === 'auto' && cyc.length > 1 && cyc.includes(screen)
     ? { screens: cyc, every: b.autoEvery || 60 } : null);
   // Speed settings (contract "anim"): ms, baseball rotation in s.
@@ -239,15 +235,15 @@ function createBoard({
   // Rain nearby (radar.visit): on any chosen screen but weather, if turned
   // on and not held off from the phone (holds); `always` visits even
   // without rain (current conditions).
-  // Holds, per board, in memory: {until} ("Back to <screen> now": no
-  // visit until the next one is due) or {rain: true} ("Stop until the rain
-  // passes": none until the radar box is dry). The board picks the change
-  // up with its next update.
-  const holds = new Map();
-  const holdOf = (id, now, raining) => {
-    const h = holds.get(id);
-    if (h && (h.rain ? raining : now < h.until)) return h.rain ? 'rain' : 'visit';
-    holds.delete(id);
+  // Holds (state `rainHold`, kept across restarts): {until} ("Back to
+  // <screen> now", or the board's knob: no visit until the next one is due)
+  // or {rain: true} ("Stop until the rain passes": none until the radar box
+  // is dry). The board picks the change up with its next update.
+  const holdOf = (id, b, now, raining) => {
+    const h = b.rainHold;
+    if (!h) return null;
+    if (h.rain ? raining : now < h.until) return h.rain ? 'rain' : 'visit';
+    try { store.setRainHold(id, null); } catch (e) { log.error('[board] rain hold:', e.message); }
     return null;
   };
   const visitOf = (b) => (b.screen !== 'weather' && (b.wxVisit === 'rain' || b.wxVisit === 'always') && b.radarEvery > 0
@@ -538,11 +534,14 @@ function createBoard({
     catch (e) { log.error('[board] alerts:', e.message); }
     // Test alerts from the simulator (expire on their own).
     if (test) for (const ln of test.lines) alertLines.add(ln);
+    // Games only for a board that shows baseball (chosen, or a Cycle turn);
+    // they never take over another screen.
     let games = [];
     const bbTeams = board.bbTeams || ['cubs', 'sox', 'post'];
-    if (sports) try {
-      games = mlb.get(board.screen === 'baseball' ? 'forced' : 'auto', {
-        teams: board.screen === 'baseball' ? ['cubs', 'sox', 'post'] : bbTeams,
+    const showsBaseball = board.screen === 'baseball' || (board.screen === 'auto' && Array.isArray(board.cycle) && board.cycle.includes('baseball'));
+    if (sports && showsBaseball) try {
+      games = mlb.get('forced', {
+        teams: ['cubs', 'sox', 'post'],
         pre: (board.bbPre != null ? board.bbPre : 30) * 60, final: (board.bbFinal != null ? board.bbFinal : 15) * 60,
       });
       games = prioritize(games, board.bbPriority, bbTeams);
@@ -550,8 +549,8 @@ function createBoard({
     if (sports && test && test.game) games = [testGame(test.game, now), ...games];
     const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
     const cyc = cycleOf(board, caps, sports);
-    const screen = resolveScreen(board, games.length > 0, cyc);
-    const held = holdOf(id, now, !!radarState.on);
+    const screen = resolveScreen(board, cyc);
+    const held = holdOf(id, board, now, !!radarState.on);
     const viewKey = `${id}:${board.station.mapid}`;
     const { view, viewState, rows, ticker, bars } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
@@ -647,6 +646,11 @@ function createBoard({
       const board = store.get(String(parsed.query.b || ''));
       if (!board) return send(res, 404, { err: 'unknown_board' });
       noteHealth(String(parsed.query.b), parsed.query, nowSecs());
+      // The board's knob ended a rain visit (`hq`: no visit before then).
+      const hq = Number(parsed.query.hq);
+      if (Number.isInteger(hq) && hq > nowSecs() && hq <= nowSecs() + 3600 && !(board.rainHold && board.rainHold.until === hq)) {
+        try { store.setRainHold(String(parsed.query.b), { until: hq }); } catch (e) { log.error('[board] rain hold:', e.message); }
+      }
       seenAt.set(String(parsed.query.b), nowSecs());
       // An OTA offer when this S3 should run another build (firmware.js).
       let fw = null;
@@ -894,9 +898,7 @@ function createBoard({
         if (![null, 'visit', 'rain'].includes(h ?? null)) return send(res, 400, { err: 'invalid', detail: 'hold must be visit, rain, or null' });
         const now = nowSecs();
         const every = (board.radarEvery || 4) * 60;
-        if (h === 'visit') holds.set(id, { until: Math.floor(now / every) * every + every });
-        else if (h === 'rain') holds.set(id, { rain: true });
-        else holds.delete(id);
+        store.setRainHold(id, h === 'visit' ? { until: Math.floor(now / every) * every + every } : h === 'rain' ? { rain: true } : null);
         return send(res, 200, { hold: h ?? null });
       }
       if (sub === 'api/state') {

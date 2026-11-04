@@ -438,15 +438,8 @@
   <p class="ft" data-note="sports" role="status"></p>
   <p class="sh">Layout</p>
   <div class="grp"><div class="c" style="padding-top:10px;padding-bottom:10px"><div class="seg" id="bbLayout"><button data-v="classic">Classic</button><button data-v="logos">Logos</button><button data-v="bands">Bands</button></div></div></div>
-  <p class="sh">Ballgames take over the Cycle for</p>
+  <p class="sh">Games</p>
   <div class="grp">
-    <div class="c"><label for="bbCubs" class="grow">Cubs</label><input type="checkbox" class="sw" id="bbCubs"></div>
-    <div class="c"><label for="bbSox" class="grow">White Sox</label><input type="checkbox" class="sw" id="bbSox"></div>
-    <div class="c"><label for="bbPost" class="grow">Postseason (all teams)</label><input type="checkbox" class="sw" id="bbPost"></div>
-    <label class="c sel"><span>Starts showing</span><span class="v"></span><span data-icon="chev"></span>
-      <select id="bbPre"><option value="0">At first pitch</option><option value="15">15 min before</option><option value="30">30 min before</option><option value="60">1 hr before</option><option value="90">90 min before</option><option value="120">2 hr before</option></select></label>
-    <label class="c sel"><span>Final score stays</span><span class="v"></span><span data-icon="chev"></span>
-      <select id="bbFinal"><option value="0">Not at all</option><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hr</option></select></label>
     <label class="c sel"><span>During live games</span><span class="v"></span><span data-icon="chev"></span>
       <select id="bbPriority"><option value="live">Live games</option><option value="favorite">Cubs/Sox first</option><option value="all">All games</option></select></label>
     <label class="c sel"><span>Each game shows for</span><span class="v"></span><span data-icon="chev"></span>
@@ -1078,7 +1071,7 @@
   $('transitLayout').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) save({ transitLayout: b.dataset.v }); });
   for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'showTemp', 'boats', 'twinkle', 'gradInvert']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
-  for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery', 'bbPre', 'bbFinal']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
+  for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('bbPriority').addEventListener('change', (e) => save({ bbPriority: e.target.value }));
   const slider = (id, out, key) => {
     $(id).addEventListener('input', (e) => { $(out).textContent = `${e.target.value}%`; });
@@ -1281,19 +1274,11 @@
   // ---- Sports (hidden for now) ----
   function renderSports() {
     pressed('bbLayout', board.baseballLayout || 'classic');
-    const teams = board.bbTeams || ['cubs', 'sox', 'post'];
-    $('bbCubs').checked = teams.includes('cubs');
-    $('bbSox').checked = teams.includes('sox');
-    $('bbPost').checked = teams.includes('post');
-    selVal('bbPre', board.bbPre != null ? board.bbPre : 30);
-    selVal('bbFinal', board.bbFinal != null ? board.bbFinal : 15);
     selVal('bbPriority', board.bbPriority || 'live');
     selVal('gameEvery', board.gameEvery || 60);
     if (document.activeElement !== $('logoBright')) { $('logoBright').value = board.logoBright || 90; $('logoBrightV').textContent = `${board.logoBright || 90}%`; }
   }
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
-  const bbTeams = () => [['cubs', 'bbCubs'], ['sox', 'bbSox'], ['post', 'bbPost']].filter(([, id]) => $(id).checked).map(([k]) => k);
-  for (const id of ['bbCubs', 'bbSox', 'bbPost']) $(id).addEventListener('change', () => save({ bbTeams: bbTeams() }));
 
   // ---- Brightness ----
   $('bright').addEventListener('click', (e) => {
