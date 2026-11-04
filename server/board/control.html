@@ -132,7 +132,8 @@
   .minis { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 16px 0; color: var(--sub); flex-wrap: wrap; }
   .minis canvas, .minis img { width: 144px; height: 80px; padding: 8px; border-radius: 9px; background: #000; image-rendering: pixelated; }
   textarea.field { resize: none; line-height: 1.35; }
-  .pinned { position: sticky; bottom: 0; padding: 14px 0 calc(10px + env(safe-area-inset-bottom)); margin-top: 18px; background: var(--bg); }
+  .pinned { position: sticky; bottom: 0; padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); margin-top: 18px; background: var(--bg); box-shadow: 0 -1px 0 var(--sep), 0 -12px 16px -12px rgba(0,0,0,.25); }
+  .view[data-view="announce"] .tiles { padding-bottom: 22px; }
   pre.keys { white-space: pre-wrap; word-break: break-all; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--cell); border-radius: 10px; padding: 12px 14px; margin: 10px 16px 0; user-select: all; }
   code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
   ul.plain { list-style: none; margin: 8px 32px 0; padding: 0 0 0 18px; color: var(--sub); font-size: 15px; }
@@ -890,13 +891,13 @@
       st.classList.add('warn');
       st.replaceChildren(el('span', { class: 'dot warn' }), `Board offline since ${new Date(me.seen * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Changes apply when it reconnects.`);
       $('prevOverText').textContent = `Last seen ${new Date(me.seen * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-    } else if (p && p.stale && (ns.screen === 'transit' || ns.screen === 'ticker')) {
-      st.classList.add('warn');
-      st.replaceChildren(el('span', { class: 'dot warn' }), "No train times. CTA isn't responding.");
     } else if (switching && switching.failed) {
       st.classList.add('err');
       // The server has the change; Retry waits for the board again.
       st.replaceChildren("Didn't reach the board. ", el('button', { class: 'lnk', text: 'Retry', onclick: (e) => { e.preventDefault(); switching.at = nowS(); switching.failed = false; refresh(); renderScreens(); renderStatus(); } }));
+    } else if (p && p.stale && (ns.screen === 'transit' || ns.screen === 'ticker')) {
+      st.classList.add('warn');
+      st.replaceChildren(el('span', { class: 'dot warn' }), "No train times. CTA isn't responding.");
     } else if (switching) {
       st.textContent = `Switching to ${SCREEN_NAME[switching.to]}…`;
     } else if (ns && ns.visiting) {
@@ -905,7 +906,9 @@
       const back = SCREEN_NAME[board.screen === 'auto' ? 'auto' : board.screen] || 'it';
       $('rainBack').textContent = `Back to ${back} now`;
       $('rainNowLeft').textContent = `${ns.left} s left`;
-      $('rainNowFt').textContent = `“Back to ${back} now” ends this visit; the radar comes back in ${Math.max(1, Math.round((p.radar.visit.every - p.radar.visit.for) / 60))} min while rain is near.`;
+      $('rainNowFt').textContent = `“Back to ${back} now” ends this visit; the radar comes back in ${Math.max(1, Math.round((p.radar.visit.every - p.radar.visit.for) / 60))} min${p.radar.on ? ' while rain is near' : ''}.`;
+      // "Until the rain passes" means nothing when it's dry (Rain or not visits).
+      $('rainStop').closest('.c').hidden = !p.radar.on;
     } else if (board.screen === 'auto' && p && p.rot) {
       const i = p.rot.screens.indexOf(ns.turn);
       const next = p.rot.screens[(i + 1) % p.rot.screens.length];
@@ -932,12 +935,12 @@
       const thumb = sc === 'auto' ? cycleThumb() : thumbImg(sc === 'transit' ? board.transitScreen || 'transit' : sc);
       let sub = can ? subOf(sc) : 'Needs a board with an S3';
       let subCls = 's';
-      if (on && off) sub = 'Queued · shows when the board is back';
+      if (off && target === sc && !on) sub = 'Queued · shows when the board is back';
       else if (switching && switching.failed && sc === (switching.to === 'ticker' ? 'transit' : switching.to)) { sub = 'Not switched'; subCls = 's err'; }
       else if (sc === 'transit' && on && p && p.stale) { sub += ' · times out of date'; subCls = 's warn'; }
       const pick = el('button', { class: 'pick', role: 'radio', 'aria-checked': String(on), disabled: !can || null, onclick: () => (sc === 'transit' ? switchTo(board.transitScreen || 'transit') : switchTo(sc)) },
         thumb, el('span', { class: 'grow' }, SCREEN_NAME[sc], el('span', { class: subCls, text: sub })));
-      if (target === sc && !on) pick.insertAdjacentHTML('beforeend', ICON.spin);
+      if (target === sc && !on && !off) pick.insertAdjacentHTML('beforeend', ICON.spin);
       else if (on) pick.insertAdjacentHTML('beforeend', ICON.check);
       const gear = el('a', { class: 'nb end gear', href: '#' + (sc === 'auto' ? 'cycle' : sc === 'baseball' ? 'sports' : sc), 'aria-label': `${SCREEN_NAME[sc]} settings`, html: ICON.gear22 });
       // Desktop: mark the row whose page is open on the right.
@@ -1129,7 +1132,10 @@
   $('name').addEventListener('input', () => { clearTimeout(nameTimer); if (renderNameFit()) nameTimer = setTimeout(saveName, 900); });
   const saveName = () => { clearTimeout(nameTimer); const n = $('name').value.trim().toUpperCase(); if (n && n !== board.station.name && renderNameFit()) save({ station: { mapid: board.station.mapid, name: n } }); };
   $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('name').blur(); } });
-  $('name').addEventListener('blur', saveName);
+  $('name').addEventListener('blur', () => {
+    if (!D || renderNameFit()) saveName(); // without draw.js the server checks the fit
+    else { $('name').value = board.station.name; renderNameFit(); }
+  });
 
   // ---- Lines & destinations ----
   function renderLines() {
@@ -1140,7 +1146,13 @@
     const lineRows = lines.length > 1 ? lines.map((l) => {
       const on = !hide.includes(l);
       const sw = el('input', { type: 'checkbox', class: 'sw', id: `ln-${l}`, checked: on || null, disabled: on && onCount === 1 || null });
-      sw.addEventListener('change', () => save({ hideLines: sw.checked ? hide.filter((x) => x !== l) : [...hide, l] }));
+      sw.addEventListener('change', () => {
+        const next = sw.checked ? hide.filter((x) => x !== l) : [...hide, l];
+        // Picks on that line stay saved (they come back with it); if none
+        // would be left showing, the destinations go back to All.
+        const left = board.rows.filter((k) => !next.includes(k.split(':')[0]));
+        save({ hideLines: next, ...(board.rows.length && !left.length ? { rows: [] } : {}) });
+      });
       return el('div', { class: 'c' }, badge(l), el('label', { for: `ln-${l}`, class: 'grow', text: `${LINE_NAME[l]} Line` }), sw);
     }) : [];
     const other = el('input', { type: 'checkbox', class: 'sw', id: 'otherLines', checked: board.otherLines === false || null });
@@ -1151,13 +1163,14 @@
     $('allDest').checked = all;
     const chosen = board.rows;
     const visible = dests.filter((d) => !hide.includes(d.ln));
-    const order = all ? visible.map((d) => d.key) : [...chosen, ...visible.map((d) => d.key).filter((k) => !chosen.includes(k))];
+    const shownPicks = chosen.filter((k) => !hide.includes(k.split(':')[0]));
+    const order = all ? visible.map((d) => d.key) : [...shownPicks, ...visible.map((d) => d.key).filter((k) => !chosen.includes(k))];
     const byKey = new Map(dests.map((d) => [d.key, d]));
     const anyLive = dests.some((d) => d.live);
     $('dests').replaceChildren(...order.map((key) => {
       const d = byKey.get(key) || { key, ln: key.split(':')[0], name: key.slice(key.indexOf(':') + 1), live: 0 };
       const on = all || chosen.includes(key);
-      const sw = el('input', { type: 'checkbox', class: 'sw', checked: on || null, disabled: all || (on && chosen.length === 1) || null, 'aria-label': `Show ${d.name}, ${LINE_NAME[d.ln]}` });
+      const sw = el('input', { type: 'checkbox', class: 'sw', checked: on || null, disabled: all || (on && shownPicks.length === 1) || null, 'aria-label': `Show ${d.name}, ${LINE_NAME[d.ln]}` });
       sw.addEventListener('change', () => save({ rows: sw.checked ? [...chosen, key] : chosen.filter((k) => k !== key) }));
       const name = el('span', { class: 'grow', style: all || !on ? 'color:var(--sub)' : '' }, d.name, anyLive && !d.live ? el('span', { class: 's', text: 'None running now' }) : null);
       const row = el('div', { class: 'c', 'data-key': key }, badge(d.ln), name, sw);
@@ -1420,7 +1433,10 @@
     renderKeys(me);
     renderFleet();
   }
-  $('label').addEventListener('change', (e) => save({ label: e.target.value }));
+  let labelTimer = null;
+  const saveLabel = () => { clearTimeout(labelTimer); if ($('label').value.trim() !== (board.label || '')) save({ label: $('label').value }); };
+  $('label').addEventListener('input', () => { clearTimeout(labelTimer); labelTimer = setTimeout(saveLabel, 900); });
+  $('label').addEventListener('change', saveLabel);
   $('label').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
   $('copyFrom').addEventListener('change', async (e) => {
     const from = e.target.value;
