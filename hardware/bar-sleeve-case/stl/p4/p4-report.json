@@ -176,6 +176,28 @@
    "spare_a_side": 108.7,
    "volume_cm3": 0.6
   },
+  "p4-knob.stl": {
+   "watertight": true,
+   "extents": [
+    35.4,
+    35.4,
+    15.0
+   ],
+   "square": 35.4,
+   "spare_a_side": 110.3,
+   "volume_cm3": 11.8
+  },
+  "p4-encoder-collar.stl": {
+   "watertight": true,
+   "extents": [
+    41.3,
+    41.3,
+    5.0
+   ],
+   "square": 41.3,
+   "spare_a_side": 107.3,
+   "volume_cm3": 2.8
+  },
   "coupon-p4-drawer-fit-shell.stl": {
    "watertight": true,
    "extents": [

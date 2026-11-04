@@ -20,7 +20,6 @@ The v5 drawer bar sleeve for a **Waveshare RGB-Matrix-P4-64x32** (256 x 128 mm),
    - `coupon-p4-seam-top.stl` + `coupon-p4-seam-bottom.stl` (walnut, back-down as exported): push together; the lip should drop in with a slight gap (0.12 mm a side, filled by the CA) and the outsides meet flush with an even reveal. If it binds, raise `LAP_CL` in `p4.py`; if it rattles badly, lower it. Glue one and finish it (lap, oil) to see the line.
    - `coupon-p4-drawer-fit-shell.stl` (walnut) + `coupon-p4-drawer-fit-tray.stl` (black PETG): the crush ribs should press in with firm hand force, no wobble (tune `CR_H` / `TRAY_CL` in `drawer.py`).
    - `coupon-p4-diffuser-joint-{left,right}-{white,black}.stl` (two-colour, face down): hold both on the panel at the bottom centre. The ribs must sit between the LEDs and the joint fall on the column gap.
-   - Knob bore: `bar-knob-fit-set.stl` if not already done for the P3.
 
 ## Parts (`stl/p4/`)
 | Part | File | Material | Print |
@@ -31,8 +30,8 @@ The v5 drawer bar sleeve for a **Waveshare RGB-Matrix-P4-64x32** (256 x 128 mm),
 | Tray, left / right | `p4-tray-left.stl`, `p4-tray-right.stl` | black PETG | back face down, walls up |
 | Spine | `p4-spine.stl` | black PETG | flat, as exported (countersinks on the bed) |
 | Bridge | `p4-bridge.stl` | black PETG | plate down, tube up |
-| Encoder collar | `bar-encoder-collar-v5.stl` | walnut, or translucent PETG | flange-top down (as v5) |
-| Knob | `bar-knob.stl` (or the winner of `bar-knob-fit-set.stl`) | white PLA | as exported |
+| Encoder collar | `p4-encoder-collar.stl` (41 mm flange: the v5 collar 18% wider, same crush-ribbed plug and 9.8 mm pocket) | walnut, or translucent PETG | flange-top down |
+| Knob | `p4-knob.stl` (35 mm: the v5 pebble 18% bigger, same bore fit as the P3's settled knob) | white PLA | skirt down, as exported |
 | Status window | `bar-status-window.stl` | translucent PETG | flat |
 | Boot key | `bar-boot-key.stl` | PETG or PLA | flat |
 | Wall cleat (optional) | `bar-cleat-case.stl` + `bar-cleat-wall.stl` | PETG | wall face down |
@@ -61,7 +60,7 @@ Filament, roughly: walnut ~150 g (shell), black PETG ~200 g (trays, diffuser, sp
 4. Scuff and finish (Danish oil or wax) as the v4 shell. Oil goes on after gluing; CA won't bond to oiled wood PLA.
 
 ## Assembly
-1. **Shell:** bumpers into the four recesses underneath; collar into the knob hole.
+1. **Shell:** bumpers into the four recesses underneath; press the collar into the knob hole (its crush ribs take a firm push).
 2. **Panel on the bench:** remove the magnetic screws; snap both diffuser halves on (skirts over the outer edges; their straight edges meet at the centre). Plug the power lead into the panel's power header and the ribbon into its data-in (red stripe = pin 1).
 3. **Panel in:** turned 180° (data-in on the left seen from the front), slide it in from the back until the bezel seats on the screen rim. Leave the ribbon and power lead hanging out of the back.
 4. **Encoder:** after the panel (the bezel's top edge passes right under it): push it up from inside, NeoPixel toward the front, M7 nut on top of the collar, knob on.

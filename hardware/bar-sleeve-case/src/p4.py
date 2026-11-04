@@ -350,11 +350,50 @@ def encoder_envelope():
     return board + body + bush + socks + plugs
 
 
+# ---------------------------------------------------------------- knob and collar: 18% bigger, for the P4's proportions
+KNOB_SCALE = 1.18                # chosen from renders (Nov 3); 1.33 (the panel ratio) read heavy and put the collar 3.8 mm
+                                 # from the back edge
+
+
+def knob_p4(bore_d=None, flat=None, marks=2):
+    """knob.py's pebble knob, KNOB_SCALE wider and taller. Everything that fits the encoder stays: bore and D fit
+    (knob.FITS[1], settled on the P3), the shaft-tip stop (TIP_Z), the nut recess and press travel, the 1 mm gap over the
+    collar (SKIRT_Z). The extra height goes into a thicker top; the flutes keep their spacing."""
+    import knob as KN
+    if bore_d is None:
+        bore_d, flat = KN.FITS[1]
+    saved = KN.PEB_R, KN.SHOULDER_R, KN.TOP_T, KN.FLUTES
+    try:
+        KN.PEB_R = saved[0] * KNOB_SCALE
+        KN.SHOULDER_R = saved[1] * KNOB_SCALE
+        KN.TOP_T = (KN.TIP_Z + saved[2] - KN.SKIRT_Z) * KNOB_SCALE + KN.SKIRT_Z - KN.TIP_Z
+        KN.FLUTES = int(round(saved[3] * KNOB_SCALE / 4)) * 4
+        return KN.knob(bore_d, flat, marks)
+    finally:
+        KN.PEB_R, KN.SHOULDER_R, KN.TOP_T, KN.FLUTES = saved
+
+
+def collar_p4():
+    """collar.py's back-down collar (crush-ribbed plug, 9.8 pocket) with its flange KNOB_SCALE wider. The plug, the shell's
+    24 mm hole and the flange thickness (which sets how much bushing the nut gets) don't change."""
+    import collar as CO
+    saved = CO.FL_R, CO.TIP_BACK
+    try:
+        CO.FL_R = saved[0] * KNOB_SCALE
+        CO.TIP_BACK = False
+        return CO.collar()
+    finally:
+        CO.FL_R, CO.TIP_BACK = saved
+
+
 def collar_knob():
-    import collar as CO, knob as KN
-    CO.TIP_BACK = False
-    c = CO.collar().translate([0, KY, H])
-    return c
+    """the collar in the case (fit checks)"""
+    return collar_p4().translate([0, KY, H])
+
+
+def knob_in_case():
+    import knob as KN
+    return knob_p4().translate([0, KY, H])
 
 
 # ---------------------------------------------------------------- coupons
@@ -445,6 +484,10 @@ if __name__ == '__main__':
     dj = diffuser_joint_coupon(P['diffuser'])
     for (side, part), m in dj.items():
         put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj, side))
+    import knob as KN, collar as CO
+    put(KN.to_bed(knob_p4()), 'p4-knob.stl', None, drop_axis=2)                        # skirt on the bed
+    cm = collar_p4()
+    put(cm.mirror([0, 0, 1]).translate([0, 0, CO.FL_T]), 'p4-encoder-collar.stl', None, drop_axis=2)   # flange top down
     cs, ctr = DR.fit_coupon(P['shell'], P['tray'])
     put(cs, 'coupon-p4-drawer-fit-shell.stl', down); put(ctr, 'coupon-p4-drawer-fit-tray.stl', down)
     import json

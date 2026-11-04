@@ -156,5 +156,6 @@ if __name__ == '__main__':
     def save(m, name):
         me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
         t.export(f'{out}/{name}'); print(name, t.is_watertight, np.round(t.extents, 1).tolist())
-    save(Manifold.batch_boolean(parts, manifold3d.OpType.Add), 'bar-knob-fit-set.stl')
+    import os; os.makedirs(f'{out}/archive/fit-tests', exist_ok=True)
+    save(Manifold.batch_boolean(parts, manifold3d.OpType.Add), 'archive/fit-tests/bar-knob-fit-set.stl')   # settled
     save(to_bed(knob(*FITS[1], 2)), 'bar-knob.stl')
