@@ -22,7 +22,7 @@ const random = (bytes) => crypto.randomBytes(bytes).toString('base64url');
 
 function createKeys({ dir, log = console } = {}) {
   const file = path.join(dir, FILE_NAME);
-  let keys = {}; // board id -> { sha (hex), link, at }
+  let keys = {}; // board id -> { sha (hex), link, at, mine?, wipe? (pending stamp), last? (newest stamp made) }
   try {
     const s = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (s && typeof s.boards === 'object') keys = s.boards;
@@ -43,15 +43,20 @@ function createKeys({ dir, log = console } = {}) {
 
   return {
     has: (id) => Object.hasOwn(keys, id),
+    mine: (id) => !!(keyOf(id) && keyOf(id).mine),
 
     // A new token and link for board `id` (replacing any it had). The token
-    // is returned only here: it goes into that board's flash.
-    issue(id, now = Math.floor(Date.now() / 1000)) {
+    // is returned only here: it goes into that board's flash. `mine`: one
+    // of the maker's own boards with its own token (Set up a board gives
+    // every board one), so it keeps the maker's features (baseball).
+    issue(id, { now = Math.floor(Date.now() / 1000), mine = false } = {}) {
       const old = keyOf(id);
       if (old) byLink.delete(old.link);
       const token = random(24);
       const link = random(16);
-      keys[id] = { sha: sha(token).toString('hex'), link, at: now };
+      // A new token means a reflash, which clears the board's WiFi anyway: no
+      // pending wipe carries over (the last stamp does, so stamps keep growing).
+      keys[id] = { sha: sha(token).toString('hex'), link, at: now, ...(mine ? { mine: true } : {}), ...(old && old.last ? { last: old.last } : {}) };
       byLink.set(link, id);
       save();
       return { token, link };
@@ -75,6 +80,31 @@ function createKeys({ dir, log = console } = {}) {
       const a = sha(given || '');
       const b = Buffer.from(k.sha, 'hex');
       return given != null && a.length === b.length && crypto.timingSafeEqual(a, b);
+    },
+
+    // A new owner (transfer): a new control link (the old one stops working)
+    // and, with `wipe`, a WiFi wipe stamped `now`. The board forgets its
+    // saved networks once for each stamp newer than the last one it applied
+    // (so stamps only grow), and the stamp is dropped once the board reports
+    // it applied (applied()), so a later reflash isn't wiped again.
+    transfer(id, { now = Math.floor(Date.now() / 1000), wipe = true } = {}) {
+      const k = keyOf(id);
+      if (!k) return null;
+      byLink.delete(k.link);
+      k.link = random(16);
+      delete k.mine; // a new owner: not the maker's any more
+      if (wipe) k.wipe = k.last = Math.max(now, (k.last || 0) + 1);
+      byLink.set(k.link, id);
+      save();
+      return { link: k.link, wipe: wipe ? k.wipe : null };
+    },
+    wipeOf: (id) => (keyOf(id) && keyOf(id).wipe) || 0,
+    // The board reports the newest stamp it has applied (health hz).
+    applied(id, stamp) {
+      const k = keyOf(id);
+      if (!k || !k.wipe || !(stamp >= k.wipe)) return;
+      delete k.wipe;
+      save();
     },
 
     linkOf: (id) => (keyOf(id) ? keyOf(id).link : null),

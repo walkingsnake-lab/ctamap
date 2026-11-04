@@ -96,7 +96,7 @@ class WifiNet : public app::Net {
   bool radar(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
   bool sky(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
   bool logo(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
-  bool select(const std::string &category, json::Value &out, std::string &err) override;
+  bool select(const std::string &category, const std::string &variant, json::Value &out, std::string &err) override;
   bool rssi(int &out) override;
   bool firmware(const std::string &v, long long size, const app::ChunkFn &chunk, std::string &err) override;
   std::string mac() const;
@@ -161,12 +161,18 @@ class SetupPortal : public app::Setup {
   SetupPortal(config::Config *cfg, Panel *panel, std::function<void()> feed);
   void run(const std::string &why) override;  // doesn't return: restarts the board
   void joined() override;                     // clears the "new network" flag
+  void forget(long long stamp) override;      // a new owner: forget saved WiFi (but a just-entered one), restart
+  long long wiped() override;                 // the newest wipe stamp applied (flash "wiped", cached)
+  void checked_in() override;                 // clears flash "newnet" (once)
   std::string ssid() const;
 
  private:
   config::Config *cfg_;
   Panel *panel_;
   std::function<void()> feed_;
+  long long wiped_ = -1;      // flash "wiped", read once
+  long long wipe_failed_ = 0;  // a stamp whose save failed (logged once)
+  int newnet_ = -1;            // flash "newnet" is set: -1 unknown, 0 no, 1 yes
 };
 
 class SysClock : public app::Clock {
@@ -189,13 +195,15 @@ class Knob : public app::Knob {
   explicit Knob(bool reverse = false) : reverse_(reverse) {}
   bool begin();
   int clicks() override;
-  bool pressed();  // the knob's push button, held now
+  bool pressed() override;  // the knob's push button, held now (read at most every KNOB_POLL_MS)
 
  private:
   bool reverse_;
   bool button_ = false;  // push button set up as an input
   bool on_ = false;
   uint32_t polled_ = 0;
+  uint32_t press_polled_ = 0;
+  bool press_ = false;  // the last reading
   bool read(uint8_t base, uint8_t reg, uint8_t *buf, size_t n);
 };
 

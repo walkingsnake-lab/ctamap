@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir, knobOf } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -29,6 +29,10 @@ const { render, assets, autoScreen, messageLayout } = require('./render');
 const SIM_HTML = fs.readFileSync(path.join(__dirname, 'sim.html'));
 const CONTROL_HTML = fs.readFileSync(path.join(__dirname, 'control.html'));
 const DRAW_JS = fs.readFileSync(path.join(__dirname, 'draw.js'));
+// Set up a board (maker's page only): the shared setup code, and the
+// flashing and QR tools bundled by build.js (absent until npm run build).
+const SETUP_IMAGE_JS = fs.readFileSync(path.join(__dirname, 'setup-image.js'));
+const SETUP_TOOLS_FILE = path.join(__dirname, '..', '..', 'dist', 'setup-tools.min.js');
 const SIM_ASSETS = JSON.stringify(assets());
 
 const MAX_BODY = 8 * 1024;
@@ -40,7 +44,7 @@ const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky',
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
 // answer 404 there.
-const SCOPED_OK = new Set(['', 'api/destinations', 'api/boards', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png']);
+const SCOPED_OK = new Set(['', 'api/destinations', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png']);
 // Settings a per-board link may not change: the update channel (a buyer
 // stays on stable, or turns updates off).
 const SCOPED_FW = ['stable', 'off'];
@@ -173,6 +177,17 @@ function createBoard({
     if (own !== null) return own;
     return !token || sameSecret(req.headers['x-board-token'], token);
   };
+  // Baseball (MLB Stats API: personal, non-commercial use only) is for the
+  // maker's own boards. A board with its own key (one set up for someone
+  // else) gets no baseball screen, takeover, games, logos, or settings.
+  const sportsOn = (id) => !keys.has(String(id || '')) || keys.mine(String(id || ''));
+  const SPORTS_FIELDS = ['baseballLayout', 'bbTeams', 'bbPre', 'bbFinal', 'bbPriority', 'gameEvery', 'logoBright'];
+  function checkSportsPatch(id, patch) {
+    if (sportsOn(id) || !patch || typeof patch !== 'object') return;
+    if (patch.screen === 'baseball' || SPORTS_FIELDS.some((k) => patch[k] !== undefined)) {
+      throw new ValidationError('baseball is not available on this board');
+    }
+  }
   if (!tracker) tracker = createTracker({ log }).start();
   if (!weather) weather = createWeather({ log, cacheFile: path.join(path.dirname(store.file), 'board-weather.json') }).start();
   if (!nws) nws = createNws({ log }).start();
@@ -300,7 +315,20 @@ function createBoard({
     if (safe(q.hd)) h.hardware = q.hd;
     if (safe(q.hv)) h.firmware = q.hv;
     if (safe(q.hx)) h.ota = q.hx;
+    // The newest WiFi wipe the board has applied (keys.transfer's stamp).
+    if (q.hz != null && Number.isFinite(Number(q.hz))) {
+      h.wiped = Number(q.hz);
+      keys.applied(id, h.wiped);
+    }
     const prev = healthOf.get(id);
+    // A stable board hears no offer outside the overnight window, so it stops
+    // reporting a rolled-back (or unsigned) build all day: keep the last such
+    // note while that build is still the one this board should get.
+    if (!h.ota && prev && /^(rolledback|unsigned|nokey):/.test(prev.ota || '')) {
+      const b = store.get(id);
+      const t = b ? firmware.target(b.fw || 'stable') : null;
+      if (t && prev.ota.split(':')[1] === t.v && h.firmware !== t.v) h.ota = prev.ota;
+    }
     // What the firmware can draw beyond the original screens, colon-separated
     // (`skyline`: the clock screen's skyline face). Sent with every report.
     if (safe(q.hk)) h.caps = q.hk.split(':');
@@ -336,7 +364,9 @@ function createBoard({
   const canDraw = (screen, caps) => (screen === 'clock' ? caps.clock : screen === 'announce' ? caps.announce : true);
   const forBoard = (body, caps) => (canDraw(body.screen, caps) ? body : { ...body, screen: 'transit' });
   // caps.face(name): whether the firmware draws that clock face.
-  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) });
+  // `peek` (`hk=...:peek`): the firmware draws the peek chooser, so it gets
+  // every screen's sections and every variant's data (`pv`).
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f), peek: capOk(id, q, 'peek') });
 
   // The announce screen's message as the board draws it (draw.js
   // messageLayout: the lines for its style), or null when none is set.
@@ -362,7 +392,7 @@ function createBoard({
   function boardList() {
     return store.ids().map((id) => {
       const b = store.get(id);
-      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, seen: seenAt.get(id) ?? null, ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, sports: sportsOn(id), ...(keys.mine(id) ? { mine: true } : {}), ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
     });
   }
   // A removed board's live state (health, test alerts, chrono views).
@@ -394,6 +424,18 @@ function createBoard({
     catch (e) { log.error('[board] skyline:', e.message); return null; }
   }
 
+  // Every variant's data for the peek chooser: both forecast layouts, and
+  // each clock face the board draws (the skyline's parameters, the analog
+  // face's weather, the day/night face's sun, the gradient's inversion).
+  function peekOf(board, w, wd, st, skyNow, now, caps) {
+    const faces = {};
+    if (caps.clock) faces.skyline = skylineOf(board, w, wd, st, skyNow);
+    if (caps.face('analog')) faces.cwx = wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null;
+    if (caps.face('daynight')) faces.dn = dayNightOf(st, now);
+    if (caps.face('gradient') && board.gradInvert === true) faces.ginv = true;
+    return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...faces };
+  }
+
   async function update(board, id, boot, preview = {}, caps = capsOf(id)) {
     // The clock screen's face: one other than the skyline only for firmware that draws it.
     const face = board.clockFace && board.clockFace !== 'skyline' && caps.face(board.clockFace) ? board.clockFace : 'skyline';
@@ -403,6 +445,10 @@ function createBoard({
       board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
     }
     for (const k of ['showHeader', 'showWeather', 'radarTime', 'baseballLayout']) if (preview[k] != null) board = { ...board, [k]: preview[k] };
+    // A board without baseball that was left on (or copied with) the
+    // baseball screen shows transit instead.
+    const sports = sportsOn(id);
+    if (!sports && board.screen === 'baseball') board = { ...board, screen: 'transit' };
     const st = stationById.get(board.station.mapid);
     // Weather and warnings are nice-to-haves: a failure just leaves them off.
     const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
@@ -457,7 +503,13 @@ function createBoard({
     const barsOn = wxRain === 'bars' || wxRain === 'both';
     let rain = barsOn && w ? toRain(w, now) : null;
     if (testBars) rain = testBars;
-    if (!radarState.on || wxRain === 'bars' || (testBars && wxRain !== 'both')) radarState = { ...radarState, frames: [], ft: [] };
+    // The radar view (wxView 'radar') keeps its frames whatever the weather
+    // (an empty map when dry) and never shows rain bars.
+    const radarView = board.wxView === 'radar';
+    if (radarView) rain = null;
+    // Every kept frame, rain or not, for the peek chooser's radar view.
+    const allFrames = { frames: radarState.frames, ft: radarState.ft };
+    if (!radarView && (!radarState.on || wxRain === 'bars' || (testBars && wxRain !== 'both'))) radarState = { ...radarState, frames: [], ft: [] };
     // Both: the radar loop plays wxRainLoops full cycles, then the bars show
     // for alt s, repeating (draw.js rainBarsTurn()).
     if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15, loops: board.wxRainLoops || 2 };
@@ -476,14 +528,14 @@ function createBoard({
     if (test) for (const ln of test.lines) alertLines.add(ln);
     let games = [];
     const bbTeams = board.bbTeams || ['cubs', 'sox', 'post'];
-    try {
+    if (sports) try {
       games = mlb.get(board.screen === 'baseball' ? 'forced' : 'auto', {
         teams: board.screen === 'baseball' ? ['cubs', 'sox', 'post'] : bbTeams,
         pre: (board.bbPre != null ? board.bbPre : 30) * 60, final: (board.bbFinal != null ? board.bbFinal : 15) * 60,
       });
       games = prioritize(games, board.bbPriority, bbTeams);
     } catch (e) { log.error('[board] mlb:', e.message); }
-    if (test && test.game) games = [testGame(test.game, now), ...games];
+    if (sports && test && test.game) games = [testGame(test.game, now), ...games];
     const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
     const screen = resolveScreen(board, games.length > 0, warn);
     const viewKey = `${id}:${board.station.mapid}`;
@@ -499,7 +551,7 @@ function createBoard({
       screen,
       rot: rotOf(board, screen),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board, { clock: caps.clock, announce: caps.announce }),
+      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)) }),
       bright: resolveBright(board, w, now),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),
@@ -543,9 +595,15 @@ function createBoard({
       ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
       // Announce screen: the message's lines for its style (contract "Announce").
       msg: msgOf(board),
-      mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
-        ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
-        : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
+      // Peek chooser (caps.peek): what the other variants draw from, so the
+      // board can draw any of them while the knob turns (contract "Peek").
+      ...(caps.peek ? { pv: { ...peekOf(board, w, wd, st, skyNow, now, caps), radar: allFrames } } : {}),
+      // Baseball: on the maker's boards only (sportsOn); absent on the others.
+      ...(sports ? {
+        mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
+          ? { layout: board.baseballLayout, dim: (board.logoBright || 90) / 100, games: games.map((g) => withLogos(g, board.baseballLayout === 'logos')), ...(board.bbPriority === 'all' ? { all: true } : {}) }
+          : { layout: 'classic', games, ...(board.bbPriority === 'all' ? { all: true } : {}) },
+      } : {}),
     };
   }
 
@@ -578,8 +636,10 @@ function createBoard({
       seenAt.set(String(parsed.query.b), nowSecs());
       // An OTA offer when this S3 should run another build (firmware.js).
       let fw = null;
-      try { fw = firmware.offer(board, parsed.query); } catch (e) { log.error('[board] firmware offer:', e.message); }
-      return send(res, 200, fw ? { v: board.v, now: nowSecs(), fw } : { v: board.v, now: nowSecs() });
+      try { fw = firmware.offer(board, parsed.query, nowSecs()); } catch (e) { log.error('[board] firmware offer:', e.message); }
+      // A new owner's transfer: the board forgets its saved WiFi once per stamp (contract "Board keys").
+      const wipe = keys.wipeOf(String(parsed.query.b));
+      return send(res, 200, { v: board.v, now: nowSecs(), ...(fw ? { fw } : {}), ...(wipe ? { wipe } : {}) });
     }
 
     // An OTA build (contract: "Firmware"): streamed, exactly `size` bytes.
@@ -609,7 +669,7 @@ function createBoard({
       const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, caps), caps);
       const asked = SCREENS.includes(parsed.query.s) && !canDraw(parsed.query.s, caps) ? 'transit' : parsed.query.s;
       const shown = SCREENS.includes(asked) ? asked : body.screen;
-      return send(res, 200, sectionsFor(body, shown));
+      return send(res, 200, caps.peek ? { ...body, for: shown } : sectionsFor(body, shown));
     }
 
     // The knob chose a category (s, one of knob.ring): the same as choosing
@@ -620,7 +680,7 @@ function createBoard({
       if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
       const id = String(parsed.query.b || '');
       let board;
-      try { board = store.select(id, String(parsed.query.s || '')); }
+      try { board = store.select(id, String(parsed.query.s || ''), parsed.query.v != null ? String(parsed.query.v) : undefined); }
       catch (e) {
         if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
         throw e;
@@ -628,7 +688,7 @@ function createBoard({
       if (!board) return send(res, 404, { err: 'unknown_board' });
       const caps = capsOf(id, parsed.query);
       const body = forBoard(await update(board, id, false, {}, caps), caps);
-      return send(res, 200, sectionsFor(body, body.screen));
+      return send(res, 200, caps.peek ? { ...body, for: body.screen } : sectionsFor(body, body.screen));
     }
 
     // A cloud strip for the skyline face (contract "Cloud strips"): 1664
@@ -657,6 +717,7 @@ function createBoard({
     if (first === 'logo' && rest.length === 1) {
       if (method !== 'GET') return send(res, 405, { err: 'method' });
       if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
+      if (!sportsOn(parsed.query.b)) return send(res, 404, { err: 'not_found' });
       return sendLogo(res, logos.bytes(rest[0]));
     }
 
@@ -668,7 +729,13 @@ function createBoard({
       if (!sameSecret(req.headers['x-deploy-token'], deployToken)) return send(res, 401, { err: 'bad_token' });
       try {
         const body = await readBody(req, MAX_FIRMWARE + 64 * 1024);
-        const st = firmware.upload(body, { sig: req.headers['x-firmware-signature'] || null, channel: 'beta', pinned: pinnedBuilds() });
+        const sig = req.headers['x-firmware-signature'] || null;
+        // ?boot=<build>: that build's boot image (after the build itself).
+        if (parsed.query.boot != null) {
+          firmware.attachBoot(String(parsed.query.boot), body, { sig });
+          return send(res, 200, { boot: String(parsed.query.boot) });
+        }
+        const st = firmware.upload(body, { sig, channel: 'beta', pinned: pinnedBuilds() });
         return send(res, 200, { beta: st.channels.beta });
       } catch (e) {
         if (e instanceof FirmwareError || e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
@@ -767,10 +834,27 @@ function createBoard({
       // goes into its flash; a board running with the old one gets 401s);
       // DELETE: back to the shared token, link revoked. POST
       // api/boards/link?b=<id>: a new control link, the old one stops working.
+      // A new owner (contract "Board keys"): POST api/boards/transfer?b=<id>
+      // gives a keyed board a new control link (the old one stops working),
+      // resets its settings to the defaults (name and firmware setting kept),
+      // and (from the maker's page) tells the board to forget its saved WiFi.
+      // From the board's own link it only relinks and resets: an old link
+      // must not be able to wipe the current owner's WiFi.
+      if (sub === 'api/boards/transfer') {
+        if (method !== 'POST') return send(res, 405, { err: 'method' });
+        const id = String(parsed.query.b || '');
+        if (!store.get(id)) return send(res, 404, { err: 'unknown_board' });
+        if (!keys.has(id)) return send(res, 400, { err: 'invalid', detail: 'this board has no key; give it one first' });
+        store.reset(id);
+        const t = keys.transfer(id, { now: nowSecs(), wipe: !scope });
+        tests.delete(id);
+        log.warn(`[board] board "${id}" transferred to a new owner`);
+        return send(res, 200, { id, link: t.link, ...(t.wipe ? { wipe: t.wipe } : {}) });
+      }
       if (sub === 'api/boards/key' || sub === 'api/boards/link') {
         const id = String(parsed.query.b || '');
         if (!store.get(id)) return send(res, 404, { err: 'unknown_board' });
-        if (sub === 'api/boards/key' && method === 'POST') return send(res, 200, { id, ...keys.issue(id) });
+        if (sub === 'api/boards/key' && method === 'POST') return send(res, 200, { id, ...keys.issue(id, { mine: parsed.query.mine === '1' }) });
         if (sub === 'api/boards/key' && method === 'DELETE') { keys.remove(id); return send(res, 200, { id, link: null }); }
         if (sub === 'api/boards/link' && method === 'POST') {
           const link = keys.relink(id);
@@ -791,6 +875,7 @@ function createBoard({
             if (scope && patch && patch.fw !== undefined && !SCOPED_FW.includes(patch.fw)) {
               throw new ValidationError(`fw must be one of ${SCOPED_FW.join(', ')}`);
             }
+            checkSportsPatch(id, patch);
             return send(res, 200, store.update(id, patch));
           } catch (e) {
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
@@ -861,6 +946,28 @@ function createBoard({
         }
         return send(res, 405, { err: 'method' });
       }
+      // A build's boot image (POST, raw body + X-Firmware-Signature), and
+      // what Set up a board flashes: the boot image and the app, i.e. the
+      // merged image up to the app's end (GET api/firmware/image?v=).
+      if (sub === 'api/firmware/boot' || sub === 'api/firmware/image') {
+        const v = String(parsed.query.v || '');
+        try {
+          if (sub === 'api/firmware/boot' && method === 'POST') {
+            return send(res, 200, firmware.attachBoot(v, await readBody(req, 0x20000), { sig: req.headers['x-firmware-signature'] || null }));
+          }
+          if (sub === 'api/firmware/image' && method === 'GET') {
+            const img = firmware.image(v);
+            if (!img) return send(res, 404, { err: 'not_found', detail: firmware.has(v) ? `build ${v} has no boot image` : `unknown build: ${v}` });
+            res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': img.length, 'Cache-Control': 'no-store' });
+            res.end(img);
+            return;
+          }
+        } catch (e) {
+          if (e instanceof FirmwareError || e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
+          throw e;
+        }
+        return send(res, 405, { err: 'method' });
+      }
       // Point a channel at a build: {channel: beta|stable, v: <build> | null}.
       if (sub === 'api/firmware/channel') {
         if (method !== 'POST') return send(res, 405, { err: 'method' });
@@ -916,6 +1023,17 @@ function createBoard({
         res.end(SIM_HTML);
         return;
       }
+      // Set up a board's scripts (scoped links never reach these: not in SCOPED_OK).
+      if (sub === 'setup-image.js' || sub === 'setup-tools.js') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        let js = SETUP_IMAGE_JS;
+        if (sub === 'setup-tools.js') {
+          try { js = fs.readFileSync(SETUP_TOOLS_FILE); } catch (e) { return send(res, 404, { err: 'not_found', detail: 'not built: run npm run build' }); }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache' });
+        res.end(js);
+        return;
+      }
       // draw.js and the fonts/icons it needs, for the simulator page.
       if (sub === 'draw.js' || sub === 'sim-assets.json') {
         if (method !== 'GET') return send(res, 405, { err: 'method' });
@@ -932,7 +1050,8 @@ function createBoard({
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
         const body = await update(board, id, false, preview);
-        const screen = SCREENS.includes(parsed.query.screen) ? parsed.query.screen : autoScreen(body, body.now);
+        const asked = SCREENS.includes(parsed.query.screen) && (parsed.query.screen !== 'baseball' || body.mlb) ? parsed.query.screen : null;
+        const screen = asked || autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
         for (const fid of body.radar.frames) { const b = radar.frame(radarMapid, fid) || testRadar.frame(fid); if (b) frames[fid] = b; }

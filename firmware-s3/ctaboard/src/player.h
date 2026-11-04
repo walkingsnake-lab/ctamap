@@ -47,7 +47,9 @@ class Player {
   double msg_start = 0;  // when the announce screen's message appeared (its intro plays from here)
 
   // ---- inputs ----
-  void set_payload(const Value &payload, double ms);
+  void set_payload(const Value &payload, double ms) { set_payload(Value(payload), ms); }
+  void set_payload(Value &&payload, double ms);
+  std::vector<std::string> frame_ids() const;
   std::vector<std::string> missing_frames() const;
   bool has_slot() const { return (int)radar_frames.size() < RADAR_SLOTS; }
   void add_frame(const std::string &fid, std::vector<uint8_t> bytes, std::optional<double> ms = std::nullopt);

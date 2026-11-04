@@ -69,8 +69,10 @@ class Net {
     return false;
   }
   // The knob chose a category (/board/select): out is the update for its screen.
-  virtual bool select(const std::string &category, Value &out, std::string &err) {
+  // variant: one of the category's knob.vars, or empty.
+  virtual bool select(const std::string &category, const std::string &variant, Value &out, std::string &err) {
     (void)category;
+    (void)variant;
     (void)out;
     err = "Unsupported";
     return false;
@@ -116,6 +118,7 @@ class Knob {
  public:
   virtual ~Knob() {}
   virtual int clicks() = 0;
+  virtual bool pressed() { return false; }  // the knob's push button, held now
 };
 
 // The light sensor (device::LightSensor): lux, false when it can't be read.
@@ -158,6 +161,14 @@ class Setup {
   // "badwifi" (the network just entered didn't join), "asked" (held at power-on).
   virtual void run(const std::string &why) = 0;
   virtual void joined() {}  // online: a network entered on the page worked
+  // A new owner (the server's /board/version `wipe`, a stamp that only
+  // grows): remember `stamp` as applied, forget the saved networks except
+  // one entered on the setup page since the last check-in (the new owner's,
+  // when the board was offline at the transfer), and restart, into the setup
+  // network (why "reset") if none is left. On the board it doesn't return.
+  virtual void forget(long long stamp) { (void)stamp; }
+  virtual long long wiped() { return 0; }  // the newest stamp applied, 0 if none
+  virtual void checked_in() {}  // a version check with no newer stamp: a network entered on the page is no longer new
 };
 
 // Runs one piece of network work at a time off the draw loop. start() hands
@@ -186,7 +197,7 @@ const long long SKY_EVERY = 3000;       // the skyline's cloud strip, when the p
 // What this firmware draws beyond the original screens (health `hk`, contract):
 // the server sends the clock screen only to boards that report `skyline`,
 // and each other clock face (and the announce screen) only to those that also report it.
-const char *const CAPS = "skyline:seventies:analog:daynight:gradient:announce";
+const char *const CAPS = "skyline:seventies:analog:daynight:gradient:announce:peek";
 const int FAILS_BEFORE_RECONNECT = 3;
 const long long SETUP_AFTER_MS = 600000;  // no network joined this long: open the setup network
 const long long HEALTH_EVERY = 60000;  // ms between health snapshots sent with the version check
@@ -225,6 +236,7 @@ class Board {
   player::Player player;
   control::ScreenOverride override_;
   control::Chooser chooser;
+  control::PeekChooser peek;
   sched::Scheduler sched;
   sched::Job version_job, update_job, radar_job, logo_job, sky_job;
   Stats stats;
@@ -287,6 +299,7 @@ class Board {
     bool ok = false;
     std::string err;
     std::string id;     // radar frame / logo id, or the knob's category
+    std::string variant;  // the knob's variant (peek), or empty
     int left = 0;       // more of a set still missing after this one
     Value v;            // JSON answer
     std::vector<uint8_t> bytes;  // binary answer
@@ -299,7 +312,7 @@ class Board {
   // Screen-change transition: the last frame shown and what it showed (a
   // Screen, or one of these); a change of that slides (knob, buttons) or
   // fades (anything else) the new screen in over a copy of it.
-  static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3;
+  static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3, SHOWN_PEEK = -4;
   static constexpr double SCREEN_SLIDE_QUICK_MS = 250;  // a slide that interrupts a running one
   enum Trans { NO_TRANS, SLIDE, FADE };
   uint8_t last_px_[draw::Frame::W * draw::Frame::H * 3] = {};
@@ -311,6 +324,17 @@ class Board {
   double slide_ms_ = draw::SCREEN_SLIDE_MS;  // this slide's length (quicker when it interrupts one)
   long long chooser_travel_ = 0;  // where the knob's last turn went (ring steps, + clockwise)
   int button_dir_ = 0;            // a button press waiting for its frame: -1 UP, +1 DOWN
+  control::Debounce knob_press_;  // the knob's push button
+  bool knob_held_ = false;
+  // The peek chooser's views, built once per payload (draw::peek_view):
+  // key k * 32 + vi.
+  std::map<int, draw::PeekView> peek_views_;
+  long peek_gen_ = -1;
+  const Value &peek_payload(int k, int vi);
+  bool peek_mode() const { return player.has_p && player.p["knob"]["vars"].is_arr(); }
+  void open_peek(long long ms);
+  void send_peek();
+  void draw_peek(draw::Frame &f, long long ms, long long n);
   void shown(int what, long long ms);
   void launch(Flight f);
   void land(long long ended);
@@ -324,7 +348,7 @@ class Board {
   void sync(double server_now, long long started, long long ended);
   void status(const std::string &kind, const std::string &detail = "");
   void wait(long long ms_total);
-  void apply(const Value &p, long long started, long long ms);
+  void apply(Value &p, long long started, long long ms);  // moves p into the player
   bool draw_frame(long long ms, long long now);
   // Each job either skips (nothing to fetch) or launches a Flight.
   sched::Result do_version(double ms);

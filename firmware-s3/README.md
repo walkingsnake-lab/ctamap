@@ -11,6 +11,37 @@ visibly shimmers on the S3. This firmware uses the
 driver, where the S3's display hardware streams the panel data on its own:
 steady at 8-bit color.
 
+## Setting up a board (from the control page)
+
+On your control page in **Chrome or Edge on a computer**: Board tab → All
+boards → **Set up a board…**. Nothing to install.
+
+1. **The board:** a name (the ID follows it), **Someone else** (its own
+   token and owner link, printed on the label) or **Me** (its own token,
+   your features, optional WiFi), its **station**, which board's other
+   settings it starts from, and the firmware (Stable unless you pick
+   another).
+2. **Flash it:** plug the board in by USB, hold BOOT, tap RESET, let go of
+   BOOT, click **Flash** and pick its port. The page checks it's an
+   ESP32-S3, adds the board on the server with its token, and writes the
+   build and the board's settings in one pass (everything up to the app's
+   end, so the TinyUF2 recovery loader stays).
+3. **Done:** press RESET. Print the label (the only copy of the setup
+   password and owner link). **Set up another** keeps the station, starting
+   settings and firmware for the next board; **Print all labels** prints the
+   session's labels on one page.
+
+If flashing fails after the board was added, fix the problem (cable, upload
+mode) and click **Flash** again: the same token and label are used.
+
+Each region is read back and checked after writing. Unlike the script below,
+the page gives your own boards (**Me**) their own token too, instead of the
+shared `BOARD_TOKEN`.
+
+It needs a build with a **boot image**, which CI publishes with every build
+of `main` (`scripts/split-merged.js`); older builds can only be flashed with
+the script below.
+
 ## Setting up a board (one command)
 
 `scripts/setup-board.js` sets up a board without the Arduino IDE: the CI
@@ -18,7 +49,7 @@ build, the board's own key, its settings, one flash, and a printable label.
 
 Once, on your computer:
 - `npm install` in the repo (the label's QR codes need `qrcode`).
-- `pip install esptool esp-idf-nvs-partition-gen`.
+- `pip install esptool`.
 - The GitHub CLI (`gh auth login`), so the script can fetch the CI build.
 - `export BOARD_CONTROL_PATH=…` (the Fly secret); for your own boards also
   `BOARD_TOKEN`.
@@ -117,11 +148,14 @@ WIFI` means none of the networks could be joined (it retries).
 ### The knob (optional)
 
 An Adafruit 5880 I2C rotary encoder plugged into the STEMMA QT port (any
-STEMMA QT / Qwiic cable, no soldering). Turn it to choose AUTO, TRANSIT,
-WEATHER or SPORTS; rest about a second and the board switches (design spec
-§10, "Knob"). The serial log says `[knob] encoder found` or `[knob] no
-encoder on the STEMMA QT port` at startup, and `[board] knob: <category>`
-after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
+STEMMA QT / Qwiic cable, no soldering). It's the peek chooser (design spec
+§10, "Knob"): turn it to move along the icon bar (Transit, Weather, Clock,
+Announce, Cycle) and the panel shows that screen itself; press to step to its
+next variant (rows or ticker, the weather views, the clock faces), or hold it
+down and turn to step either way. Rest about a second and the bar drops away
+on the chosen screen. The serial log says `[knob] encoder found` or `[knob] no
+encoder on the STEMMA QT port` at startup, and `[board] knob: <category>
+<variant>` after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
 `secrets.h`. Without a knob the board runs as before.
 
 ### The light sensor (optional)
@@ -184,6 +218,18 @@ with no phone on it to retry the saved networks (a router back after a power
 cut). Holding the knob (or UP) for 2 seconds while the board starts opens it
 on demand. Up to 8 networks are kept, the newest tried first.
 
+**A new owner** (gift, resale): Board tab → Give it away → **New owner…** on
+your control page, or the same button on the board's own owner link. It
+makes a new owner link (the old one stops working) and resets the board's
+settings; the token stays. From your page the board also forgets its WiFi
+at its next check-in (keeping a network the new owner already entered, if
+it was handed over offline) and opens its setup network, so the new owner
+sets it up as in step 4 with the new link in place of the label's. From an
+owner link there's no remote wipe (an old link mustn't strand the next
+owner); the setup page's **Forget saved networks** (password-locked setup
+networks only) clears it for someone next to the board. An owner link can
+also make itself a **New link**, which revokes every copy of the old one.
+
 ## OTA updates
 
 Once a board has run a setup build, new firmware can reach it over WiFi:
@@ -202,9 +248,11 @@ Once a board has run a setup build, new firmware can reach it over WiFi:
 3. **Boards follow their channel** (Updates, per board): Stable (default),
    Beta, a pinned build, or Off. Put your own boards on Beta; once a build
    has run well, press **Stable** on it so everyone else's boards get it.
-4. **The board installs it** within a minute, between animations: the panel
-   shows `UPDATING` and the percentage, then it restarts into the new build.
-   The Health rows show the new Firmware commit.
+4. **The board installs it** between animations: the panel shows `UPDATING`
+   and the percentage, then it restarts into the new build. Beta and pinned
+   builds go within a minute; **Stable only between 2 and 5 AM** Chicago time,
+   so buyers never see a restart. The Health rows show the new Firmware
+   commit, and Board tab → All boards shows every board's build at a glance.
 
 Safety:
 - The download goes into the unused app slot and is checked (SHA-256) before
@@ -270,7 +318,7 @@ then on.
 | `ctaboard/src/json.*` | Small JSON tree with Python dict semantics, so the renderer reads payloads exactly as `draw.py` did. |
 | `ctaboard/src/screen.h` | The screens as an enum (names only at the JSON boundary) and the redraw key. |
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
-| `ctaboard/src/sched.h`, `control.h` | Network jobs, run when due one at a time on the worker; buttons vs. the phone (`control.py`); the knob's chooser (twist and rest, S3 only). |
+| `ctaboard/src/sched.h`, `control.h` | Network jobs, run when due one at a time on the worker; buttons vs. the phone (`control.py`); the knob's choosers (the old wheel, and the peek chooser: twist, press, hold and turn, rest; S3 only). |
 | `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. The `sky` job fetches the skyline's cloud strip (`/board/sky/<id>`) while the clock screen shows; health reports `hk=skyline` so the server sends the clock screen to this build. |
 | `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |

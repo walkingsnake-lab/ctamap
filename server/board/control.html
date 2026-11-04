@@ -66,10 +66,35 @@
   .credits { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 14px 2px 0; }
   .credits p { margin: 0 0 8px; }
   .credits a { color: var(--muted); }
+  /* Set up a board (maker only): a dialog over the page. */
+  dialog#setup { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--fg); }
+  dialog#setup::backdrop { background: rgba(0, 0, 0, .7); }
+  #setup .head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px 0; }
+  #setup .head h1 { font-size: 18px; }
+  #setup .body { padding: 0 16px 16px; }
+  #setup section { margin-top: 12px; }
+  #setup input[type=text], #setup input[type=password] { text-transform: none; width: 100%; font: inherit; color: var(--fg); background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; }
+  #setup .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #setup .steps { margin: 6px 0 0; padding-left: 20px; color: var(--fg); font-size: 15px; }
+  #setup .steps li { display: list-item; border: 0; padding: 2px 0; }
+  #setup .primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+  #setup .primary:disabled { opacity: .5; cursor: default; }
+  #setup progress { width: 100%; height: 10px; accent-color: var(--accent); margin-top: 10px; }
+  #setup .log { font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--muted); background: #0e0e0e; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; margin-top: 10px; max-height: 140px; overflow: auto; white-space: pre-wrap; }
+  #setup .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 12px; }
+  #setup .labelbox { background: #fff; border-radius: 9px; padding: 10px; overflow-x: auto; margin-top: 10px; }
+  #setup .labelbox .label { margin: 0; }
+  #setup .warn { color: var(--err); }
   /* A board's owner link (/board/c/<link>/): this board only, no admin controls. */
   body.owner .admin { display: none !important; }
+  /* Baseball is the maker's own boards' only (api/boards `sports`). */
+  body.nosports .sports { display: none !important; }
   pre.keys { white-space: pre-wrap; word-break: break-all; font-size: 13px; background: #0e0e0e; border: 1px solid #333; border-radius: 9px; padding: 10px; margin: 8px 0 0; user-select: all; }
   #fwBuilds li { flex-wrap: wrap; }
+  #fleet li { cursor: pointer; align-items: flex-start; }
+  #fleet li .nm small { display: block; margin: 2px 0 0; }
+  #fleet li .st { color: var(--muted); font-size: 14px; text-align: right; white-space: nowrap; }
+  #fleet li .st.bad { color: var(--err); }
   #fwBuilds li .nm { text-transform: none; letter-spacing: 0; }
   #fwBuilds li button { width: auto; padding: 0 10px; font-size: 14px; }
   #fwBuilds li button[aria-pressed="true"] { background: var(--accent); color: #111; border-color: var(--accent); }
@@ -134,7 +159,7 @@
       <button data-v="transit">Transit</button>
       <button data-v="ticker">Ticker</button>
       <button data-v="weather">Weather</button>
-      <button data-v="baseball">Baseball</button>
+      <button data-v="baseball" class="sports">Baseball</button>
       <button data-v="clock">Clock</button>
       <button data-v="announce">Announce</button>
     </div>
@@ -198,7 +223,7 @@
   </section>
 
   <footer class="credits" aria-label="Data sources">
-    <p>Weather by <a href="https://www.weatherapi.com/" target="_blank" rel="noopener">WeatherAPI.com</a>. Forecasts and alerts from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>. Radar: NOAA MRMS via the <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a>. Arrivals and alerts: data provided by CTA; not affiliated with or endorsed by the Chicago Transit Authority. Seventies clock digits after VCR OSD Neue by Elli Sho.</p>
+    <p>Weather by <a href="https://www.weatherapi.com/" target="_blank" rel="noopener">WeatherAPI.com</a>. Forecasts and alerts from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>. Radar: NOAA MRMS (NOAA Open Data on AWS and the National Weather Service). Arrivals and alerts: data provided by CTA; not affiliated with or endorsed by the Chicago Transit Authority. Seventies clock digits after VCR OSD Neue by Elli Sho.</p>
     <p>Weather information displayed here is provided for general informational purposes only. Forecasts and conditions are probabilistic and may not be accurate for your specific location or time. This data should not be used as the sole basis for decisions involving personal safety, aviation, marine navigation, emergency planning, or other safety-critical activities. Always consult official meteorological services and relevant authorities for decisions where accuracy is critical.</p>
   </footer>
  </div>
@@ -208,7 +233,7 @@
     <button role="tab" data-tab="transit">Transit</button>
     <button role="tab" data-tab="ticker">Ticker</button>
     <button role="tab" data-tab="weather">Weather</button>
-    <button role="tab" data-tab="baseball">Baseball</button>
+    <button role="tab" data-tab="baseball" class="sports">Baseball</button>
     <button role="tab" data-tab="clock">Clock</button>
     <button role="tab" data-tab="announce">Announce</button>
     <button role="tab" data-tab="health">Board</button>
@@ -226,6 +251,7 @@
       <button data-v="now">Conditions</button>
       <button data-v="5day">5-day</button>
       <button data-v="hourly">Hourly</button>
+      <button data-v="radar">Radar</button>
     </div>
     <p class="hint" id="wxViewHint"></p>
     <!-- Rain bars need 15-minute precipitation, which the weather source
@@ -325,7 +351,7 @@
     </div>
   </section>
 
-  <section data-tab="baseball">
+  <section data-tab="baseball" class="sports">
     <h2>Baseball screen</h2>
     <div class="seg" id="bbLayout">
       <button data-v="classic">Classic</button>
@@ -418,7 +444,19 @@
     <div class="row admin"><span>Copy settings from</span>
       <select id="copyFrom" aria-label="Copy settings from" style="width:auto"></select></div>
     <p class="hint admin">Copies every setting except the name. Brightness goes back to Auto.</p>
+    <div class="row" id="relinkRow" hidden><span>Owner link</span><button class="small" id="relinkOwn">New link</button></div>
+    <p class="hint" id="relinkHint" hidden>Makes a new link to this page; the old one (and every copy of it) stops working.</p>
+    <div class="row" id="giveRow" hidden><span>Give it away</span><button class="small danger" id="giveAway">New owner…</button></div>
+    <p class="hint" id="giveHint" hidden></p>
+    <pre class="keys" id="giveOut" hidden></pre>
     <div class="row admin"><span></span><button class="small danger" id="delBoard">Delete board</button></div>
+  </section>
+
+  <section data-tab="health" class="admin">
+    <h2>All boards</h2>
+    <ul id="fleet"></ul>
+    <div class="row"><span class="hint" style="margin:0">Flash a new board from here (Chrome or Edge on a computer, USB).</span><button class="small" id="setupOpen">Set up a board…</button></div>
+    <p class="hint">Tap a board to open it. Stable builds install overnight (2–5 AM); Beta and pinned builds right away.</p>
   </section>
 
   <section data-tab="health">
@@ -438,6 +476,57 @@
     <div id="health"><p class="hint">No report yet. The board sends one about once a minute.</p></div>
   </section>
  </div>
+
+  <dialog id="setup" aria-labelledby="setupTitle">
+    <div class="head"><h1 id="setupTitle">Set up a board</h1><button class="small" id="setupClose" aria-label="Close">✕</button></div>
+    <div class="body">
+      <p class="hint warn" id="setupNoSerial" hidden>This browser can't reach USB devices. Use Chrome or Edge on a computer (not a phone or Safari).</p>
+      <section id="sBoard">
+        <h2>1. The board</h2>
+        <div class="two">
+          <div><label class="field" for="sLabel">Name</label><input type="text" id="sLabel" maxlength="24" autocomplete="off" placeholder="e.g. Kitchen"></div>
+          <div><label class="field" for="sId">Board ID</label><input type="text" id="sId" maxlength="32" autocomplete="off" spellcheck="false" placeholder="kitchen"></div>
+        </div>
+        <label class="field">For</label>
+        <div class="seg" id="sWho"><button data-v="other" aria-pressed="true">Someone else</button><button data-v="mine">Me</button></div>
+        <p class="hint" id="sWhoHint"></p>
+        <div class="row" id="sKnownRow" hidden><span class="hint warn" id="sKnownText" style="margin:0"></span><label class="switch"><input type="checkbox" id="sReplace"><span></span></label></div>
+        <label class="field" for="sStation">Station</label>
+        <select id="sStation"></select>
+        <label class="field" for="sFrom">Other settings from</label>
+        <select id="sFrom"></select>
+        <div id="sWifi" hidden>
+          <label class="field">WiFi (optional; or set it on the board's setup network)</label>
+          <div class="two"><input type="text" id="sSsid" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Network"><input type="password" id="sPass" maxlength="63" autocomplete="new-password" placeholder="Password"></div>
+        </div>
+        <label class="field" for="sBuild">Firmware</label>
+        <select id="sBuild"></select>
+        <p class="hint" id="sBuildHint"></p>
+      </section>
+      <section id="sFlash">
+        <h2>2. Flash it</h2>
+        <ol class="steps">
+          <li>Plug the board into this computer by USB.</li>
+          <li>Put it in upload mode: hold <b>BOOT</b>, tap <b>RESET</b>, let go of <b>BOOT</b>.</li>
+          <li>Click <b>Flash</b> and pick the board's port.</li>
+        </ol>
+        <div class="actions"><button class="small primary" id="sGo">Flash</button></div>
+        <progress id="sProgress" max="1" value="0" hidden></progress>
+        <div class="log" id="sLog" hidden></div>
+      </section>
+      <section id="sDone" hidden>
+        <h2>3. Done</h2>
+        <p id="sDoneText"></p>
+        <div class="labelbox" id="sLabelBox"></div>
+        <div class="actions">
+          <button class="small" id="sPrint">Print label</button>
+          <button class="small" id="sPrintAll" hidden>Print all labels</button>
+          <button class="small" id="sOpen">Open the board</button>
+          <button class="small primary" id="sNext">Set up another</button>
+        </div>
+      </section>
+    </div>
+  </dialog>
 
   <div id="status" role="status"></div>
 </main>
@@ -568,6 +657,63 @@
     $('copyFrom').replaceChildren(new Option('Choose…', ''), ...others.map((b) => new Option(boardName(b), b.id)));
     $('delBoard').closest('.row').hidden = !others.length;
     renderKeys(me);
+    // Give away: a keyed board only (its link page, or the maker's page for a keyed board).
+    const keyed = SCOPE || (me && me.link);
+    $('giveRow').hidden = !keyed;
+    $('giveHint').hidden = !keyed;
+    $('relinkRow').hidden = !SCOPE;
+    $('relinkHint').hidden = !SCOPE;
+    $('giveHint').textContent = SCOPE
+      ? 'For a new owner: makes a new owner link for them and resets every setting. This page stops working. To clear your WiFi from the board, hold its knob (or UP) while plugging it in, then Forget saved networks on its setup page.'
+      : 'Makes a new owner link (the old one stops working), resets its settings, and an S3 forgets its WiFi on its next check-in (keeping a network the new owner already entered). Its token and firmware setting stay.';
+    renderFleet();
+  }
+  async function giveAway() {
+    if (!confirm(SCOPE ? 'Give this board to a new owner? Its settings are reset and this page stops working.' : 'Transfer this board to a new owner? Its owner link changes, its settings are reset, and it forgets its WiFi.')) return;
+    try {
+      const t = await api(`api/boards/transfer?b=${enc(boardId)}`, { method: 'POST' });
+      const url = `${location.origin}/board/c/${t.link}/`;
+      $('giveOut').hidden = false;
+      $('giveOut').textContent = SCOPE
+        ? `New owner link (give this to the new owner):\n${url}\n\nAt their place the board opens its setup network after about 10 minutes without WiFi (or at once if held at power-on). They join it (the WiFi code on the board's label) and pick their network.`
+        : `New owner link (give this to the new owner):\n${url}\n\nIf the board is online it forgets its WiFi now and opens its setup network; otherwise it opens it at their place after about 10 minutes without WiFi. They join it (the WiFi code on the board's label) and pick their network.`;
+      if (navigator.share) navigator.share({ title: 'Board owner link', url }).catch(() => {});
+      if (!SCOPE) { await loadBoards(); board = (await api('api/state')).boards[boardId]; await loadDests(); render(); refreshPreview(); }
+      setStatus(SCOPE ? 'Done. Copy the new link now: this page no longer controls the board.' : 'Transferred. Copy the new owner link.');
+    } catch (err) { setStatus(err.message, true); }
+  }
+  // The maker's fleet: every board's build, update setting, last check-in and trouble.
+  let healthAll = {};
+  function renderFleet() {
+    if (SCOPE) return;
+    const now = Date.now() / 1000;
+    const ch = (fwStatus && fwStatus.channels) || {};
+    $('fleet').replaceChildren(...boards.map((b) => {
+      const h = healthAll[b.id] || null;
+      const li = document.createElement('li');
+      const nm = document.createElement('span'); nm.className = 'nm';
+      nm.textContent = boardName(b);
+      const sub = document.createElement('small');
+      const want = b.fw === 'off' ? null : ch[b.fw] || (/^[0-9a-f]{7,40}$/.test(b.fw) ? b.fw : null);
+      const running = h && h.firmware;
+      const parts = [b.link && !b.mine ? 'owner link' : 'yours', running ? `runs ${running}` : null,
+        b.fw === 'off' ? 'updates off' : b.fw === 'stable' || b.fw === 'beta' ? b.fw : `pinned ${b.fw}`,
+        running && /^[0-9a-f]{7,40}$/.test(running) && want && running !== want ? `${want} waiting${b.fw === 'stable' ? ' for 2–5 AM' : ''}` : null,
+        b.wiping ? 'WiFi reset pending' : null].filter(Boolean);
+      sub.textContent = parts.join(' · ');
+      nm.append(sub);
+      const st = document.createElement('span'); st.className = 'st';
+      const ota = (h && h.ota) || '';
+      const offline = !b.seen || now - b.seen > 180;
+      const trouble = ota.startsWith('rolledback:') ? `rolled back ${ota.split(':')[1]}`
+        : ota.startsWith('error:') ? 'install failed'
+        : h && h.restarts ? `${h.restarts} restart${h.restarts > 1 ? 's' : ''}` : '';
+      st.textContent = (b.seen ? (offline ? `offline ${ago(now - b.seen)}` : 'online') : 'not seen') + (trouble ? ` · ${trouble}` : '');
+      if (offline || ota.startsWith('rolledback:') || ota.startsWith('error:')) st.classList.add('bad');
+      li.append(nm, st);
+      li.addEventListener('click', () => { if (b.id !== boardId) go(b.id); });
+      return li;
+    }));
   }
 
   // ---- owner link and board token (keys.js) ----
@@ -638,6 +784,11 @@
   function render() {
     renderBoards();
     if (!board) return;
+    // A board set up for someone else has no baseball (the server refuses its settings).
+    const me = boards.find((x) => x.id === boardId);
+    const sports = !me || me.sports !== false;
+    document.body.classList.toggle('nosports', !sports);
+    if (!sports && tab === 'baseball') showTab('transit');
     renderFirmware();
     pressed('screen', board.screen);
     const auto = board.screen === 'auto';
@@ -659,7 +810,7 @@
     const teams = board.bbTeams || ['cubs', 'sox', 'post'];
     const names = { transit: 'transit', ticker: 'the ticker' };
     const mainText = mains.length > 1 ? `switches between transit and the ticker every ${$('autoEvery').selectedOptions[0].text}` : `stays on ${names[mains[0]]}`;
-    const bbText = teams.length ? ` Baseball takes over during ${[teams.includes('cubs') && 'Cubs', teams.includes('sox') && 'White Sox', teams.includes('post') && 'postseason'].filter(Boolean).join(', ')} games.` : ' Baseball never takes over.';
+    const bbText = !sports ? '' : teams.length ? ` Baseball takes over during ${[teams.includes('cubs') && 'Cubs', teams.includes('sox') && 'White Sox', teams.includes('post') && 'postseason'].filter(Boolean).join(', ')} games.` : ' Baseball never takes over.';
     const wvText = wv === 'off' ? '' : ` The weather screen shows for ${$('radarFor').selectedOptions[0].text} every ${board.radarEvery} min${wv === 'rain' ? ' while it\'s raining' : ''}.`;
     const ajText = board.alertJump === 'warning' ? ' During NWS warnings it stays on the weather screen.' : board.alertJump === 'all' ? ' During NWS watches and warnings it stays on the weather screen.' : '';
     $('screenHint').textContent = !auto ? (board.screen === 'weather' ? 'Current weather; switches to the radar loop while rain is nearby.' : board.screen === 'clock' ? 'The clock face (set under Clock). Needs an S3 with clock firmware; other boards show Transit.' : board.screen === 'announce' ? 'Your message (set under Announce). Needs an S3 with announce firmware; other boards show Transit.' : 'Stays on this screen until you change it.')
@@ -736,7 +887,7 @@
     $('radarBright').value = String(board.radarBright || 100);
     $('radarCondRow').hidden = corner === 'temp' || corner === 'age' || corner === 'none';
     $('tempShadow').checked = board.tempShadow === true;
-    pressed('wxView', board.wxView === '5day' || board.wxView === 'hourly' ? board.wxView : 'now');
+    pressed('wxView', ['5day', 'hourly', 'radar'].includes(board.wxView) ? board.wxView : 'now');
     const wr = board.wxRain === 'bars' || board.wxRain === 'both' ? board.wxRain : 'radar';
     pressed('wxRain', wr);
     $('wxRainEveryRow').style.display = wr === 'both' ? '' : 'none';
@@ -752,6 +903,8 @@
       ? 'Today on top, the next five days\' highs below. A weather warning or watch shows on the high/low line.'
       : board.wxView === 'hourly'
       ? 'Today on top, then the weather 2, 4, 6 and 8 hours ahead. A weather warning or watch shows on the high/low line.'
+      : board.wxView === 'radar'
+      ? 'The radar loop all the time: rain and snow when there is some, the empty map when it\'s dry. Rain bars don\'t show.'
       : 'The big temperature, feels-like, wind, high/low, and rain chance.';
     $('radarCornerHint').textContent = corner === 'frame'
       ? 'The radar frame\'s time (dim), with AM/PM and any weather warning icon under it.'
@@ -1055,6 +1208,17 @@
       refreshPreview();
     } catch (err) { render(); setStatus(err.message, true); }
   });
+  $('giveAway').addEventListener('click', giveAway);
+  $('relinkOwn').addEventListener('click', async () => {
+    if (!confirm('Make a new link to this page? This link, and every copy of it, stops working.')) return;
+    try {
+      const r = await api(`api/boards/link?b=${enc(boardId)}`, { method: 'POST' });
+      const url = `${location.origin}/board/c/${r.link}/`;
+      $('giveOut').hidden = false;
+      $('giveOut').textContent = `Your new link (save it; this page stops working):\n${url}`;
+      setStatus('New link made. Open it and add it to your home screen.');
+    } catch (err) { setStatus(err.message, true); }
+  });
   $('delBoard').addEventListener('click', async () => {
     if (!confirm(`Delete board "${boardName({ id: boardId, label: board.label })}"? If a board is still running with this ID, it adds itself back as a copy of "home".`)) return;
     try {
@@ -1092,6 +1256,7 @@
     else if (kind === 'trial') hint = `Trying ${what}: it's kept once it reaches the server and runs a minute, and rolled back if it can't.`;
     else if (kind === 'error') hint = `The last install failed (${what}). The board tries again every 10 minutes.`;
     else if (track === 'off') hint = 'This board keeps whatever it runs now.';
+    else if (track === 'stable' || SCOPE) hint = 'New builds install overnight, between 2 and 5 AM, so the board never restarts while you\'re watching.';
     else hint = 'The board installs a new build within a minute of it being offered, between animations. It shows UPDATING while it downloads.';
     if (!SCOPE && fwStatus.signing === false) hint = 'No signing key yet: the server takes no builds and boards install none. Run node scripts/firmware-key.js --github (README, "Signed builds").';
     $('fwHint').textContent = hint;
@@ -1135,6 +1300,7 @@
   async function loadFirmware() {
     try { fwStatus = await api('api/firmware'); } catch (e) { return; }
     renderFirmware();
+    renderFleet();
   }
   $('fwTrack').addEventListener('change', (e) => save({ fw: e.target.value }));
   $('fwRetry').addEventListener('click', () => save({ fwRetry: (board.fwRetry || 0) + 1 }));
@@ -1179,6 +1345,8 @@
     try { all = await api('api/health'); } catch (e) { return; }
     const h = all[boardId];
     health = h || null;
+    healthAll = all || {};
+    renderFleet();
     renderFirmware();
     renderBrightHint();
     if (!h) return;
@@ -1244,6 +1412,225 @@
     setInterval(loadBoards, 30000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshPreview(); loadHealth(); loadBoards(); } });
   }
+  // ---- Set up a board (maker only): flash a new board from the browser ----
+  // Web Serial + esptool-js (dist/setup-tools.min.js, window.SetupTools) and
+  // the shared setup code (setup-image.js, window.BoardSetup): the same
+  // settings, settings image, flash plan and label as scripts/setup-board.js.
+  // The server gives the board its entry and token; the token stays in this
+  // page's memory (it goes into the board's flash and the label never shows it).
+  const setupDlg = $('setup');
+  const setup = { who: 'other', done: [], last: null, pending: null, busy: false };
+  // One load per script; a failed one is forgotten so the next call tries again.
+  const scripts = new Map();
+  const loadScript = (src) => {
+    if (!scripts.has(src)) {
+      scripts.set(src, new Promise((resolve, reject) => {
+        const el = document.createElement('script');
+        el.src = src; el.onload = resolve;
+        el.onerror = () => { el.remove(); scripts.delete(src); reject(new Error(src === 'setup-tools.js' ? 'the flashing tools aren\'t on the server (npm run build)' : `couldn't load ${src}`)); };
+        document.head.append(el);
+      }));
+    }
+    return scripts.get(src);
+  };
+  const slug = (s) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32);
+  // The next free ID like this one: kitchen -> kitchen-2.
+  function nextId(id) {
+    const taken = new Set(boards.map((b) => b.id).concat(setup.done.map((d) => d.id)));
+    if (!taken.has(id)) return id;
+    const base = id.replace(/-\d+$/, '');
+    for (let n = 2; ; n++) { const c = `${base}-${n}`.slice(0, 32); if (!taken.has(c)) return c; }
+  }
+  function slog(msg) { const el = $('sLog'); el.hidden = false; el.textContent += msg + '\n'; el.scrollTop = el.scrollHeight; }
+  function renderSetupWho() {
+    pressed('sWho', setup.who);
+    $('sWifi').hidden = setup.who !== 'mine';
+    $('sWhoHint').textContent = setup.who === 'mine'
+      ? 'Your own board: its own token, your features (baseball), on your page. No owner link on the label.'
+      : 'Its own token and owner link (on the label). It joins the owner\'s WiFi on its setup network; their page reaches only this board.';
+  }
+  function setupBuilds() {
+    const ch = (fwStatus && fwStatus.channels) || {};
+    const ok = ((fwStatus && fwStatus.builds) || []).filter((b) => b.boot);
+    const name = (b) => `${b.v}${b.v === ch.stable ? ' (Stable)' : b.v === ch.beta ? ' (Beta)' : ''}`;
+    $('sBuild').replaceChildren(...ok.map((b) => new Option(name(b), b.v)));
+    const pick = ok.find((b) => b.v === ch.stable) || ok[0];
+    if (pick) $('sBuild').value = pick.v;
+    $('sBuildHint').textContent = ok.length ? 'Stable unless you pick another. The board updates itself over WiFi after this.'
+      : 'No build can be flashed from here yet: CI adds what this needs (a boot image) with each build of main from now on.';
+    $('sGo').disabled = !ok.length || !('serial' in navigator);
+  }
+  async function openSetup() {
+    await loadFirmware(); // a boot image CI just published shows up
+    $('setupNoSerial').hidden = 'serial' in navigator;
+    $('sStation').replaceChildren(...stations.map((s) => new Option(s.desc, s.mapid)));
+    $('sStation').value = board ? board.station.mapid : stations[0].mapid;
+    $('sFrom').replaceChildren(...boards.map((b) => new Option(boardName(b), b.id)));
+    $('sFrom').value = boards.some((b) => b.id === 'home') ? 'home' : boardId;
+    $('sLabel').value = '';
+    $('sId').value = '';
+    $('sId').dataset.auto = '1';
+    $('sLog').textContent = ''; $('sLog').hidden = true; $('sProgress').hidden = true;
+    $('sDone').hidden = true; $('sBoard').hidden = false; $('sFlash').hidden = false;
+    setup.pending = null; setup.knownFor = null;
+    $('sKnownRow').hidden = true;
+    renderSetupWho();
+    setupBuilds();
+    setupDlg.showModal();
+    $('sLabel').focus();
+    loadScript('setup-image.js').catch((e) => slog(e.message));
+  }
+  $('setupOpen').addEventListener('click', openSetup);
+  $('setupClose').addEventListener('click', () => { if (!setup.busy) setupDlg.close(); });
+  setupDlg.addEventListener('cancel', (e) => { if (setup.busy) e.preventDefault(); });
+  $('sWho').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !setup.busy) { setup.who = v; renderSetupWho(); renderKnown(); } });
+  // An ID that's already on the server: setting it up again replaces its
+  // token (asked here, not in a dialog after Flash: the port picker needs
+  // the click's fresh user activation), and starts from its own station and name.
+  function renderKnown() {
+    const known = boards.find((b) => b.id === $('sId').value.trim().toLowerCase());
+    const retry = setup.pending && known && setup.pending.id === known.id && setup.pending.who === setup.who;
+    $('sKnownRow').hidden = !known || retry;
+    if (!known || retry) return;
+    $('sKnownText').textContent = `${known.id} is already on the server. Replace its token? A board running ${known.id} now, its owner link and its label stop working until it's flashed with the new one.`;
+    $('sReplace').checked = false;
+    if (setup.knownFor !== known.id) {
+      setup.knownFor = known.id;
+      if (stations.some((st) => st.mapid === known.mapid)) $('sStation').value = known.mapid;
+      if (!$('sLabel').value) $('sLabel').value = known.label || '';
+    }
+  }
+  $('sLabel').addEventListener('input', () => { if ($('sId').dataset.auto) { $('sId').value = nextId(slug($('sLabel').value) || ''); renderKnown(); } });
+  $('sId').addEventListener('input', () => { delete $('sId').dataset.auto; renderKnown(); });
+
+  async function runSetup() {
+    if (setup.busy) return;
+    const label = $('sLabel').value.trim();
+    const id = $('sId').value.trim().toLowerCase();
+    if (!BOARD_ID_RE.test(id)) return slog('The board ID must be 1-32 characters of a-z, 0-9, -.');
+    const known = boards.find((b) => b.id === id);
+    // The same board again after a failed flash keeps its token (if it's
+    // still for the same person); a board already on the server gets a new
+    // one only if the switch above says so.
+    const retry = setup.pending && setup.pending.id === id && setup.pending.who === setup.who ? setup.pending : null;
+    if (known && !retry && !$('sReplace').checked) return slog(`${id} is already on the server: turn on Replace its token, or pick another ID.`);
+    let networks = [];
+    if (setup.who === 'mine' && $('sSsid').value) {
+      try { await loadScript('setup-image.js'); networks = [BoardSetup.checkWifi($('sSsid').value, $('sPass').value)]; } catch (e) { return slog(e.message); }
+    }
+    let port;
+    // In upload mode the S3 shows up as Espressif's USB serial (303a); the
+    // running app's own port (Adafruit, 239a) can't be flashed from here.
+    try { port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] }); }
+    catch (e) { return slog(e.name === 'NotFoundError' ? 'No port picked. Not in the list? Put the board in upload mode (hold BOOT, tap RESET, let go of BOOT) and click Flash again.' : `Couldn't open the port picker: ${e.message}`); }
+    setup.busy = true;
+    $('sGo').disabled = true; $('setupClose').disabled = true;
+    $('sLog').textContent = '';
+    const prog = $('sProgress');
+    let transport = null;
+    try {
+      slog('Loading the flashing tools…');
+      await Promise.all([loadScript('setup-tools.js'), loadScript('setup-image.js')]);
+      const v = $('sBuild').value;
+      slog(`Getting build ${v}…`);
+      const r = await fetch(`api/firmware/image?v=${enc(v)}`, { cache: 'no-store' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `the build: HTTP ${r.status}`);
+      const img = new Uint8Array(await r.arrayBuffer());
+      const info = BoardSetup.inspectMerged(img);
+      slog('Connecting to the board…');
+      transport = new SetupTools.Transport(port, false);
+      // Native USB ignores the baud rate; asking for a faster one only makes
+      // esptool-js reopen the port (which can reset the chip).
+      const loader = new SetupTools.ESPLoader({ transport, baudrate: 115200, terminal: { clean() {}, writeLine: (l) => { if (/warn|error|unable|fail/i.test(l)) slog(l); }, write() {} } });
+      const chip = await loader.main();
+      if (!/ESP32-S3/i.test(chip)) throw new Error(`that's an ${chip}, not the Matrix Portal S3`);
+      slog(`Found ${chip}.`);
+      // The server: the board, its station and name, and its token.
+      let key = retry && retry.key;
+      if (!boards.some((b) => b.id === id)) await api('api/boards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, from: $('sFrom').value, label }) });
+      await api(`api/state?b=${enc(id)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label, station: { mapid: $('sStation').value } }) });
+      if (!key) {
+        key = await api(`api/boards/key?b=${enc(id)}${setup.who === 'mine' ? '&mine=1' : ''}`, { method: 'POST' });
+        slog(`${known ? 'Gave' : 'Added'} ${id} ${known ? 'a new token' : 'on the server with its own token'}.`);
+      }
+      const net = (retry && retry.net) || BoardSetup.setupNetwork();
+      setup.pending = { id, key, net, who: setup.who, label };
+      const cfg = BoardSetup.boardConfig({ id, token: key.token, url: location.origin, networks, setupName: net.name, setupPass: net.pass });
+      const plan = BoardSetup.flashPlan(img, BoardSetup.nvsImage({ value: cfg, size: info.nvs.size }), info.nvs, info.end);
+      const total = plan.reduce((n, p) => n + p.data.length, 0);
+      const before = plan.map((p, i) => plan.slice(0, i).reduce((n, q) => n + q.data.length, 0));
+      prog.hidden = false; prog.value = 0;
+      slog(`Flashing ${(total / 1024).toFixed(0)} KB…`);
+      await loader.writeFlash({
+        fileArray: plan.map((p) => ({ data: p.data, address: p.offset })),
+        flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep', eraseAll: false, compress: true,
+        // Each region is read back (MD5) and checked; a bad write throws.
+        calculateMD5Hash: SetupTools.md5,
+        // Progress comes in compressed bytes of the region's compressed size.
+        reportProgress: (i, written, of) => { prog.value = (before[i] + (of ? Math.min(1, written / of) : 1) * plan[i].data.length) / total; },
+      });
+      prog.value = 1;
+      try { await loader.after('hard_reset'); } catch (e) { /* native USB: RESET by hand */ }
+      slog('Flashed and checked.');
+      const ownerUrl = setup.who === 'other' ? `${location.origin}/board/c/${key.link}/` : null;
+      const svg = (text) => SetupTools.QRCode.toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
+      const qr = { wifi: await svg(BoardSetup.wifiQrText(net.name, net.pass)), owner: ownerUrl ? await svg(ownerUrl) : null };
+      setup.last = { id, label, setupName: net.name, setupPass: net.pass, ownerUrl, qr };
+      setup.done.push(setup.last);
+      setup.pending = null;
+      showSetupDone(networks.length ? networks[0][0] : null);
+      loadBoards();
+    } catch (e) {
+      slog(`Stopped: ${e.message || e}`);
+      loadBoards(); // the board may have been added before it stopped
+      if (setup.pending) slog('The board is on the server with its token: fix the problem and click Flash again (the same token and label are used).');
+    } finally {
+      try { if (transport) await transport.disconnect(); } catch (e) { /* already closed */ }
+      setup.busy = false;
+      $('sGo').disabled = false; $('setupClose').disabled = false;
+    }
+  }
+  $('sGo').addEventListener('click', runSetup);
+
+  function labelStyle() {
+    if (document.getElementById('labelCss')) return;
+    const st = document.createElement('style');
+    st.id = 'labelCss';
+    st.textContent = BoardSetup.LABEL_CSS;
+    document.head.append(st);
+  }
+  function showSetupDone(wifi) {
+    const d = setup.last;
+    labelStyle();
+    $('sBoard').hidden = true; $('sFlash').hidden = true; $('sDone').hidden = false;
+    $('sDoneText').textContent = `Press RESET on the board. ${wifi ? `It joins ${wifi}.` : `It shows SETUP WIFI and ${d.setupName}: ${d.ownerUrl ? 'the owner joins' : 'join'} that to enter WiFi.`} Print the label now: it's the only copy of the setup password${d.ownerUrl ? ' and the owner link' : ''}.`;
+    $('sLabelBox').innerHTML = BoardSetup.labelBody(d, d.qr);
+    $('sPrintAll').hidden = setup.done.length < 2;
+    $('sPrintAll').textContent = `Print all ${setup.done.length} labels`;
+  }
+  function printLabels(items) {
+    const w = window.open('', '_blank');
+    if (!w) return setStatus('Allow pop-ups to print labels.', true);
+    w.document.write(BoardSetup.labelPage(items));
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 300);
+  }
+  $('sPrint').addEventListener('click', () => printLabels([setup.last]));
+  $('sPrintAll').addEventListener('click', () => printLabels(setup.done));
+  $('sOpen').addEventListener('click', () => { setupDlg.close(); go(setup.last.id); });
+  $('sNext').addEventListener('click', () => {
+    const prev = setup.last;
+    $('sDone').hidden = true; $('sBoard').hidden = false; $('sFlash').hidden = false;
+    $('sLog').textContent = ''; $('sLog').hidden = true; $('sProgress').hidden = true;
+    $('sLabel').value = '';
+    $('sId').value = nextId(prev.id);
+    $('sId').dataset.auto = '1';
+    renderKnown();
+    $('sLabel').focus();
+  });
+  setupDlg.addEventListener('close', () => { if (setup.done.length) loadBoards(); });
+
   init().catch((e) => setStatus('Could not load: ' + e.message, true));
 })();
 </script>

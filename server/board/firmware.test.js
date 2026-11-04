@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { createFirmware, inspect, FirmwareError, MAX_BUILDS, loadPublicKey, verifySignature } = require('./firmware');
+const { createFirmware, inStableWindow, inspect, FirmwareError, MAX_BUILDS, loadPublicKey, verifySignature } = require('./firmware');
 
 // A test signing key (the real one never leaves its owner's computer and CI).
 const { privateKey: KEY, publicKey: PUB } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
@@ -54,7 +54,7 @@ test('upload stores the build with its SHA-256; channels point at builds', () =>
   let st = fw.upload(buf, { sig: signOf(buf), channel: 'beta', now: 100 });
   assert.equal(st.channels.beta, 'a1b2c3d');
   assert.equal(st.channels.stable, null);
-  assert.deepEqual(st.builds, [{ v: 'a1b2c3d', size: 4096, sha: crypto.createHash('sha256').update(buf).digest('hex'), at: 100, signed: true }]);
+  assert.deepEqual(st.builds, [{ v: 'a1b2c3d', size: 4096, sha: crypto.createHash('sha256').update(buf).digest('hex'), at: 100, signed: true, boot: false }]);
   assert.deepEqual(fs.readFileSync(fw.file('a1b2c3d').path), buf);
   st = fw.setChannel('stable', 'a1b2c3d');
   assert.equal(st.channels.stable, 'a1b2c3d');
@@ -88,7 +88,7 @@ test('old builds are pruned, except channel and pinned ones', () => {
 });
 
 test('offer: an S3 running a committed build gets its channel\'s or pinned build', () => {
-  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB, stableWindow: () => true });
   fw.upload(fakeBuild('aaaaaaa'), { sig: signOf(fakeBuild('aaaaaaa')), channel: 'stable', now: 1 });
   fw.upload(fakeBuild('bbbbbbb'), { sig: signOf(fakeBuild('bbbbbbb')), channel: 'beta', now: 2 });
   const t = fw.target('stable');
@@ -105,8 +105,33 @@ test('offer: an S3 running a committed build gets its channel\'s or pinned build
   assert.equal(fw.offer({ fw: 'stable' }, S3), null);
 });
 
-test('signatures: uploads need a valid one by the repo key; offers carry it', () => {
+test('offer: stable installs only overnight in Chicago; beta and pinned builds any time', () => {
   const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  fw.upload(fakeBuild('aaaaaaa'), { sig: signOf(fakeBuild('aaaaaaa')), channel: 'stable', now: 1 });
+  fw.upload(fakeBuild('bbbbbbb'), { sig: signOf(fakeBuild('bbbbbbb')), channel: 'beta', now: 2 });
+  const at = (y, m, d, h, min = 0) => Date.UTC(y, m - 1, d, h, min) / 1000; // UTC
+  const q = { ...S3, hv: '1234567' };
+  // Nov 3, 2026 (CST, UTC-6): 1:59 no, 2:00 yes, 4:59 yes, 5:00 no.
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 11, 3, 7, 59)), null);
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 11, 3, 8, 0)).v, 'aaaaaaa');
+  assert.equal(fw.offer({}, q, at(2026, 11, 3, 10, 59)).v, 'aaaaaaa'); // default: stable
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 11, 3, 11, 0)), null);
+  // July (CDT, UTC-5): 2:30 AM is 7:30 UTC.
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 7, 1, 7, 30)).v, 'aaaaaaa');
+  assert.equal(fw.offer({ fw: 'stable' }, q, at(2026, 7, 1, 6, 30)), null);
+  // Midday: beta and a pinned build still come right away.
+  const noon = at(2026, 11, 3, 18);
+  assert.equal(fw.offer({ fw: 'beta' }, q, noon).v, 'bbbbbbb');
+  assert.equal(fw.offer({ fw: 'aaaaaaa' }, q, noon).v, 'aaaaaaa');
+  // Midday, just started (uptime under 2 min): stable too, before anyone is watching.
+  assert.equal(fw.offer({ fw: 'stable' }, { ...q, hu: '45' }, noon).v, 'aaaaaaa');
+  assert.equal(fw.offer({ fw: 'stable' }, { ...q, hu: '600' }, noon), null);
+  assert.equal(inStableWindow(at(2026, 11, 3, 9)), true);
+  assert.equal(inStableWindow(noon), false);
+});
+
+test('signatures: uploads need a valid one by the repo key; offers carry it', () => {
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB, stableWindow: () => true });
   const buf = fakeBuild('aaaaaaa');
   assert.throws(() => fw.upload(buf, {}), /unsigned/);
   assert.throws(() => fw.upload(buf, { sig: 'zz' }), /doesn't match/);
@@ -135,4 +160,68 @@ test('signatures: the repo key file, and what the board checks', () => {
   const rsa = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey;
   fs.writeFileSync(path.join(dir, 'rsa.pem'), rsa.export({ type: 'spki', format: 'pem' }));
   assert.throws(() => loadPublicKey(path.join(dir, 'rsa.pem')), /P-256/);
+});
+
+// ---- boot images (Set up a board) ----
+
+// The merged image's first part, as scripts/split-merged.js cuts it: the
+// bootloader header, the partition table at 0x8000 (TinyUF2 8MB), up to
+// the first app slot at 0x10000.
+function fakeBoot({ chip = 9, appAt = 0x10000, appSize = 0x200000 } = {}) {
+  const b = Buffer.alloc(appAt, 0xff);
+  b[0] = 0xe9; b.writeUInt16LE(chip, 12);
+  const entry = (i, type, sub, off, size, label) => {
+    const at = 0x8000 + i * 32;
+    b[at] = 0xaa; b[at + 1] = 0x50; b[at + 2] = type; b[at + 3] = sub;
+    b.writeUInt32LE(off, at + 4); b.writeUInt32LE(size, at + 8); b.fill(0, at + 12, at + 28); b.write(label, at + 12, 'latin1');
+  };
+  entry(0, 1, 2, 0x9000, 0x5000, 'nvs'); entry(1, 1, 0, 0xe000, 0x2000, 'otadata');
+  entry(2, 0, 0x10, appAt, appSize, 'ota_0'); entry(3, 0, 0x11, appAt + appSize, appSize, 'ota_1');
+  b.writeUInt32LE(1, 0xe000); // boot_app0: ota_seq 1 (ota_0)
+  return b;
+}
+// A real-shaped app image (header, segments, checksum padding, SHA-256), so
+// the setup tools can find its end.
+function fakeApp(v) {
+  const seg = (len) => { const s = Buffer.alloc(8 + len, 0x22); s.writeUInt32LE(0x3c000000, 0); s.writeUInt32LE(len, 4); return s; };
+  const h = Buffer.alloc(24, 0); h[0] = 0xe9; h[1] = 1; h.writeUInt16LE(9, 12); h[23] = 1;
+  const s1 = seg(2000); s1.write(`CTABOARD-BUILD:${v}:generic;`, 100, 'latin1');
+  let body = Buffer.concat([h, s1]);
+  body = Buffer.concat([body, Buffer.alloc(Math.ceil((body.length + 1) / 16) * 16 - body.length, 0), Buffer.alloc(32, 0x5a)]);
+  return body;
+}
+
+test('boot image: checked, signed, and with the app makes the image a new board is flashed with', () => {
+  const { inspectBoot } = require('./firmware');
+  const S = require('./setup-image');
+  const fw = createFirmware({ dir: tmp(), log: quiet, publicKey: PUB });
+  const app = fakeApp('aaaaaaa');
+  fw.upload(app, { sig: signOf(app), channel: 'stable', now: 1 });
+  const boot = fakeBoot();
+  assert.equal(fw.image('aaaaaaa'), null, 'no boot image yet');
+  assert.throws(() => fw.attachBoot('bbbbbbb', boot, { sig: signOf(boot) }), /unknown build/);
+  assert.throws(() => fw.attachBoot('aaaaaaa', boot, {}), /unsigned/);
+  assert.throws(() => fw.attachBoot('aaaaaaa', boot, { sig: signOf(app) }), /signature/);
+  const st = fw.attachBoot('aaaaaaa', boot, { sig: signOf(boot) });
+  assert.equal(st.builds[0].boot, true);
+  const img = fw.image('aaaaaaa');
+  assert.ok(img.equals(Buffer.concat([boot, app])));
+  // It's the merged image up to the app's end: the setup tools take it as is.
+  const info = S.inspectMerged(img);
+  assert.deepEqual([info.version, info.nvs.offset, info.app.offset, info.end], ['aaaaaaa', 0x9000, 0x10000, img.length]);
+  // Bad boot images.
+  const bad = (buf, re) => assert.throws(() => inspectBoot(buf), (e) => e instanceof FirmwareError && re.test(e.message));
+  bad(Buffer.from('nope'), /not a boot image/);
+  bad(fakeBoot({ chip: 0 }), /another chip/);
+  bad(fakeBoot().subarray(0, 0xc000), /must end where the first app slot starts/);
+  bad(Buffer.concat([fakeBoot(), Buffer.alloc(16)]), /must end where/);
+  bad(fakeBoot({ appSize: 0x100000 }), /smaller than an app build/);
+  const noTable = fakeBoot(); noTable.fill(0xff, 0x8000, 0x9000);
+  bad(noTable, /no partition table/);
+  const erased = fakeBoot(); erased.fill(0xff, 0xe000, 0x10000);
+  bad(erased, /OTA data is erased/);
+  // Removing the build removes its boot image too.
+  fw.setChannel('stable', null);
+  fw.remove('aaaaaaa');
+  assert.equal(fw.image('aaaaaaa'), null);
 });

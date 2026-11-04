@@ -227,6 +227,91 @@ test('knob chooser: wheel across the top, one pip per entry, the selection amber
   assert.equal(lit(render({ bright: 100 }, { screen: 'chooser', chooser: { pos: 0 } }), 0, 31).length, 0);
 });
 
+test('peek chooser: the chosen variant itself, drawn from pv, under the category-color icon bar', () => {
+  const { PEEK, PEEK_ICONS, PEEK_COLORS } = require('./render');
+  const base = payload('morse-2026-10-03-2316.json');
+  const now = base.now;
+  const wx = { icon: 'sun', temp: 54, word: 'SUNNY', hi: 61, lo: 47, feels: 51, wind: 'NW 12', pop: 20 };
+  const days = ['SU', 'MO', 'TU', 'WE', 'TH'].map((d, i) => ({ d, hi: 60 + i, icon: 'sun' }));
+  const hours = ['1A', '3A', '5A', '7A'].map((h, i) => ({ h, t: 50 + i, icon: 'moon' }));
+  const radar = { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx };
+  const p = { ...base, tzo: -18000, tickerHeader: 'TEST', radar, msg: null,
+    pv: { days, hours, skyline: null, cwx: { temp: 54, icon: 'sun' }, dn: null },
+    knob: { ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 0, vars: [['transit', 'ticker'], ['now', '5day', 'hourly'], ['skyline', 'seventies', 'analog'], [], []], sel: [0, 0, 0, 0, 0], ln: 'BL' } };
+  const peek = (pk, o = {}) => render(p, { screen: 'peek', now, frames: {}, peek: pk, ...o });
+  const rowsEqual = (a, b, y0, y1) => { for (let y = y0; y <= y1; y++) for (let x = 0; x < 64; x++) if (hex(a.get(x, y)) !== hex(b.get(x, y))) return false; return true; };
+  const scale = (c, k) => '#' + [1, 3, 5].map((i) => Math.round(parseInt(c.slice(i, i + 2), 16) * k).toString(16).padStart(2, '0')).join('');
+
+  // The view above the bar is the variant drawn as its own screen.
+  assert.ok(rowsEqual(peek({ k: 0, vi: 1 }), render(p, { screen: 'ticker', now }), 0, 20), 'transit · ticker');
+  assert.ok(rowsEqual(peek({ k: 1, vi: 1 }), render({ ...p, radar: { ...radar, wx: { ...wx, days } } }, { screen: 'weather', now }), 0, 20), 'weather · 5-day from pv.days');
+  assert.ok(rowsEqual(peek({ k: 1, vi: 2 }), render({ ...p, radar: { ...radar, wx: { ...wx, hours } } }, { screen: 'weather', now }), 0, 20), 'weather · hourly from pv.hours');
+  assert.ok(rowsEqual(peek({ k: 2, vi: 2 }), render({ ...p, cface: 'analog', cwx: p.pv.cwx }, { screen: 'clock', now }), 0, 20), 'clock · analog from pv.cwx');
+  assert.ok(!rowsEqual(peek({ k: 1, vi: 0 }), peek({ k: 1, vi: 1 }), 0, 20));
+
+  // The bar: five icons 12 px apart from x4, the chosen one in its color, the rest at 30%.
+  let f = peek({ k: 0, vi: 0 });
+  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 21)), '#000000', 'row 21 black');
+  const cats = p.knob.ring, colorOf = (c) => (c === 'transit' ? LINE.RD : PEEK_COLORS[c]); // red at a Blue Line station too
+  cats.forEach((cat, i) => {
+    const [dx, dy] = [...PEEK_ICONS[cat].join('')].reduce((a, ch, n) => (a || ch !== '#' ? a : [n % 7, Math.floor(n / 7)]), null);
+    assert.equal(hex(f.get(4 + i * PEEK.pitch + dx, 23 + dy)), i === 0 ? colorOf(cat) : scale(colorOf(cat), 0.3), cat);
+  });
+  // Underline under the chosen icon; its variants as dots beside it (two for transit).
+  for (let x = 4; x < 11; x++) assert.equal(hex(f.get(x, 31)), LINE.RD);
+  assert.equal(hex(f.get(12, 25)), LINE.RD);
+  assert.equal(hex(f.get(12, 27)), C.indicator);
+  // Clock with three faces, the third chosen: dots on rows 24, 26, 28.
+  f = peek({ k: 2, vi: 2 });
+  assert.deepEqual([24, 26, 28].map((y) => hex(f.get(4 + 2 * PEEK.pitch + 8, y))), [C.indicator, C.indicator, PEEK_COLORS.clock]);
+  // No dots for a category without variants; cycle draws the phone's symbol in cyan.
+  f = peek({ k: 4, vi: 0 });
+  assert.equal(hex(f.get(4 + 4 * PEEK.pitch + 8, 26)), '#000000');
+  assert.equal(hex(f.get(26, 9)), PEEK_COLORS.cycle);
+  // Three entries: the bar is centered.
+  const three = render({ ...p, knob: { ...p.knob, ring: ['transit', 'weather', 'cycle'], vars: [[], [], []] } }, { screen: 'peek', now, peek: { k: 2, vi: 0 } });
+  for (let x = 40; x < 47; x++) assert.equal(hex(three.get(x, 31)), PEEK_COLORS.cycle);
+
+  // Slides: from the old view to the new, sideways for a category and down for a variant.
+  const a = peek({ k: 0, vi: 0 }), b = peek({ k: 1, vi: 0 });
+  assert.ok(rowsEqual(peek({ k: 1, vi: 0, slide: { k: 0, vi: 0, t: 0, axis: 'x', dir: 1 } }), a, 0, 20), 'starts on the old view');
+  assert.ok(rowsEqual(peek({ k: 1, vi: 0, slide: { k: 0, vi: 0, t: PEEK.xMs, axis: 'x', dir: 1 } }), b, 0, 31), 'ends on the new one');
+  const mid = peek({ k: 1, vi: 0, slide: { k: 0, vi: 0, t: 60, axis: 'x', dir: 1 } });
+  assert.ok(!rowsEqual(mid, a, 0, 20) && !rowsEqual(mid, b, 0, 20));
+  const down = peek({ k: 1, vi: 1, slide: { k: 1, vi: 0, t: PEEK.yMs, axis: 'y', dir: 1 } });
+  assert.ok(rowsEqual(down, peek({ k: 1, vi: 1 }), 0, 31));
+
+  // The bar drops away: fully dropped is the bare view.
+  assert.ok(rowsEqual(peek({ k: 0, vi: 0, drop: PEEK.band }), render(p, { screen: 'transit', now }), 0, 31));
+  f = peek({ k: 0, vi: 0, drop: 4 });
+  assert.equal(hex(f.get(5, 27)), LINE.RD, 'the icons have moved down 4 rows');
+  assert.equal(hex(f.get(7, 31)), '#000000', 'the underline is off the panel');
+
+  // Raining: the radar, still, on the newest frame on hand; missing frames
+  // leave it empty with their indicator segments dark, the loaded ones lit.
+  const pr = { ...p, radar: { ...radar, on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now - 60] } };
+  const seg = (fr) => [57, 60, 63].map((x) => hex(fr.get(x, 2)));
+  f = render(pr, { screen: 'peek', now, frames: {}, peek: { k: 1, vi: 0 } });
+  assert.deepEqual(seg(f), [C.indicator, C.indicator, C.indicator], 'nothing on hand: empty radar, not the conditions layout');
+  const bytes = new Uint8Array(2048).fill(2);
+  f = render(pr, { screen: 'peek', now, frames: { a: bytes, b: bytes }, peek: { k: 1, vi: 0 } });
+  assert.deepEqual(seg(f), ['#6a6a6a', C.amber, C.indicator]);
+  assert.notEqual(hex(f.get(0, 10)), '#000000', 'the newest frame on hand is drawn');
+
+  // The radar view: every kept frame from pv.radar, dry or not; the other
+  // views ignore frames while it's dry (radar.on false).
+  const pd = { ...p, radar: { ...radar, on: false, frames: ['a', 'b'], ft: [now - 400, now - 40] },
+    pv: { ...p.pv, radar: { frames: ['a', 'b'], ft: [now - 400, now - 40] } },
+    knob: { ...p.knob, vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline'], [], []] } };
+  const empty = new Uint8Array(2048);
+  empty[3 * 64 + 5] = 6;
+  f = render(pd, { screen: 'peek', now, frames: { a: empty, b: empty }, peek: { k: 1, vi: 3 } });
+  assert.deepEqual([60, 63].map((x) => hex(f.get(x, 2))), ['#6a6a6a', C.amber], 'the radar loop, still on the newest');
+  assert.notEqual(hex(f.get(5, 3)), '#000000', 'the shoreline');
+  f = render(pd, { screen: 'peek', now, frames: { a: empty, b: empty }, peek: { k: 1, vi: 0 } });
+  assert.ok(rowsEqual(f, render({ ...p, radar: { ...radar, wx } }, { screen: 'weather', now }), 0, 20), 'conditions while dry');
+});
+
 test('clock screen, seventies face: VCR digits banded by row, stripes along the bottom and up the right edge', () => {
   const t = Date.parse('2026-11-02T03:42:00Z') / 1000;  // 9:42 PM in Chicago
   const p = { now: t, tzo: -21600, screen: 'clock', cface: 'seventies', bright: 100, skyline: null };

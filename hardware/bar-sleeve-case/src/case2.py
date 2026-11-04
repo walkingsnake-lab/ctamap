@@ -54,6 +54,8 @@ PLATE_Y0 = D - BACKL - PLATE_T            # the plate's inner face, seated
 SKINS = True                              # print the knob hole and screw holes closed by a 0.5 mm
 SKIN_USB = True                           # USB-C: cut out a larger opening; port_bezel() covers the cut edge
 SENSOR_PRINTED = False                    # print the Ø2 light-sensor hole open instead of drilling it
+SENSOR_ROUND = False                      # printed hole round instead of a teardrop: fine at Ø2.1 (the top sags ~0.1); twist a 2 mm bit
+                                          # through it by hand after printing for a crisp round pinhole
 SENSOR_POCKET = True                      # blind pocket from inside (Ø SENSOR_POCKET_D), 0.8 mm short of the outside: the grille is
                                           # drilled through that skin from outside with grille_guide.py, only if the sensor is fitted
 GLUED_FRAME = True                        # back-down only: plain sleeve + glued screen_frame(); False = built-in rim (as front-down)
@@ -162,6 +164,9 @@ def latch_dimples():
     return Manifold.batch_boolean([radial_sweep(c, BORE_R, LT_DIMPLE, LT_DIMPLE_A, PLATE_Y0) for c in corner_arcs()], ADD)
 
 
+SCREW_FLOAT = 0.0                # +/- y float of the screws from below (0: round holes)
+
+
 def teardrop_cs(r, cx, cy, trunc=None, seg=64):
     """circle with a 45-deg point toward +y (the print's up); optionally truncated flat at cy + trunc"""
     a = r * math.cos(math.pi / 4)
@@ -217,7 +222,9 @@ def shell2():
     if SENSOR_POCKET and not SENSOR_PRINTED:       # blind pocket from inside: invisible outside, guides the bit when drilled
         cuts.append(Manifold.extrude(teardrop_cs(SENSOR_POCKET_D / 2, SENSOR_X, SENSOR_Y, seg=48), WALL - 0.8 + 1).translate([0, 0, H - WALL - 1]))
     if SENSOR_PRINTED:                             # Ø2 light-sensor hole through the top (teardrop toward the print's up)
-        cuts.append(Manifold.extrude(teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24), WALL + 2).translate([0, 0, H - WALL - 1]))
+        cs = (CrossSection.circle(SENSOR_D / 2 + 0.05, 48).translate([SENSOR_X, SENSOR_Y]) if SENSOR_ROUND
+              else teardrop_cs(SENSOR_D / 2 + 0.05, SENSOR_X, SENSOR_Y, seg=24))
+        cuts.append(Manifold.extrude(cs, WALL + 2).translate([0, 0, H - WALL - 1]))
     # USB-C: straight-through opening for the plug housing, 0.5 mm chamfer outside;
     # relief behind the edge buttons (its top edge at 45 deg for printing)
     def stad(w_y, h_z, r=1.5):            # rounded rectangle (r 1.5 clears a square-cornered spec-max housing)
@@ -248,8 +255,11 @@ def shell2():
     for sx in (-1, 1):
       for scx in SCREW_XS:
         z0 = 1.0 + SKIN_T if SKINS else -1          # skin at the counterbore floor; drill through with a 3.4 mm bit
-        cuts.append(Manifold.extrude(teardrop_cs(1.7, sx * scx, SCREW_Y, seg=32), WALL + 1 - z0).translate([0, 0, z0]))
-        cuts.append(Manifold.extrude(teardrop_cs(3.2, sx * scx, SCREW_Y, seg=48), 2.0).translate([0, 0, -1]))
+        f = SCREW_FLOAT                             # stadium along y when the tray's float lives here (drawer, nut fixed in the tray)
+        hole = teardrop_cs(1.7, sx * scx, SCREW_Y - f, seg=32) + teardrop_cs(1.7, sx * scx, SCREW_Y + f, seg=32)
+        cb = teardrop_cs(3.2, sx * scx, SCREW_Y - f, seg=48) + teardrop_cs(3.2, sx * scx, SCREW_Y + f, seg=48)
+        cuts.append(Manifold.extrude(hole.hull(), WALL + 1 - z0).translate([0, 0, z0]))
+        cuts.append(Manifold.extrude(cb.hull(), 2.0).translate([0, 0, -1]))
     # tongue grooves (as v1)
     yp0 = D - BACKL - PLATE_T
     for sx in ((-1, 1) if TONGUES else ()):
@@ -461,10 +471,11 @@ def export_open(out, backdown):
 
 if __name__ == '__main__':
     import os, trimesh
-    out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    alt = f'{out}/alternate-frontdown'
+    out = sys.argv[1] if len(sys.argv) > 1 else '.'            # the stl folder: Boot key here, v4 shells in archive/v4
+    v4 = f'{out}/archive/v4'
+    alt = f'{v4}/alternate-frontdown'
     os.makedirs(alt, exist_ok=True)
-    export_open(out, backdown=True)
+    export_open(v4, backdown=True)
     export_open(alt, backdown=False)
     k = boot_key(); me = k.to_mesh(); tk = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     tk.apply_translation(-tk.bounds[0]); tk.export(f'{out}/bar-boot-key.stl'); print('key', tk.is_watertight, np.round(tk.extents, 1).tolist())

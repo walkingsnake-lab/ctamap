@@ -1120,18 +1120,25 @@ test('select: the knob sets a category and gets the new screen\'s update back', 
   assert.equal((await s.req('/board/select?b=nope&s=weather', h())).status, 404);
   const bad = await s.req('/board/select?b=home&s=baseball', h());
   assert.equal(bad.status, 400);
-  assert.match(bad.body.detail, /auto, transit, weather, sports/);
+  assert.match(bad.body.detail, /transit, weather, cycle/);
+  assert.equal((await s.req('/board/select?b=home&s=sports', h())).status, 400, 'sports is phone-only');
   // Every update carries the ring and the chosen screen's place on it.
   let b = (await s.req('/board/update?b=home', h('GET'))).body;
-  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports'], at: 0 });
+  assert.deepEqual(b.knob, { ring: ['transit', 'weather', 'cycle'], at: 2 });
   const v = b.v;
-  b = (await s.req('/board/select?b=home&s=sports', h())).body;
-  assert.deepEqual([b.screen, b.for, b.knob.at, b.v], ['baseball', 'baseball', 3, v + 1]);
-  assert.ok(b.mlb && !('rows' in b), 'only the baseball sections');
-  assert.equal(s.store.get('home').screen, 'baseball');
+  b = (await s.req('/board/select?b=home&s=weather', h())).body;
+  assert.deepEqual([b.screen, b.for, b.knob.at, b.v], ['weather', 'weather', 1, v + 1]);
+  assert.ok(b.radar && !('rows' in b), 'only the weather sections');
+  assert.equal(s.store.get('home').screen, 'weather');
   b = (await s.req('/board/select?b=home&s=transit', h())).body;
-  assert.deepEqual([b.screen, b.knob.at], ['transit', 1]);
+  assert.deepEqual([b.screen, b.knob.at], ['transit', 0]);
   assert.ok('rows' in b && !('mlb' in b));
+  // CYCLE opens the auto screen (the rotation, for now).
+  assert.equal((await s.req('/board/select?b=home&s=cycle', h())).status, 200);
+  assert.equal(s.store.get('home').screen, 'auto');
+  // Baseball chosen on the phone: the knob opens on TRANSIT.
+  s.store.update('home', { screen: 'baseball' });
+  assert.equal((await s.req('/board/update?b=home', h('GET'))).body.knob.at, 0);
   await s.close();
 });
 
@@ -1160,7 +1167,7 @@ test('control API: list, add (copy or defaults), label, and delete boards', asyn
   const J = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   await s.req('/board/secret123/api/state?b=home', J('POST', { station: { mapid: '40380' }, label: 'Kitchen' }));
   let r = await s.req('/board/secret123/api/boards');
-  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'auto', seen: null }]);
+  assert.deepEqual(r.body, [{ id: 'home', label: 'Kitchen', station: 'CLARK/LAKE', mapid: '40380', screen: 'auto', fw: 'stable', seen: null, sports: true }]);
   r = await s.req('/board/secret123/api/boards', J('POST', { id: 'desk', from: 'home', label: 'Desk' }));
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.map((b) => [b.id, b.label, b.mapid]), [['home', 'Kitchen', '40380'], ['desk', 'Desk', '40380']]);
@@ -1196,7 +1203,7 @@ const crypto = require('crypto');
 const FW_KEY = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
 const fwSig = (buf) => crypto.sign('sha256', buf, FW_KEY.privateKey).toString('hex');
 // A board server with a firmware store that trusts the test key.
-const serveFw = (opts = {}) => serve({ firmware: createFirmware({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-fw-')), log: quiet, publicKey: FW_KEY.publicKey }), ...opts });
+const serveFw = (opts = {}) => serve({ firmware: createFirmware({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-fw-')), log: quiet, publicKey: FW_KEY.publicKey, stableWindow: () => true }), ...opts });
 const signed = (buf) => ({ method: 'POST', body: buf, headers: { 'X-Firmware-Signature': fwSig(buf) } });
 
 function fakeBuild(v, kind = 'generic') {
@@ -1206,6 +1213,28 @@ function fakeBuild(v, kind = 'generic') {
   b.write(`CTABOARD-BUILD:${v}:${kind};`, 1000, 'latin1');
   return b;
 }
+
+test('firmware: outside the overnight window a stable board gets no offer; beta still does', async () => {
+  const s = await serve({ firmware: createFirmware({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-fw-')), log: quiet, publicKey: FW_KEY.publicKey, stableWindow: () => false }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  assert.equal((await s.req('/board/secret123/api/firmware?channel=stable', signed(fakeBuild('aaaaaaa')))).status, 200);
+  assert.equal((await s.req('/board/secret123/api/firmware?channel=beta', signed(fakeBuild('bbbbbbb')))).status, 200);
+  const q = '/board/version?b=home&hu=600&hd=adafruit_matrixportal_s3&hv=1234567';
+  assert.ok(!('fw' in (await s.req(q, h)).body));
+  // Just started (unplugged overnight, say): offered anyway, before anyone watches.
+  assert.equal((await s.req(q.replace('hu=600', 'hu=30'), h)).body.fw.v, 'aaaaaaa');
+  // A rollback note outlives the reports without an offer, while that build is still the target.
+  await s.req(q.replace('hu=600', 'hu=700') + '&hx=rolledback:aaaaaaa', h);
+  await s.req(q.replace('hu=600', 'hu=760'), h);
+  assert.equal((await s.req('/board/secret123/api/health')).body.home.ota, 'rolledback:aaaaaaa');
+  await s.req('/board/version?b=home&hu=800&hd=adafruit_matrixportal_s3&hv=aaaaaaa', h);
+  assert.equal((await s.req('/board/secret123/api/health')).body.home.ota, undefined, 'running it now: gone');
+  s.store.update('home', { fw: 'beta' });
+  assert.equal((await s.req(q, h)).body.fw.v, 'bbbbbbb');
+  s.store.update('home', { fw: 'aaaaaaa' });
+  assert.equal((await s.req(q, h)).body.fw.v, 'aaaaaaa', 'pinned: right away');
+  await s.close();
+});
 
 test('firmware: upload on the control page, offered to an S3 in its version check, downloaded by the board', async () => {
   const s = await serveFw();
@@ -1297,6 +1326,117 @@ test('board keys: a keyed board must use its own token; others keep the shared o
   await s.close();
 });
 
+test('transfer: a keyed board gets a new link, default settings, and a WiFi wipe stamp', async () => {
+  const s = await serve();
+  s.store.create('kitchen', { from: 'home', label: 'Kitchen' });
+  s.store.update('kitchen', { screen: 'ticker', station: { mapid: '40380' }, fw: 'off' });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  // Only for a keyed board.
+  let r = await s.req('/board/secret123/api/boards/transfer?b=kitchen', { method: 'POST' });
+  assert.equal(r.status, 400);
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  const own = { headers: { 'X-Board-Token': key.token } };
+  assert.ok(!('wipe' in (await s.req('/board/version?b=kitchen', own)).body), 'no wipe before a transfer');
+  const v0 = s.store.get('kitchen').v;
+  r = await s.req('/board/secret123/api/boards/transfer?b=kitchen', { method: 'POST' });
+  assert.equal(r.status, 200);
+  assert.match(r.body.link, /^[A-Za-z0-9_-]{22}$/);
+  assert.notEqual(r.body.link, key.link);
+  assert.ok(Math.abs(r.body.wipe - Date.now() / 1000) < 5);
+  // The old link is dead, the new one works; the token is unchanged.
+  assert.equal((await s.req(`/board/c/${key.link}/api/state`)).status, 404);
+  assert.equal((await s.req(`/board/c/${r.body.link}/api/state`)).status, 200);
+  // Settings back to the defaults; its name and firmware setting stay.
+  const b = s.store.get('kitchen');
+  assert.equal(b.screen, 'auto');
+  assert.notEqual(b.station.mapid, '40380');
+  assert.equal(b.label, 'Kitchen');
+  assert.equal(b.fw, 'off');
+  assert.ok(b.v > v0);
+  // The board hears the stamp on every version check until it reports applying it.
+  assert.equal((await s.req('/board/version?b=kitchen&hu=5', own)).body.wipe, r.body.wipe);
+  await s.req('/board/version?b=kitchen&hu=6&hz=' + r.body.wipe, own);
+  assert.equal((await s.req('/board/secret123/api/health')).body.kitchen.wiped, r.body.wipe);
+  assert.ok(!('wipe' in (await s.req('/board/version?b=kitchen&hu=7', own)).body), 'applied: dropped, so a reflash is never wiped again');
+  // A second transfer gets a newer stamp, even within the same second; a new token (a reflash) drops it.
+  const r2 = await s.req('/board/secret123/api/boards/transfer?b=kitchen', { method: 'POST' });
+  assert.ok(r2.body.wipe > r.body.wipe);
+  const { body: key2 } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  assert.ok(!('wipe' in (await s.req('/board/version?b=kitchen', { headers: { 'X-Board-Token': key2.token } })).body));
+  // The board's own link can make itself a new link (revoking a leaked one) ...
+  const nl = await s.req(`/board/c/${key2.link}/api/boards/link?b=home`, { method: 'POST' });
+  assert.equal(nl.status, 200);
+  assert.equal(nl.body.id, 'kitchen');
+  assert.equal((await s.req(`/board/c/${key2.link}/`)).status, 404);
+  // ... and hand the board on: a new link and default settings, but no WiFi wipe from a link.
+  const r3 = await s.req(`/board/c/${nl.body.link}/api/boards/transfer?b=home`, { method: 'POST' });
+  assert.equal(r3.status, 200);
+  assert.equal(r3.body.id, 'kitchen', 'a link reaches its own board only');
+  assert.equal(r3.body.wipe, undefined);
+  assert.ok(!('wipe' in (await s.req('/board/version?b=kitchen', { headers: { 'X-Board-Token': key2.token } })).body));
+  assert.equal((await s.req(`/board/c/${nl.body.link}/`)).status, 404);
+  // Key endpoints stay the maker's.
+  assert.equal((await s.req(`/board/c/${r3.body.link}/api/boards/key`, { method: 'POST' })).status, 404);
+  // The maker's boards never get a wipe.
+  assert.ok(!('wipe' in (await s.req('/board/version?b=home', h)).body));
+  // The board list carries each board's firmware setting (the fleet table).
+  assert.deepEqual((await s.req('/board/secret123/api/boards')).body.map((x) => [x.id, x.fw]), [['home', 'stable'], ['kitchen', 'off']]);
+  await s.close();
+});
+
+test('baseball is the maker\'s only: a keyed board gets no games, screen, logos, or baseball settings', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const game = { id: 7, st: 'live', start: now - 3600, away: { ab: 'CHC', c: '#2a5bd8', r: 1 }, home: { ab: 'STL', c: '#d62a2a', r: 0 }, inn: 3, half: 'T', b: 0, s: 0, o: 0, on: [0, 0, 0] };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), mlb: fakeMlb([game]), logos: fakeLogos({ CHC: '#0e3386' }) });
+  s.store.update('home', { screen: 'baseball', baseballLayout: 'logos' });
+  s.store.create('kitchen', { from: 'home' }); // a copy keeps the baseball screen
+  const shared = { headers: { 'X-Board-Token': 'tok' } };
+  // Before it has a key, it's one of the maker's boards.
+  assert.equal((await s.req('/board/update?b=kitchen', shared)).body.screen, 'baseball');
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  const own = { headers: { 'X-Board-Token': key.token } };
+  // Keyed: the baseball screen falls back to transit, and no takeover on auto.
+  let b = (await s.req('/board/update?b=kitchen', own)).body;
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.mlb, undefined);
+  s.store.update('kitchen', { screen: 'auto' });
+  b = (await s.req(`/board/secret123/api/update?b=kitchen`)).body;
+  assert.equal(b.screen, 'transit');
+  assert.equal(b.mlb, undefined, 'the simulator copy has no games either');
+  // A test game doesn't bring it back.
+  await s.req('/board/secret123/api/test?b=kitchen', { method: 'POST', body: JSON.stringify({ game: 'live' }) });
+  assert.equal((await s.req('/board/update?b=kitchen', own)).body.mlb, undefined);
+  // The maker's board is unchanged.
+  b = (await s.req('/board/update?b=home', shared)).body;
+  assert.equal(b.screen, 'baseball');
+  assert.equal(b.mlb.games.length, 1);
+  // Baseball settings are refused, from its link and from the maker's page.
+  const c = `/board/c/${key.link}`;
+  for (const patch of [{ screen: 'baseball' }, { bbTeams: ['cubs'] }, { baseballLayout: 'bands' }, { logoBright: 50 }, { gameEvery: 30 }]) {
+    for (const p of [`${c}/api/state`, '/board/secret123/api/state?b=kitchen']) {
+      const r = await s.req(p, { method: 'POST', body: JSON.stringify(patch) });
+      assert.equal(r.status, 400, `${p} ${JSON.stringify(patch)}`);
+      assert.match(r.body.detail, /baseball/);
+    }
+  }
+  assert.equal((await s.req(`${c}/api/state`, { method: 'POST', body: JSON.stringify({ screen: 'ticker' }) })).status, 200);
+  assert.equal((await s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify({ bbTeams: ['cubs'] }) })).status, 200);
+  // Logos are the maker's boards' only.
+  const logo = async (id, h) => (await fetch(`http://127.0.0.1:${s.port}/board/logo/CHC-1?b=${id}`, h)).status;
+  assert.equal(await logo('kitchen', own), 404);
+  assert.equal(await logo('home', shared), 200);
+  // The board list says which boards have baseball (the page hides it on the others).
+  const list = (await s.req('/board/secret123/api/boards')).body;
+  assert.deepEqual(list.map((x) => [x.id, x.sports]), [['home', true], ['kitchen', false]]);
+  assert.equal((await s.req(`${c}/api/boards`)).body[0].sports, false);
+  // sim.png asked for the baseball screen draws the board's own screen instead.
+  assert.equal((await fetch(`http://127.0.0.1:${s.port}${c}/sim.png?screen=baseball&scale=1`)).status, 200);
+  // Without the key it's the maker's again.
+  await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'DELETE' });
+  assert.equal((await s.req('/board/secret123/api/state?b=kitchen', { method: 'POST', body: JSON.stringify({ screen: 'baseball' }) })).status, 200);
+  await s.close();
+});
+
 test('per-board link: the control page for that board only, without the owner\'s controls', async () => {
   const s = await serve();
   s.store.create('kitchen', { from: 'home', label: 'Kitchen' });
@@ -1349,7 +1489,7 @@ test('clock screen: only for boards whose firmware draws it (hk=skyline); the sk
   assert.equal(b.screen, 'transit');
   assert.equal(b.for, 'transit');
   assert.equal(b.skyline, undefined);
-  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports']);
+  assert.deepEqual(b.knob.ring, ['transit', 'weather', 'cycle']);
   assert.equal((await get('&s=clock')).for, 'transit', 'a press asking for clock gets transit too');
 
   // The S3 firmware reports it can draw the skyline.
@@ -1358,7 +1498,7 @@ test('clock screen: only for boards whose firmware draws it (hk=skyline); the sk
   assert.equal(b.screen, 'clock');
   assert.equal(b.for, 'clock');
   assert.equal(b.rows, undefined, 'transit sections stay home');
-  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports', 'clock'], at: 4 });
+  assert.deepEqual(b.knob, { ring: ['transit', 'weather', 'clock', 'cycle'], at: 2 });
   assert.equal(b.skyline.face, 'skyline');
   assert.equal(b.skyline.st, 'partly');
   assert.equal(b.skyline.temp, 63);
@@ -1477,7 +1617,7 @@ test('clock screen: decided per request from the update\'s own hk, so it never f
   // No health report at all (e.g. right after a server restart): the update's hk is enough.
   let b = (await s.req('/board/update?b=home&hk=skyline', h)).body;
   assert.equal(b.screen, 'clock');
-  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports', 'clock']);
+  assert.deepEqual(b.knob.ring, ['transit', 'weather', 'clock', 'cycle']);
   // Another board under the same ID reports health without hk: the S3's own requests still get clock.
   await s.req('/board/version?b=home&hu=60', h);
   for (let i = 0; i < 5; i++) assert.equal((await s.req('/board/update?b=home&hk=skyline', h)).body.screen, 'clock');
@@ -1552,14 +1692,14 @@ test('announce screen: only for firmware that reports it (hk=...:announce); the 
   let b = await get('&hk=skyline');
   assert.equal(b.screen, 'transit');
   assert.equal(b.msg, undefined);
-  assert.deepEqual(b.knob.ring, ['auto', 'transit', 'weather', 'sports', 'clock']);
+  assert.deepEqual(b.knob.ring, ['transit', 'weather', 'clock', 'cycle']);
   assert.equal((await get('&hk=skyline&s=announce')).for, 'transit', 'a press asking for announce gets transit too');
 
   b = await get('&hk=skyline:seventies:announce');
   assert.equal(b.screen, 'announce');
   assert.equal(b.for, 'announce');
   assert.equal(b.rows, undefined, 'transit sections stay home');
-  assert.deepEqual(b.knob, { ring: ['auto', 'transit', 'weather', 'sports', 'clock', 'announce'], at: 5 });
+  assert.deepEqual(b.knob, { ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 3 });
   assert.deepEqual(b.msg, { id: s.store.get('home').msg.id, style: 'type', lines: ['Dinner at 7', 'bring wine'] });
   // Other screens leave it out; the simulator's copy keeps it.
   s.store.update('home', { screen: 'transit' });
@@ -1591,5 +1731,149 @@ test('announce: the control page sets the message; a message that does not fit i
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=announce&scale=1`);
   assert.equal(png.status, 200);
   assert.equal(png.headers.get('content-type'), 'image/png');
+  await s.close();
+});
+
+test('peek: firmware that draws the peek chooser gets every section, each variant\'s data and the knob\'s variants', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(om)) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const HK = 'skyline:seventies:analog:daynight:gradient:announce:peek';
+  s.store.update('home', { screen: 'transit', clockFace: 'analog', msg: { text: 'Hi', style: 'note' } });
+  const res = await s.req(`/board/update?b=home&hk=${HK}`, h);
+  const b = res.body;
+  assert.equal(b.for, 'transit');
+  // Every screen's sections, not just the shown one's.
+  for (const k of ['rows', 'ticker', 'msg', 'cface']) assert.ok(k in b, k);
+  assert.ok(b.radar.timeBox, 'the whole radar section');
+  // Every variant's data: both forecast layouts and each face.
+  assert.ok('days' in b.pv && 'hours' in b.pv);
+  assert.equal(b.pv.skyline.face, 'skyline');
+  assert.equal(b.pv.cwx.temp, b.cwx.temp);
+  assert.deepEqual(Object.keys(b.pv.dn).sort(), ['dec', 'here', 'lon', 't']);
+  assert.equal(b.pv.ginv, undefined, 'gradient not inverted');
+  assert.deepEqual(b.knob, {
+    ring: ['transit', 'weather', 'clock', 'announce', 'cycle'], at: 0,
+    vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline', 'seventies', 'analog', 'daynight', 'gradient'], [], []],
+    sel: [0, 0, 2, 0, 0],
+  });
+  // Only the faces the firmware draws.
+  const less = (await s.req('/board/update?b=home&hk=skyline:peek', h)).body;
+  assert.deepEqual(less.knob.vars[2], ['skyline']);
+  assert.equal(less.pv.dn, undefined);
+  // The knob picks a variant with its category.
+  const sel = await s.req(`/board/select?b=home&s=clock&v=daynight&hk=${HK}`, { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.equal(sel.status, 200);
+  assert.deepEqual([sel.body.screen, sel.body.cface, sel.body.knob.sel[2]], ['clock', 'daynight', 3]);
+  assert.ok('rows' in sel.body, 'still every section');
+  assert.equal((await s.req(`/board/select?b=home&s=clock&v=nixie&hk=${HK}`, { method: 'POST', headers: { 'X-Board-Token': 'tok' } })).status, 400);
+  // Boards without peek are unchanged: sections, no pv, no variants.
+  const old = (await s.req('/board/update?b=home&hk=skyline', h)).body;
+  assert.equal(old.pv, undefined);
+  assert.deepEqual(Object.keys(old.knob), ['ring', 'at']);
+  await s.close();
+});
+
+test('radar view (wxView radar): the frames ride along when dry too; peek boards get every kept frame in pv.radar', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const dry = { on: false, frames: ['40100-a', '40100-b'], ft: [now - 400, now - 40], timeBox: [40, 0, 24, 22], split: false };
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), radar: fakeRadar(dry) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  s.store.update('home', { screen: 'weather' });
+  // Conditions: dry, so no frames (the weather layout).
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual(b.radar.frames, []);
+  // Radar view: the loop whatever the weather.
+  s.store.update('home', { wxView: 'radar' });
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual([b.radar.on, b.radar.frames], [false, ['40100-a', '40100-b']]);
+  assert.deepEqual(b.radar.ft, dry.ft);
+  // Peek: every kept frame in pv.radar, whatever the view; the weather variants include radar.
+  s.store.update('home', { wxView: 'now' });
+  b = (await s.req('/board/update?b=home&hk=skyline:peek', h)).body;
+  assert.deepEqual(b.radar.frames, []);
+  assert.deepEqual(b.pv.radar, { frames: dry.frames, ft: dry.ft });
+  assert.deepEqual(b.knob.vars[1], ['now', '5day', 'hourly', 'radar']);
+  const sel = await s.req('/board/select?b=home&s=weather&v=radar&hk=skyline:peek', { method: 'POST', headers: { 'X-Board-Token': 'tok' } });
+  assert.deepEqual([sel.body.radar.frames, sel.body.knob.sel[1]], [dry.frames, 3]);
+  await s.close();
+});
+
+test('firmware: boot images (CI or the page) and the setup image, maker only', async () => {
+  const S = require('./setup-image');
+  // A real-shaped app and the boot image before it (scripts/split-merged.js).
+  const seg = (len) => { const x = Buffer.alloc(8 + len, 0x22); x.writeUInt32LE(0x3c000000, 0); x.writeUInt32LE(len, 4); return x; };
+  const h = Buffer.alloc(24, 0); h[0] = 0xe9; h[1] = 1; h.writeUInt16LE(9, 12); h[23] = 1;
+  const s1 = seg(2000); s1.write('CTABOARD-BUILD:aaaaaaa:generic;', 100, 'latin1');
+  let app = Buffer.concat([h, s1]);
+  app = Buffer.concat([app, Buffer.alloc(Math.ceil((app.length + 1) / 16) * 16 - app.length, 0), Buffer.alloc(32, 0x5a)]);
+  const boot = Buffer.alloc(0x10000, 0xff);
+  boot[0] = 0xe9; boot.writeUInt16LE(9, 12);
+  boot.writeUInt32LE(1, 0xe000); // boot_app0
+  [[1, 2, 0x9000, 0x5000, 'nvs'], [1, 0, 0xe000, 0x2000, 'otadata'], [0, 0x10, 0x10000, 0x200000, 'ota_0'], [0, 0x11, 0x210000, 0x200000, 'ota_1']].forEach(([t, st, off, size, label], i) => {
+    const at = 0x8000 + i * 32;
+    boot[at] = 0xaa; boot[at + 1] = 0x50; boot[at + 2] = t; boot[at + 3] = st;
+    boot.writeUInt32LE(off, at + 4); boot.writeUInt32LE(size, at + 8); boot.fill(0, at + 12, at + 28); boot.write(label, at + 12, 'latin1');
+  });
+  const s = await serveFw({ deployToken: 'deploy123' });
+  const ci = (q, body, sig) => fetch(`http://127.0.0.1:${s.port}/board/firmware-upload${q}`, { method: 'POST', body, headers: { 'X-Deploy-Token': 'deploy123', 'X-Firmware-Signature': sig } });
+  assert.equal((await ci('', app, fwSig(app))).status, 200);
+  const image = () => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/firmware/image?v=aaaaaaa`);
+  assert.equal((await image()).status, 404, 'no boot image yet');
+  assert.equal((await ci('?boot=aaaaaaa', boot, fwSig(app))).status, 400, 'wrong signature');
+  assert.equal((await ci('?boot=bbbbbbb', boot, fwSig(boot))).status, 400, 'unknown build');
+  const r = await ci('?boot=aaaaaaa', boot, fwSig(boot));
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { boot: 'aaaaaaa' });
+  assert.equal((await s.req('/board/secret123/api/firmware')).body.builds[0].boot, true);
+  // The image: boot + app, which the setup tools read as a merged image.
+  const got = Buffer.from(await (await image()).arrayBuffer());
+  assert.ok(got.equals(Buffer.concat([boot, app])));
+  const info = S.inspectMerged(got);
+  assert.equal(info.version, 'aaaaaaa');
+  assert.equal(S.flashPlan(got, new Uint8Array(0x5000), info.nvs, info.end).length, 3);
+  // The page can attach one too (same checks).
+  const page = await s.req('/board/secret123/api/firmware/boot?v=aaaaaaa', signed(boot));
+  assert.equal(page.status, 200);
+  assert.equal((await s.req('/board/secret123/api/firmware/boot?v=aaaaaaa', { method: 'POST', body: boot, headers: { 'X-Firmware-Signature': fwSig(app) } })).status, 400);
+  // Never from an owner link.
+  s.store.create('kitchen', { from: 'home' });
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  for (const p of ['api/firmware/image?v=aaaaaaa', 'api/firmware/boot?v=aaaaaaa']) {
+    assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/c/${key.link}/${p}`)).status, 404, p);
+  }
+  await s.close();
+});
+
+test('your own boards with their own token (Set up a board): baseball stays; a transfer makes them someone else\'s', async () => {
+  const s = await serve();
+  s.store.create('den', { from: 'home' });
+  const k = await s.req('/board/secret123/api/boards/key?b=den&mine=1', { method: 'POST' });
+  assert.equal(k.status, 200);
+  const own = { headers: { 'X-Board-Token': k.body.token } };
+  assert.equal((await s.req('/board/version?b=den', own)).status, 200);
+  assert.equal((await s.req('/board/version?b=den', { headers: { 'X-Board-Token': 'tok' } })).status, 401, 'its own token only');
+  let me = (await s.req('/board/secret123/api/boards')).body.find((b) => b.id === 'den');
+  assert.deepEqual([me.mine, me.sports], [true, true]);
+  assert.equal((await s.req('/board/secret123/api/state?b=den', { method: 'POST', body: JSON.stringify({ screen: 'baseball' }) })).status, 200);
+  // Given away: someone else's now.
+  await s.req('/board/secret123/api/boards/transfer?b=den', { method: 'POST' });
+  me = (await s.req('/board/secret123/api/boards')).body.find((b) => b.id === 'den');
+  assert.deepEqual([me.mine, me.sports], [undefined, false]);
+  await s.close();
+});
+
+test('Set up a board\'s scripts: the maker\'s page only', async () => {
+  const s = await serve();
+  const js = await fetch(`http://127.0.0.1:${s.port}/board/secret123/setup-image.js`);
+  assert.equal(js.status, 200);
+  assert.match(await js.text(), /root\.BoardSetup = factory\(\)/);
+  const tools = await fetch(`http://127.0.0.1:${s.port}/board/secret123/setup-tools.js`);
+  assert.ok([200, 404].includes(tools.status), 'built by npm run build');
+  s.store.create('kitchen', { from: 'home' });
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  for (const f of ['setup-image.js', 'setup-tools.js']) assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/c/${key.link}/${f}`)).status, 404, f);
   await s.close();
 });

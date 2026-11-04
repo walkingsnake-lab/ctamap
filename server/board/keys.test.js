@@ -12,7 +12,7 @@ test('keys: only the hash is kept, and keys survive a restart', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'board-keys-'));
   const k = createKeys({ dir, log: quiet });
   assert.equal(k.check('kitchen', 'x'), null); // no key: the shared token applies
-  const { token, link } = k.issue('kitchen', 100);
+  const { token, link } = k.issue('kitchen', { now: 100 });
   assert.equal(k.check('kitchen', token), true);
   assert.equal(k.check('kitchen', token + 'x'), false);
   assert.equal(k.check('kitchen', undefined), false);
