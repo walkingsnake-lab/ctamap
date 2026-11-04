@@ -707,6 +707,30 @@ void Board::do_knob(long long ms) {
   const Value &k = player.p["knob"];
   int n = (int)k["ring"].size();
   if (n < 1) return;  // a server without the knob ring
+  bool idle = !chooser.open && !peek.open;
+  // A board that's off: the first turn or press turns it back on (the
+  // server sets Auto brightness on any select), on the screen it was on.
+  if (idle && (c || down) && player.p["bright"].is_num() && player.p["bright"].num() == 0 && !player.p["ab"].truthy()) {
+    if (flight_) return;
+    say("[board] knob: turning the panel back on");
+    if (watchdog) watchdog->feed();
+    job_err_.clear();
+    Flight f;
+    f.id = json::str(k["ring"][(size_t)((((int)k["at"].num(0)) % n + n) % n)]);
+    f.work = [this] { return net->select(flight_->id, "", flight_->v, flight_->err); };
+    launch(std::move(f));
+    return;
+  }
+  // A Rain nearby visit (spec §10, "Interruptions"): the first turn or
+  // press only ends it; the next one opens the chooser.
+  long long nw = now(ms);
+  if (idle && (c || down) && !override_.screen && player.visiting(nw)) {
+    long long every = (long long)player.p["radar"]["visit"]["every"].num(60);
+    player.visit_skip_until = (draw::fdiv(nw, every) + 1) * every;
+    say("[board] knob: ended the rain visit");
+    player.set_screen(player.auto_screen(nw), (double)ms);
+    return;
+  }
   if (!peek_mode()) {
     if (c) chooser.turn(c, (int)k["at"].num(0), n, (double)ms);
     return;

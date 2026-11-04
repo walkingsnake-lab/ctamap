@@ -190,7 +190,11 @@ function latchDue(prev, next, now) {
 // prevView: this board's last view state (see chooseView); the new one is
 // returned as viewState for the caller to keep.
 function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}) {
-  const live = arrivals.filter((a) => a.t >= now - DROP_GRACE).sort((a, b) => a.t - b.t);
+  // Lines & destinations: lines turned off here, and (otherLines false)
+  // lines that don't serve the station (cfg.lines: the station's lines).
+  const off = new Set(cfg.hideLines || []);
+  const serves = cfg.otherLines === false && Array.isArray(cfg.lines) ? new Set(cfg.lines) : null;
+  const live = arrivals.filter((a) => a.t >= now - DROP_GRACE && !off.has(a.ln) && (!serves || serves.has(a.ln))).sort((a, b) => a.t - b.t);
 
   // Group into rows by line + short destination.
   const groups = new Map();

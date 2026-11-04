@@ -172,10 +172,12 @@ void Player::prune_clouds() {
 }
 
 Screen Player::auto_screen(long long now) const {
-  // The server's `screen`, except that on the auto screen `rot` alternates
-  // the main screens every `every` s, and the weather screen is visited for
-  // `for` s at the start of every `every`-s cycle while rain is in the box
-  // (or always). Both epoch-aligned. Mirrors autoScreen() in draw.js.
+  // The server's `screen`, except that in the Cycle `rot` takes turns
+  // through its screens every `every` s, and (Rain nearby) the weather
+  // screen is visited for `for` s at the start of every `every`-s cycle
+  // while rain is in the box (or always), on any base screen but weather,
+  // unless the knob ended one (visit_skip_until). Both epoch-aligned.
+  // Mirrors autoScreen() in draw.js.
   static const std::string TRANSIT = "transit";
   const Value &ps = p["screen"];
   const std::string &base_name = has_p && ps.is_str() && ps.truthy() ? ps.s : TRANSIT;
@@ -192,19 +194,42 @@ Screen Player::auto_screen(long long now) const {
   // Visits interrupt only these screens, by name: one this build doesn't
   // know (or a non-string) draws as transit but gets no visits, as in draw.js.
   bool visited = !(has_p && ps.truthy() && !ps.is_str()) &&
-                 (base_name == "transit" || base_name == "ticker" || base_name == "baseball");
+                 (base_name == "transit" || base_name == "ticker" || base_name == "baseball" || base_name == "clock" ||
+                  base_name == "announce");
   const Value &r = p["radar"];
   const Value &v = r["visit"];
-  if (!visited || !v.truthy() || !(v["every"].num(0) > 0) || !(r["on"].truthy() || v["always"].truthy())) return s;
+  if (!visited || !v.truthy() || !(v["every"].num(0) > 0) || !(r["on"].truthy() || v["always"].truthy()) ||
+      now < visit_skip_until)
+    return s;
   return fmod_floor(now, (long long)v["every"].num()) < (long long)v["for"].num() ? Screen::Weather : s;
 }
 
+bool Player::visiting(long long now) const {
+  // The screen with a visit, against the Cycle's turn alone (no visit).
+  if (!has_p || auto_screen(now) != Screen::Weather) return false;
+  const Value &ps = p["screen"];
+  Screen s = screen::from(ps.is_str() ? ps.s : std::string());
+  const Value &rot = p["rot"];
+  if (rot.truthy() && rot["screens"].size() > 1 && rot["every"].num(0) > 0) {
+    const Value &scr = rot["screens"];
+    bool in = false;
+    for (size_t i = 0; i < scr.size(); i++)
+      if (ps.is_str() && scr[i].str_or("") == ps.s) in = true;
+    if (in) s = screen::from(scr[(size_t)fmod_floor(fdiv(now, (long long)rot["every"].num()), (long long)scr.size())].str_or(""));
+  }
+  return s != Screen::Weather;
+}
+
 bool Player::wants_frames() const {
-  // Radar frames are needed on the radar screen, ahead of visits, and for
-  // the peek chooser (pv.radar) at any time.
+  // Radar frames are needed on the radar screen, ahead of visits, when the
+  // weather screen takes a turn in the Cycle, and for the peek chooser
+  // (pv.radar) at any time.
   if (screen == Screen::Weather) return true;
   const Value &r = p["radar"];
   if (has_p && p["pv"]["radar"]["frames"].truthy()) return true;
+  const Value &scr = p["rot"]["screens"];
+  for (size_t i = 0; has_p && i < scr.size(); i++)
+    if (scr[i].str_or("") == "weather") return true;
   return has_p && r["on"].truthy() && r["visit"].truthy();
 }
 
