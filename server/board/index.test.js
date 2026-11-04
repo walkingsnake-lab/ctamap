@@ -380,7 +380,7 @@ test('simulator: station list and previewing another station without changing th
   const list = await s.req('/board/secret123/api/stations');
   assert.equal(list.status, 200);
   assert.ok(list.body.length > 100);
-  assert.ok(list.body.some((x) => x.mapid === '40100' && x.desc === 'Morse (Red Line)'));
+  assert.ok(list.body.some((x) => x.mapid === '40100' && x.desc === 'Morse (Red Line)' && x.name === 'Morse' && x.lines.join() === 'RD'));
   const prev = await s.req('/board/secret123/api/update?b=home&mapid=40850');
   assert.equal(prev.body.header, 'HW LIBRARY');
   assert.deepEqual(tracker.asked, ['40850']);

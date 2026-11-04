@@ -159,7 +159,7 @@ function createBoard({
 
   const stationById = new Map(stations.map((st) => [st.mapid, st]));
   const stationList = JSON.stringify(stations
-    .map(({ mapid, desc, short }) => ({ mapid, desc, short }))
+    .map(({ mapid, name, desc, short, lines }) => ({ mapid, name, desc, short, lines }))
     .sort((a, b) => a.desc.localeCompare(b.desc)));
   // Simulator preview settings from the query: mapid, header=0|1, weather=0|1,
   // rtime=0|1 (radar corner: frame time or temperature), bblayout=classic|logos|bands (baseball layout).
