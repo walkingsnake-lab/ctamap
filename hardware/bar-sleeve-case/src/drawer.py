@@ -202,18 +202,25 @@ RAIL_LAP = 0.75                                 # how far the rails reach down p
 # The board sits where it did (SEN_TOP), its sockets in the same channels. 'pillars' = the v5 mount.
 SENSOR_MOUNT = os.environ.get('SENSOR_MOUNT', 'sled')
 SLED_T = 2.0                                    # sled plate under the board
-SLED_X_M, SLED_Y0 = 0.5, 31.0                   # margin past the board's ends; sled front edge (y)
+_DY = Y_FACE - 12.0                             # a deeper hood (P4: 16 mm) moves everything behind the face back by this
+SLED_X_M, SLED_Y0 = 0.5, 31.0 + _DY             # margin past the board's ends; sled front edge (y)
 SLED_TAB_W, SLED_GRIP = 4.4, 2.0                # back tabs: width, depth into the hooks
 SLED_CL = 0.25                                  # tab clearance in the hook's slot (top and bottom; 0.2 a side in x)
 HOOK_FLARE = 0.8                                # 45 deg flare at the slot's mouth
-HOOK_WALL, HOOK_FRONT, HOOK_LIP = 1.2, 57.0, 1.25   # hook cheeks either side of the slot, hook front face (y), lip under the tab
+HOOK_WALL, HOOK_FRONT, HOOK_LIP = 1.2, 57.0 + _DY, 1.25   # hook cheeks either side of the slot, hook front face (y), lip under the tab
 LV_BLIND = 1.5                                  # louver slots behind the hooks end this far behind the band's inner face (1 mm past the hook)
-SLED_SCREW = (48.0, 34.5)                       # front screw: 3.6 mm of web to the light hole, 10 mm from the nearest crush rib
+SLED_SCREW = (48.0, 34.5 + _DY)                 # front screw: 3.6 mm of web to the light hole, 10 mm from the nearest crush rib
 SLED_BOSS_D, SLED_PILOT = 6.0, 2.4
 SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray's top (button head 4.4-4.7 x 1.4-1.6), 0.7 wall left
 
 
-def tray():
+def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=None, extra_cuts=()):
+    """the tray. The options are for trays split in two (p4.py), and their defaults give the one-piece tray:
+    top_bar: half width of the solid bar across the middle of the top louver rows (LV_SPLIT / 2);
+    bottom_gap: half width of a gap in the bottom louver rows at the middle (0: none);
+    ribbon_hooks: [(x, z)] of the ribbon hook pairs (default: one pair between the S3's connector and the panel input);
+    hook_lip: the hooks' lip thickness (their reach is 4 mm: 4.0 makes the lip's underside 45 deg back-down);
+    tie_x0: left end of the tie loop's patch (default: just right of the first hook pair); extra_cuts: more cuts"""
     outer = rr_cs(BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL, BORE_R - TRAY_CL)
     inner = rr_cs(BORE_HX - TRAY_CL - TRAY_WT, BORE_HZ - TRAY_CL - TRAY_WT, BORE_R - TRAY_CL - TRAY_WT)
     t = prism_y(outer, Y0, Y1) + (prism_y(outer, YF, Y0 + 0.01) - prism_y(inner, YF - 1, Y0 + 0.02))
@@ -269,18 +276,18 @@ def tray():
     idc_x = S3_EDGE - 57.0
     pi_x = min(h[0] for h in HEADERS)
     RZ = ZC + min(HEADERS, key=lambda h: h[0])[1]
-    hook_xs = [round((idc_x + pi_x) / 2, 1)]
-    for hx in hook_xs:
+    hooks = ribbon_hooks if ribbon_hooks is not None else [(round((idc_x + pi_x) / 2, 1), RZ)]
+    for hx, hz_r in hooks:
         for side in (-1, 1):
-            zi = RZ + side * (HOOK_RW / 2 + 1.0); zo = zi + side * 3.0
-            ya, yb = Y0 - 3.0 - 1.5, Y0 - 3.0
+            zi = hz_r + side * (HOOK_RW / 2 + 1.0); zo = zi + side * 3.0
+            ya, yb = Y0 - 3.0 - hook_lip, Y0 - 3.0
             t = t + box(hx - 2.5, hx + 2.5, ya, Y0 + 0.01, min(zi, zo), max(zi, zo))
             tip = zi - side * 4.0
             t = t + Manifold.batch_hull([box(hx - 2.5, hx + 2.5, ya, yb, min(zi, zo), max(zi, zo)), box(hx - 2.5, hx + 2.5, ya, ya + 0.01, tip - 0.005, tip + 0.005)])
     # tie loop for the power-cable bundle (12 mm hook-and-loop strap): a bar over a tunnel running up and down the back wall,
     # in the clear patch above the ribbon, between the ribbon hook and the S3's connector, below the top louver band, with
     # TIE_EXIT free at each end so the strap can turn out over the bundle
-    tx0, tx1 = hook_xs[0] + 2.5 + 1.0, S3_EDGE - 63.8 - 1.0
+    tx0, tx1 = (hooks[0][0] + 2.5 + 1.0 if tie_x0 is None else tie_x0), S3_EDGE - 63.8 - 1.0
     tx = (tx0 + tx1) / 2
     band_lo = zt_rows[0] - LV_H / 2 - 1.5
     tz = (RZ + HOOK_RW / 2 + band_lo) / 2
@@ -306,8 +313,11 @@ def tray():
         if any(lo < hz_ + P3.S3_POST_D / 2 + 3.7 and hi > hz_ - P3.S3_POST_D / 2 - 3.7 for hz_ in hzs):
             segs = minus(segs, *pad)
         if zc > ZC:                                                          # top rows: a bar in the middle
-            segs = minus(segs, -LV_SPLIT / 2, LV_SPLIT / 2)
+            tb = LV_SPLIT / 2 if top_bar is None else top_bar
+            segs = minus(segs, -tb, tb)
         if zc < ZC:                                                          # bottom rows: gaps at the screw bosses
+            if bottom_gap:
+                segs = minus(segs, -bottom_gap, bottom_gap)
             for scx in C.SCREW_XS:
                 segs = minus(minus(segs, -scx - 6.5, -scx + 6.5), scx - 6.5, scx + 6.5)
         for xa, xb in segs:
@@ -349,6 +359,7 @@ def tray():
     # right wall: window for the USB-C plug and the edge buttons
     # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
     cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
+    cuts += list(extra_cuts)
     t = t - Manifold.batch_boolean(cuts, ADD)
     t = t + crush_ribs()
     return max(t.decompose(), key=lambda m: m.volume())

@@ -9,7 +9,7 @@
    ],
    "square": 246.3,
    "spare_a_side": 4.8,
-   "volume_cm3": 102.6
+   "volume_cm3": 102.7
   },
   "p4-shell-bottom-walnut-backdown.stl": {
    "watertight": true,
@@ -31,7 +31,7 @@
    ],
    "square": 146.2,
    "spare_a_side": 54.9,
-   "volume_cm3": 97.5
+   "volume_cm3": 98.1
   },
   "p4-tray-right.stl": {
    "watertight": true,
@@ -42,7 +42,18 @@
    ],
    "square": 146.2,
    "spare_a_side": 54.9,
-   "volume_cm3": 100.4
+   "volume_cm3": 101.6
+  },
+  "p4-tray-right-window.stl": {
+   "watertight": true,
+   "extents": [
+    6.0,
+    6.0,
+    1.0
+   ],
+   "square": 6.0,
+   "spare_a_side": 125.0,
+   "volume_cm3": 0.0
   },
   "p4-spine.stl": {
    "watertight": true,
@@ -60,11 +71,11 @@
    "extents": [
     30.0,
     14.0,
-    39.8
+    40.1
    ],
    "square": 30.0,
    "spare_a_side": 113.0,
-   "volume_cm3": 2.3
+   "volume_cm3": 2.5
   },
   "p4-diffuser-left-white.stl": {
    "watertight": true,
@@ -198,6 +209,50 @@
    "spare_a_side": 107.3,
    "volume_cm3": 2.8
   },
+  "p4-sensor-sled.stl": {
+   "watertight": true,
+   "extents": [
+    26.4,
+    28.0,
+    6.4
+   ],
+   "square": 28.0,
+   "spare_a_side": 114.0,
+   "volume_cm3": 1.4
+  },
+  "p4-cleat-case.stl": {
+   "watertight": true,
+   "extents": [
+    150.0,
+    25.0,
+    12.0
+   ],
+   "square": 150.0,
+   "spare_a_side": 53.0,
+   "volume_cm3": 35.3
+  },
+  "p4-cleat-wall.stl": {
+   "watertight": true,
+   "extents": [
+    149.0,
+    44.0,
+    12.0
+   ],
+   "square": 149.0,
+   "spare_a_side": 53.5,
+   "volume_cm3": 69.2
+  },
+  "p4-boot-key.stl": {
+   "watertight": true,
+   "extents": [
+    26.4,
+    10.0,
+    3.4
+   ],
+   "square": 26.4,
+   "spare_a_side": 114.8,
+   "volume_cm3": 0.1
+  },
   "coupon-p4-drawer-fit-shell.stl": {
    "watertight": true,
    "extents": [
@@ -252,6 +307,8 @@
    ]
   ],
   "bridge_z": -56.0,
-  "spine_z": 45.7
+  "spine_z": 45.7,
+  "ribbon_drop": 27.5,
+  "idc_z": -27.5
  }
 }
