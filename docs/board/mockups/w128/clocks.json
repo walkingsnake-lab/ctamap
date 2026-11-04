@@ -38,7 +38,7 @@
   "kind": "clock",
   "id": "clock-seventies",
   "title": "Seventies swoosh",
-  "desc": "The stripes run along the bottom, climb, and run along the top to the right edge. Time on the left, date and temperature under the top run.",
+  "desc": "The stripes run along the bottom, climb, and run along the top to the right edge. Time on the left; the weekday in full, then the date and temperature, under the top run.",
   "note": ""
  },
  {
@@ -50,10 +50,10 @@
  },
  {
   "kind": "clock",
-  "id": "clock-daynight",
-  "title": "Day/night + sun times",
-  "desc": "The world map as it is, with sunrise and sunset and the time in three other cities.",
-  "note": "A wider map needs a new world mask, and at 128 × 26 it can't keep its proportions and still show the southern hemisphere."
+  "id": "clock-words-64",
+  "title": "Word clock at 64",
+  "desc": "The same idea in 64 columns: 16 letters by 5 rows, words run together and share letters (SEVENINEIGHTWO), as on physical word clocks. 9:42 PM lights TWENTY, TO, TEN and PM.",
+  "note": "Drops IT IS and MINUTES. M and W are drawn 3 px wide to fit the 4 px grid; the board font has them at 5."
  },
  {
   "kind": "clock",

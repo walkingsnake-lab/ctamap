@@ -145,7 +145,7 @@ function seventies() {
       if (y <= cy1 && y >= cy2 && (x === cx1 + r - 1 || x === cx1 + r)) on = true;           // the climb
       if (x >= cx2 && (y === cy2 - r2 - 1 || y === cy2 - r2)) on = true;                      // top run
       if (x >= cx1 && y > cy1) { const u = 2 * (x - cx1) + 1, v = 2 * (y - cy1) + 1, d = u * u + v * v; if (d > (2 * r - 2) ** 2 && d <= (2 * r + 2) ** 2) on = true; }
-      if (x < cx2 && y < cy2) { const u = 2 * (x - cx2) + 1, v = 2 * (y - cy2) + 1, d = u * u + v * v; if (d > (2 * r2) ** 2 && d <= (2 * r2 + 4) ** 2 && x >= cx1 - 1) on = true; }
+      if (x < cx2 && y < cy2) { const u = 2 * (x - cx2) + 1, v = 2 * (y - cy2) + 1, d = u * u + v * v; if (d > (2 * r2 - 2) ** 2 && d <= (2 * r2 + 2) ** 2) on = true; }   // same band as the climb and the top run
       if (on) f.set(x, y, c);
     }
   });
@@ -154,7 +154,7 @@ function seventies() {
   const tw = measure('vcr', '9:42');
   t.text('vcr', '9:42', Math.floor((cx1 - 2 - tw) / 2), 16, '#ffffff');
   for (let y = 0; y < H; y++) for (let x = 0; x < cx1 - 1; x++) if (t.get(x, y)[0]) f.set(x, y, hex(band(y)));
-  f.text('5x7', 'TUE', 78, 20, COLS[0]);
+  f.text('5x7', 'TUESDAY', 78, 20, COLS[0]);
   f.text('5x7', 'NOV 3', 78, 29, COLS[1]);
   rtext(f, '5x7', '54°', 127, 29, COLS[2]);
   return f;
@@ -178,6 +178,25 @@ function wordClock() {
   return f;
 }
 
+// Word clock in 64 columns: 16 letters x 5 rows on a 4 px grid, words run
+// together and sharing letters (sevENINEIGHTWO, TONE), the way physical word
+// clocks pack theirs. No IT IS or MINUTES; AM and PM fill the spare cells.
+// Tom Thumb's M and W are 5 px wide, so this face draws them 3 px wide.
+const NARROW = { M: ['#.#', '###', '###', '#.#', '#.#'], W: ['#.#', '#.#', '###', '###', '#.#'] };
+function wordClock64() {
+  const f = new Frame(64, H);
+  const rows = ['QUARTERTWENTYTEN', 'HALFFIVEPASTTONE', 'SEVENINEIGHTWOAM', 'THREELEVENSIXTEN', 'FOURFIVETWELVEPM'];
+  // 9:42 PM -> 9:40 -> TWENTY TO TEN PM: [row, first column, length].
+  const lit = [[0, 7, 6], [1, 12, 2], [3, 13, 3], [4, 14, 2]];
+  rows.forEach((row, j) => [...row].forEach((ch, i) => {
+    const on = lit.some(([r, c, n]) => r === j && i >= c && i < c + n);
+    const col = on ? '#ffb000' : '#2a2a2a', x = i * 4, base = 6 + j * 6;
+    if (NARROW[ch]) NARROW[ch].forEach((r, y) => [...r].forEach((c, k) => { if (c === '#') f.set(x + k, base - 5 + y, hex(col)); }));
+    else f.text('small', ch, x, base, col);
+  }));
+  return f;
+}
+
 // Analog face (real 64-wide render) with this month's calendar beside it.
 function calendarPanel(f) {
   const x0 = 37, colW = 13;
@@ -191,13 +210,6 @@ function calendarPanel(f) {
     const str = String(d);
     ctext(f, 'small', str, cx, base, today ? '#ffffff' : col === 0 || col === 6 ? '#6a6a6a' : '#b8b8b8');
   }
-}
-
-// Day/night map (real 64-wide render) with the sun's times and other cities' clocks.
-function sunPanel(f) {
-  const x0 = 67;
-  const lines = [['SUNRISE', '6:22 AM', '#ffc23a'], ['SUNSET', '4:46 PM', '#ff7414'], ['NEW YORK', '10:42 PM', '#cccccc'], ['LONDON', '3:42 AM', '#cccccc'], ['TOKYO', '12:42 PM', '#cccccc']];
-  lines.forEach(([l, v, c], i) => { const base = 6 + i * 6; f.text('small', l, x0, base, '#666666'); rtext(f, 'small', v, 127, base, c); });
 }
 
 async function main() {
@@ -222,7 +234,6 @@ async function main() {
 
   // The face only (columns 0-33); the calendar replaces the date text.
   const analog = new Frame(W, H); blit(analog, real64('analog 9:42:37 PM'), 0, 34); calendarPanel(analog);
-  const dn = new Frame(W, H); blit(dn, real64('daynight evening'), 0); sunPanel(dn);
 
   const P = Object.fromEntries(panoramas.map(([id, title, f]) => [id, { id, title, f }]));
   const MOCKS = [
@@ -231,18 +242,18 @@ async function main() {
     { kind: 'skyline', ...P['sky-night'], desc: 'Clear night: twice the stars, the pier lit, the wheel cycling color.', note: '' },
     { kind: 'skyline', ...P['sky-snow'], desc: 'Snow on every roof, flakes across the whole width.', note: '' },
     { kind: 'skyline', id: 'sky-bigclock', title: 'Skyline with a big clock', f: big, desc: 'The 64 scene kept at the left; the right half is open lake and sky, with the clock in the big digits.', note: 'Keeps the existing art; only the sky and water get wider.' },
-    { kind: 'clock', id: 'clock-seventies', title: 'Seventies swoosh', f: seventies(), desc: 'The stripes run along the bottom, climb, and run along the top to the right edge. Time on the left, date and temperature under the top run.', note: '' },
+    { kind: 'clock', id: 'clock-seventies', title: 'Seventies swoosh', f: seventies(), desc: 'The stripes run along the bottom, climb, and run along the top to the right edge. Time on the left; the weekday in full, then the date and temperature, under the top run.', note: '' },
     { kind: 'clock', id: 'clock-analog', title: 'Analog + calendar', f: analog, desc: 'The analog face as it is, with the month beside it and today highlighted.', note: 'The calendar replaces the face\'s date and temperature; five week rows fill the height, so there\'s no weekday header.' },
-    { kind: 'clock', id: 'clock-daynight', title: 'Day/night + sun times', f: dn, desc: 'The world map as it is, with sunrise and sunset and the time in three other cities.', note: 'A wider map needs a new world mask, and at 128 × 26 it can\'t keep its proportions and still show the southern hemisphere.' },
+    { kind: 'clock', id: 'clock-words-64', title: 'Word clock at 64', f: wordClock64(), w64: true, desc: 'The same idea in 64 columns: 16 letters by 5 rows, words run together and share letters (SEVENINEIGHTWO), as on physical word clocks. 9:42 PM lights TWENTY, TO, TEN and PM.', note: 'Drops IT IS and MINUTES. M and W are drawn 3 px wide to fit the 4 px grid; the board font has them at 5.' },
     { kind: 'clock', id: 'clock-words', title: 'Word clock', f: wordClock(), desc: 'Every word stays faintly on the grid; the ones that tell the time light up. 9:42 PM reads TWENTY MINUTES TO TEN.', note: 'A new face rather than a widened one. Rounds to five minutes.' },
   ];
-  for (const m of MOCKS) if (m.f.w !== W) m.f = toFrame128(m.f);
+  for (const m of MOCKS) if (m.f.w !== W && !m.w64) m.f = toFrame128(m.f);
 
   const q5 = (v) => v & 0xf8;
   fs.mkdirSync(OUT, { recursive: true });
   for (const m of MOCKS) {
-    const q = new Frame(W, H);
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) q.set(x, y, m.f.get(x, y).map(q5));
+    const q = new Frame(m.f.w, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < m.f.w; x++) q.set(x, y, m.f.get(x, y).map(q5));
     fs.writeFileSync(path.join(OUT, `${m.id}.png`), q.toPNG(10));
   }
   const GAP = 4, TH = 8, COLS = 2;
@@ -250,7 +261,7 @@ async function main() {
   MOCKS.forEach((m, i) => {
     const ox = GAP + (i % COLS) * (W + GAP), oy = GAP + Math.floor(i / COLS) * (TH + H + GAP);
     sheet.text('small', m.title.toUpperCase(), ox, oy + 5, '#5a5a5a');
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) sheet.set(ox + x, oy + TH + y, m.f.get(x, y).map(q5));
+    for (let y = 0; y < H; y++) for (let x = 0; x < m.f.w; x++) sheet.set(ox + x, oy + TH + y, m.f.get(x, y).map(q5));
   });
   fs.writeFileSync(path.join(OUT, 'clocks-sheet.png'), sheet.toPNG(5));
   fs.writeFileSync(path.join(OUT, 'clocks.json'), JSON.stringify(MOCKS.map(({ kind, id, title, desc, note }) => ({ kind, id, title, desc, note })), null, 1));

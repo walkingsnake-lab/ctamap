@@ -3,7 +3,7 @@
   "kind": "map",
   "id": "map-tall",
   "title": "Full height + panel (recommended)",
-  "desc": "True shape on all 32 rows: 80 × 32 at 4.5° a pixel, 84° N to 60° S, every continent but Antarctica. The 45 columns beside it hold the time, sunrise, sunset and day length.",
+  "desc": "True shape on all 32 rows: 80 × 32 at 4.5° a pixel, 84° N to 60° S, every continent but Antarctica. The 45 columns beside it hold the time, sunrise and sunset (a half sun on the horizon, then the arrow) and day length.",
   "note": "Sunrise and sunset are for Chicago on Nov 1 (6:22 AM, 4:46 PM)."
  },
  {

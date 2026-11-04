@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-// The board's existing screens on a 128x32 panel (two 64x32 chained).
-// Two approaches: two existing 64-wide renders side by side (real draw.js
-// output, no new layout code), and screens redrawn for the width. Not in
-// draw.js. Transit times are from the recorded fixtures; the rest is made up
+// The board's existing screens redrawn for a 128x32 panel (two 64x32
+// chained). Not in draw.js. Transit times are from the recorded fixtures; the rest is made up
 // unless noted.
 //   node scripts/mock-128-screens.js   -> docs/board/mockups/w128/*.png
 
@@ -16,8 +14,6 @@ const draw = require(path.join(B, 'render'));
 const icons = require(path.join(B, 'icons'));
 const G = require(path.join(B, 'glyphs'));
 const radar = require(path.join(B, 'radar'));
-const { tzOffset } = require(path.join(B, 'time'));
-const { build } = require(path.join(__dirname, '..', 'firmware', 'tests', 'scenarios'));
 
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'mockups', 'w128');
 const F = packFonts();
@@ -48,20 +44,14 @@ function times(f, ts, x1, base, end, { col = (i) => (i === 0 ? C.amber : C.dim),
   let x = x1;
   for (let i = keep.length - 1; i >= 0; i--) { const w = measure('small', keep[i]); f.text('small', keep[i], x - w + 1, base, col(i)); x -= w + gap; }
 }
-function blit(f, src, x0, { w = 64, from = 0 } = {}) {
-  for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) f.set(x0 + x, y, src.get(from + x, y));
-}
 
 // ======================= redrawn =======================
 
-// Transit rows, full width: CTA destination names, up to 5 times, weather in the header.
+// Transit rows, full width: CTA destination names, up to 5 times.
 function transitRows() {
   const f = new Frame(W, H);
   f.text('small', 'BELMONT', 0, 6, C.head);
-  let x = rtext(f, 'small', '11:16', 127, 6, C.clock);
-  x = 127 - measure('small', '11:16') - 6;
-  rtext(f, 'small', '57°', x, 6, tempColor(57));
-  rtext(f, 'small', 'PT CLOUDY', x - measure('small', '57°') - 4, 6, C.wxText);
+  rtext(f, 'small', '11:16', 127, 6, C.clock);
   const rows = [['RD', 'HOWARD', [5, 12, 19, 28, 34]], ['RD', '95TH/DAN RYAN', [4, 14]], ['BR', 'KIMBALL', [5, 17, 38, 47]], ['BR', 'LOOP', ['DUE', 16]]];
   rows.forEach(([ln, lbl, ts], i) => {
     const top = 8 + i * 6;
@@ -91,22 +81,34 @@ function transitSplit() {
   return f;
 }
 
-// Ticker: two big rows, the next train big and the ones after it small.
+// Ticker in the style of the CTA's platform signs: the row number in the grey
+// index column, the full destination, the time at the far right, and after
+// it a live-train signal (three arcs) or, for a scheduled train, a clock.
+// 7 x 7, the height of the 5x7 capitals: three arcs opening to the upper right, and a clock face.
+const LIVE = ['###....', '...##..', '##...#.', '..#..#.', '#..#..#', '.#.#..#', '.#..#.#'];
+const SCHED = ['.#####.', '#..#..#', '#..#..#', '#..##.#', '#.....#', '#.....#', '.#####.'];
 function ticker() {
   const f = new Frame(W, H);
   f.text('small', 'MORSE', 0, 6, C.head);
   rtext(f, 'small', '11:16', 127, 6, C.clock);
-  const rows = [['RD', '95th', 'Due', [7]], ['RD', 'Howard', '3', [8, 17, 25]]];
-  rows.forEach(([ln, dest, t, next], i) => {
-    const top = 8 + i * 12;
-    f.fill(0, top, 128, 11, scale(LINE[ln], 0.55));
-    f.fill(0, top, 5, 11, C.index);
-    f.text('5x7', dest, 8, top + 9, C.white);
-    const main = t === 'Due' ? 'Due' : `${t}${s(G.MIN)}`;
-    const mx = 84;
-    rtext(f, '5x7', main, mx, top + 9, C.white);
-    f.text('small', 'THEN', mx + 6, top + 8, scale('#ffffff', 0.45));
-    times(f, next, 127, top + 8, mx + 6 + measure('small', 'THEN'), { col: () => scale('#ffffff', 0.8) });
+  // Morse, Oct 3, 11:16 PM; the Howard train is shown as scheduled to show the clock.
+  const rows = [['RD', '95th/Dan Ryan', 'Due', true], ['RD', 'Howard', '3', false]];
+  rows.forEach(([ln, dest, t, live], i) => {
+    const top = 7 + i * 13, base = top + 9;
+    f.fill(0, top, 5, 12, C.index);
+    f.fill(5, top, 123, 12, scale(LINE[ln], 0.55));
+    f.text('small', String(i + 1), 1, base, C.label);
+    f.text('5x7', dest, 7, base, C.white);
+    // Icon 1px in from the right edge, the time 3px clear of it.
+    const ix = 126 - 6;
+    (live ? LIVE : SCHED).forEach((r, y) => [...r].forEach((c, x) => { if (c === '#') f.set(ix + x, base - 7 + y, hex(C.white)); }));
+    const tr = ix - 4;
+    if (t === 'Due') rtext(f, '5x7', 'Due', tr, base, C.white);
+    else {
+      const mw = measure('5x7', s(G.MIN));
+      f.text('5x7', s(G.MIN), tr - mw + 1, base, C.white);
+      rtext(f, '5x7', t, tr - mw - 2, base, C.white);
+    }
   });
   return f;
 }
@@ -250,36 +252,16 @@ function note() {
 // ======================= side by side =======================
 
 async function main() {
-  const S = await build();
-  const px = (name, i = 0) => {
-    const sc = S.find((x) => x.name === name);
-    if (!sc) throw new Error(`no scenario ${name}`);
-    const b = Buffer.from(sc.renders[i].px, 'base64');
-    const fr = new Frame();
-    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) { const k = (y * 64 + x) * 3; fr.set(x, y, [b[k], b[k + 1], b[k + 2]]); }
-    return fr;
-  };
-  const pair = (a, b) => { const f = new Frame(W, H); blit(f, a, 0); blit(f, b, 64); return f; };
-
-  // A second game for the two-games pair.
-  const t = 1791140000;
-  const game = { id: 2, start: t - 5400, st: 'live', inn: 8, half: 'B', b: 1, s: 2, o: 1, on: [0, 1, 0],
-    away: { ab: 'NYY', c: '#3a5fa8', r: 5, w: 95, l: 67 }, home: { ab: 'BOS', c: '#c8323d', r: 4, w: 81, l: 81 } };
-  const nyy = draw.render({ now: t, tzo: tzOffset(t), bright: 100, screen: 'baseball', mlb: { games: [game] } }, { screen: 'baseball' });
-
   const MOCKS = [
-    ['redrawn', 'transit-rows', 'Transit rows', 'Full CTA names, up to five times a row, and the weather moved into the header so it no longer takes a row.', '', transitRows()],
+    ['redrawn', 'transit-rows', 'Transit rows', 'Full CTA names and up to five times a row; the header keeps the station and clock.', '', transitRows()],
     ['redrawn', 'transit-split', 'Transit, by direction', 'Belmont split north | south, two times or more per line. The station and clock move to the bottom.', 'Real Belmont times (Oct 3, 11:16 PM, no Purple).', transitSplit()],
-    ['redrawn', 'ticker', 'Ticker', 'The next train big, then the following times small after THEN. At 64 the ticker shows one time per row.', '', ticker()],
+    ['redrawn', 'ticker', 'Ticker', 'After the CTA platform signs: the row number in the grey column, the full destination, the time at the far right, then the live-train signal, or a clock for a scheduled train (row 2).', 'Real Morse times; the Howard train is marked scheduled here to show the clock.', ticker()],
     ['redrawn', 'chrono', 'Chronological, two columns', 'Eight trains instead of four, with full names (FOREST PK, 54/CERMAK).', 'Real Clark/Lake times.', chrono()],
     ['redrawn', 'seven-day', '7-day forecast', 'Seven columns with highs and lows; the 64 screen shows five days and highs only.', 'NWS gives seven days already.', sevenDay()],
     ['redrawn', 'hourly', 'Hourly, 24 hours', 'Eight 3-hour steps under a top bar with room for the condition and feels-like.', 'The server builds 4 slots today (HOUR_STEPS); the NWS hourly feed covers more.', hourly()],
     ['redrawn', 'radar', 'Radar, 128 wide', 'A real MRMS frame (the Aug 10, 2020 derecho) cropped 128 LEDs wide: about 190 mi of the region instead of 95. The station sits right of center; the time stack moves over the lake.', 'Each station needs a new water mask at 128 (built here from the lake outline).', null],
     ['redrawn', 'line-score', 'Baseball line score', 'Runs by inning, R H E, then the count, outs, pitch count and bases.', 'The innings come in the linescore the server already fetches; the pitch count would need a field added.', lineScore()],
     ['redrawn', 'note', 'Message note', 'About 21 characters a line in 5x7 instead of 10.', '', note()],
-    ['pair', 'pair-transit-weather', 'Transit | weather', 'Morse arrivals and the weather screen, both unchanged.', 'The two screens touch at the seam: the times end at column 63, the icon starts at 64.', pair(px('transit morse-2026-10-03-2316.json header=true wx=false'), px('weather screen normal'))],
-    ['pair', 'pair-skyline-transit', 'Skyline | transit', 'An ambient screen on one panel, arrivals with the weather strip on the other.', '', pair(px('skyline partly day'), px('transit morse-2026-10-03-2316.json header=true wx=true'))],
-    ['pair', 'pair-two-games', 'Two games', 'The classic baseball layout twice.', '', pair(px('baseball live'), nyy)],
   ];
   MOCKS.find((m) => m[1] === 'radar')[5] = await wideRadar();
 

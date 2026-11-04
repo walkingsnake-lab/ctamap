@@ -3,7 +3,7 @@
   "kind": "redrawn",
   "id": "transit-rows",
   "title": "Transit rows",
-  "desc": "Full CTA names, up to five times a row, and the weather moved into the header so it no longer takes a row.",
+  "desc": "Full CTA names and up to five times a row; the header keeps the station and clock.",
   "note": ""
  },
  {
@@ -17,8 +17,8 @@
   "kind": "redrawn",
   "id": "ticker",
   "title": "Ticker",
-  "desc": "The next train big, then the following times small after THEN. At 64 the ticker shows one time per row.",
-  "note": ""
+  "desc": "After the CTA platform signs: the row number in the grey column, the full destination, the time at the far right, then the live-train signal, or a clock for a scheduled train (row 2).",
+  "note": "Real Morse times; the Howard train is marked scheduled here to show the clock."
  },
  {
   "kind": "redrawn",
@@ -60,27 +60,6 @@
   "id": "note",
   "title": "Message note",
   "desc": "About 21 characters a line in 5x7 instead of 10.",
-  "note": ""
- },
- {
-  "kind": "pair",
-  "id": "pair-transit-weather",
-  "title": "Transit | weather",
-  "desc": "Morse arrivals and the weather screen, both unchanged.",
-  "note": "The two screens touch at the seam: the times end at column 63, the icon starts at 64."
- },
- {
-  "kind": "pair",
-  "id": "pair-skyline-transit",
-  "title": "Skyline | transit",
-  "desc": "An ambient screen on one panel, arrivals with the weather strip on the other.",
-  "note": ""
- },
- {
-  "kind": "pair",
-  "id": "pair-two-games",
-  "title": "Two games",
-  "desc": "The classic baseball layout twice.",
   "note": ""
  }
 ]
