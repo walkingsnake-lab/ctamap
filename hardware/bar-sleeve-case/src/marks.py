@@ -9,8 +9,9 @@ chamfered at 45 deg like the teardrops elsewhere. The lettering's roofs are a le
 
 - Setup sticker (QR to join the board's setup network): 1/2 x 1 3/4 in (12.7 x 44.45), the 80-up return-address sheet.
 - Regulatory label (product, model, Part 15 statement): 1 x 2 5/8 in (25.4 x 66.68), the 30-up address sheet.
-- Lettering, debossed (permanently marked, 47 CFR 2.925(d)): "Contains FCC ID: ..." (15.212), two lines. Nothing has to be
-  debossed (a nameplate with permanent adhesive also counts), but this is the marking that must outlast a peeled label.
+- Lettering, debossed (permanently marked, 47 CFR 2.925(d)): the model, and "Contains FCC ID: ..." (15.212). Nothing has to
+  be debossed (a nameplate with permanent adhesive also counts), but these must outlast a peeled label. With a 0.4 nozzle
+  it's three centred lines; with a 0.6 the ID line would reach the screws, so the model moves under the setup sticker.
   Placeholders until settled: MODEL, FCC_ID in the environment (FCC_ID: read it off the S3's module can).
 
 Lettering size follows the nozzle: vertical strokes (DejaVu Sans Bold: 0.175 x size) and the gaps between letters must be
@@ -30,9 +31,8 @@ import case2 as V
 IN = 25.4
 MODEL = os.environ.get('MODEL', 'AB-1')
 FCC_ID = os.environ.get('FCC_ID', '2AC7Z-XXXXXXXXXXX')   # 17 characters: as long as Espressif's longest S3 module ID
-LINES = ['Contains FCC ID:', FCC_ID]   # the minimum: the one marking with a permanence rule. The model is on the label;
-if os.environ.get('MARK_MODEL'):         # MARK_MODEL=1 debosses it too (fits with a 0.4 nozzle only)
-    LINES.insert(0, f'MODEL {MODEL}')
+MODEL_LINE = f'MODEL {MODEL}' if os.environ.get('MARK_MODEL', '1') != '0' else None   # MARK_MODEL=0: FCC ID only
+LINES = ['Contains FCC ID:', FCC_ID]
 
 FONT = os.environ.get('MARK_FONT', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
 NOZZLE = float(os.environ.get('NOZZLE', '0.4'))
@@ -49,6 +49,7 @@ REG = (2.625 * IN, 1.0 * IN)
 GAP = 3.0                 # between the recesses
 REC_Y0 = 11.8             # recesses' front edge (y): the bottom face starts at front_y(0) = 9
 TEXT_GAP = 3.2            # recesses' back edge to the first line's cap top
+MODEL_BESIDE = NOZZLE >= 0.6   # model line under the setup sticker instead of above the FCC ID
 
 
 def _advance(ch, size):
@@ -88,12 +89,18 @@ def layout():
     hr = rh + 2 * REC_CL
     x0 = -(wr + GAP + ws) / 2
     xs = x0 + wr + GAP
-    ys = REC_Y0 + (hr - sh - 2 * REC_CL) / 2          # setup sticker centred on the regulatory label's row
+    # setup sticker centred on the regulatory label's row, or at its front with the model line under it
+    ys = REC_Y0 if MODEL_LINE and MODEL_BESIDE else REC_Y0 + (hr - sh - 2 * REC_CL) / 2
     rec_r = _rrect(x0, x0 + wr, REC_Y0, REC_Y0 + hr, REC_R + REC_CL)
     rec_s = _rrect(xs, xs + ws, ys, ys + sh + 2 * REC_CL, REC_R + REC_CL)
     text = CrossSection()
     y = REC_Y0 + hr + TEXT_GAP
-    for s in LINES:
+    lines = list(LINES)
+    if MODEL_LINE and MODEL_BESIDE:
+        text = text + _text_cs(MODEL_LINE, xs + ws / 2, ys + sh + 2 * REC_CL + 2.4)
+    elif MODEL_LINE:
+        lines.insert(0, MODEL_LINE)
+    for s in lines:
         text = text + _text_cs(s, 0.0, y)
         y += TEXT_PITCH
     items = [('regulatory label', rec_r, REC_DEPTH, True), ('setup sticker', rec_s, REC_DEPTH, True),
