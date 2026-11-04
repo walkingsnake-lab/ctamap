@@ -1,0 +1,65 @@
+[
+ {
+  "kind": "skyline",
+  "id": "sky-day",
+  "title": "Panorama, partly cloudy day",
+  "desc": "The real skyline renderer at 128: the 64 scene in the middle, the South Loop added on the left and the Gold Coast stepping down to the lake on the right. Clouds, sun, windows and ripples come from the same payload.",
+  "note": ""
+ },
+ {
+  "kind": "skyline",
+  "id": "sky-dusk",
+  "title": "Panorama, dusk",
+  "desc": "Dusk: the sun sets behind the Loop as the windows come on.",
+  "note": ""
+ },
+ {
+  "kind": "skyline",
+  "id": "sky-night",
+  "title": "Panorama, clear night",
+  "desc": "Clear night: twice the stars, the pier lit, the wheel cycling color.",
+  "note": ""
+ },
+ {
+  "kind": "skyline",
+  "id": "sky-snow",
+  "title": "Panorama, snowy night",
+  "desc": "Snow on every roof, flakes across the whole width.",
+  "note": ""
+ },
+ {
+  "kind": "skyline",
+  "id": "sky-bigclock",
+  "title": "Skyline with a big clock",
+  "desc": "The 64 scene kept at the left; the right half is open lake and sky, with the clock in the big digits.",
+  "note": "Keeps the existing art; only the sky and water get wider."
+ },
+ {
+  "kind": "clock",
+  "id": "clock-seventies",
+  "title": "Seventies swoosh",
+  "desc": "The stripes run along the bottom, climb, and run along the top to the right edge. Time on the left, date and temperature under the top run.",
+  "note": ""
+ },
+ {
+  "kind": "clock",
+  "id": "clock-analog",
+  "title": "Analog + calendar",
+  "desc": "The analog face as it is, with the month beside it and today highlighted.",
+  "note": "The calendar replaces the face's date and temperature; five week rows fill the height, so there's no weekday header."
+ },
+ {
+  "kind": "clock",
+  "id": "clock-daynight",
+  "title": "Day/night + sun times",
+  "desc": "The world map as it is, with sunrise and sunset and the time in three other cities.",
+  "note": "A wider map needs a new world mask, and at 128 × 26 it can't keep its proportions and still show the southern hemisphere."
+ },
+ {
+  "kind": "clock",
+  "id": "clock-words",
+  "title": "Word clock",
+  "desc": "Every word stays faintly on the grid; the ones that tell the time light up. 9:42 PM reads TWENTY MINUTES TO TEN.",
+  "note": "A new face rather than a widened one. Rounds to five minutes."
+ }
+]
