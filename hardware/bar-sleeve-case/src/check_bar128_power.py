@@ -2,9 +2,9 @@
 turning flat behind it, checked against everything else behind the panels: the S3 and the encoder on panel B, both
 trays (posts, bosses, hooks, tie loop), the splice plates, and the data plugs in use (S3 -> A in, A out -> B in).
 
-The P2.5's socket position isn't measured. With no argument this sweeps it over the panel back and prints a map per
-panel; with one, it checks that spot on both panels:
-    python3 check_bar128_power.py [frames dir] [x,z]
+With no argument it checks the socket where the P2.5 profile puts it (panel.py 'power', from the product photo); with
+x,z it checks that spot (both pin-row directions); with --sweep it maps every spot over the panel back:
+    python3 check_bar128_power.py [frames dir] [x,z | --sweep]
 x, z: the socket's centre in mm from the panel's centre, seen from the front with the panel in its NORMAL orientation
 (data in on the right), like the profiles' 'headers'. Both panels sit turned 180 deg in the case, so the same socket
 lands at a mirrored spot on each. Run bar128.py first (frames dir: $BAR128_FRAMES or the temp dir, as check_bar128.py)."""
@@ -17,8 +17,14 @@ os.environ.setdefault('CASE_WALL', '3.5')
 import drawer as DR                                           # noqa: E402  (PANEL must be set first)
 from case import box, ZC, PANEL_BACK                          # noqa: E402
 
-args = [a for a in sys.argv[1:] if ',' not in a]
+import panel                                                 # noqa: E402
+SWEEP = '--sweep' in sys.argv
+args = [a for a in sys.argv[1:] if ',' not in a and not a.startswith('--')]
 spot = [a for a in sys.argv[1:] if ',' in a]
+ROWS = 'xz'
+if not spot and not SWEEP and panel.P.get('power'):
+    spot = ['%s,%s' % panel.P['power']]
+    ROWS = panel.P.get('power_row', 'xz')
 F = args[0] if args else os.environ.get('BAR128_FRAMES', os.path.join(tempfile.gettempdir(), 'bar128-frames'))
 
 # the plug: VH 3.96 mm x 4 class (VHR-4N): BODY_L x BODY_W, seated ~PROUD past the housing back (the socket sits in the
@@ -79,7 +85,7 @@ if spot:
     ok = True
     for p in 'AB':
         gx, gz = to_case(p, x, z)
-        for row in 'xz':
+        for row in ROWS:
             h = hits(gx, gz, row)
             ok &= not h
             print(f'panel {p}, pin row along {row}: socket at case x {gx:+7.1f}, z {gz - ZC:+5.1f}: {"clear" if not h else "HITS " + ", ".join(h)}')

@@ -55,6 +55,10 @@ PROFILES = {
         # PO OUT sits under the S3's bottom socket; the S3 would move back by the header's height above the insert faces
         s3_back=0.0,                     # PO OUT sits below the frame top (a ruler across the frame clears it, Oct 29)
         sensor_x=40.0,                   # moved in: at 55 its bracket hits the top-right standoff (x 63.5)
+        # 4-pin power socket (POWER1, VH 3.96 class, pins in a vertical row): centre (x, z), from Waveshare's product photo
+        # of the back (Nov 4), scaled to the confirmed corner inserts; the headers and middle inserts land within ~1 mm
+        # of the values above on the same photo. +5V is the top pair, GND the bottom. check_bar128_power.py uses it
+        power=(1.7, 0.2), power_row='z',
         key_x=51.5,                      # keyholes beside the corner standoffs, so the top louvers run unbroken between them
         screw_xs=(46.0,),                # one pair (the plate bolts to the panel; these only stop the insert sliding out)
         # push foot: a blade under the S3 (only 3.8 mm between its edge and the panel's), clear of the screw boss

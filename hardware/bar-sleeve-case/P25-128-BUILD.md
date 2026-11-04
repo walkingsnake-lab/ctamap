@@ -56,9 +56,9 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
 4. **Chain (bench):** both panels turned 180°, butted, the S3 ribbon into A's input, a short ribbon from A's output to
    B's input. Light both and note which columns land on which panel (the firmware's mapping; nothing printed depends on
    it). Check the power leads reach panel A from where the S3 sits on panel B (~25 cm).
-5. **Power socket position:** measure its centre from the panel's centre, panel in its normal orientation (data in on
-   the right) seen from the front, and run `python3 check_bar128_power.py <frames> x,z`. On panel B the S3 sits over
-   the left side of the panel: a socket more than ~13 mm left of centre puts its plug under the S3 (map below).
+5. **Power socket:** from Waveshare's photo of the back it's at the panel's centre (1.7 mm right, 0.2 up in the normal
+   orientation, pins in a vertical row), which is clear on both panels (below). A glance at yours confirms it; if it
+   differs, `python3 check_bar128_power.py <frames> x,z` checks the spot.
 6. As the single P2.5: the panel thickness (14.5) is assumed, not measured.
 
 ## Parts (`stl/p25-128x32/`)
@@ -132,6 +132,10 @@ against the S3, the encoder, both trays, the splice plates and the data plugs in
 socket can be (only the spots touching a data plug fail). Panel B: clear from ~13 mm left of centre rightward
 (normal orientation, seen from the front), including where the P3's socket is (13 left, 2 up); from ~15-20 mm left
 of centre the plug is under the S3. The same holds for the single P2.5 build, whose S3 sits in the same place.
+The socket itself, measured off Waveshare's photo of the P2.5's back (scaled to the confirmed corner inserts; the
+data headers and middle inserts come out within ~1 mm of the profile on the same photo): centre (+1.7, +0.2), pins in
+a vertical row, now `power` in the P2.5 profile. Clear on both panels with 4 mm or more of margin in any direction; on
+panel B the plug's edge is ~20 mm from the S3's. Seated, the sockets sit at case x -81.7 and +78.3, 160 mm apart.
 
 ## Open
 - **Firmware and server are 64 x 32.** `firmware-s3` sets up the matrix as one 64 x 32 panel (`device.cpp`,
@@ -139,5 +143,5 @@ of centre the plug is under the S3. The same holds for the single P2.5 build, wh
   there and its own layouts: separate work from the case.
 - The joint rib, the splice hole and the lap clearance come from the test pieces.
 - Which columns land on which panel with S3 → A → B (firmware mapping, bench), and the power lead to panel A.
-- The P2.5's power-socket position (see "Before printing" 5) and whether its stock power cable has a second plug: if it
-  does, one cable can feed both panels (the sockets are 160 mm apart, the plug spacing has to reach).
+- Whether the P2.5's stock power cable has a second plug: if it does, one cable can feed both panels (the sockets are
+  160 mm apart, so the plug spacing has to reach that plus slack).
