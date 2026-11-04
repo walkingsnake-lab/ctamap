@@ -14,8 +14,10 @@ chamfered at 45 deg like the teardrops elsewhere. The lettering's roofs are a le
   it's three centred lines; with a 0.6 the ID line would reach the screws, so the model moves under the setup sticker.
   Placeholders until settled: MODEL, FCC_ID in the environment (FCC_ID: read it off the S3's module can).
 
-Lettering size follows the nozzle: vertical strokes (DejaVu Sans Bold: 0.175 x size) and the gaps between letters must be
-wider than a line, or the slicer drops or merges them. NOZZLE=0.4 gives 5.1 mm text (strokes 0.9); NOZZLE=0.6 gives 6.3.
+Lettering size follows the nozzle: vertical strokes and the gaps between letters must be wider than a line (horizontal
+strokes are layers, so they can be thinner), or the slicer drops or merges them. NOZZLE=0.4: caps 3.75 mm, strokes 0.9;
+NOZZLE=0.6: caps 4.6, strokes 1.1. Any font works: one with thinner stems is thickened (outline offset) to the stroke, and
+letter spacing is widened to keep the gaps. MARK_FONT=dejavu|atkinson|b612|ocrb, MARK_CAPS=1 for all caps.
 
 It reads correctly seen from below with the case's front edge at the top (tip the case back to look underneath).
 Run: python3 marks.py preview <out.png>    a shaded preview of the underside (PANEL=p25 for the P2.5)
@@ -32,14 +34,21 @@ IN = 25.4
 MODEL = os.environ.get('MODEL', 'AB-1')
 FCC_ID = os.environ.get('FCC_ID', '2AC7Z-XXXXXXXXXXX')   # 17 characters: as long as Espressif's longest S3 module ID
 MODEL_LINE = f'MODEL {MODEL}' if os.environ.get('MARK_MODEL', '1') != '0' else None   # MARK_MODEL=0: FCC ID only
-LINES = ['Contains FCC ID:', FCC_ID]
 
-FONT = os.environ.get('MARK_FONT', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
+_FD = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'fonts')
+FONTS = {                 # candidates (../fonts/README.md); compared on coupon-marks-ladder.stl
+    'dejavu': '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    'atkinson': os.path.join(_FD, 'AtkinsonHyperlegible-Bold.ttf'),
+    'b612': os.path.join(_FD, 'B612-Bold.ttf'),
+    'ocrb': os.path.join(_FD, 'OCRB.otf'),
+}
+FONT = FONTS.get(os.environ.get('MARK_FONT', 'dejavu'), os.environ.get('MARK_FONT'))   # a name above, or a font file
+CAPS = os.environ.get('MARK_CAPS', '0') == '1'   # all caps: no small lowercase counters (e, a, s) to fill in
 NOZZLE = float(os.environ.get('NOZZLE', '0.4'))
 STROKE = NOZZLE + 0.5     # narrowest feature in the lettering (vertical stroke, gap between letters): 0.9 at 0.4, 1.1 at 0.6
-TEXT_SIZE = round(STROKE / 0.175, 1)   # 5.1 mm at 0.4 (caps 3.7), 6.3 at 0.6 (caps 4.6)
-TRACK = max(0.0, STROKE - 0.1 * TEXT_SIZE)   # extra letter spacing: DejaVu Bold's own gap is ~0.1 x size
-TEXT_PITCH = 1.25 * TEXT_SIZE
+CAP_H = round(STROKE * 4.17, 2)   # cap height: 3.75 at 0.4, 4.59 at 0.6 (DejaVu Bold's own strokes are that wide there)
+TEXT_PITCH = 1.71 * CAP_H
+LINES = ['CONTAINS FCC ID:' if CAPS else 'Contains FCC ID:', FCC_ID]
 TEXT_DEPTH = 0.6          # deboss depth (3 layers at 0.2 across a 3.5 mm wall)
 REC_DEPTH = 0.5           # label recesses (a label is 0.1-0.25 thick: its edges sit below the surface, out of reach)
 REC_CL = 0.4              # recess size past the label, a side
@@ -52,30 +61,51 @@ TEXT_GAP = 3.2            # recesses' back edge to the first line's cap top
 MODEL_BESIDE = NOZZLE >= 0.6   # model line under the setup sticker instead of above the FCC ID
 
 
-def _advance(ch, size):
-    from PIL import ImageFont
-    f = ImageFont.truetype(FONT, 1000)
-    return f.getlength(ch) * size / 1000
+_METRICS = {}
 
 
-def _text_cs(s, x_center, y_top, size=None, track=None):
+def _metrics(font):
+    """per unit font size: cap height, stem width (H's left stem at 30% height), the tightest side gap of H O N C 0
+    (advance - outline width)"""
+    if font not in _METRICS:
+        from matplotlib.textpath import TextPath
+        from matplotlib.font_manager import FontProperties
+        from PIL import ImageFont
+        tp = TextPath((0, 0), 'H', size=1, prop=FontProperties(fname=font))
+        e = tp.get_extents()
+        cs = CrossSection([p for p in tp.to_polygons() if len(p) >= 3], FillRule.EvenOdd)
+        cut = cs ^ CrossSection.square([5, 0.002]).translate([-1, 0.3 * e.y1])
+        stem = min((c.bounds()[0], c.bounds()[2] - c.bounds()[0]) for c in cut.decompose())[1]
+        pil, fp = ImageFont.truetype(font, 1000), FontProperties(fname=font)
+        gap = min(pil.getlength(c) / 1000 - TextPath((0, 0), c, size=1, prop=fp).get_extents().width for c in 'HONC0')
+        _METRICS[font] = (e.y1, stem, gap)
+    return _METRICS[font]
+
+
+def _text_cs(s, x_center, y_top, cap_h=None, font=None, stroke=None):
     """one line of text as a CrossSection on the bottom (z = 0) plane, read from below with the front (y = 0) at the top:
-    glyph right = +x, glyph up = -y. Letters placed one by one so tracking can widen the gaps."""
+    glyph right = +x, glyph up = -y. Stems thinner than the stroke are thickened by an outline offset; letters are placed
+    one by one with extra spacing so the gaps stay a stroke wide."""
     from matplotlib.textpath import TextPath
     from matplotlib.font_manager import FontProperties
-    size = TEXT_SIZE if size is None else size
-    track = TRACK if track is None else track
-    fp = FontProperties(fname=FONT)
-    cap = TextPath((0, 0), 'H', size=size, prop=fp).get_extents().y1
+    from PIL import ImageFont
+    cap_h, font, stroke = cap_h or CAP_H, font or FONT, stroke or STROKE
+    cap_r, stem_r, gap_r = _metrics(font)
+    size = cap_h / cap_r
+    off = max(0.0, (stroke - stem_r * size) / 2)
+    track = max(0.0, stroke - (gap_r * size - 2 * off))
+    fp, pil = FontProperties(fname=font), ImageFont.truetype(font, 1000)
     polys, x = [], 0.0
     for ch in s:
         if ch != ' ':
             tp = TextPath((x, 0), ch, size=size, prop=fp)
             polys += [p for p in tp.to_polygons() if len(p) >= 3]
-        x += _advance(ch, size) + track
-    width = x - track
-    out = [np.column_stack([x_center + p[:, 0] - width / 2, y_top + cap - p[:, 1]]) for p in polys]
-    return CrossSection(out, FillRule.EvenOdd)
+        x += pil.getlength(ch) * size / 1000 + track
+    cs = CrossSection([np.column_stack([p[:, 0], cap_h - p[:, 1]]) for p in polys], FillRule.EvenOdd)
+    if off > 0:
+        cs = cs.offset(off, C.JT, circular_segments=16)
+    b = cs.bounds()
+    return cs.translate([x_center - (b[0] + b[2]) / 2, y_top + off])
 
 
 def _rrect(x0, x1, y0, y1, r):
@@ -163,14 +193,29 @@ def coupon_wall(shell):
     return wall + flange
 
 
+LADDER = [   # (font, caps, cap height, stroke): sizes first (DejaVu: below the 0.4 pick, the 0.4 pick, the 0.6 pick), then
+    ('dejavu', False, 3.35, 0.8), ('dejavu', False, 3.75, 0.9), ('dejavu', False, 4.59, 1.1),   # fonts at the 0.4 pick
+    ('dejavu', True, 3.75, 0.9), ('atkinson', True, 3.75, 0.9), ('b612', True, 3.75, 0.9), ('ocrb', True, 3.75, 0.9)]
+
+
+def _ladder_rows():
+    rows, y = [], 4.0
+    for i, (f, caps, cap_h, stroke) in enumerate(LADDER, 1):
+        t = f'{i}  ' + ('CONTAINS FCC ID: 0O1I5S8B' if caps else 'Contains FCC ID: 0O1Il5S8B')
+        rows.append(_text_cs(t, 0.0, y, cap_h=cap_h, font=FONTS[f], stroke=stroke))
+        y += cap_h + 3.2
+    cs = rows[0]
+    for r in rows[1:]:
+        cs = cs + r
+    return cs, y
+
+
 def coupon_ladder():
-    """a plate standing on its back edge with the ID line at three sizes (0.4 and 0.6 nozzle picks and one below), so a
-    print shows where the lettering stops holding up"""
-    w, y, cs = 120.0, 5.0, CrossSection()
-    for size, stroke in ((4.6, 0.8), (5.1, 0.9), (6.3, 1.1)):     # one below the 0.4 pick, the 0.4 pick, the 0.6 pick
-        cs = cs + _text_cs(f'{size:g} {FCC_ID}', 0.0, y, size=size, track=max(0.0, stroke - 0.1 * size))
-        y += 1.25 * size + 3.0
-    h = y + 2.0
+    """a plate standing on its back edge, one numbered line per LADDER row: which size and font stay crisp. The ID part is
+    the characters that blur into each other (0 O, 1 I l, 5 S, 8 B)"""
+    cs, y = _ladder_rows()
+    b = cs.bounds()
+    w, h = (b[2] - b[0]) + 10.0, y + 3.0
     plate = Manifold.cube([w, h, 3.0]).translate([-w / 2, 0, 0])
     plate = plate - Manifold.extrude(cs, TEXT_DEPTH + 1).translate([0, 0, -1])
     flange = Manifold.cube([w, 5.0, 14.0]).translate([-w / 2, h - 5.0, 0])
@@ -220,6 +265,20 @@ def preview(shell, out, px=0.08, stickers=False, title=''):
     ax.set_xticks([]); ax.set_yticks([])
     ax.set_title(title + (' with labels' if stickers else ''), fontsize=11)
     fig.savefig(out, bbox_inches='tight'); plt.close(fig)
+
+
+def preview_ladder(out, px=0.04):
+    """the ladder's lettering as it's cut (thickened, spaced), dark on walnut"""
+    from PIL import Image
+    cs, h = _ladder_rows()
+    b = cs.bounds()
+    x0, y0 = b[0] - 3, 0.0
+    nx, ny = int((b[2] - b[0] + 6) / px), int((h + 1) / px)
+    m = _raster(cs, x0, y0, nx, ny, px)
+    img = np.empty((ny, nx, 3), np.uint8)
+    img[:] = (128, 86, 54)
+    img[m] = (62, 38, 22)
+    Image.fromarray(img).save(out)
 
 
 def _draw_stickers(ax):
@@ -285,6 +344,7 @@ if __name__ == '__main__':
         sh = mark(_shell(os.environ.get('PANEL', 'p25')))
         _save(coupon_wall(sh), os.path.join(d, 'coupon-marks-wall.stl'))
         _save(coupon_ladder(), os.path.join(d, 'coupon-marks-ladder.stl'))
+        preview_ladder(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'img', 'marks-ladder.png'))
         print(d)
     else:
         print(__doc__)
