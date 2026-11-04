@@ -1800,3 +1800,80 @@ test('radar view (wxView radar): the frames ride along when dry too; peek boards
   assert.deepEqual([sel.body.radar.frames, sel.body.knob.sel[1]], [dry.frames, 3]);
   await s.close();
 });
+
+test('firmware: boot images (CI or the page) and the setup image, maker only', async () => {
+  const S = require('./setup-image');
+  // A real-shaped app and the boot image before it (scripts/split-merged.js).
+  const seg = (len) => { const x = Buffer.alloc(8 + len, 0x22); x.writeUInt32LE(0x3c000000, 0); x.writeUInt32LE(len, 4); return x; };
+  const h = Buffer.alloc(24, 0); h[0] = 0xe9; h[1] = 1; h.writeUInt16LE(9, 12); h[23] = 1;
+  const s1 = seg(2000); s1.write('CTABOARD-BUILD:aaaaaaa:generic;', 100, 'latin1');
+  let app = Buffer.concat([h, s1]);
+  app = Buffer.concat([app, Buffer.alloc(Math.ceil((app.length + 1) / 16) * 16 - app.length, 0), Buffer.alloc(32, 0x5a)]);
+  const boot = Buffer.alloc(0x10000, 0xff);
+  boot[0] = 0xe9; boot.writeUInt16LE(9, 12);
+  boot.writeUInt32LE(1, 0xe000); // boot_app0
+  [[1, 2, 0x9000, 0x5000, 'nvs'], [1, 0, 0xe000, 0x2000, 'otadata'], [0, 0x10, 0x10000, 0x200000, 'ota_0'], [0, 0x11, 0x210000, 0x200000, 'ota_1']].forEach(([t, st, off, size, label], i) => {
+    const at = 0x8000 + i * 32;
+    boot[at] = 0xaa; boot[at + 1] = 0x50; boot[at + 2] = t; boot[at + 3] = st;
+    boot.writeUInt32LE(off, at + 4); boot.writeUInt32LE(size, at + 8); boot.fill(0, at + 12, at + 28); boot.write(label, at + 12, 'latin1');
+  });
+  const s = await serveFw({ deployToken: 'deploy123' });
+  const ci = (q, body, sig) => fetch(`http://127.0.0.1:${s.port}/board/firmware-upload${q}`, { method: 'POST', body, headers: { 'X-Deploy-Token': 'deploy123', 'X-Firmware-Signature': sig } });
+  assert.equal((await ci('', app, fwSig(app))).status, 200);
+  const image = () => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/firmware/image?v=aaaaaaa`);
+  assert.equal((await image()).status, 404, 'no boot image yet');
+  assert.equal((await ci('?boot=aaaaaaa', boot, fwSig(app))).status, 400, 'wrong signature');
+  assert.equal((await ci('?boot=bbbbbbb', boot, fwSig(boot))).status, 400, 'unknown build');
+  const r = await ci('?boot=aaaaaaa', boot, fwSig(boot));
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { boot: 'aaaaaaa' });
+  assert.equal((await s.req('/board/secret123/api/firmware')).body.builds[0].boot, true);
+  // The image: boot + app, which the setup tools read as a merged image.
+  const got = Buffer.from(await (await image()).arrayBuffer());
+  assert.ok(got.equals(Buffer.concat([boot, app])));
+  const info = S.inspectMerged(got);
+  assert.equal(info.version, 'aaaaaaa');
+  assert.equal(S.flashPlan(got, new Uint8Array(0x5000), info.nvs, info.end).length, 3);
+  // The page can attach one too (same checks).
+  const page = await s.req('/board/secret123/api/firmware/boot?v=aaaaaaa', signed(boot));
+  assert.equal(page.status, 200);
+  assert.equal((await s.req('/board/secret123/api/firmware/boot?v=aaaaaaa', { method: 'POST', body: boot, headers: { 'X-Firmware-Signature': fwSig(app) } })).status, 400);
+  // Never from an owner link.
+  s.store.create('kitchen', { from: 'home' });
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  for (const p of ['api/firmware/image?v=aaaaaaa', 'api/firmware/boot?v=aaaaaaa']) {
+    assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/c/${key.link}/${p}`)).status, 404, p);
+  }
+  await s.close();
+});
+
+test('your own boards with their own token (Set up a board): baseball stays; a transfer makes them someone else\'s', async () => {
+  const s = await serve();
+  s.store.create('den', { from: 'home' });
+  const k = await s.req('/board/secret123/api/boards/key?b=den&mine=1', { method: 'POST' });
+  assert.equal(k.status, 200);
+  const own = { headers: { 'X-Board-Token': k.body.token } };
+  assert.equal((await s.req('/board/version?b=den', own)).status, 200);
+  assert.equal((await s.req('/board/version?b=den', { headers: { 'X-Board-Token': 'tok' } })).status, 401, 'its own token only');
+  let me = (await s.req('/board/secret123/api/boards')).body.find((b) => b.id === 'den');
+  assert.deepEqual([me.mine, me.sports], [true, true]);
+  assert.equal((await s.req('/board/secret123/api/state?b=den', { method: 'POST', body: JSON.stringify({ screen: 'baseball' }) })).status, 200);
+  // Given away: someone else's now.
+  await s.req('/board/secret123/api/boards/transfer?b=den', { method: 'POST' });
+  me = (await s.req('/board/secret123/api/boards')).body.find((b) => b.id === 'den');
+  assert.deepEqual([me.mine, me.sports], [undefined, false]);
+  await s.close();
+});
+
+test('Set up a board\'s scripts: the maker\'s page only', async () => {
+  const s = await serve();
+  const js = await fetch(`http://127.0.0.1:${s.port}/board/secret123/setup-image.js`);
+  assert.equal(js.status, 200);
+  assert.match(await js.text(), /root\.BoardSetup = factory\(\)/);
+  const tools = await fetch(`http://127.0.0.1:${s.port}/board/secret123/setup-tools.js`);
+  assert.ok([200, 404].includes(tools.status), 'built by npm run build');
+  s.store.create('kitchen', { from: 'home' });
+  const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
+  for (const f of ['setup-image.js', 'setup-tools.js']) assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/c/${key.link}/${f}`)).status, 404, f);
+  await s.close();
+});

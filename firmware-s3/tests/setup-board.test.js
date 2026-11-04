@@ -44,6 +44,7 @@ function mergedImage({ mark = 'CTABOARD-BUILD:a1b2c3d:generic;', chip = 9, pad =
       partitionEntry(0, 0x10, 0x10000, 0x200000, 'ota_0'), partitionEntry(0, 0x11, 0x210000, 0x200000, 'ota_1'),
       partitionEntry(0, 0, 0x410000, 0x40000, 'uf2'), partitionEntry(1, 0x81, 0x450000, 0x3b0000, 'ffat')]
       .forEach((e, i) => e.copy(img, 0x8000 + i * 32));
+    img.writeUInt32LE(1, 0xe000); // boot_app0: ota_seq 1
   }
   const app = appImage(mark);
   app.copy(img, 0x10000);
@@ -80,7 +81,9 @@ test('settings: WiFi rules and the setup network', () => {
 test('build: version, NVS partition and app end from a merged image', () => {
   const { img, appLen } = mergedImage();
   const info = s.inspectMerged(img);
-  assert.deepEqual(info, { version: 'a1b2c3d', nvs: { offset: 0x9000, size: 0x5000 }, end: 0x10000 + appLen });
+  assert.deepEqual(info, { version: 'a1b2c3d', nvs: { offset: 0x9000, size: 0x5000 }, app: { offset: 0x10000, size: 0x200000 }, end: 0x10000 + appLen });
+  // Just the part up to the app's end is enough (what the server sends the browser).
+  assert.deepEqual(s.inspectMerged(img.subarray(0, info.end)), info);
   assert.deepEqual(s.partitions(img).map((p) => p.label), ['nvs', 'otadata', 'ota_0', 'ota_1', 'uf2', 'ffat']);
 });
 
@@ -135,18 +138,32 @@ function readNvsStrings(img) {
 }
 
 const nvsGen = ['python3', 'python'].find((py) => spawnSync(py, ['-m', 'esp_idf_nvs_partition_gen', '--help']).status === 0);
+const S = require('../../server/board/setup-image');
+const CFG = s.boardConfig({ id: 'kitchen', token: 'x'.repeat(32), url: 'https://ctamap.fly.dev', networks: [['a,b "c"', 'pässword1']], setupName: 'Board-AB12', setupPass: 'abcdefghjk' });
 
-test('settings image: Preferences finds ctaboard/cfg with the exact JSON', { skip: !nvsGen && 'no esp-idf-nvs-partition-gen' }, () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nvs-'));
-  const cfg = s.boardConfig({ id: 'kitchen', token: 'x'.repeat(32), networks: [['a,b "c"', 'password1']], setupName: 'Board-AB12', setupPass: 'abcdefghjk' });
-  const csv = path.join(dir, 'in.csv');
-  fs.writeFileSync(path.join(dir, 'cfg.json'), cfg);
-  fs.writeFileSync(csv, `key,type,encoding,value\nctaboard,namespace,,\ncfg,file,string,${path.join(dir, 'cfg.json')}\n`);
-  const r = spawnSync(nvsGen, ['-m', 'esp_idf_nvs_partition_gen', 'generate', csv, path.join(dir, 'nvs.bin'), '0x5000'], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  const img = fs.readFileSync(path.join(dir, 'nvs.bin'));
+test('settings image: Preferences finds ctaboard/cfg with the exact JSON', () => {
+  const img = Buffer.from(S.nvsImage({ value: CFG, size: 0x5000 }));
   assert.equal(img.length, 0x5000);
-  assert.equal(readNvsStrings(img)['ctaboard/cfg'], cfg);
+  assert.equal(readNvsStrings(img)['ctaboard/cfg'], CFG);
+  // Header and entry CRCs as NVS checks them.
+  assert.equal(img.readUInt32LE(28), S.crc32(img.subarray(4, 28), 0xffffffff));
+  const e = img.subarray(64, 96);
+  assert.equal(e.readUInt32LE(4), S.crc32(Buffer.concat([e.subarray(0, 4), e.subarray(8, 32)]), 0xffffffff));
+  assert.equal(S.crc32(Buffer.from('123456789')), 0xcbf43926); // the standard CRC-32 check value
+  assert.throws(() => S.nvsImage({ value: 'y'.repeat(3990), size: 0x3000 }), /one NVS page/);
+  assert.throws(() => S.nvsImage({ value: CFG, size: 0x1000 }), /multiple of 4096/);
+});
+
+test('settings image: byte for byte what ESP-IDF\'s nvs_partition_gen makes', { skip: !nvsGen && 'no esp-idf-nvs-partition-gen' }, () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nvs-'));
+  for (const [name, value] of [['cfg', CFG], ['empty', ''], ['edge', 'y'.repeat(32)], ['long', 'y'.repeat(3935)]]) {
+    fs.writeFileSync(path.join(dir, `${name}.json`), value);
+    const csv = path.join(dir, `${name}.csv`);
+    fs.writeFileSync(csv, `key,type,encoding,value\nctaboard,namespace,,\ncfg,file,string,${path.join(dir, `${name}.json`)}\n`);
+    const r = spawnSync(nvsGen, ['-m', 'esp_idf_nvs_partition_gen', 'generate', csv, path.join(dir, `${name}.bin`), '0x5000'], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.ok(fs.readFileSync(path.join(dir, `${name}.bin`)).equals(Buffer.from(S.nvsImage({ value, size: 0x5000 }))), name);
+  }
 });
 
 test('label: both QR codes, names escaped, WiFi QR text escaped', async () => {
@@ -155,4 +172,19 @@ test('label: both QR codes, names escaped, WiFi QR text escaped', async () => {
   assert.ok(!html.includes('<Kitchen>') && html.includes('&#60;Kitchen&#62;'));
   const noOwner = await s.labelHtml({ id: 'mine', setupName: 'Board-AB12', setupPass: 'abcdefghjk', ownerUrl: null });
   assert.equal((noOwner.match(/<svg/g) || []).length, 1);
+});
+
+test('split-merged: the boot image is everything before the app, and the app must be the app build', () => {
+  const { split } = require('../../scripts/split-merged');
+  const { img, appLen } = mergedImage();
+  const app = img.subarray(0x10000, 0x10000 + appLen);
+  const { boot, version } = split(img, Buffer.from(app));
+  assert.equal(version, 'a1b2c3d');
+  assert.ok(boot.equals(img.subarray(0, 0x10000)));
+  // Boot + app is the merged image up to the app's end: what the page flashes.
+  const both = Buffer.concat([boot, app]);
+  assert.deepEqual(s.inspectMerged(both), s.inspectMerged(img));
+  const other = Buffer.from(app); other[40] ^= 1;
+  assert.throws(() => split(img, other), /isn't the app build/);
+  assert.throws(() => split(img, app.subarray(0, 100)), /isn't the app build/);
 });

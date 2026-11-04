@@ -28,10 +28,19 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
   - `morse-2026-10-11-1406-forecast.json`: 12-hour periods, Sunday afternoon. Sunny today and Monday; rain showers likely Tue night–Thu (60–70%); Friday a split icon (`rain_showers,20/wind_bkn`, slight chance before 7 AM).
   - `morse-2026-10-11-1404-hourly.json`: 156 hourly periods from 2 PM Sunday.
 
-- `mrms/` — IEM `mrms_lcref` frames (full CONUS PNG + `.wld`), from `mesonet.agron.iastate.edu/archive/data/.../GIS/mrms/`.
+- `mrms/` — IEM `mrms_lcref` frames (full CONUS PNG + `.wld`), from `mesonet.agron.iastate.edu/archive/data/.../GIS/mrms/` (the board's first radar source; still used to test the pipeline and replayed by the simulator's test storms).
   - `lcref_202008102100.*`: Aug 10, 2020 derecho crossing Chicago (4:00 PM CDT). Old-style `.wld` origin (-130.0, 55.0).
   - `lcref_202202021800.*`: Feb 2, 2022 snowstorm, noon CST. Chicago crop averages 11–18 dBZ.
   - `lcref_202610041600.*`: Oct 4, 2026, clear at Chicago. New-style `.wld` origin (-129.995, 54.995).
+  - `lcref_202611032144.*`: Nov 3, 2026, the same time as `mrms-aws/MRMS_SeamlessHSR_00.00_20261103-214400.grib2.gz` (IEM makes lcref from SeamlessHSR).
+
+- `radar-nws/` — NWS map service (`radar-nws.js`), Nov 3, 2026, recorded from the cloud session.
+  - `catalog-20261103-2150.json`: `query` for CONUS items (`catalogUrl()`), 17 frames 19:40–21:50 UTC.
+  - `bref-20261103-214420-32.0n-93.0w.png`: `exportImage` locked to the 21:44:20 UTC item (objectid 262765637), the window for a station at 32.0 N, 93.0 W (northwest Louisiana; rain to 53 dBZ). 166 × 72, 8-bit RGB with a tRNS background.
+  - Its truth is the raw MRMS base reflectivity file of the same time in `mrms-aws/`.
+- `mrms-aws/` — NOAA's MRMS files on AWS, bucket `noaa-mrms-pds`, whole CONUS files, unchanged.
+  - `MRMS_SeamlessHSR_00.00_20261103-214400.grib2.gz` (1.7 MB): the main source's product (`radar-mrms.js`). Rain over Louisiana to 53 dBZ; light echo near Chicago. IEM's frame of the same time is `mrms/lcref_202611032144.*`; a test checks they give identical frames.
+  - `MRMS_MergedBaseReflectivityQC_00.50_20261103-214420.grib2.gz` (1.6 MB): the product the NWS fallback draws, the truth for `radar-nws/`.
 
 - `mlb/` — MLB Stats API schedule responses (`mlb.js` `url()`, `hydrate=linescore`). Record new ones from `/board/<control path>/api/raw/mlb`.
   - `schedule-2026-10-03-alds-final.json`: ALDS Game 1, White Sox 3 at Guardians 0, final (postseason `leagueRecord` 1-0 / 0-1). **Not a byte-for-byte recording**: the cloud session couldn't reach the API directly, so it was assembled from a fetched copy of the game object (field names and values as returned; the date wrapper and a trimmed `defense` block filled in). Replace with a capture from `api/raw/mlb` when convenient.

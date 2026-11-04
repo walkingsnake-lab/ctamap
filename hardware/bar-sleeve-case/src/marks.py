@@ -1,4 +1,4 @@
-"""Markings on the shell's underside (v5 drawer shell): two label recesses and debossed lettering.
+"""Markings on the shell's underside (v5 drawer shell): two label recesses, and optional debossed lettering.
 
 One layout for every panel: it fits between the P2.5's feet (the narrowest shell), so P3 and a future P4 get the same
 footprint, and one test print checks them all.
@@ -8,11 +8,13 @@ small overhangs. Seen in the print, a recess's front edge (smaller y) is a roof 
 chamfered at 45 deg like the teardrops elsewhere. The lettering's roofs are a letter wide (< 4 mm), short enough to bridge.
 
 - Setup sticker (QR to join the board's setup network): 1/2 x 1 3/4 in (12.7 x 44.45), the 80-up return-address sheet.
-- Regulatory label (product, model, Part 15 statement): 1 x 2 5/8 in (25.4 x 66.68), the 30-up address sheet.
-- Lettering, debossed (permanently marked, 47 CFR 2.925(d)): the model, and "Contains FCC ID: ..." (15.212). Nothing has to
-  be debossed (a nameplate with permanent adhesive also counts), but these must outlast a peeled label. With a 0.4 nozzle
-  it's three centred lines; with a 0.6 the ID line would reach the screws, so the model moves under the setup sticker.
-  Placeholders until settled: MODEL, FCC_ID in the environment (FCC_ID: read it off the S3's module can).
+- Regulatory label: product and model, "Contains FCC ID: ..." (15.212) and the Part 15 statement (15.19), 1 x 2 5/8 in
+  (25.4 x 66.68), the 30-up address sheet. The same on every board, so it's ordered printed: polyester, permanent adhesive
+  (a nameplate with permanent adhesive is a permanent marking, 47 CFR 2.925(d)). The recess gives it a smooth floor and
+  keeps its edges out of reach.
+- Lettering (off; MARK_TEXT=1): the model and the FCC ID debossed as well, for a marking a peeled label can't take along.
+  With a 0.4 nozzle it's three centred lines; with a 0.6 the ID line would reach the screws, so the model moves under the
+  setup sticker. Placeholders until settled: MODEL, FCC_ID in the environment (FCC_ID: read it off the S3's module can).
 
 Lettering size follows the nozzle: vertical strokes and the gaps between letters must be wider than a line (horizontal
 strokes are layers, so they can be thinner), or the slicer drops or merges them. NOZZLE=0.4: caps 3.75 mm, strokes 0.9;
@@ -26,6 +28,7 @@ Run: python3 marks.py preview <out.png>    a shaded preview of the underside (PA
 """
 import os, sys, math
 import numpy as np
+os.environ.setdefault('CASE_WALL', '3.5')   # the v5 shell's wall; drawer.py sets the same, but case.py loads first here
 from manifold3d import Manifold, CrossSection, FillRule
 import case as C
 import case2 as V
@@ -33,6 +36,7 @@ import case2 as V
 IN = 25.4
 MODEL = os.environ.get('MODEL', 'AB-1')
 FCC_ID = os.environ.get('FCC_ID', '2AC7Z-XXXXXXXXXXX')   # 17 characters: as long as Espressif's longest S3 module ID
+LETTERING = os.environ.get('MARK_TEXT', '0') == '1'
 MODEL_LINE = f'MODEL {MODEL}' if os.environ.get('MARK_MODEL', '1') != '0' else None   # MARK_MODEL=0: FCC ID only
 
 _FD = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'fonts')
@@ -120,7 +124,7 @@ def layout():
     x0 = -(wr + GAP + ws) / 2
     xs = x0 + wr + GAP
     # setup sticker centred on the regulatory label's row, or at its front with the model line under it
-    ys = REC_Y0 if MODEL_LINE and MODEL_BESIDE else REC_Y0 + (hr - sh - 2 * REC_CL) / 2
+    ys = REC_Y0 if LETTERING and MODEL_LINE and MODEL_BESIDE else REC_Y0 + (hr - sh - 2 * REC_CL) / 2
     rec_r = _rrect(x0, x0 + wr, REC_Y0, REC_Y0 + hr, REC_R + REC_CL)
     rec_s = _rrect(xs, xs + ws, ys, ys + sh + 2 * REC_CL, REC_R + REC_CL)
     text = CrossSection()
@@ -133,8 +137,9 @@ def layout():
     for s in lines:
         text = text + _text_cs(s, 0.0, y)
         y += TEXT_PITCH
-    items = [('regulatory label', rec_r, REC_DEPTH, True), ('setup sticker', rec_s, REC_DEPTH, True),
-             ('lettering', text, TEXT_DEPTH, False)]
+    items = [('regulatory label', rec_r, REC_DEPTH, True), ('setup sticker', rec_s, REC_DEPTH, True)]
+    if LETTERING:
+        items.append(('lettering', text, TEXT_DEPTH, False))
     labels = [('reg', x0 + REC_CL, REC_Y0 + REC_CL, rw, rh), ('setup', xs + REC_CL, ys + REC_CL, sw, sh)]
     return items, labels
 
@@ -306,13 +311,14 @@ def _draw_stickers(ax):
     ax.text(tx, y + 1.6, 'WiFi setup', fontsize=1.9 * pt, weight='bold', va='top', zorder=5)
     ax.text(tx, y + 5.0, 'Board-H3HM\nPass 7q76qp5dvn', fontsize=1.75 * pt, va='top', zorder=5, linespacing=1.3, family='monospace')
     x, y, w, h = L['reg']
-    ax.text(x + 2.2, y + 1.8, f'Arrivals Board  ·  Model {MODEL}', fontsize=2.1 * pt, weight='bold', va='top', zorder=5)
+    ax.text(x + 2.2, y + 1.8, f'Arrivals Board  ·  Model {MODEL}', fontsize=1.95 * pt, weight='bold', va='top', zorder=5)
+    ax.text(x + 2.2, y + 4.9, f'Contains FCC ID: {FCC_ID}', fontsize=1.75 * pt, weight='bold', va='top', zorder=5)
     import textwrap
     stmt = '\n'.join(textwrap.wrap('This device complies with part 15 of the FCC Rules. Operation is subject to the following '
                                    'two conditions: (1) This device may not cause harmful interference, and (2) this device '
                                    'must accept any interference received, including interference that may cause undesired '
                                    'operation.', 62))
-    ax.text(x + 2.2, y + 5.4, stmt, fontsize=1.65 * pt, va='top', zorder=5, linespacing=1.35)
+    ax.text(x + 2.2, y + 8.3, stmt, fontsize=1.6 * pt, va='top', zorder=5, linespacing=1.25)
 
 
 def _shell(panel):
@@ -340,7 +346,7 @@ if __name__ == '__main__':
         bottom = sh ^ C.box(-C.HW - 1, C.HW + 1, -1, C.D + 1, -1, 2.0)   # the bottom wall only: fast slices
         out = sys.argv[2]
         name = {'p3': 'P3', 'p25': 'P2.5'}.get(p, p)
-        t = f'{name} underside, seen from below (front edge at the top), lettering for a {NOZZLE:g} nozzle'
+        t = f'{name} underside, seen from below (front edge at the top)' + (f', lettering for a {NOZZLE:g} nozzle' if LETTERING else '')
         preview(bottom, out, title=t)
         preview(bottom, out.replace('.png', '-labels.png'), stickers=True, title=t)
         print(out)

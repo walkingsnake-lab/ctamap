@@ -22,11 +22,7 @@ DECK_BOT = -1.4                  # encoder body top sits here (deck 3.0 thick to
 POCKET_R = 9.8                   # clears the real body (~12.4 x 13.4 with its frame, corners r 9.13) plus print shrink; 9.0 jammed (Nov 2)
 BUSH_R = 3.7                     # M7 bushing
 RELIEF_R, RELIEF_TOP = 6.5, 0.2  # clears the body's anti-rotation tab wherever it sits
-# bore retainer: RET_N thin ribs in the deck's bore that the bushing's M7 thread bites into when the encoder is pushed
-# straight up, so it hangs on its own while the nut and knob go on from the top. The nut still does all the clamping.
-# RET_R is the ribs' crest radius (thread major r 3.5); None = plain bore. The bore's bottom edge gets a BORE_CH lead-in.
-RET_R, RET_N, RET_W, RET_LEAD = 3.40, 3, 0.9, 0.3   # 0.9 wide: two lines at a 0.4 nozzle (0.6 is under one); fit set 3.30/3.40/3.50
-BORE_CH = 0.4                                     # deck above the relief is 1.4: 0.4 lead-in + 1.0 of ribs
+BORE_CH = 0.4                                     # lead-in at the bore's bottom: the bushing finds the bore when pushed up
 RIB_R = 12.15                    # crush-rib crest radius (nominal hole r 12.0); None = plain plug. 12.15 (2 notches): snug; 12.25 took too much force (Nov 2)
 RIB_W, RIB_N, RIB_LEAD = 1.0, 12, 0.6   # rib width, count on a 30° grid (those near the teardrop tip are dropped), lead-in
 KEY = (1.3, 11.0, 14.3)          # half width, y0, y1 (shell notch: ±1.5, 11.5–14.5)
@@ -60,8 +56,6 @@ def collar():
     c = c - cyl(RELIEF_R, DECK_BOT - 0.1, RELIEF_TOP)
     if BORE_CH > 0:
         c = c - cyl(BUSH_R + BORE_CH, RELIEF_TOP - 0.01, RELIEF_TOP + BORE_CH, BUSH_R - 0.01)
-    if RET_R is not None:
-        c = c + bore_ribs(RET_R)
     return c
 
 
@@ -82,36 +76,6 @@ def ribs(rib_r):
                              + Manifold.cube([depth, RIB_W, 0.01]).translate([rib_r - depth, -RIB_W / 2, PLUG_BOT + RIB_LEAD]))
         out.append((r + lead).rotate([0, 0, a]))
     return Manifold.batch_boolean(out, manifold3d.OpType.Add)
-
-
-def bore_ribs(crest):
-    """RET_N ribs on the bore wall above the lead-in, crest at `crest`, leading in over RET_LEAD at the bottom"""
-    z0, z1 = RELIEF_TOP + BORE_CH, FL_T
-    depth = BUSH_R - crest + 0.3                           # root 0.3 inside the bore wall
-    out = []
-    for i in range(RET_N):
-        a = 360 * i / RET_N + 90                           # one rib toward the back, the others at 120 deg
-        r = Manifold.cube([depth, RET_W, z1 - z0 - RET_LEAD]).translate([crest, -RET_W / 2, z0 + RET_LEAD])
-        lead = Manifold.hull(Manifold.cube([0.3, RET_W, 0.01]).translate([BUSH_R, -RET_W / 2, z0])
-                             + Manifold.cube([depth, RET_W, 0.01]).translate([crest, -RET_W / 2, z0 + RET_LEAD]))
-        out.append((r + lead).rotate([0, 0, a]))
-    return Manifold.batch_boolean(out, manifold3d.OpType.Add)
-
-
-def retainer_fit_set(radii=(3.30, 3.40, 3.50)):
-    """the current collar with bore retainer ribs at three crest radii; 1-3 notches in the flange rim mark them"""
-    global RET_R
-    saved, parts = RET_R, []
-    try:
-        for i, r in enumerate(radii):
-            RET_R = r
-            m = collar()
-            for k in range(i + 1):
-                m = m - Manifold.cube([1.2, 1.6, 10]).translate([-0.6 + (k - i / 2) * 2.4, -FL_R - 0.4, -5])
-            parts.append(m.translate([i * (2 * FL_R + 4), 0, 0]))
-    finally:
-        RET_R = saved
-    return Manifold.batch_boolean(parts, manifold3d.OpType.Add)
 
 
 def export(m, path, flip=True):
@@ -156,7 +120,7 @@ def ribbed_fit_set(radii=(12.05, 12.15, 12.25)):
     return Manifold.batch_boolean(parts, manifold3d.OpType.Add)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':                                # v4 collars (2.5 mm wall): python3 collar.py ../stl/archive/v4
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
     import os; os.makedirs(f'{out}/alternate-frontdown', exist_ok=True)
     t = export(collar(), f'{out}/alternate-frontdown/bar-encoder-collar.stl')
