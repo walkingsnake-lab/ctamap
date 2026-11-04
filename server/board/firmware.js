@@ -26,6 +26,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const setup = require('./setup-image');
 const { tzOffset } = require('./time');
 
 const FILE_NAME = 'firmware.json';
@@ -94,6 +95,25 @@ function inspect(buf) {
   return { v };
 }
 
+// A build's boot image (for setting up a board from the browser, contract
+// "Firmware"): the merged image's first part, everything before the first
+// app slot (bootloader, partition table, the initial OTA data). With the
+// app it makes the image a new board is flashed with. Returns its partition
+// facts; throws FirmwareError saying what's wrong.
+function inspectBoot(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 0x9000 || buf[0] !== ESP_IMAGE_MAGIC) {
+    throw new FirmwareError('not a boot image: upload ctaboard.ino.boot.bin (scripts/split-merged.js makes it from the merged image)');
+  }
+  if (buf.readUInt16LE(12) !== ESP32S3_CHIP_ID) throw new FirmwareError('the bootloader is for another chip');
+  const parts = setup.partitions(buf);
+  const nvs = parts.find((p) => p.type === 1 && p.subtype === 2);
+  const slots = parts.filter((p) => p.type === 0 && (p.subtype === 0x10 || p.subtype === 0x11));
+  if (!nvs || slots.length < 2) throw new FirmwareError('no partition table with an NVS partition and two OTA app slots');
+  if (slots[0].offset !== buf.length) throw new FirmwareError(`the boot image must end where the first app slot starts (${slots[0].offset} bytes; got ${buf.length})`);
+  if (slots[0].size < MAX_BYTES) throw new FirmwareError('the first app slot is smaller than an app build may be');
+  return { nvs, app: slots[0] };
+}
+
 // stableWindow(now): whether stable installs are allowed at epoch second now.
 function createFirmware({ dir, log = console, publicKey = loadPublicKey(), stableWindow = inStableWindow } = {}) {
   if (!publicKey) log.warn('[board] no firmware signing key (firmware-s3/firmware-signing.pub.pem): OTA uploads are refused until scripts/firmware-key.js makes one');
@@ -109,6 +129,8 @@ function createFirmware({ dir, log = console, publicKey = loadPublicKey(), stabl
   for (const ch of CHANNELS) if (!(state.channels[ch] in state.builds)) state.channels[ch] = null;
 
   const binOf = (v) => path.join(root, `${v}.bin`);
+  const bootOf = (v) => path.join(root, `${v}.boot.bin`);
+  const unlinkBuild = (v) => { for (const f of [binOf(v), bootOf(v)]) try { fs.unlinkSync(f); } catch (_) { /* already gone */ } };
   function save() {
     fs.mkdirSync(root, { recursive: true });
     const tmp = `${file}.${process.pid}.tmp`;
@@ -125,14 +147,14 @@ function createFirmware({ dir, log = console, publicKey = loadPublicKey(), stabl
       if (n <= MAX_BUILDS) break;
       if (keep.has(v)) continue;
       delete state.builds[v];
-      try { fs.unlinkSync(binOf(v)); } catch (_) { /* already gone */ }
+      unlinkBuild(v);
       n--;
     }
   }
 
   function status() {
     const builds = Object.entries(state.builds)
-      .map(([v, b]) => ({ v, size: b.size, sha: b.sha, at: b.at, signed: !!b.sig }))
+      .map(([v, b]) => ({ v, size: b.size, sha: b.sha, at: b.at, signed: !!b.sig, boot: !!b.boot }))
       .sort((a, b) => b.at - a.at);
     return { builds, channels: { ...state.channels }, signing: !!publicKey };
   }
@@ -178,9 +200,41 @@ function createFirmware({ dir, log = console, publicKey = loadPublicKey(), stabl
       if (ch) throw new FirmwareError(`${v} is the ${ch} build; point ${ch} at another build first`);
       if (pinned.includes(v)) throw new FirmwareError(`a board is pinned to ${v}`);
       delete state.builds[v];
-      try { fs.unlinkSync(binOf(v)); } catch (_) { /* already gone */ }
+      unlinkBuild(v);
       save();
       return status();
+    },
+
+    // A stored build's boot image (inspectBoot), signed like the build.
+    attachBoot(v, buf, { sig = null } = {}) {
+      if (!Object.hasOwn(state.builds, v)) throw new FirmwareError(`unknown build: ${v} (upload the app first)`);
+      inspectBoot(buf);
+      if (!publicKey) throw new FirmwareError('no signing key yet: run node scripts/firmware-key.js (firmware-s3/README.md, "Signed builds")');
+      if (!sig) throw new FirmwareError('unsigned: upload the boot image with its .sig');
+      const s = String(sig).trim().toLowerCase();
+      if (!verifySignature(buf, s, publicKey)) throw new FirmwareError('the signature doesn\'t match this boot image and the repo\'s signing key');
+      fs.mkdirSync(root, { recursive: true });
+      const tmp = `${bootOf(v)}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, buf);
+      fs.renameSync(tmp, bootOf(v));
+      state.builds[v].boot = { size: buf.length, sha: crypto.createHash('sha256').update(buf).digest('hex'), sig: s };
+      save();
+      log.warn(`[board] firmware ${v}: boot image attached (${buf.length} bytes)`);
+      return status();
+    },
+
+    // What a new board is flashed with (Set up a board): the boot image and
+    // the app right after it, i.e. the merged image up to the app's end.
+    // Null without a boot image. Both files are checked against the
+    // signatures they were stored with.
+    image(v) {
+      const b = Object.hasOwn(state.builds, v) ? state.builds[v] : null;
+      if (!b || !b.boot) return null;
+      const boot = fs.readFileSync(bootOf(v)), app = fs.readFileSync(binOf(v));
+      if (!verifySignature(boot, b.boot.sig, publicKey) || !verifySignature(app, b.sig, publicKey)) {
+        throw new FirmwareError(`build ${v}'s stored files don't match their signatures`);
+      }
+      return Buffer.concat([boot, app]);
     },
 
     // The build a board's `fw` setting names: a channel's, a pinned one, or none (off).
@@ -211,4 +265,4 @@ function createFirmware({ dir, log = console, publicKey = loadPublicKey(), stabl
   };
 }
 
-module.exports = { createFirmware, inStableWindow, STABLE_HOURS, inspect, loadPublicKey, verifySignature, PUBLIC_KEY_FILE, FirmwareError, CHANNELS, MAX_BYTES, MAX_BUILDS, VERSION_RE };
+module.exports = { createFirmware, inStableWindow, STABLE_HOURS, inspect, inspectBoot, loadPublicKey, verifySignature, PUBLIC_KEY_FILE, FirmwareError, CHANNELS, MAX_BYTES, MAX_BUILDS, VERSION_RE };

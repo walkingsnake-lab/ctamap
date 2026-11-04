@@ -68,6 +68,7 @@ jobs:
           ls -l build/ctaboard.ino.bin build/ctaboard.ino.merged.bin
           size=$(stat -c %s build/ctaboard.ino.bin)
           test "$size" -le 2097152
+          node scripts/split-merged.js build/ctaboard.ino.merged.bin build/ctaboard.ino.bin
           echo "version=$v" >> "$GITHUB_OUTPUT"
           echo "Built **$v**: ctaboard.ino.bin, $size bytes (app slot: 2097152)." >> "$GITHUB_STEP_SUMMARY"
 
@@ -113,15 +114,24 @@ jobs:
           name: ctaboard-${{ needs.build.outputs.version }}
           path: build
 
+      - name: Boot image for Set up a board (checked against the app)
+        if: steps.ready.outputs.go == '1'
+        run: node scripts/split-merged.js build/ctaboard.ino.merged.bin build/ctaboard.ino.bin
+
       - name: Sign (checked against the repo's public key)
         if: steps.ready.outputs.go == '1'
-        run: node scripts/sign-firmware.js build/ctaboard.ino.bin
+        run: |
+          node scripts/sign-firmware.js build/ctaboard.ino.bin
+          node scripts/sign-firmware.js build/ctaboard.ino.boot.bin
 
       - uses: actions/upload-artifact@v4
         if: steps.ready.outputs.go == '1'
         with:
           name: ctaboard-${{ needs.build.outputs.version }}-signature
-          path: build/ctaboard.ino.bin.sig
+          path: |
+            build/ctaboard.ino.bin.sig
+            build/ctaboard.ino.boot.bin
+            build/ctaboard.ino.boot.bin.sig
           retention-days: 90
 
       - name: Publish to beta
@@ -134,4 +144,11 @@ jobs:
             --data-binary @build/ctaboard.ino.bin)
           cat response.json; echo
           test "$code" = 200
-          echo "Published **${{ needs.build.outputs.version }}** to beta." >> "$GITHUB_STEP_SUMMARY"
+          code=$(curl -sS -o response.json -w '%{http_code}' -X POST "$BOARD_URL/board/firmware-upload?boot=${{ needs.build.outputs.version }}" \
+            -H "X-Deploy-Token: $FIRMWARE_DEPLOY_TOKEN" \
+            -H "X-Firmware-Signature: $(tr -d '\n' < build/ctaboard.ino.boot.bin.sig)" \
+            -H 'Content-Type: application/octet-stream' \
+            --data-binary @build/ctaboard.ino.boot.bin)
+          cat response.json; echo
+          test "$code" = 200
+          echo "Published **${{ needs.build.outputs.version }}** to beta (with its boot image)." >> "$GITHUB_STEP_SUMMARY"

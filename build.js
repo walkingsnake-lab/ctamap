@@ -36,3 +36,20 @@ fs.unlinkSync(tmpPath);
 
 const stat = fs.statSync(path.join(__dirname, 'dist', 'bundle.min.js'));
 console.log(`dist/bundle.min.js — ${(stat.size / 1024).toFixed(1)} KB`);
+
+// The LED board control page's Set up a board: esptool-js (flashing over
+// Web Serial) and qrcode, as window.SetupTools. Served by the board router;
+// loaded only when the setup dialog opens.
+buildSync({
+  entryPoints: [path.join(__dirname, 'server', 'board', 'setup-tools-entry.mjs')],
+  outfile: path.join(__dirname, 'dist', 'setup-tools.min.js'),
+  bundle: true,
+  format: 'iife',
+  globalName: 'SetupTools',
+  platform: 'browser',
+  minify: true,
+  target: ['es2020'],
+  logLevel: 'warning',
+});
+const st = fs.statSync(path.join(__dirname, 'dist', 'setup-tools.min.js'));
+console.log(`dist/setup-tools.min.js — ${(st.size / 1024).toFixed(1)} KB`);
