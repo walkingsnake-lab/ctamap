@@ -1,7 +1,7 @@
 """French cleat for the v5 drawer case: hang it on a wall with the louvers standing off it.
 
 - Case cleat: bolts to the tray's back between the louver bands (2 x M3 x 10 socket or button head,
-  from the wall side, into nuts in the tray's bosses). Its bevel faces down and toward the wall.
+  from the wall side, threaded into the tray's bosses). Its bevel faces down and toward the wall.
 - Wall cleat: screws to the wall (2 x #8 / 4 mm countersunk wood screws, or anchors). Its bevel faces up; its front face
   holds the tray's back, so the case hangs plumb with no bottom spacer.
 - Both are CLEAT_T deep: the tray's back sits CLEAT_T off the wall and the rim CLEAT_T - BACKL. The two cleats fill the

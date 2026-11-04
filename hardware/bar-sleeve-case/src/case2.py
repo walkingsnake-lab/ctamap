@@ -471,10 +471,11 @@ def export_open(out, backdown):
 
 if __name__ == '__main__':
     import os, trimesh
-    out = sys.argv[1] if len(sys.argv) > 1 else '.'
-    alt = f'{out}/alternate-frontdown'
+    out = sys.argv[1] if len(sys.argv) > 1 else '.'            # the stl folder: Boot key here, v4 shells in archive/v4
+    v4 = f'{out}/archive/v4'
+    alt = f'{v4}/alternate-frontdown'
     os.makedirs(alt, exist_ok=True)
-    export_open(out, backdown=True)
+    export_open(v4, backdown=True)
     export_open(alt, backdown=False)
     k = boot_key(); me = k.to_mesh(); tk = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
     tk.apply_translation(-tk.bounds[0]); tk.export(f'{out}/bar-boot-key.stl'); print('key', tk.is_watertight, np.round(tk.extents, 1).tolist())
