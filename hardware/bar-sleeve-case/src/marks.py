@@ -222,6 +222,12 @@ def coupon_ladder():
     return plate + flange
 
 
+def _stand(m):
+    """print orientation: stood on the flange (the back, largest y) like the back-down shell; the lettered face toward -y"""
+    y1 = m.bounding_box()[4]
+    return m.transform([[1, 0, 0, 0], [0, 0, 1, 0], [0, -1, 0, y1]])
+
+
 def _save(m, path):
     import trimesh
     mesh = m.to_mesh()
@@ -342,8 +348,8 @@ if __name__ == '__main__':
         d = sys.argv[2]
         os.makedirs(d, exist_ok=True)
         sh = mark(_shell(os.environ.get('PANEL', 'p25')))
-        _save(coupon_wall(sh), os.path.join(d, 'coupon-marks-wall.stl'))
-        _save(coupon_ladder(), os.path.join(d, 'coupon-marks-ladder.stl'))
+        _save(_stand(coupon_wall(sh)), os.path.join(d, 'coupon-marks-wall.stl'))
+        _save(_stand(coupon_ladder()), os.path.join(d, 'coupon-marks-ladder.stl'))
         preview_ladder(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'img', 'marks-ladder.png'))
         print(d)
     else:
