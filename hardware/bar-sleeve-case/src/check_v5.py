@@ -57,7 +57,7 @@ for cx, cz in DR.CLEAT_SCREWS:
     rep(f'cleat screw at x {cx:+.0f}: core vs tray and cleat', ov(scr, tray) + ov(scr, cc), ov(scr, tray) + ov(scr, cc) < 1e-3)
     ring = (cyl_y(cx, cz, head_y - 10.0, head_y, DR.TAP_D_V + 1.0, 32) - cyl_y(cx, cz, head_y - 11, head_y + 1, DR.TAP_D_V + 0.1, 32)) ^ tray
     bb = ring.bounding_box()
-    rep(f'cleat thread engagement in PETG (mm), pilot Ø{DR.TAP_D_V}', round(bb[4] - DR.TAP_LEAD - bb[1], 2), bb[4] - DR.TAP_LEAD - bb[1] >= 5.0)
+    rep(f'cleat thread engagement in PETG (mm), pilot Ø{DR.TAP_D_V}', round(bb[4] - DR.TAP_LEAD_V - bb[1], 2), bb[4] - DR.TAP_LEAD_V - bb[1] >= 5.0)
     rep('cleat screw tip inside the boss (mm short of its inner end)', round((head_y - 10.0) - (DR.Y0 - DR.CB_H), 2), head_y - 10.0 >= DR.Y0 - DR.CB_H)
 s3 = DR.s3_envelope()
 near = Manifold.batch_boolean([box(cx - 8, cx + 8, DR.Y0 - DR.CB_H - 1, DR.Y1, cz - 8, cz + 8) for cx, cz in DR.CLEAT_SCREWS], C.ADD)

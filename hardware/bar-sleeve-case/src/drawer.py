@@ -142,8 +142,10 @@ ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
 # regenerate and reprint the tray; nothing else changes. (The nut slot and #485's hex seat are in DESIGN-HISTORY.)
 FASTEN = os.environ.get('FASTEN', 'tap')
 TAP_D = 3.0                                     # bottom pilots, horizontal in the print: the fit set's best (#3 of 2.6 / 2.8 / 3.0, Nov 3)
-TAP_D_V = 3.3                                   # cleat pilots, vertical in the print: 2.8 / 2.9 / 3.0 all printed too tight to
-                                                # drive an M3 (Nov 3; 3.0 went furthest); retest 3.2 / 3.3 / 3.4 (test-plate-v5b)
+TAP_D_V = 3.1                                   # cleat pilots, vertical in the print: 3.0 too tight to drive an M3, 3.2 / 3.3 / 3.4
+                                                # too loose (Nov 3, two rounds): 3.1, with a deeper lead-in (the first layers on
+                                                # the bed print tightest, and the screw enters there); test-plate-v5c checks 3.05-3.15
+TAP_LEAD_V = 0.6
 TAP_LEAD = 0.4                                  # 45 deg lead-in where the screw enters
 INSERT_D, INSERT_L = 4.0, 6.0                   # M3 heat-set insert, 4.6-5.0 OD x 5.7 long class
 SCREW_FLOAT = 0.4                               # the tray's +/- y float, in the shell's stadium holes (0.6 left the head no bearing)
@@ -398,8 +400,8 @@ def cleat_cuts():
             cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y1, 3.4, 24))
             continue
         cuts.append(cyl_y(cx, cz, Y0 - CB_H - 1, Y1 + 1, TAP_D_V, 24))
-        cuts.append(Manifold.cylinder(TAP_LEAD + 0.01, TAP_D_V / 2, TAP_D_V / 2 + TAP_LEAD + 0.01, 24).rotate([-90, 0, 0])
-                    .translate([cx, Y1 - TAP_LEAD, cz]))
+        cuts.append(Manifold.cylinder(TAP_LEAD_V + 0.01, TAP_D_V / 2, TAP_D_V / 2 + TAP_LEAD_V + 0.01, 24).rotate([-90, 0, 0])
+                    .translate([cx, Y1 - TAP_LEAD_V, cz]))
     return cuts
 
 
@@ -670,7 +672,7 @@ def pilot_block(ds):
         x = 6.0 + 12.0 * i
         blk = blk + cyl_y(x, 7.0, Y0 - CB_H, Y0 + 0.01, CB_D, 48)
         cuts.append(cyl_y(x, 7.0, Y0 - CB_H - 1, Y1 + 1, d, 24))
-        cuts.append(Manifold.cylinder(TAP_LEAD + 0.01, d / 2, d / 2 + TAP_LEAD + 0.01, 24).rotate([-90, 0, 0]).translate([x, Y1 - TAP_LEAD, 7.0]))
+        cuts.append(Manifold.cylinder(TAP_LEAD_V + 0.01, d / 2, d / 2 + TAP_LEAD_V + 0.01, 24).rotate([-90, 0, 0]).translate([x, Y1 - TAP_LEAD_V, 7.0]))
         for k in range(i + 1):
             mx = x + (k - i / 2) * 2.0
             cuts.append(box(mx - 0.5, mx + 0.5, Y0 - 1, Y1 + 1, 13.0, 15.0))
@@ -678,11 +680,11 @@ def pilot_block(ds):
 
 
 def retest_plate():
-    """the second round (Nov 3): the cleat pilots at 3.2 / 3.3 / 3.4 and the post with the sequentially bridged floor"""
+    """round 3 (Nov 3): the cleat pilots only, at 3.05 / 3.1 / 3.15 with the deeper lead-in"""
     import trimesh
     down = trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0])
     out, x = [], 0.0
-    for m in (pilot_block((3.2, 3.3, 3.4)), post_test()):
+    for m in (pilot_block((3.05, 3.1, 3.15)),):
         me = m.to_mesh(); t = trimesh.Trimesh(me.vert_properties[:, :3], me.tri_verts, process=False)
         t.apply_transform(down)
         mn, mx = t.bounds
@@ -766,6 +768,6 @@ if __name__ == '__main__':
     _mod.FASTEN = _saved
     P, W = test_plate(tr)
     P.export(f'{out}/test-plate-v5.stl'); W.export(f'{out}/test-plate-v5-window.stl')
-    t = retest_plate(); t.export(f'{out}/test-plate-v5b.stl'); print('test-plate-v5b.stl', t.is_watertight, np.round(t.extents, 1).tolist())
+    t = retest_plate(); t.export(f'{out}/test-plate-v5c.stl'); print('test-plate-v5c.stl', t.is_watertight, np.round(t.extents, 1).tolist())
     print('test-plate-v5.stl', P.is_watertight, np.round(P.extents, 1).tolist(), '+ window', W.is_watertight)
     print(dict(D=D, S3_edge=round(S3_EDGE, 2), s3_z0=round(S3_Z0 - ZC, 2), port_z=round(PORT_Z - ZC, 2), corners=CORNERS))

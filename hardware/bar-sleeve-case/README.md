@@ -32,9 +32,10 @@ Files are in `stl/v5-drawer/` unless they start with `stl/`.
 | Tilt plinth (optional) | `stl/bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 
 ## Test plate
-**Round 2 (`test-plate-v5b.stl`, black PETG, ~60 x 16 mm):** the cleat pilots at Ø3.2 / 3.3 / 3.4 (1-3 notches; round 1's
-2.8 / 2.9 / 3.0 were all too tight) and the post with its re-done floor. Same checks as items 2 and 4 below. Round 1 passed
-the window, the rails (now 0.25 mm closer a side) and the sled.
+**Round 3 (`test-plate-v5c.stl`, black PETG, 36 x 14 mm):** the cleat pilots only, at Ø3.05 / 3.1 / 3.15 (1-3 notches)
+with a deeper lead-in at the entry. Round 1's 2.8-3.0 were too tight to drive and round 2's 3.2-3.4 too loose, so the tray
+has 3.1. Round 2 also passed the re-done post floor (sequential bridging), and round 1 the window, the rails (now 0.25 mm
+closer a side) and the sled.
 
 **Round 1:** one print with every fit that's new and not yet confirmed on a real print (Nov 3). Print it with the tray's settings
 (below). It has five pieces: the long top strip, a small piece of the tray's back (status window and Boot funnel), a block
@@ -43,7 +44,7 @@ of three bosses, one short post, and the light-sensor sled (a real one: keep it 
    with no black bleeding into it. That's the AMS swap the tray will do.
 2. **Cleat pilots** (three bosses, 1-3 notches = Ø2.8 / 2.9 / 3.0): drive an M3 x 10 into each, from the flat side, through
    a 4 mm spacer (a scrap of plastic or a stack of washers: the cleat is 4 mm thick there), or let the tip come out 3.5 mm
-   the far side. Keep the one that threads in firmly without the boss splitting. The tray has 3.3 (`TAP_D_V` in
+   the far side. Keep the one that threads in firmly without the boss splitting. The tray has 3.1 (`TAP_D_V` in
    `src/drawer.py`): if another wins, change it and regenerate. (The bottom screws' pilots are settled: Ø3.0, the fit set's best.)
 3. **Top strip** (the long piece: the tray's top wall over the encoder and the sensor):
    - **Encoder rails:** set the encoder's board between the two rails at the left end. It should go in with a little play
