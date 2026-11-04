@@ -20,7 +20,6 @@ Files are in `stl/v5-drawer/` unless they start with `stl/`.
 
 | Part | File | Material | Print |
 |---|---|---|---|
-| **Test plate** (first, once) | `test-plate-v5.stl` + `test-plate-v5-window.stl`: load both as one object with two parts; the window part is translucent | black PETG + translucent PETG | as exported; see [Test plate](#test-plate) |
 | Shell | `bar-shell-v5-walnut-backdown.stl` | PLA Wood | as exported (back rim down) |
 | Tray | `bar-drawer-tray.stl` + `bar-drawer-tray-window.stl`: one object, two parts (they share one frame; don't move either on its own); the window is the status light | black PETG + translucent PETG | as exported (back face down, walls up) |
 | Diffuser | `stl/bar-diffuser-white-face.stl` + `stl/bar-diffuser-white-grid-black.stl` (0.2 face, 0.4 nozzle), or `stl/bar-diffuser-translucent-face.stl` + `stl/bar-diffuser-translucent-grid-black.stl` (0.4 face, 0.6 nozzle): one object, two parts | face white or translucent, the rest black | face down; the face part is the first layer |
@@ -31,31 +30,12 @@ Files are in `stl/v5-drawer/` unless they start with `stl/`.
 | Wall cleat (optional) | `bar-cleat-case.stl` + `bar-cleat-wall.stl` | PETG | wall face down |
 | Tilt plinth (optional) | `stl/bar-plinth-walnut-8deg.stl` | PLA Wood | flat |
 
-## Test plate
-**Round 2 (`test-plate-v5b.stl`, black PETG, ~60 x 16 mm):** the cleat pilots at Ø3.2 / 3.3 / 3.4 (1-3 notches; round 1's
-2.8 / 2.9 / 3.0 were all too tight) and the post with its re-done floor. Same checks as items 2 and 4 below. Round 1 passed
-the window, the rails (now 0.25 mm closer a side) and the sled.
-
-**Round 1:** one print with every fit that's new and not yet confirmed on a real print (Nov 3). Print it with the tray's settings
-(below). It has five pieces: the long top strip, a small piece of the tray's back (status window and Boot funnel), a block
-of three bosses, one short post, and the light-sensor sled (a real one: keep it for the build). Then:
-1. **Status window** (on the small back piece, beside the Boot funnel): the translucent disc should be clean and flush,
-   with no black bleeding into it. That's the AMS swap the tray will do.
-2. **Cleat pilots** (three bosses, 1-3 notches = Ø2.8 / 2.9 / 3.0): drive an M3 x 10 into each, from the flat side, through
-   a 4 mm spacer (a scrap of plastic or a stack of washers: the cleat is 4 mm thick there), or let the tip come out 3.5 mm
-   the far side. Keep the one that threads in firmly without the boss splitting. The tray has 3.3 (`TAP_D_V` in
-   `src/drawer.py`): if another wins, change it and regenerate. (The bottom screws' pilots are settled: Ø3.0, the fit set's best.)
-3. **Top strip** (the long piece: the tray's top wall over the encoder and the sensor):
-   - **Encoder rails:** set the encoder's board between the two rails at the left end. It should go in with a little play
-     (~0.45 mm a side) and, turned, stop at about 2.3°.
-   - **Sensor sled:** tilt the sled about 10° (front down), put its two back tabs into the two hooks, swing the front up to
-     the wall and drive an M2.5 x 6 in from the outside face (the counterbore beside the big hole). The tabs should slide
-     in without force and not rattle.
-4. **Post** (the short round one): its floor prints as a bridge, the way the tray's four post floors will. Its first layer
-   is a slot running across the tube and its second a square (sequential bridging: every strand is anchored at both
-   ends, so nothing sags round a hole), then the round hole. Check the inside is clean, then drop an M3 x 8 flanged button
-   head down the tube: the flange should sit flat on the two strips either side of the slot and the screw should slide
-   ~0.7 mm every way.
+## Test plates (done, Nov 3)
+Every new fit was checked on small test prints before the tray: three rounds, now in `stl/archive/fit-tests/` (`test-plate-v5`
++ `-window`, `test-plate-v5c`; round 2's pieces are folded into those). Settled: the status window (printed in, clean), the
+encoder rails (0.45 mm a side), the sensor sled and hooks, the post floor (sequential bridging, clean), the bottom pilots
+Ø3.0 and the cleat pilots Ø3.1 (3.0 too tight to drive, 3.2 too loose). The test plate is regenerated with the tray
+(`drawer.py`), so after a filament or setting change it can be printed again to recheck.
 
 ## Hardware
 - **Screws** (button heads; the hex keys below fit them): 4 x M3 x 8 **flanged** button head (ISO 7380-2, flange ~Ø6.9;
@@ -78,7 +58,7 @@ of three bosses, one short post, and the light-sensor sled (a real one: keep it 
   layer height (smooths the hood ramp and rim slopes), 4 walls on a 0.4 nozzle, elephant foot 0.15. Seam: rotate Z 225° (or
   135°) so the bottom-right corner faces the back, Seam position "Back", scarf seam; check in Preview. Outer brim 5 mm with
   a 0.1 mm gap; Z hop 0.6 mm. Plate washed with dish soap, then glue stick; bed 55-60 °C; door closed.
-- **Tray** (and the test plate, which should match whatever your tray printed well with): PETG, 0.4 nozzle, 0.24 mm layers, 4 walls, 4 top + 4 bottom layers, 15% gyroid, monotonic
+- **Tray** (the test plates were printed with these; keep them if the tray prints well): PETG, 0.4 nozzle, 0.24 mm layers, 4 walls, 4 top + 4 bottom layers, 15% gyroid, monotonic
   bottom surface, textured PEI, elephant foot 0.15, Z hop, dried PETG. The window part takes the translucent PETG: the
   swaps happen only in the first ~4 layers (it's 1 mm deep, in the back face on the bed).
 - **Diffuser:** first layer as thick as the face (0.2 or 0.4), first layer 30 mm/s, monotonic bottom surface, elephant foot 0.
