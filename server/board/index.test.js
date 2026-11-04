@@ -273,7 +273,8 @@ test('update: auth, unknown board, and no Train Tracker data yet', async () => {
   const r = await s.req(FULL);
   assert.equal(r.status, 200);
   assert.deepEqual([r.body.age, r.body.stale, r.body.rows, r.body.ticker], [null, 1, [], []]);
-  assert.equal(r.body.mlb.games.length, 1);
+  s.store.update('home', { screen: 'baseball' });
+  assert.equal((await s.req(FULL)).body.mlb.games.length, 1);
   await s.close();
 });
 
@@ -603,12 +604,24 @@ test('Rain nearby: off by default, then on a timer on any screen but weather; ho
   assert.equal((await get()).radar.held, undefined);
   state.on = true;
   assert.deepEqual((await get()).radar.visit, { every: 240, for: 120 });
+  // Holds are kept in the state file (they survive a restart).
+  await rain({ hold: 'rain' });
+  assert.deepEqual(s.store.get('home').rainHold, { rain: true });
+  await rain({ hold: null });
+  assert.equal(s.store.get('home').rainHold, undefined);
+  // The board's knob ended a visit (hq on the version check): held until then.
+  const until = Math.floor(now / 240) * 240 + 240;
+  await s.req(`/board/version?b=home&hq=${until}`, { headers: { 'X-Board-Token': 'tok' } });
+  b = await get();
+  assert.deepEqual([b.radar.visit, b.radar.held, s.store.get('home').rainHold], [null, 'visit', { until }]);
+  await s.req(`/board/version?b=home&hq=${now + 99999}`, { headers: { 'X-Board-Token': 'tok' } }); // out of range: ignored
+  assert.deepEqual(s.store.get('home').rainHold, { until });
   assert.equal((await post({ radarEvery: 61 })).status, 400);
   assert.equal((await post({ radarFor: 5 })).status, 400);
   await s.close();
 });
 
-test('Cycle: its screens take turns, baseball takes over, the alert jump is retired; baseball teams/priority', async () => {
+test('Cycle: its screens take turns; nothing takes it over (ballgames, alerts); baseball priority', async () => {
   const now = Math.floor(Date.now() / 1000);
   const live = (id, away, home) => ({ id, st: 'live', start: now - 3600, inn: 3, half: 'T', away: { ab: away, c: '#000000', r: 1 }, home: { ab: home, c: '#000000', r: 0 } });
   let games = [];
@@ -640,20 +653,21 @@ test('Cycle: its screens take turns, baseball takes over, the alert jump is reti
   board = (await s.req('/board/update?b=home&hk=skyline', h)).body;
   assert.deepEqual(board.rot.screens, ['clock', 'weather', 'transit']);
   for (const bad of [['transit'], ['transit', 'transit'], ['transit', 'radar'], 'transit']) assert.equal((await post({ cycle: bad })).status, 400, JSON.stringify(bad));
-  // Baseball takes over the Cycle during a game; NWS alerts no longer jump.
+  // Neither a game nor an NWS warning takes the Cycle over, and games aren't
+  // even fetched unless baseball is shown.
   games = [live(1, 'CHC', 'STL')];
   warn = 'warning';
   await post({ alertJump: 'all' });
   b = await get();
-  assert.deepEqual([b.screen, b.rot], ['baseball', null]);
-  games = [];
-  assert.equal((await get()).screen, 'weather'); // the simulator's copy: no clock firmware reported
+  assert.deepEqual([b.screen, b.mlb.games], ['weather', []]); // the simulator's copy: no clock firmware reported
   warn = null;
-  games = [live(1, 'CHC', 'STL')];
-  // Baseball teams and windows reach the poller; a forced Baseball screen shows all.
+  // Baseball as a Cycle turn gets the day's games.
+  await post({ cycle: ['transit', 'baseball'] });
+  assert.deepEqual((await get()).mlb.games.map((g) => g.id), [1]);
+  // A shown Baseball screen asks for every game today.
   await post({ bbTeams: ['sox'], bbPre: 60, bbFinal: 5 });
   await get();
-  assert.deepEqual(mlb.asked, { teams: ['sox'], pre: 3600, final: 300 });
+  assert.deepEqual(mlb.asked, { teams: ['cubs', 'sox', 'post'], pre: 3600, final: 300 });
   // Priority: 'favorite' keeps only live Cubs/Sox games while one is on;
   // 'all' tells the board to rotate every game.
   games = [live(1, 'NYY', 'BOS'), live(2, 'CWS', 'CLE')];
@@ -1023,7 +1037,7 @@ test('sunTime: the moment the sun reaches an elevation, rising or setting, near 
   assert.equal(sunTime(t, lat, lon, 80, -1), null);
 });
 
-test('baseball: auto shows it during a game, weather warnings or not', async () => {
+test('baseball: shown only when chosen (or a Cycle turn), never as a takeover', async () => {
   const now = Math.floor(Date.now() / 1000);
   const arrivals = normalize(morseJson, { log: quiet });
   const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
@@ -1041,10 +1055,13 @@ test('baseball: auto shows it during a game, weather warnings or not', async () 
   s = await serve({ tracker: tracker(), mlb: fakeMlb([game]) });
   s.store.update('home', { screen: 'auto' });
   b = (await s.req(FULL)).body;
+  assert.equal(b.screen, 'transit'); // a game on doesn't take the Cycle over
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  s.store.update('home', { screen: 'baseball' });
+  b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'baseball');
   assert.deepEqual(b.mlb.games, [game]);
   // A weather warning doesn't take the board off the game.
-  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   await post({ warn: { kind: 'tor', lvl: 'warning' } });
   assert.equal((await s.req(FULL)).body.screen, 'baseball');
   // The phone can pick baseball directly.
@@ -1062,7 +1079,7 @@ test('baseball: the simulator test game goes first in the list, in the chosen st
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await post({ game: 'extra' })).status, 400);
-  s.store.update('home', { screen: 'auto' });
+  s.store.update('home', { screen: 'baseball' });
   for (const st of ['pre', 'live', 'final']) {
     const r = await post({ game: st });
     assert.equal((await r.json()).game, st);
@@ -1096,7 +1113,7 @@ test('baseball logo layout: payload carries logo ids and band colors; the board 
   const game = { id: 7, st: 'live', start: now - 3600, away: { ab: 'CHC', c: '#2a5bd8', r: 1 }, home: { ab: 'STL', c: '#d62a2a', r: 0 }, inn: 3, half: 'T', b: 0, s: 0, o: 0, on: [0, 0, 0] };
   const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), mlb: fakeMlb([game]), logos: fakeLogos({ CHC: '#142d5a' }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
-  s.store.update('home', { baseballLayout: 'logos' });
+  s.store.update('home', { baseballLayout: 'logos', screen: 'baseball' });
   const b = (await s.req(FULL)).body;
   assert.equal(b.mlb.layout, 'logos');
   assert.equal(b.mlb.dim, 0.9);

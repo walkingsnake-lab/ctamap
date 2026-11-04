@@ -106,8 +106,15 @@
   .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.err { background: var(--err); }
 
   /* Board renders: a black bezel, square LEDs at exact multiples. */
-  .prev { position: relative; margin: 0 16px; border-radius: 14px; background: #000; padding: 5.3%; aspect-ratio: 358 / 198; overflow: hidden; }
-  .prev img, .prev canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+  /* The render sets the height (2:1 from its width), so no browser has to
+     resolve a percentage height inside an aspect-ratio box (Safari doesn't). */
+  .prev { position: relative; margin: 0 16px; border-radius: 14px; background: #000; padding: 19px; overflow: hidden; display: grid; justify-items: center; }
+  .prev img, .prev canvas { display: block; width: 100%; height: auto; aspect-ratio: 2 / 1; object-fit: contain; image-rendering: pixelated; }
+  /* Whole LEDs: the largest multiple of 64 px that fits (320 px at 390 wide). */
+  @supports (width: round(down, 100px, 64px)) {
+    .prev { container-type: inline-size; }
+    .prev img, .prev canvas { width: round(down, 100cqi, 64px); }
+  }
   .prev.dim img { opacity: .35; }
   .prev .over { position: absolute; inset: 0; display: grid; place-items: center; }
   .prev .over span { background: rgba(0,0,0,.75); color: #fff; font-size: 14px; border-radius: 14px; padding: 6px 12px; }
@@ -132,7 +139,8 @@
   .minis { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 12px 16px 0; color: var(--sub); flex-wrap: wrap; }
   .minis canvas, .minis img { width: 144px; height: 80px; padding: 8px; border-radius: 9px; background: #000; image-rendering: pixelated; }
   textarea.field { resize: none; line-height: 1.35; }
-  .pinned { position: sticky; bottom: 0; padding: 14px 0 calc(10px + env(safe-area-inset-bottom)); margin-top: 18px; background: var(--bg); }
+  .pinned { position: sticky; bottom: 0; padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); margin-top: 18px; background: var(--bg); box-shadow: 0 -1px 0 var(--sep), 0 -12px 16px -12px rgba(0,0,0,.25); }
+  .view[data-view="announce"] .tiles { padding-bottom: 22px; }
   pre.keys { white-space: pre-wrap; word-break: break-all; font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--cell); border-radius: 10px; padding: 12px 14px; margin: 10px 16px 0; user-select: all; }
   code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
   ul.plain { list-style: none; margin: 8px 32px 0; padding: 0 0 0 18px; color: var(--sub); font-size: 15px; }
@@ -176,6 +184,9 @@
     #app > .view[data-view="home"] { display: block !important; position: sticky; top: 16px; grid-column: 1; grid-row: 1; }
     #app > .view:not([data-view="home"]) { grid-column: 2; grid-row: 1; }
     #app > .view:not([data-view="home"]) .back-home { visibility: hidden; }
+    /* The row (or the cog) whose page is open on the right. */
+    #screens .c.t.open { background: var(--fill); }
+    #screens .c.t.open .gear, .nav.home a.nb.open { color: var(--fg); background: var(--fill); border-radius: 10px; }
   }
 </style>
 </head>
@@ -188,7 +199,7 @@
     <button class="title" id="boardTitle" aria-haspopup="dialog"><span id="boardName">Board</span>
       <svg class="admin" width="13" height="8" viewBox="0 0 16 10" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity:.45;margin-top:3px"><path d="M2 2l6 6 6-6"/></svg>
     </button>
-    <a class="nb end" href="#board" aria-label="Board settings" data-icon="gear24"></a>
+    <a class="nb end" id="boardGear" href="#board" aria-label="Board settings" data-icon="gear24"></a>
   </div>
   <div class="prev" id="homePrev"><img id="preview" alt="What the board is showing now"><div class="over" id="prevOver" hidden><span id="prevOverText"></span></div></div>
   <a class="ft stat" id="homeStat" role="status" href="#status"></a>
@@ -238,8 +249,8 @@
 
   <p class="sh" id="tShowsH">Shows</p>
   <div class="grp" role="radiogroup" aria-labelledby="tShowsH" id="tShows">
-    <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="transit"><canvas class="thumb" width="64" height="32"></canvas><span class="grow">Rows<span class="s">One row per destination</span></span><span class="ck" data-icon="check"></span></button></div>
-    <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="ticker"><canvas class="thumb" width="64" height="32"></canvas><span class="grow">Ticker<span class="s">Station-sign style, two at a time</span></span><span class="ck" data-icon="check"></span></button></div>
+    <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="transit"><img class="thumb" alt="" data-static="rows"><span class="grow">Rows<span class="s">One row per destination</span></span><span class="ck" data-icon="check"></span></button></div>
+    <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="ticker"><img class="thumb" alt="" data-static="ticker"><span class="grow">Ticker<span class="s">Station-sign style, two at a time</span></span><span class="ck" data-icon="check"></span></button></div>
   </div>
 
   <p class="sh">Station</p>
@@ -258,8 +269,8 @@
   <p class="sh" id="layH">Rows</p>
   <div class="grp">
     <div class="tiles" role="radiogroup" aria-labelledby="layH" id="transitLayout">
-      <button role="radio" data-v="header"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Station on top</span></button>
-      <button role="radio" data-v="key"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Key on top</span></button>
+      <button role="radio" data-v="header"><img alt="" data-static="layout-header"><span class="lab"><span class="rd" data-icon="dotck"></span>Station on top</span></button>
+      <button role="radio" data-v="key"><img alt="" data-static="layout-key"><span class="lab"><span class="rd" data-icon="dotck"></span>Key on top</span></button>
     </div>
     <div class="c" id="wxRow"><label for="showWeather" class="grow">Weather at the bottom</label><input type="checkbox" class="sw" id="showWeather"></div>
     <div class="c" id="hdivRow"><label for="headerDivider" class="grow">Divider under the top line</label><input type="checkbox" class="sw" id="headerDivider"></div>
@@ -317,10 +328,10 @@
   <p class="sh" id="wvH">Shows</p>
   <div class="grp">
     <div class="tiles" role="radiogroup" aria-labelledby="wvH" id="wxView">
-      <button role="radio" data-v="now"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Conditions</span></button>
-      <button role="radio" data-v="5day"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>5-day</span></button>
-      <button role="radio" data-v="hourly"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Hourly</span></button>
-      <button role="radio" data-v="radar"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Radar</span></button>
+      <button role="radio" data-v="now"><img alt="" data-static="wx-now"><span class="lab"><span class="rd" data-icon="dotck"></span>Conditions</span></button>
+      <button role="radio" data-v="5day"><img alt="" data-static="wx-5day"><span class="lab"><span class="rd" data-icon="dotck"></span>5-day</span></button>
+      <button role="radio" data-v="hourly"><img alt="" data-static="wx-hourly"><span class="lab"><span class="rd" data-icon="dotck"></span>Hourly</span></button>
+      <button role="radio" data-v="radar"><img alt="" data-static="wx-radar"><span class="lab"><span class="rd" data-icon="dotck"></span>Radar</span></button>
     </div>
     <div class="c"><label for="tempShadow" class="grow">Color behind the temperature</label><input type="checkbox" class="sw" id="tempShadow"></div>
   </div>
@@ -361,11 +372,11 @@
   <p class="sh" id="faceH">Face</p>
   <div class="grp">
     <div class="tiles" role="radiogroup" aria-labelledby="faceH" id="clockFace">
-      <button role="radio" data-v="skyline"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Skyline</span></button>
-      <button role="radio" data-v="seventies"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Seventies</span></button>
-      <button role="radio" data-v="analog"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Analog</span></button>
-      <button role="radio" data-v="daynight"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Day/night</span></button>
-      <button role="radio" data-v="gradient"><canvas width="128" height="64"></canvas><span class="lab"><span class="rd" data-icon="dotck"></span>Gradient</span></button>
+      <button role="radio" data-v="skyline"><img alt="" data-static="face-skyline"><span class="lab"><span class="rd" data-icon="dotck"></span>Skyline</span></button>
+      <button role="radio" data-v="seventies"><img alt="" data-static="face-seventies"><span class="lab"><span class="rd" data-icon="dotck"></span>Seventies</span></button>
+      <button role="radio" data-v="analog"><img alt="" data-static="face-analog"><span class="lab"><span class="rd" data-icon="dotck"></span>Analog</span></button>
+      <button role="radio" data-v="daynight"><img alt="" data-static="face-daynight"><span class="lab"><span class="rd" data-icon="dotck"></span>Day/night</span></button>
+      <button role="radio" data-v="gradient"><img alt="" data-static="face-gradient"><span class="lab"><span class="rd" data-icon="dotck"></span>Gradient</span></button>
     </div>
   </div>
   <p class="ft" id="faceFt"></p>
@@ -438,15 +449,8 @@
   <p class="ft" data-note="sports" role="status"></p>
   <p class="sh">Layout</p>
   <div class="grp"><div class="c" style="padding-top:10px;padding-bottom:10px"><div class="seg" id="bbLayout"><button data-v="classic">Classic</button><button data-v="logos">Logos</button><button data-v="bands">Bands</button></div></div></div>
-  <p class="sh">Ballgames take over the Cycle for</p>
+  <p class="sh">Games</p>
   <div class="grp">
-    <div class="c"><label for="bbCubs" class="grow">Cubs</label><input type="checkbox" class="sw" id="bbCubs"></div>
-    <div class="c"><label for="bbSox" class="grow">White Sox</label><input type="checkbox" class="sw" id="bbSox"></div>
-    <div class="c"><label for="bbPost" class="grow">Postseason (all teams)</label><input type="checkbox" class="sw" id="bbPost"></div>
-    <label class="c sel"><span>Starts showing</span><span class="v"></span><span data-icon="chev"></span>
-      <select id="bbPre"><option value="0">At first pitch</option><option value="15">15 min before</option><option value="30">30 min before</option><option value="60">1 hr before</option><option value="90">90 min before</option><option value="120">2 hr before</option></select></label>
-    <label class="c sel"><span>Final score stays</span><span class="v"></span><span data-icon="chev"></span>
-      <select id="bbFinal"><option value="0">Not at all</option><option value="5">5 min</option><option value="15">15 min</option><option value="30">30 min</option><option value="60">1 hr</option></select></label>
     <label class="c sel"><span>During live games</span><span class="v"></span><span data-icon="chev"></span>
       <select id="bbPriority"><option value="live">Live games</option><option value="favorite">Cubs/Sox first</option><option value="all">All games</option></select></label>
     <label class="c sel"><span>Each game shows for</span><span class="v"></span><span data-icon="chev"></span>
@@ -699,11 +703,14 @@
     if (v === 'announce') loadDraw().then(renderAnnounce).catch((e) => toast(`Couldn't load the preview: ${e.message}`, true));
     if (v === 'status') loadHealth();
     if (v === 'give') renderGive();
+    if (board) renderScreens();
+    $('boardGear').classList.toggle('open', desktop.matches && ['board', 'fleet', 'status', 'updates', 'builds', 'owner', 'give', 'logos'].includes(v));
     refreshPages();
   }
   window.addEventListener('hashchange', showView);
-  // Desktop: the right column always has a page.
-  if (matchMedia('(min-width: 900px)').matches && view() === 'home') history.replaceState(null, '', '#transit');
+  // Desktop: the right column always has a page: the chosen screen's (set in init).
+  const desktop = matchMedia('(min-width: 900px)');
+  const pageOf = (sc) => (sc === 'auto' ? 'cycle' : sc === 'ticker' ? 'transit' : sc === 'baseball' ? 'sports' : sc);
 
   // ---- toast ----
   let toastTimer = null, toastAct = null;
@@ -798,38 +805,38 @@
   }
   const imgUrl = (q) => `sim.png?b=${enc(boardId)}&led=square&${q}&t=${Date.now()}`;
   function swapImg(img, url) { const n = new Image(); n.onload = () => { img.src = n.src; }; n.src = url; }
-  // Thumbnails (1x) per screen: the last loaded image, for rows rebuilt since.
-  const thumbSrc = {};
+  // Tiles and thumbnails: fixed sample renders (tiles.json, made by
+  // scripts/build-control-tiles.js), the same whatever the board is doing.
+  // Announce's is the board's own message, drawn here.
+  let TILES = {};
+  const tileSrc = (name) => (TILES[name] ? `data:image/png;base64,${TILES[name]}` : '');
+  const tileOf = (sc) => (sc === 'transit' ? (board.transitScreen === 'ticker' ? 'ticker' : 'rows') : sc === 'ticker' ? 'ticker'
+    : sc === 'weather' ? `wx-${WX_NAME[board.wxView] ? board.wxView : 'now'}` : sc === 'clock' ? `face-${FACE_NAME[board.clockFace] ? board.clockFace : 'skyline'}` : null);
   function thumbImg(sc, cls = 'thumb', alt = '') {
-    const img = el('img', { class: cls, alt, 'data-thumb': sc });
-    if (thumbSrc[sc]) img.src = thumbSrc[sc];
-    return img;
+    if (sc === 'announce') {
+      // data-k: what it shows, so a rebuilt list redraws it only when that changes.
+      const c = el('canvas', { class: cls, width: 64, height: 32, 'aria-label': alt || null, 'data-k': `${D ? 1 : 0}:${board.msg ? board.msg.style + board.msg.text : ''}` });
+      if (D && board.msg) try { paintLed(c, D.render({ bright: 100, screen: 'announce', msg: msgOf({ text: board.msg.text, style: board.msg.style }) }, { t: 1e6 })); } catch (e) { /* drawn blank */ }
+      else { const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 64, 32); }
+      return c;
+    }
+    return el('img', { class: cls, alt, src: tileSrc(tileOf(sc)) || null, 'data-tile-of': sc });
   }
+  function paintStatic() { for (const img of qa('img[data-static]')) if (TILES[img.dataset.static] && !img.src) img.src = tileSrc(img.dataset.static); }
   async function refresh() {
     try {
       pay = await api('api/update?b=' + enc(boardId));
       swapImg($('preview'), imgUrl('scale=5'));
       render();
       refreshPages();
-      if (D) renderTiles();
     } catch (e) {
       $('homeStat').textContent = 'Preview unavailable: ' + e.message;
     }
   }
-  // The open page's preview and the Home thumbnails.
-  let thumbsAt = 0;
+  // The open page's preview: live, what the board shows with these settings.
   function refreshPages() {
     if (!board) return;
     for (const img of qa('img[data-prev]')) if (!img.closest('.view').hidden) swapImg(img, imgUrl(`scale=5&screen=${img.dataset.prev === 'transit' ? board.transitScreen || 'transit' : img.dataset.prev}`));
-    if (nowS() - thumbsAt > 30) {
-      thumbsAt = nowS();
-      const scs = [...new Set(qa('img[data-thumb]').map((i) => i.dataset.thumb))];
-      for (const sc of scs) {
-        const n = new Image();
-        n.onload = () => { thumbSrc[sc] = n.src; for (const img of qa(`img[data-thumb="${sc}"]`)) img.src = n.src; };
-        n.src = imgUrl(`scale=1&screen=${sc}`);
-      }
-    }
   }
 
   // ---- render ----
@@ -891,13 +898,13 @@
       st.classList.add('warn');
       st.replaceChildren(el('span', { class: 'dot warn' }), `Board offline since ${new Date(me.seen * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}. Changes apply when it reconnects.`);
       $('prevOverText').textContent = `Last seen ${new Date(me.seen * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-    } else if (p && p.stale && (ns.screen === 'transit' || ns.screen === 'ticker')) {
-      st.classList.add('warn');
-      st.replaceChildren(el('span', { class: 'dot warn' }), "No train times. CTA isn't responding.");
     } else if (switching && switching.failed) {
       st.classList.add('err');
       // The server has the change; Retry waits for the board again.
       st.replaceChildren("Didn't reach the board. ", el('button', { class: 'lnk', text: 'Retry', onclick: (e) => { e.preventDefault(); switching.at = nowS(); switching.failed = false; refresh(); renderScreens(); renderStatus(); } }));
+    } else if (p && p.stale && (ns.screen === 'transit' || ns.screen === 'ticker')) {
+      st.classList.add('warn');
+      st.replaceChildren(el('span', { class: 'dot warn' }), "No train times. CTA isn't responding.");
     } else if (switching) {
       st.textContent = `Switching to ${SCREEN_NAME[switching.to]}…`;
     } else if (ns && ns.visiting) {
@@ -906,7 +913,9 @@
       const back = SCREEN_NAME[board.screen === 'auto' ? 'auto' : board.screen] || 'it';
       $('rainBack').textContent = `Back to ${back} now`;
       $('rainNowLeft').textContent = `${ns.left} s left`;
-      $('rainNowFt').textContent = `“Back to ${back} now” ends this visit; the radar comes back in ${Math.max(1, Math.round((p.radar.visit.every - p.radar.visit.for) / 60))} min while rain is near.`;
+      $('rainNowFt').textContent = `“Back to ${back} now” ends this visit; the radar comes back in ${Math.max(1, Math.round((p.radar.visit.every - p.radar.visit.for) / 60))} min${p.radar.on ? ' while rain is near' : ''}.`;
+      // "Until the rain passes" means nothing when it's dry (Rain or not visits).
+      $('rainStop').closest('.c').hidden = !p.radar.on;
     } else if (board.screen === 'auto' && p && p.rot) {
       const i = p.rot.screens.indexOf(ns.turn);
       const next = p.rot.screens[(i + 1) % p.rot.screens.length];
@@ -927,22 +936,29 @@
     const cat = (sc) => (sc === 'ticker' ? 'transit' : sc);
     const target = switching && !switching.failed ? cat(switching.to) : null;
     const chosen = cat(switching ? switching.from : board.screen);
-    $('screens').replaceChildren(...rows.map((sc) => {
+    const items = rows.map((sc) => {
       const can = sc === 'auto' || canDraw(sc);
       const on = chosen === sc;
       const thumb = sc === 'auto' ? cycleThumb() : thumbImg(sc === 'transit' ? board.transitScreen || 'transit' : sc);
       let sub = can ? subOf(sc) : 'Needs a board with an S3';
       let subCls = 's';
-      if (on && off) sub = 'Queued · shows when the board is back';
+      if (off && target === sc && !on) sub = 'Queued · shows when the board is back';
       else if (switching && switching.failed && sc === (switching.to === 'ticker' ? 'transit' : switching.to)) { sub = 'Not switched'; subCls = 's err'; }
       else if (sc === 'transit' && on && p && p.stale) { sub += ' · times out of date'; subCls = 's warn'; }
       const pick = el('button', { class: 'pick', role: 'radio', 'aria-checked': String(on), disabled: !can || null, onclick: () => (sc === 'transit' ? switchTo(board.transitScreen || 'transit') : switchTo(sc)) },
         thumb, el('span', { class: 'grow' }, SCREEN_NAME[sc], el('span', { class: subCls, text: sub })));
-      if (target === sc && !on) pick.insertAdjacentHTML('beforeend', ICON.spin);
+      if (target === sc && !on && !off) pick.insertAdjacentHTML('beforeend', ICON.spin);
       else if (on) pick.insertAdjacentHTML('beforeend', ICON.check);
       const gear = el('a', { class: 'nb end gear', href: '#' + (sc === 'auto' ? 'cycle' : sc === 'baseball' ? 'sports' : sc), 'aria-label': `${SCREEN_NAME[sc]} settings`, html: ICON.gear22 });
-      return el('div', { class: 'c t' }, pick, gear);
-    }));
+      // Desktop: mark the row whose page is open on the right.
+      const open = desktop.matches && (view() === pageOf(sc) || (sc === 'transit' && ['station', 'lines'].includes(view())));
+      if (open) gear.setAttribute('aria-current', 'page');
+      return el('div', { class: 'c t' + (open ? ' open' : '') }, pick, gear);
+    });
+    // Rebuild only when a row changed: a tap that lands while its row is
+    // replaced (iOS) never becomes a click.
+    const html = items.map((e) => e.outerHTML).join('');
+    if (html !== $('screens').dataset.html) { $('screens').replaceChildren(...items); $('screens').dataset.html = html; }
   }
   function renderBrightness() {
     const fixed = Number.isInteger(board.bright);
@@ -1001,7 +1017,7 @@
     }
   }
 
-  // ---- variant tiles (2x) and thumbnails (1x), drawn here with draw.js ----
+  // ---- draw.js on the phone: the Announce draft, its styles and presets, the header fit ----
   let D = null, drawLoading = null;
   function loadDraw() {
     if (D) return Promise.resolve(D);
@@ -1022,25 +1038,6 @@
       ctx.fillStyle = r || gg || b ? `rgb(${r},${gg},${b})` : '#0d0d0d';
       ctx.fillRect(x * s, y * s, s - g, s - g);
     }
-  }
-  function tile(canvas, p, screen) {
-    try { paintLed(canvas, D.render({ ...p, bright: 100 }, { screen, t: 0 })); }
-    catch (e) { const ctx = canvas.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-  }
-  function renderTiles() {
-    if (!D || !pay) return;
-    const p = pay, pv = p.pv || {};
-    const cv = (group, v) => $(group).querySelector(`[data-v="${v}"] canvas`);
-    tile(qa('#tShows [data-v="transit"] canvas')[0], p, 'transit');
-    tile(qa('#tShows [data-v="ticker"] canvas')[0], p, 'ticker');
-    tile(cv('transitLayout', 'header'), { ...p, key: 0, header: board.station.name }, 'transit');
-    tile(cv('transitLayout', 'key'), { ...p, key: 1, header: board.station.name, wx: null }, 'transit');
-    const wx = (p.radar && p.radar.wx) || null;
-    const strip = (w) => (w ? (() => { const o = { ...w }; delete o.days; delete o.hours; delete o.rain; return o; })() : null);
-    const wxFor = (v) => (!wx ? null : v === '5day' ? { ...strip(wx), days: wx && (wx.days || pv.days) } : v === 'hourly' ? { ...strip(wx), hours: wx && (wx.hours || pv.hours) } : strip(wx));
-    for (const v of ['now', '5day', 'hourly']) tile(cv('wxView', v), { ...p, radar: { ...p.radar, frames: [], ft: [], wx: wxFor(v) } }, 'weather');
-    tile(cv('wxView', 'radar'), { ...p, radar: { ...p.radar, wx: null } }, 'weather');
-    for (const f of Object.keys(FACE_NAME)) tile(cv('clockFace', f), { ...p, cface: f, skyline: p.skyline || pv.skyline || null, cwx: p.cwx || pv.cwx || null, dn: p.dn || pv.dn || null, ginv: board.gradInvert === true }, 'clock');
   }
 
   // ---- Transit ----
@@ -1078,7 +1075,7 @@
   $('transitLayout').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) save({ transitLayout: b.dataset.v }); });
   for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'showTemp', 'boats', 'twinkle', 'gradInvert']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
-  for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery', 'bbPre', 'bbFinal']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
+  for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('bbPriority').addEventListener('change', (e) => save({ bbPriority: e.target.value }));
   const slider = (id, out, key) => {
     $(id).addEventListener('input', (e) => { $(out).textContent = `${e.target.value}%`; });
@@ -1123,7 +1120,10 @@
   $('name').addEventListener('input', () => { clearTimeout(nameTimer); if (renderNameFit()) nameTimer = setTimeout(saveName, 900); });
   const saveName = () => { clearTimeout(nameTimer); const n = $('name').value.trim().toUpperCase(); if (n && n !== board.station.name && renderNameFit()) save({ station: { mapid: board.station.mapid, name: n } }); };
   $('name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('name').blur(); } });
-  $('name').addEventListener('blur', saveName);
+  $('name').addEventListener('blur', () => {
+    if (!D || renderNameFit()) saveName(); // without draw.js the server checks the fit
+    else { $('name').value = board.station.name; renderNameFit(); }
+  });
 
   // ---- Lines & destinations ----
   function renderLines() {
@@ -1134,7 +1134,13 @@
     const lineRows = lines.length > 1 ? lines.map((l) => {
       const on = !hide.includes(l);
       const sw = el('input', { type: 'checkbox', class: 'sw', id: `ln-${l}`, checked: on || null, disabled: on && onCount === 1 || null });
-      sw.addEventListener('change', () => save({ hideLines: sw.checked ? hide.filter((x) => x !== l) : [...hide, l] }));
+      sw.addEventListener('change', () => {
+        const next = sw.checked ? hide.filter((x) => x !== l) : [...hide, l];
+        // Picks on that line stay saved (they come back with it); if none
+        // would be left showing, the destinations go back to All.
+        const left = board.rows.filter((k) => !next.includes(k.split(':')[0]));
+        save({ hideLines: next, ...(board.rows.length && !left.length ? { rows: [] } : {}) });
+      });
       return el('div', { class: 'c' }, badge(l), el('label', { for: `ln-${l}`, class: 'grow', text: `${LINE_NAME[l]} Line` }), sw);
     }) : [];
     const other = el('input', { type: 'checkbox', class: 'sw', id: 'otherLines', checked: board.otherLines === false || null });
@@ -1145,13 +1151,14 @@
     $('allDest').checked = all;
     const chosen = board.rows;
     const visible = dests.filter((d) => !hide.includes(d.ln));
-    const order = all ? visible.map((d) => d.key) : [...chosen, ...visible.map((d) => d.key).filter((k) => !chosen.includes(k))];
+    const shownPicks = chosen.filter((k) => !hide.includes(k.split(':')[0]));
+    const order = all ? visible.map((d) => d.key) : [...shownPicks, ...visible.map((d) => d.key).filter((k) => !chosen.includes(k))];
     const byKey = new Map(dests.map((d) => [d.key, d]));
     const anyLive = dests.some((d) => d.live);
     $('dests').replaceChildren(...order.map((key) => {
       const d = byKey.get(key) || { key, ln: key.split(':')[0], name: key.slice(key.indexOf(':') + 1), live: 0 };
       const on = all || chosen.includes(key);
-      const sw = el('input', { type: 'checkbox', class: 'sw', checked: on || null, disabled: all || (on && chosen.length === 1) || null, 'aria-label': `Show ${d.name}, ${LINE_NAME[d.ln]}` });
+      const sw = el('input', { type: 'checkbox', class: 'sw', checked: on || null, disabled: all || (on && shownPicks.length === 1) || null, 'aria-label': `Show ${d.name}, ${LINE_NAME[d.ln]}` });
       sw.addEventListener('change', () => save({ rows: sw.checked ? [...chosen, key] : chosen.filter((k) => k !== key) }));
       const name = el('span', { class: 'grow', style: all || !on ? 'color:var(--sub)' : '' }, d.name, anyLive && !d.live ? el('span', { class: 's', text: 'None running now' }) : null);
       const row = el('div', { class: 'c', 'data-key': key }, badge(d.ln), name, sw);
@@ -1281,19 +1288,11 @@
   // ---- Sports (hidden for now) ----
   function renderSports() {
     pressed('bbLayout', board.baseballLayout || 'classic');
-    const teams = board.bbTeams || ['cubs', 'sox', 'post'];
-    $('bbCubs').checked = teams.includes('cubs');
-    $('bbSox').checked = teams.includes('sox');
-    $('bbPost').checked = teams.includes('post');
-    selVal('bbPre', board.bbPre != null ? board.bbPre : 30);
-    selVal('bbFinal', board.bbFinal != null ? board.bbFinal : 15);
     selVal('bbPriority', board.bbPriority || 'live');
     selVal('gameEvery', board.gameEvery || 60);
     if (document.activeElement !== $('logoBright')) { $('logoBright').value = board.logoBright || 90; $('logoBrightV').textContent = `${board.logoBright || 90}%`; }
   }
   $('bbLayout').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ baseballLayout: v }); });
-  const bbTeams = () => [['cubs', 'bbCubs'], ['sox', 'bbSox'], ['post', 'bbPost']].filter(([, id]) => $(id).checked).map(([k]) => k);
-  for (const id of ['bbCubs', 'bbSox', 'bbPost']) $(id).addEventListener('change', () => save({ bbTeams: bbTeams() }));
 
   // ---- Brightness ----
   $('bright').addEventListener('click', (e) => {
@@ -1422,7 +1421,10 @@
     renderKeys(me);
     renderFleet();
   }
-  $('label').addEventListener('change', (e) => save({ label: e.target.value }));
+  let labelTimer = null;
+  const saveLabel = () => { clearTimeout(labelTimer); if ($('label').value.trim() !== (board.label || '')) save({ label: $('label').value }); };
+  $('label').addEventListener('input', () => { clearTimeout(labelTimer); labelTimer = setTimeout(saveLabel, 900); });
+  $('label').addEventListener('change', saveLabel);
   $('label').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
   $('copyFrom').addEventListener('change', async (e) => {
     const from = e.target.value;
@@ -1698,11 +1700,13 @@
     if (!board) { toast(`No board named "${boardId}".`, true, 'Open the first', () => go(Object.keys(all_)[0])); return; }
     if (!SCOPE) try { localStorage.setItem('board', boardId); } catch (e) { /* private mode */ }
     await loadDests();
+    if (desktop.matches && view() === 'home') history.replaceState(null, '', '#' + pageOf(board.screen));
     render();
     showView();
     refresh();
     loadHealth();
-    loadDraw().then(() => { renderTiles(); renderNameFit(); if (view() === 'announce') renderAnnounce(); }).catch(() => {});
+    api('tiles.json').then((t) => { TILES = t; paintStatic(); renderScreens(); renderCycle(); }).catch(() => {});
+    loadDraw().then(() => { renderNameFit(); renderScreens(); renderCycle(); if (view() === 'announce') renderAnnounce(); }).catch(() => {});
     if (!SCOPE) { loadFirmware(); loadLogoStatus(); }
     setInterval(() => { if (!document.hidden) refresh(); }, 10000);
     setInterval(() => { if (!document.hidden) { loadHealth(); loadBoards(); } }, 10000);

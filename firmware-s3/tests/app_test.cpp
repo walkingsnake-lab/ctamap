@@ -1602,7 +1602,10 @@ static void test_knob_first_turn_only_ends_a_rain_visit() {
   r->run_for(300);
   CHECK(!r->board->chooser.open, "the first turn doesn't open the chooser");
   CHECK(S(r->board) == "transit", "the visit ended: %s", S(r->board).c_str());
-  r->run_for(20000);
+  r->run_for(3000);
+  CHECK(!r->server.health.empty() && r->server.health.back().find("&hq=" + jnum(r->board->player.visit_skip_until)) != std::string::npos,
+        "the server hears of it: %s", r->server.health.empty() ? "" : r->server.health.back().c_str());
+  r->run_for(17000);
   CHECK(S(r->board) == "transit", "and stays ended: %s", S(r->board).c_str());
   CHECK(r->server.count("select:") == 0, "%d", r->server.count("select:"));
   r->knob.pending = 1;

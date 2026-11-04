@@ -516,6 +516,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     const fields = validatePatch({ label }, stations);
     const board = from != null ? JSON.parse(JSON.stringify(state.boards[from])) : defaultBoard(stations);
     Object.assign(board, fields, { v: 1, bright: 'auto' });
+    delete board.rainHold;
     state.boards[id] = board;
     save();
     return board;
@@ -549,6 +550,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       const prev = state.boards[id];
       const board = JSON.parse(JSON.stringify(state.boards[from]));
       Object.assign(board, { label: prev.label || '', v: (prev.v || 0) + 1, bright: 'auto' });
+      delete board.rainHold;
       state.boards[id] = board;
       save();
       return board;
@@ -613,6 +615,19 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
         else if (cat === 'clock') fields.clockFace = v;
       }
       return this.update(id, fields);
+    },
+
+    // Rain nearby held off (index.js holdOf): {until} (epoch s), {rain:
+    // true}, or null. Not a setting: v stays (the board sees it with its
+    // next update), and copies and new owners start without one.
+    setRainHold(id, hold) {
+      if (!Object.hasOwn(state.boards, id)) return null;
+      const b = state.boards[id];
+      if (hold) b.rainHold = hold.rain ? { rain: true } : { until: Math.floor(hold.until) };
+      else if (!b.rainHold) return b;
+      else delete b.rainHold;
+      save();
+      return b;
     },
 
     // Board restart: everything persists, Off included (Off stays off until
