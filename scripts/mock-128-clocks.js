@@ -196,7 +196,7 @@ function calendarPanel(f) {
 // Day/night map (real 64-wide render) with the sun's times and other cities' clocks.
 function sunPanel(f) {
   const x0 = 67;
-  const lines = [['SUNRISE', '6:25 AM', '#ffc23a'], ['SUNSET', '4:40 PM', '#ff7414'], ['NEW YORK', '10:42 PM', '#cccccc'], ['LONDON', '3:42 AM', '#cccccc'], ['TOKYO', '12:42 PM', '#cccccc']];
+  const lines = [['SUNRISE', '6:22 AM', '#ffc23a'], ['SUNSET', '4:46 PM', '#ff7414'], ['NEW YORK', '10:42 PM', '#cccccc'], ['LONDON', '3:42 AM', '#cccccc'], ['TOKYO', '12:42 PM', '#cccccc']];
   lines.forEach(([l, v, c], i) => { const base = 6 + i * 6; f.text('small', l, x0, base, '#666666'); rtext(f, 'small', v, 127, base, c); });
 }
 
