@@ -82,6 +82,8 @@ S3_NEO = s3(12.192, 41.021)
 S3_BOOT = s3(14.58, 28.524)
 # edge buttons (Reset, Up, Down) now sit above the USB-C
 BTN_Z0, BTN_Z1 = PORT_Z + 8.8, PORT_Z + 35.0
+if 'drawer_btn_top' in panel.P:                 # cap the buttons' relief (board frame by): an S3 raised toward the
+    BTN_Z1 = min(BTN_Z1, S3_Z0 + panel.P['drawer_btn_top'])   # shell's joint (P4) keeps it below the joint
 
 
 def configure_shell():
