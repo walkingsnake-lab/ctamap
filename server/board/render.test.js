@@ -362,6 +362,8 @@ test('clock screen, big digits face: 17-row ttyp0 digits with their ink centered
   // Mid-roll the colon stays lit whatever the second.
   const mid = render(p, { ms: t * 1000 + 750, nums: { 'dig.clock': { from: '8:07', p: 0.5 } } });
   assert.ok(mid.get(c0 + 1, 11)[0], 'lit mid-roll');
+  // Steady (Blinking colon off): lit all second.
+  assert.deepEqual(render({ ...p, steady: true }, { ms: t * 1000 + 750 }).px, on.px, 'steady colon');
 });
 
 test('clock screen, day/date face: weekday, time with AM/PM, date, each centered', () => {

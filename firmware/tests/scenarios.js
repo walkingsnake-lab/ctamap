@@ -493,7 +493,7 @@ async function build() {
     const p = {
       ...p0, tickerHeader: 'MORSE', radar: { on: false, frames: [], ft: [], timeBox: loc.timeBox, split: loc.split, wx },
       msg: { id: 1, style: 'note', ...draw.messageLayout('Dinner at 7\nbring wine', 'note') },
-      pv: { days, hours, skyline, cwx: { temp: 52, icon: 'pcloudy_day' }, dn: { dec: -150, lon: 1200, t, here: [16, 7] }, radar: { frames: ids, ft } },
+      pv: { days, hours, skyline, cwx: { temp: 52, icon: 'pcloudy_day' }, dn: { dec: -150, lon: 1200, t, here: [16, 7] }, steady: true, radar: { frames: ids, ft } },
       knob: { ring, at: 0, vars, sel: [0, 0, 0, 0, 0], ln: 'RD' },
     };
     const pk = (k, vi, extra = {}) => ({ screen: 'peek', peek: { k, vi, ...extra } });
@@ -644,6 +644,7 @@ async function build() {
     add('digits 9:42', cf('2026-11-02T03:42:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('digits 12:58', cf('2026-11-01T18:58:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('digits colon blink', cf('2026-11-01T16:07:00Z', 'digits'), [0, 499, 500, 999, 1000].map((d) => ({ screen: 'clock', ms: at('2026-11-01T16:07:00Z', d) })), undefined, undefined, { s3only: true });
+    add('digits steady colon', cf('2026-11-01T16:07:00Z', 'digits', { steady: true }), [0, 750].map((d) => ({ screen: 'clock', ms: at('2026-11-01T16:07:00Z', d) })), undefined, undefined, { s3only: true });
     add('digits 10:07 dimmed', cf('2026-11-01T16:07:00Z', 'digits', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('digits roll per digit', cf('2026-11-02T03:42:00Z', 'digits'), roll('dig.clock', '9:41').map((r) => ({ ...r, ms: at('2026-11-02T03:42:00Z', 700) })), undefined, undefined, { s3only: true });
     add('digits roll width change', cf('2026-11-01T19:00:00Z', 'digits'), roll('dig.clock', '12:59'), undefined, undefined, { s3only: true });

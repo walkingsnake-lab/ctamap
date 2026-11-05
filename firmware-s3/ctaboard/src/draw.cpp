@@ -2235,10 +2235,12 @@ PeekView peek_view(const Value &p, int k, int vi) {
     member(out.v, "cface") = str_value(v.empty() ? "skyline" : v);
     // Each face's object read through from pv (the skyline's is large).
     for (const char *key : {"skyline", "cwx", "dn"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
-    Value g;
-    g.type = json::BOOL;
-    g.b = pv["ginv"].truthy();
-    member(out.v, "ginv") = g;
+    for (const char *key : {"ginv", "steady"}) {
+      Value g;
+      g.type = json::BOOL;
+      g.b = pv[key].truthy();
+      member(out.v, key) = g;
+    }
     return out;
   }
   return out;
@@ -3216,8 +3218,9 @@ static void render_digits(const Value &p, Frame &f, std::optional<double> now_o,
   // Ink centered: x = floor((65 - measure) / 2) (draw.js xOf).
   std::optional<Roll> roll = take_roll("dig.clock", text);
   roll_text_at(f, FONT_D17, text, SPAN, 64, BD_BASE, hexc(0xe6e6e6), roll);
-  // The colon blinks: off for the second half of each second, never mid-roll.
-  if (!roll && fmod_floor(ms, 1000) >= 500) {
+  // The colon blinks: off for the second half of each second, never mid-roll,
+  // never with steady.
+  if (!p["steady"].truthy() && !roll && fmod_floor(ms, 1000) >= 500) {
     size_t i = text.find(U':');
     int g = glyph(FONT_D17, ':');
     int cw = g >= 0 ? assets::FONT_DATA[FONT_D17][g + 1] : 0;

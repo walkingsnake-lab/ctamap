@@ -1643,7 +1643,7 @@
         }
         return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }
-      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv }, screen: 'clock' };
+      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
       return { p, screen: 'cycle' };
     }
@@ -1876,7 +1876,7 @@
     const DD = { dayBase: 6, timeBase: 22, dateBase: 31, color: '#e6e6e6', label: '#8f8f8f', ampm: '#555555' };
     // Big digits: the time alone, its ink centered, rows 7-23. The colon
     // blinks (off for the second half of each second on the board's clock),
-    // except while the time rolls.
+    // except while the time rolls, or always lit with p.steady.
     function renderDigits(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
@@ -1885,7 +1885,7 @@
       const text = clockText(now), xOf = (str) => fdivI(65 - measure('d17', str), 2);
       const roll = takeRoll('dig.clock', text);
       rollTextWith(f, 'd17', roll, text, xOf, BD.base, BD.color);
-      if (!roll && ((ms % 1000) + 1000) % 1000 >= 500) {
+      if (!p.steady && !roll && ((ms % 1000) + 1000) % 1000 >= 500) {
         const i = text.indexOf(':');
         f.fill(xOf(text) + measure('d17', text.slice(0, i)) + 1, BD.top, fonts.d17[58][1], BD.base - BD.top, '#000000');
       }

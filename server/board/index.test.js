@@ -1628,7 +1628,12 @@ test('clock screen, big digits and day/date faces: sent only to firmware that dr
     assert.equal(b.skyline, null, 'no skyline drawing');
     assert.equal(b.cwx, undefined);
     assert.equal(b.dn, undefined);
+    assert.equal(b.steady, undefined, 'the colon blinks by default');
   }
+  s.store.update('home', { colonBlink: false });
+  assert.equal((await get('skyline:digits:daydate')).steady, undefined, 'only the big digits face');
+  s.store.update('home', { clockFace: 'digits' });
+  assert.equal((await get('skyline:digits:daydate')).steady, true, 'Blinking colon off: steady');
   await s.close();
 });
 

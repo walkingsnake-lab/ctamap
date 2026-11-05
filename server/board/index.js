@@ -71,7 +71,7 @@ const SECTIONS = {
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
-  clock: ['skyline', 'cface', 'cwx', 'dn', 'ginv'],
+  clock: ['skyline', 'cface', 'cwx', 'dn', 'ginv', 'steady'],
   announce: ['msg'],
 };
 function sectionsFor(body, screen) {
@@ -443,6 +443,7 @@ function createBoard({
     if (caps.face('analog')) faces.cwx = wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null;
     if (caps.face('daynight')) faces.dn = dayNightOf(st, now);
     if (caps.face('gradient') && board.gradInvert === true) faces.ginv = true;
+    if (caps.face('digits') && board.colonBlink === false) faces.steady = true;
     return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...faces };
   }
 
@@ -610,6 +611,8 @@ function createBoard({
       ...(face === 'daynight' ? { dn: dayNightOf(st, now) } : {}),
       // Gradient face: lit gradient digits on black (contract "Gradient").
       ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
+      // Big digits face: a steady colon (contract "Big digits").
+      ...(face === 'digits' && board.colonBlink === false ? { steady: true } : {}),
       // Announce screen: the message's lines for its style (contract "Announce").
       msg: msgOf(board),
       // Peek chooser (caps.peek): what the other variants draw from, so the

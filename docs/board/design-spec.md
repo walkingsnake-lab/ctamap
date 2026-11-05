@@ -705,7 +705,7 @@ Built Nov 5, 2026, S3 only, from the round 4–8 clock mockups (`scripts/mock-cl
 
 - **Font:** digits from Uwe Waldmann's UW ttyp0 Bold (u8g2's `t0-30b` and `t0-22b`), at their native sizes: 17 rows (`d17`) and 13 rows (`d13`). Tabular: each digit centered in a slot as wide as the widest digit, 2 px apart, so nothing shifts as the minutes change. Plain zeros. The license (MIT-style) asks that changed fonts be renamed without "UW": these are `BoardD17` / `BoardD13`, with the notice kept in the BDFs.
 - **Colon:** redrawn and centered on the digits (ttyp0's sits low, like two periods): two 4 px round dots (corner pixels off) at 17 rows, and two 3 x 3 squares at 13 rows, where a cornerless dot would read as a plus sign.
-- **Big digits** (`digits`): the time alone, centered, rows 7-23, `#e6e6e6`. The colon blinks once a second (off for the second half); never mid-roll.
+- **Big digits** (`digits`): the time alone, centered, rows 7-23, `#e6e6e6`. The colon blinks once a second (off for the second half); never mid-roll. Phone: Blinking colon (per board, on by default) keeps it lit when off.
 - **Day & date** (`daydate`): the weekday in full (Tom Thumb, grey), the time in 13-row digits with AM/PM small and dim beside it, and the date (`NOV 4`, 5x7, grey), each line centered.
 - Both roll at the minute like the other clocks, and stop rolling with Board → Display → Animate clock digits off.
 - **Not built:** the 128-wide versions (wide-spec), the dark red night color from the round 4 mockups.

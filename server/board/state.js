@@ -224,6 +224,8 @@ function defaultBoard(stations) {
     showTemp: true,
     // Gradient clock face: lit gradient digits on black instead of digits cut out of the gradient.
     gradInvert: false,
+    // Big digits clock face: the colon blinks once a second (false: steady).
+    colonBlink: true,
     wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
@@ -306,6 +308,7 @@ function validatePatch(patch, stations) {
       case 'twinkle':
       case 'showTemp':
       case 'gradInvert':
+      case 'colonBlink':
       case 'clockRoll':
       case 'otherLines':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
