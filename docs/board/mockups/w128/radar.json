@@ -1,0 +1,86 @@
+[
+ {
+  "kind": "radar",
+  "id": "radar-p1-split",
+  "title": "1 · Split: map and time panel",
+  "desc": "The map on 96 columns with the station at x52 (about 78 mi west, where weather comes from; the lake to the Michigan shore east); a 31-column panel with frame pips, time, condition and temperature.",
+  "note": "Works the same at every station. Masks rebuilt per station at 96 wide."
+ },
+ {
+  "kind": "radar",
+  "id": "radar-p2-city",
+  "title": "2 · One Chicago map for every board",
+  "desc": "The same crop for every board: downtown at x76, the lake on the right, and the board's station as the white dot. The time sits over the lake at a fixed spot, so there's no per-station layout.",
+  "note": "All 144 stations fall inside the view (columns 67–77, rows 9–25); the time box is open water. The server would crop one frame for all boards. The station is off center, so the view shows about 114 mi west of downtown and less west of a far-west station."
+ },
+ {
+  "kind": "radar",
+  "id": "radar-p3-bar",
+  "title": "3 · Full-width map, status bar",
+  "desc": "The map on rows 0–24 across all 128 columns, then a status bar: frame pips, time, the nearest rain and the temperature. Nothing sits on the map, so no water spot is needed.",
+  "note": "The map is 25 rows (37 mi) tall instead of 32."
+ },
+ {
+  "kind": "radar",
+  "id": "radar-p4-zooms",
+  "title": "4 · Local and regional",
+  "desc": "Left, the 64 radar unchanged (1.5 mi per LED, time over the lake). Right, the region at 6 mi per LED (about 380 × 190 mi) with the local view outlined, so storms show up hours out.",
+  "note": "A side-by-side that means something: two zoom levels. Reuses the 64 layout and its per-station data as is."
+ },
+ {
+  "kind": "radar",
+  "id": "radar-p5-nearest",
+  "title": "5 · Map and nearest rain",
+  "desc": "The map on 88 columns, then a panel that answers the question directly: the nearest rain's distance, direction and strength, with the time and temperature under it.",
+  "note": "Computed from the frame the server already crops; whether the rain is moving closer would need two frames compared (later)."
+ },
+ {
+  "kind": "radar",
+  "id": "radar-rejected-lake",
+  "title": "Rejected · Full width, time over the lake",
+  "desc": "The station at x92 and the time over the lake. Works at Morse, but no fixed spot is open water for every station: it fails at 56 of 144 (the Loop and South Side reach the Indiana shore).",
+  "note": ""
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s1-bigtime",
+  "title": "Split A · Big time",
+  "desc": "Only the time, in the clock digits, with AM/PM under it and the loop as a thin bar along the bottom. The map keeps 87 columns.",
+  "note": "Wide enough for 12:44 (39 px)."
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s2-timeline",
+  "title": "Split B · Loop position",
+  "desc": "The six frames as a column of pips down the right edge, the newest amber; the time of the frame on screen sits beside its pip and walks down as the loop plays. The map keeps 105 columns.",
+  "note": "Shown mid-loop, on the 3:32 frame."
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s3-legend",
+  "title": "Split C · Time and color key",
+  "desc": "The time at the top, then the five rain colors as swatches from LO to HI, so the greens and reds explain themselves.",
+  "note": ""
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s4-inset",
+  "title": "Split D · No panel, corner chip",
+  "desc": "The map across all 128 columns with the station at the same spot; the time on a small black chip in the bottom-right corner, over Michigan rather than the city.",
+  "note": "Hides a 27 × 7 corner of the map. The chip has its own black backing, so it works at every station: no open water needed. The loop's frame dots sit flush left on the bottom row."
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s4-inset-temp",
+  "title": "Split D · with the temperature",
+  "desc": "The same, with the temperature (optional, per board) on a matching chip in the bottom-left corner and the frame dots 3 px to its right.",
+  "note": "The left chip is 27 × 7 with the dots, on the far west edge of the map."
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s5-conditions",
+  "title": "Split E · Conditions first",
+  "desc": "The temperature in the clock digits with the condition icon, the condition word, and the time small at the bottom.",
+  "note": ""
+ }
+]

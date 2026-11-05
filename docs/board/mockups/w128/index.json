@@ -1,0 +1,219 @@
+[
+ {
+  "kind": "redrawn",
+  "id": "transit-rows",
+  "title": "Transit rows",
+  "desc": "Full CTA names and up to five times a row; the header keeps the station and clock.",
+  "note": ""
+ },
+ {
+  "kind": "redrawn",
+  "id": "transit-split",
+  "title": "Transit, by direction",
+  "desc": "Belmont split north | south, two times or more per line. The station and clock move to the bottom.",
+  "note": "Real Belmont times (Oct 3, 11:16 PM, no Purple)."
+ },
+ {
+  "kind": "redrawn",
+  "id": "ticker",
+  "title": "Ticker",
+  "desc": "After the CTA platform signs: the row number in the grey column, the full destination, the time at the far right, then the live-train signal, or a clock for a scheduled train (row 2).",
+  "note": "Real Morse times; the Howard train is marked scheduled here to show the clock."
+ },
+ {
+  "kind": "redrawn",
+  "id": "chrono",
+  "title": "Chronological, two columns",
+  "desc": "Eight trains instead of four, with full names (FOREST PK, 54/CERMAK).",
+  "note": "Real Clark/Lake times."
+ },
+ {
+  "kind": "redrawn",
+  "id": "transit-five",
+  "title": "Busy station: five rows",
+  "desc": "Clark/Lake's five destinations as destination rows with full names and up to four times; the header drops to make room, as it does on the 64 board.",
+  "note": "Real Clark/Lake times."
+ },
+ {
+  "kind": "redrawn",
+  "id": "transit-columns",
+  "title": "Busy station: two columns",
+  "desc": "Eight destinations in two columns of four under the header: Clark/Lake at rush. With the 64 board's short names (HARLEM, 63RD, 54/CRMK) every row keeps three times.",
+  "note": "Made-up times."
+ },
+ {
+  "kind": "redrawn",
+  "id": "transit-byline",
+  "title": "Busy station: one row per line",
+  "desc": "Five lines on five rows; a line with two destinations puts the second at the halfway mark (Blue: O'HARE and FOREST). Short names, as on the 64 board.",
+  "note": "Made-up times. Seven destinations, no paging."
+ },
+ {
+  "kind": "redrawn",
+  "id": "seven-day",
+  "title": "7-day forecast",
+  "desc": "Seven columns with highs and lows; the 64 screen shows five days and highs only.",
+  "note": "NWS gives seven days already."
+ },
+ {
+  "kind": "redrawn",
+  "id": "seven-day-top",
+  "title": "7-day, top bar on",
+  "desc": "The current-conditions bar as an option: with it on, the lows drop out.",
+  "note": ""
+ },
+ {
+  "kind": "redrawn",
+  "id": "hourly",
+  "title": "Hourly, 24 hours",
+  "desc": "Eight 3-hour steps under the top bar.",
+  "note": "The server builds 4 slots today (HOUR_STEPS); the NWS hourly feed covers more."
+ },
+ {
+  "kind": "redrawn",
+  "id": "hourly-notop",
+  "title": "Hourly, top bar off",
+  "desc": "Without the bar the freed rows carry each slot's rain chance (bright from 20%).",
+  "note": ""
+ },
+ {
+  "kind": "redrawn",
+  "id": "line-score",
+  "title": "Baseball line score",
+  "desc": "Runs by inning, R H E, then the count, outs, pitch count and bases.",
+  "note": "The innings come in the linescore the server already fetches; the pitch count would need a field added."
+ },
+ {
+  "kind": "redrawn",
+  "id": "note",
+  "title": "Message note",
+  "desc": "About 21 characters a line in 5x7 instead of 10.",
+  "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "key-layout",
+  "title": "Key layout",
+  "desc": "The column key on the top row (trains to, min), with the station and clock between them instead of moving to the bottom.",
+  "note": "Real Belmont times."
+ },
+ {
+  "kind": "more",
+  "id": "alert-rows",
+  "title": "Alerts on rows",
+  "desc": "The full destination, the red alert circle, then the alert's short label in red. At 64 the name is cut to fit the circle and there's no label.",
+  "note": "The label needs a new payload field: today the board only knows that a line has a major alert."
+ },
+ {
+  "kind": "more",
+  "id": "overnight",
+  "title": "Overnight",
+  "desc": "The owl, big clock and NO TRAINS as on 64; the right side shows now and tomorrow. No data and stale keep this layout with NO DATA and the red line across the top.",
+  "note": "Tomorrow comes from the NWS forecast the board already gets."
+ },
+ {
+  "kind": "more",
+  "id": "now",
+  "title": "Current conditions",
+  "desc": "A 2x icon and the temperature in the clock digits, high/low and date under them; the readout (sky, feels, wind, rain, sunset) beside, with dot leaders.",
+  "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "rain-bars",
+  "title": "Rain bars",
+  "desc": "The eight quarter-hours across the full width, 16 px each, with time marks under them (lowercase h and m); light, moderate and heavy in three blues.",
+  "note": "No data source today: WeatherAPI has no 15-minute precipitation, so the 64 rain bars don't show either."
+ },
+ {
+  "kind": "more",
+  "id": "warning",
+  "title": "Warning strip",
+  "desc": "The warning spelled out on the bottom strip: funnel, TORNADO WARNING and the expiry, with the temperature at left.",
+  "note": "The 64 strip has room for WARNING only. Blinks as it does now."
+ },
+ {
+  "kind": "more",
+  "id": "gradient",
+  "title": "Gradient clock",
+  "desc": "The same block digits widened to 21 x 30 (7 x 6 blocks) so the time fills the width as it does at 64; the gradient spans all 128 columns.",
+  "note": "12:58 is 108 px wide."
+ },
+ {
+  "kind": "more",
+  "id": "typewriter",
+  "title": "Typewriter",
+  "desc": "About 21 characters a line instead of 10, so most notes fit in two lines. Shown mid-typing.",
+  "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "big-word",
+  "title": "Big word",
+  "desc": "At 3x instead of 2x: 21 px letters, up to about 7 characters; longer words drop to 2x (about 10).",
+  "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "credits",
+  "title": "Credits roll",
+  "desc": "Wider lines mean fewer of them; the roll and its fade at the edges stay the same.",
+  "note": "Mid-roll."
+ },
+ {
+  "kind": "dial",
+  "id": "dial-1-named",
+  "title": "1 · Icons in place, chosen one named",
+  "desc": "The 64 bar with room to spare: every category's icon stays put, the chosen one adds its name and variant, with one pip per variant under the variant name.",
+  "note": "The first pass from the more-screens round."
+ },
+ {
+  "kind": "dial",
+  "id": "dial-2-wheel",
+  "title": "2 · Wheel",
+  "desc": "The chosen category stays centered, named, with its neighbors' icons either side, fading with distance and wrapping; twisting slides the strip under a fixed center.",
+  "note": ""
+ },
+ {
+  "kind": "dial",
+  "id": "dial-3-strip",
+  "title": "3 · Variant strip",
+  "desc": "The bar shows what a press does: the chosen category's icon, then all its variants as words, the chosen one white. Where the category sits on the ring is a column of five dots at the right edge.",
+  "note": "Twisting swaps the whole strip. Clock uses short names (SKY 70S DIAL MAP GRAD WORDS) to fit."
+ },
+ {
+  "kind": "dial3",
+  "id": "dial-3-transit",
+  "title": "Strip · Transit, ROWS",
+  "desc": "Two variants: ROWS and TICKER.",
+  "note": ""
+ },
+ {
+  "kind": "dial3",
+  "id": "dial-3-clock",
+  "title": "Strip · Clock, GRAD",
+  "desc": "Six faces with short names (SKY 70S DIAL MAP GRAD WORDS), 4 px apart instead of 5 so they clear the ring dots.",
+  "note": ""
+ },
+ {
+  "kind": "dial3",
+  "id": "dial-3-announce",
+  "title": "Strip · Announce",
+  "desc": "No variants: the category's name in its color takes the strip.",
+  "note": "Cycle works the same way."
+ },
+ {
+  "kind": "dial",
+  "id": "dial-4-chip",
+  "title": "4 · Chip, no bar",
+  "desc": "Most of the view stays visible: a black chip at the bottom center names the category and variant, with one dot per category under it in its color.",
+  "note": "Same idea as the radar's time chip."
+ },
+ {
+  "kind": "dial",
+  "id": "dial-5-tworows",
+  "title": "5 · Two rows",
+  "desc": "Every category's icon spread across the width, the chosen one underlined, and under them the chosen category's variants as words.",
+  "note": "The bar takes rows 17–31, half the panel. Clock's six faces need short names to fit, as in 3."
+ }
+]

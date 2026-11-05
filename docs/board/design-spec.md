@@ -2,6 +2,8 @@
 
 Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the design sessions of Oct 2–4, 2026. All mocks used made-up train times unless noted.
 
+A wider board (two panels, 128x32) is planned but not built: [`wide-spec.md`](wide-spec.md).
+
 ---
 
 ## 1. Hardware
@@ -87,7 +89,7 @@ On the M4, a small cooperative scheduler lines up network requests with animatio
 
 One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led-matrix/fonts`:
 
-- **Tom Thumb** (3x5): the default small text everywhere. **All Tom Thumb text is uppercase** (row labels, headers, weather words, status text), except the lowercase `m` minutes suffix in the chronological transit view (patched to 5px wide with a 3-row x-height, bottom-aligned with the digits; the stock 3px `m` reads as a blob). Only the ticker's 5x7 destinations use mixed case.
+- **Tom Thumb** (3x5): the default small text everywhere. **All Tom Thumb text is uppercase** (row labels, headers, weather words, status text), except the lowercase `m` minutes suffix in the chronological transit view (patched to 5px wide with a 3-row x-height, bottom-aligned with the digits; the stock 3px `m` reads as a blob). **Rule (Nov 4, 2026): units right after a number are lowercase `h` and `m`** (`4m`, `1h`): the capitals H and M are near-identical at 3x5, and `3M` reads as millions. Words stay uppercase (`25 MIN`, `2 HRS`). Still to change: the rain bars' `1H` / `2H` axis labels (§7). Only the ticker's 5x7 destinations use mixed case.
 - **X11 5x7**: CTA-style ticker destinations and the radar time.
 - Both made **proportional** (advance = ink width + 1px). CircuitPython honors per-glyph widths.
 - Patched glyphs: **W** and **w** widened to 5px (the stock 4px versions read as H/u). 5x7 **t** narrowed to 3px (bottom hook tucked under the crossbar).
