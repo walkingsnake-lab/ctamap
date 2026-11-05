@@ -19,6 +19,7 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 - **One screen, not two.** Use the width; don't put two existing 64-wide screens side by side. The exceptions are splits whose halves mean something (northbound | southbound) and designed side panels (the day/night sun panel, the analog calendar).
 - **Same type, colors and rows as 64.** Tom Thumb, 5x7, the clock digits; 5 px text rows at the 64 layouts' pitches (6 px with a header, 8 px for three rows); the same header, amber/dim times, line blocks and glyphs. Text runs to the edges (x0 and x127).
 - **Where the width goes:** full names, more times per row, more destinations, more forecast slots, and words spelled out where 64 uses a glyph or a cut name.
+- **Units after a number are lowercase:** `h` and `m` (`4m`, `10h 24m`, `1h30`), as in the 64 chronological view. In Tom Thumb the capitals H and M are both 3 × 5 boxes that differ only in the middle, and `3M` reads as millions; lowercase `h` has an ascender and `m` is short and 5 px wide. Words stay uppercase (`RAIN IN 25 MIN`, `NEXT 2 HRS`); the ticker keeps its `min` glyph.
 - **Halves** (splits, two-column lists): columns 0–61 and 65/66–127, a 3–4 px gutter between them.
 
 ---
@@ -79,7 +80,7 @@ Eight 16-px columns, 3 hours apart: time, icon, temperature. With the top bar of
 A 2× icon (16 × 16) and the temperature in the clock digits, high/low and date under them on the left; the readout on the right (columns 58–127) with dot leaders: `SKY`, `FEELS`, `WIND`, `RAIN`, `SUNSET`.
 
 ### Rain bars (first pass)
-The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours across the full width (16 px each, 14 px bars), the same intensity scale and blues; `NOW 30M 1H 1H30 2H` under the axis.
+The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours across the full width (16 px each, 14 px bars), the same intensity scale and blues; `NOW 30m 1h 1h30 2h` under the axis. **No data source today:** WeatherAPI has no 15-minute precipitation, so the 64 rain bars don't show either; the layout waits for a source.
 
 ---
 
@@ -97,7 +98,8 @@ At 64, each station gets a full-width map with the time over open water, or a sp
 
 ### Day/night map (decided)
 - The map at true shape on all 32 rows: **80 × 32 at 4.5° per pixel**, 84° N to 60° S, built like the 64 map (`build-world.js`: Natural Earth land, Blue Marble colors). No bottom time bar.
-- **Sun panel** on columns 83–127: the time in 5x7 with AM/PM; a divider; sunrise and sunset, each as a **half sun on the horizon** (7 × 5) in the time's color, then the up or down arrow, then the time; then day length (`DAY 10H 24M`). Sunrise and sunset computed by the server (NOAA's approximation).
+- **Sun panel** on columns 83–127: the time in 5x7 with AM/PM; a divider; sunrise and sunset, each as a **half sun on the horizon** (7 × 5) in the time's color, then the up or down arrow, then the time; then day length (`DAY 10h 24m`). Sunrise and sunset from WeatherAPI's astronomy data, which the server already fetches for auto brightness.
+- **Sun icon** (open): the half sun with an arrow, or one of three alternatives mocked (`map-sun-*.png`): rays over a smaller half sun with the arrow; an arrow through an open dome (one icon, no separate arrow); or no arrow, the sun whole on the horizon at sunrise and half sunk with a dim reflection at sunset.
 
 ### Seventies (decided)
 The three stripes run along the bottom, climb at columns 62–69, and run along the top to the right edge; the top turn on the same 2 px band as the climb and the runs. The time in the VCR digits on the left, banded as at 64; under the top run, the **weekday in full** (`TUESDAY`), then `NOV 3` and the temperature.

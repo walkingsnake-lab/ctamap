@@ -143,8 +143,8 @@
   "kind": "more",
   "id": "rain-bars",
   "title": "Rain bars",
-  "desc": "The eight quarter-hours across the full width, 16 px each, with time marks under them; light, moderate and heavy in three blues.",
-  "note": ""
+  "desc": "The eight quarter-hours across the full width, 16 px each, with time marks under them (lowercase h and m); light, moderate and heavy in three blues.",
+  "note": "No data source today: WeatherAPI has no 15-minute precipitation, so the 64 rain bars don't show either."
  },
  {
   "kind": "more",

@@ -418,7 +418,7 @@ function rainBars() {
     if (h) f.fill(i * 16 + 1, FLOOR - h + 1, 14, h, col);
   });
   f.fill(0, FLOOR + 1, 128, 1, '#1a1a1a');
-  [['NOW', 0, 'l'], ['30M', 32, 'c'], ['1H', 64, 'c'], ['1H30', 96, 'c'], ['2H', 127, 'r']].forEach(([t, x, a]) =>
+  [['NOW', 0, 'l'], ['30m', 32, 'c'], ['1h', 64, 'c'], ['1h30', 96, 'c'], ['2h', 127, 'r']].forEach(([t, x, a]) =>
     (a === 'l' ? f.text('small', t, x, 32, C.dimHead) : a === 'r' ? rtext(f, 'small', t, x, 32, C.dimHead) : ctext(f, 'small', t, x, 32, C.dimHead)));
   return f;
 }
@@ -558,7 +558,7 @@ async function main() {
     ['more', 'alert-rows', 'Alerts on rows', 'The full destination, the red alert circle, then the alert\'s short label in red. At 64 the name is cut to fit the circle and there\'s no label.', 'The label needs a new payload field: today the board only knows that a line has a major alert.', alertRows()],
     ['more', 'overnight', 'Overnight', 'The owl, big clock and NO TRAINS as on 64; the right side shows now and tomorrow. No data and stale keep this layout with NO DATA and the red line across the top.', 'Tomorrow comes from the NWS forecast the board already gets.', overnight()],
     ['more', 'now', 'Current conditions', 'A 2x icon and the temperature in the clock digits, high/low and date under them; the readout (sky, feels, wind, rain, sunset) beside, with dot leaders.', '', nowReadout()],
-    ['more', 'rain-bars', 'Rain bars', 'The eight quarter-hours across the full width, 16 px each, with time marks under them; light, moderate and heavy in three blues.', '', rainBars()],
+    ['more', 'rain-bars', 'Rain bars', 'The eight quarter-hours across the full width, 16 px each, with time marks under them (lowercase h and m); light, moderate and heavy in three blues.', 'No data source today: WeatherAPI has no 15-minute precipitation, so the 64 rain bars don\'t show either.', rainBars()],
     ['more', 'warning', 'Warning strip', 'The warning spelled out on the bottom strip: funnel, TORNADO WARNING and the expiry, with the temperature at left.', 'The 64 strip has room for WARNING only. Blinks as it does now.', warningStrip()],
     ['more', 'gradient', 'Gradient clock', 'The same block digits widened to 21 x 30 (7 x 6 blocks) so the time fills the width as it does at 64; the gradient spans all 128 columns.', '12:58 is 108 px wide.', gradient()],
     ['more', 'typewriter', 'Typewriter', 'About 21 characters a line instead of 10, so most notes fit in two lines. Shown mid-typing.', '', typewriter()],

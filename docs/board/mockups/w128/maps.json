@@ -7,6 +7,27 @@
   "note": "Sunrise and sunset are for Chicago on Nov 1 (6:22 AM, 4:46 PM)."
  },
  {
+  "kind": "sun",
+  "id": "map-sun-rays",
+  "title": "Sun icons: rays",
+  "desc": "Three short rays over a smaller half sun, then the arrow. Reads as a sun first, at the cost of a row of height (6 rows).",
+  "note": ""
+ },
+ {
+  "kind": "sun",
+  "id": "map-sun-dome",
+  "title": "Sun icons: arrow through the dome",
+  "desc": "One icon, no separate arrow: an open dome on the horizon with the arrow through it, up for sunrise and down for sunset (the usual weather-app symbol).",
+  "note": "Saves 7 px, but at this size the dome reads less like a sun."
+ },
+ {
+  "kind": "sun",
+  "id": "map-sun-sink",
+  "title": "Sun icons: rising and sinking",
+  "desc": "No arrows: at sunrise the whole sun sits on the horizon, at sunset it is half sunk with a dim reflection below.",
+  "note": "The two differ in shape as well as color."
+ },
+ {
   "kind": "map",
   "id": "map-tall-wide",
   "title": "Bigger map, narrow panel",

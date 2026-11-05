@@ -104,23 +104,37 @@ const FN = packFonts();
 const measure = (font, str) => { let w = 0; for (const ch of str) { const g = FN[font][ch.codePointAt(0)]; if (g) w += g[0]; } return w > 0 ? w - 1 : 0; };
 const rtext = (f, font, str, x1, base, col) => f.text(font, str, x1 - measure(font, str) + 1, base, col);
 const UP = String.fromCodePoint(G.UP), DOWN = String.fromCodePoint(G.DOWN);
-// Half sun on the horizon (7 x 5: three rows of sun, a gap, the horizon line), in the time's color.
-const HALF_SUN = ['..###..', '.#####.', '#######', '.......', '-------'];
-function halfSun(f, x, base, col) {
-  HALF_SUN.forEach((row, j) => [...row].forEach((ch, i) => {
-    if (ch === '#') f.set(x + i, base - 5 + j, hexRgb(col));
-    else if (ch === '-') f.set(x + i, base - 5 + j, hexRgb('#555555'));
+// Sunrise / sunset icons, 7 wide, bottom row on the text baseline row. '#' the
+// time's color, ':' that color at 35 %, '-' the horizon in #555555. `arrow`:
+// the up/down arrow follows the icon; without it the icon alone says rise or set.
+const SUN_ICONS = {
+  half: { arrow: true, title: 'Half sun (current)',
+    rise: ['..###..', '.#####.', '#######', '.......', '-------'], set: ['..###..', '.#####.', '#######', '.......', '-------'] },
+  rays: { arrow: true, title: 'Rays',
+    rise: ['...#...', '.#...#.', '..###..', '.#####.', '.......', '-------'], set: ['...#...', '.#...#.', '..###..', '.#####.', '.......', '-------'] },
+  dome: { arrow: false, title: 'Arrow through the dome',
+    rise: ['...#...', '..###..', '.#.#.#.', '#..#..#', '#..#..#', '-------'], set: ['...#...', '...#...', '.#.#.#.', '#.###.#', '#..#..#', '-------'] },
+  sink: { arrow: false, title: 'Rising and sinking',
+    rise: ['..###..', '.#####.', '.#####.', '..###..', '-------', '.......'], set: ['.......', '.......', '..###..', '.#####.', '-------', '.:::::.'] },
+};
+const hexRgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+function sunIcon(f, rows, x, base, col) {
+  // The horizon lines up with the bottom of the text (row base - 1); a reflection hangs below it.
+  const top = base - 1 - rows.findIndex((r) => r.includes('-'));
+  rows.forEach((row, j) => [...row].forEach((ch, i) => {
+    const c = ch === '#' ? hexRgb(col) : ch === ':' ? hexRgb(col).map((v) => Math.round(v * 0.35)) : ch === '-' ? hexRgb('#555555') : null;
+    if (c) f.set(x + i, top + j, c);
   }));
 }
-const hexRgb = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
-function panelWide(f, x0) {
-  // 45 px: the time in 5x7 with AM/PM, then rise / set (half sun, arrow, time) and day length.
+function panelWide(f, x0, icons = 'half') {
+  // 45 px: the time in 5x7 with AM/PM, then rise / set (icon, arrow, time) and day length.
+  const set = SUN_ICONS[icons];
   const tx = f.text('5x7', '9:42', x0, 8, '#ffffff');
   f.text('small', 'PM', tx + 1, 8, '#8f8f8f');
   f.fill(x0, 11, 128 - x0, 1, '#262626');
-  [[UP, '6:22 AM', '#ffc23a'], [DOWN, '4:46 PM', '#ff7414'], ['', '10H 24M', '#8f8f8f']].forEach(([g, v, c], i) => {
+  [['rise', UP, '6:22 AM', '#ffc23a'], ['set', DOWN, '4:46 PM', '#ff7414'], ['', '', '10h 24m', '#8f8f8f']].forEach(([k, g, v, c], i) => {
     const base = 18 + i * 7;
-    if (g) { halfSun(f, x0, base, c); f.text('small', g, x0 + 9, base, c); } else f.text('small', 'DAY', x0, base, '#555555');
+    if (k) { sunIcon(f, set[k], x0, base, c); if (set.arrow) f.text('small', g, x0 + 9, base, c); } else f.text('small', 'DAY', x0, base, '#555555');
     rtext(f, 'small', v, 127, base, c);
   });
 }
@@ -138,6 +152,12 @@ function panelNarrow(f, x0) {
 const GRIDS = [
   { id: 'map-tall', title: 'Full height + panel (recommended)', top: 84, dy: 4.5, w: 80, panel: panelWide,
     desc: 'True shape on all 32 rows: 80 × 32 at 4.5° a pixel, 84° N to 60° S, every continent but Antarctica. The 45 columns beside it hold the time, sunrise and sunset (a half sun on the horizon, then the arrow) and day length.', note: 'Sunrise and sunset are for Chicago on Nov 1 (6:22 AM, 4:46 PM).' },
+  { id: 'map-sun-rays', title: 'Sun icons: rays', top: 84, dy: 4.5, w: 80, panel: (f, x) => panelWide(f, x, 'rays'), variant: true,
+    desc: 'Three short rays over a smaller half sun, then the arrow. Reads as a sun first, at the cost of a row of height (6 rows).', note: '' },
+  { id: 'map-sun-dome', title: 'Sun icons: arrow through the dome', top: 84, dy: 4.5, w: 80, panel: (f, x) => panelWide(f, x, 'dome'), variant: true,
+    desc: 'One icon, no separate arrow: an open dome on the horizon with the arrow through it, up for sunrise and down for sunset (the usual weather-app symbol).', note: 'Saves 7 px, but at this size the dome reads less like a sun.' },
+  { id: 'map-sun-sink', title: 'Sun icons: rising and sinking', top: 84, dy: 4.5, w: 80, panel: (f, x) => panelWide(f, x, 'sink'), variant: true,
+    desc: 'No arrows: at sunrise the whole sun sits on the horizon, at sunset it is half sunk with a dim reflection below.', note: 'The two differ in shape as well as color.' },
   { id: 'map-tall-wide', title: 'Bigger map, narrow panel', top: 72, dy: 3.75, w: 96, panel: panelNarrow,
     desc: '96 × 32 at 3.75°, 72° N to 48° S: a finer map, and the panel shrinks to 30 columns with arrows instead of words.', note: 'Loses the same edges as the mild-stretch version: north Greenland, the tips of South America and New Zealand.' },
   { id: 'map-world', title: 'Whole world, stretched', top: 84.375, dy: 146.25 / 32,
@@ -157,7 +177,7 @@ for (const g of GRIDS) {
   const q = new Frame(W, H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) q.set(x, y, f.get(x, y).map(q5));
   fs.writeFileSync(path.join(OUT, `${g.id}.png`), q.toPNG(10));
-  out.push({ kind: 'map', id: g.id, title: g.title, desc: g.desc, note: g.note });
+  out.push({ kind: g.variant ? 'sun' : 'map', id: g.id, title: g.title, desc: g.desc, note: g.note });
 }
 fs.writeFileSync(path.join(OUT, 'maps.json'), JSON.stringify(out, null, 1));
 console.log('wrote', out.map((m) => m.id).join(', '));
