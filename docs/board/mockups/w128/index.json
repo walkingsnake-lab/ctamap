@@ -109,7 +109,7 @@
   "id": "alert-rows",
   "title": "Alerts on rows",
   "desc": "The full destination, the red alert circle, then the alert's short label in red. At 64 the name is cut to fit the circle and there's no label.",
-  "note": "The label would come from the payload's alert text, as al does now."
+  "note": "The label needs a new payload field: today the board only knows that a line has a major alert."
  },
  {
   "kind": "more",
