@@ -68,6 +68,9 @@ const char BUILD_MARK[] = "CTABOARD-BUILD:" FIRMWARE_VERSION ":" BUILD_KIND ";";
 #ifndef MATRIX_COLOR_ORDER
 #define MATRIX_COLOR_ORDER "RGB"
 #endif
+#ifndef MATRIX_PANELS
+#define MATRIX_PANELS 1  // 2: a second panel chained on (test: it mirrors the first)
+#endif
 #ifndef KNOB_REVERSE
 #define KNOB_REVERSE 0
 #endif
@@ -155,6 +158,7 @@ static void load_settings() {
   }
   cfg = ch.cfg;
   settings = device::settings_from(cfg);
+  settings.panels = MATRIX_PANELS;  // a build define, not saved to flash
 }
 
 void setup() {
@@ -184,8 +188,11 @@ void setup() {
 
   panel = new device::Panel(settings);
   if (!panel->begin()) Serial.println("[board] panel init failed");
-  Serial.printf("[board] panel refresh %d Hz (clock phase %d, double buffer %d, colors %s)\n", panel->refresh_rate(),
-                (int)settings.clk_phase, (int)settings.double_buffer, settings.color_order.c_str());
+  Serial.printf("[board] panel refresh %d Hz (panels %d, clock phase %d, double buffer %d, colors %s)\n",
+                panel->refresh_rate(), settings.panels, (int)settings.clk_phase, (int)settings.double_buffer,
+                settings.color_order.c_str());
+  Serial.printf("[board] memory after panel: free %ld, largest block %ld\n", device::free_heap(), device::largest_block());
+  panel->identify(3000);  // 2 panels: red outline + 1 dot = first, green + 2 dots = second
 
   if (no_setup) {
     panel->show([&](draw::Frame &f) { draw::render_status(f, "nosetup", ""); });

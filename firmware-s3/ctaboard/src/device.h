@@ -43,6 +43,11 @@ struct Settings {
   // Which color each HUB75 data line (R, G, B, in that order) lights on this panel: "RGB" normally; some panels
   // are wired "RBG" (green and blue swapped) or another order. Applied by reassigning the data pins, so it costs nothing.
   std::string color_order = "RGB";
+  // Panels chained on the HUB75 ribbon: 1, or 2 (128 x 32). Test only for
+  // now: with 2, the second panel mirrors the first (Panel::show), and
+  // Panel::identify marks which is which at startup. A build define
+  // (MATRIX_PANELS), not a flash setting, so OTA builds stay at 1.
+  int panels = 1;
 };
 
 // The runtime settings from the saved ones (config.h).
@@ -67,6 +72,9 @@ class Panel : public app::Display {
   // the renderer scales colors by (k without hw; 1 when hardware did it all).
   double dim(double k, bool hw);
   void set_curves(int day, int night);
+  // With 2 panels: outlines each one (red = 1st, nearest the Portal; green =
+  // 2nd) for ms, so the chain order shows. Does nothing with 1.
+  void identify(int ms);
   int day_curve() const { return day_curve_; }
   int night_curve() const { return night_curve_; }
 
@@ -84,6 +92,7 @@ class Panel : public app::Display {
   int oe_ = 255;  // the driver's brightness (output-enable window), 0-255
   bool clk_phase_, double_buffer_;
   std::string color_order_;
+  int panels_;
   int64_t flipped_at_ = 0;  // us; when the last back buffer was flipped in
 };
 

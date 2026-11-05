@@ -83,7 +83,8 @@ bool nvs_put(const char *key, const std::string &value) {
 
 Panel::Panel(const Settings &s)
     : rotation_(s.rotation), pipe_(s.curve), scene_pipe_(s.night_curve), day_curve_(s.curve), night_curve_(s.night_curve), hw_dim_(s.hw_dim),
-      clk_phase_(s.clk_phase), double_buffer_(s.double_buffer), color_order_(s.color_order.empty() ? "RGB" : s.color_order) {}
+      clk_phase_(s.clk_phase), double_buffer_(s.double_buffer), color_order_(s.color_order.empty() ? "RGB" : s.color_order),
+      panels_(s.panels == 2 ? 2 : 1) {}
 
 void Panel::set_curves(int day, int night) {
   day_curve_ = day;
@@ -137,7 +138,7 @@ bool Panel::begin() {
   color_pins(color_order_, top, t);
   color_pins(color_order_, bottom, b);
   HUB75_I2S_CFG::i2s_pins pins = {t[0], t[1], t[2], b[0], b[1], b[2], kA, kB, kC, kD, kE, kLat, kOe, kClk};
-  HUB75_I2S_CFG cfg(64, 32, 1, pins);
+  HUB75_I2S_CFG cfg(64, 32, panels_, pins);
   cfg.double_buff = double_buffer_;  // draw into the back buffer, then flip: no half-drawn frames
   cfg.clkphase = clk_phase_;
   dma_ = new MatrixPanel_I2S_DMA(cfg);
@@ -151,6 +152,42 @@ bool Panel::begin() {
     flipped_at_ = esp_timer_get_time();
   }
   return true;
+}
+
+void Panel::identify(int ms) {
+  if (panels_ < 2 || !dma_) return;
+  // Straight to the driver, so it shows each panel's real position in the chain.
+  for (int buf = 0; buf < (double_buffer_ ? 2 : 1); buf++) {
+    dma_->clearScreen();
+    for (int p = 0; p < panels_; p++) {
+      uint8_t r = p == 0 ? 255 : 0, g = p == 0 ? 0 : 255;
+      int x0 = p * 64;
+      for (int x = 0; x < 64; x++) {
+        dma_->drawPixelRGB888(x0 + x, 0, r, g, 0);
+        dma_->drawPixelRGB888(x0 + x, 31, r, g, 0);
+      }
+      for (int y = 0; y < 32; y++) {
+        dma_->drawPixelRGB888(x0, y, r, g, 0);
+        dma_->drawPixelRGB888(x0 + 63, y, r, g, 0);
+      }
+      // p + 1 dots in the middle: 1 for the first panel, 2 for the second.
+      for (int d = 0; d <= p; d++)
+        for (int y = 14; y < 18; y++)
+          for (int x = 0; x < 4; x++) dma_->drawPixelRGB888(x0 + 26 + d * 8 + x, y, 255, 255, 255);
+    }
+    if (double_buffer_) {
+      dma_->flipDMABuffer();
+      delay(20);
+    }
+  }
+  delay(ms);
+  dma_->clearScreen();
+  if (double_buffer_) {
+    dma_->flipDMABuffer();
+    delay(20);
+    dma_->clearScreen();
+    flipped_at_ = esp_timer_get_time();
+  }
 }
 
 int Panel::refresh_rate() const { return dma_ ? dma_->calculated_refresh_rate : 0; }
@@ -179,7 +216,8 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
       // skyline (floor = false) always takes the night curve: the day one's
       // 565 / 6-bit truncation flattens its dark gradients into a few colors.
       (frame_.floor ? pipe_ : scene_pipe_).map(r, g, b, frame_.floor);
-      dma_->drawPixelRGB888(flip ? 63 - x : x, dy, r, g, b);
+      // Every panel gets the same picture (a second panel mirrors the first, for now).
+      for (int p = 0; p < panels_; p++) dma_->drawPixelRGB888(p * 64 + (flip ? 63 - x : x), dy, r, g, b);
     }
   }
   if (double_buffer_) {
