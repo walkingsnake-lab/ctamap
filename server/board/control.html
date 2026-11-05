@@ -19,12 +19,14 @@
     --bg: #f2f2f7; --cell: #fff; --sep: #c6c6c8; --fg: #000; --sub: #6c6c70; --fill: rgba(118,118,128,.12);
     --sel: #fff; --on: #1c1c1e; --knob: #fff; --off: #e9e9ea; --tile: #3a3a3c;
     --err: #d70015; --warn: #c93400; --ok: #248a3d; --toast: #2c2c2e;
+    --pane: #e8e8ed; --pick: #d1d1d6;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #000; --cell: #1c1c1e; --sep: #38383a; --fg: #fff; --sub: #8e8e93; --fill: rgba(118,118,128,.24);
       --sel: #636366; --on: #f2f2f7; --knob: #1c1c1e; --off: #39393d; --tile: #48484a;
       --err: #ff6961; --warn: #ff9f0a; --ok: #30d158; --toast: #3a3a3c;
+      --pane: #0f0f11; --pick: #3a3a3c;
     }
   }
   * { box-sizing: border-box; }
@@ -182,12 +184,20 @@
   @media (min-width: 900px) {
     #app { max-width: 1040px; display: grid; grid-template-columns: 440px 1fr; gap: 24px; align-items: start; padding-top: 16px; }
     #app > .view[data-view="home"] { display: block !important; position: sticky; top: 16px; grid-column: 1; grid-row: 1; }
-    #app > .view:not([data-view="home"]) { grid-column: 2; grid-row: 1; }
+    /* The right side is a panel: where pages open. */
+    #app > .view:not([data-view="home"]) { grid-column: 2; grid-row: 1; background: var(--pane); border-radius: 18px; box-shadow: 0 0 0 1px var(--sep); padding: 4px 0 28px; min-height: calc(100vh - 48px); }
     #app > .view:not([data-view="home"]) .back-home { visibility: hidden; }
-    /* The row (or the cog) whose page is open on the right. */
-    #screens .c.t.open { background: var(--fill); }
-    #screens .c.t.open .gear, .nav.home a.nb.open { color: var(--fg); background: var(--fill); border-radius: 10px; }
+    #app > .view:not([data-view="home"]) .pinned { background: var(--pane); }
+    /* A page opening slides in, so a click visibly lands. */
+    #app > .view.enter { animation: pane-in .2s ease-out; }
+    /* The row (or the cog) whose page is open on the right: a sidebar selection. */
+    #screens .c.t.open { background: var(--pick); }
+    #screens .c.t.open + .c.t::before, #screens .c.t.open::before { opacity: 0; }
+    #screens .c.t.open .gear, .nav.home a.nb.open { color: var(--fg); }
+    .nav.home a.nb.open { background: var(--pick); border-radius: 10px; }
   }
+  @keyframes pane-in { from { opacity: 0; transform: translateX(14px); } }
+  @media (prefers-reduced-motion: reduce) { #app > .view.enter { animation: none; } }
 </style>
 </head>
 <body>
@@ -699,7 +709,11 @@
   function showView() {
     let v = view();
     if (!document.querySelector(`.view[data-view="${v}"]`)) v = 'home';
+    const was = qa('.view').find((s) => !s.hidden);
     for (const s of qa('.view')) s.hidden = s.dataset.view !== v;
+    // Desktop: the newly opened page slides in on the right.
+    const now = document.querySelector(`.view[data-view="${v}"]`);
+    if (desktop.matches && was !== now && v !== 'home') { now.classList.remove('enter'); void now.offsetWidth; now.classList.add('enter'); }
     if (v !== 'home') window.scrollTo(0, 0);
     if (v === 'announce') loadDraw().then(renderAnnounce).catch((e) => toast(`Couldn't load the preview: ${e.message}`, true));
     if (v === 'status') loadHealth();
@@ -946,7 +960,11 @@
       if (off && target === sc && !on) sub = 'Queued · shows when the board is back';
       else if (switching && switching.failed && sc === (switching.to === 'ticker' ? 'transit' : switching.to)) { sub = 'Not switched'; subCls = 's err'; }
       else if (sc === 'transit' && on && p && p.stale) { sub += ' · times out of date'; subCls = 's warn'; }
-      const pick = el('button', { class: 'pick', role: 'radio', 'aria-checked': String(on), disabled: !can || null, onclick: () => (sc === 'transit' ? switchTo(board.transitScreen || 'transit') : switchTo(sc)) },
+      const pick = el('button', { class: 'pick', role: 'radio', 'aria-checked': String(on), disabled: !can || null, onclick: () => {
+        // Desktop: the row's page opens on the right too.
+        if (desktop.matches) location.hash = '#' + pageOf(sc);
+        return sc === 'transit' ? switchTo(board.transitScreen || 'transit') : switchTo(sc);
+      } },
         thumb, el('span', { class: 'grow' }, SCREEN_NAME[sc], el('span', { class: subCls, text: sub })));
       if (target === sc && !on && !off) pick.insertAdjacentHTML('beforeend', ICON.spin);
       else if (on) pick.insertAdjacentHTML('beforeend', ICON.check);
