@@ -96,5 +96,82 @@
   "title": "Message note",
   "desc": "About 21 characters a line in 5x7 instead of 10.",
   "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "key-layout",
+  "title": "Key layout",
+  "desc": "The column key on the top row (trains to, min), with the station and clock between them instead of moving to the bottom.",
+  "note": "Real Belmont times."
+ },
+ {
+  "kind": "more",
+  "id": "alert-rows",
+  "title": "Alerts on rows",
+  "desc": "The full destination, the red alert circle, then the alert's short label in red. At 64 the name is cut to fit the circle and there's no label.",
+  "note": "The label would come from the payload's alert text, as al does now."
+ },
+ {
+  "kind": "more",
+  "id": "overnight",
+  "title": "Overnight",
+  "desc": "The owl, big clock and NO TRAINS as on 64; the right side shows now and tomorrow. No data and stale keep this layout with NO DATA and the red line across the top.",
+  "note": "Tomorrow comes from the NWS forecast the board already gets."
+ },
+ {
+  "kind": "more",
+  "id": "now",
+  "title": "Current conditions",
+  "desc": "A 2x icon and the temperature in the clock digits, high/low and date under them; the readout (sky, feels, wind, rain, sunset) beside, with dot leaders.",
+  "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "rain-bars",
+  "title": "Rain bars",
+  "desc": "The eight quarter-hours across the full width, 16 px each, with time marks under them; light, moderate and heavy in three blues.",
+  "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "warning",
+  "title": "Warning strip",
+  "desc": "The warning spelled out on the bottom strip: funnel, TORNADO WARNING and the expiry, with the temperature at left.",
+  "note": "The 64 strip has room for WARNING only. Blinks as it does now."
+ },
+ {
+  "kind": "more",
+  "id": "gradient",
+  "title": "Gradient clock",
+  "desc": "The same block digits widened to 21 x 30 (7 x 6 blocks) so the time fills the width as it does at 64; the gradient spans all 128 columns.",
+  "note": "12:58 is 110 px wide."
+ },
+ {
+  "kind": "more",
+  "id": "typewriter",
+  "title": "Typewriter",
+  "desc": "About 21 characters a line instead of 10, so most notes fit in two lines. Shown mid-typing.",
+  "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "big-word",
+  "title": "Big word",
+  "desc": "At 3x instead of 2x: 21 px letters, up to about 7 characters; longer words drop to 2x (about 10).",
+  "note": ""
+ },
+ {
+  "kind": "more",
+  "id": "credits",
+  "title": "Credits roll",
+  "desc": "Wider lines mean fewer of them; the roll and its fade at the edges stay the same.",
+  "note": "Mid-roll."
+ },
+ {
+  "kind": "more",
+  "id": "chooser",
+  "title": "Knob chooser",
+  "desc": "The peek chooser with room to name things: the chosen category and its variant are spelled out beside its icon, with one pip per variant under the name.",
+  "note": "The view on top is the 7-day with the top bar."
  }
 ]

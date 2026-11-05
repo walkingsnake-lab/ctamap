@@ -309,6 +309,215 @@ function note() {
 
 // ======================= side by side =======================
 
+// ======================= more screens: first pass =======================
+const glyph = (f, rows, x, y, col) => rows.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.set(x + i, y + j, hex(col)); }));
+// Belmont, real times (Oct 3, 11:16 PM).
+const BELMONT = [['RD', 'HOWARD', [5, 12, 19, 28]], ['RD', '95TH/DAN RYAN', [4, 14]], ['BR', 'KIMBALL', [5, 17, 38, 47]], ['BR', 'LOOP', ['DUE', 16]]];
+
+// Key layout: the column key on the top row, with the station and clock between.
+function keyLayout() {
+  const f = new Frame(W, H);
+  f.text('small', 'trains to', 5, 6, C.dimHead);
+  rtext(f, 'small', 'min', 127, 6, C.dimHead);
+  ctext(f, 'small', 'BELMONT  11:16', 64, 6, C.head);
+  BELMONT.forEach(([ln, lbl, ts], i) => {
+    const top = 8 + i * 6;
+    f.fill(0, top, 3, 5, LINE[ln]);
+    times(f, ts, 127, top + 5, f.text('small', lbl, 5, top + 5, C.label) - 1);
+  });
+  return f;
+}
+
+// Alerts: the full name, the red alert circle, then the alert's short label.
+function alertRows() {
+  const f = new Frame(W, H);
+  f.text('small', 'BELMONT', 0, 6, C.head);
+  rtext(f, 'small', '11:16', 127, 6, C.clock);
+  BELMONT.forEach(([ln, lbl, ts], i) => {
+    const top = 8 + i * 6, base = top + 5;
+    f.fill(0, top, 3, 5, LINE[ln]);
+    let end = f.text('small', lbl, 5, base, C.label) - 1;
+    if (ln === 'BR') {
+      const ix = end + 3;
+      f.text('small', s(G.ALERT_DISC), ix, base, C.red);
+      f.text('small', s(G.ALERT_MARK), ix, base, C.white);
+      end = f.text('small', 'MAJOR DELAYS', ix + 7, base, '#c83030') - 1;
+    }
+    times(f, ts, 127, base, end);
+  });
+  return f;
+}
+
+// Overnight: the owl and big clock as on 64, with now and tomorrow beside them.
+function overnight() {
+  const f = new Frame(W, H);
+  const owl = icons.OWL.frames[0][1], pal = icons.OWL.palette;
+  owl.forEach((r, j) => [...r].forEach((c, i) => { if (c !== '.' && pal[c]) f.set(2 + i, 9 + j, hex(pal[c])); }));
+  ctext(f, 'clock', '11:16', 41, 15, C.label);
+  ctext(f, 'small', 'NO TRAINS', 41, 24, C.noTrains);
+  f.fill(65, 2, 1, 28, C.rule);
+  const x0 = 69;
+  f.text('small', '63°', x0, 6, tempColor(63));
+  f.text('small', 'PT CLOUDY', x0 + 15, 6, C.wxText);
+  f.text('small', 'TOMORROW', x0, 14, C.dimHead);
+  icon(f, 'sun', x0, 17);
+  const tx = f.text('5x7', '69°', x0 + 11, 24, tempColor(69));
+  f.text('small', '51°', tx + 3, 24, scale(tempColor(51), 0.6));
+  f.text('small', 'SUNNY', x0, 31, C.wxText);
+  return f;
+}
+
+// Current conditions: a 2x icon and the temperature in the clock digits, the readout beside.
+function nowReadout() {
+  const f = new Frame(W, H);
+  icons.ICONS.pcloudy_day.forEach((row, j) => [...row].forEach((c, i) => { if (c !== '.') f.fill(i * 2, 1 + j * 2, 2, 2, icons.PALETTE[c]); }));
+  const tx = f.text('clock', '57', 19, 13, C.white);
+  f.text('small', '°', tx, 6, C.white);
+  let x = 0;
+  for (const [str, col] of [[s(G.UP), C.grey], ['63', C.label], [s(G.DOWN), C.grey], ['49', C.label]]) x = f.text('small', str, x, 25, col) + (str === '63' ? 3 : 1);
+  f.text('small', 'TUE NOV 3', 0, 31, C.dimHead);
+  const X0 = 58, lines = [['SKY', 'PT CLOUDY', C.label], ['FEELS', '53°', tempColor(53)], ['WIND', 'NW 12 MPH', C.label], ['RAIN', '20%', '#1e90ff'], ['SUNSET', '4:46 PM', '#ff7414']];
+  lines.forEach(([l, v, c], i) => {
+    const base = 6 + i * 6, le = f.text('small', l, X0, base, C.grey) + 1, vs = 127 - measure('small', v) + 1;
+    for (let dx = le + 1; dx < vs - 2; dx += 2) f.set(dx, base - 1, hex('#3a3a3a'));
+    f.text('small', v, vs, base, c);
+  });
+  return f;
+}
+
+// Rain bars: eight quarter-hours across the width, 16 px each, under the top bar.
+function rainBars() {
+  const f = new Frame(W, H);
+  icon(f, 'rain', 0, 0);
+  f.text('5x7', '78°', 10, 7, C.white);
+  ctext(f, 'small', 'RAIN IN 25 MIN', 64, 6, '#4aa0ff');
+  let x = 127;
+  for (const [str, col] of [['66', C.label], [s(G.DOWN), C.grey], ['84', C.label], [s(G.UP), C.grey]]) { rtext(f, 'small', str, x, 6, col); x -= measure('small', str) + (str === '84' ? 4 : 2); }
+  const mmh = [0, 0.6, 2.5, 6, 9, 5, 2, 0.8], FLOOR = 26, TALL = 16;
+  mmh.forEach((v, i) => {
+    const h = v ? Math.max(1, Math.round(TALL * Math.sqrt(Math.min(1, v / 10)))) : 0;
+    const col = v >= 7.6 ? '#5aa8ff' : v >= 2.5 ? '#2a78e0' : '#1e4fa0';
+    if (h) f.fill(i * 16 + 1, FLOOR - h + 1, 14, h, col);
+  });
+  f.fill(0, FLOOR + 1, 128, 1, '#1a1a1a');
+  [['NOW', 0, 'l'], ['30M', 32, 'c'], ['1H', 64, 'c'], ['1H30', 96, 'c'], ['2H', 127, 'r']].forEach(([t, x, a]) =>
+    (a === 'l' ? f.text('small', t, x, 32, C.dimHead) : a === 'r' ? rtext(f, 'small', t, x, 32, C.dimHead) : ctext(f, 'small', t, x, 32, C.dimHead)));
+  return f;
+}
+
+// Warning: transit rows with the warning spelled out on the bottom strip.
+function warningStrip() {
+  const f = new Frame(W, H);
+  f.text('small', 'MORSE', 0, 6, C.head);
+  rtext(f, 'small', '11:16', 127, 6, C.clock);
+  [['RD', 'HOWARD', [3, 8, 17, 25]], ['RD', '95TH/DAN RYAN', ['DUE', 7]]].forEach(([ln, lbl, ts], i) => {
+    const top = 8 + i * 6;
+    f.fill(0, top, 3, 5, LINE[ln]);
+    times(f, ts, 127, top + 5, f.text('small', lbl, 5, top + 5, C.label) - 1);
+  });
+  f.text('small', '63°', 0, 31, C.grey);
+  const msg = 'TORNADO WARNING', until = 'UNTIL 7:45 PM';
+  const wu = measure('small', until), wm = measure('small', msg), wg = measure('small', s(G.FUNNEL));
+  const x0 = 127 - wu - 4 - wm - 3 - wg + 1;
+  f.text('small', s(G.FUNNEL), x0, 31, C.warnTornado);
+  f.text('small', msg, x0 + wg + 3, 31, C.warnTornado);
+  rtext(f, 'small', until, 127, 31, '#a01818');
+  return f;
+}
+
+// Gradient: the same block digits, wider (7 x 6 blocks: 21 x 30), across a 128-wide gradient.
+const GRG = { 0: ['###', '#.#', '#.#', '#.#', '###'], 1: ['##.', '.#.', '.#.', '.#.', '###'], 2: ['###', '..#', '###', '#..', '###'], 3: ['###', '..#', '###', '..#', '###'],
+  4: ['#.#', '#.#', '###', '..#', '..#'], 5: ['###', '#..', '###', '..#', '###'], 6: ['###', '#..', '###', '#.#', '###'], 7: ['###', '..#', '..#', '..#', '..#'],
+  8: ['###', '#.#', '###', '#.#', '###'], 9: ['###', '#.#', '###', '..#', '###'], ':': ['.', '#', '.', '#', '.'] };
+function gradient(time = '7:15') {
+  const f = new Frame(W, H), ring = draw.GR.ring, n = ring.length, span = draw.GR.span;
+  const SX = 7, SY = 6, GAP = 5, CW = 4;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const u = Math.floor(((x * 2 + y * 3) * 1024) / (127 * 2 + 31 * 3 + 1));
+    const r = Math.floor((u * span * 256) / 1024) + 2 * 256, i = Math.floor(r / 256) % n, t = (r % 256) / 256;
+    f.set(x, y, hex(lerp(ring[i], ring[(i + 1) % n], t)));
+  }
+  const w = [...time].reduce((a, ch) => a + (ch === ':' ? CW : 3 * SX) + GAP, -GAP);
+  let x = Math.floor((W - w) / 2);
+  for (const ch of time) {
+    const g = GRG[ch], sx = ch === ':' ? CW : SX;
+    g.forEach((row, rr) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * sx, 1 + rr * SY, sx, SY, '#000000'); }));
+    x += g[0].length * sx + GAP;
+  }
+  return f;
+}
+
+// Messages: typewriter, big word, credits roll.
+function wrap(font, text, maxW) {
+  const lines = []; let cur = '';
+  for (const word of text.split(/\s+/)) { const t = cur ? `${cur} ${word}` : word; if (measure(font, t) <= maxW) cur = t; else { lines.push(cur); cur = word; } }
+  if (cur) lines.push(cur);
+  return lines;
+}
+function typewriter() {
+  const f = new Frame(W, H);
+  // Mid-typing: the 64 board's line bases (one line 19; two 14, 24), the cursor after the last character.
+  const lines = wrap('5x7', 'Gone to the gym. Back by 6, grab dinner?', 124).map((l, i, a) => (i === a.length - 1 ? l.slice(0, -7) : l));
+  const bases = lines.length === 1 ? [19] : [14, 24];
+  let x = 0;
+  lines.forEach((l, i) => { x = f.text('5x7', l, 0, bases[i], C.amber); });
+  f.fill(x + 1, bases[lines.length - 1] - 6, 4, 6, '#cc8d00');
+  return f;
+}
+function bigWord(str = 'Go Cubs!', k = 3) {
+  const f = new Frame(W, H), t = new Frame(W, 16);
+  t.text('5x7', str, 0, 9, '#ffffff');
+  const tw = measure('5x7', str), x0 = Math.floor((W - tw * k) / 2), top = 1;
+  const A = hex('#ff3060'), Bc = hex('#ffb000'), G2 = 26;
+  for (let y = 0; y < 16; y++) for (let x = 0; x < W; x++) {
+    if (!t.get(x, y)[0]) continue;
+    for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) {
+      const py = top + (y - 2) * k + dy, kk = Math.max(0, Math.min(1, py / G2));
+      f.set(x0 + x * k + dx, py, A.map((v, i) => Math.round(v + (Bc[i] - v) * kk)));
+    }
+  }
+  return f;
+}
+function credits() {
+  const f = new Frame(W, H);
+  const lines = wrap('5x7', 'Happy birthday, Sam! Dinner at Lula at 7. We have the back table, come hungry.', 124);
+  const first = 6 - 4; // mid-roll: baselines every 10 px, the first just off the top edge
+  lines.forEach((l, i) => ctext(f, '5x7', l, 64, first + i * 10, C.label));
+  for (let y = 0; y < H; y++) { const k = y < 3 ? (y + 1) / 4 : y > 28 ? (32 - y) / 4 : 1; if (k < 1) for (let x = 0; x < W; x++) f.set(x, y, f.get(x, y).map((v) => Math.round(v * k))); }
+  return f;
+}
+
+// Knob chooser (peek): the chosen view on top, the bar below with the chosen category and variant named.
+const PEEK_ICONS = {
+  transit: ['.#####.', '#.....#', '#.....#', '#######', '##...##', '.#####.', '#.....#'],
+  weather: ['...#...', '.#...#.', '..###..', '#.###.#', '..###..', '.#...#.', '...#...'],
+  clock: ['..###..', '.#...#.', '#..#..#', '#..##.#', '#.....#', '.#...#.', '..###..'],
+  announce: ['#######', '#.....#', '#.###.#', '#.....#', '#######', '.##....', '.#.....'],
+  cycle: ['..###.#', '.#...##', '#...###', '#.....#', '###...#', '##...#.', '#.###..'],
+};
+const PEEK_COL = { transit: LINE.RD, weather: '#ffd040', clock: '#f0e2c8', announce: '#40e090', cycle: '#3fd0e8' };
+function chooser() {
+  const f = new Frame(W, H), view = sevenDay({ top: true });
+  for (let y = 0; y < 21; y++) for (let x = 0; x < W; x++) f.set(x, y, view.get(x, y));
+  const ring = ['transit', 'weather', 'clock', 'announce', 'cycle'], k = 1, vars = ['NOW', '7-DAY', 'HOURLY', 'RADAR'], vi = 1;
+  const label = 'WEATHER', vname = vars[vi];
+  const chosenW = 7 + 3 + measure('small', label) + 4 + measure('small', vname);
+  const total = (ring.length - 1) * (7 + 6) + chosenW;
+  let x = Math.floor((W - total) / 2);
+  ring.forEach((cat, i) => {
+    const col = PEEK_COL[cat];
+    glyph(f, PEEK_ICONS[cat], x, 23, i === k ? col : scale(col, 0.3));
+    if (i !== k) { x += 7 + 6; return; }
+    f.fill(x, 31, 7, 1, col);
+    const lx = f.text('small', label, x + 10, 29, col);
+    const vx = lx + 3;
+    f.text('small', vname, vx, 29, C.label);
+    vars.forEach((_, j) => f.fill(vx + j * 4, 31, 3, 1, j === vi ? C.label : C.indicator));
+    x += chosenW + 6;
+  });
+  return f;
+}
+
 async function main() {
   const MOCKS = [
     ['redrawn', 'transit-rows', 'Transit rows', 'Full CTA names and up to five times a row; the header keeps the station and clock.', '', transitRows()],
@@ -325,6 +534,17 @@ async function main() {
     ['redrawn', 'radar', 'Radar, 128 wide', 'A real MRMS frame (the Aug 10, 2020 derecho) cropped 128 LEDs wide: about 190 mi of the region instead of 95. The station sits right of center; the time stack moves over the lake.', 'Each station needs a new water mask at 128 (built here from the lake outline).', null],
     ['redrawn', 'line-score', 'Baseball line score', 'Runs by inning, R H E, then the count, outs, pitch count and bases.', 'The innings come in the linescore the server already fetches; the pitch count would need a field added.', lineScore()],
     ['redrawn', 'note', 'Message note', 'About 21 characters a line in 5x7 instead of 10.', '', note()],
+    ['more', 'key-layout', 'Key layout', 'The column key on the top row (trains to, min), with the station and clock between them instead of moving to the bottom.', 'Real Belmont times.', keyLayout()],
+    ['more', 'alert-rows', 'Alerts on rows', 'The full destination, the red alert circle, then the alert\'s short label in red. At 64 the name is cut to fit the circle and there\'s no label.', 'The label would come from the payload\'s alert text, as al does now.', alertRows()],
+    ['more', 'overnight', 'Overnight', 'The owl, big clock and NO TRAINS as on 64; the right side shows now and tomorrow. No data and stale keep this layout with NO DATA and the red line across the top.', 'Tomorrow comes from the NWS forecast the board already gets.', overnight()],
+    ['more', 'now', 'Current conditions', 'A 2x icon and the temperature in the clock digits, high/low and date under them; the readout (sky, feels, wind, rain, sunset) beside, with dot leaders.', '', nowReadout()],
+    ['more', 'rain-bars', 'Rain bars', 'The eight quarter-hours across the full width, 16 px each, with time marks under them; light, moderate and heavy in three blues.', '', rainBars()],
+    ['more', 'warning', 'Warning strip', 'The warning spelled out on the bottom strip: funnel, TORNADO WARNING and the expiry, with the temperature at left.', 'The 64 strip has room for WARNING only. Blinks as it does now.', warningStrip()],
+    ['more', 'gradient', 'Gradient clock', 'The same block digits widened to 21 x 30 (7 x 6 blocks) so the time fills the width as it does at 64; the gradient spans all 128 columns.', '12:58 is 110 px wide.', gradient()],
+    ['more', 'typewriter', 'Typewriter', 'About 21 characters a line instead of 10, so most notes fit in two lines. Shown mid-typing.', '', typewriter()],
+    ['more', 'big-word', 'Big word', 'At 3x instead of 2x: 21 px letters, up to about 7 characters; longer words drop to 2x (about 10).', '', bigWord()],
+    ['more', 'credits', 'Credits roll', 'Wider lines mean fewer of them; the roll and its fade at the edges stay the same.', 'Mid-roll.', credits()],
+    ['more', 'chooser', 'Knob chooser', 'The peek chooser with room to name things: the chosen category and its variant are spelled out beside its icon, with one pip per variant under the name.', 'The view on top is the 7-day with the top bar.', chooser()],
   ];
   MOCKS.find((m) => m[1] === 'radar')[5] = await wideRadar();
 
