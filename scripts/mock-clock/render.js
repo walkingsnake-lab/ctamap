@@ -17,7 +17,7 @@ const { redLine } = require('./env');
 const OUT = path.join(__dirname, '..', '..', 'docs', 'board', 'mockups', 'clock');
 const env = { fonts: packFonts(), icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE }, redLine: redLine(), digitFonts: require('./digit-fonts.json'), bitmapDigits: require('./bitmap-digits.json') };
 const r5 = require('./faces-r5').build(env); // pushes round 5 (one group per font) onto FACES
-const r6 = require('./faces-r6').build(env); // round 6: bitmap fonts
+const r6 = require('./faces-r6').build(env); // rounds 6 and 7: bitmap fonts
 // Round 2 is shown at night so the north sky has stars; an argument overrides both.
 const at = (hms) => { const [hh, mm, ss] = hms.split(':').map(Number); return new Date(2026, 9, 17, hh, mm, ss, 400); };
 const when = (face) => at(process.argv[2] || (face.group === 'R2' ? '21:42:37' : '10:09:37'));
@@ -33,8 +33,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const SHEETS = { 'sheet.png': ['KEEP', 'R1'], 'sheet-round2.png': ['KEEP', 'R2'], 'sheet-round4.png': ['R4'], 'sheet-round4-128.png': ['R4W'] };
 SHEETS['sheet-round5-64.png'] = r5.map(([g]) => g); // the 64-wide panels of every font
 SHEETS['sheet-round5-128.png'] = r5.map(([g]) => g);
-SHEETS['sheet-round6-64.png'] = r6.map(([g]) => g);
-SHEETS['sheet-round6-128.png'] = r6.map(([g]) => g);
+for (const n of [6, 7]) for (const w of [64, 128]) SHEETS[`sheet-round${n}-${w}.png`] = r6.filter(([g]) => g.startsWith(`R${n}-`)).map(([g]) => g);
 const frames = new Map(FACES.map((face) => {
   const f = toFrame(render(face, when(face), env));
   fs.writeFileSync(path.join(OUT, `${face.id}.png`), f.toPNG(10));
@@ -45,9 +44,9 @@ const PH = 32, GAP = 4, TH = 8;
 for (const [file, groups] of Object.entries(SHEETS)) {
   const wide = file.endsWith('-128.png');
   let faces = FACES.filter((face) => groups.includes(face.group));
-  if (/sheet-round[56]/.test(file)) faces = faces.filter((face) => (face.w || 64) === (wide ? 128 : 64));
-  const PW = faces[0].w || 64, COLS = PW > 64 || /sheet-round[56]/.test(file) ? 2 : 3;
-  const fam = (g) => (g.startsWith('R5-') ? env.digitFonts[g.slice(3)] : g.startsWith('R6-') ? env.bitmapDigits[g.slice(3)] : null);
+  if (/sheet-round[567]/.test(file)) faces = faces.filter((face) => (face.w || 64) === (wide ? 128 : 64));
+  const PW = faces[0].w || 64, COLS = PW > 64 || /sheet-round[567]/.test(file) ? 2 : 3;
+  const fam = (g) => (g.startsWith('R5-') ? env.digitFonts[g.slice(3)] : /^R[67]-/.test(g) ? env.bitmapDigits[g.slice(3)] : null);
   const label = (face) => (fam(face.group) ? `${fam(face.group).label} ${face.title.startsWith('Big') ? 'big' : face.title.startsWith('Day') ? 'dtd' : 'panel'}` : face.title).toUpperCase();
   const panels = faces.map((face) => [label(face), frames.get(face.id)]);
   const sheet = new Frame(COLS * PW + (COLS + 1) * GAP, Math.ceil(panels.length / COLS) * (PH + TH + GAP) + GAP);
