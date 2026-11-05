@@ -97,9 +97,10 @@ const ENV = /*__ENV__*/null;
     KEEP: ['Basic', 'Kept from round 1.'],
     R2: ['Creative', 'Round 2. Most of these tie back to the CTA or Chicago.'],
   };
-  // Round 5: one group per typeface, listed first.
+  // Rounds 6 (bitmap fonts) and 5 (outline fonts): one group per typeface, listed first.
+  const R6 = self.ClockFacesR6 ? self.ClockFacesR6.build(ENV) : [];
   const R5 = self.ClockFacesR5 ? self.ClockFacesR5.build(ENV) : [];
-  const FONTS = Object.fromEntries(R5.map(([k, title, note]) => [k, [title, note]]));
+  const FONTS = Object.fromEntries([...R6, ...R5].map(([k, title, note]) => [k, [title, note]]));
   const ONLY = /*__GROUPS__*/null;
   const pick = (k) => !ONLY || ONLY.includes(k) || ONLY.some((o) => o.endsWith('*') && k.startsWith(o.slice(0, -1)));
   const GROUPS = Object.fromEntries(Object.entries({ ...FONTS, ...ALL }).filter(([k]) => pick(k)));
