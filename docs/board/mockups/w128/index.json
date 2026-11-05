@@ -161,10 +161,38 @@
   "note": "Mid-roll."
  },
  {
-  "kind": "more",
-  "id": "chooser",
-  "title": "Knob chooser",
-  "desc": "The peek chooser with room to name things: the chosen category and its variant are spelled out beside its icon, with one pip per variant under the name.",
-  "note": "The view on top is the 7-day with the top bar."
+  "kind": "dial",
+  "id": "dial-1-named",
+  "title": "1 · Icons in place, chosen one named",
+  "desc": "The 64 bar with room to spare: every category's icon stays put, the chosen one adds its name and variant, with one pip per variant under the variant name.",
+  "note": "The first pass from the more-screens round."
+ },
+ {
+  "kind": "dial",
+  "id": "dial-2-wheel",
+  "title": "2 · Wheel",
+  "desc": "The chosen category stays centered, named, with its neighbors' icons either side, fading with distance and wrapping; twisting slides the strip under a fixed center.",
+  "note": ""
+ },
+ {
+  "kind": "dial",
+  "id": "dial-3-strip",
+  "title": "3 · Variant strip",
+  "desc": "The bar shows what a press does: the chosen category's icon, then all its variants as words, the chosen one white. Where the category sits on the ring is a column of five dots at the right edge.",
+  "note": "Twisting swaps the whole strip; Announce and Cycle show the icon alone. Clock's six faces only fit with short names (SKY 70S ANALOG MAP GRAD WORDS)."
+ },
+ {
+  "kind": "dial",
+  "id": "dial-4-chip",
+  "title": "4 · Chip, no bar",
+  "desc": "Most of the view stays visible: a black chip at the bottom center names the category and variant, with one dot per category under it in its color.",
+  "note": "Same idea as the radar's time chip."
+ },
+ {
+  "kind": "dial",
+  "id": "dial-5-tworows",
+  "title": "5 · Two rows",
+  "desc": "Every category's icon spread across the width, the chosen one underlined, and under them the chosen category's variants as words.",
+  "note": "The bar takes rows 17–31, half the panel. Clock's six faces need short names to fit, as in 3."
  }
 ]

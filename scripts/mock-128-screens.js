@@ -450,7 +450,7 @@ const PEEK_ICONS = {
 };
 const PEEK_COL = { transit: LINE.RD, weather: '#ffd040', clock: '#f0e2c8', announce: '#40e090', cycle: '#3fd0e8' };
 function chooser() {
-  const f = new Frame(W, H), view = sevenDay({ top: true });
+  const f = new Frame(W, H), view = sevenDay();
   for (let y = 0; y < 21; y++) for (let x = 0; x < W; x++) f.set(x, y, view.get(x, y));
   const ring = ['transit', 'weather', 'clock', 'announce', 'cycle'], k = 1, vars = ['NOW', '7-DAY', 'HOURLY', 'RADAR'], vi = 1;
   const label = 'WEATHER', vname = vars[vi];
@@ -468,6 +468,78 @@ function chooser() {
     vars.forEach((_, j) => f.fill(vx + j * 4, 31, 3, 1, j === vi ? C.label : C.indicator));
     x += chosenW + 6;
   });
+  return f;
+}
+
+// ======================= dial (knob) chooser: five bars =======================
+// Same interaction as 64 (twist = category, press = next variant, rest 1 s
+// commits); the chosen view fills the panel and a bar names what's chosen.
+// Shown with Weather chosen, on its 7-DAY variant.
+const RING = ['transit', 'weather', 'clock', 'announce', 'cycle'];
+const RING_NAME = { transit: 'TRANSIT', weather: 'WEATHER', clock: 'CLOCK', announce: 'ANNOUNCE', cycle: 'CYCLE' };
+const VARS = { transit: ['ROWS', 'TICKER'], weather: ['NOW', '7-DAY', 'HOURLY', 'RADAR'], clock: ['SKYLINE', '70S', 'ANALOG', 'MAP', 'GRADIENT', 'WORDS'], announce: [], cycle: [] };
+const DK = 1, DV = 1;
+function peekBase(top) {
+  const f = new Frame(W, H), view = sevenDay();
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) f.set(x, y, view.get(x, y));
+  f.fill(0, top, W, H - top, '#000000');
+  return f;
+}
+// 1. Icons in place, the chosen one named with its variant (the first pass).
+function dialNamed() { return chooser(); }
+// 2. Wheel: the chosen category stays centered, named; neighbors' icons either side, fading, wrapping.
+function dialWheel() {
+  const f = peekBase(21), cat = RING[DK], col = PEEK_COL[cat], name = RING_NAME[cat], vname = VARS[cat][DV];
+  const gw = 7 + 3 + measure('small', name) + 4 + measure('small', vname), gx = Math.floor((W - gw) / 2);
+  glyph(f, PEEK_ICONS[cat], gx, 23, col);
+  f.fill(gx, 31, 7, 1, col);
+  const vx = f.text('small', name, gx + 10, 29, col) + 3;
+  f.text('small', vname, vx, 29, C.label);
+  VARS[cat].forEach((_, j) => f.fill(vx + j * 4, 31, 3, 1, j === DV ? C.label : C.indicator));
+  const n = RING.length;
+  for (const d of [-2, -1, 1, 2]) {
+    const c2 = RING[((DK + d) % n + n) % n], k = Math.abs(d) === 1 ? 0.45 : 0.2;
+    const x = d < 0 ? gx - 6 - 7 + (d + 1) * 13 : gx + gw + 6 + (d - 1) * 13;
+    glyph(f, PEEK_ICONS[c2], x, 23, scale(PEEK_COL[c2], k));
+  }
+  return f;
+}
+// 3. Variant strip: the chosen category's icon, then its variants as words (chosen white, rest dim);
+// where the category sits on the ring as a column of dots at the right edge.
+function dialStrip() {
+  const f = peekBase(21), cat = RING[DK], col = PEEK_COL[cat];
+  glyph(f, PEEK_ICONS[cat], 2, 23, col);
+  f.fill(2, 31, 7, 1, col);
+  let x = 14;
+  VARS[cat].forEach((v, j) => { x = f.text('small', v, x, 29, j === DV ? C.white : '#4a4a4a') + 5; });
+  RING.forEach((c2, i) => f.fill(126, 22 + i * 2, 1, 1, i === DK ? PEEK_COL[c2] : scale(PEEK_COL[c2], 0.3)));
+  return f;
+}
+// 4. Chip: no bar. A black chip at the bottom center with the name and variant, and
+// one dot per category under it in its color (the chosen one full, the rest dim).
+function dialChip() {
+  const f = new Frame(W, H), view = sevenDay();
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) f.set(x, y, view.get(x, y));
+  const cat = RING[DK], col = PEEK_COL[cat], name = RING_NAME[cat], vname = VARS[cat][DV];
+  const tw = measure('small', name) + 4 + measure('small', vname), cx = Math.floor((W - tw) / 2);
+  f.fill(cx - 3, 22, tw + 6, 10, '#000000');
+  const vx = f.text('small', name, cx, 28, col) + 3;
+  f.text('small', vname, vx, 28, C.label);
+  const dx = Math.floor(W / 2 - (RING.length * 3 - 1) / 2);
+  RING.forEach((c2, i) => f.fill(dx + i * 3, 30, 2, 1, i === DK ? PEEK_COL[c2] : scale(PEEK_COL[c2], 0.3)));
+  return f;
+}
+// 5. Two rows: every category's icon spread across the width (the chosen one underlined),
+// and under them the chosen category's variants as words. The bar takes rows 17-31.
+function dialTwoRows() {
+  const f = peekBase(17);
+  RING.forEach((c2, i) => {
+    const x = 6 + i * 26;
+    glyph(f, PEEK_ICONS[c2], x, 18, i === DK ? PEEK_COL[c2] : scale(PEEK_COL[c2], 0.3));
+    if (i === DK) f.fill(x, 26, 7, 1, PEEK_COL[c2]);
+  });
+  let x = 6;
+  VARS[RING[DK]].forEach((v, j) => { x = f.text('small', v, x, 32, j === DV ? C.white : '#4a4a4a') + 6; });
   return f;
 }
 
@@ -496,7 +568,11 @@ async function main() {
     ['more', 'typewriter', 'Typewriter', 'About 21 characters a line instead of 10, so most notes fit in two lines. Shown mid-typing.', '', typewriter()],
     ['more', 'big-word', 'Big word', 'At 3x instead of 2x: 21 px letters, up to about 7 characters; longer words drop to 2x (about 10).', '', bigWord()],
     ['more', 'credits', 'Credits roll', 'Wider lines mean fewer of them; the roll and its fade at the edges stay the same.', 'Mid-roll.', credits()],
-    ['more', 'chooser', 'Knob chooser', 'The peek chooser with room to name things: the chosen category and its variant are spelled out beside its icon, with one pip per variant under the name.', 'The view on top is the 7-day with the top bar.', chooser()],
+    ['dial', 'dial-1-named', '1 · Icons in place, chosen one named', 'The 64 bar with room to spare: every category\'s icon stays put, the chosen one adds its name and variant, with one pip per variant under the variant name.', 'The first pass from the more-screens round.', dialNamed()],
+    ['dial', 'dial-2-wheel', '2 · Wheel', 'The chosen category stays centered, named, with its neighbors\' icons either side, fading with distance and wrapping; twisting slides the strip under a fixed center.', '', dialWheel()],
+    ['dial', 'dial-3-strip', '3 · Variant strip', 'The bar shows what a press does: the chosen category\'s icon, then all its variants as words, the chosen one white. Where the category sits on the ring is a column of five dots at the right edge.', 'Twisting swaps the whole strip; Announce and Cycle show the icon alone. Clock\'s six faces only fit with short names (SKY 70S ANALOG MAP GRAD WORDS).', dialStrip()],
+    ['dial', 'dial-4-chip', '4 · Chip, no bar', 'Most of the view stays visible: a black chip at the bottom center names the category and variant, with one dot per category under it in its color.', 'Same idea as the radar\'s time chip.', dialChip()],
+    ['dial', 'dial-5-tworows', '5 · Two rows', 'Every category\'s icon spread across the width, the chosen one underlined, and under them the chosen category\'s variants as words.', 'The bar takes rows 17–31, half the panel. Clock\'s six faces need short names to fit, as in 3.', dialTwoRows()],
   ];
 
   const q5 = (v) => v & 0xf8;
