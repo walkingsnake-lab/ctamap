@@ -71,6 +71,30 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
 | Splice plates | `bar128-splice-plates.stl` (2) | PETG | flat |
 | Collar, knob, Boot key, sensor sled, wall cleats | the P2.5 / shared files: `stl/v5-drawer-p25/bar-encoder-collar-v5.stl`, `bar-sensor-sled.stl`, `bar-cleat-case.stl` + `bar-cleat-wall.stl` (one set per tray), `stl/bar-knob.stl`, `stl/bar-boot-key.stl` | as the README | as the README |
 
+## Print plates (`stl/p25-128x32/plates/`)
+One 3MF per plate, laid out on the X2D's 256 x 256 bed in print orientation ([top views](stl/p25-128x32/plates/plates.png)).
+Each two-colour part is one object with its parts in register: in Bambu Studio set each part's filament in the object
+list, then the plate's process settings. They're plain 3MF: Bambu Studio may say the file isn't from Bambu Lab and load the
+geometry only, which is all they carry. If it moves the parts, Arrange fits each plate again. Made by `src/plates128.py` from the committed STLs, so after rebuilding the parts run it again.
+
+| Plate | Nozzle | Filament | Settings |
+|---|---|---|---|
+| `plate-0a-test-seam-lap` | 0.4 | PLA Wood | as the shell (below); 5 mm brim (each piece stands 34 mm on a 5 mm edge) |
+| `plate-0b-test-diffuser-joint` | 0.2 | white face: white; black grid: black | as the diffuser (below) |
+| `plate-0c-test-splice` | 0.4 | black PETG | as the tray |
+| `plate-1-shell` | 0.4 | PLA Wood | shell settings, 5 mm brim, seam on a back corner away from the joint |
+| `plate-2-trays` | 0.4 | black PETG; tray B's window part translucent PETG | tray settings (splice plates, Boot key and sensor sled ride along) |
+| `plate-3-diffusers` | 0.2 | white face: white; black grid: black | diffuser settings, 0.14 first layer (the face) |
+
+Not on a plate (print from their own STLs, as the README): knob, encoder collar, wall cleats (optional, one set per tray).
+
+**Order:**
+1. Plates 0a, 0b, 0c and the bench checks under "Before printing".
+2. If a test changes a number, rebuild: `JOINT_RIB=<w> SPLICE_HOLE=<d> python3 bar128.py ../stl/p25-128x32`, then
+   `python3 plates128.py` (both in `src/`). A changed `LAP_CL` goes in `bar128.py` itself.
+3. Plates 1, 2 and 3, in any order. Plate 2's trays don't depend on any test, but its splice plates take
+   `SPLICE_HOLE`: print it after 0c, or drop the splice plates from it and print them later.
+
 ## Print settings
 As the README ("Print settings") for the shell, tray and diffuser. Differences:
 - **Shell halves:** both on one plate (177 x 203), so the walnut matches. 5 mm brim is fine (no diagonal layout). Seam: on
@@ -122,6 +146,10 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 the splice screw heads clear the open posts with the tray 0.7 off any way; the knob, sensor, USB-C and the four screws from
 below line up between the shell and the trays (0.00 mm); every part is watertight and fits the bed (largest 177.3 x 96.3).
 The P2.5 and P3 builds are unchanged (same volumes; `check_v5.py` all OK for the P2.5).
+
+**Nov 5, on main after the P3/P4 drawer changes:** a rebuild still reproduces every part byte for byte, `check_v5.py`
+(P2.5) passes including the new STEMMA QT plug check (10 mm clear: the P3's raised S3 isn't needed here), and the
+plates pass lib3mf's strict validation with no warnings.
 
 **Rechecked Nov 4:** a clean rebuild reproduces every committed STL byte for byte and `check_bar128.py` passes again.
 The 65 mm³ of S3 envelope it reports inside tray B is the same as the single P2.5 tray's (the envelope's boxy outline at
