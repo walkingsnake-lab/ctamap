@@ -38,14 +38,14 @@
   "kind": "redrawn",
   "id": "transit-columns",
   "title": "Busy station: two columns",
-  "desc": "Eight destinations in two columns of four under the header: Clark/Lake at rush. Long names leave room for one or two times.",
+  "desc": "Eight destinations in two columns of four under the header: Clark/Lake at rush. With the 64 board's short names (HARLEM, 63RD, 54/CRMK) every row keeps three times.",
   "note": "Made-up times."
  },
  {
   "kind": "redrawn",
   "id": "transit-byline",
   "title": "Busy station: one row per line",
-  "desc": "Five lines on five rows; a line with two destinations puts the second at the halfway mark (Blue: O'Hare and Forest Park).",
+  "desc": "Five lines on five rows; a line with two destinations puts the second at the halfway mark (Blue: O'HARE and FOREST). Short names, as on the 64 board.",
   "note": "Made-up times. Seven destinations, no paging."
  },
  {

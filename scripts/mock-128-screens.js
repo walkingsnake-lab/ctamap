@@ -162,16 +162,17 @@ function transitColumns() {
   const f = new Frame(W, H);
   f.text('small', 'CLARK/LAKE', 0, 6, C.head);
   rtext(f, 'small', '5:42', 127, 6, C.clock);
-  const rows = [['BL', "O'HARE", [2, 9, 15]], ['BL', 'FOREST PARK', [4, 11]], ['BR', 'KIMBALL', ['DUE', 7]], ['PR', 'LINDEN', [5, 13]],
-    ['GR', 'HARLEM/LAKE', [3, 12]], ['GR', 'ASHLAND/63RD', [8]], ['OR', 'MIDWAY', [6, 14]], ['PK', '54TH/CERMAK', [10, 19]]];
+  // The 64 board's short names (destinations.js), so each row keeps three times.
+  const rows = [['BL', "O'HARE", [2, 9, 15]], ['BL', 'FOREST', [4, 11, 18]], ['BR', 'KIMBALL', ['DUE', 7, 16]], ['PR', 'LINDEN', [5, 13, 24]],
+    ['GR', 'HARLEM', [3, 12, 20]], ['GR', '63RD', [8, 17, 26]], ['OR', 'MIDWAY', [6, 14, 22]], ['PK', '54/CRMK', [10, 19, 31]]];
   rows.forEach((r, i) => destRow(f, i < 4 ? 0 : 66, i < 4 ? 61 : 127, 8 + (i % 4) * 6, r));
   return f;
 }
 // One row per line; a line's second destination starts at column 66. Clark/Lake midday (made up).
 function transitByLine() {
   const f = new Frame(W, H);
-  const lines = [['BL', [["O'HARE", [3, 10]], ['FOREST PARK', [6, 21]]]], ['BR', [['KIMBALL', [5, 13, 21, 29]]]],
-    ['GR', [['HARLEM/LAKE', ['DUE', 12]], ['ASHLAND/63RD', [8]]]], ['OR', [['MIDWAY', [4, 11, 19, 26]]]], ['PK', [['54TH/CERMAK', [10, 22, 34]]]]];
+  const lines = [['BL', [["O'HARE", [3, 10, 18]], ['FOREST', [6, 21, 33]]]], ['BR', [['KIMBALL', [5, 13, 21, 29]]]],
+    ['GR', [['HARLEM', ['DUE', 12, 21]], ['63RD', [8, 19, 30]]]], ['OR', [['MIDWAY', [4, 11, 19, 26]]]], ['PK', [['54/CRMK', [10, 22, 34]]]]];
   lines.forEach(([ln, dests], i) => {
     const top = 1 + i * 6;
     f.fill(0, top, 3, 5, LINE[ln]);
@@ -315,8 +316,8 @@ async function main() {
     ['redrawn', 'ticker', 'Ticker', 'After the CTA platform signs: the row number in the grey column, the full destination, the time at the far right, then the live-train signal, or a clock for a scheduled train (row 2).', 'Real Morse times; the Howard train is marked scheduled here to show the clock.', ticker()],
     ['redrawn', 'chrono', 'Chronological, two columns', 'Eight trains instead of four, with full names (FOREST PK, 54/CERMAK).', 'Real Clark/Lake times.', chrono()],
     ['redrawn', 'transit-five', 'Busy station: five rows', 'Clark/Lake\'s five destinations as destination rows with full names and up to four times; the header drops to make room, as it does on the 64 board.', 'Real Clark/Lake times.', transitFive()],
-    ['redrawn', 'transit-columns', 'Busy station: two columns', 'Eight destinations in two columns of four under the header: Clark/Lake at rush. Long names leave room for one or two times.', 'Made-up times.', transitColumns()],
-    ['redrawn', 'transit-byline', 'Busy station: one row per line', 'Five lines on five rows; a line with two destinations puts the second at the halfway mark (Blue: O\'Hare and Forest Park).', 'Made-up times. Seven destinations, no paging.', transitByLine()],
+    ['redrawn', 'transit-columns', 'Busy station: two columns', 'Eight destinations in two columns of four under the header: Clark/Lake at rush. With the 64 board\'s short names (HARLEM, 63RD, 54/CRMK) every row keeps three times.', 'Made-up times.', transitColumns()],
+    ['redrawn', 'transit-byline', 'Busy station: one row per line', 'Five lines on five rows; a line with two destinations puts the second at the halfway mark (Blue: O\'HARE and FOREST). Short names, as on the 64 board.', 'Made-up times. Seven destinations, no paging.', transitByLine()],
     ['redrawn', 'seven-day', '7-day forecast', 'Seven columns with highs and lows; the 64 screen shows five days and highs only.', 'NWS gives seven days already.', sevenDay()],
     ['redrawn', 'seven-day-top', '7-day, top bar on', 'The current-conditions bar as an option: with it on, the lows drop out.', '', sevenDay({ top: true })],
     ['redrawn', 'hourly', 'Hourly, 24 hours', 'Eight 3-hour steps under the top bar.', 'The server builds 4 slots today (HOUR_STEPS); the NWS hourly feed covers more.', hourly()],
