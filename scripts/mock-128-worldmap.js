@@ -110,9 +110,9 @@ const UP = String.fromCodePoint(G.UP), DOWN = String.fromCodePoint(G.DOWN);
 const SUN_ICONS = {
   half: { arrow: true, title: 'Half sun (current)',
     rise: ['..###..', '.#####.', '#######', '.......', '-------'], set: ['..###..', '.#####.', '#######', '.......', '-------'] },
-  // Chosen Nov 4: a 3 x 3 sun on the horizon with five rays (top, two upper diagonals, two at the sides).
+  // Chosen Nov 4: two rows of a 3-wide sun on the horizon, five rays (top, two upper diagonals, two at the sides).
   rays: { arrow: true, title: 'Rays',
-    rise: ['...#...', '#.....#', '..###..', '#.###.#', '..###..', '-------'], set: ['...#...', '#.....#', '..###..', '#.###.#', '..###..', '-------'] },
+    rise: ['...#...', '#.....#', '..###..', '#.###.#', '-------'], set: ['...#...', '#.....#', '..###..', '#.###.#', '-------'] },
   dome: { arrow: false, title: 'Arrow through the dome',
     rise: ['...#...', '..###..', '.#.#.#.', '#..#..#', '#..#..#', '-------'], set: ['...#...', '...#...', '.#.#.#.', '#.###.#', '#..#..#', '-------'] },
   sink: { arrow: false, title: 'Rising and sinking',
