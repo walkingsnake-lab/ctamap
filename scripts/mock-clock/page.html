@@ -43,6 +43,7 @@ section.group { padding-block: 26px 4px; }
 .group-head h2 b { color: var(--amber); font-weight: 600; margin-right: 6px; }
 .group-head p { margin: 0; color: var(--muted); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 22px 20px; }
+.grid.wide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr)); }
 figure { margin: 0; min-width: 0; }
 canvas { display: block; width: 100%; max-width: 100%; aspect-ratio: 2 / 1; background: #080808; border-radius: 4px; }
 figcaption { padding-top: 10px; }
@@ -91,23 +92,27 @@ const ENV = /*__ENV__*/null;
 (function () {
   const { FACES, render } = self.ClockFaces;
   const ALL = {
+    R4W: ['From other clocks, 128 x 32', 'Round 4 widened for two chained panels, per the 128 spec: use the width, same fonts and rows as 64.'],
     R4: ['From other clocks', 'Round 4: styles from popular faces on Tidbyt, AWTRIX (Ulanzi TC001) and LaMetric.'],
     KEEP: ['Basic', 'Kept from round 1.'],
     R2: ['Creative', 'Round 2. Most of these tie back to the CTA or Chicago.'],
   };
   const ONLY = /*__GROUPS__*/null;
   const GROUPS = Object.fromEntries(Object.entries(ALL).filter(([k]) => !ONLY || ONLY.includes(k)));
-  const S = 10, W = 64, H = 32;
+  const S = 10, H = 32;
 
-  // Unlit LED grid, drawn once and copied under every frame.
-  const base = document.createElement('canvas');
-  base.width = W * S; base.height = H * S;
-  (function () {
+  // Unlit LED grid per panel width, drawn once and copied under every frame.
+  const BASES = {};
+  function baseFor(W) {
+    if (BASES[W]) return BASES[W];
+    const base = document.createElement('canvas');
+    base.width = W * S; base.height = H * S;
     const g = base.getContext('2d');
     g.fillStyle = '#080808'; g.fillRect(0, 0, base.width, base.height);
     g.fillStyle = '#0f0f0f';
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { g.beginPath(); g.arc(x * S + S / 2, y * S + S / 2, S * 0.42, 0, Math.PI * 2); g.fill(); }
-  })();
+    return (BASES[W] = base);
+  }
 
   const root = document.getElementById('groups');
   const panels = [];
@@ -116,13 +121,16 @@ const ENV = /*__ENV__*/null;
     sec.className = 'group';
     sec.innerHTML = `<div class="group-head"><h2>${GROUPS[key][0]}</h2><p>${GROUPS[key][1]}</p></div><div class="grid"></div>`;
     const grid = sec.querySelector('.grid');
-    for (const face of FACES.filter((f) => f.group === key)) {
+    const faces = FACES.filter((f) => f.group === key);
+    if (faces.some((f) => (f.w || 64) > 64)) grid.classList.add('wide');
+    for (const face of faces) {
+      const W = face.w || 64;
       const fig = document.createElement('figure');
       const m = face.title.match(/^([A-D]\d) (.*)$/);
-      fig.innerHTML = `<canvas width="${W * S}" height="${H * S}" role="img" aria-label="${face.title} mockup"></canvas><figcaption><h3>${m ? `<span>${m[1]}</span>${m[2]}` : face.title}</h3><p></p></figcaption>`;
+      fig.innerHTML = `<canvas width="${W * S}" height="${H * S}" style="aspect-ratio: ${W} / ${H}" role="img" aria-label="${face.title} mockup"></canvas><figcaption><h3>${m ? `<span>${m[1]}</span>${m[2]}` : face.title}</h3><p></p></figcaption>`;
       fig.querySelector('p').textContent = face.note;
       grid.appendChild(fig);
-      panels.push({ face, ctx: fig.querySelector('canvas').getContext('2d'), last: null });
+      panels.push({ face, W, ctx: fig.querySelector('canvas').getContext('2d'), last: null });
     }
     root.appendChild(sec);
   }
@@ -161,8 +169,8 @@ const ENV = /*__ENV__*/null;
       for (let i = 0; i < px.length; i++) { out[i] = q5(px[i] * k); sig = Math.imul(sig ^ out[i], 16777619); }
       if (sig === p.last) continue;
       p.last = sig;
-      const g = p.ctx;
-      g.drawImage(base, 0, 0);
+      const g = p.ctx, W = p.W;
+      g.drawImage(baseFor(W), 0, 0);
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const i = (y * W + x) * 3, r = out[i], gg = out[i + 1], b = out[i + 2];
         if (!(r | gg | b)) continue;

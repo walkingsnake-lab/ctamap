@@ -28,16 +28,18 @@ function toFrame(led) {
 }
 
 fs.mkdirSync(OUT, { recursive: true });
-const SHEETS = { 'sheet.png': ['KEEP', 'R1'], 'sheet-round2.png': ['KEEP', 'R2'], 'sheet-round4.png': ['R4'] };
+const SHEETS = { 'sheet.png': ['KEEP', 'R1'], 'sheet-round2.png': ['KEEP', 'R2'], 'sheet-round4.png': ['R4'], 'sheet-round4-128.png': ['R4W'] };
 const frames = new Map(FACES.map((face) => {
   const f = toFrame(render(face, when(face), env));
   fs.writeFileSync(path.join(OUT, `${face.id}.png`), f.toPNG(10));
   return [face.id, f];
 }));
 
-const COLS = 3, PW = 64, PH = 32, GAP = 4, TH = 8;
+const PH = 32, GAP = 4, TH = 8;
 for (const [file, groups] of Object.entries(SHEETS)) {
-  const panels = FACES.filter((face) => groups.includes(face.group)).map((face) => [face.title.toUpperCase(), frames.get(face.id)]);
+  const faces = FACES.filter((face) => groups.includes(face.group));
+  const PW = faces[0].w || 64, COLS = PW > 64 ? 2 : 3;
+  const panels = faces.map((face) => [face.title.toUpperCase(), frames.get(face.id)]);
   const sheet = new Frame(COLS * PW + (COLS + 1) * GAP, Math.ceil(panels.length / COLS) * (PH + TH + GAP) + GAP);
   panels.forEach(([title, f], i) => {
     const ox = GAP + (i % COLS) * (PW + GAP), oy = GAP + Math.floor(i / COLS) * (PH + TH + GAP);

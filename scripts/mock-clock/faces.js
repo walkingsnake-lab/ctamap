@@ -719,7 +719,7 @@
     trains: { north: [4, 11, 19], south: [7, 15, 22] },
   };
 
-  function render(face, date, env, w = 64, h = 32) {
+  function render(face, date, env, w = face.w || 64, h = 32) {
     const f = new Led(env, w, h);
     face.draw(f, parts(date), MOCK.wx, MOCK.trains);
     return f;
