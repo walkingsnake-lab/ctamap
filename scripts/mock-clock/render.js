@@ -11,6 +11,7 @@ const { Frame } = require('../../server/board/raster');
 const { packFonts } = require('../../server/board/fonts');
 const icons = require('../../server/board/icons');
 const { FACES, render } = require('./faces');
+require('./faces-r4'); // pushes round 4 onto FACES
 const { redLine } = require('./env');
 
 const OUT = path.join(__dirname, '..', '..', 'docs', 'board', 'mockups', 'clock');
@@ -27,7 +28,7 @@ function toFrame(led) {
 }
 
 fs.mkdirSync(OUT, { recursive: true });
-const SHEETS = { 'sheet.png': ['KEEP', 'R1'], 'sheet-round2.png': ['KEEP', 'R2'] };
+const SHEETS = { 'sheet.png': ['KEEP', 'R1'], 'sheet-round2.png': ['KEEP', 'R2'], 'sheet-round4.png': ['R4'] };
 const frames = new Map(FACES.map((face) => {
   const f = toFrame(render(face, when(face), env));
   fs.writeFileSync(path.join(OUT, `${face.id}.png`), f.toPNG(10));

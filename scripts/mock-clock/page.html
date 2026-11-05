@@ -56,7 +56,7 @@ footer p { max-width: 75ch; margin: 0 0 6px; }
 
 <header class="intro wrap">
   <h1>Board clock faces</h1>
-  <p class="lede">Round 2 for the v2 clock screen: seven creative faces, plus A1 from round 1 as the basic option. No M4 memory limits. Drawn with the board's own fonts, colors cut to the panel's 5 bits per channel. Weather and train numbers are made up. Try 60× to see the minute changes.</p>
+  <p class="lede">Mockups for the clock screen, drawn with the board's own fonts, colors cut to the panel's 5 bits per channel. Weather and train numbers are made up. Try 60× to see the minute changes.</p>
 </header>
 
 <div class="bar">
@@ -90,10 +90,13 @@ const ENV = /*__ENV__*/null;
 <script>
 (function () {
   const { FACES, render } = self.ClockFaces;
-  const GROUPS = {
+  const ALL = {
+    R4: ['From other clocks', 'Round 4: styles from popular faces on Tidbyt, AWTRIX (Ulanzi TC001) and LaMetric.'],
     KEEP: ['Basic', 'Kept from round 1.'],
     R2: ['Creative', 'Round 2. Most of these tie back to the CTA or Chicago.'],
   };
+  const ONLY = /*__GROUPS__*/null;
+  const GROUPS = Object.fromEntries(Object.entries(ALL).filter(([k]) => !ONLY || ONLY.includes(k)));
   const S = 10, W = 64, H = 32;
 
   // Unlit LED grid, drawn once and copied under every frame.
