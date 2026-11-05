@@ -6,7 +6,7 @@ tray B: tray + window). Built from the committed STLs, so run bar128.py first wh
 
 Plain 3MF (core spec): Bambu Studio opens it as geometry (it says the file isn't from Bambu Lab); assign each part's
 filament and the plate's process settings as the build sheet's "Print plates" table says. Also writes a top view of
-every plate (plates.png) to check the layout. Single-part extras (knob, collar, cleats) print from their own STLs."""
+every plate (plates.png) to check the layout. Single-part extras (knob, collar, case cleats) print from their own STLs."""
 import os
 import sys
 import zipfile
@@ -53,6 +53,9 @@ PLATES = [
                                ('black grid', P + 'bar128-diffuser-A-black.stl', 0)], (43.0, 140.0)),
         ('diffuser B (right)', [('white face', P + 'bar128-diffuser-B-white.stl', 0),
                                 ('black grid', P + 'bar128-diffuser-B-black.stl', 0)], (43.0, 27.0)),
+    ]),
+    ('plate-4-wall-cleat', 'Wall cleat, optional (PETG, wall face down, at 45 deg: 293 mm long)', [
+        ('wall cleat', [('wall cleat', P + 'bar128-cleat-wall.stl', 45)], (12.2, 12.2)),
     ]),
 ]
 MARGIN = {'plate-1-shell': 5.0}             # brim: keep this much more from the bed edge and between objects
@@ -158,7 +161,7 @@ def top_views(views, path):
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
     from matplotlib.collections import PolyCollection
-    fig, axs = plt.subplots(2, 3, figsize=(15, 10.4), dpi=110)
+    fig, axs = plt.subplots(3, 3, figsize=(15, 15.4), dpi=110)
     cols = {'white face': '#d9d9d4', 'window (translucent)': '#8fc4ff', 'black grid': '#333333'}
     for ax, (stem, title, placed) in zip(axs.flat, views):
         ax.add_patch(plt.Rectangle((0, 0), BED, BED, fc='#f3f1ee', ec='#888', lw=1))
@@ -178,6 +181,8 @@ def top_views(views, path):
         ax.set_yticks([0, 128, 256])
         ax.tick_params(labelsize=7)
         ax.set_title(f'{stem}\n{title}', fontsize=8.5)
+    for ax in list(axs.flat)[len(views):]:
+        ax.axis('off')
     fig.suptitle('128 x 32 bar: print plates on the X2D (256 x 256), top view', fontsize=11)
     fig.tight_layout()
     fig.savefig(path)

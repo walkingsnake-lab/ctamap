@@ -40,10 +40,14 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   splice plates, a pocket round each plate screw's head: they push, they don't bolt. They're solid and closed at the
   back (Nov 5): no tube means no bridged floor to print and no hole in the back face, so only the four outer posts'
   screw holes show.
+- **Wall mounting (optional): a case cleat per tray, one long wall cleat** (Nov 5). The wall side is one piece
+  (`bar128-cleat-wall.stl`, 293 mm, 3 wall screws), so the two case cleats hang in line by construction: two wall
+  pieces would have to be set at exactly the same height. The case cleats stay one per tray (the shared
+  `bar-cleat-case.stl`, 2 x M3 each), held in line by the trays and shell, so the bar hangs on four screws at x ±30 /
+  ±130 (one centred case cleat would have had them 60 mm apart, with the knob 123 mm off centre).
 - **Kept on purpose (Nov 5 review):** two screws from below per tray (one would leave each tray, and its panel, on a
-  single screw in a slotted hole), a cleat per tray (one centred cleat would hang on screws 60 mm apart, with the knob
-  123 mm off centre), and no vents in the middle (the band's free end at the seam would print thin, and the bands
-  stiffen the trays).
+  single screw in a slotted hole), and no vents in the middle (the band's free end at the seam would print thin, and
+  the bands stiffen the trays).
 - **Panels turned 180°** as in the single build (data in on the left of each panel seen from the front).
 - **Data chain: S3 → panel A's input, A's output → B's input** (Nov 4). Seen from the front the four headers sit at
   x -120.1 (A in), -39.9 (A out), +39.9 (B in) and +120.1 (B out). B's output is directly under the S3, as in the single
@@ -81,7 +85,8 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
 | Tray, left | `bar128-tray-A.stl` | black PETG | back face down, walls up |
 | Tray, right | `bar128-tray-B.stl` + `bar128-tray-B-window.stl` (one object, two parts) | black PETG + translucent PETG | as the P2.5 tray |
 | Splice plates | `bar128-splice-plates.stl` (2) | PETG | flat |
-| Collar, knob, Boot key, sensor sled, wall cleats | the P2.5 / shared files: `stl/v5-drawer-p25/bar-encoder-collar-v5.stl`, `bar-sensor-sled.stl`, `bar-cleat-case.stl` + `bar-cleat-wall.stl` (one set per tray), `stl/bar-knob.stl`, `stl/bar-boot-key.stl` | as the README | as the README |
+| Wall cleat (optional) | `bar128-cleat-wall.stl` (one, 293 mm) | PETG | wall face down, at 45° on the plate |
+| Collar, knob, Boot key, sensor sled, case cleats | the P2.5 / shared files: `stl/v5-drawer-p25/bar-encoder-collar-v5.stl`, `bar-sensor-sled.stl`, `bar-cleat-case.stl` (two, one per tray; optional), `stl/bar-knob.stl`, `stl/bar-boot-key.stl` | as the README | as the README |
 
 ## Print plates (`stl/p25-128x32/plates/`)
 One 3MF per plate, laid out on the X2D's 256 x 256 bed in print orientation ([top views](stl/p25-128x32/plates/plates.png)).
@@ -97,8 +102,9 @@ geometry only, which is all they carry. If it moves the parts, Arrange fits each
 | `plate-1-shell` | 0.4 | PLA Wood | shell settings, 5 mm brim, seam on a back corner away from the joint |
 | `plate-2-trays` | 0.4 | black PETG; tray B's window part translucent PETG | tray settings (splice plates, Boot key and sensor sled ride along) |
 | `plate-3-diffusers` | 0.2 | white face: white; black grid: black | diffuser settings, 0.14 first layer (the face) |
+| `plate-4-wall-cleat` (optional) | 0.4 | PETG | as the README's cleats; laid at 45° (293 mm) |
 
-Not on a plate (print from their own STLs, as the README): knob, encoder collar, wall cleats (optional, one set per tray).
+Not on a plate (print from their own STLs, as the README): knob, encoder collar, case cleats (optional, two).
 
 **Order:**
 1. Plates 0a, 0b, 0c and the bench checks under "Before printing".
@@ -115,7 +121,9 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 
 ## Hardware
 - **Screws:** 4 x M3 x 8 flanged button head (the four outer posts, as the P2.5), 4 x M3 x 6 button head (splice plates),
-  4 x M3 x 10 (from below, two per tray), 4 x M2.5 x 8 (S3). Light sensor and cleats as the README (cleats: per tray).
+  4 x M3 x 10 (from below, two per tray), 4 x M2.5 x 8 (S3). Light sensor as the README. Cleats
+  (optional): 4 x M3 x 10 (two per case cleat, as the README) and 3 wall screws (#8 / 4 mm countersunk) for the one wall
+  cleat.
 - **STEMMA QT:** S3 → light sensor: **400 mm** (Adafruit 5385). From the S3's socket on tray B to the sensor on tray A it
   runs ~31 cm seated, ~37 cm with tray B out of the case still plugged in. Sensor → encoder: 15 cm, as the single build
   (~3 cm seated). Without the sensor, S3 → encoder needs ~41 cm: use a 500 mm cable.

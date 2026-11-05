@@ -26,7 +26,8 @@ Trays (black PETG): one per panel, each the P2.5 v5 tray cut at the panel joint 
 Tray B (right) is the P2.5 tray's S3 side as built (S3, status window, Boot, USB-C slot), without the controls. Tray A
 (left) is the same tray without the S3, carrying the controls instead: the encoder slot and rails under the knob, the
 light-sensor sled hooks (drawer.tray(s3=False), drawer.ENC_X). A long STEMMA QT cable runs from the S3 to them. The two inner posts of each stand SPLICE_T further back,
-on the splice plates, solid and closed at the back, with no screw. Both take their own pair of screws from below and their own wall cleat.
+on the splice plates, solid and closed at the back, with no screw. Both take their own pair of screws from below and their own case cleat; one long wall cleat (bar128-cleat-wall.stl)
+takes both.
 Run: python3 bar128.py <outdir>            -> shell halves, diffuser halves, trays, test pieces (sets PANEL itself; the
      trays come from a second run of this script with --trays and PANEL=p25). JOINT_RIB=0.55 / SPLICE_HOLE=3.45 set the
      two sizes the test pieces choose. Case-frame copies for check_bar128.py go to $BAR128_FRAMES (default: temp dir).
@@ -296,6 +297,7 @@ def trays():
 
 def build_trays(out, frame_dir):
     """print files (back face down; B's window shares B's frame) and case-frame copies in frame_dir for the checks"""
+    import trimesh
     rep = {}
     ta, tb, win = trays()
     for n, m in (('tray-A', ta), ('tray-B', tb), ('tray-B-window', win)):
@@ -309,6 +311,16 @@ def build_trays(out, frame_dir):
                  ('env-sensor', (DR.sensor_envelope() + DR.sensor_plugs()).translate([-PANEL_CX, 0, 0])),
                  ('env-sled', DR.sled().translate([-PANEL_CX, 0, 0])), ('env-encoder', enc.translate([KNOB_X, 0, 0]))):
         to_tm(m).export(f'{frame_dir}/{n}.stl')
+    # one wall cleat for both trays' case cleats (one piece on the wall: the two hang in line by construction). It spans
+    # both case cleats (x -/+(PANEL_CX + CLEAT_HW)), screws 15 mm in from each end and one in the middle; printed wall
+    # face down, laid at 45 deg on the plate (293 mm)
+    import cleat as CL
+    whw = PANEL_CX + DR.CLEAT_HW - 0.5
+    wc = CL.wall_cleat(hw=whw, xs=[-(whw - 15.0), 0.0, whw - 15.0])
+    to_tm(wc).export(f'{frame_dir}/wall-cleat.stl')
+    t = to_tm(wc)
+    t.apply_transform(trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0]))   # wall face (y = YW) on the bed
+    t.apply_translation(-t.bounds[0]); n = 'bar128-cleat-wall.stl'; t.export(f'{out}/{n}'); rep[n] = report(n, t)
     fb = backdown(tb)
     for n, m, f in (('bar128-tray-A.stl', ta, None), ('bar128-tray-B.stl', tb, None), ('bar128-tray-B-window.stl', win, fb)):
         t = backdown(m)
