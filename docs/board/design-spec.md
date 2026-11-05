@@ -2,6 +2,8 @@
 
 Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the design sessions of Oct 2–4, 2026. All mocks used made-up train times unless noted.
 
+A wider board (two panels, 128x32) is planned but not built: [`wide-spec.md`](wide-spec.md).
+
 ---
 
 ## 1. Hardware

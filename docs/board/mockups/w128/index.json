@@ -80,8 +80,22 @@
   "kind": "redrawn",
   "id": "radar",
   "title": "Radar, 128 wide",
-  "desc": "A real MRMS frame (the Aug 10, 2020 derecho) cropped 128 LEDs wide: about 190 mi of the region instead of 95. The station sits right of center; the time stack moves over the lake.",
-  "note": "Each station needs a new water mask at 128 (built here from the lake outline)."
+  "desc": "A real MRMS frame (the Aug 10, 2020 derecho) cropped 128 LEDs wide, the time over the lake. Works for Morse, but no fixed spot for the time box is open water for all stations: it fails at 56 of 144 (the South Side and the Loop, where the box reaches the Indiana shore).",
+  "note": "Checked against every station in stations.json with the lake outline."
+ },
+ {
+  "kind": "redrawn",
+  "id": "radar-split",
+  "title": "Radar, split: Morse",
+  "desc": "One layout for every station: the map on 96 columns with the station at x 52, so it shows about 78 mi west (where storms come from) and the lake to the Michigan shore; the time and conditions in a 31-column panel.",
+  "note": "Real MRMS frame, Aug 10, 2020, 4 PM (the derecho)."
+ },
+ {
+  "kind": "redrawn",
+  "id": "radar-split-south",
+  "title": "Radar, split: 95th/Dan Ryan",
+  "desc": "The same layout at a South Side station, where no fixed spot over the lake works for the time.",
+  "note": "Same frame."
  },
  {
   "kind": "redrawn",
@@ -144,7 +158,7 @@
   "id": "gradient",
   "title": "Gradient clock",
   "desc": "The same block digits widened to 21 x 30 (7 x 6 blocks) so the time fills the width as it does at 64; the gradient spans all 128 columns.",
-  "note": "12:58 is 110 px wide."
+  "note": "12:58 is 108 px wide."
  },
  {
   "kind": "more",
