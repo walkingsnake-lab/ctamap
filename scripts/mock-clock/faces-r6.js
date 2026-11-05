@@ -115,7 +115,8 @@
     for (let j = 0; j < d; j++) {
       let r = '';
       for (let i = 0; i < d; i++) {
-        const corner = (i === 0 || i === d - 1) && (j === 0 || j === d - 1);
+        // A 3 px dot stays square (crisp): with its corners off it's a plus sign.
+        const corner = (soft || d > 3) && (i === 0 || i === d - 1) && (j === 0 || j === d - 1);
         r += corner ? (soft ? '+' : '.') : '#';
       }
       dot.push(r);
