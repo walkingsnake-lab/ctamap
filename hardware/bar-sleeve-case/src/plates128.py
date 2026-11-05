@@ -115,10 +115,9 @@ def write_3mf(path, title, objects):
     rels = ('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             '<Relationship Target="/3D/3dmodel.model" Id="rel0" '
             'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>')
-    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:
-        z.writestr('[Content_Types].xml', ctypes)
-        z.writestr('_rels/.rels', rels)
-        z.writestr('3D/3dmodel.model', model)
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:      # fixed timestamps: a plate only changes with its parts
+        for name, data in (('[Content_Types].xml', ctypes), ('_rels/.rels', rels), ('3D/3dmodel.model', model)):
+            z.writestr(zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0)), data, compress_type=zipfile.ZIP_DEFLATED)
 
 
 def check(stem, objects):
