@@ -364,6 +364,10 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   store.update('home', { gradInvert: true });
   assert.equal(store.get('home').gradInvert, true);
   assert.throws(() => store.update('home', { gradInvert: 'yes' }), ValidationError);
+  assert.equal(store.get('home').clockRoll, true);
+  store.update('home', { clockRoll: false });
+  assert.equal(store.get('home').clockRoll, false);
+  assert.throws(() => store.update('home', { clockRoll: 'off' }), ValidationError);
   store.update('home', { screen: 'clock' });
   assert.equal(store.get('home').screen, 'clock');
   assert.throws(() => store.update('home', { clockFace: 'nixie' }), ValidationError);

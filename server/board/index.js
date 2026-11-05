@@ -579,6 +579,8 @@ function createBoard({
       tickerHeader: board.station.name,
       // Header clock (transit and ticker) and line-colored labels.
       hclock: board.headerClock !== false,
+      // Clock digits roll at each minute (off: they just change).
+      croll: board.clockRoll !== false,
       lnc: board.lineNames === 'line',
       // Third transit time one step dimmer than the second.
       ts: board.timeSteps === true,

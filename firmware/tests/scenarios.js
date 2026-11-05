@@ -197,6 +197,9 @@ async function build() {
     add('rolls big overnight clock', nt, nums({ 'big.clock': '11:15' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
     add('rolls big overnight clock width change', nt, nums({ 'big.clock': '9:59' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
     add('rolls no-games clock', { ...nt, mlb: { games: [] } }, nums({ 'big.clock': '11:15' }).map((n) => ({ screen: 'baseball', nums: n })), undefined, undefined, s3);
+    // Clock rolls off (croll false): clocks draw still, the temperature still rolls.
+    add('rolls off: header clock still, temperature rolls', { ...hdr, croll: false }, nums({ 'hdr.clock': '11:15', 'wx.temp': '62°' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
+    add('rolls off: radar current time still', { ...rp(), croll: false }, radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr, undefined, s3);
     add('rolls weather strip temperature', hdr, nums({ 'wx.temp': '62°' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
     add('rolls weather strip temperature width change', hdr, nums({ 'wx.temp': '9°' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
     const wxs = { icon: 'pcloudy_day', temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51, feels: 61, wind: 'NW 12', pop: 20, rl: 1 };
@@ -654,6 +657,7 @@ async function build() {
     add('gradient inverted roll', face('2026-11-01T19:00:00Z', 'gradient', { ginv: true }), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
     add('gradient roll width change', face('2026-11-01T19:00:00Z', 'gradient'), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: Date.parse('2026-11-01T19:00:00Z'), nums: { 'grad.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
     add('gradient roll per digit', face('2026-11-02T01:15:00Z', 'gradient'), [0.25, 0.5, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
+    add('gradient roll off', { ...face('2026-11-02T01:15:00Z', 'gradient'), croll: false }, [0.5].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
     add('daynight roll', face('2026-11-01T19:00:00Z', 'daynight'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'dn.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
   }
   // Announce screen (S3 only): the styles, the typewriter's intro (typing,

@@ -479,8 +479,9 @@
   <div class="grp">
     <div class="c" style="min-height:48px"><span>Temperature</span>
       <div class="seg fit" id="tempUnit" role="group" aria-label="Temperature unit"><button data-v="F">°F</button><button data-v="C">°C</button></div></div>
+    <div class="c"><label for="clockRoll" class="grow">Animate clock digits</label><input type="checkbox" class="sw" id="clockRoll"></div>
   </div>
-  <p class="ft">Every temperature on the board. Wind stays in mph.</p>
+  <p class="ft">Temperature: every temperature on the board; wind stays in mph. Clock digits: every clock rolls to the new minute; off, it just changes.</p>
   <p class="sh">Software</p>
   <div class="grp">
     <a class="c" href="#updates"><span>Updates</span><span class="v" id="updatesV"></span><span data-icon="chev"></span></a>
@@ -1206,11 +1207,13 @@
     $('wxViewFt').textContent = board.wxView === 'radar' ? 'The radar all the time: an empty map when it\'s dry.' : 'The radar loop takes over while rain is in the radar box.';
     for (const v of qa('[data-rain-v]')) v.textContent = rainValue();
     pressed('tempUnit', board.tempUnit === 'C' ? 'C' : 'F');
+    $('clockRoll').checked = board.clockRoll !== false;
   }
   $('wxView').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) save({ wxView: b.dataset.v }); });
   $('radarCorner').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save(v === 'temp' ? { radarTime: false } : { radarTime: true, radarClock: ['now', 'age', 'none'].includes(board.radarClock) && board.radarTime !== false ? board.radarClock : 'frame' }); });
   $('radarSpeed').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ radarFrame: Number(v) }); });
   $('tempUnit').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v) save({ tempUnit: v }); });
+  $('clockRoll').addEventListener('change', (e) => save({ clockRoll: e.target.checked }));
 
   // ---- Rain nearby ----
   function renderRain() {

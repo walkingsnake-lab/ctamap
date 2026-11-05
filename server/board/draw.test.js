@@ -1418,6 +1418,25 @@ test('number rolls: the big clocks and the weather screen numbers roll mid-chang
   assert.deepEqual(done.px, draw.render(wp({ ...wx, feels: 62 }), { screen: 'weather', now: t }).px, 'feels settles');
 });
 
+test('clock rolls off (croll false): clocks change in place, other numbers still roll', () => {
+  const t = 1791140000 - (1791140000 % 60) + 59;
+  const p = { now: t, tzo: -18000, screen: 'transit', bright: 100, croll: false, header: 'MORSE', rows: [{ ln: 'RD', lbl: 'HOWARD', t: [t + 3600], s: [0], a: 0 }], ticker: [], wx: { icon: 'sun', temp: 63, word: 'SUNNY' } };
+  const r = draw.createNumRoller();
+  const frame = (ms, now, pl = p) => { r.begin(ms); const f = draw.render(pl, { screen: 'transit', now, roller: r }); r.end(); return f; };
+  frame(0, t);
+  const first = frame(1000, t + 1);
+  assert.deepEqual(first.px, draw.render(p, { screen: 'transit', now: t + 1 }).px, 'the new minute shows at once');
+  assert.equal(r.clock(), true, 'the roller still knows a clock is on screen');
+  // The weather strip's temperature isn't a clock: it still rolls.
+  frame(5000, t + 5, { ...p, wx: { ...p.wx, temp: 64 } });
+  const mid = frame(5000 + draw.ROLL_MS / 2, t + 5, { ...p, wx: { ...p.wx, temp: 64 } });
+  assert.notDeepEqual(mid.px, draw.render({ ...p, wx: { ...p.wx, temp: 64 } }, { screen: 'transit', now: t + 5 }).px, 'temperature mid-roll');
+  // Fixed rolls (tests, parity) follow the same rule.
+  const nums = { 'hdr.clock': { from: '11:15', p: 0.5 } };
+  assert.deepEqual(draw.render(p, { screen: 'transit', now: t, nums }).px, draw.render(p, { screen: 'transit', now: t }).px);
+  assert.notDeepEqual(draw.render({ ...p, croll: true }, { screen: 'transit', now: t, nums }).px, draw.render(p, { screen: 'transit', now: t }).px);
+});
+
 test('number rolls: texts new to the screen just appear; reset drops rolls', () => {
   const r = draw.createNumRoller();
   r.begin(0); assert.equal(r.take('a', '1'), null); r.end();

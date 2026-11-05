@@ -261,11 +261,14 @@
     // and the simulator, which notice changes as they draw) or fixed rolls
     // ({name: {from, p}}: tests and parity scenarios).
     let NR = null;
+    // With the payload's croll false, clocks (names ending in 'clock') don't
+    // roll; the roller still sees them, so it still knows a clock is on screen.
     function takeRoll(name, text) {
       if (!NR) return null;
-      if (NR.roller) return NR.roller.take(name, text);
+      const still = NR.still && name.endsWith('clock');
+      if (NR.roller) { const r = NR.roller.take(name, text); return still ? null : r; }
       const r = NR.rolls && NR.rolls[name];
-      return r && r.p < 1 && r.from !== text ? r : null;
+      return !still && r && r.p < 1 && r.from !== text ? r : null;
     }
     // [travel, top, bottom] for a font's digits: the ink rows the digits
     // span, relative to the baseline (the roll's clip), and travel = their
@@ -2613,7 +2616,7 @@
     function render(p, opts) {
       const o = opts || {};
       const screen = o.screen || p.screen;
-      NR = o.roller || o.nums ? { roller: o.roller, rolls: o.nums } : null;
+      NR = o.roller || o.nums ? { roller: o.roller, rolls: o.nums, still: p.croll === false } : null;
       ICON_T = o.iconT != null ? o.iconT : null;
       let f;
       try {
