@@ -98,8 +98,8 @@ At 64, each station gets a full-width map with the time over open water, or a sp
 
 ### Day/night map (decided)
 - The map at true shape on all 32 rows: **80 × 32 at 4.5° per pixel**, 84° N to 60° S, built like the 64 map (`build-world.js`: Natural Earth land, Blue Marble colors). No bottom time bar.
-- **Sun panel** on columns 83–127: the time in 5x7 with AM/PM; a divider; sunrise and sunset, each as a **half sun on the horizon** (7 × 5) in the time's color, then the up or down arrow, then the time; then day length (`DAY 10h 24m`). Sunrise and sunset from WeatherAPI's astronomy data, which the server already fetches for auto brightness.
-- **Sun icon** (open): the half sun with an arrow, or one of three alternatives mocked (`map-sun-*.png`): rays over a smaller half sun with the arrow; an arrow through an open dome (one icon, no separate arrow); or no arrow, the sun whole on the horizon at sunrise and half sunk with a dim reflection at sunset.
+- **Sun panel** on columns 83–127: the time in 5x7 with AM/PM; a divider; sunrise and sunset, each as a **sun icon** in the time's color, then the up or down arrow, then the time; then day length (`DAY 10h 24m`). Sunrise and sunset from WeatherAPI's astronomy data, which the server already fetches for auto brightness.
+- **Sun icon** (decided): 7 × 6, a 3 × 3 sun sitting on a `#555555` horizon line with five one-pixel rays (top, the two upper diagonals and the two sides, each 1 px clear of the sun). The horizon lines up with the bottom of the text, so the top ray sits one row above it. Rejected: the plain half sun, an arrow through an open dome, and a rising/sinking pair without arrows (`map-sun-*.png`).
 
 ### Seventies (decided)
 The three stripes run along the bottom, climb at columns 62–69, and run along the top to the right edge; the top turn on the same 2 px band as the climb and the runs. The time in the VCR digits on the left, banded as at 64; under the top run, the **weekday in full** (`TUESDAY`), then `NOV 3` and the temperature.

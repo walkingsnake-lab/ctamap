@@ -110,8 +110,9 @@ const UP = String.fromCodePoint(G.UP), DOWN = String.fromCodePoint(G.DOWN);
 const SUN_ICONS = {
   half: { arrow: true, title: 'Half sun (current)',
     rise: ['..###..', '.#####.', '#######', '.......', '-------'], set: ['..###..', '.#####.', '#######', '.......', '-------'] },
+  // Chosen Nov 4: a 3 x 3 sun on the horizon with five rays (top, two upper diagonals, two at the sides).
   rays: { arrow: true, title: 'Rays',
-    rise: ['...#...', '.#...#.', '..###..', '.#####.', '.......', '-------'], set: ['...#...', '.#...#.', '..###..', '.#####.', '.......', '-------'] },
+    rise: ['...#...', '#.....#', '..###..', '#.###.#', '..###..', '-------'], set: ['...#...', '#.....#', '..###..', '#.###.#', '..###..', '-------'] },
   dome: { arrow: false, title: 'Arrow through the dome',
     rise: ['...#...', '..###..', '.#.#.#.', '#..#..#', '#..#..#', '-------'], set: ['...#...', '...#...', '.#.#.#.', '#.###.#', '#..#..#', '-------'] },
   sink: { arrow: false, title: 'Rising and sinking',
@@ -126,7 +127,7 @@ function sunIcon(f, rows, x, base, col) {
     if (c) f.set(x + i, top + j, c);
   }));
 }
-function panelWide(f, x0, icons = 'half') {
+function panelWide(f, x0, icons = 'rays') {
   // 45 px: the time in 5x7 with AM/PM, then rise / set (icon, arrow, time) and day length.
   const set = SUN_ICONS[icons];
   const tx = f.text('5x7', '9:42', x0, 8, '#ffffff');
@@ -151,9 +152,9 @@ function panelNarrow(f, x0) {
 
 const GRIDS = [
   { id: 'map-tall', title: 'Full height + panel (recommended)', top: 84, dy: 4.5, w: 80, panel: panelWide,
-    desc: 'True shape on all 32 rows: 80 × 32 at 4.5° a pixel, 84° N to 60° S, every continent but Antarctica. The 45 columns beside it hold the time, sunrise and sunset (a half sun on the horizon, then the arrow) and day length.', note: 'Sunrise and sunset are for Chicago on Nov 1 (6:22 AM, 4:46 PM).' },
-  { id: 'map-sun-rays', title: 'Sun icons: rays', top: 84, dy: 4.5, w: 80, panel: (f, x) => panelWide(f, x, 'rays'), variant: true,
-    desc: 'Three short rays over a smaller half sun, then the arrow. Reads as a sun first, at the cost of a row of height (6 rows).', note: '' },
+    desc: 'True shape on all 32 rows: 80 × 32 at 4.5° a pixel, 84° N to 60° S, every continent but Antarctica. The 45 columns beside it hold the time, sunrise and sunset (a square sun with five rays on the horizon, then the arrow) and day length.', note: 'Sunrise and sunset are for Chicago on Nov 1 (6:22 AM, 4:46 PM).' },
+  { id: 'map-sun-half', title: 'Sun icons: half sun (before)', top: 84, dy: 4.5, w: 80, panel: (f, x) => panelWide(f, x, 'half'), variant: true,
+    desc: 'The first version: a half sun on the horizon, then the arrow.', note: '' },
   { id: 'map-sun-dome', title: 'Sun icons: arrow through the dome', top: 84, dy: 4.5, w: 80, panel: (f, x) => panelWide(f, x, 'dome'), variant: true,
     desc: 'One icon, no separate arrow: an open dome on the horizon with the arrow through it, up for sunrise and down for sunset (the usual weather-app symbol).', note: 'Saves 7 px, but at this size the dome reads less like a sun.' },
   { id: 'map-sun-sink', title: 'Sun icons: rising and sinking', top: 84, dy: 4.5, w: 80, panel: (f, x) => panelWide(f, x, 'sink'), variant: true,
