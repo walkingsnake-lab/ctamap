@@ -84,22 +84,14 @@ The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours 
 
 ---
 
-## 5. Radar (open: five proposals)
+## 5. Radar (decided)
 
-At 64, each station gets a full-width map with the time over open water, or a split layout when there's none (114 of 144 stations get full width). A fixed spot over the lake doesn't carry over to 128: checked against `stations.json` and the lake outline at 1.5 mi per LED, a 24 × 22 time box fails at 56 of 144 stations (the Loop and South Side reach the Indiana shore; Lake Michigan is only about 37 LEDs wide at Chicago's latitude). Five layouts that avoid it, mocked on the recorded frame of Nov 3, 2026, 3:44 PM (showers southwest of the city), at Morse:
+- **Map across all 128 columns, no panel.** 1.5 mi per LED as at 64, the station at x69 (about 100 mi west, where weather comes from; the lake and part of Michigan east), rows centered on it as now. Water masked black with the shoreline, per station at 128 wide (`build-locations.js`). Frames are 128 × 32 (4 KB).
+- **Time chip** in the bottom-right corner: a 27 × 7 black backing (columns 101–127, rows 25–31) with the time (label white) and AM/PM (`#8f8f8f`) in Tom Thumb, right-aligned. The chip has its own backing, so unlike the 64 layout it needs no open water: one layout for every station.
+- **Temperature chip** (optional, per board): the same kind of chip in the bottom-left corner, sized to the temperature (`58°`: 13 × 7).
+- No frame indicator in this layout; whether the loop needs one (in the time chip) is open.
 
-1. **Split: map and time panel.** Map on columns 0–95 with the station at x52 (about 78 mi west, where weather comes from; the lake to the Michigan shore east), a divider, and a 31-column panel: frame pips, time in 5x7, AM/PM, condition icon and temperature. The same at every station; masks rebuilt per station at the map's width. The stacked panel didn't work; five other right sides were mocked (`radar-s*.png`):
-   - **A, big time:** only the time in the clock digits with AM/PM under it, the loop as a thin bar along the bottom (map 87 wide; fits `12:44`).
-   - **B, loop position:** six pips down the right edge, the newest amber, the time of the frame on screen beside its pip, walking down as the loop plays (map 105 wide).
-   - **C, time and color key:** the time, then the five rain colors as swatches from `LO` to `HI` (map 96 wide).
-   - **D, no panel:** the map across all 128 columns, the time on a 27 × 7 black chip in the bottom-right corner, over Michigan.
-   - **E, conditions first:** the condition icon and the temperature in the clock digits, the condition word, the time small (map 91 wide).
-2. **One Chicago map for every board.** One fixed crop (downtown at x76), the board's station as the white dot. The time stack sits at a fixed spot over the lake (columns 84–103, rows 1–20, open water in this crop), so no per-station layout or mask. All 144 stations fall inside the view (columns 67–77, rows 9–25). The server crops one frame for all boards instead of one per station. The station is off center: the view shows about 114 mi west of downtown.
-3. **Full-width map, status bar.** Map on rows 0–24 across all 128 columns, then a bar: frame pips, time, the nearest rain (`RAIN 17 MI SW`) and temperature. Nothing sits on the map, so no water spot is needed; the map is 25 rows (37 mi) tall instead of 32.
-4. **Local and regional.** Left, the 64 radar unchanged (layout and per-station data as now); right, the region at 6 mi per LED (about 380 × 190 mi) with the local view outlined, so storms show up hours out. A side-by-side whose halves mean something: two zoom levels.
-5. **Map and nearest rain.** Map on 88 columns, then a panel that answers the question: the nearest rain's distance, direction and strength (`17 MI SW`, `LIGHT`), with time and temperature under it. Computed from the frame the server already crops; whether it's approaching needs two frames compared (later).
-
-**Leaning:** 2, for a Chicago-only product: one crop, one layout, a guaranteed spot for the time, and the most room west. The nearest-rain line from 3 and 5 could sit under its time over the lake.
+**Why:** at 64 the time sits over open water or the map splits; at 128 a fixed spot over the lake fails at 56 of 144 stations (checked against `stations.json` and the lake outline: the Loop and South Side reach the Indiana shore). Also mocked, not chosen (`radar-p*.png`, `radar-s*.png`): a split map with a time panel and five panel variants (big time, loop position, color key, conditions first), one fixed Chicago map for every board, a full-width map with a status bar, local and regional zooms side by side, and a nearest-rain panel (`17 MI SW`, computed from the frame).
 
 ---
 
@@ -150,7 +142,7 @@ The peek chooser as at 64 (the chosen view on rows 0–20, the bar on 21–31), 
 ## 10. Open questions
 
 - Busy-station layout: confirm the fitting order in §3, or pick one layout.
-- Radar: pick from the five layouts in §5.
+- Radar: a frame indicator for the loop, or none.
 - Skyline: panorama or big clock; building art.
 - Direction labels for the split at Loop and branch stations.
 - Baseball beyond the line score.

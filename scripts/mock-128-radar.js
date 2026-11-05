@@ -156,11 +156,16 @@ async function splitLegend() {
   return f;
 }
 // D. No panel: the map across all 128 columns, the time on a small black chip in the corner.
-async function splitInset() {
+// Chosen Nov 4. Optional: the temperature on a matching chip in the bottom-left corner.
+async function splitInset({ temp = false } = {}) {
   const { f } = await splitMap(128, false);
   f.fill(101, 25, 27, 7, '#000000');
   rtext(f, 'small', AMPM, 127, 32, C.radarAmpm);
   rtext(f, 'small', TIME, 127 - measure('small', AMPM) - 2, 32, C.label);
+  if (temp) {
+    f.fill(0, 25, measure('small', TEMP) + 2, 7, '#000000');
+    f.text('small', TEMP, 0, 32, C.label);
+  }
   return f;
 }
 // E. Conditions first: the temperature in the clock digits, the condition, the time small.
@@ -288,7 +293,8 @@ function checkCity() {
     ['radar-s1-bigtime', 'Split A · Big time', await splitBigTime(), 'Only the time, in the clock digits, with AM/PM under it and the loop as a thin bar along the bottom. The map keeps 87 columns.', 'Wide enough for 12:44 (39 px).', 'split'],
     ['radar-s2-timeline', 'Split B · Loop position', await splitTimeline(), 'The six frames as a column of pips down the right edge, the newest amber; the time of the frame on screen sits beside its pip and walks down as the loop plays. The map keeps 105 columns.', 'Shown mid-loop, on the 3:32 frame.', 'split'],
     ['radar-s3-legend', 'Split C · Time and color key', await splitLegend(), 'The time at the top, then the five rain colors as swatches from LO to HI, so the greens and reds explain themselves.', '', 'split'],
-    ['radar-s4-inset', 'Split D · No panel, corner chip', await splitInset(), 'The map across all 128 columns with the station at the same spot; the time on a small black chip in the bottom-right corner, over Michigan rather than the city.', 'Hides a 27 × 7 corner of the map.', 'split'],
+    ['radar-s4-inset', 'Split D · No panel, corner chip', await splitInset(), 'The map across all 128 columns with the station at the same spot; the time on a small black chip in the bottom-right corner, over Michigan rather than the city.', 'Hides a 27 × 7 corner of the map. The chip has its own black backing, so it works at every station: no open water needed.', 'split'],
+    ['radar-s4-inset-temp', 'Split D · with the temperature', await splitInset({ temp: true }), 'The same, with the temperature (optional, per board) on a matching chip in the bottom-left corner.', 'Hides another 13 × 7 corner, on the far west edge of the map.', 'split'],
     ['radar-s5-conditions', 'Split E · Conditions first', await splitConditions(), 'The temperature in the clock digits with the condition icon, the condition word, and the time small at the bottom.', '', 'split'],
   );
   const q5 = (v) => v & 0xf8;

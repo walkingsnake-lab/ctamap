@@ -67,7 +67,14 @@
   "id": "radar-s4-inset",
   "title": "Split D · No panel, corner chip",
   "desc": "The map across all 128 columns with the station at the same spot; the time on a small black chip in the bottom-right corner, over Michigan rather than the city.",
-  "note": "Hides a 27 × 7 corner of the map."
+  "note": "Hides a 27 × 7 corner of the map. The chip has its own black backing, so it works at every station: no open water needed."
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s4-inset-temp",
+  "title": "Split D · with the temperature",
+  "desc": "The same, with the temperature (optional, per board) on a matching chip in the bottom-left corner.",
+  "note": "Hides another 13 × 7 corner, on the far west edge of the map."
  },
  {
   "kind": "radar-split",
