@@ -46,8 +46,8 @@ pairs = [('shell-A', 'tray-A'), ('shell-B', 'tray-B'), ('shell-A', 'tray-B'), ('
          ('splice-top', 'panel-A'), ('splice-top', 'panel-B'),
          ('diff-A', 'diff-B'), ('diff-A', 'shell-A'), ('diff-A', 'shell-B'), ('diff-B', 'shell-B'), ('diff-A', 'panel-B'),
          ('diff-A', 'tray-A'), ('diff-B', 'tray-B'), ('diff-A', 'tray-B'),
-         ('env-s3', 'tray-B'), ('env-s3', 'shell-B'), ('env-sensor', 'tray-B'), ('env-sled', 'tray-B'),
-         ('env-encoder', 'tray-B'), ('env-encoder', 'panel-B'), ('env-encoder', 'shell-B')]
+         ('env-s3', 'tray-B'), ('env-s3', 'shell-B'), ('env-sensor', 'tray-A'), ('env-sled', 'tray-A'), ('env-sensor', 'shell-A'),
+         ('env-encoder', 'tray-A'), ('env-encoder', 'panel-A'), ('env-encoder', 'shell-A'), ('env-encoder', 'env-sensor')]
 print('overlaps (mm3; crush ribs into the shell and post feet 0.3 into the splice plates are intended):')
 res = {}
 for a, b in pairs:
@@ -72,7 +72,7 @@ def chk(name, a, b, tol=0.05):
     good = abs(a - b) <= tol
     ok &= good
     print(f'  {name:44s} shell {a:8.2f}  tray {b:8.2f}  {"ok" if good else "OFF"}')
-chk('knob x (shell hole vs tray B encoder slot)', case['knob_x'], 80.0)
+chk('knob x (shell hole vs tray A encoder slot)', case['knob_x'], tr['knob_x'])
 chk('light sensor x', case['sensor_x'], tr['sensor_x'])
 chk('USB-C z', case['port_z'], tr['port_z'])
 xs = sorted([s * x for s in (-1, 1) for x in case['screw_xs']])

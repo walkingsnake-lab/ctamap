@@ -20,16 +20,22 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   bottom walls, half A's inner 1.75 mm runs on 3.5 mm as a lip into a pocket in half B (0.12 glue gap on its face and
   ends, 0.2 at its tip, 45° ends). The lap stays 1 mm behind the screen face and 0.5 in front of the trays' back.
   Glued, then lapped flat across the joint: that one rim is what both diffuser flanges seat on.
-- **Knob at x +80, light sensor at +120, screws from below at ±34 / ±126.** That is panel B's own centre, where the P2.5
-  tray already puts the encoder rails, the S3 and the sensor; each tray keeps its own ±46.
+- **Knob near the left end, at x -123 (50 mm from the end); light sensor 40 mm to its right (x -83); USB-C still at the
+  right end** (Nov 5). -123 is as far left as the encoder's board (25.4 wide, under the top wall) clears tray A's
+  top-left post sideways; further out it would ride ~1 mm over the post, and past ~-138 the collar would reach the top's
+  corner round. The S3 stays where the P2.5 tray has it, on tray B: moving it left too would have meant turning the
+  board upside down (USB-C facing left) and redesigning the tray's whole S3 corner. A long STEMMA QT cable joins them.
+- **Screws from below at ±34 / ±126**: each tray keeps its own ±46.
 - **Diffuser per panel, split at the panel joint.** No skirt on the seam edge. A's half owns the rib over the joint,
   `JOINT_RIB` wide (0.45 = every other rib, plus any gap between the butted panels); B's starts 0.225 past its panel's
   edge. Neither half carries a 0.225 half rib (too thin for the 0.2 nozzle).
 - **Splice plates** on the panels' inner corner inserts (x ±17.5, z ±32.25, 35 mm apart), top and bottom: a round hole on
   A's insert, a slot (±0.5 in x) on B's. They hold the rows in line across the seam (each diffuser floats ±0.3 in the
   bore, so unspliced the rows could step 0.6 mm) and let the panels butt freely.
-- **Trays: one per panel, cut at the joint** (no end wall there: the panels fill it). Tray B is the P2.5 tray as built
-  (S3, USB-C slot, encoder rails, sensor sled hooks, status window). Tray A is the same tray with none of those. Each
+- **Trays: one per panel, cut at the joint** (no end wall there: the panels fill it). Tray B is the P2.5 tray's S3 side
+  as built (S3, USB-C slot, Boot, status window) without the controls. Tray A is the same tray without the S3, carrying
+  the controls instead: the encoder slot and rails under the knob and the sensor sled's hooks (`drawer.tray(s3=False)`
+  with `drawer.ENC_X`). Each
   bolts to its two outer corner inserts and takes its pair of screws from below. The two inner posts of each stand on the
   splice plates as open tubes round the plates' screw heads: they push, they don't bolt.
 - **Panels turned 180°** as in the single build (data in on the left of each panel seen from the front).
@@ -104,6 +110,9 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 ## Hardware
 - **Screws:** 4 x M3 x 8 flanged button head (the four outer posts, as the P2.5), 4 x M3 x 6 button head (splice plates),
   4 x M3 x 10 (from below, two per tray), 4 x M2.5 x 8 (S3). Light sensor and cleats as the README (cleats: per tray).
+- **STEMMA QT:** S3 → light sensor: **400 mm** (Adafruit 5385). From the S3's socket on tray B to the sensor on tray A it
+  runs ~31 cm seated, ~37 cm with tray B out of the case still plugged in. Sensor → encoder: 15 cm, as the single build
+  (~3 cm seated). Without the sensor, S3 → encoder needs ~41 cm: use a 500 mm cable.
 - **Other:** 4 bumpers 12.7 x 3.8 (at the ends); medium CA glue; the encoder's M7 nut.
 - **Cables:** S3 → panel A's input: a 16-pin IDC ribbon, **35 cm minimum, 40 comfortable** (seated it runs ~27 cm from the
   S3 on tray B to A's input; the rest lets tray B come out still cabled, as the single build's 15 cm does). The P2.5's
@@ -125,27 +134,38 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 4. Scuff and finish as the README. Oil goes on after gluing (CA won't bond to oiled wood PLA).
 
 ## Assembly
-1. **Shell:** bumpers into the four recesses; collar into the knob hole (over panel B).
+1. **Shell:** bumpers into the four recesses; collar into the knob hole (near the left end).
 2. **Panels, face down on a towel:** snap each diffuser onto its panel (A's wide-rib edge toward the joint; its skirtless
    edge meets B's). Butt the panels, screw both splice plates on (round hole on A, 2 x M3 x 6 each), check the rows across
    the seam, tighten. Plug the power cable's two plugs into both panels (the far one into A, its run above or below the
    short ribbon), the short ribbon from A's output to B's input, and the long ribbon into A's input (red stripe = pin 1).
-3. **Panels in:** shell face down, the joined panels in from the back until both bezels seat on the rim (panel B on the
+3. **Panels in:** shell face down, the joined panels in from the back until both bezels seat on the rim (panel A on the
    knob side).
-4. **Encoder:** as the P2.5 build, steps 5-6 (QT cable into the encoder before tray B).
-5. **Tray A first:** lay the long ribbon and the power cable's forked end along the panel backs toward the joint and out through
-   the right half's back opening (tray B isn't in yet), so tray A slides in over them without pinching them. Tray A in,
-   2 x M3 x 8 flanged into its outer posts.
-6. **Tray B on the bench, then in:** the long ribbon into the S3's IDC header and the power cable's forks into its terminals
-   while the S3 is loose (as the P2.5 build), then the S3 onto its posts. Fold the spare ribbon into tray A's empty space
+4. **Encoder:** as the P2.5 build, step 5 (flip the shell, encoder into the collar, nut, knob).
+5. **Tray A on the bench:** the light sensor onto its sled and the sled into its hooks (as the P2.5 build, tray step);
+   the 400 mm QT cable into the sensor's right-hand socket and the 15 cm one into its left. Plug the 15 cm cable's free
+   end into the encoder's socket under its board **now** (as the P2.5 build, step 6: it can't be reached once tray A is
+   in).
+6. **Tray A in:** lay the long ribbon, the power cable's forked end and the 400 mm QT cable along the panel backs toward
+   the joint and out through the right half's back opening (tray B isn't in yet), so tray A slides in over them without
+   pinching them. Its rails pass either side of the encoder's board (if it stops there, square the board as the P2.5
+   build says). 2 x M3 x 8 flanged into its outer posts.
+7. **Tray B on the bench, then in:** the long ribbon into the S3's IDC header, the 400 mm QT cable into its QT socket
+   and the power cable's forks into its terminals while the S3 is loose (as the P2.5 build), then the S3 onto its posts. Fold the spare ribbon into tray A's empty space
    behind panel A as tray B goes in. 2 x M3 x 8 flanged into its outer posts. In both trays the inner posts stand on the
    plates, no screw. Then the four M3 x 10 from below.
-7. **Firmware:** see Open.
+8. **Firmware:** see Open.
 ## Checked (model, Nov 3)
 `check_bar128.py`: nothing collides when seated except the trays' crush ribs and the 0.3 mm post feet (as the P2.5);
 the splice screw heads clear the open posts with the tray 0.7 off any way; the knob, sensor, USB-C and the four screws from
 below line up between the shell and the trays (0.00 mm); every part is watertight and fits the bed (largest 177.3 x 96.3).
 The P2.5 and P3 builds are unchanged (same volumes; `check_v5.py` all OK for the P2.5).
+
+**Knob moved left (Nov 5):** `check_bar128.py` again: the knob hole and the sensor pinhole line up with tray A's encoder
+slot and sensor (x -123 / -83, 0.00 off); the encoder, sensor and sled clear tray A, shell A and panel A; tray B is
+unchanged around the S3 (the same 65 mm³ envelope note). `drawer.py`'s new options leave the single P3, P2.5 and P4
+parts byte for byte as main's code builds them (main's committed P4 STLs already differ from its own code in four files;
+that predates this). Power sockets still clear.
 
 **Nov 5, on main after the P3/P4 drawer changes:** a rebuild still reproduces every part byte for byte, `check_v5.py`
 (P2.5) passes including the new STEMMA QT plug check (10 mm clear: the P3's raised S3 isn't needed here), and the
