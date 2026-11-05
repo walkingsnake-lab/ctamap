@@ -64,6 +64,19 @@ worst = max((P[t].translate([0.7 * math.cos(a), 0, 0.7 * math.sin(a)]) ^ heads).
             for t in ('tray-A', 'tray-B') for a in np.linspace(0, 2 * math.pi, 12, endpoint=False))
 print(f'  splice screw heads vs trays, tray 0.7 off any way {worst:9.2f}')
 res['splice heads x trays (0.7 off)'] = round(worst, 2)
+# the encoder's STEMMA QT plugs (check_v5.py's envelope: out 7 mm past each side edge of its board, under it). At x -123
+# the left-hand one would sit on tray A's top-left post: only the right-hand socket (toward the sensor) is usable
+import sensor as SN
+kx, ky = case['knob_x'], tr['ky']
+print('encoder QT plugs (mm3, vs tray A seated / worst while it slides in 0-56 mm):')
+for side, sx in (('left', -1), ('right', 1)):
+    xa, xb = sorted((kx + sx * 7.7, kx + sx * (12.7 + 7.0)))
+    plug = box(xa, xb, ky - 3.0, ky + 3.0, SN.EB_BOT - 2.96, SN.EB_BOT)
+    seat = (plug ^ P['tray-A']).volume()
+    slide = max((plug ^ P['tray-A'].translate([0, dy, 0])).volume() for dy in np.arange(0, 56, 2.0))
+    print(f'  {side:5s} socket  {seat:8.2f} / {slide:8.2f}  ' + ('clear' if slide < 1e-3 else 'BLOCKED by tray A (use the other socket)'))
+    res[f'encoder {side} QT plug x tray-A (sliding)'] = round(slide, 2)
+right_ok = res['encoder right QT plug x tray-A (sliding)'] < 1e-3
 # lined-up features
 print('alignment:')
 ok = True
@@ -89,6 +102,9 @@ for f in sorted(os.listdir(STL)):
     if f.endswith('.stl') and not f.startswith('coupon'):
         t = trimesh.load(os.path.join(STL, f))
         e = t.extents
-        print(f'  {f:44s} {e[0]:6.1f} x {e[1]:6.1f} x {e[2]:5.1f}  {"fits" if max(e[0], e[1]) <= 250 else "TOO BIG"}')
-json.dump(dict(overlaps=res, aligned=ok), open(f'{F}/check.json', 'w'), indent=1)
+        diag = 'wall' in f and 'cleat' in f                      # laid at 45 deg on its plate
+        fits = (e[0] + e[1]) / math.sqrt(2) <= 250 if diag else max(e[0], e[1]) <= 250
+        print(f'  {f:44s} {e[0]:6.1f} x {e[1]:6.1f} x {e[2]:5.1f}  {("fits at 45 deg" if diag else "fits") if fits else "TOO BIG"}')
+json.dump(dict(overlaps=res, aligned=ok, encoder_right_socket_clear=right_ok), open(f'{F}/check.json', 'w'), indent=1)
 print('all aligned' if ok else 'MISALIGNED')
+print('encoder right-hand socket clear' if right_ok else 'ENCODER RIGHT-HAND SOCKET BLOCKED')
