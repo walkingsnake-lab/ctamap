@@ -133,17 +133,18 @@ Most of the skyline code already takes its width from a variable, and the server
 - **Line score (first pass):** innings 1–9, R H E, then the inning, count, outs, pitch count and bases on the bottom row. The innings are in the linescore the server already fetches; the pitch count isn't.
 - The classic, logo and band layouts and the other game states aren't planned yet.
 
-## 9. Knob chooser (open: five bars)
+## 9. Knob chooser (liked: variant strip)
 
-The interaction stays as at 64 (twist = category, press = next variant, hold and turn = step variants, rest 1 s commits; the chosen view fills the panel while choosing). What changes is the bar, which has room to name things. Five mocked (`dial-*.png`, Weather chosen on 7-DAY):
+The interaction stays as at 64 (twist = category, press = next variant, hold and turn = step variants, rest 1 s commits; the chosen view fills the panel while choosing). The bar changes:
 
-1. **Icons in place, chosen one named:** the 64 bar on rows 21–31, every icon where it is, the chosen one adding its name in its color, the variant name, and one pip per variant under the variant name.
-2. **Wheel:** the chosen category fixed at the center, named; neighbors' icons either side, fading with distance and wrapping. Twisting slides the strip under the center.
-3. **Variant strip:** the chosen category's icon, then all its variants as words (chosen white, the rest dim): it shows what a press will do. The ring position as five dots at the right edge. Clock's six faces need short names to fit (`SKY 70S ANALOG MAP GRAD WORDS`).
-4. **Chip, no bar:** a black chip at the bottom center with the name and variant, one dot per category under it. Most of the view stays visible (the same idea as the radar's chips).
-5. **Two rows:** every category's icon spread across the width, the chosen one underlined, and the chosen category's variants as words under them. The bar takes rows 17–31.
+- **Variant strip** on rows 21–31 (black band): the chosen category's 7 × 7 icon at x2 (rows 23–29) in its color with the underline on row 31, then **all its variants as words** in Tom Thumb on baseline 29 from x14: the chosen one white, the rest `#4a4a4a`. The strip shows what a press will do.
+- **Spacing:** 5 px between words, closer when a category needs it to stay within columns 14–123.
+- **Names:** Transit `ROWS TICKER`; Weather `NOW 7-DAY HOURLY RADAR`; Clock `SKY 70S DIAL MAP GRAD WORDS` (short names; 4 px apart).
+- **Categories without variants** (Announce, Cycle): the category's name in its color takes the strip.
+- **Ring position:** five 1-px dots in a column at x126 (rows 22–30, 2 px apart), each in its category's color, the chosen one full and the rest at 30 %.
+- Twisting swaps the whole strip (and slides the view sideways, as at 64); pressing moves the white word along it (and slides the view vertically).
 
-In 1–3 and 5 the bar hides the bottom of the view (here the forecast's temperatures), as at 64.
+Also mocked (`dial-*.png`): icons in place with the chosen one named, a centered wheel, a chip with no bar, and two rows of icons and words.
 
 ---
 
@@ -152,7 +153,6 @@ In 1–3 and 5 the bar hides the bottom of the view (here the forecast's tempera
 - Busy-station layout: confirm the fitting order in §3, or pick one layout.
 - Skyline: panorama or big clock; building art.
 - Direction labels for the split at Loop and branch stations.
-- Knob chooser: pick a bar in §9.
 - Baseball beyond the line score.
 
 ## 11. What the software would need (not started)

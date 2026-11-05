@@ -179,7 +179,28 @@
   "id": "dial-3-strip",
   "title": "3 · Variant strip",
   "desc": "The bar shows what a press does: the chosen category's icon, then all its variants as words, the chosen one white. Where the category sits on the ring is a column of five dots at the right edge.",
-  "note": "Twisting swaps the whole strip; Announce and Cycle show the icon alone. Clock's six faces only fit with short names (SKY 70S ANALOG MAP GRAD WORDS)."
+  "note": "Twisting swaps the whole strip. Clock uses short names (SKY 70S DIAL MAP GRAD WORDS) to fit."
+ },
+ {
+  "kind": "dial3",
+  "id": "dial-3-transit",
+  "title": "Strip · Transit, ROWS",
+  "desc": "Two variants: ROWS and TICKER.",
+  "note": ""
+ },
+ {
+  "kind": "dial3",
+  "id": "dial-3-clock",
+  "title": "Strip · Clock, GRAD",
+  "desc": "Six faces with short names (SKY 70S DIAL MAP GRAD WORDS), 4 px apart instead of 5 so they clear the ring dots.",
+  "note": ""
+ },
+ {
+  "kind": "dial3",
+  "id": "dial-3-announce",
+  "title": "Strip · Announce",
+  "desc": "No variants: the category's name in its color takes the strip.",
+  "note": "Cycle works the same way."
  },
  {
   "kind": "dial",

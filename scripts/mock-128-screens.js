@@ -477,7 +477,7 @@ function chooser() {
 // Shown with Weather chosen, on its 7-DAY variant.
 const RING = ['transit', 'weather', 'clock', 'announce', 'cycle'];
 const RING_NAME = { transit: 'TRANSIT', weather: 'WEATHER', clock: 'CLOCK', announce: 'ANNOUNCE', cycle: 'CYCLE' };
-const VARS = { transit: ['ROWS', 'TICKER'], weather: ['NOW', '7-DAY', 'HOURLY', 'RADAR'], clock: ['SKYLINE', '70S', 'ANALOG', 'MAP', 'GRADIENT', 'WORDS'], announce: [], cycle: [] };
+const VARS = { transit: ['ROWS', 'TICKER'], weather: ['NOW', '7-DAY', 'HOURLY', 'RADAR'], clock: ['SKY', '70S', 'DIAL', 'MAP', 'GRAD', 'WORDS'], announce: [], cycle: [] };
 const DK = 1, DV = 1;
 function peekBase(top) {
   const f = new Frame(W, H), view = sevenDay();
@@ -506,13 +506,22 @@ function dialWheel() {
 }
 // 3. Variant strip: the chosen category's icon, then its variants as words (chosen white, rest dim);
 // where the category sits on the ring as a column of dots at the right edge.
-function dialStrip() {
-  const f = peekBase(21), cat = RING[DK], col = PEEK_COL[cat];
+// Chosen Nov 4. k: the ring entry, vi: its variant, view: the peek frame behind the bar.
+// A category without variants (Announce, Cycle) shows its name instead, in its color.
+function dialStrip(k = DK, vi = DV, view = sevenDay()) {
+  const f = new Frame(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) f.set(x, y, view.get(x, y));
+  f.fill(0, 21, W, 11, '#000000');
+  const cat = RING[k], col = PEEK_COL[cat];
   glyph(f, PEEK_ICONS[cat], 2, 23, col);
   f.fill(2, 31, 7, 1, col);
+  // Words 5 px apart, closer when a category's variants need it (columns 14-123; the ring dots are on 126).
   let x = 14;
-  VARS[cat].forEach((v, j) => { x = f.text('small', v, x, 29, j === DV ? C.white : '#4a4a4a') + 5; });
-  RING.forEach((c2, i) => f.fill(126, 22 + i * 2, 1, 1, i === DK ? PEEK_COL[c2] : scale(PEEK_COL[c2], 0.3)));
+  const vs = VARS[cat], used = vs.reduce((a, v) => a + measure('small', v), 0);
+  const gap = vs.length > 1 ? Math.min(5, Math.floor((110 - used) / (vs.length - 1))) : 5;
+  if (!vs.length) f.text('small', RING_NAME[cat], x, 29, col);
+  vs.forEach((v, j) => { x = f.text('small', v, x, 29, j === vi ? C.white : '#4a4a4a') - 1 + gap; });   // text() returns the next origin, 1 px past the ink
+  RING.forEach((c2, i) => f.fill(126, 22 + i * 2, 1, 1, i === k ? PEEK_COL[c2] : scale(PEEK_COL[c2], 0.3)));
   return f;
 }
 // 4. Chip: no bar. A black chip at the bottom center with the name and variant, and
@@ -570,7 +579,10 @@ async function main() {
     ['more', 'credits', 'Credits roll', 'Wider lines mean fewer of them; the roll and its fade at the edges stay the same.', 'Mid-roll.', credits()],
     ['dial', 'dial-1-named', '1 · Icons in place, chosen one named', 'The 64 bar with room to spare: every category\'s icon stays put, the chosen one adds its name and variant, with one pip per variant under the variant name.', 'The first pass from the more-screens round.', dialNamed()],
     ['dial', 'dial-2-wheel', '2 · Wheel', 'The chosen category stays centered, named, with its neighbors\' icons either side, fading with distance and wrapping; twisting slides the strip under a fixed center.', '', dialWheel()],
-    ['dial', 'dial-3-strip', '3 · Variant strip', 'The bar shows what a press does: the chosen category\'s icon, then all its variants as words, the chosen one white. Where the category sits on the ring is a column of five dots at the right edge.', 'Twisting swaps the whole strip; Announce and Cycle show the icon alone. Clock\'s six faces only fit with short names (SKY 70S ANALOG MAP GRAD WORDS).', dialStrip()],
+    ['dial', 'dial-3-strip', '3 · Variant strip', 'The bar shows what a press does: the chosen category\'s icon, then all its variants as words, the chosen one white. Where the category sits on the ring is a column of five dots at the right edge.', 'Twisting swaps the whole strip. Clock uses short names (SKY 70S DIAL MAP GRAD WORDS) to fit.', dialStrip()],
+    ['dial3', 'dial-3-transit', 'Strip · Transit, ROWS', 'Two variants: ROWS and TICKER.', '', dialStrip(0, 0, transitRows())],
+    ['dial3', 'dial-3-clock', 'Strip · Clock, GRAD', 'Six faces with short names (SKY 70S DIAL MAP GRAD WORDS), 4 px apart instead of 5 so they clear the ring dots.', '', dialStrip(2, 4, gradient())],
+    ['dial3', 'dial-3-announce', 'Strip · Announce', 'No variants: the category\'s name in its color takes the strip.', 'Cycle works the same way.', dialStrip(3, 0, note())],
     ['dial', 'dial-4-chip', '4 · Chip, no bar', 'Most of the view stays visible: a black chip at the bottom center names the category and variant, with one dot per category under it in its color.', 'Same idea as the radar\'s time chip.', dialChip()],
     ['dial', 'dial-5-tworows', '5 · Two rows', 'Every category\'s icon spread across the width, the chosen one underlined, and under them the chosen category\'s variants as words.', 'The bar takes rows 17–31, half the panel. Clock\'s six faces need short names to fit, as in 3.', dialTwoRows()],
   ];
