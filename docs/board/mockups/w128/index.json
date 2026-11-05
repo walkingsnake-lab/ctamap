@@ -29,6 +29,27 @@
  },
  {
   "kind": "redrawn",
+  "id": "transit-five",
+  "title": "Busy station: five rows",
+  "desc": "Clark/Lake's five destinations as destination rows with full names and up to four times; the header drops to make room, as it does on the 64 board.",
+  "note": "Real Clark/Lake times."
+ },
+ {
+  "kind": "redrawn",
+  "id": "transit-columns",
+  "title": "Busy station: two columns",
+  "desc": "Eight destinations in two columns of four under the header: Clark/Lake at rush. Long names leave room for one or two times.",
+  "note": "Made-up times."
+ },
+ {
+  "kind": "redrawn",
+  "id": "transit-byline",
+  "title": "Busy station: one row per line",
+  "desc": "Five lines on five rows; a line with two destinations puts the second at the halfway mark (Blue: O'Hare and Forest Park).",
+  "note": "Made-up times. Seven destinations, no paging."
+ },
+ {
+  "kind": "redrawn",
   "id": "seven-day",
   "title": "7-day forecast",
   "desc": "Seven columns with highs and lows; the 64 screen shows five days and highs only.",
@@ -36,10 +57,24 @@
  },
  {
   "kind": "redrawn",
+  "id": "seven-day-top",
+  "title": "7-day, top bar on",
+  "desc": "The current-conditions bar as an option: with it on, the lows drop out.",
+  "note": ""
+ },
+ {
+  "kind": "redrawn",
   "id": "hourly",
   "title": "Hourly, 24 hours",
-  "desc": "Eight 3-hour steps under a top bar with room for the condition and feels-like.",
+  "desc": "Eight 3-hour steps under the top bar.",
   "note": "The server builds 4 slots today (HOUR_STEPS); the NWS hourly feed covers more."
+ },
+ {
+  "kind": "redrawn",
+  "id": "hourly-notop",
+  "title": "Hourly, top bar off",
+  "desc": "Without the bar the freed rows carry each slot's rain chance (bright from 20%).",
+  "note": ""
  },
  {
   "kind": "redrawn",

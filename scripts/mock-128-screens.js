@@ -130,24 +130,8 @@ function chrono() {
   return f;
 }
 
-// 7-day forecast: day, icon, high, low.
-function sevenDay() {
-  const f = new Frame(W, H);
-  const days = [['TU', 'sun', 71, 54], ['WE', 'pcloudy_day', 66, 52], ['TH', 'rain', 58, 49], ['FR', 'storm', 61, 47], ['SA', 'cloudy', 52, 40], ['SU', 'snow', 38, 29], ['MO', 'sun', 44, 30]];
-  days.forEach(([d, ic, hi, lo], i) => {
-    const x = i * 18 + 1, cx = x + 8;
-    if (i) f.fill(x - 2, 0, 1, 32, C.rule);
-    ctext(f, 'small', d, cx, 6, i === 0 ? C.label : C.grey);
-    icon(f, ic, cx - 4, 8);
-    ctext(f, 'small', `${hi}°`, cx + 1, 23, tempColor(hi));
-    ctext(f, 'small', `${lo}°`, cx + 1, 30, scale(tempColor(lo), 0.6));
-  });
-  return f;
-}
-
-// Hourly, 24 hours in 3-hour steps, under a fuller top bar.
-function hourly() {
-  const f = new Frame(W, H);
+// The weather screens' top bar (current conditions): optional.
+function topBar(f) {
   icon(f, 'pcloudy_day', 0, 0);
   const tx = f.text('5x7', '57°', 10, 7, C.white);
   f.text('small', 'PT CLOUDY', tx + 4, 6, C.wxText);
@@ -157,13 +141,86 @@ function hourly() {
     rtext(f, 'small', str, x, 6, col);
     x -= measure('small', str) + (str === '63' ? 4 : 2);
   }
-  const hrs = [['3P', 'sun', 61], ['6P', 'cloudy', 58], ['9P', 'pcloudy_night', 55], ['12A', 'moon', 52], ['3A', 'moon', 50], ['6A', 'fog', 49], ['9A', 'pcloudy_day', 54], ['12P', 'sun', 62]];
-  hrs.forEach(([h, ic, t], i) => {
+}
+
+// A 4-5 line station without the chronological view. Clark/Lake, real
+// times (Oct 3, 11:17 PM): five destinations on five lines.
+const CL = [['GR', 'HARLEM/LAKE', ['DUE']], ['BL', "O'HARE", [3, 10, 20, 27]], ['BL', 'FOREST PARK', [6, 21, 39]], ['PK', '54TH/CERMAK', [10, 22]], ['BR', 'KIMBALL', [19, 28, 44]]];
+function destRow(f, x0, x1, top, [ln, lbl, ts]) {
+  f.fill(x0, top, 3, 5, LINE[ln]);
+  const end = f.text('small', lbl, x0 + 5, top + 5, C.label) - 1;
+  times(f, ts, x1, top + 5, end);
+}
+// Five destination rows, no header (the 64 board drops the header to fit, too).
+function transitFive() {
+  const f = new Frame(W, H);
+  CL.forEach((r, i) => destRow(f, 0, 127, 1 + i * 6, r));
+  return f;
+}
+// Two columns of destination rows under the header: eight destinations. Clark/Lake at rush (made up).
+function transitColumns() {
+  const f = new Frame(W, H);
+  f.text('small', 'CLARK/LAKE', 0, 6, C.head);
+  rtext(f, 'small', '5:42', 127, 6, C.clock);
+  const rows = [['BL', "O'HARE", [2, 9, 15]], ['BL', 'FOREST PARK', [4, 11]], ['BR', 'KIMBALL', ['DUE', 7]], ['PR', 'LINDEN', [5, 13]],
+    ['GR', 'HARLEM/LAKE', [3, 12]], ['GR', 'ASHLAND/63RD', [8]], ['OR', 'MIDWAY', [6, 14]], ['PK', '54TH/CERMAK', [10, 19]]];
+  rows.forEach((r, i) => destRow(f, i < 4 ? 0 : 66, i < 4 ? 61 : 127, 8 + (i % 4) * 6, r));
+  return f;
+}
+// One row per line; a line's second destination starts at column 66. Clark/Lake midday (made up).
+function transitByLine() {
+  const f = new Frame(W, H);
+  const lines = [['BL', [["O'HARE", [3, 10]], ['FOREST PARK', [6, 21]]]], ['BR', [['KIMBALL', [5, 13, 21, 29]]]],
+    ['GR', [['HARLEM/LAKE', ['DUE', 12]], ['ASHLAND/63RD', [8]]]], ['OR', [['MIDWAY', [4, 11, 19, 26]]]], ['PK', [['54TH/CERMAK', [10, 22, 34]]]]];
+  lines.forEach(([ln, dests], i) => {
+    const top = 1 + i * 6;
+    f.fill(0, top, 3, 5, LINE[ln]);
+    dests.forEach(([lbl, ts], k) => {
+      const x0 = k ? 66 : 5, x1 = dests.length > 1 && !k ? 61 : 127;
+      const end = f.text('small', lbl, x0, top + 5, C.label) - 1;
+      times(f, ts, x1, top + 5, end);
+    });
+  });
+  return f;
+}
+
+// 7-day forecast: day, icon, high, low. With the top bar the lows drop out.
+function sevenDay({ top = false } = {}) {
+  const f = new Frame(W, H);
+  if (top) topBar(f);
+  const o = top ? 8 : 0;
+  const days = [['TU', 'sun', 71, 54], ['WE', 'pcloudy_day', 66, 52], ['TH', 'rain', 58, 49], ['FR', 'storm', 61, 47], ['SA', 'cloudy', 52, 40], ['SU', 'snow', 38, 29], ['MO', 'sun', 44, 30]];
+  days.forEach(([d, ic, hi, lo], i) => {
+    const x = i * 18 + 1, cx = x + 8;
+    if (i) f.fill(x - 2, o + (top ? 2 : 0), 1, 32 - o, C.rule);
+    ctext(f, 'small', d, cx, o + 6, i === 0 ? C.label : C.grey);
+    icon(f, ic, cx - 4, o + 8);
+    if (top) { ctext(f, 'small', `${hi}°`, cx + 1, 31, tempColor(hi)); return; }
+    ctext(f, 'small', `${hi}°`, cx + 1, 23, tempColor(hi));
+    ctext(f, 'small', `${lo}°`, cx + 1, 30, scale(tempColor(lo), 0.6));
+  });
+  return f;
+}
+
+// Hourly, 24 hours in 3-hour steps. Without the top bar the freed rows carry the rain chance.
+function hourly({ top = true } = {}) {
+  const f = new Frame(W, H);
+  if (top) topBar(f);
+  const hrs = [['3P', 'sun', 61, 0], ['6P', 'cloudy', 58, 10], ['9P', 'pcloudy_night', 55, 20], ['12A', 'rain', 52, 60], ['3A', 'rain', 50, 70], ['6A', 'fog', 49, 30], ['9A', 'pcloudy_day', 54, 10], ['12P', 'sun', 62, 0]];
+  hrs.forEach(([h, ic, t, pop], i) => {
     const cx = i * 16 + 7;
-    if (i) f.fill(i * 16 - 1, 10, 1, 22, C.rule);
-    ctext(f, 'small', h, cx, 15, C.grey);
-    icon(f, ic, cx - 4, 17);
-    ctext(f, 'small', `${t}°`, cx + 1, 31, tempColor(t));
+    if (top) {
+      if (i) f.fill(i * 16 - 1, 10, 1, 22, C.rule);
+      ctext(f, 'small', h, cx, 15, C.grey);
+      icon(f, ic, cx - 4, 17);
+      ctext(f, 'small', `${t}°`, cx + 1, 31, tempColor(t));
+      return;
+    }
+    if (i) f.fill(i * 16 - 1, 0, 1, 32, C.rule);
+    ctext(f, 'small', h, cx, 6, C.grey);
+    icon(f, ic, cx - 4, 8);
+    ctext(f, 'small', `${t}°`, cx + 1, 23, tempColor(t));
+    ctext(f, 'small', `${pop}%`, cx, 30, pop >= 20 ? '#1e90ff' : pop ? '#2a5a90' : '#3a3a3a');
   });
   return f;
 }
@@ -257,8 +314,13 @@ async function main() {
     ['redrawn', 'transit-split', 'Transit, by direction', 'Belmont split north | south, two times or more per line. The station and clock move to the bottom.', 'Real Belmont times (Oct 3, 11:16 PM, no Purple).', transitSplit()],
     ['redrawn', 'ticker', 'Ticker', 'After the CTA platform signs: the row number in the grey column, the full destination, the time at the far right, then the live-train signal, or a clock for a scheduled train (row 2).', 'Real Morse times; the Howard train is marked scheduled here to show the clock.', ticker()],
     ['redrawn', 'chrono', 'Chronological, two columns', 'Eight trains instead of four, with full names (FOREST PK, 54/CERMAK).', 'Real Clark/Lake times.', chrono()],
+    ['redrawn', 'transit-five', 'Busy station: five rows', 'Clark/Lake\'s five destinations as destination rows with full names and up to four times; the header drops to make room, as it does on the 64 board.', 'Real Clark/Lake times.', transitFive()],
+    ['redrawn', 'transit-columns', 'Busy station: two columns', 'Eight destinations in two columns of four under the header: Clark/Lake at rush. Long names leave room for one or two times.', 'Made-up times.', transitColumns()],
+    ['redrawn', 'transit-byline', 'Busy station: one row per line', 'Five lines on five rows; a line with two destinations puts the second at the halfway mark (Blue: O\'Hare and Forest Park).', 'Made-up times. Seven destinations, no paging.', transitByLine()],
     ['redrawn', 'seven-day', '7-day forecast', 'Seven columns with highs and lows; the 64 screen shows five days and highs only.', 'NWS gives seven days already.', sevenDay()],
-    ['redrawn', 'hourly', 'Hourly, 24 hours', 'Eight 3-hour steps under a top bar with room for the condition and feels-like.', 'The server builds 4 slots today (HOUR_STEPS); the NWS hourly feed covers more.', hourly()],
+    ['redrawn', 'seven-day-top', '7-day, top bar on', 'The current-conditions bar as an option: with it on, the lows drop out.', '', sevenDay({ top: true })],
+    ['redrawn', 'hourly', 'Hourly, 24 hours', 'Eight 3-hour steps under the top bar.', 'The server builds 4 slots today (HOUR_STEPS); the NWS hourly feed covers more.', hourly()],
+    ['redrawn', 'hourly-notop', 'Hourly, top bar off', 'Without the bar the freed rows carry each slot\'s rain chance (bright from 20%).', '', hourly({ top: false })],
     ['redrawn', 'radar', 'Radar, 128 wide', 'A real MRMS frame (the Aug 10, 2020 derecho) cropped 128 LEDs wide: about 190 mi of the region instead of 95. The station sits right of center; the time stack moves over the lake.', 'Each station needs a new water mask at 128 (built here from the lake outline).', null],
     ['redrawn', 'line-score', 'Baseball line score', 'Runs by inning, R H E, then the count, outs, pitch count and bases.', 'The innings come in the linescore the server already fetches; the pitch count would need a field added.', lineScore()],
     ['redrawn', 'note', 'Message note', 'About 21 characters a line in 5x7 instead of 10.', '', note()],
