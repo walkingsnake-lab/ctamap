@@ -117,6 +117,64 @@ async function split() {
   return f;
 }
 
+// ---- split variants: the map on the left, different right sides ----
+// mapW columns of map (station at about 54 % across), a divider, the panel after it.
+async function splitMap(mapW, divider = true) {
+  const f = new Frame(W, H), v = { lat: MORSE.lat, lon: MORSE.lon, cx: Math.round(mapW * 0.54), cy: 16, mi: 1.5 };
+  const c = await crop(v, mapW);
+  paint(f, c, 0, v);
+  if (divider) f.fill(mapW, 0, 1, 32, C.divider);
+  return { f, c, v, x0: mapW + (divider ? 3 : 0) };
+}
+// A. Big time: the clock digits, AM/PM under, the loop as a thin bar at the bottom.
+async function splitBigTime() {
+  const { f } = await splitMap(87);
+  const cx = 108;
+  const tw = measure('clock', TIME);
+  f.text('clock', TIME, Math.round(cx - tw / 2), 15, C.clock);
+  const aw = measure('small', AMPM);
+  f.text('small', AMPM, Math.round(cx - aw / 2), 23, C.radarAmpm);
+  for (let i = 0; i < 6; i++) f.fill(90 + i * 6, 30, 5, 1, i === 5 ? C.amber : C.indicator);
+  return f;
+}
+// B. Loop position: the six frames as a column of pips down the right edge (the newest
+// amber), and the time of the frame on screen beside its pip, so it walks down as the loop plays.
+async function splitTimeline(shown = 3) {
+  const { f } = await splitMap(105);
+  for (let i = 0; i < 6; i++) f.fill(125, 1 + i * 5, 3, 3, i === shown ? C.label : i === 5 ? C.amber : C.indicator);
+  rtext(f, 'small', ['3:14', '3:20', '3:26', '3:32', '3:38', '3:44'][shown], 122, 1 + shown * 5 + 4, C.label);
+  return f;
+}
+// C. Time and a color key: what the greens, yellows and reds mean.
+async function splitLegend() {
+  const { f } = await splitMap(96);
+  rtext(f, '5x7', TIME, 127, 9, C.radarTime);
+  rtext(f, 'small', AMPM, 127, 16, C.radarAmpm);
+  [1, 2, 3, 4, 5].forEach((lv, i) => f.fill(99 + i * 6, 21, 5, 3, draw.RADAR[lv]));
+  f.text('small', 'LO', 99, 31, C.dimHead);
+  rtext(f, 'small', 'HI', 127, 31, C.dimHead);
+  return f;
+}
+// D. No panel: the map across all 128 columns, the time on a small black chip in the corner.
+async function splitInset() {
+  const { f } = await splitMap(128, false);
+  f.fill(101, 25, 27, 7, '#000000');
+  rtext(f, 'small', AMPM, 127, 32, C.radarAmpm);
+  rtext(f, 'small', TIME, 127 - measure('small', AMPM) - 2, 32, C.label);
+  return f;
+}
+// E. Conditions first: the temperature in the clock digits, the condition, the time small.
+async function splitConditions() {
+  const { f } = await splitMap(91);
+  icon(f, 'rain', 94, 1);
+  const tx = f.text('clock', '58', 104, 13, C.white);
+  f.text('small', '°', tx, 6, C.white);
+  f.text('small', 'RAIN', 94, 22, '#4aa0ff');
+  const t = f.text('small', TIME, 94, 31, C.grey);
+  f.text('small', AMPM, t + 2, 31, C.radarAmpm);
+  return f;
+}
+
 // ---- 2. One Chicago map for every board ----
 // Downtown at x 76; the station is just the dot. The time sits over the lake at a fixed spot.
 const CHI = { lat: 41.95, lon: -87.65, cx: 76, cy: 15, mi: 1.5 };
@@ -226,12 +284,19 @@ function checkCity() {
     ['radar-rejected-lake', 'Rejected · Full width, time over the lake', await overLake(),
       'The station at x92 and the time over the lake. Works at Morse, but no fixed spot is open water for every station: it fails at 56 of 144 (the Loop and South Side reach the Indiana shore).', ''],
   ];
+  MOCKS.push(
+    ['radar-s1-bigtime', 'Split A · Big time', await splitBigTime(), 'Only the time, in the clock digits, with AM/PM under it and the loop as a thin bar along the bottom. The map keeps 87 columns.', 'Wide enough for 12:44 (39 px).', 'split'],
+    ['radar-s2-timeline', 'Split B · Loop position', await splitTimeline(), 'The six frames as a column of pips down the right edge, the newest amber; the time of the frame on screen sits beside its pip and walks down as the loop plays. The map keeps 105 columns.', 'Shown mid-loop, on the 3:32 frame.', 'split'],
+    ['radar-s3-legend', 'Split C · Time and color key', await splitLegend(), 'The time at the top, then the five rain colors as swatches from LO to HI, so the greens and reds explain themselves.', '', 'split'],
+    ['radar-s4-inset', 'Split D · No panel, corner chip', await splitInset(), 'The map across all 128 columns with the station at the same spot; the time on a small black chip in the bottom-right corner, over Michigan rather than the city.', 'Hides a 27 × 7 corner of the map.', 'split'],
+    ['radar-s5-conditions', 'Split E · Conditions first', await splitConditions(), 'The temperature in the clock digits with the condition icon, the condition word, and the time small at the bottom.', '', 'split'],
+  );
   const q5 = (v) => v & 0xf8;
   for (const [id, , fr] of MOCKS) {
     const q = new Frame(W, H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) q.set(x, y, fr.get(x, y).map(q5));
     fs.writeFileSync(path.join(OUT, `${id}.png`), q.toPNG(10));
   }
-  fs.writeFileSync(path.join(OUT, 'radar.json'), JSON.stringify(MOCKS.map(([id, title, , desc, note]) => ({ kind: 'radar', id, title, desc, note })), null, 1));
+  fs.writeFileSync(path.join(OUT, 'radar.json'), JSON.stringify(MOCKS.map(([id, title, , desc, note, kind]) => ({ kind: kind === 'split' ? 'radar-split' : 'radar', id, title, desc, note })), null, 1));
   console.log('wrote', MOCKS.map((m) => m[0]).join(', '));
 })().catch((e) => { console.error(e); process.exit(1); });

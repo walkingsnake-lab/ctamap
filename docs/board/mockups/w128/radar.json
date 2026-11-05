@@ -40,5 +40,40 @@
   "title": "Rejected · Full width, time over the lake",
   "desc": "The station at x92 and the time over the lake. Works at Morse, but no fixed spot is open water for every station: it fails at 56 of 144 (the Loop and South Side reach the Indiana shore).",
   "note": ""
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s1-bigtime",
+  "title": "Split A · Big time",
+  "desc": "Only the time, in the clock digits, with AM/PM under it and the loop as a thin bar along the bottom. The map keeps 87 columns.",
+  "note": "Wide enough for 12:44 (39 px)."
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s2-timeline",
+  "title": "Split B · Loop position",
+  "desc": "The six frames as a column of pips down the right edge, the newest amber; the time of the frame on screen sits beside its pip and walks down as the loop plays. The map keeps 105 columns.",
+  "note": "Shown mid-loop, on the 3:32 frame."
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s3-legend",
+  "title": "Split C · Time and color key",
+  "desc": "The time at the top, then the five rain colors as swatches from LO to HI, so the greens and reds explain themselves.",
+  "note": ""
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s4-inset",
+  "title": "Split D · No panel, corner chip",
+  "desc": "The map across all 128 columns with the station at the same spot; the time on a small black chip in the bottom-right corner, over Michigan rather than the city.",
+  "note": "Hides a 27 × 7 corner of the map."
+ },
+ {
+  "kind": "radar-split",
+  "id": "radar-s5-conditions",
+  "title": "Split E · Conditions first",
+  "desc": "The temperature in the clock digits with the condition icon, the condition word, and the time small at the bottom.",
+  "note": ""
  }
 ]
