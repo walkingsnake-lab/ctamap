@@ -53,7 +53,7 @@
   "id": "clock-words-64",
   "title": "Word clock at 64",
   "desc": "The same idea in 64 columns: 16 letters by 5 rows, words run together and share letters (SEVENINEIGHTWO), as on physical word clocks. 9:42 PM lights TWENTY, TO, TEN and PM.",
-  "note": "Drops IT IS and MINUTES. M and W are drawn 3 px wide to fit the 4 px grid; the board font has them at 5."
+  "note": "Drops IT IS and MINUTES. W is drawn 3 px wide to fit the 4 px grid; the board font has it at 5."
  },
  {
   "kind": "clock",

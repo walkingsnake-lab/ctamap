@@ -181,8 +181,8 @@ function wordClock() {
 // Word clock in 64 columns: 16 letters x 5 rows on a 4 px grid, words run
 // together and sharing letters (sevENINEIGHTWO, TONE), the way physical word
 // clocks pack theirs. No IT IS or MINUTES; AM and PM fill the spare cells.
-// Tom Thumb's M and W are 5 px wide, so this face draws them 3 px wide.
-const NARROW = { M: ['#.#', '###', '###', '#.#', '#.#'], W: ['#.#', '#.#', '###', '###', '#.#'] };
+// Tom Thumb's W is 5 px wide, so this face draws it 3 px wide.
+const NARROW = { W: ['#.#', '#.#', '###', '###', '#.#'] };
 function wordClock64() {
   const f = new Frame(64, H);
   const rows = ['QUARTERTWENTYTEN', 'HALFFIVEPASTTONE', 'SEVENINEIGHTWOAM', 'THREELEVENSIXTEN', 'FOURFIVETWELVEPM'];
@@ -244,7 +244,7 @@ async function main() {
     { kind: 'skyline', id: 'sky-bigclock', title: 'Skyline with a big clock', f: big, desc: 'The 64 scene kept at the left; the right half is open lake and sky, with the clock in the big digits.', note: 'Keeps the existing art; only the sky and water get wider.' },
     { kind: 'clock', id: 'clock-seventies', title: 'Seventies swoosh', f: seventies(), desc: 'The stripes run along the bottom, climb, and run along the top to the right edge. Time on the left; the weekday in full, then the date and temperature, under the top run.', note: '' },
     { kind: 'clock', id: 'clock-analog', title: 'Analog + calendar', f: analog, desc: 'The analog face as it is, with the month beside it and today highlighted.', note: 'The calendar replaces the face\'s date and temperature; five week rows fill the height, so there\'s no weekday header.' },
-    { kind: 'clock', id: 'clock-words-64', title: 'Word clock at 64', f: wordClock64(), w64: true, desc: 'The same idea in 64 columns: 16 letters by 5 rows, words run together and share letters (SEVENINEIGHTWO), as on physical word clocks. 9:42 PM lights TWENTY, TO, TEN and PM.', note: 'Drops IT IS and MINUTES. M and W are drawn 3 px wide to fit the 4 px grid; the board font has them at 5.' },
+    { kind: 'clock', id: 'clock-words-64', title: 'Word clock at 64', f: wordClock64(), w64: true, desc: 'The same idea in 64 columns: 16 letters by 5 rows, words run together and share letters (SEVENINEIGHTWO), as on physical word clocks. 9:42 PM lights TWENTY, TO, TEN and PM.', note: 'Drops IT IS and MINUTES. W is drawn 3 px wide to fit the 4 px grid; the board font has it at 5.' },
     { kind: 'clock', id: 'clock-words', title: 'Word clock', f: wordClock(), desc: 'Every word stays faintly on the grid; the ones that tell the time light up. 9:42 PM reads TWENTY MINUTES TO TEN.', note: 'A new face rather than a widened one. Rounds to five minutes.' },
   ];
   for (const m of MOCKS) if (m.f.w !== W && !m.w64) m.f = toFrame128(m.f);

@@ -106,7 +106,7 @@ The three stripes run along the bottom, climb at columns 62–69, and run along 
 The analog face (columns 0–33) and the month in seven 13-px columns: five week rows at a 6 px pitch, no weekday header, weekends dimmer, today on an amber block. The calendar replaces the face's date and temperature.
 
 ### Word clock (liked, wide only)
-Every word on the grid stays faintly lit (`#2a2a2a`); the words that tell the time light amber, rounded to five minutes (`IT IS TWENTY MINUTES TO TEN IN THE EVENING`). A 64-wide version is possible: 16 × 5 run-together letters with shared letters (`SEVENINEIGHTWO`), no `IT IS`/`MINUTES`, AM/PM in the spare cells, and M and W drawn 3 px wide.
+Every word on the grid stays faintly lit (`#2a2a2a`); the words that tell the time light amber, rounded to five minutes (`IT IS TWENTY MINUTES TO TEN IN THE EVENING`). A 64-wide version is possible: 16 × 5 run-together letters with shared letters (`SEVENINEIGHTWO`), no `IT IS`/`MINUTES`, AM/PM in the spare cells, and W drawn 3 px wide (Tom Thumb's is 5).
 
 ### Gradient (first pass)
 The same block digits widened to 7 × 6 blocks (21 × 30), so the time fills the width as at 64 (`12:58` is 108 px); the gradient spans all 128 columns.
@@ -149,6 +149,6 @@ The peek chooser as at 64 (the chosen view on rows 0–20, the bar on 21–31), 
 - **The board's width.** A per-board `cols` setting (64 or 128) in the S3's flash, sent with each `/board/update`; the server stores it per board. Payloads stay additive: a 64 board gets exactly what it gets today.
 - **Server layouts by width.** `arrivals.js` (rows, fitting, the busy-station chain), weather slots (7 days, 8 hours), radar crop width and masks, sun times, alert labels and expiries: chosen per board width.
 - **`draw.js` and `draw.cpp`.** Replace the hard-coded 64s with the frame width, one screen at a time; new layouts behind the width. Parity scenarios at both widths (`firmware/tests/scenarios.js`).
-- **Assets.** Fonts unchanged; new glyphs (live and scheduled icons, half sun, 3 px M and W) and the 80 × 32 world map, generated as now.
+- **Assets.** Fonts unchanged; new glyphs (live and scheduled icons, half sun, a 3 px W) and the 80 × 32 world map, generated as now.
 - **Simulator and control page** previews at 128.
 - **Firmware.** Chain length from the `cols` setting; radar frame buffers for 96 × 32.
