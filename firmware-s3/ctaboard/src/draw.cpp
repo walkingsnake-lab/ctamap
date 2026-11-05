@@ -454,7 +454,8 @@ struct RollFont {
   int dist, t0, t1;
 };
 static RollFont roll_font(Font font) {
-  return font == FONT_5X7 ? RollFont{7, -6, -1} : font == FONT_CLOCK ? RollFont{11, -10, -1} : font == FONT_VCR ? RollFont{12, -11, -1} : RollFont{6, -5, -1};
+  return font == FONT_5X7 ? RollFont{7, -6, -1} : font == FONT_CLOCK ? RollFont{11, -10, -1} : font == FONT_VCR ? RollFont{12, -11, -1}
+       : font == FONT_D17 ? RollFont{18, -17, -1} : font == FONT_D13 ? RollFont{14, -13, -1} : RollFont{6, -5, -1};
 }
 
 static bool same_shape(Font font, const ustr &a, const ustr &b) {
@@ -3202,12 +3203,52 @@ std::vector<std::string> SkylineFader::wanted() const {
   return out;
 }
 
+// ---- clock screen: big digits and day/date faces (design spec §20) ----
+// Mirrors renderDigits() / renderDayDate() and BD / DD in draw.js. The d17
+// and d13 fonts' advance carries a 2 px gap, so a time's ink is measure() - 1.
+static const int BD_TOP = 7, BD_BASE = 24;
+static const int DD_DAY_BASE = 6, DD_TIME_BASE = 22, DD_DATE_BASE = 31;
+
+static void render_digits(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
+  double now = now_o ? *now_o : p["now"].num(0);
+  long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
+  ustr text = clock_text(now, p["tzo"].num(0));
+  // Ink centered: x = floor((65 - measure) / 2) (draw.js xOf).
+  std::optional<Roll> roll = take_roll("dig.clock", text);
+  roll_text_at(f, FONT_D17, text, SPAN, 64, BD_BASE, hexc(0xe6e6e6), roll);
+  // The colon blinks: off for the second half of each second, never mid-roll.
+  if (!roll && fmod_floor(ms, 1000) >= 500) {
+    size_t i = text.find(U':');
+    int g = glyph(FONT_D17, ':');
+    int cw = g >= 0 ? assets::FONT_DATA[FONT_D17][g + 1] : 0;
+    f.fill(align_x(FONT_D17, text, SPAN, 64) + measure(FONT_D17, text.substr(0, i)) + 1, BD_TOP, cw, BD_BASE - BD_TOP, hexc(0x000000));
+  }
+}
+
+static void render_daydate(const Value &p, Frame &f, std::optional<double> now_o) {
+  double now = floor(now_o ? *now_o : p["now"].num(0));
+  double tzo = p["tzo"].num(0);
+  LocalDate t = local_date(now, tzo);
+  ustr day = U(DAY_NAMES[t.wd]);
+  f.text(FONT_SMALL, day, (int)fdiv(64 - measure(FONT_SMALL, day), 2), DD_DAY_BASE, C::wxText);
+  ustr text = clock_text(now, tzo), ampm = U(t.h < 12 ? "AM" : "PM");
+  int aw = measure(FONT_SMALL, ampm);
+  // The time and AM/PM centered as a pair: x = floor((63 - aw - measure) / 2)
+  // (draw.js xOf), which is CENTER from column -(aw + 1).
+  roll_named(f, FONT_D13, "dd.clock", text, CENTER, -(aw + 1), DD_TIME_BASE, hexc(0xe6e6e6));
+  f.text(FONT_SMALL, ampm, align_x(FONT_D13, text, CENTER, -(aw + 1)) + measure(FONT_D13, text) + 1, DD_TIME_BASE, C::dimHead);
+  ustr date = U(std::string(MONTH_NAMES[t.m - 1]) + " " + std::to_string(t.d));
+  f.text(FONT_5X7, date, (int)fdiv(64 - measure(FONT_5X7, date), 2), DD_DATE_BASE, C::wxText);
+}
+
 static void render_clock(const Value &p, Frame &f, const RenderOpts &o) {
   std::string face = json::str(p["cface"]);
   if (face == "seventies") render_seventies(p, f, o.now);
   else if (face == "analog") render_analog(p, f, o.now);
   else if (face == "daynight") render_daynight(p, f, o.now);
   else if (face == "gradient") render_gradient(p, f, o.now, o.ms);
+  else if (face == "digits") render_digits(p, f, o.now, o.ms);
+  else if (face == "daydate") render_daydate(p, f, o.now);
   else render_skyline_faded(p, f, o);
 }
 

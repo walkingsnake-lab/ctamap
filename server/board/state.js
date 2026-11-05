@@ -19,10 +19,10 @@ const DEFAULT_MAPID = '40100'; // Morse
 const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 // Announce screen (design spec §15): saved presets per board.
 const MAX_PRESETS = 8;
-// Clock screen faces (design spec §14, §16-19): the skyline, the seventies
-// stripes with VCR digits, the analog dial, the day/night world map, and the
-// flowing gradient.
-const CLOCK_FACES = ['skyline', 'seventies', 'analog', 'daynight', 'gradient'];
+// Clock screen faces (design spec §14, §16-20): the skyline, the seventies
+// stripes with VCR digits, the analog dial, the day/night world map, the
+// flowing gradient, big digits, and day/date.
+const CLOCK_FACES = ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate'];
 // Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
 const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
 const WHEEL_SPEEDS = ['off', 'slow', 'normal', 'fast'];

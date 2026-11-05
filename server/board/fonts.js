@@ -7,7 +7,7 @@ const { loadBDF } = require('./bdf');
 const G = require('./glyphs');
 
 const FONT_DIR = path.join(__dirname, 'fonts');
-const FILES = { small: 'board-small.bdf', '5x7': 'board-5x7.bdf', clock: 'board-clock.bdf', vcr: 'board-vcr.bdf' };
+const FILES = { small: 'board-small.bdf', '5x7': 'board-5x7.bdf', clock: 'board-clock.bdf', vcr: 'board-vcr.bdf', d17: 'board-d17.bdf', d13: 'board-d13.bdf' };
 
 const cache = new Map();
 

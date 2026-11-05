@@ -986,7 +986,7 @@ static void test_health_reports_the_skyline_capability() {
   std::string sent;
   for (const std::string &h : r.server.health)
     if (!h.empty()) sent = h;
-  CHECK(sent.find("&hk=skyline:seventies:analog:daynight:gradient:announce") != std::string::npos, "%s", sent.c_str());
+  CHECK(sent.find("&hk=skyline:seventies:analog:daynight:gradient:digits:daydate:announce") != std::string::npos, "%s", sent.c_str());
 }
 
 static void test_announce_typewriter_animates_its_intro_then_redraws_only_for_the_cursor() {

@@ -361,7 +361,7 @@ function createBoard({
   // another board under the same ID reports without it. Health's `hk` is
   // the fallback for the simulator and control page. Others get transit
   // instead, and no CLOCK on the knob's ring.
-  // Each other face works the same way (`hk=skyline:seventies:analog:daynight:gradient`);
+  // Each other face works the same way (`hk=skyline:seventies:analog:daynight:gradient:digits:daydate`);
   // a board without the chosen face gets the skyline face.
   const capOk = (id, q, cap) => {
     if (typeof q.hk === 'string' && q.hk.split(':').includes(cap)) return true;

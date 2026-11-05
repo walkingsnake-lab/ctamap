@@ -121,7 +121,7 @@ The combined update, polled ~every 30 s. `hk` (S3): the same capabilities as the
 | `anim` | object | Speed settings, from the board's state: `{pageHold, slide, radarFrame, radarHold, game}`. Ticker page hold and slide (ms), radar loop frame step and the hold on the newest frame (ms), and baseball rotation per game (s). Defaults 8000, 1200, 500, 4000, 60 (`timing()` in `draw.js` fills in any missing one). |
 | `tickerFill` | int | Ticker row fill: the line color at this percent behind the white text (25–80, default 55). |
 | `skyline` | object \| null | Clock screen, skyline face: drawing parameters (see *Skyline*), or `null` without weather data or on the seventies face. Sent only with `for` `clock`. |
-| `cface` | string | Clock screen face: `skyline`, `seventies`, `analog`, `daynight` or `gradient` (see *Seventies*, *Analog*, *Day/night*, *Gradient*). Sent only with `for` `clock`. Firmware without a face never gets it named here. |
+| `cface` | string | Clock screen face: `skyline`, `seventies`, `analog`, `daynight`, `gradient`, `digits` or `daydate` (see *Seventies*, *Analog*, *Day/night*, *Gradient*, *Big digits*, *Day/date*). Sent only with `for` `clock`. Firmware without a face never gets it named here. |
 | `ginv` | bool | Gradient face only, when set: lit gradient digits on black (state `gradInvert`). Absent: digits cut out of the gradient. |
 | `cwx` | object \| null | Analog face only: `{temp, icon}` (board unit, icon name as in `wx`), or `null` without weather. |
 | `dn` | object | Day/night face only: `{dec, lon, t, here}`, see *Day/night*. |
@@ -366,6 +366,12 @@ The clock screen's day/night map face (design spec §18). `dn`: `dec` the sun's 
 #### Gradient (`cface` `gradient`)
 The clock screen's gradient face (design spec §19). Drawn from `now` and the board's animation clock (epoch ms) alone. Every pixel takes a color from a ring of ten (`GR.ring` in `draw.js`: `#ffc24a`, `#ff8a52`, `#ff5f7e`, `#e94fb8`, `#a55cff`, `#5a5cf2`, `#3e9cff`, `#3fd6c6`, `#9be65a`, `#ffe14a`): u = floor((2x + 3y) · 1024 / 220), r = floor(ms · 256 / 360000) + floor(u · 3 · 256 / 1024), colors i = floor(r / 256) mod 10 and the next, mixed by r mod 256 (each channel a + floor((b − a) · t / 256)). So three ring colors span the diagonal and the ring slides one color every 6 minutes (an hour around). On it, unlit: the time in 3 x 5 block digits (`GR_GLYPHS` in `draw.js`) blown up 4 x 6 (each glyph pixel a 4 x 6 block: digits 12 x 30, the colon 4 wide), 4 px between digits and 2 px either side of the colon (`12:59` is 64 px), centered, rows 1-30, rolling as `grad.clock` (travel 36 px, clipped to rows 1-30). With `ginv` the colors swap: black panel, and every pixel of the digits takes its gradient color (drawn as a white mask, then colored).
 
+#### Big digits (`cface` `digits`)
+The clock screen's big digits face (design spec §20). Drawn from `now`, `tzo` and the board's animation clock (epoch ms) alone. The time (`h:mm`, 12-hour, no AM/PM) in the `d17` font (UW ttyp0 Bold digits, 17 rows, tabular: each digit centered in an 11 px slot, advance 13; the colon two 4 px round dots, advance 6), `#e6e6e6`, on rows 7-23 (baseline 24), at x = floor((65 − width) / 2), where width is the font's measure (its ink + 1, the advance carrying a 2 px gap), so the ink is centered. It rolls at each minute under the name `dig.clock`. The colon blinks: when the time isn't rolling and ms mod 1000 ≥ 500, its 4 columns are cleared on rows 7-23. Reference: `renderDigits()` in `draw.js`.
+
+#### Day/date (`cface` `daydate`)
+The clock screen's day/date face (design spec §20). Drawn from `now` and `tzo` alone. Three lines, each centered: the weekday in full (Tom Thumb `#8f8f8f`, baseline 6, x = floor((64 − width) / 2)); the time (`h:mm`) in the `d13` font (13 rows, 9 px digit slots, advance 11; the colon two 3 x 3 squares, advance 5), `#e6e6e6`, baseline 22, followed two columns after its ink by `AM` or `PM` (Tom Thumb `#555555`, same baseline): the time at x = floor((63 − aw − width) / 2), aw the AM/PM width, AM/PM at that x + width + 1; and the date (`NOV 4`, 5x7 `#8f8f8f`, baseline 31). The time rolls as `dd.clock`. Reference: `renderDayDate()` in `draw.js`.
+
 #### Announce (`msg`)
 The announce screen (design spec §15): a short message from the phone in one of four styles. The server lays the text out (`messageLayout()` in `draw.js`) and sends the lines; the board draws them without wrapping or measuring.
 
@@ -544,7 +550,7 @@ POST rules: allowed fields are `label` (up to 24 characters, trimmed; empty for 
 | `timeSteps` | Transit times at 100/40/20% instead of 100/40/40% (default off). |
 Settings added after a board's state was saved load with these defaults (today's behavior). |
 | `baseballLayout` | `classic` (default), `logos`, or `bands`. Sent as `mlb.layout`. |
-| `clockFace` | The clock screen's face: `skyline` (default), `seventies`, `analog`, `daynight` or `gradient`. Sent as `cface`; a face other than the skyline only to boards that report it as a capability (`hk`), others get `skyline`. |
+| `clockFace` | The clock screen's face: `skyline` (default), `seventies`, `analog`, `daynight`, `gradient`, `digits` or `daydate`. Sent as `cface`; a face other than the skyline only to boards that report it as a capability (`hk`), others get `skyline`. |
 | `msg` | The announce screen's message: `{text, style, id}` or `null` (default). A patch sends `{text, style}` (style `note`, `type`, `big`, `roll`) or `null`; the server cleans the text (characters outside the board fonts, such as emoji, dropped; tabs to spaces; runs of spaces collapsed; lines trimmed; line breaks kept), and rejects it (400) when it's empty, over 160 characters, or doesn't fit the style (one screen; 16 lines for `roll`). `id` is set by the server to the new `v`. Sent as `msg` (see *Announce*). A saved `flap` (split-flap, removed Nov 2026) loads as `note`. |
 | `msgPresets` | Saved messages for the phone page: up to 8 `{text, style}`, each checked like `msg` (default `[]`). Never sent to the board. |
 | `boats` | Skyline face: the quarter-hour boats (default `true`). `false` sends `skyline.boats` 0. |
