@@ -9,6 +9,7 @@
   else root.ClockFacesR6 = factory(root.ClockFaces);
 })(typeof self !== 'undefined' ? self : this, function (CF) {
   const { FACES } = CF;
+  const SOFT = 0.35;
   const WHITE = '#e6e6e6', GREY = '#8f8f8f', DIM = '#555555', FAINT = '#262626';
   const MONTHS_FULL = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
 
@@ -24,7 +25,8 @@
     const L = layout(size, H, hm);
     for (const p of L.parts) {
       const rows = L.g[p.ch], ox = x + Math.floor((p.w - rows[0].length) / 2);
-      if (p.ch !== ':' || colon) rows.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.plot(ox + i, y + j, color); }));
+      // '#' lit, '+' lit dimly (the soft colon's corners).
+      if (p.ch !== ':' || colon) rows.forEach((r, j) => [...r].forEach((c, i) => { if (c === '#') f.plot(ox + i, y + j, color); else if (c === '+') f.plot(ox + i, y + j, color, SOFT); }));
       x += p.w + L.gap;
     }
     return x - L.gap;
@@ -91,7 +93,35 @@
       FACES.push(...familyFaces(key, fam));
       built.push([`R${fam.round || 6}-${key}`, fam.label, fam.note]);
     }
+    // Round 8: t0 Bold with round colon dots instead of its square blocks.
+    const t0 = env.bitmapDigits && env.bitmapDigits.t0;
+    if (t0) for (const [key, label, note, soft] of ROUND_COLONS) {
+      const fam = { ...t0, round: 8, label, note, sizes: {} };
+      for (const [h, size] of Object.entries(t0.sizes)) fam.sizes[h] = { ...size, glyphs: { ...size.glyphs, ':': roundColon(size.glyphs[':'][0].length, Number(h), soft) } };
+      FACES.push(...familyFaces(key, fam));
+      built.unshift([`R8-${key}`, label, note]);
+    }
     return built;
+  }
+  // A colon of two round dots, each as big as t0's square ones (3, 4 or 5 px),
+  // centered on the digits with the same space between them as t0's.
+  const ROUND_COLONS = [
+    ['t0-soft', 't0 Bold, soft round colon', 'Round dots with their corner pixels lit at about a third: on the panel they read as circles rather than plus signs.', true],
+    ['t0-round', 't0 Bold, crisp round colon', 'Round dots with the corner pixels left off: every LED fully on or off, like the digits.', false],
+  ];
+  function roundColon(d, H, soft) {
+    const inner = d >= 5 ? 5 : d >= 4 ? 3 : 2, top = Math.floor((H - (2 * d + inner)) / 2);
+    const dot = [];
+    for (let j = 0; j < d; j++) {
+      let r = '';
+      for (let i = 0; i < d; i++) {
+        const corner = (i === 0 || i === d - 1) && (j === 0 || j === d - 1);
+        r += corner ? (soft ? '+' : '.') : '#';
+      }
+      dot.push(r);
+    }
+    const blank = '.'.repeat(d);
+    return Array.from({ length: H }, (_, y) => (y >= top && y < top + d ? dot[y - top] : y >= top + d + inner && y < top + 2 * d + inner ? dot[y - top - d - inner] : blank));
   }
   return { build };
 });

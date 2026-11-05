@@ -33,7 +33,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const SHEETS = { 'sheet.png': ['KEEP', 'R1'], 'sheet-round2.png': ['KEEP', 'R2'], 'sheet-round4.png': ['R4'], 'sheet-round4-128.png': ['R4W'] };
 SHEETS['sheet-round5-64.png'] = r5.map(([g]) => g); // the 64-wide panels of every font
 SHEETS['sheet-round5-128.png'] = r5.map(([g]) => g);
-for (const n of [6, 7]) for (const w of [64, 128]) SHEETS[`sheet-round${n}-${w}.png`] = r6.filter(([g]) => g.startsWith(`R${n}-`)).map(([g]) => g);
+for (const n of [6, 7, 8]) for (const w of [64, 128]) SHEETS[`sheet-round${n}-${w}.png`] = r6.filter(([g]) => g.startsWith(`R${n}-`)).map(([g]) => g);
 const frames = new Map(FACES.map((face) => {
   const f = toFrame(render(face, when(face), env));
   fs.writeFileSync(path.join(OUT, `${face.id}.png`), f.toPNG(10));
@@ -44,9 +44,9 @@ const PH = 32, GAP = 4, TH = 8;
 for (const [file, groups] of Object.entries(SHEETS)) {
   const wide = file.endsWith('-128.png');
   let faces = FACES.filter((face) => groups.includes(face.group));
-  if (/sheet-round[567]/.test(file)) faces = faces.filter((face) => (face.w || 64) === (wide ? 128 : 64));
-  const PW = faces[0].w || 64, COLS = PW > 64 || /sheet-round[567]/.test(file) ? 2 : 3;
-  const fam = (g) => (g.startsWith('R5-') ? env.digitFonts[g.slice(3)] : /^R[67]-/.test(g) ? env.bitmapDigits[g.slice(3)] : null);
+  if (/sheet-round[5-8]/.test(file)) faces = faces.filter((face) => (face.w || 64) === (wide ? 128 : 64));
+  const PW = faces[0].w || 64, COLS = PW > 64 || /sheet-round[5-8]/.test(file) ? 2 : 3;
+  const fam = (g) => (g.startsWith('R5-') ? env.digitFonts[g.slice(3)] : /^R[67]-/.test(g) ? env.bitmapDigits[g.slice(3)] : g.startsWith('R8-') ? { label: g.includes('soft') ? 'T0 SOFT COLON' : 'T0 CRISP COLON' } : null);
   const label = (face) => (fam(face.group) ? `${fam(face.group).label} ${face.title.startsWith('Big') ? 'big' : face.title.startsWith('Day') ? 'dtd' : 'panel'}` : face.title).toUpperCase();
   const panels = faces.map((face) => [label(face), frames.get(face.id)]);
   const sheet = new Frame(COLS * PW + (COLS + 1) * GAP, Math.ceil(panels.length / COLS) * (PH + TH + GAP) + GAP);
