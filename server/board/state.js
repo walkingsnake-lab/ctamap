@@ -191,6 +191,8 @@ function defaultBoard(stations) {
     tempShadow: false,
     // Temperature unit on every weather display: 'F' or 'C'.
     tempUnit: 'F',
+    // Clock digits roll when the time changes (every clock: header, radar, faces).
+    clockRoll: true,
     // Weather screen without rain: 'now' (current conditions), '5day'
     // (today on top, the next five days in columns), or 'hourly' (today on
     // top, 3/6/9/12 hours ahead in columns).
@@ -304,6 +306,7 @@ function validatePatch(patch, stations) {
       case 'twinkle':
       case 'showTemp':
       case 'gradInvert':
+      case 'clockRoll':
       case 'otherLines':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
         out[key] = val;

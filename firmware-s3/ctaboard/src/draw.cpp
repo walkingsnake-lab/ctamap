@@ -427,9 +427,20 @@ static void draw_icon(Frame &f, int icon, int x, int y) {
 
 static NumRoller *g_roller = nullptr;
 static const Rolls *g_nums = nullptr;
+static bool g_still = false;  // payload croll false: clocks don't roll (draw.js takeRoll)
+
+static bool is_clock(const std::string &name) {
+  return name.size() >= 5 && name.compare(name.size() - 5, 5, "clock") == 0;
+}
 
 static std::optional<Roll> take_roll(const std::string &name, const ustr &text) {
-  if (g_roller) return g_roller->take(name, text);
+  bool still = g_still && is_clock(name);
+  if (g_roller) {
+    std::optional<Roll> r = g_roller->take(name, text);  // still seen, so clock() holds
+    if (still) return std::nullopt;
+    return r;
+  }
+  if (still) return std::nullopt;
   if (g_nums && !g_nums->empty()) {
     auto it = g_nums->find(name);
     if (it != g_nums->end() && it->second.p < 1 && it->second.from != text) return it->second;
@@ -543,10 +554,8 @@ bool NumRoller::busy(double ms) const {
 }
 
 bool NumRoller::clock() const {
-  for (const auto &kv : prev_) {
-    const std::string &k = kv.first;
-    if (k.size() >= 5 && k.compare(k.size() - 5, 5, "clock") == 0) return true;
-  }
+  for (const auto &kv : prev_)
+    if (is_clock(kv.first)) return true;
   return false;
 }
 
@@ -3207,6 +3216,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   if (!o.screen && !p["screen"].truthy()) screen = "";
   g_roller = o.roller;
   g_nums = o.nums;
+  g_still = p["croll"].is_false();
   g_icon_t = o.icon_t;
   if (screen == "peek") render_peek(p, f, o);
   else if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
@@ -3218,6 +3228,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   else render_transit(p, f, o.now, o.blink, o.view);
   g_roller = nullptr;
   g_nums = nullptr;
+  g_still = false;
   g_icon_t.reset();
   if (o.roller) o.roller->end();  // the Player calls begin(); render() ends the frame
   if (o.apply_bright) apply_brightness(f, o.bright ? *o.bright : p["bright"].is_null() ? 100 : p["bright"].num());

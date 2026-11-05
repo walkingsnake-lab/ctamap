@@ -634,7 +634,7 @@ test('Cycle: its screens take turns; nothing takes it over (ballgames, alerts); 
   const h = { headers: { 'X-Board-Token': 'tok' } };
   // Defaults: transit, no rotation.
   let b = await get();
-  assert.deepEqual([b.screen, b.rot, b.hclock, b.lnc], ['transit', null, true, false]);
+  assert.deepEqual([b.screen, b.rot, b.hclock, b.lnc, b.croll], ['transit', null, true, false, true]);
   // The Cycle (screen 'auto'): transit and weather by default.
   await post({ screen: 'auto' });
   b = await get();
@@ -678,9 +678,9 @@ test('Cycle: its screens take turns; nothing takes it over (ballgames, alerts); 
   assert.deepEqual([b.mlb.games.length, b.mlb.all], [2, true]);
   // Header clock and line-colored names.
   assert.equal(b.ts, false);
-  await post({ headerClock: false, lineNames: 'line', timeSteps: true });
+  await post({ headerClock: false, lineNames: 'line', timeSteps: true, clockRoll: false });
   b = await get();
-  assert.deepEqual([b.hclock, b.lnc, b.ts], [false, true, true]);
+  assert.deepEqual([b.hclock, b.lnc, b.ts, b.croll], [false, true, true, false]);
   await s.close();
 });
 
