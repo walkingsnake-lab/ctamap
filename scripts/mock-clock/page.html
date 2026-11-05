@@ -97,8 +97,12 @@ const ENV = /*__ENV__*/null;
     KEEP: ['Basic', 'Kept from round 1.'],
     R2: ['Creative', 'Round 2. Most of these tie back to the CTA or Chicago.'],
   };
+  // Round 5: one group per typeface, listed first.
+  const R5 = self.ClockFacesR5 ? self.ClockFacesR5.build(ENV) : [];
+  const FONTS = Object.fromEntries(R5.map(([k, title, note]) => [k, [title, note]]));
   const ONLY = /*__GROUPS__*/null;
-  const GROUPS = Object.fromEntries(Object.entries(ALL).filter(([k]) => !ONLY || ONLY.includes(k)));
+  const pick = (k) => !ONLY || ONLY.includes(k) || ONLY.some((o) => o.endsWith('*') && k.startsWith(o.slice(0, -1)));
+  const GROUPS = Object.fromEntries(Object.entries({ ...FONTS, ...ALL }).filter(([k]) => pick(k)));
   const S = 10, H = 32;
 
   // Unlit LED grid per panel width, drawn once and copied under every frame.
