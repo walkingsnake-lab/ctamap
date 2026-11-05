@@ -51,6 +51,8 @@ save('sheet-small.png', sheet('small', 8, 6, `${s(G.BOLT)} ${s(G.FUNNEL)} ${s(G.
 save('sheet-5x7.png', sheet('5x7', 10, 7, `${s(G.TT)} ${s(G.MIN)} ${ligatures('Cottage')}`), 8);
 save('sheet-clock.png', sheet('clock', 17, 13, '12:34', '0123456789'), 8);
 save('sheet-vcr.png', sheet('vcr', 14, 12, '12:34 9:07', '0123456789'), 8);
+save('sheet-d17.png', sheet('d17', 20, 18, '12:34 9:07', '0123456789'), 8);
+save('sheet-d13.png', sheet('d13', 16, 14, '12:34 9:07', '0123456789'), 8);
 
 // ---- mock panels ----
 

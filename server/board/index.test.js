@@ -1615,6 +1615,28 @@ test('clock screen, seventies face: only for firmware that reports it; others ke
   await s.close();
 });
 
+test('clock screen, big digits and day/date faces: sent only to firmware that draws them, with no face sections', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const get = async (hk) => (await s.req(`/board/update?b=home&hk=${hk}`, h)).body;
+  for (const face of ['digits', 'daydate']) {
+    s.store.update('home', { screen: 'clock', clockFace: face });
+    assert.equal((await get('skyline:seventies:analog:daynight:gradient')).cface, 'skyline', `${face}: older firmware keeps the skyline`);
+    const b = await get('skyline:seventies:analog:daynight:gradient:digits:daydate');
+    assert.equal(b.cface, face);
+    assert.equal(b.skyline, null, 'no skyline drawing');
+    assert.equal(b.cwx, undefined);
+    assert.equal(b.dn, undefined);
+    assert.equal(b.steady, undefined, 'the colon blinks by default');
+  }
+  s.store.update('home', { colonBlink: false });
+  assert.equal((await get('skyline:digits:daydate')).steady, undefined, 'only the big digits face');
+  s.store.update('home', { clockFace: 'digits' });
+  assert.equal((await get('skyline:digits:daydate')).steady, true, 'Blinking colon off: steady');
+  await s.close();
+});
+
 test('clock screen, analog and day/night faces: their sections, only for firmware that draws them', async () => {
   const { parse } = require('./weather');
   const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));

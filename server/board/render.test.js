@@ -337,6 +337,56 @@ test('clock screen, seventies face: VCR digits banded by row, stripes along the 
   assert.notEqual(hex(render({ ...p, cface: undefined }).get(0, 23)), '#ffc23a');
 });
 
+test('clock screen, big digits face: 17-row ttyp0 digits with their ink centered; the colon blinks, never mid-roll', () => {
+  // 8:08 PM in Chicago: full-width digits at both ends (a 1 sits centered in
+  // its tabular slot, so its ink starts further in).
+  const t = Date.parse('2026-11-02T02:08:00Z') / 1000;
+  const p = { now: t, tzo: -21600, screen: 'clock', cface: 'digits', bright: 100 };
+  const inkCols = (f, y0 = 0, y1 = 31) => {
+    const xs = [];
+    for (let x = 0; x < 64; x++) for (let y = y0; y <= y1; y++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) { xs.push(x); break; } }
+    return xs;
+  };
+  const rows = (f) => { const ys = new Set(); for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) ys.add(y); } return [...ys]; };
+  const on = render(p, { ms: t * 1000 + 250 });
+  assert.deepEqual([Math.min(...rows(on)), Math.max(...rows(on))], [7, 23], 'digits on rows 7-23');
+  const xs = inkCols(on);
+  assert.ok(Math.abs(xs[0] - (63 - xs[xs.length - 1])) <= 1, 'centered: as much room left as right');
+  // The colon (two round dots) goes dark for the second half of each second.
+  const off = render(p, { ms: t * 1000 + 750 });
+  const colon = inkCols(on).filter((x) => !inkCols(off).includes(x));
+  assert.equal(colon.length, 4, 'the 4 px colon');
+  const c0 = colon[0];
+  assert.deepEqual([0, 1, 2, 3].map((i) => !!on.get(c0 + i, 10)[0]), [false, true, true, false], 'round dot: corner pixels off');
+  assert.deepEqual([0, 1, 2, 3].map((i) => !!on.get(c0 + i, 11)[0]), [true, true, true, true]);
+  // Mid-roll the colon stays lit whatever the second.
+  const mid = render(p, { ms: t * 1000 + 750, nums: { 'dig.clock': { from: '8:07', p: 0.5 } } });
+  assert.ok(mid.get(c0 + 1, 11)[0], 'lit mid-roll');
+  // Steady (Blinking colon off): lit all second.
+  assert.deepEqual(render({ ...p, steady: true }, { ms: t * 1000 + 750 }).px, on.px, 'steady colon');
+});
+
+test('clock screen, day/date face: weekday, time with AM/PM, date, each centered', () => {
+  const t = Date.parse('2026-11-04T16:07:00Z') / 1000;  // Wednesday 10:07 AM in Chicago
+  const p = { now: t, tzo: -21600, screen: 'clock', cface: 'daydate', bright: 100 };
+  const f = render(p);
+  const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+  const lit = (y0, y1) => { const xs = []; for (let x = 0; x < 64; x++) for (let y = y0; y <= y1; y++) if (f.get(x, y)[0]) { xs.push(x); break; } return xs; };
+  const span = (xs) => [xs[0], xs[xs.length - 1]];
+  // Lines on rows 1-5 (weekday), 9-21 (time), 24-30 (date); nothing between.
+  for (const y of [0, 6, 7, 8, 22, 23, 31]) assert.equal(lit(y, y).length, 0, `row ${y} empty`);
+  const [d0, d1] = span(lit(1, 5));
+  assert.ok(Math.abs(d0 - (63 - d1)) <= 1, 'WEDNESDAY centered');
+  const [n0, n1] = span(lit(24, 30));
+  assert.ok(Math.abs(n0 - (63 - n1)) <= 1, 'NOV 4 centered');
+  // The time and AM/PM centered as a pair; AM is dim and two columns after the digits.
+  const [t0, t1] = span(lit(9, 21));
+  assert.ok(Math.abs(t0 - (63 - t1)) <= 1, 'time + AM centered');
+  assert.equal(hex(f.get(t1, 21)), '#555555', 'AM/PM at the right, on the digits\' bottom row');
+  const digitsEnd = Math.max(...lit(9, 16));
+  assert.equal(lit(17, 21).filter((x) => x > digitsEnd && x < digitsEnd + 3).length, 0, 'a two-column gap before AM');
+});
+
 test('clock faces: localDate matches the calendar (weekday, month, day, time) across years and offsets', () => {
   const { localDate } = require('./render');
   for (const iso of ['1970-01-01T00:00:00Z', '2000-02-29T12:34:56Z', '2026-11-02T03:42:37Z', '2026-12-31T23:59:59Z', '2028-02-29T05:00:00Z', '2100-03-01T00:00:00Z']) {

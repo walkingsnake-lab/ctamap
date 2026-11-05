@@ -489,11 +489,11 @@ async function build() {
     const skyline = toSkyline({ temp: 52, code: 2, clouds: 35 }, { lat: 41.8917, lon: -87.590, now: t, temp: 52 });
     const ids = ['a', 'b', 'c'], ft = [t - 720, t - 360, t - 60];
     const ring = ['transit', 'weather', 'clock', 'announce', 'cycle'];
-    const vars = [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline', 'seventies', 'analog', 'daynight', 'gradient'], [], []];
+    const vars = [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate'], [], []];
     const p = {
       ...p0, tickerHeader: 'MORSE', radar: { on: false, frames: [], ft: [], timeBox: loc.timeBox, split: loc.split, wx },
       msg: { id: 1, style: 'note', ...draw.messageLayout('Dinner at 7\nbring wine', 'note') },
-      pv: { days, hours, skyline, cwx: { temp: 52, icon: 'pcloudy_day' }, dn: { dec: -150, lon: 1200, t, here: [16, 7] }, radar: { frames: ids, ft } },
+      pv: { days, hours, skyline, cwx: { temp: 52, icon: 'pcloudy_day' }, dn: { dec: -150, lon: 1200, t, here: [16, 7] }, steady: true, radar: { frames: ids, ft } },
       knob: { ring, at: 0, vars, sel: [0, 0, 0, 0, 0], ln: 'RD' },
     };
     const pk = (k, vi, extra = {}) => ({ screen: 'peek', peek: { k, vi, ...extra } });
@@ -632,6 +632,28 @@ async function build() {
     add('seventies 10:07 dimmed', s70('2026-11-01T16:07:00Z', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('seventies roll per digit', s70('2026-11-02T03:42:00Z'), roll('9:41'), undefined, undefined, { s3only: true });
     add('seventies roll width change', s70('2026-11-01T19:00:00Z'), roll('12:59'), undefined, undefined, { s3only: true });
+  }
+  // Clock screen, big digits and day/date faces (S3 only): one- and
+  // two-digit hours, the colon's blink, the minute roll (per digit, and
+  // whole when the width changes), AM and PM, the longest weekday, dimmed.
+  {
+    const cf = (iso, cface, extra = {}) => { const t = Date.parse(iso) / 1000; return { now: t, tzo: tzOffset(t), screen: 'clock', cface, bright: 100, warn: null, skyline: null, ...extra }; };
+    const ps = [0.25, 0.5, 0.75];
+    const roll = (name, from) => ps.map((p) => ({ screen: 'clock', nums: { [name]: { from, p } } }));
+    const at = (iso, d) => Date.parse(iso) + d;
+    add('digits 9:42', cf('2026-11-02T03:42:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('digits 12:58', cf('2026-11-01T18:58:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('digits colon blink', cf('2026-11-01T16:07:00Z', 'digits'), [0, 499, 500, 999, 1000].map((d) => ({ screen: 'clock', ms: at('2026-11-01T16:07:00Z', d) })), undefined, undefined, { s3only: true });
+    add('digits steady colon', cf('2026-11-01T16:07:00Z', 'digits', { steady: true }), [0, 750].map((d) => ({ screen: 'clock', ms: at('2026-11-01T16:07:00Z', d) })), undefined, undefined, { s3only: true });
+    add('digits 10:07 dimmed', cf('2026-11-01T16:07:00Z', 'digits', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('digits roll per digit', cf('2026-11-02T03:42:00Z', 'digits'), roll('dig.clock', '9:41').map((r) => ({ ...r, ms: at('2026-11-02T03:42:00Z', 700) })), undefined, undefined, { s3only: true });
+    add('digits roll width change', cf('2026-11-01T19:00:00Z', 'digits'), roll('dig.clock', '12:59'), undefined, undefined, { s3only: true });
+    add('daydate 9:42 PM', cf('2026-11-02T03:42:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daydate 12:58 PM', cf('2026-11-01T18:58:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daydate wednesday 10:07 AM', cf('2026-11-04T16:07:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daydate dimmed', cf('2026-11-04T16:07:00Z', 'daydate', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daydate roll per digit', cf('2026-11-02T03:42:00Z', 'daydate'), roll('dd.clock', '9:41'), undefined, undefined, { s3only: true });
+    add('daydate roll width change', cf('2026-11-01T19:00:00Z', 'daydate'), roll('dd.clock', '12:59'), undefined, undefined, { s3only: true });
   }
   // Clock screen, analog and day/night faces (S3 only).
   {

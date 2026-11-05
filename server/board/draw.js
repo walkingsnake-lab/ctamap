@@ -1643,7 +1643,7 @@
         }
         return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }
-      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv }, screen: 'clock' };
+      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
       return { p, screen: 'cycle' };
     }
@@ -1865,6 +1865,48 @@
         const band = hex(s70Band(y));
         for (let x = 0; x <= S70.right; x++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) f.set(x, y, band); }
       }
+      return f;
+    }
+
+    // ---- clock screen: big digits and day/date faces (design spec §20) ----
+    // The time in the d17 / d13 fonts (UW ttyp0 Bold digits, tabular, with
+    // round colon dots). Their advance carries a 2 px gap, so a time's ink is
+    // measure() - 1 wide.
+    const BD = { top: 7, base: 24, color: '#e6e6e6' };
+    const DD = { dayBase: 6, timeBase: 22, dateBase: 31, color: '#e6e6e6', label: '#8f8f8f', ampm: '#555555' };
+    // Big digits: the time alone, its ink centered, rows 7-23. The colon
+    // blinks (off for the second half of each second on the board's clock),
+    // except while the time rolls, or always lit with p.steady.
+    function renderDigits(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
+      const f = newFrame();
+      const text = clockText(now), xOf = (str) => fdivI(65 - measure('d17', str), 2);
+      const roll = takeRoll('dig.clock', text);
+      rollTextWith(f, 'd17', roll, text, xOf, BD.base, BD.color);
+      if (!p.steady && !roll && ((ms % 1000) + 1000) % 1000 >= 500) {
+        const i = text.indexOf(':');
+        f.fill(xOf(text) + measure('d17', text.slice(0, i)) + 1, BD.top, fonts.d17[58][1], BD.base - BD.top, '#000000');
+      }
+      return f;
+    }
+    // Day/date: the weekday (Tom Thumb, rows 1-5), the time in d13 (rows
+    // 9-21) with AM/PM in Tom Thumb two columns after it, bottom-aligned, the
+    // pair centered; the date (5x7, rows 24-30). Each line centered.
+    function renderDayDate(p, opts) {
+      const o = opts || {};
+      const now = Math.floor(o.now != null ? o.now : p.now);
+      const f = newFrame();
+      const t = localDate(now, p.tzo);
+      const day = DAY_NAMES[t.wd];
+      f.text('small', day, fdivI(64 - measure('small', day), 2), DD.dayBase, DD.label);
+      const text = clockText(now), ampm = t.h < 12 ? 'AM' : 'PM', aw = measure('small', ampm);
+      const xOf = (str) => fdivI(63 - aw - measure('d13', str), 2);
+      rollText(f, 'd13', 'dd.clock', text, xOf, DD.timeBase, DD.color);
+      f.text('small', ampm, xOf(text) + measure('d13', text) + 1, DD.timeBase, DD.ampm);
+      const date = `${MONTHS[t.m - 1]} ${t.d}`;
+      f.text('5x7', date, fdivI(64 - measure('5x7', date), 2), DD.dateBase, DD.label);
       return f;
     }
 
@@ -2604,7 +2646,8 @@
     // The clock screen's face (payload cface; the skyline by default).
     function renderClock(p, o) {
       return p.cface === 'seventies' ? renderSeventies(p, o) : p.cface === 'analog' ? renderAnalog(p, o)
-        : p.cface === 'daynight' ? renderDayNight(p, o) : p.cface === 'gradient' ? renderGradient(p, o) : renderSkyline(p, o);
+        : p.cface === 'daynight' ? renderDayNight(p, o) : p.cface === 'gradient' ? renderGradient(p, o)
+        : p.cface === 'digits' ? renderDigits(p, o) : p.cface === 'daydate' ? renderDayDate(p, o) : renderSkyline(p, o);
     }
 
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock

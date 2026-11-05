@@ -52,7 +52,7 @@ std::string utf8(const ustr &s);
 ustr num_text(long long n);  // str(int)
 
 // Fonts, in assets.h order (sorted names).
-enum Font { FONT_5X7 = 0, FONT_CLOCK = 1, FONT_SMALL = 2, FONT_VCR = 3 };
+enum Font { FONT_5X7 = 0, FONT_CLOCK = 1, FONT_D13 = 2, FONT_D17 = 3, FONT_SMALL = 4, FONT_VCR = 5 };
 
 // ---- frame ----
 

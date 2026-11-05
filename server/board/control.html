@@ -387,6 +387,8 @@
       <button role="radio" data-v="analog"><img alt="" data-static="face-analog"><span class="lab"><span class="rd" data-icon="dotck"></span>Analog</span></button>
       <button role="radio" data-v="daynight"><img alt="" data-static="face-daynight"><span class="lab"><span class="rd" data-icon="dotck"></span>Day/night</span></button>
       <button role="radio" data-v="gradient"><img alt="" data-static="face-gradient"><span class="lab"><span class="rd" data-icon="dotck"></span>Gradient</span></button>
+      <button role="radio" data-v="digits"><img alt="" data-static="face-digits"><span class="lab"><span class="rd" data-icon="dotck"></span>Big digits</span></button>
+      <button role="radio" data-v="daydate"><img alt="" data-static="face-daydate"><span class="lab"><span class="rd" data-icon="dotck"></span>Day &amp; date</span></button>
     </div>
   </div>
   <p class="ft" id="faceFt"></p>
@@ -404,6 +406,10 @@
   <div id="gradientOpts">
     <p class="sh">Gradient</p>
     <div class="grp"><div class="c"><label for="gradInvert" class="grow">Lit digits on black</label><input type="checkbox" class="sw" id="gradInvert"></div></div>
+  </div>
+  <div id="digitsOpts">
+    <p class="sh">Big digits</p>
+    <div class="grp"><div class="c"><label for="colonBlink" class="grow">Blinking colon</label><input type="checkbox" class="sw" id="colonBlink"></div></div>
   </div>
 </section>
 
@@ -680,7 +686,7 @@
   const SCREEN_NAME = { transit: 'Transit', ticker: 'Ticker', weather: 'Weather', clock: 'Clock', announce: 'Announce', auto: 'Cycle', baseball: 'Sports' };
   const CYCLE_NAME = { transit: 'Transit', ticker: 'Ticker', weather: 'Weather', clock: 'Clock', announce: 'Announce', baseball: 'Sports' };
   const WX_NAME = { now: 'Conditions', '5day': '5-day', hourly: 'Hourly', radar: 'Radar' };
-  const FACE_NAME = { skyline: 'Skyline', seventies: 'Seventies', analog: 'Analog', daynight: 'Day/night', gradient: 'Gradient' };
+  const FACE_NAME = { skyline: 'Skyline', seventies: 'Seventies', analog: 'Analog', daynight: 'Day/night', gradient: 'Gradient', digits: 'Big digits', daydate: 'Day & date' };
   const MSG_NAMES = { note: 'Note', type: 'Typewriter', big: 'Big word', roll: 'Credits' };
   const MOTION = {
     still: { cloudDrift: 'off', wheelSpeed: 'off', rippleSpeed: 'off', rainSpeed: 'slow' },
@@ -1092,7 +1098,7 @@
     else save({ transitScreen: v });
   });
   $('transitLayout').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) save({ transitLayout: b.dataset.v }); });
-  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'showTemp', 'boats', 'twinkle', 'gradInvert']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
+  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
   for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('bbPriority').addEventListener('change', (e) => save({ bbPriority: e.target.value }));
@@ -1269,10 +1275,12 @@
     $('faceFt').hidden = !$('faceFt').textContent;
     $('skylineOpts').hidden = face !== 'skyline';
     $('gradientOpts').hidden = face !== 'gradient';
+    $('digitsOpts').hidden = face !== 'digits';
     $('showTemp').checked = board.showTemp !== false;
     $('boats').checked = board.boats !== false;
     $('twinkle').checked = board.twinkle !== false;
     $('gradInvert').checked = board.gradInvert === true;
+    $('colonBlink').checked = board.colonBlink !== false;
     const cur = { cloudDrift: board.cloudDrift || 'slow', wheelSpeed: board.wheelSpeed || 'normal', rippleSpeed: board.rippleSpeed || 'normal', rainSpeed: board.rainSpeed || 'normal' };
     const m = Object.keys(MOTION).find((k) => Object.entries(MOTION[k]).every(([f, v]) => cur[f] === v)) || 'custom';
     selVal('motion', m);

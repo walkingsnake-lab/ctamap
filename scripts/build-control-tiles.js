@@ -52,6 +52,8 @@ const PICKS = {
   'face-analog': ['analog 9:42:37 PM', 0],
   'face-daynight': ['daynight evening', 0],
   'face-gradient': ['gradient 12:58 fills the width', 0],
+  'face-digits': ['digits 9:42', 0],
+  'face-daydate': ['daydate wednesday 10:07 AM', 0],
 };
 
 function png(px) {
