@@ -37,7 +37,13 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   the controls instead: the encoder slot and rails under the knob and the sensor sled's hooks (`drawer.tray(s3=False)`
   with `drawer.ENC_X`). Each
   bolts to its two outer corner inserts and takes its pair of screws from below. The two inner posts of each stand on the
-  splice plates as open tubes round the plates' screw heads: they push, they don't bolt.
+  splice plates, a pocket round each plate screw's head: they push, they don't bolt. They're solid and closed at the
+  back (Nov 5): no tube means no bridged floor to print and no hole in the back face, so only the four outer posts'
+  screw holes show.
+- **Kept on purpose (Nov 5 review):** two screws from below per tray (one would leave each tray, and its panel, on a
+  single screw in a slotted hole), a cleat per tray (one centred cleat would hang on screws 60 mm apart, with the knob
+  123 mm off centre), and no vents in the middle (the band's free end at the seam would print thin, and the bands
+  stiffen the trays).
 - **Panels turned 180°** as in the single build (data in on the left of each panel seen from the front).
 - **Data chain: S3 → panel A's input, A's output → B's input** (Nov 4). Seen from the front the four headers sit at
   x -120.1 (A in), -39.9 (A out), +39.9 (B in) and +120.1 (B out). B's output is directly under the S3, as in the single
@@ -160,6 +166,9 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 the splice screw heads clear the open posts with the tray 0.7 off any way; the knob, sensor, USB-C and the four screws from
 below line up between the shell and the trays (0.00 mm); every part is watertight and fits the bed (largest 177.3 x 96.3).
 The P2.5 and P3 builds are unchanged (same volumes; `check_v5.py` all OK for the P2.5).
+
+**Inner posts closed (Nov 5):** each still stands on its splice plate on a Ø11 / Ø8.6 ring (the same 11 mm³ at 0.3 mm
+in), and the splice screw heads clear the pockets with the tray 0.7 off any way.
 
 **Knob moved left (Nov 5):** `check_bar128.py` again: the knob hole and the sensor pinhole line up with tray A's encoder
 slot and sensor (x -123 / -83, 0.00 off); the encoder, sensor and sled clear tray A, shell A and panel A; tray B is

@@ -21,12 +21,12 @@ A's: JOINT_RIB wide (0.45 = every other rib, plus any gap between the butted pan
 half rib (too thin to print on the 0.2 nozzle). B's diffuser starts 0.225 past its panel's edge.
 Splice plates: two short PETG plates on the panels' inner corner inserts (x +/-17.5, z +/-32.25), one round hole and
 one slot (x), screwed on first (M3 x 6 button heads): they tie the panels into one unit so their rows can't step at the
-seam. The trays' inner posts stand on them, open tubes round the screw heads (push only).
+seam. The trays' inner posts stand on them, solid posts with a pocket round the screw heads (push only).
 Trays (black PETG): one per panel, each the P2.5 v5 tray cut at the panel joint (no end wall there: the panels fill it).
 Tray B (right) is the P2.5 tray's S3 side as built (S3, status window, Boot, USB-C slot), without the controls. Tray A
 (left) is the same tray without the S3, carrying the controls instead: the encoder slot and rails under the knob, the
 light-sensor sled hooks (drawer.tray(s3=False), drawer.ENC_X). A long STEMMA QT cable runs from the S3 to them. The two inner posts of each stand SPLICE_T further back,
-on the splice plates, with no floor or screw. Both take their own pair of screws from below and their own wall cleat.
+on the splice plates, solid and closed at the back, with no screw. Both take their own pair of screws from below and their own wall cleat.
 Run: python3 bar128.py <outdir>            -> shell halves, diffuser halves, trays, test pieces (sets PANEL itself; the
      trays come from a second run of this script with --trays and PANEL=p25). JOINT_RIB=0.55 / SPLICE_HOLE=3.45 set the
      two sizes the test pieces choose. Case-frame copies for check_bar128.py go to $BAR128_FRAMES (default: temp dir).
@@ -281,10 +281,13 @@ def trays():
     inner = lambda sx: {c: SPLICE_T for c in DR.CORNERS if c[0] * sx > 0}   # the corners toward the joint
 
     def open_posts(t, corners):
-        """the inner posts carry no screw (the splice plate's screws take those inserts): no floor, an open tube whose
-        rim stands on the plate round the screw head"""
+        """the inner posts carry no screw (the splice plate's screws take those inserts): solid, closed at the back (no
+        tube, no bridged floor, no hole in the back face), with a pocket at the front whose rim stands on the plate round
+        the screw head (Ø POST_BORE, SO_FLOOR + 0.6 deep: the head's 1.65 plus the tray's float)"""
         y = P3.FOOT_Y + SPLICE_T
-        return t - Manifold.batch_boolean([cyl_y(x, ZC + z, y - 1, y + P3.SO_FLOOR + 0.6, DR.POST_BORE, 48) for x, z in corners], ADD)
+        fill = Manifold.batch_boolean([cyl_y(x, ZC + z, y + P3.SO_FLOOR + 0.6, DR.Y1, DR.POST_BORE + 0.02, 48) for x, z in corners], ADD)
+        pocket = Manifold.batch_boolean([cyl_y(x, ZC + z, y - 1, y + P3.SO_FLOOR + 0.6, DR.POST_BORE, 48) for x, z in corners], ADD)
+        return (t + fill) - pocket
     tb = open_posts(DR.tray(controls=False, post_dy=inner(-1)), inner(-1)).translate([PANEL_CX, 0, 0]) ^ box(TRAY_GAP, 500, -50, 200, -50, 200)
     ta = open_posts(DR.tray(s3=False, post_dy=inner(+1)), inner(+1)).translate([-PANEL_CX, 0, 0]) ^ box(-500, -TRAY_GAP, -50, 200, -50, 200)
     big = lambda m: max(m.decompose(), key=lambda q: q.volume())
