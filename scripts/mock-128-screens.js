@@ -13,7 +13,6 @@ const { packFonts } = require(path.join(B, 'fonts'));
 const draw = require(path.join(B, 'render'));
 const icons = require(path.join(B, 'icons'));
 const G = require(path.join(B, 'glyphs'));
-const radar = require(path.join(B, 'radar'));
 
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'mockups', 'w128');
 const F = packFonts();
@@ -223,70 +222,6 @@ function hourly({ top = true } = {}) {
     ctext(f, 'small', `${t}°`, cx + 1, 23, tempColor(t));
     ctext(f, 'small', `${pop}%`, cx, 30, pop >= 20 ? '#1e90ff' : pop ? '#2a5a90' : '#3a3a3a');
   });
-  return f;
-}
-
-// Wide radar: a real MRMS frame (the Aug 10, 2020 derecho at 4 PM) cropped 128 LEDs wide.
-// Radar layer: a real MRMS frame cropped `width` LEDs wide at 1.5 mi/LED with
-// the station at column `sx`, drawn into columns 0..width-1 of f. Water is
-// masked from the lake outline (as build-locations.js does per station at 64).
-async function radarLayer(f, mapid, width, sx, stamp = '202008102100') {
-  const st = require(path.join(B, 'stations.json')).find((x) => x.mapid === mapid);
-  const wld = radar.parseWld(fs.readFileSync(path.join(B, 'fixtures', 'mrms', `lcref_${stamp}.wld`), 'utf8'));
-  const KM = 1.5 * 1.609344, shift = sx - Math.floor(width / 2);
-  const lonC = st.lon - (shift * KM) / (111.32 * Math.cos(st.lat * Math.PI / 180));
-  const crop = await radar.crops(fs.createReadStream(path.join(B, 'fixtures', 'mrms', `lcref_${stamp}.png`)), wld, [{ key: 'k', lat: st.lat, lon: lonC, width }]);
-  const { dbz } = crop.get('k');
-  const rings = JSON.parse(fs.readFileSync(path.join(__dirname, 'geo-src', 'lake-michigan.geojson'), 'utf8')).features[0].geometry.coordinates;
-  const inR = (ring, lon, lat) => { let c = false; for (let a = 0, b = ring.length - 1; a < ring.length; b = a++) { const [xi, yi] = ring[a], [xj, yj] = ring[b]; if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) c = !c; } return c; };
-  const colsPer = KM / (wld.dx * 111.32 * Math.cos(st.lat * Math.PI / 180)), rowsPer = KM / (Math.abs(wld.dy) * 111.32);
-  const cx = (lonC - wld.x0) / wld.dx, cy = (st.lat - wld.y0) / wld.dy;
-  const left = cx - (Math.floor(width / 2) + 0.5) * colsPer, top = cy - (16 + 0.5) * rowsPer;
-  const water = new Uint8Array(width * H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < width; x++) {
-    const lon = wld.x0 + (left + (x + 0.5) * colsPer) * wld.dx, lat = wld.y0 + (top + (y + 0.5) * rowsPer) * wld.dy;
-    water[y * width + x] = inR(rings[0], lon, lat) && !rings.slice(1).some((r) => inR(r, lon, lat)) ? 1 : 0;
-  }
-  const RAIN = [15, 25, 35, 45, 55], lv = new Uint8Array(width * H);
-  for (let k = 0; k < lv.length; k++) { let n = 0; while (n < RAIN.length && dbz[k] >= RAIN[n]) n++; lv[k] = water[k] ? 0 : n; }
-  for (let y = 0; y < H; y++) for (let x = 0; x < width; x++) {
-    const v = lv[y * width + x];
-    if (!v) continue;
-    let n = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && x + dx >= 0 && y + dy >= 0 && x + dx < width && y + dy < H && lv[(y + dy) * width + x + dx]) n++;
-    if (n >= 2) f.set(x, y, hex(draw.RADAR[v]));
-  }
-  for (let y = 0; y < H; y++) for (let x = 0; x < width; x++) {
-    if (!water[y * width + x]) continue;
-    const land = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const xx = x + dx, yy = y + dy; return xx >= 0 && yy >= 0 && xx < width && yy < H && !water[yy * width + xx]; });
-    if (land) f.set(x, y, hex(draw.RADAR[6]));
-  }
-  f.set(sx, 16, [255, 255, 255]);
-}
-
-// Wide radar over the lake: the station at x 92, the time stack over the water.
-async function wideRadar() {
-  const f = new Frame(W, H);
-  await radarLayer(f, '40100', W, 92);
-  rtext(f, 'clock', '4:00', 127, 15, C.clock);
-  rtext(f, 'small', 'PM', 127, 22, C.radarAmpm);
-  rtext(f, 'small', '84°', 127, 30, tempColor(84));
-  for (let i = 0; i < 6; i++) f.set(104 + i * 2, 1, hex(i === 5 ? C.amber : C.indicator));
-  return f;
-}
-
-// Split radar, every station: the map on columns 0-95 with the station at
-// x 52 (more room west, where storms come from), a divider on column 96 and
-// a 31-column panel: frame pips, time and AM/PM, conditions at the bottom.
-async function splitRadar(mapid) {
-  const f = new Frame(W, H);
-  await radarLayer(f, mapid, 96, 52);
-  f.fill(96, 0, 1, 32, C.divider);
-  for (let i = 0; i < 6; i++) f.fill(99 + i * 4, 1, 3, 2, i === 5 ? C.amber : C.indicator);
-  rtext(f, '5x7', '4:00', 127, 13, C.radarTime);
-  rtext(f, 'small', 'PM', 127, 20, C.radarAmpm);
-  icon(f, 'storm', 99, 23);
-  rtext(f, 'small', '84°', 127, 31, tempColor(84));
   return f;
 }
 
@@ -549,9 +484,6 @@ async function main() {
     ['redrawn', 'seven-day-top', '7-day, top bar on', 'The current-conditions bar as an option: with it on, the lows drop out.', '', sevenDay({ top: true })],
     ['redrawn', 'hourly', 'Hourly, 24 hours', 'Eight 3-hour steps under the top bar.', 'The server builds 4 slots today (HOUR_STEPS); the NWS hourly feed covers more.', hourly()],
     ['redrawn', 'hourly-notop', 'Hourly, top bar off', 'Without the bar the freed rows carry each slot\'s rain chance (bright from 20%).', '', hourly({ top: false })],
-    ['redrawn', 'radar', 'Radar, 128 wide', 'A real MRMS frame (the Aug 10, 2020 derecho) cropped 128 LEDs wide, the time over the lake. Works for Morse, but no fixed spot for the time box is open water for all stations: it fails at 56 of 144 (the South Side and the Loop, where the box reaches the Indiana shore).', 'Checked against every station in stations.json with the lake outline.', null],
-    ['redrawn', 'radar-split', 'Radar, split: Morse', 'One layout for every station: the map on 96 columns with the station at x 52, so it shows about 78 mi west (where storms come from) and the lake to the Michigan shore; the time and conditions in a 31-column panel.', 'Real MRMS frame, Aug 10, 2020, 4 PM (the derecho).', null],
-    ['redrawn', 'radar-split-south', 'Radar, split: 95th/Dan Ryan', 'The same layout at a South Side station, where no fixed spot over the lake works for the time.', 'Same frame.', null],
     ['redrawn', 'line-score', 'Baseball line score', 'Runs by inning, R H E, then the count, outs, pitch count and bases.', 'The innings come in the linescore the server already fetches; the pitch count would need a field added.', lineScore()],
     ['redrawn', 'note', 'Message note', 'About 21 characters a line in 5x7 instead of 10.', '', note()],
     ['more', 'key-layout', 'Key layout', 'The column key on the top row (trains to, min), with the station and clock between them instead of moving to the bottom.', 'Real Belmont times.', keyLayout()],
@@ -566,9 +498,6 @@ async function main() {
     ['more', 'credits', 'Credits roll', 'Wider lines mean fewer of them; the roll and its fade at the edges stay the same.', 'Mid-roll.', credits()],
     ['more', 'chooser', 'Knob chooser', 'The peek chooser with room to name things: the chosen category and its variant are spelled out beside its icon, with one pip per variant under the name.', 'The view on top is the 7-day with the top bar.', chooser()],
   ];
-  MOCKS.find((m) => m[1] === 'radar')[5] = await wideRadar();
-  MOCKS.find((m) => m[1] === 'radar-split')[5] = await splitRadar('40100');
-  MOCKS.find((m) => m[1] === 'radar-split-south')[5] = await splitRadar('40450');
 
   const q5 = (v) => v & 0xf8;
   fs.mkdirSync(OUT, { recursive: true });

@@ -84,13 +84,17 @@ The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours 
 
 ---
 
-## 5. Radar (open; proposed: split for every station)
+## 5. Radar (open: five proposals)
 
-At 64, each station gets a full-width map with the time over open water, or a split layout when there's no water there (114 of 144 stations get full width). At 128 that doesn't carry over:
+At 64, each station gets a full-width map with the time over open water, or a split layout when there's none (114 of 144 stations get full width). A fixed spot over the lake doesn't carry over to 128: checked against `stations.json` and the lake outline at 1.5 mi per LED, a 24 × 22 time box fails at 56 of 144 stations (the Loop and South Side reach the Indiana shore; Lake Michigan is only about 37 LEDs wide at Chicago's latitude). Five layouts that avoid it, mocked on the recorded frame of Nov 3, 2026, 3:44 PM (showers southwest of the city), at Morse:
 
-- **A fixed time box over the lake fails at 56 of 144 stations.** Checked against `stations.json` and the lake outline at 1.5 mi per LED, a 24 × 22 box: south of downtown and in the Loop it runs into the Indiana shore. Lake Michigan is only about 37 LEDs wide at Chicago's latitude, so the Michigan shore also enters the view.
-- **Proposal: one split layout for all stations.** Map on columns 0–95 with the station at x52 (about 78 mi west, where storms come from; the lake to the Michigan shore east), a divider on column 96, and a 31-column panel: frame pips, the time in 5x7 with AM/PM, the condition icon and temperature at the bottom. Same scale (1.5 mi per LED), colors, water mask and shoreline as 64; masks rebuilt per station at 96 wide (`build-locations.js`).
-- Radar frames grow from 2 KB to 3 KB (96 × 32).
+1. **Split: map and time panel.** Map on columns 0–95 with the station at x52 (about 78 mi west, where weather comes from; the lake to the Michigan shore east), a divider, and a 31-column panel: frame pips, time in 5x7, AM/PM, condition icon and temperature. The same at every station; masks rebuilt at 96 wide.
+2. **One Chicago map for every board.** One fixed crop (downtown at x76), the board's station as the white dot. The time stack sits at a fixed spot over the lake (columns 84–103, rows 1–20, open water in this crop), so no per-station layout or mask. All 144 stations fall inside the view (columns 67–77, rows 9–25). The server crops one frame for all boards instead of one per station. The station is off center: the view shows about 114 mi west of downtown.
+3. **Full-width map, status bar.** Map on rows 0–24 across all 128 columns, then a bar: frame pips, time, the nearest rain (`RAIN 17 MI SW`) and temperature. Nothing sits on the map, so no water spot is needed; the map is 25 rows (37 mi) tall instead of 32.
+4. **Local and regional.** Left, the 64 radar unchanged (layout and per-station data as now); right, the region at 6 mi per LED (about 380 × 190 mi) with the local view outlined, so storms show up hours out. A side-by-side whose halves mean something: two zoom levels.
+5. **Map and nearest rain.** Map on 88 columns, then a panel that answers the question: the nearest rain's distance, direction and strength (`17 MI SW`, `LIGHT`), with time and temperature under it. Computed from the frame the server already crops; whether it's approaching needs two frames compared (later).
+
+**Leaning:** 2, for a Chicago-only product: one crop, one layout, a guaranteed spot for the time, and the most room west. The nearest-rain line from 3 and 5 could sit under its time over the lake.
 
 ---
 
@@ -141,7 +145,7 @@ The peek chooser as at 64 (the chosen view on rows 0–20, the bar on 21–31), 
 ## 10. Open questions
 
 - Busy-station layout: confirm the fitting order in §3, or pick one layout.
-- Radar: the split proposal in §5.
+- Radar: pick from the five layouts in §5.
 - Skyline: panorama or big clock; building art.
 - Direction labels for the split at Loop and branch stations.
 - Baseball beyond the line score.
@@ -153,4 +157,4 @@ The peek chooser as at 64 (the chosen view on rows 0–20, the bar on 21–31), 
 - **`draw.js` and `draw.cpp`.** Replace the hard-coded 64s with the frame width, one screen at a time; new layouts behind the width. Parity scenarios at both widths (`firmware/tests/scenarios.js`).
 - **Assets.** Fonts unchanged; new glyphs (live and scheduled icons, half sun, a 3 px W) and the 80 × 32 world map, generated as now.
 - **Simulator and control page** previews at 128.
-- **Firmware.** Chain length from the `cols` setting; radar frame buffers for 96 × 32.
+- **Firmware.** Chain length from the `cols` setting; radar frame buffers sized for the chosen radar layout (up to 128 × 32, 4 KB a frame).
