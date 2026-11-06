@@ -699,6 +699,26 @@ async function build() {
     add('wide seventies no weather, dimmed', wf('2026-12-31T05:07:00Z', 'seventies', { cwx: null, bright: 40 }), one, undefined, undefined, { s3only: true });
     add('wide seventies below zero', wf('2026-01-14T18:00:00Z', 'seventies', { cwx: { temp: -12, icon: 'snow' } }), one, undefined, undefined, { s3only: true });
     add('wide seventies roll', wf('2026-11-01T19:00:00Z', 'seventies'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'svt.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    // Analog + calendar: 5- and 6-week months (August 2026 wraps 30 and 31
+    // into the first row), February, a leap February, the accent colors.
+    add('wide analog November 1st', wf('2026-11-02T03:42:37Z', 'analog'), [{ screen: 'clock' }, { screen: 'clock', now: Date.parse('2026-11-02T03:43:05Z') / 1000 }], undefined, undefined, { s3only: true });
+    add('wide analog six-week month', wf('2026-08-31T15:00:00Z', 'analog', { cacc: '#22c8e6' }), one, undefined, undefined, { s3only: true });
+    add('wide analog February 14', wf('2026-02-14T18:00:00Z', 'analog', { cacc: '#ff4fa8' }), one, undefined, undefined, { s3only: true });
+    add('wide analog leap day, dimmed', wf('2028-02-29T13:00:00Z', 'analog', { cacc: '#a8e23a', bright: 40 }), one, undefined, undefined, { s3only: true });
+    add('wide analog last of the month', wf('2026-12-31T22:00:00Z', 'analog', { cacc: '#a066ff' }), one, undefined, undefined, { s3only: true });
+    add('analog accent', face('2026-11-02T03:42:37Z', 'analog', { cacc: '#ff5a4e' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    // Word clock: each five minutes of an hour, the rounding up to the next
+    // hour, noon and midnight.
+    const words = (iso, extra = {}) => wf(iso, 'words', extra);
+    add('wide words through the hour', words('2026-11-02T03:00:00Z'), Array.from({ length: 13 }, (_, i) => ({ screen: 'clock', now: Date.parse('2026-11-02T03:00:00Z') / 1000 + i * 300 })), undefined, undefined, { s3only: true });
+    add('wide words rounding', words('2026-11-02T03:42:00Z'), [0, 59, 60, 179, 1020, 1079].map((d) => ({ screen: 'clock', now: Date.parse('2026-11-02T03:42:00Z') / 1000 + d })), undefined, undefined, { s3only: true });
+    add('wide words noon and midnight, dimmed', words('2026-11-01T17:58:00Z', { bright: 40 }), [{ screen: 'clock' }, { screen: 'clock', now: Date.parse('2026-11-02T05:58:00Z') / 1000 }, { screen: 'clock', now: Date.parse('2026-11-01T11:31:00Z') / 1000 }], undefined, undefined, { s3only: true });
+    // Gradient at 128: 7 x 6 blocks, the gradient across all 128 columns.
+    add('wide gradient over the hour', wf('2026-11-02T01:15:00Z', 'gradient'), [0, 1234567, 3599999].map((d) => ({ screen: 'clock', ms: gms + d })), undefined, undefined, { s3only: true });
+    add('wide gradient 12:58', wf('2026-11-01T18:58:00Z', 'gradient', { bright: 40 }), [{ screen: 'clock', ms: gms }], undefined, undefined, { s3only: true });
+    add('wide gradient inverted', wf('2026-11-02T01:15:00Z', 'gradient', { ginv: true }), [0, 1234567].map((d) => ({ screen: 'clock', ms: gms + d })), undefined, undefined, { s3only: true });
+    add('wide gradient roll width change', wf('2026-11-01T19:00:00Z', 'gradient'), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    add('wide gradient roll per digit', wf('2026-11-02T01:15:00Z', 'gradient', { ginv: true }), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
   }
   // Announce screen (S3 only): the styles, the typewriter's intro (typing,
   // then its cursor blinking), the credits roll's steps, edge fades, pause

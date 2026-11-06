@@ -394,6 +394,7 @@
       <button role="radio" data-v="gradient"><img alt="" data-static="face-gradient"><span class="lab"><span class="rd" data-icon="dotck"></span>Gradient</span></button>
       <button role="radio" data-v="digits"><img alt="" data-static="face-digits"><span class="lab"><span class="rd" data-icon="dotck"></span>Big digits</span></button>
       <button role="radio" data-v="daydate"><img alt="" data-static="face-daydate"><span class="lab"><span class="rd" data-icon="dotck"></span>Day &amp; date</span></button>
+      <button role="radio" data-v="words"><img alt="" data-static="face-words"><span class="lab"><span class="rd" data-icon="dotck"></span>Words</span></button>
     </div>
   </div>
   <p class="ft" id="faceFt"></p>
@@ -407,6 +408,14 @@
         <select id="motion"><option value="still">Still</option><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option><option value="custom" disabled>Custom</option></select></label>
     </div>
     <p class="ft">Motion: the clouds, the wheel's rainbow, the ripples and the rain.</p>
+  </div>
+  <div id="analogOpts">
+    <p class="sh">Analog</p>
+    <div class="grp">
+      <label class="c sel"><span>Accent</span><span class="v"></span><span data-icon="chev"></span>
+        <select id="analogAccent"><option value="amber">Amber</option><option value="coral">Coral</option><option value="pink">Pink</option><option value="violet">Violet</option><option value="blue">Blue</option><option value="cyan">Cyan</option><option value="mint">Mint</option><option value="lime">Lime</option></select></label>
+    </div>
+    <p class="ft">The second hand, and today on the calendar (two panels).</p>
   </div>
   <div id="gradientOpts">
     <p class="sh">Gradient</p>
@@ -692,7 +701,7 @@
   const SCREEN_NAME = { transit: 'Transit', ticker: 'Ticker', weather: 'Weather', clock: 'Clock', announce: 'Announce', auto: 'Cycle', baseball: 'Sports' };
   const CYCLE_NAME = { transit: 'Transit', ticker: 'Ticker', weather: 'Weather', clock: 'Clock', announce: 'Announce', baseball: 'Sports' };
   const WX_NAME = { now: 'Conditions', '5day': '5-day', hourly: 'Hourly', radar: 'Radar' };
-  const FACE_NAME = { skyline: 'Skyline', seventies: 'Seventies', analog: 'Analog', daynight: 'Day/night', gradient: 'Gradient', digits: 'Big digits', daydate: 'Day & date' };
+  const FACE_NAME = { skyline: 'Skyline', seventies: 'Seventies', analog: 'Analog', daynight: 'Day/night', gradient: 'Gradient', digits: 'Big digits', daydate: 'Day & date', words: 'Words' };
   const MSG_NAMES = { note: 'Note', type: 'Typewriter', big: 'Big word', roll: 'Credits' };
   const MOTION = {
     still: { cloudDrift: 'off', wheelSpeed: 'off', rippleSpeed: 'off', rainSpeed: 'slow' },
@@ -1285,10 +1294,15 @@
     const face = board.clockFace || 'skyline';
     checked('clockFace', face);
     const c = caps();
-    for (const b of qa('#clockFace [data-v]')) b.disabled = !!c && b.dataset.v !== 'skyline' && !c.includes(b.dataset.v) && b.dataset.v !== face;
-    $('faceFt').textContent = c && face !== 'skyline' && !c.includes(face) ? 'This board\'s firmware doesn\'t draw this face yet: it shows the skyline.' : '';
+    const wide = board.cols === 128;
+    for (const b of qa('#clockFace [data-v]')) b.disabled = b.dataset.v !== face && ((!!c && b.dataset.v !== 'skyline' && !c.includes(b.dataset.v)) || (b.dataset.v === 'words' && !wide));
+    $('faceFt').textContent = face === 'words' && !wide ? 'The word clock needs two panels (128 × 32): this board shows the skyline.'
+      : c && face !== 'skyline' && !c.includes(face) ? 'This board\'s firmware doesn\'t draw this face yet: it shows the skyline.'
+      : !wide ? 'Words: two panels (128 × 32) only.' : '';
     $('faceFt').hidden = !$('faceFt').textContent;
     $('skylineOpts').hidden = face !== 'skyline';
+    $('analogOpts').hidden = face !== 'analog';
+    selVal('analogAccent', board.analogAccent || 'amber');
     $('gradientOpts').hidden = face !== 'gradient';
     $('digitsOpts').hidden = face !== 'digits';
     $('showTemp').checked = board.showTemp !== false;
@@ -1302,6 +1316,7 @@
   }
   $('clockFace').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) save({ clockFace: b.dataset.v }); });
   $('motion').addEventListener('change', (e) => { if (MOTION[e.target.value]) save(MOTION[e.target.value]); });
+  $('analogAccent').addEventListener('change', (e) => save({ analogAccent: e.target.value }));
 
   // ---- Cycle ----
   function cycThumb(sc, big) {

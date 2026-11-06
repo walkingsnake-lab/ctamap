@@ -1836,7 +1836,7 @@
         }
         return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }
-      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
+      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
       return { p, screen: 'cycle' };
     }
@@ -2195,10 +2195,31 @@
         if (err < 0) err += 2 * y + 1; else { x--; err += 2 * (y - x) + 1; }
       }
     }
+    // Wide board (wide-spec §6): the dial as at 64 (columns 0-33) and this
+    // month's calendar in seven 13 px columns from x37, Sunday first: five
+    // week rows at a 6 px pitch (baselines 6-30), no weekday header; a sixth
+    // week's days go in the first row's empty cells. Weekdays #b8b8b8,
+    // weekends #6a6a6a, today white on an 11 x 7 block: the accent (p.cacc,
+    // else amber) at 40% (amber's is #664600).
+    const CAL = { x0: 37, colW: 13, day: '#b8b8b8', weekend: '#6a6a6a' };
+    const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    function drawCalendar(f, now, tzo, accent) {
+      const t = localDate(now, tzo);
+      const first = now - (t.d - 1) * 86400;
+      const n = t.m === 2 ? (localDate(first + 28 * 86400, tzo).m === 2 ? 29 : 28) : MONTH_DAYS[t.m - 1];
+      const off = ((t.wd - (t.d - 1)) % 7 + 7) % 7;
+      for (let d = 1; d <= n; d++) {
+        const i = off + d - 1, col = i % 7, row = fdivI(i, 7) % 5;
+        const cx = CAL.x0 + col * CAL.colW + 6, base = 6 + row * 6, str = String(d);
+        if (d === t.d) f.fill(cx - 5, base - 6, 11, 7, scaleColor(accent, 0.4));
+        f.text('small', str, cx - fdivI(measure('small', str) - 1, 2), base, d === t.d ? C.white : col === 0 || col === 6 ? CAL.weekend : CAL.day);
+      }
+    }
     function renderAnalog(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
+      const wide = colsOf(p) === WIDE;
+      const f = newFrame(wide ? WIDE : 64);
       const t = localDate(now, p.tzo);
       circle(f, AN.cx, AN.cy, 15, '#333333');
       const tk = AN_T.ticks;
@@ -2206,8 +2227,11 @@
       const hand = (tab, i, color) => bresenham(f, AN.cx, AN.cy, tab[i * 2], tab[i * 2 + 1], color);
       hand(AN_T.hour, (t.h % 12) * 5 + fdivI(t.min, 12), C.clock);
       hand(AN_T.min, t.min, C.clock);
-      hand(AN_T.sec, t.s, C.amber);
+      // The second hand in the accent (p.cacc: the board's analogAccent), else amber.
+      const accent = p.cacc || C.amber;
+      hand(AN_T.sec, t.s, accent);
       f.fill(AN.cx, AN.cy, 1, 1, C.clock);
+      if (wide) { drawCalendar(f, now, p.tzo, accent); return f; }
       // Right: day (full name when it fits the 31 px column), date, weather.
       const full = DAY_NAMES[t.wd], day = measure('small', full) <= 31 ? full : full.slice(0, 3);
       f.text('small', day, AN.rx - fdivI(measure('small', day), 2), 7, C.wxText);
@@ -2220,6 +2244,43 @@
         const x = f.text('5x7', temp, x0 + 10, 30, C.label);
         f.text('small', '°', x, 28, C.label);
       }
+      return f;
+    }
+
+    // ---- clock screen: word clock (wide boards only; wide-spec §6) ----
+    // Five rows of words in Tom Thumb, centered, baselines 6-30; every word
+    // faintly lit (#2a2a2a), the ones that tell the time amber, rounded to
+    // five minutes: IT IS TWENTY MINUTES TO TEN IN THE EVENING. Morning
+    // before noon, afternoon to 6 PM, evening after (by the hour shown).
+    const WORDS = {
+      rows: ['IT IS HALF TEN QUARTER TWENTY', 'FIVE MINUTES TO PAST ONE TWO', 'THREE FOUR FIVE SIX SEVEN EIGHT',
+        "NINE TEN ELEVEN TWELVE O'CLOCK", 'IN THE MORNING AFTERNOON EVENING'],
+      off: '#2a2a2a',
+      // Word ids: row * 8 + the word's place in its row.
+      hours: [27, 12, 13, 16, 17, 18, 19, 20, 21, 24, 25, 26],  // 12, 1, 2, ... 11
+      // By five minutes: the minute words, then PAST (11) or TO (10).
+      mins: [[28], [8, 9, 11], [3, 9, 11], [4, 11], [5, 9, 11], [5, 8, 9, 11], [2, 11], [5, 8, 9, 10], [5, 9, 10], [4, 10], [3, 9, 10], [8, 9, 10]],
+    };
+    function wordsLit(now, tzo) {
+      const t = localDate(now, tzo);
+      let q = fdivI(t.min + 2, 5), h = t.h;
+      if (q === 12) { q = 0; h = (h + 1) % 24; }
+      if (q >= 7) h = (h + 1) % 24;
+      return [0, 1, ...WORDS.mins[q], WORDS.hours[h % 12], 32, 33, h < 12 ? 34 : h < 18 ? 35 : 36];
+    }
+    function renderWords(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const f = newFrame(WIDE);
+      const lit = wordsLit(now, p.tzo);
+      WORDS.rows.forEach((row, j) => {
+        const x0 = fdivI(WIDE - measure('small', row), 2), words = row.split(' ');
+        let prefix = '';
+        words.forEach((word, k) => {
+          f.text('small', word, x0 + (prefix ? measure('small', prefix) + 1 : 0), 6 + j * 6, lit.includes(j * 8 + k) ? C.amber : WORDS.off);
+          prefix += `${word} `;
+        });
+      });
       return f;
     }
 
@@ -2334,10 +2395,18 @@
       gap: 4,          // px between digits; 2 either side of the colon (12:59 fills the width exactly)
       dark: '#000000',
     };
-    function gradientColor(x, y, ms) {
+    // Digit geometry by width: blocks sx x sy, the gap between characters,
+    // and the colon's width, lead (it starts 2 px back at 64) and gap after.
+    // Wide (wide-spec §6): 7 x 6 blocks (21 x 30 digits), 5 px gaps either
+    // side of a 4 px colon: 12:58 is 108 px.
+    const BIG = {
+      64: { w: 64, sx: GR.sx, sy: GR.sy, gap: GR.gap, colonW: GR.sx, lead: -2, colonGap: GR.gap - 2 },
+      128: { w: 128, sx: 7, sy: 6, gap: 5, colonW: 4, lead: 0, colonGap: 5 },
+    };
+    function gradientColor(x, y, ms, w = 64) {
       const n = GR.ring.length;
       // Position on the diagonal, 0-1023, top left to bottom right.
-      const u = fdivI((x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+      const u = fdivI((x * 2 + y * 3) * 1024, (w - 1) * 2 + 31 * 3 + 1);
       const r = fdivI(ms * 256, GR.step) + fdivI(u * GR.span * 256, 1024);
       const i = fdivI(r, 256) % n, t = r % 256;
       return mixInt(hex(GR.ring[i]), hex(GR.ring[(i + 1) % n]), t);
@@ -2352,56 +2421,57 @@
       8: ['###', '#.#', '###', '#.#', '###'], 9: ['###', '#.#', '###', '..#', '###'],
       ':': ['.', '#', '.', '#', '.'],
     };
-    // The colon sits closer: it starts 2 px back and leaves 2 px after it.
-    const bigLead = (ch) => (ch === ':' ? -2 : 0), bigGap = (ch) => (ch === ':' ? GR.gap - 2 : GR.gap);
-    const bigW = (str) => [...str].reduce((w, ch) => w + bigLead(ch) + GR_GLYPHS[ch][0].length * GR.sx + bigGap(ch), -GR.gap);
-    function bigChar(f, ch, x, top, color) {
-      const g = GR_GLYPHS[ch];
-      x += bigLead(ch);
-      g.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * GR.sx, top + r * GR.sy, GR.sx, GR.sy, color); }));
-      return x + g[0].length * GR.sx + bigGap(ch);
+    const bigLead = (g, ch) => (ch === ':' ? g.lead : 0), bigGap = (g, ch) => (ch === ':' ? g.colonGap : g.gap);
+    const bigBlockW = (g, ch) => (ch === ':' ? g.colonW : g.sx);
+    const bigW = (g, str) => [...str].reduce((w, ch) => w + bigLead(g, ch) + GR_GLYPHS[ch][0].length * bigBlockW(g, ch) + bigGap(g, ch), -g.gap);
+    function bigChar(f, g, ch, x, top, color) {
+      const gl = GR_GLYPHS[ch], bw = bigBlockW(g, ch);
+      x += bigLead(g, ch);
+      gl.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * bw, top + r * g.sy, bw, g.sy, color); }));
+      return x + gl[0].length * bw + bigGap(g, ch);
     }
-    function bigText(f, str, x, top, color) { for (const ch of str) x = bigChar(f, ch, x, top, color); }
+    function bigText(f, g, str, x, top, color) { for (const ch of str) x = bigChar(f, g, ch, x, top, color); }
     function renderGradient(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
-      const f = newFrame();
+      const g = BIG[colsOf(p) === WIDE ? 128 : 64], W = g.w;
+      const f = newFrame(W);
       // Inverted (p.ginv): the digits carry the gradient on black. They're
       // drawn as a mask, then every lit pixel takes its gradient color.
       if (p.ginv) {
-        drawBigTime(f, p, now, '#ffffff');
-        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y)[0]) f.set(x, y, gradientColor(x, y, ms));
+        drawBigTime(f, g, p, now, '#ffffff');
+        for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) if (f.get(x, y)[0]) f.set(x, y, gradientColor(x, y, ms, W));
         return f;
       }
-      for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(x, y, gradientColor(x, y, ms));
-      drawBigTime(f, p, now, GR.dark);
+      for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) f.set(x, y, gradientColor(x, y, ms, W));
+      drawBigTime(f, g, p, now, GR.dark);
       return f;
     }
-    function drawBigTime(f, p, now, color) {
+    function drawBigTime(f, g, p, now, color) {
       // The time, at the minute it rolls like the other clocks
       // (only changed characters when the shape holds, else the whole time).
-      const text = clockText(now), H = 5 * GR.sy, top = fdivI(32 - H, 2);
-      const xOf = (str) => fdivI(64 - bigW(str), 2);
+      const text = clockText(now), H = 5 * g.sy, top = fdivI(32 - H, 2);
+      const xOf = (str) => fdivI(g.w - bigW(g, str), 2);
       const roll = takeRoll('grad.clock', text);
-      if (!roll) bigText(f, text, xOf(text), top, color);
-      else bigRoll(f, text, roll, xOf, top, H, color);
+      if (!roll) bigText(f, g, text, xOf(text), top, color);
+      else bigRoll(f, g, text, roll, xOf, top, H, color);
     }
     // The time mid-roll (rollTextWith's rules, on the giant digits).
-    function bigRoll(f, text, roll, xOf, top, H, color) {
-      const dist = H + GR.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
-      f.withClip(0, top, 63, top + H - 1, () => {
+    function bigRoll(f, g, text, roll, xOf, top, H, color) {
+      const dist = H + g.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
+      f.withClip(0, top, g.w - 1, top + H - 1, () => {
         const a = [...text], b = [...from];
-        if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(ch) === bigW(b[i]))) {
+        if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(g, ch) === bigW(g, b[i]))) {
           let x = xOf(text);
           a.forEach((ch, i) => {
-            if (ch === b[i]) bigChar(f, ch, x, top, color);
-            else { bigChar(f, b[i], x, top - up, color); bigChar(f, ch, x, top - up + dist, color); }
-            x += bigW(ch) + GR.gap;  // one character's advance (bigW drops a trailing gap)
+            if (ch === b[i]) bigChar(f, g, ch, x, top, color);
+            else { bigChar(f, g, b[i], x, top - up, color); bigChar(f, g, ch, x, top - up + dist, color); }
+            x += bigW(g, ch) + g.gap;  // one character's advance (bigW drops a trailing gap)
           });
         } else {
-          bigText(f, from, xOf(from), top - up, color);
-          bigText(f, text, xOf(text), top - up + dist, color);
+          bigText(f, g, from, xOf(from), top - up, color);
+          bigText(f, g, text, xOf(text), top - up + dist, color);
         }
       });
     }
@@ -2919,7 +2989,8 @@
     function renderClock(p, o) {
       return p.cface === 'seventies' ? renderSeventies(p, o) : p.cface === 'analog' ? renderAnalog(p, o)
         : p.cface === 'daynight' ? renderDayNight(p, o) : p.cface === 'gradient' ? renderGradient(p, o)
-        : p.cface === 'digits' ? renderDigits(p, o) : p.cface === 'daydate' ? renderDayDate(p, o) : renderSkyline(p, o);
+        : p.cface === 'digits' ? renderDigits(p, o) : p.cface === 'daydate' ? renderDayDate(p, o)
+        : p.cface === 'words' && colsOf(p) === WIDE ? renderWords(p, o) : renderSkyline(p, o);
     }
 
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock

@@ -107,13 +107,13 @@ The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours 
 ### Seventies (decided, built)
 The three stripes run along the bottom, climb at columns 62–69, and run along the top to the right edge; the top turn on the same 2 px band as the climb and the runs. The time in the VCR digits on the left, banded as at 64; under the top run, the **weekday in full** (`TUESDAY`), then `NOV 3` and the temperature.
 
-### Analog + calendar (liked)
-The analog face (columns 0–33) and the month in seven 13-px columns: five week rows at a 6 px pitch, no weekday header, weekends dimmer, today on an amber block. The calendar replaces the face's date and temperature.
+### Analog + calendar (built)
+The analog face (columns 0–33) and the month in seven 13-px columns: five week rows at a 6 px pitch, no weekday header, weekends dimmer, today on a block in the accent at 40%. The calendar replaces the face's date and temperature. A sixth week's days go in the first row's empty cells. **Accent** (decided Nov 5): one of eight colors (amber, coral, pink, violet, blue, cyan, mint, lime) for the second hand and today's block.
 
-### Word clock (liked, wide only)
-Every word on the grid stays faintly lit (`#2a2a2a`); the words that tell the time light amber, rounded to five minutes (`IT IS TWENTY MINUTES TO TEN IN THE EVENING`). A 64-wide version is possible: 16 × 5 run-together letters with shared letters (`SEVENINEIGHTWO`), no `IT IS`/`MINUTES`, AM/PM in the spare cells, and W drawn 3 px wide (Tom Thumb's is 5).
+### Word clock (built, wide only)
+Every word on the grid stays faintly lit (`#2a2a2a`); the words that tell the time light amber, rounded to five minutes (`IT IS TWENTY MINUTES TO TEN IN THE EVENING`). Built with `MORNING`, `AFTERNOON` and `EVENING` on the last row (the mockup had only `EVENING`), and the hours in reading order across rows 2–4. A 64-wide version is possible: 16 × 5 run-together letters with shared letters (`SEVENINEIGHTWO`), no `IT IS`/`MINUTES`, AM/PM in the spare cells, and W drawn 3 px wide (Tom Thumb's is 5).
 
-### Gradient (first pass)
+### Gradient (built)
 The same block digits widened to 7 × 6 blocks (21 × 30), so the time fills the width as at 64 (`12:58` is 108 px); the gradient spans all 128 columns.
 
 ### Skyline (open)

@@ -2464,7 +2464,7 @@ PeekView peek_view(const Value &p, int k, int vi) {
     out.v = overlay(p);
     member(out.v, "cface") = str_value(v.empty() ? "skyline" : v);
     // Each face's object read through from pv (the skyline's is large).
-    for (const char *key : {"skyline", "cwx", "dn"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
+    for (const char *key : {"skyline", "cwx", "dn", "cacc"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
     for (const char *key : {"ginv", "steady"}) {
       Value g;
       g.type = json::BOOL;
@@ -3095,16 +3095,39 @@ static void midpoint_circle(Frame &f, int cx, int cy, int r, RGB c) {
     }
   }
 }
+// Wide board (draw.js drawCalendar; wide-spec §6): this month in seven
+// 13 px columns from x37, five week rows (a sixth week wraps to the first
+// row), today white on the accent at 40%.
+static const int CAL_X0 = 37, CAL_COL_W = 13;
+static const RGB CAL_DAY = hexc(0xb8b8b8), CAL_WEEKEND = hexc(0x6a6a6a);
+static const int MONTH_DAYS[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+static void draw_calendar(Frame &f, double now, double tzo, RGB accent) {
+  LocalDate t = local_date(now, tzo);
+  double first = now - (double)(t.d - 1) * 86400;
+  long long n = t.m == 2 ? (local_date(first + 28 * 86400, tzo).m == 2 ? 29 : 28) : MONTH_DAYS[t.m - 1];
+  long long off = fmod_floor(t.wd - (t.d - 1), 7);
+  for (long long d = 1; d <= n; d++) {
+    long long i = off + d - 1, col = i % 7, row = fdiv(i, 7) % 5;
+    int cx = CAL_X0 + (int)col * CAL_COL_W + 6, base = 6 + (int)row * 6;
+    ustr str = num_text(d);
+    if (d == t.d) f.fill(cx - 5, base - 6, 11, 7, scale_color(accent, 0.4));
+    f.text(FONT_SMALL, str, cx - (int)fdiv(measure(FONT_SMALL, str) - 1, 2), base, d == t.d ? C::white : col == 0 || col == 6 ? CAL_WEEKEND : CAL_DAY);
+  }
+}
 static void render_analog(const Value &p, Frame &f, std::optional<double> now_o) {
   double now = now_o ? *now_o : p["now"].num(0);
+  bool wide = cols_of(p) == WIDE;
+  if (wide) f.w = WIDE;
   LocalDate t = local_date(now, p["tzo"].num(0));
   midpoint_circle(f, AN_CX, AN_CY, 15, hexc(0x333333));
   for (size_t i = 0; i < sizeof AN_TICKS; i += 3) f.fill(AN_TICKS[i], AN_TICKS[i + 1], 1, 1, AN_TICKS[i + 2] ? C::wxText : C::dimHead);
   auto hand = [&](const int8_t *tab, long long i, RGB c) { bresenham(f, AN_CX, AN_CY, tab[i * 2], tab[i * 2 + 1], c); };
   hand(AN_HOUR, (t.h % 12) * 5 + fdiv(t.min, 12), C::clock);
   hand(AN_MIN, t.min, C::clock);
-  hand(AN_SEC, t.s, C::amber);
+  RGB accent = p["cacc"].truthy() ? hexs(p["cacc"].str_or("")) : C::amber;
+  hand(AN_SEC, t.s, accent);
   f.fill(AN_CX, AN_CY, 1, 1, C::clock);
+  if (wide) return draw_calendar(f, now, p["tzo"].num(0), accent);
   ustr full = U(DAY_NAMES[t.wd]);
   ustr day = measure(FONT_SMALL, full) <= 31 ? full : full.substr(0, 3);
   f.text(FONT_SMALL, day, AN_RX - (int)fdiv(measure(FONT_SMALL, day), 2), 7, C::wxText);
@@ -3118,6 +3141,43 @@ static void render_analog(const Value &p, Frame &f, std::optional<double> now_o)
     if (icon >= 0) draw_icon(f, icon, x0, 22);
     int x = f.text(FONT_5X7, temp, x0 + 10, 30, C::label);
     f.text(FONT_SMALL, U"°", x, 28, C::label);
+  }
+}
+
+// ---- clock screen: word clock (wide boards only; draw.js renderWords) ----
+static const char *const WORDS_ROWS[] = {"IT IS HALF TEN QUARTER TWENTY", "FIVE MINUTES TO PAST ONE TWO", "THREE FOUR FIVE SIX SEVEN EIGHT",
+                                         "NINE TEN ELEVEN TWELVE O'CLOCK", "IN THE MORNING AFTERNOON EVENING"};
+static const RGB WORDS_OFF = hexc(0x2a2a2a);
+// Word ids: row * 8 + the word's place in its row (draw.js WORDS).
+static const int WORDS_HOURS[] = {27, 12, 13, 16, 17, 18, 19, 20, 21, 24, 25, 26};
+static const int WORDS_MINS[12][5] = {{28, -1}, {8, 9, 11, -1}, {3, 9, 11, -1}, {4, 11, -1}, {5, 9, 11, -1}, {5, 8, 9, 11, -1},
+                                      {2, 11, -1}, {5, 8, 9, 10, -1}, {5, 9, 10, -1}, {4, 10, -1}, {3, 9, 10, -1}, {8, 9, 10, -1}};
+static void render_words(const Value &p, Frame &f, std::optional<double> now_o) {
+  f.w = WIDE;
+  double now = now_o ? *now_o : p["now"].num(0);
+  LocalDate t = local_date(now, p["tzo"].num(0));
+  long long q = fdiv(t.min + 2, 5), h = t.h;
+  if (q == 12) {
+    q = 0;
+    h = (h + 1) % 24;
+  }
+  if (q >= 7) h = (h + 1) % 24;
+  std::vector<int> lit = {0, 1, WORDS_HOURS[h % 12], 32, 33, h < 12 ? 34 : h < 18 ? 35 : 36};
+  for (int i = 0; WORDS_MINS[q][i] >= 0; i++) lit.push_back(WORDS_MINS[q][i]);
+  for (int j = 0; j < 5; j++) {
+    std::string row = WORDS_ROWS[j];
+    int x0 = (int)fdiv(WIDE - measure(FONT_SMALL, U(row)), 2);
+    std::string prefix;
+    size_t start = 0;
+    for (int k = 0; start <= row.size(); k++) {
+      size_t end = row.find(' ', start);
+      if (end == std::string::npos) end = row.size();
+      std::string word = row.substr(start, end - start);
+      bool on = std::find(lit.begin(), lit.end(), j * 8 + k) != lit.end();
+      f.text(FONT_SMALL, U(word), x0 + (prefix.empty() ? 0 : measure(FONT_SMALL, U(prefix)) + 1), 6 + j * 6, on ? C::amber : WORDS_OFF);
+      prefix += word + " ";
+      start = end + 1;
+    }
   }
 }
 
@@ -3267,10 +3327,15 @@ static void render_seventies_wide(const Value &p, Frame &f, double now) {
 static const RGB GR_RING[] = {hexc(0xffc24a), hexc(0xff8a52), hexc(0xff5f7e), hexc(0xe94fb8), hexc(0xa55cff),
                               hexc(0x5a5cf2), hexc(0x3e9cff), hexc(0x3fd6c6), hexc(0x9be65a), hexc(0xffe14a)};
 static const long long GR_N = 10, GR_SPAN = 3, GR_STEP = 360000;
-static const int GR_SX = 4, GR_SY = 6, GR_GAP = 4;
+// Digit geometry by width (draw.js BIG): blocks sx x sy, the gap, and the
+// colon's width, lead and gap after.
+struct BigGeo {
+  int w, sx, sy, gap, colon_w, lead, colon_gap;
+};
+static const BigGeo BIG64 = {64, 4, 6, 4, 4, -2, 2}, BIG128 = {128, 7, 6, 5, 4, 0, 5};
 
-static RGB gradient_color(int x, int y, long long ms) {
-  long long u = fdiv((long long)(x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+static RGB gradient_color(int x, int y, long long ms, int w = 64) {
+  long long u = fdiv((long long)(x * 2 + y * 3) * 1024, (w - 1) * 2 + 31 * 3 + 1);
   long long r = fdiv(ms * 256, GR_STEP) + fdiv(u * GR_SPAN * 256, 1024);
   long long i = fmod_floor(fdiv(r, 256), GR_N), t = fmod_floor(r, 256);
   RGB a = GR_RING[i], b = GR_RING[(i + 1) % GR_N];
@@ -3285,59 +3350,59 @@ static const char *const GR_GLYPHS[11][5] = {
     {"###", "#..", "###", "#.#", "###"}, {"###", "..#", "..#", "..#", "..#"}, {"###", "#.#", "###", "#.#", "###"},
     {"###", "#.#", "###", "..#", "###"}, {".", "#", ".", "#", "."}};
 static int gr_index(char32_t ch) { return ch == U':' ? 10 : ch >= U'0' && ch <= U'9' ? (int)(ch - U'0') : -1; }
-// The colon sits closer: it starts 2 px back and leaves 2 px after it.
-static int big_lead(char32_t ch) { return ch == U':' ? -2 : 0; }
-static int big_gap(char32_t ch) { return ch == U':' ? GR_GAP - 2 : GR_GAP; }
-static int big_w(const ustr &s) {
-  int w = -GR_GAP;
+static int big_lead(const BigGeo &g, char32_t ch) { return ch == U':' ? g.lead : 0; }
+static int big_gap(const BigGeo &g, char32_t ch) { return ch == U':' ? g.colon_gap : g.gap; }
+static int big_block_w(const BigGeo &g, char32_t ch) { return ch == U':' ? g.colon_w : g.sx; }
+static int big_w(const BigGeo &g, const ustr &s) {
+  int w = -g.gap;
   for (char32_t ch : s) {
-    int g = gr_index(ch);
-    if (g >= 0) w += big_lead(ch) + (int)strlen(GR_GLYPHS[g][0]) * GR_SX + big_gap(ch);
+    int gi = gr_index(ch);
+    if (gi >= 0) w += big_lead(g, ch) + (int)strlen(GR_GLYPHS[gi][0]) * big_block_w(g, ch) + big_gap(g, ch);
   }
   return w;
 }
-static int big_char(Frame &f, char32_t ch, int x, int top, RGB c) {
-  int g = gr_index(ch);
-  if (g < 0) return x;
-  x += big_lead(ch);
-  int w = (int)strlen(GR_GLYPHS[g][0]);
+static int big_char(Frame &f, const BigGeo &g, char32_t ch, int x, int top, RGB c) {
+  int gi = gr_index(ch);
+  if (gi < 0) return x;
+  x += big_lead(g, ch);
+  int w = (int)strlen(GR_GLYPHS[gi][0]), bw = big_block_w(g, ch);
   for (int r = 0; r < 5; r++)
     for (int i = 0; i < w; i++)
-      if (GR_GLYPHS[g][r][i] == '#') f.fill(x + i * GR_SX, top + r * GR_SY, GR_SX, GR_SY, c);
-  return x + w * GR_SX + big_gap(ch);
+      if (GR_GLYPHS[gi][r][i] == '#') f.fill(x + i * bw, top + r * g.sy, bw, g.sy, c);
+  return x + w * bw + big_gap(g, ch);
 }
-static void big_text(Frame &f, const ustr &s, int x, int top, RGB c) {
-  for (char32_t ch : s) x = big_char(f, ch, x, top, c);
+static void big_text(Frame &f, const BigGeo &g, const ustr &s, int x, int top, RGB c) {
+  for (char32_t ch : s) x = big_char(f, g, ch, x, top, c);
 }
 
 // The time, rolling at the minute (draw.js drawBigTime / bigRoll).
-static void draw_big_time(Frame &f, const Value &p, double now, RGB color) {
+static void draw_big_time(Frame &f, const BigGeo &g, const Value &p, double now, RGB color) {
   ustr text = clock_text(now, p["tzo"].num(0));
-  const int H = 5 * GR_SY, top = (int)fdiv(32 - H, 2);
-  auto x_of = [](const ustr &s) { return (int)fdiv(64 - big_w(s), 2); };
+  const int H = 5 * g.sy, top = (int)fdiv(32 - H, 2);
+  auto x_of = [&g](const ustr &s) { return (int)fdiv(g.w - big_w(g, s), 2); };
   std::optional<Roll> roll = take_roll("grad.clock", text);
   if (!roll) {
-    big_text(f, text, x_of(text), top, color);
+    big_text(f, g, text, x_of(text), top, color);
     return;
   }
-  int dist = H + GR_SY, up = (int)jsround(ease_in_out(roll->p) * dist);
+  int dist = H + g.sy, up = (int)jsround(ease_in_out(roll->p) * dist);
   const ustr &from = roll->from;
-  f.push_clip(0, top, 63, top + H - 1);
+  f.push_clip(0, top, g.w - 1, top + H - 1);
   bool same = x_of(from) == x_of(text) && from.size() == text.size();
-  for (size_t i = 0; same && i < text.size(); i++) same = big_w(text.substr(i, 1)) == big_w(from.substr(i, 1));
+  for (size_t i = 0; same && i < text.size(); i++) same = big_w(g, text.substr(i, 1)) == big_w(g, from.substr(i, 1));
   if (same) {
     int x = x_of(text);
     for (size_t i = 0; i < text.size(); i++) {
-      if (text[i] == from[i]) big_char(f, text[i], x, top, color);
+      if (text[i] == from[i]) big_char(f, g, text[i], x, top, color);
       else {
-        big_char(f, from[i], x, top - up, color);
-        big_char(f, text[i], x, top - up + dist, color);
+        big_char(f, g, from[i], x, top - up, color);
+        big_char(f, g, text[i], x, top - up + dist, color);
       }
-      x += big_w(text.substr(i, 1)) + GR_GAP;
+      x += big_w(g, text.substr(i, 1)) + g.gap;
     }
   } else {
-    big_text(f, from, x_of(from), top - up, color);
-    big_text(f, text, x_of(text), top - up + dist, color);
+    big_text(f, g, from, x_of(from), top - up, color);
+    big_text(f, g, text, x_of(text), top - up + dist, color);
   }
   f.pop_clip();
 }
@@ -3345,18 +3410,21 @@ static void draw_big_time(Frame &f, const Value &p, double now, RGB color) {
 static void render_gradient(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
   double now = now_o ? *now_o : p["now"].num(0);
   long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
+  const BigGeo &g = cols_of(p) == WIDE ? BIG128 : BIG64;
+  const int W = g.w;
+  f.w = W;
   // Inverted (ginv): the digits carry the gradient on black, drawn as a
   // mask and then colored.
   if (p["ginv"].truthy()) {
-    draw_big_time(f, p, now, hexc(0xffffff));
+    draw_big_time(f, g, p, now, hexc(0xffffff));
     for (int y = 0; y < 32; y++)
-      for (int x = 0; x < 64; x++)
-        if (f.get(x, y).r) f.set(x, y, gradient_color(x, y, ms));
+      for (int x = 0; x < W; x++)
+        if (f.get(x, y).r) f.set(x, y, gradient_color(x, y, ms, W));
     return;
   }
   for (int y = 0; y < 32; y++)
-    for (int x = 0; x < 64; x++) f.set(x, y, gradient_color(x, y, ms));
-  draw_big_time(f, p, now, RGB{});
+    for (int x = 0; x < W; x++) f.set(x, y, gradient_color(x, y, ms, W));
+  draw_big_time(f, g, p, now, RGB{});
 }
 
 // ---- announce screen (design spec §15; contract "Announce") ----
@@ -3576,6 +3644,7 @@ static void render_clock(const Value &p, Frame &f, const RenderOpts &o) {
   else if (face == "gradient") render_gradient(p, f, o.now, o.ms);
   else if (face == "digits") render_digits(p, f, o.now, o.ms);
   else if (face == "daydate") render_daydate(p, f, o.now);
+  else if (face == "words" && cols_of(p) == WIDE) render_words(p, f, o.now);
   else render_skyline_faded(p, f, o);
 }
 
