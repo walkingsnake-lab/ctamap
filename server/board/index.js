@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACE
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
+const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toWeek, toDayHours, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
@@ -462,7 +462,8 @@ function createBoard({
     if (caps.face('gradient') && board.gradInvert === true) faces.ginv = true;
     if (caps.face('digits') && board.colonBlink === false) faces.steady = true;
     if (caps.face('analog') && accentOf(board)) faces.cacc = accentOf(board);
-    return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...faces };
+    const wide = board.cols === 128;
+    return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...(wide && wd ? { week: toWeek(wd), hours24: toDayHours(wd) } : {}), ...faces };
   }
 
   async function update(board, id, boot, preview = {}, caps = capsOf(id)) {
@@ -528,11 +529,21 @@ function createBoard({
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && wd ? toDays(wd) : null;
     const hours = board.wxView === 'hourly' && wd ? toHours(wd) : null;
+    // A wide board (contract "Width") also gets the week (today and six
+    // days) and the 24-hour slots when NWS has them, and `notop` with its
+    // conditions bar off; the 64 fields stay for firmware without them.
+    const wide = board.cols === 128;
+    const week = wide && days ? toWeek(wd) : null;
+    const dayHours = wide && hours ? toDayHours(wd) : null;
+    // The wide conditions' last line: the next sunrise or sunset (WeatherAPI's
+    // times for today; after sunset, tomorrow's sunrise as today's + 1 day).
+    const sun = wide && w && w.sunrise != null && w.sunset != null
+      ? (now < w.sunrise ? { k: 'rise', t: w.sunrise } : now < w.sunset ? { k: 'set', t: w.sunset } : { k: 'rise', t: w.sunrise + 86400 }) : null;
     // The conditions screen's RAIN line (`rl`), buffered per board and station.
     const rlKey = `${id}:${board.station.mapid}`;
     const rl = wd ? rainLine(rainLines.get(rlKey), wd.pop) : false;
     if (wd) rainLines.set(rlKey, rl);
-    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(rl ? { rl: 1 } : {}), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}) } };
+    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(rl ? { rl: 1 } : {}), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(week ? { week } : {}), ...(dayHours ? { hours24: dayHours } : {}), ...(wide && board.wxTop === false ? { notop: 1 } : {}), ...(sun ? { sun } : {}) } };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }

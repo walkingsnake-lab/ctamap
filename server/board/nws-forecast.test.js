@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { iconFor, parse, withForecast, createFetch, pointsUrl } = require('./nws-forecast');
-const { toDays, toHours, toScreenWx } = require('./weather');
+const { toDays, toHours, toScreenWx, toWeek, toDayHours } = require('./weather');
 
 const fx = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'nws-forecast', f), 'utf8'));
 const FORECAST = fx('morse-2026-10-11-1406-forecast.json');
@@ -55,6 +55,28 @@ test('withForecast: 5 days from NWS daytime periods, their icons as sent', () =>
     { d: 'TH', icon: 'rain', hi: 64 },
     { d: 'FR', icon: 'rain', hi: 58 },        // slight chance (20%) before 7am, then mostly cloudy
   ]);
+});
+
+test('wide boards: the week (today and six days, with lows) and 24 hours on the hours divisible by 3', () => {
+  const w = withForecast(OM, F, NOW);
+  assert.deepStrictEqual(toWeek(w), [
+    { d: 'SU', icon: 'sun', hi: 71, lo: 63 },  // today: This Afternoon, Tonight
+    { d: 'MO', icon: 'pcloudy_day', hi: 83, lo: 69 },
+    { d: 'TU', icon: 'sun', hi: 81, lo: 61 },
+    { d: 'WE', icon: 'rain', hi: 67, lo: 57 },
+    { d: 'TH', icon: 'rain', hi: 64, lo: 54 },
+    { d: 'FR', icon: 'rain', hi: 58, lo: 43 },
+    { d: 'SA', icon: 'pcloudy_day', hi: 53, lo: 44 },
+  ]);
+  const h = toDayHours(w);
+  assert.deepStrictEqual(h.map((x) => x.h), ['3P', '6P', '9P', '12A', '3A', '6A', '9A', '12P']);
+  assert.deepStrictEqual(h[0], { h: '3P', icon: 'sun', t: 71, p: 0 });
+  // Evening: today is tonight's period, still Sunday.
+  const e = toWeek(withForecast(OM, F, at('2026-10-11T19:30:00-05:00')));
+  assert.deepStrictEqual([e[0].d, e[0].icon, e.length], ['SU', 'pcloudy_night', 7]);
+  // Without NWS (WeatherAPI only: 3 days, 9 hours), neither.
+  assert.strictEqual(toWeek(OM), null);
+  assert.strictEqual(toDayHours(OM), null);
 });
 
 test('withForecast: today\'s high/low and rain chance from NWS', () => {

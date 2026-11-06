@@ -208,6 +208,10 @@ test('wxView: default conditions, 5day allowed; validated', () => {
   store.update('home', { wxView: 'hourly' });
   assert.equal(store.get('home').wxView, 'hourly');
   assert.throws(() => store.update('home', { wxView: 'week' }), /wxView must be one of now, 5day, hourly/);
+  assert.equal(store.get('home').wxTop, true);
+  store.update('home', { wxTop: false });
+  assert.equal(store.get('home').wxTop, false);
+  assert.throws(() => store.update('home', { wxTop: 'no' }), /wxTop/);
   // The rain bars were cut (Nov 2026): their settings are gone.
   assert.equal(Object.hasOwn(store.get('home'), 'wxRain'), false);
   assert.throws(() => store.update('home', { wxRain: 'bars' }), /unknown field: wxRain/);

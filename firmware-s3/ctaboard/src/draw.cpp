@@ -1566,6 +1566,142 @@ static void draw_hourly(Frame &f, const Value &wx, bool shadow, const Value *war
   }
 }
 
+// ---- wide weather layouts (draw.js drawTopBarWide, drawWeek, drawDayHours,
+// drawConditionsWide; contract "Width") ----
+static const int WW_RIGHT = 126, WW_COLS7 = 18, WW_COLS8 = 16;
+static const RGB WW_POP0 = hexc(0x3a3a3a), WW_POP_LOW = hexc(0x24538c);
+static ustr wide_date_line(double now, double tzo);  // "TUE NOV 3" (after local_date below)
+
+static void draw_top_bar_wide(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  int icon = icon_index(wx["icon"]);
+  if (icon >= 0) draw_icon(f, icon, FD_ICON_X, 0);
+  ustr temp = vstr(wx["temp"]);
+  if (shadow) {
+    RGB sh = scale_color(temp_color(wx["temp"].num(), wx["c"]), 0.2);
+    f.text(FONT_SMALL, U"°", roll_named(f, FONT_5X7, "wx.top", temp, LEFT, FD_TEMP_X + 1, 8, sh), 7, sh);
+  }
+  int x = roll_named(f, FONT_5X7, "wx.top", temp, LEFT, FD_TEMP_X, 7, C::label);
+  f.text(FONT_SMALL, U"°", x, 6, C::label);
+  if (wx["word"].truthy()) f.text(FONT_SMALL, vstr(wx["word"]), x + 1 + 5, 7, C::wxText);
+  if (warn) {
+    WarnStyle ws = warn_style(*warn);
+    if (ws.blinks && blink) return;
+    ustr word = (*warn)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
+    int gx = WW_RIGHT - (measure(FONT_SMALL, ws.glyph) + TAG_GAP + measure(FONT_SMALL, word)) + 1;
+    f.text(FONT_SMALL, word, f.text(FONT_SMALL, ws.glyph, gx, 7, ws.color) + TAG_GAP - 1, 7, ws.color);
+  } else if (!wx["hi"].is_null() && !wx["lo"].is_null()) {
+    std::vector<Part> parts = {{g(assets::G_UP), FD_LETTER, false}, {vstr(wx["hi"]), FD_NUM, true},
+                               {U" " + g(assets::G_DOWN), FD_LETTER, false}, {vstr(wx["lo"]), FD_NUM, true}};
+    int hx = fd_left(parts) + (WW_RIGHT - FD_HL_RIGHT);
+    for (const Part &p : parts) hx = p.n ? draw_temp_text(f, p.t, hx, 7, p.c) : f.text(FONT_SMALL, p.t, hx, 7, p.c);
+  }
+}
+
+// A temperature and its degree sign (Tom Thumb), centered at cx.
+static void draw_deg_temp(Frame &f, const Value &t, int cx, int base, RGB color) {
+  ustr str = vstr(t);
+  int w = temp_width(str) + 1 + measure(FONT_SMALL, U"°");
+  f.text(FONT_SMALL, U"°", draw_temp_text(f, str, cx - (int)fdiv(w, 2), base, color), base, color);
+}
+
+static void draw_week(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  bool bar = !wx["notop"].truthy();
+  if (bar) draw_top_bar_wide(f, wx, shadow, warn, blink);
+  int y0 = bar ? 10 : 0, dB = bar ? 15 : 6, iY = bar ? 17 : 8, hB = bar ? 31 : 23;
+  for (int i = 1; i < 7; i++) f.fill(i * WW_COLS7, y0, 1, 32 - y0, C::divider);
+  const Value &week = wx["week"];
+  for (size_t i = 0; i < week.size() && i < 7; i++) {
+    const Value &d = week[i];
+    int cx = (int)i * WW_COLS7 + 9;
+    ctext(f, FONT_SMALL, vstr(d["d"]), cx, dB, i == 0 ? C::label : C::grey);
+    int icon = icon_index(d["icon"]);
+    if (icon >= 0) draw_icon(f, icon, cx - 4, iY);
+    draw_deg_temp(f, d["hi"], cx, hB, temp_color(d["hi"].num(), wx["c"]));
+    if (!bar && !d["lo"].is_null()) draw_deg_temp(f, d["lo"], cx, 30, scale_color(temp_color(d["lo"].num(), wx["c"]), 0.6));
+  }
+}
+
+static void draw_day_hours(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  bool bar = !wx["notop"].truthy();
+  if (bar) draw_top_bar_wide(f, wx, shadow, warn, blink);
+  int y0 = bar ? 10 : 0, lB = bar ? 15 : 6, iY = bar ? 17 : 8, tB = bar ? 31 : 23;
+  for (int i = 1; i < 8; i++) f.fill(i * WW_COLS8 - 1, y0, 1, 32 - y0, C::divider);
+  const Value &hs = wx["hours24"];
+  for (size_t i = 0; i < hs.size() && i < 8; i++) {
+    const Value &h = hs[i];
+    int cx = (int)i * WW_COLS8 + 7;
+    ctext(f, FONT_SMALL, vstr(h["h"]), cx, lB, C::grey);
+    int icon = icon_index(h["icon"]);
+    if (icon >= 0) draw_icon(f, icon, cx - 4, iY);
+    draw_deg_temp(f, h["t"], cx, tB, temp_color(h["t"].num(), wx["c"]));
+    if (!bar && !h["p"].is_null()) {
+      double pp = h["p"].num();
+      draw_day_temp(f, vstr(h["p"]) + U"%", cx, 30, pp <= 0 ? WW_POP0 : pp < 20 ? WW_POP_LOW : WX_BLUE);
+    }
+  }
+}
+
+static void draw_icon2x(Frame &f, int icon, int x, int y) {
+  const char *px = assets::ICONS[icon].px;
+  for (int j = 0; j < 8; j++)
+    for (int i = 0; i < 8; i++) {
+      char c = px[j * 8 + i];
+      if (c != '.') f.fill(x + i * 2, y + j * 2, 2, 2, icon_color(c));
+    }
+}
+
+static const int CONW_X0 = 58, CONW_L5[] = {6, 12, 18, 24, 30}, CONW_L4[] = {7, 15, 23, 31};
+static void draw_conditions_wide(Frame &f, const Value &p, double now, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  int icon = icon_index(wx["icon"]);
+  if (icon >= 0) draw_icon2x(f, icon, 1, 0);
+  ustr temp = vstr(wx["temp"]);
+  if (shadow) {
+    RGB sh = scale_color(temp_color(wx["temp"].num(), wx["c"]), 0.2);
+    f.text(FONT_SMALL, U"°", roll_named(f, FONT_CLOCK, "wx.temp", temp, LEFT, 20, 14, sh) + 1, 7, sh);
+  }
+  int tx = roll_named(f, FONT_CLOCK, "wx.temp", temp, LEFT, 19, 13, C::label);
+  f.text(FONT_SMALL, U"°", tx, 6, C::label);
+  if (warn) {
+    WarnStyle ws = warn_style(*warn);
+    if (!(ws.blinks && blink)) {
+      ustr word = (*warn)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
+      f.text(FONT_SMALL, word, f.text(FONT_SMALL, ws.glyph, 0, 25, ws.color) + TAG_GAP - 1, 25, ws.color);
+    }
+  } else if (!wx["hi"].is_null() && !wx["lo"].is_null()) {
+    int hx = f.text(FONT_SMALL, g(assets::G_UP), 0, 25, FD_LETTER) + 1;
+    hx = draw_temp_text(f, vstr(wx["hi"]), hx, 25, FD_NUM) + 3;
+    hx = f.text(FONT_SMALL, g(assets::G_DOWN), hx, 25, FD_LETTER) + 1;
+    draw_temp_text(f, vstr(wx["lo"]), hx, 25, FD_NUM);
+  }
+  double tzo = p["tzo"].num(0);
+  f.text(FONT_SMALL, wide_date_line(now, tzo), 0, 31, C::dimHead);
+  struct Line { ustr label; const char *name; ustr value; RGB color; };
+  Line lines[5];
+  int n = 0;
+  lines[n++] = {U"SKY", nullptr, wx["word"].truthy() ? vstr(wx["word"]) : ustr(), sky_color(wx["icon"])};
+  if (!wx["feels"].is_null())
+    lines[n++] = {U"FEELS", "wx.feels", vstr(wx["feels"]) + U"°", temp_color(wx["feels"].num(), wx["c"], TEXT_TEMP_STOPS)};
+  if (wx["wind"].truthy()) {
+    ustr w = vstr(wx["wind"]);
+    lines[n++] = {U"WIND", nullptr, w == U"CALM" ? w : w + U" MPH", C::label};
+  }
+  if (wx["rl"].truthy() && !wx["pop"].is_null()) lines[n++] = {U"RAIN", "wx.pop", vstr(wx["pop"]) + U"%", WX_BLUE};
+  const Value &sun = wx["sun"];
+  if (sun.truthy()) {
+    bool rise = sun["k"].eq("rise");
+    double t = sun["t"].num();
+    lines[n++] = {rise ? U"SUNRISE" : U"SUNSET", nullptr, clock_text(t, tzo) + U" " + ampm_text(t, tzo), rise ? hexc(0xffc23a) : hexc(0xff7414)};
+  }
+  for (int i = 0; i < n; i++) {
+    int base = n == 5 ? CONW_L5[i] : CONW_L4[i];
+    int lx = f.text(FONT_SMALL, lines[i].label, CONW_X0, base, C::head);
+    int vx = WIDE - measure(FONT_SMALL, lines[i].value);
+    for (int x = lx + 1 + ((lx + 1) % 2 ? 0 : 1); x < vx - 2; x += 2) f.fill(x, base - 1, 1, 1, C::divider);
+    if (lines[i].name) roll_named(f, FONT_SMALL, lines[i].name, lines[i].value, RIGHT, WIDE - 1, base, lines[i].color);
+    else f.text(FONT_SMALL, lines[i].value, vx, base, lines[i].color);
+  }
+}
+
 // ---- radar ----
 
 static int radar_value(const std::vector<uint8_t> &data, int i, int w = 64) {
@@ -1712,6 +1848,14 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   // (The rain bars were cut, Nov 2026: wx.rain is ignored.)
   if ((!ids.truthy() || (!peek && frames && !radar_on_hand(ids, frames))) && wx.truthy()) {
     bool shadow = r["tempShadow"].truthy();
+    // Wide: 24 hours, the week, or the wide conditions; hours or days
+    // without the wide data show the 64 layout on both panels.
+    if (cols_of(p) == WIDE) {
+      bool hours = wx["hours"].truthy() && wx["hours"].size(), days = wx["days"].truthy() && wx["days"].size();
+      if (wx["hours24"].truthy() && wx["hours24"].size() >= 8) { f.w = WIDE; draw_day_hours(f, wx, shadow, warnp, blink); return; }
+      if (wx["week"].truthy() && wx["week"].size() >= 7) { f.w = WIDE; draw_week(f, wx, shadow, warnp, blink); return; }
+      if (!hours && !days) { f.w = WIDE; draw_conditions_wide(f, p, now ? *now : p["now"].num(), wx, shadow, warnp, blink); return; }
+    }
     if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
     else if (wx["days"].truthy()) draw_five_day(f, wx, shadow, warnp, blink);
     else draw_conditions(f, wx, shadow, warnp, blink);
@@ -2392,7 +2536,8 @@ PeekView peek_view(const Value &p, int k, int vi) {
       wx = overlay(r["wx"]);
       member(wx, "days") = v == "5day" && pv["days"].truthy() ? pv["days"] : Value();
       member(wx, "hours") = v == "hourly" && pv["hours"].truthy() ? pv["hours"] : Value();
-      if (radar_view) member(wx, "rain") = Value();
+      member(wx, "week") = v == "5day" && pv["week"].truthy() ? pv["week"] : Value();
+      member(wx, "hours24") = v == "hourly" && pv["hours24"].truthy() ? pv["hours24"] : Value();
     } else {
       member(nr, "wx") = Value();
     }
@@ -3012,6 +3157,11 @@ static const char *const MONTH_NAMES[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JU
 struct LocalDate {
   long long wd, m, d, h, min, s;
 };
+static LocalDate local_date(double now, double tzo);
+static ustr wide_date_line(double now, double tzo) {
+  LocalDate t = local_date(now, tzo);
+  return U(std::string(DAY_NAMES[t.wd]).substr(0, 3) + " " + MONTH_NAMES[t.m - 1] + " " + std::to_string(t.d));
+}
 static LocalDate local_date(double now, double tzo) {
   long long lt = (long long)floor(now + tzo), days = fdiv(lt, 86400);
   LocalDate r;

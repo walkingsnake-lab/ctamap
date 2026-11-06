@@ -1124,6 +1124,133 @@
       });
     }
 
+    // ---- wide weather layouts (contract "Width"; wide-spec §4) ----
+    // The top bar at 128: the icon at x1, the temperature (5x7, rolling,
+    // optional shadow) at x11, the condition word (Tom Thumb, #8f8f8f) 5 px
+    // after it, and the high and low right-aligned to x126; a watch or
+    // warning (spelled out) takes the high/low's place, blinking for a
+    // tornado warning.
+    const WW = { right: 126, cols7: 18, cols8: 16, pop0: '#3a3a3a', popLow: '#24538c' };
+    function drawTopBarWide(f, wx, top) {
+      const { shadow, warn, blink } = top || {};
+      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
+      if (shadow) {
+        const sh = scaleColor(tempColor(wx.temp, wx.c), 0.2);
+        f.text('small', '°', rollText(f, '5x7', 'wx.top', String(wx.temp), () => FD_TEMP_X + 1, 8, sh), 7, sh);
+      }
+      const x = rollText(f, '5x7', 'wx.top', String(wx.temp), () => FD_TEMP_X, 7, C.label);
+      f.text('small', '°', x, 6, C.label);
+      if (wx.word) f.text('small', wx.word, x + 1 + 5, 7, C.wxText);
+      if (warn) {
+        const ws = warnStyle(warn);
+        if (ws.blinks && blink) return;
+        const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
+        const gx = WW.right - (measure('small', ws.glyph) + TAG_GAP + measure('small', word)) + 1;
+        f.text('small', word, f.text('small', ws.glyph, gx, 7, ws.color) + TAG_GAP - 1, 7, ws.color);
+      } else if (wx.hi != null && wx.lo != null) {
+        const parts = [[s(G.UP), FD_LETTER, false], [String(wx.hi), FD_NUM, true], [' ' + s(G.DOWN), FD_LETTER, false], [String(wx.lo), FD_NUM, true]];
+        let hx = WW.right - parts.reduce((w, [t, , n]) => w + (n ? tempWidth(t) : measure('small', t)) + 1, -1) + 1;
+        for (const [t, c, n] of parts) hx = n ? drawTempText(f, t, hx, 7, c) : f.text('small', t, hx, 7, c);
+      }
+    }
+    // A temperature and its degree sign (Tom Thumb), centered at cx.
+    function drawDegTemp(f, t, cx, base, color) {
+      const str = String(t), w = tempWidth(str) + 1 + measure('small', '°');
+      f.text('small', '°', drawTempText(f, str, cx - Math.floor(w / 2), base, color), base, color);
+    }
+    // 7-day: today and the six days after it (wx.week) in seven 17 px
+    // columns from x1 (centers 9, 27, ... 117), #262626 dividers on columns
+    // 18, 36, ... 108: weekday (today white, the rest grey), icon, high in
+    // its temperature color. With the top bar (rows 0-7): weekday baseline
+    // 15, icon rows 17-24, high baseline 31, dividers rows 10-31. Without
+    // (wx.notop): weekday baseline 6, icon rows 8-15, high baseline 23, the
+    // low at 60% on baseline 30, dividers full height.
+    function drawWeek(f, wx, top) {
+      const bar = !wx.notop;
+      if (bar) drawTopBarWide(f, wx, top);
+      const y0 = bar ? 10 : 0, [dB, iY, hB] = bar ? [15, 17, 31] : [6, 8, 23];
+      for (let i = 1; i < 7; i++) f.fill(i * WW.cols7, y0, 1, 32 - y0, C.divider);
+      wx.week.slice(0, 7).forEach((d, i) => {
+        const cx = i * WW.cols7 + 9;
+        ctext(f, 'small', d.d, cx, dB, i === 0 ? C.label : C.grey);
+        if (icons.ICONS[d.icon]) drawIcon(f, d.icon, cx - 4, iY);
+        drawDegTemp(f, d.hi, cx, hB, tempColor(d.hi, wx.c));
+        if (!bar && d.lo != null) drawDegTemp(f, d.lo, cx, 30, scaleColor(tempColor(d.lo, wx.c), 0.6));
+      });
+    }
+    // 24 hours: eight 16 px columns (centers 7, 23, ... 119; dividers on
+    // columns 15, 31, ... 111) for the hours divisible by 3 ahead
+    // (wx.hours24): time label (grey), icon, temperature. With the top bar:
+    // label baseline 15, icon rows 17-24, temperature baseline 31, dividers
+    // rows 10-31. Without: label baseline 6, icon rows 8-15, temperature
+    // baseline 23, and the rain chance on baseline 30 (#3a3a3a at 0%,
+    // #24538c under 20%, #1e90ff from 20%).
+    function drawDayHours(f, wx, top) {
+      const bar = !wx.notop;
+      if (bar) drawTopBarWide(f, wx, top);
+      const y0 = bar ? 10 : 0, [lB, iY, tB] = bar ? [15, 17, 31] : [6, 8, 23];
+      for (let i = 1; i < 8; i++) f.fill(i * WW.cols8 - 1, y0, 1, 32 - y0, C.divider);
+      wx.hours24.slice(0, 8).forEach((h, i) => {
+        const cx = i * WW.cols8 + 7;
+        ctext(f, 'small', h.h, cx, lB, C.grey);
+        if (icons.ICONS[h.icon]) drawIcon(f, h.icon, cx - 4, iY);
+        drawDegTemp(f, h.t, cx, tB, tempColor(h.t, wx.c));
+        if (!bar && h.p != null) drawDayTemp(f, `${h.p}%`, cx, 30, h.p <= 0 ? WW.pop0 : h.p < 20 ? WW.popLow : WX_BLUE);  // 100% condensed like a temperature
+      });
+    }
+    // Current conditions at 128 (first pass, mockup w128/now.png): on the
+    // left the icon at twice its size (x1, rows 0-15), the temperature in
+    // the clock digits (x19, rows 3-12) with a small degree sign, the high
+    // and low (or a watch or warning) on baseline 25, and the date (#555555)
+    // on baseline 31; on the right (x58-127) the readout with dot leaders:
+    // SKY, FEELS, WIND, RAIN (while `rl`), and the next SUNRISE or SUNSET
+    // (wx.sun: {k: 'rise' | 'set', t}).
+    const CONW = { x0: 58, lines5: [6, 12, 18, 24, 30], lines4: [7, 15, 23, 31], rise: '#ffc23a', set: '#ff7414' };
+    function drawIcon2x(f, name, x, y) {
+      icons.ICONS[name].forEach((row, j) => [...row].forEach((c, i) => { if (c !== '.') f.fill(x + i * 2, y + j * 2, 2, 2, icons.PALETTE[c]); }));
+    }
+    function drawConditionsWide(f, p, wx, top) {
+      const { shadow, warn, blink } = top || {};
+      if (icons.ICONS[wx.icon]) drawIcon2x(f, wx.icon, 1, 0);
+      const temp = String(wx.temp);
+      if (shadow) {
+        const sh = scaleColor(tempColor(wx.temp, wx.c), 0.2);
+        f.text('small', '°', rollText(f, 'clock', 'wx.temp', temp, () => 20, 14, sh) + 1, 7, sh);
+      }
+      const tx = rollText(f, 'clock', 'wx.temp', temp, () => 19, 13, C.label);
+      f.text('small', '°', tx, 6, C.label);
+      if (warn) {
+        const ws = warnStyle(warn);
+        if (!(ws.blinks && blink)) {
+          const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
+          f.text('small', word, f.text('small', ws.glyph, 0, 25, ws.color) + TAG_GAP - 1, 25, ws.color);
+        }
+      } else if (wx.hi != null && wx.lo != null) {
+        let hx = f.text('small', s(G.UP), 0, 25, FD_LETTER) + 1;
+        hx = drawTempText(f, String(wx.hi), hx, 25, FD_NUM) + 3;
+        hx = f.text('small', s(G.DOWN), hx, 25, FD_LETTER) + 1;
+        drawTempText(f, String(wx.lo), hx, 25, FD_NUM);
+      }
+      const now = p.now != null ? p.now : 0, t = localDate(now, p.tzo);
+      f.text('small', `${DAY_NAMES[t.wd].slice(0, 3)} ${MONTHS[t.m - 1]} ${t.d}`, 0, 31, C.dimHead);
+      const lines = [['SKY', null, wx.word || '', SKY_COLOR[wx.icon] || C.label]];
+      if (wx.feels != null) lines.push(['FEELS', 'wx.feels', `${wx.feels}°`, tempColor(wx.feels, wx.c, TEXT_TEMP_STOPS)]);
+      if (wx.wind) lines.push(['WIND', null, wx.wind === 'CALM' ? 'CALM' : `${wx.wind} MPH`, C.label]);
+      if (wx.rl && wx.pop != null) lines.push(['RAIN', 'wx.pop', `${wx.pop}%`, WX_BLUE]);
+      if (wx.sun) {
+        const d = localDate(wx.sun.t, p.tzo);
+        lines.push([wx.sun.k === 'rise' ? 'SUNRISE' : 'SUNSET', null, `${d.h % 12 || 12}:${String(d.min).padStart(2, '0')} ${d.h < 12 ? 'AM' : 'PM'}`, wx.sun.k === 'rise' ? CONW.rise : CONW.set]);
+      }
+      const bases = lines.length === 5 ? CONW.lines5 : CONW.lines4;
+      lines.slice(0, 5).forEach(([label, name, value, color], i) => {
+        const base = bases[i], lx = f.text('small', label, CONW.x0, base, C.head);
+        const vx = WIDE - measure('small', value);
+        for (let x = lx + 1 + ((lx + 1) % 2 ? 0 : 1); x < vx - 2; x += 2) f.fill(x, base - 1, 1, 1, C.divider);
+        if (name) rollText(f, 'small', name, value, rightAt('small', WIDE - 1), base, color);
+        else f.text('small', value, vx, base, color);
+      });
+    }
+
     // The radar loop: with every frame on hand, step through them in time
     // order, then hold on the newest. While any is still downloading, hold
     // on the newest on hand (playing a partial loop showed missing frames
@@ -1166,6 +1293,15 @@
       if ((!ids.length || (!o.peek && o.frames && !radarOnHand(ids, o.frames))) && r.wx) {
         // The forecast layouts' top bar carries a warning on its high/low line.
         const top = { shadow: !!r.tempShadow, warn: p.warn, blink: o.blink };
+        // Wide (contract "Width"): 24 hours, the week, or the wide
+        // conditions; hours or days without the wide data (WeatherAPI only)
+        // show the 64 layout on both panels.
+        if (colsOf(p) === WIDE) {
+          const wx = r.wx, g = newFrame(WIDE);
+          if (wx.hours24 && wx.hours24.length >= 8) { drawDayHours(g, wx, top); return g; }
+          if (wx.week && wx.week.length >= 7) { drawWeek(g, wx, top); return g; }
+          if (!(wx.hours && wx.hours.length) && !(wx.days && wx.days.length)) { drawConditionsWide(g, { ...p, now: o.now != null ? o.now : p.now }, wx, top); return g; }
+        }
         if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
         else if (r.wx.days && r.wx.days.length) drawFiveDay(f, r.wx, top);
         else drawConditions(f, r.wx, top);
@@ -1776,10 +1912,11 @@
         let wx = r.wx || null;
         if (wx) {
           wx = { ...wx };
-          delete wx.days; delete wx.hours;
-          if (v === 'radar') delete wx.rain;
+          delete wx.days; delete wx.hours; delete wx.week; delete wx.hours24;
           if (v === '5day' && pv.days) wx.days = pv.days;
           if (v === 'hourly' && pv.hours) wx.hours = pv.hours;
+          if (v === '5day' && pv.week) wx.week = pv.week;
+          if (v === 'hourly' && pv.hours24) wx.hours24 = pv.hours24;
         }
         return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }

@@ -969,6 +969,36 @@ test('simulator test weather: a forced state and time of day reach every weather
   await s.close();
 });
 
+test('width: wide boards get the week, 24 hours, the next sun time, and notop with the top bar off', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const upd = async (w) => (await s.req(`/board/update?b=home&s=weather&hk=skyline:peek${w ? '&w=128' : ''}`, h)).body;
+  await post({ weather: { kind: 'rain' } });
+  s.store.update('home', { screen: 'weather', wxView: '5day' });
+  let b = await upd(false);
+  assert.equal(b.radar.wx.days.length, 5);
+  assert.equal('week' in b.radar.wx || 'sun' in b.radar.wx || 'notop' in b.radar.wx, false, 'a 64 board gets the 64 fields only');
+  assert.equal('week' in b.pv, false);
+  b = await upd(true);
+  assert.equal(b.radar.wx.days.length, 5, 'the 64 days stay, for firmware without the week');
+  assert.equal(b.radar.wx.week.length, 7);
+  assert.deepEqual(Object.keys(b.radar.wx.week[0]).sort(), ['d', 'hi', 'icon', 'lo']);
+  assert.equal(b.pv.week.length, 7);
+  assert.equal(b.pv.hours24.length, 8, 'the peek chooser gets both');
+  assert.ok(['rise', 'set'].includes(b.radar.wx.sun.k));
+  assert.equal(b.radar.wx.notop, undefined);
+  s.store.update('home', { wxView: 'hourly', wxTop: false });
+  b = await upd(true);
+  assert.equal(b.radar.wx.week, undefined);
+  assert.equal(b.radar.wx.hours24.length, 8);
+  assert.deepEqual(Object.keys(b.radar.wx.hours24[0]).sort(), ['h', 'icon', 'p', 't']);
+  assert.equal(b.radar.wx.notop, 1);
+  await post({});
+  await s.close();
+});
+
 test('sunTime: the moment the sun reaches an elevation, rising or setting, near a time', () => {
   const { sunPos, sunTime } = require('./sun');
   const lat = 42.0, lon = -87.67, t = Date.UTC(2026, 10, 1, 18) / 1000; // Nov 1, noon CST

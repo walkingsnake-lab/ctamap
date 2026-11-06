@@ -199,6 +199,9 @@ function defaultBoard(stations) {
     radarBright: 100,
     // Weather screen: a temperature-colored shadow behind the big temperature.
     tempShadow: false,
+    // Wide boards' 7-day and 24-hour layouts: today's conditions bar on top
+    // (false: the layout takes the whole panel, with lows / rain chances).
+    wxTop: true,
     // Temperature unit on every weather display: 'F' or 'C'.
     tempUnit: 'F',
     // Clock digits roll when the time changes (every clock: header, radar, faces).
@@ -306,6 +309,7 @@ function validatePatch(patch, stations) {
       case 'radarTime':
       case 'radarCond':
       case 'tempShadow':
+      case 'wxTop':
       case 'headerClock':
       case 'timeSteps':
       case 'boats':
