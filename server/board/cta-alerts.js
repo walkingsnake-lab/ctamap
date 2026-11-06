@@ -71,6 +71,21 @@ function boardAlertLines(alerts) {
   return lines;
 }
 
+// The wide board's alert words per line (wide-spec §3, "Alerts"): the
+// impact of a line's highest-scoring major alert, uppercase (`MAJOR
+// DELAYS`). Returns a Map of line code -> words.
+function boardAlertWords(alerts) {
+  const best = new Map();
+  for (const a of alerts || []) {
+    if (!(a.major || a.severity === 'major') || !a.impact) continue;
+    for (const r of a.routes) {
+      const ln = lineCode(r);
+      if (ln && (!best.has(ln) || a.score > best.get(ln).score)) best.set(ln, a);
+    }
+  }
+  return new Map([...best].map(([ln, a]) => [ln, a.impact.toUpperCase()]));
+}
+
 function fetchText(url, timeout = 10000) {
   return new Promise((resolve, reject) => {
     const req = http.get(url, { timeout }, (res) => {
@@ -120,4 +135,4 @@ function createAlertsPoller({ fetch = () => fetchText(ALERTS_URL), interval = 18
   };
 }
 
-module.exports = { ALERTS_URL, parseAlerts, mapAlerts, boardAlertLines, createAlertsPoller };
+module.exports = { ALERTS_URL, parseAlerts, mapAlerts, boardAlertLines, createAlertsPoller, boardAlertWords };

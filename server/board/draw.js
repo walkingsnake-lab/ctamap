@@ -342,8 +342,6 @@
     const rightAt = (font, right) => (str) => right - measure(font, str) + 1;
     const centerX = (font) => (str) => Math.floor((64 - measure(font, str)) / 2);
     // Centered in columns x0-63.
-    const centerIn = (font, x0) => (str) => x0 + Math.floor((64 - x0 - measure(font, str)) / 2);
-
     // Station name + clock on rows 1-5, flush to the screen edges, both in
     // `color` (the transit screen's dark grey, or the ticker's header grey).
     // `divider`: a line on row 7 (transit).
@@ -366,10 +364,45 @@
     // the left, the condition word on the right. A watch or warning replaces
     // the word with its tag (glyph + WATCH/WARNING, in its colors); the
     // temperature stays.
-    function drawWeather(f, wx, warn, blink) {
+    // Wide board (wide-spec §3): the warning spelled out from 4 px after the
+    // temperature: glyph, then `TORNADO WARNING` (`SEVERE T-STORM WARNING`,
+    // or `T-STORM ...` when that leaves no room), in its color; `UNTIL 7:45
+    // PM` (warn.until, at tzo; else just the time; else nothing) right-aligned
+    // to x127 in the color at 60% when it fits 4 px clear. Blinks as at 64.
+    function warnWords(warn) {
+      const lvl = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
+      return warn.kind === 'tor' ? [`TORNADO ${lvl}`] : [`SEVERE T-STORM ${lvl}`, `T-STORM ${lvl}`];
+    }
+    function drawWarnWide(f, wx, warn, base, tzo) {
+      const { glyph, color } = warnStyle(warn);
+      const gx = measure('small', `${wx.temp}°`) + 4;
+      const nx = gx + measure('small', glyph) + TAG_GAP;
+      let until = [];
+      if (warn.until != null) {
+        const d = localDate(warn.until, tzo), t = `${d.h % 12 || 12}:${String(d.min).padStart(2, '0')} ${d.h < 12 ? 'AM' : 'PM'}`;
+        until = [`UNTIL ${t}`, t];
+      }
+      const names = warnWords(warn);
+      let pick = null;
+      // The end time first, then the word UNTIL, then SEVERE.
+      for (const u of [...until, null]) {
+        for (const name of names) {
+          const end = nx + measure('small', name) - 1 + (u ? 4 + measure('small', u) : 0);
+          if (end <= WIDE - 1) { pick = [name, u]; break; }
+        }
+        if (pick) break;
+      }
+      if (!pick) pick = [names[names.length - 1], null];
+      f.text('small', glyph, gx, base, color);
+      f.text('small', pick[0], nx, base, color);
+      if (pick[1]) rtext(f, 'small', pick[1], WIDE - 1, base, scaleColor(color, 0.6));
+    }
+    function drawWeather(f, wx, warn, blink, tzo) {
       const base = 32;
       rollText(f, 'small', 'wx.temp', `${wx.temp}°`, () => 0, base, C.dimHead);
-      if (warn) {
+      if (warn && f.w === WIDE) {
+        if (!(warnStyle(warn).blinks && blink)) drawWarnWide(f, wx, warn, base, tzo);
+      } else if (warn) {
         const { glyph, color, blinks } = warnStyle(warn);
         if (blinks && blink) return;
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
@@ -387,6 +420,13 @@
     function drawKey(f) {
       f.text('small', 'trains to', 0, 6, C.dimHead);
       rtext(f, 'small', 'min', f.w - 1, 6, C.dimHead);
+    }
+    // Wide key layout (wide-spec §3; decided Nov 5): `trains to` at x0 and
+    // `minutes` right-aligned to x127 (#555555) on rows 1-5; no station or
+    // clock.
+    function drawKeyWide(f) {
+      f.text('small', 'trains to', 0, 6, C.dimHead);
+      rtext(f, 'small', 'minutes', WIDE - 1, 6, C.dimHead);
     }
     function drawBand(f, name, now, clock, color = C.head, divider = true) {
       if (divider) f.fill(0, 25, f.w, 1, C.divider);
@@ -449,9 +489,12 @@
     // The animator (createTransitAnimator) adjusts positions, colors, and alphas.
     function buildTransitView(p, now) {
       if (p.view === 'chrono') return buildChronoView(p, now);
-      if (colsOf(p) === WIDE && (p.view === 'split' || p.view === 'cols2')) return buildHalvesView(p, now);
+      if (colsOf(p) === WIDE && (p.view === 'split' || p.view === 'cols2' || p.view === 'byline')) return buildHalvesView(p, now);
       const rows = liveRows(p, now);
-      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
+      // The wide key layout: the key's row holds the station and clock, so
+      // rows sit as under a header.
+      const wideKey = colsOf(p) === WIDE && !!p.key;
+      const tops = wideKey ? rowTops(rows.length, true, !!p.wx, false, false) : rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
       const right = colsOf(p) - 1;
       return {
         now,
@@ -465,8 +508,9 @@
         wx: p.wx,
         warn: p.warn,
         stale: p.stale,
+        tzo: p.tzo,
         rows: rows.map((r, i) => ({
-          key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, top: tops[i], alpha: 1,
+          key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, aw: r.aw, top: tops[i], alpha: 1,
           cells: layoutCells(r, now, p.ts === true, 0, right),
         })),
       };
@@ -479,9 +523,27 @@
     // halves share row tops, set by the fuller one.
     const HALVES = [[0, 61], [66, 127]];
     const SPLIT_TOPS = { 1: [14], 2: [10, 18], 3: [8, 14, 20] };
+    // byline (one row per line): rows sit on their line's row (`y`), in a
+    // half (`h`) or, without `h`, across the whole width; drawn as cols2.
     function buildHalvesView(p, now) {
       const split = p.view === 'split';
       const rows = liveRows(p, now);
+      if (p.view === 'byline') {
+        const n = rows.reduce((m, r) => Math.max(m, (r.y || 0) + 1), 0);
+        const tops = rowTops(n, !!p.header, !!p.wx, !!p.headerDivider, false);
+        return {
+          now, mode: 'cols2', w: WIDE, halves: null, header: p.header, hdiv: !!p.headerDivider, key: false, clock: p.hclock !== false,
+          lnc: !!p.lnc, wx: p.wx, warn: p.warn, stale: p.stale, tzo: p.tzo,
+          rows: rows.map((r) => {
+            const full = r.h == null, h = r.h ? 1 : 0;
+            const [x0, right] = full ? [0, WIDE - 1] : HALVES[h];
+            return {
+              key: `${full ? 'f' : h}:${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, aw: r.aw, h: full ? undefined : h, x0, right, top: tops[r.y || 0], alpha: 1,
+              cells: layoutCells(r, now, p.ts === true, x0, right),
+            };
+          }),
+        };
+      }
       const per = [0, 1].map((h) => rows.filter((r) => (r.h ? 1 : 0) === h));
       const n = Math.max(per[0].length, per[1].length);
       const tops = split ? SPLIT_TOPS[Math.min(n, 3)] || [] : rowTops(n, !!p.header, !!p.wx, !!p.headerDivider, false);
@@ -498,6 +560,7 @@
         wx: split ? null : p.wx,
         warn: p.warn,
         stale: p.stale,
+        tzo: p.tzo,
         rows: per.flatMap((list, h) => list.map((r, i) => {
           const [x0, right] = HALVES[h];
           return {
@@ -531,6 +594,7 @@
         wx: p.wx,
         warn: p.warn,
         stale: p.stale,
+        tzo: p.tzo,
         rows: rows.map((r, i) => {
           const dest = `${r.ln}:${r.lbl}`;
           const due = !seenDest.has(dest); // chronological: the first one per destination is the soonest
@@ -576,6 +640,8 @@
         const ix = alertIconX(row, lx);
         f.text('small', s(G.ALERT_DISC), ix, top + 5, fade(C.red, row.alpha));
         f.text('small', s(G.ALERT_MARK), ix, top + 5, fade(C.white, row.alpha));
+        // Wide rows: the alert's words in red after the circle (row.aw).
+        if (row.aw) f.text('small', row.aw, ix + 5 + 3, top + 5, fade(C.red, row.alpha));
       }
       for (const cell of row.cells) {
         const a = cell.alpha * row.alpha;
@@ -597,21 +663,24 @@
 
     // No trains: the owl on a line along row 31 (or row 25 above the weather
     // strip), at the left; the big clock and NO TRAINS centered in x 16-63.
-    // The owl blinks and glances on the S3's icon clock.
+    // The owl blinks and glances on the S3's icon clock. On a wide board the
+    // same, 32 px in (columns 32-95), the line across the whole width
+    // (wide-spec §3; nothing else, decided Nov 5).
     const OWL_X = 2, OWL_PANEL = 16;
     function drawOvernight(f, p, now) {
       const clock = clockText(now);
       const nt = p.stale ? 'NO DATA' : 'NO TRAINS';
       const bottom = p.wx ? 25 : 31;
-      f.fill(0, bottom, 64, 1, C.perch);
+      const x0 = f.w === WIDE ? 32 : 0, mid = (font) => (str) => x0 + OWL_PANEL + Math.floor((64 - OWL_PANEL - measure(font, str)) / 2);
+      f.fill(0, bottom, f.w, 1, C.perch);
       const rows = owlRows(ICON_T);
       const oy = bottom - rows.length;
       rows.forEach((row, j) => [...row].forEach((c, i) => {
-        if (c !== '.') f.fill(OWL_X + i, oy + j, 1, 1, icons.OWL.palette[c]);
+        if (c !== '.') f.fill(x0 + OWL_X + i, oy + j, 1, 1, icons.OWL.palette[c]);
       }));
       const top = p.wx ? 3 : 5;
-      rollText(f, 'clock', 'big.clock', clock, centerIn('clock', OWL_PANEL), top + 10, C.clock);
-      f.text('small', nt, centerIn('small', OWL_PANEL)(nt), top + 18, C.noTrains);
+      rollText(f, 'clock', 'big.clock', clock, mid('clock'), top + 10, C.clock);
+      f.text('small', nt, mid('small')(nt), top + 18, C.noTrains);
     }
 
     // Stale train data (the server hasn't reached Train Tracker for a while):
@@ -626,19 +695,22 @@
       } else if (view.mode === 'split') {
         drawSplit(f, view);
       } else {
-        if (view.key) {
+        const wideKey = view.key && view.w === WIDE;
+        if (wideKey) {
+          drawKeyWide(f);
+        } else if (view.key) {
           drawKey(f);
           if (view.header) drawBand(f, view.header, view.now, view.clock !== false);
         } else if (view.header) {
           drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false, C.dimHead);
         }
-        const clipTop = view.key ? 6 : view.header ? 7 : 0;
-        const clipBottom = view.key && view.header ? 24 : view.wx ? 25 : 31;
+        const clipTop = wideKey ? 7 : view.key ? 6 : view.header ? 7 : 0;
+        const clipBottom = !wideKey && view.key && view.header ? 24 : view.wx ? 25 : 31;
         f.withClip(0, clipTop, f.w - 1, clipBottom, () => {
           for (const row of view.rows) drawViewRow(f, row, view.lnc);
         });
       }
-      if (view.wx) drawWeather(f, view.wx, view.warn, blink);
+      if (view.wx) drawWeather(f, view.wx, view.warn, blink, view.tzo);
     }
 
     // Wide board, northbound | southbound: each half's label on rows 1-5,
@@ -667,7 +739,7 @@
         view = buildTransitView(p, now);
         if (o.rolls) for (const row of view.rows) for (const c of row.cells) if (o.rolls[c.id]) c.roll = o.rolls[c.id];
       }
-      const f = newFrame(view.rows.length && (view.w || 64) === WIDE ? WIDE : 64);
+      const f = newFrame(colsOf(p) === WIDE ? WIDE : 64);
       drawTransitView(f, view, !!o.blink);
       drawStale(f, p);
       return f;
@@ -801,11 +873,11 @@
             }
             // Position numbers roll when a row moves up (2 -> 1).
             if (r.num != null && st.num != null && st.num !== r.num && !isNewRow) st.numRoll = { from: String(st.num), start: t };
-            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: r.num, mode: target.mode, h: r.h, x0: r.x0, right: r.right });
+            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, aw: r.aw, num: r.num, mode: target.mode, h: r.h, x0: r.x0, right: r.right });
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, mode: target.mode, w: target.w, halves: target.halves, header: target.header, hdiv: target.hdiv, key: target.key, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
+          const view = { now, mode: target.mode, w: target.w, halves: target.halves, header: target.header, hdiv: target.hdiv, key: target.key, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, tzo: target.tzo, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
@@ -827,7 +899,7 @@
             const numP = st.numRoll ? (t - st.numRoll.start) / ROLL_MS : 1;
             if (numP >= 1) st.numRoll = null;
             view.rows.push({
-              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, al: st.al, h: st.h, x0: st.x0, right: st.right, top: st.shownTop, alpha, cells,
+              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, al: st.al, aw: st.aw, h: st.h, x0: st.x0, right: st.right, top: st.shownTop, alpha, cells,
               num: st.num, numRoll: st.numRoll ? { from: st.numRoll.from, p: numP } : null,
             });
           }

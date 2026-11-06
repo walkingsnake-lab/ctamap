@@ -875,7 +875,7 @@ async function build() {
     const wideFrom = (name, mapid, header, cfg = {}) => {
       const json = fixture(name);
       const now = parseCtaTime(json.ctatt.tmst);
-      const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather: !!cfg.wx, showKey: !!cfg.key, cols: 128, wideLayout: cfg.layout || 'split', station: { mapid }, ...(cfg.hide ? { hideLines: cfg.hide } : {}) }, { now, alerts: new Set(cfg.alerts || []) });
+      const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather: !!cfg.wx, showKey: !!cfg.key, cols: 128, wideLayout: cfg.layout || 'split', station: { mapid }, ...(cfg.hide ? { hideLines: cfg.hide } : {}) }, { now, alerts: new Set(cfg.alerts || []), alertWords: new Map(Object.entries(cfg.words || {})) });
       return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, cols: 128, header: r.bars.showHeader ? header : null, ...(r.bars.showKey ? { key: 1 } : {}), view: r.view, ...(r.halves ? { halves: r.halves } : {}), rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx : null, warn: cfg.warn || null, ...(cfg.extra || {}) };
     };
     const at = (q) => [{ screen: 'transit' }, { screen: 'transit', now: q.now + 75 }, { screen: 'transit', now: q.now + 610 }];
@@ -902,6 +902,17 @@ async function build() {
         add(`wide transit ${r6.view} six destinations wx=${!!wx} alerts=${alertLines.length}`, c, at(c), undefined, undefined, S3);
       }
       const r = wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', alerts: ['BR'] });
+      // The alert's words after the circle (wide-spec §3), where they fit.
+      const aw = wideFrom('belmont-2026-10-03-2316.json', '41320', 'BELMONT', { layout: 'rows', alerts: ['BR', 'RD'], words: { BR: 'MAJOR DELAYS', RD: 'SIGNIFICANT DELAYS' } });
+      add('wide transit rows alert words', aw, [{ screen: 'transit' }, { screen: 'transit', blink: true }], undefined, undefined, S3);
+      const ak = wideFrom('belmont-2026-10-03-2316.json', '41320', 'BELMONT', { layout: 'rows', key: true, alerts: ['BR'], words: { BR: 'MAJOR DELAYS' } });
+      add('wide transit key layout alert words', ak, [{ screen: 'transit' }], undefined, undefined, S3);
+      // The warning spelled out on the weather strip, with when it ends.
+      for (const [warn, name] of [[{ kind: 'tor', lvl: 'warning', until: 1791248700 }, 'tornado warning until'], [{ kind: 'svr', lvl: 'warning', until: 1791252300 }, 'severe warning until'],
+        [{ kind: 'svr', lvl: 'watch' }, 'severe watch'], [{ kind: 'tor', lvl: 'watch', until: 1791255900 }, 'tornado watch until']]) {
+        const q = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { layout: 'rows', wx: WX, warn });
+        add(`wide transit ${name} on the strip`, q, [{ screen: 'transit' }, { screen: 'transit', blink: true }], undefined, undefined, S3);
+      }
       add('wide transit rows alert, line colors, steps', { ...r, lnc: true, ts: true }, at(r), undefined, undefined, S3);
       const st = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { extra: { stale: 1, hclock: false } });
       add('wide transit split stale, no clock', st, at(st), undefined, undefined, S3);
@@ -910,6 +921,10 @@ async function build() {
       add('wide transit split one half empty', half, [{ screen: 'transit' }], undefined, undefined, S3);
       // Overnight on a wide board: the 64 layout on both panels.
       add('wide transit overnight', { ...st, stale: 0, rows: [] }, [{ screen: 'transit' }], undefined, undefined, S3);
+      // The owl, clock and NO TRAINS 32 px in, the line across: with the
+      // weather strip (and a warning on it), and NO DATA.
+      add('wide transit overnight, weather strip and warning', { ...st, view: 'dest', halves: null, stale: 0, rows: [], wx: WX, warn: { kind: 'tor', lvl: 'watch', until: st.now + 3600 } }, [{ screen: 'transit' }, { screen: 'transit', now: st.now + 60, iconT: 5000 }], undefined, undefined, S3);
+      add('wide transit no data', { ...st, stale: 1, rows: [] }, [{ screen: 'transit' }], undefined, undefined, S3);
       // Many destinations: the chronological list, full width.
       const many = { ...wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', wx: WX }) };
       const chrono = { ...many, view: 'chrono', rows: many.rows.map((x, i) => ({ ...x, t: [x.t[0]], s: [x.s[0]], rn: String(800 + i) })), wx: null };

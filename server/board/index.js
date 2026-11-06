@@ -8,8 +8,8 @@ const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
 const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toWeek, toDayHours, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
-const { boardAlertLines } = require('./cta-alerts');
-const { createNws, pickWarn } = require('./nws');
+const { boardAlertLines, boardAlertWords } = require('./cta-alerts');
+const { createNws, pickWarn, warnUntil } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
 const { createRadar, packFrame } = require('./radar');
 const { createTestRadar } = require('./test-radar');
@@ -552,11 +552,14 @@ function createBoard({
     const rl = wd ? rainLine(rainLines.get(rlKey), wd.pop) : false;
     if (wd) rainLines.set(rlKey, rl);
     if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(rl ? { rl: 1 } : {}), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(week ? { week } : {}), ...(dayHours ? { hours24: dayHours } : {}), ...(wide && board.wxTop === false ? { notop: 1 } : {}), ...(sun ? { sun } : {}) } };
-    let alertLines = new Set();
-    try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
-    catch (e) { log.error('[board] alerts:', e.message); }
+    let alertLines = new Set(), alertWords = new Map();
+    try {
+      const list = alerts && alerts.get() ? alerts.get().alerts : [];
+      alertLines = boardAlertLines(list);
+      alertWords = boardAlertWords(list);
+    } catch (e) { log.error('[board] alerts:', e.message); }
     // Test alerts from the simulator (expire on their own).
-    if (test) for (const ln of test.lines) alertLines.add(ln);
+    if (test) for (const ln of test.lines) { alertLines.add(ln); if (!alertWords.has(ln)) alertWords.set(ln, 'MAJOR DELAYS'); }
     // Games only for a board that shows baseball (chosen, or a Cycle turn);
     // they never take over another screen.
     let games = [];
@@ -571,12 +574,18 @@ function createBoard({
       games = prioritize(games, board.bbPriority, bbTeams);
     } catch (e) { log.error('[board] mlb:', e.message); }
     if (sports && test && test.game) games = [testGame(test.game, now, board.cols === 128), ...games];
-    const warn = (test && test.warn) || pickWarn(nwsAlerts, now);
+    let warn = (test && test.warn) || pickWarn(nwsAlerts, now);
+    // A wide board spells out when it ends (`until`, epoch s); a test warning
+    // runs for the test's 10 minutes.
+    if (warn && board.cols === 128) {
+      const until = test && test.warn ? test.until : warnUntil(nwsAlerts, now);
+      if (until != null) warn = { ...warn, until };
+    }
     const cyc = cycleOf(board, caps, sports);
     const screen = resolveScreen(board, cyc);
     const held = holdOf(id, board, now, !!radarState.on);
     const viewKey = `${id}:${board.station.mapid}`;
-    const { view, viewState, rows, ticker, bars, halves } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
+    const { view, viewState, rows, ticker, bars, halves } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, alertWords, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
       v: board.v,

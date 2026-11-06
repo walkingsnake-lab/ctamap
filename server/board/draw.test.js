@@ -1575,7 +1575,7 @@ test('width: a 128 payload (cols) shows 64-wide screens on both panels; slides a
   assert.deepEqual(Array.from(c.px), Array.from(d.px));
 });
 
-test('width: wide transit and ticker draw 128 across; overnight shows on both panels', () => {
+test('width: wide transit and ticker draw 128 across; overnight once, in the middle', () => {
   const rows = [{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(9)], s: [0, 0], a: 0 }];
   const ticker = [{ ln: 'RD', d: 'Howard', t: min(3), s: 0, a: 0 }, { ln: 'RD', d: '95th/Dan Ryan', t: min(5), s: 1, a: 0 }];
   const p = { ...payload(rows, ticker), cols: 128 };
@@ -1597,9 +1597,12 @@ test('width: wide transit and ticker draw 128 across; overnight shows on both pa
   assert.equal(t.w, 128);
   assert.ok(count(t, '#ffffff', 120, 9, 126, 15) > 0, 'the live icon');
   assert.ok(count(t, '#ffffff', 120, 22, 126, 28) > 0, 'the schedule icon');
-  // Overnight: the 64 layout on both panels.
+  // Overnight: the 64 owl, clock and NO TRAINS 32 px in, once; the line across.
   const night = draw.render({ ...p, rows: [] });
-  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) assert.deepEqual(night.get(x, y), night.get(x + 64, y));
+  assert.equal(night.w, 128);
+  assert.equal(count(night, '#cccccc', 0, 0, 31, 30) + count(night, '#cccccc', 96, 0, 127, 30), 0, 'nothing outside columns 32-95');
+  assert.ok(count(night, '#cccccc', 48, 5, 95, 15) > 0, 'the clock');
+  assert.deepEqual(night.get(0, 31), night.get(127, 31), 'the line across');
 });
 
 test('baseball at 128: the line score for every layout; the batting half amber; X for a home half not needed', () => {
