@@ -266,10 +266,18 @@ function createBoard({
   }
   // Test game (simulator): a made-up Cubs game in one state, shown first.
   const GAME_STATES = ['pre', 'live', 'final'];
-  function testGame(st, now) {
+  // line: a wide board's line score (mlb.js lineScore).
+  function testGame(st, now, line = false) {
     const g = { id: 0, st, start: now - 3600, away: { ...team(112), r: 3, w: 92, l: 70 }, home: { ...team(138), r: 2, w: 88, l: 74 } };
     if (st === 'pre') return { ...g, start: now + 25 * 60, away: { ...g.away, r: 0 }, home: { ...g.home, r: 0 } };
-    if (st === 'final') return { ...g, away: { ...g.away, w: 93 }, home: { ...g.home, l: 75 } };
+    if (line) {
+      g.away = { ...g.away, rs: [0, 1, 0, 0, 2, 0, 0], h: 7, e: 0 };
+      g.home = { ...g.home, rs: [1, 0, 0, 1, 0, 0], h: 5, e: 1 };
+    }
+    if (st === 'final') {
+      if (line) { g.away.rs.push(0, 0); g.home.rs.push(0, 0, 0); }
+      return { ...g, away: { ...g.away, w: 93 }, home: { ...g.home, l: 75 } };
+    }
     return { ...g, inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1] };
   }
   // Test times of day (simulator): the sun's elevation (degrees) and whether
@@ -390,7 +398,7 @@ function createBoard({
   function msgOf(board) {
     if (!board.msg) return null;
     try {
-      const lay = messageLayout(board.msg.text, board.msg.style);
+      const lay = messageLayout(board.msg.text, board.msg.style, board.cols);
       return lay ? { id: board.msg.id || 0, style: board.msg.style, ...lay } : null;
     } catch (e) { log.error('[board] message:', e.message); return null; }
   }
@@ -561,10 +569,11 @@ function createBoard({
       games = mlb.get('forced', {
         teams: ['cubs', 'sox', 'post'],
         pre: (board.bbPre != null ? board.bbPre : 30) * 60, final: (board.bbFinal != null ? board.bbFinal : 15) * 60,
+        line: board.cols === 128,
       });
       games = prioritize(games, board.bbPriority, bbTeams);
     } catch (e) { log.error('[board] mlb:', e.message); }
-    if (sports && test && test.game) games = [testGame(test.game, now), ...games];
+    if (sports && test && test.game) games = [testGame(test.game, now, board.cols === 128), ...games];
     let warn = (test && test.warn) || pickWarn(nwsAlerts, now);
     // A wide board spells out when it ends (`until`, epoch s); a test warning
     // runs for the test's 10 minutes.

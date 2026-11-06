@@ -258,21 +258,22 @@ function defaultBoard(stations) {
 
 // A message for the announce screen: {text, style}, with the text cleaned
 // (characters outside the board's fonts dropped) and fitting the style on
-// one screen.
-function validMessage(m, where) {
+// one screen of the board's width (`cols`).
+function validMessage(m, where, cols) {
   if (!m || typeof m !== 'object' || Array.isArray(m)) throw new ValidationError(`${where} must be {text, style}`);
   if (!MSG_STYLES.includes(m.style)) throw new ValidationError(`${where}.style must be one of ${MSG_STYLES.join(', ')}`);
   if (typeof m.text !== 'string' || m.text.length > 4 * MSG_MAX) throw new ValidationError(`${where}.text must be a string`);
   const text = cleanMessage(m.text);
   if (!text) throw new ValidationError(`${where}.text is empty (the board can't draw emoji)`);
   if ([...text].length > MSG_MAX) throw new ValidationError(`${where}.text is longer than ${MSG_MAX} characters`);
-  if (!messageLayout(text, m.style)) throw new ValidationError(`${where}.text doesn't fit the ${m.style} style on one screen`);
+  if (!messageLayout(text, m.style, cols)) throw new ValidationError(`${where}.text doesn't fit the ${m.style} style on one screen`);
   return { text, style: m.style };
 }
 
 // Validate a partial update and return the fields to apply. Throws
-// ValidationError with a short message on anything unexpected.
-function validatePatch(patch, stations) {
+// ValidationError with a short message on anything unexpected. `cols`: the
+// board's width (128 or absent), for the messages.
+function validatePatch(patch, stations, cols) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new ValidationError('body must be an object');
   const out = {};
   for (const [key, val] of Object.entries(patch)) {
@@ -419,11 +420,11 @@ function validatePatch(patch, stations) {
         break;
       }
       case 'msg':
-        out.msg = val === null ? null : validMessage(val, 'msg');
+        out.msg = val === null ? null : validMessage(val, 'msg', cols);
         break;
       case 'msgPresets':
         if (!Array.isArray(val) || val.length > MAX_PRESETS) throw new ValidationError(`msgPresets must be a list of up to ${MAX_PRESETS} messages`);
-        out.msgPresets = val.map((m, i) => validMessage(m, `msgPresets[${i}]`));
+        out.msgPresets = val.map((m, i) => validMessage(m, `msgPresets[${i}]`, cols));
         break;
       case 'fw':
         if (!(FW_CHANNELS.includes(val) || (typeof val === 'string' && FW_PIN_RE.test(val)))) {
@@ -599,8 +600,8 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     // it doesn't exist yet. Always bumps v so the board refetches.
     update(id, patch) {
       validId(id);
-      const fields = validatePatch(patch, stations);
       const board = Object.hasOwn(state.boards, id) ? state.boards[id] : defaultBoard(stations);
+      const fields = validatePatch(patch, stations, board.cols);
       // A destination filter belongs to its station: a new station starts
       // with all destinations unless the patch sets rows too.
       if (fields.station && fields.station.mapid !== board.station.mapid && !fields.rows) fields.rows = [];

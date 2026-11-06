@@ -720,7 +720,7 @@ test('Cycle: its screens take turns; nothing takes it over (ballgames, alerts); 
   // A shown Baseball screen asks for every game today.
   await post({ bbTeams: ['sox'], bbPre: 60, bbFinal: 5 });
   await get();
-  assert.deepEqual(mlb.asked, { teams: ['cubs', 'sox', 'post'], pre: 3600, final: 300 });
+  assert.deepEqual(mlb.asked, { teams: ['cubs', 'sox', 'post'], pre: 3600, final: 300, line: false });
   // Priority: 'favorite' keeps only live Cubs/Sox games while one is on;
   // 'all' tells the board to rotate every game.
   games = [live(1, 'NYY', 'BOS'), live(2, 'CWS', 'CLE')];
@@ -1066,6 +1066,7 @@ test('baseball: shown only when chosen (or a Cycle turn), never as a takeover', 
 });
 
 test('baseball: the simulator test game goes first in the list, in the chosen state', async () => {
+  const b0 = (r) => r.body.mlb.games[0];
   const now = Math.floor(Date.now() / 1000);
   const arrivals = normalize(morseJson, { log: quiet });
   const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
@@ -1080,6 +1081,14 @@ test('baseball: the simulator test game goes first in the list, in the chosen st
     assert.equal(b.mlb.games[0].st, st);
     assert.equal(b.mlb.games[0].away.ab, 'CHC');
     assert.equal(b.screen, 'baseball');
+  }
+  assert.equal(b0(await s.req('/board/secret123/api/update?b=home')).away.rs, undefined, 'no line score at 64');
+  // A wide board's test game carries a line score that adds up to the runs.
+  s.store.setCols('home', 128);
+  for (const st of ['live', 'final']) {
+    await post({ game: st });
+    const g = b0(await s.req('/board/secret123/api/update?b=home'));
+    for (const k of ['away', 'home']) assert.equal(g[k].rs.reduce((x, y) => x + (y || 0), 0), g[k].r, `${st} ${k}`);
   }
   await post({});
   assert.equal((await s.req('/board/secret123/api/update?b=home')).body.mlb.games.length, 0);
@@ -1846,6 +1855,14 @@ test('announce: the control page sets the message; a message that does not fit i
   r = await post({ msg: { text: 'Hooray for everyone', style: 'big' } });
   assert.equal(r.status, 400);
   assert.match(r.body.detail, /doesn't fit the big style/);
+  // A wide board (cols 128) takes messages that fit its width, laid out across both panels.
+  s.store.setCols('home', 128);
+  r = await post({ msg: { text: 'Welcome home', style: 'big' } });
+  assert.equal(r.status, 200);
+  const wide = await s.req('/board/update?b=home&w=128&hk=announce', { headers: { 'X-Board-Token': 'tok' } });
+  assert.deepEqual([wide.body.cols, wide.body.msg.lines, wide.body.msg.x3], [128, ['Welcome home'], undefined]);
+  r = await post({ msg: { text: 'Go Cubs', style: 'big' } });
+  assert.equal((await s.req('/board/update?b=home&w=128&hk=announce', { headers: { 'X-Board-Token': 'tok' } })).body.msg.x3, 1);
   // sim.png draws it on request.
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=announce&scale=1`);
   assert.equal(png.status, 200);
@@ -1994,5 +2011,17 @@ test('Set up a board\'s scripts: the maker\'s page only', async () => {
   s.store.create('kitchen', { from: 'home' });
   const { body: key } = await s.req('/board/secret123/api/boards/key?b=kitchen', { method: 'POST' });
   for (const f of ['setup-image.js', 'setup-tools.js']) assert.equal((await fetch(`http://127.0.0.1:${s.port}/board/c/${key.link}/${f}`)).status, 404, f);
+  await s.close();
+});
+
+test('baseball: a wide board asks the poller for the line score', async () => {
+  const asked = [];
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) }), mlb: { get: (mode, opts) => { asked.push(opts); return []; }, raw: () => null } });
+  s.store.update('home', { screen: 'baseball' });
+  await s.req('/board/secret123/api/update?b=home');
+  assert.equal(asked.at(-1).line, false);
+  s.store.setCols('home', 128);
+  await s.req('/board/secret123/api/update?b=home');
+  assert.equal(asked.at(-1).line, true);
   await s.close();
 });

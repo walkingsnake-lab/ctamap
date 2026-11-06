@@ -2131,17 +2131,17 @@ static const Roll *roll_of(const Rolls &rolls, const char *k) {
   return it == rolls.end() ? nullptr : &it->second;
 }
 
-static void draw_score(Frame &f, const ustr &text, int top, RGB color, const Roll *roll) {
+static void draw_score(Frame &f, const ustr &text, int top, RGB color, const Roll *roll, int right = SCORE_RIGHT) {
   int base = top + 6;
   if (!roll || roll->from == text || roll->p >= 1) {
-    rtext(f, FONT_5X7, text, SCORE_RIGHT, base, color);
+    rtext(f, FONT_5X7, text, right, base, color);
     return;
   }
   int up = (int)jsround(ease_in_out(roll->p) * SCORE_ROLL);
-  f.push_clip(SCORE_RIGHT - 12, top, SCORE_RIGHT, top + 6);
+  f.push_clip(right - 12, top, right, top + 6);
   const ustr &frm = roll->from;
   if (frm.size() == text.size()) {
-    int x = SCORE_RIGHT - measure(FONT_5X7, text) + 1;
+    int x = right - measure(FONT_5X7, text) + 1;
     for (size_t i = 0; i < text.size(); i++) {
       if (frm[i] == text[i]) {
         f.text(FONT_5X7, text.substr(i, 1), x, base, color);
@@ -2152,8 +2152,8 @@ static void draw_score(Frame &f, const ustr &text, int top, RGB color, const Rol
       x += measure(FONT_5X7, text.substr(i, 1)) + 1;
     }
   } else {
-    rtext(f, FONT_5X7, frm, SCORE_RIGHT, base - up, color);
-    rtext(f, FONT_5X7, text, SCORE_RIGHT, base - up + SCORE_ROLL, color);
+    rtext(f, FONT_5X7, frm, right, base - up, color);
+    rtext(f, FONT_5X7, text, right, base - up + SCORE_ROLL, color);
   }
   f.pop_clip();
 }
@@ -2192,7 +2192,7 @@ static void draw_roll_text(Frame &f, const ustr &text, int left, int base, RGB c
         same = false;
         break;
       }
-  f.push_clip(0, base - 5, 63, base - 1);
+  f.push_clip(0, base - 5, f.w - 1, base - 1);
   if (same) {
     int x = left;
     for (size_t i = 0; i < text.size(); i++) {
@@ -2253,8 +2253,8 @@ static void draw_no_games(Frame &f, double now, double tzo) {
   ustr clock = clock_text(now, tzo);
   ustr label = U"NO GAMES";
   int top = (32 - 18) / 2;
-  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, 0, top + 10, C::clock);
-  f.text(FONT_SMALL, label, (int)fdiv(64 - measure(FONT_SMALL, label), 2), top + 18, C::noTrains);
+  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, 0, top + 10, C::clock, f.w);
+  f.text(FONT_SMALL, label, (int)fdiv(f.w - measure(FONT_SMALL, label), 2), top + 18, C::noTrains);
 }
 
 // ---- baseball, logo layout ----
@@ -2389,8 +2389,80 @@ static void render_baseball_logos(Frame &f, const Value &p, const Value &gm, dou
   draw_bottom_line(f, t, rolls);
 }
 
+// ---- baseball, wide (wide-spec §8); mirrors renderBaseballWide() in draw.js ----
+static const int BW_INN_X = 26, BW_PITCH = 8, BW_COLS = 9, BW_DIV = 95, BW_COUNT_X = 30, BW_OUTS_X = 46;
+static const int BW_RHE[] = {105, 117, 126};
+static const int BW_TOPS[] = {9, 17};
+static const RGB BW_HEAD = hexc(0x4a4a4a);
+
+static void render_baseball_wide(Frame &f, const Value &gm, double now, double tzo, const Rolls &rolls) {
+  bool live = gm["st"].eq("live"), final = gm["st"].eq("final");
+  std::string winner = winner_of(gm);
+  const char *keys[] = {"away", "home"};
+  int name_end = 0;
+  for (int s = 0; s < 2; s++) {
+    const Value &side = gm[keys[s]];
+    int top = BW_TOPS[s];
+    f.fill(0, top, 3, 6, side["c"].truthy() ? hexs(side["c"].str_or("")) : C::grey);
+    name_end = std::max(name_end, f.text(FONT_5X7, vstr(side["ab"]), 5, top + 6, winner == keys[s] ? C::amber : C::label));
+  }
+  f.fill(0, BB_DIVIDER, f.w, 1, C::divider);
+
+  if (gm["st"].eq("pre")) {
+    for (int s = 0; s < 2; s++) f.text(FONT_SMALL, bb_record(gm[keys[s]]), name_end + 2, BW_TOPS[s] + 6, C::grey);
+    f.text(FONT_SMALL, U"TODAY", 0, BB_BOTTOM, C::grey);
+    ustr ap = ampm_text(gm["start"].num(), tzo);
+    rtext(f, FONT_SMALL, ap, f.w - 1, BB_BOTTOM, C::grey);
+    rtext(f, FONT_SMALL, clock_text(gm["start"].num(), tzo), f.w - 1 - measure(FONT_SMALL, ap) - 3, BB_BOTTOM, C::label);
+    return;
+  }
+
+  const Value &rs_a = gm["away"]["rs"], &rs_h = gm["home"]["rs"];
+  int len_a = rs_a.truthy() ? (int)rs_a.size() : 0, len_h = rs_h.truthy() ? (int)rs_h.size() : 0;
+  int cur = live ? (gm["inn"].truthy() ? (int)gm["inn"].num() : 1) : 0;
+  int last = std::max(std::max(BW_COLS, len_a), std::max(len_h, cur));
+  int first = last - BW_COLS + 1;
+  f.fill(BW_DIV, 0, 1, BB_DIVIDER, C::divider);
+  for (int i = 0; i < BW_COLS; i++) {
+    int inn = first + i, cx = BW_INN_X + i * BW_PITCH;
+    ctext(f, FONT_SMALL, num_text(inn), cx, 6, inn == cur ? C::amber : BW_HEAD);
+    for (int s = 0; s < 2; s++) {
+      const Value &rs = s == 0 ? rs_a : rs_h;
+      int len = s == 0 ? len_a : len_h;
+      bool has = inn - 1 < len && !rs[inn - 1].is_null();
+      bool bat = inn == cur && (s == 0 ? gm["half"].eq("T") : gm["half"].eq("B"));
+      ustr str = has ? num_text((long long)rs[inn - 1].num()) : bat ? ustr(U"0") : final && s == 1 && inn <= len_a ? ustr(U"X") : ustr();
+      if (!str.empty()) ctext(f, FONT_SMALL, str, cx, BW_TOPS[s] + 6, bat ? C::amber : C::grey);
+    }
+  }
+  static const char32_t *const RHE[] = {U"R", U"H", U"E"};
+  for (int i = 0; i < 3; i++) ctext(f, FONT_SMALL, RHE[i], BW_RHE[i] - 2, 6, BW_HEAD);
+  for (int s = 0; s < 2; s++) {
+    const Value &side = gm[keys[s]];
+    RGB color = final ? (winner == keys[s] ? C::amber : !winner.empty() ? BB_LOSE : C::label) : score_color(side, now);
+    draw_score(f, vstr(side["r"]), BW_TOPS[s], color, roll_of(rolls, keys[s]), BW_RHE[0]);
+    rtext(f, FONT_5X7, num_text(side["h"].truthy() ? (long long)side["h"].num() : 0), BW_RHE[1], BW_TOPS[s] + 6, C::grey);
+    rtext(f, FONT_5X7, num_text(side["e"].truthy() ? (long long)side["e"].num() : 0), BW_RHE[2], BW_TOPS[s] + 6, C::grey);
+  }
+
+  if (final) {
+    f.text(FONT_SMALL, U"FINAL", 0, BB_BOTTOM, C::label);
+    return;
+  }
+  LiveTexts t = live_texts(gm);
+  draw_roll_text(f, t.inn, 0, BB_BOTTOM, C::label, roll_of(rolls, "inn"), 0);
+  draw_roll_text(f, t.count, BW_COUNT_X, BB_BOTTOM, C::label, roll_of(rolls, "count"), BW_COUNT_X);
+  draw_roll_text(f, t.outs, BW_OUTS_X, BB_BOTTOM, C::grey, roll_of(rolls, "outs"), BW_OUTS_X);
+  const Value &on = gm["on"];
+  auto base_on = [&](int i) { return on.truthy() ? on[i].truthy() : false; };
+  draw_diamond(f, 125, 29, 1, base_on(0) ? C::amber : BB_BASE, true);
+  draw_diamond(f, 122, 27, 1, base_on(1) ? C::amber : BB_BASE, true);
+  draw_diamond(f, 119, 29, 1, base_on(2) ? C::amber : BB_BASE, true);
+}
+
 static void render_baseball(const Value &p, Frame &f, std::optional<double> now_o, std::optional<int> game,
                             const Rolls *rolls_in, const Logos *logos) {
+  if (cols_of(p) == WIDE) f.w = WIDE;
   double now = now_o ? *now_o : p["now"].num();
   double tzo = p["tzo"].num(0);
   const Value &mlb = p["mlb"];
@@ -2404,6 +2476,10 @@ static void render_baseball(const Value &p, Frame &f, std::optional<double> now_
   const Value &gm = games[gi];
   static const Rolls empty;
   const Rolls &rolls = rolls_in ? *rolls_in : empty;
+  if (f.w == WIDE) {
+    render_baseball_wide(f, gm, now, tzo, rolls);
+    return;
+  }
   if (mlb["layout"].eq("logos") || mlb["layout"].eq("bands")) {
     render_baseball_logos(f, p, gm, now, tzo, rolls, logos);
     return;
@@ -3709,12 +3785,12 @@ static void render_gradient(const Value &p, Frame &f, std::optional<double> now_
 static const int MSG_BASES[4][3] = {{0, 0, 0}, {19, 0, 0}, {14, 24, 0}, {9, 19, 29}};
 static const int MSG_SMALL_LINES = 5;
 static const double TYPE_WAIT = 400, TYPE_CHAR = 90, TYPE_BLINK = 530;
-static const int BIG_TOP = 7, BIG_GRAD = 14;
+static const int BIG_TOP = 7, BIG_GRAD = 14, BIG_TOP3 = 1;  // 2x; 3x (wide boards)
 static const double ROLL_STEP = 150, ROLL_PAUSE = 1500;
 static const int ROLL_START = 40, ROLL_PITCH = 10, ROLL_FADE = 3;
 static constexpr RGB MSG_TEXT = C::label, MSG_TYPE = C::amber, MSG_CURSOR = hexc(0xcc8d00), BIG_FROM = hexc(0xff3060), BIG_TO = hexc(0xffb000), MSG_CTA = C::head;
 
-static int msg_x(Font font, const ustr &s) { return (int)fdiv(64 - measure(font, s), 2); }
+static int msg_x(const Frame &f, Font font, const ustr &s) { return (int)fdiv(f.w - measure(font, s), 2); }
 
 static std::vector<ustr> msg_lines(const Value &m) {
   std::vector<ustr> out;
@@ -3727,11 +3803,11 @@ static void draw_note(Frame &f, const std::vector<ustr> &lines, bool sm) {
   if (sm) {
     int n = std::min((int)lines.size(), MSG_SMALL_LINES);
     int top = (int)fdiv(32 - (n * 6 - 1), 2);
-    for (int i = 0; i < n; i++) f.text(FONT_SMALL, lines[i], msg_x(FONT_SMALL, lines[i]), top + 5 + i * 6, MSG_TEXT);
+    for (int i = 0; i < n; i++) f.text(FONT_SMALL, lines[i], msg_x(f, FONT_SMALL, lines[i]), top + 5 + i * 6, MSG_TEXT);
     return;
   }
   int n = std::min((int)lines.size(), 3);
-  for (int i = 0; i < n; i++) f.text(FONT_5X7, lines[i], msg_x(FONT_5X7, lines[i]), MSG_BASES[n][i], MSG_TEXT);
+  for (int i = 0; i < n; i++) f.text(FONT_5X7, lines[i], msg_x(f, FONT_5X7, lines[i]), MSG_BASES[n][i], MSG_TEXT);
 }
 
 static long long typed_total(const std::vector<ustr> &lines) {
@@ -3758,15 +3834,16 @@ static void draw_typed(Frame &f, const std::vector<ustr> &lines, std::optional<d
   if (on) f.fill(last_x, last_b - 7, 4, 7, MSG_CURSOR);
 }
 
-static RGB big_grad(int y) {
-  int k = clampi(y, 0, BIG_GRAD);
-  auto ch = [k](int a, int b) { return (uint8_t)jsround(a + (double)((b - a) * k) / BIG_GRAD); };
+static RGB big_grad(int y, int span) {
+  int k = clampi(y, 0, span);
+  auto ch = [k, span](int a, int b) { return (uint8_t)jsround(a + (double)((b - a) * k) / span); };
   return RGB{ch(BIG_FROM.r, BIG_TO.r), ch(BIG_FROM.g, BIG_TO.g), ch(BIG_FROM.b, BIG_TO.b)};
 }
 
-static void draw_big(Frame &f, const ustr &s) {
+static void draw_big(Frame &f, const ustr &s, bool x3) {
   const uint8_t *d = assets::FONT_DATA[FONT_5X7];
-  int x0 = 32 - measure(FONT_5X7, s);
+  int sc = x3 ? 3 : 2, y0 = x3 ? BIG_TOP3 : BIG_TOP, span = x3 ? BIG_GRAD * 3 / 2 : BIG_GRAD;
+  int x0 = (int)fdiv(f.w - measure(FONT_5X7, s) * sc, 2);
   int x = 0;
   for (char32_t ch : s) {
     int o = glyph(FONT_5X7, ch);
@@ -3778,8 +3855,8 @@ static void draw_big(Frame &f, const ustr &s) {
       for (int c = 0; c < w; c++) {
         if (!((bits >> (w - 1 - c)) & 1)) continue;
         int px = x + xo + c, py = top + r;
-        for (int dy = 0; dy < 2; dy++)
-          for (int dx = 0; dx < 2; dx++) f.set(x0 + px * 2 + dx, BIG_TOP + py * 2 + dy, big_grad(py * 2 + dy));
+        for (int dy = 0; dy < sc; dy++)
+          for (int dx = 0; dx < sc; dx++) f.set(x0 + px * sc + dx, y0 + py * sc + dy, big_grad(py * sc + dy, span));
       }
     }
     x += dw;
@@ -3797,27 +3874,28 @@ static int roll_base(int n, std::optional<double> t) {
 
 static void draw_roll(Frame &f, const std::vector<ustr> &lines, std::optional<double> t) {
   int base = roll_base((int)lines.size(), t);
-  for (size_t i = 0; i < lines.size(); i++) f.text(FONT_5X7, lines[i], msg_x(FONT_5X7, lines[i]), base + (int)i * ROLL_PITCH, MSG_TEXT);
+  for (size_t i = 0; i < lines.size(); i++) f.text(FONT_5X7, lines[i], msg_x(f, FONT_5X7, lines[i]), base + (int)i * ROLL_PITCH, MSG_TEXT);
   for (int i = 0; i < ROLL_FADE; i++) {
     double k = (double)(i + 1) / (ROLL_FADE + 1);
     for (int y : {i, 31 - i})
-      for (int x = 0; x < 64; x++) f.set(x, y, scale_color(f.get(x, y), k));
+      for (int x = 0; x < f.w; x++) f.set(x, y, scale_color(f.get(x, y), k));
   }
 }
 
 static bool has_message(const Value &m) { return m.truthy() && m["lines"].size() > 0; }
 
 static void render_announce(const Value &p, Frame &f, std::optional<double> t) {
+  if (cols_of(p) == WIDE) f.w = WIDE;
   const Value &m = p["msg"];
   if (!has_message(m)) {
     // No message yet: a call to action.
-    f.text(FONT_SMALL, U"SET A MESSAGE", msg_x(FONT_SMALL, U"SET A MESSAGE"), 15, MSG_CTA);
-    f.text(FONT_SMALL, U"ON YOUR PHONE", msg_x(FONT_SMALL, U"ON YOUR PHONE"), 22, MSG_CTA);
+    f.text(FONT_SMALL, U"SET A MESSAGE", msg_x(f, FONT_SMALL, U"SET A MESSAGE"), 15, MSG_CTA);
+    f.text(FONT_SMALL, U"ON YOUR PHONE", msg_x(f, FONT_SMALL, U"ON YOUR PHONE"), 22, MSG_CTA);
     return;
   }
   std::vector<ustr> lines = msg_lines(m);
   if (m["style"].eq("type")) draw_typed(f, lines, t);
-  else if (m["style"].eq("big")) draw_big(f, lines[0]);
+  else if (m["style"].eq("big")) draw_big(f, lines[0], m["x3"].truthy());
   else if (m["style"].eq("roll")) draw_roll(f, lines, t);
   else draw_note(f, lines, m["sm"].truthy());
 }

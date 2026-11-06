@@ -1447,6 +1447,33 @@ test('messageLayout: typewriter leaves room for the cursor; big word is one 2x l
   assert.equal(draw.messageLayout('Hi', 'marquee'), null, 'styles not built yet');
 });
 
+test('messageLayout at 128 (wide boards): lines as wide as both panels; a big word at 3x when it fits, else 2x', () => {
+  assert.deepEqual(draw.messageLayout('Grab milk on the way home please', 'note', 128), { lines: ['Grab milk on the way home', 'please'] });
+  const typed = draw.messageLayout('Gone to the gym. Back by 6. Dinner in the fridge.', 'type', 128);
+  assert.equal(typed.lines.length, 2);
+  assert.ok(typed.lines.every((l) => measure('5x7', l) + 1 + 4 <= 128), 'the cursor fits after every line');
+  assert.deepEqual(draw.messageLayout('Go Cubs', 'big', 128), { lines: ['Go Cubs'], x3: 1 });
+  assert.deepEqual(draw.messageLayout('Hooray!!', 'big', 128), { lines: ['Hooray!!'], x3: 1 });
+  assert.deepEqual(draw.messageLayout('Welcome home', 'big', 128), { lines: ['Welcome home'] }, 'too wide for 3x');
+  assert.equal(draw.messageLayout('Welcome home, everyone', 'big', 128), null);
+  assert.equal(draw.messageLayout('Hooray!!', 'big', 64), null, 'a 64 board is unchanged');
+  assert.deepEqual(draw.messageLayout('Yay!', 'big'), { lines: ['Yay!'] }, 'no x3 at 64');
+  assert.equal(draw.messageLayout('Happy birthday, Sam! Dinner at Lula at 7.', 'roll', 128).lines.length, 2);
+});
+
+test('announce at 128: a 128-wide frame, centered on both panels; the 3x word is 18 px tall in capitals and centered', () => {
+  const f = draw.render({ bright: 100, cols: 128, screen: 'announce', msg: { id: 1, style: 'note', ...draw.messageLayout('Dinner at 7', 'note', 128) } });
+  assert.equal(f.w, 128);
+  let x0 = 128, x1 = -1;
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 128; x++) if (f.get(x, y).some((v) => v)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+  assert.ok(Math.abs(x0 - (127 - x1)) <= 1, `centered: ${x0}..${x1}`);
+  const big = draw.render({ bright: 100, cols: 128, screen: 'announce', msg: { id: 1, style: 'big', ...draw.messageLayout('GO', 'big', 128) } });
+  const rows = []; for (let y = 0; y < 32; y++) for (let x = 0; x < 128; x++) if (big.get(x, y).some((v) => v)) { rows.push(y); break; }
+  assert.deepEqual([rows[0], rows[rows.length - 1]], [7, 24]);
+  const cta = draw.render({ bright: 100, cols: 128, screen: 'announce', msg: null });
+  assert.equal(cta.w, 128);
+});
+
 const msgPayload = (text, style) => ({ bright: 100, screen: 'announce', msg: { id: 1, style, ...draw.messageLayout(text, style) } });
 const litRows = (f) => { const rows = new Set(); for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y).some((v) => v)) rows.add(y); return [...rows]; };
 
@@ -1525,7 +1552,7 @@ test('width: a 128 payload (cols) shows 64-wide screens on both panels; slides a
   const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(9)], s: [0, 0], a: 0 }]);
   const narrow = draw.render(p);
   assert.equal(narrow.w, 64);
-  for (const screen of ['weather', 'announce']) {  // every clock face has a 128 layout now
+  for (const screen of ['weather']) {  // every clock face and announce have a 128 layout now
     const f = draw.render({ ...p, cols: 128 }, { screen });
     const n = draw.render(p, { screen });
     assert.equal(f.w, 128, screen);
@@ -1576,4 +1603,30 @@ test('width: wide transit and ticker draw 128 across; overnight once, in the mid
   assert.equal(count(night, '#cccccc', 0, 0, 31, 30) + count(night, '#cccccc', 96, 0, 127, 30), 0, 'nothing outside columns 32-95');
   assert.ok(count(night, '#cccccc', 48, 5, 95, 15) > 0, 'the clock');
   assert.deepEqual(night.get(0, 31), night.get(127, 31), 'the line across');
+});
+
+test('baseball at 128: the line score for every layout; the batting half amber; X for a home half not needed', () => {
+  const t = 1791140000;
+  const side = (ab, c, r, rs, h, e) => ({ ab, c, r, rs, h, e, w: 1, l: 0 });
+  const live = { id: 1, st: 'live', start: t - 3600, inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1],
+    away: side('CHC', '#2a5bd8', 3, [0, 1, 0, 0, 2, 0], 7, 0), home: side('STL', '#d62a2a', 2, [1, 0, 0, 1, 0, 0], 5, 1) };
+  const pay = (layout, g) => ({ now: t, tzo: 0, bright: 100, screen: 'baseball', cols: 128, mlb: { layout, games: [g] } });
+  const f = draw.render(pay('classic', live));
+  assert.equal(f.w, 128);
+  assert.deepEqual(Array.from(draw.render(pay('logos', live)).px), Array.from(f.px), 'no logos at 128 yet');
+  const lit = (x0, x1, y0, y1, color) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hex(f.get(x, y)) === color) return true; return false; };
+  assert.ok(lit(73, 76, 1, 5, '#ffb000'), 'the 7th inning header amber');
+  assert.ok(lit(73, 76, 10, 14, '#ffb000'), 'away batting in the 7th: 0 in amber');
+  assert.ok(!lit(73, 76, 18, 22, '#8f8f8f') && !lit(73, 76, 18, 22, '#ffb000'), 'home 7th not played');
+  assert.ok(lit(118, 126, 26, 30, '#ffb000'), 'runners on the bases');
+  assert.ok(lit(95, 95, 0, 23, '#333333'), 'divider column');
+  // Final, home ahead after the top of the 9th: X.
+  const fin = { ...live, st: 'final', away: { ...live.away, r: 1, rs: [0, 0, 0, 1, 0, 0, 0, 0, 0] }, home: { ...live.home, rs: [1, 0, 0, 1, 0, 0, 0, 0, null] } };
+  const ff = draw.render(pay('classic', fin));
+  const xs = []; for (let x = 89; x <= 93; x++) for (let y = 18; y <= 22; y++) if (ff.get(x, y).some((v) => v)) xs.push(x);
+  assert.ok(xs.length > 0, 'X drawn in the home 9th');
+  // No games: centered on 128.
+  const ng = draw.render({ now: t, tzo: 0, bright: 100, screen: 'baseball', cols: 128, mlb: { games: [] } });
+  let a = 128, b = -1; for (let y = 0; y < 32; y++) for (let x = 0; x < 128; x++) if (ng.get(x, y).some((v) => v)) { a = Math.min(a, x); b = Math.max(b, x); }
+  assert.ok(Math.abs(a - (127 - b)) <= 1, `centered: ${a}..${b}`);
 });

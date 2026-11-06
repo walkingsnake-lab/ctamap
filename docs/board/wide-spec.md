@@ -126,16 +126,17 @@ The weekday over the date (5x7) on the left, a divider, the time in the 23-row d
 **Panorama:** the 64 scene in the middle and a continuous skyline of generic towers on both sides, the left for the South Loop and the right running on to the edge (no Gold Coast stepping down to the lake). Sun, moon, pier, wheel and lightning stay with the 64 scene; stars, rain and snow double; clouds and boats run the whole width. Rejected: the big-clock layout (the 64 scene and open lake with the time over the water).
 ---
 
-## 7. Announce
+## 7. Announce (built)
 
-- **Note, typewriter:** about 21 characters a line in 5x7 (10 at 64), the same line bases.
-- **Big word:** 3× instead of 2× (21-px letters) for up to about 7 characters; longer words drop to 2× (about 10).
+- **Note, typewriter:** about 21 characters a line in 5x7 (10 at 64), the same line bases; the note's Tom Thumb fallback up to 5 lines as wide as both panels.
+- **Big word:** 3× instead of 2× (18-px capitals, rows 7–24) for up to about 7 characters; longer words drop to 2× (about 10).
 - **Credits roll:** unchanged apart from the longer lines.
+- The server lays the message out for the board's width and checks it fits that width; the phone's preview and style tiles draw it 128 wide (built Nov 5).
 
 ## 8. Baseball
 
-- **Line score (first pass):** innings 1–9, R H E, then the inning, count, outs, pitch count and bases on the bottom row. The innings are in the linescore the server already fetches; the pitch count isn't.
-- The classic, logo and band layouts and the other game states aren't planned yet.
+- **Line score (first pass, built Nov 5):** innings 1–9 (the last nine in extras), R H E, then the inning, count, outs and bases on the bottom row. The innings come from the linescore the server already fetches (`rs`, `h`, `e`, wide boards only); the pitch count isn't in it, so it's left out. Every layout draws the line score for now (no logos). Pregame: names and records, first pitch on the bottom row; finals: `X` for an unneeded home half, `FINAL` bottom left.
+- Logos at 128 and a richer pregame aren't planned yet.
 
 ## 9. Knob chooser (variant strip; built)
 

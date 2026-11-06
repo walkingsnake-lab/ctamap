@@ -1608,16 +1608,16 @@
       return lerpColor(C.amber, rest, (age - SCORE_HOLD_S) / SCORE_FADE_S);
     }
 
-    // Score, right-aligned at SCORE_RIGHT; a changed score rolls digit by
-    // digit like arrival times.
-    function drawScore(f, text, top, color, roll) {
+    // Score, right-aligned at `right` (SCORE_RIGHT); a changed score rolls
+    // digit by digit like arrival times.
+    function drawScore(f, text, top, color, roll, right = SCORE_RIGHT) {
       const base = top + 6;
-      if (!roll || roll.from === text || roll.p >= 1) { rtext(f, '5x7', text, SCORE_RIGHT, base, color); return; }
+      if (!roll || roll.from === text || roll.p >= 1) { rtext(f, '5x7', text, right, base, color); return; }
       const up = Math.round(easeInOut(roll.p) * SCORE_ROLL);
-      f.withClip(SCORE_RIGHT - 12, top, SCORE_RIGHT, top + 6, () => {
+      f.withClip(right - 12, top, right, top + 6, () => {
         const from = roll.from;
         if (from.length === text.length) {
-          let x = SCORE_RIGHT - measure('5x7', text) + 1;
+          let x = right - measure('5x7', text) + 1;
           for (let i = 0; i < text.length; i++) {
             if (from[i] === text[i]) f.text('5x7', text[i], x, base, color);
             else {
@@ -1627,8 +1627,8 @@
             x += measure('5x7', text[i]) + 1;
           }
         } else {
-          rtext(f, '5x7', from, SCORE_RIGHT, base - up, color);
-          rtext(f, '5x7', text, SCORE_RIGHT, base - up + SCORE_ROLL, color);
+          rtext(f, '5x7', from, right, base - up, color);
+          rtext(f, '5x7', text, right, base - up + SCORE_ROLL, color);
         }
       });
     }
@@ -1661,7 +1661,7 @@
       const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
       const oldLeft = fromLeft != null ? fromLeft : left + measure('small', text) - measure('small', from);
       const sameShape = oldLeft === left && from.length === text.length && [...text].every((ch, i) => measure('small', ch) === measure('small', from[i]));
-      f.withClip(0, base - 5, 63, base - 1, () => {
+      f.withClip(0, base - 5, f.w - 1, base - 1, () => {
         if (sameShape) {
           let x = left;
           for (let i = 0; i < text.length; i++) {
@@ -1711,8 +1711,8 @@
       const clock = clockText(now);
       const label = 'NO GAMES';
       const top = Math.floor((32 - 18) / 2);
-      rollText(f, 'clock', 'big.clock', clock, centerX('clock'), top + 10, C.clock);
-      f.text('small', label, Math.floor((64 - measure('small', label)) / 2), top + 18, C.noTrains);
+      rollText(f, 'clock', 'big.clock', clock, (str) => Math.floor((f.w - measure('clock', str)) / 2), top + 10, C.clock);
+      f.text('small', label, Math.floor((f.w - measure('small', label)) / 2), top + 18, C.noTrains);
     }
 
     // Embossed text: black right of, below, and below-right of every lit
@@ -1834,16 +1834,83 @@
       return f;
     }
 
+    // ---- baseball, wide (wide-spec §8; contract "Baseball") ----
+    // The line score across both panels, for every layout (no logos yet):
+    // inning numbers on rows 1-5 (the inning being played amber), each team's
+    // color block and abbreviation as in the classic layout, its runs by
+    // inning in Tom Thumb under the numbers, a divider column, then R H E in
+    // 5x7, right-aligned (hits often reach two digits). The live bottom line has the inning, count and outs from the left
+    // and the bases at the right. Past the 9th, the last 9 innings.
+    const BW = { innX: 26, pitch: 8, cols: 9, div: 95, rhe: [105, 117, 126], tops: [9, 17], head: '#4a4a4a', countX: 30, outsX: 46 };
+    function renderBaseballWide(f, g, now, o) {
+      const rolls = o.rolls || {};
+      const live = g.st === 'live', final = g.st === 'final';
+      const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
+      const sides = [['away', BW.tops[0]], ['home', BW.tops[1]]];
+      let nameEnd = 0;
+      for (const [k, top] of sides) {
+        f.fill(0, top, 3, 6, g[k].c || C.grey);
+        nameEnd = Math.max(nameEnd, f.text('5x7', g[k].ab, 5, top + 6, winner === k ? C.amber : C.label));
+      }
+      f.fill(0, DIVIDER, f.w, 1, C.divider);
+
+      if (g.st === 'pre') {
+        // As at 64: records after the longer name, first pitch on the bottom line.
+        for (const [k, top] of sides) f.text('small', record(g[k]), nameEnd + 2, top + 6, C.grey);
+        f.text('small', 'TODAY', 0, BOTTOM, C.grey);
+        const ap = ampmText(g.start);
+        rtext(f, 'small', ap, f.w - 1, BOTTOM, C.grey);
+        rtext(f, 'small', clockText(g.start), f.w - 1 - measure('small', ap) - 3, BOTTOM, C.label);
+        return f;
+      }
+
+      const rs = (k) => g[k].rs || [];
+      const cur = live ? g.inn || 1 : 0;
+      const last = Math.max(BW.cols, rs('away').length, rs('home').length, cur);
+      const first = last - BW.cols + 1;
+      f.fill(BW.div, 0, 1, DIVIDER, C.divider);
+      for (let i = 0; i < BW.cols; i++) {
+        const inn = first + i, cx = BW.innX + i * BW.pitch;
+        ctext(f, 'small', String(inn), cx, 6, inn === cur ? C.amber : BW.head);
+        for (const [k, top] of sides) {
+          const v = rs(k)[inn - 1];
+          const bat = inn === cur && (k === 'away' ? g.half === 'T' : g.half === 'B');
+          // A home half not needed in a final: X.
+          const str = v != null ? String(v) : bat ? '0' : final && k === 'home' && inn <= rs('away').length ? 'X' : '';
+          if (str) ctext(f, 'small', str, cx, top + 6, bat ? C.amber : C.grey);
+        }
+      }
+      // Letters centered over a one-digit value.
+      ['R', 'H', 'E'].forEach((l, i) => ctext(f, 'small', l, BW.rhe[i] - 2, 6, BW.head));
+      for (const [k, top] of sides) {
+        const color = final ? (winner === k ? C.amber : winner ? BB.lose : C.label) : scoreColor(g[k], now);
+        drawScore(f, String(g[k].r), top, color, rolls[k], BW.rhe[0]);
+        rtext(f, '5x7', String(g[k].h || 0), BW.rhe[1], top + 6, C.grey);
+        rtext(f, '5x7', String(g[k].e || 0), BW.rhe[2], top + 6, C.grey);
+      }
+
+      if (final) { f.text('small', 'FINAL', 0, BOTTOM, C.label); return f; }
+      const t = liveTexts(g);
+      drawRollText(f, t.inn, 0, BOTTOM, C.label, rolls.inn, 0);
+      drawRollText(f, t.count, BW.countX, BOTTOM, C.label, rolls.count, BW.countX);
+      drawRollText(f, t.outs, BW.outsX, BOTTOM, C.grey, rolls.outs, BW.outsX);
+      // Bases: 3x3 diamonds, second above first and third.
+      const on = g.on || [0, 0, 0];
+      [[125, 29, on[0]], [122, 27, on[1]], [119, 29, on[2]]].forEach(([x, y, b]) => drawDiamond(f, x, y, 1, b ? C.amber : BB.base, true));
+      return f;
+    }
+
     // opts: now, game (index into p.mlb.games; default the rotation),
     // rolls ({away|home|inn|count|outs: {from, p}}: scores and live status
     // texts mid-roll), logos ({id: 864-byte 24x12 RGB crop}; logo layout)
     function renderBaseball(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
+      const f = newFrame(colsOf(p) === WIDE ? WIDE : 64);
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) { drawNoGames(f, now); return f; }
       const g = games[o.game != null ? o.game % games.length : pickGame(games, now, timing(p).game, !!(p.mlb && p.mlb.all)).i];
+      if (f.w === WIDE) return renderBaseballWide(f, g, now, o);
       if (p.mlb.layout === 'logos' || p.mlb.layout === 'bands') return renderBaseballLogos(f, p, g, now, o);
       const rolls = o.rolls || {};
       const final = g.st === 'final';
@@ -2730,8 +2797,8 @@
     const MSG = {
       bases: { 1: [19], 2: [14, 24], 3: [9, 19, 29] },  // 5x7 lines (note, typewriter)
       smallLines: 5,
-      typeWrap: 59, typeWait: 400, typeChar: 90, typeBlink: 530,
-      bigTop: 7, bigGrad: 14,
+      typeCursor: 5, typeWait: 400, typeChar: 90, typeBlink: 530,
+      bigTop: 7, bigGrad: 14, bigTop3: 1,  // 2x; 3x (wide boards)
       // Credits roll: 1 px up every rollStep ms from below the panel (first
       // baseline rollStart) until the last line has left the top, then
       // rollPause ms blank, looping; lines rollPitch apart; the top and
@@ -2781,41 +2848,49 @@
     // The lines a style draws for `text` (payload `msg`), or null when it
     // doesn't fit on one screen. Note: 5x7, up to 3 lines, else Tom Thumb
     // (uppercase) up to 5 (`sm`). Typewriter: 5x7, 3 lines, room for the cursor. Big word:
-    // one line of 5x7 at 2x.
-    function messageLayout(text, style) {
+    // one line of 5x7 at 2x. `cols`: the board's width; at 128 the lines
+    // are as wide as the panels, and a big word that fits at 3x is drawn
+    // at 3x (`x3`).
+    function messageLayout(text, style, cols) {
+      const w = cols === WIDE ? WIDE : 64;
       const t = cleanMessage(text);
       if (!t || [...t].length > MSG_MAX) return null;
       const upto = (lines, n) => (lines && lines.length <= n ? lines : null);
       if (style === 'note') {
-        const big = upto(wrapMessage(t, '5x7', 64), 3);
+        const big = upto(wrapMessage(t, '5x7', w), 3);
         if (big) return { lines: big };
-        const sm = upto(wrapMessage(msgUpper(t), 'small', 64), MSG.smallLines);
+        const sm = upto(wrapMessage(msgUpper(t), 'small', w), MSG.smallLines);
         return sm ? { lines: sm, sm: 1 } : null;
       }
       if (style === 'type') {
-        const lines = upto(wrapMessage(t, '5x7', MSG.typeWrap), 3);
+        const lines = upto(wrapMessage(t, '5x7', w - MSG.typeCursor), 3);
         return lines ? { lines } : null;
       }
-      if (style === 'big') return !t.includes('\n') && measure('5x7', t) * 2 <= 64 ? { lines: [t] } : null;
+      if (style === 'big') {
+        if (t.includes('\n')) return null;
+        const m = measure('5x7', t);
+        if (w === WIDE && m * 3 <= w) return { lines: [t], x3: 1 };
+        return m * 2 <= w ? { lines: [t] } : null;
+      }
       if (style === 'roll') {
         // It scrolls, so it isn't held to one screen: any number of lines up to rollLines.
-        const lines = upto(wrapMessage(t, '5x7', 64), MSG.rollLines);
+        const lines = upto(wrapMessage(t, '5x7', w), MSG.rollLines);
         return lines ? { lines } : null;
       }
       return null;
     }
 
-    const msgX = (font, str) => Math.floor((64 - measure(font, str)) / 2);
+    const msgX = (f, font, str) => Math.floor((f.w - measure(font, str)) / 2);
     const msgLen = (str) => [...str].length;
     function drawNote(f, lines, sm) {
       if (sm) {
         const n = Math.min(lines.length, MSG.smallLines);
         const top = Math.floor((32 - (n * 6 - 1)) / 2);
-        for (let i = 0; i < n; i++) f.text('small', lines[i], msgX('small', lines[i]), top + 5 + i * 6, MSG_C.text);
+        for (let i = 0; i < n; i++) f.text('small', lines[i], msgX(f, 'small', lines[i]), top + 5 + i * 6, MSG_C.text);
         return;
       }
       const n = Math.min(lines.length, 3);
-      for (let i = 0; i < n; i++) f.text('5x7', lines[i], msgX('5x7', lines[i]), MSG.bases[n][i], MSG_C.text);
+      for (let i = 0; i < n; i++) f.text('5x7', lines[i], msgX(f, '5x7', lines[i]), MSG.bases[n][i], MSG_C.text);
     }
     // Typewriter: amber 5x7 from the left edge, typed one character every
     // typeChar ms (a line break counts as one), a block cursor after the last
@@ -2841,11 +2916,12 @@
       const on = typed < total || !Number.isFinite(t) || Math.floor((t - doneAt) / MSG.typeBlink) % 2 === 0;
       if (on) f.fill(lastX, lastB - 7, 4, 7, MSG_C.cursor);
     }
-    // Big word: 5x7 at 2x, centered, rows shaded from pink to amber.
-    function drawBig(f, str) {
+    // Big word: 5x7 at 2x (3x: `x3`), centered, rows shaded from pink to amber.
+    function drawBig(f, str, x3) {
+      const s = x3 ? 3 : 2, y0 = x3 ? MSG.bigTop3 : MSG.bigTop, span = x3 ? MSG.bigGrad * 3 / 2 : MSG.bigGrad;
       const A = hex(MSG_C.bigFrom), B = hex(MSG_C.bigTo);
-      const grad = (y) => { const k = Math.max(0, Math.min(MSG.bigGrad, y)); return [0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * k / MSG.bigGrad)); };
-      const x0 = 32 - measure('5x7', str);
+      const grad = (y) => { const k = Math.max(0, Math.min(span, y)); return [0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * k / span)); };
+      const x0 = Math.floor((f.w - measure('5x7', str) * s) / 2);
       let x = 0;
       for (const ch of str) {
         const g = fonts['5x7'][ch.codePointAt(0)];
@@ -2857,7 +2933,7 @@
           for (let c = 0; c < w; c++) {
             if (!((bits >> (w - 1 - c)) & 1)) continue;
             const px = x + xo + c, py = top + r;
-            for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) f.set(x0 + px * 2 + dx, MSG.bigTop + py * 2 + dy, grad(py * 2 + dy));
+            for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) f.set(x0 + px * s + dx, y0 + py * s + dy, grad(py * s + dy));
           }
         }
         x += dw;
@@ -2874,24 +2950,24 @@
     }
     function drawRoll(f, lines, t) {
       const base = rollBase(lines.length, t);
-      lines.forEach((l, i) => f.text('5x7', l, msgX('5x7', l), base + i * MSG.rollPitch, MSG_C.text));
+      lines.forEach((l, i) => f.text('5x7', l, msgX(f, '5x7', l), base + i * MSG.rollPitch, MSG_C.text));
       for (let i = 0; i < MSG.rollFade; i++) {
         const k = (i + 1) / (MSG.rollFade + 1);
-        for (const y of [i, 31 - i]) for (let x = 0; x < 64; x++) f.set(x, y, f.get(x, y).map((v) => Math.round(v * k)));
+        for (const y of [i, 31 - i]) for (let x = 0; x < f.w; x++) f.set(x, y, f.get(x, y).map((v) => Math.round(v * k)));
       }
     }
     function renderAnnounce(p, opts) {
       const o = opts || {};
-      const f = newFrame();
+      const f = newFrame(colsOf(p) === WIDE ? WIDE : 64);
       const m = p.msg;
       if (!m || !m.lines || !m.lines.length) {
         // No message yet: a call to action.
-        for (const [str, base] of [['SET A MESSAGE', 15], ['ON YOUR PHONE', 22]]) f.text('small', str, msgX('small', str), base, MSG_C.cta);
+        for (const [str, base] of [['SET A MESSAGE', 15], ['ON YOUR PHONE', 22]]) f.text('small', str, msgX(f, 'small', str), base, MSG_C.cta);
         return f;
       }
       const t = o.t != null ? o.t : Infinity;
       if (m.style === 'type') drawTyped(f, m.lines, t);
-      else if (m.style === 'big') drawBig(f, m.lines[0]);
+      else if (m.style === 'big') drawBig(f, m.lines[0], !!m.x3);
       else if (m.style === 'roll') drawRoll(f, m.lines, t);
       else drawNote(f, m.lines, !!m.sm);
       return f;

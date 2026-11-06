@@ -116,10 +116,12 @@
   @supports (width: round(down, 100px, 64px)) {
     .prev { container-type: inline-size; }
     .prev img, .prev canvas { width: round(down, 100cqi, 64px); }
-    .wide .prev img { width: round(down, 100cqi, 128px); }
+    .wide .prev img, .prev canvas.w4 { width: round(down, 100cqi, 128px); }
   }
   /* A board of two panels: its renders are 128 x 32. */
-  .wide .prev img { aspect-ratio: 4 / 1; }
+  .wide .prev img, .prev canvas.w4 { aspect-ratio: 4 / 1; }
+  .tiles canvas.w4 { height: 48px; }
+  .thumb.w4 { height: 24px; }
   .prev.dim img { opacity: .35; }
   .prev .over { position: absolute; inset: 0; display: grid; place-items: center; }
   .prev .over span { background: rgba(0,0,0,.75); color: #fff; font-size: 14px; border-radius: 14px; padding: 6px 12px; }
@@ -859,7 +861,7 @@
     if (sc === 'announce') {
       // data-k: what it shows, so a rebuilt list redraws it only when that changes.
       const c = el('canvas', { class: cls, width: 64, height: 32, 'aria-label': alt || null, 'data-k': `${D ? 1 : 0}:${board.msg ? board.msg.style + board.msg.text : ''}` });
-      if (D && board.msg) try { paintLed(c, D.render({ bright: 100, screen: 'announce', msg: msgOf({ text: board.msg.text, style: board.msg.style }) }, { t: 1e6 })); } catch (e) { /* drawn blank */ }
+      if (D && board.msg) try { paintLed(c, D.render(annPay(msgOf({ text: board.msg.text, style: board.msg.style })), { t: 1e6 })); } catch (e) { /* drawn blank */ }
       else { const x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 64, 32); }
       return c;
     }
@@ -1078,11 +1080,15 @@
     return drawLoading;
   }
   // Square LEDs on black, each `s` canvas pixels, with a 1-in-5 gap.
+  // A frame 128 wide (two panels) makes the canvas 4:1 (class w4).
   function paintLed(canvas, f) {
-    const s = canvas.width / 64, g = s >= 4 ? Math.round(s / 5) : 0, ctx = canvas.getContext('2d');
+    const s = canvas.height / 32, g = s >= 4 ? Math.round(s / 5) : 0;
+    if (canvas.width !== f.w * s) canvas.width = f.w * s;
+    canvas.classList.toggle('w4', f.w === 128);
+    const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+    for (let y = 0; y < 32; y++) for (let x = 0; x < f.w; x++) {
       const [r, gg, b] = f.get(x, y);
       ctx.fillStyle = r || gg || b ? `rgb(${r},${gg},${b})` : '#0d0d0d';
       ctx.fillRect(x * s, y * s, s - g, s - g);
@@ -1375,7 +1381,9 @@
   // The draft is drawn with the board's own renderer, so the preview, the
   // fit line and the disabled styles agree with what the server accepts.
   let draft = null, introStart = 0, introRaf = 0, liveTimer = null, lastFit = null;
-  const msgOf = (m) => { const lay = m && D.messageLayout(m.text, m.style); return lay ? { id: 0, style: m.style, ...lay } : null; };
+  // Laid out for the board's width, as the server does.
+  const msgOf = (m) => { const lay = m && D.messageLayout(m.text, m.style, board.cols); return lay ? { id: 0, style: m.style, ...lay } : null; };
+  const annPay = (m, bright = 100) => ({ bright, screen: 'announce', cols: board.cols === 128 ? 128 : undefined, msg: m });
   const sameMsg = (a, b) => !!a && !!b && a.style === b.style && D.cleanMessage(a.text) === D.cleanMessage(b.text);
   const onBoardMsg = () => board.screen === 'announce' && sameMsg(draft, board.msg);
   const liveMsg = () => board.screen === 'announce' && !!board.msg;
@@ -1386,7 +1394,7 @@
     if (m) lastFit = m;
     const dim = !m && D.cleanMessage(draft.text) && lastFit;
     if (dim) m = lastFit;
-    paintLed($('msgPreview'), D.render({ bright: dim ? 30 : 100, screen: 'announce', msg: m }, { t: dim ? undefined : t }));
+    paintLed($('msgPreview'), D.render(annPay(m, dim ? 30 : 100), { t: dim ? undefined : t }));
     if (dim) return;
     if (m && (t < D.messageIntroMs(m) || m.style === 'type' || m.style === 'roll') && $('msgPreview').offsetParent) introRaf = requestAnimationFrame(paintDraft);
   }
@@ -1395,14 +1403,14 @@
     if (!draft) { draft = board.msg ? { text: board.msg.text, style: board.msg.style } : { text: '', style: 'note' }; $('msgText').value = draft.text; }
     const clean = D.cleanMessage(draft.text);
     const fits = {};
-    for (const st of Object.keys(MSG_NAMES)) fits[st] = D.messageLayout(draft.text, st);
+    for (const st of Object.keys(MSG_NAMES)) fits[st] = D.messageLayout(draft.text, st, board.cols);
     for (const b of qa('#msgStyles [data-v]')) {
       const st = b.dataset.v;
       b.setAttribute('aria-checked', String(st === draft.style));
       b.disabled = !!clean && !fits[st];
       b.querySelector('.lab span:last-child').textContent = MSG_NAMES[st] + (b.disabled ? ' · too long' : '');
       const sample = clean && fits[st] ? { text: draft.text, style: st } : { text: { note: 'Dinner at 7', type: 'Back by 6', big: 'Yay!', roll: 'Thanks for coming!' }[st], style: st };
-      paintLed(b.querySelector('canvas'), D.render({ bright: 100, screen: 'announce', msg: msgOf(sample) }));
+      paintLed(b.querySelector('canvas'), D.render(annPay(msgOf(sample))));
     }
     const lay = fits[draft.style];
     const dropped = [...draft.text.replace(/\s/g, '')].length > [...clean.replace(/\s/g, '')].length;
@@ -1424,7 +1432,7 @@
     $('presetBox').hidden = !presets.length;
     $('msgPresets').replaceChildren(...presets.map((pr, i) => {
       const cv = el('canvas', { class: 'thumb', width: 64, height: 32 });
-      paintLed(cv, D.render({ bright: 100, screen: 'announce', msg: msgOf(pr) }, { t: 1e6 }));
+      paintLed(cv, D.render(annPay(msgOf(pr)), { t: 1e6 }));
       const del = el('button', { class: 'rc minus', 'aria-label': 'Delete preset', text: '−', onclick: () => save({ msgPresets: presets.filter((_, k) => k !== i) }) });
       const pick = el('button', { class: 'pick', onclick: () => { draft = { text: pr.text, style: pr.style }; $('msgText').value = pr.text; draftChanged(); } }, cv, el('span', { class: 'grow' }, pr.text.replace(/\n/g, ' / '), el('span', { class: 's', text: MSG_NAMES[pr.style] || pr.style })));
       return el('div', { class: 'c t' }, del, pick);
@@ -1436,8 +1444,8 @@
     if (restart) introStart = performance.now();
     renderAnnounce();
     clearTimeout(liveTimer);
-    if (liveMsg() && !sameMsg(draft, board.msg) && D.messageLayout(draft.text, draft.style)) {
-      liveTimer = setTimeout(() => { if (liveMsg() && D.messageLayout(draft.text, draft.style) && !sameMsg(draft, board.msg)) save({ msg: { ...draft } }, { quiet: true }); }, 1000);
+    if (liveMsg() && !sameMsg(draft, board.msg) && msgOf(draft)) {
+      liveTimer = setTimeout(() => { if (liveMsg() && msgOf(draft) && !sameMsg(draft, board.msg)) save({ msg: { ...draft } }, { quiet: true }); }, 1000);
     }
   }
   $('msgText').addEventListener('input', (e) => { draft.text = e.target.value; draftChanged(false); });

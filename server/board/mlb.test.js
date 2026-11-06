@@ -195,3 +195,25 @@ test('priority: favorite keeps only live Cubs/Sox games while one is on', () => 
   assert.deepEqual(prioritize(games, 'live').map((x) => x.id), [1, 2, 3]);
   assert.deepEqual(prioritize(games, 'all').map((x) => x.id), [1, 2, 3]);
 });
+
+test('wide boards (line): live games and finals carry runs by inning, hits and errors; pregame and 64 boards do not', () => {
+  const [g] = shown(FIX, START + 3 * 3600, new Map(), new Map(), 'forced', { line: true });
+  assert.deepEqual(g.away.rs, [0, 0, 0, 2, 0, 0, 1, 0, 0]);
+  assert.deepEqual([g.away.h, g.away.e, g.home.h, g.home.e], [6, 0, 3, 0]);
+  assert.equal(g.home.rs.length, 9);
+  assert.equal(shown(FIX, START + 3 * 3600, new Map(), new Map(), 'forced')[0].away.rs, undefined, 'not without line');
+  // Live, top of the 3rd: halves not played yet are null.
+  const lv = structuredClone(G);
+  live({ currentInning: 3, inningState: 'Top', inningHalf: 'Top' })(lv);
+  lv.linescore.innings = [
+    { num: 1, away: { runs: 1, hits: 2, errors: 0 }, home: { runs: 0, hits: 0, errors: 1 } },
+    { num: 2, away: { runs: 1, hits: 1, errors: 0 }, home: { runs: 1, hits: 1, errors: 0 } },
+    { num: 3, away: { hits: 0, errors: 0 }, home: {} },
+  ];
+  const [l] = shown(schedule(lv), START + 3600, new Map(), new Map(), 'forced', { line: true });
+  assert.deepEqual([l.away.rs, l.home.rs], [[1, 1, null], [0, 1, null]]);
+  const p = structuredClone(G);
+  pre(p);
+  const [pg] = shown(schedule(p), START - 600, new Map(), new Map(), 'forced', { line: true });
+  assert.equal(pg.away.rs, undefined);
+});
