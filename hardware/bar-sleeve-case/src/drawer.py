@@ -96,6 +96,7 @@ def configure_shell():
     V.SKINS, V.SKIN_USB, V.SENSOR_PRINTED, V.GLUED_FRAME = False, False, True, False   # light-sensor hole printed open (Ø2.1), Nov 2
     V.SENSOR_ROUND = True                          # round, not a teardrop: reads as a pinhole; ream with a 2 mm bit
     V.SCREW_FLOAT = SCREW_FLOAT
+    V.CB_SQUARE = panel.KEY.startswith('p25')    # P2.5 builds (single and 128): square counterbores (case2.CB_SQUARE)
 
 
 # ---- tray ----

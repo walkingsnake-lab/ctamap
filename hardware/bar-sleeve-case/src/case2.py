@@ -166,6 +166,8 @@ def latch_dimples():
 
 
 SCREW_FLOAT = 0.0                # +/- y float of the screws from below (0: round holes)
+CB_SQUARE = False                # screw counterbores square (sides straight front to back as printed back-down, flat
+                                 # roof and floor): a round one cut sideways makes Bambu Studio print ramps across it
 FLOOR_CH = 0.0                   # >0: the feet recesses and screw counterbores widen by this at the mouth and meet their
                                  # floors (same size as without) at 45 deg: no sharp inside corner there, which is where an
                                  # 'aligned' seam goes (bar128.py: the shell joint is where it should go)
@@ -268,6 +270,8 @@ def shell2():
         f = SCREW_FLOAT                             # stadium along y when the tray's float lives here (drawer, nut fixed in the tray)
         hole = teardrop_cs(1.7, sx * scx, SCREW_Y - f, seg=32) + teardrop_cs(1.7, sx * scx, SCREW_Y + f, seg=32)
         cb = teardrop_cs(3.2, sx * scx, SCREW_Y - f, seg=48) + teardrop_cs(3.2, sx * scx, SCREW_Y + f, seg=48)
+        if CB_SQUARE:                               # 6.4 wide, the same length along y as the round one
+            cb = CrossSection.square([6.4, 6.4 + 2 * f], center=True).translate([sx * scx, SCREW_Y])
         cuts.append(Manifold.extrude(hole.hull(), WALL + 1 - z0).translate([0, 0, z0]))
         cuts.append(recess(cb.hull(), 1.0, FLOOR_CH))
     # tongue grooves (as v1)

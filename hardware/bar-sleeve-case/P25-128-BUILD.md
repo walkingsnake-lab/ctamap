@@ -28,6 +28,9 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   so it drops on over the bar lying back-down on the bench; the bench lines up the backs, the arms the top and bottom
   faces, a slot in each arm keeps it off the glue line. What holds the halves together in the end is the inside: each
   tray is screwed to its half and bolted to its panel, and the panels are spliced.
+- **Screw counterbores square (Nov 6, single P2.5 shell too).** Printed back-down, a round counterbore is cut sideways
+  and its edge moves every layer; Bambu Studio printed ramps across it (PrusaSlicer didn't). Square, its sides run
+  straight front to back, so every layer's step sits on the one below. The screw hole inside stays round.
 - **Knob near the right end, at x +123 (50 mm from the end), over the S3's tray; light sensor 40 mm toward the centre
   (x +83); USB-C at the same end** (Nov 5). ±123 is as far out as the encoder's board (25.4 wide, under the top wall)
   clears the tray's top corner post sideways; further out it would ride ~1 mm over the post, and past ~138 the collar
