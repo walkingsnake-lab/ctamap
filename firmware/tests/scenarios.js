@@ -889,13 +889,10 @@ async function build() {
       add('wide transit split one half empty', half, [{ screen: 'transit' }], undefined, undefined, S3);
       // Overnight on a wide board: the 64 layout on both panels.
       add('wide transit overnight', { ...st, stale: 0, rows: [] }, [{ screen: 'transit' }], undefined, undefined, S3);
-      // With weather (radar.wx, tmrw): the wide overnight layout.
-      const rw = { icon: 'pcloudy_night', temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51 };
-      const night = { ...st, stale: 0, rows: [], radar: { wx: rw }, tmrw: { icon: 'sun', word: 'SUNNY', hi: 69, lo: 51 } };
-      add('wide transit overnight with weather', night, [{ screen: 'transit' }, { screen: 'transit', now: st.now + 60, iconT: 5000 }], undefined, undefined, S3);
-      add('wide transit no data with weather', { ...night, stale: 1 }, [{ screen: 'transit' }], undefined, undefined, S3);
-      add('wide transit overnight celsius, no low', { ...night, radar: { wx: { ...rw, temp: -4, c: 1 } }, tmrw: { icon: 'snow', word: 'SNOW', hi: -2, lo: null, c: 1 } }, [{ screen: 'transit' }], undefined, undefined, S3);
-      add('wide transit overnight, no forecast', { ...night, tmrw: undefined }, [{ screen: 'transit' }], undefined, undefined, S3);
+      // The owl, clock and NO TRAINS 32 px in, the line across: with the
+      // weather strip (and a warning on it), and NO DATA.
+      add('wide transit overnight, weather strip and warning', { ...st, view: 'dest', halves: null, stale: 0, rows: [], wx: WX, warn: { kind: 'tor', lvl: 'watch', until: st.now + 3600 } }, [{ screen: 'transit' }, { screen: 'transit', now: st.now + 60, iconT: 5000 }], undefined, undefined, S3);
+      add('wide transit no data', { ...st, stale: 1, rows: [] }, [{ screen: 'transit' }], undefined, undefined, S3);
       // Many destinations: the chronological list, full width.
       const many = { ...wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', wx: WX }) };
       const chrono = { ...many, view: 'chrono', rows: many.rows.map((x, i) => ({ ...x, t: [x.t[0]], s: [x.s[0]], rn: String(800 + i) })), wx: null };

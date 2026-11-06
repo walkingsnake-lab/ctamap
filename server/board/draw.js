@@ -342,8 +342,6 @@
     const rightAt = (font, right) => (str) => right - measure(font, str) + 1;
     const centerX = (font) => (str) => Math.floor((64 - measure(font, str)) / 2);
     // Centered in columns x0-63.
-    const centerIn = (font, x0) => (str) => x0 + Math.floor((64 - x0 - measure(font, str)) / 2);
-
     // Station name + clock on rows 1-5, flush to the screen edges, both in
     // `color` (the transit screen's dark grey, or the ticker's header grey).
     // `divider`: a line on row 7 (transit).
@@ -423,18 +421,12 @@
       f.text('small', 'trains to', 0, 6, C.dimHead);
       rtext(f, 'small', 'min', f.w - 1, 6, C.dimHead);
     }
-    // Wide key layout (wide-spec §3): `trains to` at x5 and `min` at the
-    // right edge (#555555), the station and clock (#808080, 4 px apart)
-    // centered between them, all on rows 1-5.
-    function drawKeyWide(f, name, now, clock) {
-      const lx = f.text('small', 'trains to', 5, 6, C.dimHead) + 1;
-      const mx = WIDE - measure('small', 'min');
-      f.text('small', 'min', mx, 6, C.dimHead);
-      const clk = clock ? clockText(now) : '', nw = name ? measure('small', name) : 0;
-      const w = nw + (name && clk ? 4 : 0) + (clk ? measure('small', clk) : 0);
-      const x = lx + Math.floor((mx - 1 - lx - w) / 2);
-      if (name) f.text('small', name, x, 6, C.head);
-      if (clk) rollText(f, 'small', 'hdr.clock', clk, () => x + nw + (name ? 4 : 0), 6, C.head);
+    // Wide key layout (wide-spec §3; decided Nov 5): `trains to` at x0 and
+    // `minutes` right-aligned to x127 (#555555) on rows 1-5; no station or
+    // clock.
+    function drawKeyWide(f) {
+      f.text('small', 'trains to', 0, 6, C.dimHead);
+      rtext(f, 'small', 'minutes', WIDE - 1, 6, C.dimHead);
     }
     function drawBand(f, name, now, clock, color = C.head, divider = true) {
       if (divider) f.fill(0, 25, f.w, 1, C.divider);
@@ -671,45 +663,24 @@
 
     // No trains: the owl on a line along row 31 (or row 25 above the weather
     // strip), at the left; the big clock and NO TRAINS centered in x 16-63.
-    // The owl blinks and glances on the S3's icon clock.
+    // The owl blinks and glances on the S3's icon clock. On a wide board the
+    // same, 32 px in (columns 32-95), the line across the whole width
+    // (wide-spec §3; nothing else, decided Nov 5).
     const OWL_X = 2, OWL_PANEL = 16;
     function drawOvernight(f, p, now) {
       const clock = clockText(now);
       const nt = p.stale ? 'NO DATA' : 'NO TRAINS';
       const bottom = p.wx ? 25 : 31;
-      f.fill(0, bottom, 64, 1, C.perch);
+      const x0 = f.w === WIDE ? 32 : 0, mid = (font) => (str) => x0 + OWL_PANEL + Math.floor((64 - OWL_PANEL - measure(font, str)) / 2);
+      f.fill(0, bottom, f.w, 1, C.perch);
       const rows = owlRows(ICON_T);
       const oy = bottom - rows.length;
       rows.forEach((row, j) => [...row].forEach((c, i) => {
-        if (c !== '.') f.fill(OWL_X + i, oy + j, 1, 1, icons.OWL.palette[c]);
+        if (c !== '.') f.fill(x0 + OWL_X + i, oy + j, 1, 1, icons.OWL.palette[c]);
       }));
       const top = p.wx ? 3 : 5;
-      rollText(f, 'clock', 'big.clock', clock, centerIn('clock', OWL_PANEL), top + 10, C.clock);
-      f.text('small', nt, centerIn('small', OWL_PANEL)(nt), top + 18, C.noTrains);
-    }
-
-    // Overnight on a wide board (wide-spec §3): the 64 owl, big clock and NO
-    // TRAINS (or NO DATA) on columns 0-63; a #262626 divider on column 65
-    // (rows 2-29); from x69 the current temperature (Tom Thumb, its color)
-    // and condition word (radar.wx), TOMORROW, then tomorrow's icon, high
-    // (5x7, its color, a small degree sign) and low (Tom Thumb, 60%), and its
-    // word (p.tmrw).
-    function drawOvernightWide(f, p, now, stale) {
-      drawOvernight(f, { stale, wx: null }, now);
-      f.fill(65, 2, 1, 28, C.divider);
-      const w = p.radar && p.radar.wx, t = p.tmrw, X = 69;
-      if (w && w.temp != null) {
-        const x = f.text('small', `${w.temp}°`, X, 6, tempColor(w.temp, w.c));
-        if (w.word) f.text('small', w.word, x + 4, 6, C.wxText);
-      }
-      if (t) {
-        f.text('small', 'TOMORROW', X, 14, C.dimHead);
-        if (icons.ICONS[t.icon]) drawIcon(f, t.icon, X, 17);
-        let x = f.text('5x7', String(t.hi), X + 11, 25, tempColor(t.hi, t.c));
-        x = f.text('small', '°', x, 24, tempColor(t.hi, t.c));
-        if (t.lo != null) f.text('small', `${t.lo}°`, x + 4, 25, scaleColor(tempColor(t.lo, t.c), 0.6));
-        if (t.word) f.text('small', t.word, X, 31, C.wxText);
-      }
+      rollText(f, 'clock', 'big.clock', clock, mid('clock'), top + 10, C.clock);
+      f.text('small', nt, mid('small')(nt), top + 18, C.noTrains);
     }
 
     // Stale train data (the server hasn't reached Train Tracker for a while):
@@ -726,7 +697,7 @@
       } else {
         const wideKey = view.key && view.w === WIDE;
         if (wideKey) {
-          drawKeyWide(f, view.header, view.now, view.clock !== false);
+          drawKeyWide(f);
         } else if (view.key) {
           drawKey(f);
           if (view.header) drawBand(f, view.header, view.now, view.clock !== false);
@@ -768,14 +739,7 @@
         view = buildTransitView(p, now);
         if (o.rolls) for (const row of view.rows) for (const c of row.cells) if (o.rolls[c.id]) c.roll = o.rolls[c.id];
       }
-      // Overnight on a wide board with weather to show: the wide layout.
-      if (!view.rows.length && colsOf(p) === WIDE && (p.tmrw || (p.radar && p.radar.wx))) {
-        const g = newFrame(WIDE);
-        drawOvernightWide(g, p, now, !!p.stale);
-        drawStale(g, p);
-        return g;
-      }
-      const f = newFrame(view.rows.length && (view.w || 64) === WIDE ? WIDE : 64);
+      const f = newFrame(colsOf(p) === WIDE ? WIDE : 64);
       drawTransitView(f, view, !!o.blink);
       drawStale(f, p);
       return f;

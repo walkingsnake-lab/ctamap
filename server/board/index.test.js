@@ -999,7 +999,7 @@ test('width: wide boards get the week, 24 hours, the next sun time, and notop wi
   await s.close();
 });
 
-test('width: wide transit gets tomorrow (tmrw), the warning\'s end (warn.until) and alert words; a 64 board none of them', async () => {
+test('width: wide transit gets the warning\'s end (warn.until) and alert words; a 64 board neither', async () => {
   const now = Math.floor(Date.now() / 1000);
   const arrivals = normalize(morseJson, { log: quiet });
   const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
@@ -1010,11 +1010,9 @@ test('width: wide transit gets tomorrow (tmrw), the warning\'s end (warn.until) 
   s.store.update('home', { screen: 'transit', wideLayout: 'rows' });
   await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' }, weather: { kind: 'clear' } });
   let b = await upd(false);
-  assert.equal(b.tmrw, undefined);
   assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' }, 'the 64 warning is unchanged');
   assert.ok(b.rows.every((r) => r.aw === undefined));
   b = await upd(true);
-  assert.deepEqual(Object.keys(b.tmrw).sort(), ['hi', 'icon', 'lo', 'word']);
   assert.ok(b.warn.until > now && b.warn.until <= now + 600, 'a test warning ends with the test');
   assert.ok(b.rows.some((r) => r.aw === 'MAJOR DELAYS'), 'test alerts read MAJOR DELAYS');
   await post({});

@@ -45,14 +45,14 @@ The chronological view is the weakest transit screen. For stations with 4–5 li
 
 **Proposed fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built (Nov 5):** rows → one row per line → two columns → chronological. One row per line keeps 3 times in a half and up to 5 across a whole row (full names there).
 
-### Key layout (first pass; built)
-`trains to` (x5) and `min` (right) on row 0 as now, with the station and clock centered between them, so the station line at the bottom isn't needed.
+### Key layout (built; changed Nov 5)
+`trains to` flush left and `minutes` at the right on the top row, nothing between them: no station or clock anywhere. Rows sit as under a header.
 
 ### Alerts (first pass; built)
 The full destination, the red alert circle, then the alert's **short label in red** (`MAJOR DELAYS`), then the times. The label is the alert's CTA `Impact` (`MAJOR DELAYS`), sent per row as `aw`; it costs a row its fourth and fifth times if need be, and is left out when it doesn't fit.
 
-### Overnight, no data, stale (first pass; built)
-Owl and big clock with `NO TRAINS` as now in columns 0–62; a dim divider on column 65; the right side shows the current temperature and condition, then `TOMORROW` with icon, high (5x7) and low, and the condition. `NO DATA` and stale use the same layout with the red line across the top.
+### Overnight, no data, stale (built; changed Nov 5)
+Just the owl, big clock and NO TRAINS (NO DATA), the 64 composition 32 px in with the line across the width. The current-and-tomorrow panel was tried and dropped. Stale keeps its red line across the top.
 
 ### Ticker (decided; built)
 After the CTA's platform signs:

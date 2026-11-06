@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACE
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toWeek, toDayHours, toTomorrow, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
+const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toWeek, toDayHours, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
 const { boardAlertLines, boardAlertWords } = require('./cta-alerts');
 const { createNws, pickWarn, warnUntil } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
@@ -615,8 +615,6 @@ function createBoard({
       rows,
       ticker,
       wx: bars.showWeather ? wx : null,
-      // Wide boards' overnight screen: tomorrow's forecast (contract "Width").
-      ...(board.cols === 128 && wd && toTomorrow(wd) ? { tmrw: { ...toTomorrow(wd), ...(board.tempUnit === 'C' ? { c: 1 } : {}) } } : {}),
       warn,
       anim: animOf(board),
       tickerFill: board.tickerFill || 55,

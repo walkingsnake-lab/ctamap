@@ -675,17 +675,10 @@ static void draw_key(Frame &f) {
   rtext(f, FONT_SMALL, U"min", f.w - 1, 6, C::dimHead);
 }
 
-// Wide key layout (draw.js drawKeyWide).
-static void draw_key_wide(Frame &f, const ustr *name, double now, double tzo, bool clock) {
-  int lx = f.text(FONT_SMALL, U"trains to", 5, 6, C::dimHead) + 1;
-  int mx = WIDE - measure(FONT_SMALL, U"min");
-  f.text(FONT_SMALL, U"min", mx, 6, C::dimHead);
-  ustr clk = clock ? clock_text(now, tzo) : ustr();
-  int nw = name ? measure(FONT_SMALL, *name) : 0;
-  int w = nw + (name && !clk.empty() ? 4 : 0) + (clk.empty() ? 0 : measure(FONT_SMALL, clk));
-  int x = lx + (int)fdiv(mx - 1 - lx - w, 2);
-  if (name) f.text(FONT_SMALL, *name, x, 6, C::head);
-  if (!clk.empty()) roll_named(f, FONT_SMALL, "hdr.clock", clk, LEFT, x + nw + (name ? 4 : 0), 6, C::head);
+// Wide key layout (draw.js drawKeyWide): `trains to` and `minutes`, no station or clock.
+static void draw_key_wide(Frame &f) {
+  f.text(FONT_SMALL, U"trains to", 0, 6, C::dimHead);
+  rtext(f, FONT_SMALL, U"minutes", WIDE - 1, 6, C::dimHead);
 }
 
 static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock = true, RGB color = C::head,
@@ -1016,21 +1009,20 @@ static void draw_overnight(Frame &f, const View &view, double now) {
   ustr clock = clock_text(now, view.tzo);
   ustr nt = view.stale ? U"NO DATA" : U"NO TRAINS";
   int bottom = view.wx ? 25 : 31;
-  f.fill(0, bottom, 64, 1, C::perch);
+  // A wide board: the same, 32 px in, the line across the whole width.
+  int x0 = f.w == WIDE ? 32 : 0;
+  f.fill(0, bottom, f.w, 1, C::perch);
   const char *px = assets::OWL_FRAMES[owl_frame(g_icon_t)].px;
   int oy = bottom - assets::OWL_H;
   for (int j = 0; j < assets::OWL_H; j++)
     for (int i = 0; i < assets::OWL_W; i++) {
       char c = px[j * assets::OWL_W + i];
-      if (c != '.') f.fill(OWL_X + i, oy + j, 1, 1, owl_color(c));
+      if (c != '.') f.fill(x0 + OWL_X + i, oy + j, 1, 1, owl_color(c));
     }
   int top = view.wx ? 3 : 5;
-  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, OWL_PANEL, top + 10, C::clock);
-  f.text(FONT_SMALL, nt, align_x(FONT_SMALL, nt, CENTER, OWL_PANEL), top + 18, C::noTrains);
+  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, x0 + OWL_PANEL, top + 10, C::clock, x0 + 64);
+  f.text(FONT_SMALL, nt, align_x(FONT_SMALL, nt, CENTER, x0 + OWL_PANEL, x0 + 64), top + 18, C::noTrains);
 }
-
-// Overnight on a wide board (draw.js drawOvernightWide), below the weather screen's helpers.
-static void draw_overnight_wide(Frame &f, const Value &p, double now, bool stale);
 
 static void draw_stale(Frame &f, const Value &p) {
   if (p["stale"].truthy()) f.fill(0, 0, f.w, 1, C::red);
@@ -1065,7 +1057,7 @@ static void draw_transit_view(Frame &f, const View &view, bool blink) {
   } else {
     bool wide_key = view.key && view.w == WIDE;
     if (wide_key) {
-      draw_key_wide(f, view.has_header ? &view.header : nullptr, view.now, view.tzo, view.clock);
+      draw_key_wide(f);
     } else if (view.key) {
       draw_key(f);
       if (view.has_header) draw_band(f, view.header, view.now, view.tzo, view.clock);
@@ -1090,13 +1082,7 @@ static void render_transit(const Value &p, Frame &f, std::optional<double> now, 
     built = build_transit_view(p, n);
     view = &built;
   }
-  if (view->rows.empty() && cols_of(p) == WIDE && (p["tmrw"].truthy() || p["radar"]["wx"].truthy())) {
-    f.w = WIDE;
-    draw_overnight_wide(f, p, n, p["stale"].truthy());
-    draw_stale(f, p);
-    return;
-  }
-  if (!view->rows.empty() && view->w == WIDE) f.w = WIDE;
+  if (cols_of(p) == WIDE) f.w = WIDE;
   draw_transit_view(f, *view, blink);
   draw_stale(f, p);
 }
@@ -1669,32 +1655,6 @@ static void draw_hourly(Frame &f, const Value &wx, bool shadow, const Value *war
     int icon = icon_index(h["icon"]);
     if (icon >= 0) draw_icon(f, icon, cx - 4, 17);
     draw_day_temp(f, vstr(h["t"]), cx, 31, temp_color(h["t"].num(), wx["c"]));
-  }
-}
-
-// Overnight on a wide board (draw.js drawOvernightWide).
-static void draw_overnight_wide(Frame &f, const Value &p, double now, bool stale) {
-  View left;
-  left.stale = stale;
-  left.wx = nullptr;
-  left.tzo = p["tzo"].num(0);
-  draw_overnight(f, left, now);
-  f.fill(65, 2, 1, 28, C::divider);
-  const Value &w = p["radar"]["wx"], &t = p["tmrw"];
-  const int X = 69;
-  if (w.truthy() && !w["temp"].is_null()) {
-    int x = f.text(FONT_SMALL, vstr(w["temp"]) + U"°", X, 6, temp_color(w["temp"].num(), w["c"]));
-    if (w["word"].truthy()) f.text(FONT_SMALL, vstr(w["word"]), x + 4, 6, C::wxText);
-  }
-  if (t.truthy()) {
-    f.text(FONT_SMALL, U"TOMORROW", X, 14, C::dimHead);
-    int icon = icon_index(t["icon"]);
-    if (icon >= 0) draw_icon(f, icon, X, 17);
-    RGB hc = temp_color(t["hi"].num(), t["c"]);
-    int x = f.text(FONT_5X7, vstr(t["hi"]), X + 11, 25, hc);
-    x = f.text(FONT_SMALL, U"°", x, 24, hc);
-    if (!t["lo"].is_null()) f.text(FONT_SMALL, vstr(t["lo"]) + U"°", x + 4, 25, scale_color(temp_color(t["lo"].num(), t["c"]), 0.6));
-    if (t["word"].truthy()) f.text(FONT_SMALL, vstr(t["word"]), X, 31, C::wxText);
   }
 }
 

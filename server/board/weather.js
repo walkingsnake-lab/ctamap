@@ -254,17 +254,6 @@ function toHours(w) {
   return out;
 }
 
-// Words for a forecast icon (NWS days carry an icon, not a code).
-const ICON_WORDS = { sun: 'SUNNY', moon: 'CLEAR', pcloudy_day: 'PT CLOUDY', pcloudy_night: 'PT CLOUDY', cloudy: 'CLOUDY', rain: 'RAIN', ice: 'FRZ RAIN', snow: 'SNOW', storm: 'STORMS', tsnow: 'THNDRSNOW', fog: 'FOG' };
-// Parsed weather -> tomorrow for a wide board's overnight screen: {icon,
-// word, hi, lo} (lo null when missing), or null without forecast days.
-function toTomorrow(w) {
-  const d = w && w.days && w.days[0];
-  if (!d || d.hi == null) return null;
-  const [icon, word] = d.icon ? [d.icon, ICON_WORDS[d.icon] || ''] : condition(d.code, true, d.wa);
-  return { icon, word, hi: Math.round(d.hi), lo: d.lo == null ? null : Math.round(d.lo) };
-}
-
 // Parsed weather -> the wide 7-day layout's days: [{d, icon, hi, lo}],
 // today first (lo null when NWS has no night for the last day), or null
 // without the whole week (NWS only; WeatherAPI's free plan has 3 days).
@@ -370,4 +359,4 @@ function createWeather({ key = process.env.WEATHERAPI_KEY || '', fetch = null, c
   return w;
 }
 
-module.exports = { url, parse, rainLine, RAIN_ON, RAIN_OFF, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toWeek, toDayHours, toTomorrow, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, WEEK_DAYS, DAY_SLOTS };
+module.exports = { url, parse, rainLine, RAIN_ON, RAIN_OFF, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toWeek, toDayHours, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, WEEK_DAYS, DAY_SLOTS };

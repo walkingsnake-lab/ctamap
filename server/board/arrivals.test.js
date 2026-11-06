@@ -488,10 +488,10 @@ test('wide: an alerted row\'s words (aw) after its circle when they fit whole; t
   // Halves and the chronological list never get words.
   const s = run('belmont-2026-10-03-2316.json', wide('41320'), { alerts: new Set(['BR']), alertWords: new Map([['BR', 'MAJOR DELAYS']]) });
   assert.ok(s.rows.every((x) => x.aw === undefined));
-  // Key layout: the key's row carries the station and clock, so four rows fit under it (the weather strip makes room).
+  // Key layout: the key's row alone (no station or clock), placed like a header: four rows under it (the weather strip makes room).
   const k = run('belmont-2026-10-03-2316.json', wide('41320', { wideLayout: 'rows', showKey: true, showWeather: true }));
   assert.equal(k.view, 'dest');
-  assert.deepEqual([k.bars.showKey, k.bars.showHeader, k.bars.showWeather, k.rows.length], [true, true, false, 4]);
+  assert.deepEqual([k.bars.showKey, k.bars.showHeader, k.bars.showWeather, k.rows.length], [true, false, false, 4], 'no station line at 128');
 });
 
 test('wide: a name that would crowd its times keeps fewer times instead', () => {

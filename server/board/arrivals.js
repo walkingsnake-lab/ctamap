@@ -394,14 +394,14 @@ function formatWide(ordered, shown, cfg, now, alerts, alertWords = new Map()) {
   }
   // Full-width destination rows while they fit (the rows layout, and where
   // the split isn't true: a terminal's one or two rows read best whole).
-  // The key layout at 128 puts the station and clock on the key's row
-  // (wide-spec §3), so key and header together take one row.
+  // The key layout at 128 is the key's row alone (`trains to` ... `minutes`,
+  // no station or clock; wide-spec §3), placed like a header.
   if (cfg.showKey) {
     const kb = fitBars(ordered.length, true, cfg.showWeather, false);
     if (ordered.length <= maxRows(kb.showHeader, kb.showWeather, false)) {
       const hidden = kb.hidden.map((x) => (x === 'header' ? 'key' : x));
       return { view: 'dest', viewState: view('dest'), rows: ordered.map((g) => wideRow(g, now, alerts.has(g.ln), alertWords.get(g.ln))),
-        bars: { showHeader: !!cfg.showHeader && kb.showHeader, showWeather: kb.showWeather, showKey: kb.showHeader, hidden: [...hidden, ...(cfg.showHeader && !kb.showHeader ? ['header'] : [])] } };
+        bars: { showHeader: false, showWeather: kb.showWeather, showKey: kb.showHeader, hidden } };
     }
   }
   {
