@@ -510,7 +510,7 @@ static int roll_text_at(Frame &f, Font font, const ustr &text, Align a, int pos,
   RollFont rf = roll_font(font);
   int up = (int)jsround(ease_in_out(roll->p) * rf.dist);
   int fx = align_x(font, frm, a, pos);
-  f.push_clip(0, base + rf.t0, 63, base + rf.t1);
+  f.push_clip(0, base + rf.t0, f.w - 1, base + rf.t1);
   if (fx == x && same_shape(font, text, frm)) {
     for (size_t i = 0; i < text.size(); i++) {
       ustr ch = text.substr(i, 1);
@@ -1614,10 +1614,11 @@ static void draw_rain_bars(Frame &f, const Value &wx, bool shadow, const Value *
 
 // ---- radar ----
 
-static int radar_value(const std::vector<uint8_t> &data, int i) {
-  // 2048 bytes (one a pixel, as from the server), or 1024 packed (two a
-  // byte, left pixel in the high nibble).
-  if (data.size() == 2048) return data[i];
+static int radar_value(const std::vector<uint8_t> &data, int i, int w = 64) {
+  // w x 32 bytes (one a pixel, as from the server), or half that packed (two
+  // a byte, left pixel in the high nibble).
+  if (data.size() == (size_t)w * 32) return data[i];
+  if ((size_t)(i >> 1) >= data.size()) return 0;
   uint8_t b = data[i >> 1];
   return i & 1 ? b & 15 : b >> 4;
 }
@@ -1667,6 +1668,89 @@ bool rain_bars_turn(const Value &rn, int n, const Timing &tm, double t) {
 
 static const RGB PEEK_LOADED = hexc(0x6a6a6a);
 
+// Wide board (draw.js renderRadarWide; wide-spec §5): the 128 x 32 map, the
+// time on a black chip bottom-right (at least columns 101-127), a warning
+// tag before it, the frame dots straight on the map along row 31, the
+// temperature on its own chip bottom-left.
+static const int WIDE_CHIP_X = 101;
+static const RGB WIDE_DOT = hexc(0x4a4a4a);
+template <class OnHand>
+static void render_radar_wide(const Value &p, const Value &r, Frame &f, const Value &ids, int idx,
+                              const std::vector<uint8_t> *data, std::optional<double> now_o, bool blink, bool peek,
+                              const OnHand &on_hand) {
+  f.w = WIDE;
+  if (data && !data->empty()) {
+    const Value &rbv = r["rb"];
+    RadarColors rc = radar_colors(r.has("rb") ? (rbv.is_null() ? 100 : rbv.num()) : 100);
+    for (int y = 0; y < 32; y++)
+      for (int x = 0; x < WIDE; x++) {
+        int v = radar_value(*data, y * WIDE + x, WIDE);
+        if (v >= 0 && v < 16 && rc.on[v]) f.fill(x, y, 1, 1, rc.c[v]);
+      }
+  }
+  int nids = (int)ids.size();
+  double now_s = now_o ? *now_o : p["now"].num();
+  bool now_clock = r["clock"].eq("now");
+  const Value &ft = r["ft"];
+  double t = !now_clock && idx >= 0 && ft.truthy() && !ft[idx].is_null() ? ft[idx].num() : now_s;
+  double tzo = p["tzo"].num(0);
+  const Value *warnp = p["warn"].truthy() ? &p["warn"] : nullptr;
+  std::optional<WarnStyle> ws;
+  if (warnp) ws = warn_style(*warnp);
+  bool hide_warn = ws && ws->blinks && blink;
+  bool show_time = !r["showTime"].is_false() && !r["clock"].eq("none");
+  int x = WIDE;
+  bool any = false;
+  // Right to left: AM/PM, the time (or its age), the warning tag. Drawn after the chip.
+  ustr age, clk, ap;
+  std::optional<Roll> cr;
+  int ap_x = 0, right = 0, tag_x = 0;
+  if (show_time && r["clock"].eq("age")) {
+    double fts = idx >= 0 && ft.truthy() && !ft[idx].is_null() ? ft[idx].num() : now_s;
+    age = num_text((long long)std::max(0.0, floor((now_s - fts + 30) / 60))) + U"m";
+    x -= measure(FONT_SMALL, age) + 1;
+    any = true;
+  } else if (show_time) {
+    ap = ampm_text(t, tzo);
+    clk = clock_text(t, tzo);
+    ap_x = WIDE - measure(FONT_SMALL, ap);
+    right = ap_x - 3;
+    if (now_clock) cr = take_roll("rad.clock", clk);
+    x = right - measure(FONT_SMALL, clk) + 1;
+    if (cr) x = std::min(x, right - measure(FONT_SMALL, cr->from) + 1);
+    any = true;
+  }
+  ustr word;
+  if (ws) {
+    word = (*warnp)["lvl"].eq("warning") ? U"WARN" : U"WATCH";
+    int tw = measure(FONT_SMALL, ws->glyph) + TAG_GAP + measure(FONT_SMALL, word);
+    tag_x = (any ? x - 3 : WIDE) - tw;
+    x = tag_x;
+  }
+  if (any || ws) {
+    int x0 = std::min(any && show_time ? WIDE_CHIP_X : WIDE, x - 1);
+    f.fill(x0, 25, WIDE - x0, 7, RGB{0, 0, 0});
+    if (!age.empty()) f.text(FONT_SMALL, age, WIDE - measure(FONT_SMALL, age), 32, C::label);
+    else if (any) {
+      roll_text(f, FONT_SMALL, clk, right, 32, C::label, cr);
+      f.text(FONT_SMALL, ap, ap_x, 32, C::radarAmpm);
+    }
+    if (ws && !hide_warn) {
+      int gx = f.text(FONT_SMALL, ws->glyph, tag_x, 32, ws->color);
+      f.text(FONT_SMALL, word, gx + TAG_GAP - 1, 32, ws->color);
+    }
+  }
+  int dx = 0;
+  if (!r["temp"].is_null() && r.has("temp") && (r["cond"].truthy() || r["showTime"].is_false())) {
+    ustr tt = vstr(r["temp"]) + U"°";
+    int tw = measure(FONT_SMALL, tt);
+    f.fill(0, 25, tw + 1, 7, RGB{0, 0, 0});
+    f.text(FONT_SMALL, tt, 0, 32, C::label);
+    dx = tw + 3;
+  }
+  for (int i = 0; i < nids; i++) f.fill(dx + i * 2, 31, 1, 1, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : WIDE_DOT);
+}
+
 static void render_weather(const Value &p, Frame &f, std::optional<double> now, std::optional<int> idx_o,
                            const Frames *frames, bool blink, std::optional<double> t_o, bool peek = false) {
   const Value &r = p["radar"];
@@ -1705,6 +1789,10 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   if (idx >= 0 && frames && !frames->empty()) {
     auto it = frames->find(json::str(ids[idx]));
     if (it != frames->end()) data = &it->second;
+  }
+  if (r["wide"].truthy() && cols_of(p) == WIDE) {
+    render_radar_wide(p, r, f, ids, idx, data, now, blink, peek, on_hand);
+    return;
   }
   if (data && !data->empty()) {
     const Value &rbv = r["rb"];

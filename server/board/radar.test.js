@@ -288,3 +288,41 @@ test('packFrame: two pixels a byte, left in the high nibble', () => {
   assert.equal(p[0], (frame[0] << 4) | frame[1]);
   assert.deepEqual([...p].flatMap((b) => [b >> 4, b & 15]), [...frame]);
 });
+
+test('wide board: 128-wide frames (station at x69) from the same decode; on from the 64 crop', async () => {
+  const t = R.timeOf('202008102100') + 120;
+  let decodes = 0;
+  const radar = R.createRadar({
+    now: () => t, log: quiet,
+    fetch: async () => { decodes++; return { wld: wldOf('202008102100'), png: pngOf('202008102100') }; },
+  });
+  assert.deepEqual(radar.want('40100', MORSE.lat, MORSE.lon, { wide: true }), { on: false, frames: [], ft: [], timeBox: R.FULL_TIME_BOX, split: false, wide: 1 });
+  await radar.pass();
+  assert.equal(decodes, 1, 'one decode feeds both crops');
+  const r = radar.want('40100', MORSE.lat, MORSE.lon, { wide: true });
+  assert.deepEqual(r.frames, [`${R.wideKey('40100')}-202008102100`]);
+  assert.equal(r.wide, 1);
+  assert.equal(r.on, true, 'the 64 crop decides Rain nearby');
+  const bytes = radar.frame('40100', r.frames[0]);
+  assert.equal(bytes.length, 128 * 32);
+  assert.equal(bytes[16 * 128 + R.WIDE_MX], R.MARKER);
+  // Water masked east of Morse (the lake), shoreline drawn; rain west.
+  const loc = R.loadLocation(R.wideKey('40100'));
+  assert.equal(loc.width, 128);
+  assert.ok(loc.water[16 * 128 + 100] === 1 && bytes[16 * 128 + 100] === 0, 'the lake');
+  assert.ok([...bytes.slice(0, 16 * 128)].some((v) => v === R.SHORE));
+  assert.ok([...bytes].filter((v) => v >= 1 && v <= 5).length > 500, 'the derecho');
+  // The 64 board at the same station keeps its own frames.
+  const n = radar.want('40100', MORSE.lat, MORSE.lon);
+  assert.deepEqual(n.frames, ['40100-202008102100']);
+  assert.equal('wide' in n, false);
+  assert.equal(radar.frame('40100', n.frames[0]).length, 2048);
+});
+
+test('every station has 128-wide water masks', () => {
+  for (const st of require('./stations.json')) {
+    const loc = R.loadLocation(R.wideKey(st.mapid));
+    assert.ok(loc.water && loc.water.length === 128 * 32, st.name);
+    assert.equal(loc.mx, R.WIDE_MX);
+  }
+});

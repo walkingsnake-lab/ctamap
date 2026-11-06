@@ -32,7 +32,8 @@ after(() => { for (const srv of openServers) { srv.closeAllConnections(); srv.cl
 
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), nwsForecast: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), logos: fakeLogos(), ...opts });
+  const radar = opts.radar || fakeRadar();
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), nwsForecast: fakeWeather(null), mlb: fakeMlb(), logos: fakeLogos(), ...opts, radar });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -45,7 +46,7 @@ async function serve(opts = {}) {
     const r = await fetch(base + p, init);
     return { status: r.status, body: await r.json(), headers: r.headers };
   };
-  return { req, store, port: server.address().port, close: () => new Promise((r) => { openServers.delete(server); server.close(r); }) };
+  return { req, store, radar, port: server.address().port, close: () => new Promise((r) => { openServers.delete(server); server.close(r); }) };
 }
 
 test('ping needs no token', async () => {
@@ -251,7 +252,8 @@ const { normalize } = require('./arrivals');
 const morseJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
 
 function fakeRadar(state = { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 32], split: true }, frames = {}) {
-  return { want: () => state, frame: (mapid, id) => frames[`${mapid}/${id}`] || null };
+  const wants = [];
+  return { wants, want: (mapid, lat, lon, opts = {}) => { wants.push(!!opts.wide); return opts.wide ? { ...state, wide: 1 } : state; }, frame: (mapid, id) => frames[`${mapid}/${id}`] || null };
 }
 
 function fakeWeather(data) {
@@ -410,6 +412,9 @@ test('width: w=128 on update and select makes a wide board (cols 128); no w is 6
   // Select answers for the width too.
   b = (await s.req('/board/select?b=home&s=weather&w=128', { method: 'POST', ...h })).body;
   assert.equal(b.cols, 128);
+  // Radar: the wide board asks for the 128-wide crops.
+  assert.equal(s.radar.wants[s.radar.wants.length - 1], true);
+  assert.equal((await s.req('/board/update?b=home&w=128&s=weather', h)).body.radar.wide, 1);
   // Back on one panel (an M4, or a board set up again): no w.
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal('cols' in b, false);

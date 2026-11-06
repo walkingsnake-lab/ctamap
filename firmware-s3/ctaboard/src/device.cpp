@@ -510,8 +510,9 @@ bool WifiNet::update(bool boot, const std::string &screen, json::Value &out, std
 }
 
 bool WifiNet::radar(const std::string &id, std::vector<uint8_t> &out, std::string &err) {
-  // Packed 4 bits a pixel (pk=4): 1024 bytes.
-  return get_bytes("/board/radar/" + id + "?b=" + s_.board_id + "&pk=4", 1024, out, err);
+  // Packed 4 bits a pixel (pk=4): 1024 bytes, or 2048 for a wide board's
+  // 128 x 32 frames (contract "Width").
+  return get_bytes("/board/radar/" + id + "?b=" + s_.board_id + "&pk=4", s_.cols == 128 ? 2048 : 1024, out, err);
 }
 
 bool WifiNet::sky(const std::string &id, std::vector<uint8_t> &out, std::string &err) {

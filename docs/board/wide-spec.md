@@ -86,12 +86,12 @@ The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours 
 
 ---
 
-## 5. Radar (decided)
+## 5. Radar (decided; built)
 
 - **Map across all 128 columns, no panel.** 1.5 mi per LED as at 64, the station at x69 (about 100 mi west, where weather comes from; the lake and part of Michigan east), rows centered on it as now. Water masked black with the shoreline, per station at 128 wide (`build-locations.js`). Frames are 128 × 32 (4 KB).
 - **Time chip** in the bottom-right corner: a 27 × 7 black backing (columns 101–127, rows 25–31) with the time (label white) and AM/PM (`#8f8f8f`) in Tom Thumb, right-aligned. The chip has its own backing, so unlike the 64 layout it needs no open water: one layout for every station.
-- **Frame indicator:** six 1-px dots on the bottom row (row 31), 1 px apart, the frame on screen amber and the rest `#4a4a4a`, on a black backing (12 × 3). Flush left without the temperature; 3 px right of it with.
-- **Temperature chip** (optional, per board): the bottom-left chip grows to hold the temperature in Tom Thumb (label white) and the dots after it (`58°`: 27 × 7).
+- **Frame indicator:** six 1-px dots on the bottom row (row 31), 1 px apart, the frame on screen amber and the rest `#4a4a4a`, **straight on the map, no backing** (decided Nov 5; a box behind them, or the dots inside the time chip, were the alternatives). Flush left without the temperature; 3 px right of it with.
+- **Temperature chip** (optional, per board, the radar's conditions setting): the temperature in Tom Thumb (label white) on its own black chip at the bottom left.
 
 **Why:** at 64 the time sits over open water or the map splits; at 128 a fixed spot over the lake fails at 56 of 144 stations (checked against `stations.json` and the lake outline: the Loop and South Side reach the Indiana shore). Also mocked, not chosen (`radar-p*.png`, `radar-s*.png`): a split map with a time panel and five panel variants (big time, loop position, color key, conditions first), one fixed Chicago map for every board, a full-width map with a status bar, local and regional zooms side by side, and a nearest-rain panel (`17 MI SW`, computed from the frame).
 

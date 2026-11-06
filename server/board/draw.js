@@ -324,7 +324,7 @@
       const up = Math.round(easeInOut(roll.p) * dist);
       const a = [...text], b = [...from];
       const same = fx === x && a.length === b.length && a.every((ch, i) => measure(font, ch) === measure(font, b[i]));
-      f.withClip(0, base + t0, 63, base + t1, () => {
+      f.withClip(0, base + t0, f.w - 1, base + t1, () => {
         if (same) {
           a.forEach((ch, i) => {
             if (ch === b[i]) f.text(font, ch, x, base, color);
@@ -1225,6 +1225,7 @@
         return f;
       }
       const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
+      if (r.wide && colsOf(p) === WIDE) return renderRadarWide(p, r, ids, idx, bytes, o);
       if (bytes) {
         const rc = radarFor(r.rb);
         for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
@@ -1343,6 +1344,80 @@
       rollTextWith(f, '5x7', cr, clock, cx, top + 11, nowClock ? C.clock : C.radarTime);
       f.text('small', ap, apX, top + 18, C.radarAmpm);
       if (ws && !hideWarn) f.text('small', ws.glyph, wX, top + 18, ws.color);
+      return f;
+    }
+
+    // Wide board (contract "Width"; wide-spec §5): radar.wide frames are 128
+    // x 32, the station at x69. The time on a black chip in the bottom-right
+    // corner, rows 25-31, at least 27 wide (columns 101-127, so it keeps its
+    // size as the loop's times change): the time (or radar.clock 'age': how
+    // long ago) in Tom Thumb, label white, then AM/PM in #8f8f8f at the right
+    // edge; a warning tag before it, the chip growing to hold it. The frame
+    // dots straight on the map, no backing: six 1 px dots on row 31, 1 px
+    // apart from x0, the shown frame amber, the others #4a4a4a. The
+    // temperature (radar.cond, or the time off) on its own black chip at the
+    // bottom left, the dots 3 px after it. Clock 'none': no time.
+    const WIDE_CHIP_X = 101, WIDE_DOT = '#4a4a4a';
+    function renderRadarWide(p, r, ids, idx, bytes, o) {
+      const f = newFrame(WIDE);
+      if (bytes) {
+        const rc = radarFor(r.rb);
+        for (let y = 0; y < 32; y++) for (let x = 0; x < WIDE; x++) {
+          const c = rc[bytes[y * WIDE + x]];
+          if (c) f.fill(x, y, 1, 1, c);
+        }
+      }
+      const nowS = o.now != null ? o.now : p.now;
+      const nowClock = r.clock === 'now';
+      const t = !nowClock && idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : nowS;
+      const ws = p.warn ? warnStyle(p.warn) : null;
+      const hideWarn = ws && ws.blinks && o.blink;
+      const showTime = r.showTime !== false && r.clock !== 'none';
+      // Right to left: AM/PM, the time, the warning tag.
+      let x = WIDE;
+      const pieces = [];
+      if (showTime && r.clock === 'age') {
+        const ft = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : nowS;
+        const age = `${Math.max(0, Math.floor((nowS - ft + 30) / 60))}m`;
+        x -= measure('small', age) + 1;
+        pieces.push(() => f.text('small', age, WIDE - measure('small', age), 32, C.label));
+      } else if (showTime) {
+        const ap = ampmText(t), clock = clockText(t);
+        const apX = WIDE - measure('small', ap);
+        const right = apX - 3;  // 2 px between the time and AM/PM
+        const cr = nowClock ? takeRoll('rad.clock', clock) : null;
+        x = right - measure('small', clock) + 1;
+        if (cr) x = Math.min(x, right - measure('small', cr.from) + 1);
+        pieces.push(() => {
+          rollTextWith(f, 'small', cr, clock, rightAt('small', right), 32, C.label);
+          f.text('small', ap, apX, 32, C.radarAmpm);
+        });
+      }
+      if (ws) {
+        const word = p.warn.lvl === 'warning' ? 'WARN' : 'WATCH';
+        const tw = measure('small', ws.glyph) + TAG_GAP + measure('small', word);
+        const tx = (pieces.length ? x - 3 : WIDE) - tw;
+        x = tx;
+        pieces.push(() => {
+          if (hideWarn) return;
+          const gx = f.text('small', ws.glyph, tx, 32, ws.color);
+          f.text('small', word, gx + TAG_GAP - 1, 32, ws.color);
+        });
+      }
+      if (pieces.length) {
+        const x0 = Math.min(pieces.length && showTime ? WIDE_CHIP_X : WIDE, x - 1);
+        f.fill(x0, 25, WIDE - x0, 7, '#000000');
+        for (const draw1 of pieces) draw1();
+      }
+      // The temperature chip, then the frame dots.
+      let dx = 0;
+      if (r.temp != null && (r.cond || r.showTime === false)) {
+        const tt = `${r.temp}°`, tw = measure('small', tt);
+        f.fill(0, 25, tw + 1, 7, '#000000');
+        f.text('small', tt, 0, 32, C.label);
+        dx = tw + 3;
+      }
+      ids.forEach((id, i) => f.fill(dx + i * 2, 31, 1, 1, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : WIDE_DOT));
       return f;
     }
 

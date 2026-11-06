@@ -23,6 +23,12 @@ const { createNwsSource, GRID: NWS_GRID } = require('./radar-nws');
 const { createMrmsSource } = require('./radar-mrms');
 
 const W = 64, H = 32;
+// Wide board (128 x 32; contract "Width", wide-spec §5): the map across all
+// 128 columns, the station at WIDE_MX (about 100 mi of the west, where
+// weather comes from), row 16. Its location key is the mapid plus "w".
+const WIDE_W = 128, WIDE_MX = 69;
+const wideKey = (mapid) => `${mapid}w`;
+const isWide = (key) => String(key).endsWith('w');
 const KM_PER_LED = 1.5 * 1.609344;      // ~1.5 mi per LED
 const SPLIT_W = 39;                      // radar width in the split layout: cols 0-38, gray divider at 39, time panel 40-63
 const SPLIT_TIME_BOX = [40, 0, W - 40, H];
@@ -70,8 +76,8 @@ function parseWld(text) {
 
 // Lat/lon of an LED's center, for a station on the marker LED. Same math as
 // geometry() below, used by scripts/build-locations.js for the water masks.
-function ledCenter(lat, lon, x, y, width = W) {
-  const mx = Math.floor(width / 2), my = Math.floor(H / 2);
+function ledCenter(lat, lon, x, y, width = W, mx = Math.floor(width / 2)) {
+  const my = Math.floor(H / 2);
   const degLon = KM_PER_LED / (111.32 * Math.cos(lat * Math.PI / 180));
   const degLat = KM_PER_LED / 111.32;
   return [lon + (x - mx) * degLon, lat - (y - my) * degLat];
@@ -85,25 +91,29 @@ function hexRows(rows, width) {
   rows.forEach((hex, y) => { for (let x = 0; x < width; x++) if ((parseInt(hex[x >> 2], 16) >> (3 - (x & 3))) & 1) out[y * width + x] = 1; });
   return out;
 }
-function loadLocation(mapid) {
-  if (locCache.has(mapid)) return locCache.get(mapid);
-  let loc = { split: true, width: SPLIT_W, timeBox: SPLIT_TIME_BOX, water: null, shore: null };
+// A wide key (mapid + "w") gets the file's 128-wide masks (`wide`).
+function loadLocation(key) {
+  if (locCache.has(key)) return locCache.get(key);
+  const wide = isWide(key), mapid = wide ? String(key).slice(0, -1) : key;
+  let loc = wide ? { split: false, width: WIDE_W, mx: WIDE_MX, timeBox: null, water: null, shore: null }
+    : { split: true, width: SPLIT_W, timeBox: SPLIT_TIME_BOX, water: null, shore: null };
   try {
     const j = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'locations', `${mapid}.json`), 'utf8'));
-    loc = { split: j.split, width: j.width, timeBox: j.timeBox, water: hexRows(j.water, j.width), shore: hexRows(j.shore, j.width) };
+    if (!wide) loc = { split: j.split, width: j.width, timeBox: j.timeBox, water: hexRows(j.water, j.width), shore: hexRows(j.shore, j.width) };
+    else if (j.wide) loc = { ...loc, water: hexRows(j.wide.water, WIDE_W), shore: hexRows(j.wide.shore, WIDE_W) };
   } catch (e) { /* no file: split layout, no masks */ }
-  locCache.set(mapid, loc);
+  locCache.set(key, loc);
   return loc;
 }
 
 // Which source pixels feed which LED, for a station at lat/lon. The station
-// lands on the marker LED (center of the radar area). Each source pixel goes
-// to the LED block containing its center.
-function geometry(wld, lat, lon, width = W) {
+// lands on the marker LED (center of the radar area, or column mx). Each
+// source pixel goes to the LED block containing its center.
+function geometry(wld, lat, lon, width = W, mx = Math.floor(width / 2)) {
   const colsPer = KM_PER_LED / (wld.dx * 111.32 * Math.cos(lat * Math.PI / 180));
   const rowsPer = KM_PER_LED / (Math.abs(wld.dy) * 111.32);
   const sx = (lon - wld.x0) / wld.dx, sy = (lat - wld.y0) / wld.dy;
-  const mx = Math.floor(width / 2), my = Math.floor(H / 2);
+  const my = Math.floor(H / 2);
   const left = sx - (mx + 0.5) * colsPer, top = sy - (my + 0.5) * rowsPer;
   const x0 = Math.ceil(left), x1 = Math.ceil(left + width * colsPer) - 1;
   const y0 = Math.ceil(top), y1 = Math.ceil(top + H * rowsPer) - 1;
@@ -146,10 +156,10 @@ function modeFor(w) {
 
 const isPrecip = (v) => (v >= 1 && v <= 5) || (v >= 8 && v <= 10);
 
-// Mean dBZ grid -> the 2048-byte frame: levels, water masked, despeckle,
-// shoreline, marker. The time box is not cleared: the shoreline (and rain)
-// draw under the time stack. loc: loadLocation() result (masks
-// are on the crop's grid). Returns { bytes, colored }.
+// Mean dBZ grid -> the 2048-byte frame (4096 for a wide crop: 128 x 32):
+// levels, water masked, despeckle, shoreline, marker. The time box is not
+// cleared: the shoreline (and rain) draw under the time stack. loc:
+// loadLocation() result (masks are on the crop's grid). Returns { bytes, colored }.
 function toFrame(dbz, geo, mode, loc = null) {
   const levels = mode === 'snow' ? SNOW_DBZ : RAIN_DBZ;
   const first = mode === 'snow' ? 8 : 1;
@@ -162,7 +172,8 @@ function toFrame(dbz, geo, mode, loc = null) {
     if (loc && loc.water && loc.water[k]) lv[k] = 0; // water is masked black
   }
   // Despeckle: drop precip pixels with fewer than 2 precip neighbors.
-  const out = new Uint8Array(W * H);
+  const OW = Math.max(W, w);  // the frame's width: 64 (a 39-wide split crop on the left), or 128
+  const out = new Uint8Array(OW * H);
   let colored = 0;
   for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) {
     const v = lv[y * w + x];
@@ -173,15 +184,15 @@ function toFrame(dbz, geo, mode, loc = null) {
       const xx = x + dx, yy = y + dy;
       if (xx >= 0 && yy >= 0 && xx < w && yy < H && lv[yy * w + xx]) n++;
     }
-    if (n >= 2) { out[y * W + x] = v; colored++; }
+    if (n >= 2) { out[y * OW + x] = v; colored++; }
   }
   // Shoreline: the lake's edge pixels (water side), always drawn. Water is
   // masked, so rain never covers it.
   if (loc && loc.shore) {
-    for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) if (loc.shore[y * w + x]) out[y * W + x] = SHORE;
+    for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) if (loc.shore[y * w + x]) out[y * OW + x] = SHORE;
   }
   // Location marker: a white dot. The pixels around it keep their precip.
-  const m = geo.my * W + geo.mx;
+  const m = geo.my * OW + geo.mx;
   if (isPrecip(out[m])) colored--;
   out[m] = MARKER;
   return { bytes: out, colored };
@@ -194,7 +205,7 @@ function toFrame(dbz, geo, mode, loc = null) {
 // fallback's colors.
 async function crops(png, wld, locs, pixels = null) {
   const { rgbIndex = null, gray16 = null } = typeof pixels === 'function' ? { rgbIndex: pixels } : pixels || {};
-  const accs = locs.map((l) => ({ key: l.key, acc: accumulator(geometry(wld, l.lat, l.lon, l.width)) }));
+  const accs = locs.map((l) => ({ key: l.key, acc: accumulator(geometry(wld, l.lat, l.lon, l.width, l.mx)) }));
   const y0 = Math.min(...accs.map((a) => a.acc.geo.y0));
   const y1 = Math.max(...accs.map((a) => a.acc.geo.y1));
   await decodeRows(png, {
@@ -284,7 +295,7 @@ function createRadar({
       return src;
     } catch (e) {
       if (!fallback || (e.status === 404 && now() - timeOf(stamp) < lag + STEP)) throw e;
-      const geos = list.map((l) => geometry(NWS_GRID, l.lat, l.lon, l.width));
+      const geos = list.map((l) => geometry(NWS_GRID, l.lat, l.lon, l.width, l.mx));
       const src = await fallback(timeOf(stamp), geos).catch((f) => {
         if (e.status !== 404 && f.status === 404) f.status = 0; // the main source's real failure still gets logged
         f.message = `AWS: ${e.message}; NWS: ${f.message}`;
@@ -296,7 +307,7 @@ function createRadar({
   }
 
   async function processStamp(stamp, wanted) {
-    const list = wanted.map(([key, l]) => ({ key, lat: l.lat, lon: l.lon, width: loadLocation(key).width }));
+    const list = wanted.map(([key, l]) => ({ key, lat: l.lat, lon: l.lon, width: loadLocation(key).width, mx: loadLocation(key).mx }));
     const src = await source(stamp, list);
     let out;
     try { out = await crops(src.png, src.wld, list, { rgbIndex: src.rgbIndex || null, gray16: src.gray16 || null }); }
@@ -351,32 +362,42 @@ function createRadar({
 
   return {
     // Marks the station wanted and returns the payload's `radar` object.
-    want(mapid, lat, lon) {
-      if (!locs.has(mapid)) locs.set(mapid, { lat, lon, wantedAt: 0, frames: new Map(), on: false });
-      const l = locs.get(mapid);
-      l.wantedAt = now();
-      const oldest = timeOf(slots()[0]);
-      const inLoop = [...l.frames.values()].filter((f) => f.t >= oldest).sort((a, b) => a.t - b.t);
-      const latest = inLoop[inLoop.length - 1];
-      // One source per loop: the fallback draws a different product (base
-      // reflectivity, ~1.5 dB weaker), so a loop mixing them would pulse.
-      // While the sources change over, the loop is just the newest's frames.
-      const frames = latest ? inLoop.filter((f) => f.src === latest.src) : inLoop;
-      if (!latest) l.on = false;
-      else if (latest !== l.judged) {
-        // Hysteresis on the newest frame's precip pixel count.
-        if (!l.on && latest.colored >= ON_PX) l.on = true;
-        else if (l.on && latest.colored < OFF_PX) l.on = false;
-        l.judged = latest;
-      }
+    // wide (a 128-wide board): the frames are the station's 128-wide crops
+    // (`wide: 1`); `on` still comes from the 64 crop, so Rain nearby means
+    // the same on every board.
+    want(mapid, lat, lon, { wide = false } = {}) {
+      const loop = (key) => {
+        if (!locs.has(key)) locs.set(key, { lat, lon, wantedAt: 0, frames: new Map(), on: false });
+        const l = locs.get(key);
+        l.wantedAt = now();
+        const oldest = timeOf(slots()[0]);
+        const inLoop = [...l.frames.values()].filter((f) => f.t >= oldest).sort((a, b) => a.t - b.t);
+        const latest = inLoop[inLoop.length - 1];
+        // One source per loop: the fallback draws a different product (base
+        // reflectivity, ~1.5 dB weaker), so a loop mixing them would pulse.
+        // While the sources change over, the loop is just the newest's frames.
+        const frames = latest ? inLoop.filter((f) => f.src === latest.src) : inLoop;
+        if (!latest) l.on = false;
+        else if (latest !== l.judged) {
+          // Hysteresis on the newest frame's precip pixel count.
+          if (!l.on && latest.colored >= ON_PX) l.on = true;
+          else if (l.on && latest.colored < OFF_PX) l.on = false;
+          l.judged = latest;
+        }
+        return { on: l.on, frames: frames.map((f) => f.id), ft: frames.map((f) => f.t) };
+      };
+      const narrow = loop(mapid);
       const loc = loadLocation(mapid);
-      return { on: l.on, frames: frames.map((f) => f.id), ft: frames.map((f) => f.t), timeBox: loc.timeBox, split: loc.split };
+      if (!wide) return { ...narrow, timeBox: loc.timeBox, split: loc.split };
+      const w = loop(wideKey(mapid));
+      return { on: narrow.on, frames: w.frames, ft: w.ft, timeBox: loc.timeBox, split: loc.split, wide: 1 };
     },
     // A kept frame's bytes for this station, or null.
     frame(mapid, id) {
-      const l = locs.get(mapid);
-      if (!l) return null;
-      for (const f of l.frames.values()) if (f.id === id) return f.bytes;
+      for (const key of [mapid, wideKey(mapid)]) {
+        const l = locs.get(key);
+        if (l) for (const f of l.frames.values()) if (f.id === id) return f.bytes;
+      }
       return null;
     },
     pass,
@@ -403,5 +424,5 @@ function packFrame(bytes) {
 
 module.exports = { packFrame,
   parseWld, geometry, accumulator, modeFor, toFrame, crops, createRadar, fetchFrame,
-  ledCenter, loadLocation, stampOf, timeOf, dbzOf, W, H, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX, SHORE, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
+  ledCenter, loadLocation, stampOf, timeOf, dbzOf, W, H, WIDE_W, WIDE_MX, wideKey, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX, SHORE, ON_PX, OFF_PX, RAIN_DBZ, SNOW_DBZ, MARKER,
 };
