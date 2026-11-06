@@ -32,9 +32,10 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 - **No weather in the header** (station and clock only). The weather strip stays an option as at 64.
 
 ### Northbound | southbound split (decided Nov 5; built, the wide default)
-- Two halves, a direction label on row 0 of each (`NORTHBOUND`, `SOUTHBOUND`), rows at 10 and 18 (2 rows) in each half, up to **3 rows a half** (8, 14, 20), station and clock on the bottom row in `#555555`.
-- A per-board layout choice (`wideLayout`: split, the default, or rows). Halves come from each train's direction code (`trDr` in Train Tracker).
-- **Only where it's true:** every line at the station runs north-south there (`station-dirs.json`, from the track geometry; Red and Purple count everywhere off the Loop) and none ends there. Elsewhere (the Loop, east-west lines, terminals, more than 3 destinations in a half) it falls back to **two columns** of destination rows.
+- Two halves, a direction label on row 0 of each (`NORTHBOUND`, `SOUTHBOUND`, or `WESTBOUND`, `EASTBOUND`), rows at 10 and 18 (2 rows) in each half, up to **3 rows a half** (8, 14, 20), station and clock on the bottom row in `#555555`. North or west on the left.
+- A per-board layout choice (`wideLayout`: split, the default, or rows). Halves come from each train's direction code (`trDr` in Train Tracker) and which way that direction heads at the station.
+- **Only where it's true:** every line at the station runs along the same axis there (`station-dirs.json`, from the track geometry: within 35° of north-south or of east-west; Red and Purple count as north-south everywhere off the Loop) and none ends there. 59 stations split north-south, 51 east-west, 34 don't.
+- **Elsewhere** (the Loop, diagonal stretches like Blue's Milwaukee Avenue, mixed axes like Howard, terminals, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then the chronological list.
 
 ### Busy stations, replacing the chronological view (open)
 The chronological view is the weakest transit screen. For stations with 4–5 lines (Clark/Lake), three layouts were mocked:

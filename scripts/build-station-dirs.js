@@ -1,17 +1,23 @@
 #!/usr/bin/env node
 'use strict';
-// Builds server/board/station-dirs.json: which way each line's track runs at
-// each station, for the wide board's northbound | southbound split
-// (docs/board/wide-spec.md §3). The split shows only where it's true: every
-// line at the station runs north-south there and none is on the Loop.
+// Builds server/board/station-dirs.json: which way each line's trains run at
+// each station, for the wide board's split, northbound | southbound or
+// westbound | eastbound (docs/board/wide-spec.md §3). The split shows only
+// where it's true: every line at the station runs the same way along one
+// axis there, and none is on the Loop.
 //
 //   node scripts/build-station-dirs.js
 //
 // From the map's track geometry (data/cta-lines.geojson) and
 // server/board/stations.json: for each line serving a station, the track's
-// heading over CHORD_M either side of the point nearest the station.
-//   "ns": within NS_DEG of north-south;  "ew": anything else;
-//   "loop": the nearest track is the Loop's elevated circuit.
+// heading over CHORD_M either side of the point nearest the station, and
+// which way of it leads to the line's direction-1 end (Train Tracker trDr 1:
+// LINE_DESTS[ln][0], or the Loop). Each entry is where trDr 1 trains head:
+//   "N" / "S": within AXIS_DEG of north-south;
+//   "E" / "W": within AXIS_DEG of east-west;
+//   "diag": in between (no split);  "loop": on the Loop's elevated circuit.
+// "ends": the lines whose track ends at the station (a terminal: one way
+// only, so no split; short-turn destinations like Jefferson Park aren't).
 // Red and Purple count as north-south everywhere off the Loop: riders call
 // them northbound and southbound even where the track runs diagonally
 // (Jarvis to Howard, Clark/Division, North/Clybourn).
@@ -22,11 +28,14 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
+const { LINE_DESTS, DEST_MAPID } = require('../server/board/destinations');
+// The Loop (State/Madison), where Orange and Pink direction-1 trains head.
+const LOOP = [-87.6278, 41.8820];
 const GEO = path.join(ROOT, 'data', 'cta-lines.geojson');
 const STATIONS = path.join(ROOT, 'server', 'board', 'stations.json');
 const OUT = path.join(ROOT, 'server', 'board', 'station-dirs.json');
 
-const NS_DEG = 35;
+const AXIS_DEG = 35;
 const CHORD_M = 600;  // about a station either way, so a curve at the platform doesn't decide
 const ALWAYS_NS = new Set(['RD', 'PR']);
 const NAMES = { RD: 'Red', BL: 'Blue', BR: 'Brown', GR: 'Green', OR: 'Orange', PR: 'Purple', PK: 'Pink', YL: 'Yellow' };
@@ -107,14 +116,53 @@ function along(n, m, lines) {
   }
 }
 
+// Track distance from n ({line, i, u}) to the first point within REACH_M of
+// `target`, walking one way (sign 1 or -1), or Infinity when the walk ends
+// (a terminal, or MAX_M) without reaching it. Straight-line distance can't
+// tell which way a train goes (Blue's Forest Park branch heads east, away
+// from O'Hare, before it turns north).
+const REACH_M = 500, MAX_M = 45000;
+function trackTo(n, sign, lines, target) {
+  let pts = n.line.pts, i = n.i, u = n.u;
+  if (sign < 0) { pts = [...pts].reverse(); i = pts.length - 2 - n.i; u = 1 - n.u; }
+  let walked = -u * dist(pts[i], pts[i + 1]), cur = n.line, guard = 0;
+  for (;;) {
+    for (let k = i; k < pts.length - 1; k++) {
+      walked += dist(pts[k], pts[k + 1]);
+      if (walked > 0 && dist(pts[k + 1], target) < REACH_M) return walked;
+      if (walked > MAX_M) return Infinity;
+    }
+    const end = pts[pts.length - 1], dir = [end[0] - pts[pts.length - 2][0], end[1] - pts[pts.length - 2][1]];
+    let next = null, best = -Infinity;
+    for (const l of lines) {
+      if (l === cur) continue;
+      for (const flip of [false, true]) {
+        const q = flip ? [...l.pts].reverse() : l.pts;
+        if (q.length < 2 || dist(q[0], end) > JOIN_M) continue;
+        const d2 = [q[1][0] - q[0][0], q[1][1] - q[0][1]];
+        const cos = (dir[0] * d2[0] + dir[1] * d2[1]) / (Math.hypot(...dir) * Math.hypot(...d2) || 1);
+        if (cos > best) { best = cos; next = { l, q }; }
+      }
+    }
+    if (!next || best < 0 || ++guard > 400) return Infinity;
+    cur = next.l; pts = next.q; i = 0; u = 0;
+  }
+}
+
 function build() {
   const geo = JSON.parse(fs.readFileSync(GEO, 'utf8'));
   const stations = JSON.parse(fs.readFileSync(STATIONS, 'utf8'));
   const byLine = Object.fromEntries(Object.keys(NAMES).map((ln) => [ln, polylines(geo, ln)]));
+  const byId = new Map(stations.map((s) => [s.mapid, s]));
+  // Where each line's direction-1 trains end up.
+  const end1 = (ln) => {
+    const s = byId.get(DEST_MAPID[LINE_DESTS[ln][0]]);
+    return xy(s ? [s.lon, s.lat] : LOOP);
+  };
   const out = {};
   for (const st of [...stations].sort((a, b) => a.mapid.localeCompare(b.mapid))) {
     const p = xy([st.lon, st.lat]);
-    const dirs = {};
+    const dirs = {}, ends = [];
     for (const ln of st.lines) {
       const n = nearest(byLine[ln], p);
       if (!n || n.d > 400) throw new Error(`${st.name}: no ${NAMES[ln]} track within 400 m`);
@@ -123,12 +171,21 @@ function build() {
       const L = byLine[ln];
       let a = along(n, -CHORD_M, L), b = along(n, CHORD_M, L);
       // A terminal (the track ends here): twice as far the only way it goes.
-      if (dist(a, p) < CHORD_M / 4) { a = p; b = along(n, 2 * CHORD_M, L); }
-      else if (dist(b, p) < CHORD_M / 4) { b = p; a = along(n, -2 * CHORD_M, L); }
-      const deg = (Math.atan2(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])) * 180) / Math.PI;
-      dirs[ln] = deg <= NS_DEG || ALWAYS_NS.has(ln) ? 'ns' : 'ew';
+      if (dist(a, p) < CHORD_M / 4) { a = p; b = along(n, 2 * CHORD_M, L); ends.push(ln); }
+      else if (dist(b, p) < CHORD_M / 4) { b = p; a = along(n, -2 * CHORD_M, L); ends.push(ln); }
+      // Make a -> b the way direction-1 trains go: toward that end along the
+      // track (at a direction-1 terminal, the end is here: trains arrive).
+      const e = end1(ln);
+      const fwd = trackTo(n, 1, L, e), back = trackTo(n, -1, L, e);
+      const here = dist(p, e) < REACH_M;
+      if (here ? dist(a, p) < dist(b, p) : back < fwd) [a, b] = [b, a];
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const deg = (Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI;  // 0 north-south, 90 east-west
+      if (deg <= AXIS_DEG || ALWAYS_NS.has(ln)) dirs[ln] = dy >= 0 ? 'N' : 'S';
+      else if (deg >= 90 - AXIS_DEG) dirs[ln] = dx >= 0 ? 'E' : 'W';
+      else dirs[ln] = 'diag';
     }
-    out[st.mapid] = dirs;
+    out[st.mapid] = ends.length ? { ...dirs, ends } : dirs;
   }
   return out;
 }

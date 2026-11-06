@@ -791,8 +791,14 @@ async function build() {
       add('wide transit split alert', q, at(q), undefined, undefined, S3);
       const k = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { layout: 'rows', key: true });
       add('wide transit rows key layout', k, at(k), undefined, undefined, S3);
-      const c = wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { alerts: ['BL', 'PK'] });
-      add('wide transit cols2 alerts', c, at(c), undefined, undefined, S3);
+      // Six destinations at a station without the split: two columns.
+      const t0 = 1_800_000_000;
+      const six = ['Howard', '95th', 'Kimball', 'Loop', 'Linden', 'Midway'].map((d, i) => ({ ln: ['RD', 'RD', 'BR', 'BR', 'PR', 'OR'][i], dest: d, full: d, known: true, dir: 1 + (i % 2) * 4, t: t0 + (i + 2) * 60 + i * 37, s: i === 3 ? 1 : 0, rn: String(900 + i) }));
+      for (const [wx, alertLines] of [[WX, []], [null, ['BR', 'OR']]]) {
+        const r6 = format(six, { rows: [], showHeader: true, showWeather: !!wx, cols: 128, station: { mapid: '40380' } }, { now: t0, alerts: new Set(alertLines) });
+        const c = { v: 1, now: t0, tzo: tzOffset(t0), screen: 'transit', bright: 100, cols: 128, header: r6.bars.showHeader ? 'CLARK/LAKE' : null, view: r6.view, rows: r6.rows, ticker: r6.ticker, wx: r6.bars.showWeather ? wx : null, warn: null };
+        add(`wide transit ${r6.view} six destinations wx=${!!wx} alerts=${alertLines.length}`, c, at(c), undefined, undefined, S3);
+      }
       const r = wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', alerts: ['BR'] });
       add('wide transit rows alert, line colors, steps', { ...r, lnc: true, ts: true }, at(r), undefined, undefined, S3);
       const st = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { extra: { stale: 1, hclock: false } });

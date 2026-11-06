@@ -285,37 +285,51 @@ function tickerOf(shown, alerts, wide = false) {
 //   - destination rows (wideLayout 'rows'): full CTA names (FOREST PARK),
 //     up to WIDE_TIMES times, dropping a time rather than cutting the name
 //     (a time goes when it would come within LABEL_GAP of it);
-//   - northbound | southbound halves (wideLayout 'split', the default):
-//     where every line at the station runs north-south (station-dirs.json)
-//     and the station isn't a terminal of one; up to SPLIT_ROWS rows a half,
-//     64-style rows (short names, 3 times) in columns 0-61 and 66-127, the
-//     direction labels on top and the station line at the bottom;
-//   - two columns (`cols2`) of 64-style rows under the header, where the
-//     split isn't true (or for the rows layout once the rows don't fit);
-//   - past that, the chronological list, labels full width.
+//   - halves (wideLayout 'split', the default): northbound | southbound, or
+//     westbound | eastbound, where every line at the station runs along
+//     that axis (station-dirs.json) and the station isn't a terminal of
+//     one; up to SPLIT_ROWS rows a half, 64-style rows (short names, 3
+//     times) in columns 0-61 and 66-127, the direction labels on top and
+//     the station line at the bottom;
+//   - otherwise, and for the rows layout: full-width rows while they fit,
+//     then two columns (`cols2`) of 64-style rows under the header, then
+//     the chronological list, labels full width.
 // Rows of the halves and columns carry `h` (0 left, 1 right).
 const WIDE_RIGHT = 127;
 const WIDE_TIMES = 5;
 const HALVES = [[0, 61], [66, 127]];
 const SPLIT_ROWS = 3;
-const SPLIT_LABELS = ['NORTHBOUND', 'SOUTHBOUND'];
+// The halves' labels per axis: north and west on the left, as on a map.
+const SPLIT_LABELS = { ns: ['NORTHBOUND', 'SOUTHBOUND'], ew: ['WESTBOUND', 'EASTBOUND'] };
 const STATION_DIRS = require('./station-dirs.json');
+const AXIS = { N: 'ns', S: 'ns', E: 'ew', W: 'ew' };
+const LEFT = { N: true, W: true, S: false, E: false };
 
-// trDr 1 heads to the line's northern end (Howard, Linden, Kimball, O'Hare,
-// Harlem, the Loop for Orange and Pink), 5 to the southern: the left and
-// right halves where the track runs north-south.
-const HALF_OF_DIR = { 1: 0, 5: 1 };
-
-// Whether the split is true at the station: every line there runs
-// north-south (not on the Loop) and both directions stop here (no terminal).
-function splitTrue(mapid, lines) {
+// The split's axis at the station ('ns' or 'ew'), or null when it isn't
+// true: every line there runs along one axis (station-dirs.json: where its
+// trDr 1 trains head; not diagonal, not the Loop) and both directions stop
+// here (the station is no line's terminal).
+function splitAxis(mapid, lines) {
   const dirs = STATION_DIRS[mapid];
-  if (!dirs || !lines || !lines.length) return false;
+  if (!dirs || !lines || !lines.length) return null;
+  const axes = new Set(lines.map((ln) => AXIS[dirs[ln]] || null));
+  if (axes.size !== 1 || axes.has(null)) return null;
+  // A terminal: the line's track ends here (`ends`), or its trDr 1 end is
+  // here (O'Hare's track runs on past the platform). Short-turn
+  // destinations (Jefferson Park, UIC-Halsted) aren't: trains go both ways.
   for (const ln of lines) {
-    if (dirs[ln] !== 'ns') return false;
-    if ((LINE_DESTS[ln] || []).some((d) => DEST_MAPID[d] === mapid)) return false;
+    if ((dirs.ends || []).includes(ln) || DEST_MAPID[(LINE_DESTS[ln] || [])[0]] === mapid) return null;
   }
-  return true;
+  return [...axes][0];
+}
+const splitTrue = (mapid, lines) => !!splitAxis(mapid, lines);
+
+// A destination's half: trDr 1 trains head where the table says, 5 the
+// opposite way; north and west on the left (h 0). Null for any other trDr.
+function halfOf(mapid, g) {
+  const d = (STATION_DIRS[mapid] || {})[g.ln];
+  if (!(d in LEFT) || (g.dir !== 1 && g.dir !== 5)) return null;
+  return LEFT[d] === (g.dir === 1) ? 0 : 1;
 }
 
 // One 64-style row in column range [x0, right]: short name, up to 3 times.
@@ -353,22 +367,24 @@ function wideRow(g, now, alerted) {
 function formatWide(ordered, shown, cfg, now, alerts) {
   const view = (v) => ({ view: v, fitSince: null });
   const lines = [...new Set(ordered.map((g) => g.ln))];
-  // Northbound | southbound.
-  if (cfg.wideLayout !== 'rows' && splitTrue(cfg.station && cfg.station.mapid, lines)
-      && ordered.every((g) => g.dir in HALF_OF_DIR)) {
+  const mapid = cfg.station && cfg.station.mapid;
+  // The halves: northbound | southbound or westbound | eastbound.
+  const axis = cfg.wideLayout !== 'rows' ? splitAxis(mapid, lines) : null;
+  if (axis && ordered.every((g) => halfOf(mapid, g) != null)) {
     const halves = [[], []];
-    for (const g of ordered) halves[HALF_OF_DIR[g.dir]].push(g);
+    for (const g of ordered) halves[halfOf(mapid, g)].push(g);
     if (halves.every((x) => x.length <= SPLIT_ROWS)) {
       const hidden = [...(cfg.showWeather ? ['weather'] : []), ...(cfg.showKey ? ['key'] : [])];
       return {
-        view: 'split', viewState: view('split'), halves: SPLIT_LABELS,
+        view: 'split', viewState: view('split'), halves: SPLIT_LABELS[axis],
         rows: halves.flatMap((x, h) => x.map((g) => halfRow(g, h, now, alerts.has(g.ln)))),
         bars: { showHeader: cfg.showHeader, showWeather: false, showKey: false, hidden },
       };
     }
   }
-  // Full-width destination rows (the rows layout).
-  if (cfg.wideLayout === 'rows') {
+  // Full-width destination rows while they fit (the rows layout, and where
+  // the split isn't true: a terminal's one or two rows read best whole).
+  {
     const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
     const max = maxRows(bars.showHeader, bars.showWeather, bars.showKey);
     if (ordered.length <= max) {
@@ -402,4 +418,4 @@ function formatWide(ordered, shown, cfg, now, alerts) {
   return { view: 'chrono', viewState: view('chrono'), rows, bars };
 }
 
-module.exports = { normalize, latchDue, splitTrue, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };
+module.exports = { normalize, latchDue, splitTrue, splitAxis, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };
