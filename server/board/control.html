@@ -56,6 +56,15 @@
   .ft.warn { color: var(--warn); }
   .grp { background: var(--cell); border-radius: 10px; overflow: hidden; margin: 0 16px; }
   .c { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 16px; position: relative; text-decoration: none; color: var(--fg); }
+  /* Color swatches: the label (with the chosen color's name) over a row of circles. */
+  .swr { flex-direction: column; align-items: stretch; gap: 10px; padding: 11px 16px 14px; }
+  .swn { color: var(--sub); margin-left: 4px; }
+  .sws { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sws button { width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; background: var(--c);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); outline: none; transition: box-shadow .12s; }
+  .sws button[aria-checked="true"] { box-shadow: 0 0 0 2px var(--cell), 0 0 0 4px var(--fg); }
+  .sws button:focus-visible { box-shadow: 0 0 0 2px var(--cell), 0 0 0 4px var(--sub); }
+  .sws button[aria-checked="true"]:focus-visible { box-shadow: 0 0 0 2px var(--cell), 0 0 0 4px var(--fg), 0 0 0 6px var(--sub); }
   .c + .c::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; transform: scaleY(.5); background: var(--sep); }
   .c.t + .c.t::before { left: 100px; }
   .c.t { padding-right: 4px; }
@@ -419,8 +428,7 @@
   <div id="analogOpts">
     <p class="sh">Analog</p>
     <div class="grp">
-      <label class="c sel"><span>Accent</span><span class="v"></span><span data-icon="chev"></span>
-        <select id="analogAccent"><option value="amber">Amber</option><option value="coral">Coral</option><option value="pink">Pink</option><option value="violet">Violet</option><option value="blue">Blue</option><option value="cyan">Cyan</option><option value="mint">Mint</option><option value="lime">Lime</option></select></label>
+      <div class="c swr"><span id="analogAccentH">Accent <span class="swn"></span></span><div class="sws" id="analogAccent" role="radiogroup" aria-labelledby="analogAccentH" data-colors="amber coral pink violet blue cyan mint lime"></div></div>
     </div>
     <p class="ft">The second hand, and today on the calendar (two panels).</p>
   </div>
@@ -431,8 +439,7 @@
   <div id="digitsOpts">
     <p class="sh" id="digitsHead">Big digits</p>
     <div class="grp">
-      <label class="c sel"><span>Digit color</span><span class="v"></span><span data-icon="chev"></span>
-        <select id="digitColor"><option value="white">White</option><option value="amber">Amber</option><option value="coral">Coral</option><option value="pink">Pink</option><option value="violet">Violet</option><option value="blue">Blue</option><option value="cyan">Cyan</option><option value="mint">Mint</option><option value="lime">Lime</option></select></label>
+      <div class="c swr"><span id="digitColorH">Digit color <span class="swn"></span></span><div class="sws" id="digitColor" role="radiogroup" aria-labelledby="digitColorH" data-colors="white amber coral pink violet blue cyan mint lime"></div></div>
       <div class="c" id="colonRow"><label for="colonBlink" class="grow">Blinking colon</label><input type="checkbox" class="sw" id="colonBlink"></div>
     </div>
   </div>
@@ -904,6 +911,39 @@
   // ---- render ----
   function pressed(group, value) { for (const b of $(group).querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === value)); }
   function checked(group, value) { for (const b of $(group).querySelectorAll('[role=radio]')) b.setAttribute('aria-checked', String(b.dataset.v === value)); }
+  // Color swatches (analog accent, digit color): the same colors as
+  // ANALOG_ACCENTS / DIGIT_COLORS in state.js. A radiogroup: one tab stop,
+  // arrow keys move and pick.
+  const SWATCH = {
+    white: ['White', '#e6e6e6'], amber: ['Amber', '#ffb000'], coral: ['Coral', '#ff5a4e'], pink: ['Pink', '#ff4fa8'],
+    violet: ['Violet', '#a066ff'], blue: ['Blue', '#4a7dff'], cyan: ['Cyan', '#22c8e6'], mint: ['Mint', '#2fe08a'], lime: ['Lime', '#a8e23a'],
+  };
+  function swatches(id, pick) {
+    const g = $(id);
+    for (const k of g.dataset.colors.split(' ')) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'radio'); b.dataset.v = k;
+      b.setAttribute('aria-label', SWATCH[k][0]); b.title = SWATCH[k][0];
+      b.style.setProperty('--c', SWATCH[k][1]);
+      g.append(b);
+    }
+    const choose = (b) => { if (b.getAttribute('aria-checked') === 'true') return; swatchVal(id, b.dataset.v); pick(b.dataset.v); };
+    g.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) choose(b); });
+    g.addEventListener('keydown', (e) => {
+      const d = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      const bs = qa('button', g), i = bs.indexOf(document.activeElement);
+      const b = bs[(i + d + bs.length) % bs.length];
+      b.focus();
+      choose(b);
+    });
+  }
+  function swatchVal(id, v) {
+    const g = $(id);
+    for (const b of qa('button', g)) { const on = b.dataset.v === v; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; }
+    g.parentElement.querySelector('.swn').textContent = (SWATCH[v] || [''])[0];
+  }
   function selVal(id, v) { const s = $(id); s.value = String(v); const row = s.closest('.sel'); if (row) row.querySelector('.v').textContent = optText(s); }
   const caps = () => (health && health.caps) || null;
   const canDraw = (sc) => { const c = caps(); return !c || (sc === 'clock' ? c.includes('skyline') : sc === 'announce' ? c.includes('announce') : true); };
@@ -1335,13 +1375,13 @@
     $('faceFt').hidden = !$('faceFt').textContent;
     $('skylineOpts').hidden = face !== 'skyline';
     $('analogOpts').hidden = face !== 'analog';
-    selVal('analogAccent', board.analogAccent || 'amber');
+    swatchVal('analogAccent', board.analogAccent || 'amber');
     $('gradientOpts').hidden = face !== 'gradient';
     // Digit color on both big-digit faces; the colon blinks only on Big digits.
     $('digitsOpts').hidden = face !== 'digits' && face !== 'daydate';
     $('digitsHead').textContent = face === 'daydate' ? 'Day & date' : 'Big digits';
     $('colonRow').hidden = face !== 'digits';
-    selVal('digitColor', board.digitColor || 'white');
+    swatchVal('digitColor', board.digitColor || 'white');
     $('showTemp').checked = board.showTemp !== false;
     $('boats').checked = board.boats !== false;
     $('twinkle').checked = board.twinkle !== false;
@@ -1353,8 +1393,7 @@
   }
   $('clockFace').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) save({ clockFace: b.dataset.v }); });
   $('motion').addEventListener('change', (e) => { if (MOTION[e.target.value]) save(MOTION[e.target.value]); });
-  $('analogAccent').addEventListener('change', (e) => save({ analogAccent: e.target.value }));
-  $('digitColor').addEventListener('change', (e) => save({ digitColor: e.target.value }));
+  for (const id of ['analogAccent', 'digitColor']) swatches(id, (v) => save({ [id]: v }));
 
   // ---- Cycle ----
   function cycThumb(sc, big) {

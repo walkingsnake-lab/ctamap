@@ -507,3 +507,14 @@ test('announce: boards saved before it get no message and no presets', () => {
   assert.equal(again.get('home').msg, null);
   assert.deepEqual(again.get('home').msgPresets, []);
 });
+
+test('the control page\'s color swatches match DIGIT_COLORS (which includes every analog accent)', () => {
+  const { DIGIT_COLORS, ANALOG_ACCENTS } = require('./state');
+  const html = fs.readFileSync(path.join(__dirname, 'control.html'), 'utf8');
+  const block = html.slice(html.indexOf('const SWATCH = {'), html.indexOf('};', html.indexOf('const SWATCH = {')));
+  const page = Object.fromEntries([...block.matchAll(/(\w+): \['\w+', '(#[0-9a-f]{6})'\]/g)].map((m) => [m[1], m[2]]));
+  assert.deepEqual(page, DIGIT_COLORS);
+  for (const [k, v] of Object.entries(ANALOG_ACCENTS)) assert.equal(DIGIT_COLORS[k], v);
+  assert.match(html, /id="analogAccent"[^>]*data-colors="amber coral pink violet blue cyan mint lime"/);
+  assert.match(html, /id="digitColor"[^>]*data-colors="white amber coral pink violet blue cyan mint lime"/);
+});
