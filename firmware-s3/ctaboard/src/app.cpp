@@ -38,6 +38,11 @@ Board::Board(Net *n, Display *d, Clock *c, Networks nets, Buttons *b, Watchdog *
   run_start_ = clock->ms();
 }
 
+Board::~Board() {
+  draw::big_free(last_px_);
+  draw::big_free(slide_px_);
+}
+
 // ---- time ----
 // The server's whole-second `now` puts the true time at `ended` between lo
 // and hi. The clock starts at lo and moves only when it's outside that
@@ -148,6 +153,7 @@ void Board::apply(Value &in, long long st, long long ms) {
   sync(in["now"].num(), st, ms);
   player.set_payload(std::move(in), (double)ms);
   const Value &p = player.p;
+  if (peek.open) peek.resync(knob_counts(), (double)ms);
   double b = p["bright"].is_null() ? 100 : p["bright"].num();
   payload_bright_ = std::max(0.0, std::min(100.0, b));
   const Value &ab = p["ab"];
@@ -177,7 +183,7 @@ void Board::shown(int what, long long ms) {
       trans_ = NO_TRANS;
     } else {
       bool chained = transitioning(ms);
-      memcpy(slide_px_, last_px_, sizeof slide_px_);
+      memcpy(slide_px_, last_px_, (size_t)last_w_ * draw::Frame::H * 3);
       slide_w_ = last_w_;
       trans_start_ = ms;
       if (shown_ == SHOWN_CHOOSER || button_dir_) {
@@ -214,11 +220,6 @@ bool Board::draw_frame(long long ms, long long n) {
     // shown() starts a slide or fade on a change (from the last shown frame:
     // t = 0); then that; then this frame, as shown, is kept for the next.
     shown(what, ms);
-    if ((sliding(ms) || fading(ms)) && slide_w_ < f.w) {
-      // From a 64-wide status screen on a 128 board: as it showed, on both panels.
-      draw::widen_px(slide_px_, slide_w_, f.w);
-      slide_w_ = f.w;
-    }
     if (sliding(ms)) {
       // A quick slide runs the same curve faster.
       double t = (double)(ms - trans_start_) * draw::SCREEN_SLIDE_MS / slide_ms_;
@@ -757,14 +758,19 @@ void Board::do_knob(long long ms) {
   if (up) peek.release((double)ms);
 }
 
+// knob.vars sizes, one per ring entry.
+std::vector<int> Board::knob_counts() const {
+  const Value &k = player.p["knob"];
+  std::vector<int> counts;
+  for (size_t i = 0; i < k["ring"].size(); i++) counts.push_back((int)k["vars"][i].size());
+  return counts;
+}
+
 void Board::open_peek(long long ms) {
   const Value &k = player.p["knob"];
-  std::vector<int> counts, sels;
-  for (size_t i = 0; i < k["ring"].size(); i++) {
-    counts.push_back((int)k["vars"][i].size());
-    sels.push_back((int)k["sel"][i].num(0));
-  }
-  peek.start(counts, sels, (int)k["at"].num(0), (double)ms);
+  std::vector<int> sels;
+  for (size_t i = 0; i < k["ring"].size(); i++) sels.push_back((int)k["sel"][i].num(0));
+  peek.start(knob_counts(), sels, (int)k["at"].num(0), (double)ms);
 }
 
 void Board::send_peek() {

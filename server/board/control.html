@@ -1437,7 +1437,10 @@
     $('msgFit').className = 'ft' + (clean && !lay ? ' err' : '');
     $('msgShow').disabled = !lay || onBoardMsg() || !canDraw('announce');
     $('msgShow').textContent = !canDraw('announce') ? 'Needs a board with an S3' : onBoardMsg() ? 'On the board ✓' : 'Show on board';
-    $('msgState').textContent = liveMsg() ? 'Live on the board' : onBoardMsg() ? 'On the board' : 'Draft · not on the board';
+    // A message saved for two panels doesn't always fit one (a board set up
+    // again at 64): the board shows "set a message" until it's shortened.
+    const savedFits = !board.msg || D.messageLayout(board.msg.text, board.msg.style, board.cols);
+    $('msgState').textContent = !savedFits ? 'The saved message doesn\'t fit this board · shorten it' : liveMsg() ? 'Live on the board' : onBoardMsg() ? 'On the board' : 'Draft · not on the board';
     const presets = board.msgPresets || [];
     $('msgSave').disabled = !lay || presets.length >= 8 || presets.some((pr) => sameMsg(pr, draft));
     $('presetBox').hidden = !presets.length;

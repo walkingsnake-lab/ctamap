@@ -134,16 +134,16 @@ static void color_pins(const std::string &order, const int8_t lines[3], int8_t o
 }
 
 bool Panel::begin() {
-  const int8_t top[3] = {kR1, kG1, kB1}, bottom[3] = {kR2, kG2, kB2};
-  int8_t t[3], b[3];
-  color_pins(color_order_, top, t);
-  color_pins(color_order_, bottom, b);
-  HUB75_I2S_CFG::i2s_pins pins = {t[0], t[1], t[2], b[0], b[1], b[2], kA, kB, kC, kD, kE, kLat, kOe, kClk};
-  HUB75_I2S_CFG cfg(64, 32, panels_, pins);
-  cfg.double_buff = double_buffer_;  // draw into the back buffer, then flip: no half-drawn frames
-  cfg.clkphase = clk_phase_;
-  dma_ = new MatrixPanel_I2S_DMA(cfg);
-  if (!dma_->begin()) return false;
+  // Double buffering takes twice the DMA memory (internal RAM), and two
+  // panels double it again; if it doesn't fit, one buffer still draws.
+  if (!start(double_buffer_)) {
+    if (!double_buffer_ || !start(false)) {
+      Serial.println("[board] panel driver didn't start: nothing will show");
+      return false;
+    }
+    Serial.println("[board] panel: not enough memory to double buffer; using one buffer");
+    double_buffer_ = false;
+  }
   dma_->setBrightness8((uint8_t)oe_);  // full until the first payload's brightness
   dma_->clearScreen();
   if (double_buffer_) {
@@ -153,6 +153,24 @@ bool Panel::begin() {
     flipped_at_ = esp_timer_get_time();
   }
   return true;
+}
+
+// The driver with or without a back buffer; on failure it's freed and
+// dma_ stays null.
+bool Panel::start(bool double_buffer) {
+  const int8_t top[3] = {kR1, kG1, kB1}, bottom[3] = {kR2, kG2, kB2};
+  int8_t t[3], b[3];
+  color_pins(color_order_, top, t);
+  color_pins(color_order_, bottom, b);
+  HUB75_I2S_CFG::i2s_pins pins = {t[0], t[1], t[2], b[0], b[1], b[2], kA, kB, kC, kD, kE, kLat, kOe, kClk};
+  HUB75_I2S_CFG cfg(64, 32, panels_, pins);
+  cfg.double_buff = double_buffer;  // draw into the back buffer, then flip: no half-drawn frames
+  cfg.clkphase = clk_phase_;
+  dma_ = new MatrixPanel_I2S_DMA(cfg);
+  if (dma_->begin()) return true;
+  delete dma_;
+  dma_ = nullptr;
+  return false;
 }
 
 void Panel::identify(int ms) {
@@ -194,6 +212,7 @@ void Panel::identify(int ms) {
 int Panel::refresh_rate() const { return dma_ ? dma_->calculated_refresh_rate : 0; }
 
 void Panel::show(const std::function<void(draw::Frame &)> &fn) {
+  if (!dma_) return;  // the driver didn't start (logged at boot)
   if (double_buffer_) {
     // A flip takes effect at the end of the panel's current refresh. Until
     // then the buffer we'd draw into next is still on screen, and drawing
@@ -209,8 +228,9 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
   fn(frame_);
   const bool flip = rotation_ == 180;
   // The panels' columns from the frame's: a frame as wide as the chain
-  // fills it (render() widens 64-wide screens for a 128 payload); a
-  // narrower one, a status screen, shows on each panel. Upside down, the
+  // fills it (status screens draw at the chain's width; render() widens a
+  // 64-wide screen for a 128 payload); a narrower one (a 64 payload on two
+  // panels) shows on each panel. Upside down, the
   // whole chain turns: column 0 lands at the far end.
   const int W = panels_ * 64, fw = frame_.w > 0 ? frame_.w : 64;
   for (int y = 0; y < 32; y++) {
@@ -241,6 +261,7 @@ static const int JOIN_PAUSE_MS = 2000;  // after a failed ping on a fresh join (
 // Connect (TLS included) plus read stay under the 16 s watchdog.
 static const int HTTP_CONNECT_MS = 5000;
 static const int HTTP_TIMEOUT_MS = 8000;
+static const int MAX_JSON = 64 * 1024;  // largest JSON body the board reads (payloads are about 4 KB)
 
 WifiNet::WifiNet(const Settings &s) : s_(s) {
   WiFi.persistent(false);  // don't write credentials to flash on every join
@@ -387,8 +408,15 @@ bool WifiNet::request(const std::string &path, bool auth, bool post, json::Value
     }
     bool ok = true;
     if (doc) {
-      String s = c.http.getString();
-      if (!json::parse(s.c_str(), s.length(), *doc)) {
+      // A body past MAX_JSON (a server bug) is turned away rather than
+      // parsed: the tree takes about 10x the text. Known length: before
+      // reading it.
+      int len = c.http.getSize();
+      String s = len > MAX_JSON ? String() : c.http.getString();
+      if (len > MAX_JSON || (int)s.length() > MAX_JSON) {
+        err = "TooBig";
+        ok = false;
+      } else if (!json::parse(s.c_str(), s.length(), *doc)) {
         err = "JSON";
         ok = false;
       }
@@ -510,9 +538,11 @@ bool WifiNet::update(bool boot, const std::string &screen, json::Value &out, std
 }
 
 bool WifiNet::radar(const std::string &id, std::vector<uint8_t> &out, std::string &err) {
-  // Packed 4 bits a pixel (pk=4): 1024 bytes, or 2048 for a wide board's
-  // 128 x 32 frames (contract "Width").
-  return get_bytes("/board/radar/" + id + "?b=" + s_.board_id + "&pk=4", s_.cols == 128 ? 2048 : 1024, out, err);
+  // Packed 4 bits a pixel (pk=4): 1024 bytes, or 2048 for a 128 x 32 crop
+  // (ids <mapid>w-<stamp>, contract "Width"). By the id, not the board's
+  // width, so a 64 crop on a wide board is read as one (the 64 radar,
+  // shown on both panels) and never as half a wide frame.
+  return get_bytes("/board/radar/" + id + "?b=" + s_.board_id + "&pk=4", app::radar_bytes(id), out, err);
 }
 
 bool WifiNet::sky(const std::string &id, std::vector<uint8_t> &out, std::string &err) {
@@ -1153,6 +1183,10 @@ bool cold_boot() {
 
 long free_heap() { return (long)ESP.getFreeHeap(); }
 long largest_block() { return (long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT); }
+long largest_internal() { return (long)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT); }
+long psram_free() { return (long)heap_caps_get_free_size(MALLOC_CAP_SPIRAM); }
+static void *psram_alloc(size_t n) { return heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); }  // null without PSRAM: malloc
+void use_psram() { draw::big_alloc = psram_alloc; }
 long psram_size() { return (long)ESP.getPsramSize(); }
 
 float chip_temp_c() {

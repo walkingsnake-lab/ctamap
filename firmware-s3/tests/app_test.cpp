@@ -98,6 +98,7 @@ struct Server : app::Net {
   bool peek = false;
   std::vector<std::string> variants;
   std::string tscreen = "transit", wx_view = "now", face = "skyline";
+  std::vector<std::string> faces = {"skyline", "seventies", "analog"};  // knob.vars for the clock
   std::string fw;                                 // version check's `fw` offer (JSON object), "" for none
   long long wipe = 0;                             // version check's `wipe` stamp (a new owner), 0 for none
   int fw_fail = 0;                                // fail the next firmware downloads halfway
@@ -178,10 +179,12 @@ struct Server : app::Net {
         return 0;
       };
       int pat = screen == "transit" || screen == "ticker" ? 0 : screen == "weather" ? 1 : screen == "clock" ? 2 : screen == "announce" ? 3 : 4;
+      std::string face_list;
+      for (const std::string &fc : faces) face_list += std::string(face_list.empty() ? "" : ",") + "\"" + fc + "\"";
       knob = ",\"knob\":{\"ring\":[\"transit\",\"weather\",\"clock\",\"announce\",\"cycle\"],\"at\":" + jnum(pat) +
-             ",\"vars\":[[\"transit\",\"ticker\"],[\"now\",\"5day\",\"hourly\",\"radar\"],[\"skyline\",\"seventies\",\"analog\"],[],[]],\"sel\":[" +
+             ",\"vars\":[[\"transit\",\"ticker\"],[\"now\",\"5day\",\"hourly\",\"radar\"],[" + face_list + "],[],[]],\"sel\":[" +
              jnum(idx({"transit", "ticker"}, tscreen)) + "," + jnum(idx({"now", "5day", "hourly", "radar"}, wx_view)) + "," +
-             jnum(idx({"skyline", "seventies", "analog"}, face)) + ",0,0],\"ln\":\"RD\"}";
+             jnum(idx(faces, face)) + ",0,0],\"ln\":\"RD\"}";
       std::string pf = "[", pft = "[";
       for (int k = 2; k >= 0; k--) {
         pf += std::string(pf.size() > 1 ? "," : "") + "\"40100-" + jnum(now / 360 * 360 - k * 360) + "\"";
@@ -275,7 +278,7 @@ struct Server : app::Net {
   bool radar(const std::string &id, std::vector<uint8_t> &out, std::string &err) override {
     if (!call("radar:" + id, err)) return false;
     long long n = atoll(id.substr(id.rfind('-') + 1).c_str());
-    out.assign(1024, (uint8_t)(n % 251 + 1));
+    out.assign(app::radar_bytes(id), (uint8_t)(n % 251 + 1));
     return true;
   }
 
@@ -309,7 +312,9 @@ struct SimDisplay : app::Display {
   std::vector<std::pair<long long, double>> ks;  // every brightness set, with the time
   int max_px = 0;    // brightest channel in the last frame
   draw::Frame last;  // the last frame shown
+  int chain = 64;    // the panels' width (Panel::cols): status screens draw this wide
   explicit SimDisplay(SimClock *c) : clock(c) {}
+  int cols() const override { return chain; }
   void show(const std::function<void(draw::Frame &)> &fn) override {
     draw::Frame f;
     fn(f);
@@ -826,23 +831,38 @@ static bool halves_alike(const draw::Frame &f) {
   return true;
 }
 
+// The column span of lit pixels in rows y0-y1: {first, last}, or {-1, -1}.
+static std::pair<int, int> lit_span(const draw::Frame &f, int y0, int y1) {
+  int a = -1, b = -1;
+  for (int y = y0; y <= y1; y++)
+    for (int x = 0; x < f.w; x++)
+      if (f.get(x, y) != draw::RGB{}) {
+        if (a < 0 || x < a) a = x;
+        if (x > b) b = x;
+      }
+  return {a, b};
+}
+
 static void test_a_wide_board_draws_128_across_and_fades_in_from_a_status_screen() {
+  // The board as built: two panels, so the status screens are 128 wide too.
   Rig r({"ok"}, true);
+  r.display.chain = 128;
   r.server.cols = 128;
-  r.server.screen = "weather";  // no 128 layout yet: on both panels
+  r.server.screen = "weather";
   r.board->connect();
-  // The first frames fade in from the last status screen (64 wide), as it
-  // showed, on both panels: alike halves all the way, no garbled rows.
-  bool all_alike = true;
+  CHECK(r.display.last.w == 128, "the status screen spans both panels: w %d", r.display.last.w);
+  std::pair<int, int> st = lit_span(r.display.last, 0, 31);
+  CHECK(st.first > 20 && std::abs(st.first - (127 - st.second)) <= 1, "centered on 128: %d..%d", st.first, st.second);
+  // The fade into the first screen stays 128 wide throughout.
+  bool all_wide = true;
   for (long long t0 = r.clock.t; r.clock.t - t0 < 400;) {
     r.board->step();
-    if (r.display.frames && !halves_alike(r.display.last)) all_alike = false;
+    if (r.display.last.w != 128) all_wide = false;
     r.clock.sleep_ms(5);
   }
-  CHECK(r.display.last.w == 128, "w %d", r.display.last.w);
-  CHECK(all_alike, "the fade from the status screen");
+  CHECK(all_wide, "the fade from the status screen");
   r.run_for(15000);
-  CHECK(r.display.last.w == 128 && halves_alike(r.display.last), "");
+  CHECK(r.display.last.w == 128, "");
   // Transit draws 128 across: the header's clock at the far right, nothing
   // where a second copy of the station name would be.
   r.server.screen = "transit";
@@ -872,6 +892,23 @@ static void test_a_wide_board_draws_128_across_and_fades_in_from_a_status_screen
     r.clock.sleep_ms(5);
   }
   CHECK(crossed, "the slide crosses both panels as one");
+  // A 64 payload on the wide board (a server that dropped `cols`): drawn
+  // on both panels, and the slide into it from a 128 frame takes that
+  // frame's left columns, as the panels showed them: no garbled rows.
+  r.server.cols = 64;
+  r.server.screen = "transit";
+  r.server.v = 4;
+  r.run_for(40000);
+  r.btn.held_down = true;
+  r.run_for(100);
+  r.btn.held_down = false;
+  bool narrow = true;
+  for (long long t0 = r.clock.t; r.clock.t - t0 < 600;) {
+    r.board->step();
+    if (r.display.last.w != 64) narrow = false;
+    r.clock.sleep_ms(5);
+  }
+  CHECK(narrow, "64 frames through the slide");
   // A one-panel payload stays 64 wide.
   Rig n;
   n.board->connect();
@@ -1831,6 +1868,47 @@ static void test_peek_hold_and_turn_steps_variants_both_ways() {
   CHECK(r->server.variants == std::vector<std::string>({"analog"}), "%zu", r->server.variants.size());
 }
 
+static void test_peek_survives_its_variants_changing_under_it() {
+  // A payload lands while the chooser is open with fewer clock faces than
+  // when it opened (a face turned off): the chosen one past the end goes
+  // back to the first, and the wide strip draws without reading past it.
+  for (int chain : {64, 128}) {
+    Rig *raw = new Rig({"ok"}, false, false, 0, "", "", true);
+    std::unique_ptr<Rig> r(raw);
+    r->server.peek = true;
+    r->server.cols = chain;
+    r->display.chain = chain;
+    r->board->connect();
+    r->run_for(5000);
+    r->knob.pending = 2;  // transit -> clock
+    r->run_for(400);
+    r->knob.down = true;  // held: no commit, however long
+    r->run_for(100);
+    r->knob.pending = -1;  // back one face, wrapping to analog (the third)
+    r->run_for(300);
+    CHECK(r->board->peek.vi() == 2, "analog: %d", r->board->peek.vi());
+    r->server.faces = {"skyline", "seventies"};
+    r->server.v++;
+    r->run_for(app::UPDATE_EVERY + 2000);  // an update lands while held
+    CHECK(r->board->peek.open, "still open");
+    CHECK(r->board->peek.nv[2] == 2 && r->board->peek.vi() == 0, "nv %d vi %d", r->board->peek.nv[2], r->board->peek.vi());
+    r->knob.down = false;
+    r->run_for(3000 + LATENCY);
+    CHECK(!r->board->peek.open, "closed");
+  }
+  // A different ring: the chooser drops without choosing.
+  std::unique_ptr<Rig> r(peek_rig());
+  r->knob.pending = 1;
+  r->run_for(300);
+  r->knob.down = true;
+  r->server.knob_ring = false;  // no ring at all now
+  r->server.peek = false;
+  r->server.v++;
+  r->run_for(app::UPDATE_EVERY + 2000);
+  CHECK(!r->board->peek.open || r->board->peek.closing, "dropped");
+  CHECK(r->server.selects.empty(), "nothing chosen");
+}
+
 static void test_peek_press_on_a_live_screen_steps_its_variant() {
   std::unique_ptr<Rig> r(peek_rig());
   press(r);
@@ -2205,6 +2283,7 @@ int main() {
       T_(test_peek_press_on_a_live_screen_steps_its_variant),
       T_(test_peek_prefetches_radar_frames_and_clouds),
       T_(test_peek_survives_a_long_burst_of_turns_and_presses),
+      T_(test_peek_survives_its_variants_changing_under_it),
       T_(test_setup_opens_right_away_with_no_networks),
       T_(test_a_new_owner_wipe_forgets_wifi_once_per_stamp),
       T_(test_setup_opens_after_ten_minutes_without_wifi),

@@ -143,6 +143,19 @@ test('poller: newest frame first, then backfill; 404s retried later; on/off hyst
   assert.equal(fetched.filter((s) => s === '202008102112').length >= 2, true);
 });
 
+test('poller: a station no board has asked for in `forget` s is dropped, frames and all', async () => {
+  let t = R.timeOf('202008102100') + 120;
+  const radar = R.createRadar({ now: () => t, log: quiet, forget: 3600, fetch: async () => ({ wld: wldOf('202008102100'), png: pngOf('202008102100') }) });
+  const id = () => radar.want('40100', MORSE.lat, MORSE.lon).frames[0];
+  radar.want('40100', MORSE.lat, MORSE.lon);
+  for (let i = 0; i < 6; i++) await radar.pass();
+  const f = id();
+  assert.ok(radar.frame('40100', f), 'kept while asked for');
+  t += 3601;
+  await radar.pass();
+  assert.equal(radar.frame('40100', f), null, 'dropped');
+});
+
 test('poller: idle stations cost nothing', async () => {
   let calls = 0;
   const radar = R.createRadar({ now: () => 1e9, log: quiet, fetch: async () => { calls++; throw new Error('x'); } });

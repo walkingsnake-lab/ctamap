@@ -53,8 +53,10 @@ const SCOPED_FW = ['stable', 'off'];
 const MAX_SHEET = 8 * 1024 * 1024; // uploaded logo sheet (PNG)
 
 function send(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify(body));
+  // With its length, so the board can turn away an oversized body before reading it.
+  const text = JSON.stringify(body);
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Content-Length': Buffer.byteLength(text) });
+  res.end(text);
 }
 
 // The board's /board/update carries only what one screen draws (contract:
@@ -386,8 +388,28 @@ function createBoard({
   // select from a board of two chained panels; no `w` is 64 (the M4, and
   // S3 builds from before it). Kept in the board's state so the simulator,
   // the control page and the next payload know it.
+  // Returns the request's width, which that payload is laid out for (two
+  // boards flashed with one ID but different widths each get theirs). A
+  // width that flips back within COLS_SETTLE_S isn't saved again (no state
+  // write on every update), just logged once.
+  const COLS_SETTLE_S = 600;
+  const colsChanged = new Map();  // id -> { at: when the saved width last changed (s), said: logged }
   function noteCols(id, q) {
-    try { store.setCols(id, q.w === '128' ? 128 : 64); } catch (e) { log.error('[board] width:', e.message); }
+    const cols = q.w === '128' ? 128 : 64;
+    try {
+      const b = store.get(id);
+      if (b && (b.cols === 128 ? 128 : 64) !== cols) {
+        const last = colsChanged.get(id);
+        if (last && nowSecs() - last.at < COLS_SETTLE_S) {
+          if (!last.said) log.error(`[board] ${id}: asked at 64 and 128 within ${COLS_SETTLE_S / 60} min; two boards share this ID?`);
+          last.said = true;
+        } else {
+          store.setCols(id, cols);
+          colsChanged.set(id, { at: nowSecs(), said: false });
+        }
+      }
+    } catch (e) { log.error('[board] width:', e.message); }
+    return cols;
   }
   // A wide-only face (WIDE_FACES: the word clock) counts only on a wide board.
   const wideNow = (id, q) => (typeof q.w === 'string' ? q.w === '128' : (store.get(id) || {}).cols === 128);
@@ -426,6 +448,7 @@ function createBoard({
     healthOf.delete(id);
     seenAt.delete(id);
     tests.delete(id);
+    colsChanged.delete(id);
     for (const m of [views, rainLines]) for (const k of [...m.keys()]) if (k.startsWith(`${id}:`)) m.delete(k);
   }
 
@@ -483,6 +506,12 @@ function createBoard({
       board = { ...board, station: { mapid: st.mapid, name: st.short }, rows: [] };
     }
     for (const k of ['showHeader', 'showWeather', 'radarTime', 'baseballLayout']) if (preview[k] != null) board = { ...board, [k]: preview[k] };
+    // The asking board's width (noteCols), over the saved one.
+    if (preview.cols != null) {
+      board = { ...board };
+      if (preview.cols === 128) board.cols = 128;
+      else delete board.cols;
+    }
     // A board without baseball that was left on (or copied with) the
     // baseball screen shows transit instead.
     const sports = sportsOn(id);
@@ -727,9 +756,9 @@ function createBoard({
       const board = store.get(id) || store.register(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
       seenAt.set(id, nowSecs());
-      noteCols(id, parsed.query);
-      const caps = capsOf(id, parsed.query);
-      const body = forBoard(await update(store.get(id), id, parsed.query.boot === '1', {}, caps), caps);
+      const cols = noteCols(id, parsed.query);
+      const caps = capsOf(id, { ...parsed.query, w: String(cols) });  // this request's width, not the saved one
+      const body = forBoard(await update(store.get(id), id, parsed.query.boot === '1', { cols }, caps), caps);
       const asked = SCREENS.includes(parsed.query.s) && !canDraw(parsed.query.s, caps) ? 'transit' : parsed.query.s;
       const shown = SCREENS.includes(asked) ? asked : body.screen;
       return send(res, 200, caps.peek ? { ...body, for: shown } : sectionsFor(body, shown));
@@ -749,9 +778,9 @@ function createBoard({
         throw e;
       }
       if (!board) return send(res, 404, { err: 'unknown_board' });
-      noteCols(id, parsed.query);
-      const caps = capsOf(id, parsed.query);
-      const body = forBoard(await update(store.get(id), id, false, {}, caps), caps);
+      const cols = noteCols(id, parsed.query);
+      const caps = capsOf(id, { ...parsed.query, w: String(cols) });  // this request's width, not the saved one
+      const body = forBoard(await update(store.get(id), id, false, { cols }, caps), caps);
       return send(res, 200, caps.peek ? { ...body, for: body.screen } : sectionsFor(body, body.screen));
     }
 
