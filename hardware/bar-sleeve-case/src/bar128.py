@@ -73,7 +73,6 @@ else:
     V.SENSOR_X = SENSOR_X
 DR.configure_shell()
 V.BACKDOWN = True
-V.FLOOR_CH = 0.5                                 # seams go to the joint, not the recesses underneath (split_shell)
 V.KNOB_X = KNOB_X
 for _m in (C, V, P3):
     _m.SCREW_XS = tuple(panel.P['screw_xs'])     # +/-34, +/-126: each tray's own +/-46
@@ -143,32 +142,33 @@ def tongue(cl, y_back=None):
 
 
 def groove(cl=None):
-    """B's groove for both walls: the tongue's slot (full band, TONGUE_L deep, from yf to D - TONGUE_BACK) and the
-    mouth chamfer"""
+    """B's groove for both walls, TONGUE_L deep, from yf to D - TONGUE_BACK, its mouth chamfered MOUTH x 45 deg: one
+    x-z profile extruded along y (built as separate pieces, their end faces nearly met and left slivers)"""
     out = None
     for z0, z1, yf in _walls():
         yb = D - TONGUE_BACK
-        g = box(-0.01, TONGUE_L, yf, yb, z0, z1)
-        e = 0.1                                # the 45 deg faces run on into the groove's space: no vertex lands on
-        mouth = CrossSection([[(-0.01, z0 - MOUTH - 0.01), (MOUTH + e, z0 + e), (MOUTH + e, z1 - e),   # its corner
-                               (-0.01, z1 + MOUTH + 0.01)]])          # (a near-twin there left a 0-thick sliver)
-        g = g + Manifold.extrude(mouth, yb - yf).rotate([90, 0, 0]).translate([0, yb, 0])
+        prof = CrossSection([[(-0.05, z0 - MOUTH - 0.05), (MOUTH, z0), (TONGUE_L, z0), (TONGUE_L, z1), (MOUTH, z1),
+                              (-0.05, z1 + MOUTH + 0.05)]])
+        g = Manifold.extrude(prof, yb - yf).rotate([90, 0, 0]).translate([0, yb, 0])   # x-z profile, y from yf to yb
         out = g if out is None else out + g
     return out
 
 
-def v_groove(sh):
+def v_groove(sh, ov=0.3):
     """material within CHAMF - |x| of the OUTER surface (top, bottom, front and back rims) near x = 0: each half's
     outer edges at the joint chamfered 45 deg. outer_inset is convex, so the part deep enough is the hull of the body
-    inset CHAMF at x = 0 and the body itself at |x| = CHAMF: an exact chamfer, no steps. Not the bore's surfaces (hood,
-    screen stop): inside, the halves just butt."""
+    inset CHAMF at x = 0 and the body grown by ov at |x| = CHAMF + ov: the 45 deg faces run on past the surface and
+    cross it cleanly (ending them exactly on the surface left near-coincident faces: slivers in the mesh). Not the
+    bore's surfaces (hood, screen stop): inside, the halves just butt."""
     e = 1e-3
     keep = None
     for sg in (1, -1):
+        x1 = sg * (CHAMF + ov)
         k = Manifold.hull((outer_inset(CHAMF) ^ box(-e, e, -50, D + 50, -50, H + 50))
-                          + (outer_inset(0.0) ^ box(sg * CHAMF - e, sg * CHAMF + e, -50, D + 50, -50, H + 50)))
+                          + (outer_inset(-ov) ^ box(x1 - e, x1 + e, -50, D + 50, -50, H + 50)))
         keep = k if keep is None else keep + k
-    return (sh ^ box(-CHAMF, CHAMF, -50, D + 50, -1, H + 1)) - keep
+    w = CHAMF + ov
+    return (sh ^ box(-w, w, -50, D + 50, -1, H + 1)) - keep
 
 
 def split_shell(sh, cl=None, y_back=None):
