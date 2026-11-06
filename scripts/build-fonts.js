@@ -12,6 +12,7 @@
 //   board-vcr.bdf    8x11 digits + colon after VCR OSD Neue (clock screen, seventies face)
 //   board-d17.bdf    17-row digits from UW ttyp0 Bold 30 (clock screen, big digits face)
 //   board-d13.bdf    13-row digits from UW ttyp0 Bold 22 (clock screen, day/date face)
+//   board-d23.bdf    23-row digits from UW ttyp0 Bold 40 (clock screen, wide big digits face)
 //
 // Rules (see docs/board/design-spec.md §3):
 //   - Proportional: each glyph is trimmed to its ink columns, advance = ink + 1.
@@ -461,6 +462,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const fonts = {
   'board-small.bdf': buildSmall(), 'board-5x7.bdf': build5x7(), 'board-clock.bdf': buildClock(), 'board-vcr.bdf': buildVcr(),
   'board-d17.bdf': buildTtypDigits('t0-30b-digits.bdf', 'd17'), 'board-d13.bdf': buildTtypDigits('t0-22b-digits.bdf', 'd13'),
+  'board-d23.bdf': buildTtypDigits('t0-40b-digits.bdf', 'd23'),
 };
 for (const [name, font] of Object.entries(fonts)) {
   fs.writeFileSync(path.join(OUT, name), writeBDF(font));

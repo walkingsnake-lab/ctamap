@@ -654,6 +654,19 @@ async function build() {
     add('daydate dimmed', cf('2026-11-04T16:07:00Z', 'daydate', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('daydate roll per digit', cf('2026-11-02T03:42:00Z', 'daydate'), roll('dd.clock', '9:41'), undefined, undefined, { s3only: true });
     add('daydate roll width change', cf('2026-11-01T19:00:00Z', 'daydate'), roll('dd.clock', '12:59'), undefined, undefined, { s3only: true });
+    // Wide (wide-spec §6): big digits in d23 centered on 128; day/date with
+    // the weekday and date beside the time (Wednesday, Sept 30: the widest).
+    const cw = (iso, cface, extra = {}) => cf(iso, cface, { cols: 128, ...extra });
+    add('wide digits 9:42', cw('2026-11-02T03:42:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide digits colon blink', cw('2026-11-01T18:58:00Z', 'digits'), [0, 500].map((d) => ({ screen: 'clock', ms: at('2026-11-01T18:58:00Z', d) })), undefined, undefined, { s3only: true });
+    add('wide digits steady, dimmed', cw('2026-11-01T16:07:00Z', 'digits', { steady: true, bright: 40 }), [{ screen: 'clock', ms: at('2026-11-01T16:07:00Z', 750) }], undefined, undefined, { s3only: true });
+    add('wide digits roll per digit', cw('2026-11-02T03:42:00Z', 'digits'), roll('dig.clock', '9:41').map((r) => ({ ...r, ms: at('2026-11-02T03:42:00Z', 700) })), undefined, undefined, { s3only: true });
+    add('wide digits roll width change', cw('2026-11-01T19:00:00Z', 'digits'), roll('dig.clock', '12:59'), undefined, undefined, { s3only: true });
+    add('wide daydate 9:42 PM', cw('2026-11-06T03:42:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide daydate Wednesday, September 30', cw('2026-09-30T17:58:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide daydate 10:07 AM dimmed', cw('2026-11-04T16:07:00Z', 'daydate', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide daydate roll per digit', cw('2026-11-02T03:42:00Z', 'daydate'), roll('dd.clock', '9:41'), undefined, undefined, { s3only: true });
+    add('wide daydate roll width change', cw('2026-11-01T19:00:00Z', 'daydate'), roll('dd.clock', '12:59'), undefined, undefined, { s3only: true });
   }
   // Clock screen, analog and day/night faces (S3 only).
   {

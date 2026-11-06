@@ -116,6 +116,12 @@ Every word on the grid stays faintly lit (`#2a2a2a`); the words that tell the ti
 ### Gradient (built)
 The same block digits widened to 7 × 6 blocks (21 × 30), so the time fills the width as at 64 (`12:58` is 108 px); the gradient spans all 128 columns.
 
+### Big digits (decided Nov 5, built)
+The time alone in 23-row digits (UW ttyp0 Bold 40, the same family as the 64 face's), centered; the colon blinks as at 64. Mocked, not chosen: seconds in the 13-row digits after the time, a small AM/PM, a row of 60 dots filling through the minute.
+
+### Day/date (decided Nov 5, built)
+The weekday over the date (5x7) on the left, a divider, the time in the 23-row digits with AM/PM on the right. The widest case (`WEDNESDAY`, `12:58 PM`) uses every column. Mocked, not chosen: the date spelled out over the time, the time with a weekday/date/temperature panel, a tear-off calendar page.
+
 ### Skyline (open)
 Two directions, both using the real renderer patched to 128 columns:
 - **Panorama:** the 64 scene in the middle, the South Loop added on the left and the Gold Coast stepping down to the beach on the right. Needs new building art.

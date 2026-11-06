@@ -480,7 +480,8 @@ struct RollFont {
 };
 static RollFont roll_font(Font font) {
   return font == FONT_5X7 ? RollFont{7, -6, -1} : font == FONT_CLOCK ? RollFont{11, -10, -1} : font == FONT_VCR ? RollFont{12, -11, -1}
-       : font == FONT_D17 ? RollFont{18, -17, -1} : font == FONT_D13 ? RollFont{14, -13, -1} : RollFont{6, -5, -1};
+       : font == FONT_D17 ? RollFont{18, -17, -1} : font == FONT_D13 ? RollFont{14, -13, -1} : font == FONT_D23 ? RollFont{24, -23, -1}
+       : RollFont{6, -5, -1};
 }
 
 static bool same_shape(Font font, const ustr &a, const ustr &b) {
@@ -493,23 +494,23 @@ static bool same_shape(Font font, const ustr &a, const ustr &b) {
 // Where a rolling text goes: its left edge at `pos`, its right edge at
 // `pos`, or centered on the panel (draw.js xOf: () => x, rightAt, centerX).
 enum Align { LEFT, RIGHT, CENTER, SPAN };
-static int align_x(Font font, const ustr &s, Align a, int pos) {
-  // CENTER: centered in columns pos-63 (pos 0: the whole panel).
+static int align_x(Font font, const ustr &s, Align a, int pos, int end = 64) {
+  // CENTER: centered in columns pos to end - 1 (pos 0: the whole panel).
   // SPAN: centered in columns 0-pos.
   if (a == SPAN) return (int)fdiv(pos + 1 - measure(font, s), 2);
-  return a == LEFT ? pos : a == RIGHT ? pos - measure(font, s) + 1 : pos + (int)fdiv(64 - pos - measure(font, s), 2);
+  return a == LEFT ? pos : a == RIGHT ? pos - measure(font, s) + 1 : pos + (int)fdiv(end - pos - measure(font, s), 2);
 }
 
 // Text that rolls when it changes. Pixel-identical to rollTextWith() in
 // draw.js. Returns x after the last advance.
 static int roll_text_at(Frame &f, Font font, const ustr &text, Align a, int pos, int base, RGB color,
-                        const std::optional<Roll> &roll) {
-  int x = align_x(font, text, a, pos);
+                        const std::optional<Roll> &roll, int end = 64) {
+  int x = align_x(font, text, a, pos, end);
   if (!roll) return f.text(font, text, x, base, color);
   const ustr &frm = roll->from;
   RollFont rf = roll_font(font);
   int up = (int)jsround(ease_in_out(roll->p) * rf.dist);
-  int fx = align_x(font, frm, a, pos);
+  int fx = align_x(font, frm, a, pos, end);
   f.push_clip(0, base + rf.t0, f.w - 1, base + rf.t1);
   if (fx == x && same_shape(font, text, frm)) {
     for (size_t i = 0; i < text.size(); i++) {
@@ -537,8 +538,8 @@ static int roll_text(Frame &f, Font font, const ustr &text, int right, int base,
   return roll_text_at(f, font, text, RIGHT, right, base, color, roll);
 }
 // Named rolls: the big clocks and current-conditions numbers (draw.js rollText).
-static int roll_named(Frame &f, Font font, const std::string &name, const ustr &text, Align a, int pos, int base, RGB color) {
-  return roll_text_at(f, font, text, a, pos, base, color, take_roll(name, text));
+static int roll_named(Frame &f, Font font, const std::string &name, const ustr &text, Align a, int pos, int base, RGB color, int end = 64) {
+  return roll_text_at(f, font, text, a, pos, base, color, take_roll(name, text), end);
 }
 
 void NumRoller::begin(double ms) {
@@ -3603,25 +3604,52 @@ std::vector<std::string> SkylineFader::wanted() const {
 static const int BD_TOP = 7, BD_BASE = 24;
 static const int DD_DAY_BASE = 6, DD_TIME_BASE = 22, DD_DATE_BASE = 31;
 
+// Wide board: the d23 digits, rows 4-26, centered on 128 columns.
+static const int BDW_TOP = 4, BDW_BASE = 27;
+
 static void render_digits(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
   double now = now_o ? *now_o : p["now"].num(0);
   long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
+  bool wide = cols_of(p) == WIDE;
+  Font font = wide ? FONT_D23 : FONT_D17;
+  int W = wide ? WIDE : 64, top = wide ? BDW_TOP : BD_TOP, base = wide ? BDW_BASE : BD_BASE;
+  f.w = W;
   ustr text = clock_text(now, p["tzo"].num(0));
-  // Ink centered: x = floor((65 - measure) / 2) (draw.js xOf).
+  // Ink centered: x = floor((W + 1 - measure) / 2) (draw.js xOf).
   std::optional<Roll> roll = take_roll("dig.clock", text);
-  roll_text_at(f, FONT_D17, text, SPAN, 64, BD_BASE, hexc(0xe6e6e6), roll);
+  roll_text_at(f, font, text, SPAN, W, base, hexc(0xe6e6e6), roll);
   // The colon blinks: off for the second half of each second, never mid-roll,
   // never with steady.
   if (!p["steady"].truthy() && !roll && fmod_floor(ms, 1000) >= 500) {
     size_t i = text.find(U':');
-    int g = glyph(FONT_D17, ':');
-    int cw = g >= 0 ? assets::FONT_DATA[FONT_D17][g + 1] : 0;
-    f.fill(align_x(FONT_D17, text, SPAN, 64) + measure(FONT_D17, text.substr(0, i)) + 1, BD_TOP, cw, BD_BASE - BD_TOP, hexc(0x000000));
+    int g = glyph(font, ':');
+    int cw = g >= 0 ? assets::FONT_DATA[font][g + 1] : 0;
+    f.fill(align_x(font, text, SPAN, W) + measure(font, text.substr(0, i)) + 1, top, cw, base - top, hexc(0x000000));
   }
+}
+
+// Wide day/date (draw.js renderDayDateWide): weekday over date on the left,
+// a divider, the time and AM/PM centered in columns 48-127.
+static const int DDW_CX = 22, DDW_DAY_BASE = 14, DDW_DATE_BASE = 25, DDW_DIV_X = 46, DDW_X0 = 48, DDW_TIME_BASE = 27;
+static void render_daydate_wide(const Value &p, Frame &f, double now) {
+  f.w = WIDE;
+  double tzo = p["tzo"].num(0);
+  LocalDate t = local_date(now, tzo);
+  ustr day = U(DAY_NAMES[t.wd]), date = U(std::string(MONTH_NAMES[t.m - 1]) + " " + std::to_string(t.d));
+  f.text(FONT_5X7, day, DDW_CX - (int)fdiv(measure(FONT_5X7, day), 2), DDW_DAY_BASE, C::wxText);
+  f.text(FONT_5X7, date, DDW_CX - (int)fdiv(measure(FONT_5X7, date), 2), DDW_DATE_BASE, hexc(0xe6e6e6));
+  f.fill(DDW_DIV_X, 4, 1, 24, hexc(0x262626));
+  ustr text = clock_text(now, tzo), ampm = U(t.h < 12 ? "AM" : "PM");
+  int aw = measure(FONT_SMALL, ampm);
+  // x = 48 + floor((80 - (measure + 3 + aw)) / 2): CENTER in columns 48 to 124 - aw.
+  int end = WIDE - 3 - aw;
+  roll_named(f, FONT_D23, "dd.clock", text, CENTER, DDW_X0, DDW_TIME_BASE, hexc(0xe6e6e6), end);
+  f.text(FONT_SMALL, ampm, align_x(FONT_D23, text, CENTER, DDW_X0, end) + measure(FONT_D23, text) + 3, DDW_TIME_BASE, C::dimHead);
 }
 
 static void render_daydate(const Value &p, Frame &f, std::optional<double> now_o) {
   double now = floor(now_o ? *now_o : p["now"].num(0));
+  if (cols_of(p) == WIDE) return render_daydate_wide(p, f, now);
   double tzo = p["tzo"].num(0);
   LocalDate t = local_date(now, tzo);
   ustr day = U(DAY_NAMES[t.wd]);

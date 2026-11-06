@@ -2103,26 +2103,49 @@
     // Big digits: the time alone, its ink centered, rows 7-23. The colon
     // blinks (off for the second half of each second on the board's clock),
     // except while the time rolls, or always lit with p.steady.
+    // Wide board (wide-spec §6): the 23-row digits (d23, ttyp0 Bold 40),
+    // rows 4-26, centered on all 128 columns.
+    const BDW = { top: 4, base: 27 };
     function renderDigits(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
-      const f = newFrame();
-      const text = clockText(now), xOf = (str) => fdivI(65 - measure('d17', str), 2);
+      const wide = colsOf(p) === WIDE, font = wide ? 'd23' : 'd17', W = wide ? WIDE : 64, g = wide ? BDW : BD;
+      const f = newFrame(W);
+      const text = clockText(now), xOf = (str) => fdivI(W + 1 - measure(font, str), 2);
       const roll = takeRoll('dig.clock', text);
-      rollTextWith(f, 'd17', roll, text, xOf, BD.base, BD.color);
+      rollTextWith(f, font, roll, text, xOf, g.base, BD.color);
       if (!p.steady && !roll && ((ms % 1000) + 1000) % 1000 >= 500) {
         const i = text.indexOf(':');
-        f.fill(xOf(text) + measure('d17', text.slice(0, i)) + 1, BD.top, fonts.d17[58][1], BD.base - BD.top, '#000000');
+        f.fill(xOf(text) + measure(font, text.slice(0, i)) + 1, g.top, fonts[font][58][1], g.base - g.top, '#000000');
       }
       return f;
     }
     // Day/date: the weekday (Tom Thumb, rows 1-5), the time in d13 (rows
     // 9-21) with AM/PM in Tom Thumb two columns after it, bottom-aligned, the
     // pair centered; the date (5x7, rows 24-30). Each line centered.
+    // Wide board (wide-spec §6): the weekday (5x7, #8f8f8f, baseline 14)
+    // over the date (5x7, #e6e6e6, baseline 25), centered on column 22; a
+    // #262626 divider on column 46, rows 4-27; the time in d23 (rows 4-26)
+    // with AM/PM 3 px after it, the pair centered in columns 48-127.
+    const DDW = { cx: 22, dayBase: 14, dateBase: 25, divX: 46, x0: 48, timeBase: 27, divider: '#262626' };
+    function renderDayDateWide(p, now) {
+      const f = newFrame(WIDE);
+      const t = localDate(now, p.tzo);
+      const day = DAY_NAMES[t.wd], date = `${MONTHS[t.m - 1]} ${t.d}`;
+      f.text('5x7', day, DDW.cx - fdivI(measure('5x7', day), 2), DDW.dayBase, DD.label);
+      f.text('5x7', date, DDW.cx - fdivI(measure('5x7', date), 2), DDW.dateBase, DD.color);
+      f.fill(DDW.divX, 4, 1, 24, DDW.divider);
+      const text = clockText(now), ampm = t.h < 12 ? 'AM' : 'PM', aw = measure('small', ampm);
+      const xOf = (str) => DDW.x0 + fdivI(WIDE - DDW.x0 - (measure('d23', str) + 3 + aw), 2);
+      rollText(f, 'd23', 'dd.clock', text, xOf, DDW.timeBase, DD.color);
+      f.text('small', ampm, xOf(text) + measure('d23', text) + 3, DDW.timeBase, DD.ampm);
+      return f;
+    }
     function renderDayDate(p, opts) {
       const o = opts || {};
       const now = Math.floor(o.now != null ? o.now : p.now);
+      if (colsOf(p) === WIDE) return renderDayDateWide(p, now);
       const f = newFrame();
       const t = localDate(now, p.tzo);
       const day = DAY_NAMES[t.wd];
