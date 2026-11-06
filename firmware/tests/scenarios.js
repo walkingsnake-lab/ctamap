@@ -681,6 +681,24 @@ async function build() {
     add('gradient roll per digit', face('2026-11-02T01:15:00Z', 'gradient'), [0.25, 0.5, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
     add('gradient roll off', { ...face('2026-11-02T01:15:00Z', 'gradient'), croll: false }, [0.5].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
     add('daynight roll', face('2026-11-01T19:00:00Z', 'daynight'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'dn.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    // Wide board (wide-spec §6): the 80 x 32 map with the sun panel, and the
+    // Seventies stripes with the weekday, date and temperature.
+    const wf = (iso, cface, extra = {}) => {
+      const p = face(iso, cface, extra), t = p.now;
+      return { ...p, cols: 128, dn: p.dn && { ...p.dn, hw: [20, 9], sr: t - 15 * 3600 - 20 * 60, ss: t - 5 * 3600 + 4 * 60 }, ...extra };
+    };
+    const one = [{ screen: 'clock' }];
+    add('wide daynight evening', wf('2026-11-04T03:42:00Z', 'daynight'), [{ screen: 'clock' }, { screen: 'clock', now: Date.parse('2026-11-04T05:42:00Z') / 1000 }], undefined, undefined, { s3only: true });
+    add('wide daynight June noon', wf('2026-06-21T17:00:00Z', 'daynight'), one, undefined, undefined, { s3only: true });
+    add('wide daynight 12:58 PM dimmed', wf('2026-11-01T18:58:00Z', 'daynight', { bright: 40 }), one, undefined, undefined, { s3only: true });
+    add('wide daynight no sunrise or sunset', wf('2026-11-01T18:00:00Z', 'daynight', { dn: { ...face('2026-11-01T18:00:00Z', 'daynight').dn, hw: [20, 9] } }), one, undefined, undefined, { s3only: true });
+    add('wide daynight no sun data', wf('2026-11-01T18:00:00Z', 'daynight', { dn: null }), one, undefined, undefined, { s3only: true });
+    add('wide daynight roll', wf('2026-11-01T19:00:00Z', 'daynight'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'dn.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    add('wide seventies Tuesday 9:42', wf('2026-11-04T03:42:00Z', 'seventies'), one, undefined, undefined, { s3only: true });
+    add('wide seventies Wednesday 12:58', wf('2026-11-04T18:58:00Z', 'seventies', { cwx: { temp: 101, icon: 'sunny' } }), one, undefined, undefined, { s3only: true });
+    add('wide seventies no weather, dimmed', wf('2026-12-31T05:07:00Z', 'seventies', { cwx: null, bright: 40 }), one, undefined, undefined, { s3only: true });
+    add('wide seventies below zero', wf('2026-01-14T18:00:00Z', 'seventies', { cwx: { temp: -12, icon: 'snow' } }), one, undefined, undefined, { s3only: true });
+    add('wide seventies roll', wf('2026-11-01T19:00:00Z', 'seventies'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'svt.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
   }
   // Announce screen (S3 only): the styles, the typewriter's intro (typing,
   // then its cursor blinking), the credits roll's steps, edge fades, pause
