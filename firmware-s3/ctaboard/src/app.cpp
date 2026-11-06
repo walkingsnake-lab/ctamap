@@ -62,7 +62,7 @@ void Board::status(const std::string &kind, const std::string &detail) {
   if (led) led->set(led_base);
   long long ms = clock->ms();
   display->show([&](draw::Frame &f) {
-    draw::render_status(f, kind, detail);
+    draw::render_status(f, kind, detail, display->cols());
     shown(SHOWN_STATUS, ms);
     memcpy(last_px_, f.px, f.bytes());
     last_w_ = f.w;

@@ -2,7 +2,7 @@
 'use strict';
 // The control page's picker tiles and screen thumbnails: one 64x32 render per
 // option (Rows, Ticker, the two transit layouts, each weather view, each
-// clock face), drawn by the reference renderer from fixed sample payloads
+// clock face), and a 128x32 one (`w:<tile>`) for wide boards, drawn by the reference renderer from fixed sample payloads
 // (the parity scenarios in firmware/tests/scenarios.js), so a tile looks the
 // same whatever the board is doing. Saved as PNGs (one pixel per LED; the page
 // scales them up square) in server/board/control-tiles.json, served at
@@ -64,10 +64,36 @@ const PICKS = {
   'face-daydate': ['daydate wednesday 10:07 AM', 0],
 };
 
-function png(px) {
+// Wide boards (cols 128): the same tiles at 128 x 32, named `w:<tile>`; the
+// page uses them on a wide board.
+const WIDE_OWN = {
+  'w:face-words': () => {
+    const now = Date.parse('2026-11-02T03:42:00Z') / 1000;
+    return draw.render({ screen: 'clock', cface: 'words', cols: 128, tzo: tzOffset(now), now, bright: 100 }, { now });
+  },
+};
+const WIDE_PICKS = {
+  'w:rows': ['wide transit dest belmont-2026-10-03-2316.json rows header=true wx=true', 0],
+  'w:ticker': ['wide ticker morse-2026-10-03-2316.json', 0],
+  'w:layout-header': ['wide transit dest belmont-2026-10-03-2316.json rows header=true wx=true', 0],
+  'w:layout-key': ['wide transit rows key layout', 0],
+  'w:wx-now': ['wide weather conditions, sunrise', 0],
+  'w:wx-5day': ['wide weather week', 0],
+  'w:wx-hourly': ['wide weather 24 hours', 0],
+  'w:wx-radar': ['wide radar 40100-202008102100', 0],
+  'w:face-skyline': ['wide skyline clear night', 0],
+  'w:face-seventies': ['wide seventies 9:42', 0],
+  'w:face-analog': ['wide analog November 1st', 0],
+  'w:face-daynight': ['wide daynight evening', 0],
+  'w:face-gradient': ['wide gradient 12:58', 0],
+  'w:face-digits': ['wide digits 9:42', 0],
+  'w:face-daydate': ['wide daydate 9:42 PM', 0],
+};
+
+function png(px, w = 64) {
   const rgb = Buffer.from(px, 'base64');
-  const img = new PNG({ width: 64, height: 32 });
-  for (let i = 0; i < 64 * 32; i++) {
+  const img = new PNG({ width: w, height: 32 });
+  for (let i = 0; i < w * 32; i++) {
     const [r, g, b] = [rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]];
     // Unlit LEDs as the page's previews draw them.
     const off = !r && !g && !b;
@@ -88,10 +114,17 @@ async function tiles() {
     if (!s || !s.renders || !s.renders[i]) throw new Error(`no scenario render "${scenario}" #${i} for tile ${name}`);
     out[name] = png(s.renders[i].px);
   }
+  for (const [name, fn] of Object.entries(WIDE_OWN)) out[name] = png(Buffer.from(fn().px).toString('base64'), 128);
+  for (const [name, [scenario, i]] of Object.entries(WIDE_PICKS)) {
+    const s = scenarios.get(scenario);
+    if (!s || !s.renders || !s.renders[i]) throw new Error(`no scenario render "${scenario}" #${i} for tile ${name}`);
+    if (Buffer.from(s.renders[i].px, 'base64').length !== 128 * 32 * 3) throw new Error(`tile ${name}: "${scenario}" isn't 128 wide`);
+    out[name] = png(s.renders[i].px, 128);
+  }
   return out;
 }
 
-module.exports = { tiles, PICKS, OUT };
+module.exports = { tiles, PICKS, WIDE_PICKS, OUT };
 
 if (require.main === module) {
   tiles().then((t) => {

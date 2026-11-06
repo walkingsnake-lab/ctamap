@@ -64,6 +64,7 @@ class Panel : public app::Display {
   explicit Panel(const Settings &s);
   bool begin();
   void show(const std::function<void(draw::Frame &)> &fn) override;
+  int cols() const override { return panels_ * 64; }
   long last_ms = 0, max_ms = 0;  // draw time, for the serial report
   int refresh_rate() const;
   double set_brightness(double k) override;

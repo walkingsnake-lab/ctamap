@@ -195,7 +195,7 @@ void setup() {
   panel->identify(3000);  // 2 panels: red outline + 1 dot = first, green + 2 dots = second
 
   if (no_setup) {
-    panel->show([&](draw::Frame &f) { draw::render_status(f, "nosetup", ""); });
+    panel->show([&](draw::Frame &f) { draw::render_status(f, "nosetup", "", panel->cols()); });
     return;
   }
 
