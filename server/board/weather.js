@@ -4,9 +4,8 @@
 // adds feels-like, wind, and the next 6 hours' rain chance), and auto
 // brightness from sunrise/sunset. The weather screen's 5-day and hourly
 // layouts get a fallback forecast here; NWS (nws-forecast.js) lays its own
-// over it. WeatherAPI has no 15-minute precipitation on our plan, so `q15`
-// is always empty and the rain bars don't show (their rules stay, for a
-// source that has it).
+// over it. (The rain bars, which needed 15-minute precipitation WeatherAPI
+// doesn't have, were cut in Nov 2026.)
 // Rules: docs/board/design-spec.md §4–5, contract "Weather row".
 //
 // Terms (weatherapi.com/terms.aspx): the free plan credits WeatherAPI.com by
@@ -26,19 +25,6 @@ const MAX_AGE = 3600;    // s: WeatherAPI's limit for caching current conditions
 // Hourly layout: the slots HOUR_STEPS hours after the current hour.
 const HOUR_STEPS = [2, 4, 6, 8];
 const HOURS = HOUR_STEPS[HOUR_STEPS.length - 1] + 1;
-// Rain bars: 8 quarter hours (2 hours). 15-minute amounts are sums over the
-// preceding 15 minutes.
-const BARS = 8;
-const SLOT_S = 900;
-// Intensity scales (rate in mm/h, as water; snow is measured melted, so its
-// scale tops out lower): height on a square-root scale, full at `full`, so
-// drizzle stays visible but short; levels at the NWS light/moderate/heavy
-// cutoffs.
-const RAIN_SCALE = { full: 10, levels: [2.5, 7.6] };
-const SNOW_SCALE = { full: 4, levels: [1, 2.5] };
-const BAR_MAX = 10; // rows
-const SNOW_CM_PER_MM = 0.7; // snowfall (cm) from water (mm)
-
 // Two-letter weekday at a daily slot's time (noon keeps it clear of DST
 // changes; WeatherAPI's date_epoch is the date's UTC midnight, which noon
 // keeps on the same Chicago date).
@@ -143,7 +129,6 @@ function parse(json) {
     clouds: num(c.cloud),
     pop: maxPop(hours),
     days: forecastDays(fd),
-    q15: [],
     hrs: hours.map((h) => ({ time: h.time_epoch, temp: num(h.temp_f), code: wmo(h.condition), wa: waCode(h.condition), isDay: h.is_day === 1 })),
   };
 }
@@ -203,7 +188,7 @@ function condition(code, isDay, wa) {
 
 // Parsed weather with its temperatures in the board's unit ('F' as fetched,
 // or 'C'), converted before rounding. Wind stays mph; everything else is
-// untouched (radar snow mode and rain bars read the original).
+// untouched (radar snow mode reads the original).
 const toC = (f) => (f == null ? f : (f - 32) * 5 / 9);
 function inUnit(w, unit) {
   if (!w || unit !== 'C') return w;
@@ -262,65 +247,6 @@ function toHours(w) {
   return out;
 }
 
-// Parsed weather -> the rain bars at `now`, or null when no precipitation
-// is falling or due in the next 2 hours (or there's no 15-minute data):
-//   {snow, now, title, h, l}
-// snow: 1 when snow makes up at least half the water (the whole view is one
-// kind); now: 1 when it's falling in the current quarter hour; title: what
-// it's doing, uppercase; h: 8 bar heights (0 = dry, else 1-BAR_MAX); l: 8
-// intensity levels (0 dry, 1-3).
-function toRain(w, now) {
-  const steps = (w.q15 || []).filter((x) => x.t > now).slice(0, BARS);
-  if (steps.length < BARS) return null;
-  const wet = steps.map((x) => x.p > 0);
-  if (!wet.includes(true)) return null;
-  const water = steps.reduce((a, x) => a + x.p, 0);
-  const snowWater = steps.reduce((a, x) => a + x.s, 0) / SNOW_CM_PER_MM;
-  const snow = snowWater * 2 >= water;
-  const sc = snow ? SNOW_SCALE : RAIN_SCALE;
-  const h = [], l = [];
-  for (const x of steps) {
-    const rate = x.p * 4;
-    if (!(x.p > 0)) { h.push(0); l.push(0); continue; }
-    h.push(Math.max(1, Math.round(Math.sqrt(Math.min(rate, sc.full) / sc.full) * BAR_MAX)));
-    l.push(1 + (rate >= sc.levels[0] ? 1 : 0) + (rate >= sc.levels[1] ? 1 : 0));
-  }
-  // Minutes until step i starts, to the nearest 5 (at least 5).
-  const mins = (i) => Math.max(5, Math.round((steps[i].t - SLOT_S - now) / 300) * 5);
-  const kind = snow ? 'SNOW' : 'RAIN';
-  let title;
-  if (wet[0]) {
-    const dry = wet.indexOf(false);
-    if (dry < 0) title = `${kind} NEXT 2 HRS`;
-    else title = `${wet.indexOf(true, dry) > 0 ? 'BREAK' : 'ENDS'} IN ${mins(dry)} MIN`;
-  } else {
-    title = `${kind} IN ${mins(wet.indexOf(true))} MIN`;
-  }
-  return { snow: snow ? 1 : 0, now: wet[0] ? 1 : 0, title, h, l };
-}
-
-// Made-up rain bars for the simulator's test controls: a kind from
-// TEST_RAIN, built as 15-minute data and run through toRain() so titles and
-// heights come from the real rules. Amounts are mm per 15 min for the next 8
-// quarter hours (the first is the current one).
-const TEST_RAIN = {
-  rain: [0, 0, 0.1, 0.4, 0.9, 1.2, 0.6, 0.3],
-  downpour: [0, 0.8, 2.5, 4, 3, 1.5, 0.7, 0.2],
-  break: [0.6, 0.4, 0, 0, 0.5, 1, 0.8, 0.5],
-  ends: [1.2, 0.9, 0.5, 0.2, 0, 0, 0, 0],
-  continues: [0.5, 0.7, 1, 1.4, 1.2, 0.9, 0.7, 0.5],
-  snow: [0, 0, 0.05, 0.2, 0.35, 0.5, 0.4, 0.2],
-  'snow now': [0.2, 0.3, 0.5, 0.7, 0.6, 0.45, 0.3, 0.2],
-};
-function testRain(kind, now) {
-  const mm = TEST_RAIN[kind];
-  if (!mm) return null;
-  const snow = kind.startsWith('snow');
-  const b0 = Math.floor(now / SLOT_S) * SLOT_S;
-  const q15 = [{ t: b0, p: 0, s: 0 }, ...mm.map((p, i) => ({ t: b0 + (i + 1) * SLOT_S, p, s: snow ? p * SNOW_CM_PER_MM : 0 }))];
-  return toRain({ q15 }, now);
-}
-
 // Test weather states for the simulator: the current conditions forced to
 // one state (WMO code and cloud cover, as parse() would give them, and a
 // temperature in °F that suits it). Each maps to one skyline kind and level
@@ -349,7 +275,7 @@ function testWeather(kind, base, now, isDay) {
   if (!s) return base ? { ...base, isDay } : null;
   const day = (i) => ({ time: now + i * 86400, code: s.code, wa: null, hi: s.temp + [4, -2, 5, 1, -3][i - 1], lo: s.temp - [9, 12, 8, 10, 13][i - 1] });
   const b = base || {
-    sunrise: now - 6 * 3600, sunset: now + 6 * 3600, windSpeed: 9, windDir: 300, q15: [],
+    sunrise: now - 6 * 3600, sunset: now + 6 * 3600, windSpeed: 9, windDir: 300,
     days: [1, 2, 3, 4, 5].map(day),
     hrs: Array.from({ length: 9 }, (_, i) => ({ time: now + i * 3600, temp: s.temp + (i % 3) - 1, code: s.code, wa: null, isDay })),
   };
@@ -379,7 +305,7 @@ function createWeather({ key = process.env.WEATHERAPI_KEY || '', fetch = null, c
   const fetchRaw = fetch || ((lat, lon) => fetchJson(url(lat, lon, key)));
   const poller = createLocationPoller({
     name: 'weather', fetch: fetchRaw, parse, interval, maxAge: MAX_AGE, now, log,
-    usable: (d) => Array.isArray(d.days) && Array.isArray(d.q15) && Array.isArray(d.hrs),
+    usable: (d) => Array.isArray(d.days) && Array.isArray(d.hrs),
     ...opts,
   });
   // Data whose conditions are over MAX_AGE old (WeatherAPI down for an
@@ -401,4 +327,4 @@ function createWeather({ key = process.env.WEATHERAPI_KEY || '', fetch = null, c
   return w;
 }
 
-module.exports = { url, parse, rainLine, RAIN_ON, RAIN_OFF, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, BARS, BAR_MAX };
+module.exports = { url, parse, rainLine, RAIN_ON, RAIN_OFF, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS };

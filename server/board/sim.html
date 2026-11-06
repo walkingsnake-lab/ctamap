@@ -71,16 +71,6 @@
       <option value="storm">Radar: storm (Aug 2020 derecho)</option>
       <option value="snow">Radar: snow (Feb 2022)</option>
     </select>
-    <select id="testBars" aria-label="Test rain bars">
-      <option value="">No test rain bars</option>
-      <option value="rain">Bars: rain in 25 min</option>
-      <option value="downpour">Bars: downpour</option>
-      <option value="break">Bars: break in rain</option>
-      <option value="ends">Bars: rain ends</option>
-      <option value="continues">Bars: rain next 2 hrs</option>
-      <option value="snow">Bars: snow in 40 min</option>
-      <option value="snow now">Bars: snow next 2 hrs</option>
-    </select>
     <select id="testWx" aria-label="Test weather state">
       <option value="">Real weather</option>
       <option value="clear">Weather: clear</option>
@@ -447,7 +437,7 @@
 
   // ---- test alerts ----
   const TEST_LINES = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
-  let test = { lines: [], warn: null, game: null, radar: null, bars: null, weather: null, left: 0 };
+  let test = { lines: [], warn: null, game: null, radar: null, weather: null, left: 0 };
   function renderTest() {
     for (const b of $('testLines').children) {
       const on = test.lines.includes(b.dataset.ln);
@@ -457,7 +447,6 @@
     $('testWarn').value = test.warn ? `${test.warn.kind}:${test.warn.lvl}` : '';
     $('testGame').value = test.game || '';
     $('testRadar').value = test.radar || '';
-    $('testBars').value = test.bars || '';
     $('testWx').value = (test.weather && test.weather.kind) || '';
     $('testTod').value = (test.weather && test.weather.tod) || '';
     $('testLeft').textContent = test.left > 0 ? `clears in ${Math.ceil(test.left / 60)} min` : '';
@@ -480,11 +469,10 @@
   });
   $('testGame').addEventListener('change', (e) => setTest({ ...test, game: e.target.value || null }));
   $('testRadar').addEventListener('change', (e) => setTest({ ...test, radar: e.target.value || null }));
-  $('testBars').addEventListener('change', (e) => setTest({ ...test, bars: e.target.value || null }));
   const setWx = (k, v) => { const wx = { kind: null, tod: null, ...test.weather, [k]: v || null }; setTest({ ...test, weather: wx.kind || wx.tod ? wx : null }); };
   $('testWx').addEventListener('change', (e) => setWx('kind', e.target.value));
   $('testTod').addEventListener('change', (e) => setWx('tod', e.target.value));
-  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null, game: null, radar: null, bars: null, weather: null }));
+  $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null, game: null, radar: null, weather: null }));
   const pollTest = () => fetch('api/test?b=' + encodeURIComponent(board), { cache: 'no-store' }).then((r) => r.json()).then((t) => { test = t; renderTest(); }).catch(() => {});
   pollTest();
   setInterval(pollTest, 15000);

@@ -275,34 +275,6 @@ async function build() {
     ]) {
       add(`weather celsius ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, tempShadow: true, wx: w } }, [{ screen: 'weather' }], undefined, undefined, name === 'conditions' ? { s3only: true } : {});
     }
-    // Rain bars: rain and snow, falling now (drop or flake) or due, a title
-    // too wide for its mark, every level, and warnings in the title row.
-    const rain = (snow, now, title, h, l) => ({ snow, now, title, h, l });
-    const rainCases = [
-      ['break', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 30 MIN', [5, 4, 0, 0, 6, 8, 7, 5], [2, 1, 0, 0, 2, 2, 2, 2]) }, null],
-      ['downpour', { ...wx, temp: 78, hi: 84, lo: 66, rain: rain(0, 0, 'RAIN IN 25 MIN', [0, 5, 9, 10, 10, 8, 5, 3], [0, 2, 3, 3, 3, 2, 2, 1]) }, null],
-      ['snow in', { ...wx, icon: 'cloudy', temp: 30, hi: 33, lo: 24, rain: rain(1, 0, 'SNOW IN 40 MIN', [0, 0, 4, 6, 7, 9, 8, 6], [0, 0, 1, 2, 2, 3, 2, 2]) }, null],
-      ['snow ends', { ...wx, icon: 'snow', temp: 28, hi: 31, lo: 22, rain: rain(1, 1, 'ENDS IN 40 MIN', [5, 4, 3, 2, 1, 0, 0, 0], [2, 2, 2, 1, 1, 0, 0, 0]) }, null],
-      ['snow now', { ...wx, icon: 'snow', temp: 28, hi: 31, lo: 22, rain: rain(1, 1, 'SNOW NEXT 2 HRS', [5, 7, 9, 10, 9, 8, 7, 5], [2, 2, 3, 3, 3, 3, 2, 2]) }, null],
-      ['no room for the mark', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 105 MIN', [1, 1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0]) }, null],
-      ['tor warning', { ...wx, icon: 'storm', rain: rain(0, 1, 'RAIN NEXT 2 HRS', [6, 7, 8, 9, 8, 7, 6, 5], [2, 2, 2, 3, 2, 2, 2, 2]) }, { kind: 'tor', lvl: 'warning' }],
-      ['svr watch', { ...wx, icon: 'storm', rain: rain(0, 0, 'RAIN IN 45 MIN', [0, 0, 0, 3, 9, 10, 6, 2], [0, 0, 0, 1, 3, 3, 2, 1]) }, { kind: 'svr', lvl: 'watch' }],
-    ];
-    // Both (rain.loops, rain.alt): two frames make a 4.5 s loop (500 ms steps
-    // and the 4 s hold), so 2 loops are 9 s, then 20 s of bars. t: ms since
-    // the loop started.
-    {
-      const ids = ['40100-202610091200', '40100-202610091206'];
-      const frame = new Uint8Array(2048).fill(3);
-      const alt = { ...wx, icon: 'rain', rain: rain(0, 1, 'RAIN NEXT 2 HRS', [6, 7, 8, 9, 8, 7, 6, 5], [2, 2, 2, 3, 2, 2, 2, 2]) };
-      alt.rain.alt = 20;
-      alt.rain.loops = 2;
-      add('weather rain loops then bars', { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: true, frames: ids, ft: [t - 360, t], timeBox: radar.FULL_TIME_BOX, split: false, wx: alt } },
-        [{ screen: 'weather', idx: 1, t: 0 }, { screen: 'weather', idx: 1, t: 8999 }, { screen: 'weather', idx: 1, t: 9000 }, { screen: 'weather', idx: 1, t: 28999 }, { screen: 'weather', idx: 1, t: 29000 }], Object.fromEntries(ids.map((id) => [id, frame])));
-    }
-    for (const [name, w, warn] of rainCases) {
-      add(`weather rain bars ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
-    }
   }
 
   // Radar time off: icon + temperature, WATCH/WARN tag bottom right (tornado warning blinks).
@@ -799,7 +771,7 @@ async function build() {
     const wide = (p) => ({ ...p, cols: 128 });
     const bytes = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Uint8Array.from(v)])) : undefined);
     const WIDE = ['transit morse-2026-10-03-2316.json header=true wx=true', 'chrono clark/lake alerts', 'stale', 'ticker header kept', 'weather screen normal',
-      'weather rain loops then bars', 'radar time off split=true svr warning', 'baseball logos live', 'knob chooser five entries', 'peek slides',
+      'radar time off split=true svr warning', 'baseball logos live', 'knob chooser five entries', 'peek slides',
       'peek every variant', 'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'announce typewriter', 'brightness 50'];
     // The skyline panorama (wide-spec §6): every weather and time of day,
     // the boats crossing all 128 columns, lightning, rain and snow, the
