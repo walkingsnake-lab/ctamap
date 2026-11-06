@@ -2,7 +2,7 @@
 
 Real-time visualization of Chicago CTA train positions using D3.js. Trains animate smoothly along track geometry, with direction inference and phantom jump detection.
 
-This server also backs a **64x32 LED arrivals board** (Adafruit Matrix Portal S3, running the C++ firmware in `firmware-s3/`; an older Matrix Portal M4 runs the frozen CircuitPython firmware in `firmware/`). The board code lives in `server/board/` and has its own rules; see [LED Board](#led-board-serverboard) below.
+This server also backs a **64x32 LED arrivals board** (Adafruit Matrix Portal S3, running the C++ firmware in `firmware-s3/`; an older Matrix Portal M4 runs the frozen CircuitPython firmware in `firmware/`). An S3 can also drive two chained panels, 128x32 (contract "Width"; layouts planned in `docs/board/wide-spec.md`). The board code lives in `server/board/` and has its own rules; see [LED Board](#led-board-serverboard) below.
 
 ## Running the Project
 
@@ -86,7 +86,7 @@ PRs use `claude/<feature>-<id>` branch names. Recent work has focused on directi
 
 ## LED Board (`server/board/`)
 
-The server fetches and formats everything for a 64x32 LED matrix board; the board only draws what it receives. Full design: [`docs/board/design-spec.md`](docs/board/design-spec.md). The API contract (endpoints, `/board/update` JSON, radar frame format) will live in `docs/board/contract.md`; once it exists, it is the source of truth, and changes to the API must update it in the same PR.
+The server fetches and formats everything for a 64x32 LED matrix board (or 128x32, two panels: payloads carry `cols: 128`, and screens without a 128 layout draw at 64 on both panels via `widen` in `draw.js` / `draw.cpp`); the board only draws what it receives. Full design: [`docs/board/design-spec.md`](docs/board/design-spec.md). The API contract (endpoints, `/board/update` JSON, radar frame format) will live in `docs/board/contract.md`; once it exists, it is the source of truth, and changes to the API must update it in the same PR.
 
 ### Boundaries
 - All board code goes in `server/board/`. `server.js` gets exactly one hook: requests whose path starts with `/board/` are handed to the board router. Do not add board logic anywhere else.

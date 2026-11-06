@@ -375,6 +375,43 @@ test('simulator page, PNG frames, and update proxy live under the control path',
   await s.close();
 });
 
+test('width: w=128 on update and select makes a wide board (cols 128); no w is 64', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  // A 64 board's payload is as before: no cols.
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal('cols' in b, false);
+  assert.equal(s.store.get('home').cols, undefined);
+  // Two panels: the same request says so, and its own payload carries it.
+  const v = s.store.get('home').v;
+  b = (await s.req('/board/update?b=home&w=128', h)).body;
+  assert.equal(b.cols, 128);
+  assert.equal(s.store.get('home').cols, 128);
+  assert.equal(s.store.get('home').v, v, 'the width is no settings change');
+  // The simulator, the control page's renders and the board list know it.
+  assert.equal((await s.req('/board/secret123/api/update?b=home')).body.cols, 128);
+  const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=transit&scale=2`);
+  assert.equal(Buffer.from(await png.arrayBuffer()).readUInt32BE(16), 256); // 128 px * scale 2
+  assert.equal((await s.req('/board/secret123/api/boards')).body.find((x) => x.id === 'home').cols, 128);
+  // Select answers for the width too.
+  b = (await s.req('/board/select?b=home&s=weather&w=128', { method: 'POST', ...h })).body;
+  assert.equal(b.cols, 128);
+  // Back on one panel (an M4, or a board set up again): no w.
+  b = (await s.req('/board/update?b=home', h)).body;
+  assert.equal('cols' in b, false);
+  assert.equal(s.store.get('home').cols, undefined);
+  assert.equal('cols' in (await s.req('/board/secret123/api/boards')).body.find((x) => x.id === 'home'), false);
+  // Only 128 is wide; the phone can't set it.
+  await s.req('/board/update?b=home&w=96', h);
+  assert.equal(s.store.get('home').cols, undefined);
+  const J = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await s.req('/board/secret123/api/state?b=home', J('POST', { cols: 128 }))).status, 400);
+  await s.close();
+});
+
 test('simulator: station list and previewing another station without changing the board', async () => {
   const tracker = fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) });
   const s = await serve({ tracker });

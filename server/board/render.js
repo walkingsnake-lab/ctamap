@@ -16,7 +16,7 @@ const draw = create({
   icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL, WORLD, WORLD_PALETTE },
   glyphs,
   tz: TZ,
-  makeFrame: () => new Frame(),
+  makeFrame: (w, h) => new Frame(w, h),
 });
 
 // Everything the simulator needs to run draw.js in the browser.

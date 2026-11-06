@@ -119,30 +119,55 @@ int measure(Font font, const ustr &s) {
 // ---- frame ----
 
 void Frame::clear() {
-  for (int i = 0; i < W * H * 3; i++) px[i] = 0;
+  // A blank 64-wide frame: every screen starts at 64 (render() widens it).
+  for (int i = 0; i < MAX_W * H * 3; i++) px[i] = 0;
+  w = 64;
   floor = true;
   clip_.on = false;
   clips_.clear();
 }
 
 void Frame::set(int x, int y, RGB c) {
-  if (x < 0 || y < 0 || x >= W || y >= H) return;
+  if (x < 0 || y < 0 || x >= w || y >= H) return;
   if (clip_.on && (x < clip_.x0 || y < clip_.y0 || x > clip_.x1 || y > clip_.y1)) return;
-  int i = (y * W + x) * 3;
+  int i = (y * w + x) * 3;
   px[i] = c.r;
   px[i + 1] = c.g;
   px[i + 2] = c.b;
 }
 
 RGB Frame::get(int x, int y) const {
-  int i = (y * W + x) * 3;
+  int i = (y * w + x) * 3;
   return RGB{px[i], px[i + 1], px[i + 2]};
 }
 
-void Frame::fill(int x, int y, int w, int h, RGB c) {
-  for (int j = y; j < y + h; j++)
-    for (int i = x; i < x + w; i++) set(i, j, c);
+void Frame::fill(int x, int y, int fw, int fh, RGB c) {
+  for (int j = y; j < y + fh; j++)
+    for (int i = x; i < x + fw; i++) set(i, j, c);
 }
+
+void widen_px(uint8_t *px, int from_w, int to_w) {
+  // In place, last row first: row y moves from y * from_w to y * to_w, which
+  // is never before where it was, so no row is overwritten before it moves.
+  if (from_w <= 0 || to_w <= from_w) return;
+  for (int y = Frame::H - 1; y >= 0; y--)
+    for (int x = to_w - 1; x >= 0; x--) {
+      int i = (y * to_w + x) * 3, j = (y * from_w + x % from_w) * 3;
+      uint8_t r = px[j], g = px[j + 1], b = px[j + 2];
+      px[i] = r;
+      px[i + 1] = g;
+      px[i + 2] = b;
+    }
+}
+
+void widen(Frame &f, int cols) {
+  if (cols > Frame::MAX_W) cols = Frame::MAX_W;
+  if (f.w >= cols) return;
+  widen_px(f.px, f.w, cols);
+  f.w = cols;
+}
+
+int cols_of(const Value &p) { return p["cols"].is_num() && p["cols"].num() == WIDE ? WIDE : 64; }
 
 void Frame::push_clip(int x0, int y0, int x1, int y1) {
   clips_.push_back(clip_);
@@ -2300,7 +2325,7 @@ static void render_peek(const Value &p, Frame &f, const RenderOpts &o) {
     int sh = peek_shift(pk.slide_y, pk.slide_t);
     if (sh < (pk.slide_y ? 32 : 64)) {
       static Frame from;
-      static uint8_t cur[Frame::W * Frame::H * 3];
+      static uint8_t cur[Frame::MAX_W * Frame::H * 3];
       if (pk.slide_view) draw_peek_view(*pk.slide_view, peek_screen(p, pk.slide_k, pk.slide_vi), from, vo);
       else {
         PeekView fv = peek_view(p, pk.slide_k, pk.slide_vi);
@@ -3172,7 +3197,7 @@ long long message_tick(const Value &m, double t) {
 static void apply_brightness(Frame &f, double b) {
   double k = std::max(0.0, std::min(100.0, b)) / 100;
   if (k == 1) return;
-  for (int i = 0; i < Frame::W * Frame::H * 3; i++) f.px[i] = (uint8_t)jsround(f.px[i] * k);
+  for (size_t i = 0; i < f.bytes(); i++) f.px[i] = (uint8_t)jsround(f.px[i] * k);
 }
 
 // The skyline, crossfading from o.sky_from when a fade is running (draw.js
@@ -3185,7 +3210,7 @@ static void render_skyline_faded(const Value &p, Frame &f, const RenderOpts &o) 
     render_skyline(p, *o.sky_from, a, o.now, o.ms, o.blink, o.sky_bare ? nullptr : o.clouds);
     render_skyline(p, cur, f, o.now, o.ms, o.blink, o.clouds);
     for (int y = 0; y < Frame::H; y++)
-      for (int x = 0; x < Frame::W; x++) f.set(x, y, mix_rgb(a.get(x, y), f.get(x, y), o.sky_k));
+      for (int x = 0; x < f.w; x++) f.set(x, y, mix_rgb(a.get(x, y), f.get(x, y), o.sky_k));
     return;
   }
   render_skyline(p, cur, f, o.now, o.ms, o.blink, o.clouds);
@@ -3275,20 +3300,34 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   g_still = false;
   g_icon_t.reset();
   if (o.roller) o.roller->end();  // the Player calls begin(); render() ends the frame
+  widen(f, cols_of(p));
   if (o.apply_bright) apply_brightness(f, o.bright ? *o.bright : p["bright"].is_null() ? 100 : p["bright"].num());
-  if (o.slide_from) slide_frames(o.slide_from, f, slide_offset(o.slide_t), o.slide_dir);
-  else if (o.fade_from) fade_frames(o.fade_from, f, o.fade_t);
+  if (o.slide_from) slide_frames(o.slide_from, f, slide_offset(o.slide_t, f.w), o.slide_dir, o.from_w);
+  else if (o.fade_from) fade_frames(o.fade_from, f, o.fade_t, o.from_w);
   return f;
 }
 
-int slide_offset(double t) {
-  return (int)jsround(ease_in_out(std::max(0.0, std::min(1.0, t / SCREEN_SLIDE_MS))) * (64 + SLIDE_GAP));
+int slide_offset(double t, int w) {
+  return (int)jsround(ease_in_out(std::max(0.0, std::min(1.0, t / SCREEN_SLIDE_MS))) * (w + SLIDE_GAP));
 }
 
-void slide_frames(const uint8_t *from, Frame &f, int d, int dir) {
-  const int w = Frame::W, h = Frame::H;
-  uint8_t cur[Frame::W * Frame::H * 3];
-  memcpy(cur, f.px, sizeof cur);
+// The `from` pixels as wide as f: a narrower one (a 64-wide status screen
+// on a 128 board) widened as the board showed it. The Board widens its own
+// copy first (app.cpp), so on the board this never allocates.
+static const uint8_t *from_px(const uint8_t *from, int from_w, const Frame &f) {
+  if (from_w >= f.w) return from;
+  static std::vector<uint8_t> buf;
+  buf.assign(f.bytes(), 0);
+  memcpy(buf.data(), from, (size_t)from_w * Frame::H * 3);
+  widen_px(buf.data(), from_w, f.w);
+  return buf.data();
+}
+
+void slide_frames(const uint8_t *from, Frame &f, int d, int dir, int from_w) {
+  from = from_px(from, from_w, f);
+  const int w = f.w, h = Frame::H;
+  static uint8_t cur[Frame::MAX_W * Frame::H * 3];  // not on the stack: the loop task's is small
+  memcpy(cur, f.px, f.bytes());
   for (int y = 0; y < h; y++)
     for (int x = 0; x < w; x++) {
       // Which frame, and which of its columns, lands on column x (none: the gap).
@@ -3309,11 +3348,12 @@ void slide_frames(const uint8_t *from, Frame &f, int d, int dir) {
     }
 }
 
-void fade_frames(const uint8_t *from, Frame &f, double t) {
+void fade_frames(const uint8_t *from, Frame &f, double t, int from_w) {
+  from = from_px(from, from_w, f);
   bool out = t < SCREEN_FADE_OUT_MS;
   double k = out ? 1 - std::max(0.0, t) / SCREEN_FADE_OUT_MS : std::min(1.0, (t - SCREEN_FADE_OUT_MS) / SCREEN_FADE_IN_MS);
   const uint8_t *src = out ? from : f.px;
-  for (int i = 0; i < Frame::W * Frame::H * 3; i++) f.px[i] = (uint8_t)jsround(src[i] * k);
+  for (size_t i = 0; i < f.bytes(); i++) f.px[i] = (uint8_t)jsround(src[i] * k);
 }
 
 // ---- status screens (firmware/boardlib/status.py) ----

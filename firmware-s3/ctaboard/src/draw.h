@@ -56,12 +56,17 @@ enum Font { FONT_5X7 = 0, FONT_CLOCK = 1, FONT_D13 = 2, FONT_D17 = 3, FONT_SMALL
 
 // ---- frame ----
 
-// 64x32 RGB framebuffer. The board draws into one and copies it to the panel.
+// RGB framebuffer, w x 32: 64 wide, or 128 for two chained panels (payload
+// `cols`). Rows are w pixels apart in px. The board draws into one and
+// copies it to the panel. Screens draw at 64; render() widens the frame
+// for a 128 payload (widen()).
 class Frame {
  public:
-  static const int W = 64;
+  static const int MAX_W = 128;
   static const int H = 32;
-  uint8_t px[W * H * 3];
+  int w = 64;
+  uint8_t px[MAX_W * H * 3];
+  size_t bytes() const { return (size_t)w * H * 3; }
   // The panel's dim-color floor (color.h): false lets colors too dark for the
   // panel go black instead of lifting them, and has the panel use its
   // full-depth night curve at every brightness (the skyline face). Not a
@@ -88,6 +93,16 @@ class Frame {
 };
 
 int measure(Font font, const ustr &s);
+
+// ---- width (draw.js WIDE, colsOf, widenPx) ----
+const int WIDE = 128;
+// The payload's width: 128 for `cols` 128, else 64.
+int cols_of(const Value &p);
+// Repeats each row of a frame from_w wide across to_w columns, in place
+// (px must hold to_w x 32).
+void widen_px(uint8_t *px, int from_w, int to_w);
+// f as the board shows it on a panel cols wide: a 64-wide screen on both panels.
+void widen(Frame &f, int cols);
 
 // ---- colors ----
 
@@ -290,6 +305,8 @@ struct RenderOpts {
   // pixels and ms into the fade. Used only without a slide.
   const uint8_t *fade_from = nullptr;
   double fade_t = 0;
+  // How wide slide_from / fade_from is (64, or 128 on a wide board).
+  int from_w = 64;
   // The icon clock (draw.js opts.iconT), ms on the board's clock: the overnight owl.
   std::optional<double> icon_t;
 };
@@ -298,15 +315,17 @@ struct RenderOpts {
 // sideways, SLIDE_GAP unlit columns between them.
 const double SCREEN_SLIDE_MS = 450;
 const int SLIDE_GAP = 4;
-int slide_offset(double t);  // px the new screen has come in, 0..64 + SLIDE_GAP
+// px the new screen has come in across a panel w wide, 0..w + SLIDE_GAP
+int slide_offset(double t, int w = 64);
 // Overnight owl: its frame (assets::OWL_FRAMES) at icon-clock ms t; 0 without one.
 int owl_frame(std::optional<double> t);
-void slide_frames(const uint8_t *from, Frame &f, int d, int dir);
+// from: the old frame's pixels, from_w wide (narrower than f: widened first).
+void slide_frames(const uint8_t *from, Frame &f, int d, int dir, int from_w = 64);
 // Screen change from the phone or the auto rotation: the old frame fades to
 // black, then the new one fades in (draw.js fadeFrames).
 const double SCREEN_FADE_OUT_MS = 125, SCREEN_FADE_IN_MS = 125;
 const double SCREEN_FADE_MS = SCREEN_FADE_OUT_MS + SCREEN_FADE_IN_MS;
-void fade_frames(const uint8_t *from, Frame &f, double t);
+void fade_frames(const uint8_t *from, Frame &f, double t, int from_w = 64);
 
 Frame &render(const Value &p, Frame &f, const RenderOpts &o);
 

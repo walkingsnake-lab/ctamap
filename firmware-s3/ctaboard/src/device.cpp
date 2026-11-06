@@ -60,6 +60,7 @@ Settings settings_from(const config::Config &c) {
   s.clk_phase = c.clk_phase;
   s.double_buffer = c.double_buffer;
   s.color_order = c.color_order;
+  s.cols = c.cols == 128 ? 128 : 64;
   return s;
 }
 
@@ -84,7 +85,7 @@ bool nvs_put(const char *key, const std::string &value) {
 Panel::Panel(const Settings &s)
     : rotation_(s.rotation), pipe_(s.curve), scene_pipe_(s.night_curve), day_curve_(s.curve), night_curve_(s.night_curve), hw_dim_(s.hw_dim),
       clk_phase_(s.clk_phase), double_buffer_(s.double_buffer), color_order_(s.color_order.empty() ? "RGB" : s.color_order),
-      panels_(s.panels == 2 ? 2 : 1) {}
+      panels_(s.cols == 128 ? 2 : 1) {}
 
 void Panel::set_curves(int day, int night) {
   day_curve_ = day;
@@ -206,18 +207,22 @@ void Panel::show(const std::function<void(draw::Frame &)> &fn) {
   int64_t t0 = esp_timer_get_time();
   frame_.clear();
   fn(frame_);
-  const uint8_t *px = frame_.px;
   const bool flip = rotation_ == 180;
+  // The panels' columns from the frame's: a frame as wide as the chain
+  // fills it (render() widens 64-wide screens for a 128 payload); a
+  // narrower one, a status screen, shows on each panel. Upside down, the
+  // whole chain turns: column 0 lands at the far end.
+  const int W = panels_ * 64, fw = frame_.w > 0 ? frame_.w : 64;
   for (int y = 0; y < 32; y++) {
     int dy = flip ? 31 - y : y;
-    for (int x = 0; x < 64; x++, px += 3) {
+    for (int x = 0; x < W; x++) {
+      const uint8_t *px = frame_.px + (y * fw + x % fw) * 3;
       uint8_t r = px[0], g = px[1], b = px[2];
       // The chosen curve, compensated for the driver's own (color.h). The
       // skyline (floor = false) always takes the night curve: the day one's
       // 565 / 6-bit truncation flattens its dark gradients into a few colors.
       (frame_.floor ? pipe_ : scene_pipe_).map(r, g, b, frame_.floor);
-      // Every panel gets the same picture (a second panel mirrors the first, for now).
-      for (int p = 0; p < panels_; p++) dma_->drawPixelRGB888(p * 64 + (flip ? 63 - x : x), dy, r, g, b);
+      dma_->drawPixelRGB888(flip ? W - 1 - x : x, dy, r, g, b);
     }
   }
   if (double_buffer_) {
@@ -498,8 +503,9 @@ bool WifiNet::version(const std::string &health, json::Value &out, std::string &
 
 bool WifiNet::update(bool boot, const std::string &screen, json::Value &out, std::string &err) {
   // hk on every update: the server decides the clock screen per request (contract).
+  // w=128 on a board of two panels (contract "Width"): the server draws for it.
   return get_json("/board/update?b=" + s_.board_id + (boot ? "&boot=1" : "") + (screen.empty() ? "" : "&s=" + screen) +
-                      "&hk=" + app::CAPS,
+                      "&hk=" + app::CAPS + (s_.cols == 128 ? "&w=128" : ""),
                   true, out, err);
 }
 
@@ -520,7 +526,8 @@ bool WifiNet::logo(const std::string &id, std::vector<uint8_t> &out, std::string
 bool WifiNet::select(const std::string &category, const std::string &variant, json::Value &out, std::string &err) {
   // Category and variant ids are plain lowercase words (contract: knob.ring, knob.vars).
   std::string v = variant.empty() ? "" : "&v=" + variant;
-  return get_json("/board/select?b=" + s_.board_id + "&s=" + category + v + "&hk=" + app::CAPS, true, out, err, true);
+  return get_json("/board/select?b=" + s_.board_id + "&s=" + category + v + "&hk=" + app::CAPS + (s_.cols == 128 ? "&w=128" : ""),
+                  true, out, err, true);
 }
 
 // ---- OTA ----

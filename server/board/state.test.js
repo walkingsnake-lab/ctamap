@@ -346,6 +346,33 @@ test('boards: create copies or defaults, register copies home, remove keeps one'
   assert.throws(() => again.remove('home'), /only board/);
 });
 
+test('width: setCols keeps 128 as cols (v stays), and copies, resets and new boards keep their own', () => {
+  const dir = tmpDir();
+  const store = createStore({ dir, log: quiet });
+  const v = store.get('home').v;
+  store.setCols('home', 128);
+  assert.equal(store.get('home').cols, 128);
+  assert.equal(store.get('home').v, v);
+  assert.equal(createStore({ dir, log: quiet }).get('home').cols, 128, 'saved');
+  // A new board, copied from a wide one, reports its own width.
+  assert.equal('cols' in store.create('desk', { from: 'home' }), false);
+  assert.equal('cols' in store.register('office'), false);
+  // Copying settings onto a board keeps its panels, both ways.
+  store.copy('desk', 'home');
+  assert.equal('cols' in store.get('desk'), false);
+  store.setCols('desk', 128);
+  store.setCols('home', 64);
+  store.copy('desk', 'home');
+  assert.equal(store.get('desk').cols, 128);
+  // A new owner: the same panels.
+  store.reset('desk');
+  assert.equal(store.get('desk').cols, 128);
+  // Anything but 128 is one panel; unknown boards get null.
+  store.setCols('desk', 96);
+  assert.equal('cols' in store.get('desk'), false);
+  assert.equal(store.setCols('nope', 128), null);
+});
+
 test('an older board without a label loads with an empty one', () => {
   const dir = tmpDir();
   fs.writeFileSync(path.join(dir, 'board-state.json'), JSON.stringify({ boards: { home: { v: 3, station: { mapid: '40100', name: 'MORSE' }, rows: [], screen: 'auto', bright: 'auto' } } }));

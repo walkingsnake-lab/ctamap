@@ -53,17 +53,18 @@ static draw::Rolls rolls_of(const Value &v) {
 static std::string diff(const std::string &name, const std::string &want_b64, const Frame &f, size_t limit = 6) {
   std::vector<uint8_t> want = b64(want_b64);
   std::vector<std::string> bad;
-  for (size_t i = 0; i + 2 < want.size() && i + 2 < sizeof f.px; i += 3) {
+  for (size_t i = 0; i + 2 < want.size() && i + 2 < f.bytes(); i += 3) {
     if (want[i] != f.px[i] || want[i + 1] != f.px[i + 1] || want[i + 2] != f.px[i + 2]) {
       size_t p = i / 3;
       char buf[120];
-      snprintf(buf, sizeof buf, "(%zu,%zu) want (%d, %d, %d) got (%d, %d, %d)", p % 64, p / 64, want[i], want[i + 1],
+      snprintf(buf, sizeof buf, "(%zu,%zu) want (%d, %d, %d) got (%d, %d, %d)", p % f.w, p / f.w, want[i], want[i + 1],
                want[i + 2], f.px[i], f.px[i + 1], f.px[i + 2]);
       bad.push_back(buf);
     }
   }
-  if (bad.empty() && want.size() == sizeof f.px) return "";
-  std::string out = name + ": " + std::to_string(bad.size()) + " px differ: ";
+  if (bad.empty() && want.size() == f.bytes()) return "";
+  std::string out = name + ": " + std::to_string(bad.size()) + " px differ" +
+                    (want.size() != f.bytes() ? " (" + std::to_string(want.size() / 96) + " wide, got " + std::to_string(f.w) + ")" : "") + ": ";
   for (size_t i = 0; i < bad.size() && i < limit; i++) out += (i ? "; " : "") + bad[i];
   return out;
 }
@@ -145,12 +146,14 @@ int main(int argc, char **argv) {
           ro.slide_from = slide_from.data();
           ro.slide_t = o["slide"]["t"].num(0);
           ro.slide_dir = o["slide"]["dir"].is_null() ? 1 : (int)o["slide"]["dir"].num();
+          ro.from_w = (int)(slide_from.size() / (Frame::H * 3));
         }
         std::vector<uint8_t> fade_from;
         if (!o["fade"].is_null()) {
           for (const Value &v : o["fade"]["from"].a) fade_from.push_back((uint8_t)v.num());
           ro.fade_from = fade_from.data();
           ro.fade_t = o["fade"]["t"].num(0);
+          ro.from_w = (int)(fade_from.size() / (Frame::H * 3));
         }
         Frame f;
         draw::render(s["payload"], f, ro);

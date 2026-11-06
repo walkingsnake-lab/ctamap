@@ -32,10 +32,10 @@
   // The firmware's defaults (ctaboard.ino), tuned for the P3 panel the boards use.
   const PANEL_DEFAULTS = {
     rotation: 0, curve: 2, night_curve: 3, hw_dim: true, status_led: 2, tls_verify: true,
-    clk_phase: false, double_buffer: true, color_order: 'RGB', knob_reverse: false,
+    clk_phase: false, double_buffer: true, color_order: 'RGB', knob_reverse: false, cols: 64,
   };
   const FIELDS = ['networks', 'url', 'board_id', 'token', 'rotation', 'curve', 'night_curve', 'hw_dim', 'status_led',
-    'tls_verify', 'clk_phase', 'double_buffer', 'color_order', 'knob_reverse', 'setup_name', 'setup_pass'];
+    'tls_verify', 'clk_phase', 'double_buffer', 'color_order', 'knob_reverse', 'cols', 'setup_name', 'setup_pass'];
 
   const DEFAULT_URL = 'https://ctamap.fly.dev';
   function boardConfig({ id, token, url = DEFAULT_URL, networks = [], setupName = '', setupPass = '', panel = {} }) {
