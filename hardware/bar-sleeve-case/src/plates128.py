@@ -4,9 +4,14 @@ tray B: tray + window). Built from the committed STLs, so run bar128.py first wh
 
     python3 plates128.py [stl dir, default ../stl] [out dir, default ../stl/p25-128x32/plates]
 
-Plain 3MF (core spec): Bambu Studio opens it as geometry (it says the file isn't from Bambu Lab); assign each part's
-filament and the plate's process settings as the build sheet's "Print plates" table says. Also writes a top view of
-every plate (plates.png) to check the layout. Single-part extras (knob, collar, case cleats) print from their own STLs."""
+Bambu Studio's own project layout (objects in 3D/Objects/, Metadata/model_settings.config) WITHOUT project settings, so
+opening one keeps the printer, filament and process presets already selected and takes from the file only: the
+geometry, the plate's name, each part's filament slot (1: the plate's main filament; 2: the diffuser grid, tray B's
+window) and per-object overrides (SHELL, TRAY, DIFFUSER below: walls, brim, seam, infill, elephant foot, layer
+height). Bambu Studio notes that it loaded "geometry data only": that refers to the presets it didn't find. A generic
+core-spec 3MF (the first version of this) makes it fall back to its foreign-3MF path, which can add filaments and
+reset presets. Format: BambuStudio src/libslic3r/Format/bbs_3mf.cpp. Also writes a top view of every plate
+(plates.png) to check the layout. Single-part extras (knob, collar, case cleats) print from their own STLs."""
 import os
 import sys
 import zipfile
@@ -22,25 +27,38 @@ BED = 256.0
 P = 'p25-128x32/'
 C = P + 'coupons/'
 
-# plate: (file stem, title, [objects]); object: (name, [(part name, stl, rotate_z deg)], (x0, y0) of its footprint's
-# lower-left corner on the bed). Parts of one object share a frame (as exported) and keep it.
+# per-object overrides, Bambu Studio keys and value strings (README "Print settings"); only per-object options, none of
+# them per-nozzle (print_options_with_variant). Plate-wide ones (first layer height, nozzle, Z hop, bed) are the build
+# sheet's to set.
+SHELL = {'layer_height': '0.2', 'wall_loops': '4', 'elefant_foot_compensation': '0.15', 'brim_type': 'outer_only',
+         'brim_width': '5', 'brim_object_gap': '0.1', 'seam_position': 'back', 'seam_slope_type': 'external'}
+TRAY = {'layer_height': '0.24', 'wall_loops': '4', 'top_shell_layers': '4', 'bottom_shell_layers': '4',
+        'sparse_infill_density': '15%', 'sparse_infill_pattern': 'gyroid', 'bottom_surface_pattern': 'monotonic',
+        'elefant_foot_compensation': '0.15'}
+DIFFUSER = {'bottom_surface_pattern': 'monotonic', 'elefant_foot_compensation': '0'}
+SLOT2 = {'black grid', 'window (translucent)'}             # parts on filament slot 2; everything else slot 1
+
+# plate: (file stem, title, settings, [objects]); object: (name, [(part name, stl, rotate_z deg)], (x0, y0) of its
+# footprint's lower-left corner on the bed). Parts of one object share a frame (as exported) and keep it.
+# The shell halves turn 180 deg: back rim down puts the case's top at +y, and the seam ('back') goes to +y, so turned
+# it lands on the underside.
 PLATES = [
-    ('plate-0a-test-seam-lap', 'Test: seam lap (PLA Wood)', [
+    ('plate-0a-test-seam-lap', 'Test: seam lap (PLA Wood)', SHELL, [
         ('seam lap, half A', [('seam A', C + 'coupon-128-seam-A-walnut.stl', 0)], (98.0, 125.6)),
         ('seam lap, half B', [('seam B', C + 'coupon-128-seam-B-walnut.stl', 0)], (146.8, 125.6)),
     ]),
-    ('plate-0b-test-diffuser-joint', 'Test: diffuser joint (0.2 nozzle, white + black)', [
+    ('plate-0b-test-diffuser-joint', 'Test: diffuser joint (0.2 nozzle, white + black)', DIFFUSER, [
         ('diffuser joint coupon', [('white face', C + 'coupon-128-diffuser-joint-white.stl', 0),
                                    ('black grid', C + 'coupon-128-diffuser-joint-black.stl', 0)], (109.5, 95.7)),
     ]),
-    ('plate-0c-test-splice', 'Test: splice plate holes (PETG)', [
+    ('plate-0c-test-splice', 'Test: splice plate holes (PETG)', TRAY, [
         ('splice plate coupon', [('splice coupon', C + 'coupon-128-splice-plates.stl', 0)], (104.5, 104.0)),
     ]),
-    ('plate-1-shell', 'Shell halves (PLA Wood, back rim down, 5 mm brim)', [
-        ('shell half A (left)', [('shell A', P + 'bar128-shell-A-walnut-backdown.stl', 0)], (39.4, 135.5)),
-        ('shell half B (right)', [('shell B', P + 'bar128-shell-B-walnut-backdown.stl', 0)], (41.5, 25.0)),
+    ('plate-1-shell', 'Shell halves (PLA Wood, back rim down, 5 mm brim)', SHELL, [
+        ('shell half A (left)', [('shell A', P + 'bar128-shell-A-walnut-backdown.stl', 180)], (39.4, 135.5)),
+        ('shell half B (right)', [('shell B', P + 'bar128-shell-B-walnut-backdown.stl', 180)], (41.5, 25.0)),
     ]),
-    ('plate-2-trays', 'Trays + splice plates + Boot key + sensor sled (black PETG; tray B window translucent PETG)', [
+    ('plate-2-trays', 'Trays + splice plates + Boot key + sensor sled (black PETG; tray B window translucent PETG)', TRAY, [
         ('tray A (left)', [('tray A', P + 'bar128-tray-A.stl', 0)], (10.0, 126.0)),
         ('tray B (right, S3)', [('tray B', P + 'bar128-tray-B.stl', 0),
                                 ('window (translucent)', P + 'bar128-tray-B-window.stl', 0)], (10.0, 24.0)),
@@ -48,13 +66,13 @@ PLATES = [
         ('Boot key', [('Boot key', 'bar-boot-key.stl', 0)], (218.0, 140.0)),
         ('sensor sled (optional)', [('sensor sled', 'v5-drawer-p25/bar-sensor-sled.stl', 0)], (218.0, 196.0)),
     ]),
-    ('plate-3-diffusers', 'Diffusers (0.2 nozzle, white face + black grid, face down)', [
+    ('plate-3-diffusers', 'Diffusers (0.2 nozzle, white face + black grid, face down)', DIFFUSER, [
         ('diffuser A (left)', [('white face', P + 'bar128-diffuser-A-white.stl', 0),
                                ('black grid', P + 'bar128-diffuser-A-black.stl', 0)], (43.0, 140.0)),
         ('diffuser B (right)', [('white face', P + 'bar128-diffuser-B-white.stl', 0),
                                 ('black grid', P + 'bar128-diffuser-B-black.stl', 0)], (43.0, 27.0)),
     ]),
-    ('plate-4-wall-cleat', 'Wall cleat, optional (PETG, wall face down, at 45 deg: 293 mm long)', [
+    ('plate-4-wall-cleat', 'Wall cleat, optional (PETG, wall face down, at 45 deg: 293 mm long)', TRAY, [
         ('wall cleat', [('wall cleat', P + 'bar128-cleat-wall.stl', 45)], (12.2, 12.2)),
     ]),
 ]
@@ -81,45 +99,84 @@ def place(parts, at):
     return out
 
 
-def mesh_xml(oid, name, m):
+NS = ('xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021" '
+      'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" requiredextensions="p"')
+APP = 'BambuStudio-02.00.02.01'   # a released version older than any that knows the X2D: a newer one would raise a dialog
+
+
+def uuid(kind, n):
+    return f'{kind:08x}-{n:04x}-4000-8000-{n:012x}'
+
+
+def mesh_xml(oid, m):
     v = np.asarray(m.vertices)
     f = np.asarray(m.faces)
     vs = ''.join(f'<vertex x="{a:.4f}" y="{b:.4f}" z="{c:.4f}"/>' for a, b, c in v)
     ts = ''.join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in f)
-    return (f'<object id="{oid}" name="{escape(name)}" type="model"><mesh><vertices>{vs}</vertices>'
+    return (f'<object id="{oid}" p:UUID="{uuid(2, oid)}" type="model"><mesh><vertices>{vs}</vertices>'
             f'<triangles>{ts}</triangles></mesh></object>')
 
 
-def write_3mf(path, title, objects):
-    """objects: [(name, [(part name, mesh in bed coords)])]. A multi-part object is a parent with components."""
-    res, build, oid = [], [], 1
-    for name, parts in objects:
-        if len(parts) == 1:
-            res.append(mesh_xml(oid, name, parts[0][1]))
-            build.append(f'<item objectid="{oid}"/>')
-            oid += 1
-            continue
-        ids = []
+def write_3mf(path, title, settings, objects):
+    """objects: [(name, [(part name, mesh in bed coords)])] -> a Bambu Studio project 3MF without project settings.
+    Each object: its parts (mesh objects, object frame: footprint centred on the origin, bottom at z 0) in
+    3D/Objects/object_<n>.model, a parent with one component per part in 3D/3dmodel.model, a build item placing it on
+    the bed; names, filament slots and `settings` in Metadata/model_settings.config, with the plate."""
+    files, comps, items, cfg, inst = {}, [], [], [], []
+    oid = 1
+    for k, (name, parts) in enumerate(objects, 1):
+        lo = np.min([m.bounds[0] for _, m in parts], axis=0)
+        hi = np.max([m.bounds[1] for _, m in parts], axis=0)
+        c = np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, lo[2]])
+        sub, pids, pcfg = f'3D/Objects/object_{k}.model', [], []
+        body = []
         for pn, m in parts:
-            res.append(mesh_xml(oid, pn, m))
-            ids.append(oid)
+            m = m.copy()
+            m.apply_translation(-c)
+            body.append(mesh_xml(oid, m))
+            pids.append(oid)
+            slot = 2 if pn in SLOT2 else 1
+            pcfg.append(f'    <part id="{oid}" subtype="normal_part">\n      <metadata key="name" value="{escape(pn)}"/>\n'
+                        f'      <metadata key="extruder" value="{slot}"/>\n'
+                        f'      <mesh_stat face_count="{len(m.faces)}" edges_fixed="0" degenerate_facets="0" facets_removed="0" '
+                        f'facets_reversed="0" backwards_edges="0"/>\n    </part>\n')
             oid += 1
-        comps = ''.join(f'<component objectid="{i}"/>' for i in ids)
-        res.append(f'<object id="{oid}" name="{escape(name)}" type="model"><components>{comps}</components></object>')
-        build.append(f'<item objectid="{oid}"/>')
+        files[sub] = (f'<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" {NS}>'
+                      f'<metadata name="BambuStudio:3mfVersion">1</metadata><resources>{"".join(body)}</resources><build/></model>')
+        cs = ''.join(f'<component p:path="/{sub}" objectid="{i}" p:UUID="{uuid(3, i)}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>'
+                     for i in pids)
+        comps.append(f'<object id="{oid}" p:UUID="{uuid(1, oid)}" type="model"><components>{cs}</components></object>')
+        items.append(f'<item objectid="{oid}" p:UUID="{uuid(4, oid)}" transform="1 0 0 0 1 0 0 0 1 {c[0]:.4f} {c[1]:.4f} {c[2]:.4f}"/>')
+        first = 2 if parts[0][0] in SLOT2 else 1
+        meta = ''.join(f'    <metadata key="{key}" value="{escape(val)}"/>\n' for key, val in settings.items())
+        cfg.append(f'  <object id="{oid}">\n    <metadata key="name" value="{escape(name)}"/>\n'
+                   f'    <metadata key="extruder" value="{first}"/>\n{meta}{"".join(pcfg)}  </object>\n')
+        inst.append(f'    <model_instance>\n      <metadata key="object_id" value="{oid}"/>\n'
+                    f'      <metadata key="instance_id" value="0"/>\n      <metadata key="identify_id" value="{100 + k}"/>\n'
+                    f'    </model_instance>\n')
         oid += 1
-    model = ('<?xml version="1.0" encoding="UTF-8"?>\n'
-             '<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
-             f'<metadata name="Title">{escape(title)}</metadata><metadata name="Application">ctamap plates128.py</metadata>'
-             f'<resources>{"".join(res)}</resources><build>{"".join(build)}</build></model>')
+    model = (f'<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" {NS}>\n'
+             f' <metadata name="Application">{APP}</metadata>\n <metadata name="BambuStudio:3mfVersion">1</metadata>\n'
+             f' <metadata name="Title">{escape(title)}</metadata>\n'
+             f' <resources>{"".join(comps)}</resources>\n <build p:UUID="{uuid(5, 0)}">{"".join(items)}</build>\n</model>\n')
+    settings_xml = ('<?xml version="1.0" encoding="UTF-8"?>\n<config>\n' + ''.join(cfg) +
+                    '  <plate>\n    <metadata key="plater_id" value="1"/>\n'
+                    f'    <metadata key="plater_name" value="{escape(title)}"/>\n    <metadata key="locked" value="false"/>\n'
+                    + ''.join(inst) + '  </plate>\n</config>\n')
+    rels_model = ('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                  + ''.join(f'<Relationship Target="/{f}" Id="rel-{n}" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>'
+                            for n, f in enumerate(files, 1)) + '</Relationships>')
     ctypes = ('<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
               '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-              '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>')
+              '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>'
+              '<Default Extension="config" ContentType="text/xml"/></Types>')
     rels = ('<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            '<Relationship Target="/3D/3dmodel.model" Id="rel0" '
+            '<Relationship Target="/3D/3dmodel.model" Id="rel-1" '
             'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>')
+    entries = [('[Content_Types].xml', ctypes), ('_rels/.rels', rels), ('3D/3dmodel.model', model),
+               ('3D/_rels/3dmodel.model.rels', rels_model)] + list(files.items()) + [('Metadata/model_settings.config', settings_xml)]
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:      # fixed timestamps: a plate only changes with its parts
-        for name, data in (('[Content_Types].xml', ctypes), ('_rels/.rels', rels), ('3D/3dmodel.model', model)):
+        for name, data in entries:
             z.writestr(zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0)), data, compress_type=zipfile.ZIP_DEFLATED)
 
 
@@ -145,10 +202,10 @@ def check(stem, objects):
 def main():
     os.makedirs(OUT, exist_ok=True)
     views = []
-    for stem, title, objs in PLATES:
+    for stem, title, settings, objs in PLATES:
         placed = [(name, place([(pn, load(f, r)) for pn, f, r in parts], at)) for name, parts, at in objs]
         boxes = check(stem, placed)
-        write_3mf(os.path.join(OUT, stem + '.3mf'), title, placed)
+        write_3mf(os.path.join(OUT, stem + '.3mf'), title, settings, placed)
         views.append((stem, title, placed))
         h = max(hi[2] for _, _, hi in boxes)
         print(f'{stem + ".3mf":34s} {len(placed)} objects, tallest {h:5.1f} mm   ' +

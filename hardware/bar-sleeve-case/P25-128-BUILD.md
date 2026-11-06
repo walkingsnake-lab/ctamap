@@ -99,19 +99,32 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
 
 ## Print plates (`stl/p25-128x32/plates/`)
 One 3MF per plate, laid out on the X2D's 256 x 256 bed in print orientation ([top views](stl/p25-128x32/plates/plates.png)).
-Each two-colour part is one object with its parts in register: in Bambu Studio set each part's filament in the object
-list, then the plate's process settings. They're plain 3MF: Bambu Studio may say the file isn't from Bambu Lab and load the
-geometry only, which is all they carry. If it moves the parts, Arrange fits each plate again. Made by `src/plates128.py` from the committed STLs, so after rebuilding the parts run it again.
+Each two-colour part is one object with its parts in register. They're Bambu Studio project files without presets:
+opening one keeps the printer, filament and process presets you have selected (pick the nozzle and filaments first),
+and takes from the file the plate's name, each part's filament slot and the per-object settings below (object list,
+the object's settings icon). Bambu Studio notes it loaded "geometry data only": that means no presets came with it.
+Made by `src/plates128.py` from the committed STLs, so after rebuilding the parts run it again.
 
-| Plate | Nozzle | Filament | Settings |
-|---|---|---|---|
-| `plate-0a-test-seam-lap` | 0.4 | PLA Wood | as the shell (below); 5 mm brim (each piece stands 34 mm on a 5 mm edge) |
-| `plate-0b-test-diffuser-joint` | 0.2 | white face: white; black grid: black | as the diffuser (below) |
-| `plate-0c-test-splice` | 0.4 | black PETG | as the tray |
-| `plate-1-shell` | 0.4 | PLA Wood | shell settings, 5 mm brim, seam on a back corner away from the joint |
-| `plate-2-trays` | 0.4 | black PETG; tray B's window part translucent PETG | tray settings (splice plates, Boot key and sensor sled ride along) |
-| `plate-3-diffusers` | 0.2 | white face: white; black grid: black | diffuser settings, 0.14 first layer (the face) |
-| `plate-4-wall-cleat` (optional) | 0.4 | PETG | as the README's cleats; laid at 45° (293 mm) |
+Filament slots: **1** = the plate's main filament; **2** = the diffusers' black grid and tray B's window.
+
+| Plate | Nozzle | Slot 1 / slot 2 | In the file (per object) | Set yourself (plate-wide) |
+|---|---|---|---|---|
+| `plate-0a-test-seam-lap` | 0.4 | PLA Wood | shell | shell |
+| `plate-0b-test-diffuser-joint` | 0.2 | white / black | diffuser | diffuser |
+| `plate-0c-test-splice` | 0.4 | black PETG | tray | tray |
+| `plate-1-shell` | 0.4 | PLA Wood | shell | shell |
+| `plate-2-trays` | 0.4 | black PETG / translucent PETG | tray | tray |
+| `plate-3-diffusers` | 0.2 | white / black | diffuser | diffuser |
+| `plate-4-wall-cleat` (optional) | 0.4 | PETG | tray | tray; laid at 45° (293 mm) |
+
+- **Shell**, in the file: 0.2 mm layers, 4 walls, elephant foot 0.15, outer brim 5 mm with a 0.1 mm gap, seam
+  position Back with a scarf seam (Contour). The halves lie turned so Back is the case's underside: check in Preview
+  that the seam runs along the bottom face. Yourself: Bambu PLA Wood (dried, flow-calibrated), variable layer height
+  (Adaptive, then Smooth), Z hop 0.6 mm, plate washed then glue stick, bed 55-60 °C, door closed.
+- **Tray**, in the file: 0.24 mm layers, 4 walls, 4 top + 4 bottom layers, 15% gyroid, monotonic bottom surface,
+  elephant foot 0.15. Yourself: dried PETG, textured PEI, Z hop.
+- **Diffuser**, in the file: monotonic bottom surface, elephant foot 0. Yourself: 0.2 nozzle, first layer height 0.14
+  (the face), first layer speed 30 mm/s.
 
 Not on a plate (print from their own STLs, as the README): knob, encoder collar, case cleats (optional, two).
 
@@ -125,7 +138,8 @@ Not on a plate (print from their own STLs, as the README): knob, encoder collar,
 ## Print settings
 As the README ("Print settings") for the shell, tray and diffuser. Differences:
 - **Shell halves:** both on one plate (177 x 207), so the walnut matches. 5 mm brim is fine (no diagonal layout). Seam: on
-  a back corner of each half, away from the joint.
+  the underside (the plate turns each half so the case's bottom faces the back of the bed; seam position Back), not the
+  single bar's turned-to-a-corner layout, which wouldn't fit two halves.
 - **Diffuser:** the P2.5's: 0.2 nozzle, 0.14 first layer (the face, one layer).
 
 ## Hardware
