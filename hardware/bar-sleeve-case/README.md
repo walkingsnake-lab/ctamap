@@ -12,7 +12,7 @@ back plate) is archived in [ARCHIVE-v4.md](ARCHIVE-v4.md).
 - No grilles in the shell: the tray's back has two louver bands (intake along the bottom, exhaust along the top), slots
   rising 45° inward so nothing inside shows from eye level.
 - The tray is boxed in by the sleeve (crush ribs on its outside take up the clearance), so nothing latches at the top; two
-  screws from below stop it sliding out (P2.5 shells: their counterbores are square, sides straight front to back as
+  screws from below stop it sliding out (P2.5 shells: their counterbores and clearance holes are square, sides straight front to back as
   printed, because a round one cut sideways makes Bambu Studio print ramps across it). Everything screws into printed PETG: no nuts, no soldering, no heat-set inserts
   (the bosses can take inserts later: [Heat-set inserts](#heat-set-inserts-later)).
 
