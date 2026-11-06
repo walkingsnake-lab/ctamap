@@ -618,6 +618,12 @@
         <label class="c sel"><span>Firmware</span><span class="v"></span><span data-icon="chev"></span><select id="sBuild"></select></label>
       </div>
       <p class="ft" id="sWhoHint"></p>
+      <p class="sh">Panel</p>
+      <div class="grp">
+        <div class="c" style="min-height:48px"><span>Mounted</span><div class="seg fit" id="sRot"><button data-v="0" aria-pressed="true">Upright</button><button data-v="180">Upside down</button></div></div>
+        <label class="c sel"><span>Color order</span><span class="v"></span><span data-icon="chev"></span><select id="sColors"></select></label>
+      </div>
+      <p class="ft">Upside down for the bar sleeve cases. Color order: RGB, unless colors look wrong; then pick what red, green and blue showed as (green and blue swapped: RBG). Changing either later means flashing again.</p>
       <div id="sWifi" hidden>
         <p class="sh">WiFi (optional)</p>
         <div class="grp">
@@ -1749,7 +1755,22 @@
   // (setup-image.js, window.BoardSetup): the same settings, settings image,
   // flash plan and label as scripts/setup-board.js.
   const setupDlg = $('setup');
-  const setup = { who: 'other', done: [], last: null, pending: null, busy: false };
+  const setup = { who: 'other', done: [], last: null, pending: null, busy: false, rot: '0', colors: 'RGB' };
+  // The panel options are remembered on this computer: a batch of boards usually shares its case and panel.
+  try { Object.assign(setup, JSON.parse(localStorage.getItem('setupPanel')) || {}); } catch (e) { /* private mode */ }
+  const COLOR_ORDERS = ['RGB', 'RBG', 'GRB', 'GBR', 'BRG', 'BGR'];   // BoardSetup.COLOR_ORDERS
+  $('sColors').replaceChildren(...COLOR_ORDERS.map((c) => new Option(c, c)));
+  function renderSetupPanel() {
+    if (!COLOR_ORDERS.includes(setup.colors)) setup.colors = 'RGB';
+    if (setup.rot !== '180') setup.rot = '0';
+    pressed('sRot', setup.rot);
+    selVal('sColors', setup.colors);
+  }
+  function saveSetupPanel() {
+    try { localStorage.setItem('setupPanel', JSON.stringify({ rot: setup.rot, colors: setup.colors })); } catch (e) { /* private mode */ }
+  }
+  $('sRot').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !setup.busy) { setup.rot = v; renderSetupPanel(); saveSetupPanel(); } });
+  $('sColors').addEventListener('change', () => { setup.colors = $('sColors').value; renderSetupPanel(); saveSetupPanel(); });
   const scripts = new Map();
   const loadScript = (src) => {
     if (!scripts.has(src)) {
@@ -1800,6 +1821,7 @@
     setup.pending = null; setup.knownFor = null;
     $('sKnownRow').hidden = true;
     renderSetupWho();
+    renderSetupPanel();
     setupBuilds();
     setupDlg.showModal();
     $('sLabel').focus();
@@ -1870,7 +1892,9 @@
       }
       const net = (retry && retry.net) || BoardSetup.setupNetwork();
       setup.pending = { id, key, net, who: setup.who, label };
-      const cfg = BoardSetup.boardConfig({ id, token: key.token, url: location.origin, networks, setupName: net.name, setupPass: net.pass });
+      const panel = BoardSetup.panelOptions({ rotation: setup.rot, colorOrder: setup.colors });
+      const cfg = BoardSetup.boardConfig({ id, token: key.token, url: location.origin, networks, setupName: net.name, setupPass: net.pass, panel });
+      slog(`Panel: ${panel.rotation === 180 ? 'upside down' : 'upright'}, colors ${panel.color_order}.`);
       const plan = BoardSetup.flashPlan(img, BoardSetup.nvsImage({ value: cfg, size: info.nvs.size }), info.nvs, info.end);
       const total = plan.reduce((n, p) => n + p.data.length, 0);
       const before = plan.map((p, i) => plan.slice(0, i).reduce((n, q) => n + q.data.length, 0));

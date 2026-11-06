@@ -62,6 +62,37 @@ test('settings: the firmware reads back exactly what the script writes', { skip:
   assert.deepEqual(JSON.parse(r.stdout), JSON.parse(json));
 });
 
+test('settings: the panel options (rotation, color order) read back in the firmware', { skip: !CXX && 'no C++ compiler' }, () => {
+  const bin = compile('config_roundtrip.cpp', ['config.cpp']);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfg-'));
+  for (const [rotation, colorOrder] of [[180, 'RBG'], ['0', 'bgr'], ['180', 'GBR']]) {
+    const json = s.boardConfig({ id: 'kitchen', token: 't', panel: s.panelOptions({ rotation, colorOrder }) });
+    const file = path.join(dir, 'cfg.json');
+    fs.writeFileSync(file, json);
+    const r = spawnSync(bin, [file], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    const back = JSON.parse(r.stdout);
+    assert.equal(back.rotation, Number(rotation));
+    assert.equal(back.color_order, colorOrder.toUpperCase());
+  }
+});
+
+test('settings: panel options are checked, and the control page offers the same color orders', () => {
+  assert.deepEqual(s.panelOptions(), { rotation: 0, color_order: 'RGB' });
+  assert.deepEqual(s.panelOptions({ rotation: '180', colorOrder: 'grb' }), { rotation: 180, color_order: 'GRB' });
+  assert.throws(() => s.panelOptions({ rotation: 90 }), /0 or 180/);
+  for (const bad of ['RRB', 'RG', 'RGBX', 'XYZ']) assert.throws(() => s.panelOptions({ colorOrder: bad }), /one of/);
+  assert.equal(s.COLOR_ORDERS.length, 6);
+  for (const o of s.COLOR_ORDERS) assert.deepEqual([...o].sort(), ['B', 'G', 'R']);
+  // Defaults when no panel options are given: what the firmware's own defaults are.
+  const c = JSON.parse(s.boardConfig({ id: 'k', token: 't' }));
+  assert.equal(c.rotation, 0); assert.equal(c.color_order, 'RGB');
+  const html = fs.readFileSync(path.join(__dirname, '../../server/board/control.html'), 'utf8');
+  const m = html.match(/const COLOR_ORDERS = (\[[^\]]*\]);/);
+  assert.ok(m, 'control.html lists COLOR_ORDERS');
+  assert.deepEqual(JSON.parse(m[1].replace(/'/g, '"')), s.COLOR_ORDERS);
+});
+
 test('settings: WiFi rules and the setup network', () => {
   assert.deepEqual(s.parseWifi('home=password1'), ['home', 'password1']);
   assert.deepEqual(s.parseWifi('cafe'), ['cafe', '']);
