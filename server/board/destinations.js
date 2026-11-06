@@ -22,6 +22,11 @@ const SHORT_DEST = {
   'Cottage Grove': 'Cottage',
 };
 
+// CTA `destNm` -> the full name a wide board shows (wide-spec §3), where
+// Train Tracker's isn't the station's.
+const FULL_DEST = { '63rd Street': 'Ashland/63rd' };
+const fullDest = (destNm) => FULL_DEST[String(destNm || '').trim()] || String(destNm || '').trim();
+
 // Destinations CTA normally uses, shown as-is.
 const PASS_THROUGH = new Set(['Howard', "O'Hare", 'Kimball', 'Loop', 'Linden', 'Midway', 'Rosemont', 'Cumberland']);
 
@@ -109,4 +114,4 @@ function stationDestinations(st) {
   return out;
 }
 
-module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, lineCode, shortDest, resolveDest, endsHere, stationDestinations };
+module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, lineCode, shortDest, fullDest, resolveDest, endsHere, stationDestinations };

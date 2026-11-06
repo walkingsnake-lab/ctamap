@@ -391,3 +391,103 @@ test('arrival times survive the DST fall-back (CTA counts on its wall clock)', (
     assert.deepEqual(arr.map((a) => (a.t - now) / 60), [7, 28, 46]);
   }
 });
+
+// ---- wide board (cols 128) ----
+const { splitTrue, splitAxis, HALVES, SPLIT_LABELS, WIDE_TIMES } = require('./arrivals');
+const wide = (mapid, more = {}) => ({ ...base, cols: 128, station: { mapid }, ...more });
+
+test('wide: northbound | southbound or westbound | eastbound where every line runs that way and none ends here', () => {
+  // Morse (Red), Belmont (Red, Brown, Purple): north-south.
+  let r = run('morse-2026-10-03-2316.json', wide('40100'));
+  assert.equal(r.view, 'split');
+  assert.deepEqual(r.halves, SPLIT_LABELS.ns);
+  assert.deepEqual(r.rows.map((x) => [x.h, x.lbl]), [[0, 'HOWARD'], [1, '95TH']]);
+  assert.deepEqual(r.bars, { showHeader: true, showWeather: false, showKey: false, hidden: [] });
+  r = run('belmont-2026-10-03-2316.json', wide('41320', { showWeather: true }));
+  assert.equal(r.view, 'split');
+  assert.deepEqual(r.rows.map((x) => `${x.h}:${x.ln}:${x.lbl}`), ['0:RD:HOWARD', '0:BR:KIMBALL', '1:RD:95TH', '1:BR:LOOP']);
+  assert.deepEqual(r.bars.hidden, ['weather'], 'the split has no weather strip');
+  // Short names and up to 3 times, fitted to the half.
+  for (const x of r.rows) {
+    assert.ok(x.t.length <= 3);
+    const [x0, right] = HALVES[x.h];
+    assert.ok(x0 + 5 + measure('small', x.lbl) + 3 + worstTimesWidth(x.t, r.now) <= right + 1, x.lbl);
+  }
+  // The ticker is formatted for the width too (full names).
+  assert.equal(r.ticker.length, 6);
+  // Jefferson Park (Blue, a short-turn end, not a terminal): west | east,
+  // O'Hare-bound on the left.
+  r = run('jefferson-park-2026-10-03-2316.json', wide('41280'));
+  assert.equal(r.view, 'split');
+  assert.deepEqual(r.halves, SPLIT_LABELS.ew);
+  assert.deepEqual(r.rows.map((x) => [x.h, x.lbl]), [[0, "O'HARE"], [1, 'FOREST']]);
+  // Not true: the Loop (Clark/Lake), mixed axes (Howard: Yellow runs west).
+  for (const [f, mapid] of [['clark-lake-2026-10-03-2317.json', '40380'], ['howard-2026-10-03-2316.json', '40900']]) {
+    assert.notEqual(run(f, wide(mapid)).view, 'split', f);
+  }
+  assert.equal(splitAxis('40100', ['RD']), 'ns');
+  assert.equal(splitAxis('40450', ['RD']), null, "95th: Red's terminal");
+  assert.equal(splitAxis('40890', ['BL']), null, "O'Hare: Blue's direction-1 end");
+  assert.equal(splitAxis('41320', ['RD', 'BR', 'PR']), 'ns');
+  assert.equal(splitAxis('41320', ['RD', 'BL']), null, 'a line the table lacks there');
+  assert.equal(splitAxis('40170', ['GR', 'PK']), 'ew', 'Ashland (Lake St): Green west, Pink east, one axis');
+  assert.equal(splitAxis('nope', ['RD']), null);
+  assert.equal(splitTrue('40100', ['RD']), true);
+});
+
+test('wide: an east-west station puts each line by where it heads (trDr and the table)', () => {
+  // Ashland (Lake St): Green trDr 1 (Harlem) heads west, Pink trDr 1 (Loop) east.
+  const now = 1_800_000_000;
+  const a = (ln, dest, dir, m) => ({ ln, dest, full: dest, known: true, dir, t: now + m * 60, s: 0, rn: `${ln}${m}` });
+  const r = format([a('GR', 'Harlem', 1, 3), a('GR', '63rd', 5, 4), a('PK', 'Loop', 1, 5), a('PK', '54/Crmk', 5, 6)], wide('40170'), { now });
+  assert.equal(r.view, 'split');
+  assert.deepEqual(r.halves, ['WESTBOUND', 'EASTBOUND']);
+  assert.deepEqual(r.rows.map((x) => `${x.h}:${x.ln}:${x.lbl}`), ['0:GR:HARLEM', '0:PK:54/CRMK', '1:GR:63RD', '1:PK:LOOP']);
+});
+
+test('wide: where the split isn\'t true, full-width rows while they fit, then two columns', () => {
+  // Rows layout: full names, up to 5 times, a time dropped before the name is cut.
+  const r = run('morse-2026-10-03-2316.json', wide('40100', { wideLayout: 'rows', showWeather: true }));
+  assert.equal(r.view, 'dest');
+  assert.deepEqual(r.rows.map((x) => x.lbl), ['HOWARD', '95TH/DAN RYAN']);
+  assert.equal(r.rows[0].t.length, 5);
+  assert.equal('h' in r.rows[0], false);
+  for (const x of r.rows) assert.ok(5 + measure('small', x.lbl) + 3 + worstTimesWidth(x.t, r.now) <= 128, x.lbl);
+  assert.ok(WIDE_TIMES === 5);
+  // Howard (split not true): its two destinations as full-width rows.
+  const h = run('howard-2026-10-03-2316.json', wide('40900', { showWeather: true }));
+  assert.equal(h.view, 'dest');
+  assert.deepEqual(h.rows.map((x) => x.lbl), ['95TH/DAN RYAN', 'LINDEN']);
+  // Clark/Lake: five destinations fit as rows once the weather strip and the header go.
+  const c = run('clark-lake-2026-10-03-2317.json', wide('40380', { showWeather: true }));
+  assert.equal(c.view, 'dest');
+  assert.deepEqual(c.rows.map((x) => x.lbl), ["O'HARE", 'FOREST PARK', 'KIMBALL', 'HARLEM/LAKE', '54TH/CERMAK']);
+  assert.deepEqual(c.bars.hidden, ['weather', 'header']);
+  // Six or more: two columns, left column first, header kept, 64-style rows.
+  const now = 1_800_000_000;
+  const six = ['Howard', '95th', 'Kimball', 'Loop', 'Linden', 'Midway'].map((d, i) => ({ ln: ['RD', 'RD', 'BR', 'BR', 'PR', 'OR'][i], dest: d, full: d, known: true, dir: 1 + (i % 2) * 4, t: now + (i + 2) * 60, s: 0, rn: String(i) }));
+  const two = format(six, wide('40380', { showWeather: true }), { now });
+  assert.equal(two.view, 'cols2');
+  assert.deepEqual(two.rows.map((x) => `${x.h}:${x.lbl}`), ['0:HOWARD', '0:95TH', '0:KIMBALL', '1:LOOP', '1:MIDWAY', '1:LINDEN']);
+  assert.deepEqual([two.bars.showHeader, two.bars.showWeather], [true, true]);
+});
+
+test('wide: a name that would crowd its times keeps fewer times instead', () => {
+  const now = 1_800_000_000;
+  const arrivals = [10, 11, 12, 13, 14].map((m, i) => ({ ln: 'BL', dest: 'Forest', full: 'Forest Park Via Harlem', known: true, dir: 5, t: now + m * 60, s: 0, rn: String(100 + i) }));
+  const r = format(arrivals, wide('40380', { wideLayout: 'rows' }), { now });
+  assert.equal(r.view, 'dest');
+  const row = r.rows[0];
+  assert.ok(row.t.length < 5, `${row.t.length} times`);
+  assert.equal(row.lbl, 'FOREST PARK VIA HARLEM');
+  assert.ok(row.t.length >= 2, 'it keeps what fits');
+  assert.ok(5 + measure('small', row.lbl) + 3 + worstTimesWidth(row.t, now) <= 128);
+});
+
+test('wide: alerted rows get the alert label in every layout', () => {
+  const s = run('belmont-2026-10-03-2316.json', wide('41320'), { alerts: new Set(['BR']) });
+  const br = s.rows.filter((x) => x.ln === 'BR');
+  assert.ok(br.every((x) => x.a === 1 && typeof x.al === 'string'));
+  const d = run('belmont-2026-10-03-2316.json', wide('41320', { wideLayout: 'rows' }), { alerts: new Set(['RD']) });
+  assert.ok(d.rows.filter((x) => x.ln === 'RD').every((x) => x.a === 1 && x.al === x.lbl));
+});

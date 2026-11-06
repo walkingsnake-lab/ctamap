@@ -26,14 +26,16 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 
 ## 3. Transit
 
-### Destination rows (decided)
+### Destination rows (decided; built)
 - Same anatomy and row geometry as 64 (§5): header on rows 0–6 (station `#808080` left, clock right), rows at 8, 14, 20, 26 with four rows, 1, 7, 13, 19, 25 with five and no header.
 - **Full CTA names** (`95TH/DAN RYAN`, `FOREST PARK`), **up to 5 times** per row, right-aligned as a group as now. A time is dropped when it would come within 3 px of the name.
 - **No weather in the header** (station and clock only). The weather strip stays an option as at 64.
 
-### Northbound | southbound split (liked)
-- Two halves, a direction label on row 0 of each (`NORTHBOUND`, `SOUTHBOUND`), rows at 10 and 18 (2 rows) in each half, station and clock on the bottom row in `#555555`.
-- A per-board layout choice next to header and key. Halves come from each train's direction code (`trDr` in Train Tracker). Labels per line pair need a small table (Loop lines aren't north/south).
+### Northbound | southbound split (decided Nov 5; built, the wide default)
+- Two halves, a direction label on row 0 of each (`NORTHBOUND`, `SOUTHBOUND`, or `WESTBOUND`, `EASTBOUND`), rows at 10 and 18 (2 rows) in each half, up to **3 rows a half** (8, 14, 20), station and clock on the bottom row in `#555555`. North or west on the left.
+- A per-board layout choice (`wideLayout`: split, the default, or rows). Halves come from each train's direction code (`trDr` in Train Tracker) and which way that direction heads at the station.
+- **Only where it's true:** every line at the station runs along the same axis there (`station-dirs.json`, from the track geometry: within 35° of north-south or of east-west; Red and Purple count as north-south everywhere off the Loop) and none ends there. 59 stations split north-south, 51 east-west, 34 don't.
+- **Elsewhere** (the Loop, diagonal stretches like Blue's Milwaukee Avenue, mixed axes like Howard, terminals, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then the chronological list.
 
 ### Busy stations, replacing the chronological view (open)
 The chronological view is the weakest transit screen. For stations with 4–5 lines (Clark/Lake), three layouts were mocked:
@@ -41,7 +43,7 @@ The chronological view is the weakest transit screen. For stations with 4–5 li
 2. **Two columns of four under the header:** up to 8 destinations, short names, three times each.
 3. **Five rows, no header:** full names; only for five destinations or fewer.
 
-**Proposed fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now.
+**Proposed fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built so far (Nov 5):** rows → two columns → chronological; one row per line isn't built.
 
 ### Key layout (first pass)
 `trains to` (x5) and `min` (right) on row 0 as now, with the station and clock centered between them, so the station line at the bottom isn't needed.
@@ -52,7 +54,7 @@ The full destination, the red alert circle, then the alert's **short label in re
 ### Overnight, no data, stale (first pass)
 Owl and big clock with `NO TRAINS` as now in columns 0–62; a dim divider on column 65; the right side shows the current temperature and condition, then `TOMORROW` with icon, high (5x7) and low, and the condition. `NO DATA` and stale use the same layout with the red line across the top.
 
-### Ticker (decided)
+### Ticker (decided; built)
 After the CTA's platform signs:
 - Bands at rows 7–18 and 20–31; the grey index column (0–4) with the **row number**; the band in the line color at 55 % from column 5 to 127.
 - **Full destination** in 5x7 at x7 (`95th/Dan Ryan`).

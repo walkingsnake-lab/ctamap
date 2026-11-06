@@ -67,7 +67,7 @@ function send(res, status, body) {
 // (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 const SECTIONS = {
-  transit: ['header', 'key', 'hidden', 'view', 'rows', 'wx'],
+  transit: ['header', 'key', 'hidden', 'view', 'halves', 'rows', 'wx'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
@@ -562,7 +562,7 @@ function createBoard({
     const screen = resolveScreen(board, cyc);
     const held = holdOf(id, board, now, !!radarState.on);
     const viewKey = `${id}:${board.station.mapid}`;
-    const { view, viewState, rows, ticker, bars } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
+    const { view, viewState, rows, ticker, bars, halves } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
       v: board.v,
@@ -596,6 +596,8 @@ function createBoard({
       ts: board.timeSteps === true,
       hidden: bars.hidden,
       view,
+      // Wide board, split view: the halves' direction labels (contract "Width").
+      ...(halves ? { halves } : {}),
       rows,
       ticker,
       wx: bars.showWeather ? wx : null,
