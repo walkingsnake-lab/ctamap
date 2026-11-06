@@ -146,6 +146,21 @@ void Frame::fill(int x, int y, int fw, int fh, RGB c) {
     for (int i = x; i < x + fw; i++) set(i, j, c);
 }
 
+static void *malloc_big(size_t n) { return std::malloc(n); }
+void *(*big_alloc)(size_t) = malloc_big;
+
+uint8_t *big_bytes(size_t n) {
+  void *m = big_alloc(n);
+  if (!m) m = std::malloc(n);
+  if (!m) std::abort();  // as new would
+  memset(m, 0, n);
+  return static_cast<uint8_t *>(m);
+}
+
+Frame *big_frame() { return new (big_bytes(sizeof(Frame))) Frame(); }
+
+void big_free(void *m) { std::free(m); }
+
 void widen_px(uint8_t *px, int from_w, int to_w) {
   // In place, last row first: row y moves from y * from_w to y * to_w, which
   // is never before where it was, so no row is overwritten before it moves.
@@ -670,15 +685,10 @@ static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blin
 
 // Key layout: the key on rows 1-5, the station and clock on rows 27-31 under
 // a divider on row 25. Mirrors drawKey() / drawBand() in draw.js.
+// The key row (draw.js drawKey): `min`, or 128 wide `minutes`.
 static void draw_key(Frame &f) {
   f.text(FONT_SMALL, U"trains to", 0, 6, C::dimHead);
-  rtext(f, FONT_SMALL, U"min", f.w - 1, 6, C::dimHead);
-}
-
-// Wide key layout (draw.js drawKeyWide): `trains to` and `minutes`, no station or clock.
-static void draw_key_wide(Frame &f) {
-  f.text(FONT_SMALL, U"trains to", 0, 6, C::dimHead);
-  rtext(f, FONT_SMALL, U"minutes", WIDE - 1, 6, C::dimHead);
+  rtext(f, FONT_SMALL, f.w == WIDE ? U"minutes" : U"min", f.w - 1, 6, C::dimHead);
 }
 
 static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock = true, RGB color = C::head,
@@ -831,6 +841,17 @@ static std::vector<int> split_tops(int n) {
   return {8, 14, 20};
 }
 
+// byline rows: at most 5 lines; a row off them (a bad `y`) is left out
+// (draw.js bylineY).
+static const int BYLINE_ROWS = 5;
+static int byline_y(const Value &r) {
+  const Value &y = r["y"];
+  if (!y.truthy()) return 0;
+  if (!y.is_num()) return -1;
+  double v = y.num();
+  return v == std::floor(v) && v >= 0 && v < BYLINE_ROWS ? (int)v : -1;
+}
+
 static View build_halves_view(const Value &p, double now) {
   bool split = p["view"].eq("split");
   std::vector<LiveRow> rows = live_rows(p, now);
@@ -838,7 +859,7 @@ static View build_halves_view(const Value &p, double now) {
     // One row per line (draw.js buildHalvesView): each row on its line's
     // row `y`, in a half, or without `h` across the whole width; drawn as cols2.
     int n = 0;
-    for (const LiveRow &r : rows) n = std::max(n, (int)(*r.src)["y"].num(0) + 1);
+    for (const LiveRow &r : rows) n = std::max(n, byline_y(*r.src) + 1);
     std::vector<int> tops = row_tops(n, p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true(), false);
     View v = view_base(p, now);
     v.mode = "cols2";
@@ -846,6 +867,8 @@ static View build_halves_view(const Value &p, double now) {
     v.key = false;
     for (const LiveRow &lr : rows) {
       const Value &r = *lr.src;
+      int y = byline_y(r);
+      if (y < 0) continue;
       bool full = r["h"].is_null();
       int h = r["h"].truthy() ? 1 : 0;
       ViewRow vr;
@@ -858,8 +881,6 @@ static View build_halves_view(const Value &p, double now) {
       vr.a = r["a"].truthy();
       if (!r["al"].is_null()) vr.al = vstr(r["al"]);
       if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
-    if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
-      int y = (int)r["y"].num(0);
       vr.top = y < (int)tops.size() ? tops[y] : 0;
       vr.alpha = 1;
       vr.cells = layout_cells(lr, now, p["ts"].is_true(), vr.x0, vr.right);
@@ -891,8 +912,6 @@ static View build_halves_view(const Value &p, double now) {
       vr.right = HALVES[h][1];
       vr.a = r["a"].truthy();
       if (!r["al"].is_null()) vr.al = vstr(r["al"]);
-      if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
-    if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
       vr.top = i < tops.size() ? tops[i] : 0;
       vr.alpha = 1;
       vr.cells = layout_cells(per[h][i], now, p["ts"].is_true(), vr.x0, vr.right);
@@ -934,7 +953,6 @@ static View build_chrono_view(const Value &p, double now) {
     vr.lbl = U(lbl);
     vr.a = r["a"].truthy();
     if (!r["al"].is_null()) vr.al = vstr(r["al"]);
-    if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
     vr.num = (int)i + 1;
     vr.top = tops[i];
     vr.alpha = 1;
@@ -1057,7 +1075,7 @@ static void draw_transit_view(Frame &f, const View &view, bool blink) {
   } else {
     bool wide_key = view.key && view.w == WIDE;
     if (wide_key) {
-      draw_key_wide(f);
+      draw_key(f);
     } else if (view.key) {
       draw_key(f);
       if (view.has_header) draw_band(f, view.header, view.now, view.tzo, view.clock);
@@ -2107,7 +2125,7 @@ static ustr bb_record(const Value &t) {
 
 PickedGame pick_game(const Value &games, double now, double every, bool all_games) {
   // Live games take precedence (unless all_games); `every` seconds each by wall time.
-  if (!games.truthy()) return PickedGame{-1, 0, 0};
+  if (!has_games(games)) return PickedGame{-1, 0, 0};
   std::vector<int> pool;
   if (!all_games)
     for (size_t i = 0; i < games.size(); i++)
@@ -2116,6 +2134,14 @@ PickedGame pick_game(const Value &games, double now, double every, bool all_game
     for (size_t i = 0; i < games.size(); i++) pool.push_back((int)i);
   long long pos = fmod_floor((long long)floor(now / every), (long long)pool.size());
   return PickedGame{pool[pos], (int)pos, (int)pool.size()};
+}
+
+// Pregame's bottom line (draw.js drawFirstPitch): TODAY, the first pitch right-aligned.
+static void draw_first_pitch(Frame &f, const Value &gm, double tzo) {
+  f.text(FONT_SMALL, U"TODAY", 0, BB_BOTTOM, C::grey);
+  ustr ap = ampm_text(gm["start"].num(), tzo);
+  rtext(f, FONT_SMALL, ap, f.w - 1, BB_BOTTOM, C::grey);
+  rtext(f, FONT_SMALL, clock_text(gm["start"].num(), tzo), f.w - 1 - measure(FONT_SMALL, ap) - 3, BB_BOTTOM, C::label);
 }
 
 static RGB score_color(const Value &side, double now, RGB rest = BB_LIVE) {
@@ -2366,10 +2392,7 @@ static void render_baseball_logos(Frame &f, const Value &p, const Value &gm, dou
       if (!bands) draw_logo_score(f, side["ab"].truthy() ? vstr(side["ab"]) : ustr(), LG_TOPS[s], lg_ink(side, dim), nullptr, -1);
       ctext(f, FONT_SMALL, bb_record(side), PANEL_X, LG_TOPS[s] + 8, C::grey);
     }
-    f.text(FONT_SMALL, U"TODAY", 0, BB_BOTTOM, C::grey);
-    ustr ap = ampm_text(gm["start"].num(), tzo);
-    rtext(f, FONT_SMALL, ap, 63, BB_BOTTOM, C::grey);
-    rtext(f, FONT_SMALL, clock_text(gm["start"].num(), tzo), 63 - measure(FONT_SMALL, ap) - 3, BB_BOTTOM, C::label);
+    draw_first_pitch(f, gm, tzo);
     return;
   }
   if (final) {
@@ -2410,10 +2433,7 @@ static void render_baseball_wide(Frame &f, const Value &gm, double now, double t
 
   if (gm["st"].eq("pre")) {
     for (int s = 0; s < 2; s++) f.text(FONT_SMALL, bb_record(gm[keys[s]]), name_end + 2, BW_TOPS[s] + 6, C::grey);
-    f.text(FONT_SMALL, U"TODAY", 0, BB_BOTTOM, C::grey);
-    ustr ap = ampm_text(gm["start"].num(), tzo);
-    rtext(f, FONT_SMALL, ap, f.w - 1, BB_BOTTOM, C::grey);
-    rtext(f, FONT_SMALL, clock_text(gm["start"].num(), tzo), f.w - 1 - measure(FONT_SMALL, ap) - 3, BB_BOTTOM, C::label);
+    draw_first_pitch(f, gm, tzo);
     return;
   }
 
@@ -2467,7 +2487,7 @@ static void render_baseball(const Value &p, Frame &f, std::optional<double> now_
   double tzo = p["tzo"].num(0);
   const Value &mlb = p["mlb"];
   const Value &games = mlb["games"];
-  if (!games.truthy()) {
+  if (!has_games(games)) {
     draw_no_games(f, now, tzo);
     return;
   }
@@ -2500,10 +2520,7 @@ static void render_baseball(const Value &p, Frame &f, std::optional<double> now_
   if (gm["st"].eq("pre")) {
     f.text(FONT_SMALL, bb_record(gm["away"]), name_end + 2, BB_ROW_TOPS[0] + 6, C::grey);
     f.text(FONT_SMALL, bb_record(gm["home"]), name_end + 2, BB_ROW_TOPS[1] + 6, C::grey);
-    f.text(FONT_SMALL, U"TODAY", 0, BB_BOTTOM, C::grey);
-    ustr ap = ampm_text(gm["start"].num(), tzo);
-    rtext(f, FONT_SMALL, ap, 63, BB_BOTTOM, C::grey);
-    rtext(f, FONT_SMALL, clock_text(gm["start"].num(), tzo), 63 - measure(FONT_SMALL, ap) - 3, BB_BOTTOM, C::label);
+    draw_first_pitch(f, gm, tzo);
     return;
   }
   if (final) {
@@ -2527,7 +2544,7 @@ std::optional<BaseballTexts> baseball_texts(const Value &p, double now) {
   // Texts that roll when they change, keyed by game and state.
   const Value &mlb = p["mlb"];
   const Value &games = mlb["games"];
-  if (!games.truthy()) return std::nullopt;
+  if (!has_games(games)) return std::nullopt;
   const Value &gm = games[pick_game(games, now, timing(p).game, mlb["all"].is_true()).i];
   BaseballTexts bt;
   bt.texts["away"] = vstr(gm["away"]["r"]);
@@ -2791,8 +2808,13 @@ static void draw_peek_bar_wide(Frame &f, const Value &p, int k, int vi, int drop
       xs.push_back(x);
       x += measure(FONT_SMALL, words.back()) + 1 + PW_GAP;
     }
-    int end = xs[vi] + measure(FONT_SMALL, words[vi]) - 1, shift = 0;
-    for (int j = 0; end - shift > PW_RIGHT && j < vi; j++) shift = xs[j + 1] - PW_X0;
+    // A variant past the list (a payload changed under the chooser): no
+    // shift, none lit, as draw.js.
+    int shift = 0;
+    if (vi >= 0 && vi < nv) {
+      int end = xs[vi] + measure(FONT_SMALL, words[vi]) - 1;
+      for (int j = 0; end - shift > PW_RIGHT && j < vi; j++) shift = xs[j + 1] - PW_X0;
+    }
     f.push_clip(PW_X0, 0, PW_RIGHT, 31);
     for (int i = 0; i < nv; i++) f.text(FONT_SMALL, words[i], xs[i] - shift, sh(29), i == vi ? C::white : PW_OFF);
     f.pop_clip();
@@ -2847,14 +2869,16 @@ static void render_peek(const Value &p, Frame &f, const RenderOpts &o) {
     const int W = f.w;
     int sh = peek_shift(pk.slide_y, pk.slide_t, W);
     if (sh < (pk.slide_y ? 32 : W)) {
-      static Frame from;
-      static uint8_t cur[Frame::MAX_W * Frame::H * 3];
+      // Kept, not on the loop task's small stack; in PSRAM on the board.
+      static Frame &from = *big_frame();
+      static uint8_t *const cur = big_bytes(Frame::MAX_W * Frame::H * 3);
+      from.clear();
       if (pk.slide_view) draw_peek_view(*pk.slide_view, peek_screen(p, pk.slide_k, pk.slide_vi), from, vo);
       else {
         PeekView fv = peek_view(p, pk.slide_k, pk.slide_vi);
         draw_peek_view(fv.payload(p), fv.screen, from, vo);
       }
-      memcpy(cur, f.px, sizeof cur);
+      memcpy(cur, f.px, f.bytes());
       int dir = pk.slide_dir < 0 ? -1 : 1;
       for (int y = 0; y < 32; y++)
         for (int x = 0; x < W; x++) {
@@ -3926,7 +3950,7 @@ static void apply_brightness(Frame &f, double b) {
 static void render_skyline_faded(const Value &p, Frame &f, const RenderOpts &o) {
   const Value &cur = o.sky ? *o.sky : p["skyline"];
   if (o.sky_from && o.sky_from->truthy() && o.sky_k < 1) {
-    static Frame a;  // not on the stack: the loop task's is small
+    static Frame &a = *big_frame();  // not on the loop task's small stack; PSRAM on the board
     a.clear();
     render_skyline(p, *o.sky_from, a, o.now, o.ms, o.blink, o.sky_bare ? nullptr : o.clouds);
     render_skyline(p, cur, f, o.now, o.ms, o.blink, o.clouds);
@@ -4060,22 +4084,22 @@ int slide_offset(double t, int w) {
   return (int)jsround(ease_in_out(std::max(0.0, std::min(1.0, t / SCREEN_SLIDE_MS))) * (w + SLIDE_GAP));
 }
 
-// The `from` pixels as wide as f: a narrower one (a 64-wide status screen
-// on a 128 board) widened as the board showed it. The Board widens its own
-// copy first (app.cpp), so on the board this never allocates.
+// The `from` pixels as wide as f, as the panels showed them: a narrower
+// frame (a 64 payload on a 128 board) on both panels; a wider one by its
+// left columns. The only place a transition changes width.
 static const uint8_t *from_px(const uint8_t *from, int from_w, const Frame &f) {
-  if (from_w >= f.w) return from;
-  static std::vector<uint8_t> buf;
-  buf.assign(f.bytes(), 0);
-  memcpy(buf.data(), from, (size_t)from_w * Frame::H * 3);
-  widen_px(buf.data(), from_w, f.w);
-  return buf.data();
+  if (from_w == f.w) return from;
+  static uint8_t *const buf = big_bytes(Frame::MAX_W * Frame::H * 3);
+  const int w = std::max(1, std::min(from_w, Frame::MAX_W));
+  for (int y = 0; y < Frame::H; y++)
+    for (int x = 0; x < f.w; x++) memcpy(buf + (y * f.w + x) * 3, from + (y * w + x % w) * 3, 3);
+  return buf;
 }
 
 void slide_frames(const uint8_t *from, Frame &f, int d, int dir, int from_w) {
   from = from_px(from, from_w, f);
   const int w = f.w, h = Frame::H;
-  static uint8_t cur[Frame::MAX_W * Frame::H * 3];  // not on the stack: the loop task's is small
+  static uint8_t *const cur = big_bytes(Frame::MAX_W * Frame::H * 3);  // kept; PSRAM on the board
   memcpy(cur, f.px, f.bytes());
   for (int y = 0; y < h; y++)
     for (int x = 0; x < w; x++) {

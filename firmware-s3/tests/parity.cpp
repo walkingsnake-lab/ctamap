@@ -20,11 +20,12 @@ using json::Value;
 static std::vector<uint8_t> b64(const std::string &s) {
   static const std::string A = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   std::vector<uint8_t> out;
-  int val = 0, bits = -8;
+  uint32_t val = 0;  // only the low 24 bits matter (unsigned: no overflow)
+  int bits = -8;
   for (char c : s) {
     size_t i = A.find(c);
     if (i == std::string::npos) continue;
-    val = (val << 6) + (int)i;
+    val = ((val << 6) | (uint32_t)i) & 0xFFFFFF;
     bits += 6;
     if (bits >= 0) {
       out.push_back((uint8_t)((val >> bits) & 0xFF));

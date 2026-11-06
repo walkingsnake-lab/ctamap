@@ -102,7 +102,8 @@ quicker.
      under File → Preferences → Additional boards manager URLs, then install
      **esp32** by Espressif Systems (Tools → Board → Boards Manager).
    - **Libraries** (Tools → Manage Libraries): **ESP32 HUB75 LED MATRIX PANEL
-     DMA Display** (by mrcodetastic) and **Adafruit GFX Library** (choose
+     DMA Display** (by mrcodetastic), version **3.1.0** (what CI builds with;
+     the panel's single-buffer fallback relies on its cleanup), and **Adafruit GFX Library** (choose
      Install All for its dependencies).
 2. **Settings:** in `firmware-s3/ctaboard/`, copy `secrets.example.h` to
    `secrets.h` and fill in your WiFi networks and `BOARD_TOKEN` (the same

@@ -162,6 +162,7 @@ static void load_settings() {
 }
 
 void setup() {
+  device::use_psram();  // frame-sized buffers out of internal RAM, before any is made
   Serial.begin(115200);
   delay(500);  // let USB serial come up so the first lines aren't lost
 
@@ -191,7 +192,8 @@ void setup() {
   Serial.printf("[board] panel refresh %d Hz (%d x 32, clock phase %d, double buffer %d, colors %s)\n",
                 panel->refresh_rate(), settings.cols, (int)settings.clk_phase, (int)settings.double_buffer,
                 settings.color_order.c_str());
-  Serial.printf("[board] memory after panel: free %ld, largest block %ld\n", device::free_heap(), device::largest_block());
+  Serial.printf("[board] memory after panel: free %ld, largest block %ld, largest internal %ld, PSRAM free %ld\n",
+                device::free_heap(), device::largest_block(), device::largest_internal(), device::psram_free());
   panel->identify(3000);  // 2 panels: red outline + 1 dot = first, green + 2 dots = second
 
   if (no_setup) {
@@ -248,9 +250,10 @@ void setup() {
   else Serial.println("[board] no network worker: requests pause the panel");
   board->fresh_wifi = device::nvs_get("fresh") == "1";
   board->mem_free = device::free_heap;
-  board->largest_block = device::largest_block;
-  Serial.printf("[board] memory free %ld, largest block %ld, PSRAM %ld\n", device::free_heap(), device::largest_block(),
-                device::psram_size());
+  board->largest_block = device::largest_internal;  // what TLS needs: the one to watch
+  Serial.printf("[board] memory free %ld, largest block %ld, largest internal %ld, PSRAM %ld (free %ld)\n",
+                device::free_heap(), device::largest_block(), device::largest_internal(), device::psram_size(),
+                device::psram_free());
 
   board->connect(device::cold_boot());
   Serial.printf("[board] online: memory free %ld\n", device::free_heap());
@@ -296,9 +299,9 @@ void loop() {
     const app::Stats &st = board->stats;
     Serial.printf(
         "[board] fetch %d ms, new connections %ld, draw %ld ms (max %ld), fetches %ld, draws %ld, fails %ld, "
-        "reconnects %ld, mem free %ld, largest block %ld, chip %.1f C\n",
+        "reconnects %ld, mem free %ld, largest internal %ld, chip %.1f C\n",
         (int)board->sched.fetch_ms, net->connects - last_connects, panel->last_ms, panel->max_ms, st.fetches,
-        st.draws, st.fails, st.reconnects, device::free_heap(), device::largest_block(), device::chip_temp_c());
+        st.draws, st.fails, st.reconnects, device::free_heap(), device::largest_internal(), device::chip_temp_c());
     last_connects = net->connects;
     panel->max_ms = 0;
     last_report = ms;

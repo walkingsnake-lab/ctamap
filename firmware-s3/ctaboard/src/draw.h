@@ -62,8 +62,8 @@ enum Font { FONT_5X7 = 0, FONT_CLOCK = 1, FONT_D13 = 2, FONT_D17 = 3, FONT_D23 =
 // for a 128 payload (widen()).
 class Frame {
  public:
-  static const int MAX_W = 128;
-  static const int H = 32;
+  static constexpr int MAX_W = 128;  // constexpr: inline (C++17), safe to bind to std::min
+  static constexpr int H = 32;
   int w = 64;
   uint8_t px[MAX_W * H * 3];
   size_t bytes() const { return (size_t)w * H * 3; }
@@ -93,6 +93,16 @@ class Frame {
 };
 
 int measure(Font font, const ustr &s);
+
+// ---- frame-sized buffers ----
+// Where the buffers kept for the board's life come from (frames, 12 KB
+// each): the board points big_alloc at PSRAM (device.cpp use_psram), which
+// keeps internal RAM for the network stack and TLS. Default and fallback:
+// malloc. Free them with big_free.
+extern void *(*big_alloc)(size_t bytes);
+uint8_t *big_bytes(size_t bytes);  // zeroed
+Frame *big_frame();
+void big_free(void *m);
 
 // ---- width (draw.js WIDE, colsOf, widenPx) ----
 const int WIDE = 128;
@@ -327,7 +337,8 @@ const int SLIDE_GAP = 4;
 int slide_offset(double t, int w = 64);
 // Overnight owl: its frame (assets::OWL_FRAMES) at icon-clock ms t; 0 without one.
 int owl_frame(std::optional<double> t);
-// from: the old frame's pixels, from_w wide (narrower than f: widened first).
+// from: the old frame's pixels, from_w wide (narrower than f: widened as
+// the panels showed it; wider: its left columns).
 void slide_frames(const uint8_t *from, Frame &f, int d, int dir, int from_w = 64);
 // Screen change from the phone or the auto rotation: the old frame fades to
 // black, then the new one fades in (draw.js fadeFrames).
@@ -433,6 +444,8 @@ int radar_loop_idx(const Value &ids, const Frames *frames, double t, const Timin
 struct PickedGame {
   int i, pos, of;
 };
+// mlb.games as a list with at least one game (anything else: no games).
+inline bool has_games(const Value &games) { return games.is_arr() && games.size() > 0; }
 PickedGame pick_game(const Value &games, double now, double every, bool all_games);
 
 struct BaseballTexts {

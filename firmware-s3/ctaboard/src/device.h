@@ -74,15 +74,16 @@ class Panel : public app::Display {
   double dim(double k, bool hw);
   void set_curves(int day, int night);
   // With 2 panels: outlines each one (red = 1st, nearest the Portal; green =
-  // 2nd) for ms, so the chain order shows. Does nothing with 1. Frames
-  // narrower than the panels (64-wide status screens on 128) show on each.
+  // 2nd) for ms, so the chain order shows. Does nothing with 1. A frame
+  // narrower than the panels (a 64 payload on 128) shows on each.
   void identify(int ms);
   int day_curve() const { return day_curve_; }
   int night_curve() const { return night_curve_; }
 
  private:
-  MatrixPanel_I2S_DMA *dma_ = nullptr;
-  draw::Frame frame_;
+  bool start(bool double_buffer);
+  MatrixPanel_I2S_DMA *dma_ = nullptr;  // null when the driver couldn't start: frames go nowhere
+  draw::Frame &frame_ = *draw::big_frame();  // PSRAM (use_psram)
   int rotation_;
   color::Pipeline pipe_;
   // The skyline's curve at every brightness: the night curve (full depth,
@@ -272,6 +273,11 @@ std::string start_reason();  // POWER_ON, RESET_PIN, SOFTWARE, PANIC, WATCHDOG, 
 bool cold_boot();            // power-on or the RESET button (not a crash or watchdog restart)
 long free_heap();
 long largest_block();
+long largest_internal();  // largest internal-RAM block (what TLS and the panel's DMA need)
+long psram_free();
+// Points draw::big_alloc at PSRAM, so frame-sized buffers stay out of
+// internal RAM. Call first thing in setup(), before anything allocates one.
+void use_psram();
 long psram_size();  // bytes of PSRAM the build can use: 0 when the board option leaves it off
 float chip_temp_c();  // ESP32-S3 internal sensor: die temperature in C (mean of 8 reads; tracks the air around the board)
 
