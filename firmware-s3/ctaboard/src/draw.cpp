@@ -1670,8 +1670,8 @@ static const RGB PEEK_LOADED = hexc(0x6a6a6a);
 
 // Wide board (draw.js renderRadarWide; wide-spec §5): the 128 x 32 map, the
 // time on a black chip bottom-right (at least columns 101-127), a watch or
-// warning (else the temperature) on a chip bottom-left, the frame dots
-// straight on the map along row 31 after it.
+// warning (else the temperature) on a chip bottom-left, the frame dots with
+// black gaps, along row 31 or just above the left chip.
 static const int WIDE_CHIP_X = 101, WIDE_CHIP_Y = 26;  // chips: rows 26-31
 static const RGB WIDE_DOT = hexc(0x4a4a4a);
 template <class OnHand>
@@ -1721,25 +1721,27 @@ static void render_radar_wide(const Value &p, const Value &r, Frame &f, const Va
     f.text(FONT_SMALL, ap, ap_x, 32, C::radarAmpm);
   }
   // The bottom-left chip: a watch or warning (in place of the temperature),
-  // else the temperature; then the frame dots.
-  int dx = 0;
+  // else the temperature; the frame dots above it.
+  bool chip = false;
   if (ws) {
-    ustr word = (*warnp)["lvl"].eq("warning") ? U"WARN" : U"WATCH";
+    ustr word = (*warnp)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
     int tw = measure(FONT_SMALL, ws->glyph) + TAG_GAP + measure(FONT_SMALL, word);
     f.fill(0, WIDE_CHIP_Y, tw + 1, ch, black);
     if (!hide_warn) {
       int gx = f.text(FONT_SMALL, ws->glyph, 0, 32, ws->color);
       f.text(FONT_SMALL, word, gx + TAG_GAP - 1, 32, ws->color);
     }
-    dx = tw + 3;
+    chip = true;
   } else if (!r["temp"].is_null() && r.has("temp") && (r["cond"].truthy() || r["showTime"].is_false())) {
     ustr tt = vstr(r["temp"]) + U"°";
     int tw = measure(FONT_SMALL, tt);
     f.fill(0, WIDE_CHIP_Y, tw + 1, ch, black);
     f.text(FONT_SMALL, tt, 0, 32, C::label);
-    dx = tw + 3;
+    chip = true;
   }
-  for (int i = 0; i < nids; i++) f.fill(dx + i * 2, 31, 1, 1, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : WIDE_DOT);
+  int dy = chip ? WIDE_CHIP_Y - 1 : 31;
+  if (nids) f.fill(0, dy, nids * 2 - 1, 1, black);
+  for (int i = 0; i < nids; i++) f.fill(i * 2, dy, 1, 1, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : WIDE_DOT);
 }
 
 static void render_weather(const Value &p, Frame &f, std::optional<double> now, std::optional<int> idx_o,

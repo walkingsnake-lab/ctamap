@@ -1354,9 +1354,9 @@
     // long ago) in Tom Thumb, label white, then AM/PM in #8f8f8f at the right
     // edge. A watch or warning on a black chip at the bottom left, in place
     // of the temperature (radar.cond, or the time off) when that's on. The
-    // frame dots straight on the map, no backing: six 1 px dots on row 31,
-    // 1 px apart from x0 (3 px after the left chip), the shown frame amber,
-    // the others #4a4a4a. Clock 'none': no time.
+    // frame dots: one 1 px dot per frame, 1 px apart from x0, the shown frame
+    // amber, the others #4a4a4a, the gaps between them black; on row 31, or
+    // with a left chip on row 25, just above it. Clock 'none': no time.
     // Chips: rows 26-31, 1 px of black above the text.
     const WIDE_CHIP_X = 101, WIDE_CHIP_Y = 26, WIDE_DOT = '#4a4a4a';
     function renderRadarWide(p, r, ids, idx, bytes, o) {
@@ -1393,24 +1393,26 @@
         f.text('small', ap, apX, 32, C.radarAmpm);
       }
       // The bottom-left chip: a watch or warning (in place of the
-      // temperature), else the temperature; then the frame dots.
-      let dx = 0;
+      // temperature), else the temperature; the frame dots above it.
+      let chip = false;
       if (ws) {
-        const word = p.warn.lvl === 'warning' ? 'WARN' : 'WATCH';
+        const word = p.warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
         const tw = measure('small', ws.glyph) + TAG_GAP + measure('small', word);
         f.fill(0, WIDE_CHIP_Y, tw + 1, 32 - WIDE_CHIP_Y, '#000000');
         if (!hideWarn) {
           const gx = f.text('small', ws.glyph, 0, 32, ws.color);
           f.text('small', word, gx + TAG_GAP - 1, 32, ws.color);
         }
-        dx = tw + 3;
+        chip = true;
       } else if (r.temp != null && (r.cond || r.showTime === false)) {
         const tt = `${r.temp}°`, tw = measure('small', tt);
         f.fill(0, WIDE_CHIP_Y, tw + 1, 32 - WIDE_CHIP_Y, '#000000');
         f.text('small', tt, 0, 32, C.label);
-        dx = tw + 3;
+        chip = true;
       }
-      ids.forEach((id, i) => f.fill(dx + i * 2, 31, 1, 1, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : WIDE_DOT));
+      const dy = chip ? WIDE_CHIP_Y - 1 : 31;
+      if (ids.length) f.fill(0, dy, ids.length * 2 - 1, 1, '#000000');
+      ids.forEach((id, i) => f.fill(i * 2, dy, 1, 1, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : WIDE_DOT));
       return f;
     }
 
