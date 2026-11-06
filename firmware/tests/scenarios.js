@@ -498,6 +498,7 @@ async function build() {
       pk(2, 1, { slide: { k: 2, vi: 2, t: 200, axis: 'y', dir: -1 } }), pk(1, 0, { slide: { k: 0, vi: 0, t: 999, axis: 'x', dir: 1 } }),
     ], frames, undefined, { s3only: true, clouds });
     add('peek bar drop', p, [1, 3, 6, 10, 11, 14].map((drop) => pk(2, 0, { drop })), frames, undefined, { s3only: true, clouds });
+    add('peek digit color', { ...p, pv: { ...p.pv, cdig: '#ff4fa8' } }, [pk(2, 5), pk(2, 6)], frames, undefined, { s3only: true, clouds });
     // Raining: the newest frame on hand, still; none yet: the empty radar.
     const rain = { ...p, radar: { ...p.radar, on: true, frames: ids, ft } };
     add('peek radar none on hand', rain, [pk(1, 0), pk(1, 3)], {}, undefined, { s3only: true });
@@ -653,6 +654,12 @@ async function build() {
     add('wide digits roll per digit', cw('2026-11-02T03:42:00Z', 'digits'), roll('dig.clock', '9:41').map((r) => ({ ...r, ms: at('2026-11-02T03:42:00Z', 700) })), undefined, undefined, { s3only: true });
     add('wide digits roll width change', cw('2026-11-01T19:00:00Z', 'digits'), roll('dig.clock', '12:59'), undefined, undefined, { s3only: true });
     add('wide daydate 9:42 PM', cw('2026-11-06T03:42:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    // Digit color (digitColor -> cdig): the time only; AM/PM, weekday and date as before.
+    add('digits color mint', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#2fe08a' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('digits color coral rolling', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#ff5a4e' }), roll('dig.clock', '9:41'), undefined, undefined, { s3only: true });
+    add('daydate color cyan', cf('2026-11-02T03:42:00Z', 'daydate', { cdig: '#22c8e6' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide digits color amber', cw('2026-11-02T03:42:00Z', 'digits', { cdig: '#ffb000' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide daydate color violet dimmed', cw('2026-11-06T03:42:00Z', 'daydate', { cdig: '#a066ff', bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('wide daydate Wednesday, September 30', cw('2026-09-30T17:58:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('wide daydate 10:07 AM dimmed', cw('2026-11-04T16:07:00Z', 'daydate', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('wide daydate roll per digit', cw('2026-11-02T03:42:00Z', 'daydate'), roll('dd.clock', '9:41'), undefined, undefined, { s3only: true });

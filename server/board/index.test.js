@@ -1732,6 +1732,20 @@ test('width: the word clock goes only to wide boards that draw it; the analog ac
   assert.equal(b.pv.cacc, '#2fe08a', 'the peek chooser draws the analog face with it too');
   s.store.update('home', { clockFace: 'gradient' });
   assert.equal((await get(`hk=${HK}&w=128`)).cacc, undefined, 'other faces leave it out');
+  // Digit color: big digits and day/date only; white (the default) sends nothing.
+  s.store.update('home', { clockFace: 'digits' });
+  b = await get(`hk=${HK}`);
+  assert.equal(b.cdig, undefined);
+  assert.equal(b.pv.cdig, undefined);
+  s.store.update('home', { digitColor: 'coral' });
+  b = await get(`hk=${HK}`);
+  assert.deepEqual([b.cdig, b.pv.cdig], ['#ff5a4e', '#ff5a4e']);
+  s.store.update('home', { clockFace: 'daydate' });
+  assert.equal((await get(`hk=${HK}`)).cdig, '#ff5a4e');
+  s.store.update('home', { clockFace: 'analog' });
+  assert.equal((await get(`hk=${HK}`)).cdig, undefined, 'other faces leave it out');
+  b = await get('hk=skyline:analog:peek');
+  assert.equal(b.pv.cdig, undefined, 'firmware without either face gets no cdig');
   await s.close();
 });
 

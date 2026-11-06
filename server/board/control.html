@@ -429,8 +429,12 @@
     <div class="grp"><div class="c"><label for="gradInvert" class="grow">Lit digits on black</label><input type="checkbox" class="sw" id="gradInvert"></div></div>
   </div>
   <div id="digitsOpts">
-    <p class="sh">Big digits</p>
-    <div class="grp"><div class="c"><label for="colonBlink" class="grow">Blinking colon</label><input type="checkbox" class="sw" id="colonBlink"></div></div>
+    <p class="sh" id="digitsHead">Big digits</p>
+    <div class="grp">
+      <label class="c sel"><span>Digit color</span><span class="v"></span><span data-icon="chev"></span>
+        <select id="digitColor"><option value="white">White</option><option value="amber">Amber</option><option value="coral">Coral</option><option value="pink">Pink</option><option value="violet">Violet</option><option value="blue">Blue</option><option value="cyan">Cyan</option><option value="mint">Mint</option><option value="lime">Lime</option></select></label>
+      <div class="c" id="colonRow"><label for="colonBlink" class="grow">Blinking colon</label><input type="checkbox" class="sw" id="colonBlink"></div>
+    </div>
   </div>
 </section>
 
@@ -1333,7 +1337,11 @@
     $('analogOpts').hidden = face !== 'analog';
     selVal('analogAccent', board.analogAccent || 'amber');
     $('gradientOpts').hidden = face !== 'gradient';
-    $('digitsOpts').hidden = face !== 'digits';
+    // Digit color on both big-digit faces; the colon blinks only on Big digits.
+    $('digitsOpts').hidden = face !== 'digits' && face !== 'daydate';
+    $('digitsHead').textContent = face === 'daydate' ? 'Day & date' : 'Big digits';
+    $('colonRow').hidden = face !== 'digits';
+    selVal('digitColor', board.digitColor || 'white');
     $('showTemp').checked = board.showTemp !== false;
     $('boats').checked = board.boats !== false;
     $('twinkle').checked = board.twinkle !== false;
@@ -1346,6 +1354,7 @@
   $('clockFace').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) save({ clockFace: b.dataset.v }); });
   $('motion').addEventListener('change', (e) => { if (MOTION[e.target.value]) save(MOTION[e.target.value]); });
   $('analogAccent').addEventListener('change', (e) => save({ analogAccent: e.target.value }));
+  $('digitColor').addEventListener('change', (e) => save({ digitColor: e.target.value }));
 
   // ---- Cycle ----
   function cycThumb(sc, big) {

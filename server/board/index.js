@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -445,6 +445,7 @@ function createBoard({
   }
   // The analog face's accent color, or null for the original amber.
   const accentOf = (board) => (board.analogAccent && board.analogAccent !== 'amber' ? ANALOG_ACCENTS[board.analogAccent] || null : null);
+  const digitOf = (board) => (board.digitColor && board.digitColor !== 'white' ? DIGIT_COLORS[board.digitColor] || null : null);
   // The analog face's weather (and the wide Seventies face's temperature).
   const cwxOf = (wd) => (wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null);
 
@@ -470,6 +471,7 @@ function createBoard({
     if (caps.face('gradient') && board.gradInvert === true) faces.ginv = true;
     if (caps.face('digits') && board.colonBlink === false) faces.steady = true;
     if (caps.face('analog') && accentOf(board)) faces.cacc = accentOf(board);
+    if ((caps.face('digits') || caps.face('daydate')) && digitOf(board)) faces.cdig = digitOf(board);
     const wide = board.cols === 128;
     return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...(wide && wd ? { week: toWeek(wd), hours24: toDayHours(wd) } : {}), ...faces };
   }
@@ -644,6 +646,8 @@ function createBoard({
       ...(face === 'analog' || (face === 'seventies' && board.cols === 128) ? { cwx: cwxOf(wd) } : {}),
       // Analog face: the accent color (the second hand, the calendar's day), absent = amber.
       ...(face === 'analog' && accentOf(board) ? { cacc: accentOf(board) } : {}),
+      // Big digits and day/date faces: the time's color, absent = white.
+      ...((face === 'digits' || face === 'daydate') && digitOf(board) ? { cdig: digitOf(board) } : {}),
       // Day/night face: the subsolar point and the board's spot (contract "Day/night").
       ...(face === 'daynight' ? { dn: dayNightOf(st, now, board.cols === 128, w) } : {}),
       // Gradient face: lit gradient digits on black (contract "Gradient").

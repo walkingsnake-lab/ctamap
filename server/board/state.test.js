@@ -390,6 +390,10 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   assert.equal(validatePatch({ analogAccent: 'mint' }).analogAccent, 'mint');
   assert.throws(() => validatePatch({ analogAccent: 'teal' }), ValidationError);
   assert.equal(Object.keys(ANALOG_ACCENTS).length, 8);
+  assert.equal(store.get('home').digitColor, 'white');
+  assert.equal(validatePatch({ digitColor: 'cyan' }).digitColor, 'cyan');
+  assert.equal(validatePatch({ digitColor: 'white' }).digitColor, 'white');
+  assert.throws(() => validatePatch({ digitColor: '#ff0000' }), ValidationError);
   store.update('home', { clockFace: 'seventies' });
   assert.equal(store.get('home').clockFace, 'seventies');
   store.update('home', { clockFace: 'skyline' });
