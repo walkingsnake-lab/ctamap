@@ -21,12 +21,13 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   overhang on the rounded outer corners; back-down has almost none. So the split stays; the joint changed.
 - **Shell joint: tongue and groove (Nov 6).** The first print used the P4's half-lap (a lip in a pocket open to the
   inside): it held each wall from one side only, so the long halves' slight bow and the seam blobs on the lip showed as a
-  step, and nothing at all held the front 13 mm. Now the wall is 1.0 skin | 1.5 groove | 1.0 skin: half A's 1.3 mm tongue
+  step, and nothing at all held the front 13 mm. Now the wall is 1.2 outer skin | 1.5 groove | 0.8 inner skin: half A's 1.3 mm tongue
   (`TONGUE_CL` a side, from the test plate) runs 8 mm into a groove closed on both sides in half B, from 2 mm behind
   the front face to 2 mm in front of the back, so both faces are held flush. A ridge on the tongue's inside face clicks
   into a recess in the groove's inside skin (hidden; it flexes 0.2 mm going in, and once the trays are in it can't, so
-  the joint is locked). Outside, every visible edge at the joint has a 0.5 mm chamfer each side (a V-groove round the
-  case) instead of the square reveal and its thin ledges. Glue is optional, for permanence.
+  the joint is locked). Outside, every outer edge at the joint has a 0.5 mm chamfer each side (a V-groove round the
+  top, bottom and both rims) instead of the square reveal and its thin ledges; inside the hood the halves just butt
+  (a chamfer crossing the screen stop's sloped faces came out as a stepped slot). Glue is optional, for permanence.
 - **Seams go into the joint by design.** The slicer's Aligned seam goes to each layer's sharpest inside corner. The
   tongue's root and the groove's bottom are 90° inside corners on every layer, hidden once the halves are together, and
   the groove's mouth is chamfered and the tongue's tip has 0.3 mm, so a seam blob can't hold the halves apart. The

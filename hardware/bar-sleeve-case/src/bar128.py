@@ -7,11 +7,12 @@ both are turned 180 deg, as in the single build.
 Shell (walnut PLA, 347 x 96.3 x 69): the v5 sleeve built from the 'p25x2' profile (bore 340 x 89.3), split at x = 0
 into a left and a right half, both on one plate. The joint is the P4 split's (p4.py on its branch) turned 90 deg: it
 cuts the top and bottom walls, the hood and both rims.
-- the halves meet at x = 0. Every visible edge there is chamfered CHAMF x 45 deg on both sides (a V-groove round the
-  case: top, bottom, front rim, hood, back rim): it hides the joint line without the thin stepped ledges of the first
-  version's square reveal, and its corners are convex, so the slicer's seam doesn't collect there.
+- the halves meet at x = 0. Every outer edge there is chamfered CHAMF x 45 deg on both sides (a V-groove round the
+  case: top, bottom, front and back rims; the hood's inside just butts): it hides the joint line without the thin
+  stepped ledges of the first version's square reveal, and its corners are convex, so the slicer's seam doesn't
+  collect there.
 - a tongue and groove inside the top and bottom walls (Nov 6; replaces the half-lap, which held each wall from one side
-  only, so the halves stepped). The wall is SKIN | GROOVE | SKIN; half A's tongue runs TONGUE_L into a groove closed on
+  only, so the halves stepped). The wall is SKIN_O | GROOVE | SKIN_I; half A's tongue runs TONGUE_L into a groove closed on
   both sides in half B, so the outer faces are held flush both ways. From TONGUE_FRONT behind the front face to
   TONGUE_BACK in front of the back face (its back end 45 deg: no flat overhang back-down); hidden everywhere.
   TONGUE_CL a side; a DETENT ridge across the tongue's inner face clicks into a recess in the groove's inner skin when
@@ -78,8 +79,8 @@ for _m in (C, V, P3):
 BED = 256.0
 # ---------------------------------------------------------------- shell split: tongue and groove at x = 0
 CHAMF = 0.5                     # V-groove: each half's visible edges at the joint chamfered this much x 45 deg
-SKIN = 1.0                      # wall = SKIN | GROOVE | SKIN (WALL 3.5)
-GROOVE = WALL - 2 * SKIN        # 1.5
+SKIN_O, SKIN_I = 1.2, 0.8       # wall = outer skin | GROOVE | inner skin (WALL 3.5): the outer one keeps 0.45 at the
+GROOVE = WALL - SKIN_O - SKIN_I # 1.5    joint edge past the V and the mouth; the inner one is the one the detent flexes
 TONGUE_L = 8.0                  # how far A's tongue runs into B
 TIP_CL = 0.3                    # gap at the tongue's tip: the end faces at x = 0 are the seat in x
 TONGUE_CLS = (0.05, 0.10, 0.15) # the test plate's three
@@ -119,7 +120,7 @@ def visible_layer(sh, d):
 def _walls():
     """(z0, z1) of the top and bottom walls' groove band, with the y where the tongue starts behind each wall's front"""
     out = []
-    for z0, z1 in ((H - SKIN - GROOVE, H - SKIN), (SKIN, SKIN + GROOVE)):
+    for z0, z1 in ((H - SKIN_O - GROOVE, H - SKIN_O), (SKIN_O, SKIN_O + GROOVE)):
         yf = max(V.front_y(z0), V.front_y(z1)) + V.CH_F + TONGUE_FRONT
         out.append((z0, z1, yf))
     return out
@@ -175,11 +176,13 @@ def groove(cl=None):
 
 
 def v_groove(sh, steps=8):
-    """material within d of a visible face and within CHAMF - d of x = 0: each half's visible edges chamfered 45 deg"""
+    """material within d of the OUTER surface (top, bottom, front and back rims) and within CHAMF - d of x = 0: each
+    half's outer edges at the joint chamfered 45 deg. Not the bore's surfaces (hood, screen stop): crossing the screen
+    stop's sloped faces a distance-from-face cut turns into a stepped slot; inside, the halves just butt."""
     cut, prev = None, None
     for k in range(1, steps + 1):
         d = CHAMF * k / steps
-        lay = visible_layer(sh, d)
+        lay = sh - outer_inset(d)
         band = lay if prev is None else lay - prev
         w = CHAMF - CHAMF * (k - 1) / steps
         c = band ^ box(-w, w, -50, D + 50, -1, H + 1)
