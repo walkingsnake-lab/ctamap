@@ -482,7 +482,16 @@ void Board::step() {
   // The peek chooser at rest: the bar drops away, and unless the knob came
   // back to where it started, the choice goes out as soon as nothing else
   // is in flight. It closes once the bar is gone and the answer is in.
-  if (peek.rested((double)ms)) peek.close((double)ms, !peek.cancelled());
+  if (peek.rested((double)ms)) {
+    bool commit = !peek.cancelled();
+    if (commit) {
+      const Value &k = player.p["knob"];
+      const Value &vv = k["vars"][peek.k][peek.vi()];
+      peek_cat_ = json::str(k["ring"][peek.k]);
+      peek_var_ = vv.is_str() ? vv.s : "";
+    }
+    peek.close((double)ms, commit);
+  }
   if (peek.open && peek.committing && !peek.sent && !flight_) {
     send_peek();
     ms = clock->ms();
@@ -776,11 +785,10 @@ void Board::open_peek(long long ms) {
 void Board::send_peek() {
   // The choice, with its variant: the server answers with the update for
   // the new screen.
-  const Value &k = player.p["knob"];
-  const Value &vv = k["vars"][peek.k][peek.vi()];
+  // The choice as the chooser closed on it (peek_cat_, peek_var_).
   Flight f;
-  f.id = json::str(k["ring"][peek.k]);
-  f.variant = vv.is_str() ? vv.s : "";
+  f.id = peek_cat_;
+  f.variant = peek_var_;
   peek.sent = true;
   if (watchdog) watchdog->feed();
   job_err_.clear();

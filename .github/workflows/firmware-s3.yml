@@ -52,7 +52,7 @@ jobs:
           arduino-cli config add board_manager.additional_urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
-          arduino-cli lib install "ESP32 HUB75 LED MATRIX PANEL DMA Display" "Adafruit GFX Library"
+          arduino-cli lib install "ESP32 HUB75 LED MATRIX PANEL DMA Display@3.1.0" "Adafruit GFX Library"
           arduino-cli core list
           arduino-cli lib list
 

@@ -212,7 +212,13 @@ void Panel::identify(int ms) {
 int Panel::refresh_rate() const { return dma_ ? dma_->calculated_refresh_rate : 0; }
 
 void Panel::show(const std::function<void(draw::Frame &)> &fn) {
-  if (!dma_) return;  // the driver didn't start (logged at boot)
+  // Without a driver (it didn't start; logged at boot) the frame is still
+  // drawn, so the Board runs the same path, and goes nowhere.
+  if (!dma_) {
+    frame_.clear();
+    fn(frame_);
+    return;
+  }
   if (double_buffer_) {
     // A flip takes effect at the end of the panel's current refresh. Until
     // then the buffer we'd draw into next is still on screen, and drawing

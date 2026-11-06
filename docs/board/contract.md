@@ -15,7 +15,7 @@ Status: **draft v0**. Items marked **(decide)** are open.
 - **Auth:** header `X-Board-Token: <BOARD_TOKEN>` on every board endpoint except `/board/ping`. If `BOARD_TOKEN` is unset (local dev), auth is skipped.
 - **Errors:** `400` invalid input · `401` bad/missing token · `404` unknown board ID or route · `405` wrong method · `503` data not ready yet. Error bodies are `{"err":"<short code>"}`; `400` adds `"detail"` with a human-readable reason.
 - **Caching:** every `/board/` response is `Cache-Control: no-store` (radar frames excepted, see below).
-- **Size:** JSON responses carry `Content-Length`. The S3 reads at most 64 KB of JSON (`MAX_JSON` in `device.cpp`; a payload is about 4 KB): a longer body fails the request (`TooBig`) unread.
+- **Size:** JSON responses carry `Content-Length`. The S3 reads at most 64 KB of JSON (`MAX_JSON` in `device.cpp`; a payload is about 4 KB): a longer body fails the request (`TooBig`), unread when it has a `Content-Length` (a chunked body from a proxy is read first, then refused).
 - **Text is final:** the server sends labels already shortened, cased, ligature-substituted, and truncated to fit by pixel width. The board never edits text.
 - **Fonts:** the board font BDFs are committed under `server/board/fonts/`. The server reads glyph advances from them to measure and truncate text; the board build uses the same files. One source for widths.
 

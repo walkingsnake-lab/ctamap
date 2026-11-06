@@ -1868,6 +1868,18 @@ static void test_peek_hold_and_turn_steps_variants_both_ways() {
   CHECK(r->server.variants == std::vector<std::string>({"analog"}), "%zu", r->server.variants.size());
 }
 
+static void test_radar_frame_size_by_id() {
+  // A 128 x 32 crop by a digit right before "w-"; the simulator's test
+  // snow loop ("snow-") isn't one.
+  CHECK(app::radar_bytes("40100-202611061200") == 1024, "64");
+  CHECK(app::radar_bytes("40100-202611061200s") == 1024, "64 snow");
+  CHECK(app::radar_bytes("40100w-202611061200") == 2048, "128");
+  CHECK(app::radar_bytes("test-snow-40100-0") == 1024, "test snow 64");
+  CHECK(app::radar_bytes("test-snow-40100w-0") == 2048, "test snow 128");
+  CHECK(app::radar_bytes("test-rain-40100w-2") == 2048, "test rain 128");
+  CHECK(app::radar_bytes("w-") == 1024 && app::radar_bytes("") == 1024, "odd ids");
+}
+
 static void test_peek_survives_its_variants_changing_under_it() {
   // A payload lands while the chooser is open with fewer clock faces than
   // when it opened (a face turned off): the chosen one past the end goes
@@ -2284,6 +2296,7 @@ int main() {
       T_(test_peek_prefetches_radar_frames_and_clouds),
       T_(test_peek_survives_a_long_burst_of_turns_and_presses),
       T_(test_peek_survives_its_variants_changing_under_it),
+      T_(test_radar_frame_size_by_id),
       T_(test_setup_opens_right_away_with_no_networks),
       T_(test_a_new_owner_wipe_forgets_wifi_once_per_stamp),
       T_(test_setup_opens_after_ten_minutes_without_wifi),

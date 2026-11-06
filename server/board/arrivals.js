@@ -39,6 +39,7 @@ const CHRONO_HOLD = 0;
 // this long (s). The split and destination rows rank alike.
 const WIDE_VIEW_HOLD = 60;
 const WIDE_RANK = { split: 0, dest: 0, byline: 1, cols2: 2, chrono: 3 };
+const WIDE_VIEWS = ['split', 'dest', 'byline', 'cols2', 'chrono'];  // wideBuilders' order
 // Chrono labels are fitted against the widest single time ("99m" or "DUE").
 const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
 
@@ -382,13 +383,16 @@ function wideRow(g, now, alerted, words = null) {
 function formatWide(ordered, shown, cfg, now, alerts, alertWords = new Map(), prevView = null, hold = WIDE_VIEW_HOLD) {
   // Each layout, sparsest first; null where it doesn't fit (or apply).
   const builders = wideBuilders(ordered, shown, cfg, now, alerts, alertWords);
-  const pick = builders.map((b) => b()).find(Boolean);
+  // Built lazily: the first that fits (the chronological list always does).
+  let pick = null;
+  for (const b of builders) if ((pick = b())) break;
   // Back to a sparser layout only once it has fit for `hold` s: until then
   // the last one, while it still applies (else the sparser one at once).
   const rank = (v) => WIDE_RANK[v] || 0;
   if (prevView && rank(prevView.view) > rank(pick.view)) {
     const fitSince = prevView.fitSince != null ? prevView.fitSince : now;
-    const held = now - fitSince < hold && builders.map((b) => b()).find((r) => r && r.view === prevView.view);
+    const want = WIDE_VIEWS.indexOf(prevView.view);
+    const held = now - fitSince < hold && want >= 0 && builders[want]();
     if (held) return { ...held, viewState: { view: held.view, fitSince } };
   }
   return { ...pick, viewState: { view: pick.view, fitSince: null } };

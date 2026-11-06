@@ -192,8 +192,13 @@ class Led {
 
 const long long VERSION_EVERY = 10000;  // settings version check (spec: ~10 s)
 // A radar frame's size with pk=4: 2048 bytes for a 128 x 32 crop (ids
-// <mapid>w-<stamp>), else 1024.
-inline size_t radar_bytes(const std::string &id) { return id.find("w-") != std::string::npos ? 2048 : 1024; }
+// <mapid>w-<stamp>, or the simulator's test-<kind>-<mapid>w-<i>: a digit
+// right before "w-", so test-snow-... isn't one), else 1024.
+inline size_t radar_bytes(const std::string &id) {
+  for (size_t i = id.find("w-"); i != std::string::npos; i = id.find("w-", i + 1))
+    if (i > 0 && id[i - 1] >= '0' && id[i - 1] <= '9') return 2048;
+  return 1024;
+}
 const long long UPDATE_EVERY = 30000;   // combined update (spec: ~30 s)
 const long long LIVE_EVERY = 10000;     // combined update while a live game is on screen
 const long long RADAR_EVERY = 3000;     // one missing radar frame per run
@@ -347,6 +352,9 @@ class Board {
   void open_peek(long long ms);
   std::vector<int> knob_counts() const;
   void send_peek();
+  // The chooser's choice as it closed (category and variant names), so a
+  // payload landing before it goes out can't change what's sent.
+  std::string peek_cat_, peek_var_;
   void draw_peek(draw::Frame &f, long long ms, long long n);
   void shown(int what, long long ms);
   void launch(Flight f);
