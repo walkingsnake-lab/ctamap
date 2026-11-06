@@ -381,6 +381,24 @@ async function build() {
     add('baseball rotation', bb(other, fin), [0, 60, 120].map((d) => ({ screen: 'baseball', now: t + d })).concat([{ screen: 'baseball', game: 1 }]));
     add('baseball live takes precedence', bb(other, live, fin), [{ screen: 'baseball', now: t }, { screen: 'baseball', now: t + 60 }]);
     add('baseball no games', bb(), [{ screen: 'baseball' }]);
+    // Wide board (cols 128): the line score, for every layout.
+    const s3 = { s3only: true };
+    const bw = (...games) => ({ ...bb(...games), cols: 128 });
+    const ln = (a, h, extra) => ({ away: { ...CHC, r: 3, rs: a, h: 7, e: 0 }, home: { ...STL, r: 2, rs: h, h: 5, e: 1 }, ...extra });
+    const wlive = game({ st: 'live', inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1], ...ln([0, 1, 0, 0, 2, 0], [1, 0, 0, 1, 0, 0]) });
+    add('wide baseball live', bw(wlive), [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball live, logos layout', { ...bw(wlive), mlb: { layout: 'logos', dim: 0.9, games: [wlive] } }, [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball live rolls', bw({ ...wlive, half: 'B', b: 0, s: 0, o: 0, on: [0, 1, 0], away: { ...wlive.away, r: 10, rs: [0, 1, 0, 0, 2, 0, 7] } }), [0.25, 0.5, 0.75].map((p) => ({
+      screen: 'baseball', rolls: { away: { from: '3', p }, home: { from: '2', p }, inn: { from: 'TOP 7', p }, count: { from: '2-1', p }, outs: { from: '2 OUT', p } },
+    })), undefined, undefined, s3);
+    add('wide baseball break', bw({ ...wlive, half: 'M', b: 0, s: 0, o: 0, on: [0, 0, 0], away: { ...wlive.away, rs: [0, 1, 0, 0, 2, 0, 0] } }), [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball score flash', bw({ ...wlive, away: { ...wlive.away, at: t - 10 } }), [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball extra innings', bw({ ...wlive, inn: 11, half: 'B', away: { ...wlive.away, r: 4, rs: [0, 1, 0, 0, 2, 0, 0, 0, 0, 0, 1], h: 11 }, home: { ...wlive.home, r: 3, rs: [1, 0, 0, 1, 0, 0, 1, 0, 0, 0], h: 10, e: 2 } }), [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball final, home not needed in the 9th', bw(game({ st: 'final', ...ln([0, 0, 0, 1, 0, 0, 0, 0, 0], [1, 0, 0, 1, 0, 0, 0, 0, null]), away: { ...CHC, r: 1, rs: [0, 0, 0, 1, 0, 0, 0, 0, 0], h: 4, e: 2 } })), [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball final, away wins', bw(game({ st: 'final', ...ln([0, 1, 0, 0, 2, 0, 0, 0, 0], [1, 0, 0, 1, 0, 0, 0, 0, 0]) })), [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball pregame', bw(game({ st: 'pre', start: t + 1500, away: { ...CHC, r: 0, w: 109, l: 53 }, home: { ...STL, r: 0, w: null, l: null } })), [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball no games', bw(), [{ screen: 'baseball' }], undefined, undefined, s3);
+    add('wide baseball live without a line score', bw(live), [{ screen: 'baseball' }], undefined, undefined, s3);
   }
 
   // Transit animator sequences.
@@ -785,8 +803,8 @@ async function build() {
     const wide = (p) => ({ ...p, cols: 128 });
     const bytes = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Uint8Array.from(v)])) : undefined);
     const WIDE = ['transit morse-2026-10-03-2316.json header=true wx=true', 'chrono clark/lake alerts', 'stale', 'ticker header kept', 'weather screen normal',
-      'radar time off split=true svr warning', 'baseball logos live', 'knob chooser five entries', 'peek slides',
-      'peek every variant', 'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'announce typewriter', 'brightness 50'];
+      'radar time off split=true svr warning', 'knob chooser five entries', 'peek slides',
+      'peek every variant', 'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'brightness 50'];
     // The skyline panorama (wide-spec §6): every weather and time of day,
     // the boats crossing all 128 columns, lightning, rain and snow, the
     // crossfades, warnings and the widest text.

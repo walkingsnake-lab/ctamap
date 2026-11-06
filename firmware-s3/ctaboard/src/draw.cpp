@@ -2039,17 +2039,17 @@ static const Roll *roll_of(const Rolls &rolls, const char *k) {
   return it == rolls.end() ? nullptr : &it->second;
 }
 
-static void draw_score(Frame &f, const ustr &text, int top, RGB color, const Roll *roll) {
+static void draw_score(Frame &f, const ustr &text, int top, RGB color, const Roll *roll, int right = SCORE_RIGHT) {
   int base = top + 6;
   if (!roll || roll->from == text || roll->p >= 1) {
-    rtext(f, FONT_5X7, text, SCORE_RIGHT, base, color);
+    rtext(f, FONT_5X7, text, right, base, color);
     return;
   }
   int up = (int)jsround(ease_in_out(roll->p) * SCORE_ROLL);
-  f.push_clip(SCORE_RIGHT - 12, top, SCORE_RIGHT, top + 6);
+  f.push_clip(right - 12, top, right, top + 6);
   const ustr &frm = roll->from;
   if (frm.size() == text.size()) {
-    int x = SCORE_RIGHT - measure(FONT_5X7, text) + 1;
+    int x = right - measure(FONT_5X7, text) + 1;
     for (size_t i = 0; i < text.size(); i++) {
       if (frm[i] == text[i]) {
         f.text(FONT_5X7, text.substr(i, 1), x, base, color);
@@ -2060,8 +2060,8 @@ static void draw_score(Frame &f, const ustr &text, int top, RGB color, const Rol
       x += measure(FONT_5X7, text.substr(i, 1)) + 1;
     }
   } else {
-    rtext(f, FONT_5X7, frm, SCORE_RIGHT, base - up, color);
-    rtext(f, FONT_5X7, text, SCORE_RIGHT, base - up + SCORE_ROLL, color);
+    rtext(f, FONT_5X7, frm, right, base - up, color);
+    rtext(f, FONT_5X7, text, right, base - up + SCORE_ROLL, color);
   }
   f.pop_clip();
 }
@@ -2100,7 +2100,7 @@ static void draw_roll_text(Frame &f, const ustr &text, int left, int base, RGB c
         same = false;
         break;
       }
-  f.push_clip(0, base - 5, 63, base - 1);
+  f.push_clip(0, base - 5, f.w - 1, base - 1);
   if (same) {
     int x = left;
     for (size_t i = 0; i < text.size(); i++) {
@@ -2161,8 +2161,8 @@ static void draw_no_games(Frame &f, double now, double tzo) {
   ustr clock = clock_text(now, tzo);
   ustr label = U"NO GAMES";
   int top = (32 - 18) / 2;
-  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, 0, top + 10, C::clock);
-  f.text(FONT_SMALL, label, (int)fdiv(64 - measure(FONT_SMALL, label), 2), top + 18, C::noTrains);
+  roll_named(f, FONT_CLOCK, "big.clock", clock, CENTER, 0, top + 10, C::clock, f.w);
+  f.text(FONT_SMALL, label, (int)fdiv(f.w - measure(FONT_SMALL, label), 2), top + 18, C::noTrains);
 }
 
 // ---- baseball, logo layout ----
@@ -2297,8 +2297,80 @@ static void render_baseball_logos(Frame &f, const Value &p, const Value &gm, dou
   draw_bottom_line(f, t, rolls);
 }
 
+// ---- baseball, wide (wide-spec §8); mirrors renderBaseballWide() in draw.js ----
+static const int BW_INN_X = 26, BW_PITCH = 8, BW_COLS = 9, BW_DIV = 95, BW_COUNT_X = 30, BW_OUTS_X = 46;
+static const int BW_RHE[] = {105, 117, 126};
+static const int BW_TOPS[] = {9, 17};
+static const RGB BW_HEAD = hexc(0x4a4a4a);
+
+static void render_baseball_wide(Frame &f, const Value &gm, double now, double tzo, const Rolls &rolls) {
+  bool live = gm["st"].eq("live"), final = gm["st"].eq("final");
+  std::string winner = winner_of(gm);
+  const char *keys[] = {"away", "home"};
+  int name_end = 0;
+  for (int s = 0; s < 2; s++) {
+    const Value &side = gm[keys[s]];
+    int top = BW_TOPS[s];
+    f.fill(0, top, 3, 6, side["c"].truthy() ? hexs(side["c"].str_or("")) : C::grey);
+    name_end = std::max(name_end, f.text(FONT_5X7, vstr(side["ab"]), 5, top + 6, winner == keys[s] ? C::amber : C::label));
+  }
+  f.fill(0, BB_DIVIDER, f.w, 1, C::divider);
+
+  if (gm["st"].eq("pre")) {
+    for (int s = 0; s < 2; s++) f.text(FONT_SMALL, bb_record(gm[keys[s]]), name_end + 2, BW_TOPS[s] + 6, C::grey);
+    f.text(FONT_SMALL, U"TODAY", 0, BB_BOTTOM, C::grey);
+    ustr ap = ampm_text(gm["start"].num(), tzo);
+    rtext(f, FONT_SMALL, ap, f.w - 1, BB_BOTTOM, C::grey);
+    rtext(f, FONT_SMALL, clock_text(gm["start"].num(), tzo), f.w - 1 - measure(FONT_SMALL, ap) - 3, BB_BOTTOM, C::label);
+    return;
+  }
+
+  const Value &rs_a = gm["away"]["rs"], &rs_h = gm["home"]["rs"];
+  int len_a = rs_a.truthy() ? (int)rs_a.size() : 0, len_h = rs_h.truthy() ? (int)rs_h.size() : 0;
+  int cur = live ? (gm["inn"].truthy() ? (int)gm["inn"].num() : 1) : 0;
+  int last = std::max(std::max(BW_COLS, len_a), std::max(len_h, cur));
+  int first = last - BW_COLS + 1;
+  f.fill(BW_DIV, 0, 1, BB_DIVIDER, C::divider);
+  for (int i = 0; i < BW_COLS; i++) {
+    int inn = first + i, cx = BW_INN_X + i * BW_PITCH;
+    ctext(f, FONT_SMALL, num_text(inn), cx, 6, inn == cur ? C::amber : BW_HEAD);
+    for (int s = 0; s < 2; s++) {
+      const Value &rs = s == 0 ? rs_a : rs_h;
+      int len = s == 0 ? len_a : len_h;
+      bool has = inn - 1 < len && !rs[inn - 1].is_null();
+      bool bat = inn == cur && (s == 0 ? gm["half"].eq("T") : gm["half"].eq("B"));
+      ustr str = has ? num_text((long long)rs[inn - 1].num()) : bat ? ustr(U"0") : final && s == 1 && inn <= len_a ? ustr(U"X") : ustr();
+      if (!str.empty()) ctext(f, FONT_SMALL, str, cx, BW_TOPS[s] + 6, bat ? C::amber : C::grey);
+    }
+  }
+  static const char32_t *const RHE[] = {U"R", U"H", U"E"};
+  for (int i = 0; i < 3; i++) ctext(f, FONT_SMALL, RHE[i], BW_RHE[i] - 2, 6, BW_HEAD);
+  for (int s = 0; s < 2; s++) {
+    const Value &side = gm[keys[s]];
+    RGB color = final ? (winner == keys[s] ? C::amber : !winner.empty() ? BB_LOSE : C::label) : score_color(side, now);
+    draw_score(f, vstr(side["r"]), BW_TOPS[s], color, roll_of(rolls, keys[s]), BW_RHE[0]);
+    rtext(f, FONT_5X7, num_text(side["h"].truthy() ? (long long)side["h"].num() : 0), BW_RHE[1], BW_TOPS[s] + 6, C::grey);
+    rtext(f, FONT_5X7, num_text(side["e"].truthy() ? (long long)side["e"].num() : 0), BW_RHE[2], BW_TOPS[s] + 6, C::grey);
+  }
+
+  if (final) {
+    f.text(FONT_SMALL, U"FINAL", 0, BB_BOTTOM, C::label);
+    return;
+  }
+  LiveTexts t = live_texts(gm);
+  draw_roll_text(f, t.inn, 0, BB_BOTTOM, C::label, roll_of(rolls, "inn"), 0);
+  draw_roll_text(f, t.count, BW_COUNT_X, BB_BOTTOM, C::label, roll_of(rolls, "count"), BW_COUNT_X);
+  draw_roll_text(f, t.outs, BW_OUTS_X, BB_BOTTOM, C::grey, roll_of(rolls, "outs"), BW_OUTS_X);
+  const Value &on = gm["on"];
+  auto base_on = [&](int i) { return on.truthy() ? on[i].truthy() : false; };
+  draw_diamond(f, 125, 29, 1, base_on(0) ? C::amber : BB_BASE, true);
+  draw_diamond(f, 122, 27, 1, base_on(1) ? C::amber : BB_BASE, true);
+  draw_diamond(f, 119, 29, 1, base_on(2) ? C::amber : BB_BASE, true);
+}
+
 static void render_baseball(const Value &p, Frame &f, std::optional<double> now_o, std::optional<int> game,
                             const Rolls *rolls_in, const Logos *logos) {
+  if (cols_of(p) == WIDE) f.w = WIDE;
   double now = now_o ? *now_o : p["now"].num();
   double tzo = p["tzo"].num(0);
   const Value &mlb = p["mlb"];
@@ -2312,6 +2384,10 @@ static void render_baseball(const Value &p, Frame &f, std::optional<double> now_
   const Value &gm = games[gi];
   static const Rolls empty;
   const Rolls &rolls = rolls_in ? *rolls_in : empty;
+  if (f.w == WIDE) {
+    render_baseball_wide(f, gm, now, tzo, rolls);
+    return;
+  }
   if (mlb["layout"].eq("logos") || mlb["layout"].eq("bands")) {
     render_baseball_logos(f, p, gm, now, tzo, rolls, logos);
     return;

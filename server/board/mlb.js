@@ -82,10 +82,25 @@ function liveState(ls) {
   };
 }
 
+// Line score for a wide board (wide-spec §8): each side's runs by inning
+// (`rs`, null for a half not played), hits (`h`) and errors (`e`).
+function lineScore(ls) {
+  const inns = Array.isArray(ls.innings) ? ls.innings : [];
+  const teams = ls.teams || {};
+  const runs = (h) => (h && typeof h.runs === 'number' ? h.runs : null);
+  const of = (k) => ({
+    rs: inns.map((i) => runs(i[k])),
+    h: (teams[k] && teams[k].hits) || 0,
+    e: (teams[k] && teams[k].errors) || 0,
+  });
+  return { away: of('away'), home: of('home') };
+}
+
 // Schedule JSON -> the games to show at `now`, in start order.
 // `finals` (gamePk -> epoch first seen final) is updated in place.
 // `mode`: 'auto' (default) or 'forced' (see the windows above).
-// opts (per board): teams (bbTeams), pre / final windows in s.
+// opts (per board): teams (bbTeams), pre / final windows in s, line (a wide
+// board: live games and finals carry the line score, see lineScore).
 function shown(json, now, finals = new Map(), changes = new Map(), mode = 'auto', opts = {}) {
   const forced = mode === 'forced';
   const teams = opts.teams || ALL_TEAMS;
@@ -119,6 +134,11 @@ function shown(json, now, finals = new Map(), changes = new Map(), mode = 'auto'
           if (!finals.has(g.gamePk)) finals.set(g.gamePk, now - start > STALE_S ? -Infinity : now);
           if (now - finals.get(g.gamePk) >= finalS) continue;
         }
+      }
+      if (opts.line && game.st !== 'pre') {
+        const ln = lineScore(g.linescore || {});
+        Object.assign(game.away, ln.away);
+        Object.assign(game.home, ln.home);
       }
       if (game.st === 'live') {
         Object.assign(game, liveState(g.linescore || {}));
@@ -212,4 +232,4 @@ function prioritize(games, priority, teams = ALL_TEAMS) {
   return fav.length ? fav : games;
 }
 
-module.exports = { createMlb, dayStart, FORCED_FINAL_HOUR, shown, trackScores, nextDelay, url, qualifies, qualifiesFor, prioritize, CUBS, SOX, TEAMS, PRE_S, FINAL_S, FAST_S, SLOW_S };
+module.exports = { createMlb, dayStart, FORCED_FINAL_HOUR, shown, lineScore, trackScores, nextDelay, url, qualifies, qualifiesFor, prioritize, CUBS, SOX, TEAMS, PRE_S, FINAL_S, FAST_S, SLOW_S };

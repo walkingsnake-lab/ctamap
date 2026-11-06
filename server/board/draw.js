@@ -1536,16 +1536,16 @@
       return lerpColor(C.amber, rest, (age - SCORE_HOLD_S) / SCORE_FADE_S);
     }
 
-    // Score, right-aligned at SCORE_RIGHT; a changed score rolls digit by
-    // digit like arrival times.
-    function drawScore(f, text, top, color, roll) {
+    // Score, right-aligned at `right` (SCORE_RIGHT); a changed score rolls
+    // digit by digit like arrival times.
+    function drawScore(f, text, top, color, roll, right = SCORE_RIGHT) {
       const base = top + 6;
-      if (!roll || roll.from === text || roll.p >= 1) { rtext(f, '5x7', text, SCORE_RIGHT, base, color); return; }
+      if (!roll || roll.from === text || roll.p >= 1) { rtext(f, '5x7', text, right, base, color); return; }
       const up = Math.round(easeInOut(roll.p) * SCORE_ROLL);
-      f.withClip(SCORE_RIGHT - 12, top, SCORE_RIGHT, top + 6, () => {
+      f.withClip(right - 12, top, right, top + 6, () => {
         const from = roll.from;
         if (from.length === text.length) {
-          let x = SCORE_RIGHT - measure('5x7', text) + 1;
+          let x = right - measure('5x7', text) + 1;
           for (let i = 0; i < text.length; i++) {
             if (from[i] === text[i]) f.text('5x7', text[i], x, base, color);
             else {
@@ -1555,8 +1555,8 @@
             x += measure('5x7', text[i]) + 1;
           }
         } else {
-          rtext(f, '5x7', from, SCORE_RIGHT, base - up, color);
-          rtext(f, '5x7', text, SCORE_RIGHT, base - up + SCORE_ROLL, color);
+          rtext(f, '5x7', from, right, base - up, color);
+          rtext(f, '5x7', text, right, base - up + SCORE_ROLL, color);
         }
       });
     }
@@ -1589,7 +1589,7 @@
       const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
       const oldLeft = fromLeft != null ? fromLeft : left + measure('small', text) - measure('small', from);
       const sameShape = oldLeft === left && from.length === text.length && [...text].every((ch, i) => measure('small', ch) === measure('small', from[i]));
-      f.withClip(0, base - 5, 63, base - 1, () => {
+      f.withClip(0, base - 5, f.w - 1, base - 1, () => {
         if (sameShape) {
           let x = left;
           for (let i = 0; i < text.length; i++) {
@@ -1639,8 +1639,8 @@
       const clock = clockText(now);
       const label = 'NO GAMES';
       const top = Math.floor((32 - 18) / 2);
-      rollText(f, 'clock', 'big.clock', clock, centerX('clock'), top + 10, C.clock);
-      f.text('small', label, Math.floor((64 - measure('small', label)) / 2), top + 18, C.noTrains);
+      rollText(f, 'clock', 'big.clock', clock, (str) => Math.floor((f.w - measure('clock', str)) / 2), top + 10, C.clock);
+      f.text('small', label, Math.floor((f.w - measure('small', label)) / 2), top + 18, C.noTrains);
     }
 
     // Embossed text: black right of, below, and below-right of every lit
@@ -1762,16 +1762,83 @@
       return f;
     }
 
+    // ---- baseball, wide (wide-spec §8; contract "Baseball") ----
+    // The line score across both panels, for every layout (no logos yet):
+    // inning numbers on rows 1-5 (the inning being played amber), each team's
+    // color block and abbreviation as in the classic layout, its runs by
+    // inning in Tom Thumb under the numbers, a divider column, then R H E in
+    // 5x7, right-aligned (hits often reach two digits). The live bottom line has the inning, count and outs from the left
+    // and the bases at the right. Past the 9th, the last 9 innings.
+    const BW = { innX: 26, pitch: 8, cols: 9, div: 95, rhe: [105, 117, 126], tops: [9, 17], head: '#4a4a4a', countX: 30, outsX: 46 };
+    function renderBaseballWide(f, g, now, o) {
+      const rolls = o.rolls || {};
+      const live = g.st === 'live', final = g.st === 'final';
+      const winner = final ? (g.away.r > g.home.r ? 'away' : g.home.r > g.away.r ? 'home' : null) : null;
+      const sides = [['away', BW.tops[0]], ['home', BW.tops[1]]];
+      let nameEnd = 0;
+      for (const [k, top] of sides) {
+        f.fill(0, top, 3, 6, g[k].c || C.grey);
+        nameEnd = Math.max(nameEnd, f.text('5x7', g[k].ab, 5, top + 6, winner === k ? C.amber : C.label));
+      }
+      f.fill(0, DIVIDER, f.w, 1, C.divider);
+
+      if (g.st === 'pre') {
+        // As at 64: records after the longer name, first pitch on the bottom line.
+        for (const [k, top] of sides) f.text('small', record(g[k]), nameEnd + 2, top + 6, C.grey);
+        f.text('small', 'TODAY', 0, BOTTOM, C.grey);
+        const ap = ampmText(g.start);
+        rtext(f, 'small', ap, f.w - 1, BOTTOM, C.grey);
+        rtext(f, 'small', clockText(g.start), f.w - 1 - measure('small', ap) - 3, BOTTOM, C.label);
+        return f;
+      }
+
+      const rs = (k) => g[k].rs || [];
+      const cur = live ? g.inn || 1 : 0;
+      const last = Math.max(BW.cols, rs('away').length, rs('home').length, cur);
+      const first = last - BW.cols + 1;
+      f.fill(BW.div, 0, 1, DIVIDER, C.divider);
+      for (let i = 0; i < BW.cols; i++) {
+        const inn = first + i, cx = BW.innX + i * BW.pitch;
+        ctext(f, 'small', String(inn), cx, 6, inn === cur ? C.amber : BW.head);
+        for (const [k, top] of sides) {
+          const v = rs(k)[inn - 1];
+          const bat = inn === cur && (k === 'away' ? g.half === 'T' : g.half === 'B');
+          // A home half not needed in a final: X.
+          const str = v != null ? String(v) : bat ? '0' : final && k === 'home' && inn <= rs('away').length ? 'X' : '';
+          if (str) ctext(f, 'small', str, cx, top + 6, bat ? C.amber : C.grey);
+        }
+      }
+      // Letters centered over a one-digit value.
+      ['R', 'H', 'E'].forEach((l, i) => ctext(f, 'small', l, BW.rhe[i] - 2, 6, BW.head));
+      for (const [k, top] of sides) {
+        const color = final ? (winner === k ? C.amber : winner ? BB.lose : C.label) : scoreColor(g[k], now);
+        drawScore(f, String(g[k].r), top, color, rolls[k], BW.rhe[0]);
+        rtext(f, '5x7', String(g[k].h || 0), BW.rhe[1], top + 6, C.grey);
+        rtext(f, '5x7', String(g[k].e || 0), BW.rhe[2], top + 6, C.grey);
+      }
+
+      if (final) { f.text('small', 'FINAL', 0, BOTTOM, C.label); return f; }
+      const t = liveTexts(g);
+      drawRollText(f, t.inn, 0, BOTTOM, C.label, rolls.inn, 0);
+      drawRollText(f, t.count, BW.countX, BOTTOM, C.label, rolls.count, BW.countX);
+      drawRollText(f, t.outs, BW.outsX, BOTTOM, C.grey, rolls.outs, BW.outsX);
+      // Bases: 3x3 diamonds, second above first and third.
+      const on = g.on || [0, 0, 0];
+      [[125, 29, on[0]], [122, 27, on[1]], [119, 29, on[2]]].forEach(([x, y, b]) => drawDiamond(f, x, y, 1, b ? C.amber : BB.base, true));
+      return f;
+    }
+
     // opts: now, game (index into p.mlb.games; default the rotation),
     // rolls ({away|home|inn|count|outs: {from, p}}: scores and live status
     // texts mid-roll), logos ({id: 864-byte 24x12 RGB crop}; logo layout)
     function renderBaseball(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
+      const f = newFrame(colsOf(p) === WIDE ? WIDE : 64);
       const games = (p.mlb && p.mlb.games) || [];
       if (!games.length) { drawNoGames(f, now); return f; }
       const g = games[o.game != null ? o.game % games.length : pickGame(games, now, timing(p).game, !!(p.mlb && p.mlb.all)).i];
+      if (f.w === WIDE) return renderBaseballWide(f, g, now, o);
       if (p.mlb.layout === 'logos' || p.mlb.layout === 'bands') return renderBaseballLogos(f, p, g, now, o);
       const rolls = o.rolls || {};
       const final = g.st === 'final';

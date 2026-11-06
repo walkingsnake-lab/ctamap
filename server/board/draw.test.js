@@ -1601,3 +1601,29 @@ test('width: wide transit and ticker draw 128 across; overnight shows on both pa
   const night = draw.render({ ...p, rows: [] });
   for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) assert.deepEqual(night.get(x, y), night.get(x + 64, y));
 });
+
+test('baseball at 128: the line score for every layout; the batting half amber; X for a home half not needed', () => {
+  const t = 1791140000;
+  const side = (ab, c, r, rs, h, e) => ({ ab, c, r, rs, h, e, w: 1, l: 0 });
+  const live = { id: 1, st: 'live', start: t - 3600, inn: 7, half: 'T', b: 2, s: 1, o: 2, on: [1, 0, 1],
+    away: side('CHC', '#2a5bd8', 3, [0, 1, 0, 0, 2, 0], 7, 0), home: side('STL', '#d62a2a', 2, [1, 0, 0, 1, 0, 0], 5, 1) };
+  const pay = (layout, g) => ({ now: t, tzo: 0, bright: 100, screen: 'baseball', cols: 128, mlb: { layout, games: [g] } });
+  const f = draw.render(pay('classic', live));
+  assert.equal(f.w, 128);
+  assert.deepEqual(Array.from(draw.render(pay('logos', live)).px), Array.from(f.px), 'no logos at 128 yet');
+  const lit = (x0, x1, y0, y1, color) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (hex(f.get(x, y)) === color) return true; return false; };
+  assert.ok(lit(73, 76, 1, 5, '#ffb000'), 'the 7th inning header amber');
+  assert.ok(lit(73, 76, 10, 14, '#ffb000'), 'away batting in the 7th: 0 in amber');
+  assert.ok(!lit(73, 76, 18, 22, '#8f8f8f') && !lit(73, 76, 18, 22, '#ffb000'), 'home 7th not played');
+  assert.ok(lit(118, 126, 26, 30, '#ffb000'), 'runners on the bases');
+  assert.ok(lit(95, 95, 0, 23, '#333333'), 'divider column');
+  // Final, home ahead after the top of the 9th: X.
+  const fin = { ...live, st: 'final', away: { ...live.away, r: 1, rs: [0, 0, 0, 1, 0, 0, 0, 0, 0] }, home: { ...live.home, rs: [1, 0, 0, 1, 0, 0, 0, 0, null] } };
+  const ff = draw.render(pay('classic', fin));
+  const xs = []; for (let x = 89; x <= 93; x++) for (let y = 18; y <= 22; y++) if (ff.get(x, y).some((v) => v)) xs.push(x);
+  assert.ok(xs.length > 0, 'X drawn in the home 9th');
+  // No games: centered on 128.
+  const ng = draw.render({ now: t, tzo: 0, bright: 100, screen: 'baseball', cols: 128, mlb: { games: [] } });
+  let a = 128, b = -1; for (let y = 0; y < 32; y++) for (let x = 0; x < 128; x++) if (ng.get(x, y).some((v) => v)) { a = Math.min(a, x); b = Math.max(b, x); }
+  assert.ok(Math.abs(a - (127 - b)) <= 1, `centered: ${a}..${b}`);
+});

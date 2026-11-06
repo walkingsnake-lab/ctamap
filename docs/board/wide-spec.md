@@ -135,8 +135,8 @@ The weekday over the date (5x7) on the left, a divider, the time in the 23-row d
 
 ## 8. Baseball
 
-- **Line score (first pass):** innings 1–9, R H E, then the inning, count, outs, pitch count and bases on the bottom row. The innings are in the linescore the server already fetches; the pitch count isn't.
-- The classic, logo and band layouts and the other game states aren't planned yet.
+- **Line score (first pass, built Nov 5):** innings 1–9 (the last nine in extras), R H E, then the inning, count, outs and bases on the bottom row. The innings come from the linescore the server already fetches (`rs`, `h`, `e`, wide boards only); the pitch count isn't in it, so it's left out. Every layout draws the line score for now (no logos). Pregame: names and records, first pitch on the bottom row; finals: `X` for an unneeded home half, `FINAL` bottom left.
+- Logos at 128 and a richer pregame aren't planned yet.
 
 ## 9. Knob chooser (variant strip; built)
 
