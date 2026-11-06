@@ -33,7 +33,7 @@ The v5 drawer bar sleeve for a **Waveshare RGB-Matrix-P4-64x32** (256 x 128 mm),
 | Diffuser, left / right | `p4-diffuser-left-white.stl` + `p4-diffuser-left-black.stl`; same for right: one object, two parts per half (shared frame) | white + black PETG | face down; the white part is the first layer |
 | Spine | `p4-spine.stl` | black PETG | flat, as exported (countersinks on the bed) |
 | Bridge | `p4-bridge.stl` | black PETG | plate down, post up |
-| Encoder collar | `p4-encoder-collar.stl` (41 mm flange; the v5 collar's crush-ribbed plug and Ø19.6 pocket) | walnut, or translucent PETG for the knob's glow | flange-top down |
+| Encoder collar | `p4-encoder-collar.stl` (41 mm flange; the v5 collar's crush-ribbed plug and Ø19.6 pocket) | translucent PETG (the knob's light glows through it) or a solid PETG / PLA; not walnut: at this size it's hard to sand and polish to match the shell | flange-top down |
 | Knob | `p4-knob.stl` (35 mm; the v5 pebble's bore fit) | white PLA, or any | skirt down, as exported |
 | Boot key | `p4-boot-key.stl` | PETG or PLA | flat |
 | Light-sensor sled (optional) | `p4-sensor-sled.stl` | PETG | plate down |
@@ -46,7 +46,7 @@ Filament, roughly (the slicer has the real numbers): walnut ~230 g (the shell's 
 - **Shell halves:** Bambu PLA Wood profile, filament dried (~8 h at 50-55 °C) and flow-calibrated. 0.2 mm base layers with variable layer height (smooths the hood ramp and rim slopes; the two halves slice a little differently, so their faint bands won't line up exactly across the joint, which the reveal breaks anyway), 4 walls on a 0.4 nozzle, elephant foot 0.15. **Brim 3 mm with a 0.1 mm gap, or brim ears, not 5 mm:** the halves sit diagonally with ~4.5 mm a side, and the bottom half's first layer leaves room for a brim of at most ~4.6 mm. Keep the 45° turn they come with (don't let auto-arrange rotate them back). Seam on a back corner (Preview), scarf seam. Z hop 0.6 mm. Plate washed with dish soap, then glue stick; bed 55-60 °C; door closed. The bed's corners have to print well: if unsure, print the seam coupon at a bed corner first.
 - **Tray halves:** PETG, 0.4 nozzle, 0.24 mm layers, 4 walls, 4 top + 4 bottom layers, 15% gyroid, monotonic bottom surface, textured PEI, elephant foot 0.15, Z hop, dried PETG (the v5 tray's settings). The right half's window part takes the translucent PETG: the swaps happen only in its first ~4 layers.
 - **Diffuser halves:** 0.4 nozzle, first layer 0.2 (the face, one layer, two colours: white face, black bezel), 0.2 layers after it all black, first layer 30 mm/s, monotonic bottom surface, elephant foot 0.
-- **Spine, bridge:** PETG on the tray plate at its 0.24 mm layers (the bridge's floor is cut for them); 100% infill on the spine. **Collar** in translucent PETG: 100% infill. Small parts (key, sled): print beside a larger part.
+- **Spine, bridge:** PETG on the tray plate at its 0.24 mm layers (the bridge's floor is cut for them); 100% infill on the spine. **Collar:** 100% infill (translucent PETG glows evenly that way). Small parts (key, sled): print beside a larger part.
 
 ## Hardware
 - **Screws:**
