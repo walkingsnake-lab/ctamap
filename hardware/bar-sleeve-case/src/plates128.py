@@ -30,8 +30,9 @@ C = P + 'coupons/'
 # per-object overrides, Bambu Studio keys and value strings (README "Print settings"); only per-object options, none of
 # them per-nozzle (print_options_with_variant). Plate-wide ones (first layer height, nozzle, Z hop, bed) are the build
 # sheet's to set.
-SHELL = {'layer_height': '0.2', 'wall_loops': '4', 'elefant_foot_compensation': '0.15', 'brim_type': 'outer_only',
-         'brim_width': '5', 'brim_object_gap': '0.1', 'seam_position': 'back', 'seam_slope_type': 'external'}
+SHELL = {'layer_height': '0.16', 'wall_loops': '4', 'elefant_foot_compensation': '0.15', 'brim_type': 'outer_only',
+         'brim_width': '5', 'brim_object_gap': '0.1', 'seam_position': 'aligned', 'seam_slope_type': 'none'}
+# (seam Aligned, no scarf: the shell's sharpest inside corners are in the joint by design, bar128.py split_shell)
 TRAY = {'layer_height': '0.24', 'wall_loops': '4', 'top_shell_layers': '4', 'bottom_shell_layers': '4',
         'sparse_infill_density': '15%', 'sparse_infill_pattern': 'gyroid', 'bottom_surface_pattern': 'monotonic',
         'elefant_foot_compensation': '0.15'}
@@ -40,12 +41,10 @@ SLOT2 = {'black grid', 'window (translucent)'}             # parts on filament s
 
 # plate: (file stem, title, settings, [objects]); object: (name, [(part name, stl, rotate_z deg)], (x0, y0) of its
 # footprint's lower-left corner on the bed). Parts of one object share a frame (as exported) and keep it.
-# The shell halves turn 180 deg: back rim down puts the case's top at +y, and the seam ('back') goes to +y, so turned
-# it lands on the underside.
 PLATES = [
-    ('plate-0a-test-seam-lap', 'Test: seam lap (PLA Wood)', SHELL, [
-        ('seam lap, half A', [('seam A', C + 'coupon-128-seam-A-walnut.stl', 0)], (98.0, 125.6)),
-        ('seam lap, half B', [('seam B', C + 'coupon-128-seam-B-walnut.stl', 0)], (146.8, 125.6)),
+    ('plate-0a-test-seam-joint', 'Test: shell joint, 3 clearances (PLA Wood, 5 mm brim)', SHELL, [
+        ('joint, half A x3 (tongues)', [('seam A', C + 'coupon-128-seam-A-walnut.stl', 0)], (100.0, 107.0)),
+        ('joint, half B x3 (grooves)', [('seam B', C + 'coupon-128-seam-B-walnut.stl', 0)], (143.7, 107.0)),
     ]),
     ('plate-0b-test-diffuser-joint', 'Test: diffuser joint (0.2 nozzle, white + black)', DIFFUSER, [
         ('diffuser joint coupon', [('white face', C + 'coupon-128-diffuser-joint-white.stl', 0),
@@ -55,8 +54,8 @@ PLATES = [
         ('splice plate coupon', [('splice coupon', C + 'coupon-128-splice-plates.stl', 0)], (104.5, 104.0)),
     ]),
     ('plate-1-shell', 'Shell halves (PLA Wood, back rim down, 5 mm brim)', SHELL, [
-        ('shell half A (left)', [('shell A', P + 'bar128-shell-A-walnut-backdown.stl', 180)], (39.4, 135.5)),
-        ('shell half B (right)', [('shell B', P + 'bar128-shell-B-walnut-backdown.stl', 180)], (41.5, 25.0)),
+        ('shell half A (left)', [('shell A', P + 'bar128-shell-A-walnut-backdown.stl', 0)], (39.4, 135.5)),
+        ('shell half B (right)', [('shell B', P + 'bar128-shell-B-walnut-backdown.stl', 0)], (41.5, 25.0)),
     ]),
     ('plate-2-trays', 'Trays + splice plates + Boot key + sensor sled (black PETG; tray B window translucent PETG)', TRAY, [
         ('tray A (left)', [('tray A', P + 'bar128-tray-A.stl', 0)], (10.0, 126.0)),
@@ -76,7 +75,7 @@ PLATES = [
         ('wall cleat', [('wall cleat', P + 'bar128-cleat-wall.stl', 45)], (12.2, 12.2)),
     ]),
 ]
-MARGIN = {'plate-1-shell': 5.0}             # brim: keep this much more from the bed edge and between objects
+MARGIN = {'plate-1-shell': 5.0, 'plate-0a-test-seam-joint': 5.0}             # brim: keep this much more from the bed edge and between objects
 GAP = 4.0                                   # minimum clear gap between objects (plus brims)
 
 

@@ -166,6 +166,9 @@ def latch_dimples():
 
 
 SCREW_FLOAT = 0.0                # +/- y float of the screws from below (0: round holes)
+FLOOR_CH = 0.0                   # >0: the feet recesses and screw counterbores widen by this at the mouth and meet their
+                                 # floors (same size as without) at 45 deg: no sharp inside corner there, which is where an
+                                 # 'aligned' seam goes (bar128.py: the shell joint is where it should go)
 
 
 def teardrop_cs(r, cx, cy, trunc=None, seg=64):
@@ -250,8 +253,14 @@ def shell2():
         usb_cuts = [m.mirror([1, 0, 0]) for m in usb_cuts]
     cuts += usb_cuts
     # feet recesses (full teardrop toward the back: no flat roof to curl and catch the nozzle; the point shows ~3 mm past the bumper, underneath)
+    def recess(cs, depth, c, z0=-1.0):             # extruded from z0 up to depth; FLOOR_CH: c wider below depth - c
+        if not c:
+            return Manifold.extrude(cs, depth - z0).translate([0, 0, z0])
+        wide = cs.offset(c, JT, circular_segments=SEG)
+        return Manifold.batch_hull([Manifold.extrude(wide, depth - c - z0).translate([0, 0, z0]),
+                                    Manifold.extrude(cs, 0.01).translate([0, 0, depth - 0.01])])
     for fx, fy in FEET:
-        cuts.append(Manifold.extrude(teardrop_cs(FOOT_D / 2, fx, fy), FOOT_DEPTH + 1).translate([0, 0, -1]))
+        cuts.append(recess(teardrop_cs(FOOT_D / 2, fx, fy), FOOT_DEPTH, FLOOR_CH))
     # back plate screws from below
     for sx in (-1, 1):
       for scx in SCREW_XS:
@@ -260,7 +269,7 @@ def shell2():
         hole = teardrop_cs(1.7, sx * scx, SCREW_Y - f, seg=32) + teardrop_cs(1.7, sx * scx, SCREW_Y + f, seg=32)
         cb = teardrop_cs(3.2, sx * scx, SCREW_Y - f, seg=48) + teardrop_cs(3.2, sx * scx, SCREW_Y + f, seg=48)
         cuts.append(Manifold.extrude(hole.hull(), WALL + 1 - z0).translate([0, 0, z0]))
-        cuts.append(Manifold.extrude(cb.hull(), 2.0).translate([0, 0, -1]))
+        cuts.append(recess(cb.hull(), 1.0, FLOOR_CH))
     # tongue grooves (as v1)
     yp0 = D - BACKL - PLATE_T
     for sx in ((-1, 1) if TONGUES else ()):

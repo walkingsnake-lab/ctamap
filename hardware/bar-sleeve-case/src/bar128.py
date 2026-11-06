@@ -7,12 +7,16 @@ both are turned 180 deg, as in the single build.
 Shell (walnut PLA, 347 x 96.3 x 69): the v5 sleeve built from the 'p25x2' profile (bore 340 x 89.3), split at x = 0
 into a left and a right half, both on one plate. The joint is the P4 split's (p4.py on its branch) turned 90 deg: it
 cuts the top and bottom walls, the hood and both rims.
-- a 1 x 1 mm reveal centred on x = 0 wraps the case (top, bottom, front rim, hood, back rim). The halves meet outside at
-  its right edge (XJ), so the joint line sits in the groove's shadow;
-- a half-lap inside the top and bottom walls: half A's inner WALL / 2 runs on past the cut as a lip into a pocket in
-  half B, to x = LAP, with LAP_CL of glue gap on its face and y ends and LAP_XCL at its tip, so the outer band is the
-  only seat in x. The lip's y ends are 45 deg (no flat overhang back-down). It stays 1 mm behind the screen face and
-  0.5 mm in front of the trays' back, so it never shows.
+- the halves meet at x = 0. Every visible edge there is chamfered CHAMF x 45 deg on both sides (a V-groove round the
+  case: top, bottom, front rim, hood, back rim): it hides the joint line without the thin stepped ledges of the first
+  version's square reveal, and its corners are convex, so the slicer's seam doesn't collect there.
+- a tongue and groove inside the top and bottom walls (Nov 6; replaces the half-lap, which held each wall from one side
+  only, so the halves stepped). The wall is SKIN | GROOVE | SKIN; half A's tongue runs TONGUE_L into a groove closed on
+  both sides in half B, so the outer faces are held flush both ways. From TONGUE_FRONT behind the front face to
+  TONGUE_BACK in front of the back face (its back end 45 deg: no flat overhang back-down); hidden everywhere.
+  TONGUE_CL a side; a DETENT ridge across the tongue's inner face clicks into a recess in the groove's inner skin when
+  it's home (that skin, hidden, flexes 0.2 mm going in; once the trays are in it can't, so the joint is locked). The groove's mouth is chamfered so a seam blob at the tongue's root can't hold the
+  halves apart. The seam test plate prints three clearances (TONGUE_CLS) to choose TONGUE_CL.
 - the knob moves to x KNOB_X (+123, near the right end over the S3's tray: its encoder board just clears tray B's
   top-right post), the light sensor to SENSOR_X (+83, 40 mm from the knob toward the centre), the screws from below to
   x +/-34 and +/-126 (each tray's own +/-46).
@@ -66,20 +70,27 @@ else:
     V.SENSOR_X = SENSOR_X
 DR.configure_shell()
 V.BACKDOWN = True
+V.FLOOR_CH = 0.5                                 # seams go to the joint, not the recesses underneath (split_shell)
 V.KNOB_X = KNOB_X
 for _m in (C, V, P3):
     _m.SCREW_XS = tuple(panel.P['screw_xs'])     # +/-34, +/-126: each tray's own +/-46
 
 BED = 256.0
-# ---------------------------------------------------------------- shell split (p4.py's joint, about x instead of z)
-LAP = 4.0                       # half A's inner half-wall runs on to x = LAP
-REV_W, REV_D = 1.0, 1.0         # reveal: width (along x) and depth
-XS = 0.0                        # reveal centre: the panel joint
-XJ = XS + REV_W / 2             # where the halves meet outside: the reveal's right edge
-LAP_Y0 = Y_FACE + 1.0           # lap only behind the screen face ...
-LAP_Y1 = DR.Y1 - 0.5            # ... and in front of the trays' back (the back rim shows the plain reveal)
-LAP_CL = 0.12                   # glue gap on the lip's outer face and its y ends (medium CA)
-LAP_XCL = 0.2                   # gap at the lip's tip: the outer band at XJ is the only seat in x
+# ---------------------------------------------------------------- shell split: tongue and groove at x = 0
+CHAMF = 0.5                     # V-groove: each half's visible edges at the joint chamfered this much x 45 deg
+SKIN = 1.0                      # wall = SKIN | GROOVE | SKIN (WALL 3.5)
+GROOVE = WALL - 2 * SKIN        # 1.5
+TONGUE_L = 8.0                  # how far A's tongue runs into B
+TIP_CL = 0.3                    # gap at the tongue's tip: the end faces at x = 0 are the seat in x
+TONGUE_CLS = (0.05, 0.10, 0.15) # the test plate's three
+TONGUE_CL = float(os.environ.get('TONGUE_CL', '0.10'))   # a side
+DETENT = 0.20                   # the ridge's interference going in: only the inner skin (hidden) flexes, 0.8 % strain
+DET_X, DET_W = 6.5, 0.8         # ridge centre (from the joint) and base width; 45 deg flanks
+DET_Y0 = Y_FACE + 2.0           # ridge and recess only behind the screen (the inner skin in front of it is the hood)
+MOUTH = 0.3                     # the groove's mouth chamfer (room for a seam blob at the tongue's root)
+TONGUE_FRONT = 1.2              # tongue stops this far behind the front face (chamfer included)
+TONGUE_BACK = 2.0               # ... and in front of the back face at its root
+Y_CL = 0.2                      # the tongue's front end short of the groove's: y is set by the backs, flat on the bench
 
 
 def outer_inset(i):
@@ -105,25 +116,85 @@ def visible_layer(sh, d):
     return sh - deep
 
 
-def lap_prism(cl, xcl):
-    """the lap's extent in x and y (all z): from the joint XJ to XS + LAP, both y ends 45 deg so neither the lip nor the
-    pocket's roof is a flat overhang printed back-down. cl / xcl shrink it (the lip) inside the pocket."""
-    x0, x1 = XJ - 0.01, XS + LAP - xcl
-    e = cl * math.sqrt(2)
-    a = box(x0, x0 + 0.01, LAP_Y0 + e, LAP_Y1 - e, -1, H + 1)
-    b = box(x1 - 0.01, x1, LAP_Y0 + e + (x1 - x0), LAP_Y1 - e - (x1 - x0), -1, H + 1)
-    return (a + b).hull()
+def _walls():
+    """(z0, z1) of the top and bottom walls' groove band, with the y where the tongue starts behind each wall's front"""
+    out = []
+    for z0, z1 in ((H - SKIN - GROOVE, H - SKIN), (SKIN, SKIN + GROOVE)):
+        yf = max(V.front_y(z0), V.front_y(z1)) + V.CH_F + TONGUE_FRONT
+        out.append((z0, z1, yf))
+    return out
 
 
-def split_shell(sh):
-    """left (A) and right (B) halves. Outside they meet at XJ; inside the top and bottom walls A's lip (inner WALL / 2)
-    runs on to XS + LAP into a pocket in B."""
-    reveal = visible_layer(sh, REV_D) ^ box(XS - REV_W / 2, XS + REV_W / 2, -50, D + 1, -1, H + 1)
-    s = sh - reveal
-    pocket = s ^ outer_inset(WALL / 2) ^ lap_prism(0, 0)
-    lip = s ^ outer_inset(WALL / 2 + LAP_CL) ^ lap_prism(LAP_CL, LAP_XCL)
-    a = (s ^ box(-HW - 1, XJ, -50, D + 1, -1, H + 1)) + lip
-    b = (s ^ box(XJ, HW + 1, -50, D + 1, -1, H + 1)) - pocket
+def _ridge(x0, z, sgn, h, w, y0, y1):
+    """a 45 deg-flanked ridge (base w at the face z, height h toward sgn), across y0..y1, centred on x0"""
+    top = max(w / 2 - h, 0.02)
+    cs = CrossSection([[(x0 - w / 2, 0.0), (x0 + w / 2, 0.0), (x0 + top, h), (x0 - top, h)]])
+    m = Manifold.extrude(cs, y1 - y0).rotate([90, 0, 0])            # xz profile, extruded along -y
+    m = m.translate([0, y1, 0])
+    if sgn < 0:
+        m = m.mirror([0, 0, 1])
+    return m.translate([0, 0, z])
+
+
+def tongue(cl, y_back=None):
+    """A's tongue for both walls (clearance cl a side), with its detent ridge on the face toward the case's inside;
+    y_back: cut flat there (the test piece)"""
+    out = None
+    for k, (z0, z1, yf) in enumerate(_walls()):
+        a0, a1 = z0 + cl, z1 - cl
+        yb = D - TONGUE_BACK if y_back is None else y_back
+        L = TONGUE_L - TIP_CL
+        yt = yf + Y_CL                         # its front end clears the groove's
+        if y_back is None:                     # back end 45 deg: from yb at the root to yb - L at the tip
+            prof = CrossSection([[(-0.01, yt), (L, yt), (L, yb - L), (-0.01, yb)]])
+        else:
+            prof = CrossSection([[(-0.01, yt), (L, yt), (L, yb), (-0.01, yb)]])
+        t = Manifold.extrude(prof, a1 - a0).translate([0, 0, a0])   # x, y profile, extruded along z
+        zf, sg = (a0, -1) if k == 0 else (a1, 1)                  # top wall: its lower face; bottom wall: its upper
+        # 2 cl + DETENT: DETENT past the groove face even with the tongue pushed against the outer skin
+        r = _ridge(DET_X, zf, sg, 2 * cl + DETENT, DET_W, DET_Y0, (yb if y_back is not None else yb - L) - 1.0)
+        t = t + (r ^ box(0, L, -50, D + 50, a0 - 1, a1 + 1))
+        out = t if out is None else out + t
+    return out
+
+
+def groove(cl=None):
+    """B's groove for both walls: the tongue's slot (full band, TONGUE_L deep, from yf to D - TONGUE_BACK), the detent
+    recess in the inner skin, and the mouth chamfer"""
+    cl = TONGUE_CL if cl is None else cl
+    out = None
+    for k, (z0, z1, yf) in enumerate(_walls()):
+        yb = D - TONGUE_BACK
+        g = box(-0.01, TONGUE_L, yf, yb, z0, z1)
+        zf, sg = (z0, -1) if k == 0 else (z1, 1)
+        g = g + _ridge(DET_X, zf, sg, cl + DETENT + 0.05, DET_W + 0.2, DET_Y0 - 0.5, yb - 0.5)
+        mouth = CrossSection([[(-0.01, z0 - MOUTH), (MOUTH, z0), (MOUTH, z1), (-0.01, z1 + MOUTH)]])
+        g = g + Manifold.extrude(mouth, yb - yf).rotate([90, 0, 0]).translate([0, yb, 0])
+        out = g if out is None else out + g
+    return out
+
+
+def v_groove(sh, steps=8):
+    """material within d of a visible face and within CHAMF - d of x = 0: each half's visible edges chamfered 45 deg"""
+    cut, prev = None, None
+    for k in range(1, steps + 1):
+        d = CHAMF * k / steps
+        lay = visible_layer(sh, d)
+        band = lay if prev is None else lay - prev
+        w = CHAMF - CHAMF * (k - 1) / steps
+        c = band ^ box(-w, w, -50, D + 50, -1, H + 1)
+        cut = c if cut is None else cut + c
+        prev = lay
+    return cut
+
+
+def split_shell(sh, cl=None, y_back=None):
+    """left (A) and right (B) halves, meeting at x = 0: V-groove chamfers outside, A's tongue in B's groove inside the
+    top and bottom walls (clearance cl a side, default TONGUE_CL)."""
+    cl = TONGUE_CL if cl is None else cl
+    s = sh - v_groove(sh)
+    a = (s ^ box(-HW - 1, 0.0, -50, D + 1, -1, H + 1)) + (tongue(cl, y_back) ^ sh)
+    b = (s ^ box(0.0, HW + 1, -50, D + 1, -1, H + 1)) - groove(cl)
     out = []
     for m in (a, b):
         parts = sorted(m.decompose(), key=lambda q: -q.volume())
@@ -132,12 +203,24 @@ def split_shell(sh):
     return tuple(out)
 
 
-def seam_coupon(a, b, wall='top'):
-    """both halves across the seam, 50 mm wide, the front 34 mm deep (hood, rim, reveal and the lap's front end), one wall:
-    test the lap's fit and the glue, and see how the reveal reads after finishing"""
+COUPON_Y = 34.0                 # the seam test pieces: the front 34 mm (hood, rim, V-groove, the tongue's front end)
+
+
+def seam_coupon(a, b, wall='top', w=20.0):
+    """both halves across the seam, w a side, the front COUPON_Y deep, one wall: test the tongue's fit and click, the
+    faces' flushness and how the V-groove reads"""
     zr = (H - 15.0, H + 1) if wall == 'top' else (-1, 15.0)
-    reg = box(-25.0, 25.0, -50, 34.0, *zr)
+    reg = box(-w, w, -50, COUPON_Y, *zr)
     return a ^ reg, b ^ reg
+
+
+def coupon_marks(m, n, x_end):
+    """n small notches across the inner face near the piece's outer end: which clearance it is (1, 2, 3)"""
+    sg = 1 if x_end < 0 else -1                    # inward from the outer end
+    for k in range(n):
+        x = x_end + sg * (2.0 + 1.6 * k)
+        m = m - box(x - 0.4, x + 0.4, -50, COUPON_Y + 1, H - WALL - 1, H - WALL + 0.5)
+    return m
 
 
 # ---------------------------------------------------------------- diffuser halves
@@ -259,11 +342,17 @@ def build_coupons(out):
     os.makedirs(out, exist_ok=True)
     rep = {}
     sh = V.shell2()
-    a, b = split_shell(sh)
-    # seam lap: top wall pair, print orientation as the shell (back-down: the 34 mm cut face on the bed)
-    ca, cb = seam_coupon(a, b, 'top')
-    ta, tb = backdown(ca), backdown(cb)
-    layout([[ta, tb]], gap=10.0)
+    # seam tongue and groove: three top-wall pairs (TONGUE_CLS, 1 / 2 / 3 notches on the inner face), print orientation
+    # as the shell (back-down: the cut face at COUPON_Y on the bed), the tongue cut flat there
+    rows = []
+    for k, cl in enumerate(TONGUE_CLS, 1):
+        a, b = split_shell(sh, cl, y_back=COUPON_Y)
+        ca, cb = seam_coupon(a, b, 'top')
+        ca, cb = coupon_marks(ca, k, -20.0), coupon_marks(cb, k, 20.0)
+        rows.append([backdown(ca), backdown(cb)])
+    layout(rows, gap=14.0)
+    import trimesh
+    ta = trimesh.util.concatenate([r[0] for r in rows]); tb = trimesh.util.concatenate([r[1] for r in rows])
     for n, t in (('coupon-128-seam-A-walnut.stl', ta), ('coupon-128-seam-B-walnut.stl', tb)):
         t.export(f'{out}/{n}'); rep[n] = report(n, t)
     # diffuser joint: all four pieces on one plate, one object with two parts (white face = first layer, black above)
