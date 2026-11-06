@@ -113,7 +113,7 @@ def _pair(pts):
 PROFILES['p25x2'] = dict(PROFILES['p25'], name='2 x Waveshare P2.5 64x32 (128 x 32)', w=320.0, cols=128,
                          inserts=_pair(PROFILES['p25']['inserts']), headers=_pair(PROFILES['p25']['headers']),
                          standoffs=_pair(PROFILES['p25']['standoffs']),
-                         sensor_x=-83.0,          # 40 mm right of the knob (bar128.KNOB_X, x -123), on tray A
+                         sensor_x=83.0,           # 40 mm from the knob toward the centre (bar128.KNOB_X, x +123)
                          screw_xs=(34.0, 126.0))  # each tray's pair from below (x +/-46 about its panel)
 
 KEY = os.environ.get('PANEL', 'p3').lower()
