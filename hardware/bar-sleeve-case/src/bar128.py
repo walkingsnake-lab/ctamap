@@ -47,6 +47,11 @@ import drawer as DR
 from case import box, rr_cs, prism_y, cyl_y, cyl_z, ZC, H, D, WALL, HW, RC, BORE_HX, BORE_HZ, BORE_R, JT, ADD, Y_FACE
 
 PANEL_CX = 80.0                                  # panel centres at x -/+80
+# Panel orientation (Nov 5): B turned 180 deg (as the single build: its right-hand header, under the S3, is its unused
+# output); A in its normal orientation, so its input is the inner header (x -39.9) and its output the outer one
+# (x -120.1). Data: S3 -> A in (a 30 cm ribbon), A out -> B in (30 cm). Nothing printed depends on it (inserts, posts,
+# splice plates and diffusers are the same either way round); the firmware maps each panel's rotation.
+PANEL_TURNED = {'A': False, 'B': True}
 KNOB_X = float(os.environ.get('KNOB_X', '123'))   # knob / encoder (case x): near the right end, over the S3's tray; at
                                                  # +/-123 the encoder board (25.4 wide) clears the tray's top corner post
                                                  # (x +/-142.5, Ø11) sideways. KNOB_X=-123 puts the controls on tray A
@@ -333,7 +338,7 @@ def build_trays(out, frame_dir):
         t.export(f'{out}/{n}'); rep[n] = report(n, t)
     import json
     json.dump(dict(rep=rep, port_z=DR.PORT_Z, s3_edge=DR.S3_EDGE + PANEL_CX, s3_z0=DR.S3_Z0, ky=C.KY,
-                   sensor_x=V.SENSOR_X + CSX * PANEL_CX, knob_x=DR.ENC_X + CSX * PANEL_CX, ctrl=CTRL, bottom_xs=[x + PANEL_CX * s for s in (-1, 1) for x in DR.bottom_xs()],
+                   sensor_x=V.SENSOR_X + CSX * PANEL_CX, knob_x=DR.ENC_X + CSX * PANEL_CX, ctrl=CTRL, turned=PANEL_TURNED, bottom_xs=[x + PANEL_CX * s for s in (-1, 1) for x in DR.bottom_xs()],
                    bot_y=DR.BOT_Y, foot_y=P3.FOOT_Y, y0=DR.Y0, y1=DR.Y1, yf=DR.YF,
                    corners=[(x + PANEL_CX * s, z) for s in (-1, 1) for x, z in DR.CORNERS],
                    cleat=[(x + PANEL_CX * s, z) for s in (-1, 1) for x, z in DR.CLEAT_SCREWS]),

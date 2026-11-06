@@ -50,12 +50,18 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
 - **Kept on purpose (Nov 5 review):** two screws from below per tray (one would leave each tray, and its panel, on a
   single screw in a slotted hole), and no vents in the middle (the band's free end at the seam would print thin, and
   the bands stiffen the trays).
-- **Panels turned 180°** as in the single build (data in on the left of each panel seen from the front).
-- **Data chain: S3 → panel A's input, A's output → B's input** (Nov 4). Seen from the front the four headers sit at
-  x -120.1 (A in), -39.9 (A out), +39.9 (B in) and +120.1 (B out). B's output is directly under the S3, as in the single
-  build (where it's unused): a plug fits in the 9.5 mm under the board, but its ribbon has no way out (toward A the S3's
-  own panel socket fills the gap down to 1 mm off the housing; the other way ends at the end wall). So B's output stays
-  empty and the S3 feeds A, which puts the short run between the two inner headers.
+- **Panel B turned 180°, as the single build; panel A in its normal orientation** (Nov 5). Each panel's data then runs
+  from its header nearest the joint out toward its end of the bar: on the boards, **the printed data arrows beside the
+  headers point away from the joint** on both panels. Nothing printed depends on it (inserts, posts, splice plates and
+  diffusers are the same either way round, `bar128.PANEL_TURNED`); the firmware turns only panel B's picture.
+- **Data chain: S3 → panel A's input, A's output → B's input, two 30 cm 16-pin ribbons** (Nov 4-5). Seen from the front
+  the headers sit at x -120.1 (A out), -39.9 (A in), +39.9 (B in) and +120.1 (B out, unused). B's outer header is
+  directly under the S3: a plug fits in the 9.5 mm under the board, but its ribbon has no way out (toward the middle the
+  S3's own panel socket fills the gap down to 1 mm off the housing; the other way is the end wall), so it can only be the
+  chain's unused end. That makes A the first panel. With both panels turned (until Nov 5) A's input was its far-left
+  header and the S3's ribbon crossed the bar (40-50 cm); with A the other way round its input is the inner header, so
+  both runs fit standard 30 cm ribbons. (The S3 can't plug straight onto a panel either: its socket sits 57 mm from its
+  USB-C edge, and on B's outer header the board would reach ~7 mm through the end wall.)
 
 ## Before printing: test pieces (`stl/p25-128x32/coupons/`)
 1. **Seam lap** — `coupon-128-seam-A-walnut.stl` + `-B-walnut.stl` (walnut, as exported, the 34 mm cut face on the bed): a
@@ -71,9 +77,10 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
    snuggest one an M3 passes through freely (`SPLICE_HOLE=<it>`). Also check: it sits flat on both bosses (nothing on the
    housings between them stands proud), and the rows still line up with it tightened. Then rebuild with **both** sizes
    set (`JOINT_RIB=<w> SPLICE_HOLE=<d> python3 bar128.py ../stl/p25-128x32`): one left out goes back to its default.
-4. **Chain (bench):** both panels turned 180°, butted, the S3 ribbon into A's input, a short ribbon from A's output to
-   B's input. Light both and note which columns land on which panel (the firmware's mapping; nothing printed depends on
-   it). Check the power leads reach panel A from where the S3 sits on panel B (~25 cm).
+4. **Chain (bench):** panels butted as they'll sit (both boards' data arrows pointing away from the joint), the S3's
+   ribbon into A's inner header (its input), the jumper from A's outer header to B's inner header. Light both and note
+   which columns land on which panel and that A shows its picture the other way up from B (the firmware's mapping;
+   nothing printed depends on it). Check the power leads reach panel A from where the S3 sits on panel B (~25 cm).
 5. **Power socket:** from Waveshare's photo of the back it's at the panel's centre (1.7 mm right, 0.2 up in the normal
    orientation, pins in a vertical row), which is clear on both panels (below). A glance at yours confirms it; if it
    differs, `python3 check_bar128_power.py <frames> x,z` checks the spot.
@@ -130,12 +137,14 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
   them). Sensor → encoder: **15 cm**, as the single build, into the encoder's **left-hand** socket (step 7). Without the
   sensor: S3 → encoder, **30 cm** (~13 cm seated, plus the slack to plug it with tray B out of the case).
 - **Other:** 4 bumpers 12.7 x 3.8 (at the ends); medium CA glue; the encoder's M7 nut.
-- **Cables:** S3 → panel A's input: a 16-pin IDC ribbon, **40 cm minimum, 50 cm recommended** (seated it runs ~27 cm
-  from the S3 on tray B to A's input; tray B held behind the back opening while plugging needs ~33-37 cm; the spare folds
-  into tray A's space). The P2.5's stock ribbon is too short for this run. A's output → B's input (headers 80 mm apart): the stock ribbon, folded.
+- **Data ribbons: two 30 cm 16-pin (2x8) IDC ribbons**, the standard HUB75 length (the panels' own stock ribbons, if
+  they're 30 cm). S3 → A's input: ~20 cm seated along the trays' back walls through tray B's ribbon hooks, ~26 cm with
+  tray B held behind the back opening to plug it (4 cm spare). A's output → B's input: ~19 cm across the panel backs,
+  behind A's input and power plugs, plugged on the bench (25 cm would do; 20 is tight). Both routes are checked in
+  `check_bar128_power.py`.
 - **Power: the panel's stock cable, both plugs** (it has two). Forks into the S3's terminals, the nearer plug into panel
   B (the same run as the single P2.5 build), the far plug into panel A. Between the plugs it runs flat on the panel backs
-  just above or just below the A → B data ribbon (straight across at socket height the two data plugs are in the way):
+  just above or just below the data plugs (straight across at socket height the plugs at x ±39.9 are in the way):
   ~160 mm socket to socket plus the drops, so it needs **~18-20 cm or more between the plugs**. Tie up any spare as the
   single build does.
 - **Power:** two panels can draw about twice one at full white. A 5 V / 3 A USB-C supply runs the transit screens; cap the
@@ -154,15 +163,17 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 
 ## Assembly
 1. **Shell:** bumpers into the four recesses; collar into the knob hole (near the right end).
-2. **Panels, face down on a towel:** snap each diffuser onto its panel (A's wide-rib edge toward the joint; its skirtless
+2. **Panels, face down on a towel**, the right way round: both boards' printed data arrows (beside the headers) point
+   away from the joint, so panel A lies the other way up from panel B. Snap each diffuser onto its panel (A's wide-rib edge toward the joint; its skirtless
    edge meets B's). Butt the panels, screw both splice plates on (round hole on A, 2 x M3 x 6 each) and snug them; turn
    the unit face up and check a row runs straight across the seam (a straightedge along the diffusers' grid), then face
-   down again and tighten. Plug the power cable's two plugs into both panels (the far one into A, its run above or below the
-   short ribbon), the short ribbon from A's output to B's input, and the long ribbon into A's input (red stripe = pin 1).
+   down again and tighten. Plug the power cable's two plugs into both panels (the far one into A, its run
+   above or below the data plugs), the jumper ribbon from A's outer header to B's inner header (flat across the panel
+   backs, behind A's input and power plugs), and the other ribbon into A's inner header, its input (red stripe = pin 1).
 3. **Panels in:** shell face down, the joined panels in from the back until both bezels seat on the rim (panel B on the
    knob side).
 4. **Encoder:** as the P2.5 build, step 5 (flip the shell, encoder into the collar, nut, knob).
-5. **Tray A in:** lay the long ribbon and the power cable's forked end along the panel backs toward the joint and out
+5. **Tray A in:** lay the S3's ribbon and the power cable's forked end along the panel backs toward the joint and out
    through the right half's back opening (tray B isn't in yet), so tray A slides in over them without pinching them.
    Cross the joint **between the splice plates**, within ~25 mm of the panels' centre line: the inner posts land on the
    plates above and below that. 2 x M3 x 8 flanged into its outer posts.
@@ -170,14 +181,14 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
    encoder) into the sensor's sockets **before** the sled goes into its hooks (as the P2.5 build: the sockets end up in
    the top wall's channels), then the sled into its hooks and its screw. The 20 cm cable's other end into the S3's QT
    socket while the S3 is loose (as the P2.5 build). Then, with tray B held square right behind the back opening (the
-   ribbon only just reaches that far), the long ribbon into the S3's IDC header and the power cable's forks into its
-   terminals; then the S3 onto its posts.
+   30 cm ribbon reaches that far with ~4 cm to spare), the ribbon into the S3's IDC header and the power cable's forks
+   into its terminals; then the S3 onto its posts.
 7. **Encoder cable:** reach in through the back opening and plug the 15 cm cable's free end into the encoder's
    **left-hand socket** (toward the centre) under its board **now** (as the P2.5 build, step 6: it can't be reached once
    tray B is in). Not the right one: a plug there sits on tray B's top-right post and stops the tray going in.
 8. **Tray B in:** its rails pass either side of the encoder's board (if it stops there, square the board as the P2.5
-   build says). As it starts in, push the spare ribbon forward through the joint opening into tray A's space behind
-   panel A, before tray B is more than halfway in (once it's in, tray A's space can't be reached). 2 x M3 x 8 flanged
+   build says). As it goes in, clip the ribbon into tray B's ribbon hooks on its back wall and let the few cm of spare
+   lie flat along the back wall toward the joint. 2 x M3 x 8 flanged
    into its outer posts. In both trays the inner posts stand on the plates, no screw. Then the four M3 x 10 from below.
 9. **Firmware:** see Open.
 ## Checked (model, Nov 3)
@@ -189,7 +200,8 @@ The P2.5 and P3 builds are unchanged (same volumes; `check_v5.py` all OK for the
 **Assembly review (Nov 5, an independent virtual assembly against the model):** the encoder's left-hand QT plug would sit
 on tray A's top-left post (26.7 mm³ seated, 28.6 while sliding in; the right-hand one is clear, now checked in
 `check_bar128.py`); with the knob at the right end it's the mirror (the right-hand plug sits on tray B's top-right post),
-so step 7 names the left-hand socket. Also from it: a longer ribbon (35 cm left ~2-3 cm with tray B out; and the long
+so step 7 names the left-hand socket. Also from it: a longer ribbon (35 cm left ~2-3 cm with tray B out; since replaced
+by two 30 cm ribbons with panel A turned the other way; and the long
 QT cable, gone since the knob moved to the S3's end), cables cross the joint between the splice plates, glue kept off the lap's inside edges,
 the spare ribbon pushed into tray A's space early, the rows checked face up, the sensor's cables plugged before its sled
 goes in, both test sizes set on a rebuild. Found fine: slide-in paths of the panels and both trays, tool reach (2 mm key
@@ -197,6 +209,10 @@ to the post screws), screw stacks, the sled's swing into its hooks, plates match
 
 **Inner posts closed (Nov 5):** each still stands on its splice plate on a Ø11 / Ø8.6 ring (the same 11 mm³ at 0.3 mm
 in), and the splice screw heads clear the pockets with the tray 0.7 off any way.
+
+**Panel A the other way round (Nov 5):** `check_bar128_power.py` routes both 30 cm ribbons against the trays, the
+splice plates, the S3, the encoder, the data plugs and both power plugs as seated: clear. Panel A's power socket lands at
+x -78.3 (was -81.7): clear. No part changes (every STL rebuilds byte for byte).
 
 **Knob at the right end (Nov 5):** `check_bar128.py`: the knob hole and the sensor pinhole line up with tray B's encoder
 slot and sensor (x +123 / +83, 0.00 off); the encoder, sensor and sled clear tray B, shell B, panel B and the S3 and its
@@ -230,7 +246,11 @@ panel B the plug's edge is ~20 mm from the S3's. Seated, the sockets sit at case
 ## Open
 - **Firmware and server are 64 x 32.** `firmware-s3` sets up the matrix as one 64 x 32 panel (`device.cpp`,
   `HUB75_I2S_CFG(64, 32, 1, …)`), and `server/board/` lays everything out for 64 wide. A 128-wide board needs a chain of 2
-  there and its own layouts: separate work from the case.
+  there and its own layouts: separate work from the case. With panel A in its normal orientation and B turned,
+  `Panel::show` (which already copies each pixel to the driver and does the 180° turn itself) maps each half of the
+  picture to its panel with that panel's rotation: a per-panel setting (`0,180`) beside today's single `rotation`. The
+  two-panel test mode (PR #500) uses one global flip, so on the bench panel A shows upside down there.
 - The joint rib, the splice hole and the lap clearance come from the test pieces.
-- Which columns land on which panel with S3 → A → B (firmware mapping, bench), and the power lead to panel A.
+- Which columns land on which panel with S3 → A → B and A's picture the other way up from B's (firmware mapping, bench),
+  and the power lead to panel A.
 - The length of cable between the stock power cable's two plugs: ~18-20 cm or more (measure before the build).
