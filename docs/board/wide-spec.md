@@ -122,12 +122,8 @@ The time alone in 23-row digits (UW ttyp0 Bold 40, the same family as the 64 fac
 ### Day/date (decided Nov 5, built)
 The weekday over the date (5x7) on the left, a divider, the time in the 23-row digits with AM/PM on the right. The widest case (`WEDNESDAY`, `12:58 PM`) uses every column. Mocked, not chosen: the date spelled out over the time, the time with a weekday/date/temperature panel, a tear-off calendar page.
 
-### Skyline (open)
-Two directions, both using the real renderer patched to 128 columns:
-- **Panorama:** the 64 scene in the middle, the South Loop added on the left and the Gold Coast stepping down to the beach on the right. Needs new building art.
-- **Big clock:** the 64 scene on the left, open lake and sky on the right with the time in the clock digits and the date over the water.
-Most of the skyline code already takes its width from a variable, and the server's cloud strip is already 128 wide.
-
+### Skyline (decided Nov 5, built)
+**Panorama:** the 64 scene in the middle and a continuous skyline of generic towers on both sides, the left for the South Loop and the right running on to the edge (no Gold Coast stepping down to the lake). Sun, moon, pier, wheel and lightning stay with the 64 scene; stars, rain and snow double; clouds and boats run the whole width. Rejected: the big-clock layout (the 64 scene and open lake with the time over the water).
 ---
 
 ## 7. Announce

@@ -801,7 +801,16 @@ async function build() {
     const WIDE = ['transit morse-2026-10-03-2316.json header=true wx=true', 'chrono clark/lake alerts', 'stale', 'ticker header kept', 'weather screen normal',
       'weather rain loops then bars', 'radar time off split=true svr warning', 'baseball logos live', 'knob chooser five entries', 'peek slides',
       'peek every variant', 'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'announce typewriter', 'brightness 50'];
-    for (const name of WIDE) {
+    // The skyline panorama (wide-spec §6): every weather and time of day,
+    // the boats crossing all 128 columns, lightning, rain and snow, the
+    // crossfades, warnings and the widest text.
+    const SKY_WIDE = ['skyline clear night', 'skyline partly day', 'skyline mostly night', 'skyline overcast day', 'skyline rain day', 'skyline rain night',
+      'skyline snow day', 'skyline snow night', 'skyline fog day', 'skyline fog night', 'skyline storm day', 'skyline storm night', 'skyline cloud drift normal',
+      'skyline dusk +0 min', 'skyline dusk +40 min', 'skyline dusk +80 min', 'skyline tornado warning', 'skyline sailboat', 'skyline speedboat',
+      'skyline lightning', 'skyline heavy rain falling', 'skyline heavy snow falling', 'skyline rain slant right', 'skyline rain slant left',
+      'skyline wheel and ripples slow', 'skyline crossfade clear to rain', 'skyline crossfade clouds arriving', 'skyline no weather yet',
+      'skyline negative temperature', 'skyline widest text'];
+    for (const name of [...WIDE, ...SKY_WIDE.filter((n) => !WIDE.includes(n))]) {
       const s = S.find((x) => x.name === name);
       if (!s) throw new Error(`no scenario "${name}" to widen`);
       add(`wide ${name}`, wide(s.payload), s.renders.map((r) => r.opts), bytes(s.frames), bytes(s.logos), { s3only: true, clouds: bytes(s.clouds) });

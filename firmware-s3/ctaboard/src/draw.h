@@ -421,7 +421,7 @@ struct Boat {
   bool sail;  // false: the speedboat
   int x0, dir;
 };
-std::optional<Boat> boat_at(double ms);
+std::optional<Boat> boat_at(double ms, int w = 64);
 double strike_level(double ms);
 
 int ticker_pages(const Value &p, double now);

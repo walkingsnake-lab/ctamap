@@ -469,7 +469,7 @@ A board is 64 × 32 (one panel) or 128 × 32 (two panels chained on the HUB75 ri
 - **Gradient clock**: the gradient across all 128 columns (the diagonal's denominator `127 × 2 + 31 × 3 + 1`) and the block digits at 7 × 6 px blocks (21 × 30), 5 px between characters and either side of a 4 px colon, centered (`12:58` is 108 px).
 - **Big digits clock**: the time in `d23` (23-row digits from UW ttyp0 Bold 40, built like `d17`), rows 4–26, its ink centered on 128 columns (`x = floor((129 − measure) / 2)`); the colon blinks as at 64.
 - **Day/date clock**: the weekday (5x7, `#8f8f8f`, baseline 14) over the date (`NOV 5`, 5x7, `#e6e6e6`, baseline 25), each centered on column 22; a `#262626` divider on column 46, rows 4–27; the time in `d23` (rows 4–26, rolling) with AM/PM (Tom Thumb, `#555555`) 3 px after it, the pair centered in columns 48–127.
-- The skyline face shows the 64 layout on both panels.
+- **Skyline clock** (the panorama): the 64 scene drawn 32 px in (columns 32–95; `SKYW` in `draw.js`, `buildSky`) with generic towers on columns 0–31 and 96–127 (windows like the others; the left side's background mass has none, as at 64). Every position from the payload or the scene moves by 32: the sun (`sun.x + 32`), the glitter path (`gl.x + 32`), the moon, the pier, the lightning. Twice the stars (`stars × 2`, from 28 slots), rain and snow (`pcp.n × 2`, across all 128 columns); the cloud strip (already 128 wide) fills the whole sky; the boats cross all 128 columns (a sailboat 134 steps, the speedboat 151). The temperature or warning bottom left, the clock bottom right at x127.
 
 ---
 

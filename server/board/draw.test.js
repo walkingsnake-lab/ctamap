@@ -1586,7 +1586,7 @@ test('width: a 128 payload (cols) shows 64-wide screens on both panels; slides a
   const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(9)], s: [0, 0], a: 0 }]);
   const narrow = draw.render(p);
   assert.equal(narrow.w, 64);
-  for (const screen of ['weather', 'clock', 'announce']) {
+  for (const screen of ['weather', 'announce']) {  // every clock face has a 128 layout now
     const f = draw.render({ ...p, cols: 128 }, { screen });
     const n = draw.render(p, { screen });
     assert.equal(f.w, 128, screen);
