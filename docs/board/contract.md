@@ -48,8 +48,8 @@ Polled ~every 10 s.
 
 `fw` (S3 only, present only when there's something to install) offers an OTA build: `{"v": "a1b2c3d", "size": 1245184, "sha": "<SHA-256, hex>", "n": 0, "sig": "<signature, hex DER>"}` (`sig` absent for a build stored before signing). See **Firmware**.
 
-### `GET /board/update?b=<id>[&boot=1][&s=<screen>][&hk=<caps>]`
-The combined update, polled ~every 30 s. `hk` (S3): the same capabilities as the health field, sent on every update and select so the server decides the clock and announce screens per request (it doesn't depend on the last health report, which is lost on a server restart and overwritten by any other board reporting under the same ID). Target size ≤ ~1.2 KB (typically 0.5–0.75 KB with sections).
+### `GET /board/update?b=<id>[&boot=1][&s=<screen>][&hk=<caps>][&w=128]`
+The combined update, polled ~every 30 s. `hk` (S3): the same capabilities as the health field, sent on every update and select so the server decides the clock and announce screens per request (it doesn't depend on the last health report, which is lost on a server restart and overwritten by any other board reporting under the same ID). `w=128` (S3): the board is two chained panels; see **Width**. Target size ≤ ~1.2 KB (typically 0.5–0.75 KB with sections).
 
 **Sections.** To keep JSON parsing light on the board's fragmenting heap, this endpoint sends only what one screen draws, named by `for`: the payload's `screen`, or `s` (`transit`, `ticker`, `weather`, `baseball`, `clock`, `announce`) when a button press on the board overrides it. The board fetches right away after a press, asking for the new screen. Fields kept only for their screen: transit `header`, `key`, `hidden`, `view`, `rows`, `wx`; ticker `ticker`, `tickerHeader`, `tickerFill`; baseball `mlb`; clock `skyline`, `cface`, `cwx`, `dn`, `ginv`; announce `msg`. `radar` is whole on the weather screen, whenever `radar.visit` is set (the board switches to it by itself), and when `weather` is one of `rot.screens`; otherwise it's just `{on, visit: null}`. Everything else is always sent. The simulator's `api/update` returns the whole payload, and so does this endpoint for boards with the `peek` capability (they draw any screen while the knob turns), plus `pv`: about 2–3 KB.
 
@@ -93,6 +93,7 @@ The combined update, polled ~every 30 s. `hk` (S3): the same capabilities as the
 |---|---|---|
 | `v` | int | Settings version (same as `/board/version`). |
 | `stn` | string | The board's station (mapid). When it changes, the board starts the transit and ticker screens fresh instead of animating from the old station's rows. |
+| `cols` | int | `128` for a board of two chained panels (it sent `w=128`); absent on a 64-wide board, whose payload is unchanged. See **Width**. |
 | `now` | int | Server epoch seconds. |
 | `tzo` | int | Chicago's UTC offset in seconds at `now` (-18000 CDT, -21600 CST). The board adds it to epoch times for every clock (CircuitPython has no time zone database). Refreshed with every update, so DST changes take effect within one fetch. |
 | `age` | int \| null | Seconds since the arrivals data was last fetched successfully, or `null` when the server hasn't reached Train Tracker since it started (the update is still sent, with no rows). The server keeps serving last-good data when CTA fails. |
@@ -404,7 +405,7 @@ CI's upload: a signed build (raw body, with `X-Firmware-Signature`) that becomes
 
 With `?boot=<build>`: that build's **boot image** instead (`ctaboard.ino.boot.bin`, signed the same way; see **Firmware**). `{boot: <build>}`; `400` for an unknown build, a bad image or signature.
 
-### `POST /board/select?b=<id>&s=<category>[&v=<variant>][&hk=<caps>]`
+### `POST /board/select?b=<id>&s=<category>[&v=<variant>][&hk=<caps>][&w=128]`
 The knob chose a category on its ring (`knob.ring`). The server sets the board's `screen` the same way the phone would (bumps `v`), and a board that's Off goes back to Auto brightness (the S3 sends its current category on the first turn while dark), so the choice persists, the phone page shows it, and it ends any button override: `transit` → the transit-family screen last chosen (`transit` or `ticker`, state `transitScreen`), `weather` → `weather`, `clock` → `clock`, `announce` → `announce`, `cycle` → `auto`. With `v` (one of the category's variants, as in `knob.vars`) the variant is set too: `transit` or `ticker` as the screen, the weather view (`wxView`), or the clock face (`clockFace`). The response is `/board/update`'s payload for the new screen (sections for `screen`; the whole payload for `peek` boards), so the board needs no second request. Empty body. 400 `invalid` for a category not on the ring or a variant it doesn't have, 401 without the token, 404 for an unknown board, 405 for anything but POST.
 
 ### `GET /board/logo/<logoId>?b=<id>`
@@ -442,6 +443,16 @@ A frame is either all rain levels (1–5) or all snow levels (8–10); the serve
 - Snow uses its own dBZ thresholds, because dry snow reflects much less than rain at the same rate. Provisional: **10 / 15 / 20 dBZ** (the Feb 2, 2022 Chicago snowstorm averaged 11–18 dBZ per LED, so 10/20/30 left the top two levels unused). Fixtures: `fixtures/mrms/`.
 - Known limits: a rain/snow line inside the box, and sleet or mixed precip, render as one type.
 - `radar.on` hysteresis counts snow pixels the same as rain pixels. `404` if the frame ID is no longer kept (the server keeps the last 12).
+
+---
+
+## Width
+
+A board is 64 × 32 (one panel) or 128 × 32 (two panels chained on the HUB75 ribbon; S3 only, the M4 stays 64). The wide layouts are planned in [`wide-spec.md`](wide-spec.md).
+
+- **The board says so.** Its width is a flash setting (`cols` in the S3's settings, `config.h`; `MATRIX_COLS` in a setup build, `--cols` in `scripts/setup-board.js`, **Panels** on the control page's Set up a board). It sets the driver's chain length, and the board sends `w=128` with every `/board/update` and `/board/select`. No `w` is 64: the M4, and S3 builds from before width support.
+- **The server keeps it** as the board's `cols` in the state file (only when 128; not a setting: `v` doesn't change, the phone can't set it, a copy or reset keeps the board's own, a new board starts without one) and sends `cols: 128` in that board's payloads, the simulator's (`api/update`) included. `api/boards` lists `cols: 128` for such a board.
+- **Drawing.** With `cols` 128 every frame is 128 × 32. A screen without a 128 layout yet draws at 64 and shows on both panels: columns 64–127 repeat 0–63 (`draw.js` `widenPx`, `draw.cpp` `widen`). The screen-change slide runs across all 128 columns (`slideOffset(t, w)`: 0..w + 4); a slide or fade from a 64-wide frame (the S3's status screens, which stay 64 and show on both panels) widens it first, as it showed.
 
 ---
 
@@ -531,6 +542,7 @@ POST rules: allowed fields are `label` (up to 24 characters, trimmed; empty for 
 |---|---|
 | `v` | Settings version for this board. |
 | `label` | A name for people (`""` by default): the control page's picker shows it instead of the ID. Never sent to the board. |
+| `cols` | `128` for a board of two panels, as it last reported (`w=128`); absent for 64. Not a setting: set only by the board's own requests (see **Width**). |
 | `station` | Train Tracker `mapid` and header name. Changeable from the control page. The station's coordinates are also the board's **location** for weather, NWS alerts, and the radar crop. |
 | `rows` | **Ordered** list of `LINE:ShortName` to show. Acts as both the destination filter and the row order; if more destinations than the cap remain, the board shows the chronological view. Empty means all destinations, in default order. Unknown destinations are appended after the listed ones. |
 | `showHeader`, `showWeather` | Transit toggles; together they set the row cap. |

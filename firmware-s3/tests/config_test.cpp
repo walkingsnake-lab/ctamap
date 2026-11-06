@@ -37,6 +37,7 @@ static config::Config sample() {
   c.double_buffer = false;
   c.color_order = "RBG";
   c.knob_reverse = true;
+  c.cols = 128;
   return c;
 }
 
@@ -48,6 +49,7 @@ static void round_trip() {
   CHECK(b.board_id == "office" && b.token == "tok" && b.url == a.url, "");
   CHECK(b.rotation == 180 && b.curve == 1 && b.night_curve == 2 && !b.hw_dim && b.status_led == 1, "");
   CHECK(!b.tls_verify && b.clk_phase && !b.double_buffer && b.color_order == "RBG" && b.knob_reverse, "");
+  CHECK(b.cols == 128, "cols %d", b.cols);
   CHECK(config::to_json(b) == config::to_json(a), "");
 }
 
@@ -57,6 +59,10 @@ static void missing_fields_keep_defaults() {
   CHECK(config::from_json("{\"networks\":[[\"a\",\"b\"]],\"board_id\":\"home\"}", c), "");
   config::Config d;
   CHECK(c.url == d.url && c.curve == d.curve && c.hw_dim == d.hw_dim && c.color_order == "RGB", "");
+  CHECK(c.cols == 64, "an older build's settings: one panel");
+  // One panel or two: any other width reads as one.
+  CHECK(config::from_json("{\"board_id\":\"home\",\"cols\":96}", c) && c.cols == 64, "cols %d", c.cols);
+  CHECK(config::from_json("{\"board_id\":\"home\",\"cols\":128}", c) && c.cols == 128, "cols %d", c.cols);
   CHECK(!config::from_json("not json", c), "");
   CHECK(!config::from_json("[1]", c), "");
 }

@@ -1,6 +1,6 @@
 # CTA LED Board: Wide Board (128 × 32) Screen Plan
 
-**Status: planned, not built.** How each screen should look on a board of two 64 × 32 panels chained (128 × 32). Nothing in `server/board/` or the firmware supports the width yet; §11 lists what would have to change. Anything this plan doesn't mention works as in [`design-spec.md`](design-spec.md) (fonts, colors, row anatomy, animations, fitting rules).
+**Status: the width is built (Nov 2026); the layouts below are planned.** How each screen should look on a board of two 64 × 32 panels chained (128 × 32). The board reports its width and every screen draws at 64 on both panels until its 128 layout lands (contract: "Width"); §11 lists what's done and what's left. Anything this plan doesn't mention works as in [`design-spec.md`](design-spec.md) (fonts, colors, row anatomy, animations, fitting rules).
 
 Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, `mock-128-clocks.js` and `mock-128-worldmap.js` with the board's fonts and LED preview. Decisions from the review of Nov 4, 2026; each section says whether it's **decided**, **liked**, a **first pass**, or **open**.
 
@@ -155,11 +155,10 @@ Also mocked (`dial-*.png`): icons in place with the chosen one named, a centered
 - Direction labels for the split at Loop and branch stations.
 - Baseball beyond the line score.
 
-## 11. What the software would need (not started)
+## 11. What the software needs
 
-- **The board's width.** A per-board `cols` setting (64 or 128) in the S3's flash, sent with each `/board/update`; the server stores it per board. Payloads stay additive: a 64 board gets exactly what it gets today.
+- **The board's width (done).** `cols` (64 or 128) in the S3's flash sets the chain length; the board sends `w=128` with each `/board/update` and `/board/select`, the server keeps it as the board's `cols` and sends `cols: 128` in its payloads. A 64 board gets exactly what it got before. Frames are 128 wide; screens without a 128 layout draw at 64 on both panels, and screen slides and fades run across all 128 columns (contract: "Width"). The simulator and control page show 128-wide renders.
 - **Server layouts by width.** `arrivals.js` (rows, fitting, the busy-station chain), weather slots (7 days, 8 hours), radar crop width and masks, sun times, alert labels and expiries: chosen per board width.
-- **`draw.js` and `draw.cpp`.** Replace the hard-coded 64s with the frame width, one screen at a time; new layouts behind the width. Parity scenarios at both widths (`firmware/tests/scenarios.js`).
+- **`draw.js` and `draw.cpp`.** Replace the hard-coded 64s with the frame width, one screen at a time; new layouts behind the width (a screen returning a 128-wide frame is no longer widened). Parity scenarios at both widths (`firmware/tests/scenarios.js`; the `wide …` ones so far).
 - **Assets.** Fonts unchanged; new glyphs (live and scheduled icons, half sun, a 3 px W) and the 80 × 32 world map, generated as now.
-- **Simulator and control page** previews at 128.
-- **Firmware.** Chain length from the `cols` setting; radar frame buffers sized for the chosen radar layout (up to 128 × 32, 4 KB a frame).
+- **Firmware.** Radar frame buffers sized for the chosen radar layout (up to 128 × 32, 4 KB a frame). The chain length from `cols` is done.

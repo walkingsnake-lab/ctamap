@@ -37,11 +37,11 @@
 // their screen order.
 #define MATRIX_ROTATION 0
 
-// Panels chained on the ribbon: 1, or 2 for 128 x 32. For now 2 is a test:
-// at startup the first panel (nearest the Portal) shows a red outline and
-// one dot, the second a green outline and two; then the second mirrors the
-// first. Build-only: OTA (generic) builds run 1 panel.
-// #define MATRIX_PANELS 2
+// LEDs across: 64 for one panel, 128 for two chained on the ribbon. Saved
+// to flash with the rest, so OTA updates keep it. At startup the first
+// panel (nearest the Portal) shows a red outline and one dot, the second a
+// green outline and two. Screens without a 128 layout yet show on both.
+// #define MATRIX_COLS 128
 
 // Panel clock edge: 0 = falling, 1 = rising (the driver's default). The wrong
 // one for a panel shifts the picture a pixel and shows stray pixels; the

@@ -325,3 +325,11 @@ The first walnut shell was a prototype and was scrapped, so the shell was open t
 - P3: the S3 3.1 mm higher (`drawer_s3_mid` 0.6 in the profile): the plug clears the post by 2.1 mm and its wires, bent back, rest on the post's flank; the board's top edge stays 0.7 under the upper-right post. The USB-C (ZC -13.37) and button openings in the shell moved up with it, so the shell and tray reprint together. `check_v5.py` checks the plug now (the P2.5's sits clear of its posts).
 - P4: 5.5 mm higher (more room between its posts), the buttons' relief capped below the shell's joint.
 
+## P4 virtual assembly (Nov 5)
+
+- An independent pass assembled the P4 step by step against the model (sweeps, screw reach and engagement, cable spans in each pose). Assembly worked as written; service didn't: resting the right half on the case's back covers the left half's screws, so the sheet now frees the right half (S3 off its posts, ribbon and power unplugged) before the left one comes out.
+- Tray seam: 0.5 mm x 45° chamfers where the halves pass each other (`seam_chamfer` in `p4.py`): the halves were cut square at x 0, and the left half's crush ribs can leave it up to 0.2 mm past the centre, where the right half's leading edge would catch.
+- Button relief capped 0.5 mm lower (`drawer_btn_top` 41.1): it left 0.62 mm, about one line, of full wall under the shell joint's pocket; now 1.1.
+- Sheet: S3 -> sensor QT 30 cm (a 20 cm had ~1 cm spare), laid on the back wall before the S3 goes on; ribbon at least 26 cm between plug faces (lining the right half up takes ~3 cm more than seated); where the spare cable goes; pulling a half out on an M3 in its cleat boss; both glue joints in 30-minute epoxy (no bloom in the reveal or on the bezel, time to align).
+- Coupons (Nov 5): the seam, drawer-fit and diffuser-joint coupons all fit as printed; glue tests pending.
+

@@ -137,6 +137,8 @@ SEN_HOLE = round(V.GRILLE_SPAN + 1.8, 2)        # hole in the tray's top wall ov
                                                 # (case2.GRILLE_SPAN: 5 holes, 1/16" bit, Ø6.47) with ~0.9 a side -> 8.27
 ENC_HALF = 11.8 / 2 * math.sqrt(2)              # encoder body (11.8 square, turned 45 deg): half diagonal
 ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
+ENC_X = 0.0                                     # encoder (knob) x in the tray's frame: the slot, the rails and the
+                                                # crush ribs kept off the slot follow it (bar128.py puts it near tray A's end)
 
 # Screws into the tray (Nov 3): no nuts. The bottom M3 x 10s (from below) and the cleat's M3 x 10s (from the wall side)
 # thread straight into pilots in solid PETG bosses. FASTEN 'tap' (default). 'insert': holes for M3 heat-set inserts
@@ -216,17 +218,22 @@ SLED_BOSS_D, SLED_PILOT = 6.0, 2.4
 SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray's top (button head 4.4-4.7 x 1.4-1.6), 0.7 wall left
 
 
-def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=None, extra_cuts=(), blank=False, post_dy=None):
+def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=None, extra_cuts=(), blank=False, post_dy=None,
+         s3=None, controls=None):
     """the v5 tray. The split options are for trays split in two (p4.py), and their defaults give the one-piece tray:
     top_bar: half width of the solid bar across the middle of the top louver rows (LV_SPLIT / 2);
     bottom_gap: half width of a gap in the bottom louver rows at the middle (0: none);
     ribbon_hooks: [(x, z)] of the ribbon hook pairs (default: one pair between the S3's connector and the panel input);
     hook_lip: the hooks' lip thickness (their reach is 4 mm: 4.0 makes the lip's underside 45 deg back-down);
     tie_x0: left end of the tie loop's patch (default: just right of the first hook pair); extra_cuts: more cuts.
-    blank: no S3, light tube, Boot, encoder slot and rails, light sensor or USB-C window (bar128.py's tray A, which
-    carries none of them). post_dy: {(x, z): dy} moves those posts' feet back by dy (bar128.py: the inner posts stand on
-    its splice plates)."""
+    blank: no S3, light tube, Boot, encoder slot and rails, light sensor or USB-C window. Or separately: s3=False drops
+    the S3 and what goes with it (pad, posts, light tube and window, Boot, USB-C window); controls=False drops the encoder
+    slot and rails and the light sensor (bar128.py: tray B keeps the S3, tray A takes the controls at ENC_X / the
+    sensor's x). post_dy: {(x, z): dy} moves those posts' feet back by dy (bar128.py: the inner posts stand on its
+    splice plates)."""
     post_dy = post_dy or {}
+    s3 = (not blank) if s3 is None else s3
+    controls = (not blank) if controls is None else controls
     outer = rr_cs(BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL, BORE_R - TRAY_CL)
     inner = rr_cs(BORE_HX - TRAY_CL - TRAY_WT, BORE_HZ - TRAY_CL - TRAY_WT, BORE_R - TRAY_CL - TRAY_WT)
     t = prism_y(outer, Y0, Y1) + (prism_y(outer, YF, Y0 + 0.01) - prism_y(inner, YF - 1, Y0 + 0.02))
@@ -268,12 +275,13 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     tube_end = yc + 1.5
     btop = yc + 1.9
     import sensor as SN
-    if not blank:
+    if s3:
         t = t + rrect_y(min(hxs) - 3.7, max(hxs) + 3.7, min(hzs) - 3.7, max(hzs) + 3.7, 3.7, Y0 - 3.0, Y0 + 0.01)
         for hx, hz_ in S3_HOLES:
             t = t + cyl_y(hx, hz_, yc, Y0 + 0.01, P3.S3_POST_D, 32)
         t = t + cyl_y(*_xz(S3_NEO), tube_end, Y0 + 0.01, 7.0, 48)
         t = t + cyl_y(*_xz(S3_BOOT), btop + 1.0, Y0 + 0.01, 5.0, 32)
+    if controls:
         # light sensor mount (pillars or sled hooks)
         t = t + sensor_mount()
         t = t + enc_rails()
@@ -318,7 +326,7 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     for zc in zb_rows + zt_rows:
         segs = [(-x_lim, x_lim)]
         lo, hi = zc - r - 0.5, zc + LV_DEPTH + r + 0.5                      # the slot rises LV_DEPTH going inward
-        if not blank and any(lo < hz_ + P3.S3_POST_D / 2 + 3.7 and hi > hz_ - P3.S3_POST_D / 2 - 3.7 for hz_ in hzs):
+        if s3 and any(lo < hz_ + P3.S3_POST_D / 2 + 3.7 and hi > hz_ - P3.S3_POST_D / 2 - 3.7 for hz_ in hzs):
             segs = minus(segs, *pad)
         if zc > ZC:                                                          # top rows: a bar in the middle
             tb = LV_SPLIT / 2 if top_bar is None else top_bar
@@ -336,7 +344,7 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
             # the top row's slot rises into the top wall near its inner end: stop it 0.6 under the wall (a slot roof
             # grazing the wall's face left a zero-thickness sheet, non-manifold in the STL)
             sl = sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6)
-            if zc > ZC and not blank:                                        # blind behind the sensor sled's hooks
+            if zc > ZC and controls:                                         # blind behind the sensor sled's hooks
                 for g0, g1 in louver_gaps(zc, r):
                     sl = sl - box(g0, g1, Y0 - 20, y_in + LV_BLIND, -5, H + 5)
             cuts.append(sl)
@@ -352,26 +360,29 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
         t = t - Manifold.batch_boolean(cuts, ADD)
         t = t + crush_ribs()
         return max(t.decompose(), key=lambda m: m.volume())
-    nx, nz = _xz(S3_NEO)
-    cuts.append(cyl_y(nx, nz, tube_end - 1, Y1 - WIN_T + 0.01, 4.5, 48))     # light tube straight through to the window
-    cuts.append(cyl_y(nx, nz, Y1 - WIN_T, Y1 + 1, WIN_D, 48))                  # window pocket (flat roof: a 0.75 mm ring)
-    for hx, hz_ in S3_HOLES:
-        cuts.append(cyl_y(hx, hz_, yc - 1, yc + 8.0, P3.S3_PILOT, 24))
-        cuts.append(Manifold.cylinder(P3.S3_LEAD + 0.01, P3.S3_PILOT / 2 + P3.S3_LEAD, P3.S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc - 0.01, hz_]))
-    bx, bz = _xz(S3_BOOT)
-    cuts.append(cyl_y(bx, bz, btop + 0.5, Y1 + 1, 2.6, 24))
-    fd = (BOOT_FUNNEL_D - 2.6) / 2                                              # 45 deg: as deep as it is wide
-    cuts.append(Manifold.cylinder(fd + 0.01, 1.3, BOOT_FUNNEL_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([bx, Y1 - fd, bz]))
-    for dz in ((-1.5, 1.5) if BOOT_DOTS else ()):
-        cuts.append(cyl_y(bx + BOOT_FUNNEL_D / 2 + 2.2, bz + dz, Y1 - BOOT_DOT_DEPTH, Y1 + 1, BOOT_DOT_D, 24))
-    # top wall: slot open to the front edge past the encoder body; light hole and sensor pilots
-    ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
-    cuts.append(box(-ENC_SLOT, ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
-    cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
-    cuts += sensor_cuts()
-    # right wall: window for the USB-C plug and the edge buttons
-    # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
-    cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
+    if s3:
+        nx, nz = _xz(S3_NEO)
+        cuts.append(cyl_y(nx, nz, tube_end - 1, Y1 - WIN_T + 0.01, 4.5, 48))     # light tube straight through to the window
+        cuts.append(cyl_y(nx, nz, Y1 - WIN_T, Y1 + 1, WIN_D, 48))                  # window pocket (flat roof: a 0.75 mm ring)
+        for hx, hz_ in S3_HOLES:
+            cuts.append(cyl_y(hx, hz_, yc - 1, yc + 8.0, P3.S3_PILOT, 24))
+            cuts.append(Manifold.cylinder(P3.S3_LEAD + 0.01, P3.S3_PILOT / 2 + P3.S3_LEAD, P3.S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc - 0.01, hz_]))
+        bx, bz = _xz(S3_BOOT)
+        cuts.append(cyl_y(bx, bz, btop + 0.5, Y1 + 1, 2.6, 24))
+        fd = (BOOT_FUNNEL_D - 2.6) / 2                                              # 45 deg: as deep as it is wide
+        cuts.append(Manifold.cylinder(fd + 0.01, 1.3, BOOT_FUNNEL_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([bx, Y1 - fd, bz]))
+        for dz in ((-1.5, 1.5) if BOOT_DOTS else ()):
+            cuts.append(cyl_y(bx + BOOT_FUNNEL_D / 2 + 2.2, bz + dz, Y1 - BOOT_DOT_DEPTH, Y1 + 1, BOOT_DOT_D, 24))
+    if controls:
+        # top wall: slot open to the front edge past the encoder body; light hole and sensor pilots
+        ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
+        cuts.append(box(ENC_X - ENC_SLOT, ENC_X + ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
+        cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
+        cuts += sensor_cuts()
+    if s3:
+        # right wall: window for the USB-C plug and the edge buttons
+        # open to the front edge: printed back-down, a closed window's front edge would be a ~45 mm bridge
+        cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
     cuts += list(extra_cuts)
     t = t - Manifold.batch_boolean(cuts, ADD)
     t = t + crush_ribs()
@@ -449,7 +460,7 @@ def enc_board():
 
 def rail_xs():
     hw = enc_board()[0]
-    return [(sx * (hw + RAIL_CL), sx * (hw + RAIL_CL + RAIL_W)) for sx in (-1, 1)]
+    return [(ENC_X + sx * (hw + RAIL_CL), ENC_X + sx * (hw + RAIL_CL + RAIL_W)) for sx in (-1, 1)]
 
 
 def enc_rails():
@@ -616,7 +627,7 @@ def crush_ribs():
         ramp = Manifold.batch_hull([prism_y(tri(0.0), y_a, y_a + 0.01), prism_y(tri(CR_H), y_a + CR_RAMP, y_a + CR_RAMP + 0.01)])
         return prism_y(tri(CR_H), y_a + CR_RAMP, y_b) + ramp
     xs = [-0.75 * (ox - BORE_R), -0.3 * (ox - BORE_R), 0.3 * (ox - BORE_R), 0.75 * (ox - BORE_R)]
-    top_block = [(-ENC_SLOT - 2, ENC_SLOT + 2)]
+    top_block = [(ENC_X - ENC_SLOT - 2, ENC_X + ENC_SLOT + 2)]
     for x in xs:
         ribs.append(rib(x, None, 'z', -1))
         if not any(a < x < b for a, b in top_block):

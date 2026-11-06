@@ -1,6 +1,7 @@
 # Board firmware for the Matrix Portal S3 (C++)
 
-Runs on the Adafruit Matrix Portal S3 driving the 64x32 panel. Like the M4's
+Runs on the Adafruit Matrix Portal S3 driving one 64x32 panel, or two chained
+(128x32; see "Two panels" below). Like the M4's
 CircuitPython firmware (`firmware/`, now frozen), the server does all fetching
 and formatting (`server/board/`, API in `docs/board/contract.md`) and the
 board draws what it receives.
@@ -62,6 +63,7 @@ Then, with the board on USB:
 node scripts/setup-board.js --id kitchen --label "Kitchen"            # a board for someone else
 node scripts/setup-board.js --id den --shared --wifi "home=password"  # one of yours
 node scripts/setup-board.js --id den --shared --rotate 180 --colors RBG   # panel upside down, green/blue swapped
+node scripts/setup-board.js --id bar --cols 128                        # two panels, 128 x 32
 ```
 
 It asks you to put the board in upload mode (hold BOOT, tap RESET, release
@@ -189,6 +191,17 @@ if it stops answering for 10 s) Auto is sunrise and sunset, as before.
   red/blue `BGR`; colors that move round one step are `GBR` or `BRG`. It
   reassigns the data pins, so the picture and timing are otherwise unchanged.
 - The serial log's first lines show the refresh rate and these settings.
+
+### Two panels (128 x 32)
+
+Chain a second panel off the first one's output and set the width to 128:
+`MATRIX_COLS 128` in `secrets.h`, `--cols 128` for `scripts/setup-board.js`,
+or **Panels: Two** on the control page's Set up a board. It's saved to flash
+with the other settings, so OTA updates keep it. At startup the first panel
+(nearest the Portal) shows a red outline and one dot, the second a green
+outline and two. The board sends `w=128` with every update and the server
+answers for that width (contract: "Width"); screens without a 128 layout yet
+show on both panels.
 
 ### Going back to CircuitPython
 

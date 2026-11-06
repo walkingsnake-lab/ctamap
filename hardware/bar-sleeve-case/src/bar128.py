@@ -13,18 +13,22 @@ cuts the top and bottom walls, the hood and both rims.
   half B, to x = LAP, with LAP_CL of glue gap on its face and y ends and LAP_XCL at its tip, so the outer band is the
   only seat in x. The lip's y ends are 45 deg (no flat overhang back-down). It stays 1 mm behind the screen face and
   0.5 mm in front of the trays' back, so it never shows.
-- the knob moves to x +80 (panel B's centre, where the P2.5 tray's encoder rails are), the light sensor to +120, the
-  screws from below to x +/-34 and +/-126 (each tray's own +/-46).
+- the knob moves to x KNOB_X (+123, near the right end over the S3's tray: its encoder board just clears tray B's
+  top-right post), the light sensor to SENSOR_X (+83, 40 mm from the knob toward the centre), the screws from below to
+  x +/-34 and +/-126 (each tray's own +/-46).
 Diffuser (two-colour): one per panel, split at the panel joint. No skirt on the seam edge. The rib over the joint is
 A's: JOINT_RIB wide (0.45 = every other rib, plus any gap between the butted panels), so neither half carries a 0.225 mm
 half rib (too thin to print on the 0.2 nozzle). B's diffuser starts 0.225 past its panel's edge.
 Splice plates: two short PETG plates on the panels' inner corner inserts (x +/-17.5, z +/-32.25), one round hole and
 one slot (x), screwed on first (M3 x 6 button heads): they tie the panels into one unit so their rows can't step at the
-seam. The trays' inner posts stand on them, open tubes round the screw heads (push only).
+seam. The trays' inner posts stand on them, solid posts with a pocket round the screw heads (push only).
 Trays (black PETG): one per panel, each the P2.5 v5 tray cut at the panel joint (no end wall there: the panels fill it).
-Tray B (right) is the P2.5 tray as built (S3, encoder rails, sensor sled hooks, status window, USB-C slot). Tray A (left)
-is the same tray with none of those (drawer.tray(blank=True)). The two inner posts of each stand SPLICE_T further back,
-on the splice plates, with no floor or screw. Both take their own pair of screws from below and their own wall cleat.
+Tray B (right) is the P2.5 tray (S3, status window, Boot, USB-C slot) with the controls moved toward its end: the
+encoder slot and rails under the knob, the light-sensor sled hooks (drawer.ENC_X, the sensor's x). Tray A (left) is the
+same tray with none of those (drawer.tray(s3=False, controls=False)). The STEMMA QT cables stay short (S3, sensor and
+encoder all at the right end). The two inner posts of each stand SPLICE_T further back,
+on the splice plates, solid and closed at the back, with no screw. Both take their own pair of screws from below and their own case cleat; one long wall cleat (bar128-cleat-wall.stl)
+takes both.
 Run: python3 bar128.py <outdir>            -> shell halves, diffuser halves, trays, test pieces (sets PANEL itself; the
      trays come from a second run of this script with --trays and PANEL=p25). JOINT_RIB=0.55 / SPLICE_HOLE=3.45 set the
      two sizes the test pieces choose. Case-frame copies for check_bar128.py go to $BAR128_FRAMES (default: temp dir).
@@ -42,9 +46,27 @@ import plate3 as P3
 import drawer as DR
 from case import box, rr_cs, prism_y, cyl_y, cyl_z, ZC, H, D, WALL, HW, RC, BORE_HX, BORE_HZ, BORE_R, JT, ADD, Y_FACE
 
+PANEL_CX = 80.0                                  # panel centres at x -/+80
+# Panel orientation (Nov 5): B turned 180 deg (as the single build: its right-hand header, under the S3, is its unused
+# output); A in its normal orientation, so its input is the inner header (x -39.9) and its output the outer one
+# (x -120.1). Data: S3 -> A in (a 30 cm ribbon), A out -> B in (30 cm). Nothing printed depends on it (inserts, posts,
+# splice plates and diffusers are the same either way round); the firmware maps each panel's rotation.
+PANEL_TURNED = {'A': False, 'B': True}
+KNOB_X = float(os.environ.get('KNOB_X', '123'))   # knob / encoder (case x): near the right end, over the S3's tray; at
+                                                 # +/-123 the encoder board (25.4 wide) clears the tray's top corner post
+                                                 # (x +/-142.5, Ø11) sideways. KNOB_X=-123 puts the controls on tray A
+CTRL = 'A' if KNOB_X < 0 else 'B'                # the tray that carries the controls (encoder, light sensor)
+CSX = -1 if CTRL == 'A' else 1                   # its panel's side
+SENSOR_X = KNOB_X - CSX * 40.0                   # light sensor: 40 mm from the knob toward the bar's centre
+if TRAYS:                                        # the tray run (PANEL=p25) works in that panel's frame for the controls:
+    V.SENSOR_X = SENSOR_X - CSX * PANEL_CX       # set before sensor.py loads (it reads it once)
+    DR.ENC_X = KNOB_X - CSX * PANEL_CX
+    DR.SLED_SCREW = (V.SENSOR_X + 8.0, DR.SLED_SCREW[1])   # the sled's front screw sits 8 mm right of the chip
+else:
+    V.SENSOR_X = SENSOR_X
 DR.configure_shell()
 V.BACKDOWN = True
-V.KNOB_X = 80.0                                  # panel B's centre: the P2.5 tray's encoder slot and rails
+V.KNOB_X = KNOB_X
 for _m in (C, V, P3):
     _m.SCREW_XS = tuple(panel.P['screw_xs'])     # +/-34, +/-126: each tray's own +/-46
 
@@ -260,7 +282,6 @@ def build_coupons(out):
 
 
 # ---------------------------------------------------------------- trays (PANEL=p25 run)
-PANEL_CX = 80.0                   # panel centres at x -/+80
 TRAY_GAP = 0.15                   # each tray stops this far short of the panel joint (0.3 between them)
 
 
@@ -270,30 +291,45 @@ def trays():
     inner = lambda sx: {c: SPLICE_T for c in DR.CORNERS if c[0] * sx > 0}   # the corners toward the joint
 
     def open_posts(t, corners):
-        """the inner posts carry no screw (the splice plate's screws take those inserts): no floor, an open tube whose
-        rim stands on the plate round the screw head"""
+        """the inner posts carry no screw (the splice plate's screws take those inserts): solid, closed at the back (no
+        tube, no bridged floor, no hole in the back face), with a pocket at the front whose rim stands on the plate round
+        the screw head (Ø POST_BORE, SO_FLOOR + 0.6 deep: the head's 1.65 plus the tray's float)"""
         y = P3.FOOT_Y + SPLICE_T
-        return t - Manifold.batch_boolean([cyl_y(x, ZC + z, y - 1, y + P3.SO_FLOOR + 0.6, DR.POST_BORE, 48) for x, z in corners], ADD)
-    tb = open_posts(DR.tray(post_dy=inner(-1)), inner(-1)).translate([PANEL_CX, 0, 0]) ^ box(TRAY_GAP, 500, -50, 200, -50, 200)
-    ta = open_posts(DR.tray(blank=True, post_dy=inner(+1)), inner(+1)).translate([-PANEL_CX, 0, 0]) ^ box(-500, -TRAY_GAP, -50, 200, -50, 200)
+        fill = Manifold.batch_boolean([cyl_y(x, ZC + z, y + P3.SO_FLOOR + 0.6, DR.Y1, DR.POST_BORE + 0.02, 48) for x, z in corners], ADD)
+        pocket = Manifold.batch_boolean([cyl_y(x, ZC + z, y - 1, y + P3.SO_FLOOR + 0.6, DR.POST_BORE, 48) for x, z in corners], ADD)
+        return (t + fill) - pocket
+    tb = open_posts(DR.tray(controls=CTRL == 'B', post_dy=inner(-1)), inner(-1)).translate([PANEL_CX, 0, 0]) ^ box(TRAY_GAP, 500, -50, 200, -50, 200)
+    ta = open_posts(DR.tray(s3=False, controls=CTRL == 'A', post_dy=inner(+1)), inner(+1)).translate([-PANEL_CX, 0, 0]) ^ box(-500, -TRAY_GAP, -50, 200, -50, 200)
     big = lambda m: max(m.decompose(), key=lambda q: q.volume())
     return big(ta), big(tb), DR.status_window().translate([PANEL_CX, 0, 0])
 
 
 def build_trays(out, frame_dir):
     """print files (back face down; B's window shares B's frame) and case-frame copies in frame_dir for the checks"""
+    import trimesh
     rep = {}
     ta, tb, win = trays()
     for n, m in (('tray-A', ta), ('tray-B', tb), ('tray-B-window', win)):
         to_tm(m).export(f'{frame_dir}/{n}.stl')
-    # envelopes on panel B, for the checks: S3 and its parts, the light sensor (board, plugs) on its sled, the encoder
+    # envelopes for the checks: S3 and its parts (panel B); the light sensor (board, plugs) on its sled and the encoder (panel A)
     import sensor as SN
     enc = (box(-12.7, 12.7, C.KY - 12.7, C.KY + 12.7, SN.EB_BOT, SN.EB_TOP)
            + Manifold.cube([12.0, 12.0, H - 1.4 - SN.EB_TOP], True).rotate([0, 0, 45]).translate([0, C.KY, (H - 1.4 + SN.EB_TOP) / 2])
            + cyl_z(0, C.KY, H - 1.4, H + 6.0, 7.0))
-    for n, m in (('env-s3', DR.s3_envelope()), ('env-sensor', DR.sensor_envelope() + DR.sensor_plugs()), ('env-sled', DR.sled()),
-                 ('env-encoder', enc)):
-        to_tm(m.translate([PANEL_CX, 0, 0])).export(f'{frame_dir}/{n}.stl')
+    for n, m in (('env-s3', DR.s3_envelope().translate([PANEL_CX, 0, 0])),
+                 ('env-sensor', (DR.sensor_envelope() + DR.sensor_plugs()).translate([CSX * PANEL_CX, 0, 0])),
+                 ('env-sled', DR.sled().translate([CSX * PANEL_CX, 0, 0])), ('env-encoder', enc.translate([KNOB_X, 0, 0]))):
+        to_tm(m).export(f'{frame_dir}/{n}.stl')
+    # one wall cleat for both trays' case cleats (one piece on the wall: the two hang in line by construction). It spans
+    # both case cleats (x -/+(PANEL_CX + CLEAT_HW)), screws 15 mm in from each end and one in the middle; printed wall
+    # face down, laid at 45 deg on the plate (293 mm)
+    import cleat as CL
+    whw = PANEL_CX + DR.CLEAT_HW - 0.5
+    wc = CL.wall_cleat(hw=whw, xs=[-(whw - 15.0), 0.0, whw - 15.0])
+    to_tm(wc).export(f'{frame_dir}/wall-cleat.stl')
+    t = to_tm(wc)
+    t.apply_transform(trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0]))   # wall face (y = YW) on the bed
+    t.apply_translation(-t.bounds[0]); n = 'bar128-cleat-wall.stl'; t.export(f'{out}/{n}'); rep[n] = report(n, t)
     fb = backdown(tb)
     for n, m, f in (('bar128-tray-A.stl', ta, None), ('bar128-tray-B.stl', tb, None), ('bar128-tray-B-window.stl', win, fb)):
         t = backdown(m)
@@ -302,7 +338,7 @@ def build_trays(out, frame_dir):
         t.export(f'{out}/{n}'); rep[n] = report(n, t)
     import json
     json.dump(dict(rep=rep, port_z=DR.PORT_Z, s3_edge=DR.S3_EDGE + PANEL_CX, s3_z0=DR.S3_Z0, ky=C.KY,
-                   sensor_x=V.SENSOR_X + PANEL_CX, bottom_xs=[x + PANEL_CX * s for s in (-1, 1) for x in DR.bottom_xs()],
+                   sensor_x=V.SENSOR_X + CSX * PANEL_CX, knob_x=DR.ENC_X + CSX * PANEL_CX, ctrl=CTRL, turned=PANEL_TURNED, bottom_xs=[x + PANEL_CX * s for s in (-1, 1) for x in DR.bottom_xs()],
                    bot_y=DR.BOT_Y, foot_y=P3.FOOT_Y, y0=DR.Y0, y1=DR.Y1, yf=DR.YF,
                    corners=[(x + PANEL_CX * s, z) for s in (-1, 1) for x, z in DR.CORNERS],
                    cleat=[(x + PANEL_CX * s, z) for s in (-1, 1) for x, z in DR.CLEAT_SCREWS]),

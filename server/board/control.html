@@ -116,7 +116,10 @@
   @supports (width: round(down, 100px, 64px)) {
     .prev { container-type: inline-size; }
     .prev img, .prev canvas { width: round(down, 100cqi, 64px); }
+    .wide .prev img { width: round(down, 100cqi, 128px); }
   }
+  /* A board of two panels: its renders are 128 x 32. */
+  .wide .prev img { aspect-ratio: 4 / 1; }
   .prev.dim img { opacity: .35; }
   .prev .over { position: absolute; inset: 0; display: grid; place-items: center; }
   .prev .over span { background: rgba(0,0,0,.75); color: #fff; font-size: 14px; border-radius: 14px; padding: 6px 12px; }
@@ -612,6 +615,7 @@
         <div class="c"><label for="sLabel">Name</label><input type="text" id="sLabel" class="field" style="text-align:right" maxlength="24" autocomplete="off" placeholder="e.g. Kitchen"></div>
         <div class="c"><label for="sId">Board ID</label><input type="text" id="sId" class="field" style="text-align:right" maxlength="32" autocomplete="off" spellcheck="false" placeholder="kitchen"></div>
         <div class="c" style="min-height:48px"><span>For</span><div class="seg fit" id="sWho"><button data-v="other" aria-pressed="true">Someone else</button><button data-v="mine">Me</button></div></div>
+        <div class="c" style="min-height:48px"><span>Panels</span><div class="seg fit" id="sCols"><button data-v="64" aria-pressed="true">One · 64 × 32</button><button data-v="128">Two · 128 × 32</button></div></div>
         <div class="c" id="sKnownRow" hidden><span class="grow s err" id="sKnownText"></span><input type="checkbox" class="sw" id="sReplace" aria-label="Replace its token"></div>
         <label class="c sel"><span>Station</span><span class="v"></span><span data-icon="chev"></span><select id="sStation"></select></label>
         <label class="c sel"><span>Other settings from</span><span class="v"></span><span data-icon="chev"></span><select id="sFrom"></select></label>
@@ -853,6 +857,8 @@
   async function refresh() {
     try {
       pay = await api('api/update?b=' + enc(boardId));
+      // Two panels (cols 128): the board's renders are 4:1.
+      document.documentElement.classList.toggle('wide', pay.cols === 128);
       swapImg($('preview'), imgUrl('scale=5'));
       render();
       refreshPages();
@@ -1501,7 +1507,7 @@
       const h = healthAll[b.id] || null;
       const want = b.fw === 'off' ? null : ch[b.fw] || (/^[0-9a-f]{7,40}$/.test(b.fw) ? b.fw : null);
       const running = h && h.firmware;
-      const sub = [b.link && !b.mine ? 'Owner link' : 'Yours', running || null,
+      const sub = [b.link && !b.mine ? 'Owner link' : 'Yours', b.cols === 128 ? '128 × 32' : null, running || null,
         b.fw === 'off' ? 'Updates off' : b.fw === 'stable' ? 'Stable' : b.fw === 'beta' ? 'Beta' : `Pinned ${b.fw}`,
         running && /^[0-9a-f]{7,40}$/.test(running) && want && running !== want ? 'update waiting' : null,
         b.wiping ? 'WiFi reset pending' : null].filter(Boolean).join(' · ');
@@ -1755,7 +1761,7 @@
   // (setup-image.js, window.BoardSetup): the same settings, settings image,
   // flash plan and label as scripts/setup-board.js.
   const setupDlg = $('setup');
-  const setup = { who: 'other', done: [], last: null, pending: null, busy: false, rot: '0', colors: 'RGB' };
+  const setup = { who: 'other', cols: 64, done: [], last: null, pending: null, busy: false, rot: '0', colors: 'RGB' };
   // The panel options are remembered on this computer: a batch of boards usually shares its case and panel.
   try { Object.assign(setup, JSON.parse(localStorage.getItem('setupPanel')) || {}); } catch (e) { /* private mode */ }
   const COLOR_ORDERS = ['RGB', 'RBG', 'GRB', 'GBR', 'BRG', 'BGR'];   // BoardSetup.COLOR_ORDERS
@@ -1832,6 +1838,7 @@
   $('setupClose').addEventListener('click', () => { if (!setup.busy) setupDlg.close(); });
   setupDlg.addEventListener('cancel', (e) => { if (setup.busy) e.preventDefault(); });
   $('sWho').addEventListener('click', (e) => { const v = e.target.dataset.v; if (v && !setup.busy) { setup.who = v; renderSetupWho(); renderKnown(); } });
+  $('sCols').addEventListener('click', (e) => { const v = Number(e.target.dataset.v); if (v && !setup.busy) { setup.cols = v; pressed('sCols', String(v)); } });
   function renderKnown() {
     const known = boards.find((b) => b.id === $('sId').value.trim().toLowerCase());
     const retry = setup.pending && known && setup.pending.id === known.id && setup.pending.who === setup.who;
@@ -1893,8 +1900,8 @@
       const net = (retry && retry.net) || BoardSetup.setupNetwork();
       setup.pending = { id, key, net, who: setup.who, label };
       const panel = BoardSetup.panelOptions({ rotation: setup.rot, colorOrder: setup.colors });
-      const cfg = BoardSetup.boardConfig({ id, token: key.token, url: location.origin, networks, setupName: net.name, setupPass: net.pass, panel });
-      slog(`Panel: ${panel.rotation === 180 ? 'upside down' : 'upright'}, colors ${panel.color_order}.`);
+      const cfg = BoardSetup.boardConfig({ id, token: key.token, url: location.origin, networks, setupName: net.name, setupPass: net.pass, panel: { ...panel, cols: setup.cols } });
+      slog(`Panel: ${panel.rotation === 180 ? 'upside down' : 'upright'}, colors ${panel.color_order}${setup.cols === 128 ? ', two panels' : ''}.`);
       const plan = BoardSetup.flashPlan(img, BoardSetup.nvsImage({ value: cfg, size: info.nvs.size }), info.nvs, info.end);
       const total = plan.reduce((n, p) => n + p.data.length, 0);
       const before = plan.map((p, i) => plan.slice(0, i).reduce((n, q) => n + q.data.length, 0));

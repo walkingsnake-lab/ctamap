@@ -131,6 +131,7 @@ const USAGE = `node scripts/setup-board.js --id <board-id> [options]
   --rotate <0|180>      180: the panel is mounted upside down (the bar sleeve cases); default 0
   --colors <order>      the panel's color order: what red, green and blue showed as with RGB
                         (${COLOR_ORDERS.join(', ')}; default RGB; green and blue swapped: RBG)
+  --cols 64|128         LEDs across: 64 for one panel (default), 128 for two chained
   --firmware <file>     ctaboard.ino.merged.bin to flash (default: the CI build, via gh)
   --port <port>         serial port (default: esptool finds it)
   --server <url>        default ${DEFAULT_SERVER}
@@ -149,11 +150,13 @@ async function main(argv) {
       firmware: { type: 'string' }, port: { type: 'string' }, server: { type: 'string', default: DEFAULT_SERVER },
       rotate: { type: 'string', default: '0' }, colors: { type: 'string', default: 'RGB' },
       control: { type: 'string' }, token: { type: 'string' }, out: { type: 'string', default: path.join(os.homedir(), 'board-labels') },
+      cols: { type: 'string', default: '64' },
       'dry-run': { type: 'boolean' }, yes: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
     },
   });
   if (o.help || !o.id) { console.log(USAGE); return o.help ? 0 : 2; }
   if (!BOARD_ID_RE.test(o.id)) throw new Error('--id must be 1-32 characters of a-z, 0-9, -');
+  if (o.cols !== '64' && o.cols !== '128') throw new Error('--cols must be 64 (one panel) or 128 (two)');
   const dry = !!o['dry-run'];
   const control = o.control || process.env.BOARD_CONTROL_PATH;
   if (!control) throw new Error('set BOARD_CONTROL_PATH (or --control): the script adds the board and its key on the server');
@@ -210,8 +213,8 @@ async function main(argv) {
 
     // 3. Settings.
     const net = setupNetwork();
-    const cfg = boardConfig({ id: o.id, token, url: o.server, networks, setupName: net.name, setupPass: net.pass, panel });
-    console.log(`Panel: ${panel.rotation === 180 ? 'upside down (rotation 180)' : 'upright'}, colors ${panel.color_order}`);
+    const cfg = boardConfig({ id: o.id, token, url: o.server, networks, setupName: net.name, setupPass: net.pass, panel: { ...panel, cols: Number(o.cols) } });
+    console.log(`Panel: ${panel.rotation === 180 ? 'upside down (rotation 180)' : 'upright'}, colors ${panel.color_order}${o.cols === '128' ? ', two panels (128 x 32)' : ''}`);
     const nvsImage = buildNvs(cfg, nvs.size);
     const plan = flashPlan(img, nvsImage, nvs, end);
 

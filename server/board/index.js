@@ -376,6 +376,13 @@ function createBoard({
   // caps.face(name): whether the firmware draws that clock face.
   // `peek` (`hk=...:peek`): the firmware draws the peek chooser, so it gets
   // every screen's sections and every variant's data (`pv`).
+  // The board's width (contract "Width"): `w=128` on every update and
+  // select from a board of two chained panels; no `w` is 64 (the M4, and
+  // S3 builds from before it). Kept in the board's state so the simulator,
+  // the control page and the next payload know it.
+  function noteCols(id, q) {
+    try { store.setCols(id, q.w === '128' ? 128 : 64); } catch (e) { log.error('[board] width:', e.message); }
+  }
   const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f), peek: capOk(id, q, 'peek') });
 
   // The announce screen's message as the board draws it (draw.js
@@ -402,7 +409,7 @@ function createBoard({
   function boardList() {
     return store.ids().map((id) => {
       const b = store.get(id);
-      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, sports: sportsOn(id), ...(keys.mine(id) ? { mine: true } : {}), ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, sports: sportsOn(id), ...(b.cols === 128 ? { cols: 128 } : {}), ...(keys.mine(id) ? { mine: true } : {}), ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
     });
   }
   // A removed board's live state (health, test alerts, chrono views).
@@ -562,6 +569,8 @@ function createBoard({
       now,
       tzo: tzOffset(now),
       stn: board.station.mapid, // the board starts transit and ticker fresh when it changes
+      // Two chained panels (contract "Width"): absent on a 64-wide board.
+      ...(board.cols === 128 ? { cols: 128 } : {}),
       age: data ? Math.max(0, Math.round(now - data.fetchedAt)) : null,
       stale: stale ? 1 : 0,
       screen,
@@ -690,8 +699,9 @@ function createBoard({
       const board = store.get(id) || store.register(id);
       if (!board) return send(res, 404, { err: 'unknown_board' });
       seenAt.set(id, nowSecs());
+      noteCols(id, parsed.query);
       const caps = capsOf(id, parsed.query);
-      const body = forBoard(await update(board, id, parsed.query.boot === '1', {}, caps), caps);
+      const body = forBoard(await update(store.get(id), id, parsed.query.boot === '1', {}, caps), caps);
       const asked = SCREENS.includes(parsed.query.s) && !canDraw(parsed.query.s, caps) ? 'transit' : parsed.query.s;
       const shown = SCREENS.includes(asked) ? asked : body.screen;
       return send(res, 200, caps.peek ? { ...body, for: shown } : sectionsFor(body, shown));
@@ -711,8 +721,9 @@ function createBoard({
         throw e;
       }
       if (!board) return send(res, 404, { err: 'unknown_board' });
+      noteCols(id, parsed.query);
       const caps = capsOf(id, parsed.query);
-      const body = forBoard(await update(board, id, false, {}, caps), caps);
+      const body = forBoard(await update(store.get(id), id, false, {}, caps), caps);
       return send(res, 200, caps.peek ? { ...body, for: body.screen } : sectionsFor(body, body.screen));
     }
 
