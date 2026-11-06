@@ -1933,10 +1933,52 @@
       return widen(screen === 'ticker' ? renderTicker(q, oo) : screen === 'weather' ? renderWeather(q, oo) : screen === 'clock' ? renderClock(q, oo)
         : screen === 'announce' ? renderAnnounce(q, oo) : renderTransit(q, oo), colsOf(p));
     }
+    // Wide board (wide-spec §9, the variant strip): on the black band, the
+    // chosen category's icon at x2 (rows 23-29) in its color with its
+    // underline on row 31; its variants as words (Tom Thumb, baseline 29)
+    // from x14, 5 px apart, the chosen one white and the rest #4a4a4a, kept
+    // in columns 14-123 (when they don't all fit, the strip shifts left by
+    // whole words until the chosen one shows whole); a category without variants
+    // shows its name in its color. The ring: one dot per category on
+    // column 126, rows 22, 24, ..., in its color, the chosen full and the
+    // rest at 30%.
+    const PEEK_WIDE = { x0: 14, right: 123, gap: 5, off: '#4a4a4a', dotX: 126 };
+    const PEEK_NAMES = { transit: 'ROWS', rows: 'ROWS', ticker: 'TICKER', now: 'NOW', '5day': '5-DAY', hourly: 'HOURLY', radar: 'RADAR', skyline: 'SKY', seventies: '70S',
+      analog: 'DIAL', daynight: 'MAP', gradient: 'GRAD', digits: 'BIG', daydate: 'DATE', words: 'WORDS' };
+    const PEEK_CATS = { transit: 'TRANSIT', weather: 'WEATHER', clock: 'CLOCK', announce: 'ANNOUNCE', cycle: 'CYCLE' };
+    function drawPeekBarWide(f, p, k, vi, drop) {
+      const kn = p.knob || {}, ring = kn.ring || [], cat = ring[k];
+      const sh = (y) => y + drop;
+      const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
+      if (rows) rows.forEach((r, j) => [...r].forEach((ch, x) => { if (ch === '#') f.fill(2 + x, sh(23 + j), 1, 1, col); }));
+      f.fill(2, sh(31), 7, 1, col);
+      const vars = (kn.vars || [])[k] || [];
+      if (vars.length > 1) {
+        // The week's name follows what the 7-day view shows (7-DAY with the week).
+        const words = vars.map((v) => (v === '5day' && p.pv && p.pv.week ? '7-DAY' : PEEK_NAMES[v] || String(v).toUpperCase()));
+        const xs = [];
+        let x = PEEK_WIDE.x0;
+        for (const w of words) { xs.push(x); x += measure('small', w) + 1 + PEEK_WIDE.gap; }
+        // Shifted by whole words, so the first one shown is whole.
+        const end = xs[vi] + measure('small', words[vi]) - 1;
+        let shift = 0;
+        for (let j = 0; end - shift > PEEK_WIDE.right && j < vi; j++) shift = xs[j + 1] - PEEK_WIDE.x0;
+        f.withClip(PEEK_WIDE.x0, 0, PEEK_WIDE.right, 31, () => {
+          words.forEach((w, i) => f.text('small', w, xs[i] - shift, sh(29), i === vi ? C.white : PEEK_WIDE.off));
+        });
+      } else {
+        f.text('small', PEEK_CATS[cat] || String(cat || '').toUpperCase(), PEEK_WIDE.x0, sh(29), col);
+      }
+      ring.forEach((c, i) => {
+        const dc = peekColor(p, c);
+        f.fill(PEEK_WIDE.dotX, sh(22 + i * 2), 1, 1, i === k ? dc : scaleColor(dc, 0.3));
+      });
+    }
     function drawPeekBar(f, p, k, vi, drop) {
       const kn = p.knob || {}, ring = kn.ring || [], n = ring.length;
       const sh = (y) => y + drop;
       f.fill(0, sh(PEEK.top), f.w, PEEK.band, '#000000');
+      if (f.w === WIDE) { drawPeekBarWide(f, p, k, vi, drop); return; }
       const x0 = Math.floor(f.w / 2 - (n * PEEK.pitch - 5) / 2);
       ring.forEach((cat, i) => {
         const col = peekColor(p, cat), rows = PEEK_ICONS[cat];

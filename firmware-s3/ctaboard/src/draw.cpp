@@ -2575,11 +2575,74 @@ static void draw_peek_view(const Value &q, const std::string &screen, Frame &f, 
   widen(f, cols_of(q));
 }
 
+// Wide board (draw.js drawPeekBarWide; wide-spec §9): the chosen
+// category's icon at x2 with its underline, its variants as words from x14
+// (the chosen white), shifted left by whole words to show the chosen one in
+// columns 14-123; a category without variants shows its name in its color;
+// one dot per category on column 126.
+static const int PW_X0 = 14, PW_RIGHT = 123, PW_GAP = 5, PW_DOT_X = 126;
+static const RGB PW_OFF = hexc(0x4a4a4a);
+static ustr peek_name(const std::string &v, bool week) {
+  static const char *const names[][2] = {{"transit", "ROWS"}, {"rows", "ROWS"}, {"ticker", "TICKER"}, {"now", "NOW"}, {"5day", "5-DAY"},
+                                         {"hourly", "HOURLY"}, {"radar", "RADAR"}, {"skyline", "SKY"}, {"seventies", "70S"}, {"analog", "DIAL"},
+                                         {"daynight", "MAP"}, {"gradient", "GRAD"}, {"digits", "BIG"}, {"daydate", "DATE"}, {"words", "WORDS"}};
+  if (v == "5day" && week) return U"7-DAY";
+  for (const auto &n : names)
+    if (v == n[0]) return U(n[1]);
+  std::string up = v;
+  for (char &c : up) c = (char)toupper((unsigned char)c);
+  return U(up);
+}
+static ustr peek_cat_name(const std::string &cat) {
+  static const char *const names[][2] = {{"transit", "TRANSIT"}, {"weather", "WEATHER"}, {"clock", "CLOCK"}, {"announce", "ANNOUNCE"}, {"cycle", "CYCLE"}};
+  for (const auto &n : names)
+    if (cat == n[0]) return U(n[1]);
+  std::string up = cat;
+  for (char &c : up) c = (char)toupper((unsigned char)c);
+  return U(up);
+}
+static void draw_peek_bar_wide(Frame &f, const Value &p, int k, int vi, int drop) {
+  const Value &kn = p["knob"], &ring = kn["ring"];
+  auto sh = [&](int y) { return y + drop; };
+  std::string cat = ring[k].is_str() ? ring[k].s : "";
+  RGB col = peek_color(p, cat);
+  if (const char *const *rows = peek_icon(cat))
+    for (int j = 0; j < 7; j++)
+      for (int x = 0; x < 7; x++)
+        if (rows[j][x] == '#') f.fill(2 + x, sh(23 + j), 1, 1, col);
+  f.fill(2, sh(31), 7, 1, col);
+  const Value &vars = kn["vars"][k];
+  int nv = (int)vars.size();
+  if (nv > 1) {
+    bool week = p["pv"]["week"].truthy();
+    std::vector<ustr> words;
+    std::vector<int> xs;
+    int x = PW_X0;
+    for (int i = 0; i < nv; i++) {
+      words.push_back(peek_name(vars[i].is_str() ? vars[i].s : "", week));
+      xs.push_back(x);
+      x += measure(FONT_SMALL, words.back()) + 1 + PW_GAP;
+    }
+    int end = xs[vi] + measure(FONT_SMALL, words[vi]) - 1, shift = 0;
+    for (int j = 0; end - shift > PW_RIGHT && j < vi; j++) shift = xs[j + 1] - PW_X0;
+    f.push_clip(PW_X0, 0, PW_RIGHT, 31);
+    for (int i = 0; i < nv; i++) f.text(FONT_SMALL, words[i], xs[i] - shift, sh(29), i == vi ? C::white : PW_OFF);
+    f.pop_clip();
+  } else {
+    f.text(FONT_SMALL, peek_cat_name(cat), PW_X0, sh(29), col);
+  }
+  for (int i = 0; i < (int)ring.size(); i++) {
+    RGB dc = peek_color(p, ring[i].is_str() ? ring[i].s : "");
+    f.fill(PW_DOT_X, sh(22 + i * 2), 1, 1, i == k ? dc : scale_color(dc, 0.3));
+  }
+}
+
 static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop) {
   const Value &kn = p["knob"], &ring = kn["ring"];
   int n = (int)ring.size();
   auto sh = [&](int y) { return y + drop; };
   f.fill(0, sh(PEEK_TOP), f.w, PEEK_BAND, RGB{0, 0, 0});
+  if (f.w == WIDE) return draw_peek_bar_wide(f, p, k, vi, drop);
   int x0 = (int)std::floor(f.w / 2.0 - (n * PEEK_PITCH - 5) / 2.0);
   for (int i = 0; i < n; i++) {
     std::string cat = ring[i].is_str() ? ring[i].s : "";

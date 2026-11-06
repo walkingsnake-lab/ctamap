@@ -799,6 +799,17 @@ async function build() {
         }),
       });
     }
+    // The wide chooser's variant strip: eight clock faces (the strip shifts
+    // by whole words to show the chosen one), the bar dropping, and a clock
+    // with one face (its name instead of words).
+    {
+      const s = S.find((x) => x.name === 'wide peek every variant');
+      const p = { ...s.payload, knob: { ...s.payload.knob, vars: s.payload.knob.vars.map((v, i) => (i === 2 ? [...v, 'words'] : v)) } };
+      const base = s.renders[0].opts;
+      add('wide peek strip shifts to the chosen word', p, [[2, 4], [2, 5], [2, 6], [2, 7], [1, 1]].map(([k, vi]) => ({ ...base, peek: { k, vi } })).concat([{ ...base, peek: { k: 2, vi: 7, drop: 4 } }]), bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
+      const one = { ...s.payload, knob: { ...s.payload.knob, vars: s.payload.knob.vars.map((v, i) => (i === 2 ? ['skyline'] : v)) } };
+      add('wide peek a category with one variant', one, [{ ...base, peek: { k: 2, vi: 0 } }], bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
+    }
     // Wide weather (wide-spec §4): the week and 24 hours, with and without
     // the top bar, warnings, °C and negatives, and the wide conditions.
     {
