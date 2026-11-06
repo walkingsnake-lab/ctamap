@@ -1669,10 +1669,10 @@ bool rain_bars_turn(const Value &rn, int n, const Timing &tm, double t) {
 static const RGB PEEK_LOADED = hexc(0x6a6a6a);
 
 // Wide board (draw.js renderRadarWide; wide-spec §5): the 128 x 32 map, the
-// time on a black chip bottom-right (at least columns 101-127), a warning
-// tag before it, the frame dots straight on the map along row 31, the
-// temperature on its own chip bottom-left.
-static const int WIDE_CHIP_X = 101;
+// time on a black chip bottom-right (at least columns 101-127), a watch or
+// warning (else the temperature) on a chip bottom-left, the frame dots
+// straight on the map along row 31 after it.
+static const int WIDE_CHIP_X = 101, WIDE_CHIP_Y = 26;  // chips: rows 26-31
 static const RGB WIDE_DOT = hexc(0x4a4a4a);
 template <class OnHand>
 static void render_radar_wide(const Value &p, const Value &r, Frame &f, const Value &ids, int idx,
@@ -1699,52 +1699,43 @@ static void render_radar_wide(const Value &p, const Value &r, Frame &f, const Va
   if (warnp) ws = warn_style(*warnp);
   bool hide_warn = ws && ws->blinks && blink;
   bool show_time = !r["showTime"].is_false() && !r["clock"].eq("none");
-  int x = WIDE;
-  bool any = false;
-  // Right to left: AM/PM, the time (or its age), the warning tag. Drawn after the chip.
-  ustr age, clk, ap;
-  std::optional<Roll> cr;
-  int ap_x = 0, right = 0, tag_x = 0;
+  const RGB black{0, 0, 0};
+  const int ch = 32 - WIDE_CHIP_Y;
+  // The time chip: AM/PM at the right edge, the time before it.
   if (show_time && r["clock"].eq("age")) {
     double fts = idx >= 0 && ft.truthy() && !ft[idx].is_null() ? ft[idx].num() : now_s;
-    age = num_text((long long)std::max(0.0, floor((now_s - fts + 30) / 60))) + U"m";
-    x -= measure(FONT_SMALL, age) + 1;
-    any = true;
+    ustr age = num_text((long long)std::max(0.0, floor((now_s - fts + 30) / 60))) + U"m";
+    f.fill(WIDE_CHIP_X, WIDE_CHIP_Y, WIDE - WIDE_CHIP_X, ch, black);
+    f.text(FONT_SMALL, age, WIDE - measure(FONT_SMALL, age), 32, C::label);
   } else if (show_time) {
-    ap = ampm_text(t, tzo);
-    clk = clock_text(t, tzo);
-    ap_x = WIDE - measure(FONT_SMALL, ap);
-    right = ap_x - 3;
+    ustr ap = ampm_text(t, tzo), clk = clock_text(t, tzo);
+    int ap_x = WIDE - measure(FONT_SMALL, ap);
+    int right = ap_x - 3;
+    std::optional<Roll> cr;
     if (now_clock) cr = take_roll("rad.clock", clk);
-    x = right - measure(FONT_SMALL, clk) + 1;
+    int x = right - measure(FONT_SMALL, clk) + 1;
     if (cr) x = std::min(x, right - measure(FONT_SMALL, cr->from) + 1);
-    any = true;
+    int x0 = std::min(WIDE_CHIP_X, x - 1);
+    f.fill(x0, WIDE_CHIP_Y, WIDE - x0, ch, black);
+    roll_text(f, FONT_SMALL, clk, right, 32, C::label, cr);
+    f.text(FONT_SMALL, ap, ap_x, 32, C::radarAmpm);
   }
-  ustr word;
+  // The bottom-left chip: a watch or warning (in place of the temperature),
+  // else the temperature; then the frame dots.
+  int dx = 0;
   if (ws) {
-    word = (*warnp)["lvl"].eq("warning") ? U"WARN" : U"WATCH";
+    ustr word = (*warnp)["lvl"].eq("warning") ? U"WARN" : U"WATCH";
     int tw = measure(FONT_SMALL, ws->glyph) + TAG_GAP + measure(FONT_SMALL, word);
-    tag_x = (any ? x - 3 : WIDE) - tw;
-    x = tag_x;
-  }
-  if (any || ws) {
-    int x0 = std::min(any && show_time ? WIDE_CHIP_X : WIDE, x - 1);
-    f.fill(x0, 25, WIDE - x0, 7, RGB{0, 0, 0});
-    if (!age.empty()) f.text(FONT_SMALL, age, WIDE - measure(FONT_SMALL, age), 32, C::label);
-    else if (any) {
-      roll_text(f, FONT_SMALL, clk, right, 32, C::label, cr);
-      f.text(FONT_SMALL, ap, ap_x, 32, C::radarAmpm);
-    }
-    if (ws && !hide_warn) {
-      int gx = f.text(FONT_SMALL, ws->glyph, tag_x, 32, ws->color);
+    f.fill(0, WIDE_CHIP_Y, tw + 1, ch, black);
+    if (!hide_warn) {
+      int gx = f.text(FONT_SMALL, ws->glyph, 0, 32, ws->color);
       f.text(FONT_SMALL, word, gx + TAG_GAP - 1, 32, ws->color);
     }
-  }
-  int dx = 0;
-  if (!r["temp"].is_null() && r.has("temp") && (r["cond"].truthy() || r["showTime"].is_false())) {
+    dx = tw + 3;
+  } else if (!r["temp"].is_null() && r.has("temp") && (r["cond"].truthy() || r["showTime"].is_false())) {
     ustr tt = vstr(r["temp"]) + U"°";
     int tw = measure(FONT_SMALL, tt);
-    f.fill(0, 25, tw + 1, 7, RGB{0, 0, 0});
+    f.fill(0, WIDE_CHIP_Y, tw + 1, ch, black);
     f.text(FONT_SMALL, tt, 0, 32, C::label);
     dx = tw + 3;
   }
