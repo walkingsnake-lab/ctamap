@@ -480,7 +480,8 @@ struct RollFont {
 };
 static RollFont roll_font(Font font) {
   return font == FONT_5X7 ? RollFont{7, -6, -1} : font == FONT_CLOCK ? RollFont{11, -10, -1} : font == FONT_VCR ? RollFont{12, -11, -1}
-       : font == FONT_D17 ? RollFont{18, -17, -1} : font == FONT_D13 ? RollFont{14, -13, -1} : RollFont{6, -5, -1};
+       : font == FONT_D17 ? RollFont{18, -17, -1} : font == FONT_D13 ? RollFont{14, -13, -1} : font == FONT_D23 ? RollFont{24, -23, -1}
+       : RollFont{6, -5, -1};
 }
 
 static bool same_shape(Font font, const ustr &a, const ustr &b) {
@@ -493,24 +494,24 @@ static bool same_shape(Font font, const ustr &a, const ustr &b) {
 // Where a rolling text goes: its left edge at `pos`, its right edge at
 // `pos`, or centered on the panel (draw.js xOf: () => x, rightAt, centerX).
 enum Align { LEFT, RIGHT, CENTER, SPAN };
-static int align_x(Font font, const ustr &s, Align a, int pos) {
-  // CENTER: centered in columns pos-63 (pos 0: the whole panel).
+static int align_x(Font font, const ustr &s, Align a, int pos, int end = 64) {
+  // CENTER: centered in columns pos to end - 1 (pos 0: the whole panel).
   // SPAN: centered in columns 0-pos.
   if (a == SPAN) return (int)fdiv(pos + 1 - measure(font, s), 2);
-  return a == LEFT ? pos : a == RIGHT ? pos - measure(font, s) + 1 : pos + (int)fdiv(64 - pos - measure(font, s), 2);
+  return a == LEFT ? pos : a == RIGHT ? pos - measure(font, s) + 1 : pos + (int)fdiv(end - pos - measure(font, s), 2);
 }
 
 // Text that rolls when it changes. Pixel-identical to rollTextWith() in
 // draw.js. Returns x after the last advance.
 static int roll_text_at(Frame &f, Font font, const ustr &text, Align a, int pos, int base, RGB color,
-                        const std::optional<Roll> &roll) {
-  int x = align_x(font, text, a, pos);
+                        const std::optional<Roll> &roll, int end = 64) {
+  int x = align_x(font, text, a, pos, end);
   if (!roll) return f.text(font, text, x, base, color);
   const ustr &frm = roll->from;
   RollFont rf = roll_font(font);
   int up = (int)jsround(ease_in_out(roll->p) * rf.dist);
-  int fx = align_x(font, frm, a, pos);
-  f.push_clip(0, base + rf.t0, 63, base + rf.t1);
+  int fx = align_x(font, frm, a, pos, end);
+  f.push_clip(0, base + rf.t0, f.w - 1, base + rf.t1);
   if (fx == x && same_shape(font, text, frm)) {
     for (size_t i = 0; i < text.size(); i++) {
       ustr ch = text.substr(i, 1);
@@ -537,8 +538,8 @@ static int roll_text(Frame &f, Font font, const ustr &text, int right, int base,
   return roll_text_at(f, font, text, RIGHT, right, base, color, roll);
 }
 // Named rolls: the big clocks and current-conditions numbers (draw.js rollText).
-static int roll_named(Frame &f, Font font, const std::string &name, const ustr &text, Align a, int pos, int base, RGB color) {
-  return roll_text_at(f, font, text, a, pos, base, color, take_roll(name, text));
+static int roll_named(Frame &f, Font font, const std::string &name, const ustr &text, Align a, int pos, int base, RGB color, int end = 64) {
+  return roll_text_at(f, font, text, a, pos, base, color, take_roll(name, text), end);
 }
 
 void NumRoller::begin(double ms) {
@@ -592,9 +593,9 @@ static void draw_header(Frame &f, const ustr &name, double now, double tzo, bool
   f.text(FONT_SMALL, name, 0, 6, color);
   if (clock) {
     ustr ck = clock_text(now, tzo);
-    roll_text(f, FONT_SMALL, ck, 63, 6, color, take_roll("hdr.clock", ck));
+    roll_text(f, FONT_SMALL, ck, f.w - 1, 6, color, take_roll("hdr.clock", ck));
   }
-  if (divider) f.fill(0, 7, 64, 1, C::divider);
+  if (divider) f.fill(0, 7, f.w, 1, C::divider);
 }
 
 struct WarnStyle {
@@ -621,10 +622,10 @@ static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blin
     WarnStyle ws = warn_style(*warn);
     if (ws.blinks && blink) return;
     ustr word = (*warn)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
-    int x = 63 - (measure(FONT_SMALL, ws.glyph) + TAG_GAP + measure(FONT_SMALL, word)) + 1;
+    int x = f.w - 1 - (measure(FONT_SMALL, ws.glyph) + TAG_GAP + measure(FONT_SMALL, word)) + 1;
     f.text(FONT_SMALL, word, f.text(FONT_SMALL, ws.glyph, x, base, ws.color) + TAG_GAP - 1, base, ws.color);
   } else if (wx["word"].truthy()) {
-    rtext(f, FONT_SMALL, vstr(wx["word"]), 63, base, C::dimHead);
+    rtext(f, FONT_SMALL, vstr(wx["word"]), f.w - 1, base, C::dimHead);
   }
 }
 
@@ -632,15 +633,16 @@ static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blin
 // a divider on row 25. Mirrors drawKey() / drawBand() in draw.js.
 static void draw_key(Frame &f) {
   f.text(FONT_SMALL, U"trains to", 0, 6, C::dimHead);
-  rtext(f, FONT_SMALL, U"min", 63, 6, C::dimHead);
+  rtext(f, FONT_SMALL, U"min", f.w - 1, 6, C::dimHead);
 }
 
-static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock = true) {
-  f.fill(0, 25, 64, 1, C::divider);
-  f.text(FONT_SMALL, name, 0, 32, C::head);
+static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock = true, RGB color = C::head,
+                      bool divider = true) {
+  if (divider) f.fill(0, 25, f.w, 1, C::divider);
+  f.text(FONT_SMALL, name, 0, 32, color);
   if (clock) {
     ustr ck = clock_text(now, tzo);
-    roll_text(f, FONT_SMALL, ck, 63, 32, C::head, take_roll("hdr.clock", ck));
+    roll_text(f, FONT_SMALL, ck, f.w - 1, 32, color, take_roll("hdr.clock", ck));
   }
 }
 
@@ -654,15 +656,17 @@ static bool is_num(ustr s) {
 }
 
 // One time cell, right-aligned at `right`, optionally mid-roll.
-// Same-length numbers roll only the digits that changed.
-static void draw_time_cell(Frame &f, const ustr &text, int right, int top, RGB color, const std::optional<Roll> &roll) {
+// Same-length numbers roll only the digits that changed. x0..x1: the row's
+// columns, for the roll's clip (x1 -1: the frame's last column).
+static void draw_time_cell(Frame &f, const ustr &text, int right, int top, RGB color, const std::optional<Roll> &roll,
+                           int x0 = 0, int x1 = -1) {
   int base = top + 5;
   if (!roll || roll->from == text || roll->p >= 1) {
     rtext(f, FONT_SMALL, text, right, base, color);
     return;
   }
   int up = (int)jsround(ease_in_out(roll->p) * ROLL_DIST);
-  f.push_clip(0, top, 63, top + 4);
+  f.push_clip(x0, top, x1 < 0 ? f.w - 1 : x1, top + 4);
   const ustr &frm = roll->from;
   if (frm.size() == text.size() && is_num(frm) && is_num(text)) {
     int x = right - measure(FONT_SMALL, text) + 1;
@@ -691,7 +695,8 @@ static int alert_icon_x(const ustr &text, int x) {
 }
 
 // steps: the third time a step dimmer than the second (payload ts).
-static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool steps = false) {
+// x0, right: the row's columns (a wide board's halves).
+static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool steps = false, int x0 = 0, int right = 63) {
   std::vector<ustr> texts;
   for (size_t k = 0; k < r.tn.size(); k++) texts.push_back(time_text(r.tn[k], now, k == 0));
   auto width_at = [&](int gap) {
@@ -702,11 +707,11 @@ static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool ste
   const Value &src = *r.src;
   ustr lbl = vstr(src["lbl"]);
   int label_end = src["a"].truthy()
-                      ? alert_icon_x(src["al"].is_null() ? lbl : vstr(src["al"]), 5) + 4
-                      : 5 + measure(FONT_SMALL, lbl) - 1;
-  int gap = 63 - width_at(TIME_GAP) + 1 - label_end - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
+                      ? alert_icon_x(src["al"].is_null() ? lbl : vstr(src["al"]), x0 + 5) + 4
+                      : x0 + 5 + measure(FONT_SMALL, lbl) - 1;
+  int gap = right - width_at(TIME_GAP) + 1 - label_end - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
   std::vector<ViewCell> cells(texts.size());
-  int x = 63;
+  int x = right;
   for (int k = (int)texts.size() - 1; k >= 0; k--) {
     bool sch = r.s[k] != 0;
     RGB color = sch ? (k == 0 ? C::sch : steps && k >= 2 ? C::schDim2 : C::schDim)
@@ -725,6 +730,7 @@ static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool ste
 static View view_base(const Value &p, double now) {
   View v;
   v.now = now;
+  v.w = cols_of(p);
   v.has_header = p["header"].truthy();
   if (v.has_header) v.header = vstr(p["header"]);
   v.wx = p["wx"].truthy() ? &p["wx"] : nullptr;
@@ -739,9 +745,11 @@ static View view_base(const Value &p, double now) {
 }
 
 static View build_chrono_view(const Value &p, double now);
+static View build_halves_view(const Value &p, double now);
 
 View build_transit_view(const Value &p, double now) {
   if (p["view"].eq("chrono")) return build_chrono_view(p, now);
+  if (cols_of(p) == WIDE && (p["view"].eq("split") || p["view"].eq("cols2"))) return build_halves_view(p, now);
   std::vector<LiveRow> rows = live_rows(p, now);
   std::vector<int> tops = row_tops((int)rows.size(), p["header"].truthy(), p["wx"].truthy(),
                                    p["headerDivider"].is_true(), p["key"].truthy());
@@ -757,9 +765,56 @@ View build_transit_view(const Value &p, double now) {
     if (!r["al"].is_null()) vr.al = vstr(r["al"]);
     vr.top = tops[i];
     vr.alpha = 1;
-    vr.cells = layout_cells(rows[i], now, p["ts"].is_true());
+    vr.cells = layout_cells(rows[i], now, p["ts"].is_true(), 0, v.w - 1);
     v.rows.push_back(vr);
   }
+  return v;
+}
+
+// A wide board's halves (draw.js buildHalvesView, HALVES, SPLIT_TOPS):
+// split (northbound | southbound, the payload's `halves` labels on top, the
+// station line at the bottom) or cols2 (two columns under the header). Rows
+// carry `h`; both halves share row tops, set by the fuller one.
+static const int HALVES[2][2] = {{0, 61}, {66, 127}};
+static std::vector<int> split_tops(int n) {
+  if (n <= 0) return {};
+  if (n == 1) return {14};
+  if (n == 2) return {10, 18};
+  return {8, 14, 20};
+}
+
+static View build_halves_view(const Value &p, double now) {
+  bool split = p["view"].eq("split");
+  std::vector<LiveRow> rows = live_rows(p, now);
+  std::vector<LiveRow> per[2];
+  for (const LiveRow &r : rows) per[(*r.src)["h"].truthy() ? 1 : 0].push_back(r);
+  int n = (int)std::max(per[0].size(), per[1].size());
+  std::vector<int> tops = split ? split_tops(std::min(n, 3)) : row_tops(n, p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true(), false);
+  View v = view_base(p, now);
+  v.mode = split ? "split" : "cols2";
+  v.w = WIDE;
+  if (split)
+    for (size_t i = 0; i < p["halves"].size(); i++) v.halves.push_back(vstr(p["halves"][i]));
+  v.hdiv = !split && p["headerDivider"].is_true();
+  v.key = false;
+  if (split) v.wx = nullptr;
+  for (int h = 0; h < 2; h++)
+    for (size_t i = 0; i < per[h].size(); i++) {
+      const Value &r = *per[h][i].src;
+      ViewRow vr;
+      vr.ln = r["ln"].str_or("");
+      vr.lbl = vstr(r["lbl"]);
+      vr.key = std::to_string(h) + ":" + vr.ln + ":" + utf8(vr.lbl);
+      vr.h = h;
+      vr.x0 = HALVES[h][0];
+      vr.right = HALVES[h][1];
+      vr.a = r["a"].truthy();
+      if (!r["al"].is_null()) vr.al = vstr(r["al"]);
+      vr.top = i < tops.size() ? tops[i] : 0;
+      vr.alpha = 1;
+      vr.cells = layout_cells(per[h][i], now, p["ts"].is_true(), vr.x0, vr.right);
+      v.rows.push_back(vr);
+    }
   return v;
 }
 
@@ -802,7 +857,7 @@ static View build_chrono_view(const Value &p, double now) {
     ViewCell c;
     c.t = rows[i].tn[0];
     c.text = chrono_text(rows[i].tn[0], now, due);
-    c.right = 63;
+    c.right = v.w - 1;
     c.alpha = 1;
     c.color = color;
     vr.cells.push_back(c);
@@ -822,9 +877,11 @@ static void draw_view_row(Frame &f, const ViewRow &row, bool lnc) {
   bool chrono = row.num.has_value();
   RGB lc = line_color(row.ln);
   RGB line = fade(lc, row.alpha);
+  // A half of a wide board (row.x0, row.right), else the whole panel.
+  int x0 = row.x0, x1 = row.right >= 0 ? row.right : f.w - 1;
   if (chrono) draw_time_cell(f, num_text(*row.num), 2, top, fade(lc, row.alpha), row.numRoll);
-  f.fill(chrono ? CHRONO_BLOCK_X : 0, top, 3, 5, line);
-  int lx = chrono ? CHRONO_LABEL_X : 5;
+  f.fill(chrono ? CHRONO_BLOCK_X : x0, top, 3, 5, line);
+  int lx = chrono ? CHRONO_LABEL_X : x0 + 5;
   const ustr &text = row.a && row.al ? *row.al : row.lbl;
   f.text(FONT_SMALL, text, lx, top + 5, fade(lnc ? lc : C::label, row.alpha));
   if (row.a) {
@@ -835,7 +892,7 @@ static void draw_view_row(Frame &f, const ViewRow &row, bool lnc) {
   for (const ViewCell &cell : row.cells) {
     double a = cell.alpha * row.alpha;
     if (a <= 0) continue;
-    draw_time_cell(f, cell.text, (int)jsround(cell.right), top, fade(cell.color, a), cell.roll);
+    draw_time_cell(f, cell.text, (int)jsround(cell.right), top, fade(cell.color, a), cell.roll, x0, x1);
   }
 }
 
@@ -881,12 +938,35 @@ static void draw_overnight(Frame &f, const View &view, double now) {
 }
 
 static void draw_stale(Frame &f, const Value &p) {
-  if (p["stale"].truthy()) f.fill(0, 0, 64, 1, C::red);
+  if (p["stale"].truthy()) f.fill(0, 0, f.w, 1, C::red);
+}
+
+// Wide board, northbound | southbound (draw.js drawSplit): each half's label
+// on rows 1-5, its rows, the station line at the bottom; NO TRAINS in a half
+// with none.
+static void draw_split(Frame &f, const View &view) {
+  for (int h = 0; h < 2; h++) {
+    int x0 = HALVES[h][0], x1 = HALVES[h][1];
+    f.text(FONT_SMALL, h < (int)view.halves.size() ? view.halves[h] : ustr(), x0, 6, C::head);
+    bool any = false;
+    for (const ViewRow &r : view.rows)
+      if ((r.h == 1 ? 1 : 0) == h) any = true;
+    if (!any) {
+      ustr nt = U"NO TRAINS";
+      f.text(FONT_SMALL, nt, x0 + (int)fdiv(x1 - x0 + 1 - measure(FONT_SMALL, nt), 2), 19, C::noTrains);
+    }
+  }
+  if (view.has_header) draw_band(f, view.header, view.now, view.tzo, view.clock, C::dimHead, false);
+  f.push_clip(0, 7, f.w - 1, view.has_header ? 25 : 31);
+  for (const ViewRow &row : view.rows) draw_view_row(f, row, view.lnc);
+  f.pop_clip();
 }
 
 static void draw_transit_view(Frame &f, const View &view, bool blink) {
   if (view.rows.empty()) {
     draw_overnight(f, view, view.now);
+  } else if (view.mode == "split") {
+    draw_split(f, view);
   } else {
     if (view.key) {
       draw_key(f);
@@ -896,21 +976,24 @@ static void draw_transit_view(Frame &f, const View &view, bool blink) {
     }
     int clip_top = view.key ? 6 : (view.has_header ? 7 : 0);
     int clip_bottom = (view.key && view.has_header) ? 24 : (view.wx ? 25 : 31);
-    f.push_clip(0, clip_top, 63, clip_bottom);
+    f.push_clip(0, clip_top, f.w - 1, clip_bottom);
     for (const ViewRow &row : view.rows) draw_view_row(f, row, view.lnc);
     f.pop_clip();
   }
   if (view.wx) draw_weather(f, *view.wx, view.warn, blink);
 }
 
+// A wide payload's rows draw 128 across; with none (overnight) the 64
+// layout shows on both panels (render() widens it).
 static void render_transit(const Value &p, Frame &f, std::optional<double> now, bool blink, const View *view) {
   double n = now ? *now : p["now"].num();
-  if (view) {
-    draw_transit_view(f, *view, blink);
-  } else {
-    View v = build_transit_view(p, n);
-    draw_transit_view(f, v, blink);
+  View built;
+  if (!view) {
+    built = build_transit_view(p, n);
+    view = &built;
   }
+  if (!view->rows.empty() && view->w == WIDE) f.w = WIDE;
+  draw_transit_view(f, *view, blink);
   draw_stale(f, p);
 }
 
@@ -1128,6 +1211,9 @@ View TransitAnimator::step(const Value &p, double now, double t) {
     }
     st->ln = r.ln;
     st->lbl = r.lbl;
+    st->h = r.h;
+    st->x0 = r.x0;
+    st->right = r.right;
     st->a = r.a;
     st->al = r.al;
     st->num = r.num;
@@ -1184,6 +1270,9 @@ View TransitAnimator::step(const Value &p, double now, double t) {
     vr.key = st.key;
     vr.ln = st.ln;
     vr.lbl = st.lbl;
+    vr.h = st.h;
+    vr.x0 = st.x0;
+    vr.right = st.right;
     vr.a = st.a;
     vr.al = st.al;
     vr.top = st.shownTop;
@@ -1223,6 +1312,40 @@ static void draw_ticker_item(Frame &f, const Value &it, int idx, int top, double
   }
 }
 
+// Wide board (draw.js drawTickerItemWide): the CTA platform sign's row:
+// the row number (or the alert circle) in the index column, the band to the
+// right edge, the full destination, the time right-aligned at
+// TICKER_TIME_RIGHT, the status icon (tracked or schedule-based) at
+// TICKER_ICON_X, rows 2-8 of the band.
+static const int TICKER_ICON_X = 120, TICKER_TIME_RIGHT = 116;
+static const char *const TICKER_LIVE[7] = {"####...", "....#..", "###..#.", "...#..#", "##..#.#", "..#.#.#", "#.#.#.#"};
+static const char *const TICKER_SCH[7] = {"..###..", ".#...#.", "#..#..#", "#..##.#", "#.....#", ".#...#.", "..###.."};
+static void draw_ticker_item_wide(Frame &f, const Value &it, int idx, int top, double now, bool due, double fill) {
+  int base = top + 9;
+  RGB white = C::white;
+  f.fill(0, top, 5, 12, C::index);
+  f.fill(5, top, f.w - 5, 12, scale_color(line_color(it["ln"].str_or("")), fill));
+  if (it["a"].truthy()) {
+    f.text(FONT_SMALL, g(assets::G_ALERT_DISC), 0, base, C::red);
+    f.text(FONT_SMALL, g(assets::G_ALERT_MARK), 0, base, C::white);
+  } else {
+    f.text(FONT_SMALL, num_text(idx), 1, base, C::label);
+  }
+  f.text(FONT_5X7, vstr(it["d"]), 7, base, white);
+  long long m = minutes_until(it["t"].num(), now);
+  if (m <= 1 && due) {
+    rtext(f, FONT_5X7, U"Due", TICKER_TIME_RIGHT, base, white);
+  } else {
+    int mw = measure(FONT_5X7, g(assets::G_MIN));
+    f.text(FONT_5X7, g(assets::G_MIN), TICKER_TIME_RIGHT - mw + 1, base, white);
+    rtext(f, FONT_5X7, num_text(m <= 1 ? 2 : m), TICKER_TIME_RIGHT - mw - 2, base, white);
+  }
+  const char *const *icon = it["s"].truthy() ? TICKER_SCH : TICKER_LIVE;
+  for (int j = 0; j < 7; j++)
+    for (int i = 0; i < 7; i++)
+      if (icon[j][i] == '#') f.fill(TICKER_ICON_X + i, top + 2 + j, 1, 1, white);
+}
+
 int ticker_pages(const Value &p, double now) {
   long long n = (long long)live_ticker(p, now).size();
   return (int)std::max(1LL, -fdiv(-n, 2));
@@ -1230,6 +1353,8 @@ int ticker_pages(const Value &p, double now) {
 
 static void render_ticker(const Value &p, Frame &f, std::optional<double> now_o, int page, double slide) {
   double now = now_o ? *now_o : p["now"].num();
+  const bool wide = cols_of(p) == WIDE;
+  if (wide) f.w = WIDE;
   const Value &th = p.has("tickerHeader") ? p["tickerHeader"] : p["header"];
   if (th.truthy()) draw_header(f, vstr(th), now, p["tzo"].num(0), false, !p["hclock"].is_false());
   std::vector<const Value *> items = live_ticker(p, now);
@@ -1261,10 +1386,10 @@ static void render_ticker(const Value &p, Frame &f, std::optional<double> now_o,
       size_t n = (size_t)(pg * 2 + i);
       if (n >= items.size()) break;
       const Value &it = *items[n];
-      draw_ticker_item(f, it, (int)n + 1, 7 + i * 13 + shift, now, first(key_of(it)) == n, fill);
+      (wide ? draw_ticker_item_wide : draw_ticker_item)(f, it, (int)n + 1, 7 + i * 13 + shift, now, first(key_of(it)) == n, fill);
     }
   };
-  f.push_clip(0, 7, 63, 31);
+  f.push_clip(0, 7, f.w - 1, 31);
   draw_page(page, -offset);
   if (offset > 0 && pages > 1) draw_page((page + 1) % pages, 26 - offset);
   f.pop_clip();
@@ -1441,59 +1566,149 @@ static void draw_hourly(Frame &f, const Value &wx, bool shadow, const Value *war
   }
 }
 
-// ---- rain bars ----
+// ---- wide weather layouts (draw.js drawTopBarWide, drawWeek, drawDayHours,
+// drawConditionsWide; contract "Width") ----
+static const int WW_RIGHT = 126, WW_COLS7 = 18, WW_COLS8 = 16;
+static const RGB WW_POP0 = hexc(0x3a3a3a), WW_POP_LOW = hexc(0x24538c);
+static ustr wide_date_line(double now, double tzo);  // "TUE NOV 3" (after local_date below)
 
-static const RGB RAIN_LEVELS[] = {hexc(0x0a2a78), hexc(0x0f48c0), hexc(0x1a6cff)};
-static const RGB SNOW_LEVELS[] = {hexc(0x3357a6), hexc(0x6e83a6), hexc(0xa6a6a6)};
-static const RGB RAIN_TEXT = hexc(0x60b0ff), SNOW_TEXT = hexc(0xa9c9ff), RAIN_DRY = hexc(0x081428),
-                 AXIS = hexc(0x555555);
-static const char *const FLAKE[] = {"..#..", "#.#.#", ".###.", "#.#.#", "..#.."};
-
-static void draw_art(Frame &f, const char *const *art, int rows, int x, int y, RGB color) {
-  for (int j = 0; j < rows; j++)
-    for (int i = 0; art[j][i]; i++)
-      if (art[j][i] == '#') f.fill(x + i, y + j, 1, 1, color);
+static void draw_top_bar_wide(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  int icon = icon_index(wx["icon"]);
+  if (icon >= 0) draw_icon(f, icon, FD_ICON_X, 0);
+  ustr temp = vstr(wx["temp"]);
+  if (shadow) {
+    RGB sh = scale_color(temp_color(wx["temp"].num(), wx["c"]), 0.2);
+    f.text(FONT_SMALL, U"°", roll_named(f, FONT_5X7, "wx.top", temp, LEFT, FD_TEMP_X + 1, 8, sh), 7, sh);
+  }
+  int x = roll_named(f, FONT_5X7, "wx.top", temp, LEFT, FD_TEMP_X, 7, C::label);
+  f.text(FONT_SMALL, U"°", x, 6, C::label);
+  if (wx["word"].truthy()) f.text(FONT_SMALL, vstr(wx["word"]), x + 1 + 5, 7, C::wxText);
+  if (warn) {
+    WarnStyle ws = warn_style(*warn);
+    if (ws.blinks && blink) return;
+    ustr word = (*warn)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
+    int gx = WW_RIGHT - (measure(FONT_SMALL, ws.glyph) + TAG_GAP + measure(FONT_SMALL, word)) + 1;
+    f.text(FONT_SMALL, word, f.text(FONT_SMALL, ws.glyph, gx, 7, ws.color) + TAG_GAP - 1, 7, ws.color);
+  } else if (!wx["hi"].is_null() && !wx["lo"].is_null()) {
+    std::vector<Part> parts = {{g(assets::G_UP), FD_LETTER, false}, {vstr(wx["hi"]), FD_NUM, true},
+                               {U" " + g(assets::G_DOWN), FD_LETTER, false}, {vstr(wx["lo"]), FD_NUM, true}};
+    int hx = fd_left(parts) + (WW_RIGHT - FD_HL_RIGHT);
+    for (const Part &p : parts) hx = p.n ? draw_temp_text(f, p.t, hx, 7, p.c) : f.text(FONT_SMALL, p.t, hx, 7, p.c);
+  }
 }
 
-static void draw_rain_bars(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
-  const Value &rain = wx["rain"];
-  draw_top_bar(f, wx, shadow, warn, blink);
-  bool snow = rain["snow"].truthy();
-  RGB color = snow ? SNOW_TEXT : RAIN_TEXT;
-  std::string title8 = json::str(rain["title"]);
-  ustr title = U(title8);
-  const char *const *art = nullptr;
-  int art_rows = 0, art_w = 0;
-  if (title8.find("RAIN") == std::string::npos && title8.find("SNOW") == std::string::npos) {
-    art = snow ? FLAKE : WX_DROP;
-    art_rows = snow ? 5 : 4;
-    art_w = (int)strlen(art[0]);
+// A temperature and its degree sign (Tom Thumb), centered at cx.
+static void draw_deg_temp(Frame &f, const Value &t, int cx, int base, RGB color) {
+  ustr str = vstr(t);
+  int w = temp_width(str) + 1 + measure(FONT_SMALL, U"°");
+  f.text(FONT_SMALL, U"°", draw_temp_text(f, str, cx - (int)fdiv(w, 2), base, color), base, color);
+}
+
+static void draw_week(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  bool bar = !wx["notop"].truthy();
+  if (bar) draw_top_bar_wide(f, wx, shadow, warn, blink);
+  int y0 = bar ? 10 : 0, dB = bar ? 15 : 6, iY = bar ? 17 : 8, hB = bar ? 31 : 23;
+  for (int i = 1; i < 7; i++) f.fill(i * WW_COLS7, y0, 1, 32 - y0, C::divider);
+  const Value &week = wx["week"];
+  for (size_t i = 0; i < week.size() && i < 7; i++) {
+    const Value &d = week[i];
+    int cx = (int)i * WW_COLS7 + 9;
+    ctext(f, FONT_SMALL, vstr(d["d"]), cx, dB, i == 0 ? C::label : C::grey);
+    int icon = icon_index(d["icon"]);
+    if (icon >= 0) draw_icon(f, icon, cx - 4, iY);
+    draw_deg_temp(f, d["hi"], cx, hB, temp_color(d["hi"].num(), wx["c"]));
+    if (!bar && !d["lo"].is_null()) draw_deg_temp(f, d["lo"], cx, 30, scale_color(temp_color(d["lo"].num(), wx["c"]), 0.6));
   }
-  int mark_w = art && measure(FONT_SMALL, title) + art_w + 2 <= 64 ? art_w + 2 : 0;
-  int x = 32 - (int)fdiv(measure(FONT_SMALL, title) + mark_w, 2);
-  if (mark_w) draw_art(f, art, art_rows, x, snow ? 9 : 10, snow ? color : WX_BLUE);
-  f.text(FONT_SMALL, title, x + mark_w, 14, color);
-  const RGB *levels = snow ? SNOW_LEVELS : RAIN_LEVELS;
-  const Value &hs = rain["h"];
+}
+
+static void draw_day_hours(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  bool bar = !wx["notop"].truthy();
+  if (bar) draw_top_bar_wide(f, wx, shadow, warn, blink);
+  int y0 = bar ? 10 : 0, lB = bar ? 15 : 6, iY = bar ? 17 : 8, tB = bar ? 31 : 23;
+  for (int i = 1; i < 8; i++) f.fill(i * WW_COLS8 - 1, y0, 1, 32 - y0, C::divider);
+  const Value &hs = wx["hours24"];
   for (size_t i = 0; i < hs.size() && i < 8; i++) {
-    int h = (int)hs[i].num();
-    if (!hs[i].truthy()) {
-      f.fill((int)i * 8, 25, 7, 1, RAIN_DRY);
-    } else {
-      int l = clampi((int)rain["l"][i].num(), 1, 3);
-      f.fill((int)i * 8, 26 - h, 7, h, levels[l - 1]);
+    const Value &h = hs[i];
+    int cx = (int)i * WW_COLS8 + 7;
+    ctext(f, FONT_SMALL, vstr(h["h"]), cx, lB, C::grey);
+    int icon = icon_index(h["icon"]);
+    if (icon >= 0) draw_icon(f, icon, cx - 4, iY);
+    draw_deg_temp(f, h["t"], cx, tB, temp_color(h["t"].num(), wx["c"]));
+    if (!bar && !h["p"].is_null()) {
+      double pp = h["p"].num();
+      draw_day_temp(f, vstr(h["p"]) + U"%", cx, 30, pp <= 0 ? WW_POP0 : pp < 20 ? WW_POP_LOW : WX_BLUE);
     }
   }
-  ctext(f, FONT_SMALL, U"1H", 31, 31, AXIS);
-  rtext(f, FONT_SMALL, U"2H", 62, 31, AXIS);
+}
+
+static void draw_icon2x(Frame &f, int icon, int x, int y) {
+  const char *px = assets::ICONS[icon].px;
+  for (int j = 0; j < 8; j++)
+    for (int i = 0; i < 8; i++) {
+      char c = px[j * 8 + i];
+      if (c != '.') f.fill(x + i * 2, y + j * 2, 2, 2, icon_color(c));
+    }
+}
+
+static const int CONW_X0 = 58, CONW_L5[] = {6, 12, 18, 24, 30}, CONW_L4[] = {7, 15, 23, 31};
+static void draw_conditions_wide(Frame &f, const Value &p, double now, const Value &wx, bool shadow, const Value *warn, bool blink) {
+  int icon = icon_index(wx["icon"]);
+  if (icon >= 0) draw_icon2x(f, icon, 1, 0);
+  ustr temp = vstr(wx["temp"]);
+  if (shadow) {
+    RGB sh = scale_color(temp_color(wx["temp"].num(), wx["c"]), 0.2);
+    f.text(FONT_SMALL, U"°", roll_named(f, FONT_CLOCK, "wx.temp", temp, LEFT, 20, 14, sh) + 1, 7, sh);
+  }
+  int tx = roll_named(f, FONT_CLOCK, "wx.temp", temp, LEFT, 19, 13, C::label);
+  f.text(FONT_SMALL, U"°", tx, 6, C::label);
+  if (warn) {
+    WarnStyle ws = warn_style(*warn);
+    if (!(ws.blinks && blink)) {
+      ustr word = (*warn)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
+      f.text(FONT_SMALL, word, f.text(FONT_SMALL, ws.glyph, 0, 25, ws.color) + TAG_GAP - 1, 25, ws.color);
+    }
+  } else if (!wx["hi"].is_null() && !wx["lo"].is_null()) {
+    int hx = f.text(FONT_SMALL, g(assets::G_UP), 0, 25, FD_LETTER) + 1;
+    hx = draw_temp_text(f, vstr(wx["hi"]), hx, 25, FD_NUM) + 3;
+    hx = f.text(FONT_SMALL, g(assets::G_DOWN), hx, 25, FD_LETTER) + 1;
+    draw_temp_text(f, vstr(wx["lo"]), hx, 25, FD_NUM);
+  }
+  double tzo = p["tzo"].num(0);
+  f.text(FONT_SMALL, wide_date_line(now, tzo), 0, 31, C::dimHead);
+  struct Line { ustr label; const char *name; ustr value; RGB color; };
+  Line lines[5];
+  int n = 0;
+  lines[n++] = {U"SKY", nullptr, wx["word"].truthy() ? vstr(wx["word"]) : ustr(), sky_color(wx["icon"])};
+  if (!wx["feels"].is_null())
+    lines[n++] = {U"FEELS", "wx.feels", vstr(wx["feels"]) + U"°", temp_color(wx["feels"].num(), wx["c"], TEXT_TEMP_STOPS)};
+  if (wx["wind"].truthy()) {
+    ustr w = vstr(wx["wind"]);
+    lines[n++] = {U"WIND", nullptr, w == U"CALM" ? w : w + U" MPH", C::label};
+  }
+  if (wx["rl"].truthy() && !wx["pop"].is_null()) lines[n++] = {U"RAIN", "wx.pop", vstr(wx["pop"]) + U"%", WX_BLUE};
+  const Value &sun = wx["sun"];
+  if (sun.truthy()) {
+    bool rise = sun["k"].eq("rise");
+    double t = sun["t"].num();
+    lines[n++] = {rise ? U"SUNRISE" : U"SUNSET", nullptr, clock_text(t, tzo) + U" " + ampm_text(t, tzo), rise ? hexc(0xffc23a) : hexc(0xff7414)};
+  }
+  for (int i = 0; i < n; i++) {
+    int base = n == 5 ? CONW_L5[i] : CONW_L4[i];
+    int lx = f.text(FONT_SMALL, lines[i].label, CONW_X0, base, C::head);
+    int vx = WIDE - measure(FONT_SMALL, lines[i].value);
+    for (int x = lx + 1 + ((lx + 1) % 2 ? 0 : 1); x < vx - 2; x += 2) f.fill(x, base - 1, 1, 1, C::divider);
+    if (lines[i].name) roll_named(f, FONT_SMALL, lines[i].name, lines[i].value, RIGHT, WIDE - 1, base, lines[i].color);
+    else f.text(FONT_SMALL, lines[i].value, vx, base, lines[i].color);
+  }
 }
 
 // ---- radar ----
 
-static int radar_value(const std::vector<uint8_t> &data, int i) {
-  // 2048 bytes (one a pixel, as from the server), or 1024 packed (two a
-  // byte, left pixel in the high nibble).
-  if (data.size() == 2048) return data[i];
+static int radar_value(const std::vector<uint8_t> &data, int i, int w = 64) {
+  // w x 32 bytes (one a pixel, as from the server), or half that packed (two
+  // a byte, left pixel in the high nibble).
+  if (data.size() == (size_t)w * 32) return data[i];
+  if ((size_t)(i >> 1) >= data.size()) return 0;
   uint8_t b = data[i >> 1];
   return i & 1 ? b & 15 : b >> 4;
 }
@@ -1530,21 +1745,86 @@ int radar_loop_idx(const Value &ids, const Frames *frames, double t, const Timin
   return (int)std::min((double)(n - 1), floor(pos / tm.radarFrame));
 }
 
-// The rain turns: the radar loop plays `loops` full cycles, then the bars
-// show for alt s. Mirrors rainBarsTurn() in draw.js.
-bool rain_bars_turn(const Value &rn, int n, const Timing &tm, double t) {
-  if (!rn.truthy() || !rn["h"].truthy() || !rn["alt"].truthy() || !rn["loops"].truthy() || !n) return false;
-  double cycle = std::max(1, n - 1) * tm.radarFrame + tm.radarHold;
-  double loop_ms = rn["loops"].num() * cycle;
-  double period = loop_ms + rn["alt"].num() * 1000;
-  double pos = t - floor(t / period) * period;
-  return pos >= loop_ms;
-}
-
 static const RGB PEEK_LOADED = hexc(0x6a6a6a);
 
+// Wide board (draw.js renderRadarWide; wide-spec §5): the 128 x 32 map, the
+// time on a black chip bottom-right (at least columns 101-127), a watch or
+// warning (else the temperature) on a chip bottom-left, the frame dots with
+// black gaps, along row 31 or just above the left chip.
+static const int WIDE_CHIP_X = 101, WIDE_CHIP_Y = 26;  // chips: rows 26-31
+static const RGB WIDE_DOT = hexc(0x4a4a4a);
+template <class OnHand>
+static void render_radar_wide(const Value &p, const Value &r, Frame &f, const Value &ids, int idx,
+                              const std::vector<uint8_t> *data, std::optional<double> now_o, bool blink, bool peek,
+                              const OnHand &on_hand) {
+  f.w = WIDE;
+  if (data && !data->empty()) {
+    const Value &rbv = r["rb"];
+    RadarColors rc = radar_colors(r.has("rb") ? (rbv.is_null() ? 100 : rbv.num()) : 100);
+    for (int y = 0; y < 32; y++)
+      for (int x = 0; x < WIDE; x++) {
+        int v = radar_value(*data, y * WIDE + x, WIDE);
+        if (v >= 0 && v < 16 && rc.on[v]) f.fill(x, y, 1, 1, rc.c[v]);
+      }
+  }
+  int nids = (int)ids.size();
+  double now_s = now_o ? *now_o : p["now"].num();
+  bool now_clock = r["clock"].eq("now");
+  const Value &ft = r["ft"];
+  double t = !now_clock && idx >= 0 && ft.truthy() && !ft[idx].is_null() ? ft[idx].num() : now_s;
+  double tzo = p["tzo"].num(0);
+  const Value *warnp = p["warn"].truthy() ? &p["warn"] : nullptr;
+  std::optional<WarnStyle> ws;
+  if (warnp) ws = warn_style(*warnp);
+  bool hide_warn = ws && ws->blinks && blink;
+  bool show_time = !r["showTime"].is_false() && !r["clock"].eq("none");
+  const RGB black{0, 0, 0};
+  const int ch = 32 - WIDE_CHIP_Y;
+  // The time chip: AM/PM at the right edge, the time before it.
+  if (show_time && r["clock"].eq("age")) {
+    double fts = idx >= 0 && ft.truthy() && !ft[idx].is_null() ? ft[idx].num() : now_s;
+    ustr age = num_text((long long)std::max(0.0, floor((now_s - fts + 30) / 60))) + U"m";
+    f.fill(WIDE_CHIP_X, WIDE_CHIP_Y, WIDE - WIDE_CHIP_X, ch, black);
+    f.text(FONT_SMALL, age, WIDE - measure(FONT_SMALL, age), 32, C::label);
+  } else if (show_time) {
+    ustr ap = ampm_text(t, tzo), clk = clock_text(t, tzo);
+    int ap_x = WIDE - measure(FONT_SMALL, ap);
+    int right = ap_x - 3;
+    std::optional<Roll> cr;
+    if (now_clock) cr = take_roll("rad.clock", clk);
+    int x = right - measure(FONT_SMALL, clk) + 1;
+    if (cr) x = std::min(x, right - measure(FONT_SMALL, cr->from) + 1);
+    int x0 = std::min(WIDE_CHIP_X, x - 1);
+    f.fill(x0, WIDE_CHIP_Y, WIDE - x0, ch, black);
+    roll_text(f, FONT_SMALL, clk, right, 32, C::label, cr);
+    f.text(FONT_SMALL, ap, ap_x, 32, C::radarAmpm);
+  }
+  // The bottom-left chip: a watch or warning (in place of the temperature),
+  // else the temperature; the frame dots above it.
+  bool chip = false;
+  if (ws) {
+    ustr word = (*warnp)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
+    int tw = measure(FONT_SMALL, ws->glyph) + TAG_GAP + measure(FONT_SMALL, word);
+    f.fill(0, WIDE_CHIP_Y, tw + 1, ch, black);
+    if (!hide_warn) {
+      int gx = f.text(FONT_SMALL, ws->glyph, 0, 32, ws->color);
+      f.text(FONT_SMALL, word, gx + TAG_GAP - 1, 32, ws->color);
+    }
+    chip = true;
+  } else if (!r["temp"].is_null() && r.has("temp") && (r["cond"].truthy() || r["showTime"].is_false())) {
+    ustr tt = vstr(r["temp"]) + U"°";
+    int tw = measure(FONT_SMALL, tt);
+    f.fill(0, WIDE_CHIP_Y, tw + 1, ch, black);
+    f.text(FONT_SMALL, tt, 0, 32, C::label);
+    chip = true;
+  }
+  int dy = chip ? WIDE_CHIP_Y - 1 : 31;
+  if (nids) f.fill(0, dy, nids * 2 - 1, 1, black);
+  for (int i = 0; i < nids; i++) f.fill(i * 2, dy, 1, 1, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : WIDE_DOT);
+}
+
 static void render_weather(const Value &p, Frame &f, std::optional<double> now, std::optional<int> idx_o,
-                           const Frames *frames, bool blink, std::optional<double> t_o, bool peek = false) {
+                           const Frames *frames, bool blink, bool peek = false) {
   const Value &r = p["radar"];
   const Value &ids = r["frames"];
   int nids = (int)ids.size();
@@ -1562,17 +1842,21 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   } else if (idx_o) idx = std::max(0, std::min(nids - 1, *idx_o));
   else idx = nids - 1;
   const Value &wx = r["wx"];
-  const Value &rn = wx.truthy() ? wx["rain"] : Value::null_value();
-  double clock = now ? *now : p["now"].num();
-  double loop_t = t_o ? *t_o : clock * 1000;
-  bool bars_turn = rain_bars_turn(rn, nids, timing(p), loop_t);
   const Value *warnp = p["warn"].truthy() ? &p["warn"] : nullptr;
   // A peek never falls back for frames still downloading: it shows the
   // empty radar, its frame indicator filling in as they land.
-  if (((!ids.truthy() || (!peek && frames && !radar_on_hand(ids, frames))) || bars_turn) && wx.truthy()) {
+  // (The rain bars were cut, Nov 2026: wx.rain is ignored.)
+  if ((!ids.truthy() || (!peek && frames && !radar_on_hand(ids, frames))) && wx.truthy()) {
     bool shadow = r["tempShadow"].truthy();
-    if (wx["rain"].truthy() && wx["rain"]["h"].truthy()) draw_rain_bars(f, wx, shadow, warnp, blink);
-    else if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
+    // Wide: 24 hours, the week, or the wide conditions; hours or days
+    // without the wide data show the 64 layout on both panels.
+    if (cols_of(p) == WIDE) {
+      bool hours = wx["hours"].truthy() && wx["hours"].size(), days = wx["days"].truthy() && wx["days"].size();
+      if (wx["hours24"].truthy() && wx["hours24"].size() >= 8) { f.w = WIDE; draw_day_hours(f, wx, shadow, warnp, blink); return; }
+      if (wx["week"].truthy() && wx["week"].size() >= 7) { f.w = WIDE; draw_week(f, wx, shadow, warnp, blink); return; }
+      if (!hours && !days) { f.w = WIDE; draw_conditions_wide(f, p, now ? *now : p["now"].num(), wx, shadow, warnp, blink); return; }
+    }
+    if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
     else if (wx["days"].truthy()) draw_five_day(f, wx, shadow, warnp, blink);
     else draw_conditions(f, wx, shadow, warnp, blink);
     return;
@@ -1581,6 +1865,10 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   if (idx >= 0 && frames && !frames->empty()) {
     auto it = frames->find(json::str(ids[idx]));
     if (it != frames->end()) data = &it->second;
+  }
+  if (r["wide"].truthy() && cols_of(p) == WIDE) {
+    render_radar_wide(p, r, f, ids, idx, data, now, blink, peek, on_hand);
+    return;
   }
   if (data && !data->empty()) {
     const Value &rbv = r["rb"];
@@ -2151,7 +2439,7 @@ static double peek_ease(double k) {
   return 1 - (1 - c) * (1 - c) * (1 - c);
 }
 
-int peek_shift(bool y, double t) { return (int)jsround(peek_ease(t / (y ? PEEK_Y_MS : PEEK_X_MS)) * (y ? 32 : 64)); }
+int peek_shift(bool y, double t, int w) { return (int)jsround(peek_ease(t / (y ? PEEK_Y_MS : PEEK_X_MS)) * (y ? 32 : w)); }
 
 int peek_drop(bool up, double t) {
   return (int)jsround((up ? 1 - peek_ease(t / PEEK_UP_MS) : peek_ease(t / PEEK_DOWN_MS)) * PEEK_BAND);
@@ -2248,7 +2536,8 @@ PeekView peek_view(const Value &p, int k, int vi) {
       wx = overlay(r["wx"]);
       member(wx, "days") = v == "5day" && pv["days"].truthy() ? pv["days"] : Value();
       member(wx, "hours") = v == "hourly" && pv["hours"].truthy() ? pv["hours"] : Value();
-      if (radar_view) member(wx, "rain") = Value();
+      member(wx, "week") = v == "5day" && pv["week"].truthy() ? pv["week"] : Value();
+      member(wx, "hours24") = v == "hourly" && pv["hours24"].truthy() ? pv["hours24"] : Value();
     } else {
       member(nr, "wx") = Value();
     }
@@ -2259,7 +2548,7 @@ PeekView peek_view(const Value &p, int k, int vi) {
     out.v = overlay(p);
     member(out.v, "cface") = str_value(v.empty() ? "skyline" : v);
     // Each face's object read through from pv (the skyline's is large).
-    for (const char *key : {"skyline", "cwx", "dn"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
+    for (const char *key : {"skyline", "cwx", "dn", "cacc"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
     for (const char *key : {"ginv", "steady"}) {
       Value g;
       g.type = json::BOOL;
@@ -2274,22 +2563,87 @@ PeekView peek_view(const Value &p, int k, int vi) {
 static void render_clock(const Value &p, Frame &f, const RenderOpts &o);
 static void render_announce(const Value &p, Frame &f, std::optional<double> t);
 
+// On a wide board every view is 128 across (64-wide ones on both panels).
 static void draw_peek_view(const Value &q, const std::string &screen, Frame &f, const RenderOpts &o) {
   f.clear();
   if (screen == "cycle") draw_cycle_art(f);
   else if (screen == "ticker") render_ticker(q, f, o.now, o.page, o.slide);
-  else if (screen == "weather") render_weather(q, f, o.now, o.idx, o.frames, o.blink, o.t, true);
+  else if (screen == "weather") render_weather(q, f, o.now, o.idx, o.frames, o.blink, true);
   else if (screen == "clock") render_clock(q, f, o);
   else if (screen == "announce") render_announce(q, f, o.t);
   else render_transit(q, f, o.now, o.blink, o.view);
+  widen(f, cols_of(q));
+}
+
+// Wide board (draw.js drawPeekBarWide; wide-spec §9): the chosen
+// category's icon at x2 with its underline, its variants as words from x14
+// (the chosen white), shifted left by whole words to show the chosen one in
+// columns 14-123; a category without variants shows its name in its color;
+// one dot per category on column 126.
+static const int PW_X0 = 14, PW_RIGHT = 123, PW_GAP = 5, PW_DOT_X = 126;
+static const RGB PW_OFF = hexc(0x4a4a4a);
+static ustr peek_name(const std::string &v, bool week) {
+  static const char *const names[][2] = {{"transit", "ROWS"}, {"rows", "ROWS"}, {"ticker", "TICKER"}, {"now", "NOW"}, {"5day", "5-DAY"},
+                                         {"hourly", "HOURLY"}, {"radar", "RADAR"}, {"skyline", "SKY"}, {"seventies", "70S"}, {"analog", "DIAL"},
+                                         {"daynight", "MAP"}, {"gradient", "GRAD"}, {"digits", "BIG"}, {"daydate", "DATE"}, {"words", "WORDS"}};
+  if (v == "5day" && week) return U"7-DAY";
+  for (const auto &n : names)
+    if (v == n[0]) return U(n[1]);
+  std::string up = v;
+  for (char &c : up) c = (char)toupper((unsigned char)c);
+  return U(up);
+}
+static ustr peek_cat_name(const std::string &cat) {
+  static const char *const names[][2] = {{"transit", "TRANSIT"}, {"weather", "WEATHER"}, {"clock", "CLOCK"}, {"announce", "ANNOUNCE"}, {"cycle", "CYCLE"}};
+  for (const auto &n : names)
+    if (cat == n[0]) return U(n[1]);
+  std::string up = cat;
+  for (char &c : up) c = (char)toupper((unsigned char)c);
+  return U(up);
+}
+static void draw_peek_bar_wide(Frame &f, const Value &p, int k, int vi, int drop) {
+  const Value &kn = p["knob"], &ring = kn["ring"];
+  auto sh = [&](int y) { return y + drop; };
+  std::string cat = ring[k].is_str() ? ring[k].s : "";
+  RGB col = peek_color(p, cat);
+  if (const char *const *rows = peek_icon(cat))
+    for (int j = 0; j < 7; j++)
+      for (int x = 0; x < 7; x++)
+        if (rows[j][x] == '#') f.fill(2 + x, sh(23 + j), 1, 1, col);
+  f.fill(2, sh(31), 7, 1, col);
+  const Value &vars = kn["vars"][k];
+  int nv = (int)vars.size();
+  if (nv > 1) {
+    bool week = p["pv"]["week"].truthy();
+    std::vector<ustr> words;
+    std::vector<int> xs;
+    int x = PW_X0;
+    for (int i = 0; i < nv; i++) {
+      words.push_back(peek_name(vars[i].is_str() ? vars[i].s : "", week));
+      xs.push_back(x);
+      x += measure(FONT_SMALL, words.back()) + 1 + PW_GAP;
+    }
+    int end = xs[vi] + measure(FONT_SMALL, words[vi]) - 1, shift = 0;
+    for (int j = 0; end - shift > PW_RIGHT && j < vi; j++) shift = xs[j + 1] - PW_X0;
+    f.push_clip(PW_X0, 0, PW_RIGHT, 31);
+    for (int i = 0; i < nv; i++) f.text(FONT_SMALL, words[i], xs[i] - shift, sh(29), i == vi ? C::white : PW_OFF);
+    f.pop_clip();
+  } else {
+    f.text(FONT_SMALL, peek_cat_name(cat), PW_X0, sh(29), col);
+  }
+  for (int i = 0; i < (int)ring.size(); i++) {
+    RGB dc = peek_color(p, ring[i].is_str() ? ring[i].s : "");
+    f.fill(PW_DOT_X, sh(22 + i * 2), 1, 1, i == k ? dc : scale_color(dc, 0.3));
+  }
 }
 
 static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop) {
   const Value &kn = p["knob"], &ring = kn["ring"];
   int n = (int)ring.size();
   auto sh = [&](int y) { return y + drop; };
-  f.fill(0, sh(PEEK_TOP), 64, PEEK_BAND, RGB{0, 0, 0});
-  int x0 = (int)std::floor(32 - (n * PEEK_PITCH - 5) / 2.0);
+  f.fill(0, sh(PEEK_TOP), f.w, PEEK_BAND, RGB{0, 0, 0});
+  if (f.w == WIDE) return draw_peek_bar_wide(f, p, k, vi, drop);
+  int x0 = (int)std::floor(f.w / 2.0 - (n * PEEK_PITCH - 5) / 2.0);
   for (int i = 0; i < n; i++) {
     std::string cat = ring[i].is_str() ? ring[i].s : "";
     const char *const *rows = peek_icon(cat);
@@ -2322,8 +2676,9 @@ static void render_peek(const Value &p, Frame &f, const RenderOpts &o) {
     draw_peek_view(pv.payload(p), pv.screen, f, vo);
   }
   if (pk.slide) {
-    int sh = peek_shift(pk.slide_y, pk.slide_t);
-    if (sh < (pk.slide_y ? 32 : 64)) {
+    const int W = f.w;
+    int sh = peek_shift(pk.slide_y, pk.slide_t, W);
+    if (sh < (pk.slide_y ? 32 : W)) {
       static Frame from;
       static uint8_t cur[Frame::MAX_W * Frame::H * 3];
       if (pk.slide_view) draw_peek_view(*pk.slide_view, peek_screen(p, pk.slide_k, pk.slide_vi), from, vo);
@@ -2334,17 +2689,17 @@ static void render_peek(const Value &p, Frame &f, const RenderOpts &o) {
       memcpy(cur, f.px, sizeof cur);
       int dir = pk.slide_dir < 0 ? -1 : 1;
       for (int y = 0; y < 32; y++)
-        for (int x = 0; x < 64; x++) {
+        for (int x = 0; x < W; x++) {
           const uint8_t *src = from.px;
           int sx = x, sy = y;
           if (!pk.slide_y) {
             sx = x + dir * sh;
-            if (sx < 0 || sx >= 64) src = cur, sx = (int)fmod_floor(sx, 64);
+            if (sx < 0 || sx >= W) src = cur, sx = (int)fmod_floor(sx, W);
           } else {
             sy = y + dir * sh;
             if (sy < 0 || sy >= 32) src = cur, sy = (int)fmod_floor(sy, 32);
           }
-          int i = (y * 64 + x) * 3, j = (sy * 64 + sx) * 3;
+          int i = (y * W + x) * 3, j = (sy * W + sx) * 3;
           f.px[i] = src[j];
           f.px[i + 1] = src[j + 1];
           f.px[i + 2] = src[j + 2];
@@ -2383,13 +2738,16 @@ static RGB hsv_rgb(double h, double s, double v) {
 }
 
 namespace sky {
-const int W = 64, SHORE = 25, CX = 32, CY = 17, R = 6, SPREAD = 5;
+// The scene's geometry (draw.js buildSky): the 64 scene, or the wide
+// board's panorama (W 128, the 64 scene O = 32 px in, towers either side).
+const int SHORE = 25, CY = 17, R = 6, SPREAD = 5;
 struct Win { int x, y; uint32_t th; bool bright; };
 struct Star { int x, y; bool bright, tw; uint32_t ph; double per; };
 struct Ant { int x, t, roof; bool beacon; };
 struct RimPx { int x, y; double deg; };
 struct Geometry {
-  uint8_t role[64 * 32] = {0};
+  int W = 64, O = 0, CX = 32;
+  std::vector<uint8_t> role;  // W x 32
   std::vector<Ant> ants;
   std::vector<Win> wins;
   std::vector<Star> stars;
@@ -2402,7 +2760,7 @@ struct Geometry {
 static void rect(Geometry &g, int x, int w, int t, uint8_t r) {
   for (int y = std::max(0, t); y <= SHORE; y++)
     for (int i = x; i < x + w; i++)
-      if (i >= 0 && i < W) g.role[y * W + i] = r;
+      if (i >= 0 && i < g.W) g.role[y * g.W + i] = r;
 }
 static int top(int rows) { return SHORE + 1 - rows; }
 static bool seg(double ax, double ay, double bx, double by, double px, double py) {
@@ -2412,7 +2770,7 @@ static bool seg(double ax, double ay, double bx, double by, double px, double py
   return ex * ex + ey * ey < 0.25;
 }
 template <typename F>
-static std::vector<std::pair<int, int>> cover(F test) {
+static std::vector<std::pair<int, int>> cover(int CX, F test) {
   std::vector<std::pair<int, int>> out;
   for (int y = CY - R - 2; y <= SHORE; y++)
     for (int x = CX - R - 2; x <= CX + R + 1; x++) {
@@ -2425,48 +2783,69 @@ static std::vector<std::pair<int, int>> cover(F test) {
   return out;
 }
 
-static Geometry build() {
-  Geometry g;
+// The wide panorama's extra buildings [x, width, rows, role] and antennas
+// [x, top rows, roof rows, beacon] (draw.js SKYW).
+static const int WIDE_EXTRA[][4] = {
+    {0, 5, 6, 1}, {5, 4, 8, 1}, {10, 3, 5, 1}, {13, 5, 7, 1}, {18, 4, 9, 1}, {22, 3, 6, 1}, {25, 4, 8, 1}, {29, 3, 6, 1},
+    {2, 3, 11, 2}, {7, 3, 16, 2}, {14, 3, 13, 2}, {20, 4, 10, 2}, {26, 3, 12, 2},
+    {96, 4, 8, 1}, {100, 5, 10, 1}, {105, 4, 7, 1}, {109, 5, 9, 1}, {114, 4, 8, 1}, {118, 5, 10, 1}, {123, 5, 8, 1},
+    {97, 3, 13, 2}, {102, 4, 15, 2}, {107, 3, 11, 2}, {111, 4, 16, 2}, {116, 3, 12, 2}, {120, 4, 14, 2}, {125, 3, 12, 2}};
+static const int WIDE_ANTS[][4] = {{8, 19, 16, 0}, {112, 19, 16, 0}};
+
+static void build(Geometry &g, bool wide) {
+  g.W = wide ? 128 : 64;
+  g.role.assign((size_t)g.W * 32, 0);
+  g.O = wide ? 32 : 0;
+  g.CX = 32 + g.O;
+  const int W = g.W, O = g.O, CX = g.CX;
   static const int mass[][3] = {{0, 4, 7}, {8, 3, 9}, {19, 3, 8}, {22, 3, 10}, {28, 3, 7}, {36, 3, 6},
                                 {39, 4, 9}, {43, 3, 11}, {46, 4, 8}, {50, 3, 10}, {57, 4, 9}, {61, 3, 7}};
-  for (const auto &m : mass) rect(g, m[0], m[1], top(m[2]), 1);
-  rect(g, 1, 1, top(9), 2); rect(g, 2, 4, top(15), 2); rect(g, 6, 2, top(13), 2); rect(g, 8, 2, top(9), 2);  // Willis
-  rect(g, 11, 4, top(17), 2);                                                                                 // Aon
-  rect(g, 15, 5, top(21), 2);                                                                                 // St. Regis
-  rect(g, 23, 5, top(10), 2); rect(g, 24, 4, top(13), 2); rect(g, 24, 3, top(16), 2);                         // Trump
-  rect(g, 29, 7, top(15), 2); rect(g, 30, 5, top(17), 2);                                                     // Lake Point Tower
+  for (const auto &m : mass) rect(g, m[0] + O, m[1], top(m[2]), 1);
+  if (wide) {
+    for (const auto &e : WIDE_EXTRA) if (e[3] == 1) rect(g, e[0], e[1], top(e[2]), 1);
+    for (const auto &e : WIDE_EXTRA) if (e[3] == 2) rect(g, e[0], e[1], top(e[2]), 2);
+  }
+  rect(g, 1 + O, 1, top(9), 2); rect(g, 2 + O, 4, top(15), 2); rect(g, 6 + O, 2, top(13), 2); rect(g, 8 + O, 2, top(9), 2);  // Willis
+  rect(g, 11 + O, 4, top(17), 2);                                                                                             // Aon
+  rect(g, 15 + O, 5, top(21), 2);                                                                                             // St. Regis
+  rect(g, 23 + O, 5, top(10), 2); rect(g, 24 + O, 4, top(13), 2); rect(g, 24 + O, 3, top(16), 2);                             // Trump
+  rect(g, 29 + O, 7, top(15), 2); rect(g, 30 + O, 5, top(17), 2);                                                             // Lake Point Tower
   {
-    int t = top(17), steps[3] = {4, 6, 8};                                                                    // Hancock
+    int t = top(17), steps[3] = {4, 6, 8};                                                                                    // Hancock
     for (int y = t; y <= SHORE; y++) {
       int w = steps[std::min(2, (int)fdiv((y - t) * 3, SHORE - t + 1))];
-      for (int i = 53 - w / 2; i < 53 + w / 2; i++) g.role[y * W + i] = 2;
+      for (int i = 53 + O - w / 2; i < 53 + O + w / 2; i++) g.role[y * W + i] = 2;
     }
   }
-  g.ants = {{2, top(18), top(15), false}, {4, top(17), top(15), false}, {51, top(22), top(17), true}, {54, top(22), top(17), true}};
+  g.ants = {{2 + O, top(18), top(15), false}, {4 + O, top(17), top(15), false}, {51 + O, top(22), top(17), true}, {54 + O, top(22), top(17), true}};
+  if (wide)
+    for (const auto &a : WIDE_ANTS) g.ants.push_back({a[0], top(a[1]), top(a[2]), a[3] != 0});
   for (int y = 1; y <= SHORE; y++)
     for (int x = 0; x < W; x++) {
       int r = g.role[y * W + x];
-      if (!r || (r == 1 && x < 38) || (x >= 19 && x <= 44 && y >= SHORE - 6)) continue;
+      if (!r || (r == 1 && x < 38 + O) || (x >= 19 + O && x <= 44 + O && y >= SHORE - 6)) continue;
       double dx = x + 0.5 - CX, dy = y + 0.5 - CY;
       if (dx * dx + dy * dy < 49 || x % 2 != 0 || y % 2 != 1 || !g.isB(x, y - 1)) continue;
       g.wins.push_back({x, y, ih(x, y, 5) % 1000, ih(x, y, 9) % 10 < 3});
     }
   static const double pers[3] = {4000, 6000, 12000};
-  for (int i = 0; g.stars.size() < 14 && i < 1000; i++) {
+  const size_t nstars = wide ? 28 : 14;
+  const int tries = wide ? 2000 : 1000;
+  for (int i = 0; g.stars.size() < nstars && i < tries; i++) {
     int x = (int)(ih(i, 1, 3) % W), y = (int)(ih(i, 2, 3) % 14);
     double dx = x + 0.5 - CX, dy = y + 0.5 - CY;
     bool dup = false;
-    for (const Star &s : g.stars) dup = dup || (s.x == x && s.y == y);
-    if (g.isB(x, y) || (x > 35 && x < 49 && y < 11) || (x >= 50 && x <= 55 && y < 10) || dx * dx + dy * dy < 90.25 || dup) continue;  // not between the Hancock antennas
+    for (const Star &st : g.stars) dup = dup || (st.x == x && st.y == y);
+    if (g.isB(x, y) || (x > 35 + O && x < 49 + O && y < 11) || (x >= 50 + O && x <= 55 + O && y < 10) || dx * dx + dy * dy < 90.25 || dup) continue;  // not between the Hancock antennas
     g.stars.push_back({x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 == 1, ih(i, 5, 3) % 1000, pers[g.stars.size() % 3]});
   }
-  g.legs = cover([](double x, double y) {
+  g.legs = cover(CX, [CX](double x, double y) {
     double dx = x - CX, dy = y - CY;
     return dx * dx + dy * dy > 0.36 && (seg(CX, CY, CX - SPREAD, SHORE + 1, x, y) || seg(CX, CY, CX + SPREAD, SHORE + 1, x, y));
   });
   double kb = (SHORE - 1 + 0.5 - CY) / (double)(SHORE + 1 - CY);
   g.bar[0] = (int)jsround(CX - SPREAD * kb); g.bar[1] = SHORE - 1; g.bar[2] = (int)jsround(2 * SPREAD * kb);
-  for (const auto &p : cover([](double x, double y) {
+  for (const auto &p : cover(CX, [CX](double x, double y) {
          double dx = x - CX, dy = y - CY, d2 = dx * dx + dy * dy;
          return d2 >= (R - 1) * (R - 1) && d2 <= R * R;
        })) {
@@ -2474,11 +2853,16 @@ static Geometry build() {
     double pa = dy >= 0 ? (dx >= 0 ? dy / (ax + ay) : 1 + ax / (ax + ay)) : (dx < 0 ? 2 + ay / (ax + ay) : 3 + ax / (ax + ay));
     g.rim.push_back({p.first, p.second, pa * 90});
   }
-  return g;
 }
-static const Geometry &geo() {
-  static const Geometry g = build();
-  return g;
+// Built on first use (the wide one only on a wide board).
+static const Geometry &geo(bool wide = false) {
+  static Geometry g[2];
+  static bool built[2] = {false, false};
+  if (!built[wide]) {
+    build(g[wide], wide);
+    built[wide] = true;
+  }
+  return g[wide];
 }
 
 const RGB WHEEL_LEG[3] = {hexc(0x565c68), hexc(0x4a505c), hexc(0x262a32)};
@@ -2514,13 +2898,12 @@ static RGB sky_at(const Value &stops, int y) {
 }
 
 template <typename L>
-static void disc(Frame &f, int cx, int cy, RGB color, L lit) {
-  const Geometry &G = geo();
+static void disc(Frame &f, const Geometry &G, int cx, int cy, RGB color, L lit) {
   const double c = 3.5;
   for (int y = 0; y < 7; y++)
     for (int x = 0; x < 7; x++) {
       int X = cx - 3 + x, Y = cy - 3 + y;
-      if (Y < 0 || Y > SHORE || X < 0 || X >= 64 || G.isB(X, Y)) continue;
+      if (Y < 0 || Y > SHORE || X < 0 || X >= G.W || G.isB(X, Y)) continue;
       int hit = 0;
       for (int j = 0; j < 8; j++)
         for (int i = 0; i < 8; i++) {
@@ -2544,25 +2927,25 @@ double strike_level(double ms) {
   return u * u;
 }
 
-std::optional<Boat> boat_at(double ms) {
+std::optional<Boat> boat_at(double ms, int w) {
   long long m = (long long)ms;
   long long q = fdiv(m, sky::QUARTER), qi = fmod_floor(q, 4), e = m - q * sky::QUARTER;
   if (qi == 0 || qi == 2) {
     long long step = fdiv(e, sky::SAIL_STEP);
-    if (step > 70) return std::nullopt;
-    return qi == 0 ? Boat{true, (int)(64 - step), -1} : Boat{true, (int)(-6 + step), 1};
+    if (step > w + 6) return std::nullopt;
+    return qi == 0 ? Boat{true, (int)(w - step), -1} : Boat{true, (int)(-6 + step), 1};
   }
-  long long leg = 87 * sky::SPEED_STEP;
-  if (e < leg) return Boat{false, (int)(64 - fdiv(e, sky::SPEED_STEP)), -1};
+  long long leg = (w + 23) * sky::SPEED_STEP;
+  if (e < leg) return Boat{false, (int)(w - fdiv(e, sky::SPEED_STEP)), -1};
   long long e2 = e - leg - sky::SPEED_WAIT;
   if (e2 >= 0 && e2 < leg) return Boat{false, (int)(-14 + fdiv(e2, sky::SPEED_STEP)), 1};
   return std::nullopt;
 }
 
-static void draw_boat(Frame &f, const Boat &b) {
+static void draw_boat(Frame &f, const Boat &b, int W) {
   const int S = sky::SHORE;
   if (b.sail) {
-    auto put = [&](int dx, int y, RGB c) { int x = b.dir < 0 ? b.x0 + dx : b.x0 + 5 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+    auto put = [&](int dx, int y, RGB c) { int x = b.dir < 0 ? b.x0 + dx : b.x0 + 5 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
     for (int dy = 0; dy < 4; dy++)
       for (int dx = 0; sky::SAILS[dy][dx]; dx++)
         if (sky::SAILS[dy][dx] == '#') put(dx, S - 4 + dy, sky::SAIL);
@@ -2571,7 +2954,7 @@ static void draw_boat(Frame &f, const Boat &b) {
     return;
   }
   const int n = 14;
-  auto put = [&](int dx, int y, RGB c) { int x = b.dir < 0 ? b.x0 + dx : b.x0 + n - 1 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+  auto put = [&](int dx, int y, RGB c) { int x = b.dir < 0 ? b.x0 + dx : b.x0 + n - 1 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
   for (int dy = 0; dy < 3; dy++)
     for (int dx = 0; sky::SEADOG[dy][dx]; dx++)
       if (sky::SEADOG[dy][dx] != '.') put(dx, S - 1 + dy, sky::seadog_color(sky::SEADOG[dy][dx]));
@@ -2579,7 +2962,7 @@ static void draw_boat(Frame &f, const Boat &b) {
   for (const auto &pl : plume)
     for (int i = 0; i < pl[1]; i++) {
       int x = b.dir < 0 ? b.x0 + n + i : b.x0 - 1 - i;
-      if (x >= 0 && x < 64) f.set(x, pl[0], mix_rgb(f.get(x, pl[0]), sky::SPRAY, 0.95 * (1 - (double)i / pl[1])));
+      if (x >= 0 && x < W) f.set(x, pl[0], mix_rgb(f.get(x, pl[0]), sky::SPRAY, 0.95 * (1 - (double)i / pl[1])));
     }
 }
 
@@ -2598,7 +2981,11 @@ static const Value &sky_none() {
 
 static void render_skyline(const Value &p, const Value &sky, Frame &f, std::optional<double> now_o, std::optional<double> ms_o,
                            bool blink, const Frames *clouds) {
-  const sky::Geometry &G = sky::geo();
+  // The wide board's panorama: the 64 scene O px in (draw.js SKYW).
+  const bool wide = cols_of(p) == WIDE;
+  const sky::Geometry &G = sky::geo(wide);
+  const int W = G.W, O = G.O, more = W / 64;
+  f.w = W;
   // The scene's dark sky, water and night clouds would all be lifted to one
   // primary at the panel's floor (a flat blue sky, a patchwork of red and
   // blue clouds): let them go black instead (color.h).
@@ -2611,11 +2998,11 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
 
   for (int y = 0; y <= S; y++) {
     RGB c = sky::sky_at(s["sky"], y);
-    for (int x = 0; x < 64; x++)
-      if (!G.role[y * 64 + x]) f.set(x, y, c);
+    for (int x = 0; x < W; x++)
+      if (!G.role[y * W + x]) f.set(x, y, c);
   }
-  if (s["sun"].truthy()) sky::disc(f, (int)s["sun"]["x"].num(), (int)s["sun"]["y"].num(), hexs(json::str(s["sun"]["c"])), [](double, double, double) { return true; });
-  int nstars = std::min((int)s["stars"].num(0), (int)G.stars.size());
+  if (s["sun"].truthy()) sky::disc(f, G, (int)s["sun"]["x"].num() + O, (int)s["sun"]["y"].num(), hexs(json::str(s["sun"]["c"])), [](double, double, double) { return true; });
+  int nstars = std::min((int)s["stars"].num(0) * more, (int)G.stars.size());
   for (int i = 0; i < nstars; i++) {
     const sky::Star &st = G.stars[i];
     double k = st.tw && !(s["twk"].is_num() && s["twk"].num() == 0) ? 0.25 + 0.75 * wave(ms / st.per + st.ph / 1000.0) : 1;
@@ -2624,7 +3011,7 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
   if (s["moon"].truthy()) {
     double cosv = 1 - 2 * s["moon"]["fr"].num() / 100;
     bool waxing = s["moon"]["ph"].num() < 50;
-    sky::disc(f, 41, 5, sky::MOON, [&](double dx, double dy, double c) {
+    sky::disc(f, G, 41 + O, 5, sky::MOON, [&](double dx, double dy, double c) {
       double w = std::sqrt(std::max(0.0, c * c - dy * dy));
       return waxing ? dx > w * cosv : dx < -w * cosv;
     });
@@ -2646,8 +3033,8 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
         if (pal[i].is_str() && !c.empty()) { pc[i] = hexs(c); has[i] = true; }
       }
       for (int y = 0; y <= S; y++)
-        for (int x = 0; x < 64; x++) {
-          if (G.role[y * 64 + x]) continue;
+        for (int x = 0; x < W; x++) {
+          if (G.role[y * W + x]) continue;
           auto at = [&](long long col) {
             long long i = y * sky::CLOUD_W + col % sky::CLOUD_W;
             int n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15;
@@ -2668,36 +3055,36 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
     if ((int)w.th < lim) f.fill(w.x, w.y, 1, 1, w.bright ? sky::WIN_BRIGHT : sky::WIN_DIM);
   if (s["roof"].truthy()) {
     RGB rc = hexs(json::str(s["roof"]));
-    for (int x = 0; x < 64; x++)
+    for (int x = 0; x < W; x++)
       for (int y = 0; y <= S; y++)
-        if (G.role[y * 64 + x]) { f.fill(x, y, 1, 1, rc); break; }
+        if (G.role[y * W + x]) { f.fill(x, y, 1, 1, rc); break; }
   }
   if (s["fog"].truthy()) {
     RGB fc = hexs(json::str(s["fog"]));
     for (int y = 0; y <= S; y++) {
       double k = std::max(0.0, std::min(1.0, (21 - y) / 18.0)) * 0.85;
       if (k)
-        for (int x = 0; x < 64; x++) f.set(x, y, mix_rgb(f.get(x, y), fc, k));
+        for (int x = 0; x < W; x++) f.set(x, y, mix_rgb(f.get(x, y), fc, k));
     }
   }
   double lv = s["storm"].truthy() ? strike_level(ms) : 0;
   if (lv > 0) {
     for (int y = 0; y <= S; y++)
-      for (int x = 0; x < 64; x++) {
-        if (G.role[y * 64 + x]) continue;
-        double ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = std::sqrt(ex * ex + ey * ey);
+      for (int x = 0; x < W; x++) {
+        if (G.role[y * W + x]) continue;
+        double ex = (x + 0.5 - 22 - O) / 11, ey = (y + 0.5 - 4) / 4, d = std::sqrt(ex * ex + ey * ey);
         double a = lv * (0.35 + 0.45 * (1 - sstep01(0.3, 1, d)));  // whole sky 35%, the patch 80%
         if (a > 0.01) f.set(x, y, mix_rgb(f.get(x, y), sky::GLOW, a));
       }
     auto put = [&](int x, int y, RGB c) {
-      if (x >= 0 && x < 64 && y >= 0 && !G.role[y * 64 + x]) f.set(x, y, mix_rgb(f.get(x, y), mix_rgb(c, sky::BOLT_SOFT, 0.15), 0.8 * lv));
+      if (x >= 0 && x < W && y >= 0 && !G.role[y * W + x]) f.set(x, y, mix_rgb(f.get(x, y), mix_rgb(c, sky::BOLT_SOFT, 0.15), 0.8 * lv));
     };
     auto in_core = [](int x, int y) { for (const auto &b : sky::BOLT) if (b[0] == x && b[1] == y) return true; return false; };
     for (const auto &b : sky::BOLT)
       for (int X : {b[0] - 1, b[0] + 1})
-        if (!in_core(X, b[1])) put(X, b[1], hexc(0x7060c0));
-    for (const auto &b : sky::BOLT_BRANCH) put(b[0], b[1], hexc(0x9a8ae0));
-    for (const auto &b : sky::BOLT) put(b[0], b[1], hexc(0xffffff));
+        if (!in_core(X, b[1])) put(X + O, b[1], hexc(0x7060c0));
+    for (const auto &b : sky::BOLT_BRANCH) put(b[0] + O, b[1], hexc(0x9a8ae0));
+    for (const auto &b : sky::BOLT) put(b[0] + O, b[1], hexc(0xffffff));
   }
   RGB beacon = mix_rgb(sky::BEACON0, sky::BEACON1, wave(ms / 4000));
   for (const sky::Ant &a : G.ants) {
@@ -2712,7 +3099,7 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
   double turn_ms = s["wheel"].is_num() ? s["wheel"].num() : (double)sky::WHEEL_TURN_MS;  // 0: still
   double turn = turn_ms > 0 ? std::fmod(ms, turn_ms) * (360.0 / turn_ms) : 0;
   for (const sky::RimPx &r : G.rim) f.fill(r.x, r.y, 1, 1, lit ? hsv_rgb(std::fmod(r.deg + turn, 360.0), 0.7, 0.9) : sky::WHEEL_RIM[whl]);
-  f.fill(sky::CX - 1, sky::CY - 1, 2, 2, leg);
+  f.fill(G.CX - 1, sky::CY - 1, 2, 2, leg);
 
   ustr clock = clock_text(now, p["tzo"].num());
   int cw = measure(FONT_SMALL, clock);
@@ -2723,7 +3110,7 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
   ustr wword = has_warn ? (warn["lvl"].eq("warning") ? U"WARNING" : U"WATCH") : U"";
   ustr temp_str = s["temp"].is_null() ? U"" : vstr(s["temp"]) + U"°";
   int lw = has_warn ? measure(FONT_SMALL, ws.glyph) + TAG_GAP - 1 + measure(FONT_SMALL, wword) : !temp_str.empty() ? measure(FONT_SMALL, temp_str) : 0;
-  auto quiet = [&](int x, int y) { return y >= S + 2 && ((lw && x <= lw) || x >= 63 - cw); };
+  auto quiet = [&](int x, int y) { return y >= S + 2 && ((lw && x <= lw) || x >= W - 1 - cw); };
 
   double rip_ms = s["rip"].is_num() ? s["rip"].num() : (double)sky::RIPPLE_MS;  // ripples: 1 px every rip_ms, sub-pixel; 0: still
   double glide = rip_ms > 0 ? std::fmod(ms, rip_ms * 990) / rip_ms : 0;
@@ -2732,28 +3119,28 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
   bool path = gl.truthy() && gl["p"].num() > 0;
   RGB path_rgb = path ? mix_rgb(ripple, hexs(json::str(gl["c"])), gl["p"].num() / 100) : RGB{};
   for (int y = S + 1; y < 32; y++) {
-    f.fill(0, y, 64, 1, mix_rgb(hexs(json::str(s["wat"][0])), hexs(json::str(s["wat"][1])), (double)(y - S - 1) / (32 - S - 2)));
+    f.fill(0, y, W, 1, mix_rgb(hexs(json::str(s["wat"][0])), hexs(json::str(s["wat"][1])), (double)(y - S - 1) / (32 - S - 2)));
     int dir = y % 2 ? 1 : -1, len = y - S <= 2 ? 2 : 3, gap = 9 + (y % 3);
-    for (int x = 0; x < 64; x++) {
+    for (int x = 0; x < W; x++) {
       if (quiet(x, y)) continue;
       double u = x - dir * glide + y * 5, a = u - gap * std::floor(u / gap);
       double cov = std::max(0.0, std::min(a + 1, (double)len) - a) + std::max(0.0, a + 1 - gap);
       if (cov <= 0) continue;
-      bool on_path = path && std::abs(x + 0.5 - gl["x"].num()) < 1.5 + (y - S) * 0.8;
+      bool on_path = path && std::abs(x + 0.5 - O - gl["x"].num()) < 1.5 + (y - S) * 0.8;
       f.set(x, y, mix_rgb(f.get(x, y), on_path ? path_rgb : ripple, std::min(1.0, cov)));
     }
   }
-  f.fill(24, S, 16, 1, s["roof"].truthy() ? hexs(json::str(s["roof"])) : mix_rgb(sky::PIER_DAY0, sky::PIER_NIGHT0, night));
-  f.fill(24, S + 1, 16, 1, mix_rgb(sky::PIER_DAY1, sky::PIER_NIGHT1, night));
+  f.fill(24 + O, S, 16, 1, s["roof"].truthy() ? hexs(json::str(s["roof"])) : mix_rgb(sky::PIER_DAY0, sky::PIER_NIGHT0, night));
+  f.fill(24 + O, S + 1, 16, 1, mix_rgb(sky::PIER_DAY1, sky::PIER_NIGHT1, night));
   if (lit)
-    for (int x = 24; x <= 39; x += 3) f.fill(x, S, 1, 1, sky::PIER_BULB);
+    for (int x = 24 + O; x <= 39 + O; x += 3) f.fill(x, S, 1, 1, sky::PIER_BULB);
   if (s["boats"].truthy()) {
-    std::optional<Boat> b = boat_at(ms);
-    if (b) draw_boat(f, *b);
+    std::optional<Boat> b = boat_at(ms, W);
+    if (b) draw_boat(f, *b, W);
   }
   const Value &pcp = s["pcp"];
   if (pcp.truthy() && pcp["n"].num() > 0) {
-    int n = (int)pcp["n"].num();
+    int n = (int)pcp["n"].num() * more;
     double fall = s["fall"].num(0) > 0 ? s["fall"].num() : (double)sky::RAIN_MS;
     if (pcp["k"].eq("r")) {
       RGB c1 = mix_rgb(sky::RAIN_DAY0, sky::RAIN_NIGHT0, night), c2 = mix_rgb(sky::RAIN_DAY1, sky::RAIN_NIGHT1, night);
@@ -2763,12 +3150,12 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
       for (int i = 0; i < n; i++) {
         int land = S + 1 + (int)(ih(i, 33, 4) % (31 - S)), cyc = land + 1;  // falls to its own row of water
         int hy = (int)((ih(i, 32, 4) % cyc + step) % cyc);
-        int hx = (int)fmod_floor((long long)(ih(i, 31, 4) % 64) + sl * (step % 64), 64);
+        int hx = (int)fmod_floor((long long)(ih(i, 31, 4) % W) + sl * (step % W), W);
         for (int j = -1; j <= 1; j++) {
           int y = hy + j;
           double d = fr - j;
           if (y < 0 || y > land) continue;
-          int x = (int)fmod_floor((long long)(hx + sl * j), 64);
+          int x = (int)fmod_floor((long long)(hx + sl * j), W);
           if (quiet(x, y)) continue;
           RGB c = d <= 0 ? c1 : d <= 1 ? mix_rgb(c1, c2, d) : c2;
           double a = d <= 0 ? 1 + d : d <= 1 ? 1 : 2 - d;
@@ -2781,7 +3168,7 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
         int cyc = S + 2 + (int)(ih(i, 25, 4) % (31 - S));
         int y = (int)((ih(i, 22, 4) % cyc + step) % cyc);
         long long side = fmod_floor(fdiv((long long)ms + (long long)(ih(i, 23, 4) % 2000), 2000), 2);
-        int x = (int)((ih(i, 21, 4) % 64 + side) % 64);
+        int x = (int)((ih(i, 21, 4) % W + side) % W);
         if (quiet(x, y)) continue;
         f.fill(x, y, 1, 1, ih(i, 24, 4) % 10 < 4 ? sky::SNOW1 : sky::SNOW0);
       }
@@ -2792,7 +3179,7 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
   } else if (!temp_str.empty()) {
     f.text(FONT_SMALL, temp_str, 0, 32, C::label);
   }
-  f.text(FONT_SMALL, clock, 64 - cw, 32, C::label);
+  f.text(FONT_SMALL, clock, W - cw, 32, C::label);
 }
 
 // ---- clock screen: seventies face (design spec §16; contract "Seventies") ----
@@ -2800,8 +3187,10 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
 static const RGB S70_COLORS[] = {hexc(0xffc23a), hexc(0xff7414), hexc(0xd2361a)};
 static const int S70_TOP = 5, S70_BASE = 16, S70_RIGHT = 52, S70_CX = 54, S70_CY = 21, S70_RADII[] = {3, 6, 9};
 
+static void render_seventies_wide(const Value &p, Frame &f, double now);
 static void render_seventies(const Value &p, Frame &f, std::optional<double> now_o) {
   double now = now_o ? *now_o : p["now"].num(0);
+  if (cols_of(p) == WIDE) return render_seventies_wide(p, f, now);
   for (int i = 0; i < 3; i++) {
     int r = S70_RADII[i];
     RGB c = S70_COLORS[i];
@@ -2831,6 +3220,11 @@ static const char *const MONTH_NAMES[] = {"JAN", "FEB", "MAR", "APR", "MAY", "JU
 struct LocalDate {
   long long wd, m, d, h, min, s;
 };
+static LocalDate local_date(double now, double tzo);
+static ustr wide_date_line(double now, double tzo) {
+  LocalDate t = local_date(now, tzo);
+  return U(std::string(DAY_NAMES[t.wd]).substr(0, 3) + " " + MONTH_NAMES[t.m - 1] + " " + std::to_string(t.d));
+}
 static LocalDate local_date(double now, double tzo) {
   long long lt = (long long)floor(now + tzo), days = fdiv(lt, 86400);
   LocalDate r;
@@ -2885,16 +3279,39 @@ static void midpoint_circle(Frame &f, int cx, int cy, int r, RGB c) {
     }
   }
 }
+// Wide board (draw.js drawCalendar; wide-spec §6): this month in seven
+// 13 px columns from x37, five week rows (a sixth week wraps to the first
+// row), today white on the accent at 40%.
+static const int CAL_X0 = 37, CAL_COL_W = 13;
+static const RGB CAL_DAY = hexc(0xb8b8b8), CAL_WEEKEND = hexc(0x6a6a6a);
+static const int MONTH_DAYS[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+static void draw_calendar(Frame &f, double now, double tzo, RGB accent) {
+  LocalDate t = local_date(now, tzo);
+  double first = now - (double)(t.d - 1) * 86400;
+  long long n = t.m == 2 ? (local_date(first + 28 * 86400, tzo).m == 2 ? 29 : 28) : MONTH_DAYS[t.m - 1];
+  long long off = fmod_floor(t.wd - (t.d - 1), 7);
+  for (long long d = 1; d <= n; d++) {
+    long long i = off + d - 1, col = i % 7, row = fdiv(i, 7) % 5;
+    int cx = CAL_X0 + (int)col * CAL_COL_W + 6, base = 6 + (int)row * 6;
+    ustr str = num_text(d);
+    if (d == t.d) f.fill(cx - 5, base - 6, 11, 7, scale_color(accent, 0.4));
+    f.text(FONT_SMALL, str, cx - (int)fdiv(measure(FONT_SMALL, str) - 1, 2), base, d == t.d ? C::white : col == 0 || col == 6 ? CAL_WEEKEND : CAL_DAY);
+  }
+}
 static void render_analog(const Value &p, Frame &f, std::optional<double> now_o) {
   double now = now_o ? *now_o : p["now"].num(0);
+  bool wide = cols_of(p) == WIDE;
+  if (wide) f.w = WIDE;
   LocalDate t = local_date(now, p["tzo"].num(0));
   midpoint_circle(f, AN_CX, AN_CY, 15, hexc(0x333333));
   for (size_t i = 0; i < sizeof AN_TICKS; i += 3) f.fill(AN_TICKS[i], AN_TICKS[i + 1], 1, 1, AN_TICKS[i + 2] ? C::wxText : C::dimHead);
   auto hand = [&](const int8_t *tab, long long i, RGB c) { bresenham(f, AN_CX, AN_CY, tab[i * 2], tab[i * 2 + 1], c); };
   hand(AN_HOUR, (t.h % 12) * 5 + fdiv(t.min, 12), C::clock);
   hand(AN_MIN, t.min, C::clock);
-  hand(AN_SEC, t.s, C::amber);
+  RGB accent = p["cacc"].truthy() ? hexs(p["cacc"].str_or("")) : C::amber;
+  hand(AN_SEC, t.s, accent);
   f.fill(AN_CX, AN_CY, 1, 1, C::clock);
+  if (wide) return draw_calendar(f, now, p["tzo"].num(0), accent);
   ustr full = U(DAY_NAMES[t.wd]);
   ustr day = measure(FONT_SMALL, full) <= 31 ? full : full.substr(0, 3);
   f.text(FONT_SMALL, day, AN_RX - (int)fdiv(measure(FONT_SMALL, day), 2), 7, C::wxText);
@@ -2911,48 +3328,134 @@ static void render_analog(const Value &p, Frame &f, std::optional<double> now_o)
   }
 }
 
+// ---- clock screen: word clock (wide boards only; draw.js renderWords) ----
+static const char *const WORDS_ROWS[] = {"IT IS HALF TEN QUARTER TWENTY", "FIVE MINUTES TO PAST ONE TWO", "THREE FOUR FIVE SIX SEVEN EIGHT",
+                                         "NINE TEN ELEVEN TWELVE O'CLOCK", "IN THE MORNING AFTERNOON EVENING"};
+static const RGB WORDS_OFF = hexc(0x2a2a2a);
+// Word ids: row * 8 + the word's place in its row (draw.js WORDS).
+static const int WORDS_HOURS[] = {27, 12, 13, 16, 17, 18, 19, 20, 21, 24, 25, 26};
+static const int WORDS_MINS[12][5] = {{28, -1}, {8, 9, 11, -1}, {3, 9, 11, -1}, {4, 11, -1}, {5, 9, 11, -1}, {5, 8, 9, 11, -1},
+                                      {2, 11, -1}, {5, 8, 9, 10, -1}, {5, 9, 10, -1}, {4, 10, -1}, {3, 9, 10, -1}, {8, 9, 10, -1}};
+static void render_words(const Value &p, Frame &f, std::optional<double> now_o) {
+  f.w = WIDE;
+  double now = now_o ? *now_o : p["now"].num(0);
+  LocalDate t = local_date(now, p["tzo"].num(0));
+  long long q = fdiv(t.min + 2, 5), h = t.h;
+  if (q == 12) {
+    q = 0;
+    h = (h + 1) % 24;
+  }
+  if (q >= 7) h = (h + 1) % 24;
+  std::vector<int> lit = {0, 1, WORDS_HOURS[h % 12], 32, 33, h < 12 ? 34 : h < 18 ? 35 : 36};
+  for (int i = 0; WORDS_MINS[q][i] >= 0; i++) lit.push_back(WORDS_MINS[q][i]);
+  for (int j = 0; j < 5; j++) {
+    std::string row = WORDS_ROWS[j];
+    int x0 = (int)fdiv(WIDE - measure(FONT_SMALL, U(row)), 2);
+    std::string prefix;
+    size_t start = 0;
+    for (int k = 0; start <= row.size(); k++) {
+      size_t end = row.find(' ', start);
+      if (end == std::string::npos) end = row.size();
+      std::string word = row.substr(start, end - start);
+      bool on = std::find(lit.begin(), lit.end(), j * 8 + k) != lit.end();
+      f.text(FONT_SMALL, U(word), x0 + (prefix.empty() ? 0 : measure(FONT_SMALL, U(prefix)) + 1), 6 + j * 6, on ? C::amber : WORDS_OFF);
+      prefix += word + " ";
+      start = end + 1;
+    }
+  }
+}
+
 // ---- clock screen: day/night map face (design spec §18; contract "Day/night") ----
 // Mirrors renderDayNight() and DN in draw.js.
 static const int DN_ROWS = 26;
 static const long long DN_NIGHT12 = -2079LL * 10000;
 static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_HERE = hexc(0xffffff);
 static const int DN_NIGHT_K[] = {104, 116, 140};
-static RGB world_color(char code) {
-  for (int i = 0; i < assets::WORLD_PALETTE_N; i++)
-    if (assets::WORLD_PALETTE[i].code == code)
-      return RGB{assets::WORLD_PALETTE[i].r, assets::WORLD_PALETTE[i].g, assets::WORLD_PALETTE[i].b};
+static RGB world_color(const assets::IconColor *pal, int n, char code) {
+  for (int i = 0; i < n; i++)
+    if (pal[i].code == code) return RGB{pal[i].r, pal[i].g, pal[i].b};
   return RGB{};
 }
 static uint8_t mix_int(uint8_t n, uint8_t d, long long k) { return (uint8_t)(n + fdiv(((long long)d - n) * k, 256)); }
 
+// The map lit by the sun (draw.js drawWorld): `rows` x `cols` pixels of
+// `deg` degrees from `top` degrees north and 180 W.
+static void draw_world(Frame &f, const Value &dn, long long now, const char *const *world, const assets::IconColor *pal,
+                       int pal_n, int rows, int cols, double top, double deg) {
+  // The subsolar longitude moves 15° an hour: tenths of a degree back from dn.t.
+  long long lon10 = (long long)dn["lon"].num(0) - fdiv(now - (long long)dn["t"].num(0), 24);
+  lon10 = fmod_floor(lon10 + 1800, 3600) - 1800;
+  long long dec10 = (long long)dn["dec"].num(0);
+  long long dec_d = fdiv(dec10 + 5, 10), lon_d = fdiv(lon10 + 5, 10);
+  long long s_dec = sin_d(dec_d), c_dec = cos_d(dec_d);
+  for (int y = 0; y < rows; y++) {
+    long long lat = (long long)jsround(top - (y + 0.5) * deg);
+    long long sl = sin_d(lat) * s_dec, cl = cos_d(lat) * c_dec;
+    for (int x = 0; x < cols; x++) {
+      long long lon = (long long)jsround(-180 + (x + 0.5) * deg);
+      // sin(sun's altitude) x 1e8.
+      long long sv = sl + fdiv(cl * cos_d(lon - lon_d), 10000);
+      long long k = sv >= 0 ? 256 : sv <= DN_NIGHT12 ? 0 : 256 - fdiv(sv * 256, DN_NIGHT12);
+      char code = world[y][x];
+      RGB d, n;
+      if (code == '.') {
+        d = DN_SEA;
+        n = DN_NIGHT_SEA;
+      } else {
+        d = world_color(pal, pal_n, code);
+        n = RGB{(uint8_t)fdiv(d.r * DN_NIGHT_K[0], 256), (uint8_t)fdiv(d.g * DN_NIGHT_K[1], 256), (uint8_t)fdiv(d.b * DN_NIGHT_K[2], 256)};
+      }
+      f.set(x, y, RGB{mix_int(n.r, d.r, k), mix_int(n.g, d.g, k), mix_int(n.b, d.b, k)});
+    }
+  }
+}
+
+// Wide board (draw.js renderDayNightWide; wide-spec §6): the 80 x 32 map at
+// 4.5°, the board's spot dn.hw; the sun panel from column 83.
+static const int DNW_X0 = 83;
+static const RGB DNW_RISE = hexc(0xffc23a), DNW_SET = hexc(0xff7414), DNW_DIVIDER = hexc(0x262626);
+static const char *const SUN_ICON[] = {"...#...", ".#...#.", "..###..", "#.###.#", "-------"};
+static void render_daynight_wide(const Value &p, Frame &f, long long now) {
+  f.w = WIDE;
+  const Value &dn = p["dn"];
+  double tzo = p["tzo"].num(0);
+  if (dn.truthy()) {
+    draw_world(f, dn, now, assets::WORLD_WIDE, assets::WORLD_WIDE_PALETTE, assets::WORLD_WIDE_PALETTE_N, assets::WORLD_WIDE_H,
+               assets::WORLD_WIDE_W, 84, 4.5);
+    const Value &hw = dn["hw"];
+    if (hw.is_arr() && hw.size() == 2 && hw[1].num(0) < 32) f.fill((int)hw[0].num(0), (int)hw[1].num(0), 1, 1, DN_HERE);
+  }
+  LocalDate t = local_date((double)now, tzo);
+  int x = roll_named(f, FONT_5X7, "dn.clock", clock_text((double)now, tzo), LEFT, DNW_X0, 8, hexc(0xffffff));
+  f.text(FONT_SMALL, t.h < 12 ? U"AM" : U"PM", x + 1, 8, C::wxText);
+  f.fill(DNW_X0, 11, WIDE - DNW_X0, 1, DNW_DIVIDER);
+  if (dn.truthy() && !dn["sr"].is_null() && !dn["ss"].is_null()) {
+    long long sr = (long long)dn["sr"].num(0), ss = (long long)dn["ss"].num(0);
+    const long long times[] = {sr, ss};
+    const uint32_t arrows[] = {assets::G_UP, assets::G_DOWN};
+    const RGB colors[] = {DNW_RISE, DNW_SET};
+    for (int i = 0; i < 2; i++) {
+      int base = 18 + i * 7;
+      RGB c = colors[i];
+      for (int j = 0; j < 5; j++)
+        for (int k = 0; SUN_ICON[j][k]; k++)
+          if (SUN_ICON[j][k] != '.') f.fill(DNW_X0 + k, base - 5 + j, 1, 1, SUN_ICON[j][k] == '#' ? c : C::dimHead);
+      f.text(FONT_SMALL, g(arrows[i]), DNW_X0 + 9, base, c);
+      LocalDate d = local_date((double)times[i], tzo);
+      rtext(f, FONT_SMALL, clock_text((double)times[i], tzo) + (d.h < 12 ? U" AM" : U" PM"), WIDE - 1, base, c);
+    }
+    long long mins = std::max(0LL, fdiv(ss - sr, 60));
+    f.text(FONT_SMALL, U"DAY", DNW_X0, 32, C::dimHead);
+    rtext(f, FONT_SMALL, num_text(fdiv(mins, 60)) + U"h " + num_text(mins % 60) + U"m", WIDE - 1, 32, C::wxText);
+  }
+}
+
 static void render_daynight(const Value &p, Frame &f, std::optional<double> now_o) {
   long long now = (long long)floor(now_o ? *now_o : p["now"].num(0));
+  if (cols_of(p) == WIDE) return render_daynight_wide(p, f, now);
   const Value &dn = p["dn"];
   if (dn.truthy()) {
-    long long lon10 = (long long)dn["lon"].num(0) - fdiv(now - (long long)dn["t"].num(0), 24);
-    lon10 = fmod_floor(lon10 + 1800, 3600) - 1800;
-    long long dec10 = (long long)dn["dec"].num(0);
-    long long dec_d = fdiv(dec10 + 5, 10), lon_d = fdiv(lon10 + 5, 10);
-    long long s_dec = sin_d(dec_d), c_dec = cos_d(dec_d);
-    for (int y = 0; y < DN_ROWS; y++) {
-      long long lat = (long long)jsround(84.375 - (y + 0.5) * 5.625);
-      long long sl = sin_d(lat) * s_dec, cl = cos_d(lat) * c_dec;
-      for (int x = 0; x < 64; x++) {
-        long long lon = (long long)jsround(-180 + (x + 0.5) * 5.625);
-        long long sv = sl + fdiv(cl * cos_d(lon - lon_d), 10000);
-        long long k = sv >= 0 ? 256 : sv <= DN_NIGHT12 ? 0 : 256 - fdiv(sv * 256, DN_NIGHT12);
-        char code = assets::WORLD[y][x];
-        RGB d, n;
-        if (code == '.') {
-          d = DN_SEA;
-          n = DN_NIGHT_SEA;
-        } else {
-          d = world_color(code);
-          n = RGB{(uint8_t)fdiv(d.r * DN_NIGHT_K[0], 256), (uint8_t)fdiv(d.g * DN_NIGHT_K[1], 256), (uint8_t)fdiv(d.b * DN_NIGHT_K[2], 256)};
-        }
-        f.set(x, y, RGB{mix_int(n.r, d.r, k), mix_int(n.g, d.g, k), mix_int(n.b, d.b, k)});
-      }
-    }
+    draw_world(f, dn, now, assets::WORLD, assets::WORLD_PALETTE, assets::WORLD_PALETTE_N, DN_ROWS, 64, 84.375, 5.625);
     const Value &here = dn["here"];
     if (here.is_arr() && here.size() == 2 && here[1].num(0) < DN_ROWS) f.fill((int)here[0].num(0), (int)here[1].num(0), 1, 1, DN_HERE);
   }
@@ -2963,15 +3466,60 @@ static void render_daynight(const Value &p, Frame &f, std::optional<double> now_
   f.text(FONT_SMALL, date, 64 - measure(FONT_SMALL, date), 32, C::wxText);
 }
 
+// ---- clock screen: seventies face, wide board (draw.js renderSeventiesWide; wide-spec §6) ----
+// The stripes along the bottom, up columns 62-69 and along the top; the time
+// on the left; the weekday in full, the date and the temperature (cwx).
+static const int S70W_CX1 = 60, S70W_CY1 = 21, S70W_CX2 = 72, S70W_CY2 = 10, S70W_TEXT_X = 78;
+static bool s70_ring(int u, int v, int r) {
+  int d = u * u + v * v;
+  return d > (2 * r - 2) * (2 * r - 2) && d <= (2 * r + 2) * (2 * r + 2);
+}
+static void render_seventies_wide(const Value &p, Frame &f, double now) {
+  f.w = WIDE;
+  for (int i = 0; i < 3; i++) {
+    int r = S70_RADII[i], r2 = 12 - r;
+    RGB c = S70_COLORS[i];
+    f.fill(0, S70W_CY1 + r - 1, S70W_CX1, 2, c);
+    f.fill(S70W_CX1 + r - 1, S70W_CY2, 2, S70W_CY1 - S70W_CY2 + 1, c);
+    f.fill(S70W_CX2, S70W_CY2 - r2 - 1, WIDE - S70W_CX2, 2, c);
+    for (int y = S70W_CY1 + 1; y < 32; y++)
+      for (int x = S70W_CX1; x < WIDE; x++)
+        if (s70_ring(2 * (x - S70W_CX1) + 1, 2 * (y - S70W_CY1) + 1, r)) f.fill(x, y, 1, 1, c);
+    for (int y = 0; y < S70W_CY2; y++)
+      for (int x = 0; x < S70W_CX2; x++)
+        if (s70_ring(2 * (x - S70W_CX2) + 1, 2 * (y - S70W_CY2) + 1, r2)) f.fill(x, y, 1, 1, c);
+  }
+  // Centered in columns 0-57, drawn white, then banded by row.
+  roll_named(f, FONT_VCR, "svt.clock", clock_text(now, p["tzo"].num(0)), SPAN, S70W_CX1 - 3, S70_BASE, hexc(0xffffff));
+  for (int y = S70_TOP; y < S70_BASE; y++) {
+    RGB band = S70_COLORS[y < S70_TOP + 4 ? 0 : y < S70_TOP + 7 ? 1 : 2];
+    for (int xx = 0; xx < S70W_CX1 - 1; xx++) {
+      RGB c = f.get(xx, y);
+      if (c.r || c.g || c.b) f.set(xx, y, band);
+    }
+  }
+  LocalDate t = local_date(now, p["tzo"].num(0));
+  ustr day = U(DAY_NAMES[t.wd]);
+  f.text(FONT_5X7, day, std::min(S70W_TEXT_X, WIDE - measure(FONT_5X7, day)), 20, S70_COLORS[0]);
+  f.text(FONT_5X7, U(std::string(MONTH_NAMES[t.m - 1]) + " " + std::to_string(t.d)), S70W_TEXT_X, 29, S70_COLORS[1]);
+  const Value &w = p["cwx"];
+  if (w.truthy() && !w["temp"].is_null()) rtext(f, FONT_5X7, vstr(w["temp"]) + U"°", WIDE - 1, 29, S70_COLORS[2]);
+}
+
 // ---- clock screen: gradient face (design spec §19; contract "Gradient") ----
 // Mirrors renderGradient() and GR in draw.js.
 static const RGB GR_RING[] = {hexc(0xffc24a), hexc(0xff8a52), hexc(0xff5f7e), hexc(0xe94fb8), hexc(0xa55cff),
                               hexc(0x5a5cf2), hexc(0x3e9cff), hexc(0x3fd6c6), hexc(0x9be65a), hexc(0xffe14a)};
 static const long long GR_N = 10, GR_SPAN = 3, GR_STEP = 360000;
-static const int GR_SX = 4, GR_SY = 6, GR_GAP = 4;
+// Digit geometry by width (draw.js BIG): blocks sx x sy, the gap, and the
+// colon's width, lead and gap after.
+struct BigGeo {
+  int w, sx, sy, gap, colon_w, lead, colon_gap;
+};
+static const BigGeo BIG64 = {64, 4, 6, 4, 4, -2, 2}, BIG128 = {128, 7, 6, 5, 4, 0, 5};
 
-static RGB gradient_color(int x, int y, long long ms) {
-  long long u = fdiv((long long)(x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+static RGB gradient_color(int x, int y, long long ms, int w = 64) {
+  long long u = fdiv((long long)(x * 2 + y * 3) * 1024, (w - 1) * 2 + 31 * 3 + 1);
   long long r = fdiv(ms * 256, GR_STEP) + fdiv(u * GR_SPAN * 256, 1024);
   long long i = fmod_floor(fdiv(r, 256), GR_N), t = fmod_floor(r, 256);
   RGB a = GR_RING[i], b = GR_RING[(i + 1) % GR_N];
@@ -2986,59 +3534,59 @@ static const char *const GR_GLYPHS[11][5] = {
     {"###", "#..", "###", "#.#", "###"}, {"###", "..#", "..#", "..#", "..#"}, {"###", "#.#", "###", "#.#", "###"},
     {"###", "#.#", "###", "..#", "###"}, {".", "#", ".", "#", "."}};
 static int gr_index(char32_t ch) { return ch == U':' ? 10 : ch >= U'0' && ch <= U'9' ? (int)(ch - U'0') : -1; }
-// The colon sits closer: it starts 2 px back and leaves 2 px after it.
-static int big_lead(char32_t ch) { return ch == U':' ? -2 : 0; }
-static int big_gap(char32_t ch) { return ch == U':' ? GR_GAP - 2 : GR_GAP; }
-static int big_w(const ustr &s) {
-  int w = -GR_GAP;
+static int big_lead(const BigGeo &g, char32_t ch) { return ch == U':' ? g.lead : 0; }
+static int big_gap(const BigGeo &g, char32_t ch) { return ch == U':' ? g.colon_gap : g.gap; }
+static int big_block_w(const BigGeo &g, char32_t ch) { return ch == U':' ? g.colon_w : g.sx; }
+static int big_w(const BigGeo &g, const ustr &s) {
+  int w = -g.gap;
   for (char32_t ch : s) {
-    int g = gr_index(ch);
-    if (g >= 0) w += big_lead(ch) + (int)strlen(GR_GLYPHS[g][0]) * GR_SX + big_gap(ch);
+    int gi = gr_index(ch);
+    if (gi >= 0) w += big_lead(g, ch) + (int)strlen(GR_GLYPHS[gi][0]) * big_block_w(g, ch) + big_gap(g, ch);
   }
   return w;
 }
-static int big_char(Frame &f, char32_t ch, int x, int top, RGB c) {
-  int g = gr_index(ch);
-  if (g < 0) return x;
-  x += big_lead(ch);
-  int w = (int)strlen(GR_GLYPHS[g][0]);
+static int big_char(Frame &f, const BigGeo &g, char32_t ch, int x, int top, RGB c) {
+  int gi = gr_index(ch);
+  if (gi < 0) return x;
+  x += big_lead(g, ch);
+  int w = (int)strlen(GR_GLYPHS[gi][0]), bw = big_block_w(g, ch);
   for (int r = 0; r < 5; r++)
     for (int i = 0; i < w; i++)
-      if (GR_GLYPHS[g][r][i] == '#') f.fill(x + i * GR_SX, top + r * GR_SY, GR_SX, GR_SY, c);
-  return x + w * GR_SX + big_gap(ch);
+      if (GR_GLYPHS[gi][r][i] == '#') f.fill(x + i * bw, top + r * g.sy, bw, g.sy, c);
+  return x + w * bw + big_gap(g, ch);
 }
-static void big_text(Frame &f, const ustr &s, int x, int top, RGB c) {
-  for (char32_t ch : s) x = big_char(f, ch, x, top, c);
+static void big_text(Frame &f, const BigGeo &g, const ustr &s, int x, int top, RGB c) {
+  for (char32_t ch : s) x = big_char(f, g, ch, x, top, c);
 }
 
 // The time, rolling at the minute (draw.js drawBigTime / bigRoll).
-static void draw_big_time(Frame &f, const Value &p, double now, RGB color) {
+static void draw_big_time(Frame &f, const BigGeo &g, const Value &p, double now, RGB color) {
   ustr text = clock_text(now, p["tzo"].num(0));
-  const int H = 5 * GR_SY, top = (int)fdiv(32 - H, 2);
-  auto x_of = [](const ustr &s) { return (int)fdiv(64 - big_w(s), 2); };
+  const int H = 5 * g.sy, top = (int)fdiv(32 - H, 2);
+  auto x_of = [&g](const ustr &s) { return (int)fdiv(g.w - big_w(g, s), 2); };
   std::optional<Roll> roll = take_roll("grad.clock", text);
   if (!roll) {
-    big_text(f, text, x_of(text), top, color);
+    big_text(f, g, text, x_of(text), top, color);
     return;
   }
-  int dist = H + GR_SY, up = (int)jsround(ease_in_out(roll->p) * dist);
+  int dist = H + g.sy, up = (int)jsround(ease_in_out(roll->p) * dist);
   const ustr &from = roll->from;
-  f.push_clip(0, top, 63, top + H - 1);
+  f.push_clip(0, top, g.w - 1, top + H - 1);
   bool same = x_of(from) == x_of(text) && from.size() == text.size();
-  for (size_t i = 0; same && i < text.size(); i++) same = big_w(text.substr(i, 1)) == big_w(from.substr(i, 1));
+  for (size_t i = 0; same && i < text.size(); i++) same = big_w(g, text.substr(i, 1)) == big_w(g, from.substr(i, 1));
   if (same) {
     int x = x_of(text);
     for (size_t i = 0; i < text.size(); i++) {
-      if (text[i] == from[i]) big_char(f, text[i], x, top, color);
+      if (text[i] == from[i]) big_char(f, g, text[i], x, top, color);
       else {
-        big_char(f, from[i], x, top - up, color);
-        big_char(f, text[i], x, top - up + dist, color);
+        big_char(f, g, from[i], x, top - up, color);
+        big_char(f, g, text[i], x, top - up + dist, color);
       }
-      x += big_w(text.substr(i, 1)) + GR_GAP;
+      x += big_w(g, text.substr(i, 1)) + g.gap;
     }
   } else {
-    big_text(f, from, x_of(from), top - up, color);
-    big_text(f, text, x_of(text), top - up + dist, color);
+    big_text(f, g, from, x_of(from), top - up, color);
+    big_text(f, g, text, x_of(text), top - up + dist, color);
   }
   f.pop_clip();
 }
@@ -3046,18 +3594,21 @@ static void draw_big_time(Frame &f, const Value &p, double now, RGB color) {
 static void render_gradient(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
   double now = now_o ? *now_o : p["now"].num(0);
   long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
+  const BigGeo &g = cols_of(p) == WIDE ? BIG128 : BIG64;
+  const int W = g.w;
+  f.w = W;
   // Inverted (ginv): the digits carry the gradient on black, drawn as a
   // mask and then colored.
   if (p["ginv"].truthy()) {
-    draw_big_time(f, p, now, hexc(0xffffff));
+    draw_big_time(f, g, p, now, hexc(0xffffff));
     for (int y = 0; y < 32; y++)
-      for (int x = 0; x < 64; x++)
-        if (f.get(x, y).r) f.set(x, y, gradient_color(x, y, ms));
+      for (int x = 0; x < W; x++)
+        if (f.get(x, y).r) f.set(x, y, gradient_color(x, y, ms, W));
     return;
   }
   for (int y = 0; y < 32; y++)
-    for (int x = 0; x < 64; x++) f.set(x, y, gradient_color(x, y, ms));
-  draw_big_time(f, p, now, RGB{});
+    for (int x = 0; x < W; x++) f.set(x, y, gradient_color(x, y, ms, W));
+  draw_big_time(f, g, p, now, RGB{});
 }
 
 // ---- announce screen (design spec §15; contract "Announce") ----
@@ -3236,25 +3787,52 @@ std::vector<std::string> SkylineFader::wanted() const {
 static const int BD_TOP = 7, BD_BASE = 24;
 static const int DD_DAY_BASE = 6, DD_TIME_BASE = 22, DD_DATE_BASE = 31;
 
+// Wide board: the d23 digits, rows 4-26, centered on 128 columns.
+static const int BDW_TOP = 4, BDW_BASE = 27;
+
 static void render_digits(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
   double now = now_o ? *now_o : p["now"].num(0);
   long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
+  bool wide = cols_of(p) == WIDE;
+  Font font = wide ? FONT_D23 : FONT_D17;
+  int W = wide ? WIDE : 64, top = wide ? BDW_TOP : BD_TOP, base = wide ? BDW_BASE : BD_BASE;
+  f.w = W;
   ustr text = clock_text(now, p["tzo"].num(0));
-  // Ink centered: x = floor((65 - measure) / 2) (draw.js xOf).
+  // Ink centered: x = floor((W + 1 - measure) / 2) (draw.js xOf).
   std::optional<Roll> roll = take_roll("dig.clock", text);
-  roll_text_at(f, FONT_D17, text, SPAN, 64, BD_BASE, hexc(0xe6e6e6), roll);
+  roll_text_at(f, font, text, SPAN, W, base, hexc(0xe6e6e6), roll);
   // The colon blinks: off for the second half of each second, never mid-roll,
   // never with steady.
   if (!p["steady"].truthy() && !roll && fmod_floor(ms, 1000) >= 500) {
     size_t i = text.find(U':');
-    int g = glyph(FONT_D17, ':');
-    int cw = g >= 0 ? assets::FONT_DATA[FONT_D17][g + 1] : 0;
-    f.fill(align_x(FONT_D17, text, SPAN, 64) + measure(FONT_D17, text.substr(0, i)) + 1, BD_TOP, cw, BD_BASE - BD_TOP, hexc(0x000000));
+    int g = glyph(font, ':');
+    int cw = g >= 0 ? assets::FONT_DATA[font][g + 1] : 0;
+    f.fill(align_x(font, text, SPAN, W) + measure(font, text.substr(0, i)) + 1, top, cw, base - top, hexc(0x000000));
   }
+}
+
+// Wide day/date (draw.js renderDayDateWide): weekday over date on the left,
+// a divider, the time and AM/PM centered in columns 48-127.
+static const int DDW_CX = 22, DDW_DAY_BASE = 14, DDW_DATE_BASE = 25, DDW_DIV_X = 46, DDW_X0 = 48, DDW_TIME_BASE = 27;
+static void render_daydate_wide(const Value &p, Frame &f, double now) {
+  f.w = WIDE;
+  double tzo = p["tzo"].num(0);
+  LocalDate t = local_date(now, tzo);
+  ustr day = U(DAY_NAMES[t.wd]), date = U(std::string(MONTH_NAMES[t.m - 1]) + " " + std::to_string(t.d));
+  f.text(FONT_5X7, day, DDW_CX - (int)fdiv(measure(FONT_5X7, day), 2), DDW_DAY_BASE, C::wxText);
+  f.text(FONT_5X7, date, DDW_CX - (int)fdiv(measure(FONT_5X7, date), 2), DDW_DATE_BASE, hexc(0xe6e6e6));
+  f.fill(DDW_DIV_X, 4, 1, 24, hexc(0x262626));
+  ustr text = clock_text(now, tzo), ampm = U(t.h < 12 ? "AM" : "PM");
+  int aw = measure(FONT_SMALL, ampm);
+  // x = 48 + floor((80 - (measure + 3 + aw)) / 2): CENTER in columns 48 to 124 - aw.
+  int end = WIDE - 3 - aw;
+  roll_named(f, FONT_D23, "dd.clock", text, CENTER, DDW_X0, DDW_TIME_BASE, hexc(0xe6e6e6), end);
+  f.text(FONT_SMALL, ampm, align_x(FONT_D23, text, CENTER, DDW_X0, end) + measure(FONT_D23, text) + 3, DDW_TIME_BASE, C::dimHead);
 }
 
 static void render_daydate(const Value &p, Frame &f, std::optional<double> now_o) {
   double now = floor(now_o ? *now_o : p["now"].num(0));
+  if (cols_of(p) == WIDE) return render_daydate_wide(p, f, now);
   double tzo = p["tzo"].num(0);
   LocalDate t = local_date(now, tzo);
   ustr day = U(DAY_NAMES[t.wd]);
@@ -3277,6 +3855,7 @@ static void render_clock(const Value &p, Frame &f, const RenderOpts &o) {
   else if (face == "gradient") render_gradient(p, f, o.now, o.ms);
   else if (face == "digits") render_digits(p, f, o.now, o.ms);
   else if (face == "daydate") render_daydate(p, f, o.now);
+  else if (face == "words" && cols_of(p) == WIDE) render_words(p, f, o.now);
   else render_skyline_faded(p, f, o);
 }
 
@@ -3290,7 +3869,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   if (screen == "peek") render_peek(p, f, o);
   else if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
-  else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
+  else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
   else if (screen == "clock") render_clock(p, f, o);
   else if (screen == "announce") render_announce(p, f, o.t);

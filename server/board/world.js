@@ -3,6 +3,8 @@
 // Blue Marble (both public domain). Do not edit; rebuild. The clock screen's
 // day/night map: 64 x 26 pixels of 5.625°, longitude -180 to 180, latitude
 // 84.375° N to 61.875° S; '.' sea, a letter a land color in WORLD_PALETTE.
+// WORLD_WIDE: the wide board's (128 x 32): 80 x 32 pixels of 4.5°, 84° N to
+// 60° S, its colors in WORLD_WIDE_PALETTE.
 
 const WORLD = [
   '...............VVVVVVVVVVVVVV...................................',
@@ -60,4 +62,66 @@ const WORLD_PALETTE = {
   X: '#c8c8c8',
 };
 
-module.exports = { WORLD, WORLD_PALETTE };
+const WORLD_WIDE = [
+  '...................VNVVVVVVVVVVVVVVV.........................N..................',
+  '..............NV.NNNVVV.VVVVVVVVVVVV.......V.................VVNN...............',
+  '............VVVVV.VVVVN....VVVVVVVV.................V..V.VVVVVVVVNNVV..VV.......',
+  '.NNVVVV.......NVVNN..VNNV.NNNVVVVVNNNNNNNNN..S...GN....VSVNNNNVVVNNNVVVVVVV.....',
+  '...KKLLSNKUNLSUVVVVV.VNVVN..NVV....S.....KJCBBBBJJGKLJSVVVUJKKNNNSUVVVVVVVVVVVVV',
+  '....LJJ.NKKKGGGKSVV....UJS...............JCB.BBBCGFGKKKSSLLJJGGGKUUVVUVVVV.VV...',
+  '...........JCKNIFCFFKGBBFCC...........DE.EEEECCCFFFGKNMMLNNKGKFCKNLLLSS...VS....',
+  '............GGHMMICBBBBBBBBB...........EICEFFFFFFIIHMMMMMMNSPSMIFHIFFFFF........',
+  '............BIFHMHICBBBBBB.............GEFFCFFIIFIHPQQQPPMNQQQQQQPMMFFB.........',
+  '............CMPMMMHIIFCC..............IHF.FGFFHMMHH.RRQPSRTTTRRRQMHIF..C........',
+  '.............MPPMMIFFCC...............HNQQ....MPQQPQRRQQUTTTTTMPHHH.F.C.........',
+  '..............QMPHFCCC................PRTTTTTT.TTTRRRTRQMPRQPMFCCII..C..........',
+  '...............IMHI..C...............TTTTTTTTTTTRTTTRTTRQHIHGCCCCED.............',
+  '................FHF.................TTTTTTTTTTTTQTTTT..PHIIFDDAEEE..............',
+  '.................EEDA...............TTTTTTTTTTTTRRTTT...IIE..EEE................',
+  '...................ADD..............MMPQRRTTRRRPMPT.....IH...EID................',
+  '.....................D.DEED..........DEFEIHIEIIEIPR......I.....E...D............',
+  '.......................DEADAA.........DDEEAAAADIHPQ...........D..A..............',
+  '......................DAAAAAA.............AAAAAFPI............D.AA..............',
+  '......................EAAAADAEIM..........DEDDEMM..............E.DD...AA........',
+  '......................IAAAADEHMM...........EEEIMI......................DA.......',
+  '.......................IDEEIIMHH...........IIIHHH....................M..........',
+  '........................PIEIMMI...........PPPPMHH.H................OOOPPH.......',
+  '........................RMIIHII............QQQOH..H..............OOOOOQQP.......',
+  '........................QMIFF..............QRPMI.................OOOOOQQOH......',
+  '........................PMHIF...............POH..................MOOOOQQOI......',
+  '........................NHII................N.....................H...MMIF......',
+  '.......................AMHI.............................................C......E',
+  '.......................JMP...................................................J..',
+  '.......................SM.......................................................',
+  '.......................JI.......................................................',
+  '................................................................................',
+];
+
+const WORLD_WIDE_PALETTE = {
+  A: '#304b13',
+  B: '#343c19',
+  C: '#454d25',
+  D: '#3a541f',
+  E: '#4b5c25',
+  F: '#59582f',
+  G: '#5a614a',
+  H: '#7f7042',
+  I: '#6c6736',
+  J: '#667062',
+  K: '#747a6f',
+  L: '#878980',
+  M: '#8f794c',
+  N: '#878565',
+  O: '#ab7649',
+  P: '#a98c5c',
+  Q: '#bc9a67',
+  R: '#c5ab78',
+  S: '#9ea096',
+  T: '#c8c18e',
+  U: '#aeb4b1',
+  V: '#c8c8c8',
+  W: '#c8c8c8',
+  X: '#c8c8c8',
+};
+
+module.exports = { WORLD, WORLD_PALETTE, WORLD_WIDE, WORLD_WIDE_PALETTE };

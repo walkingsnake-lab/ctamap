@@ -632,67 +632,6 @@ test('weather 5-day: today on top, five day columns between dividers; the top ba
   for (let y = 0; y < 8; y++) assert.deepEqual(warned.get(63, y), [0, 0, 0], 'right margin');
 });
 
-test('weather rain bars: shared top bar, centered title with a drop, bars on an 8px pitch, 1H/2H axis', () => {
-  const now = Date.UTC(2026, 9, 9, 16, 48) / 1000;
-  const wx = { icon: 'rain', temp: 54, word: 'RAIN', hi: 61, lo: 49, feels: 50, wind: 'NW 12', pop: 80 };
-  const rain = { snow: 0, now: 1, title: 'BREAK IN 30 MIN', h: [5, 4, 0, 0, 6, 8, 7, 5], l: [2, 1, 0, 0, 2, 2, 2, 2] };
-  const rad = (w) => ({ on: false, frames: [], ft: [], timeBox: [40, 0, 24, 22], split: false, wx: w });
-  const f = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rain }) }, { screen: 'weather', now, frames: {} });
-  const five = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, days: [{ d: 'SA', hi: 71, icon: 'sun' }] }) }, { screen: 'weather', now, frames: {} });
-  for (let y = 0; y < 8; y++) for (let x = 0; x < 64; x++) assert.deepEqual(f.get(x, y), five.get(x, y), `top bar ${x},${y}`);
-  assert.equal(count(f, '#1e90ff', 0, 10, 12, 14), 8, 'drop before the title');
-  assert.ok(count(f, '#60b0ff', 14, 10, 63, 14) > 40, 'title');
-  // Bars: 7px wide on an 8px pitch; heights from row 25; levels 1-3 colors.
-  const col = (i) => { let h = 0; for (let y = 25; y >= 16; y--) if (hex(f.get(i * 8 + 3, y)) !== '#000000') h++; return h; };
-  assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7].map(col), [5, 4, 1, 1, 6, 8, 7, 5]); // dry bars are a 1px baseline
-  assert.equal(hex(f.get(3, 25)), '#0f48c0');   // level 2
-  assert.equal(hex(f.get(11, 25)), '#0a2a78');  // level 1
-  assert.equal(hex(f.get(19, 25)), '#081428');  // dry baseline
-  for (let i = 0; i < 8; i++) assert.deepEqual(f.get(i * 8 + 7, 25), [0, 0, 0], `gap after bar ${i}`);
-  assert.ok(count(f, '#555555', 26, 26, 36, 31) > 5, '1H');
-  assert.ok(count(f, '#555555', 54, 26, 63, 31) > 5, '2H');
-  assert.deepEqual(f.get(63, 31), [0, 0, 0], 'margin right of 2H');
-  // The drop stands in for the word: none on titles that say RAIN or SNOW,
-  // whether or not it's falling now; always on ENDS / BREAK titles.
-  for (const [title, now_, mark] of [['RAIN IN 25 MIN', 0, false], ['RAIN NEXT 2 HRS', 1, false], ['ENDS IN 60 MIN', 0, true], ['BREAK IN 30 MIN', 1, true]]) {
-    const r = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rain: { ...rain, now: now_, title } }) }, { screen: 'weather', now, frames: {} });
-    assert.equal(count(r, '#1e90ff', 0, 9, 63, 14) > 0, mark, `${title} (now ${now_})`);
-  }
-  // Snow: the colors; the flake only on ENDS / BREAK titles, on the text's
-  // rows 9-13.
-  const snow = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rain: { ...rain, snow: 1, title: 'SNOW NEXT 2 HRS' } }) }, { screen: 'weather', now, frames: {} });
-  assert.equal(hex(snow.get(3, 25)), '#6e83a6');
-  assert.ok(count(snow, '#a9c9ff', 0, 9, 63, 14) > 40);
-  const ends = draw.render({ now, bright: 100, warn: null, radar: rad({ ...wx, rain: { ...rain, snow: 1, title: 'ENDS IN 60 MIN' } }) }, { screen: 'weather', now, frames: {} });
-  let x0 = -1; for (let x = 0; x < 64 && x0 < 0; x++) for (let y = 9; y <= 14; y++) if (hex(ends.get(x, y)) === '#a9c9ff') { x0 = x; break; }
-  const flake = []; for (let y = 8; y <= 15; y++) { let n = 0; for (let x = x0; x < x0 + 5; x++) if (hex(ends.get(x, y)) === '#a9c9ff') n++; flake.push(n); }
-  assert.deepEqual(flake, [0, 1, 3, 3, 3, 1, 0, 0], 'flake on rows 9-13');
-  // A warning takes over the top bar's high/low line; the title stays.
-  const warn = (blink) => draw.render({ now, bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: rad({ ...wx, rain }) }, { screen: 'weather', now, frames: {}, blink });
-  assert.ok(count(warn(false), draw.C.warnTornado, 34, 2, 62, 6) > 15);
-  assert.equal(count(warn(true), draw.C.warnTornado, 0, 0, 63, 31), 0, 'the tornado warning blinks');
-  assert.ok(count(warn(true), '#60b0ff', 14, 9, 63, 14) > 40, 'the title stays');
-});
-
-test('weather rain: the radar loop plays rain.loops full cycles, then the bars for rain.alt s (never cut off)', () => {
-  // One frame: the cycle is one 500 ms step plus the 4 s hold (4.5 s), so 2 loops
-  // are 9 s, then 20 s of bars.
-  const wx = { icon: 'rain', temp: 54, word: 'RAIN', hi: 61, lo: 49, rain: { snow: 0, now: 1, title: 'RAIN NEXT 2 HRS', h: [5, 5, 5, 5, 5, 5, 5, 5], l: [2, 2, 2, 2, 2, 2, 2, 2], alt: 20, loops: 2 } };
-  const p = { bright: 100, warn: null, radar: { on: true, frames: ['a'], ft: [0], timeBox: [40, 0, 24, 22], split: false, wx } };
-  const frames = { a: new Uint8Array(2048).fill(3) };
-  const at = (t) => draw.render({ ...p, now: 0 }, { screen: 'weather', now: 0, t, frames });
-  const bars = (t) => count(at(t), '#60b0ff', 0, 10, 63, 14) > 40;
-  assert.equal(bars(0), false, 'loop 1');
-  assert.equal(bars(8999), false, 'loop 2 ends at 9 s, not cut off');
-  assert.equal(bars(9000), true, 'bars after 2 loops');
-  assert.equal(bars(28999), true, 'bars for alt s');
-  assert.equal(bars(29000), false, 'the loop starts again');
-  assert.equal(bars(38000), true, 'and turns to bars after its 2 loops');
-  // Without loops or alt (bars mode or no radar) the frames never matter.
-  const noAlt = draw.render({ ...p, now: 0, radar: { ...p.radar, frames: [], wx: { ...wx, rain: { ...wx.rain, alt: undefined } } } }, { screen: 'weather', now: 0, frames: {} });
-  assert.ok(count(noAlt, '#60b0ff', 0, 10, 63, 14) > 40);
-});
-
 test('weather hourly: the 5-day top bar over four 16px columns; the top bar follows the shadow setting and carries a warning', () => {
   const now = Date.UTC(2026, 9, 9, 16, 48) / 1000;
   const hours = [{ h: '3P', icon: 'sun', t: 78 }, { h: '6P', icon: 'cloudy', t: 76 }, { h: '9P', icon: 'pcloudy_night', t: 69 }, { h: '12A', icon: 'moon', t: 104 }];
@@ -1586,7 +1525,7 @@ test('width: a 128 payload (cols) shows 64-wide screens on both panels; slides a
   const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(9)], s: [0, 0], a: 0 }]);
   const narrow = draw.render(p);
   assert.equal(narrow.w, 64);
-  for (const screen of ['transit', 'ticker', 'weather', 'clock', 'announce']) {
+  for (const screen of ['weather', 'announce']) {  // every clock face has a 128 layout now
     const f = draw.render({ ...p, cols: 128 }, { screen });
     const n = draw.render(p, { screen });
     assert.equal(f.w, 128, screen);
@@ -1599,11 +1538,39 @@ test('width: a 128 payload (cols) shows 64-wide screens on both panels; slides a
   assert.equal(draw.slideOffset(draw.SCREEN_SLIDE_MS), 64 + draw.SLIDE_GAP);
   // From a 64-wide frame (a status screen): widened as the board showed it.
   const wide = { ...p, cols: 128 };
-  const from = Array.from(narrow.px);
+  const from = Array.from(draw.render(p, { screen: 'weather' }).px);
+  const wfrom = Array.from(draw.render(wide, { screen: 'weather' }).px);
   const a = draw.render(wide, { screen: 'ticker', fade: { from, t: 40 } });
-  const b = draw.render(wide, { screen: 'ticker', fade: { from: Array.from(draw.render(wide).px), t: 40 } });
+  const b = draw.render(wide, { screen: 'ticker', fade: { from: wfrom, t: 40 } });
   assert.deepEqual(Array.from(a.px), Array.from(b.px));
   const c = draw.render(wide, { screen: 'ticker', slide: { from, t: 150, dir: 1 } });
-  const d = draw.render(wide, { screen: 'ticker', slide: { from: Array.from(draw.render(wide).px), t: 150, dir: 1 } });
+  const d = draw.render(wide, { screen: 'ticker', slide: { from: wfrom, t: 150, dir: 1 } });
   assert.deepEqual(Array.from(c.px), Array.from(d.px));
+});
+
+test('width: wide transit and ticker draw 128 across; overnight shows on both panels', () => {
+  const rows = [{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(9)], s: [0, 0], a: 0 }];
+  const ticker = [{ ln: 'RD', d: 'Howard', t: min(3), s: 0, a: 0 }, { ln: 'RD', d: '95th/Dan Ryan', t: min(5), s: 1, a: 0 }];
+  const p = { ...payload(rows, ticker), cols: 128 };
+  // Rows: the header clock and the times at the right edge, nothing mirrored.
+  const f = draw.render(p);
+  assert.equal(f.w, 128);
+  assert.ok(count(f, '#ffb000', 120, 7, 127, 31) > 0, 'the first time at the right edge');
+  assert.equal(count(f, '#d8d8d8', 64, 7, 100, 31), 0, 'no second label');
+  // Split: the halves' labels, a row in each.
+  const split = { ...p, view: 'split', halves: ['NORTHBOUND', 'SOUTHBOUND'], rows: [{ ...rows[0], h: 0 }, { ln: 'RD', lbl: '95TH', t: [min(4)], s: [0], a: 0, h: 1 }] };
+  const sf = draw.render(split);
+  assert.ok(count(sf, '#808080', 0, 1, 40, 5) > 0 && count(sf, '#808080', 66, 1, 110, 5) > 0, 'both labels');
+  assert.ok(count(sf, '#ffb000', 40, 8, 61, 22) > 0 && count(sf, '#ffb000', 100, 8, 127, 22) > 0, 'times in both halves');
+  // An empty half says so.
+  const half = draw.render({ ...split, rows: [split.rows[0]] });
+  assert.ok(count(half, '#6c6c6c', 66, 14, 127, 19) > 0, 'NO TRAINS');
+  // Ticker: the band to the right edge, the status icon at 120-126.
+  const t = draw.render(p, { screen: 'ticker' });
+  assert.equal(t.w, 128);
+  assert.ok(count(t, '#ffffff', 120, 9, 126, 15) > 0, 'the live icon');
+  assert.ok(count(t, '#ffffff', 120, 22, 126, 28) > 0, 'the schedule icon');
+  // Overnight: the 64 layout on both panels.
+  const night = draw.render({ ...p, rows: [] });
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) assert.deepEqual(night.get(x, y), night.get(x + 64, y));
 });

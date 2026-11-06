@@ -21,8 +21,16 @@ const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock', 'a
 const MAX_PRESETS = 8;
 // Clock screen faces (design spec §14, §16-20): the skyline, the seventies
 // stripes with VCR digits, the analog dial, the day/night world map, the
-// flowing gradient, big digits, and day/date.
-const CLOCK_FACES = ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate'];
+// flowing gradient, big digits, and day/date; the word clock on wide
+// boards only (WIDE_FACES: a 64 board shows the skyline instead).
+const CLOCK_FACES = ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate', 'words'];
+const WIDE_FACES = ['words'];
+// Analog face accent (the second hand; the wide board's calendar day
+// block at 40%): name -> color. amber is the original.
+const ANALOG_ACCENTS = {
+  amber: '#ffb000', coral: '#ff5a4e', pink: '#ff4fa8', violet: '#a066ff',
+  blue: '#4a7dff', cyan: '#22c8e6', mint: '#2fe08a', lime: '#a8e23a',
+};
 // Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
 const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
 const WHEEL_SPEEDS = ['off', 'slow', 'normal', 'fast'];
@@ -72,6 +80,9 @@ const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
 const TRANSIT_LAYOUTS = ['header', 'key'];
+// Transit on a wide board (128 x 32, `cols`): northbound | southbound halves
+// where that's true at the station, or full-width destination rows.
+const WIDE_LAYOUTS = ['split', 'rows'];
 const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame time, current time, how long ago the frame is, or nothing
 // The weather screen's view: conditions, 5-day, or hourly (the radar loop
 // takes over while rain is in the box), or the radar, always (an empty map
@@ -79,9 +90,9 @@ const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame
 const WX_VIEWS = ['now', '5day', 'hourly', 'radar'];
 const TEMP_UNITS = ['F', 'C'];  // temperatures on every weather display
 // Retired settings, dropped from saved state on load: per-layout animated
-// weather icons (removed Nov 2026; icons are always static).
-const RETIRED_KEYS = ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar'];
-const WX_RAINS = ['radar', 'bars', 'both'];  // weather screen with rain around: radar loop, rain bars, or both alternating
+// weather icons (removed Nov 2026; icons are always static), and the rain
+// bars' settings (the bars were cut, Nov 2026).
+const RETIRED_KEYS = ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar', 'wxRain', 'wxRainEvery', 'wxRainLoops'];
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
   tickerHold: [5, 6, 8, 10, 12, 15],         // s each ticker page holds
@@ -89,8 +100,6 @@ const SPEEDS = {
   radarFrame: [300, 400, 500, 700, 1000],    // ms per radar loop frame
   radarHold: [2, 3, 4, 6, 8],                // s the loop holds on the newest frame
   gameEvery: [30, 45, 60, 90, 120],
-  wxRainEvery: [10, 15, 20, 30, 45, 60],     // s of rain bars per turn when both alternate
-  wxRainLoops: [1, 2, 3, 5],                 // full radar loops per turn when both alternate
 };
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
@@ -137,6 +146,7 @@ function defaultBoard(stations) {
     // Transit layout: 'header' (station and clock on top) or 'key' (a
     // "trains to / min" key on top, station and clock under a line at the bottom).
     transitLayout: 'header',
+    wideLayout: 'split',
     screen: 'transit',
     // The transit-family screen the knob's TRANSIT opens: the last of
     // transit and ticker chosen. Kept by the store, not set directly.
@@ -189,6 +199,9 @@ function defaultBoard(stations) {
     radarBright: 100,
     // Weather screen: a temperature-colored shadow behind the big temperature.
     tempShadow: false,
+    // Wide boards' 7-day and 24-hour layouts: today's conditions bar on top
+    // (false: the layout takes the whole panel, with lows / rain chances).
+    wxTop: true,
     // Temperature unit on every weather display: 'F' or 'C'.
     tempUnit: 'F',
     // Clock digits roll when the time changes (every clock: header, radar, faces).
@@ -197,13 +210,6 @@ function defaultBoard(stations) {
     // (today on top, the next five days in columns), or 'hourly' (today on
     // top, 3/6/9/12 hours ahead in columns).
     wxView: 'now',
-    // Weather screen while rain is around: 'radar' (the loop, while rain is
-    // in the box), 'bars' (the next 2 hours in 15-minute bars, while the
-    // forecast has rain; never the loop), or 'both' (alternate every
-    // wxRainLoops full radar loops, then wxRainEvery s of bars, repeating,
-    // while both apply).
-    wxRain: 'radar',
-    wxRainEvery: 15,
     // Announce screen (design spec §15): the message on it ({text, style,
     // id}; null: none yet, the screen asks for one) and saved presets
     // ({text, style}). id is the board's v when the message was set: a new
@@ -226,7 +232,8 @@ function defaultBoard(stations) {
     gradInvert: false,
     // Big digits clock face: the colon blinks once a second (false: steady).
     colonBlink: true,
-    wxRainLoops: 2,
+    // Analog clock face: the accent color (ANALOG_ACCENTS).
+    analogAccent: 'amber',
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -302,6 +309,7 @@ function validatePatch(patch, stations) {
       case 'radarTime':
       case 'radarCond':
       case 'tempShadow':
+      case 'wxTop':
       case 'headerClock':
       case 'timeSteps':
       case 'boats':
@@ -327,8 +335,6 @@ function validatePatch(patch, stations) {
       case 'radarFrame':
       case 'radarHold':
       case 'gameEvery':
-      case 'wxRainEvery':
-      case 'wxRainLoops':
         if (!SPEEDS[key].includes(val)) throw new ValidationError(`${key} must be one of ${SPEEDS[key].join(', ')}`);
         out[key] = val;
         break;
@@ -397,16 +403,17 @@ function validatePatch(patch, stations) {
       case 'bbPriority':
       case 'lineNames':
       case 'transitLayout':
+      case 'wideLayout':
       case 'radarClock':
       case 'wxView':
       case 'tempUnit':
-      case 'wxRain':
       case 'clockFace':
+      case 'analogAccent':
       case 'cloudDrift':
       case 'wheelSpeed':
       case 'rippleSpeed':
       case 'rainSpeed': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, clockFace: CLOCK_FACES, analogAccent: Object.keys(ANALOG_ACCENTS), cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;
@@ -668,4 +675,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };

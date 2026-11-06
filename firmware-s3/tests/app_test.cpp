@@ -829,6 +829,7 @@ static bool halves_alike(const draw::Frame &f) {
 static void test_a_wide_board_draws_128_across_and_fades_in_from_a_status_screen() {
   Rig r({"ok"}, true);
   r.server.cols = 128;
+  r.server.screen = "weather";  // no 128 layout yet: on both panels
   r.board->connect();
   // The first frames fade in from the last status screen (64 wide), as it
   // showed, on both panels: alike halves all the way, no garbled rows.
@@ -842,8 +843,25 @@ static void test_a_wide_board_draws_128_across_and_fades_in_from_a_status_screen
   CHECK(all_alike, "the fade from the status screen");
   r.run_for(15000);
   CHECK(r.display.last.w == 128 && halves_alike(r.display.last), "");
+  // Transit draws 128 across: the header's clock at the far right, nothing
+  // where a second copy of the station name would be.
+  r.server.screen = "transit";
+  r.server.v = 2;
+  r.run_for(40000);
+  const draw::Frame &f = r.display.last;
+  bool clock_right = false, middle_dark = true;
+  for (int y = 1; y <= 5; y++) {
+    for (int x = 110; x < 128; x++)
+      if (f.get(x, y) != draw::RGB{}) clock_right = true;
+    for (int x = 64; x < 100; x++)
+      if (f.get(x, y) != draw::RGB{}) middle_dark = false;
+  }
+  CHECK(f.w == 128 && clock_right && middle_dark, "w %d clock %d middle %d", f.w, clock_right, middle_dark);
   // A button press slides the next screen in across all 128 columns at
   // once: mid-slide, the panels differ.
+  r.server.screen = "weather";
+  r.server.v = 3;
+  r.run_for(40000);
   r.btn.held_down = true;
   r.run_for(100);
   r.btn.held_down = false;
@@ -854,8 +872,6 @@ static void test_a_wide_board_draws_128_across_and_fades_in_from_a_status_screen
     r.clock.sleep_ms(5);
   }
   CHECK(crossed, "the slide crosses both panels as one");
-  r.run_for(5000);
-  CHECK(halves_alike(r.display.last), "");
   // A one-panel payload stays 64 wide.
   Rig n;
   n.board->connect();
@@ -1032,7 +1048,7 @@ static void test_health_reports_the_skyline_capability() {
   std::string sent;
   for (const std::string &h : r.server.health)
     if (!h.empty()) sent = h;
-  CHECK(sent.find("&hk=skyline:seventies:analog:daynight:gradient:digits:daydate:announce") != std::string::npos, "%s", sent.c_str());
+  CHECK(sent.find("&hk=skyline:seventies:analog:daynight:gradient:digits:daydate:words:announce") != std::string::npos, "%s", sent.c_str());
 }
 
 static void test_announce_typewriter_animates_its_intro_then_redraws_only_for_the_cursor() {

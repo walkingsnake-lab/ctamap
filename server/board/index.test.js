@@ -32,7 +32,8 @@ after(() => { for (const srv of openServers) { srv.closeAllConnections(); srv.cl
 
 async function serve(opts = {}) {
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-http-')), log: quiet });
-  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), nwsForecast: fakeWeather(null), radar: fakeRadar(), mlb: fakeMlb(), logos: fakeLogos(), ...opts });
+  const radar = opts.radar || fakeRadar();
+  const board = createBoard({ store, token: 'tok', controlPath: 'secret123', log: quiet, weather: fakeWeather(null), nws: fakeWeather(null), nwsForecast: fakeWeather(null), mlb: fakeMlb(), logos: fakeLogos(), ...opts, radar });
   const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url, true);
     if (parsed.pathname.startsWith('/board/')) return board.handle(req, res, parsed);
@@ -45,7 +46,7 @@ async function serve(opts = {}) {
     const r = await fetch(base + p, init);
     return { status: r.status, body: await r.json(), headers: r.headers };
   };
-  return { req, store, port: server.address().port, close: () => new Promise((r) => { openServers.delete(server); server.close(r); }) };
+  return { req, store, radar, port: server.address().port, close: () => new Promise((r) => { openServers.delete(server); server.close(r); }) };
 }
 
 test('ping needs no token', async () => {
@@ -251,7 +252,8 @@ const { normalize } = require('./arrivals');
 const morseJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
 
 function fakeRadar(state = { on: false, frames: [], ft: [], timeBox: [40, 0, 24, 32], split: true }, frames = {}) {
-  return { want: () => state, frame: (mapid, id) => frames[`${mapid}/${id}`] || null };
+  const wants = [];
+  return { wants, want: (mapid, lat, lon, opts = {}) => { wants.push(!!opts.wide); return opts.wide ? { ...state, wide: 1 } : state; }, frame: (mapid, id) => frames[`${mapid}/${id}`] || null };
 }
 
 function fakeWeather(data) {
@@ -391,6 +393,17 @@ test('width: w=128 on update and select makes a wide board (cols 128); no w is 6
   assert.equal(b.cols, 128);
   assert.equal(s.store.get('home').cols, 128);
   assert.equal(s.store.get('home').v, v, 'the width is no settings change');
+  // Transit for the width: Morse runs north-south, so the split (the default).
+  assert.equal(b.view, 'split');
+  assert.deepEqual(b.halves, ['NORTHBOUND', 'SOUTHBOUND']);
+  assert.deepEqual(b.rows.map((r) => [r.h, r.lbl]), [[0, 'HOWARD'], [1, '95TH']]);
+  const J0 = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  await s.req('/board/secret123/api/state?b=home', J0('POST', { wideLayout: 'rows' }));
+  b = (await s.req('/board/update?b=home&w=128', h)).body;
+  assert.deepEqual([b.view, 'halves' in b, b.rows[1].lbl, b.rows[0].t.length], ['dest', false, '95TH/DAN RYAN', 5]);
+  // Off the transit screen, the halves go with the rest of its section.
+  await s.req('/board/secret123/api/state?b=home', J0('POST', { wideLayout: 'split' }));
+  assert.equal('halves' in (await s.req('/board/update?b=home&w=128&s=ticker', h)).body, false);
   // The simulator, the control page's renders and the board list know it.
   assert.equal((await s.req('/board/secret123/api/update?b=home')).body.cols, 128);
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=transit&scale=2`);
@@ -399,6 +412,9 @@ test('width: w=128 on update and select makes a wide board (cols 128); no w is 6
   // Select answers for the width too.
   b = (await s.req('/board/select?b=home&s=weather&w=128', { method: 'POST', ...h })).body;
   assert.equal(b.cols, 128);
+  // Radar: the wide board asks for the 128-wide crops.
+  assert.equal(s.radar.wants[s.radar.wants.length - 1], true);
+  assert.equal((await s.req('/board/update?b=home&w=128&s=weather', h)).body.radar.wide, 1);
   // Back on one panel (an M4, or a board set up again): no w.
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal('cols' in b, false);
@@ -797,76 +813,6 @@ test('update: the 5-day setting sends the next days with the weather screen cond
   await s.close();
 });
 
-test('update: rain bars replace the radar loop while precipitation is due, when the board asks for them', async () => {
-  const now = Math.floor(Date.now() / 1000);
-  const { parse } = require('./weather');
-  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
-  const t0 = Math.ceil(now / 900) * 900;
-  const time = [], precipitation = [];
-  for (let i = 0; i < 12; i++) { time.push(t0 + i * 900); precipitation.push(i >= 2 && i <= 5 ? 0.5 : 0); }
-  // 15-minute data as a source that has it would give (WeatherAPI doesn't).
-  const steps = (p) => time.map((t, i) => ({ t, p: p[i], s: 0 }));
-  const w = { ...parse(raw), q15: steps(precipitation) };
-  const radarOn = { on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
-  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar(radarOn) });
-  let b = (await s.req(FULL)).body.radar;
-  assert.deepEqual(b.frames, ['x']);       // default: the radar loop
-  assert.equal(b.wx.rain, undefined);
-  s.store.update('home', { wxRain: 'bars' });
-  b = (await s.req(FULL)).body.radar;
-  assert.deepEqual(b.frames, []);          // bars replace it
-  assert.deepEqual(b.ft, []);
-  assert.equal(b.wx.rain.snow, 0);
-  assert.equal(b.wx.rain.h.length, 8);
-  assert.equal(b.wx.rain.alt, undefined);
-  assert.match(b.wx.rain.title, /^RAIN IN \d+ MIN$/);
-  // Both: the frames stay, and the board alternates (alt s each).
-  s.store.update('home', { wxRain: 'both', wxRainEvery: 20 });
-  b = (await s.req(FULL)).body.radar;
-  assert.deepEqual(b.frames, ['x']);
-  assert.equal(b.wx.rain.alt, 20);
-  await s.close();
-  // Bars mode never sends the radar loop, even when the forecast is dry but
-  // the radar box has rain.
-  const dry0 = { ...parse(raw), q15: steps(time.map(() => 0)) };
-  const s0 = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(dry0), radar: fakeRadar(radarOn) });
-  s0.store.update('home', { wxRain: 'bars' });
-  b = (await s0.req(FULL)).body.radar;
-  assert.deepEqual(b.frames, []);
-  assert.equal(b.wx.rain, undefined);
-  s0.store.update('home', { wxRain: 'both' });
-  b = (await s0.req(FULL)).body.radar;
-  assert.deepEqual(b.frames, ['x']);       // radar only, nothing to alternate with
-  assert.equal(b.wx.rain, undefined);
-  await s0.close();
-  // Dry forecast: no bars; 'bars' never sends the loop, 'both' and 'radar' do.
-  const dry = { ...parse(raw), q15: steps(precipitation.map(() => 0)) };
-  const s2 = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(dry), radar: fakeRadar(radarOn) });
-  s2.store.update('home', { wxRain: 'bars' });
-  b = (await s2.req(FULL)).body.radar;
-  assert.equal(b.wx.rain, undefined);
-  assert.deepEqual(b.frames, []);
-  s2.store.update('home', { wxRain: 'both' });
-  assert.deepEqual((await s2.req(FULL)).body.radar.frames, ['x']);
-  await s2.close();
-});
-
-test('update: without 15-minute data (WeatherAPI), rain bars settings still get the radar loop', async () => {
-  const now = Math.floor(Date.now() / 1000);
-  const { parse } = require('./weather');
-  const w = parse(JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8')));
-  assert.deepEqual(w.q15, []);
-  const radarOn = { on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
-  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar(radarOn) });
-  for (const wxRain of ['radar', 'bars', 'both']) {
-    s.store.update('home', { wxRain });
-    const b = (await s.req(FULL)).body.radar;
-    assert.deepEqual(b.frames, ['x'], wxRain);
-    assert.equal(b.wx.rain, undefined, wxRain);
-  }
-  await s.close();
-});
-
 test('update: the hourly setting sends the four hourly columns with the weather screen conditions', async () => {
   const now = Math.floor(Date.now() / 1000);
   const { parse } = require('./weather');
@@ -881,46 +827,6 @@ test('update: the hourly setting sends the four hourly columns with the weather 
   assert.deepEqual(hours.map((x) => x.t), [52, 54, 56, 58]);
   assert.ok(hours.every((x) => x.icon === 'cloudy' && /^\d{1,2}[AP]$/.test(x.h)));
   assert.equal((await s.req(FULL)).body.radar.wx.days, undefined);
-  await s.close();
-});
-
-test('simulator test rain bars: forced whatever the setting, expires and clears like the other tests', async () => {
-  const now = Math.floor(Date.now() / 1000);
-  const { parse } = require('./weather');
-  const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
-  const radarOn = { on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false };
-  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(parse(raw)), radar: fakeRadar(radarOn) });
-  const post = async (body) => {
-    const r = await fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    return { status: r.status, body: await r.json() };
-  };
-  assert.deepEqual((await s.req(FULL)).body.radar.frames, ['x']); // dry forecast, rain on radar
-  assert.equal((await post({ bars: 'nope' })).status, 400);
-  const titles = {};
-  for (const kind of ['rain', 'downpour', 'break', 'ends', 'continues', 'snow', 'snow now']) {
-    const r = await post({ bars: kind });
-    assert.equal(r.status, 200);
-    assert.equal(r.body.bars, kind);
-    const rad = (await s.req(FULL)).body.radar;
-    assert.deepEqual(rad.frames, [], `${kind}: bars replace the loop`);
-    assert.equal(rad.wx.rain.h.length, 8);
-    titles[kind] = rad.wx.rain.title;
-  }
-  assert.match(titles.rain, /^RAIN IN \d+ MIN$/);
-  assert.match(titles.break, /^BREAK IN \d+ MIN$/);
-  assert.match(titles.ends, /^ENDS IN \d+ MIN$/);
-  assert.equal(titles.continues, 'RAIN NEXT 2 HRS');
-  assert.match(titles.snow, /^SNOW IN \d+ MIN$/);
-  assert.equal(titles['snow now'], 'SNOW NEXT 2 HRS');
-  assert.ok((await s.req(FULL)).body.radar.wx.rain.snow === 1);
-  // Both: the radar loop stays and the board alternates: bars for alt s after loops radar loops.
-  s.store.update('home', { wxRain: 'both', wxRainEvery: 10, wxRainLoops: 3 });
-  const both = (await s.req(FULL)).body.radar;
-  assert.deepEqual(both.frames, ['x']);
-  assert.deepEqual([both.wx.rain.alt, both.wx.rain.loops], [10, 3]);
-  // Cleared: back to the dry forecast.
-  assert.equal((await post({})).body.bars, null);
-  assert.equal((await s.req(FULL)).body.radar.wx.rain, undefined);
   await s.close();
 });
 
@@ -999,7 +905,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, bars: null, weather: null, left: 0 });
+  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, weather: null, left: 0 });
   let r = await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' } });
   assert.equal(r.status, 200);
   const t = await r.json();
@@ -1060,6 +966,36 @@ test('simulator test weather: a forced state and time of day reach every weather
   assert.equal((await post({ weather: 'snow' })).status, 400);
   await post({});
   assert.equal((await upd()).skyline, null);
+  await s.close();
+});
+
+test('width: wide boards get the week, 24 hours, the next sun time, and notop with the top bar off', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const upd = async (w) => (await s.req(`/board/update?b=home&s=weather&hk=skyline:peek${w ? '&w=128' : ''}`, h)).body;
+  await post({ weather: { kind: 'rain' } });
+  s.store.update('home', { screen: 'weather', wxView: '5day' });
+  let b = await upd(false);
+  assert.equal(b.radar.wx.days.length, 5);
+  assert.equal('week' in b.radar.wx || 'sun' in b.radar.wx || 'notop' in b.radar.wx, false, 'a 64 board gets the 64 fields only');
+  assert.equal('week' in b.pv, false);
+  b = await upd(true);
+  assert.equal(b.radar.wx.days.length, 5, 'the 64 days stay, for firmware without the week');
+  assert.equal(b.radar.wx.week.length, 7);
+  assert.deepEqual(Object.keys(b.radar.wx.week[0]).sort(), ['d', 'hi', 'icon', 'lo']);
+  assert.equal(b.pv.week.length, 7);
+  assert.equal(b.pv.hours24.length, 8, 'the peek chooser gets both');
+  assert.ok(['rise', 'set'].includes(b.radar.wx.sun.k));
+  assert.equal(b.radar.wx.notop, undefined);
+  s.store.update('home', { wxView: 'hourly', wxTop: false });
+  b = await upd(true);
+  assert.equal(b.radar.wx.week, undefined);
+  assert.equal(b.radar.wx.hours24.length, 8);
+  assert.deepEqual(Object.keys(b.radar.wx.hours24[0]).sort(), ['h', 'icon', 'p', 't']);
+  assert.equal(b.radar.wx.notop, 1);
+  await post({});
   await s.close();
 });
 
@@ -1712,6 +1648,61 @@ test('clock screen, analog and day/night faces: their sections, only for firmwar
   s.store.update('home', { screen: 'transit' });
   b = await get(ALL);
   assert.equal(b.dn, undefined, 'other screens leave it out');
+  await s.close();
+});
+
+test('width: wide day/night gets its spot on the 4.5° map and sunrise/sunset; wide Seventies gets the temperature', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const wx = parse(om);
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(wx) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const ALL = 'skyline:seventies:analog:daynight';
+  const get = async (w) => (await s.req(`/board/update?b=home&hk=${ALL}${w ? '&w=128' : ''}`, h)).body;
+  s.store.update('home', { screen: 'clock', clockFace: 'daynight' });
+  let b = await get(false);
+  assert.equal('hw' in b.dn || 'sr' in b.dn || 'ss' in b.dn, false, 'a 64 board gets the 64 fields only');
+  b = await get(true);
+  assert.deepEqual(b.dn.here, [16, 7]);
+  assert.deepEqual(b.dn.hw, [20, 9], 'Morse (42.008 N, 87.666 W) on the 4.5° map');
+  assert.ok(wx.sunrise && wx.sunset);
+  assert.equal(b.dn.sr, wx.sunrise);
+  assert.equal(b.dn.ss, wx.sunset);
+  assert.equal(b.cwx, undefined);
+  s.store.update('home', { clockFace: 'seventies' });
+  b = await get(true);
+  assert.deepEqual(Object.keys(b.cwx).sort(), ['icon', 'temp']);
+  assert.equal(b.dn, undefined);
+  s.store.setCols('home', 64);
+  assert.equal((await get(false)).cwx, undefined, 'Seventies at 64 has no temperature');
+  await s.close();
+});
+
+test('width: the word clock goes only to wide boards that draw it; the analog accent is sent as cacc', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const HK = 'skyline:seventies:analog:daynight:gradient:digits:daydate:words:peek';
+  const get = async (q) => (await s.req(`/board/update?b=home&${q}`, h)).body;
+  s.store.update('home', { screen: 'clock', clockFace: 'words' });
+  assert.equal((await get(`hk=${HK}&w=128`)).cface, 'words');
+  assert.equal((await get(`hk=${HK.replace(':words', '')}&w=128`)).cface, 'skyline', 'firmware without it gets the skyline');
+  let b = await get(`hk=${HK}`);
+  assert.equal(b.cface, 'skyline', 'a 64 board gets the skyline');
+  assert.equal(b.knob.vars[2].includes('words'), false, 'and no WORDS on the knob');
+  b = await get(`hk=${HK}&w=128`);
+  assert.equal(b.knob.vars[2].includes('words'), true);
+  s.store.update('home', { clockFace: 'analog' });
+  b = await get(`hk=${HK}&w=128`);
+  assert.equal(b.cacc, undefined, 'amber is the default: no cacc');
+  assert.equal(b.pv.cacc, undefined);
+  s.store.update('home', { analogAccent: 'mint' });
+  b = await get(`hk=${HK}&w=128`);
+  assert.equal(b.cacc, '#2fe08a');
+  assert.equal(b.pv.cacc, '#2fe08a', 'the peek chooser draws the analog face with it too');
+  s.store.update('home', { clockFace: 'gradient' });
+  assert.equal((await get(`hk=${HK}&w=128`)).cacc, undefined, 'other faces leave it out');
   await s.close();
 });
 

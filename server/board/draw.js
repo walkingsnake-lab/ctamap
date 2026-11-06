@@ -324,7 +324,7 @@
       const up = Math.round(easeInOut(roll.p) * dist);
       const a = [...text], b = [...from];
       const same = fx === x && a.length === b.length && a.every((ch, i) => measure(font, ch) === measure(font, b[i]));
-      f.withClip(0, base + t0, 63, base + t1, () => {
+      f.withClip(0, base + t0, f.w - 1, base + t1, () => {
         if (same) {
           a.forEach((ch, i) => {
             if (ch === b[i]) f.text(font, ch, x, base, color);
@@ -349,8 +349,8 @@
     // `divider`: a line on row 7 (transit).
     function drawHeader(f, name, now, divider, clock = true, color = C.head) {
       f.text('small', name, 0, 6, color);
-      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', 63), 6, color);
-      if (divider) f.fill(0, 7, 64, 1, C.divider);
+      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', f.w - 1), 6, color);
+      if (divider) f.fill(0, 7, f.w, 1, C.divider);
     }
 
     // NWS warning tag style: watches yellow, severe warnings orange, tornado
@@ -373,10 +373,10 @@
         const { glyph, color, blinks } = warnStyle(warn);
         if (blinks && blink) return;
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
-        const x = 63 - (measure('small', glyph) + TAG_GAP + measure('small', word)) + 1;
+        const x = f.w - 1 - (measure('small', glyph) + TAG_GAP + measure('small', word)) + 1;
         f.text('small', word, f.text('small', glyph, x, base, color) + TAG_GAP - 1, base, color);
       } else if (wx.word) {
-        rtext(f, 'small', wx.word, 63, base, C.dimHead);
+        rtext(f, 'small', wx.word, f.w - 1, base, C.dimHead);
       }
     }
 
@@ -386,22 +386,23 @@
     // divider on row 25 (drawn when the header isn't hidden to fit the rows).
     function drawKey(f) {
       f.text('small', 'trains to', 0, 6, C.dimHead);
-      rtext(f, 'small', 'min', 63, 6, C.dimHead);
+      rtext(f, 'small', 'min', f.w - 1, 6, C.dimHead);
     }
-    function drawBand(f, name, now, clock) {
-      f.fill(0, 25, 64, 1, C.divider);
-      f.text('small', name, 0, 32, C.head);
-      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', 63), 32, C.head);
+    function drawBand(f, name, now, clock, color = C.head, divider = true) {
+      if (divider) f.fill(0, 25, f.w, 1, C.divider);
+      f.text('small', name, 0, 32, color);
+      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', f.w - 1), 32, color);
     }
 
     // One time cell, right-aligned at `right`, optionally mid-roll from
     // `roll.from`. Same-length numbers roll only the digits that changed;
     // anything else (length change, to/from DUE) rolls the whole cell.
-    function drawTimeCell(f, text, right, top, color, roll) {
+    // x0-x1: the row's columns (the whole panel, or a half), for the roll's clip.
+    function drawTimeCell(f, text, right, top, color, roll, x0 = 0, x1 = f.w - 1) {
       const base = top + 5;
       if (!roll || roll.from === text || roll.p >= 1) { rtext(f, 'small', text, right, base, color); return; }
       const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
-      f.withClip(0, top, 63, top + 4, () => {
+      f.withClip(x0, top, x1, top + 4, () => {
         const from = roll.from;
         const num = /^\d+m?$/;
         const perDigit = from.length === text.length && num.test(from) && num.test(text);
@@ -425,12 +426,13 @@
     // Lay out one row's times: right-aligned group, 3px gaps tightening to 2px
     // when the row is full. Returns cells (right-to-left order not assumed).
     // steps: the third time a step dimmer than the second (state timeSteps).
-    function layoutCells(r, now, steps) {
+    // x0, right: the row's columns (a wide board's halves; contract "Width").
+    function layoutCells(r, now, steps, x0 = 0, right = 63) {
       const texts = r.t.map((t, k) => timeText(t, now, k === 0));
       const widthAt = (gap) => texts.reduce((w, txt, i) => w + measure('small', txt) + (i ? gap : 0), 0);
-      const gap = 63 - widthAt(TIME_GAP) + 1 - labelEnd(r, 5) - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
+      const gap = right - widthAt(TIME_GAP) + 1 - labelEnd(r, x0 + 5) - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
       const cells = new Array(texts.length);
-      let x = 63;
+      let x = right;
       for (let k = texts.length - 1; k >= 0; k--) {
         const sch = r.s && r.s[k];
         cells[k] = {
@@ -447,11 +449,14 @@
     // The animator (createTransitAnimator) adjusts positions, colors, and alphas.
     function buildTransitView(p, now) {
       if (p.view === 'chrono') return buildChronoView(p, now);
+      if (colsOf(p) === WIDE && (p.view === 'split' || p.view === 'cols2')) return buildHalvesView(p, now);
       const rows = liveRows(p, now);
       const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
+      const right = colsOf(p) - 1;
       return {
         now,
         mode: 'dest',
+        w: colsOf(p),
         header: p.header,
         hdiv: !!p.headerDivider,
         key: !!p.key,
@@ -462,7 +467,43 @@
         stale: p.stale,
         rows: rows.map((r, i) => ({
           key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, top: tops[i], alpha: 1,
-          cells: layoutCells(r, now, p.ts === true),
+          cells: layoutCells(r, now, p.ts === true, 0, right),
+        })),
+      };
+    }
+
+    // A wide board's halves (contract "Width"): `split`, northbound |
+    // southbound with the payload's `halves` labels on top and the station
+    // line at the bottom; `cols2`, two columns under the header. Rows carry
+    // `h`: columns 0-61 (h 0) or 66-127 (h 1), each a 64-style row. Both
+    // halves share row tops, set by the fuller one.
+    const HALVES = [[0, 61], [66, 127]];
+    const SPLIT_TOPS = { 1: [14], 2: [10, 18], 3: [8, 14, 20] };
+    function buildHalvesView(p, now) {
+      const split = p.view === 'split';
+      const rows = liveRows(p, now);
+      const per = [0, 1].map((h) => rows.filter((r) => (r.h ? 1 : 0) === h));
+      const n = Math.max(per[0].length, per[1].length);
+      const tops = split ? SPLIT_TOPS[Math.min(n, 3)] || [] : rowTops(n, !!p.header, !!p.wx, !!p.headerDivider, false);
+      return {
+        now,
+        mode: split ? 'split' : 'cols2',
+        w: WIDE,
+        halves: split ? p.halves || [] : null,
+        header: p.header,
+        hdiv: !split && !!p.headerDivider,
+        key: false,
+        clock: p.hclock !== false,
+        lnc: !!p.lnc,
+        wx: split ? null : p.wx,
+        warn: p.warn,
+        stale: p.stale,
+        rows: per.flatMap((list, h) => list.map((r, i) => {
+          const [x0, right] = HALVES[h];
+          return {
+            key: `${h}:${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, h, x0, right, top: tops[i], alpha: 1,
+            cells: layoutCells(r, now, p.ts === true, x0, right),
+          };
         })),
       };
     }
@@ -476,9 +517,11 @@
       const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
       const seenDest = new Set();
       const seenKey = new Set();
+      const right = colsOf(p) - 1;
       return {
         now,
         mode: 'chrono',
+        w: colsOf(p),
         pitch: tops.length > 1 ? tops[1] - tops[0] : 6,
         header: p.header,
         hdiv: !!p.headerDivider,
@@ -502,7 +545,7 @@
           return {
             key, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: i + 1, top: tops[i], alpha: 1,
             cells: [{
-              id: key, t: r.t[0], text: chronoText(r.t[0], now, due), right: 63, alpha: 1, roll: null,
+              id: key, t: r.t[0], text: chronoText(r.t[0], now, due), right, alpha: 1, roll: null,
               color: sch ? (i ? C.schDim : C.sch) : (i ? C.dimAmber : C.amber),
             }],
           };
@@ -521,11 +564,13 @@
       const top = Math.round(row.top);
       const chrono = row.num != null;
       const line = fade(LINE[row.ln], row.alpha);
+      // A half of a wide board (row.x0, row.right), else the whole panel.
+      const x0 = row.x0 || 0, x1 = row.right != null ? row.right : f.w - 1;
       // Chronological view: the row's position as a digit in the block's
       // exact color, before the block.
       if (chrono) drawTimeCell(f, String(row.num), 2, top, line, row.numRoll);
-      f.fill(chrono ? CHRONO_BLOCK_X : 0, top, 3, 5, line);
-      const lx = chrono ? CHRONO_LABEL_X : 5;
+      f.fill(chrono ? CHRONO_BLOCK_X : x0, top, 3, 5, line);
+      const lx = chrono ? CHRONO_LABEL_X : x0 + 5;
       f.text('small', row.a ? alertText(row) : row.lbl, lx, top + 5, fade(lnc ? LINE[row.ln] : C.label, row.alpha));
       if (row.a) {
         const ix = alertIconX(row, lx);
@@ -535,7 +580,7 @@
       for (const cell of row.cells) {
         const a = cell.alpha * row.alpha;
         if (a <= 0) continue;
-        drawTimeCell(f, cell.text, Math.round(cell.right), top, fade(cell.color, a), cell.roll);
+        drawTimeCell(f, cell.text, Math.round(cell.right), top, fade(cell.color, a), cell.roll, x0, x1);
       }
     }
 
@@ -572,12 +617,14 @@
     // Stale train data (the server hasn't reached Train Tracker for a while):
     // a red line along the top edge, which no screen draws on.
     function drawStale(f, p) {
-      if (p.stale) f.fill(0, 0, 64, 1, C.red);
+      if (p.stale) f.fill(0, 0, f.w, 1, C.red);
     }
 
     function drawTransitView(f, view, blink) {
       if (!view.rows.length) {
         drawOvernight(f, view, view.now);
+      } else if (view.mode === 'split') {
+        drawSplit(f, view);
       } else {
         if (view.key) {
           drawKey(f);
@@ -587,24 +634,40 @@
         }
         const clipTop = view.key ? 6 : view.header ? 7 : 0;
         const clipBottom = view.key && view.header ? 24 : view.wx ? 25 : 31;
-        f.withClip(0, clipTop, 63, clipBottom, () => {
+        f.withClip(0, clipTop, f.w - 1, clipBottom, () => {
           for (const row of view.rows) drawViewRow(f, row, view.lnc);
         });
       }
       if (view.wx) drawWeather(f, view.wx, view.warn, blink);
     }
 
+    // Wide board, northbound | southbound: each half's label on rows 1-5,
+    // its rows, and (header on) the station and clock on rows 27-31 in the
+    // dim header grey. A half with no trains says so.
+    function drawSplit(f, view) {
+      HALVES.forEach(([x0, x1], h) => {
+        f.text('small', (view.halves || [])[h] || '', x0, 6, C.head);
+        if (!view.rows.some((r) => (r.h ? 1 : 0) === h)) f.text('small', 'NO TRAINS', x0 + Math.floor((x1 - x0 + 1 - measure('small', 'NO TRAINS')) / 2), 19, C.noTrains);
+      });
+      if (view.header) drawBand(f, view.header, view.now, view.clock !== false, C.dimHead, false);
+      f.withClip(0, 7, f.w - 1, view.header ? 25 : 31, () => {
+        for (const row of view.rows) drawViewRow(f, row, view.lnc);
+      });
+    }
+
     // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}}),
     // view (a frame from createTransitAnimator; overrides the static layout)
+    // A wide payload's rows draw 128 across; with none (overnight) the 64
+    // layout shows on both panels.
     function renderTransit(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
       let view = o.view;
       if (!view) {
         view = buildTransitView(p, now);
         if (o.rolls) for (const row of view.rows) for (const c of row.cells) if (o.rolls[c.id]) c.roll = o.rolls[c.id];
       }
+      const f = newFrame(view.rows.length && (view.w || 64) === WIDE ? WIDE : 64);
       drawTransitView(f, view, !!o.blink);
       drawStale(f, p);
       return f;
@@ -738,11 +801,11 @@
             }
             // Position numbers roll when a row moves up (2 -> 1).
             if (r.num != null && st.num != null && st.num !== r.num && !isNewRow) st.numRoll = { from: String(st.num), start: t };
-            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: r.num, mode: target.mode });
+            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: r.num, mode: target.mode, h: r.h, x0: r.x0, right: r.right });
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, mode: target.mode, header: target.header, hdiv: target.hdiv, key: target.key, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
+          const view = { now, mode: target.mode, w: target.w, halves: target.halves, header: target.header, hdiv: target.hdiv, key: target.key, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
@@ -764,7 +827,7 @@
             const numP = st.numRoll ? (t - st.numRoll.start) / ROLL_MS : 1;
             if (numP >= 1) st.numRoll = null;
             view.rows.push({
-              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, al: st.al, top: st.shownTop, alpha, cells,
+              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, al: st.al, h: st.h, x0: st.x0, right: st.right, top: st.shownTop, alpha, cells,
               num: st.num, numRoll: st.numRoll ? { from: st.numRoll.from, p: numP } : null,
             });
           }
@@ -801,13 +864,48 @@
       }
     }
 
+    // Wide board (contract "Width"): the CTA platform sign's row. The row
+    // number in the grey index column (the alert circle on a line with a
+    // major alert), the band in the line color to the right edge, the full
+    // destination, the time right-aligned 3 px clear of the status icon:
+    // TICKER_ICONS live (tracked) or sch (schedule-based, `s`), 7 x 7 at
+    // columns 120-126, rows 2-8 of the band.
+    const TICKER_ICON_X = 120, TICKER_TIME_RIGHT = 116;
+    const TICKER_ICONS = {
+      live: ['####...', '....#..', '###..#.', '...#..#', '##..#.#', '..#.#.#', '#.#.#.#'],
+      sch: ['..###..', '.#...#.', '#..#..#', '#..##.#', '#.....#', '.#...#.', '..###..'],
+    };
+    function drawTickerItemWide(f, it, idx, top, now, due, fill) {
+      const base = top + 9;
+      f.fill(0, top, 5, 12, C.index);
+      f.fill(5, top, f.w - 5, 12, scaleColor(LINE[it.ln], fill));
+      if (it.a) {
+        f.text('small', s(G.ALERT_DISC), 0, base, C.red);
+        f.text('small', s(G.ALERT_MARK), 0, base, C.white);
+      } else {
+        f.text('small', String(idx), 1, base, C.label);
+      }
+      f.text('5x7', it.d, 7, base, C.white);
+      const min = minutesUntil(it.t, now);
+      if (min <= 1 && due) {
+        rtext(f, '5x7', 'Due', TICKER_TIME_RIGHT, base, C.white);
+      } else {
+        const mw = measure('5x7', s(G.MIN));
+        f.text('5x7', s(G.MIN), TICKER_TIME_RIGHT - mw + 1, base, C.white);
+        rtext(f, '5x7', String(min <= 1 ? 2 : min), TICKER_TIME_RIGHT - mw - 2, base, C.white);
+      }
+      TICKER_ICONS[it.s ? 'sch' : 'live'].forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(TICKER_ICON_X + i, top + 2 + j, 1, 1, C.white); }));
+    }
+
     const tickerPages = (p, now) => Math.max(1, Math.ceil(liveTicker(p, now).length / 2));
 
     // opts: now, page, slide (0..1 progress of the slide to the next page)
     function renderTicker(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
+      const wide = colsOf(p) === WIDE;
+      const f = newFrame(wide ? WIDE : 64);
+      const item = wide ? drawTickerItemWide : drawTickerItem;
       // The ticker's header stays when the transit header is hidden to fit.
       const th = p.tickerHeader !== undefined ? p.tickerHeader : p.header;
       if (th) drawHeader(f, th, now, false, p.hclock !== false);
@@ -826,10 +924,10 @@
       const drawPage = (pg, shift) => {
         items.slice(pg * 2, pg * 2 + 2).forEach((it, i) => {
           const n = pg * 2 + i;
-          drawTickerItem(f, it, n + 1, 7 + i * 13 + shift, now, firstOf.get(`${it.ln}:${it.d}`) === n, fill);
+          item(f, it, n + 1, 7 + i * 13 + shift, now, firstOf.get(`${it.ln}:${it.d}`) === n, fill);
         });
       };
-      f.withClip(0, 7, 63, 31, () => {
+      f.withClip(0, 7, f.w - 1, 31, () => {
         drawPage(page, -offset);
         if (offset > 0 && pages > 1) drawPage((page + 1) % pages, 26 - offset);
       });
@@ -876,7 +974,6 @@
     // 25-29 (the first on the 5-day's weekday row).
     // Mockup: docs/board/mockups/weather/readout/pick.png.
     const WX_BLUE = '#1e90ff';
-    const WX_DROP = ['.#.', '###', '###', '.#.'];
     // Condition word colors by icon; anything else is label white.
     const SKY_COLOR = { rain: '#4aa0ff', ice: '#4aa0ff', snow: '#c8e8ff', tsnow: '#c8e8ff', sun: '#ffc800', moon: '#ffe47a' };
     // Temperature shadow (optional): 1px down-right at 20%, its color blended
@@ -957,7 +1054,7 @@
     function drawDayTemp(f, str, cx, base, color) {
       drawTempText(f, str, cx - Math.floor(tempWidth(str) / 2), base, color);
     }
-    // Today on rows 0-7, shared by the 5-day layout and the rain bars.
+    // Today on rows 0-7, shared by the 5-day and hourly layouts.
     // top: {shadow: the board's temperature shadow setting, warn: the NWS
     // watch/warning, blink: the blink phase}. The warning takes over the
     // high/low line: glyph + WATCH / WARN in its color, right-aligned to x62;
@@ -1027,37 +1124,131 @@
       });
     }
 
-    // ---- rain bars (wxRain 'bars'; mockup docs/board/mockups/weather/rain-states) ----
-    // The weather screen while precipitation is falling or due in the next 2
-    // hours (wx.rain). The top bar, then the title centered on rows 10-14
-    // (a drop, or a flake for snow, in front of titles that don't say RAIN or SNOW), eight
-    // 15-minute bars (7px wide on an 8px pitch) rising from row 25 up to 10
-    // rows, and `1H` / `2H` under the 4th/5th bar gap and the last bar. An NWS
-    // warning or watch takes the title's place.
-    const RAIN_LEVELS = ['#0a2a78', '#0f48c0', '#1a6cff'];
-    const SNOW_LEVELS = ['#3357a6', '#6e83a6', '#a6a6a6'];
-    const RAIN_TEXT = '#60b0ff', SNOW_TEXT = '#a9c9ff', RAIN_DRY = '#081428', AXIS = '#555555';
-    const FLAKE = ['..#..', '#.#.#', '.###.', '#.#.#', '..#..'];
-    const drawArt = (f, art, x, y, color) => art.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i, y + j, 1, 1, color); }));
-    function drawRainBars(f, wx, top) {
-      const rain = wx.rain;
-      drawTopBar(f, wx, top);
-      const color = rain.snow ? SNOW_TEXT : RAIN_TEXT;
-      // The drop or flake stands in for the word: only on titles that don't
-      // say RAIN or SNOW (ENDS IN..., BREAK IN...), and only if it fits.
-      const art = /RAIN|SNOW/.test(rain.title) ? null : (rain.snow ? FLAKE : WX_DROP);
-      const markW = art && measure('small', rain.title) + art[0].length + 2 <= 64 ? art[0].length + 2 : 0;
-      const x = 32 - Math.floor((measure('small', rain.title) + markW) / 2);
-      // The text's rows are 9-13; the 5px flake matches them, the 4px drop sits on the bottom.
-      if (markW) drawArt(f, art, x, rain.snow ? 9 : 10, rain.snow ? color : WX_BLUE);
-      f.text('small', rain.title, x + markW, 14, color);
-      const levels = rain.snow ? SNOW_LEVELS : RAIN_LEVELS;
-      rain.h.slice(0, 8).forEach((h, i) => {
-        if (!h) f.fill(i * 8, 25, 7, 1, RAIN_DRY);
-        else f.fill(i * 8, 26 - h, 7, h, levels[Math.max(1, Math.min(3, rain.l[i])) - 1]);
+    // ---- wide weather layouts (contract "Width"; wide-spec §4) ----
+    // The top bar at 128: the icon at x1, the temperature (5x7, rolling,
+    // optional shadow) at x11, the condition word (Tom Thumb, #8f8f8f) 5 px
+    // after it, and the high and low right-aligned to x126; a watch or
+    // warning (spelled out) takes the high/low's place, blinking for a
+    // tornado warning.
+    const WW = { right: 126, cols7: 18, cols8: 16, pop0: '#3a3a3a', popLow: '#24538c' };
+    function drawTopBarWide(f, wx, top) {
+      const { shadow, warn, blink } = top || {};
+      if (icons.ICONS[wx.icon]) drawIcon(f, wx.icon, FD_ICON_X, 0);
+      if (shadow) {
+        const sh = scaleColor(tempColor(wx.temp, wx.c), 0.2);
+        f.text('small', '°', rollText(f, '5x7', 'wx.top', String(wx.temp), () => FD_TEMP_X + 1, 8, sh), 7, sh);
+      }
+      const x = rollText(f, '5x7', 'wx.top', String(wx.temp), () => FD_TEMP_X, 7, C.label);
+      f.text('small', '°', x, 6, C.label);
+      if (wx.word) f.text('small', wx.word, x + 1 + 5, 7, C.wxText);
+      if (warn) {
+        const ws = warnStyle(warn);
+        if (ws.blinks && blink) return;
+        const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
+        const gx = WW.right - (measure('small', ws.glyph) + TAG_GAP + measure('small', word)) + 1;
+        f.text('small', word, f.text('small', ws.glyph, gx, 7, ws.color) + TAG_GAP - 1, 7, ws.color);
+      } else if (wx.hi != null && wx.lo != null) {
+        const parts = [[s(G.UP), FD_LETTER, false], [String(wx.hi), FD_NUM, true], [' ' + s(G.DOWN), FD_LETTER, false], [String(wx.lo), FD_NUM, true]];
+        let hx = WW.right - parts.reduce((w, [t, , n]) => w + (n ? tempWidth(t) : measure('small', t)) + 1, -1) + 1;
+        for (const [t, c, n] of parts) hx = n ? drawTempText(f, t, hx, 7, c) : f.text('small', t, hx, 7, c);
+      }
+    }
+    // A temperature and its degree sign (Tom Thumb), centered at cx.
+    function drawDegTemp(f, t, cx, base, color) {
+      const str = String(t), w = tempWidth(str) + 1 + measure('small', '°');
+      f.text('small', '°', drawTempText(f, str, cx - Math.floor(w / 2), base, color), base, color);
+    }
+    // 7-day: today and the six days after it (wx.week) in seven 17 px
+    // columns from x1 (centers 9, 27, ... 117), #262626 dividers on columns
+    // 18, 36, ... 108: weekday (today white, the rest grey), icon, high in
+    // its temperature color. With the top bar (rows 0-7): weekday baseline
+    // 15, icon rows 17-24, high baseline 31, dividers rows 10-31. Without
+    // (wx.notop): weekday baseline 6, icon rows 8-15, high baseline 23, the
+    // low at 60% on baseline 30, dividers full height.
+    function drawWeek(f, wx, top) {
+      const bar = !wx.notop;
+      if (bar) drawTopBarWide(f, wx, top);
+      const y0 = bar ? 10 : 0, [dB, iY, hB] = bar ? [15, 17, 31] : [6, 8, 23];
+      for (let i = 1; i < 7; i++) f.fill(i * WW.cols7, y0, 1, 32 - y0, C.divider);
+      wx.week.slice(0, 7).forEach((d, i) => {
+        const cx = i * WW.cols7 + 9;
+        ctext(f, 'small', d.d, cx, dB, i === 0 ? C.label : C.grey);
+        if (icons.ICONS[d.icon]) drawIcon(f, d.icon, cx - 4, iY);
+        drawDegTemp(f, d.hi, cx, hB, tempColor(d.hi, wx.c));
+        if (!bar && d.lo != null) drawDegTemp(f, d.lo, cx, 30, scaleColor(tempColor(d.lo, wx.c), 0.6));
       });
-      ctext(f, 'small', '1H', 31, 31, AXIS);
-      rtext(f, 'small', '2H', 62, 31, AXIS);
+    }
+    // 24 hours: eight 16 px columns (centers 7, 23, ... 119; dividers on
+    // columns 15, 31, ... 111) for the hours divisible by 3 ahead
+    // (wx.hours24): time label (grey), icon, temperature. With the top bar:
+    // label baseline 15, icon rows 17-24, temperature baseline 31, dividers
+    // rows 10-31. Without: label baseline 6, icon rows 8-15, temperature
+    // baseline 23, and the rain chance on baseline 30 (#3a3a3a at 0%,
+    // #24538c under 20%, #1e90ff from 20%).
+    function drawDayHours(f, wx, top) {
+      const bar = !wx.notop;
+      if (bar) drawTopBarWide(f, wx, top);
+      const y0 = bar ? 10 : 0, [lB, iY, tB] = bar ? [15, 17, 31] : [6, 8, 23];
+      for (let i = 1; i < 8; i++) f.fill(i * WW.cols8 - 1, y0, 1, 32 - y0, C.divider);
+      wx.hours24.slice(0, 8).forEach((h, i) => {
+        const cx = i * WW.cols8 + 7;
+        ctext(f, 'small', h.h, cx, lB, C.grey);
+        if (icons.ICONS[h.icon]) drawIcon(f, h.icon, cx - 4, iY);
+        drawDegTemp(f, h.t, cx, tB, tempColor(h.t, wx.c));
+        if (!bar && h.p != null) drawDayTemp(f, `${h.p}%`, cx, 30, h.p <= 0 ? WW.pop0 : h.p < 20 ? WW.popLow : WX_BLUE);  // 100% condensed like a temperature
+      });
+    }
+    // Current conditions at 128 (first pass, mockup w128/now.png): on the
+    // left the icon at twice its size (x1, rows 0-15), the temperature in
+    // the clock digits (x19, rows 3-12) with a small degree sign, the high
+    // and low (or a watch or warning) on baseline 25, and the date (#555555)
+    // on baseline 31; on the right (x58-127) the readout with dot leaders:
+    // SKY, FEELS, WIND, RAIN (while `rl`), and the next SUNRISE or SUNSET
+    // (wx.sun: {k: 'rise' | 'set', t}).
+    const CONW = { x0: 58, lines5: [6, 12, 18, 24, 30], lines4: [7, 15, 23, 31], rise: '#ffc23a', set: '#ff7414' };
+    function drawIcon2x(f, name, x, y) {
+      icons.ICONS[name].forEach((row, j) => [...row].forEach((c, i) => { if (c !== '.') f.fill(x + i * 2, y + j * 2, 2, 2, icons.PALETTE[c]); }));
+    }
+    function drawConditionsWide(f, p, wx, top) {
+      const { shadow, warn, blink } = top || {};
+      if (icons.ICONS[wx.icon]) drawIcon2x(f, wx.icon, 1, 0);
+      const temp = String(wx.temp);
+      if (shadow) {
+        const sh = scaleColor(tempColor(wx.temp, wx.c), 0.2);
+        f.text('small', '°', rollText(f, 'clock', 'wx.temp', temp, () => 20, 14, sh) + 1, 7, sh);
+      }
+      const tx = rollText(f, 'clock', 'wx.temp', temp, () => 19, 13, C.label);
+      f.text('small', '°', tx, 6, C.label);
+      if (warn) {
+        const ws = warnStyle(warn);
+        if (!(ws.blinks && blink)) {
+          const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
+          f.text('small', word, f.text('small', ws.glyph, 0, 25, ws.color) + TAG_GAP - 1, 25, ws.color);
+        }
+      } else if (wx.hi != null && wx.lo != null) {
+        let hx = f.text('small', s(G.UP), 0, 25, FD_LETTER) + 1;
+        hx = drawTempText(f, String(wx.hi), hx, 25, FD_NUM) + 3;
+        hx = f.text('small', s(G.DOWN), hx, 25, FD_LETTER) + 1;
+        drawTempText(f, String(wx.lo), hx, 25, FD_NUM);
+      }
+      const now = p.now != null ? p.now : 0, t = localDate(now, p.tzo);
+      f.text('small', `${DAY_NAMES[t.wd].slice(0, 3)} ${MONTHS[t.m - 1]} ${t.d}`, 0, 31, C.dimHead);
+      const lines = [['SKY', null, wx.word || '', SKY_COLOR[wx.icon] || C.label]];
+      if (wx.feels != null) lines.push(['FEELS', 'wx.feels', `${wx.feels}°`, tempColor(wx.feels, wx.c, TEXT_TEMP_STOPS)]);
+      if (wx.wind) lines.push(['WIND', null, wx.wind === 'CALM' ? 'CALM' : `${wx.wind} MPH`, C.label]);
+      if (wx.rl && wx.pop != null) lines.push(['RAIN', 'wx.pop', `${wx.pop}%`, WX_BLUE]);
+      if (wx.sun) {
+        const d = localDate(wx.sun.t, p.tzo);
+        lines.push([wx.sun.k === 'rise' ? 'SUNRISE' : 'SUNSET', null, `${d.h % 12 || 12}:${String(d.min).padStart(2, '0')} ${d.h < 12 ? 'AM' : 'PM'}`, wx.sun.k === 'rise' ? CONW.rise : CONW.set]);
+      }
+      const bases = lines.length === 5 ? CONW.lines5 : CONW.lines4;
+      lines.slice(0, 5).forEach(([label, name, value, color], i) => {
+        const base = bases[i], lx = f.text('small', label, CONW.x0, base, C.head);
+        const vx = WIDE - measure('small', value);
+        for (let x = lx + 1 + ((lx + 1) % 2 ? 0 : 1); x < vx - 2; x += 2) f.fill(x, base - 1, 1, 1, C.divider);
+        if (name) rollText(f, 'small', name, value, rightAt('small', WIDE - 1), base, color);
+        else f.text('small', value, vx, base, color);
+      });
     }
 
     // The radar loop: with every frame on hand, step through them in time
@@ -1085,17 +1276,6 @@
     // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
     // The weather screen: the radar loop while there are frames (rain in the
     // box), current conditions (or the 5-day layout) otherwise.
-    // The rain turns (rain.loops, rain.alt): the radar loop plays `loops` full
-    // cycles from its start (cycle as radarLoopIdx() counts it, the hold
-    // included), then the bars show for alt s, then the loop starts again.
-    // n: frames in the loop; t: ms since the loop started. Mirrors
-    // rain_bars_turn() in draw.py.
-    function rainBarsTurn(rn, n, tm, t) {
-      if (!rn || !rn.h || !rn.alt || !rn.loops || !n) return false;
-      const cycle = Math.max(1, n - 1) * tm.radarFrame + tm.radarHold;
-      const loopMs = rn.loops * cycle;
-      return t % (loopMs + rn.alt * 1000) >= loopMs;
-    }
     function renderWeather(p, opts) {
       const o = opts || {};
       const r = p.radar || {};
@@ -1106,27 +1286,29 @@
       const idx = !ids.length ? -1 : o.peek ? newestOnHand() : o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
       const f = newFrame();
       // No frames (no rain in the box, or none processed yet), or none
-      // downloaded yet: the weather screen.
-      // Rain bars when sent (alternating with the radar loop while the
-      // payload says so: rain.alt s each, epoch-aligned, bars on the odd
-      // turns).
-      const rn = r.wx && r.wx.rain;
-      // t defaults to the epoch clock (the simulator's stills); the board
-      // passes ms since its loop started.
-      const loopT = o.t != null ? o.t : (o.now != null ? o.now : p.now) * 1000;
-      const barsTurn = rainBarsTurn(rn, ids.length, timing(p), loopT);
+      // downloaded yet: the weather screen. (The rain bars were cut, Nov
+      // 2026: a payload's wx.rain is ignored.)
       // A peek never falls back for frames still downloading: it shows the
       // empty radar, its frame indicator filling in as they land.
-      if (((!ids.length || (!o.peek && o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
+      if ((!ids.length || (!o.peek && o.frames && !radarOnHand(ids, o.frames))) && r.wx) {
         // The forecast layouts' top bar carries a warning on its high/low line.
         const top = { shadow: !!r.tempShadow, warn: p.warn, blink: o.blink };
-        if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, top);
-        else if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
+        // Wide (contract "Width"): 24 hours, the week, or the wide
+        // conditions; hours or days without the wide data (WeatherAPI only)
+        // show the 64 layout on both panels.
+        if (colsOf(p) === WIDE) {
+          const wx = r.wx, g = newFrame(WIDE);
+          if (wx.hours24 && wx.hours24.length >= 8) { drawDayHours(g, wx, top); return g; }
+          if (wx.week && wx.week.length >= 7) { drawWeek(g, wx, top); return g; }
+          if (!(wx.hours && wx.hours.length) && !(wx.days && wx.days.length)) { drawConditionsWide(g, { ...p, now: o.now != null ? o.now : p.now }, wx, top); return g; }
+        }
+        if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
         else if (r.wx.days && r.wx.days.length) drawFiveDay(f, r.wx, top);
         else drawConditions(f, r.wx, top);
         return f;
       }
       const bytes = idx >= 0 && o.frames ? o.frames[ids[idx]] : null;
+      if (r.wide && colsOf(p) === WIDE) return renderRadarWide(p, r, ids, idx, bytes, o);
       if (bytes) {
         const rc = radarFor(r.rb);
         for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
@@ -1245,6 +1427,75 @@
       rollTextWith(f, '5x7', cr, clock, cx, top + 11, nowClock ? C.clock : C.radarTime);
       f.text('small', ap, apX, top + 18, C.radarAmpm);
       if (ws && !hideWarn) f.text('small', ws.glyph, wX, top + 18, ws.color);
+      return f;
+    }
+
+    // Wide board (contract "Width"; wide-spec §5): radar.wide frames are 128
+    // x 32, the station at x69. The time on a black chip in the bottom-right
+    // corner, rows 26-31, at least 27 wide (columns 101-127, so it keeps its
+    // size as the loop's times change): the time (or radar.clock 'age': how
+    // long ago) in Tom Thumb, label white, then AM/PM in #8f8f8f at the right
+    // edge. A watch or warning on a black chip at the bottom left, in place
+    // of the temperature (radar.cond, or the time off) when that's on. The
+    // frame dots: one 1 px dot per frame, 1 px apart from x0, the shown frame
+    // amber, the others #4a4a4a, the gaps between them black; on row 31, or
+    // with a left chip on row 25, just above it. Clock 'none': no time.
+    // Chips: rows 26-31, 1 px of black above the text.
+    const WIDE_CHIP_X = 101, WIDE_CHIP_Y = 26, WIDE_DOT = '#4a4a4a';
+    function renderRadarWide(p, r, ids, idx, bytes, o) {
+      const f = newFrame(WIDE);
+      if (bytes) {
+        const rc = radarFor(r.rb);
+        for (let y = 0; y < 32; y++) for (let x = 0; x < WIDE; x++) {
+          const c = rc[bytes[y * WIDE + x]];
+          if (c) f.fill(x, y, 1, 1, c);
+        }
+      }
+      const nowS = o.now != null ? o.now : p.now;
+      const nowClock = r.clock === 'now';
+      const t = !nowClock && idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : nowS;
+      const ws = p.warn ? warnStyle(p.warn) : null;
+      const hideWarn = ws && ws.blinks && o.blink;
+      const showTime = r.showTime !== false && r.clock !== 'none';
+      // The time chip: AM/PM at the right edge, the time before it.
+      if (showTime && r.clock === 'age') {
+        const ft = idx >= 0 && r.ft && r.ft[idx] != null ? r.ft[idx] : nowS;
+        const age = `${Math.max(0, Math.floor((nowS - ft + 30) / 60))}m`;
+        f.fill(WIDE_CHIP_X, WIDE_CHIP_Y, WIDE - WIDE_CHIP_X, 32 - WIDE_CHIP_Y, '#000000');
+        f.text('small', age, WIDE - measure('small', age), 32, C.label);
+      } else if (showTime) {
+        const ap = ampmText(t), clock = clockText(t);
+        const apX = WIDE - measure('small', ap);
+        const right = apX - 3;  // 2 px between the time and AM/PM
+        const cr = nowClock ? takeRoll('rad.clock', clock) : null;
+        let x = right - measure('small', clock) + 1;
+        if (cr) x = Math.min(x, right - measure('small', cr.from) + 1);
+        const x0 = Math.min(WIDE_CHIP_X, x - 1);
+        f.fill(x0, WIDE_CHIP_Y, WIDE - x0, 32 - WIDE_CHIP_Y, '#000000');
+        rollTextWith(f, 'small', cr, clock, rightAt('small', right), 32, C.label);
+        f.text('small', ap, apX, 32, C.radarAmpm);
+      }
+      // The bottom-left chip: a watch or warning (in place of the
+      // temperature), else the temperature; the frame dots above it.
+      let chip = false;
+      if (ws) {
+        const word = p.warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
+        const tw = measure('small', ws.glyph) + TAG_GAP + measure('small', word);
+        f.fill(0, WIDE_CHIP_Y, tw + 1, 32 - WIDE_CHIP_Y, '#000000');
+        if (!hideWarn) {
+          const gx = f.text('small', ws.glyph, 0, 32, ws.color);
+          f.text('small', word, gx + TAG_GAP - 1, 32, ws.color);
+        }
+        chip = true;
+      } else if (r.temp != null && (r.cond || r.showTime === false)) {
+        const tt = `${r.temp}°`, tw = measure('small', tt);
+        f.fill(0, WIDE_CHIP_Y, tw + 1, 32 - WIDE_CHIP_Y, '#000000');
+        f.text('small', tt, 0, 32, C.label);
+        chip = true;
+      }
+      const dy = chip ? WIDE_CHIP_Y - 1 : 31;
+      if (ids.length) f.fill(0, dy, ids.length * 2 - 1, 1, '#000000');
+      ids.forEach((id, i) => f.fill(i * 2, dy, 1, 1, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : WIDE_DOT));
       return f;
     }
 
@@ -1661,29 +1912,74 @@
         let wx = r.wx || null;
         if (wx) {
           wx = { ...wx };
-          delete wx.days; delete wx.hours;
-          if (v === 'radar') delete wx.rain;
+          delete wx.days; delete wx.hours; delete wx.week; delete wx.hours24;
           if (v === '5day' && pv.days) wx.days = pv.days;
           if (v === 'hourly' && pv.hours) wx.hours = pv.hours;
+          if (v === '5day' && pv.week) wx.week = pv.week;
+          if (v === 'hourly' && pv.hours24) wx.hours24 = pv.hours24;
         }
         return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }
-      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
+      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
       return { p, screen: 'cycle' };
     }
+    // On a wide board every view is 128 across (64-wide ones on both panels),
+    // and the bar is centered on the whole width.
     function drawPeekView(p, k, vi, o) {
       const { p: q, screen } = peekView(p, k, vi);
-      if (screen === 'cycle') { const f = newFrame(); drawCycleArt(f); return f; }
+      if (screen === 'cycle') { const f = newFrame(); drawCycleArt(f); return widen(f, colsOf(p)); }
       const oo = { ...o, peek: true, screen };
-      return screen === 'ticker' ? renderTicker(q, oo) : screen === 'weather' ? renderWeather(q, oo) : screen === 'clock' ? renderClock(q, oo)
-        : screen === 'announce' ? renderAnnounce(q, oo) : renderTransit(q, oo);
+      return widen(screen === 'ticker' ? renderTicker(q, oo) : screen === 'weather' ? renderWeather(q, oo) : screen === 'clock' ? renderClock(q, oo)
+        : screen === 'announce' ? renderAnnounce(q, oo) : renderTransit(q, oo), colsOf(p));
+    }
+    // Wide board (wide-spec §9, the variant strip): on the black band, the
+    // chosen category's icon at x2 (rows 23-29) in its color with its
+    // underline on row 31; its variants as words (Tom Thumb, baseline 29)
+    // from x14, 5 px apart, the chosen one white and the rest #4a4a4a, kept
+    // in columns 14-123 (when they don't all fit, the strip shifts left by
+    // whole words until the chosen one shows whole); a category without variants
+    // shows its name in its color. The ring: one dot per category on
+    // column 126, rows 22, 24, ..., in its color, the chosen full and the
+    // rest at 30%.
+    const PEEK_WIDE = { x0: 14, right: 123, gap: 5, off: '#4a4a4a', dotX: 126 };
+    const PEEK_NAMES = { transit: 'ROWS', rows: 'ROWS', ticker: 'TICKER', now: 'NOW', '5day': '5-DAY', hourly: 'HOURLY', radar: 'RADAR', skyline: 'SKY', seventies: '70S',
+      analog: 'DIAL', daynight: 'MAP', gradient: 'GRAD', digits: 'BIG', daydate: 'DATE', words: 'WORDS' };
+    const PEEK_CATS = { transit: 'TRANSIT', weather: 'WEATHER', clock: 'CLOCK', announce: 'ANNOUNCE', cycle: 'CYCLE' };
+    function drawPeekBarWide(f, p, k, vi, drop) {
+      const kn = p.knob || {}, ring = kn.ring || [], cat = ring[k];
+      const sh = (y) => y + drop;
+      const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
+      if (rows) rows.forEach((r, j) => [...r].forEach((ch, x) => { if (ch === '#') f.fill(2 + x, sh(23 + j), 1, 1, col); }));
+      f.fill(2, sh(31), 7, 1, col);
+      const vars = (kn.vars || [])[k] || [];
+      if (vars.length > 1) {
+        // The week's name follows what the 7-day view shows (7-DAY with the week).
+        const words = vars.map((v) => (v === '5day' && p.pv && p.pv.week ? '7-DAY' : PEEK_NAMES[v] || String(v).toUpperCase()));
+        const xs = [];
+        let x = PEEK_WIDE.x0;
+        for (const w of words) { xs.push(x); x += measure('small', w) + 1 + PEEK_WIDE.gap; }
+        // Shifted by whole words, so the first one shown is whole.
+        const end = xs[vi] + measure('small', words[vi]) - 1;
+        let shift = 0;
+        for (let j = 0; end - shift > PEEK_WIDE.right && j < vi; j++) shift = xs[j + 1] - PEEK_WIDE.x0;
+        f.withClip(PEEK_WIDE.x0, 0, PEEK_WIDE.right, 31, () => {
+          words.forEach((w, i) => f.text('small', w, xs[i] - shift, sh(29), i === vi ? C.white : PEEK_WIDE.off));
+        });
+      } else {
+        f.text('small', PEEK_CATS[cat] || String(cat || '').toUpperCase(), PEEK_WIDE.x0, sh(29), col);
+      }
+      ring.forEach((c, i) => {
+        const dc = peekColor(p, c);
+        f.fill(PEEK_WIDE.dotX, sh(22 + i * 2), 1, 1, i === k ? dc : scaleColor(dc, 0.3));
+      });
     }
     function drawPeekBar(f, p, k, vi, drop) {
       const kn = p.knob || {}, ring = kn.ring || [], n = ring.length;
       const sh = (y) => y + drop;
-      f.fill(0, sh(PEEK.top), 64, PEEK.band, '#000000');
-      const x0 = Math.floor(32 - (n * PEEK.pitch - 5) / 2);
+      f.fill(0, sh(PEEK.top), f.w, PEEK.band, '#000000');
+      if (f.w === WIDE) { drawPeekBarWide(f, p, k, vi, drop); return; }
+      const x0 = Math.floor(f.w / 2 - (n * PEEK.pitch - 5) / 2);
       ring.forEach((cat, i) => {
         const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
         if (!rows) return;
@@ -1695,8 +1991,8 @@
       const nv = ((kn.vars || [])[k] || []).length;
       if (nv > 1) for (let j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, j === vi ? col : C.indicator);
     }
-    // Slide offset in px (0..64 across, 0..32 down) at t ms.
-    const peekShift = (axis, t) => Math.round(peekEase(t / (axis === 'x' ? PEEK.xMs : PEEK.yMs)) * (axis === 'x' ? 64 : 32));
+    // Slide offset in px (0..w across, 0..32 down) at t ms.
+    const peekShift = (axis, t, w = 64) => Math.round(peekEase(t / (axis === 'x' ? PEEK.xMs : PEEK.yMs)) * (axis === 'x' ? w : 32));
     // Rows the bar has dropped at t ms: rising (up) from gone to 0, or falling.
     const peekDrop = (up, t) => Math.round((up ? 1 - peekEase(t / PEEK.upMs) : peekEase(t / PEEK.downMs)) * PEEK.band);
     function renderPeek(p, opts) {
@@ -1705,14 +2001,14 @@
       const f = drawPeekView(p, k, vi, o);
       const sl = pk.slide;
       if (sl && sl.t != null) {
-        const axis = sl.axis === 'y' ? 'y' : 'x', dir = sl.dir < 0 ? -1 : 1, sh = peekShift(axis, sl.t);
-        if (sh < (axis === 'x' ? 64 : 32)) {
+        const W = f.w, axis = sl.axis === 'y' ? 'y' : 'x', dir = sl.dir < 0 ? -1 : 1, sh = peekShift(axis, sl.t, W);
+        if (sh < (axis === 'x' ? W : 32)) {
           const from = drawPeekView(p, sl.k || 0, sl.vi || 0, o), cur = f.px.slice();
-          for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+          for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) {
             let src = from.px, sx = x, sy = y;
-            if (axis === 'x') { sx = x + dir * sh; if (sx < 0 || sx >= 64) { src = cur; sx = ((sx % 64) + 64) % 64; } }
+            if (axis === 'x') { sx = x + dir * sh; if (sx < 0 || sx >= W) { src = cur; sx = ((sx % W) + W) % W; } }
             else { sy = y + dir * sh; if (sy < 0 || sy >= 32) { src = cur; sy = ((sy % 32) + 32) % 32; } }
-            const i = (y * 64 + x) * 3, j = (sy * 64 + sx) * 3;
+            const i = (y * W + x) * 3, j = (sy * W + sx) * 3;
             f.px[i] = src[j]; f.px[i + 1] = src[j + 1]; f.px[i + 2] = src[j + 2];
           }
         }
@@ -1728,44 +2024,51 @@
     // atan2 or random) so firmware ports can match it pixel for pixel.
     // `o.ms` is the animation clock, epoch milliseconds (boats and lightning
     // are scheduled on the wall clock); it defaults to now.
-    const SKY = (() => {
-      const W = 64, SHORE = 25, CX = 32, CY = 17, R = 6, SPREAD = 5;
+    // The scene, built once per width: the 64 scene, and the wide board's
+    // (wide-spec §6, panorama) with the same scene 32 px in (O) and generic
+    // towers either side (cfg.extra: [x, width, rows, role]; cfg.ants; twice
+    // the stars).
+    function buildSky(cfg) {
+      const W = cfg.W, O = cfg.O, SHORE = 25, CX = 32 + O, CY = 17, R = 6, SPREAD = 5;
       // 0 sky, 1 background mass, 2 tower (only towers and mass right of the
       // wheel get windows).
-      const role = new Uint8Array(64 * 32);
+      const role = new Uint8Array(W * 32);
       const rect = (x, w, t, r) => { for (let y = Math.max(0, t); y <= SHORE; y++) for (let i = x; i < x + w; i++) if (i >= 0 && i < W) role[y * W + i] = r; };
       const top = (rows) => SHORE + 1 - rows;
       // Background mass: the Loop to the left, Streeterville to the right. [x, width, rows]
       [[0, 4, 7], [8, 3, 9], [19, 3, 8], [22, 3, 10], [28, 3, 7], [36, 3, 6], [39, 4, 9], [43, 3, 11], [46, 4, 8], [50, 3, 10], [57, 4, 9], [61, 3, 7]]
-        .forEach(([x, w, h]) => rect(x, w, top(h), 1));
-      rect(1, 1, top(9), 2); rect(2, 4, top(15), 2); rect(6, 2, top(13), 2); rect(8, 2, top(9), 2);   // Willis, setbacks down to the right
-      rect(11, 4, top(17), 2);                                                                         // Aon
-      rect(15, 5, top(21), 2);                                                                         // St. Regis
-      rect(23, 5, top(10), 2); rect(24, 4, top(13), 2); rect(24, 3, top(16), 2);                       // Trump
-      rect(29, 7, top(15), 2); rect(30, 5, top(17), 2);                                                // Lake Point Tower, 2 rows above the rim
-      { const t = top(17), steps = [4, 6, 8];                                                           // Hancock: 4-6-8 steps around x 53
-        for (let y = t; y <= SHORE; y++) { const w = steps[Math.min(2, Math.floor((y - t) * 3 / (SHORE - t + 1)))]; for (let i = 53 - w / 2; i < 53 + w / 2; i++) role[y * W + i] = 2; } }
+        .forEach(([x, w, h]) => rect(x + O, w, top(h), 1));
+      for (const [x, w, h, r] of cfg.extra) if (r === 1) rect(x, w, top(h), 1);
+      for (const [x, w, h, r] of cfg.extra) if (r === 2) rect(x, w, top(h), 2);
+      rect(1 + O, 1, top(9), 2); rect(2 + O, 4, top(15), 2); rect(6 + O, 2, top(13), 2); rect(8 + O, 2, top(9), 2);   // Willis, setbacks down to the right
+      rect(11 + O, 4, top(17), 2);                                                                                     // Aon
+      rect(15 + O, 5, top(21), 2);                                                                                     // St. Regis
+      rect(23 + O, 5, top(10), 2); rect(24 + O, 4, top(13), 2); rect(24 + O, 3, top(16), 2);                           // Trump
+      rect(29 + O, 7, top(15), 2); rect(30 + O, 5, top(17), 2);                                                        // Lake Point Tower, 2 rows above the rim
+      { const t = top(17), steps = [4, 6, 8];                                                                           // Hancock: 4-6-8 steps around x 53
+        for (let y = t; y <= SHORE; y++) { const w = steps[Math.min(2, Math.floor((y - t) * 3 / (SHORE - t + 1)))]; for (let i = 53 + O - w / 2; i < 53 + O + w / 2; i++) role[y * W + i] = 2; } }
       const isB = (x, y) => x >= 0 && x < W && y >= 0 && y <= SHORE && role[y * W + x] !== 0;
       // Antennas [x, top row, roof row, beacon]: Willis's two, Hancock's twin with beacons.
-      const ants = [[2, top(18), top(15), 0], [4, top(17), top(15), 0], [51, top(22), top(17), 1], [54, top(22), top(17), 1]];
+      const ants = [[2 + O, top(18), top(15), 0], [4 + O, top(17), top(15), 0], [51 + O, top(22), top(17), 1], [54 + O, top(22), top(17), 1],
+        ...cfg.ants.map(([x, t, roof, bc]) => [x, top(t), top(roof), bc])];
       // Window slots: even columns, odd rows, under another building pixel,
       // clear of the pier (x 19-44, rows 19 and below) and the wheel.
       // [x, y, threshold 0-999, bright]
       const wins = [];
       for (let y = 1; y <= SHORE; y++) for (let x = 0; x < W; x++) {
         const r = role[y * W + x];
-        if (!r || (r === 1 && x < 38) || (x >= 19 && x <= 44 && y >= SHORE - 6)) continue;
+        if (!r || (r === 1 && x < 38 + O) || (x >= 19 + O && x <= 44 + O && y >= SHORE - 6)) continue;
         const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
         if (dx * dx + dy * dy < 49 || x % 2 !== 0 || y % 2 !== 1 || !isB(x, y - 1)) continue;
         wins.push([x, y, ih(x, y, 5) % 1000, ih(x, y, 9) % 10 < 3]);
       }
-      // Stars: the first 14 hash positions in the top 14 rows that miss the
+      // Stars: the first 14 (wide: 28) hash positions in the top 14 rows that miss the
       // buildings, the moon's spot, the Hancock antennas and the wheel. [x, y, bright, twinkles, phase 0-999, period ms]
       const stars = [];
-      for (let i = 0; stars.length < 14 && i < 1000; i++) {
+      for (let i = 0; stars.length < cfg.stars && i < cfg.stars * 1000 / 14; i++) {
         const x = ih(i, 1, 3) % W, y = ih(i, 2, 3) % 14;
         const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
-        if (isB(x, y) || (x > 35 && x < 49 && y < 11) || (x >= 50 && x <= 55 && y < 10) || dx * dx + dy * dy < 90.25 || stars.some((s) => s[0] === x && s[1] === y)) continue;
+        if (isB(x, y) || (x > 35 + O && x < 49 + O && y < 11) || (x >= 50 + O && x <= 55 + O && y < 10) || dx * dx + dy * dy < 90.25 || stars.some((s) => s[0] === x && s[1] === y)) continue;
         stars.push([x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 === 1, ih(i, 5, 3) % 1000, [4000, 6000, 12000][stars.length % 3]]);
       }
       // Wheel: hard-edged shapes, a pixel on when at least half covered (6x6
@@ -1795,8 +2098,23 @@
           const pa = dy >= 0 ? (dx >= 0 ? dy / (ax + ay) : 1 + ax / (ax + ay)) : (dx < 0 ? 2 + ay / (ax + ay) : 3 + ax / (ax + ay));
           return [x, y, pa * 90];
         });
-      return { W, SHORE, CX, CY, role, isB, ants, wins, stars, legs, bar, rim };
-    })();
+      return { W, O, SHORE, CX, CY, role, isB, ants, wins, stars, legs, bar, rim };
+    }
+    const SKY = buildSky({ W: 64, O: 0, extra: [], ants: [], stars: 14 });
+    // The wide board's panorama: the 64 scene on columns 32-95 and generic
+    // towers both sides, no step down to the lake (decided Nov 5).
+    const SKYW = buildSky({
+      W: 128, O: 32, stars: 28,
+      extra: [
+        // Left: the South Loop.
+        [0, 5, 6, 1], [5, 4, 8, 1], [10, 3, 5, 1], [13, 5, 7, 1], [18, 4, 9, 1], [22, 3, 6, 1], [25, 4, 8, 1], [29, 3, 6, 1],
+        [2, 3, 11, 2], [7, 3, 16, 2], [14, 3, 13, 2], [20, 4, 10, 2], [26, 3, 12, 2],
+        // Right: more towers to the edge.
+        [96, 4, 8, 1], [100, 5, 10, 1], [105, 4, 7, 1], [109, 5, 9, 1], [114, 4, 8, 1], [118, 5, 10, 1], [123, 5, 8, 1],
+        [97, 3, 13, 2], [102, 4, 15, 2], [107, 3, 11, 2], [111, 4, 16, 2], [116, 3, 12, 2], [120, 4, 14, 2], [125, 3, 12, 2],
+      ],
+      ants: [[8, 19, 16, 0], [112, 19, 16, 0]],  // [x, top rows, roof rows, beacon]
+    });
     // Integer hash (32-bit, wraps the same in JS and C++).
     function ih(a, b, c) {
       let h = (Math.imul(a >>> 0, 0x9E3779B1) ^ Math.imul(b >>> 0, 0x85EBCA77) ^ Math.imul(c >>> 0, 0xC2B2AE3D)) >>> 0;
@@ -1839,11 +2157,11 @@
     }
     // 7 px soft-edged disc centered on (cx, cy), hidden by buildings;
     // `lit(dx, dy)` keeps part of it (the moon's phase).
-    function skyDisc(f, cx, cy, color, lit) {
+    function skyDisc(f, cx, cy, color, lit, K = SKY) {
       const c = 3.5, rgb = hex(color);
       for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
         const X = cx - 3 + x, Y = cy - 3 + y;
-        if (Y < 0 || Y > SKY.SHORE || X < 0 || X >= 64 || SKY.isB(X, Y)) continue;
+        if (Y < 0 || Y > K.SHORE || X < 0 || X >= K.W || K.isB(X, Y)) continue;
         let hit = 0;
         for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
           const dx = x + (i + 0.5) / 8 - c, dy = y + (j + 0.5) / 8 - c;
@@ -1869,9 +2187,40 @@
     // along the bottom that turn up the right edge. Integer geometry only.
     const S70 = { colors: ['#ffc23a', '#ff7414', '#d2361a'], top: 5, base: 16, right: 52, cx: 54, cy: 21, radii: [3, 6, 9] };
     const s70Band = (y) => S70.colors[y < S70.top + 4 ? 0 : y < S70.top + 7 ? 1 : 2];
+    // Wide board (wide-spec §6): the stripes run along the bottom, climb at
+    // columns 62-69 (around a turn at cx1, cy1) and run along the top to the
+    // right edge (around a second turn at cx2, cy2, on the same 2 px bands);
+    // the time on the left, banded as at 64; under the top run the weekday
+    // in full, the date and the temperature (cwx), one stripe color each.
+    const S70W = { cx1: 60, cy1: 21, cx2: 72, cy2: 10, textX: 78 };
+    const ring = (u, v, r) => { const d = u * u + v * v; return d > (2 * r - 2) * (2 * r - 2) && d <= (2 * r + 2) * (2 * r + 2); };
+    function renderSeventiesWide(p, o, now) {
+      const f = newFrame(WIDE);
+      const { cx1, cy1, cx2, cy2, textX } = S70W;
+      S70.radii.forEach((r, i) => {
+        const c = S70.colors[i], r2 = 12 - r;
+        f.fill(0, cy1 + r - 1, cx1, 2, c);
+        f.fill(cx1 + r - 1, cy2, 2, cy1 - cy2 + 1, c);
+        f.fill(cx2, cy2 - r2 - 1, WIDE - cx2, 2, c);
+        for (let y = cy1 + 1; y < 32; y++) for (let x = cx1; x < WIDE; x++) if (ring(2 * (x - cx1) + 1, 2 * (y - cy1) + 1, r)) f.fill(x, y, 1, 1, c);
+        for (let y = 0; y < cy2; y++) for (let x = 0; x < cx2; x++) if (ring(2 * (x - cx2) + 1, 2 * (y - cy2) + 1, r2)) f.fill(x, y, 1, 1, c);
+      });
+      rollText(f, 'vcr', 'svt.clock', clockText(now), (str) => Math.floor((cx1 - 2 - measure('vcr', str)) / 2), S70.base, '#ffffff');
+      for (let y = S70.top; y < S70.base; y++) {
+        const band = hex(s70Band(y));
+        for (let x = 0; x < cx1 - 1; x++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) f.set(x, y, band); }
+      }
+      const t = localDate(now, p.tzo);
+      const day = DAY_NAMES[t.wd];
+      f.text('5x7', day, Math.min(textX, WIDE - measure('5x7', day)), 20, S70.colors[0]);
+      f.text('5x7', `${MONTHS[t.m - 1]} ${t.d}`, textX, 29, S70.colors[1]);
+      if (p.cwx && p.cwx.temp != null) rtext(f, '5x7', `${p.cwx.temp}°`, WIDE - 1, 29, S70.colors[2]);
+      return f;
+    }
     function renderSeventies(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
+      if (colsOf(p) === WIDE) return renderSeventiesWide(p, o, now);
       const f = newFrame();
       const { cx, cy } = S70;
       S70.radii.forEach((r, i) => {
@@ -1902,26 +2251,49 @@
     // Big digits: the time alone, its ink centered, rows 7-23. The colon
     // blinks (off for the second half of each second on the board's clock),
     // except while the time rolls, or always lit with p.steady.
+    // Wide board (wide-spec §6): the 23-row digits (d23, ttyp0 Bold 40),
+    // rows 4-26, centered on all 128 columns.
+    const BDW = { top: 4, base: 27 };
     function renderDigits(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
-      const f = newFrame();
-      const text = clockText(now), xOf = (str) => fdivI(65 - measure('d17', str), 2);
+      const wide = colsOf(p) === WIDE, font = wide ? 'd23' : 'd17', W = wide ? WIDE : 64, g = wide ? BDW : BD;
+      const f = newFrame(W);
+      const text = clockText(now), xOf = (str) => fdivI(W + 1 - measure(font, str), 2);
       const roll = takeRoll('dig.clock', text);
-      rollTextWith(f, 'd17', roll, text, xOf, BD.base, BD.color);
+      rollTextWith(f, font, roll, text, xOf, g.base, BD.color);
       if (!p.steady && !roll && ((ms % 1000) + 1000) % 1000 >= 500) {
         const i = text.indexOf(':');
-        f.fill(xOf(text) + measure('d17', text.slice(0, i)) + 1, BD.top, fonts.d17[58][1], BD.base - BD.top, '#000000');
+        f.fill(xOf(text) + measure(font, text.slice(0, i)) + 1, g.top, fonts[font][58][1], g.base - g.top, '#000000');
       }
       return f;
     }
     // Day/date: the weekday (Tom Thumb, rows 1-5), the time in d13 (rows
     // 9-21) with AM/PM in Tom Thumb two columns after it, bottom-aligned, the
     // pair centered; the date (5x7, rows 24-30). Each line centered.
+    // Wide board (wide-spec §6): the weekday (5x7, #8f8f8f, baseline 14)
+    // over the date (5x7, #e6e6e6, baseline 25), centered on column 22; a
+    // #262626 divider on column 46, rows 4-27; the time in d23 (rows 4-26)
+    // with AM/PM 3 px after it, the pair centered in columns 48-127.
+    const DDW = { cx: 22, dayBase: 14, dateBase: 25, divX: 46, x0: 48, timeBase: 27, divider: '#262626' };
+    function renderDayDateWide(p, now) {
+      const f = newFrame(WIDE);
+      const t = localDate(now, p.tzo);
+      const day = DAY_NAMES[t.wd], date = `${MONTHS[t.m - 1]} ${t.d}`;
+      f.text('5x7', day, DDW.cx - fdivI(measure('5x7', day), 2), DDW.dayBase, DD.label);
+      f.text('5x7', date, DDW.cx - fdivI(measure('5x7', date), 2), DDW.dateBase, DD.color);
+      f.fill(DDW.divX, 4, 1, 24, DDW.divider);
+      const text = clockText(now), ampm = t.h < 12 ? 'AM' : 'PM', aw = measure('small', ampm);
+      const xOf = (str) => DDW.x0 + fdivI(WIDE - DDW.x0 - (measure('d23', str) + 3 + aw), 2);
+      rollText(f, 'd23', 'dd.clock', text, xOf, DDW.timeBase, DD.color);
+      f.text('small', ampm, xOf(text) + measure('d23', text) + 3, DDW.timeBase, DD.ampm);
+      return f;
+    }
     function renderDayDate(p, opts) {
       const o = opts || {};
       const now = Math.floor(o.now != null ? o.now : p.now);
+      if (colsOf(p) === WIDE) return renderDayDateWide(p, now);
       const f = newFrame();
       const t = localDate(now, p.tzo);
       const day = DAY_NAMES[t.wd];
@@ -1994,10 +2366,31 @@
         if (err < 0) err += 2 * y + 1; else { x--; err += 2 * (y - x) + 1; }
       }
     }
+    // Wide board (wide-spec §6): the dial as at 64 (columns 0-33) and this
+    // month's calendar in seven 13 px columns from x37, Sunday first: five
+    // week rows at a 6 px pitch (baselines 6-30), no weekday header; a sixth
+    // week's days go in the first row's empty cells. Weekdays #b8b8b8,
+    // weekends #6a6a6a, today white on an 11 x 7 block: the accent (p.cacc,
+    // else amber) at 40% (amber's is #664600).
+    const CAL = { x0: 37, colW: 13, day: '#b8b8b8', weekend: '#6a6a6a' };
+    const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    function drawCalendar(f, now, tzo, accent) {
+      const t = localDate(now, tzo);
+      const first = now - (t.d - 1) * 86400;
+      const n = t.m === 2 ? (localDate(first + 28 * 86400, tzo).m === 2 ? 29 : 28) : MONTH_DAYS[t.m - 1];
+      const off = ((t.wd - (t.d - 1)) % 7 + 7) % 7;
+      for (let d = 1; d <= n; d++) {
+        const i = off + d - 1, col = i % 7, row = fdivI(i, 7) % 5;
+        const cx = CAL.x0 + col * CAL.colW + 6, base = 6 + row * 6, str = String(d);
+        if (d === t.d) f.fill(cx - 5, base - 6, 11, 7, scaleColor(accent, 0.4));
+        f.text('small', str, cx - fdivI(measure('small', str) - 1, 2), base, d === t.d ? C.white : col === 0 || col === 6 ? CAL.weekend : CAL.day);
+      }
+    }
     function renderAnalog(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
+      const wide = colsOf(p) === WIDE;
+      const f = newFrame(wide ? WIDE : 64);
       const t = localDate(now, p.tzo);
       circle(f, AN.cx, AN.cy, 15, '#333333');
       const tk = AN_T.ticks;
@@ -2005,8 +2398,11 @@
       const hand = (tab, i, color) => bresenham(f, AN.cx, AN.cy, tab[i * 2], tab[i * 2 + 1], color);
       hand(AN_T.hour, (t.h % 12) * 5 + fdivI(t.min, 12), C.clock);
       hand(AN_T.min, t.min, C.clock);
-      hand(AN_T.sec, t.s, C.amber);
+      // The second hand in the accent (p.cacc: the board's analogAccent), else amber.
+      const accent = p.cacc || C.amber;
+      hand(AN_T.sec, t.s, accent);
       f.fill(AN.cx, AN.cy, 1, 1, C.clock);
+      if (wide) { drawCalendar(f, now, p.tzo, accent); return f; }
       // Right: day (full name when it fits the 31 px column), date, weather.
       const full = DAY_NAMES[t.wd], day = measure('small', full) <= 31 ? full : full.slice(0, 3);
       f.text('small', day, AN.rx - fdivI(measure('small', day), 2), 7, C.wxText);
@@ -2019,6 +2415,43 @@
         const x = f.text('5x7', temp, x0 + 10, 30, C.label);
         f.text('small', '°', x, 28, C.label);
       }
+      return f;
+    }
+
+    // ---- clock screen: word clock (wide boards only; wide-spec §6) ----
+    // Five rows of words in Tom Thumb, centered, baselines 6-30; every word
+    // faintly lit (#2a2a2a), the ones that tell the time amber, rounded to
+    // five minutes: IT IS TWENTY MINUTES TO TEN IN THE EVENING. Morning
+    // before noon, afternoon to 6 PM, evening after (by the hour shown).
+    const WORDS = {
+      rows: ['IT IS HALF TEN QUARTER TWENTY', 'FIVE MINUTES TO PAST ONE TWO', 'THREE FOUR FIVE SIX SEVEN EIGHT',
+        "NINE TEN ELEVEN TWELVE O'CLOCK", 'IN THE MORNING AFTERNOON EVENING'],
+      off: '#2a2a2a',
+      // Word ids: row * 8 + the word's place in its row.
+      hours: [27, 12, 13, 16, 17, 18, 19, 20, 21, 24, 25, 26],  // 12, 1, 2, ... 11
+      // By five minutes: the minute words, then PAST (11) or TO (10).
+      mins: [[28], [8, 9, 11], [3, 9, 11], [4, 11], [5, 9, 11], [5, 8, 9, 11], [2, 11], [5, 8, 9, 10], [5, 9, 10], [4, 10], [3, 9, 10], [8, 9, 10]],
+    };
+    function wordsLit(now, tzo) {
+      const t = localDate(now, tzo);
+      let q = fdivI(t.min + 2, 5), h = t.h;
+      if (q === 12) { q = 0; h = (h + 1) % 24; }
+      if (q >= 7) h = (h + 1) % 24;
+      return [0, 1, ...WORDS.mins[q], WORDS.hours[h % 12], 32, 33, h < 12 ? 34 : h < 18 ? 35 : 36];
+    }
+    function renderWords(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const f = newFrame(WIDE);
+      const lit = wordsLit(now, p.tzo);
+      WORDS.rows.forEach((row, j) => {
+        const x0 = fdivI(WIDE - measure('small', row), 2), words = row.split(' ');
+        let prefix = '';
+        words.forEach((word, k) => {
+          f.text('small', word, x0 + (prefix ? measure('small', prefix) + 1 : 0), 6 + j * 6, lit.includes(j * 8 + k) ? C.amber : WORDS.off);
+          prefix += `${word} `;
+        });
+      });
       return f;
     }
 
@@ -2041,30 +2474,71 @@
     const DN_LAT = Array.from({ length: DN.rows }, (_, r) => Math.round(DN.top - (r + 0.5) * DN.deg));
     const DN_LON = Array.from({ length: 64 }, (_, x) => Math.round(-180 + (x + 0.5) * DN.deg));
     const mixInt = (n, d, k) => n.map((v, i) => v + fdivI((d[i] - v) * k, 256));
+    // Wide board (wide-spec §6): the map at true shape on all 32 rows
+    // (WORLD_WIDE: 80 x 32 of 4.5°, 84° N to 60° S), lit the same way, the
+    // board's spot dn.hw; the sun panel on columns 83-127: the time in 5x7
+    // with AM/PM, a divider on row 11, then sunrise and sunset (dn.sr, dn.ss:
+    // the sun icon on its horizon and the arrow in the row's color, the time
+    // at the right edge) and the day length.
+    const DNW = { w: 80, deg: 4.5, top: 84, x0: 83, rise: '#ffc23a', set: '#ff7414', divider: '#262626' };
+    const DNW_LAT = Array.from({ length: 32 }, (_, r) => Math.round(DNW.top - (r + 0.5) * DNW.deg));
+    const DNW_LON = Array.from({ length: DNW.w }, (_, x) => Math.round(-180 + (x + 0.5) * DNW.deg));
+    // The sun on the horizon (7 x 5, the horizon on the text's bottom row):
+    // '#' the row's color, '-' the horizon in #555555.
+    const SUN_ICON = ['...#...', '.#...#.', '..###..', '#.###.#', '-------'];
+    function drawWorld(f, dn, now, world, palette, lats, lons) {
+      // The subsolar longitude moves 15° an hour: tenths of a degree back from dn.t.
+      let lon10 = dn.lon - fdivI(now - dn.t, 24);
+      lon10 = ((lon10 + 1800) % 3600 + 3600) % 3600 - 1800;
+      const decD = fdivI(dn.dec + 5, 10), lonD = fdivI(lon10 + 5, 10);
+      const sDec = sinD(decD), cDec = cosD(decD);
+      const sea = [hex(DN.sea), hex(DN.nightSea)], land = {};
+      for (const [c, v] of Object.entries(palette)) { const d = hex(v); land[c] = [d, d.map((ch, i) => fdivI(ch * DN.nightK[i], 256))]; }
+      for (let y = 0; y < lats.length; y++) {
+        const lat = lats[y], sl = sinD(lat) * sDec, cl = cosD(lat) * cDec;
+        for (let x = 0; x < lons.length; x++) {
+          // sin(sun's altitude) x 1e8.
+          const s = sl + fdivI(cl * cosD(lons[x] - lonD), 10000);
+          const k = s >= 0 ? 256 : s <= DN.night12 ? 0 : 256 - fdivI(s * 256, DN.night12);
+          const [dc, nc] = world[y][x] === '.' ? sea : land[world[y][x]];
+          f.set(x, y, mixInt(nc, dc, k));
+        }
+      }
+    }
+    function renderDayNightWide(p, now) {
+      const f = newFrame(WIDE);
+      const dn = p.dn, { x0 } = DNW;
+      if (dn && icons.WORLD_WIDE) {
+        drawWorld(f, dn, now, icons.WORLD_WIDE, icons.WORLD_WIDE_PALETTE, DNW_LAT, DNW_LON);
+        if (dn.hw && dn.hw[1] < 32) f.fill(dn.hw[0], dn.hw[1], 1, 1, DN.here);
+      }
+      const t = localDate(now, p.tzo);
+      const x = rollText(f, '5x7', 'dn.clock', clockText(now), () => x0, 8, '#ffffff');
+      f.text('small', t.h < 12 ? 'AM' : 'PM', x + 1, 8, C.wxText);
+      f.fill(x0, 11, WIDE - x0, 1, DNW.divider);
+      // At the payload's offset (tzo), as on the board, even across a DST change.
+      const at = (ts) => { const d = localDate(ts, p.tzo); return `${d.h % 12 || 12}:${String(d.min).padStart(2, '0')} ${d.h < 12 ? 'AM' : 'PM'}`; };
+      if (dn && dn.sr != null && dn.ss != null) {
+        [[dn.sr, G.UP, DNW.rise], [dn.ss, G.DOWN, DNW.set]].forEach(([ts, arrow, c], i) => {
+          const base = 18 + i * 7;
+          SUN_ICON.forEach((row, j) => [...row].forEach((ch, k) => { if (ch !== '.') f.fill(x0 + k, base - 5 + j, 1, 1, ch === '#' ? c : C.dimHead); }));
+          f.text('small', s(arrow), x0 + 9, base, c);
+          rtext(f, 'small', at(ts), WIDE - 1, 18 + i * 7, c);
+        });
+        const mins = Math.max(0, fdivI(dn.ss - dn.sr, 60));
+        f.text('small', 'DAY', x0, 32, C.dimHead);
+        rtext(f, 'small', `${fdivI(mins, 60)}h ${mins % 60}m`, WIDE - 1, 32, C.wxText);
+      }
+      return f;
+    }
     function renderDayNight(p, opts) {
       const o = opts || {};
       const now = Math.floor(o.now != null ? o.now : p.now);
+      if (colsOf(p) === WIDE) return renderDayNightWide(p, now);
       const f = newFrame();
       const dn = p.dn;
-      const world = icons.WORLD;
-      if (dn && world) {
-        // The subsolar longitude moves 15° an hour: tenths of a degree back from dn.t.
-        let lon10 = dn.lon - fdivI(now - dn.t, 24);
-        lon10 = ((lon10 + 1800) % 3600 + 3600) % 3600 - 1800;
-        const decD = fdivI(dn.dec + 5, 10), lonD = fdivI(lon10 + 5, 10);
-        const sDec = sinD(decD), cDec = cosD(decD);
-        const sea = [hex(DN.sea), hex(DN.nightSea)], land = {};
-        for (const [c, v] of Object.entries(icons.WORLD_PALETTE)) { const d = hex(v); land[c] = [d, d.map((ch, i) => fdivI(ch * DN.nightK[i], 256))]; }
-        for (let y = 0; y < DN.rows; y++) {
-          const lat = DN_LAT[y], sl = sinD(lat) * sDec, cl = cosD(lat) * cDec;
-          for (let x = 0; x < 64; x++) {
-            // sin(sun's altitude) x 1e8.
-            const s = sl + fdivI(cl * cosD(DN_LON[x] - lonD), 10000);
-            const k = s >= 0 ? 256 : s <= DN.night12 ? 0 : 256 - fdivI(s * 256, DN.night12);
-            const [dc, nc] = world[y][x] === '.' ? sea : land[world[y][x]];
-            f.set(x, y, mixInt(nc, dc, k));
-          }
-        }
+      if (dn && icons.WORLD) {
+        drawWorld(f, dn, now, icons.WORLD, icons.WORLD_PALETTE, DN_LAT, DN_LON);
         // The board's own spot.
         if (dn.here && dn.here[1] < DN.rows) f.fill(dn.here[0], dn.here[1], 1, 1, DN.here);
       }
@@ -2092,10 +2566,18 @@
       gap: 4,          // px between digits; 2 either side of the colon (12:59 fills the width exactly)
       dark: '#000000',
     };
-    function gradientColor(x, y, ms) {
+    // Digit geometry by width: blocks sx x sy, the gap between characters,
+    // and the colon's width, lead (it starts 2 px back at 64) and gap after.
+    // Wide (wide-spec §6): 7 x 6 blocks (21 x 30 digits), 5 px gaps either
+    // side of a 4 px colon: 12:58 is 108 px.
+    const BIG = {
+      64: { w: 64, sx: GR.sx, sy: GR.sy, gap: GR.gap, colonW: GR.sx, lead: -2, colonGap: GR.gap - 2 },
+      128: { w: 128, sx: 7, sy: 6, gap: 5, colonW: 4, lead: 0, colonGap: 5 },
+    };
+    function gradientColor(x, y, ms, w = 64) {
       const n = GR.ring.length;
       // Position on the diagonal, 0-1023, top left to bottom right.
-      const u = fdivI((x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+      const u = fdivI((x * 2 + y * 3) * 1024, (w - 1) * 2 + 31 * 3 + 1);
       const r = fdivI(ms * 256, GR.step) + fdivI(u * GR.span * 256, 1024);
       const i = fdivI(r, 256) % n, t = r % 256;
       return mixInt(hex(GR.ring[i]), hex(GR.ring[(i + 1) % n]), t);
@@ -2110,56 +2592,57 @@
       8: ['###', '#.#', '###', '#.#', '###'], 9: ['###', '#.#', '###', '..#', '###'],
       ':': ['.', '#', '.', '#', '.'],
     };
-    // The colon sits closer: it starts 2 px back and leaves 2 px after it.
-    const bigLead = (ch) => (ch === ':' ? -2 : 0), bigGap = (ch) => (ch === ':' ? GR.gap - 2 : GR.gap);
-    const bigW = (str) => [...str].reduce((w, ch) => w + bigLead(ch) + GR_GLYPHS[ch][0].length * GR.sx + bigGap(ch), -GR.gap);
-    function bigChar(f, ch, x, top, color) {
-      const g = GR_GLYPHS[ch];
-      x += bigLead(ch);
-      g.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * GR.sx, top + r * GR.sy, GR.sx, GR.sy, color); }));
-      return x + g[0].length * GR.sx + bigGap(ch);
+    const bigLead = (g, ch) => (ch === ':' ? g.lead : 0), bigGap = (g, ch) => (ch === ':' ? g.colonGap : g.gap);
+    const bigBlockW = (g, ch) => (ch === ':' ? g.colonW : g.sx);
+    const bigW = (g, str) => [...str].reduce((w, ch) => w + bigLead(g, ch) + GR_GLYPHS[ch][0].length * bigBlockW(g, ch) + bigGap(g, ch), -g.gap);
+    function bigChar(f, g, ch, x, top, color) {
+      const gl = GR_GLYPHS[ch], bw = bigBlockW(g, ch);
+      x += bigLead(g, ch);
+      gl.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * bw, top + r * g.sy, bw, g.sy, color); }));
+      return x + gl[0].length * bw + bigGap(g, ch);
     }
-    function bigText(f, str, x, top, color) { for (const ch of str) x = bigChar(f, ch, x, top, color); }
+    function bigText(f, g, str, x, top, color) { for (const ch of str) x = bigChar(f, g, ch, x, top, color); }
     function renderGradient(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
-      const f = newFrame();
+      const g = BIG[colsOf(p) === WIDE ? 128 : 64], W = g.w;
+      const f = newFrame(W);
       // Inverted (p.ginv): the digits carry the gradient on black. They're
       // drawn as a mask, then every lit pixel takes its gradient color.
       if (p.ginv) {
-        drawBigTime(f, p, now, '#ffffff');
-        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y)[0]) f.set(x, y, gradientColor(x, y, ms));
+        drawBigTime(f, g, p, now, '#ffffff');
+        for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) if (f.get(x, y)[0]) f.set(x, y, gradientColor(x, y, ms, W));
         return f;
       }
-      for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(x, y, gradientColor(x, y, ms));
-      drawBigTime(f, p, now, GR.dark);
+      for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) f.set(x, y, gradientColor(x, y, ms, W));
+      drawBigTime(f, g, p, now, GR.dark);
       return f;
     }
-    function drawBigTime(f, p, now, color) {
+    function drawBigTime(f, g, p, now, color) {
       // The time, at the minute it rolls like the other clocks
       // (only changed characters when the shape holds, else the whole time).
-      const text = clockText(now), H = 5 * GR.sy, top = fdivI(32 - H, 2);
-      const xOf = (str) => fdivI(64 - bigW(str), 2);
+      const text = clockText(now), H = 5 * g.sy, top = fdivI(32 - H, 2);
+      const xOf = (str) => fdivI(g.w - bigW(g, str), 2);
       const roll = takeRoll('grad.clock', text);
-      if (!roll) bigText(f, text, xOf(text), top, color);
-      else bigRoll(f, text, roll, xOf, top, H, color);
+      if (!roll) bigText(f, g, text, xOf(text), top, color);
+      else bigRoll(f, g, text, roll, xOf, top, H, color);
     }
     // The time mid-roll (rollTextWith's rules, on the giant digits).
-    function bigRoll(f, text, roll, xOf, top, H, color) {
-      const dist = H + GR.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
-      f.withClip(0, top, 63, top + H - 1, () => {
+    function bigRoll(f, g, text, roll, xOf, top, H, color) {
+      const dist = H + g.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
+      f.withClip(0, top, g.w - 1, top + H - 1, () => {
         const a = [...text], b = [...from];
-        if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(ch) === bigW(b[i]))) {
+        if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(g, ch) === bigW(g, b[i]))) {
           let x = xOf(text);
           a.forEach((ch, i) => {
-            if (ch === b[i]) bigChar(f, ch, x, top, color);
-            else { bigChar(f, b[i], x, top - up, color); bigChar(f, ch, x, top - up + dist, color); }
-            x += bigW(ch) + GR.gap;  // one character's advance (bigW drops a trailing gap)
+            if (ch === b[i]) bigChar(f, g, ch, x, top, color);
+            else { bigChar(f, g, b[i], x, top - up, color); bigChar(f, g, ch, x, top - up + dist, color); }
+            x += bigW(g, ch) + g.gap;  // one character's advance (bigW drops a trailing gap)
           });
         } else {
-          bigText(f, from, xOf(from), top - up, color);
-          bigText(f, text, xOf(text), top - up + dist, color);
+          bigText(f, g, from, xOf(from), top - up, color);
+          bigText(f, g, text, xOf(text), top - up + dist, color);
         }
       });
     }
@@ -2397,36 +2880,37 @@
     // Sailboat on :00 (heading left) and :30 (right), 1 px per 800 ms;
     // speedboat on :15 and :45, out to the left at 1 px per 150 ms, turning
     // around off the panel for 4 s and coming back to the right.
-    function boatAt(ms) {
+    // W: the scene's width (the wide panorama's boats cross all 128 columns).
+    function boatAt(ms, W = 64) {
       const q = Math.floor(ms / QUARTER), qi = q % 4, e = ms - q * QUARTER;
       if (qi === 0 || qi === 2) {
         const step = Math.floor(e / SAIL_STEP);
-        if (step > 70) return null;
-        return qi === 0 ? { kind: 'sail', x0: 64 - step, dir: -1 } : { kind: 'sail', x0: -6 + step, dir: 1 };
+        if (step > W + 6) return null;
+        return qi === 0 ? { kind: 'sail', x0: W - step, dir: -1 } : { kind: 'sail', x0: -6 + step, dir: 1 };
       }
-      const span = 87, leg = span * SPEED_STEP;
-      if (e < leg) return { kind: 'speed', x0: 64 - Math.floor(e / SPEED_STEP), dir: -1 };
+      const span = W + 23, leg = span * SPEED_STEP;
+      if (e < leg) return { kind: 'speed', x0: W - Math.floor(e / SPEED_STEP), dir: -1 };
       const e2 = e - leg - SPEED_WAIT;
       if (e2 >= 0 && e2 < leg) return { kind: 'speed', x0: -14 + Math.floor(e2 / SPEED_STEP), dir: 1 };
       return null;
     }
-    function drawBoat(f, b, wat) {
+    function drawBoat(f, b, wat, W = 64) {
       const S = SKY.SHORE;
       if (b.kind === 'sail') {
-        const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + 5 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+        const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + 5 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
         SAIL.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch === '#') put(dx, S - 4 + dy, SK.sail); }));
         for (let dx = 0; dx < 6; dx++) put(dx, S, SK.hull[0]);
         for (let dx = 1; dx < 5; dx++) put(dx, S + 1, SK.hull[1]);
         return;
       }
       const n = SEADOG[0].length;
-      const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + n - 1 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+      const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + n - 1 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
       SEADOG.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch !== '.') put(dx, S - 1 + dy, SK.seadog[ch]); }));
       // Spray plume behind the stern, fading out: 9 / 6 / 3 px on rows 26 / 25 / 24.
       for (const [y, len] of [[S + 1, 9], [S, 6], [S - 1, 3]]) {
         for (let i = 0; i < len; i++) {
           const x = b.dir < 0 ? b.x0 + n + i : b.x0 - 1 - i;
-          if (x >= 0 && x < 64) f.set(x, y, mixRgb(f.get(x, y), hex(SK.spray), 0.95 * (1 - i / len)));
+          if (x >= 0 && x < W) f.set(x, y, mixRgb(f.get(x, y), hex(SK.spray), 0.95 * (1 - i / len)));
         }
       }
     }
@@ -2442,32 +2926,36 @@
       if (o.skyFrom !== undefined && o.skyFrom !== null && o.skyK != null && o.skyK < 1) {
         const a = renderSkyline(p, { ...o, skyFrom: null, sky: o.skyFrom, clouds: o.skyBare ? null : o.clouds });
         const b = renderSkyline(p, { ...o, skyFrom: null });
-        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) b.set(x, y, mixRgb(a.get(x, y), b.get(x, y), o.skyK));
+        for (let y = 0; y < 32; y++) for (let x = 0; x < b.w; x++) b.set(x, y, mixRgb(a.get(x, y), b.get(x, y), o.skyK));
         return b;
       }
       const s = (o.sky !== undefined ? o.sky : p.skyline) || SKY_NONE;
       const now = o.now != null ? o.now : p.now;
       const ms = o.ms != null ? o.ms : Math.floor(now * 1000);
-      const f = newFrame();
-      const S = SKY.SHORE, night = (s.win || 0) / 100;
+      // The wide board's panorama (SKYW): the 64 scene O px in, so every
+      // position the payload gives (sun, glint) and the fixed ones (moon,
+      // pier, lightning) move by O; twice the stars, rain and snow.
+      const K = colsOf(p) === WIDE ? SKYW : SKY, W = K.W, O = K.O, more = W / 64;
+      const f = newFrame(W);
+      const S = K.SHORE, night = (s.win || 0) / 100;
 
       // Sky; buildings stay black (LEDs off).
       for (let y = 0; y <= S; y++) {
         const c = hex(skyAt(s.sky, y));
-        for (let x = 0; x < 64; x++) if (!SKY.role[y * 64 + x]) f.set(x, y, c);
+        for (let x = 0; x < W; x++) if (!K.role[y * W + x]) f.set(x, y, c);
       }
-      if (s.sun) skyDisc(f, s.sun.x, s.sun.y, s.sun.c);
+      if (s.sun) skyDisc(f, s.sun.x + O, s.sun.y, s.sun.c, null, K);
       // Stars twinkle (some), then the moon at its phase: the lit part is
       // past the terminator, an ellipse whose half-width follows the lit
       // fraction (cos of the phase angle = 1 - 2 * lit).
-      for (let i = 0; i < Math.min(s.stars || 0, SKY.stars.length); i++) {
-        const [x, y, bright, tw, ph, per] = SKY.stars[i];
+      for (let i = 0; i < Math.min((s.stars || 0) * more, K.stars.length); i++) {
+        const [x, y, bright, tw, ph, per] = K.stars[i];
         const k = tw && s.twk !== 0 ? 0.25 + 0.75 * wave(ms / per + ph / 1000) : 1;
         f.set(x, y, mixRgb(f.get(x, y), hex(bright ? '#a8aebc' : '#5a6070'), k));
       }
       if (s.moon) {
         const cosv = 1 - 2 * s.moon.fr / 100, waxing = s.moon.ph < 50;
-        skyDisc(f, 41, 5, SK.moon, (dx, dy, c) => { const w = Math.sqrt(Math.max(0, c * c - dy * dy)); return waxing ? dx > w * cosv : dx < -w * cosv; });
+        skyDisc(f, 41 + O, 5, SK.moon, (dx, dy, c) => { const w = Math.sqrt(Math.max(0, c * c - dy * dy)); return waxing ? dx > w * cosv : dx < -w * cosv; }, K);
       }
       // Clouds: the server's strip (128 x 26, 4-bit indexes, packed high
       // nibble first), scrolled 1 px every 4 s and wrapping, behind the city;
@@ -2484,8 +2972,8 @@
         const off = step > 0 ? ((ms - rem) / step) % CLOUD_W : 0;
         const pal = s.cl.pal.map((c) => (c ? hex(c) : null));
         const at = (y, col) => { const i = y * CLOUD_W + (col % CLOUD_W); const n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15; return n && pal[n] ? n : 0; };
-        for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
-          if (SKY.role[y * 64 + x]) continue;
+        for (let y = 0; y <= S; y++) for (let x = 0; x < W; x++) {
+          if (K.role[y * W + x]) continue;
           const n0 = at(y, x + off), n1 = fr > 0 ? at(y, x + off + 1) : 0;
           if (!n0 && !n1) continue;
           const bg = f.get(x, y);
@@ -2497,44 +2985,44 @@
       }
       // Windows come on one at a time as `win` rises.
       const lim = Math.round(450 * night);
-      for (const [x, y, th, bright] of SKY.wins) if (th < lim) f.fill(x, y, 1, 1, SK.win[bright ? 1 : 0]);
+      for (const [x, y, th, bright] of K.wins) if (th < lim) f.fill(x, y, 1, 1, SK.win[bright ? 1 : 0]);
       // Snow on the roofs: the top pixel of every building column.
-      if (s.roof) for (let x = 0; x < 64; x++) for (let y = 0; y <= S; y++) if (SKY.role[y * 64 + x]) { f.fill(x, y, 1, 1, s.roof); break; }
+      if (s.roof) for (let x = 0; x < W; x++) for (let y = 0; y <= S; y++) if (K.role[y * W + x]) { f.fill(x, y, 1, 1, s.roof); break; }
       // Fog: everything fades toward it with height (strongest at the top).
       if (s.fog) {
         const fc = hex(s.fog);
-        for (let y = 0; y <= S; y++) { const k = Math.max(0, Math.min(1, (21 - y) / 18)) * 0.85; if (k) for (let x = 0; x < 64; x++) f.set(x, y, mixRgb(f.get(x, y), fc, k)); }
+        for (let y = 0; y <= S; y++) { const k = Math.max(0, Math.min(1, (21 - y) / 18)) * 0.85; if (k) for (let x = 0; x < W; x++) f.set(x, y, mixRgb(f.get(x, y), fc, k)); }
       }
       // Lightning: the whole sky flashes (35% toward the glow), brightest in
       // a patch of the cloud deck around the bolt (80%).
       const lv = s.storm ? strikeLevel(ms) : 0;
       if (lv > 0) {
         const gc = hex(SK.glow);
-        for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
-          if (SKY.role[y * 64 + x]) continue;
-          const ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = Math.sqrt(ex * ex + ey * ey);
+        for (let y = 0; y <= S; y++) for (let x = 0; x < W; x++) {
+          if (K.role[y * W + x]) continue;
+          const ex = (x + 0.5 - 22 - O) / 11, ey = (y + 0.5 - 4) / 4, d = Math.sqrt(ex * ex + ey * ey);
           const a = lv * (0.35 + 0.45 * (1 - sstep01(0.3, 1, d)));
           if (a > 0.01) f.set(x, y, mixRgb(f.get(x, y), gc, a));
         }
-        const put = (x, y, c) => { if (x >= 0 && x < 64 && y >= 0 && !SKY.role[y * 64 + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.15)), 0.8 * lv)); };
+        const put = (x, y, c) => { if (x >= 0 && x < W && y >= 0 && !K.role[y * W + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.15)), 0.8 * lv)); };
         const core = new Set(BOLT.map(([x, y]) => y * 64 + x));
-        for (const [x, y] of BOLT) for (const X of [x - 1, x + 1]) if (!core.has(y * 64 + X)) put(X, y, '#7060c0');
-        for (const [x, y] of BOLT_BRANCH) put(x, y, '#9a8ae0');
-        for (const [x, y] of BOLT) put(x, y, '#ffffff');
+        for (const [x, y] of BOLT) for (const X of [x - 1, x + 1]) if (!core.has(y * 64 + X)) put(X + O, y, '#7060c0');
+        for (const [x, y] of BOLT_BRANCH) put(x + O, y, '#9a8ae0');
+        for (const [x, y] of BOLT) put(x + O, y, '#ffffff');
       }
       // Antennas (unlit) and the Hancock beacons: dark red to bright red over 4 s.
       const beacon = mixHex(SK.beacon[0], SK.beacon[1], wave(ms / 4000));
-      for (const [x, t, roof, b] of SKY.ants) { f.fill(x, t, 1, roof - t, '#000000'); if (b && s.lit) f.fill(x, t, 1, 1, beacon); }
+      for (const [x, t, roof, b] of K.ants) { f.fill(x, t, 1, roof - t, '#000000'); if (b && s.lit) f.fill(x, t, 1, 1, beacon); }
       // The wheel: white rim and darker frame by day, a slow pastel rainbow
       // (one turn a minute) at night.
       const wp = s.lit ? { leg: SK.wheelNight } : SK.wheel[s.whl || 0];
-      for (const [x, y] of SKY.legs) f.fill(x, y, 1, 1, wp.leg);
-      f.fill(SKY.bar[0], SKY.bar[1], SKY.bar[2], 1, wp.leg);
+      for (const [x, y] of K.legs) f.fill(x, y, 1, 1, wp.leg);
+      f.fill(K.bar[0], K.bar[1], K.bar[2], 1, wp.leg);
       // Wheel speed: s.wheel ms a turn (0: still).
       const turnMs = s.wheel != null ? s.wheel : WHEEL_TURN_MS;
       const turn = turnMs > 0 ? (ms % turnMs) * (360 / turnMs) : 0;
-      for (const [x, y, deg] of SKY.rim) f.fill(x, y, 1, 1, s.lit ? hsvHex((deg + turn) % 360, 0.7, 0.9) : wp.rim);
-      f.fill(SKY.CX - 1, SKY.CY - 1, 2, 2, wp.leg);
+      for (const [x, y, deg] of K.rim) f.fill(x, y, 1, 1, s.lit ? hsvHex((deg + turn) % 360, 0.7, 0.9) : wp.rim);
+      f.fill(K.CX - 1, K.CY - 1, 2, 2, wp.leg);
 
       // Text: the temperature (or a watch or warning in its place) bottom
       // left, the clock bottom right, over the water.
@@ -2545,7 +3033,7 @@
       const wword = warn ? (warn.lvl === 'warning' ? 'WARNING' : 'WATCH') : '';
       const tempStr = s.temp != null ? `${s.temp}°` : '';
       const lw = ws ? measure('small', ws.glyph) + TAG_GAP - 1 + measure('small', wword) : tempStr ? measure('small', tempStr) : 0;
-      const quiet = (x, y) => y >= S + 2 && ((lw && x <= lw) || x >= 63 - cw);   // text rows plus a 1 px margin
+      const quiet = (x, y) => y >= S + 2 && ((lw && x <= lw) || x >= W - 1 - cw);   // text rows plus a 1 px margin
 
       // Water: a two-color gradient, ripples gliding sideways (alternate rows
       // opposite ways, 1 px every 500 ms, drawn with sub-pixel coverage so the
@@ -2559,25 +3047,25 @@
       const ripple = hex(s.wat[2]);
       const pathRgb = s.gl && s.gl.p > 0 ? mixRgb(ripple, hex(s.gl.c), s.gl.p / 100) : null;
       for (let y = S + 1; y < 32; y++) {
-        f.fill(0, y, 64, 1, mixHex(s.wat[0], s.wat[1], (y - S - 1) / (32 - S - 2)));
+        f.fill(0, y, W, 1, mixHex(s.wat[0], s.wat[1], (y - S - 1) / (32 - S - 2)));
         const dir = y % 2 ? 1 : -1, len = y - S <= 2 ? 2 : 3, gap = 9 + (y % 3);
-        for (let x = 0; x < 64; x++) {
+        for (let x = 0; x < W; x++) {
           if (quiet(x, y)) continue;
           const u = x - dir * glide + y * 5, a = u - gap * Math.floor(u / gap);
           const cov = Math.max(0, Math.min(a + 1, len) - a) + Math.max(0, a + 1 - gap);   // this pixel's share of a dash
           if (cov <= 0) continue;
-          const onPath = pathRgb && Math.abs(x + 0.5 - s.gl.x) < 1.5 + (y - S) * 0.8;
+          const onPath = pathRgb && Math.abs(x + 0.5 - O - s.gl.x) < 1.5 + (y - S) * 0.8;
           f.set(x, y, mixRgb(f.get(x, y), onPath ? pathRgb : ripple, Math.min(1, cov)));
         }
       }
       // Navy Pier: deck on row 25 (snow-covered when the roofs are), darker
       // face on 26, string lights at night.
-      f.fill(24, S, 16, 1, s.roof || mixHex(SK.pier.day[0], SK.pier.night[0], night));
-      f.fill(24, S + 1, 16, 1, mixHex(SK.pier.day[1], SK.pier.night[1], night));
-      if (s.lit) for (let x = 24; x <= 39; x += 3) f.fill(x, S, 1, 1, SK.pier.bulb);
+      f.fill(24 + O, S, 16, 1, s.roof || mixHex(SK.pier.day[0], SK.pier.night[0], night));
+      f.fill(24 + O, S + 1, 16, 1, mixHex(SK.pier.day[1], SK.pier.night[1], night));
+      if (s.lit) for (let x = 24 + O; x <= 39 + O; x += 3) f.fill(x, S, 1, 1, SK.pier.bulb);
       // The quarter-hour boat.
-      const b = s.boats ? boatAt(ms) : null;
-      if (b) drawBoat(f, b, s.wat);
+      const b = s.boats ? boatAt(ms, W) : null;
+      if (b) drawBoat(f, b, s.wat, W);
       // Rain: 2 px streaks moving 1 px every s.fall ms (200 by default)
       // along their own line, straight down (pcp.sl 0) or 45° left or right
       // (-1, 1), with sub-pixel coverage so they glide rather than step: a
@@ -2591,14 +3079,14 @@
         if (s.pcp.k === 'r') {
           const c1 = hex(mixHex(SK.rain.day[0], SK.rain.night[0], night)), c2 = hex(mixHex(SK.rain.day[1], SK.rain.night[1], night));
           const sl = s.pcp.sl || 0, rem = ms % fall, step = (ms - rem) / fall, fr = rem / fall;
-          for (let i = 0; i < s.pcp.n; i++) {
+          for (let i = 0; i < s.pcp.n * more; i++) {
             const land = S + 1 + ih(i, 33, 4) % (31 - S), cyc = land + 1;
             const hy = (ih(i, 32, 4) % cyc + step) % cyc;
-            const hx = (((ih(i, 31, 4) % 64 + sl * (step % 64)) % 64) + 64) % 64;
+            const hx = (((ih(i, 31, 4) % W + sl * (step % W)) % W) + W) % W;
             for (let j = -1; j <= 1; j++) {             // j px ahead of the head pixel
               const y = hy + j, d = fr - j;
               if (y < 0 || y > land) continue;
-              const x = (((hx + sl * j) % 64) + 64) % 64;
+              const x = (((hx + sl * j) % W) + W) % W;
               if (quiet(x, y)) continue;
               const c = d <= 0 ? c1 : d <= 1 ? mixRgb(c1, c2, d) : c2;
               const a = d <= 0 ? 1 + d : d <= 1 ? 1 : 2 - d;
@@ -2607,11 +3095,11 @@
           }
         } else {
           const step = Math.floor(ms / (fall * 3.5));
-          for (let i = 0; i < s.pcp.n; i++) {
+          for (let i = 0; i < s.pcp.n * more; i++) {
             const cyc = S + 2 + ih(i, 25, 4) % (31 - S);
             const y = (ih(i, 22, 4) % cyc + step) % cyc;
             const side = Math.floor((ms + (ih(i, 23, 4) % 2000)) / 2000) % 2;
-            const x = (ih(i, 21, 4) % 64 + side) % 64;
+            const x = (ih(i, 21, 4) % W + side) % W;
             if (quiet(x, y)) continue;
             f.fill(x, y, 1, 1, SK.snow[ih(i, 24, 4) % 10 < 4 ? 1 : 0]);
           }
@@ -2620,7 +3108,7 @@
       if (ws) {
         if (!(ws.blinks && o.blink)) f.text('small', wword, f.text('small', ws.glyph, 0, 32, ws.color) + TAG_GAP - 1, 32, ws.color);
       } else if (tempStr) f.text('small', tempStr, 0, 32, C.label);
-      f.text('small', clock, 64 - cw, 32, C.label);
+      f.text('small', clock, W - cw, 32, C.label);
       return f;
     }
 
@@ -2677,7 +3165,8 @@
     function renderClock(p, o) {
       return p.cface === 'seventies' ? renderSeventies(p, o) : p.cface === 'analog' ? renderAnalog(p, o)
         : p.cface === 'daynight' ? renderDayNight(p, o) : p.cface === 'gradient' ? renderGradient(p, o)
-        : p.cface === 'digits' ? renderDigits(p, o) : p.cface === 'daydate' ? renderDayDate(p, o) : renderSkyline(p, o);
+        : p.cface === 'digits' ? renderDigits(p, o) : p.cface === 'daydate' ? renderDayDate(p, o)
+        : p.cface === 'words' && colsOf(p) === WIDE ? renderWords(p, o) : renderSkyline(p, o);
     }
 
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock
@@ -2743,8 +3232,8 @@
     }
 
     return {
-      Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderPeek, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekShift, peekDrop, renderSkyline, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
+      renderBaseball, renderChooser, renderPeek, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekShift, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };

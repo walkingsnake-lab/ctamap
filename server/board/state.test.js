@@ -160,10 +160,10 @@ test('retired animated-icon settings are dropped from a saved state', () => {
   createStore({ dir, log: quiet }).update('home', { screen: 'weather' });
   const file = path.join(dir, 'board-state.json');
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-  Object.assign(saved.boards.home, { iconsNow: 'animated', icons5day: 'static', iconsHourly: 'animated', iconsRadar: 'animated' });
+  Object.assign(saved.boards.home, { iconsNow: 'animated', icons5day: 'static', iconsHourly: 'animated', iconsRadar: 'animated', wxRain: 'both', wxRainEvery: 30, wxRainLoops: 3 });
   fs.writeFileSync(file, JSON.stringify(saved));
   const home = createStore({ dir, log: quiet }).get('home');
-  for (const key of ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar']) assert.equal(Object.hasOwn(home, key), false);
+  for (const key of ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar', 'wxRain', 'wxRainEvery', 'wxRainLoops']) assert.equal(Object.hasOwn(home, key), false);
 });
 
 test('writes are atomic: no temp file left behind', () => {
@@ -208,18 +208,13 @@ test('wxView: default conditions, 5day allowed; validated', () => {
   store.update('home', { wxView: 'hourly' });
   assert.equal(store.get('home').wxView, 'hourly');
   assert.throws(() => store.update('home', { wxView: 'week' }), /wxView must be one of now, 5day, hourly/);
-  assert.equal(store.get('home').wxRain, 'radar');
-  store.update('home', { wxRain: 'bars' });
-  assert.equal(store.get('home').wxRain, 'bars');
-  store.update('home', { wxRain: 'both', wxRainEvery: 30 });
-  assert.deepEqual([store.get('home').wxRain, store.get('home').wxRainEvery], ['both', 30]);
-  assert.equal(createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'bs-')), log: quiet }).get('home').wxRainEvery, 15);
-  assert.throws(() => store.update('home', { wxRain: 'all' }), /wxRain must be one of radar, bars, both/);
-  assert.throws(() => store.update('home', { wxRainEvery: 12 }), /wxRainEvery must be one of/);
-  assert.equal(store.get('home').wxRainLoops, 2);
-  store.update('home', { wxRainLoops: 5 });
-  assert.equal(store.get('home').wxRainLoops, 5);
-  assert.throws(() => store.update('home', { wxRainLoops: 4 }), /wxRainLoops must be one of 1, 2, 3, 5/);
+  assert.equal(store.get('home').wxTop, true);
+  store.update('home', { wxTop: false });
+  assert.equal(store.get('home').wxTop, false);
+  assert.throws(() => store.update('home', { wxTop: 'no' }), /wxTop/);
+  // The rain bars were cut (Nov 2026): their settings are gone.
+  assert.equal(Object.hasOwn(store.get('home'), 'wxRain'), false);
+  assert.throws(() => store.update('home', { wxRain: 'bars' }), /unknown field: wxRain/);
 });
 
 test('radarBright: default 100, 20-150', () => {
@@ -373,6 +368,13 @@ test('width: setCols keeps 128 as cols (v stays), and copies, resets and new boa
   assert.equal(store.setCols('nope', 128), null);
 });
 
+test('wideLayout: the split by default, rows allowed; validated', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  assert.equal(store.get('home').wideLayout, 'split');
+  assert.equal(store.update('home', { wideLayout: 'rows' }).wideLayout, 'rows');
+  assert.throws(() => store.update('home', { wideLayout: 'columns' }), ValidationError);
+});
+
 test('an older board without a label loads with an empty one', () => {
   const dir = tmpDir();
   fs.writeFileSync(path.join(dir, 'board-state.json'), JSON.stringify({ boards: { home: { v: 3, station: { mapid: '40100', name: 'MORSE' }, rows: [], screen: 'auto', bright: 'auto' } } }));
@@ -380,10 +382,14 @@ test('an older board without a label loads with an empty one', () => {
 });
 
 test('clock screen and its face are settings; the knob ring adds CLOCK when the board can draw it', () => {
-  const { knobOf, KNOB_RING, CLOCK_FACES } = require('./state');
+  const { knobOf, KNOB_RING, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, validatePatch } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
   assert.equal(store.get('home').clockFace, 'skyline');
-  assert.deepEqual(CLOCK_FACES, ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate']);
+  assert.deepEqual(CLOCK_FACES, ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate', 'words']);
+  assert.deepEqual(WIDE_FACES, ['words']);
+  assert.equal(validatePatch({ analogAccent: 'mint' }).analogAccent, 'mint');
+  assert.throws(() => validatePatch({ analogAccent: 'teal' }), ValidationError);
+  assert.equal(Object.keys(ANALOG_ACCENTS).length, 8);
   store.update('home', { clockFace: 'seventies' });
   assert.equal(store.get('home').clockFace, 'seventies');
   store.update('home', { clockFace: 'skyline' });

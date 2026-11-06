@@ -275,34 +275,6 @@ async function build() {
     ]) {
       add(`weather celsius ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, tempShadow: true, wx: w } }, [{ screen: 'weather' }], undefined, undefined, name === 'conditions' ? { s3only: true } : {});
     }
-    // Rain bars: rain and snow, falling now (drop or flake) or due, a title
-    // too wide for its mark, every level, and warnings in the title row.
-    const rain = (snow, now, title, h, l) => ({ snow, now, title, h, l });
-    const rainCases = [
-      ['break', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 30 MIN', [5, 4, 0, 0, 6, 8, 7, 5], [2, 1, 0, 0, 2, 2, 2, 2]) }, null],
-      ['downpour', { ...wx, temp: 78, hi: 84, lo: 66, rain: rain(0, 0, 'RAIN IN 25 MIN', [0, 5, 9, 10, 10, 8, 5, 3], [0, 2, 3, 3, 3, 2, 2, 1]) }, null],
-      ['snow in', { ...wx, icon: 'cloudy', temp: 30, hi: 33, lo: 24, rain: rain(1, 0, 'SNOW IN 40 MIN', [0, 0, 4, 6, 7, 9, 8, 6], [0, 0, 1, 2, 2, 3, 2, 2]) }, null],
-      ['snow ends', { ...wx, icon: 'snow', temp: 28, hi: 31, lo: 22, rain: rain(1, 1, 'ENDS IN 40 MIN', [5, 4, 3, 2, 1, 0, 0, 0], [2, 2, 2, 1, 1, 0, 0, 0]) }, null],
-      ['snow now', { ...wx, icon: 'snow', temp: 28, hi: 31, lo: 22, rain: rain(1, 1, 'SNOW NEXT 2 HRS', [5, 7, 9, 10, 9, 8, 7, 5], [2, 2, 3, 3, 3, 3, 2, 2]) }, null],
-      ['no room for the mark', { ...wx, icon: 'rain', rain: rain(0, 1, 'BREAK IN 105 MIN', [1, 1, 1, 1, 1, 1, 1, 0], [1, 1, 1, 1, 1, 1, 1, 0]) }, null],
-      ['tor warning', { ...wx, icon: 'storm', rain: rain(0, 1, 'RAIN NEXT 2 HRS', [6, 7, 8, 9, 8, 7, 6, 5], [2, 2, 2, 3, 2, 2, 2, 2]) }, { kind: 'tor', lvl: 'warning' }],
-      ['svr watch', { ...wx, icon: 'storm', rain: rain(0, 0, 'RAIN IN 45 MIN', [0, 0, 0, 3, 9, 10, 6, 2], [0, 0, 0, 1, 3, 3, 2, 1]) }, { kind: 'svr', lvl: 'watch' }],
-    ];
-    // Both (rain.loops, rain.alt): two frames make a 4.5 s loop (500 ms steps
-    // and the 4 s hold), so 2 loops are 9 s, then 20 s of bars. t: ms since
-    // the loop started.
-    {
-      const ids = ['40100-202610091200', '40100-202610091206'];
-      const frame = new Uint8Array(2048).fill(3);
-      const alt = { ...wx, icon: 'rain', rain: rain(0, 1, 'RAIN NEXT 2 HRS', [6, 7, 8, 9, 8, 7, 6, 5], [2, 2, 2, 3, 2, 2, 2, 2]) };
-      alt.rain.alt = 20;
-      alt.rain.loops = 2;
-      add('weather rain loops then bars', { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { on: true, frames: ids, ft: [t - 360, t], timeBox: radar.FULL_TIME_BOX, split: false, wx: alt } },
-        [{ screen: 'weather', idx: 1, t: 0 }, { screen: 'weather', idx: 1, t: 8999 }, { screen: 'weather', idx: 1, t: 9000 }, { screen: 'weather', idx: 1, t: 28999 }, { screen: 'weather', idx: 1, t: 29000 }], Object.fromEntries(ids.map((id) => [id, frame])));
-    }
-    for (const [name, w, warn] of rainCases) {
-      add(`weather rain bars ${name}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, wx: w } }, [{ screen: 'weather' }, { screen: 'weather', blink: true }]);
-    }
   }
 
   // Radar time off: icon + temperature, WATCH/WARN tag bottom right (tornado warning blinks).
@@ -654,6 +626,19 @@ async function build() {
     add('daydate dimmed', cf('2026-11-04T16:07:00Z', 'daydate', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('daydate roll per digit', cf('2026-11-02T03:42:00Z', 'daydate'), roll('dd.clock', '9:41'), undefined, undefined, { s3only: true });
     add('daydate roll width change', cf('2026-11-01T19:00:00Z', 'daydate'), roll('dd.clock', '12:59'), undefined, undefined, { s3only: true });
+    // Wide (wide-spec §6): big digits in d23 centered on 128; day/date with
+    // the weekday and date beside the time (Wednesday, Sept 30: the widest).
+    const cw = (iso, cface, extra = {}) => cf(iso, cface, { cols: 128, ...extra });
+    add('wide digits 9:42', cw('2026-11-02T03:42:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide digits colon blink', cw('2026-11-01T18:58:00Z', 'digits'), [0, 500].map((d) => ({ screen: 'clock', ms: at('2026-11-01T18:58:00Z', d) })), undefined, undefined, { s3only: true });
+    add('wide digits steady, dimmed', cw('2026-11-01T16:07:00Z', 'digits', { steady: true, bright: 40 }), [{ screen: 'clock', ms: at('2026-11-01T16:07:00Z', 750) }], undefined, undefined, { s3only: true });
+    add('wide digits roll per digit', cw('2026-11-02T03:42:00Z', 'digits'), roll('dig.clock', '9:41').map((r) => ({ ...r, ms: at('2026-11-02T03:42:00Z', 700) })), undefined, undefined, { s3only: true });
+    add('wide digits roll width change', cw('2026-11-01T19:00:00Z', 'digits'), roll('dig.clock', '12:59'), undefined, undefined, { s3only: true });
+    add('wide daydate 9:42 PM', cw('2026-11-06T03:42:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide daydate Wednesday, September 30', cw('2026-09-30T17:58:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide daydate 10:07 AM dimmed', cw('2026-11-04T16:07:00Z', 'daydate', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide daydate roll per digit', cw('2026-11-02T03:42:00Z', 'daydate'), roll('dd.clock', '9:41'), undefined, undefined, { s3only: true });
+    add('wide daydate roll width change', cw('2026-11-01T19:00:00Z', 'daydate'), roll('dd.clock', '12:59'), undefined, undefined, { s3only: true });
   }
   // Clock screen, analog and day/night faces (S3 only).
   {
@@ -681,6 +666,44 @@ async function build() {
     add('gradient roll per digit', face('2026-11-02T01:15:00Z', 'gradient'), [0.25, 0.5, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
     add('gradient roll off', { ...face('2026-11-02T01:15:00Z', 'gradient'), croll: false }, [0.5].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
     add('daynight roll', face('2026-11-01T19:00:00Z', 'daynight'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'dn.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    // Wide board (wide-spec §6): the 80 x 32 map with the sun panel, and the
+    // Seventies stripes with the weekday, date and temperature.
+    const wf = (iso, cface, extra = {}) => {
+      const p = face(iso, cface, extra), t = p.now;
+      return { ...p, cols: 128, dn: p.dn && { ...p.dn, hw: [20, 9], sr: t - 15 * 3600 - 20 * 60, ss: t - 5 * 3600 + 4 * 60 }, ...extra };
+    };
+    const one = [{ screen: 'clock' }];
+    add('wide daynight evening', wf('2026-11-04T03:42:00Z', 'daynight'), [{ screen: 'clock' }, { screen: 'clock', now: Date.parse('2026-11-04T05:42:00Z') / 1000 }], undefined, undefined, { s3only: true });
+    add('wide daynight June noon', wf('2026-06-21T17:00:00Z', 'daynight'), one, undefined, undefined, { s3only: true });
+    add('wide daynight 12:58 PM dimmed', wf('2026-11-01T18:58:00Z', 'daynight', { bright: 40 }), one, undefined, undefined, { s3only: true });
+    add('wide daynight no sunrise or sunset', wf('2026-11-01T18:00:00Z', 'daynight', { dn: { ...face('2026-11-01T18:00:00Z', 'daynight').dn, hw: [20, 9] } }), one, undefined, undefined, { s3only: true });
+    add('wide daynight no sun data', wf('2026-11-01T18:00:00Z', 'daynight', { dn: null }), one, undefined, undefined, { s3only: true });
+    add('wide daynight roll', wf('2026-11-01T19:00:00Z', 'daynight'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'dn.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    add('wide seventies Tuesday 9:42', wf('2026-11-04T03:42:00Z', 'seventies'), one, undefined, undefined, { s3only: true });
+    add('wide seventies Wednesday 12:58', wf('2026-11-04T18:58:00Z', 'seventies', { cwx: { temp: 101, icon: 'sunny' } }), one, undefined, undefined, { s3only: true });
+    add('wide seventies no weather, dimmed', wf('2026-12-31T05:07:00Z', 'seventies', { cwx: null, bright: 40 }), one, undefined, undefined, { s3only: true });
+    add('wide seventies below zero', wf('2026-01-14T18:00:00Z', 'seventies', { cwx: { temp: -12, icon: 'snow' } }), one, undefined, undefined, { s3only: true });
+    add('wide seventies roll', wf('2026-11-01T19:00:00Z', 'seventies'), [0.25, 0.75].map((p) => ({ screen: 'clock', nums: { 'svt.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    // Analog + calendar: 5- and 6-week months (August 2026 wraps 30 and 31
+    // into the first row), February, a leap February, the accent colors.
+    add('wide analog November 1st', wf('2026-11-02T03:42:37Z', 'analog'), [{ screen: 'clock' }, { screen: 'clock', now: Date.parse('2026-11-02T03:43:05Z') / 1000 }], undefined, undefined, { s3only: true });
+    add('wide analog six-week month', wf('2026-08-31T15:00:00Z', 'analog', { cacc: '#22c8e6' }), one, undefined, undefined, { s3only: true });
+    add('wide analog February 14', wf('2026-02-14T18:00:00Z', 'analog', { cacc: '#ff4fa8' }), one, undefined, undefined, { s3only: true });
+    add('wide analog leap day, dimmed', wf('2028-02-29T13:00:00Z', 'analog', { cacc: '#a8e23a', bright: 40 }), one, undefined, undefined, { s3only: true });
+    add('wide analog last of the month', wf('2026-12-31T22:00:00Z', 'analog', { cacc: '#a066ff' }), one, undefined, undefined, { s3only: true });
+    add('analog accent', face('2026-11-02T03:42:37Z', 'analog', { cacc: '#ff5a4e' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    // Word clock: each five minutes of an hour, the rounding up to the next
+    // hour, noon and midnight.
+    const words = (iso, extra = {}) => wf(iso, 'words', extra);
+    add('wide words through the hour', words('2026-11-02T03:00:00Z'), Array.from({ length: 13 }, (_, i) => ({ screen: 'clock', now: Date.parse('2026-11-02T03:00:00Z') / 1000 + i * 300 })), undefined, undefined, { s3only: true });
+    add('wide words rounding', words('2026-11-02T03:42:00Z'), [0, 59, 60, 179, 1020, 1079].map((d) => ({ screen: 'clock', now: Date.parse('2026-11-02T03:42:00Z') / 1000 + d })), undefined, undefined, { s3only: true });
+    add('wide words noon and midnight, dimmed', words('2026-11-01T17:58:00Z', { bright: 40 }), [{ screen: 'clock' }, { screen: 'clock', now: Date.parse('2026-11-02T05:58:00Z') / 1000 }, { screen: 'clock', now: Date.parse('2026-11-01T11:31:00Z') / 1000 }], undefined, undefined, { s3only: true });
+    // Gradient at 128: 7 x 6 blocks, the gradient across all 128 columns.
+    add('wide gradient over the hour', wf('2026-11-02T01:15:00Z', 'gradient'), [0, 1234567, 3599999].map((d) => ({ screen: 'clock', ms: gms + d })), undefined, undefined, { s3only: true });
+    add('wide gradient 12:58', wf('2026-11-01T18:58:00Z', 'gradient', { bright: 40 }), [{ screen: 'clock', ms: gms }], undefined, undefined, { s3only: true });
+    add('wide gradient inverted', wf('2026-11-02T01:15:00Z', 'gradient', { ginv: true }), [0, 1234567].map((d) => ({ screen: 'clock', ms: gms + d })), undefined, undefined, { s3only: true });
+    add('wide gradient roll width change', wf('2026-11-01T19:00:00Z', 'gradient'), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '12:59', p } } })), undefined, undefined, { s3only: true });
+    add('wide gradient roll per digit', wf('2026-11-02T01:15:00Z', 'gradient', { ginv: true }), [0.25, 0.75].map((p) => ({ screen: 'clock', ms: gms, nums: { 'grad.clock': { from: '7:14', p } } })), undefined, undefined, { s3only: true });
   }
   // Announce screen (S3 only): the styles, the typewriter's intro (typing,
   // then its cursor blinking), the credits roll's steps, edge fades, pause
@@ -748,9 +771,18 @@ async function build() {
     const wide = (p) => ({ ...p, cols: 128 });
     const bytes = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Uint8Array.from(v)])) : undefined);
     const WIDE = ['transit morse-2026-10-03-2316.json header=true wx=true', 'chrono clark/lake alerts', 'stale', 'ticker header kept', 'weather screen normal',
-      'weather rain loops then bars', 'radar time off split=true svr warning', 'baseball logos live', 'knob chooser five entries', 'peek slides',
-      'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'announce typewriter', 'brightness 50'];
-    for (const name of WIDE) {
+      'radar time off split=true svr warning', 'baseball logos live', 'knob chooser five entries', 'peek slides',
+      'peek every variant', 'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'announce typewriter', 'brightness 50'];
+    // The skyline panorama (wide-spec §6): every weather and time of day,
+    // the boats crossing all 128 columns, lightning, rain and snow, the
+    // crossfades, warnings and the widest text.
+    const SKY_WIDE = ['skyline clear night', 'skyline partly day', 'skyline mostly night', 'skyline overcast day', 'skyline rain day', 'skyline rain night',
+      'skyline snow day', 'skyline snow night', 'skyline fog day', 'skyline fog night', 'skyline storm day', 'skyline storm night', 'skyline cloud drift normal',
+      'skyline dusk +0 min', 'skyline dusk +40 min', 'skyline dusk +80 min', 'skyline tornado warning', 'skyline sailboat', 'skyline speedboat',
+      'skyline lightning', 'skyline heavy rain falling', 'skyline heavy snow falling', 'skyline rain slant right', 'skyline rain slant left',
+      'skyline wheel and ripples slow', 'skyline crossfade clear to rain', 'skyline crossfade clouds arriving', 'skyline no weather yet',
+      'skyline negative temperature', 'skyline widest text'];
+    for (const name of [...WIDE, ...SKY_WIDE.filter((n) => !WIDE.includes(n))]) {
       const s = S.find((x) => x.name === name);
       if (!s) throw new Error(`no scenario "${name}" to widen`);
       add(`wide ${name}`, wide(s.payload), s.renders.map((r) => r.opts), bytes(s.frames), bytes(s.logos), { s3only: true, clouds: bytes(s.clouds) });
@@ -764,6 +796,153 @@ async function build() {
         steps: s.steps.map((st) => {
           const p = wide(st.payload), view = anim.step(p, st.now, st.t);
           return { ...st, payload: p, px: hexOf(draw.render(p, { screen: 'transit', now: st.now, view, blink: st.blink })) };
+        }),
+      });
+    }
+    // The wide chooser's variant strip: eight clock faces (the strip shifts
+    // by whole words to show the chosen one), the bar dropping, and a clock
+    // with one face (its name instead of words).
+    {
+      const s = S.find((x) => x.name === 'wide peek every variant');
+      const p = { ...s.payload, knob: { ...s.payload.knob, vars: s.payload.knob.vars.map((v, i) => (i === 2 ? [...v, 'words'] : v)) } };
+      const base = s.renders[0].opts;
+      add('wide peek strip shifts to the chosen word', p, [[2, 4], [2, 5], [2, 6], [2, 7], [1, 1]].map(([k, vi]) => ({ ...base, peek: { k, vi } })).concat([{ ...base, peek: { k: 2, vi: 7, drop: 4 } }]), bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
+      const one = { ...s.payload, knob: { ...s.payload.knob, vars: s.payload.knob.vars.map((v, i) => (i === 2 ? ['skyline'] : v)) } };
+      add('wide peek a category with one variant', one, [{ ...base, peek: { k: 2, vi: 0 } }], bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
+    }
+    // Wide weather (wide-spec §4): the week and 24 hours, with and without
+    // the top bar, warnings, °C and negatives, and the wide conditions.
+    {
+      const W = require(path.join(B, 'weather'));
+      const t = 1793763720; // Nov 3, 2026, 9:42 PM CST
+      const base = W.testWeather('partly', null, t, false);
+      base.week[3].code = 63; base.week[5].code = 73; base.hrs[4].code = 63; base.hrs[7].code = 95;
+      base.hrs.forEach((h, i) => { h.pop = [0, 10, 60, 100, 0, 30, 5, 20][i % 8]; h.temp = 48 - i; });
+      const sw = { ...W.toScreenWx(base), rl: 1 };
+      const week = W.toWeek(base), hours24 = W.toDayHours(base);
+      const wp = (wx, extra = {}) => ({ now: t, tzo: tzOffset(t), screen: 'weather', cols: 128, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, tempShadow: false, wx }, ...extra });
+      const one = [{ screen: 'weather' }];
+      const cold = W.inUnit(W.testWeather('snow heavy', null, t, false), 'C');
+      cold.week = cold.week.map((d, i) => ({ ...d, hi: d.hi - 20 + i * 4, lo: d.lo - 20 }));
+      add('wide weather week', wp({ ...sw, days: [{}], week }), one, undefined, undefined, { s3only: true });
+      add('wide weather week, no top bar', wp({ ...sw, days: [{}], week, notop: 1 }), one, undefined, undefined, { s3only: true });
+      add('wide weather week, tornado warning', wp({ ...sw, days: [{}], week }, { warn: { kind: 'tor', lvl: 'warning' } }), [{ screen: 'weather' }, { screen: 'weather', blink: true }], undefined, undefined, { s3only: true });
+      add('wide weather week, celsius below zero', wp({ ...W.toScreenWx(cold), c: 1, days: [{}], week: W.toWeek(cold), notop: 1 }), one, undefined, undefined, { s3only: true });
+      add('wide weather 24 hours', wp({ ...sw, hours: [{}], hours24, tempShadow: true }), one, undefined, undefined, { s3only: true });
+      add('wide weather 24 hours, no top bar', wp({ ...sw, hours: [{}], hours24, notop: 1 }), one, undefined, undefined, { s3only: true });
+      add('wide weather 24 hours, severe watch', wp({ ...sw, hours: [{}], hours24 }, { warn: { kind: 'svr', lvl: 'watch' } }), one, undefined, undefined, { s3only: true });
+      add('wide weather conditions, sunrise', wp({ ...sw, sun: { k: 'rise', t: t + 9 * 3600 } }), one, undefined, undefined, { s3only: true });
+      add('wide weather conditions, no rain line, sunset', { ...wp({ ...sw, rl: 0, sun: { k: 'set', t: t + 3600 } }), radar: { ...wp(sw).radar, tempShadow: true, wx: { ...sw, rl: 0, sun: { k: 'set', t: t + 3600 } } } }, one, undefined, undefined, { s3only: true });
+      add('wide weather conditions, tornado warning', wp({ ...sw }, { warn: { kind: 'tor', lvl: 'warning' } }), [{ screen: 'weather' }, { screen: 'weather', blink: true }], undefined, undefined, { s3only: true });
+      add('wide weather conditions, celsius', wp({ ...W.toScreenWx(cold), c: 1, rl: 1 }), one, undefined, undefined, { s3only: true });
+      add('wide weather hours without 24-hour data', wp({ ...sw, hours: W.toHours(base) }), one, undefined, undefined, { s3only: true });
+    }
+    // Wide transit, as the server formats it (arrivals.js formatWide):
+    // northbound | southbound, two columns, full-width rows, the
+    // chronological list; alerts, the key layout, an empty half.
+    const wideFrom = (name, mapid, header, cfg = {}) => {
+      const json = fixture(name);
+      const now = parseCtaTime(json.ctatt.tmst);
+      const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather: !!cfg.wx, showKey: !!cfg.key, cols: 128, wideLayout: cfg.layout || 'split', station: { mapid }, ...(cfg.hide ? { hideLines: cfg.hide } : {}) }, { now, alerts: new Set(cfg.alerts || []) });
+      return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, cols: 128, header: r.bars.showHeader ? header : null, ...(r.bars.showKey ? { key: 1 } : {}), view: r.view, ...(r.halves ? { halves: r.halves } : {}), rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx : null, warn: cfg.warn || null, ...(cfg.extra || {}) };
+    };
+    const at = (q) => [{ screen: 'transit' }, { screen: 'transit', now: q.now + 75 }, { screen: 'transit', now: q.now + 610 }];
+    const S3 = { s3only: true };
+    for (const [file, mapid, name] of [['morse-2026-10-03-2316.json', '40100', 'MORSE'], ['belmont-2026-10-03-2316.json', '41320', 'BELMONT'], ['clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE'], ['howard-2026-10-03-2316.json', '40900', 'HOWARD'], ['jefferson-park-2026-10-03-2316.json', '41280', 'JEFF PARK']]) {
+      for (const layout of ['split', 'rows']) {
+        for (const [header, wx] of [[name, null], [null, null], [name, WX]]) {
+          const q = wideFrom(file, mapid, header, { layout, wx });
+          add(`wide transit ${q.view} ${file} ${layout} header=${!!header} wx=${!!wx}`, q, at(q), undefined, undefined, S3);
+        }
+      }
+    }
+    {
+      const q = wideFrom('belmont-2026-10-03-2316.json', '41320', 'BELMONT', { alerts: ['RD'] });
+      add('wide transit split alert', q, at(q), undefined, undefined, S3);
+      const k = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { layout: 'rows', key: true });
+      add('wide transit rows key layout', k, at(k), undefined, undefined, S3);
+      // Six destinations at a station without the split: two columns.
+      const t0 = 1_800_000_000;
+      const six = ['Howard', '95th', 'Kimball', 'Loop', 'Linden', 'Midway'].map((d, i) => ({ ln: ['RD', 'RD', 'BR', 'BR', 'PR', 'OR'][i], dest: d, full: d, known: true, dir: 1 + (i % 2) * 4, t: t0 + (i + 2) * 60 + i * 37, s: i === 3 ? 1 : 0, rn: String(900 + i) }));
+      for (const [wx, alertLines] of [[WX, []], [null, ['BR', 'OR']]]) {
+        const r6 = format(six, { rows: [], showHeader: true, showWeather: !!wx, cols: 128, station: { mapid: '40380' } }, { now: t0, alerts: new Set(alertLines) });
+        const c = { v: 1, now: t0, tzo: tzOffset(t0), screen: 'transit', bright: 100, cols: 128, header: r6.bars.showHeader ? 'CLARK/LAKE' : null, view: r6.view, rows: r6.rows, ticker: r6.ticker, wx: r6.bars.showWeather ? wx : null, warn: null };
+        add(`wide transit ${r6.view} six destinations wx=${!!wx} alerts=${alertLines.length}`, c, at(c), undefined, undefined, S3);
+      }
+      const r = wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', alerts: ['BR'] });
+      add('wide transit rows alert, line colors, steps', { ...r, lnc: true, ts: true }, at(r), undefined, undefined, S3);
+      const st = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { extra: { stale: 1, hclock: false } });
+      add('wide transit split stale, no clock', st, at(st), undefined, undefined, S3);
+      // A half with no trains (one direction's run ended).
+      const half = { ...st, stale: 0, rows: st.rows.filter((x) => !x.h) };
+      add('wide transit split one half empty', half, [{ screen: 'transit' }], undefined, undefined, S3);
+      // Overnight on a wide board: the 64 layout on both panels.
+      add('wide transit overnight', { ...st, stale: 0, rows: [] }, [{ screen: 'transit' }], undefined, undefined, S3);
+      // Many destinations: the chronological list, full width.
+      const many = { ...wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', wx: WX }) };
+      const chrono = { ...many, view: 'chrono', rows: many.rows.map((x, i) => ({ ...x, t: [x.t[0]], s: [x.s[0]], rn: String(800 + i) })), wx: null };
+      add('wide transit chrono', chrono, at(chrono), undefined, undefined, S3);
+    }
+    // Wide radar (wide-spec §5): 128-wide crops of the recorded frames, the
+    // station at x69; the time chip, the dots on the map, the temperature
+    // chip, warnings, the clock options, the current time rolling, peek.
+    {
+      const wideFrames = {};
+      for (const [stamp, mode, mapid] of [['202008102100', 'rain', '40100'], ['202202021800', 'snow', '41320'], ['202611032144', 'rain', '40380']]) {
+        const st = require(path.join(B, 'stations.json')).find((x) => x.mapid === mapid);
+        const loc = radar.loadLocation(radar.wideKey(mapid));
+        const wld = radar.parseWld(fs.readFileSync(path.join(B, 'fixtures', 'mrms', `lcref_${stamp}.wld`), 'utf8'));
+        const crop = await radar.crops(fs.createReadStream(path.join(B, 'fixtures', 'mrms', `lcref_${stamp}.png`)), wld, [{ key: 'k', lat: st.lat, lon: st.lon, width: loc.width, mx: loc.mx }]);
+        const { dbz, geo } = crop.get('k');
+        wideFrames[`${mapid}-${stamp}`] = radar.toFrame(dbz, geo, mode, loc).bytes;
+      }
+      for (const [key, bytes] of Object.entries(wideFrames)) {
+        const t = radar.timeOf(key.split('-')[1]);
+        const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+        const frames = Object.fromEntries(ids.map((id) => [id, bytes]));
+        const r = { on: true, frames: ids, ft: ids.map((_, i) => t - (5 - i) * 360), timeBox: null, split: false, wide: 1 };
+        const q = (radarExtra = {}, extra = {}) => ({ now: t, tzo: tzOffset(t), bright: 100, cols: 128, warn: null, radar: { ...r, ...radarExtra }, ...extra });
+        add(`wide radar ${key}`, q(), [{ screen: 'weather', idx: 5 }, { screen: 'weather', idx: 0 }, { screen: 'weather', idx: 3 }], frames, undefined, S3);
+        add(`wide radar ${key} temperature chip`, q({ cond: true, temp: 58 }), [{ screen: 'weather', idx: 2 }], frames, undefined, S3);
+      }
+      const [key, bytes] = Object.entries(wideFrames)[0];
+      const t = radar.timeOf(key.split('-')[1]);
+      const ids = ['a', 'b', 'c'];
+      const frames = Object.fromEntries(ids.map((id) => [id, bytes]));
+      const r = { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 360), timeBox: null, split: false, wide: 1 };
+      const q = (radarExtra = {}, extra = {}) => ({ now: t, tzo: tzOffset(t), bright: 100, cols: 128, warn: null, radar: { ...r, ...radarExtra }, ...extra });
+      add('wide radar time off, temperature', q({ showTime: false, temp: -4, icon: 'snow' }), [{ screen: 'weather', idx: 1 }], frames, undefined, S3);
+      add('wide radar clock none', q({ clock: 'none' }), [{ screen: 'weather', idx: 1 }], frames, undefined, S3);
+      add('wide radar clock age', q({ clock: 'age' }), [{ screen: 'weather', idx: 0 }, { screen: 'weather', idx: 2, now: t + 3000 }], frames, undefined, S3);
+      add('wide radar clock now', q({ clock: 'now' }), [{ screen: 'weather', idx: 0, now: t + 3600 * 5 }], frames, undefined, S3);
+      add('wide radar tornado warning blink', q({}, { warn: { kind: 'tor', lvl: 'warning' } }), [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, blink: true }], frames, undefined, S3);
+      add('wide radar svr watch, time off', q({ showTime: false, temp: 71 }, { warn: { kind: 'svr', lvl: 'watch' } }), [{ screen: 'weather', idx: 2 }], frames, undefined, S3);
+      add('wide radar dimmed, precip brightness', q({ rb: 60 }, { bright: 40 }), [{ screen: 'weather', idx: 2 }], frames, undefined, S3);
+      add('wide radar frames not all on hand', q(), [{ screen: 'weather', idx: 2 }], { a: bytes }, undefined, S3);
+      const ps = [0.25, 0.5, 0.75];
+      add('wide rolls radar current time', q({ clock: 'now' }), ps.map((pp) => ({ screen: 'weather', idx: 2, nums: { 'rad.clock': { from: '12:59', p: pp } } })), frames, undefined, S3);
+      const hdr = wide(payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX }));
+      add('wide rolls header clock', hdr, ps.map((pp) => ({ screen: 'transit', nums: { 'hdr.clock': { from: '12:59', p: pp } } })), undefined, undefined, S3);
+    }
+    // Wide ticker: the platform sign (full names, the status icon right).
+    for (const [file, mapid, name] of [['morse-2026-10-03-2316.json', '40100', 'MORSE'], ['clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE']]) {
+      const q = { ...wideFrom(file, mapid, name, { alerts: ['BL'] }), screen: 'ticker', tickerHeader: name, tickerFill: 40 };
+      add(`wide ticker ${file}`, q, [{ screen: 'ticker' }, { screen: 'ticker', page: 1 }, { screen: 'ticker', page: 1, slide: 0.4 }, { screen: 'ticker', now: q.now + 130 }], undefined, undefined, S3);
+    }
+    // Wide animator: a departing train in a half, a row joining, a row moving halves' tops.
+    {
+      const anim = draw.createTransitAnimator();
+      const r = (h, ln, lbl, t) => ({ ln, lbl, t, s: t.map(() => 0), a: 0, h });
+      const base2 = { ...base, cols: 128, view: 'split', halves: ['NORTHBOUND', 'SOUTHBOUND'] };
+      const one = { ...base2, now: NOW, rows: [r(0, 'RD', 'HOWARD', [NOW + 10, min(6), min(12)]), r(1, 'RD', '95TH', [min(3), min(9)])] };
+      const two = { ...base2, now: NOW + 45, rows: [r(0, 'RD', 'HOWARD', [min(6), min(12)]), r(0, 'PR', 'LINDEN', [min(4)]), r(1, 'RD', '95TH', [min(3), min(9)])] };
+      const steps = [{ p: one, now: NOW, t: 0 }, ...ts(1000, 1800, 14).map((t) => ({ p: two, now: NOW + 45, t }))];
+      S.push({
+        s3only: true,
+        name: 'wide anim split departure and a joining row',
+        steps: steps.map((st) => {
+          const view = anim.step(st.p, st.now, st.t);
+          return { payload: st.p, now: st.now, t: st.t, blink: false, px: hexOf(draw.render(st.p, { screen: 'transit', now: st.now, view })) };
         }),
       });
     }

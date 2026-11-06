@@ -9,7 +9,7 @@
 // Contract "Weather row"; fixtures: fixtures/nws-forecast/.
 
 const { createLocationPoller, fetchJson } = require('./location-poller');
-const { POP_HOURS, FORECAST_DAYS, HOUR_STEPS } = require('./weather');
+const { POP_HOURS, FORECAST_DAYS, HOUR_STEPS, WEEK_DAYS } = require('./weather');
 
 const HOURS = HOUR_STEPS[HOUR_STEPS.length - 1] + 1;
 const GEO = { headers: { Accept: 'application/geo+json' } };
@@ -79,7 +79,7 @@ function withForecast(w, f, now) {
   // Hours from the current one on.
   const hrs = (f.hours || []).filter((h) => h.e > now);
   if (hrs.length >= HOURS && hrs.slice(0, HOURS).every((h) => h.t != null)) {
-    out.hrs = hrs.map((h) => ({ time: h.s, temp: h.t, icon: h.icon, isDay: h.isDay }));
+    out.hrs = hrs.map((h) => ({ time: h.s, temp: h.t, icon: h.icon, isDay: h.isDay, pop: h.pop }));
   }
   const pops = hrs.slice(0, POP_HOURS).map((h) => h.pop).filter((x) => x != null);
   if (pops.length) out.pop = Math.max(...pops);
@@ -97,6 +97,19 @@ function withForecast(w, f, now) {
     days.push({ time: p.s, icon: p.icon, hi: p.t, lo: night });
   }
   if (days.length) out.days = days;
+  // The week (a wide board's 7-day layout, contract "Width"): today (its
+  // day period's icon, or tonight's once that's over; today's high and low
+  // as above), then the six days after it.
+  const week = [];
+  for (let i = 0; i < ps.length && week.length < WEEK_DAYS - 1; i++) {
+    const p = ps[i];
+    if (!p.day || dateOf(p.s) <= today || p.t == null) continue;
+    week.push({ time: p.s, icon: p.icon, hi: p.t, lo: ps[i + 1] && !ps[i + 1].day ? ps[i + 1].t : null });
+  }
+  const todayP = dayToday || nightToday;
+  // (Today's time is 12 h back: dayName() names the day 12 h after a time,
+  // for WeatherAPI's midnight epochs.)
+  if (todayP && week.length === WEEK_DAYS - 1 && out.hi != null) out.week = [{ time: now - 12 * 3600, icon: todayP.icon, hi: out.hi, lo: out.lo }, ...week];
   return out;
 }
 

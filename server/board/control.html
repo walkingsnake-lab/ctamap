@@ -281,6 +281,8 @@
 
   <p class="sh" id="layH">Rows</p>
   <div class="grp">
+    <label class="c sel" id="wideRow" hidden><span>Two panels</span><span class="v"></span><span data-icon="chev"></span>
+      <select id="wideLayout"><option value="split">Northbound | southbound</option><option value="rows">Destination rows</option></select></label>
     <div class="tiles" role="radiogroup" aria-labelledby="layH" id="transitLayout">
       <button role="radio" data-v="header"><img alt="" data-static="layout-header"><span class="lab"><span class="rd" data-icon="dotck"></span>Station on top</span></button>
       <button role="radio" data-v="key"><img alt="" data-static="layout-key"><span class="lab"><span class="rd" data-icon="dotck"></span>Key on top</span></button>
@@ -342,11 +344,12 @@
   <div class="grp">
     <div class="tiles" role="radiogroup" aria-labelledby="wvH" id="wxView">
       <button role="radio" data-v="now"><img alt="" data-static="wx-now"><span class="lab"><span class="rd" data-icon="dotck"></span>Conditions</span></button>
-      <button role="radio" data-v="5day"><img alt="" data-static="wx-5day"><span class="lab"><span class="rd" data-icon="dotck"></span>5-day</span></button>
+      <button role="radio" data-v="5day"><img alt="" data-static="wx-5day"><span class="lab"><span class="rd" data-icon="dotck"></span><span data-wide-name="7-day">5-day</span></span></button>
       <button role="radio" data-v="hourly"><img alt="" data-static="wx-hourly"><span class="lab"><span class="rd" data-icon="dotck"></span>Hourly</span></button>
       <button role="radio" data-v="radar"><img alt="" data-static="wx-radar"><span class="lab"><span class="rd" data-icon="dotck"></span>Radar</span></button>
     </div>
     <div class="c"><label for="tempShadow" class="grow">Color behind the temperature</label><input type="checkbox" class="sw" id="tempShadow"></div>
+    <div class="c" id="wxTopRow" hidden><label for="wxTop" class="grow">Today's conditions on top<span class="s">7-day and hourly; off, they show lows and rain chances</span></label><input type="checkbox" class="sw" id="wxTop"></div>
   </div>
   <p class="ft" id="wxViewFt"></p>
   <p class="sh">Radar</p>
@@ -392,6 +395,7 @@
       <button role="radio" data-v="gradient"><img alt="" data-static="face-gradient"><span class="lab"><span class="rd" data-icon="dotck"></span>Gradient</span></button>
       <button role="radio" data-v="digits"><img alt="" data-static="face-digits"><span class="lab"><span class="rd" data-icon="dotck"></span>Big digits</span></button>
       <button role="radio" data-v="daydate"><img alt="" data-static="face-daydate"><span class="lab"><span class="rd" data-icon="dotck"></span>Day &amp; date</span></button>
+      <button role="radio" data-v="words"><img alt="" data-static="face-words"><span class="lab"><span class="rd" data-icon="dotck"></span>Words</span></button>
     </div>
   </div>
   <p class="ft" id="faceFt"></p>
@@ -405,6 +409,14 @@
         <select id="motion"><option value="still">Still</option><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option><option value="custom" disabled>Custom</option></select></label>
     </div>
     <p class="ft">Motion: the clouds, the wheel's rainbow, the ripples and the rain.</p>
+  </div>
+  <div id="analogOpts">
+    <p class="sh">Analog</p>
+    <div class="grp">
+      <label class="c sel"><span>Accent</span><span class="v"></span><span data-icon="chev"></span>
+        <select id="analogAccent"><option value="amber">Amber</option><option value="coral">Coral</option><option value="pink">Pink</option><option value="violet">Violet</option><option value="blue">Blue</option><option value="cyan">Cyan</option><option value="mint">Mint</option><option value="lime">Lime</option></select></label>
+    </div>
+    <p class="ft">The second hand, and today on the calendar (two panels).</p>
   </div>
   <div id="gradientOpts">
     <p class="sh">Gradient</p>
@@ -696,7 +708,7 @@
   const SCREEN_NAME = { transit: 'Transit', ticker: 'Ticker', weather: 'Weather', clock: 'Clock', announce: 'Announce', auto: 'Cycle', baseball: 'Sports' };
   const CYCLE_NAME = { transit: 'Transit', ticker: 'Ticker', weather: 'Weather', clock: 'Clock', announce: 'Announce', baseball: 'Sports' };
   const WX_NAME = { now: 'Conditions', '5day': '5-day', hourly: 'Hourly', radar: 'Radar' };
-  const FACE_NAME = { skyline: 'Skyline', seventies: 'Seventies', analog: 'Analog', daynight: 'Day/night', gradient: 'Gradient', digits: 'Big digits', daydate: 'Day & date' };
+  const FACE_NAME = { skyline: 'Skyline', seventies: 'Seventies', analog: 'Analog', daynight: 'Day/night', gradient: 'Gradient', digits: 'Big digits', daydate: 'Day & date', words: 'Words' };
   const MSG_NAMES = { note: 'Note', type: 'Typewriter', big: 'Big word', roll: 'Credits' };
   const MOTION = {
     still: { cloudDrift: 'off', wheelSpeed: 'off', rippleSpeed: 'off', rainSpeed: 'slow' },
@@ -1096,12 +1108,18 @@
     $('headerDivider').checked = board.headerDivider === true;
     $('timeSteps').checked = board.timeSteps === true;
     selVal('lineNames', board.lineNames || 'white');
+    // A wide board (two panels): its transit layout.
+    $('wideRow').hidden = board.cols !== 128;
+    selVal('wideLayout', board.wideLayout || 'split');
     selVal('tickerHold', board.tickerHold || 8);
     selVal('tickerSlide', board.tickerSlide || 1200);
     if (document.activeElement !== $('tickerFill')) { $('tickerFill').value = board.tickerFill || 55; $('tickerFillV').textContent = `${board.tickerFill || 55}%`; }
     const hid = (pay && pay.hidden) || [];
     $('rowsFt').textContent = (key ? 'With more destinations than fit, the station line goes first, then the key; past 5, one train per row.' : 'With more destinations than fit, the weather goes first, then the top line; past 5, one train per row.')
-      + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? (key ? 'station line' : 'top line') : h === 'weather' ? 'weather' : h)).join(' and ')}.` : '');
+      + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? (key ? 'station line' : 'top line') : h === 'weather' ? 'weather' : h)).join(' and ')}.` : '')
+      + (board.cols === 128 ? (board.wideLayout === 'rows'
+        ? ' Two panels: full names, up to 5 times; past 5 destinations, two columns.'
+        : ' Two panels: northbound | southbound where every line here runs that way, else two columns.') : '');
   }
   $('tShows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
@@ -1110,8 +1128,9 @@
     else save({ transitScreen: v });
   });
   $('transitLayout').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) save({ transitLayout: b.dataset.v }); });
-  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
+  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
+  $('wideLayout').addEventListener('change', (e) => save({ wideLayout: e.target.value }));
   for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('bbPriority').addEventListener('change', (e) => save({ bbPriority: e.target.value }));
   const slider = (id, out, key) => {
@@ -1237,6 +1256,11 @@
   function renderWeather() {
     checked('wxView', ['5day', 'hourly', 'radar'].includes(board.wxView) ? board.wxView : 'now');
     $('tempShadow').checked = board.tempShadow === true;
+    // Two panels: 7 days, 24 hours, and the optional top bar.
+    const wide = board.cols === 128;
+    for (const el of qa('[data-wide-name]')) { el.dataset.name ??= el.textContent; el.textContent = wide ? el.dataset.wideName : el.dataset.name; }
+    $('wxTopRow').hidden = !wide;
+    $('wxTop').checked = board.wxTop !== false;
     pressed('radarCorner', board.radarTime === false ? 'temp' : 'time');
     const rf = board.radarFrame || 500;
     pressed('radarSpeed', rf >= 700 ? '700' : rf <= 300 ? '300' : '500');
@@ -1282,10 +1306,15 @@
     const face = board.clockFace || 'skyline';
     checked('clockFace', face);
     const c = caps();
-    for (const b of qa('#clockFace [data-v]')) b.disabled = !!c && b.dataset.v !== 'skyline' && !c.includes(b.dataset.v) && b.dataset.v !== face;
-    $('faceFt').textContent = c && face !== 'skyline' && !c.includes(face) ? 'This board\'s firmware doesn\'t draw this face yet: it shows the skyline.' : '';
+    const wide = board.cols === 128;
+    for (const b of qa('#clockFace [data-v]')) b.disabled = b.dataset.v !== face && ((!!c && b.dataset.v !== 'skyline' && !c.includes(b.dataset.v)) || (b.dataset.v === 'words' && !wide));
+    $('faceFt').textContent = face === 'words' && !wide ? 'The word clock needs two panels (128 × 32): this board shows the skyline.'
+      : c && face !== 'skyline' && !c.includes(face) ? 'This board\'s firmware doesn\'t draw this face yet: it shows the skyline.'
+      : !wide ? 'Words: two panels (128 × 32) only.' : '';
     $('faceFt').hidden = !$('faceFt').textContent;
     $('skylineOpts').hidden = face !== 'skyline';
+    $('analogOpts').hidden = face !== 'analog';
+    selVal('analogAccent', board.analogAccent || 'amber');
     $('gradientOpts').hidden = face !== 'gradient';
     $('digitsOpts').hidden = face !== 'digits';
     $('showTemp').checked = board.showTemp !== false;
@@ -1299,6 +1328,7 @@
   }
   $('clockFace').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) save({ clockFace: b.dataset.v }); });
   $('motion').addEventListener('change', (e) => { if (MOTION[e.target.value]) save(MOTION[e.target.value]); });
+  $('analogAccent').addEventListener('change', (e) => save({ analogAccent: e.target.value }));
 
   // ---- Cycle ----
   function cycThumb(sc, big) {

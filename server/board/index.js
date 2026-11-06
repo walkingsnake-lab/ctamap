@@ -3,11 +3,11 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
+const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toWeek, toDayHours, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
@@ -67,7 +67,7 @@ function send(res, status, body) {
 // (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 const SECTIONS = {
-  transit: ['header', 'key', 'hidden', 'view', 'rows', 'wx'],
+  transit: ['header', 'key', 'hidden', 'view', 'halves', 'rows', 'wx'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
@@ -295,14 +295,12 @@ function createBoard({
     if (game && !GAME_STATES.includes(game)) throw new ValidationError(`game must be one of ${GAME_STATES.join(', ')}`);
     const rad = body.radar == null ? null : body.radar;
     if (rad && !testRadar.KINDS.includes(rad)) throw new ValidationError(`radar must be one of ${testRadar.KINDS.join(', ')}`);
-    const bars = body.bars == null ? null : body.bars;
-    if (bars && !Object.keys(TEST_RAIN).includes(bars)) throw new ValidationError(`bars must be one of ${Object.keys(TEST_RAIN).join(', ')}`);
     const wb = body.weather == null ? null : body.weather;
     if (wb != null && typeof wb !== 'object') throw new ValidationError('weather must be {kind, tod}');
     const kind = wb && wb.kind != null ? wb.kind : null, tod = wb && wb.tod != null ? wb.tod : null;
     if (kind != null && !Object.keys(TEST_WX).includes(kind)) throw new ValidationError(`weather.kind must be one of ${Object.keys(TEST_WX).join(', ')}`);
     if (tod != null && !Object.keys(TEST_TOD).includes(tod)) throw new ValidationError(`weather.tod must be one of ${Object.keys(TEST_TOD).join(', ')}`);
-    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, bars, weather: kind || tod ? { kind, tod } : null };
+    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, weather: kind || tod ? { kind, tod } : null };
   }
 
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
@@ -383,7 +381,9 @@ function createBoard({
   function noteCols(id, q) {
     try { store.setCols(id, q.w === '128' ? 128 : 64); } catch (e) { log.error('[board] width:', e.message); }
   }
-  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f), peek: capOk(id, q, 'peek') });
+  // A wide-only face (WIDE_FACES: the word clock) counts only on a wide board.
+  const wideNow = (id, q) => (typeof q.w === 'string' ? q.w === '128' : (store.get(id) || {}).cols === 128);
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) && (!WIDE_FACES.includes(f) || wideNow(id, q)), peek: capOk(id, q, 'peek') });
 
   // The announce screen's message as the board draws it (draw.js
   // messageLayout: the lines for its style), or null when none is set.
@@ -422,13 +422,23 @@ function createBoard({
   }
 
   // The day/night face's sun and spot: the subsolar point in tenths of a
-  // degree at `now` (t), and the station's pixel on the 5.625° map.
-  function dayNightOf(st, now) {
+  // degree at `now` (t), and the station's pixel on the 5.625° map. A wide
+  // board (contract "Width") also gets its pixel on the 4.5° map (hw) and
+  // today's sunrise and sunset (sr, ss: WeatherAPI's, as for auto brightness).
+  function dayNightOf(st, now, wide = false, w = null) {
     const sun = subsolar(now);
     const here = st && st.lat <= 84.375 && st.lat > -61.875
       ? [Math.min(63, Math.floor((st.lon + 180) / 5.625)), Math.floor((84.375 - st.lat) / 5.625)] : null;
-    return { dec: Math.round(sun.dec * 10), lon: Math.round(sun.lon * 10), t: Math.floor(now), here };
+    const out = { dec: Math.round(sun.dec * 10), lon: Math.round(sun.lon * 10), t: Math.floor(now), here };
+    if (!wide) return out;
+    out.hw = st && st.lat <= 84 && st.lat > -60 ? [Math.min(79, Math.floor((st.lon + 180) / 4.5)), Math.floor((84 - st.lat) / 4.5)] : null;
+    if (w && w.sunrise != null && w.sunset != null) { out.sr = w.sunrise; out.ss = w.sunset; }
+    return out;
   }
+  // The analog face's accent color, or null for the original amber.
+  const accentOf = (board) => (board.analogAccent && board.analogAccent !== 'amber' ? ANALOG_ACCENTS[board.analogAccent] || null : null);
+  // The analog face's weather (and the wide Seventies face's temperature).
+  const cwxOf = (wd) => (wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null);
 
   // The skyline face's parameters, or null without weather or a station.
   function skylineOf(board, w, wd, st, now) {
@@ -447,11 +457,13 @@ function createBoard({
   function peekOf(board, w, wd, st, skyNow, now, caps) {
     const faces = {};
     if (caps.clock) faces.skyline = skylineOf(board, w, wd, st, skyNow);
-    if (caps.face('analog')) faces.cwx = wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null;
-    if (caps.face('daynight')) faces.dn = dayNightOf(st, now);
+    if (caps.face('analog') || (board.cols === 128 && caps.face('seventies'))) faces.cwx = cwxOf(wd);
+    if (caps.face('daynight')) faces.dn = dayNightOf(st, now, board.cols === 128, w);
     if (caps.face('gradient') && board.gradInvert === true) faces.ginv = true;
     if (caps.face('digits') && board.colonBlink === false) faces.steady = true;
-    return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...faces };
+    if (caps.face('analog') && accentOf(board)) faces.cacc = accentOf(board);
+    const wide = board.cols === 128;
+    return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...(wide && wd ? { week: toWeek(wd), hours24: toDayHours(wd) } : {}), ...faces };
   }
 
   async function update(board, id, boot, preview = {}, caps = capsOf(id)) {
@@ -491,54 +503,47 @@ function createBoard({
     const stale = !data || now - data.fetchedAt > STALE_S;
     // The row cap only reserves space for the weather row when there's
     // weather to show.
-    // Temperatures in the board's unit (wd); rain bars keep the raw data.
+    // Temperatures in the board's unit (wd).
     const wd = inUnit(w, board.tempUnit);
     // The key layout has no weather strip: the station line takes rows 25-31.
     const keyLayout = board.transitLayout === 'key';
     const wx = board.showWeather && !keyLayout && wd ? toWx(wd) : null;
     const cfg = { ...board, showWeather: !!wx, showKey: keyLayout, lines: st ? st.lines : null };
     let radarState = NO_RADAR;
-    try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
+    // A wide board (cols 128) gets the station's 128-wide frames (contract "Width").
+    try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon, { wide: board.cols === 128 }); }
     catch (e) { log.error('[board] radar:', e.message); }
     // Test radar loop from the simulator (expires with the test alerts).
     if (test && test.radar && st) {
-      try { radarState = { ...radarState, ...(await testRadar.want(test.radar, st, nowSecs())) }; }
+      try { radarState = { ...radarState, ...(await testRadar.want(test.radar, st, nowSecs(), { wide: board.cols === 128 })) }; }
       catch (e) { log.error('[board] test radar:', e.message); }
     }
     // The radar screen is the weather screen: the radar loop only while rain
     // is in the box (frames are sent only then), current conditions otherwise.
-    // Rain bars (wxRain 'bars' or 'both'): while precipitation is falling or
-    // due in the next 2 hours. 'bars' never sends the radar loop; 'both'
-    // sends both and the board alternates them (rain.loops radar loops, then
-    // rain.alt s of bars) while both apply.
-    // Test rain bars (simulator): shown whatever the board's setting, and
-    // replacing the radar loop unless it's alternating ('both').
-    const testBars = test && test.bars ? testRain(test.bars, now) : null;
-    // Bars need 15-minute precipitation, which WeatherAPI doesn't send: without
-    // it (and no test bars), 'bars' and 'both' act as 'radar', so a board left
-    // on 'bars' still gets its radar loop.
-    const wxRain = (w && w.q15 && w.q15.length) || testBars ? board.wxRain : 'radar';
-    const barsOn = wxRain === 'bars' || wxRain === 'both';
-    let rain = barsOn && w ? toRain(w, now) : null;
-    if (testBars) rain = testBars;
     // The radar view (wxView 'radar') keeps its frames whatever the weather
-    // (an empty map when dry) and never shows rain bars.
+    // (an empty map when dry).
     const radarView = board.wxView === 'radar';
-    if (radarView) rain = null;
     // Every kept frame, rain or not, for the peek chooser's radar view.
     const allFrames = { frames: radarState.frames, ft: radarState.ft };
-    if (!radarView && (!radarState.on || wxRain === 'bars' || (testBars && wxRain !== 'both'))) radarState = { ...radarState, frames: [], ft: [] };
-    // Both: the radar loop plays wxRainLoops full cycles, then the bars show
-    // for alt s, repeating (draw.js rainBarsTurn()).
-    if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15, loops: board.wxRainLoops || 2 };
+    if (!radarView && !radarState.on) radarState = { ...radarState, frames: [], ft: [] };
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && wd ? toDays(wd) : null;
     const hours = board.wxView === 'hourly' && wd ? toHours(wd) : null;
+    // A wide board (contract "Width") also gets the week (today and six
+    // days) and the 24-hour slots when NWS has them, and `notop` with its
+    // conditions bar off; the 64 fields stay for firmware without them.
+    const wide = board.cols === 128;
+    const week = wide && days ? toWeek(wd) : null;
+    const dayHours = wide && hours ? toDayHours(wd) : null;
+    // The wide conditions' last line: the next sunrise or sunset (WeatherAPI's
+    // times for today; after sunset, tomorrow's sunrise as today's + 1 day).
+    const sun = wide && w && w.sunrise != null && w.sunset != null
+      ? (now < w.sunrise ? { k: 'rise', t: w.sunrise } : now < w.sunset ? { k: 'set', t: w.sunset } : { k: 'rise', t: w.sunrise + 86400 }) : null;
     // The conditions screen's RAIN line (`rl`), buffered per board and station.
     const rlKey = `${id}:${board.station.mapid}`;
     const rl = wd ? rainLine(rainLines.get(rlKey), wd.pop) : false;
     if (wd) rainLines.set(rlKey, rl);
-    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(rl ? { rl: 1 } : {}), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(rain ? { rain } : {}) } };
+    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(rl ? { rl: 1 } : {}), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(week ? { week } : {}), ...(dayHours ? { hours24: dayHours } : {}), ...(wide && board.wxTop === false ? { notop: 1 } : {}), ...(sun ? { sun } : {}) } };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }
@@ -562,7 +567,7 @@ function createBoard({
     const screen = resolveScreen(board, cyc);
     const held = holdOf(id, board, now, !!radarState.on);
     const viewKey = `${id}:${board.station.mapid}`;
-    const { view, viewState, rows, ticker, bars } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
+    const { view, viewState, rows, ticker, bars, halves } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
       v: board.v,
@@ -596,6 +601,8 @@ function createBoard({
       ts: board.timeSteps === true,
       hidden: bars.hidden,
       view,
+      // Wide board, split view: the halves' direction labels (contract "Width").
+      ...(halves ? { halves } : {}),
       rows,
       ticker,
       wx: bars.showWeather ? wx : null,
@@ -614,10 +621,13 @@ function createBoard({
       // (skyline.js; contract "Skyline"; null on the seventies face).
       cface: face,
       skyline: face === 'skyline' ? skylineOf(board, w, wd, st, skyNow) : null,
-      // Analog face: the temperature and icon (contract "Analog"); null without weather.
-      ...(face === 'analog' ? { cwx: wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null } : {}),
+      // Analog face, and Seventies on a wide board: the temperature and icon
+      // (contract "Analog", "Width"); null without weather.
+      ...(face === 'analog' || (face === 'seventies' && board.cols === 128) ? { cwx: cwxOf(wd) } : {}),
+      // Analog face: the accent color (the second hand, the calendar's day), absent = amber.
+      ...(face === 'analog' && accentOf(board) ? { cacc: accentOf(board) } : {}),
       // Day/night face: the subsolar point and the board's spot (contract "Day/night").
-      ...(face === 'daynight' ? { dn: dayNightOf(st, now) } : {}),
+      ...(face === 'daynight' ? { dn: dayNightOf(st, now, board.cols === 128, w) } : {}),
       // Gradient face: lit gradient digits on black (contract "Gradient").
       ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
       // Big digits face: a steady colon (contract "Big digits").
@@ -1052,13 +1062,13 @@ function createBoard({
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
             throw e;
           }
-          if (t.lines.length || t.warn || t.game || t.radar || t.bars || t.weather) tests.set(id, { ...t, until: now + TEST_S });
+          if (t.lines.length || t.warn || t.game || t.radar || t.weather) tests.set(id, { ...t, until: now + TEST_S });
           else tests.delete(id);
         } else if (method !== 'GET') {
           return send(res, 405, { err: 'method' });
         }
         const t = activeTest(id, now);
-        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, bars: t.bars || null, weather: t.weather || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, bars: null, weather: null, left: 0 });
+        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, weather: t.weather || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, weather: null, left: 0 });
       }
 
       // Station list for the simulator's picker.

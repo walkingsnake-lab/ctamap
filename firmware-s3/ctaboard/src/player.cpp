@@ -357,12 +357,6 @@ int Player::radar_idx(double ms) const {
   return draw::radar_loop_idx(p["radar"]["frames"], &radar_frames, ms - loop_start, draw::timing(p));
 }
 
-bool Player::rain_bars(double ms) const {
-  // True while the rain bars show in the radar loop's turn.
-  const Value &rn = p["radar"]["wx"]["rain"];
-  return draw::rain_bars_turn(rn, loop_len(), draw::timing(p), ms - loop_start);
-}
-
 int Player::loop_len() const {
   // Frames in the playing loop: all of them once every frame is on hand,
   // else 0 (the screen holds on the newest on hand).
@@ -409,7 +403,7 @@ std::optional<screen::FrameKey> Player::frame_key(double ms, long long now) {
       break;
     }
     case Screen::Weather:
-      k.v[4] = radar_idx(ms) * 2 + (rain_bars(ms) ? 1 : 0);
+      k.v[4] = radar_idx(ms);
       k.v[5] = (long long)radar_frames.size();
       break;
     case Screen::Baseball:
@@ -455,7 +449,7 @@ bool Player::screen_busy(double ms) const {
   if (screen == Screen::Announce) return ms - msg_start < draw::message_intro_ms(p["msg"]);
   if (screen == Screen::Weather) {
     int n = loop_len();
-    if (n < 2 || rain_bars(ms)) return false;
+    if (n < 2) return false;
     draw::Timing tm = draw::timing(p);
     double cycle = (n - 1) * tm.radarFrame + tm.radarHold;
     return pymod(ms - loop_start, cycle) < (n - 1) * tm.radarFrame;
