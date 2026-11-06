@@ -69,6 +69,7 @@ std::string to_json(const Config &c) {
   key(o, "color_order");
   put_str(o, c.color_order);
   flag("knob_reverse", c.knob_reverse);
+  num("cols", c.cols);
   key(o, "setup_name");
   put_str(o, c.setup_name);
   key(o, "setup_pass");
@@ -111,6 +112,8 @@ bool from_json(const std::string &text, Config &out, std::string *err) {
   flag("double_buffer", c.double_buffer);
   str("color_order", c.color_order);
   flag("knob_reverse", c.knob_reverse);
+  num("cols", c.cols);
+  if (c.cols != 128) c.cols = 64;  // one panel or two; anything else reads as one
   str("setup_name", c.setup_name);
   str("setup_pass", c.setup_pass);
   out = c;

@@ -32,6 +32,10 @@ struct Config {
   bool double_buffer = true;
   std::string color_order = "RGB";
   bool knob_reverse = false;
+  // LEDs across: 64 (one panel), or 128 for two panels chained on the
+  // ribbon (128 x 32). Sets the driver's chain length, and the board tells
+  // the server with every update (`w=128`; contract "Width").
+  int cols = 64;
   // The board's own setup network (WiFi setup without USB): its name ("":
   // Board-<last 4 hex of the MAC>) and WPA2 password ("": open). Both go on
   // the label, as a WiFi QR code that joins it.

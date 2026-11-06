@@ -126,6 +126,7 @@ const USAGE = `node scripts/setup-board.js --id <board-id> [options]
   --shared              no key of its own: the shared BOARD_TOKEN (your own boards)
   --rekey               give a board that already has a key a new one (the old token stops working)
   --wifi "ssid=pass"    save a network (repeatable); without it, WiFi is set on the board's setup network
+  --cols 64|128         LEDs across: 64 for one panel (default), 128 for two chained
   --firmware <file>     ctaboard.ino.merged.bin to flash (default: the CI build, via gh)
   --port <port>         serial port (default: esptool finds it)
   --server <url>        default ${DEFAULT_SERVER}
@@ -143,11 +144,13 @@ async function main(argv) {
       shared: { type: 'boolean' }, rekey: { type: 'boolean' }, wifi: { type: 'string', multiple: true, default: [] },
       firmware: { type: 'string' }, port: { type: 'string' }, server: { type: 'string', default: DEFAULT_SERVER },
       control: { type: 'string' }, token: { type: 'string' }, out: { type: 'string', default: path.join(os.homedir(), 'board-labels') },
+      cols: { type: 'string', default: '64' },
       'dry-run': { type: 'boolean' }, yes: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
     },
   });
   if (o.help || !o.id) { console.log(USAGE); return o.help ? 0 : 2; }
   if (!BOARD_ID_RE.test(o.id)) throw new Error('--id must be 1-32 characters of a-z, 0-9, -');
+  if (o.cols !== '64' && o.cols !== '128') throw new Error('--cols must be 64 (one panel) or 128 (two)');
   const dry = !!o['dry-run'];
   const control = o.control || process.env.BOARD_CONTROL_PATH;
   if (!control) throw new Error('set BOARD_CONTROL_PATH (or --control): the script adds the board and its key on the server');
@@ -203,7 +206,7 @@ async function main(argv) {
 
     // 3. Settings.
     const net = setupNetwork();
-    const cfg = boardConfig({ id: o.id, token, url: o.server, networks, setupName: net.name, setupPass: net.pass });
+    const cfg = boardConfig({ id: o.id, token, url: o.server, networks, setupName: net.name, setupPass: net.pass, panel: { cols: Number(o.cols) } });
     const nvsImage = buildNvs(cfg, nvs.size);
     const plan = flashPlan(img, nvsImage, nvs, end);
 

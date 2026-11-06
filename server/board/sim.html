@@ -15,6 +15,9 @@
   figcaption { color: var(--muted); font-size: 12px; margin-bottom: 6px; display: flex; justify-content: space-between; gap: 8px; }
   figure.active figcaption span:first-child { color: var(--accent); }
   canvas { width: 100%; aspect-ratio: 2 / 1; display: block; border: 1px solid var(--line); border-radius: 6px; background: #080808; }
+  /* A board of two panels (payload cols 128): one screen per row, 4:1. */
+  .screens.wide { grid-template-columns: 1fr; }
+  .screens.wide canvas { aspect-ratio: 4 / 1; }
   figure.active canvas { border-color: #4a3a10; }
   .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 16px 0; color: var(--muted); font-size: 12px; }
   .bar b { color: var(--fg); font-weight: 600; }
@@ -161,24 +164,32 @@
   const assets = await fetch('sim-assets.json').then((r) => r.json());
   const D = BoardDraw.create(assets);
 
-  // ---- LED canvas: 64x32 pixels scaled up, with a dot grille on top ----
+  // ---- LED canvas: the board's pixels (64x32, or 128x32 for two panels:
+  // the payload's `cols`) scaled up, with a dot grille on top ----
+  const S = 10; // canvas px per LED
   function ledCanvas(canvas) {
-    const S = canvas.width / 64;
     const ctx = canvas.getContext('2d');
-    const small = new OffscreenCanvas(64, 32);
-    const sctx = small.getContext('2d');
-    const img = sctx.createImageData(64, 32);
-    // Grille: dark board with round holes; unlit LEDs show as near-black dots.
-    const grille = new OffscreenCanvas(canvas.width, canvas.height);
-    const g = grille.getContext('2d');
-    g.fillStyle = '#080808';
-    g.fillRect(0, 0, grille.width, grille.height);
-    g.globalCompositeOperation = 'destination-out';
-    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
-      g.beginPath(); g.arc(x * S + S / 2, y * S + S / 2, S * 0.42, 0, Math.PI * 2); g.fill();
+    let w = 0, small, sctx, img, grille;
+    // Sized to the frame: a wide board's frames are 128 across.
+    function size(fw) {
+      w = fw;
+      canvas.width = w * S; canvas.height = 32 * S;
+      small = new OffscreenCanvas(w, 32);
+      sctx = small.getContext('2d');
+      img = sctx.createImageData(w, 32);
+      // Grille: dark board with round holes; unlit LEDs show as near-black dots.
+      grille = new OffscreenCanvas(canvas.width, canvas.height);
+      const g = grille.getContext('2d');
+      g.fillStyle = '#080808';
+      g.fillRect(0, 0, grille.width, grille.height);
+      g.globalCompositeOperation = 'destination-out';
+      for (let y = 0; y < 32; y++) for (let x = 0; x < w; x++) {
+        g.beginPath(); g.arc(x * S + S / 2, y * S + S / 2, S * 0.42, 0, Math.PI * 2); g.fill();
+      }
     }
     return (frame) => {
-      for (let i = 0, j = 0; i < 64 * 32; i++, j += 3) {
+      if (frame.w !== w) size(frame.w);
+      for (let i = 0, j = 0; i < w * 32; i++, j += 3) {
         const r = frame.px[j], gg = frame.px[j + 1], b = frame.px[j + 2];
         const lit = r || gg || b;
         img.data[i * 4] = lit ? r : 12;
@@ -271,6 +282,7 @@
       if (!r.ok) throw new Error(body.err || r.status);
       if (p && body.stn !== p.stn) resetAnimation(); // new station: start fresh, like the board
       p = body;
+      document.querySelector('.screens').classList.toggle('wide', p.cols === 128);
       skyFade.set(p.skyline || null, performance.now(), hasStrip, true);
       // The server's clock is whole seconds; adopt a new offset only on real
       // drift so the clock doesn't jitter by up to a second every poll.

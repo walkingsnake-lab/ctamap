@@ -1,4 +1,5 @@
-// Board drawing: the reference implementation of how the 64x32 board draws a
+// Board drawing: the reference implementation of how the board (64x32, or
+// 128x32 with two panels: `cols`) draws a
 // /board/update payload in either transit view (destination rows or the
 // chronological list), including its animations (per-digit roll, fades and
 // slides, ticker slide, alert blink). Runs unchanged in Node (render.js, tests, previews)
@@ -195,11 +196,35 @@
   // ---- easing ----
   const easeInOut = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
 
+  // ---- width ----
+  // A board of two chained panels is 128 x 32: the payload says so with
+  // `cols` (contract "Width"; absent on a 64-wide board). A screen without a
+  // 128 layout yet draws at 64 and shows on both panels: widenPx() repeats
+  // each row of a frame `w` wide across `to` columns.
+  const WIDE = 128;
+  const colsOf = (p) => (p && p.cols === WIDE ? WIDE : 64);
+  function widenPx(px, w, to) {
+    const h = px.length / (w * 3), out = new Uint8Array(to * h * 3);
+    for (let y = 0; y < h; y++) for (let x = 0; x < to; x++) {
+      const i = (y * to + x) * 3, j = (y * w + (x % w)) * 3;
+      out[i] = px[j]; out[i + 1] = px[j + 1]; out[i + 2] = px[j + 2];
+    }
+    return out;
+  }
+
   // ---- renderer ----
 
   function create({ fonts, icons, glyphs: G, tz = 'America/Chicago', makeFrame }) {
     const measure = (font, str) => measureWith(fonts, font, str);
-    const newFrame = makeFrame || (() => new Frame(64, 32, fonts));
+    // makeFrame(w, h): the caller's Frame class (render.js adds PNG output).
+    const newFrame = (w = 64) => (makeFrame ? makeFrame(w, 32) : new Frame(w, 32, fonts));
+    // The frame as the board shows it: 64-wide screens on a 128 board fill both panels.
+    function widen(f, cols) {
+      if (f.w >= cols) return f;
+      const g = newFrame(cols);
+      g.px.set(widenPx(f.px, f.w, cols));
+      return g;
+    }
     const s = (cp) => String.fromCodePoint(cp);
 
     const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
@@ -2609,11 +2634,15 @@
     // Screen change (S3): the new screen pushes the old one's last frame
     // off the panel sideways over SCREEN_SLIDE_MS, SLIDE_GAP unlit columns
     // between them. dir 1: the new screen comes in from the right (a later
-    // screen); -1: from the left. slideOffset(t) is how far it has come,
-    // 0..64 + SLIDE_GAP px, t ms into the slide.
+    // screen); -1: from the left. slideOffset(t, w) is how far it has come,
+    // 0..w + SLIDE_GAP px, t ms into the slide across a panel w wide.
+    // `from` (pixels) narrower than f, the last frame of a 64-wide status
+    // screen on a 128 board, is widened as the board showed it.
     const SCREEN_SLIDE_MS = 450, SLIDE_GAP = 4;
-    const slideOffset = (t) => Math.round(easeInOut(Math.max(0, Math.min(1, t / SCREEN_SLIDE_MS))) * (64 + SLIDE_GAP));
+    const slideOffset = (t, w = 64) => Math.round(easeInOut(Math.max(0, Math.min(1, t / SCREEN_SLIDE_MS))) * (w + SLIDE_GAP));
+    const fromPx = (from, f) => (from.length < f.px.length ? widenPx(from, from.length / (f.h * 3), f.w) : from);
     function slideFrames(from, f, d, dir) {
+      from = fromPx(from, f);
       const w = f.w, h = f.h, cur = f.px.slice();
       for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -2636,6 +2665,7 @@
     // into the fade.
     const SCREEN_FADE_OUT_MS = 125, SCREEN_FADE_IN_MS = 125, SCREEN_FADE_MS = SCREEN_FADE_OUT_MS + SCREEN_FADE_IN_MS;
     function fadeFrames(from, f, t) {
+      from = fromPx(from, f);
       const out = t < SCREEN_FADE_OUT_MS;
       const k = out ? 1 - Math.max(0, t) / SCREEN_FADE_OUT_MS : Math.min(1, (t - SCREEN_FADE_OUT_MS) / SCREEN_FADE_IN_MS);
       const src = out ? from : f.px;
@@ -2667,8 +2697,9 @@
           : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderClock(p, o)
           : screen === 'announce' ? renderAnnounce(p, o) : renderTransit(p, o);
       } finally { NR = null; ICON_T = null; }
+      f = widen(f, colsOf(p));
       applyBrightness(f, p.bright);
-      if (o.slide && o.slide.from) slideFrames(o.slide.from, f, slideOffset(o.slide.t || 0), o.slide.dir == null ? 1 : o.slide.dir);
+      if (o.slide && o.slide.from) slideFrames(o.slide.from, f, slideOffset(o.slide.t || 0, f.w), o.slide.dir == null ? 1 : o.slide.dir);
       else if (o.fade && o.fade.from) fadeFrames(o.fade.from, f, o.fade.t || 0);
       return f;
     }
@@ -2751,5 +2782,5 @@
     return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : screen;
   }
 
-  return { Frame, create, autoScreen, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE, HOLD_MAX };
+  return { Frame, create, autoScreen, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE, HOLD_MAX, WIDE, colsOf, widenPx };
 });

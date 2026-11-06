@@ -740,6 +740,42 @@ async function build() {
     add('screen fade ticker to transit', p, [0, 40, 100, 124, 125, 170, 249, 250, 400].map((t) => ({ screen: 'transit', fade: { from, t } })), undefined, undefined, { s3only: true });
     add('screen fade dimmed transit to weather', dim, [60, 190].map((t) => ({ screen: 'weather', fade: { from: fromDim, t } })), undefined, undefined, { s3only: true });
   }
+  // Two chained panels (payload `cols` 128; S3 only, the M4 is 64 wide):
+  // screens without a 128 layout yet draw at 64 on both panels, and the
+  // screen-change slide and fade run across all 128 columns, from a 64-wide
+  // frame (a status screen) too.
+  {
+    const wide = (p) => ({ ...p, cols: 128 });
+    const bytes = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Uint8Array.from(v)])) : undefined);
+    const WIDE = ['transit morse-2026-10-03-2316.json header=true wx=true', 'chrono clark/lake alerts', 'stale', 'ticker header kept', 'weather screen normal',
+      'weather rain loops then bars', 'radar time off split=true svr warning', 'baseball logos live', 'knob chooser five entries', 'peek slides',
+      'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'announce typewriter', 'brightness 50'];
+    for (const name of WIDE) {
+      const s = S.find((x) => x.name === name);
+      if (!s) throw new Error(`no scenario "${name}" to widen`);
+      add(`wide ${name}`, wide(s.payload), s.renders.map((r) => r.opts), bytes(s.frames), bytes(s.logos), { s3only: true, clouds: bytes(s.clouds) });
+    }
+    for (const name of ['anim DUE leaves, times slide', 'anim view switch']) {
+      const s = S.find((x) => x.name === name);
+      const anim = draw.createTransitAnimator();
+      S.push({
+        s3only: true,
+        name: `wide ${name}`,
+        steps: s.steps.map((st) => {
+          const p = wide(st.payload), view = anim.step(p, st.now, st.t);
+          return { ...st, payload: p, px: hexOf(draw.render(p, { screen: 'transit', now: st.now, view, blink: st.blink })) };
+        }),
+      });
+    }
+    const p = wide(payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX }));
+    const from = Array.from(draw.render(p, { screen: 'ticker' }).px);
+    const narrow = Array.from(draw.render({ ...p, cols: undefined }, { screen: 'ticker' }).px);
+    add('wide screen slide ticker to transit', p, [0, 60, 150, 225, 449, 450].map((t) => ({ screen: 'transit', slide: { from, t, dir: 1 } })), undefined, undefined, { s3only: true });
+    add('wide screen slide from the left', p, [60, 225].map((t) => ({ screen: 'transit', slide: { from, t, dir: -1 } })), undefined, undefined, { s3only: true });
+    add('wide screen slide from a 64-wide frame', p, [0, 150, 300].map((t) => ({ screen: 'transit', slide: { from: narrow, t, dir: 1 } })), undefined, undefined, { s3only: true });
+    add('wide screen fade ticker to transit', p, [0, 100, 170, 400].map((t) => ({ screen: 'transit', fade: { from, t } })), undefined, undefined, { s3only: true });
+    add('wide screen fade from a 64-wide frame', p, [40, 200].map((t) => ({ screen: 'transit', fade: { from: narrow, t } })), undefined, undefined, { s3only: true });
+  }
   return S;
 }
 

@@ -523,6 +523,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     const board = from != null ? JSON.parse(JSON.stringify(state.boards[from])) : defaultBoard(stations);
     Object.assign(board, fields, { v: 1, bright: 'auto' });
     delete board.rainHold;
+    delete board.cols; // the hardware's, not a setting: the new board reports its own
     state.boards[id] = board;
     save();
     return board;
@@ -557,6 +558,8 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       const board = JSON.parse(JSON.stringify(state.boards[from]));
       Object.assign(board, { label: prev.label || '', v: (prev.v || 0) + 1, bright: 'auto' });
       delete board.rainHold;
+      delete board.cols;
+      if (prev.cols) board.cols = prev.cols; // its own panels, not the copied board's
       state.boards[id] = board;
       save();
       return board;
@@ -570,6 +573,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       const prev = state.boards[id];
       const board = defaultBoard(stations);
       Object.assign(board, { label: prev.label || '', fw: prev.fw || board.fw, fwRetry: prev.fwRetry || 0, v: (prev.v || 0) + 1 });
+      if (prev.cols) board.cols = prev.cols; // same panels
       state.boards[id] = board;
       save();
       return board;
@@ -632,6 +636,22 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       if (hold) b.rainHold = hold.rain ? { rain: true } : { until: Math.floor(hold.until) };
       else if (!b.rainHold) return b;
       else delete b.rainHold;
+      save();
+      return b;
+    },
+
+    // The board's width in LEDs, as it reports it (index.js: `w` on every
+    // update and select; contract "Width"): 64, or 128 for two chained
+    // panels. Kept as `cols` only when 128, so a 64 board's state is as
+    // before. Not a setting: v stays (the board drew its own width already),
+    // and it's saved only when it changes. Null for an unknown board.
+    setCols(id, cols) {
+      if (!Object.hasOwn(state.boards, id)) return null;
+      const b = state.boards[id];
+      const want = cols === 128 ? 128 : undefined;
+      if (b.cols === want) return b;
+      if (want) b.cols = want;
+      else delete b.cols;
       save();
       return b;
     },

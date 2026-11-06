@@ -64,7 +64,8 @@ void Board::status(const std::string &kind, const std::string &detail) {
   display->show([&](draw::Frame &f) {
     draw::render_status(f, kind, detail);
     shown(SHOWN_STATUS, ms);
-    memcpy(last_px_, f.px, sizeof last_px_);
+    memcpy(last_px_, f.px, f.bytes());
+    last_w_ = f.w;
   });
 }
 
@@ -177,6 +178,7 @@ void Board::shown(int what, long long ms) {
     } else {
       bool chained = transitioning(ms);
       memcpy(slide_px_, last_px_, sizeof slide_px_);
+      slide_w_ = last_w_;
       trans_start_ = ms;
       if (shown_ == SHOWN_CHOOSER || button_dir_) {
         trans_ = SLIDE;
@@ -212,14 +214,20 @@ bool Board::draw_frame(long long ms, long long n) {
     // shown() starts a slide or fade on a change (from the last shown frame:
     // t = 0); then that; then this frame, as shown, is kept for the next.
     shown(what, ms);
+    if ((sliding(ms) || fading(ms)) && slide_w_ < f.w) {
+      // From a 64-wide status screen on a 128 board: as it showed, on both panels.
+      draw::widen_px(slide_px_, slide_w_, f.w);
+      slide_w_ = f.w;
+    }
     if (sliding(ms)) {
       // A quick slide runs the same curve faster.
       double t = (double)(ms - trans_start_) * draw::SCREEN_SLIDE_MS / slide_ms_;
-      draw::slide_frames(slide_px_, f, draw::slide_offset(t), slide_dir_);
+      draw::slide_frames(slide_px_, f, draw::slide_offset(t, f.w), slide_dir_, slide_w_);
     } else if (fading(ms)) {
-      draw::fade_frames(slide_px_, f, (double)(ms - trans_start_));
+      draw::fade_frames(slide_px_, f, (double)(ms - trans_start_), slide_w_);
     }
-    memcpy(last_px_, f.px, sizeof last_px_);
+    memcpy(last_px_, f.px, f.bytes());
+    last_w_ = f.w;
   });
   return true;
 }

@@ -43,11 +43,11 @@ struct Settings {
   // Which color each HUB75 data line (R, G, B, in that order) lights on this panel: "RGB" normally; some panels
   // are wired "RBG" (green and blue swapped) or another order. Applied by reassigning the data pins, so it costs nothing.
   std::string color_order = "RGB";
-  // Panels chained on the HUB75 ribbon: 1, or 2 (128 x 32). Test only for
-  // now: with 2, the second panel mirrors the first (Panel::show), and
-  // Panel::identify marks which is which at startup. A build define
-  // (MATRIX_PANELS), not a flash setting, so OTA builds stay at 1.
-  int panels = 1;
+  // LEDs across (config cols): 64, or 128 for two panels chained on the
+  // HUB75 ribbon. Sets the driver's chain length; Panel::identify marks
+  // which panel is which at startup, and the board sends `w=128` with every
+  // update and select so the server draws for the width.
+  int cols = 64;
 };
 
 // The runtime settings from the saved ones (config.h).
@@ -73,7 +73,8 @@ class Panel : public app::Display {
   double dim(double k, bool hw);
   void set_curves(int day, int night);
   // With 2 panels: outlines each one (red = 1st, nearest the Portal; green =
-  // 2nd) for ms, so the chain order shows. Does nothing with 1.
+  // 2nd) for ms, so the chain order shows. Does nothing with 1. Frames
+  // narrower than the panels (64-wide status screens on 128) show on each.
   void identify(int ms);
   int day_curve() const { return day_curve_; }
   int night_curve() const { return night_curve_; }

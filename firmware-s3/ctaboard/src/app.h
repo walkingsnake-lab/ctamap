@@ -315,8 +315,11 @@ class Board {
   static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3, SHOWN_PEEK = -4;
   static constexpr double SCREEN_SLIDE_QUICK_MS = 250;  // a slide that interrupts a running one
   enum Trans { NO_TRANS, SLIDE, FADE };
-  uint8_t last_px_[draw::Frame::W * draw::Frame::H * 3] = {};
-  uint8_t slide_px_[draw::Frame::W * draw::Frame::H * 3] = {};
+  // last_w_ / slide_w_: how wide those pixels are (a 64-wide status screen
+  // shown on a 128 board is widened before a transition starts from it).
+  uint8_t last_px_[draw::Frame::MAX_W * draw::Frame::H * 3] = {};
+  uint8_t slide_px_[draw::Frame::MAX_W * draw::Frame::H * 3] = {};
+  int last_w_ = 64, slide_w_ = 64;
   int shown_ = SHOWN_NONE;
   Trans trans_ = NO_TRANS;
   long long trans_start_ = -1;

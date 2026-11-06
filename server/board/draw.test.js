@@ -1581,3 +1581,29 @@ test('announce big word: 2x text, shaded pink at the top to amber at the bottom'
   const top = colorAt(rows[0]), bot = colorAt(rows[rows.length - 1]);
   assert.ok(top[1] < bot[1], 'greener (more amber) lower down');
 });
+
+test('width: a 128 payload (cols) shows 64-wide screens on both panels; slides and fades run across 128', () => {
+  const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(9)], s: [0, 0], a: 0 }]);
+  const narrow = draw.render(p);
+  assert.equal(narrow.w, 64);
+  for (const screen of ['transit', 'ticker', 'weather', 'clock', 'announce']) {
+    const f = draw.render({ ...p, cols: 128 }, { screen });
+    const n = draw.render(p, { screen });
+    assert.equal(f.w, 128, screen);
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 128; x++) assert.deepEqual(f.get(x, y), n.get(x % 64, y), `${screen} ${x},${y}`);
+  }
+  // Only cols 128 is wide.
+  assert.equal(draw.render({ ...p, cols: 96 }).w, 64);
+  // The slide travels the whole width, plus the gap.
+  assert.equal(draw.slideOffset(draw.SCREEN_SLIDE_MS, 128), 128 + draw.SLIDE_GAP);
+  assert.equal(draw.slideOffset(draw.SCREEN_SLIDE_MS), 64 + draw.SLIDE_GAP);
+  // From a 64-wide frame (a status screen): widened as the board showed it.
+  const wide = { ...p, cols: 128 };
+  const from = Array.from(narrow.px);
+  const a = draw.render(wide, { screen: 'ticker', fade: { from, t: 40 } });
+  const b = draw.render(wide, { screen: 'ticker', fade: { from: Array.from(draw.render(wide).px), t: 40 } });
+  assert.deepEqual(Array.from(a.px), Array.from(b.px));
+  const c = draw.render(wide, { screen: 'ticker', slide: { from, t: 150, dir: 1 } });
+  const d = draw.render(wide, { screen: 'ticker', slide: { from: Array.from(draw.render(wide).px), t: 150, dir: 1 } });
+  assert.deepEqual(Array.from(c.px), Array.from(d.px));
+});

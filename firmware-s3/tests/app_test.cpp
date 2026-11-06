@@ -103,6 +103,7 @@ struct Server : app::Net {
   int fw_fail = 0;                                // fail the next firmware downloads halfway
   std::string cloud = "p1";                       // the skyline's cloud strip id, "" for a clear sky
   std::string msg = "null";                       // the announce screen's message (payload `msg`), raw JSON
+  int cols = 64;                                  // the board's width: 128 sends payload `cols`
 
   bool deferred = false;  // on the SimWorker: requests take time without moving the loop's clock
   long long owed = 0;     // simulated time the deferred requests took
@@ -189,7 +190,7 @@ struct Server : app::Net {
       pv = ",\"cface\":\"" + face + "\",\"pv\":{\"days\":[{\"d\":\"SU\",\"hi\":60,\"icon\":\"sun\"}],\"hours\":[{\"h\":\"1P\",\"t\":50,\"icon\":\"sun\"}],"
            "\"skyline\":" + skyline(true) + ",\"cwx\":{\"temp\":60,\"icon\":\"sun\"},\"radar\":{\"frames\":" + pf + "],\"ft\":" + pft + "]}}";
     }
-    return "{\"v\":" + jnum(v) + ",\"now\":" + jnum(now) + ",\"tzo\":-18000,\"age\":3,\"screen\":\"" + scr +
+    return "{\"v\":" + jnum(v) + ",\"now\":" + jnum(now) + (cols == 128 ? ",\"cols\":128" : "") + ",\"tzo\":-18000,\"age\":3,\"screen\":\"" + scr +
            "\",\"bright\":" + jnum(bright) + ",\"ab\":" + ab + ",\"header\":\"MORSE\",\"view\":\"dest\",\"rows\":" + rows + ",\"ticker\":" + ticker +
            ",\"wx\":" + (tornado ? "{\"icon\":\"storm\",\"temp\":70,\"word\":\"STORMS\"}" : "null") +
            ",\"warn\":" + (tornado ? "{\"kind\":\"tor\",\"lvl\":\"warning\"}" : "null") +
@@ -815,6 +816,51 @@ static void test_settings_change_shows_up_fast() {
   }
   CHECK(S(r.board) == "ticker", "phone change took too long");
   CHECK(r.board->player.p["v"].num() == 2, "");
+}
+
+// Both halves of a frame alike: a 64-wide screen shown on both panels.
+static bool halves_alike(const draw::Frame &f) {
+  for (int y = 0; y < 32; y++)
+    for (int x = 0; x < 64; x++)
+      if (f.get(x, y) != f.get(x + 64, y)) return false;
+  return true;
+}
+
+static void test_a_wide_board_draws_128_across_and_fades_in_from_a_status_screen() {
+  Rig r({"ok"}, true);
+  r.server.cols = 128;
+  r.board->connect();
+  // The first frames fade in from the last status screen (64 wide), as it
+  // showed, on both panels: alike halves all the way, no garbled rows.
+  bool all_alike = true;
+  for (long long t0 = r.clock.t; r.clock.t - t0 < 400;) {
+    r.board->step();
+    if (r.display.frames && !halves_alike(r.display.last)) all_alike = false;
+    r.clock.sleep_ms(5);
+  }
+  CHECK(r.display.last.w == 128, "w %d", r.display.last.w);
+  CHECK(all_alike, "the fade from the status screen");
+  r.run_for(15000);
+  CHECK(r.display.last.w == 128 && halves_alike(r.display.last), "");
+  // A button press slides the next screen in across all 128 columns at
+  // once: mid-slide, the panels differ.
+  r.btn.held_down = true;
+  r.run_for(100);
+  r.btn.held_down = false;
+  bool crossed = false;
+  for (long long t0 = r.clock.t; r.clock.t - t0 < 600;) {
+    r.board->step();
+    if (r.display.last.w == 128 && !halves_alike(r.display.last)) crossed = true;
+    r.clock.sleep_ms(5);
+  }
+  CHECK(crossed, "the slide crosses both panels as one");
+  r.run_for(5000);
+  CHECK(halves_alike(r.display.last), "");
+  // A one-panel payload stays 64 wide.
+  Rig n;
+  n.board->connect();
+  n.run_for(15000);
+  CHECK(n.display.last.w == 64, "w %d", n.display.last.w);
 }
 
 static void test_radar_frames_only_on_the_radar_screen_and_once_each() {
@@ -2081,6 +2127,7 @@ int main() {
   } tests[] = {
 #define T_(f) {#f, f}
       T_(test_a_held_train_stays_due_until_the_server_drops_it),
+      T_(test_a_wide_board_draws_128_across_and_fades_in_from_a_status_screen),
       T_(test_health_reports_the_skyline_capability),
       T_(test_announce_typewriter_animates_its_intro_then_redraws_only_for_the_cursor),
       T_(test_announce_credits_roll_redraws_once_per_step),

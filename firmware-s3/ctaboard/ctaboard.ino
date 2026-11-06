@@ -68,8 +68,8 @@ const char BUILD_MARK[] = "CTABOARD-BUILD:" FIRMWARE_VERSION ":" BUILD_KIND ";";
 #ifndef MATRIX_COLOR_ORDER
 #define MATRIX_COLOR_ORDER "RGB"
 #endif
-#ifndef MATRIX_PANELS
-#define MATRIX_PANELS 1  // 2: a second panel chained on (test: it mirrors the first)
+#ifndef MATRIX_COLS
+#define MATRIX_COLS 64  // 128: two panels chained (128 x 32)
 #endif
 #ifndef KNOB_REVERSE
 #define KNOB_REVERSE 0
@@ -129,6 +129,7 @@ static config::Config built_config() {
   c.double_buffer = MATRIX_DOUBLE_BUFFER;
   c.color_order = MATRIX_COLOR_ORDER;
   c.knob_reverse = KNOB_REVERSE;
+  c.cols = MATRIX_COLS;
   c.setup_name = SETUP_NAME;
   c.setup_pass = SETUP_PASSWORD;
   return c;
@@ -158,7 +159,6 @@ static void load_settings() {
   }
   cfg = ch.cfg;
   settings = device::settings_from(cfg);
-  settings.panels = MATRIX_PANELS;  // a build define, not saved to flash
 }
 
 void setup() {
@@ -188,8 +188,8 @@ void setup() {
 
   panel = new device::Panel(settings);
   if (!panel->begin()) Serial.println("[board] panel init failed");
-  Serial.printf("[board] panel refresh %d Hz (panels %d, clock phase %d, double buffer %d, colors %s)\n",
-                panel->refresh_rate(), settings.panels, (int)settings.clk_phase, (int)settings.double_buffer,
+  Serial.printf("[board] panel refresh %d Hz (%d x 32, clock phase %d, double buffer %d, colors %s)\n",
+                panel->refresh_rate(), settings.cols, (int)settings.clk_phase, (int)settings.double_buffer,
                 settings.color_order.c_str());
   Serial.printf("[board] memory after panel: free %ld, largest block %ld\n", device::free_heap(), device::largest_block());
   panel->identify(3000);  // 2 panels: red outline + 1 dot = first, green + 2 dots = second
