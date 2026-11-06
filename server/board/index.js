@@ -422,13 +422,21 @@ function createBoard({
   }
 
   // The day/night face's sun and spot: the subsolar point in tenths of a
-  // degree at `now` (t), and the station's pixel on the 5.625° map.
-  function dayNightOf(st, now) {
+  // degree at `now` (t), and the station's pixel on the 5.625° map. A wide
+  // board (contract "Width") also gets its pixel on the 4.5° map (hw) and
+  // today's sunrise and sunset (sr, ss: WeatherAPI's, as for auto brightness).
+  function dayNightOf(st, now, wide = false, w = null) {
     const sun = subsolar(now);
     const here = st && st.lat <= 84.375 && st.lat > -61.875
       ? [Math.min(63, Math.floor((st.lon + 180) / 5.625)), Math.floor((84.375 - st.lat) / 5.625)] : null;
-    return { dec: Math.round(sun.dec * 10), lon: Math.round(sun.lon * 10), t: Math.floor(now), here };
+    const out = { dec: Math.round(sun.dec * 10), lon: Math.round(sun.lon * 10), t: Math.floor(now), here };
+    if (!wide) return out;
+    out.hw = st && st.lat <= 84 && st.lat > -60 ? [Math.min(79, Math.floor((st.lon + 180) / 4.5)), Math.floor((84 - st.lat) / 4.5)] : null;
+    if (w && w.sunrise != null && w.sunset != null) { out.sr = w.sunrise; out.ss = w.sunset; }
+    return out;
   }
+  // The analog face's weather (and the wide Seventies face's temperature).
+  const cwxOf = (wd) => (wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null);
 
   // The skyline face's parameters, or null without weather or a station.
   function skylineOf(board, w, wd, st, now) {
@@ -447,8 +455,8 @@ function createBoard({
   function peekOf(board, w, wd, st, skyNow, now, caps) {
     const faces = {};
     if (caps.clock) faces.skyline = skylineOf(board, w, wd, st, skyNow);
-    if (caps.face('analog')) faces.cwx = wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null;
-    if (caps.face('daynight')) faces.dn = dayNightOf(st, now);
+    if (caps.face('analog') || (board.cols === 128 && caps.face('seventies'))) faces.cwx = cwxOf(wd);
+    if (caps.face('daynight')) faces.dn = dayNightOf(st, now, board.cols === 128, w);
     if (caps.face('gradient') && board.gradInvert === true) faces.ginv = true;
     if (caps.face('digits') && board.colonBlink === false) faces.steady = true;
     return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...faces };
@@ -617,10 +625,11 @@ function createBoard({
       // (skyline.js; contract "Skyline"; null on the seventies face).
       cface: face,
       skyline: face === 'skyline' ? skylineOf(board, w, wd, st, skyNow) : null,
-      // Analog face: the temperature and icon (contract "Analog"); null without weather.
-      ...(face === 'analog' ? { cwx: wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null } : {}),
+      // Analog face, and Seventies on a wide board: the temperature and icon
+      // (contract "Analog", "Width"); null without weather.
+      ...(face === 'analog' || (face === 'seventies' && board.cols === 128) ? { cwx: cwxOf(wd) } : {}),
       // Day/night face: the subsolar point and the board's spot (contract "Day/night").
-      ...(face === 'daynight' ? { dn: dayNightOf(st, now) } : {}),
+      ...(face === 'daynight' ? { dn: dayNightOf(st, now, board.cols === 128, w) } : {}),
       // Gradient face: lit gradient digits on black (contract "Gradient").
       ...(face === 'gradient' && board.gradInvert === true ? { ginv: true } : {}),
       // Big digits face: a steady colon (contract "Big digits").

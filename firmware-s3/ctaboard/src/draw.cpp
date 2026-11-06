@@ -3008,8 +3008,10 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
 static const RGB S70_COLORS[] = {hexc(0xffc23a), hexc(0xff7414), hexc(0xd2361a)};
 static const int S70_TOP = 5, S70_BASE = 16, S70_RIGHT = 52, S70_CX = 54, S70_CY = 21, S70_RADII[] = {3, 6, 9};
 
+static void render_seventies_wide(const Value &p, Frame &f, double now);
 static void render_seventies(const Value &p, Frame &f, std::optional<double> now_o) {
   double now = now_o ? *now_o : p["now"].num(0);
+  if (cols_of(p) == WIDE) return render_seventies_wide(p, f, now);
   for (int i = 0; i < 3; i++) {
     int r = S70_RADII[i];
     RGB c = S70_COLORS[i];
@@ -3125,42 +3127,91 @@ static const int DN_ROWS = 26;
 static const long long DN_NIGHT12 = -2079LL * 10000;
 static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_HERE = hexc(0xffffff);
 static const int DN_NIGHT_K[] = {104, 116, 140};
-static RGB world_color(char code) {
-  for (int i = 0; i < assets::WORLD_PALETTE_N; i++)
-    if (assets::WORLD_PALETTE[i].code == code)
-      return RGB{assets::WORLD_PALETTE[i].r, assets::WORLD_PALETTE[i].g, assets::WORLD_PALETTE[i].b};
+static RGB world_color(const assets::IconColor *pal, int n, char code) {
+  for (int i = 0; i < n; i++)
+    if (pal[i].code == code) return RGB{pal[i].r, pal[i].g, pal[i].b};
   return RGB{};
 }
 static uint8_t mix_int(uint8_t n, uint8_t d, long long k) { return (uint8_t)(n + fdiv(((long long)d - n) * k, 256)); }
 
+// The map lit by the sun (draw.js drawWorld): `rows` x `cols` pixels of
+// `deg` degrees from `top` degrees north and 180 W.
+static void draw_world(Frame &f, const Value &dn, long long now, const char *const *world, const assets::IconColor *pal,
+                       int pal_n, int rows, int cols, double top, double deg) {
+  // The subsolar longitude moves 15° an hour: tenths of a degree back from dn.t.
+  long long lon10 = (long long)dn["lon"].num(0) - fdiv(now - (long long)dn["t"].num(0), 24);
+  lon10 = fmod_floor(lon10 + 1800, 3600) - 1800;
+  long long dec10 = (long long)dn["dec"].num(0);
+  long long dec_d = fdiv(dec10 + 5, 10), lon_d = fdiv(lon10 + 5, 10);
+  long long s_dec = sin_d(dec_d), c_dec = cos_d(dec_d);
+  for (int y = 0; y < rows; y++) {
+    long long lat = (long long)jsround(top - (y + 0.5) * deg);
+    long long sl = sin_d(lat) * s_dec, cl = cos_d(lat) * c_dec;
+    for (int x = 0; x < cols; x++) {
+      long long lon = (long long)jsround(-180 + (x + 0.5) * deg);
+      // sin(sun's altitude) x 1e8.
+      long long sv = sl + fdiv(cl * cos_d(lon - lon_d), 10000);
+      long long k = sv >= 0 ? 256 : sv <= DN_NIGHT12 ? 0 : 256 - fdiv(sv * 256, DN_NIGHT12);
+      char code = world[y][x];
+      RGB d, n;
+      if (code == '.') {
+        d = DN_SEA;
+        n = DN_NIGHT_SEA;
+      } else {
+        d = world_color(pal, pal_n, code);
+        n = RGB{(uint8_t)fdiv(d.r * DN_NIGHT_K[0], 256), (uint8_t)fdiv(d.g * DN_NIGHT_K[1], 256), (uint8_t)fdiv(d.b * DN_NIGHT_K[2], 256)};
+      }
+      f.set(x, y, RGB{mix_int(n.r, d.r, k), mix_int(n.g, d.g, k), mix_int(n.b, d.b, k)});
+    }
+  }
+}
+
+// Wide board (draw.js renderDayNightWide; wide-spec §6): the 80 x 32 map at
+// 4.5°, the board's spot dn.hw; the sun panel from column 83.
+static const int DNW_X0 = 83;
+static const RGB DNW_RISE = hexc(0xffc23a), DNW_SET = hexc(0xff7414), DNW_DIVIDER = hexc(0x262626);
+static const char *const SUN_ICON[] = {"...#...", ".#...#.", "..###..", "#.###.#", "-------"};
+static void render_daynight_wide(const Value &p, Frame &f, long long now) {
+  f.w = WIDE;
+  const Value &dn = p["dn"];
+  double tzo = p["tzo"].num(0);
+  if (dn.truthy()) {
+    draw_world(f, dn, now, assets::WORLD_WIDE, assets::WORLD_WIDE_PALETTE, assets::WORLD_WIDE_PALETTE_N, assets::WORLD_WIDE_H,
+               assets::WORLD_WIDE_W, 84, 4.5);
+    const Value &hw = dn["hw"];
+    if (hw.is_arr() && hw.size() == 2 && hw[1].num(0) < 32) f.fill((int)hw[0].num(0), (int)hw[1].num(0), 1, 1, DN_HERE);
+  }
+  LocalDate t = local_date((double)now, tzo);
+  int x = roll_named(f, FONT_5X7, "dn.clock", clock_text((double)now, tzo), LEFT, DNW_X0, 8, hexc(0xffffff));
+  f.text(FONT_SMALL, t.h < 12 ? U"AM" : U"PM", x + 1, 8, C::wxText);
+  f.fill(DNW_X0, 11, WIDE - DNW_X0, 1, DNW_DIVIDER);
+  if (dn.truthy() && !dn["sr"].is_null() && !dn["ss"].is_null()) {
+    long long sr = (long long)dn["sr"].num(0), ss = (long long)dn["ss"].num(0);
+    const long long times[] = {sr, ss};
+    const uint32_t arrows[] = {assets::G_UP, assets::G_DOWN};
+    const RGB colors[] = {DNW_RISE, DNW_SET};
+    for (int i = 0; i < 2; i++) {
+      int base = 18 + i * 7;
+      RGB c = colors[i];
+      for (int j = 0; j < 5; j++)
+        for (int k = 0; SUN_ICON[j][k]; k++)
+          if (SUN_ICON[j][k] != '.') f.fill(DNW_X0 + k, base - 5 + j, 1, 1, SUN_ICON[j][k] == '#' ? c : C::dimHead);
+      f.text(FONT_SMALL, g(arrows[i]), DNW_X0 + 9, base, c);
+      LocalDate d = local_date((double)times[i], tzo);
+      rtext(f, FONT_SMALL, clock_text((double)times[i], tzo) + (d.h < 12 ? U" AM" : U" PM"), WIDE - 1, base, c);
+    }
+    long long mins = std::max(0LL, fdiv(ss - sr, 60));
+    f.text(FONT_SMALL, U"DAY", DNW_X0, 32, C::dimHead);
+    rtext(f, FONT_SMALL, num_text(fdiv(mins, 60)) + U"h " + num_text(mins % 60) + U"m", WIDE - 1, 32, C::wxText);
+  }
+}
+
 static void render_daynight(const Value &p, Frame &f, std::optional<double> now_o) {
   long long now = (long long)floor(now_o ? *now_o : p["now"].num(0));
+  if (cols_of(p) == WIDE) return render_daynight_wide(p, f, now);
   const Value &dn = p["dn"];
   if (dn.truthy()) {
-    long long lon10 = (long long)dn["lon"].num(0) - fdiv(now - (long long)dn["t"].num(0), 24);
-    lon10 = fmod_floor(lon10 + 1800, 3600) - 1800;
-    long long dec10 = (long long)dn["dec"].num(0);
-    long long dec_d = fdiv(dec10 + 5, 10), lon_d = fdiv(lon10 + 5, 10);
-    long long s_dec = sin_d(dec_d), c_dec = cos_d(dec_d);
-    for (int y = 0; y < DN_ROWS; y++) {
-      long long lat = (long long)jsround(84.375 - (y + 0.5) * 5.625);
-      long long sl = sin_d(lat) * s_dec, cl = cos_d(lat) * c_dec;
-      for (int x = 0; x < 64; x++) {
-        long long lon = (long long)jsround(-180 + (x + 0.5) * 5.625);
-        long long sv = sl + fdiv(cl * cos_d(lon - lon_d), 10000);
-        long long k = sv >= 0 ? 256 : sv <= DN_NIGHT12 ? 0 : 256 - fdiv(sv * 256, DN_NIGHT12);
-        char code = assets::WORLD[y][x];
-        RGB d, n;
-        if (code == '.') {
-          d = DN_SEA;
-          n = DN_NIGHT_SEA;
-        } else {
-          d = world_color(code);
-          n = RGB{(uint8_t)fdiv(d.r * DN_NIGHT_K[0], 256), (uint8_t)fdiv(d.g * DN_NIGHT_K[1], 256), (uint8_t)fdiv(d.b * DN_NIGHT_K[2], 256)};
-        }
-        f.set(x, y, RGB{mix_int(n.r, d.r, k), mix_int(n.g, d.g, k), mix_int(n.b, d.b, k)});
-      }
-    }
+    draw_world(f, dn, now, assets::WORLD, assets::WORLD_PALETTE, assets::WORLD_PALETTE_N, DN_ROWS, 64, 84.375, 5.625);
     const Value &here = dn["here"];
     if (here.is_arr() && here.size() == 2 && here[1].num(0) < DN_ROWS) f.fill((int)here[0].num(0), (int)here[1].num(0), 1, 1, DN_HERE);
   }
@@ -3169,6 +3220,46 @@ static void render_daynight(const Value &p, Frame &f, std::optional<double> now_
   f.text(FONT_SMALL, t.h < 12 ? U"AM" : U"PM", x + 2, 32, C::wxText);
   ustr date = U(std::string(DAY_NAMES[t.wd]).substr(0, 3) + " " + MONTH_NAMES[t.m - 1] + " " + std::to_string(t.d));
   f.text(FONT_SMALL, date, 64 - measure(FONT_SMALL, date), 32, C::wxText);
+}
+
+// ---- clock screen: seventies face, wide board (draw.js renderSeventiesWide; wide-spec §6) ----
+// The stripes along the bottom, up columns 62-69 and along the top; the time
+// on the left; the weekday in full, the date and the temperature (cwx).
+static const int S70W_CX1 = 60, S70W_CY1 = 21, S70W_CX2 = 72, S70W_CY2 = 10, S70W_TEXT_X = 78;
+static bool s70_ring(int u, int v, int r) {
+  int d = u * u + v * v;
+  return d > (2 * r - 2) * (2 * r - 2) && d <= (2 * r + 2) * (2 * r + 2);
+}
+static void render_seventies_wide(const Value &p, Frame &f, double now) {
+  f.w = WIDE;
+  for (int i = 0; i < 3; i++) {
+    int r = S70_RADII[i], r2 = 12 - r;
+    RGB c = S70_COLORS[i];
+    f.fill(0, S70W_CY1 + r - 1, S70W_CX1, 2, c);
+    f.fill(S70W_CX1 + r - 1, S70W_CY2, 2, S70W_CY1 - S70W_CY2 + 1, c);
+    f.fill(S70W_CX2, S70W_CY2 - r2 - 1, WIDE - S70W_CX2, 2, c);
+    for (int y = S70W_CY1 + 1; y < 32; y++)
+      for (int x = S70W_CX1; x < WIDE; x++)
+        if (s70_ring(2 * (x - S70W_CX1) + 1, 2 * (y - S70W_CY1) + 1, r)) f.fill(x, y, 1, 1, c);
+    for (int y = 0; y < S70W_CY2; y++)
+      for (int x = 0; x < S70W_CX2; x++)
+        if (s70_ring(2 * (x - S70W_CX2) + 1, 2 * (y - S70W_CY2) + 1, r2)) f.fill(x, y, 1, 1, c);
+  }
+  // Centered in columns 0-57, drawn white, then banded by row.
+  roll_named(f, FONT_VCR, "svt.clock", clock_text(now, p["tzo"].num(0)), SPAN, S70W_CX1 - 3, S70_BASE, hexc(0xffffff));
+  for (int y = S70_TOP; y < S70_BASE; y++) {
+    RGB band = S70_COLORS[y < S70_TOP + 4 ? 0 : y < S70_TOP + 7 ? 1 : 2];
+    for (int xx = 0; xx < S70W_CX1 - 1; xx++) {
+      RGB c = f.get(xx, y);
+      if (c.r || c.g || c.b) f.set(xx, y, band);
+    }
+  }
+  LocalDate t = local_date(now, p["tzo"].num(0));
+  ustr day = U(DAY_NAMES[t.wd]);
+  f.text(FONT_5X7, day, std::min(S70W_TEXT_X, WIDE - measure(FONT_5X7, day)), 20, S70_COLORS[0]);
+  f.text(FONT_5X7, U(std::string(MONTH_NAMES[t.m - 1]) + " " + std::to_string(t.d)), S70W_TEXT_X, 29, S70_COLORS[1]);
+  const Value &w = p["cwx"];
+  if (w.truthy() && !w["temp"].is_null()) rtext(f, FONT_5X7, vstr(w["temp"]) + U"°", WIDE - 1, 29, S70_COLORS[2]);
 }
 
 // ---- clock screen: gradient face (design spec §19; contract "Gradient") ----

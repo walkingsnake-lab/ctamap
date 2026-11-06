@@ -2039,9 +2039,40 @@
     // along the bottom that turn up the right edge. Integer geometry only.
     const S70 = { colors: ['#ffc23a', '#ff7414', '#d2361a'], top: 5, base: 16, right: 52, cx: 54, cy: 21, radii: [3, 6, 9] };
     const s70Band = (y) => S70.colors[y < S70.top + 4 ? 0 : y < S70.top + 7 ? 1 : 2];
+    // Wide board (wide-spec §6): the stripes run along the bottom, climb at
+    // columns 62-69 (around a turn at cx1, cy1) and run along the top to the
+    // right edge (around a second turn at cx2, cy2, on the same 2 px bands);
+    // the time on the left, banded as at 64; under the top run the weekday
+    // in full, the date and the temperature (cwx), one stripe color each.
+    const S70W = { cx1: 60, cy1: 21, cx2: 72, cy2: 10, textX: 78 };
+    const ring = (u, v, r) => { const d = u * u + v * v; return d > (2 * r - 2) * (2 * r - 2) && d <= (2 * r + 2) * (2 * r + 2); };
+    function renderSeventiesWide(p, o, now) {
+      const f = newFrame(WIDE);
+      const { cx1, cy1, cx2, cy2, textX } = S70W;
+      S70.radii.forEach((r, i) => {
+        const c = S70.colors[i], r2 = 12 - r;
+        f.fill(0, cy1 + r - 1, cx1, 2, c);
+        f.fill(cx1 + r - 1, cy2, 2, cy1 - cy2 + 1, c);
+        f.fill(cx2, cy2 - r2 - 1, WIDE - cx2, 2, c);
+        for (let y = cy1 + 1; y < 32; y++) for (let x = cx1; x < WIDE; x++) if (ring(2 * (x - cx1) + 1, 2 * (y - cy1) + 1, r)) f.fill(x, y, 1, 1, c);
+        for (let y = 0; y < cy2; y++) for (let x = 0; x < cx2; x++) if (ring(2 * (x - cx2) + 1, 2 * (y - cy2) + 1, r2)) f.fill(x, y, 1, 1, c);
+      });
+      rollText(f, 'vcr', 'svt.clock', clockText(now), (str) => Math.floor((cx1 - 2 - measure('vcr', str)) / 2), S70.base, '#ffffff');
+      for (let y = S70.top; y < S70.base; y++) {
+        const band = hex(s70Band(y));
+        for (let x = 0; x < cx1 - 1; x++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) f.set(x, y, band); }
+      }
+      const t = localDate(now, p.tzo);
+      const day = DAY_NAMES[t.wd];
+      f.text('5x7', day, Math.min(textX, WIDE - measure('5x7', day)), 20, S70.colors[0]);
+      f.text('5x7', `${MONTHS[t.m - 1]} ${t.d}`, textX, 29, S70.colors[1]);
+      if (p.cwx && p.cwx.temp != null) rtext(f, '5x7', `${p.cwx.temp}°`, WIDE - 1, 29, S70.colors[2]);
+      return f;
+    }
     function renderSeventies(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
+      if (colsOf(p) === WIDE) return renderSeventiesWide(p, o, now);
       const f = newFrame();
       const { cx, cy } = S70;
       S70.radii.forEach((r, i) => {
@@ -2211,30 +2242,71 @@
     const DN_LAT = Array.from({ length: DN.rows }, (_, r) => Math.round(DN.top - (r + 0.5) * DN.deg));
     const DN_LON = Array.from({ length: 64 }, (_, x) => Math.round(-180 + (x + 0.5) * DN.deg));
     const mixInt = (n, d, k) => n.map((v, i) => v + fdivI((d[i] - v) * k, 256));
+    // Wide board (wide-spec §6): the map at true shape on all 32 rows
+    // (WORLD_WIDE: 80 x 32 of 4.5°, 84° N to 60° S), lit the same way, the
+    // board's spot dn.hw; the sun panel on columns 83-127: the time in 5x7
+    // with AM/PM, a divider on row 11, then sunrise and sunset (dn.sr, dn.ss:
+    // the sun icon on its horizon and the arrow in the row's color, the time
+    // at the right edge) and the day length.
+    const DNW = { w: 80, deg: 4.5, top: 84, x0: 83, rise: '#ffc23a', set: '#ff7414', divider: '#262626' };
+    const DNW_LAT = Array.from({ length: 32 }, (_, r) => Math.round(DNW.top - (r + 0.5) * DNW.deg));
+    const DNW_LON = Array.from({ length: DNW.w }, (_, x) => Math.round(-180 + (x + 0.5) * DNW.deg));
+    // The sun on the horizon (7 x 5, the horizon on the text's bottom row):
+    // '#' the row's color, '-' the horizon in #555555.
+    const SUN_ICON = ['...#...', '.#...#.', '..###..', '#.###.#', '-------'];
+    function drawWorld(f, dn, now, world, palette, lats, lons) {
+      // The subsolar longitude moves 15° an hour: tenths of a degree back from dn.t.
+      let lon10 = dn.lon - fdivI(now - dn.t, 24);
+      lon10 = ((lon10 + 1800) % 3600 + 3600) % 3600 - 1800;
+      const decD = fdivI(dn.dec + 5, 10), lonD = fdivI(lon10 + 5, 10);
+      const sDec = sinD(decD), cDec = cosD(decD);
+      const sea = [hex(DN.sea), hex(DN.nightSea)], land = {};
+      for (const [c, v] of Object.entries(palette)) { const d = hex(v); land[c] = [d, d.map((ch, i) => fdivI(ch * DN.nightK[i], 256))]; }
+      for (let y = 0; y < lats.length; y++) {
+        const lat = lats[y], sl = sinD(lat) * sDec, cl = cosD(lat) * cDec;
+        for (let x = 0; x < lons.length; x++) {
+          // sin(sun's altitude) x 1e8.
+          const s = sl + fdivI(cl * cosD(lons[x] - lonD), 10000);
+          const k = s >= 0 ? 256 : s <= DN.night12 ? 0 : 256 - fdivI(s * 256, DN.night12);
+          const [dc, nc] = world[y][x] === '.' ? sea : land[world[y][x]];
+          f.set(x, y, mixInt(nc, dc, k));
+        }
+      }
+    }
+    function renderDayNightWide(p, now) {
+      const f = newFrame(WIDE);
+      const dn = p.dn, { x0 } = DNW;
+      if (dn && icons.WORLD_WIDE) {
+        drawWorld(f, dn, now, icons.WORLD_WIDE, icons.WORLD_WIDE_PALETTE, DNW_LAT, DNW_LON);
+        if (dn.hw && dn.hw[1] < 32) f.fill(dn.hw[0], dn.hw[1], 1, 1, DN.here);
+      }
+      const t = localDate(now, p.tzo);
+      const x = rollText(f, '5x7', 'dn.clock', clockText(now), () => x0, 8, '#ffffff');
+      f.text('small', t.h < 12 ? 'AM' : 'PM', x + 1, 8, C.wxText);
+      f.fill(x0, 11, WIDE - x0, 1, DNW.divider);
+      // At the payload's offset (tzo), as on the board, even across a DST change.
+      const at = (ts) => { const d = localDate(ts, p.tzo); return `${d.h % 12 || 12}:${String(d.min).padStart(2, '0')} ${d.h < 12 ? 'AM' : 'PM'}`; };
+      if (dn && dn.sr != null && dn.ss != null) {
+        [[dn.sr, G.UP, DNW.rise], [dn.ss, G.DOWN, DNW.set]].forEach(([ts, arrow, c], i) => {
+          const base = 18 + i * 7;
+          SUN_ICON.forEach((row, j) => [...row].forEach((ch, k) => { if (ch !== '.') f.fill(x0 + k, base - 5 + j, 1, 1, ch === '#' ? c : C.dimHead); }));
+          f.text('small', s(arrow), x0 + 9, base, c);
+          rtext(f, 'small', at(ts), WIDE - 1, 18 + i * 7, c);
+        });
+        const mins = Math.max(0, fdivI(dn.ss - dn.sr, 60));
+        f.text('small', 'DAY', x0, 32, C.dimHead);
+        rtext(f, 'small', `${fdivI(mins, 60)}h ${mins % 60}m`, WIDE - 1, 32, C.wxText);
+      }
+      return f;
+    }
     function renderDayNight(p, opts) {
       const o = opts || {};
       const now = Math.floor(o.now != null ? o.now : p.now);
+      if (colsOf(p) === WIDE) return renderDayNightWide(p, now);
       const f = newFrame();
       const dn = p.dn;
-      const world = icons.WORLD;
-      if (dn && world) {
-        // The subsolar longitude moves 15° an hour: tenths of a degree back from dn.t.
-        let lon10 = dn.lon - fdivI(now - dn.t, 24);
-        lon10 = ((lon10 + 1800) % 3600 + 3600) % 3600 - 1800;
-        const decD = fdivI(dn.dec + 5, 10), lonD = fdivI(lon10 + 5, 10);
-        const sDec = sinD(decD), cDec = cosD(decD);
-        const sea = [hex(DN.sea), hex(DN.nightSea)], land = {};
-        for (const [c, v] of Object.entries(icons.WORLD_PALETTE)) { const d = hex(v); land[c] = [d, d.map((ch, i) => fdivI(ch * DN.nightK[i], 256))]; }
-        for (let y = 0; y < DN.rows; y++) {
-          const lat = DN_LAT[y], sl = sinD(lat) * sDec, cl = cosD(lat) * cDec;
-          for (let x = 0; x < 64; x++) {
-            // sin(sun's altitude) x 1e8.
-            const s = sl + fdivI(cl * cosD(DN_LON[x] - lonD), 10000);
-            const k = s >= 0 ? 256 : s <= DN.night12 ? 0 : 256 - fdivI(s * 256, DN.night12);
-            const [dc, nc] = world[y][x] === '.' ? sea : land[world[y][x]];
-            f.set(x, y, mixInt(nc, dc, k));
-          }
-        }
+      if (dn && icons.WORLD) {
+        drawWorld(f, dn, now, icons.WORLD, icons.WORLD_PALETTE, DN_LAT, DN_LON);
         // The board's own spot.
         if (dn.here && dn.here[1] < DN.rows) f.fill(dn.here[0], dn.here[1], 1, 1, DN.here);
       }

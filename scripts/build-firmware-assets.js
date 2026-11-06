@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const { packFonts } = require('../server/board/fonts');
 const icons = require('../server/board/icons');
-const { WORLD, WORLD_PALETTE } = require('../server/board/world');
+const { WORLD, WORLD_PALETTE, WORLD_WIDE, WORLD_WIDE_PALETTE } = require('../server/board/world');
 const glyphs = require('../server/board/glyphs');
 
 
@@ -127,6 +127,12 @@ function buildCpp() {
   lines.push('};', 'static const IconColor WORLD_PALETTE[] = {');
   for (const [k, v] of Object.entries(WORLD_PALETTE)) lines.push(`  {'${k}', ${parseInt(v.slice(1, 3), 16)}, ${parseInt(v.slice(3, 5), 16)}, ${parseInt(v.slice(5, 7), 16)}},`);
   lines.push('};', `static const int WORLD_PALETTE_N = ${Object.keys(WORLD_PALETTE).length};`, '');
+  // The wide board's (128 x 32) map: 80 x 32, its own palette.
+  lines.push(`static const int WORLD_WIDE_W = ${WORLD_WIDE[0].length}, WORLD_WIDE_H = ${WORLD_WIDE.length};`, 'static const char *const WORLD_WIDE[] = {');
+  for (const r of WORLD_WIDE) lines.push(`  "${r}",`);
+  lines.push('};', 'static const IconColor WORLD_WIDE_PALETTE[] = {');
+  for (const [k, v] of Object.entries(WORLD_WIDE_PALETTE)) lines.push(`  {'${k}', ${parseInt(v.slice(1, 3), 16)}, ${parseInt(v.slice(3, 5), 16)}, ${parseInt(v.slice(5, 7), 16)}},`);
+  lines.push('};', `static const int WORLD_WIDE_PALETTE_N = ${Object.keys(WORLD_WIDE_PALETTE).length};`, '');
   lines.push(`static const char *const ALERT_BANG[] = {${icons.ALERT_BANG.map((r) => `"${r}"`).join(', ')}};`);
   lines.push(`static const int ALERT_BANG_N = ${icons.ALERT_BANG.length};`, '');
   // G_ prefix: the ESP32's headers define MIN/MAX macros.

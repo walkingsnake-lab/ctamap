@@ -726,6 +726,69 @@ static const IconColor WORLD_PALETTE[] = {
 };
 static const int WORLD_PALETTE_N = 24;
 
+static const int WORLD_WIDE_W = 80, WORLD_WIDE_H = 32;
+static const char *const WORLD_WIDE[] = {
+  "...................VNVVVVVVVVVVVVVVV.........................N..................",
+  "..............NV.NNNVVV.VVVVVVVVVVVV.......V.................VVNN...............",
+  "............VVVVV.VVVVN....VVVVVVVV.................V..V.VVVVVVVVNNVV..VV.......",
+  ".NNVVVV.......NVVNN..VNNV.NNNVVVVVNNNNNNNNN..S...GN....VSVNNNNVVVNNNVVVVVVV.....",
+  "...KKLLSNKUNLSUVVVVV.VNVVN..NVV....S.....KJCBBBBJJGKLJSVVVUJKKNNNSUVVVVVVVVVVVVV",
+  "....LJJ.NKKKGGGKSVV....UJS...............JCB.BBBCGFGKKKSSLLJJGGGKUUVVUVVVV.VV...",
+  "...........JCKNIFCFFKGBBFCC...........DE.EEEECCCFFFGKNMMLNNKGKFCKNLLLSS...VS....",
+  "............GGHMMICBBBBBBBBB...........EICEFFFFFFIIHMMMMMMNSPSMIFHIFFFFF........",
+  "............BIFHMHICBBBBBB.............GEFFCFFIIFIHPQQQPPMNQQQQQQPMMFFB.........",
+  "............CMPMMMHIIFCC..............IHF.FGFFHMMHH.RRQPSRTTTRRRQMHIF..C........",
+  ".............MPPMMIFFCC...............HNQQ....MPQQPQRRQQUTTTTTMPHHH.F.C.........",
+  "..............QMPHFCCC................PRTTTTTT.TTTRRRTRQMPRQPMFCCII..C..........",
+  "...............IMHI..C...............TTTTTTTTTTTRTTTRTTRQHIHGCCCCED.............",
+  "................FHF.................TTTTTTTTTTTTQTTTT..PHIIFDDAEEE..............",
+  ".................EEDA...............TTTTTTTTTTTTRRTTT...IIE..EEE................",
+  "...................ADD..............MMPQRRTTRRRPMPT.....IH...EID................",
+  ".....................D.DEED..........DEFEIHIEIIEIPR......I.....E...D............",
+  ".......................DEADAA.........DDEEAAAADIHPQ...........D..A..............",
+  "......................DAAAAAA.............AAAAAFPI............D.AA..............",
+  "......................EAAAADAEIM..........DEDDEMM..............E.DD...AA........",
+  "......................IAAAADEHMM...........EEEIMI......................DA.......",
+  ".......................IDEEIIMHH...........IIIHHH....................M..........",
+  "........................PIEIMMI...........PPPPMHH.H................OOOPPH.......",
+  "........................RMIIHII............QQQOH..H..............OOOOOQQP.......",
+  "........................QMIFF..............QRPMI.................OOOOOQQOH......",
+  "........................PMHIF...............POH..................MOOOOQQOI......",
+  "........................NHII................N.....................H...MMIF......",
+  ".......................AMHI.............................................C......E",
+  ".......................JMP...................................................J..",
+  ".......................SM.......................................................",
+  ".......................JI.......................................................",
+  "................................................................................",
+};
+static const IconColor WORLD_WIDE_PALETTE[] = {
+  {'A', 48, 75, 19},
+  {'B', 52, 60, 25},
+  {'C', 69, 77, 37},
+  {'D', 58, 84, 31},
+  {'E', 75, 92, 37},
+  {'F', 89, 88, 47},
+  {'G', 90, 97, 74},
+  {'H', 127, 112, 66},
+  {'I', 108, 103, 54},
+  {'J', 102, 112, 98},
+  {'K', 116, 122, 111},
+  {'L', 135, 137, 128},
+  {'M', 143, 121, 76},
+  {'N', 135, 133, 101},
+  {'O', 171, 118, 73},
+  {'P', 169, 140, 92},
+  {'Q', 188, 154, 103},
+  {'R', 197, 171, 120},
+  {'S', 158, 160, 150},
+  {'T', 200, 193, 142},
+  {'U', 174, 180, 177},
+  {'V', 200, 200, 200},
+  {'W', 200, 200, 200},
+  {'X', 200, 200, 200},
+};
+static const int WORLD_WIDE_PALETTE_N = 24;
+
 static const char *const ALERT_BANG[] = {".#.", ".#.", ".#.", "...", ".#."};
 static const int ALERT_BANG_N = 5;
 

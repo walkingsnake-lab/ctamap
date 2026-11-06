@@ -1731,6 +1731,34 @@ test('clock screen, analog and day/night faces: their sections, only for firmwar
   await s.close();
 });
 
+test('width: wide day/night gets its spot on the 4.5° map and sunrise/sunset; wide Seventies gets the temperature', async () => {
+  const { parse } = require('./weather');
+  const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));
+  const wx = parse(om);
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(wx) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const ALL = 'skyline:seventies:analog:daynight';
+  const get = async (w) => (await s.req(`/board/update?b=home&hk=${ALL}${w ? '&w=128' : ''}`, h)).body;
+  s.store.update('home', { screen: 'clock', clockFace: 'daynight' });
+  let b = await get(false);
+  assert.equal('hw' in b.dn || 'sr' in b.dn || 'ss' in b.dn, false, 'a 64 board gets the 64 fields only');
+  b = await get(true);
+  assert.deepEqual(b.dn.here, [16, 7]);
+  assert.deepEqual(b.dn.hw, [20, 9], 'Morse (42.008 N, 87.666 W) on the 4.5° map');
+  assert.ok(wx.sunrise && wx.sunset);
+  assert.equal(b.dn.sr, wx.sunrise);
+  assert.equal(b.dn.ss, wx.sunset);
+  assert.equal(b.cwx, undefined);
+  s.store.update('home', { clockFace: 'seventies' });
+  b = await get(true);
+  assert.deepEqual(Object.keys(b.cwx).sort(), ['icon', 'temp']);
+  assert.equal(b.dn, undefined);
+  s.store.setCols('home', 64);
+  assert.equal((await get(false)).cwx, undefined, 'Seventies at 64 has no temperature');
+  await s.close();
+});
+
 test('clock screen: decided per request from the update\'s own hk, so it never flaps', async () => {
   const { parse } = require('./weather');
   const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));

@@ -99,12 +99,12 @@ The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours 
 
 ## 6. Clock faces
 
-### Day/night map (decided)
+### Day/night map (decided, built)
 - The map at true shape on all 32 rows: **80 × 32 at 4.5° per pixel**, 84° N to 60° S, built like the 64 map (`build-world.js`: Natural Earth land, Blue Marble colors). No bottom time bar.
 - **Sun panel** on columns 83–127: the time in 5x7 with AM/PM; a divider; sunrise and sunset, each as a **sun icon** in the time's color, then the up or down arrow, then the time; then day length (`DAY 10h 24m`). Sunrise and sunset from WeatherAPI's astronomy data, which the server already fetches for auto brightness.
 - **Sun icon** (decided): 7 × 5, the same height as the text: two rows of a 3-wide sun on a `#555555` horizon line, with five one-pixel rays (top, the two upper diagonals just outside the sun's corners, and one each side level with the sun's lower row). Rejected: the plain half sun, an arrow through an open dome, and a rising/sinking pair without arrows (`map-sun-*.png`).
 
-### Seventies (decided)
+### Seventies (decided, built)
 The three stripes run along the bottom, climb at columns 62–69, and run along the top to the right edge; the top turn on the same 2 px band as the climb and the runs. The time in the VCR digits on the left, banded as at 64; under the top run, the **weekday in full** (`TUESDAY`), then `NOV 3` and the temperature.
 
 ### Analog + calendar (liked)
