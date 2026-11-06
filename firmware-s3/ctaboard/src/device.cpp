@@ -769,7 +769,7 @@ void SetupPortal::run(const std::string &why) {
   std::string name = ssid();
   bool locked = config::setup_pass_ok(cfg_->setup_pass);
   Serial.printf("[setup] opening setup network %s (%s, %s)\n", name.c_str(), locked ? "WPA2" : "open", why.c_str());
-  panel_->show([&](draw::Frame &f) { draw::render_status(f, "setup", name); });
+  panel_->show([&](draw::Frame &f) { draw::render_status(f, "setup", name, panel_->cols()); });
 
   WiFi.disconnect(true);
   WiFi.mode(WIFI_AP_STA);  // the station side scans while the network is up

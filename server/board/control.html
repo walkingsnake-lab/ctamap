@@ -133,6 +133,10 @@
   .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px 16px; padding: 16px 12px 14px; }
   .tiles button { display: flex; flex-direction: column; align-items: center; gap: 8px; border: 0; background: none; padding: 0; font-size: 15px; cursor: pointer; width: 144px; }
   .tiles canvas, .tiles img { width: 144px; height: 80px; padding: 8px; border-radius: 9px; image-rendering: pixelated; display: block; background: #000; box-shadow: 0 0 0 1px var(--sep); }
+  /* Two panels: the tiles are 128 x 32 (4:1). */
+  .wide .tiles img, .wide .minis img { height: 48px; }
+  .wide img.thumb { height: 24px; }
+  .minis canvas.w4 { height: 48px; }
   .tiles [aria-checked="true"] canvas, .tiles [aria-checked="true"] img { box-shadow: 0 0 0 2.5px var(--fg); }
   .tiles button:disabled { cursor: default; color: var(--sub); }
   .tiles button:disabled canvas { opacity: .35; }
@@ -854,7 +858,11 @@
   // scripts/build-control-tiles.js), the same whatever the board is doing.
   // Announce's is the board's own message, drawn here.
   let TILES = {};
-  const tileSrc = (name) => (TILES[name] ? `data:image/png;base64,${TILES[name]}` : '');
+  // A wide board (two panels) gets the 128 x 32 tile (`w:<name>`) where there is one.
+  const tileSrc = (name) => {
+    const k = document.documentElement.classList.contains('wide') && TILES[`w:${name}`] ? `w:${name}` : name;
+    return TILES[k] ? `data:image/png;base64,${TILES[k]}` : '';
+  };
   const tileOf = (sc) => (sc === 'transit' ? (board.transitScreen === 'ticker' ? 'ticker' : 'rows') : sc === 'ticker' ? 'ticker'
     : sc === 'weather' ? `wx-${WX_NAME[board.wxView] ? board.wxView : 'now'}` : sc === 'clock' ? `face-${FACE_NAME[board.clockFace] ? board.clockFace : 'skyline'}` : null);
   function thumbImg(sc, cls = 'thumb', alt = '') {
@@ -867,12 +875,15 @@
     }
     return el('img', { class: cls, alt, src: tileSrc(tileOf(sc)) || null, 'data-tile-of': sc });
   }
-  function paintStatic() { for (const img of qa('img[data-static]')) if (TILES[img.dataset.static] && !img.src) img.src = tileSrc(img.dataset.static); }
+  function paintStatic() {
+    for (const img of qa('img[data-static]')) { const src = tileSrc(img.dataset.static); if (src && img.getAttribute('src') !== src) img.src = src; }
+  }
   async function refresh() {
     try {
       pay = await api('api/update?b=' + enc(boardId));
       // Two panels (cols 128): the board's renders are 4:1.
       document.documentElement.classList.toggle('wide', pay.cols === 128);
+      paintStatic();
       swapImg($('preview'), imgUrl('scale=5'));
       render();
       refreshPages();

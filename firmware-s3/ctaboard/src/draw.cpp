@@ -4108,7 +4108,7 @@ void fade_frames(const uint8_t *from, Frame &f, double t, int from_w) {
 // ---- status screens (firmware/boardlib/status.py) ----
 
 static void center(Frame &f, Font font, const ustr &s, int base, RGB color) {
-  f.text(font, s, (int)fdiv(64 - measure(font, s), 2), base, color);
+  f.text(font, s, (int)fdiv(f.w - measure(font, s), 2), base, color);
 }
 
 static std::string upper(std::string s) {
@@ -4119,14 +4119,21 @@ static std::string upper(std::string s) {
 
 static ustr first(const ustr &s, size_t n) { return s.substr(0, std::min(n, s.size())); }
 
-void render_status(Frame &f, const std::string &kind, const std::string &detail) {
+void render_status(Frame &f, const std::string &kind, const std::string &detail, int cols) {
+  f.w = cols == WIDE ? WIDE : 64;
+  const bool wide = f.w == WIDE;
+  const size_t room = wide ? 31 : 15;  // Tom Thumb characters on a line
   ustr d = U(upper(detail));
   if (kind == "connecting") {
     center(f, FONT_5X7, U"WIFI", 13, C::grey);
-    center(f, FONT_SMALL, first(d, 15), 22, C::grey);
+    center(f, FONT_SMALL, first(d, room), 22, C::grey);
   } else if (kind == "ok") {
     center(f, FONT_5X7, U"WIFI OK", 13, C::label);
-    center(f, FONT_SMALL, first(d, 15), 22, C::grey);
+    center(f, FONT_SMALL, first(d, room), 22, C::grey);
+  } else if (kind == "portal" && wide) {
+    // MAC on one line, for IT to whitelist.
+    center(f, FONT_5X7, U"PORTAL", 13, C::amber);
+    center(f, FONT_SMALL, first(d, 17), 22, C::label);
   } else if (kind == "portal") {
     center(f, FONT_5X7, U"PORTAL", 10, C::amber);
     // MAC as two lines of 3 octets, for IT to whitelist.
@@ -4137,7 +4144,7 @@ void render_status(Frame &f, const std::string &kind, const std::string &detail)
     center(f, FONT_SMALL, U"RETRYING", 22, C::grey);
   } else if (kind == "noserver") {
     center(f, FONT_5X7, U"NO SERVER", 13, C::red);
-    center(f, FONT_SMALL, first(detail.empty() ? U"RETRYING" : d, 15), 22, C::grey);
+    center(f, FONT_SMALL, first(detail.empty() ? U"RETRYING" : d, room), 22, C::grey);
   } else if (kind == "updating") {
     // OTA install (S3 only): detail is the percent downloaded.
     center(f, FONT_5X7, U"UPDATING", 13, C::label);
@@ -4145,7 +4152,7 @@ void render_status(Frame &f, const std::string &kind, const std::string &detail)
   } else if (kind == "setup") {
     // WiFi setup: detail is the board's own network to join (also on its label).
     center(f, FONT_5X7, U"SETUP WIFI", 13, C::amber);
-    center(f, FONT_SMALL, first(U(detail), 16), 22, C::label);
+    center(f, FONT_SMALL, first(U(detail), wide ? 32 : 16), 22, C::label);
   } else if (kind == "nosetup") {
     // No settings in flash (a generic build on a board never set up): detail says what's missing.
     center(f, FONT_5X7, U"NO SETUP", 13, C::amber);

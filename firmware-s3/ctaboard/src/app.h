@@ -92,6 +92,8 @@ class Display {
  public:
   virtual ~Display() {}
   virtual void show(const std::function<void(draw::Frame &)> &fn) = 0;
+  // LEDs across the chain: 64, or 128 for two panels (the status screens' width).
+  virtual int cols() const { return 64; }
   // Brightness k (0-1). Returns the share the renderer scales colors by:
   // 1 when the display dims it all in hardware, k when it can't dim at all,
   // or between (color::hw_dim: hardware down to a floor, then the colors).

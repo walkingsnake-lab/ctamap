@@ -175,6 +175,26 @@ static void status_screens() {
   draw::Frame c;
   draw::render_status(c, "nosetup", "");
   CHECK(lit(c, 0, 15) > 20 && lit(c, 16, 32) > 20, "NO SETUP");
+
+  // Two panels: drawn across 128, centered, with room for longer details.
+  draw::Frame w;
+  draw::render_status(w, "connecting", "Rogers Park Apartment 3F", 128);
+  CHECK(w.w == 128, "wide status frame");
+  int x0 = 128, x1 = -1;
+  for (int y = 0; y < 15; y++)
+    for (int x = 0; x < 128; x++) {
+      int i = (y * 128 + x) * 3;
+      if (w.px[i] || w.px[i + 1] || w.px[i + 2]) { x0 = std::min(x0, x); x1 = std::max(x1, x); }
+    }
+  CHECK(x0 > 50 && x1 < 78 && std::abs(x0 - (127 - x1)) <= 1, "WIFI centered on 128");
+  draw::Frame n;
+  draw::render_status(n, "connecting", "Rogers Park Apartment 3F");
+  int wide_lit = 0, narrow_lit = 0;
+  for (int y = 16; y < 32; y++) {
+    for (int x = 0; x < 128; x++) { int i = (y * 128 + x) * 3; if (w.px[i] || w.px[i + 1] || w.px[i + 2]) wide_lit++; }
+    for (int x = 0; x < 64; x++) { int i = (y * 64 + x) * 3; if (n.px[i] || n.px[i + 1] || n.px[i + 2]) narrow_lit++; }
+  }
+  CHECK(n.w == 64 && wide_lit > narrow_lit, "the whole network name at 128, cut at 15 characters at 64");
 }
 
 int main() {

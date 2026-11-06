@@ -1,6 +1,6 @@
 # CTA LED Board: Wide Board (128 × 32) Screen Plan
 
-**Status: the width is built (Nov 2026); the layouts below are planned.** How each screen should look on a board of two 64 × 32 panels chained (128 × 32). The board reports its width and every screen draws at 64 on both panels until its 128 layout lands (contract: "Width"); §11 lists what's done and what's left. Anything this plan doesn't mention works as in [`design-spec.md`](design-spec.md) (fonts, colors, row anatomy, animations, fitting rules).
+**Status: built (Nov 5, 2026); not yet checked on hardware.** How each screen looks on a board of two 64 × 32 panels chained (128 × 32). Every screen below has its 128 layout, and so do the board's own status screens (§11); a screen without one would draw at 64 on both panels (contract: "Width"). §10 lists what's still open. Anything this plan doesn't mention works as in [`design-spec.md`](design-spec.md) (fonts, colors, row anatomy, animations, fitting rules).
 
 Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, `mock-128-clocks.js` and `mock-128-worldmap.js` with the board's fonts and LED preview. Decisions from the review of Nov 4, 2026; each section says whether it's **decided**, **liked**, a **first pass**, or **open**.
 
@@ -43,7 +43,7 @@ The chronological view is the weakest transit screen. For stations with 4–5 li
 2. **Two columns of four under the header:** up to 8 destinations, short names, three times each.
 3. **Five rows, no header:** full names; only for five destinations or fewer.
 
-**Proposed fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built (Nov 5):** rows → one row per line → two columns → chronological. One row per line keeps 3 times in a half and up to 5 across a whole row (full names there).
+**Fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built (Nov 5):** rows → one row per line → two columns → chronological. One row per line keeps 3 times in a half and up to 5 across a whole row (full names there).
 
 ### Key layout (built; changed Nov 5)
 `trains to` flush left and `minutes` at the right on the top row, nothing between them: no station or clock anywhere. Rows sit as under a header.
@@ -155,13 +155,15 @@ Also mocked (`dial-*.png`): icons in place with the chosen one named, a centered
 
 ## 10. Open questions
 
-- Direction labels for the split at Loop and branch stations.
-- Baseball beyond the line score.
+- **Hardware check:** none of the 128 layouts has run on the two-panel board yet. Draw time per frame (the serial report's `last_ms` / `max_ms`) during digit rolls, the credits roll and screen slides, and free memory with 128-wide radar frames.
+- **Direction labels at Loop stations:** settled by not splitting there; the Loop, mixed axes and terminals fall back to rows (§3).
+- **Baseball beyond the line score:** logos at 128, a fuller pregame.
 
-## 11. What the software needs
+## 11. What the software needs (done)
 
-- **The board's width (done).** `cols` (64 or 128) in the S3's flash sets the chain length; the board sends `w=128` with each `/board/update` and `/board/select`, the server keeps it as the board's `cols` and sends `cols: 128` in its payloads. A 64 board gets exactly what it got before. Frames are 128 wide; screens without a 128 layout draw at 64 on both panels, and screen slides and fades run across all 128 columns (contract: "Width"). The simulator and control page show 128-wide renders.
-- **Server layouts by width.** `arrivals.js` (rows, fitting, the busy-station chain), weather slots (7 days, 8 hours), radar crop width and masks, sun times, alert labels and expiries: chosen per board width.
-- **`draw.js` and `draw.cpp`.** Replace the hard-coded 64s with the frame width, one screen at a time; new layouts behind the width (a screen returning a 128-wide frame is no longer widened). Parity scenarios at both widths (`firmware/tests/scenarios.js`; the `wide …` ones so far).
-- **Assets.** Fonts unchanged; new glyphs (live and scheduled icons, half sun, a 3 px W) and the 80 × 32 world map, generated as now.
-- **Firmware.** Radar frame buffers sized for the chosen radar layout (up to 128 × 32, 4 KB a frame). The chain length from `cols` is done.
+- **The board's width.** `cols` (64 or 128) in the S3's flash sets the chain length; the board sends `w=128` with each `/board/update` and `/board/select`, the server keeps it as the board's `cols` and sends `cols: 128` in its payloads. A 64 board gets exactly what it got before. Frames are 128 wide; slides and fades run across all 128 columns (contract: "Width").
+- **Server layouts by width.** `arrivals.js` (rows, the split, the busy-station chain, alert words), weather (7 days, 24 hours, wide conditions), radar crop width and masks, sun times, warning expiries, the announce layout and its validation, and the baseball line score: chosen per board width.
+- **`draw.js` and `draw.cpp`.** Every screen has a 128 layout behind the width, with parity scenarios at both widths (`firmware/tests/scenarios.js`, the `wide …` ones).
+- **Assets.** New glyphs and the 80 × 32 world map, generated as before.
+- **Firmware.** Radar frame buffers for 128-wide frames (`pk=4`, 2 KB a frame packed). The status screens (WiFi, setup, portal, no server, updating, no setup) are drawn across both panels, centered on 128, with room for twice the detail (a whole network name, the MAC on one line): `render_status(f, kind, detail, cols)`, the width from the panel (`Display::cols()`).
+- **Control page.** Renders, previews and the picker tiles are 4:1 on a wide board: `tiles.json` carries a 128 × 32 tile (`w:<tile>`) for each picker option, which the page uses on a wide board.
