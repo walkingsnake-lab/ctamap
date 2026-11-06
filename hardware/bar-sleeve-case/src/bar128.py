@@ -15,8 +15,10 @@ cuts the top and bottom walls, the hood and both rims.
   only, so the halves stepped). The wall is SKIN_O | GROOVE | SKIN_I; half A's tongue runs TONGUE_L into a groove closed on
   both sides in half B, so the outer faces are held flush both ways. From TONGUE_FRONT behind the front face to
   TONGUE_BACK in front of the back face (its back end 45 deg: no flat overhang back-down); hidden everywhere.
-  TONGUE_CL a side; a DETENT ridge across the tongue's inner face clicks into a recess in the groove's inner skin when
-  it's home (that skin, hidden, flexes 0.2 mm going in; once the trays are in it can't, so the joint is locked). The groove's mouth is chamfered so a seam blob at the tongue's root can't hold the
+  TONGUE_CL a side (the test plate's three pick it): a firm push fit. What holds the halves together in the end is
+  the inside: each tray is screwed to its half and bolted to its panel, and the panels are spliced, so the joint can't
+  open once the bar is assembled. (A click detent was tried: its recess left the hidden skin under two lines thick,
+  which the slicer printed with holes.) The groove's mouth is chamfered so a seam blob at the tongue's root can't hold the
   halves apart. The seam test plate prints three clearances (TONGUE_CLS) to choose TONGUE_CL.
 - the knob moves to x KNOB_X (+123, near the right end over the S3's tray: its encoder board just clears tray B's
   top-right post), the light sensor to SENSOR_X (+83, 40 mm from the knob toward the centre), the screws from below to
@@ -79,15 +81,12 @@ for _m in (C, V, P3):
 BED = 256.0
 # ---------------------------------------------------------------- shell split: tongue and groove at x = 0
 CHAMF = 0.5                     # V-groove: each half's visible edges at the joint chamfered this much x 45 deg
-SKIN_O, SKIN_I = 1.2, 0.8       # wall = outer skin | GROOVE | inner skin (WALL 3.5): the outer one keeps 0.45 at the
-GROOVE = WALL - SKIN_O - SKIN_I # 1.5    joint edge past the V and the mouth; the inner one is the one the detent flexes
+SKIN_O, SKIN_I = 1.2, 0.8       # wall = outer skin | GROOVE | inner skin (WALL 3.5): 3 and 2 lines of a 0.4 nozzle
+GROOVE = WALL - SKIN_O - SKIN_I # 1.5
 TONGUE_L = 8.0                  # how far A's tongue runs into B
 TIP_CL = 0.3                    # gap at the tongue's tip: the end faces at x = 0 are the seat in x
 TONGUE_CLS = (0.05, 0.10, 0.15) # the test plate's three
 TONGUE_CL = float(os.environ.get('TONGUE_CL', '0.10'))   # a side
-DETENT = 0.20                   # the ridge's interference going in: only the inner skin (hidden) flexes, 0.8 % strain
-DET_X, DET_W = 6.5, 0.8         # ridge centre (from the joint) and base width; 45 deg flanks
-DET_Y0 = Y_FACE + 2.0           # ridge and recess only behind the screen (the inner skin in front of it is the hood)
 MOUTH = 0.3                     # the groove's mouth chamfer (room for a seam blob at the tongue's root)
 TONGUE_FRONT = 1.2              # tongue stops this far behind the front face (chamfer included)
 TONGUE_BACK = 2.0               # ... and in front of the back face at its root
@@ -126,22 +125,10 @@ def _walls():
     return out
 
 
-def _ridge(x0, z, sgn, h, w, y0, y1):
-    """a 45 deg-flanked ridge (base w at the face z, height h toward sgn), across y0..y1, centred on x0"""
-    top = max(w / 2 - h, 0.02)
-    cs = CrossSection([[(x0 - w / 2, 0.0), (x0 + w / 2, 0.0), (x0 + top, h), (x0 - top, h)]])
-    m = Manifold.extrude(cs, y1 - y0).rotate([90, 0, 0])            # xz profile, extruded along -y
-    m = m.translate([0, y1, 0])
-    if sgn < 0:
-        m = m.mirror([0, 0, 1])
-    return m.translate([0, 0, z])
-
-
 def tongue(cl, y_back=None):
-    """A's tongue for both walls (clearance cl a side), with its detent ridge on the face toward the case's inside;
-    y_back: cut flat there (the test piece)"""
+    """A's tongue for both walls (clearance cl a side); y_back: cut flat there (the test piece)"""
     out = None
-    for k, (z0, z1, yf) in enumerate(_walls()):
+    for z0, z1, yf in _walls():
         a0, a1 = z0 + cl, z1 - cl
         yb = D - TONGUE_BACK if y_back is None else y_back
         L = TONGUE_L - TIP_CL
@@ -151,24 +138,17 @@ def tongue(cl, y_back=None):
         else:
             prof = CrossSection([[(-0.01, yt), (L, yt), (L, yb), (-0.01, yb)]])
         t = Manifold.extrude(prof, a1 - a0).translate([0, 0, a0])   # x, y profile, extruded along z
-        zf, sg = (a0, -1) if k == 0 else (a1, 1)                  # top wall: its lower face; bottom wall: its upper
-        # 2 cl + DETENT: DETENT past the groove face even with the tongue pushed against the outer skin
-        r = _ridge(DET_X, zf, sg, 2 * cl + DETENT, DET_W, DET_Y0, (yb if y_back is not None else yb - L) - 1.0)
-        t = t + (r ^ box(0, L, -50, D + 50, a0 - 1, a1 + 1))
         out = t if out is None else out + t
     return out
 
 
 def groove(cl=None):
-    """B's groove for both walls: the tongue's slot (full band, TONGUE_L deep, from yf to D - TONGUE_BACK), the detent
-    recess in the inner skin, and the mouth chamfer"""
-    cl = TONGUE_CL if cl is None else cl
+    """B's groove for both walls: the tongue's slot (full band, TONGUE_L deep, from yf to D - TONGUE_BACK) and the
+    mouth chamfer"""
     out = None
-    for k, (z0, z1, yf) in enumerate(_walls()):
+    for z0, z1, yf in _walls():
         yb = D - TONGUE_BACK
         g = box(-0.01, TONGUE_L, yf, yb, z0, z1)
-        zf, sg = (z0, -1) if k == 0 else (z1, 1)
-        g = g + _ridge(DET_X, zf, sg, cl + DETENT + 0.05, DET_W + 0.2, DET_Y0 - 0.5, yb - 0.5)
         e = 0.1                                # the 45 deg faces run on into the groove's space: no vertex lands on
         mouth = CrossSection([[(-0.01, z0 - MOUTH - 0.01), (MOUTH + e, z0 + e), (MOUTH + e, z1 - e),   # its corner
                                (-0.01, z1 + MOUTH + 0.01)]])          # (a near-twin there left a 0-thick sliver)
@@ -185,7 +165,7 @@ def v_groove(sh):
     e = 1e-3
     keep = None
     for sg in (1, -1):
-        k = Manifold.hull(outer_inset(CHAMF) ^ box(-e, e, -50, D + 50, -50, H + 50)
+        k = Manifold.hull((outer_inset(CHAMF) ^ box(-e, e, -50, D + 50, -50, H + 50))
                           + (outer_inset(0.0) ^ box(sg * CHAMF - e, sg * CHAMF + e, -50, D + 50, -50, H + 50)))
         keep = k if keep is None else keep + k
     return (sh ^ box(-CHAMF, CHAMF, -50, D + 50, -1, H + 1)) - keep
@@ -214,7 +194,7 @@ COUPON_W = (18.0, 22.0, 26.0)   # each pair's length a side, shortest to longest
 def seam_coupon(a, b, wall='top', w=20.0):
     """both halves across the seam, w a side, the front COUPON_Y deep, one wall: test the tongue's fit and click, the
     faces' flushness and how the V-groove reads"""
-    zr = (H - 15.0, H + 1) if wall == 'top' else (-1, 15.0)
+    zr = (H - WALL, H + 1) if wall == 'top' else (-1, WALL)          # the wall only, not the screen stop's ledge
     reg = box(-w, w, -50, COUPON_Y, *zr)
     return a ^ reg, b ^ reg
 

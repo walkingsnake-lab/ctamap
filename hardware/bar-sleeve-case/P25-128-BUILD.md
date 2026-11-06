@@ -23,9 +23,10 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   inside): it held each wall from one side only, so the long halves' slight bow and the seam blobs on the lip showed as a
   step, and nothing at all held the front 13 mm. Now the wall is 1.2 outer skin | 1.5 groove | 0.8 inner skin: half A's 1.3 mm tongue
   (`TONGUE_CL` a side, from the test plate) runs 8 mm into a groove closed on both sides in half B, from 2 mm behind
-  the front face to 2 mm in front of the back, so both faces are held flush. A ridge on the tongue's inside face clicks
-  into a recess in the groove's inside skin (hidden; it flexes 0.2 mm going in, and once the trays are in it can't, so
-  the joint is locked). Outside, every outer edge at the joint has a 0.5 mm chamfer each side (a V-groove round the
+  the front face to 2 mm in front of the back, so both faces are held flush. A firm push fit; what holds the halves
+  together in the end is the inside: each tray is screwed to its half and bolted to its panel, and the panels are
+  spliced, so the joint can't open once the bar is assembled. (A click ridge was tried: its recess left the hidden
+  skin under two lines thick, and the slicer printed it with holes.) Outside, every outer edge at the joint has a 0.5 mm chamfer each side (a V-groove round the
   top, bottom and both rims) instead of the square reveal and its thin ledges; inside the hood the halves just butt
   (a chamfer crossing the screen stop's sloped faces came out as a stepped slot). Glue is optional, for permanence.
 - **Seams go into the joint by design.** The slicer's Aligned seam goes to each layer's sharpest inside corner. The
@@ -33,7 +34,9 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   the groove's mouth is chamfered and the tongue's tip has 0.3 mm, so a seam blob can't hold the halves apart. The
   other inside corners lost their sharpness: the feet recesses and screw counterbores meet their floors at 45°
   (`case2.FLOOR_CH`), and the V-groove's corners are outside corners. (Checked layer by layer: the joint is the sharpest
-  inside corner on every layer from 2 mm behind the front to 3 mm before the back.)
+  inside corner on every layer from 2 mm behind the front to 3 mm before the back. The test pieces were also sliced in
+  PrusaSlicer 2.7, Bambu Studio's parent, with Classic and Arachne walls: every layer's paths cover the model, no
+  holes; every wall is at least two lines of a 0.4 nozzle.)
 - **Knob near the right end, at x +123 (50 mm from the end), over the S3's tray; light sensor 40 mm toward the centre
   (x +83); USB-C at the same end** (Nov 5). ±123 is as far out as the encoder's board (25.4 wide, under the top wall)
   clears the tray's top corner post sideways; further out it would ride ~1 mm over the post, and past ~138 the collar
@@ -82,8 +85,9 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
    V-groove, the tongue's front end), the cut face on the bed. The pair's length says its tongue clearance: 18 mm a
    side = 0.05, 22 = 0.10, 26 = 0.15 mm a side (no marks cut in: they'd be inside corners, and the seam would go to
    them instead of the joint). Print them with the shell's settings; in Preview (Seams on) the seam should run up the
-   joint end of each piece. Push each pair together by hand on a flat surface: the end faces should close completely,
-   the ridge should click, and the outer faces should be flush (run a fingernail across; check the front edges too).
+   joint end of each piece. The pieces are the wall only (the screen stop's ledge is left off: its cut ends print
+   ragged and it isn't part of the fit). Push each pair together by hand on a flat surface: the end faces should close
+   completely, it should take a firm push and stay put, and the outer faces should be flush (run a fingernail across; check the front edges too).
    Pick the tightest that closes fully by hand (`TONGUE_CL=<it>`). If even 0.15 won't close, look for blobs at the
    tongue's root first.
 2. **Diffuser joint** — `coupon-128-diffuser-joint-white.stl` + `-black.stl` (one object, two parts, same frame; 0.2
@@ -185,11 +189,11 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
 
 ## Joining and finishing the shell
 1. Lay both halves back-down on a flat sheet (glass or a tile): the back rims are one plane, so the halves can't step
-   front to back. Slide them together until the end faces meet and the ridges click (top and bottom). The tongue holds
-   the faces flush up and down. Check the V-groove is even on the top, the bottom and round the hood.
+   front to back. Push them together until the end faces meet (top and bottom). The tongue holds the faces flush up
+   and down. Check the V-groove is even on the top, the bottom and round the hood.
 2. Optional, for permanence: pull apart, put thin dots of medium CA on the tongue's outer face only, 2 mm back from its
    root and its tip (none near the inside skin: a bead inside would catch the trays), and push home again on the sheet.
-   Unglued, the trays lock the ridges in once they're in.
+   Unglued, the assembled bar holds it closed (trays screwed to the halves, bolted to the panels, panels spliced).
 3. Lap the front flat across the joint if it needs it (400 on glass, figure-eights); clear the V-groove with a folded
    strip of paper.
 4. Scuff and finish as the README. Oil goes on after gluing (CA won't bond to oiled wood PLA).
