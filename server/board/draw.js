@@ -349,8 +349,8 @@
     // `divider`: a line on row 7 (transit).
     function drawHeader(f, name, now, divider, clock = true, color = C.head) {
       f.text('small', name, 0, 6, color);
-      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', 63), 6, color);
-      if (divider) f.fill(0, 7, 64, 1, C.divider);
+      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', f.w - 1), 6, color);
+      if (divider) f.fill(0, 7, f.w, 1, C.divider);
     }
 
     // NWS warning tag style: watches yellow, severe warnings orange, tornado
@@ -373,10 +373,10 @@
         const { glyph, color, blinks } = warnStyle(warn);
         if (blinks && blink) return;
         const word = warn.lvl === 'warning' ? 'WARNING' : 'WATCH';
-        const x = 63 - (measure('small', glyph) + TAG_GAP + measure('small', word)) + 1;
+        const x = f.w - 1 - (measure('small', glyph) + TAG_GAP + measure('small', word)) + 1;
         f.text('small', word, f.text('small', glyph, x, base, color) + TAG_GAP - 1, base, color);
       } else if (wx.word) {
-        rtext(f, 'small', wx.word, 63, base, C.dimHead);
+        rtext(f, 'small', wx.word, f.w - 1, base, C.dimHead);
       }
     }
 
@@ -386,22 +386,23 @@
     // divider on row 25 (drawn when the header isn't hidden to fit the rows).
     function drawKey(f) {
       f.text('small', 'trains to', 0, 6, C.dimHead);
-      rtext(f, 'small', 'min', 63, 6, C.dimHead);
+      rtext(f, 'small', 'min', f.w - 1, 6, C.dimHead);
     }
-    function drawBand(f, name, now, clock) {
-      f.fill(0, 25, 64, 1, C.divider);
-      f.text('small', name, 0, 32, C.head);
-      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', 63), 32, C.head);
+    function drawBand(f, name, now, clock, color = C.head, divider = true) {
+      if (divider) f.fill(0, 25, f.w, 1, C.divider);
+      f.text('small', name, 0, 32, color);
+      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', f.w - 1), 32, color);
     }
 
     // One time cell, right-aligned at `right`, optionally mid-roll from
     // `roll.from`. Same-length numbers roll only the digits that changed;
     // anything else (length change, to/from DUE) rolls the whole cell.
-    function drawTimeCell(f, text, right, top, color, roll) {
+    // x0-x1: the row's columns (the whole panel, or a half), for the roll's clip.
+    function drawTimeCell(f, text, right, top, color, roll, x0 = 0, x1 = f.w - 1) {
       const base = top + 5;
       if (!roll || roll.from === text || roll.p >= 1) { rtext(f, 'small', text, right, base, color); return; }
       const up = Math.round(easeInOut(roll.p) * ROLL_DIST);
-      f.withClip(0, top, 63, top + 4, () => {
+      f.withClip(x0, top, x1, top + 4, () => {
         const from = roll.from;
         const num = /^\d+m?$/;
         const perDigit = from.length === text.length && num.test(from) && num.test(text);
@@ -425,12 +426,13 @@
     // Lay out one row's times: right-aligned group, 3px gaps tightening to 2px
     // when the row is full. Returns cells (right-to-left order not assumed).
     // steps: the third time a step dimmer than the second (state timeSteps).
-    function layoutCells(r, now, steps) {
+    // x0, right: the row's columns (a wide board's halves; contract "Width").
+    function layoutCells(r, now, steps, x0 = 0, right = 63) {
       const texts = r.t.map((t, k) => timeText(t, now, k === 0));
       const widthAt = (gap) => texts.reduce((w, txt, i) => w + measure('small', txt) + (i ? gap : 0), 0);
-      const gap = 63 - widthAt(TIME_GAP) + 1 - labelEnd(r, 5) - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
+      const gap = right - widthAt(TIME_GAP) + 1 - labelEnd(r, x0 + 5) - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
       const cells = new Array(texts.length);
-      let x = 63;
+      let x = right;
       for (let k = texts.length - 1; k >= 0; k--) {
         const sch = r.s && r.s[k];
         cells[k] = {
@@ -447,11 +449,14 @@
     // The animator (createTransitAnimator) adjusts positions, colors, and alphas.
     function buildTransitView(p, now) {
       if (p.view === 'chrono') return buildChronoView(p, now);
+      if (colsOf(p) === WIDE && (p.view === 'split' || p.view === 'cols2')) return buildHalvesView(p, now);
       const rows = liveRows(p, now);
       const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
+      const right = colsOf(p) - 1;
       return {
         now,
         mode: 'dest',
+        w: colsOf(p),
         header: p.header,
         hdiv: !!p.headerDivider,
         key: !!p.key,
@@ -462,7 +467,43 @@
         stale: p.stale,
         rows: rows.map((r, i) => ({
           key: `${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, top: tops[i], alpha: 1,
-          cells: layoutCells(r, now, p.ts === true),
+          cells: layoutCells(r, now, p.ts === true, 0, right),
+        })),
+      };
+    }
+
+    // A wide board's halves (contract "Width"): `split`, northbound |
+    // southbound with the payload's `halves` labels on top and the station
+    // line at the bottom; `cols2`, two columns under the header. Rows carry
+    // `h`: columns 0-61 (h 0) or 66-127 (h 1), each a 64-style row. Both
+    // halves share row tops, set by the fuller one.
+    const HALVES = [[0, 61], [66, 127]];
+    const SPLIT_TOPS = { 1: [14], 2: [10, 18], 3: [8, 14, 20] };
+    function buildHalvesView(p, now) {
+      const split = p.view === 'split';
+      const rows = liveRows(p, now);
+      const per = [0, 1].map((h) => rows.filter((r) => (r.h ? 1 : 0) === h));
+      const n = Math.max(per[0].length, per[1].length);
+      const tops = split ? SPLIT_TOPS[Math.min(n, 3)] || [] : rowTops(n, !!p.header, !!p.wx, !!p.headerDivider, false);
+      return {
+        now,
+        mode: split ? 'split' : 'cols2',
+        w: WIDE,
+        halves: split ? p.halves || [] : null,
+        header: p.header,
+        hdiv: !split && !!p.headerDivider,
+        key: false,
+        clock: p.hclock !== false,
+        lnc: !!p.lnc,
+        wx: split ? null : p.wx,
+        warn: p.warn,
+        stale: p.stale,
+        rows: per.flatMap((list, h) => list.map((r, i) => {
+          const [x0, right] = HALVES[h];
+          return {
+            key: `${h}:${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, h, x0, right, top: tops[i], alpha: 1,
+            cells: layoutCells(r, now, p.ts === true, x0, right),
+          };
         })),
       };
     }
@@ -476,9 +517,11 @@
       const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
       const seenDest = new Set();
       const seenKey = new Set();
+      const right = colsOf(p) - 1;
       return {
         now,
         mode: 'chrono',
+        w: colsOf(p),
         pitch: tops.length > 1 ? tops[1] - tops[0] : 6,
         header: p.header,
         hdiv: !!p.headerDivider,
@@ -502,7 +545,7 @@
           return {
             key, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: i + 1, top: tops[i], alpha: 1,
             cells: [{
-              id: key, t: r.t[0], text: chronoText(r.t[0], now, due), right: 63, alpha: 1, roll: null,
+              id: key, t: r.t[0], text: chronoText(r.t[0], now, due), right, alpha: 1, roll: null,
               color: sch ? (i ? C.schDim : C.sch) : (i ? C.dimAmber : C.amber),
             }],
           };
@@ -521,11 +564,13 @@
       const top = Math.round(row.top);
       const chrono = row.num != null;
       const line = fade(LINE[row.ln], row.alpha);
+      // A half of a wide board (row.x0, row.right), else the whole panel.
+      const x0 = row.x0 || 0, x1 = row.right != null ? row.right : f.w - 1;
       // Chronological view: the row's position as a digit in the block's
       // exact color, before the block.
       if (chrono) drawTimeCell(f, String(row.num), 2, top, line, row.numRoll);
-      f.fill(chrono ? CHRONO_BLOCK_X : 0, top, 3, 5, line);
-      const lx = chrono ? CHRONO_LABEL_X : 5;
+      f.fill(chrono ? CHRONO_BLOCK_X : x0, top, 3, 5, line);
+      const lx = chrono ? CHRONO_LABEL_X : x0 + 5;
       f.text('small', row.a ? alertText(row) : row.lbl, lx, top + 5, fade(lnc ? LINE[row.ln] : C.label, row.alpha));
       if (row.a) {
         const ix = alertIconX(row, lx);
@@ -535,7 +580,7 @@
       for (const cell of row.cells) {
         const a = cell.alpha * row.alpha;
         if (a <= 0) continue;
-        drawTimeCell(f, cell.text, Math.round(cell.right), top, fade(cell.color, a), cell.roll);
+        drawTimeCell(f, cell.text, Math.round(cell.right), top, fade(cell.color, a), cell.roll, x0, x1);
       }
     }
 
@@ -572,12 +617,14 @@
     // Stale train data (the server hasn't reached Train Tracker for a while):
     // a red line along the top edge, which no screen draws on.
     function drawStale(f, p) {
-      if (p.stale) f.fill(0, 0, 64, 1, C.red);
+      if (p.stale) f.fill(0, 0, f.w, 1, C.red);
     }
 
     function drawTransitView(f, view, blink) {
       if (!view.rows.length) {
         drawOvernight(f, view, view.now);
+      } else if (view.mode === 'split') {
+        drawSplit(f, view);
       } else {
         if (view.key) {
           drawKey(f);
@@ -587,24 +634,40 @@
         }
         const clipTop = view.key ? 6 : view.header ? 7 : 0;
         const clipBottom = view.key && view.header ? 24 : view.wx ? 25 : 31;
-        f.withClip(0, clipTop, 63, clipBottom, () => {
+        f.withClip(0, clipTop, f.w - 1, clipBottom, () => {
           for (const row of view.rows) drawViewRow(f, row, view.lnc);
         });
       }
       if (view.wx) drawWeather(f, view.wx, view.warn, blink);
     }
 
+    // Wide board, northbound | southbound: each half's label on rows 1-5,
+    // its rows, and (header on) the station and clock on rows 27-31 in the
+    // dim header grey. A half with no trains says so.
+    function drawSplit(f, view) {
+      HALVES.forEach(([x0, x1], h) => {
+        f.text('small', (view.halves || [])[h] || '', x0, 6, C.head);
+        if (!view.rows.some((r) => (r.h ? 1 : 0) === h)) f.text('small', 'NO TRAINS', x0 + Math.floor((x1 - x0 + 1 - measure('small', 'NO TRAINS')) / 2), 19, C.noTrains);
+      });
+      if (view.header) drawBand(f, view.header, view.now, view.clock !== false, C.dimHead, false);
+      f.withClip(0, 7, f.w - 1, view.header ? 25 : 31, () => {
+        for (const row of view.rows) drawViewRow(f, row, view.lnc);
+      });
+    }
+
     // opts: now, blink (alert "!" phase), rolls ({slotKey: {from, p}}),
     // view (a frame from createTransitAnimator; overrides the static layout)
+    // A wide payload's rows draw 128 across; with none (overnight) the 64
+    // layout shows on both panels.
     function renderTransit(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
       let view = o.view;
       if (!view) {
         view = buildTransitView(p, now);
         if (o.rolls) for (const row of view.rows) for (const c of row.cells) if (o.rolls[c.id]) c.roll = o.rolls[c.id];
       }
+      const f = newFrame(view.rows.length && (view.w || 64) === WIDE ? WIDE : 64);
       drawTransitView(f, view, !!o.blink);
       drawStale(f, p);
       return f;
@@ -738,11 +801,11 @@
             }
             // Position numbers roll when a row moves up (2 -> 1).
             if (r.num != null && st.num != null && st.num !== r.num && !isNewRow) st.numRoll = { from: String(st.num), start: t };
-            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: r.num, mode: target.mode });
+            Object.assign(st, { ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, num: r.num, mode: target.mode, h: r.h, x0: r.x0, right: r.right });
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, mode: target.mode, header: target.header, hdiv: target.hdiv, key: target.key, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
+          const view = { now, mode: target.mode, w: target.w, halves: target.halves, header: target.header, hdiv: target.hdiv, key: target.key, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;
@@ -764,7 +827,7 @@
             const numP = st.numRoll ? (t - st.numRoll.start) / ROLL_MS : 1;
             if (numP >= 1) st.numRoll = null;
             view.rows.push({
-              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, al: st.al, top: st.shownTop, alpha, cells,
+              key: st.key, ln: st.ln, lbl: st.lbl, a: st.a, al: st.al, h: st.h, x0: st.x0, right: st.right, top: st.shownTop, alpha, cells,
               num: st.num, numRoll: st.numRoll ? { from: st.numRoll.from, p: numP } : null,
             });
           }
@@ -801,13 +864,48 @@
       }
     }
 
+    // Wide board (contract "Width"): the CTA platform sign's row. The row
+    // number in the grey index column (the alert circle on a line with a
+    // major alert), the band in the line color to the right edge, the full
+    // destination, the time right-aligned 3 px clear of the status icon:
+    // TICKER_ICONS live (tracked) or sch (schedule-based, `s`), 7 x 7 at
+    // columns 120-126, rows 2-8 of the band.
+    const TICKER_ICON_X = 120, TICKER_TIME_RIGHT = 116;
+    const TICKER_ICONS = {
+      live: ['####...', '....#..', '###..#.', '...#..#', '##..#.#', '..#.#.#', '#.#.#.#'],
+      sch: ['..###..', '.#...#.', '#..#..#', '#..##.#', '#.....#', '.#...#.', '..###..'],
+    };
+    function drawTickerItemWide(f, it, idx, top, now, due, fill) {
+      const base = top + 9;
+      f.fill(0, top, 5, 12, C.index);
+      f.fill(5, top, f.w - 5, 12, scaleColor(LINE[it.ln], fill));
+      if (it.a) {
+        f.text('small', s(G.ALERT_DISC), 0, base, C.red);
+        f.text('small', s(G.ALERT_MARK), 0, base, C.white);
+      } else {
+        f.text('small', String(idx), 1, base, C.label);
+      }
+      f.text('5x7', it.d, 7, base, C.white);
+      const min = minutesUntil(it.t, now);
+      if (min <= 1 && due) {
+        rtext(f, '5x7', 'Due', TICKER_TIME_RIGHT, base, C.white);
+      } else {
+        const mw = measure('5x7', s(G.MIN));
+        f.text('5x7', s(G.MIN), TICKER_TIME_RIGHT - mw + 1, base, C.white);
+        rtext(f, '5x7', String(min <= 1 ? 2 : min), TICKER_TIME_RIGHT - mw - 2, base, C.white);
+      }
+      TICKER_ICONS[it.s ? 'sch' : 'live'].forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(TICKER_ICON_X + i, top + 2 + j, 1, 1, C.white); }));
+    }
+
     const tickerPages = (p, now) => Math.max(1, Math.ceil(liveTicker(p, now).length / 2));
 
     // opts: now, page, slide (0..1 progress of the slide to the next page)
     function renderTicker(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
+      const wide = colsOf(p) === WIDE;
+      const f = newFrame(wide ? WIDE : 64);
+      const item = wide ? drawTickerItemWide : drawTickerItem;
       // The ticker's header stays when the transit header is hidden to fit.
       const th = p.tickerHeader !== undefined ? p.tickerHeader : p.header;
       if (th) drawHeader(f, th, now, false, p.hclock !== false);
@@ -826,10 +924,10 @@
       const drawPage = (pg, shift) => {
         items.slice(pg * 2, pg * 2 + 2).forEach((it, i) => {
           const n = pg * 2 + i;
-          drawTickerItem(f, it, n + 1, 7 + i * 13 + shift, now, firstOf.get(`${it.ln}:${it.d}`) === n, fill);
+          item(f, it, n + 1, 7 + i * 13 + shift, now, firstOf.get(`${it.ln}:${it.d}`) === n, fill);
         });
       };
-      f.withClip(0, 7, 63, 31, () => {
+      f.withClip(0, 7, f.w - 1, 31, () => {
         drawPage(page, -offset);
         if (offset > 0 && pages > 1) drawPage((page + 1) % pages, 26 - offset);
       });
@@ -1672,18 +1770,20 @@
       if (cat === 'announce') return { p, screen: 'announce' };
       return { p, screen: 'cycle' };
     }
+    // On a wide board every view is 128 across (64-wide ones on both panels),
+    // and the bar is centered on the whole width.
     function drawPeekView(p, k, vi, o) {
       const { p: q, screen } = peekView(p, k, vi);
-      if (screen === 'cycle') { const f = newFrame(); drawCycleArt(f); return f; }
+      if (screen === 'cycle') { const f = newFrame(); drawCycleArt(f); return widen(f, colsOf(p)); }
       const oo = { ...o, peek: true, screen };
-      return screen === 'ticker' ? renderTicker(q, oo) : screen === 'weather' ? renderWeather(q, oo) : screen === 'clock' ? renderClock(q, oo)
-        : screen === 'announce' ? renderAnnounce(q, oo) : renderTransit(q, oo);
+      return widen(screen === 'ticker' ? renderTicker(q, oo) : screen === 'weather' ? renderWeather(q, oo) : screen === 'clock' ? renderClock(q, oo)
+        : screen === 'announce' ? renderAnnounce(q, oo) : renderTransit(q, oo), colsOf(p));
     }
     function drawPeekBar(f, p, k, vi, drop) {
       const kn = p.knob || {}, ring = kn.ring || [], n = ring.length;
       const sh = (y) => y + drop;
-      f.fill(0, sh(PEEK.top), 64, PEEK.band, '#000000');
-      const x0 = Math.floor(32 - (n * PEEK.pitch - 5) / 2);
+      f.fill(0, sh(PEEK.top), f.w, PEEK.band, '#000000');
+      const x0 = Math.floor(f.w / 2 - (n * PEEK.pitch - 5) / 2);
       ring.forEach((cat, i) => {
         const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
         if (!rows) return;
@@ -1695,8 +1795,8 @@
       const nv = ((kn.vars || [])[k] || []).length;
       if (nv > 1) for (let j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, j === vi ? col : C.indicator);
     }
-    // Slide offset in px (0..64 across, 0..32 down) at t ms.
-    const peekShift = (axis, t) => Math.round(peekEase(t / (axis === 'x' ? PEEK.xMs : PEEK.yMs)) * (axis === 'x' ? 64 : 32));
+    // Slide offset in px (0..w across, 0..32 down) at t ms.
+    const peekShift = (axis, t, w = 64) => Math.round(peekEase(t / (axis === 'x' ? PEEK.xMs : PEEK.yMs)) * (axis === 'x' ? w : 32));
     // Rows the bar has dropped at t ms: rising (up) from gone to 0, or falling.
     const peekDrop = (up, t) => Math.round((up ? 1 - peekEase(t / PEEK.upMs) : peekEase(t / PEEK.downMs)) * PEEK.band);
     function renderPeek(p, opts) {
@@ -1705,14 +1805,14 @@
       const f = drawPeekView(p, k, vi, o);
       const sl = pk.slide;
       if (sl && sl.t != null) {
-        const axis = sl.axis === 'y' ? 'y' : 'x', dir = sl.dir < 0 ? -1 : 1, sh = peekShift(axis, sl.t);
-        if (sh < (axis === 'x' ? 64 : 32)) {
+        const W = f.w, axis = sl.axis === 'y' ? 'y' : 'x', dir = sl.dir < 0 ? -1 : 1, sh = peekShift(axis, sl.t, W);
+        if (sh < (axis === 'x' ? W : 32)) {
           const from = drawPeekView(p, sl.k || 0, sl.vi || 0, o), cur = f.px.slice();
-          for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+          for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) {
             let src = from.px, sx = x, sy = y;
-            if (axis === 'x') { sx = x + dir * sh; if (sx < 0 || sx >= 64) { src = cur; sx = ((sx % 64) + 64) % 64; } }
+            if (axis === 'x') { sx = x + dir * sh; if (sx < 0 || sx >= W) { src = cur; sx = ((sx % W) + W) % W; } }
             else { sy = y + dir * sh; if (sy < 0 || sy >= 32) { src = cur; sy = ((sy % 32) + 32) % 32; } }
-            const i = (y * 64 + x) * 3, j = (sy * 64 + sx) * 3;
+            const i = (y * W + x) * 3, j = (sy * W + sx) * 3;
             f.px[i] = src[j]; f.px[i + 1] = src[j + 1]; f.px[i + 2] = src[j + 2];
           }
         }

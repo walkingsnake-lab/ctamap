@@ -749,7 +749,7 @@ async function build() {
     const bytes = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Uint8Array.from(v)])) : undefined);
     const WIDE = ['transit morse-2026-10-03-2316.json header=true wx=true', 'chrono clark/lake alerts', 'stale', 'ticker header kept', 'weather screen normal',
       'weather rain loops then bars', 'radar time off split=true svr warning', 'baseball logos live', 'knob chooser five entries', 'peek slides',
-      'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'announce typewriter', 'brightness 50'];
+      'peek every variant', 'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'announce typewriter', 'brightness 50'];
     for (const name of WIDE) {
       const s = S.find((x) => x.name === name);
       if (!s) throw new Error(`no scenario "${name}" to widen`);
@@ -764,6 +764,68 @@ async function build() {
         steps: s.steps.map((st) => {
           const p = wide(st.payload), view = anim.step(p, st.now, st.t);
           return { ...st, payload: p, px: hexOf(draw.render(p, { screen: 'transit', now: st.now, view, blink: st.blink })) };
+        }),
+      });
+    }
+    // Wide transit, as the server formats it (arrivals.js formatWide):
+    // northbound | southbound, two columns, full-width rows, the
+    // chronological list; alerts, the key layout, an empty half.
+    const wideFrom = (name, mapid, header, cfg = {}) => {
+      const json = fixture(name);
+      const now = parseCtaTime(json.ctatt.tmst);
+      const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather: !!cfg.wx, showKey: !!cfg.key, cols: 128, wideLayout: cfg.layout || 'split', station: { mapid }, ...(cfg.hide ? { hideLines: cfg.hide } : {}) }, { now, alerts: new Set(cfg.alerts || []) });
+      return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, cols: 128, header: r.bars.showHeader ? header : null, ...(r.bars.showKey ? { key: 1 } : {}), view: r.view, ...(r.halves ? { halves: r.halves } : {}), rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx : null, warn: cfg.warn || null, ...(cfg.extra || {}) };
+    };
+    const at = (q) => [{ screen: 'transit' }, { screen: 'transit', now: q.now + 75 }, { screen: 'transit', now: q.now + 610 }];
+    const S3 = { s3only: true };
+    for (const [file, mapid, name] of [['morse-2026-10-03-2316.json', '40100', 'MORSE'], ['belmont-2026-10-03-2316.json', '41320', 'BELMONT'], ['clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE'], ['howard-2026-10-03-2316.json', '40900', 'HOWARD'], ['jefferson-park-2026-10-03-2316.json', '41280', 'JEFF PARK']]) {
+      for (const layout of ['split', 'rows']) {
+        for (const [header, wx] of [[name, null], [null, null], [name, WX]]) {
+          const q = wideFrom(file, mapid, header, { layout, wx });
+          add(`wide transit ${q.view} ${file} ${layout} header=${!!header} wx=${!!wx}`, q, at(q), undefined, undefined, S3);
+        }
+      }
+    }
+    {
+      const q = wideFrom('belmont-2026-10-03-2316.json', '41320', 'BELMONT', { alerts: ['RD'] });
+      add('wide transit split alert', q, at(q), undefined, undefined, S3);
+      const k = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { layout: 'rows', key: true });
+      add('wide transit rows key layout', k, at(k), undefined, undefined, S3);
+      const c = wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { alerts: ['BL', 'PK'] });
+      add('wide transit cols2 alerts', c, at(c), undefined, undefined, S3);
+      const r = wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', alerts: ['BR'] });
+      add('wide transit rows alert, line colors, steps', { ...r, lnc: true, ts: true }, at(r), undefined, undefined, S3);
+      const st = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { extra: { stale: 1, hclock: false } });
+      add('wide transit split stale, no clock', st, at(st), undefined, undefined, S3);
+      // A half with no trains (one direction's run ended).
+      const half = { ...st, stale: 0, rows: st.rows.filter((x) => !x.h) };
+      add('wide transit split one half empty', half, [{ screen: 'transit' }], undefined, undefined, S3);
+      // Overnight on a wide board: the 64 layout on both panels.
+      add('wide transit overnight', { ...st, stale: 0, rows: [] }, [{ screen: 'transit' }], undefined, undefined, S3);
+      // Many destinations: the chronological list, full width.
+      const many = { ...wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', wx: WX }) };
+      const chrono = { ...many, view: 'chrono', rows: many.rows.map((x, i) => ({ ...x, t: [x.t[0]], s: [x.s[0]], rn: String(800 + i) })), wx: null };
+      add('wide transit chrono', chrono, at(chrono), undefined, undefined, S3);
+    }
+    // Wide ticker: the platform sign (full names, the status icon right).
+    for (const [file, mapid, name] of [['morse-2026-10-03-2316.json', '40100', 'MORSE'], ['clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE']]) {
+      const q = { ...wideFrom(file, mapid, name, { alerts: ['BL'] }), screen: 'ticker', tickerHeader: name, tickerFill: 40 };
+      add(`wide ticker ${file}`, q, [{ screen: 'ticker' }, { screen: 'ticker', page: 1 }, { screen: 'ticker', page: 1, slide: 0.4 }, { screen: 'ticker', now: q.now + 130 }], undefined, undefined, S3);
+    }
+    // Wide animator: a departing train in a half, a row joining, a row moving halves' tops.
+    {
+      const anim = draw.createTransitAnimator();
+      const r = (h, ln, lbl, t) => ({ ln, lbl, t, s: t.map(() => 0), a: 0, h });
+      const base2 = { ...base, cols: 128, view: 'split', halves: ['NORTHBOUND', 'SOUTHBOUND'] };
+      const one = { ...base2, now: NOW, rows: [r(0, 'RD', 'HOWARD', [NOW + 10, min(6), min(12)]), r(1, 'RD', '95TH', [min(3), min(9)])] };
+      const two = { ...base2, now: NOW + 45, rows: [r(0, 'RD', 'HOWARD', [min(6), min(12)]), r(0, 'PR', 'LINDEN', [min(4)]), r(1, 'RD', '95TH', [min(3), min(9)])] };
+      const steps = [{ p: one, now: NOW, t: 0 }, ...ts(1000, 1800, 14).map((t) => ({ p: two, now: NOW + 45, t }))];
+      S.push({
+        s3only: true,
+        name: 'wide anim split departure and a joining row',
+        steps: steps.map((st) => {
+          const view = anim.step(st.p, st.now, st.t);
+          return { payload: st.p, now: st.now, t: st.t, blink: false, px: hexOf(draw.render(st.p, { screen: 'transit', now: st.now, view })) };
         }),
       });
     }

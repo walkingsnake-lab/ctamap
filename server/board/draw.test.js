@@ -1586,7 +1586,7 @@ test('width: a 128 payload (cols) shows 64-wide screens on both panels; slides a
   const p = payload([{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(9)], s: [0, 0], a: 0 }]);
   const narrow = draw.render(p);
   assert.equal(narrow.w, 64);
-  for (const screen of ['transit', 'ticker', 'weather', 'clock', 'announce']) {
+  for (const screen of ['weather', 'clock', 'announce']) {
     const f = draw.render({ ...p, cols: 128 }, { screen });
     const n = draw.render(p, { screen });
     assert.equal(f.w, 128, screen);
@@ -1599,11 +1599,39 @@ test('width: a 128 payload (cols) shows 64-wide screens on both panels; slides a
   assert.equal(draw.slideOffset(draw.SCREEN_SLIDE_MS), 64 + draw.SLIDE_GAP);
   // From a 64-wide frame (a status screen): widened as the board showed it.
   const wide = { ...p, cols: 128 };
-  const from = Array.from(narrow.px);
+  const from = Array.from(draw.render(p, { screen: 'weather' }).px);
+  const wfrom = Array.from(draw.render(wide, { screen: 'weather' }).px);
   const a = draw.render(wide, { screen: 'ticker', fade: { from, t: 40 } });
-  const b = draw.render(wide, { screen: 'ticker', fade: { from: Array.from(draw.render(wide).px), t: 40 } });
+  const b = draw.render(wide, { screen: 'ticker', fade: { from: wfrom, t: 40 } });
   assert.deepEqual(Array.from(a.px), Array.from(b.px));
   const c = draw.render(wide, { screen: 'ticker', slide: { from, t: 150, dir: 1 } });
-  const d = draw.render(wide, { screen: 'ticker', slide: { from: Array.from(draw.render(wide).px), t: 150, dir: 1 } });
+  const d = draw.render(wide, { screen: 'ticker', slide: { from: wfrom, t: 150, dir: 1 } });
   assert.deepEqual(Array.from(c.px), Array.from(d.px));
+});
+
+test('width: wide transit and ticker draw 128 across; overnight shows on both panels', () => {
+  const rows = [{ ln: 'RD', lbl: 'HOWARD', t: [min(3), min(9)], s: [0, 0], a: 0 }];
+  const ticker = [{ ln: 'RD', d: 'Howard', t: min(3), s: 0, a: 0 }, { ln: 'RD', d: '95th/Dan Ryan', t: min(5), s: 1, a: 0 }];
+  const p = { ...payload(rows, ticker), cols: 128 };
+  // Rows: the header clock and the times at the right edge, nothing mirrored.
+  const f = draw.render(p);
+  assert.equal(f.w, 128);
+  assert.ok(count(f, '#ffb000', 120, 7, 127, 31) > 0, 'the first time at the right edge');
+  assert.equal(count(f, '#d8d8d8', 64, 7, 100, 31), 0, 'no second label');
+  // Split: the halves' labels, a row in each.
+  const split = { ...p, view: 'split', halves: ['NORTHBOUND', 'SOUTHBOUND'], rows: [{ ...rows[0], h: 0 }, { ln: 'RD', lbl: '95TH', t: [min(4)], s: [0], a: 0, h: 1 }] };
+  const sf = draw.render(split);
+  assert.ok(count(sf, '#808080', 0, 1, 40, 5) > 0 && count(sf, '#808080', 66, 1, 110, 5) > 0, 'both labels');
+  assert.ok(count(sf, '#ffb000', 40, 8, 61, 22) > 0 && count(sf, '#ffb000', 100, 8, 127, 22) > 0, 'times in both halves');
+  // An empty half says so.
+  const half = draw.render({ ...split, rows: [split.rows[0]] });
+  assert.ok(count(half, '#6c6c6c', 66, 14, 127, 19) > 0, 'NO TRAINS');
+  // Ticker: the band to the right edge, the status icon at 120-126.
+  const t = draw.render(p, { screen: 'ticker' });
+  assert.equal(t.w, 128);
+  assert.ok(count(t, '#ffffff', 120, 9, 126, 15) > 0, 'the live icon');
+  assert.ok(count(t, '#ffffff', 120, 22, 126, 28) > 0, 'the schedule icon');
+  // Overnight: the 64 layout on both panels.
+  const night = draw.render({ ...p, rows: [] });
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) assert.deepEqual(night.get(x, y), night.get(x + 64, y));
 });

@@ -592,9 +592,9 @@ static void draw_header(Frame &f, const ustr &name, double now, double tzo, bool
   f.text(FONT_SMALL, name, 0, 6, color);
   if (clock) {
     ustr ck = clock_text(now, tzo);
-    roll_text(f, FONT_SMALL, ck, 63, 6, color, take_roll("hdr.clock", ck));
+    roll_text(f, FONT_SMALL, ck, f.w - 1, 6, color, take_roll("hdr.clock", ck));
   }
-  if (divider) f.fill(0, 7, 64, 1, C::divider);
+  if (divider) f.fill(0, 7, f.w, 1, C::divider);
 }
 
 struct WarnStyle {
@@ -621,10 +621,10 @@ static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blin
     WarnStyle ws = warn_style(*warn);
     if (ws.blinks && blink) return;
     ustr word = (*warn)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
-    int x = 63 - (measure(FONT_SMALL, ws.glyph) + TAG_GAP + measure(FONT_SMALL, word)) + 1;
+    int x = f.w - 1 - (measure(FONT_SMALL, ws.glyph) + TAG_GAP + measure(FONT_SMALL, word)) + 1;
     f.text(FONT_SMALL, word, f.text(FONT_SMALL, ws.glyph, x, base, ws.color) + TAG_GAP - 1, base, ws.color);
   } else if (wx["word"].truthy()) {
-    rtext(f, FONT_SMALL, vstr(wx["word"]), 63, base, C::dimHead);
+    rtext(f, FONT_SMALL, vstr(wx["word"]), f.w - 1, base, C::dimHead);
   }
 }
 
@@ -632,15 +632,16 @@ static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blin
 // a divider on row 25. Mirrors drawKey() / drawBand() in draw.js.
 static void draw_key(Frame &f) {
   f.text(FONT_SMALL, U"trains to", 0, 6, C::dimHead);
-  rtext(f, FONT_SMALL, U"min", 63, 6, C::dimHead);
+  rtext(f, FONT_SMALL, U"min", f.w - 1, 6, C::dimHead);
 }
 
-static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock = true) {
-  f.fill(0, 25, 64, 1, C::divider);
-  f.text(FONT_SMALL, name, 0, 32, C::head);
+static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock = true, RGB color = C::head,
+                      bool divider = true) {
+  if (divider) f.fill(0, 25, f.w, 1, C::divider);
+  f.text(FONT_SMALL, name, 0, 32, color);
   if (clock) {
     ustr ck = clock_text(now, tzo);
-    roll_text(f, FONT_SMALL, ck, 63, 32, C::head, take_roll("hdr.clock", ck));
+    roll_text(f, FONT_SMALL, ck, f.w - 1, 32, color, take_roll("hdr.clock", ck));
   }
 }
 
@@ -654,15 +655,17 @@ static bool is_num(ustr s) {
 }
 
 // One time cell, right-aligned at `right`, optionally mid-roll.
-// Same-length numbers roll only the digits that changed.
-static void draw_time_cell(Frame &f, const ustr &text, int right, int top, RGB color, const std::optional<Roll> &roll) {
+// Same-length numbers roll only the digits that changed. x0..x1: the row's
+// columns, for the roll's clip (x1 -1: the frame's last column).
+static void draw_time_cell(Frame &f, const ustr &text, int right, int top, RGB color, const std::optional<Roll> &roll,
+                           int x0 = 0, int x1 = -1) {
   int base = top + 5;
   if (!roll || roll->from == text || roll->p >= 1) {
     rtext(f, FONT_SMALL, text, right, base, color);
     return;
   }
   int up = (int)jsround(ease_in_out(roll->p) * ROLL_DIST);
-  f.push_clip(0, top, 63, top + 4);
+  f.push_clip(x0, top, x1 < 0 ? f.w - 1 : x1, top + 4);
   const ustr &frm = roll->from;
   if (frm.size() == text.size() && is_num(frm) && is_num(text)) {
     int x = right - measure(FONT_SMALL, text) + 1;
@@ -691,7 +694,8 @@ static int alert_icon_x(const ustr &text, int x) {
 }
 
 // steps: the third time a step dimmer than the second (payload ts).
-static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool steps = false) {
+// x0, right: the row's columns (a wide board's halves).
+static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool steps = false, int x0 = 0, int right = 63) {
   std::vector<ustr> texts;
   for (size_t k = 0; k < r.tn.size(); k++) texts.push_back(time_text(r.tn[k], now, k == 0));
   auto width_at = [&](int gap) {
@@ -702,11 +706,11 @@ static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool ste
   const Value &src = *r.src;
   ustr lbl = vstr(src["lbl"]);
   int label_end = src["a"].truthy()
-                      ? alert_icon_x(src["al"].is_null() ? lbl : vstr(src["al"]), 5) + 4
-                      : 5 + measure(FONT_SMALL, lbl) - 1;
-  int gap = 63 - width_at(TIME_GAP) + 1 - label_end - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
+                      ? alert_icon_x(src["al"].is_null() ? lbl : vstr(src["al"]), x0 + 5) + 4
+                      : x0 + 5 + measure(FONT_SMALL, lbl) - 1;
+  int gap = right - width_at(TIME_GAP) + 1 - label_end - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
   std::vector<ViewCell> cells(texts.size());
-  int x = 63;
+  int x = right;
   for (int k = (int)texts.size() - 1; k >= 0; k--) {
     bool sch = r.s[k] != 0;
     RGB color = sch ? (k == 0 ? C::sch : steps && k >= 2 ? C::schDim2 : C::schDim)
@@ -725,6 +729,7 @@ static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool ste
 static View view_base(const Value &p, double now) {
   View v;
   v.now = now;
+  v.w = cols_of(p);
   v.has_header = p["header"].truthy();
   if (v.has_header) v.header = vstr(p["header"]);
   v.wx = p["wx"].truthy() ? &p["wx"] : nullptr;
@@ -739,9 +744,11 @@ static View view_base(const Value &p, double now) {
 }
 
 static View build_chrono_view(const Value &p, double now);
+static View build_halves_view(const Value &p, double now);
 
 View build_transit_view(const Value &p, double now) {
   if (p["view"].eq("chrono")) return build_chrono_view(p, now);
+  if (cols_of(p) == WIDE && (p["view"].eq("split") || p["view"].eq("cols2"))) return build_halves_view(p, now);
   std::vector<LiveRow> rows = live_rows(p, now);
   std::vector<int> tops = row_tops((int)rows.size(), p["header"].truthy(), p["wx"].truthy(),
                                    p["headerDivider"].is_true(), p["key"].truthy());
@@ -757,9 +764,56 @@ View build_transit_view(const Value &p, double now) {
     if (!r["al"].is_null()) vr.al = vstr(r["al"]);
     vr.top = tops[i];
     vr.alpha = 1;
-    vr.cells = layout_cells(rows[i], now, p["ts"].is_true());
+    vr.cells = layout_cells(rows[i], now, p["ts"].is_true(), 0, v.w - 1);
     v.rows.push_back(vr);
   }
+  return v;
+}
+
+// A wide board's halves (draw.js buildHalvesView, HALVES, SPLIT_TOPS):
+// split (northbound | southbound, the payload's `halves` labels on top, the
+// station line at the bottom) or cols2 (two columns under the header). Rows
+// carry `h`; both halves share row tops, set by the fuller one.
+static const int HALVES[2][2] = {{0, 61}, {66, 127}};
+static std::vector<int> split_tops(int n) {
+  if (n <= 0) return {};
+  if (n == 1) return {14};
+  if (n == 2) return {10, 18};
+  return {8, 14, 20};
+}
+
+static View build_halves_view(const Value &p, double now) {
+  bool split = p["view"].eq("split");
+  std::vector<LiveRow> rows = live_rows(p, now);
+  std::vector<LiveRow> per[2];
+  for (const LiveRow &r : rows) per[(*r.src)["h"].truthy() ? 1 : 0].push_back(r);
+  int n = (int)std::max(per[0].size(), per[1].size());
+  std::vector<int> tops = split ? split_tops(std::min(n, 3)) : row_tops(n, p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true(), false);
+  View v = view_base(p, now);
+  v.mode = split ? "split" : "cols2";
+  v.w = WIDE;
+  if (split)
+    for (size_t i = 0; i < p["halves"].size(); i++) v.halves.push_back(vstr(p["halves"][i]));
+  v.hdiv = !split && p["headerDivider"].is_true();
+  v.key = false;
+  if (split) v.wx = nullptr;
+  for (int h = 0; h < 2; h++)
+    for (size_t i = 0; i < per[h].size(); i++) {
+      const Value &r = *per[h][i].src;
+      ViewRow vr;
+      vr.ln = r["ln"].str_or("");
+      vr.lbl = vstr(r["lbl"]);
+      vr.key = std::to_string(h) + ":" + vr.ln + ":" + utf8(vr.lbl);
+      vr.h = h;
+      vr.x0 = HALVES[h][0];
+      vr.right = HALVES[h][1];
+      vr.a = r["a"].truthy();
+      if (!r["al"].is_null()) vr.al = vstr(r["al"]);
+      vr.top = i < tops.size() ? tops[i] : 0;
+      vr.alpha = 1;
+      vr.cells = layout_cells(per[h][i], now, p["ts"].is_true(), vr.x0, vr.right);
+      v.rows.push_back(vr);
+    }
   return v;
 }
 
@@ -802,7 +856,7 @@ static View build_chrono_view(const Value &p, double now) {
     ViewCell c;
     c.t = rows[i].tn[0];
     c.text = chrono_text(rows[i].tn[0], now, due);
-    c.right = 63;
+    c.right = v.w - 1;
     c.alpha = 1;
     c.color = color;
     vr.cells.push_back(c);
@@ -822,9 +876,11 @@ static void draw_view_row(Frame &f, const ViewRow &row, bool lnc) {
   bool chrono = row.num.has_value();
   RGB lc = line_color(row.ln);
   RGB line = fade(lc, row.alpha);
+  // A half of a wide board (row.x0, row.right), else the whole panel.
+  int x0 = row.x0, x1 = row.right >= 0 ? row.right : f.w - 1;
   if (chrono) draw_time_cell(f, num_text(*row.num), 2, top, fade(lc, row.alpha), row.numRoll);
-  f.fill(chrono ? CHRONO_BLOCK_X : 0, top, 3, 5, line);
-  int lx = chrono ? CHRONO_LABEL_X : 5;
+  f.fill(chrono ? CHRONO_BLOCK_X : x0, top, 3, 5, line);
+  int lx = chrono ? CHRONO_LABEL_X : x0 + 5;
   const ustr &text = row.a && row.al ? *row.al : row.lbl;
   f.text(FONT_SMALL, text, lx, top + 5, fade(lnc ? lc : C::label, row.alpha));
   if (row.a) {
@@ -835,7 +891,7 @@ static void draw_view_row(Frame &f, const ViewRow &row, bool lnc) {
   for (const ViewCell &cell : row.cells) {
     double a = cell.alpha * row.alpha;
     if (a <= 0) continue;
-    draw_time_cell(f, cell.text, (int)jsround(cell.right), top, fade(cell.color, a), cell.roll);
+    draw_time_cell(f, cell.text, (int)jsround(cell.right), top, fade(cell.color, a), cell.roll, x0, x1);
   }
 }
 
@@ -881,12 +937,35 @@ static void draw_overnight(Frame &f, const View &view, double now) {
 }
 
 static void draw_stale(Frame &f, const Value &p) {
-  if (p["stale"].truthy()) f.fill(0, 0, 64, 1, C::red);
+  if (p["stale"].truthy()) f.fill(0, 0, f.w, 1, C::red);
+}
+
+// Wide board, northbound | southbound (draw.js drawSplit): each half's label
+// on rows 1-5, its rows, the station line at the bottom; NO TRAINS in a half
+// with none.
+static void draw_split(Frame &f, const View &view) {
+  for (int h = 0; h < 2; h++) {
+    int x0 = HALVES[h][0], x1 = HALVES[h][1];
+    f.text(FONT_SMALL, h < (int)view.halves.size() ? view.halves[h] : ustr(), x0, 6, C::head);
+    bool any = false;
+    for (const ViewRow &r : view.rows)
+      if ((r.h == 1 ? 1 : 0) == h) any = true;
+    if (!any) {
+      ustr nt = U"NO TRAINS";
+      f.text(FONT_SMALL, nt, x0 + (int)fdiv(x1 - x0 + 1 - measure(FONT_SMALL, nt), 2), 19, C::noTrains);
+    }
+  }
+  if (view.has_header) draw_band(f, view.header, view.now, view.tzo, view.clock, C::dimHead, false);
+  f.push_clip(0, 7, f.w - 1, view.has_header ? 25 : 31);
+  for (const ViewRow &row : view.rows) draw_view_row(f, row, view.lnc);
+  f.pop_clip();
 }
 
 static void draw_transit_view(Frame &f, const View &view, bool blink) {
   if (view.rows.empty()) {
     draw_overnight(f, view, view.now);
+  } else if (view.mode == "split") {
+    draw_split(f, view);
   } else {
     if (view.key) {
       draw_key(f);
@@ -896,21 +975,24 @@ static void draw_transit_view(Frame &f, const View &view, bool blink) {
     }
     int clip_top = view.key ? 6 : (view.has_header ? 7 : 0);
     int clip_bottom = (view.key && view.has_header) ? 24 : (view.wx ? 25 : 31);
-    f.push_clip(0, clip_top, 63, clip_bottom);
+    f.push_clip(0, clip_top, f.w - 1, clip_bottom);
     for (const ViewRow &row : view.rows) draw_view_row(f, row, view.lnc);
     f.pop_clip();
   }
   if (view.wx) draw_weather(f, *view.wx, view.warn, blink);
 }
 
+// A wide payload's rows draw 128 across; with none (overnight) the 64
+// layout shows on both panels (render() widens it).
 static void render_transit(const Value &p, Frame &f, std::optional<double> now, bool blink, const View *view) {
   double n = now ? *now : p["now"].num();
-  if (view) {
-    draw_transit_view(f, *view, blink);
-  } else {
-    View v = build_transit_view(p, n);
-    draw_transit_view(f, v, blink);
+  View built;
+  if (!view) {
+    built = build_transit_view(p, n);
+    view = &built;
   }
+  if (!view->rows.empty() && view->w == WIDE) f.w = WIDE;
+  draw_transit_view(f, *view, blink);
   draw_stale(f, p);
 }
 
@@ -1128,6 +1210,9 @@ View TransitAnimator::step(const Value &p, double now, double t) {
     }
     st->ln = r.ln;
     st->lbl = r.lbl;
+    st->h = r.h;
+    st->x0 = r.x0;
+    st->right = r.right;
     st->a = r.a;
     st->al = r.al;
     st->num = r.num;
@@ -1184,6 +1269,9 @@ View TransitAnimator::step(const Value &p, double now, double t) {
     vr.key = st.key;
     vr.ln = st.ln;
     vr.lbl = st.lbl;
+    vr.h = st.h;
+    vr.x0 = st.x0;
+    vr.right = st.right;
     vr.a = st.a;
     vr.al = st.al;
     vr.top = st.shownTop;
@@ -1223,6 +1311,40 @@ static void draw_ticker_item(Frame &f, const Value &it, int idx, int top, double
   }
 }
 
+// Wide board (draw.js drawTickerItemWide): the CTA platform sign's row:
+// the row number (or the alert circle) in the index column, the band to the
+// right edge, the full destination, the time right-aligned at
+// TICKER_TIME_RIGHT, the status icon (tracked or schedule-based) at
+// TICKER_ICON_X, rows 2-8 of the band.
+static const int TICKER_ICON_X = 120, TICKER_TIME_RIGHT = 116;
+static const char *const TICKER_LIVE[7] = {"####...", "....#..", "###..#.", "...#..#", "##..#.#", "..#.#.#", "#.#.#.#"};
+static const char *const TICKER_SCH[7] = {"..###..", ".#...#.", "#..#..#", "#..##.#", "#.....#", ".#...#.", "..###.."};
+static void draw_ticker_item_wide(Frame &f, const Value &it, int idx, int top, double now, bool due, double fill) {
+  int base = top + 9;
+  RGB white = C::white;
+  f.fill(0, top, 5, 12, C::index);
+  f.fill(5, top, f.w - 5, 12, scale_color(line_color(it["ln"].str_or("")), fill));
+  if (it["a"].truthy()) {
+    f.text(FONT_SMALL, g(assets::G_ALERT_DISC), 0, base, C::red);
+    f.text(FONT_SMALL, g(assets::G_ALERT_MARK), 0, base, C::white);
+  } else {
+    f.text(FONT_SMALL, num_text(idx), 1, base, C::label);
+  }
+  f.text(FONT_5X7, vstr(it["d"]), 7, base, white);
+  long long m = minutes_until(it["t"].num(), now);
+  if (m <= 1 && due) {
+    rtext(f, FONT_5X7, U"Due", TICKER_TIME_RIGHT, base, white);
+  } else {
+    int mw = measure(FONT_5X7, g(assets::G_MIN));
+    f.text(FONT_5X7, g(assets::G_MIN), TICKER_TIME_RIGHT - mw + 1, base, white);
+    rtext(f, FONT_5X7, num_text(m <= 1 ? 2 : m), TICKER_TIME_RIGHT - mw - 2, base, white);
+  }
+  const char *const *icon = it["s"].truthy() ? TICKER_SCH : TICKER_LIVE;
+  for (int j = 0; j < 7; j++)
+    for (int i = 0; i < 7; i++)
+      if (icon[j][i] == '#') f.fill(TICKER_ICON_X + i, top + 2 + j, 1, 1, white);
+}
+
 int ticker_pages(const Value &p, double now) {
   long long n = (long long)live_ticker(p, now).size();
   return (int)std::max(1LL, -fdiv(-n, 2));
@@ -1230,6 +1352,8 @@ int ticker_pages(const Value &p, double now) {
 
 static void render_ticker(const Value &p, Frame &f, std::optional<double> now_o, int page, double slide) {
   double now = now_o ? *now_o : p["now"].num();
+  const bool wide = cols_of(p) == WIDE;
+  if (wide) f.w = WIDE;
   const Value &th = p.has("tickerHeader") ? p["tickerHeader"] : p["header"];
   if (th.truthy()) draw_header(f, vstr(th), now, p["tzo"].num(0), false, !p["hclock"].is_false());
   std::vector<const Value *> items = live_ticker(p, now);
@@ -1261,10 +1385,10 @@ static void render_ticker(const Value &p, Frame &f, std::optional<double> now_o,
       size_t n = (size_t)(pg * 2 + i);
       if (n >= items.size()) break;
       const Value &it = *items[n];
-      draw_ticker_item(f, it, (int)n + 1, 7 + i * 13 + shift, now, first(key_of(it)) == n, fill);
+      (wide ? draw_ticker_item_wide : draw_ticker_item)(f, it, (int)n + 1, 7 + i * 13 + shift, now, first(key_of(it)) == n, fill);
     }
   };
-  f.push_clip(0, 7, 63, 31);
+  f.push_clip(0, 7, f.w - 1, 31);
   draw_page(page, -offset);
   if (offset > 0 && pages > 1) draw_page((page + 1) % pages, 26 - offset);
   f.pop_clip();
@@ -2151,7 +2275,7 @@ static double peek_ease(double k) {
   return 1 - (1 - c) * (1 - c) * (1 - c);
 }
 
-int peek_shift(bool y, double t) { return (int)jsround(peek_ease(t / (y ? PEEK_Y_MS : PEEK_X_MS)) * (y ? 32 : 64)); }
+int peek_shift(bool y, double t, int w) { return (int)jsround(peek_ease(t / (y ? PEEK_Y_MS : PEEK_X_MS)) * (y ? 32 : w)); }
 
 int peek_drop(bool up, double t) {
   return (int)jsround((up ? 1 - peek_ease(t / PEEK_UP_MS) : peek_ease(t / PEEK_DOWN_MS)) * PEEK_BAND);
@@ -2274,6 +2398,7 @@ PeekView peek_view(const Value &p, int k, int vi) {
 static void render_clock(const Value &p, Frame &f, const RenderOpts &o);
 static void render_announce(const Value &p, Frame &f, std::optional<double> t);
 
+// On a wide board every view is 128 across (64-wide ones on both panels).
 static void draw_peek_view(const Value &q, const std::string &screen, Frame &f, const RenderOpts &o) {
   f.clear();
   if (screen == "cycle") draw_cycle_art(f);
@@ -2282,14 +2407,15 @@ static void draw_peek_view(const Value &q, const std::string &screen, Frame &f, 
   else if (screen == "clock") render_clock(q, f, o);
   else if (screen == "announce") render_announce(q, f, o.t);
   else render_transit(q, f, o.now, o.blink, o.view);
+  widen(f, cols_of(q));
 }
 
 static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop) {
   const Value &kn = p["knob"], &ring = kn["ring"];
   int n = (int)ring.size();
   auto sh = [&](int y) { return y + drop; };
-  f.fill(0, sh(PEEK_TOP), 64, PEEK_BAND, RGB{0, 0, 0});
-  int x0 = (int)std::floor(32 - (n * PEEK_PITCH - 5) / 2.0);
+  f.fill(0, sh(PEEK_TOP), f.w, PEEK_BAND, RGB{0, 0, 0});
+  int x0 = (int)std::floor(f.w / 2.0 - (n * PEEK_PITCH - 5) / 2.0);
   for (int i = 0; i < n; i++) {
     std::string cat = ring[i].is_str() ? ring[i].s : "";
     const char *const *rows = peek_icon(cat);
@@ -2322,8 +2448,9 @@ static void render_peek(const Value &p, Frame &f, const RenderOpts &o) {
     draw_peek_view(pv.payload(p), pv.screen, f, vo);
   }
   if (pk.slide) {
-    int sh = peek_shift(pk.slide_y, pk.slide_t);
-    if (sh < (pk.slide_y ? 32 : 64)) {
+    const int W = f.w;
+    int sh = peek_shift(pk.slide_y, pk.slide_t, W);
+    if (sh < (pk.slide_y ? 32 : W)) {
       static Frame from;
       static uint8_t cur[Frame::MAX_W * Frame::H * 3];
       if (pk.slide_view) draw_peek_view(*pk.slide_view, peek_screen(p, pk.slide_k, pk.slide_vi), from, vo);
@@ -2334,17 +2461,17 @@ static void render_peek(const Value &p, Frame &f, const RenderOpts &o) {
       memcpy(cur, f.px, sizeof cur);
       int dir = pk.slide_dir < 0 ? -1 : 1;
       for (int y = 0; y < 32; y++)
-        for (int x = 0; x < 64; x++) {
+        for (int x = 0; x < W; x++) {
           const uint8_t *src = from.px;
           int sx = x, sy = y;
           if (!pk.slide_y) {
             sx = x + dir * sh;
-            if (sx < 0 || sx >= 64) src = cur, sx = (int)fmod_floor(sx, 64);
+            if (sx < 0 || sx >= W) src = cur, sx = (int)fmod_floor(sx, W);
           } else {
             sy = y + dir * sh;
             if (sy < 0 || sy >= 32) src = cur, sy = (int)fmod_floor(sy, 32);
           }
-          int i = (y * 64 + x) * 3, j = (sy * 64 + sx) * 3;
+          int i = (y * W + x) * 3, j = (sy * W + sx) * 3;
           f.px[i] = src[j];
           f.px[i + 1] = src[j + 1];
           f.px[i + 2] = src[j + 2];

@@ -373,6 +373,13 @@ test('width: setCols keeps 128 as cols (v stays), and copies, resets and new boa
   assert.equal(store.setCols('nope', 128), null);
 });
 
+test('wideLayout: the split by default, rows allowed; validated', () => {
+  const store = createStore({ dir: tmpDir(), log: quiet });
+  assert.equal(store.get('home').wideLayout, 'split');
+  assert.equal(store.update('home', { wideLayout: 'rows' }).wideLayout, 'rows');
+  assert.throws(() => store.update('home', { wideLayout: 'columns' }), ValidationError);
+});
+
 test('an older board without a label loads with an empty one', () => {
   const dir = tmpDir();
   fs.writeFileSync(path.join(dir, 'board-state.json'), JSON.stringify({ boards: { home: { v: 3, station: { mapid: '40100', name: 'MORSE' }, rows: [], screen: 'auto', bright: 'auto' } } }));

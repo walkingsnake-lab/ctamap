@@ -391,6 +391,17 @@ test('width: w=128 on update and select makes a wide board (cols 128); no w is 6
   assert.equal(b.cols, 128);
   assert.equal(s.store.get('home').cols, 128);
   assert.equal(s.store.get('home').v, v, 'the width is no settings change');
+  // Transit for the width: Morse runs north-south, so the split (the default).
+  assert.equal(b.view, 'split');
+  assert.deepEqual(b.halves, ['NORTHBOUND', 'SOUTHBOUND']);
+  assert.deepEqual(b.rows.map((r) => [r.h, r.lbl]), [[0, 'HOWARD'], [1, '95TH']]);
+  const J0 = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  await s.req('/board/secret123/api/state?b=home', J0('POST', { wideLayout: 'rows' }));
+  b = (await s.req('/board/update?b=home&w=128', h)).body;
+  assert.deepEqual([b.view, 'halves' in b, b.rows[1].lbl, b.rows[0].t.length], ['dest', false, '95TH/DAN RYAN', 5]);
+  // Off the transit screen, the halves go with the rest of its section.
+  await s.req('/board/secret123/api/state?b=home', J0('POST', { wideLayout: 'split' }));
+  assert.equal('halves' in (await s.req('/board/update?b=home&w=128&s=ticker', h)).body, false);
   // The simulator, the control page's renders and the board list know it.
   assert.equal((await s.req('/board/secret123/api/update?b=home')).body.cols, 128);
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=transit&scale=2`);

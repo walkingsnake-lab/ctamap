@@ -72,6 +72,9 @@ const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
 const TRANSIT_LAYOUTS = ['header', 'key'];
+// Transit on a wide board (128 x 32, `cols`): northbound | southbound halves
+// where that's true at the station, or full-width destination rows.
+const WIDE_LAYOUTS = ['split', 'rows'];
 const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame time, current time, how long ago the frame is, or nothing
 // The weather screen's view: conditions, 5-day, or hourly (the radar loop
 // takes over while rain is in the box), or the radar, always (an empty map
@@ -137,6 +140,7 @@ function defaultBoard(stations) {
     // Transit layout: 'header' (station and clock on top) or 'key' (a
     // "trains to / min" key on top, station and clock under a line at the bottom).
     transitLayout: 'header',
+    wideLayout: 'split',
     screen: 'transit',
     // The transit-family screen the knob's TRANSIT opens: the last of
     // transit and ticker chosen. Kept by the store, not set directly.
@@ -397,6 +401,7 @@ function validatePatch(patch, stations) {
       case 'bbPriority':
       case 'lineNames':
       case 'transitLayout':
+      case 'wideLayout':
       case 'radarClock':
       case 'wxView':
       case 'tempUnit':
@@ -406,7 +411,7 @@ function validatePatch(patch, stations) {
       case 'wheelSpeed':
       case 'rippleSpeed':
       case 'rainSpeed': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;

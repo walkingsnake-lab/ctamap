@@ -178,6 +178,9 @@ struct ViewCell {
 struct ViewRow {
   std::string key, ln;
   ustr lbl;
+  // A wide board's halves (draw.js buildHalvesView): h 0 or 1 (-1: none),
+  // the row's columns x0..right (right -1: the frame's last column).
+  int h = -1, x0 = 0, right = -1;
   bool a = false;
   std::optional<ustr> al;  // alert label (payload `al`), with `a`
   std::optional<int> num;
@@ -189,7 +192,9 @@ struct ViewRow {
 
 struct View {
   double now = 0;
-  std::string mode;  // "dest" or "chrono"
+  std::string mode;  // "dest", "chrono", or a wide board's "split" / "cols2"
+  int w = 64;        // the frame it draws in: 128 for a wide payload (cols)
+  std::vector<ustr> halves;  // split: the halves' labels
   bool has_header = false;
   ustr header;
   const Value *wx = nullptr;    // null when absent or falsy
@@ -222,6 +227,7 @@ class TransitAnimator {
   struct RowState {
     std::string key, ln, mode;
     ustr lbl;
+    int h = -1, x0 = 0, right = -1;
     bool a = false;
     std::optional<ustr> al;
     double top = 0, shownTop = 0;
@@ -342,7 +348,7 @@ struct PeekView {
 };
 PeekView peek_view(const Value &p, int k, int vi);
 std::string peek_screen(const Value &p, int k, int vi);  // just the screen, no copy
-int peek_shift(bool y, double t);  // px slid at t ms: 0..64 across, 0..32 down
+int peek_shift(bool y, double t, int w = 64);  // px slid at t ms: 0..w across, 0..32 down
 int peek_drop(bool up, double t);  // rows the bar has dropped at t ms (rising: up)
 
 // Announce screen (draw.js messageIntroMs / messageTick): how long a message's

@@ -281,6 +281,8 @@
 
   <p class="sh" id="layH">Rows</p>
   <div class="grp">
+    <label class="c sel" id="wideRow" hidden><span>Two panels</span><span class="v"></span><span data-icon="chev"></span>
+      <select id="wideLayout"><option value="split">Northbound | southbound</option><option value="rows">Destination rows</option></select></label>
     <div class="tiles" role="radiogroup" aria-labelledby="layH" id="transitLayout">
       <button role="radio" data-v="header"><img alt="" data-static="layout-header"><span class="lab"><span class="rd" data-icon="dotck"></span>Station on top</span></button>
       <button role="radio" data-v="key"><img alt="" data-static="layout-key"><span class="lab"><span class="rd" data-icon="dotck"></span>Key on top</span></button>
@@ -1090,12 +1092,18 @@
     $('headerDivider').checked = board.headerDivider === true;
     $('timeSteps').checked = board.timeSteps === true;
     selVal('lineNames', board.lineNames || 'white');
+    // A wide board (two panels): its transit layout.
+    $('wideRow').hidden = board.cols !== 128;
+    selVal('wideLayout', board.wideLayout || 'split');
     selVal('tickerHold', board.tickerHold || 8);
     selVal('tickerSlide', board.tickerSlide || 1200);
     if (document.activeElement !== $('tickerFill')) { $('tickerFill').value = board.tickerFill || 55; $('tickerFillV').textContent = `${board.tickerFill || 55}%`; }
     const hid = (pay && pay.hidden) || [];
     $('rowsFt').textContent = (key ? 'With more destinations than fit, the station line goes first, then the key; past 5, one train per row.' : 'With more destinations than fit, the weather goes first, then the top line; past 5, one train per row.')
-      + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? (key ? 'station line' : 'top line') : h === 'weather' ? 'weather' : h)).join(' and ')}.` : '');
+      + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? (key ? 'station line' : 'top line') : h === 'weather' ? 'weather' : h)).join(' and ')}.` : '')
+      + (board.cols === 128 ? (board.wideLayout === 'rows'
+        ? ' Two panels: full names, up to 5 times; past 5 destinations, two columns.'
+        : ' Two panels: northbound | southbound where every line here runs that way, else two columns.') : '');
   }
   $('tShows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
@@ -1106,6 +1114,7 @@
   $('transitLayout').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) save({ transitLayout: b.dataset.v }); });
   for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
+  $('wideLayout').addEventListener('change', (e) => save({ wideLayout: e.target.value }));
   for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
   $('bbPriority').addEventListener('change', (e) => save({ bbPriority: e.target.value }));
   const slider = (id, out, key) => {
