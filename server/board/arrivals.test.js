@@ -463,13 +463,35 @@ test('wide: where the split isn\'t true, full-width rows while they fit, then tw
   assert.equal(c.view, 'dest');
   assert.deepEqual(c.rows.map((x) => x.lbl), ["O'HARE", 'FOREST PARK', 'KIMBALL', 'HARLEM/LAKE', '54TH/CERMAK']);
   assert.deepEqual(c.bars.hidden, ['weather', 'header']);
-  // Six or more: two columns, left column first, header kept, 64-style rows.
+  // Six destinations on four lines, two at most a line: one row per line,
+  // a line's two destinations in the halves, one destination across the row.
   const now = 1_800_000_000;
   const six = ['Howard', '95th', 'Kimball', 'Loop', 'Linden', 'Midway'].map((d, i) => ({ ln: ['RD', 'RD', 'BR', 'BR', 'PR', 'OR'][i], dest: d, full: d, known: true, dir: 1 + (i % 2) * 4, t: now + (i + 2) * 60, s: 0, rn: String(i) }));
-  const two = format(six, wide('40380', { showWeather: true }), { now });
+  const by = format(six, wide('40380', { showWeather: true }), { now });
+  assert.equal(by.view, 'byline');
+  assert.deepEqual(by.rows.map((x) => `${x.y}:${x.h ?? '-'}:${x.lbl}`), ['0:0:HOWARD', '0:1:95TH', '1:0:KIMBALL', '1:1:LOOP', '2:-:MIDWAY', '3:-:LINDEN']);
+  assert.deepEqual([by.bars.showHeader, by.bars.showWeather], [true, false], 'four lines: the weather strip makes room');
+  // A line with three destinations, or more lines than rows: two columns.
+  const three = [...six, { ln: 'RD', dest: 'Roosevelt', full: 'Roosevelt', known: true, dir: 5, t: now + 600, s: 0, rn: '9' }];
+  const two = format(three, wide('40380', { showWeather: true }), { now });
   assert.equal(two.view, 'cols2');
-  assert.deepEqual(two.rows.map((x) => `${x.h}:${x.lbl}`), ['0:HOWARD', '0:95TH', '0:KIMBALL', '1:LOOP', '1:MIDWAY', '1:LINDEN']);
-  assert.deepEqual([two.bars.showHeader, two.bars.showWeather], [true, true]);
+  assert.deepEqual(two.rows.map((x) => `${x.h}:${x.lbl}`), ['0:HOWARD', '0:95TH', '0:ROOSEVELT', '0:KIMBALL', '1:LOOP', '1:MIDWAY', '1:LINDEN']);
+});
+
+test('wide: an alerted row\'s words (aw) after its circle when they fit whole; the key layout\'s one row', () => {
+  const r = run('belmont-2026-10-03-2316.json', wide('41320', { wideLayout: 'rows' }), { alerts: new Set(['BR', 'RD']), alertWords: new Map([['BR', 'MAJOR DELAYS'], ['RD', 'SIGNIFICANT DELAYS']]) });
+  const by = Object.fromEntries(r.rows.map((x) => [x.lbl, x]));
+  assert.equal(by.KIMBALL.aw, 'MAJOR DELAYS');
+  assert.equal(by.LOOP.aw, 'MAJOR DELAYS');
+  assert.equal(by['95TH/DAN RYAN'].aw, undefined, 'no room beside its times');
+  assert.equal(by.KIMBALL.t.length, r.rows.find((x) => x.lbl === 'KIMBALL').t.length);
+  // Halves and the chronological list never get words.
+  const s = run('belmont-2026-10-03-2316.json', wide('41320'), { alerts: new Set(['BR']), alertWords: new Map([['BR', 'MAJOR DELAYS']]) });
+  assert.ok(s.rows.every((x) => x.aw === undefined));
+  // Key layout: the key's row carries the station and clock, so four rows fit under it (the weather strip makes room).
+  const k = run('belmont-2026-10-03-2316.json', wide('41320', { wideLayout: 'rows', showKey: true, showWeather: true }));
+  assert.equal(k.view, 'dest');
+  assert.deepEqual([k.bars.showKey, k.bars.showHeader, k.bars.showWeather, k.rows.length], [true, true, false, 4]);
 });
 
 test('wide: a name that would crowd its times keeps fewer times instead', () => {

@@ -615,10 +615,49 @@ static WarnStyle warn_style(const Value &warn) {
 }
 
 // Weather strip: one Tom Thumb line on rows 27-31. Mirrors drawWeather() in draw.js.
-static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blink) {
+// Wide board: the warning spelled out (draw.js drawWarnWide).
+static void draw_warn_wide(Frame &f, const Value &wx, const Value &warn, int base, double tzo) {
+  WarnStyle ws = warn_style(warn);
+  int gx = measure(FONT_SMALL, vstr(wx["temp"]) + U"°") + 4;
+  int nx = gx + measure(FONT_SMALL, ws.glyph) + TAG_GAP;
+  ustr lvl = warn["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
+  std::vector<ustr> names;
+  if (warn["kind"].eq("tor")) names = {U"TORNADO " + lvl};
+  else names = {U"SEVERE T-STORM " + lvl, U"T-STORM " + lvl};
+  std::vector<ustr> until;
+  if (!warn["until"].is_null()) {
+    double t = warn["until"].num();
+    ustr tt = clock_text(t, tzo) + U" " + ampm_text(t, tzo);
+    until = {U"UNTIL " + tt, tt};
+  }
+  until.push_back(ustr());
+  const ustr *name = nullptr, *u = nullptr;
+  for (const ustr &x : until) {
+    for (const ustr &n : names) {
+      int end = nx + measure(FONT_SMALL, n) - 1 + (x.empty() ? 0 : 4 + measure(FONT_SMALL, x));
+      if (end <= WIDE - 1) {
+        name = &n;
+        u = &x;
+        break;
+      }
+    }
+    if (name) break;
+  }
+  if (!name) {
+    name = &names.back();
+    u = nullptr;
+  }
+  f.text(FONT_SMALL, ws.glyph, gx, base, ws.color);
+  f.text(FONT_SMALL, *name, nx, base, ws.color);
+  if (u && !u->empty()) rtext(f, FONT_SMALL, *u, WIDE - 1, base, scale_color(ws.color, 0.6));
+}
+
+static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blink, double tzo = 0) {
   int base = 32;
   roll_named(f, FONT_SMALL, "wx.temp", vstr(wx["temp"]) + U"°", LEFT, 0, base, C::dimHead);
-  if (warn) {
+  if (warn && f.w == WIDE) {
+    if (!(warn_style(*warn).blinks && blink)) draw_warn_wide(f, wx, *warn, base, tzo);
+  } else if (warn) {
     WarnStyle ws = warn_style(*warn);
     if (ws.blinks && blink) return;
     ustr word = (*warn)["lvl"].eq("warning") ? U"WARNING" : U"WATCH";
@@ -634,6 +673,19 @@ static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blin
 static void draw_key(Frame &f) {
   f.text(FONT_SMALL, U"trains to", 0, 6, C::dimHead);
   rtext(f, FONT_SMALL, U"min", f.w - 1, 6, C::dimHead);
+}
+
+// Wide key layout (draw.js drawKeyWide).
+static void draw_key_wide(Frame &f, const ustr *name, double now, double tzo, bool clock) {
+  int lx = f.text(FONT_SMALL, U"trains to", 5, 6, C::dimHead) + 1;
+  int mx = WIDE - measure(FONT_SMALL, U"min");
+  f.text(FONT_SMALL, U"min", mx, 6, C::dimHead);
+  ustr clk = clock ? clock_text(now, tzo) : ustr();
+  int nw = name ? measure(FONT_SMALL, *name) : 0;
+  int w = nw + (name && !clk.empty() ? 4 : 0) + (clk.empty() ? 0 : measure(FONT_SMALL, clk));
+  int x = lx + (int)fdiv(mx - 1 - lx - w, 2);
+  if (name) f.text(FONT_SMALL, *name, x, 6, C::head);
+  if (!clk.empty()) roll_named(f, FONT_SMALL, "hdr.clock", clk, LEFT, x + nw + (name ? 4 : 0), 6, C::head);
 }
 
 static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock = true, RGB color = C::head,
@@ -749,10 +801,12 @@ static View build_halves_view(const Value &p, double now);
 
 View build_transit_view(const Value &p, double now) {
   if (p["view"].eq("chrono")) return build_chrono_view(p, now);
-  if (cols_of(p) == WIDE && (p["view"].eq("split") || p["view"].eq("cols2"))) return build_halves_view(p, now);
+  if (cols_of(p) == WIDE && (p["view"].eq("split") || p["view"].eq("cols2") || p["view"].eq("byline"))) return build_halves_view(p, now);
   std::vector<LiveRow> rows = live_rows(p, now);
-  std::vector<int> tops = row_tops((int)rows.size(), p["header"].truthy(), p["wx"].truthy(),
-                                   p["headerDivider"].is_true(), p["key"].truthy());
+  // The wide key layout: the key's row holds the station and clock.
+  bool wide_key = cols_of(p) == WIDE && p["key"].truthy();
+  std::vector<int> tops = wide_key ? row_tops((int)rows.size(), true, p["wx"].truthy(), false, false)
+                                   : row_tops((int)rows.size(), p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true(), p["key"].truthy());
   View v = view_base(p, now);
   v.mode = "dest";
   for (size_t i = 0; i < rows.size(); i++) {
@@ -763,6 +817,7 @@ View build_transit_view(const Value &p, double now) {
     vr.key = vr.ln + ":" + utf8(vr.lbl);
     vr.a = r["a"].truthy();
     if (!r["al"].is_null()) vr.al = vstr(r["al"]);
+    if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
     vr.top = tops[i];
     vr.alpha = 1;
     vr.cells = layout_cells(rows[i], now, p["ts"].is_true(), 0, v.w - 1);
@@ -786,6 +841,39 @@ static std::vector<int> split_tops(int n) {
 static View build_halves_view(const Value &p, double now) {
   bool split = p["view"].eq("split");
   std::vector<LiveRow> rows = live_rows(p, now);
+  if (p["view"].eq("byline")) {
+    // One row per line (draw.js buildHalvesView): each row on its line's
+    // row `y`, in a half, or without `h` across the whole width; drawn as cols2.
+    int n = 0;
+    for (const LiveRow &r : rows) n = std::max(n, (int)(*r.src)["y"].num(0) + 1);
+    std::vector<int> tops = row_tops(n, p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true(), false);
+    View v = view_base(p, now);
+    v.mode = "cols2";
+    v.w = WIDE;
+    v.key = false;
+    for (const LiveRow &lr : rows) {
+      const Value &r = *lr.src;
+      bool full = r["h"].is_null();
+      int h = r["h"].truthy() ? 1 : 0;
+      ViewRow vr;
+      vr.ln = r["ln"].str_or("");
+      vr.lbl = vstr(r["lbl"]);
+      vr.key = (full ? std::string("f") : std::to_string(h)) + ":" + vr.ln + ":" + utf8(vr.lbl);
+      vr.h = full ? -1 : h;
+      vr.x0 = full ? 0 : HALVES[h][0];
+      vr.right = full ? WIDE - 1 : HALVES[h][1];
+      vr.a = r["a"].truthy();
+      if (!r["al"].is_null()) vr.al = vstr(r["al"]);
+      if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
+    if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
+      int y = (int)r["y"].num(0);
+      vr.top = y < (int)tops.size() ? tops[y] : 0;
+      vr.alpha = 1;
+      vr.cells = layout_cells(lr, now, p["ts"].is_true(), vr.x0, vr.right);
+      v.rows.push_back(vr);
+    }
+    return v;
+  }
   std::vector<LiveRow> per[2];
   for (const LiveRow &r : rows) per[(*r.src)["h"].truthy() ? 1 : 0].push_back(r);
   int n = (int)std::max(per[0].size(), per[1].size());
@@ -810,6 +898,8 @@ static View build_halves_view(const Value &p, double now) {
       vr.right = HALVES[h][1];
       vr.a = r["a"].truthy();
       if (!r["al"].is_null()) vr.al = vstr(r["al"]);
+      if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
+    if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
       vr.top = i < tops.size() ? tops[i] : 0;
       vr.alpha = 1;
       vr.cells = layout_cells(per[h][i], now, p["ts"].is_true(), vr.x0, vr.right);
@@ -851,6 +941,7 @@ static View build_chrono_view(const Value &p, double now) {
     vr.lbl = U(lbl);
     vr.a = r["a"].truthy();
     if (!r["al"].is_null()) vr.al = vstr(r["al"]);
+    if (!r["aw"].is_null()) vr.aw = vstr(r["aw"]);
     vr.num = (int)i + 1;
     vr.top = tops[i];
     vr.alpha = 1;
@@ -888,6 +979,7 @@ static void draw_view_row(Frame &f, const ViewRow &row, bool lnc) {
     int ix = alert_icon_x(text, lx);
     f.text(FONT_SMALL, g(assets::G_ALERT_DISC), ix, top + 5, fade(C::red, row.alpha));
     f.text(FONT_SMALL, g(assets::G_ALERT_MARK), ix, top + 5, fade(C::white, row.alpha));
+    if (row.aw) f.text(FONT_SMALL, *row.aw, ix + 5 + 3, top + 5, fade(C::red, row.alpha));
   }
   for (const ViewCell &cell : row.cells) {
     double a = cell.alpha * row.alpha;
@@ -937,6 +1029,9 @@ static void draw_overnight(Frame &f, const View &view, double now) {
   f.text(FONT_SMALL, nt, align_x(FONT_SMALL, nt, CENTER, OWL_PANEL), top + 18, C::noTrains);
 }
 
+// Overnight on a wide board (draw.js drawOvernightWide), below the weather screen's helpers.
+static void draw_overnight_wide(Frame &f, const Value &p, double now, bool stale);
+
 static void draw_stale(Frame &f, const Value &p) {
   if (p["stale"].truthy()) f.fill(0, 0, f.w, 1, C::red);
 }
@@ -968,19 +1063,22 @@ static void draw_transit_view(Frame &f, const View &view, bool blink) {
   } else if (view.mode == "split") {
     draw_split(f, view);
   } else {
-    if (view.key) {
+    bool wide_key = view.key && view.w == WIDE;
+    if (wide_key) {
+      draw_key_wide(f, view.has_header ? &view.header : nullptr, view.now, view.tzo, view.clock);
+    } else if (view.key) {
       draw_key(f);
       if (view.has_header) draw_band(f, view.header, view.now, view.tzo, view.clock);
     } else if (view.has_header) {
       draw_header(f, view.header, view.now, view.tzo, view.hdiv, view.clock, C::dimHead);
     }
-    int clip_top = view.key ? 6 : (view.has_header ? 7 : 0);
-    int clip_bottom = (view.key && view.has_header) ? 24 : (view.wx ? 25 : 31);
+    int clip_top = wide_key ? 7 : view.key ? 6 : (view.has_header ? 7 : 0);
+    int clip_bottom = (!wide_key && view.key && view.has_header) ? 24 : (view.wx ? 25 : 31);
     f.push_clip(0, clip_top, f.w - 1, clip_bottom);
     for (const ViewRow &row : view.rows) draw_view_row(f, row, view.lnc);
     f.pop_clip();
   }
-  if (view.wx) draw_weather(f, *view.wx, view.warn, blink);
+  if (view.wx) draw_weather(f, *view.wx, view.warn, blink, view.tzo);
 }
 
 // A wide payload's rows draw 128 across; with none (overnight) the 64
@@ -991,6 +1089,12 @@ static void render_transit(const Value &p, Frame &f, std::optional<double> now, 
   if (!view) {
     built = build_transit_view(p, n);
     view = &built;
+  }
+  if (view->rows.empty() && cols_of(p) == WIDE && (p["tmrw"].truthy() || p["radar"]["wx"].truthy())) {
+    f.w = WIDE;
+    draw_overnight_wide(f, p, n, p["stale"].truthy());
+    draw_stale(f, p);
+    return;
   }
   if (!view->rows.empty() && view->w == WIDE) f.w = WIDE;
   draw_transit_view(f, *view, blink);
@@ -1216,6 +1320,7 @@ View TransitAnimator::step(const Value &p, double now, double t) {
     st->right = r.right;
     st->a = r.a;
     st->al = r.al;
+    st->aw = r.aw;
     st->num = r.num;
     st->mode = target.mode;
     match_cells(*st, r.cells, t, is_new_row);
@@ -1275,6 +1380,7 @@ View TransitAnimator::step(const Value &p, double now, double t) {
     vr.right = st.right;
     vr.a = st.a;
     vr.al = st.al;
+    vr.aw = st.aw;
     vr.top = st.shownTop;
     vr.alpha = alpha;
     vr.cells = cells;
@@ -1563,6 +1669,32 @@ static void draw_hourly(Frame &f, const Value &wx, bool shadow, const Value *war
     int icon = icon_index(h["icon"]);
     if (icon >= 0) draw_icon(f, icon, cx - 4, 17);
     draw_day_temp(f, vstr(h["t"]), cx, 31, temp_color(h["t"].num(), wx["c"]));
+  }
+}
+
+// Overnight on a wide board (draw.js drawOvernightWide).
+static void draw_overnight_wide(Frame &f, const Value &p, double now, bool stale) {
+  View left;
+  left.stale = stale;
+  left.wx = nullptr;
+  left.tzo = p["tzo"].num(0);
+  draw_overnight(f, left, now);
+  f.fill(65, 2, 1, 28, C::divider);
+  const Value &w = p["radar"]["wx"], &t = p["tmrw"];
+  const int X = 69;
+  if (w.truthy() && !w["temp"].is_null()) {
+    int x = f.text(FONT_SMALL, vstr(w["temp"]) + U"°", X, 6, temp_color(w["temp"].num(), w["c"]));
+    if (w["word"].truthy()) f.text(FONT_SMALL, vstr(w["word"]), x + 4, 6, C::wxText);
+  }
+  if (t.truthy()) {
+    f.text(FONT_SMALL, U"TOMORROW", X, 14, C::dimHead);
+    int icon = icon_index(t["icon"]);
+    if (icon >= 0) draw_icon(f, icon, X, 17);
+    RGB hc = temp_color(t["hi"].num(), t["c"]);
+    int x = f.text(FONT_5X7, vstr(t["hi"]), X + 11, 25, hc);
+    x = f.text(FONT_SMALL, U"°", x, 24, hc);
+    if (!t["lo"].is_null()) f.text(FONT_SMALL, vstr(t["lo"]) + U"°", x + 4, 25, scale_color(temp_color(t["lo"].num(), t["c"]), 0.6));
+    if (t["word"].truthy()) f.text(FONT_SMALL, vstr(t["word"]), X, 31, C::wxText);
   }
 }
 

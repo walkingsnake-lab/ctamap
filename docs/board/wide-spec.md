@@ -37,21 +37,21 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 - **Only where it's true:** every line at the station runs along the same axis there (`station-dirs.json`, from the track geometry: within 35° of north-south or of east-west; Red and Purple count as north-south everywhere off the Loop) and none ends there. 59 stations split north-south, 51 east-west, 34 don't.
 - **Elsewhere** (the Loop, diagonal stretches like Blue's Milwaukee Avenue, mixed axes like Howard, terminals, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then the chronological list.
 
-### Busy stations, replacing the chronological view (open)
+### Busy stations, replacing the chronological view (built)
 The chronological view is the weakest transit screen. For stations with 4–5 lines (Clark/Lake), three layouts were mocked:
 1. **One row per line:** up to 5 lines; a line's second destination starts at column 66 (`O'HARE 3 10 18 | FOREST 6 21 33`). Short names (`destinations.js`), three times per destination.
 2. **Two columns of four under the header:** up to 8 destinations, short names, three times each.
 3. **Five rows, no header:** full names; only for five destinations or fewer.
 
-**Proposed fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built so far (Nov 5):** rows → two columns → chronological; one row per line isn't built.
+**Proposed fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built (Nov 5):** rows → one row per line → two columns → chronological. One row per line keeps 3 times in a half and up to 5 across a whole row (full names there).
 
-### Key layout (first pass)
+### Key layout (first pass; built)
 `trains to` (x5) and `min` (right) on row 0 as now, with the station and clock centered between them, so the station line at the bottom isn't needed.
 
-### Alerts (first pass)
-The full destination, the red alert circle, then the alert's **short label in red** (`MAJOR DELAYS`), then the times. Needs a new payload field with a short label per alert; the board knows only that a line has a major alert today.
+### Alerts (first pass; built)
+The full destination, the red alert circle, then the alert's **short label in red** (`MAJOR DELAYS`), then the times. The label is the alert's CTA `Impact` (`MAJOR DELAYS`), sent per row as `aw`; it costs a row its fourth and fifth times if need be, and is left out when it doesn't fit.
 
-### Overnight, no data, stale (first pass)
+### Overnight, no data, stale (first pass; built)
 Owl and big clock with `NO TRAINS` as now in columns 0–62; a dim divider on column 65; the right side shows the current temperature and condition, then `TOMORROW` with icon, high (5x7) and low, and the condition. `NO DATA` and stale use the same layout with the red line across the top.
 
 ### Ticker (decided; built)
@@ -62,8 +62,8 @@ After the CTA's platform signs:
 - **Status icon**, 7 × 7 at columns 120–126: three arcs for a live train, a clock face for a schedule-based one (`isSch`).
 - Pages of two, as now.
 
-### Warnings on the weather strip (first pass)
-Spelled out: glyph, `TORNADO WARNING` and `UNTIL 7:45 PM` in a dimmer red, the temperature at left. Needs the alert's expiry in the payload. Blinking as now.
+### Warnings on the weather strip (first pass; built)
+Spelled out: glyph, `TORNADO WARNING` and `UNTIL 7:45 PM` in a dimmer red, the temperature at left. The end comes from the NWS alert (`warn.until`, wide boards only); when it doesn't all fit, `SEVERE` goes first, then `UNTIL`, then the time. Blinking as now.
 
 ---
 
@@ -154,8 +154,6 @@ Also mocked (`dial-*.png`): icons in place with the chosen one named, a centered
 
 ## 10. Open questions
 
-- Busy-station layout: confirm the fitting order in §3, or pick one layout.
-- Skyline: panorama or big clock; building art.
 - Direction labels for the split at Loop and branch stations.
 - Baseball beyond the line score.
 

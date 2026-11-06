@@ -193,7 +193,7 @@ function latchDue(prev, next, now) {
 // alerts: Set of line codes with an active service alert.
 // prevView: this board's last view state (see chooseView); the new one is
 // returned as viewState for the caller to keep.
-function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}) {
+function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map(), prevView = null } = {}) {
   // Lines & destinations: lines turned off here, and (otherLines false)
   // lines that don't serve the station (cfg.lines: the station's lines).
   const off = new Set(cfg.hideLines || []);
@@ -224,7 +224,7 @@ function format(arrivals, cfg, { now, alerts = new Set(), prevView = null } = {}
   const shownKeys = new Set(ordered.map((g) => g.key));
   if (cfg.cols === 128) {
     const shownWide = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
-    return { ...formatWide(ordered, shownWide, cfg, now, alerts), ticker: tickerOf(shownWide, alerts, true) };
+    return { ...formatWide(ordered, shownWide, cfg, now, alerts, alertWords), ticker: tickerOf(shownWide, alerts, true) };
   }
   const bars = cfg.autoFit === false
     ? { showHeader: cfg.showHeader, showWeather: cfg.showWeather, showKey: !!cfg.showKey, hidden: [] }
@@ -347,7 +347,11 @@ function halfRow(g, h, now, alerted) {
 }
 
 // A full-width row: the full name, as many of WIDE_TIMES times as leave it whole.
-function wideRow(g, now, alerted) {
+// words: an alerted line's alert words (`MAJOR DELAYS`), sent as `aw` when
+// they fit whole after the circle (ALERT_WORDS_GAP px), at the cost of the
+// fourth and fifth times if need be.
+const ALERT_WORDS_GAP = 3;
+function wideRow(g, now, alerted, words = null) {
   const name = g.full.toUpperCase();
   const nameW = alerted ? measure('small', fit('small', name, Infinity)) + ALERT_ICON_GAP + ALERT_ICON_PX : measure('small', fit('small', name, Infinity));
   const gap = alerted ? ALERT_TIME_GAP : LABEL_GAP;
@@ -358,13 +362,19 @@ function wideRow(g, now, alerted) {
   };
   let k = Math.min(WIDE_TIMES, g.items.length);
   while (k > 1 && nameW > room(k)) k--;
+  // An alert's words are worth the fourth and fifth times (not the first three).
+  const wordsW = alerted && words ? ALERT_WORDS_GAP + measure('small', words) : 0;
+  while (wordsW && k > 3 && nameW + wordsW > room(k)) k--;
   const items = g.items.slice(0, k);
   const row = { ln: g.ln, lbl: fit('small', name, room(k)), t: items.map((a) => a.t), s: items.map((a) => a.s), a: alerted ? 1 : 0 };
-  if (alerted) row.al = alertLabel(name, room(k));
+  if (alerted) {
+    row.al = alertLabel(name, room(k));
+    if (words && row.al === fit('small', name, Infinity) && nameW + ALERT_WORDS_GAP + measure('small', words) <= room(k)) row.aw = words;
+  }
   return row;
 }
 
-function formatWide(ordered, shown, cfg, now, alerts) {
+function formatWide(ordered, shown, cfg, now, alerts, alertWords = new Map()) {
   const view = (v) => ({ view: v, fitSince: null });
   const lines = [...new Set(ordered.map((g) => g.ln))];
   const mapid = cfg.station && cfg.station.mapid;
@@ -384,11 +394,43 @@ function formatWide(ordered, shown, cfg, now, alerts) {
   }
   // Full-width destination rows while they fit (the rows layout, and where
   // the split isn't true: a terminal's one or two rows read best whole).
+  // The key layout at 128 puts the station and clock on the key's row
+  // (wide-spec §3), so key and header together take one row.
+  if (cfg.showKey) {
+    const kb = fitBars(ordered.length, true, cfg.showWeather, false);
+    if (ordered.length <= maxRows(kb.showHeader, kb.showWeather, false)) {
+      const hidden = kb.hidden.map((x) => (x === 'header' ? 'key' : x));
+      return { view: 'dest', viewState: view('dest'), rows: ordered.map((g) => wideRow(g, now, alerts.has(g.ln), alertWords.get(g.ln))),
+        bars: { showHeader: !!cfg.showHeader && kb.showHeader, showWeather: kb.showWeather, showKey: kb.showHeader, hidden: [...hidden, ...(cfg.showHeader && !kb.showHeader ? ['header'] : [])] } };
+    }
+  }
   {
     const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
     const max = maxRows(bars.showHeader, bars.showWeather, bars.showKey);
     if (ordered.length <= max) {
-      return { view: 'dest', viewState: view('dest'), rows: ordered.map((g) => wideRow(g, now, alerts.has(g.ln))), bars };
+      return { view: 'dest', viewState: view('dest'), rows: ordered.map((g) => wideRow(g, now, alerts.has(g.ln), alertWords.get(g.ln))), bars };
+    }
+  }
+  // One row per line (busy stations, wide-spec §3), when every line has one
+  // or two destinations and the lines fit: a line's first destination on the
+  // left half and its second on the right (short names, three times), a line
+  // with one destination across the whole row (wideRow). Rows carry `y`, the
+  // line's row; the key's column heads don't fit the halves, so it's hidden.
+  {
+    const byLine = [];
+    for (const g of ordered) {
+      const l = byLine.find((x) => x[0].ln === g.ln);
+      if (l) l.push(g); else byLine.push([g]);
+    }
+    if (byLine.every((l) => l.length <= 2)) {
+      const bars3 = fitBars(byLine.length, cfg.showHeader, cfg.showWeather, false);
+      if (byLine.length <= maxRows(bars3.showHeader, bars3.showWeather, false)) {
+        return {
+          view: 'byline', viewState: view('byline'),
+          rows: byLine.flatMap((l, y) => (l.length === 1 ? [{ ...wideRow(l[0], now, alerts.has(l[0].ln), alertWords.get(l[0].ln)), y }] : l.map((g, h) => ({ ...halfRow(g, h, now, alerts.has(g.ln)), y })))),
+          bars: { ...bars3, hidden: [...bars3.hidden, ...(cfg.showKey ? ['key'] : [])] },
+        };
+      }
     }
   }
   // Two columns under the header (the key layout's station line goes on top).

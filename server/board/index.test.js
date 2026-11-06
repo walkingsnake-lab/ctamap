@@ -999,6 +999,28 @@ test('width: wide boards get the week, 24 hours, the next sun time, and notop wi
   await s.close();
 });
 
+test('width: wide transit gets tomorrow (tmrw), the warning\'s end (warn.until) and alert words; a 64 board none of them', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const arrivals = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...arrivals.map((a) => a.t)) + 120;
+  const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
+  const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const upd = async (w) => (await s.req(`/board/update?b=home&s=transit${w ? '&w=128' : ''}`, h)).body;
+  s.store.update('home', { screen: 'transit', wideLayout: 'rows' });
+  await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' }, weather: { kind: 'clear' } });
+  let b = await upd(false);
+  assert.equal(b.tmrw, undefined);
+  assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' }, 'the 64 warning is unchanged');
+  assert.ok(b.rows.every((r) => r.aw === undefined));
+  b = await upd(true);
+  assert.deepEqual(Object.keys(b.tmrw).sort(), ['hi', 'icon', 'lo', 'word']);
+  assert.ok(b.warn.until > now && b.warn.until <= now + 600, 'a test warning ends with the test');
+  assert.ok(b.rows.some((r) => r.aw === 'MAJOR DELAYS'), 'test alerts read MAJOR DELAYS');
+  await post({});
+  await s.close();
+});
+
 test('sunTime: the moment the sun reaches an elevation, rising or setting, near a time', () => {
   const { sunPos, sunTime } = require('./sun');
   const lat = 42.0, lon = -87.67, t = Date.UTC(2026, 10, 1, 18) / 1000; // Nov 1, noon CST
