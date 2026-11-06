@@ -78,12 +78,14 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   USB-C edge, and on B's outer header the board would reach ~7 mm through the end wall.)
 
 ## Before printing: test pieces (`stl/p25-128x32/coupons/`)
-1. **Shell joint** (plate 0a) — three pairs of 40 mm pieces of the top wall across the joint, front 34 mm (hood, front
-   rim, V-groove, the tongue's front end), the cut face on the bed. One, two or three notches on the inside face: tongue
-   clearance 0.05, 0.10, 0.15 mm a side. Print them with the shell's settings. Push each pair together by hand on a flat
-   surface: the end faces should close completely, the ridge should click, and the outer faces should be flush (run a
-   fingernail across; check the front edges too). Pick the tightest that closes fully by hand (`TONGUE_CL=<it>`). If even
-   0.15 won't close, look for blobs at the tongue's root first.
+1. **Shell joint** (plate 0a) — three pairs of pieces of the top wall across the joint, front 34 mm (hood, front rim,
+   V-groove, the tongue's front end), the cut face on the bed. The pair's length says its tongue clearance: 18 mm a
+   side = 0.05, 22 = 0.10, 26 = 0.15 mm a side (no marks cut in: they'd be inside corners, and the seam would go to
+   them instead of the joint). Print them with the shell's settings; in Preview (Seams on) the seam should run up the
+   joint end of each piece. Push each pair together by hand on a flat surface: the end faces should close completely,
+   the ridge should click, and the outer faces should be flush (run a fingernail across; check the front edges too).
+   Pick the tightest that closes fully by hand (`TONGUE_CL=<it>`). If even 0.15 won't close, look for blobs at the
+   tongue's root first.
 2. **Diffuser joint** — `coupon-128-diffuser-joint-white.stl` + `-black.stl` (one object, two parts, same frame; 0.2
    nozzle, 0.14 first layer as the P2.5 diffuser): three A pieces with joint ribs 0.45 / 0.55 / 0.65 (1 / 2 / 3 notches in
    the bezel edge) and one B piece, 6 columns either side, bottom edge included. Butt the panels, hold an A and the B at

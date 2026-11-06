@@ -169,26 +169,26 @@ def groove(cl=None):
         g = box(-0.01, TONGUE_L, yf, yb, z0, z1)
         zf, sg = (z0, -1) if k == 0 else (z1, 1)
         g = g + _ridge(DET_X, zf, sg, cl + DETENT + 0.05, DET_W + 0.2, DET_Y0 - 0.5, yb - 0.5)
-        mouth = CrossSection([[(-0.01, z0 - MOUTH), (MOUTH, z0), (MOUTH, z1), (-0.01, z1 + MOUTH)]])
+        e = 0.1                                # the 45 deg faces run on into the groove's space: no vertex lands on
+        mouth = CrossSection([[(-0.01, z0 - MOUTH - 0.01), (MOUTH + e, z0 + e), (MOUTH + e, z1 - e),   # its corner
+                               (-0.01, z1 + MOUTH + 0.01)]])          # (a near-twin there left a 0-thick sliver)
         g = g + Manifold.extrude(mouth, yb - yf).rotate([90, 0, 0]).translate([0, yb, 0])
         out = g if out is None else out + g
     return out
 
 
-def v_groove(sh, steps=8):
-    """material within d of the OUTER surface (top, bottom, front and back rims) and within CHAMF - d of x = 0: each
-    half's outer edges at the joint chamfered 45 deg. Not the bore's surfaces (hood, screen stop): crossing the screen
-    stop's sloped faces a distance-from-face cut turns into a stepped slot; inside, the halves just butt."""
-    cut, prev = None, None
-    for k in range(1, steps + 1):
-        d = CHAMF * k / steps
-        lay = sh - outer_inset(d)
-        band = lay if prev is None else lay - prev
-        w = CHAMF - CHAMF * (k - 1) / steps
-        c = band ^ box(-w, w, -50, D + 50, -1, H + 1)
-        cut = c if cut is None else cut + c
-        prev = lay
-    return cut
+def v_groove(sh):
+    """material within CHAMF - |x| of the OUTER surface (top, bottom, front and back rims) near x = 0: each half's
+    outer edges at the joint chamfered 45 deg. outer_inset is convex, so the part deep enough is the hull of the body
+    inset CHAMF at x = 0 and the body itself at |x| = CHAMF: an exact chamfer, no steps. Not the bore's surfaces (hood,
+    screen stop): inside, the halves just butt."""
+    e = 1e-3
+    keep = None
+    for sg in (1, -1):
+        k = Manifold.hull(outer_inset(CHAMF) ^ box(-e, e, -50, D + 50, -50, H + 50)
+                          + (outer_inset(0.0) ^ box(sg * CHAMF - e, sg * CHAMF + e, -50, D + 50, -50, H + 50)))
+        keep = k if keep is None else keep + k
+    return (sh ^ box(-CHAMF, CHAMF, -50, D + 50, -1, H + 1)) - keep
 
 
 def split_shell(sh, cl=None, y_back=None):
@@ -207,6 +207,8 @@ def split_shell(sh, cl=None, y_back=None):
 
 
 COUPON_Y = 34.0                 # the seam test pieces: the front 34 mm (hood, rim, V-groove, the tongue's front end)
+COUPON_W = (18.0, 22.0, 26.0)   # each pair's length a side, shortest to longest = TONGUE_CLS: the length says which is
+                                # which (marks cut into the piece would be inside corners: the seam would go to them)
 
 
 def seam_coupon(a, b, wall='top', w=20.0):
@@ -216,14 +218,6 @@ def seam_coupon(a, b, wall='top', w=20.0):
     reg = box(-w, w, -50, COUPON_Y, *zr)
     return a ^ reg, b ^ reg
 
-
-def coupon_marks(m, n, x_end):
-    """n small notches across the inner face near the piece's outer end: which clearance it is (1, 2, 3)"""
-    sg = 1 if x_end < 0 else -1                    # inward from the outer end
-    for k in range(n):
-        x = x_end + sg * (2.0 + 1.6 * k)
-        m = m - box(x - 0.4, x + 0.4, -50, COUPON_Y + 1, H - WALL - 1, H - WALL + 0.5)
-    return m
 
 
 # ---------------------------------------------------------------- diffuser halves
@@ -345,13 +339,12 @@ def build_coupons(out):
     os.makedirs(out, exist_ok=True)
     rep = {}
     sh = V.shell2()
-    # seam tongue and groove: three top-wall pairs (TONGUE_CLS, 1 / 2 / 3 notches on the inner face), print orientation
-    # as the shell (back-down: the cut face at COUPON_Y on the bed), the tongue cut flat there
+    # seam tongue and groove: three top-wall pairs (TONGUE_CLS; pair k is COUPON_W[k] a side), print orientation as the
+    # shell (back-down: the cut face at COUPON_Y on the bed), the tongue cut flat there
     rows = []
-    for k, cl in enumerate(TONGUE_CLS, 1):
+    for cl, w in zip(TONGUE_CLS, COUPON_W):
         a, b = split_shell(sh, cl, y_back=COUPON_Y)
-        ca, cb = seam_coupon(a, b, 'top')
-        ca, cb = coupon_marks(ca, k, -20.0), coupon_marks(cb, k, 20.0)
+        ca, cb = seam_coupon(a, b, 'top', w)
         rows.append([backdown(ca), backdown(cb)])
     layout(rows, gap=14.0)
     import trimesh

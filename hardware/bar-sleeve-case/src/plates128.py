@@ -43,8 +43,8 @@ SLOT2 = {'black grid', 'window (translucent)'}             # parts on filament s
 # footprint's lower-left corner on the bed). Parts of one object share a frame (as exported) and keep it.
 PLATES = [
     ('plate-0a-test-seam-joint', 'Test: shell joint, 3 clearances (PLA Wood, 5 mm brim)', SHELL, [
-        ('joint, half A x3 (tongues)', [('seam A', C + 'coupon-128-seam-A-walnut.stl', 0)], (100.0, 107.0)),
-        ('joint, half B x3 (grooves)', [('seam B', C + 'coupon-128-seam-B-walnut.stl', 0)], (143.7, 107.0)),
+        ('joint, half A x3 (tongues)', [('seam A', C + 'coupon-128-seam-A-walnut.stl', 0)], (86.0, 107.0)),
+        ('joint, half B x3 (grooves)', [('seam B', C + 'coupon-128-seam-B-walnut.stl', 0)], (135.7, 107.0)),
     ]),
     ('plate-0b-test-diffuser-joint', 'Test: diffuser joint (0.2 nozzle, white + black)', DIFFUSER, [
         ('diffuser joint coupon', [('white face', C + 'coupon-128-diffuser-joint-white.stl', 0),
