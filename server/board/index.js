@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -383,7 +383,9 @@ function createBoard({
   function noteCols(id, q) {
     try { store.setCols(id, q.w === '128' ? 128 : 64); } catch (e) { log.error('[board] width:', e.message); }
   }
-  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f), peek: capOk(id, q, 'peek') });
+  // A wide-only face (WIDE_FACES: the word clock) counts only on a wide board.
+  const wideNow = (id, q) => (typeof q.w === 'string' ? q.w === '128' : (store.get(id) || {}).cols === 128);
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) && (!WIDE_FACES.includes(f) || wideNow(id, q)), peek: capOk(id, q, 'peek') });
 
   // The announce screen's message as the board draws it (draw.js
   // messageLayout: the lines for its style), or null when none is set.
@@ -435,6 +437,8 @@ function createBoard({
     if (w && w.sunrise != null && w.sunset != null) { out.sr = w.sunrise; out.ss = w.sunset; }
     return out;
   }
+  // The analog face's accent color, or null for the original amber.
+  const accentOf = (board) => (board.analogAccent && board.analogAccent !== 'amber' ? ANALOG_ACCENTS[board.analogAccent] || null : null);
   // The analog face's weather (and the wide Seventies face's temperature).
   const cwxOf = (wd) => (wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null);
 
@@ -459,6 +463,7 @@ function createBoard({
     if (caps.face('daynight')) faces.dn = dayNightOf(st, now, board.cols === 128, w);
     if (caps.face('gradient') && board.gradInvert === true) faces.ginv = true;
     if (caps.face('digits') && board.colonBlink === false) faces.steady = true;
+    if (caps.face('analog') && accentOf(board)) faces.cacc = accentOf(board);
     return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...faces };
   }
 
@@ -628,6 +633,8 @@ function createBoard({
       // Analog face, and Seventies on a wide board: the temperature and icon
       // (contract "Analog", "Width"); null without weather.
       ...(face === 'analog' || (face === 'seventies' && board.cols === 128) ? { cwx: cwxOf(wd) } : {}),
+      // Analog face: the accent color (the second hand, the calendar's day), absent = amber.
+      ...(face === 'analog' && accentOf(board) ? { cacc: accentOf(board) } : {}),
       // Day/night face: the subsolar point and the board's spot (contract "Day/night").
       ...(face === 'daynight' ? { dn: dayNightOf(st, now, board.cols === 128, w) } : {}),
       // Gradient face: lit gradient digits on black (contract "Gradient").

@@ -21,8 +21,16 @@ const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock', 'a
 const MAX_PRESETS = 8;
 // Clock screen faces (design spec §14, §16-20): the skyline, the seventies
 // stripes with VCR digits, the analog dial, the day/night world map, the
-// flowing gradient, big digits, and day/date.
-const CLOCK_FACES = ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate'];
+// flowing gradient, big digits, and day/date; the word clock on wide
+// boards only (WIDE_FACES: a 64 board shows the skyline instead).
+const CLOCK_FACES = ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate', 'words'];
+const WIDE_FACES = ['words'];
+// Analog face accent (the second hand; the wide board's calendar day
+// block at 40%): name -> color. amber is the original.
+const ANALOG_ACCENTS = {
+  amber: '#ffb000', coral: '#ff5a4e', pink: '#ff4fa8', violet: '#a066ff',
+  blue: '#4a7dff', cyan: '#22c8e6', mint: '#2fe08a', lime: '#a8e23a',
+};
 // Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
 const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
 const WHEEL_SPEEDS = ['off', 'slow', 'normal', 'fast'];
@@ -230,6 +238,8 @@ function defaultBoard(stations) {
     gradInvert: false,
     // Big digits clock face: the colon blinks once a second (false: steady).
     colonBlink: true,
+    // Analog clock face: the accent color (ANALOG_ACCENTS).
+    analogAccent: 'amber',
     wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
@@ -407,11 +417,12 @@ function validatePatch(patch, stations) {
       case 'tempUnit':
       case 'wxRain':
       case 'clockFace':
+      case 'analogAccent':
       case 'cloudDrift':
       case 'wheelSpeed':
       case 'rippleSpeed':
       case 'rainSpeed': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, analogAccent: Object.keys(ANALOG_ACCENTS), cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;
@@ -673,4 +684,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };

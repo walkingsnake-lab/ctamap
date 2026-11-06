@@ -39,6 +39,14 @@ const OWN = {
   ticker: () => draw.render(transit({}), { screen: 'ticker' }),
   'layout-header': () => draw.render(transit({}), { screen: 'transit' }),
   'layout-key': () => draw.render(transit({ key: true }), { screen: 'transit' }),
+  // Wide only: the middle 64 columns of 9:42 PM.
+  'face-words': () => {
+    const now = Date.parse('2026-11-02T03:42:00Z') / 1000;
+    const f = draw.render({ screen: 'clock', cface: 'words', cols: 128, tzo: tzOffset(now), now, bright: 100 }, { now });
+    const px = new Uint8Array(64 * 32 * 3);
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) px.set(f.get(x + 32, y), (y * 64 + x) * 3);
+    return { px };
+  },
 };
 
 // Tile name -> [scenario name, render index].

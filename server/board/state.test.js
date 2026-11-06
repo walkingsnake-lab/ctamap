@@ -387,10 +387,14 @@ test('an older board without a label loads with an empty one', () => {
 });
 
 test('clock screen and its face are settings; the knob ring adds CLOCK when the board can draw it', () => {
-  const { knobOf, KNOB_RING, CLOCK_FACES } = require('./state');
+  const { knobOf, KNOB_RING, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, validatePatch } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
   assert.equal(store.get('home').clockFace, 'skyline');
-  assert.deepEqual(CLOCK_FACES, ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate']);
+  assert.deepEqual(CLOCK_FACES, ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate', 'words']);
+  assert.deepEqual(WIDE_FACES, ['words']);
+  assert.equal(validatePatch({ analogAccent: 'mint' }).analogAccent, 'mint');
+  assert.throws(() => validatePatch({ analogAccent: 'teal' }), ValidationError);
+  assert.equal(Object.keys(ANALOG_ACCENTS).length, 8);
   store.update('home', { clockFace: 'seventies' });
   assert.equal(store.get('home').clockFace, 'seventies');
   store.update('home', { clockFace: 'skyline' });

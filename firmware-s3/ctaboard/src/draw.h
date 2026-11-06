@@ -52,7 +52,7 @@ std::string utf8(const ustr &s);
 ustr num_text(long long n);  // str(int)
 
 // Fonts, in assets.h order (sorted names).
-enum Font { FONT_5X7 = 0, FONT_CLOCK = 1, FONT_D13 = 2, FONT_D17 = 3, FONT_SMALL = 4, FONT_VCR = 5 };
+enum Font { FONT_5X7 = 0, FONT_CLOCK = 1, FONT_D13 = 2, FONT_D17 = 3, FONT_D23 = 4, FONT_SMALL = 5, FONT_VCR = 6 };
 
 // ---- frame ----
 
@@ -421,7 +421,7 @@ struct Boat {
   bool sail;  // false: the speedboat
   int x0, dir;
 };
-std::optional<Boat> boat_at(double ms);
+std::optional<Boat> boat_at(double ms, int w = 64);
 double strike_level(double ms);
 
 int ticker_pages(const Value &p, double now);

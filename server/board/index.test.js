@@ -1759,6 +1759,33 @@ test('width: wide day/night gets its spot on the 4.5° map and sunrise/sunset; w
   await s.close();
 });
 
+test('width: the word clock goes only to wide boards that draw it; the analog accent is sent as cacc', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const HK = 'skyline:seventies:analog:daynight:gradient:digits:daydate:words:peek';
+  const get = async (q) => (await s.req(`/board/update?b=home&${q}`, h)).body;
+  s.store.update('home', { screen: 'clock', clockFace: 'words' });
+  assert.equal((await get(`hk=${HK}&w=128`)).cface, 'words');
+  assert.equal((await get(`hk=${HK.replace(':words', '')}&w=128`)).cface, 'skyline', 'firmware without it gets the skyline');
+  let b = await get(`hk=${HK}`);
+  assert.equal(b.cface, 'skyline', 'a 64 board gets the skyline');
+  assert.equal(b.knob.vars[2].includes('words'), false, 'and no WORDS on the knob');
+  b = await get(`hk=${HK}&w=128`);
+  assert.equal(b.knob.vars[2].includes('words'), true);
+  s.store.update('home', { clockFace: 'analog' });
+  b = await get(`hk=${HK}&w=128`);
+  assert.equal(b.cacc, undefined, 'amber is the default: no cacc');
+  assert.equal(b.pv.cacc, undefined);
+  s.store.update('home', { analogAccent: 'mint' });
+  b = await get(`hk=${HK}&w=128`);
+  assert.equal(b.cacc, '#2fe08a');
+  assert.equal(b.pv.cacc, '#2fe08a', 'the peek chooser draws the analog face with it too');
+  s.store.update('home', { clockFace: 'gradient' });
+  assert.equal((await get(`hk=${HK}&w=128`)).cacc, undefined, 'other faces leave it out');
+  await s.close();
+});
+
 test('clock screen: decided per request from the update\'s own hk, so it never flaps', async () => {
   const { parse } = require('./weather');
   const om = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'weatherapi', 'morse-cell-2026-10-04-1045.json'), 'utf8'));

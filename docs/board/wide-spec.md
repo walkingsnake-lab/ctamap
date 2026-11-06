@@ -107,21 +107,23 @@ The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours 
 ### Seventies (decided, built)
 The three stripes run along the bottom, climb at columns 62–69, and run along the top to the right edge; the top turn on the same 2 px band as the climb and the runs. The time in the VCR digits on the left, banded as at 64; under the top run, the **weekday in full** (`TUESDAY`), then `NOV 3` and the temperature.
 
-### Analog + calendar (liked)
-The analog face (columns 0–33) and the month in seven 13-px columns: five week rows at a 6 px pitch, no weekday header, weekends dimmer, today on an amber block. The calendar replaces the face's date and temperature.
+### Analog + calendar (built)
+The analog face (columns 0–33) and the month in seven 13-px columns: five week rows at a 6 px pitch, no weekday header, weekends dimmer, today on a block in the accent at 40%. The calendar replaces the face's date and temperature. A sixth week's days go in the first row's empty cells. **Accent** (decided Nov 5): one of eight colors (amber, coral, pink, violet, blue, cyan, mint, lime) for the second hand and today's block.
 
-### Word clock (liked, wide only)
-Every word on the grid stays faintly lit (`#2a2a2a`); the words that tell the time light amber, rounded to five minutes (`IT IS TWENTY MINUTES TO TEN IN THE EVENING`). A 64-wide version is possible: 16 × 5 run-together letters with shared letters (`SEVENINEIGHTWO`), no `IT IS`/`MINUTES`, AM/PM in the spare cells, and W drawn 3 px wide (Tom Thumb's is 5).
+### Word clock (built, wide only)
+Every word on the grid stays faintly lit (`#2a2a2a`); the words that tell the time light amber, rounded to five minutes (`IT IS TWENTY MINUTES TO TEN IN THE EVENING`). Built with `MORNING`, `AFTERNOON` and `EVENING` on the last row (the mockup had only `EVENING`), and the hours in reading order across rows 2–4. A 64-wide version is possible: 16 × 5 run-together letters with shared letters (`SEVENINEIGHTWO`), no `IT IS`/`MINUTES`, AM/PM in the spare cells, and W drawn 3 px wide (Tom Thumb's is 5).
 
-### Gradient (first pass)
+### Gradient (built)
 The same block digits widened to 7 × 6 blocks (21 × 30), so the time fills the width as at 64 (`12:58` is 108 px); the gradient spans all 128 columns.
 
-### Skyline (open)
-Two directions, both using the real renderer patched to 128 columns:
-- **Panorama:** the 64 scene in the middle, the South Loop added on the left and the Gold Coast stepping down to the beach on the right. Needs new building art.
-- **Big clock:** the 64 scene on the left, open lake and sky on the right with the time in the clock digits and the date over the water.
-Most of the skyline code already takes its width from a variable, and the server's cloud strip is already 128 wide.
+### Big digits (decided Nov 5, built)
+The time alone in 23-row digits (UW ttyp0 Bold 40, the same family as the 64 face's), centered; the colon blinks as at 64. Mocked, not chosen: seconds in the 13-row digits after the time, a small AM/PM, a row of 60 dots filling through the minute.
 
+### Day/date (decided Nov 5, built)
+The weekday over the date (5x7) on the left, a divider, the time in the 23-row digits with AM/PM on the right. The widest case (`WEDNESDAY`, `12:58 PM`) uses every column. Mocked, not chosen: the date spelled out over the time, the time with a weekday/date/temperature panel, a tear-off calendar page.
+
+### Skyline (decided Nov 5, built)
+**Panorama:** the 64 scene in the middle and a continuous skyline of generic towers on both sides, the left for the South Loop and the right running on to the edge (no Gold Coast stepping down to the lake). Sun, moon, pier, wheel and lightning stay with the 64 scene; stars, rain and snow double; clouds and boats run the whole width. Rejected: the big-clock layout (the 64 scene and open lake with the time over the water).
 ---
 
 ## 7. Announce

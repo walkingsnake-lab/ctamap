@@ -1836,7 +1836,7 @@
         }
         return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }
-      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
+      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
       return { p, screen: 'cycle' };
     }
@@ -1898,44 +1898,51 @@
     // atan2 or random) so firmware ports can match it pixel for pixel.
     // `o.ms` is the animation clock, epoch milliseconds (boats and lightning
     // are scheduled on the wall clock); it defaults to now.
-    const SKY = (() => {
-      const W = 64, SHORE = 25, CX = 32, CY = 17, R = 6, SPREAD = 5;
+    // The scene, built once per width: the 64 scene, and the wide board's
+    // (wide-spec §6, panorama) with the same scene 32 px in (O) and generic
+    // towers either side (cfg.extra: [x, width, rows, role]; cfg.ants; twice
+    // the stars).
+    function buildSky(cfg) {
+      const W = cfg.W, O = cfg.O, SHORE = 25, CX = 32 + O, CY = 17, R = 6, SPREAD = 5;
       // 0 sky, 1 background mass, 2 tower (only towers and mass right of the
       // wheel get windows).
-      const role = new Uint8Array(64 * 32);
+      const role = new Uint8Array(W * 32);
       const rect = (x, w, t, r) => { for (let y = Math.max(0, t); y <= SHORE; y++) for (let i = x; i < x + w; i++) if (i >= 0 && i < W) role[y * W + i] = r; };
       const top = (rows) => SHORE + 1 - rows;
       // Background mass: the Loop to the left, Streeterville to the right. [x, width, rows]
       [[0, 4, 7], [8, 3, 9], [19, 3, 8], [22, 3, 10], [28, 3, 7], [36, 3, 6], [39, 4, 9], [43, 3, 11], [46, 4, 8], [50, 3, 10], [57, 4, 9], [61, 3, 7]]
-        .forEach(([x, w, h]) => rect(x, w, top(h), 1));
-      rect(1, 1, top(9), 2); rect(2, 4, top(15), 2); rect(6, 2, top(13), 2); rect(8, 2, top(9), 2);   // Willis, setbacks down to the right
-      rect(11, 4, top(17), 2);                                                                         // Aon
-      rect(15, 5, top(21), 2);                                                                         // St. Regis
-      rect(23, 5, top(10), 2); rect(24, 4, top(13), 2); rect(24, 3, top(16), 2);                       // Trump
-      rect(29, 7, top(15), 2); rect(30, 5, top(17), 2);                                                // Lake Point Tower, 2 rows above the rim
-      { const t = top(17), steps = [4, 6, 8];                                                           // Hancock: 4-6-8 steps around x 53
-        for (let y = t; y <= SHORE; y++) { const w = steps[Math.min(2, Math.floor((y - t) * 3 / (SHORE - t + 1)))]; for (let i = 53 - w / 2; i < 53 + w / 2; i++) role[y * W + i] = 2; } }
+        .forEach(([x, w, h]) => rect(x + O, w, top(h), 1));
+      for (const [x, w, h, r] of cfg.extra) if (r === 1) rect(x, w, top(h), 1);
+      for (const [x, w, h, r] of cfg.extra) if (r === 2) rect(x, w, top(h), 2);
+      rect(1 + O, 1, top(9), 2); rect(2 + O, 4, top(15), 2); rect(6 + O, 2, top(13), 2); rect(8 + O, 2, top(9), 2);   // Willis, setbacks down to the right
+      rect(11 + O, 4, top(17), 2);                                                                                     // Aon
+      rect(15 + O, 5, top(21), 2);                                                                                     // St. Regis
+      rect(23 + O, 5, top(10), 2); rect(24 + O, 4, top(13), 2); rect(24 + O, 3, top(16), 2);                           // Trump
+      rect(29 + O, 7, top(15), 2); rect(30 + O, 5, top(17), 2);                                                        // Lake Point Tower, 2 rows above the rim
+      { const t = top(17), steps = [4, 6, 8];                                                                           // Hancock: 4-6-8 steps around x 53
+        for (let y = t; y <= SHORE; y++) { const w = steps[Math.min(2, Math.floor((y - t) * 3 / (SHORE - t + 1)))]; for (let i = 53 + O - w / 2; i < 53 + O + w / 2; i++) role[y * W + i] = 2; } }
       const isB = (x, y) => x >= 0 && x < W && y >= 0 && y <= SHORE && role[y * W + x] !== 0;
       // Antennas [x, top row, roof row, beacon]: Willis's two, Hancock's twin with beacons.
-      const ants = [[2, top(18), top(15), 0], [4, top(17), top(15), 0], [51, top(22), top(17), 1], [54, top(22), top(17), 1]];
+      const ants = [[2 + O, top(18), top(15), 0], [4 + O, top(17), top(15), 0], [51 + O, top(22), top(17), 1], [54 + O, top(22), top(17), 1],
+        ...cfg.ants.map(([x, t, roof, bc]) => [x, top(t), top(roof), bc])];
       // Window slots: even columns, odd rows, under another building pixel,
       // clear of the pier (x 19-44, rows 19 and below) and the wheel.
       // [x, y, threshold 0-999, bright]
       const wins = [];
       for (let y = 1; y <= SHORE; y++) for (let x = 0; x < W; x++) {
         const r = role[y * W + x];
-        if (!r || (r === 1 && x < 38) || (x >= 19 && x <= 44 && y >= SHORE - 6)) continue;
+        if (!r || (r === 1 && x < 38 + O) || (x >= 19 + O && x <= 44 + O && y >= SHORE - 6)) continue;
         const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
         if (dx * dx + dy * dy < 49 || x % 2 !== 0 || y % 2 !== 1 || !isB(x, y - 1)) continue;
         wins.push([x, y, ih(x, y, 5) % 1000, ih(x, y, 9) % 10 < 3]);
       }
-      // Stars: the first 14 hash positions in the top 14 rows that miss the
+      // Stars: the first 14 (wide: 28) hash positions in the top 14 rows that miss the
       // buildings, the moon's spot, the Hancock antennas and the wheel. [x, y, bright, twinkles, phase 0-999, period ms]
       const stars = [];
-      for (let i = 0; stars.length < 14 && i < 1000; i++) {
+      for (let i = 0; stars.length < cfg.stars && i < cfg.stars * 1000 / 14; i++) {
         const x = ih(i, 1, 3) % W, y = ih(i, 2, 3) % 14;
         const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
-        if (isB(x, y) || (x > 35 && x < 49 && y < 11) || (x >= 50 && x <= 55 && y < 10) || dx * dx + dy * dy < 90.25 || stars.some((s) => s[0] === x && s[1] === y)) continue;
+        if (isB(x, y) || (x > 35 + O && x < 49 + O && y < 11) || (x >= 50 + O && x <= 55 + O && y < 10) || dx * dx + dy * dy < 90.25 || stars.some((s) => s[0] === x && s[1] === y)) continue;
         stars.push([x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 === 1, ih(i, 5, 3) % 1000, [4000, 6000, 12000][stars.length % 3]]);
       }
       // Wheel: hard-edged shapes, a pixel on when at least half covered (6x6
@@ -1965,8 +1972,23 @@
           const pa = dy >= 0 ? (dx >= 0 ? dy / (ax + ay) : 1 + ax / (ax + ay)) : (dx < 0 ? 2 + ay / (ax + ay) : 3 + ax / (ax + ay));
           return [x, y, pa * 90];
         });
-      return { W, SHORE, CX, CY, role, isB, ants, wins, stars, legs, bar, rim };
-    })();
+      return { W, O, SHORE, CX, CY, role, isB, ants, wins, stars, legs, bar, rim };
+    }
+    const SKY = buildSky({ W: 64, O: 0, extra: [], ants: [], stars: 14 });
+    // The wide board's panorama: the 64 scene on columns 32-95 and generic
+    // towers both sides, no step down to the lake (decided Nov 5).
+    const SKYW = buildSky({
+      W: 128, O: 32, stars: 28,
+      extra: [
+        // Left: the South Loop.
+        [0, 5, 6, 1], [5, 4, 8, 1], [10, 3, 5, 1], [13, 5, 7, 1], [18, 4, 9, 1], [22, 3, 6, 1], [25, 4, 8, 1], [29, 3, 6, 1],
+        [2, 3, 11, 2], [7, 3, 16, 2], [14, 3, 13, 2], [20, 4, 10, 2], [26, 3, 12, 2],
+        // Right: more towers to the edge.
+        [96, 4, 8, 1], [100, 5, 10, 1], [105, 4, 7, 1], [109, 5, 9, 1], [114, 4, 8, 1], [118, 5, 10, 1], [123, 5, 8, 1],
+        [97, 3, 13, 2], [102, 4, 15, 2], [107, 3, 11, 2], [111, 4, 16, 2], [116, 3, 12, 2], [120, 4, 14, 2], [125, 3, 12, 2],
+      ],
+      ants: [[8, 19, 16, 0], [112, 19, 16, 0]],  // [x, top rows, roof rows, beacon]
+    });
     // Integer hash (32-bit, wraps the same in JS and C++).
     function ih(a, b, c) {
       let h = (Math.imul(a >>> 0, 0x9E3779B1) ^ Math.imul(b >>> 0, 0x85EBCA77) ^ Math.imul(c >>> 0, 0xC2B2AE3D)) >>> 0;
@@ -2009,11 +2031,11 @@
     }
     // 7 px soft-edged disc centered on (cx, cy), hidden by buildings;
     // `lit(dx, dy)` keeps part of it (the moon's phase).
-    function skyDisc(f, cx, cy, color, lit) {
+    function skyDisc(f, cx, cy, color, lit, K = SKY) {
       const c = 3.5, rgb = hex(color);
       for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
         const X = cx - 3 + x, Y = cy - 3 + y;
-        if (Y < 0 || Y > SKY.SHORE || X < 0 || X >= 64 || SKY.isB(X, Y)) continue;
+        if (Y < 0 || Y > K.SHORE || X < 0 || X >= K.W || K.isB(X, Y)) continue;
         let hit = 0;
         for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
           const dx = x + (i + 0.5) / 8 - c, dy = y + (j + 0.5) / 8 - c;
@@ -2103,26 +2125,49 @@
     // Big digits: the time alone, its ink centered, rows 7-23. The colon
     // blinks (off for the second half of each second on the board's clock),
     // except while the time rolls, or always lit with p.steady.
+    // Wide board (wide-spec §6): the 23-row digits (d23, ttyp0 Bold 40),
+    // rows 4-26, centered on all 128 columns.
+    const BDW = { top: 4, base: 27 };
     function renderDigits(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
-      const f = newFrame();
-      const text = clockText(now), xOf = (str) => fdivI(65 - measure('d17', str), 2);
+      const wide = colsOf(p) === WIDE, font = wide ? 'd23' : 'd17', W = wide ? WIDE : 64, g = wide ? BDW : BD;
+      const f = newFrame(W);
+      const text = clockText(now), xOf = (str) => fdivI(W + 1 - measure(font, str), 2);
       const roll = takeRoll('dig.clock', text);
-      rollTextWith(f, 'd17', roll, text, xOf, BD.base, BD.color);
+      rollTextWith(f, font, roll, text, xOf, g.base, BD.color);
       if (!p.steady && !roll && ((ms % 1000) + 1000) % 1000 >= 500) {
         const i = text.indexOf(':');
-        f.fill(xOf(text) + measure('d17', text.slice(0, i)) + 1, BD.top, fonts.d17[58][1], BD.base - BD.top, '#000000');
+        f.fill(xOf(text) + measure(font, text.slice(0, i)) + 1, g.top, fonts[font][58][1], g.base - g.top, '#000000');
       }
       return f;
     }
     // Day/date: the weekday (Tom Thumb, rows 1-5), the time in d13 (rows
     // 9-21) with AM/PM in Tom Thumb two columns after it, bottom-aligned, the
     // pair centered; the date (5x7, rows 24-30). Each line centered.
+    // Wide board (wide-spec §6): the weekday (5x7, #8f8f8f, baseline 14)
+    // over the date (5x7, #e6e6e6, baseline 25), centered on column 22; a
+    // #262626 divider on column 46, rows 4-27; the time in d23 (rows 4-26)
+    // with AM/PM 3 px after it, the pair centered in columns 48-127.
+    const DDW = { cx: 22, dayBase: 14, dateBase: 25, divX: 46, x0: 48, timeBase: 27, divider: '#262626' };
+    function renderDayDateWide(p, now) {
+      const f = newFrame(WIDE);
+      const t = localDate(now, p.tzo);
+      const day = DAY_NAMES[t.wd], date = `${MONTHS[t.m - 1]} ${t.d}`;
+      f.text('5x7', day, DDW.cx - fdivI(measure('5x7', day), 2), DDW.dayBase, DD.label);
+      f.text('5x7', date, DDW.cx - fdivI(measure('5x7', date), 2), DDW.dateBase, DD.color);
+      f.fill(DDW.divX, 4, 1, 24, DDW.divider);
+      const text = clockText(now), ampm = t.h < 12 ? 'AM' : 'PM', aw = measure('small', ampm);
+      const xOf = (str) => DDW.x0 + fdivI(WIDE - DDW.x0 - (measure('d23', str) + 3 + aw), 2);
+      rollText(f, 'd23', 'dd.clock', text, xOf, DDW.timeBase, DD.color);
+      f.text('small', ampm, xOf(text) + measure('d23', text) + 3, DDW.timeBase, DD.ampm);
+      return f;
+    }
     function renderDayDate(p, opts) {
       const o = opts || {};
       const now = Math.floor(o.now != null ? o.now : p.now);
+      if (colsOf(p) === WIDE) return renderDayDateWide(p, now);
       const f = newFrame();
       const t = localDate(now, p.tzo);
       const day = DAY_NAMES[t.wd];
@@ -2195,10 +2240,31 @@
         if (err < 0) err += 2 * y + 1; else { x--; err += 2 * (y - x) + 1; }
       }
     }
+    // Wide board (wide-spec §6): the dial as at 64 (columns 0-33) and this
+    // month's calendar in seven 13 px columns from x37, Sunday first: five
+    // week rows at a 6 px pitch (baselines 6-30), no weekday header; a sixth
+    // week's days go in the first row's empty cells. Weekdays #b8b8b8,
+    // weekends #6a6a6a, today white on an 11 x 7 block: the accent (p.cacc,
+    // else amber) at 40% (amber's is #664600).
+    const CAL = { x0: 37, colW: 13, day: '#b8b8b8', weekend: '#6a6a6a' };
+    const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    function drawCalendar(f, now, tzo, accent) {
+      const t = localDate(now, tzo);
+      const first = now - (t.d - 1) * 86400;
+      const n = t.m === 2 ? (localDate(first + 28 * 86400, tzo).m === 2 ? 29 : 28) : MONTH_DAYS[t.m - 1];
+      const off = ((t.wd - (t.d - 1)) % 7 + 7) % 7;
+      for (let d = 1; d <= n; d++) {
+        const i = off + d - 1, col = i % 7, row = fdivI(i, 7) % 5;
+        const cx = CAL.x0 + col * CAL.colW + 6, base = 6 + row * 6, str = String(d);
+        if (d === t.d) f.fill(cx - 5, base - 6, 11, 7, scaleColor(accent, 0.4));
+        f.text('small', str, cx - fdivI(measure('small', str) - 1, 2), base, d === t.d ? C.white : col === 0 || col === 6 ? CAL.weekend : CAL.day);
+      }
+    }
     function renderAnalog(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
-      const f = newFrame();
+      const wide = colsOf(p) === WIDE;
+      const f = newFrame(wide ? WIDE : 64);
       const t = localDate(now, p.tzo);
       circle(f, AN.cx, AN.cy, 15, '#333333');
       const tk = AN_T.ticks;
@@ -2206,8 +2272,11 @@
       const hand = (tab, i, color) => bresenham(f, AN.cx, AN.cy, tab[i * 2], tab[i * 2 + 1], color);
       hand(AN_T.hour, (t.h % 12) * 5 + fdivI(t.min, 12), C.clock);
       hand(AN_T.min, t.min, C.clock);
-      hand(AN_T.sec, t.s, C.amber);
+      // The second hand in the accent (p.cacc: the board's analogAccent), else amber.
+      const accent = p.cacc || C.amber;
+      hand(AN_T.sec, t.s, accent);
       f.fill(AN.cx, AN.cy, 1, 1, C.clock);
+      if (wide) { drawCalendar(f, now, p.tzo, accent); return f; }
       // Right: day (full name when it fits the 31 px column), date, weather.
       const full = DAY_NAMES[t.wd], day = measure('small', full) <= 31 ? full : full.slice(0, 3);
       f.text('small', day, AN.rx - fdivI(measure('small', day), 2), 7, C.wxText);
@@ -2220,6 +2289,43 @@
         const x = f.text('5x7', temp, x0 + 10, 30, C.label);
         f.text('small', '°', x, 28, C.label);
       }
+      return f;
+    }
+
+    // ---- clock screen: word clock (wide boards only; wide-spec §6) ----
+    // Five rows of words in Tom Thumb, centered, baselines 6-30; every word
+    // faintly lit (#2a2a2a), the ones that tell the time amber, rounded to
+    // five minutes: IT IS TWENTY MINUTES TO TEN IN THE EVENING. Morning
+    // before noon, afternoon to 6 PM, evening after (by the hour shown).
+    const WORDS = {
+      rows: ['IT IS HALF TEN QUARTER TWENTY', 'FIVE MINUTES TO PAST ONE TWO', 'THREE FOUR FIVE SIX SEVEN EIGHT',
+        "NINE TEN ELEVEN TWELVE O'CLOCK", 'IN THE MORNING AFTERNOON EVENING'],
+      off: '#2a2a2a',
+      // Word ids: row * 8 + the word's place in its row.
+      hours: [27, 12, 13, 16, 17, 18, 19, 20, 21, 24, 25, 26],  // 12, 1, 2, ... 11
+      // By five minutes: the minute words, then PAST (11) or TO (10).
+      mins: [[28], [8, 9, 11], [3, 9, 11], [4, 11], [5, 9, 11], [5, 8, 9, 11], [2, 11], [5, 8, 9, 10], [5, 9, 10], [4, 10], [3, 9, 10], [8, 9, 10]],
+    };
+    function wordsLit(now, tzo) {
+      const t = localDate(now, tzo);
+      let q = fdivI(t.min + 2, 5), h = t.h;
+      if (q === 12) { q = 0; h = (h + 1) % 24; }
+      if (q >= 7) h = (h + 1) % 24;
+      return [0, 1, ...WORDS.mins[q], WORDS.hours[h % 12], 32, 33, h < 12 ? 34 : h < 18 ? 35 : 36];
+    }
+    function renderWords(p, opts) {
+      const o = opts || {};
+      const now = o.now != null ? o.now : p.now;
+      const f = newFrame(WIDE);
+      const lit = wordsLit(now, p.tzo);
+      WORDS.rows.forEach((row, j) => {
+        const x0 = fdivI(WIDE - measure('small', row), 2), words = row.split(' ');
+        let prefix = '';
+        words.forEach((word, k) => {
+          f.text('small', word, x0 + (prefix ? measure('small', prefix) + 1 : 0), 6 + j * 6, lit.includes(j * 8 + k) ? C.amber : WORDS.off);
+          prefix += `${word} `;
+        });
+      });
       return f;
     }
 
@@ -2334,10 +2440,18 @@
       gap: 4,          // px between digits; 2 either side of the colon (12:59 fills the width exactly)
       dark: '#000000',
     };
-    function gradientColor(x, y, ms) {
+    // Digit geometry by width: blocks sx x sy, the gap between characters,
+    // and the colon's width, lead (it starts 2 px back at 64) and gap after.
+    // Wide (wide-spec §6): 7 x 6 blocks (21 x 30 digits), 5 px gaps either
+    // side of a 4 px colon: 12:58 is 108 px.
+    const BIG = {
+      64: { w: 64, sx: GR.sx, sy: GR.sy, gap: GR.gap, colonW: GR.sx, lead: -2, colonGap: GR.gap - 2 },
+      128: { w: 128, sx: 7, sy: 6, gap: 5, colonW: 4, lead: 0, colonGap: 5 },
+    };
+    function gradientColor(x, y, ms, w = 64) {
       const n = GR.ring.length;
       // Position on the diagonal, 0-1023, top left to bottom right.
-      const u = fdivI((x * 2 + y * 3) * 1024, 63 * 2 + 31 * 3 + 1);
+      const u = fdivI((x * 2 + y * 3) * 1024, (w - 1) * 2 + 31 * 3 + 1);
       const r = fdivI(ms * 256, GR.step) + fdivI(u * GR.span * 256, 1024);
       const i = fdivI(r, 256) % n, t = r % 256;
       return mixInt(hex(GR.ring[i]), hex(GR.ring[(i + 1) % n]), t);
@@ -2352,56 +2466,57 @@
       8: ['###', '#.#', '###', '#.#', '###'], 9: ['###', '#.#', '###', '..#', '###'],
       ':': ['.', '#', '.', '#', '.'],
     };
-    // The colon sits closer: it starts 2 px back and leaves 2 px after it.
-    const bigLead = (ch) => (ch === ':' ? -2 : 0), bigGap = (ch) => (ch === ':' ? GR.gap - 2 : GR.gap);
-    const bigW = (str) => [...str].reduce((w, ch) => w + bigLead(ch) + GR_GLYPHS[ch][0].length * GR.sx + bigGap(ch), -GR.gap);
-    function bigChar(f, ch, x, top, color) {
-      const g = GR_GLYPHS[ch];
-      x += bigLead(ch);
-      g.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * GR.sx, top + r * GR.sy, GR.sx, GR.sy, color); }));
-      return x + g[0].length * GR.sx + bigGap(ch);
+    const bigLead = (g, ch) => (ch === ':' ? g.lead : 0), bigGap = (g, ch) => (ch === ':' ? g.colonGap : g.gap);
+    const bigBlockW = (g, ch) => (ch === ':' ? g.colonW : g.sx);
+    const bigW = (g, str) => [...str].reduce((w, ch) => w + bigLead(g, ch) + GR_GLYPHS[ch][0].length * bigBlockW(g, ch) + bigGap(g, ch), -g.gap);
+    function bigChar(f, g, ch, x, top, color) {
+      const gl = GR_GLYPHS[ch], bw = bigBlockW(g, ch);
+      x += bigLead(g, ch);
+      gl.forEach((row, r) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i * bw, top + r * g.sy, bw, g.sy, color); }));
+      return x + gl[0].length * bw + bigGap(g, ch);
     }
-    function bigText(f, str, x, top, color) { for (const ch of str) x = bigChar(f, ch, x, top, color); }
+    function bigText(f, g, str, x, top, color) { for (const ch of str) x = bigChar(f, g, ch, x, top, color); }
     function renderGradient(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
-      const f = newFrame();
+      const g = BIG[colsOf(p) === WIDE ? 128 : 64], W = g.w;
+      const f = newFrame(W);
       // Inverted (p.ginv): the digits carry the gradient on black. They're
       // drawn as a mask, then every lit pixel takes its gradient color.
       if (p.ginv) {
-        drawBigTime(f, p, now, '#ffffff');
-        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) if (f.get(x, y)[0]) f.set(x, y, gradientColor(x, y, ms));
+        drawBigTime(f, g, p, now, '#ffffff');
+        for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) if (f.get(x, y)[0]) f.set(x, y, gradientColor(x, y, ms, W));
         return f;
       }
-      for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) f.set(x, y, gradientColor(x, y, ms));
-      drawBigTime(f, p, now, GR.dark);
+      for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) f.set(x, y, gradientColor(x, y, ms, W));
+      drawBigTime(f, g, p, now, GR.dark);
       return f;
     }
-    function drawBigTime(f, p, now, color) {
+    function drawBigTime(f, g, p, now, color) {
       // The time, at the minute it rolls like the other clocks
       // (only changed characters when the shape holds, else the whole time).
-      const text = clockText(now), H = 5 * GR.sy, top = fdivI(32 - H, 2);
-      const xOf = (str) => fdivI(64 - bigW(str), 2);
+      const text = clockText(now), H = 5 * g.sy, top = fdivI(32 - H, 2);
+      const xOf = (str) => fdivI(g.w - bigW(g, str), 2);
       const roll = takeRoll('grad.clock', text);
-      if (!roll) bigText(f, text, xOf(text), top, color);
-      else bigRoll(f, text, roll, xOf, top, H, color);
+      if (!roll) bigText(f, g, text, xOf(text), top, color);
+      else bigRoll(f, g, text, roll, xOf, top, H, color);
     }
     // The time mid-roll (rollTextWith's rules, on the giant digits).
-    function bigRoll(f, text, roll, xOf, top, H, color) {
-      const dist = H + GR.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
-      f.withClip(0, top, 63, top + H - 1, () => {
+    function bigRoll(f, g, text, roll, xOf, top, H, color) {
+      const dist = H + g.sy, up = Math.round(easeInOut(roll.p) * dist), from = roll.from;
+      f.withClip(0, top, g.w - 1, top + H - 1, () => {
         const a = [...text], b = [...from];
-        if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(ch) === bigW(b[i]))) {
+        if (xOf(from) === xOf(text) && a.length === b.length && a.every((ch, i) => bigW(g, ch) === bigW(g, b[i]))) {
           let x = xOf(text);
           a.forEach((ch, i) => {
-            if (ch === b[i]) bigChar(f, ch, x, top, color);
-            else { bigChar(f, b[i], x, top - up, color); bigChar(f, ch, x, top - up + dist, color); }
-            x += bigW(ch) + GR.gap;  // one character's advance (bigW drops a trailing gap)
+            if (ch === b[i]) bigChar(f, g, ch, x, top, color);
+            else { bigChar(f, g, b[i], x, top - up, color); bigChar(f, g, ch, x, top - up + dist, color); }
+            x += bigW(g, ch) + g.gap;  // one character's advance (bigW drops a trailing gap)
           });
         } else {
-          bigText(f, from, xOf(from), top - up, color);
-          bigText(f, text, xOf(text), top - up + dist, color);
+          bigText(f, g, from, xOf(from), top - up, color);
+          bigText(f, g, text, xOf(text), top - up + dist, color);
         }
       });
     }
@@ -2639,36 +2754,37 @@
     // Sailboat on :00 (heading left) and :30 (right), 1 px per 800 ms;
     // speedboat on :15 and :45, out to the left at 1 px per 150 ms, turning
     // around off the panel for 4 s and coming back to the right.
-    function boatAt(ms) {
+    // W: the scene's width (the wide panorama's boats cross all 128 columns).
+    function boatAt(ms, W = 64) {
       const q = Math.floor(ms / QUARTER), qi = q % 4, e = ms - q * QUARTER;
       if (qi === 0 || qi === 2) {
         const step = Math.floor(e / SAIL_STEP);
-        if (step > 70) return null;
-        return qi === 0 ? { kind: 'sail', x0: 64 - step, dir: -1 } : { kind: 'sail', x0: -6 + step, dir: 1 };
+        if (step > W + 6) return null;
+        return qi === 0 ? { kind: 'sail', x0: W - step, dir: -1 } : { kind: 'sail', x0: -6 + step, dir: 1 };
       }
-      const span = 87, leg = span * SPEED_STEP;
-      if (e < leg) return { kind: 'speed', x0: 64 - Math.floor(e / SPEED_STEP), dir: -1 };
+      const span = W + 23, leg = span * SPEED_STEP;
+      if (e < leg) return { kind: 'speed', x0: W - Math.floor(e / SPEED_STEP), dir: -1 };
       const e2 = e - leg - SPEED_WAIT;
       if (e2 >= 0 && e2 < leg) return { kind: 'speed', x0: -14 + Math.floor(e2 / SPEED_STEP), dir: 1 };
       return null;
     }
-    function drawBoat(f, b, wat) {
+    function drawBoat(f, b, wat, W = 64) {
       const S = SKY.SHORE;
       if (b.kind === 'sail') {
-        const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + 5 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+        const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + 5 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
         SAIL.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch === '#') put(dx, S - 4 + dy, SK.sail); }));
         for (let dx = 0; dx < 6; dx++) put(dx, S, SK.hull[0]);
         for (let dx = 1; dx < 5; dx++) put(dx, S + 1, SK.hull[1]);
         return;
       }
       const n = SEADOG[0].length;
-      const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + n - 1 - dx; if (x >= 0 && x < 64) f.fill(x, y, 1, 1, c); };
+      const put = (dx, y, c) => { const x = b.dir < 0 ? b.x0 + dx : b.x0 + n - 1 - dx; if (x >= 0 && x < W) f.fill(x, y, 1, 1, c); };
       SEADOG.forEach((row, dy) => [...row].forEach((ch, dx) => { if (ch !== '.') put(dx, S - 1 + dy, SK.seadog[ch]); }));
       // Spray plume behind the stern, fading out: 9 / 6 / 3 px on rows 26 / 25 / 24.
       for (const [y, len] of [[S + 1, 9], [S, 6], [S - 1, 3]]) {
         for (let i = 0; i < len; i++) {
           const x = b.dir < 0 ? b.x0 + n + i : b.x0 - 1 - i;
-          if (x >= 0 && x < 64) f.set(x, y, mixRgb(f.get(x, y), hex(SK.spray), 0.95 * (1 - i / len)));
+          if (x >= 0 && x < W) f.set(x, y, mixRgb(f.get(x, y), hex(SK.spray), 0.95 * (1 - i / len)));
         }
       }
     }
@@ -2684,32 +2800,36 @@
       if (o.skyFrom !== undefined && o.skyFrom !== null && o.skyK != null && o.skyK < 1) {
         const a = renderSkyline(p, { ...o, skyFrom: null, sky: o.skyFrom, clouds: o.skyBare ? null : o.clouds });
         const b = renderSkyline(p, { ...o, skyFrom: null });
-        for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) b.set(x, y, mixRgb(a.get(x, y), b.get(x, y), o.skyK));
+        for (let y = 0; y < 32; y++) for (let x = 0; x < b.w; x++) b.set(x, y, mixRgb(a.get(x, y), b.get(x, y), o.skyK));
         return b;
       }
       const s = (o.sky !== undefined ? o.sky : p.skyline) || SKY_NONE;
       const now = o.now != null ? o.now : p.now;
       const ms = o.ms != null ? o.ms : Math.floor(now * 1000);
-      const f = newFrame();
-      const S = SKY.SHORE, night = (s.win || 0) / 100;
+      // The wide board's panorama (SKYW): the 64 scene O px in, so every
+      // position the payload gives (sun, glint) and the fixed ones (moon,
+      // pier, lightning) move by O; twice the stars, rain and snow.
+      const K = colsOf(p) === WIDE ? SKYW : SKY, W = K.W, O = K.O, more = W / 64;
+      const f = newFrame(W);
+      const S = K.SHORE, night = (s.win || 0) / 100;
 
       // Sky; buildings stay black (LEDs off).
       for (let y = 0; y <= S; y++) {
         const c = hex(skyAt(s.sky, y));
-        for (let x = 0; x < 64; x++) if (!SKY.role[y * 64 + x]) f.set(x, y, c);
+        for (let x = 0; x < W; x++) if (!K.role[y * W + x]) f.set(x, y, c);
       }
-      if (s.sun) skyDisc(f, s.sun.x, s.sun.y, s.sun.c);
+      if (s.sun) skyDisc(f, s.sun.x + O, s.sun.y, s.sun.c, null, K);
       // Stars twinkle (some), then the moon at its phase: the lit part is
       // past the terminator, an ellipse whose half-width follows the lit
       // fraction (cos of the phase angle = 1 - 2 * lit).
-      for (let i = 0; i < Math.min(s.stars || 0, SKY.stars.length); i++) {
-        const [x, y, bright, tw, ph, per] = SKY.stars[i];
+      for (let i = 0; i < Math.min((s.stars || 0) * more, K.stars.length); i++) {
+        const [x, y, bright, tw, ph, per] = K.stars[i];
         const k = tw && s.twk !== 0 ? 0.25 + 0.75 * wave(ms / per + ph / 1000) : 1;
         f.set(x, y, mixRgb(f.get(x, y), hex(bright ? '#a8aebc' : '#5a6070'), k));
       }
       if (s.moon) {
         const cosv = 1 - 2 * s.moon.fr / 100, waxing = s.moon.ph < 50;
-        skyDisc(f, 41, 5, SK.moon, (dx, dy, c) => { const w = Math.sqrt(Math.max(0, c * c - dy * dy)); return waxing ? dx > w * cosv : dx < -w * cosv; });
+        skyDisc(f, 41 + O, 5, SK.moon, (dx, dy, c) => { const w = Math.sqrt(Math.max(0, c * c - dy * dy)); return waxing ? dx > w * cosv : dx < -w * cosv; }, K);
       }
       // Clouds: the server's strip (128 x 26, 4-bit indexes, packed high
       // nibble first), scrolled 1 px every 4 s and wrapping, behind the city;
@@ -2726,8 +2846,8 @@
         const off = step > 0 ? ((ms - rem) / step) % CLOUD_W : 0;
         const pal = s.cl.pal.map((c) => (c ? hex(c) : null));
         const at = (y, col) => { const i = y * CLOUD_W + (col % CLOUD_W); const n = (cb[i >> 1] >> ((i & 1) ? 0 : 4)) & 15; return n && pal[n] ? n : 0; };
-        for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
-          if (SKY.role[y * 64 + x]) continue;
+        for (let y = 0; y <= S; y++) for (let x = 0; x < W; x++) {
+          if (K.role[y * W + x]) continue;
           const n0 = at(y, x + off), n1 = fr > 0 ? at(y, x + off + 1) : 0;
           if (!n0 && !n1) continue;
           const bg = f.get(x, y);
@@ -2739,44 +2859,44 @@
       }
       // Windows come on one at a time as `win` rises.
       const lim = Math.round(450 * night);
-      for (const [x, y, th, bright] of SKY.wins) if (th < lim) f.fill(x, y, 1, 1, SK.win[bright ? 1 : 0]);
+      for (const [x, y, th, bright] of K.wins) if (th < lim) f.fill(x, y, 1, 1, SK.win[bright ? 1 : 0]);
       // Snow on the roofs: the top pixel of every building column.
-      if (s.roof) for (let x = 0; x < 64; x++) for (let y = 0; y <= S; y++) if (SKY.role[y * 64 + x]) { f.fill(x, y, 1, 1, s.roof); break; }
+      if (s.roof) for (let x = 0; x < W; x++) for (let y = 0; y <= S; y++) if (K.role[y * W + x]) { f.fill(x, y, 1, 1, s.roof); break; }
       // Fog: everything fades toward it with height (strongest at the top).
       if (s.fog) {
         const fc = hex(s.fog);
-        for (let y = 0; y <= S; y++) { const k = Math.max(0, Math.min(1, (21 - y) / 18)) * 0.85; if (k) for (let x = 0; x < 64; x++) f.set(x, y, mixRgb(f.get(x, y), fc, k)); }
+        for (let y = 0; y <= S; y++) { const k = Math.max(0, Math.min(1, (21 - y) / 18)) * 0.85; if (k) for (let x = 0; x < W; x++) f.set(x, y, mixRgb(f.get(x, y), fc, k)); }
       }
       // Lightning: the whole sky flashes (35% toward the glow), brightest in
       // a patch of the cloud deck around the bolt (80%).
       const lv = s.storm ? strikeLevel(ms) : 0;
       if (lv > 0) {
         const gc = hex(SK.glow);
-        for (let y = 0; y <= S; y++) for (let x = 0; x < 64; x++) {
-          if (SKY.role[y * 64 + x]) continue;
-          const ex = (x + 0.5 - 22) / 11, ey = (y + 0.5 - 4) / 4, d = Math.sqrt(ex * ex + ey * ey);
+        for (let y = 0; y <= S; y++) for (let x = 0; x < W; x++) {
+          if (K.role[y * W + x]) continue;
+          const ex = (x + 0.5 - 22 - O) / 11, ey = (y + 0.5 - 4) / 4, d = Math.sqrt(ex * ex + ey * ey);
           const a = lv * (0.35 + 0.45 * (1 - sstep01(0.3, 1, d)));
           if (a > 0.01) f.set(x, y, mixRgb(f.get(x, y), gc, a));
         }
-        const put = (x, y, c) => { if (x >= 0 && x < 64 && y >= 0 && !SKY.role[y * 64 + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.15)), 0.8 * lv)); };
+        const put = (x, y, c) => { if (x >= 0 && x < W && y >= 0 && !K.role[y * W + x]) f.set(x, y, mixRgb(f.get(x, y), hex(mixHex(c, SK.boltSoft, 0.15)), 0.8 * lv)); };
         const core = new Set(BOLT.map(([x, y]) => y * 64 + x));
-        for (const [x, y] of BOLT) for (const X of [x - 1, x + 1]) if (!core.has(y * 64 + X)) put(X, y, '#7060c0');
-        for (const [x, y] of BOLT_BRANCH) put(x, y, '#9a8ae0');
-        for (const [x, y] of BOLT) put(x, y, '#ffffff');
+        for (const [x, y] of BOLT) for (const X of [x - 1, x + 1]) if (!core.has(y * 64 + X)) put(X + O, y, '#7060c0');
+        for (const [x, y] of BOLT_BRANCH) put(x + O, y, '#9a8ae0');
+        for (const [x, y] of BOLT) put(x + O, y, '#ffffff');
       }
       // Antennas (unlit) and the Hancock beacons: dark red to bright red over 4 s.
       const beacon = mixHex(SK.beacon[0], SK.beacon[1], wave(ms / 4000));
-      for (const [x, t, roof, b] of SKY.ants) { f.fill(x, t, 1, roof - t, '#000000'); if (b && s.lit) f.fill(x, t, 1, 1, beacon); }
+      for (const [x, t, roof, b] of K.ants) { f.fill(x, t, 1, roof - t, '#000000'); if (b && s.lit) f.fill(x, t, 1, 1, beacon); }
       // The wheel: white rim and darker frame by day, a slow pastel rainbow
       // (one turn a minute) at night.
       const wp = s.lit ? { leg: SK.wheelNight } : SK.wheel[s.whl || 0];
-      for (const [x, y] of SKY.legs) f.fill(x, y, 1, 1, wp.leg);
-      f.fill(SKY.bar[0], SKY.bar[1], SKY.bar[2], 1, wp.leg);
+      for (const [x, y] of K.legs) f.fill(x, y, 1, 1, wp.leg);
+      f.fill(K.bar[0], K.bar[1], K.bar[2], 1, wp.leg);
       // Wheel speed: s.wheel ms a turn (0: still).
       const turnMs = s.wheel != null ? s.wheel : WHEEL_TURN_MS;
       const turn = turnMs > 0 ? (ms % turnMs) * (360 / turnMs) : 0;
-      for (const [x, y, deg] of SKY.rim) f.fill(x, y, 1, 1, s.lit ? hsvHex((deg + turn) % 360, 0.7, 0.9) : wp.rim);
-      f.fill(SKY.CX - 1, SKY.CY - 1, 2, 2, wp.leg);
+      for (const [x, y, deg] of K.rim) f.fill(x, y, 1, 1, s.lit ? hsvHex((deg + turn) % 360, 0.7, 0.9) : wp.rim);
+      f.fill(K.CX - 1, K.CY - 1, 2, 2, wp.leg);
 
       // Text: the temperature (or a watch or warning in its place) bottom
       // left, the clock bottom right, over the water.
@@ -2787,7 +2907,7 @@
       const wword = warn ? (warn.lvl === 'warning' ? 'WARNING' : 'WATCH') : '';
       const tempStr = s.temp != null ? `${s.temp}°` : '';
       const lw = ws ? measure('small', ws.glyph) + TAG_GAP - 1 + measure('small', wword) : tempStr ? measure('small', tempStr) : 0;
-      const quiet = (x, y) => y >= S + 2 && ((lw && x <= lw) || x >= 63 - cw);   // text rows plus a 1 px margin
+      const quiet = (x, y) => y >= S + 2 && ((lw && x <= lw) || x >= W - 1 - cw);   // text rows plus a 1 px margin
 
       // Water: a two-color gradient, ripples gliding sideways (alternate rows
       // opposite ways, 1 px every 500 ms, drawn with sub-pixel coverage so the
@@ -2801,25 +2921,25 @@
       const ripple = hex(s.wat[2]);
       const pathRgb = s.gl && s.gl.p > 0 ? mixRgb(ripple, hex(s.gl.c), s.gl.p / 100) : null;
       for (let y = S + 1; y < 32; y++) {
-        f.fill(0, y, 64, 1, mixHex(s.wat[0], s.wat[1], (y - S - 1) / (32 - S - 2)));
+        f.fill(0, y, W, 1, mixHex(s.wat[0], s.wat[1], (y - S - 1) / (32 - S - 2)));
         const dir = y % 2 ? 1 : -1, len = y - S <= 2 ? 2 : 3, gap = 9 + (y % 3);
-        for (let x = 0; x < 64; x++) {
+        for (let x = 0; x < W; x++) {
           if (quiet(x, y)) continue;
           const u = x - dir * glide + y * 5, a = u - gap * Math.floor(u / gap);
           const cov = Math.max(0, Math.min(a + 1, len) - a) + Math.max(0, a + 1 - gap);   // this pixel's share of a dash
           if (cov <= 0) continue;
-          const onPath = pathRgb && Math.abs(x + 0.5 - s.gl.x) < 1.5 + (y - S) * 0.8;
+          const onPath = pathRgb && Math.abs(x + 0.5 - O - s.gl.x) < 1.5 + (y - S) * 0.8;
           f.set(x, y, mixRgb(f.get(x, y), onPath ? pathRgb : ripple, Math.min(1, cov)));
         }
       }
       // Navy Pier: deck on row 25 (snow-covered when the roofs are), darker
       // face on 26, string lights at night.
-      f.fill(24, S, 16, 1, s.roof || mixHex(SK.pier.day[0], SK.pier.night[0], night));
-      f.fill(24, S + 1, 16, 1, mixHex(SK.pier.day[1], SK.pier.night[1], night));
-      if (s.lit) for (let x = 24; x <= 39; x += 3) f.fill(x, S, 1, 1, SK.pier.bulb);
+      f.fill(24 + O, S, 16, 1, s.roof || mixHex(SK.pier.day[0], SK.pier.night[0], night));
+      f.fill(24 + O, S + 1, 16, 1, mixHex(SK.pier.day[1], SK.pier.night[1], night));
+      if (s.lit) for (let x = 24 + O; x <= 39 + O; x += 3) f.fill(x, S, 1, 1, SK.pier.bulb);
       // The quarter-hour boat.
-      const b = s.boats ? boatAt(ms) : null;
-      if (b) drawBoat(f, b, s.wat);
+      const b = s.boats ? boatAt(ms, W) : null;
+      if (b) drawBoat(f, b, s.wat, W);
       // Rain: 2 px streaks moving 1 px every s.fall ms (200 by default)
       // along their own line, straight down (pcp.sl 0) or 45° left or right
       // (-1, 1), with sub-pixel coverage so they glide rather than step: a
@@ -2833,14 +2953,14 @@
         if (s.pcp.k === 'r') {
           const c1 = hex(mixHex(SK.rain.day[0], SK.rain.night[0], night)), c2 = hex(mixHex(SK.rain.day[1], SK.rain.night[1], night));
           const sl = s.pcp.sl || 0, rem = ms % fall, step = (ms - rem) / fall, fr = rem / fall;
-          for (let i = 0; i < s.pcp.n; i++) {
+          for (let i = 0; i < s.pcp.n * more; i++) {
             const land = S + 1 + ih(i, 33, 4) % (31 - S), cyc = land + 1;
             const hy = (ih(i, 32, 4) % cyc + step) % cyc;
-            const hx = (((ih(i, 31, 4) % 64 + sl * (step % 64)) % 64) + 64) % 64;
+            const hx = (((ih(i, 31, 4) % W + sl * (step % W)) % W) + W) % W;
             for (let j = -1; j <= 1; j++) {             // j px ahead of the head pixel
               const y = hy + j, d = fr - j;
               if (y < 0 || y > land) continue;
-              const x = (((hx + sl * j) % 64) + 64) % 64;
+              const x = (((hx + sl * j) % W) + W) % W;
               if (quiet(x, y)) continue;
               const c = d <= 0 ? c1 : d <= 1 ? mixRgb(c1, c2, d) : c2;
               const a = d <= 0 ? 1 + d : d <= 1 ? 1 : 2 - d;
@@ -2849,11 +2969,11 @@
           }
         } else {
           const step = Math.floor(ms / (fall * 3.5));
-          for (let i = 0; i < s.pcp.n; i++) {
+          for (let i = 0; i < s.pcp.n * more; i++) {
             const cyc = S + 2 + ih(i, 25, 4) % (31 - S);
             const y = (ih(i, 22, 4) % cyc + step) % cyc;
             const side = Math.floor((ms + (ih(i, 23, 4) % 2000)) / 2000) % 2;
-            const x = (ih(i, 21, 4) % 64 + side) % 64;
+            const x = (ih(i, 21, 4) % W + side) % W;
             if (quiet(x, y)) continue;
             f.fill(x, y, 1, 1, SK.snow[ih(i, 24, 4) % 10 < 4 ? 1 : 0]);
           }
@@ -2862,7 +2982,7 @@
       if (ws) {
         if (!(ws.blinks && o.blink)) f.text('small', wword, f.text('small', ws.glyph, 0, 32, ws.color) + TAG_GAP - 1, 32, ws.color);
       } else if (tempStr) f.text('small', tempStr, 0, 32, C.label);
-      f.text('small', clock, 64 - cw, 32, C.label);
+      f.text('small', clock, W - cw, 32, C.label);
       return f;
     }
 
@@ -2919,7 +3039,8 @@
     function renderClock(p, o) {
       return p.cface === 'seventies' ? renderSeventies(p, o) : p.cface === 'analog' ? renderAnalog(p, o)
         : p.cface === 'daynight' ? renderDayNight(p, o) : p.cface === 'gradient' ? renderGradient(p, o)
-        : p.cface === 'digits' ? renderDigits(p, o) : p.cface === 'daydate' ? renderDayDate(p, o) : renderSkyline(p, o);
+        : p.cface === 'digits' ? renderDigits(p, o) : p.cface === 'daydate' ? renderDayDate(p, o)
+        : p.cface === 'words' && colsOf(p) === WIDE ? renderWords(p, o) : renderSkyline(p, o);
     }
 
     // opts.roller (createNumRoller) or opts.nums ({name: {from, p}}): clock
@@ -2986,7 +3107,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderPeek, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekShift, peekDrop, renderSkyline, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderPeek, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekShift, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };
