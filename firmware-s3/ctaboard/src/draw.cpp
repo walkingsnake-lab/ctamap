@@ -3617,12 +3617,12 @@ static void render_gradient(const Value &p, Frame &f, std::optional<double> now_
 static const int MSG_BASES[4][3] = {{0, 0, 0}, {19, 0, 0}, {14, 24, 0}, {9, 19, 29}};
 static const int MSG_SMALL_LINES = 5;
 static const double TYPE_WAIT = 400, TYPE_CHAR = 90, TYPE_BLINK = 530;
-static const int BIG_TOP = 7, BIG_GRAD = 14;
+static const int BIG_TOP = 7, BIG_GRAD = 14, BIG_TOP3 = 1;  // 2x; 3x (wide boards)
 static const double ROLL_STEP = 150, ROLL_PAUSE = 1500;
 static const int ROLL_START = 40, ROLL_PITCH = 10, ROLL_FADE = 3;
 static constexpr RGB MSG_TEXT = C::label, MSG_TYPE = C::amber, MSG_CURSOR = hexc(0xcc8d00), BIG_FROM = hexc(0xff3060), BIG_TO = hexc(0xffb000), MSG_CTA = C::head;
 
-static int msg_x(Font font, const ustr &s) { return (int)fdiv(64 - measure(font, s), 2); }
+static int msg_x(const Frame &f, Font font, const ustr &s) { return (int)fdiv(f.w - measure(font, s), 2); }
 
 static std::vector<ustr> msg_lines(const Value &m) {
   std::vector<ustr> out;
@@ -3635,11 +3635,11 @@ static void draw_note(Frame &f, const std::vector<ustr> &lines, bool sm) {
   if (sm) {
     int n = std::min((int)lines.size(), MSG_SMALL_LINES);
     int top = (int)fdiv(32 - (n * 6 - 1), 2);
-    for (int i = 0; i < n; i++) f.text(FONT_SMALL, lines[i], msg_x(FONT_SMALL, lines[i]), top + 5 + i * 6, MSG_TEXT);
+    for (int i = 0; i < n; i++) f.text(FONT_SMALL, lines[i], msg_x(f, FONT_SMALL, lines[i]), top + 5 + i * 6, MSG_TEXT);
     return;
   }
   int n = std::min((int)lines.size(), 3);
-  for (int i = 0; i < n; i++) f.text(FONT_5X7, lines[i], msg_x(FONT_5X7, lines[i]), MSG_BASES[n][i], MSG_TEXT);
+  for (int i = 0; i < n; i++) f.text(FONT_5X7, lines[i], msg_x(f, FONT_5X7, lines[i]), MSG_BASES[n][i], MSG_TEXT);
 }
 
 static long long typed_total(const std::vector<ustr> &lines) {
@@ -3666,15 +3666,16 @@ static void draw_typed(Frame &f, const std::vector<ustr> &lines, std::optional<d
   if (on) f.fill(last_x, last_b - 7, 4, 7, MSG_CURSOR);
 }
 
-static RGB big_grad(int y) {
-  int k = clampi(y, 0, BIG_GRAD);
-  auto ch = [k](int a, int b) { return (uint8_t)jsround(a + (double)((b - a) * k) / BIG_GRAD); };
+static RGB big_grad(int y, int span) {
+  int k = clampi(y, 0, span);
+  auto ch = [k, span](int a, int b) { return (uint8_t)jsround(a + (double)((b - a) * k) / span); };
   return RGB{ch(BIG_FROM.r, BIG_TO.r), ch(BIG_FROM.g, BIG_TO.g), ch(BIG_FROM.b, BIG_TO.b)};
 }
 
-static void draw_big(Frame &f, const ustr &s) {
+static void draw_big(Frame &f, const ustr &s, bool x3) {
   const uint8_t *d = assets::FONT_DATA[FONT_5X7];
-  int x0 = 32 - measure(FONT_5X7, s);
+  int sc = x3 ? 3 : 2, y0 = x3 ? BIG_TOP3 : BIG_TOP, span = x3 ? BIG_GRAD * 3 / 2 : BIG_GRAD;
+  int x0 = (int)fdiv(f.w - measure(FONT_5X7, s) * sc, 2);
   int x = 0;
   for (char32_t ch : s) {
     int o = glyph(FONT_5X7, ch);
@@ -3686,8 +3687,8 @@ static void draw_big(Frame &f, const ustr &s) {
       for (int c = 0; c < w; c++) {
         if (!((bits >> (w - 1 - c)) & 1)) continue;
         int px = x + xo + c, py = top + r;
-        for (int dy = 0; dy < 2; dy++)
-          for (int dx = 0; dx < 2; dx++) f.set(x0 + px * 2 + dx, BIG_TOP + py * 2 + dy, big_grad(py * 2 + dy));
+        for (int dy = 0; dy < sc; dy++)
+          for (int dx = 0; dx < sc; dx++) f.set(x0 + px * sc + dx, y0 + py * sc + dy, big_grad(py * sc + dy, span));
       }
     }
     x += dw;
@@ -3705,27 +3706,28 @@ static int roll_base(int n, std::optional<double> t) {
 
 static void draw_roll(Frame &f, const std::vector<ustr> &lines, std::optional<double> t) {
   int base = roll_base((int)lines.size(), t);
-  for (size_t i = 0; i < lines.size(); i++) f.text(FONT_5X7, lines[i], msg_x(FONT_5X7, lines[i]), base + (int)i * ROLL_PITCH, MSG_TEXT);
+  for (size_t i = 0; i < lines.size(); i++) f.text(FONT_5X7, lines[i], msg_x(f, FONT_5X7, lines[i]), base + (int)i * ROLL_PITCH, MSG_TEXT);
   for (int i = 0; i < ROLL_FADE; i++) {
     double k = (double)(i + 1) / (ROLL_FADE + 1);
     for (int y : {i, 31 - i})
-      for (int x = 0; x < 64; x++) f.set(x, y, scale_color(f.get(x, y), k));
+      for (int x = 0; x < f.w; x++) f.set(x, y, scale_color(f.get(x, y), k));
   }
 }
 
 static bool has_message(const Value &m) { return m.truthy() && m["lines"].size() > 0; }
 
 static void render_announce(const Value &p, Frame &f, std::optional<double> t) {
+  if (cols_of(p) == WIDE) f.w = WIDE;
   const Value &m = p["msg"];
   if (!has_message(m)) {
     // No message yet: a call to action.
-    f.text(FONT_SMALL, U"SET A MESSAGE", msg_x(FONT_SMALL, U"SET A MESSAGE"), 15, MSG_CTA);
-    f.text(FONT_SMALL, U"ON YOUR PHONE", msg_x(FONT_SMALL, U"ON YOUR PHONE"), 22, MSG_CTA);
+    f.text(FONT_SMALL, U"SET A MESSAGE", msg_x(f, FONT_SMALL, U"SET A MESSAGE"), 15, MSG_CTA);
+    f.text(FONT_SMALL, U"ON YOUR PHONE", msg_x(f, FONT_SMALL, U"ON YOUR PHONE"), 22, MSG_CTA);
     return;
   }
   std::vector<ustr> lines = msg_lines(m);
   if (m["style"].eq("type")) draw_typed(f, lines, t);
-  else if (m["style"].eq("big")) draw_big(f, lines[0]);
+  else if (m["style"].eq("big")) draw_big(f, lines[0], m["x3"].truthy());
   else if (m["style"].eq("roll")) draw_roll(f, lines, t);
   else draw_note(f, lines, m["sm"].truthy());
 }

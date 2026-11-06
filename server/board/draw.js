@@ -2658,8 +2658,8 @@
     const MSG = {
       bases: { 1: [19], 2: [14, 24], 3: [9, 19, 29] },  // 5x7 lines (note, typewriter)
       smallLines: 5,
-      typeWrap: 59, typeWait: 400, typeChar: 90, typeBlink: 530,
-      bigTop: 7, bigGrad: 14,
+      typeCursor: 5, typeWait: 400, typeChar: 90, typeBlink: 530,
+      bigTop: 7, bigGrad: 14, bigTop3: 1,  // 2x; 3x (wide boards)
       // Credits roll: 1 px up every rollStep ms from below the panel (first
       // baseline rollStart) until the last line has left the top, then
       // rollPause ms blank, looping; lines rollPitch apart; the top and
@@ -2709,41 +2709,49 @@
     // The lines a style draws for `text` (payload `msg`), or null when it
     // doesn't fit on one screen. Note: 5x7, up to 3 lines, else Tom Thumb
     // (uppercase) up to 5 (`sm`). Typewriter: 5x7, 3 lines, room for the cursor. Big word:
-    // one line of 5x7 at 2x.
-    function messageLayout(text, style) {
+    // one line of 5x7 at 2x. `cols`: the board's width; at 128 the lines
+    // are as wide as the panels, and a big word that fits at 3x is drawn
+    // at 3x (`x3`).
+    function messageLayout(text, style, cols) {
+      const w = cols === WIDE ? WIDE : 64;
       const t = cleanMessage(text);
       if (!t || [...t].length > MSG_MAX) return null;
       const upto = (lines, n) => (lines && lines.length <= n ? lines : null);
       if (style === 'note') {
-        const big = upto(wrapMessage(t, '5x7', 64), 3);
+        const big = upto(wrapMessage(t, '5x7', w), 3);
         if (big) return { lines: big };
-        const sm = upto(wrapMessage(msgUpper(t), 'small', 64), MSG.smallLines);
+        const sm = upto(wrapMessage(msgUpper(t), 'small', w), MSG.smallLines);
         return sm ? { lines: sm, sm: 1 } : null;
       }
       if (style === 'type') {
-        const lines = upto(wrapMessage(t, '5x7', MSG.typeWrap), 3);
+        const lines = upto(wrapMessage(t, '5x7', w - MSG.typeCursor), 3);
         return lines ? { lines } : null;
       }
-      if (style === 'big') return !t.includes('\n') && measure('5x7', t) * 2 <= 64 ? { lines: [t] } : null;
+      if (style === 'big') {
+        if (t.includes('\n')) return null;
+        const m = measure('5x7', t);
+        if (w === WIDE && m * 3 <= w) return { lines: [t], x3: 1 };
+        return m * 2 <= w ? { lines: [t] } : null;
+      }
       if (style === 'roll') {
         // It scrolls, so it isn't held to one screen: any number of lines up to rollLines.
-        const lines = upto(wrapMessage(t, '5x7', 64), MSG.rollLines);
+        const lines = upto(wrapMessage(t, '5x7', w), MSG.rollLines);
         return lines ? { lines } : null;
       }
       return null;
     }
 
-    const msgX = (font, str) => Math.floor((64 - measure(font, str)) / 2);
+    const msgX = (f, font, str) => Math.floor((f.w - measure(font, str)) / 2);
     const msgLen = (str) => [...str].length;
     function drawNote(f, lines, sm) {
       if (sm) {
         const n = Math.min(lines.length, MSG.smallLines);
         const top = Math.floor((32 - (n * 6 - 1)) / 2);
-        for (let i = 0; i < n; i++) f.text('small', lines[i], msgX('small', lines[i]), top + 5 + i * 6, MSG_C.text);
+        for (let i = 0; i < n; i++) f.text('small', lines[i], msgX(f, 'small', lines[i]), top + 5 + i * 6, MSG_C.text);
         return;
       }
       const n = Math.min(lines.length, 3);
-      for (let i = 0; i < n; i++) f.text('5x7', lines[i], msgX('5x7', lines[i]), MSG.bases[n][i], MSG_C.text);
+      for (let i = 0; i < n; i++) f.text('5x7', lines[i], msgX(f, '5x7', lines[i]), MSG.bases[n][i], MSG_C.text);
     }
     // Typewriter: amber 5x7 from the left edge, typed one character every
     // typeChar ms (a line break counts as one), a block cursor after the last
@@ -2769,11 +2777,12 @@
       const on = typed < total || !Number.isFinite(t) || Math.floor((t - doneAt) / MSG.typeBlink) % 2 === 0;
       if (on) f.fill(lastX, lastB - 7, 4, 7, MSG_C.cursor);
     }
-    // Big word: 5x7 at 2x, centered, rows shaded from pink to amber.
-    function drawBig(f, str) {
+    // Big word: 5x7 at 2x (3x: `x3`), centered, rows shaded from pink to amber.
+    function drawBig(f, str, x3) {
+      const s = x3 ? 3 : 2, y0 = x3 ? MSG.bigTop3 : MSG.bigTop, span = x3 ? MSG.bigGrad * 3 / 2 : MSG.bigGrad;
       const A = hex(MSG_C.bigFrom), B = hex(MSG_C.bigTo);
-      const grad = (y) => { const k = Math.max(0, Math.min(MSG.bigGrad, y)); return [0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * k / MSG.bigGrad)); };
-      const x0 = 32 - measure('5x7', str);
+      const grad = (y) => { const k = Math.max(0, Math.min(span, y)); return [0, 1, 2].map((i) => Math.round(A[i] + (B[i] - A[i]) * k / span)); };
+      const x0 = Math.floor((f.w - measure('5x7', str) * s) / 2);
       let x = 0;
       for (const ch of str) {
         const g = fonts['5x7'][ch.codePointAt(0)];
@@ -2785,7 +2794,7 @@
           for (let c = 0; c < w; c++) {
             if (!((bits >> (w - 1 - c)) & 1)) continue;
             const px = x + xo + c, py = top + r;
-            for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) f.set(x0 + px * 2 + dx, MSG.bigTop + py * 2 + dy, grad(py * 2 + dy));
+            for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) f.set(x0 + px * s + dx, y0 + py * s + dy, grad(py * s + dy));
           }
         }
         x += dw;
@@ -2802,24 +2811,24 @@
     }
     function drawRoll(f, lines, t) {
       const base = rollBase(lines.length, t);
-      lines.forEach((l, i) => f.text('5x7', l, msgX('5x7', l), base + i * MSG.rollPitch, MSG_C.text));
+      lines.forEach((l, i) => f.text('5x7', l, msgX(f, '5x7', l), base + i * MSG.rollPitch, MSG_C.text));
       for (let i = 0; i < MSG.rollFade; i++) {
         const k = (i + 1) / (MSG.rollFade + 1);
-        for (const y of [i, 31 - i]) for (let x = 0; x < 64; x++) f.set(x, y, f.get(x, y).map((v) => Math.round(v * k)));
+        for (const y of [i, 31 - i]) for (let x = 0; x < f.w; x++) f.set(x, y, f.get(x, y).map((v) => Math.round(v * k)));
       }
     }
     function renderAnnounce(p, opts) {
       const o = opts || {};
-      const f = newFrame();
+      const f = newFrame(colsOf(p) === WIDE ? WIDE : 64);
       const m = p.msg;
       if (!m || !m.lines || !m.lines.length) {
         // No message yet: a call to action.
-        for (const [str, base] of [['SET A MESSAGE', 15], ['ON YOUR PHONE', 22]]) f.text('small', str, msgX('small', str), base, MSG_C.cta);
+        for (const [str, base] of [['SET A MESSAGE', 15], ['ON YOUR PHONE', 22]]) f.text('small', str, msgX(f, 'small', str), base, MSG_C.cta);
         return f;
       }
       const t = o.t != null ? o.t : Infinity;
       if (m.style === 'type') drawTyped(f, m.lines, t);
-      else if (m.style === 'big') drawBig(f, m.lines[0]);
+      else if (m.style === 'big') drawBig(f, m.lines[0], !!m.x3);
       else if (m.style === 'roll') drawRoll(f, m.lines, t);
       else drawNote(f, m.lines, !!m.sm);
       return f;

@@ -1826,6 +1826,14 @@ test('announce: the control page sets the message; a message that does not fit i
   r = await post({ msg: { text: 'Hooray for everyone', style: 'big' } });
   assert.equal(r.status, 400);
   assert.match(r.body.detail, /doesn't fit the big style/);
+  // A wide board (cols 128) takes messages that fit its width, laid out across both panels.
+  s.store.setCols('home', 128);
+  r = await post({ msg: { text: 'Welcome home', style: 'big' } });
+  assert.equal(r.status, 200);
+  const wide = await s.req('/board/update?b=home&w=128&hk=announce', { headers: { 'X-Board-Token': 'tok' } });
+  assert.deepEqual([wide.body.cols, wide.body.msg.lines, wide.body.msg.x3], [128, ['Welcome home'], undefined]);
+  r = await post({ msg: { text: 'Go Cubs', style: 'big' } });
+  assert.equal((await s.req('/board/update?b=home&w=128&hk=announce', { headers: { 'X-Board-Token': 'tok' } })).body.msg.x3, 1);
   // sim.png draws it on request.
   const png = await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&screen=announce&scale=1`);
   assert.equal(png.status, 200);

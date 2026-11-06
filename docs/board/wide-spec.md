@@ -126,11 +126,12 @@ The weekday over the date (5x7) on the left, a divider, the time in the 23-row d
 **Panorama:** the 64 scene in the middle and a continuous skyline of generic towers on both sides, the left for the South Loop and the right running on to the edge (no Gold Coast stepping down to the lake). Sun, moon, pier, wheel and lightning stay with the 64 scene; stars, rain and snow double; clouds and boats run the whole width. Rejected: the big-clock layout (the 64 scene and open lake with the time over the water).
 ---
 
-## 7. Announce
+## 7. Announce (built)
 
-- **Note, typewriter:** about 21 characters a line in 5x7 (10 at 64), the same line bases.
-- **Big word:** 3× instead of 2× (21-px letters) for up to about 7 characters; longer words drop to 2× (about 10).
+- **Note, typewriter:** about 21 characters a line in 5x7 (10 at 64), the same line bases; the note's Tom Thumb fallback up to 5 lines as wide as both panels.
+- **Big word:** 3× instead of 2× (18-px capitals, rows 7–24) for up to about 7 characters; longer words drop to 2× (about 10).
 - **Credits roll:** unchanged apart from the longer lines.
+- The server lays the message out for the board's width and checks it fits that width; the phone's preview and style tiles draw it 128 wide (built Nov 5).
 
 ## 8. Baseball
 

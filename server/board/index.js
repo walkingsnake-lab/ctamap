@@ -390,7 +390,7 @@ function createBoard({
   function msgOf(board) {
     if (!board.msg) return null;
     try {
-      const lay = messageLayout(board.msg.text, board.msg.style);
+      const lay = messageLayout(board.msg.text, board.msg.style, board.cols);
       return lay ? { id: board.msg.id || 0, style: board.msg.style, ...lay } : null;
     } catch (e) { log.error('[board] message:', e.message); return null; }
   }

@@ -732,6 +732,20 @@ async function build() {
       add('announce credits roll accents and blank line', ann('\u00c9t\u00e9 \u2014 caf\u00e9\n\n\u00e0 6h', 'roll'), at(3000, 5100), undefined, undefined, s3);
     }
     add('announce dimmed', ann('Dinner at 7\nbring wine', 'type', { bright: 40 }), at(), undefined, undefined, s3);
+    // Wide board (cols 128): laid out across both panels.
+    const annW = (text, style, extra = {}) => ({ now: NOW, tzo: tzOffset(NOW), screen: 'announce', bright: 100, cols: 128, msg: { id: 7, style, ...draw.messageLayout(text, style, 128) }, ...extra });
+    add('wide announce no message', { now: NOW, tzo: tzOffset(NOW), screen: 'announce', bright: 100, cols: 128, msg: null }, [{ screen: 'announce' }], undefined, undefined, s3);
+    add('wide announce note', annW('Grab milk on the way home please, and bread', 'note'), at(), undefined, undefined, s3);
+    add('wide announce note small text', annW('Leaving at 8:15 for the game tonight. Meet at the north end of the Addison platform by the stairs. Bring the tickets!', 'note'), at(), undefined, undefined, s3);
+    add('wide announce typewriter', annW('Gone to the gym. Back by 6. Dinner in the fridge.', 'type'), at(0, 1300, 4000, 4900, 5430), undefined, undefined, s3);
+    add('wide announce big word 3x', annW('Go Cubs', 'big'), at(), undefined, undefined, s3);
+    add('wide announce big word descender 3x', annW('yup', 'big'), at(), undefined, undefined, s3);
+    add('wide announce big word 2x', annW('Welcome home', 'big'), at(), undefined, undefined, s3);
+    {
+      const long = 'Happy birthday, Sam! Dinner at Lula at 7. We have the back table, then cake at home.';
+      const travel = 40 + 2 + 10 * (draw.messageLayout(long, 'roll', 128).lines.length - 1);
+      add('wide announce credits roll', annW(long, 'roll'), at(0, 1500, 3000, 6000, travel * 150 - 1), undefined, undefined, s3);
+    }
   }
   // Chronological departure: slide, digits roll, next train slides in.
   {
