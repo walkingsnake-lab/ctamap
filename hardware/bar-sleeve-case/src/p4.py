@@ -7,7 +7,7 @@ same height). Only the two end walls are cut. The joint:
   edge (ZJ), so the joint line sits in the groove's shadow and neither half has a sliver behind it;
 - a half-lap inside the wall: the inner half of the wall (WALL / 2) splits LAP lower than the outer half, so the top half
   carries a lip down into a pocket in the bottom half, with a glue gap (LAP_CL on its face and ends, LAP_ZCL under it,
-  so the outer band is the only z seat). Glue (medium CA) goes on the lap faces. The lap's ends are 45 deg (no flat
+  so the outer band is the only z seat). Glue (30-minute epoxy) goes on the lap faces. The lap's ends are 45 deg (no flat
   overhang back-down). The lap stops 1 mm behind the screen face and 0.5 mm in front of the tray's back, so nothing of
   it shows in the hood or at the back rim.
 - Glue the halves back-down on a flat sheet (the back rims are one plane), so they can't step front-to-back; the lap
@@ -34,7 +34,7 @@ import math, os, sys
 os.environ['PANEL'] = 'p4'
 os.environ.setdefault('CASE_WALL', '3.5')
 import numpy as np
-from manifold3d import Manifold, CrossSection
+from manifold3d import Manifold, CrossSection, JoinType
 import panel
 import case as C
 import case2 as V
@@ -53,7 +53,7 @@ REV_W, REV_D = 1.0, 1.0         # reveal: width (along z) and depth
 ZS = (H + LAP) / 2              # outer split height: top and bottom halves come out the same height
 LAP_Y0 = Y_FACE + 1.0           # lap only behind the screen face ...
 LAP_Y1 = DR.Y1 - 0.5            # ... and in front of the tray's back (the back rim shows the plain reveal)
-LAP_CL = 0.12                   # glue gap on the lip's outer face and its ends (medium CA)
+LAP_CL = 0.12                   # glue gap on the lip's outer face and its ends (epoxy)
 LAP_ZCL = 0.2                   # gap under the lip: the band at the reveal's lower edge is the only z seat
 ZJ = ZS - REV_W / 2             # where the halves meet outside: the reveal's lower edge, so the joint sits in its shadow
 BED = 256.0
@@ -136,10 +136,33 @@ def tray_p4():
                    hook_lip=RIB_HOOK_LIP, tie_x0=SEAM_BAR + 4.0, extra_cuts=[notch])
 
 
+SEAM_CH = 0.5                   # 45 deg chamfer on the tray seam's edges that meet as the right half slides in
+
+
+def seam_chamfer(t, side):
+    """remove a SEAM_CH x 45 deg chamfer from a tray half's edges on the seam (x = 0): the right half's (side +1)
+    front-facing edges, which lead as it slides in, and the left half's (side -1) back-facing ones, which they pass.
+    The half's section on the seam, extruded SEAM_CH into the half and sheared back (right) or forward (left) by
+    SEAM_CH at the seam, is what may stay in that slab. The section is grown 0.01 so none of its faces lands (almost)
+    on the half's own: a slice's round-off there leaves zero-area slivers that break the STL."""
+    to_yzx = [[0, 1, 0, 0], [0, 0, 1, 0], [1, 0, 0, 0]]                 # (x, y, z) -> (y, z, x)
+    sec = t.transform(to_yzx).slice(side * 0.01).offset(0.01, JoinType.Miter)   # (y, z)
+    k = Manifold.extrude(sec, SEAM_CH + 0.2).transform([[0, 0, 1, 0], [1, 0, 0, 0], [0, 1, 0, 0]])
+    k = k.translate([-0.1, 0, 0])                                        # x -0.1..SEAM_CH + 0.1
+    if side < 0:
+        k = k.mirror([1, 0, 0])
+    # shear: y += side * (SEAM_CH - |x|), so the section steps SEAM_CH away from the leading side at the seam
+    k = k.transform([[1, 0, 0, 0], [-1.0, 1, 0, SEAM_CH], [0, 0, 1, 0]] if side > 0 else
+                    [[1, 0, 0, 0], [-1.0, 1, 0, -SEAM_CH], [0, 0, 1, 0]])
+    slab = box(-0.1, SEAM_CH, -10, D + 10, -10, H + 10) if side > 0 else box(-SEAM_CH, 0.1, -10, D + 10, -10, H + 10)
+    return t - (slab - k)
+
+
 def split_tray(t):
     left = t ^ box(-HW, 0, -10, D + 10, -10, H + 10)
     right = t ^ box(0, HW, -10, D + 10, -10, H + 10)
-    return max(left.decompose(), key=lambda m: m.volume()), max(right.decompose(), key=lambda m: m.volume())
+    left, right = (max(m.decompose(), key=lambda m: m.volume()) for m in (left, right))
+    return seam_chamfer(left, -1), seam_chamfer(right, 1)
 
 
 def spine():

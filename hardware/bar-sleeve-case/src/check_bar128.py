@@ -46,8 +46,11 @@ pairs = [('shell-A', 'tray-A'), ('shell-B', 'tray-B'), ('shell-A', 'tray-B'), ('
          ('splice-top', 'panel-A'), ('splice-top', 'panel-B'),
          ('diff-A', 'diff-B'), ('diff-A', 'shell-A'), ('diff-A', 'shell-B'), ('diff-B', 'shell-B'), ('diff-A', 'panel-B'),
          ('diff-A', 'tray-A'), ('diff-B', 'tray-B'), ('diff-A', 'tray-B'),
-         ('env-s3', 'tray-B'), ('env-s3', 'shell-B'), ('env-sensor', 'tray-B'), ('env-sled', 'tray-B'),
-         ('env-encoder', 'tray-B'), ('env-encoder', 'panel-B'), ('env-encoder', 'shell-B')]
+         ('env-s3', 'tray-B'), ('env-s3', 'shell-B')]
+C_ = tr.get('ctrl', 'A')                                              # the tray (and half, panel) carrying the controls
+pairs += [('env-sensor', f'tray-{C_}'), ('env-sled', f'tray-{C_}'), ('env-sensor', f'shell-{C_}'), ('env-encoder', f'tray-{C_}'),
+          ('env-encoder', f'panel-{C_}'), ('env-encoder', f'shell-{C_}'), ('env-encoder', 'env-sensor'),
+          ('env-encoder', 'env-s3'), ('env-sensor', 'env-s3'), ('env-sled', 'env-s3')]
 print('overlaps (mm3; crush ribs into the shell and post feet 0.3 into the splice plates are intended):')
 res = {}
 for a, b in pairs:
@@ -64,6 +67,21 @@ worst = max((P[t].translate([0.7 * math.cos(a), 0, 0.7 * math.sin(a)]) ^ heads).
             for t in ('tray-A', 'tray-B') for a in np.linspace(0, 2 * math.pi, 12, endpoint=False))
 print(f'  splice screw heads vs trays, tray 0.7 off any way {worst:9.2f}')
 res['splice heads x trays (0.7 off)'] = round(worst, 2)
+# the encoder's STEMMA QT plugs (check_v5.py's envelope: out 7 mm past each side edge of its board, under it). At x -123
+# the left-hand one would sit on tray A's top-left post: only the right-hand socket (toward the sensor) is usable
+import sensor as SN
+kx, ky = case['knob_x'], tr['ky']
+CT = P[f"tray-{tr.get('ctrl', 'A')}"]
+print(f"encoder QT plugs (mm3, vs tray {tr.get('ctrl', 'A')} seated / worst while it slides in 0-56 mm):")
+for side, sx in (('left', -1), ('right', 1)):
+    xa, xb = sorted((kx + sx * 7.7, kx + sx * (12.7 + 7.0)))
+    plug = box(xa, xb, ky - 3.0, ky + 3.0, SN.EB_BOT - 2.96, SN.EB_BOT)
+    seat = (plug ^ CT).volume() + (plug ^ P['env-s3']).volume()
+    slide = max((plug ^ CT.translate([0, dy, 0])).volume() for dy in np.arange(0, 56, 2.0))
+    print(f'  {side:5s} socket  {seat:8.2f} / {slide:8.2f}  ' + ('clear' if max(seat, slide) < 1e-3 else 'BLOCKED (use the other socket)'))
+    res[f'encoder {side} QT plug (sliding)'] = round(max(seat, slide), 2)
+inner_side = 'right' if tr.get('ctrl', 'A') == 'A' else 'left'        # the socket toward the bar's centre (and the sensor)
+right_ok = res[f'encoder {inner_side} QT plug (sliding)'] < 1e-3
 # lined-up features
 print('alignment:')
 ok = True
@@ -72,7 +90,7 @@ def chk(name, a, b, tol=0.05):
     good = abs(a - b) <= tol
     ok &= good
     print(f'  {name:44s} shell {a:8.2f}  tray {b:8.2f}  {"ok" if good else "OFF"}')
-chk('knob x (shell hole vs tray B encoder slot)', case['knob_x'], 80.0)
+chk(f"knob x (shell hole vs tray {tr.get('ctrl', 'A')} encoder slot)", case['knob_x'], tr['knob_x'])
 chk('light sensor x', case['sensor_x'], tr['sensor_x'])
 chk('USB-C z', case['port_z'], tr['port_z'])
 xs = sorted([s * x for s in (-1, 1) for x in case['screw_xs']])
@@ -89,6 +107,9 @@ for f in sorted(os.listdir(STL)):
     if f.endswith('.stl') and not f.startswith('coupon'):
         t = trimesh.load(os.path.join(STL, f))
         e = t.extents
-        print(f'  {f:44s} {e[0]:6.1f} x {e[1]:6.1f} x {e[2]:5.1f}  {"fits" if max(e[0], e[1]) <= 250 else "TOO BIG"}')
-json.dump(dict(overlaps=res, aligned=ok), open(f'{F}/check.json', 'w'), indent=1)
+        diag = 'wall' in f and 'cleat' in f                      # laid at 45 deg on its plate
+        fits = (e[0] + e[1]) / math.sqrt(2) <= 250 if diag else max(e[0], e[1]) <= 250
+        print(f'  {f:44s} {e[0]:6.1f} x {e[1]:6.1f} x {e[2]:5.1f}  {("fits at 45 deg" if diag else "fits") if fits else "TOO BIG"}')
+json.dump(dict(overlaps=res, aligned=ok, encoder_right_socket_clear=right_ok), open(f'{F}/check.json', 'w'), indent=1)
 print('all aligned' if ok else 'MISALIGNED')
+print(f'encoder {inner_side}-hand socket (toward the centre) clear' if right_ok else f'ENCODER {inner_side.upper()}-HAND SOCKET BLOCKED')

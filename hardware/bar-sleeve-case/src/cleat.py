@@ -41,16 +41,19 @@ def case_cleat():
     return c - Manifold.batch_boolean(cuts, ADD)
 
 
-def wall_screws():
+def wall_screws(xs=None):
     zs = (ZW0 + ZB - T) / 2
-    return [(sx * (CLEAT_HW - 15.0), zs) for sx in (-1, 1)]
+    xs = [sx * (CLEAT_HW - 15.0) for sx in (-1, 1)] if xs is None else xs
+    return [(x, zs) for x in xs]
 
 
-def wall_cleat():
-    hw = CLEAT_HW - 0.5
+def wall_cleat(hw=None, xs=None):
+    """hw: half length (default: the case cleat's, less 0.5); xs: the wall screws' x (default: 15 mm in from each end).
+    bar128.py makes one long wall cleat for its two case cleats."""
+    hw = CLEAT_HW - 0.5 if hw is None else hw
     c = prism_x(poly([(YW, ZW0), (YW, ZB - T), (Y1 + TIP, ZB - TIP), (Y1, ZB - TIP), (Y1, ZW0)]), -hw, hw)
     cuts = []
-    for x, z in wall_screws():
+    for x, z in wall_screws(xs):
         cuts.append(cyl_y(x, z, Y1 - 1, YW + 1, WS_D, 32))
         cs = (WS_HEAD - WS_D) / 2                                       # 90-degree countersink at the front face
         cuts.append(Manifold.cylinder(cs + 0.01, WS_HEAD / 2, WS_D / 2, 48).rotate([-90, 0, 0]).translate([x, Y1 - 0.01, z]))
