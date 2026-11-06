@@ -69,17 +69,17 @@ Spelled out: glyph, `TORNADO WARNING` and `UNTIL 7:45 PM` in a dimmer red, the t
 
 ## 4. Weather
 
-### Top bar (decided: optional)
+### Top bar (decided: optional; built)
 The current-conditions bar (icon, temperature, condition, ↑high ↓low) becomes a **per-board setting**. Off, its eight rows go to the layout below; on, layouts give something up (below).
 
-### 7-day forecast (liked)
-Seven 18-px columns split by dim dividers: weekday, icon, high (temperature color), low (60 %). With the top bar on, the lows drop out. NWS already gives seven days.
+### 7-day forecast (built)
+Seven 18-px columns split by dim dividers: weekday, icon, high (temperature color), low (60 %). With the top bar on, the lows drop out. Today first (NWS gives today and six more days, not seven after today); without NWS (WeatherAPI's 3 days) the 64 layout shows on both panels.
 
-### Hourly, 24 hours (liked)
-Eight 16-px columns, 3 hours apart: time, icon, temperature. With the top bar off, a fourth line shows each slot's rain chance (blue from 20 %, dim below). The server builds 4 slots today (`HOUR_STEPS`); the NWS hourly feed covers 24 hours.
+### Hourly, 24 hours (built)
+Eight 16-px columns, 3 hours apart, on the hours divisible by 3 (3P, 6P, …): time, icon, temperature. With the top bar off, a fourth line shows each slot's rain chance (blue from 20 %, dim below, grey at 0). From the NWS hourly feed; without it, the 64 layout.
 
-### Current conditions (first pass)
-A 2× icon (16 × 16) and the temperature in the clock digits, high/low and date under them on the left; the readout on the right (columns 58–127) with dot leaders: `SKY`, `FEELS`, `WIND`, `RAIN`, `SUNSET`.
+### Current conditions (first pass; built as mocked)
+A 2× icon (16 × 16) and the temperature in the clock digits, high/low and date under them on the left; the readout on the right (columns 58–127) with dot leaders: `SKY`, `FEELS`, `WIND`, `RAIN`, then the next `SUNRISE` or `SUNSET`.
 
 ### Rain bars (cut)
 Cut from the board altogether (Nov 5): no dependable 15-minute precipitation source.

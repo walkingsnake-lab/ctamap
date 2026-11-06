@@ -344,11 +344,12 @@
   <div class="grp">
     <div class="tiles" role="radiogroup" aria-labelledby="wvH" id="wxView">
       <button role="radio" data-v="now"><img alt="" data-static="wx-now"><span class="lab"><span class="rd" data-icon="dotck"></span>Conditions</span></button>
-      <button role="radio" data-v="5day"><img alt="" data-static="wx-5day"><span class="lab"><span class="rd" data-icon="dotck"></span>5-day</span></button>
+      <button role="radio" data-v="5day"><img alt="" data-static="wx-5day"><span class="lab"><span class="rd" data-icon="dotck"></span><span data-wide-name="7-day">5-day</span></span></button>
       <button role="radio" data-v="hourly"><img alt="" data-static="wx-hourly"><span class="lab"><span class="rd" data-icon="dotck"></span>Hourly</span></button>
       <button role="radio" data-v="radar"><img alt="" data-static="wx-radar"><span class="lab"><span class="rd" data-icon="dotck"></span>Radar</span></button>
     </div>
     <div class="c"><label for="tempShadow" class="grow">Color behind the temperature</label><input type="checkbox" class="sw" id="tempShadow"></div>
+    <div class="c" id="wxTopRow" hidden><label for="wxTop" class="grow">Today's conditions on top<span class="s">7-day and hourly; off, they show lows and rain chances</span></label><input type="checkbox" class="sw" id="wxTop"></div>
   </div>
   <p class="ft" id="wxViewFt"></p>
   <p class="sh">Radar</p>
@@ -1121,7 +1122,7 @@
     else save({ transitScreen: v });
   });
   $('transitLayout').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) save({ transitLayout: b.dataset.v }); });
-  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
+  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
   $('wideLayout').addEventListener('change', (e) => save({ wideLayout: e.target.value }));
   for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
@@ -1249,6 +1250,11 @@
   function renderWeather() {
     checked('wxView', ['5day', 'hourly', 'radar'].includes(board.wxView) ? board.wxView : 'now');
     $('tempShadow').checked = board.tempShadow === true;
+    // Two panels: 7 days, 24 hours, and the optional top bar.
+    const wide = board.cols === 128;
+    for (const el of qa('[data-wide-name]')) { el.dataset.name ??= el.textContent; el.textContent = wide ? el.dataset.wideName : el.dataset.name; }
+    $('wxTopRow').hidden = !wide;
+    $('wxTop').checked = board.wxTop !== false;
     pressed('radarCorner', board.radarTime === false ? 'temp' : 'time');
     const rf = board.radarFrame || 500;
     pressed('radarSpeed', rf >= 700 ? '700' : rf <= 300 ? '300' : '500');

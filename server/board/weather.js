@@ -25,6 +25,11 @@ const MAX_AGE = 3600;    // s: WeatherAPI's limit for caching current conditions
 // Hourly layout: the slots HOUR_STEPS hours after the current hour.
 const HOUR_STEPS = [2, 4, 6, 8];
 const HOURS = HOUR_STEPS[HOUR_STEPS.length - 1] + 1;
+// Wide boards (contract "Width"): the 7-day layout (today and the six days
+// after), and the 24-hour layout (eight slots 3 hours apart, on the hours
+// divisible by 3).
+const WEEK_DAYS = 7;
+const DAY_SLOTS = 8, SLOT_HOURS = 3;
 // Two-letter weekday at a daily slot's time (noon keeps it clear of DST
 // changes; WeatherAPI's date_epoch is the date's UTC midnight, which noon
 // keeps on the same Chicago date).
@@ -135,6 +140,7 @@ function parse(json) {
 
 // 3 PM -> "3P", midnight "12A".
 const hourFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hour12: true });
+const hourOfDay = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', hourCycle: 'h23' });
 const hourLabel = (t) => hourFmt.format(new Date(t * 1000)).replace(/\s?([AP])M$/i, '$1').toUpperCase();
 
 // The days after today with a high and a weather code: [{time, code, hi, lo}].
@@ -197,6 +203,7 @@ function inUnit(w, unit) {
     temp: toC(w.temp), hi: toC(w.hi), lo: toC(w.lo), feels: toC(w.feels),
     days: (w.days || []).map((x) => ({ ...x, hi: toC(x.hi), lo: toC(x.lo) })),
     hrs: (w.hrs || []).map((x) => ({ ...x, temp: toC(x.temp) })),
+    ...(w.week ? { week: w.week.map((x) => ({ ...x, hi: toC(x.hi), lo: toC(x.lo) })) } : {}),
   };
 }
 
@@ -247,6 +254,30 @@ function toHours(w) {
   return out;
 }
 
+// Parsed weather -> the wide 7-day layout's days: [{d, icon, hi, lo}],
+// today first (lo null when NWS has no night for the last day), or null
+// without the whole week (NWS only; WeatherAPI's free plan has 3 days).
+function toWeek(w) {
+  if (!w.week || w.week.length < WEEK_DAYS) return null;
+  return w.week.slice(0, WEEK_DAYS).map((x) => ({ d: dayName(x.time), icon: x.icon || condition(x.code, true, x.wa)[0],
+    hi: Math.round(x.hi), lo: x.lo == null ? null : Math.round(x.lo) }));
+}
+
+// Parsed weather -> the wide 24-hour layout's slots: [{h: '3P', icon, t, p}]
+// for the first eight hours after the current one that fall on a multiple of
+// 3 (3P, 6P, 9P, 12A, ...); p the rain chance (%, null when missing). Null
+// without all eight (NWS only: WeatherAPI's hours are cut at 9).
+function toDayHours(w) {
+  const out = [];
+  for (const x of (w.hrs || []).slice(1)) {
+    if (out.length === DAY_SLOTS) break;
+    if (Number(hourOfDay.format(new Date(x.time * 1000))) % SLOT_HOURS) continue;
+    if (x.temp == null || (x.icon == null && x.code == null)) return null;
+    out.push({ h: hourLabel(x.time), icon: x.icon || condition(x.code, x.isDay, x.wa)[0], t: Math.round(x.temp), p: x.pop == null ? null : Math.round(x.pop) });
+  }
+  return out.length === DAY_SLOTS ? out : null;
+}
+
 // Test weather states for the simulator: the current conditions forced to
 // one state (WMO code and cloud cover, as parse() would give them, and a
 // temperature in °F that suits it). Each maps to one skyline kind and level
@@ -277,7 +308,8 @@ function testWeather(kind, base, now, isDay) {
   const b = base || {
     sunrise: now - 6 * 3600, sunset: now + 6 * 3600, windSpeed: 9, windDir: 300,
     days: [1, 2, 3, 4, 5].map(day),
-    hrs: Array.from({ length: 9 }, (_, i) => ({ time: now + i * 3600, temp: s.temp + (i % 3) - 1, code: s.code, wa: null, isDay })),
+    hrs: Array.from({ length: 26 }, (_, i) => ({ time: now + i * 3600, temp: s.temp + (i % 3) - 1, code: s.code, wa: null, isDay, pop: s.pop ? s.pop - (i % 4) * 10 : 0 })),
+    week: [0, 1, 2, 3, 4, 5, 6].map((i) => (i ? { ...day(((i - 1) % 5) + 1), time: now + i * 86400 - 12 * 3600 } : { time: now - 12 * 3600, code: s.code, wa: null, hi: s.temp + 6, lo: s.temp - 9 })),
   };
   return {
     ...b, time: now, code: s.code, wa: null, isDay, clouds: s.clouds,
@@ -327,4 +359,4 @@ function createWeather({ key = process.env.WEATHERAPI_KEY || '', fetch = null, c
   return w;
 }
 
-module.exports = { url, parse, rainLine, RAIN_ON, RAIN_OFF, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS };
+module.exports = { url, parse, rainLine, RAIN_ON, RAIN_OFF, cellPoint, stationCells, WMO_OF, WA_FOG, THUNDERSNOW, MAX_AGE, inUnit, condition, toWx, toScreenWx, toDays, toHours, toWeek, toDayHours, testWeather, TEST_WX, dayName, windText, compass, autoBright, createWeather, NIGHT_BRIGHT, POP_HOURS, FORECAST_DAYS, HOUR_STEPS, WEEK_DAYS, DAY_SLOTS };

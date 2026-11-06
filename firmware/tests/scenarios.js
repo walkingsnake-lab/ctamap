@@ -799,6 +799,33 @@ async function build() {
         }),
       });
     }
+    // Wide weather (wide-spec §4): the week and 24 hours, with and without
+    // the top bar, warnings, °C and negatives, and the wide conditions.
+    {
+      const W = require(path.join(B, 'weather'));
+      const t = 1793763720; // Nov 3, 2026, 9:42 PM CST
+      const base = W.testWeather('partly', null, t, false);
+      base.week[3].code = 63; base.week[5].code = 73; base.hrs[4].code = 63; base.hrs[7].code = 95;
+      base.hrs.forEach((h, i) => { h.pop = [0, 10, 60, 100, 0, 30, 5, 20][i % 8]; h.temp = 48 - i; });
+      const sw = { ...W.toScreenWx(base), rl: 1 };
+      const week = W.toWeek(base), hours24 = W.toDayHours(base);
+      const wp = (wx, extra = {}) => ({ now: t, tzo: tzOffset(t), screen: 'weather', cols: 128, bright: 100, warn: null, radar: { on: false, frames: [], ft: [], timeBox: radar.FULL_TIME_BOX, split: false, tempShadow: false, wx }, ...extra });
+      const one = [{ screen: 'weather' }];
+      const cold = W.inUnit(W.testWeather('snow heavy', null, t, false), 'C');
+      cold.week = cold.week.map((d, i) => ({ ...d, hi: d.hi - 20 + i * 4, lo: d.lo - 20 }));
+      add('wide weather week', wp({ ...sw, days: [{}], week }), one, undefined, undefined, { s3only: true });
+      add('wide weather week, no top bar', wp({ ...sw, days: [{}], week, notop: 1 }), one, undefined, undefined, { s3only: true });
+      add('wide weather week, tornado warning', wp({ ...sw, days: [{}], week }, { warn: { kind: 'tor', lvl: 'warning' } }), [{ screen: 'weather' }, { screen: 'weather', blink: true }], undefined, undefined, { s3only: true });
+      add('wide weather week, celsius below zero', wp({ ...W.toScreenWx(cold), c: 1, days: [{}], week: W.toWeek(cold), notop: 1 }), one, undefined, undefined, { s3only: true });
+      add('wide weather 24 hours', wp({ ...sw, hours: [{}], hours24, tempShadow: true }), one, undefined, undefined, { s3only: true });
+      add('wide weather 24 hours, no top bar', wp({ ...sw, hours: [{}], hours24, notop: 1 }), one, undefined, undefined, { s3only: true });
+      add('wide weather 24 hours, severe watch', wp({ ...sw, hours: [{}], hours24 }, { warn: { kind: 'svr', lvl: 'watch' } }), one, undefined, undefined, { s3only: true });
+      add('wide weather conditions, sunrise', wp({ ...sw, sun: { k: 'rise', t: t + 9 * 3600 } }), one, undefined, undefined, { s3only: true });
+      add('wide weather conditions, no rain line, sunset', { ...wp({ ...sw, rl: 0, sun: { k: 'set', t: t + 3600 } }), radar: { ...wp(sw).radar, tempShadow: true, wx: { ...sw, rl: 0, sun: { k: 'set', t: t + 3600 } } } }, one, undefined, undefined, { s3only: true });
+      add('wide weather conditions, tornado warning', wp({ ...sw }, { warn: { kind: 'tor', lvl: 'warning' } }), [{ screen: 'weather' }, { screen: 'weather', blink: true }], undefined, undefined, { s3only: true });
+      add('wide weather conditions, celsius', wp({ ...W.toScreenWx(cold), c: 1, rl: 1 }), one, undefined, undefined, { s3only: true });
+      add('wide weather hours without 24-hour data', wp({ ...sw, hours: W.toHours(base) }), one, undefined, undefined, { s3only: true });
+    }
     // Wide transit, as the server formats it (arrivals.js formatWide):
     // northbound | southbound, two columns, full-width rows, the
     // chronological list; alerts, the key layout, an empty half.
