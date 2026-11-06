@@ -14,29 +14,20 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
 
 ## Decisions
 - **Split left/right at the panel joint.** One piece needs 313 mm even turned 45° on the bed; the P4's top/bottom split
-  still needs 279. Halves cut at x = 0 fit flat, both on one plate (181 x 207 with the tongue and the brim gap).
+  still needs 279. Halves cut at x = 0 fit flat, both on one plate (174 x 207 with the brim gap).
   Re-checked Nov 6 after the first print: the shell is a ring, so every piece needs an end wall (two U-shaped halves is
   the only split), the cut can sit anywhere within ±77 mm, and x = 0 puts its line on the panel and diffuser seam, the
   one line there already is. Printing a half end-down instead (it fits 260 mm high) would put ~1300 mm² of steep
   overhang on the rounded outer corners; back-down has almost none. So the split stays; the joint changed.
-- **Shell joint: tongue and groove (Nov 6).** The first print used the P4's half-lap (a lip in a pocket open to the
-  inside): it held each wall from one side only, so the long halves' slight bow and the seam blobs on the lip showed as a
-  step, and nothing at all held the front 13 mm. Now the wall is 1.2 outer skin | 1.5 groove | 0.8 inner skin: half A's 1.3 mm tongue
-  (`TONGUE_CL` a side, from the test plate) runs 8 mm into a groove closed on both sides in half B, from 2 mm behind
-  the front face to 2 mm in front of the back, so both faces are held flush. A firm push fit; what holds the halves
-  together in the end is the inside: each tray is screwed to its half and bolted to its panel, and the panels are
-  spliced, so the joint can't open once the bar is assembled. (A click ridge was tried: its recess left the hidden
-  skin under two lines thick, and the slicer printed it with holes.) Outside, every outer edge at the joint has a 0.5 mm chamfer each side (a V-groove round the
-  top, bottom and both rims) instead of the square reveal and its thin ledges; inside the hood the halves just butt
-  (a chamfer crossing the screen stop's sloped faces came out as a stepped slot). Glue is optional, for permanence.
-- **Seams go into the joint by design.** The slicer's Aligned seam goes to each layer's sharpest inside corner. The
-  tongue's root and the groove's bottom are 90° inside corners on every layer, hidden once the halves are together, and
-  the groove's mouth is chamfered and the tongue's tip has 0.3 mm, so a seam blob can't hold the halves apart. The
-  other inside corners lost their sharpness: the feet recesses and screw counterbores meet their floors at 45°
-  (`case2.FLOOR_CH`), and the V-groove's corners are outside corners. (Checked layer by layer: the joint is the sharpest
-  inside corner on every layer from 2 mm behind the front to 3 mm before the back. The test pieces were also sliced in
-  PrusaSlicer 2.7, Bambu Studio's parent, with Classic and Arachne walls: every layer's paths cover the model, no
-  holes; every wall is at least two lines of a 0.4 nozzle.)
+- **Shell joint: a flat cut (Nov 6, after stepping back).** Each half is exactly the single bar's sleeve geometry cut
+  at x = 0: nothing added at the joint (the two halves together are the unsplit shell, checked to 0 mm³). Two earlier
+  joints each brought their own print problems at the split: the P4's half-lap (held each wall from one side only, so
+  the halves stepped; seam blobs on its thin lip) and a tongue and groove with a V-groove (thin skins, slivers and
+  stepped edges where it met the sloped front). A flat end face prints as a plain wall. Alignment comes from a printed
+  gluing jig (`bar128-joint-jig.stl`, plate 5): a U over the top and bottom faces across the joint, open at the back,
+  so it drops on over the bar lying back-down on the bench; the bench lines up the backs, the arms the top and bottom
+  faces, a slot in each arm keeps it off the glue line. What holds the halves together in the end is the inside: each
+  tray is screwed to its half and bolted to its panel, and the panels are spliced.
 - **Knob near the right end, at x +123 (50 mm from the end), over the S3's tray; light sensor 40 mm toward the centre
   (x +83); USB-C at the same end** (Nov 5). ±123 is as far out as the encoder's board (25.4 wide, under the top wall)
   clears the tray's top corner post sideways; further out it would ride ~1 mm over the post, and past ~138 the collar
@@ -81,25 +72,16 @@ Renders (Nov 4, from the model; the screen is a mock 128-wide arrivals layout dr
   USB-C edge, and on B's outer header the board would reach ~7 mm through the end wall.)
 
 ## Before printing: test pieces (`stl/p25-128x32/coupons/`)
-1. **Shell joint** (plate 0a) — three pairs of pieces of the top wall across the joint, front 34 mm (hood, front rim,
-   V-groove, the tongue's front end), the cut face on the bed. The pair's length says its tongue clearance: 18 mm a
-   side = 0.05, 22 = 0.10, 26 = 0.15 mm a side (no marks cut in: they'd be inside corners, and the seam would go to
-   them instead of the joint). Print them with the shell's settings; in Preview (Seams on) the seam should run up the
-   joint end of each piece. The pieces are the wall only (the screen stop's ledge is left off: its cut ends print
-   ragged and it isn't part of the fit). Push each pair together by hand on a flat surface: the end faces should close
-   completely, it should take a firm push and stay put, and the outer faces should be flush (run a fingernail across; check the front edges too).
-   Pick the tightest that closes fully by hand (`TONGUE_CL=<it>`). If even 0.15 won't close, look for blobs at the
-   tongue's root first.
-2. **Diffuser joint** — `coupon-128-diffuser-joint-white.stl` + `-black.stl` (one object, two parts, same frame; 0.2
+1. **Diffuser joint** — `coupon-128-diffuser-joint-white.stl` + `-black.stl` (one object, two parts, same frame; 0.2
    nozzle, 0.14 first layer as the P2.5 diffuser): three A pieces with joint ribs 0.45 / 0.55 / 0.65 (1 / 2 / 3 notches in
    the bezel edge) and one B piece, 6 columns either side, bottom edge included. Butt the panels, hold an A and the B at
    the bottom of the joint, panel lit and dark. The width whose seam column looks like the others is `JOINT_RIB`.
-3. **Splice plates** — `coupon-128-splice-plates.stl` (PETG, flat): holes 3.3 / 3.45 / 3.6 (1 / 2 / 3 notches). With the
+2. **Splice plates** — `coupon-128-splice-plates.stl` (PETG, flat): holes 3.3 / 3.45 / 3.6 (1 / 2 / 3 notches). With the
    panels butted face down, round hole over A's inner corner insert, slot over B's, 2 x M3 x 6 button heads. Use the
    snuggest one an M3 passes through freely (`SPLICE_HOLE=<it>`). Also check: it sits flat on both bosses (nothing on the
    housings between them stands proud), and the rows still line up with it tightened. Then rebuild with **both** sizes
-   set (`TONGUE_CL=<c> JOINT_RIB=<w> SPLICE_HOLE=<d> python3 bar128.py ../stl/p25-128x32`): one left out goes back to its default.
-4. **Chain (bench):** panels butted as they'll sit (both boards' data arrows pointing away from the joint), the S3's
+   set (`JOINT_RIB=<w> SPLICE_HOLE=<d> python3 bar128.py ../stl/p25-128x32`): one left out goes back to its default.
+3. **Chain (bench):** panels butted as they'll sit (both boards' data arrows pointing away from the joint), the S3's
    ribbon into A's inner header (its input), the jumper from A's outer header to B's inner header. Light both and note
    which columns land on which panel and that A shows its picture the other way up from B (the firmware's mapping;
    nothing printed depends on it). Check the power leads reach panel A from where the S3 sits on panel B (~25 cm).
@@ -131,20 +113,20 @@ Filament slots: **1** = the plate's main filament; **2** = the diffusers' black 
 
 | Plate | Nozzle | Slot 1 / slot 2 | In the file (per object) | Set yourself (plate-wide) |
 |---|---|---|---|---|
-| `plate-0a-test-seam-joint` | 0.4 | PLA Wood | shell | shell |
 | `plate-0b-test-diffuser-joint` | 0.2 | white / black | diffuser | diffuser |
 | `plate-0c-test-splice` | 0.4 | black PETG | tray | tray |
 | `plate-1-shell` | 0.4 | PLA Wood | shell | shell |
 | `plate-2-trays` | 0.4 | black PETG / translucent PETG | tray | tray |
 | `plate-3-diffusers` | 0.2 | white / black | diffuser | diffuser |
 | `plate-4-wall-cleat` (optional) | 0.4 | PETG | tray | tray; laid at 45° (293 mm) |
+| `plate-5-joint-jig` | 0.4 | PETG (CA doesn't grip it) | tray | tray; stands 60 mm, open U up |
 
 - **Shell**, in the file: 0.16 mm layers, 4 walls, elephant foot 0.15, outer brim 5 mm with a 0.1 mm gap, seam
   Aligned, scarf seam off. Yourself (and all of it if your Bambu Studio drops per-object settings): **one fixed layer
   height, no variable layer height** (it changes the layer height round every feature, and each change leaves a line
   across the face: the first print's bands); seam position Aligned and scarf seam None (a scarf ramps the seam out of
   the corner onto the face); Bambu PLA Wood (dried, flow-calibrated), Z hop 0.6 mm, plate washed then glue stick, bed
-  55-60 °C, door closed. In Preview (Seams on) the seam should run up the joint end of each half.
+  55-60 °C, door closed. 
 - **Tray**, in the file: 0.24 mm layers, 4 walls, 4 top + 4 bottom layers, 15% gyroid, monotonic bottom surface,
   elephant foot 0.15. Yourself: dried PETG, textured PEI, Z hop.
 - **Diffuser**, in the file: monotonic bottom surface, elephant foot 0. Yourself: 0.2 nozzle, first layer height 0.14
@@ -153,16 +135,16 @@ Filament slots: **1** = the plate's main filament; **2** = the diffusers' black 
 Not on a plate (print from their own STLs, as the README): knob, encoder collar, case cleats (optional, two).
 
 **Order:**
-1. Plates 0a, 0b, 0c and the bench checks under "Before printing".
-2. If a test changes a number, rebuild: `TONGUE_CL=<c> JOINT_RIB=<w> SPLICE_HOLE=<d> python3 bar128.py ../stl/p25-128x32`, then
+1. Plates 0b, 0c and the bench checks under "Before printing".
+2. If a test changes a number, rebuild: `JOINT_RIB=<w> SPLICE_HOLE=<d> python3 bar128.py ../stl/p25-128x32`, then
    `python3 plates128.py` (both in `src/`). A changed `LAP_CL` goes in `bar128.py` itself.
 3. Plates 1, 2 and 3, in any order. Plate 2's trays don't depend on any test, but its splice plates take
    `SPLICE_HOLE`: print it after 0c, or drop the splice plates from it and print them later.
 
 ## Print settings
 As the README ("Print settings") for the shell, tray and diffuser. Differences:
-- **Shell halves:** both on one plate (181 x 207), so the walnut matches. 5 mm brim is fine (no diagonal layout). Seam:
-  Aligned, which puts it in the joint (see Decisions); no painting.
+- **Shell halves:** both on one plate (174 x 207), so the walnut matches. 5 mm brim is fine (no diagonal layout). Seam:
+  Aligned.
 - **Diffuser:** the P2.5's: 0.2 nozzle, 0.14 first layer (the face, one layer).
 
 ## Hardware
@@ -188,14 +170,14 @@ As the README ("Print settings") for the shell, tray and diffuser. Differences:
   brightness, or feed the panels from a separate 5 V supply.
 
 ## Joining and finishing the shell
-1. Lay both halves back-down on a flat sheet (glass or a tile): the back rims are one plane, so the halves can't step
-   front to back. Push them together until the end faces meet (top and bottom). The tongue holds the faces flush up
-   and down. Check the V-groove is even on the top, the bottom and round the hood.
-2. Optional, for permanence: pull apart, put thin dots of medium CA on the tongue's outer face only, 2 mm back from its
-   root and its tip (none near the inside skin: a bead inside would catch the trays), and push home again on the sheet.
-   Unglued, the assembled bar holds it closed (trays screwed to the halves, bolted to the panels, panels spliced).
-3. Lap the front flat across the joint if it needs it (400 on glass, figure-eights); clear the V-groove with a folded
-   strip of paper.
+1. Dry-fit: lay both halves back-down on a flat sheet (glass or a tile) and push the end faces together. Drop the jig
+   on from the front, its slots over the joint: the arms hold the top and bottom faces flush, the sheet the backs. If a
+   half's end face doesn't close (a brim stub, a blob on the edge), scrape it flat.
+2. Lift the jig off, medium CA on one end face (2 mm in from the outer edges so it doesn't squeeze onto the faces,
+   none on the inner edges where it could catch the trays), push together on the sheet, jig back on, hold a minute,
+   tape across the top and bottom, leave it to cure.
+3. Sand the joint flush across the top, bottom and front rim (220, then 400, on a block, along the bar), then scrape the
+   inside joint line clean.
 4. Scuff and finish as the README. Oil goes on after gluing (CA won't bond to oiled wood PLA).
 
 ## Assembly
@@ -239,7 +221,7 @@ on tray A's top-left post (26.7 mm³ seated, 28.6 while sliding in; the right-ha
 `check_bar128.py`); with the knob at the right end it's the mirror (the right-hand plug sits on tray B's top-right post),
 so step 7 names the left-hand socket. Also from it: a longer ribbon (35 cm left ~2-3 cm with tray B out; since replaced
 by two 30 cm ribbons with panel A turned the other way; and the long
-QT cable, gone since the knob moved to the S3's end), cables cross the joint between the splice plates, glue kept off the tongue's inside face,
+QT cable, gone since the knob moved to the S3's end), cables cross the joint between the splice plates, glue kept off the end faces' inside face,
 the spare ribbon pushed into tray A's space early, the rows checked face up, the sensor's cables plugged before its sled
 goes in, both test sizes set on a rebuild. Found fine: slide-in paths of the panels and both trays, tool reach (2 mm key
 to the post screws), screw stacks, the sled's swing into its hooks, plates matching the STLs.
@@ -266,9 +248,8 @@ plates pass lib3mf's strict validation with no warnings.
 The 65 mm³ of S3 envelope it reports inside tray B is the same as the single P2.5 tray's (the envelope's boxy outline at
 the posts), not new. Cabling, against the model's S3 and header positions: B's output is unusable (above), so the data
 chain is S3 → A → B. The A → B ribbon and the S3 → A run both clear the trays, the splice plates and the S3. Printing:
-the halves and trays have no overhangs the single P2.5 shell and tray don't already have. The tongue's back end is 45°
-(no flat overhang), the groove's front end is a 1.5 mm bridge, and the joint ends of both halves print plain vertical
-walls.
+the halves and trays have no overhangs the single P2.5 shell and tray don't already have. The joint ends of both halves are flat
+end faces: plain vertical walls.
 
 **Power sockets (Nov 4), `check_bar128_power.py`:** each panel's 4-pin socket with a seated VH-class plug (20 x 10,
 5 mm past the housing) and its wires turning flat behind it (12 mm), pin row along x or z, swept over the panel back
@@ -288,7 +269,7 @@ panel B the plug's edge is ~20 mm from the S3's. Seated, the sockets sit at case
   `Panel::show` (which already copies each pixel to the driver and does the 180° turn itself) maps each half of the
   picture to its panel with that panel's rotation: a per-panel setting (`0,180`) beside today's single `rotation`. The
   two-panel test mode (PR #500) uses one global flip, so on the bench panel A shows upside down there.
-- The joint rib, the splice hole and the tongue clearance come from the test pieces.
+- The joint rib and the splice hole come from the test pieces.
 - Which columns land on which panel with S3 → A → B and A's picture the other way up from B's (firmware mapping, bench),
   and the power lead to panel A.
 - The length of cable between the stock power cable's two plugs: ~18-20 cm or more (measure before the build).

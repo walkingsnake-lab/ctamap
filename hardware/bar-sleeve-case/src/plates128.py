@@ -32,7 +32,6 @@ C = P + 'coupons/'
 # sheet's to set.
 SHELL = {'layer_height': '0.16', 'wall_loops': '4', 'elefant_foot_compensation': '0.15', 'brim_type': 'outer_only',
          'brim_width': '5', 'brim_object_gap': '0.1', 'seam_position': 'aligned', 'seam_slope_type': 'none'}
-# (seam Aligned, no scarf: the shell's sharpest inside corners are in the joint by design, bar128.py split_shell)
 TRAY = {'layer_height': '0.24', 'wall_loops': '4', 'top_shell_layers': '4', 'bottom_shell_layers': '4',
         'sparse_infill_density': '15%', 'sparse_infill_pattern': 'gyroid', 'bottom_surface_pattern': 'monotonic',
         'elefant_foot_compensation': '0.15'}
@@ -42,10 +41,6 @@ SLOT2 = {'black grid', 'window (translucent)'}             # parts on filament s
 # plate: (file stem, title, settings, [objects]); object: (name, [(part name, stl, rotate_z deg)], (x0, y0) of its
 # footprint's lower-left corner on the bed). Parts of one object share a frame (as exported) and keep it.
 PLATES = [
-    ('plate-0a-test-seam-joint', 'Test: shell joint, 3 clearances (PLA Wood, 5 mm brim)', SHELL, [
-        ('joint, half A x3 (tongues)', [('seam A', C + 'coupon-128-seam-A-walnut.stl', 0)], (86.0, 107.0)),
-        ('joint, half B x3 (grooves)', [('seam B', C + 'coupon-128-seam-B-walnut.stl', 0)], (135.7, 107.0)),
-    ]),
     ('plate-0b-test-diffuser-joint', 'Test: diffuser joint (0.2 nozzle, white + black)', DIFFUSER, [
         ('diffuser joint coupon', [('white face', C + 'coupon-128-diffuser-joint-white.stl', 0),
                                    ('black grid', C + 'coupon-128-diffuser-joint-black.stl', 0)], (109.5, 95.7)),
@@ -71,11 +66,14 @@ PLATES = [
         ('diffuser B (right)', [('white face', P + 'bar128-diffuser-B-white.stl', 0),
                                 ('black grid', P + 'bar128-diffuser-B-black.stl', 0)], (43.0, 27.0)),
     ]),
+    ('plate-5-joint-jig', 'Gluing jig for the shell halves (PETG: CA does not grip it)', TRAY, [
+        ('joint jig', [('joint jig', P + 'bar128-joint-jig.stl', 0)], (75.0, 70.0)),
+    ]),
     ('plate-4-wall-cleat', 'Wall cleat, optional (PETG, wall face down, at 45 deg: 293 mm long)', TRAY, [
         ('wall cleat', [('wall cleat', P + 'bar128-cleat-wall.stl', 45)], (12.2, 12.2)),
     ]),
 ]
-MARGIN = {'plate-1-shell': 5.0, 'plate-0a-test-seam-joint': 5.0}             # brim: keep this much more from the bed edge and between objects
+MARGIN = {'plate-1-shell': 5.0}             # brim: keep this much more from the bed edge and between objects
 GAP = 4.0                                   # minimum clear gap between objects (plus brims)
 
 

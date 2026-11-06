@@ -5,21 +5,11 @@ Case frame as everywhere (x right seen from the front, y back, z up). Panel A (l
 both are turned 180 deg, as in the single build.
 
 Shell (walnut PLA, 347 x 96.3 x 69): the v5 sleeve built from the 'p25x2' profile (bore 340 x 89.3), split at x = 0
-into a left and a right half, both on one plate. The joint is the P4 split's (p4.py on its branch) turned 90 deg: it
-cuts the top and bottom walls, the hood and both rims.
-- the halves meet at x = 0. Every outer edge there is chamfered CHAMF x 45 deg on both sides (a V-groove round the
-  case: top, bottom, front and back rims; the hood's inside just butts): it hides the joint line without the thin
-  stepped ledges of the first version's square reveal, and its corners are convex, so the slicer's seam doesn't
-  collect there.
-- a tongue and groove inside the top and bottom walls (Nov 6; replaces the half-lap, which held each wall from one side
-  only, so the halves stepped). The wall is SKIN_O | GROOVE | SKIN_I; half A's tongue runs TONGUE_L into a groove closed on
-  both sides in half B, so the outer faces are held flush both ways. From TONGUE_FRONT behind the front face to
-  TONGUE_BACK in front of the back face (its back end 45 deg: no flat overhang back-down); hidden everywhere.
-  TONGUE_CL a side (the test plate's three pick it): a firm push fit. What holds the halves together in the end is
-  the inside: each tray is screwed to its half and bolted to its panel, and the panels are spliced, so the joint can't
-  open once the bar is assembled. (A click detent was tried: its recess left the hidden skin under two lines thick,
-  which the slicer printed with holes.) The groove's mouth is chamfered so a seam blob at the tongue's root can't hold the
-  halves apart. The seam test plate prints three clearances (TONGUE_CLS) to choose TONGUE_CL.
+into a left and a right half, both on one plate. The cut is flat: each half is the single bar's sleeve geometry cut at
+x = 0, nothing added at the joint (Nov 6: a P4-style half-lap, then a tongue and groove with a V-groove, each brought
+new print problems at the joint). The halves are lined up for gluing by a printed jig (bar128-joint-jig.stl: a U over
+the top and bottom faces, the bench lines up the backs) and held together by the assembled bar: each tray is screwed
+to its half and bolted to its panel, and the panels are spliced.
 - the knob moves to x KNOB_X (+123, near the right end over the S3's tray: its encoder board just clears tray B's
   top-right post), the light sensor to SENSOR_X (+83, 40 mm from the knob toward the centre), the screws from below to
   x +/-34 and +/-126 (each tray's own +/-46).
@@ -78,126 +68,32 @@ for _m in (C, V, P3):
     _m.SCREW_XS = tuple(panel.P['screw_xs'])     # +/-34, +/-126: each tray's own +/-46
 
 BED = 256.0
-# ---------------------------------------------------------------- shell split: tongue and groove at x = 0
-CHAMF = 0.5                     # V-groove: each half's visible edges at the joint chamfered this much x 45 deg
-SKIN_O, SKIN_I = 1.2, 0.8       # wall = outer skin | GROOVE | inner skin (WALL 3.5): 3 and 2 lines of a 0.4 nozzle
-GROOVE = WALL - SKIN_O - SKIN_I # 1.5
-TONGUE_L = 8.0                  # how far A's tongue runs into B
-TIP_CL = 0.3                    # gap at the tongue's tip: the end faces at x = 0 are the seat in x
-TONGUE_CLS = (0.05, 0.10, 0.15) # the test plate's three
-TONGUE_CL = float(os.environ.get('TONGUE_CL', '0.10'))   # a side
-MOUTH = 0.3                     # the groove's mouth chamfer (room for a seam blob at the tongue's root)
-TONGUE_FRONT = 1.2              # tongue stops this far behind the front face (chamfer included)
-TONGUE_BACK = 2.0               # ... and in front of the back face at its root
-Y_CL = 0.2                      # the tongue's front end short of the groove's: y is set by the backs, flat on the bench
 
 
-def outer_inset(i):
-    """case2's back-down outer body (chamfered front and back rims) moved inward by i (as p4.py)"""
-    ch = V.CH_F
-    pts = []
-    for (x, z) in rr_cs(HW - ch - i, H / 2 - ch - i, RC - ch - i).to_polygons()[0]:
-        pts.append((x, V.front_y(z) + i, z))
-    for (x, z) in rr_cs(HW - i, H / 2 - i, RC - i).to_polygons()[0]:
-        pts.append((x, V.front_y(z) + ch + i, z))
-    for (x, z) in rr_cs(HW - ch - i, H / 2 - ch - i, RC - ch - i).to_polygons()[0]:
-        pts.append((x, D - i, z))
-    for (x, z) in rr_cs(HW - i, H / 2 - i, RC - i).to_polygons()[0]:
-        pts.append((x, D - ch - i, z))
-    return Manifold.hull_points(np.array(pts))
+# ---------------------------------------------------------------- shell split: flat at x = 0
+def split_shell(sh):
+    """left (A) and right (B) halves: the shell cut flat at x = 0"""
+    return (sh ^ box(-HW - 1, 0.0, -50, D + 1, -1, H + 1)), (sh ^ box(0.0, HW + 1, -50, D + 1, -1, H + 1))
 
 
-def visible_layer(sh, d):
-    """shell material within d of a face you can see: outside, the hood in front of the screen, the back rim"""
-    deep = outer_inset(d)
-    deep = deep - prism_y(rr_cs(BORE_HX + d, BORE_HZ + d, BORE_R + d), -50, Y_FACE + d)
-    deep = deep - prism_y(rr_cs(BORE_HX + d, BORE_HZ + d, BORE_R + d), DR.Y1, D + 50)
-    return sh - deep
+JIG_CL = 0.15                   # the jig's arms clear the top and bottom faces by this
+JIG_L, JIG_T = 60.0, 4.0        # along x (centred on the joint), arm thickness
+JIG_RELIEF = (4.0, 1.0)         # a slot across each arm's inner face at the joint (x width, depth): no glue on the jig
 
 
-def _walls():
-    """(z0, z1) of the top and bottom walls' groove band, with the y where the tongue starts behind each wall's front"""
-    out = []
-    for z0, z1 in ((H - SKIN_O - GROOVE, H - SKIN_O), (SKIN_O, SKIN_O + GROOVE)):
-        yf = max(V.front_y(z0), V.front_y(z1)) + V.CH_F + TONGUE_FRONT
-        out.append((z0, z1, yf))
-    return out
-
-
-def tongue(cl, y_back=None):
-    """A's tongue for both walls (clearance cl a side); y_back: cut flat there (the test piece)"""
-    out = None
-    for z0, z1, yf in _walls():
-        a0, a1 = z0 + cl, z1 - cl
-        yb = D - TONGUE_BACK if y_back is None else y_back
-        L = TONGUE_L - TIP_CL
-        yt = yf + Y_CL                         # its front end clears the groove's
-        if y_back is None:                     # back end 45 deg: from yb at the root to yb - L at the tip
-            prof = CrossSection([[(-0.01, yt), (L, yt), (L, yb - L), (-0.01, yb)]])
-        else:
-            prof = CrossSection([[(-0.01, yt), (L, yt), (L, yb), (-0.01, yb)]])
-        t = Manifold.extrude(prof, a1 - a0).translate([0, 0, a0])   # x, y profile, extruded along z
-        out = t if out is None else out + t
-    return out
-
-
-def groove(cl=None):
-    """B's groove for both walls, TONGUE_L deep, from yf to D - TONGUE_BACK, its mouth chamfered MOUTH x 45 deg: one
-    x-z profile extruded along y (built as separate pieces, their end faces nearly met and left slivers)"""
-    out = None
-    for z0, z1, yf in _walls():
-        yb = D - TONGUE_BACK
-        prof = CrossSection([[(-0.05, z0 - MOUTH - 0.05), (MOUTH, z0), (TONGUE_L, z0), (TONGUE_L, z1), (MOUTH, z1),
-                              (-0.05, z1 + MOUTH + 0.05)]])
-        g = Manifold.extrude(prof, yb - yf).rotate([90, 0, 0]).translate([0, yb, 0])   # x-z profile, y from yf to yb
-        out = g if out is None else out + g
-    return out
-
-
-def v_groove(sh, ov=0.3):
-    """material within CHAMF - |x| of the OUTER surface (top, bottom, front and back rims) near x = 0: each half's
-    outer edges at the joint chamfered 45 deg. outer_inset is convex, so the part deep enough is the hull of the body
-    inset CHAMF at x = 0 and the body grown by ov at |x| = CHAMF + ov: the 45 deg faces run on past the surface and
-    cross it cleanly (ending them exactly on the surface left near-coincident faces: slivers in the mesh). Not the
-    bore's surfaces (hood, screen stop): inside, the halves just butt."""
-    e = 1e-3
-    keep = None
-    for sg in (1, -1):
-        x1 = sg * (CHAMF + ov)
-        k = Manifold.hull((outer_inset(CHAMF) ^ box(-e, e, -50, D + 50, -50, H + 50))
-                          + (outer_inset(-ov) ^ box(x1 - e, x1 + e, -50, D + 50, -50, H + 50)))
-        keep = k if keep is None else keep + k
-    w = CHAMF + ov
-    return (sh ^ box(-w, w, -50, D + 50, -1, H + 1)) - keep
-
-
-def split_shell(sh, cl=None, y_back=None):
-    """left (A) and right (B) halves, meeting at x = 0: V-groove chamfers outside, A's tongue in B's groove inside the
-    top and bottom walls (clearance cl a side, default TONGUE_CL)."""
-    cl = TONGUE_CL if cl is None else cl
-    s = sh - v_groove(sh)
-    a = (s ^ box(-HW - 1, 0.0, -50, D + 1, -1, H + 1)) + (tongue(cl, y_back) ^ sh)
-    b = (s ^ box(0.0, HW + 1, -50, D + 1, -1, H + 1)) - groove(cl)
-    out = []
-    for m in (a, b):
-        parts = sorted(m.decompose(), key=lambda q: -q.volume())
-        assert all(q.volume() < 0.01 for q in parts[1:]), [q.volume() for q in parts[1:]]
-        out.append(parts[0])
-    return tuple(out)
-
-
-COUPON_Y = 34.0                 # the seam test pieces: the front 34 mm (hood, rim, V-groove, the tongue's front end)
-COUPON_W = (18.0, 22.0, 26.0)   # each pair's length a side, shortest to longest = TONGUE_CLS: the length says which is
-                                # which (marks cut into the piece would be inside corners: the seam would go to them)
-
-
-def seam_coupon(a, b, wall='top', w=20.0):
-    """both halves across the seam, w a side, the front COUPON_Y deep, one wall: test the tongue's fit and click, the
-    faces' flushness and how the V-groove reads"""
-    zr = (H - WALL, H + 1) if wall == 'top' else (-1, WALL)          # the wall only, not the screen stop's ledge
-    reg = box(-w, w, -50, COUPON_Y, *zr)
-    return a ^ reg, b ^ reg
-
+def joint_jig():
+    """gluing jig, case frame: a U whose arms lie on the top and bottom faces across the joint (+/-JIG_L/2), joined by a
+    web in front of the screen; open at the back, so it drops on over the bar lying back-down on the bench (the bench
+    lines up the backs, the arms the tops and the bottoms). Printed with x up (bar128-joint-jig.stl)."""
+    hl = JIG_L / 2
+    y0, y1 = -JIG_T - 3.0, D - 12.0             # web 3 mm in front of the case; arms stop 12 mm short of the bench
+    top = box(-hl, hl, y0, y1, H + JIG_CL, H + JIG_CL + JIG_T)
+    bot = box(-hl, hl, y0, y1, -JIG_CL - JIG_T, -JIG_CL)
+    web = box(-hl, hl, y0, y0 + JIG_T, -JIG_CL - JIG_T, H + JIG_CL + JIG_T)
+    rw, rd = JIG_RELIEF
+    relief = (box(-rw / 2, rw / 2, y0 + JIG_T, y1 + 1, H + JIG_CL - 0.01, H + JIG_CL + rd)
+              + box(-rw / 2, rw / 2, y0 + JIG_T, y1 + 1, -JIG_CL - rd, -JIG_CL + 0.01))
+    return top + bot + web - relief
 
 
 # ---------------------------------------------------------------- diffuser halves
@@ -319,18 +215,7 @@ def build_coupons(out):
     os.makedirs(out, exist_ok=True)
     rep = {}
     sh = V.shell2()
-    # seam tongue and groove: three top-wall pairs (TONGUE_CLS; pair k is COUPON_W[k] a side), print orientation as the
-    # shell (back-down: the cut face at COUPON_Y on the bed), the tongue cut flat there
-    rows = []
-    for cl, w in zip(TONGUE_CLS, COUPON_W):
-        a, b = split_shell(sh, cl, y_back=COUPON_Y)
-        ca, cb = seam_coupon(a, b, 'top', w)
-        rows.append([backdown(ca), backdown(cb)])
-    layout(rows, gap=14.0)
     import trimesh
-    ta = trimesh.util.concatenate([r[0] for r in rows]); tb = trimesh.util.concatenate([r[1] for r in rows])
-    for n, t in (('coupon-128-seam-A-walnut.stl', ta), ('coupon-128-seam-B-walnut.stl', tb)):
-        t.export(f'{out}/{n}'); rep[n] = report(n, t)
     # diffuser joint: all four pieces on one plate, one object with two parts (white face = first layer, black above)
     pieces = diffuser_joint_coupons()
     pairs = [(to_tm(w), to_tm(k)) for _, w, k in pieces]
@@ -343,7 +228,7 @@ def build_coupons(out):
     layout([[s] for s in sp], gap=6.0)
     S = trimesh.util.concatenate(sp)
     n = 'coupon-128-splice-plates.stl'; S.export(f'{out}/{n}'); rep[n] = report(n, S)
-    return rep, (sh, a, b)
+    return rep, None
 
 
 # ---------------------------------------------------------------- trays (PANEL=p25 run)
@@ -431,6 +316,9 @@ def build_case(out, frame_dir):
         for part in ('white', 'black'):
             to_tm(h[(side, part)]).export(f'{frame_dir}/diffuser-{side}-{part}.stl')
     import trimesh
+    j = to_tm(joint_jig())
+    j.apply_transform(np.array([[0, 1, 0, 0], [0, 0, 1, 0], [1, 0, 0, 0], [0, 0, 0, 1]], float))   # (x, y, z) -> (y, z, x)
+    j.apply_translation(-j.bounds[0]); n = 'bar128-joint-jig.stl'; j.export(f'{out}/{n}'); rep[n] = report(n, j)
     sp = [to_tm(splice_plate(SPLICE_HOLE)) for _ in range(2)]
     layout([sp], gap=6.0)
     S = trimesh.util.concatenate(sp); n = 'bar128-splice-plates.stl'; S.export(f'{out}/{n}'); rep[n] = report(n, S)
