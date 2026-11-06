@@ -47,6 +47,16 @@ const ENDED = new Set(['CAN', 'EXP']);
 // The most severe alert in effect at `now`, as {kind, lvl}, or null.
 // Order: tornado warning > severe warning > tornado watch > severe watch.
 function pickWarn(alerts, now) {
+  const best = pickAlert(alerts, now);
+  return best ? { kind: best.kind, lvl: best.lvl } : null;
+}
+// When the alert pickWarn() chose ends (epoch s), or null: a wide board
+// spells it out (`UNTIL 7:45 PM`, contract "Width").
+function warnUntil(alerts, now) {
+  const best = pickAlert(alerts, now);
+  return best && best.ends != null ? best.ends : null;
+}
+function pickAlert(alerts, now) {
   let best = null;
   for (const a of alerts || []) {
     if (a.status !== 'Actual' || a.messageType === 'Cancel' || ENDED.has(a.action)) continue;
@@ -54,7 +64,7 @@ function pickWarn(alerts, now) {
     if (a.ends != null && now >= a.ends) continue;
     if (!best || a.rank > best.rank) best = a;
   }
-  return best ? { kind: best.kind, lvl: best.lvl } : null;
+  return best;
 }
 
 // Every 90 s per location while a board is asking.
@@ -62,4 +72,4 @@ function createNws({ fetch = (lat, lon) => fetchJson(url(lat, lon), { headers: {
   return createLocationPoller({ name: 'nws', fetch, parse, interval, ...opts });
 }
 
-module.exports = { url, parse, pickWarn, createNws, EVENTS };
+module.exports = { url, parse, pickWarn, warnUntil, createNws, EVENTS };

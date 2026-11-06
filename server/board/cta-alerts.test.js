@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { parseAlerts, mapAlerts, boardAlertLines, createAlertsPoller } = require('./cta-alerts');
+const { parseAlerts, mapAlerts, boardAlertLines, boardAlertWords, createAlertsPoller } = require('./cta-alerts');
 
 const XML = fs.readFileSync(path.join(__dirname, 'fixtures', 'cta-alerts', '2026-10-04-1057.xml'), 'utf8');
 const quiet = { warn() {}, error() {} };
@@ -24,6 +24,12 @@ test('map alerts: same filter as before (major or delay), one entry per line', (
   const out = mapAlerts(parseAlerts(XML));
   assert.deepEqual(out.map((a) => `${a.id}:${a.service}`), ['117906:g', '117906:org']);
   assert.deepEqual(Object.keys(out[0]), ['id', 'headline', 'short', 'severity', 'impact', 'service', 'start']);
+});
+
+test('board: a wide board\'s alert words are the major alert\'s impact, uppercase', () => {
+  assert.deepEqual([...boardAlertWords(parseAlerts(XML))], []);
+  const asMajor = parseAlerts(XML.replace('<SeverityCSS>minor</SeverityCSS>', '<SeverityCSS>major</SeverityCSS>'));
+  assert.deepEqual(Object.fromEntries(boardAlertWords(asMajor)), { GR: 'MINOR DELAYS', OR: 'MINOR DELAYS' });
 });
 
 test('board: only major alerts blink (not minor delays, planned work, closures, or elevators)', () => {

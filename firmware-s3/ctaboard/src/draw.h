@@ -183,6 +183,7 @@ struct ViewRow {
   int h = -1, x0 = 0, right = -1;
   bool a = false;
   std::optional<ustr> al;  // alert label (payload `al`), with `a`
+  std::optional<ustr> aw;  // wide rows: the alert's words (payload `aw`)
   std::optional<int> num;
   std::optional<Roll> numRoll;
   double top = 0;
@@ -230,6 +231,7 @@ class TransitAnimator {
     int h = -1, x0 = 0, right = -1;
     bool a = false;
     std::optional<ustr> al;
+    std::optional<ustr> aw;
     double top = 0, shownTop = 0;
     std::optional<double> born, fromTop, moveStart, leaving;
     std::vector<CellP> cells;
