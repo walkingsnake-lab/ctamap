@@ -14,7 +14,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { ledCenter, W, H, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX } = require('../server/board/radar');
+const { ledCenter, W, H, WIDE_W, WIDE_MX, SPLIT_W, SPLIT_TIME_BOX, FULL_TIME_BOX } = require('../server/board/radar');
 
 const OUT = path.join(__dirname, '..', 'server', 'board', 'locations');
 const lake = JSON.parse(fs.readFileSync(path.join(__dirname, 'geo-src', 'lake-michigan.geojson'), 'utf8')).features[0].geometry;
@@ -30,9 +30,9 @@ function inRing(x, y, ring) {
 }
 const isWater = (lon, lat) => rings.some(([outer, ...holes]) => inRing(lon, lat, outer) && !holes.some((h) => inRing(lon, lat, h)));
 
-function masks(st, width) {
+function masks(st, width, mx = Math.floor(width / 2)) {
   const water = new Uint8Array(width * H);
-  for (let y = 0; y < H; y++) for (let x = 0; x < width; x++) water[y * width + x] = isWater(...ledCenter(st.lat, st.lon, x, y, width)) ? 1 : 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < width; x++) water[y * width + x] = isWater(...ledCenter(st.lat, st.lon, x, y, width, mx)) ? 1 : 0;
   const shore = new Uint8Array(width * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < width; x++) {
     if (!water[y * width + x]) continue;
@@ -59,15 +59,19 @@ function hex(bits, width) {
   return rows;
 }
 
+// `wide`: the 128-wide board's masks (the station at WIDE_MX; one layout
+// for every station, the time on its own chip).
 function build(st) {
   const full = masks(st, W);
+  const w = masks(st, WIDE_W, WIDE_MX);
+  const wide = { water: hex(w.water, WIDE_W), shore: hex(w.shore, WIDE_W) };
   // The widest clock stack draws on cols 41-62, rows 2-19; that area must be
   // all water. The rest of the box is cleared either way.
   let boxWater = true;
   for (let y = 2; y <= 19 && boxWater; y++) for (let x = 41; x <= 62; x++) if (!full.water[y * W + x]) { boxWater = false; break; }
-  if (boxWater) return { mapid: st.mapid, split: false, width: W, timeBox: FULL_TIME_BOX, water: hex(full.water, W), shore: hex(full.shore, W) };
+  if (boxWater) return { mapid: st.mapid, split: false, width: W, timeBox: FULL_TIME_BOX, water: hex(full.water, W), shore: hex(full.shore, W), wide };
   const split = masks(st, SPLIT_W);
-  return { mapid: st.mapid, split: true, width: SPLIT_W, timeBox: SPLIT_TIME_BOX, water: hex(split.water, SPLIT_W), shore: hex(split.shore, SPLIT_W) };
+  return { mapid: st.mapid, split: true, width: SPLIT_W, timeBox: SPLIT_TIME_BOX, water: hex(split.water, SPLIT_W), shore: hex(split.shore, SPLIT_W), wide };
 }
 
 if (require.main === module) {

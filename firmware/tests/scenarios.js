@@ -813,6 +813,47 @@ async function build() {
       const chrono = { ...many, view: 'chrono', rows: many.rows.map((x, i) => ({ ...x, t: [x.t[0]], s: [x.s[0]], rn: String(800 + i) })), wx: null };
       add('wide transit chrono', chrono, at(chrono), undefined, undefined, S3);
     }
+    // Wide radar (wide-spec §5): 128-wide crops of the recorded frames, the
+    // station at x69; the time chip, the dots on the map, the temperature
+    // chip, warnings, the clock options, the current time rolling, peek.
+    {
+      const wideFrames = {};
+      for (const [stamp, mode, mapid] of [['202008102100', 'rain', '40100'], ['202202021800', 'snow', '41320'], ['202611032144', 'rain', '40380']]) {
+        const st = require(path.join(B, 'stations.json')).find((x) => x.mapid === mapid);
+        const loc = radar.loadLocation(radar.wideKey(mapid));
+        const wld = radar.parseWld(fs.readFileSync(path.join(B, 'fixtures', 'mrms', `lcref_${stamp}.wld`), 'utf8'));
+        const crop = await radar.crops(fs.createReadStream(path.join(B, 'fixtures', 'mrms', `lcref_${stamp}.png`)), wld, [{ key: 'k', lat: st.lat, lon: st.lon, width: loc.width, mx: loc.mx }]);
+        const { dbz, geo } = crop.get('k');
+        wideFrames[`${mapid}-${stamp}`] = radar.toFrame(dbz, geo, mode, loc).bytes;
+      }
+      for (const [key, bytes] of Object.entries(wideFrames)) {
+        const t = radar.timeOf(key.split('-')[1]);
+        const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+        const frames = Object.fromEntries(ids.map((id) => [id, bytes]));
+        const r = { on: true, frames: ids, ft: ids.map((_, i) => t - (5 - i) * 360), timeBox: null, split: false, wide: 1 };
+        const q = (radarExtra = {}, extra = {}) => ({ now: t, tzo: tzOffset(t), bright: 100, cols: 128, warn: null, radar: { ...r, ...radarExtra }, ...extra });
+        add(`wide radar ${key}`, q(), [{ screen: 'weather', idx: 5 }, { screen: 'weather', idx: 0 }, { screen: 'weather', idx: 3 }], frames, undefined, S3);
+        add(`wide radar ${key} temperature chip`, q({ cond: true, temp: 58 }), [{ screen: 'weather', idx: 2 }], frames, undefined, S3);
+      }
+      const [key, bytes] = Object.entries(wideFrames)[0];
+      const t = radar.timeOf(key.split('-')[1]);
+      const ids = ['a', 'b', 'c'];
+      const frames = Object.fromEntries(ids.map((id) => [id, bytes]));
+      const r = { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 360), timeBox: null, split: false, wide: 1 };
+      const q = (radarExtra = {}, extra = {}) => ({ now: t, tzo: tzOffset(t), bright: 100, cols: 128, warn: null, radar: { ...r, ...radarExtra }, ...extra });
+      add('wide radar time off, temperature', q({ showTime: false, temp: -4, icon: 'snow' }), [{ screen: 'weather', idx: 1 }], frames, undefined, S3);
+      add('wide radar clock none', q({ clock: 'none' }), [{ screen: 'weather', idx: 1 }], frames, undefined, S3);
+      add('wide radar clock age', q({ clock: 'age' }), [{ screen: 'weather', idx: 0 }, { screen: 'weather', idx: 2, now: t + 3000 }], frames, undefined, S3);
+      add('wide radar clock now', q({ clock: 'now' }), [{ screen: 'weather', idx: 0, now: t + 3600 * 5 }], frames, undefined, S3);
+      add('wide radar tornado warning blink', q({}, { warn: { kind: 'tor', lvl: 'warning' } }), [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, blink: true }], frames, undefined, S3);
+      add('wide radar svr watch, time off', q({ showTime: false, temp: 71 }, { warn: { kind: 'svr', lvl: 'watch' } }), [{ screen: 'weather', idx: 2 }], frames, undefined, S3);
+      add('wide radar dimmed, precip brightness', q({ rb: 60 }, { bright: 40 }), [{ screen: 'weather', idx: 2 }], frames, undefined, S3);
+      add('wide radar frames not all on hand', q(), [{ screen: 'weather', idx: 2 }], { a: bytes }, undefined, S3);
+      const ps = [0.25, 0.5, 0.75];
+      add('wide rolls radar current time', q({ clock: 'now' }), ps.map((pp) => ({ screen: 'weather', idx: 2, nums: { 'rad.clock': { from: '12:59', p: pp } } })), frames, undefined, S3);
+      const hdr = wide(payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX }));
+      add('wide rolls header clock', hdr, ps.map((pp) => ({ screen: 'transit', nums: { 'hdr.clock': { from: '12:59', p: pp } } })), undefined, undefined, S3);
+    }
     // Wide ticker: the platform sign (full names, the status icon right).
     for (const [file, mapid, name] of [['morse-2026-10-03-2316.json', '40100', 'MORSE'], ['clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE']]) {
       const q = { ...wideFrom(file, mapid, name, { alerts: ['BL'] }), screen: 'ticker', tickerHeader: name, tickerFill: 40 };

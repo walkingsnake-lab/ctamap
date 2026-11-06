@@ -86,12 +86,12 @@ The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours 
 
 ---
 
-## 5. Radar (decided)
+## 5. Radar (decided; built)
 
 - **Map across all 128 columns, no panel.** 1.5 mi per LED as at 64, the station at x69 (about 100 mi west, where weather comes from; the lake and part of Michigan east), rows centered on it as now. Water masked black with the shoreline, per station at 128 wide (`build-locations.js`). Frames are 128 × 32 (4 KB).
-- **Time chip** in the bottom-right corner: a 27 × 7 black backing (columns 101–127, rows 25–31) with the time (label white) and AM/PM (`#8f8f8f`) in Tom Thumb, right-aligned. The chip has its own backing, so unlike the 64 layout it needs no open water: one layout for every station.
-- **Frame indicator:** six 1-px dots on the bottom row (row 31), 1 px apart, the frame on screen amber and the rest `#4a4a4a`, on a black backing (12 × 3). Flush left without the temperature; 3 px right of it with.
-- **Temperature chip** (optional, per board): the bottom-left chip grows to hold the temperature in Tom Thumb (label white) and the dots after it (`58°`: 27 × 7).
+- **Time chip** in the bottom-right corner: a 27 × 6 black backing (columns 101–127, rows 26–31: 1 px of black above the text, decided Nov 5) with the time (label white) and AM/PM (`#8f8f8f`) in Tom Thumb, right-aligned. The chip has its own backing, so unlike the 64 layout it needs no open water: one layout for every station.
+- **Frame indicator:** six 1-px dots, 1 px apart from the left edge, the frame on screen amber and the rest `#4a4a4a`, with **the gaps between them black**, nothing beyond the dots (decided Nov 5, after trying them straight on the map and in a box). On the bottom row (row 31), or with a left chip, on row 25 just above it.
+- **Left chip** at the bottom left, same height: a watch or warning (glyph + `WATCH`/`WARNING`, the full word at this width, in place of the temperature, decided Nov 5), else (optional, per board, the radar's conditions setting) the temperature in Tom Thumb (label white).
 
 **Why:** at 64 the time sits over open water or the map splits; at 128 a fixed spot over the lake fails at 56 of 144 stations (checked against `stations.json` and the lake outline: the Loop and South Side reach the Indiana shore). Also mocked, not chosen (`radar-p*.png`, `radar-s*.png`): a split map with a time panel and five panel variants (big time, loop position, color key, conditions first), one fixed Chicago map for every board, a full-width map with a status bar, local and regional zooms side by side, and a nearest-rain panel (`17 MI SW`, computed from the frame).
 

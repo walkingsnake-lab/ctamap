@@ -498,11 +498,12 @@ function createBoard({
     const wx = board.showWeather && !keyLayout && wd ? toWx(wd) : null;
     const cfg = { ...board, showWeather: !!wx, showKey: keyLayout, lines: st ? st.lines : null };
     let radarState = NO_RADAR;
-    try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon); }
+    // A wide board (cols 128) gets the station's 128-wide frames (contract "Width").
+    try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon, { wide: board.cols === 128 }); }
     catch (e) { log.error('[board] radar:', e.message); }
     // Test radar loop from the simulator (expires with the test alerts).
     if (test && test.radar && st) {
-      try { radarState = { ...radarState, ...(await testRadar.want(test.radar, st, nowSecs())) }; }
+      try { radarState = { ...radarState, ...(await testRadar.want(test.radar, st, nowSecs(), { wide: board.cols === 128 })) }; }
       catch (e) { log.error('[board] test radar:', e.message); }
     }
     // The radar screen is the weather screen: the radar loop only while rain

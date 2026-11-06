@@ -20,22 +20,23 @@ function createTestRadar({ dir = path.join(__dirname, 'fixtures', 'mrms') } = {}
   const built = new Map(); // `${kind}:${mapid}` -> Promise<Uint8Array[]>
   const bytes = new Map(); // frame id -> Uint8Array
 
-  const idOf = (kind, mapid, i) => `test-${kind}-${mapid}-${i}`;
+  // wide: the 128-wide board's crops (radar.js wideKey).
+  const idOf = (kind, mapid, i, wide) => `test-${kind}-${wide ? R.wideKey(mapid) : mapid}-${i}`;
 
-  async function build(kind, st) {
+  async function build(kind, st, wide) {
     const { stamp, mode } = KINDS[kind];
-    const loc = R.loadLocation(st.mapid);
+    const loc = R.loadLocation(wide ? R.wideKey(st.mapid) : st.mapid);
     const wld = R.parseWld(fs.readFileSync(path.join(dir, `lcref_${stamp}.wld`), 'utf8'));
     // Earlier frames are cropped further east, so the weather moves east.
     const locs = Array.from({ length: LOOP }, (_, i) => {
       const [lon] = R.ledCenter(st.lat, st.lon, 32 + (LOOP - 1 - i) * DRIFT, 16);
-      return { key: i, lat: st.lat, lon, width: loc.width };
+      return { key: i, lat: st.lat, lon, width: loc.width, mx: loc.mx };
     });
     const crops = await R.crops(fs.createReadStream(path.join(dir, `lcref_${stamp}.png`)), wld, locs);
     return locs.map(({ key }) => {
       const { dbz, geo } = crops.get(key);
       const out = R.toFrame(dbz, geo, mode, loc).bytes;
-      bytes.set(idOf(kind, st.mapid, key), out);
+      bytes.set(idOf(kind, st.mapid, key, wide), out);
       return out;
     });
   }
@@ -43,18 +44,19 @@ function createTestRadar({ dir = path.join(__dirname, 'fixtures', 'mrms') } = {}
   return {
     KINDS: Object.keys(KINDS),
     // The payload's radar fields for a test loop at a station (a stations.json entry).
-    async want(kind, st, now) {
-      const k = `${kind}:${st.mapid}`;
-      if (!built.has(k)) built.set(k, build(kind, st).catch((e) => { built.delete(k); throw e; }));
+    async want(kind, st, now, { wide = false } = {}) {
+      const k = `${kind}:${st.mapid}:${wide ? 'w' : ''}`;
+      if (!built.has(k)) built.set(k, build(kind, st, wide).catch((e) => { built.delete(k); throw e; }));
       await built.get(k);
       const loc = R.loadLocation(st.mapid);
       const last = Math.floor(now / STEP) * STEP;
       return {
         on: true,
-        frames: Array.from({ length: LOOP }, (_, i) => idOf(kind, st.mapid, i)),
+        frames: Array.from({ length: LOOP }, (_, i) => idOf(kind, st.mapid, i, wide)),
         ft: Array.from({ length: LOOP }, (_, i) => last - (LOOP - 1 - i) * STEP),
         timeBox: loc.timeBox,
         split: loc.split,
+        ...(wide ? { wide: 1 } : {}),
       };
     },
     frame: (id) => bytes.get(id) || null,
