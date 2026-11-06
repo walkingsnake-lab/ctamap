@@ -84,8 +84,9 @@ PROFILES = {
         headers=((80.8, 0.0), (-81.2, 0.0)),
         s3_back=0.0,
         # S3 5.5 mm above the drawer's lowest place: its STEMMA QT plug enters from the board's bottom edge, right over
-        # the lower-right post (p4_cables.py); the buttons' relief stops 3.5 above Reset, below the shell's joint
-        drawer_s3_mid=-22.0, drawer_btn_top=41.6,
+        # the lower-right post (p4_cables.py); the buttons' relief stops 3.0 above Reset, leaving 1.1 mm of full wall
+        # under the shell joint's pocket
+        drawer_s3_mid=-22.0, drawer_btn_top=41.1,
         sensor_x=55.0,
         key_x=40.0,
         screw_xs=(46.0,),
