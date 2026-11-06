@@ -81,8 +81,8 @@ Eight 16-px columns, 3 hours apart: time, icon, temperature. With the top bar of
 ### Current conditions (first pass)
 A 2× icon (16 × 16) and the temperature in the clock digits, high/low and date under them on the left; the readout on the right (columns 58–127) with dot leaders: `SKY`, `FEELS`, `WIND`, `RAIN`, `SUNSET`.
 
-### Rain bars (first pass)
-The top bar with the title centered (`RAIN IN 25 MIN`); the eight quarter-hours across the full width (16 px each, 14 px bars), the same intensity scale and blues; `NOW 30m 1h 1h30 2h` under the axis. **No data source today:** WeatherAPI has no 15-minute precipitation, so the 64 rain bars don't show either; the layout waits for a source.
+### Rain bars (cut)
+Cut from the board altogether (Nov 5): no dependable 15-minute precipitation source.
 
 ---
 

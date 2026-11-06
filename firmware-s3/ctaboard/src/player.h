@@ -76,7 +76,6 @@ class Player {
   bool blink_on(double ms) const;
   bool blinking() const;
   int radar_idx(double ms) const;
-  bool rain_bars(double ms) const;
   bool awaiting_drop(long long now) const;
   std::optional<screen::FrameKey> frame_key(double ms, long long now);
 

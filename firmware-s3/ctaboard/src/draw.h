@@ -427,7 +427,6 @@ double strike_level(double ms);
 int ticker_pages(const Value &p, double now);
 int radar_on_hand(const Value &ids, const Frames *frames);
 int radar_loop_idx(const Value &ids, const Frames *frames, double t, const Timing &tm);
-bool rain_bars_turn(const Value &rn, int n, const Timing &tm, double t);
 
 struct PickedGame {
   int i, pos, of;

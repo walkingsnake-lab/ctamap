@@ -974,7 +974,6 @@
     // 25-29 (the first on the 5-day's weekday row).
     // Mockup: docs/board/mockups/weather/readout/pick.png.
     const WX_BLUE = '#1e90ff';
-    const WX_DROP = ['.#.', '###', '###', '.#.'];
     // Condition word colors by icon; anything else is label white.
     const SKY_COLOR = { rain: '#4aa0ff', ice: '#4aa0ff', snow: '#c8e8ff', tsnow: '#c8e8ff', sun: '#ffc800', moon: '#ffe47a' };
     // Temperature shadow (optional): 1px down-right at 20%, its color blended
@@ -1055,7 +1054,7 @@
     function drawDayTemp(f, str, cx, base, color) {
       drawTempText(f, str, cx - Math.floor(tempWidth(str) / 2), base, color);
     }
-    // Today on rows 0-7, shared by the 5-day layout and the rain bars.
+    // Today on rows 0-7, shared by the 5-day and hourly layouts.
     // top: {shadow: the board's temperature shadow setting, warn: the NWS
     // watch/warning, blink: the blink phase}. The warning takes over the
     // high/low line: glyph + WATCH / WARN in its color, right-aligned to x62;
@@ -1125,39 +1124,6 @@
       });
     }
 
-    // ---- rain bars (wxRain 'bars'; mockup docs/board/mockups/weather/rain-states) ----
-    // The weather screen while precipitation is falling or due in the next 2
-    // hours (wx.rain). The top bar, then the title centered on rows 10-14
-    // (a drop, or a flake for snow, in front of titles that don't say RAIN or SNOW), eight
-    // 15-minute bars (7px wide on an 8px pitch) rising from row 25 up to 10
-    // rows, and `1H` / `2H` under the 4th/5th bar gap and the last bar. An NWS
-    // warning or watch takes the title's place.
-    const RAIN_LEVELS = ['#0a2a78', '#0f48c0', '#1a6cff'];
-    const SNOW_LEVELS = ['#3357a6', '#6e83a6', '#a6a6a6'];
-    const RAIN_TEXT = '#60b0ff', SNOW_TEXT = '#a9c9ff', RAIN_DRY = '#081428', AXIS = '#555555';
-    const FLAKE = ['..#..', '#.#.#', '.###.', '#.#.#', '..#..'];
-    const drawArt = (f, art, x, y, color) => art.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(x + i, y + j, 1, 1, color); }));
-    function drawRainBars(f, wx, top) {
-      const rain = wx.rain;
-      drawTopBar(f, wx, top);
-      const color = rain.snow ? SNOW_TEXT : RAIN_TEXT;
-      // The drop or flake stands in for the word: only on titles that don't
-      // say RAIN or SNOW (ENDS IN..., BREAK IN...), and only if it fits.
-      const art = /RAIN|SNOW/.test(rain.title) ? null : (rain.snow ? FLAKE : WX_DROP);
-      const markW = art && measure('small', rain.title) + art[0].length + 2 <= 64 ? art[0].length + 2 : 0;
-      const x = 32 - Math.floor((measure('small', rain.title) + markW) / 2);
-      // The text's rows are 9-13; the 5px flake matches them, the 4px drop sits on the bottom.
-      if (markW) drawArt(f, art, x, rain.snow ? 9 : 10, rain.snow ? color : WX_BLUE);
-      f.text('small', rain.title, x + markW, 14, color);
-      const levels = rain.snow ? SNOW_LEVELS : RAIN_LEVELS;
-      rain.h.slice(0, 8).forEach((h, i) => {
-        if (!h) f.fill(i * 8, 25, 7, 1, RAIN_DRY);
-        else f.fill(i * 8, 26 - h, 7, h, levels[Math.max(1, Math.min(3, rain.l[i])) - 1]);
-      });
-      ctext(f, 'small', '1H', 31, 31, AXIS);
-      rtext(f, 'small', '2H', 62, 31, AXIS);
-    }
-
     // The radar loop: with every frame on hand, step through them in time
     // order, then hold on the newest. While any is still downloading, hold
     // on the newest on hand (playing a partial loop showed missing frames
@@ -1183,17 +1149,6 @@
     // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
     // The weather screen: the radar loop while there are frames (rain in the
     // box), current conditions (or the 5-day layout) otherwise.
-    // The rain turns (rain.loops, rain.alt): the radar loop plays `loops` full
-    // cycles from its start (cycle as radarLoopIdx() counts it, the hold
-    // included), then the bars show for alt s, then the loop starts again.
-    // n: frames in the loop; t: ms since the loop started. Mirrors
-    // rain_bars_turn() in draw.py.
-    function rainBarsTurn(rn, n, tm, t) {
-      if (!rn || !rn.h || !rn.alt || !rn.loops || !n) return false;
-      const cycle = Math.max(1, n - 1) * tm.radarFrame + tm.radarHold;
-      const loopMs = rn.loops * cycle;
-      return t % (loopMs + rn.alt * 1000) >= loopMs;
-    }
     function renderWeather(p, opts) {
       const o = opts || {};
       const r = p.radar || {};
@@ -1204,22 +1159,14 @@
       const idx = !ids.length ? -1 : o.peek ? newestOnHand() : o.idx != null ? Math.max(0, Math.min(ids.length - 1, o.idx)) : ids.length - 1;
       const f = newFrame();
       // No frames (no rain in the box, or none processed yet), or none
-      // downloaded yet: the weather screen.
-      // Rain bars when sent (alternating with the radar loop while the
-      // payload says so: rain.alt s each, epoch-aligned, bars on the odd
-      // turns).
-      const rn = r.wx && r.wx.rain;
-      // t defaults to the epoch clock (the simulator's stills); the board
-      // passes ms since its loop started.
-      const loopT = o.t != null ? o.t : (o.now != null ? o.now : p.now) * 1000;
-      const barsTurn = rainBarsTurn(rn, ids.length, timing(p), loopT);
+      // downloaded yet: the weather screen. (The rain bars were cut, Nov
+      // 2026: a payload's wx.rain is ignored.)
       // A peek never falls back for frames still downloading: it shows the
       // empty radar, its frame indicator filling in as they land.
-      if (((!ids.length || (!o.peek && o.frames && !radarOnHand(ids, o.frames))) || barsTurn) && r.wx) {
+      if ((!ids.length || (!o.peek && o.frames && !radarOnHand(ids, o.frames))) && r.wx) {
         // The forecast layouts' top bar carries a warning on its high/low line.
         const top = { shadow: !!r.tempShadow, warn: p.warn, blink: o.blink };
-        if (r.wx.rain && r.wx.rain.h) drawRainBars(f, r.wx, top);
-        else if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
+        if (r.wx.hours && r.wx.hours.length) drawHourly(f, r.wx, top);
         else if (r.wx.days && r.wx.days.length) drawFiveDay(f, r.wx, top);
         else drawConditions(f, r.wx, top);
         return f;
@@ -3106,7 +3053,7 @@
     }
 
     return {
-      Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, rainBarsTurn, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
+      Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, renderChooser, renderPeek, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekShift, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,

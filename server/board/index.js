@@ -7,7 +7,7 @@ const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACE
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
-const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toRain, testRain, TEST_RAIN, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
+const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
 const { boardAlertLines } = require('./cta-alerts');
 const { createNws, pickWarn } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
@@ -295,14 +295,12 @@ function createBoard({
     if (game && !GAME_STATES.includes(game)) throw new ValidationError(`game must be one of ${GAME_STATES.join(', ')}`);
     const rad = body.radar == null ? null : body.radar;
     if (rad && !testRadar.KINDS.includes(rad)) throw new ValidationError(`radar must be one of ${testRadar.KINDS.join(', ')}`);
-    const bars = body.bars == null ? null : body.bars;
-    if (bars && !Object.keys(TEST_RAIN).includes(bars)) throw new ValidationError(`bars must be one of ${Object.keys(TEST_RAIN).join(', ')}`);
     const wb = body.weather == null ? null : body.weather;
     if (wb != null && typeof wb !== 'object') throw new ValidationError('weather must be {kind, tod}');
     const kind = wb && wb.kind != null ? wb.kind : null, tod = wb && wb.tod != null ? wb.tod : null;
     if (kind != null && !Object.keys(TEST_WX).includes(kind)) throw new ValidationError(`weather.kind must be one of ${Object.keys(TEST_WX).join(', ')}`);
     if (tod != null && !Object.keys(TEST_TOD).includes(tod)) throw new ValidationError(`weather.tod must be one of ${Object.keys(TEST_TOD).join(', ')}`);
-    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, bars, weather: kind || tod ? { kind, tod } : null };
+    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, weather: kind || tod ? { kind, tod } : null };
   }
 
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
@@ -504,7 +502,7 @@ function createBoard({
     const stale = !data || now - data.fetchedAt > STALE_S;
     // The row cap only reserves space for the weather row when there's
     // weather to show.
-    // Temperatures in the board's unit (wd); rain bars keep the raw data.
+    // Temperatures in the board's unit (wd).
     const wd = inUnit(w, board.tempUnit);
     // The key layout has no weather strip: the station line takes rows 25-31.
     const keyLayout = board.transitLayout === 'key';
@@ -521,30 +519,12 @@ function createBoard({
     }
     // The radar screen is the weather screen: the radar loop only while rain
     // is in the box (frames are sent only then), current conditions otherwise.
-    // Rain bars (wxRain 'bars' or 'both'): while precipitation is falling or
-    // due in the next 2 hours. 'bars' never sends the radar loop; 'both'
-    // sends both and the board alternates them (rain.loops radar loops, then
-    // rain.alt s of bars) while both apply.
-    // Test rain bars (simulator): shown whatever the board's setting, and
-    // replacing the radar loop unless it's alternating ('both').
-    const testBars = test && test.bars ? testRain(test.bars, now) : null;
-    // Bars need 15-minute precipitation, which WeatherAPI doesn't send: without
-    // it (and no test bars), 'bars' and 'both' act as 'radar', so a board left
-    // on 'bars' still gets its radar loop.
-    const wxRain = (w && w.q15 && w.q15.length) || testBars ? board.wxRain : 'radar';
-    const barsOn = wxRain === 'bars' || wxRain === 'both';
-    let rain = barsOn && w ? toRain(w, now) : null;
-    if (testBars) rain = testBars;
     // The radar view (wxView 'radar') keeps its frames whatever the weather
-    // (an empty map when dry) and never shows rain bars.
+    // (an empty map when dry).
     const radarView = board.wxView === 'radar';
-    if (radarView) rain = null;
     // Every kept frame, rain or not, for the peek chooser's radar view.
     const allFrames = { frames: radarState.frames, ft: radarState.ft };
-    if (!radarView && (!radarState.on || wxRain === 'bars' || (testBars && wxRain !== 'both'))) radarState = { ...radarState, frames: [], ft: [] };
-    // Both: the radar loop plays wxRainLoops full cycles, then the bars show
-    // for alt s, repeating (draw.js rainBarsTurn()).
-    if (rain && radarState.frames.length) rain = { ...rain, alt: board.wxRainEvery || 15, loops: board.wxRainLoops || 2 };
+    if (!radarView && !radarState.on) radarState = { ...radarState, frames: [], ft: [] };
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && wd ? toDays(wd) : null;
     const hours = board.wxView === 'hourly' && wd ? toHours(wd) : null;
@@ -552,7 +532,7 @@ function createBoard({
     const rlKey = `${id}:${board.station.mapid}`;
     const rl = wd ? rainLine(rainLines.get(rlKey), wd.pop) : false;
     if (wd) rainLines.set(rlKey, rl);
-    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(rl ? { rl: 1 } : {}), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}), ...(rain ? { rain } : {}) } };
+    if (wd) radarState = { ...radarState, wx: { ...toScreenWx(wd), ...(rl ? { rl: 1 } : {}), ...(board.tempUnit === 'C' ? { c: 1 } : {}), ...(days ? { days } : {}), ...(hours ? { hours } : {}) } };
     let alertLines = new Set();
     try { alertLines = boardAlertLines(alerts && alerts.get() ? alerts.get().alerts : []); }
     catch (e) { log.error('[board] alerts:', e.message); }
@@ -1071,13 +1051,13 @@ function createBoard({
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
             throw e;
           }
-          if (t.lines.length || t.warn || t.game || t.radar || t.bars || t.weather) tests.set(id, { ...t, until: now + TEST_S });
+          if (t.lines.length || t.warn || t.game || t.radar || t.weather) tests.set(id, { ...t, until: now + TEST_S });
           else tests.delete(id);
         } else if (method !== 'GET') {
           return send(res, 405, { err: 'method' });
         }
         const t = activeTest(id, now);
-        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, bars: t.bars || null, weather: t.weather || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, bars: null, weather: null, left: 0 });
+        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, weather: t.weather || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, weather: null, left: 0 });
       }
 
       // Station list for the simulator's picker.

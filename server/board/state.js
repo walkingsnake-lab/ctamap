@@ -90,9 +90,9 @@ const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame
 const WX_VIEWS = ['now', '5day', 'hourly', 'radar'];
 const TEMP_UNITS = ['F', 'C'];  // temperatures on every weather display
 // Retired settings, dropped from saved state on load: per-layout animated
-// weather icons (removed Nov 2026; icons are always static).
-const RETIRED_KEYS = ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar'];
-const WX_RAINS = ['radar', 'bars', 'both'];  // weather screen with rain around: radar loop, rain bars, or both alternating
+// weather icons (removed Nov 2026; icons are always static), and the rain
+// bars' settings (the bars were cut, Nov 2026).
+const RETIRED_KEYS = ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar', 'wxRain', 'wxRainEvery', 'wxRainLoops'];
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
   tickerHold: [5, 6, 8, 10, 12, 15],         // s each ticker page holds
@@ -100,8 +100,6 @@ const SPEEDS = {
   radarFrame: [300, 400, 500, 700, 1000],    // ms per radar loop frame
   radarHold: [2, 3, 4, 6, 8],                // s the loop holds on the newest frame
   gameEvery: [30, 45, 60, 90, 120],
-  wxRainEvery: [10, 15, 20, 30, 45, 60],     // s of rain bars per turn when both alternate
-  wxRainLoops: [1, 2, 3, 5],                 // full radar loops per turn when both alternate
 };
 const LINE_CODES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
 const ROW_RE = new RegExp(`^(${LINE_CODES.join('|')}):[^:]{1,24}$`);
@@ -209,13 +207,6 @@ function defaultBoard(stations) {
     // (today on top, the next five days in columns), or 'hourly' (today on
     // top, 3/6/9/12 hours ahead in columns).
     wxView: 'now',
-    // Weather screen while rain is around: 'radar' (the loop, while rain is
-    // in the box), 'bars' (the next 2 hours in 15-minute bars, while the
-    // forecast has rain; never the loop), or 'both' (alternate every
-    // wxRainLoops full radar loops, then wxRainEvery s of bars, repeating,
-    // while both apply).
-    wxRain: 'radar',
-    wxRainEvery: 15,
     // Announce screen (design spec §15): the message on it ({text, style,
     // id}; null: none yet, the screen asks for one) and saved presets
     // ({text, style}). id is the board's v when the message was set: a new
@@ -240,7 +231,6 @@ function defaultBoard(stations) {
     colonBlink: true,
     // Analog clock face: the accent color (ANALOG_ACCENTS).
     analogAccent: 'amber',
-    wxRainLoops: 2,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -341,8 +331,6 @@ function validatePatch(patch, stations) {
       case 'radarFrame':
       case 'radarHold':
       case 'gameEvery':
-      case 'wxRainEvery':
-      case 'wxRainLoops':
         if (!SPEEDS[key].includes(val)) throw new ValidationError(`${key} must be one of ${SPEEDS[key].join(', ')}`);
         out[key] = val;
         break;
@@ -415,14 +403,13 @@ function validatePatch(patch, stations) {
       case 'radarClock':
       case 'wxView':
       case 'tempUnit':
-      case 'wxRain':
       case 'clockFace':
       case 'analogAccent':
       case 'cloudDrift':
       case 'wheelSpeed':
       case 'rippleSpeed':
       case 'rainSpeed': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, wxRain: WX_RAINS, clockFace: CLOCK_FACES, analogAccent: Object.keys(ANALOG_ACCENTS), cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, clockFace: CLOCK_FACES, analogAccent: Object.keys(ANALOG_ACCENTS), cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;

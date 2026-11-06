@@ -1566,53 +1566,6 @@ static void draw_hourly(Frame &f, const Value &wx, bool shadow, const Value *war
   }
 }
 
-// ---- rain bars ----
-
-static const RGB RAIN_LEVELS[] = {hexc(0x0a2a78), hexc(0x0f48c0), hexc(0x1a6cff)};
-static const RGB SNOW_LEVELS[] = {hexc(0x3357a6), hexc(0x6e83a6), hexc(0xa6a6a6)};
-static const RGB RAIN_TEXT = hexc(0x60b0ff), SNOW_TEXT = hexc(0xa9c9ff), RAIN_DRY = hexc(0x081428),
-                 AXIS = hexc(0x555555);
-static const char *const FLAKE[] = {"..#..", "#.#.#", ".###.", "#.#.#", "..#.."};
-
-static void draw_art(Frame &f, const char *const *art, int rows, int x, int y, RGB color) {
-  for (int j = 0; j < rows; j++)
-    for (int i = 0; art[j][i]; i++)
-      if (art[j][i] == '#') f.fill(x + i, y + j, 1, 1, color);
-}
-
-static void draw_rain_bars(Frame &f, const Value &wx, bool shadow, const Value *warn, bool blink) {
-  const Value &rain = wx["rain"];
-  draw_top_bar(f, wx, shadow, warn, blink);
-  bool snow = rain["snow"].truthy();
-  RGB color = snow ? SNOW_TEXT : RAIN_TEXT;
-  std::string title8 = json::str(rain["title"]);
-  ustr title = U(title8);
-  const char *const *art = nullptr;
-  int art_rows = 0, art_w = 0;
-  if (title8.find("RAIN") == std::string::npos && title8.find("SNOW") == std::string::npos) {
-    art = snow ? FLAKE : WX_DROP;
-    art_rows = snow ? 5 : 4;
-    art_w = (int)strlen(art[0]);
-  }
-  int mark_w = art && measure(FONT_SMALL, title) + art_w + 2 <= 64 ? art_w + 2 : 0;
-  int x = 32 - (int)fdiv(measure(FONT_SMALL, title) + mark_w, 2);
-  if (mark_w) draw_art(f, art, art_rows, x, snow ? 9 : 10, snow ? color : WX_BLUE);
-  f.text(FONT_SMALL, title, x + mark_w, 14, color);
-  const RGB *levels = snow ? SNOW_LEVELS : RAIN_LEVELS;
-  const Value &hs = rain["h"];
-  for (size_t i = 0; i < hs.size() && i < 8; i++) {
-    int h = (int)hs[i].num();
-    if (!hs[i].truthy()) {
-      f.fill((int)i * 8, 25, 7, 1, RAIN_DRY);
-    } else {
-      int l = clampi((int)rain["l"][i].num(), 1, 3);
-      f.fill((int)i * 8, 26 - h, 7, h, levels[l - 1]);
-    }
-  }
-  ctext(f, FONT_SMALL, U"1H", 31, 31, AXIS);
-  rtext(f, FONT_SMALL, U"2H", 62, 31, AXIS);
-}
-
 // ---- radar ----
 
 static int radar_value(const std::vector<uint8_t> &data, int i, int w = 64) {
@@ -1654,17 +1607,6 @@ int radar_loop_idx(const Value &ids, const Frames *frames, double t, const Timin
   double cycle = std::max(1, n - 1) * tm.radarFrame + tm.radarHold;
   double pos = t - floor(t / cycle) * cycle;  // Python t % cycle
   return (int)std::min((double)(n - 1), floor(pos / tm.radarFrame));
-}
-
-// The rain turns: the radar loop plays `loops` full cycles, then the bars
-// show for alt s. Mirrors rainBarsTurn() in draw.js.
-bool rain_bars_turn(const Value &rn, int n, const Timing &tm, double t) {
-  if (!rn.truthy() || !rn["h"].truthy() || !rn["alt"].truthy() || !rn["loops"].truthy() || !n) return false;
-  double cycle = std::max(1, n - 1) * tm.radarFrame + tm.radarHold;
-  double loop_ms = rn["loops"].num() * cycle;
-  double period = loop_ms + rn["alt"].num() * 1000;
-  double pos = t - floor(t / period) * period;
-  return pos >= loop_ms;
 }
 
 static const RGB PEEK_LOADED = hexc(0x6a6a6a);
@@ -1746,7 +1688,7 @@ static void render_radar_wide(const Value &p, const Value &r, Frame &f, const Va
 }
 
 static void render_weather(const Value &p, Frame &f, std::optional<double> now, std::optional<int> idx_o,
-                           const Frames *frames, bool blink, std::optional<double> t_o, bool peek = false) {
+                           const Frames *frames, bool blink, bool peek = false) {
   const Value &r = p["radar"];
   const Value &ids = r["frames"];
   int nids = (int)ids.size();
@@ -1764,17 +1706,13 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   } else if (idx_o) idx = std::max(0, std::min(nids - 1, *idx_o));
   else idx = nids - 1;
   const Value &wx = r["wx"];
-  const Value &rn = wx.truthy() ? wx["rain"] : Value::null_value();
-  double clock = now ? *now : p["now"].num();
-  double loop_t = t_o ? *t_o : clock * 1000;
-  bool bars_turn = rain_bars_turn(rn, nids, timing(p), loop_t);
   const Value *warnp = p["warn"].truthy() ? &p["warn"] : nullptr;
   // A peek never falls back for frames still downloading: it shows the
   // empty radar, its frame indicator filling in as they land.
-  if (((!ids.truthy() || (!peek && frames && !radar_on_hand(ids, frames))) || bars_turn) && wx.truthy()) {
+  // (The rain bars were cut, Nov 2026: wx.rain is ignored.)
+  if ((!ids.truthy() || (!peek && frames && !radar_on_hand(ids, frames))) && wx.truthy()) {
     bool shadow = r["tempShadow"].truthy();
-    if (wx["rain"].truthy() && wx["rain"]["h"].truthy()) draw_rain_bars(f, wx, shadow, warnp, blink);
-    else if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
+    if (wx["hours"].truthy()) draw_hourly(f, wx, shadow, warnp, blink);
     else if (wx["days"].truthy()) draw_five_day(f, wx, shadow, warnp, blink);
     else draw_conditions(f, wx, shadow, warnp, blink);
     return;
@@ -2485,7 +2423,7 @@ static void draw_peek_view(const Value &q, const std::string &screen, Frame &f, 
   f.clear();
   if (screen == "cycle") draw_cycle_art(f);
   else if (screen == "ticker") render_ticker(q, f, o.now, o.page, o.slide);
-  else if (screen == "weather") render_weather(q, f, o.now, o.idx, o.frames, o.blink, o.t, true);
+  else if (screen == "weather") render_weather(q, f, o.now, o.idx, o.frames, o.blink, true);
   else if (screen == "clock") render_clock(q, f, o);
   else if (screen == "announce") render_announce(q, f, o.t);
   else render_transit(q, f, o.now, o.blink, o.view);
@@ -3718,7 +3656,7 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   if (screen == "peek") render_peek(p, f, o);
   else if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
-  else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, o.t);
+  else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
   else if (screen == "clock") render_clock(p, f, o);
   else if (screen == "announce") render_announce(p, f, o.t);
