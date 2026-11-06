@@ -31,6 +31,9 @@ const ANALOG_ACCENTS = {
   amber: '#ffb000', coral: '#ff5a4e', pink: '#ff4fa8', violet: '#a066ff',
   blue: '#4a7dff', cyan: '#22c8e6', mint: '#2fe08a', lime: '#a8e23a',
 };
+// Big digits and day/date faces: the time's color. white is the original;
+// the rest are the analog accents.
+const DIGIT_COLORS = { white: '#e6e6e6', ...ANALOG_ACCENTS };
 // Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
 const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
 const WHEEL_SPEEDS = ['off', 'slow', 'normal', 'fast'];
@@ -234,6 +237,8 @@ function defaultBoard(stations) {
     colonBlink: true,
     // Analog clock face: the accent color (ANALOG_ACCENTS).
     analogAccent: 'amber',
+    // Big digits and day/date faces: the time's color (DIGIT_COLORS).
+    digitColor: 'white',
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -410,11 +415,12 @@ function validatePatch(patch, stations, cols) {
       case 'tempUnit':
       case 'clockFace':
       case 'analogAccent':
+      case 'digitColor':
       case 'cloudDrift':
       case 'wheelSpeed':
       case 'rippleSpeed':
       case 'rainSpeed': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, clockFace: CLOCK_FACES, analogAccent: Object.keys(ANALOG_ACCENTS), cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, clockFace: CLOCK_FACES, analogAccent: Object.keys(ANALOG_ACCENTS), digitColor: Object.keys(DIGIT_COLORS), cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;
@@ -676,4 +682,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };
