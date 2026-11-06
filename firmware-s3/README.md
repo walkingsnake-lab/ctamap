@@ -21,7 +21,9 @@ boards → **Set up a board…**. Nothing to install.
    token and owner link, printed on the label) or **Me** (its own token,
    your features, optional WiFi), its **station**, which board's other
    settings it starts from, and the firmware (Stable unless you pick
-   another).
+   another). Under **Panel**: **Upside down** for a panel mounted turned
+   180° (the bar sleeve cases) and its **color order** (below). This
+   computer remembers both for the next board.
 2. **Flash it:** plug the board in by USB, hold BOOT, tap RESET, let go of
    BOOT, click **Flash** and pick its port. The page checks it's an
    ESP32-S3, adds the board on the server with its token, and writes the
@@ -60,6 +62,7 @@ Then, with the board on USB:
 ```sh
 node scripts/setup-board.js --id kitchen --label "Kitchen"            # a board for someone else
 node scripts/setup-board.js --id den --shared --wifi "home=password"  # one of yours
+node scripts/setup-board.js --id den --shared --rotate 180 --colors RBG   # panel upside down, green/blue swapped
 node scripts/setup-board.js --id bar --cols 128                        # two panels, 128 x 32
 ```
 
@@ -181,9 +184,12 @@ if it stops answering for 10 s) Auto is sunrise and sunset, as before.
   `MATRIX_DOUBLE_BUFFER 0` (draws straight onto the panel, as the driver test
   sketch did).
 - **Wrong colors (green shows as blue, blue as green):** the panel's color
-  lines are wired in another order. Set `MATRIX_COLOR_ORDER "RBG"` in
-  `secrets.h` (red/green swapped: `"GRB"`; red/blue: `"BGR"`). It reassigns the
-  data pins, so the picture and timing are otherwise unchanged.
+  lines are wired in another order. Pick the color order in the setup page's
+  **Panel** section or `scripts/setup-board.js --colors` (a setup build:
+  `MATRIX_COLOR_ORDER` in `secrets.h`): what red, green and blue showed as
+  with RGB, in that order. Green/blue swapped is `RBG`, red/green `GRB`,
+  red/blue `BGR`; colors that move round one step are `GBR` or `BRG`. It
+  reassigns the data pins, so the picture and timing are otherwise unchanged.
 - The serial log's first lines show the refresh rate and these settings.
 
 ### Two panels (128 x 32)

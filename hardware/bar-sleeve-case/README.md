@@ -127,7 +127,8 @@ The panel goes in first; the encoder after it (its board hangs where the panel s
    two narrow printed strips). Then the
    2 x M3 x 10 from below into the tray: the first time, drive each in slowly, back it out once, then drive it home and stop
    when the head seats (snug, not tight: the head bears on the walnut).
-8. **Firmware:** the panel sits turned 180° in this case: `MATRIX_ROTATION 180` in `secrets.h`. Plug in USB-C.
+8. **Firmware:** the panel sits turned 180° in this case: set it up with **Upside down** (the control page's Set up a board,
+   or `scripts/setup-board.js --rotate 180`), or `MATRIX_ROTATION 180` in `secrets.h` for a setup build. Plug in USB-C.
 
 - **Flashing:** hold the Boot key in through the funnel on the back, plug in USB-C, upload, replug.
 - **Placement:** on a shelf, keep ~1 cm behind the case: pushed flat against a wall the rim's 4 mm recess seals both louver

@@ -4,6 +4,7 @@
 // (firmware-s3/README.md, "Setting up a board"):
 //
 //   node scripts/setup-board.js --id kitchen --label "Kitchen"
+//   node scripts/setup-board.js --id kitchen --rotate 180 --colors RBG   # a turned panel, green and blue swapped
 //
 // 1. Gets the generic build (the CI artifact matching the server's stable
 //    build, else the newest on main; or --firmware <merged.bin>).
@@ -11,7 +12,8 @@
 //    home) and gives it its own token and owner link (keys.js). --shared
 //    uses the shared BOARD_TOKEN instead (your own boards).
 // 3. Builds the board's settings (src/config.h: board ID, token, server,
-//    setup network name and password, optional --wifi) into an NVS image.
+//    setup network name and password, optional --wifi, the panel's
+//    --rotate and --colors) into an NVS image.
 // 4. Flashes build and settings with esptool in one pass.
 // 5. Writes a printable label (~/board-labels/<id>-label.html, outside the
 //    repo: it holds the owner link): a QR code that
@@ -42,7 +44,7 @@ const { BOARD_ID_RE } = require('../server/board/setup-image');
 // The settings, the settings image, the build checks and the label are
 // shared with the control page's Set up a board (server/board/setup-image.js).
 const S = require('../server/board/setup-image');
-const { boardConfig, randomText, setupNetwork, partitions, appImageEnd, inspectMerged, flashPlan, PANEL_DEFAULTS, FIELDS, hex } = S;
+const { boardConfig, panelOptions, COLOR_ORDERS, randomText, setupNetwork, partitions, appImageEnd, inspectMerged, flashPlan, PANEL_DEFAULTS, FIELDS, hex } = S;
 
 // "ssid=password" (password may be empty for an open network); WiFi limits as on the setup page.
 function parseWifi(s) {
@@ -126,6 +128,9 @@ const USAGE = `node scripts/setup-board.js --id <board-id> [options]
   --shared              no key of its own: the shared BOARD_TOKEN (your own boards)
   --rekey               give a board that already has a key a new one (the old token stops working)
   --wifi "ssid=pass"    save a network (repeatable); without it, WiFi is set on the board's setup network
+  --rotate <0|180>      180: the panel is mounted upside down (the bar sleeve cases); default 0
+  --colors <order>      the panel's color order: what red, green and blue showed as with RGB
+                        (${COLOR_ORDERS.join(', ')}; default RGB; green and blue swapped: RBG)
   --cols 64|128         LEDs across: 64 for one panel (default), 128 for two chained
   --firmware <file>     ctaboard.ino.merged.bin to flash (default: the CI build, via gh)
   --port <port>         serial port (default: esptool finds it)
@@ -143,6 +148,7 @@ async function main(argv) {
       id: { type: 'string' }, label: { type: 'string' }, from: { type: 'string', default: 'home' },
       shared: { type: 'boolean' }, rekey: { type: 'boolean' }, wifi: { type: 'string', multiple: true, default: [] },
       firmware: { type: 'string' }, port: { type: 'string' }, server: { type: 'string', default: DEFAULT_SERVER },
+      rotate: { type: 'string', default: '0' }, colors: { type: 'string', default: 'RGB' },
       control: { type: 'string' }, token: { type: 'string' }, out: { type: 'string', default: path.join(os.homedir(), 'board-labels') },
       cols: { type: 'string', default: '64' },
       'dry-run': { type: 'boolean' }, yes: { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
@@ -157,6 +163,7 @@ async function main(argv) {
   const sharedToken = o.shared ? (o.token || process.env.BOARD_TOKEN) : null;
   if (o.shared && !sharedToken) throw new Error('--shared needs the shared token: set BOARD_TOKEN or pass --token');
   const networks = o.wifi.map(parseWifi);
+  const panel = panelOptions({ rotation: o.rotate, colorOrder: o.colors });
   if (networks.length && !o.shared) {
     console.warn('! --wifi on a board with its own key: its owner can read that password out of flash. Run setup again without --wifi before it ships.');
   }
@@ -206,7 +213,8 @@ async function main(argv) {
 
     // 3. Settings.
     const net = setupNetwork();
-    const cfg = boardConfig({ id: o.id, token, url: o.server, networks, setupName: net.name, setupPass: net.pass, panel: { cols: Number(o.cols) } });
+    const cfg = boardConfig({ id: o.id, token, url: o.server, networks, setupName: net.name, setupPass: net.pass, panel: { ...panel, cols: Number(o.cols) } });
+    console.log(`Panel: ${panel.rotation === 180 ? 'upside down (rotation 180)' : 'upright'}, colors ${panel.color_order}${o.cols === '128' ? ', two panels (128 x 32)' : ''}`);
     const nvsImage = buildNvs(cfg, nvs.size);
     const plan = flashPlan(img, nvsImage, nvs, end);
 
@@ -246,7 +254,7 @@ function ask(q) {
   return new Promise((resolve) => rl.question(q, () => { rl.close(); resolve(); }));
 }
 
-module.exports = { boardConfig, parseWifi, randomText, setupNetwork, partitions, appImageEnd, inspectMerged, flashPlan, labelHtml, PANEL_DEFAULTS, FIELDS };
+module.exports = { boardConfig, panelOptions, COLOR_ORDERS, parseWifi, randomText, setupNetwork, partitions, appImageEnd, inspectMerged, flashPlan, labelHtml, PANEL_DEFAULTS, FIELDS };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then((code) => { process.exitCode = code; }, (e) => { console.error(`setup-board: ${e.message}`); process.exitCode = 1; });

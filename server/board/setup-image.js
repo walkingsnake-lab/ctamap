@@ -37,6 +37,18 @@
   const FIELDS = ['networks', 'url', 'board_id', 'token', 'rotation', 'curve', 'night_curve', 'hw_dim', 'status_led',
     'tls_verify', 'clk_phase', 'double_buffer', 'color_order', 'knob_reverse', 'cols', 'setup_name', 'setup_pass'];
 
+  // The panel options the setup tools offer (the rest keep PANEL_DEFAULTS): which way up it's mounted (the bar
+  // sleeve cases turn it 180 deg) and the order its color lines are wired in. An order reads as what red, green and
+  // blue showed as on that panel with RGB: green and blue swapped is RBG (device.cpp color_pins).
+  const COLOR_ORDERS = ['RGB', 'RBG', 'GRB', 'GBR', 'BRG', 'BGR'];
+  function panelOptions({ rotation = 0, colorOrder = 'RGB' } = {}) {
+    const r = Number(rotation);
+    if (r !== 0 && r !== 180) throw new Error(`rotation ${rotation}: 0 or 180`);
+    const c = String(colorOrder).toUpperCase();
+    if (!COLOR_ORDERS.includes(c)) throw new Error(`color order ${colorOrder}: one of ${COLOR_ORDERS.join(', ')}`);
+    return { rotation: r, color_order: c };
+  }
+
   const DEFAULT_URL = 'https://ctamap.fly.dev';
   function boardConfig({ id, token, url = DEFAULT_URL, networks = [], setupName = '', setupPass = '', panel = {} }) {
     const c = { networks, url, board_id: id, token, ...PANEL_DEFAULTS, ...panel, setup_name: setupName, setup_pass: setupPass };
@@ -251,7 +263,7 @@ ${items.map((it) => labelBody(it, it.qr)).join('\n')}
   }
 
   return {
-    BOARD_ID_RE, PANEL_DEFAULTS, FIELDS, boardConfig, checkWifi, randomText, setupNetwork,
+    BOARD_ID_RE, PANEL_DEFAULTS, FIELDS, COLOR_ORDERS, panelOptions, boardConfig, checkWifi, randomText, setupNetwork,
     crc32, nvsImage, partitions, appImageEnd, buildMark, inspectMerged, flashPlan,
     wifiQrText, labelBody, labelPage, LABEL_CSS, hex,
   };
