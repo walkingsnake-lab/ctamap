@@ -117,6 +117,18 @@ PROFILES['p25x2'] = dict(PROFILES['p25'], name='2 x Waveshare P2.5 64x32 (128 x 
                          sensor_x=83.0,           # 40 mm from the knob toward the centre (bar128.KNOB_X, x +123)
                          screw_xs=(34.0, 126.0))  # each tray's pair from below (x +/-46 about its panel)
 
+# Two P3 panels side by side (128 x 32, p3x2.py): one 384 x 96 "panel" for the parts that span both (shell, diffuser).
+# Panel A's centre at x -96, B's at +96. The trays are built per panel with the plain 'p3' profile.
+def _pair3(pts):
+    return tuple((cx + x, z) for cx in (-96.0, 96.0) for x, z in pts)
+
+
+PROFILES['p3x2'] = dict(PROFILES['p3'], name='2 x Waveshare P3 64x32 (128 x 32)', w=384.0, cols=128,
+                        inserts=_pair3(PROFILES['p3']['inserts']), headers=_pair3(PROFILES['p3']['headers']),
+                        standoffs=_pair3(PROFILES['p3']['standoffs']),
+                        sensor_x=122.0,          # 40 mm from the knob toward the centre (p3x2.KNOB_X, x +162)
+                        screw_xs=(50.0, 142.0))  # each tray's pair from below (x +/-46 about its panel)
+
 KEY = os.environ.get('PANEL', 'p3').lower()
 if KEY not in PROFILES:
     raise SystemExit(f'PANEL={KEY!r}: use one of {", ".join(PROFILES)}')

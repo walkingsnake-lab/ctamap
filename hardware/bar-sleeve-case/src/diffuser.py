@@ -60,19 +60,21 @@ def diffuser(grid=True, skin=None):
     for yc in (-hy / 2, hy / 2):
         for sx in (-1, 1):
             b = cyl.rotate([90, 0, 0]).translate([sx * (hx + CLR), yc, zb])
-            keep = box(hx + CLR - BUMP, hx + CLR, yc - 3, yc + 3, 0, 20) if sx > 0 else box(-hx - CLR, -hx - CLR + BUMP, yc - 3, yc + 3, 0, 20)
+            # the kept slice of the bump runs 0.3 into the skirt wall and stops under the tip chamfer, so it merges into the
+            # wall instead of meeting the chamfer along an edge (which rounded to non-manifold edges in the STL)
+            keep = box(hx + CLR - BUMP, hx + CLR + 0.3, yc - 3, yc + 3, 0, zt - c - 0.05) if sx > 0 else box(-hx - CLR - 0.3, -hx - CLR + BUMP, yc - 3, yc + 3, 0, zt - c - 0.05)
             d = d + (b ^ keep)
     for xc in (-hx / 2, hx / 2):
         b = cyl.rotate([0, 90, 0]).translate([xc, -hy - CLR, zb])
-        d = d + (b ^ box(xc - 3, xc + 3, -hy - CLR, -hy - CLR + BUMP, 0, 20))
+        d = d + (b ^ box(xc - 3, xc + 3, -hy - CLR - 0.3, -hy - CLR + BUMP, 0, zt - c - 0.05))   # bumps stop under the tip chamfer
     if grid:
         ribs = []
         for i in range(1, panel.COLS):
             x = -hx + i * PITCH
-            ribs.append(box(x - RIB / 2, x + RIB / 2, -hy + 0.29, hy - 0.29, zg0, zg1))
+            ribs.append(box(x - RIB / 2, x + RIB / 2, -hy + 0.3, hy - 0.3, zg0, zg1))      # ends exactly on the frame: 0.29 left 0.01 slivers
         for j in range(1, panel.ROWS):
             y = -hy + j * PITCH
-            ribs.append(box(-hx + 0.29, hx - 0.29, y - RIB / 2, y + RIB / 2, zg0, zg1))
+            ribs.append(box(-hx + 0.3, hx - 0.3, y - RIB / 2, y + RIB / 2, zg0, zg1))
         d = d + Manifold.batch_boolean(ribs, manifold3d.OpType.Add)
     return d
 
