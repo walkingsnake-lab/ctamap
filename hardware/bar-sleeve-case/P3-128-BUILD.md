@@ -69,10 +69,16 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
   full-span one would be 341 mm and not fit even at 45°). Three wall screws, at ±95 and the centre.
 - **The same parts round two P2.5 panels:** `stl/p25x2-128x32/` (`p25x2-*.stl`, built by `WIDE=p25x2 python3 p3x2.py`):
   case 350 x 99.3 x 69 at the same 5 mm wall and joint, panels at ±80, symmetric inserts so the splice plates have no
-  offset, 0.45 ribs on the 0.2 nozzle (0.14 face) as the single P2.5 diffuser, knob at +123 (50 mm from the end; only the
+  offset, 0.45 ribs and a **0.2 face printed on the 0.4 nozzle**, knob at +123 (50 mm from the end; only the
   encoder's left-hand socket is reachable there, as the P2.5 bar found), screws from below ±34 / ±126, feet ±148. It
   supersedes `bar128.py`'s tongue-and-groove bar (`stl/p25-128x32/`): the P2.5's thin skins were the joint's failure,
   not the panel; the same checks pass for this set. Renders: `img/p25x2-*.png`.
+- **P2.5 diffuser on the 0.4 nozzle (Nov 7):** the single P2.5 diffuser moved to the 0.2 nozzle (0.14 face) because
+  0.45 ribs are one bead on a 0.4 and printed wavy. On the 0.2 the two halves take ~12.5 h. A 0.4 coupon with pressure
+  advance calibrated and the grid slowed came out close: continuous ribs, but cells slightly uneven and soft-cornered.
+  Judged good enough for the time saved, so the pair's diffusers have a 0.2 face for the 0.4 nozzle (`DIFF_FACE`, default
+  0.2). For crisp squares instead: `DIFF_FACE=0.14 WIDE=p25x2 python3 p3x2.py <outdir>` and print on the 0.2 nozzle at
+  0.14 mm layers (~9 h).
 
 ## Checks (`src/meshcheck.py`, `src/check_p3x2.py`)
 Every STL was checked the way Bambu Studio trips: welded as float32, watertight, consistent winding, no edge shared by
@@ -108,7 +114,8 @@ front pocket. Push a tenon into A, then B onto it:
 - Check the V-groove reads evenly across the joint, and that the seam blobs landed in the pocket mouths (chamfered) or on
   the inside, not on the outer face.
 2. **Diffuser joint:** `coupon-p3x2-diffuser-joint-white.stl` + `-black.stl` (one object, two parts, same frame; 0.4
-   nozzle, 0.2 first layer, as the diffuser): three A pieces with joint ribs 0.6 / 0.8 / 1.0 (1 / 2 / 3 notches in the
+   nozzle, 0.2 first layer, as the diffuser; the P2.5's too): three A pieces with joint ribs 0.6 / 0.8 / 1.0 (P2.5: 0.45 /
+   0.6 / 0.75) (1 / 2 / 3 notches in the
    flange edge) and one B piece, 6 columns either side, bottom edge included. Butt the panels, hold an A and the B at the
    bottom of the joint, panel lit and dark. The width whose seam column looks like the others is `JOINT_RIB`; prefer the
    narrowest that hides the seam (a wider one moves B's assembly right by the difference).
@@ -126,7 +133,7 @@ goes back to its default) and reprint what changed.
 | Tenons (4) | `p3x2-tenon.stl` | black PETG | flat, ribs up, as exported; 0.12 mm layers |
 | Tray, left | `p3x2-tray-A.stl` | black PETG | back face down, walls up; the v5 tray's settings |
 | Tray, right | `p3x2-tray-B.stl` + `p3x2-tray-B-window.stl` (one object, two parts, same frame) | black PETG + translucent PETG | as the v5 tray |
-| Diffuser, left / right | `p3x2-diffuser-A-white.stl` + `-A-black.stl`; same for B (one object, two parts per half) | white + black | face down, 0.4 nozzle, 0.2 first layer = the face; both halves fit one plate |
+| Diffuser, left / right | `p3x2-diffuser-A-white.stl` + `-A-black.stl`; same for B (one object, two parts per half) | white + black | face down, 0.4 nozzle, 0.2 first layer = the face; both halves fit one plate. P2.5 pair: the same, plus Classic walls with Detect thin wall on, pressure advance calibrated, outer wall and gap fill 30-40 mm/s and acceleration ~2000 on the black part (one bead per 0.45 rib) |
 | Splice plates (2) | `p3x2-splice-plates.stl` | PETG | flat |
 | Encoder collar | `p3x2-encoder-collar.stl` (the v5 collar with a 4.9 mm plug for the 5 mm wall) | translucent PETG, 100% infill | flange-top down |
 | Light-sensor sled (optional) | `p3x2-sensor-sled.stl` | PETG | plate down |

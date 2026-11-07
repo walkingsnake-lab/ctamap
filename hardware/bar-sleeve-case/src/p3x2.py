@@ -237,6 +237,10 @@ def tm(m, mat=None, process=False):
 
 
 # ---------------------------------------------------------------- diffuser halves (PANEL=p3x2 run)
+# the diffuser's face: one 0.2 layer on the 0.4 nozzle for both pairs (the P2.5 pair too: its 0.14 face on the 0.2 nozzle
+# printed crisper squares, but the two halves took ~12.5 h; a 0.4 coupon, Nov 7, was judged good enough). DIFF_FACE=0.14
+# for the 0.2-nozzle version.
+DIFF_FACE = float(os.environ.get('DIFF_FACE', '0.2'))
 HALF = panel.P['rib'] / 2 if not TRAYS else None   # half of a normal rib (P3 0.3, P2.5 0.225)
 JOINT_RIBS = tuple(round(panel.P['rib'] + k * panel.P['rib'] / 3, 2) for k in range(3)) if not TRAYS else ()   # P3 0.6 / 0.8 / 1.0
 JOINT_RIB = float(os.environ.get('JOINT_RIB', JOINT_RIBS[0] if JOINT_RIBS else 0))   # default: a normal rib (panels butted tight)
@@ -248,7 +252,7 @@ def diffuser_halves(rib=JOINT_RIB, skin=None):
     +HALF. Returns {('A'|'B', 'white'|'black'): manifold} in the diffuser's frame (z = 0 the face, +z toward the LEDs;
     x as seen from the front, so A is x < 0)."""
     import diffuser as DF
-    skin = DF.VARIANTS['white'] if skin is None else skin
+    skin = DIFF_FACE if skin is None else skin
     d = DF.diffuser(skin=skin)
     hy = DF.PH / 2
     xa1 = rib - HALF
@@ -491,7 +495,7 @@ if __name__ == '__main__':
     json.dump(dict(knob_x=KNOB_X, sensor_x=SENSOR_X, port_z=DR.PORT_Z, screw_xs=list(V.SCREW_XS), screw_y=C.SCREW_Y,
                    hw=HW, h=H, d=D, zc=ZC, bore=(BORE_HX, BORE_HZ), y_face=Y_FACE, panel_back=C.PANEL_BACK,
                    joint_rib=JOINT_RIB, splice=dict(x=SPLICE_X, t=SPLICE_T, dz=SPLICE_DZ, za=(splice_z('A', True), splice_z('A', False))),
-                   skin=DF.VARIANTS['white'], grid_h=DF.GRID_H, wide=WIDE, pfx=PFX, panel_cx=PANEL_CX),
+                   skin=DIFF_FACE, grid_h=DF.GRID_H, wide=WIDE, pfx=PFX, panel_cx=PANEL_CX),
               open(f'{frames}/case.json', 'w'), indent=1)
     print(dict(W=2 * HW, H=round(H, 2), D=D, wall=WALL, slot=SLOT, skin=SKIN, knob=KNOB_X, sensor=SENSOR_X, screws=V.SCREW_XS,
                feet=C.FEET, ten_y=TEN_Y, port_z=round(DR.PORT_Z - ZC, 2), joint_rib=JOINT_RIB, splice_x=SPLICE_X, splice_dz=SPLICE_DZ))
