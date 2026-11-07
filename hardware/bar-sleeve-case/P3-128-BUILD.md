@@ -79,6 +79,13 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
   Judged good enough for the time saved, so the pair's diffusers have a 0.2 face for the 0.4 nozzle (`DIFF_FACE`, default
   0.2). For crisp squares instead: `DIFF_FACE=0.14 WIDE=p25x2 python3 p3x2.py <outdir>` and print on the 0.2 nozzle at
   0.14 mm layers (~9 h).
+- **PETG shrink in the diffuser halves (Nov 7):** the first P2.5 pair's black grid (generic black PETG) printed 0.45%
+  small (88.3 mm on 88.7 tall). Each half is located in x by its outer skirt only, so against its panel's outer edge
+  the seam edge sat ~0.8 mm short (a dark line at the seam, B's first LED column half uncovered, B's rib ends showing as
+  a comb), and the top/bottom skirts came out narrower than the 79.9 mm panel, perched on its edges and fell off. The
+  diffuser halves and their joint coupon are now built 0.45% larger in x and y (`DIFF_SHRINK`, z untouched), both
+  pairs; the fit check shrinks them back before testing. `DIFF_SHRINK=0` for a PLA grid. Measure a printed half (P2.5:
+  88.7 tall; P3: 104.7) and adjust if yours differs.
 
 ## Checks (`src/meshcheck.py`, `src/check_p3x2.py`)
 Every STL was checked the way Bambu Studio trips: welded as float32, watertight, consistent winding, no edge shared by

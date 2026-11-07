@@ -30,7 +30,8 @@ cx = case['panel_cx']
 P = {n: load(n) for n in ('shell-A', 'shell-B', 'tray-A', 'tray-B', 'env-s3', 'env-sensor', 'env-sled', 'env-encoder',
                           'splice-top', 'splice-bot', 'tenon')}
 for s in 'AB':
-    P[f'diff-{s}'] = dif_case(load(f'diffuser-{s}-white') + load(f'diffuser-{s}-black'))
+    d = load(f'diffuser-{s}-white') + load(f'diffuser-{s}-black')
+    P[f'diff-{s}'] = dif_case(d.scale([1 - B.DIFF_SHRINK, 1 - B.DIFF_SHRINK, 1.0]))   # as printed and shrunk
 # A's joint rib is JOINT_RIB wide; the extra over a normal rib is the gap the butted panels leave, so B and its diffuser
 # sit that much further right
 P['diff-B'] = P['diff-B'].translate([case['joint_rib'] - 2 * B.HALF, 0, 0])   # (and panel B below, by the same)

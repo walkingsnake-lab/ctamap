@@ -241,6 +241,12 @@ def tm(m, mat=None, process=False):
 # printed crisper squares, but the two halves took ~12.5 h; a 0.4 coupon, Nov 7, was judged good enough). DIFF_FACE=0.14
 # for the 0.2-nozzle version.
 DIFF_FACE = float(os.environ.get('DIFF_FACE', '0.2'))
+# PETG shrink: the first P2.5 pair's black grid printed 0.45% small (88.3 on 88.7 tall), which left each half ~0.8 mm
+# short of the seam against its panel's outer edge and the top/bottom skirts too narrow to go round the panel (they
+# perched on its edges and fell off). The diffuser halves and their coupon are built this much larger in x and y
+# (not z: the face stays one layer); the single-panel diffusers are not. Set 0 for a PLA grid.
+DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0045'))
+DIFF_SCALE = 1.0 / (1.0 - DIFF_SHRINK)
 HALF = panel.P['rib'] / 2 if not TRAYS else None   # half of a normal rib (P3 0.3, P2.5 0.225)
 JOINT_RIBS = tuple(round(panel.P['rib'] + k * panel.P['rib'] / 3, 2) for k in range(3)) if not TRAYS else ()   # P3 0.6 / 0.8 / 1.0
 JOINT_RIB = float(os.environ.get('JOINT_RIB', JOINT_RIBS[0] if JOINT_RIBS else 0))   # default: a normal rib (panels butted tight)
@@ -262,7 +268,8 @@ def diffuser_halves(rib=JOINT_RIB, skin=None):
     face = box(lo[0] - 1, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, skin)
     a = d ^ box(lo[0] - 1, xa1, lo[1] - 1, lo[4] + 1, -1, 20)
     b = d ^ box(HALF, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, 20)
-    return {('A', 'white'): a ^ face, ('A', 'black'): a - face, ('B', 'white'): b ^ face, ('B', 'black'): b - face}
+    out = {('A', 'white'): a ^ face, ('A', 'black'): a - face, ('B', 'white'): b ^ face, ('B', 'black'): b - face}
+    return {k: v.scale([DIFF_SCALE, DIFF_SCALE, 1.0]) for k, v in out.items()}   # shrink compensation, about the seam
 
 
 def diffuser_joint_coupons():
