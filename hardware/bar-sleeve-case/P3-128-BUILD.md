@@ -66,11 +66,14 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
 - **Wall mounting (optional):** a case cleat per tray (the shared `bar-cleat-case.stl`) and **one wall cleat, 220 mm**
   (`p3x2-cleat-wall.stl`: it spans x ±110, catching 89 mm of each 150 mm case cleat, and lies flat on the plate; a
   full-span one would be 341 mm and not fit even at 45°). Three wall screws, at ±95 and the centre.
-- **Same parts round two P2.5 panels:** `WIDE=p25x2 python3 p3x2.py <outdir>` builds the whole set for the P2.5 pair
-  (case 350 x 99.3 x 69, panels at ±80, symmetric inserts so the splice plates have no offset, 0.45 ribs for the 0.2
-  nozzle, knob at +123). Not built here; the P2.5 bar's thin tongue-and-groove was the joint, not the wall.
+- **The same parts round two P2.5 panels:** `stl/p25x2-128x32/` (`p25x2-*.stl`, built by `WIDE=p25x2 python3 p3x2.py`):
+  case 350 x 99.3 x 69 at the same 5 mm wall and joint, panels at ±80, symmetric inserts so the splice plates have no
+  offset, 0.45 ribs on the 0.2 nozzle (0.14 face) as the single P2.5 diffuser, knob at +123 (50 mm from the end; only the
+  encoder's left-hand socket is reachable there, as the P2.5 bar found), screws from below ±34 / ±126, feet ±148. It
+  supersedes `bar128.py`'s tongue-and-groove bar (`stl/p25-128x32/`): the P2.5's thin skins were the joint's failure,
+  not the panel; the same checks pass for this set. Renders: `img/p25x2-*.png`.
 
-## Checks (`src/meshcheck.py`)
+## Checks (`src/meshcheck.py`, `src/check_p3x2.py`)
 Every STL was checked the way Bambu Studio trips: welded as float32, watertight, consistent winding, no edge shared by
 more than two faces, no duplicate or zero-area faces, one body; then sliced layer by layer (0.16 mm for the shells, 0.12
 for the tenons) with each layer's polygons validated and anything thinner than one solid line (0.6 mm) and longer than a
@@ -81,7 +84,11 @@ The trays pass too, after the same cleanup every export gets (vertices welded at
 triangles that collapse in that rounding dropped: they are what the P2.5 bar's "parts touch themselves along an edge"
 were, and the printed v5 tray's STL still has them). The four diffuser files each keep one zero-area (collinear)
 triangle on the white/black split face, as the single P3 diffuser does; a slicer drops it. Run it on any regenerated
-part: `python3 meshcheck.py ../stl/p3-128x32/*.stl --layer 0.16`.
+part: `python3 meshcheck.py ../stl/p3-128x32/*.stl --layer 0.16`. It also lists, per file in its print orientation, every
+downward patch steeper than 45° off the bed and every bridge over 6 mm: on these parts all of them are the single
+build's own (the USB-C opening and the sensor pinhole in the shell; the ribbon hook lips, the sensor socket channels
+and the tie loop in the tray), printed and fine; nothing new (pockets, V-groove, recess, open posts, split diffuser)
+needs support.
 
 `src/check_p3x2.py <outdir>` is the fit check (run after `p3x2.py <outdir>`): overlaps between every pair of parts that
 should only touch (the only ones are the intended crush ribs, post feet and tenon ribs), the shell/tray positions that

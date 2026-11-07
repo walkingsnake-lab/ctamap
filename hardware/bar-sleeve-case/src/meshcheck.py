@@ -1,7 +1,8 @@
-"""Slicer-readiness check for an STL, the things Bambu Studio trips on:
+"""Slicer-readiness check for an STL, the things Bambu Studio trips on, and what won't print unsupported:
     python3 meshcheck.py <stl> [<stl> ...]  [--layer 0.2] [--min-width 0.85] [--fast]
 1. Mesh health as the slicer sees it (float32 STL): watertight, consistent winding, no edge shared by more than two
-   faces, no duplicate faces, no zero-area (sliver) triangles, one connected body.
+   faces, no duplicate or collapsed faces (collinear zero-area ones are noted, not failed: a slicer drops them), one
+   connected body, or several each closed.
 2. Every layer (print orientation = the file's z, as exported): the layer's polygons are valid, and nothing in them is
    thinner than --min-width (default 0.6 mm: under one solid 0.42-0.6 mm line, which is where Arachne starts dropping or
    thinning walls; the proven v5 shell's 0.8 mm relief behind the S3's edge buttons and the 0.63 mm last layer of its
@@ -10,9 +11,11 @@
    parts thinner than that; corner artefacts (shorter than the width) are ignored, anything longer is reported with
    its z, position and length. Slicers drop or merge such features, and that is where the "gaps" and "missing walls"
    come from. --fast checks every 5th layer.
+3. Overhangs in the file's orientation: patches of downward faces steeper than 50 deg off vertical, or flat ceilings
+   (bridges) wider than 6 mm, off the bed and over 2 mm2, listed for review: those need supports or will sag.
 Exit code 1 if any file fails the mesh health or layer validity; thin features are listed for review (a long one
 at a 45 deg chamfer's last layer is normal; a thin wall or skin that runs through many layers is the problem)."""
-import sys
+import math, sys
 import numpy as np
 import trimesh
 from shapely.geometry import Polygon, MultiPolygon
@@ -33,8 +36,13 @@ def health(t):
     if len(np.unique(fs, axis=0)) != len(fs):
         issues.append(f'{len(fs) - len(np.unique(fs, axis=0))} duplicate faces')
     area = t.area_faces
-    if (area < 1e-6).any():
-        issues.append(f'{int((area < 1e-6).sum())} zero-area faces')
+    f = t.faces
+    collapsed = (f[:, 0] == f[:, 1]) | (f[:, 1] == f[:, 2]) | (f[:, 0] == f[:, 2])
+    if collapsed.any():                              # two corners welded into one: these read as non-manifold edges
+        issues.append(f'{int(collapsed.sum())} collapsed faces')
+    thin_tri = (area < 1e-6) & ~collapsed
+    if thin_tri.any():                               # three distinct collinear corners: a slicer drops it; the mesh stays closed
+        print(f'  note: {int(thin_tri.sum())} zero-area (collinear) faces, harmless')
     bodies = t.split(only_watertight=False)
     if len(bodies) != 1:                             # several parts in one file is fine if each is closed
         leaky = sum(1 for b in bodies if not b.is_watertight)
@@ -78,6 +86,34 @@ def thin_parts(layer, w):
     return out
 
 
+def overhangs(t, max_angle=50.0, bridge_ok=6.0, min_area=2.0):
+    """printability in the file's orientation (z up, bed at z = 0): patches of downward-facing triangles steeper than
+    max_angle from vertical that aren't on the bed. A flat patch (a ceiling) is a bridge: fine when its narrow dimension
+    is at most bridge_ok. Returns [(kind, area, zmin, span, centre)] worth a look."""
+    n = t.face_normals
+    down = -n[:, 2]                                  # 1 = facing straight down, 0 = vertical
+    steep = down > math.cos(math.radians(90 - max_angle))
+    cz = t.triangles_center
+    steep &= cz[:, 2] > 0.3                          # not the first layer on the bed
+    idx = np.where(steep)[0]
+    if len(idx) == 0:
+        return []
+    sub = t.submesh([idx], append=True, repair=False)
+    out = []
+    for patch in sub.split(only_watertight=False):
+        a = patch.area
+        if a < min_area:
+            continue
+        flat = (-patch.face_normals[:, 2] > 0.985).all()      # a ceiling
+        lo, hi = patch.bounds
+        span = min(hi[0] - lo[0], hi[1] - lo[1])
+        if flat and span <= bridge_ok:
+            continue
+        kind = f'bridge {span:.1f} wide' if flat else f'overhang {math.degrees(math.acos(float(np.clip(1 - (-patch.face_normals[:, 2]).max(), -1, 1)))):.0f} deg past vertical'
+        out.append((kind, a, lo[2], span, ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)))
+    return sorted(out, key=lambda r: -r[1])
+
+
 def check(path, layer_h=0.2, min_w=0.6, fast=False):
     t = trimesh.load(path, process=False)
     t.vertices = t.vertices.astype(np.float32).astype(np.float64)   # as the STL stores them
@@ -111,6 +147,11 @@ def check(path, layer_h=0.2, min_w=0.6, fast=False):
             print(f'    z {z:6.2f}  at ({cx:7.1f}, {cy:7.1f})  {L:5.1f} long, ~{W:.2f} wide')
         if len(thin) > 12:
             print(f'    ... {len(thin) - 12} more')
+    ov = overhangs(t)
+    if ov:
+        print(f'  PRINT: {len(ov)} unsupported patch(es) in this orientation (review; >45 deg or a bridge over 6 mm):')
+        for kind, a, z, span, (cx, cy) in ov[:10]:
+            print(f'    {kind:32s} {a:7.1f} mm2 from z {z:6.2f} at ({cx:6.1f}, {cy:6.1f})')
     ok = not bad and not invalid                       # thin features are listed for review (a chamfer's last layer
     print('  OK' if ok else '  FAIL', '(thin features to review)' if ok and thin else '')   # is one, harmlessly)
     return ok

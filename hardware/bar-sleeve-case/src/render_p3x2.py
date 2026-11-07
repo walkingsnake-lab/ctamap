@@ -1,5 +1,5 @@
 """Renders of the P3 128 x 32 bar's shell halves and joint (p3x2.py), from the case-frame STLs in <outdir>/frames:
-    python3 render_p3x2.py <outdir> <img dir>
+    python3 render_p3x2.py <outdir> <img dir> [prefix]
 Needs pyrender on EGL (headless). Writes p3x2-exploded.png (both halves pulled apart, the four tenons between them),
 p3x2-joint.png (close-up of the top wall's pockets and a tenon) and p3x2-front.png (assembled, from the front)."""
 import math, os, sys
@@ -59,6 +59,7 @@ def shift(dx=0, dy=0, dz=0):
 if __name__ == '__main__':
     from PIL import Image
     out, img = sys.argv[1], sys.argv[2]
+    pfx = sys.argv[3] if len(sys.argv) > 3 else 'p3x2'          # file name prefix (p25x2 for the P2.5 pair)
     F = f'{out}/frames'
     a, ma = load(f'{F}/shell-A.stl', WALNUT)
     b, mb = load(f'{F}/shell-B.stl', WALNUT)
@@ -73,15 +74,15 @@ if __name__ == '__main__':
         for dz in (0.0, -(a.bounds[1][2] - 5.0)):
             items.append((tt, mt, shift(0, dy, dz)))
     c = render(items, eye=(120, -520, 260), target=(0, 35, zc), yfov=0.62)
-    Image.fromarray(c).save(f'{img}/p3x2-exploded.png')
+    Image.fromarray(c).save(f'{img}/{pfx}-exploded.png')
     # joint close-up: the top wall near x = 0, halves 12 mm apart, one tenon half way into A
     items = [(a, ma, shift(-8)), (b, mb, shift(30)), (tt, mt, shift(-9.0))]
     c = render(items, eye=(48, -22, a.bounds[1][2] + 14), target=(-8, 34, a.bounds[1][2] - 3), yfov=0.32, size=(1600, 1000))
-    Image.fromarray(c).save(f'{img}/p3x2-joint.png')
+    Image.fromarray(c).save(f'{img}/{pfx}-joint.png')
     # assembled, from the front
     items = [(a, ma, np.eye(4)), (b, mb, np.eye(4))]
     c = render(items, eye=(0, -900, zc + 160), target=(0, 20, zc), yfov=0.5)
-    Image.fromarray(c).save(f'{img}/p3x2-front.png')
+    Image.fromarray(c).save(f'{img}/{pfx}-front.png')
     # everything, exploded from the back: trays pulled out behind, diffusers in front, splice plates and tenons in place
     if os.path.exists(f'{F}/tray-A.stl'):
         BLACK = [0.10, 0.10, 0.11, 1.0]; WHITE = [0.92, 0.92, 0.90, 1.0]; GREY = [0.45, 0.45, 0.47, 1.0]
@@ -98,5 +99,5 @@ if __name__ == '__main__':
             for dz in (0.0, -(a.bounds[1][2] - 5.0)):
                 items.append((tt, mt, shift(0, dy, dz)))
         c = render(items, eye=(260, 700, zc + 330), target=(0, 40, zc), yfov=0.62)
-        Image.fromarray(c).save(f'{img}/p3x2-exploded-all.png')
+        Image.fromarray(c).save(f'{img}/{pfx}-exploded-all.png')
     print('ok')
