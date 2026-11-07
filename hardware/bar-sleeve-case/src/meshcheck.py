@@ -21,7 +21,7 @@ from shapely.ops import unary_union
 
 def health(t):
     issues = []
-    if not t.is_watertight:
+    if not t.is_watertight and len(t.split(only_watertight=False)) == 1:
         issues.append('not watertight')
     if not t.is_winding_consistent:
         issues.append('winding inconsistent')
@@ -36,8 +36,12 @@ def health(t):
     if (area < 1e-6).any():
         issues.append(f'{int((area < 1e-6).sum())} zero-area faces')
     bodies = t.split(only_watertight=False)
-    if len(bodies) != 1:
-        issues.append(f'{len(bodies)} separate bodies')
+    if len(bodies) != 1:                             # several parts in one file is fine if each is closed
+        leaky = sum(1 for b in bodies if not b.is_watertight)
+        if leaky:
+            issues.append(f'{len(bodies)} separate bodies, {leaky} not watertight')
+        else:
+            print(f'  note: {len(bodies)} separate bodies, each watertight (a multi-part file)')
     return issues
 
 

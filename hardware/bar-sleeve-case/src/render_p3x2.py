@@ -82,4 +82,21 @@ if __name__ == '__main__':
     items = [(a, ma, np.eye(4)), (b, mb, np.eye(4))]
     c = render(items, eye=(0, -900, zc + 160), target=(0, 20, zc), yfov=0.5)
     Image.fromarray(c).save(f'{img}/p3x2-front.png')
+    # everything, exploded from the back: trays pulled out behind, diffusers in front, splice plates and tenons in place
+    if os.path.exists(f'{F}/tray-A.stl'):
+        BLACK = [0.10, 0.10, 0.11, 1.0]; WHITE = [0.92, 0.92, 0.90, 1.0]; GREY = [0.45, 0.45, 0.47, 1.0]
+        ta, mta = load(f'{F}/tray-A.stl', BLACK); tb, mtb = load(f'{F}/tray-B.stl', BLACK)
+        dif = np.array([[1, 0, 0, 0], [0, 0, 1, 12.0], [0, -1, 0, zc], [0, 0, 0, 1]], float)   # diffuser frame -> case
+        da, mda = load(f'{F}/diffuser-A-black.stl', BLACK); db, mdb = load(f'{F}/diffuser-B-black.stl', BLACK)
+        wa, mwa = load(f'{F}/diffuser-A-white.stl', WHITE); wb, mwb = load(f'{F}/diffuser-B-white.stl', WHITE)
+        st, mst = load(f'{F}/splice-top.stl', GREY); sb, msb = load(f'{F}/splice-bot.stl', GREY)
+        items = [(a, ma, shift(-gap / 2)), (b, mb, shift(gap / 2)), (ta, mta, shift(-gap / 2, 95)), (tb, mtb, shift(gap / 2, 95)),
+                 (st, mst, shift(0, 55)), (sb, msb, shift(0, 55))]
+        for d, m, dx in ((da, mda, -gap / 2), (db, mdb, gap / 2), (wa, mwa, -gap / 2), (wb, mwb, gap / 2)):
+            items.append((d, m, shift(dx, -70) @ dif))
+        for dy in (0.0, 32.0):
+            for dz in (0.0, -(a.bounds[1][2] - 5.0)):
+                items.append((tt, mt, shift(0, dy, dz)))
+        c = render(items, eye=(260, 700, zc + 330), target=(0, 40, zc), yfov=0.62)
+        Image.fromarray(c).save(f'{img}/p3x2-exploded-all.png')
     print('ok')

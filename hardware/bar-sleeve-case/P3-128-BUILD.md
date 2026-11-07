@@ -1,8 +1,10 @@
-# CTA LED Board: 128 x 32 Bar, P3 (shell, Nov 6, 2026)
+# CTA LED Board: 128 x 32 Bar, P3 (build sheet, Nov 6, 2026)
 
 The v5 drawer bar sleeve for **two Waveshare P3 64x32 panels side by side** (128 x 32, 384 x 96 mm of LEDs), in parts
-that fit the X2D's 256 x 256 mm bed. This sheet covers the **shell and its joint**; the trays, diffuser and splice plates
-are the next step (see [Still to build](#still-to-build)). Started fresh from the single P3 v5 shell
+that fit the X2D's 256 x 256 mm bed: a walnut shell in two halves joined by PETG tenons, one black PETG tray per panel,
+one two-colour diffuser per panel, two splice plates joining the panels, one long wall cleat. Everything not covered here
+is the single P3 v5 build ([README](README.md): hardware, print settings, finishing, assembly, service). Started fresh
+from the single P3 v5 shell
 ([README](README.md)), not from the P2.5 bar: its tongue-and-groove joint lived in 1.0 mm skins and a 1.3 mm tongue in
 the walnut, and the first print stepped, blobbed at the seam and sliced with gaps. Source: `src/p3x2.py` (+ the `p3x2`
 profile in `src/panel.py`); STLs: `stl/p3-128x32/`; renders: `img/p3x2-*.png`. Nothing here has been printed yet.
@@ -37,6 +39,36 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
   corner post at x 183.25 by ~1 mm), light sensor at +122 (40 mm toward the centre), USB-C at the right end. Screws from
   below at ±50 / ±142 (each tray's own ±46), feet at ±180. `KNOB_X=96` builds the stock-tray version (knob over panel
   B's centre, tray B = the single v5 tray unchanged).
+- **Trays: one per panel, cut at the joint** (no end wall there: the panels fill it), 0.3 mm apart. Tray B is the v5 P3
+  tray (S3, status window, Boot, USB-C slot) with the controls under the knob: encoder slot and rails at +66 in its own
+  frame, the sensor sled 40 mm toward the centre (its hooks and front screw moved with it). Tray A is the same tray with
+  no S3 and no controls. **Panel A sits in its normal orientation, B turned 180°** (the P2.5 bar's data chain: S3 → A's
+  inner header, A's outer header → B's inner one; B's outer header is under the S3 and unused), so tray A's posts sit at
+  the un-turned inserts (z +31 / −29) and tray B's at the turned ones (z +29 / −31). Each tray bolts to its two outer
+  corner inserts and takes its pair of screws from below; the **inner posts stand on the splice plates**, solid and
+  closed at the back, a pocket round each plate screw's head (they push, they don't bolt).
+- **The 5 mm wall and the encoder:** the encoder hangs from the case top (collar deck 1.4 under it), so the thicker wall
+  raised the case top 1.5 mm over the tray and the encoder board (hung from the top) landed 0.05 mm *into* tray B's top
+  wall. Fix: a 1.2 mm recess in that wall's inner face over the board, out to the rails' outer faces (1.3 mm of wall left
+  there, the board 1.15 mm clear, the rails lapping it 1.9 mm). Lowering the collar's deck instead would have left the
+  M7 nut too little thread.
+- **Tray B's top crush ribs:** the rib at +28.3 would have crossed the sensor hole and the sled screw's counterbore, the
+  one at +70.7 is under the knob slot; both are dropped and one added at +45, between the counterbore and the slot.
+- **Diffuser per panel, split at the panel joint** on the rib that falls there (every rib sits at a 3 mm pitch from the
+  left edge, so x = 0 is a rib centre). No skirt on the seam edge. A owns the joint rib, `JOINT_RIB` wide (0.6 = a normal
+  rib, the default: panels butted tight; 0.8 / 1.0 cover a gap between them, and B's assembly then sits that much
+  further right, which the splice slots and the bore's 0.3 mm allow); B starts a half rib (0.3) past its panel's edge.
+  0.4 nozzle, 0.2 face, as the single P3 diffuser.
+- **Splice plates** (PETG, 29.5 x 14 x 2) on the panels' inner corner inserts (x ±8.75), screwed on first (M3 x 6 button
+  heads): a round hole on A's insert, a slot (±0.5 in x) on B's, so the plates hold the rows in line across the seam
+  while the panels butt freely. Because of the orientations above, B's hole sits **2 mm lower** than A's on both the top
+  and bottom plate: one plate, used twice the same way up (notch toward the top).
+- **Wall mounting (optional):** a case cleat per tray (the shared `bar-cleat-case.stl`) and **one wall cleat, 220 mm**
+  (`p3x2-cleat-wall.stl`: it spans x ±110, catching 89 mm of each 150 mm case cleat, and lies flat on the plate; a
+  full-span one would be 341 mm and not fit even at 45°). Three wall screws, at ±95 and the centre.
+- **Same parts round two P2.5 panels:** `WIDE=p25x2 python3 p3x2.py <outdir>` builds the whole set for the P2.5 pair
+  (case 350 x 99.3 x 69, panels at ±80, symmetric inserts so the splice plates have no offset, 0.45 ribs for the 0.2
+  nozzle, knob at +123). Not built here; the P2.5 bar's thin tongue-and-groove was the joint, not the wall.
 
 ## Checks (`src/meshcheck.py`)
 Every STL was checked the way Bambu Studio trips: welded as float32, watertight, consistent winding, no edge shared by
@@ -44,11 +76,21 @@ more than two faces, no duplicate or zero-area faces, one body; then sliced laye
 for the tenons) with each layer's polygons validated and anything thinner than one solid line (0.6 mm) and longer than a
 corner facet (3 mm) listed for review (a 45° chamfer's last layer is one, harmlessly); the proven single v5 shell passes the same check (its thinnest real features are the 0.8 mm
 wall behind the S3's edge buttons and the last layer of the bottom lip's chamfer). Both halves, the collar, the tenons
-(at 0.5: their rib crests are one 0.6 mm line by design) and the coupons pass. Run it on any regenerated part:
-`python3 meshcheck.py ../stl/p3-128x32/*.stl --layer 0.16`.
+(at 0.5: their rib crests are one 0.6 mm line by design), the splice plates, the cleat, the sled and the coupons pass.
+The trays pass too, after the same cleanup every export gets (vertices welded at float32 precision, the sliver
+triangles that collapse in that rounding dropped: they are what the P2.5 bar's "parts touch themselves along an edge"
+were, and the printed v5 tray's STL still has them). The four diffuser files each keep one zero-area (collinear)
+triangle on the white/black split face, as the single P3 diffuser does; a slicer drops it. Run it on any regenerated
+part: `python3 meshcheck.py ../stl/p3-128x32/*.stl --layer 0.16`.
 
-## Before printing the shell: the seam coupon (`stl/p3-128x32/coupons/`)
-`coupon-p3x2-seam-A-walnut.stl` + `-B-walnut.stl` (walnut, as exported: the cut face on the bed, hood up; **5 mm brim**,
+`src/check_p3x2.py <outdir>` is the fit check (run after `p3x2.py <outdir>`): overlaps between every pair of parts that
+should only touch (the only ones are the intended crush ribs, post feet and tenon ribs), the shell/tray positions that
+have to line up (knob, sensor, USB-C, the four screws from below), the splice screw heads inside the inner posts with the
+tray 0.7 mm off any way, the encoder's QT plugs with tray B seated and sliding in, and the bed fit of every file. All
+pass; both of the encoder's sockets are usable.
+
+## Before printing: the coupons (`stl/p3-128x32/coupons/`)
+1. **Seam** (gates the shell): `coupon-p3x2-seam-A-walnut.stl` + `-B-walnut.stl` (walnut, as exported: the cut face on the bed, hood up; **5 mm brim**,
 they stand 37 mm on a 6 mm edge) + `coupon-p3x2-tenon-0.45 / 0.55 / 0.65.stl` (PETG, flat as exported, ribs up; 1 / 2 / 3
 notches on the front edge). Each coupon is 20 mm of its half's top wall across the joint: hood, front rim, V-groove and the
 front pocket. Push a tenon into A, then B onto it:
@@ -57,14 +99,31 @@ front pocket. Push a tenon into A, then B onto it:
 - If even 0.45 won't start, the pocket printed undersize: measure it; `SLOT` can grow, or `TEN_T` shrink, in `p3x2.py`.
 - Check the V-groove reads evenly across the joint, and that the seam blobs landed in the pocket mouths (chamfered) or on
   the inside, not on the outer face.
-Then rebuild with the pick: `RIB_H=<h> python3 p3x2.py ../stl/p3-128x32` and reprint the tenons only.
+2. **Diffuser joint:** `coupon-p3x2-diffuser-joint-white.stl` + `-black.stl` (one object, two parts, same frame; 0.4
+   nozzle, 0.2 first layer, as the diffuser): three A pieces with joint ribs 0.6 / 0.8 / 1.0 (1 / 2 / 3 notches in the
+   flange edge) and one B piece, 6 columns either side, bottom edge included. Butt the panels, hold an A and the B at the
+   bottom of the joint, panel lit and dark. The width whose seam column looks like the others is `JOINT_RIB`; prefer the
+   narrowest that hides the seam (a wider one moves B's assembly right by the difference).
+3. **Splice plates:** `coupon-p3x2-splice-plates.stl` (PETG, flat): holes 3.3 / 3.45 / 3.6 (1 / 2 / 3 notches). With the
+   panels butted face down, A in its normal orientation and B turned, round hole over A's inner corner insert, slot over
+   B's (the slot end is the lower one), 2 x M3 x 6 button heads. Use the snuggest an M3 passes through freely
+   (`SPLICE_HOLE`). Also check it sits flat on both bosses and the rows still line up with it tightened.
+Then rebuild with the picks: `RIB_H=<h> JOINT_RIB=<w> SPLICE_HOLE=<d> python3 p3x2.py ../stl/p3-128x32` (one left out
+goes back to its default) and reprint what changed.
 
 ## Parts (`stl/p3-128x32/`)
 | Part | File | Material | Print |
 |---|---|---|---|
 | Shell, left / right | `p3x2-shell-A-walnut-backdown.stl`, `p3x2-shell-B-walnut-backdown.stl` | PLA Wood | back rim down, both on one plate (same spool); ~10 mm to the plate's edges, 5 between them: **3 mm brim** or brim ears |
 | Tenons (4) | `p3x2-tenon.stl` | black PETG | flat, ribs up, as exported; 0.12 mm layers |
+| Tray, left | `p3x2-tray-A.stl` | black PETG | back face down, walls up; the v5 tray's settings |
+| Tray, right | `p3x2-tray-B.stl` + `p3x2-tray-B-window.stl` (one object, two parts, same frame) | black PETG + translucent PETG | as the v5 tray |
+| Diffuser, left / right | `p3x2-diffuser-A-white.stl` + `-A-black.stl`; same for B (one object, two parts per half) | white + black | face down, 0.4 nozzle, 0.2 first layer = the face; both halves fit one plate |
+| Splice plates (2) | `p3x2-splice-plates.stl` | PETG | flat |
 | Encoder collar | `p3x2-encoder-collar.stl` (the v5 collar with a 4.9 mm plug for the 5 mm wall) | translucent PETG, 100% infill | flange-top down |
+| Light-sensor sled (optional) | `p3x2-sensor-sled.stl` | PETG | plate down |
+| Wall cleat (optional) | `p3x2-cleat-wall.stl` (one, 220 mm) + two shared `bar-cleat-case.stl` | PETG | wall face down, flat |
+| Knob, Boot key | the shared `stl/bar-knob.stl`, `stl/bar-boot-key.stl` | as the README | as the README |
 | Coupons | `coupons/` | as above | as exported |
 
 Shell print settings: as the single v5 shell (Bambu PLA Wood, dried, 4 walls, elephant foot 0.15, glue stick, bed 55-60 °C,
@@ -72,18 +131,38 @@ door closed) but **fixed 0.16 mm layers, no variable layer height** (it banded t
 **Aligned** and scarf off: the sharpest inside corners on every layer at the joint are the pocket mouths, which are
 chamfered for a blob; set the seam to the back corner away from the joint if Preview shows it elsewhere.
 
-## Assembly (joint only)
-Press the four tenons into one half's pockets (ribs toward the outside of the case or the inside, either way: both faces
-are flat skins), then push the other half on until the end faces meet. The fronts line up on the pockets' ends and the
-faces on the skins; lap the front flat across the joint as the single shell. Optional: a thin film of CA on the tenons
-before the second half goes on makes it permanent.
+## Hardware (beyond the single build's)
+- Screws: the single build's per tray, less the two inner post screws each (the splice plates' 2 x M3 x 6 button heads
+  take those inserts); 2 x M3 x 12 from below per tray (the 5 mm floor); 4 x M2.5 x 8 (S3, tray B only).
+- Panels: two P3s, butted; both their power cables (one stock lead reaches only its own panel: parallel them at the S3's
+  screw terminals, or use one lead with both plugs if the kit has it).
+- Ribbons: S3 → A's inner header (x −33 from the S3's IDC at ~+142: ~20 cm plus drops) and A's outer header (−159) →
+  B's inner one (+33): ~25 cm. Two 30 cm 16-pin ribbons.
+- STEMMA QT: S3 → sensor 20 cm, sensor → encoder 15 cm; or one 30 cm S3 → encoder without the sensor. Either encoder
+  socket works at this knob position.
+- Hung on a wall: 3 x #8 / 4 mm countersunk wood screws or anchors (the wall cleat); each case cleat takes 2 x M3 x 10
+  into its tray's bosses, as the README.
 
-## Still to build
-- **Trays:** one per panel, cut at the joint (no end wall there), as the P2.5 bar: tray B = the v5 P3 tray with the
-  encoder slot and rails at `ENC_X` +66 (knob +162 less panel B's centre) and the sensor sled hooks at +26; tray A =
-  `drawer.tray(s3=False, controls=False)`. Inner posts on splice plates.
-- **Diffuser:** one per panel, split on the joint rib (P3 rib 0.6 at a 3 mm pitch; A owns the joint rib, `JOINT_RIB`
-  wide); a joint coupon picks its width.
-- **Splice plates** on the panels' inner corner inserts (x ±8.75, z +31 / -29 after the 180° turn: the P3's inserts are
-  not symmetric top and bottom, so A's and B's plates differ in z).
-- Wall cleat, print plates (3MF) if wanted, firmware `cols: 128` as the P2.5 bar.
+## Assembly
+The single build's order per half, with the joint and the splice first:
+1. **Shell:** press the four tenons into one half's pockets (ribs toward the outside of the case or the inside, either
+   way: both faces are flat skins), then push the other half on until the end faces meet; the fronts line up on the
+   pockets' ends and the faces on the skins. Optional: a thin film of CA on the tenons first makes it permanent. Lap the
+   front flat across the joint, finish, bumpers, collar.
+2. **Panels, on the bench, face down:** A in its normal orientation, B turned 180° (both boards' data arrows beside the
+   headers point away from the joint), butted. Splice plates on the inner corner inserts, round hole on A, slot on B,
+   notch toward the top, 2 x M3 x 6 each, snug. Check the rows line up across the seam, lit.
+3. **Diffusers** snap onto their panels (A's carries the joint rib). Ribbons into A's inner header (from the S3) and from
+   A's outer header to B's inner one; power leads.
+4. **Panels in** from the back, together, until both flanges seat on the rim. Encoder up into the collar from inside, as
+   the single build.
+5. **Tray A** (plain) in on the left, pushed fully forward; its two outer post screws loosely. **Tray B** on the right the
+   same way, S3 and sensor cabled on the bench as the single build, encoder cable plugged before it goes in. The inner
+   posts land on the splice plates by themselves. Snug the four outer post screws, then the four from below.
+6. Firmware: `cols: 128`, panel B upside down (the P2.5 bar's per-panel rotation).
+
+## Still to do
+- Print plates (3MF) if wanted (`plates128.py` shows how; Bambu Studio 2.08.03+ keeps their per-object settings).
+- The underside label recesses (`marks.py`) are not on these shells.
+- First prints: the three coupons, then the shell. The trays and diffusers don't depend on the coupon picks except
+  `JOINT_RIB` (diffuser A) and `SPLICE_HOLE` (the plates).
