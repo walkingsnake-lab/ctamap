@@ -49,8 +49,9 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
   closed at the back, a pocket round each plate screw's head (they push, they don't bolt).
 - **The 5 mm wall and the encoder:** the encoder hangs from the case top (collar deck 1.4 under it), so the thicker wall
   raised the case top 1.5 mm over the tray and the encoder board (hung from the top) landed 0.05 mm *into* tray B's top
-  wall. Fix: a 1.2 mm recess in that wall's inner face over the board, out to the rails' outer faces (1.3 mm of wall left
-  there, the board 1.15 mm clear, the rails lapping it 1.9 mm). Lowering the collar's deck instead would have left the
+  wall. Fix: a 1.2 mm recess into that wall's inner face over the board, out to the rails' outer faces (1.3 mm of wall left
+  there, the board 1.15 mm clear); the rails hang from the recess roof and lap the board 0.75 mm as before. (A first
+  version cut the recess downward and took the rails with it; an independent audit of the STLs caught it.) Lowering the collar's deck instead would have left the
   M7 nut too little thread.
 - **Tray B's top crush ribs:** the rib at +28.3 would have crossed the sensor hole and the sled screw's counterbore, the
   one at +70.7 is under the knob slot; both are dropped and one added at +45, between the counterbore and the slot.

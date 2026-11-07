@@ -385,7 +385,7 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
         cuts.append(box(ENC_X - ENC_SLOT, ENC_X + ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
         if ENC_RECESS:                                                   # room over the board, out to the rails' outer faces
             hw_, (by0, by1), _ = enc_board()
-            cuts.append(box(ENC_X - hw_ - RAIL_CL - RAIL_W, ENC_X + hw_ + RAIL_CL + RAIL_W, by0 - 1.0, by1 + 1.0, _zw() - ENC_RECESS, _zw() + 1.0))
+            cuts.append(box(ENC_X - hw_ - RAIL_CL - RAIL_W, ENC_X + hw_ + RAIL_CL + RAIL_W, by0 - 1.0, by1 + 1.0, _zw() - 0.01, _zw() + ENC_RECESS))
         cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
         cuts += sensor_cuts()
     if s3:
@@ -480,7 +480,7 @@ def enc_rails():
     zw, y_in = _zw(), Y1 - LV_DEPTH
     out = []
     for xa, xb in rail_xs():
-        r = box(min(xa, xb), max(xa, xb), by0 + 1.0, y_in + 0.5, bz1 - RAIL_LAP, zw + 0.01)   # into the wall (or its recess roof)
+        r = box(min(xa, xb), max(xa, xb), by0 + 1.0, y_in + 0.5, bz1 - RAIL_LAP, zw + ENC_RECESS + 0.01)   # into the wall, or the recess roof
         sgn = 1 if xb > xa else -1                    # from the face toward the board (xa) into the rail
         y0 = by0 + 1.0
         pts = [(xa - sgn * 0.2, y0 - 0.1), (xa + sgn * 1.0, y0 - 0.1), (xa - sgn * 0.2, y0 + 1.2)]
