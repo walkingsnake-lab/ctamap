@@ -57,9 +57,9 @@ Just the owl, big clock and NO TRAINS (NO DATA), the 64 composition 32 px in wit
 ### Ticker (decided; built)
 After the CTA's platform signs:
 - Bands at rows 7–18 and 20–31; the grey index column (0–4) with the **row number**; the band in the line color at 55 % from column 5 to 127.
-- **Full destination** in 5x7 at x7 (`95th/Dan Ryan`).
+- **Full destination** in 5x7 at x7 (`95th/Dan Ryan`); a line with a major alert has the **red alert circle after the name**, 3 px on, as the CTA's signs do (Nov 8; the 64 ticker keeps it in the index column for room).
 - **Time at the far right** (`Due`, `3 min`, the min glyph as now), 3 px clear of the status icon.
-- **Status icon**, 7 × 7 at columns 120–126: three arcs for a live train, a clock face for a schedule-based one (`isSch`).
+- **Status icon** at the right edge, on the text's baseline: three waves (6 × 6) for a live train, the 5 × 5 clock for a schedule-based one (`isSch`) (Nov 8; they were 7 × 7).
 - Pages of two, as now.
 
 ### Warnings on the weather strip (first pass; built)

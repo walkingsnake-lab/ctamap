@@ -939,24 +939,28 @@
     // number in the grey index column (the alert circle on a line with a
     // major alert), the band in the line color to the right edge, the full
     // destination, the time right-aligned 3 px clear of the status icon:
-    // TICKER_ICONS live (tracked) or sch (schedule-based, `s`), 7 x 7 at
-    // columns 120-126, rows 2-8 of the band.
-    const TICKER_ICON_X = 120, TICKER_TIME_RIGHT = 116;
+    // TICKER_ICONS live (tracked: three waves, 6 x 6) or sch (schedule-based,
+    // `s`: the clock, 5 x 5), right-aligned to column 126 and sitting on the
+    // text's baseline (rows 3-8 / 4-8 of the band, the 5x7 capitals' rows).
+    const TICKER_TIME_RIGHT = 116;
     const TICKER_ICONS = {
-      live: ['####...', '....#..', '###..#.', '...#..#', '##..#.#', '..#.#.#', '#.#.#.#'],
-      sch: ['..###..', '.#...#.', '#..#..#', '#..##.#', '#.....#', '.#...#.', '..###..'],
+      live: { x: 121, y: 3, rows: ['###...', '...#..', '##..#.', '..#..#', '#..#.#', '.#.#.#'] },
+      sch: { x: 122, y: 4, rows: ['.###.', '#.#.#', '#.###', '#...#', '.###.'] },
     };
+    // A major alert: the circle 3 px after the name (the server leaves it
+    // room), as on the CTA's signs; the row number stays in the index column.
+    const TICKER_ALERT_GAP = 3;
     function drawTickerItemWide(f, it, idx, top, now, due, fill) {
       const base = top + 9;
       f.fill(0, top, 5, 12, C.index);
       f.fill(5, top, f.w - 5, 12, scaleColor(LINE[it.ln], fill));
-      if (it.a) {
-        f.text('small', s(G.ALERT_DISC), 0, base, C.red);
-        f.text('small', s(G.ALERT_MARK), 0, base, C.white);
-      } else {
-        f.text('small', String(idx), 1, base, C.label);
-      }
+      f.text('small', String(idx), 1, base, C.label);
       f.text('5x7', it.d, 7, base, C.white);
+      if (it.a) {
+        const ax = 7 + measure('5x7', it.d) + TICKER_ALERT_GAP;
+        f.text('small', s(G.ALERT_DISC), ax, base, C.red);
+        f.text('small', s(G.ALERT_MARK), ax, base, C.white);
+      }
       const min = minutesUntil(it.t, now);
       if (min <= 1 && due) {
         rtext(f, '5x7', 'Due', TICKER_TIME_RIGHT, base, C.white);
@@ -965,7 +969,8 @@
         f.text('5x7', s(G.MIN), TICKER_TIME_RIGHT - mw + 1, base, C.white);
         rtext(f, '5x7', String(min <= 1 ? 2 : min), TICKER_TIME_RIGHT - mw - 2, base, C.white);
       }
-      TICKER_ICONS[it.s ? 'sch' : 'live'].forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(TICKER_ICON_X + i, top + 2 + j, 1, 1, C.white); }));
+      const icon = TICKER_ICONS[it.s ? 'sch' : 'live'];
+      icon.rows.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(icon.x + i, top + icon.y + j, 1, 1, C.white); }));
     }
 
     const tickerPages = (p, now) => Math.max(1, Math.ceil(liveTicker(p, now).length / 2));
