@@ -63,7 +63,8 @@ test('"Howard (or Loop)" before a Purple trip starts: the Howard row, or the Loo
   assert.deepEqual(davis.map((a) => a.dest), ['Howard', 'Howard', 'Loop']);
   assert.ok(davis.every((a) => a.known));
   const howard = normalize(json('40900', 'Howard'), { log: quiet });
-  assert.deepEqual(howard.map((a) => a.dest), ['Loop', 'Loop'], 'ending at Howard: dropped; maybe-Loop: the Loop row');
+  assert.deepEqual(howard.filter((a) => !a.arr).map((a) => a.dest), ['Loop', 'Loop'], 'ending at Howard: kept apart; maybe-Loop: the Loop row');
+  assert.deepEqual(howard.filter((a) => a.arr).map((a) => [a.dest, a.full]), [['Linden', 'Linden']], 'ending here, from Linden (trDr 5)');
 });
 
 test('Clark/Lake with the header: five destinations -> header and weather hidden, five rows', () => {
@@ -421,10 +422,10 @@ test('wide: northbound | southbound or westbound | eastbound where every line ru
   assert.equal(r.view, 'split');
   assert.deepEqual(r.halves, SPLIT_LABELS.ew);
   assert.deepEqual(r.rows.map((x) => [x.h, x.lbl]), [[0, "O'HARE"], [1, 'FOREST']]);
-  // Not true: the Loop (Clark/Lake), mixed axes (Howard: Yellow runs west).
-  for (const [f, mapid] of [['clark-lake-2026-10-03-2317.json', '40380'], ['howard-2026-10-03-2316.json', '40900']]) {
-    assert.notEqual(run(f, wide(mapid)).view, 'split', f);
-  }
+  // Not a direction split: the Loop (Clark/Lake); an end of the line
+  // (Howard) is departing | arriving instead (its own test).
+  assert.notEqual(run('clark-lake-2026-10-03-2317.json', wide('40380')).view, 'split');
+  assert.equal(splitAxis('40900', ['RD', 'PR']), null, 'Howard: an end of the line');
   assert.equal(splitAxis('40100', ['RD']), 'ns');
   assert.equal(splitAxis('40450', ['RD']), null, "95th: Red's terminal");
   assert.equal(splitAxis('40890', ['BL']), null, "O'Hare: Blue's direction-1 end");
@@ -432,6 +433,12 @@ test('wide: northbound | southbound or westbound | eastbound where every line ru
   assert.equal(splitAxis('41320', ['RD', 'BL']), null, 'a line the table lacks there');
   assert.equal(splitAxis('40170', ['GR', 'PK']), 'ew', 'Ashland (Lake St): Green west, Pink east, one axis');
   assert.equal(splitAxis('nope', ['RD']), null);
+  // Inbound | outbound where the compass doesn't give one: diagonal track
+  // (California, Blue), lines on different axes (Sedgwick: Brown west,
+  // Purple north).
+  assert.equal(splitAxis('40570', ['BL']), 'io');
+  assert.equal(splitAxis('40800', ['BR', 'PR']), 'io');
+  assert.equal(splitAxis('40800', ['BR']), 'ew', 'the compass where it works');
   assert.equal(splitTrue('40100', ['RD']), true);
 });
 
@@ -454,8 +461,8 @@ test('wide: where the split isn\'t true, full-width rows while they fit, then tw
   assert.equal('h' in r.rows[0], false);
   for (const x of r.rows) assert.ok(5 + measure('small', x.lbl) + 3 + worstTimesWidth(x.t, r.now) <= 128, x.lbl);
   assert.ok(WIDE_TIMES === 5);
-  // Howard (split not true): its two destinations as full-width rows.
-  const h = run('howard-2026-10-03-2316.json', wide('40900', { showWeather: true }));
+  // Howard in the rows layout: its two destinations as full-width rows.
+  const h = run('howard-2026-10-03-2316.json', wide('40900', { showWeather: true, wideLayout: 'rows' }));
   assert.equal(h.view, 'dest');
   assert.deepEqual(h.rows.map((x) => x.lbl), ['95TH/DAN RYAN', 'LINDEN']);
   // Clark/Lake: five destinations fit as rows once the weather strip and the header go.
@@ -550,4 +557,38 @@ test('wide ticker: full names; a line with a major alert gives up room for the c
   assert.ok(measure('5x7', g.d) <= WIDE_TICKER_DEST_PX && measure('5x7', g.d) > WIDE_TICKER_DEST_PX - 6, g.d);
   assert.equal(bl.a, 1);
   assert.ok(measure('5x7', bl.d) <= WIDE_TICKER_DEST_PX - WIDE_TICKER_ALERT_GAP - 5, bl.d);
+});
+
+test('wide: inbound | outbound where the compass doesn\'t give a split; toward the Loop on the left', () => {
+  // California (Blue, O'Hare branch, diagonal): trDr 5 (Forest Park) is inbound.
+  const now = 1_800_000_000;
+  const a = (ln, dest, dir, m) => ({ ln, dest, full: dest, known: true, dir, t: now + m * 60, s: 0, rn: `${ln}${m}` });
+  let r = format([a('BL', "O'Hare", 1, 3), a('BL', 'Forest', 5, 4)], wide('40570'), { now });
+  assert.equal(r.view, 'split');
+  assert.deepEqual(r.halves, ['INBOUND', 'OUTBOUND']);
+  assert.deepEqual(r.rows.map((x) => `${x.h}:${x.lbl}`), ['0:FOREST', "1:O'HARE"]);
+  // Sedgwick (Brown west, Purple north): Loop-bound trains of both lines inbound.
+  r = format([a('BR', 'Kimball', 1, 2), a('BR', 'Loop', 5, 3), a('PR', 'Linden', 1, 5), a('PR', 'Loop', 5, 6)], wide('40800'), { now });
+  assert.deepEqual(r.halves, ['INBOUND', 'OUTBOUND']);
+  assert.deepEqual(r.rows.map((x) => `${x.h}:${x.ln}:${x.lbl}`), ['0:BR:LOOP', '0:PR:LOOP', '1:BR:KIMBALL', '1:PR:LINDEN']);
+});
+
+test('wide: an end of the line is departing | arriving from (trains ending their runs here, by where they came from)', () => {
+  const r = run('howard-2026-10-03-2316.json', wide('40900'));
+  assert.equal(r.view, 'split');
+  assert.deepEqual(r.halves, ['DEPARTING', 'ARRIVING FROM']);
+  assert.deepEqual(r.rows.map((x) => `${x.h}:${x.ln}:${x.lbl}`), ['0:RD:95TH', '0:PR:LINDEN', '1:PR:LINDEN', '1:RD:95TH', '1:YL:SKOKIE']);
+  // Trains ending here are only in the arriving half: not the ticker or other layouts.
+  assert.ok(r.ticker.every((t) => t.d !== 'Howard'));
+  const rows = run('howard-2026-10-03-2316.json', wide('40900', { wideLayout: 'rows' }));
+  assert.deepEqual(rows.rows.map((x) => x.lbl), ['95TH/DAN RYAN', 'LINDEN']);
+  // Green's south ends share a direction: the line's name.
+  const now = 1_800_000_000;
+  const g = format([
+    { ln: 'GR', dest: '63rd', full: 'Ashland/63rd', known: true, dir: 5, t: now + 120, s: 1, rn: '1' },
+    { ln: 'GR', arr: 1, dest: null, full: null, dir: 1, t: now + 300, s: 0, rn: '2' },
+  ], wide('40020'), { now });
+  assert.deepEqual(g.rows.map((x) => `${x.h}:${x.lbl}`), ['0:63RD', '1:GREEN']);
+  // No departures: no split (the no-trains screen), even with trains arriving.
+  assert.notEqual(format([{ ln: 'GR', arr: 1, dest: null, dir: 1, t: now + 300, s: 0, rn: '2' }], wide('40020'), { now }).view, 'split');
 });
