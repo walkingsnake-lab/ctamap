@@ -128,6 +128,29 @@ JP_Y1_BOT = C.SCREW_Y - 4.5                     # the bottom plate stops short o
 JP_CL_Y = 0.15                  # rebate longer than the plate at each end (the ends line the fronts up)
 JP_EC = 0.4                     # lead chamfer on the plate's four edges (the mating faces stay flat)
 assert WALL - JP_T - JP_CL >= 3.5, WALL
+# JOINT=tenon rebuilds the Nov 6 joint (loose PETG tenons in pockets) for comparison: its shell halves, tenon and seam
+# coupons go out under *-tenon-* names beside the plate joint's files (p3x2.py <outdir> --tenon-set writes only those).
+# The hollowed faces and the V-groove are on both.
+JOINT = os.environ.get('JOINT', 'plate')
+assert JOINT in ('plate', 'tenon'), JOINT
+SKIN = 1.5                      # wall = SKIN | SLOT | SKIN
+SLOT = WALL - 2 * SKIN          # 2.0: the tenon pocket's width (across the wall)
+TEN_IN = 12.0                   # pocket depth into each half from the joint face
+TIP_CL = 0.25                   # tenon end short of the pocket bottom, each end: the end faces at x = 0 seat first
+MOUTH = 0.5                     # pocket mouth chamfer at the joint face (room for a seam blob)
+TEN_L = 20.0                    # tenon length along the case depth
+TEN_Y = ((Y_FACE + 2.5, Y_FACE + 2.5 + TEN_L), (D - 2.5 - TEN_L, D - 2.5))   # front and back pockets (y)
+TEN_CL_Y = 0.15                 # tenon clearance to the pocket's y ends, a side (the pocket's ends line the fronts up)
+TEN_T = SLOT - 0.4              # tenon body thickness: 0.2 a side in the pocket before the ribs (a slot printed on its side
+                                #   in wood PLA comes out ~0.2-0.3 undersize, as the collar hole did; the ribs take up the rest)
+RIB_HS = (0.45, 0.55, 0.65)     # the coupon's three rib heights: interference 0.05 / 0.15 / 0.25 in a slot printed to size,
+                                #   0.25 / 0.35 / 0.45 in one printed 0.2 undersize (the ribbed face only: the flat face bears on the skin)
+RIB_H = float(os.environ.get('RIB_H', '0.55'))
+RIB_W, RIB_CREST, RIB_LEAD, RIB_N = 1.4, 0.6, 2.0, 3   # rib base and crest widths (a trapezoid: its top layer is one
+                                                      # 0.6 mm line printed flat), ramp length at each end, ribs per tenon
+END_CH = 0.4                    # lead-in chamfer on the tenon's x ends
+
+assert SLOT >= 1.8 and SKIN >= 1.3, (SLOT, SKIN)
 
 
 def outer_inset(i):
@@ -185,6 +208,63 @@ def rebate_cuts():
     return out
 
 
+def wall_slots():
+    """(z0, z1) of the pocket across each wall: top and bottom"""
+    return [(H - WALL + SKIN, H - SKIN), (SKIN, WALL - SKIN)]
+
+
+def pocket_cuts():
+    """the tenon pockets in both halves (symmetric about x = 0) with their mouth chamfers"""
+    cuts = []
+    for z0, z1 in wall_slots():
+        for y0, y1 in TEN_Y:
+            cuts.append(box(-TEN_IN, TEN_IN, y0, y1, z0, z1))
+            cuts.append(Manifold.batch_hull([box(-0.005, 0.005, y0, y1, z0 - MOUTH, z1 + MOUTH),
+                                             box(-MOUTH, MOUTH, y0, y1, z0, z1)]))
+    return cuts
+
+
+def tenon(rib_h=RIB_H, notches=0, y=None):
+    """one tenon in the case frame, in the front top pocket (or the span y): a flat bar TEN_T thick, filling the
+    pocket's length less TEN_CL_Y a side, 2 * TIP_CL short of the two pockets' combined depth, with RIB_N crush ribs
+    rib_h proud on its +z face running along x (ramped to nothing over RIB_LEAD at each end) and END_CH lead-in
+    chamfers on its x ends. Prints flat, ribs up. notches: 1-3 marks on its front edge (the coupon's sizes)."""
+    y0, y1 = TEN_Y[0] if y is None else y
+    y0, y1 = y0 + TEN_CL_Y, y1 - TEN_CL_Y
+    z0, z1 = wall_slots()[0]
+    zb = z0 + 0.1                                   # the bar's underside, 0.1 off the pocket's inside face
+    zt = zb + TEN_T
+    hl = TEN_IN - TIP_CL
+    t = box(-hl, hl, y0, y1, zb, zt)
+    for sx in (-1, 1):                              # end chamfers, both z edges
+        for ze, sgn in ((zt, -1), (zb, 1)):
+            tri = CrossSection([[(sx * hl, ze), (sx * (hl - END_CH), ze), (sx * hl, ze + sgn * END_CH)]])
+            if tri.area() <= 0:
+                tri = CrossSection([[(sx * hl, ze), (sx * hl, ze + sgn * END_CH), (sx * (hl - END_CH), ze)]])
+            t = t - prism_y(tri, y0 - 1, y1 + 1)
+    ribs = []
+    for i in range(RIB_N):
+        yc = y0 + (y1 - y0) * (i + 1) / (RIB_N + 1)
+
+        def rib_cs(h):
+            """trapezoid: RIB_W at the base, RIB_CREST at the top (one solid line when printed flat), h tall"""
+            pts = [(yc - RIB_W / 2, zt - 0.02), (yc + RIB_W / 2, zt - 0.02), (yc + RIB_CREST / 2, zt + h), (yc - RIB_CREST / 2, zt + h)]
+            cs = CrossSection([pts])
+            return cs if cs.area() > 0 else CrossSection([pts[::-1]])
+        xa, xb = -hl + END_CH + 0.3, hl - END_CH - 0.3    # ribs start 0.3 in from the chamfer edge (off its edge line)
+        ribs.append(prism_x(rib_cs(rib_h), xa + RIB_LEAD, xb - RIB_LEAD))
+        # ramps: from the full rib down to a 0.05 mm sliver of its base at each end (a box, so no zero-area faces)
+        for e0, e1 in ((xa, xa + RIB_LEAD), (xb - RIB_LEAD, xb)):
+            full = prism_x(rib_cs(rib_h), e1 - 0.01, e1) if e0 == xa else prism_x(rib_cs(rib_h), e0, e0 + 0.01)
+            end_x = e0 if e0 == xa else e1 - 0.01
+            ribs.append(Manifold.batch_hull([full, box(end_x, end_x + 0.01, yc - RIB_W / 2, yc + RIB_W / 2, zt - 0.02, zt + 0.05)]))
+    t = t + Manifold.batch_boolean(ribs, ADD)
+    for k in range(notches):                        # 1 mm notches in the front edge, 2 mm apart, on the bar's centre
+        nx = (k - (notches - 1) / 2) * 2.0
+        t = t - box(nx - 0.5, nx + 0.5, y0 - 1, y0 + 0.8, zb - 1, zt + 1)
+    return t
+
+
 def hollow_cuts(sh):
     """the seam faces' relief: HOLLOW off each half's face at x = 0, wherever the wall is more than LAND from a visible
     face (deep(LAND)): the band you see stays full height"""
@@ -192,8 +272,10 @@ def hollow_cuts(sh):
 
 
 def split_shell(sh):
-    """left (A) and right (B) halves: the V-groove, the rebates and the hollowed faces cut, then the shell cut at x = 0"""
-    s = sh - v_groove(sh) - hollow_cuts(sh) - Manifold.batch_boolean(rebate_cuts(), ADD)
+    """left (A) and right (B) halves: the V-groove, the hollowed faces and the joint (JOINT: the plate rebates, or the
+    tenon pockets) cut, then the shell cut at x = 0"""
+    joint = rebate_cuts() if JOINT == 'plate' else pocket_cuts()
+    s = sh - v_groove(sh) - hollow_cuts(sh) - Manifold.batch_boolean(joint, ADD)
     a = s ^ box(-HW - 1, 0.0, -50, D + 1, -1, H + 1)
     b = s ^ box(0.0, HW + 1, -50, D + 1, -1, H + 1)
     out = []
@@ -487,6 +569,18 @@ if __name__ == '__main__':
         t.apply_translation([-f.bounds[0][0], -f.bounds[0][1], -f.bounds[0][2]]); t.export(f'{out}/{name}')
         print(name, 'watertight', t.is_watertight, np.round(t.extents, 1).tolist(), 'vol cm3', round(t.volume / 1000, 1))
         return t
+    if JOINT == 'tenon':                                             # the comparison set, then stop
+        for m, name in ((a, 'A'), (b, 'B')):
+            put(m, f'{PFX}-shell-{name}-tenon-walnut-backdown.stl')
+        t = tm(tenon(RIB_H)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/{PFX}-tenon.stl')
+        print(f'{PFX}-tenon.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist())
+        ca, cb = coupon(a, b)
+        for m, name in ((ca, 'A'), (cb, 'B')):
+            put(m, f'coupons/coupon-{PFX}-seam-tenon-{name}-walnut.stl')
+        for n, hh in enumerate(RIB_HS, 1):
+            t = tm(tenon(hh, notches=n)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/coupons/coupon-{PFX}-tenon-{hh:.2f}.stl')
+            print(f'coupon-{PFX}-tenon-{hh:.2f}.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist(), f'{n} notch(es)')
+        sys.exit()
     for m, name in ((a, 'A'), (b, 'B')):
         tm(m).export(f'{frames}/shell-{name}.stl')
         put(m, f'{PFX}-shell-{name}-walnut-backdown.stl')
@@ -544,3 +638,5 @@ if __name__ == '__main__':
     env = dict(os.environ)
     env.pop('PANEL', None)
     subprocess.run([sys.executable, __file__, out, '--trays'], check=True, env=env)
+    if JOINT == 'plate':                                             # and the tenon joint's comparison set
+        subprocess.run([sys.executable, __file__, out, '--tenon-set'], check=True, env=dict(env, JOINT='tenon'))

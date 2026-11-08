@@ -155,6 +155,13 @@ sockets are usable.
   a 0.3 mm slot. If the land doesn't close, find the high spot (pencil on one face, press, look for transfer) and check
   that the seam blobs landed inside, not on the land.
 - Then glue the coupon pair as a dress rehearsal (below) and try to break it by hand once cured.
+- **The comparison (Nov 8):** the Nov 6 tenon joint is still in the code (`JOINT=tenon`; the plate build also writes
+  its set under `*-tenon-*` names): `coupon-p3x2-seam-tenon-A/-B-walnut.stl` (the same 30 mm of top wall, with the two
+  pockets instead of the rebate; hollowed faces and V-groove on both) + `coupon-p3x2-tenon-0.45 / 0.55 / 0.65.stl`
+  (PETG, flat, ribs up; 1 / 2 / 3 notches; the fit that goes home with a firm push and holds the halves flush is
+  `RIB_H`). Glue both pairs the same way (CA or epoxy on the faces; the tenons glued in too), cure, and try to twist
+  and pull each apart by hand. Whichever holds is the joint: plates are the default; `JOINT=tenon python3 p3x2.py
+  <outdir>` builds the tenon shells (`p3x2-shell-A/-B-tenon-walnut-backdown.stl`, `p3x2-tenon.stl`, print four).
 2. **Diffuser joint:** `coupon-p3x2-diffuser-joint-white.stl` + `-black.stl` (one object, two parts, same frame; 0.4
    nozzle, 0.2 first layer, as the diffuser; the P2.5's too): the split pair (A with 4 notches in the flange edge, B with
    1), and the single-rib set: three A pieces with joint ribs 0.6 / 0.8 / 1.0 (P2.5: 0.45 / 0.6 / 0.75) (1 / 2 / 3
