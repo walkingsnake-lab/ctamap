@@ -1425,11 +1425,13 @@ static void draw_ticker_item(Frame &f, const Value &it, int idx, int top, double
 // Wide board (draw.js drawTickerItemWide): the CTA platform sign's row:
 // the row number (or the alert circle) in the index column, the band to the
 // right edge, the full destination, the time right-aligned at
-// TICKER_TIME_RIGHT, the status icon (tracked or schedule-based) at
-// TICKER_ICON_X, rows 2-8 of the band.
-static const int TICKER_ICON_X = 120, TICKER_TIME_RIGHT = 116;
-static const char *const TICKER_LIVE[7] = {"####...", "....#..", "###..#.", "...#..#", "##..#.#", "..#.#.#", "#.#.#.#"};
-static const char *const TICKER_SCH[7] = {"..###..", ".#...#.", "#..#..#", "#..##.#", "#.....#", ".#...#.", "..###.."};
+// TICKER_TIME_RIGHT, the status icon right-aligned to column 126 on the
+// text's baseline: three waves (6 x 6) for a tracked train, the clock
+// (5 x 5) for a schedule-based one.
+static const int TICKER_TIME_RIGHT = 116;
+struct TickerIcon { int x, y, n; const char *rows[6]; };
+static const TickerIcon TICKER_LIVE = {121, 3, 6, {"###...", "...#..", "##..#.", "..#..#", "#..#.#", ".#.#.#"}};
+static const TickerIcon TICKER_SCH = {122, 4, 5, {".###.", "#.#.#", "#.###", "#...#", ".###."}};
 static void draw_ticker_item_wide(Frame &f, const Value &it, int idx, int top, double now, bool due, double fill) {
   int base = top + 9;
   RGB white = C::white;
@@ -1450,10 +1452,10 @@ static void draw_ticker_item_wide(Frame &f, const Value &it, int idx, int top, d
     f.text(FONT_5X7, g(assets::G_MIN), TICKER_TIME_RIGHT - mw + 1, base, white);
     rtext(f, FONT_5X7, num_text(m <= 1 ? 2 : m), TICKER_TIME_RIGHT - mw - 2, base, white);
   }
-  const char *const *icon = it["s"].truthy() ? TICKER_SCH : TICKER_LIVE;
-  for (int j = 0; j < 7; j++)
-    for (int i = 0; i < 7; i++)
-      if (icon[j][i] == '#') f.fill(TICKER_ICON_X + i, top + 2 + j, 1, 1, white);
+  const TickerIcon &icon = it["s"].truthy() ? TICKER_SCH : TICKER_LIVE;
+  for (int j = 0; j < icon.n; j++)
+    for (int i = 0; icon.rows[j][i]; i++)
+      if (icon.rows[j][i] == '#') f.fill(icon.x + i, top + icon.y + j, 1, 1, white);
 }
 
 int ticker_pages(const Value &p, double now) {

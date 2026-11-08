@@ -939,12 +939,13 @@
     // number in the grey index column (the alert circle on a line with a
     // major alert), the band in the line color to the right edge, the full
     // destination, the time right-aligned 3 px clear of the status icon:
-    // TICKER_ICONS live (tracked) or sch (schedule-based, `s`), 7 x 7 at
-    // columns 120-126, rows 2-8 of the band.
-    const TICKER_ICON_X = 120, TICKER_TIME_RIGHT = 116;
+    // TICKER_ICONS live (tracked: three waves, 6 x 6) or sch (schedule-based,
+    // `s`: the clock, 5 x 5), right-aligned to column 126 and sitting on the
+    // text's baseline (rows 3-8 / 4-8 of the band, the 5x7 capitals' rows).
+    const TICKER_TIME_RIGHT = 116;
     const TICKER_ICONS = {
-      live: ['####...', '....#..', '###..#.', '...#..#', '##..#.#', '..#.#.#', '#.#.#.#'],
-      sch: ['..###..', '.#...#.', '#..#..#', '#..##.#', '#.....#', '.#...#.', '..###..'],
+      live: { x: 121, y: 3, rows: ['###...', '...#..', '##..#.', '..#..#', '#..#.#', '.#.#.#'] },
+      sch: { x: 122, y: 4, rows: ['.###.', '#.#.#', '#.###', '#...#', '.###.'] },
     };
     function drawTickerItemWide(f, it, idx, top, now, due, fill) {
       const base = top + 9;
@@ -965,7 +966,8 @@
         f.text('5x7', s(G.MIN), TICKER_TIME_RIGHT - mw + 1, base, C.white);
         rtext(f, '5x7', String(min <= 1 ? 2 : min), TICKER_TIME_RIGHT - mw - 2, base, C.white);
       }
-      TICKER_ICONS[it.s ? 'sch' : 'live'].forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(TICKER_ICON_X + i, top + 2 + j, 1, 1, C.white); }));
+      const icon = TICKER_ICONS[it.s ? 'sch' : 'live'];
+      icon.rows.forEach((row, j) => [...row].forEach((c, i) => { if (c === '#') f.fill(icon.x + i, top + icon.y + j, 1, 1, C.white); }));
     }
 
     const tickerPages = (p, now) => Math.max(1, Math.ceil(liveTicker(p, now).length / 2));
