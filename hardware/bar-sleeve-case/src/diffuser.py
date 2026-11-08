@@ -14,6 +14,8 @@ SKIN = float(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[1].endswith('.stl') 
 GRID_H = 1.5                        # grid behind the skin
 SK_T, SK_D, CLR, BUMP = 1.2, 3.0, 0.15, 0.2
 TOP_BUMPS = False                   # bumps on the top skirt too (p3x2.py: the bars, with BUMP 0.3, for a 79.9 mm panel)
+BUMP_XS = None                      # x of the top/bottom bumps; None = +/- a quarter of the width (two on the single
+                                    # diffuser's 192; p3x2.py sets two per half: +/-40 about each half's centre)
 FT = 1.2                            # flange thickness
 PITCH, RIB = panel.P['pitch'], panel.P['rib']
 OUT = CLR + SK_T                    # skirt outline past the panel edge (1.35)
@@ -67,7 +69,7 @@ def diffuser(grid=True, skin=None):
             # wall instead of meeting the chamfer along an edge (which rounded to non-manifold edges in the STL)
             keep = box(hx + CLR - BUMP, hx + CLR + 0.3, yc - 3, yc + 3, 0, zt - c - 0.05) if sx > 0 else box(-hx - CLR - 0.3, -hx - CLR + BUMP, yc - 3, yc + 3, 0, zt - c - 0.05)
             d = d + (b ^ keep)
-    for xc in (-hx / 2, hx / 2):
+    for xc in (BUMP_XS if BUMP_XS is not None else (-hx / 2, hx / 2)):
         b = cyl.rotate([0, 90, 0]).translate([xc, -hy - CLR, zb])
         d = d + (b ^ box(xc - 3, xc + 3, -hy - CLR - 0.3, -hy - CLR + BUMP, 0, zt - c - 0.05))   # bumps stop under the tip chamfer
         if TOP_BUMPS:

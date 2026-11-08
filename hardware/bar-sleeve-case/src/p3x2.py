@@ -88,6 +88,8 @@ _DF.BEV = DIFF_BEV
 # with the single build's one 0.2 bump on the bottom skirt: 0.3 of slack, no snap, the half wiggled. Bumps 0.3 tall on
 # the top skirt too (and the outer end, which pushes the half toward the seam): ~0.3 mm of interference over four bumps.
 _DF.BUMP, _DF.TOP_BUMPS = float(os.environ.get('DIFF_BUMP', '0.3')), True
+if not TRAYS:                                 # two bumps per half per long edge (the single's +/- quarter rule gave one)
+    _DF.BUMP_XS = tuple(cx + dx for cx in (-PANEL_CX, PANEL_CX) for dx in (-40.0, 40.0))
 V.KNOB_X = KNOB_X
 if not TRAYS:
     for _m in (C, V, P3):
