@@ -91,8 +91,10 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
 - **Diffuser skirt fit (Nov 7, testing):** the first rescaled P2.5 half measured 80.2 inside the skirts on a 79.9 mm
   panel, with the single build's one 0.2 bump on the bottom skirt: 0.3 of slack, no snap. The pairs' diffusers now have
   **0.3 mm bumps on the top skirt too**, the bottom and the outer end, two per half on each long edge (±40 about the
-  half's centre; the single's quarter rule gave one) (`DIFF_BUMP`; the single diffuser is unchanged).
-  Not yet confirmed on a print.
+  half's centre; the single's quarter rule gave one) (`DIFF_BUMP`; the single diffuser is unchanged). Printed: no
+  wiggle, but a three-sided half **peels** off from its seam edge, which bumps can't stop; pinching the skirts onto the
+  panel held it. So the skirts now bear along their length: **clearance 0.05** (`DIFF_CLR`; opening 80.1, printed
+  ~80.0 on the 79.9 panel), bumps 0.2 as lead-in. The single diffuser keeps its 0.15 / 0.2: four sides can't peel.
 - **PETG shrink in the diffuser halves (Nov 7):** the first P2.5 pair's black grid (generic black PETG) printed 0.45%
   small (88.3 mm on 88.7 tall). Each half is located in x by its outer skirt only, so against its panel's outer edge
   the seam edge sat ~0.8 mm short (a dark line at the seam, B's first LED column half uncovered, B's rib ends showing as

@@ -87,7 +87,12 @@ _DF.BEV = DIFF_BEV
 # skirt fit (Nov 7, P2.5 pair, generic black PETG on the 0.4 nozzle): the skirts came out 80.2 inside on a 79.9 mm panel
 # with the single build's one 0.2 bump on the bottom skirt: 0.3 of slack, no snap, the half wiggled. Bumps 0.3 tall on
 # the top skirt too (and the outer end, which pushes the half toward the seam): ~0.3 mm of interference over four bumps.
-_DF.BUMP, _DF.TOP_BUMPS = float(os.environ.get('DIFF_BUMP', '0.3')), True
+# Nov 7, third B print: 0.3 bumps held it without wiggle but a three-sided half peels off from its seam edge; pinching the
+# skirts onto the panel held it, so the skirts bear along their length: clearance 0.05 (opening 80.1, printed ~80.0 on
+# the 79.9 panel), bumps back to 0.2 as lead-in. The outer end gets the same 0.05, which also pushes the half toward
+# the seam. DIFF_CLR / DIFF_BUMP to adjust.
+_DF.CLR = float(os.environ.get('DIFF_CLR', '0.05'))
+_DF.BUMP, _DF.TOP_BUMPS = float(os.environ.get('DIFF_BUMP', '0.2')), True
 if not TRAYS:                                 # two bumps per half per long edge (the single's +/- quarter rule gave one)
     _DF.BUMP_XS = tuple(cx + dx for cx in (-PANEL_CX, PANEL_CX) for dx in (-40.0, 40.0))
 V.KNOB_X = KNOB_X
