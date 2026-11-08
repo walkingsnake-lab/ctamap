@@ -947,17 +947,20 @@
       live: { x: 121, y: 3, rows: ['###...', '...#..', '##..#.', '..#..#', '#..#.#', '.#.#.#'] },
       sch: { x: 122, y: 4, rows: ['.###.', '#.#.#', '#.###', '#...#', '.###.'] },
     };
+    // A major alert: the circle 3 px after the name (the server leaves it
+    // room), as on the CTA's signs; the row number stays in the index column.
+    const TICKER_ALERT_GAP = 3;
     function drawTickerItemWide(f, it, idx, top, now, due, fill) {
       const base = top + 9;
       f.fill(0, top, 5, 12, C.index);
       f.fill(5, top, f.w - 5, 12, scaleColor(LINE[it.ln], fill));
-      if (it.a) {
-        f.text('small', s(G.ALERT_DISC), 0, base, C.red);
-        f.text('small', s(G.ALERT_MARK), 0, base, C.white);
-      } else {
-        f.text('small', String(idx), 1, base, C.label);
-      }
+      f.text('small', String(idx), 1, base, C.label);
       f.text('5x7', it.d, 7, base, C.white);
+      if (it.a) {
+        const ax = 7 + measure('5x7', it.d) + TICKER_ALERT_GAP;
+        f.text('small', s(G.ALERT_DISC), ax, base, C.red);
+        f.text('small', s(G.ALERT_MARK), ax, base, C.white);
+      }
       const min = minutesUntil(it.t, now);
       if (min <= 1 && due) {
         rtext(f, '5x7', 'Due', TICKER_TIME_RIGHT, base, C.white);

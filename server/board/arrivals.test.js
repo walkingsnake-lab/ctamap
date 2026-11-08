@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD } = require('./arrivals');
+const { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD, WIDE_TICKER_DEST_PX, WIDE_TICKER_ALERT_GAP } = require('./arrivals');
 const G = require('./glyphs');
 const { parseCtaTime } = require('./time');
 const { measure } = require('./fonts');
@@ -539,4 +539,15 @@ test('wide layouts: denser at once, back to a sparser one only after it has fit 
   r = format(tri, cfg, { now, prevView: { view: 'byline', fitSince: null } });
   assert.equal(r.view, 'dest');
   assert.equal(format(six, cfg, { now, prevView: { view: 'dest', fitSince: null } }).view, 'byline');
+});
+
+test('wide ticker: full names; a line with a major alert gives up room for the circle after its name', () => {
+  const now = 1_800_000_000;
+  const long = 'Harlem/Lake via the Loop elevated';
+  const shown = [{ ln: 'G', dest: 'Harlem', full: long, t: now + 600, s: 0 }, { ln: 'BL', dest: "O'Hare", full: long, t: now + 900, s: 0 }];
+  const r = format(shown.map((a, i) => ({ ...a, known: true, dir: 1, rn: String(i) })), wide('40380'), { now, alerts: new Set(['BL']) });
+  const [g, bl] = r.ticker;
+  assert.ok(measure('5x7', g.d) <= WIDE_TICKER_DEST_PX && measure('5x7', g.d) > WIDE_TICKER_DEST_PX - 6, g.d);
+  assert.equal(bl.a, 1);
+  assert.ok(measure('5x7', bl.d) <= WIDE_TICKER_DEST_PX - WIDE_TICKER_ALERT_GAP - 5, bl.d);
 });

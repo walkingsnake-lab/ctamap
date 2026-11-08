@@ -1432,18 +1432,22 @@ static const int TICKER_TIME_RIGHT = 116;
 struct TickerIcon { int x, y, n; const char *rows[6]; };
 static const TickerIcon TICKER_LIVE = {121, 3, 6, {"###...", "...#..", "##..#.", "..#..#", "#..#.#", ".#.#.#"}};
 static const TickerIcon TICKER_SCH = {122, 4, 5, {".###.", "#.#.#", "#.###", "#...#", ".###."}};
+// A major alert: the circle TICKER_ALERT_GAP px after the name, as on the
+// CTA's signs; the row number stays in the index column.
+static const int TICKER_ALERT_GAP = 3;
 static void draw_ticker_item_wide(Frame &f, const Value &it, int idx, int top, double now, bool due, double fill) {
   int base = top + 9;
   RGB white = C::white;
   f.fill(0, top, 5, 12, C::index);
   f.fill(5, top, f.w - 5, 12, scale_color(line_color(it["ln"].str_or("")), fill));
+  f.text(FONT_SMALL, num_text(idx), 1, base, C::label);
+  ustr d = vstr(it["d"]);
+  f.text(FONT_5X7, d, 7, base, white);
   if (it["a"].truthy()) {
-    f.text(FONT_SMALL, g(assets::G_ALERT_DISC), 0, base, C::red);
-    f.text(FONT_SMALL, g(assets::G_ALERT_MARK), 0, base, C::white);
-  } else {
-    f.text(FONT_SMALL, num_text(idx), 1, base, C::label);
+    int ax = 7 + measure(FONT_5X7, d) + TICKER_ALERT_GAP;
+    f.text(FONT_SMALL, g(assets::G_ALERT_DISC), ax, base, C::red);
+    f.text(FONT_SMALL, g(assets::G_ALERT_MARK), ax, base, C::white);
   }
-  f.text(FONT_5X7, vstr(it["d"]), 7, base, white);
   long long m = minutes_until(it["t"].num(), now);
   if (m <= 1 && due) {
     rtext(f, FONT_5X7, U"Due", TICKER_TIME_RIGHT, base, white);
