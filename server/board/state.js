@@ -82,7 +82,6 @@ const ALERT_JUMPS = ['off', 'warning', 'all']; // jump to weather: never, NWS wa
 const BB_TEAMS = ['cubs', 'sox', 'post'];
 const BB_PRIORITIES = ['live', 'favorite', 'all'];
 const LINE_NAMES = ['white', 'line'];
-const TRANSIT_LAYOUTS = ['header', 'key'];
 // Transit on a wide board (128 x 32, `cols`): northbound | southbound halves
 // where that's true at the station, or full-width destination rows.
 const WIDE_LAYOUTS = ['split', 'rows'];
@@ -93,9 +92,11 @@ const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame
 const WX_VIEWS = ['now', '5day', 'hourly', 'radar'];
 const TEMP_UNITS = ['F', 'C'];  // temperatures on every weather display
 // Retired settings, dropped from saved state on load: per-layout animated
-// weather icons (removed Nov 2026; icons are always static), and the rain
-// bars' settings (the bars were cut, Nov 2026).
-const RETIRED_KEYS = ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar', 'wxRain', 'wxRainEvery', 'wxRainLoops'];
+// weather icons (removed Nov 2026; icons are always static), the rain
+// bars' settings (the bars were cut, Nov 2026), the transit key layout and
+// the old weather row's divider (Nov 8, 2026: one bar layout, one divider
+// setting).
+const RETIRED_KEYS = ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar', 'wxRain', 'wxRainEvery', 'wxRainLoops', 'transitLayout', 'wxDivider'];
 // Speed settings: the allowed values (defaults in defaultBoard).
 const SPEEDS = {
   tickerHold: [5, 6, 8, 10, 12, 15],         // s each ticker page holds
@@ -142,13 +143,9 @@ function defaultBoard(stations) {
     rows: [],
     showHeader: true,
     showWeather: true,
-    // Transit divider line under the header (row 7). (wxDivider, the line
-    // above the old weather row, is still accepted but no longer drawn.)
+    // Transit divider lines: under the top bar (row 7) and over the bottom
+    // one (row 25), in every view.
     headerDivider: false,
-    wxDivider: true,
-    // Transit layout: 'header' (station and clock on top) or 'key' (a
-    // "trains to / min" key on top, station and clock under a line at the bottom).
-    transitLayout: 'header',
     wideLayout: 'split',
     screen: 'transit',
     // The transit-family screen the knob's TRANSIT opens: the last of
@@ -311,7 +308,6 @@ function validatePatch(patch, stations, cols) {
       case 'showHeader':
       case 'showWeather':
       case 'headerDivider':
-      case 'wxDivider':
       case 'radarTime':
       case 'radarCond':
       case 'tempShadow':
@@ -408,7 +404,6 @@ function validatePatch(patch, stations, cols) {
       case 'alertJump':
       case 'bbPriority':
       case 'lineNames':
-      case 'transitLayout':
       case 'wideLayout':
       case 'radarClock':
       case 'wxView':
@@ -420,7 +415,7 @@ function validatePatch(patch, stations, cols) {
       case 'wheelSpeed':
       case 'rippleSpeed':
       case 'rainSpeed': {
-        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, transitLayout: TRANSIT_LAYOUTS, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, clockFace: CLOCK_FACES, analogAccent: Object.keys(ANALOG_ACCENTS), digitColor: Object.keys(DIGIT_COLORS), cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
+        const allowed = { wxVisit: WX_VISITS, alertJump: ALERT_JUMPS, bbPriority: BB_PRIORITIES, lineNames: LINE_NAMES, wideLayout: WIDE_LAYOUTS, radarClock: RADAR_CLOCKS, wxView: WX_VIEWS, tempUnit: TEMP_UNITS, clockFace: CLOCK_FACES, analogAccent: Object.keys(ANALOG_ACCENTS), digitColor: Object.keys(DIGIT_COLORS), cloudDrift: CLOUD_DRIFTS, wheelSpeed: WHEEL_SPEEDS, rippleSpeed: RIPPLE_SPEEDS, rainSpeed: RAIN_SPEEDS }[key];
         if (!allowed.includes(val)) throw new ValidationError(`${key} must be one of ${allowed.join(', ')}`);
         out[key] = val;
         break;

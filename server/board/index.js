@@ -69,7 +69,7 @@ function send(res, status, body) {
 // (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 const SECTIONS = {
-  transit: ['header', 'key', 'hidden', 'view', 'halves', 'rows', 'wx'],
+  transit: ['header', 'hidden', 'view', 'halves', 'rows', 'wx'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
@@ -163,7 +163,7 @@ function createBoard({
 
   const stationById = new Map(stations.map((st) => [st.mapid, st]));
   const stationList = JSON.stringify(stations
-    .map(({ mapid, name, desc, short, lines }) => ({ mapid, name, desc, short, lines }))
+    .map(({ mapid, name, desc, short, wide, lines }) => ({ mapid, name, desc, short, wide, lines }))
     .sort((a, b) => a.desc.localeCompare(b.desc)));
   // Simulator preview settings from the query: mapid, header=0|1, weather=0|1,
   // rtime=0|1 (radar corner: frame time or temperature), bblayout=classic|logos|bands (baseball layout).
@@ -544,10 +544,8 @@ function createBoard({
     // weather to show.
     // Temperatures in the board's unit (wd).
     const wd = inUnit(w, board.tempUnit);
-    // The key layout has no weather strip: the station line takes rows 25-31.
-    const keyLayout = board.transitLayout === 'key';
-    const wx = board.showWeather && !keyLayout && wd ? toWx(wd) : null;
-    const cfg = { ...board, showWeather: !!wx, showKey: keyLayout, lines: st ? st.lines : null };
+    const wx = board.showWeather && wd ? toWx(wd) : null;
+    const cfg = { ...board, showWeather: !!wx, lines: st ? st.lines : null };
     let radarState = NO_RADAR;
     // A wide board (cols 128) gets the station's 128-wide frames (contract "Width").
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon, { wide: board.cols === 128 }); }
@@ -616,6 +614,9 @@ function createBoard({
     const screen = resolveScreen(board, cyc);
     const held = holdOf(id, board, now, !!radarState.on);
     const viewKey = `${id}:${board.station.mapid}`;
+    // Two panels have room for the full name (stations.json `wide`), unless
+    // the phone set a name of its own.
+    const stName = board.cols === 128 && st && st.wide && board.station.name === st.short ? st.wide : board.station.name;
     const { view, viewState, rows, ticker, bars, halves } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, alertWords, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
@@ -636,11 +637,10 @@ function createBoard({
       ab: autoBrightOf(board),
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
-      header: bars.showHeader ? board.station.name : null,
+      header: bars.showHeader ? stName : null,
+      // Divider lines under the top bar and over the bottom one, every view.
       headerDivider: board.headerDivider === true,
-      // Key layout: the key on top; `header` then goes on the bottom line.
-      ...(bars.showKey ? { key: 1 } : {}),
-      tickerHeader: board.station.name,
+      tickerHeader: stName,
       // Header clock (transit and ticker) and line-colored labels.
       hclock: board.headerClock !== false,
       // Clock digits roll at each minute (off: they just change).

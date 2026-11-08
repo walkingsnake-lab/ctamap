@@ -298,12 +298,8 @@
   <div class="grp">
     <label class="c sel" id="wideRow" hidden><span>Two panels</span><span class="v"></span><span data-icon="chev"></span>
       <select id="wideLayout"><option value="split">Split by direction</option><option value="rows">Destination rows</option></select></label>
-    <div class="tiles" role="radiogroup" aria-labelledby="layH" id="transitLayout">
-      <button role="radio" data-v="header"><img alt="" data-static="layout-header"><span class="lab"><span class="rd" data-icon="dotck"></span>Station on top</span></button>
-      <button role="radio" data-v="key"><img alt="" data-static="layout-key"><span class="lab"><span class="rd" data-icon="dotck"></span>Key on top</span></button>
-    </div>
     <div class="c" id="wxRow"><label for="showWeather" class="grow">Weather at the bottom</label><input type="checkbox" class="sw" id="showWeather"></div>
-    <div class="c" id="hdivRow"><label for="headerDivider" class="grow">Divider under the top line</label><input type="checkbox" class="sw" id="headerDivider"></div>
+    <div class="c" id="hdivRow"><label for="headerDivider" class="grow">Divider lines<span class="s">Under the top line and over the bottom one</span></label><input type="checkbox" class="sw" id="headerDivider"></div>
     <div class="c"><label for="timeSteps" class="grow">Dim later times step by step<span class="s">Next train full, then 40%, then 20%</span></label><input type="checkbox" class="sw" id="timeSteps"></div>
     <label class="c sel"><span>Destination name color</span><span class="v"></span><span data-icon="chev"></span>
       <select id="lineNames"><option value="white">White</option><option value="line">Line color</option></select></label>
@@ -332,7 +328,7 @@
       <input id="name" class="field caps" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="done">
       <span class="s" id="nameFit" style="margin:0;white-space:nowrap"></span></div>
   </div>
-  <p class="ft" data-note="station" role="status">Picking a station also sets the weather and radar location.</p>
+  <p class="ft" data-note="station" role="status">Picking a station also sets the weather and radar location.<span id="wideNote"></span></p>
 </section>
 
 <!-- ===== Lines & destinations ===== -->
@@ -1155,16 +1151,14 @@
     checked('tShows', board.transitScreen || 'transit');
     const st = stations.find((s) => s.mapid === board.station.mapid);
     $('stationV').replaceChildren(st ? st.name : board.station.mapid, ...(st ? st.lines.map(badge) : []));
-    $('nameV').textContent = board.station.name;
+    // Two panels show the full name while the name is the station's own.
+    const nst = stations.find((s) => s.mapid === board.station.mapid);
+    $('nameV').textContent = board.cols === 128 && nst && nst.wide && board.station.name === nst.short ? nst.wide : board.station.name;
     const lines = st ? st.lines : [];
     const off = (board.hideLines || []).filter((l) => lines.includes(l));
     $('linesV').textContent = off.length ? `${off.map((l) => LINE_NAME[l]).join(', ')} off` : board.rows.length ? `${board.rows.length} picked` : 'All';
     $('showHeader').checked = board.showHeader;
     $('headerClock').checked = board.headerClock !== false;
-    const key = board.transitLayout === 'key';
-    checked('transitLayout', key ? 'key' : 'header');
-    $('wxRow').hidden = key;
-    $('hdivRow').hidden = key;
     $('showWeather').checked = board.showWeather;
     $('headerDivider').checked = board.headerDivider === true;
     $('timeSteps').checked = board.timeSteps === true;
@@ -1176,11 +1170,11 @@
     selVal('tickerSlide', board.tickerSlide || 1200);
     if (document.activeElement !== $('tickerFill')) { $('tickerFill').value = board.tickerFill || 55; $('tickerFillV').textContent = `${board.tickerFill || 55}%`; }
     const hid = (pay && pay.hidden) || [];
-    $('rowsFt').textContent = (key ? 'With more destinations than fit, the station line goes first, then the key; past 5, one train per row.' : 'With more destinations than fit, the weather goes first, then the top line; past 5, one train per row.')
-      + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? (key ? 'station line' : 'top line') : h === 'weather' ? 'weather' : h)).join(' and ')}.` : '')
+    $('rowsFt').textContent = 'With more destinations than fit, the weather goes first, then the top line; past 5, one train per row.'
+      + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? 'top line' : h)).join(' and ')}.` : '')
       + (board.cols === 128 ? (board.wideLayout === 'rows'
         ? ' Two panels: full names, up to 5 times; past 5 destinations, two columns.'
-        : ' Two panels: northbound | southbound (or westbound | eastbound) where every line here runs that way, else inbound | outbound; at an end of the line, departing to | arriving from; on the Loop, rows.') : '');
+        : ' Two panels: northbound | southbound (or westbound | eastbound) where every line here runs that way, else inbound | outbound, with the station at the bottom and no weather; at an end of the line, departing to | arriving from; on the Loop, rows.') : '');
   }
   $('tShows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
@@ -1188,7 +1182,6 @@
     if (board.screen === 'transit' || board.screen === 'ticker') switchTo(v);
     else save({ transitScreen: v });
   });
-  $('transitLayout').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) save({ transitLayout: b.dataset.v }); });
   for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
   $('wideLayout').addEventListener('change', (e) => save({ wideLayout: e.target.value }));
@@ -1206,6 +1199,9 @@
   // ---- Station ----
   function renderStation() {
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
+    const st = stations.find((s) => s.mapid === board.station.mapid);
+    $('wideNote').textContent = board.cols === 128 && st && st.wide && st.wide !== st.short
+      ? (board.station.name === st.short ? ` Two panels show the full name, ${st.wide}.` : ` Two panels show your name; set it back to ${st.short} for the full name, ${st.wide}.`) : '';
     renderNameFit();
     renderStationList();
   }

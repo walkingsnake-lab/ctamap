@@ -86,18 +86,14 @@ function alertLabel(name, px) {
 // like Merchandise Mart gains and loses the weather strip as rush-only
 // Purple service comes and goes. Returns the bars to show and which were
 // hidden.
-function fitBars(n, showHeader, showWeather, showKey = false) {
+function fitBars(n, showHeader, showWeather) {
   const hidden = [];
-  let h = showHeader, w = showWeather, k = showKey;
-  if (n > maxRows(h, w, k)) {
+  let h = showHeader, w = showWeather;
+  if (n > maxRows(h, w)) {
     if (w) { w = false; hidden.push('weather'); }
-    if (k) {
-      // Key layout: the station line goes before the key; past 5 the key stays.
-      if (n > maxRows(h, w, k) && h) { h = false; hidden.push('header'); }
-      if (n > maxRows(h, w, k) && n <= maxRows(false, false, false)) { k = false; hidden.push('key'); }
-    } else if (n > maxRows(h, w) && n <= maxRows(false, false) && h) { h = false; hidden.push('header'); }
+    if (n > maxRows(h, w) && n <= maxRows(false, false) && h) { h = false; hidden.push('header'); }
   }
-  return { showHeader: h, showWeather: w, showKey: k, hidden };
+  return { showHeader: h, showWeather: w, hidden };
 }
 
 // Destination rows, or the chronological list when they don't fit.
@@ -109,10 +105,10 @@ function chooseView(destCount, max, prev, now, hold = CHRONO_HOLD) {
   return now - fitSince >= hold ? { view: 'dest', fitSince: null } : { view: 'chrono', fitSince };
 }
 
-// Max transit rows by header/weather/key toggles (design spec §5 table):
-// each takes one row.
-function maxRows(showHeader, showWeather, showKey = false) {
-  return 5 - (showHeader ? 1 : 0) - (showWeather ? 1 : 0) - (showKey ? 1 : 0);
+// Max transit rows by the header and weather toggles (design spec §5
+// table): each takes one row.
+function maxRows(showHeader, showWeather) {
+  return 5 - (showHeader ? 1 : 0) - (showWeather ? 1 : 0);
 }
 
 // What the board will draw for a time (contract countdown rules: minutes
@@ -205,7 +201,7 @@ function latchDue(prev, next, now) {
   });
 }
 
-// cfg: the board's state (rows filter, showHeader, showWeather, showKey).
+// cfg: the board's state (rows filter, showHeader, showWeather).
 // alerts: Set of line codes with an active service alert.
 // prevView: this board's last view state (see chooseView); the new one is
 // returned as viewState for the caller to keep.
@@ -247,9 +243,9 @@ function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map()
     return { ...formatWide(ordered, shownWide, cfg, now, alerts, alertWords, prevView, WIDE_VIEW_HOLD, ending), ticker: tickerOf(shownWide, alerts, true) };
   }
   const bars = cfg.autoFit === false
-    ? { showHeader: cfg.showHeader, showWeather: cfg.showWeather, showKey: !!cfg.showKey, hidden: [] }
-    : fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
-  const max = maxRows(bars.showHeader, bars.showWeather, bars.showKey);
+    ? { showHeader: cfg.showHeader, showWeather: cfg.showWeather, hidden: [] }
+    : fitBars(ordered.length, cfg.showHeader, cfg.showWeather);
+  const max = maxRows(bars.showHeader, bars.showWeather);
   const viewState = chooseView(ordered.length, max, prevView, now);
   const shown = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
 
@@ -439,11 +435,11 @@ function wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending = [])
   const mapid = cfg.station && cfg.station.mapid;
   const split = () => {
     if (cfg.wideLayout === 'rows') return null;
-    const hidden = [...(cfg.showWeather ? ['weather'] : []), ...(cfg.showKey ? ['key'] : [])];
+    const hidden = cfg.showWeather ? ['weather'] : [];
     const out = (labels, halves) => ({
       view: 'split', halves: labels,
       rows: halves.flatMap((x, h) => x.map((g) => halfRow(g, h, now, alerts.has(g.ln)))),
-      bars: { showHeader: cfg.showHeader, showWeather: false, showKey: false, hidden },
+      bars: { showHeader: cfg.showHeader, showWeather: false, hidden },
     });
     // An end of the line: departing to | arriving from, the trains ending their
     // runs here grouped by where they came from (or the line), soonest
@@ -467,26 +463,17 @@ function wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending = [])
     return out(SPLIT_LABELS[axis], halves);
   };
   // Full-width destination rows while they fit (the rows layout, and where
-  // the split isn't true: a terminal's one or two rows read best whole).
-  // The key layout at 128 is the key's row alone (`trains to` ... `minutes`,
-  // no station or clock; wide-spec §3), placed like a header.
+  // the split isn't true).
   const dest = () => {
-    const rows = () => ordered.map((g) => wideRow(g, now, alerts.has(g.ln), alertWords.get(g.ln)));
-    if (cfg.showKey) {
-      const kb = fitBars(ordered.length, true, cfg.showWeather, false);
-      if (ordered.length <= maxRows(kb.showHeader, kb.showWeather, false)) {
-        const hidden = kb.hidden.map((x) => (x === 'header' ? 'key' : x));
-        return { view: 'dest', rows: rows(), bars: { showHeader: false, showWeather: kb.showWeather, showKey: kb.showHeader, hidden } };
-      }
-    }
-    const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
-    return ordered.length <= maxRows(bars.showHeader, bars.showWeather, bars.showKey) ? { view: 'dest', rows: rows(), bars } : null;
+    const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather);
+    if (ordered.length > maxRows(bars.showHeader, bars.showWeather)) return null;
+    return { view: 'dest', rows: ordered.map((g) => wideRow(g, now, alerts.has(g.ln), alertWords.get(g.ln))), bars };
   };
   // One row per line (busy stations, wide-spec §3), when every line has one
   // or two destinations and the lines fit: a line's first destination on the
   // left half and its second on the right (short names, three times), a line
   // with one destination across the whole row (wideRow). Rows carry `y`, the
-  // line's row; the key's column heads don't fit the halves, so it's hidden.
+  // line's row.
   const byline = () => {
     const byLine = [];
     for (const g of ordered) {
@@ -494,29 +481,28 @@ function wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending = [])
       if (l) l.push(g); else byLine.push([g]);
     }
     if (!byLine.every((l) => l.length <= 2)) return null;
-    const bars3 = fitBars(byLine.length, cfg.showHeader, cfg.showWeather, false);
-    if (byLine.length > maxRows(bars3.showHeader, bars3.showWeather, false)) return null;
+    const bars3 = fitBars(byLine.length, cfg.showHeader, cfg.showWeather);
+    if (byLine.length > maxRows(bars3.showHeader, bars3.showWeather)) return null;
     return {
       view: 'byline',
       rows: byLine.flatMap((l, y) => (l.length === 1 ? [{ ...wideRow(l[0], now, alerts.has(l[0].ln), alertWords.get(l[0].ln)), y }] : l.map((g, h) => ({ ...halfRow(g, h, now, alerts.has(g.ln)), y })))),
-      bars: { ...bars3, hidden: [...bars3.hidden, ...(cfg.showKey ? ['key'] : [])] },
+      bars: bars3,
     };
   };
   const cols2 = () => {
-    // Two columns under the header (the key layout's station line goes on top).
+    // Two columns under the header.
     const perCol = Math.ceil(ordered.length / 2);
-    const top = cfg.showHeader || !!cfg.showKey;
-    const bars2 = fitBars(perCol, top, cfg.showWeather, false);
-    if (perCol > maxRows(bars2.showHeader, bars2.showWeather, false)) return null;
+    const bars2 = fitBars(perCol, cfg.showHeader, cfg.showWeather);
+    if (perCol > maxRows(bars2.showHeader, bars2.showWeather)) return null;
     return {
       view: 'cols2',
       rows: ordered.map((g, i) => halfRow(g, i < perCol ? 0 : 1, now, alerts.has(g.ln))),
-      bars: { ...bars2, hidden: [...bars2.hidden, ...(cfg.showKey ? ['key'] : [])] },
+      bars: bars2,
     };
   };
   const chrono = () => {
-    const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
-    const max = maxRows(bars.showHeader, bars.showWeather, bars.showKey);
+    const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather);
+    const max = maxRows(bars.showHeader, bars.showWeather);
     const labelPx = WIDE_RIGHT - LABEL_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
     const alertPx = WIDE_RIGHT - ALERT_TIME_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
     const rows = shown.slice(0, max + CHRONO_EXTRA).map((a) => {

@@ -141,20 +141,19 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Departures fade, not roll:** when the first train leaves, its cell fades out in place (0.7 s), then (not during the fade) the remaining times slide left (0.5 s), a newly joined time at the end fades in after that slide, and the new first time eases from dim to amber (0.7 s). A row losing its last train fades out, then the rows below slide up; new rows and times fade in. Arrivals are matched across updates by time (within 90 s), so refreshed predictions don't flicker. Reference: `createTransitAnimator()` in `server/board/draw.js`.
 
 ### Layout
-- **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone.
-- **Header** (station name and clock both dark grey `#555555`, so the train rows are the focus; flush to the screen edges at x0 and x63, no background; same layout as the ticker header, which stays `#808080`) and **weather strip** (rows 27–31, no divider) are **each optional**, set per board in config, independent of row count.
-- **Header divider:** a per-board toggle for a `#333333` line on row 7 under the header (default off). The old line above the weather row is gone with the row (`wxDivider` is still accepted but not drawn).
-- **Layouts** (per board, `transitLayout`): **header** (above) or **key** (below).
+- **Header station names** must fit 42px (the space left by the widest clock). Shortening order: full name; then drop ordinal suffixes (`95/DAN RYAN`, `35/ARCHER`); then a curated short name (`HW LIBRARY`, `MERCH MART`, `CLARK/DIV`); list in `server/board/station-names.js`, editable per board from the phone. Two panels (wide-spec §3) show the full name instead, up to 106px (`JEFFERSON PARK`, `95TH/DAN RYAN`; curated only where that's too long: `HAROLD WASHINGTON LIBRARY`), unless the phone set a name of its own.
+- **Header** (station name and clock both dark grey `#555555`, so the train rows are the focus; flush to the screen edges at x0 and x63, no background; same layout as the ticker header, which stays `#808080`) and **weather strip** (rows 27–31) are **each optional**, set per board in config, independent of row count.
+- **Divider lines:** one per-board toggle (`headerDivider`, default off) for `#333333` lines under the top bar (row 7) and over the bottom one (row 25), in every view: the header and the weather strip here; the halves' labels and the station line in the wide split. A line shows only with its bar. One bar layout (Nov 8, 2026): the key layout is gone.
 - **No edge padding:** text runs to the screen edges (x0 and x63) everywhere outside filled bands.
 - Rows fill the remaining space (5px rows, gaps of 1px or more).
 - **Without the header, rows are spread evenly** from the top of the panel to the weather strip (rows 0–25) (or the bottom edge): equal gaps above, between, and below. The between-row gap is the ideal gap rounded to the nearest pixel; the leftover is split top and bottom, any odd pixel going to the bottom.
-- **Fitting:** the header and weather toggles are the most the board shows; each takes one row. When more destinations are running than fit, the **weather strip is hidden first, then the header** (key layout: **the station line first, then the key**), so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header or key (if on) and **no weather strip or station line**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
+- **Fitting:** the header and weather toggles are the most the board shows; each takes one row. When more destinations are running than fit, the **weather strip is hidden first, then the header**, so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header (if on) and **no weather strip**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
 - Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**; the chronological view covers those stations.
 
 **Geometry (from the mocks):**
 - Header band on rows 0–6, text on rows 1–5. Train rows start at row 9 or lower (at least 2px clear of the band).
 - Weather strip on rows 27–31; train rows end by row 25.
-- **With header** (row pitch, row top to row top): 2 rows 8px (9px with no weather strip: 4 px under the header and between the rows, rows at 12 and 21 with the header's divider line, 10 and 19 without; the rest of the space stays at the bottom); 3 rows 8px (rows at 10, 18, 26); 4 rows 6px (rows at 9, 15, 21, 27, using the full height). With the weather strip: 2 rows at 10, 18; 3 rows at 8, 14, 20 (2 px under the header text, 1 between, 2 above the strip). Without the divider line the 3- and 4-row layouts and the weather-strip layouts move up 1 px (the header text ends on row 5) so the gap under the header matches the gaps between rows. Otherwise rows are centered in whatever space is left.
+- **With header** (row pitch, row top to row top): 2 rows 8px (9px with no weather strip: 4 px under the header and between the rows, rows at 12 and 21 with the header's divider line, 10 and 19 without; the rest of the space stays at the bottom); 3 rows 8px (rows at 10, 18, 26); 4 rows 6px (rows at 9, 15, 21, 27, using the full height). With the weather strip: 2 rows at 10, 18; 3 rows at 8, 14, 20 (2 px under the header text, 1 between, 2 above the strip; with the divider lines too, the rows keep these tops and meet the lines on rows 7 and 25). Without the divider line the 3- and 4-row layouts and the 1- and 2-row weather-strip layouts move up 1 px (the header text ends on row 5) so the gap under the header matches the gaps between rows. Otherwise rows are centered in whatever space is left.
 - **Without header** (even spacing over rows 0–31, or rows 0–25 with the weather strip on):
 
 | Weather strip | Rows | Row tops | Gaps (top / between / bottom) |
@@ -168,21 +167,15 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 | on | 4 | 1, 7, 13, 19 | 1 / 1 / 2 |
 
 
-| Header (or station line) | Weather strip | Key | Max rows |
-|---|---|---|---|
-| off | off | off | 5 |
-| on | off | off | 4 |
-| off | on | off | 4 |
-| on | on | off | 3 |
-| on (station line) | — | on | 3 |
-| off | — | on | 4 |
+| Header | Weather strip | Max rows |
+|---|---|---|
+| off | off | 5 |
+| on | off | 4 |
+| off | on | 4 |
+| on | on | 3 |
 
-### Key layout (optional)
-- **Key** on rows 1–5: lowercase Tom Thumb in the transit dark grey `#555555`, `trains to` from x0 (over the color blocks) and `min` flush right. Never amber (amber means a live train). The wording follows WMATA's `LN | CAR | DEST | MIN` header row; most agencies have no key.
-- **Station line** at the bottom: a `#333333` divider on row 25, then the station name (x0) and clock (flush right, rolling) in `#808080` on rows 27–31 (baseline 32), on an unlit background. It reads as a footer, not as the key's equal. (First built on a `#141414` band on rows 27–31; replaced by the unlit line.)
-- **Rows** between the key and the divider (rows 6–24), 1 px apart from three rows up: 3 rows at 7, 13, 19 (1 px everywhere: key, rows, divider, station); 2 rows at 9, 17; 1 row at 13. With the station line hidden (4 rows): 7, 13, 19, 25.
-- **Fitting:** the station line hides before the key (4 rows: key and rows; 5: neither). The chronological view keeps the key (4 rows). No weather strip in this layout (the station line takes its rows).
-- The header divider doesn't apply.
+### Key layout (retired Nov 8, 2026)
+A `trains to` / `min` key on top with the station line at the bottom was an option until Nov 8, 2026; it was cut to keep one bar layout across views.
 
 ### Chronological view (overflow)
 - **When:** the destination count (after the per-board destination filter) exceeds the board's max rows. The server decides on each update and sends `view` in the combined update.
@@ -362,7 +355,7 @@ Redesigned Nov 2026 ("Control Page Redesign Decisions"; mockups: the Board Contr
 - **Station and destination filter:** per-board config, editable instead of hardcoded. Default station: Morse. The station's coordinates are also the board's location for weather, NWS alerts, and radar.
 - **Destination filter UI:** "All destinations" on by default. Turned off, it lists every destination the station's lines can show (including rush-only ones not running now, so a filter set off-peak doesn't hide Purple at rush), with checkboxes and up/down ordering. Picking a new station resets the filter to all.
 - **Live preview** of what the board is showing at the top of the page (refreshes every 10 s and after each change).
-- **Transit layout:** station on top (header) or key on top (station line at the bottom). **Header and weather strip:** independent on/off toggles per board (see §5 for how many rows each combination fits; the key layout has no weather strip).
+- **Header and weather strip:** independent on/off toggles per board (see §5 for how many rows each combination fits), and **divider lines** under the top bar and over the bottom one.
 - **Header clock** (transit and ticker) on/off, and **destination names** in white or the line's color (Brown and Purple read dim as text in their true colors).
 - **Time dim steps** (Transit): the third arrival time at 20% instead of 40% (default off).
 - **Board health:** last report, uptime, free memory (and lowest), skipped frames, failed fetches, reconnects, restarts, last error, WiFi signal. Sent by the board with the version check about once a minute, so problems show without a USB serial console.

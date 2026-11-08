@@ -227,21 +227,8 @@ static ustr chrono_text(double t, double now, bool due = true) {
   return num_text(m) + U"m";
 }
 
-static int max_rows(bool has_header, bool has_weather, bool has_key = false) {
-  return 5 - (has_header ? 1 : 0) - (has_weather ? 1 : 0) - (has_key ? 1 : 0);
-}
-
-static std::vector<int> key_row_tops(int n, bool band) {
-  // Mirrors keyRowTops in draw.js.
-  std::vector<int> out;
-  if (n == 0) return out;
-  int area_top = 6;
-  int area_h = (band ? 24 : 31) - area_top + 1;
-  int kp = n == 2 ? 8 : (n == 3 || n == 4) ? 6 : 6;
-  int pitch = n == 1 ? 0 : std::min(kp, (int)fdiv(area_h - 5, n - 1));
-  int top = area_top + std::max(0LL, fdiv(area_h - ((n - 1) * pitch + 5), 2));
-  for (int i = 0; i < n; i++) out.push_back(top + i * pitch);
-  return out;
+static int max_rows(bool has_header, bool has_weather) {
+  return 5 - (has_header ? 1 : 0) - (has_weather ? 1 : 0);
 }
 
 static std::vector<int> row_tops_base(int n, bool has_header, bool has_weather) {
@@ -270,9 +257,10 @@ static std::vector<int> row_tops_base(int n, bool has_header, bool has_weather) 
 }
 
 // Mirrors rowTops in draw.js: without the header's divider line, the
-// header layouts move up so the gap under the header matches the rest.
-static std::vector<int> row_tops(int n, bool has_header, bool has_weather, bool divider = false, bool key = false) {
-  if (key) return key_row_tops(n, has_header);
+// header layouts move up so the gap under the header matches the rest;
+// three rows between the header and the weather strip keep 8, 14, 20.
+static std::vector<int> row_tops(int n, bool has_header, bool has_weather, bool divider = false) {
+  if (has_header && has_weather && n == 3) return {8, 14, 20};
   if (has_header && !has_weather && n == 2) return divider ? std::vector<int>{12, 21} : std::vector<int>{10, 19};
   std::vector<int> tops = row_tops_base(n, has_header, has_weather);
   if (!has_header || divider || tops.empty()) return tops;
@@ -683,21 +671,13 @@ static void draw_weather(Frame &f, const Value &wx, const Value *warn, bool blin
   }
 }
 
-// Key layout: the key on rows 1-5, the station and clock on rows 27-31 under
-// a divider on row 25. Mirrors drawKey() / drawBand() in draw.js.
-// The key row (draw.js drawKey): `min`, or 128 wide `minutes`.
-static void draw_key(Frame &f) {
-  f.text(FONT_SMALL, U"trains to", 0, 6, C::dimHead);
-  rtext(f, FONT_SMALL, f.w == WIDE ? U"minutes" : U"min", f.w - 1, 6, C::dimHead);
-}
-
-static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock = true, RGB color = C::head,
-                      bool divider = true) {
-  if (divider) f.fill(0, 25, f.w, 1, C::divider);
-  f.text(FONT_SMALL, name, 0, 32, color);
+// The split view's station line: the station and clock on rows 27-31 in the
+// dim header grey. Mirrors drawBand() in draw.js.
+static void draw_band(Frame &f, const ustr &name, double now, double tzo, bool clock) {
+  f.text(FONT_SMALL, name, 0, 32, C::dimHead);
   if (clock) {
     ustr ck = clock_text(now, tzo);
-    roll_text(f, FONT_SMALL, ck, f.w - 1, 32, color, take_roll("hdr.clock", ck));
+    roll_text(f, FONT_SMALL, ck, f.w - 1, 32, C::dimHead, take_roll("hdr.clock", ck));
   }
 }
 
@@ -791,7 +771,6 @@ static View view_base(const Value &p, double now) {
   v.wx = p["wx"].truthy() ? &p["wx"] : nullptr;
   v.warn = p["warn"].truthy() ? &p["warn"] : nullptr;
   v.hdiv = p["headerDivider"].is_true();
-  v.key = p["key"].truthy();
   v.clock = !p["hclock"].is_false();
   v.lnc = p["lnc"].is_true();
   v.stale = p["stale"].truthy();
@@ -806,10 +785,7 @@ View build_transit_view(const Value &p, double now) {
   if (p["view"].eq("chrono")) return build_chrono_view(p, now);
   if (cols_of(p) == WIDE && (p["view"].eq("split") || p["view"].eq("cols2") || p["view"].eq("byline"))) return build_halves_view(p, now);
   std::vector<LiveRow> rows = live_rows(p, now);
-  // The wide key layout: the key's row holds the station and clock.
-  bool wide_key = cols_of(p) == WIDE && p["key"].truthy();
-  std::vector<int> tops = wide_key ? row_tops((int)rows.size(), true, p["wx"].truthy(), false, false)
-                                   : row_tops((int)rows.size(), p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true(), p["key"].truthy());
+  std::vector<int> tops = row_tops((int)rows.size(), p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true());
   View v = view_base(p, now);
   v.mode = "dest";
   for (size_t i = 0; i < rows.size(); i++) {
@@ -860,11 +836,10 @@ static View build_halves_view(const Value &p, double now) {
     // row `y`, in a half, or without `h` across the whole width; drawn as cols2.
     int n = 0;
     for (const LiveRow &r : rows) n = std::max(n, byline_y(*r.src) + 1);
-    std::vector<int> tops = row_tops(n, p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true(), false);
+    std::vector<int> tops = row_tops(n, p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true());
     View v = view_base(p, now);
     v.mode = "cols2";
     v.w = WIDE;
-    v.key = false;
     for (const LiveRow &lr : rows) {
       const Value &r = *lr.src;
       int y = byline_y(r);
@@ -891,14 +866,12 @@ static View build_halves_view(const Value &p, double now) {
   std::vector<LiveRow> per[2];
   for (const LiveRow &r : rows) per[(*r.src)["h"].truthy() ? 1 : 0].push_back(r);
   int n = (int)std::max(per[0].size(), per[1].size());
-  std::vector<int> tops = split ? split_tops(std::min(n, 3)) : row_tops(n, p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true(), false);
+  std::vector<int> tops = split ? split_tops(std::min(n, 3)) : row_tops(n, p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true());
   View v = view_base(p, now);
   v.mode = split ? "split" : "cols2";
   v.w = WIDE;
   if (split)
     for (size_t i = 0; i < p["halves"].size(); i++) v.halves.push_back(vstr(p["halves"][i]));
-  v.hdiv = !split && p["headerDivider"].is_true();
-  v.key = false;
   if (split) v.wx = nullptr;
   for (int h = 0; h < 2; h++)
     for (size_t i = 0; i < per[h].size(); i++) {
@@ -924,10 +897,9 @@ static View build_chrono_view(const Value &p, double now) {
   // Sorted here too, by time (stable). Mirrors buildChronoView in draw.js.
   std::vector<LiveRow> rows = live_rows(p, now);
   std::stable_sort(rows.begin(), rows.end(), [](const LiveRow &a, const LiveRow &b) { return a.tn[0] < b.tn[0]; });
-  size_t cap = (size_t)std::max(0, max_rows(p["header"].truthy(), p["wx"].truthy(), p["key"].truthy()));
+  size_t cap = (size_t)std::max(0, max_rows(p["header"].truthy(), p["wx"].truthy()));
   if (rows.size() > cap) rows.resize(cap);
-  std::vector<int> tops = row_tops((int)rows.size(), p["header"].truthy(), p["wx"].truthy(),
-                                   p["headerDivider"].is_true(), p["key"].truthy());
+  std::vector<int> tops = row_tops((int)rows.size(), p["header"].truthy(), p["wx"].truthy(), p["headerDivider"].is_true());
   View v = view_base(p, now);
   v.mode = "chrono";
   v.pitch = tops.size() > 1 ? tops[1] - tops[0] : 6;
@@ -1047,8 +1019,9 @@ static void draw_stale(Frame &f, const Value &p) {
 }
 
 // Wide board, northbound | southbound (draw.js drawSplit): each half's label
-// on rows 1-5, its rows, the station line at the bottom; NO TRAINS in a half
-// with none.
+// on rows 1-5, its rows, the station line at the bottom, the divider lines
+// (row 7, and row 25 over the station line) with headerDivider; NO TRAINS in
+// a half with none.
 static void draw_split(Frame &f, const View &view) {
   for (int h = 0; h < 2; h++) {
     int x0 = HALVES[h][0], x1 = HALVES[h][1];
@@ -1061,8 +1034,12 @@ static void draw_split(Frame &f, const View &view) {
       f.text(FONT_SMALL, nt, x0 + (int)fdiv(x1 - x0 + 1 - measure(FONT_SMALL, nt), 2), 19, C::noTrains);
     }
   }
-  if (view.has_header) draw_band(f, view.header, view.now, view.tzo, view.clock, C::dimHead, false);
-  f.push_clip(0, 7, f.w - 1, view.has_header ? 25 : 31);
+  if (view.hdiv) f.fill(0, 7, f.w, 1, C::divider);
+  if (view.has_header) {
+    if (view.hdiv) f.fill(0, 25, f.w, 1, C::divider);
+    draw_band(f, view.header, view.now, view.tzo, view.clock);
+  }
+  f.push_clip(0, view.hdiv ? 8 : 7, f.w - 1, view.has_header ? (view.hdiv ? 24 : 25) : 31);
   for (const ViewRow &row : view.rows) draw_view_row(f, row, view.lnc);
   f.pop_clip();
 }
@@ -1073,17 +1050,11 @@ static void draw_transit_view(Frame &f, const View &view, bool blink) {
   } else if (view.mode == "split") {
     draw_split(f, view);
   } else {
-    bool wide_key = view.key && view.w == WIDE;
-    if (wide_key) {
-      draw_key(f);
-    } else if (view.key) {
-      draw_key(f);
-      if (view.has_header) draw_band(f, view.header, view.now, view.tzo, view.clock);
-    } else if (view.has_header) {
-      draw_header(f, view.header, view.now, view.tzo, view.hdiv, view.clock, C::dimHead);
-    }
-    int clip_top = wide_key ? 7 : view.key ? 6 : (view.has_header ? 7 : 0);
-    int clip_bottom = (!wide_key && view.key && view.has_header) ? 24 : (view.wx ? 25 : 31);
+    if (view.has_header) draw_header(f, view.header, view.now, view.tzo, view.hdiv, view.clock, C::dimHead);
+    if (view.wx && view.hdiv) f.fill(0, 25, f.w, 1, C::divider);
+    // Rows stay off the bars and their lines (mid-slide too).
+    int clip_top = view.has_header ? (view.hdiv ? 8 : 7) : 0;
+    int clip_bottom = view.wx ? (view.hdiv ? 24 : 25) : 31;
     f.push_clip(0, clip_top, f.w - 1, clip_bottom);
     for (const ViewRow &row : view.rows) draw_view_row(f, row, view.lnc);
     f.pop_clip();

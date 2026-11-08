@@ -21,9 +21,8 @@ function payloadFrom(name, header, cfg = {}) {
   const json = fixture(name);
   const now = parseCtaTime(json.ctatt.tmst);
   const showWeather = !!cfg.wx;
-  const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather, showKey: !!cfg.key }, { now, alerts: new Set(cfg.alerts || []) });
-  const key = r.bars.showKey ? { key: 1 } : {};
-  return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: cfg.bright != null ? cfg.bright : 100, header: r.bars.showHeader ? header : null, ...key, view: r.view, rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx || null : null, warn: cfg.warn || null };
+  const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather }, { now, alerts: new Set(cfg.alerts || []) });
+  return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: cfg.bright != null ? cfg.bright : 100, header: r.bars.showHeader ? header : null, view: r.view, rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx || null : null, warn: cfg.warn || null };
 }
 
 const hexOf = (f) => Buffer.from(f.px).toString('base64');
@@ -90,21 +89,20 @@ async function build() {
   add('options: no header clock (chrono)', { ...cl, hclock: false }, [{ screen: 'transit' }, { screen: 'ticker' }]);
   add('chrono clark/lake weather + warning', payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { wx: WX, warn: { kind: 'svr', lvl: 'warning' } }), [{ screen: 'transit' }]);
   // 50%: every odd channel value lands on .5, where JS and Python rounding differ.
-  // Header divider line (dest and chrono views).
-  for (const [name, hdr] of [['belmont-2026-10-03-2316.json', 'BELMONT'], ['clark-lake-2026-10-03-2317.json', 'CLARK/LAKE']]) {
+  // Divider lines (dest and chrono views): under the header and over the
+  // weather strip (S3 only: the frozen M4 draws just the header's), with
+  // three, four, and two rows; the strip's line without the header.
+  for (const [name, hdr] of [['belmont-2026-10-03-2316.json', 'BELMONT'], ['clark-lake-2026-10-03-2317.json', 'CLARK/LAKE'], ['morse-2026-10-03-2316.json', 'MORSE']]) {
     const p = { ...payloadFrom(name, hdr, { wx: WX }), headerDivider: true };
-    add(`dividers ${hdr}`, p, [{ screen: 'transit' }, { screen: 'transit', blink: true }]);
+    add(`dividers ${hdr}`, p, [{ screen: 'transit' }, { screen: 'transit', blink: true }], undefined, undefined, { s3only: true });
+    if (hdr === 'BELMONT') add('dividers no header', { ...payloadFrom(name, null, { wx: WX }), headerDivider: true }, [{ screen: 'transit' }], undefined, undefined, { s3only: true });
   }
+  {
+    const three = { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { wx: WX }), rows: payloadFrom('belmont-2026-10-03-2316.json', null).rows.slice(0, 3), headerDivider: true };
+    add('dividers 3 rows', three, [{ screen: 'transit' }], undefined, undefined, { s3only: true });
+  }
+  add('dividers no weather', { ...payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT'), headerDivider: true }, [{ screen: 'transit' }]);
   add('brightness 50', payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { wx: WX, bright: 50 }), [{ screen: 'transit' }, { screen: 'ticker' }]);
-  // Key layout: key + station line (Morse, 2 rows; Howard), station line hidden (Belmont, 4
-  // rows), key hidden (Clark/Lake as dest rows needs 5), chrono with the key,
-  // no station clock, alerts, dim.
-  for (const [name, hdr] of [['morse-2026-10-03-2316.json', 'MORSE'], ['howard-2026-10-03-2316.json', 'HOWARD'], ['belmont-2026-10-03-2316.json', 'BELMONT'], ['jefferson-park-2026-10-03-2316.json', 'JEFFERSON PK']]) {
-    const p = payloadFrom(name, hdr, { key: true, alerts: ['RD', 'BL'] });
-    add(`key layout ${hdr}`, p, [{ screen: 'transit' }, { screen: 'transit', now: p.now + 75 }]);
-  }
-  add('key layout chrono', payloadFrom('clark-lake-2026-10-03-2317.json', 'CLARK/LAKE', { key: true, alerts: ['GR'] }), [{ screen: 'transit' }]);
-  add('key layout 3 rows no clock dim', { ...payloadFrom('morse-2026-10-03-2316.json', 'MORSE', { key: true }), rows: payloadFrom('belmont-2026-10-03-2316.json', null).rows.slice(0, 3), hclock: false, bright: 40 }, [{ screen: 'transit' }]);
   add('dest belmont alerts blink + dim', payloadFrom('belmont-2026-10-03-2316.json', 'BELMONT', { alerts: ['BR'], bright: 40 }), [{ screen: 'transit', blink: true }, { screen: 'transit', blink: false }]);
   // Alert labels: cut to fit the circle with three times (HOWA, KIMB), whole
   // with fewer (95TH, LOOP); line-colored names; header hidden.
@@ -407,10 +405,11 @@ async function build() {
   const NOW = 1_800_000_000;
   const min = (m) => NOW + m * 60 - 5;
   const base = { v: 1, tzo: tzOffset(NOW), screen: 'transit', bright: 100, header: 'TEST', ticker: [], wx: null, warn: null };
-  const seq = (name, steps) => {
+  const seq = (name, steps, extra = {}) => {
     const anim = draw.createTransitAnimator();
     S.push({
       ...(steps.some((s) => alerted(s.p)) ? { s3only: true } : {}),
+      ...extra,
       name,
       steps: steps.map((s) => {
         const p = { ...base, now: s.now, ...s.p };
@@ -449,14 +448,16 @@ async function build() {
     ].filter((r) => r.t.length);
     seq('anim row leaves', [{ p: { rows: rowsAt(false) }, now: NOW, t: 0 }, ...ts(1000, 1400, 14).map((t, i) => ({ p: { rows: rowsAt(true) }, now: NOW + 60, t, blink: i % 3 === 0 }))]);
   }
-  // Key layout: a row leaves and the others slide between the key and the band.
+  // Divider lines: a row leaves and the others slide between the header's
+  // line and the weather strip's (S3 only: the M4 draws no strip line).
   {
     const rowsAt = (gone) => [
-      { ln: 'RD', lbl: 'HOWARD', t: [min(4)], s: [0], a: 1 },
-      { ln: 'RD', lbl: '95TH', t: gone ? [] : [NOW + 10], s: [0], a: 1 },
+      { ln: 'RD', lbl: 'HOWARD', t: [min(4)], s: [0], a: 0 },
+      { ln: 'RD', lbl: '95TH', t: gone ? [] : [NOW + 10], s: [0], a: 0 },
       { ln: 'BR', lbl: 'KIMBALL', t: [min(9)], s: [0], a: 0 },
     ].filter((r) => r.t.length);
-    seq('anim key layout row leaves', [{ p: { key: 1, rows: rowsAt(false) }, now: NOW, t: 0 }, ...ts(1000, 1400, 14).map((t) => ({ p: { key: 1, rows: rowsAt(true) }, now: NOW + 60, t }))]);
+    const d = { headerDivider: true, wx: WX };
+    seq('anim dividers row leaves', [{ p: { ...d, rows: rowsAt(false) }, now: NOW, t: 0 }, ...ts(1000, 1400, 14).map((t) => ({ p: { ...d, rows: rowsAt(true) }, now: NOW + 60, t }))], { s3only: true });
   }
   // Knob chooser (S3 only): the wheel resting, mid-slide, wrapped, and committed.
   {
@@ -882,12 +883,12 @@ async function build() {
     }
     // Wide transit, as the server formats it (arrivals.js formatWide):
     // northbound | southbound, two columns, full-width rows, the
-    // chronological list; alerts, the key layout, an empty half.
+    // chronological list; alerts, divider lines, an empty half.
     const wideFrom = (name, mapid, header, cfg = {}) => {
       const json = fixture(name);
       const now = parseCtaTime(json.ctatt.tmst);
-      const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather: !!cfg.wx, showKey: !!cfg.key, cols: 128, wideLayout: cfg.layout || 'split', station: { mapid }, ...(cfg.hide ? { hideLines: cfg.hide } : {}) }, { now, alerts: new Set(cfg.alerts || []), alertWords: new Map(Object.entries(cfg.words || {})) });
-      return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, cols: 128, header: r.bars.showHeader ? header : null, ...(r.bars.showKey ? { key: 1 } : {}), view: r.view, ...(r.halves ? { halves: r.halves } : {}), rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx : null, warn: cfg.warn || null, ...(cfg.extra || {}) };
+      const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather: !!cfg.wx, cols: 128, wideLayout: cfg.layout || 'split', station: { mapid }, ...(cfg.hide ? { hideLines: cfg.hide } : {}) }, { now, alerts: new Set(cfg.alerts || []), alertWords: new Map(Object.entries(cfg.words || {})) });
+      return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, cols: 128, header: r.bars.showHeader ? header : null, view: r.view, ...(r.halves ? { halves: r.halves } : {}), rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx : null, warn: cfg.warn || null, ...(cfg.extra || {}) };
     };
     const at = (q) => [{ screen: 'transit' }, { screen: 'transit', now: q.now + 75 }, { screen: 'transit', now: q.now + 610 }];
     const S3 = { s3only: true };
@@ -902,8 +903,14 @@ async function build() {
     {
       const q = wideFrom('belmont-2026-10-03-2316.json', '41320', 'BELMONT', { alerts: ['RD'] });
       add('wide transit split alert', q, at(q), undefined, undefined, S3);
-      const k = wideFrom('morse-2026-10-03-2316.json', '40100', 'MORSE', { layout: 'rows', key: true });
-      add('wide transit rows key layout', k, at(k), undefined, undefined, S3);
+      // Divider lines: under the split's labels and over its station line;
+      // under the header and over the weather strip.
+      for (const [file, mapid, name, layout] of [['belmont-2026-10-03-2316.json', '41320', 'BELMONT', 'split'], ['howard-2026-10-03-2316.json', '40900', 'HOWARD', 'split'], ['morse-2026-10-03-2316.json', '40100', 'MORSE', 'rows']]) {
+        const d = wideFrom(file, mapid, name, { layout, wx: layout === 'rows' ? WX : null, extra: { headerDivider: true } });
+        add(`wide transit ${d.view} ${name} dividers`, d, at(d), undefined, undefined, S3);
+      }
+      const dn = wideFrom('belmont-2026-10-03-2316.json', '41320', null, { extra: { headerDivider: true } });
+      add('wide transit split dividers no station line', dn, [{ screen: 'transit' }], undefined, undefined, S3);
       // Six destinations at a station without the split: two columns.
       const t0 = 1_800_000_000;
       const six = ['Howard', '95th', 'Kimball', 'Loop', 'Linden', 'Midway'].map((d, i) => ({ ln: ['RD', 'RD', 'BR', 'BR', 'PR', 'OR'][i], dest: d, full: d, known: true, dir: 1 + (i % 2) * 4, t: t0 + (i + 2) * 60 + i * 37, s: i === 3 ? 1 : 0, rn: String(900 + i) }));
@@ -921,8 +928,6 @@ async function build() {
       // The alert's words after the circle (wide-spec §3), where they fit.
       const aw = wideFrom('belmont-2026-10-03-2316.json', '41320', 'BELMONT', { layout: 'rows', alerts: ['BR', 'RD'], words: { BR: 'MAJOR DELAYS', RD: 'SIGNIFICANT DELAYS' } });
       add('wide transit rows alert words', aw, [{ screen: 'transit' }, { screen: 'transit', blink: true }], undefined, undefined, S3);
-      const ak = wideFrom('belmont-2026-10-03-2316.json', '41320', 'BELMONT', { layout: 'rows', key: true, alerts: ['BR'], words: { BR: 'MAJOR DELAYS' } });
-      add('wide transit key layout alert words', ak, [{ screen: 'transit' }], undefined, undefined, S3);
       // The warning spelled out on the weather strip, with when it ends.
       for (const [warn, name] of [[{ kind: 'tor', lvl: 'warning', until: 1791248700 }, 'tornado warning until'], [{ kind: 'svr', lvl: 'warning', until: 1791252300 }, 'severe warning until'],
         [{ kind: 'svr', lvl: 'watch' }, 'severe watch'], [{ kind: 'tor', lvl: 'watch', until: 1791255900 }, 'tornado watch until']]) {

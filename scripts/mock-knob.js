@@ -16,7 +16,7 @@ const B = path.join(__dirname, '..', 'server', 'board');
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'mockups', 'knob');
 const json = JSON.parse(fs.readFileSync(path.join(B, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
 const now = parseCtaTime(json.ctatt.tmst);
-const r = format(normalize(json, { log: { warn() {}, error() {} } }), { rows: [], showHeader: true, showWeather: true, showKey: false }, { now, alerts: new Set() });
+const r = format(normalize(json, { log: { warn() {}, error() {} } }), { rows: [], showHeader: true, showWeather: true }, { now, alerts: new Set() });
 const knob = { ring: ['auto', 'transit', 'weather', 'sports'], at: 1 };
 const p = {
   v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, header: 'MORSE', view: r.view, rows: r.rows, ticker: r.ticker,

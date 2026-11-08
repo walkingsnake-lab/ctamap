@@ -437,6 +437,26 @@ test('width: w=128 on update and select makes a wide board (cols 128); no w is 6
   await s.close();
 });
 
+test('width: two panels show the full station name unless the phone set one', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const J = (body) => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  await s.req('/board/secret123/api/state?b=home', J({ station: { mapid: '41280' } }));
+  // The ticker's header comes with the ticker's section (s=ticker).
+  const names = async (q) => [(await s.req(`/board/update?b=home${q}`, h)).body.header, (await s.req(`/board/update?b=home${q}&s=ticker`, h)).body.tickerHeader];
+  assert.deepEqual(await names(''), ['JEFF PARK', 'JEFF PARK']);
+  assert.deepEqual(await names('&w=128'), ['JEFFERSON PARK', 'JEFFERSON PARK']);
+  assert.equal(s.store.get('home').station.name, 'JEFF PARK', 'the saved name stays the 64 one');
+  // A name of the phone's own shows on both widths.
+  await s.req('/board/secret123/api/state?b=home', J({ station: { mapid: '41280', name: 'JEFF PK' } }));
+  assert.deepEqual(await names('&w=128'), ['JEFF PK', 'JEFF PK']);
+  // The control page's list carries both.
+  const st = (await s.req('/board/secret123/api/stations')).body.find((x) => x.mapid === '41280');
+  assert.deepEqual([st.short, st.wide], ['JEFF PARK', 'JEFFERSON PARK']);
+  await s.close();
+});
+
 test('simulator: station list and previewing another station without changing the board', async () => {
   const tracker = fakeTracker({ arrivals: [], fetchedAt: Math.floor(Date.now() / 1000) });
   const s = await serve({ tracker });
@@ -758,14 +778,9 @@ test('update: weather screen gets conditions always, radar frames only while rai
   assert.equal(b.wx, null); // weather row off...
   assert.deepEqual(b.radar.wx, screenWx); // ...but the weather screen still gets conditions
   await s.close();
-  // Key layout: `key` sent, no weather strip even with it on; the weather screen still gets conditions.
+  // Weather back on: the strip comes back; no `key` (the key layout is gone).
   s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
-  s.store.update('home', { showWeather: true, transitLayout: 'key' });
-  b = (await s.req(FULL)).body;
-  assert.equal(b.key, 1);
-  assert.equal(b.wx, null);
-  assert.deepEqual(b.radar.wx, screenWx);
-  s.store.update('home', { transitLayout: 'header' });
+  s.store.update('home', { showWeather: true });
   b = (await s.req(FULL)).body;
   assert.equal(b.key, undefined);
   assert.equal(b.wx.temp, 63);
@@ -1022,7 +1037,7 @@ test('width: wide transit gets the warning\'s end (warn.until) and alert words; 
   assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' }, 'the 64 warning is unchanged');
   assert.ok(b.rows.every((r) => r.aw === undefined));
   b = await upd(true);
-  assert.ok(b.warn.until > now && b.warn.until <= now + 600, 'a test warning ends with the test');
+  assert.ok(b.warn.until > now && b.warn.until <= Math.floor(Date.now() / 1000) + 600, 'a test warning ends with the test');  // the clock may tick past `now` mid-test
   assert.ok(b.rows.some((r) => r.aw === 'MAJOR DELAYS'), 'test alerts read MAJOR DELAYS');
   await post({});
   await s.close();

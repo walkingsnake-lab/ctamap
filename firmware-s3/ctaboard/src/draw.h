@@ -212,7 +212,7 @@ struct View {
   ustr header;
   const Value *wx = nullptr;    // null when absent or falsy
   const Value *warn = nullptr;  // null when absent or falsy
-  bool hdiv = false, key = false, clock = true, lnc = false, stale = false;
+  bool hdiv = false, clock = true, lnc = false, stale = false;
   double tzo = 0;
   double pitch = 6;
   std::vector<ViewRow> rows;
