@@ -84,6 +84,10 @@ SEAT_DEG, RIM_IN, DIFF_BEV = 55.0, 1.5, 0.2
 V.set_seat(SEAT_DEG, RIM_IN, DIFF_BEV)
 import diffuser as _DF
 _DF.BEV = DIFF_BEV
+# skirt fit (Nov 7, P2.5 pair, generic black PETG on the 0.4 nozzle): the skirts came out 80.2 inside on a 79.9 mm panel
+# with the single build's one 0.2 bump on the bottom skirt: 0.3 of slack, no snap, the half wiggled. Bumps 0.3 tall on
+# the top skirt too (and the outer end, which pushes the half toward the seam): ~0.3 mm of interference over four bumps.
+_DF.BUMP, _DF.TOP_BUMPS = float(os.environ.get('DIFF_BUMP', '0.3')), True
 V.KNOB_X = KNOB_X
 if not TRAYS:
     for _m in (C, V, P3):

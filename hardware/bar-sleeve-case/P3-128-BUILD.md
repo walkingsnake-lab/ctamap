@@ -88,6 +88,10 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
   now, ~23 N with solid walls, so **print the shell halves with 6 walls** (solid 5 mm, ~40 g more walnut). A groove
   behind the rim (overlap 1.9, ~22/36 N, the diffuser slid in from the seam end before the halves are joined) is in the
   code (`GROOVE`) but not used: it changes the assembly order.
+- **Diffuser skirt fit (Nov 7, testing):** the first rescaled P2.5 half measured 80.2 inside the skirts on a 79.9 mm
+  panel, with the single build's one 0.2 bump on the bottom skirt: 0.3 of slack, no snap. The pairs' diffusers now have
+  **0.3 mm bumps on the top skirt too**, the bottom and the outer end (`DIFF_BUMP`; the single diffuser is unchanged).
+  Not yet confirmed on a print.
 - **PETG shrink in the diffuser halves (Nov 7):** the first P2.5 pair's black grid (generic black PETG) printed 0.45%
   small (88.3 mm on 88.7 tall). Each half is located in x by its outer skirt only, so against its panel's outer edge
   the seam edge sat ~0.8 mm short (a dark line at the seam, B's first LED column half uncovered, B's rib ends showing as
