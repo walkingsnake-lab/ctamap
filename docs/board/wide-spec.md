@@ -34,8 +34,10 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 ### Northbound | southbound split (decided Nov 5; built, the wide default)
 - Two halves, a direction label on row 0 of each (`NORTHBOUND`, `SOUTHBOUND`, or `WESTBOUND`, `EASTBOUND`), rows at 10 and 18 (2 rows) in each half, up to **3 rows a half** (8, 14, 20), station and clock on the bottom row in `#555555`. North or west on the left.
 - A per-board layout choice (`wideLayout`: split, the default, or rows). Halves come from each train's direction code (`trDr` in Train Tracker) and which way that direction heads at the station.
-- **Only where it's true:** every line at the station runs along the same axis there (`station-dirs.json`, from the track geometry: within 35° of north-south or of east-west; Red and Purple count as north-south everywhere off the Loop) and none ends there. 59 stations split north-south, 51 east-west, 34 don't.
-- **Elsewhere** (the Loop, diagonal stretches like Blue's Milwaukee Avenue, mixed axes like Howard, terminals, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then the chronological list.
+- **Only where it's true:** every line at the station runs along the same axis there (`station-dirs.json`, from the track geometry: within 35° of north-south or of east-west; Red and Purple count as north-south everywhere off the Loop) and none ends there. 59 stations split north-south, 51 east-west.
+- **Inbound | outbound** where the compass doesn't give one but every line reaches the Loop (decided Nov 8, as a fallback only): diagonal stretches (Blue's Milwaukee Avenue, Orange southwest) and mixed axes (Sedgwick). 14 stations. Inbound (toward the Loop) on the left.
+- **Departing to | arriving from** at an end of the line (decided Nov 8): departures left, trains ending their runs there right, by where they came from. 12 stations, Howard included.
+- **Elsewhere** (the 8 Loop stations, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then the chronological list.
 
 ### Busy stations, replacing the chronological view (built)
 The chronological view is the weakest transit screen. For stations with 4–5 lines (Clark/Lake), three layouts were mocked:
@@ -156,7 +158,7 @@ Also mocked (`dial-*.png`): icons in place with the chosen one named, a centered
 ## 10. Open questions
 
 - **Hardware check:** none of the 128 layouts has run on the two-panel board yet. Draw time per frame (the serial report's `last_ms` / `max_ms`) during digit rolls, the credits roll and screen slides, and free memory with 128-wide radar frames.
-- **Direction labels at Loop stations:** settled by not splitting there; the Loop, mixed axes and terminals fall back to rows (§3).
+- **Direction labels at Loop stations:** settled by not splitting there; the Loop falls back to rows. Mixed axes and diagonal track get inbound | outbound, ends of the line departing to | arriving from (§3, Nov 8).
 - **Baseball beyond the line score:** logos at 128, a fuller pregame.
 
 ## 11. What the software needs (done)

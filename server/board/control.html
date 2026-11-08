@@ -297,7 +297,7 @@
   <p class="sh" id="layH">Rows</p>
   <div class="grp">
     <label class="c sel" id="wideRow" hidden><span>Two panels</span><span class="v"></span><span data-icon="chev"></span>
-      <select id="wideLayout"><option value="split">Northbound | southbound</option><option value="rows">Destination rows</option></select></label>
+      <select id="wideLayout"><option value="split">Split by direction</option><option value="rows">Destination rows</option></select></label>
     <div class="tiles" role="radiogroup" aria-labelledby="layH" id="transitLayout">
       <button role="radio" data-v="header"><img alt="" data-static="layout-header"><span class="lab"><span class="rd" data-icon="dotck"></span>Station on top</span></button>
       <button role="radio" data-v="key"><img alt="" data-static="layout-key"><span class="lab"><span class="rd" data-icon="dotck"></span>Key on top</span></button>
@@ -1180,7 +1180,7 @@
       + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? (key ? 'station line' : 'top line') : h === 'weather' ? 'weather' : h)).join(' and ')}.` : '')
       + (board.cols === 128 ? (board.wideLayout === 'rows'
         ? ' Two panels: full names, up to 5 times; past 5 destinations, two columns.'
-        : ' Two panels: northbound | southbound where every line here runs that way, else two columns.') : '');
+        : ' Two panels: northbound | southbound (or westbound | eastbound) where every line here runs that way, else inbound | outbound; at an end of the line, departing to | arriving from; on the Loop, rows.') : '');
   }
   $('tShows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;

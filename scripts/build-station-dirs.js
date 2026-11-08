@@ -18,6 +18,11 @@
 //   "diag": in between (no split);  "loop": on the Loop's elevated circuit.
 // "ends": the lines whose track ends at the station (a terminal: one way
 // only, so no split; short-turn destinations like Jefferson Park aren't).
+// "in": per line, the trDr (1 or 5) of trains heading toward the Loop along
+// the track (inbound), off the Loop and away from a terminal; left out for
+// a line that doesn't reach it (Yellow). The fallback labels, inbound |
+// outbound, where the compass doesn't give a split (diagonal track, lines
+// on different axes).
 // Red and Purple count as north-south everywhere off the Loop: riders call
 // them northbound and southbound even where the track runs diagonally
 // (Jarvis to Howard, Clark/Division, North/Clybourn).
@@ -162,7 +167,7 @@ function build() {
   const out = {};
   for (const st of [...stations].sort((a, b) => a.mapid.localeCompare(b.mapid))) {
     const p = xy([st.lon, st.lat]);
-    const dirs = {}, ends = [];
+    const dirs = {}, ends = [], inb = {};
     for (const ln of st.lines) {
       const n = nearest(byLine[ln], p);
       if (!n || n.d > 400) throw new Error(`${st.name}: no ${NAMES[ln]} track within 400 m`);
@@ -179,13 +184,19 @@ function build() {
       const fwd = trackTo(n, 1, L, e), back = trackTo(n, -1, L, e);
       const here = dist(p, e) < REACH_M;
       if (here ? dist(a, p) < dist(b, p) : back < fwd) [a, b] = [b, a];
+      // Inbound: the way along the track that reaches the Loop first.
+      if (!ends.includes(ln) && !here) {
+        const one = back < fwd ? -1 : 1;  // the walk direction-1 trains take
+        const loop = xy(LOOP), toLoopF = trackTo(n, 1, L, loop), toLoopB = trackTo(n, -1, L, loop);
+        if (Number.isFinite(toLoopF) || Number.isFinite(toLoopB)) inb[ln] = (toLoopB < toLoopF ? -1 : 1) === one ? 1 : 5;
+      }
       const dx = b[0] - a[0], dy = b[1] - a[1];
       const deg = (Math.atan2(Math.abs(dx), Math.abs(dy)) * 180) / Math.PI;  // 0 north-south, 90 east-west
       if (deg <= AXIS_DEG || ALWAYS_NS.has(ln)) dirs[ln] = dy >= 0 ? 'N' : 'S';
       else if (deg >= 90 - AXIS_DEG) dirs[ln] = dx >= 0 ? 'E' : 'W';
       else dirs[ln] = 'diag';
     }
-    out[st.mapid] = ends.length ? { ...dirs, ends } : dirs;
+    out[st.mapid] = { ...dirs, ...(ends.length ? { ends } : {}), ...(Object.keys(inb).length ? { in: inb } : {}) };
   }
   return out;
 }

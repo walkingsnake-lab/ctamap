@@ -880,7 +880,7 @@ function createBoard({
         const live = new Set();
         try {
           const data = await tracker.get(st.mapid);
-          for (const a of (data && data.arrivals) || []) live.add(`${a.ln}:${a.dest}`);
+          for (const a of (data && data.arrivals) || []) if (!a.arr) live.add(`${a.ln}:${a.dest}`);  // not trains ending here
         } catch (e) { log.warn('[board] destinations: no live data:', e.message); }
         const board = store.get(String(parsed.query.b || ''));
         const chosen = board && board.station.mapid === st.mapid ? board.rows : [];
