@@ -987,6 +987,37 @@ bool Knob::pressed() {
   return press_;
 }
 
+// The knob's NeoPixel: the seesaw's NeoPixel module driving the 5880's one
+// pixel on its pin 6 (GRB, 800 kHz). Set up on the first light() (pin, speed,
+// a 3-byte buffer), then each call writes the buffer and shows it: two short
+// writes, only when the Board's color changes.
+static const uint8_t SEESAW_NEOPIXEL = 0x0E, SEESAW_NEOPIXEL_PIN = 0x01, SEESAW_NEOPIXEL_SPEED = 0x02,
+                     SEESAW_NEOPIXEL_BUF_LENGTH = 0x03, SEESAW_NEOPIXEL_BUF = 0x04, SEESAW_NEOPIXEL_SHOW = 0x05;
+static const uint8_t KNOB_PIXEL_PIN = 6;
+
+static bool seesaw_write(uint8_t base, uint8_t reg, const uint8_t *d, size_t n) {
+  Wire.beginTransmission(SEESAW_ADDR);
+  Wire.write(base);
+  Wire.write(reg);
+  for (size_t i = 0; i < n; i++) Wire.write(d[i]);
+  return Wire.endTransmission() == 0;
+}
+
+void Knob::light(uint8_t r, uint8_t g, uint8_t b) {
+  if (!on_) return;
+  if (!pixel_) {
+    uint8_t pin = KNOB_PIXEL_PIN, speed = 1, len[2] = {0, 3};  // 800 kHz; one pixel, 3 bytes
+    pixel_ = seesaw_write(SEESAW_NEOPIXEL, SEESAW_NEOPIXEL_PIN, &pin, 1) &&
+             seesaw_write(SEESAW_NEOPIXEL, SEESAW_NEOPIXEL_SPEED, &speed, 1) &&
+             seesaw_write(SEESAW_NEOPIXEL, SEESAW_NEOPIXEL_BUF_LENGTH, len, 2);
+    if (!pixel_) return;  // try again on the next change
+  }
+  uint8_t buf[5] = {0, 0, g, r, b};  // 16-bit offset 0, then the pixel's bytes in GRB order
+  if (!seesaw_write(SEESAW_NEOPIXEL, SEESAW_NEOPIXEL_BUF, buf, 5)) return;
+  delayMicroseconds(300);
+  seesaw_write(SEESAW_NEOPIXEL, SEESAW_NEOPIXEL_SHOW, nullptr, 0);
+}
+
 bool Knob::begin() {
   Wire.begin();
   uint8_t id = 0;

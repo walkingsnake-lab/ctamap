@@ -208,10 +208,12 @@ class Knob : public app::Knob {
   bool begin();
   int clicks() override;
   bool pressed() override;  // the knob's push button, held now (read at most every KNOB_POLL_MS)
+  void light(uint8_t r, uint8_t g, uint8_t b) override;  // the 5880's NeoPixel (seesaw pin 6)
 
  private:
   bool reverse_;
   bool button_ = false;  // push button set up as an input
+  bool pixel_ = false;   // NeoPixel set up (pin, speed, length)
   bool on_ = false;
   uint32_t polled_ = 0;
   uint32_t press_polled_ = 0;
