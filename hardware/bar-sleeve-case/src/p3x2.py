@@ -6,23 +6,35 @@ Case frame as everywhere (x right seen from the front, y back, z up). Panel A (l
 
 Shell (walnut PLA, ~414 x 115 x 69 at CASE_WALL 5.0): the v5 sleeve from the 'p3x2' profile (bore 404 x 105.3), split at
 x = 0 (the panel joint) into a left half A and a right half B. Both fit one plate back-down (each ~207 x 115 footprint).
-- The wall is 5.0 (v5: 3.5) so the joint can live inside it with nothing thin: SKIN | SLOT | SKIN = 1.5 | 2.0 | 1.5.
-- The joint is loose tenons: the walnut only gets pockets (SLOT wide, TEN_IN deep into each half, open at the joint
-  face), two per wall (top and bottom), front and back (TEN_Y). Pure subtraction from a thick wall: no lip, no stepped
-  reveal, no bridge wider than the 2 mm slot end. Separate PETG tenons (tenon()) bridge the halves: flat bars that fill
-  the pocket's length (so the fronts can't step) and are held on both faces by the skins (so the tops can't step).
-  Crush ribs on one face (RIB_H proud; the tenon prints flat, ribs up) take up the clearance in PETG, where ribs work,
-  not in the walnut. The halves' end faces are the seat in x (the tenon is TIP_CL short at each end).
-- Outside, every visible edge at the joint has a CHAMF x 45 deg chamfer each side (a V-groove round the case), stepped
-  in V_STEPS bands of 0.1 mm. The slot mouths are chamfered MOUTH at the joint face so a seam blob can't hold the halves
-  apart or foul the tenon.
+- The wall is 5.0 (v5: 3.5), solid (6 walls in the slicer): the bar's long top and bottom walls flex far more than the
+  single's, and the diffuser's rim seat and the joint both need it stiff.
+- The joint (Nov 8, replaces the loose tenons of Nov 6): two glued joint plates. Inside the top and bottom walls a
+  rebate JP_L long straddles the seam (JP_T + JP_CL deep, from JP_Y0 to JP_Y1 along the case depth); a flat PLA plate
+  JP_T thick lies in it, half in each shell half, glued to both (PLA to PLA, ~49 cm2 the top plate, ~41 the bottom, which stops short of the screws from below). The plate locates the
+  halves up/down (rebate floor) and front/back (rebate ends) the way the tenons did, and carries the seam's shear and
+  tension over area instead of through four small tenons with clearance; the end faces are glued too. Permanent: the
+  shell is a ring that is serviced from the back (trays and panels), never opened. Why not the tenons: the finished first
+  bar still split at the seam under twist, with everything screwed down. The seam runs only through the top and bottom
+  walls (~12 cm2 of face), the tenons had clearance in their pockets, CA on PETG tenons in wood PLA did not hold, and the
+  inside chain (tray, panel, splice plates, panel, tray) has the splice slot's play in it: two stiff boxes on a floppy
+  link. Bowtie keys were considered and dropped (they stop pull-apart, not twist).
+- Seam faces are hollowed (HOLLOW): each half's end face at x = 0 is relieved HOLLOW deep except a LAND-wide band along
+  the visible edges (outside, front rim, back rim), so two not-quite-flat printed faces still close at the edge you see,
+  and the glue has somewhere to sit. Outside, every visible edge at the joint has a CHAMF x 45 deg chamfer each side (a
+  V-groove round the case), stepped in V_STEPS bands of 0.1 mm.
 - Knob at KNOB_X (+162, 45 mm from the right end, over tray B: its encoder board, 25.4 wide, clears tray B's top-right
   corner post at x 183.25), light sensor 40 mm toward the centre, USB-C at the right end. KNOB_X=96 is the stock-tray
   option (knob over panel B's centre, tray B = the single v5 tray).
 Diffuser (two-colour, 0.4 nozzle, 0.2 face as the single P3): one per panel, split at the panel joint on the rib that
-falls there (every rib is at a 3 mm pitch from the left edge, so x = 0 is a rib centre). No skirt on the seam edge. A
-owns the joint rib, JOINT_RIB wide (0.6 = a normal rib; wider covers any gap between the butted panels); B starts a
-half rib (0.3) past its panel's edge. The joint coupon (JOINT_RIBS) picks the width.
+falls there (every rib is at a 3 mm pitch from the left edge, so x = 0 is a rib centre). No skirt on the seam edge.
+JOINT_SPLIT (default): each half ends in its own wall at the seam, JOINT_WALL wide (a normal rib: the thinnest bead the
+grid prints), so the joint is two walls, 2 x JOINT_WALL in all, split at x = 0. A gap between the halves then falls
+between two white walls over the dead strip between the panels' edge columns, a dark hairline at worst; the first print
+(Nov 7) had the rib on A only and B's face starting a half rib past its edge, so the same gap opened straight over B's
+first column of LEDs. The cost: the two columns at the seam sit in cells a half rib narrower than the rest.
+JOINT_SPLIT=0 is that first scheme: A owns the joint rib, JOINT_RIB wide (0.6 = a normal rib; 0.8 / 1.0 cover a gap
+between the butted panels, and shift B right by the difference). The joint coupon has both: A pieces at JOINT_RIBS
+(1-3 notches) and B (no notch) for the single rib, and the split pair (4 notches on A, 1 on B).
 Splice plates (PETG): two short plates on the panels' inner corner inserts (x +/-8.75), screwed on first (M3 x 6 button
 heads), a round hole on A's insert and a slot (x) on B's: they tie the panels into one unit so the rows can't step at the
 seam, and let them butt freely. Panel A sits in its normal orientation and B turned 180 deg (the P2.5 bar's data chain:
@@ -32,13 +44,16 @@ than A's on both plates: one plate, used twice the same way up.
 Trays (black PETG, the --trays run, PANEL=p3): one per panel, each the P3 v5 tray cut at the panel joint (no end wall
 there: the panels fill it). Tray B is the v5 tray (S3, status window, Boot, USB-C slot) with the controls under the
 knob: the encoder slot and rails at ENC_X (KNOB_X - 96) and the light-sensor sled 40 mm toward the centre. Tray A is
-the same tray with no S3 and no controls, its posts at panel A's un-turned inserts. The inner posts of each stand
-SPLICE_T further back, on the splice plates, solid and closed at the back, with no screw. Each takes its own pair of
-screws from below and its own case cleat; one wall cleat (p3x2-cleat-wall.stl, 220 mm, flat on the plate) takes both.
-Run: python3 p3x2.py <outdir>   -> shell halves, tenons (RIB_H), diffuser halves, splice plates, collar, coupons (seam:
-     both halves' top wall across the joint + three tenons at RIB_HS; diffuser joint at JOINT_RIBS; splice holes), then
-     the trays and wall cleat from a second run of this script with --trays (PANEL=p3). Case-frame copies for
-     check_p3x2.py go to <outdir>/frames. JOINT_RIB=0.8 / SPLICE_HOLE=3.45 / RIB_H=0.55 set the sizes the coupons pick.
+the same tray with no S3 and no controls, its posts at panel A's un-turned inserts. The inner posts of each are bolted
+like the outer ones, standing on an M3 hex standoff that replaces the splice plate's screw at that insert (STANDOFF_L).
+Each tray takes its own pair of screws from below and its own case cleat; one wall cleat (p3x2-cleat-wall.stl, 220 mm,
+flat on the plate) takes both.
+Underside: the single shell's two label recesses (marks.py) on half B, centred on panel B (in front of the screws from
+below, inside the feet).
+Run: python3 p3x2.py <outdir>   -> shell halves, joint plates, diffuser halves, splice plates, collar, coupons (seam: both
+     halves' top wall across the joint, 60 wide, with a 60 mm plate; diffuser joint; splice holes), then the trays and
+     wall cleat from a second run of this script with --trays (PANEL=p3). Case-frame copies for check_p3x2.py go to
+     <outdir>/frames. JOINT_RIB=0.8 / SPLICE_HOLE=3.45 / JP_CL=0.1 set the sizes the coupons pick.
 """
 import math, os, sys
 TRAYS = '--trays' in sys.argv                    # the trays are built per panel, from the plain panel profile
@@ -104,6 +119,20 @@ BED = 256.0
 # ---------------------------------------------------------------- joint
 CHAMF = 0.5                     # V-groove: each half's visible edges at the joint chamfered this much x 45 deg
 V_STEPS = 5                     # the chamfer is cut in bands this many deep (0.1 mm steps)
+HOLLOW, LAND = 0.3, 2.0         # seam faces relieved HOLLOW except a LAND band along the visible edges (incl. the V)
+JP_T = 1.2                      # joint plate thickness (6 layers at 0.2, printed flat)
+JP_CL = float(os.environ.get('JP_CL', '0.1'))   # rebate deeper than the plate: it sits this far below the bore
+JP_L = 100.0                    # plate length along the bar (50 into each half)
+JP_Y0, JP_Y1 = Y_FACE + 2.0, DR.Y1 - 2.0        # plate span along the depth: behind the rim's seat, in front of the back rim
+JP_Y1_BOT = C.SCREW_Y - 4.5                     # the bottom plate stops short of the screws from below (counterbore r 3.2 at SCREW_Y)
+JP_CL_Y = 0.15                  # rebate longer than the plate at each end (the ends line the fronts up)
+JP_EC = 0.4                     # lead chamfer on the plate's four edges (the mating faces stay flat)
+assert WALL - JP_T - JP_CL >= 3.5, WALL
+# JOINT=tenon rebuilds the Nov 6 joint (loose PETG tenons in pockets) for comparison: its shell halves, tenon and seam
+# coupons go out under *-tenon-* names beside the plate joint's files (p3x2.py <outdir> --tenon-set writes only those).
+# The hollowed faces and the V-groove are on both.
+JOINT = os.environ.get('JOINT', 'plate')
+assert JOINT in ('plate', 'tenon'), JOINT
 SKIN = 1.5                      # wall = SKIN | SLOT | SKIN
 SLOT = WALL - 2 * SKIN          # 2.0: the tenon pocket's width (across the wall)
 TEN_IN = 12.0                   # pocket depth into each half from the joint face
@@ -120,6 +149,7 @@ RIB_H = float(os.environ.get('RIB_H', '0.55'))
 RIB_W, RIB_CREST, RIB_LEAD, RIB_N = 1.4, 0.6, 2.0, 3   # rib base and crest widths (a trapezoid: its top layer is one
                                                       # 0.6 mm line printed flat), ramp length at each end, ribs per tenon
 END_CH = 0.4                    # lead-in chamfer on the tenon's x ends
+
 assert SLOT >= 1.8 and SKIN >= 1.3, (SLOT, SKIN)
 
 
@@ -159,6 +189,25 @@ def v_groove(sh):
     return Manifold.batch_boolean(cuts, ADD)
 
 
+def rebate_cuts():
+    """the joint plates' rebates: in the bore faces of the top and bottom walls, JP_L long about x = 0, JP_T + JP_CL
+    deep, JP_Y0 - JP_CL_Y .. JP_Y1 + JP_CL_Y along the depth. Printed back-down the rebate is a pocket in a vertical
+    face whose front end (smaller y) is its roof: that end slopes 45 deg (the floor meets the bore d further forward),
+    as the label recesses do; the back end is square and is the plate's y datum."""
+    d = JP_T + JP_CL
+    y0 = JP_Y0 - JP_CL_Y
+    zt, zb = H - WALL, WALL                        # the bore's top and bottom faces
+    out = []
+    for y1, za, zb_ in ((JP_Y1 + JP_CL_Y, zt - 0.01, zt + d), (JP_Y1_BOT + JP_CL_Y, zb - d, zb + 0.01)):
+        full = box(-JP_L / 2, JP_L / 2, y0, y1, za, zb_)
+        if zb_ > H / 2:                                    # top wall: bore face at za
+            mouth = box(-JP_L / 2, JP_L / 2, y0 - d, y1, za, za + 0.01)
+        else:                                              # bottom wall: bore face at zb_
+            mouth = box(-JP_L / 2, JP_L / 2, y0 - d, y1, zb_ - 0.01, zb_)
+        out.append(Manifold.batch_hull([full, mouth]))
+    return out
+
+
 def wall_slots():
     """(z0, z1) of the pocket across each wall: top and bottom"""
     return [(H - WALL + SKIN, H - SKIN), (SKIN, WALL - SKIN)]
@@ -173,19 +222,6 @@ def pocket_cuts():
             cuts.append(Manifold.batch_hull([box(-0.005, 0.005, y0, y1, z0 - MOUTH, z1 + MOUTH),
                                              box(-MOUTH, MOUTH, y0, y1, z0, z1)]))
     return cuts
-
-
-def split_shell(sh):
-    """left (A) and right (B) halves: the V-groove and the pockets cut, then the shell cut at x = 0"""
-    s = sh - v_groove(sh) - Manifold.batch_boolean(pocket_cuts(), ADD)
-    a = s ^ box(-HW - 1, 0.0, -50, D + 1, -1, H + 1)
-    b = s ^ box(0.0, HW + 1, -50, D + 1, -1, H + 1)
-    out = []
-    for m in (a, b):
-        parts = sorted(m.decompose(), key=lambda q: -q.volume())
-        assert all(q.volume() < 0.01 for q in parts[1:]), [q.volume() for q in parts[1:]]
-        out.append(parts[0])
-    return tuple(out)
 
 
 def tenon(rib_h=RIB_H, notches=0, y=None):
@@ -229,11 +265,47 @@ def tenon(rib_h=RIB_H, notches=0, y=None):
     return t
 
 
+def hollow_cuts(sh):
+    """the seam faces' relief: HOLLOW off each half's face at x = 0, wherever the wall is more than LAND from a visible
+    face (deep(LAND)): the band you see stays full height"""
+    return (sh ^ box(-HOLLOW, HOLLOW, -50, D + 1, -1, H + 1)) ^ deep(LAND)
+
+
+def split_shell(sh):
+    """left (A) and right (B) halves: the V-groove, the hollowed faces and the joint (JOINT: the plate rebates, or the
+    tenon pockets) cut, then the shell cut at x = 0"""
+    joint = rebate_cuts() if JOINT == 'plate' else pocket_cuts()
+    s = sh - v_groove(sh) - hollow_cuts(sh) - Manifold.batch_boolean(joint, ADD)
+    a = s ^ box(-HW - 1, 0.0, -50, D + 1, -1, H + 1)
+    b = s ^ box(0.0, HW + 1, -50, D + 1, -1, H + 1)
+    out = []
+    for m in (a, b):
+        parts = sorted(m.decompose(), key=lambda q: -q.volume())
+        assert all(q.volume() < 0.01 for q in parts[1:]), [q.volume() for q in parts[1:]]
+        out.append(parts[0])
+    return tuple(out)
+
+
+def joint_plate(top=True, length=JP_L):
+    """one joint plate in the case frame, in its rebate (top or bottom wall), its face JP_CL below the bore: a flat bar
+    length x (JP_Y1 - JP_Y0) x JP_T with JP_EC x 45 deg chamfers on the four edges of its bore-side face (the rebate-side
+    face and the edges stay square)"""
+    zt, zb = H - WALL, WALL
+    y1 = JP_Y1 if top else JP_Y1_BOT
+    if top:
+        z0, z1 = zt + JP_CL, zt + JP_CL + JP_T              # bore side at z0
+        full = box(-length / 2, length / 2, JP_Y0, y1, z0 + JP_EC, z1)
+    else:
+        z0, z1 = zb - JP_CL - JP_T, zb - JP_CL              # bore side at z1
+        full = box(-length / 2, length / 2, JP_Y0, y1, z0, z1 - JP_EC)
+    inset = box(-length / 2 + JP_EC, length / 2 - JP_EC, JP_Y0 + JP_EC, y1 - JP_EC, z0, z1)
+    return Manifold.batch_hull([full, inset])
+
+
 def coupon(a, b):
-    """both halves' top wall across the joint, 40 wide, from the hood to 2.5 mm past the front pocket's end (as the
-    pocket's own back end in the part): the hood, the front rim, the V-groove and the front pocket. The cut face
-    prints on the bed, as the halves do."""
-    reg = box(-20.0, 20.0, -50, TEN_Y[0][1] + 2.5, H - 16.0, H + 1)
+    """both halves' top wall across the joint, 60 wide, from the hood to the back rim: the hood, the front rim, the
+    V-groove, the hollowed face and the rebate (with a 60 mm plate). The cut face prints on the bed, as the halves do."""
+    reg = box(-30.0, 30.0, -50, D + 1, H - 16.0, H + 1)
     return a ^ reg, b ^ reg
 
 
@@ -268,46 +340,66 @@ DIFF_SCALE = 1.0 / (1.0 - DIFF_SHRINK)
 HALF = panel.P['rib'] / 2 if not TRAYS else None   # half of a normal rib (P3 0.3, P2.5 0.225)
 JOINT_RIBS = tuple(round(panel.P['rib'] + k * panel.P['rib'] / 3, 2) for k in range(3)) if not TRAYS else ()   # P3 0.6 / 0.8 / 1.0
 JOINT_RIB = float(os.environ.get('JOINT_RIB', JOINT_RIBS[0] if JOINT_RIBS else 0))   # default: a normal rib (panels butted tight)
+# Split joint (Nov 8, the default): a wall on each half's seam edge, JOINT_WALL wide (default a normal rib, the thinnest
+# bead the grid prints), split at x = 0. JOINT_SPLIT=0: A owns the whole joint rib (JOINT_RIB), B has no wall.
+JOINT_SPLIT = os.environ.get('JOINT_SPLIT', '1') not in ('0', '', 'no', 'false')
+JOINT_WALL = float(os.environ.get('JOINT_WALL', panel.P['rib'] if not TRAYS else 0))
 
 
-def diffuser_halves(rib=JOINT_RIB, skin=None):
+def diffuser_halves(rib=JOINT_RIB, skin=None, split=None, wall=None):
     """diffuser.diffuser() over both panels (the 'p3x2' profile: 128 columns, skirts and bumps on the outer ends, top and
-    bottom), split at the panel joint. A keeps the joint rib, widened to rib (from -HALF to rib - HALF); B starts at
-    +HALF. Returns {('A'|'B', 'white'|'black'): manifold} in the diffuser's frame (z = 0 the face, +z toward the LEDs;
-    x as seen from the front, so A is x < 0)."""
+    bottom), split at the panel joint. split (JOINT_SPLIT): the joint rib is replaced by two walls, wall (JOINT_WALL)
+    wide each, one on A ending at x = 0 and one on B starting there. Otherwise A keeps the joint rib, widened to rib
+    (from -HALF to rib - HALF), and B starts at +HALF. Returns {('A'|'B', 'white'|'black'): manifold} in the diffuser's
+    frame (z = 0 the face, +z toward the LEDs; x as seen from the front, so A is x < 0)."""
     import diffuser as DF
     skin = DIFF_FACE if skin is None else skin
+    split = JOINT_SPLIT if split is None else split
+    wall = JOINT_WALL if wall is None else wall
     d = DF.diffuser(skin=skin)
     hy = DF.PH / 2
-    xa1 = rib - HALF
-    if xa1 > HALF:                                           # widen the joint rib onto B's side
-        d = d + box(HALF - 0.01, xa1, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+    if split:
+        xa1 = xb0 = 0.0
+        if wall > HALF:                                      # widen the joint rib to two walls (one each side of x = 0)
+            d = d + box(-wall, wall, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+    else:
+        xa1, xb0 = rib - HALF, HALF
+        if xa1 > HALF:                                       # widen the joint rib onto B's side
+            d = d + box(HALF - 0.01, xa1, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
     lo = d.bounding_box()
     face = box(lo[0] - 1, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, skin)
     a = d ^ box(lo[0] - 1, xa1, lo[1] - 1, lo[4] + 1, -1, 20)
-    b = d ^ box(HALF, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, 20)
+    b = d ^ box(xb0, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, 20)
     out = {('A', 'white'): a ^ face, ('A', 'black'): a - face, ('B', 'white'): b ^ face, ('B', 'black'): b - face}
     return {k: v.scale([DIFF_SCALE, DIFF_SCALE, 1.0]) for k, v in out.items()}   # shrink compensation, about the seam
 
 
 def diffuser_joint_coupons():
     """6 columns either side of the joint (cut at a rib's outer edge, so no half rib at the coupon's own edge), the
-    bottom edge (skirt, flange) and 8 rows: an A piece per joint rib width (1-3 notches in its flange edge) and one B
-    piece. Hold A and B on the butted panels at the bottom of the joint; the width whose seam column looks like the
-    rest is the build's JOINT_RIB."""
+    bottom edge (skirt, flange) and 8 rows. Single-rib scheme: an A piece per joint rib width (1-3 notches in its flange
+    edge) and one B piece (no notch). Split scheme: an A piece (4 notches) and a B piece (1 notch), each with its own
+    wall at the seam. Hold a pair on the butted panels at the bottom of the joint, lit; the pair whose seam looks like
+    the rest of the grid is the build's (JOINT_SPLIT / JOINT_RIB)."""
     import diffuser as DF
     hy = DF.PH / 2
     reg = lambda x0, x1: box(x0, x1, -hy - 20, -hy + 25.0, -5, 20)
+    x6 = 6 * panel.P['pitch'] + HALF                           # cut at the sixth rib's outer edge
+
+    def notched(n):
+        return Manifold.batch_boolean([box(-12.0 + k * 2.2, -12.0 + k * 2.2 + 1.0, -DF.FL_HZ - 1, -DF.FL_HZ + 1.0, -1, 20)
+                                       for k in range(n)], ADD) if n else Manifold()
+
+    def piece(name, h, side, n):
+        r = reg(-x6, 2.0) if side == 'A' else reg(-2.0, x6)
+        nk = notched(n).translate([0 if side == 'A' else 18.0, 0, 0])   # B's notch on its own side of the seam (x +6)
+        return (name, h[(side, 'white')] ^ r - nk, h[(side, 'black')] ^ r - nk)
     out = []
     for n, rib in enumerate(JOINT_RIBS, 1):
-        h = diffuser_halves(rib)
-        notches = Manifold.batch_boolean([box(-12.0 + k * 2.2, -12.0 + k * 2.2 + 1.0, -DF.FL_HZ - 1, -DF.FL_HZ + 1.0, -1, 20)
-                                          for k in range(n)], ADD)
-        x6 = 6 * panel.P['pitch'] + HALF                       # cut at the sixth rib's outer edge
-        out.append((f'A{rib:.2f}', h[('A', 'white')] ^ reg(-x6, 2.0) - notches, h[('A', 'black')] ^ reg(-x6, 2.0) - notches))
-    h = diffuser_halves(JOINT_RIBS[0])
-    x6 = 6 * panel.P['pitch'] + HALF
-    out.append(('B', h[('B', 'white')] ^ reg(-2.0, x6), h[('B', 'black')] ^ reg(-2.0, x6)))
+        out.append(piece(f'A{rib:.2f}', diffuser_halves(rib, split=False), 'A', n))
+    out.append(piece('B', diffuser_halves(JOINT_RIBS[0], split=False), 'B', 0))
+    h = diffuser_halves(split=True)
+    out.append(piece('Asplit', h, 'A', 4))
+    out.append(piece('Bsplit', h, 'B', 1))
     return out
 
 
@@ -321,6 +413,15 @@ SPLICE_T, SPLICE_W, SPLICE_L = 2.0, 14.0, 2 * SPLICE_X + 12.0
 SPLICE_SLOT = 0.5                 # B's hole is a slot, +/-0.5 in x: the plate holds the rows, the panels butt freely
 SPLICE_HOLES = (3.3, 3.45, 3.6)   # printed vertical, so they come out small: pick the snuggest an M3 passes freely
 SPLICE_HOLE = float(os.environ.get('SPLICE_HOLE', '3.45'))   # the build's (set from the test piece)
+# Inner posts (Nov 8): at each inner insert the plate's M3 x 6 is an M3 male-female hex standoff instead (brass, body
+# STANDOFF_L long, STANDOFF_AF across flats, stud ~6 mm: 4 into the insert through the 2 mm plate, as the screw it
+# replaces). Its top is the inner post's seat and the post screw (M3 x 8 or 10) threads into its female end: all four
+# posts bolted, the plate clamped, and the inner posts float on their screws like the outer ones (Ø POST_HOLE on an M3:
+# +/-0.7; the standoff's hex top, 6.35 across corners, stays under the floor's bearing annulus at that offset). No socket
+# keys the standoff: tighten it into the insert first (pliers or a 5.5 mm wrench), the post screw only clamps.
+# INNER_DY moves the inner posts' feet back by the plate and the standoff from the outer posts' feet (which keep POST_LONG).
+STANDOFF_L, STANDOFF_AF = 6.0, 5.5
+INNER_DY = SPLICE_T + STANDOFF_L
 
 
 def splice_z(side, top):
@@ -366,21 +467,12 @@ def trays():
     """(tray A, tray B, B's status window) in the case frame. Only valid in the --trays run (PANEL=p3)."""
     assert TRAYS
 
-    def open_posts(t, corners):
-        """the inner posts carry no screw (the splice plate's screws take those inserts): solid, closed at the back (no
-        tube, no bridged floor, no hole in the back face), with a pocket at the front whose rim stands on the plate round
-        the screw head (Ø POST_BORE, SO_FLOOR + 0.6 deep: the head's 1.65 plus the tray's float)"""
-        y = P3.FOOT_Y + SPLICE_T
-        fill = Manifold.batch_boolean([cyl_y(x, ZC + z, y + P3.SO_FLOOR + 0.6, DR.Y1, DR.POST_BORE + 0.4, 48) for x, z in corners], ADD)   # 0.2 into the tube wall: no tangent faces
-        pocket = Manifold.batch_boolean([cyl_y(x, ZC + z, y - 1, y + P3.SO_FLOOR + 0.6, DR.POST_BORE + 0.05, 32) for x, z in corners], ADD)   # not the tube's own facets
-        return (t + fill) - pocket
-
     def build(side, sx, **kw):
         saved = DR.CORNERS
         DR.CORNERS = corners_for(side)
         try:
-            inner = {c: SPLICE_T for c in DR.CORNERS if c[0] * sx > 0}   # the corners toward the joint
-            t = open_posts(DR.tray(post_dy=inner, **kw), inner)
+            inner = {c: INNER_DY for c in DR.CORNERS if c[0] * sx > 0}   # the corners toward the joint: floating posts, on the standoffs
+            t = DR.tray(post_dy=inner, **kw)
         finally:
             DR.CORNERS = saved
         return t.translate([-sx * PANEL_CX, 0, 0])
@@ -423,7 +515,7 @@ def build_trays(out, frames):
     json.dump(dict(port_z=DR.PORT_Z, s3_edge=DR.S3_EDGE + PANEL_CX, s3_z0=DR.S3_Z0, ky=C.KY,
                    sensor_x=V.SENSOR_X + PANEL_CX, knob_x=DR.ENC_X + PANEL_CX, turned=PANEL_TURNED,
                    bottom_xs=[x + PANEL_CX * s for s in (-1, 1) for x in DR.bottom_xs()],
-                   bot_y=DR.BOT_Y, foot_y=P3.FOOT_Y, y0=DR.Y0, y1=DR.Y1, yf=DR.YF,
+                   bot_y=DR.BOT_Y, foot_y=P3.FOOT_Y, y0=DR.Y0, y1=DR.Y1, yf=DR.YF, inner_dy=INNER_DY, standoff=(STANDOFF_L, STANDOFF_AF),
                    corners={side: [(x + PANEL_CX * sx, z) for x, z in corners_for(side)] for side, sx in (('A', -1), ('B', 1))},
                    cleat=[(x + PANEL_CX * s, z) for s in (-1, 1) for x, z in DR.CLEAT_SCREWS]),
               open(f'{frames}/trays.json', 'w'), indent=1)
@@ -464,6 +556,11 @@ if __name__ == '__main__':
         sys.exit()
     sh = V.shell2()
     a, b = split_shell(sh)
+    import marks as MK                                              # the single shell's label recesses, on half B
+    MK.CX = PANEL_CX
+    bad = MK.check(MK.layout()[0])
+    assert not bad, bad
+    b = MK.mark(b)
     down = trimesh.transformations.rotation_matrix(-math.pi / 2, [1, 0, 0])      # y = D on the bed (back down)
 
     def put(m, name, mat=down, frame=None):
@@ -472,13 +569,27 @@ if __name__ == '__main__':
         t.apply_translation([-f.bounds[0][0], -f.bounds[0][1], -f.bounds[0][2]]); t.export(f'{out}/{name}')
         print(name, 'watertight', t.is_watertight, np.round(t.extents, 1).tolist(), 'vol cm3', round(t.volume / 1000, 1))
         return t
+    if JOINT == 'tenon':                                             # the comparison set, then stop
+        for m, name in ((a, 'A'), (b, 'B')):
+            put(m, f'{PFX}-shell-{name}-tenon-walnut-backdown.stl')
+        t = tm(tenon(RIB_H)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/{PFX}-tenon.stl')
+        print(f'{PFX}-tenon.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist())
+        ca, cb = coupon(a, b)
+        for m, name in ((ca, 'A'), (cb, 'B')):
+            put(m, f'coupons/coupon-{PFX}-seam-tenon-{name}-walnut.stl')
+        for n, hh in enumerate(RIB_HS, 1):
+            t = tm(tenon(hh, notches=n)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/coupons/coupon-{PFX}-tenon-{hh:.2f}.stl')
+            print(f'coupon-{PFX}-tenon-{hh:.2f}.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist(), f'{n} notch(es)')
+        sys.exit()
     for m, name in ((a, 'A'), (b, 'B')):
         tm(m).export(f'{frames}/shell-{name}.stl')
         put(m, f'{PFX}-shell-{name}-walnut-backdown.stl')
-    # tenon (print four), flat as built
-    tm(tenon(RIB_H)).export(f'{frames}/tenon.stl')
-    t = tm(tenon(RIB_H)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/{PFX}-tenon.stl')
-    print(f'{PFX}-tenon.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist())
+    # joint plates: flat; the top one (plain) and the bottom one (shorter: it stops before the screws from below)
+    for top in (True, False):
+        tm(joint_plate(top)).export(f'{frames}/plate-{"top" if top else "bot"}.stl')
+    for top, n in ((True, 'top'), (False, 'bottom')):
+        t = tm(joint_plate(top)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/{PFX}-joint-plate-{n}.stl')
+        print(f'{PFX}-joint-plate-{n}.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist(), 'flat')
     # diffuser halves: face down, white face + black grid in one frame per half
     h = diffuser_halves(JOINT_RIB)
     for side in ('A', 'B'):
@@ -496,16 +607,15 @@ if __name__ == '__main__':
     print(f'{PFX}-splice-plates.stl', 'watertight', S.is_watertight, np.round(S.extents, 1).tolist())
     for top in (True, False):
         tm(splice_in_case(top)).export(f'{frames}/splice-{"top" if top else "bot"}.stl')
-    # coupons: seam (both halves' top wall across the joint + the three tenon sizes), diffuser joint, splice holes
+    # coupons: seam (both halves' top wall across the joint, with a 60 mm plate), diffuser joint, splice holes
     ca, cb = coupon(a, b)
     for m, name in ((ca, 'A'), (cb, 'B')):
         put(m, f'coupons/coupon-{PFX}-seam-{name}-walnut.stl')
-    for n, hh in enumerate(RIB_HS, 1):
-        t = tm(tenon(hh, notches=n)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/coupons/coupon-{PFX}-tenon-{hh:.2f}.stl')
-        print(f'coupon-{PFX}-tenon-{hh:.2f}.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist(), f'{n} notch(es)')
+    t = tm(joint_plate(True, 60.0)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/coupons/coupon-{PFX}-joint-plate.stl')
+    print(f'coupon-{PFX}-joint-plate.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist())
     pieces = diffuser_joint_coupons()
     pairs = [(tm(w, process=True), tm(k, process=True)) for _, w, k in pieces]
-    layout([pairs[:2], pairs[2:]], gap=6.0)
+    layout([pairs[:2], pairs[2:4], pairs[4:]], gap=6.0)
     W = trimesh.util.concatenate([p[0] for p in pairs]); K = trimesh.util.concatenate([p[1] for p in pairs])
     for n, t in ((f'coupon-{PFX}-diffuser-joint-white.stl', W), (f'coupon-{PFX}-diffuser-joint-black.stl', K)):
         t.export(f'{out}/coupons/{n}'); print(n, 'watertight', t.is_watertight, np.round(t.extents, 1).tolist())
@@ -519,11 +629,14 @@ if __name__ == '__main__':
     import diffuser as DF
     json.dump(dict(knob_x=KNOB_X, sensor_x=SENSOR_X, port_z=DR.PORT_Z, screw_xs=list(V.SCREW_XS), screw_y=C.SCREW_Y,
                    hw=HW, h=H, d=D, zc=ZC, bore=(BORE_HX, BORE_HZ), y_face=Y_FACE, panel_back=C.PANEL_BACK,
-                   joint_rib=JOINT_RIB, splice=dict(x=SPLICE_X, t=SPLICE_T, dz=SPLICE_DZ, za=(splice_z('A', True), splice_z('A', False))),
-                   skin=DIFF_FACE, grid_h=DF.GRID_H, wide=WIDE, pfx=PFX, panel_cx=PANEL_CX),
+                   joint_rib=JOINT_RIB, joint_split=JOINT_SPLIT, joint_wall=JOINT_WALL, splice=dict(x=SPLICE_X, t=SPLICE_T, dz=SPLICE_DZ, za=(splice_z('A', True), splice_z('A', False))),
+                   skin=DIFF_FACE, grid_h=DF.GRID_H, wide=WIDE, pfx=PFX, panel_cx=PANEL_CX,
+                   plate=dict(l=JP_L, y0=JP_Y0, y1=JP_Y1, y1_bot=JP_Y1_BOT, t=JP_T, cl=JP_CL), hollow=HOLLOW, land=LAND),
               open(f'{frames}/case.json', 'w'), indent=1)
-    print(dict(W=2 * HW, H=round(H, 2), D=D, wall=WALL, slot=SLOT, skin=SKIN, knob=KNOB_X, sensor=SENSOR_X, screws=V.SCREW_XS,
-               feet=C.FEET, ten_y=TEN_Y, port_z=round(DR.PORT_Z - ZC, 2), joint_rib=JOINT_RIB, splice_x=SPLICE_X, splice_dz=SPLICE_DZ))
+    print(dict(W=2 * HW, H=round(H, 2), D=D, wall=WALL, plate=(JP_L, JP_Y0, JP_Y1, JP_T, JP_CL), knob=KNOB_X, sensor=SENSOR_X, screws=V.SCREW_XS,
+               feet=C.FEET, port_z=round(DR.PORT_Z - ZC, 2), joint_rib=JOINT_RIB, splice_x=SPLICE_X, splice_dz=SPLICE_DZ))
     env = dict(os.environ)
     env.pop('PANEL', None)
     subprocess.run([sys.executable, __file__, out, '--trays'], check=True, env=env)
+    if JOINT == 'plate':                                             # and the tenon joint's comparison set
+        subprocess.run([sys.executable, __file__, out, '--tenon-set'], check=True, env=dict(env, JOINT='tenon'))
