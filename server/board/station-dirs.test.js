@@ -12,7 +12,7 @@ test('station-dirs.json is current (node scripts/build-station-dirs.js)', () => 
 test('station-dirs: every station and line, with the expected headings at known stations', () => {
   const d = require('./station-dirs.json');
   assert.deepEqual(Object.keys(d).sort(), stations.map((s) => s.mapid).sort());
-  for (const st of stations) assert.deepEqual(Object.keys(d[st.mapid]).filter((k) => k !== 'ends').sort(), [...st.lines].sort(), st.name);
+  for (const st of stations) assert.deepEqual(Object.keys(d[st.mapid]).filter((k) => k !== 'ends' && k !== 'in').sort(), [...st.lines].sort(), st.name);
   const at = (name, ln) => d[stations.find((s) => s.name === name && s.lines.includes(ln)).mapid][ln];
   const ends = (name) => d[stations.find((s) => s.name === name).mapid].ends || [];
   // Where trDr 1 trains head.
@@ -32,4 +32,14 @@ test('station-dirs: every station and line, with the expected headings at known 
   assert.deepEqual(ends('Kimball'), ['BR']);
   assert.deepEqual(ends('95th/Dan Ryan'), ['RD']);
   assert.deepEqual(ends('Jefferson Park'), [], 'a short-turn end, not a terminal');
+  // Inbound (toward the Loop): the trDr of trains heading there.
+  const inb = (name, ln) => (d[stations.find((s) => s.name === name && s.lines.includes(ln)).mapid].in || {})[ln];
+  assert.equal(inb('Morse', 'RD'), 5, 'north side: 95th-bound');
+  assert.equal(inb('Garfield', 'RD'), 1, 'south side: Howard-bound');
+  assert.equal(inb('California', 'BL'), 5, "O'Hare branch: Forest Park-bound");
+  assert.equal(inb('Pulaski', 'OR'), 1, 'Orange: Loop-bound is trDr 1');
+  assert.equal(inb('Sedgwick', 'BR'), 5);
+  assert.equal(inb('Sedgwick', 'PR'), 5);
+  assert.equal(inb('Oakton-Skokie', 'YL'), undefined, "Yellow doesn't reach the Loop");
+  assert.equal(inb('Kimball', 'BR'), undefined, 'an end of the line');
 });

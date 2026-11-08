@@ -67,6 +67,21 @@ const LINE_DESTS = {
   YL: ['Dempster-Skokie', 'Howard'],
 };
 
+// Each line's ends by direction (trDr 1, 5), for where a train ending its run
+// came from: a trDr 1 train arriving at its end started at the trDr 5 one.
+// Null where two branches share a direction (Green's south ends).
+const LINE_ENDS = {
+  RD: { 1: 'Howard', 5: '95th/Dan Ryan' },
+  BL: { 1: "O'Hare", 5: 'Forest Park' },
+  BR: { 1: 'Kimball', 5: 'Loop' },
+  GR: { 1: 'Harlem/Lake', 5: null },
+  OR: { 1: 'Loop', 5: 'Midway' },
+  PR: { 1: 'Linden', 5: 'Howard' },
+  PK: { 1: 'Loop', 5: '54th/Cermak' },
+  YL: { 1: 'Dempster-Skokie', 5: 'Howard' },
+};
+const originOf = (ln, trDr) => ((LINE_ENDS[ln] || {})[Number(trDr) === 1 ? 5 : 1]) || null;
+
 const lineCode = (rt) => RT_TO_LN[String(rt || '').toLowerCase()] || null;
 
 // True when a prediction is for a train that ends at this station.
@@ -114,4 +129,4 @@ function stationDestinations(st) {
   return out;
 }
 
-module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, lineCode, shortDest, fullDest, resolveDest, endsHere, stationDestinations };
+module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, LINE_ENDS, originOf, lineCode, shortDest, fullDest, resolveDest, endsHere, stationDestinations };

@@ -297,7 +297,7 @@
   <p class="sh" id="layH">Rows</p>
   <div class="grp">
     <label class="c sel" id="wideRow" hidden><span>Two panels</span><span class="v"></span><span data-icon="chev"></span>
-      <select id="wideLayout"><option value="split">Northbound | southbound</option><option value="rows">Destination rows</option></select></label>
+      <select id="wideLayout"><option value="split">Split by direction</option><option value="rows">Destination rows</option></select></label>
     <div class="c" id="wxRow"><label for="showWeather" class="grow">Weather at the bottom</label><input type="checkbox" class="sw" id="showWeather"></div>
     <div class="c" id="hdivRow"><label for="headerDivider" class="grow">Divider lines<span class="s">Under the top line and over the bottom one</span></label><input type="checkbox" class="sw" id="headerDivider"></div>
     <div class="c"><label for="timeSteps" class="grow">Dim later times step by step<span class="s">Next train full, then 40%, then 20%</span></label><input type="checkbox" class="sw" id="timeSteps"></div>
@@ -1172,7 +1172,7 @@
       + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? 'top line' : h)).join(' and ')}.` : '')
       + (board.cols === 128 ? (board.wideLayout === 'rows'
         ? ' Two panels: full names, up to 5 times; past 5 destinations, two columns.'
-        : ' Two panels: northbound | southbound where every line here runs that way, with the station at the bottom and no weather; else two columns.') : '');
+        : ' Two panels: northbound | southbound (or westbound | eastbound) where every line here runs that way, else inbound | outbound, with the station at the bottom and no weather; at an end of the line, departing to | arriving from; on the Loop, rows.') : '');
   }
   $('tShows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;

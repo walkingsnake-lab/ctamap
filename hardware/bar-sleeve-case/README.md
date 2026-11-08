@@ -217,10 +217,12 @@ python3 check_v5.py              # PANEL=p25 for the P2.5
   `stl/p25-128x32/`. Shell split left/right at the panel joint (both halves on one plate), a diffuser and a tray per panel,
   splice plates across the joint. Test pieces first; not printed yet.
 - **128 x 32 from two P3 panels** (414 x 115.3 x 69, 5 mm wall): [P3-128-BUILD.md](P3-128-BUILD.md), `src/p3x2.py`,
-  `stl/p3-128x32/`. Shell split left/right at the panel joint, joined by loose PETG tenons with crush ribs in pockets in
-  the walls (nothing thin in the walnut); a tray and a diffuser per panel, splice plates across the joint, one long wall
-  cleat. Coupons first; not printed yet. `stl/p25x2-128x32/` is the same set round two P2.5 panels (`WIDE=p25x2`),
-  superseding the tongue-and-groove bar below.
+  `stl/p3-128x32/`. Shell split left/right at the panel joint and glued together over two flat PLA joint plates in
+  rebates inside the top and bottom walls (the Nov 6 loose tenons didn't hold the finished bar against a twist); a tray
+  and a diffuser per panel (each diffuser half with its own wall at the seam), splice plates across the joint with hex
+  standoffs the inner tray posts bolt to, one long wall cleat. `stl/p25x2-128x32/` is the same set round two P2.5
+  panels (`WIDE=p25x2`), superseding the tongue-and-groove bar below; that pair was printed once (Nov 7) with the earlier
+  joint.
 - **P4** (256 x 128): the case (281 mm) and diffuser exceed the X2D's 256 mm bed, so it's built in split parts (shell top/bottom, tray and diffuser left/right): [P4-BUILD.md](P4-BUILD.md), `src/p4.py`, `stl/p4/`.
 
 ## Archive

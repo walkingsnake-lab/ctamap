@@ -497,6 +497,7 @@ void Board::step() {
     ms = clock->ms();
   }
   if (peek.open && peek.closing && !peek.committing && (double)ms - peek.closed_at >= draw::PEEK_DOWN_MS) peek.open = false;
+  knob_light();
 
   long long n = now(ms);
   if (player.has_p) {
@@ -765,6 +766,35 @@ void Board::do_knob(long long ms) {
   if (down) peek.press((double)ms);
   if (c) peek.turn(c, (double)ms);
   if (up) peek.release((double)ms);
+}
+
+// The knob's light (spec §10, "Knob"): while a chooser is open it shows the
+// hovered category's color (the peek chooser's icon color, dimmed to
+// KNOB_LIGHT), so the hand on the knob sees the choice without looking up at
+// the panel; it holds through the rest and the commit, and goes out as the
+// chooser closes. Dark otherwise, so it isn't a lamp at night.
+// The knob is written only when the color changes (one I2C transaction).
+static const double KNOB_LIGHT = 0.25;
+
+void Board::knob_light() {
+  if (!knob) return;
+  draw::RGB want{0, 0, 0};
+  bool on = false;
+  if (player.has_p) {
+    const Value &k = player.p["knob"];
+    int n = (int)k["ring"].size();
+    int at = -1;
+    if (peek.open && n) at = peek.k;
+    else if (chooser.open && n) at = chooser.selected();
+    if (at >= 0 && at < n) {
+      want = draw::scale_color(draw::peek_color(player.p, json::str(k["ring"][(size_t)at])), KNOB_LIGHT);
+      on = true;
+    }
+  }
+  if (on == knob_lit_ && want == knob_rgb_) return;
+  knob_lit_ = on;
+  knob_rgb_ = want;
+  knob->light(want.r, want.g, want.b);
 }
 
 // knob.vars sizes, one per ring entry.

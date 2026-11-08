@@ -60,6 +60,7 @@ REC_R = 1.6               # label corner radius (round-cornered sheets: ~1.6 mm)
 SETUP = (1.75 * IN, 0.5 * IN)        # w, h
 REG = (2.625 * IN, 1.0 * IN)
 GAP = 3.0                 # between the recesses
+CX = 0.0                  # the layout's centre (x): 0 on the single shell; p3x2.py puts it on panel B, off the seam
 REC_Y0 = 11.8             # recesses' front edge (y): the bottom face starts at front_y(0) = 9
 TEXT_GAP = 3.2            # recesses' back edge to the first line's cap top
 MODEL_BESIDE = NOZZLE >= 0.6   # model line under the setup sticker instead of above the FCC ID
@@ -121,7 +122,7 @@ def layout():
     (sw, sh), (rw, rh) = SETUP, REG
     ws, wr = sw + 2 * REC_CL, rw + 2 * REC_CL
     hr = rh + 2 * REC_CL
-    x0 = -(wr + GAP + ws) / 2
+    x0 = CX - (wr + GAP + ws) / 2
     xs = x0 + wr + GAP
     # setup sticker centred on the regulatory label's row, or at its front with the model line under it
     ys = REC_Y0 if LETTERING and MODEL_LINE and MODEL_BESIDE else REC_Y0 + (hr - sh - 2 * REC_CL) / 2

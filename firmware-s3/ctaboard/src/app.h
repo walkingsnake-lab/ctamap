@@ -121,6 +121,8 @@ class Knob {
   virtual ~Knob() {}
   virtual int clicks() = 0;
   virtual bool pressed() { return false; }  // the knob's push button, held now
+  // The knob's own light (the 5880's NeoPixel), 0-255 each; (0, 0, 0) is off. Called only when the color changes.
+  virtual void light(uint8_t r, uint8_t g, uint8_t b) { (void)r; (void)g; (void)b; }
 };
 
 // The light sensor (device::LightSensor): lux, false when it can't be read.
@@ -343,6 +345,9 @@ class Board {
   int button_dir_ = 0;            // a button press waiting for its frame: -1 UP, +1 DOWN
   control::Debounce knob_press_;  // the knob's push button
   bool knob_held_ = false;
+  // The knob's light: the hovered category's color while a chooser is open (KNOB_LIGHT of it), off otherwise.
+  draw::RGB knob_rgb_{0, 0, 0};
+  bool knob_lit_ = false;
   // The peek chooser's views, built once per payload (draw::peek_view):
   // key k * 32 + vi.
   std::map<int, draw::PeekView> peek_views_;
@@ -383,6 +388,7 @@ class Board {
   void led_update();
   void do_buttons(long long ms);
   void do_knob(long long ms);
+  void knob_light();
   void commit_choice(long long ms);
   void say(const std::string &s) {
     if (log) log(s);

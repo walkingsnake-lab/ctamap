@@ -129,6 +129,8 @@ constexpr RGB label = hexc(0xd8d8d8), clock = hexc(0xcccccc), radarTime = hexc(0
 RGB line_color(const std::string &ln);
 RGB scale_color(RGB c, double k);
 RGB fade(RGB c, double alpha);
+// A knob category's color (contract "Peek": the chooser's icons; the knob's own light follows it).
+RGB peek_color(const json::Value &p, const std::string &cat);
 
 // ---- timing ----
 

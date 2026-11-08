@@ -1,14 +1,16 @@
 """Renders of the P3 128 x 32 bar's shell halves and joint (p3x2.py), from the case-frame STLs in <outdir>/frames:
     python3 render_p3x2.py <outdir> <img dir> [prefix]
-Needs pyrender on EGL (headless). Writes p3x2-exploded.png (both halves pulled apart, the four tenons between them),
-p3x2-joint.png (close-up of the top wall's pockets and a tenon) and p3x2-front.png (assembled, from the front)."""
+Needs pyrender on EGL (headless). Writes p3x2-exploded.png (both halves pulled apart, the two joint plates between
+them), p3x2-joint.png (the front of the case cut away: both rebates with their plates lying in them, halves apart),
+p3x2-underside.png (half B from below: the label recesses), p3x2-front.png (assembled, from the front) and
+p3x2-exploded-all.png (everything, from the back)."""
 import math, os, sys
 os.environ.setdefault('PYOPENGL_PLATFORM', 'egl')
 import numpy as np
 import trimesh
 import pyrender
 
-WALNUT = [0.36, 0.22, 0.12, 1.0]
+WALNUT = [0.62, 0.42, 0.26, 1.0]   # lighter than the oiled wood: the features read
 PETG = [0.12, 0.12, 0.13, 1.0]
 
 
@@ -19,7 +21,7 @@ AMBIENT = 0.3
 def load(path, color):
     """the shading is baked into face colours (pyrender's directional lights barely register on EGL here) and the
     mesh is drawn with RenderFlags.FLAT, so GL only does the hidden-surface work"""
-    t = trimesh.load(path, process=False)
+    t = trimesh.load(path, process=False, force='mesh')
     n = t.face_normals
     shade = AMBIENT * np.ones(len(n))
     for d, w in LIGHTS:
@@ -63,22 +65,36 @@ if __name__ == '__main__':
     F = f'{out}/frames'
     a, ma = load(f'{F}/shell-A.stl', WALNUT)
     b, mb = load(f'{F}/shell-B.stl', WALNUT)
-    tt, mt = load(f'{F}/tenon.stl', PETG)
+    PLATE = [0.80, 0.78, 0.72, 1.0]
+    pt, mpt = load(f'{F}/plate-top.stl', PLATE)
+    pb, mpb = load(f'{F}/plate-bot.stl', PLATE)
     # case frame: x right, y back, z up; the renders look at the front (-y side)
     zc = a.bounds[1][2] / 2
-    # exploded: halves 40 mm apart, tenons floating in the middle at their four pockets (the tenon STL sits at the front top)
+    H = a.bounds[1][2]
+    # exploded: halves 40 mm apart, the plates floating between them in their rebates' places
     gap = 40.0
-    ty = [(0, 0), (0, 32.0)]
-    items = [(a, ma, shift(-gap / 2)), (b, mb, shift(gap / 2))]
-    for dy in (0.0, 32.0):
-        for dz in (0.0, -(a.bounds[1][2] - 5.0)):
-            items.append((tt, mt, shift(0, dy, dz)))
+    items = [(a, ma, shift(-gap / 2)), (b, mb, shift(gap / 2)), (pt, mpt, np.eye(4)), (pb, mpb, np.eye(4))]
     c = render(items, eye=(120, -520, 260), target=(0, 35, zc), yfov=0.62)
     Image.fromarray(c).save(f'{img}/{pfx}-exploded.png')
-    # joint close-up: the top wall near x = 0, halves 12 mm apart, one tenon half way into A
-    items = [(a, ma, shift(-8)), (b, mb, shift(30)), (tt, mt, shift(-9.0))]
-    c = render(items, eye=(48, -22, a.bounds[1][2] + 14), target=(-8, 34, a.bounds[1][2] - 3), yfov=0.32, size=(1600, 1000))
+    # joint: the front 34 mm of the case cut away, halves 24 mm apart, both plates in A's rebates (B's come down over
+    # their other halves), seen from the front: the two rebates with the plates lying in them
+    ya = 34.0
+    def section(t, x0, x1):
+        return t.slice_plane([0, ya, 0], [0, 1, 0], cap=True).slice_plane([x0, 0, 0], [1, 0, 0], cap=True).slice_plane([x1, 0, 0], [-1, 0, 0], cap=True)
+    sa = section(trimesh.load(f'{F}/shell-A.stl', force='mesh'), -80, 0); sb = section(trimesh.load(f'{F}/shell-B.stl', force='mesh'), 0, 80)
+    spt = section(trimesh.load(f'{F}/plate-top.stl', force='mesh'), -80, 80); spb = section(trimesh.load(f'{F}/plate-bot.stl', force='mesh'), -80, 80)
+    for t, pth in ((sa, 'sec-A'), (sb, 'sec-B'), (spt, 'sec-pt'), (spb, 'sec-pb')):
+        t.export(f'{F}/{pth}.stl')
+    A2, mA2 = load(f'{F}/sec-A.stl', WALNUT); B2, mB2 = load(f'{F}/sec-B.stl', WALNUT)
+    P2, mP2 = load(f'{F}/sec-pt.stl', PLATE); Q2, mQ2 = load(f'{F}/sec-pb.stl', PLATE)
+    g = 24.0
+    items = [(A2, mA2, shift(-g / 2)), (B2, mB2, shift(g / 2)), (P2, mP2, shift(-g / 2)), (Q2, mQ2, shift(-g / 2))]
+    c = render(items, eye=(90, -260, zc + 70), target=(0, 50, zc), yfov=0.62, size=(1600, 1000))
     Image.fromarray(c).save(f'{img}/{pfx}-joint.png')
+    # underside: half B from below, front edge at the top of the picture: the two label recesses, the screw holes, feet
+    items = [(b, mb, np.eye(4))]
+    c = render(items, eye=(110, 150, -400), target=(110, 32, 0), yfov=0.5, size=(1600, 900))
+    Image.fromarray(c).save(f'{img}/{pfx}-underside.png')
     # assembled, from the front
     items = [(a, ma, np.eye(4)), (b, mb, np.eye(4))]
     c = render(items, eye=(0, -900, zc + 160), target=(0, 20, zc), yfov=0.5)
@@ -95,9 +111,7 @@ if __name__ == '__main__':
                  (st, mst, shift(0, 55)), (sb, msb, shift(0, 55))]
         for d, m, dx in ((da, mda, -gap / 2), (db, mdb, gap / 2), (wa, mwa, -gap / 2), (wb, mwb, gap / 2)):
             items.append((d, m, shift(dx, -70) @ dif))
-        for dy in (0.0, 32.0):
-            for dz in (0.0, -(a.bounds[1][2] - 5.0)):
-                items.append((tt, mt, shift(0, dy, dz)))
+        items += [(pt, mpt, np.eye(4)), (pb, mpb, np.eye(4))]
         c = render(items, eye=(260, 700, zc + 330), target=(0, 40, zc), yfov=0.62)
         Image.fromarray(c).save(f'{img}/{pfx}-exploded-all.png')
     print('ok')

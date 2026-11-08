@@ -2586,7 +2586,7 @@ static const char *const *peek_icon(const std::string &cat) {
   return nullptr;
 }
 
-static RGB peek_color(const Value &p, const std::string &cat) {
+RGB peek_color(const Value &p, const std::string &cat) {
   (void)p;
   if (cat == "transit") return line_color("RD");  // always Red Line red, whatever the station
   if (cat == "weather") return PEEK_WEATHER;
