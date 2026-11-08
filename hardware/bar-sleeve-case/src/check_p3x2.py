@@ -9,8 +9,9 @@ case = json.load(open(f'{F}/case.json'))
 os.environ['WIDE'] = case['wide']
 import numpy as np
 import trimesh
-from manifold3d import Manifold, Mesh
+from manifold3d import Manifold, CrossSection, Mesh
 import p3x2 as B
+import drawer as DR
 from case import box, cyl_y, ZC, H, D, Y_FACE, PANEL_BACK
 
 
@@ -56,21 +57,29 @@ pairs = [('shell-A', 'tray-A'), ('shell-B', 'tray-B'), ('shell-A', 'tray-B'), ('
          ('env-encoder', 'panel-B'), ('env-encoder', 'shell-B'), ('env-encoder', 'env-sensor'),
          ('env-encoder', 'env-s3'), ('env-sensor', 'env-s3'), ('env-sled', 'env-s3'),
          ('tenon', 'tray-A'), ('tenon', 'tray-B'), ('tenon', 'shell-A'), ('tenon', 'shell-B')]
-print('overlaps (mm3; crush ribs into the shell, post feet 0.3 into the splice plates and the tenon ribs into the skin are intended):')
+print('overlaps (mm3; crush ribs into the shell, post feet 0.3 into the panel and the tenon ribs into the skin are intended):')
 res = {}
 for a, b in pairs:
     v = (P[a] ^ P[b]).volume()
     res[f'{a} x {b}'] = round(v, 2)
     print(f'  {a:12s} x {b:12s} {v:9.2f}')
-# splice screw heads (M3 button head, Ø5.7 x 1.65) on the plates, inside the open inner posts, with the tray off by up
-# to 0.7 mm in any direction (the outer posts' float)
+# the hex standoffs on the splice plates (M3 male-female, STANDOFF_AF across flats, STANDOFF_L tall, trays.json
+# 'standoff'), which the inner posts stand on: seated, each post's floor sits 0.3 into the standoff's top (as the outer
+# posts' feet sit 0.3 into the panel), so the expected overlap is 4 x 0.3 x (hex area less the Ø POST_HOLE hole); with
+# the tray 0.7 off any way (the posts' float) the hex top must stay under the floor, so the overlap barely changes
 sp = case['splice']
-heads = Manifold.batch_boolean([cyl_y(sx * sp['x'], ZC + z + (0 if sx < 0 else -sp['dz']), PANEL_BACK + sp['t'], PANEL_BACK + sp['t'] + 1.7, 5.8, 32)
-                                for sx in (-1, 1) for z in sp['za']], B.ADD)
-worst = max((P[t].translate([0.7 * math.cos(a), 0, 0.7 * math.sin(a)]) ^ heads).volume()
-            for t in ('tray-A', 'tray-B') for a in np.linspace(0, 2 * math.pi, 12, endpoint=False))
-print(f'  splice screw heads vs trays, tray 0.7 off any way {worst:9.2f}')
-res['splice heads x trays (0.7 off)'] = round(worst, 2)
+so_l, so_af = tr['standoff']
+hexcs = CrossSection.circle(so_af / math.sqrt(3), 6)
+standoffs = Manifold.batch_boolean([Manifold.extrude(hexcs, so_l).rotate([-90, 0, 0]).translate([sx * sp['x'], PANEL_BACK + sp['t'], ZC + z + (0 if sx < 0 else -sp['dz'])])
+                                    for sx in (-1, 1) for z in sp['za']], B.ADD)
+hex_area = 6 * (so_af / math.sqrt(3)) ** 2 * math.sqrt(3) / 4 - math.pi * (DR.POST_HOLE / 2) ** 2
+seated = sum((P[t] ^ standoffs).volume() for t in ('tray-A', 'tray-B'))
+offs = [sum((P[t].translate([0.7 * math.cos(a), 0, 0.7 * math.sin(a)]) ^ standoffs).volume() for t in ('tray-A', 'tray-B'))
+        for a in np.linspace(0, 2 * math.pi, 12, endpoint=False)]
+print(f'  standoffs vs tray posts, seated {seated:9.2f}  (expected {4 * 0.3 * hex_area:.2f}: 0.3 into the floors)')
+print(f'  standoffs vs tray posts, tray 0.7 off any way {min(offs):9.2f} .. {max(offs):.2f}  (the hex top stays on the floor)')
+res['standoffs x trays seated'] = round(seated, 2)
+res['standoffs x trays (0.7 off)'] = round(max(offs), 2)
 # the encoder's STEMMA QT plugs (out 7 mm past each side edge of its board, under it) vs tray B seated and sliding in
 import sensor as SN
 kx, ky = case['knob_x'], tr['ky']

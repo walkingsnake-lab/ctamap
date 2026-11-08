@@ -20,9 +20,15 @@ x = 0 (the panel joint) into a left half A and a right half B. Both fit one plat
   corner post at x 183.25), light sensor 40 mm toward the centre, USB-C at the right end. KNOB_X=96 is the stock-tray
   option (knob over panel B's centre, tray B = the single v5 tray).
 Diffuser (two-colour, 0.4 nozzle, 0.2 face as the single P3): one per panel, split at the panel joint on the rib that
-falls there (every rib is at a 3 mm pitch from the left edge, so x = 0 is a rib centre). No skirt on the seam edge. A
-owns the joint rib, JOINT_RIB wide (0.6 = a normal rib; wider covers any gap between the butted panels); B starts a
-half rib (0.3) past its panel's edge. The joint coupon (JOINT_RIBS) picks the width.
+falls there (every rib is at a 3 mm pitch from the left edge, so x = 0 is a rib centre). No skirt on the seam edge.
+JOINT_SPLIT (default): each half ends in its own wall at the seam, JOINT_WALL wide (a normal rib: the thinnest bead the
+grid prints), so the joint is two walls, 2 x JOINT_WALL in all, split at x = 0. A gap between the halves then falls
+between two white walls over the dead strip between the panels' edge columns, a dark hairline at worst; the first print
+(Nov 7) had the rib on A only and B's face starting a half rib past its edge, so the same gap opened straight over B's
+first column of LEDs. The cost: the two columns at the seam sit in cells a half rib narrower than the rest.
+JOINT_SPLIT=0 is that first scheme: A owns the joint rib, JOINT_RIB wide (0.6 = a normal rib; 0.8 / 1.0 cover a gap
+between the butted panels, and shift B right by the difference). The joint coupon has both: A pieces at JOINT_RIBS
+(1-3 notches) and B (no notch) for the single rib, and the split pair (4 notches on A, 1 on B).
 Splice plates (PETG): two short plates on the panels' inner corner inserts (x +/-8.75), screwed on first (M3 x 6 button
 heads), a round hole on A's insert and a slot (x) on B's: they tie the panels into one unit so the rows can't step at the
 seam, and let them butt freely. Panel A sits in its normal orientation and B turned 180 deg (the P2.5 bar's data chain:
@@ -32,9 +38,10 @@ than A's on both plates: one plate, used twice the same way up.
 Trays (black PETG, the --trays run, PANEL=p3): one per panel, each the P3 v5 tray cut at the panel joint (no end wall
 there: the panels fill it). Tray B is the v5 tray (S3, status window, Boot, USB-C slot) with the controls under the
 knob: the encoder slot and rails at ENC_X (KNOB_X - 96) and the light-sensor sled 40 mm toward the centre. Tray A is
-the same tray with no S3 and no controls, its posts at panel A's un-turned inserts. The inner posts of each stand
-SPLICE_T further back, on the splice plates, solid and closed at the back, with no screw. Each takes its own pair of
-screws from below and its own case cleat; one wall cleat (p3x2-cleat-wall.stl, 220 mm, flat on the plate) takes both.
+the same tray with no S3 and no controls, its posts at panel A's un-turned inserts. The inner posts of each are bolted
+like the outer ones, standing on an M3 hex standoff that replaces the splice plate's screw at that insert (STANDOFF_L).
+Each tray takes its own pair of screws from below and its own case cleat; one wall cleat (p3x2-cleat-wall.stl, 220 mm,
+flat on the plate) takes both.
 Run: python3 p3x2.py <outdir>   -> shell halves, tenons (RIB_H), diffuser halves, splice plates, collar, coupons (seam:
      both halves' top wall across the joint + three tenons at RIB_HS; diffuser joint at JOINT_RIBS; splice holes), then
      the trays and wall cleat from a second run of this script with --trays (PANEL=p3). Case-frame copies for
@@ -268,46 +275,66 @@ DIFF_SCALE = 1.0 / (1.0 - DIFF_SHRINK)
 HALF = panel.P['rib'] / 2 if not TRAYS else None   # half of a normal rib (P3 0.3, P2.5 0.225)
 JOINT_RIBS = tuple(round(panel.P['rib'] + k * panel.P['rib'] / 3, 2) for k in range(3)) if not TRAYS else ()   # P3 0.6 / 0.8 / 1.0
 JOINT_RIB = float(os.environ.get('JOINT_RIB', JOINT_RIBS[0] if JOINT_RIBS else 0))   # default: a normal rib (panels butted tight)
+# Split joint (Nov 8, the default): a wall on each half's seam edge, JOINT_WALL wide (default a normal rib, the thinnest
+# bead the grid prints), split at x = 0. JOINT_SPLIT=0: A owns the whole joint rib (JOINT_RIB), B has no wall.
+JOINT_SPLIT = os.environ.get('JOINT_SPLIT', '1') not in ('0', '', 'no', 'false')
+JOINT_WALL = float(os.environ.get('JOINT_WALL', panel.P['rib'] if not TRAYS else 0))
 
 
-def diffuser_halves(rib=JOINT_RIB, skin=None):
+def diffuser_halves(rib=JOINT_RIB, skin=None, split=None, wall=None):
     """diffuser.diffuser() over both panels (the 'p3x2' profile: 128 columns, skirts and bumps on the outer ends, top and
-    bottom), split at the panel joint. A keeps the joint rib, widened to rib (from -HALF to rib - HALF); B starts at
-    +HALF. Returns {('A'|'B', 'white'|'black'): manifold} in the diffuser's frame (z = 0 the face, +z toward the LEDs;
-    x as seen from the front, so A is x < 0)."""
+    bottom), split at the panel joint. split (JOINT_SPLIT): the joint rib is replaced by two walls, wall (JOINT_WALL)
+    wide each, one on A ending at x = 0 and one on B starting there. Otherwise A keeps the joint rib, widened to rib
+    (from -HALF to rib - HALF), and B starts at +HALF. Returns {('A'|'B', 'white'|'black'): manifold} in the diffuser's
+    frame (z = 0 the face, +z toward the LEDs; x as seen from the front, so A is x < 0)."""
     import diffuser as DF
     skin = DIFF_FACE if skin is None else skin
+    split = JOINT_SPLIT if split is None else split
+    wall = JOINT_WALL if wall is None else wall
     d = DF.diffuser(skin=skin)
     hy = DF.PH / 2
-    xa1 = rib - HALF
-    if xa1 > HALF:                                           # widen the joint rib onto B's side
-        d = d + box(HALF - 0.01, xa1, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+    if split:
+        xa1 = xb0 = 0.0
+        if wall > HALF:                                      # widen the joint rib to two walls (one each side of x = 0)
+            d = d + box(-wall, wall, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+    else:
+        xa1, xb0 = rib - HALF, HALF
+        if xa1 > HALF:                                       # widen the joint rib onto B's side
+            d = d + box(HALF - 0.01, xa1, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
     lo = d.bounding_box()
     face = box(lo[0] - 1, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, skin)
     a = d ^ box(lo[0] - 1, xa1, lo[1] - 1, lo[4] + 1, -1, 20)
-    b = d ^ box(HALF, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, 20)
+    b = d ^ box(xb0, lo[3] + 1, lo[1] - 1, lo[4] + 1, -1, 20)
     out = {('A', 'white'): a ^ face, ('A', 'black'): a - face, ('B', 'white'): b ^ face, ('B', 'black'): b - face}
     return {k: v.scale([DIFF_SCALE, DIFF_SCALE, 1.0]) for k, v in out.items()}   # shrink compensation, about the seam
 
 
 def diffuser_joint_coupons():
     """6 columns either side of the joint (cut at a rib's outer edge, so no half rib at the coupon's own edge), the
-    bottom edge (skirt, flange) and 8 rows: an A piece per joint rib width (1-3 notches in its flange edge) and one B
-    piece. Hold A and B on the butted panels at the bottom of the joint; the width whose seam column looks like the
-    rest is the build's JOINT_RIB."""
+    bottom edge (skirt, flange) and 8 rows. Single-rib scheme: an A piece per joint rib width (1-3 notches in its flange
+    edge) and one B piece (no notch). Split scheme: an A piece (4 notches) and a B piece (1 notch), each with its own
+    wall at the seam. Hold a pair on the butted panels at the bottom of the joint, lit; the pair whose seam looks like
+    the rest of the grid is the build's (JOINT_SPLIT / JOINT_RIB)."""
     import diffuser as DF
     hy = DF.PH / 2
     reg = lambda x0, x1: box(x0, x1, -hy - 20, -hy + 25.0, -5, 20)
+    x6 = 6 * panel.P['pitch'] + HALF                           # cut at the sixth rib's outer edge
+
+    def notched(n):
+        return Manifold.batch_boolean([box(-12.0 + k * 2.2, -12.0 + k * 2.2 + 1.0, -DF.FL_HZ - 1, -DF.FL_HZ + 1.0, -1, 20)
+                                       for k in range(n)], ADD) if n else Manifold()
+
+    def piece(name, h, side, n):
+        r = reg(-x6, 2.0) if side == 'A' else reg(-2.0, x6)
+        nk = notched(n).translate([0 if side == 'A' else 18.0, 0, 0])   # B's notch on its own side of the seam (x +6)
+        return (name, h[(side, 'white')] ^ r - nk, h[(side, 'black')] ^ r - nk)
     out = []
     for n, rib in enumerate(JOINT_RIBS, 1):
-        h = diffuser_halves(rib)
-        notches = Manifold.batch_boolean([box(-12.0 + k * 2.2, -12.0 + k * 2.2 + 1.0, -DF.FL_HZ - 1, -DF.FL_HZ + 1.0, -1, 20)
-                                          for k in range(n)], ADD)
-        x6 = 6 * panel.P['pitch'] + HALF                       # cut at the sixth rib's outer edge
-        out.append((f'A{rib:.2f}', h[('A', 'white')] ^ reg(-x6, 2.0) - notches, h[('A', 'black')] ^ reg(-x6, 2.0) - notches))
-    h = diffuser_halves(JOINT_RIBS[0])
-    x6 = 6 * panel.P['pitch'] + HALF
-    out.append(('B', h[('B', 'white')] ^ reg(-2.0, x6), h[('B', 'black')] ^ reg(-2.0, x6)))
+        out.append(piece(f'A{rib:.2f}', diffuser_halves(rib, split=False), 'A', n))
+    out.append(piece('B', diffuser_halves(JOINT_RIBS[0], split=False), 'B', 0))
+    h = diffuser_halves(split=True)
+    out.append(piece('Asplit', h, 'A', 4))
+    out.append(piece('Bsplit', h, 'B', 1))
     return out
 
 
@@ -321,6 +348,15 @@ SPLICE_T, SPLICE_W, SPLICE_L = 2.0, 14.0, 2 * SPLICE_X + 12.0
 SPLICE_SLOT = 0.5                 # B's hole is a slot, +/-0.5 in x: the plate holds the rows, the panels butt freely
 SPLICE_HOLES = (3.3, 3.45, 3.6)   # printed vertical, so they come out small: pick the snuggest an M3 passes freely
 SPLICE_HOLE = float(os.environ.get('SPLICE_HOLE', '3.45'))   # the build's (set from the test piece)
+# Inner posts (Nov 8): at each inner insert the plate's M3 x 6 is an M3 male-female hex standoff instead (brass, body
+# STANDOFF_L long, STANDOFF_AF across flats, stud ~6 mm: 4 into the insert through the 2 mm plate, as the screw it
+# replaces). Its top is the inner post's seat and the post screw (M3 x 8 or 10) threads into its female end: all four
+# posts bolted, the plate clamped, and the inner posts float on their screws like the outer ones (Ø POST_HOLE on an M3:
+# +/-0.7; the standoff's hex top, 6.35 across corners, stays under the floor's bearing annulus at that offset). No socket
+# keys the standoff: tighten it into the insert first (pliers or a 5.5 mm wrench), the post screw only clamps.
+# INNER_DY moves the inner posts' feet back by the plate and the standoff from the outer posts' feet (which keep POST_LONG).
+STANDOFF_L, STANDOFF_AF = 6.0, 5.5
+INNER_DY = SPLICE_T + STANDOFF_L
 
 
 def splice_z(side, top):
@@ -366,21 +402,12 @@ def trays():
     """(tray A, tray B, B's status window) in the case frame. Only valid in the --trays run (PANEL=p3)."""
     assert TRAYS
 
-    def open_posts(t, corners):
-        """the inner posts carry no screw (the splice plate's screws take those inserts): solid, closed at the back (no
-        tube, no bridged floor, no hole in the back face), with a pocket at the front whose rim stands on the plate round
-        the screw head (Ø POST_BORE, SO_FLOOR + 0.6 deep: the head's 1.65 plus the tray's float)"""
-        y = P3.FOOT_Y + SPLICE_T
-        fill = Manifold.batch_boolean([cyl_y(x, ZC + z, y + P3.SO_FLOOR + 0.6, DR.Y1, DR.POST_BORE + 0.4, 48) for x, z in corners], ADD)   # 0.2 into the tube wall: no tangent faces
-        pocket = Manifold.batch_boolean([cyl_y(x, ZC + z, y - 1, y + P3.SO_FLOOR + 0.6, DR.POST_BORE + 0.05, 32) for x, z in corners], ADD)   # not the tube's own facets
-        return (t + fill) - pocket
-
     def build(side, sx, **kw):
         saved = DR.CORNERS
         DR.CORNERS = corners_for(side)
         try:
-            inner = {c: SPLICE_T for c in DR.CORNERS if c[0] * sx > 0}   # the corners toward the joint
-            t = open_posts(DR.tray(post_dy=inner, **kw), inner)
+            inner = {c: INNER_DY for c in DR.CORNERS if c[0] * sx > 0}   # the corners toward the joint: floating posts, on the standoffs
+            t = DR.tray(post_dy=inner, **kw)
         finally:
             DR.CORNERS = saved
         return t.translate([-sx * PANEL_CX, 0, 0])
@@ -423,7 +450,7 @@ def build_trays(out, frames):
     json.dump(dict(port_z=DR.PORT_Z, s3_edge=DR.S3_EDGE + PANEL_CX, s3_z0=DR.S3_Z0, ky=C.KY,
                    sensor_x=V.SENSOR_X + PANEL_CX, knob_x=DR.ENC_X + PANEL_CX, turned=PANEL_TURNED,
                    bottom_xs=[x + PANEL_CX * s for s in (-1, 1) for x in DR.bottom_xs()],
-                   bot_y=DR.BOT_Y, foot_y=P3.FOOT_Y, y0=DR.Y0, y1=DR.Y1, yf=DR.YF,
+                   bot_y=DR.BOT_Y, foot_y=P3.FOOT_Y, y0=DR.Y0, y1=DR.Y1, yf=DR.YF, inner_dy=INNER_DY, standoff=(STANDOFF_L, STANDOFF_AF),
                    corners={side: [(x + PANEL_CX * sx, z) for x, z in corners_for(side)] for side, sx in (('A', -1), ('B', 1))},
                    cleat=[(x + PANEL_CX * s, z) for s in (-1, 1) for x, z in DR.CLEAT_SCREWS]),
               open(f'{frames}/trays.json', 'w'), indent=1)
@@ -505,7 +532,7 @@ if __name__ == '__main__':
         print(f'coupon-{PFX}-tenon-{hh:.2f}.stl', 'watertight', t.is_watertight, np.round(t.extents, 2).tolist(), f'{n} notch(es)')
     pieces = diffuser_joint_coupons()
     pairs = [(tm(w, process=True), tm(k, process=True)) for _, w, k in pieces]
-    layout([pairs[:2], pairs[2:]], gap=6.0)
+    layout([pairs[:2], pairs[2:4], pairs[4:]], gap=6.0)
     W = trimesh.util.concatenate([p[0] for p in pairs]); K = trimesh.util.concatenate([p[1] for p in pairs])
     for n, t in ((f'coupon-{PFX}-diffuser-joint-white.stl', W), (f'coupon-{PFX}-diffuser-joint-black.stl', K)):
         t.export(f'{out}/coupons/{n}'); print(n, 'watertight', t.is_watertight, np.round(t.extents, 1).tolist())
@@ -519,7 +546,7 @@ if __name__ == '__main__':
     import diffuser as DF
     json.dump(dict(knob_x=KNOB_X, sensor_x=SENSOR_X, port_z=DR.PORT_Z, screw_xs=list(V.SCREW_XS), screw_y=C.SCREW_Y,
                    hw=HW, h=H, d=D, zc=ZC, bore=(BORE_HX, BORE_HZ), y_face=Y_FACE, panel_back=C.PANEL_BACK,
-                   joint_rib=JOINT_RIB, splice=dict(x=SPLICE_X, t=SPLICE_T, dz=SPLICE_DZ, za=(splice_z('A', True), splice_z('A', False))),
+                   joint_rib=JOINT_RIB, joint_split=JOINT_SPLIT, joint_wall=JOINT_WALL, splice=dict(x=SPLICE_X, t=SPLICE_T, dz=SPLICE_DZ, za=(splice_z('A', True), splice_z('A', False))),
                    skin=DIFF_FACE, grid_h=DF.GRID_H, wide=WIDE, pfx=PFX, panel_cx=PANEL_CX),
               open(f'{frames}/case.json', 'w'), indent=1)
     print(dict(W=2 * HW, H=round(H, 2), D=D, wall=WALL, slot=SLOT, skin=SKIN, knob=KNOB_X, sensor=SENSOR_X, screws=V.SCREW_XS,
