@@ -311,7 +311,7 @@ function tickerOf(shown, alerts, wide = false) {
 //     westbound | eastbound, where every line at the station runs along
 //     that axis (station-dirs.json); else inbound | outbound (toward the
 //     Loop or away) where every line there reaches it (diagonal track,
-//     lines on different axes); at an end of the line, departing |
+//     lines on different axes); at an end of the line, departing to |
 //     arriving from (trains ending their runs here, by where they came
 //     from, or the line where that's two branches).
 //     Up to SPLIT_ROWS rows a half, 64-style rows (short names, 3 times)
@@ -326,8 +326,8 @@ const WIDE_TIMES = 5;
 const HALVES = [[0, 61], [66, 127]];
 const SPLIT_ROWS = 3;
 // The halves' labels per axis: north and west on the left, as on a map;
-// inbound (toward the Loop) and departing on the left.
-const SPLIT_LABELS = { ns: ['NORTHBOUND', 'SOUTHBOUND'], ew: ['WESTBOUND', 'EASTBOUND'], io: ['INBOUND', 'OUTBOUND'], end: ['DEPARTING', 'ARRIVING FROM'] };
+// inbound (toward the Loop) and departing to on the left.
+const SPLIT_LABELS = { ns: ['NORTHBOUND', 'SOUTHBOUND'], ew: ['WESTBOUND', 'EASTBOUND'], io: ['INBOUND', 'OUTBOUND'], end: ['DEPARTING TO', 'ARRIVING FROM'] };
 const STATION_DIRS = require('./station-dirs.json');
 const LINE_NAMES = { RD: 'Red', BL: 'Blue', BR: 'Brown', GR: 'Green', OR: 'Orange', PR: 'Purple', PK: 'Pink', YL: 'Yellow' };
 const AXIS = { N: 'ns', S: 'ns', E: 'ew', W: 'ew' };
@@ -445,7 +445,7 @@ function wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending = [])
       rows: halves.flatMap((x, h) => x.map((g) => halfRow(g, h, now, alerts.has(g.ln)))),
       bars: { showHeader: cfg.showHeader, showWeather: false, showKey: false, hidden },
     });
-    // An end of the line: departing | arriving, the trains ending their
+    // An end of the line: departing to | arriving from, the trains ending their
     // runs here grouped by where they came from (or the line), soonest
     // first. Needs a departure to show (else the no-trains screen).
     if (terminalHere(mapid)) {

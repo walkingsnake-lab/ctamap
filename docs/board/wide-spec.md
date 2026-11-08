@@ -36,7 +36,7 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 - A per-board layout choice (`wideLayout`: split, the default, or rows). Halves come from each train's direction code (`trDr` in Train Tracker) and which way that direction heads at the station.
 - **Only where it's true:** every line at the station runs along the same axis there (`station-dirs.json`, from the track geometry: within 35° of north-south or of east-west; Red and Purple count as north-south everywhere off the Loop) and none ends there. 59 stations split north-south, 51 east-west.
 - **Inbound | outbound** where the compass doesn't give one but every line reaches the Loop (decided Nov 8, as a fallback only): diagonal stretches (Blue's Milwaukee Avenue, Orange southwest) and mixed axes (Sedgwick). 14 stations. Inbound (toward the Loop) on the left.
-- **Departing | arriving from** at an end of the line (decided Nov 8): departures left, trains ending their runs there right, by where they came from. 12 stations, Howard included.
+- **Departing to | arriving from** at an end of the line (decided Nov 8): departures left, trains ending their runs there right, by where they came from. 12 stations, Howard included.
 - **Elsewhere** (the 8 Loop stations, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then the chronological list.
 
 ### Busy stations, replacing the chronological view (built)
@@ -158,7 +158,7 @@ Also mocked (`dial-*.png`): icons in place with the chosen one named, a centered
 ## 10. Open questions
 
 - **Hardware check:** none of the 128 layouts has run on the two-panel board yet. Draw time per frame (the serial report's `last_ms` / `max_ms`) during digit rolls, the credits roll and screen slides, and free memory with 128-wide radar frames.
-- **Direction labels at Loop stations:** settled by not splitting there; the Loop falls back to rows. Mixed axes and diagonal track get inbound | outbound, ends of the line departing | arriving from (§3, Nov 8).
+- **Direction labels at Loop stations:** settled by not splitting there; the Loop falls back to rows. Mixed axes and diagonal track get inbound | outbound, ends of the line departing to | arriving from (§3, Nov 8).
 - **Baseball beyond the line score:** logos at 128, a fuller pregame.
 
 ## 11. What the software needs (done)

@@ -423,7 +423,7 @@ test('wide: northbound | southbound or westbound | eastbound where every line ru
   assert.deepEqual(r.halves, SPLIT_LABELS.ew);
   assert.deepEqual(r.rows.map((x) => [x.h, x.lbl]), [[0, "O'HARE"], [1, 'FOREST']]);
   // Not a direction split: the Loop (Clark/Lake); an end of the line
-  // (Howard) is departing | arriving instead (its own test).
+  // (Howard) is departing to | arriving from instead (its own test).
   assert.notEqual(run('clark-lake-2026-10-03-2317.json', wide('40380')).view, 'split');
   assert.equal(splitAxis('40900', ['RD', 'PR']), null, 'Howard: an end of the line');
   assert.equal(splitAxis('40100', ['RD']), 'ns');
@@ -573,10 +573,10 @@ test('wide: inbound | outbound where the compass doesn\'t give a split; toward t
   assert.deepEqual(r.rows.map((x) => `${x.h}:${x.ln}:${x.lbl}`), ['0:BR:LOOP', '0:PR:LOOP', '1:BR:KIMBALL', '1:PR:LINDEN']);
 });
 
-test('wide: an end of the line is departing | arriving from (trains ending their runs here, by where they came from)', () => {
+test('wide: an end of the line is departing to | arriving from (trains ending their runs here, by where they came from)', () => {
   const r = run('howard-2026-10-03-2316.json', wide('40900'));
   assert.equal(r.view, 'split');
-  assert.deepEqual(r.halves, ['DEPARTING', 'ARRIVING FROM']);
+  assert.deepEqual(r.halves, ['DEPARTING TO', 'ARRIVING FROM']);
   assert.deepEqual(r.rows.map((x) => `${x.h}:${x.ln}:${x.lbl}`), ['0:RD:95TH', '0:PR:LINDEN', '1:PR:LINDEN', '1:RD:95TH', '1:YL:SKOKIE']);
   // Trains ending here are only in the arriving half: not the ticker or other layouts.
   assert.ok(r.ticker.every((t) => t.d !== 'Howard'));

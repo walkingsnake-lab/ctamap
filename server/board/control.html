@@ -1180,7 +1180,7 @@
       + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? (key ? 'station line' : 'top line') : h === 'weather' ? 'weather' : h)).join(' and ')}.` : '')
       + (board.cols === 128 ? (board.wideLayout === 'rows'
         ? ' Two panels: full names, up to 5 times; past 5 destinations, two columns.'
-        : ' Two panels: northbound | southbound (or westbound | eastbound) where every line here runs that way, else inbound | outbound; at an end of the line, departing | arriving from; on the Loop, rows.') : '');
+        : ' Two panels: northbound | southbound (or westbound | eastbound) where every line here runs that way, else inbound | outbound; at an end of the line, departing to | arriving from; on the Loop, rows.') : '');
   }
   $('tShows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
