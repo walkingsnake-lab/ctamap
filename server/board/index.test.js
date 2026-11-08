@@ -1037,7 +1037,7 @@ test('width: wide transit gets the warning\'s end (warn.until) and alert words; 
   assert.deepEqual(b.warn, { kind: 'tor', lvl: 'warning' }, 'the 64 warning is unchanged');
   assert.ok(b.rows.every((r) => r.aw === undefined));
   b = await upd(true);
-  assert.ok(b.warn.until > now && b.warn.until <= now + 600, 'a test warning ends with the test');
+  assert.ok(b.warn.until > now && b.warn.until <= Math.floor(Date.now() / 1000) + 600, 'a test warning ends with the test');  // the clock may tick past `now` mid-test
   assert.ok(b.rows.some((r) => r.aw === 'MAJOR DELAYS'), 'test alerts read MAJOR DELAYS');
   await post({});
   await s.close();
