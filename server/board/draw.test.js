@@ -1269,6 +1269,12 @@ test('header: name and clock flush to the edges in the transit dark grey; divide
   assert.equal(count(f, draw.C.divider, 0, 8, 63, 31), 0, 'no line above the weather strip');
   const g = draw.renderTransit({ ...base, headerDivider: true });
   assert.equal(count(g, draw.C.divider, 0, 7, 63, 7), 64);
+  assert.equal(count(g, draw.C.divider, 0, 25, 63, 25), 64, 'and over the weather strip');
+  assert.equal(count(g, draw.C.divider, 0, 8, 63, 24) + count(g, draw.C.divider, 0, 26, 63, 31), 0);
+  // No strip, no bottom line; no header, the bottom line alone.
+  assert.equal(count(draw.renderTransit({ ...base, headerDivider: true, wx: null }), draw.C.divider, 0, 25, 63, 25), 0);
+  const nh = draw.renderTransit({ ...base, header: null, headerDivider: true });
+  assert.deepEqual([count(nh, draw.C.divider, 0, 7, 63, 7), count(nh, draw.C.divider, 0, 25, 63, 25)], [0, 64]);
   // The ticker header keeps the lighter header grey; it has no divider (its
   // rows start at row 7).
   const t = draw.render({ ...base, headerDivider: true, ticker: [] }, { screen: 'ticker' });
@@ -1589,6 +1595,14 @@ test('width: wide transit and ticker draw 128 across; overnight once, in the mid
   const sf = draw.render(split);
   assert.ok(count(sf, '#808080', 0, 1, 40, 5) > 0 && count(sf, '#808080', 66, 1, 110, 5) > 0, 'both labels');
   assert.ok(count(sf, '#ffb000', 40, 8, 61, 22) > 0 && count(sf, '#ffb000', 100, 8, 127, 22) > 0, 'times in both halves');
+  // Divider lines: under the labels (row 7) and over the station line (25),
+  // as the other views; no station line, no bottom line.
+  assert.equal(count(sf, draw.C.divider, 0, 0, 127, 31), 0, 'no lines by default');
+  const sd = draw.render({ ...split, headerDivider: true });
+  assert.deepEqual([7, 25].map((y) => count(sd, draw.C.divider, 0, y, 127, y)), [128, 128]);
+  assert.ok(count(sd, draw.C.dimHead, 0, 27, 127, 31) > 0, 'the station line dim');
+  const sn = draw.render({ ...split, header: null, headerDivider: true });
+  assert.deepEqual([7, 25].map((y) => count(sn, draw.C.divider, 0, y, 127, y)), [128, 0]);
   // An empty half says so.
   const half = draw.render({ ...split, rows: [split.rows[0]] });
   assert.ok(count(half, '#6c6c6c', 66, 14, 127, 19) > 0, 'NO TRAINS');

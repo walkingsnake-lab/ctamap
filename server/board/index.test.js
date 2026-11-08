@@ -758,14 +758,9 @@ test('update: weather screen gets conditions always, radar frames only while rai
   assert.equal(b.wx, null); // weather row off...
   assert.deepEqual(b.radar.wx, screenWx); // ...but the weather screen still gets conditions
   await s.close();
-  // Key layout: `key` sent, no weather strip even with it on; the weather screen still gets conditions.
+  // Weather back on: the strip comes back; no `key` (the key layout is gone).
   s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w) });
-  s.store.update('home', { showWeather: true, transitLayout: 'key' });
-  b = (await s.req(FULL)).body;
-  assert.equal(b.key, 1);
-  assert.equal(b.wx, null);
-  assert.deepEqual(b.radar.wx, screenWx);
-  s.store.update('home', { transitLayout: 'header' });
+  s.store.update('home', { showWeather: true });
   b = (await s.req(FULL)).body;
   assert.equal(b.key, undefined);
   assert.equal(b.wx.temp, 63);

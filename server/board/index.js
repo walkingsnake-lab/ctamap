@@ -69,7 +69,7 @@ function send(res, status, body) {
 // (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 const SECTIONS = {
-  transit: ['header', 'key', 'hidden', 'view', 'halves', 'rows', 'wx'],
+  transit: ['header', 'hidden', 'view', 'halves', 'rows', 'wx'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
@@ -544,10 +544,8 @@ function createBoard({
     // weather to show.
     // Temperatures in the board's unit (wd).
     const wd = inUnit(w, board.tempUnit);
-    // The key layout has no weather strip: the station line takes rows 25-31.
-    const keyLayout = board.transitLayout === 'key';
-    const wx = board.showWeather && !keyLayout && wd ? toWx(wd) : null;
-    const cfg = { ...board, showWeather: !!wx, showKey: keyLayout, lines: st ? st.lines : null };
+    const wx = board.showWeather && wd ? toWx(wd) : null;
+    const cfg = { ...board, showWeather: !!wx, lines: st ? st.lines : null };
     let radarState = NO_RADAR;
     // A wide board (cols 128) gets the station's 128-wide frames (contract "Width").
     try { if (st) radarState = radar.want(st.mapid, st.lat, st.lon, { wide: board.cols === 128 }); }
@@ -637,9 +635,8 @@ function createBoard({
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
       header: bars.showHeader ? board.station.name : null,
+      // Divider lines under the top bar and over the bottom one, every view.
       headerDivider: board.headerDivider === true,
-      // Key layout: the key on top; `header` then goes on the bottom line.
-      ...(bars.showKey ? { key: 1 } : {}),
       tickerHeader: board.station.name,
       // Header clock (transit and ticker) and line-colored labels.
       hclock: board.headerClock !== false,

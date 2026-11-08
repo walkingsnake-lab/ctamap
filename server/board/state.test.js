@@ -62,15 +62,16 @@ test('Cycle, lines and the transit screen: validation', () => {
 
 test('settings validation: lists, choices, and ranges', () => {
   const store = createStore({ dir: tmpDir(), log: quiet });
-  const ok = { autoScreens: ['ticker', 'transit'], autoEvery: 120, wxVisit: 'always', alertJump: 'all', bbTeams: [], bbPre: 120, bbFinal: 0, bbPriority: 'favorite', lineNames: 'line', headerClock: false, timeSteps: true, transitLayout: 'key' };
+  const ok = { autoScreens: ['ticker', 'transit'], autoEvery: 120, wxVisit: 'always', alertJump: 'all', bbTeams: [], bbPre: 120, bbFinal: 0, bbPriority: 'favorite', lineNames: 'line', headerClock: false, timeSteps: true };
   const b = store.update('home', ok);
-  assert.equal(b.transitLayout, 'key');
   assert.deepEqual(b.autoScreens, ['transit', 'ticker']); // stored in a fixed order
   assert.deepEqual(b.bbTeams, []);
   for (const bad of [{ autoScreens: [] }, { autoScreens: ['weather'] }, { autoScreens: ['transit', 'transit'] }, { autoEvery: 45 }, { wxVisit: 'sometimes' },
-    { alertJump: 'watch' }, { bbTeams: ['mets'] }, { bbPre: 121 }, { bbFinal: -1 }, { bbPriority: 'first' }, { lineNames: 'red' }, { transitLayout: 'footer' }, { headerClock: 'no' }, { timeSteps: 1 }, { radarEvery: 0 }]) {
+    { alertJump: 'watch' }, { bbTeams: ['mets'] }, { bbPre: 121 }, { bbFinal: -1 }, { bbPriority: 'first' }, { lineNames: 'red' }, { headerClock: 'no' }, { timeSteps: 1 }, { radarEvery: 0 }]) {
     assert.throws(() => store.update('home', bad), /must/, JSON.stringify(bad));
   }
+  // Retired: the key layout and the old weather row's divider.
+  for (const bad of [{ transitLayout: 'header' }, { wxDivider: true }]) assert.throws(() => store.update('home', bad), /unknown field/);
 });
 
 test('a saved filter with the old 54th short name loads as 54/Crmk', () => {
@@ -160,10 +161,10 @@ test('retired animated-icon settings are dropped from a saved state', () => {
   createStore({ dir, log: quiet }).update('home', { screen: 'weather' });
   const file = path.join(dir, 'board-state.json');
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-  Object.assign(saved.boards.home, { iconsNow: 'animated', icons5day: 'static', iconsHourly: 'animated', iconsRadar: 'animated', wxRain: 'both', wxRainEvery: 30, wxRainLoops: 3 });
+  Object.assign(saved.boards.home, { iconsNow: 'animated', icons5day: 'static', iconsHourly: 'animated', iconsRadar: 'animated', wxRain: 'both', wxRainEvery: 30, wxRainLoops: 3, transitLayout: 'key', wxDivider: true });
   fs.writeFileSync(file, JSON.stringify(saved));
   const home = createStore({ dir, log: quiet }).get('home');
-  for (const key of ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar', 'wxRain', 'wxRainEvery', 'wxRainLoops']) assert.equal(Object.hasOwn(home, key), false);
+  for (const key of ['iconsNow', 'icons5day', 'iconsHourly', 'iconsRadar', 'wxRain', 'wxRainEvery', 'wxRainLoops', 'transitLayout', 'wxDivider']) assert.equal(Object.hasOwn(home, key), false);
 });
 
 test('writes are atomic: no temp file left behind', () => {

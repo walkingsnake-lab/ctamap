@@ -32,7 +32,7 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 - **No weather in the header** (station and clock only). The weather strip stays an option as at 64.
 
 ### Northbound | southbound split (decided Nov 5; built, the wide default)
-- Two halves, a direction label on row 0 of each (`NORTHBOUND`, `SOUTHBOUND`, or `WESTBOUND`, `EASTBOUND`), rows at 10 and 18 (2 rows) in each half, up to **3 rows a half** (8, 14, 20), station and clock on the bottom row in `#555555`. North or west on the left.
+- Two halves, a direction label on row 0 of each (`NORTHBOUND`, `SOUTHBOUND`, or `WESTBOUND`, `EASTBOUND`), rows at 10 and 18 (2 rows) in each half, up to **3 rows a half** (8, 14, 20), station and clock on the bottom row in `#555555`, the labels a step lighter (`#808080`). North or west on the left. No weather strip. The divider lines setting draws lines under the labels and over the station line, as the other views do under the header and over the weather strip (Nov 8).
 - A per-board layout choice (`wideLayout`: split, the default, or rows). Halves come from each train's direction code (`trDr` in Train Tracker) and which way that direction heads at the station.
 - **Only where it's true:** every line at the station runs along the same axis there (`station-dirs.json`, from the track geometry: within 35° of north-south or of east-west; Red and Purple count as north-south everywhere off the Loop) and none ends there. 59 stations split north-south, 51 east-west, 34 don't.
 - **Elsewhere** (the Loop, diagonal stretches like Blue's Milwaukee Avenue, mixed axes like Howard, terminals, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then the chronological list.
@@ -45,8 +45,8 @@ The chronological view is the weakest transit screen. For stations with 4–5 li
 
 **Fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built (Nov 5):** rows → one row per line → two columns → chronological. One row per line keeps 3 times in a half and up to 5 across a whole row (full names there).
 
-### Key layout (built; changed Nov 5)
-`trains to` flush left and `minutes` at the right on the top row, nothing between them: no station or clock anywhere. Rows sit as under a header.
+### Key layout (retired Nov 8)
+Built Nov 5 (`trains to` / `minutes` on the top row, no station or clock); cut with the 64 key layout to keep one bar layout.
 
 ### Alerts (first pass; built)
 The full destination, the red alert circle, then the alert's **short label in red** (`MAJOR DELAYS`), then the times. The label is the alert's CTA `Impact` (`MAJOR DELAYS`), sent per row as `aw`; it costs a row its fourth and fifth times if need be, and is left out when it doesn't fit.

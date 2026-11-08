@@ -26,7 +26,7 @@ test('row positions follow the spec', () => {
   assert.deepEqual(rowTops(3, true, false, true), [10, 18, 26]);
   assert.deepEqual(rowTops(5, false, false), [1, 7, 13, 19, 25]);
   assert.deepEqual(rowTops(2, true, true, true), [11, 19]);     // ends by row 25, above the weather strip
-  assert.deepEqual(rowTops(3, true, true, true), [9, 15, 21]);
+  assert.deepEqual(rowTops(3, true, true, true), [8, 14, 20]);  // between the lines on rows 7 and 25
   // Without the header's divider line the rows move up: the gap under the
   // header text (row 5) matches the gaps between rows.
   assert.deepEqual(rowTops(2, true, false, false), [10, 19]);   // 4 px under the text, 4 between
@@ -55,14 +55,6 @@ test('rows stay inside their area', () => {
     assert.ok(tops[0] >= (h ? 7 : 0), `${n}/${h}/${w} starts at ${tops[0]}`);
     assert.ok(tops[n - 1] + 4 <= (w ? 25 : 31), `${n}/${h}/${w} ends at ${tops[n - 1] + 4}`);
   }
-});
-
-test('key layout: rows between the key and the band, 1 px apart from three rows up', () => {
-  assert.deepEqual(rowTops(3, true, false, false, true), [7, 13, 19]);   // 1 px everywhere: key, rows, line (25), station
-  assert.deepEqual(rowTops(2, true, false, false, true), [9, 17]);
-  assert.deepEqual(rowTops(1, true, false, false, true), [13]);
-  assert.deepEqual(rowTops(4, false, false, false, true), [7, 13, 19, 25]); // band hidden: to the bottom edge
-  assert.deepEqual(rowTops(3, true, false, true, true), [7, 13, 19]);    // the header divider doesn't apply
 });
 
 test('clock is 12-hour Chicago time without AM/PM', () => {
@@ -180,23 +172,6 @@ test('weather strip: temperature left, condition right; a warning tag replaces t
   assert.ok(colors(warned, 0, 10).has(C.dimHead));  // the temperature stays
   assert.ok(colors(warned, 30, 63).has(C.warnTornado));
   assert.ok(!colors(warned, 30, 63).has(C.dimHead));
-});
-
-test('key layout: key on rows 1-5, station and clock unlit under a line on row 25, no header on top', () => {
-  const p = { ...payload('morse-2026-10-03-2316.json'), key: 1 };
-  const f = render(p);
-  const top = new Set(), band = new Set();
-  for (let y = 0; y < 6; y++) for (let x = 0; x < 64; x++) top.add(hex(f.get(x, y)));
-  for (let y = 27; y < 32; y++) for (let x = 0; x < 64; x++) band.add(hex(f.get(x, y)));
-  assert.deepEqual([...top].sort(), ['#000000', C.dimHead].sort());
-  assert.deepEqual([...band].sort(), ['#000000', C.head].sort()); // unlit background
-  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 25)), C.divider);
-  for (let x = 0; x < 64; x++) assert.equal(hex(f.get(x, 26)), '#000000');
-  assert.equal(hex(f.get(0, 9)), LINE.RD);         // two rows: 9 and 17
-  assert.equal(hex(f.get(0, 17)), LINE.RD);
-  // Station line hidden (header null): no line, the key stays.
-  const g = render({ ...p, header: null });
-  assert.equal(hex(g.get(10, 25)), '#000000');
 });
 
 test('knob chooser: wheel across the top, one pip per entry, the selection amber; commit drops the neighbors', () => {

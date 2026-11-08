@@ -105,11 +105,10 @@
   // Arrivals stay listed until 30 s past their time (contract countdown rules).
   const DROP_GRACE = 30;
 
-  // Max transit rows for the header/weather/key toggles (design spec §5).
-  // Each takes one row: the header (or, with the key, the station line at
-  // the bottom), the weather strip, the key.
-  function maxRows(hasHeader, hasWeather, hasKey = false) {
-    return 5 - (hasHeader ? 1 : 0) - (hasWeather ? 1 : 0) - (hasKey ? 1 : 0);
+  // Max transit rows for the header/weather toggles (design spec §5). Each
+  // takes one row.
+  function maxRows(hasHeader, hasWeather) {
+    return 5 - (hasHeader ? 1 : 0) - (hasWeather ? 1 : 0);
   }
 
   // Row tops for n transit rows. Without the header, rows are spread evenly
@@ -120,10 +119,10 @@
   // below are tuned around that line; without it the header text ends on
   // row 5, so the rows move up to keep the gap under the header even with
   // the gaps between rows (2 px for one or two rows without weather, else 1).
-  // key: the key layout (KEY_ROWS): the key on rows 1-5 and, with
-  // hasHeader, the station line: a divider on row 25, text on rows 27-31.
-  function rowTops(n, hasHeader, hasWeather, divider = false, key = false) {
-    if (key) return keyRowTops(n, hasHeader);
+  // With weather the divider also draws a line on row 25, over the strip:
+  // three rows between the two lines keep the no-divider tops (8, 14, 20).
+  function rowTops(n, hasHeader, hasWeather, divider = false) {
+    if (hasHeader && hasWeather && n === 3) return [8, 14, 20];
     // Two rows under the header: 4 px above, between, and below the rows
     // (from the text, or from the line), the rest of the space at the bottom.
     if (hasHeader && !hasWeather && n === 2) return divider ? [12, 21] : [10, 19];
@@ -131,19 +130,6 @@
     if (!hasHeader || divider || !tops.length) return tops;
     const shift = !hasWeather && n <= 2 ? 2 : 1;
     return tops.map((t) => t - shift);
-  }
-
-  // Key layout: rows between the key (ink rows 1-5) and the station line's
-  // divider (row 25) or the bottom edge, at the preferred pitch (1px between
-  // rows from three rows up), centered, the odd pixel going below.
-  function keyRowTops(n, band) {
-    if (n === 0) return [];
-    const areaTop = 6, areaBottom = band ? 24 : 31;
-    const areaH = areaBottom - areaTop + 1;
-    const preferred = { 2: 8, 3: 6, 4: 6 };
-    const pitch = n === 1 ? 0 : Math.min(preferred[n] || 6, Math.floor((areaH - 5) / (n - 1)));
-    const top = areaTop + Math.max(0, Math.floor((areaH - ((n - 1) * pitch + 5)) / 2));
-    return Array.from({ length: n }, (_, i) => top + i * pitch);
   }
 
   function rowTopsBase(n, hasHeader, hasWeather) {
@@ -359,7 +345,8 @@
       blinks: warn.kind === 'tor' && warn.lvl === 'warning',
     });
 
-    // Weather strip: one Tom Thumb line on rows 27-31 (no divider), in the
+    // Weather strip: one Tom Thumb line on rows 27-31 (under the divider on
+    // row 25 when headerDivider is on), in the
     // transit header's dark grey so the train rows lead: the temperature on
     // the left, the condition word on the right. A watch or warning replaces
     // the word with its tag (glyph + WATCH/WARNING, in its colors); the
@@ -413,20 +400,11 @@
       }
     }
 
-    // Key layout (transitLayout 'key'): a lowercase key over the columns on
-    // rows 1-5 ("trains to" from x0, over the color blocks; "min" flush
-    // right), and the station name and clock on rows 27-31, unlit, under a
-    // divider on row 25 (drawn when the header isn't hidden to fit the rows).
-    // The key row: `trains to` at x0, `min` right-aligned on rows 1-5; 128
-    // wide (wide-spec §3; decided Nov 5) `minutes`, with no station or clock.
-    function drawKey(f) {
-      f.text('small', 'trains to', 0, 6, C.dimHead);
-      rtext(f, 'small', f.w === WIDE ? 'minutes' : 'min', f.w - 1, 6, C.dimHead);
-    }
-    function drawBand(f, name, now, clock, color = C.head, divider = true) {
-      if (divider) f.fill(0, 25, f.w, 1, C.divider);
-      f.text('small', name, 0, 32, color);
-      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', f.w - 1), 32, color);
+    // The split view's station line: the station and clock on rows 27-31,
+    // in the dim header grey.
+    function drawBand(f, name, now, clock) {
+      f.text('small', name, 0, 32, C.dimHead);
+      if (clock) rollText(f, 'small', 'hdr.clock', clockText(now), rightAt('small', f.w - 1), 32, C.dimHead);
     }
 
     // One time cell, right-aligned at `right`, optionally mid-roll from
@@ -486,10 +464,7 @@
       if (p.view === 'chrono') return buildChronoView(p, now);
       if (colsOf(p) === WIDE && (p.view === 'split' || p.view === 'cols2' || p.view === 'byline')) return buildHalvesView(p, now);
       const rows = liveRows(p, now);
-      // The wide key layout: the key's row holds the station and clock, so
-      // rows sit as under a header.
-      const wideKey = colsOf(p) === WIDE && !!p.key;
-      const tops = wideKey ? rowTops(rows.length, true, !!p.wx, false, false) : rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
+      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider);
       const right = colsOf(p) - 1;
       return {
         now,
@@ -497,7 +472,6 @@
         w: colsOf(p),
         header: p.header,
         hdiv: !!p.headerDivider,
-        key: !!p.key,
         clock: p.hclock !== false,
         lnc: !!p.lnc,
         wx: p.wx,
@@ -529,9 +503,9 @@
       if (p.view === 'byline') {
         const on = rows.filter((r) => bylineY(r) >= 0);
         const n = on.reduce((m, r) => Math.max(m, bylineY(r) + 1), 0);
-        const tops = rowTops(n, !!p.header, !!p.wx, !!p.headerDivider, false);
+        const tops = rowTops(n, !!p.header, !!p.wx, !!p.headerDivider);
         return {
-          now, mode: 'cols2', w: WIDE, halves: null, header: p.header, hdiv: !!p.headerDivider, key: false, clock: p.hclock !== false,
+          now, mode: 'cols2', w: WIDE, halves: null, header: p.header, hdiv: !!p.headerDivider, clock: p.hclock !== false,
           lnc: !!p.lnc, wx: p.wx, warn: p.warn, stale: p.stale, tzo: p.tzo,
           rows: on.map((r) => {
             const full = r.h == null, h = r.h ? 1 : 0;
@@ -545,15 +519,14 @@
       }
       const per = [0, 1].map((h) => rows.filter((r) => (r.h ? 1 : 0) === h));
       const n = Math.max(per[0].length, per[1].length);
-      const tops = split ? SPLIT_TOPS[Math.min(n, 3)] || [] : rowTops(n, !!p.header, !!p.wx, !!p.headerDivider, false);
+      const tops = split ? SPLIT_TOPS[Math.min(n, 3)] || [] : rowTops(n, !!p.header, !!p.wx, !!p.headerDivider);
       return {
         now,
         mode: split ? 'split' : 'cols2',
         w: WIDE,
         halves: split ? p.halves || [] : null,
         header: p.header,
-        hdiv: !split && !!p.headerDivider,
-        key: false,
+        hdiv: !!p.headerDivider,
         clock: p.hclock !== false,
         lnc: !!p.lnc,
         wx: split ? null : p.wx,
@@ -575,8 +548,8 @@
     function buildChronoView(p, now) {
       // Sorted here too, by time (stable): the order must hold however the
       // payload arrives.
-      const rows = liveRows(p, now).sort((a, b) => a.t[0] - b.t[0]).slice(0, maxRows(!!p.header, !!p.wx, !!p.key));
-      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider, !!p.key);
+      const rows = liveRows(p, now).sort((a, b) => a.t[0] - b.t[0]).slice(0, maxRows(!!p.header, !!p.wx));
+      const tops = rowTops(rows.length, !!p.header, !!p.wx, !!p.headerDivider);
       const seenDest = new Set();
       const seenKey = new Set();
       const right = colsOf(p) - 1;
@@ -587,7 +560,6 @@
         pitch: tops.length > 1 ? tops[1] - tops[0] : 6,
         header: p.header,
         hdiv: !!p.headerDivider,
-        key: !!p.key,
         clock: p.hclock !== false,
         lnc: !!p.lnc,
         wx: p.wx,
@@ -694,17 +666,11 @@
       } else if (view.mode === 'split') {
         drawSplit(f, view);
       } else {
-        const wideKey = view.key && view.w === WIDE;
-        if (wideKey) {
-          drawKey(f);
-        } else if (view.key) {
-          drawKey(f);
-          if (view.header) drawBand(f, view.header, view.now, view.clock !== false);
-        } else if (view.header) {
-          drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false, C.dimHead);
-        }
-        const clipTop = wideKey ? 7 : view.key ? 6 : view.header ? 7 : 0;
-        const clipBottom = !wideKey && view.key && view.header ? 24 : view.wx ? 25 : 31;
+        if (view.header) drawHeader(f, view.header, view.now, view.hdiv, view.clock !== false, C.dimHead);
+        if (view.wx && view.hdiv) f.fill(0, 25, f.w, 1, C.divider);
+        // Rows stay off the bars and their lines (mid-slide too).
+        const clipTop = view.header ? (view.hdiv ? 8 : 7) : 0;
+        const clipBottom = view.wx ? (view.hdiv ? 24 : 25) : 31;
         f.withClip(0, clipTop, f.w - 1, clipBottom, () => {
           for (const row of view.rows) drawViewRow(f, row, view.lnc);
         });
@@ -712,16 +678,22 @@
       if (view.wx) drawWeather(f, view.wx, view.warn, blink, view.tzo);
     }
 
-    // Wide board, northbound | southbound: each half's label on rows 1-5,
-    // its rows, and (header on) the station and clock on rows 27-31 in the
-    // dim header grey. A half with no trains says so.
+    // Wide board, northbound | southbound: each half's label on rows 1-5 in
+    // the header grey (a step lighter than the station line), its rows, and
+    // (header on) the station and clock on rows 27-31 in the dim header
+    // grey. headerDivider: lines on row 7 and, with the station line, row 25,
+    // as the other views. A half with no trains says so.
     function drawSplit(f, view) {
       HALVES.forEach(([x0, x1], h) => {
         f.text('small', (view.halves || [])[h] || '', x0, 6, C.head);
         if (!view.rows.some((r) => (r.h ? 1 : 0) === h)) f.text('small', 'NO TRAINS', x0 + Math.floor((x1 - x0 + 1 - measure('small', 'NO TRAINS')) / 2), 19, C.noTrains);
       });
-      if (view.header) drawBand(f, view.header, view.now, view.clock !== false, C.dimHead, false);
-      f.withClip(0, 7, f.w - 1, view.header ? 25 : 31, () => {
+      if (view.hdiv) f.fill(0, 7, f.w, 1, C.divider);
+      if (view.header) {
+        if (view.hdiv) f.fill(0, 25, f.w, 1, C.divider);
+        drawBand(f, view.header, view.now, view.clock !== false);
+      }
+      f.withClip(0, view.hdiv ? 8 : 7, f.w - 1, view.header ? (view.hdiv ? 24 : 25) : 31, () => {
         for (const row of view.rows) drawViewRow(f, row, view.lnc);
       });
     }
@@ -876,7 +848,7 @@
             matchCells(st, r.cells, t, isNewRow);
           }
 
-          const view = { now, mode: target.mode, w: target.w, halves: target.halves, header: target.header, hdiv: target.hdiv, key: target.key, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, tzo: target.tzo, rows: [] };
+          const view = { now, mode: target.mode, w: target.w, halves: target.halves, header: target.header, hdiv: target.hdiv, clock: target.clock, lnc: target.lnc, wx: target.wx, warn: target.warn, stale: target.stale, tzo: target.tzo, rows: [] };
           if (!target.rows.length && ![...rows.values()].some((st) => st.leaving)) { rows.clear(); return view; }
           for (const st of rows.values()) {
             st.shownTop = st.moveStart != null ? tween(st.fromTop, st.top, st.moveStart, MOVE_MS, t) : st.top;

@@ -27,18 +27,16 @@ const OUT = path.join(__dirname, '..', 'server', 'board', 'control-tiles.json');
 // Transit tiles: Morse's recorded arrivals, no alerts (the scenarios mostly
 // carry alerts, for testing).
 const WX = { icon: 'pcloudy_day', temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51 };
-function transit(cfg) {
+function transit() {
   const json = JSON.parse(fs.readFileSync(path.join(B, 'fixtures', 'tt-arrivals', 'morse-2026-10-03-2316.json'), 'utf8'));
   const now = parseCtaTime(json.ctatt.tmst);
-  const r = format(normalize(json, { log: { warn() {}, error() {} } }), { rows: [], showHeader: true, showWeather: !cfg.key, showKey: !!cfg.key }, { now, alerts: new Set() });
-  return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, header: 'MORSE', tickerHeader: 'MORSE', ...(r.bars.showKey ? { key: 1 } : {}),
+  const r = format(normalize(json, { log: { warn() {}, error() {} } }), { rows: [], showHeader: true, showWeather: true }, { now, alerts: new Set() });
+  return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, header: 'MORSE', tickerHeader: 'MORSE',
     view: r.view, rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? WX : null, warn: null, hclock: true };
 }
 const OWN = {
-  rows: () => draw.render(transit({}), { screen: 'transit' }),
-  ticker: () => draw.render(transit({}), { screen: 'ticker' }),
-  'layout-header': () => draw.render(transit({}), { screen: 'transit' }),
-  'layout-key': () => draw.render(transit({ key: true }), { screen: 'transit' }),
+  rows: () => draw.render(transit(), { screen: 'transit' }),
+  ticker: () => draw.render(transit(), { screen: 'ticker' }),
   // Wide only: the middle 64 columns of 9:42 PM.
   'face-words': () => {
     const now = Date.parse('2026-11-02T03:42:00Z') / 1000;
@@ -75,8 +73,6 @@ const WIDE_OWN = {
 const WIDE_PICKS = {
   'w:rows': ['wide transit dest belmont-2026-10-03-2316.json rows header=true wx=true', 0],
   'w:ticker': ['wide ticker morse-2026-10-03-2316.json', 0],
-  'w:layout-header': ['wide transit dest belmont-2026-10-03-2316.json rows header=true wx=true', 0],
-  'w:layout-key': ['wide transit rows key layout', 0],
   'w:wx-now': ['wide weather conditions, sunrise', 0],
   'w:wx-5day': ['wide weather week', 0],
   'w:wx-hourly': ['wide weather 24 hours', 0],
