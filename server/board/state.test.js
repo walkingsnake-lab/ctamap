@@ -390,6 +390,10 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   assert.equal(validatePatch({ analogAccent: 'mint' }).analogAccent, 'mint');
   assert.throws(() => validatePatch({ analogAccent: 'teal' }), ValidationError);
   assert.equal(Object.keys(ANALOG_ACCENTS).length, 8);
+  assert.equal(store.get('home').digitColor, 'white');
+  assert.equal(validatePatch({ digitColor: 'cyan' }).digitColor, 'cyan');
+  assert.equal(validatePatch({ digitColor: 'white' }).digitColor, 'white');
+  assert.throws(() => validatePatch({ digitColor: '#ff0000' }), ValidationError);
   store.update('home', { clockFace: 'seventies' });
   assert.equal(store.get('home').clockFace, 'seventies');
   store.update('home', { clockFace: 'skyline' });
@@ -502,4 +506,15 @@ test('announce: boards saved before it get no message and no presets', () => {
   const again = createStore({ dir, log: quiet });
   assert.equal(again.get('home').msg, null);
   assert.deepEqual(again.get('home').msgPresets, []);
+});
+
+test('the control page\'s color swatches match DIGIT_COLORS (which includes every analog accent)', () => {
+  const { DIGIT_COLORS, ANALOG_ACCENTS } = require('./state');
+  const html = fs.readFileSync(path.join(__dirname, 'control.html'), 'utf8');
+  const block = html.slice(html.indexOf('const SWATCH = {'), html.indexOf('};', html.indexOf('const SWATCH = {')));
+  const page = Object.fromEntries([...block.matchAll(/(\w+): \['\w+', '(#[0-9a-f]{6})'\]/g)].map((m) => [m[1], m[2]]));
+  assert.deepEqual(page, DIGIT_COLORS);
+  for (const [k, v] of Object.entries(ANALOG_ACCENTS)) assert.equal(DIGIT_COLORS[k], v);
+  assert.match(html, /id="analogAccent"[^>]*data-colors="amber coral pink violet blue cyan mint lime"/);
+  assert.match(html, /id="digitColor"[^>]*data-colors="white amber coral pink violet blue cyan mint lime"/);
 });

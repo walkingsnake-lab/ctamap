@@ -2059,7 +2059,7 @@
         }
         return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }
-      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
+      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, cdig: pv.cdig || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
       return { p, screen: 'cycle' };
     }
@@ -2387,6 +2387,9 @@
     // measure() - 1 wide.
     const BD = { top: 7, base: 24, color: '#e6e6e6' };
     const DD = { dayBase: 6, timeBase: 22, dateBase: 31, color: '#e6e6e6', label: '#8f8f8f', ampm: '#555555' };
+    // The time's color on both faces: p.cdig (the board's digitColor), else
+    // BD.color.
+    const digitColor = (p) => p.cdig || BD.color;
     // Big digits: the time alone, its ink centered, rows 7-23. The colon
     // blinks (off for the second half of each second on the board's clock),
     // except while the time rolls, or always lit with p.steady.
@@ -2401,7 +2404,7 @@
       const f = newFrame(W);
       const text = clockText(now), xOf = (str) => fdivI(W + 1 - measure(font, str), 2);
       const roll = takeRoll('dig.clock', text);
-      rollTextWith(f, font, roll, text, xOf, g.base, BD.color);
+      rollTextWith(f, font, roll, text, xOf, g.base, digitColor(p));
       if (!p.steady && !roll && ((ms % 1000) + 1000) % 1000 >= 500) {
         const i = text.indexOf(':');
         f.fill(xOf(text) + measure(font, text.slice(0, i)) + 1, g.top, fonts[font][58][1], g.base - g.top, '#000000');
@@ -2425,7 +2428,7 @@
       f.fill(DDW.divX, 4, 1, 24, DDW.divider);
       const text = clockText(now), ampm = t.h < 12 ? 'AM' : 'PM', aw = measure('small', ampm);
       const xOf = (str) => DDW.x0 + fdivI(WIDE - DDW.x0 - (measure('d23', str) + 3 + aw), 2);
-      rollText(f, 'd23', 'dd.clock', text, xOf, DDW.timeBase, DD.color);
+      rollText(f, 'd23', 'dd.clock', text, xOf, DDW.timeBase, digitColor(p));
       f.text('small', ampm, xOf(text) + measure('d23', text) + 3, DDW.timeBase, DD.ampm);
       return f;
     }
@@ -2439,7 +2442,7 @@
       f.text('small', day, fdivI(64 - measure('small', day), 2), DD.dayBase, DD.label);
       const text = clockText(now), ampm = t.h < 12 ? 'AM' : 'PM', aw = measure('small', ampm);
       const xOf = (str) => fdivI(63 - aw - measure('d13', str), 2);
-      rollText(f, 'd13', 'dd.clock', text, xOf, DD.timeBase, DD.color);
+      rollText(f, 'd13', 'dd.clock', text, xOf, DD.timeBase, digitColor(p));
       f.text('small', ampm, xOf(text) + measure('d13', text) + 1, DD.timeBase, DD.ampm);
       const date = `${MONTHS[t.m - 1]} ${t.d}`;
       f.text('5x7', date, fdivI(64 - measure('5x7', date), 2), DD.dateBase, DD.label);

@@ -2716,7 +2716,7 @@ PeekView peek_view(const Value &p, int k, int vi) {
     out.v = overlay(p);
     member(out.v, "cface") = str_value(v.empty() ? "skyline" : v);
     // Each face's object read through from pv (the skyline's is large).
-    for (const char *key : {"skyline", "cwx", "dn", "cacc"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
+    for (const char *key : {"skyline", "cwx", "dn", "cacc", "cdig"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
     for (const char *key : {"ginv", "steady"}) {
       Value g;
       g.type = json::BOOL;
@@ -3960,6 +3960,9 @@ static const int DD_DAY_BASE = 6, DD_TIME_BASE = 22, DD_DATE_BASE = 31;
 // Wide board: the d23 digits, rows 4-26, centered on 128 columns.
 static const int BDW_TOP = 4, BDW_BASE = 27;
 
+// The time's color on both faces: p.cdig (the board's digitColor), else #e6e6e6.
+static RGB digit_color(const Value &p) { return p["cdig"].truthy() ? hexs(p["cdig"].str_or("")) : hexc(0xe6e6e6); }
+
 static void render_digits(const Value &p, Frame &f, std::optional<double> now_o, std::optional<double> ms_o) {
   double now = now_o ? *now_o : p["now"].num(0);
   long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
@@ -3970,7 +3973,7 @@ static void render_digits(const Value &p, Frame &f, std::optional<double> now_o,
   ustr text = clock_text(now, p["tzo"].num(0));
   // Ink centered: x = floor((W + 1 - measure) / 2) (draw.js xOf).
   std::optional<Roll> roll = take_roll("dig.clock", text);
-  roll_text_at(f, font, text, SPAN, W, base, hexc(0xe6e6e6), roll);
+  roll_text_at(f, font, text, SPAN, W, base, digit_color(p), roll);
   // The colon blinks: off for the second half of each second, never mid-roll,
   // never with steady.
   if (!p["steady"].truthy() && !roll && fmod_floor(ms, 1000) >= 500) {
@@ -3996,7 +3999,7 @@ static void render_daydate_wide(const Value &p, Frame &f, double now) {
   int aw = measure(FONT_SMALL, ampm);
   // x = 48 + floor((80 - (measure + 3 + aw)) / 2): CENTER in columns 48 to 124 - aw.
   int end = WIDE - 3 - aw;
-  roll_named(f, FONT_D23, "dd.clock", text, CENTER, DDW_X0, DDW_TIME_BASE, hexc(0xe6e6e6), end);
+  roll_named(f, FONT_D23, "dd.clock", text, CENTER, DDW_X0, DDW_TIME_BASE, digit_color(p), end);
   f.text(FONT_SMALL, ampm, align_x(FONT_D23, text, CENTER, DDW_X0, end) + measure(FONT_D23, text) + 3, DDW_TIME_BASE, C::dimHead);
 }
 
@@ -4011,7 +4014,7 @@ static void render_daydate(const Value &p, Frame &f, std::optional<double> now_o
   int aw = measure(FONT_SMALL, ampm);
   // The time and AM/PM centered as a pair: x = floor((63 - aw - measure) / 2)
   // (draw.js xOf), which is CENTER from column -(aw + 1).
-  roll_named(f, FONT_D13, "dd.clock", text, CENTER, -(aw + 1), DD_TIME_BASE, hexc(0xe6e6e6));
+  roll_named(f, FONT_D13, "dd.clock", text, CENTER, -(aw + 1), DD_TIME_BASE, digit_color(p));
   f.text(FONT_SMALL, ampm, align_x(FONT_D13, text, CENTER, -(aw + 1)) + measure(FONT_D13, text) + 1, DD_TIME_BASE, C::dimHead);
   ustr date = U(std::string(MONTH_NAMES[t.m - 1]) + " " + std::to_string(t.d));
   f.text(FONT_5X7, date, (int)fdiv(64 - measure(FONT_5X7, date), 2), DD_DATE_BASE, C::wxText);
