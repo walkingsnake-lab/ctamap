@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { measure } = require('./fonts');
-const { HEADER_NAME_PX, SHORT_NAMES, dropOrdinals, shortName } = require('./station-names');
+const { HEADER_NAME_PX, WIDE_NAME_PX, SHORT_NAMES, WIDE_NAMES, dropOrdinals, shortName, wideName } = require('./station-names');
 
 test('header budget matches the widest clock plus a 3px gap', () => {
   assert.equal(HEADER_NAME_PX, 62 - measure('small', '12:59') - 3);
@@ -38,6 +38,19 @@ test('curated entries are only for names the ordinal rule cannot fix', () => {
   }
 });
 
+test('two panels: the full name, ordinals kept, or a curated one', () => {
+  assert.equal(WIDE_NAME_PX, 126 - measure('small', '12:59') - 3);
+  assert.equal(wideName('Jefferson Park', measure), 'JEFFERSON PARK');
+  assert.equal(wideName('95th/Dan Ryan', measure), '95TH/DAN RYAN');
+  assert.equal(wideName('Illinois Medical District', measure), 'ILLINOIS MEDICAL DISTRICT');
+  assert.equal(wideName('Harold Washington Library-State/Van Buren', measure), 'HAROLD WASHINGTON LIBRARY');
+  for (const [name, wide] of Object.entries(WIDE_NAMES)) {
+    assert.ok(measure('small', wide) <= WIDE_NAME_PX, `${name} -> ${wide}`);
+    assert.equal(wide, wide.toUpperCase());
+    assert.ok(measure('small', name.toUpperCase()) > WIDE_NAME_PX, `${name} doesn't need a curated entry`);
+  }
+});
+
 const stationsFile = path.join(__dirname, 'stations.json');
 test('every station in stations.json has a fitting short name', { skip: !fs.existsSync(stationsFile) && 'stations.json not built yet' }, () => {
   const stations = JSON.parse(fs.readFileSync(stationsFile, 'utf8'));
@@ -45,6 +58,7 @@ test('every station in stations.json has a fitting short name', { skip: !fs.exis
   for (const s of stations) {
     assert.ok(measure('small', s.short) <= HEADER_NAME_PX, `${s.name}: ${s.short}`);
     assert.ok(s.lines.length > 0, `${s.name} has no lines`);
+    assert.equal(s.wide, wideName(s.name, measure), `${s.name}: wide ${s.wide} (rebuild stations.json)`);
   }
   assert.equal(stations.find((s) => s.mapid === '40100').short, 'MORSE');
 });

@@ -328,7 +328,7 @@
       <input id="name" class="field caps" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="done">
       <span class="s" id="nameFit" style="margin:0;white-space:nowrap"></span></div>
   </div>
-  <p class="ft" data-note="station" role="status">Picking a station also sets the weather and radar location.</p>
+  <p class="ft" data-note="station" role="status">Picking a station also sets the weather and radar location.<span id="wideNote"></span></p>
 </section>
 
 <!-- ===== Lines & destinations ===== -->
@@ -1151,7 +1151,9 @@
     checked('tShows', board.transitScreen || 'transit');
     const st = stations.find((s) => s.mapid === board.station.mapid);
     $('stationV').replaceChildren(st ? st.name : board.station.mapid, ...(st ? st.lines.map(badge) : []));
-    $('nameV').textContent = board.station.name;
+    // Two panels show the full name while the name is the station's own.
+    const nst = stations.find((s) => s.mapid === board.station.mapid);
+    $('nameV').textContent = board.cols === 128 && nst && nst.wide && board.station.name === nst.short ? nst.wide : board.station.name;
     const lines = st ? st.lines : [];
     const off = (board.hideLines || []).filter((l) => lines.includes(l));
     $('linesV').textContent = off.length ? `${off.map((l) => LINE_NAME[l]).join(', ')} off` : board.rows.length ? `${board.rows.length} picked` : 'All';
@@ -1197,6 +1199,9 @@
   // ---- Station ----
   function renderStation() {
     if (document.activeElement !== $('name')) $('name').value = board.station.name;
+    const st = stations.find((s) => s.mapid === board.station.mapid);
+    $('wideNote').textContent = board.cols === 128 && st && st.wide && st.wide !== st.short
+      ? (board.station.name === st.short ? ` Two panels show the full name, ${st.wide}.` : ` Two panels show your name; set it back to ${st.short} for the full name, ${st.wide}.`) : '';
     renderNameFit();
     renderStationList();
   }

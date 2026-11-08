@@ -6,10 +6,16 @@
 //   3. a curated entry in SHORT_NAMES.
 // scripts/build-stations.js fails on any station that still overflows. The
 // phone page can still override the header name per board.
+//
+// Two panels (128 wide) have room for the full name: wideName() gives the
+// full uppercase name (ordinals kept) if it fits WIDE_NAME_PX, else a curated
+// entry in WIDE_NAMES. Stored as `wide` in stations.json.
 
 // Header: name at x=1, clock right-aligned at column 62. Widest clock
 // ("12:59") is 17px, plus a 3px gap -> 42px for the name.
 const HEADER_NAME_PX = 42;
+// Two panels: the clock right-aligned at column 126, the same 3px gap.
+const WIDE_NAME_PX = 126 - 17 - 3;
 
 const SHORT_NAMES = {
   'North/Clybourn': 'NORTH/CLYB',
@@ -38,6 +44,11 @@ const SHORT_NAMES = {
   'Quincy/Wells': 'QUINCY',
 };
 
+// Full names too long for two panels.
+const WIDE_NAMES = {
+  'Harold Washington Library-State/Van Buren': 'HAROLD WASHINGTON LIBRARY',
+};
+
 const dropOrdinals = (name) => name.replace(/\b(\d+)(st|nd|rd|th)\b/gi, '$1');
 
 // Returns the header name for a station, or null if nothing fits.
@@ -52,4 +63,13 @@ function shortName(name, measure) {
   return curated && fits(curated) ? curated : null;
 }
 
-module.exports = { HEADER_NAME_PX, SHORT_NAMES, dropOrdinals, shortName };
+// Two panels' header name for a station, or null if nothing fits.
+function wideName(name, measure) {
+  const fits = (s) => measure('small', s) <= WIDE_NAME_PX;
+  const full = name.toUpperCase();
+  if (fits(full)) return full;
+  const curated = WIDE_NAMES[name];
+  return curated && fits(curated) ? curated : null;
+}
+
+module.exports = { HEADER_NAME_PX, WIDE_NAME_PX, SHORT_NAMES, WIDE_NAMES, dropOrdinals, shortName, wideName };
