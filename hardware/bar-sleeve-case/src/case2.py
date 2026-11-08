@@ -29,7 +29,40 @@ import panel
 K = (LT - LB) / H                         # front slope: y_front(z) = K * (H - z)
 CH_F = 0.45                               # front rim chamfers (leaves ~1.6 mm of rim on the bed)
 RIM_IN = 1.2                              # how far the rim reaches in from the bore (visible frame)
+# Diffuser seat. GROOVE = 0: the v5 rim, 45 deg both faces, the diffuser flange (bore - 0.3, bevel 0.6) meeting the back
+# slope with 0.3 mm of overlap: a wedge the 217 mm shell's walls hold, a 350 mm bar's don't (the diffuser pushes
+# through under a thumb). GROOVE > 0 (the two-panel bars): behind the rim the top and bottom bore walls open out by
+# GROOVE for GROOVE_L along y, the diffuser's flange grows to sit in it (diffuser.FL_GROOVE) and the seat is a steeper
+# slope (SEAT_TAN = radial per y: tan 30 deg, a 30 deg overhang back-down) from the rim's edge out to the groove.
+# Overlap 1.9 mm with less wedge. The diffuser slides into its shell half from the seam end before the halves
+# are joined; it can't go in from the back (the flange is bigger than the bore).
+GROOVE = 0.0
+GROOVE_L = 2.0                            # the groove's length along y past the seat (flange 1.2 + room)
+SEAT_DEG = 45.0                           # the seat's overhang angle from vertical, back-down: the v5 rim (outward
+                                          # force = forward force); 50 cuts it to 0.84 and still prints clean; closer to
+                                          # flat prints worse. The groove runs all round (ends too), so the seat is one
+                                          # slope and the flange meets it at Y_FACE on every side.
+SEAT_TAN = 1.0 / math.tan(math.radians(SEAT_DEG))   # y per radial along the seat
+FRONT_DEG = 45.0                          # the rim's front (visible) face, from the y axis; it faces the front, so any angle
+                                          # prints. set_groove() steepens it to 60 so the peak's move forward keeps the rim
+                                          # behind the bottom lip (its front at y = K * H = 9)
 RIM_PEAK = Y_FACE - (RIM_IN - 0.9)        # 11.7: peak; the diffuser's front edge (bore - 0.9) meets the back slope at y = 12
+
+
+def set_seat(deg=SEAT_DEG, rim_in=RIM_IN, bev=0.6, groove=0.0):
+    """the diffuser seat for the two-panel bars (p3x2.py): seat overhang deg (45 = v5), rim reach rim_in (1.5: overlap
+    1.0 with the diffuser's bevel at 0.2, vs the v5's 0.3), the diffuser's bevel bev (diffuser.BEV, set there too) and
+    an optional groove. The peak moves so the flange's front edge (bore + groove - 0.3 - bev) still meets the seat at
+    Y_FACE, and the front face steepens to 60 deg with a groove so the rim stays behind the bottom lip (y = 9)."""
+    global GROOVE, RIM_PEAK, FRONT_DEG, SEAT_DEG, SEAT_TAN, RIM_IN
+    SEAT_DEG, RIM_IN, GROOVE = deg, rim_in, groove
+    SEAT_TAN = 1.0 / math.tan(math.radians(deg))
+    RIM_PEAK = Y_FACE - (RIM_IN + groove - 0.3 - bev) * SEAT_TAN
+    FRONT_DEG = 60.0 if groove else 45.0
+
+
+def set_groove(g, bev=0.2):
+    set_seat(SEAT_DEG, RIM_IN, bev, g)
 BACKDOWN = False                         # True: shell prints back-down (layers square to the case); screen rim is a glued-in frame
 GRILLES = False
 DETENT = True                             # v4: top snap (dimples in the tongue grooves; bumps on plate3's tongues)
@@ -199,10 +232,17 @@ def shell2():
         cuts = [prism_y(bore_cs, -50, D + 1)]
     else:                                          # built-in rim: two 45-deg slopes, prints either way up without supports
         lo = rr_cs(BORE_HX - RIM_IN, BORE_HZ - RIM_IN, BORE_R - RIM_IN)
-        y_a, y_b = RIM_PEAK - RIM_IN, RIM_PEAK + RIM_IN
-        if SEAMLESS_RIM:
+        y_a, y_b = RIM_PEAK - RIM_IN / math.tan(math.radians(FRONT_DEG)), RIM_PEAK + RIM_IN
+        if GROOVE:
+            wide = rr_cs(BORE_HX + GROOVE, BORE_HZ + GROOVE, BORE_R + GROOVE)   # the groove, all round
+            y_s = RIM_PEAK + (RIM_IN + GROOVE) * SEAT_TAN         # the seat slope's back end, at the groove's outer wall
+            cuts = [Manifold.batch_hull([prism_y(bore_cs, -50, y_a), prism_y(lo, RIM_PEAK - 0.001, RIM_PEAK)]),   # front slope
+                    Manifold.batch_hull([prism_y(lo, RIM_PEAK, RIM_PEAK + 0.001), prism_y(wide, y_s, y_s + GROOVE_L)]),   # seat + groove
+                    prism_y(bore_cs, y_s + GROOVE_L - 0.001, D + 1)]
+        elif SEAMLESS_RIM:
             # two convex hulls meeting on one shared face at the peak: the bore and its slope in one piece each, so no
             # thin overlaps at y_a / y_b (they left sliver triangles, non-manifold once the STL rounds to float32)
+            y_b = RIM_PEAK + RIM_IN * SEAT_TAN                       # = RIM_PEAK + RIM_IN at the v5's 45 deg
             cuts = [Manifold.batch_hull([prism_y(bore_cs, -50, y_a), prism_y(lo, RIM_PEAK - 0.001, RIM_PEAK)]),   # front slope
                     Manifold.batch_hull([prism_y(lo, RIM_PEAK, RIM_PEAK + 0.001), prism_y(bore_cs, y_b, D + 1)])]  # back slope = diffuser seat
         else:

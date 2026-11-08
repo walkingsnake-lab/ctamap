@@ -139,6 +139,12 @@ ENC_HALF = 11.8 / 2 * math.sqrt(2)              # encoder body (11.8 square, tur
 ENC_SLOT = ENC_HALF + 1.0                       # top-wall slot half width
 ENC_X = 0.0                                     # encoder (knob) x in the tray's frame: the slot, the rails and the
                                                 # crush ribs kept off the slot follow it (bar128.py puts it near tray A's end)
+CR_TOP_SKIP = ()                                # more x ranges the top wall's crush ribs keep off (p3x2.py: the sensor hole
+                                                # and the sled screw's counterbore, which its knob position puts under a rib)
+CR_TOP_EXTRA = ()                               # extra top-wall rib positions (p3x2.py: one between the sensor and the knob)
+ENC_RECESS = 0.0                                # recess in the top wall's inner face over the encoder board (p3x2.py: the
+                                                # 5 mm shell wall puts the board, hung from the case top, 0.05 into the
+                                                # tray's wall; 1.2 restores room above it and the rails' lap)
 
 # Screws into the tray (Nov 3): no nuts. The bottom M3 x 10s (from below) and the cleat's M3 x 10s (from the wall side)
 # thread straight into pilots in solid PETG bosses. FASTEN 'tap' (default). 'insert': holes for M3 heat-set inserts
@@ -377,6 +383,9 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
         # top wall: slot open to the front edge past the encoder body; light hole and sensor pilots
         ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
         cuts.append(box(ENC_X - ENC_SLOT, ENC_X + ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
+        if ENC_RECESS:                                                   # room over the board, out to the rails' outer faces
+            hw_, (by0, by1), _ = enc_board()
+            cuts.append(box(ENC_X - hw_ - RAIL_CL - RAIL_W, ENC_X + hw_ + RAIL_CL + RAIL_W, by0 - 1.0, by1 + 1.0, _zw() - 0.01, _zw() + ENC_RECESS))
         cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
         cuts += sensor_cuts()
     if s3:
@@ -471,7 +480,7 @@ def enc_rails():
     zw, y_in = _zw(), Y1 - LV_DEPTH
     out = []
     for xa, xb in rail_xs():
-        r = box(min(xa, xb), max(xa, xb), by0 + 1.0, y_in + 0.5, bz1 - RAIL_LAP, zw + 0.01)
+        r = box(min(xa, xb), max(xa, xb), by0 + 1.0, y_in + 0.5, bz1 - RAIL_LAP, zw + ENC_RECESS + 0.01)   # into the wall, or the recess roof
         sgn = 1 if xb > xa else -1                    # from the face toward the board (xa) into the rail
         y0 = by0 + 1.0
         pts = [(xa - sgn * 0.2, y0 - 0.1), (xa + sgn * 1.0, y0 - 0.1), (xa - sgn * 0.2, y0 + 1.2)]
@@ -627,11 +636,13 @@ def crush_ribs():
         ramp = Manifold.batch_hull([prism_y(tri(0.0), y_a, y_a + 0.01), prism_y(tri(CR_H), y_a + CR_RAMP, y_a + CR_RAMP + 0.01)])
         return prism_y(tri(CR_H), y_a + CR_RAMP, y_b) + ramp
     xs = [-0.75 * (ox - BORE_R), -0.3 * (ox - BORE_R), 0.3 * (ox - BORE_R), 0.75 * (ox - BORE_R)]
-    top_block = [(ENC_X - ENC_SLOT - 2, ENC_X + ENC_SLOT + 2)]
+    top_block = [(ENC_X - ENC_SLOT - 2, ENC_X + ENC_SLOT + 2)] + list(CR_TOP_SKIP)
     for x in xs:
         ribs.append(rib(x, None, 'z', -1))
         if not any(a < x < b for a, b in top_block):
             ribs.append(rib(x, None, 'z', +1))
+    for x in CR_TOP_EXTRA:
+        ribs.append(rib(x, None, 'z', +1))
     zs = [ZC - 0.5 * (oz - BORE_R), ZC + 0.5 * (oz - BORE_R)]
     for z in zs:
         ribs.append(rib(z, None, 'x', -1))

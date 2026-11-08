@@ -13,10 +13,14 @@ PW, PH = panel.P['w'], panel.P['h']
 SKIN = float(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[1].endswith('.stl') else 0.2   # one-piece face skin
 GRID_H = 1.5                        # grid behind the skin
 SK_T, SK_D, CLR, BUMP = 1.2, 3.0, 0.15, 0.2
+TOP_BUMPS = False                   # bumps on the top skirt too (p3x2.py: the bars, with BUMP 0.3, for a 79.9 mm panel)
+BUMP_XS = None                      # x of the top/bottom bumps; None = +/- a quarter of the width (two on the single
+                                    # diffuser's 192; p3x2.py sets two per half: +/-40 about each half's centre)
 FT = 1.2                            # flange thickness
 PITCH, RIB = panel.P['pitch'], panel.P['rib']
 OUT = CLR + SK_T                    # skirt outline past the panel edge (1.35)
 BORE_HX, BORE_HZ, BORE_R = panel.BORE_HX, panel.BORE_HZ, panel.BORE_R   # case opening (bore) half sizes and corner radius
+FL_GROOVE = 0.0                     # case2.GROOVE: the flange grows this much top and bottom to sit in the shell's groove
 FL_HX, FL_HZ, FL_R = BORE_HX - 0.3, BORE_HZ - 0.3, BORE_R - 0.3      # flange back edge: 0.3 mm clear of the bore
 BEV = 0.6                                        # flange front edge 0.6 mm smaller: clears the ledge chamfer, seats on its flat
 
@@ -36,10 +40,11 @@ def diffuser(grid=True, skin=None):
     o = OUT
     zg0, zg1 = SKIN - 0.01, SKIN + GRID_H
     zt = zg1 + SK_D
-    front = rrect(FL_HX - BEV, FL_HZ - BEV, FL_R - BEV, 0, 0.05)
-    back = rrect(FL_HX, FL_HZ, FL_R, FT - 0.05, FT)
+    fx, fz, fr = FL_HX + FL_GROOVE, FL_HZ + FL_GROOVE, FL_R + FL_GROOVE   # the flange reaches into the shell's groove
+    front = rrect(fx - BEV, fz - BEV, fr - BEV, 0, 0.05)
+    back = rrect(fx, fz, fr, FT - 0.05, FT)
     plate = Manifold.batch_hull([front, back])
-    face = rrect(FL_HX - BEV, FL_HZ - BEV, FL_R - BEV, 0, SKIN)
+    face = rrect(fx - BEV, fz - BEV, fr - BEV, 0, SKIN)
     flange = plate - box(-hx - o + 0.01, hx + o - 0.01, -hy - o + 0.01, hy + o - 0.01, -1, FT + 1)
     frame = box(-hx - o, hx + o, -hy - o, hy + o, zg0, zg1) - box(-hx + 0.3, hx - 0.3, -hy + 0.3, hy - 0.3, -1, 10)
     skirt = box(-hx - o, hx + o, -hy - o, hy + o, zg1 - 0.01, zt) - box(-hx - CLR, hx + CLR, -hy - CLR, hy + CLR, -1, 20)
@@ -60,19 +65,24 @@ def diffuser(grid=True, skin=None):
     for yc in (-hy / 2, hy / 2):
         for sx in (-1, 1):
             b = cyl.rotate([90, 0, 0]).translate([sx * (hx + CLR), yc, zb])
-            keep = box(hx + CLR - BUMP, hx + CLR, yc - 3, yc + 3, 0, 20) if sx > 0 else box(-hx - CLR, -hx - CLR + BUMP, yc - 3, yc + 3, 0, 20)
+            # the kept slice of the bump runs 0.3 into the skirt wall and stops under the tip chamfer, so it merges into the
+            # wall instead of meeting the chamfer along an edge (which rounded to non-manifold edges in the STL)
+            keep = box(hx + CLR - BUMP, hx + CLR + 0.3, yc - 3, yc + 3, 0, zt - c - 0.05) if sx > 0 else box(-hx - CLR - 0.3, -hx - CLR + BUMP, yc - 3, yc + 3, 0, zt - c - 0.05)
             d = d + (b ^ keep)
-    for xc in (-hx / 2, hx / 2):
+    for xc in (BUMP_XS if BUMP_XS is not None else (-hx / 2, hx / 2)):
         b = cyl.rotate([0, 90, 0]).translate([xc, -hy - CLR, zb])
-        d = d + (b ^ box(xc - 3, xc + 3, -hy - CLR, -hy - CLR + BUMP, 0, 20))
+        d = d + (b ^ box(xc - 3, xc + 3, -hy - CLR - 0.3, -hy - CLR + BUMP, 0, zt - c - 0.05))   # bumps stop under the tip chamfer
+        if TOP_BUMPS:
+            b = cyl.rotate([0, 90, 0]).translate([xc, hy + CLR, zb])
+            d = d + (b ^ box(xc - 3, xc + 3, hy + CLR - BUMP, hy + CLR + 0.3, 0, zt - c - 0.05))
     if grid:
         ribs = []
         for i in range(1, panel.COLS):
             x = -hx + i * PITCH
-            ribs.append(box(x - RIB / 2, x + RIB / 2, -hy + 0.29, hy - 0.29, zg0, zg1))
+            ribs.append(box(x - RIB / 2, x + RIB / 2, -hy + 0.3, hy - 0.3, zg0, zg1))      # ends exactly on the frame: 0.29 left 0.01 slivers
         for j in range(1, panel.ROWS):
             y = -hy + j * PITCH
-            ribs.append(box(-hx + 0.29, hx - 0.29, y - RIB / 2, y + RIB / 2, zg0, zg1))
+            ribs.append(box(-hx + 0.3, hx - 0.3, y - RIB / 2, y + RIB / 2, zg0, zg1))
         d = d + Manifold.batch_boolean(ribs, manifold3d.OpType.Add)
     return d
 
