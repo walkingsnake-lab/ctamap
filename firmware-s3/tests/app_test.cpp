@@ -381,6 +381,9 @@ struct SimButtons : app::Buttons {
 struct SimKnob : app::Knob {
   int pending = 0;
   bool down = false;
+  std::vector<draw::RGB> lights;  // every light() call, in order
+  draw::RGB lit() const { return lights.empty() ? draw::RGB{0, 0, 0} : lights.back(); }
+  void light(uint8_t r, uint8_t g, uint8_t b) override { lights.push_back(draw::RGB{r, g, b}); }
   bool pressed() override { return down; }
   int clicks() override {
     int c = pending;
@@ -1835,6 +1838,28 @@ static void test_peek_turn_shows_the_view_press_steps_the_variant_rest_commits()
   CHECK(S(r->board) == "weather", "%s", S(r->board).c_str());
 }
 
+// The knob's own light follows the hovered category while the chooser is
+// open (its peek color at a quarter), holds through the rest and the commit,
+// and goes out as the chooser closes; it's written only on a change.
+static void test_knob_light_follows_the_chooser_and_goes_out_after() {
+  std::unique_ptr<Rig> r(peek_rig());
+  CHECK(r->knob.lights.empty(), "dark with the chooser closed: %zu writes", r->knob.lights.size());
+  r->knob.pending = 1;
+  r->run_for(400);
+  CHECK(r->board->peek.open && r->board->peek.k == 1, "weather hovered");
+  CHECK(r->knob.lit() == draw::scale_color(SUN, 0.25), "the weather color, dimmed: %02x%02x%02x", r->knob.lit().r, r->knob.lit().g, r->knob.lit().b);
+  size_t writes = r->knob.lights.size();
+  CHECK(writes == 1, "one write for one color: %zu", writes);
+  r->knob.pending = 1;
+  r->run_for(400);
+  CHECK(r->board->peek.k == 2 && r->knob.lit() == draw::scale_color(CLOCK_C, 0.25), "clock hovered: lit %02x%02x%02x", r->knob.lit().r, r->knob.lit().g, r->knob.lit().b);
+  r->run_for(500);  // resting, not yet committed
+  CHECK(r->board->peek.open && !r->board->peek.closing && r->knob.lit() == draw::scale_color(CLOCK_C, 0.25), "still lit through the rest");
+  r->run_for(1300 + LATENCY);  // commit, bar down, answer in
+  CHECK(!r->board->peek.open && r->knob.lit() == draw::hexc(0), "out once the chooser closed");
+  CHECK(r->knob.lights.size() == 3, "lit, changed, out: %zu writes", r->knob.lights.size());
+}
+
 static void test_peek_back_to_the_start_cancels() {
   std::unique_ptr<Rig> r(peek_rig());
   r->knob.pending = 1;
@@ -2290,6 +2315,7 @@ int main() {
       T_(test_knob_select_failure_keeps_the_screen),
       T_(test_knob_waits_for_the_ring),
       T_(test_peek_turn_shows_the_view_press_steps_the_variant_rest_commits),
+      T_(test_knob_light_follows_the_chooser_and_goes_out_after),
       T_(test_peek_back_to_the_start_cancels),
       T_(test_peek_hold_and_turn_steps_variants_both_ways),
       T_(test_peek_press_on_a_live_screen_steps_its_variant),

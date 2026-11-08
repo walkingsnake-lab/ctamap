@@ -159,7 +159,8 @@ STEMMA QT / Qwiic cable, no soldering). It's the peek chooser (design spec
 Announce, Cycle) and the panel shows that screen itself; press to step to its
 next variant (rows or ticker, the weather views, the clock faces), or hold it
 down and turn to step either way. Rest about a second and the bar drops away
-on the chosen screen. The serial log says `[knob] encoder found` or `[knob] no
+on the chosen screen. The knob's own light shows the hovered category's color
+while you choose and goes out once the choice lands. The serial log says `[knob] encoder found` or `[knob] no
 encoder on the STEMMA QT port` at startup, and `[board] knob: <category>
 <variant>` after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
 `secrets.h`. Without a knob the board runs as before.
