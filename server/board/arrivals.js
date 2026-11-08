@@ -24,6 +24,10 @@ const TICKER_COUNT = 6;
 // Wide board (draw.js drawTickerItemWide): the full name from x7, 3 px
 // clear of the widest time ("99" and the min glyph, right-aligned at 116).
 const WIDE_TICKER_DEST_PX = 116 - (measure('5x7', '99') + 2 + measure('5x7', String.fromCodePoint(G.MIN))) - 3 - 7 + 1;
+// Wide ticker, a line with a major alert: the circle follows the name, as
+// on the CTA's platform signs, WIDE_TICKER_ALERT_GAP px after it; the name
+// gives up that room.
+const WIDE_TICKER_ALERT_GAP = 3;
 
 // Drop an arrival once it's this far past its time (contract countdown rules).
 const DROP_GRACE = 30;
@@ -279,7 +283,9 @@ function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map()
 function tickerOf(shown, alerts, wide = false) {
   return shown.slice(0, TICKER_COUNT).map((a) => ({
     ln: a.ln,
-    d: wide ? fit('5x7', ligatures(a.full || a.dest), WIDE_TICKER_DEST_PX) : fit('5x7', ligatures(a.dest), TICKER_DEST_PX),
+    d: wide
+      ? fit('5x7', ligatures(a.full || a.dest), WIDE_TICKER_DEST_PX - (alerts.has(a.ln) ? WIDE_TICKER_ALERT_GAP + ALERT_ICON_PX : 0))
+      : fit('5x7', ligatures(a.dest), TICKER_DEST_PX),
     t: a.t,
     s: a.s,
     a: alerts.has(a.ln) ? 1 : 0,
@@ -483,4 +489,4 @@ function wideBuilders(ordered, shown, cfg, now, alerts, alertWords) {
   return [split, dest, byline, cols2, chrono];
 }
 
-module.exports = { normalize, latchDue, splitTrue, splitAxis, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD };
+module.exports = { normalize, latchDue, splitTrue, splitAxis, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, WIDE_TICKER_ALERT_GAP, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD };
