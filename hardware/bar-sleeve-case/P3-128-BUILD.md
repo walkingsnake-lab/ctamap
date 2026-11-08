@@ -79,6 +79,15 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
   Judged good enough for the time saved, so the pair's diffusers have a 0.2 face for the 0.4 nozzle (`DIFF_FACE`, default
   0.2). For crisp squares instead: `DIFF_FACE=0.14 WIDE=p25x2 python3 p3x2.py <outdir>` and print on the 0.2 nozzle at
   0.14 mm layers (~9 h).
+- **Diffuser seat (Nov 7):** the v5 rim is a 45° V whose back slope holds the diffuser's flange by 0.3 mm (flange 0.3
+  clear of the bore, bevel 0.6). That's a wedge: pushing the diffuser forward pushes the walls outward, and the bar's
+  175 mm wall spans (end wall to the seam joint) bow 0.3 mm under a thumb, so the diffuser pushed through the rim on the
+  first P2.5 shells. Now, for the bars only (`case2.set_seat`; the single shell is unchanged): rim **1.5** in from the
+  bore (was 1.2 visible), seat **55°** (outward force 0.70× the push; a 55° overhang back-down, which walnut prints
+  clean at 0.16), the diffuser's bevel **0.2**: overlap 1.0 mm. Rough pop-through, wall as a beam: ~3 N before, ~14 N
+  now, ~23 N with solid walls, so **print the shell halves with 6 walls** (solid 5 mm, ~40 g more walnut). A groove
+  behind the rim (overlap 1.9, ~22/36 N, the diffuser slid in from the seam end before the halves are joined) is in the
+  code (`GROOVE`) but not used: it changes the assembly order.
 - **PETG shrink in the diffuser halves (Nov 7):** the first P2.5 pair's black grid (generic black PETG) printed 0.45%
   small (88.3 mm on 88.7 tall). Each half is located in x by its outer skirt only, so against its panel's outer edge
   the seam edge sat ~0.8 mm short (a dark line at the seam, B's first LED column half uncovered, B's rib ends showing as
@@ -148,7 +157,7 @@ goes back to its default) and reprint what changed.
 | Knob, Boot key | the shared `stl/bar-knob.stl`, `stl/bar-boot-key.stl` | as the README | as the README |
 | Coupons | `coupons/` | as above | as exported |
 
-Shell print settings: as the single v5 shell (Bambu PLA Wood, dried, 4 walls, elephant foot 0.15, glue stick, bed 55-60 °C,
+Shell print settings: as the single v5 shell (Bambu PLA Wood, dried, **6 walls** (solid), elephant foot 0.15, glue stick, bed 55-60 °C,
 door closed) but **fixed 0.16 mm layers, no variable layer height** (it banded the P2.5 halves differently), seam
 **Aligned** and scarf off: the sharpest inside corners on every layer at the joint are the pocket mouths, which are
 chamfered for a blob; set the seam to the back corner away from the joint if Preview shows it elsewhere.

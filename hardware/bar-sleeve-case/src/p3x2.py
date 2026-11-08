@@ -77,6 +77,13 @@ else:
     V.SENSOR_X = SENSOR_X
 DR.configure_shell()
 V.BACKDOWN = True
+# diffuser seat for the bar (Nov 7): the v5 rim's 45 deg seat held the diffuser by 0.3 mm, a wedge the 350 mm walls
+# couldn't hold (it pushed through under a thumb). Rim 1.5 (was 1.2 visible), seat 55 deg (wedge force 0.70x), the
+# diffuser's bevel 0.2: overlap 1.0. Rough pop-through ~14 N as printed, ~23 N with solid walls (v5: ~3 N).
+SEAT_DEG, RIM_IN, DIFF_BEV = 55.0, 1.5, 0.2
+V.set_seat(SEAT_DEG, RIM_IN, DIFF_BEV)
+import diffuser as _DF
+_DF.BEV = DIFF_BEV
 V.KNOB_X = KNOB_X
 if not TRAYS:
     for _m in (C, V, P3):

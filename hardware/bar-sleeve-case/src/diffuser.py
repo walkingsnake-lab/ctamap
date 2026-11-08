@@ -17,6 +17,7 @@ FT = 1.2                            # flange thickness
 PITCH, RIB = panel.P['pitch'], panel.P['rib']
 OUT = CLR + SK_T                    # skirt outline past the panel edge (1.35)
 BORE_HX, BORE_HZ, BORE_R = panel.BORE_HX, panel.BORE_HZ, panel.BORE_R   # case opening (bore) half sizes and corner radius
+FL_GROOVE = 0.0                     # case2.GROOVE: the flange grows this much top and bottom to sit in the shell's groove
 FL_HX, FL_HZ, FL_R = BORE_HX - 0.3, BORE_HZ - 0.3, BORE_R - 0.3      # flange back edge: 0.3 mm clear of the bore
 BEV = 0.6                                        # flange front edge 0.6 mm smaller: clears the ledge chamfer, seats on its flat
 
@@ -36,10 +37,11 @@ def diffuser(grid=True, skin=None):
     o = OUT
     zg0, zg1 = SKIN - 0.01, SKIN + GRID_H
     zt = zg1 + SK_D
-    front = rrect(FL_HX - BEV, FL_HZ - BEV, FL_R - BEV, 0, 0.05)
-    back = rrect(FL_HX, FL_HZ, FL_R, FT - 0.05, FT)
+    fx, fz, fr = FL_HX + FL_GROOVE, FL_HZ + FL_GROOVE, FL_R + FL_GROOVE   # the flange reaches into the shell's groove
+    front = rrect(fx - BEV, fz - BEV, fr - BEV, 0, 0.05)
+    back = rrect(fx, fz, fr, FT - 0.05, FT)
     plate = Manifold.batch_hull([front, back])
-    face = rrect(FL_HX - BEV, FL_HZ - BEV, FL_R - BEV, 0, SKIN)
+    face = rrect(fx - BEV, fz - BEV, fr - BEV, 0, SKIN)
     flange = plate - box(-hx - o + 0.01, hx + o - 0.01, -hy - o + 0.01, hy + o - 0.01, -1, FT + 1)
     frame = box(-hx - o, hx + o, -hy - o, hy + o, zg0, zg1) - box(-hx + 0.3, hx - 0.3, -hy + 0.3, hy - 0.3, -1, 10)
     skirt = box(-hx - o, hx + o, -hy - o, hy + o, zg1 - 0.01, zt) - box(-hx - CLR, hx + CLR, -hy - CLR, hy + CLR, -1, 20)

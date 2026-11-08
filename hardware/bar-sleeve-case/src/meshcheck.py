@@ -92,7 +92,7 @@ def overhangs(t, max_angle=50.0, bridge_ok=6.0, min_area=2.0):
     is at most bridge_ok. Returns [(kind, area, zmin, span, centre)] worth a look."""
     n = t.face_normals
     down = -n[:, 2]                                  # 1 = facing straight down, 0 = vertical
-    steep = down > math.cos(math.radians(90 - max_angle))
+    steep = down > math.sin(math.radians(max_angle)) + 1e-3
     cz = t.triangles_center
     steep &= cz[:, 2] > 0.3                          # not the first layer on the bed
     idx = np.where(steep)[0]
@@ -109,7 +109,7 @@ def overhangs(t, max_angle=50.0, bridge_ok=6.0, min_area=2.0):
         span = min(hi[0] - lo[0], hi[1] - lo[1])
         if flat and span <= bridge_ok:
             continue
-        kind = f'bridge {span:.1f} wide' if flat else f'overhang {math.degrees(math.acos(float(np.clip(1 - (-patch.face_normals[:, 2]).max(), -1, 1)))):.0f} deg past vertical'
+        kind = f'bridge {span:.1f} wide' if flat else f'overhang {math.degrees(math.asin(float(np.clip((-patch.face_normals[:, 2]).max(), -1, 1)))):.0f} deg from vertical'
         out.append((kind, a, lo[2], span, ((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2)))
     return sorted(out, key=lambda r: -r[1])
 
