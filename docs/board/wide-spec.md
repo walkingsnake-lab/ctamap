@@ -27,7 +27,7 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 ## 3. Transit
 
 ### Destination rows (decided; built)
-- Same anatomy and row geometry as 64 (§5): header on rows 0–6 (station `#808080` left, clock right), rows at 8, 14, 20, 26 with four rows, 1, 7, 13, 19, 25 with five and no header.
+- Same anatomy and row geometry as 64 (§5): header on rows 0–6 (station `#808080` left, clock right; the station's full name, `stations.json` `wide`, up to 106px, Nov 8), rows at 8, 14, 20, 26 with four rows, 1, 7, 13, 19, 25 with five and no header.
 - **Full CTA names** (`95TH/DAN RYAN`, `FOREST PARK`), **up to 5 times** per row, right-aligned as a group as now. A time is dropped when it would come within 3 px of the name.
 - **No weather in the header** (station and clock only). The weather strip stays an option as at 64.
 
