@@ -29,7 +29,7 @@ def dif_case(m):
 tr = json.load(open(f'{F}/trays.json'))
 cx = case['panel_cx']
 P = {n: load(n) for n in ('shell-A', 'shell-B', 'tray-A', 'tray-B', 'env-s3', 'env-sensor', 'env-sled', 'env-encoder',
-                          'splice-top', 'splice-bot', 'tenon')}
+                          'splice-top', 'splice-bot', 'plate-top', 'plate-bot')}
 for s in 'AB':
     d = load(f'diffuser-{s}-white') + load(f'diffuser-{s}-black')
     P[f'diff-{s}'] = dif_case(d.scale([1 - B.DIFF_SHRINK, 1 - B.DIFF_SHRINK, 1.0]))   # as printed and shrunk
@@ -56,8 +56,9 @@ pairs = [('shell-A', 'tray-A'), ('shell-B', 'tray-B'), ('shell-A', 'tray-B'), ('
          ('env-sensor', 'tray-B'), ('env-sled', 'tray-B'), ('env-sensor', 'shell-B'), ('env-encoder', 'tray-B'),
          ('env-encoder', 'panel-B'), ('env-encoder', 'shell-B'), ('env-encoder', 'env-sensor'),
          ('env-encoder', 'env-s3'), ('env-sensor', 'env-s3'), ('env-sled', 'env-s3'),
-         ('tenon', 'tray-A'), ('tenon', 'tray-B'), ('tenon', 'shell-A'), ('tenon', 'shell-B')]
-print('overlaps (mm3; crush ribs into the shell, post feet 0.3 into the panel and the tenon ribs into the skin are intended):')
+         ('plate-top', 'tray-A'), ('plate-top', 'tray-B'), ('plate-bot', 'tray-A'), ('plate-bot', 'tray-B'),
+         ('plate-top', 'shell-A'), ('plate-top', 'shell-B'), ('plate-bot', 'shell-A'), ('plate-bot', 'shell-B'), ('plate-top', 'diff-A'), ('plate-top', 'diff-B')]
+print('overlaps (mm3; crush ribs into the shell and into the joint plates, and post feet 0.3 into the panel are intended; plates x shells must be 0):')
 res = {}
 for a, b in pairs:
     v = (P[a] ^ P[b]).volume()
