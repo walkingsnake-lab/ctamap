@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD } = require('./arrivals');
+const { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD } = require('./arrivals');
 const G = require('./glyphs');
 const { parseCtaTime } = require('./time');
 const { measure } = require('./fonts');
@@ -512,4 +512,31 @@ test('wide: alerted rows get the alert label in every layout', () => {
   assert.ok(br.every((x) => x.a === 1 && typeof x.al === 'string'));
   const d = run('belmont-2026-10-03-2316.json', wide('41320', { wideLayout: 'rows' }), { alerts: new Set(['RD']) });
   assert.ok(d.rows.filter((x) => x.ln === 'RD').every((x) => x.a === 1 && x.al === x.lbl));
+});
+
+test('wide layouts: denser at once, back to a sparser one only after it has fit for WIDE_VIEW_HOLD s', () => {
+  const now = 1_800_000_000;
+  const arr = (dests) => dests.map(([ln, d], i) => ({ ln, dest: d, full: d, known: true, dir: 1 + (i % 2) * 4, t: now + 3000 + i * 60, s: 0, rn: String(i) }));
+  const six = arr([['RD', 'Howard'], ['RD', '95th'], ['BR', 'Kimball'], ['BR', 'Loop'], ['PR', 'Linden'], ['OR', 'Midway']]);
+  const three = six.slice(0, 3);
+  const cfg = wide('40380', { showWeather: true });
+  let r = format(six, cfg, { now });
+  assert.equal(r.view, 'byline');
+  // Down to three destinations: rows would fit, but byline holds.
+  let prev = r.viewState;
+  r = format(three, cfg, { now: now + 20, prevView: prev });
+  assert.equal(r.view, 'byline', 'held');
+  assert.equal(r.viewState.fitSince, now + 20);
+  prev = r.viewState;
+  r = format(three, cfg, { now: now + 20 + WIDE_VIEW_HOLD - 1, prevView: prev });
+  assert.equal(r.view, 'byline');
+  r = format(three, cfg, { now: now + 20 + WIDE_VIEW_HOLD, prevView: r.viewState });
+  assert.equal(r.view, 'dest', 'fit long enough');
+  assert.equal(r.viewState.fitSince, null);
+  // Denser right away; a held view that no longer applies (byline needs two
+  // destinations a line at most) gives way at once.
+  const tri = arr([['RD', 'Howard'], ['RD', '95th'], ['RD', 'Roosevelt']]);
+  r = format(tri, cfg, { now, prevView: { view: 'byline', fitSince: null } });
+  assert.equal(r.view, 'dest');
+  assert.equal(format(six, cfg, { now, prevView: { view: 'dest', fitSince: null } }).view, 'byline');
 });

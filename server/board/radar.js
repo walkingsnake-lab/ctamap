@@ -262,6 +262,7 @@ function createRadar({
   lag = 120,               // s before a frame is expected in the archive
   retry = 120,             // s before retrying a missing frame
   idle = 120,              // s without a board request before polling stops
+  forget = 3600,           // s without one before a location's frames are dropped (memory)
   tick = 20000,            // ms between passes
   frameTimeoutMs = FRAME_TIMEOUT_MS,
   log = console,
@@ -329,6 +330,12 @@ function createRadar({
     const run = (async () => {
       try {
         const t = now();
+        // Locations no board has asked for in a while (a station previewed
+        // once in the simulator, a board moved) go, frames and all; so do
+        // retry marks for slots that left the loop.
+        for (const [key, l] of locs) if (t - l.wantedAt > forget) locs.delete(key);
+        const inLoop = new Set(slots());
+        for (const stamp of missing.keys()) if (!inLoop.has(stamp)) missing.delete(stamp);
         const active = [...locs.entries()].filter(([, l]) => t - l.wantedAt <= idle);
         if (!active.length) return;
         const want = slots();

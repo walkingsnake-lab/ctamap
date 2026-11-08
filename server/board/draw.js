@@ -417,16 +417,11 @@
     // rows 1-5 ("trains to" from x0, over the color blocks; "min" flush
     // right), and the station name and clock on rows 27-31, unlit, under a
     // divider on row 25 (drawn when the header isn't hidden to fit the rows).
+    // The key row: `trains to` at x0, `min` right-aligned on rows 1-5; 128
+    // wide (wide-spec §3; decided Nov 5) `minutes`, with no station or clock.
     function drawKey(f) {
       f.text('small', 'trains to', 0, 6, C.dimHead);
-      rtext(f, 'small', 'min', f.w - 1, 6, C.dimHead);
-    }
-    // Wide key layout (wide-spec §3; decided Nov 5): `trains to` at x0 and
-    // `minutes` right-aligned to x127 (#555555) on rows 1-5; no station or
-    // clock.
-    function drawKeyWide(f) {
-      f.text('small', 'trains to', 0, 6, C.dimHead);
-      rtext(f, 'small', 'minutes', WIDE - 1, 6, C.dimHead);
+      rtext(f, 'small', f.w === WIDE ? 'minutes' : 'min', f.w - 1, 6, C.dimHead);
     }
     function drawBand(f, name, now, clock, color = C.head, divider = true) {
       if (divider) f.fill(0, 25, f.w, 1, C.divider);
@@ -523,22 +518,26 @@
     // halves share row tops, set by the fuller one.
     const HALVES = [[0, 61], [66, 127]];
     const SPLIT_TOPS = { 1: [14], 2: [10, 18], 3: [8, 14, 20] };
+    // byline rows: at most 5 lines; a row off them (a bad `y`) is left out.
+    const BYLINE_ROWS = 5;
+    const bylineY = (r) => { const y = r.y || 0; return Number.isInteger(y) && y >= 0 && y < BYLINE_ROWS ? y : -1; };
     // byline (one row per line): rows sit on their line's row (`y`), in a
     // half (`h`) or, without `h`, across the whole width; drawn as cols2.
     function buildHalvesView(p, now) {
       const split = p.view === 'split';
       const rows = liveRows(p, now);
       if (p.view === 'byline') {
-        const n = rows.reduce((m, r) => Math.max(m, (r.y || 0) + 1), 0);
+        const on = rows.filter((r) => bylineY(r) >= 0);
+        const n = on.reduce((m, r) => Math.max(m, bylineY(r) + 1), 0);
         const tops = rowTops(n, !!p.header, !!p.wx, !!p.headerDivider, false);
         return {
           now, mode: 'cols2', w: WIDE, halves: null, header: p.header, hdiv: !!p.headerDivider, key: false, clock: p.hclock !== false,
           lnc: !!p.lnc, wx: p.wx, warn: p.warn, stale: p.stale, tzo: p.tzo,
-          rows: rows.map((r) => {
+          rows: on.map((r) => {
             const full = r.h == null, h = r.h ? 1 : 0;
             const [x0, right] = full ? [0, WIDE - 1] : HALVES[h];
             return {
-              key: `${full ? 'f' : h}:${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, aw: r.aw, h: full ? undefined : h, x0, right, top: tops[r.y || 0], alpha: 1,
+              key: `${full ? 'f' : h}:${r.ln}:${r.lbl}`, ln: r.ln, lbl: r.lbl, a: r.a, al: r.al, aw: r.aw, h: full ? undefined : h, x0, right, top: tops[bylineY(r)], alpha: 1,
               cells: layoutCells(r, now, p.ts === true, x0, right),
             };
           }),
@@ -697,7 +696,7 @@
       } else {
         const wideKey = view.key && view.w === WIDE;
         if (wideKey) {
-          drawKeyWide(f);
+          drawKey(f);
         } else if (view.key) {
           drawKey(f);
           if (view.header) drawBand(f, view.header, view.now, view.clock !== false);
@@ -1596,6 +1595,14 @@
       return { i: pool[pos], pos, of: pool.length };
     }
 
+    // Pregame's bottom line: TODAY at x0, the first pitch right-aligned.
+    function drawFirstPitch(f, g) {
+      f.text('small', 'TODAY', 0, BOTTOM, C.grey);
+      const ap = ampmText(g.start);
+      rtext(f, 'small', ap, f.w - 1, BOTTOM, C.grey);
+      rtext(f, 'small', clockText(g.start), f.w - 1 - measure('small', ap) - 3, BOTTOM, C.label);
+    }
+
     // A score that just changed shows amber for SCORE_HOLD_S, then fades back
     // to the live white over SCORE_FADE_S. `side.at` is when the server saw
     // the change (epoch s); without it the score is plain white.
@@ -1809,10 +1816,7 @@
           if (!bands) drawLogoScore(f, g[k].ab || '', top, lgInk(g[k], dim), null, -1); // 1px left of the score's center
           ctext(f, 'small', record(g[k]), PANEL_X, top + 8, C.grey);
         }
-        f.text('small', 'TODAY', 0, BOTTOM, C.grey);
-        const ap = ampmText(g.start);
-        rtext(f, 'small', ap, 63, BOTTOM, C.grey);
-        rtext(f, 'small', clockText(g.start), 63 - measure('small', ap) - 3, BOTTOM, C.label);
+        drawFirstPitch(f, g);
         return f;
       }
 
@@ -1857,10 +1861,7 @@
       if (g.st === 'pre') {
         // As at 64: records after the longer name, first pitch on the bottom line.
         for (const [k, top] of sides) f.text('small', record(g[k]), nameEnd + 2, top + 6, C.grey);
-        f.text('small', 'TODAY', 0, BOTTOM, C.grey);
-        const ap = ampmText(g.start);
-        rtext(f, 'small', ap, f.w - 1, BOTTOM, C.grey);
-        rtext(f, 'small', clockText(g.start), f.w - 1 - measure('small', ap) - 3, BOTTOM, C.label);
+        drawFirstPitch(f, g);
         return f;
       }
 
@@ -1907,7 +1908,7 @@
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const f = newFrame(colsOf(p) === WIDE ? WIDE : 64);
-      const games = (p.mlb && p.mlb.games) || [];
+      const games = p.mlb && Array.isArray(p.mlb.games) ? p.mlb.games : [];
       if (!games.length) { drawNoGames(f, now); return f; }
       const g = games[o.game != null ? o.game % games.length : pickGame(games, now, timing(p).game, !!(p.mlb && p.mlb.all)).i];
       if (f.w === WIDE) return renderBaseballWide(f, g, now, o);
@@ -1928,10 +1929,7 @@
         // Records 3px after the longer name; first pitch in the bottom line.
         f.text('small', record(g.away), nameEnd + 2, ROW_TOPS[0] + 6, C.grey);
         f.text('small', record(g.home), nameEnd + 2, ROW_TOPS[1] + 6, C.grey);
-        f.text('small', 'TODAY', 0, BOTTOM, C.grey);
-        const ap = ampmText(g.start);
-        rtext(f, 'small', ap, 63, BOTTOM, C.grey);
-        rtext(f, 'small', clockText(g.start), 63 - measure('small', ap) - 3, BOTTOM, C.label);
+        drawFirstPitch(f, g);
         return f;
       }
 
@@ -1958,7 +1956,7 @@
     // while live the inning, count, and outs. `key` (game and state) changes
     // when a different game or state is up; don't roll across those.
     function baseballTexts(p, now) {
-      const games = (p.mlb && p.mlb.games) || [];
+      const games = p.mlb && Array.isArray(p.mlb.games) ? p.mlb.games : [];
       if (!games.length) return null;
       const g = games[pickGame(games, now, timing(p).game, !!(p.mlb && p.mlb.all)).i];
       const texts = { away: String(g.away.r), home: String(g.home.r) };
@@ -2098,10 +2096,13 @@
         const xs = [];
         let x = PEEK_WIDE.x0;
         for (const w of words) { xs.push(x); x += measure('small', w) + 1 + PEEK_WIDE.gap; }
-        // Shifted by whole words, so the first one shown is whole.
-        const end = xs[vi] + measure('small', words[vi]) - 1;
+        // Shifted by whole words, so the first one shown is whole. A variant
+        // past the list (a payload changed under the chooser): no shift, none lit.
         let shift = 0;
-        for (let j = 0; end - shift > PEEK_WIDE.right && j < vi; j++) shift = xs[j + 1] - PEEK_WIDE.x0;
+        if (vi >= 0 && vi < xs.length) {
+          const end = xs[vi] + measure('small', words[vi]) - 1;
+          for (let j = 0; end - shift > PEEK_WIDE.right && j < vi; j++) shift = xs[j + 1] - PEEK_WIDE.x0;
+        }
         f.withClip(PEEK_WIDE.x0, 0, PEEK_WIDE.right, 31, () => {
           words.forEach((w, i) => f.text('small', w, xs[i] - shift, sh(29), i === vi ? C.white : PEEK_WIDE.off));
         });

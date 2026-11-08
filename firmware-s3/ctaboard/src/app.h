@@ -191,6 +191,14 @@ class Led {
 };
 
 const long long VERSION_EVERY = 10000;  // settings version check (spec: ~10 s)
+// A radar frame's size with pk=4: 2048 bytes for a 128 x 32 crop (ids
+// <mapid>w-<stamp>, or the simulator's test-<kind>-<mapid>w-<i>: a digit
+// right before "w-", so test-snow-... isn't one), else 1024.
+inline size_t radar_bytes(const std::string &id) {
+  for (size_t i = id.find("w-"); i != std::string::npos; i = id.find("w-", i + 1))
+    if (i > 0 && id[i - 1] >= '0' && id[i - 1] <= '9') return 2048;
+  return 1024;
+}
 const long long UPDATE_EVERY = 30000;   // combined update (spec: ~30 s)
 const long long LIVE_EVERY = 10000;     // combined update while a live game is on screen
 const long long RADAR_EVERY = 3000;     // one missing radar frame per run
@@ -212,6 +220,9 @@ struct Stats {
 
 class Board {
  public:
+  ~Board();
+  Board(const Board &) = delete;
+  Board &operator=(const Board &) = delete;
   Board(Net *net, Display *display, Clock *clock, Networks networks, Buttons *buttons = nullptr,
         Watchdog *watchdog = nullptr, std::function<void(const std::string &)> log = nullptr,
         std::string started = "", std::string crash = "", Led *led = nullptr, Knob *knob = nullptr);
@@ -317,10 +328,11 @@ class Board {
   static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3, SHOWN_PEEK = -4;
   static constexpr double SCREEN_SLIDE_QUICK_MS = 250;  // a slide that interrupts a running one
   enum Trans { NO_TRANS, SLIDE, FADE };
-  // last_w_ / slide_w_: how wide those pixels are (a 64-wide status screen
-  // shown on a 128 board is widened before a transition starts from it).
-  uint8_t last_px_[draw::Frame::MAX_W * draw::Frame::H * 3] = {};
-  uint8_t slide_px_[draw::Frame::MAX_W * draw::Frame::H * 3] = {};
+  // last_w_ / slide_w_: how wide those pixels are (draw::slide_frames and
+  // fade_frames fit them to the new frame). Frame-sized: from
+  // draw::big_bytes (PSRAM on the board).
+  uint8_t *last_px_ = draw::big_bytes(draw::Frame::MAX_W * draw::Frame::H * 3);
+  uint8_t *slide_px_ = draw::big_bytes(draw::Frame::MAX_W * draw::Frame::H * 3);
   int last_w_ = 64, slide_w_ = 64;
   int shown_ = SHOWN_NONE;
   Trans trans_ = NO_TRANS;
@@ -338,7 +350,11 @@ class Board {
   const Value &peek_payload(int k, int vi);
   bool peek_mode() const { return player.has_p && player.p["knob"]["vars"].is_arr(); }
   void open_peek(long long ms);
+  std::vector<int> knob_counts() const;
   void send_peek();
+  // The chooser's choice as it closed (category and variant names), so a
+  // payload landing before it goes out can't change what's sent.
+  std::string peek_cat_, peek_var_;
   void draw_peek(draw::Frame &f, long long ms, long long n);
   void shown(int what, long long ms);
   void launch(Flight f);

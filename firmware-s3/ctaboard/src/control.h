@@ -170,6 +170,21 @@ class PeekChooser {
     closing = committing = sent = holding = hold_turned = slide = false;
     opened = last = ms;
   }
+  // A payload landed while open: its knob.vars sizes. A different ring
+  // cancels the choice (the bar drops); otherwise each count follows the
+  // payload and a variant past the end goes back to the first.
+  void resync(const std::vector<int> &counts, double ms) {
+    if (!open || closing) return;
+    if ((int)counts.size() != n) {
+      close(ms, false);
+      return;
+    }
+    nv = counts;
+    for (int i = 0; i < n; i++)
+      if (sel[i] >= nv[i]) sel[i] = 0;
+    if (start_vi >= nv[start_k]) start_vi = 0;
+    if (slide_k < n && slide_vi >= nv[slide_k]) slide_vi = 0;
+  }
   // clicks: + clockwise. While held, they step the variant.
   void turn(int clicks, double ms) {
     if (!open || closing || !clicks || n <= 0) return;

@@ -34,6 +34,12 @@ const CHRONO_EXTRA = 2;
 // Back to destination rows only after they've fit this long. 0 = switch
 // back as soon as they fit; raise it if the view flips too often.
 const CHRONO_HOLD = 0;
+// Wide boards (formatWide): four layouts, so more thresholds to cross as
+// destinations come and go; back to a sparser one only after it has fit
+// this long (s). The split and destination rows rank alike.
+const WIDE_VIEW_HOLD = 60;
+const WIDE_RANK = { split: 0, dest: 0, byline: 1, cols2: 2, chrono: 3 };
+const WIDE_VIEWS = ['split', 'dest', 'byline', 'cols2', 'chrono'];  // wideBuilders' order
 // Chrono labels are fitted against the widest single time ("99m" or "DUE").
 const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
 
@@ -224,7 +230,7 @@ function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map()
   const shownKeys = new Set(ordered.map((g) => g.key));
   if (cfg.cols === 128) {
     const shownWide = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
-    return { ...formatWide(ordered, shownWide, cfg, now, alerts, alertWords), ticker: tickerOf(shownWide, alerts, true) };
+    return { ...formatWide(ordered, shownWide, cfg, now, alerts, alertWords, prevView), ticker: tickerOf(shownWide, alerts, true) };
   }
   const bars = cfg.autoFit === false
     ? { showHeader: cfg.showHeader, showWeather: cfg.showWeather, showKey: !!cfg.showKey, hidden: [] }
@@ -374,90 +380,107 @@ function wideRow(g, now, alerted, words = null) {
   return row;
 }
 
-function formatWide(ordered, shown, cfg, now, alerts, alertWords = new Map()) {
-  const view = (v) => ({ view: v, fitSince: null });
+function formatWide(ordered, shown, cfg, now, alerts, alertWords = new Map(), prevView = null, hold = WIDE_VIEW_HOLD) {
+  // Each layout, sparsest first; null where it doesn't fit (or apply).
+  const builders = wideBuilders(ordered, shown, cfg, now, alerts, alertWords);
+  // Built lazily: the first that fits (the chronological list always does).
+  let pick = null;
+  for (const b of builders) if ((pick = b())) break;
+  // Back to a sparser layout only once it has fit for `hold` s: until then
+  // the last one, while it still applies (else the sparser one at once).
+  const rank = (v) => WIDE_RANK[v] || 0;
+  if (prevView && rank(prevView.view) > rank(pick.view)) {
+    const fitSince = prevView.fitSince != null ? prevView.fitSince : now;
+    const want = WIDE_VIEWS.indexOf(prevView.view);
+    const held = now - fitSince < hold && want >= 0 && builders[want]();
+    if (held) return { ...held, viewState: { view: held.view, fitSince } };
+  }
+  return { ...pick, viewState: { view: pick.view, fitSince: null } };
+}
+
+// formatWide's layouts, sparsest first: the split, destination rows, one
+// row per line, two columns, the chronological list (always fits).
+function wideBuilders(ordered, shown, cfg, now, alerts, alertWords) {
   const lines = [...new Set(ordered.map((g) => g.ln))];
   const mapid = cfg.station && cfg.station.mapid;
-  // The halves: northbound | southbound or westbound | eastbound.
-  const axis = cfg.wideLayout !== 'rows' ? splitAxis(mapid, lines) : null;
-  if (axis && ordered.every((g) => halfOf(mapid, g) != null)) {
+  const split = () => {
+    // The halves: northbound | southbound or westbound | eastbound.
+    const axis = cfg.wideLayout !== 'rows' ? splitAxis(mapid, lines) : null;
+    if (!axis || !ordered.every((g) => halfOf(mapid, g) != null)) return null;
     const halves = [[], []];
     for (const g of ordered) halves[halfOf(mapid, g)].push(g);
-    if (halves.every((x) => x.length <= SPLIT_ROWS)) {
-      const hidden = [...(cfg.showWeather ? ['weather'] : []), ...(cfg.showKey ? ['key'] : [])];
-      return {
-        view: 'split', viewState: view('split'), halves: SPLIT_LABELS[axis],
-        rows: halves.flatMap((x, h) => x.map((g) => halfRow(g, h, now, alerts.has(g.ln)))),
-        bars: { showHeader: cfg.showHeader, showWeather: false, showKey: false, hidden },
-      };
-    }
-  }
+    if (!halves.every((x) => x.length <= SPLIT_ROWS)) return null;
+    const hidden = [...(cfg.showWeather ? ['weather'] : []), ...(cfg.showKey ? ['key'] : [])];
+    return {
+      view: 'split', halves: SPLIT_LABELS[axis],
+      rows: halves.flatMap((x, h) => x.map((g) => halfRow(g, h, now, alerts.has(g.ln)))),
+      bars: { showHeader: cfg.showHeader, showWeather: false, showKey: false, hidden },
+    };
+  };
   // Full-width destination rows while they fit (the rows layout, and where
   // the split isn't true: a terminal's one or two rows read best whole).
   // The key layout at 128 is the key's row alone (`trains to` ... `minutes`,
   // no station or clock; wide-spec §3), placed like a header.
-  if (cfg.showKey) {
-    const kb = fitBars(ordered.length, true, cfg.showWeather, false);
-    if (ordered.length <= maxRows(kb.showHeader, kb.showWeather, false)) {
-      const hidden = kb.hidden.map((x) => (x === 'header' ? 'key' : x));
-      return { view: 'dest', viewState: view('dest'), rows: ordered.map((g) => wideRow(g, now, alerts.has(g.ln), alertWords.get(g.ln))),
-        bars: { showHeader: false, showWeather: kb.showWeather, showKey: kb.showHeader, hidden } };
+  const dest = () => {
+    const rows = () => ordered.map((g) => wideRow(g, now, alerts.has(g.ln), alertWords.get(g.ln)));
+    if (cfg.showKey) {
+      const kb = fitBars(ordered.length, true, cfg.showWeather, false);
+      if (ordered.length <= maxRows(kb.showHeader, kb.showWeather, false)) {
+        const hidden = kb.hidden.map((x) => (x === 'header' ? 'key' : x));
+        return { view: 'dest', rows: rows(), bars: { showHeader: false, showWeather: kb.showWeather, showKey: kb.showHeader, hidden } };
+      }
     }
-  }
-  {
     const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
-    const max = maxRows(bars.showHeader, bars.showWeather, bars.showKey);
-    if (ordered.length <= max) {
-      return { view: 'dest', viewState: view('dest'), rows: ordered.map((g) => wideRow(g, now, alerts.has(g.ln), alertWords.get(g.ln))), bars };
-    }
-  }
+    return ordered.length <= maxRows(bars.showHeader, bars.showWeather, bars.showKey) ? { view: 'dest', rows: rows(), bars } : null;
+  };
   // One row per line (busy stations, wide-spec §3), when every line has one
   // or two destinations and the lines fit: a line's first destination on the
   // left half and its second on the right (short names, three times), a line
   // with one destination across the whole row (wideRow). Rows carry `y`, the
   // line's row; the key's column heads don't fit the halves, so it's hidden.
-  {
+  const byline = () => {
     const byLine = [];
     for (const g of ordered) {
       const l = byLine.find((x) => x[0].ln === g.ln);
       if (l) l.push(g); else byLine.push([g]);
     }
-    if (byLine.every((l) => l.length <= 2)) {
-      const bars3 = fitBars(byLine.length, cfg.showHeader, cfg.showWeather, false);
-      if (byLine.length <= maxRows(bars3.showHeader, bars3.showWeather, false)) {
-        return {
-          view: 'byline', viewState: view('byline'),
-          rows: byLine.flatMap((l, y) => (l.length === 1 ? [{ ...wideRow(l[0], now, alerts.has(l[0].ln), alertWords.get(l[0].ln)), y }] : l.map((g, h) => ({ ...halfRow(g, h, now, alerts.has(g.ln)), y })))),
-          bars: { ...bars3, hidden: [...bars3.hidden, ...(cfg.showKey ? ['key'] : [])] },
-        };
-      }
-    }
-  }
-  // Two columns under the header (the key layout's station line goes on top).
-  const perCol = Math.ceil(ordered.length / 2);
-  const top = cfg.showHeader || !!cfg.showKey;
-  const bars2 = fitBars(perCol, top, cfg.showWeather, false);
-  if (perCol <= maxRows(bars2.showHeader, bars2.showWeather, false)) {
+    if (!byLine.every((l) => l.length <= 2)) return null;
+    const bars3 = fitBars(byLine.length, cfg.showHeader, cfg.showWeather, false);
+    if (byLine.length > maxRows(bars3.showHeader, bars3.showWeather, false)) return null;
     return {
-      view: 'cols2', viewState: view('cols2'),
+      view: 'byline',
+      rows: byLine.flatMap((l, y) => (l.length === 1 ? [{ ...wideRow(l[0], now, alerts.has(l[0].ln), alertWords.get(l[0].ln)), y }] : l.map((g, h) => ({ ...halfRow(g, h, now, alerts.has(g.ln)), y })))),
+      bars: { ...bars3, hidden: [...bars3.hidden, ...(cfg.showKey ? ['key'] : [])] },
+    };
+  };
+  const cols2 = () => {
+    // Two columns under the header (the key layout's station line goes on top).
+    const perCol = Math.ceil(ordered.length / 2);
+    const top = cfg.showHeader || !!cfg.showKey;
+    const bars2 = fitBars(perCol, top, cfg.showWeather, false);
+    if (perCol > maxRows(bars2.showHeader, bars2.showWeather, false)) return null;
+    return {
+      view: 'cols2',
       rows: ordered.map((g, i) => halfRow(g, i < perCol ? 0 : 1, now, alerts.has(g.ln))),
       bars: { ...bars2, hidden: [...bars2.hidden, ...(cfg.showKey ? ['key'] : [])] },
     };
-  }
-  // The chronological list.
-  const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
-  const max = maxRows(bars.showHeader, bars.showWeather, bars.showKey);
-  const labelPx = WIDE_RIGHT - LABEL_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
-  const alertPx = WIDE_RIGHT - ALERT_TIME_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
-  const rows = shown.slice(0, max + CHRONO_EXTRA).map((a) => {
-    const alerted = alerts.has(a.ln), name = (a.full || a.dest).toUpperCase();
-    return {
-      ln: a.ln, lbl: fit('small', name, labelPx), t: [a.t], s: [a.s], a: alerted ? 1 : 0,
-      ...(alerted ? { al: alertLabel(name, alertPx) } : {}),
-      rn: a.rn != null ? String(a.rn) : undefined,
-    };
-  });
-  return { view: 'chrono', viewState: view('chrono'), rows, bars };
+  };
+  const chrono = () => {
+    const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather, !!cfg.showKey);
+    const max = maxRows(bars.showHeader, bars.showWeather, bars.showKey);
+    const labelPx = WIDE_RIGHT - LABEL_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
+    const alertPx = WIDE_RIGHT - ALERT_TIME_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
+    const rows = shown.slice(0, max + CHRONO_EXTRA).map((a) => {
+      const alerted = alerts.has(a.ln), name = (a.full || a.dest).toUpperCase();
+      return {
+        ln: a.ln, lbl: fit('small', name, labelPx), t: [a.t], s: [a.s], a: alerted ? 1 : 0,
+        ...(alerted ? { al: alertLabel(name, alertPx) } : {}),
+        rn: a.rn != null ? String(a.rn) : undefined,
+      };
+    });
+    return { view: 'chrono', rows, bars };
+  };
+  return [split, dest, byline, cols2, chrono];
 }
 
-module.exports = { normalize, latchDue, splitTrue, splitAxis, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD };
+module.exports = { normalize, latchDue, splitTrue, splitAxis, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD };

@@ -398,6 +398,8 @@ async function build() {
     add('wide baseball final, away wins', bw(game({ st: 'final', ...ln([0, 1, 0, 0, 2, 0, 0, 0, 0], [1, 0, 0, 1, 0, 0, 0, 0, 0]) })), [{ screen: 'baseball' }], undefined, undefined, s3);
     add('wide baseball pregame', bw(game({ st: 'pre', start: t + 1500, away: { ...CHC, r: 0, w: 109, l: 53 }, home: { ...STL, r: 0, w: null, l: null } })), [{ screen: 'baseball' }], undefined, undefined, s3);
     add('wide baseball no games', bw(), [{ screen: 'baseball' }], undefined, undefined, s3);
+    // games not a list: no games (not a divide by zero).
+    for (const games of ['CHC', 7, true, {}]) add(`baseball games is ${JSON.stringify(games)}`, { ...bb(), mlb: { layout: 'classic', games } }, [{ screen: 'baseball' }], undefined, undefined, s3);
     add('wide baseball live without a line score', bw(live), [{ screen: 'baseball' }], undefined, undefined, s3);
   }
 
@@ -848,6 +850,8 @@ async function build() {
       add('wide peek strip shifts to the chosen word', p, [[2, 4], [2, 5], [2, 6], [2, 7], [1, 1]].map(([k, vi]) => ({ ...base, peek: { k, vi } })).concat([{ ...base, peek: { k: 2, vi: 7, drop: 4 } }]), bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
       const one = { ...s.payload, knob: { ...s.payload.knob, vars: s.payload.knob.vars.map((v, i) => (i === 2 ? ['skyline'] : v)) } };
       add('wide peek a category with one variant', one, [{ ...base, peek: { k: 2, vi: 0 } }], bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
+      // A variant past the list (the payload changed under the chooser): no shift, none lit.
+      add('wide peek variant past the list', s.payload, [{ ...base, peek: { k: 2, vi: 11 } }, { ...base, peek: { k: 2, vi: -2 } }], bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
     }
     // Wide weather (wide-spec §4): the week and 24 hours, with and without
     // the top bar, warnings, °C and negatives, and the wide conditions.
@@ -907,6 +911,11 @@ async function build() {
         const r6 = format(six, { rows: [], showHeader: true, showWeather: !!wx, cols: 128, station: { mapid: '40380' } }, { now: t0, alerts: new Set(alertLines) });
         const c = { v: 1, now: t0, tzo: tzOffset(t0), screen: 'transit', bright: 100, cols: 128, header: r6.bars.showHeader ? 'CLARK/LAKE' : null, view: r6.view, rows: r6.rows, ticker: r6.ticker, wx: r6.bars.showWeather ? wx : null, warn: null };
         add(`wide transit ${r6.view} six destinations wx=${!!wx} alerts=${alertLines.length}`, c, at(c), undefined, undefined, S3);
+        // A row off the lines (a bad y: negative, huge, fractional, a string) is left out.
+        if (!wx) {
+          const bad = { ...c, rows: c.rows.map((row, i) => (i < 4 ? { ...row, y: [-1, 2e8, 1.5, '2'][i] } : row)) };
+          add('wide transit byline rows with bad y', bad, at(bad), undefined, undefined, S3);
+        }
       }
       const r = wideFrom('clark-lake-2026-10-03-2317.json', '40380', 'CLARK/LAKE', { layout: 'rows', alerts: ['BR'] });
       // The alert's words after the circle (wide-spec §3), where they fit.

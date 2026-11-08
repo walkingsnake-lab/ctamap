@@ -78,7 +78,7 @@ void Player::add_frame(const std::string &fid, std::vector<uint8_t> bytes, std::
 
 const Value &Player::games() const {
   const Value &mlb = p["mlb"];
-  if (has_p && mlb["layout"].eq("logos") && mlb["games"].truthy()) return mlb["games"];
+  if (has_p && mlb["layout"].eq("logos") && draw::has_games(mlb["games"])) return mlb["games"];
   return Value::null_value();
 }
 
@@ -104,7 +104,7 @@ std::vector<std::string> Player::wanted_logos(long long now) const {
   // The game on screen, then the next one in the rotation (logo layout
   // only). Mirrors draw.pick_game().
   const Value &gs = games();
-  if (!gs.truthy()) return {};
+  if (!draw::has_games(gs)) return {};
   bool all_games = p["mlb"]["all"].is_true();
   draw::PickedGame pick = draw::pick_game(gs, (double)now, draw::timing(p).game, all_games);
   std::vector<int> pool;

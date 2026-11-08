@@ -415,10 +415,19 @@ test('width: w=128 on update and select makes a wide board (cols 128); no w is 6
   // Radar: the wide board asks for the 128-wide crops.
   assert.equal(s.radar.wants[s.radar.wants.length - 1], true);
   assert.equal((await s.req('/board/update?b=home&w=128&s=weather', h)).body.radar.wide, 1);
-  // Back on one panel (an M4, or a board set up again): no w.
+  // Back on one panel (an M4, or a board set up again): no w. Its payload
+  // is 64 at once; so soon after the last change (two boards on one ID?)
+  // the saved width waits, then follows.
   b = (await s.req('/board/update?b=home', h)).body;
   assert.equal('cols' in b, false);
-  assert.equal(s.store.get('home').cols, undefined);
+  assert.equal(s.store.get('home').cols, 128, 'not saved yet');
+  b = (await s.req('/board/update?b=home&w=128', h)).body;
+  assert.equal(b.cols, 128);
+  const realNow = Date.now;
+  Date.now = () => realNow() + 601 * 1000;
+  try { b = (await s.req('/board/update?b=home', h)).body; } finally { Date.now = realNow; }
+  assert.equal('cols' in b, false);
+  assert.equal(s.store.get('home').cols, undefined, 'settled: saved');
   assert.equal('cols' in (await s.req('/board/secret123/api/boards')).body.find((x) => x.id === 'home'), false);
   // Only 128 is wide; the phone can't set it.
   await s.req('/board/update?b=home&w=96', h);
