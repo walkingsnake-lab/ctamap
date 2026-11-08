@@ -163,7 +163,7 @@ function createBoard({
 
   const stationById = new Map(stations.map((st) => [st.mapid, st]));
   const stationList = JSON.stringify(stations
-    .map(({ mapid, name, desc, short, lines }) => ({ mapid, name, desc, short, lines }))
+    .map(({ mapid, name, desc, short, wide, lines }) => ({ mapid, name, desc, short, wide, lines }))
     .sort((a, b) => a.desc.localeCompare(b.desc)));
   // Simulator preview settings from the query: mapid, header=0|1, weather=0|1,
   // rtime=0|1 (radar corner: frame time or temperature), bblayout=classic|logos|bands (baseball layout).
@@ -614,6 +614,9 @@ function createBoard({
     const screen = resolveScreen(board, cyc);
     const held = holdOf(id, board, now, !!radarState.on);
     const viewKey = `${id}:${board.station.mapid}`;
+    // Two panels have room for the full name (stations.json `wide`), unless
+    // the phone set a name of its own.
+    const stName = board.cols === 128 && st && st.wide && board.station.name === st.short ? st.wide : board.station.name;
     const { view, viewState, rows, ticker, bars, halves } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, alertWords, prevView: views.get(viewKey) });
     views.set(viewKey, viewState);
     return {
@@ -634,10 +637,10 @@ function createBoard({
       ab: autoBrightOf(board),
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
-      header: bars.showHeader ? board.station.name : null,
+      header: bars.showHeader ? stName : null,
       // Divider lines under the top bar and over the bottom one, every view.
       headerDivider: board.headerDivider === true,
-      tickerHeader: board.station.name,
+      tickerHeader: stName,
       // Header clock (transit and ticker) and line-colored labels.
       hclock: board.headerClock !== false,
       // Clock digits roll at each minute (off: they just change).

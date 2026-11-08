@@ -9,13 +9,14 @@
 //
 // The dataset has one record per platform; this groups them by map_id.
 // Each station gets a header short name via shortName() in
-// server/board/station-names.js (full name, then ordinals dropped, then curated). The build
+// server/board/station-names.js (full name, then ordinals dropped, then curated),
+// and a two-panel name via wideName() (full name, then curated). The build
 // fails, listing the stations, if any name overflows without a curated entry.
 
 const fs = require('fs');
 const path = require('path');
 const { measure } = require('../server/board/fonts');
-const { HEADER_NAME_PX, SHORT_NAMES, shortName } = require('../server/board/station-names');
+const { HEADER_NAME_PX, WIDE_NAME_PX, SHORT_NAMES, WIDE_NAMES, shortName, wideName } = require('../server/board/station-names');
 
 const URL = 'https://data.cityofchicago.org/resource/8pix-ypme.json?$limit=5000';
 const OUT = path.join(__dirname, '..', 'server', 'board', 'stations.json');
@@ -58,11 +59,14 @@ function build(records) {
     const lon = st.pts.reduce((a, p) => a + p.lon, 0) / st.pts.length;
     const short = shortName(st.name, measure);
     if (!short) overflow.push(`${st.name} (${measure('small', st.name.toUpperCase())}px)`);
+    const wide = wideName(st.name, measure);
+    if (!wide) overflow.push(`${st.name} (${measure('small', st.name.toUpperCase())}px, two panels: over ${WIDE_NAME_PX}px; add it to WIDE_NAMES)`);
     return {
       mapid: st.mapid,
       name: st.name,
       desc: st.desc,
       short,
+      wide,
       lines: [...st.lines].sort(),
       lat: Number(lat.toFixed(6)),
       lon: Number(lon.toFixed(6)),
@@ -72,7 +76,7 @@ function build(records) {
   if (overflow.length) {
     throw new Error(`header names over ${HEADER_NAME_PX}px; add them to server/board/station-names.js:\n  ${overflow.join('\n  ')}`);
   }
-  const unused = Object.keys(SHORT_NAMES).filter((n) => !byMap.size || ![...byMap.values()].some((s) => s.name === n));
+  const unused = [...Object.keys(SHORT_NAMES), ...Object.keys(WIDE_NAMES)].filter((n) => !byMap.size || ![...byMap.values()].some((s) => s.name === n));
   if (unused.length) console.warn(`curated names not in the dataset (check spelling): ${unused.join(', ')}`);
   return stations;
 }
