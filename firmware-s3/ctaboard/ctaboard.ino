@@ -256,7 +256,8 @@ void setup() {
                 device::psram_free());
 
   board->connect(device::cold_boot());
-  Serial.printf("[board] online: memory free %ld\n", device::free_heap());
+  Serial.printf("[board] online: memory free %ld, largest internal %ld, PSRAM free %ld\n", device::free_heap(),
+                device::largest_internal(), device::psram_free());
   last_report = sys_clock.ms();
 }
 

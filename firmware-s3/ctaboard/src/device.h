@@ -276,7 +276,9 @@ long largest_block();
 long largest_internal();  // largest internal-RAM block (what TLS and the panel's DMA need)
 long psram_free();
 // Points draw::big_alloc at PSRAM, so frame-sized buffers stay out of
-// internal RAM. Call first thing in setup(), before anything allocates one.
+// internal RAM, and sends ordinary allocations of 64 bytes and up there
+// first (the payload, TLS). Call first thing in setup(), before anything
+// allocates one.
 void use_psram();
 long psram_size();  // bytes of PSRAM the build can use: 0 when the board option leaves it off
 float chip_temp_c();  // ESP32-S3 internal sensor: die temperature in C (mean of 8 reads; tracks the air around the board)

@@ -1191,8 +1191,19 @@ long free_heap() { return (long)ESP.getFreeHeap(); }
 long largest_block() { return (long)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT); }
 long largest_internal() { return (long)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT); }
 long psram_free() { return (long)heap_caps_get_free_size(MALLOC_CAP_SPIRAM); }
+static const size_t PSRAM_FROM = 64;  // bytes: smaller allocations stay internal (fast, and short-lived)
 static void *psram_alloc(size_t n) { return heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); }  // null without PSRAM: malloc
-void use_psram() { draw::big_alloc = psram_alloc; }
+void use_psram() {
+  draw::big_alloc = psram_alloc;
+  // Ordinary allocations of PSRAM_FROM bytes and up go to PSRAM first
+  // (internal RAM when it's full). The core's default is 16 KB, so the
+  // payload's JSON tree, strings and mbedTLS's buffers all landed in
+  // internal RAM: with two panels' DMA buffers there, a board went online
+  // with 4 KB free and every request after failed (Conn1). Task stacks,
+  // DMA buffers and the WiFi driver ask for internal RAM by name, so they
+  // stay put.
+  if (ESP.getPsramSize() > 0) heap_caps_malloc_extmem_enable(PSRAM_FROM);
+}
 long psram_size() { return (long)ESP.getPsramSize(); }
 
 float chip_temp_c() {
