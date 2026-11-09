@@ -53,8 +53,9 @@ bigger per side. Panel A is the left one seen from the front, B the right one.
   inner header, A's outer header → B's inner one; B's outer header is under the S3 and unused), so tray A's posts sit at
   the un-turned inserts (z +31 / −29) and tray B's at the turned ones (z +29 / −31). Each tray bolts to all four of its
   panel's corner inserts and takes its pair of screws from below. **Inner posts (Nov 8):** at each inner insert the
-  splice plate's M3 x 6 is replaced by an **M3 male-female hex standoff** (brass, 6 mm body, 5.5 mm across flats, ~6 mm
-  stud: 4 mm into the insert through the 2 mm plate, as the screw it replaces). It clamps the plate, its top is the
+  splice plate's M3 x 6 is replaced by an **M3 male-female hex standoff** (brass, **10 mm body**, 5.5 mm across flats,
+  6 mm stud: 4 mm into the insert through the 2 mm plate, as the screw it replaces; a 5 mm body's female thread can
+  bottom an M3 x 8 before it clamps). It clamps the plate, its top is the
   inner post's seat, and the post screw threads into its female end, so all four posts are bolted and float ±0.7 on
   their screws like the outer ones (the hex top, 6.35 across corners, stays under the floor's bearing ring at that
   offset). Tighten the standoff into the insert first (pliers or a 5.5 mm wrench); the post screw only clamps. The
@@ -199,9 +200,9 @@ door closed) but **fixed 0.16 mm layers, no variable layer height** (it banded t
 
 ## Hardware (beyond the single build's)
 - Screws: the single build's per tray (four M3 x 8 flanged button heads for the posts, or M3 x 10 on the inner ones:
-  they thread 3.5-5.5 mm into the standoffs), 2 x M3 x 12 from below per tray (the 5 mm floor); 4 x M2.5 x 8 (S3, tray B
-  only). **4 x M3 male-female hex standoffs**, brass, 6 mm body, 5.5 across flats, 6 mm stud (one at each inner insert,
-  replacing the splice plates' M3 x 6s).
+  they thread 5-7 mm into the standoffs), 2 x M3 x 12 from below per tray (the 5 mm floor); 4 x M2.5 x 8 (S3, tray B
+  only). **4 x M3 male-female hex standoffs**, brass, 10 mm body, 5.5 across flats, 6 mm stud ("M3 x 10+6"; one at each
+  inner insert, replacing the splice plates' M3 x 6s).
 - Glue: medium (gap-filling) CA or 5-minute epoxy for the shell seam and the joint plates; thin CA for the diffuser seam
   walls. Two straps or tape to hold the halves while it cures.
 - Panels: two P3s, butted; both their power cables (one stock lead reaches only its own panel: parallel them at the S3's

@@ -414,13 +414,13 @@ SPLICE_SLOT = 0.5                 # B's hole is a slot, +/-0.5 in x: the plate h
 SPLICE_HOLES = (3.3, 3.45, 3.6)   # printed vertical, so they come out small: pick the snuggest an M3 passes freely
 SPLICE_HOLE = float(os.environ.get('SPLICE_HOLE', '3.45'))   # the build's (set from the test piece)
 # Inner posts (Nov 8): at each inner insert the plate's M3 x 6 is an M3 male-female hex standoff instead (brass, body
-# STANDOFF_L long, STANDOFF_AF across flats, stud ~6 mm: 4 into the insert through the 2 mm plate, as the screw it
+# STANDOFF_L long, STANDOFF_AF across flats, stud 6 mm: 4 into the insert through the 2 mm plate, as the screw it
 # replaces). Its top is the inner post's seat and the post screw (M3 x 8 or 10) threads into its female end: all four
 # posts bolted, the plate clamped, and the inner posts float on their screws like the outer ones (Ø POST_HOLE on an M3:
 # +/-0.7; the standoff's hex top, 6.35 across corners, stays under the floor's bearing annulus at that offset). No socket
 # keys the standoff: tighten it into the insert first (pliers or a 5.5 mm wrench), the post screw only clamps.
 # INNER_DY moves the inner posts' feet back by the plate and the standoff from the outer posts' feet (which keep POST_LONG).
-STANDOFF_L, STANDOFF_AF = 6.0, 5.5
+STANDOFF_L, STANDOFF_AF = 10.0, 5.5     # Nov 8: the 10 mm body (M3 x 10+6): a 5 mm body's female thread can bottom an M3 x 8
 INNER_DY = SPLICE_T + STANDOFF_L
 
 
