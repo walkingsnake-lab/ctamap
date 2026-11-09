@@ -1247,19 +1247,20 @@
       });
     }
     // Current conditions at 128 (first pass, mockup w128/now.png): on the
-    // left the icon at twice its size (x1, rows 0-15), the temperature in
+    // left the 16 x 16 icon (x1, rows 0-15), the temperature in
     // the clock digits (x19, rows 3-12) with a small degree sign, the high
     // and low (or a watch or warning) on baseline 25, and the date (#555555)
     // on baseline 31; on the right (x58-127) the readout with dot leaders:
     // SKY, FEELS, WIND, RAIN (while `rl`), and the next SUNRISE or SUNSET
     // (wx.sun: {k: 'rise' | 'set', t}).
     const CONW = { x0: 58, lines5: [6, 12, 18, 24, 30], lines4: [7, 15, 23, 31], rise: '#ffc23a', set: '#ff7414' };
-    function drawIcon2x(f, name, x, y) {
-      icons.ICONS[name].forEach((row, j) => [...row].forEach((c, i) => { if (c !== '.') f.fill(x + i * 2, y + j * 2, 2, 2, icons.PALETTE[c]); }));
+    // The 16 x 16 icon (icons.ICONS16), drawn for the size rather than the 8 x 8 scaled up.
+    function drawIcon16(f, name, x, y) {
+      icons.ICONS16[name].forEach((row, j) => [...row].forEach((c, i) => { if (c !== '.') f.fill(x + i, y + j, 1, 1, icons.PALETTE[c]); }));
     }
     function drawConditionsWide(f, p, wx, top) {
       const { shadow, warn, blink } = top || {};
-      if (icons.ICONS[wx.icon]) drawIcon2x(f, wx.icon, 1, 0);
+      if (icons.ICONS16[wx.icon]) drawIcon16(f, wx.icon, 1, 0);
       const temp = String(wx.temp);
       if (shadow) {
         const sh = scaleColor(tempColor(wx.temp, wx.c), 0.2);

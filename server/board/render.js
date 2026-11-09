@@ -13,7 +13,7 @@ const { TZ } = require('./time');
 
 const draw = create({
   fonts: packFonts(),
-  icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL, WORLD, WORLD_PALETTE, WORLD_WIDE, WORLD_WIDE_PALETTE },
+  icons: { ICONS: icons.ICONS, ICONS16: icons.ICONS16, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL, WORLD, WORLD_PALETTE, WORLD_WIDE, WORLD_WIDE_PALETTE },
   glyphs,
   tz: TZ,
   makeFrame: (w, h) => new Frame(w, h),
@@ -23,7 +23,7 @@ const draw = create({
 function assets() {
   return {
     fonts: packFonts(),
-    icons: { ICONS: icons.ICONS, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL, WORLD, WORLD_PALETTE, WORLD_WIDE, WORLD_WIDE_PALETTE },
+    icons: { ICONS: icons.ICONS, ICONS16: icons.ICONS16, PALETTE: icons.PALETTE, ALERT_BANG: icons.ALERT_BANG, OWL: icons.OWL, WORLD, WORLD_PALETTE, WORLD_WIDE, WORLD_WIDE_PALETTE },
     glyphs,
     tz: TZ,
   };

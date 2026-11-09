@@ -726,6 +726,20 @@ static const Icon ICONS[] = {
 };
 static const int ICONS_N = 11;
 
+static const Icon ICONS16[] = {
+  {"sun", ".......................YY.........Y....YY....Y.....Y........Y.........................YYYY...........YYYYYY......YY.YYYYYYYY.YY..YY.YYYYYYYY.YY......YYYYYY...........YYYY.........................Y........Y.....Y....YY....Y.........YY......................."},
+  {"moon", ".....MMMMMM........MMMMMM.........MMMMM..........MMMMM...........MMMM...........MMMMM...........MMMM............MMMM............MMMM............MMMM............MMMMM............MMMM............MMMMM............MMMMM............MMMMMM............MMMMMM....."},
+  {"pcloudy_day", "....Y............Y.....Y...........YYY............YYYYY.........Y.YYYYY.Y.........YYYYY............YYY..CCCC.....Y.....CCCCCC........CCCCCCCCC......CCCCCCCCCCC....CCCCCCCCCCCCC...CCCCCCCCCCCCC....DDDDDDDDDDD......DDDDDDDDD.................................."},
+  {"pcloudy_night", "...MMMM...........MMM............MMM.............MMM.............MMM.............MMM..............MMM...CCCC.......MMMMCCCCCC........CCCCCCCCC......CCCCCCCCCCC....CCCCCCCCCCCCC...CCCCCCCCCCCCC....DDDDDDDDDDD......DDDDDDDDD.................................."},
+  {"cloudy", "........................................................CCCC...........CCCCCC......CCC.CCCCCCC....CCCCCCCCCCCCC..CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC.DDDDDDDDDDDDDD...DDDDDDDDDDDD.................................................................."},
+  {"rain", "........CCCC...........CCCCCC......CCC.CCCCCCC....CCCCCCCCCCCCC..CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCC.DDDDDDDDDDDDDD...DDDDDDDDDDDD.....................B....B....B.....B....B....B....B....B....B........................B....B..........B....B.........B....B......"},
+  {"ice", "........CCCC...........CCCCCC......CCC.CCCCCCC....CCCCCCCCCCCCC..CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCC.DDDDDDDDDDDDDD...DDDDDDDDDDDD.....................B.......W.......B.....W.W.W....B.......WWW...........WWWWWWW......B....WWW........B...W.W.W......B......W...."},
+  {"snow", ".......................S............S..S..S..........S.S.S........S...SSS...S......SS..S..SS.........SSSSS.......SSSSSSSSSSSSS.......SSSSS.........SS..S..SS......S...SSS...S........S.S.S..........S..S..S............S........................................"},
+  {"storm", "........GGGG...........GGGGGG......GGG.GGGGGGG....GGGGGGGGGGGGG..GGGGGGGGGGGGGG.GGGGGGGGGGGGGGGG.KKKKKKKKKKKKKK...KKKKKKKKKKKK..........LL.............LL.............LL.............LLLLL.............LL.............LL.............LL.............L..........."},
+  {"tsnow", "........GGGG...........GGGGGG......GGG.GGGGGGG....GGGGGGGGGGGGG..GGGGGGGGGGGGGG.GGGGGGGGGGGGGGGG.KKKKKKKKKKKKKK...KKKKKKKKKKKK.......LL.............LL.....S.......LL....S.S.S....LLLLL...SSS.......LL..SSSSSSS....LL.....SSS.....LL.....S.S.S...L.........S...."},
+  {"fog", ".................................................FFFFFFFFFFF.....FFFFFFFFFFF........................................EEEEEEEEEEE.....EEEEEEEEEEE..................................FFFFFFFFFFF.....FFFFFFFFFFF...................................................."},
+};
+
 static const IconColor OWL_PALETTE[] = {
   {'B', 110, 74, 42},
   {'b', 168, 135, 92},

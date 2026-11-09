@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { ICONS, PALETTE, ALERT_BANG, iconForCode } = require('./icons');
+const { ICONS, ICONS16, PALETTE, ALERT_BANG, iconForCode } = require('./icons');
 
 // Icon names the contract's wx.icon allows (docs/board/contract.md).
 const CONTRACT_ICONS = ['sun', 'moon', 'pcloudy_day', 'pcloudy_night', 'cloudy', 'rain', 'ice', 'snow', 'storm', 'tsnow', 'fog'];
@@ -15,6 +15,17 @@ test('every icon is 8x8 and uses only palette colors', () => {
     assert.equal(rows.length, 8, name);
     for (const r of rows) {
       assert.equal(r.length, 8, `${name}: ${r}`);
+      for (const c of r) if (c !== '.') assert.ok(PALETTE[c], `${name}: unknown color '${c}'`);
+    }
+  }
+});
+
+test('every icon has a 16x16 version in the same palette', () => {
+  assert.deepEqual(Object.keys(ICONS16).sort(), Object.keys(ICONS).sort());
+  for (const [name, rows] of Object.entries(ICONS16)) {
+    assert.equal(rows.length, 16, name);
+    for (const r of rows) {
+      assert.equal(r.length, 16, `${name}: ${r}`);
       for (const c of r) if (c !== '.') assert.ok(PALETTE[c], `${name}: unknown color '${c}'`);
     }
   }

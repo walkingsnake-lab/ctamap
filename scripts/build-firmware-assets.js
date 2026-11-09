@@ -108,6 +108,14 @@ function buildCpp() {
     lines.push(`  {"${k}", "${rows.join('')}"},`);
   }
   lines.push('};', `static const int ICONS_N = ${Object.keys(icons.ICONS).length};`, '');
+  // The 16 x 16 icons, in the same order as ICONS so one index serves both.
+  lines.push('static const Icon ICONS16[] = {');
+  for (const k of Object.keys(icons.ICONS)) {
+    const rows = icons.ICONS16[k];
+    if (!rows || rows.length !== 16 || rows.some((r) => r.length !== 16)) throw new Error(`icon16 ${k} is not 16 x 16`);
+    lines.push(`  {"${k}", "${rows.join('')}"},`);
+  }
+  lines.push('};', '');
   // Overnight owl (icons.js OWL): its palette and frames (13 x 15, row by
   // row), with how long each shows (ms). S3 only.
   lines.push('static const IconColor OWL_PALETTE[] = {');
