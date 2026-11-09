@@ -1811,6 +1811,17 @@ static draw::RGB px(const std::unique_ptr<Rig> &r, int x, int y) { return r->dis
 static const draw::RGB SUN = draw::hexc(0xffd040), CLOCK_C = draw::hexc(0xf0e2c8);
 
 // Press the knob for `hold` ms, then let go.
+// The brightest channel on the panel in rows y0..y1.
+static int max_in(const std::unique_ptr<Rig> &r, int y0, int y1) {
+  int m = 0;
+  for (int y = y0; y <= y1; y++)
+    for (int x = 0; x < r->display.last.w; x++) {
+      draw::RGB c = r->display.last.get(x, y);
+      m = std::max(m, (int)std::max(c.r, std::max(c.g, c.b)));
+    }
+  return m;
+}
+
 static void press(const std::unique_ptr<Rig> &r, long long hold = 120) {
   r->knob.down = true;
   r->run_for(hold);
@@ -1826,11 +1837,16 @@ static void test_peek_turn_shows_the_view_press_steps_the_variant_rest_commits()
   // The bar is up: the sun icon (x16, rows 23-29) lit in its color, the underline under it.
   CHECK(px(r, 19, 23) == SUN && px(r, 16, 31) == SUN, "weather lit");
   CHECK(S(r->board) == "transit", "nothing switches while turning: %s", S(r->board).c_str());
+  // Behind the bar, the screen it opened on, dimmed to a quarter.
+  int lit = max_in(r, 0, 20);
+  CHECK(lit > 0 && lit <= (int)(255 * draw::PEEK_DIM + 1), "dimmed behind the bar: %d", lit);
   press(r);
   r->run_for(400);
   CHECK(r->board->peek.vi() == 1, "a press steps to 5-day: %d", r->board->peek.vi());
   CHECK(r->server.selects.empty(), "no commit before the rest");
-  r->run_for(1200 + LATENCY);
+  r->run_for(700);  // rested 1000 ms after the release: 100 ms into the fade
+  CHECK(r->board->peek.chose && r->board->fading(r->clock.t), "the choice fades in");
+  r->run_for(500 + LATENCY);
   CHECK(r->server.selects == std::vector<std::string>({"weather"}), "%zu", r->server.selects.size());
   CHECK(r->server.variants == std::vector<std::string>({"5day"}), "%s", r->server.variants.empty() ? "" : r->server.variants[0].c_str());
   r->run_for(600);
@@ -1867,8 +1883,10 @@ static void test_peek_back_to_the_start_cancels() {
   r->knob.pending = -1;
   r->run_for(1300);
   CHECK(r->board->peek.closing && !r->board->peek.committing, "dropping, nothing to send");
+  CHECK(!r->board->peek.chose && !r->board->fading(r->clock.t), "no fade: the screen it opened on comes back up");
   r->run_for(600);
   CHECK(!r->board->peek.open, "");
+  CHECK(max_in(r, 0, 20) > (int)(255 * draw::PEEK_DIM + 1), "undimmed");
   CHECK(r->server.count("select:") == 0, "%d", r->server.count("select:"));
   CHECK(S(r->board) == "transit", "%s", S(r->board).c_str());
 }

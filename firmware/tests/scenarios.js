@@ -490,27 +490,38 @@ async function build() {
       knob: { ring, at: 0, vars, sel: [0, 0, 0, 0, 0], ln: 'RD' },
     };
     const pk = (k, vi, extra = {}) => ({ screen: 'peek', peek: { k, vi, ...extra } });
-    const every = []; vars.forEach((v, k) => (v.length ? v : [null]).forEach((_, vi) => every.push(pk(k, vi))));
+    // Every variant as the chooser closes on it (the chosen view alone),
+    // and the bar over the screen behind, dimmed, at each choice.
+    const every = [], bars = [];
+    vars.forEach((v, k) => (v.length ? v : [null]).forEach((_, vi) => { every.push(pk(k, vi, { chosen: true })); bars.push(pk(k, vi)); }));
     const frames = { a: rbytes, b: rbytes, c: rbytes };
     const clouds = skyline.cl ? { [skyline.cl.id]: stripBytes(skyline.cl.id) } : undefined;
     add('peek every variant', p, every, frames, undefined, { s3only: true, clouds });
-    add('peek slides', p, [
-      pk(1, 0, { slide: { k: 0, vi: 0, t: 0, axis: 'x', dir: 1 } }), pk(1, 0, { slide: { k: 0, vi: 0, t: 40, axis: 'x', dir: 1 } }),
-      pk(1, 0, { slide: { k: 0, vi: 0, t: 135, axis: 'x', dir: 1 } }), pk(0, 0, { slide: { k: 1, vi: 0, t: 90, axis: 'x', dir: -1 } }),
-      pk(4, 0, { slide: { k: 0, vi: 0, t: 100, axis: 'x', dir: -1 } }), pk(2, 2, { slide: { k: 2, vi: 1, t: 60, axis: 'y', dir: 1 } }),
-      pk(2, 1, { slide: { k: 2, vi: 2, t: 200, axis: 'y', dir: -1 } }), pk(1, 0, { slide: { k: 0, vi: 0, t: 999, axis: 'x', dir: 1 } }),
+    add('peek bars', p, bars, frames, undefined, { s3only: true, clouds });
+    // Over other screens (under): the clock, the weather, a ticker.
+    add('peek bar over other screens', p, [pk(1, 2, { under: 'clock' }), pk(2, 0, { under: 'weather' }), pk(0, 1, { under: 'ticker' }), pk(3, 0, { under: 'announce' })], frames, undefined, { s3only: true, clouds });
+    // Glides: the underline along the icons (forward, back, across the
+    // wrap, from part way), the lit dot down and up, past the end.
+    add('peek glides', p, [
+      pk(1, 0, { glide: { k: 0, vi: 0, t: 0, axis: 'x' } }), pk(1, 0, { glide: { k: 0, vi: 0, t: 40, axis: 'x' } }),
+      pk(1, 0, { glide: { k: 0, vi: 0, t: 135, axis: 'x' } }), pk(0, 0, { glide: { k: 1, vi: 0, t: 90, axis: 'x' } }),
+      pk(0, 0, { glide: { k: 4, vi: 0, t: 100, axis: 'x' } }), pk(3, 0, { glide: { k: 1.6, vi: 0, t: 50, axis: 'x' } }),
+      pk(2, 2, { glide: { k: 2, vi: 1, t: 60, axis: 'y' } }), pk(2, 1, { glide: { k: 2, vi: 2.5, t: 200, axis: 'y' } }),
+      pk(1, 0, { glide: { k: 0, vi: 0, t: 999, axis: 'x' } }),
     ], frames, undefined, { s3only: true, clouds });
+    // The bar rising or dropping, the dim with it.
     add('peek bar drop', p, [1, 3, 6, 10, 11, 14].map((drop) => pk(2, 0, { drop })), frames, undefined, { s3only: true, clouds });
-    add('peek digit color', { ...p, pv: { ...p.pv, cdig: '#ff4fa8' } }, [pk(2, 5), pk(2, 6)], frames, undefined, { s3only: true, clouds });
+    add('peek digit color', { ...p, pv: { ...p.pv, cdig: '#ff4fa8' } }, [pk(2, 5, { chosen: true }), pk(2, 6, { chosen: true })], frames, undefined, { s3only: true, clouds });
     // Raining: the newest frame on hand, still; none yet: the empty radar.
     const rain = { ...p, radar: { ...p.radar, on: true, frames: ids, ft } };
-    add('peek radar none on hand', rain, [pk(1, 0), pk(1, 3)], {}, undefined, { s3only: true });
-    add('peek radar two on hand', rain, [pk(1, 0), pk(1, 1)], { a: rbytes, b: rbytes }, undefined, { s3only: true });
-    add('peek skyline strip not fetched', p, [pk(2, 0)], undefined, undefined, { s3only: true });
+    const c = { chosen: true };
+    add('peek radar none on hand', rain, [pk(1, 0, c), pk(1, 3, c)], {}, undefined, { s3only: true });
+    add('peek radar two on hand', rain, [pk(1, 0, c), pk(1, 1, c)], { a: rbytes, b: rbytes }, undefined, { s3only: true });
+    add('peek skyline strip not fetched', p, [pk(2, 0, c)], undefined, undefined, { s3only: true });
     add('peek three entries, red at a blue line station', { ...p, knob: { ring: ['transit', 'weather', 'cycle'], at: 0, vars: [vars[0], vars[1], []], sel: [0, 0, 0], ln: 'BL' } },
-      [pk(0, 1), pk(2, 0)], frames, undefined, { s3only: true });
-    add('peek dimmed', { ...p, bright: 40 }, [pk(0, 0), pk(2, 3)], frames, undefined, { s3only: true, clouds });
-    add('peek no knob variants', { ...p, knob: { ring, at: 0 } }, [pk(1, 0), pk(2, 0)], frames, undefined, { s3only: true });
+      [pk(0, 1), pk(2, 0), pk(2, 0, c), pk(1, 0, { glide: { k: 2, vi: 0, t: 80, axis: 'x' } })], frames, undefined, { s3only: true });
+    add('peek dimmed', { ...p, bright: 40 }, [pk(0, 0), pk(2, 3), pk(2, 3, c)], frames, undefined, { s3only: true, clouds });
+    add('peek no knob variants', { ...p, knob: { ring, at: 0 } }, [pk(1, 0), pk(2, 0), pk(2, 0, c)], frames, undefined, { s3only: true });
   }
   // Clock screen, skyline face (S3 only): every weather kind by day and night,
   // dusk, warnings, boats, lightning, rain and snow in motion, clouds drifting,
@@ -813,8 +824,8 @@ async function build() {
     const wide = (p) => ({ ...p, cols: 128 });
     const bytes = (o) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Uint8Array.from(v)])) : undefined);
     const WIDE = ['transit morse-2026-10-03-2316.json header=true wx=true', 'chrono clark/lake alerts', 'stale', 'ticker header kept', 'weather screen normal',
-      'radar time off split=true svr warning', 'knob chooser five entries', 'peek slides',
-      'peek every variant', 'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'brightness 50'];
+      'radar time off split=true svr warning', 'knob chooser five entries', 'peek glides', 'peek bars',
+      'peek bar over other screens', 'peek every variant', 'skyline clear day', 'seventies 9:42', 'daynight December solstice dimmed', 'brightness 50'];
     // The skyline panorama (wide-spec §6): every weather and time of day,
     // the boats crossing all 128 columns, lightning, rain and snow, the
     // crossfades, warnings and the widest text.
@@ -847,12 +858,17 @@ async function build() {
     {
       const s = S.find((x) => x.name === 'wide peek every variant');
       const p = { ...s.payload, knob: { ...s.payload.knob, vars: s.payload.knob.vars.map((v, i) => (i === 2 ? [...v, 'words'] : v)) } };
-      const base = s.renders[0].opts;
+      const base = { ...s.renders[0].opts, peek: undefined };
       add('wide peek strip shifts to the chosen word', p, [[2, 4], [2, 5], [2, 6], [2, 7], [1, 1]].map(([k, vi]) => ({ ...base, peek: { k, vi } })).concat([{ ...base, peek: { k: 2, vi: 7, drop: 4 } }]), bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
       const one = { ...s.payload, knob: { ...s.payload.knob, vars: s.payload.knob.vars.map((v, i) => (i === 2 ? ['skyline'] : v)) } };
       add('wide peek a category with one variant', one, [{ ...base, peek: { k: 2, vi: 0 } }], bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
       // A variant past the list (the payload changed under the chooser): no shift, none lit.
       add('wide peek variant past the list', s.payload, [{ ...base, peek: { k: 2, vi: 11 } }, { ...base, peek: { k: 2, vi: -2 } }], bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
+      // Glides on the strip: categories scroll up or down the band as the
+      // ring dot glides; the variant words' white passes along as the strip shifts.
+      const g = (k, vi, glide) => ({ ...base, peek: { k, vi, glide } });
+      add('wide peek glides', p, [g(1, 0, { k: 0, vi: 0, t: 60, axis: 'x' }), g(0, 0, { k: 1, vi: 0, t: 120, axis: 'x' }), g(0, 0, { k: 4, vi: 0, t: 90, axis: 'x' }), g(3, 0, { k: 2.4, vi: 0, t: 30, axis: 'x' }),
+        g(2, 1, { k: 2, vi: 0, t: 100, axis: 'y' }), g(2, 7, { k: 2, vi: 6, t: 60, axis: 'y' }), g(2, 6, { k: 2, vi: 7, t: 150, axis: 'y' })], bytes(s.frames), undefined, { s3only: true, clouds: bytes(s.clouds) });
     }
     // Wide weather (wide-spec §4): the week and 24 hours, with and without
     // the top bar, warnings, °C and negatives, and the wide conditions.

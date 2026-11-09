@@ -1977,16 +1977,19 @@
     }
 
     // ---- peek chooser (spec §10, "Knob"; contract "Peek") ----
-    // While the knob turns, the panel shows the chosen category's variant
-    // itself, drawn from the payload's sections and `pv`, with the icon bar
-    // over rows 21-31: one 7x7 icon per ring entry in its category color
-    // (30% when not chosen), an underline under the chosen one, and its
-    // variants as a column of dots beside it. opts.peek: {k, vi} the view
-    // (ring index, variant index); slide: {k, vi, t, axis, dir} the view it
-    // is sliding away from (t ms in; axis 'x' for a category, 'y' for a
-    // variant; dir +1 the new view enters from the right or below); drop:
-    // rows the bar has dropped (0 up, PEEK.band gone).
-    const PEEK = { xMs: 270, yMs: 300, upMs: 240, downMs: 390, band: 11, top: 21, pitch: 12 };
+    // While the knob turns, the screen on the panel stays (live) and dims to
+    // PEEK.dim under the icon bar on rows 21-31: one 7x7 icon per ring entry
+    // in its category color (30% when not chosen), an underline under the
+    // chosen one, and its variants as a column of dots beside it. Nothing
+    // changes behind the bar until the choice is made; then the chosen view
+    // (drawn from the payload's sections and `pv`) comes in with the screen
+    // fade. opts.peek: {k, vi} the choice (ring index, variant index); drop:
+    // rows the bar has dropped (0 up, PEEK.band gone; the dim follows it, so
+    // it comes in with the bar and lifts as it goes); glide: {k, vi, t, axis}
+    // where the bar is gliding from (fractional indexes; t ms in; axis 'x'
+    // for a category, 'y' for a variant); under: the screen behind
+    // (p.screen by default); chosen: the chosen view alone, no bar, no dim.
+    const PEEK = { xMs: 270, yMs: 300, upMs: 240, downMs: 390, band: 11, top: 21, pitch: 12, dim: 0.25 };
     const PEEK_LOADED = '#6a6a6a';
     const PEEK_ICONS = {
       transit: ['.#####.', '#.....#', '#.....#', '#######', '##...##', '.#####.', '#.....#'],
@@ -2061,9 +2064,26 @@
     const PEEK_NAMES = { transit: 'ROWS', rows: 'ROWS', ticker: 'TICKER', now: 'NOW', '5day': '5-DAY', hourly: 'HOURLY', radar: 'RADAR', skyline: 'SKY', seventies: '70S',
       analog: 'DIAL', daynight: 'MAP', gradient: 'GRAD', digits: 'BIG', daydate: 'DATE', words: 'WORDS' };
     const PEEK_CATS = { transit: 'TRANSIT', weather: 'WEATHER', clock: 'CLOCK', announce: 'ANNOUNCE', cycle: 'CYCLE' };
-    function drawPeekBarWide(f, p, k, vi, drop) {
+    // A glide (see PEEK): where the bar is along the list, as a fractional
+    // ring index (category) or variant index, gliding from gl.k / gl.vi
+    // (fractional too: a turn mid-glide carries on from where the bar is) to
+    // the choice. {axis, pos} while it moves, else null.
+    function peekGlide(gl, k, vi) {
+      if (!gl || gl.t == null) return null;
+      const y = gl.axis === 'y', e = peekEase(gl.t / (y ? PEEK.yMs : PEEK.xMs));
+      if (e >= 1) return null;
+      return { axis: y ? 'y' : 'x', pos: y ? lerp(gl.vi || 0, vi, e) : lerp(gl.k || 0, k, e) };
+    }
+    // How lit entry i is with the bar at pos: 1 on it, 0 a step away or more.
+    const peekNear = (i, pos) => Math.max(0, 1 - Math.abs(i - pos));
+    // One category on the wide strip, its rows moved by dy, its words kept
+    // to rows top..31 (the band: a clip doesn't nest, so the words' own clip
+    // carries it). vpos: the variants' glide position (fractional), or null:
+    // the strip's shift eases between words and the white passes from one
+    // to the next.
+    function drawPeekWideEntry(f, p, k, vi, dy, vpos, top) {
       const kn = p.knob || {}, ring = kn.ring || [], cat = ring[k];
-      const sh = (y) => y + drop;
+      const sh = (y) => y + dy;
       const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
       if (rows) rows.forEach((r, j) => [...r].forEach((ch, x) => { if (ch === '#') f.fill(2 + x, sh(23 + j), 1, 1, col); }));
       f.fill(2, sh(31), 7, 1, col);
@@ -2076,63 +2096,92 @@
         for (const w of words) { xs.push(x); x += measure('small', w) + 1 + PEEK_WIDE.gap; }
         // Shifted by whole words, so the first one shown is whole. A variant
         // past the list (a payload changed under the chooser): no shift, none lit.
-        let shift = 0;
-        if (vi >= 0 && vi < xs.length) {
-          const end = xs[vi] + measure('small', words[vi]) - 1;
-          for (let j = 0; end - shift > PEEK_WIDE.right && j < vi; j++) shift = xs[j + 1] - PEEK_WIDE.x0;
-        }
-        f.withClip(PEEK_WIDE.x0, 0, PEEK_WIDE.right, 31, () => {
-          words.forEach((w, i) => f.text('small', w, xs[i] - shift, sh(29), i === vi ? C.white : PEEK_WIDE.off));
+        const shiftOf = (v) => {
+          let shift = 0;
+          if (v >= 0 && v < xs.length) {
+            const end = xs[v] + measure('small', words[v]) - 1;
+            for (let j = 0; end - shift > PEEK_WIDE.right && j < v; j++) shift = xs[j + 1] - PEEK_WIDE.x0;
+          }
+          return shift;
+        };
+        let shift = shiftOf(vi);
+        if (vpos != null) { const a = Math.floor(vpos); shift = Math.round(lerp(shiftOf(a), shiftOf(a + 1), vpos - a)); }
+        const colorOf = (i) => (vpos == null ? (i === vi ? C.white : PEEK_WIDE.off) : lerpColor(PEEK_WIDE.off, C.white, peekNear(i, vpos)));
+        f.withClip(PEEK_WIDE.x0, top, PEEK_WIDE.right, 31, () => {
+          words.forEach((w, i) => f.text('small', w, xs[i] - shift, sh(29), colorOf(i)));
         });
       } else {
         f.text('small', PEEK_CATS[cat] || String(cat || '').toUpperCase(), PEEK_WIDE.x0, sh(29), col);
       }
-      ring.forEach((c, i) => {
-        const dc = peekColor(p, c);
-        f.fill(PEEK_WIDE.dotX, sh(22 + i * 2), 1, 1, i === k ? dc : scaleColor(dc, 0.3));
-      });
     }
-    function drawPeekBar(f, p, k, vi, drop) {
+    // The wide strip. A category glide scrolls the strip up or down the band
+    // like a list (the next category below, as the ring's dots run) while
+    // the lit ring dot glides to its place.
+    function drawPeekBarWide(f, p, k, vi, drop, gl) {
+      const ring = (p.knob || {}).ring || [];
+      const g = peekGlide(gl, k, vi), top = PEEK.top + drop;
+      if (g && g.axis === 'x') {
+        const a = Math.floor(g.pos);
+        f.withClip(0, top, PEEK_WIDE.dotX - 2, 31, () => {
+          for (const j of [a, a + 1]) if (j >= 0 && j < ring.length) drawPeekWideEntry(f, p, j, j === k ? vi : ((p.knob.sel || [])[j] || 0), drop + Math.round((j - g.pos) * PEEK.band), null, top);
+        });
+      } else {
+        drawPeekWideEntry(f, p, k, vi, drop, g ? g.pos : null, top);
+      }
+      ring.forEach((c, i) => f.fill(PEEK_WIDE.dotX, drop + 22 + i * 2, 1, 1, scaleColor(peekColor(p, c), 0.3)));
+      const ly = g && g.axis === 'x' ? Math.round(22 + g.pos * 2) : 22 + k * 2;
+      if (k < ring.length) f.fill(PEEK_WIDE.dotX, drop + ly, 1, 1, peekColor(p, ring[k]));
+    }
+    // The 64 bar. A category glide slides the underline along the icons,
+    // each lighting as it passes (the variant dots come back beside the new
+    // one once it's there); a variant glide slides the lit dot up or down
+    // its column.
+    function drawPeekBar(f, p, k, vi, drop, gl) {
       const kn = p.knob || {}, ring = kn.ring || [], n = ring.length;
       const sh = (y) => y + drop;
       f.fill(0, sh(PEEK.top), f.w, PEEK.band, '#000000');
-      if (f.w === WIDE) { drawPeekBarWide(f, p, k, vi, drop); return; }
+      if (f.w === WIDE) { drawPeekBarWide(f, p, k, vi, drop, gl); return; }
+      const g = peekGlide(gl, k, vi), gx = g && g.axis === 'x', at = gx ? g.pos : k;
       const x0 = Math.floor(f.w / 2 - (n * PEEK.pitch - 5) / 2);
       ring.forEach((cat, i) => {
         const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
         if (!rows) return;
-        const c = i === k ? col : scaleColor(col, 0.3);
+        const lit = peekNear(i, at);
+        const c = lit >= 1 ? col : scaleColor(col, 0.3 + 0.7 * lit);
         rows.forEach((r, j) => [...r].forEach((ch, x) => { if (ch === '#') f.fill(x0 + i * PEEK.pitch + x, sh(23 + j), 1, 1, c); }));
       });
-      const ix = x0 + k * PEEK.pitch, col = peekColor(p, ring[k]);
+      const col = peekColor(p, ring[k]);
+      if (gx) {
+        const a = Math.floor(at), b = Math.min(n - 1, a + 1);
+        f.fill(Math.round(x0 + at * PEEK.pitch), sh(31), 7, 1, lerpColor(peekColor(p, ring[a]), peekColor(p, ring[b]), at - a));
+        return;
+      }
+      const ix = x0 + k * PEEK.pitch;
       f.fill(ix, sh(31), 7, 1, col);
-      const nv = ((kn.vars || [])[k] || []).length;
-      if (nv > 1) for (let j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, j === vi ? col : C.indicator);
+      const nv = ((kn.vars || [])[k] || []).length, dotY = (j) => 26 - (nv - 1) + j * 2;
+      if (nv > 1) {
+        for (let j = 0; j < nv; j++) f.fill(ix + 8, sh(dotY(j)), 1, 1, C.indicator);
+        if (vi >= 0 && vi < nv) f.fill(ix + 8, sh(Math.round(dotY(g ? g.pos : vi))), 1, 1, col);
+      }
     }
-    // Slide offset in px (0..w across, 0..32 down) at t ms.
-    const peekShift = (axis, t, w = 64) => Math.round(peekEase(t / (axis === 'x' ? PEEK.xMs : PEEK.yMs)) * (axis === 'x' ? w : 32));
     // Rows the bar has dropped at t ms: rising (up) from gone to 0, or falling.
     const peekDrop = (up, t) => Math.round((up ? 1 - peekEase(t / PEEK.upMs) : peekEase(t / PEEK.downMs)) * PEEK.band);
+    // The bar over a frame of the screen behind (already drawn, and widened
+    // on a wide board): the frame dims as the bar rises, to PEEK.dim. The
+    // board draws its own live screen and calls this on it.
+    function peekOverlay(f, p, pk) {
+      const drop = Math.max(0, Math.min(PEEK.band, (pk && pk.drop) || 0));
+      const dk = 1 - (1 - PEEK.dim) * (1 - drop / PEEK.band);
+      if (dk < 1) for (let i = 0; i < f.px.length; i++) f.px[i] = Math.round(f.px[i] * dk);
+      if (drop < PEEK.band) drawPeekBar(f, p, pk.k || 0, pk.vi || 0, drop, pk.glide);
+      return f;
+    }
     function renderPeek(p, opts) {
       const o = opts || {}, pk = o.peek || {};
-      const k = pk.k || 0, vi = pk.vi || 0, drop = Math.max(0, Math.min(PEEK.band, pk.drop || 0));
-      const f = drawPeekView(p, k, vi, o);
-      const sl = pk.slide;
-      if (sl && sl.t != null) {
-        const W = f.w, axis = sl.axis === 'y' ? 'y' : 'x', dir = sl.dir < 0 ? -1 : 1, sh = peekShift(axis, sl.t, W);
-        if (sh < (axis === 'x' ? W : 32)) {
-          const from = drawPeekView(p, sl.k || 0, sl.vi || 0, o), cur = f.px.slice();
-          for (let y = 0; y < 32; y++) for (let x = 0; x < W; x++) {
-            let src = from.px, sx = x, sy = y;
-            if (axis === 'x') { sx = x + dir * sh; if (sx < 0 || sx >= W) { src = cur; sx = ((sx % W) + W) % W; } }
-            else { sy = y + dir * sh; if (sy < 0 || sy >= 32) { src = cur; sy = ((sy % 32) + 32) % 32; } }
-            const i = (y * W + x) * 3, j = (sy * W + sx) * 3;
-            f.px[i] = src[j]; f.px[i + 1] = src[j + 1]; f.px[i + 2] = src[j + 2];
-          }
-        }
-      }
-      if (drop < PEEK.band) drawPeekBar(f, p, k, vi, drop);
-      return f;
+      if (pk.chosen) return drawPeekView(p, pk.k || 0, pk.vi || 0, o);
+      const under = pk.under && pk.under !== 'peek' && pk.under !== 'chooser' ? pk.under : p.screen;
+      const f = widen(renderScreen(p, { ...o, peek: undefined, screen: under }, under), colsOf(p));
+      return peekOverlay(f, p, pk);
     }
 
     // ---- clock screen: skyline face (design spec §14; contract "Skyline") ----
@@ -3312,15 +3361,19 @@
       ICON_T = o.iconT != null ? o.iconT : null;
       let f;
       try {
-        f = screen === 'peek' ? renderPeek(p, o) : screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
-          : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderClock(p, o)
-          : screen === 'announce' ? renderAnnounce(p, o) : renderTransit(p, o);
+        f = renderScreen(p, o, screen);
       } finally { NR = null; ICON_T = null; }
       f = widen(f, colsOf(p));
       applyBrightness(f, p.bright);
       if (o.slide && o.slide.from) slideFrames(o.slide.from, f, slideOffset(o.slide.t || 0, f.w), o.slide.dir == null ? 1 : o.slide.dir);
       else if (o.fade && o.fade.from) fadeFrames(o.fade.from, f, o.fade.t || 0);
       return f;
+    }
+
+    function renderScreen(p, o, screen) {
+      return screen === 'peek' ? renderPeek(p, o) : screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
+        : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderClock(p, o)
+        : screen === 'announce' ? renderAnnounce(p, o) : renderTransit(p, o);
     }
 
     // Time texts per transit slot at `now`, keyed for change detection.
@@ -3363,7 +3416,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderPeek, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekShift, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderPeek, peekOverlay, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };

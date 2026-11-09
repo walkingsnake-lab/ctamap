@@ -361,6 +361,7 @@ class Board {
   // payload landing before it goes out can't change what's sent.
   std::string peek_cat_, peek_var_;
   void draw_peek(draw::Frame &f, long long ms, long long n);
+  void start_fade(long long ms);
   void shown(int what, long long ms);
   void launch(Flight f);
   void land(long long ended);

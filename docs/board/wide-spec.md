@@ -142,14 +142,14 @@ The weekday over the date (5x7) on the left, a divider, the time in the 23-row d
 
 ## 9. Knob chooser (variant strip; built)
 
-The interaction stays as at 64 (twist = category, press = next variant, hold and turn = step variants, rest 1 s commits; the chosen view fills the panel while choosing). The bar changes:
+The interaction stays as at 64 (twist = category, press = next variant, hold and turn = step variants, rest 1 s commits; the screen behind stays, dimmed, and the choice fades in, Nov 8). The bar changes:
 
 - **Variant strip** on rows 21–31 (black band): the chosen category's 7 × 7 icon at x2 (rows 23–29) in its color with the underline on row 31, then **all its variants as words** in Tom Thumb on baseline 29 from x14: the chosen one white, the rest `#4a4a4a`. The strip shows what a press will do.
 - **Spacing:** 5 px between words, closer when a category needs it to stay within columns 14–123.
 - **Names:** Transit `ROWS TICKER`; Weather `NOW 7-DAY HOURLY RADAR`; Clock `SKY 70S DIAL MAP GRAD BIG DATE WORDS` (short names). Eight clock faces don't fit columns 14–123 even 3 px apart, so the strip keeps 5 px gaps and shifts left by whole words until the chosen one shows whole (built Nov 5).
 - **Categories without variants** (Announce, Cycle): the category's name in its color takes the strip.
 - **Ring position:** five 1-px dots in a column at x126 (rows 22–30, 2 px apart), each in its category's color, the chosen one full and the rest at 30 %.
-- Twisting swaps the whole strip (and slides the view sideways, as at 64); pressing moves the white word along it (and slides the view vertically).
+- Twisting scrolls the strip up or down the band, like a list, while the lit ring dot glides; pressing passes the white along the words as the strip shifts (Nov 8; before, the views slid behind the bar).
 
 Also mocked (`dial-*.png`): icons in place with the chosen one named, a centered wheel, a chip with no bar, and two rows of icons and words.
 

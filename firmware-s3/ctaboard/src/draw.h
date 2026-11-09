@@ -289,18 +289,22 @@ struct RenderOpts {
   // Knob chooser (screen "chooser"): wheel position and commit (draw.js opts.chooser).
   std::optional<double> chooser_pos;
   bool chooser_commit = false;
-  // Peek chooser (screen "peek"; draw.js opts.peek): the view (ring index k,
-  // variant vi), the bar's drop in rows, and the slide from another view
-  // (draw.js peek.slide: its k and vi, ms in, vertical or sideways, dir).
-  // view / slide_view: the views' payloads already built by peek_view()
-  // (null: built here). Weather in a peek: the newest frame on hand, still.
+  // Peek chooser (screen "peek"; draw.js opts.peek): the choice (ring index
+  // k, variant vi), the bar's drop in rows (the screen behind dims with it),
+  // the bar's glide from another choice (draw.js peek.glide: its k and vi,
+  // ms in, vertical or sideways, dir), the screen behind (`under`; empty:
+  // the payload's), and `chosen`: the chosen view alone. view: its payload
+  // already built by peek_view() (null: built here). Weather in a peek:
+  // the newest frame on hand, still.
   struct Peek {
     int k = 0, vi = 0, drop = 0;
-    bool slide = false;
-    int slide_k = 0, slide_vi = 0, slide_dir = 1;
-    double slide_t = 0;
-    bool slide_y = false;
-    const Value *view = nullptr, *slide_view = nullptr;
+    bool glide = false;
+    double glide_k = 0, glide_vi = 0;  // fractional: a turn mid-glide carries on from where the bar is
+    double glide_t = 0;
+    bool glide_y = false;
+    bool chosen = false;
+    std::string under;
+    const Value *view = nullptr;
   };
   std::optional<Peek> peek;
   // Clock screen (skyline face): the animation clock in epoch ms (null: now x 1000)
@@ -363,8 +367,13 @@ struct PeekView {
 };
 PeekView peek_view(const Value &p, int k, int vi);
 std::string peek_screen(const Value &p, int k, int vi);  // just the screen, no copy
-int peek_shift(bool y, double t, int w = 64);  // px slid at t ms: 0..w across, 0..32 down
 int peek_drop(bool up, double t);  // rows the bar has dropped at t ms (rising: up)
+// The bar over a frame of the screen behind (drawn and widened): the frame
+// dims as the bar rises (draw.js peekOverlay). Before brightness.
+void peek_overlay(Frame &f, const Value &p, const RenderOpts::Peek &pk);
+// Scales a drawn frame to `b` percent, as render() does (payload `bright`).
+void apply_brightness(Frame &f, double b);
+const double PEEK_DIM = 0.25;
 
 // Announce screen (draw.js messageIntroMs / messageTick): how long a message's
 // intro runs (ms; 0 for the still styles), and after it a number that changes

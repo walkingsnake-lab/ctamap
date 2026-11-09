@@ -249,14 +249,14 @@ void Player::set_screen(Screen s, double ms) {
 
 // ---- drawing ----
 
-void Player::draw(draw::Frame &frame, double ms, long long now) {
+void Player::draw(draw::Frame &frame, double ms, long long now, bool bright_here) {
   // Render the current screen at monotonic ms / epoch now. The header and
   // radar clocks roll at the minute (NumRoller; render() ends its frame).
   nums.begin(ms);
   draw::RenderOpts o;
   o.now = (double)now;
   o.roller = &nums;
-  o.apply_bright = !hw_bright;
+  o.apply_bright = !hw_bright && bright_here;
   o.bright = bright;
   if (screen == Screen::Ticker) {
     int pages = draw::ticker_pages(p, (double)now);

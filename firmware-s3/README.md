@@ -156,10 +156,10 @@ WIFI` means none of the networks could be joined (it retries).
 An Adafruit 5880 I2C rotary encoder plugged into the STEMMA QT port (any
 STEMMA QT / Qwiic cable, no soldering). It's the peek chooser (design spec
 §10, "Knob"): turn it to move along the icon bar (Transit, Weather, Clock,
-Announce, Cycle) and the panel shows that screen itself; press to step to its
+Announce, Cycle) over the screen on the panel, dimmed; press to step to its
 next variant (rows or ticker, the weather views, the clock faces), or hold it
-down and turn to step either way. Rest about a second and the bar drops away
-on the chosen screen. The knob's own light shows the hovered category's color
+down and turn to step either way. Rest about a second and the chosen screen
+fades in (back where it started, the bar just drops away). The knob's own light shows the hovered category's color
 while you choose and goes out once the choice lands. The serial log says `[knob] encoder found` or `[knob] no
 encoder on the STEMMA QT port` at startup, and `[board] knob: <category>
 <variant>` after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in

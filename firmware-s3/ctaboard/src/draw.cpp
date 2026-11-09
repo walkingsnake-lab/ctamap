@@ -2607,7 +2607,24 @@ static double peek_ease(double k) {
   return 1 - (1 - c) * (1 - c) * (1 - c);
 }
 
-int peek_shift(bool y, double t, int w) { return (int)jsround(peek_ease(t / (y ? PEEK_Y_MS : PEEK_X_MS)) * (y ? 32 : w)); }
+// A glide (draw.js peekGlide): where the bar is along the list, a
+// fractional ring or variant index, gliding from glide_k / glide_vi to the
+// choice. Moving: true, with the axis and position.
+struct PeekGlide {
+  bool moving = false, y = false;
+  double pos = 0;
+};
+static PeekGlide peek_glide(const RenderOpts::Peek &pk, int k, int vi) {
+  PeekGlide g;
+  if (!pk.glide) return g;
+  double e = peek_ease(pk.glide_t / (pk.glide_y ? PEEK_Y_MS : PEEK_X_MS));
+  if (e >= 1) return g;
+  g.moving = true;
+  g.y = pk.glide_y;
+  g.pos = pk.glide_y ? lerp(pk.glide_vi, vi, e) : lerp(pk.glide_k, k, e);
+  return g;
+}
+static double peek_near(int i, double pos) { return std::max(0.0, 1 - std::fabs(i - pos)); }
 
 int peek_drop(bool up, double t) {
   return (int)jsround((up ? 1 - peek_ease(t / PEEK_UP_MS) : peek_ease(t / PEEK_DOWN_MS)) * PEEK_BAND);
@@ -2769,9 +2786,12 @@ static ustr peek_cat_name(const std::string &cat) {
   for (char &c : up) c = (char)toupper((unsigned char)c);
   return U(up);
 }
-static void draw_peek_bar_wide(Frame &f, const Value &p, int k, int vi, int drop) {
+// One category on the wide strip, its rows moved by dy, its words kept to
+// rows top..31 (draw.js drawPeekWideEntry: a clip doesn't nest). vglide
+// with vpos: the variants' glide position.
+static void draw_peek_wide_entry(Frame &f, const Value &p, int k, int vi, int dy, bool vglide, double vpos, int top) {
   const Value &kn = p["knob"], &ring = kn["ring"];
-  auto sh = [&](int y) { return y + drop; };
+  auto sh = [&](int y) { return y + dy; };
   std::string cat = ring[k].is_str() ? ring[k].s : "";
   RGB col = peek_color(p, cat);
   if (const char *const *rows = peek_icon(cat))
@@ -2793,95 +2813,124 @@ static void draw_peek_bar_wide(Frame &f, const Value &p, int k, int vi, int drop
     }
     // A variant past the list (a payload changed under the chooser): no
     // shift, none lit, as draw.js.
-    int shift = 0;
-    if (vi >= 0 && vi < nv) {
-      int end = xs[vi] + measure(FONT_SMALL, words[vi]) - 1;
-      for (int j = 0; end - shift > PW_RIGHT && j < vi; j++) shift = xs[j + 1] - PW_X0;
+    auto shift_of = [&](int v) {
+      int shift = 0;
+      if (v >= 0 && v < nv) {
+        int end = xs[v] + measure(FONT_SMALL, words[v]) - 1;
+        for (int j = 0; end - shift > PW_RIGHT && j < v; j++) shift = xs[j + 1] - PW_X0;
+      }
+      return shift;
+    };
+    int shift = shift_of(vi);
+    if (vglide) {
+      int a = (int)std::floor(vpos);
+      shift = (int)jsround(lerp(shift_of(a), shift_of(a + 1), vpos - a));
     }
-    f.push_clip(PW_X0, 0, PW_RIGHT, 31);
-    for (int i = 0; i < nv; i++) f.text(FONT_SMALL, words[i], xs[i] - shift, sh(29), i == vi ? C::white : PW_OFF);
+    auto color_of = [&](int i) {
+      if (!vglide) return i == vi ? C::white : PW_OFF;
+      return lerp_color(PW_OFF, C::white, peek_near(i, vpos));
+    };
+    f.push_clip(PW_X0, top, PW_RIGHT, 31);
+    for (int i = 0; i < nv; i++) f.text(FONT_SMALL, words[i], xs[i] - shift, sh(29), color_of(i));
     f.pop_clip();
   } else {
     f.text(FONT_SMALL, peek_cat_name(cat), PW_X0, sh(29), col);
   }
-  for (int i = 0; i < (int)ring.size(); i++) {
-    RGB dc = peek_color(p, ring[i].is_str() ? ring[i].s : "");
-    f.fill(PW_DOT_X, sh(22 + i * 2), 1, 1, i == k ? dc : scale_color(dc, 0.3));
+}
+// The wide strip (draw.js drawPeekBarWide): a category glide scrolls the
+// strip up or down the band while the lit ring dot glides to its place.
+static void draw_peek_bar_wide(Frame &f, const Value &p, int k, int vi, int drop, const RenderOpts::Peek &pk) {
+  const Value &ring = p["knob"]["ring"];
+  int n = (int)ring.size();
+  PeekGlide g = peek_glide(pk, k, vi);
+  bool gx = g.moving && !g.y;
+  int top = PEEK_TOP + drop;
+  if (gx) {
+    int a = (int)std::floor(g.pos);
+    f.push_clip(0, top, PW_DOT_X - 2, 31);
+    for (int j = a; j <= a + 1; j++)
+      if (j >= 0 && j < n)
+        draw_peek_wide_entry(f, p, j, j == k ? vi : (int)p["knob"]["sel"][j].num(0), drop + (int)jsround((j - g.pos) * PEEK_BAND), false, 0, top);
+    f.pop_clip();
+  } else {
+    draw_peek_wide_entry(f, p, k, vi, drop, g.moving, g.pos, top);
   }
+  for (int i = 0; i < n; i++) f.fill(PW_DOT_X, drop + 22 + i * 2, 1, 1, scale_color(peek_color(p, ring[i].is_str() ? ring[i].s : ""), 0.3));
+  int ly = gx ? (int)jsround(22 + g.pos * 2) : 22 + k * 2;
+  if (k < n) f.fill(PW_DOT_X, drop + ly, 1, 1, peek_color(p, ring[k].is_str() ? ring[k].s : ""));
 }
 
-static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop) {
+// The 64 bar (draw.js drawPeekBar): a category glide slides the underline
+// along the icons, each lighting as it passes; a variant glide slides the
+// lit dot.
+static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop, const RenderOpts::Peek &pk) {
   const Value &kn = p["knob"], &ring = kn["ring"];
   int n = (int)ring.size();
   auto sh = [&](int y) { return y + drop; };
   f.fill(0, sh(PEEK_TOP), f.w, PEEK_BAND, RGB{0, 0, 0});
-  if (f.w == WIDE) return draw_peek_bar_wide(f, p, k, vi, drop);
+  if (f.w == WIDE) return draw_peek_bar_wide(f, p, k, vi, drop, pk);
+  PeekGlide g = peek_glide(pk, k, vi);
+  bool gx = g.moving && !g.y;
+  double at = gx ? g.pos : k;
   int x0 = (int)std::floor(f.w / 2.0 - (n * PEEK_PITCH - 5) / 2.0);
+  auto cat_of = [&](int i) { return ring[i].is_str() ? ring[i].s : std::string(); };
   for (int i = 0; i < n; i++) {
-    std::string cat = ring[i].is_str() ? ring[i].s : "";
+    std::string cat = cat_of(i);
     const char *const *rows = peek_icon(cat);
     if (!rows) continue;
     RGB col = peek_color(p, cat);
-    RGB c = i == k ? col : scale_color(col, 0.3);
+    double lit = peek_near(i, at);
+    RGB c = lit >= 1 ? col : scale_color(col, 0.3 + 0.7 * lit);
     for (int j = 0; j < 7; j++)
       for (int x = 0; x < 7; x++)
         if (rows[j][x] == '#') f.fill(x0 + i * PEEK_PITCH + x, sh(23 + j), 1, 1, c);
   }
+  RGB col = peek_color(p, cat_of(k));
+  if (gx) {
+    int a = (int)std::floor(at), b = std::min(n - 1, a + 1);
+    f.fill((int)jsround(x0 + at * PEEK_PITCH), sh(31), 7, 1, lerp_color(peek_color(p, cat_of(a)), peek_color(p, cat_of(b)), at - a));
+    return;
+  }
   int ix = x0 + k * PEEK_PITCH;
-  std::string kc = ring[k].is_str() ? ring[k].s : "";
-  RGB col = peek_color(p, kc);
   f.fill(ix, sh(31), 7, 1, col);
   int nv = (int)kn["vars"][k].size();
-  if (nv > 1)
-    for (int j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, j == vi ? col : C::indicator);
+  if (nv > 1) {
+    for (int j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, C::indicator);
+    if (vi >= 0 && vi < nv) f.fill(ix + 8, sh((int)jsround(26 - (nv - 1) + (g.moving ? g.pos : vi) * 2)), 1, 1, col);
+  }
 }
+
+void peek_overlay(Frame &f, const Value &p, const RenderOpts::Peek &pk) {
+  int drop = std::max(0, std::min(PEEK_BAND, pk.drop));
+  double dk = 1 - (1 - PEEK_DIM) * (1 - (double)drop / PEEK_BAND);
+  if (dk < 1)
+    for (size_t i = 0; i < f.bytes(); i++) f.px[i] = (uint8_t)jsround(f.px[i] * dk);
+  if (drop < PEEK_BAND) draw_peek_bar(f, p, pk.k, pk.vi, drop, pk);
+}
+
+static void render_screen(const Value &p, Frame &f, const RenderOpts &o, const std::string &screen);
 
 static void render_peek(const Value &p, Frame &f, const RenderOpts &o) {
   RenderOpts::Peek pk = o.peek ? *o.peek : RenderOpts::Peek{};
-  int drop = std::max(0, std::min(PEEK_BAND, pk.drop));
-  RenderOpts vo = o;  // the views: no skyline crossfade, the peek's own frames
-  vo.sky = nullptr;
-  vo.sky_from = nullptr;
-  vo.peek.reset();
-  if (pk.view) draw_peek_view(*pk.view, peek_screen(p, pk.k, pk.vi), f, vo);
-  else {
-    PeekView pv = peek_view(p, pk.k, pk.vi);
-    draw_peek_view(pv.payload(p), pv.screen, f, vo);
-  }
-  if (pk.slide) {
-    const int W = f.w;
-    int sh = peek_shift(pk.slide_y, pk.slide_t, W);
-    if (sh < (pk.slide_y ? 32 : W)) {
-      // Kept, not on the loop task's small stack; in PSRAM on the board.
-      static Frame &from = *big_frame();
-      static uint8_t *const cur = big_bytes(Frame::MAX_W * Frame::H * 3);
-      from.clear();
-      if (pk.slide_view) draw_peek_view(*pk.slide_view, peek_screen(p, pk.slide_k, pk.slide_vi), from, vo);
-      else {
-        PeekView fv = peek_view(p, pk.slide_k, pk.slide_vi);
-        draw_peek_view(fv.payload(p), fv.screen, from, vo);
-      }
-      memcpy(cur, f.px, f.bytes());
-      int dir = pk.slide_dir < 0 ? -1 : 1;
-      for (int y = 0; y < 32; y++)
-        for (int x = 0; x < W; x++) {
-          const uint8_t *src = from.px;
-          int sx = x, sy = y;
-          if (!pk.slide_y) {
-            sx = x + dir * sh;
-            if (sx < 0 || sx >= W) src = cur, sx = (int)fmod_floor(sx, W);
-          } else {
-            sy = y + dir * sh;
-            if (sy < 0 || sy >= 32) src = cur, sy = (int)fmod_floor(sy, 32);
-          }
-          int i = (y * W + x) * 3, j = (sy * W + sx) * 3;
-          f.px[i] = src[j];
-          f.px[i + 1] = src[j + 1];
-          f.px[i + 2] = src[j + 2];
-        }
+  if (pk.chosen) {
+    RenderOpts vo = o;  // the view: no skyline crossfade, the peek's own frames
+    vo.sky = nullptr;
+    vo.sky_from = nullptr;
+    vo.peek.reset();
+    if (pk.view) draw_peek_view(*pk.view, peek_screen(p, pk.k, pk.vi), f, vo);
+    else {
+      PeekView pv = peek_view(p, pk.k, pk.vi);
+      draw_peek_view(pv.payload(p), pv.screen, f, vo);
     }
+    return;
   }
-  if (drop < PEEK_BAND) draw_peek_bar(f, p, pk.k, pk.vi, drop);
+  std::string under = pk.under.empty() || pk.under == "peek" || pk.under == "chooser" ? json::str(p["screen"]) : pk.under;
+  RenderOpts bo = o;
+  bo.peek.reset();
+  bo.screen = nullptr;
+  render_screen(p, f, bo, under);
+  widen(f, cols_of(p));
+  peek_overlay(f, p, pk);
 }
 
 // ---- clock screen: skyline face (design spec §14; contract "Skyline") ----
@@ -3922,7 +3971,7 @@ long long message_tick(const Value &m, double t) {
 
 // ---- whole screen ----
 
-static void apply_brightness(Frame &f, double b) {
+void apply_brightness(Frame &f, double b) {
   double k = std::max(0.0, std::min(100.0, b)) / 100;
   if (k == 1) return;
   for (size_t i = 0; i < f.bytes(); i++) f.px[i] = (uint8_t)jsround(f.px[i] * k);
@@ -4039,13 +4088,7 @@ static void render_clock(const Value &p, Frame &f, const RenderOpts &o) {
   else render_skyline_faded(p, f, o);
 }
 
-Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
-  std::string screen = o.screen ? o.screen : json::str(p["screen"]);
-  if (!o.screen && !p["screen"].truthy()) screen = "";
-  g_roller = o.roller;
-  g_nums = o.nums;
-  g_still = p["croll"].is_false();
-  g_icon_t = o.icon_t;
+static void render_screen(const Value &p, Frame &f, const RenderOpts &o, const std::string &screen) {
   if (screen == "peek") render_peek(p, f, o);
   else if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
@@ -4054,6 +4097,16 @@ Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
   else if (screen == "clock") render_clock(p, f, o);
   else if (screen == "announce") render_announce(p, f, o.t);
   else render_transit(p, f, o.now, o.blink, o.view);
+}
+
+Frame &render(const Value &p, Frame &f, const RenderOpts &o) {
+  std::string screen = o.screen ? o.screen : json::str(p["screen"]);
+  if (!o.screen && !p["screen"].truthy()) screen = "";
+  g_roller = o.roller;
+  g_nums = o.nums;
+  g_still = p["croll"].is_false();
+  g_icon_t = o.icon_t;
+  render_screen(p, f, o, screen);
   g_roller = nullptr;
   g_nums = nullptr;
   g_still = false;
