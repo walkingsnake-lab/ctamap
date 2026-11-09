@@ -379,7 +379,7 @@ test('clock screen, day/night face: lit where the sun is up, dark on the far sid
   const f = render(p);
   const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
   assert.equal(hex(f.get(16, 7)), '#ffffff', 'Chicago');
-  assert.equal(hex(f.get(10, 14)), '#2c70b0', 'the Pacific off Mexico at noon: day sea');
+  assert.equal(hex(f.get(10, 14)), '#1e4f80', 'the Pacific off Mexico at noon: day sea');
   const { WORLD, WORLD_PALETTE } = require('./world');
   const day = WORLD_PALETTE[WORLD[10][50]];
   const night = [1, 3, 5].map((i, k) => Math.floor(parseInt(day.slice(i, i + 2), 16) * [104, 116, 140][k] / 256));

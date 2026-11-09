@@ -3544,7 +3544,7 @@ static void render_words(const Value &p, Frame &f, std::optional<double> now_o) 
 // Mirrors renderDayNight() and DN in draw.js.
 static const int DN_ROWS = 26;
 static const long long DN_NIGHT12 = -2079LL * 10000;
-static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_HERE = hexc(0xffffff);
+static const RGB DN_SEA = hexc(0x1e4f80), DN_NIGHT_SEA = hexc(0x0c2440), DN_HERE = hexc(0xffffff);
 static const int DN_NIGHT_K[] = {104, 116, 140};
 static RGB world_color(const assets::IconColor *pal, int n, char code) {
   for (int i = 0; i < n; i++)

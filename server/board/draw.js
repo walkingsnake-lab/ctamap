@@ -2585,7 +2585,7 @@
     // the bottom rows.
     const DN = {
       rows: 26, deg: 5.625, top: 84.375,
-      sea: '#2c70b0', nightSea: '#143a5c',
+      sea: '#1e4f80', nightSea: '#0c2440', // darkened Nov 8: the panel pushed the old blues (#2c70b0, #143a5c) to cyan
       // Night land: each channel x k / 256 (dimmer, a little bluer).
       nightK: [104, 116, 140],
       here: '#ffffff',
