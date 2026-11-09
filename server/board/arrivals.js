@@ -369,12 +369,19 @@ function halfOf(mapid, g, axis) {
 }
 
 // One 64-style row in column range [x0, right]: short name, up to 3 times.
+// The name stays whole and times drop (to one) when they'd come within
+// LABEL_GAP of it, as in a full-width row (Nov 8, 2026: a half is 2 px
+// narrower than the 64 board, so KIMBALL lost its last L to `DUE 12 27`).
 function halfRow(g, h, now, alerted) {
   const [x0, right] = HALVES[h];
-  const items = g.items.slice(0, MAX_TIMES);
+  const name = g.dest.toUpperCase();
+  const nameW = measure('small', fit('small', name, Infinity));
+  const room = (k) => right - LABEL_GAP - worstTimesWidth(g.items.slice(0, k).map((a) => a.t), now) - (x0 + LABEL_X) + 1;
+  let k = Math.min(MAX_TIMES, g.items.length);
+  while (k > 1 && nameW > room(k)) k--;
+  const items = g.items.slice(0, k);
   const t = items.map((a) => a.t);
-  const labelPx = right - LABEL_GAP - worstTimesWidth(t, now) - (x0 + LABEL_X) + 1;
-  const row = { ln: g.ln, lbl: fit('small', g.dest.toUpperCase(), labelPx), t, s: items.map((a) => a.s), a: alerted ? 1 : 0, h };
+  const row = { ln: g.ln, lbl: fit('small', name, room(k)), t, s: items.map((a) => a.s), a: alerted ? 1 : 0, h };
   if (alerted) {
     const timesPx = Math.max(widestTimesWidth(t.length), worstTimesWidth(t, now));
     row.al = alertLabel(g.dest.toUpperCase(), right - ALERT_TIME_GAP - timesPx - (x0 + LABEL_X) + 1);
@@ -518,4 +525,4 @@ function wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending = [])
   return [split, dest, byline, cols2, chrono];
 }
 
-module.exports = { normalize, latchDue, splitTrue, splitAxis, terminalHere, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, WIDE_TICKER_ALERT_GAP, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD };
+module.exports = { halfRow, normalize, latchDue, splitTrue, splitAxis, terminalHere, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, WIDE_TICKER_ALERT_GAP, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD };
