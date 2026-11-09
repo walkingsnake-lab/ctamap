@@ -138,6 +138,229 @@ const ICONS = {
   ],
 };
 
+// 16 x 16 icons (ICONS16), designed for the size rather than scaled from the
+// 8 x 8 set: a 7 px disc sun with eight rays, a crescent moon, one shared
+// cloud (a centered dome with equal shoulders on a flat base, the bottom two
+// rows shaded), rain as dashes on a 4 px grid, an eight-arm flake with forked
+// tips, a 2 px bolt. Same names as ICONS; their own palette (PALETTE16), since
+// the larger shapes want lighter clouds and a paler moon. Used where an icon
+// gets a 16 px slot (the wide board's conditions screen). Decided Nov 8, 2026.
+const PALETTE16 = {
+  Y: '#ffc800', // sun
+  y: '#ffb000', // sun rays
+  M: '#f0e0a0', // moon
+  C: '#dcdcdc', // cloud
+  D: '#8a8a8a', // cloud underside
+  G: '#8a8a8a', // storm cloud
+  K: '#4a4a4a', // storm cloud underside
+  B: '#2e8cff', // rain
+  W: '#ffffff', // ice crystal
+  S: '#d8f0ff', // snowflake
+  F: '#c0c0c0', // fog lines
+  E: '#6a6a6a', // fog cloud
+  L: '#ffe000', // lightning
+};
+const ICONS16 = {
+  sun: [
+    '................',
+    '.......y........',
+    '..y....y....y...',
+    '...y.......y....',
+    '......YYY.......',
+    '.....YYYYY......',
+    '....YYYYYYY.....',
+    '.yy.YYYYYYY.yy..',
+    '....YYYYYYY.....',
+    '.....YYYYY......',
+    '......YYY.......',
+    '...y.......y....',
+    '..y....y....y...',
+    '.......y........',
+    '................',
+    '................',
+  ],
+  moon: [
+    '................',
+    '................',
+    '....MMMMMMM.....',
+    '...MMMMM........',
+    '..MMMMM.........',
+    '..MMMM..........',
+    '.MMMMM..........',
+    '.MMMMM..........',
+    '.MMMMM..........',
+    '.MMMMM..........',
+    '..MMMM..........',
+    '..MMMMM.........',
+    '...MMMMM........',
+    '....MMMMMMM.....',
+    '................',
+    '................',
+  ],
+  pcloudy_day: [
+    '................',
+    '................',
+    '................',
+    '.......y........',
+    '....y.....y.....',
+    '......YYY.......',
+    '.....YYYYY......',
+    '...y.YYYYY......',
+    '.....YYY........',
+    '......Y.CCCC....',
+    '....y..CCCCCC...',
+    '.....CCCCCCCCCC.',
+    '....CCCCCCCCCCCC',
+    '....CCCCCCCCCCCC',
+    '....DDDDDDDDDDDD',
+    '.....DDDDDDDDDD.',
+  ],
+  pcloudy_night: [
+    '................',
+    '................',
+    '................',
+    '....MMMM........',
+    '...MMM..........',
+    '..MMMM..........',
+    '..MMM...........',
+    '..MMM...........',
+    '..MMMM..........',
+    '...MMM..CCCC....',
+    '....M..CCCCCC...',
+    '.....CCCCCCCCCC.',
+    '....CCCCCCCCCCCC',
+    '....CCCCCCCCCCCC',
+    '....DDDDDDDDDDDD',
+    '.....DDDDDDDDDD.',
+  ],
+  cloudy: [
+    '................',
+    '................',
+    '................',
+    '................',
+    '......CCCC......',
+    '.....CCCCCC.....',
+    '..CCCCCCCCCCCC..',
+    '.CCCCCCCCCCCCCC.',
+    'CCCCCCCCCCCCCCCC',
+    'CCCCCCCCCCCCCCCC',
+    'DDDDDDDDDDDDDDDD',
+    '.DDDDDDDDDDDDDD.',
+    '................',
+    '................',
+    '................',
+    '................',
+  ],
+  rain: [
+    '......CCCC......',
+    '.....CCCCCC.....',
+    '..CCCCCCCCCCCC..',
+    '.CCCCCCCCCCCCCC.',
+    'CCCCCCCCCCCCCCCC',
+    'CCCCCCCCCCCCCCCC',
+    'DDDDDDDDDDDDDDDD',
+    '.DDDDDDDDDDDDDD.',
+    '................',
+    '................',
+    '...B...B...B....',
+    '...B...B...B....',
+    '...B...B...B....',
+    '.....B...B...B..',
+    '.....B...B...B..',
+    '.....B...B...B..',
+  ],
+  ice: [
+    '......CCCC......',
+    '.....CCCCCC.....',
+    '..CCCCCCCCCCCC..',
+    '.CCCCCCCCCCCCCC.',
+    'CCCCCCCCCCCCCCCC',
+    'CCCCCCCCCCCCCCCC',
+    'DDDDDDDDDDDDDDDD',
+    '.DDDDDDDDDDDDDD.',
+    '................',
+    '................',
+    '...B...B..W...W.',
+    '...B...B........',
+    '...B...B........',
+    '.....B......W...',
+    '.....B..W.......',
+    '.....B..........',
+  ],
+  snow: [
+    '................',
+    '.......S........',
+    '......SSS.......',
+    '...S...S...S....',
+    '....S..S..S.....',
+    '.....S.S.S......',
+    '..S...SSS...S...',
+    '.SSSSSSSSSSSSS..',
+    '..S...SSS...S...',
+    '.....S.S.S......',
+    '....S..S..S.....',
+    '...S...S...S....',
+    '......SSS.......',
+    '.......S........',
+    '................',
+    '................',
+  ],
+  storm: [
+    '......GGGG......',
+    '.....GGGGGG.....',
+    '..GGGGGGGGGGGG..',
+    '.GGGGGGGGGGGGGG.',
+    'GGGGGGGGGGGGGGGG',
+    'GGGGGGGGGGGGGGGG',
+    'KKKKKKKKKKKKKKKK',
+    '.KKKKKKKKKKKKKK.',
+    '................',
+    '........LL......',
+    '.......LL.......',
+    '......LLLLL.....',
+    '........LL......',
+    '.......LL.......',
+    '......LL........',
+    '......L.........',
+  ],
+  tsnow: [
+    '......GGGG......',
+    '.....GGGGGG.....',
+    '..GGGGGGGGGGGG..',
+    '.GGGGGGGGGGGGGG.',
+    'GGGGGGGGGGGGGGGG',
+    'GGGGGGGGGGGGGGGG',
+    'KKKKKKKKKKKKKKKK',
+    '.KKKKKKKKKKKKKK.',
+    '................',
+    '....LL.....S....',
+    '...LL....S.S.S..',
+    '..LLLLL...SSS...',
+    '....LL..SSSSSSS.',
+    '...LL.....SSS...',
+    '..LL.....S.S.S..',
+    '..L........S....',
+  ],
+  fog: [
+    '......EEEE......',
+    '.....EEEEEE.....',
+    '..EEEEEEEEEEEE..',
+    '.EEEEEEEEEEEEEE.',
+    'EEEEEEEEEEEEEEEE',
+    'EEEEEEEEEEEEEEEE',
+    'EEEEEEEEEEEEEEEE',
+    '.EEEEEEEEEEEEEE.',
+    '................',
+    '................',
+    'FFFFFFFFFFFF....',
+    '................',
+    '....FFFFFFFFFFFF',
+    '................',
+    'FFFFFFFFFFFF....',
+    '................',
+  ],
+};
+
 // Overnight owl (transit screen, no trains; CTA calls its overnight service
 // Owl): 13 x 15, perched on a line left of the big clock. Frames of
 // [ms, rows], cycled on the board's icon clock; frame 0 is the static owl; it mostly sits still, blinks now and
@@ -208,4 +431,4 @@ function drawIcon(frame, name, x, y) {
   }));
 }
 
-module.exports = { ICONS, PALETTE, ALERT_BANG, OWL, iconForCode, drawIcon };
+module.exports = { ICONS, ICONS16, PALETTE, PALETTE16, ALERT_BANG, OWL, iconForCode, drawIcon };

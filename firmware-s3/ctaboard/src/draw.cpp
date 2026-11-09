@@ -1728,19 +1728,25 @@ static void draw_day_hours(Frame &f, const Value &wx, bool shadow, const Value *
   }
 }
 
-static void draw_icon2x(Frame &f, int icon, int x, int y) {
-  const char *px = assets::ICONS[icon].px;
-  for (int j = 0; j < 8; j++)
-    for (int i = 0; i < 8; i++) {
-      char c = px[j * 8 + i];
-      if (c != '.') f.fill(x + i * 2, y + j * 2, 2, 2, icon_color(c));
+// The 16 x 16 icon (assets::ICONS16, same names and order as ICONS, its own palette).
+static RGB icon16_color(char code) {
+  for (int i = 0; i < assets::ICON_PALETTE16_N; i++)
+    if (assets::ICON_PALETTE16[i].code == code) return RGB{assets::ICON_PALETTE16[i].r, assets::ICON_PALETTE16[i].g, assets::ICON_PALETTE16[i].b};
+  return RGB{};
+}
+static void draw_icon16(Frame &f, int icon, int x, int y) {
+  const char *px = assets::ICONS16[icon].px;
+  for (int j = 0; j < 16; j++)
+    for (int i = 0; i < 16; i++) {
+      char c = px[j * 16 + i];
+      if (c != '.') f.fill(x + i, y + j, 1, 1, icon16_color(c));
     }
 }
 
 static const int CONW_X0 = 58, CONW_L5[] = {6, 12, 18, 24, 30}, CONW_L4[] = {7, 15, 23, 31};
 static void draw_conditions_wide(Frame &f, const Value &p, double now, const Value &wx, bool shadow, const Value *warn, bool blink) {
   int icon = icon_index(wx["icon"]);
-  if (icon >= 0) draw_icon2x(f, icon, 1, 0);
+  if (icon >= 0) draw_icon16(f, icon, 1, 0);
   ustr temp = vstr(wx["temp"]);
   if (shadow) {
     RGB sh = scale_color(temp_color(wx["temp"].num(), wx["c"]), 0.2);
@@ -3538,7 +3544,7 @@ static void render_words(const Value &p, Frame &f, std::optional<double> now_o) 
 // Mirrors renderDayNight() and DN in draw.js.
 static const int DN_ROWS = 26;
 static const long long DN_NIGHT12 = -2079LL * 10000;
-static const RGB DN_SEA = hexc(0x2c70b0), DN_NIGHT_SEA = hexc(0x143a5c), DN_HERE = hexc(0xffffff);
+static const RGB DN_SEA = hexc(0x1e4f80), DN_NIGHT_SEA = hexc(0x0c2440), DN_HERE = hexc(0xffffff);
 static const int DN_NIGHT_K[] = {104, 116, 140};
 static RGB world_color(const assets::IconColor *pal, int n, char code) {
   for (int i = 0; i < n; i++)

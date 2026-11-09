@@ -388,6 +388,20 @@ test('arrival times survive the DST fall-back (CTA counts on its wall clock)', (
 const { splitTrue, splitAxis, HALVES, SPLIT_LABELS, WIDE_TIMES } = require('./arrivals');
 const wide = (mapid, more = {}) => ({ ...base, cols: 128, station: { mapid }, ...more });
 
+test('wide half row: the name stays whole and the third time drops when DUE would crowd it', () => {
+  const { halfRow } = require('./arrivals');
+  const now = 1_700_000_000;
+  const g = { ln: 'BR', dest: 'Kimball', items: [{ t: now + 110, s: 0 }, { t: now + 12 * 60, s: 0 }, { t: now + 27 * 60, s: 0 }] };
+  // 2 min now, DUE within the minute: `DUE 12 27` leaves 25 px, KIMBALL is 27.
+  const r = halfRow(g, 0, now, false);
+  assert.equal(r.lbl, 'KIMBALL');
+  assert.equal(r.t.length, 2);
+  // Plenty of room: all three.
+  const far = halfRow({ ...g, items: [{ t: now + 5 * 60, s: 0 }, ...g.items.slice(1)] }, 0, now, false);
+  assert.equal(far.lbl, 'KIMBALL');
+  assert.equal(far.t.length, 3);
+});
+
 test('wide: northbound | southbound or westbound | eastbound where every line runs that way and none ends here', () => {
   // Morse (Red), Belmont (Red, Brown, Purple): north-south.
   let r = run('morse-2026-10-03-2316.json', wide('40100'));
@@ -399,9 +413,11 @@ test('wide: northbound | southbound or westbound | eastbound where every line ru
   assert.equal(r.view, 'split');
   assert.deepEqual(r.rows.map((x) => `${x.h}:${x.ln}:${x.lbl}`), ['0:RD:HOWARD', '0:BR:KIMBALL', '1:RD:95TH', '1:BR:LOOP']);
   assert.deepEqual(r.bars.hidden, ['weather'], 'the split has no weather strip');
-  // Short names and up to 3 times, fitted to the half.
+  // Short names and up to 3 times, fitted to the half: the name stays whole
+  // and a time drops instead when they'd collide.
   for (const x of r.rows) {
     assert.ok(x.t.length <= 3);
+    assert.ok(['HOWARD', 'KIMBALL', '95TH', 'LOOP'].includes(x.lbl), `${x.lbl} is whole`);
     const [x0, right] = HALVES[x.h];
     assert.ok(x0 + 5 + measure('small', x.lbl) + 3 + worstTimesWidth(x.t, r.now) <= right + 1, x.lbl);
   }
