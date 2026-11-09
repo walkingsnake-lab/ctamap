@@ -130,20 +130,26 @@ class Chooser {
 };
 
 // The peek chooser (spec §10, "Knob"; boards whose payload carries
-// knob.vars): the chosen category's variant itself under the icon bar.
-// Turning steps through the ring (k); a press steps the category's variant;
-// holding the knob down while turning steps the variants either way.
-// PEEK_REST_MS after the last click or release it's done: the bar drops
-// (closing) and, unless back on the starting view, the board commits the
-// choice (/board/select with its variant). Each category keeps its variant
-// (sel) while the chooser is open. Times are ms on the loop's clock; the
-// Board turns them into slides and the bar's drop (draw::peek_shift, peek_drop).
+// knob.vars): the icon bar over the screen on the panel, dimmed. Turning
+// steps through the ring (k); a press steps the category's variant; holding
+// the knob down while turning steps the variants either way. Each step
+// glides the bar's selection there from wherever it is. PEEK_REST_MS after
+// the last click or release it's done: back on the starting view the bar
+// drops and the dim lifts (closing); otherwise the chosen view fades in
+// (chose) and the board commits the choice (/board/select with its variant).
+// Each category keeps its variant (sel) while the chooser is open. Times are
+// ms on the loop's clock; the Board turns them into the glide and the bar's
+// drop (draw::peek_drop).
 const double PEEK_REST_MS = 1000;
+// The bar's glide timing and curve (draw.js PEEK.xMs, yMs; ease-out cubic):
+// only where a glide starts follows it, the pixels come from draw::.
+const double PEEK_GLIDE_X_MS = 270, PEEK_GLIDE_Y_MS = 300;
 
 class PeekChooser {
  public:
   bool open = false;
   bool closing = false;     // the bar is dropping away (commit or cancel)
+  bool chose = false;       // closing on a new choice (its view fades in)
   bool committing = false;  // the choice is being sent (until it lands)
   bool sent = false;        // ... and its request has gone out
   bool holding = false;     // the knob is held down
@@ -151,10 +157,10 @@ class PeekChooser {
   int n = 0, k = 0, start_k = 0, start_vi = 0;
   std::vector<int> nv, sel;  // per ring entry: variant count, and the one shown
   double opened = 0, last = 0, closed_at = 0;
-  // The slide in flight: from (slide_k, slide_vi), vertical for a variant.
-  bool slide = false, slide_y = false;
-  int slide_k = 0, slide_vi = 0, slide_dir = 1;
-  double slide_t0 = 0;
+  // The bar's glide: from (glide_k, glide_vi), fractional, vertical for a
+  // variant; started at glide_t0.
+  bool glide = false, glide_y = false;
+  double glide_k = 0, glide_vi = 0, glide_t0 = 0;
 
   int vi() const { return k < (int)sel.size() ? sel[k] : 0; }
 
@@ -167,7 +173,7 @@ class PeekChooser {
     k = start_k = n ? ((at % n) + n) % n : 0;
     start_vi = vi();
     open = true;
-    closing = committing = sent = holding = hold_turned = slide = false;
+    closing = chose = committing = sent = holding = hold_turned = glide = false;
     opened = last = ms;
   }
   // A payload landed while open: its knob.vars sizes. A different ring
@@ -183,20 +189,18 @@ class PeekChooser {
     for (int i = 0; i < n; i++)
       if (sel[i] >= nv[i]) sel[i] = 0;
     if (start_vi >= nv[start_k]) start_vi = 0;
-    if (slide_k < n && slide_vi >= nv[slide_k]) slide_vi = 0;
   }
   // clicks: + clockwise. While held, they step the variant.
   void turn(int clicks, double ms) {
     if (!open || closing || !clicks || n <= 0) return;
-    int d = clicks > 0 ? 1 : -1;
     if (holding) {
       hold_turned = true;
       int m = nv[k];
       if (m < 2) return;
-      begin_slide(true, d, ms);
+      begin_glide(true, ms);
       sel[k] = (((sel[k] + clicks) % m) + m) % m;
     } else {
-      begin_slide(false, d, ms);
+      begin_glide(false, ms);
       k = (((k + clicks) % n) + n) % n;
     }
     last = ms;
@@ -212,7 +216,7 @@ class PeekChooser {
     if (!holding) return;
     holding = false;
     if (!hold_turned && open && !closing && nv[k] > 1) {
-      begin_slide(true, 1, ms);
+      begin_glide(true, ms);
       sel[k] = (sel[k] + 1) % nv[k];
     }
     last = ms;
@@ -221,6 +225,7 @@ class PeekChooser {
   bool cancelled() const { return k == start_k && vi() == start_vi; }
   void close(double ms, bool commit) {
     closing = true;
+    chose = commit;
     committing = commit;
     sent = false;
     holding = false;
@@ -228,13 +233,22 @@ class PeekChooser {
   }
 
  private:
-  void begin_slide(bool y, int dir, double ms) {
-    slide = true;
-    slide_y = y;
-    slide_k = k;
-    slide_vi = vi();
-    slide_dir = dir;
-    slide_t0 = ms;
+  // Where the bar is now: mid-glide, part way from its start to (k, vi).
+  void begin_glide(bool y, double ms) {
+    double gk = k, gv = vi();
+    if (glide) {
+      double t = ms - glide_t0, d = glide_y ? PEEK_GLIDE_Y_MS : PEEK_GLIDE_X_MS;
+      double c = t / d < 0 ? 0 : t / d > 1 ? 1 : t / d, e = 1 - (1 - c) * (1 - c) * (1 - c);
+      if (e < 1 && glide_y == y) {
+        if (y) gv = glide_vi + (gv - glide_vi) * e;
+        else gk = glide_k + (gk - glide_k) * e;
+      }
+    }
+    glide = true;
+    glide_y = y;
+    glide_k = gk;
+    glide_vi = gv;
+    glide_t0 = ms;
   }
 };
 

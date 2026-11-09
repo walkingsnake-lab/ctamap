@@ -130,15 +130,16 @@ int main(int argc, char **argv) {
           k.k = (int)pk["k"].num(0);
           k.vi = (int)pk["vi"].num(0);
           k.drop = (int)pk["drop"].num(0);
-          if (!pk["slide"].is_null()) {
-            const Value &sl = pk["slide"];
-            k.slide = !sl["t"].is_null();
-            k.slide_k = (int)sl["k"].num(0);
-            k.slide_vi = (int)sl["vi"].num(0);
-            k.slide_t = sl["t"].num(0);
-            k.slide_y = sl["axis"].eq("y");
-            k.slide_dir = sl["dir"].num(1) < 0 ? -1 : 1;
+          if (!pk["glide"].is_null()) {
+            const Value &gl = pk["glide"];
+            k.glide = !gl["t"].is_null();
+            k.glide_k = gl["k"].num(0);
+            k.glide_vi = gl["vi"].num(0);
+            k.glide_t = gl["t"].num(0);
+            k.glide_y = gl["axis"].eq("y");
           }
+          k.chosen = pk["chosen"].truthy();
+          if (pk["under"].is_str()) k.under = pk["under"].s;
           ro.peek = k;
         }
         std::vector<uint8_t> slide_from;

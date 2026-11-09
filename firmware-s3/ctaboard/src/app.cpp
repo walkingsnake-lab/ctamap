@@ -177,9 +177,12 @@ void Board::shown(int what, long long ms) {
   // snaps; a slide that interrupts one runs quicker (SCREEN_SLIDE_QUICK_MS),
   // so presses in a row read as one fast run.
   if (what != shown_ && shown_ != SHOWN_NONE) {
-    // The peek chooser shows the views themselves: no transition into it,
-    // and none out of it (the chosen view is already on the panel).
-    if (what == SHOWN_STATUS || what == SHOWN_CHOOSER || what == SHOWN_PEEK || shown_ == SHOWN_PEEK) {
+    // The peek chooser dims the screen it opens on (its own fade): no
+    // transition into it. Out of it, nothing new: the fade into a choice
+    // started as the chooser closed on it (start_fade) and runs on; a cancel
+    // ends on the screen it opened on.
+    if (shown_ == SHOWN_PEEK && what != SHOWN_STATUS) {
+    } else if (what == SHOWN_STATUS || what == SHOWN_CHOOSER || what == SHOWN_PEEK) {
       trans_ = NO_TRANS;
     } else {
       bool chained = transitioning(ms);
@@ -491,6 +494,8 @@ void Board::step() {
       peek_var_ = vv.is_str() ? vv.s : "";
     }
     peek.close((double)ms, commit);
+    // A choice: the chosen view fades in over what was on the panel.
+    if (commit) start_fade(ms);
   }
   if (peek.open && peek.committing && !peek.sent && !flight_) {
     send_peek();
@@ -827,8 +832,8 @@ void Board::send_peek() {
 }
 
 const Value &Board::peek_payload(int k, int vi) {
-  // Built once per payload; only the views on screen are kept (a weather
-  // or clock view is a copy of the payload).
+  // Built once per payload; only the chosen view is kept (a weather or
+  // clock view is an overlay on the payload).
   if (peek_gen_ != player.gen) {
     peek_views_.clear();
     peek_gen_ = player.gen;
@@ -836,44 +841,58 @@ const Value &Board::peek_payload(int k, int vi) {
   int key = k * 32 + vi;
   auto it = peek_views_.find(key);
   if (it == peek_views_.end()) {
-    int keep[2] = {peek.k * 32 + peek.vi(), peek.slide_k * 32 + peek.slide_vi};
-    for (auto e = peek_views_.begin(); e != peek_views_.end();) {
-      if (e->first != keep[0] && e->first != keep[1]) e = peek_views_.erase(e);
-      else ++e;
-    }
+    peek_views_.clear();
     it = peek_views_.emplace(key, draw::peek_view(player.p, k, vi)).first;
   }
   return it->second.payload(player.p);
 }
 
 void Board::draw_peek(draw::Frame &f, long long ms, long long n) {
-  draw::RenderOpts o;
-  o.screen = "peek";
-  o.apply_bright = !player.hw_bright;
-  o.bright = player.bright;
-  o.now = (double)n;
-  o.ms = player.wall_ms;  // the skyline's animation clock
-  o.frames = &player.radar_frames;
-  o.clouds = &player.clouds;
   draw::RenderOpts::Peek pk;
   pk.k = peek.k;
   pk.vi = peek.vi();
   double t = (double)ms;
-  pk.drop = peek.closing ? draw::peek_drop(false, t - peek.closed_at) : draw::peek_drop(true, t - peek.opened);
-  if (peek.slide && t - peek.slide_t0 < (peek.slide_y ? draw::PEEK_Y_MS : draw::PEEK_X_MS)) {
-    pk.slide = true;
-    pk.slide_k = peek.slide_k;
-    pk.slide_vi = peek.slide_vi;
-    pk.slide_t = t - peek.slide_t0;
-    pk.slide_y = peek.slide_y;
-    pk.slide_dir = peek.slide_dir;
-    pk.slide_view = &peek_payload(peek.slide_k, peek.slide_vi);
-  } else {
-    peek.slide = false;
+  if (peek.chose) {
+    // Closing on a choice: the chosen view (the fade into it runs over it).
+    draw::RenderOpts o;
+    o.screen = "peek";
+    o.apply_bright = !player.hw_bright;
+    o.bright = player.bright;
+    o.now = (double)n;
+    o.ms = player.wall_ms;  // the skyline's animation clock
+    o.frames = &player.radar_frames;
+    o.clouds = &player.clouds;
+    pk.chosen = true;
+    pk.view = &peek_payload(pk.k, pk.vi);
+    o.peek = pk;
+    draw::render(player.p, f, o);
+    return;
   }
-  pk.view = &peek_payload(pk.k, pk.vi);
-  o.peek = pk;
-  draw::render(player.p, f, o);
+  // The screen it opened on, live, dimmed under the bar (draw.js renderPeek
+  // with `under`): drawn by the player as ever, the bar laid over it before
+  // the brightness.
+  pk.drop = peek.closing ? draw::peek_drop(false, t - peek.closed_at) : draw::peek_drop(true, t - peek.opened);
+  if (peek.glide && t - peek.glide_t0 < (peek.glide_y ? draw::PEEK_Y_MS : draw::PEEK_X_MS)) {
+    pk.glide = true;
+    pk.glide_k = peek.glide_k;
+    pk.glide_vi = peek.glide_vi;
+    pk.glide_t = t - peek.glide_t0;
+    pk.glide_y = peek.glide_y;
+  } else {
+    peek.glide = false;
+  }
+  player.draw(f, (double)ms, n, false);
+  draw::peek_overlay(f, player.p, pk);
+  if (!player.hw_bright)
+    draw::apply_brightness(f, player.bright ? *player.bright : player.p["bright"].is_null() ? 100 : player.p["bright"].num());
+}
+
+void Board::start_fade(long long ms) {
+  // The screen fade (shown()'s FADE), from the frame on the panel now.
+  memcpy(slide_px_, last_px_, (size_t)last_w_ * draw::Frame::H * 3);
+  slide_w_ = last_w_;
+  trans_start_ = ms;
+  trans_ = FADE;
 }
 
 void Board::commit_choice(long long ms) {

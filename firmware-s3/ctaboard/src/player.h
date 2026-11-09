@@ -70,7 +70,8 @@ class Player {
   void set_screen(Screen s, double ms);
 
   // ---- drawing ----
-  void draw(draw::Frame &frame, double ms, long long now);
+  // bright false: leave brightness to the caller (the peek chooser draws its bar first).
+  void draw(draw::Frame &frame, double ms, long long now, bool bright = true);
 
   // ---- alert blink ----
   bool blink_on(double ms) const;
