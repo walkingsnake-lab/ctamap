@@ -2076,10 +2076,12 @@
     }
     // How lit entry i is with the bar at pos: 1 on it, 0 a step away or more.
     const peekNear = (i, pos) => Math.max(0, 1 - Math.abs(i - pos));
-    // One category on the wide strip, its rows moved by dy. vpos: the
-    // variants' glide position (fractional), or null: the strip's shift
-    // eases between words and the white passes from one to the next.
-    function drawPeekWideEntry(f, p, k, vi, dy, vpos) {
+    // One category on the wide strip, its rows moved by dy, its words kept
+    // to rows top..31 (the band: a clip doesn't nest, so the words' own clip
+    // carries it). vpos: the variants' glide position (fractional), or null:
+    // the strip's shift eases between words and the white passes from one
+    // to the next.
+    function drawPeekWideEntry(f, p, k, vi, dy, vpos, top) {
       const kn = p.knob || {}, ring = kn.ring || [], cat = ring[k];
       const sh = (y) => y + dy;
       const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
@@ -2105,7 +2107,7 @@
         let shift = shiftOf(vi);
         if (vpos != null) { const a = Math.floor(vpos); shift = Math.round(lerp(shiftOf(a), shiftOf(a + 1), vpos - a)); }
         const colorOf = (i) => (vpos == null ? (i === vi ? C.white : PEEK_WIDE.off) : lerpColor(PEEK_WIDE.off, C.white, peekNear(i, vpos)));
-        f.withClip(PEEK_WIDE.x0, 0, PEEK_WIDE.right, 31, () => {
+        f.withClip(PEEK_WIDE.x0, top, PEEK_WIDE.right, 31, () => {
           words.forEach((w, i) => f.text('small', w, xs[i] - shift, sh(29), colorOf(i)));
         });
       } else {
@@ -2117,14 +2119,14 @@
     // the lit ring dot glides to its place.
     function drawPeekBarWide(f, p, k, vi, drop, gl) {
       const ring = (p.knob || {}).ring || [];
-      const g = peekGlide(gl, k, vi);
+      const g = peekGlide(gl, k, vi), top = PEEK.top + drop;
       if (g && g.axis === 'x') {
         const a = Math.floor(g.pos);
-        f.withClip(0, PEEK.top + drop, PEEK_WIDE.dotX - 2, 31, () => {
-          for (const j of [a, a + 1]) if (j >= 0 && j < ring.length) drawPeekWideEntry(f, p, j, j === k ? vi : ((p.knob.sel || [])[j] || 0), drop + Math.round((j - g.pos) * PEEK.band), null);
+        f.withClip(0, top, PEEK_WIDE.dotX - 2, 31, () => {
+          for (const j of [a, a + 1]) if (j >= 0 && j < ring.length) drawPeekWideEntry(f, p, j, j === k ? vi : ((p.knob.sel || [])[j] || 0), drop + Math.round((j - g.pos) * PEEK.band), null, top);
         });
       } else {
-        drawPeekWideEntry(f, p, k, vi, drop, g ? g.pos : null);
+        drawPeekWideEntry(f, p, k, vi, drop, g ? g.pos : null, top);
       }
       ring.forEach((c, i) => f.fill(PEEK_WIDE.dotX, drop + 22 + i * 2, 1, 1, scaleColor(peekColor(p, c), 0.3)));
       const ly = g && g.axis === 'x' ? Math.round(22 + g.pos * 2) : 22 + k * 2;

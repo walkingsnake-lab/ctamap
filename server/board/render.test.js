@@ -282,6 +282,14 @@ test('peek chooser: the icon bar over the screen behind, dimmed; the chosen vari
   assert.equal(dot(peek({ k: 0, vi: 1, glide: { k: 0, vi: 0, t: 80, axis: 'y' } })), 26);
   assert.equal(dot(peek({ k: 0, vi: 1, glide: { k: 0, vi: 0, t: PEEK.yMs, axis: 'y' } })), 27);
 
+  // Two panels: a category glide scrolls the strip within the band; nothing
+  // of it shows above row 21, at any point of the glide.
+  const pw = { ...p, cols: 128 }, still = render(pw, { screen: 'peek', now, frames: {}, peek: { k: 1, vi: 0 } });
+  for (const t of [0, 20, 40, 80, 150, 260]) for (const [k, from] of [[1, 0], [0, 1], [2, 0.5]]) {
+    const g = render(pw, { screen: 'peek', now, frames: {}, peek: { k, vi: 0, glide: { k: from, vi: 0, t, axis: 'x' } } });
+    for (let y = 0; y <= 20; y++) for (let x = 0; x < 128; x++) assert.equal(hex(g.get(x, y)), hex(still.get(x, y)), `t ${t} ${from}->${k} at ${x},${y}`);
+  }
+
   // The bar drops away: fully dropped is the screen behind, undimmed.
   assert.ok(rowsEqual(peek({ k: 0, vi: 0, drop: PEEK.band }), render(p, { screen: 'transit', now }), 0, 31));
   f = peek({ k: 0, vi: 0, drop: 4 });

@@ -2786,9 +2786,10 @@ static ustr peek_cat_name(const std::string &cat) {
   for (char &c : up) c = (char)toupper((unsigned char)c);
   return U(up);
 }
-// One category on the wide strip, its rows moved by dy (draw.js
-// drawPeekWideEntry). vglide with vpos: the variants' glide position.
-static void draw_peek_wide_entry(Frame &f, const Value &p, int k, int vi, int dy, bool vglide, double vpos) {
+// One category on the wide strip, its rows moved by dy, its words kept to
+// rows top..31 (draw.js drawPeekWideEntry: a clip doesn't nest). vglide
+// with vpos: the variants' glide position.
+static void draw_peek_wide_entry(Frame &f, const Value &p, int k, int vi, int dy, bool vglide, double vpos, int top) {
   const Value &kn = p["knob"], &ring = kn["ring"];
   auto sh = [&](int y) { return y + dy; };
   std::string cat = ring[k].is_str() ? ring[k].s : "";
@@ -2829,7 +2830,7 @@ static void draw_peek_wide_entry(Frame &f, const Value &p, int k, int vi, int dy
       if (!vglide) return i == vi ? C::white : PW_OFF;
       return lerp_color(PW_OFF, C::white, peek_near(i, vpos));
     };
-    f.push_clip(PW_X0, 0, PW_RIGHT, 31);
+    f.push_clip(PW_X0, top, PW_RIGHT, 31);
     for (int i = 0; i < nv; i++) f.text(FONT_SMALL, words[i], xs[i] - shift, sh(29), color_of(i));
     f.pop_clip();
   } else {
@@ -2843,15 +2844,16 @@ static void draw_peek_bar_wide(Frame &f, const Value &p, int k, int vi, int drop
   int n = (int)ring.size();
   PeekGlide g = peek_glide(pk, k, vi);
   bool gx = g.moving && !g.y;
+  int top = PEEK_TOP + drop;
   if (gx) {
     int a = (int)std::floor(g.pos);
-    f.push_clip(0, PEEK_TOP + drop, PW_DOT_X - 2, 31);
+    f.push_clip(0, top, PW_DOT_X - 2, 31);
     for (int j = a; j <= a + 1; j++)
       if (j >= 0 && j < n)
-        draw_peek_wide_entry(f, p, j, j == k ? vi : (int)p["knob"]["sel"][j].num(0), drop + (int)jsround((j - g.pos) * PEEK_BAND), false, 0);
+        draw_peek_wide_entry(f, p, j, j == k ? vi : (int)p["knob"]["sel"][j].num(0), drop + (int)jsround((j - g.pos) * PEEK_BAND), false, 0, top);
     f.pop_clip();
   } else {
-    draw_peek_wide_entry(f, p, k, vi, drop, g.moving, g.pos);
+    draw_peek_wide_entry(f, p, k, vi, drop, g.moving, g.pos, top);
   }
   for (int i = 0; i < n; i++) f.fill(PW_DOT_X, drop + 22 + i * 2, 1, 1, scale_color(peek_color(p, ring[i].is_str() ? ring[i].s : ""), 0.3));
   int ly = gx ? (int)jsround(22 + g.pos * 2) : 22 + k * 2;
