@@ -726,18 +726,35 @@ static const Icon ICONS[] = {
 };
 static const int ICONS_N = 11;
 
+static const IconColor ICON_PALETTE16[] = {
+  {'Y', 255, 200, 0},
+  {'y', 255, 176, 0},
+  {'M', 240, 224, 160},
+  {'C', 220, 220, 220},
+  {'D', 138, 138, 138},
+  {'G', 138, 138, 138},
+  {'K', 74, 74, 74},
+  {'B', 46, 140, 255},
+  {'W', 255, 255, 255},
+  {'S', 216, 240, 255},
+  {'F', 192, 192, 192},
+  {'E', 106, 106, 106},
+  {'L', 255, 224, 0},
+};
+static const int ICON_PALETTE16_N = 13;
+
 static const Icon ICONS16[] = {
-  {"sun", ".......................Y..........Y....Y....Y......Y.......Y..........YYY............YYYYY..........YYYYYYY......YY.YYYYYYY.YY......YYYYYYY..........YYYYY............YYY..........Y.......Y......Y....Y....Y..........Y........................................"},
-  {"moon", ".........................MM............MMM...........MMMM...........MMMM...........MMMM............MMMM............MMMM............MMMM............MMMM.............MMMM.............MMMM..............MMM...............MM....................................."},
-  {"pcloudy_day", "....Y............Y.....Y...........YYY............YYYYY.........Y.YYYYY.Y.........YYYYY............YYY...........Y........CCC............CCCCC.......CCC.CCCCCC.....CCCCCCCCCCC.....CCCCCCCCCCCC...CCCCCCCCCCCCC....DDDDDDDDDDD......DDDDDDDDD.................."},
-  {"pcloudy_night", ".....MM............MMM............MMM............MMM.............MMM.............MMM..............MMM..............MMM....CCC............CCCCC.......CCC.CCCCCC.....CCCCCCCCCCC.....CCCCCCCCCCCC...CCCCCCCCCCCCC....DDDDDDDDDDD......DDDDDDDDD.................."},
-  {"cloudy", "........................................................CCC............CCCCC......CCC.CCCCCCC....CCCCCCCCCCCCC...CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC.DDDDDDDDDDDDDD...DDDDDDDDDDDD.................................................................."},
-  {"rain", "........CCC............CCCCC......CCC.CCCCCCC....CCCCCCCCCCCCC...CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC.DDDDDDDDDDDDDD...DDDDDDDDDDDD......................B...B...B......B...B...B.......B...B...B..........B...B..........B...B...........B...B......"},
-  {"ice", "........CCC............CCCCC......CCC.CCCCCCC....CCCCCCCCCCCCC...CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC.DDDDDDDDDDDDDD...DDDDDDDDDDDD.............W.......B.....W.W.W....B.......WWW.....B.....WWWWWWW......B....WWW.......B....W.W.W......B......W...."},
-  {"snow", ".......................S...............S...........S...S...S........S..S..S..........S.S.S............SSS........SSSSSSSSSSSSS........SSS............S.S.S..........S..S..S........S...S...S...........S...............S........................................"},
-  {"storm", "........GGG............GGGGG......GGG.GGGGGGG....GGGGGGGGGGGGG...GGGGGGGGGGGGGG.GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG.KKKKKKKKKKKKKK...KKKKKKKKKKKK..........LL.............LL.............LLLLL............LLL.............LL.............LL.............L.........."},
-  {"tsnow", "........GGG............GGGGG......GGG.GGGGGGG....GGGGGGGGGGGGG...GGGGGGGGGGGGGG.GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG.KKKKKKKKKKKKKK...KKKKKKKKKKKK......LL.....S.......LL....S.S.S....LLLLL...SSS......LLL..SSSSSSS....LL.....SSS.....LL.....S.S.S...L.........S...."},
-  {"fog", ".................................................FFFFFFFFFFF.....FFFFFFFFFFF........................................EEEEEEEEEEE.....EEEEEEEEEEE..................................FFFFFFFFFFF.....FFFFFFFFFFF...................................................."},
+  {"sun", ".......................y..........y....y....y......y.......y..........YYY............YYYYY..........YYYYYYY......yy.YYYYYYY.yy......YYYYYYY..........YYYYY............YYY..........y.......y......y....y....y..........y........................................"},
+  {"moon", "....................................MMMMMMM........MMMMM..........MMMMM...........MMMM...........MMMMM...........MMMMM...........MMMMM...........MMMMM............MMMM............MMMMM............MMMMM............MMMMMMM....................................."},
+  {"pcloudy_day", ".....y............y.....y...........YYY............YYYYY.........y.YYYYY.y.........YYYYY............YYY...........y.....................................CCCC...........CCCCCC........CC.CCCC.CC.....CCCCCCCCCCCC....CCCCCCCCCCCC....DDDDDDDDDDDD.....DDDDDDDDDD."},
+  {"pcloudy_night", "..................MMMM...........MMM............MMMM............MMM.............MMM.............MMMM.............MMM..............MMMM..................CCCC...........CCCCCC........CC.CCCC.CC.....CCCCCCCCCCCC....CCCCCCCCCCCC....DDDDDDDDDDDD.....DDDDDDDDDD."},
+  {"cloudy", "......................................................................CCCC...........CCCCCC.......CC.CCCCCC.CC...CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDD.DDDDDDDDDDDDDD................................................................."},
+  {"rain", "......CCCC...........CCCCCC.......CC.CCCCCC.CC...CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDD.DDDDDDDDDDDDDD....................................B...B...B.......B...B...B.......B...B...B.........B...B...B.......B...B...B.......B...B...B.."},
+  {"ice", "......CCCC...........CCCCCC.......CC.CCCCCC.CC...CCCCCCCCCCCCCC.CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCDDDDDDDDDDDDDDDD.DDDDDDDDDDDDDD............................W.......B.....W.W.W.....B......WWW......B....WWWWWWW......B....WWW........B...W.W.W.......B.....W...."},
+  {"snow", ".......................S..............SSS..........S...S...S........S..S..S..........S.S.S........S...SSS...S....SSSSSSSSSSSSS....S...SSS...S........S.S.S..........S..S..S........S...S...S..........SSS..............S........................................"},
+  {"storm", "......GGGG...........GGGGGG.......GG.GGGGGG.GG...GGGGGGGGGGGGGG.GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGKKKKKKKKKKKKKKKK.KKKKKKKKKKKKKK.........................LL.............LL.............LLLLL.............LL.............LL.............LL..............L........."},
+  {"tsnow", "......GGGG...........GGGGGG.......GG.GGGGGG.GG...GGGGGGGGGGGGGG.GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGKKKKKKKKKKKKKKKK.KKKKKKKKKKKKKK.....................LL.....S.......LL....S.S.S....LLLLL...SSS.......LL..SSSSSSS....LL.....SSS.....LL.....S.S.S....L........S...."},
+  {"fog", "......EEEE...........EEEEEE.......EE.EEEEEE.EE...EEEEEEEEEEEEEE.EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE.EEEEEEEEEEEEEE.................................FFFFFFFFFFFF........................FFFFFFFFFFFF................FFFFFFFFFFFF...................."},
 };
 
 static const IconColor OWL_PALETTE[] = {

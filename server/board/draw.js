@@ -1254,9 +1254,9 @@
     // SKY, FEELS, WIND, RAIN (while `rl`), and the next SUNRISE or SUNSET
     // (wx.sun: {k: 'rise' | 'set', t}).
     const CONW = { x0: 58, lines5: [6, 12, 18, 24, 30], lines4: [7, 15, 23, 31], rise: '#ffc23a', set: '#ff7414' };
-    // The 16 x 16 icon (icons.ICONS16), drawn for the size rather than the 8 x 8 scaled up.
+    // The 16 x 16 icon (icons.ICONS16, its own palette), drawn for the size rather than the 8 x 8 scaled up.
     function drawIcon16(f, name, x, y) {
-      icons.ICONS16[name].forEach((row, j) => [...row].forEach((c, i) => { if (c !== '.') f.fill(x + i, y + j, 1, 1, icons.PALETTE[c]); }));
+      icons.ICONS16[name].forEach((row, j) => [...row].forEach((c, i) => { if (c !== '.') f.fill(x + i, y + j, 1, 1, icons.PALETTE16[c]); }));
     }
     function drawConditionsWide(f, p, wx, top) {
       const { shadow, warn, blink } = top || {};

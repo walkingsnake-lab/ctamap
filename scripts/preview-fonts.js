@@ -9,7 +9,7 @@ const path = require('path');
 const { Frame } = require('../server/board/raster');
 const { measure, ligatures } = require('../server/board/fonts');
 const G = require('../server/board/glyphs');
-const { ICONS, ICONS16, PALETTE: ICON_PALETTE, drawIcon } = require('../server/board/icons');
+const { ICONS, ICONS16, PALETTE: ICON_PALETTE, PALETTE16, drawIcon } = require('../server/board/icons');
 const { alertLabel, widestTimesWidth } = require('../server/board/arrivals');
 
 const OUT = path.join(__dirname, '..', 'docs', 'board', 'previews');
@@ -211,7 +211,7 @@ function transitRows(f, rows, tops) {
   const bigF = new Frame(names.length * 20, 40);
   names.forEach((n, i) => {
     ICONS[n].forEach((r, j) => [...r].forEach((c, k) => { if (c !== '.') bigF.fill(2 + i * 20 + k * 2, 2 + j * 2, 2, 2, ICON_PALETTE[c]); }));
-    ICONS16[n].forEach((r, j) => [...r].forEach((c, k) => { if (c !== '.') bigF.fill(2 + i * 20 + k, 22 + j, 1, 1, ICON_PALETTE[c]); }));
+    ICONS16[n].forEach((r, j) => [...r].forEach((c, k) => { if (c !== '.') bigF.fill(2 + i * 20 + k, 22 + j, 1, 1, PALETTE16[c]); }));
   });
   save('sheet-icons-16.png', bigF, 10);
 

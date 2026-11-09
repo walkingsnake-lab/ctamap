@@ -1728,13 +1728,18 @@ static void draw_day_hours(Frame &f, const Value &wx, bool shadow, const Value *
   }
 }
 
-// The 16 x 16 icon (assets::ICONS16, same names and order as ICONS).
+// The 16 x 16 icon (assets::ICONS16, same names and order as ICONS, its own palette).
+static RGB icon16_color(char code) {
+  for (int i = 0; i < assets::ICON_PALETTE16_N; i++)
+    if (assets::ICON_PALETTE16[i].code == code) return RGB{assets::ICON_PALETTE16[i].r, assets::ICON_PALETTE16[i].g, assets::ICON_PALETTE16[i].b};
+  return RGB{};
+}
 static void draw_icon16(Frame &f, int icon, int x, int y) {
   const char *px = assets::ICONS16[icon].px;
   for (int j = 0; j < 16; j++)
     for (int i = 0; i < 16; i++) {
       char c = px[j * 16 + i];
-      if (c != '.') f.fill(x + i, y + j, 1, 1, icon_color(c));
+      if (c != '.') f.fill(x + i, y + j, 1, 1, icon16_color(c));
     }
 }
 
