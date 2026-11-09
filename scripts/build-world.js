@@ -68,11 +68,16 @@ const texel = (lon, lat) => {
   return [img.data[i], img.data[i + 1], img.data[i + 2]];
 };
 // Shadows lifted (gamma 0.8: forests are near-black in the source), then
-// saturation and gain, snow capped.
+// saturation and gain, snow capped. Red held to green (RED_MAX): the
+// outback and the dark browns inside the forests otherwise come out red on the
+// panel, whose per-channel gamma pushes red ahead of green at low levels (Nov 8, 2026).
+const RED_MAX = 1.0;
 const tune = (c) => {
   const [r, g, b] = c.map((v) => 255 * Math.pow(v / 255, 0.8));
   const l = 0.299 * r + 0.587 * g + 0.114 * b;
-  return [r, g, b].map((v) => Math.max(0, Math.min(SNOW, Math.round((l + (v - l) * SAT) * GAIN))));
+  const out = [r, g, b].map((v) => Math.max(0, Math.min(SNOW, Math.round((l + (v - l) * SAT) * GAIN))));
+  out[0] = Math.min(out[0], Math.round(out[1] * RED_MAX));
+  return out;
 };
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWX';
 const hex = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
