@@ -200,7 +200,7 @@ def parts():
     Q['bumpers'] = Manifold.batch_boolean([cyl_z(fx, fy, C.FOOT_DEPTH - 3.8, C.FOOT_DEPTH, 12.7, 48) for fx, fy in C.FEET], ADD)
     up = PC.usb_plug()
     Q['usb'] = up['usb_shell'] + up['usb_overmold']
-    Q['cleat_case'], Q['cleat_wall'] = CLT.case_cleat(), CLT.wall_cleat()
+    Q['cleat_case'], Q['cleat_wall'] = CLT.case_cleat(), p4.wall_cleat_p4()
     return Q
 
 
@@ -267,30 +267,35 @@ def overview(Q, out):
 
 # ---------------------------------------------------------------- 02 shell joint
 def shell_joint(Q, out):
-    lip_t = WALL / 2 - LAP_CL
+    lip_t, lip_l = WALL / 2 - LAP_CL, LAP - LAP_ZCL
+    xo = -HW                                                         # the left end wall's outer face
     near = slab(x=(-BIG, -100))
     lift = 16.0
-    xi = -HW + WALL * 0.75
+    xi = xo + WALL * 0.75
     a = persp('Left end from inside the case, the top half lifted 16 mm: its lip drops into the pocket in the bottom half',
               [(Q['shell_top'] ^ near, COL['shell_top'], shift(dz=lift)), (Q['shell_bot'] ^ near, COL['shell_bot'], np.eye(4))],
               eye=(-52, -92, ZS + 44), target=(-137, 40, ZS + 6), size=(1500, 820), yfov=0.46,
-              callouts=[('a', (xi, 44, ZS - 2.2 + lift)), ('b', (xi, 50, ZS - LAP / 2 - 0.6)), ('c', (-HW + WALL - 0.2, 7, ZS))],
-              legend=['a  lip: the inner half of the top half\'s end wall,', f'    {lip_t:.2f} mm thick, {LAP - LAP_ZCL - REV_W / 2:.1f} mm long',
-                      'b  pocket in the bottom half', 'c  1 x 1 mm reveal round the end: outside,', '    front rim, hood side, back rim',
-                      '', 'The right end is the same, mirrored.', 'Glue: 30-minute epoxy on the lap\'s faces.'])
+              callouts=[('a', (xi, 44, ZS - 2.2 + lift)), ('b', (xi, 50, ZS - LAP / 2 - 0.6)), ('c', (xo + WALL - 0.2, 7, ZS))],
+              legend=['a  lip: the inner half of the top half\'s end wall,', f'    {lip_t:.2f} mm thick, {lip_l:.1f} mm long',
+                      'b  pocket in the bottom half', f'c  V-groove round the end, {CHAMF:g} mm x 45 deg on', '    each half: outside, front rim, hood side,',
+                      '    back rim', '', 'The right end is the same, mirrored.', 'Glue: 30-minute epoxy on the lap\'s faces,',
+                      'with both tray halves pushed in as the form.'])
     b = section('Section through the left end wall at mid depth, seen from the front (outside is on the left)',
-                it(Q, 'tray_left', 'shell_top', 'shell_bot'), slab(y=(45, 52)), 'front', (-137.2, 45, ZS - 2.6), 8.0, (1300, 800),
-                [('top half', (-139.6, 45, ZS + 1.7), -1), ('1 x 1 mm reveal:\nthe joint line sits at its lower edge', (-139.9, 45, ZS), -1),
-                 ('the halves seat here only\n(outer band)', (-139.3, 45, ZJ), -1), ('bottom half', (-139.6, 45, ZS - 6.5), -1),
-                 (f'lip, {lip_t:.2f} mm thick', (-137.7, 45, ZS - 2.2), 1), (f'glue gap {LAP_CL} mm\non the lip\'s face', (-138.6, 45, ZS - 2.6), 1),
-                 (f'{LAP_ZCL} mm under the lip\n(no seat here)', (-137.8, 45, ZS - LAP + LAP_ZCL / 2), 1),
-                 ('tray\'s end wall (PETG),\n0.25 mm from the shell', (-135.4, 45, ZS - 6.5), 1)])
-    xs = -HW + WALL * 0.75
+                it(Q, 'tray_left', 'shell_top', 'shell_bot'), slab(y=(45, 52)), 'front', (xo + 3.4, 45, ZS - 2.4), 8.0, (1300, 800),
+                [('top half', (xo + 0.9, 45, ZS + 1.7), -1),
+                 (f'V-groove: {CHAMF:g} mm x 45 deg on each half, on every visible edge of the joint', (xo + 0.12, 45, ZJ), -1),
+                 (f'the halves seat here only: a {WALL / 2:g} mm band along the outside', (xo + 1.3, 45, ZJ), -1),
+                 ('bottom half', (xo + 0.9, 45, ZS - 6.2), -1),
+                 (f'lip, {lip_t:.2f} mm thick', (xo + WALL * 0.78, 45, ZS - 2.2), 1),
+                 (f'glue gap {LAP_CL} mm on the lip\'s face', (xo + WALL / 2 + LAP_CL / 2, 45, ZS - 2.6), 1),
+                 (f'{LAP_ZCL} mm under the lip (no seat here)', (xo + WALL * 0.75, 45, ZS - LAP + LAP_ZCL / 2), 1),
+                 ('tray\'s end wall (PETG), 0.25 mm from the shell; glued up with the trays in, it keys the wall the other way', (-BORE_HX + DR.TRAY_CL + 1.25, 45, ZS - 6.2), 1)])
+    xs = xo + WALL * 0.75
     c = section('The same joint from outside with the outer half of the wall cut away: where the lap runs along the depth (front is on the right)',
-                it(Q, 'shell_top', 'shell_bot'), slab(x=(xs, -HW + WALL - 0.02)), 'left', (xs, D / 2, ZS - 2.0), 40.0, (1300, 420),
-                [('back rim', (xs, D - 1.5, ZS + 6), -1), (f'lap ends {D - LAP_Y1:.1f} mm\ninside the back rim', (xs, LAP_Y1, ZS - 2), -1),
-                 ('lip in its pocket,\n45 deg at both ends', (xs, 44, ZS - 2.2), -1),
-                 (f'front {LAP_Y0:.0f} mm: no lap\n(the hood side shows\nonly the reveal)', (xs, 8, ZS - 1.0), 1),
+                it(Q, 'shell_top', 'shell_bot'), slab(x=(xs, xo + WALL - 0.02)), 'left', (xs, D / 2, ZS - 2.0), 40.0, (1300, 420),
+                [('back rim', (xs, D - 1.5, ZS + 6), -1), (f'lap ends {D - LAP_Y1:.1f} mm inside the back rim', (xs, LAP_Y1, ZS - 2), -1),
+                 ('lip in its pocket, 45 deg at both ends', (xs, 44, ZS - 2.2), -1),
+                 (f'front {LAP_Y0:.0f} mm: no lap (the hood side shows only the V)', (xs, 8, ZS - 0.2), 1),
                  ('the screen face is at this depth', (xs, Y_FACE, ZS - 9), 1)])
     stack(f'1. Shell joint: top and bottom halves (wall {WALL:g} mm)', [a, b, c], f'{out}/p4-assembly-02-shell-joint.png')
 
@@ -302,11 +307,11 @@ def diffuser(Q, out):
     a = section('Section through the top edge, seen from the right (front of the case is on the left)',
                 it(Q, 'dif_white', 'dif_left', 'tray_left', 'panel', 'shell_top'), slab(x=(xp - 12, xp)), 'right', (xp, 19.5, H - 10.5), 20.0, (1300, 780),
                 [('hood: the shell runs 16 mm\npast the screen at the top', (xp, 5.0, H - 1.7), -1),
-                 ('rim: the diffuser\'s flange seats\nbehind it (45 deg, 0.3 mm overlap)', (xp, Y_FACE - 0.6, zt - 0.5), -1),
-                 ('white face, 0.2 mm (one layer)', (xp, Y_FACE + 0.1, H - 17.0), -1),
+                 (f'rim: the diffuser\'s flange seats behind it ({V.SEAT_DEG:g} deg, {V.RIM_IN - 0.3 - DF.BEV:.1f} mm overlap)', (xp, Y_FACE - 0.5, zt - 0.6), -1),
+                 ('white first layer, 0.2 mm: the face and the flange\'s front', (xp, Y_FACE + 0.1, H - 17.0), -1),
                  ('black grid, 1.5 mm:\nits ribs sit between the LEDs', (xp, Y_FACE + 1.0, H - 20.0), -1),
                  ('shell top wall (walnut)', (xp, 28.0, H - WALL / 2), 1),
-                 ('flange = the 8 mm black bezel,\n1.2 mm thick, 0.3 mm clear of the bore', (xp, Y_FACE + 0.7, zt - 3.5), 1),
+                 ('flange: the 8 mm border round the pixels, white in front, 1.2 mm thick, 0.3 mm clear of the bore', (xp, Y_FACE + 0.7, zt - 3.5), 1),
                  ('tray\'s front edge holds the flange\nagainst the rim', (xp, DR.YF + 1.5, zt - 1.5), 1),
                  ('skirt over the panel\'s edge\n(0.15 mm clear, snap bumps)', (xp, Y_FACE + 3.4, ZC + 64.8), 1),
                  ('panel', (xp, 27.0, H - 20.0), 1)])
@@ -399,7 +404,7 @@ def s3_usb(Q, out):
                  ('tray\'s right wall, open at the port', (BORE_HX - DR.TRAY_CL - 1.2, 60.0, pz), 1),
                  ('shell end wall: 13.65 x 8 mm opening,\nlarge enough for any plug\'s housing', (HW - WALL / 2, C.PORT_Y + 5.5, pz), 1),
                  ('cable\'s plug', (HW + 6.0, C.PORT_Y, pz), 1),
-                 (f'board edge {BORE_HX - DR.S3_EDGE:.2f} mm\ninside the wall', (DR.S3_EDGE, PCB_Y0 + 0.8, pz), 1)])
+                 (f'board edge {BORE_HX - DR.S3_EDGE:.2f} mm inside the wall, {HW - DR.S3_EDGE:.2f} mm behind its outer face: the plug\'s housing goes in through the opening', (DR.S3_EDGE, PCB_Y0 + 0.8, pz), 1)])
     hz = DR.S3_HOLES[1][1]                                             # the upper pair of posts
     b = section('The S3\'s upper pair of posts, cut level through them and seen from above',
                 it(Q, 'sc_s3', 's3', 'tray_right', 'shell_bot', 'shell_top'), slab(z=(hz - 3.0, hz)), 'top', (112.0, 52.5, hz), 37.0, (1300, 760),
@@ -407,8 +412,8 @@ def s3_usb(Q, out):
                  ('S3 post on the tray\'s back', (DR.S3_HOLES[2][0], 58.0, hz), -1), ('tray back wall', (95.0, DR.Y1 - 1.0, hz), -1),
                  ('S3 board', (80.0, PCB_Y0 + 0.8, hz), -1),
                  ('second post, beside the edge buttons', (DR.S3_HOLES[1][0], 58.0, hz), 1),
-                 ('relief behind the S3\'s edge buttons:\n0.8 mm of wall left here', (HW - 0.4, 42.5, hz), 1),
-                 ('shell end wall, full thickness', (HW - WALL / 2, 62.0, hz), 1)])
+                 (f'no relief now: the full {WALL:g} mm wall behind the edge buttons, {BORE_HX - DR.S3_EDGE:.2f} mm from the board\'s edge', (HW - WALL / 2, 44.0, hz), 1),
+                 ('tray\'s right wall (open in front of the buttons and the port)', (BORE_HX - DR.TRAY_CL - 1.2, 60.0, hz), 1)])
     stack('10. S3 on the right tray half, and USB-C through the end wall', [a, b], f'{out}/p4-assembly-07-s3-usb.png')
 
 
@@ -442,17 +447,16 @@ def sensor_sled(Q, out):
 def cleat(Q, out):
     xc, zc = DR.CLEAT_SCREWS[0]
     wall = box(-200, 200, CLT.YW, CLT.YW + 6.0, -50, 250)
-    wscrew = Manifold.batch_boolean([cyl_y(x, z, DR.Y1 + 1.0, CLT.YW + 6.0, 4.0, 24) for x, z in CLT.wall_screws()], ADD)
-    items = [(Q['sc_cleat'], COL['screw']), (wscrew, COL['screw']), (Q['cleat_case'], COL['cleat_case']), (Q['cleat_wall'], COL['cleat_wall']),
+    items = [(Q['sc_cleat'], COL['screw']), (Q['cleat_case'], COL['cleat_case']), (Q['cleat_wall'], COL['cleat_wall']),
              (wall, COL['wall']), (Q['tray_left'], COL['tray_left']), (Q['shell_top'], COL['shell_top']), (Q['shell_bot'], COL['shell_bot'])]
     a = section('Wall cleat (optional, replaces the spine), cut through a case-cleat screw, seen from the right',
                 items, slab(x=(xc - 40, xc)), 'right', (xc, 70.0, ZC + 28.0), 22.0, (900, 1500),
                 [('tray back', (xc, DR.Y1 - 1.0, ZC + 12), -1), ('cleat boss in the tray\n(the spine\'s bosses)', (xc, DR.Y0 - 2.5, zc + 3.6), -1),
                  ('top louver band; the shell\'s rim ends 8 mm off the wall, so the louvers stay open', (xc, DR.Y1 - 2.5, CLT.CLEAT_ZTOP + 6.0), -1),
-                 ('case cleat, 12 mm deep:\n2 x M3 x 10 from the wall side', (xc, DR.Y1 + 8.0, zc + 3.0), 1), ('M3 x 10 in a counterbore', (xc, DR.Y1 + 4.8, zc), 1),
+                 ('case cleat, 150 mm long, 12 mm deep: 2 x M3 x 10 from the wall side', (xc, DR.Y1 + 8.0, zc + 3.0), 1), ('M3 x 10 in a counterbore', (xc, DR.Y1 + 4.8, zc), 1),
                  ('45 deg bevels: the case drops\nonto the wall cleat', (xc, DR.Y1 + 6.0, CLT.ZB - 6.0), 1),
-                 ('wall cleat: its face also holds\nthe tray\'s back plumb', (xc, DR.Y1 + 5.0, CLT.ZB - 30.0), 1),
-                 ('2 wood screws or anchors go through here (10 mm behind this cut)', (xc, CLT.YW - 2.0, CLT.wall_screws()[0][1]), 1), ('wall', (xc, CLT.YW + 3.0, ZC + 4.0), 1)], margin=470)
+                 (f'wall cleat, {2 * p4.WALL_CLEAT_HW:g} mm long: its face also holds the tray\'s back plumb', (xc, DR.Y1 + 5.0, CLT.ZB - 30.0), 1),
+                 (f'3 wood screws or anchors through the wall cleat, at the centre and {p4.WALL_CLEAT_XS[-1]:g} mm either side (not in this cut)', (xc, CLT.YW - 2.0, CLT.wall_screws()[0][1]), 1), ('wall', (xc, CLT.YW + 3.0, ZC + 4.0), 1)], margin=470)
     feet = [(Q['shell_top'], COL['shell_top'], np.eye(4)), (Q['shell_bot'], COL['shell_bot'], np.eye(4)),
             (Q['bumpers'], COL['bumper'], shift(dz=-16)), (Q['sc_bottom'], COL['screw'], shift(dz=-26))]
     b = persp('Underneath, seen from below and in front: four bumpers and the two screws from below, pulled out', feet, eye=(150, -250, -330), target=(0, 36, -6),

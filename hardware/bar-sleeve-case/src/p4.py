@@ -1,17 +1,25 @@
 """P4 bar sleeve: the v5 drawer case for a Waveshare RGB-Matrix-P4-64x32 (256 x 128), in parts that fit the X2D's
 256 mm bed. Everything not listed here is the v5 drawer (drawer.py), built from the 'p4' panel profile.
 
-Shell (walnut PLA): the v5 sleeve, split into a top and a bottom half at ZS (2 mm above centre, so both halves print the
-same height). Only the two end walls are cut. The joint:
-- a 1 mm x 1 mm reveal round each end (end wall, front rim, hood side, back rim). The halves meet at the reveal's lower
-  edge (ZJ), so the joint line sits in the groove's shadow and neither half has a sliver behind it;
+Shell (walnut PLA, 4 mm wall): the v5 sleeve, split into a top and a bottom half at ZS (2 mm above centre, so both halves
+print the same height). Only the two end walls are cut. The joint:
+- outside, a V-groove: each half's visible edges at the joint are chamfered CHAMF x 45 deg (end wall, front rim, hood
+  side, back rim), so the line reads as deliberate and there is no thin ledge for a seam blob to sit on (the 1 x 1 mm
+  square reveal this replaces is what the first P2.5 pair's seam blobs piled up on);
 - a half-lap inside the wall: the inner half of the wall (WALL / 2) splits LAP lower than the outer half, so the top half
   carries a lip down into a pocket in the bottom half, with a glue gap (LAP_CL on its face and ends, LAP_ZCL under it,
-  so the outer band is the only z seat). Glue (30-minute epoxy) goes on the lap faces. The lap's ends are 45 deg (no flat
-  overhang back-down). The lap stops 1 mm behind the screen face and 0.5 mm in front of the tray's back, so nothing of
-  it shows in the hood or at the back rim.
-- Glue the halves back-down on a flat sheet (the back rims are one plane), so they can't step front-to-back; the lap
-  keys them in and out. Lap the front and finish after gluing.
+  so the outer band is the only z seat: a 2 mm land along the visible edge, which is all a hollowed face would leave).
+  Glue (30-minute epoxy) goes on the lap faces. The lap's ends are 45 deg (no flat overhang back-down). The lap stops
+  1 mm behind the screen face and 0.5 mm in front of the tray's back, so nothing of it shows in the hood or at the back
+  rim.
+- Glue the halves back-down on a flat sheet (the back rims are one plane), with both tray halves pushed in as the form:
+  the lap keys the end walls one way, the trays the other. Lap the front and finish after gluing.
+- The trays hold both halves: two M3 x 10 from below into the bottom half's side (drawer.py), and two M2.5 x 8 under the
+  knob into the top half's (TOP_SCREWS below), so the tray halves, which cross the shell's joint, splint it.
+- No relief behind the S3's edge buttons (case2.BTN_RELIEF): in the drawer the board's edge sits 3.15 mm inside the
+  shell's wall, behind the tray's own wall, so the relief only thinned the wall to 0.8 mm right under the joint.
+Diffuser seat: the pairs' (p3x2.py), 55 deg with a 1.0 mm overlap (the v5's 45 deg / 0.3 mm let a diffuser push through
+the rim of a long wall).
 Tray (black PETG): drawer.tray(), the print-tested v5 drawer tray, with its options for a split tray, cut at x = 0. Each
 half bolts to its two corner inserts (M3 x 8 flanged button heads down the post tubes, floating +/-0.7 on flat floors)
 and takes one M3 x 10 from below into a pilot. Two pieces cross the tray seam on the back face:
@@ -21,10 +29,13 @@ and takes one M3 x 10 from below into a pilot. Two pieces cross the tray seam on
   passes a notch half in each tray half, so it keys them.
 The ribbon runs at the panel input's height on the left half and at the S3 connector's on the right (RIBBON_DROP lower):
 one hook pair on each half, the ribbon folded twice at 45 deg between them.
-Diffuser (two-colour PETG): the bar diffuser with an 8 mm flange, which is the bezel, split at x = 0 on the grid rib
-between pixel columns 32 and 33. That rib is 1.2 mm (0.6 a half) instead of 0.8, so each half has a printable edge.
-First layer: white over the pixels, black over the bezel; everything above it black.
+Diffuser (two-colour PETG): the bar diffuser with an 8 mm flange, split at x = 0 on the grid rib between pixel columns 32
+and 33. That rib is 1.2 mm (0.6 a half) instead of 0.8, so each half has a printable edge. The whole first layer is
+white (the face and the flange's front, as the single builds); everything above it black. The printed halves are built
+DIFF_SHRINK larger in x and y (PETG shrink, measured on the first P2.5 pair: a 128 mm half comes out ~0.6 mm short).
 The two halves are glued into one before fitting: nothing else holds the centre joint closed.
+Wall cleat: the single build's case cleat (it bolts to the spine's bosses), with a longer wall cleat (WALL_CLEAT_HW) for
+the 282 mm case.
 Panel: turned 180 deg in the case like the v5 drawer (MATRIX_ROTATION 180), data in on the left; the S3 sits on the right
 tray half, ribbon to the panel's input. (Plugged straight onto the panel's input, the S3's edge buttons would leave under
 1 mm of wall at the 8 mm bezel.)
@@ -32,7 +43,7 @@ Run: python3 p4.py <outdir>   -> STLs (print orientation), coupons, and fit numb
 """
 import math, os, sys
 os.environ['PANEL'] = 'p4'
-os.environ.setdefault('CASE_WALL', '3.5')
+os.environ.setdefault('CASE_WALL', '4.0')       # 3.5 until Nov 9: ~1.5x stiffer; the halves still leave a 3 mm brim on the bed
 import numpy as np
 from manifold3d import Manifold, CrossSection, JoinType
 import panel
@@ -46,16 +57,22 @@ from case import box, rr_cs, prism_y, prism_x, cyl_y, cyl_z, ZC, H, D, WALL, HW,
 
 DR.configure_shell()
 V.BACKDOWN = True
+V.BTN_RELIEF = False             # no relief behind the S3's edge buttons (it left 0.8 mm of wall under the joint)
+# diffuser seat, as the two-panel bars (p3x2.py, Nov 7): rim 1.5 in from the bore, seat 55 deg, the diffuser's bevel 0.2:
+# overlap 1.0 mm (the v5's 45 deg seat held it by 0.3, a wedge a long wall can't hold)
+SEAT_DEG, RIM_IN, DIFF_BEV = 55.0, 1.5, 0.2
+V.set_seat(SEAT_DEG, RIM_IN, DIFF_BEV)
+DF.BEV = DIFF_BEV
 
 # ---------------------------------------------------------------- shell split
 LAP = 4.0                       # inner half of the wall splits this much lower than the outer half
-REV_W, REV_D = 1.0, 1.0         # reveal: width (along z) and depth
-ZS = (H + LAP) / 2              # outer split height: top and bottom halves come out the same height
+CHAMF, V_STEPS = 0.5, 5         # V-groove: each half's visible edges at the joint chamfered CHAMF x 45 deg, cut in 0.1 mm bands
+ZS = (H + LAP) / 2              # joint height: top and bottom halves come out the same height
+ZJ = ZS                         # where the halves meet outside: the bottom of the V
 LAP_Y0 = Y_FACE + 1.0           # lap only behind the screen face ...
-LAP_Y1 = DR.Y1 - 0.5            # ... and in front of the tray's back (the back rim shows the plain reveal)
+LAP_Y1 = DR.Y1 - 0.5            # ... and in front of the tray's back (the back rim shows the plain V)
 LAP_CL = 0.12                   # glue gap on the lip's outer face and its ends (epoxy)
-LAP_ZCL = 0.2                   # gap under the lip: the band at the reveal's lower edge is the only z seat
-ZJ = ZS - REV_W / 2             # where the halves meet outside: the reveal's lower edge, so the joint sits in its shadow
+LAP_ZCL = 0.2                   # gap under the lip: the outer band is the only z seat
 BED = 256.0
 
 
@@ -93,11 +110,24 @@ def lap_prism(cl, zcl):
     return (a + b).hull()
 
 
+def v_groove(sh):
+    """the CHAMF x 45 deg chamfer on both halves' visible edges at the joint (z = ZJ), as V_STEPS stepped bands: in the
+    band k steps out from the joint plane, the material within CHAMF less that distance of a visible face (p3x2.v_groove)"""
+    cuts = []
+    for k in range(V_STEPS):
+        a, b = CHAMF * k / V_STEPS, CHAMF * (k + 1) / V_STEPS
+        dk = CHAMF - (a + b) / 2
+        band = box(-HW - 1, HW + 1, -50, D + 1, ZJ - b, ZJ + b)
+        if k:
+            band = band - box(-HW - 2, HW + 2, -51, D + 2, ZJ - a, ZJ + a)
+        cuts.append(visible_layer(sh ^ band, dk))
+    return Manifold.batch_boolean(cuts, ADD)
+
+
 def split_shell(sh):
-    """top and bottom halves. Outside, the halves meet at ZJ (the reveal's lower edge). Inside the wall, the top half's
-    lip (inner WALL / 2) runs down to ZS - LAP into a pocket in the bottom half, with LAP_CL / LAP_ZCL of glue gap."""
-    reveal = visible_layer(sh, REV_D) ^ box(-HW - 1, HW + 1, -1, D + 1, ZS - REV_W / 2, ZS + REV_W / 2)
-    s = sh - reveal
+    """top and bottom halves. Outside, the halves meet at ZJ, in the bottom of the V-groove. Inside the wall, the top
+    half's lip (inner WALL / 2) runs down to ZS - LAP into a pocket in the bottom half, with LAP_CL / LAP_ZCL of glue gap."""
+    s = sh - v_groove(sh)
     pocket = s ^ outer_inset(WALL / 2) ^ lap_prism(0, 0)
     lip = s ^ outer_inset(WALL / 2 + LAP_CL) ^ lap_prism(LAP_CL, LAP_ZCL)
     top = (s ^ box(-HW - 1, HW + 1, -50, D + 1, ZJ, H + 10)) + lip
@@ -272,21 +302,28 @@ def bridge():
 
 # ---------------------------------------------------------------- diffuser halves
 CENTRE_RIB = 1.2                 # 0.6 each side of the split
+# PETG shrink (p3x2.py, Nov 7): the first P2.5 pair's black PETG grid printed 0.45% small. Each P4 half is 128 mm wide
+# and tall, so uncompensated it comes out ~0.6 mm short each way: the skirts too tight for the panel and the ribs
+# walking off the gaps between the LEDs. The printed halves are built this much larger in x and y (z untouched).
+# DIFF_SHRINK=0 for a PLA grid; measure a printed half (145.2 mm tall over the flange) and adjust.
+DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0045'))
 
 
-def diffuser_halves():
-    """DF.diffuser() (8 mm flange = bezel) split at x = 0. Returns {(side, part): manifold} in DF's frame
-    (z = 0 is the face, +z toward the LEDs; y up the panel). part: 'white' (first layer over the pixels) or 'black'."""
+def diffuser_halves(printed=False):
+    """DF.diffuser() (8 mm flange) split at x = 0. Returns {(side, part): manifold} in DF's frame (z = 0 is the face, +z
+    toward the LEDs; y up the panel). part: 'white' (the whole first layer: the face and the flange's front) or 'black'
+    (everything above it). printed: built DIFF_SHRINK larger in x and y, about the centre joint, for the PETG's shrink;
+    otherwise the size it should come out (fit checks, renders)."""
     d = DF.diffuser(skin=DF.SKIN)
     hy = DF.PH / 2
     d = d + box(-CENTRE_RIB / 2, CENTRE_RIB / 2, -hy + 0.29, hy - 0.29, DF.SKIN - 0.01, DF.SKIN + DF.GRID_H)
-    hx = DF.PW / 2
-    white_zone = box(-hx, hx, -hy, hy, -1, DF.SKIN)
+    first = box(-400, 400, -400, 400, -1, DF.SKIN)
+    k = 1.0 / (1.0 - DIFF_SHRINK) if printed else 1.0
     out = {}
     for side, xs in (('left', (-200, 0)), ('right', (0, 200))):
         half = d ^ box(xs[0], xs[1], -200, 200, -5, 20)
-        out[(side, 'white')] = half ^ white_zone
-        out[(side, 'black')] = half - white_zone
+        out[(side, 'white')] = (half ^ first).scale([k, k, 1.0])
+        out[(side, 'black')] = (half - first).scale([k, k, 1.0])
     return out
 
 
@@ -368,6 +405,16 @@ def collar_p4():
         CO.FL_R, CO.TIP_BACK, CO.RIB_PHASE = saved
 
 
+WALL_CLEAT_HW = 110.0           # wall cleat half length: 220 mm for the 282 mm case (the single's is 149); flat on the bed,
+                                # and 5 mm short of the Boot funnel on the right tray half's back
+WALL_CLEAT_XS = (-95.0, 0.0, 95.0)   # its three wall screws
+
+
+def wall_cleat_p4():
+    import cleat as CLT
+    return CLT.wall_cleat(hw=WALL_CLEAT_HW, xs=WALL_CLEAT_XS)
+
+
 def collar_knob():
     """the collar in the case (fit checks)"""
     return collar_p4().translate([0, KY, H])
@@ -380,10 +427,20 @@ def knob_in_case():
 
 # ---------------------------------------------------------------- coupons
 def seam_coupon(top, bot):
-    """the right end of both shell halves, 30 mm wide and the front 34 mm deep: test the lap's fit, the glue and how the
-    reveal reads after finishing"""
-    reg = box(HW - 30, HW + 1, -50, 34, ZS - 30, ZS + 30)
+    """the LEFT end of both shell halves, 30 mm wide and the full depth (hood, front rim, V-groove, the whole lap, back
+    rim): test the lap's fit over its whole length, the glue and how the V reads after finishing. (The front 34 mm alone,
+    as before Nov 9, can't show a step along the depth.)"""
+    reg = box(-HW - 1, -HW + 30, -50, D + 1, ZS - 30, ZS + 30)
     return top ^ reg, bot ^ reg
+
+
+def top_screw_coupon(top, tray):
+    """one top screw's stack: the shell's top wall round its hole (walnut) and the tray's top wall with the pad, boss
+    and pilot (PETG), 18 x 18 mm each. Drive an M2.5 x 8 through the walnut into the PETG: it should thread in firmly and
+    pull the two together with no gap and no dishing."""
+    x, y = top_screw_xy()[1]
+    reg = box(x - 7.0, x + 11.0, y - 9.0, y + 9.0, H - 30, H + 5)
+    return top ^ reg, tray ^ reg
 
 
 def diffuser_joint_coupon(halves):
@@ -392,6 +449,15 @@ def diffuser_joint_coupon(halves):
     hy = DF.PH / 2
     reg = box(-20, 20, -hy - 20, -hy + 30, -5, 20)
     return {k: v ^ reg for k, v in halves.items()}
+
+
+def diffuser_shrink_coupon(printed):
+    """the bottom strip of the printed left half, its whole width (flange, skirt and the first rows of the grid): a
+    quick print to measure the PETG's shrink before the halves. Built length (flange edge to the joint face):
+    DF.FL_HX / (1 - DIFF_SHRINK); it should measure DF.FL_HX (136.6). Otherwise DIFF_SHRINK = 1 - measured / built."""
+    hy = DF.PH / 2
+    reg = box(-400, 0.5, -hy - 20, -hy + 9.0, -5, 20)
+    return {k: v ^ reg for k, v in printed.items() if k[0] == 'left'}
 
 
 # ---------------------------------------------------------------- export
@@ -427,7 +493,7 @@ def build():
     tr = tray_p4()
     tl, trr = split_tray(tr)
     return dict(shell=sh, top=top, bot=bot, tray=tr, tray_left=tl, tray_right=trr, spine=spine(), bridge=bridge(),
-                diffuser=diffuser_halves())
+                diffuser=diffuser_halves(), diffuser_print=diffuser_halves(printed=True))
 
 
 if __name__ == '__main__':
@@ -461,21 +527,27 @@ if __name__ == '__main__':
     put(P['spine'], 'p4-spine.stl', down)
     put(P['bridge'], 'p4-bridge.stl', down)
     pair = lambda d, side: d[(side, 'white')] + d[(side, 'black')]
-    for (side, part), m in P['diffuser'].items():               # face down, z = 0 is the face: as exported
-        put(m, f'p4-diffuser-{side}-{part}.stl', None, drop_axis=2, frame=pair(P['diffuser'], side))
+    for (side, part), m in P['diffuser_print'].items():         # face down, z = 0 is the face: as exported (built for the shrink)
+        put(m, f'p4-diffuser-{side}-{part}.stl', None, drop_axis=2, frame=pair(P['diffuser_print'], side))
     # coupons
     ct, cb = seam_coupon(P['top'], P['bot'])
     put(ct, 'coupon-p4-seam-top.stl', down); put(cb, 'coupon-p4-seam-bottom.stl', down)
-    dj = diffuser_joint_coupon(P['diffuser'])
+    dj = diffuser_joint_coupon(P['diffuser_print'])
     for (side, part), m in dj.items():
         put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj, side))
+    ds = diffuser_shrink_coupon(P['diffuser_print'])
+    for (side, part), m in ds.items():
+        put(m, f'coupon-p4-diffuser-shrink-{part}.stl', None, drop_axis=2, frame=pair(ds, side))
     import knob as KN, collar as CO
     put(KN.to_bed(knob_p4()), 'p4-knob.stl', None, drop_axis=2)                        # skirt on the bed
     cm = collar_p4()
     put(cm.mirror([0, 0, 1]).translate([0, 0, CO.FL_T]), 'p4-encoder-collar.stl', None, drop_axis=2)   # flange top down
     put(DR.sled(), 'p4-sensor-sled.stl', None, drop_axis=2)                           # plate down
     import cleat as CLT                                                                  # wall hanging (replaces the spine)
-    put(CLT.case_cleat(), 'p4-cleat-case.stl', down); put(CLT.wall_cleat(), 'p4-cleat-wall.stl', down)
+    put(CLT.case_cleat(), 'p4-cleat-case.stl', down); put(wall_cleat_p4(), 'p4-cleat-wall.stl', down)
+    if TOP_SCREWS:
+        cw, cp = top_screw_coupon(P['top'], P['tray'])
+        put(cw, 'coupon-p4-top-screw-shell.stl', down); put(cp, 'coupon-p4-top-screw-tray.stl', down)
     put(V.boot_key(), 'p4-boot-key.stl', None, drop_axis=2)
     cs, ctr = DR.fit_coupon(P['shell'], P['tray'])
     put(cs, 'coupon-p4-drawer-fit-shell.stl', down); put(ctr, 'coupon-p4-drawer-fit-tray.stl', down)
@@ -484,6 +556,8 @@ if __name__ == '__main__':
         print(k, v)
     summary = dict(W=round(2 * HW, 1), H=round(H, 1), D=D, ZS_above_centre=round(ZS - ZC, 2), lap=LAP, bore=(BORE_HX, BORE_HZ),
                    S3_edge=round(DR.S3_EDGE, 2), port_z=round(DR.PORT_Z - ZC, 2), corners=DR.CORNERS, bridge_z=round(BRIDGE_Z - ZC, 1),
-                   spine_z=round(DR.CLEAT_SCREWS[0][1] - ZC, 1), ribbon_drop=round(RIBBON_DROP, 2), idc_z=round(IDC_Z - ZC, 2))
+                   spine_z=round(DR.CLEAT_SCREWS[0][1] - ZC, 1), ribbon_drop=round(RIBBON_DROP, 2), idc_z=round(IDC_Z - ZC, 2),
+                   wall=WALL, seat_deg=SEAT_DEG, rim_in=RIM_IN, diff_shrink=DIFF_SHRINK, shrink_strip_built=round(DF.FL_HX / (1 - DIFF_SHRINK), 2),
+                   wall_cleat=2 * WALL_CLEAT_HW, top_screws=TOP_SCREWS)
     print(summary)
     json.dump(dict(parts=report, summary=summary), open(f'{out}/p4-report.json', 'w'), indent=1)

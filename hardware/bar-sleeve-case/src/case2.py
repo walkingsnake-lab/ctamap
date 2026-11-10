@@ -107,6 +107,7 @@ TOP_SL = dict(xc=57.0, n=16, y0=30.5, y1=46.5)
 BOT_SL = dict(xs=[50.0 + 4.0 * i for i in range(7)], y0=TOP_SL['y0'] + 9.0, y1=TOP_SL['y1'] + 9.0)  # +9: same layers
 BTN_Z0, BTN_Z1 = PORT_Z - 35.0, PORT_Z - 8.8  # Down (-10.3), Up (-20.1), Reset (-29.9) sit below the USB-C   # Down (+9.9), Up (+19.8), Reset (+29.7) on the S3 edge
 BTN_WALL = 0.8                                 # wall left behind the buttons
+BTN_RELIEF = True                              # False (p4.py): no relief; in the drawer the board's edge sits 3.15 mm inside the wall, behind the tray's own wall
 PORT_H, PORT_W = 13.65, 8.0                    # USB-C opening: along the port's long axis (z) x across (y);
                                                # spec housing max 12.85 x 7.0 + 0.4 a side, +0.2 across for print sag
 PORT_CH = 0.5                                  # outer edge chamfer
@@ -285,7 +286,7 @@ def shell2():
         btn = Manifold.batch_hull([rel(PORT_Y - 7.0, PORT_Y + 4.5, deep, inner), rel(PORT_Y - 7.0 - (inner - deep), PORT_Y + 4.5, inner - 0.01, inner)])
     else:
         btn = Manifold.batch_hull([rel(PORT_Y - 7.0, PORT_Y + 4.5, deep, inner), rel(PORT_Y - 7.0, PORT_Y + 4.5 + (inner - deep), inner - 0.01, inner)])
-    usb_cuts = [port, port_ch, btn]
+    usb_cuts = [port, port_ch, btn] if BTN_RELIEF else [port, port_ch]
     if USB_SIDE > 0:                               # mirrored to the right wall
         usb_cuts = [m.mirror([1, 0, 0]) for m in usb_cuts]
     cuts += usb_cuts
