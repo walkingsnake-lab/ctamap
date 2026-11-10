@@ -22,7 +22,7 @@ COL = dict(shell_top=[0.64, 0.43, 0.26], shell_bot=[0.52, 0.34, 0.20], tray_left
            spine=[0.14, 0.52, 0.56], bridge=[0.14, 0.52, 0.56], sled=[0.14, 0.52, 0.56], cleat_case=[0.14, 0.52, 0.56],
            cleat_wall=[0.74, 0.56, 0.16], wall=[0.78, 0.78, 0.75], s3=[0.50, 0.24, 0.55], sensor=[0.62, 0.26, 0.24],
            collar=[0.60, 0.67, 0.72], knob=[0.86, 0.85, 0.80], enc=[0.55, 0.55, 0.58], usb=[0.72, 0.72, 0.76],
-           screw=[0.16, 0.42, 0.86], bumper=[0.10, 0.10, 0.10], window=[0.85, 0.80, 0.45])
+           screw=[0.16, 0.42, 0.86], bumper=[0.10, 0.10, 0.10], window=[0.85, 0.80, 0.45], plates=[0.88, 0.80, 0.52])
 BG = (247, 247, 245)
 INK = (25, 25, 25)
 
@@ -201,6 +201,7 @@ def parts():
     up = PC.usb_plug()
     Q['usb'] = up['usb_shell'] + up['usb_overmold']
     Q['cleat_case'], Q['cleat_wall'] = CLT.case_cleat(), p4.wall_cleat_p4()
+    Q['plates'] = P['plates'][0] + P['plates'][1] if P['plates'] else Manifold()
     return Q
 
 
@@ -217,7 +218,7 @@ def slab(x=(-BIG, BIG), y=(-BIG, BIG), z=(-BIG, BIG)):
 # ---------------------------------------------------------------- 01 overview
 def overview(Q, out):
     up = 46
-    off = dict(shell_top=(0, 0, up), shell_bot=(0, 0, -up), dif_left=(-8, -125, 0), dif_right=(8, -125, 0),
+    off = dict(shell_top=(0, 0, up), shell_bot=(0, 0, -up), plates=(0, 0, 0), dif_left=(-8, -125, 0), dif_right=(8, -125, 0),
                panel=(0, -62, 0), tray_left=(-14, 105, 0), tray_right=(14, 105, 0), s3=(14, 105, 0), sensor=(14, 105, 0), sled=(14, 105, 0),
                window=(14, 105, 0), sc_s3=(14, 105, 0), sc_sled=(14, 105, 0), spine=(0, 160, 0), bridge=(0, 160, 0), sc_spine=(0, 190, 0),
                sc_bridge=(0, 190, 0), sc_posts=(0, 165, 0), sc_bottom=(0, 0, -up - 30), bumpers=(0, 0, -up - 14), collar=(0, 0, up + 18),
@@ -227,14 +228,15 @@ def overview(Q, out):
     items += [(dw_l, COL['dif_white'], shift(*off['dif_left'])), (dw_r, COL['dif_white'], shift(*off['dif_right']))]
     P = lambda p, n: tuple(np.array(p, float) + np.array(off[n], float))
     zsp = DR.CLEAT_SCREWS[0][1]
-    back = [(1, P((HW, 50, ZS - 2), 'shell_top')), (4, P((120, DR.Y1, ZC + 56), 'tray_right')), (4, P((-120, DR.Y1, ZC + 56), 'tray_left')),
+    back = [(1, P((BORE_HX + 1, 44, ZJ), 'plates')), (4, P((120, DR.Y1, ZC + 56), 'tray_right')), (4, P((-120, DR.Y1, ZC + 56), 'tray_left')),
             (5, P((30, 72, zsp), 'spine')), (6, P((0, 72, BRIDGE_Z), 'bridge')), (7, P((46, DR.BOT_Y, -4), 'sc_bottom')),
             (8, P((TS_X + 6, KY, H + 4), 'sc_top')), (9, P((0, KY, H + 12), 'knob')), (10, P((HW, C.PORT_Y, DR.PORT_Z), 'shell_bot')),
             (12, P((114.9, 62, -3), 'bumpers'))]
-    front = [(1, P((-HW, 30, ZS - 2), 'shell_top')), (2, P((-70, Y_FACE, ZC + BORE_HZ - 2), 'dif_left')), (3, P((8, Y_FACE, ZC + 20), 'dif_right')),
+    front = [(1, P((-BORE_HX - 1, 30, ZJ), 'plates')), (2, P((-70, Y_FACE, ZC + BORE_HZ - 2), 'dif_left')), (3, P((8, Y_FACE, ZC + 20), 'dif_right')),
              (8, P((-TS_X - 6, KY, H + 4), 'sc_top')), (9, P((0, KY, H + 12), 'knob')), (11, P((V.SENSOR_X, V.SENSOR_Y, H), 'shell_top')),
              (12, P((-114.9, 25, -3), 'bumpers'))]
-    legend = ['1  Shell joint: half-lap in each end wall, epoxy',
+    legend = ['1  Shell joint: a plate glued into a rebate inside',
+              '    each end wall; V-groove outside',
               '2  Diffuser in the shell: its flange behind the rim,',
               '    the trays\' front edge behind the flange',
               '3  Diffuser centre joint: two halves, epoxy on the rib',
@@ -261,42 +263,49 @@ def overview(Q, out):
               target=tuple(c), size=(1500, 1060), yfov=0.50, callouts=front,
               legend=['Colours are for reading, not the print colours:', '  shell halves: two browns (both walnut)',
                       '  tray halves: two greys (both black PETG)', '  spine, bridge, sled: teal (black PETG)',
-                      '  every screw: blue', '  panel: green; S3: purple; sensor: red'])
+                      '  every screw: blue; joint plates: sand (any PLA)', '  panel: green; S3: purple; sensor: red'])
     stack(f'P4 bar sleeve, exploded: the assembly points (wall {WALL:g} mm)', [a, b], f'{out}/p4-assembly-01-overview.png')
 
 
 # ---------------------------------------------------------------- 02 shell joint
 def shell_joint(Q, out):
-    lip_t, lip_l = WALL / 2 - LAP_CL, LAP - LAP_ZCL
     xo = -HW                                                         # the left end wall's outer face
-    near = slab(x=(-BIG, -100))
-    lift = 16.0
-    xi = xo + WALL * 0.75
-    a = persp('Left end from inside the case, the top half lifted 16 mm: its lip drops into the pocket in the bottom half',
-              [(Q['shell_top'] ^ near, COL['shell_top'], shift(dz=lift)), (Q['shell_bot'] ^ near, COL['shell_bot'], np.eye(4))],
-              eye=(-52, -92, ZS + 44), target=(-137, 40, ZS + 6), size=(1500, 820), yfov=0.46,
-              callouts=[('a', (xi, 44, ZS - 2.2 + lift)), ('b', (xi, 50, ZS - LAP / 2 - 0.6)), ('c', (xo + WALL - 0.2, 7, ZS))],
-              legend=['a  lip: the inner half of the top half\'s end wall,', f'    {lip_t:.2f} mm thick, {lip_l:.1f} mm long',
-                      'b  pocket in the bottom half', f'c  V-groove round the end, {CHAMF:g} mm x 45 deg on', '    each half: outside, front rim, hood side,',
-                      '    back rim', '', 'The right end is the same, mirrored.', 'Glue: 30-minute epoxy on the lap\'s faces,',
-                      'with both tray halves pushed in as the form.'])
+    xb = -BORE_HX                                                    # ... and its inner (bore) face
+    w, h = p4.JP_Y1 - p4.JP_Y0, p4.JP_H
+    near = slab(x=(-BIG, -96))
+    lift = 34.0
+    left_plate = Q['plates'] ^ slab(x=(-BIG, 0))
+    a = persp(f'Left end from inside the case, the top half lifted {lift:g} mm: the plate stands in the bottom half\'s rebate; the top half\'s comes down over it',
+              [(Q['shell_top'] ^ near, COL['shell_top'], shift(dz=lift)), (Q['shell_bot'] ^ near, COL['shell_bot'], np.eye(4)),
+               (left_plate, COL['plates'], np.eye(4))],
+              eye=(-40, -96, ZJ + 62), target=(-136, 40, ZJ + 12), size=(1500, 900), yfov=0.50,
+              callouts=[('a', (xb - 0.6, 46, ZJ + 12)), ('b', (xb - 0.6, 50, ZJ + lift + 12)), ('c', (xo + WALL - 0.2, 8, ZJ)),
+                        ('d', (xo + 2.2, 70.6, ZJ))],
+              legend=[f'a  joint plate, {w:g} x {h:g} x {p4.JP_T} mm, any PLA, printed', '    flat: half in each shell half, glued to both',
+                      f'b  rebate in the wall\'s inner face, {p4.JP_T + p4.JP_CL:.1f} mm deep', '    (its front end slopes 45 deg: no roof to print)',
+                      f'c  V-groove round the end, {CHAMF:g} mm x 45 deg on', '    each half: outside, front rim, hood side, back rim',
+                      f'd  flat end faces: a {p4.LAND:g} mm land along the visible', f'    edges, the rest hollowed {p4.HOLLOW} mm', '',
+                      'The right end is the same, mirrored; its rebate', 'ends 5.5 mm above the USB-C opening.'])
     b = section('Section through the left end wall at mid depth, seen from the front (outside is on the left)',
-                it(Q, 'tray_left', 'shell_top', 'shell_bot'), slab(y=(45, 52)), 'front', (xo + 3.4, 45, ZS - 2.4), 8.0, (1300, 800),
-                [('top half', (xo + 0.9, 45, ZS + 1.7), -1),
+                it(Q, 'plates', 'tray_left', 'shell_top', 'shell_bot'), slab(y=(45, 52)), 'front', (xo + 3.6, 45, ZJ), 8.0, (1300, 800),
+                [('top half', (xo + 0.9, 45, ZJ + 3.8), -1),
                  (f'V-groove: {CHAMF:g} mm x 45 deg on each half, on every visible edge of the joint', (xo + 0.12, 45, ZJ), -1),
-                 (f'the halves seat here only: a {WALL / 2:g} mm band along the outside', (xo + 1.3, 45, ZJ), -1),
-                 ('bottom half', (xo + 0.9, 45, ZS - 6.2), -1),
-                 (f'lip, {lip_t:.2f} mm thick', (xo + WALL * 0.78, 45, ZS - 2.2), 1),
-                 (f'glue gap {LAP_CL} mm on the lip\'s face', (xo + WALL / 2 + LAP_CL / 2, 45, ZS - 2.6), 1),
-                 (f'{LAP_ZCL} mm under the lip (no seat here)', (xo + WALL * 0.75, 45, ZS - LAP + LAP_ZCL / 2), 1),
-                 ('tray\'s end wall (PETG), 0.25 mm from the shell; glued up with the trays in, it keys the wall the other way', (-BORE_HX + DR.TRAY_CL + 1.25, 45, ZS - 6.2), 1)])
-    xs = xo + WALL * 0.75
-    c = section('The same joint from outside with the outer half of the wall cut away: where the lap runs along the depth (front is on the right)',
-                it(Q, 'shell_top', 'shell_bot'), slab(x=(xs, xo + WALL - 0.02)), 'left', (xs, D / 2, ZS - 2.0), 40.0, (1300, 420),
-                [('back rim', (xs, D - 1.5, ZS + 6), -1), (f'lap ends {D - LAP_Y1:.1f} mm inside the back rim', (xs, LAP_Y1, ZS - 2), -1),
-                 ('lip in its pocket, 45 deg at both ends', (xs, 44, ZS - 2.2), -1),
-                 (f'front {LAP_Y0:.0f} mm: no lap (the hood side shows only the V)', (xs, 8, ZS - 0.2), 1),
-                 ('the screen face is at this depth', (xs, Y_FACE, ZS - 9), 1)])
+                 (f'land: the halves meet on this {p4.LAND:g} mm band along the outside', (xo + 1.2, 45, ZJ), -1),
+                 ('bottom half', (xo + 0.9, 45, ZJ - 3.8), -1),
+                 (f'hollow: {p4.HOLLOW} mm off each face behind the land, so only the visible edge has to close', (xo + 2.35, 45, ZJ), 1),
+                 (f'joint plate, {p4.JP_T} mm, glued to both halves; {WALL - p4.JP_T - p4.JP_CL:.1f} mm of wall behind it', (xb - p4.JP_CL - p4.JP_T / 2, 45, ZJ + 2.6), 1),
+                 (f'plate\'s face {p4.JP_CL} mm below the bore: the tray never touches it', (xb - p4.JP_CL / 2, 45, ZJ - 2.2), 1),
+                 ('tray\'s end wall (PETG), 0.25 mm from the shell', (xb + DR.TRAY_CL + 1.25, 45, ZJ - 3.8), 1)])
+    c = section('The left end wall\'s inner face, seen from inside the case with the tray out (front of the case is on the left)',
+                it(Q, 'plates', 'shell_top', 'shell_bot'), slab(x=(-BIG, xb + 2.0)), 'right', (xb, D / 2, ZJ), 42.0, (1300, 900),
+                [('hood (no plate here: the fronts are lined up on the flat sheet)', (xb, 6.0, ZJ + 14), -1),
+                 ('rim and diffuser seat', (xb, Y_FACE - 0.6, ZJ + 6), -1),
+                 ('rebate\'s sloped front end', (xb, p4.JP_Y0 - 0.8, ZJ - 14), -1),
+                 ('joint line', (xb, 9.0, ZJ), -1),
+                 (f'joint plate: {h / 2:g} mm into each half, {w:g} mm along the depth', (xb, 44.0, ZJ + 10), 1),
+                 (f'plate has {p4.JP_CL_E} mm of play in the rebate; its square back end sets it front to back', (xb, p4.JP_Y1, ZJ - 8), 1),
+                 ('joint line', (xb, 70.5, ZJ), 1),
+                 ('back rim', (xb, D - 1.0, ZJ - 20), 1)])
     stack(f'1. Shell joint: top and bottom halves (wall {WALL:g} mm)', [a, b, c], f'{out}/p4-assembly-02-shell-joint.png')
 
 

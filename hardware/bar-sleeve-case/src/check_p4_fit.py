@@ -39,34 +39,59 @@ def main():
     shell = top + bot
     trays = P['tray_left'] + P['tray_right']
 
-    print('shell joint')
+    print(f'shell joint ({p4.JOINT})')
     expect(vol(top, bot) < 0.01, f'halves seated: overlap {vol(top, bot):.3f} mm3')
     for n, m in (('top', top), ('bottom', bot)):
         expect(len([q for q in m.decompose() if q.volume() > 0.01]) == 1, f'{n} half: one body, {m.volume() / 1000:.1f} cm3')
         sq = p4.bed_fit(m, 1)[0]
         expect((p4.BED - sq) / 2 >= 3.1, f'{n} half on the bed: {sq} mm square, {(p4.BED - sq) / 2:.1f} mm a side (a 3 mm brim needs 3.1)')
-    left = box(-BIG, 0, -BIG, BIG, -BIG, BIG)
-    seat = vol(top.translate([0, 0, -0.05]), bot ^ box(-BIG, BIG, -BIG, BIG, ZJ - 0.06, ZJ + 0.01)) / 0.05
-    expect(seat > 150, f'seat at the joint plane: {seat:.0f} mm2 in all ({seat / 2:.0f} an end)')
-    far = vol(top.translate([0, 0, -0.05]), (bot ^ box(-BIG, BIG, -BIG, BIG, ZJ - 0.06, ZJ + 0.01)) - p4.visible_layer(bot, 2.0)) / 0.05
-    expect(far < 0.02 * seat, f'seat more than 2 mm from a visible face: {far:.1f} of {seat:.0f} mm2 (the seat is already only a 2 mm land along the visible edges: nothing to hollow)')
-    gx = min(gap(top, bot, (1, 0, 0)), gap(top, bot, (-1, 0, 0)))
-    gy = min(gap(top, bot, (0, 1, 0)), gap(top, bot, (0, -1, 0)))
-    expect(abs(gx - LAP_CL) < 0.03, f'lip sideways in its pocket: {gx:.2f} mm (glue gap {LAP_CL})')
-    expect(0.1 <= gy <= 0.25, f'lip front to back: {gy:.2f} mm')
-    lip_t, lip_l = WALL / 2 - LAP_CL, LAP - LAP_ZCL
-    lap_len = (LAP_Y1 - LAP_Y0) - lip_l                                # its mean length (45 deg ends)
-    print(f'  lip {lip_t:.2f} mm thick, {lip_l:.1f} mm long, lap face {lap_len * lip_l:.0f} mm2 an end; end faces {WALL * D:.0f} mm2 an end')
-    # the V: material removed from the outer 0.05 mm skin at the joint, left end, mid depth
+    slab = box(-BIG, BIG, -BIG, BIG, ZJ - 0.06, ZJ + 0.01)
+    seat = vol(top.translate([0, 0, -0.05]), bot ^ slab) / 0.05
+    far = vol(top.translate([0, 0, -0.05]), (bot ^ slab) - p4.visible_layer(bot, p4.LAND)) / 0.05
+    # the V: material removed from the outer skin at the joint, left end, mid depth
     sk = box(-HW, -HW + 0.1, 40, 41, ZJ - 0.6, ZJ + 0.6)
     opening = (P['shell'] ^ sk).volume() / 0.1 - ((top + bot) ^ sk).volume() / 0.1
     deepc = box(-HW + 0.42, -HW + 0.48, 40, 41, ZJ - 0.6, ZJ + 0.6)
     at_depth = (P['shell'] ^ deepc).volume() / 0.06 - ((top + bot) ^ deepc).volume() / 0.06
     expect(0.8 <= opening <= 1.0 and at_depth <= 0.25, f'V-groove outside: {opening:.2f} mm wide at the surface, {at_depth:.2f} at 0.45 mm deep')
-    thin = box(HW - WALL, HW, 20, 72, ZC - 45, ZJ)
+    if p4.JOINT == 'plate':
+        expect(seat > 100, f'the halves meet on {seat:.0f} mm2 ({seat / 2:.0f} an end): a {p4.LAND:g} mm land along the visible edges, less the V')
+        expect(far < 0.03 * seat, f'of that, more than {p4.LAND:g} mm from a visible face: {far:.1f} mm2 (the rest is hollowed {p4.HOLLOW} mm)')
+        pl = P['plates'][0] + P['plates'][1]
+        w, h = p4.JP_Y1 - p4.JP_Y0, p4.JP_H
+        print(f'  plates: {w:g} x {h:g} x {p4.JP_T} mm, one inside each end wall; glued face {w * h / 2 / 100:.1f} cm2 in each half ({w * h / 100:.1f} cm2 an end); '
+              f'wall behind the rebate {WALL - p4.JP_T - p4.JP_CL:.1f} mm')
+        expect(vol(pl, shell) < 0.01 and len([q for q in pl.decompose() if q.volume() > 1]) == 2, f'plates in their rebates: overlap with the shell {vol(pl, shell):.3f} mm3')
+        one = P['plates'][0]
+        gx = gap(one, shell, (-1, 0, 0), limit=1.0)
+        gb = gap(one, shell, (1, 0, 0), limit=1.0)
+        expect(gx <= 0.02, f'plate on the rebate\'s floor (moves {gx:.2f} mm outward before it touches)')
+        gy0, gy1 = gap(one, shell, (0, -1, 0), limit=3.0), gap(one, shell, (0, 1, 0), limit=3.0)
+        gz0, gz1 = gap(one, shell, (0, 0, -1), limit=3.0), gap(one, shell, (0, 0, 1), limit=3.0)
+        expect(abs(gy1 - p4.JP_CL_E) < 0.03 and abs(gz0 - p4.JP_CL_E) < 0.03 and abs(gz1 - p4.JP_CL_E) < 0.03,
+               f'play in the rebate: {gy1:.2f} mm at its back end, {gz0:.2f} / {gz1:.2f} at its lower / upper edge; {gy0:.2f} toward its sloped front end')
+        expect(vol(pl, trays) < 0.01, f'plates vs the trays seated: {vol(pl, trays):.3f} mm3; plate face {p4.JP_CL + DR.TRAY_CL:.2f} mm from the tray\'s wall')
+        worst = max(vol(trays.translate([0, float(dy), 0]), pl) for dy in np.arange(0.0, 60.0, 2.0))
+        expect(worst < 0.01, f'trays sliding in past the plates (60 mm): worst overlap {worst:.3f} mm3')
+        rib_z = [ZC - 0.5 * (BORE_HZ - DR.TRAY_CL - BORE_R), ZC + 0.5 * (BORE_HZ - DR.TRAY_CL - BORE_R)]
+        clear_r = min(abs(z - ZJ) for z in rib_z) - (p4.JP_H / 2 + p4.JP_CL_E)
+        expect(clear_r >= 3.0, f'trays\' side crush ribs run {clear_r:.1f} mm outside the rebates (they bear on walnut, not on the plates)')
+        usb_top = DR.PORT_Z + V.PORT_H / 2 + V.PORT_CH
+        clear_u = (ZJ - p4.JP_H / 2 - p4.JP_CL_E) - usb_top
+        expect(clear_u >= 5.0, f'right end: rebate\'s lower edge to the USB-C opening: {clear_u:.1f} mm of full wall')
+        s3 = DR.s3_envelope()
+        expect(vol(pl, s3) < 0.01, f'plates vs the S3: {vol(pl, s3):.3f} mm3 (the plate is inside the wall)')
+    else:
+        expect(seat > 150, f'seat at the joint plane: {seat:.0f} mm2 in all ({seat / 2:.0f} an end)')
+        gx = min(gap(top, bot, (1, 0, 0)), gap(top, bot, (-1, 0, 0)))
+        expect(abs(gx - LAP_CL) < 0.03, f'lip sideways in its pocket: {gx:.2f} mm (glue gap {LAP_CL})')
+        lip_t, lip_l = WALL / 2 - LAP_CL, LAP - LAP_ZCL
+        print(f'  lip {lip_t:.2f} mm thick, {lip_l:.1f} mm long, lap face {((LAP_Y1 - LAP_Y0) - lip_l) * lip_l:.0f} mm2 an end')
     w = min((bot ^ box(HW - WALL - 0.5, HW + 0.5, y - 0.1, y + 0.1, z - 0.1, z + 0.1)).volume() / 0.04
-            for y in np.arange(20.0, 72.0, 2.0) for z in np.arange(ZC - 28, ZJ - LAP - 0.3, 1.0))
-    expect(w >= WALL - 0.01, f'right end wall between the USB-C opening and the joint: {w:.2f} mm at its thinnest (was 0.8 with the relief)')
+            for y in np.arange(20.0, 72.0, 2.0) for z in np.arange(ZC - 28, ZJ - 0.5, 1.0))
+    least = (WALL - p4.JP_T - p4.JP_CL) if p4.JOINT == 'plate' else WALL / 2
+    expect(w >= least - 0.01, f'right end wall between the USB-C opening and the joint: {w:.2f} mm at its thinnest '
+           f'({"behind the plate" if p4.JOINT == "plate" else "at the lap\'s pocket"}; 0.8 with the old relief)')
 
     print('diffuser seat')
     dif = Manifold.batch_boolean([p4.diffuser_in_case(v) for v in P['diffuser'].values()], ADD)

@@ -18,7 +18,6 @@ Run: python3 p4_cables.py   -> collisions and clearances for every cable and plu
 """
 import math, os, sys
 os.environ['PANEL'] = 'p4'
-os.environ.setdefault('CASE_WALL', '3.5')
 from manifold3d import Manifold
 import p4
 DR = p4.DR
@@ -242,6 +241,7 @@ def pose_lengths():
 
 if __name__ == '__main__':
     hits, near = check()
+    print(f'wall {p4.WALL} mm, joint {p4.JOINT}, top screws {p4.TOP_SCREWS}')
     print('QT routes seated, S3 -> sensor, S3 -> encoder (no sensor), sensor -> encoder (mm):', qt_lengths())
     print('QT spans in step 7\'s pose, sensor -> encoder, S3 -> encoder (no sensor) (mm):', pose_lengths())
     print('ribbon length seated (mm):', round(ribbon_length()))

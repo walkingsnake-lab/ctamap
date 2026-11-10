@@ -3,24 +3,24 @@
   "p4-shell-top-walnut-backdown.stl": {
    "watertight": true,
    "extents": [
-    247.0,
-    247.0,
+    246.9,
+    246.9,
     73.0
    ],
-   "square": 247.0,
+   "square": 246.9,
    "spare_a_side": 4.5,
-   "volume_cm3": 117.6
+   "volume_cm3": 115.0
   },
   "p4-shell-bottom-walnut-backdown.stl": {
    "watertight": true,
    "extents": [
-    248.3,
-    248.3,
-    67.1
+    246.9,
+    246.9,
+    67.0
    ],
-   "square": 248.3,
-   "spare_a_side": 3.8,
-   "volume_cm3": 103.0
+   "square": 246.9,
+   "spare_a_side": 4.5,
+   "volume_cm3": 99.6
   },
   "p4-tray-left.stl": {
    "watertight": true,
@@ -125,23 +125,56 @@
    "watertight": true,
    "extents": [
     5.5,
-    33.8,
+    32.0,
     69.5
    ],
-   "square": 33.8,
-   "spare_a_side": 111.1,
-   "volume_cm3": 8.6
+   "square": 32.0,
+   "spare_a_side": 112.0,
+   "volume_cm3": 7.3
   },
   "coupon-p4-seam-bottom.stl": {
    "watertight": true,
    "extents": [
     5.5,
-    30.0,
+    32.0,
+    67.0
+   ],
+   "square": 32.0,
+   "spare_a_side": 112.0,
+   "volume_cm3": 6.9
+  },
+  "p4-joint-plate.stl": {
+   "watertight": true,
+   "extents": [
+    49.0,
+    46.0,
+    1.2
+   ],
+   "square": 49.0,
+   "spare_a_side": 103.5,
+   "volume_cm3": 2.7
+  },
+  "coupon-p4-seam-lap-top.stl": {
+   "watertight": true,
+   "extents": [
+    5.5,
+    35.8,
+    69.7
+   ],
+   "square": 35.8,
+   "spare_a_side": 110.1,
+   "volume_cm3": 9.1
+  },
+  "coupon-p4-seam-lap-bottom.stl": {
+   "watertight": true,
+   "extents": [
+    5.5,
+    32.0,
     67.1
    ],
-   "square": 30.0,
-   "spare_a_side": 113.0,
-   "volume_cm3": 7.6
+   "square": 32.0,
+   "spare_a_side": 112.0,
+   "volume_cm3": 8.1
   },
   "coupon-p4-diffuser-joint-left-white.stl": {
    "watertight": true,
@@ -324,8 +357,13 @@
   "W": 281.8,
   "H": 153.8,
   "D": 73.0,
-  "ZS_above_centre": 2.0,
-  "lap": 4.0,
+  "joint": "plate",
+  "joint_above_centre": 0.0,
+  "plate": [
+   49.0,
+   46.0,
+   1.2
+  ],
   "bore": [
    136.9,
    72.9

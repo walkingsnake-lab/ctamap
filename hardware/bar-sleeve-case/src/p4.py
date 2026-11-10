@@ -1,19 +1,20 @@
 """P4 bar sleeve: the v5 drawer case for a Waveshare RGB-Matrix-P4-64x32 (256 x 128), in parts that fit the X2D's
 256 mm bed. Everything not listed here is the v5 drawer (drawer.py), built from the 'p4' panel profile.
 
-Shell (walnut PLA, 4 mm wall): the v5 sleeve, split into a top and a bottom half at ZS (2 mm above centre, so both halves
-print the same height). Only the two end walls are cut. The joint:
+Shell (walnut PLA, 4 mm wall): the v5 sleeve, split into a top and a bottom half at mid height. Only the two end walls
+are cut. The joint (JOINT 'plate', Nov 9; the pairs' joint, p3x2.py, turned onto the end walls):
 - outside, a V-groove: each half's visible edges at the joint are chamfered CHAMF x 45 deg (end wall, front rim, hood
-  side, back rim), so the line reads as deliberate and there is no thin ledge for a seam blob to sit on (the 1 x 1 mm
-  square reveal this replaces is what the first P2.5 pair's seam blobs piled up on);
-- a half-lap inside the wall: the inner half of the wall (WALL / 2) splits LAP lower than the outer half, so the top half
-  carries a lip down into a pocket in the bottom half, with a glue gap (LAP_CL on its face and ends, LAP_ZCL under it,
-  so the outer band is the only z seat: a 2 mm land along the visible edge, which is all a hollowed face would leave).
-  Glue (30-minute epoxy) goes on the lap faces. The lap's ends are 45 deg (no flat overhang back-down). The lap stops
-  1 mm behind the screen face and 0.5 mm in front of the tray's back, so nothing of it shows in the hood or at the back
-  rim.
-- Glue the halves back-down on a flat sheet (the back rims are one plane), with both tray halves pushed in as the form:
-  the lap keys the end walls one way, the trays the other. Lap the front and finish after gluing.
+  side, back rim), so the line reads as deliberate and there is no thin ledge for a seam blob to sit on;
+- flat end faces, hollowed: each is relieved HOLLOW except a LAND-wide band along the visible edges, so two not-quite-
+  flat printed faces still close where you see them, and they can be sanded flat on glass before gluing;
+- inside each end wall, a rebate JP_H tall straddles the joint (JP_T + JP_CL deep, from JP_Y0 behind the rim's seat to
+  JP_Y1 in front of the back rim); a flat PLA plate JP_T thick lies in it, half in each shell half, glued to both
+  (PLA to PLA, ~11 cm2 a half an end), its face JP_CL below the bore so the trays never touch it. The plate lines the two
+  halves' walls up and carries the joint's shear, tension and peel over that area. Printed back-down the rebate is a
+  pocket in a vertical face; its front end slopes 45 deg, so it has no roof.
+  JOINT=lap builds the half-lap this replaced (inner half of the wall LAP lower, as a lip on the top half into a pocket
+  in the bottom half, ~1.8 cm2 of glue an end; its coupon fit Nov 5): kept for a coupon comparison. It is the joint that
+  stepped on the first P2.5 pair, and a 1.9 mm lip is the kind of thin walnut feature every pair joint that failed had.
 - The trays hold both halves: two M3 x 10 from below into the bottom half's side (drawer.py), and two M2.5 x 8 under the
   knob into the top half's (TOP_SCREWS below), so the tray halves, which cross the shell's joint, splint it.
 - No relief behind the S3's edge buttons (case2.BTN_RELIEF): in the drawer the board's edge sits 3.15 mm inside the
@@ -65,14 +66,32 @@ V.set_seat(SEAT_DEG, RIM_IN, DIFF_BEV)
 DF.BEV = DIFF_BEV
 
 # ---------------------------------------------------------------- shell split
-LAP = 4.0                       # inner half of the wall splits this much lower than the outer half
+JOINT = os.environ.get('JOINT', 'plate')    # 'plate' (Nov 9) or 'lap' (the half-lap until then: kept for a coupon comparison)
+assert JOINT in ('plate', 'lap'), JOINT
 CHAMF, V_STEPS = 0.5, 5         # V-groove: each half's visible edges at the joint chamfered CHAMF x 45 deg, cut in 0.1 mm bands
-ZS = (H + LAP) / 2              # joint height: top and bottom halves come out the same height
-ZJ = ZS                         # where the halves meet outside: the bottom of the V
+HOLLOW, LAND = 0.3, 2.0         # plate joint: end faces relieved HOLLOW except a LAND band along the visible edges
+JP_T = 1.2                      # joint plate thickness (6 layers at 0.2, printed flat)
+JP_CL = float(os.environ.get('JP_CL', '0.1'))   # rebate deeper than the plate: its face sits this far below the bore
+JP_H = 46.0                     # plate height, half in each shell half: 5.5 mm clear of the USB-C opening's edge, 7 mm inside the
+                                # trays' side crush ribs (50 would leave 3.5 mm to the opening)
+JP_Y0, JP_Y1 = Y_FACE + 2.0, DR.Y1 - 2.0        # plate along the depth: behind the rim's seat and the flange, in front of the back rim
+JP_CL_E = 0.15                  # rebate larger than the plate at each end and edge
+JP_EC = 0.4                     # lead chamfer on the plate's bore-side edges (its glued face stays flat)
+assert WALL - JP_T - JP_CL >= 2.5, WALL         # wall left behind the rebate
+LAP = 4.0                       # lap joint: inner half of the wall splits this much lower than the outer half
 LAP_Y0 = Y_FACE + 1.0           # lap only behind the screen face ...
 LAP_Y1 = DR.Y1 - 0.5            # ... and in front of the tray's back (the back rim shows the plain V)
 LAP_CL = 0.12                   # glue gap on the lip's outer face and its ends (epoxy)
 LAP_ZCL = 0.2                   # gap under the lip: the outer band is the only z seat
+
+
+def joint_z(joint=None):
+    """where the halves meet: mid height for the plate joint; LAP / 2 above it for the lap, so both halves (the top
+    one with its lip) come out the same height"""
+    return (H + LAP) / 2 if (JOINT if joint is None else joint) == 'lap' else H / 2
+
+
+ZS = ZJ = joint_z()             # the joint plane, in the bottom of the V
 BED = 256.0
 
 
@@ -91,47 +110,95 @@ def outer_inset(i):
     return Manifold.hull_points(np.array(pts))
 
 
+def deep(d):
+    """the shell's volume more than d from a face you can see: outside, the hood in front of the screen, the back rim"""
+    m = outer_inset(d)
+    m = m - prism_y(rr_cs(BORE_HX + d, BORE_HZ + d, BORE_R + d), -50, Y_FACE + d)
+    m = m - prism_y(rr_cs(BORE_HX + d, BORE_HZ + d, BORE_R + d), DR.Y1, D + 50)
+    return m
+
+
 def visible_layer(sh, d):
-    """shell material within d of a face you can see: outside, the hood in front of the screen, the back rim"""
-    deep = outer_inset(d)
-    deep = deep - prism_y(rr_cs(BORE_HX + d, BORE_HZ + d, BORE_R + d), -50, Y_FACE + d)
-    deep = deep - prism_y(rr_cs(BORE_HX + d, BORE_HZ + d, BORE_R + d), DR.Y1, D + 50)
-    return sh - deep
+    """shell material within d of a face you can see"""
+    return sh - deep(d)
 
 
-def lap_prism(cl, zcl):
-    """the lap's extent in y and z (all x): from the joint height down to ZS - LAP, both ends chamfered 45 deg so neither
+def lap_prism(cl, zcl, zj):
+    """the lap's extent in y and z (all x): from the joint height down LAP, both ends chamfered 45 deg so neither
     the top half's lip nor the bottom half's pocket roof is a flat overhang when printed back-down. cl / zcl shrink it
     (the lip) inside the pocket."""
-    z0, z1 = ZS - LAP + zcl, ZJ + 0.01
+    z0, z1 = zj - LAP + zcl, zj + 0.01
     e = cl * math.sqrt(2)
     a = box(-HW - 1, HW + 1, LAP_Y0 + e, LAP_Y1 - e, z1 - 0.01, z1)
     b = box(-HW - 1, HW + 1, LAP_Y0 + e + (z1 - z0), LAP_Y1 - e - (z1 - z0), z0, z0 + 0.01)
     return (a + b).hull()
 
 
-def v_groove(sh):
-    """the CHAMF x 45 deg chamfer on both halves' visible edges at the joint (z = ZJ), as V_STEPS stepped bands: in the
+def v_groove(sh, zj):
+    """the CHAMF x 45 deg chamfer on both halves' visible edges at the joint (z = zj), as V_STEPS stepped bands: in the
     band k steps out from the joint plane, the material within CHAMF less that distance of a visible face (p3x2.v_groove)"""
     cuts = []
     for k in range(V_STEPS):
         a, b = CHAMF * k / V_STEPS, CHAMF * (k + 1) / V_STEPS
         dk = CHAMF - (a + b) / 2
-        band = box(-HW - 1, HW + 1, -50, D + 1, ZJ - b, ZJ + b)
+        band = box(-HW - 1, HW + 1, -50, D + 1, zj - b, zj + b)
         if k:
-            band = band - box(-HW - 2, HW + 2, -51, D + 2, ZJ - a, ZJ + a)
+            band = band - box(-HW - 2, HW + 2, -51, D + 2, zj - a, zj + a)
         cuts.append(visible_layer(sh ^ band, dk))
     return Manifold.batch_boolean(cuts, ADD)
 
 
-def split_shell(sh):
-    """top and bottom halves. Outside, the halves meet at ZJ, in the bottom of the V-groove. Inside the wall, the top
-    half's lip (inner WALL / 2) runs down to ZS - LAP into a pocket in the bottom half, with LAP_CL / LAP_ZCL of glue gap."""
-    s = sh - v_groove(sh)
-    pocket = s ^ outer_inset(WALL / 2) ^ lap_prism(0, 0)
-    lip = s ^ outer_inset(WALL / 2 + LAP_CL) ^ lap_prism(LAP_CL, LAP_ZCL)
-    top = (s ^ box(-HW - 1, HW + 1, -50, D + 1, ZJ, H + 10)) + lip
-    bot = (s ^ box(-HW - 1, HW + 1, -50, D + 1, -10, ZJ)) - pocket
+def hollow_cuts(sh, zj):
+    """the end faces' relief: HOLLOW off each half's face at the joint, wherever the wall is more than LAND from a
+    visible face: the band you see stays full height (p3x2.hollow_cuts)"""
+    return (sh ^ box(-HW - 1, HW + 1, -50, D + 1, zj - HOLLOW, zj + HOLLOW)) ^ deep(LAND)
+
+
+def rebate_cuts(zj):
+    """the joint plates' rebates, one in each end wall's bore face: JP_H (+ clearance) tall about the joint, JP_T + JP_CL
+    deep, JP_Y0 .. JP_Y1 (+ clearance) along the depth. Printed back-down each is a pocket in a vertical face: its front
+    end (the print's top) slopes 45 deg out to the bore face, so nothing bridges."""
+    d = JP_T + JP_CL
+    y0, y1 = JP_Y0 - JP_CL_E, JP_Y1 + JP_CL_E
+    z0, z1 = zj - JP_H / 2 - JP_CL_E, zj + JP_H / 2 + JP_CL_E
+    full = box(BORE_HX - 0.01, BORE_HX + d, y0, y1, z0, z1)
+    mouth = box(BORE_HX - 0.01, BORE_HX, y0 - d, y1, z0, z1)
+    cut = (full + mouth).hull()
+    return cut + cut.mirror([1, 0, 0])
+
+
+def joint_plate(side, zj=None):
+    """one joint plate in the case, in its rebate (side -1: left end wall, +1: right), its glued face on the rebate's
+    floor and its other face JP_CL below the bore; JP_EC chamfers on that face's edges"""
+    zj = ZJ if zj is None else zj
+    x0, x1 = BORE_HX + JP_CL, BORE_HX + JP_CL + JP_T                       # bore side at x0
+    full = box(x0 + JP_EC, x1, JP_Y0, JP_Y1, zj - JP_H / 2, zj + JP_H / 2)
+    inset = box(x0, x1, JP_Y0 + JP_EC, JP_Y1 - JP_EC, zj - JP_H / 2 + JP_EC, zj + JP_H / 2 - JP_EC)
+    m = (full + inset).hull()
+    return m if side > 0 else m.mirror([1, 0, 0])
+
+
+def joint_plate_flat():
+    """the plate as it prints: its glued face on the bed"""
+    w, h = JP_Y1 - JP_Y0, JP_H
+    return (box(0, w, 0, h, 0, JP_T - JP_EC) + box(JP_EC, w - JP_EC, JP_EC, h - JP_EC, 0, JP_T)).hull()
+
+
+def split_shell(sh, joint=None):
+    """top and bottom halves; outside they meet at the joint plane, in the bottom of the V-groove.
+    'plate': hollowed flat faces and a rebate in each end wall's bore face for a glued plate.
+    'lap': the top half's lip (inner WALL / 2) runs LAP down into a pocket in the bottom half, LAP_CL / LAP_ZCL of glue gap."""
+    joint = JOINT if joint is None else joint
+    zj = joint_z(joint)
+    s = sh - v_groove(sh, zj)
+    upper, lower = box(-HW - 1, HW + 1, -50, D + 1, zj, H + 10), box(-HW - 1, HW + 1, -50, D + 1, -10, zj)
+    if joint == 'lap':
+        pocket = s ^ outer_inset(WALL / 2) ^ lap_prism(0, 0, zj)
+        lip = s ^ outer_inset(WALL / 2 + LAP_CL) ^ lap_prism(LAP_CL, LAP_ZCL, zj)
+        top, bot = (s ^ upper) + lip, (s ^ lower) - pocket
+    else:
+        s = s - hollow_cuts(sh, zj) - rebate_cuts(zj)
+        top, bot = s ^ upper, s ^ lower
     out = []
     for m in (top, bot):
         parts = sorted(m.decompose(), key=lambda q: -q.volume())
@@ -426,11 +493,12 @@ def knob_in_case():
 
 
 # ---------------------------------------------------------------- coupons
-def seam_coupon(top, bot):
-    """the LEFT end of both shell halves, 30 mm wide and the full depth (hood, front rim, V-groove, the whole lap, back
-    rim): test the lap's fit over its whole length, the glue and how the V reads after finishing. (The front 34 mm alone,
-    as before Nov 9, can't show a step along the depth.)"""
-    reg = box(-HW - 1, -HW + 30, -50, D + 1, ZS - 30, ZS + 30)
+def seam_coupon(top, bot, zj=None):
+    """the LEFT end of both shell halves, 30 mm wide and the full depth (hood, front rim and its seat, V-groove, the
+    whole joint, back rim): test the joint's fit over its whole length, the glue and how the V reads after finishing.
+    (The front 34 mm alone, as before Nov 9, can't show a step along the depth.)"""
+    zj = ZJ if zj is None else zj
+    reg = box(-HW - 1, -HW + 30, -50, D + 1, zj - 32, zj + 32)
     return top ^ reg, bot ^ reg
 
 
@@ -493,7 +561,8 @@ def build():
     tr = tray_p4()
     tl, trr = split_tray(tr)
     return dict(shell=sh, top=top, bot=bot, tray=tr, tray_left=tl, tray_right=trr, spine=spine(), bridge=bridge(),
-                diffuser=diffuser_halves(), diffuser_print=diffuser_halves(printed=True))
+                diffuser=diffuser_halves(), diffuser_print=diffuser_halves(printed=True),
+                plates=[joint_plate(-1), joint_plate(1)] if JOINT == 'plate' else [])
 
 
 if __name__ == '__main__':
@@ -532,6 +601,11 @@ if __name__ == '__main__':
     # coupons
     ct, cb = seam_coupon(P['top'], P['bot'])
     put(ct, 'coupon-p4-seam-top.stl', down); put(cb, 'coupon-p4-seam-bottom.stl', down)
+    if JOINT == 'plate':
+        put(joint_plate_flat(), 'p4-joint-plate.stl', None, drop_axis=2)          # print two (one per end); a third for the seam coupon
+        lt, lb = split_shell(P['shell'], 'lap')                                    # the half-lap, for the coupon comparison
+        ct, cb = seam_coupon(lt, lb, joint_z('lap'))
+        put(ct, 'coupon-p4-seam-lap-top.stl', down); put(cb, 'coupon-p4-seam-lap-bottom.stl', down)
     dj = diffuser_joint_coupon(P['diffuser_print'])
     for (side, part), m in dj.items():
         put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj, side))
@@ -554,7 +628,7 @@ if __name__ == '__main__':
     import json
     for k, v in report.items():
         print(k, v)
-    summary = dict(W=round(2 * HW, 1), H=round(H, 1), D=D, ZS_above_centre=round(ZS - ZC, 2), lap=LAP, bore=(BORE_HX, BORE_HZ),
+    summary = dict(W=round(2 * HW, 1), H=round(H, 1), D=D, joint=JOINT, joint_above_centre=round(ZJ - ZC, 2), plate=(round(JP_Y1 - JP_Y0, 1), JP_H, JP_T) if JOINT == 'plate' else None, bore=(BORE_HX, BORE_HZ),
                    S3_edge=round(DR.S3_EDGE, 2), port_z=round(DR.PORT_Z - ZC, 2), corners=DR.CORNERS, bridge_z=round(BRIDGE_Z - ZC, 1),
                    spine_z=round(DR.CLEAT_SCREWS[0][1] - ZC, 1), ribbon_drop=round(RIBBON_DROP, 2), idc_z=round(IDC_Z - ZC, 2),
                    wall=WALL, seat_deg=SEAT_DEG, rim_in=RIM_IN, diff_shrink=DIFF_SHRINK, shrink_strip_built=round(DF.FL_HX / (1 - DIFF_SHRINK), 2),
