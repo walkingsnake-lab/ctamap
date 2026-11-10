@@ -555,10 +555,29 @@ def bed_fit(m, drop_axis):
     return round(float(best[0]), 1), float(best[1])
 
 
+# ---------------------------------------------------------------- underside: the two label recesses (marks.py)
+# The single and pair shells' layout (regulatory label 1 x 2 5/8 in, setup sticker 1/2 x 1 3/4 in, 0.5 mm deep, front
+# edge chamfered 45 deg), centred, on the bottom half. The P4's hood is deeper, so its bottom face starts further back
+# (front_y(0) = 12, the P3's 9): the recesses keep the single's 2.8 mm from that edge. LABELS=0 builds without them.
+LABELS = os.environ.get('LABELS', '1') not in ('0', '', 'no', 'false')
+LABEL_FRONT = 2.8
+
+
+def label_cuts():
+    import marks as MK
+    MK.CX, MK.REC_Y0 = 0.0, V.front_y(0) + LABEL_FRONT
+    items = MK.layout()[0]
+    bad = MK.check(items)
+    assert not bad, bad
+    return MK.cuts()
+
+
 def build():
     sh = V.shell2()
     if TOP_SCREWS:
         sh = sh - shell_top_screw_cuts()
+    if LABELS:
+        sh = sh - label_cuts()
     top, bot = split_shell(sh)
     tr = tray_p4()
     tl, trr = split_tray(tr)
