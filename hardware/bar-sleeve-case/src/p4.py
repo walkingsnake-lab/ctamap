@@ -110,6 +110,82 @@ def split_shell(sh):
     return tuple(out)
 
 
+# ---------------------------------------------------------------- top screws, under the knob
+# Two M2.5 x 8 button heads either side of the knob axis, one into each tray half: down through a hole in the collar's
+# flange (the head sits on the walnut, flush with the flange top, under the knob's skirt), a clearance stadium in the
+# shell's top wall and into a pilot in a boss on the tray's top wall, built onto the encoder rail. They hold the top
+# shell half down on both tray halves (the screws from below hold the bottom half), so the trays splint the shell joint,
+# the 274 mm top wall is tied at mid-span, and knob presses go into the trays. TOP_SCREWS=0 builds without them.
+TOP_SCREWS = os.environ.get('TOP_SCREWS', '1') not in ('0', '', 'no', 'false')
+TS_X = 15.0                     # screw x, +/-: the pilot keeps 0.65 mm of wall to the rail's inner face (13.15)
+TS_LEN = 8.0                    # M2.5 x 8: its tip stops above the rail's lower edge (and the QT plugs under the board)
+TS_HEAD_D, TS_HEAD_K = 4.7, 1.6 # button head, largest (ISO 7380-1: 4.7 x 1.5; the kit's measure ~4.5 x 1.4)
+TS_SHANK = 2.5
+TS_CLEAR = 2.9                  # shell hole: +/-0.2 in x (the tray halves' play); +/-DR.SCREW_FLOAT along y, as the screws from below
+TS_FLANGE = 5.2                 # hole through the collar's flange for the head
+TS_PILOT = DR.SLED_PILOT        # 2.4, horizontal in the print: the sensor sled's M2.5 pilot (fit Nov 3)
+TS_BOSS_OUT = 2.8               # boss past the screw axis, outboard
+TS_BOSS_HY = 3.2                # boss half length along y
+TS_PAD = 0.2                    # pad on the tray's top under the screw: takes up TRAY_CL (0.25) so the screw doesn't dish the walnut
+TS_PAD_HX, TS_PAD_HY, TS_PAD_RAMP = 3.5, 4.5, 1.5
+TS_LEAD = 0.4
+
+
+def top_screw_xy():
+    return [(-TS_X, KY), (TS_X, KY)]
+
+
+def shell_top_screw_cuts():
+    """clearance stadiums through the shell's top wall (truncated teardrops toward the print's up, as the holes below)"""
+    r, f = TS_CLEAR / 2, DR.SCREW_FLOAT
+    cuts = []
+    for x, y in top_screw_xy():
+        cs = (V.teardrop_cs(r, x, y - f, trunc=r + 0.25, seg=32) + V.teardrop_cs(r, x, y + f, trunc=r + 0.25, seg=32)).hull()
+        cuts.append(Manifold.extrude(cs, WALL + 2).translate([0, 0, H - WALL - 1]))
+    return Manifold.batch_boolean(cuts, ADD)
+
+
+def tray_top_bosses():
+    """(adds, cuts) for the tray: per screw a boss hanging from the top wall on the outside of the encoder rail, as deep
+    as the rail (so it clears the QT plugs under the encoder's board as the rail does), its back end sloped 45 deg (no
+    flat overhang back-down); a pad on the wall's outer face; a through pilot with a lead-in at the top."""
+    bz1 = DR.enc_board()[2][1]                                   # the encoder board's top face
+    zw, zb = DR._zw(), bz1 - DR.RAIL_LAP                        # top wall's inner face, the rails' lower edge
+    zo = zw + DR.TRAY_WT                                         # top wall's outer face
+    adds, cuts = [], []
+    for (x, y), (xa, xb) in zip(top_screw_xy(), sorted(DR.rail_xs(), key=lambda r: r[0])):
+        sx = 1 if x > 0 else -1
+        x0, x1 = sorted((xa, x + sx * TS_BOSS_OUT))              # from the rail's inner face outward
+        boss = box(x0, x1, y - TS_BOSS_HY, y + TS_BOSS_HY, zb, zw + 0.01)
+        gus = (box(x0, x1, y + TS_BOSS_HY - 0.01, y + TS_BOSS_HY, zb, zw + 0.01)
+               + box(x0, x1, y + TS_BOSS_HY, y + TS_BOSS_HY + (zw - zb), zw, zw + 0.01)).hull()
+        pad = (box(x - TS_PAD_HX, x + TS_PAD_HX, y - TS_PAD_HY - TS_PAD_RAMP, y + TS_PAD_HY + TS_PAD_RAMP, zo - 0.3, zo)
+               + box(x - TS_PAD_HX, x + TS_PAD_HX, y - TS_PAD_HY, y + TS_PAD_HY, zo, zo + TS_PAD)).hull()
+        adds += [boss, gus, pad]
+        cuts.append(cyl_z(x, y, zb - 1, zo + TS_PAD + 1, TS_PILOT, 24))
+        cuts.append(Manifold.cylinder(TS_LEAD + 0.01, TS_PILOT / 2, TS_PILOT / 2 + TS_LEAD + 0.01, 24).translate([x, y, zo + TS_PAD - TS_LEAD]))
+    return Manifold.batch_boolean(adds, ADD), Manifold.batch_boolean(cuts, ADD)
+
+
+def collar_top_screw_cuts():
+    """holes through the collar's flange for the screw heads (collar frame: origin at the knob hole on the case top)"""
+    import collar as CO
+    f = DR.SCREW_FLOAT
+    cuts = []
+    for x, _ in top_screw_xy():
+        cs = (CrossSection.circle(TS_FLANGE / 2, 48).translate([x, -f]) + CrossSection.circle(TS_FLANGE / 2, 48).translate([x, f])).hull()
+        cuts.append(Manifold.extrude(cs, CO.FL_T + 1.01).translate([0, 0, -0.01]))
+    return Manifold.batch_boolean(cuts, ADD)
+
+
+def top_screws_env(dx=0.0, dy=0.0):
+    """the two screws seated (fit checks): head on the case top, shank TS_LEN down; dx / dy = the tray's float"""
+    out = []
+    for x, y in top_screw_xy():
+        out.append(cyl_z(x + dx, y + dy, H, H + TS_HEAD_K, TS_HEAD_D, 48) + cyl_z(x + dx, y + dy, H - TS_LEN, H + 0.01, TS_SHANK, 32))
+    return out
+
+
 # ---------------------------------------------------------------- tray (drawer.tray with its split options, cut at x = 0)
 SEAM_BAR = 5.0                  # top louver rows: a solid bar this far either side of the tray seam
 BRIDGE_X = 18.0                 # bottom louver rows: a gap this far either side (the bridge plate)
@@ -132,8 +208,12 @@ def tray_p4():
     ribbon hook pairs, one at the panel input's height on the left half and one at the S3 connector's on the right, with
     the ribbon folded twice at 45 deg between them; the tie loop on the right half; a notch for the bridge tube."""
     notch = cyl_y(0, BRIDGE_Z, DR.Y0 - 10, DR.Y1 + 1, NOTCH_D, 48)
-    return DR.tray(top_bar=SEAM_BAR, bottom_gap=BRIDGE_X, ribbon_hooks=[(HOOK_X, RIB_Z), (HOOK2_X, IDC_Z)],
-                   hook_lip=RIB_HOOK_LIP, tie_x0=SEAM_BAR + 4.0, extra_cuts=[notch])
+    t = DR.tray(top_bar=SEAM_BAR, bottom_gap=BRIDGE_X, ribbon_hooks=[(HOOK_X, RIB_Z), (HOOK2_X, IDC_Z)],
+                hook_lip=RIB_HOOK_LIP, tie_x0=SEAM_BAR + 4.0, extra_cuts=[notch])
+    if TOP_SCREWS:
+        adds, cuts = tray_top_bosses()
+        t = (t + adds) - cuts
+    return t
 
 
 SEAM_CH = 0.5                   # 45 deg chamfer on the tray seam's edges that meet as the right half slides in
@@ -276,13 +356,16 @@ def collar_p4():
     """collar.py's back-down collar (crush-ribbed plug, 9.8 pocket) with its flange KNOB_SCALE wider. The plug, the shell's
     24 mm hole and the flange thickness (which sets how much bushing the nut gets) don't change."""
     import collar as CO
-    saved = CO.FL_R, CO.TIP_BACK
+    saved = CO.FL_R, CO.TIP_BACK, CO.RIB_PHASE
     try:
         CO.FL_R = saved[0] * KNOB_SCALE
         CO.TIP_BACK = False
-        return CO.collar()
+        if TOP_SCREWS:
+            CO.RIB_PHASE = 15.0                     # no crush rib on the x axis, where the screw holes leave 1.55 mm of walnut
+        c = CO.collar()
+        return c - collar_top_screw_cuts() if TOP_SCREWS else c
     finally:
-        CO.FL_R, CO.TIP_BACK = saved
+        CO.FL_R, CO.TIP_BACK, CO.RIB_PHASE = saved
 
 
 def collar_knob():
@@ -338,6 +421,8 @@ def bed_fit(m, drop_axis):
 
 def build():
     sh = V.shell2()
+    if TOP_SCREWS:
+        sh = sh - shell_top_screw_cuts()
     top, bot = split_shell(sh)
     tr = tray_p4()
     tl, trr = split_tray(tr)
