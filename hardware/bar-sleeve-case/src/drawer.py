@@ -221,6 +221,10 @@ HOOK_WALL, HOOK_FRONT, HOOK_LIP = 1.2, 57.0 + _DY, 1.25   # hook cheeks either s
 LV_BLIND = 1.5                                  # louver slots behind the hooks end this far behind the band's inner face (1 mm past the hook)
 SLED_SCREW = (48.0, 34.5 + _DY)                 # front screw: 3.6 mm of web to the light hole, 10 mm from the nearest crush rib
 SLED_BOSS_D, SLED_PILOT = 6.0, 2.4
+# Guide bore at the mouth of the M2.5 pilots (S3 posts, the sled's front screw): the screw drops in this far and stands
+# square before it cuts its thread; a blunt machine screw in a bare pilot leans until 2-3 threads have bitten (hard to
+# drive straight on the P3 builds). 0 = none (the printed P3 builds); p4.py sets 1.5.
+M25_GUIDE_D, M25_GUIDE_L = 2.6, 0.0
 SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray's top (button head 4.4-4.7 x 1.4-1.6), 0.7 wall left
 
 
@@ -373,6 +377,9 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
         for hx, hz_ in S3_HOLES:
             cuts.append(cyl_y(hx, hz_, yc - 1, yc + 8.0, P3.S3_PILOT, 24))
             cuts.append(Manifold.cylinder(P3.S3_LEAD + 0.01, P3.S3_PILOT / 2 + P3.S3_LEAD, P3.S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc - 0.01, hz_]))
+            if M25_GUIDE_L > 0:                                                     # guide bore, then 45 deg down to the pilot
+                cuts.append(cyl_y(hx, hz_, yc - 0.01, yc + M25_GUIDE_L, M25_GUIDE_D, 24))
+                cuts.append(Manifold.cylinder(0.1, M25_GUIDE_D / 2, P3.S3_PILOT / 2, 24).rotate([-90, 0, 0]).translate([hx, yc + M25_GUIDE_L, hz_]))
         bx, bz = _xz(S3_BOOT)
         cuts.append(cyl_y(bx, bz, btop + 0.5, Y1 + 1, 2.6, 24))
         fd = (BOOT_FUNNEL_D - 2.6) / 2                                              # 45 deg: as deep as it is wide
@@ -567,6 +574,9 @@ def sled():
     holes += [Manifold.cylinder(0.31, P3.S3_PILOT / 2, P3.S3_PILOT / 2 + 0.3, 24).translate([x, y, zs1 - 0.3]) for x, y in SN.SH]
     holes.append(cyl_z(sx, sy, zs0 - 1, zw + 1, SLED_PILOT, 24))                                 # front screw from outside
     holes.append(Manifold.cylinder(0.41, SLED_PILOT / 2, SLED_PILOT / 2 + 0.4, 24).translate([sx, sy, zw - 0.1 - 0.4]))
+    if M25_GUIDE_L > 0:
+        holes.append(cyl_z(sx, sy, zw - 0.1 - M25_GUIDE_L, zw + 1, M25_GUIDE_D, 24))
+        holes.append(Manifold.cylinder(0.1, SLED_PILOT / 2, M25_GUIDE_D / 2, 24).translate([sx, sy, zw - 0.1 - M25_GUIDE_L - 0.1]))
     s = s - Manifold.batch_boolean(holes, ADD)
     # tab tips: 0.6 x 45 deg off both edges, so they find the hook's slot while the sled is still tilted
     tip = HOOK_FRONT + SLED_GRIP

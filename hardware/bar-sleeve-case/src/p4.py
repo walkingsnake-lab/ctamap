@@ -59,6 +59,7 @@ from case import box, rr_cs, prism_y, prism_x, cyl_y, cyl_z, ZC, H, D, WALL, HW,
 DR.configure_shell()
 V.BACKDOWN = True
 V.BTN_RELIEF = False             # no relief behind the S3's edge buttons (it left 0.8 mm of wall under the joint)
+DR.M25_GUIDE_L = 1.5             # guide bore at the mouth of the S3 posts' and the sled's M2.5 pilots (drawer.py)
 # diffuser seat, as the two-panel bars (p3x2.py, Nov 7): rim 1.5 in from the bore, seat 55 deg, the diffuser's bevel 0.2:
 # overlap 1.0 mm (the v5's 45 deg seat held it by 0.3, a wedge a long wall can't hold)
 SEAT_DEG, RIM_IN, DIFF_BEV = 55.0, 1.5, 0.2
@@ -225,7 +226,8 @@ TS_BOSS_OUT = 2.8               # boss past the screw axis, outboard
 TS_BOSS_HY = 3.2                # boss half length along y
 TS_PAD = 0.2                    # pad on the tray's top under the screw: takes up TRAY_CL (0.25) so the screw doesn't dish the walnut
 TS_PAD_HX, TS_PAD_HY, TS_PAD_RAMP = 3.5, 4.5, 1.5
-TS_LEAD = 0.4
+TS_LEAD = 0.6                   # lead-in at the pilot's mouth (0.4 until Nov 9): the screw starts blind, through the walnut. No guide
+                                # bore here: the boss has only ~4 mm of thread. Pre-thread it on the bench (P4-BUILD.md)
 
 
 def top_screw_xy():

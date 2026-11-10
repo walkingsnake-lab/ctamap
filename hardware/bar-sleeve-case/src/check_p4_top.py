@@ -102,6 +102,7 @@ def main():
     tip = H - TS_LEN
     eng = min(zo + TS_PAD, H) - max(tip, zb)
     expect(eng >= 3.5, f'thread in the tray: {eng:.2f} mm (pad top {H - zo - TS_PAD:.2f} to tip {TS_LEN:.2f} under the case top; boss ends {H - zb:.2f})')
+    expect(eng - TS_LEAD >= 3.0, f'full thread below the {TS_LEAD} lead-in: {eng - TS_LEAD:.2f} mm (1.3 x the screw diameter; no guide bore here)')
     expect(tip >= zb, f'tip stays inside the boss by {tip - zb:.2f} mm')
     r_out = TS_X + 0.2 + TS_HEAD_D / 2                           # farthest point of a head from the knob axis, tray 0.2 off
     r_knob = KN.PEB_R * p4.KNOB_SCALE
