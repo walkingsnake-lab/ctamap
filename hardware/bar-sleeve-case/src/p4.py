@@ -60,6 +60,13 @@ DR.configure_shell()
 V.BACKDOWN = True
 V.BTN_RELIEF = False             # no relief behind the S3's edge buttons (it left 0.8 mm of wall under the joint)
 DR.M25_GUIDE_L = 1.5             # guide bore at the mouth of the S3 posts' and the sled's M2.5 pilots (drawer.py)
+# Panel thickness as measured (Nov 11): ~14.0, LED face to the housing's back; the profile's 14.5 was an assumption. The
+# profile stays (it places the S3, the encoder, the USB-C opening and the knob hole in the shell); only what meets the
+# housing's back follows the measurement: the four posts and the bridge's are PANEL_THIN longer. Left as they were, they
+# would end 0.2 mm short of the housing (POST_LONG 0.3 less 0.5) and their screws would pull the panel back off the grid.
+PANEL_T_REAL = float(os.environ.get('P4_PANEL_T', '14.0'))
+PANEL_THIN = panel.P['t'] - PANEL_T_REAL
+P3.FOOT_Y = PANEL_BACK - PANEL_THIN - DR.POST_LONG
 # diffuser seat, as the two-panel bars (p3x2.py, Nov 7): rim 1.5 in from the bore, seat 55 deg, the diffuser's bevel 0.2:
 # overlap 1.0 mm (the v5's 45 deg seat held it by 0.3, a wedge a long wall can't hold)
 SEAT_DEG, RIM_IN, DIFF_BEV = 55.0, 1.5, 0.2
@@ -411,7 +418,7 @@ def diffuser_in_case(m):
 def panel_p4():
     """P4 panel in the case, turned 180 deg: LED board (2.5 mm incl. LEDs) + 12 mm housing (rim, ribs, insert bosses),
     the two HUB75 shrouds (top 1 mm under the housing back, ASSUMED), VH4 power header, a ribbon plug on data in"""
-    yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK
+    yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK - PANEL_THIN            # the measured housing back
     pw, ph = panel.P['w'], panel.P['h']
     parts = [box(-pw / 2, pw / 2, yf, yf + 2.5, ZC - ph / 2, ZC + ph / 2)]
     hous = box(-pw / 2 + 0.15, pw / 2 - 0.15, yf + 2.5 - 0.01, yb, ZC - ph / 2 + 0.15, ZC + ph / 2 - 0.15)

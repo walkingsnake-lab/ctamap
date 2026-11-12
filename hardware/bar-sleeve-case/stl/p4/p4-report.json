@@ -71,11 +71,11 @@
    "extents": [
     30.0,
     14.0,
-    40.1
+    40.6
    ],
    "square": 30.0,
    "spare_a_side": 113.0,
-   "volume_cm3": 2.5
+   "volume_cm3": 2.6
   },
   "p4-diffuser-left-white.stl": {
    "watertight": true,
