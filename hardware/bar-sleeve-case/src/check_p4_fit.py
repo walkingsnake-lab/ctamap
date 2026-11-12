@@ -105,9 +105,28 @@ def main():
     expect(worst < 0.05, f'sliding in from the back (58 mm): worst overlap with the shell {worst:.3f} mm3')
     expect(vol(dif, trays) < 0.05, f'tray front edge on the flange: overlap {vol(dif, trays):.3f} mm3')
     k = 1.0 / (1.0 - p4.DIFF_SHRINK)
+    HSW, HSH = DF.HOUSE_W or DF.PW, DF.HOUSE_H or DF.PH             # the housing's measured outline (the grid: DF.PW x DF.PH)
     print(f'  printed halves built {p4.DIFF_SHRINK * 100:.2f}% large: flange {2 * DF.FL_HX * k:.2f} x {2 * DF.FL_HZ * k:.2f} mm built, '
           f'{2 * DF.FL_HX:.1f} x {2 * DF.FL_HZ:.1f} once shrunk (bore {2 * BORE_HX:.1f} x {2 * BORE_HZ:.1f}); skirt opening '
-          f'{(DF.PW + 2 * DF.CLR) * k:.2f} x {(DF.PH + 2 * DF.CLR) * k:.2f} built for a {DF.PW:g} x {DF.PH:g} panel')
+          f'{(HSW + 2 * DF.CLR) * k:.2f} x {(HSH + 2 * DF.CLR) * k:.2f} built for a {HSW:g} x {HSH:g} housing')
+    # the skirts on the measured housing: measured off the printed parts, at the bumps' height and clear of them
+    dp = P['diffuser_print']
+    whole = dp[('left', 'black')] + dp[('right', 'black')]
+    zt = DF.SKIN + DF.GRID_H + DF.SK_D
+    house = box(-HSW / 2, HSW / 2, -HSH / 2, HSH / 2, DF.SKIN + DF.GRID_H + 0.05, zt + 5)
+    def room(axis, sign, x0, x1):                                 # how far the housing can move before it meets the part there
+        probe = house ^ (box(x0, x1, -200, 200, -5, 30) if axis == 1 else box(-200, 200, x0, x1, -5, 30))
+        for t in np.arange(0.0, 1.0, 0.01):
+            d = [0.0, 0.0, 0.0]; d[axis] = sign * float(t)
+            if vol(probe.translate(d), whole) > 1e-4:
+                return round(float(t) - 0.01, 2)
+        return 1.0
+    xb = (DF.BUMP_XS if DF.BUMP_XS is not None else (-HSW / 4, HSW / 4))[1]
+    g_top, g_bot = room(1, 1, 5.0, 25.0), room(1, -1, 5.0, 25.0)   # between bumps
+    pb = house ^ box(xb - 2.0, xb + 2.0, -200, 200, -5, 30)        # at a bottom bump: how far up before it is free
+    bite = next((round(float(t), 2) for t in np.arange(0.0, 0.6, 0.01) if vol(pb.translate([0, float(t), 0]), whole) < 1e-4), 0.6)
+    expect(abs(g_top - DF.CLR) < 0.03 and abs(g_bot - DF.CLR) < 0.03, f'skirts to the {HSH:g} mm housing, top / bottom: {g_top:.2f} / {g_bot:.2f} mm (meant {DF.CLR})')
+    expect(0.02 <= bite <= 0.15, f'bottom bumps bite the housing by {bite:.2f} mm (bump {DF.BUMP} less the {DF.CLR} clearance)')
     wl = P['diffuser'][('left', 'white')]
     bb = wl.bounding_box()
     expect(abs((bb[3] - bb[0]) - DF.FL_HX + DF.BEV) < 0.3 and bb[5] - bb[2] <= DF.SKIN + 1e-6,

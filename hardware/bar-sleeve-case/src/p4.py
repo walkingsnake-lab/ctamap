@@ -375,7 +375,13 @@ CENTRE_RIB = 1.2                 # 0.6 each side of the split
 # and tall, so uncompensated it comes out ~0.6 mm short each way: the skirts too tight for the panel and the ribs
 # walking off the gaps between the LEDs. The printed halves are built this much larger in x and y (z untouched).
 # DIFF_SHRINK=0 for a PLA grid; measure a printed half (145.2 mm tall over the flange) and adjust.
-DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0045'))
+# Nov 11, first P4 diffuser print: loose on the panel. Built 0.45% large (the P2.5 pair's black PETG), it shrank little
+# if at all, and the panel's housing measured 127.7 high, not 128.0: ~0.59 mm of gap a side where 0.15 was meant, so the
+# 0.2 bumps never touched. No compensation by default now (measure the shrink strip, then DIFF_SHRINK = 1 - measured /
+# built), and the skirts close on the measured housing (DF.HOUSE_H; the ribs stay on the 4 mm pitch).
+DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0'))
+DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.7'))
+DF.HOUSE_W = float(os.environ['P4_HOUSE_W']) if os.environ.get('P4_HOUSE_W') else None      # width: not measured yet
 
 
 def diffuser_halves(printed=False):

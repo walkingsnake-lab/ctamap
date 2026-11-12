@@ -9,7 +9,9 @@ import numpy as np
 from manifold3d import Manifold, CrossSection
 import panel
 
-PW, PH = panel.P['w'], panel.P['h']
+PW, PH = panel.P['w'], panel.P['h']                # the pixel grid: cols x pitch, rows x pitch
+HOUSE_W, HOUSE_H = None, None       # the housing's measured outline, where it is smaller than the grid's (p4.py: 127.7 high);
+                                    # the skirts, frame and bumps follow it, the ribs stay on the pitch. None = PW / PH
 SKIN = float(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[1].endswith('.stl') else 0.2   # one-piece face skin
 GRID_H = 1.5                        # grid behind the skin
 SK_T, SK_D, CLR, BUMP = 1.2, 3.0, 0.15, 0.2
@@ -36,7 +38,8 @@ def rrect(hx, hy, r, z0, z1, n=48):
 
 def diffuser(grid=True, skin=None):
     SKIN = globals()['SKIN'] if skin is None else skin
-    hx, hy = PW / 2, PH / 2
+    gx, gy = PW / 2, PH / 2                                                 # grid
+    hx, hy = (HOUSE_W or PW) / 2, (HOUSE_H or PH) / 2                       # housing: what the skirts close on
     o = OUT
     zg0, zg1 = SKIN - 0.01, SKIN + GRID_H
     zt = zg1 + SK_D
@@ -46,7 +49,7 @@ def diffuser(grid=True, skin=None):
     plate = Manifold.batch_hull([front, back])
     face = rrect(fx - BEV, fz - BEV, fr - BEV, 0, SKIN)
     flange = plate - box(-hx - o + 0.01, hx + o - 0.01, -hy - o + 0.01, hy + o - 0.01, -1, FT + 1)
-    frame = box(-hx - o, hx + o, -hy - o, hy + o, zg0, zg1) - box(-hx + 0.3, hx - 0.3, -hy + 0.3, hy - 0.3, -1, 10)
+    frame = box(-hx - o, hx + o, -hy - o, hy + o, zg0, zg1) - box(-gx + 0.3, gx - 0.3, -gy + 0.3, gy - 0.3, -1, 10)
     skirt = box(-hx - o, hx + o, -hy - o, hy + o, zg1 - 0.01, zt) - box(-hx - CLR, hx + CLR, -hy - CLR, hy + CLR, -1, 20)
     d = face + flange + frame + skirt
     # lead-in chamfers on the inside of the skirt tips
@@ -78,11 +81,11 @@ def diffuser(grid=True, skin=None):
     if grid:
         ribs = []
         for i in range(1, panel.COLS):
-            x = -hx + i * PITCH
-            ribs.append(box(x - RIB / 2, x + RIB / 2, -hy + 0.3, hy - 0.3, zg0, zg1))      # ends exactly on the frame: 0.29 left 0.01 slivers
+            x = -gx + i * PITCH
+            ribs.append(box(x - RIB / 2, x + RIB / 2, -gy + 0.3, gy - 0.3, zg0, zg1))      # ends exactly on the frame: 0.29 left 0.01 slivers
         for j in range(1, panel.ROWS):
-            y = -hy + j * PITCH
-            ribs.append(box(-hx + 0.3, hx - 0.3, y - RIB / 2, y + RIB / 2, zg0, zg1))
+            y = -gy + j * PITCH
+            ribs.append(box(-gx + 0.3, gx - 0.3, y - RIB / 2, y + RIB / 2, zg0, zg1))
         d = d + Manifold.batch_boolean(ribs, manifold3d.OpType.Add)
     return d
 
