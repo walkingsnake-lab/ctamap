@@ -377,7 +377,10 @@ def bridge():
 
 
 # ---------------------------------------------------------------- diffuser halves
-CENTRE_RIB = 1.2                 # 0.6 each side of the split
+# The joint rib: 0.4 each side of the split, one nozzle line a half, so the glued joint is as wide as every other rib
+# (1.2 until Nov 11: it read as a heavier line down the middle, lit and unlit). A 0.4 wall needs the slicer's Arachne
+# wall generator (Bambu Studio's default): check in Preview that the joint edge's rib is there. P4_CENTRE_RIB=1.0 if not.
+CENTRE_RIB = float(os.environ.get('P4_CENTRE_RIB', '0.8'))
 # PETG shrink (p3x2.py, Nov 7): the first P2.5 pair's black PETG grid printed 0.45% small. Each P4 half is 128 mm wide
 # and tall, so uncompensated it comes out ~0.6 mm short each way: the skirts too tight for the panel and the ribs
 # walking off the gaps between the LEDs. The printed halves are built this much larger in x and y (z untouched).
