@@ -400,6 +400,17 @@ JOINT_SETBACK = float(os.environ.get('P4_JOINT_SETBACK', '0.1'))
 # strip, then DIFF_SHRINK = 1 - measured / built.
 DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0021'))
 DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.7'))
+# Halves that snap on and stay, unglued (Nov 12), as the P2.5 pair's (p3x2.py's skirt fit): a three-sided half peels at
+# its joint edge unless the long skirts bear along their length, so top and bottom get the pair's 0.05 clearance and
+# bumps on both (two per half per edge, +/-40 about each half's centre; 0.2, biting 0.15). The second P4 print, ~0.02
+# clear top and bottom by accident, held. The end skirts only ever stop a half moving toward the joint and their bumps
+# push it away from it (that print's 0.5-1 mm gap), so they get no bumps and 0.4 of clearance: they shade the panel's
+# ends and never decide where the halves meet, whatever the panel's true width.
+DF.CLR = float(os.environ.get('P4_DIFF_CLR', '0.05'))
+DF.TOP_BUMPS = True
+DF.BUMP_XS = tuple(cx + dx for cx in (-DF.PW / 4, DF.PW / 4) for dx in (-40.0, 40.0))
+DF.END_CLR = float(os.environ.get('P4_DIFF_END_CLR', '0.4'))
+DF.END_BUMPS = False
 DF.HOUSE_W = float(os.environ['P4_HOUSE_W']) if os.environ.get('P4_HOUSE_W') else None      # width: not measured yet
 
 

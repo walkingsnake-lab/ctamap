@@ -122,11 +122,17 @@ def main():
                 return round(float(t) - 0.01, 2)
         return 1.0
     xb = (DF.BUMP_XS if DF.BUMP_XS is not None else (-HSW / 4, HSW / 4))[1]
-    g_top, g_bot = room(1, 1, 5.0, 25.0), room(1, -1, 5.0, 25.0)   # between bumps
-    pb = house ^ box(xb - 2.0, xb + 2.0, -200, 200, -5, 30)        # at a bottom bump: how far up before it is free
+    g_top, g_bot = room(1, 1, 40.0, 60.0), room(1, -1, 40.0, 60.0)   # between bumps
+    pb = house ^ box(xb - 2.0, xb + 2.0, -200, 0, -5, 30)        # at a bottom bump: how far up before it is free
     bite = next((round(float(t), 2) for t in np.arange(0.0, 0.6, 0.01) if vol(pb.translate([0, float(t), 0]), whole) < 1e-4), 0.6)
     expect(abs(g_top - DF.CLR) < 0.03 and abs(g_bot - DF.CLR) < 0.03, f'skirts to the {HSH:g} mm housing, top / bottom: {g_top:.2f} / {g_bot:.2f} mm (meant {DF.CLR})')
-    expect(0.02 <= bite <= 0.15, f'bottom bumps bite the housing by {bite:.2f} mm (bump {DF.BUMP} less the {DF.CLR} clearance)')
+    expect(0.02 <= bite <= 0.2, f'bottom bumps bite the housing by {bite:.2f} mm (bump {DF.BUMP} less the {DF.CLR} clearance)')
+    pt = house ^ box(xb - 2.0, xb + 2.0, 0, 200, -5, 30)        # the same bump on the top skirt
+    bite_t = next((round(float(t), 2) for t in np.arange(0.0, 0.6, 0.01) if vol(pt.translate([0, -float(t), 0]), whole) < 1e-4), 0.6)
+    expect(abs(bite_t - bite) < 0.02, f'top bumps bite it by {bite_t:.2f} mm (the halves are three-sided: both long skirts hold)')
+    e_l, e_r = room(0, -1, -30.0, 30.0), room(0, 1, -30.0, 30.0)   # the housing's ends to the end skirts (HSW assumed), bumps and all
+    expect(min(e_l, e_r) >= 0.3, f'end skirts stand {e_l:.2f} / {e_r:.2f} mm off a {HSW:g} mm housing, no bumps: they cannot hold the halves apart '
+           f'(a housing up to {HSW + 2 * min(e_l, e_r):.1f} wide still lets them meet)')
     wl = P['diffuser'][('left', 'white')]
     bb = wl.bounding_box()
     expect(abs((bb[3] - bb[0]) - DF.FL_HX + DF.BEV) < 0.3 and bb[5] - bb[2] <= DF.SKIN + 1e-6,
