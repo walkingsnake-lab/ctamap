@@ -327,8 +327,8 @@ def diffuser(Q, out):
     b = section('Centre joint, cut level through a row of pixels and seen from above (screen face at the bottom)',
                 it(Q, 'dif_white', 'dif_left', 'dif_right', 'panel'), slab(z=(ZC + 0.6, ZC + 2.0)), 'top', (0, Y_FACE + 1.9, ZC + 2), 9.0, (1300, 500),
                 [('left half: a pixel\'s cell', (-6.0, Y_FACE + 0.95, ZC + 2), -1), ('normal rib, 0.8 mm', (-4.0, Y_FACE + 1.0, ZC + 2), -1),
-                 ('white face, 0.2 mm: the halves butt here too', (-2.0, Y_FACE + 0.1, ZC + 2), -1),
-                 (f'joint rib: {CENTRE_RIB / 2:g} + {CENTRE_RIB / 2:g} mm,\nepoxy on the back half of its faces', (0.0, Y_FACE + 1.1, ZC + 2), 1),
+                 ('white face, 0.2 mm: only this layer\nreaches the joint, so it is what meets', (-2.0, Y_FACE + 0.1, ZC + 2), -1),
+                 (f'joint: two {CENTRE_RIB / 2:g} mm walls, the black set\n{p4.JOINT_SETBACK:g} mm back a half; epoxy at the back', (0.0, Y_FACE + 1.1, ZC + 2), 1),
                  ('right half: normal rib', (4.0, Y_FACE + 1.0, ZC + 2), 1), ('panel (LED board)', (6.0, Y_FACE + 2.6, ZC + 2), 1)])
     stack('2 and 3. Diffuser: its seat in the shell, and its centre joint', [a, b], f'{out}/p4-assembly-03-diffuser.png')
 

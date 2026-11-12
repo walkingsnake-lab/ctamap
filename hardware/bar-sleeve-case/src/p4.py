@@ -381,6 +381,13 @@ def bridge():
 # (1.2 until Nov 11: it read as a heavier line down the middle, lit and unlit). A 0.4 wall needs the slicer's Arachne
 # wall generator (Bambu Studio's default): check in Preview that the joint edge's rib is there. P4_CENTRE_RIB=1.0 if not.
 CENTRE_RIB = float(os.environ.get('P4_CENTRE_RIB', '0.8'))
+# Black set back from the joint (Nov 12). On the second print the joint showed as a crisp black hairline: above the
+# first layer each half's joint face is a black wall, printed to the same line as the white under it, so black sits
+# beside the white's rounded edge (and a fat black bead holds the white edges apart), and any gap is a slot with black
+# walls. Everything above the face layer now stops JOINT_SETBACK short of the joint plane on each half: only the face
+# layers reach it and meet. The joint's two walls keep their width and move apart with it, so the joint reads
+# CENTRE_RIB + 2 x JOINT_SETBACK wide through the face (1.0; the other ribs 0.8). P4_JOINT_SETBACK=0.05 / 0 to compare.
+JOINT_SETBACK = float(os.environ.get('P4_JOINT_SETBACK', '0.1'))
 # PETG shrink (p3x2.py, Nov 7): the first P2.5 pair's black PETG grid printed 0.45% small. Each P4 half is 128 mm wide
 # and tall, so uncompensated it comes out ~0.6 mm short each way: the skirts too tight for the panel and the ribs
 # walking off the gaps between the LEDs. The printed halves are built this much larger in x and y (z untouched).
@@ -410,22 +417,26 @@ def diffuser_halves(printed=False, tint=False):
     try:
         d = DF.diffuser(skin=skin)
         hy = DF.PH / 2
-        d = d + box(-CENTRE_RIB / 2, CENTRE_RIB / 2, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+        cr = CENTRE_RIB / 2 + JOINT_SETBACK
+        d = d + box(-cr, cr, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
     finally:
         DF.GRID_H = grid_h
     first = box(-400, 400, -400, 400, -1, DF.SKIN)
     second = box(-400, 400, -400, 400, DF.SKIN, skin)
     k = 1.0 / (1.0 - DIFF_SHRINK) if printed else 1.0
+    back = box(-JOINT_SETBACK, JOINT_SETBACK, -400, 400, -5, 50) if JOINT_SETBACK > 0 else None      # no black here
     out = {}
     for side, xs in (('left', (-200, 0)), ('right', (0, 200))):
         half = d ^ box(xs[0], xs[1], -200, 200, -5, 20)
+        black = half - first - second if tint else half - first
+        if back is not None:
+            black = black - back
         if tint:
             out[(side, 'gray')] = (half ^ first).scale([k, k, 1.0])
             out[(side, 'white')] = (half ^ second).scale([k, k, 1.0])
-            out[(side, 'black')] = (half - first - second).scale([k, k, 1.0])
         else:
             out[(side, 'white')] = (half ^ first).scale([k, k, 1.0])
-            out[(side, 'black')] = (half - first).scale([k, k, 1.0])
+        out[(side, 'black')] = black.scale([k, k, 1.0])
     return out
 
 
