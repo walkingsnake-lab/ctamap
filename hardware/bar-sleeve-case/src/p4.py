@@ -386,8 +386,9 @@ CENTRE_RIB = float(os.environ.get('P4_CENTRE_RIB', '0.8'))
 # beside the white's rounded edge (and a fat black bead holds the white edges apart), and any gap is a slot with black
 # walls. Everything above the face layer now stops JOINT_SETBACK short of the joint plane on each half: only the face
 # layers reach it and meet. The joint's two walls keep their width and move apart with it, so the joint reads
-# CENTRE_RIB + 2 x JOINT_SETBACK wide through the face (1.0; the other ribs 0.8). P4_JOINT_SETBACK=0.05 / 0 to compare.
-JOINT_SETBACK = float(os.environ.get('P4_JOINT_SETBACK', '0.1'))
+# CENTRE_RIB + 2 x JOINT_SETBACK wide through the face (0.9; the other ribs 0.8). 0.05 a half (0.1 as first built,
+# Nov 12, never printed): P4_JOINT_SETBACK=0.1 / 0 to compare.
+JOINT_SETBACK = float(os.environ.get('P4_JOINT_SETBACK', '0.05'))
 # PETG shrink (p3x2.py, Nov 7): the first P2.5 pair's black PETG grid printed 0.45% small. Each P4 half is 128 mm wide
 # and tall, so uncompensated it comes out ~0.6 mm short each way: the skirts too tight for the panel and the ribs
 # walking off the gaps between the LEDs. The printed halves are built this much larger in x and y (z untouched).
