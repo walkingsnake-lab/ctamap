@@ -109,9 +109,9 @@ def main():
     print(f'  printed halves built {p4.DIFF_SHRINK * 100:.2f}% large: flange {2 * DF.FL_HX * k:.2f} x {2 * DF.FL_HZ * k:.2f} mm built, '
           f'{2 * DF.FL_HX:.1f} x {2 * DF.FL_HZ:.1f} once shrunk (bore {2 * BORE_HX:.1f} x {2 * BORE_HZ:.1f}); skirt opening '
           f'{(HSW + 2 * DF.CLR) * k:.2f} x {(HSH + 2 * DF.CLR) * k:.2f} built for a {HSW:g} x {HSH:g} housing')
-    # the skirts on the measured housing: measured off the printed parts, at the bumps' height and clear of them
+    # the skirts on the measured housing: measured off the printed parts once shrunk, clear of the bumps and at one
     dp = P['diffuser_print']
-    whole = dp[('left', 'black')] + dp[('right', 'black')]
+    whole = (dp[('left', 'black')] + dp[('right', 'black')]).scale([1 / k, 1 / k, 1.0])     # as it comes out, shrunk
     zt = DF.SKIN + DF.GRID_H + DF.SK_D
     house = box(-HSW / 2, HSW / 2, -HSH / 2, HSH / 2, DF.SKIN + DF.GRID_H + 0.05, zt + 5)
     def room(axis, sign, x0, x1):                                 # how far the housing can move before it meets the part there
