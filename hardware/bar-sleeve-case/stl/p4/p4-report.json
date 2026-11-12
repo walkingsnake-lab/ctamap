@@ -220,6 +220,138 @@
    "spare_a_side": 108.7,
    "volume_cm3": 0.6
   },
+  "p4-diffuser3-left-gray.stl": {
+   "watertight": true,
+   "extents": [
+    136.4,
+    144.9,
+    0.2
+   ],
+   "square": 144.9,
+   "spare_a_side": 55.5,
+   "volume_cm3": 3.9
+  },
+  "p4-diffuser3-left-white.stl": {
+   "watertight": true,
+   "extents": [
+    136.5,
+    144.9,
+    0.2
+   ],
+   "square": 144.9,
+   "spare_a_side": 55.5,
+   "volume_cm3": 3.9
+  },
+  "p4-diffuser3-left-black.stl": {
+   "watertight": true,
+   "extents": [
+    136.6,
+    145.2,
+    4.3
+   ],
+   "square": 145.2,
+   "spare_a_side": 55.4,
+   "volume_cm3": 11.9
+  },
+  "p4-diffuser3-right-gray.stl": {
+   "watertight": true,
+   "extents": [
+    136.4,
+    144.9,
+    0.2
+   ],
+   "square": 144.9,
+   "spare_a_side": 55.5,
+   "volume_cm3": 3.9
+  },
+  "p4-diffuser3-right-white.stl": {
+   "watertight": true,
+   "extents": [
+    136.5,
+    144.9,
+    0.2
+   ],
+   "square": 144.9,
+   "spare_a_side": 55.5,
+   "volume_cm3": 3.9
+  },
+  "p4-diffuser3-right-black.stl": {
+   "watertight": true,
+   "extents": [
+    136.6,
+    145.2,
+    4.3
+   ],
+   "square": 145.2,
+   "spare_a_side": 55.4,
+   "volume_cm3": 11.9
+  },
+  "coupon-p4-diffuser3-joint-left-gray.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.4,
+    0.2
+   ],
+   "square": 38.4,
+   "spare_a_side": 108.8,
+   "volume_cm3": 0.2
+  },
+  "coupon-p4-diffuser3-joint-left-white.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.5,
+    0.2
+   ],
+   "square": 38.5,
+   "spare_a_side": 108.8,
+   "volume_cm3": 0.2
+  },
+  "coupon-p4-diffuser3-joint-left-black.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.6,
+    4.3
+   ],
+   "square": 38.6,
+   "spare_a_side": 108.7,
+   "volume_cm3": 0.5
+  },
+  "coupon-p4-diffuser3-joint-right-gray.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.4,
+    0.2
+   ],
+   "square": 38.4,
+   "spare_a_side": 108.8,
+   "volume_cm3": 0.2
+  },
+  "coupon-p4-diffuser3-joint-right-white.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.5,
+    0.2
+   ],
+   "square": 38.5,
+   "spare_a_side": 108.8,
+   "volume_cm3": 0.2
+  },
+  "coupon-p4-diffuser3-joint-right-black.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.6,
+    4.3
+   ],
+   "square": 38.6,
+   "spare_a_side": 108.7,
+   "volume_cm3": 0.5
+  },
   "coupon-p4-diffuser-shrink-white.stl": {
    "watertight": true,
    "extents": [

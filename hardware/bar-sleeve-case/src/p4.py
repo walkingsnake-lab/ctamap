@@ -394,21 +394,36 @@ DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.7'))
 DF.HOUSE_W = float(os.environ['P4_HOUSE_W']) if os.environ.get('P4_HOUSE_W') else None      # width: not measured yet
 
 
-def diffuser_halves(printed=False):
+def diffuser_halves(printed=False, tint=False):
     """DF.diffuser() (8 mm flange) split at x = 0. Returns {(side, part): manifold} in DF's frame (z = 0 is the face, +z
     toward the LEDs; y up the panel). part: 'white' (the whole first layer: the face and the flange's front) or 'black'
     (everything above it). printed: built DIFF_SHRINK larger in x and y, about the centre joint, for the PETG's shrink;
-    otherwise the size it should come out (fit checks, renders)."""
-    d = DF.diffuser(skin=DF.SKIN)
-    hy = DF.PH / 2
-    d = d + box(-CENTRE_RIB / 2, CENTRE_RIB / 2, -hy + 0.29, hy - 0.29, DF.SKIN - 0.01, DF.SKIN + DF.GRID_H)
+    otherwise the size it should come out (fit checks, renders).
+    tint: the three-colour variant to try (Nov 11): 'gray' (the whole first layer, translucent gray: the tint), 'white'
+    (the whole second layer: the scatter, behind the tint) and 'black' (the grid and the rest). The face is two layers
+    and the grid one layer lower, so the LEDs sit where they did and the variant swaps in with no other change."""
+    skin = DF.SKIN * (2 if tint else 1)
+    grid_h = DF.GRID_H
+    DF.GRID_H = grid_h - (skin - DF.SKIN)
+    try:
+        d = DF.diffuser(skin=skin)
+        hy = DF.PH / 2
+        d = d + box(-CENTRE_RIB / 2, CENTRE_RIB / 2, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+    finally:
+        DF.GRID_H = grid_h
     first = box(-400, 400, -400, 400, -1, DF.SKIN)
+    second = box(-400, 400, -400, 400, DF.SKIN, skin)
     k = 1.0 / (1.0 - DIFF_SHRINK) if printed else 1.0
     out = {}
     for side, xs in (('left', (-200, 0)), ('right', (0, 200))):
         half = d ^ box(xs[0], xs[1], -200, 200, -5, 20)
-        out[(side, 'white')] = (half ^ first).scale([k, k, 1.0])
-        out[(side, 'black')] = (half - first).scale([k, k, 1.0])
+        if tint:
+            out[(side, 'gray')] = (half ^ first).scale([k, k, 1.0])
+            out[(side, 'white')] = (half ^ second).scale([k, k, 1.0])
+            out[(side, 'black')] = (half - first - second).scale([k, k, 1.0])
+        else:
+            out[(side, 'white')] = (half ^ first).scale([k, k, 1.0])
+            out[(side, 'black')] = (half - first).scale([k, k, 1.0])
     return out
 
 
@@ -599,6 +614,7 @@ def build():
     tl, trr = split_tray(tr)
     return dict(shell=sh, top=top, bot=bot, tray=tr, tray_left=tl, tray_right=trr, spine=spine(), bridge=bridge(),
                 diffuser=diffuser_halves(), diffuser_print=diffuser_halves(printed=True),
+                diffuser3_print=diffuser_halves(printed=True, tint=True),
                 plates=[joint_plate(-1), joint_plate(1)] if JOINT == 'plate' else [])
 
 
@@ -646,6 +662,11 @@ if __name__ == '__main__':
     dj = diffuser_joint_coupon(P['diffuser_print'])
     for (side, part), m in dj.items():
         put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj, side))
+    for (side, part), m in P['diffuser3_print'].items():        # the three-colour variant to try: gray, white, black
+        put(m, f'p4-diffuser3-{side}-{part}.stl', None, drop_axis=2, frame=pair(P['diffuser3_print'], side))
+    dj3 = diffuser_joint_coupon(P['diffuser3_print'])
+    for (side, part), m in dj3.items():
+        put(m, f'coupon-p4-diffuser3-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj3, side))
     ds = diffuser_shrink_coupon(P['diffuser_print'])
     for (side, part), m in ds.items():
         put(m, f'coupon-p4-diffuser-shrink-{part}.stl', None, drop_axis=2, frame=pair(ds, side))
