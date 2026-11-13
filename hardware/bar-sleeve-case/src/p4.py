@@ -389,6 +389,29 @@ CENTRE_RIB = float(os.environ.get('P4_CENTRE_RIB', '0.8'))
 # CENTRE_RIB + 2 x JOINT_SETBACK wide through the face (0.9; the other ribs 0.8). 0.05 a half (0.1 as first built,
 # Nov 12, never printed): P4_JOINT_SETBACK=0.1 / 0 to compare.
 JOINT_SETBACK = float(os.environ.get('P4_JOINT_SETBACK', '0.05'))
+# Rib ends tapered at the joint (Nov 13). On the bar-joint coupon each half's joint wall had a gap beside every horizontal
+# rib. Sliced (PrusaSlicer 2.7 with Arachne, the generator Bambu Studio uses): the one-line wall came out as a separate
+# 3.3 mm extrusion per cell, starting and stopping at every rib, because a two-line rib meets it there; PETG starts each
+# thin. Where the rib narrows to one line before it meets the wall, the wall is one unbroken extrusion top to bottom and
+# no line starts or stops at the joint (every taper tried, 0.4-1.2 long to 0.36-0.5 wide, on every grid layer). So each
+# horizontal rib narrows from 0.8 to JOINT_TAPER_W over its last JOINT_TAPER_L before the joint wall. P4_JOINT_TAPER=0: off.
+JOINT_TAPER_L = float(os.environ.get('P4_JOINT_TAPER', '0.8'))
+JOINT_TAPER_W = 0.45
+
+
+def joint_taper_cuts(z0, z1):
+    """wedges off both sides of each horizontal rib's end, either side of the joint wall. No face of a wedge lies on a
+    face of the part (those exported as zero-thickness flaps): it runs 0.2 past the rib's side into the open cell, starts
+    0.02 off the joint wall and 0.01 above the face layers. Both steps are under the slicer's resolution."""
+    if JOINT_TAPER_L <= 0:
+        return None
+    xs, h, w, e = CENTRE_RIB / 2 + JOINT_SETBACK, DF.RIB / 2, JOINT_TAPER_W / 2, 0.2
+    xs += 0.02
+    tri = CrossSection([[(xs, w), (xs + JOINT_TAPER_L * (h + e - w) / (h - w), h + e), (xs, h + e)]])
+    one = Manifold.extrude(tri, z1 - z0).translate([0, 0, z0])
+    four = one + one.mirror([0, 1, 0]) + one.mirror([1, 0, 0]) + one.mirror([1, 0, 0]).mirror([0, 1, 0])
+    gy = DF.PH / 2
+    return Manifold.batch_boolean([four.translate([0, -gy + j * DF.PITCH, 0]) for j in range(1, panel.ROWS)], ADD)
 # PETG shrink (p3x2.py, Nov 7): the first P2.5 pair's black PETG grid printed 0.45% small. Each P4 half is 128 mm wide
 # and tall, so uncompensated it comes out ~0.6 mm short each way: the skirts too tight for the panel and the ribs
 # walking off the gaps between the LEDs. The printed halves are built this much larger in x and y (z untouched).
@@ -592,6 +615,9 @@ def diffuser_halves(printed=False, tint=False):
         hy = DF.PH / 2
         cr = CENTRE_RIB / 2 + JOINT_SETBACK
         d = d + box(-cr, cr, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+        taper = joint_taper_cuts(skin + 0.01, skin + DF.GRID_H + 1.0)
+        if taper is not None:
+            d = d - taper
     finally:
         DF.GRID_H = grid_h
     first = box(-400, 400, -400, 400, -1, DF.SKIN)
