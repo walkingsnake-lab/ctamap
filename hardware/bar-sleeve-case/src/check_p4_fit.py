@@ -108,7 +108,7 @@ def main():
     HSW, HSH = DF.HOUSE_W or DF.PW, DF.HOUSE_H or DF.PH             # the housing's measured outline (the grid: DF.PW x DF.PH)
     print(f'  printed halves built {p4.DIFF_SHRINK * 100:.2f}% large: flange {2 * DF.FL_HX * k:.2f} x {2 * DF.FL_HZ * k:.2f} mm built, '
           f'{2 * DF.FL_HX:.1f} x {2 * DF.FL_HZ:.1f} once shrunk (bore {2 * BORE_HX:.1f} x {2 * BORE_HZ:.1f}); skirt opening '
-          f'{(HSW + 2 * DF.CLR) * k:.2f} x {(HSH + 2 * DF.CLR) * k:.2f} built for a {HSW:g} x {HSH:g} housing')
+          f'{(HSW + 2 * (DF.CLR if DF.END_CLR is None else DF.END_CLR)) * k:.2f} x {(HSH + 2 * DF.CLR) * k:.2f} built for a {HSW:g} x {HSH:g} housing')
     # the skirts on the measured housing: measured off the printed parts once shrunk, clear of the bumps and at one
     dp = P['diffuser_print']
     whole = (dp[('left', 'black')] + dp[('right', 'black')]).scale([1 / k, 1 / k, 1.0])     # as it comes out, shrunk
@@ -127,7 +127,14 @@ def main():
     ecl = DF.CLR if DF.END_CLR is None else DF.END_CLR
     expect(abs(e_l - ecl) < 0.03 and abs(e_r - ecl) < 0.03, f'end skirts to a {HSW:g} mm housing: {e_l:.2f} / {e_r:.2f} mm (meant {ecl}; the width is not measured)')
     inside = vol(whole, box(-HSW / 2, HSW / 2, -HSH / 2, HSH / 2, DF.SKIN + DF.GRID_H + 0.05, zt + 5))
-    expect(inside < 1e-3, f'no bumps: nothing of the diffuser stands inside the housing\'s outline ({inside:.3f} mm3); the skirts only locate')
+    if DF.LONG_BUMPS:
+        bumps = [q for q in (whole ^ house).decompose() if q.volume() > 1e-5]
+        deep = max((min(HSH / 2 - q.bounding_box()[1], q.bounding_box()[4] + HSH / 2) for q in bumps), default=0.0)
+        bx = sorted({round(abs((q.bounding_box()[0] + q.bounding_box()[3]) / 2)) for q in bumps})
+        expect(len(bumps) == 8 and abs(deep - (DF.BUMP - DF.CLR)) < 0.03 and not DF.END_BUMPS,
+               f'snap fit: {len(bumps)} bumps (two a half, top and bottom, {bx} mm from the joint) stand {deep:.2f} mm into the housing\'s outline (meant {DF.BUMP - DF.CLR:.2f}); none on the end skirts')
+    else:
+        expect(inside < 1e-3, f'no bumps: nothing of the diffuser stands inside the housing\'s outline ({inside:.3f} mm3); the skirts only locate')
     if p4.JOINT_LUGS:
         print('diffuser joint: the draw screws')
         axes, y_out = p4.lug_axes()
@@ -201,20 +208,28 @@ def main():
         expect(same > 0.999, 'the bottom bar is the top bar turned half a turn: one part, print two')
         expect(min(y_out - yc - p4.BAR_SLOT_W / 2, yc - p4.BAR_SLOT_W / 2 - y_in) >= 0.8, f'bar walls beside the slot: {y_out - yc - p4.BAR_SLOT_W / 2:.2f} / {yc - p4.BAR_SLOT_W / 2 - y_in:.2f} mm, {p4.BAR_T} thick')
         both = Manifold.batch_boolean([p4.diffuser_in_case(v.scale([1 / k, 1 / k, 1.0])) for v in dp.values()], ADD) + p4.diffuser_in_case(bars) + p4.diffuser_in_case(sc)
+        if DF.LONG_BUMPS:                                          # the snap bumps are meant to press on the panel: left out of its checks
+            bz = p4.diffuser_in_case(Manifold.batch_boolean([box(xc - 3.2, xc + 3.2, *sorted((sy * (HSH / 2 + DF.CLR - DF.BUMP - 0.02), sy * (HSH / 2 + DF.CLR))), 0, zt + 1)
+                                                             for xc in DF.BUMP_XS for sy in (-1, 1)], ADD))
+            nb = lambda m: m - bz
+        else:
+            nb = lambda m: m
         for nm, m in (('shell', shell), ('bridge', P['bridge']), ('spine', P['spine']), ('panel', p4.panel_p4()), ('encoder', p4.encoder_envelope()), ('collar', p4.collar_knob()),
                       ('S3', DR.s3_envelope()), ('sensor and sled', DR.sensor_envelope() + DR.sensor_plugs() + DR.sled())):
-            expect(vol(both, m) < 0.01, f'joined diffuser, bars and screws (to {z_top + p4.BAR_T + p4.BAR_HEAD_K:.1f} behind the face), seated, vs {nm}: {vol(both, m):.3f} mm3')
+            v_ = vol(nb(both) if nm == 'panel' else both, m)
+            expect(v_ < 0.01, f'joined diffuser, bars and screws (to {z_top + p4.BAR_T + p4.BAR_HEAD_K:.1f} behind the face), seated, vs {nm}: {v_:.3f} mm3')
         worst = max(vol(both, trays.translate([dx, dyb, dz])) for dx in (-0.3, 0, 0.3) for dz in (-0.55, 0, 0.55) for dyb in (0.0, 0.3))
         expect(worst < 0.01, f'vs the trays floated +/-0.3 along, +/-0.55 up and down, 0-0.3 back: worst {worst:.3f} mm3 (bars {y_out:.2f} out, tray wall from {DF.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT:.2f})')
         worst = max(vol(both, trays.translate([0, float(t), 0.55 * s])) for t in np.arange(0.3, 62, 1.0) for s in (-1, 0, 1))
         expect(worst < 0.01, f'trays sliding in past the bars (62 mm): worst {worst:.3f} mm3')
         worst = max(vol(both.translate([0, float(t), 0]), shell + p4.collar_knob()) for t in np.arange(0.5, 58, 1.0))
         expect(worst < 0.05, f'joined diffuser with its bars sliding in from the back, past the shell and the collar: worst {worst:.3f} mm3')
-        worst = max(vol(both, p4.panel_p4().translate([0, float(t), dz])) for t in np.arange(0.0, 20, 0.5) for dz in (-0.14, 0.0, 0.14))
-        expect(worst < 0.01, f'panel coming in from behind, centred and 0.14 mm off up or down (20 mm): worst {worst:.3f} mm3 (bars {y_in - HSH / 2:.2f} from its edge)')
+        off = max(DF.CLR - 0.01, 0.0)                              # as far off centre as the skirts let the panel sit
+        worst = max(vol(nb(both), p4.panel_p4().translate([0, float(t), dz])) for t in np.arange(0.0, 20, 0.5) for dz in (-off, 0.0, off))
+        expect(worst < 0.01, f'panel coming in from behind, centred and {off:.2f} mm off up or down (20 mm): worst {worst:.3f} mm3 (bars {y_in - HSH / 2:.2f} from its edge{"; snap bumps left out, they press on it" if DF.LONG_BUMPS else ""})')
         play = (p4.BAR_SLOT_W - 2.5) / 2                         # each bar pushed toward the panel by its holes' play
         inb = p4.diffuser_in_case(p4.joint_bar(1).translate([0, -play, 0]) + p4.joint_bar(-1).translate([0, play, 0]))
-        worst = max(vol(inb, p4.panel_p4().translate([0, float(t), dz])) for t in np.arange(0.0, 20, 0.5) for dz in (-0.14, 0.0, 0.14))
+        worst = max(vol(nb(inb), p4.panel_p4().translate([0, float(t), dz])) for t in np.arange(0.0, 20, 0.5) for dz in (-off, 0.0, off))
         expect(worst < 0.01, f'the same with both bars {play:.1f} mm toward the panel (their holes\' play): worst {worst:.3f} mm3; their inner top edges are chamfered {p4.BAR_CHAMF}')
     wl = P['diffuser'][('left', 'white')]
     bb = wl.bounding_box()

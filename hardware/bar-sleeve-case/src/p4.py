@@ -424,18 +424,32 @@ def joint_taper_cuts(z0, z1):
 # strip, then DIFF_SHRINK = 1 - measured / built.
 DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0021'))
 DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11, 127.8 on Nov 12 (board edge, frame flush with it)
-# The skirts only locate (Nov 13). Four prints asked a snap fit on the housing's edges to hold the diffuser on, keep the
-# halves together and position them, at ~0.05 mm; the PETG's shrink and the panel's size both move by more. The last,
-# with the P2.5 pair's fit (0.05 clear, bumps top and bottom), had no clearance at all on a housing that measures 127.8
-# and cammed off one long edge as the other went on. So: the single diffuser's 0.15 mm of clearance all round and no
-# bumps anywhere. The two halves are drawn together by a screw at each border instead (joint_lugs, below), which makes
-# them one four-sided piece; in the case the panel presses it onto the rim through the grid (the trays stand 0.3 off the
-# flange: drawer.POST_LONG), so nothing has to grip.
-DF.CLR = float(os.environ.get('P4_DIFF_CLR', '0.15'))
-DF.END_CLR = float(os.environ.get('P4_DIFF_END_CLR', '0.15'))
+# Skirt fit. Two settings (P4_DIFF_FIT):
+# 'snap' (default, Nov 13, to try on the next full print): the P2.5 pair's fit, as that pair really has it. Its model has
+#   0.05 mm of clearance on an 80.0 mm panel, but the panel measures 79.9, so its skirts were built 0.10 a side clear of
+#   the real housing and printed ~0.05 clear (openings print ~0.1 small: 80.0 where 80.1 was built). The one P4 print
+#   "with the pair's fit" (the third) had 0.05 on a 127.7 housing that measures 127.8: nothing a side as built, about
+#   0.05 of interference a side along the whole skirt as printed, 0.2 mm tighter overall than the pair. It would not
+#   seat, and the fit was dropped for screws without ever being printed at the pair's size. So: 0.10 a side on the
+#   measured 127.8, 0.2 bumps top and bottom, two a half (+/-40 about each half's centre: 24 and 104 mm from the joint,
+#   clear of the bars' bosses), end skirts 0.4 clear with no bumps (they only ever push a half away from the joint, and
+#   the width is not measured). The bosses stay: if the halves creep apart or will not hold, the bars go on.
+# 'loose' (Nov 13, the bar joint as first built): 0.15 all round and no bumps anywhere; the skirts only locate and the
+#   bars make the halves one four-sided piece. In the case the panel presses the diffuser onto the rim through the grid
+#   (the trays stand 0.3 off the flange: drawer.POST_LONG), so nothing has to grip.
+DIFF_FIT = os.environ.get('P4_DIFF_FIT', 'snap')
+if DIFF_FIT not in ('snap', 'loose'):
+    raise SystemExit(f'P4_DIFF_FIT={DIFF_FIT!r}: snap or loose')
 DF.END_BUMPS = False
-DF.LONG_BUMPS = False
-DF.TOP_BUMPS = False
+if DIFF_FIT == 'snap':
+    DF.CLR = float(os.environ.get('P4_DIFF_CLR', '0.10'))
+    DF.END_CLR = float(os.environ.get('P4_DIFF_END_CLR', '0.4'))
+    DF.LONG_BUMPS = DF.TOP_BUMPS = True
+    DF.BUMP_XS = tuple(cx + dx for cx in (-DF.PW / 4, DF.PW / 4) for dx in (-40.0, 40.0))
+else:
+    DF.CLR = float(os.environ.get('P4_DIFF_CLR', '0.15'))
+    DF.END_CLR = float(os.environ.get('P4_DIFF_END_CLR', '0.15'))
+    DF.LONG_BUMPS = DF.TOP_BUMPS = False
 DF.HOUSE_W = float(os.environ['P4_HOUSE_W']) if os.environ.get('P4_HOUSE_W') else None      # width: not measured yet
 
 
