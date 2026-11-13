@@ -433,7 +433,7 @@ DF.HOUSE_W = float(os.environ['P4_HOUSE_W']) if os.environ.get('P4_HOUSE_W') els
 # (4.7) overlaps the skirt's outer face 1.65 mm from the axis. That leaves the left lug standing on its own, two walls
 # (0.85 and 1.4) under a 1.25 roof on 18 mm2 of flange: about 100 N of screw tension peels it. Carry the joined
 # diffuser flat. LUG_A 5.5 with LUG_SCREW 10 (an M2.5 x 10) is about 2.5 times stronger.
-JOINT_LUGS = os.environ.get('P4_JOINT_LUGS', '1') not in ('0', '', 'no', 'false')
+JOINT_LUGS = os.environ.get('P4_JOINT_LUGS', '0') not in ('0', '', 'no', 'false')      # superseded by the bars, below
 LUG_A, LUG_B = 3.5, 7.5                 # lug length along x: head side (left half), threaded side (right half)
 LUG_SCREW = 8.0                         # M2.5 x 8 button head: 4.5 mm of thread in the right lug
 LUG_TRAY_GAP = 0.95                     # lug's outer face to the tray wall's inner face (tray-to-diffuser float: up to 0.55)
@@ -499,6 +499,79 @@ def lug_screws_env():
                                    for yc, zc in axes], ADD)
 
 
+# ---------------------------------------------------------------- diffuser joint: splice bars, screws driven down (Nov 13)
+# The draw screw above failed on its coupon: a screw lying along the border gets a fraction of a turn of the key per
+# bite and seized cutting thread in a pilot printed on its side. A designer shown the problem but none of our
+# solutions came back with this: a boss on each half behind the top border and the bottom one, a flat bar across the
+# joint on each pair, and a screw straight down through the bar into each boss, as every other screw in the build.
+# No dimension closes the joint. The halves are pushed together by hand (they close fully: tried) and the bars clamp
+# them where they lie: the bar's holes are slots along x, so boss spacing, shrink and first-layer spread do not matter.
+# The bars sit on the boss tops with the halves face down on the bench, so they also level the two borders, and nothing
+# pulls behind the face to fold the halves. What it does not do: hold the middle of the joint level between the borders.
+JOINT_BARS = os.environ.get('P4_JOINT_BARS', '1') not in ('0', '', 'no', 'false')
+BAR_X = 10.0                            # boss centres, each side of the joint
+BOSS_LX = 6.0                           # boss length along x
+BOSS_H = 6.0                            # boss top above the flange's back: the pilot ends at the flange, 1.2 from the face
+BAR_T, BAR_END = 3.0, 5.0               # bar thickness; bar length beyond each slot's centre
+BAR_SCREW = 8.0                         # M2.5 x 8 button head: 4 mm of thread below the guide bore
+BAR_PILOT, BAR_GUIDE_D, BAR_GUIDE_L = P3.S3_PILOT, 2.6, 1.0     # the S3 posts' vertical pilot (fit Nov 3) and guide bore
+BAR_SLOT_W, BAR_SLOT_L = 2.9, 4.3       # slot: 2.9 wide, +/-0.7 of float along x
+BAR_HEAD_D, BAR_HEAD_K = 4.7, 1.7
+
+
+def bar_geom():
+    """y of the screw line, the bosses' and bars' outer y, the bar's inner y, the boss tops' z (diffuser frame, top border)"""
+    y_out = DF.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT - LUG_TRAY_GAP
+    hy = (DF.HOUSE_H or DF.PH) / 2
+    return y_out - 2.3, y_out, hy + 0.5, DF.FT + BOSS_H
+
+
+def bar_bosses():
+    """({'left': add, 'right': add}, {'left': cut, 'right': cut}) in the diffuser's frame: four bosses, one with the skirt"""
+    yc, y_out, _, z_top = bar_geom()
+    hy = (DF.HOUSE_H or DF.PH) / 2
+    yi = hy + DF.CLR + 0.02              # a hair inside the skirt's inner face and chamfer (coincident faces export badly)
+    zt = DF.SKIN + DF.GRID_H + DF.SK_D
+    # profile in (y, z): the skirt's own lead-in at its tip, 0.6 further out above it, a 0.4 chamfer at the top
+    prof = CrossSection([[(yi, DF.FT - 0.2), (y_out, DF.FT - 0.2), (y_out, z_top), (yi + 1.0, z_top), (yi + 0.6, z_top - 0.4),
+                          (yi + 0.6, zt - 0.02), (yi, zt - 0.62)]])
+    add, cut = {'left': [], 'right': []}, {'left': [], 'right': []}
+    for sy in (1, -1):
+        for side, x0 in (('left', -BAR_X - BOSS_LX / 2), ('right', BAR_X - BOSS_LX / 2)):
+            b = Manifold.extrude(prof, BOSS_LX).rotate([90, 0, 90]).translate([x0, 0, 0])
+            add[side].append(b if sy > 0 else b.mirror([0, 1, 0]))
+            xc = x0 + BOSS_LX / 2
+            cut[side].append(cyl_z(xc, sy * yc, DF.FT, z_top + 1, BAR_PILOT, 32))
+            cut[side].append(cyl_z(xc, sy * yc, z_top - BAR_GUIDE_L, z_top + 1, BAR_GUIDE_D, 32))
+            cut[side].append(Manifold.cylinder(0.1, BAR_PILOT / 2, BAR_GUIDE_D / 2, 32).translate([xc, sy * yc, z_top - BAR_GUIDE_L - 0.1]))
+    return add, cut
+
+
+def joint_bar(sy=1):
+    """one splice bar in place on its two bosses (diffuser frame): flat, two slots along x"""
+    yc, y_out, y_in, z_top = bar_geom()
+    a, b = sorted((sy * y_in, sy * y_out))
+    bar = box(-BAR_X - BAR_END, BAR_X + BAR_END, a, b, z_top, z_top + BAR_T)
+    for sx in (-1, 1):
+        hl = (BAR_SLOT_L - BAR_SLOT_W) / 2
+        slot = box(sx * BAR_X - hl, sx * BAR_X + hl, sy * yc - BAR_SLOT_W / 2, sy * yc + BAR_SLOT_W / 2, z_top - 1, z_top + BAR_T + 1)
+        for e in (-hl, hl):
+            slot = slot + cyl_z(sx * BAR_X + e, sy * yc, z_top - 1, z_top + BAR_T + 1, BAR_SLOT_W, 32)
+        bar = bar - slot
+    return bar
+
+
+def bar_screws_env(sy=None):
+    """the four screws driven home (head 4.7 x 1.7 on the bar, shank 2.5 x 8), diffuser frame"""
+    yc, _, _, z_top = bar_geom()
+    out = []
+    for s in ((1, -1) if sy is None else (sy,)):
+        for sx in (-1, 1):
+            out.append(cyl_z(sx * BAR_X, s * yc, z_top + BAR_T, z_top + BAR_T + BAR_HEAD_K, BAR_HEAD_D, 32)
+                       + cyl_z(sx * BAR_X, s * yc, z_top + BAR_T - BAR_SCREW, z_top + BAR_T, 2.5, 32))
+    return Manifold.batch_boolean(out, ADD)
+
+
 def diffuser_halves(printed=False, tint=False):
     """DF.diffuser() (8 mm flange) split at x = 0. Returns {(side, part): manifold} in DF's frame (z = 0 is the face, +z
     toward the LEDs; y up the panel). part: 'white' (the whole first layer: the face and the flange's front) or 'black'
@@ -523,6 +596,8 @@ def diffuser_halves(printed=False, tint=False):
     back = box(-JOINT_SETBACK, JOINT_SETBACK, -400, 400, -5, 50) if JOINT_SETBACK > 0 else None      # no black here
     if JOINT_LUGS:
         (lug_add, lug_cut), notch = joint_lugs(), lug_head_notch()
+    if JOINT_BARS:
+        boss_add, boss_cut = bar_bosses()
     out = {}
     for side, xs in (('left', (-200, 0)), ('right', (0, 200))):
         half = d ^ box(xs[0], xs[1], -200, 200, -5, 20)
@@ -533,6 +608,8 @@ def diffuser_halves(printed=False, tint=False):
             if side == 'left':
                 black = black - notch
             black = black + Manifold.batch_boolean(lug_add[side], ADD) - Manifold.batch_boolean(lug_cut[side], ADD)
+        if JOINT_BARS:
+            black = black + Manifold.batch_boolean(boss_add[side], ADD) - Manifold.batch_boolean(boss_cut[side], ADD)
         if tint:
             out[(side, 'gray')] = (half ^ first).scale([k, k, 1.0])
             out[(side, 'white')] = (half ^ second).scale([k, k, 1.0])
@@ -552,9 +629,9 @@ def panel_p4():
     """P4 panel in the case, turned 180 deg: LED board (2.5 mm incl. LEDs) + 12 mm housing (rim, ribs, insert bosses),
     the two HUB75 shrouds (top 1 mm under the housing back, ASSUMED), VH4 power header, a ribbon plug on data in"""
     yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK - PANEL_THIN            # the measured housing back
-    pw, ph = panel.P['w'], panel.P['h']
+    pw, ph = DF.HOUSE_W or panel.P['w'], DF.HOUSE_H or panel.P['h']         # as measured (127.8 high, board and frame flush)
     parts = [box(-pw / 2, pw / 2, yf, yf + 2.5, ZC - ph / 2, ZC + ph / 2)]
-    hous = box(-pw / 2 + 0.15, pw / 2 - 0.15, yf + 2.5 - 0.01, yb, ZC - ph / 2 + 0.15, ZC + ph / 2 - 0.15)
+    hous = box(-pw / 2, pw / 2, yf + 2.5 - 0.01, yb, ZC - ph / 2, ZC + ph / 2)
     hous = hous - box(-pw / 2 + 6, pw / 2 - 6, yf, yb + 1, ZC - ph / 2 + 6, ZC + ph / 2 - 6)
     for x in (-64.0, 0.0, 64.0):
         hous = hous + box(x - 4.5, x + 4.5, yf + 2.5, yb, ZC - ph / 2, ZC + ph / 2)
@@ -777,6 +854,8 @@ if __name__ == '__main__':
     dj = diffuser_joint_coupon(P['diffuser_print'])
     for (side, part), m in dj.items():
         put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj, side))
+    if JOINT_BARS:
+        put(joint_bar(), 'p4-diffuser-bar.stl', None, drop_axis=2)                    # print two (top and bottom border); black PETG, flat
     for (side, part), m in P['diffuser3_print'].items():        # the three-colour variant to try: gray, white, black
         put(m, f'p4-diffuser3-{side}-{part}.stl', None, drop_axis=2, frame=pair(P['diffuser3_print'], side))
     dj3 = diffuser_joint_coupon(P['diffuser3_print'])

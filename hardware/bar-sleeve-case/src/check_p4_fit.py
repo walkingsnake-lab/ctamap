@@ -168,6 +168,45 @@ def main():
         expect(worst < 0.05, f'joined diffuser sliding in from the back, past the shell and the collar: worst {worst:.3f} mm3')
         worst = max(vol(both, p4.panel_p4().translate([0, float(t), 0])) for t in np.arange(0.0, 20, 0.5))
         expect(worst < 0.01, f'panel coming in from behind onto the diffuser (20 mm): worst {worst:.3f} mm3')
+    if p4.JOINT_BARS:
+        print('diffuser joint: splice bars, screws driven down')
+        yc, y_out, y_in, z_top = p4.bar_geom()
+        L = (dp[('left', 'black')]).scale([1 / k, 1 / k, 1.0]); R = (dp[('right', 'black')]).scale([1 / k, 1 / k, 1.0])
+        Wh = (dp[('left', 'white')] + dp[('right', 'white')]).scale([1 / k, 1 / k, 1.0])
+        expect(len([q for q in L.decompose() if q.volume() > 1e-3]) == 1 and len([q for q in R.decompose() if q.volume() > 1e-3]) == 1, 'each half\'s black part is one body, bosses and all')
+        def free(m, x, y, z):
+            dm = 0.0
+            for d in np.arange(1.8, 3.4, 0.05):
+                if vol(cyl_z(x, y, z - 0.02, z + 0.02, float(d), 48), m) < 1e-6:
+                    dm = float(d)
+            return dm
+        ok = True
+        for m, sx in ((L, -1), (R, 1)):
+            for sy in (1, -1):
+                x, y = sx * p4.BAR_X, sy * yc
+                ok = ok and free(m + Wh, x, y, z_top - 0.5) >= p4.BAR_GUIDE_D - 0.11 and abs(free(m + Wh, x, y, z_top - 3.0) - p4.BAR_PILOT) < 0.11 \
+                    and free(m + Wh, x, y, DF.FT + 0.2) >= p4.BAR_PILOT - 0.11 and free(m + Wh, x, y, DF.FT - 0.2) == 0.0
+        expect(ok, f'four bosses at x +/-{p4.BAR_X:g}: guide {p4.BAR_GUIDE_D} x {p4.BAR_GUIDE_L}, pilot {p4.BAR_PILOT} down to the flange\'s back, the {DF.FT} mm flange under it whole')
+        bars = p4.joint_bar(1) + p4.joint_bar(-1)
+        sc = p4.bar_screws_env()
+        thread = p4.BAR_SCREW - p4.BAR_T - p4.BAR_GUIDE_L
+        expect(thread >= 3.5 and z_top + p4.BAR_T - p4.BAR_SCREW >= DF.FT + 0.5, f'M2.5 x {p4.BAR_SCREW:g} through the {p4.BAR_T} bar: {thread:.1f} mm of thread below the guide, tip {z_top + p4.BAR_T - p4.BAR_SCREW - DF.FT:.1f} above the flange\'s back')
+        expect(vol(bars, L + R + Wh) < 0.005 and vol(sc, bars) < 0.005, f'bars on the boss tops: overlap with the halves {vol(bars, L + R + Wh):.3f}, screws in the slots {vol(sc, bars):.3f} mm3')
+        fl = (p4.BAR_SLOT_L - 2.5) / 2
+        expect(fl >= 0.6, f'slots let each boss sit +/-{fl:.1f} mm along the joint\'s pull: no dimension closes the joint, the bars clamp the halves where they are pushed')
+        expect(min(y_out - yc - p4.BAR_SLOT_W / 2, yc - p4.BAR_SLOT_W / 2 - y_in) >= 0.8, f'bar walls beside the slot: {y_out - yc - p4.BAR_SLOT_W / 2:.2f} / {yc - p4.BAR_SLOT_W / 2 - y_in:.2f} mm, {p4.BAR_T} thick')
+        both = Manifold.batch_boolean([p4.diffuser_in_case(v.scale([1 / k, 1 / k, 1.0])) for v in dp.values()], ADD) + p4.diffuser_in_case(bars) + p4.diffuser_in_case(sc)
+        for nm, m in (('shell', shell), ('bridge', P['bridge']), ('spine', P['spine']), ('panel', p4.panel_p4()), ('encoder', p4.encoder_envelope()), ('collar', p4.collar_knob()),
+                      ('S3', DR.s3_envelope()), ('sensor and sled', DR.sensor_envelope() + DR.sensor_plugs() + DR.sled())):
+            expect(vol(both, m) < 0.01, f'joined diffuser, bars and screws (to {z_top + p4.BAR_T + p4.BAR_HEAD_K:.1f} behind the face), seated, vs {nm}: {vol(both, m):.3f} mm3')
+        worst = max(vol(both, trays.translate([dx, dyb, dz])) for dx in (-0.3, 0, 0.3) for dz in (-0.55, 0, 0.55) for dyb in (0.0, 0.3))
+        expect(worst < 0.01, f'vs the trays floated +/-0.3 along, +/-0.55 up and down, 0-0.3 back: worst {worst:.3f} mm3 (bars {y_out:.2f} out, tray wall from {DF.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT:.2f})')
+        worst = max(vol(both, trays.translate([0, float(t), 0.55 * s])) for t in np.arange(0.3, 62, 1.0) for s in (-1, 0, 1))
+        expect(worst < 0.01, f'trays sliding in past the bars (62 mm): worst {worst:.3f} mm3')
+        worst = max(vol(both.translate([0, float(t), 0]), shell + p4.collar_knob()) for t in np.arange(0.5, 58, 1.0))
+        expect(worst < 0.05, f'joined diffuser with its bars sliding in from the back, past the shell and the collar: worst {worst:.3f} mm3')
+        worst = max(vol(both, p4.panel_p4().translate([0, float(t), dz])) for t in np.arange(0.0, 20, 0.5) for dz in (-0.14, 0.0, 0.14))
+        expect(worst < 0.01, f'panel coming in from behind, centred and 0.14 mm off up or down (20 mm): worst {worst:.3f} mm3 (bars {y_in - HSH / 2:.2f} from its edge)')
     wl = P['diffuser'][('left', 'white')]
     bb = wl.bounding_box()
     expect(abs((bb[3] - bb[0]) - DF.FL_HX + DF.BEV) < 0.3 and bb[5] - bb[2] <= DF.SKIN + 1e-6,
