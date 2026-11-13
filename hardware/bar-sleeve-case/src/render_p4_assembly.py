@@ -321,14 +321,14 @@ def diffuser(Q, out):
                  ('black grid, 1.5 mm:\nits ribs sit between the LEDs', (xp, Y_FACE + 1.0, H - 20.0), -1),
                  ('shell top wall (walnut)', (xp, 28.0, H - WALL / 2), 1),
                  ('flange: the 8 mm border round the pixels, white in front, 1.2 mm thick, 0.3 mm clear of the bore', (xp, Y_FACE + 0.7, zt - 3.5), 1),
-                 ('tray\'s front edge holds the flange\nagainst the rim', (xp, DR.YF + 1.5, zt - 1.5), 1),
-                 (f'skirt over the panel\'s edge\n({DF.CLR:g} mm clear, snap bumps)', (xp, Y_FACE + 3.4, ZC + 64.8), 1),
+                 ('tray\'s front edge: 0.3 mm off the flange\nonce the posts seat on the panel', (xp, DR.YF + 1.5, zt - 1.5), 1),
+                 (f'skirt over the panel\'s edge: locates\nonly ({DF.CLR:g} mm clear, no bumps)', (xp, Y_FACE + 3.4, ZC + 64.8), 1),
                  ('panel', (xp, 27.0, H - 20.0), 1)])
     b = section('Centre joint, cut level through a row of pixels and seen from above (screen face at the bottom)',
                 it(Q, 'dif_white', 'dif_left', 'dif_right', 'panel'), slab(z=(ZC + 0.6, ZC + 2.0)), 'top', (0, Y_FACE + 1.9, ZC + 2), 9.0, (1300, 500),
                 [('left half: a pixel\'s cell', (-6.0, Y_FACE + 0.95, ZC + 2), -1), ('normal rib, 0.8 mm', (-4.0, Y_FACE + 1.0, ZC + 2), -1),
                  ('white face, 0.2 mm: only this layer\nreaches the joint, so it is what meets', (-2.0, Y_FACE + 0.1, ZC + 2), -1),
-                 (f'joint: two {CENTRE_RIB / 2:g} mm walls, the black set\n{p4.JOINT_SETBACK:g} mm back a half; not glued', (0.0, Y_FACE + 1.1, ZC + 2), 1),
+                 (f'joint: two {CENTRE_RIB / 2:g} mm walls, the black set\n{p4.JOINT_SETBACK:g} mm back; screws at the borders', (0.0, Y_FACE + 1.1, ZC + 2), 1),
                  ('right half: normal rib', (4.0, Y_FACE + 1.0, ZC + 2), 1), ('panel (LED board)', (6.0, Y_FACE + 2.6, ZC + 2), 1)])
     stack('2 and 3. Diffuser: its seat in the shell, and its centre joint', [a, b], f'{out}/p4-assembly-03-diffuser.png')
 

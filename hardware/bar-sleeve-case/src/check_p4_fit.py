@@ -103,7 +103,7 @@ def main():
     expect(held > 20 and abs(over - 1.0) < 0.01, f'rim overlap {over:.2f} mm all round ({held:.0f} mm3 in the way 0.3 mm forward); seat {V.SEAT_DEG:g} deg')
     worst = max(vol(dif.translate([0, float(dy), 0]), shell) for dy in np.arange(0.5, 58.0, 1.0))
     expect(worst < 0.05, f'sliding in from the back (58 mm): worst overlap with the shell {worst:.3f} mm3')
-    expect(vol(dif, trays) < 0.05, f'tray front edge on the flange: overlap {vol(dif, trays):.3f} mm3')
+    expect(vol(dif, trays) < 0.05, f'tray front edges at the flange as modelled (seated they stand {DR.POST_LONG} off it; the panel holds the diffuser on the rim): overlap {vol(dif, trays):.3f} mm3')
     k = 1.0 / (1.0 - p4.DIFF_SHRINK)
     HSW, HSH = DF.HOUSE_W or DF.PW, DF.HOUSE_H or DF.PH             # the housing's measured outline (the grid: DF.PW x DF.PH)
     print(f'  printed halves built {p4.DIFF_SHRINK * 100:.2f}% large: flange {2 * DF.FL_HX * k:.2f} x {2 * DF.FL_HZ * k:.2f} mm built, '
@@ -121,18 +121,40 @@ def main():
             if vol(probe.translate(d), whole) > 1e-4:
                 return round(float(t) - 0.01, 2)
         return 1.0
-    xb = (DF.BUMP_XS if DF.BUMP_XS is not None else (-HSW / 4, HSW / 4))[1]
-    g_top, g_bot = room(1, 1, 40.0, 60.0), room(1, -1, 40.0, 60.0)   # between bumps
-    pb = house ^ box(xb - 2.0, xb + 2.0, -200, 0, -5, 30)        # at a bottom bump: how far up before it is free
-    bite = next((round(float(t), 2) for t in np.arange(0.0, 0.6, 0.01) if vol(pb.translate([0, float(t), 0]), whole) < 1e-4), 0.6)
+    g_top, g_bot = room(1, 1, 40.0, 60.0), room(1, -1, 40.0, 60.0)
     expect(abs(g_top - DF.CLR) < 0.03 and abs(g_bot - DF.CLR) < 0.03, f'skirts to the {HSH:g} mm housing, top / bottom: {g_top:.2f} / {g_bot:.2f} mm (meant {DF.CLR})')
-    expect(0.02 <= bite <= 0.2, f'bottom bumps bite the housing by {bite:.2f} mm (bump {DF.BUMP} less the {DF.CLR} clearance)')
-    pt = house ^ box(xb - 2.0, xb + 2.0, 0, 200, -5, 30)        # the same bump on the top skirt
-    bite_t = next((round(float(t), 2) for t in np.arange(0.0, 0.6, 0.01) if vol(pt.translate([0, -float(t), 0]), whole) < 1e-4), 0.6)
-    expect(abs(bite_t - bite) < 0.02, f'top bumps bite it by {bite_t:.2f} mm (the halves are three-sided: both long skirts hold)')
-    e_l, e_r = room(0, -1, -30.0, 30.0), room(0, 1, -30.0, 30.0)   # the housing's ends to the end skirts (HSW assumed), bumps and all
-    expect(min(e_l, e_r) >= 0.3, f'end skirts stand {e_l:.2f} / {e_r:.2f} mm off a {HSW:g} mm housing, no bumps: they cannot hold the halves apart '
-           f'(a housing up to {HSW + 2 * min(e_l, e_r):.1f} wide still lets them meet)')
+    e_l, e_r = room(0, -1, -30.0, 30.0), room(0, 1, -30.0, 30.0)   # the housing's ends to the end skirts (HSW assumed)
+    ecl = DF.CLR if DF.END_CLR is None else DF.END_CLR
+    expect(abs(e_l - ecl) < 0.03 and abs(e_r - ecl) < 0.03, f'end skirts to a {HSW:g} mm housing: {e_l:.2f} / {e_r:.2f} mm (meant {ecl}; the width is not measured)')
+    inside = vol(whole, box(-HSW / 2, HSW / 2, -HSH / 2, HSH / 2, DF.SKIN + DF.GRID_H + 0.05, zt + 5))
+    expect(inside < 1e-3, f'no bumps: nothing of the diffuser stands inside the housing\'s outline ({inside:.3f} mm3); the skirts only locate')
+    if p4.JOINT_LUGS:
+        print('diffuser joint: the draw screws')
+        axes, y_out = p4.lug_axes()
+        L = (dp[('left', 'black')]).scale([1 / k, 1 / k, 1.0]); R = (dp[('right', 'black')]).scale([1 / k, 1 / k, 1.0])
+        WLs = (dp[('left', 'white')]).scale([1 / k, 1 / k, 1.0]); WRs = (dp[('right', 'white')]).scale([1 / k, 1 / k, 1.0])
+        expect(len([q for q in L.decompose() if q.volume() > 1e-3]) == 1 and len([q for q in R.decompose() if q.volume() > 1e-3]) == 1, 'each half\'s black part is one body, lugs and all')
+        for yc, zc in axes:
+            nm = 'top' if yc > 0 else 'bottom'
+            reg = box(-12, 12, min(yc - 4, yc + 4), max(yc - 4, yc + 4), DF.FT + 0.05, 12)
+            fa = vol(L, box(-0.02, 0, -99, 99, 0, 12) ^ reg) / 0.02; fb = vol(R, box(0, 0.02, -99, 99, 0, 12) ^ reg) / 0.02
+            expect(min(fa, fb) > 12, f'{nm}: lug faces on the joint plane, {fa:.1f} / {fb:.1f} mm2 of stop (the screw axis, {zc - DF.FT:.1f} behind the flange, passes through them)')
+        expect(abs(WLs.bounding_box()[3]) < 1e-3 and abs(WRs.bounding_box()[0]) < 1e-3, 'the white first layers reach the joint plane too')
+        sc = p4.lug_screws_env()
+        expect(vol(sc, L + WLs) < 0.005, f'screws through the left half: overlap {vol(sc, L + WLs):.3f} mm3 (clearance {p4.LUG_CLEAR}, the skirt cut away at the heads)')
+        expect(p4.LUG_SCREW - p4.LUG_A >= 4.0 and p4.LUG_PILOT_DEPTH >= p4.LUG_SCREW - p4.LUG_A + 1.5, f'thread in the right lug: {p4.LUG_SCREW - p4.LUG_A:.1f} mm of an M2.5 x {p4.LUG_SCREW:g}, pilot {p4.LUG_PILOT_DEPTH} deep')
+        expect(axes[0][1] - p4.LUG_HEAD_D / 2 - DF.FT >= 0.3, f'head ({p4.LUG_HEAD_D}) clears the flange\'s back by {axes[0][1] - p4.LUG_HEAD_D / 2 - DF.FT:.2f} mm')
+        both = Manifold.batch_boolean([p4.diffuser_in_case(v.scale([1 / k, 1 / k, 1.0])) for v in dp.values()], ADD) + p4.diffuser_in_case(sc)
+        for nm, m in (('shell', shell), ('bridge', P['bridge']), ('spine', P['spine']), ('panel', p4.panel_p4()), ('encoder', p4.encoder_envelope()), ('collar', p4.collar_knob())):
+            expect(vol(both, m) < 0.01, f'joined diffuser and its screws, seated, vs {nm}: {vol(both, m):.3f} mm3')
+        worst = max(vol(both, trays.translate([dx, dyb, dz])) for dx in (-0.3, 0, 0.3) for dz in (-0.55, 0, 0.55) for dyb in (0.0, 0.3))
+        expect(worst < 0.01, f'vs the trays floated +/-0.3 along, +/-0.55 up and down, 0-0.3 back: worst {worst:.3f} mm3 (lugs {y_out:.2f} out, tray wall from {DF.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT:.2f})')
+        worst = max(vol(both, trays.translate([0, float(t), 0.55 * s])) for t in np.arange(0.3, 62, 1.0) for s in (-1, 0, 1))
+        expect(worst < 0.01, f'trays sliding in past the lugs (62 mm): worst {worst:.3f} mm3')
+        worst = max(vol(both.translate([0, float(t), 0]), shell + p4.collar_knob()) for t in np.arange(0.5, 58, 1.0))
+        expect(worst < 0.05, f'joined diffuser sliding in from the back, past the shell and the collar: worst {worst:.3f} mm3')
+        worst = max(vol(both, p4.panel_p4().translate([0, float(t), 0])) for t in np.arange(0.0, 20, 0.5))
+        expect(worst < 0.01, f'panel coming in from behind onto the diffuser (20 mm): worst {worst:.3f} mm3')
     wl = P['diffuser'][('left', 'white')]
     bb = wl.bounding_box()
     expect(abs((bb[3] - bb[0]) - DF.FL_HX + DF.BEV) < 0.3 and bb[5] - bb[2] <= DF.SKIN + 1e-6,

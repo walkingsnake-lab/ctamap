@@ -400,19 +400,90 @@ JOINT_SETBACK = float(os.environ.get('P4_JOINT_SETBACK', '0.05'))
 # panel's ends instead of 0.05) pushed the halves 0.5-1 mm apart at the joint. Another filament: measure the shrink
 # strip, then DIFF_SHRINK = 1 - measured / built.
 DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0021'))
-DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.7'))
-# Halves that snap on and stay, unglued (Nov 12), as the P2.5 pair's (p3x2.py's skirt fit): a three-sided half peels at
-# its joint edge unless the long skirts bear along their length, so top and bottom get the pair's 0.05 clearance and
-# bumps on both (two per half per edge, +/-40 about each half's centre; 0.2, biting 0.15). The second P4 print, ~0.02
-# clear top and bottom by accident, held. The end skirts only ever stop a half moving toward the joint and their bumps
-# push it away from it (that print's 0.5-1 mm gap), so they get no bumps and 0.4 of clearance: they shade the panel's
-# ends and never decide where the halves meet, whatever the panel's true width.
-DF.CLR = float(os.environ.get('P4_DIFF_CLR', '0.05'))
-DF.TOP_BUMPS = True
-DF.BUMP_XS = tuple(cx + dx for cx in (-DF.PW / 4, DF.PW / 4) for dx in (-40.0, 40.0))
-DF.END_CLR = float(os.environ.get('P4_DIFF_END_CLR', '0.4'))
+DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11, 127.8 on Nov 12 (board edge, frame flush with it)
+# The skirts only locate (Nov 13). Four prints asked a snap fit on the housing's edges to hold the diffuser on, keep the
+# halves together and position them, at ~0.05 mm; the PETG's shrink and the panel's size both move by more. The last,
+# with the P2.5 pair's fit (0.05 clear, bumps top and bottom), had no clearance at all on a housing that measures 127.8
+# and cammed off one long edge as the other went on. So: the single diffuser's 0.15 mm of clearance all round and no
+# bumps anywhere. The two halves are drawn together by a screw at each border instead (joint_lugs, below), which makes
+# them one four-sided piece; in the case the panel presses it onto the rim through the grid (the trays stand 0.3 off the
+# flange: drawer.POST_LONG), so nothing has to grip.
+DF.CLR = float(os.environ.get('P4_DIFF_CLR', '0.15'))
+DF.END_CLR = float(os.environ.get('P4_DIFF_END_CLR', '0.15'))
 DF.END_BUMPS = False
+DF.LONG_BUMPS = False
+DF.TOP_BUMPS = False
 DF.HOUSE_W = float(os.environ['P4_HOUSE_W']) if os.environ.get('P4_HOUSE_W') else None      # width: not measured yet
+
+
+# ---------------------------------------------------------------- diffuser joint: a draw screw at each border (Nov 13)
+# A lug on each half, behind the flange in the gap between the skirt and the tray wall, at the top border and at the
+# bottom one; one M2.5 x 8 button head along x through the left half's lug (clearance) into the right half's (pilot).
+# Tightening draws the halves together: a plate with clearance holes would only have held them by friction. The lugs'
+# faces are on the joint plane with the white first layer's edges (the black between them stays JOINT_SETBACK back), so
+# the screw's pull, 2.7 mm behind the flange, lands on the lugs and does not hinge the halves about their white edges.
+# The left half's skirt is cut away for 2.4 mm where the screw's head sits. Join the halves face down on a flat sheet.
+JOINT_LUGS = os.environ.get('P4_JOINT_LUGS', '1') not in ('0', '', 'no', 'false')
+LUG_A, LUG_B = 3.5, 7.5                 # lug length along x: head side (left half), threaded side (right half)
+LUG_SCREW = 8.0                         # M2.5 x 8 button head: 4.5 mm of thread in the right lug
+LUG_TRAY_GAP = 0.95                     # lug's outer face to the tray wall's inner face (tray-to-diffuser float: up to 0.55)
+LUG_HEAD_D, LUG_HEAD_K = 4.7, 1.7       # largest button head
+LUG_PILOT, LUG_CLEAR = DR.SLED_PILOT, 2.9
+LUG_PILOT_DEPTH = 6.5
+LUG_FACE = float(os.environ.get('P4_LUG_FACE', '0.0'))     # lug faces this far behind the joint plane (0: they are the stop)
+
+
+def lug_axes():
+    """(y, z) of the two screw axes in the diffuser's frame (y up the panel, z back from the face), and the lugs' outer y"""
+    y_out = DF.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT - LUG_TRAY_GAP
+    yc, zc = y_out - 2.3, DF.FT + 2.7                       # the head's rim 0.35 above the flange's back
+    return [(sy * yc, zc) for sy in (1, -1)], y_out
+
+
+def _cyl_x(x0, x1, y, z, d, seg=32):
+    return Manifold.cylinder(x1 - x0, d / 2, d / 2, seg).rotate([0, 90, 0]).translate([x0, y, z])
+
+
+def joint_lugs():
+    """({'left': add, 'right': add}, {'left': cut, 'right': cut}) in the diffuser's frame, for diffuser_halves"""
+    axes, y_out = lug_axes()
+    hy = (DF.HOUSE_H or DF.PH) / 2
+    y_in, y_sk = hy + DF.CLR, hy + DF.OUT
+    zt = DF.SKIN + DF.GRID_H + DF.SK_D
+    z_top = axes[0][1] + LUG_CLEAR / 2 + 1.25
+    add, cut = {'left': [], 'right': []}, {'left': [], 'right': []}
+    for yc, zc in axes:
+        sy = 1 if yc > 0 else -1
+        def ybox(x0, x1, ya, yb, z0, z1):
+            a, b = sorted((sy * ya, sy * yb))
+            return box(x0, x1, a, b, z0, z1)
+        for side, x0, x1 in (('left', -LUG_A, -LUG_FACE), ('right', LUG_FACE, LUG_B)):
+            add[side].append(ybox(x0, x1, y_in, y_out, DF.FT - 0.01, zt))                    # on the flange, one with the skirt
+            add[side].append(ybox(x0, x1, y_in + 0.6, y_out, zt - 0.01, z_top))              # above the skirt's tip, stepped back as a lead-in
+        cut['left'].append(_cyl_x(-LUG_A - 1, 1, yc, zc, LUG_CLEAR))
+        cut['right'].append(_cyl_x(-1, LUG_PILOT_DEPTH, yc, zc, LUG_PILOT))
+        cut['right'].append(Manifold.cylinder(0.4 + LUG_FACE + 0.01, LUG_PILOT / 2 + 0.4, LUG_PILOT / 2, 32).rotate([0, 90, 0]).translate([LUG_FACE - 0.01, yc, zc]))
+    return add, cut
+
+
+def lug_head_notch():
+    """the left half's skirt, cut away where the two screw heads sit"""
+    axes, y_out = lug_axes()
+    hy = (DF.HOUSE_H or DF.PH) / 2
+    zt = DF.SKIN + DF.GRID_H + DF.SK_D
+    out = []
+    for yc, zc in axes:
+        sy = 1 if yc > 0 else -1
+        a, b = sorted((sy * (hy + DF.CLR - 0.3), sy * (hy + DF.OUT + 0.05)))
+        out.append(box(-LUG_A - LUG_HEAD_K - 0.7, -LUG_A, a, b, DF.SKIN + DF.GRID_H + 0.05, zt + 1))
+    return Manifold.batch_boolean(out, ADD)
+
+
+def lug_screws_env():
+    """the two screws as driven home (head 4.7 x 1.7, shank 2.5 x 8), in the diffuser's frame"""
+    axes, _ = lug_axes()
+    return Manifold.batch_boolean([_cyl_x(-LUG_A - LUG_HEAD_K, -LUG_A, yc, zc, LUG_HEAD_D) + _cyl_x(-LUG_A, -LUG_A + LUG_SCREW, yc, zc, 2.5)
+                                   for yc, zc in axes], ADD)
 
 
 def diffuser_halves(printed=False, tint=False):
@@ -437,12 +508,18 @@ def diffuser_halves(printed=False, tint=False):
     second = box(-400, 400, -400, 400, DF.SKIN, skin)
     k = 1.0 / (1.0 - DIFF_SHRINK) if printed else 1.0
     back = box(-JOINT_SETBACK, JOINT_SETBACK, -400, 400, -5, 50) if JOINT_SETBACK > 0 else None      # no black here
+    if JOINT_LUGS:
+        (lug_add, lug_cut), notch = joint_lugs(), lug_head_notch()
     out = {}
     for side, xs in (('left', (-200, 0)), ('right', (0, 200))):
         half = d ^ box(xs[0], xs[1], -200, 200, -5, 20)
         black = half - first - second if tint else half - first
         if back is not None:
             black = black - back
+        if JOINT_LUGS:
+            if side == 'left':
+                black = black - notch
+            black = black + Manifold.batch_boolean(lug_add[side], ADD) - Manifold.batch_boolean(lug_cut[side], ADD)
         if tint:
             out[(side, 'gray')] = (half ^ first).scale([k, k, 1.0])
             out[(side, 'white')] = (half ^ second).scale([k, k, 1.0])
