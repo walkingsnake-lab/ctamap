@@ -422,10 +422,13 @@ DF.HOUSE_W = float(os.environ['P4_HOUSE_W']) if os.environ.get('P4_HOUSE_W') els
 # Tightening draws the halves together: a plate with clearance holes would only have held them by friction.
 # The stop is the white first-layer edges alone. The lugs' faces stand LUG_FACE (0.1) behind the joint plane on each
 # half, so they never meet: with them on the plane (as first modelled) the outcome hung on +/-0.02 mm of print accuracy.
-# Proud, they held the white edges apart, a slit no torque closes; shy, the halves hinged on the white edges and the
-# joint lifted about 20x the error until the lugs' top edges met. So the screws tie, they do not clamp: tighten with
-# the joint pressed flat on the sheet and stop when the white edges meet. A turn too far opens the white edges by that
-# much once the rim and the panel flatten the diffuser (second review, Nov 13).
+# Proud, they held the white edges apart, a slit no torque closes; shy, the halves folded about the white edges, about
+# 20x the error, until the lugs' top edges met. So the screws tie, they do not clamp. The pull is 2.7 mm behind the
+# flange and the stop is at the face, so past contact the halves fold about the white edges: face down on a sheet the
+# joint stays down and the OUTER ENDS lift (about 2 N a screw is enough; a half weighs 23 g). Weigh each half down, stop
+# when the white edges meet; a turn too far opens the white edges by that much once the rim and the panel flatten the
+# diffuser (second review, Nov 13; "press the joint down", as first written here and in the build sheet, held the
+# wrong place).
 # The left half's skirt is cut away along the whole of each screw's way in, not only where its head ends up: the head
 # (4.7) overlaps the skirt's outer face 1.65 mm from the axis. That leaves the left lug standing on its own, two walls
 # (0.85 and 1.4) under a 1.25 roof on 18 mm2 of flange: about 100 N of screw tension peels it. Carry the joined
