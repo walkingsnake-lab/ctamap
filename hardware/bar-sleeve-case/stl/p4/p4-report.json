@@ -224,12 +224,12 @@
    "watertight": true,
    "extents": [
     30.0,
-    4.8,
+    4.6,
     3.0
    ],
    "square": 30.0,
    "spare_a_side": 113.0,
-   "volume_cm3": 0.4
+   "volume_cm3": 0.3
   },
   "p4-diffuser3-left-gray.stl": {
    "watertight": true,

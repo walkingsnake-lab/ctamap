@@ -193,7 +193,12 @@ def main():
         expect(thread >= 3.5 and z_top + p4.BAR_T - p4.BAR_SCREW >= DF.FT + 0.5, f'M2.5 x {p4.BAR_SCREW:g} through the {p4.BAR_T} bar: {thread:.1f} mm of thread below the guide, tip {z_top + p4.BAR_T - p4.BAR_SCREW - DF.FT:.1f} above the flange\'s back')
         expect(vol(bars, L + R + Wh) < 0.005 and vol(sc, bars) < 0.005, f'bars on the boss tops: overlap with the halves {vol(bars, L + R + Wh):.3f}, screws in the slots {vol(sc, bars):.3f} mm3')
         fl = (p4.BAR_SLOT_L - 2.5) / 2
-        expect(fl >= 0.6, f'slots let each boss sit +/-{fl:.1f} mm along the joint\'s pull: no dimension closes the joint, the bars clamp the halves where they are pushed')
+        b1 = p4.joint_bar(1)
+        rnd = free(b1, -p4.BAR_X, yc, z_top + 1.5) ; sl = vol(cyl_z(p4.BAR_X + fl, yc, z_top + 1.0, z_top + 2.0, 2.4, 32), b1)
+        expect(abs(rnd - p4.BAR_SLOT_W) < 0.11 and sl < 1e-4 and fl >= 0.6, f'each bar: a round {p4.BAR_SLOT_W} hole at one end (located by its first screw), a slot with +/-{fl:.1f} mm along x at the other: '
+               f'no dimension closes the joint, the bars clamp the halves where they are pushed')
+        same = vol(p4.joint_bar(-1), b1.rotate([0, 0, 180])) / b1.volume()
+        expect(same > 0.999, 'the bottom bar is the top bar turned half a turn: one part, print two')
         expect(min(y_out - yc - p4.BAR_SLOT_W / 2, yc - p4.BAR_SLOT_W / 2 - y_in) >= 0.8, f'bar walls beside the slot: {y_out - yc - p4.BAR_SLOT_W / 2:.2f} / {yc - p4.BAR_SLOT_W / 2 - y_in:.2f} mm, {p4.BAR_T} thick')
         both = Manifold.batch_boolean([p4.diffuser_in_case(v.scale([1 / k, 1 / k, 1.0])) for v in dp.values()], ADD) + p4.diffuser_in_case(bars) + p4.diffuser_in_case(sc)
         for nm, m in (('shell', shell), ('bridge', P['bridge']), ('spine', P['spine']), ('panel', p4.panel_p4()), ('encoder', p4.encoder_envelope()), ('collar', p4.collar_knob()),
@@ -207,6 +212,10 @@ def main():
         expect(worst < 0.05, f'joined diffuser with its bars sliding in from the back, past the shell and the collar: worst {worst:.3f} mm3')
         worst = max(vol(both, p4.panel_p4().translate([0, float(t), dz])) for t in np.arange(0.0, 20, 0.5) for dz in (-0.14, 0.0, 0.14))
         expect(worst < 0.01, f'panel coming in from behind, centred and 0.14 mm off up or down (20 mm): worst {worst:.3f} mm3 (bars {y_in - HSH / 2:.2f} from its edge)')
+        play = (p4.BAR_SLOT_W - 2.5) / 2                         # each bar pushed toward the panel by its holes' play
+        inb = p4.diffuser_in_case(p4.joint_bar(1).translate([0, -play, 0]) + p4.joint_bar(-1).translate([0, play, 0]))
+        worst = max(vol(inb, p4.panel_p4().translate([0, float(t), dz])) for t in np.arange(0.0, 20, 0.5) for dz in (-0.14, 0.0, 0.14))
+        expect(worst < 0.01, f'the same with both bars {play:.1f} mm toward the panel (their holes\' play): worst {worst:.3f} mm3; their inner top edges are chamfered {p4.BAR_CHAMF}')
     wl = P['diffuser'][('left', 'white')]
     bb = wl.bounding_box()
     expect(abs((bb[3] - bb[0]) - DF.FL_HX + DF.BEV) < 0.3 and bb[5] - bb[2] <= DF.SKIN + 1e-6,

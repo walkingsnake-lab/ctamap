@@ -513,9 +513,11 @@ BAR_X = 10.0                            # boss centres, each side of the joint
 BOSS_LX = 6.0                           # boss length along x
 BOSS_H = 6.0                            # boss top above the flange's back: the pilot ends at the flange, 1.2 from the face
 BAR_T, BAR_END = 3.0, 5.0               # bar thickness; bar length beyond each slot's centre
-BAR_SCREW = 8.0                         # M2.5 x 8 button head: 4 mm of thread below the guide bore
-BAR_PILOT, BAR_GUIDE_D, BAR_GUIDE_L = P3.S3_PILOT, 2.6, 1.0     # the S3 posts' vertical pilot (fit Nov 3) and guide bore
-BAR_SLOT_W, BAR_SLOT_L = 2.9, 4.3       # slot: 2.9 wide, +/-0.7 of float along x
+BAR_SCREW = 8.0                         # M2.5 x 8 button head: 3.5 mm of thread below the guide bore
+BAR_PILOT, BAR_GUIDE_D, BAR_GUIDE_L = P3.S3_PILOT, 2.6, DR.M25_GUIDE_L     # the S3 posts' vertical pilot (fit Nov 3) and 1.5 guide bore
+BAR_SLOT_W, BAR_SLOT_L = 2.9, 4.3       # one end of the bar: a slot 2.9 wide, +/-0.9 of float along x. The other end: a round 2.9
+                                        # hole, so the bar is located by its first screw and cannot slide as that screw starts
+BAR_CHAMF = 1.0                         # the bar's inner top edge: the panel meets the bars first, 5.5 mm above the skirt tips
 BAR_HEAD_D, BAR_HEAD_K = 4.7, 1.7
 
 
@@ -523,7 +525,7 @@ def bar_geom():
     """y of the screw line, the bosses' and bars' outer y, the bar's inner y, the boss tops' z (diffuser frame, top border)"""
     y_out = DF.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT - LUG_TRAY_GAP
     hy = (DF.HOUSE_H or DF.PH) / 2
-    return y_out - 2.3, y_out, hy + 0.5, DF.FT + BOSS_H
+    return y_out - 2.3, y_out, hy + 0.7, DF.FT + BOSS_H
 
 
 def bar_bosses():
@@ -548,17 +550,19 @@ def bar_bosses():
 
 
 def joint_bar(sy=1):
-    """one splice bar in place on its two bosses (diffuser frame): flat, two slots along x"""
+    """one splice bar in place on its two bosses (diffuser frame): flat, a round hole over the left boss and a slot along x
+    over the right one, its inner top edge chamfered. sy = -1: the same bar turned half a turn, at the bottom border (its
+    round hole is then over the right boss)"""
     yc, y_out, y_in, z_top = bar_geom()
-    a, b = sorted((sy * y_in, sy * y_out))
-    bar = box(-BAR_X - BAR_END, BAR_X + BAR_END, a, b, z_top, z_top + BAR_T)
-    for sx in (-1, 1):
-        hl = (BAR_SLOT_L - BAR_SLOT_W) / 2
-        slot = box(sx * BAR_X - hl, sx * BAR_X + hl, sy * yc - BAR_SLOT_W / 2, sy * yc + BAR_SLOT_W / 2, z_top - 1, z_top + BAR_T + 1)
-        for e in (-hl, hl):
-            slot = slot + cyl_z(sx * BAR_X + e, sy * yc, z_top - 1, z_top + BAR_T + 1, BAR_SLOT_W, 32)
-        bar = bar - slot
-    return bar
+    prof = CrossSection([[(y_in, z_top), (y_out, z_top), (y_out, z_top + BAR_T), (y_in + BAR_CHAMF, z_top + BAR_T), (y_in, z_top + BAR_T - BAR_CHAMF)]])
+    bar = Manifold.extrude(prof, 2 * (BAR_X + BAR_END)).rotate([90, 0, 90]).translate([-BAR_X - BAR_END, 0, 0])
+    bar = bar - cyl_z(-BAR_X, yc, z_top - 1, z_top + BAR_T + 1, BAR_SLOT_W, 32)
+    hl = (BAR_SLOT_L - BAR_SLOT_W) / 2
+    slot = box(BAR_X - hl, BAR_X + hl, yc - BAR_SLOT_W / 2, yc + BAR_SLOT_W / 2, z_top - 1, z_top + BAR_T + 1)
+    for e in (-hl, hl):
+        slot = slot + cyl_z(BAR_X + e, yc, z_top - 1, z_top + BAR_T + 1, BAR_SLOT_W, 32)
+    bar = bar - slot
+    return bar if sy > 0 else bar.rotate([0, 0, 180])
 
 
 def bar_screws_env(sy=None):
