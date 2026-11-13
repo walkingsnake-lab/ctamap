@@ -50,8 +50,8 @@ if __name__ == '__main__':
     d = ImageDraw.Draw(im)
     f = font(24)
     axes, y_out = p4.lug_axes()
-    caps = ('Apart, from behind with the face down (the left half is the nearer one): a lug on\neach half behind the border, the left half\'s skirt cut away for the screw\'s head',
-            f'Drawn together: an M2.5 x {p4.LUG_SCREW:g} button head slips through the left lug and threads\n{p4.LUG_SCREW - p4.LUG_A:g} mm into the right one; the lug faces and the white edges meet')
+    caps = ('Apart, from behind with the face down (the left half is the nearer one): a lug on\neach half behind the border, the left half\'s skirt cut away for the screw\'s way in',
+            f'Drawn together: an M2.5 x {p4.LUG_SCREW:g} button head slips through the left lug and threads\n{p4.LUG_SCREW - p4.LUG_A:g} mm into the right one. The white edges meet; the lugs stay {2 * p4.LUG_FACE:g} mm apart')
     for i, (p, cap) in enumerate(zip((a, b), caps)):
         im.paste(p, (i * (W + gapx), top))
         d.multiline_text((i * (W + gapx) + 22, 18), cap, fill=INK, font=f, spacing=6)

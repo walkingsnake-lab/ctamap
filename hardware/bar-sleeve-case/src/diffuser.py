@@ -10,8 +10,8 @@ from manifold3d import Manifold, CrossSection
 import panel
 
 PW, PH = panel.P['w'], panel.P['h']                # the pixel grid: cols x pitch, rows x pitch
-HOUSE_W, HOUSE_H = None, None       # the housing's measured outline, where it is smaller than the grid's (p4.py: 127.7 high);
-                                    # the skirts, frame and bumps follow it, the ribs stay on the pitch. None = PW / PH
+HOUSE_W, HOUSE_H = None, None       # the housing's measured outline, where it is smaller than the grid's (p4.py: 127.8 high);
+                                    # the skirts, frame and any bumps follow it, the ribs stay on the pitch. None = PW / PH
 SKIN = float(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[1].endswith('.stl') else 0.2   # one-piece face skin
 GRID_H = 1.5                        # grid behind the skin
 SK_T, SK_D, CLR, BUMP = 1.2, 3.0, 0.15, 0.2

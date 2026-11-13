@@ -134,14 +134,27 @@ def main():
         L = (dp[('left', 'black')]).scale([1 / k, 1 / k, 1.0]); R = (dp[('right', 'black')]).scale([1 / k, 1 / k, 1.0])
         WLs = (dp[('left', 'white')]).scale([1 / k, 1 / k, 1.0]); WRs = (dp[('right', 'white')]).scale([1 / k, 1 / k, 1.0])
         expect(len([q for q in L.decompose() if q.volume() > 1e-3]) == 1 and len([q for q in R.decompose() if q.volume() > 1e-3]) == 1, 'each half\'s black part is one body, lugs and all')
+        gaps = []
         for yc, zc in axes:
-            nm = 'top' if yc > 0 else 'bottom'
-            reg = box(-12, 12, min(yc - 4, yc + 4), max(yc - 4, yc + 4), DF.FT + 0.05, 12)
-            fa = vol(L, box(-0.02, 0, -99, 99, 0, 12) ^ reg) / 0.02; fb = vol(R, box(0, 0.02, -99, 99, 0, 12) ^ reg) / 0.02
-            expect(min(fa, fb) > 12, f'{nm}: lug faces on the joint plane, {fa:.1f} / {fb:.1f} mm2 of stop (the screw axis, {zc - DF.FT:.1f} behind the flange, passes through them)')
+            reg = box(-12, 12, min(yc - 4, yc + 4), max(yc - 4, yc + 4), DF.SKIN + DF.GRID_H + DF.SK_D + 0.3, 12)     # above the skirt: the lugs alone
+            gaps.append((round(-(L ^ reg).bounding_box()[3], 3), round((R ^ reg).bounding_box()[0], 3)))
+        expect(all(abs(a - p4.LUG_FACE) < 1e-3 and abs(b - p4.LUG_FACE) < 1e-3 for a, b in gaps) and p4.LUG_FACE >= 0.08,
+               f'lug faces stand {p4.LUG_FACE} mm behind the joint plane on each half ({2 * p4.LUG_FACE:.1f} apart): the white edges are the only stop, the screws tie')
         expect(abs(WLs.bounding_box()[3]) < 1e-3 and abs(WRs.bounding_box()[0]) < 1e-3, 'the white first layers reach the joint plane too')
         sc = p4.lug_screws_env()
-        expect(vol(sc, L + WLs) < 0.005, f'screws through the left half: overlap {vol(sc, L + WLs):.3f} mm3 (clearance {p4.LUG_CLEAR}, the skirt cut away at the heads)')
+        expect(vol(sc, L + WLs) < 0.005, f'screws through the left half: overlap {vol(sc, L + WLs):.3f} mm3 (clearance {p4.LUG_CLEAR})')
+        way = max(vol(sc.translate([-float(t), 0, 0]), L + WLs) for t in np.arange(0.0, p4.LUG_SCREW + 0.51, 0.25))
+        expect(way < 0.005, f'each screw\'s way in, straight along its axis from {p4.LUG_SCREW + 0.5:g} mm out (tip at the lug\'s outer face): worst overlap with the left half {way:.3f} mm3 (the skirt is cut away for it)')
+        for yc, zc in axes:                                       # no ledge for the panel: the lugs' inner faces only slope or stand
+            sy = 1 if yc > 0 else -1
+            flat = 0.0
+            for zz in np.arange(DF.SKIN + DF.GRID_H + 0.3, 6.5, 0.1):
+                a = (R ^ box(1.0, 2.0, min(sy * 63.0, sy * 66.0), max(sy * 63.0, sy * 66.0), float(zz), float(zz) + 0.1))
+                b = (R ^ box(1.0, 2.0, min(sy * 63.0, sy * 66.0), max(sy * 63.0, sy * 66.0), float(zz) + 0.1, float(zz) + 0.2))
+                if a.volume() > 1e-6 and b.volume() > 1e-6:
+                    ia = min(abs(a.bounding_box()[1]), abs(a.bounding_box()[4])); ib = min(abs(b.bounding_box()[1]), abs(b.bounding_box()[4]))
+                    flat = max(flat, ib - ia)
+            expect(flat <= 0.15, f'{"top" if sy > 0 else "bottom"} lug\'s inner face: steepest step outward per 0.1 mm of height {flat:.2f} mm (45 deg or steeper: no ledge)')
         expect(p4.LUG_SCREW - p4.LUG_A >= 4.0 and p4.LUG_PILOT_DEPTH >= p4.LUG_SCREW - p4.LUG_A + 1.5, f'thread in the right lug: {p4.LUG_SCREW - p4.LUG_A:.1f} mm of an M2.5 x {p4.LUG_SCREW:g}, pilot {p4.LUG_PILOT_DEPTH} deep')
         expect(axes[0][1] - p4.LUG_HEAD_D / 2 - DF.FT >= 0.3, f'head ({p4.LUG_HEAD_D}) clears the flange\'s back by {axes[0][1] - p4.LUG_HEAD_D / 2 - DF.FT:.2f} mm')
         both = Manifold.batch_boolean([p4.diffuser_in_case(v.scale([1 / k, 1 / k, 1.0])) for v in dp.values()], ADD) + p4.diffuser_in_case(sc)

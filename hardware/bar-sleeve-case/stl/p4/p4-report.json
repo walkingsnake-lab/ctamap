@@ -91,13 +91,13 @@
   "p4-diffuser-left-black.stl": {
    "watertight": true,
    "extents": [
-    136.9,
+    136.8,
     145.5,
     6.4
    ],
    "square": 145.5,
    "spare_a_side": 55.2,
-   "volume_cm3": 13.9
+   "volume_cm3": 13.8
   },
   "p4-diffuser-right-white.stl": {
    "watertight": true,
@@ -113,7 +113,7 @@
   "p4-diffuser-right-black.stl": {
    "watertight": true,
    "extents": [
-    136.9,
+    136.8,
     145.5,
     6.4
    ],
@@ -190,7 +190,7 @@
   "coupon-p4-diffuser-joint-left-black.stl": {
    "watertight": true,
    "extents": [
-    20.0,
+    19.9,
     38.8,
     6.4
    ],
@@ -212,7 +212,7 @@
   "coupon-p4-diffuser-joint-right-black.stl": {
    "watertight": true,
    "extents": [
-    20.0,
+    19.9,
     38.8,
     6.4
    ],
@@ -245,7 +245,7 @@
   "p4-diffuser3-left-black.stl": {
    "watertight": true,
    "extents": [
-    136.9,
+    136.8,
     145.5,
     6.2
    ],
@@ -278,7 +278,7 @@
   "p4-diffuser3-right-black.stl": {
    "watertight": true,
    "extents": [
-    136.9,
+    136.8,
     145.5,
     6.2
    ],
@@ -311,7 +311,7 @@
   "coupon-p4-diffuser3-joint-left-black.stl": {
    "watertight": true,
    "extents": [
-    20.0,
+    19.9,
     38.8,
     6.2
    ],
@@ -344,7 +344,7 @@
   "coupon-p4-diffuser3-joint-right-black.stl": {
    "watertight": true,
    "extents": [
-    20.0,
+    19.9,
     38.8,
     6.2
    ],
@@ -366,13 +366,13 @@
   "coupon-p4-diffuser-shrink-black.stl": {
    "watertight": true,
    "extents": [
-    136.9,
+    136.8,
     17.8,
     6.4
    ],
-   "square": 136.9,
-   "spare_a_side": 59.5,
-   "volume_cm3": 2.5
+   "square": 136.8,
+   "spare_a_side": 59.6,
+   "volume_cm3": 2.4
   },
   "p4-knob.stl": {
    "watertight": true,

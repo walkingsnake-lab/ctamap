@@ -419,10 +419,17 @@ DF.HOUSE_W = float(os.environ['P4_HOUSE_W']) if os.environ.get('P4_HOUSE_W') els
 # ---------------------------------------------------------------- diffuser joint: a draw screw at each border (Nov 13)
 # A lug on each half, behind the flange in the gap between the skirt and the tray wall, at the top border and at the
 # bottom one; one M2.5 x 8 button head along x through the left half's lug (clearance) into the right half's (pilot).
-# Tightening draws the halves together: a plate with clearance holes would only have held them by friction. The lugs'
-# faces are on the joint plane with the white first layer's edges (the black between them stays JOINT_SETBACK back), so
-# the screw's pull, 2.7 mm behind the flange, lands on the lugs and does not hinge the halves about their white edges.
-# The left half's skirt is cut away for 2.4 mm where the screw's head sits. Join the halves face down on a flat sheet.
+# Tightening draws the halves together: a plate with clearance holes would only have held them by friction.
+# The stop is the white first-layer edges alone. The lugs' faces stand LUG_FACE (0.1) behind the joint plane on each
+# half, so they never meet: with them on the plane (as first modelled) the outcome hung on +/-0.02 mm of print accuracy.
+# Proud, they held the white edges apart, a slit no torque closes; shy, the halves hinged on the white edges and the
+# joint lifted about 20x the error until the lugs' top edges met. So the screws tie, they do not clamp: tighten with
+# the joint pressed flat on the sheet and stop when the white edges meet. A turn too far opens the white edges by that
+# much once the rim and the panel flatten the diffuser (second review, Nov 13).
+# The left half's skirt is cut away along the whole of each screw's way in, not only where its head ends up: the head
+# (4.7) overlaps the skirt's outer face 1.65 mm from the axis. That leaves the left lug standing on its own, two walls
+# (0.85 and 1.4) under a 1.25 roof on 18 mm2 of flange: about 100 N of screw tension peels it. Carry the joined
+# diffuser flat. LUG_A 5.5 with LUG_SCREW 10 (an M2.5 x 10) is about 2.5 times stronger.
 JOINT_LUGS = os.environ.get('P4_JOINT_LUGS', '1') not in ('0', '', 'no', 'false')
 LUG_A, LUG_B = 3.5, 7.5                 # lug length along x: head side (left half), threaded side (right half)
 LUG_SCREW = 8.0                         # M2.5 x 8 button head: 4.5 mm of thread in the right lug
@@ -430,7 +437,8 @@ LUG_TRAY_GAP = 0.95                     # lug's outer face to the tray wall's in
 LUG_HEAD_D, LUG_HEAD_K = 4.7, 1.7       # largest button head
 LUG_PILOT, LUG_CLEAR = DR.SLED_PILOT, 2.9
 LUG_PILOT_DEPTH = 6.5
-LUG_FACE = float(os.environ.get('P4_LUG_FACE', '0.0'))     # lug faces this far behind the joint plane (0: they are the stop)
+LUG_FACE = float(os.environ.get('P4_LUG_FACE', '0.1'))     # lug faces this far behind the joint plane (0: they are a stop too)
+LUG_A = float(os.environ.get('P4_LUG_A', LUG_A)); LUG_SCREW = float(os.environ.get('P4_LUG_SCREW', LUG_SCREW))
 
 
 def lug_axes():
@@ -454,12 +462,14 @@ def joint_lugs():
     add, cut = {'left': [], 'right': []}, {'left': [], 'right': []}
     for yc, zc in axes:
         sy = 1 if yc > 0 else -1
-        def ybox(x0, x1, ya, yb, z0, z1):
-            a, b = sorted((sy * ya, sy * yb))
-            return box(x0, x1, a, b, z0, z1)
+        # profile in (y, z): on the flange, the skirt's own 0.6 lead-in at its tip height, then 0.6 further out up to a
+        # 0.8 chamfer at the top, so a panel coming in off-centre meets slopes and never a ledge
+        yi = y_in + 0.02          # a hair inside the skirt's own inner face and chamfer: coincident faces export as bad edges
+        prof = CrossSection([[(yi, DF.FT - 0.2), (y_out, DF.FT - 0.2), (y_out, z_top), (yi + 1.4, z_top), (yi + 0.6, z_top - 0.8),
+                              (yi + 0.6, zt - 0.02), (yi, zt - 0.62)]])
         for side, x0, x1 in (('left', -LUG_A, -LUG_FACE), ('right', LUG_FACE, LUG_B)):
-            add[side].append(ybox(x0, x1, y_in, y_out, DF.FT - 0.01, zt))                    # on the flange, one with the skirt
-            add[side].append(ybox(x0, x1, y_in + 0.6, y_out, zt - 0.01, z_top))              # above the skirt's tip, stepped back as a lead-in
+            lug = Manifold.extrude(prof, x1 - x0).rotate([90, 0, 90]).translate([x0, 0, 0])
+            add[side].append(lug if sy > 0 else lug.mirror([0, 1, 0]))
         cut['left'].append(_cyl_x(-LUG_A - 1, 1, yc, zc, LUG_CLEAR))
         cut['right'].append(_cyl_x(-1, LUG_PILOT_DEPTH, yc, zc, LUG_PILOT))
         cut['right'].append(Manifold.cylinder(0.4 + LUG_FACE + 0.01, LUG_PILOT / 2 + 0.4, LUG_PILOT / 2, 32).rotate([0, 90, 0]).translate([LUG_FACE - 0.01, yc, zc]))
@@ -467,7 +477,7 @@ def joint_lugs():
 
 
 def lug_head_notch():
-    """the left half's skirt, cut away where the two screw heads sit"""
+    """the left half's skirt, cut away along each screw's whole way in (its head overlaps the skirt's outer face)"""
     axes, y_out = lug_axes()
     hy = (DF.HOUSE_H or DF.PH) / 2
     zt = DF.SKIN + DF.GRID_H + DF.SK_D
@@ -475,7 +485,7 @@ def lug_head_notch():
     for yc, zc in axes:
         sy = 1 if yc > 0 else -1
         a, b = sorted((sy * (hy + DF.CLR - 0.3), sy * (hy + DF.OUT + 0.05)))
-        out.append(box(-LUG_A - LUG_HEAD_K - 0.7, -LUG_A, a, b, DF.SKIN + DF.GRID_H + 0.05, zt + 1))
+        out.append(box(-LUG_A - LUG_SCREW - LUG_HEAD_K - 0.7, -LUG_A + 0.3, a, b, DF.SKIN + DF.GRID_H + 0.05, zt + 1))
     return Manifold.batch_boolean(out, ADD)
 
 
