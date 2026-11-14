@@ -396,6 +396,16 @@ JOINT_SETBACK = float(os.environ.get('P4_JOINT_SETBACK', '0.05'))
 # no line starts or stops at the joint (every taper tried, 0.4-1.2 long to 0.36-0.5 wide, on every grid layer). So each
 # horizontal rib narrows from 0.8 to JOINT_TAPER_W over its last JOINT_TAPER_L before the joint wall. P4_JOINT_TAPER=0: off.
 JOINT_TAPER_L = float(os.environ.get('P4_JOINT_TAPER', '0.8'))
+# The whole joint rib on one half (Nov 13, to try: P4_JOINT_RIB=left). The tapered rib ends printed with the gap moved
+# from the joint wall to the horizontal ribs' ends: any one-line feature at the joint starts, stops or doubles back
+# there, and PETG leaves a gap at each. So no one-line features: the left half keeps the grid's own 0.8 mm rib at x = 0
+# whole (two lines, as every other rib, with the half's outer wall running the length of the joint), and the right half
+# has none: its horizontal ribs end square at the joint and butt on the left half's rib. The halves split at
+# x = +0.45, the rib's right face plus the setback, so the white seam sits at the rib's edge and the left half is 0.9 mm
+# longer. 'split' (default): half the rib on each half, as printed so far.
+JOINT_RIB = os.environ.get('P4_JOINT_RIB', 'split')
+if JOINT_RIB not in ('split', 'left'):
+    raise SystemExit(f'P4_JOINT_RIB={JOINT_RIB!r}: split or left')
 JOINT_TAPER_W = 0.45
 
 
@@ -627,23 +637,27 @@ def diffuser_halves(printed=False, tint=False):
     try:
         d = DF.diffuser(skin=skin)
         hy = DF.PH / 2
-        cr = CENTRE_RIB / 2 + JOINT_SETBACK
-        d = d + box(-cr, cr, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
-        taper = joint_taper_cuts(skin + 0.01, skin + DF.GRID_H + 1.0)
-        if taper is not None:
-            d = d - taper
+        if JOINT_RIB == 'split':
+            cr = CENTRE_RIB / 2 + JOINT_SETBACK
+            d = d + box(-cr, cr, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+            taper = joint_taper_cuts(skin + 0.01, skin + DF.GRID_H + 1.0)
+            if taper is not None:
+                d = d - taper
     finally:
         DF.GRID_H = grid_h
     first = box(-400, 400, -400, 400, -1, DF.SKIN)
     second = box(-400, 400, -400, 400, DF.SKIN, skin)
     k = 1.0 / (1.0 - DIFF_SHRINK) if printed else 1.0
-    back = box(-JOINT_SETBACK, JOINT_SETBACK, -400, 400, -5, 50) if JOINT_SETBACK > 0 else None      # no black here
+    # the joint plane, and the slot with no black in it (one-rib joint: 0.005 into the rib, so no face lies on its face)
+    sx = 0.0 if JOINT_RIB == 'split' else DF.RIB / 2 + JOINT_SETBACK
+    lo = JOINT_SETBACK if JOINT_RIB == 'split' else JOINT_SETBACK + 0.005
+    back = box(sx - lo, sx + JOINT_SETBACK, -400, 400, -5, 50) if JOINT_SETBACK > 0 else None
     if JOINT_LUGS:
         (lug_add, lug_cut), notch = joint_lugs(), lug_head_notch()
     if JOINT_BARS:
         boss_add, boss_cut = bar_bosses()
     out = {}
-    for side, xs in (('left', (-200, 0)), ('right', (0, 200))):
+    for side, xs in (('left', (-200, sx)), ('right', (sx, 200))):
         half = d ^ box(xs[0], xs[1], -200, 200, -5, 20)
         black = half - first - second if tint else half - first
         if back is not None:
