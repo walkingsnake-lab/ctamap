@@ -233,7 +233,7 @@ def main():
         expect(worst < 0.01, f'the same with both bars {play:.1f} mm toward the panel (their holes\' play): worst {worst:.3f} mm3; their inner top edges are chamfered {p4.BAR_CHAMF}')
     wl = P['diffuser'][('left', 'white')]
     bb = wl.bounding_box()
-    over = 0.0 if p4.JOINT_RIB == 'split' else DF.RIB / 2 + p4.JOINT_SETBACK      # one-rib joint: the left half runs past x = 0
+    over = (p4.JOINT_WALLS[0] - p4.JOINT_WALLS[1]) / 2 if p4.JOINT_RIB == 'split' else DF.RIB / 2 + p4.JOINT_SETBACK      # the joint plane, where it is not x = 0
     expect(abs((bb[3] - bb[0]) - over - DF.FL_HX + DF.BEV) < 0.3 and bb[5] - bb[2] <= DF.SKIN + 1e-6,
            f'white part = the whole first layer: {bb[3] - bb[0]:.1f} x {bb[4] - bb[1]:.1f} x {bb[5] - bb[2]:.2f} mm a half (face and flange front)')
 

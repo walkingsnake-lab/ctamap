@@ -395,7 +395,9 @@ JOINT_SETBACK = float(os.environ.get('P4_JOINT_SETBACK', '0.05'))
 # thin. Where the rib narrows to one line before it meets the wall, the wall is one unbroken extrusion top to bottom and
 # no line starts or stops at the joint (every taper tried, 0.4-1.2 long to 0.36-0.5 wide, on every grid layer). So each
 # horizontal rib narrows from 0.8 to JOINT_TAPER_W over its last JOINT_TAPER_L before the joint wall. P4_JOINT_TAPER=0: off.
-JOINT_TAPER_L = float(os.environ.get('P4_JOINT_TAPER', '0.8'))
+# Printed the same evening: the wall's gaps went and the horizontal ribs now stopped short of the wall instead. Off
+# (P4_JOINT_TAPER=0.8 builds it).
+JOINT_TAPER_L = float(os.environ.get('P4_JOINT_TAPER', '0'))
 # The whole joint rib on one half (Nov 13, to try: P4_JOINT_RIB=left). The tapered rib ends printed with the gap moved
 # from the joint wall to the horizontal ribs' ends: any one-line feature at the joint starts, stops or doubles back
 # there, and PETG leaves a gap at each. So no one-line features: the left half keeps the grid's own 0.8 mm rib at x = 0
@@ -407,6 +409,37 @@ JOINT_RIB = os.environ.get('P4_JOINT_RIB', 'split')
 if JOINT_RIB not in ('split', 'left'):
     raise SystemExit(f'P4_JOINT_RIB={JOINT_RIB!r}: split or left')
 JOINT_TAPER_W = 0.45
+# Unequal joint walls (Nov 13, the fallback if turning one half does not hide the gaps): P4_JOINT_WALLS=0.8,0.4 gives the
+# left half a wall as wide as any rib (two lines, with the half's outer wall running the length of the joint: no gaps
+# to cross) and leaves the right half its one-line 0.4. The joint line is then 1.2 mm of black, as on the first two
+# prints, centred on the column gap, with the white seam 0.2 mm off centre and black behind both sides of it. The
+# default is CENTRE_RIB / 2 a half.
+JOINT_WALLS = tuple(float(v) for v in os.environ.get('P4_JOINT_WALLS', f'{CENTRE_RIB / 2},{CENTRE_RIB / 2}').split(','))
+# Both halves on the bed the same way round (Nov 13, the owner's idea: the gaps would not matter if the two walls had
+# them on opposite sides of each rib). Every print so far has a gap in each half's joint wall beside every horizontal
+# rib, on one side of the rib (where the slicer starts that cell's length of wall). Left and right as modelled are
+# mirror images, sliced alike, so their gaps face each other and light crosses the joint. But a right half is exactly a
+# left half turned 180 degrees (checked at build). Printed as the same shape the same way round, the two halves get the
+# same toolpaths, and turning one round puts its gaps on the other side of each rib: 0.8 mm of rib between one wall's
+# gap and the other's. So the right half's files are the left half's, and the right coupon is exported turned 180.
+# Nothing else changes; one half is turned round at assembly. P4_DIFF_SAME_WAY=0: mirror images as before.
+DIFF_SAME_WAY = os.environ.get('P4_DIFF_SAME_WAY', '1') not in ('0', '', 'no', 'false')
+
+
+def same_way(d, whole=True):
+    """{(side, part): manifold} as it goes on the bed: the right side turned 180 degrees about z, and for whole halves
+    the left half's own mesh where the two are the same shape (so the slicer sees one file twice)"""
+    if not DIFF_SAME_WAY or JOINT_RIB != 'split' or JOINT_WALLS[0] != JOINT_WALLS[1]:
+        return d
+    out = {}
+    for (side, part), m in d.items():
+        if side == 'right':
+            m = m.rotate([0, 0, 180])
+            twin = d.get(('left', part))
+            if whole and twin is not None and (m - twin).volume() + (twin - m).volume() < 1e-3:
+                m = twin
+        out[(side, part)] = m
+    return out
 
 
 def joint_taper_cuts(z0, z1):
@@ -638,18 +671,20 @@ def diffuser_halves(printed=False, tint=False):
         d = DF.diffuser(skin=skin)
         hy = DF.PH / 2
         if JOINT_RIB == 'split':
-            cr = CENTRE_RIB / 2 + JOINT_SETBACK
-            d = d + box(-cr, cr, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
-            taper = joint_taper_cuts(skin + 0.01, skin + DF.GRID_H + 1.0)
+            wl, wr = JOINT_WALLS
+            sx = (wl - wr) / 2                                      # the joint plane: the black stays centred on x = 0
+            d = d + box(sx - JOINT_SETBACK - wl, sx + JOINT_SETBACK + wr, -hy + 0.29, hy - 0.29, skin - 0.01, skin + DF.GRID_H)
+            taper = joint_taper_cuts(skin + 0.01, skin + DF.GRID_H + 1.0) if wl == wr else None
             if taper is not None:
                 d = d - taper
+        else:
+            sx = DF.RIB / 2 + JOINT_SETBACK
     finally:
         DF.GRID_H = grid_h
     first = box(-400, 400, -400, 400, -1, DF.SKIN)
     second = box(-400, 400, -400, 400, DF.SKIN, skin)
     k = 1.0 / (1.0 - DIFF_SHRINK) if printed else 1.0
     # the joint plane, and the slot with no black in it (one-rib joint: 0.005 into the rib, so no face lies on its face)
-    sx = 0.0 if JOINT_RIB == 'split' else DF.RIB / 2 + JOINT_SETBACK
     lo = JOINT_SETBACK if JOINT_RIB == 'split' else JOINT_SETBACK + 0.005
     back = box(sx - lo, sx + JOINT_SETBACK, -400, 400, -5, 50) if JOINT_SETBACK > 0 else None
     if JOINT_LUGS:
@@ -899,8 +934,9 @@ if __name__ == '__main__':
     put(P['spine'], 'p4-spine.stl', down)
     put(P['bridge'], 'p4-bridge.stl', down)
     pair = lambda d, side: d[(side, 'white')] + d[(side, 'black')]
-    for (side, part), m in P['diffuser_print'].items():         # face down, z = 0 is the face: as exported (built for the shrink)
-        put(m, f'p4-diffuser-{side}-{part}.stl', None, drop_axis=2, frame=pair(P['diffuser_print'], side))
+    dp = same_way(P['diffuser_print'])                          # face down, z = 0 is the face: as exported (built for the shrink)
+    for (side, part), m in dp.items():
+        put(m, f'p4-diffuser-{side}-{part}.stl', None, drop_axis=2, frame=pair(dp, side))
     # coupons
     ct, cb = seam_coupon(P['top'], P['bot'])
     put(ct, 'coupon-p4-seam-top.stl', down); put(cb, 'coupon-p4-seam-bottom.stl', down)
@@ -909,14 +945,15 @@ if __name__ == '__main__':
         lt, lb = split_shell(P['shell'], 'lap')                                    # the half-lap, for the coupon comparison
         ct, cb = seam_coupon(lt, lb, joint_z('lap'))
         put(ct, 'coupon-p4-seam-lap-top.stl', down); put(cb, 'coupon-p4-seam-lap-bottom.stl', down)
-    dj = diffuser_joint_coupon(P['diffuser_print'])
+    dj = same_way(diffuser_joint_coupon(P['diffuser_print']), whole=False)
     for (side, part), m in dj.items():
         put(m, f'coupon-p4-diffuser-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj, side))
     if JOINT_BARS:
         put(joint_bar(), 'p4-diffuser-bar.stl', None, drop_axis=2)                    # print two (top and bottom border); black PETG, flat
-    for (side, part), m in P['diffuser3_print'].items():        # the three-colour variant to try: gray, white, black
-        put(m, f'p4-diffuser3-{side}-{part}.stl', None, drop_axis=2, frame=pair(P['diffuser3_print'], side))
-    dj3 = diffuser_joint_coupon(P['diffuser3_print'])
+    dp3 = same_way(P['diffuser3_print'])                        # the three-colour variant to try: gray, white, black
+    for (side, part), m in dp3.items():
+        put(m, f'p4-diffuser3-{side}-{part}.stl', None, drop_axis=2, frame=pair(dp3, side))
+    dj3 = same_way(diffuser_joint_coupon(P['diffuser3_print']), whole=False)
     for (side, part), m in dj3.items():
         put(m, f'coupon-p4-diffuser3-joint-{side}-{part}.stl', None, drop_axis=2, frame=pair(dj3, side))
     ds = diffuser_shrink_coupon(P['diffuser_print'])
