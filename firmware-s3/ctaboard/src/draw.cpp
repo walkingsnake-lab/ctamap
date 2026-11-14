@@ -483,7 +483,8 @@ struct RollFont {
 };
 static RollFont roll_font(Font font) {
   return font == FONT_5X7 ? RollFont{7, -6, -1} : font == FONT_CLOCK ? RollFont{11, -10, -1} : font == FONT_VCR ? RollFont{12, -11, -1}
-       : font == FONT_D17 ? RollFont{18, -17, -1} : font == FONT_D13 ? RollFont{14, -13, -1} : font == FONT_D23 ? RollFont{24, -23, -1}
+       : font == FONT_R17 ? RollFont{18, -17, -1} : font == FONT_D13 ? RollFont{14, -13, -1}
+       : font == FONT_D23 || font == FONT_R23 ? RollFont{24, -23, -1}
        : RollFont{6, -5, -1};
 }
 
@@ -4008,13 +4009,15 @@ std::vector<std::string> SkylineFader::wanted() const {
 }
 
 // ---- clock screen: big digits and day/date faces (design spec §20) ----
-// Mirrors renderDigits() / renderDayDate() and BD / DD in draw.js. The d17
+// Mirrors renderDigits() / renderDayDate() and BD / DD in draw.js. The r17
 // and d13 fonts' advance carries a 2 px gap, so a time's ink is measure() - 1.
 static const int BD_TOP = 7, BD_BASE = 24;
 static const int DD_DAY_BASE = 6, DD_TIME_BASE = 22, DD_DATE_BASE = 31;
 
-// Wide board: the d23 digits, rows 4-26, centered on 128 columns.
+// Wide board: the r23 digits, rows 4-26, centered on 128 columns.
 static const int BDW_TOP = 4, BDW_BASE = 27;
+// The colon's dim half-second: this share of the time's color.
+static const double COLON_DIM = 0.6;
 
 // The time's color on both faces: p.cdig (the board's digitColor), else #e6e6e6.
 static RGB digit_color(const Value &p) { return p["cdig"].truthy() ? hexs(p["cdig"].str_or("")) : hexc(0xe6e6e6); }
@@ -4023,20 +4026,27 @@ static void render_digits(const Value &p, Frame &f, std::optional<double> now_o,
   double now = now_o ? *now_o : p["now"].num(0);
   long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
   bool wide = cols_of(p) == WIDE;
-  Font font = wide ? FONT_D23 : FONT_D17;
+  Font font = wide ? FONT_R23 : FONT_R17;
   int W = wide ? WIDE : 64, top = wide ? BDW_TOP : BD_TOP, base = wide ? BDW_BASE : BD_BASE;
   f.w = W;
   ustr text = clock_text(now, p["tzo"].num(0));
   // Ink centered: x = floor((W + 1 - measure) / 2) (draw.js xOf).
   std::optional<Roll> roll = take_roll("dig.clock", text);
-  roll_text_at(f, font, text, SPAN, W, base, digit_color(p), roll);
-  // The colon blinks: off for the second half of each second, never mid-roll,
-  // never with steady.
+  RGB color = digit_color(p);
+  roll_text_at(f, font, text, SPAN, W, base, color, roll);
+  // The colon pulses: at COLON_DIM of the color for the second half of each
+  // second, full otherwise; full mid-roll and with steady.
   if (!p["steady"].truthy() && !roll && fmod_floor(ms, 1000) >= 500) {
     size_t i = text.find(U':');
     int g = glyph(font, ':');
     int cw = g >= 0 ? assets::FONT_DATA[font][g + 1] : 0;
-    f.fill(align_x(font, text, SPAN, W) + measure(font, text.substr(0, i)) + 1, top, cw, base - top, hexc(0x000000));
+    int x0 = align_x(font, text, SPAN, W) + measure(font, text.substr(0, i)) + 1;
+    RGB dim = scale_color(color, COLON_DIM);
+    for (int y = top; y < base; y++)
+      for (int x = x0; x < x0 + cw; x++) {
+        RGB c = f.get(x, y);
+        if (c.r || c.g || c.b) f.set(x, y, dim);
+      }
   }
 }
 

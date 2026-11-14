@@ -2410,32 +2410,38 @@
     }
 
     // ---- clock screen: big digits and day/date faces (design spec §20) ----
-    // The time in the d17 / d13 fonts (UW ttyp0 Bold digits, tabular, with
-    // round colon dots). Their advance carries a 2 px gap, so a time's ink is
-    // measure() - 1 wide.
+    // The time in the r17 font (rounded digits, big digits) / d13 (UW ttyp0
+    // Bold digits, day/date), both tabular. Their advance carries a 2 px gap,
+    // so a time's ink is measure() - 1 wide.
     const BD = { top: 7, base: 24, color: '#e6e6e6' };
     const DD = { dayBase: 6, timeBase: 22, dateBase: 31, color: '#e6e6e6', label: '#8f8f8f', ampm: '#555555' };
     // The time's color on both faces: p.cdig (the board's digitColor), else
     // BD.color.
     const digitColor = (p) => p.cdig || BD.color;
     // Big digits: the time alone, its ink centered, rows 7-23. The colon
-    // blinks (off for the second half of each second on the board's clock),
-    // except while the time rolls, or always lit with p.steady.
-    // Wide board (wide-spec §6): the 23-row digits (d23, ttyp0 Bold 40),
-    // rows 4-26, centered on all 128 columns.
+    // pulses: at 60% of the time's color for the second half of each second
+    // on the board's clock, full otherwise; always full while the time rolls,
+    // or with p.steady.
+    // Wide board (wide-spec §6): the 23-row rounded digits (r23), rows 4-26,
+    // centered on all 128 columns.
     const BDW = { top: 4, base: 27 };
+    const COLON_DIM = 0.6;
     function renderDigits(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
       const ms = Math.floor(o.ms != null ? o.ms : now * 1000);
-      const wide = colsOf(p) === WIDE, font = wide ? 'd23' : 'd17', W = wide ? WIDE : 64, g = wide ? BDW : BD;
+      const wide = colsOf(p) === WIDE, font = wide ? 'r23' : 'r17', W = wide ? WIDE : 64, g = wide ? BDW : BD;
       const f = newFrame(W);
       const text = clockText(now), xOf = (str) => fdivI(W + 1 - measure(font, str), 2);
       const roll = takeRoll('dig.clock', text);
-      rollTextWith(f, font, roll, text, xOf, g.base, digitColor(p));
+      const color = digitColor(p);
+      rollTextWith(f, font, roll, text, xOf, g.base, color);
       if (!p.steady && !roll && ((ms % 1000) + 1000) % 1000 >= 500) {
-        const i = text.indexOf(':');
-        f.fill(xOf(text) + measure(font, text.slice(0, i)) + 1, g.top, fonts[font][58][1], g.base - g.top, '#000000');
+        const i = text.indexOf(':'), x0 = xOf(text) + measure(font, text.slice(0, i)) + 1, dim = hex(scaleColor(color, COLON_DIM));
+        for (let y = g.top; y < g.base; y++) for (let x = x0; x < x0 + fonts[font][58][1]; x++) {
+          const c = f.get(x, y);
+          if (c[0] || c[1] || c[2]) f.set(x, y, dim);
+        }
       }
       return f;
     }

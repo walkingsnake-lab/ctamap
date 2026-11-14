@@ -346,33 +346,48 @@ test('clock screen, seventies face: VCR digits banded by row, stripes along the 
   assert.notEqual(hex(render({ ...p, cface: undefined }).get(0, 23)), '#ffc23a');
 });
 
-test('clock screen, big digits face: 17-row ttyp0 digits with their ink centered; the colon blinks, never mid-roll', () => {
-  // 8:08 PM in Chicago: full-width digits at both ends (a 1 sits centered in
-  // its tabular slot, so its ink starts further in).
+test('clock screen, big digits face: 17-row rounded digits with their ink centered; the colon pulses to 60%, never mid-roll', () => {
+  // 8:08 PM in Chicago: full-width digits at both ends.
   const t = Date.parse('2026-11-02T02:08:00Z') / 1000;
   const p = { now: t, tzo: -21600, screen: 'clock', cface: 'digits', bright: 100 };
   const inkCols = (f, y0 = 0, y1 = 31) => {
     const xs = [];
-    for (let x = 0; x < 64; x++) for (let y = y0; y <= y1; y++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) { xs.push(x); break; } }
+    for (let x = 0; x < f.w; x++) for (let y = y0; y <= y1; y++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) { xs.push(x); break; } }
     return xs;
   };
-  const rows = (f) => { const ys = new Set(); for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) ys.add(y); } return [...ys]; };
+  const rows = (f) => { const ys = new Set(); for (let y = 0; y < 32; y++) for (let x = 0; x < f.w; x++) { const c = f.get(x, y); if (c[0] || c[1] || c[2]) ys.add(y); } return [...ys]; };
   const on = render(p, { ms: t * 1000 + 250 });
   assert.deepEqual([Math.min(...rows(on)), Math.max(...rows(on))], [7, 23], 'digits on rows 7-23');
   const xs = inkCols(on);
   assert.ok(Math.abs(xs[0] - (63 - xs[xs.length - 1])) <= 1, 'centered: as much room left as right');
-  // The colon (two round dots) goes dark for the second half of each second.
+  // Rounded: the 8's top-left corner pixel is off, the pixels beside and below it lit.
+  assert.deepEqual([on.get(xs[0], 7)[0], on.get(xs[0] + 1, 7)[0], on.get(xs[0], 8)[0]], [0, 230, 230], 'rounded corner');
+  // The colon (two 3 px square dots) stays lit, at 60% for the second half of each second.
   const off = render(p, { ms: t * 1000 + 750 });
-  const colon = inkCols(on).filter((x) => !inkCols(off).includes(x));
-  assert.equal(colon.length, 4, 'the 4 px colon');
-  const c0 = colon[0];
-  assert.deepEqual([0, 1, 2, 3].map((i) => !!on.get(c0 + i, 10)[0]), [false, true, true, false], 'round dot: corner pixels off');
-  assert.deepEqual([0, 1, 2, 3].map((i) => !!on.get(c0 + i, 11)[0]), [true, true, true, true]);
-  // Mid-roll the colon stays lit whatever the second.
+  assert.deepEqual(inkCols(off), xs, 'the colon never goes dark');
+  const colon = xs.filter((x) => { for (let y = 0; y < 32; y++) if (on.get(x, y)[0] !== off.get(x, y)[0]) return true; return false; });
+  assert.equal(colon.length, 3, 'the 3 px colon');
+  const lit = [];
+  for (let y = 0; y < 32; y++) if (on.get(colon[0], y)[0]) lit.push(y);
+  assert.equal(lit.length, 6, 'two 3 px dots');
+  for (const y of lit) for (const x of colon) {
+    assert.equal(on.get(x, y)[0], 230, 'full #e6e6e6');
+    assert.deepEqual(off.get(x, y), [138, 138, 138], '60% of #e6e6e6');
+  }
+  // Only the colon changes.
+  for (let x = 0; x < 64; x++) if (!colon.includes(x)) for (let y = 0; y < 32; y++) assert.deepEqual(off.get(x, y), on.get(x, y));
+  // Mid-roll the colon stays full whatever the second.
   const mid = render(p, { ms: t * 1000 + 750, nums: { 'dig.clock': { from: '8:07', p: 0.5 } } });
-  assert.ok(mid.get(c0 + 1, 11)[0], 'lit mid-roll');
-  // Steady (Blinking colon off): lit all second.
+  assert.equal(mid.get(colon[0], lit[0])[0], 230, 'full mid-roll');
+  // Steady (Blinking colon off): full all second.
   assert.deepEqual(render({ ...p, steady: true }, { ms: t * 1000 + 750 }).px, on.px, 'steady colon');
+  // The digit color dims the same way.
+  const mint = render({ ...p, cdig: '#2fe08a' }, { ms: t * 1000 + 750 });
+  assert.deepEqual(mint.get(colon[0], lit[0]), [28, 134, 83], '60% of #2fe08a');
+  // Wide: 23-row digits on rows 4-26, a 4 px colon.
+  const w = render({ ...p, cols: 128 }, { ms: t * 1000 + 250 }), wo = render({ ...p, cols: 128 }, { ms: t * 1000 + 750 });
+  assert.deepEqual([Math.min(...rows(w)), Math.max(...rows(w))], [4, 26], 'wide digits on rows 4-26');
+  assert.equal(inkCols(w).filter((x) => { for (let y = 0; y < 32; y++) if (w.get(x, y)[0] !== wo.get(x, y)[0]) return true; return false; }).length, 4, 'the 4 px wide colon');
 });
 
 test('clock screen, day/date face: weekday, time with AM/PM, date, each centered', () => {

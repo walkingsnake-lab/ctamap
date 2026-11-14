@@ -10,9 +10,10 @@
 //   board-5x7.bdf    X11 5x7, proportional, + "tt" ligature, "min" glyph
 //   board-clock.bdf  X11 9x15 Bold, digits + square-dot colon (monospace)
 //   board-vcr.bdf    8x11 digits + colon after VCR OSD Neue (clock screen, seventies face)
-//   board-d17.bdf    17-row digits from UW ttyp0 Bold 30 (clock screen, big digits face)
 //   board-d13.bdf    13-row digits from UW ttyp0 Bold 22 (clock screen, day/date face)
-//   board-d23.bdf    23-row digits from UW ttyp0 Bold 40 (clock screen, wide big digits face)
+//   board-d23.bdf    23-row digits from UW ttyp0 Bold 40 (clock screen, wide day/date face)
+//   board-r17.bdf    17-row rounded digits, our own (clock screen, big digits face)
+//   board-r23.bdf    23-row rounded digits, our own (clock screen, wide big digits face)
 //
 // Rules (see docs/board/design-spec.md §3):
 //   - Proportional: each glyph is trimmed to its ink columns, advance = ink + 1.
@@ -393,10 +394,10 @@ function buildVcr() {
   return f;
 }
 
-// ---- d17, d13: clock digits from UW ttyp0 Bold ----
-// The big digits and day/date clock faces (design spec §20). Digits, space
+// ---- d13, d23: clock digits from UW ttyp0 Bold ----
+// The day/date clock face (design spec §20). Digits, space
 // and colon only, from Uwe Waldmann's ttyp0 (scripts/fonts-src/t0-*-digits.bdf,
-// subsets of u8g2's t0-30b / t0-22b; MIT-style license, kept in the output).
+// subsets of u8g2's t0-22b / t0-40b; MIT-style license, kept in the output).
 // Each digit is cropped to its ink and centered in a slot as wide as the
 // widest digit (tabular, so nothing shifts as the minutes change); advance
 // slot + 2. The colon is redrawn as two dots as big as ttyp0's square ones,
@@ -456,13 +457,92 @@ function buildTtypDigits(file, name) {
   return f;
 }
 
+// ---- r17, r23: rounded clock digits (big digits face) ----
+// Our own design (design spec §20): square seven-segment skeletons with
+// joined strokes, then rounded. Each digit is the union of its segments as
+// rectangles (stroke s; the middle bar centered, or one row high of center
+// when it can't be); the 1 is a stem with a flag, and the 3's middle bar
+// stops short of the left side. Rounding drops the outer pixel of each corner
+// where two strokes turn, and fills the matching inside corner of the
+// counter. Tabular like d13 / d23: each digit centered in a slot as wide as
+// the widest, advance slot + 2. The colon is two square dots (3 px at 17
+// rows; 4 px, corner pixels off, at 23), centered on the digits.
+
+const SEGS = ['abcdef', 'bc', 'abged', 'abgcd', 'fgbc', 'afgcd', 'afgedc', 'abc', 'abcdefg', 'abcdfg'];
+
+function roundDigit(d, W, H, s, r) {
+  const g = Array.from({ length: H }, () => Array(W).fill(0));
+  const fill = (x0, x1, y0, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g[y][x] = 1; };
+  if (d === 1) {
+    const w = s + 2, o = Array.from({ length: H }, (_, y) => Array.from({ length: w }, (_, x) => (y < s || x >= w - s ? 1 : 0)));
+    return roundCorners(o, r);
+  }
+  const m = Math.floor((H - s) / 2), seg = SEGS[d];
+  if (seg.includes('a')) fill(0, W - 1, 0, s - 1);
+  if (seg.includes('d')) fill(0, W - 1, H - s, H - 1);
+  if (seg.includes('g')) fill(d === 3 ? s + 1 : 0, W - 1, m, m + s - 1);
+  if (seg.includes('f')) fill(0, s - 1, 0, m + s - 1);
+  if (seg.includes('b')) fill(W - s, W - 1, 0, m + s - 1);
+  if (seg.includes('e')) fill(0, s - 1, m, H - 1);
+  if (seg.includes('c')) fill(W - s, W - 1, m, H - 1);
+  return roundCorners(g, r);
+}
+
+// A pixel is an outer corner when it's lit, both its outward neighbors are
+// off, and the strokes run on at least 3 px both ways (a stroke's end isn't
+// a corner); with r = 2 its two neighbors along the strokes go too. The
+// inside corner is an unlit pixel lit on its two outward sides and unlit on
+// the other two.
+function roundCorners(g, r) {
+  const h = g.length, w = g[0].length, at = (x, y) => (x >= 0 && y >= 0 && x < w && y < h ? g[y][x] : 0);
+  const o = g.map((r) => r.slice());
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+    if (g[y][x] && !at(x - dx, y) && !at(x, y - dy) && [1, 2, 3].every((k) => at(x + k * dx, y) && at(x, y + k * dy))) {
+      o[y][x] = 0;
+      if (r >= 2) o[y][x + dx] = o[y + dy][x] = 0;
+    }
+    if (!g[y][x] && at(x - dx, y) && at(x, y - dy) && !at(x + dx, y) && !at(x, y + dy)) o[y][x] = 1;
+  }
+  return o;
+}
+
+function buildRoundDigits(name, W, H, s, r, dot, inner) {
+  const f = loadBDF(path.join(SRC, '9x15B.bdf'));  // for its header; every glyph is replaced
+  f.glyphs = new Map();
+  const digits = [...Array(10).keys()].map((d) => roundDigit(d, W, H, s, r));
+  const slot = Math.max(...digits.map((r) => r[0].length));
+  digits.forEach((rows, d) => {
+    const w = rows[0].length;
+    f.glyphs.set(0x30 + d, { name: `digit${d}`, code: 0x30 + d, dw: slot + DIGIT_GAP, bbx: [w, H, Math.floor((slot - w) / 2), 0], rows });
+  });
+  const ctop = Math.floor((H - (2 * dot + inner)) / 2);
+  const dotRow = (j) => Array.from({ length: dot }, (_, i) => (dot > 3 && (i === 0 || i === dot - 1) && (j === 0 || j === dot - 1) ? 0 : 1));
+  const colon = Array.from({ length: H }, (_, y) => (y >= ctop && y < ctop + dot ? dotRow(y - ctop)
+    : y >= ctop + dot + inner && y < ctop + 2 * dot + inner ? dotRow(y - ctop - dot - inner) : Array(dot).fill(0)));
+  f.glyphs.set(58, { name: 'colon', code: 58, dw: dot + DIGIT_GAP, bbx: [dot, H, 0, 0], rows: colon });
+  f.glyphs.set(32, { name: 'space', code: 32, dw: slot + DIGIT_GAP, bbx: [1, 1, 0, 0], rows: [[0]] });
+  const fam = `Board${name.toUpperCase()}`;
+  rename(f, `-ctamap-${fam}-Bold-R-Normal--${H}-${H * 10}-75-75-C-${(slot + DIGIT_GAP) * 10}-ISO10646-1`,
+    `Board ${name} font: rounded clock digits, drawn for ctamap.`);
+  setHeader(f, 'SPACING', '"C"');
+  for (const [k, v] of [['FOUNDRY', '"ctamap"'], ['FAMILY_NAME', `"${fam}"`], ['PIXEL_SIZE', String(H)], ['POINT_SIZE', String(H * 10)],
+    ['AVERAGE_WIDTH', String((slot + DIGIT_GAP) * 10)], ['FONT_DESCENT', '0'], ['FONT_ASCENT', String(H)], ['X_HEIGHT', String(H)],
+    ['CAP_HEIGHT', String(H)], ['COPYRIGHT', '"Drawn for ctamap"']]) setHeader(f, k, v);
+  setHeader(f, 'SIZE', `${H} 75 75`);
+  f.header = f.header.filter((l) => !l.startsWith('_XMBDFED_INFO'));
+  const props = f.header.indexOf('ENDPROPERTIES') - f.header.findIndex((l) => l.startsWith('STARTPROPERTIES ')) - 1;
+  setHeader(f, 'STARTPROPERTIES', String(props));
+  fixBoundingBox(f);
+  return f;
+}
+
 // ---- main ----
 
 fs.mkdirSync(OUT, { recursive: true });
 const fonts = {
   'board-small.bdf': buildSmall(), 'board-5x7.bdf': build5x7(), 'board-clock.bdf': buildClock(), 'board-vcr.bdf': buildVcr(),
-  'board-d17.bdf': buildTtypDigits('t0-30b-digits.bdf', 'd17'), 'board-d13.bdf': buildTtypDigits('t0-22b-digits.bdf', 'd13'),
-  'board-d23.bdf': buildTtypDigits('t0-40b-digits.bdf', 'd23'),
+  'board-d13.bdf': buildTtypDigits('t0-22b-digits.bdf', 'd13'), 'board-d23.bdf': buildTtypDigits('t0-40b-digits.bdf', 'd23'),
+  'board-r17.bdf': buildRoundDigits('r17', 11, 17, 2, 1, 3, 3), 'board-r23.bdf': buildRoundDigits('r23', 15, 23, 3, 2, 4, 4),
 };
 for (const [name, font] of Object.entries(fonts)) {
   fs.writeFileSync(path.join(OUT, name), writeBDF(font));
