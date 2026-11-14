@@ -468,7 +468,7 @@ def joint_taper_cuts(z0, z1):
 DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0021'))
 DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11, 127.8 on Nov 12 (board edge, frame flush with it)
 # Skirt fit. Two settings (P4_DIFF_FIT):
-# 'snap' (default, Nov 13, to try on the next full print): the P2.5 pair's fit, as that pair really has it. Its model has
+# 'snap' (default, Nov 13; printed that evening, "the fit is pretty good now"): the P2.5 pair's fit, as that pair really has it. Its model has
 #   0.05 mm of clearance on an 80.0 mm panel, but the panel measures 79.9, so its skirts were built 0.10 a side clear of
 #   the real housing and printed ~0.05 clear (openings print ~0.1 small: 80.0 where 80.1 was built). The one P4 print
 #   "with the pair's fit" (the third) had 0.05 on a 127.7 housing that measures 127.8: nothing a side as built, about
