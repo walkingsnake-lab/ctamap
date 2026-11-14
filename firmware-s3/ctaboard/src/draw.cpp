@@ -4031,12 +4031,13 @@ static void render_digits(const Value &p, Frame &f, std::optional<double> now_o,
   f.w = W;
   ustr text = clock_text(now, p["tzo"].num(0));
   // Ink centered: x = floor((W + 1 - measure) / 2) (draw.js xOf).
-  std::optional<Roll> roll = take_roll("dig.clock", text);
+  // The minute changes at once, no roll (taken so the roller still sees the clock).
+  take_roll("dig.clock", text);
   RGB color = digit_color(p);
-  roll_text_at(f, font, text, SPAN, W, base, color, roll);
-  // The colon pulses: at COLON_DIM of the color for the second half of each
-  // second, full otherwise; full mid-roll and with steady.
-  if (!p["steady"].truthy() && !roll && fmod_floor(ms, 1000) >= 500) {
+  roll_text_at(f, font, text, SPAN, W, base, color, std::nullopt);
+  // The colon pulses on a 2 s cycle: full for a second, then COLON_DIM of the
+  // color for a second; full with steady.
+  if (!p["steady"].truthy() && fmod_floor(ms, 2000) >= 1000) {
     size_t i = text.find(U':');
     int g = glyph(font, ':');
     int cw = g >= 0 ? assets::FONT_DATA[font][g + 1] : 0;

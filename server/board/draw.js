@@ -2418,10 +2418,11 @@
     // The time's color on both faces: p.cdig (the board's digitColor), else
     // BD.color.
     const digitColor = (p) => p.cdig || BD.color;
-    // Big digits: the time alone, its ink centered, rows 7-23. The colon
-    // pulses: at 60% of the time's color for the second half of each second
-    // on the board's clock, full otherwise; always full while the time rolls,
-    // or with p.steady.
+    // Big digits: the time alone, its ink centered, rows 7-23. The minute
+    // changes at once, no roll (the roller still sees 'dig.clock', so it knows
+    // a clock is on screen). The colon pulses on a 2 s cycle of the board's
+    // clock: full for a second, then 60% of the time's color for a second;
+    // always full with p.steady.
     // Wide board (wide-spec §6): the 23-row rounded digits (r23), rows 4-26,
     // centered on all 128 columns.
     const BDW = { top: 4, base: 27 };
@@ -2433,10 +2434,10 @@
       const wide = colsOf(p) === WIDE, font = wide ? 'r23' : 'r17', W = wide ? WIDE : 64, g = wide ? BDW : BD;
       const f = newFrame(W);
       const text = clockText(now), xOf = (str) => fdivI(W + 1 - measure(font, str), 2);
-      const roll = takeRoll('dig.clock', text);
+      takeRoll('dig.clock', text);
       const color = digitColor(p);
-      rollTextWith(f, font, roll, text, xOf, g.base, color);
-      if (!p.steady && !roll && ((ms % 1000) + 1000) % 1000 >= 500) {
+      f.text(font, text, xOf(text), g.base, color);
+      if (!p.steady && ((ms % 2000) + 2000) % 2000 >= 1000) {
         const i = text.indexOf(':'), x0 = xOf(text) + measure(font, text.slice(0, i)) + 1, dim = hex(scaleColor(color, COLON_DIM));
         for (let y = g.top; y < g.base; y++) for (let x = x0; x < x0 + fonts[font][58][1]; x++) {
           const c = f.get(x, y);

@@ -346,7 +346,7 @@ test('clock screen, seventies face: VCR digits banded by row, stripes along the 
   assert.notEqual(hex(render({ ...p, cface: undefined }).get(0, 23)), '#ffc23a');
 });
 
-test('clock screen, big digits face: 17-row rounded digits with their ink centered; the colon pulses to 60%, never mid-roll', () => {
+test('clock screen, big digits face: 17-row rounded digits with their ink centered, no roll; the colon pulses to 60%', () => {
   // 8:08 PM in Chicago: full-width digits at both ends.
   const t = Date.parse('2026-11-02T02:08:00Z') / 1000;
   const p = { now: t, tzo: -21600, screen: 'clock', cface: 'digits', bright: 100 };
@@ -362,8 +362,8 @@ test('clock screen, big digits face: 17-row rounded digits with their ink center
   assert.ok(Math.abs(xs[0] - (63 - xs[xs.length - 1])) <= 1, 'centered: as much room left as right');
   // Rounded: the 8's top-left corner pixel is off, the pixels beside and below it lit.
   assert.deepEqual([on.get(xs[0], 7)[0], on.get(xs[0] + 1, 7)[0], on.get(xs[0], 8)[0]], [0, 230, 230], 'rounded corner');
-  // The colon (two 3 px square dots) stays lit, at 60% for the second half of each second.
-  const off = render(p, { ms: t * 1000 + 750 });
+  // The colon (two 3 px square dots) stays lit: full for a second, 60% the next.
+  const off = render(p, { ms: t * 1000 + 1250 });
   assert.deepEqual(inkCols(off), xs, 'the colon never goes dark');
   const colon = xs.filter((x) => { for (let y = 0; y < 32; y++) if (on.get(x, y)[0] !== off.get(x, y)[0]) return true; return false; });
   assert.equal(colon.length, 3, 'the 3 px colon');
@@ -376,16 +376,20 @@ test('clock screen, big digits face: 17-row rounded digits with their ink center
   }
   // Only the colon changes.
   for (let x = 0; x < 64; x++) if (!colon.includes(x)) for (let y = 0; y < 32; y++) assert.deepEqual(off.get(x, y), on.get(x, y));
-  // Mid-roll the colon stays full whatever the second.
-  const mid = render(p, { ms: t * 1000 + 750, nums: { 'dig.clock': { from: '8:07', p: 0.5 } } });
-  assert.equal(mid.get(colon[0], lit[0])[0], 230, 'full mid-roll');
+  // The minute changes at once: a roll in progress draws nothing different.
+  for (const [ms, f] of [[250, on], [1250, off]]) {
+    for (const rp of [0.25, 0.5, 0.75]) assert.deepEqual(render(p, { ms: t * 1000 + ms, nums: { 'dig.clock': { from: '8:07', p: rp } } }).px, f.px, `no roll (${ms}, ${rp})`);
+  }
+  assert.deepEqual(render({ ...p, cols: 128 }, { ms: t * 1000 + 250, nums: { 'dig.clock': { from: '8:07', p: 0.5 } } }).px, render({ ...p, cols: 128 }, { ms: t * 1000 + 250 }).px, 'no roll at 128');
+  // Its cycle is 2 s: full through 999 ms, dim from 1000 to 1999, full again at 2000.
+  for (const [ms, f] of [[999, on], [1000, off], [1999, off], [2000, on]]) assert.deepEqual(render(p, { ms: t * 1000 + ms }).px, f.px, `colon at ${ms} ms`);
   // Steady (Blinking colon off): full all second.
-  assert.deepEqual(render({ ...p, steady: true }, { ms: t * 1000 + 750 }).px, on.px, 'steady colon');
+  assert.deepEqual(render({ ...p, steady: true }, { ms: t * 1000 + 1250 }).px, on.px, 'steady colon');
   // The digit color dims the same way.
-  const mint = render({ ...p, cdig: '#2fe08a' }, { ms: t * 1000 + 750 });
+  const mint = render({ ...p, cdig: '#2fe08a' }, { ms: t * 1000 + 1250 });
   assert.deepEqual(mint.get(colon[0], lit[0]), [28, 134, 83], '60% of #2fe08a');
   // Wide: 23-row digits on rows 4-26, a 4 px colon.
-  const w = render({ ...p, cols: 128 }, { ms: t * 1000 + 250 }), wo = render({ ...p, cols: 128 }, { ms: t * 1000 + 750 });
+  const w = render({ ...p, cols: 128 }, { ms: t * 1000 + 250 }), wo = render({ ...p, cols: 128 }, { ms: t * 1000 + 1250 });
   assert.deepEqual([Math.min(...rows(w)), Math.max(...rows(w))], [4, 26], 'wide digits on rows 4-26');
   assert.equal(inkCols(w).filter((x) => { for (let y = 0; y < 32; y++) if (w.get(x, y)[0] !== wo.get(x, y)[0]) return true; return false; }).length, 4, 'the 4 px wide colon');
 });
