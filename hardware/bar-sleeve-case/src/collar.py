@@ -25,6 +25,7 @@ RELIEF_R, RELIEF_TOP = 6.5, 0.2  # clears the body's anti-rotation tab wherever 
 BORE_CH = 0.4                                     # lead-in at the bore's bottom: the bushing finds the bore when pushed up
 RIB_R = 12.15                    # crush-rib crest radius (nominal hole r 12.0); None = plain plug. 12.15 (2 notches): snug; 12.25 took too much force (Nov 2)
 RIB_W, RIB_N, RIB_LEAD = 1.0, 12, 0.6   # rib width, count on a 30° grid (those near the teardrop tip are dropped), lead-in
+RIB_PHASE = 0.0                  # turns the rib grid (deg). p4.py: 15, so no rib presses on the walnut between the knob hole and its top screws
 KEY = (1.3, 11.0, 14.3)          # half width, y0, y1 (shell notch: ±1.5, 11.5–14.5)
 
 
@@ -68,7 +69,7 @@ def ribs(rib_r):
     tip = -90 if not TIP_BACK else 90                     # teardrop tip direction (deg); the hole leaves the circle within 45°
     out = []
     for i in range(RIB_N):
-        a = 360 * i / RIB_N
+        a = 360 * i / RIB_N + RIB_PHASE
         if abs((a - tip + 180) % 360 - 180) < 50:
             continue
         r = Manifold.cube([depth, RIB_W, h - RIB_LEAD]).translate([rib_r - depth, -RIB_W / 2, PLUG_BOT + RIB_LEAD])
