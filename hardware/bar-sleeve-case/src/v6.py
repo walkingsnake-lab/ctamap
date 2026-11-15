@@ -24,7 +24,7 @@ What V6 is, in terms of the V5 parts it is built from (every proven fit is kept)
   tower simple (a well and a prong on the ring were drawn, Nov 15; see DESIGN-HISTORY.md).
 - **Wall hanging**: the V5 cleat, on the same two bosses in the chassis back (one in each half, so it splices them too).
 
-Draft: the geometry is checked for overlaps (see check()), not print-tested. Wall thickness, the tongue joint, the
+Draft: the geometry is checked for overlaps (see check(), which includes p4_cables' cables and plugs), not print-tested. Wall thickness, the tongue joint, the
 tower and the ring's fixing are first answers.
 """
 import math, os, sys
@@ -328,7 +328,7 @@ def knuckles():
 
 def chassis():
     """(left, right, info)"""
-    t = DR.tray(ribbon_hooks=[(p4.HOOK_X, p4.RIB_Z), (p4.HOOK2_X, p4.IDC_Z)], hook_lip=p4.RIB_HOOK_LIP, tie_x0=JOINT_X + TONGUE + 4.0)
+    t = DR.tray(ribbon_hooks=[(p4.HOOK_X, p4.RIB_Z), (p4.HOOK2_X, p4.IDC_Z)], hook_lip=p4.RIB_HOOK_LIP, tie_x0=TIE_X0)
     if p4.TOP_SCREWS:
         adds, cuts = p4.tray_top_bosses()
         t = (t + adds) - cuts
@@ -410,6 +410,22 @@ def build():
                 encoder=p4.encoder_envelope(), s3=DR.s3_envelope(), sensor=DR.sensor_envelope())
 
 
+TIE_X0 = JOINT_X + TONGUE + 4.0  # the power bundle's tie loop starts here: right of the joint's knuckles
+
+
+def cables(P):
+    """every cable and plug of p4_cables (ribbon, power lead and its spare bundle, QT cables, USB-C) against the chassis,
+    standoffs and skin. The bundle is moved to this chassis's tie loop; the USB-C plug passes through its openings."""
+    import p4_cables as CB
+    I = CB.items()
+    tx1 = DR.S3_EDGE - 63.8 - 1.0                                          # as drawer.tray() places the loop
+    I['power_bundle'] = I['power_bundle'].translate([(TIE_X0 + tx1) / 2 - (p4.SEAM_BAR + 4.0 + tx1) / 2, 0, 0])
+    solid = P['chassis_left'] + P['chassis_right'] + P['standoffs'] + Manifold.batch_boolean(list(P['skin'].values()), ADD)
+    worst = max(((m ^ solid).volume(), n) for n, m in I.items() if not n.startswith('usb'))
+    each = sum((I[a] ^ I['power_bundle']).volume() for a in I if a != 'power_bundle')
+    return (f'cables and plugs / chassis, standoffs, skin (worst: {worst[1]}); the moved power bundle / other cables', round(worst[0] + each, 2))
+
+
 def check(P):
     """overlap volumes (mm3) that should be zero, and what each skin piece meets as it comes on"""
     v = lambda a, b: round((a ^ b).volume(), 2)
@@ -424,6 +440,7 @@ def check(P):
             ('chassis / encoder', v(ch, P['encoder'])), ('ring / skin', v(P['ring'], sk)), ('ring / chassis', v(P['ring'], ch)), ('ring / encoder', v(P['ring'], P['encoder'])), ('chassis / pixel', v(ch, pixel())),
             ('standoffs / encoder, S3, sensor', v(P['standoffs'], P['encoder'] + P['s3'] + P['sensor'])),
             ('skin screws / panel, diffuser, S3, sensor, encoder', v(P['screws']['skin'] + P['screws']['under'], P['panel'] + dif + P['s3'] + P['sensor'] + P['encoder']))]
+    rows.append(cables(P))
     rest = ch + dif + P['panel']
     for name, d in (('plank_top', (0, 0, 1)), ('plank_bottom', (0, 0, -1)), ('cap_left', (-1, 0, 0)), ('cap_right', (1, 0, 0))):
         worst = max((P['skin'][name].translate([d[0] * s, d[1] * s, d[2] * s]) ^ rest).volume() for s in (0.5, 1, 2, 4, 8, 16))
