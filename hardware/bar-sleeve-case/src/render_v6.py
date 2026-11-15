@@ -1,6 +1,6 @@
 """Renders of the V6 draft (v6.py):  python3 render_v6.py <out dir> [which ...]
-which: closed skin chassis joint panel encoder steps glow (default: all but glow). Needs pyrender on EGL (headless) and rend.py.
-Writes 1-closed.png ... 8-glow.png (img/v6-*.png are these)."""
+which: closed skin chassis joint panel encoder steps (default: all). Needs pyrender on EGL (headless) and rend.py.
+Writes 1-closed.png ... 7-build-order.png (img/v6-*.png are these)."""
 import os, sys, math
 import numpy as np
 from PIL import Image, ImageDraw
@@ -26,7 +26,6 @@ R.MATS.update(
     brass=('plain', (0.72, 0.58, 0.28), 0.30, 60, 0.08),
     cut=('plain', (0.50, 0.33, 0.20), 0.0, 10, 0.0),
     pix=('plain', (1.0, 0.80, 0.15), 0.0, 10, 0.0),
-    clear=('plain', (0.86, 0.90, 0.88), 0.25, 60, 0.03),
 )
 
 P = v6.build()
@@ -65,8 +64,7 @@ def parts(skin=True, chassis=True, inside=True, front=True, knob=True, screws=Tr
         add('s3', P['s3'], 'pcb', 'cr')
         for k, mat in (('board', 'pcb'), ('body', 'steel'), ('shaft', 'steel'), ('nut', 'steel')):
             add('enc_' + k, ENC[k], mat, 'cl')
-        if v6.GLOW:
-            add('pixel', v6.pixel(), 'pix', 'cl')
+        add('pixel', v6.pixel(), 'pix', 'cl')
     if front:
         add('diffuser', DIF_W, 'diffuser', 'core')
         add('grid', DIF_B, 'black', 'core')
@@ -244,49 +242,3 @@ if 'steps' in WHICH:
         sc = R.Scene(moved(ps, off))
         ims.append(R.titled(sc.render(cam, ground=False), title, scale=0.8))
     save(R.titled(R.stack([R.row(ims[:3]), R.row(ims[3:])]), 'Build order', 'Everything is fitted and can be tested (lit, bleed checked) before any walnut goes on.'), '7-build-order.png')
-
-# ------------------------------------------------------------------ 8: the knob's glow (slot and prong)
-if 'glow' in WHICH:
-    def lifted(ps, ring=13.0, knob=34.0):
-        return [p.moved(offset=(0, 0, knob)) if p.name == 'knob' else p.moved(offset=(0, 0, ring)) if p.name == 'ring' else p for p in ps]
-    def clear(ps):
-        for p in ps:
-            if p.name == 'ring':
-                p.mat = 'clear'
-        return ps
-    # a: slice on the knob axis, front to back, seen from the right end (front at the left)
-    ps = clear(parts(clip=box(-0.5, 0, -50, 200, -50, 300), colour=True))
-    sc = R.Scene(ps)
-    cam = ortho((1, 0, 0), (1500, 860), 34.0, target=np.array([0, KY - 9, H - 3.5]))
-    a = sc.render(cam, ground=False, crease=0.0)
-    d = ImageDraw.Draw(a)
-    px = (0, KY - 10.6, SN.EB_TOP + 0.9)
-    for tgt in ((0, KY - 11.2, v6.ZO1 + 0.5), (0, KY - 12.6, v6.ZO1 + 0.5), (0, KY - 10.2, v6.ZO1 + 0.5)):
-        d.line([*cam.project(px), *cam.project(tgt)], fill=(235, 170, 20), width=4)
-    d.line([*cam.project((0, KY - 11.5, H - 1.5)), *cam.project((0, KY - 11.5, H + 0.3))], fill=(235, 170, 20), width=4)
-    annotate(a, cam, [('NeoPixel, on the encoder board at the front', (0, KY - 10.6, SN.EB_TOP + 0.4), (-60, 160), 'mt'),
-                      ('well: open through the top wall and the tower\'s front wall', (0, KY - 12.9, v6.ZIN1 + 1.2), (-300, 110), 'mt'),
-                      ('prong: 2.8 mm above the pixel', (0, KY - 13.0, H - 2.2), (-240, 60), 'rm'),
-                      ('trim ring, translucent: one piece with the prong', (0, KY - 16.5, H + 0.8), (-150, -150), 'mb'),
-                      ('walnut', (0, KY - 22, H - 2), (-60, -190), 'mb'),
-                      ('tower (black chassis)', (0, KY + 10.7, H - 2.5), (-60, 170), 'rt'),
-                      ('knob', (0, KY + 6, H + 8), (60, -60), 'lm'),
-                      ('encoder', (0, KY, H - 5), (40, 260), 'mt')], fs=22)
-    # b: ring and knob lifted, walnut on, seen from low in front so the prong shows
-    cam = persp((-0.3, -1.25, 0.40), size=(1500, 900), dist=215, target=np.array([0, KY - 4, H + 13]), yfov=0.5)
-    ps2 = clear(lifted([p for p in parts(colour=True) if p.name != 'top_screws'], ring=18.0, knob=40.0))
-    b = R.Scene(ps2).render(cam, ground=False)
-    annotate(b, cam, [('prong', (0, KY - 13, H + 18 - 2.5), (-200, 40), 'rm'),
-                      ('it drops into the front point of the knob hole', (0, KY - 14.5, H), (230, 60), 'lm'),
-                      ('trim ring: translucent PETG, printed flat like the collar', (17, KY + 2, H + 18 + 1.6), (120, -90), 'lb')], fs=22)
-    # c: looking down into the knob hole with the ring and knob off
-    cam = persp((-0.12, -0.7, 1.3), size=(1500, 900), dist=105, target=np.array([0, KY - 5, H]), yfov=0.5)
-    ps3 = [p for p in parts(colour=True) if p.name not in ('top_screws', 'ring', 'knob')]
-    c = R.Scene(ps3).render(cam, ground=False)
-    annotate(c, cam, [('well, with the pixel at the bottom', (0, KY - 12.8, v6.ZO1), (-260, 110), 'rm'),
-                      ('slot in the tower\'s front wall', (3.0, KY - 10.6, H - 0.2), (260, 40), 'lm'),
-                      ('front point of the walnut\'s knob hole', (-3.5, KY - 13.2, H), (-250, -40), 'rm'),
-                      ('tower, encoder nut', (5.5, KY + 4, H + 1.6), (250, -90), 'lm')], fs=22)
-    save(R.titled(R.stack([a, R.titled(b, 'Ring and knob lifted', scale=0.8), R.titled(c, 'Looking down the knob hole, ring and knob off', scale=0.8)]),
-                  'The knob\'s glow: slot and prong',
-                  'The pixel lights the prong from 3 mm below, as it lit the collar on V5; the ring is the part that shows.'), '8-glow.png')
