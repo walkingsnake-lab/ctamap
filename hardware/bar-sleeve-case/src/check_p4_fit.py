@@ -240,7 +240,7 @@ def main():
         led = 2.1                                                  # 2121 package (the panel's label), ASSUMED; centred PITCH/2 either side
         room = min(DF.PITCH / 2 - led / 2 - abs(f) for f in (f0, f1))
         expect(room > 0.05 and abs(f0 + f1) < 1e-6,
-               f'joint walls {wl:g} + {wr:g} mm ({"both" if min(wl, wr) >= 2 * 0.38 else "one" if max(wl, wr) >= 2 * 0.38 else "neither"} two lines wide): black {f1 - f0:.2f} wide, centred on the column gap; {room:.2f} mm from a wall to a {led:g} mm LED package (assumed)')
+               f'joint walls {wl:g} + {wr:g} mm ({"both" if min(wl, wr) >= 0.65 else "one" if max(wl, wr) >= 0.65 else "neither"} wide enough for two lines, 0.65): black {f1 - f0:.2f} wide, centred on the column gap; {room:.2f} mm from a wall to a {led:g} mm LED package (assumed)')
     expect(abs((bb[3] - bb[0]) - over - DF.FL_HX + DF.BEV) < 0.3 and bb[5] - bb[2] <= DF.SKIN + 1e-6,
            f'white part = the whole first layer: {bb[3] - bb[0]:.1f} x {bb[4] - bb[1]:.1f} x {bb[5] - bb[2]:.2f} mm a half (face and flange front)')
 

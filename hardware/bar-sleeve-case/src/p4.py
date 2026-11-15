@@ -414,14 +414,17 @@ JOINT_TAPER_W = 0.45
 # to cross) and leaves the right half its one-line 0.4. The joint line is then 1.2 mm of black, as on the first two
 # prints, centred on the column gap, with the white seam 0.2 mm off centre and black behind both sides of it. The
 # default is CENTRE_RIB / 2 a half.
-# Nov 15, after the full build: a solid wall on BOTH halves is the default, 0.8 + 0.8. The owner: "the joint really needs
-# a solid wall on the edge, even if we have to make it slightly thicker. Anything without shows the raw pixel light from
-# side angles." A one-line wall has a gap beside every rib at any width up to 0.6; a wall as wide as a rib is two lines,
-# the outer one the half's own outer wall, unbroken along the joint. Cost: 1.7 mm of black at the joint (the two walls
-# and the 0.1 slot between them) where the other grid lines are 0.8, and the two columns of cells beside the joint are
-# 0.45 mm narrower, 0.10 mm clear of a 2.1 mm LED package (2121, from the panel's label; assumed). P4_JOINT_WALLS=0.8,0.4
-# is the thinner line (1.3 mm, 0.30 clear), solid on the left half only; P4_CENTRE_RIB still sets an equal split.
-_walls = f'{CENTRE_RIB / 2},{CENTRE_RIB / 2}' if 'P4_CENTRE_RIB' in os.environ else '0.8,0.8'
+# Nov 15, after the full build: a solid wall on BOTH halves is the default. The owner: "the joint really needs a solid wall
+# on the edge, even if we have to make it slightly thicker. Anything without shows the raw pixel light from side angles."
+# A wall is solid when the slicer lays it as two lines, the outer one the half's own outer wall, unbroken along the
+# joint. Test slices (PrusaSlicer 2.7, Arachne, 0.4 nozzle): 0.6 mm is still one wide line laid as a separate length per
+# cell (the gaps every print had); 0.65 is two lines of 0.35, right at the switch; 0.7 two of 0.37; 0.8 two of 0.42.
+# 0.7 + 0.7 is the default: 1.5 mm of black at the joint (two walls and the 0.1 slot) where the other grid lines are
+# 0.8, the two columns of cells beside the joint 0.35 mm narrower, 0.20 mm clear of a 2.1 mm LED package (2121, from
+# the panel's label; assumed). The owner on its coupon: "I think the line is fine." P4_JOINT_WALLS=0.8,0.8 is the most
+# robust (1.7 mm, lines a full nozzle wide) if Bambu Studio lays 0.7 as one line; 0.8,0.4 is solid on the left half
+# only (1.3 mm). P4_CENTRE_RIB still sets an equal split.
+_walls = f'{CENTRE_RIB / 2},{CENTRE_RIB / 2}' if 'P4_CENTRE_RIB' in os.environ else '0.7,0.7'
 JOINT_WALLS = tuple(float(v) for v in os.environ.get('P4_JOINT_WALLS', _walls).split(','))
 # Both halves on the bed the same way round (Nov 13, the owner's idea: the gaps would not matter if the two walls had
 # them on opposite sides of each rib). Every print so far has a gap in each half's joint wall beside every horizontal
