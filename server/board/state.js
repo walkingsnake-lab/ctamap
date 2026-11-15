@@ -243,7 +243,7 @@ function defaultBoard(stations) {
     // Big digits and day/date faces: the time's color (DIGIT_COLORS).
     digitColor: 'white',
     // Big digits face: a 1 px drop shadow in the digit color's partner (DIGIT_SHADOWS).
-    digitShadow: false,
+    digitShadow: true,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).

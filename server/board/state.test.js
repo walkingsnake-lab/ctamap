@@ -395,9 +395,9 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   assert.equal(validatePatch({ digitColor: 'cyan' }).digitColor, 'cyan');
   assert.equal(validatePatch({ digitColor: 'white' }).digitColor, 'white');
   assert.throws(() => validatePatch({ digitColor: '#ff0000' }), ValidationError);
-  // The digit shadow: off by default, a boolean; every digit color has a partner that differs from it.
-  assert.equal(store.get('home').digitShadow, false);
-  assert.equal(validatePatch({ digitShadow: true }).digitShadow, true);
+  // The digit shadow: on by default, a boolean; every digit color has a partner that differs from it.
+  assert.equal(store.get('home').digitShadow, true);
+  assert.equal(validatePatch({ digitShadow: false }).digitShadow, false);
   assert.throws(() => validatePatch({ digitShadow: 'amber' }), ValidationError);
   assert.deepEqual(Object.keys(DIGIT_SHADOWS), Object.keys(DIGIT_COLORS));
   for (const k of Object.keys(DIGIT_COLORS)) { assert.match(DIGIT_SHADOWS[k], /^#[0-9a-f]{6}$/); assert.notEqual(DIGIT_SHADOWS[k], DIGIT_COLORS[k]); }

@@ -469,8 +469,8 @@ function createBoard({
   // The analog face's accent color, or null for the original amber.
   const accentOf = (board) => (board.analogAccent && board.analogAccent !== 'amber' ? ANALOG_ACCENTS[board.analogAccent] || null : null);
   const digitOf = (board) => (board.digitColor && board.digitColor !== 'white' ? DIGIT_COLORS[board.digitColor] || null : null);
-  // The big digits' drop shadow: the digit color's partner, or null when off.
-  const shadowOf = (board) => (board.digitShadow === true ? DIGIT_SHADOWS[board.digitColor || 'white'] || null : null);
+  // The big digits' drop shadow: the digit color's partner (on unless set false), or null when off.
+  const shadowOf = (board) => (board.digitShadow !== false ? DIGIT_SHADOWS[board.digitColor || 'white'] || null : null);
   // The analog face's weather (and the wide Seventies face's temperature).
   const cwxOf = (wd) => (wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null);
 

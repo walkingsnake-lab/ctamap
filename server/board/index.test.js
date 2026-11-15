@@ -1770,13 +1770,14 @@ test('width: the word clock goes only to wide boards that draw it; the analog ac
   assert.equal((await get(`hk=${HK}`)).cdig, undefined, 'other faces leave it out');
   b = await get('hk=skyline:analog:peek');
   assert.equal(b.pv.cdig, undefined, 'firmware without either face gets no cdig');
-  // Digit shadow: big digits only, the digit color's partner; off (the default) sends nothing.
+  // Digit shadow: big digits only, the digit color's partner; on by default, off sends nothing.
   s.store.update('home', { clockFace: 'digits', digitColor: 'white' });
   b = await get(`hk=${HK}`);
-  assert.deepEqual([b.cshd, b.pv.cshd], [undefined, undefined]);
-  s.store.update('home', { digitShadow: true });
-  b = await get(`hk=${HK}`);
   assert.deepEqual([b.cdig, b.cshd, b.pv.cshd], [undefined, '#3a4a78', '#3a4a78'], 'white digits, slate shadow');
+  s.store.update('home', { digitShadow: false });
+  b = await get(`hk=${HK}`);
+  assert.deepEqual([b.cshd, b.pv.cshd], [undefined, undefined], 'off');
+  s.store.update('home', { digitShadow: true });
   s.store.update('home', { digitColor: 'amber' });
   b = await get(`hk=${HK}`);
   assert.deepEqual([b.cdig, b.cshd, b.pv.cshd], ['#ffb000', '#a82c00', '#a82c00']);

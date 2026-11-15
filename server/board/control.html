@@ -1385,7 +1385,7 @@
     $('twinkle').checked = board.twinkle !== false;
     $('gradInvert').checked = board.gradInvert === true;
     $('colonBlink').checked = board.colonBlink !== false;
-    $('digitShadow').checked = board.digitShadow === true;
+    $('digitShadow').checked = board.digitShadow !== false;
     const cur = { cloudDrift: board.cloudDrift || 'slow', wheelSpeed: board.wheelSpeed || 'normal', rippleSpeed: board.rippleSpeed || 'normal', rainSpeed: board.rainSpeed || 'normal' };
     const m = Object.keys(MOTION).find((k) => Object.entries(MOTION[k]).every(([f, v]) => cur[f] === v)) || 'custom';
     selVal('motion', m);
