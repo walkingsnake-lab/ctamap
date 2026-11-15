@@ -3,7 +3,7 @@ that fit the X2D's 256 mm bed. Nothing here is printed and the panel is not in h
 are from Waveshare's photos (panel.py, 'p5'). It builds on p4.py (tray, diffuser, spine, bridge, collar, knob) with the
 'p5' profile; what is different is below.
 
-Shell (walnut PLA, 4.5 mm wall, ~347 x 187 x 77): too long for the P4's top / bottom halves (a 347 x 93 half needs a
+Shell (walnut PLA, 4.5 mm wall, ~347 x 187 x 78.5: the 3 mm diffuser grid, panel.py 'grid_h', makes it 1.5 deeper): too long for the P4's top / bottom halves (a 347 x 93 half needs a
 310 mm bed even at 45 deg), so it is split left / right at x = 0 like the two-panel bars (p3x2.py), each half ~173 x 187
 flat on its own plate, back-down, no 45 deg turn. The joint is the pairs': a V-groove outside (CHAMF), hollowed end
 faces (HOLLOW / LAND) and a glued PLA plate in a rebate inside the top wall and one inside the bottom wall (JP_L long,

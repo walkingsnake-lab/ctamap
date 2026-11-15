@@ -224,7 +224,7 @@ python3 check_v5.py              # PANEL=p25 for the P2.5
   panels (`WIDE=p25x2`), superseding the tongue-and-groove bar below; that pair was printed once (Nov 7) with the earlier
   joint.
 - **P4** (256 x 128): the case (281 mm) and diffuser exceed the X2D's 256 mm bed, so it's built in split parts (shell top/bottom, tray and diffuser left/right): [P4-BUILD.md](P4-BUILD.md), `src/p4.py`, `stl/p4/`.
-- **P5** (320 x 160; first pass, nothing printed, panel not in hand): the P4's parts with the shell split left/right (347 x 187 x 77, 4.5 mm wall, glued plates in the top and bottom walls) and the knob on the right end wall: [P5-BUILD.md](P5-BUILD.md), `src/p5.py`, `stl/p5/`.
+- **P5** (320 x 160; first pass, nothing printed, panel not in hand): the P4's parts with the shell split left/right (347 x 187 x 78.5, 4.5 mm wall, 3 mm diffuser grid, glued plates in the top and bottom walls) and the knob on the right end wall: [P5-BUILD.md](P5-BUILD.md), `src/p5.py`, `stl/p5/`.
 
 ## Archive
 `stl/archive/v4/`: the v4 build ([ARCHIVE-v4.md](ARCHIVE-v4.md)). `stl/archive/fit-tests/`: fit sets and coupons whose

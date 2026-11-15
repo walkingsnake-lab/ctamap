@@ -108,6 +108,8 @@ PROFILES = {
         w=320.0, h=160.0, t=14.8,        # outline and thickness from Waveshare's dimension drawing (the P4's 14.5 measured 14.0)
         hood=(20.0, 5.0),                # front lip top / bottom: the P3's 12 / 3 scaled 5/3, so the front's slant matches (4.6 deg)
         pitch=5.0, rib=0.8,              # 0.8 = two 0.4-nozzle lines, as the P4; SMD2121 leaves ~2.9 mm between packages
+        grid_h=3.0,                      # diffuser grid depth (every other panel: 1.5). A 5 mm cell is 4.2 mm open round a 2.1 mm
+                                         # LED, so the light needs more depth to fill it (Nov 14); the case is 1.5 mm deeper
         faces={'white': 0.2},
         # inserts from the two photos of the back, scaled to the 320 x 160 outline (they agree within 0.4 mm; +/-1 mm):
         # M3, x -152.5 / 0 / +152.5, z +/-71. Normal orientation (data in on the right seen from the front); p5.py turns

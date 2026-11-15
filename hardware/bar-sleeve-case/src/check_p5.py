@@ -38,6 +38,7 @@ PAIRS = [
     ('knob', 'shell_b', 0.01, ''), ('knob', 'collar', 0.01, ''),
     ('s3', 'tray_r', 0.01, ''), ('s3', 'shell_b', 0.01, ''), ('s3', 'panel', 0.01, ''),
     ('sensor', 'tray_r', 0.01, ''), ('sensor', 'shell_b', 0.01, ''), ('sled', 'tray_r', 0.01, ''), ('sled', 's3', 0.01, ''),
+    ('sensor', 'panel', 0.01, ''), ('sled', 'panel', 0.01, ''),
     ('plate_top', 'shell_a', 0.01, ''), ('plate_top', 'shell_b', 0.01, ''), ('plate_bot', 'shell_a', 0.01, ''), ('plate_bot', 'shell_b', 0.01, ''),
     ('plate_top', 'tray_l', 1.0, 'crush ribs into the plate'), ('plate_top', 'tray_r', 1.0, 'crush ribs into the plate'),
     ('plate_bot', 'tray_l', 1.0, 'crush ribs into the plate'), ('plate_bot', 'tray_r', 1.0, 'crush ribs into the plate'),
@@ -68,6 +69,7 @@ GAPS = [
     ('knob to the shell', M['knob'], M['shell_b'], 0.8),
     ('collar to the tray', M['collar'], M['tray_r'], 0.2),
     ('S3 to the panel', M['s3'], M['panel'], 0.5),
+    ('sensor sled to the panel', M['sled'], M['panel'], 0.5),
 ]
 for name, a, b, need in GAPS:
     g = a.min_gap(b, 30.0)
