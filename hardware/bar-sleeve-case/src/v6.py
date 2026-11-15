@@ -20,7 +20,8 @@ What V6 is, in terms of the V5 parts it is built from (every proven fit is kept)
   case. No glue. Each piece comes on square to its own face (planks down / up, caps from the sides): the rim's sloped
   seat only ever opens as a piece is lifted away.
 - **Diffuser, knob**: p4's, the diffuser 0.3 mm back from the rim (RIM_GAP) so the rim covers its border without
-  clamping it. The collar becomes a trim ring round the encoder tower.
+  clamping it. The collar becomes a trim ring round the encoder tower; printed translucent, its prong hangs in a well
+  over the encoder's NeoPixel for the knob's glow (GLOW).
 - **Wall hanging**: the V5 cleat, on the same two bosses in the chassis back (one in each half, so it splices them too).
 
 Draft: the geometry is checked for overlaps (see check()), not print-tested. Wall thickness, the tongue joint, the
@@ -221,6 +222,14 @@ def rungs(avoid):
 
 
 NECK_R = 9.5                     # the tower above the walnut: narrower, so the trim ring keeps 2.7 mm round the screw holes
+# the knob's glow. The encoder's NeoPixel sits on its board at the front (README: "NeoPixel toward the front", under the
+# knob hole's front point). V5's translucent collar stood right over it. Here the tower is black, so: a well through the
+# top wall and the tower's front wall over the pixel, and a prong under a translucent trim ring that hangs in the well.
+GLOW = os.environ.get('V6_GLOW', '1') not in ('0', '', 'no', 'false')
+GLOW_HW = 3.5                    # the well's half width
+GLOW_Y = (-14.0, -9.6)           # the well, from the knob axis: past the board's front edge (-12.7) to inside the pocket (R 9.8)
+PRONG_CL = 0.3                   # the prong, clear of the well and of the walnut's hole all round
+PRONG_Z = 0.3                    # and its end this far above the chassis top wall's outer face (3.7 above the board)
 
 
 def tower_cs(r):
@@ -241,7 +250,10 @@ def tower():
     pocket = Manifold.extrude(V.teardrop_cs(CO.POCKET_R, 0, KY, trunc=CO.POCKET_R + 0.25, seg=96), H + CO.DECK_BOT - (ZIN1 - 1)).translate([0, 0, ZIN1 - 1])
     bush = cyl_z(0, KY, ZIN1 - 1, z_top + 1, 2 * CO.BUSH_R, 64)
     relief = cyl_z(0, KY, H + CO.DECK_BOT - 0.1, H + CO.RELIEF_TOP, 2 * CO.RELIEF_R, 64)
-    return body + fill, pocket + bush + relief
+    cuts = pocket + bush + relief
+    if GLOW:                     # stops short of the neck (R 9.5), so only the plug's wall and the deck's rim are opened
+        cuts = cuts + box(-GLOW_HW, GLOW_HW, KY + GLOW_Y[0], KY + GLOW_Y[1], ZIN1 - 1, H + 0.01)
+    return body + fill, cuts
 
 
 def trim_ring():
@@ -252,7 +264,26 @@ def trim_ring():
     ring = fl - Manifold.extrude(tower_cs(NECK_R + 0.2).translate([0, -KY]), CO.FL_T + 2).translate([0, 0, -1])
     if p4.TOP_SCREWS:
         ring = ring - p4.collar_top_screw_cuts()
+    if GLOW:
+        ring = ring + prong()
     return ring.translate([0, KY, H])
+
+
+def prong():
+    """the trim ring's light catcher, in the ring's frame (knob axis, z = 0 on the walnut): it drops through the knob
+    hole's front point and the tower's well, and ends over the encoder's NeoPixel. It also keys the ring's rotation."""
+    w = GLOW_HW - PRONG_CL
+    tip = V.ENC_HOLE / 2 * math.sqrt(2) - PRONG_CL * math.sqrt(2)             # the hole's front point, inset
+    y_in, y_blunt = GLOW_Y[1] - PRONG_CL, GLOW_Y[0] - 1.5
+    pts = [(-w, y_in), (w, y_in), (w, -(tip - w)), (tip + y_blunt, y_blunt), (-(tip + y_blunt), y_blunt), (-w, -(tip - w))]
+    return Manifold.extrude(ccw(pts), H - ZO1 - PRONG_Z + 0.01).translate([0, 0, -(H - ZO1 - PRONG_Z)])
+
+
+def pixel():
+    """the encoder's NeoPixel, for the renders and checks: 2 mm square on the board at the front, as the build notes
+    place it (not measured)"""
+    import sensor as SN
+    return box(-1.0, 1.0, KY - 11.6, KY - 9.6, SN.EB_TOP, SN.EB_TOP + 0.9)
 
 
 # the chassis joint. Everything on it slides together along x, and prints back-down without support.
@@ -410,7 +441,7 @@ def check(P):
             ('skin pieces, each other', round(sum((a ^ b).volume() for i, a in enumerate(P['skin'].values()) for b in list(P['skin'].values())[i + 1:]), 2)),
             ('chassis / panel', v(ch, P['panel'])), ('chassis / diffuser', v(ch, dif)), ('skin / diffuser', v(sk, dif)),
             ('chassis / standoffs', v(ch, P['standoffs'])), ('chassis / S3, beyond the V5 tray (its posts stand in the envelope)', round(v(ch, P['s3']) - v(p4.tray_p4(), P['s3']), 2)), ('chassis / sensor', v(ch, P['sensor'])),
-            ('chassis / encoder', v(ch, P['encoder'])), ('ring / skin', v(P['ring'], sk)), ('ring / chassis', v(P['ring'], ch)),
+            ('chassis / encoder', v(ch, P['encoder'])), ('ring / skin', v(P['ring'], sk)), ('ring / chassis', v(P['ring'], ch)), ('ring / encoder', v(P['ring'], P['encoder'])), ('chassis / pixel', v(ch, pixel())),
             ('standoffs / encoder, S3, sensor', v(P['standoffs'], P['encoder'] + P['s3'] + P['sensor'])),
             ('skin screws / panel, diffuser, S3, sensor, encoder', v(P['screws']['skin'] + P['screws']['under'], P['panel'] + dif + P['s3'] + P['sensor'] + P['encoder']))]
     rest = ch + dif + P['panel']
