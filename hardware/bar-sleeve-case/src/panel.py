@@ -101,6 +101,39 @@ PROFILES = {
         bore_pad=(8.9, 8.9),
         assumed=('thickness (housing 12 per drawing + board 2.5)', 'headers (photo, +/-1 mm)', 'header height'),
     ),
+    'p5': dict(                          # Waveshare RGB-Matrix-P5-64x32, SKU 25848 (SMD2121, 1/16 scan). Built by p5.py (split parts)
+        # NOT IN HAND (Nov 14): everything here is from Waveshare's product photos and outline drawing. Print
+        # check-p5-corner-inserts.stl and measure the panel before printing a tray or a diffuser.
+        name='Waveshare P5 64x32',
+        w=320.0, h=160.0, t=14.8,        # outline and thickness from Waveshare's dimension drawing (the P4's 14.5 measured 14.0)
+        hood=(20.0, 5.0),                # front lip top / bottom: the P3's 12 / 3 scaled 5/3, so the front's slant matches (4.6 deg)
+        pitch=5.0, rib=0.8,              # 0.8 = two 0.4-nozzle lines, as the P4; SMD2121 leaves ~2.9 mm between packages
+        faces={'white': 0.2},
+        # inserts from the two photos of the back, scaled to the 320 x 160 outline (they agree within 0.4 mm; +/-1 mm):
+        # M3, x -152.5 / 0 / +152.5, z +/-71. Normal orientation (data in on the right seen from the front); p5.py turns
+        # the panel 180 deg like the v5 drawer
+        inserts=((-152.5, 71.0), (152.5, 71.0), (-152.5, -71.0), (152.5, -71.0), (0.0, 71.0), (0.0, -71.0)),
+        standoffs=((-152.5, 71.0), (152.5, 71.0), (-152.5, -71.0), (152.5, -71.0), (0.0, -71.0)),
+        tie_bridge=(-17.0, 17.0, 63.0, 78.0),   # plate v3 only (p5.py has its own tray)
+        hooks=(-22.5, 22.5),             # plate v3 only
+        lv_bottom_x=((-140.0, -20.0), (20.0, 140.0)),
+        lv_top_x=((-140.0, -20.0), (20.0, 140.0)),
+        # data in / data out centres (x, z - ZC), vertical 2x8 shrouds: from the annotated photo (+/-1.5 mm). Power (VH4)
+        # is at about (-32, +13)
+        headers=((112.3, 1.0), (-113.0, 2.0)),
+        s3_back=0.0,
+        # S3 low on the right end wall, under the knob (p5.py puts the encoder on that wall, 40 mm below the top): -22
+        # keeps the ribbon's drop from the panel input to the S3's connector near the P4's 22 mm
+        drawer_s3_mid=-22.0,
+        sensor_x=55.0,
+        key_x=40.0,
+        screw_xs=(46.0,),
+        corner_foot=(-95.0, -89.0, 0.5, 10.3),  # plate v3 only
+        posts=((-75, 43), (75, 43), (-60, -43), (60, -43)),   # plate v2 only (placeholders)
+        bore_pad=(8.9, 8.9),             # the P4's 8 mm bezel all round
+        assumed=('everything: panel not in hand', 'inserts (photos, +/-1 mm)', 'thickness (drawing)', 'headers (photo, +/-1.5 mm)',
+                 'header height', 'housing outline'),
+    ),
 }
 
 # Two P2.5 panels side by side (128 x 32, bar128.py): one 320 x 80 "panel" for the parts that span both (shell, diffuser).
