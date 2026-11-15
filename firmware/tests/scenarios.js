@@ -512,6 +512,7 @@ async function build() {
     // The bar rising or dropping, the dim with it.
     add('peek bar drop', p, [1, 3, 6, 10, 11, 14].map((drop) => pk(2, 0, { drop })), frames, undefined, { s3only: true, clouds });
     add('peek digit color', { ...p, pv: { ...p.pv, cdig: '#ff4fa8' } }, [pk(2, 5, { chosen: true }), pk(2, 6, { chosen: true })], frames, undefined, { s3only: true, clouds });
+    add('peek digit shadow', { ...p, pv: { ...p.pv, cdig: '#ff4fa8', cshd: '#6a22b0' } }, [pk(2, 5, { chosen: true }), pk(2, 6, { chosen: true })], frames, undefined, { s3only: true, clouds });
     // Raining: the newest frame on hand, still; none yet: the empty radar.
     const rain = { ...p, radar: { ...p.radar, on: true, frames: ids, ft } };
     const c = { chosen: true };
@@ -672,6 +673,13 @@ async function build() {
     // Digit color (digitColor -> cdig): the time only; AM/PM, weekday and date as before.
     add('digits color mint', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#2fe08a' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('digits color mint, colon dim', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#2fe08a' }), [{ screen: 'clock', ms: at('2026-11-02T03:42:00Z', 1500) }], undefined, undefined, { s3only: true });
+    // Drop shadow (digitShadow -> cshd): the time again 1 px down and right, under
+    // the digits; the colon dims over its steady shadow. Day/date ignores it.
+    add('digits shadow', cf('2026-11-02T03:42:00Z', 'digits', { cshd: '#3a4a78' }), [{ screen: 'clock' }, { screen: 'clock', ms: at('2026-11-02T03:42:00Z', 1500) }], undefined, undefined, { s3only: true });
+    add('digits shadow amber, 10:08', cf('2026-11-01T16:08:00Z', 'digits', { cdig: '#ffb000', cshd: '#a82c00' }), [{ screen: 'clock' }, { screen: 'clock', ms: at('2026-11-01T16:08:00Z', 1500) }], undefined, undefined, { s3only: true });
+    add('digits shadow dimmed', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#22c8e6', cshd: '#1838a8', bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daydate ignores shadow', cf('2026-11-02T03:42:00Z', 'daydate', { cdig: '#22c8e6', cshd: '#1838a8' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide digits shadow', cw('2026-11-02T03:42:00Z', 'digits', { cdig: '#ff4fa8', cshd: '#6a22b0' }), [{ screen: 'clock' }, { screen: 'clock', ms: at('2026-11-02T03:42:00Z', 1500) }], undefined, undefined, { s3only: true });
     add('digits color coral rolling', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#ff5a4e' }), roll('dig.clock', '9:41'), undefined, undefined, { s3only: true });
     add('daydate color cyan', cf('2026-11-02T03:42:00Z', 'daydate', { cdig: '#22c8e6' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('wide digits color amber', cw('2026-11-02T03:42:00Z', 'digits', { cdig: '#ffb000' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });

@@ -2038,7 +2038,7 @@
         }
         return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
       }
-      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, cdig: pv.cdig || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
+      if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, cdig: pv.cdig || null, cshd: pv.cshd || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
       return { p, screen: 'cycle' };
     }
@@ -2413,7 +2413,7 @@
     // The time in the r17 font (rounded digits, big digits) / d13 (UW ttyp0
     // Bold digits, day/date), both tabular. Their advance carries a 2 px gap,
     // so a time's ink is measure() - 1 wide.
-    const BD = { top: 7, base: 24, color: '#e6e6e6' };
+    const BD = { base: 24, color: '#e6e6e6' };
     const DD = { dayBase: 6, timeBase: 22, dateBase: 31, color: '#e6e6e6', label: '#8f8f8f', ampm: '#555555' };
     // The time's color on both faces: p.cdig (the board's digitColor), else
     // BD.color.
@@ -2422,10 +2422,12 @@
     // changes at once, no roll (the roller still sees 'dig.clock', so it knows
     // a clock is on screen). The colon pulses on a 2 s cycle of the board's
     // clock: full for a second, then 60% of the time's color for a second;
-    // always full with p.steady.
+    // always full with p.steady. With p.cshd (the board's digitShadow), the
+    // time is drawn first in that color 1 px down and right, a drop shadow
+    // under the digits; the colon's shadow doesn't pulse.
     // Wide board (wide-spec §6): the 23-row rounded digits (r23), rows 4-26,
     // centered on all 128 columns.
-    const BDW = { top: 4, base: 27 };
+    const BDW = { base: 27 };
     const COLON_DIM = 0.6;
     function renderDigits(p, opts) {
       const o = opts || {};
@@ -2436,13 +2438,11 @@
       const text = clockText(now), xOf = (str) => fdivI(W + 1 - measure(font, str), 2);
       takeRoll('dig.clock', text);
       const color = digitColor(p);
+      if (p.cshd) f.text(font, text, xOf(text) + 1, g.base + 1, p.cshd);
       f.text(font, text, xOf(text), g.base, color);
       if (!p.steady && ((ms % 2000) + 2000) % 2000 >= 1000) {
-        const i = text.indexOf(':'), x0 = xOf(text) + measure(font, text.slice(0, i)) + 1, dim = hex(scaleColor(color, COLON_DIM));
-        for (let y = g.top; y < g.base; y++) for (let x = x0; x < x0 + fonts[font][58][1]; x++) {
-          const c = f.get(x, y);
-          if (c[0] || c[1] || c[2]) f.set(x, y, dim);
-        }
+        const i = text.indexOf(':');
+        f.text(font, ':', xOf(text) + measure(font, text.slice(0, i)) + 1, g.base, scaleColor(color, COLON_DIM));
       }
       return f;
     }

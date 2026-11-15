@@ -436,6 +436,7 @@
     <p class="sh" id="digitsHead">Big digits</p>
     <div class="grp">
       <div class="c swr"><span id="digitColorH">Digit color <span class="swn"></span></span><div class="sws" id="digitColor" role="radiogroup" aria-labelledby="digitColorH" data-colors="white amber coral pink violet blue cyan mint lime"></div></div>
+      <div class="c" id="shadowRow"><label for="digitShadow" class="grow">Shadow</label><input type="checkbox" class="sw" id="digitShadow"></div>
       <div class="c" id="colonRow"><label for="colonBlink" class="grow">Blinking colon</label><input type="checkbox" class="sw" id="colonBlink"></div>
     </div>
   </div>
@@ -1182,7 +1183,7 @@
     if (board.screen === 'transit' || board.screen === 'ticker') switchTo(v);
     else save({ transitScreen: v });
   });
-  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
+  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink', 'digitShadow']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
   $('wideLayout').addEventListener('change', (e) => save({ wideLayout: e.target.value }));
   for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
@@ -1373,16 +1374,18 @@
     $('analogOpts').hidden = face !== 'analog';
     swatchVal('analogAccent', board.analogAccent || 'amber');
     $('gradientOpts').hidden = face !== 'gradient';
-    // Digit color on both big-digit faces; the colon blinks only on Big digits.
+    // Digit color on both big-digit faces; the shadow and the blinking colon only on Big digits.
     $('digitsOpts').hidden = face !== 'digits' && face !== 'daydate';
     $('digitsHead').textContent = face === 'daydate' ? 'Day & date' : 'Big digits';
     $('colonRow').hidden = face !== 'digits';
+    $('shadowRow').hidden = face !== 'digits';
     swatchVal('digitColor', board.digitColor || 'white');
     $('showTemp').checked = board.showTemp !== false;
     $('boats').checked = board.boats !== false;
     $('twinkle').checked = board.twinkle !== false;
     $('gradInvert').checked = board.gradInvert === true;
     $('colonBlink').checked = board.colonBlink !== false;
+    $('digitShadow').checked = board.digitShadow === true;
     const cur = { cloudDrift: board.cloudDrift || 'slow', wheelSpeed: board.wheelSpeed || 'normal', rippleSpeed: board.rippleSpeed || 'normal', rainSpeed: board.rainSpeed || 'normal' };
     const m = Object.keys(MOTION).find((k) => Object.entries(MOTION[k]).every(([f, v]) => cur[f] === v)) || 'custom';
     selVal('motion', m);

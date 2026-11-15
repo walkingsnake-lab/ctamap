@@ -394,6 +394,39 @@ test('clock screen, big digits face: 17-row rounded digits with their ink center
   assert.equal(inkCols(w).filter((x) => { for (let y = 0; y < 32; y++) if (w.get(x, y)[0] !== wo.get(x, y)[0]) return true; return false; }).length, 4, 'the 4 px wide colon');
 });
 
+test('clock screen, big digits face: the drop shadow (cshd) is the time 1 px down and right, under the digits', () => {
+  const t = Date.parse('2026-11-02T02:08:00Z') / 1000;
+  const p = { now: t, tzo: -21600, screen: 'clock', cface: 'digits', bright: 100, cdig: '#ffb000' };
+  const RUST = [168, 44, 0], lit = (c) => c[0] || c[1] || c[2];
+  for (const cols of [64, 128]) {
+    const q = cols === 128 ? { ...p, cols } : p;
+    for (const ms of [250, 1250]) {
+      const plain = render(q, { ms: t * 1000 + ms }), sh = render({ ...q, cshd: '#a82c00' }, { ms: t * 1000 + ms });
+      const full = render(q, { ms: t * 1000 + 250 });
+      let shadow = 0;
+      for (let y = 0; y < 32; y++) for (let x = 0; x < cols; x++) {
+        const c = sh.get(x, y);
+        // The digits are untouched (the colon still dims on its own).
+        if (lit(plain.get(x, y))) assert.deepEqual(c, plain.get(x, y), `digit pixel ${x},${y}`);
+        // Elsewhere: rust exactly where the time, moved 1 px down and right, has ink (the colon's at full shape, even while it's dim).
+        else {
+          const under = x > 0 && y > 0 && lit(full.get(x - 1, y - 1));
+          assert.deepEqual(c, under ? RUST : [0, 0, 0], `shadow pixel ${x},${y}`);
+          if (under) shadow++;
+        }
+      }
+      assert.ok(shadow > 40, 'a shadow was drawn');
+    }
+  }
+  // 64: the shadow reaches one row below the digits (row 24) and one column right of them.
+  const sh = render({ ...p, cshd: '#a82c00' }, { ms: t * 1000 + 250 });
+  const rowLit = (y) => { for (let x = 0; x < 64; x++) if (lit(sh.get(x, y))) return true; return false; };
+  assert.deepEqual([rowLit(6), rowLit(7), rowLit(24), rowLit(25)], [false, true, true, false]);
+  // Day/date ignores it.
+  const dd = { ...p, cface: 'daydate' };
+  assert.deepEqual(render({ ...dd, cshd: '#a82c00' }, { ms: t * 1000 }).px, render(dd, { ms: t * 1000 }).px, 'day/date has no shadow');
+});
+
 test('clock screen, day/date face: weekday, time with AM/PM, date, each centered', () => {
   const t = Date.parse('2026-11-04T16:07:00Z') / 1000;  // Wednesday 10:07 AM in Chicago
   const p = { now: t, tzo: -21600, screen: 'clock', cface: 'daydate', bright: 100 };

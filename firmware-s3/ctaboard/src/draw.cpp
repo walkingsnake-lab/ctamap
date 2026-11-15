@@ -2734,7 +2734,7 @@ PeekView peek_view(const Value &p, int k, int vi) {
     out.v = overlay(p);
     member(out.v, "cface") = str_value(v.empty() ? "skyline" : v);
     // Each face's object read through from pv (the skyline's is large).
-    for (const char *key : {"skyline", "cwx", "dn", "cacc", "cdig"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
+    for (const char *key : {"skyline", "cwx", "dn", "cacc", "cdig", "cshd"}) member(out.v, key) = !pv[key].truthy() ? Value() : pv[key].is_obj() ? overlay(pv[key]) : pv[key];
     for (const char *key : {"ginv", "steady"}) {
       Value g;
       g.type = json::BOOL;
@@ -4011,11 +4011,11 @@ std::vector<std::string> SkylineFader::wanted() const {
 // ---- clock screen: big digits and day/date faces (design spec §20) ----
 // Mirrors renderDigits() / renderDayDate() and BD / DD in draw.js. The r17
 // and d13 fonts' advance carries a 2 px gap, so a time's ink is measure() - 1.
-static const int BD_TOP = 7, BD_BASE = 24;
+static const int BD_BASE = 24;
 static const int DD_DAY_BASE = 6, DD_TIME_BASE = 22, DD_DATE_BASE = 31;
 
 // Wide board: the r23 digits, rows 4-26, centered on 128 columns.
-static const int BDW_TOP = 4, BDW_BASE = 27;
+static const int BDW_BASE = 27;
 // The colon's dim half-second: this share of the time's color.
 static const double COLON_DIM = 0.6;
 
@@ -4027,27 +4027,22 @@ static void render_digits(const Value &p, Frame &f, std::optional<double> now_o,
   long long ms = (long long)floor(ms_o ? *ms_o : now * 1000);
   bool wide = cols_of(p) == WIDE;
   Font font = wide ? FONT_R23 : FONT_R17;
-  int W = wide ? WIDE : 64, top = wide ? BDW_TOP : BD_TOP, base = wide ? BDW_BASE : BD_BASE;
+  int W = wide ? WIDE : 64, base = wide ? BDW_BASE : BD_BASE;
   f.w = W;
   ustr text = clock_text(now, p["tzo"].num(0));
   // Ink centered: x = floor((W + 1 - measure) / 2) (draw.js xOf).
   // The minute changes at once, no roll (taken so the roller still sees the clock).
   take_roll("dig.clock", text);
   RGB color = digit_color(p);
-  roll_text_at(f, font, text, SPAN, W, base, color, std::nullopt);
+  int x = align_x(font, text, SPAN, W);
+  // The drop shadow (cshd): the time 1 px down and right, under the digits.
+  if (p["cshd"].truthy()) f.text(font, text, x + 1, base + 1, hexs(p["cshd"].str_or("")));
+  f.text(font, text, x, base, color);
   // The colon pulses on a 2 s cycle: full for a second, then COLON_DIM of the
-  // color for a second; full with steady.
+  // color for a second; full with steady. Its shadow doesn't pulse.
   if (!p["steady"].truthy() && fmod_floor(ms, 2000) >= 1000) {
     size_t i = text.find(U':');
-    int g = glyph(font, ':');
-    int cw = g >= 0 ? assets::FONT_DATA[font][g + 1] : 0;
-    int x0 = align_x(font, text, SPAN, W) + measure(font, text.substr(0, i)) + 1;
-    RGB dim = scale_color(color, COLON_DIM);
-    for (int y = top; y < base; y++)
-      for (int x = x0; x < x0 + cw; x++) {
-        RGB c = f.get(x, y);
-        if (c.r || c.g || c.b) f.set(x, y, dim);
-      }
+    f.text(font, ustr(1, U':'), x + measure(font, text.substr(0, i)) + 1, base, scale_color(color, COLON_DIM));
   }
 }
 
