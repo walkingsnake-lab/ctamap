@@ -21,7 +21,8 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   to its own face (planks down / up, caps from the sides).
 - **Panel, diffuser, knob**: p4's. The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
   without clamping it. The collar becomes a trim ring whose cap lies over the tower's top under the encoder's nut.
-- **Wall hanging**: the V5 cleat on the same two bosses; the joint's screws on the back are countersunk flush under it.
+- **Wall hanging**: the V5 cleat on the same two bosses; the joint's screws on the back are countersunk flush; it lies over one of
+  them (the top knuckle's), so the cleat comes off before the halves are parted.
 - **Build order**: chassis halves joined; inserts in; S3 and encoder in; panel (standoffs on) in from the front, six
   screws from the back; diffuser pressed on in view and lit; then caps, planks, ring, nut, knob.
 
@@ -56,6 +57,8 @@ PILOT_H = 3.0                    # M3 thread-forming pilot (kept for the T1 coup
 INS_D, INS_DEPTH, INS_RELIEF = 4.4, 5.0, 3.2   # the hole (to confirm on the joint coupon), its depth, room past it for the screw's tip
 BOSS, BOSS_H = 8.0, 3.5          # screw bosses on the chassis walls: square, with a 45 deg ramp on the back (bed) side
 HEAD_D, HEAD_K = 6.9, 1.65       # M3 flanged button head (ISO 7380-2): a plain 5.7 head bears on only 13 mm2 round the long hole
+FOOT_IN = 16.0                   # the bumpers' recesses, this far inboard of the plank screws (V5's were where the screws are now)
+UNDER_CB = 7.6                   # counterbore for a flanged head (6.9) at the two screws under the case
 PAD_H = 0.24                     # contact pads under the planks, as tall as the 0.25 gap: the walnut bears along its length, not
                                  # only at the screws (0.2 left 0.05 of air, which no print holds; a high pad only bows a plank a hair)
 PAD_W = 4.0
@@ -134,7 +137,16 @@ def seam_cut(sx, sz):
 
 def skin():
     """{name: manifold} of the four walnut pieces, from p4's shell (top screws, labels, knob hole, USB-C opening kept)"""
-    sh = V.shell2()
+    feet = V.FEET
+    V.FEET = [(math.copysign(XE - FOOT_IN, fx), fy) for fx, fy in feet]     # the bumpers, inboard of the plank screws
+    try:
+        sh = V.shell2()
+    finally:
+        V.FEET = feet
+    f = V.SCREW_FLOAT                                                       # the two screws under the case: V5's counterbore
+    sh = sh - Manifold.batch_boolean([Manifold.extrude((V.teardrop_cs(UNDER_CB / 2, sx * x, V.SCREW_Y - f, seg=48)   # (6.4) left a
+                                                        + V.teardrop_cs(UNDER_CB / 2, sx * x, V.SCREW_Y + f, seg=48)).hull(), 2.0).translate([0, 0, -1])   # flanged head 0.25 a side
+                                      for sx in (-1, 1) for x in V.SCREW_XS], ADD)
     if p4.TOP_SCREWS:
         sh = sh - p4.shell_top_screw_cuts()
     if p4.LABELS:
@@ -156,6 +168,11 @@ def skin():
     holes_bot = Manifold.batch_boolean([slot_z(x, y, -2, WALL + 2) for x, y in PLANK_SCREWS], ADD)
     pieces['plank_top'] = pieces['plank_top'] - holes_top
     pieces['plank_bottom'] = pieces['plank_bottom'] - holes_bot
+    # underneath, the heads sit in counterbores 1 mm deep as the two V5 screws do: a head standing its full 1.7-2 mm proud
+    # would reach the table with the bumpers (2 mm proud)
+    pieces['plank_bottom'] = pieces['plank_bottom'] - Manifold.batch_boolean(
+        [Manifold.extrude((V.teardrop_cs(UNDER_CB / 2, x, y - SKIN_SLOT, seg=48) + V.teardrop_cs(UNDER_CB / 2, x, y + SKIN_SLOT, seg=48)).hull(), 2.0).translate([0, 0, -1])
+         for x, y in PLANK_SCREWS], ADD)
     for sx, cap in ((-1, 'cap_left'), (1, 'cap_right')):
         x0, x1 = sorted((sx * (W / 2 - WALL - 2), sx * (W / 2 + 2)))
         pieces[cap] = pieces[cap] - Manifold.batch_boolean([(cyl_x(y - SKIN_SLOT, z, x0, x1, SKIN_CL_D) + cyl_x(y + SKIN_SLOT, z, x0, x1, SKIN_CL_D)).hull() for y, z in CAP_SCREWS], ADD)
@@ -211,7 +228,8 @@ def pads(t):
             under = box(x - PAD_W / 2, x + PAD_W / 2, y0, y1, z0, z1)
             if (under ^ t).volume() > 0.995 * under.volume():
                 strips.append(box(x - PAD_W / 2, x + PAD_W / 2, 0, D, -5, H + 5) ^ half)
-    return band ^ Manifold.batch_boolean(strips, ADD)
+    clear = Manifold.batch_boolean([box(x - 4.5, x + 4.5, y - 4.5, y + 4.5, -5, H + 5) for x, y in PLANK_SCREWS], ADD)   # no pad on an insert's mouth
+    return (band ^ Manifold.batch_boolean(strips, ADD)) - clear
 
 
 NECK_R = 9.5                     # the tower above the walnut: narrower, so the trim ring keeps 2.7 mm round the screw holes
@@ -342,7 +360,8 @@ def chassis():
     left = (left + tg_add + kl_add) - tg_cut - kl_cut
     right = ((right - kr_cut) + kr_add) - r_cut - kr_cut
     biggest = lambda m: max(m.decompose(), key=lambda c: c.volume())
-    return biggest(left), biggest(right), dict(joint_meets_right_half_mm3=round(hit, 2))
+    lost = round(sum(m.volume() - biggest(m).volume() for m in (left, right)), 2)     # slivers only: anything real is reported
+    return biggest(left), biggest(right), dict(joint_meets_right_half_mm3=round(hit, 2), dropped_islands_mm3=lost)
 
 
 # ---------------------------------------------------------------- what goes inside (for checks and renders)
@@ -373,7 +392,7 @@ def screws():
     skin_s, back_s, hid = [], [], []
     for x, y in PLANK_SCREWS:
         skin_s.append(cyl_z(x, y, H - 10.0, H, 3.0, 24) + cyl_z(x, y, H, H + HEAD_K, HEAD_D, 32))
-        hid.append(cyl_z(x, y, 0, 10.0, 3.0, 24) + cyl_z(x, y, -HEAD_K, 0, HEAD_D, 32))
+        hid.append(cyl_z(x, y, 1.0, 11.0, 3.0, 24) + cyl_z(x, y, 1.0 - HEAD_K, 1.0, HEAD_D, 32))     # in its 1 mm counterbore
     for sx in (-1, 1):
         for y, z in CAP_SCREWS:
             a, b = sorted((sx * (W / 2 - 10.0), sx * W / 2)); c, e = sorted((sx * W / 2, sx * (W / 2 + HEAD_K)))
@@ -389,7 +408,7 @@ def screws():
     tsa, tsb = p4.top_screws_env()            # the two M2.5 beside the knob, as V5: through the ring's holes and the plank into the chassis
     for sx in C.SCREW_XS:                     # the two M3 x 10 under the case, as V5, into inserts in the chassis's bottom bosses
         for x in (sx, -sx):
-            hid.append(cyl_z(x, DR.BOT_Y, 0, 10.0, 3.0, 24) + cyl_z(x, DR.BOT_Y, -HEAD_K, 0, HEAD_D, 32))
+            hid.append(cyl_z(x, DR.BOT_Y, 1.0, 11.0, 3.0, 24) + cyl_z(x, DR.BOT_Y, 1.0 - HEAD_K, 1.0, HEAD_D, 32))
     u = lambda l: Manifold.batch_boolean(l, ADD)
     return dict(skin=u(skin_s), back=u(back_s), under=u(hid), knob=tsa + tsb)
 

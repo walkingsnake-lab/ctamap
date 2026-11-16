@@ -96,7 +96,7 @@ def knuckles(insert=None, cl_y=KN_CL):
     """the joint at the back plate, as v6.knuckles() with what its review asked for. The left half's plate carries
     blocks that reach KN_BLOCK past the joint, on the print bed; the right half's plate is notched for each and bridges
     over it between two piers. One M3 x 10 countersunk from the back through each block into the bridge, its head flush
-    (the cleat lies over two of them). The bridge's first two layers are cut as drawer.floor_bridge_cuts() cuts the post
+    (the cleat lies over the top one). The bridge's first two layers are cut as drawer.floor_bridge_cuts() cuts the post
     floors (a slot across the span, then a square), so no strand ends at the screw's hole.
     insert: (hole diameter, hole depth, relief diameter) puts a heat-set insert in each bridge, pressed in from its
     underside through the notch before the halves are joined (v6.py). cl_y: the gap between a block and its bridge.
