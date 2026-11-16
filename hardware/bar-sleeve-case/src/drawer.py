@@ -229,7 +229,7 @@ SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray
 
 
 def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=None, extra_cuts=(), blank=False, post_dy=None,
-         s3=None, controls=None):
+         s3=None, controls=None, ties=None):
     """the v5 tray. The split options are for trays split in two (p4.py), and their defaults give the one-piece tray:
     top_bar: half width of the solid bar across the middle of the top louver rows (LV_SPLIT / 2);
     bottom_gap: half width of a gap in the bottom louver rows at the middle (0: none);
@@ -240,7 +240,8 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     the S3 and what goes with it (pad, posts, light tube and window, Boot, USB-C window); controls=False drops the encoder
     slot and rails and the light sensor (bar128.py: tray B keeps the S3, tray A takes the controls at ENC_X / the
     sensor's x). post_dy: {(x, z): dy} moves those posts' feet back by dy (bar128.py: the inner posts stand on its
-    splice plates)."""
+    splice plates). ties: {'top': [(x0, x1), ...], 'bottom': [...]}: stretches where the louver rows are left solid, so the
+    band there ties the wall to the back plate (p4v55.py)."""
     post_dy = post_dy or {}
     s3 = (not blank) if s3 is None else s3
     controls = (not blank) if controls is None else controls
@@ -346,6 +347,8 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
                 segs = minus(segs, -bottom_gap, bottom_gap)
             for scx in C.SCREW_XS:
                 segs = minus(minus(segs, -scx - 6.5, -scx + 6.5), scx - 6.5, scx + 6.5)
+        for g0, g1 in (ties or {}).get('top' if zc > ZC else 'bottom', ()):
+            segs = minus(segs, g0, g1)
         for xa, xb in segs:
             def slab(y, dz, xa=xa, xb=xb, zc=zc):
                 cs = CrossSection.square([xb - xa - 2 * r, 0.01], center=True).offset(r, JT, circular_segments=16).translate([(xa + xb) / 2, zc + dz])
