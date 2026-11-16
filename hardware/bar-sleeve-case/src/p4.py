@@ -615,7 +615,10 @@ def lug_screws_env():
 JOINT_BARS = os.environ.get('P4_JOINT_BARS', '1') not in ('0', '', 'no', 'false')
 BAR_X = 10.0                            # boss centres, each side of the joint
 BOSS_LX = 6.0                           # boss length along x
-BOSS_H = 6.0                            # boss top above the flange's back: the pilot ends at the flange, 1.2 from the face
+BOSS_H = max(6.0, DF.SKIN + DF.GRID_H + DF.SK_D + 0.6 - DF.FT)   # boss top above the flange's back: the pilot ends at the flange,
+                                        # 1.2 from the face. 6.0 with the 3 mm skirt; with a taller grid or a deeper skirt (P4_GRID_H,
+                                        # P4_SKIRT_D) it follows the skirt's tip, 0.6 above it: at 6.0 the tip of a 5 mm skirt stood
+                                        # 0.4 over the boss tops, the boss's profile crossed itself and a bar could not lie flat
 BAR_T, BAR_END = 3.0, 5.0               # bar thickness; bar length beyond each slot's centre
 BAR_SCREW = 8.0                         # M2.5 x 8 button head: 3.5 mm of thread below the guide bore
 BAR_PILOT, BAR_GUIDE_D, BAR_GUIDE_L = P3.S3_PILOT, 2.6, DR.M25_GUIDE_L     # the S3 posts' vertical pilot (fit Nov 3) and 1.5 guide bore
