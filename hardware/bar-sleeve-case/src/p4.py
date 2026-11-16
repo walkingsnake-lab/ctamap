@@ -489,6 +489,10 @@ DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11,
 # makes each skirt a stiffer edge beam). A bench test on the bare panel first: in the case a taller grid sets the panel
 # further back by the same amount, which the tray's posts do not allow for.
 DF.GRID_H = float(os.environ.get('P4_GRID_H', DF.GRID_H))
+# P4_FACE: the face's thickness (0.2, one layer). The whole of it is the 'white' part of each half, whatever it is printed
+# in: for a translucent gray face 2 to 4 layers thick (the owner, Nov 16), P4_FACE=0.4 / 0.6 / 0.8. The grid keeps its
+# height behind it, so the panel sits that much further back (p4v55.GRID_EXTRA, v6.PB follow).
+DF.SKIN = float(os.environ.get('P4_FACE', DF.SKIN))
 DF.SK_D = float(os.environ.get('P4_SKIRT_D', DF.SK_D))
 DF.BUMP_FROM_GRID = float(os.environ.get('P4_BUMP_Z', '1.8'))   # where the bumps were on the 3 mm skirt that snapped; a deeper skirt no longer moves them
 # Skirt fit. Two settings (P4_DIFF_FIT):

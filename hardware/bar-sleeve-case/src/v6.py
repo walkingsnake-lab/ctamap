@@ -103,7 +103,7 @@ RIN = C.BORE_R - DR.TRAY_CL - DR.TRAY_WT
 ZIN0, ZIN1 = ZC - HZ, ZC + HZ                              # bottom / top wall, inner faces
 ZO0, ZO1 = ZIN0 - DR.TRAY_WT, ZIN1 + DR.TRAY_WT            # outer faces
 YB0, YB1 = DR.Y0, DR.Y1                                    # back plate: inner, outer face (67, 69)
-PB = p4.PANEL_BACK - p4.PANEL_THIN + RIM_GAP + (p4.DF.GRID_H - 1.5)    # the panel housing's back in V6
+PB = p4.PANEL_BACK - p4.PANEL_THIN + RIM_GAP + (p4.DF.GRID_H - 1.5) + (p4.DF.SKIN - 0.2)    # the panel housing's back in V6
 BOSS_Y = PB + STANDOFF_L + WASHER_T                        # the posts' feet: a standoff and its washer behind the panel
 
 
