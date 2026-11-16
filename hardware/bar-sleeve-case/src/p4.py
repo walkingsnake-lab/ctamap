@@ -490,6 +490,7 @@ DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11,
 # further back by the same amount, which the tray's posts do not allow for.
 DF.GRID_H = float(os.environ.get('P4_GRID_H', DF.GRID_H))
 DF.SK_D = float(os.environ.get('P4_SKIRT_D', DF.SK_D))
+DF.BUMP_FROM_GRID = float(os.environ.get('P4_BUMP_Z', '1.8'))   # where the bumps were on the 3 mm skirt that snapped; a deeper skirt no longer moves them
 # Skirt fit. Two settings (P4_DIFF_FIT):
 # 'snap' (default, Nov 13; printed that evening, "the fit is pretty good now"): the P2.5 pair's fit, as that pair really has it. Its model has
 #   0.05 mm of clearance on an 80.0 mm panel, but the panel measures 79.9, so its skirts were built 0.10 a side clear of

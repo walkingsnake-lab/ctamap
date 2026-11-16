@@ -19,6 +19,9 @@ END_CLR = None                      # clearance of the two end skirts, if not CL
 END_BUMPS = True                    # bumps on the end skirts (p4.py: off; on a half they push it away from the joint)
 LONG_BUMPS = True                   # bumps on the bottom skirt (and the top one with TOP_BUMPS); p4.py: none at all
 TOP_BUMPS = False                   # bumps on the top skirt too (p3x2.py: the bars, with BUMP 0.3, for a 79.9 mm panel)
+BUMP_FROM_GRID = None               # the bumps' height behind the grid; None = 1.2 short of the skirt's tip (1.8 on a 3 mm skirt).
+                                    # p4.py fixes it at 1.8: on a 5 mm skirt the tip rule put them 3.8 down the panel's side,
+                                    # past the edge they click behind, and the half had no snap (the owner, Nov 16)
 BUMP_XS = None                      # x of the top/bottom bumps; None = +/- a quarter of the width (two on the single
                                     # diffuser's 192; p3x2.py sets two per half: +/-40 about each half's centre)
 FT = 1.2                            # flange thickness
@@ -67,7 +70,7 @@ def diffuser(grid=True, skin=None):
         wedge = wedge.mirror([0, 1, 0]) if sy < 0 else wedge
         d = d - wedge.translate([-hx - 5, sy * (hy + CLR), zt + 0.01])
     # snap bumps on left, right and bottom (as on the part that fit)
-    zb = zt - 1.2
+    zb = zt - 1.2 if BUMP_FROM_GRID is None else zg1 + BUMP_FROM_GRID
     cyl = Manifold.cylinder(6, 0.9, 0.9, 48, True)
     for yc in ((-hy / 2, hy / 2) if END_BUMPS else ()):
         for sx in (-1, 1):
