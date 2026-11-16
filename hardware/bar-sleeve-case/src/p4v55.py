@@ -72,6 +72,15 @@ def tray():
     with DR._foot(FOOT_DY):                                  # the two centre posts, as drawer.tray() builds the corner ones
         adds = [P3.standoff(x, z, DR.Y0) for x, z in CENTRE_POSTS]
         cuts = [cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, DR.Y1 + 1, P3.SO_BORE, 48) for x, z in CENTRE_POSTS]
+        # the screw holes again, through to the bores, with their bridge layers: with the feet this far back the corner
+        # posts' floors reach into the louver band, which is added after the posts and closed the holes (found by the
+        # Nov 16 check of v6.py: a 0.4 mm skin here)
+        for x, z in list(DR.CORNERS) + list(CENTRE_POSTS):
+            cuts.append(cyl_y(x, ZC + z, P3.FOOT_Y - 1.01, P3.FOOT_Y + P3.SO_FLOOR + 0.1, P3.SO_HOLE + 0.04, 32))
+            ys, h, lh, zc = P3.FOOT_Y + P3.SO_FLOOR, P3.SO_HOLE / 2 + 0.02, DR.BRIDGE_LH, ZC + z   # drawer.floor_bridge_cuts(), a hair
+            cuts.append(box(x - h, x + h, ys - lh, ys + 0.01, zc - P3.SO_BORE, zc + P3.SO_BORE)      # inside the bore's wall
+                        ^ cyl_y(x, zc, ys - 2 * lh, ys + 0.02, P3.SO_BORE - 0.06, 48))
+            cuts.append(box(x - h, x + h, ys - 2 * lh, ys - lh + 0.01, zc - h, zc + h))
     t = (t + Manifold.batch_boolean(adds, ADD)) - Manifold.batch_boolean(cuts, ADD)
     if p4.TOP_SCREWS:
         adds, cuts = p4.tray_top_bosses()
