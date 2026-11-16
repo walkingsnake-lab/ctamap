@@ -483,6 +483,13 @@ def joint_taper_cuts(z0, z1):
 # strip, then DIFF_SHRINK = 1 - measured / built.
 DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0021'))
 DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11, 127.8 on Nov 12 (board edge, frame flush with it)
+# A stiffer diffuser to try (Nov 15: on the first full build the grid sheet did not stay flat on the panel and light bled
+# between cells at the edges). P4_GRID_H: the grid's height (1.5; 2.4 tried: the ribs' bending stiffness goes with the
+# cube, about 4x, and the pixels soften a little). P4_SKIRT_D: the skirts' depth along the panel's sides (3.0; deeper
+# makes each skirt a stiffer edge beam). A bench test on the bare panel first: in the case a taller grid sets the panel
+# further back by the same amount, which the tray's posts do not allow for.
+DF.GRID_H = float(os.environ.get('P4_GRID_H', DF.GRID_H))
+DF.SK_D = float(os.environ.get('P4_SKIRT_D', DF.SK_D))
 # Skirt fit. Two settings (P4_DIFF_FIT):
 # 'snap' (default, Nov 13; printed that evening, "the fit is pretty good now"): the P2.5 pair's fit, as that pair really has it. Its model has
 #   0.05 mm of clearance on an 80.0 mm panel, but the panel measures 79.9, so its skirts were built 0.10 a side clear of
