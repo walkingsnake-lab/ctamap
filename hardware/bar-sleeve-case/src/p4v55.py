@@ -8,9 +8,10 @@ existing shell, while V6's four-piece walnut skin costs 17 more screws, four sea
 this is the tray alone, with what transfers. Nothing else is reprinted. See DESIGN-HISTORY.md (Nov 15).
 
 What changes from p4.tray_p4():
-- **Ties.** The louver rows are left solid in stretches (TIES), so the 5 mm band behind them joins each wall to the back
-  plate there: 65 mm of the top wall's 227 mm louver span against 10 on V5 (36 of them within 40 mm of the knob), and
-  95 mm of the bottom wall's against 50 (check() measures it). V6's rungs left the 86 mm round the knob and joint untied.
+- **Ties.** Stretches of the louver rows are blind (TIES, BLIND): the slots look as long as V5's from behind, but under
+  each stretch the inner half of the 5 mm band is left solid and joins the wall to the back plate. 97 mm of the top
+  wall's 227 mm louver span is tied against 10 on V5, 108 of the bottom's against 50 (check() measures it); the rows
+  are solid round both centre posts and blind across the joint. (V6's rungs left the 86 mm round the knob untied.)
 - **The split is 24 mm right of centre** (v6.JOINT_X), not under the knob: the encoder slot, both knob screws and both
   centre inserts are on the left half. No louver crosses it.
 - **A joint in place of the spine and bridge:** v6's tongues inside the right half's top and bottom walls (two
@@ -42,8 +43,14 @@ FOOT_DY = STANDOFF_L + GRID_EXTRA
 CENTRE_POSTS = [q for q in DR.INSERTS if q not in DR.CORNERS]        # (0, -56), (0, 56) about the centre
 # louver rows left solid (x0, x1). Both walls: round each centre post, across the joint (12 each side), and every ~28 mm.
 # The bottom rows are also solid at the two screw bosses (x = +/-46) and the top ones are blind behind the sensor's hooks.
-TIES = dict(top=[(-101, -95), (-73, -67), (-45, -39), (-8, 8), (JOINT_X - 12, JOINT_X + 12), (73, 79), (97, 103)],
-            bottom=[(-101, -95), (-73, -67), (-24, -18), (-8, 8), (JOINT_X - 12, JOINT_X + 12), (73, 79), (97, 103)])
+# The louvers keep V5's look (the owner, Nov 15: a first draft that cut the rows into unequal lengths with solid ties
+# "looks weird"; an even grid of short slots was the other choice). Full-length rows, solid only round the two centre posts
+# (and at the bottom screw bosses, as V5). The ties are BLIND stretches: the slot is still cut from the back face there but
+# stops drawer.TIE_BLIND (2.5 mm) short of the band's inner face, so it looks unbroken from behind and that much of the
+# 5 mm band joins the wall to the plate. One every 24 mm, 10 wide, and 20 across the joint.
+TIES = dict(top=[(-8, 8)], bottom=[(-8, 8)])
+_b = [(c - 5, c + 5) for c in (-100, -76, -52, -28, 48, 72, 96)] + [(JOINT_X - 10, JOINT_X + 10)]
+BLIND = dict(top=_b, bottom=_b)
 # knuckles on the back plate: (z about the centre, block half height, pier). Two above the ribbon, one below it.
 KNUCKLES = ((21.0, 6.0, 4.0), (41.0, 6.0, 4.0), (-41.0, 5.0, 2.5))
 KN_BLOCK, KN_Y0, KN_Y1, KN_CL = v6.KN_BLOCK, v6.KN_Y0, v6.KN_Y1, v6.KN_CL
@@ -54,7 +61,7 @@ def tray():
     """the whole tray, before the split"""
     post_dy = {c: FOOT_DY for c in DR.CORNERS}
     t = DR.tray(ribbon_hooks=[(p4.HOOK_X, p4.RIB_Z), (p4.HOOK2_X, p4.IDC_Z)], hook_lip=p4.RIB_HOOK_LIP, tie_x0=v6.TIE_X0,
-                post_dy=post_dy, ties=TIES)
+                post_dy=post_dy, ties=TIES, blind=BLIND)
     with DR._foot(FOOT_DY):                                  # the two centre posts, as drawer.tray() builds the corner ones
         adds = [P3.standoff(x, z, DR.Y0) for x, z in CENTRE_POSTS]
         cuts = [cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, DR.Y1 + 1, P3.SO_BORE, 48) for x, z in CENTRE_POSTS]
