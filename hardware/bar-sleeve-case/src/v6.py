@@ -277,10 +277,11 @@ KN_Y0, KN_Y1 = 56.0, 64.0                                 # the right half's bri
 KN_CL = 0.2
 
 
-def tongue_legs():
+def tongue_legs(boss_h=3.5):
     """the left half's lap tongues inside the right half's top and bottom walls: plates TONGUE_T thick, TONGUE_CL clear,
     their back edge at 45 deg (the print's underside), rooted in the left half's wall. Each takes two countersunk screws
-    through the right half's wall. Returns (adds, cuts in the tongue, cuts in the right half)."""
+    through the right half's wall. boss_h: how far each screw's boss stands off the tongue (p4v55.py: taller, so an
+    M3 x 10 ends inside it). Returns (adds, cuts in the tongue, cuts in the right half)."""
     cl, t = TONGUE_CL, TONGUE_T
     x0, x1 = JOINT_X, JOINT_X + TONGUE
     xm = JOINT_X + TONGUE / 2
@@ -297,8 +298,8 @@ def tongue_legs():
         adds.append(along_z(root, *sorted((zw + sz * 0.01, zb))))
         for y in LEG_SCREW_Y:
             b = BOSS / 2
-            adds.append(along_x([(y - b, zb + sz * 0.5), (y + b + 4.0, zb + sz * 0.5), (y + b, zb - sz * 3.5), (y - b, zb - sz * 3.5)], xm - b, xm + b))
-            cut_t.append(cyl_z(xm, y, *sorted((zb - sz * 4.5, za + sz * 0.01)), PILOT_H, 32))
+            adds.append(along_x([(y - b, zb + sz * 0.5), (y + b + boss_h + 0.5, zb + sz * 0.5), (y + b, zb - sz * boss_h), (y - b, zb - sz * boss_h)], xm - b, xm + b))
+            cut_t.append(cyl_z(xm, y, *sorted((zb - sz * (boss_h + 1.0), za + sz * 0.01)), PILOT_H, 32))
             zo = zw + sz * DR.TRAY_WT
             cut_r.append(cyl_z(xm, y, *sorted((zw - sz * 1.0, zo + sz * 1.0)), 3.4, 32))
             cs = Manifold.cylinder(1.71, 3.4 / 2, p4.CSK_D / 2, 48)        # 90 deg countersink, wide end out

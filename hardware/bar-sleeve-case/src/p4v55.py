@@ -15,7 +15,7 @@ What changes from p4.tray_p4():
 - **The split is 24 mm right of centre** (v6.JOINT_X), not under the knob: the encoder slot, both knob screws and both
   centre inserts are on the left half. No louver crosses it.
 - **A joint in place of the spine and bridge:** v6's tongues inside the right half's top and bottom walls (two
-  countersunk M3 x 8 each) and three block-under-bridge knuckles on the back plate (one countersunk M3 x 10 each, flush,
+  countersunk M3 x 10 each) and three block-under-bridge knuckles on the back plate (one countersunk M3 x 10 each, flush,
   so the wall cleat lies over them). The halves are joined on the bench and go into the sleeve as one tray.
 - **Panel on standoffs.** An M3 x 30 male-female standoff in each of the panel's six inserts (the two centre ones were
   unused). The tray's posts are the V5 posts with their feet 30 mm further back (drawer.tray's post_dy): the same
@@ -53,7 +53,14 @@ _b = [(c - 5, c + 5) for c in (-100, -76, -52, -28, 48, 72, 96)] + [(JOINT_X - 1
 BLIND = dict(top=_b, bottom=_b)
 # knuckles on the back plate: (z about the centre, block half height, pier). Two above the ribbon, one below it.
 KNUCKLES = ((21.0, 6.0, 4.0), (41.0, 6.0, 4.0), (-41.0, 5.0, 2.5))
-KN_BLOCK, KN_Y0, KN_Y1, KN_CL = v6.KN_BLOCK, v6.KN_Y0, v6.KN_Y1, v6.KN_CL
+KN_BLOCK, KN_Y0, KN_CL = v6.KN_BLOCK, v6.KN_Y0, v6.KN_CL
+KN_Y1 = DR.Y1 - 4.0                           # the blocks' top: 4 mm blocks, so an M3 x 10's last 5.8 mm are in the bridge
+# Screws that thread into the tray from the back. On the built V5 the spine's M3s would not start in the cleat bosses'
+# 3.1 mm pilots (the owner, Nov 15: "wouldn't start ... too tight to drive"), though that size was right on the Nov 3
+# test plate. So each such pilot gets a guide bore at its mouth, as the M2.5 pilots have (drawer.M25_GUIDE_L): the screw
+# drops in GUIDE_L and stands square before it cuts. The thread size itself is for the coupon to confirm.
+GUIDE_D, GUIDE_L = 3.4, 1.2
+TONGUE_BOSS = 4.85                            # the tongue screws' bosses: with the 2.5 wall and tongue, an M3 x 10 ends inside
 KN_SCREW_X = JOINT_X + KN_BLOCK / 2 + 0.3
 
 
@@ -69,6 +76,8 @@ def tray():
     if p4.TOP_SCREWS:
         adds, cuts = p4.tray_top_bosses()
         t = (t + adds) - cuts
+    if DR.FASTEN == 'tap':                                   # guide bores at the cleat pilots' mouths (the back face)
+        t = t - Manifold.batch_boolean([cyl_y(cx, cz, DR.Y1 - GUIDE_L, DR.Y1 + 1, GUIDE_D, 32) for cx, cz in DR.CLEAT_SCREWS], ADD)
     return max(t.decompose(), key=lambda m: m.volume())
 
 
@@ -80,7 +89,7 @@ def knuckles():
     floors (a slot across the span, then a square), so no strand ends at the screw's hole.
     Returns (left adds, left cuts, right adds, right cuts)."""
     la, lc, ra, rc = [], [], [], []
-    xs, r, lh = KN_SCREW_X, DR.TAP_D_V / 2, DR.BRIDGE_LH
+    xs, lh = KN_SCREW_X, DR.BRIDGE_LH
     for dz, hz, pier in KNUCKLES:
         zc = ZC + dz
         la.append(box(JOINT_X - 8.0, JOINT_X + KN_BLOCK, KN_Y1, DR.Y1, zc - hz, zc + hz))
@@ -91,9 +100,11 @@ def knuckles():
         ra.append(box(JOINT_X + KN_CL, JOINT_X + KN_BLOCK + KN_CL + 2.0, KN_Y0, DR.Y0 + 0.01, z0 - pier, z1 + pier) - cav)
         rc.append(cav)
         roof = KN_Y1 - KN_CL                                                 # the bridge's underside in the print
-        rc.append(cyl_y(xs, zc, KN_Y0 - 1, roof - 2 * lh + 0.01, DR.TAP_D_V, 32))
-        rc.append(box(xs - r, xs + r, roof - lh, roof + 0.01, z0 - 0.01, z1 + 0.01))          # layer 1: strands pier to pier
-        rc.append(box(xs - r, xs + r, roof - 2 * lh, roof - lh + 0.01, zc - r, zc + r))      # layer 2: across them
+        g = GUIDE_D / 2
+        rc.append(cyl_y(xs, zc, KN_Y0 - 1, roof - GUIDE_L + 0.01, DR.TAP_D_V, 32))            # the thread
+        rc.append(cyl_y(xs, zc, roof - GUIDE_L, roof - 2 * lh + 0.01, GUIDE_D, 32))            # the guide bore
+        rc.append(box(xs - g, xs + g, roof - lh, roof + 0.01, z0 - 0.01, z1 + 0.01))          # layer 1: strands pier to pier
+        rc.append(box(xs - g, xs + g, roof - 2 * lh, roof - lh + 0.01, zc - g, zc + g))      # layer 2: across them
     u = lambda l: Manifold.batch_boolean(l, ADD)
     return u(la), u(lc), u(ra), u(rc)
 
@@ -103,7 +114,7 @@ def halves():
     t = tray()
     left = t ^ box(-400, JOINT_X, -5, D + 5, -5, H + 5)
     right = t ^ box(JOINT_X, 400, -5, D + 5, -5, H + 5)
-    tg_add, tg_cut, r_cut = v6.tongue_legs()
+    tg_add, tg_cut, r_cut = v6.tongue_legs(TONGUE_BOSS)
     kl_add, kl_cut, kr_add, kr_cut = knuckles()
     left = (left + tg_add + kl_add) - tg_cut - kl_cut
     right = ((right - kr_cut) + kr_add) - r_cut - kr_cut
@@ -125,7 +136,7 @@ def panel():
 
 def screws():
     """seated: six panel screws (M3 x 8 flanged) and three knuckle screws (M3 x 10 countersunk) from the back, four tongue
-    screws (M3 x 8 countersunk) through the right half's walls"""
+    screws (M3 x 10 countersunk) through the right half's walls"""
     out = []
     seat = P3.FOOT_Y + FOOT_DY + P3.SO_FLOOR
     for x, z in DR.INSERTS:
@@ -134,7 +145,7 @@ def screws():
         out.append(cyl_y(KN_SCREW_X, ZC + dz, DR.Y1 - 10.0, DR.Y1, 3.0, 24))
     xm = JOINT_X + v6.TONGUE / 2
     for y in v6.LEG_SCREW_Y:
-        out.append(cyl_z(xm, y, v6.ZO1 - 8.0, v6.ZO1, 3.0, 24) + cyl_z(xm, y, v6.ZO0, v6.ZO0 + 8.0, 3.0, 24))
+        out.append(cyl_z(xm, y, v6.ZO1 - 10.0, v6.ZO1, 3.0, 24) + cyl_z(xm, y, v6.ZO0, v6.ZO0 + 10.0, 3.0, 24))
     return Manifold.batch_boolean(out, ADD)
 
 
@@ -182,7 +193,10 @@ def check():
     info = dict(ties={k: (tie_length(v5, k), tie_length(T, k)) for k in ('top', 'bottom')},
                 near_knob={k: (tie_length(v5, k, -40, 40), tie_length(T, k, -40, 40)) for k in ('top', 'bottom')},
                 volume_cm3=(round(v5.volume() / 1000, 1), round(T.volume() / 1000, 1)),
-                post_seat_from_back=round(DR.Y1 - (P3.FOOT_Y + FOOT_DY + P3.SO_FLOOR), 2), grid_h=DF.GRID_H)
+                post_seat_from_back=round(DR.Y1 - (P3.FOOT_Y + FOOT_DY + P3.SO_FLOOR), 2), grid_h=DF.GRID_H,
+                thread_mm=dict(knuckle=round(10.0 - (DR.Y1 - KN_Y1) - KN_CL - GUIDE_L, 2), tongue=round(10.0 - DR.TRAY_WT - v6.TONGUE_CL, 2),
+                               tongue_tip_inside_boss=round(DR.TRAY_WT + v6.TONGUE_CL + v6.TONGUE_T + TONGUE_BOSS - 10.0, 2),
+                               cleat=round(DR.Y1 - DR.Y0 + DR.CB_H - GUIDE_L, 2)))
     return rows, info
 
 
@@ -205,4 +219,5 @@ if __name__ == '__main__':
     for name, val in rows:
         print(f'  {"ok  " if abs(val) < 0.05 else "HIT "} {name}: {val}')
     print('  louver span solid from wall to plate, mm (V5, V5.5):', info['ties'], '; within 40 mm of the centre:', info['near_knob'])
+    print('  thread, mm:', info['thread_mm'])
     print('  PETG cm3 (V5 trays, V5.5):', info['volume_cm3'], '; panel screw seat', info['post_seat_from_back'], 'mm inside the back face; grid', info['grid_h'])
