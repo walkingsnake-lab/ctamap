@@ -64,14 +64,16 @@ TONGUE_BOSS = 4.85                            # the tongue screws' bosses: with 
 KN_SCREW_X = JOINT_X + KN_BLOCK / 2 + 0.3
 
 
-def tray():
-    """the whole tray, before the split"""
-    post_dy = {c: FOOT_DY for c in DR.CORNERS}
+def tray(extra_dy=0.0):
+    """the whole tray, before the split. extra_dy: the posts' feet this much further back still (v6.py: a washer on each
+    standoff, and its panel sits behind the rim)"""
+    dy = FOOT_DY + extra_dy
+    post_dy = {c: dy for c in DR.CORNERS}
     t = DR.tray(ribbon_hooks=[(p4.HOOK_X, p4.RIB_Z), (p4.HOOK2_X, p4.IDC_Z)], hook_lip=p4.RIB_HOOK_LIP, tie_x0=v6.TIE_X0,
                 post_dy=post_dy, ties=TIES, blind=BLIND)
-    with DR._foot(FOOT_DY):                                  # the two centre posts, as drawer.tray() builds the corner ones
+    with DR._foot(dy):                                  # the two centre posts, as drawer.tray() builds the corner ones
         adds = [P3.standoff(x, z, DR.Y0) for x, z in CENTRE_POSTS]
-        cuts = [cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR, DR.Y1 + 1, P3.SO_BORE, 48) for x, z in CENTRE_POSTS]
+        cuts = [cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR + 0.02, DR.Y1 + 1, P3.SO_BORE + 0.04, 64) for x, z in CENTRE_POSTS]   # a hair over the post's own bore, so the two walls don't coincide
     t = (t + Manifold.batch_boolean(adds, ADD)) - Manifold.batch_boolean(cuts, ADD)
     if p4.TOP_SCREWS:
         adds, cuts = p4.tray_top_bosses()
@@ -81,12 +83,14 @@ def tray():
     return max(t.decompose(), key=lambda m: m.volume())
 
 
-def knuckles():
+def knuckles(insert=None, cl_y=KN_CL):
     """the joint at the back plate, as v6.knuckles() with what its review asked for. The left half's plate carries
     blocks that reach KN_BLOCK past the joint, on the print bed; the right half's plate is notched for each and bridges
     over it between two piers. One M3 x 10 countersunk from the back through each block into the bridge, its head flush
     (the cleat lies over two of them). The bridge's first two layers are cut as drawer.floor_bridge_cuts() cuts the post
     floors (a slot across the span, then a square), so no strand ends at the screw's hole.
+    insert: (hole diameter, hole depth, relief diameter) puts a heat-set insert in each bridge, pressed in from its
+    underside through the notch before the halves are joined (v6.py). cl_y: the gap between a block and its bridge.
     Returns (left adds, left cuts, right adds, right cuts)."""
     la, lc, ra, rc = [], [], [], []
     xs, lh = KN_SCREW_X, DR.BRIDGE_LH
@@ -96,13 +100,18 @@ def knuckles():
         lc.append(cyl_y(xs, zc, KN_Y1 - 1, DR.Y1 + 1, 3.4, 32))
         lc.append(Manifold.cylinder(1.71, 1.7, p4.CSK_D / 2, 48).rotate([-90, 0, 0]).translate([xs, DR.Y1 - 1.7, zc]))
         z0, z1 = zc - hz - KN_CL, zc + hz + KN_CL
-        cav = box(JOINT_X - 0.01, JOINT_X + KN_BLOCK + KN_CL, KN_Y1 - KN_CL, DR.Y1 + 0.01, z0, z1)
+        cav = box(JOINT_X - 0.01, JOINT_X + KN_BLOCK + KN_CL, KN_Y1 - cl_y, DR.Y1 + 0.01, z0, z1)
         ra.append(box(JOINT_X + KN_CL, JOINT_X + KN_BLOCK + KN_CL + 2.0, KN_Y0, DR.Y0 + 0.01, z0 - pier, z1 + pier) - cav)
         rc.append(cav)
-        roof = KN_Y1 - KN_CL                                                 # the bridge's underside in the print
-        g = GUIDE_D / 2
-        rc.append(cyl_y(xs, zc, KN_Y0 - 1, roof - GUIDE_L + 0.01, DR.TAP_D_V, 32))            # the thread
-        rc.append(cyl_y(xs, zc, roof - GUIDE_L, roof - 2 * lh + 0.01, GUIDE_D, 32))            # the guide bore
+        roof = KN_Y1 - cl_y                                                  # the bridge's underside in the print
+        if insert:
+            g = insert[0] / 2
+            rc.append(cyl_y(xs, zc, KN_Y0 - 1, roof - insert[1] + 0.01, insert[2], 32))        # room for the screw's tip
+            rc.append(cyl_y(xs, zc, roof - insert[1], roof - 2 * lh + 0.01, insert[0], 32))    # the insert
+        else:
+            g = GUIDE_D / 2
+            rc.append(cyl_y(xs, zc, KN_Y0 - 1, roof - GUIDE_L + 0.01, DR.TAP_D_V, 32))        # the thread
+            rc.append(cyl_y(xs, zc, roof - GUIDE_L, roof - 2 * lh + 0.01, GUIDE_D, 32))        # the guide bore
         rc.append(box(xs - g, xs + g, roof - lh, roof + 0.01, z0 - 0.01, z1 + 0.01))          # layer 1: strands pier to pier
         rc.append(box(xs - g, xs + g, roof - 2 * lh, roof - lh + 0.01, zc - g, zc + g))      # layer 2: across them
     u = lambda l: Manifold.batch_boolean(l, ADD)
@@ -131,7 +140,7 @@ def standoffs():
 
 
 def panel():
-    return p4.panel_p4().translate([0, GRID_EXTRA, 0])
+    return p4.panel_p4()                      # p4 places it behind the grid, whatever its height
 
 
 def screws():
@@ -168,7 +177,7 @@ def check():
     P = p4.build()
     v5 = P['tray_left'] + P['tray_right']
     v = lambda a, b: round((a ^ b).volume(), 2)
-    dif = Manifold.batch_boolean([p4.diffuser_in_case(m) for m in P['diffuser'].values()], ADD).translate([0, GRID_EXTRA, 0])
+    dif = Manifold.batch_boolean([p4.diffuser_in_case(m) for m in P['diffuser'].values()], ADD)      # already built at DF.GRID_H
     so, pan, enc = standoffs(), panel(), p4.encoder_envelope()
     import cleat as CLT
     rows = [('halves, each other', v(L, R)),
