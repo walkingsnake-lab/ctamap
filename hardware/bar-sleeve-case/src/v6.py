@@ -62,6 +62,8 @@ INS_D, INS_DEPTH, INS_RELIEF = 4.4, 5.0, 3.2   # the hole (to confirm on the joi
 BOSS, BOSS_H = 8.0, 3.5          # screw bosses on the chassis walls: square, with a 45 deg ramp on the back (bed) side
 HEAD_D, HEAD_K = 6.9, 1.65       # M3 flanged button head (ISO 7380-2): a plain 5.7 head bears on only 13 mm2 round the long hole
 FOOT_IN = 16.0                   # the bumpers' recesses, this far inboard of the plank screws (V5's were where the screws are now)
+UNDER_SCREWS = False             # the two V5 screws under the case are left out (the skin is held at both ends); their holes
+                                 # stay in the walnut and the chassis, for two M3 x 10 and inserts if the bottom ever buzzes
 UNDER_CB = 7.6                   # counterbore for a flanged head (6.9) at the two screws under the case
 PAD_H = 0.24                     # contact pads under the planks, as tall as the 0.25 gap: the walnut bears along its length, not
                                  # only at the screws (0.2 left 0.05 of air, which no print holds; a high pad only bows a plank a hair)
@@ -73,7 +75,16 @@ WASHER_REC = (7.4, 0.3)          # a recess in each post's foot that holds its w
 # skin screws, lined up (the owner: the staggered ones "look awful"). Planks: a front and a back one at each end, the same
 # distance from the seam. End caps: two in a vertical line at the knob's depth.
 XE = SEAM - 12.0
-PLANK_SCREWS = tuple((sx * XE, y) for sx in (-1, 1) for y in (30.0, 60.0))
+# The skin. 'two' (Nov 16, after the simplification review): p4's two shell halves, top and bottom, with a line of
+# SKIN_GAP left between them on each end and bezel side: nothing has to close, so the print's height error only changes
+# the line's width. One screw at each end of the top and of the bottom and two on each end, all at the knob's depth.
+# 'four' (V6_SKIN=four): planks and end caps, as reviewed Nov 15-16.
+SKIN = os.environ.get('V6_SKIN', 'two')
+SKIN_GAP = float(os.environ.get('V6_SKIN_GAP', '0.6'))    # the line. To be set from the end coupon: drawn + what the print adds
+LAP_T, LAP_H = 1.9, 3.0          # at the hood's cheeks, in front of the chassis, the top half's inner LAP_T reaches LAP_H down
+                                 # behind the bottom half's: walnut behind the line there, not a slit through the case
+PAD_H_END = 0.15                 # pads on the end walls under the halves' legs: the legs slide down past them
+PLANK_SCREWS = tuple((sx * XE, y) for sx in (-1, 1) for y in ((KY,) if SKIN == 'two' else (30.0, 60.0)))
 CAP_SCREWS = ((KY, ZC + 50.0), (KY, ZC - 50.0))            # (y, z) on each end face; z +/-50 clears the S3 and its window
 
 # chassis numbers taken from the tray
@@ -157,6 +168,8 @@ def skin():
         sh = sh - p4.label_cuts()
     sh = sh - knob_hole_tool()
     big = 400
+    if SKIN == 'two':
+        return skin_two(sh)
     mid = box(-SEAM, SEAM, -5, D + 5, -5, H + 5)
     pieces = dict(plank_top=sh ^ mid ^ box(-big, big, -5, D + 5, ZC, H + 5),
                   plank_bottom=sh ^ mid ^ box(-big, big, -5, D + 5, -5, ZC),
@@ -181,6 +194,32 @@ def skin():
         x0, x1 = sorted((sx * (W / 2 - WALL - 2), sx * (W / 2 + 2)))
         pieces[cap] = pieces[cap] - Manifold.batch_boolean([(cyl_x(y - SKIN_SLOT, z, x0, x1, SKIN_CL_D) + cyl_x(y + SKIN_SLOT, z, x0, x1, SKIN_CL_D)).hull() for y, z in CAP_SCREWS], ADD)
     return pieces
+
+
+def skin_two(sh):
+    """half_top and half_bottom from the whole shell: split at mid height with SKIN_GAP between, lapped at the hood's
+    cheeks. Each lowers (rises) straight onto the chassis; the top wall bears on the pads and the legs lie on the end
+    walls' pads. The lap's back end is a 45 deg ramp: the halves print back-down and it would start in mid-air."""
+    g = SKIN_GAP / 2
+    top = sh ^ box(-400, 400, -5, D + 5, ZC + g, H + 5)
+    bot = sh ^ box(-400, 400, -5, D + 5, -5, ZC - g)
+    yl = DR.YF - 0.5                                          # the lap ends just in front of the chassis
+    for sx in (-1, 1):
+        a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T)))
+        lip = along_x([(-1, ZC + g + 0.02), (yl, ZC + g + 0.02), (yl - LAP_H, ZC - LAP_H), (-1, ZC - LAP_H)], a, b)
+        top = top + (sh ^ lip)
+        a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T + 0.2)))
+        bot = bot - box(a, b, -1, yl + 0.3, ZC - LAP_H - 0.3, ZC + 1)
+    slot_z = lambda x, y, z0, z1: (cyl_z(x, y - SKIN_SLOT, z0, z1, SKIN_CL_D) + cyl_z(x, y + SKIN_SLOT, z0, z1, SKIN_CL_D)).hull()
+    top = top - Manifold.batch_boolean([slot_z(x, y, H - WALL - 2, H + 2) for x, y in PLANK_SCREWS], ADD)
+    bot = bot - Manifold.batch_boolean([slot_z(x, y, -2, WALL + 2) for x, y in PLANK_SCREWS], ADD)
+    bot = bot - Manifold.batch_boolean(                       # underneath, heads in 1 mm counterbores (the bumpers stand 2 mm)
+        [Manifold.extrude((V.teardrop_cs(UNDER_CB / 2, x, y - SKIN_SLOT, seg=48) + V.teardrop_cs(UNDER_CB / 2, x, y + SKIN_SLOT, seg=48)).hull(), 2.0).translate([0, 0, -1])
+         for x, y in PLANK_SCREWS], ADD)
+    ends = lambda zs: Manifold.batch_boolean([(cyl_x(y - SKIN_SLOT, z, x0, x1, SKIN_CL_D) + cyl_x(y + SKIN_SLOT, z, x0, x1, SKIN_CL_D)).hull()
+                                               for sx in (-1, 1) for x0, x1 in [sorted((sx * (W / 2 - WALL - 2), sx * (W / 2 + 2)))]
+                                               for y, z in CAP_SCREWS if (z > ZC) == zs], ADD)
+    return dict(half_top=top - ends(True), half_bottom=bot - ends(False))
 
 
 # ---------------------------------------------------------------- chassis
@@ -233,7 +272,22 @@ def pads(t):
             if (under ^ t).volume() > 0.995 * under.volume():
                 strips.append(box(x - PAD_W / 2, x + PAD_W / 2, 0, D, -5, H + 5) ^ half)
     clear = Manifold.batch_boolean([box(x - 4.5, x + 4.5, y - 4.5, y + 4.5, -5, H + 5) for x, y in PLANK_SCREWS], ADD)   # no pad on an insert's mouth
-    return (band ^ Manifold.batch_boolean(strips, ADD)) - clear
+    out = (band ^ Manifold.batch_boolean(strips, ADD)) - clear
+    if SKIN == 'two':                                          # rows on the end walls, front to back, where the wall is solid
+        ge = DR.TRAY_CL - PAD_H_END
+        band_e = C.prism_y(C.rr_cs(C.BORE_HX - ge, C.BORE_HZ - ge, C.BORE_R - ge), y0, y1) \
+            - C.prism_y(C.rr_cs(C.BORE_HX - DR.TRAY_CL - 0.3, C.BORE_HZ - DR.TRAY_CL - 0.3, C.BORE_R - DR.TRAY_CL - 0.3), y0 - 1, y1 + 1)
+        xo, rows = C.BORE_HX - DR.TRAY_CL, []
+        for sx in (-1, 1):
+            for z in (ZC + 34, ZC + 14, ZC - 14, ZC - 34):
+                a, b = sorted((sx * (xo - 1.2), sx * (xo - 0.2)))
+                under = box(a, b, y0, y1, z - PAD_W / 2, z + PAD_W / 2)
+                if (under ^ t).volume() > 0.995 * under.volume():
+                    a, b = sorted((sx * (xo - 3), sx * 400))
+                    rows.append(box(a, b, 0, D, z - PAD_W / 2, z + PAD_W / 2))
+        if rows:
+            out = out + (band_e ^ Manifold.batch_boolean(rows, ADD))
+    return out
 
 
 NECK_R = 9.5                     # the tower above the walnut: narrower, so the trim ring keeps 2.7 mm round the screw holes
@@ -403,14 +457,14 @@ def screws():
             skin_s.append(cyl_x(y, z, a, b, 3.0, 24) + cyl_x(y, z, c, e, HEAD_D, 32))
     seat = BOSS_Y - WASHER_REC[1] + T.P3.SO_FLOOR
     for x, z in insert_xz():                  # M3 x 8 with a washer under its head (the head alone could drop into the 4.5 mm hole)
-        back_s.append(cyl_y(x, z, seat + WASHER_T - 8.0, seat + WASHER_T, 3.0, 24) + cyl_y(x, z, seat, seat + WASHER_T, 7.0, 32) + cyl_y(x, z, seat + WASHER_T, seat + WASHER_T + HEAD_K, 5.7, 32))
+        back_s.append(cyl_y(x, z, seat - 8.0, seat, 3.0, 24) + cyl_y(x, z, seat, seat + HEAD_K, HEAD_D, 32))   # flanged (6.9): no washer under it
     for dz, _, _ in T.KNUCKLES:
         back_s.append(cyl_y(T.KN_SCREW_X, ZC + dz, YB1 - 10.0, YB1, 3.0, 24))
     xm = JOINT_X + TONGUE / 2
     for y in LEG_SCREW_Y:
         hid.append(cyl_z(xm, y, ZO1 - 10.0, ZO1, 3.0, 24) + cyl_z(xm, y, ZO0, ZO0 + 10.0, 3.0, 24))
     tsa, tsb = p4.top_screws_env()            # the two M2.5 beside the knob, as V5: through the ring's holes and the plank into the chassis
-    for sx in C.SCREW_XS:                     # the two M3 x 10 under the case, as V5, into inserts in the chassis's bottom bosses
+    for sx in (C.SCREW_XS if UNDER_SCREWS else ()):   # the two M3 x 10 under the case, as V5, into inserts in the bottom bosses
         for x in (sx, -sx):
             hid.append(cyl_z(x, DR.BOT_Y, 1.0, 11.0, 3.0, 24) + cyl_z(x, DR.BOT_Y, 1.0 - HEAD_K, 1.0, HEAD_D, 32))
     u = lambda l: Manifold.batch_boolean(l, ADD)
@@ -455,7 +509,7 @@ def check(P):
             ('standoffs / encoder, S3, sensor', v(P['standoffs'], P['encoder'] + P['s3'] + P['sensor'])),
             ('skin, knob and bottom screws / panel, diffuser, S3, sensor, encoder, ring', v(P['screws']['skin'] + P['screws']['under'] + P['screws']['knob'], P['panel'] + dif + P['s3'] + P['sensor'] + P['encoder'] + P['ring']))]
     rows.append(cables(P))
-    plank_top_z = max(m.bounding_box()[5] for k, m in P['skin'].items() if k == 'plank_top')
+    plank_top_z = max(m.bounding_box()[5] for k, m in P['skin'].items() if k in ('plank_top', 'half_top'))
     rows.append(('ring flange above the top plank, mm, less 0.3 (should be >= 0)', round(P['ring'].bounding_box()[2] - plank_top_z - 0.3, 2) * -1 if P['ring'].bounding_box()[2] - plank_top_z < 0.3 else 0.0))
     import cleat as CLT, p4v55 as T
     rows.append(('case cleat / chassis and the screws on its back', v(CLT.case_cleat(), ch + P['screws']['back'])))
@@ -464,6 +518,14 @@ def check(P):
     rows.append(('right chassis half slid on sideways (0.3-12 mm) / left half', round(max(v(P['chassis_right'].translate([q, 0, 0]), P['chassis_left']) for q in (0.3, 1, 3, 6, 9, 12)), 2)))
     rows.append(('panel with its standoffs and washers going in from the front (1-40 mm out) / chassis', round(max(v((P['panel'] + P['standoffs']).translate([0, -q, 0]), ch) for q in (1, 2, 4, 8, 16, 24, 32, 40)), 2)))
     rest = ch + dif + P['panel']
+    if SKIN == 'two':
+        for name, d, other in (('half_top', 1, 'half_bottom'), ('half_bottom', -1, 'half_top')):
+            steps = (0.3, 0.5, 1, 2, 4, 8, 16, 32, 64, 80)
+            worst = max((P['skin'][name].translate([0, 0, d * s]) ^ (rest + P['skin'][other] + P['encoder'] + P['s3'] + P['sensor'])).volume() for s in steps)
+            rows.append((f'{name} lifted straight off (0.3-80 mm), vs chassis, diffuser, panel, encoder, S3, sensor and the other half', round(worst, 2)))
+        g = P['skin']['half_top'].bounding_box()[2] - P['skin']['half_bottom'].bounding_box()[5]
+        rows.append((f'the lap reaches {-g:.2f} mm behind the bottom half; line drawn {SKIN_GAP} mm (info)', 0.0))
+        return rows
     for name, d in (('plank_top', (0, 0, 1)), ('plank_bottom', (0, 0, -1)), ('cap_left', (-1, 0, 0)), ('cap_right', (1, 0, 0))):
         worst = max((P['skin'][name].translate([d[0] * s, d[1] * s, d[2] * s]) ^ rest).volume() for s in (0.5, 1, 2, 4, 8, 16))
         rows.append((f'{name} lifted straight off (0.5-16 mm), vs chassis, diffuser, panel', round(worst, 2)))
@@ -477,14 +539,15 @@ if __name__ == '__main__':
     P = build()
     def save(m, name, bed='back'):
         """back: the case's back on the bed, as every V5 part; top: turned over, the top face on the bed"""
-        m = m.rotate([-90, 0, 0]) if bed == 'back' else m.mirror([0, 0, 1])
+        m = m.rotate([-90, 0, 0]) if bed in ('back', 'diag') else m.mirror([0, 0, 1])
+        m = m.rotate([0, 0, 45]) if bed == 'diag' else m          # a half is 281.8 long: on the 256 bed's diagonal, as V5's
         me = m.to_mesh()
         t = trimesh.Trimesh(vertices=np.asarray(me.vert_properties)[:, :3], faces=np.asarray(me.tri_verts)); t.merge_vertices()
         t.apply_translation([-(t.bounds[0][0] + t.bounds[1][0]) / 2, -(t.bounds[0][1] + t.bounds[1][1]) / 2, -t.bounds[0][2]])
         t.export(f'{out}/{name}.stl')
         return f'{name}: {np.round(t.extents, 1).tolist()} on the bed, {m.volume() / 1000:.1f} cm3, {len(t.split(only_watertight=False))} body'
     for k, m in P['skin'].items():
-        print(save(m, f'v6-skin-{k.replace("_", "-")}-walnut'))
+        print(save(m, f'v6-skin-{k.replace("_", "-")}-walnut', 'diag' if SKIN == 'two' else 'back'))
     print(save(P['chassis_left'], 'v6-chassis-left')); print(save(P['chassis_right'], 'v6-chassis-right')); print(save(P['ring'], 'v6-trim-ring', 'top'))
     print('info', P['info'])
     import p4v55 as T
