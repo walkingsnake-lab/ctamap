@@ -224,7 +224,7 @@ python3 check_v5.py              # PANEL=p25 for the P2.5
   panels (`WIDE=p25x2`), superseding the tongue-and-groove bar below; that pair was printed once (Nov 7) with the earlier
   joint.
 - **P4** (256 x 128): the case (281 mm) and diffuser exceed the X2D's 256 mm bed, so it's built in split parts (shell top/bottom, tray and diffuser left/right): [P4-BUILD.md](P4-BUILD.md), `src/p4.py`, `stl/p4/`.
-- **V6 (draft, not printed):** the P4 case rebuilt as a rigid PETG chassis with a four-piece walnut skin screwed on from outside: `src/v6.py`, renders `img/v6-*.png`, reasons in [DESIGN-HISTORY.md](DESIGN-HISTORY.md) (Nov 15).
+- **V6 (draft, not printed):** the P4 case rebuilt as a rigid PETG chassis with the walnut screwed on from outside in two halves, a drawn line between them: `src/v6.py`, renders `img/v6-*.png`, reasons in [DESIGN-HISTORY.md](DESIGN-HISTORY.md) (Nov 15).
 
 ## Archive
 `stl/archive/v4/`: the v4 build ([ARCHIVE-v4.md](ARCHIVE-v4.md)). `stl/archive/fit-tests/`: fit sets and coupons whose

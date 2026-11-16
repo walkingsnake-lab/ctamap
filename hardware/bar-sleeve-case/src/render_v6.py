@@ -52,10 +52,8 @@ def parts(skin=True, chassis=True, inside=True, front=True, knob=True, screws=Tr
         p = R.Part(name, m, mat, **kw); p.grp = grp
         out.append(p)
     if skin:
-        add('plank_top', P['skin']['plank_top'], 'walnut', 'top', seed=1)
-        add('plank_bottom', P['skin']['plank_bottom'], 'walnut', 'bottom', seed=2)
-        add('cap_left', P['skin']['cap_left'], 'walnut', 'left', seed=3)
-        add('cap_right', P['skin']['cap_right'], 'walnut', 'right', seed=4)
+        for i, (k, m) in enumerate(P['skin'].items()):        # two halves (default) or the four pieces (V6_SKIN=four)
+            add(k, m, 'walnut', k.split('_')[1], seed=i + 1)
     if chassis:
         add('chassis_left', P['chassis_left'], 'petgL' if colour else 'black', 'cl')
         add('chassis_right', P['chassis_right'], 'petgR' if colour else 'black', 'cr')
@@ -124,30 +122,30 @@ if 'closed' in WHICH:
     cam = R.Cam(R.look_at(CENTRE + np.array([0, 0, 900.0]), CENTRE, (0, 1, 0)), (1600, 470), xmag=1600 / 5.2 / 2)
     HEROS = (a, b)
     c = sc.render(cam, ground=False)
-    annotate(c, cam, [('plank screws: a pair at each end, 12 mm from the seam', (-v6.XE, 30, H), (150, 70), 'lm'),
-                      ('seam: a V-groove where the corner round starts', (125.4, 45, H), (-70, 0), 'rm'),
+    annotate(c, cam, [('one screw at each end, in line with the knob', (-v6.XE, KY, H), (150, 70), 'lm'),
                       ('two more under the knob, as on V5', (19, KY + 8, H), (110, -75), 'lm')])
     cam = ortho((1, 0, 0), (1000, 940), 5.2)
     e = sc.render(cam, ground=False)
-    annotate(e, cam, [('cap screws: a vertical pair', (HW, KY, ZC + 50), (-60, -70), 'rm')], fs=22)
+    annotate(e, cam, [('two screws on each end', (HW, KY, ZC + 50), (-60, -70), 'rm'),
+                      ('the line between the halves', (HW, 30, ZC), (-60, 60), 'rm')], fs=22)
     save(R.titled(R.stack([R.row([a, b]), R.row([c, e])]), 'V6: closed',
-                  'Same outside as today (281.8 x 153.8 x 73). Four walnut pieces, black M3 button heads lined up, two seams on the top.'), '1-closed.png')
+                  f'Same outside as today (281.8 x 153.8 x 73). Two walnut halves with a {v6.SKIN_GAP:g} mm line between them; eight black M3 heads in one line.'), '1-closed.png')
 
 # ------------------------------------------------------------------ 2: the skin comes off
 if 'skin' in WHICH:
-    off = dict(top=(0, 0, 70), bottom=(0, 0, -70), left=(-75, 0, 0), right=(75, 0, 0), knob=(0, 0, 118))
+    off = dict(top=(0, 0, 70), bottom=(0, 0, -70), knob=(0, 0, 118))
     ps = moved([p for p in parts(colour=True) if p.grp != 'screws'], off)
     sc = R.Scene(ps)
     cam = persp((-0.72, -1.3, 0.78), size=(1700, 1300), dist=1100, target=CENTRE + np.array([0, 0, 10]))
     im = sc.render(cam, ground=False)
-    annotate(im, cam, [('top plank: lifts straight off', (70, 40, H + 70), (150, -70), 'lm'),
-                       ('end cap: both corners and the end wall; pulls off sideways', (-HW - 75, 30, 40), (210, 200), 'mt'),
-                       ('bottom plank (feet, the two V5 screws)', (60, 45, -70), (150, 60), 'lm'),
+    annotate(im, cam, [('top half: top, hood and the upper half of each end; lifts straight off', (70, 40, H + 70), (150, -70), 'lm'),
+                       ('its inner edge reaches 3 mm down behind the bottom half: walnut behind the line', (-HW + 3, 40, ZC + 68), (-60, 190), 'mt'),
+                       ('bottom half (feet)', (60, 45, -70), (150, 60), 'lm'),
                        ('chassis: carries everything; the walnut carries nothing', (-100, 30, v6.ZO1), (-170, -210), 'mb'),
                        ('encoder tower: part of the chassis', (0, KY, H + 1.6), (120, -120), 'lm'),
                        ('diffuser: on the panel, 0.3 mm behind the rim', (60, v6.RIM_GAP + p4.Y_FACE, ZC), (150, 300), 'mt')])
-    save(R.titled(im, 'The skin: four walnut pieces on a black chassis',
-                  'Each piece comes on square to its own face, so nothing slides past the diffuser. No glue, no threads in walnut.'), '2-skin.png')
+    save(R.titled(im, 'The skin: two walnut halves on a black chassis',
+                  'Each half goes straight on, top down and bottom up; nothing has to close. No glue, no threads in walnut.'), '2-skin.png')
 
 # ------------------------------------------------------------------ 3: the chassis
 if 'chassis' in WHICH:
@@ -158,8 +156,8 @@ if 'chassis' in WHICH:
     annotate(im, cam, [('split 24 mm right of centre', (v6.JOINT_X, 20, v6.ZO1), (80, -150), 'lb'),
                        ('encoder tower', (0, KY, H + 1.6), (-120, -110), 'rb'),
                        ('short post (six): a standoff from the panel lands here', (-120, v6.BOSS_Y, ZC - 56), (-20, 170), 'mt'),
-                       ('contact pads: the planks rest on these', (-44, 40, v6.ZO1), (-330, -120), 'rb'),
-                       ('boss with a brass insert for each skin screw', (v6.XE + 34, 60, v6.ZIN1 - 3.5), (120, -110), 'lb'),
+                       ('contact pads: the walnut rests on these', (-44, 40, v6.ZO1), (-330, -120), 'rb'),
+                       ('boss with a brass insert for each skin screw', (v6.XE + 34, KY, v6.ZIN1 - 3.5), (120, -110), 'lb'),
                        ('tongue: goes under the right half\'s wall', (v6.JOINT_X + 5, 42, v6.ZIN0 + 3), (120, 190), 'mt'),
                        ('knuckles: the back plates lock', (v6.JOINT_X + 4, 64, ZC + 31), (330, 40), 'lm')])
     save(R.titled(im, 'The chassis: the V5 tray made into the structure', 'Black PETG, two halves, printed back-down like the tray. Drawn in two greys and pulled apart.'), '3-chassis.png')
@@ -176,7 +174,7 @@ if 'joint' in WHICH:
     cam = persp((0.5, 1.25, 0.45), size=(1100, 1000), dist=420, target=np.array([v6.JOINT_X + 10, 60, ZC + 20]), yfov=0.5)
     b = sc.render(cam, ground=False, flip=True)
     annotate(b, cam, [('from the back: the blocks lie on the print bed', (v6.JOINT_X + 5, 69, ZC + 41), (-120, -120), 'mb')], fs=22)
-    save(R.titled(R.row([a, b]), 'The chassis joint', 'Slides together sideways; seven screws, all from outside (three on the back, two countersunk under each plank). Nothing prints as an overhang.'), '4-joint.png')
+    save(R.titled(R.row([a, b]), 'The chassis joint', 'Slides together sideways; seven screws, all from outside (three on the back, two countersunk under the walnut top and bottom). Nothing prints as an overhang.'), '4-joint.png')
 
 # ------------------------------------------------------------------ 5: the panel on standoffs (section at a corner insert)
 if 'panel' in WHICH:
@@ -186,7 +184,7 @@ if 'panel' in WHICH:
     yf = p4.Y_FACE + v6.RIM_GAP
     cam = ortho((1, 0, 0), (1500, 900), 17.0, target=np.array([x0, 36.5, ZC + 57]))
     a = sc.render(cam, ground=False, crease=0.0)
-    annotate(a, cam, [('top plank, walnut 4 mm', (x0, 40, H - 2), (40, -60), 'mb'),
+    annotate(a, cam, [('top half, walnut 4 mm', (x0, 40, H - 2), (40, -60), 'mb'),
                       ('chassis wall 2.5 mm', (x0, 48, v6.ZO1 - 1.2), (0, 80), 'mt'),
                       ('M3 x 30 standoff, turned into the panel by hand', (x0, 45, ZC + 56), (-60, 110), 'mt'),
                       ('boss on the chassis back', (x0, 63.2, ZC + 52), (-70, 150), 'mt'),
@@ -196,7 +194,7 @@ if 'panel' in WHICH:
                       ('hood', (x0, 7, H - 2), (0, -60), 'mb')], fs=22)
     cam = ortho((1, 0, 0), (1500, 900), 62.0, target=np.array([x0, 21.5, ZC + 70.2]))
     b = sc.render(cam, ground=False, crease=0.0)
-    annotate(b, cam, [('rim of the plank: covers the white border', (x0, 15.4, 149.0), (-90, 130), 'mt'),
+    annotate(b, cam, [('rim of the walnut: covers the white border', (x0, 15.4, 149.0), (-90, 130), 'mt'),
                       ('0.3 mm: the rim no longer presses on the diffuser', (x0, 16.2, 149.05), (190, 250), 'lt'),
                       ('diffuser: white face, black flange and grid', (x0, 16.9, 146.0), (-150, 150), 'mt'),
                       ('chassis wall: its front edge 0.3 behind the flange', (x0, 18.4, 148.2), (120, 110), 'lt'),
@@ -214,8 +212,8 @@ if 'encoder' in WHICH:
     annotate(a, cam, [('tower: one piece with the chassis top wall', (-10.6, KY, H - 3), (-150, 250), 'mt'),
                       ('encoder nut clamps to the tower', (4.5, KY, H + 2.6), (150, -150), 'lb'),
                       ('trim ring', (18.5, KY, H + 0.8), (120, -90), 'lb'),
-                      ('top plank: 0.4 mm clear of the tower, carries nothing', (-28, KY, H - 2), (-20, 190), 'lt'),
-                      ('V5 screw: ring, plank, chassis boss', (15, KY, H - 6), (-40, 330), 'mt'),
+                      ('walnut: 0.4 mm clear of the tower, carries nothing', (-28, KY, H - 2), (-20, 190), 'lt'),
+                      ('V5 screw: ring, walnut, chassis boss', (15, KY, H - 6), (-40, 330), 'mt'),
                       ('encoder: up into the pocket from inside', (0, KY, H - 5), (-200, 330), 'mt'),
                       ('chassis joint: tongue, countersunk screw', (v6.JOINT_X + 5, KY, v6.ZIN1 - 4), (60, 130), 'rt')], fs=22)
     ps2 = moved([p for p in parts(inside=True, front=True, colour=True) if p.name != 'top_screws'], dict(knob=(0, 0, 0)))
@@ -223,7 +221,7 @@ if 'encoder' in WHICH:
     sc2 = R.Scene(ps2)
     cam = persp((-0.45, -1.2, 1.0), size=(1500, 820), dist=250, target=np.array([0, KY - 2, H + 12]), yfov=0.5)
     b = sc2.render(cam, ground=False)
-    annotate(b, cam, [('tower and encoder nut, standing through the plank', (0, KY - 9, H + 1.6), (-230, 40), 'rm'),
+    annotate(b, cam, [('tower and encoder nut, standing through the walnut', (0, KY - 9, H + 1.6), (-230, 40), 'rm'),
                       ('trim ring', (-19, KY, H + 12.8), (-170, -40), 'rm'),
                       ('knob', (17, KY, H + 40), (170, -30), 'lm')], fs=22)
     save(R.titled(R.stack([a, b]), 'Knob and encoder', 'Today the encoder hangs from a collar that is only pressed into the walnut. Here its seat is part of the chassis.'), '6-encoder.png')
@@ -234,8 +232,8 @@ if 'steps' in WHICH:
     steps = [('1  Chassis halves together, inserts in; S3 and encoder in', parts(skin=False, front=False, knob=False, colour=True, inside=False) + [p for p in parts(skin=False, chassis=False, front=False, knob=False, screws=False) if p.name.startswith(('s3', 'enc'))], {}),
              ('2  Panel in from the front, six screws from the back, snug', parts(skin=False, front=False, knob=False, colour=True), {}),
              ('3  Diffuser pressed onto the panel, in plain view', parts(skin=False, knob=False, colour=True), {}),
-             ('4  Planks on, top and bottom', [p for p in parts(knob=False, colour=True) if p.grp not in ('left', 'right', 'screws')], dict(top=(0, 0, 40), bottom=(0, 0, -40))),
-             ('5  End caps on from the sides, against the plank ends', [p for p in parts(knob=False, colour=True) if p.grp != 'screws'], dict(left=(-40, 0, 0), right=(40, 0, 0))),
+             ('4  Bottom half on from below, four screws', [p for p in parts(knob=False, colour=True) if p.grp not in ('top', 'screws')], dict(bottom=(0, 0, -45))),
+             ('5  Top half on from above, four screws', [p for p in parts(knob=False, colour=True) if p.grp != 'screws'], dict(top=(0, 0, 45))),
              ('6  Panel centred and tightened from the back; ring, nut, knob', parts(), {})]
     ims = []
     for title, ps, off in steps:

@@ -1,36 +1,39 @@
-"""V6 case, draft 2 (Nov 15-16, 2026): the P4 case as a rigid PETG chassis with a four-piece walnut skin. No glue. Units mm.
+"""V6 case, draft 3 (Nov 16, 2026): the P4 case as a rigid PETG chassis with a two-half walnut skin. No glue. Units mm.
 
     python3 v6.py <out dir>          # the parts in print orientation (not released print files) and the checks
+    V6_SKIN=four python3 v6.py ...   # the four-piece skin of draft 2 (planks and end caps), kept for comparison
 
 Why: the first full P4 build (v5: p4.py) had walls that press in, a tray that creaks under the knob, light bleed at the
-diffuser's edges, a fiddly glue-up and a diffuser that is seated blind. The owner wants no glue and the diffuser seated
-where he can see it. A two-half skin screwed to the chassis was reviewed and dropped (its one closing movement cannot
-both seat the long walls and close the seam). See DESIGN-HISTORY.md (Nov 14-15).
+diffuser's edges, a fiddly glue-up and a diffuser that is seated blind. The owner would rather have no glue. Draft 2 cut
+the walnut in four (planks, end caps); an independent review (Nov 16) found the chassis right and the four pieces the
+complication, and that two halves work once the seam is a line that is meant to be there. See DESIGN-HISTORY.md.
 
 What it is, in terms of the parts it is built from (every proven fit is kept):
 - **Chassis** = p4v55.tray(), the reviewed "V5.5" tray: hidden louver ties, the split 24 mm right of centre with a
   tongue-and-knuckle joint, the V5 panel posts with their feet moved back for M3 x 30 standoffs in all six inserts.
-  Here it loses its crush ribs and gains: contact pads under the planks (pads()); bosses for the skin's screws; an
-  encoder tower in the top wall (tower()), so the knob's seat is PETG; a washer under each standoff; heat-set inserts
-  (M3 x D5 x L4) wherever a screw threads into it from outside: skin, joint, cleat, the two under the case.
-- **Skin** = p4's walnut shell cut where the corner rounds start: a top and a bottom plank and two end caps, V-grooved
-  at the seams. Black M3 x 10 flanged button heads from outside, lined up: two at each plank end (front and back, 12 mm from the
-  seam), two on each end cap in a vertical line at the knob's depth. The holes in the walnut are 1 mm long front to back
-  so each piece is set against the diffuser by eye. Planks bear on the pads; the caps' screws draw them against the
-  plank ends, which closes the seams (no pad under a cap: it has to travel). Each piece comes on square to its own
-  face (planks down / up, caps from the sides). Underneath, the heads sit in 1 mm counterbores and the bumpers' recesses
-  are FOOT_IN inboard of the plank screws.
+  Here it loses its crush ribs and gains: contact pads under the walnut (pads(): top, bottom and end walls); a boss for
+  each skin screw; an encoder tower in the top wall (tower()), so the knob's seat is PETG; a washer under each
+  standoff; heat-set inserts (M3 x D5 x L4) wherever a screw threads into it from outside: skin, joint, cleat.
+- **Skin** = p4's walnut shell cut at mid height into a top and a bottom half (skin_two()), SKIN_GAP apart: a line
+  round each end, nothing to close, so the print's height error only changes the line's width. The top half's inner
+  1.9 mm laps 3 mm down behind the bottom half on both ends, so there is walnut behind the whole line. Eight black
+  M3 x 10 flanged button heads, all at the knob's depth: one at each end of the top and of the bottom, two on each
+  end. The holes in the walnut are 1 mm long front to back so each half is set against the diffuser by eye. Underneath,
+  the heads sit in 1 mm counterbores and the bumpers' recesses are FOOT_IN inboard of them. The two V5 screws under
+  the case are left out (UNDER_SCREWS); their holes stay.
 - **Panel, diffuser, knob**: p4's. The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
   without clamping it. The collar becomes a trim ring whose cap lies over the tower's top under the encoder's nut.
-- **Wall hanging**: the V5 cleat on the same two bosses; the joint's screws on the back are countersunk flush; it lies over one of
-  them (the top knuckle's), so the cleat comes off before the halves are parted.
+- **Wall hanging**: the V5 cleat on the same two bosses; the joint's screws on the back are countersunk flush; it lies
+  over one of them (the top knuckle's), so the cleat comes off before the halves are parted.
 - **Build order**: knuckle inserts in, chassis halves joined, the other inserts in (the tongues' pressed flush: 0.15 mm
   to the other half); S3 and encoder in; a washer in each post's recess, chassis on its back; panel (standoffs on) in
-  from the front, six M3 x 8 with washers from the back, snug; diffuser pressed on and lit; PLANKS, then the caps from
-  the sides against the plank ends; panel centred in the rim by eye and its screws tightened from the back; ring, nut,
-  knob. Service: the panel comes out only with the knob, ring, skin and diffuser off; the S3 with the panel out.
+  from the front, six flanged M3 x 8 from the back, snug; diffuser pressed on and lit; bottom half on from below, top
+  half from above, four screws each; panel centred in the rim by eye and its screws tightened from the back; ring,
+  nut, knob. Service: the panel comes out only with the knob, ring, both halves and diffuser off; the S3 with the
+  panel out.
 
-check() covers overlaps, each piece's way on, the halves' slide, the panel's way in, cables (p4_cables) and the cleat.
+check() covers overlaps, each half's way on with the other fitted, the line and the lap (shut, shifted, what is behind
+it), every screw's hole, the chassis halves' slide, the panel's way in, cables (p4_cables) and the cleat.
 Not print-tested. Smaller cases (P3, P2.5) keep their one-piece sleeve and take only the tray's improvements.
 """
 import math, os, sys
