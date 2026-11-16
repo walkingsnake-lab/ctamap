@@ -486,14 +486,14 @@ DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11,
 # A stiffer diffuser to try (Nov 15: on the first full build the grid sheet did not stay flat on the panel and light bled
 # between cells at the edges). P4_GRID_H: the grid's height (1.5; 2.4 tried: the ribs' bending stiffness goes with the
 # cube, about 4x, and the pixels soften a little). P4_SKIRT_D: the skirts' depth along the panel's sides (3.0; deeper
-# makes each skirt a stiffer edge beam). A bench test on the bare panel first: in the case a taller grid sets the panel
-# further back by the same amount, which the tray's posts do not allow for.
-DF.GRID_H = float(os.environ.get('P4_GRID_H', DF.GRID_H))
+# makes each skirt a stiffer edge beam). In the case a taller grid sets the panel further back by the same amount: the V6
+# chassis follows (p4v55.GRID_EXTRA, v6.PB); the V5 tray built in this file does not, and is no longer what is built.
+DF.GRID_H = float(os.environ.get('P4_GRID_H', '2.4'))     # 2.4 since Nov 16 (the owner: "we need that extra bit of grid rigidity"; 2.0 tried for brightness)
 # P4_FACE: the face's thickness (0.2, one layer). The whole of it is the 'white' part of each half, whatever it is printed
 # in: for a translucent gray face 2 to 4 layers thick (the owner, Nov 16), P4_FACE=0.4 / 0.6 / 0.8. The grid keeps its
 # height behind it, so the panel sits that much further back (p4v55.GRID_EXTRA, v6.PB follow).
 DF.SKIN = float(os.environ.get('P4_FACE', DF.SKIN))
-DF.SK_D = float(os.environ.get('P4_SKIRT_D', DF.SK_D))
+DF.SK_D = float(os.environ.get('P4_SKIRT_D', '5.0'))     # 5 with the taller grid
 DF.BUMP_FROM_GRID = float(os.environ.get('P4_BUMP_Z', '1.8'))   # where the bumps were on the 3 mm skirt that snapped; a deeper skirt no longer moves them
 # Skirt fit. Two settings (P4_DIFF_FIT):
 # 'snap' (default, Nov 13; printed that evening, "the fit is pretty good now"): the P2.5 pair's fit, as that pair really has it. Its model has
