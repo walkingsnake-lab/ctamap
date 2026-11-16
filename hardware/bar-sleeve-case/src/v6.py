@@ -80,9 +80,14 @@ XE = SEAM - 12.0
 # the line's width. One screw at each end of the top and of the bottom and two on each end, all at the knob's depth.
 # 'four' (V6_SKIN=four): planks and end caps, as reviewed Nov 15-16.
 SKIN = os.environ.get('V6_SKIN', 'two')
-SKIN_GAP = float(os.environ.get('V6_SKIN_GAP', '0.6'))    # the line. To be set from the end coupon: drawn + what the print adds
-LAP_T, LAP_H = 1.9, 3.0          # at the hood's cheeks, in front of the chassis, the top half's inner LAP_T reaches LAP_H down
-                                 # behind the bottom half's: walnut behind the line there, not a slit through the case
+SKIN_GAP = float(os.environ.get('V6_SKIN_GAP', '0.7'))    # the line. 0.6 left 0.09 at the worst height stack (the Nov 16 check: it
+                                 # closes at 0.51 drawn); to be set from the end coupon: drawn + what the print adds
+LAP_T, LAP_H = 1.9, 3.0          # the top half's inner LAP_T (of the 4 mm wall) reaches LAP_H down behind the bottom half's outer
+                                 # 1.7, on both ends, front to back: walnut behind the whole line (as first drawn the lap was
+                                 # only at the hood's cheeks, and the line showed walnut, the diffuser's edge, black chassis and,
+                                 # behind the back plate, daylight). It runs the print's whole height: no overhang.
+LAP_CL_X, LAP_CL_Z = 0.4, SKIN_GAP + 0.1   # room round the lap: the halves can shift 0.3 on the pads' play, and the lap must
+                                 # never land before the line closes (0.3 under it did, at 0.31 of closure)
 PAD_H_END = 0.15                 # pads on the end walls under the halves' legs: the legs slide down past them
 PLANK_SCREWS = tuple((sx * XE, y) for sx in (-1, 1) for y in ((KY,) if SKIN == 'two' else (30.0, 60.0)))
 CAP_SCREWS = ((KY, ZC + 50.0), (KY, ZC - 50.0))            # (y, z) on each end face; z +/-50 clears the S3 and its window
@@ -198,18 +203,16 @@ def skin():
 
 def skin_two(sh):
     """half_top and half_bottom from the whole shell: split at mid height with SKIN_GAP between, lapped at the hood's
-    cheeks. Each lowers (rises) straight onto the chassis; the top wall bears on the pads and the legs lie on the end
-    walls' pads. The lap's back end is a 45 deg ramp: the halves print back-down and it would start in mid-air."""
+    ends, front to back. Each lowers (rises) straight onto the chassis; the top wall bears on the pads and the legs lie
+    on the end walls' pads."""
     g = SKIN_GAP / 2
     top = sh ^ box(-400, 400, -5, D + 5, ZC + g, H + 5)
     bot = sh ^ box(-400, 400, -5, D + 5, -5, ZC - g)
-    yl = DR.YF - 0.5                                          # the lap ends just in front of the chassis
-    for sx in (-1, 1):
-        a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T)))
-        lip = along_x([(-1, ZC + g + 0.02), (yl, ZC + g + 0.02), (yl - LAP_H, ZC - LAP_H), (-1, ZC - LAP_H)], a, b)
-        top = top + (sh ^ lip)
-        a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T + 0.2)))
-        bot = bot - box(a, b, -1, yl + 0.3, ZC - LAP_H - 0.3, ZC + 1)
+    for sx in (-1, 1):                                        # the lap takes the screen rim's end with it: cut at the line, the
+        a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T)))     # bottom half's rim would end in a nub with no root
+        top = top + (sh ^ box(a, b, -5, D + 5, ZC - LAP_H, ZC + g + 0.02))
+        a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T + LAP_CL_X)))
+        bot = bot - box(a, b, -5, D + 5, ZC - LAP_H - LAP_CL_Z, ZC + 1)
     slot_z = lambda x, y, z0, z1: (cyl_z(x, y - SKIN_SLOT, z0, z1, SKIN_CL_D) + cyl_z(x, y + SKIN_SLOT, z0, z1, SKIN_CL_D)).hull()
     top = top - Manifold.batch_boolean([slot_z(x, y, H - WALL - 2, H + 2) for x, y in PLANK_SCREWS], ADD)
     bot = bot - Manifold.batch_boolean([slot_z(x, y, -2, WALL + 2) for x, y in PLANK_SCREWS], ADD)
@@ -523,8 +526,19 @@ def check(P):
             steps = (0.3, 0.5, 1, 2, 4, 8, 16, 32, 64, 80)
             worst = max((P['skin'][name].translate([0, 0, d * s]) ^ (rest + P['skin'][other] + P['encoder'] + P['s3'] + P['sensor'])).volume() for s in steps)
             rows.append((f'{name} lifted straight off (0.3-80 mm), vs chassis, diffuser, panel, encoder, S3, sensor and the other half', round(worst, 2)))
-        g = P['skin']['half_top'].bounding_box()[2] - P['skin']['half_bottom'].bounding_box()[5]
-        rows.append((f'the lap reaches {-g:.2f} mm behind the bottom half; line drawn {SKIN_GAP} mm (info)', 0.0))
+        ht, hb = P['skin']['half_top'], P['skin']['half_bottom']
+        rows.append(('skin screws / chassis and skin (every hole open to its screw)', v(P['screws']['skin'], ch + sk)))
+        # the halves closed until the line shuts: the lap must not land first; and shifted sideways by the pads' play
+        rows.append((f'top half lowered {SKIN_GAP - 0.02:.2f} (the line shut) / bottom half', v(ht.translate([0, 0, -(SKIN_GAP - 0.02)]), hb)))
+        rows.append(('top half shifted 0.3 left or right / bottom half', round(max(v(ht.translate([q, 0, 0]), hb) for q in (-0.3, 0.3)), 2)))
+        # looking along the line from each end: is there walnut behind it everywhere the bottom half's leg runs?
+        open_mm = 0.0
+        for sx in (-1, 1):
+            for y in np.arange(hb.bounding_box()[1] + 0.5, D - 0.2, 0.5):
+                a, b = sorted((sx * (W / 2 - WALL - 0.3), sx * (W / 2 + 1)))
+                if (ht ^ box(a, b, y - 0.05, y + 0.05, ZC - 0.05, ZC + 0.05)).volume() < 1e-6:
+                    open_mm += 0.5
+        rows.append(('length of the line with no walnut behind it, mm (both ends)', open_mm))
         return rows
     for name, d in (('plank_top', (0, 0, 1)), ('plank_bottom', (0, 0, -1)), ('cap_left', (-1, 0, 0)), ('cap_right', (1, 0, 0))):
         worst = max((P['skin'][name].translate([d[0] * s, d[1] * s, d[2] * s]) ^ rest).volume() for s in (0.5, 1, 2, 4, 8, 16))
