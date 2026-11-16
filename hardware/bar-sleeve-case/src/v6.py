@@ -434,8 +434,9 @@ def check(P):
     rows.append(cables(P))
     plank_top_z = max(m.bounding_box()[5] for k, m in P['skin'].items() if k == 'plank_top')
     rows.append(('ring flange above the top plank, mm, less 0.3 (should be >= 0)', round(P['ring'].bounding_box()[2] - plank_top_z - 0.3, 2) * -1 if P['ring'].bounding_box()[2] - plank_top_z < 0.3 else 0.0))
-    import cleat as CLT
+    import cleat as CLT, p4v55 as T
     rows.append(('case cleat / chassis and the screws on its back', v(CLT.case_cleat(), ch + P['screws']['back'])))
+    rows.append(('back screws / chassis (every hole open to its screw)', v(P['screws']['back'], ch - box(-400, 400, BOSS_Y - WASHER_REC[1] + T.P3.SO_FLOOR - 0.01, BOSS_Y - WASHER_REC[1] + T.P3.SO_FLOOR + 0.03, -5, H + 5))))   # less the 0.02 the centre bores start late (p4v55.tray)
     rows.append(('back screws / panel, S3, sensor, encoder', v(P['screws']['back'], P['panel'] + P['s3'] + P['sensor'] + P['encoder'])))
     rows.append(('right chassis half slid on sideways (0.3-12 mm) / left half', round(max(v(P['chassis_right'].translate([q, 0, 0]), P['chassis_left']) for q in (0.3, 1, 3, 6, 9, 12)), 2)))
     rows.append(('panel with its standoffs and washers going in from the front (1-40 mm out) / chassis', round(max(v((P['panel'] + P['standoffs']).translate([0, -q, 0]), ch) for q in (1, 2, 4, 8, 16, 24, 32, 40)), 2)))
