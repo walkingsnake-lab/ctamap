@@ -22,6 +22,9 @@ TOP_BUMPS = False                   # bumps on the top skirt too (p3x2.py: the b
 BUMP_FROM_GRID = None               # the bumps' height behind the grid; None = 1.2 short of the skirt's tip (1.8 on a 3 mm skirt).
                                     # p4.py fixes it at 1.8: on a 5 mm skirt the tip rule put them 3.8 down the panel's side,
                                     # past the edge they click behind, and the half had no snap (the owner, Nov 16)
+BUMP_L = 6.0                        # length of each top/bottom bump along its wall
+BUMP_WINDOW = None                  # (width, depth): the top and bottom skirts stand only `depth` behind the grid over `width` at
+                                    # each bump, so a bump on a deep skirt has a free edge just above it, as on the 3 mm skirt
 BUMP_XS = None                      # x of the top/bottom bumps; None = +/- a quarter of the width (two on the single
                                     # diffuser's 192; p3x2.py sets two per half: +/-40 about each half's centre)
 FT = 1.2                            # flange thickness
@@ -79,12 +82,25 @@ def diffuser(grid=True, skin=None):
             # wall instead of meeting the chamfer along an edge (which rounded to non-manifold edges in the STL)
             keep = box(hx + ecl - BUMP, hx + ecl + 0.3, yc - 3, yc + 3, 0, zt - c - 0.05) if sx > 0 else box(-hx - ecl - 0.3, -hx - ecl + BUMP, yc - 3, yc + 3, 0, zt - c - 0.05)
             d = d + (b ^ keep)
-    for xc in ((BUMP_XS if BUMP_XS is not None else (-hx / 2, hx / 2)) if LONG_BUMPS else ()):
+    bl, ztb = BUMP_L / 2, zt
+    cyl = Manifold.cylinder(max(6.0, BUMP_L + 1), 0.9, 0.9, 48, True)
+    xcs = (BUMP_XS if BUMP_XS is not None else (-hx / 2, hx / 2)) if LONG_BUMPS else ()
+    if BUMP_WINDOW and xcs:
+        ww, wd = BUMP_WINDOW
+        ztb = min(zt, zg1 + wd)
+        for xc in xcs:
+            for sy in ((-1, 1) if TOP_BUMPS else (-1,)):
+                a, b_ = sorted((sy * (hy + CLR - 0.5), sy * (hy + o + 0.5)))
+                d = d - box(xc - ww / 2, xc + ww / 2, a, b_, ztb, zt + 1)
+                wedge = Manifold.extrude(CrossSection([[(0, 0), (0, -c), (c, 0)]]), ww).rotate([90, 0, 90])   # the lead-in, at the new tip
+                wedge = wedge.mirror([0, 1, 0]) if sy < 0 else wedge
+                d = d - wedge.translate([xc - ww / 2, sy * (hy + CLR), ztb + 0.01])
+    for xc in xcs:
         b = cyl.rotate([0, 90, 0]).translate([xc, -hy - CLR, zb])
-        d = d + (b ^ box(xc - 3, xc + 3, -hy - CLR - 0.3, -hy - CLR + BUMP, 0, zt - c - 0.05))   # bumps stop under the tip chamfer
+        d = d + (b ^ box(xc - bl, xc + bl, -hy - CLR - 0.3, -hy - CLR + BUMP, 0, ztb - c - 0.05))   # bumps stop under the tip chamfer
         if TOP_BUMPS:
             b = cyl.rotate([0, 90, 0]).translate([xc, hy + CLR, zb])
-            d = d + (b ^ box(xc - 3, xc + 3, hy + CLR - BUMP, hy + CLR + 0.3, 0, zt - c - 0.05))
+            d = d + (b ^ box(xc - bl, xc + bl, hy + CLR - BUMP, hy + CLR + 0.3, 0, ztb - c - 0.05))
     if grid:
         ribs = []
         for i in range(1, panel.COLS):
