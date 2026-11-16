@@ -55,10 +55,13 @@ PILOT_H = 3.0                    # M3 thread-forming pilot (kept for the T1 coup
 # Printed pilots proved a 0.1 mm window: 3.1 passed on the Nov 3 plate and would not start on the built tray.
 INS_D, INS_DEPTH, INS_RELIEF = 4.4, 5.0, 3.2   # the hole (to confirm on the joint coupon), its depth, room past it for the screw's tip
 BOSS, BOSS_H = 8.0, 3.5          # screw bosses on the chassis walls: square, with a 45 deg ramp on the back (bed) side
-HEAD_D, HEAD_K = 5.7, 1.65       # M3 button head
-PAD_H = 0.2                      # contact pads under the planks: the walnut bears along its length, not only at the screws
+HEAD_D, HEAD_K = 6.9, 1.65       # M3 flanged button head (ISO 7380-2): a plain 5.7 head bears on only 13 mm2 round the long hole
+PAD_H = 0.24                     # contact pads under the planks, as tall as the 0.25 gap: the walnut bears along its length, not
+                                 # only at the screws (0.2 left 0.05 of air, which no print holds; a high pad only bows a plank a hair)
 PAD_W = 4.0
-RING_CAP = 0.6                   # the trim ring reaches over the tower's top under the encoder's nut, which is what holds it
+RING_CAP = 0.4                   # the trim ring reaches over the tower's top under the encoder's nut, which is what holds it
+RING_LIFT = 0.4                  # and its flange stands this far off the walnut: at 0 a plank printed 0.05 thick took the nut's clamp
+WASHER_REC = (7.4, 0.3)          # a recess in each post's foot that holds its washer while the panel is lowered in
 
 # skin screws, lined up (the owner: the staggered ones "look awful"). Planks: a front and a back one at each end, the same
 # distance from the seam. End caps: two in a vertical line at the knob's depth.
@@ -193,16 +196,21 @@ def insert_xz():
     return [(x, ZC + z) for x, z in DR.INSERTS]
 
 
-def pads():
+def pads(t):
     """contact pads on the chassis's top and bottom, PAD_H proud in the 0.25 mm gap: strips front to back every 22 mm under
-    the planks, so a pressed wall meets PETG at once. One more on each top corner, where the corner round starts, carries
-    the end cap, so cap and plank sit on the same surface and any mismatch in height goes underneath."""
+    the planks, so a pressed wall meets PETG at once. A strip is left out where the wall under it is not solid (the sensor's
+    openings in the top wall). None under the end caps: a pad on the corner round stopped a cap after 0.1 mm of travel, and
+    the caps have to move in to meet the plank ends."""
     gap = DR.TRAY_CL - PAD_H
     y0, y1 = DR.YF + 4.0, DR.Y0 - 4.0
     band = C.prism_y(C.rr_cs(C.BORE_HX - gap, C.BORE_HZ - gap, C.BORE_R - gap), y0, y1) \
         - C.prism_y(C.rr_cs(C.BORE_HX - DR.TRAY_CL - 0.3, C.BORE_HZ - DR.TRAY_CL - 0.3, C.BORE_R - DR.TRAY_CL - 0.3), y0 - 1, y1 + 1)
-    strips = [box(x - PAD_W / 2, x + PAD_W / 2, 0, D, -5, H + 5) for x in np.arange(-110.0, 111.0, 22.0)]
-    strips += [box(*sorted((sx * (SEAM + 1.0), sx * (SEAM + 1.0 + PAD_W))), 0, D, ZC, H + 5) for sx in (-1, 1)]   # top corners only
+    strips = []
+    for x in np.arange(-110.0, 111.0, 22.0):
+        for z0, z1, half in ((ZO1 - 1.2, ZO1 - 0.2, box(-400, 400, 0, D, ZC, H + 5)), (ZO0 + 0.2, ZO0 + 1.2, box(-400, 400, 0, D, -5, ZC))):
+            under = box(x - PAD_W / 2, x + PAD_W / 2, y0, y1, z0, z1)
+            if (under ^ t).volume() > 0.995 * under.volume():
+                strips.append(box(x - PAD_W / 2, x + PAD_W / 2, 0, D, -5, H + 5) ^ half)
     return band ^ Manifold.batch_boolean(strips, ADD)
 
 
@@ -239,7 +247,7 @@ def trim_ring():
     the encoder's nut clamps it (drawn loose before: its screw holes are larger than the screw heads, as on V5, so the
     two screws beside the knob never held it). It covers the knob hole's clearance and both of its printing points."""
     R = CO.FL_R * p4.KNOB_SCALE
-    fl = CO.cyl(R, 0, CO.FL_T - CO.FL_CH) + CO.cyl(R, CO.FL_T - CO.FL_CH, CO.FL_T, R - CO.FL_CH)
+    fl = CO.cyl(R, RING_LIFT, CO.FL_T - CO.FL_CH) + CO.cyl(R, CO.FL_T - CO.FL_CH, CO.FL_T, R - CO.FL_CH)
     ring = fl - Manifold.extrude(tower_cs(NECK_R + 0.2).translate([0, -KY]), CO.FL_T - RING_CAP + 1).translate([0, 0, -1]) \
         - Manifold.cylinder(CO.FL_T + 2, CO.BUSH_R + 0.1, CO.BUSH_R + 0.1, 64).translate([0, 0, -1])
     if p4.TOP_SCREWS:
@@ -312,14 +320,15 @@ def chassis():
     saved = DR.FASTEN, DR.INSERT_D, DR.INSERT_L
     DR.FASTEN, DR.INSERT_D, DR.INSERT_L = 'insert', INS_D, INS_DEPTH          # the cleat's and the bottom screws' bosses
     try:
-        t = T.tray(extra_dy=BOSS_Y - (T.P3.FOOT_Y + T.FOOT_DY))
+        t = T.tray(extra_dy=BOSS_Y - WASHER_REC[1] - (T.P3.FOOT_Y + T.FOOT_DY))
     finally:
         DR.FASTEN, DR.INSERT_D, DR.INSERT_L = saved
     # no crush ribs; the front edge clear of the diffuser's flange, which sits RIM_GAP further back
     t = t ^ C.prism_y(C.rr_cs(C.BORE_HX - DR.TRAY_CL, C.BORE_HZ - DR.TRAY_CL, C.BORE_R - DR.TRAY_CL), 0, D)
     t = t - box(-400, 400, 0, DR.YF + 2 * RIM_GAP, -5, H + 5)
     adds = [boss_wall(x, y, sz) for sz in (1, -1) for x, y in PLANK_SCREWS] + [boss_end(y, z, sx) for sx in (-1, 1) for y, z in CAP_SCREWS]
-    t = t + Manifold.batch_boolean(adds, ADD) + pads()
+    t = t - Manifold.batch_boolean([cyl_y(x, z, BOSS_Y - WASHER_REC[1] - 1, BOSS_Y, WASHER_REC[0], 48) for x, z in insert_xz()], ADD)   # washer recesses
+    t = t + Manifold.batch_boolean(adds, ADD) + pads(t)
     tw_add, tw_cut = tower()
     t = (t + tw_add) - tw_cut
     cuts = [thread_z(x, y, sz) for sz in (1, -1) for x, y in PLANK_SCREWS] + [thread_x(y, z, sx) for sx in (-1, 1) for y, z in CAP_SCREWS]
@@ -369,16 +378,20 @@ def screws():
         for y, z in CAP_SCREWS:
             a, b = sorted((sx * (W / 2 - 10.0), sx * W / 2)); c, e = sorted((sx * W / 2, sx * (W / 2 + HEAD_K)))
             skin_s.append(cyl_x(y, z, a, b, 3.0, 24) + cyl_x(y, z, c, e, HEAD_D, 32))
-    seat = BOSS_Y + T.P3.SO_FLOOR
-    for x, z in insert_xz():
-        back_s.append(cyl_y(x, z, seat - 8.0, seat, 3.0, 24) + cyl_y(x, z, seat, seat + HEAD_K, HEAD_D, 32))
+    seat = BOSS_Y - WASHER_REC[1] + T.P3.SO_FLOOR
+    for x, z in insert_xz():                  # M3 x 8 with a washer under its head (the head alone could drop into the 4.5 mm hole)
+        back_s.append(cyl_y(x, z, seat + WASHER_T - 8.0, seat + WASHER_T, 3.0, 24) + cyl_y(x, z, seat, seat + WASHER_T, 7.0, 32) + cyl_y(x, z, seat + WASHER_T, seat + WASHER_T + HEAD_K, 5.7, 32))
     for dz, _, _ in T.KNUCKLES:
         back_s.append(cyl_y(T.KN_SCREW_X, ZC + dz, YB1 - 10.0, YB1, 3.0, 24))
     xm = JOINT_X + TONGUE / 2
     for y in LEG_SCREW_Y:
         hid.append(cyl_z(xm, y, ZO1 - 10.0, ZO1, 3.0, 24) + cyl_z(xm, y, ZO0, ZO0 + 10.0, 3.0, 24))
+    tsa, tsb = p4.top_screws_env()            # the two M2.5 beside the knob, as V5: through the ring's holes and the plank into the chassis
+    for sx in C.SCREW_XS:                     # the two M3 x 10 under the case, as V5, into inserts in the chassis's bottom bosses
+        for x in (sx, -sx):
+            hid.append(cyl_z(x, DR.BOT_Y, 0, 10.0, 3.0, 24) + cyl_z(x, DR.BOT_Y, -HEAD_K, 0, HEAD_D, 32))
     u = lambda l: Manifold.batch_boolean(l, ADD)
-    return dict(skin=u(skin_s), back=u(back_s), under=u(hid))
+    return dict(skin=u(skin_s), back=u(back_s), under=u(hid), knob=tsa + tsb)
 
 
 def build():
@@ -417,8 +430,10 @@ def check(P):
             ('chassis / standoffs', v(ch, P['standoffs'])), ('chassis / S3, beyond the V5 tray (its posts stand in the envelope)', round(v(ch, P['s3']) - v(p4.tray_p4(), P['s3']), 2)), ('chassis / sensor', v(ch, P['sensor'])),
             ('chassis / encoder', v(ch, P['encoder'])), ('ring / skin', v(P['ring'], sk)), ('ring / chassis', v(P['ring'], ch)), ('ring / encoder', v(P['ring'], P['encoder'])), ('chassis / pixel', v(ch, pixel())),
             ('standoffs / encoder, S3, sensor', v(P['standoffs'], P['encoder'] + P['s3'] + P['sensor'])),
-            ('skin screws / panel, diffuser, S3, sensor, encoder', v(P['screws']['skin'] + P['screws']['under'], P['panel'] + dif + P['s3'] + P['sensor'] + P['encoder']))]
+            ('skin, knob and bottom screws / panel, diffuser, S3, sensor, encoder, ring', v(P['screws']['skin'] + P['screws']['under'] + P['screws']['knob'], P['panel'] + dif + P['s3'] + P['sensor'] + P['encoder'] + P['ring']))]
     rows.append(cables(P))
+    plank_top_z = max(m.bounding_box()[5] for k, m in P['skin'].items() if k == 'plank_top')
+    rows.append(('ring flange above the top plank, mm, less 0.3 (should be >= 0)', round(P['ring'].bounding_box()[2] - plank_top_z - 0.3, 2) * -1 if P['ring'].bounding_box()[2] - plank_top_z < 0.3 else 0.0))
     import cleat as CLT
     rows.append(('case cleat / chassis and the screws on its back', v(CLT.case_cleat(), ch + P['screws']['back'])))
     rows.append(('back screws / panel, S3, sensor, encoder', v(P['screws']['back'], P['panel'] + P['s3'] + P['sensor'] + P['encoder'])))
