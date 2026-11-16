@@ -89,6 +89,7 @@ LAP_T, LAP_H = 1.9, 3.0          # the top half's inner LAP_T (of the 4 mm wall)
                                  # 1.7, on both ends, front to back: walnut behind the whole line (as first drawn the lap was
                                  # only at the hood's cheeks, and the line showed walnut, the diffuser's edge, black chassis and,
                                  # behind the back plate, daylight). It runs the print's whole height: no overhang.
+LAP_END = 2.0
 LAP_CL_X, LAP_CL_Z = 0.4, SKIN_GAP + 0.1   # room round the lap: the halves can shift 0.3 on the pads' play, and the lap must
                                  # never land before the line closes (0.3 under it did, at 0.31 of closure)
 PAD_H_END = 0.15                 # pads on the end walls under the halves' legs: the legs slide down past them
@@ -211,11 +212,14 @@ def skin_two(sh):
     g = SKIN_GAP / 2
     top = sh ^ box(-400, 400, -5, D + 5, ZC + g, H + 5)
     bot = sh ^ box(-400, 400, -5, D + 5, -5, ZC - g)
+    y0, y1 = bot.bounding_box()[1] + LAP_END, D - LAP_END
     for sx in (-1, 1):                                        # the lap takes the screen rim's end with it: cut at the line, the
         a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T)))     # bottom half's rim would end in a nub with no root
-        top = top + (sh ^ box(a, b, -5, D + 5, ZC - LAP_H, ZC + g + 0.02))
+        # it stops LAP_END short of the wall's front and back edges, where it would show end-on as a step in the line;
+        # its back end is a 45 deg ramp (the halves print back-down: it would start in mid-air)
+        top = top + (sh ^ along_x([(y0, ZC + g + 0.02), (y1, ZC + g + 0.02), (y1 - LAP_H, ZC - LAP_H), (y0, ZC - LAP_H)], a, b))
         a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T + LAP_CL_X)))
-        bot = bot - box(a, b, -5, D + 5, ZC - LAP_H - LAP_CL_Z, ZC + 1)
+        bot = bot - box(a, b, y0 - 0.4, y1 + 0.4, ZC - LAP_H - LAP_CL_Z, ZC + 1)
     slot_z = lambda x, y, z0, z1: (cyl_z(x, y - SKIN_SLOT, z0, z1, SKIN_CL_D) + cyl_z(x, y + SKIN_SLOT, z0, z1, SKIN_CL_D)).hull()
     top = top - Manifold.batch_boolean([slot_z(x, y, H - WALL - 2, H + 2) for x, y in PLANK_SCREWS], ADD)
     bot = bot - Manifold.batch_boolean([slot_z(x, y, -2, WALL + 2) for x, y in PLANK_SCREWS], ADD)
@@ -537,11 +541,11 @@ def check(P):
         # looking along the line from each end: is there walnut behind it everywhere the bottom half's leg runs?
         open_mm = 0.0
         for sx in (-1, 1):
-            for y in np.arange(hb.bounding_box()[1] + 0.5, D - 0.2, 0.5):
+            for y in np.arange(hb.bounding_box()[1] + LAP_END + 0.5, D - LAP_END - LAP_H, 0.5):    # between the lap's ends
                 a, b = sorted((sx * (W / 2 - WALL - 0.3), sx * (W / 2 + 1)))
                 if (ht ^ box(a, b, y - 0.05, y + 0.05, ZC - 0.05, ZC + 0.05)).volume() < 1e-6:
                     open_mm += 0.5
-        rows.append(('length of the line with no walnut behind it, mm (both ends)', open_mm))
+        rows.append(('length of the line with no walnut behind it, mm (both ends, between the lap\'s ends)', open_mm))
         return rows
     for name, d in (('plank_top', (0, 0, 1)), ('plank_bottom', (0, 0, -1)), ('cap_left', (-1, 0, 0)), ('cap_right', (1, 0, 0))):
         worst = max((P['skin'][name].translate([d[0] * s, d[1] * s, d[2] * s]) ^ rest).volume() for s in (0.5, 1, 2, 4, 8, 16))
