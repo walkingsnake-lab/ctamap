@@ -138,8 +138,8 @@ if 'skin' in WHICH:
     sc = R.Scene(ps)
     cam = persp((-0.72, -1.3, 0.78), size=(1700, 1300), dist=1100, target=CENTRE + np.array([0, 0, 10]))
     im = sc.render(cam, ground=False)
-    annotate(im, cam, [('top half: top, hood and the upper half of each end; lifts straight off', (70, 40, H + 70), (150, -70), 'lm'),
-                       ('its inner edge reaches 3 mm down behind the bottom half: walnut behind the line', (-HW + 3, 40, ZC + 68), (-60, 190), 'mt'),
+    annotate(im, cam, [('top half: top, hood, upper ends', (70, 40, H + 70), (120, -70), 'lm'),
+                       ('inner edge tucks 3 mm behind the bottom half', (-HW + 3, 40, ZC + 68), (40, 200), 'lt'),
                        ('bottom half (feet)', (60, 45, -70), (150, 60), 'lm'),
                        ('chassis: carries everything; the walnut carries nothing', (-100, 30, v6.ZO1), (-170, -210), 'mb'),
                        ('encoder tower: part of the chassis', (0, KY, H + 1.6), (120, -120), 'lm'),
