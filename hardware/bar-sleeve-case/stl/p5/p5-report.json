@@ -1,0 +1,380 @@
+{
+ "parts": {
+  "p5-shell-left-walnut-backdown.stl": {
+   "watertight": true,
+   "extents": [
+    173.4,
+    186.8,
+    78.5
+   ],
+   "square": 186.8,
+   "spare_a_side": 34.6,
+   "volume_cm3": 157.3
+  },
+  "p5-shell-right-walnut-backdown.stl": {
+   "watertight": true,
+   "extents": [
+    173.4,
+    186.8,
+    78.5
+   ],
+   "square": 186.8,
+   "spare_a_side": 34.6,
+   "volume_cm3": 153.4
+  },
+  "p5-joint-plate-top.stl": {
+   "watertight": true,
+   "extents": [
+    100.0,
+    50.5,
+    1.2
+   ],
+   "square": 100.0,
+   "spare_a_side": 78.0,
+   "volume_cm3": 6.0
+  },
+  "p5-joint-plate-bottom.stl": {
+   "watertight": true,
+   "extents": [
+    100.0,
+    50.5,
+    1.2
+   ],
+   "square": 100.0,
+   "spare_a_side": 78.0,
+   "volume_cm3": 6.0
+  },
+  "p5-tray-left.stl": {
+   "watertight": true,
+   "extents": [
+    169.1,
+    178.2,
+    53.3
+   ],
+   "square": 178.2,
+   "spare_a_side": 38.9,
+   "volume_cm3": 134.2
+  },
+  "p5-tray-right.stl": {
+   "watertight": true,
+   "extents": [
+    169.1,
+    178.2,
+    53.3
+   ],
+   "square": 178.2,
+   "spare_a_side": 38.9,
+   "volume_cm3": 135.2
+  },
+  "p5-tray-right-window.stl": {
+   "watertight": true,
+   "extents": [
+    6.0,
+    6.0,
+    1.0
+   ],
+   "square": 6.0,
+   "spare_a_side": 125.0,
+   "volume_cm3": 0.0
+  },
+  "p5-spine.stl": {
+   "watertight": true,
+   "extents": [
+    124.0,
+    14.0,
+    3.0
+   ],
+   "square": 124.0,
+   "spare_a_side": 66.0,
+   "volume_cm3": 5.1
+  },
+  "p5-bridge.stl": {
+   "watertight": true,
+   "extents": [
+    30.0,
+    14.0,
+    39.8
+   ],
+   "square": 30.0,
+   "spare_a_side": 113.0,
+   "volume_cm3": 2.5
+  },
+  "p5-diffuser-left-white.stl": {
+   "watertight": true,
+   "extents": [
+    168.8,
+    177.2,
+    0.2
+   ],
+   "square": 177.2,
+   "spare_a_side": 39.4,
+   "volume_cm3": 6.0
+  },
+  "p5-diffuser-left-black.stl": {
+   "watertight": true,
+   "extents": [
+    168.9,
+    177.6,
+    7.0
+   ],
+   "square": 177.6,
+   "spare_a_side": 39.2,
+   "volume_cm3": 29.9
+  },
+  "p5-diffuser-right-white.stl": {
+   "watertight": true,
+   "extents": [
+    168.8,
+    177.2,
+    0.2
+   ],
+   "square": 177.2,
+   "spare_a_side": 39.4,
+   "volume_cm3": 6.0
+  },
+  "p5-diffuser-right-black.stl": {
+   "watertight": true,
+   "extents": [
+    168.9,
+    177.6,
+    7.0
+   ],
+   "square": 177.6,
+   "spare_a_side": 39.2,
+   "volume_cm3": 29.9
+  },
+  "p5-diffuser-bar.stl": {
+   "watertight": true,
+   "extents": [
+    30.0,
+    4.5,
+    3.0
+   ],
+   "square": 30.0,
+   "spare_a_side": 113.0,
+   "volume_cm3": 0.3
+  },
+  "p5-encoder-collar.stl": {
+   "watertight": true,
+   "extents": [
+    41.3,
+    41.3,
+    6.0
+   ],
+   "square": 41.3,
+   "spare_a_side": 107.3,
+   "volume_cm3": 3.0
+  },
+  "p5-sensor-sled.stl": {
+   "watertight": true,
+   "extents": [
+    26.4,
+    28.0,
+    6.4
+   ],
+   "square": 28.0,
+   "spare_a_side": 114.0,
+   "volume_cm3": 1.4
+  },
+  "p5-cleat-case.stl": {
+   "watertight": true,
+   "extents": [
+    150.0,
+    25.0,
+    12.0
+   ],
+   "square": 150.0,
+   "spare_a_side": 53.0,
+   "volume_cm3": 35.3
+  },
+  "p5-cleat-wall.stl": {
+   "watertight": true,
+   "extents": [
+    240.0,
+    51.0,
+    12.0
+   ],
+   "square": 240.0,
+   "spare_a_side": 8.0,
+   "volume_cm3": 113.7
+  },
+  "p5-boot-key.stl": {
+   "watertight": true,
+   "extents": [
+    26.1,
+    10.0,
+    3.4
+   ],
+   "square": 26.1,
+   "spare_a_side": 115.0,
+   "volume_cm3": 0.1
+  },
+  "check-p5-corner-inserts.stl": {
+   "watertight": true,
+   "extents": [
+    162.5,
+    152.0,
+    1.6
+   ],
+   "square": 162.5,
+   "spare_a_side": 46.8,
+   "volume_cm3": 4.9
+  },
+  "coupon-p5-seam-left.stl": {
+   "watertight": true,
+   "extents": [
+    30.0,
+    6.0,
+    78.5
+   ],
+   "square": 30.0,
+   "spare_a_side": 113.0,
+   "volume_cm3": 8.6
+  },
+  "coupon-p5-seam-right.stl": {
+   "watertight": true,
+   "extents": [
+    30.0,
+    6.0,
+    78.5
+   ],
+   "square": 30.0,
+   "spare_a_side": 113.0,
+   "volume_cm3": 8.6
+  },
+  "coupon-p5-knob-wall.stl": {
+   "watertight": true,
+   "extents": [
+    4.5,
+    44.0,
+    44.0
+   ],
+   "square": 44.0,
+   "spare_a_side": 106.0,
+   "volume_cm3": 6.5
+  },
+  "coupon-p5-diffuser-joint-left-white.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.6,
+    0.2
+   ],
+   "square": 38.6,
+   "spare_a_side": 108.7,
+   "volume_cm3": 0.2
+  },
+  "coupon-p5-diffuser-joint-left-black.stl": {
+   "watertight": true,
+   "extents": [
+    19.9,
+    38.8,
+    7.0
+   ],
+   "square": 38.8,
+   "spare_a_side": 108.6,
+   "volume_cm3": 0.9
+  },
+  "coupon-p5-diffuser-joint-right-white.stl": {
+   "watertight": true,
+   "extents": [
+    20.0,
+    38.6,
+    0.2
+   ],
+   "square": 38.6,
+   "spare_a_side": 108.7,
+   "volume_cm3": 0.2
+  },
+  "coupon-p5-diffuser-joint-right-black.stl": {
+   "watertight": true,
+   "extents": [
+    19.9,
+    38.8,
+    7.0
+   ],
+   "square": 38.8,
+   "spare_a_side": 108.6,
+   "volume_cm3": 0.9
+  },
+  "coupon-p5-drawer-fit-shell.stl": {
+   "watertight": true,
+   "extents": [
+    59.5,
+    36.0,
+    29.0
+   ],
+   "square": 59.5,
+   "spare_a_side": 98.2,
+   "volume_cm3": 10.7
+  },
+  "coupon-p5-drawer-fit-tray.stl": {
+   "watertight": true,
+   "extents": [
+    54.8,
+    31.7,
+    25.0
+   ],
+   "square": 54.8,
+   "spare_a_side": 100.6,
+   "volume_cm3": 9.4
+  }
+ },
+ "summary": {
+  "W": 346.8,
+  "H": 186.8,
+  "D": 78.5,
+  "wall": 4.5,
+  "bore": [
+   168.9,
+   88.9
+  ],
+  "plates": [
+   100.0,
+   50.5,
+   1.2
+  ],
+  "knob": {
+   "below_top": 40.0,
+   "y": 51.7,
+   "flange_to_corner_round": 3.35
+  },
+  "S3_edge": 165.75,
+  "port_z": -35.97,
+  "port_above_bottom": 57.43,
+  "corners": [
+   [
+    -152.5,
+    -71.0
+   ],
+   [
+    -152.5,
+    71.0
+   ],
+   [
+    152.5,
+    -71.0
+   ],
+   [
+    152.5,
+    71.0
+   ]
+  ],
+  "bridge_z": -71.0,
+  "spine_z": 61.7,
+  "ribbon_drop": 21.03,
+  "screws_below_x": 62.0,
+  "seam_screws": false,
+  "seam_screw_x": 15.0,
+  "diff_shrink": 0.0021,
+  "wall_cleat": 240.0,
+  "assumed": [
+   "everything: panel not in hand",
+   "inserts (photos, +/-1 mm)",
+   "thickness (drawing)",
+   "headers (photo, +/-1.5 mm)",
+   "header height",
+   "housing outline"
+  ]
+ }
+}
