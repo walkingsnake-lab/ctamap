@@ -45,7 +45,8 @@ CENTRE_POSTS = [q for q in DR.INSERTS if q not in DR.CORNERS]        # (0, -56),
 # The bottom rows are also solid at the two screw bosses (x = +/-46) and the top ones are blind behind the sensor's hooks.
 # The louvers keep V5's look (the owner, Nov 15: a first draft that cut the rows into unequal lengths with solid ties
 # "looks weird"; an even grid of short slots was the other choice). Full-length rows, solid only round the two centre posts
-# (and at the bottom screw bosses, as V5). The ties are BLIND stretches: the slot is still cut from the back face there but
+# (the gaps V5 left at the bottom screw bosses are blind stretches too since Nov 17: "a design quirk carried over", the
+# owner; the bottom rows now match the top). The ties are BLIND stretches: the slot is still cut from the back face there but
 # stops drawer.TIE_BLIND (2.5 mm) short of the band's inner face, so it looks unbroken from behind and that much of the
 # 5 mm band joins the wall to the plate. One every 24 mm, 10 wide, and 20 across the joint.
 TIES = dict(top=[(-8, 8)], bottom=[(-8, 8)])
@@ -70,7 +71,7 @@ def tray(extra_dy=0.0):
     dy = FOOT_DY + extra_dy
     post_dy = {c: dy for c in DR.CORNERS}
     t = DR.tray(ribbon_hooks=[(p4.HOOK_X, p4.RIB_Z), (p4.HOOK2_X, p4.IDC_Z)], hook_lip=p4.RIB_HOOK_LIP, tie_x0=v6.TIE_X0,
-                post_dy=post_dy, ties=TIES, blind=BLIND)
+                post_dy=post_dy, ties=TIES, blind=BLIND, boss_blind=True)
     with DR._foot(dy):                                  # the two centre posts, as drawer.tray() builds the corner ones
         adds = [P3.standoff(x, z, DR.Y0) for x, z in CENTRE_POSTS]
         cuts = [cyl_y(x, ZC + z, P3.FOOT_Y + P3.SO_FLOOR + 0.02, DR.Y1 + 1, P3.SO_BORE + 0.04, 64) for x, z in CENTRE_POSTS]   # a hair over the post's own bore, so the two walls don't coincide

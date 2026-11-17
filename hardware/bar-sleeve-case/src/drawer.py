@@ -230,10 +230,12 @@ SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray
 
 
 def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=None, extra_cuts=(), blank=False, post_dy=None,
-         s3=None, controls=None, ties=None, blind=None):
+         s3=None, controls=None, ties=None, blind=None, boss_blind=False):
     """the v5 tray. The split options are for trays split in two (p4.py), and their defaults give the one-piece tray:
     top_bar: half width of the solid bar across the middle of the top louver rows (LV_SPLIT / 2);
     bottom_gap: half width of a gap in the bottom louver rows at the middle (0: none);
+    boss_blind: the bottom rows run on over the two screw bosses as blind slots (TIE_BLIND of band left), so they are as
+    long as the top rows from behind (False: a 13 mm gap in the rows at each boss, as V5);
     ribbon_hooks: [(x, z)] of the ribbon hook pairs (default: one pair between the S3's connector and the panel input);
     hook_lip: the hooks' lip thickness (their reach is 4 mm: 4.0 makes the lip's underside 45 deg back-down);
     tie_x0: left end of the tie loop's patch (default: just right of the first hook pair); extra_cuts: more cuts.
@@ -348,7 +350,7 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
         if zc < ZC:                                                          # bottom rows: gaps at the screw bosses
             if bottom_gap:
                 segs = minus(segs, -bottom_gap, bottom_gap)
-            for scx in C.SCREW_XS:
+            for scx in (() if boss_blind else C.SCREW_XS):
                 segs = minus(minus(segs, -scx - 6.5, -scx + 6.5), scx - 6.5, scx + 6.5)
         for g0, g1 in (ties or {}).get('top' if zc > ZC else 'bottom', ()):
             segs = minus(segs, g0, g1)
@@ -362,6 +364,10 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
             sl = sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6)
             for g0, g1 in (blind or {}).get('top' if zc > ZC else 'bottom', ()):
                 sl = sl - box(g0, g1, Y0 - 20, y_in + TIE_BLIND, -5, H + 5)
+            if zc < ZC and boss_blind:                                       # blind over the bottom screw bosses, not a gap
+                for scx in C.SCREW_XS:
+                    for q in (-scx, scx):
+                        sl = sl - box(q - 6.5, q + 6.5, Y0 - 20, y_in + TIE_BLIND, -5, H + 5)
             if zc > ZC and controls:                                         # blind behind the sensor sled's hooks
                 for g0, g1 in louver_gaps(zc, r):
                     sl = sl - box(g0, g1, Y0 - 20, y_in + LV_BLIND, -5, H + 5)
