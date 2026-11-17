@@ -55,7 +55,7 @@ test('the sky blends continuously through dusk (no jumps between minutes)', () =
         const d = [1, 3, 5].reduce((m, i) => Math.max(m, Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16))), 0);
         assert.ok(d <= 12, `row ${y} jumped ${d} at ${new Date(t * 1000).toISOString()}`);
       }
-      assert.ok(s.win >= prev.win, 'windows only switch on as it darkens');
+      assert.ok(s.win >= prev.win, 'windows only brighten as it darkens');
     }
     prev = s;
   }
@@ -89,7 +89,7 @@ test('sunset: the sun sits low at its bearing on the sun scale; the glitter path
   assert.ok(may.gl.p > 50, `glitter ${may.gl.p}`);
 });
 
-test('dusk: windows coming on, a few stars not yet, sun gone', () => {
+test('dusk: windows fading up, a few stars not yet, sun gone', () => {
   const s = sky({}, DUSK);
   assert.equal(s.sun, null);
   assert.ok(s.win > 30 && s.win < 100, `win ${s.win}`);

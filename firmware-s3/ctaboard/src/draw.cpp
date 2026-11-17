@@ -3275,9 +3275,13 @@ static void render_skyline(const Value &p, const Value &sky, Frame &f, std::opti
         }
     }
   }
-  int lim = (int)jsround(450 * night);
-  for (const sky::Win &w : G.wins)
-    if ((int)w.th < lim) f.fill(w.x, w.y, 1, 1, w.bright ? sky::WIN_BRIGHT : sky::WIN_DIM);
+  // Windows: the same 45% are always lit; they show as the sky darkens, all
+  // at once, fading up from the black building to full at `win` 100.
+  if (night > 0) {
+    const RGB black{0, 0, 0}, dim = mix_rgb(black, sky::WIN_DIM, night), bright = mix_rgb(black, sky::WIN_BRIGHT, night);
+    for (const sky::Win &w : G.wins)
+      if ((int)w.th < 450) f.fill(w.x, w.y, 1, 1, w.bright ? bright : dim);
+  }
   if (s["roof"].truthy()) {
     RGB rc = hexs(json::str(s["roof"]));
     for (int x = 0; x < W; x++)
