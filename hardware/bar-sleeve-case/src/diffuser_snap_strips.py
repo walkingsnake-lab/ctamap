@@ -22,7 +22,7 @@ VARIANTS = ((1, dict()),
             (2, dict(BUMP_WINDOW=(14.0, 3.0))),
             (3, dict(BUMP_L=W + 6)),
             (4, dict(GRID_H=1.5, SK_D=3.0)))
-SIZES = tuple((i, dict(HOUSE_H=round(DF.HOUSE_H - 0.1 * i, 2))) for i in range(4))
+SIZES = tuple((i, dict(HOUSE_H=round(p4.HOUSE_H_MEASURED - 0.1 * i, 2))) for i in range(4))   # 3 = p4.SKIRT_TIGHT, chosen Nov 16
 
 
 def strip(n, over):

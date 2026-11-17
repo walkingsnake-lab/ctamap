@@ -482,7 +482,16 @@ def joint_taper_cuts(z0, z1):
 # panel's ends instead of 0.05) pushed the halves 0.5-1 mm apart at the joint. Another filament: measure the shrink
 # strip, then DIFF_SHRINK = 1 - measured / built.
 DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0021'))
-DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11, 127.8 on Nov 12 (board edge, frame flush with it)
+HOUSE_H_MEASURED = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11, 127.8 on Nov 12 (board edge, frame flush with it)
+# The opening between the top and bottom skirts is built SKIRT_TIGHT smaller than the fit drawn for that housing (0.10
+# clear a side, 0.2 bumps). Nov 16: the halves with the 2.4 grid and 5 mm skirts sat right but did not snap; of four sizing
+# strips (0, 0.1, 0.2, 0.3 smaller: diffuser_snap_strips.py size) the owner chose 0.3: "fits tight but well". That is the
+# opening with no shrink allowance at all (0.27), so this heavier half seems to shrink less across its height than the
+# 0.21% measured on the first, thinner ones. Only the height is tightened: lengthwise the allowance stays, so the ribs
+# keep to the gaps between the LEDs and the end skirts keep their room (uncompensated, on Nov 12, the ends pushed the
+# halves apart at the joint).
+SKIRT_TIGHT = float(os.environ.get('P4_SKIRT_TIGHT', '0.3'))
+DF.HOUSE_H = HOUSE_H_MEASURED - SKIRT_TIGHT
 # A stiffer diffuser to try (Nov 15: on the first full build the grid sheet did not stay flat on the panel and light bled
 # between cells at the edges). P4_GRID_H: the grid's height (1.5; 2.4 tried: the ribs' bending stiffness goes with the
 # cube, about 4x, and the pixels soften a little). P4_SKIRT_D: the skirts' depth along the panel's sides (3.0; deeper
@@ -635,7 +644,7 @@ BAR_HEAD_D, BAR_HEAD_K = 4.7, 1.7
 def bar_geom():
     """y of the screw line, the bosses' and bars' outer y, the bar's inner y, the boss tops' z (diffuser frame, top border)"""
     y_out = DF.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT - LUG_TRAY_GAP
-    hy = (DF.HOUSE_H or DF.PH) / 2
+    hy = (HOUSE_H_MEASURED or DF.PH) / 2            # the panel's own edge, not the tightened skirt: the bar stays as printed
     return y_out - 2.3, y_out, hy + 0.7, DF.FT + BOSS_H
 
 
@@ -753,7 +762,7 @@ def panel_p4():
     """P4 panel in the case, turned 180 deg: LED board (2.5 mm incl. LEDs) + 12 mm housing (rim, ribs, insert bosses),
     the two HUB75 shrouds (top 1 mm under the housing back, ASSUMED), VH4 power header, a ribbon plug on data in"""
     yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK - PANEL_THIN            # the measured housing back
-    pw, ph = DF.HOUSE_W or panel.P['w'], DF.HOUSE_H or panel.P['h']         # as measured (127.8 high, board and frame flush)
+    pw, ph = DF.HOUSE_W or panel.P['w'], HOUSE_H_MEASURED or panel.P['h']    # as measured (127.8 high, board and frame flush)
     parts = [box(-pw / 2, pw / 2, yf, yf + 2.5, ZC - ph / 2, ZC + ph / 2)]
     hous = box(-pw / 2, pw / 2, yf + 2.5 - 0.01, yb, ZC - ph / 2, ZC + ph / 2)
     hous = hous - box(-pw / 2 + 6, pw / 2 - 6, yf, yb + 1, ZC - ph / 2 + 6, ZC + ph / 2 - 6)
