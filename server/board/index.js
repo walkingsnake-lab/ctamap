@@ -3,7 +3,7 @@
 // else in the app knows about the board. API: docs/board/contract.md.
 
 const crypto = require('crypto');
-const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS } = require('./state');
+const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS, DIGIT_SHADOWS } = require('./state');
 const { createTracker } = require('./tracker');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
@@ -469,6 +469,8 @@ function createBoard({
   // The analog face's accent color, or null for the original amber.
   const accentOf = (board) => (board.analogAccent && board.analogAccent !== 'amber' ? ANALOG_ACCENTS[board.analogAccent] || null : null);
   const digitOf = (board) => (board.digitColor && board.digitColor !== 'white' ? DIGIT_COLORS[board.digitColor] || null : null);
+  // The big digits' drop shadow: the digit color's partner (on unless set false), or null when off.
+  const shadowOf = (board) => (board.digitShadow !== false ? DIGIT_SHADOWS[board.digitColor || 'white'] || null : null);
   // The analog face's weather (and the wide Seventies face's temperature).
   const cwxOf = (wd) => (wd ? { temp: toWx(wd).temp, icon: toWx(wd).icon } : null);
 
@@ -495,6 +497,7 @@ function createBoard({
     if (caps.face('digits') && board.colonBlink === false) faces.steady = true;
     if (caps.face('analog') && accentOf(board)) faces.cacc = accentOf(board);
     if ((caps.face('digits') || caps.face('daydate')) && digitOf(board)) faces.cdig = digitOf(board);
+    if (caps.face('digits') && shadowOf(board)) faces.cshd = shadowOf(board);
     const wide = board.cols === 128;
     return { days: wd ? toDays(wd) : null, hours: wd ? toHours(wd) : null, ...(wide && wd ? { week: toWeek(wd), hours24: toDayHours(wd) } : {}), ...faces };
   }
@@ -677,6 +680,8 @@ function createBoard({
       ...(face === 'analog' && accentOf(board) ? { cacc: accentOf(board) } : {}),
       // Big digits and day/date faces: the time's color, absent = white.
       ...((face === 'digits' || face === 'daydate') && digitOf(board) ? { cdig: digitOf(board) } : {}),
+      // Big digits face: the drop shadow's color, absent = none.
+      ...(face === 'digits' && shadowOf(board) ? { cshd: shadowOf(board) } : {}),
       // Day/night face: the subsolar point and the board's spot (contract "Day/night").
       ...(face === 'daynight' ? { dn: dayNightOf(st, now, board.cols === 128, w) } : {}),
       // Gradient face: lit gradient digits on black (contract "Gradient").

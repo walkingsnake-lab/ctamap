@@ -34,6 +34,12 @@ const ANALOG_ACCENTS = {
 // Big digits and day/date faces: the time's color. white is the original;
 // the rest are the analog accents.
 const DIGIT_COLORS = { white: '#e6e6e6', ...ANALOG_ACCENTS };
+// Big digits face: each digit color's drop shadow (digitShadow), a deeper,
+// cooler neighbor of the color, so it reads as depth and not as a fringe.
+const DIGIT_SHADOWS = {
+  white: '#3a4a78', amber: '#a82c00', coral: '#8a1238', pink: '#6a22b0', violet: '#3a2ab8',
+  blue: '#241a8c', cyan: '#1838a8', mint: '#086e68', lime: '#1a7a28',
+};
 // Skyline clouds: still, 1 px every 16 s, or 1 px every 4 s.
 const CLOUD_DRIFTS = ['off', 'slow', 'normal'];
 const WHEEL_SPEEDS = ['off', 'slow', 'normal', 'fast'];
@@ -236,6 +242,8 @@ function defaultBoard(stations) {
     analogAccent: 'amber',
     // Big digits and day/date faces: the time's color (DIGIT_COLORS).
     digitColor: 'white',
+    // Big digits face: a 1 px drop shadow in the digit color's partner (DIGIT_SHADOWS).
+    digitShadow: true,
     // Baseball screen layout: 'classic' (color blocks + abbreviations),
     // 'logos' (team logo bands, from the uploaded sprite sheet), or 'bands'
     // (the same bands with abbreviations, no logos).
@@ -319,6 +327,7 @@ function validatePatch(patch, stations, cols) {
       case 'showTemp':
       case 'gradInvert':
       case 'colonBlink':
+      case 'digitShadow':
       case 'clockRoll':
       case 'otherLines':
         if (typeof val !== 'boolean') throw new ValidationError(`${key} must be true or false`);
@@ -677,4 +686,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };
+module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS, DIGIT_SHADOWS, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };

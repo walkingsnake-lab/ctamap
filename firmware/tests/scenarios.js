@@ -512,6 +512,7 @@ async function build() {
     // The bar rising or dropping, the dim with it.
     add('peek bar drop', p, [1, 3, 6, 10, 11, 14].map((drop) => pk(2, 0, { drop })), frames, undefined, { s3only: true, clouds });
     add('peek digit color', { ...p, pv: { ...p.pv, cdig: '#ff4fa8' } }, [pk(2, 5, { chosen: true }), pk(2, 6, { chosen: true })], frames, undefined, { s3only: true, clouds });
+    add('peek digit shadow', { ...p, pv: { ...p.pv, cdig: '#ff4fa8', cshd: '#6a22b0' } }, [pk(2, 5, { chosen: true }), pk(2, 6, { chosen: true })], frames, undefined, { s3only: true, clouds });
     // Raining: the newest frame on hand, still; none yet: the empty radar.
     const rain = { ...p, radar: { ...p.radar, on: true, frames: ids, ft } };
     const c = { chosen: true };
@@ -639,8 +640,9 @@ async function build() {
     add('seventies roll width change', s70('2026-11-01T19:00:00Z'), roll('12:59'), undefined, undefined, { s3only: true });
   }
   // Clock screen, big digits and day/date faces (S3 only): one- and
-  // two-digit hours, the colon's blink, the minute roll (per digit, and
-  // whole when the width changes), AM and PM, the longest weekday, dimmed.
+  // two-digit hours, the colon's pulse, the minute change (big digits: at
+  // once, so its roll scenarios check that nothing moves; day/date: a roll
+  // per digit, and whole when the width changes), AM and PM, the longest weekday, dimmed.
   {
     const cf = (iso, cface, extra = {}) => { const t = Date.parse(iso) / 1000; return { now: t, tzo: tzOffset(t), screen: 'clock', cface, bright: 100, warn: null, skyline: null, ...extra }; };
     const ps = [0.25, 0.5, 0.75];
@@ -648,8 +650,8 @@ async function build() {
     const at = (iso, d) => Date.parse(iso) + d;
     add('digits 9:42', cf('2026-11-02T03:42:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('digits 12:58', cf('2026-11-01T18:58:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
-    add('digits colon blink', cf('2026-11-01T16:07:00Z', 'digits'), [0, 499, 500, 999, 1000].map((d) => ({ screen: 'clock', ms: at('2026-11-01T16:07:00Z', d) })), undefined, undefined, { s3only: true });
-    add('digits steady colon', cf('2026-11-01T16:07:00Z', 'digits', { steady: true }), [0, 750].map((d) => ({ screen: 'clock', ms: at('2026-11-01T16:07:00Z', d) })), undefined, undefined, { s3only: true });
+    add('digits colon pulse', cf('2026-11-01T16:07:00Z', 'digits'), [0, 999, 1000, 1999, 2000].map((d) => ({ screen: 'clock', ms: at('2026-11-01T16:07:00Z', d) })), undefined, undefined, { s3only: true });
+    add('digits steady colon', cf('2026-11-01T16:07:00Z', 'digits', { steady: true }), [0, 1500].map((d) => ({ screen: 'clock', ms: at('2026-11-01T16:07:00Z', d) })), undefined, undefined, { s3only: true });
     add('digits 10:07 dimmed', cf('2026-11-01T16:07:00Z', 'digits', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('digits roll per digit', cf('2026-11-02T03:42:00Z', 'digits'), roll('dig.clock', '9:41').map((r) => ({ ...r, ms: at('2026-11-02T03:42:00Z', 700) })), undefined, undefined, { s3only: true });
     add('digits roll width change', cf('2026-11-01T19:00:00Z', 'digits'), roll('dig.clock', '12:59'), undefined, undefined, { s3only: true });
@@ -659,17 +661,25 @@ async function build() {
     add('daydate dimmed', cf('2026-11-04T16:07:00Z', 'daydate', { bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('daydate roll per digit', cf('2026-11-02T03:42:00Z', 'daydate'), roll('dd.clock', '9:41'), undefined, undefined, { s3only: true });
     add('daydate roll width change', cf('2026-11-01T19:00:00Z', 'daydate'), roll('dd.clock', '12:59'), undefined, undefined, { s3only: true });
-    // Wide (wide-spec §6): big digits in d23 centered on 128; day/date with
+    // Wide (wide-spec §6): big digits in r23 centered on 128; day/date with
     // the weekday and date beside the time (Wednesday, Sept 30: the widest).
     const cw = (iso, cface, extra = {}) => cf(iso, cface, { cols: 128, ...extra });
     add('wide digits 9:42', cw('2026-11-02T03:42:00Z', 'digits'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
-    add('wide digits colon blink', cw('2026-11-01T18:58:00Z', 'digits'), [0, 500].map((d) => ({ screen: 'clock', ms: at('2026-11-01T18:58:00Z', d) })), undefined, undefined, { s3only: true });
-    add('wide digits steady, dimmed', cw('2026-11-01T16:07:00Z', 'digits', { steady: true, bright: 40 }), [{ screen: 'clock', ms: at('2026-11-01T16:07:00Z', 750) }], undefined, undefined, { s3only: true });
+    add('wide digits colon pulse', cw('2026-11-01T18:58:00Z', 'digits'), [0, 1000].map((d) => ({ screen: 'clock', ms: at('2026-11-01T18:58:00Z', d) })), undefined, undefined, { s3only: true });
+    add('wide digits steady, dimmed', cw('2026-11-01T16:07:00Z', 'digits', { steady: true, bright: 40 }), [{ screen: 'clock', ms: at('2026-11-01T16:07:00Z', 1500) }], undefined, undefined, { s3only: true });
     add('wide digits roll per digit', cw('2026-11-02T03:42:00Z', 'digits'), roll('dig.clock', '9:41').map((r) => ({ ...r, ms: at('2026-11-02T03:42:00Z', 700) })), undefined, undefined, { s3only: true });
     add('wide digits roll width change', cw('2026-11-01T19:00:00Z', 'digits'), roll('dig.clock', '12:59'), undefined, undefined, { s3only: true });
     add('wide daydate 9:42 PM', cw('2026-11-06T03:42:00Z', 'daydate'), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     // Digit color (digitColor -> cdig): the time only; AM/PM, weekday and date as before.
     add('digits color mint', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#2fe08a' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('digits color mint, colon dim', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#2fe08a' }), [{ screen: 'clock', ms: at('2026-11-02T03:42:00Z', 1500) }], undefined, undefined, { s3only: true });
+    // Drop shadow (digitShadow -> cshd): the time again 1 px down and right, under
+    // the digits; the colon dims over its steady shadow. Day/date ignores it.
+    add('digits shadow', cf('2026-11-02T03:42:00Z', 'digits', { cshd: '#3a4a78' }), [{ screen: 'clock' }, { screen: 'clock', ms: at('2026-11-02T03:42:00Z', 1500) }], undefined, undefined, { s3only: true });
+    add('digits shadow amber, 10:08', cf('2026-11-01T16:08:00Z', 'digits', { cdig: '#ffb000', cshd: '#a82c00' }), [{ screen: 'clock' }, { screen: 'clock', ms: at('2026-11-01T16:08:00Z', 1500) }], undefined, undefined, { s3only: true });
+    add('digits shadow dimmed', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#22c8e6', cshd: '#1838a8', bright: 40 }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('daydate ignores shadow', cf('2026-11-02T03:42:00Z', 'daydate', { cdig: '#22c8e6', cshd: '#1838a8' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
+    add('wide digits shadow', cw('2026-11-02T03:42:00Z', 'digits', { cdig: '#ff4fa8', cshd: '#6a22b0' }), [{ screen: 'clock' }, { screen: 'clock', ms: at('2026-11-02T03:42:00Z', 1500) }], undefined, undefined, { s3only: true });
     add('digits color coral rolling', cf('2026-11-02T03:42:00Z', 'digits', { cdig: '#ff5a4e' }), roll('dig.clock', '9:41'), undefined, undefined, { s3only: true });
     add('daydate color cyan', cf('2026-11-02T03:42:00Z', 'daydate', { cdig: '#22c8e6' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });
     add('wide digits color amber', cw('2026-11-02T03:42:00Z', 'digits', { cdig: '#ffb000' }), [{ screen: 'clock' }], undefined, undefined, { s3only: true });

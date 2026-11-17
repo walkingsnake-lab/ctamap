@@ -383,7 +383,7 @@ test('an older board without a label loads with an empty one', () => {
 });
 
 test('clock screen and its face are settings; the knob ring adds CLOCK when the board can draw it', () => {
-  const { knobOf, KNOB_RING, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, validatePatch } = require('./state');
+  const { knobOf, KNOB_RING, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS, DIGIT_SHADOWS, validatePatch } = require('./state');
   const store = createStore({ dir: tmpDir(), log: quiet });
   assert.equal(store.get('home').clockFace, 'skyline');
   assert.deepEqual(CLOCK_FACES, ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate', 'words']);
@@ -395,6 +395,12 @@ test('clock screen and its face are settings; the knob ring adds CLOCK when the 
   assert.equal(validatePatch({ digitColor: 'cyan' }).digitColor, 'cyan');
   assert.equal(validatePatch({ digitColor: 'white' }).digitColor, 'white');
   assert.throws(() => validatePatch({ digitColor: '#ff0000' }), ValidationError);
+  // The digit shadow: on by default, a boolean; every digit color has a partner that differs from it.
+  assert.equal(store.get('home').digitShadow, true);
+  assert.equal(validatePatch({ digitShadow: false }).digitShadow, false);
+  assert.throws(() => validatePatch({ digitShadow: 'amber' }), ValidationError);
+  assert.deepEqual(Object.keys(DIGIT_SHADOWS), Object.keys(DIGIT_COLORS));
+  for (const k of Object.keys(DIGIT_COLORS)) { assert.match(DIGIT_SHADOWS[k], /^#[0-9a-f]{6}$/); assert.notEqual(DIGIT_SHADOWS[k], DIGIT_COLORS[k]); }
   store.update('home', { clockFace: 'seventies' });
   assert.equal(store.get('home').clockFace, 'seventies');
   store.update('home', { clockFace: 'skyline' });
