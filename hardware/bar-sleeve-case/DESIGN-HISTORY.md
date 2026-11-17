@@ -448,3 +448,13 @@ The owner, with draft 2 checked three times: "I'm just a little wary now that we
 - **Risks the review named, still open:** the bleed is undiagnosed and V6 stops the rim pressing on the diffuser, the one thing known to stop it (the lit bench test comes before any walnut); PETG and PETG-CF shrink differently, so coupons in one do not prove the other; an open skin makes the P4 a different build from the P3's sleeve.
 - Halves on the bed: 247.9 mm square on the diagonal (V5's: 246.9), about 4 mm to the edge at the tips.
 
+## P4 diffuser: taller grid, and the fit found again (Nov 15-17)
+For the bleed and the sheet not lying flat on the first full build: grid 2.4 mm (was 1.5; about 4x the ribs' bending stiffness) and skirts 5 mm deep (was 3). Both are now p4.py's defaults. What it took to make that half fit:
+
+- **Bumps.** Their height was "1.2 short of the skirt's tip", so the deeper skirt carried them 2 mm down the panel's side and the half had no snap. Fixed at 1.8 mm behind the grid (`DF.BUMP_FROM_GRID`).
+- **Joint bars.** Dropped at first (the 5 mm skirt's tip stood 0.4 over the boss tops), then kept: the end skirts only stop a half moving inward, so without the bars nothing but the bumps' grip stops a half sliding out. The bosses now follow the skirt's tip (`BOSS_H`), the bar itself is unchanged.
+- **Size.** With the bumps right it still did not snap. The owner: "I think it just needs to be shrunk down ever so slightly." Four sizing strips on one plate (`diffuser_snap_strips.py size`: the opening between the top and bottom skirts 0, 0.1, 0.2, 0.3 mm smaller); he chose 0.3, "fits tight but well". That is the opening with no shrink allowance (0.27), so the heavier half seems to shrink less across its height than the 0.21% measured on the first halves. Only the height is tightened (`SKIRT_TIGHT` 0.3); lengthwise the allowance stays. A full half at that size, Nov 17: "The diffuser fit sooo perfectly!"
+- **Brightness.** The taller grid darkens the pixels slightly (deeper black wells). The board already runs at 100% by day, so there is nothing to turn up. 2.0 mm was built to compare; the owner kept 2.4: "We need that extra bit of grid rigidity."
+- Set aside: a translucent gray face 2 to 4 layers thick (`P4_FACE`, test tiles in `diffuser_tiles.py`); a skirt window at each bump and a full-length ridge (`BUMP_WINDOW`, `BUMP_L`, strips built, not needed once the size was right).
+- Still to see on the lit panel: whether the bleed is gone.
+
