@@ -414,7 +414,18 @@ JOINT_TAPER_W = 0.45
 # to cross) and leaves the right half its one-line 0.4. The joint line is then 1.2 mm of black, as on the first two
 # prints, centred on the column gap, with the white seam 0.2 mm off centre and black behind both sides of it. The
 # default is CENTRE_RIB / 2 a half.
-JOINT_WALLS = tuple(float(v) for v in os.environ.get('P4_JOINT_WALLS', f'{CENTRE_RIB / 2},{CENTRE_RIB / 2}').split(','))
+# Nov 15, after the full build: a solid wall on BOTH halves is the default. The owner: "the joint really needs a solid wall
+# on the edge, even if we have to make it slightly thicker. Anything without shows the raw pixel light from side angles."
+# A wall is solid when the slicer lays it as two lines, the outer one the half's own outer wall, unbroken along the
+# joint. Test slices (PrusaSlicer 2.7, Arachne, 0.4 nozzle): 0.6 mm is still one wide line laid as a separate length per
+# cell (the gaps every print had); 0.65 is two lines of 0.35, right at the switch; 0.7 two of 0.37; 0.8 two of 0.42.
+# 0.7 + 0.7 is the default: 1.5 mm of black at the joint (two walls and the 0.1 slot) where the other grid lines are
+# 0.8, the two columns of cells beside the joint 0.35 mm narrower, 0.20 mm clear of a 2.1 mm LED package (2121, from
+# the panel's label; assumed). The owner on its coupon: "I think the line is fine." P4_JOINT_WALLS=0.8,0.8 is the most
+# robust (1.7 mm, lines a full nozzle wide) if Bambu Studio lays 0.7 as one line; 0.8,0.4 is solid on the left half
+# only (1.3 mm). P4_CENTRE_RIB still sets an equal split.
+_walls = f'{CENTRE_RIB / 2},{CENTRE_RIB / 2}' if 'P4_CENTRE_RIB' in os.environ else '0.7,0.7'
+JOINT_WALLS = tuple(float(v) for v in os.environ.get('P4_JOINT_WALLS', _walls).split(','))
 # Both halves on the bed the same way round (Nov 13, the owner's idea: the gaps would not matter if the two walls had
 # them on opposite sides of each rib). Every print so far has a gap in each half's joint wall beside every horizontal
 # rib, on one side of the rib (where the slicer starts that cell's length of wall). Left and right as modelled are
@@ -423,7 +434,12 @@ JOINT_WALLS = tuple(float(v) for v in os.environ.get('P4_JOINT_WALLS', f'{CENTRE
 # same toolpaths, and turning one round puts its gaps on the other side of each rib: 0.8 mm of rib between one wall's
 # gap and the other's. So the right half's files are the left half's, and the right coupon is exported turned 180.
 # Nothing else changes; one half is turned round at assembly. P4_DIFF_SAME_WAY=0: mirror images as before.
-DIFF_SAME_WAY = os.environ.get('P4_DIFF_SAME_WAY', '1') not in ('0', '', 'no', 'false')
+# Off since Nov 15. On the full build the right half's grid squares sat "1 mm or so" lower than the left's at the joint.
+# The model is symmetric top to bottom (ribs at +/-60, 56, ...; skirts at +/-64.0), so the step is in the prints: whatever
+# sits a little off centre top to bottom on a printed half (bumps, the fan side, first-layer spread) is turned upside
+# down on the turned half, so the error doubles at the joint. Mirror-image halves carry it the same way and stay in
+# line with each other. With solid joint walls the gaps this was for are gone anyway.
+DIFF_SAME_WAY = os.environ.get('P4_DIFF_SAME_WAY', '0') not in ('0', '', 'no', 'false')
 
 
 def same_way(d, whole=True):
