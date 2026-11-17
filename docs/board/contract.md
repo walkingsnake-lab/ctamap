@@ -335,7 +335,7 @@ The clock screen's skyline face (design spec §14). The server turns the weather
 | `sky` | Sky gradient: `[row, color]` stops from row 0 down to the horizon (row 25). Each row is the linear mix of the stops around it, channels rounded (`Math.round`). Blended by the server from the sun's exact elevation, so it changes a little with every update. |
 | `wat` | Water: top row color, bottom row color, ripple color. |
 | `lit` | `1` once the sun is below 0.5°: the wheel's rim turns to its slow pastel rainbow, the Hancock beacons pulse, the pier's bulbs light. |
-| `win` | Percent of the night window pattern lit (0–100); each window has a fixed threshold, so the lit set only grows. |
+| `win` | Night window level (0–100). The S3 draws the whole window pattern at this percent of full brightness, so every window fades up together; the frozen M4 lights this share of the pattern instead (each window has a fixed threshold, so the lit set only grows). |
 | `stars` | Stars to draw (0–14), the first `stars` of the fixed list. |
 | `sun` | `{x, y, c}`: the sun's center and color, or `null` (night, mornings, cloudy skies). Low suns sit behind the buildings. |
 | `moon` | `{ph, fr}`: phase (0–99, 0 new, 50 full) and lit percent, or `null`. Drawn at the day sun's spot. |

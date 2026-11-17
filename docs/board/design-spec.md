@@ -501,7 +501,7 @@ The server picks the state; the board never interprets weather codes.
 
 - Between keyframes each row's color is mixed linearly by elevation; water colors blend the same way (values in the mock's `KEYS`).
 - **Mornings** use the same keyframes in reverse, except the sunrise sun isn't drawn (it rises behind the viewer, over the lake).
-- **City lights follow the sky:** windows switch on one at a time between 1° and −6° (each window has its own threshold from a hash, so the lit set only grows, reaching the full 45% at −6°); stars appear between −4° and −9° (0 → 14).
+- **City lights follow the sky:** the lights are on all along; the darkening sky is what shows them. All of the 45% fade up together from black between 1° and −6° (full at −6°); stars appear between −4° and −9° (0 → 14).
 - **Sun height:** at the skyline's real 2.4 rows per degree (center row 21 at the horizon, hidden by the buildings). Above ~8° it would leave the panel, so between 8° and 14° it slides to the day spot (x 38–44, rows 2–8). In late fall and winter it sets behind the Loop towers (on Oct 31 it's hidden behind Aon and St. Regis from about 5:15 PM), so the glow carries the sunset; in summer it sets right of the wheel over lower buildings.
 
 **Weather** comes from the current condition code and cloud cover (WeatherAPI's `current.cloud`, which the forecast request already returns; additive, so the M4 is unaffected), first match wins:

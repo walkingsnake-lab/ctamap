@@ -3162,9 +3162,12 @@
           f.set(x, y, mixRgb(c0, c1, fr));
         }
       }
-      // Windows come on one at a time as `win` rises.
-      const lim = Math.round(450 * night);
-      for (const [x, y, th, bright] of K.wins) if (th < lim) f.fill(x, y, 1, 1, SK.win[bright ? 1 : 0]);
+      // Windows: the same 45% are always lit; they show as the sky darkens,
+      // all at once, fading up from the black building to full at `win` 100.
+      if (night > 0) {
+        const wc = [mixHex('#000000', SK.win[0], night), mixHex('#000000', SK.win[1], night)];
+        for (const [x, y, th, bright] of K.wins) if (th < 450) f.fill(x, y, 1, 1, wc[bright ? 1 : 0]);
+      }
       // Snow on the roofs: the top pixel of every building column.
       if (s.roof) for (let x = 0; x < W; x++) for (let y = 0; y <= S; y++) if (K.role[y * W + x]) { f.fill(x, y, 1, 1, s.roof); break; }
       // Fog: everything fades toward it with height (strongest at the top).
