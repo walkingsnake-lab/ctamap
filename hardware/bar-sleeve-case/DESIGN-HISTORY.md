@@ -458,3 +458,13 @@ For the bleed and the sheet not lying flat on the first full build: grid 2.4 mm 
 - Set aside: a translucent gray face 2 to 4 layers thick (`P4_FACE`, test tiles in `diffuser_tiles.py`); a skirt window at each bump and a full-length ridge (`BUMP_WINDOW`, `BUMP_L`, strips built, not needed once the size was right).
 - **The bleed.** Nov 17, the owner, with the halves at that size on the lit panel: "Light bleed is gone." So the cause was the sheet not being held flat and tight on the panel, not the rim's pressure as such; V6's rim, which only covers the border, has that to rely on.
 
+## The back and the wall cleat (Nov 17)
+- **Bottom louvers.** V5 left a 13 mm gap in the bottom rows at each of the two screw bosses, so from behind the bottom showed four groups and the top two. The owner: "it's just a design quirk carried over." The rows now run on over the bosses as blind slots (`drawer.tray(boss_blind=True)`): 1.6 mm or more of plastic stays round each insert hole.
+- **Wall cleat, looked at hard for the first time.** The case is about 1 kg (the panel's 250 g assumed). Each of the two case-cleat screws sees about 22 N, the levering of the weight forward of the wall included; nothing in the cleat is near a limit. What was wrong was use, not strength, and all three changes are the owner's "yes":
+  - *It slid.* Wall cleat 220 mm, case cleat 150, nothing between them but friction: plugging the USB-C into the end would push the case along. Now a stop on the wall cleat outside each end of the case cleat (0.5 mm clear a side), its top sloped 5 mm so the case centres as it is lowered.
+  - *10 mm of hook.* A knock upward of 10 mm unhooked it. The bevel is 60 deg from the horizontal instead of 45: 17 mm in the same 12 mm depth, and a pull outward has to lift the case up a steeper ramp. Both cleats are about 8 mm taller (case cleat 150 x 33, wall cleat 220 x 43).
+  - *Plastic.* Pockets in the wall cleat's wall face: 72 cm3 from 102.
+  - Two wall screws, not three ("Does the wall cleat really need 3 screws?": no; the third only held the strip's middle to the wall).
+- The wall cleat now prints FRONT face down (with the steeper bevel, wall face down would overhang 60 deg); the case cleat wall face down as before. `v6.check()` hangs it: seated, lifted, the hanging motion, how far it slides, how far it must be lifted before it comes off the wall.
+- Other builds keep cleat.py's 45 deg and plain wall cleat (the settings are p4.py's).
+

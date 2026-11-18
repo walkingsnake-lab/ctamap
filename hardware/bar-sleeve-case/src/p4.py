@@ -832,12 +832,29 @@ def collar_p4():
 
 WALL_CLEAT_HW = 110.0           # wall cleat half length: 220 mm for the 282 mm case (the single's is 149); flat on the bed,
                                 # and 5 mm short of the Boot funnel on the right tray half's back
-WALL_CLEAT_XS = (-95.0, 0.0, 95.0)   # its three wall screws
+WALL_CLEAT_XS = (-95.0, 95.0)        # its two wall screws (three until Nov 17: the load is about 10 N, the third only held the
+                                     # strip's middle to the wall)
+# The cleat, looked at hard on Nov 17 (the case is about 1 kg; each case-cleat screw sees ~22 N): strong enough as it was.
+# Changed for use: a 60 deg bevel (about 17 mm of hook instead of 10: a knock upward no longer unhooks it), stops on the
+# wall cleat outside the case cleat's ends (plugging in the USB-C pushed the case along the cleat), pockets in its wall face.
+CLEAT_BEVEL = float(os.environ.get('P4_CLEAT_BEVEL', '60'))
+CLEAT_STOPS = (0.5, 12.0, 5.0)       # clearance each side, length, lead-in
+CLEAT_POCKETS = (8.0, 4.0)           # depth (of 12), rib
+
+
+def cleat_setup():
+    """cleat.py's settings for this build; returns the module"""
+    import cleat as CLT
+    CLT.BEVEL_DEG, CLT.WALL_STOPS, CLT.WALL_POCKETS = CLEAT_BEVEL, CLEAT_STOPS, CLEAT_POCKETS
+    return CLT
+
+
+def case_cleat_p4():
+    return cleat_setup().case_cleat()
 
 
 def wall_cleat_p4():
-    import cleat as CLT
-    return CLT.wall_cleat(hw=WALL_CLEAT_HW, xs=WALL_CLEAT_XS)
+    return cleat_setup().wall_cleat(hw=WALL_CLEAT_HW, xs=WALL_CLEAT_XS)
 
 
 def collar_knob():
@@ -1005,7 +1022,8 @@ if __name__ == '__main__':
     put(cm.mirror([0, 0, 1]).translate([0, 0, CO.FL_T]), 'p4-encoder-collar.stl', None, drop_axis=2)   # flange top down
     put(DR.sled(), 'p4-sensor-sled.stl', None, drop_axis=2)                           # plate down
     import cleat as CLT                                                                  # wall hanging (replaces the spine)
-    put(CLT.case_cleat(), 'p4-cleat-case.stl', down); put(wall_cleat_p4(), 'p4-cleat-wall.stl', down)
+    up = trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])                 # the wall cleat prints front face down
+    put(case_cleat_p4(), 'p4-cleat-case.stl', down); put(wall_cleat_p4(), 'p4-cleat-wall.stl', up)
     if TOP_SCREWS:
         cw, cp = top_screw_coupon(P['top'], P['tray'])
         put(cw, 'coupon-p4-top-screw-shell.stl', down); put(cp, 'coupon-p4-top-screw-tray.stl', down)

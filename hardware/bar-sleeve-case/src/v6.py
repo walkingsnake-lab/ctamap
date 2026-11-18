@@ -23,8 +23,10 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   the case are left out (UNDER_SCREWS); their holes stay.
 - **Panel, diffuser, knob**: p4's. The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
   without clamping it. The collar becomes a trim ring whose cap lies over the tower's top under the encoder's nut.
-- **Wall hanging**: the V5 cleat on the same two bosses; the joint's screws on the back are countersunk flush; it lies
-  over one of them (the top knuckle's), so the cleat comes off before the halves are parted.
+- **Wall hanging**: the cleat (cleat.py, with p4.py's settings of Nov 17: a 60 deg bevel for about 17 mm of hook, stops on
+  the wall cleat outside the case cleat's ends, two wall screws) on two inserts in the back plate, one in each chassis
+  half. The joint's screws on the back are countersunk flush; the case cleat lies over the upper two, so it comes off
+  before the halves are parted.
 - **Build order**: knuckle inserts in, chassis halves joined, the other inserts in (the tongues' pressed flush: 0.15 mm
   to the other half); S3 and encoder in; a washer in each post's recess, chassis on its back; panel (standoffs on) in
   from the front, six flanged M3 x 8 from the back, snug; diffuser pressed on and lit; bottom half on from below, top
@@ -522,7 +524,21 @@ def check(P):
     plank_top_z = max(m.bounding_box()[5] for k, m in P['skin'].items() if k in ('plank_top', 'half_top'))
     rows.append(('ring flange above the top plank, mm, less 0.3 (should be >= 0)', round(P['ring'].bounding_box()[2] - plank_top_z - 0.3, 2) * -1 if P['ring'].bounding_box()[2] - plank_top_z < 0.3 else 0.0))
     import cleat as CLT, p4v55 as T
-    rows.append(('case cleat / chassis and the screws on its back', v(CLT.case_cleat(), ch + P['screws']['back'])))
+    rows.append(('case cleat / chassis and the screws on its back', v(p4.case_cleat_p4(), ch + P['screws']['back'])))
+    cc, wc = p4.case_cleat_p4(), p4.wall_cleat_p4()                # the wall cleat is fixed; the case and its cleat move
+    hung = [ch, sk, cc, P['screws']['back']]
+    seated = lambda dx=0.0, dy=0.0, dz=0.0: round(sum(v(m.translate([dx, dy, dz]), wc) for m in hung), 2)
+    hk = CLT.hook()
+    rows.append(('wall cleat / chassis, skin, case cleat, back screws, hung', seated()))
+    rows.append((f'lifted straight off the wall cleat (0.5 to {hk + 6:.0f} mm; hook {hk:.1f})', max(seated(dz=q) for q in np.arange(0.5, hk + 6.01, 0.5))))
+    rows.append(('hanging: above the hook, pushed to the wall from 10 mm off, then lowered', max([seated(dy=-q, dz=hk + 1.0) for q in (10, 5, 2, 1, 0.5, 0)] + [seated(dz=q) for q in np.arange(hk + 1.0, 0, -0.5)])))
+    clear = lambda q: all(seated(dy=-d, dz=q) == 0 for d in np.arange(1.0, CLT.T + 2.01, 1.0))
+    free = min(q for q in np.arange(0, hk + 8, 0.25) if clear(q))                           # how far up before it comes straight off the wall
+    rows.append((f'it must be lifted {free:.2f} mm before it pulls off the wall (the hook, {hk:.1f}; info)', 0.0 if abs(free - hk) < 1.5 else free))
+    # lowered 4 mm off centre: the stops' lead-ins must steer it, so being off centre by less than the lead-in never jams;
+    # hung, it must not move further sideways than the stops' clearance
+    slide = max(q for q in np.arange(0, 3.01, 0.1) if seated(dx=q) == 0 and seated(dx=-q) == 0)
+    rows.append((f'hung, it slides {slide:.1f} mm each way before a stop (info)', 0.0 if slide <= p4.CLEAT_STOPS[0] + 0.11 else slide))
     rows.append(('back screws / chassis (every hole open to its screw)', v(P['screws']['back'], ch - box(-400, 400, BOSS_Y - WASHER_REC[1] + T.P3.SO_FLOOR - 0.01, BOSS_Y - WASHER_REC[1] + T.P3.SO_FLOOR + 0.03, -5, H + 5))))   # less the 0.02 the centre bores start late (p4v55.tray)
     rows.append(('back screws / panel, S3, sensor, encoder', v(P['screws']['back'], P['panel'] + P['s3'] + P['sensor'] + P['encoder'])))
     rows.append(('right chassis half slid on sideways (0.3-12 mm) / left half', round(max(v(P['chassis_right'].translate([q, 0, 0]), P['chassis_left']) for q in (0.3, 1, 3, 6, 9, 12)), 2)))
