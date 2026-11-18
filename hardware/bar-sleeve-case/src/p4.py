@@ -696,6 +696,10 @@ def bar_screws_env(sy=None):
     return Manifold.batch_boolean(out, ADD)
 
 
+TINT_WHITE = float(os.environ.get('P4_TINT_WHITE', '0.2'))
+TINT_GRID = float(os.environ['P4_TINT_GRID']) if os.environ.get('P4_TINT_GRID') else None
+
+
 def diffuser_halves(printed=False, tint=False):
     """DF.diffuser() (8 mm flange) split at x = 0. Returns {(side, part): manifold} in DF's frame (z = 0 is the face, +z
     toward the LEDs; y up the panel). part: 'white' (the whole first layer: the face and the flange's front) or 'black'
@@ -703,10 +707,14 @@ def diffuser_halves(printed=False, tint=False):
     otherwise the size it should come out (fit checks, renders).
     tint: the three-colour variant to try (Nov 11): 'gray' (the whole first layer, translucent gray: the tint), 'white'
     (the whole second layer: the scatter, behind the tint) and 'black' (the grid and the rest). The face is two layers
-    and the grid one layer lower, so the LEDs sit where they did and the variant swaps in with no other change."""
-    skin = DF.SKIN * (2 if tint else 1)
+    and the grid one layer lower, so the LEDs sit where they did and the variant swaps in with no other change.
+    TINT_WHITE (P4_TINT_WHITE) is the white layer's thickness: 0.2, or thinner to be printed as one thin layer with a
+    height-range modifier in the slicer (Nov 17: 0.1). TINT_GRID (P4_TINT_GRID) is the grid's height in this variant: by
+    default the grid's less the white's thickness; with a 0.1 white, 2.4 keeps every surface above it on 0.2 mm layers
+    (and sets the panel 0.1 further back)."""
+    skin = DF.SKIN + TINT_WHITE if tint else DF.SKIN
     grid_h = DF.GRID_H
-    DF.GRID_H = grid_h - (skin - DF.SKIN)
+    DF.GRID_H = (TINT_GRID if TINT_GRID is not None else grid_h - TINT_WHITE) if tint else grid_h
     try:
         d = DF.diffuser(skin=skin)
         hy = DF.PH / 2
