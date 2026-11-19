@@ -766,10 +766,17 @@ def diffuser_in_case(m):
 
 
 # ---------------------------------------------------------------- envelopes for fit checks (not printed)
+def panel_extra():
+    """how much further back the panel sits than with the first diffuser (1.5 grid, 0.2 face)"""
+    return (DF.GRID_H - 1.5) + (DF.SKIN - 0.2)
+
+
 def panel_p4():
     """P4 panel in the case, turned 180 deg: LED board (2.5 mm incl. LEDs) + 12 mm housing (rim, ribs, insert bosses),
     the two HUB75 shrouds (top 1 mm under the housing back, ASSUMED), VH4 power header, a ribbon plug on data in"""
-    yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK - PANEL_THIN            # the measured housing back
+    yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK - PANEL_THIN + panel_extra()   # the measured housing back; the panel
+    # keeps its thickness when a taller grid or thicker face sets it back (until Nov 19 only the LED face moved, so the
+    # checks ran against a panel 0.9 mm too thin: the final review)
     pw, ph = DF.HOUSE_W or panel.P['w'], HOUSE_H_MEASURED or panel.P['h']    # as measured (127.8 high, board and frame flush)
     parts = [box(-pw / 2, pw / 2, yf, yf + 2.5, ZC - ph / 2, ZC + ph / 2)]
     hous = box(-pw / 2, pw / 2, yf + 2.5 - 0.01, yb, ZC - ph / 2, ZC + ph / 2)
@@ -854,6 +861,7 @@ def cleat_setup():
     """cleat.py's settings for this build; returns the module"""
     import cleat as CLT
     CLT.BEVEL_DEG, CLT.WALL_STOPS, CLT.WALL_POCKETS = CLEAT_BEVEL, CLEAT_STOPS, CLEAT_POCKETS
+    CLT.CBORE_D = 7.4                 # for a flanged button head (6.9) as well as a plain one (6.6 took only the plain)
     return CLT
 
 

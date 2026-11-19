@@ -27,12 +27,17 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   the wall cleat outside the case cleat's ends, two wall screws) on two inserts in the back plate, one in each chassis
   half. The joint's screws on the back are countersunk flush; the case cleat lies over the upper two, so it comes off
   before the halves are parted.
-- **Build order**: knuckle inserts in, chassis halves joined, the other inserts in (the tongues' pressed flush: 0.15 mm
-  to the other half); S3 and encoder in; a washer in each post's recess, chassis on its back; panel (standoffs on) in
-  from the front, six flanged M3 x 8 from the back, snug; diffuser pressed on and lit; bottom half on from below, top
-  half from above, four screws each; panel centred in the rim by eye and its screws tightened from the back; ring,
-  nut, knob. Service: the panel comes out only with the knob, ring, both halves and diffuser off; the S3 with the
-  panel out.
+- **Build order**: ALL inserts in while the halves are apart (the knuckles' from under their bridges, the tongues'
+  flush: 0.15 mm to the other half, whose wall covers them once joined; skin, cleat). NONE in the six panel posts:
+  their 4.5 mm holes are clearance for the M3 x 8, and an insert there would take the panel's float away. Halves
+  joined, seven countersunk screws. S3, sensor sled and its outside screw, encoder up into the tower with its nut on
+  finger-tight (loose, it can drop onto the top-centre standoff), cables. A washer in each post's recess; the chassis
+  face up on blocks, so the back screws can be reached from below; panel (standoffs on, each hex seated on its insert)
+  lowered in, six flanged M3 x 8 from the back, snug. Diffuser pressed on, centred, and lit. Bottom walnut half on
+  from below, top half from above, four screws each (snug: the end screws close 0.1-0.25 mm of air). Panel centred in
+  the rim by eye and its screws tightened from the back. Nut off, ring on, nut, the two M2.5 (snug), knob. The case
+  cleat last: it lies over the top-centre panel screw. Service: the panel comes out only with the knob, ring, both
+  halves and diffuser off; the S3 with the panel out.
 
 check() covers overlaps, each half's way on with the other fitted, the line and the lap (shut, shifted, what is behind
 it), every screw's hole, the chassis halves' slide, the panel's way in, cables (p4_cables) and the cleat.
@@ -219,9 +224,12 @@ def skin_two(sh):
         a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T)))     # bottom half's rim would end in a nub with no root
         # it stops LAP_END short of the wall's front and back edges, where it would show end-on as a step in the line;
         # its back end is a 45 deg ramp (the halves print back-down: it would start in mid-air)
-        top = top + (sh ^ along_x([(y0, ZC + g + 0.02), (y1, ZC + g + 0.02), (y1 - LAP_H, ZC - LAP_H), (y0, ZC - LAP_H)], a, b))
+        # its front end is ramped too, and the notch's with it: square, the notch's front end was a 2.3 x 3.5 mm ceiling
+        # over nothing in the bottom half's print (the final review, Nov 19)
+        top = top + (sh ^ along_x([(y0, ZC + g + 0.02), (y1, ZC + g + 0.02), (y1 - LAP_H, ZC - LAP_H), (y0 + LAP_H + g, ZC - LAP_H)], a, b))
         a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T + LAP_CL_X)))
-        bot = bot - box(a, b, y0 - 0.4, y1 + 0.4, ZC - LAP_H - LAP_CL_Z, ZC + 1)
+        zf = ZC - LAP_H - LAP_CL_Z
+        bot = bot - along_x([(y0 - 1.4, ZC + 1), (y1 + 0.4, ZC + 1), (y1 + 0.4, zf), (y0 - 0.4 + (ZC - zf), zf)], a, b)
     slot_z = lambda x, y, z0, z1: (cyl_z(x, y - SKIN_SLOT, z0, z1, SKIN_CL_D) + cyl_z(x, y + SKIN_SLOT, z0, z1, SKIN_CL_D)).hull()
     top = top - Manifold.batch_boolean([slot_z(x, y, H - WALL - 2, H + 2) for x, y in PLANK_SCREWS], ADD)
     bot = bot - Manifold.batch_boolean([slot_z(x, y, -2, WALL + 2) for x, y in PLANK_SCREWS], ADD)
