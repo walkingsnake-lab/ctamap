@@ -468,3 +468,14 @@ For the bleed and the sheet not lying flat on the first full build: grid 2.4 mm 
 - The wall cleat now prints FRONT face down (with the steeper bevel, wall face down would overhang 60 deg); the case cleat wall face down as before. `v6.check()` hangs it: seated, lifted, the hanging motion, how far it slides, how far it must be lifted before it comes off the wall.
 - Other builds keep cleat.py's 45 deg and plain wall cleat (the settings are p4.py's).
 
+## V6: the last review before printing (Nov 19)
+An independent Fable agent, asked for a go / no-go and told to trust nothing written. Verdict: the full parts GO, nothing in the geometry has to change; the test prints GO once their README is corrected. What it found:
+
+- **The checks ran against a panel 0.9 mm too thin.** `p4.panel_p4()` moved the LED face back with the taller grid but left the housing's back where it was; `p4_cables` the same. Corrected (`p4.panel_extra()`), every row is still 0; the real margins are 1.3 mm from the S3's lower socket to the panel (not 2.2) and 1.1 from the tongue bosses to the housing (not 2.0). The S3's lower socket passes over the panel's output header on an assumed header height: a straightedge across the panel's back before the chassis is printed.
+- **A README sentence could have wasted the chassis prints:** "inserts in the posts". The six panel posts take none (4.5 mm clearance holes for the M3 x 8); an insert would press in as if it belonged and take the panel's float.
+- **An unsupported ledge** (2.3 x 3.5 mm) at the front end of the lap's notch in the bottom walnut half. The lap and its notch are now ramped 45 deg at the front as at the back.
+- **Case cleat counterbore** 6.6 against a 6.9 flanged head: now 7.4.
+- **Build order** corrected in `v6.py`: all inserts before the halves are joined (the tongue's are covered afterwards), the sensor sled and cables, the encoder's nut on finger-tight meanwhile, the chassis face up on blocks for the back screws, the cleat last (it lies over the top-centre panel screw).
+- The rim-gap gauge could not read its 0.3 mm gap (thin end 0.4): now a two-step feeler, 0.2 and 0.4, for setting the walnut halves' depth against the diffuser.
+- Left as they are, to watch on the left-end coupon: the screen rim's joint 3.4 mm below the main line; the end screws closing 0.1-0.25 mm of air (snug only); no pad under the two M2.5 beside the knob (snug only).
+
