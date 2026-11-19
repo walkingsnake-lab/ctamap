@@ -69,6 +69,11 @@ PILOT_H = 3.0                    # M3 thread-forming pilot (kept for the T1 coup
 # Heat-set inserts everywhere a screw threads into the chassis from outside (the owner, Nov 15: M3 x D5 x L4, brass).
 # Printed pilots proved a 0.1 mm window: 3.1 passed on the Nov 3 plate and would not start on the built tray.
 INS_D, INS_DEPTH, INS_RELIEF = 4.4, 5.0, 3.2   # the hole (to confirm on the joint coupon), its depth, room past it for the screw's tip
+# V6_FASTEN=tap: no inserts, for prototypes (the owner, Nov 19: "a no-insert version for now ... until final design"). Every
+# screw that would meet an insert cuts its own thread in a printed pilot instead: drawer.TAP_D (3.0) where the hole lies
+# flat in the print (skin, tongue, under the case), drawer.TAP_D_V (3.1) with a guide bore where it stands upright
+# (knuckles, cleat). Same parts, same screws, same positions; the threads wear after a few assemblies and strip if forced.
+FASTEN = os.environ.get('V6_FASTEN', 'insert')
 BOSS, BOSS_H = 8.0, 3.5          # screw bosses on the chassis walls: square, with a 45 deg ramp on the back (bed) side
 HEAD_D, HEAD_K = 6.9, 1.65       # M3 flanged button head (ISO 7380-2): a plain 5.7 head bears on only 13 mm2 round the long hole
 FOOT_IN = 16.0                   # the bumpers' recesses, this far inboard of the plank screws (V5's were where the screws are now)
@@ -263,11 +268,19 @@ def boss_end(y, z, sx):
 def thread_z(x, y, sz):
     """an insert hole from the outer face of a top / bottom wall, and room past it for the screw's tip"""
     zo, zend = (ZO1, ZIN1 - BOSS_H - 1) if sz > 0 else (ZO0, ZIN0 + BOSS_H + 1)
+    if FASTEN == 'tap':                                     # a pilot through wall and boss, a short lead-in at the mouth
+        lead = Manifold.cylinder(DR.TAP_LEAD + 0.02, DR.TAP_D / 2, DR.TAP_D / 2 + DR.TAP_LEAD + 0.02, 32)
+        lead = lead.translate([x, y, zo - DR.TAP_LEAD]) if sz > 0 else lead.mirror([0, 0, 1]).translate([x, y, zo + DR.TAP_LEAD])
+        return cyl_z(x, y, min(zo, zend) - 0.01, max(zo, zend) + 0.01, DR.TAP_D, 32) + lead
     return cyl_z(x, y, min(zo, zend) - 0.01, max(zo, zend) + 0.01, INS_RELIEF, 32) + cyl_z(x, y, *sorted((zo + sz * 0.01, zo - sz * INS_DEPTH)), INS_D, 32)
 
 
 def thread_x(y, z, sx):
     xo, xend = sx * (XIN + DR.TRAY_WT), sx * (XIN - BOSS_H - 1)
+    if FASTEN == 'tap':
+        lead = Manifold.cylinder(DR.TAP_LEAD + 0.02, DR.TAP_D / 2, DR.TAP_D / 2 + DR.TAP_LEAD + 0.02, 32).rotate([0, 90, 0])   # widens toward +x
+        lead = lead.translate([xo - DR.TAP_LEAD, y, z]) if sx > 0 else lead.mirror([1, 0, 0]).translate([xo + DR.TAP_LEAD, y, z])
+        return cyl_x(y, z, min(xo, xend) - 0.01, max(xo, xend) + 0.01, DR.TAP_D, 32) + lead
     return cyl_x(y, z, min(xo, xend) - 0.01, max(xo, xend) + 0.01, INS_RELIEF, 32) + cyl_x(y, z, *sorted((xo + sx * 0.01, xo - sx * INS_DEPTH)), INS_D, 32)
 
 
@@ -406,7 +419,7 @@ def tongue_legs(boss_h=3.5, insert=None):
 
 TONGUE_BOSS = 4.85               # with the 2.5 wall and tongue, an M3 x 10 countersunk ends inside the boss
 KN_GAP = 0.5                     # block to bridge: clear whatever the first layer's height (0.2 left none at 0.24)
-INSERT = (INS_D, INS_DEPTH, INS_RELIEF)
+INSERT = (INS_D, INS_DEPTH, INS_RELIEF) if FASTEN == 'insert' else None
 
 
 def chassis():
@@ -414,7 +427,7 @@ def chassis():
     the centre posts) without its crush ribs, with contact pads, the skin's bosses, the encoder tower, and inserts."""
     import p4v55 as T
     saved = DR.FASTEN, DR.INSERT_D, DR.INSERT_L
-    DR.FASTEN, DR.INSERT_D, DR.INSERT_L = 'insert', INS_D, INS_DEPTH          # the cleat's and the bottom screws' bosses
+    DR.FASTEN, DR.INSERT_D, DR.INSERT_L = FASTEN, INS_D, INS_DEPTH            # the cleat's and the bottom screws' bosses
     try:
         t = T.tray(extra_dy=BOSS_Y - WASHER_REC[1] - (T.P3.FOOT_Y + T.FOOT_DY))
     finally:
@@ -558,7 +571,11 @@ def check(P):
             worst = max((P['skin'][name].translate([0, 0, d * s]) ^ (rest + P['skin'][other] + P['encoder'] + P['s3'] + P['sensor'])).volume() for s in steps)
             rows.append((f'{name} lifted straight off (0.3-80 mm), vs chassis, diffuser, panel, encoder, S3, sensor and the other half', round(worst, 2)))
         ht, hb = P['skin']['half_top'], P['skin']['half_bottom']
-        rows.append(('skin screws / chassis and skin (every hole open to its screw)', v(P['screws']['skin'], ch + sk)))
+        vs = v(P['screws']['skin'], ch + sk)
+        if FASTEN == 'tap':                                   # a drawn 3.0 shank in a 3.0 pilot: only the facets' corners touch
+            rows.append((f'skin screws / chassis and skin: {vs} mm3 where the threads are cut (tap; closed holes would be > 20)', 0.0 if vs < 1.0 else vs))
+        else:
+            rows.append(('skin screws / chassis and skin (every hole open to its screw)', vs))
         # the halves closed until the line shuts: the lap must not land first; and shifted sideways by the pads' play
         rows.append((f'top half lowered {SKIN_GAP - 0.02:.2f} (the line shut) / bottom half', v(ht.translate([0, 0, -(SKIN_GAP - 0.02)]), hb)))
         rows.append(('top half shifted 0.3 left or right / bottom half', round(max(v(ht.translate([q, 0, 0]), hb) for q in (-0.3, 0.3)), 2)))
