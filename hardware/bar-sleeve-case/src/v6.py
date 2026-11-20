@@ -74,6 +74,10 @@ INS_D, INS_DEPTH, INS_RELIEF = 4.4, 5.0, 3.2   # the hole (to confirm on the joi
 # flat in the print (skin, tongue, under the case), drawer.TAP_D_V (3.1) with a guide bore where it stands upright
 # (knuckles, cleat). Same parts, same screws, same positions; the threads wear after a few assemblies and strip if forced.
 FASTEN = os.environ.get('V6_FASTEN', 'insert')
+# The status window over the S3's LED (drawer.status_window(), the right half's second part, translucent): 0.5 mm thick,
+# its pocket as deep (the owner, Nov 19: "I made the window .5mm"; drawer's 1.0 stays for the V5 builds). The light tube
+# runs on to the pocket's floor.
+DR.WIN_T = 0.5
 BOSS, BOSS_H = 8.0, 3.5          # screw bosses on the chassis walls: square, with a 45 deg ramp on the back (bed) side
 HEAD_D, HEAD_K = 6.9, 1.65       # M3 flanged button head (ISO 7380-2): a plain 5.7 head bears on only 13 mm2 round the long hole
 FOOT_IN = 16.0                   # the bumpers' recesses, this far inboard of the plank screws (V5's were where the screws are now)
