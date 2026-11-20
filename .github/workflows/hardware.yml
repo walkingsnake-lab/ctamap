@@ -1,0 +1,41 @@
+# The case's own checks, on any PR or push to main that touches hardware/:
+# v6.py builds the V6 parts and runs v6.check() (overlaps, each part's way
+# in, screws, the cleat; exits 1 on any HIT), then meshcheck.py checks the
+# V6 parts and the P4 cleat STLs (the V6 case hangs on them) for slicing.
+# The V5 checks (check_p4_fit.py and the rest) are retired: V5 is not
+# printed again.
+name: Hardware
+
+on:
+  push:
+    branches: [main]
+    paths: ['hardware/**', '.github/workflows/hardware.yml']
+  pull_request:
+    paths: ['hardware/**', '.github/workflows/hardware.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  v6:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: hardware/bar-sleeve-case/src
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install
+        run: pip install manifold3d==3.5.5 trimesh==5.2.1 numpy==2.5.3 shapely==2.2.0 scipy==1.18.1 rtree==1.4.1 networkx==3.7
+
+      - name: V6 build and v6.check()
+        run: timeout -k 5 600 python3 v6.py "$RUNNER_TEMP/v6"
+
+      - name: Mesh check (V6 parts, P4 cleats)
+        run: timeout -k 5 300 python3 meshcheck.py "$RUNNER_TEMP"/v6/*.stl ../stl/p4/p4-cleat-case.stl ../stl/p4/p4-cleat-wall.stl

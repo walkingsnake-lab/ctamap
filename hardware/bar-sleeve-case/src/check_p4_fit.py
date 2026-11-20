@@ -1,7 +1,10 @@
 """Fit check for the P4 bar sleeve's joints (p4.py): the shell's V-groove half-lap, the diffuser's seat and its way in,
 USB-C and the S3's edge buttons with no relief in the wall, and the wall cleat.
     python3 check_p4_fit.py
-Prints every number and ends with PASS or FAIL. The top screws have check_p4_top.py, the cables p4_cables.py."""
+Prints every number and ends with PASS or FAIL. The top screws have check_p4_top.py, the cables p4_cables.py.
+RETIRED Nov 19: this checks the V5 P4 (shell and trays), which will not be printed again; the V6 case is checked by
+v6.py (v6.check(), run in CI). Since the V6 diffuser defaults (2.4 grid, 5 mm skirt, Nov 16) it FAILs two of its V5
+diffuser/panel checks; that is expected. Not run in CI."""
 import math, sys
 import numpy as np
 import p4
