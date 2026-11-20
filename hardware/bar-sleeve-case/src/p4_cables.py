@@ -56,7 +56,7 @@ def ribbon():
     pi_x = min(DR.HEADERS, key=lambda h: h[0])[0]
     idc_x = DR.s3(57.15, 0)[0]
     hw, y1 = RIB_W / 2, WALL_IN - 0.02
-    yp = PANEL_BACK + IDC_TOP_PANEL
+    yp = PANEL_BACK + IDC_TOP_PANEL + p4.panel_extra()
     out = dict(
         rise_panel=box(pi_x - RIB_T / 2, pi_x + RIB_T / 2, yp, y1 - 3.0, rz - hw, rz + hw),
         bend_panel=box(pi_x - RIB_T / 2, pi_x + 3.0, y1 - 3.0, y1, rz - hw, rz + hw),
@@ -72,7 +72,7 @@ def ribbon():
 def ribbon_length():
     pi_x = min(DR.HEADERS, key=lambda h: h[0])[0]
     idc_x = DR.s3(57.15, 0)[0]
-    up = (WALL_IN - (PANEL_BACK + IDC_TOP_PANEL)) + (WALL_IN - (Y_TOP + IDC_TOP_S3))
+    up = (WALL_IN - (PANEL_BACK + IDC_TOP_PANEL + p4.panel_extra())) + (WALL_IN - (Y_TOP + IDC_TOP_S3))
     along = (idc_x - pi_x) + (p4.RIB_Z - p4.IDC_Z) - RIB_W                    # 45 deg folds: the drop costs (drop - width)
     return up + along + 2 * 15.0                                              # + the length inside both plugs
 

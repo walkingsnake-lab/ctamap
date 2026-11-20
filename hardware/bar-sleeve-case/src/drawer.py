@@ -218,6 +218,7 @@ SLED_TAB_W, SLED_GRIP = 4.4, 2.0                # back tabs: width, depth into t
 SLED_CL = 0.25                                  # tab clearance in the hook's slot (top and bottom; 0.2 a side in x)
 HOOK_FLARE = 0.8                                # 45 deg flare at the slot's mouth
 HOOK_WALL, HOOK_FRONT, HOOK_LIP = 1.2, 57.0 + _DY, 1.25   # hook cheeks either side of the slot, hook front face (y), lip under the tab
+TIE_BLIND = 2.5                                 # blind louver stretches (tray(blind=...)): this much of the 5 mm band left solid
 LV_BLIND = 1.5                                  # louver slots behind the hooks end this far behind the band's inner face (1 mm past the hook)
 SLED_SCREW = (48.0, 34.5 + _DY)                 # front screw: 3.6 mm of web to the light hole, 10 mm from the nearest crush rib
 SLED_BOSS_D, SLED_PILOT = 6.0, 2.4
@@ -229,10 +230,12 @@ SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray
 
 
 def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=None, extra_cuts=(), blank=False, post_dy=None,
-         s3=None, controls=None, encoder=None):
+         s3=None, controls=None, encoder=None, ties=None, blind=None, boss_blind=False):
     """the v5 tray. The split options are for trays split in two (p4.py), and their defaults give the one-piece tray:
     top_bar: half width of the solid bar across the middle of the top louver rows (LV_SPLIT / 2);
     bottom_gap: half width of a gap in the bottom louver rows at the middle (0: none);
+    boss_blind: the bottom rows run on over the two screw bosses as blind slots (TIE_BLIND of band left), so they are as
+    long as the top rows from behind (False: a 13 mm gap in the rows at each boss, as V5);
     ribbon_hooks: [(x, z)] of the ribbon hook pairs (default: one pair between the S3's connector and the panel input);
     hook_lip: the hooks' lip thickness (their reach is 4 mm: 4.0 makes the lip's underside 45 deg back-down);
     tie_x0: left end of the tie loop's patch (default: just right of the first hook pair); extra_cuts: more cuts.
@@ -241,7 +244,10 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     slot and rails and the light sensor (bar128.py: tray B keeps the S3, tray A takes the controls at ENC_X / the
     sensor's x). post_dy: {(x, z): dy} moves those posts' feet back by dy (bar128.py: the inner posts stand on its
     splice plates). encoder=False drops only the encoder's slot and rails in the top wall and keeps the light sensor
-    (p5.py: its knob is on the right end wall)."""
+    (p5.py: its knob is on the right end wall). ties: {'top': [(x0, x1), ...], 'bottom': [...]}: stretches where the louver rows are left solid, so the
+    band there ties the wall to the back plate (p4v55.py). blind: the same lists, but the slots are still cut from the back
+    face there and stop TIE_BLIND short of the band's inner face: the louvers look unbroken from behind and the band's
+    inner TIE_BLIND mm is the tie."""
     post_dy = post_dy or {}
     s3 = (not blank) if s3 is None else s3
     controls = (not blank) if controls is None else controls
@@ -348,8 +354,10 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
         if zc < ZC:                                                          # bottom rows: gaps at the screw bosses
             if bottom_gap:
                 segs = minus(segs, -bottom_gap, bottom_gap)
-            for scx in C.SCREW_XS:
+            for scx in (() if boss_blind else C.SCREW_XS):
                 segs = minus(minus(segs, -scx - 6.5, -scx + 6.5), scx - 6.5, scx + 6.5)
+        for g0, g1 in (ties or {}).get('top' if zc > ZC else 'bottom', ()):
+            segs = minus(segs, g0, g1)
         for xa, xb in segs:
             def slab(y, dz, xa=xa, xb=xb, zc=zc):
                 cs = CrossSection.square([xb - xa - 2 * r, 0.01], center=True).offset(r, JT, circular_segments=16).translate([(xa + xb) / 2, zc + dz])
@@ -358,6 +366,12 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
             # the top row's slot rises into the top wall near its inner end: stop it 0.6 under the wall (a slot roof
             # grazing the wall's face left a zero-thickness sheet, non-manifold in the STL)
             sl = sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6)
+            for g0, g1 in (blind or {}).get('top' if zc > ZC else 'bottom', ()):
+                sl = sl - box(g0, g1, Y0 - 20, y_in + TIE_BLIND, -5, H + 5)
+            if zc < ZC and boss_blind:                                       # blind over the bottom screw bosses, not a gap
+                for scx in C.SCREW_XS:
+                    for q in (-scx, scx):
+                        sl = sl - box(q - 6.5, q + 6.5, Y0 - 20, y_in + TIE_BLIND, -5, H + 5)
             if zc > ZC and controls:                                         # blind behind the sensor sled's hooks
                 for g0, g1 in louver_gaps(zc, r, encoder):
                     sl = sl - box(g0, g1, Y0 - 20, y_in + LV_BLIND, -5, H + 5)

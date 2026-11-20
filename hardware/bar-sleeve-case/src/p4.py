@@ -482,7 +482,28 @@ def joint_taper_cuts(z0, z1):
 # panel's ends instead of 0.05) pushed the halves 0.5-1 mm apart at the joint. Another filament: measure the shrink
 # strip, then DIFF_SHRINK = 1 - measured / built.
 DIFF_SHRINK = float(os.environ.get('DIFF_SHRINK', '0.0021'))
-DF.HOUSE_H = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11, 127.8 on Nov 12 (board edge, frame flush with it)
+HOUSE_H_MEASURED = float(os.environ.get('P4_HOUSE_H', '127.8'))     # 127.7 on Nov 11, 127.8 on Nov 12 (board edge, frame flush with it)
+# The opening between the top and bottom skirts is built SKIRT_TIGHT smaller than the fit drawn for that housing (0.10
+# clear a side, 0.2 bumps). Nov 16: the halves with the 2.4 grid and 5 mm skirts sat right but did not snap; of four sizing
+# strips (0, 0.1, 0.2, 0.3 smaller: diffuser_snap_strips.py size) the owner chose 0.3: "fits tight but well". That is the
+# opening with no shrink allowance at all (0.27), so this heavier half seems to shrink less across its height than the
+# 0.21% measured on the first, thinner ones. Only the height is tightened: lengthwise the allowance stays, so the ribs
+# keep to the gaps between the LEDs and the end skirts keep their room (uncompensated, on Nov 12, the ends pushed the
+# halves apart at the joint).
+SKIRT_TIGHT = float(os.environ.get('P4_SKIRT_TIGHT', '0.3'))
+DF.HOUSE_H = HOUSE_H_MEASURED - SKIRT_TIGHT
+# A stiffer diffuser to try (Nov 15: on the first full build the grid sheet did not stay flat on the panel and light bled
+# between cells at the edges). P4_GRID_H: the grid's height (1.5; 2.4 tried: the ribs' bending stiffness goes with the
+# cube, about 4x, and the pixels soften a little). P4_SKIRT_D: the skirts' depth along the panel's sides (3.0; deeper
+# makes each skirt a stiffer edge beam). In the case a taller grid sets the panel further back by the same amount: the V6
+# chassis follows (p4v55.GRID_EXTRA, v6.PB); the V5 tray built in this file does not, and is no longer what is built.
+DF.GRID_H = float(os.environ.get('P4_GRID_H', '2.4'))     # 2.4 since Nov 16 (the owner: "we need that extra bit of grid rigidity"; 2.0 tried for brightness)
+# P4_FACE: the face's thickness (0.2, one layer). The whole of it is the 'white' part of each half, whatever it is printed
+# in: for a translucent gray face 2 to 4 layers thick (the owner, Nov 16), P4_FACE=0.4 / 0.6 / 0.8. The grid keeps its
+# height behind it, so the panel sits that much further back (p4v55.GRID_EXTRA, v6.PB follow).
+DF.SKIN = float(os.environ.get('P4_FACE', DF.SKIN))
+DF.SK_D = float(os.environ.get('P4_SKIRT_D', '5.0'))     # 5 with the taller grid
+DF.BUMP_FROM_GRID = float(os.environ.get('P4_BUMP_Z', '1.8'))   # where the bumps were on the 3 mm skirt that snapped; a deeper skirt no longer moves them
 # Skirt fit. Two settings (P4_DIFF_FIT):
 # 'snap' (default, Nov 13; printed that evening, "the fit is pretty good now"): the P2.5 pair's fit, as that pair really has it. Its model has
 #   0.05 mm of clearance on an 80.0 mm panel, but the panel measures 79.9, so its skirts were built 0.10 a side clear of
@@ -607,7 +628,10 @@ def lug_screws_env():
 JOINT_BARS = os.environ.get('P4_JOINT_BARS', '1') not in ('0', '', 'no', 'false')
 BAR_X = 10.0                            # boss centres, each side of the joint
 BOSS_LX = 6.0                           # boss length along x
-BOSS_H = 6.0                            # boss top above the flange's back: the pilot ends at the flange, 1.2 from the face
+BOSS_H = max(6.0, DF.SKIN + DF.GRID_H + DF.SK_D + 0.6 - DF.FT)   # boss top above the flange's back: the pilot ends at the flange,
+                                        # 1.2 from the face. 6.0 with the 3 mm skirt; with a taller grid or a deeper skirt (P4_GRID_H,
+                                        # P4_SKIRT_D) it follows the skirt's tip, 0.6 above it: at 6.0 the tip of a 5 mm skirt stood
+                                        # 0.4 over the boss tops, the boss's profile crossed itself and a bar could not lie flat
 BAR_T, BAR_END = 3.0, 5.0               # bar thickness; bar length beyond each slot's centre
 BAR_SCREW = 8.0                         # M2.5 x 8 button head: 3.5 mm of thread below the guide bore
 BAR_PILOT, BAR_GUIDE_D, BAR_GUIDE_L = P3.S3_PILOT, 2.6, DR.M25_GUIDE_L     # the S3 posts' vertical pilot (fit Nov 3) and 1.5 guide bore
@@ -620,7 +644,7 @@ BAR_HEAD_D, BAR_HEAD_K = 4.7, 1.7
 def bar_geom():
     """y of the screw line, the bosses' and bars' outer y, the bar's inner y, the boss tops' z (diffuser frame, top border)"""
     y_out = DF.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT - LUG_TRAY_GAP
-    hy = (DF.HOUSE_H or DF.PH) / 2
+    hy = (HOUSE_H_MEASURED or DF.PH) / 2            # the panel's own edge, not the tightened skirt: the bar stays as printed
     return y_out - 2.3, y_out, hy + 0.7, DF.FT + BOSS_H
 
 
@@ -672,6 +696,10 @@ def bar_screws_env(sy=None):
     return Manifold.batch_boolean(out, ADD)
 
 
+TINT_WHITE = float(os.environ.get('P4_TINT_WHITE', '0.2'))
+TINT_GRID = float(os.environ['P4_TINT_GRID']) if os.environ.get('P4_TINT_GRID') else None
+
+
 def diffuser_halves(printed=False, tint=False):
     """DF.diffuser() (8 mm flange) split at x = 0. Returns {(side, part): manifold} in DF's frame (z = 0 is the face, +z
     toward the LEDs; y up the panel). part: 'white' (the whole first layer: the face and the flange's front) or 'black'
@@ -679,10 +707,14 @@ def diffuser_halves(printed=False, tint=False):
     otherwise the size it should come out (fit checks, renders).
     tint: the three-colour variant to try (Nov 11): 'gray' (the whole first layer, translucent gray: the tint), 'white'
     (the whole second layer: the scatter, behind the tint) and 'black' (the grid and the rest). The face is two layers
-    and the grid one layer lower, so the LEDs sit where they did and the variant swaps in with no other change."""
-    skin = DF.SKIN * (2 if tint else 1)
+    and the grid one layer lower, so the LEDs sit where they did and the variant swaps in with no other change.
+    TINT_WHITE (P4_TINT_WHITE) is the white layer's thickness: 0.2, or thinner to be printed as one thin layer with a
+    height-range modifier in the slicer (Nov 17: 0.1). TINT_GRID (P4_TINT_GRID) is the grid's height in this variant: by
+    default the grid's less the white's thickness; with a 0.1 white, 2.4 keeps every surface above it on 0.2 mm layers
+    (and sets the panel 0.1 further back)."""
+    skin = DF.SKIN + TINT_WHITE if tint else DF.SKIN
     grid_h = DF.GRID_H
-    DF.GRID_H = grid_h - (skin - DF.SKIN)
+    DF.GRID_H = (TINT_GRID if TINT_GRID is not None else grid_h - TINT_WHITE) if tint else grid_h
     try:
         d = DF.diffuser(skin=skin)
         hy = DF.PH / 2
@@ -734,11 +766,18 @@ def diffuser_in_case(m):
 
 
 # ---------------------------------------------------------------- envelopes for fit checks (not printed)
+def panel_extra():
+    """how much further back the panel sits than with the first diffuser (1.5 grid, 0.2 face)"""
+    return (DF.GRID_H - 1.5) + (DF.SKIN - 0.2)
+
+
 def panel_p4():
     """P4 panel in the case, turned 180 deg: LED board (2.5 mm incl. LEDs) + 12 mm housing (rim, ribs, insert bosses),
     the two HUB75 shrouds (top 1 mm under the housing back, ASSUMED), VH4 power header, a ribbon plug on data in"""
-    yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK - PANEL_THIN            # the measured housing back
-    pw, ph = DF.HOUSE_W or panel.P['w'], DF.HOUSE_H or panel.P['h']         # as measured (127.8 high, board and frame flush)
+    yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK - PANEL_THIN + panel_extra()   # the measured housing back; the panel
+    # keeps its thickness when a taller grid or thicker face sets it back (until Nov 19 only the LED face moved, so the
+    # checks ran against a panel 0.9 mm too thin: the final review)
+    pw, ph = DF.HOUSE_W or panel.P['w'], HOUSE_H_MEASURED or panel.P['h']    # as measured (127.8 high, board and frame flush)
     parts = [box(-pw / 2, pw / 2, yf, yf + 2.5, ZC - ph / 2, ZC + ph / 2)]
     hous = box(-pw / 2, pw / 2, yf + 2.5 - 0.01, yb, ZC - ph / 2, ZC + ph / 2)
     hous = hous - box(-pw / 2 + 6, pw / 2 - 6, yf, yb + 1, ZC - ph / 2 + 6, ZC + ph / 2 - 6)
@@ -808,12 +847,30 @@ def collar_p4():
 
 WALL_CLEAT_HW = 110.0           # wall cleat half length: 220 mm for the 282 mm case (the single's is 149); flat on the bed,
                                 # and 5 mm short of the Boot funnel on the right tray half's back
-WALL_CLEAT_XS = (-95.0, 0.0, 95.0)   # its three wall screws
+WALL_CLEAT_XS = (-95.0, 95.0)        # its two wall screws (three until Nov 17: the load is about 10 N, the third only held the
+                                     # strip's middle to the wall)
+# The cleat, looked at hard on Nov 17 (the case is about 1 kg; each case-cleat screw sees ~22 N): strong enough as it was.
+# Changed for use: a 60 deg bevel (about 17 mm of hook instead of 10: a knock upward no longer unhooks it), stops on the
+# wall cleat outside the case cleat's ends (plugging in the USB-C pushed the case along the cleat), pockets in its wall face.
+CLEAT_BEVEL = float(os.environ.get('P4_CLEAT_BEVEL', '60'))
+CLEAT_STOPS = (0.5, 12.0, 5.0)       # clearance each side, length, lead-in
+CLEAT_POCKETS = (8.0, 4.0)           # depth (of 12), rib
+
+
+def cleat_setup():
+    """cleat.py's settings for this build; returns the module"""
+    import cleat as CLT
+    CLT.BEVEL_DEG, CLT.WALL_STOPS, CLT.WALL_POCKETS = CLEAT_BEVEL, CLEAT_STOPS, CLEAT_POCKETS
+    CLT.CBORE_D = 7.4                 # for a flanged button head (6.9) as well as a plain one (6.6 took only the plain)
+    return CLT
+
+
+def case_cleat_p4():
+    return cleat_setup().case_cleat()
 
 
 def wall_cleat_p4():
-    import cleat as CLT
-    return CLT.wall_cleat(hw=WALL_CLEAT_HW, xs=WALL_CLEAT_XS)
+    return cleat_setup().wall_cleat(hw=WALL_CLEAT_HW, xs=WALL_CLEAT_XS)
 
 
 def collar_knob():
@@ -981,7 +1038,8 @@ if __name__ == '__main__':
     put(cm.mirror([0, 0, 1]).translate([0, 0, CO.FL_T]), 'p4-encoder-collar.stl', None, drop_axis=2)   # flange top down
     put(DR.sled(), 'p4-sensor-sled.stl', None, drop_axis=2)                           # plate down
     import cleat as CLT                                                                  # wall hanging (replaces the spine)
-    put(CLT.case_cleat(), 'p4-cleat-case.stl', down); put(wall_cleat_p4(), 'p4-cleat-wall.stl', down)
+    up = trimesh.transformations.rotation_matrix(math.pi / 2, [1, 0, 0])                 # the wall cleat prints front face down
+    put(case_cleat_p4(), 'p4-cleat-case.stl', down); put(wall_cleat_p4(), 'p4-cleat-wall.stl', up)
     if TOP_SCREWS:
         cw, cp = top_screw_coupon(P['top'], P['tray'])
         put(cw, 'coupon-p4-top-screw-shell.stl', down); put(cp, 'coupon-p4-top-screw-tray.stl', down)
