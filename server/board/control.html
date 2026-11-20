@@ -416,10 +416,11 @@
       <div class="c"><label for="showTemp" class="grow">Temperature</label><input type="checkbox" class="sw" id="showTemp"></div>
       <div class="c"><label for="boats" class="grow">Boats</label><input type="checkbox" class="sw" id="boats"></div>
       <div class="c"><label for="twinkle" class="grow">Twinkling stars</label><input type="checkbox" class="sw" id="twinkle"></div>
+      <div class="c"><label for="cloudMove" class="grow">Drifting clouds</label><input type="checkbox" class="sw" id="cloudMove"></div>
       <label class="c sel"><span>Motion</span><span class="v"></span><span data-icon="chev"></span>
         <select id="motion"><option value="still">Still</option><option value="slow">Slow</option><option value="normal">Normal</option><option value="fast">Fast</option><option value="custom" disabled>Custom</option></select></label>
     </div>
-    <p class="ft">Motion: the clouds, the wheel's rainbow, the ripples and the rain.</p>
+    <p class="ft">Motion: the wheel's rainbow, the ripples and the rain.</p>
   </div>
   <div id="analogOpts">
     <p class="sh">Analog</p>
@@ -436,6 +437,7 @@
     <p class="sh" id="digitsHead">Big digits</p>
     <div class="grp">
       <div class="c swr"><span id="digitColorH">Digit color <span class="swn"></span></span><div class="sws" id="digitColor" role="radiogroup" aria-labelledby="digitColorH" data-colors="white amber coral pink violet blue cyan mint lime"></div></div>
+      <div class="c" id="shadowRow"><label for="digitShadow" class="grow">Shadow</label><input type="checkbox" class="sw" id="digitShadow"></div>
       <div class="c" id="colonRow"><label for="colonBlink" class="grow">Blinking colon</label><input type="checkbox" class="sw" id="colonBlink"></div>
     </div>
   </div>
@@ -724,10 +726,10 @@
   const FACE_NAME = { skyline: 'Skyline', seventies: 'Seventies', analog: 'Analog', daynight: 'Day/night', gradient: 'Gradient', digits: 'Big digits', daydate: 'Day & date', words: 'Words' };
   const MSG_NAMES = { note: 'Note', type: 'Typewriter', big: 'Big word', roll: 'Credits' };
   const MOTION = {
-    still: { cloudDrift: 'off', wheelSpeed: 'off', rippleSpeed: 'off', rainSpeed: 'slow' },
-    slow: { cloudDrift: 'slow', wheelSpeed: 'slow', rippleSpeed: 'slow', rainSpeed: 'slow' },
-    normal: { cloudDrift: 'slow', wheelSpeed: 'normal', rippleSpeed: 'normal', rainSpeed: 'normal' },
-    fast: { cloudDrift: 'normal', wheelSpeed: 'fast', rippleSpeed: 'fast', rainSpeed: 'fast' },
+    still: { wheelSpeed: 'off', rippleSpeed: 'off', rainSpeed: 'slow' },
+    slow: { wheelSpeed: 'slow', rippleSpeed: 'slow', rainSpeed: 'slow' },
+    normal: { wheelSpeed: 'normal', rippleSpeed: 'normal', rainSpeed: 'normal' },
+    fast: { wheelSpeed: 'fast', rippleSpeed: 'fast', rainSpeed: 'fast' },
   };
   const badge = (ln) => el('span', { class: 'badge', style: `background:${(BADGE[ln] || ['#8e8e93'])[0]};color:${(BADGE[ln] || [0, '#fff'])[1]}`, text: LINE_NAME[ln] || ln });
   const params = new URLSearchParams(location.search);
@@ -1182,7 +1184,7 @@
     if (board.screen === 'transit' || board.screen === 'ticker') switchTo(v);
     else save({ transitScreen: v });
   });
-  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
+  for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink', 'digitShadow']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
   $('lineNames').addEventListener('change', (e) => save({ lineNames: e.target.value }));
   $('wideLayout').addEventListener('change', (e) => save({ wideLayout: e.target.value }));
   for (const k of ['tickerHold', 'tickerSlide', 'autoEvery', 'gameEvery']) $(k).addEventListener('change', (e) => save({ [k]: Number(e.target.value) }));
@@ -1373,21 +1375,25 @@
     $('analogOpts').hidden = face !== 'analog';
     swatchVal('analogAccent', board.analogAccent || 'amber');
     $('gradientOpts').hidden = face !== 'gradient';
-    // Digit color on both big-digit faces; the colon blinks only on Big digits.
+    // Digit color on both big-digit faces; the shadow and the blinking colon only on Big digits.
     $('digitsOpts').hidden = face !== 'digits' && face !== 'daydate';
     $('digitsHead').textContent = face === 'daydate' ? 'Day & date' : 'Big digits';
     $('colonRow').hidden = face !== 'digits';
+    $('shadowRow').hidden = face !== 'digits';
     swatchVal('digitColor', board.digitColor || 'white');
     $('showTemp').checked = board.showTemp !== false;
     $('boats').checked = board.boats !== false;
     $('twinkle').checked = board.twinkle !== false;
     $('gradInvert').checked = board.gradInvert === true;
     $('colonBlink').checked = board.colonBlink !== false;
-    const cur = { cloudDrift: board.cloudDrift || 'slow', wheelSpeed: board.wheelSpeed || 'normal', rippleSpeed: board.rippleSpeed || 'normal', rainSpeed: board.rainSpeed || 'normal' };
+    $('digitShadow').checked = board.digitShadow !== false;
+    $('cloudMove').checked = (board.cloudDrift || 'slow') !== 'off';
+    const cur = { wheelSpeed: board.wheelSpeed || 'normal', rippleSpeed: board.rippleSpeed || 'normal', rainSpeed: board.rainSpeed || 'normal' };
     const m = Object.keys(MOTION).find((k) => Object.entries(MOTION[k]).every(([f, v]) => cur[f] === v)) || 'custom';
     selVal('motion', m);
   }
   $('clockFace').addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) save({ clockFace: b.dataset.v }); });
+  $('cloudMove').addEventListener('change', (e) => save({ cloudDrift: e.target.checked ? 'slow' : 'off' }));
   $('motion').addEventListener('change', (e) => { if (MOTION[e.target.value]) save(MOTION[e.target.value]); });
   for (const id of ['analogAccent', 'digitColor']) swatches(id, (v) => save({ [id]: v }));
 

@@ -43,7 +43,7 @@ tray half, ribbon to the panel's input. (Plugged straight onto the panel's input
 Run: python3 p4.py <outdir>   -> STLs (print orientation), coupons, and fit numbers
 """
 import math, os, sys
-os.environ['PANEL'] = 'p4'
+os.environ['PANEL'] = os.environ.get('P4_PANEL', 'p4')       # p5.py builds on this module with its own profile
 os.environ.setdefault('CASE_WALL', '4.0')       # 3.5 until Nov 9: ~1.5x stiffer; the halves still leave a 3 mm brim on the bed
 import numpy as np
 from manifold3d import Manifold, CrossSection, JoinType

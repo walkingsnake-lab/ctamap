@@ -98,14 +98,19 @@ test('night: windows lit to the payload level, beacons pulse but never go dark, 
   assert.ok(moved > SKY.rim.length / 2, 'noticeably turning: most of the rim changes within a second');
 });
 
-test('windows switch on in a fixed order (the lit set only grows)', () => {
+test('windows: the same set shows at every level, fading up together as `win` rises', () => {
   const sky = toSkyline({ temp: 52, code: 0, clouds: 5 }, { ...PLACE, now: NIGHT, temp: 52 });
-  let prev = new Set();
-  for (const win of [0, 20, 40, 60, 80, 100]) {
+  const full = draw({}, NIGHT, { sky: { ...sky, win: 100 } });
+  const lit = SKY.wins.filter(([x, y]) => px(full, x, y) !== '#000000');
+  assert.ok(lit.length > 0 && new Set(lit.map(([x, y]) => px(full, x, y))).size === 2, 'win 100: full dim and bright amber');
+  let prev = null;
+  for (const win of [30, 50, 70, 100]) {
     const f = draw({}, NIGHT, { sky: { ...sky, win } });
-    const on = new Set(SKY.wins.filter(([x, y]) => px(f, x, y) !== '#000000').map(([x, y]) => `${x},${y}`));
-    for (const k of prev) assert.ok(on.has(k), `window ${k} went dark at win ${win}`);
-    prev = on;
+    const on = SKY.wins.filter(([x, y]) => px(f, x, y) !== '#000000');
+    assert.equal(on.length, lit.length, `win ${win}: every window of the set shows, none switch on later`);
+    const sum = on.reduce((a, [x, y]) => a + f.get(x, y).reduce((p, v) => p + v, 0), 0);
+    if (prev != null) assert.ok(sum > prev, `win ${win}: brighter than before`);
+    prev = sum;
   }
   const dark = draw({}, NIGHT, { sky: { ...sky, win: 0 } });
   assert.equal(SKY.wins.filter(([x, y]) => px(dark, x, y) !== '#000000').length, 0, 'win 0: every window dark');

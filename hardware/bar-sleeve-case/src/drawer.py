@@ -230,7 +230,7 @@ SLED_CB_D, SLED_CB_DEPTH, SLED_CLEAR = 5.0, 1.8, 2.8   # counterbore in the tray
 
 
 def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=None, extra_cuts=(), blank=False, post_dy=None,
-         s3=None, controls=None, ties=None, blind=None, boss_blind=False):
+         s3=None, controls=None, encoder=None, ties=None, blind=None, boss_blind=False):
     """the v5 tray. The split options are for trays split in two (p4.py), and their defaults give the one-piece tray:
     top_bar: half width of the solid bar across the middle of the top louver rows (LV_SPLIT / 2);
     bottom_gap: half width of a gap in the bottom louver rows at the middle (0: none);
@@ -243,13 +243,16 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     the S3 and what goes with it (pad, posts, light tube and window, Boot, USB-C window); controls=False drops the encoder
     slot and rails and the light sensor (bar128.py: tray B keeps the S3, tray A takes the controls at ENC_X / the
     sensor's x). post_dy: {(x, z): dy} moves those posts' feet back by dy (bar128.py: the inner posts stand on its
-    splice plates). ties: {'top': [(x0, x1), ...], 'bottom': [...]}: stretches where the louver rows are left solid, so the
+    splice plates). encoder=False drops only the encoder's slot and rails in the top wall and keeps the light sensor
+    (p5.py: its knob is on the right end wall). ties: {'top': [(x0, x1), ...], 'bottom': [...]}: stretches where the louver rows are left solid, so the
     band there ties the wall to the back plate (p4v55.py). blind: the same lists, but the slots are still cut from the back
     face there and stop TIE_BLIND short of the band's inner face: the louvers look unbroken from behind and the band's
     inner TIE_BLIND mm is the tie."""
     post_dy = post_dy or {}
     s3 = (not blank) if s3 is None else s3
     controls = (not blank) if controls is None else controls
+    rib_slot = encoder is None or bool(encoder)             # the top crush ribs keep off the knob slot's place unless told there is none
+    encoder = controls if encoder is None else (encoder and controls)
     outer = rr_cs(BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL, BORE_R - TRAY_CL)
     inner = rr_cs(BORE_HX - TRAY_CL - TRAY_WT, BORE_HZ - TRAY_CL - TRAY_WT, BORE_R - TRAY_CL - TRAY_WT)
     t = prism_y(outer, Y0, Y1) + (prism_y(outer, YF, Y0 + 0.01) - prism_y(inner, YF - 1, Y0 + 0.02))
@@ -300,7 +303,8 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     if controls:
         # light sensor mount (pillars or sled hooks)
         t = t + sensor_mount()
-        t = t + enc_rails()
+        if encoder:
+            t = t + enc_rails()
     # cleat nut bosses
     for cx, cz in CLEAT_SCREWS:
         t = t + cyl_y(cx, cz, Y0 - CB_H, Y0 + 0.01, CB_D, 48)
@@ -369,7 +373,7 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
                     for q in (-scx, scx):
                         sl = sl - box(q - 6.5, q + 6.5, Y0 - 20, y_in + TIE_BLIND, -5, H + 5)
             if zc > ZC and controls:                                         # blind behind the sensor sled's hooks
-                for g0, g1 in louver_gaps(zc, r):
+                for g0, g1 in louver_gaps(zc, r, encoder):
                     sl = sl - box(g0, g1, Y0 - 20, y_in + LV_BLIND, -5, H + 5)
             cuts.append(sl)
     # bottom screw holes and nut pockets
@@ -403,8 +407,9 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     if controls:
         # top wall: slot open to the front edge past the encoder body; light hole and sensor pilots
         ztw = H - WALL - TRAY_CL - TRAY_WT - 1.0
-        cuts.append(box(ENC_X - ENC_SLOT, ENC_X + ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
-        if ENC_RECESS:                                                   # room over the board, out to the rails' outer faces
+        if encoder:
+            cuts.append(box(ENC_X - ENC_SLOT, ENC_X + ENC_SLOT, YF - 1, KY + ENC_HALF + 1.5, ztw, H))
+        if ENC_RECESS and encoder:                                                   # room over the board, out to the rails' outer faces
             hw_, (by0, by1), _ = enc_board()
             cuts.append(box(ENC_X - hw_ - RAIL_CL - RAIL_W, ENC_X + hw_ + RAIL_CL + RAIL_W, by0 - 1.0, by1 + 1.0, _zw() - 0.01, _zw() + ENC_RECESS))
         cuts.append(cyl_z(SN.SX, SN.SY, ztw, H, SEN_HOLE, 32))
@@ -415,7 +420,7 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
         cuts.append(box(xin - 1, BORE_HX + 1, YF - 1, PORT_Y + 5.0, PORT_Z - 7.5, BTN_Z1 + 1.0))
     cuts += list(extra_cuts)
     t = t - Manifold.batch_boolean(cuts, ADD)
-    t = t + crush_ribs()
+    t = t + crush_ribs(rib_slot)
     return max(t.decompose(), key=lambda m: m.volume())
 
 
@@ -540,14 +545,14 @@ def hook_bottom():
     return sled_z()[0] - SLED_CL - HOOK_LIP
 
 
-def louver_gaps(zc, r):
+def louver_gaps(zc, r, encoder=True):
     """x ranges of a top louver row (centre zc, slot half height r) behind the sensor hooks: there the slot stops
     LV_BLIND short of the band's inner face (blind), so the hook's root stays whole and the back face looks as before"""
     lo, hi = zc + LV_DEPTH + 0.5 - r, zc + LV_DEPTH + 0.5 + r          # the slot's inner end, where the hooks are
     out = []
     if SENSOR_MOUNT == 'sled' and not (hi < hook_bottom() or lo > _zw()):
         out += [(hx - hook_half() - 0.6, hx + hook_half() + 0.6) for hx in hook_xs()]
-    if not (hi < enc_board()[2][1] - RAIL_LAP or lo > _zw()):          # and the encoder rails
+    if encoder and not (hi < enc_board()[2][1] - RAIL_LAP or lo > _zw()):          # and the encoder rails
         out += [(min(xa, xb) - 0.6, max(xa, xb) + 0.6) for xa, xb in rail_xs()]
     return out
 
@@ -638,8 +643,9 @@ def sensor_cuts():
     return cuts
 
 
-def crush_ribs():
-    """triangular ribs on the tray's outside, running front to back, clear of the wall slots"""
+def crush_ribs(encoder=True):
+    """triangular ribs on the tray's outside, running front to back, clear of the wall slots (encoder=False: no knob
+    slot in the top wall to keep off)"""
     import sensor as SN
     ox, oz = BORE_HX - TRAY_CL, BORE_HZ - TRAY_CL                # tray outside half sizes
     y_a, y_b = YF + 4.0, Y0 - 1.0
@@ -660,7 +666,7 @@ def crush_ribs():
         ramp = Manifold.batch_hull([prism_y(tri(0.0), y_a, y_a + 0.01), prism_y(tri(CR_H), y_a + CR_RAMP, y_a + CR_RAMP + 0.01)])
         return prism_y(tri(CR_H), y_a + CR_RAMP, y_b) + ramp
     xs = [-0.75 * (ox - BORE_R), -0.3 * (ox - BORE_R), 0.3 * (ox - BORE_R), 0.75 * (ox - BORE_R)]
-    top_block = [(ENC_X - ENC_SLOT - 2, ENC_X + ENC_SLOT + 2)] + list(CR_TOP_SKIP)
+    top_block = ([(ENC_X - ENC_SLOT - 2, ENC_X + ENC_SLOT + 2)] if encoder else []) + list(CR_TOP_SKIP)
     for x in xs:
         ribs.append(rib(x, None, 'z', -1))
         if not any(a < x < b for a, b in top_block):

@@ -12,7 +12,8 @@ import panel
 
 # ---------------- parameters ----------------
 PANEL_X, PANEL_Z, PT = panel.P['w'] / 2, panel.P['h'] / 2, panel.P['t']   # panel half sizes, thickness
-STACK = 1.7                                       # diffuser face 0.2 + grid 1.5 in front of the LEDs
+GRID_H = panel.P.get('grid_h', 1.5)              # diffuser grid depth (panel.py; P5: 3.0)
+STACK = 1.7 + (GRID_H - 1.5)                      # diffuser face 0.2 + grid 1.5 in front of the LEDs
 WALL = float(os.environ.get('CASE_WALL', '2.5'))   # sleeve wall; the v5 drawer build uses 3.5 (drawer.py sets it)
 BORE_HX, BORE_HZ, BORE_R = panel.BORE_HX, panel.BORE_HZ, panel.BORE_R   # opening for the diffuser flange (+0.3 mm all round)
 DX, DZ = panel.DX, panel.DZ                       # bore size vs P3 (0 for P3): moves the positions below
@@ -23,8 +24,9 @@ ZC = H / 2
 LT, LB = panel.P.get('hood', (12.0, 3.0))         # front lip past the face: 12 at the top, 3 at the bottom (P4: x 4/3)
 LEDGE_IN, LEDGE_T = 1.5, 1.2                      # face ledge: 1.5 mm inward, 1.2 thick, 45-deg chamfer behind it
 S3_BACK = panel.P['s3_back']                      # extra panel-to-S3 gap (0 for P3)
-D = 69.0 + S3_BACK + (LT - 12.0)                   # 63 in v1-v3; v4 adds 6 mm behind the panel for the stock cables;
-                                                  # a longer hood adds its extra length, so everything behind the face keeps its room
+D = 69.0 + S3_BACK + (LT - 12.0) + (GRID_H - 1.5)   # 63 in v1-v3; v4 adds 6 mm behind the panel for the stock cables;
+                                                  # a longer hood or a deeper grid adds its extra length, so everything behind the
+                                                  # face keeps its room
 BACKL, PLATE_T = 4.0, 2.0                         # back lip, back plate
 Y_FACE = LT                                       # diffuser front face
 PANEL_BACK = Y_FACE + STACK + PT                  # 28.2

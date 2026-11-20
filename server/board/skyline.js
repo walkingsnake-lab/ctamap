@@ -236,7 +236,7 @@ function toSkyline(w, { lat, lon, now, temp, boats = true, drift = 'slow', wheel
     sky: look.sky,
     wat: look.water,
     lit: el < 0.5 ? 1 : 0,                          // wheel rainbow, beacons, pier bulbs
-    win: Math.round(100 * night),                   // share of the full 45% window pattern lit
+    win: Math.round(100 * night),                   // window level: the 45% pattern fades up as it darkens
     stars: clearish ? Math.round(14 * sstep(-4, -9, el)) : 0,
     sun,
     moon,
