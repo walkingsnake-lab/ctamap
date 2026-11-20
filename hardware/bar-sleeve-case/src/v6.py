@@ -599,18 +599,25 @@ if __name__ == '__main__':
     out = sys.argv[1] if len(sys.argv) > 1 else '.'
     os.makedirs(out, exist_ok=True)
     P = build()
-    def save(m, name, bed='back'):
-        """back: the case's back on the bed, as every V5 part; top: turned over, the top face on the bed"""
-        m = m.rotate([-90, 0, 0]) if bed in ('back', 'diag') else m.mirror([0, 0, 1])
-        m = m.rotate([0, 0, 45]) if bed == 'diag' else m          # a half is 281.8 long: on the 256 bed's diagonal, as V5's
+    def save(m, name, bed='back', frame=None):
+        """back: the case's back on the bed, as every V5 part; top: turned over, the top face on the bed. frame: another
+        part (in the case frame) whose placement on the bed this one shares: the second part of a two-material print."""
+        def turn(q):
+            q = q.rotate([-90, 0, 0]) if bed in ('back', 'diag') else q.mirror([0, 0, 1])
+            return q.rotate([0, 0, 45]) if bed == 'diag' else q          # a half is 281.8 long: on the 256 bed's diagonal, as V5's
+        m, ref = turn(m), turn(frame if frame is not None else m)
         me = m.to_mesh()
         t = trimesh.Trimesh(vertices=np.asarray(me.vert_properties)[:, :3], faces=np.asarray(me.tri_verts)); t.merge_vertices()
-        t.apply_translation([-(t.bounds[0][0] + t.bounds[1][0]) / 2, -(t.bounds[0][1] + t.bounds[1][1]) / 2, -t.bounds[0][2]])
+        b = ref.bounding_box()
+        t.apply_translation([-(b[0] + b[3]) / 2, -(b[1] + b[4]) / 2, -b[2]])
         t.export(f'{out}/{name}.stl')
         return f'{name}: {np.round(t.extents, 1).tolist()} on the bed, {m.volume() / 1000:.1f} cm3, {len(t.split(only_watertight=False))} body'
     for k, m in P['skin'].items():
         print(save(m, f'v6-skin-{k.replace("_", "-")}-walnut', 'diag' if SKIN == 'two' else 'back'))
     print(save(P['chassis_left'], 'v6-chassis-left')); print(save(P['chassis_right'], 'v6-chassis-right')); print(save(P['ring'], 'v6-trim-ring', 'top'))
+    # the status window: a translucent disc in the right half's pocket over the S3's LED, printed as that half's second part
+    # (AMS), on the bed with it (left out of the V6 exports until Nov 19: the owner noticed)
+    print(save(DR.status_window(), 'v6-chassis-right-window', frame=P['chassis_right']))
     print('info', P['info'])
     import p4v55 as T
     print('  louver span tied wall to plate, mm (top, bottom):', T.tie_length(P['chassis_left'] + P['chassis_right'], 'top'), T.tie_length(P['chassis_left'] + P['chassis_right'], 'bottom'))
