@@ -32,7 +32,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install
-        run: pip install manifold3d==3.5.5 trimesh==5.2.1 numpy==2.5.3 shapely==2.2.0 scipy==1.18.1 rtree==1.4.1 networkx==3.7
+        run: pip install manifold3d==3.5.5 trimesh==5.2.1 numpy==2.5.3 shapely==2.2.0 scipy==1.18.1 rtree==1.4.1 networkx==3.7 matplotlib==3.11.2
 
       - name: V6 build and v6.check()
         run: timeout -k 5 600 python3 v6.py "$RUNNER_TEMP/v6"
