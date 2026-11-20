@@ -614,5 +614,9 @@ if __name__ == '__main__':
     print('info', P['info'])
     import p4v55 as T
     print('  louver span tied wall to plate, mm (top, bottom):', T.tie_length(P['chassis_left'] + P['chassis_right'], 'top'), T.tie_length(P['chassis_left'] + P['chassis_right'], 'bottom'))
+    hits = 0
     for name, val in check(P):
         print(f'  {"ok  " if val < 0.05 else "HIT "} {name}: {val}')
+        hits += val >= 0.05
+    print('PASS' if not hits else f'FAIL ({hits})')
+    sys.exit(1 if hits else 0)
