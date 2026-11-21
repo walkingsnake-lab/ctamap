@@ -701,6 +701,16 @@ def bar_screws_env(sy=None):
 TINT_GRAY = float(os.environ.get('P4_TINT_GRAY', '0.6'))
 TINT_WHITE = float(os.environ.get('P4_TINT_WHITE', '0.12'))
 TINT_GRID = float(os.environ['P4_TINT_GRID']) if os.environ.get('P4_TINT_GRID') else None
+LAYER = 0.2                      # the diffuser's layer height above the white
+
+
+def tint_grid():
+    """the three-colour diffuser's grid height: TINT_GRID, or by default the grid's less the white's thickness, rounded
+    down to whole LAYERs, so its tips land on a layer line and the slicer needs no catch-up layer after the white
+    (Nov 21: 2.2 with a 0.12 white; at 2.28 the slicer needed a 0.08 catch-up layer, or the tips printed 0.08 short)"""
+    if TINT_GRID is not None:
+        return TINT_GRID
+    return math.floor((DF.GRID_H - TINT_WHITE) / LAYER + 1e-6) * LAYER
 # Which diffuser the case is built round (Nov 20: the three-colour one, 'tint'; 'plain' is the two-colour one). It sets
 # how far back the panel sits (panel_extra()), and so the V6 chassis's posts (p4v55.GRID_EXTRA, v6.PB) and the panel in
 # the fit checks. The printed diffusers themselves don't depend on it.
@@ -712,7 +722,7 @@ def diffuser_stack(tint=None):
     tint = (CASE_DIFFUSER == 'tint') if tint is None else tint
     if not tint:
         return DF.SKIN + DF.GRID_H
-    return TINT_GRAY + TINT_WHITE + (TINT_GRID if TINT_GRID is not None else DF.GRID_H - TINT_WHITE)
+    return TINT_GRAY + TINT_WHITE + tint_grid()
 
 
 def diffuser_halves(printed=False, tint=False):
@@ -723,12 +733,11 @@ def diffuser_halves(printed=False, tint=False):
     tint: the three-colour diffuser (Nov 11; chosen Nov 20): 'gray' (the front layers, translucent gray: the tint), 'white'
     (one thin layer: the scatter, behind the tint) and 'black' (the grid and the rest).
     TINT_GRAY (P4_TINT_GRAY, 0.6: three 0.2 layers) is the gray's thickness and TINT_WHITE (P4_TINT_WHITE, 0.12: one
-    layer, set with a height-range modifier in the slicer) the white's (chosen Nov 20). TINT_GRID (P4_TINT_GRID) is the
-    grid's height in this variant: by default the grid's less the white's thickness, so the stack is TINT_GRAY + GRID_H
-    (3.0: 0.4 deeper than the two-colour diffuser's 2.6)."""
+    layer, set with a height-range modifier in the slicer) the white's (chosen Nov 20). The grid's height is tint_grid()
+    (2.2: on whole 0.2 layers above the white), so the stack is 2.92, 0.32 deeper than the two-colour diffuser's 2.6."""
     skin = TINT_GRAY + TINT_WHITE if tint else DF.SKIN
     grid_h = DF.GRID_H
-    DF.GRID_H = (TINT_GRID if TINT_GRID is not None else grid_h - TINT_WHITE) if tint else grid_h
+    DF.GRID_H = tint_grid() if tint else grid_h
     try:
         d = DF.diffuser(skin=skin)
         hy = DF.PH / 2
