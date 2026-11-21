@@ -696,7 +696,10 @@ def bar_screws_env(sy=None):
     return Manifold.batch_boolean(out, ADD)
 
 
-TINT_WHITE = float(os.environ.get('P4_TINT_WHITE', '0.2'))
+# Chosen Nov 20 on the tint strips (p4_tint_coupons.py): 0.6 gray + white behind it; the owner then picked a 0.12 white
+# in the slicer. TINT_GRAY is the gray's thickness, independent of P4_FACE (the two-colour diffuser's face).
+TINT_GRAY = float(os.environ.get('P4_TINT_GRAY', '0.6'))
+TINT_WHITE = float(os.environ.get('P4_TINT_WHITE', '0.12'))
 TINT_GRID = float(os.environ['P4_TINT_GRID']) if os.environ.get('P4_TINT_GRID') else None
 
 
@@ -705,14 +708,13 @@ def diffuser_halves(printed=False, tint=False):
     toward the LEDs; y up the panel). part: 'white' (the whole first layer: the face and the flange's front) or 'black'
     (everything above it). printed: built DIFF_SHRINK larger in x and y, about the centre joint, for the PETG's shrink;
     otherwise the size it should come out (fit checks, renders).
-    tint: the three-colour variant to try (Nov 11): 'gray' (the whole first layer, translucent gray: the tint), 'white'
-    (the whole second layer: the scatter, behind the tint) and 'black' (the grid and the rest). The face is two layers
-    and the grid one layer lower, so the LEDs sit where they did and the variant swaps in with no other change.
-    TINT_WHITE (P4_TINT_WHITE) is the white layer's thickness: 0.2, or thinner to be printed as one thin layer with a
-    height-range modifier in the slicer (Nov 17: 0.1). TINT_GRID (P4_TINT_GRID) is the grid's height in this variant: by
-    default the grid's less the white's thickness; with a 0.1 white, 2.4 keeps every surface above it on 0.2 mm layers
-    (and sets the panel 0.1 further back)."""
-    skin = DF.SKIN + TINT_WHITE if tint else DF.SKIN
+    tint: the three-colour diffuser (Nov 11; chosen Nov 20): 'gray' (the front layers, translucent gray: the tint), 'white'
+    (one thin layer: the scatter, behind the tint) and 'black' (the grid and the rest).
+    TINT_GRAY (P4_TINT_GRAY, 0.6: three 0.2 layers) is the gray's thickness and TINT_WHITE (P4_TINT_WHITE, 0.12: one
+    layer, set with a height-range modifier in the slicer) the white's (chosen Nov 20). TINT_GRID (P4_TINT_GRID) is the
+    grid's height in this variant: by default the grid's less the white's thickness, so the stack is TINT_GRAY + GRID_H
+    (3.0: 0.4 deeper than the two-colour diffuser's 2.6)."""
+    skin = TINT_GRAY + TINT_WHITE if tint else DF.SKIN
     grid_h = DF.GRID_H
     DF.GRID_H = (TINT_GRID if TINT_GRID is not None else grid_h - TINT_WHITE) if tint else grid_h
     try:
@@ -729,8 +731,9 @@ def diffuser_halves(printed=False, tint=False):
             sx = DF.RIB / 2 + JOINT_SETBACK
     finally:
         DF.GRID_H = grid_h
-    first = box(-400, 400, -400, 400, -1, DF.SKIN)
-    second = box(-400, 400, -400, 400, DF.SKIN, skin)
+    z1 = TINT_GRAY if tint else DF.SKIN                      # top of the first part (the gray, or the white face)
+    first = box(-400, 400, -400, 400, -1, z1)
+    second = box(-400, 400, -400, 400, z1, skin)
     k = 1.0 / (1.0 - DIFF_SHRINK) if printed else 1.0
     # the joint plane, and the slot with no black in it (one-rib joint: 0.005 into the rib, so no face lies on its face)
     lo = JOINT_SETBACK if JOINT_RIB == 'split' else JOINT_SETBACK + 0.005
