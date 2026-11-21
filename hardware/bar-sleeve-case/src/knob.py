@@ -104,14 +104,15 @@ def pebble_cuts(bore_d, flat, z_from):
     """as bore_cuts, but every ceiling a 45° cone so it prints upright without bridging (the D starts at +8.5, still
     5 mm of flat engagement; the shaft's flat starts at +7.2)"""
     br = bore_d / 2
-    nut_cone = Manifold.cylinder(NUT_R - BUSH_R, NUT_R, BUSH_R, SEG).translate([0, 0, NUT_TOP])
     bush_top = NUT_TOP + (NUT_R - BUSH_R)
-    bush_cone = Manifold.cylinder(BUSH_R - br, BUSH_R, br, 64).translate([0, 0, bush_top])
     d0 = bush_top + (BUSH_R - br)
-    c = cyl(NUT_R, z_from, NUT_TOP + 0.01) + nut_cone + cyl(BUSH_R, z_from, bush_top + 0.01) + bush_cone + cyl(br, z_from, d0 + 0.01, seg=48)
-    dcs = CrossSection.circle(br, 48) ^ CrossSection.square([2 * br + 2, br + flat + 1]).translate([-br - 1, -br - 1])
-    c = c + Manifold.extrude(dcs, TIP_Z - d0).translate([0, 0, d0])
-    return c
+    # one revolved profile (nut recess, its 45° cone to the bushing's radius, a 45° cone on to the bore, the bore to the
+    # tip), with the D's flat left standing above d0. Until Nov 20 these were cylinders and cones overlapped by 0.01 mm:
+    # hairline lips and slivers that welded into bad edges in the STL (meshcheck failed bar-knob and p4-knob). Same
+    # sizes and volume; the bore is a 96-gon (was 48).
+    prof = [(0, z_from), (NUT_R, z_from), (NUT_R, NUT_TOP), (BUSH_R, bush_top), (br, d0), (br, TIP_Z), (0, TIP_Z)]
+    c = Manifold.revolve(CrossSection([prof]), SEG)
+    return c - Manifold.cube([2 * br + 4, br + 2, TIP_Z - d0 + 1]).translate([-br - 2, flat, d0])
 
 
 def knob(bore_d=6.15, flat=1.55, marks=2):
@@ -135,7 +136,8 @@ def knob(bore_d=6.15, flat=1.55, marks=2):
     m = m - Manifold.batch_boolean(flutes, manifold3d.OpType.Add)
     for j in range(marks):                                                    # fit marks under the skirt
         ang = math.radians(90 + (j - (marks - 1) / 2) * 14)
-        m = m - Manifold.sphere(0.5, 16).translate([(PEB_R - 3.0) * math.cos(ang), (PEB_R - 3.0) * math.sin(ang), SKIRT_Z])
+        # tilted off every axis so no ring of its vertices lies in the skirt's face (at 0 they welded into bad edges)
+        m = m - Manifold.sphere(0.5, 16).rotate([7, 5, 3]).translate([(PEB_R - 3.0) * math.cos(ang), (PEB_R - 3.0) * math.sin(ang), SKIRT_Z])
     return m
 
 
