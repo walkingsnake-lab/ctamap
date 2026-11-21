@@ -701,6 +701,18 @@ def bar_screws_env(sy=None):
 TINT_GRAY = float(os.environ.get('P4_TINT_GRAY', '0.6'))
 TINT_WHITE = float(os.environ.get('P4_TINT_WHITE', '0.12'))
 TINT_GRID = float(os.environ['P4_TINT_GRID']) if os.environ.get('P4_TINT_GRID') else None
+# Which diffuser the case is built round (Nov 20: the three-colour one, 'tint'; 'plain' is the two-colour one). It sets
+# how far back the panel sits (panel_extra()), and so the V6 chassis's posts (p4v55.GRID_EXTRA, v6.PB) and the panel in
+# the fit checks. The printed diffusers themselves don't depend on it.
+CASE_DIFFUSER = os.environ.get('P4_CASE_DIFFUSER', 'tint')
+
+
+def diffuser_stack(tint=None):
+    """face to the grid's tips: the depth the diffuser puts between the panel's LEDs and its face (tint=None: the case's)"""
+    tint = (CASE_DIFFUSER == 'tint') if tint is None else tint
+    if not tint:
+        return DF.SKIN + DF.GRID_H
+    return TINT_GRAY + TINT_WHITE + (TINT_GRID if TINT_GRID is not None else DF.GRID_H - TINT_WHITE)
 
 
 def diffuser_halves(printed=False, tint=False):
@@ -770,14 +782,15 @@ def diffuser_in_case(m):
 
 # ---------------------------------------------------------------- envelopes for fit checks (not printed)
 def panel_extra():
-    """how much further back the panel sits than with the first diffuser (1.5 grid, 0.2 face)"""
-    return (DF.GRID_H - 1.5) + (DF.SKIN - 0.2)
+    """how much further back the panel sits than with the first diffuser (1.5 grid, 0.2 face: a 1.7 stack), for the
+    diffuser the case is built round (CASE_DIFFUSER)"""
+    return diffuser_stack() - 1.7
 
 
 def panel_p4():
     """P4 panel in the case, turned 180 deg: LED board (2.5 mm incl. LEDs) + 12 mm housing (rim, ribs, insert bosses),
     the two HUB75 shrouds (top 1 mm under the housing back, ASSUMED), VH4 power header, a ribbon plug on data in"""
-    yf, yb = Y_FACE + DF.SKIN + DF.GRID_H, PANEL_BACK - PANEL_THIN + panel_extra()   # the measured housing back; the panel
+    yf, yb = Y_FACE + diffuser_stack(), PANEL_BACK - PANEL_THIN + panel_extra()   # the measured housing back; the panel
     # keeps its thickness when a taller grid or thicker face sets it back (until Nov 19 only the LED face moved, so the
     # checks ran against a panel 0.9 mm too thin: the final review)
     pw, ph = DF.HOUSE_W or panel.P['w'], HOUSE_H_MEASURED or panel.P['h']    # as measured (127.8 high, board and frame flush)
