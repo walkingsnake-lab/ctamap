@@ -2,7 +2,8 @@
 # v6.py builds the V6 parts and runs v6.check() (overlaps, each part's way
 # in, screws, the cleat; exits 1 on any HIT), then meshcheck.py checks the
 # V6 parts and the P4 files V6 prints (cleats, diffusers, knob), and those
-# committed STLs are checked against a fresh p4.py build.
+# committed STLs are checked against a fresh p4.py build, and the V6 print
+# set in stl/p4-v6 against a fresh v6.py build.
 # The V5 checks (check_p4_fit.py and the rest) are retired: V5 is not
 # printed again.
 name: Hardware
@@ -40,6 +41,10 @@ jobs:
 
       - name: Mesh check (V6 parts, P4 cleats, diffusers, knobs)
         run: timeout -k 5 300 python3 meshcheck.py "$RUNNER_TEMP"/v6/*.stl ../stl/p4/p4-cleat-case.stl ../stl/p4/p4-cleat-wall.stl ../stl/p4/p4-diffuser-*.stl ../stl/p4/p4-diffuser3-*.stl ../stl/p4/p4-knob.stl ../stl/bar-knob.stl
+
+      - name: Committed V6 print set (stl/p4-v6) matches the code
+        run: |
+          diff -rq "$RUNNER_TEMP/v6" ../stl/p4-v6 || { echo "::error::stl/p4-v6 is out of date: rebuild with python3 v6.py ../stl/p4-v6"; exit 1; }
 
       - name: Committed P4 diffuser, knob and cleat STLs match the code
         # p4.py writes every P4 file; the ones the V6 build prints must be what the code makes today
