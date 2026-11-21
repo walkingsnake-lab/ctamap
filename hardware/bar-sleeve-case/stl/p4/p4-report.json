@@ -262,7 +262,7 @@
    ],
    "square": 145.5,
    "spare_a_side": 55.2,
-   "volume_cm3": 18.4
+   "volume_cm3": 17.9
   },
   "p4-diffuser3-right-gray.stl": {
    "watertight": true,
@@ -295,7 +295,7 @@
    ],
    "square": 145.5,
    "spare_a_side": 55.2,
-   "volume_cm3": 18.4
+   "volume_cm3": 17.9
   },
   "coupon-p4-diffuser3-joint-left-gray.stl": {
    "watertight": true,
