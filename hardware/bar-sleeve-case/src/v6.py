@@ -1,6 +1,6 @@
 """V6 case, draft 3 (Nov 16, 2026): the P4 case as a rigid PETG chassis with a two-half walnut skin. No glue. Units mm.
 
-    python3 v6.py <out dir>          # the parts in print orientation (not released print files) and the checks
+    python3 v6.py ../stl/p4-v6       # the whole print set (p4-v6-*.stl, the reused P4 parts included) and the checks
     V6_SKIN=four python3 v6.py ...   # the four-piece skin of draft 2 (planks and end caps), kept for comparison
 
 Why: the first full P4 build (v5: p4.py) had walls that press in, a tray that creaks under the knob, light bleed at the
@@ -616,12 +616,29 @@ if __name__ == '__main__':
         t.apply_translation([-(b[0] + b[3]) / 2, -(b[1] + b[4]) / 2, -b[2]])
         t.export(f'{out}/{name}.stl')
         return f'{name}: {np.round(t.extents, 1).tolist()} on the bed, {m.volume() / 1000:.1f} cm3, {len(t.split(only_watertight=False))} body'
+    # File names (Nov 20): <panel>-<case>-<part>[-side]-<colour>[-xN], the whole print set in one folder, so a P3 or a
+    # double-wide P2.5 V6 later reads p3-v6-..., p25x2-v6-...
+    pre = 'p4-v6-'
     for k, m in P['skin'].items():
-        print(save(m, f'v6-skin-{k.replace("_", "-")}-walnut', 'diag' if SKIN == 'two' else 'back'))
-    print(save(P['chassis_left'], 'v6-chassis-left')); print(save(P['chassis_right'], 'v6-chassis-right')); print(save(P['ring'], 'v6-trim-ring', 'top'))
+        print(save(m, f'{pre}skin-{k.replace("half_", "").replace("_", "-")}-walnut', 'diag' if SKIN == 'two' else 'back'))
+    print(save(P['chassis_left'], f'{pre}chassis-left-black')); print(save(P['chassis_right'], f'{pre}chassis-right-black'))
+    print(save(P['ring'], f'{pre}trim-ring-translucent', 'top'))
     # the status window: a translucent disc in the right half's pocket over the S3's LED, printed as that half's second part
     # (AMS), on the bed with it (left out of the V6 exports until Nov 19: the owner noticed)
-    print(save(DR.status_window(), 'v6-chassis-right-window', frame=P['chassis_right']))
+    print(save(DR.status_window(), f'{pre}chassis-right-window-translucent', frame=P['chassis_right']))
+    # the parts V6 takes from the P4 build unchanged, under this set's names. p4.py writes them (its export is not a
+    # function), and CI checks that the committed stl/p4 files are what p4.py makes today, so they are copied from there.
+    import shutil
+    tint = p4.CASE_DIFFUSER == 'tint'
+    reused = [(f'p4-diffuser{"3" if tint else ""}-{s}-{c}', f'diffuser-{s}-{c}') for s in ('left', 'right')
+              for c in (('gray', 'white', 'black') if tint else ('white', 'black'))]
+    reused += [('p4-diffuser-bar', 'diffuser-bar-black-x2'), ('p4-cleat-case', 'cleat-case-black'),
+               ('p4-cleat-wall', 'cleat-wall-black'), ('p4-sensor-sled', 'sensor-sled-black'), ('p4-knob', 'knob-white'),
+               ('p4-boot-key', 'boot-key')]
+    src = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'stl', 'p4')
+    for a, b in reused:
+        shutil.copyfile(os.path.join(src, a + '.stl'), os.path.join(out, pre + b + '.stl'))
+    print('reused from stl/p4:', ', '.join(pre + b for _, b in reused))
     print('info', P['info'])
     import p4v55 as T
     print('  louver span tied wall to plate, mm (top, bottom):', T.tie_length(P['chassis_left'] + P['chassis_right'], 'top'), T.tie_length(P['chassis_left'] + P['chassis_right'], 'bottom'))
