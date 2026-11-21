@@ -21,7 +21,7 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   end. The holes in the walnut are 1 mm long front to back so each half is set against the diffuser by eye. Underneath,
   the heads sit in 1 mm counterbores and the bumpers' recesses are FOOT_IN inboard of them. The two V5 screws under
   the case are left out (UNDER_SCREWS); their holes stay.
-- **Panel, diffuser, knob**: p4's. The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
+- **Panel, diffuser, knob**: p4's; the diffuser is the three-colour one (p4-diffuser3-*, a 3.0 stack; p4.CASE_DIFFUSER). The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
   without clamping it. The collar becomes a trim ring whose cap lies over the tower's top under the encoder's nut.
 - **Wall hanging**: the cleat (cleat.py, with p4.py's settings of Nov 17: a 60 deg bevel for about 17 mm of hook, stops on
   the wall cleat outside the case cleat's ends, two wall screws) on two inserts in the back plate, one in each chassis
@@ -119,7 +119,7 @@ RIN = C.BORE_R - DR.TRAY_CL - DR.TRAY_WT
 ZIN0, ZIN1 = ZC - HZ, ZC + HZ                              # bottom / top wall, inner faces
 ZO0, ZO1 = ZIN0 - DR.TRAY_WT, ZIN1 + DR.TRAY_WT            # outer faces
 YB0, YB1 = DR.Y0, DR.Y1                                    # back plate: inner, outer face (67, 69)
-PB = p4.PANEL_BACK - p4.PANEL_THIN + RIM_GAP + (p4.DF.GRID_H - 1.5) + (p4.DF.SKIN - 0.2)    # the panel housing's back in V6
+PB = p4.PANEL_BACK - p4.PANEL_THIN + RIM_GAP + p4.panel_extra()    # the panel housing's back in V6 (p4.CASE_DIFFUSER's stack)
 BOSS_Y = PB + STANDOFF_L + WASHER_T                        # the posts' feet: a standoff and its washer behind the panel
 
 
@@ -465,7 +465,7 @@ def panel_v6():
 
 
 def diffuser_v6():
-    d = p4.diffuser_halves()
+    d = p4.diffuser_halves(tint=p4.CASE_DIFFUSER == 'tint')   # the three-colour diffuser since Nov 20 (p4-diffuser3-*)
     return {k: p4.diffuser_in_case(v).translate([0, RIM_GAP, 0]) for k, v in d.items()}
 
 

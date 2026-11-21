@@ -30,8 +30,8 @@ R.MATS.update(
 )
 
 P = v6.build()
-DIF_W = Manifold.batch_boolean([m for (side, part), m in P['diffuser'].items() if part == 'white'], p4.ADD)
-DIF_B = Manifold.batch_boolean([m for (side, part), m in P['diffuser'].items() if part != 'white'], p4.ADD)
+DIF_W = Manifold.batch_boolean([m for (side, part), m in P['diffuser'].items() if part in ('white', 'gray')], p4.ADD)
+DIF_B = Manifold.batch_boolean([m for (side, part), m in P['diffuser'].items() if part not in ('white', 'gray')], p4.ADD)
 eb_top, eb_bot = SN.EB_TOP, SN.EB_BOT
 ENC = dict(board=box(-12.7, 12.7, KY - 12.7, KY + 12.7, eb_bot, eb_top),
            body=Manifold.cube([12.0, 12.0, H - 1.4 - eb_top], True).rotate([0, 0, 45]).translate([0, KY, (H - 1.4 + eb_top) / 2]),

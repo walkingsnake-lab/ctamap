@@ -38,7 +38,7 @@ import v6
 P3 = DR.P3
 JOINT_X = v6.JOINT_X
 STANDOFF_L = 30.0
-GRID_EXTRA = (DF.GRID_H - 1.5) + (DF.SKIN - 0.2)   # a taller grid or a thicker face sets the panel this much further back
+GRID_EXTRA = p4.panel_extra()   # a deeper diffuser (taller grid, thicker face; p4.CASE_DIFFUSER) sets the panel this much further back
 FOOT_DY = STANDOFF_L + GRID_EXTRA
 CENTRE_POSTS = [q for q in DR.INSERTS if q not in DR.CORNERS]        # (0, -56), (0, 56) about the centre
 # louver rows left solid (x0, x1). Both walls: round each centre post, across the joint (12 each side), and every ~28 mm.
