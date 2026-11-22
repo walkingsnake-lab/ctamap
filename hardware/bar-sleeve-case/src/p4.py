@@ -697,9 +697,9 @@ def bar_screws_env(sy=None):
 
 
 # Chosen Nov 20 on the tint strips (p4_tint_coupons.py): 0.6 gray + white behind it; the owner then picked a 0.12 white
-# in the slicer. TINT_GRAY is the gray's thickness, independent of P4_FACE (the two-colour diffuser's face).
-TINT_GRAY = float(os.environ.get('P4_TINT_GRAY', '0.6'))
-TINT_WHITE = float(os.environ.get('P4_TINT_WHITE', '0.12'))
+# in the slicer; on Nov 21 one gray layer less (0.4) and a full 0.2 white (seen on a test print). TINT_GRAY is the gray's thickness, independent of P4_FACE (the two-colour diffuser's face).
+TINT_GRAY = float(os.environ.get('P4_TINT_GRAY', '0.4'))
+TINT_WHITE = float(os.environ.get('P4_TINT_WHITE', '0.2'))
 TINT_GRID = float(os.environ['P4_TINT_GRID']) if os.environ.get('P4_TINT_GRID') else None
 LAYER = 0.2                      # the diffuser's layer height above the white
 
@@ -732,9 +732,9 @@ def diffuser_halves(printed=False, tint=False):
     otherwise the size it should come out (fit checks, renders).
     tint: the three-colour diffuser (Nov 11; chosen Nov 20): 'gray' (the front layers, translucent gray: the tint), 'white'
     (one thin layer: the scatter, behind the tint) and 'black' (the grid and the rest).
-    TINT_GRAY (P4_TINT_GRAY, 0.6: three 0.2 layers) is the gray's thickness and TINT_WHITE (P4_TINT_WHITE, 0.12: one
-    layer, set with a height-range modifier in the slicer) the white's (chosen Nov 20). The grid's height is tint_grid()
-    (2.2: on whole 0.2 layers above the white), so the stack is 2.92, 0.32 deeper than the two-colour diffuser's 2.6."""
+    TINT_GRAY (P4_TINT_GRAY, 0.4: two 0.2 layers) is the gray's thickness and TINT_WHITE (P4_TINT_WHITE, 0.2: one
+    ordinary layer, so no height-range modifier) the white's (Nov 21). The grid's height is tint_grid() (2.2: whole 0.2
+    layers above the white), so the stack is 2.8, 0.2 deeper than the two-colour diffuser's 2.6."""
     skin = TINT_GRAY + TINT_WHITE if tint else DF.SKIN
     grid_h = DF.GRID_H
     DF.GRID_H = tint_grid() if tint else grid_h

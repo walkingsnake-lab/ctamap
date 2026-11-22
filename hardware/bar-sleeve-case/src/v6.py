@@ -21,7 +21,7 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   end. The holes in the walnut are 1 mm long front to back so each half is set against the diffuser by eye. Underneath,
   the heads sit in 1 mm counterbores and the bumpers' recesses are FOOT_IN inboard of them. The two V5 screws under
   the case are left out (UNDER_SCREWS); their holes stay.
-- **Panel, diffuser, knob**: p4's; the diffuser is the three-colour one (p4-diffuser3-*, a 2.92 stack; p4.CASE_DIFFUSER). The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
+- **Panel, diffuser, knob**: p4's; the diffuser is the three-colour one (p4-diffuser3-*, a 2.8 stack; p4.CASE_DIFFUSER). The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
   without clamping it. The collar becomes a trim ring whose cap lies over the tower's top under the encoder's nut.
 - **Wall hanging**: the cleat (cleat.py, with p4.py's settings of Nov 17: a 60 deg bevel for about 17 mm of hook, stops on
   the wall cleat outside the case cleat's ends, two wall screws) on two inserts in the back plate, one in each chassis
