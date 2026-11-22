@@ -34,7 +34,12 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   finger-tight (loose, it can drop onto the top-centre standoff), cables. A washer in each post's recess; the chassis
   face up on blocks, so the back screws can be reached from below; panel (standoffs on, each hex seated on its insert)
   lowered in, six flanged M3 x 8 from the back, snug. Diffuser pressed on, centred, and lit. Bottom walnut half on
-  from below, top half from above, four screws each (snug: the end screws close 0.1-0.25 mm of air). Panel centred in
+  from below, top half from above, four screws each (snug: the end screws close 0.1-0.25 mm of air). Before
+  tightening each half's screws, slide it back in its slots until the rim stops on the diffuser's border, ease it a
+  hair forward, then tighten without holding it back: the rim then stops the diffuser working off the panel (its snap
+  is only friction) without pressing on it (pressure on the flange levers the edge cells off the LEDs). The slots
+  allow 0.3 mm back to the diffuser (the next contact is at 0.6). Set both halves alike or the hood fronts step at
+  the line. Lit with the walnut on: bleed at the edges means the rim is pressing; ease that half forward. Panel centred in
   the rim by eye and its screws tightened from the back. Nut off, ring on, nut, the two M2.5 (snug), knob. The case
   cleat last: it lies over the top-centre panel screw. Service: the panel comes out only with the knob, ring, both
   halves and diffuser off; the S3 with the panel out.
