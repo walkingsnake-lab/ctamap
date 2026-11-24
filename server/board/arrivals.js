@@ -116,11 +116,12 @@ function maxRows(showHeader, showWeather) {
 const { timeText } = require('./draw');
 
 // Widest the times group can get before the next update: digits only shrink
-// as times count down, but the first time may turn into DUE.
+// as times count down, but the first time may turn into DUE. Only the first
+// reads DUE; a later train that close is drawn as 2 (draw.js layoutCells).
 function worstTimesWidth(times, now, horizon = 60, gap = MIN_TIME_GAP) {
   let w = 0;
   times.forEach((t, i) => {
-    let txt = timeText(t, now);
+    let txt = timeText(t, now, i === 0);
     if (i === 0 && timeText(t, now + horizon) === 'DUE') txt = 'DUE';
     w += measure('small', txt) + (i ? gap : 0);
   });

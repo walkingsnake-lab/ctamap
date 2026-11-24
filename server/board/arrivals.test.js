@@ -263,6 +263,16 @@ test('labels never collide with the times, including when the first time turns D
   assert.equal(format([{ ln: 'GR', dest: 'Cottage', known: true, dir: 5, t: t[0], s: 0 }, { ln: 'GR', dest: 'Cottage', known: true, dir: 5, t: t[1], s: 0 }, { ln: 'GR', dest: 'Cottage', known: true, dir: 5, t: t[2], s: 0 }], base, { now }).rows[0].lbl, 'COTTAGE');
 });
 
+test('two trains within a minute: the second is measured as 2, not DUE, so the label stays whole', () => {
+  // Morse, Nov 23 2026: Howard trains bunched (DUE, 2, 11) and the row read HOWAR.
+  const now = 1_000_000;
+  const t = [now + 20, now + 50, now + 11 * 60 - 20];
+  assert.deepEqual(t.map((x, k) => timeText(x, now, k === 0)), ['DUE', '2', '11']);
+  assert.equal(worstTimesWidth(t, now), measure('small', 'DUE') + 2 + measure('small', '2') + 2 + measure('small', '11'));
+  const { rows } = format(t.map((x) => ({ ln: 'RD', dest: 'Howard', known: true, dir: 1, t: x, s: 0 })), { ...base, showWeather: true }, { now });
+  assert.equal(rows[0].lbl, 'HOWARD');
+});
+
 test('Green Line "63rd Street" is shown as 63rd', () => {
   const json = load('clark-lake-2026-10-03-2317.json');
   json.ctatt.eta[0].destNm = '63rd Street';
