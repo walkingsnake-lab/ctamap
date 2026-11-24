@@ -147,8 +147,8 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **No edge padding:** text runs to the screen edges (x0 and x63) everywhere outside filled bands.
 - Rows fill the remaining space (5px rows, gaps of 1px or more).
 - **Without the header, rows are spread evenly** from the top of the panel to the weather strip (rows 0–25) (or the bottom edge): equal gaps above, between, and below. The between-row gap is the ideal gap rounded to the nearest pixel; the leftover is split top and bottom, any odd pixel going to the bottom.
-- **Fitting:** the header and weather toggles are the most the board shows; each takes one row. When more destinations are running than fit, the **weather strip is hidden first, then the header**, so up to 5 destinations stay as rows. **Past 5, the board switches to the chronological view** (below) with the header (if on) and **no weather strip**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
-- Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**; the chronological view covers those stations.
+- **Fitting:** the header and weather toggles are the most the board shows; each takes one row. When more destinations are running than fit, the **weather strip is hidden first, then the header**, so up to 5 destinations stay as rows. **Past 5, the board shows the destinations with the soonest trains** (*Busy stations*, below) with the header (if on) and **no weather strip**. Re-checked on every update, so it adapts as service changes through the day (e.g. Merchandise Mart with rush-only Purple). The ticker always shows its header, even with the header toggle off (hiding it frees no space the ticker uses). Row order isn't a concern.
+- Scrolling or paging for more than 5 rows (some Loop stations need up to 7) is **out of scope for v1**; *Busy stations* covers those stations.
 
 **Geometry (from the mocks):**
 - Header band on rows 0–6, text on rows 1–5. Train rows start at row 9 or lower (at least 2px clear of the band).
@@ -177,7 +177,19 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 ### Key layout (retired Nov 8, 2026)
 A `trains to` / `min` key on top with the station line at the bottom was an option until Nov 8, 2026; it was cut to keep one bar layout across views.
 
-### Chronological view (overflow)
+### Busy stations (more destinations than rows)
+Decided Nov 23, 2026, replacing the chronological view below (the position digit and the `3m` times never sat right). Mockup: [`mockups/bus/sheet-busy.png`](mockups/bus/sheet-busy.png) (D).
+
+- **Rows:** the destinations whose next trains are soonest, as many as fit (4 with the header, 5 without), each an ordinary row with up to 3 times. So a busy station looks like any other.
+- **Order:** the usual row order (line, direction, name), not by time: rows hold their place and one swaps at a time.
+- **Swapping:** a shown row stays while its next train is the same one, unless a hidden destination's next train is more than a minute sooner. Once its train leaves, the soonest destinations are picked again; the outgoing row fades out and the new one fades in, as rows always have. At Belmont at rush that's about one swap a minute.
+- **Accepted trade-off:** a row's later times can show while a hidden destination has a sooner train.
+- **Two panels:** the same rule once two columns are full (more than 8 destinations with the header): the 8 soonest, in two columns.
+- Server only (`soonest()` in `arrivals.js`), so every board gets it, the frozen M4 included.
+
+### Chronological view (retired Nov 23, 2026)
+No longer sent; the renderers still draw it, and the parity scenarios still check it.
+
 - **When:** the destination count (after the per-board destination filter) exceeds the board's max rows. The server decides on each update and sends `view` in the combined update.
 - **Switching is immediate both ways:** chronological as soon as destinations exceed max rows, back as soon as they fit. If short-turns make it flip too often, raise `CHRONO_HOLD` in `arrivals.js` (a hold time before switching back; the mechanism is built, set to 0).
 - **Rows:** same anatomy as destination rows: 3px line-color block, Tom Thumb label (uppercase), **one time** right-aligned. Each row is one train, soonest first. First row's time amber (grey if schedule-based), the rest dim.
@@ -222,7 +234,7 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - Same destination on two lines (e.g. Brown and Purple `LOOP` at Merchandise Mart): two rows told apart by the color block only. Accepted.
 - **Short-turn trains** (e.g. Blue Line to UIC-Halsted or Jefferson Park) get **their own row**. The layout follows the row count as these come and go.
 - **Unknown destinations** (disruptions, reroutes): own row, name truncated to fit; the server logs them so they can be added to the map.
-- **No per-station default layout.** The layout follows the live destination count. Examples: Merchandise Mart shows 2 destinations off-peak (Brown) with the header and weather strip; rush-only Purple adds `LINDEN` and `LOOP`, the weather strip hides to fit 4 rows, and it returns when Purple stops. Belmont off-peak has 4 (Red and Brown, weather strip hidden); at rush, Purple makes 6 and it switches to the chronological view. The **per-board destination filter** avoids those changes if unwanted; it's applied first, and the fit runs on the filtered list.
+- **No per-station default layout.** The layout follows the live destination count. Examples: Merchandise Mart shows 2 destinations off-peak (Brown) with the header and weather strip; rush-only Purple adds `LINDEN` and `LOOP`, the weather strip hides to fit 4 rows, and it returns when Purple stops. Belmont off-peak has 4 (Red and Brown, weather strip hidden); at rush, Purple makes 6 and it shows the four with the soonest trains. The **per-board destination filter** avoids those changes if unwanted; it's applied first, and the fit runs on the filtered list.
 
 ### Other states
 - **Overnight / no predictions: the owl** (CTA calls its overnight service Owl). A 13x15 pixel-art owl (`OWL` in `server/board/icons.js`) sits at x 2 on a solid `#4a4a4a` line across row 31 (row 25 with the weather strip on), feet on the line. The large **9x15 Bold** clock (`#cccccc`, 2x2 square colon) and the dim `NO TRAINS` label are centered in x 16–63 (clock top on row 5, or 3 with the weather strip). On the S3 the owl mostly sits still, blinks (150 ms) now and then and glances right once in its ~11 s cycle, on the icon clock; the board redraws only when its frame changes. No hard on/off rhythm, since a 1 s blink means a tornado warning. `NO DATA` looks the same apart from the label. The frozen M4 keeps the plain centered clock. Mockups of the alternatives: `docs/board/mockups/no-trains/`.
@@ -425,7 +437,7 @@ Decided Oct 31, 2026.
 - Whether the work visitor WiFi has a captive portal (check with a phone).
 - Measure the real fetch time on the M4 to set its scheduler's fetch budget (the S3 reports its average request time as `hb`).
 - On-panel check: lowercase `m` legibility (diffuser glow between the humps), and whether `4m` needs a 2px gap.
-- Chronological view: whether it flips too often at short-turn stations (if so, raise `CHRONO_HOLD`).
+- Busy stations: whether rows swap too often at rush (if so, raise `SWAP_MARGIN` in `arrivals.js`).
 
 ### Sports screens beyond baseball (mockups, not built)
 Same frame as the baseball Bands layout: 12-row team-color bands (abbreviation left, score centered at x30), divider row 24, bottom line on baseline 31, status panel right. Pregame: records in the panel, `TODAY` (or the day) bottom left, start time bottom right. Final: winner's score amber, records in the panel, `FINAL` bottom right.
