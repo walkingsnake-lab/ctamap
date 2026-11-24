@@ -2576,6 +2576,10 @@ static void render_chooser(const Value &p, Frame &f, double pos, bool commit) {
 // and `pv`, under the icon bar on rows 21-31. Mirrors draw.js.
 
 static const int PEEK_TOP = 21, PEEK_PITCH = 12;
+// The 64 bar's variant dots: the most shown at once, and an end dot with
+// more variants past it.
+static const int PEEK_DOTS = 5;
+static const RGB PEEK_MORE = hexc(0x1c1c1c);
 static const char *const PEEK_ICON_TRANSIT[] = {".#####.", "#.....#", "#.....#", "#######", "##...##", ".#####.", "#.....#"};
 static const char *const PEEK_ICON_WEATHER[] = {"...#...", ".#...#.", "..###..", "#.###.#", "..###..", ".#...#.", "...#..."};
 static const char *const PEEK_ICON_CLOCK[] = {"..###..", ".#...#.", "#..#..#", "#..##.#", "#.....#", ".#...#.", "..###.."};
@@ -2895,9 +2899,26 @@ static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop, con
   int ix = x0 + k * PEEK_PITCH;
   f.fill(ix, sh(31), 7, 1, col);
   int nv = (int)kn["vars"][k].size();
-  if (nv > 1) {
+  if (nv > 1 && nv <= PEEK_DOTS) {
     for (int j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, C::indicator);
     if (vi >= 0 && vi < nv) f.fill(ix + 8, sh((int)jsround(26 - (nv - 1) + (g.moving ? g.pos : vi) * 2)), 1, 1, col);
+  } else if (nv > PEEK_DOTS) {
+    // More variants than the band holds: a window of PEEK_DOTS on rows
+    // 22-30 that scrolls to keep the lit dot in the middle (at the ends it
+    // rests on the first or last slot). An end slot with more beyond it is
+    // dimmer (PEEK_MORE). A variant glide scrolls the window too.
+    const int W = PEEK_DOTS, y0 = 26 - (W - 1);
+    double at = g.moving ? g.pos : vi;
+    double s = std::max(0.0, std::min((double)(nv - W), at - W / 2));
+    f.push_clip(ix + 8, sh(y0), ix + 8, sh(y0 + (W - 1) * 2));
+    for (int j = 0; j < nv; j++) {
+      double rel = j - s;
+      if (rel <= -1 || rel >= W) continue;
+      bool more = (rel < 0.5 && j > 0) || (rel > W - 1.5 && j < nv - 1);
+      f.fill(ix + 8, sh((int)jsround(y0 + rel * 2)), 1, 1, more ? PEEK_MORE : C::indicator);
+    }
+    if (vi >= 0 && vi < nv) f.fill(ix + 8, sh((int)jsround(y0 + (at - s) * 2)), 1, 1, col);
+    f.pop_clip();
   }
 }
 

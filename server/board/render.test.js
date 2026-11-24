@@ -254,6 +254,31 @@ test('peek chooser: the icon bar over the screen behind, dimmed; the chosen vari
   // Clock with three faces, the third chosen: dots on rows 24, 26, 28.
   f = peek({ k: 2, vi: 2 });
   assert.deepEqual([24, 26, 28].map((y) => hex(f.get(4 + 2 * PEEK.pitch + 8, y))), [C.indicator, C.indicator, PEEK_COLORS.clock]);
+  // More faces than the band holds (seven): a window of five dots on rows
+  // 22-30. The lit dot walks down to the middle, the column scrolls under
+  // it, then it walks on to the bottom; an end slot with more past it is
+  // dimmer. Nothing above the band or on the underline's row.
+  {
+    const seven = { ...p, knob: { ...p.knob, vars: p.knob.vars.map((v, i) => (i === 2 ? ['skyline', 'seventies', 'analog', 'daynight', 'gradient', 'digits', 'daydate'] : v)) } };
+    const x = 4 + 2 * PEEK.pitch + 8, I = C.indicator, L = PEEK_COLORS.clock, M = '#1c1c1c';
+    const col = (vi, o = {}) => { const g = render(seven, { screen: 'peek', now, frames: {}, peek: { k: 2, vi, ...o } }); return [20, 21, 22, 24, 26, 28, 30, 31].map((y) => hex(g.get(x, y))); };
+    const behind = hex(render(seven, { screen: 'peek', now, frames: {}, peek: { k: 0, vi: 0 } }).get(x, 20));
+    const rows = (...c) => [behind, '#000000', ...c, '#000000'];
+    assert.equal(PEEK.dots, 5);
+    assert.deepEqual(col(0), rows(L, I, I, I, M));
+    assert.deepEqual(col(1), rows(I, L, I, I, M));
+    assert.deepEqual(col(2), rows(I, I, L, I, M));
+    assert.deepEqual(col(3), rows(M, I, L, I, M));
+    assert.deepEqual(col(4), rows(M, I, L, I, I));
+    assert.deepEqual(col(5), rows(M, I, I, L, I));
+    assert.deepEqual(col(6), rows(M, I, I, I, L));
+    // A glide through the middle scrolls the column; the lit dot stays on row 26.
+    assert.equal(col(4, { glide: { k: 2, vi: 3, t: 60, axis: 'y' } })[4], L);
+    // Five faces still stand still, centered, all at full grey.
+    const five = { ...p, knob: { ...p.knob, vars: p.knob.vars.map((v, i) => (i === 2 ? ['skyline', 'seventies', 'analog', 'daynight', 'gradient'] : v)) } };
+    const g5 = render(five, { screen: 'peek', now, frames: {}, peek: { k: 2, vi: 4 } });
+    assert.deepEqual([22, 24, 26, 28, 30].map((y) => hex(g5.get(x, y))), [I, I, I, I, L]);
+  }
   // No dots for a category without variants; cycle, chosen, draws the phone's symbol in cyan.
   f = peek({ k: 4, vi: 0 });
   assert.equal(hex(f.get(4 + 4 * PEEK.pitch + 8, 26)), '#000000');
