@@ -1172,7 +1172,7 @@
     selVal('tickerSlide', board.tickerSlide || 1200);
     if (document.activeElement !== $('tickerFill')) { $('tickerFill').value = board.tickerFill || 55; $('tickerFillV').textContent = `${board.tickerFill || 55}%`; }
     const hid = (pay && pay.hidden) || [];
-    $('rowsFt').textContent = 'With more destinations than fit, the weather goes first, then the top line; past 5, one train per row.'
+    $('rowsFt').textContent = 'With more destinations than fit, the weather goes first, then the top line; past 5, the ones with the soonest trains.'
       + (hid.length ? ` Hidden now: ${hid.map((h) => (h === 'header' ? 'top line' : h)).join(' and ')}.` : '')
       + (board.cols === 128 ? (board.wideLayout === 'rows'
         ? ' Two panels: full names, up to 5 times; past 5 destinations, two columns.'
