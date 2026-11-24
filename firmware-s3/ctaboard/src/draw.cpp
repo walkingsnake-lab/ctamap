@@ -299,7 +299,8 @@ static std::vector<LiveRow> live_rows(const Value &p, double now) {
         lr.s.push_back(rs.truthy() ? rs[i].num() : 0);
       }
     }
-    if (!lr.t.empty()) out.push_back(lr);
+    // A kept row (`k`, a bus) stays with no times: it shows "--".
+    if (!lr.t.empty() || r["k"].truthy()) out.push_back(lr);
   }
   return out;
 }
@@ -332,6 +333,7 @@ RGB line_color(const std::string &ln) {
   if (ln == "PR") return hexc(0x522398);
   if (ln == "PK") return hexc(0xe27ea6);
   if (ln == "YL") return hexc(0xf9e300);
+  if (ln == "BUS") return hexc(0x8a8a8a);  // a bus row's block; no CTA line is grey
   return C::grey;
 }
 
@@ -733,6 +735,21 @@ static int alert_icon_x(const ustr &text, int x) {
 // steps: the third time a step dimmer than the second (payload ts).
 // x0, right: the row's columns (a wide board's halves).
 static std::vector<ViewCell> layout_cells(const LiveRow &r, double now, bool steps = false, int x0 = 0, int right = 63) {
+  // A kept row with nothing coming: one dim cell where the times go. Its
+  // time is 0, so it never pairs with a real one (draw.js layoutCells).
+  if (r.tn.empty()) {
+    std::vector<ViewCell> none;
+    if ((*r.src)["k"].truthy()) {
+      ViewCell c;
+      c.t = 0;
+      c.text = U"--";
+      c.right = right;
+      c.alpha = 1;
+      c.color = C::dimHead;
+      none.push_back(c);
+    }
+    return none;
+  }
   std::vector<ustr> texts;
   for (size_t k = 0; k < r.tn.size(); k++) texts.push_back(time_text(r.tn[k], now, k == 0));
   auto width_at = [&](int gap) {
@@ -2701,6 +2718,16 @@ PeekView peek_view(const Value &p, int k, int vi) {
   const Value &vv = kn["vars"][k][vi];
   std::string v = vv.is_str() ? vv.s : "";
   const Value &pv = p["pv"];
+  if (cat == "transit") {
+    // Trains and buses are both the transit screen: the payload carries the
+    // one that's chosen (`tv`: "bus" for buses), pv.tr the other.
+    const Value &tr = pv["tr"];
+    if (v == "ticker" || !tr.truthy() || (v == "bus") == p["tv"].eq("bus")) return out;
+    out.own = true;
+    out.v = overlay(p);
+    for (const char *key : {"tv", "stn", "header", "view", "halves", "rows", "wx"}) member(out.v, key) = tr[key];
+    return out;
+  }
   if (cat == "weather") {
     // The radar view: every kept frame (pv.radar), rain or not. The
     // others: the radar loop only while rain is in the box (radar.on).
@@ -2773,7 +2800,7 @@ static void draw_peek_view(const Value &q, const std::string &screen, Frame &f, 
 static const int PW_X0 = 14, PW_RIGHT = 123, PW_GAP = 5, PW_DOT_X = 126;
 static const RGB PW_OFF = hexc(0x4a4a4a);
 static ustr peek_name(const std::string &v, bool week) {
-  static const char *const names[][2] = {{"transit", "ROWS"}, {"rows", "ROWS"}, {"ticker", "TICKER"}, {"now", "NOW"}, {"5day", "5-DAY"},
+  static const char *const names[][2] = {{"transit", "ROWS"}, {"rows", "ROWS"}, {"ticker", "TICKER"}, {"bus", "BUSES"}, {"now", "NOW"}, {"5day", "5-DAY"},
                                          {"hourly", "HOURLY"}, {"radar", "RADAR"}, {"skyline", "SKY"}, {"seventies", "70S"}, {"analog", "DIAL"},
                                          {"daynight", "MAP"}, {"gradient", "GRAD"}, {"digits", "BIG"}, {"daydate", "DATE"}, {"words", "WORDS"}};
   if (v == "5day" && week) return U"7-DAY";

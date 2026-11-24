@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // The control page's picker tiles and screen thumbnails: one 64x32 render per
-// option (Rows, Ticker, the two transit layouts, each weather view, each
+// option (Rows, Ticker, Buses, the two transit layouts, each weather view, each
 // clock face), and a 128x32 one (`w:<tile>`) for wide boards, drawn by the reference renderer from fixed sample payloads
 // (the parity scenarios in firmware/tests/scenarios.js), so a tile looks the
 // same whatever the board is doing. Saved as PNGs (one pixel per LED; the page
@@ -34,9 +34,17 @@ function transit() {
   return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: 100, header: 'MORSE', tickerHeader: 'MORSE',
     view: r.view, rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? WX : null, warn: null, hclock: true };
 }
+// The Buses tile: three made-up buses at the same moment.
+function buses() {
+  const p = transit();
+  const at = (...m) => m.map((x) => p.now + x * 60 - 20);
+  const bus = (lbl, t) => ({ ln: 'BUS', lbl, t, s: t.map(() => 0), a: 0, k: 1 });
+  return { ...p, tv: 'bus', stn: 'bus', header: 'BUSES', view: 'dest', rows: [bus('22 SB', at(6, 14)), bus('147 SB', at(1, 13)), bus('96 WB', [])] };
+}
 const OWN = {
   rows: () => draw.render(transit(), { screen: 'transit' }),
   ticker: () => draw.render(transit(), { screen: 'ticker' }),
+  bus: () => draw.render(buses(), { screen: 'transit' }),
   // Wide only: the middle 64 columns of 9:42 PM.
   'face-words': () => {
     const now = Date.parse('2026-11-02T03:42:00Z') / 1000;

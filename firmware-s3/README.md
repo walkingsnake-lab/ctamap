@@ -340,7 +340,7 @@ then on.
 | `ctaboard/src/screen.h` | The screens as an enum (names only at the JSON boundary) and the redraw key. |
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
 | `ctaboard/src/sched.h`, `control.h` | Network jobs, run when due one at a time on the worker; buttons vs. the phone (`control.py`); the knob's choosers (the old wheel, and the peek chooser: twist, press, hold and turn, rest; S3 only). |
-| `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. The `sky` job fetches the skyline's cloud strip (`/board/sky/<id>`) while the clock screen shows; health reports `hk=skyline` so the server sends the clock screen to this build. |
+| `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. The `sky` job fetches the skyline's cloud strip (`/board/sky/<id>`) while the clock screen shows; health reports `hk=skyline` so the server sends the clock screen to this build (and `bus`, so it gets bus rows: `ln` `BUS`, kept with `--` when nothing is predicted). |
 | `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |
 | `ctaboard/src/color.*`, `calibrate.*` | Color curves (compensated for the driver's CIE curve) and the calibration pattern. |

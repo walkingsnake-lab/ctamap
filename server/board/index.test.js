@@ -2079,3 +2079,124 @@ test('baseball: a wide board asks the poller for the line score', async () => {
   assert.equal(asked.at(-1).line, true);
   await s.close();
 });
+
+// ---- buses (design spec §5, "Buses") ----
+const BUSES = [{ rt: '22', dir: 'Southbound', stpid: '1836', stpnm: 'Clark & Morse' }, { rt: '96', dir: 'Westbound', stpid: '14880', stpnm: 'Morse Red Line Station' }];
+// A Bus Tracker with a 22 at Clark & Morse in 5 and 14 minutes, and nothing on the 96.
+function fakeBus(now, { enabled = true, fetchedAt = now } = {}) {
+  const asked = [];
+  return {
+    enabled, asked,
+    get: async (stpids) => { asked.push(stpids); return { preds: [300, 840].map((d, i) => ({ ln: 'BUS', stpid: '1836', rt: '22', dir: 'Southbound', des: 'Harrison', rn: `${i}@1836`, t: now + d })), fetchedAt, gone: [] }; },
+    routes: async () => [{ rt: '22', name: 'Clark' }],
+    directions: async (rt) => (rt === '22' ? ['Northbound', 'Southbound'] : []),
+    stops: async (rt, dir) => { if (dir === 'Sideways') throw new Error('No data found for parameter'); return [{ stpid: '1836', name: 'Clark & Morse' }]; },
+  };
+}
+const trainsAt = (now) => fakeTracker({ arrivals: [{ ln: 'RD', dest: 'Howard', known: true, dir: 1, t: now + 240, s: 0, rn: '801' }, { ln: 'RD', dest: '95th', known: true, dir: 5, t: now + 400, s: 0, rn: '802' }], fetchedAt: now });
+const post = (s, patch, id = 'home') => s.req(`/board/secret123/api/state?b=${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+
+test('buses: the bus screen is the transit screen with the bus rows, for firmware that draws them', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const busTracker = fakeBus(now);
+  const s = await serve({ tracker: trainsAt(now), busTracker });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  assert.equal((await post(s, { buses: BUSES, screen: 'bus' })).status, 200);
+  assert.equal(s.store.get('home').transitScreen, 'bus');
+  // Firmware without buses: trains, and Bus Tracker isn't asked.
+  let b = (await s.req('/board/update?b=home&hk=skyline:peek', h)).body;
+  assert.deepEqual([b.screen, b.header, b.stn, b.rows.map((r) => r.lbl), 'tv' in b], ['transit', 'MORSE', '40100', ['HOWARD', '95TH'], false]);
+  assert.deepEqual(b.knob.vars[0], ['transit', 'ticker']);
+  assert.equal(busTracker.asked.length, 0);
+  // Firmware with them.
+  b = (await s.req('/board/update?b=home&hk=skyline:peek:bus', h)).body;
+  assert.deepEqual([b.screen, b.for, b.tv, b.stn, b.header, b.view, b.stale], ['transit', 'transit', 'bus', 'bus', 'BUSES', 'dest', 0]);
+  assert.deepEqual(busTracker.asked, [['1836', '14880']]);
+  assert.deepEqual(b.rows.map((r) => [r.ln, r.lbl, r.t.map((t) => t - now), r.k]), [['BUS', '22 SB', [300, 840], 1], ['BUS', '96 WB', [], 1]]);
+  assert.deepEqual(b.hidden, []);
+  // The ticker is still the trains'.
+  assert.deepEqual((await s.req('/board/update?b=home&hk=bus&s=ticker', h)).body.ticker.map((x) => x.d), ['Howard', '95th']);
+  // The knob: buses are transit's third variant, and the one it's on; the
+  // train rows ride in pv.tr for the chooser.
+  assert.deepEqual([b.knob.at, b.knob.vars[0], b.knob.sel[0]], [0, ['transit', 'ticker', 'bus'], 2]);
+  assert.deepEqual([b.pv.tr.tv, b.pv.tr.stn, b.pv.tr.header, b.pv.tr.rows.map((r) => r.lbl)], [null, '40100', 'MORSE', ['HOWARD', '95TH']]);
+  // Chosen from the knob: back to the trains, the buses now in pv.tr; then to the buses again.
+  b = (await s.req('/board/select?b=home&s=transit&v=transit&hk=peek:bus', { method: 'POST', ...h })).body;
+  assert.deepEqual([b.rows.map((r) => r.lbl), 'tv' in b, b.pv.tr.tv, b.pv.tr.header, b.pv.tr.rows.map((r) => r.lbl), b.knob.sel[0]], [['HOWARD', '95TH'], false, 'bus', 'BUSES', ['22 SB', '96 WB'], 0]);
+  b = (await s.req('/board/select?b=home&s=transit&v=bus&hk=peek:bus', { method: 'POST', ...h })).body;
+  assert.deepEqual([b.tv, b.rows.map((r) => r.lbl)], ['bus', ['22 SB', '96 WB']]);
+  // A turn of the knob to another category and back opens the buses again.
+  await s.req('/board/select?b=home&s=weather&hk=peek:bus', { method: 'POST', ...h });
+  assert.equal((await s.req('/board/select?b=home&s=transit&hk=peek:bus', { method: 'POST', ...h })).body.tv, 'bus');
+  // A stop Bus Tracker no longer knows is named for the phone page.
+  assert.equal('busGone' in b, false);
+  busTracker.get = async () => ({ preds: [], fetchedAt: now, gone: ['14880'] });
+  assert.deepEqual((await s.req('/board/update?b=home&hk=bus', h)).body.busGone, ['14880']);
+  // Header and weather strip follow the board's toggles.
+  await post(s, { showHeader: false });
+  assert.equal((await s.req('/board/update?b=home&hk=bus', h)).body.header, null);
+  // The last bus removed: back to the trains, for good.
+  await post(s, { buses: [] });
+  b = (await s.req('/board/update?b=home&hk=peek:bus', h)).body;
+  assert.deepEqual([b.rows.map((r) => r.lbl), 'tr' in b.pv, b.knob.vars[0], s.store.get('home').screen, s.store.get('home').transitScreen], [['HOWARD', '95TH'], false, ['transit', 'ticker'], 'transit', 'transit']);
+  await s.close();
+});
+
+test('buses: stale follows Bus Tracker on the bus screen; without a key there are no buses', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  let s = await serve({ tracker: trainsAt(now), busTracker: fakeBus(now, { fetchedAt: now - 600 }) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  await post(s, { buses: BUSES, screen: 'bus' });
+  let b = (await s.req('/board/update?b=home&hk=bus', h)).body;
+  assert.deepEqual([b.tv, b.stale, b.age], ['bus', 1, 600]);
+  await post(s, { screen: 'transit' });
+  assert.equal((await s.req('/board/update?b=home&hk=bus', h)).body.stale, 0);
+  assert.deepEqual((await s.req('/board/secret123/api/boards')).body.map((x) => x.bus), ['fw']);
+  await s.req('/board/version?b=home&hu=60&hk=skyline:bus', h);
+  assert.deepEqual((await s.req('/board/secret123/api/boards')).body.map((x) => x.bus), ['on']);
+  await s.close();
+  s = await serve({ tracker: trainsAt(now), busTracker: fakeBus(now, { enabled: false }) });
+  await post(s, { buses: BUSES, screen: 'bus' });
+  b = (await s.req('/board/update?b=home&hk=bus', h)).body;
+  assert.deepEqual([b.rows.map((r) => r.lbl), 'tv' in b], [['HOWARD', '95TH'], false]);
+  assert.equal('bus' in (await s.req('/board/secret123/api/boards')).body[0], false);
+  assert.deepEqual([(await s.req('/board/secret123/api/bus/routes')).status, (await s.req('/board/secret123/api/bus/routes')).body.err], [503, 'no_bus_key']);
+  await s.close();
+});
+
+test('buses on two panels: beside the trains on the transit screen, no bus variant', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: trainsAt(now), busTracker: fakeBus(now) });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  await post(s, { buses: BUSES });
+  let b = (await s.req('/board/update?b=home&w=128&hk=peek:bus', h)).body;
+  assert.deepEqual([b.view, b.halves, b.header, 'tv' in b, b.knob.vars[0], 'tr' in b.pv], ['split', ['TRAINS', 'BUSES'], 'MORSE', false, ['transit', 'ticker'], false]);
+  assert.deepEqual(b.rows.map((r) => [r.ln, r.lbl, r.h, r.t.length]), [['RD', 'HOWARD', 0, 1], ['RD', '95TH', 0, 1], ['BUS', '22 SB', 1, 2], ['BUS', '96 WB', 1, 0]]);
+  // Left on the bus screen (set while it was one panel): the same.
+  await post(s, { screen: 'bus' });
+  b = (await s.req('/board/update?b=home&w=128&hk=bus', h)).body;
+  assert.deepEqual([b.screen, b.view, 'tv' in b], ['transit', 'split', false]);
+  // Without buses, or on firmware that doesn't draw them: the usual split.
+  assert.deepEqual((await s.req('/board/update?b=home&w=128&hk=peek', h)).body.halves, ['NORTHBOUND', 'SOUTHBOUND']);
+  await s.close();
+});
+
+test('buses: the setting is checked; the picker lists routes, directions and stops', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: trainsAt(now), busTracker: fakeBus(now) });
+  let r = await post(s, { buses: [...BUSES, BUSES[0], BUSES[1]] });
+  assert.deepEqual([r.status, r.body.err], [400, 'invalid']);
+  r = await post(s, { buses: [{ ...BUSES[0], label: 'a label far too long to fit' }] });
+  assert.match(r.body.detail, /too long/);
+  r = await post(s, { buses: [{ ...BUSES[0], label: 'to work' }] });
+  assert.deepEqual(r.body.buses, [{ ...BUSES[0], label: 'TO WORK' }]);
+  const api = '/board/secret123/api/bus';
+  assert.deepEqual((await s.req(`${api}/routes`)).body, { routes: [{ rt: '22', name: 'Clark' }] });
+  assert.deepEqual((await s.req(`${api}/directions?rt=22`)).body, { directions: ['Northbound', 'Southbound'] });
+  assert.deepEqual((await s.req(`${api}/stops?rt=22&dir=Southbound`)).body, { stops: [{ stpid: '1836', name: 'Clark & Morse' }] });
+  assert.equal((await s.req(`${api}/directions`)).status, 400);
+  assert.equal((await s.req(`${api}/stops?rt=22&dir=${encodeURIComponent('S;')}`)).status, 400);
+  assert.deepEqual([(await s.req(`${api}/stops?rt=22&dir=Sideways`)).status, (await s.req(`${api}/stops?rt=22&dir=Sideways`)).body.err], [502, 'upstream']);
+  assert.equal((await s.req(`${api}/routes`, { method: 'POST' })).status, 405);
+  await s.close();
+});

@@ -1,0 +1,24 @@
+{
+ "bustime-response": {
+  "stops": [
+   {
+    "stpid": "1827",
+    "stpnm": "Clark & Howard",
+    "lat": 42.019,
+    "lon": -87.6752
+   },
+   {
+    "stpid": "1836",
+    "stpnm": "Clark & Morse",
+    "lat": 42.0079,
+    "lon": -87.6741
+   },
+   {
+    "stpid": "1841",
+    "stpnm": "Clark & Pratt",
+    "lat": 42.0052,
+    "lon": -87.6737
+   }
+  ]
+ }
+}

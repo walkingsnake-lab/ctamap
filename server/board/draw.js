@@ -169,7 +169,8 @@
     for (const r of p.rows || []) {
       const t = [], s = [];
       r.t.forEach((x, i) => { if (isShown(x, now, p.now)) { t.push(x); s.push(r.s ? r.s[i] : 0); } });
-      if (t.length) out.push({ ...r, t, s });
+      // A kept row (`k`, a bus) stays with no times: it shows NO_TIME.
+      if (t.length || r.k) out.push({ ...r, t, s });
     }
     return out;
   }
@@ -213,7 +214,8 @@
     }
     const s = (cp) => String.fromCodePoint(cp);
 
-    const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300' };
+    // BUS: a bus row's block (design spec §5, "Buses"); no CTA line is grey.
+    const LINE = { RD: '#c60c30', BL: '#00a1de', BR: '#62361b', GR: '#009b3a', OR: '#f9461c', PR: '#522398', PK: '#e27ea6', YL: '#f9e300', BUS: '#8a8a8a' };
     const C = {
       label: '#d8d8d8', clock: '#cccccc', radarTime: '#7a7a7a', radarAmpm: '#8f8f8f', radarSub: '#666666', wxText: '#8f8f8f', amber: '#ffb000', dimAmber: '#664600', dimAmber2: '#332300',
       sch: '#6a6a6a', schDim: '#2e2e2e', schDim2: '#151515', grey: '#8f8f8f', divider: '#333333',
@@ -221,6 +223,7 @@
       watch: '#ffd800', warnSevere: '#ff8000', warnTornado: '#ff2020', noTrains: '#6c6c6c', indicator: '#3a3a3a', perch: '#4a4a4a',
     };
 
+    const NO_TIME = '--'; // a kept row (a bus) with nothing predicted
     const TIME_GAP = 3;   // px between arrival times...
     const TIGHT_GAP = 2;  // ...tightened when the row is full
     const LABEL_GAP = 3;  // min px between the label and the times
@@ -441,6 +444,10 @@
     // steps: the third time a step dimmer than the second (state timeSteps).
     // x0, right: the row's columns (a wide board's halves; contract "Width").
     function layoutCells(r, now, steps, x0 = 0, right = 63) {
+      // A kept row with nothing coming: one dim cell where the times go. Its
+      // time is 0, so it never pairs with a real one: it fades out as the
+      // first time fades in, and back in after the last one leaves.
+      if (!r.t.length) return r.k ? [{ id: slotKey(r, 0), t: 0, text: NO_TIME, right, alpha: 1, roll: null, color: C.dimHead }] : [];
       const texts = r.t.map((t, k) => timeText(t, now, k === 0));
       const widthAt = (gap) => texts.reduce((w, txt, i) => w + measure('small', txt) + (i ? gap : 0), 0);
       const gap = right - widthAt(TIME_GAP) + 1 - labelEnd(r, x0 + 5) - 1 >= LABEL_GAP ? TIME_GAP : TIGHT_GAP;
@@ -2020,9 +2027,20 @@
     }
     // A variant's payload and screen: the chosen ring entry `k` with variant
     // `vi`, its data taken from `pv` (forecast lists, clock faces).
+    // What pv.tr carries: the transit screen's own fields.
+    const PEEK_TR = ['tv', 'stn', 'header', 'view', 'halves', 'rows', 'wx'];
     function peekView(p, k, vi) {
       const kn = p.knob || {}, cat = (kn.ring || [])[k], v = ((kn.vars || [])[k] || [])[vi], pv = p.pv || {};
-      if (cat === 'transit') return { p, screen: v === 'ticker' ? 'ticker' : 'transit' };
+      if (cat === 'transit') {
+        if (v === 'ticker') return { p, screen: 'ticker' };
+        // Trains and buses are both the transit screen: the payload carries
+        // the one that's chosen (`tv`: 'bus' for buses), pv.tr the other.
+        const other = pv.tr && (v === 'bus') !== (p.tv === 'bus') ? pv.tr : null;
+        if (!other) return { p, screen: 'transit' };
+        const q = { ...p };
+        for (const key of PEEK_TR) q[key] = other[key] === undefined ? null : other[key];
+        return { p: q, screen: 'transit' };
+      }
       if (cat === 'weather') {
         // The radar view: every kept frame (pv.radar), rain or not. The
         // others: the radar loop only while rain is in the box (radar.on).
@@ -2063,7 +2081,7 @@
     // column 126, rows 22, 24, ..., in its color, the chosen full and the
     // rest at 30%.
     const PEEK_WIDE = { x0: 14, right: 123, gap: 5, off: '#4a4a4a', dotX: 126 };
-    const PEEK_NAMES = { transit: 'ROWS', rows: 'ROWS', ticker: 'TICKER', now: 'NOW', '5day': '5-DAY', hourly: 'HOURLY', radar: 'RADAR', skyline: 'SKY', seventies: '70S',
+    const PEEK_NAMES = { transit: 'ROWS', rows: 'ROWS', ticker: 'TICKER', bus: 'BUSES', now: 'NOW', '5day': '5-DAY', hourly: 'HOURLY', radar: 'RADAR', skyline: 'SKY', seventies: '70S',
       analog: 'DIAL', daynight: 'MAP', gradient: 'GRAD', digits: 'BIG', daydate: 'DATE', words: 'WORDS' };
     const PEEK_CATS = { transit: 'TRANSIT', weather: 'WEATHER', clock: 'CLOCK', announce: 'ANNOUNCE', cycle: 'CYCLE' };
     // A glide (see PEEK): where the bar is along the list, as a fractional
