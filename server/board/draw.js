@@ -1989,8 +1989,10 @@
     // where the bar is gliding from (fractional indexes; t ms in; axis 'x'
     // for a category, 'y' for a variant); under: the screen behind
     // (p.screen by default); chosen: the chosen view alone, no bar, no dim.
-    const PEEK = { xMs: 270, yMs: 300, upMs: 240, downMs: 390, band: 11, top: 21, pitch: 12, dim: 0.25 };
+    const PEEK = { xMs: 270, yMs: 300, upMs: 240, downMs: 390, band: 11, top: 21, pitch: 12, dim: 0.25, dots: 5 };
     const PEEK_LOADED = '#6a6a6a';
+    // An end dot of the 64 bar's variant window with more variants past it.
+    const PEEK_MORE = '#1c1c1c';
     const PEEK_ICONS = {
       transit: ['.#####.', '#.....#', '#.....#', '#######', '##...##', '.#####.', '#.....#'],
       weather: ['...#...', '.#...#.', '..###..', '#.###.#', '..###..', '.#...#.', '...#...'],
@@ -2158,10 +2160,28 @@
       }
       const ix = x0 + k * PEEK.pitch;
       f.fill(ix, sh(31), 7, 1, col);
-      const nv = ((kn.vars || [])[k] || []).length, dotY = (j) => 26 - (nv - 1) + j * 2;
-      if (nv > 1) {
+      const nv = ((kn.vars || [])[k] || []).length;
+      if (nv > 1 && nv <= PEEK.dots) {
+        const dotY = (j) => 26 - (nv - 1) + j * 2;
         for (let j = 0; j < nv; j++) f.fill(ix + 8, sh(dotY(j)), 1, 1, C.indicator);
         if (vi >= 0 && vi < nv) f.fill(ix + 8, sh(Math.round(dotY(g ? g.pos : vi))), 1, 1, col);
+      } else if (nv > PEEK.dots) {
+        // More variants than the band holds: a window of PEEK.dots on rows
+        // 22-30 that scrolls to keep the lit dot in the middle (at the ends
+        // it rests on the first or last slot). An end slot with more beyond
+        // it is dimmer (PEEK_MORE). A variant glide scrolls the window too.
+        const W = PEEK.dots, at = g ? g.pos : vi;
+        const s = Math.max(0, Math.min(nv - W, at - (W >> 1)));
+        const y0 = 26 - (W - 1);
+        f.withClip(ix + 8, sh(y0), ix + 8, sh(y0 + (W - 1) * 2), () => {
+          for (let j = 0; j < nv; j++) {
+            const rel = j - s;
+            if (rel <= -1 || rel >= W) continue;
+            const more = (rel < 0.5 && j > 0) || (rel > W - 1.5 && j < nv - 1);
+            f.fill(ix + 8, sh(Math.round(y0 + rel * 2)), 1, 1, more ? PEEK_MORE : C.indicator);
+          }
+          if (vi >= 0 && vi < nv) f.fill(ix + 8, sh(Math.round(y0 + (at - s) * 2)), 1, 1, col);
+        });
       }
     }
     // Rows the bar has dropped at t ms: rising (up) from gone to 0, or falling.

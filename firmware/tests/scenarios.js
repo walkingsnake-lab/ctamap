@@ -509,6 +509,13 @@ async function build() {
       pk(2, 2, { glide: { k: 2, vi: 1, t: 60, axis: 'y' } }), pk(2, 1, { glide: { k: 2, vi: 2.5, t: 200, axis: 'y' } }),
       pk(1, 0, { glide: { k: 0, vi: 0, t: 999, axis: 'x' } }),
     ], frames, undefined, { s3only: true, clouds });
+    // The variant dots past what the band holds (7 faces: a window of 5
+    // that scrolls with the lit dot): glides through the middle, onto the
+    // last slots, across the wrap both ways; and a longer list.
+    const gy = (from, to, t) => pk(2, to, { glide: { k: 2, vi: from, t, axis: 'y' } });
+    add('peek variant window glides', p, [gy(1, 2, 110), gy(2, 3, 110), gy(3, 4, 40), gy(4, 3, 200), gy(5, 6, 110), gy(6, 0, 90), gy(0, 6, 150), gy(2.5, 5, 60)], frames, undefined, { s3only: true, clouds });
+    const nine = { ...p, knob: { ...p.knob, vars: vars.map((v, i) => (i === 2 ? [...v, 'skyline', 'analog'] : v)) } };
+    add('peek variant window nine', nine, [0, 1, 2, 3, 4, 6, 7, 8].map((vi) => pk(2, vi)).concat([pk(2, 8, { drop: 4 }), pk(2, 11), pk(2, -1)]), frames, undefined, { s3only: true, clouds });
     // The bar rising or dropping, the dim with it.
     add('peek bar drop', p, [1, 3, 6, 10, 11, 14].map((drop) => pk(2, 0, { drop })), frames, undefined, { s3only: true, clouds });
     add('peek digit color', { ...p, pv: { ...p.pv, cdig: '#ff4fa8' } }, [pk(2, 5, { chosen: true }), pk(2, 6, { chosen: true })], frames, undefined, { s3only: true, clouds });
