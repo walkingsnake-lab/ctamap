@@ -129,7 +129,7 @@ if 'closed' in WHICH:
     annotate(e, cam, [('two screws on each end', (HW, KY, ZC + 50), (-60, -70), 'rm'),
                       ('the line between the halves', (HW, 30, ZC), (-60, 60), 'rm')], fs=22)
     save(R.titled(R.stack([R.row([a, b]), R.row([c, e])]), 'V6: closed',
-                  f'Same outside as today (281.8 x 153.8 x 73). Two walnut halves with a {v6.SKIN_GAP:g} mm line between them; eight black M3 heads in one line.'), '1-closed.png')
+                  f'Same outside as today (281.8 x 153.8 x 73). Two walnut halves with a {v6.SKIN_GAP:g} mm line between them; eight M3 flat heads, flush, in one line.'), '1-closed.png')
 
 # ------------------------------------------------------------------ 2: the skin comes off
 if 'skin' in WHICH:
@@ -143,7 +143,7 @@ if 'skin' in WHICH:
                        ('bottom half (feet)', (60, 45, -70), (150, 60), 'lm'),
                        ('chassis: carries everything; the walnut carries nothing', (-100, 30, v6.ZO1), (-170, -210), 'mb'),
                        ('encoder tower: part of the chassis', (0, KY, H + 1.6), (120, -120), 'lm'),
-                       ('diffuser: on the panel, 0.3 mm behind the rim', (60, v6.RIM_GAP + p4.Y_FACE, ZC), (150, 300), 'mt')])
+                       (f'diffuser: on the panel, {v6.RIM_GAP:g} mm behind the rim', (60, v6.RIM_GAP + p4.Y_FACE, ZC), (150, 300), 'mt')])
     save(R.titled(im, 'The skin: two walnut halves on a black chassis',
                   'Each half goes straight on, top down and bottom up; nothing has to close. No glue, no threads in walnut.'), '2-skin.png')
 

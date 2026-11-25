@@ -11,16 +11,18 @@ complication, and that two halves work once the seam is a line that is meant to 
 What it is, in terms of the parts it is built from (every proven fit is kept):
 - **Chassis** = p4v55.tray(), the reviewed "V5.5" tray: hidden louver ties, the split 24 mm right of centre with a
   tongue-and-knuckle joint, the V5 panel posts with their feet moved back for M3 x 30 standoffs in all six inserts.
-  Here it loses its crush ribs and gains: contact pads under the walnut (pads(): top, bottom and end walls); a boss for
-  each skin screw; an encoder tower in the top wall (tower()), so the knob's seat is PETG; a washer under each
+  Here it loses its crush ribs and gains: contact pads under the walnut (pads(): top, bottom and end walls) and a land
+  round every skin screw (lands()); a boss for each skin screw; the USB-C port framed in the right wall (port_frame());
+  an encoder tower in the top wall (tower()), so the knob's seat is PETG; a washer under each
   standoff; heat-set inserts (M3 x D5 x L4) wherever a screw threads into it from outside: skin, joint, cleat.
 - **Skin** = p4's walnut shell cut at mid height into a top and a bottom half (skin_two()), SKIN_GAP apart: a line
   round each end, nothing to close, so the print's height error only changes the line's width. The top half's inner
-  1.9 mm laps 3 mm down behind the bottom half on both ends, so there is walnut behind the whole line. Eight black
-  M3 x 10 flanged button heads, all at the knob's depth: one at each end of the top and of the bottom, two on each
-  end. The holes in the walnut are 1 mm long front to back so each half is set against the diffuser by eye. Underneath,
-  the heads sit in 1 mm counterbores and the bumpers' recesses are FOOT_IN inboard of them. The two V5 screws under
-  the case are left out (UNDER_SCREWS); their holes stay.
+  1.9 mm laps 3 mm down behind the bottom half on both ends, so there is walnut behind the whole line. Eight
+  M3 x 10 flat heads (DIN 7991 / ISO 10642), flush in round countersinks (FLUSH, Nov 25), all at the knob's depth: one
+  at each end of the top and of the bottom, two on each end, each clamping the walnut onto a land on the chassis. The
+  holes are round: nothing is set by eye, each half's depth is the model's (RIM_GAP). Underneath, the heads are flush
+  as well and the bumpers' recesses are FOOT_IN inboard of them. The two V5 screws under the case are left out
+  (UNDER_SCREWS); their holes stay.
 - **Panel, diffuser, knob**: p4's; the diffuser is the three-colour one (p4-diffuser3-*, a 2.8 stack; p4.CASE_DIFFUSER). The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
   without clamping it. The collar becomes a trim ring whose cap lies over the tower's top under the encoder's nut.
 - **Wall hanging**: the cleat (cleat.py, with p4.py's settings of Nov 17: a 60 deg bevel for about 17 mm of hook, stops on
@@ -34,14 +36,16 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   finger-tight (loose, it can drop onto the top-centre standoff), cables. A washer in each post's recess; the chassis
   face up on blocks, so the back screws can be reached from below; panel (standoffs on, each hex seated on its insert)
   lowered in, six flanged M3 x 8 from the back, snug. Diffuser pressed on, centred, and lit. Bottom walnut half on
-  from below, top half from above, four screws each (snug: the end screws close 0.1-0.25 mm of air). Panel centred in
+  from below, top half from above, four screws each (drive each head home in its countersink and stop: the walnut is
+  on the land round the screw; all four started before any is tightened). Panel centred in
   the rim by eye and its screws tightened from the back. Nut off, ring on, nut, the two M2.5 (snug), knob. The case
   cleat last: it lies over the top-centre panel screw. Service: the panel comes out only with the knob, ring, both
   halves and diffuser off; the S3 with the panel out.
 
 check() covers overlaps, each half's way on with the other fitted, the line and the lap (shut, shifted, what is behind
 it), every screw's hole, the chassis halves' slide, the panel's way in, cables (p4_cables) and the cleat.
-Not print-tested. Smaller cases (P3, P2.5) keep their one-piece sleeve and take only the tray's improvements.
+First built Nov 21-24 (birch skin, the no-insert chassis). The Nov 25 changes (FLUSH, lands(), the end pads' stretches,
+port_frame(), RIM_GAP 0.15) are not printed yet. Smaller cases (P3, P2.5) keep their one-piece sleeve and take only the tray's improvements.
 """
 import math, os, sys
 import numpy as np
@@ -57,14 +61,17 @@ import panel
 # ---------------------------------------------------------------- settings
 SEAM = W / 2 - 15.5              # |x| where the corner round starts (125.4): plank | end cap
 V_GROOVE = 0.5                   # chamfer a side at the skin's seams
-RIM_GAP = 0.3                    # the diffuser (and panel) sit this far behind the V5 position: the rim only covers
+RIM_GAP = float(os.environ.get('V6_RIM_GAP', '0.15'))   # the diffuser (and panel) sit this far behind the V5 position: the rim
+                                 # covers the diffuser's border without pressing on it. 0.3 while the halves had 1 mm of
+                                 # front-to-back float and were set against the diffuser by eye (Nov 21); 0.15 since the
+                                 # countersunk screws fix each half's depth (Nov 25): the gap is the model's, not the builder's
 JOINT_X = 24.0                   # the chassis's split: right of the encoder (rails and QT plugs reach x = 21)
 TONGUE = 10.0                    # the left half's lap tongue reaches this far into the right half
 TONGUE_T, TONGUE_CL = 2.5, 0.15
 STANDOFF_L, STANDOFF_AF = 30.0, 5.5          # M3 male-female hex standoff, screwed into each panel insert by hand
 WASHER_T = 0.5                   # an M3 washer between each standoff and its post: the hex alone laps the 4.5 mm hole by 0.25-0.5
 SKIN_CL_D = 3.4                  # M3 clearance through the walnut
-SKIN_SLOT = 0.5                  # and the holes are this much longer front and back: each piece is set against the diffuser by eye
+SKIN_SLOT = 0.5                  # four-piece skin only: its holes are this much longer front and back (the two halves: FLUSH)
 PILOT_H = 3.0                    # M3 thread-forming pilot (kept for the T1 coupon script)
 # Heat-set inserts everywhere a screw threads into the chassis from outside (the owner, Nov 15: M3 x D5 x L4, brass).
 # Printed pilots proved a 0.1 mm window: 3.1 passed on the Nov 3 plate and would not start on the built tray.
@@ -87,6 +94,7 @@ UNDER_CB = 7.6                   # counterbore for a flanged head (6.9) at the t
 PAD_H = 0.24                     # contact pads under the planks, as tall as the 0.25 gap: the walnut bears along its length, not
                                  # only at the screws (0.2 left 0.05 of air, which no print holds; a high pad only bows a plank a hair)
 PAD_W = 4.0
+PAD_RUN = 8.0                    # the shortest stretch of an end-wall pad row worth printing
 RING_CAP = 0.4                   # the trim ring reaches over the tower's top under the encoder's nut, which is what holds it
 RING_LIFT = 0.4                  # and its flange stands this far off the walnut: at 0 a plank printed 0.05 thick took the nut's clamp
 WASHER_REC = (7.4, 0.3)          # a recess in each post's foot that holds its washer while the panel is lowered in
@@ -110,6 +118,36 @@ LAP_CL_X, LAP_CL_Z = 0.4, SKIN_GAP + 0.1   # room round the lap: the halves can 
                                  # never land before the line closes (0.3 under it did, at 0.31 of closure)
 PAD_H_END = 0.15                 # pads on the end walls under the halves' legs: the legs slide down past them
 PLANK_SCREWS = tuple((sx * XE, y) for sx in (-1, 1) for y in ((KY,) if SKIN == 'two' else (30.0, 60.0)))
+# Flush screws (Nov 25, the two-half skin). On the first build the flanged button heads stood 1.65 proud of the wood and
+# never clamped: 0.1-0.25 mm of air under the walnut at every screw (none of the pads is at a screw), and on the USB end
+# no pads at all. Now: M3 x 10 flat heads (DIN 7991 / ISO 10642: 90 deg, head 6.0 x 1.7) in round countersinks, all eight,
+# the two underneath included; a land (a ring of pad) round every screw, so the walnut is clamped onto PETG; no slots,
+# so each half's depth is the model's (RIM_GAP). A countersink lies on its side in the back-down print like every hole
+# here, but its roof is the cone's own 45 deg, so it needs no teardrop (the owner: the teardrops "didn't look good").
+FLUSH = SKIN == 'two'
+CSK_D, CSK_HEAD = 6.4, 6.0       # the countersink's mouth, and the head it is drawn for: the head ends 0.2 under the surface
+CSK_K = (CSK_D - SKIN_CL_D) / 2  # the cone's depth (1.5): 2.5 of the 4 mm wall is left under it
+LAND_ID, LAND_OD = 7.0, 12.0     # the land round each skin screw: clear of an insert's mouth (4.4) and what the iron raises
+LAND_H, LAND_H_END = PAD_H, 0.20 # as tall as the pads on the top and bottom walls; on the end walls 0.05 short of the
+                                 # 0.25 gap, because the legs slide down past them (the pads there are 0.15)
+# The USB-C port's frame (Nov 25). The tray's right wall was one window from its front edge back past the port, 41 mm
+# tall (port and edge buttons), so a plug was guided only by the walnut's 4 mm: tilted, its tip rode past the port and
+# felt as if it were going in. The wall is now closed round the port: a window PORT_FRAME (y, z) for the plug's housing,
+# 0.3 a side larger than the walnut's opening so the walnut stays the tight one, 6.75 mm of guide in all. In front of it
+# the wall is whole (pads for the USB leg). The buttons' slot above is as it was, and the web between it and the port's
+# window stops BTN_CL short of the first button's plunger.
+# What stands at the S3's USB edge is taken from Adafruit's 3D model of the board (Adafruit_CAD_Parts, "5778 Matrix
+# Portal S3", the .stl; along the edge from the port's centre, past the edge, above the component face):
+#   USB-C receptacle  -4.47..+4.47, its mouth 0.03 inside the edge (it does not overhang), 3.2 tall, 7.9 long
+#   Down plunger      +8.81..+11.76, 1.07 past the edge, 1.0-2.5 up      (drawer.BTN_Z0 is its lower side: +8.8)
+#   Up plunger        +18.59..+21.54, 0.94 past;   Reset plunger  +28.37..+31.32, 0.44 past;   the buttons' bodies 0.07 past
+# The wall's inner face is 0.4 past the edge, so only the plungers enter it. PORT_CH: a channel in the new wall's inner
+# face in front of the port all the same, so a receptacle soldered 0.5 proud of the edge still goes in with 0.4 to spare.
+PORT_FRAME = (V.PORT_W + 0.6, V.PORT_H + 0.6)
+PORT_CH = 0.5
+BTN_CL = 0.5
+S3_EDGE_PARTS = dict(receptacle=(-4.47, 4.47, 0.0, 0.03, 3.2), down=(8.81, 11.76, 1.07, 1.0, 2.5), up=(18.59, 21.54, 0.94, 1.0, 2.5),
+                     reset=(28.37, 31.32, 0.44, 1.0, 2.5))      # (from, to) along the edge, past the edge, (from, to) above the face
 CAP_SCREWS = ((KY, ZC + 50.0), (KY, ZC - 50.0))            # (y, z) on each end face; z +/-50 clears the S3 and its window
 
 # chassis numbers taken from the tray
@@ -239,16 +277,33 @@ def skin_two(sh):
         a, b = sorted((sx * (W / 2 - WALL - 14), sx * (W / 2 - WALL + LAP_T + LAP_CL_X)))
         zf = ZC - LAP_H - LAP_CL_Z
         bot = bot - along_x([(y0 - 1.4, ZC + 1), (y1 + 0.4, ZC + 1), (y1 + 0.4, zf), (y0 - 0.4 + (ZC - zf), zf)], a, b)
-    slot_z = lambda x, y, z0, z1: (cyl_z(x, y - SKIN_SLOT, z0, z1, SKIN_CL_D) + cyl_z(x, y + SKIN_SLOT, z0, z1, SKIN_CL_D)).hull()
-    top = top - Manifold.batch_boolean([slot_z(x, y, H - WALL - 2, H + 2) for x, y in PLANK_SCREWS], ADD)
-    bot = bot - Manifold.batch_boolean([slot_z(x, y, -2, WALL + 2) for x, y in PLANK_SCREWS], ADD)
-    bot = bot - Manifold.batch_boolean(                       # underneath, heads in 1 mm counterbores (the bumpers stand 2 mm)
-        [Manifold.extrude((V.teardrop_cs(UNDER_CB / 2, x, y - SKIN_SLOT, seg=48) + V.teardrop_cs(UNDER_CB / 2, x, y + SKIN_SLOT, seg=48)).hull(), 2.0).translate([0, 0, -1])
-         for x, y in PLANK_SCREWS], ADD)
-    ends = lambda zs: Manifold.batch_boolean([(cyl_x(y - SKIN_SLOT, z, x0, x1, SKIN_CL_D) + cyl_x(y + SKIN_SLOT, z, x0, x1, SKIN_CL_D)).hull()
-                                               for sx in (-1, 1) for x0, x1 in [sorted((sx * (W / 2 - WALL - 2), sx * (W / 2 + 2)))]
-                                               for y, z in CAP_SCREWS if (z > ZC) == zs], ADD)
+    # every skin screw in a round countersink (FLUSH): the top's, the two underneath (flush, so nothing reaches the table
+    # with the bumpers) and the ends'
+    top = top - Manifold.batch_boolean([csk(sx_, y, H, 'z', 1) for sx_, y in PLANK_SCREWS], ADD)
+    bot = bot - Manifold.batch_boolean([csk(sx_, y, 0.0, 'z', -1) for sx_, y in PLANK_SCREWS], ADD)
+    ends = lambda zs: Manifold.batch_boolean([csk(y, z, sx * W / 2, 'x', sx) for sx in (-1, 1) for y, z in CAP_SCREWS if (z > ZC) == zs], ADD)
     return dict(half_top=top - ends(True), half_bottom=bot - ends(False))
+
+
+def csk(a, b, o, axis, s):
+    """a countersunk M3 clearance hole through the walnut. axis 'z': at (x, y) = (a, b) in a top (s +1) or bottom (-1) wall
+    whose outer face is z = o. axis 'x': at (y, z) = (a, b) in the end wall whose outer face is x = o (s: its side).
+    The cone runs 0.02 on past the face, so the tool's rim lies on none of the wall's."""
+    e = 0.02
+    cone = Manifold.cylinder(CSK_K + e, SKIN_CL_D / 2, CSK_D / 2 + e, 64).translate([0, 0, -CSK_K])     # outer face at z = 0
+    tool = cone + Manifold.cylinder(WALL + 2.0, SKIN_CL_D / 2, SKIN_CL_D / 2, 48).translate([0, 0, -WALL - 1.0])
+    if axis == 'z':
+        return (tool if s > 0 else tool.mirror([0, 0, 1])).translate([a, b, o])
+    return tool.rotate([0, 90.0 * s, 0]).translate([o, a, b])
+
+
+def flat_screw(a, b, o, axis, s, length=10.0):
+    """an M3 flat head seated in csk()'s countersink (same arguments), its top (CSK_D - CSK_HEAD) / 2 under the face"""
+    d, k = (CSK_D - CSK_HEAD) / 2, (CSK_HEAD - 3.0) / 2
+    m = Manifold.cylinder(k, 1.5, CSK_HEAD / 2 - 0.02, 32).translate([0, 0, -d - k]) + Manifold.cylinder(length - k, 1.5, 1.5, 24).translate([0, 0, -d - length])
+    if axis == 'z':
+        return (m if s > 0 else m.mirror([0, 0, 1])).translate([a, b, o])
+    return m.rotate([0, 90.0 * s, 0]).translate([o, a, b])
 
 
 # ---------------------------------------------------------------- chassis
@@ -318,13 +373,53 @@ def pads(t):
         for sx in (-1, 1):
             for z in (ZC + 34, ZC + 14, ZC - 14, ZC - 34):
                 a, b = sorted((sx * (xo - 1.2), sx * (xo - 0.2)))
-                under = box(a, b, y0, y1, z - PAD_W / 2, z + PAD_W / 2)
-                if (under ^ t).volume() > 0.995 * under.volume():
-                    a, b = sorted((sx * (xo - 3), sx * 400))
-                    rows.append(box(a, b, 0, D, z - PAD_W / 2, z + PAD_W / 2))
+                # a row runs wherever the wall under it is solid, in stretches of PAD_RUN or more: on the USB end the
+                # rows that cross the port's window and the buttons' slot keep the parts in front of and behind them
+                # (as first built a row needed solid wall front to back, and the USB leg got none: Nov 25)
+                edges = list(np.arange(y0, y1, 2.0)) + [y1]
+                solid = [(box(a, b, c, e, z - PAD_W / 2, z + PAD_W / 2) ^ t).volume() > 0.995 * (b - a) * (e - c) * PAD_W for c, e in zip(edges, edges[1:])]
+                a, b = sorted((sx * (xo - 3), sx * 400))
+                i = 0
+                while i < len(solid):
+                    j = i
+                    while j < len(solid) and solid[j]:
+                        j += 1
+                    if j > i and edges[j] - edges[i] >= PAD_RUN:
+                        rows.append(box(a, b, edges[i], edges[j], z - PAD_W / 2, z + PAD_W / 2))
+                    i = max(j, i + 1)
         if rows:
             out = out + (band_e ^ Manifold.batch_boolean(rows, ADD))
     return out
+
+
+def lands():
+    """a ring of pad round every skin screw, on the wall's outer face: the screw clamps the walnut onto it instead of
+    closing 0.1-0.25 mm of air by bending the wall (the first build: "they go fully in but stop just short of really
+    gripping"). LAND_ID clears an insert's mouth; the thread's hole is cut through it afterwards."""
+    out = []
+    for x, y in PLANK_SCREWS:
+        out.append(cyl_z(x, y, ZO1 - 0.3, ZO1 + LAND_H, LAND_OD, 64) - cyl_z(x, y, ZO1 - 1, ZO1 + 1, LAND_ID, 48))
+        out.append(cyl_z(x, y, ZO0 - LAND_H, ZO0 + 0.3, LAND_OD, 64) - cyl_z(x, y, ZO0 - 1, ZO0 + 1, LAND_ID, 48))
+    xo = XIN + DR.TRAY_WT
+    for sx in (-1, 1):
+        for y, z in CAP_SCREWS:
+            a, b = sorted((sx * (xo - 0.3), sx * (xo + LAND_H_END)))
+            c, e = sorted((sx * (xo - 1), sx * (xo + 1)))
+            out.append(cyl_x(y, z, a, b, LAND_OD, 64) - cyl_x(y, z, c, e, LAND_ID, 48))
+    return Manifold.batch_boolean(out, ADD)
+
+
+def port_frame():
+    """(add, cut) for the right wall: the wall put back round the USB-C port (see PORT_FRAME), and the channel in front
+    of it. The window's front edge is a bridge of PORT_FRAME[1] (14 mm) in the back-down print, from the wall below the
+    port to the web that now parts the port's window from the buttons' slot."""
+    py, pz = DR.PORT_Y, DR.PORT_Z
+    fy, fz = PORT_FRAME[0] / 2, PORT_FRAME[1] / 2
+    back = py + 5.0                                            # the tray's window ended here; the buttons' slot still does
+    region = box(XIN, XIN + DR.TRAY_WT, DR.YF - 1, back + 0.01, pz - 7.5, DR.BTN_Z0 - BTN_CL)    # the old window, below the buttons' slot
+    window = box(XIN - 1, XIN + DR.TRAY_WT + 1, py - fy, py + fy, pz - fz, pz + fz)
+    channel = box(XIN - 1, XIN + PORT_CH, DR.YF - 2, py - fy + 0.01, pz - 5.2, pz + 5.2)   # a receptacle is 8.94 wide
+    return region - window, channel
 
 
 NECK_R = 9.5                     # the tower above the walnut: narrower, so the trim ring keeps 2.7 mm round the screw holes
@@ -436,12 +531,14 @@ def chassis():
         t = T.tray(extra_dy=BOSS_Y - WASHER_REC[1] - (T.P3.FOOT_Y + T.FOOT_DY))
     finally:
         DR.FASTEN, DR.INSERT_D, DR.INSERT_L = saved
+    pf_add, pf_cut = port_frame()
+    t = (t + pf_add) - pf_cut
     # no crush ribs; the front edge clear of the diffuser's flange, which sits RIM_GAP further back
     t = t ^ C.prism_y(C.rr_cs(C.BORE_HX - DR.TRAY_CL, C.BORE_HZ - DR.TRAY_CL, C.BORE_R - DR.TRAY_CL), 0, D)
     t = t - box(-400, 400, 0, DR.YF + 2 * RIM_GAP, -5, H + 5)
     adds = [boss_wall(x, y, sz) for sz in (1, -1) for x, y in PLANK_SCREWS] + [boss_end(y, z, sx) for sx in (-1, 1) for y, z in CAP_SCREWS]
     t = t - Manifold.batch_boolean([cyl_y(x, z, BOSS_Y - WASHER_REC[1] - 1, BOSS_Y, WASHER_REC[0], 48) for x, z in insert_xz()], ADD)   # washer recesses
-    t = t + Manifold.batch_boolean(adds, ADD) + pads(t)
+    t = t + Manifold.batch_boolean(adds, ADD) + pads(t) + (lands() if FLUSH else Manifold())
     tw_add, tw_cut = tower()
     t = (t + tw_add) - tw_cut
     cuts = [thread_z(x, y, sz) for sz in (1, -1) for x, y in PLANK_SCREWS] + [thread_x(y, z, sx) for sx in (-1, 1) for y, z in CAP_SCREWS]
@@ -486,10 +583,16 @@ def screws():
     import p4v55 as T
     skin_s, back_s, hid = [], [], []
     for x, y in PLANK_SCREWS:
+        if FLUSH:
+            skin_s.append(flat_screw(x, y, H, 'z', 1)); hid.append(flat_screw(x, y, 0.0, 'z', -1))
+            continue
         skin_s.append(cyl_z(x, y, H - 10.0, H, 3.0, 24) + cyl_z(x, y, H, H + HEAD_K, HEAD_D, 32))
         hid.append(cyl_z(x, y, 1.0, 11.0, 3.0, 24) + cyl_z(x, y, 1.0 - HEAD_K, 1.0, HEAD_D, 32))     # in its 1 mm counterbore
     for sx in (-1, 1):
         for y, z in CAP_SCREWS:
+            if FLUSH:
+                skin_s.append(flat_screw(y, z, sx * W / 2, 'x', sx))
+                continue
             a, b = sorted((sx * (W / 2 - 10.0), sx * W / 2)); c, e = sorted((sx * W / 2, sx * (W / 2 + HEAD_K)))
             skin_s.append(cyl_x(y, z, a, b, 3.0, 24) + cyl_x(y, z, c, e, HEAD_D, 32))
     seat = BOSS_Y - WASHER_REC[1] + T.P3.SO_FLOOR
@@ -546,6 +649,18 @@ def check(P):
             ('standoffs / encoder, S3, sensor', v(P['standoffs'], P['encoder'] + P['s3'] + P['sensor'])),
             ('skin, knob and bottom screws / panel, diffuser, S3, sensor, encoder, ring', v(P['screws']['skin'] + P['screws']['under'] + P['screws']['knob'], P['panel'] + dif + P['s3'] + P['sensor'] + P['encoder'] + P['ring']))]
     rows.append(cables(P))
+    # the largest plug housing the USB-C spec allows (12.35 x 6.5; taken 0.25 a side larger, as check_p4_fit.py does), from
+    # outside the case to 0.5 mm from the board's edge: through the walnut's opening and the port's frame
+    py, pz = DR.PORT_Y, DR.PORT_Z
+    plug = box(DR.S3_EDGE + 0.5, HW + 20, py - 3.5, py + 3.5, pz - 6.425, pz + 6.425)
+    rows.append(('largest USB-C plug housing (12.85 x 7.0) in to 0.5 mm from the board / chassis and skin', v(plug, ch + sk)))
+    # what stands at the S3's USB edge (S3_EDGE_PARTS, from Adafruit's 3D model; DR.s3_envelope() has none of it), each
+    # 0.4 larger all round except toward the board, and the receptacle taken 0.5 proud of the edge: seated, and swept
+    # out through the front, the way the board goes in
+    face = DR.PCB_Y0 + 1.6                                     # the component face, toward the back
+    edge = [box(DR.S3_EDGE - 0.5, DR.S3_EDGE + max(past, 0.5 if name == 'receptacle' else 0.0) + 0.4, DR.YF, face + y1 + 0.4, pz + z0 - 0.4, pz + z1 + 0.4)
+            for name, (z0, z1, past, y0, y1) in S3_EDGE_PARTS.items()]
+    rows.append(('the S3\'s receptacle (0.5 proud) and button plungers, 0.4 clear, seated and swept in from the front / chassis', v(Manifold.batch_boolean(edge, ADD), ch)))
     plank_top_z = max(m.bounding_box()[5] for k, m in P['skin'].items() if k in ('plank_top', 'half_top'))
     rows.append(('ring flange above the top plank, mm, less 0.3 (should be >= 0)', round(P['ring'].bounding_box()[2] - plank_top_z - 0.3, 2) * -1 if P['ring'].bounding_box()[2] - plank_top_z < 0.3 else 0.0))
     import cleat as CLT, p4v55 as T
