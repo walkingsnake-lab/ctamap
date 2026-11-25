@@ -11,6 +11,7 @@
 #include <algorithm>
 
 #include "assets.h"
+#include "qr.h"
 
 namespace draw {
 
@@ -2587,6 +2588,40 @@ static void render_chooser(const Value &p, Frame &f, double pos, bool commit) {
   for (int i = 0; i < n; i++) f.fill(x0 + i * 5, 9, 3, 1, i == sel ? C::amber : C::indicator);
 }
 
+// ---- knob menu (renderMenu, MENU) ----
+// Five 9x9 icons low on the panel, the chosen one lit, underlined and named
+// above. Mirrors draw.js.
+
+static const int MENU_TOP = 19, MENU_PITCH = 12, MENU_WIDE_PITCH = 16;
+static const double MENU_DIM = 0.3;
+static const char *const MENU_NAMES[MENU_N] = {"SCREEN OFF", "UNITS", "WIFI SETUP", "RESTART", "EXIT"};
+static const char *const MENU_ICON_OFF[] = {"....#....", "..#.#.#..", ".#..#..#.", "#...#...#", "#...#...#", "#.......#", ".#.....#.", "..#...#..", "...###..."};
+static const char *const MENU_ICON_F[] = {".#..#####", "#.#.#....", ".#..#....", "....#....", "....####.", "....#....", "....#....", "....#....", "....#...."};
+static const char *const MENU_ICON_C[] = {".#...###.", "#.#.#...#", ".#..#....", "....#....", "....#....", "....#....", "....#....", "....#...#", ".....###."};
+static const char *const MENU_ICON_WIFI[] = {".........", "###......", "...##....", ".....#...", "###...#..", "..##..#..", "...##..#.", "##..#..#.", "##..#..#."};
+static const char *const MENU_ICON_RESTART[] = {"...###.#.", "..#...##.", ".#...###.", "#........", "#.......#", "#.......#", ".#.....#.", "..#...#..", "...###..."};
+static const char *const MENU_ICON_EXIT[] = {".........", ".#.....#.", "..#...#..", "...#.#...", "....#....", "...#.#...", "..#...#..", ".#.....#.", "........."};
+
+static void render_menu(const Value &p, Frame &f, int sel_in, bool confirm) {
+  int w = cols_of(p);
+  if (w == WIDE) f.w = WIDE;
+  int sel = (int)fmod_floor(sel_in, MENU_N);
+  bool sure = confirm && (sel == MENU_WIFI || sel == MENU_RESTART);
+  RGB on = sure ? C::red : C::label, off = scale_color(C::label, MENU_DIM);
+  int pitch = w == WIDE ? MENU_WIDE_PITCH : MENU_PITCH;
+  int x0 = (int)fdiv(w - ((MENU_N - 1) * pitch + 9), 2);
+  ctext(f, FONT_5X7, U(std::string(MENU_NAMES[sel]) + (sure ? "?" : "")), w / 2, 15, on);
+  const char *const *icons[MENU_N] = {MENU_ICON_OFF, p["tu"].eq("C") ? MENU_ICON_C : MENU_ICON_F, MENU_ICON_WIFI, MENU_ICON_RESTART, MENU_ICON_EXIT};
+  for (int i = 0; i < MENU_N; i++) {
+    RGB col = i == sel ? on : off;
+    int x = x0 + i * pitch;
+    for (int j = 0; j < 9; j++)
+      for (int k = 0; k < 9; k++)
+        if (icons[i][j][k] == '#') f.set(x + k, MENU_TOP + j, col);
+    if (i == sel) f.fill(x, 30, 9, 1, on);
+  }
+}
+
 
 // ---- peek chooser (renderPeek, PEEK) ----
 // The chosen category's variant itself, drawn from the payload's sections
@@ -4147,7 +4182,8 @@ static void render_clock(const Value &p, Frame &f, const RenderOpts &o) {
 }
 
 static void render_screen(const Value &p, Frame &f, const RenderOpts &o, const std::string &screen) {
-  if (screen == "peek") render_peek(p, f, o);
+  if (screen == "menu") render_menu(p, f, o.menu ? o.menu->sel : 0, o.menu && o.menu->confirm);
+  else if (screen == "peek") render_peek(p, f, o);
   else if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
   else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink);
@@ -4260,6 +4296,11 @@ void render_status(Frame &f, const std::string &kind, const std::string &detail,
     // MAC as two lines of 3 octets, for IT to whitelist.
     center(f, FONT_SMALL, first(d, 8), 20, C::label);
     center(f, FONT_SMALL, d.size() > 9 ? d.substr(9, 8) : ustr(), 27, C::label);
+  } else if (kind == "nowifi" && detail == "press") {
+    // With a knob and the setup network to open: a press opens it now.
+    center(f, FONT_5X7, U"NO WIFI", 10, C::red);
+    center(f, FONT_SMALL, U"RETRYING", 19, C::grey);
+    center(f, FONT_SMALL, wide ? U"PRESS THE KNOB FOR SETUP" : U"PRESS FOR SETUP", 27, C::label);
   } else if (kind == "nowifi") {
     center(f, FONT_5X7, U"NO WIFI", 13, C::red);
     center(f, FONT_SMALL, U"RETRYING", 22, C::grey);
@@ -4274,11 +4315,68 @@ void render_status(Frame &f, const std::string &kind, const std::string &detail,
     // WiFi setup: detail is the board's own network to join (also on its label).
     center(f, FONT_5X7, U"SETUP WIFI", 13, C::amber);
     center(f, FONT_SMALL, first(U(detail), wide ? 32 : 16), 22, C::label);
+  } else if (kind == "restarting") {
+    // Restart chosen on the knob menu.
+    center(f, FONT_5X7, U"RESTARTING", 13, C::label);
   } else if (kind == "nosetup") {
     // No settings in flash (a generic build on a board never set up): detail says what's missing.
     center(f, FONT_5X7, U"NO SETUP", 13, C::amber);
     center(f, FONT_SMALL, U"SEE README", 22, C::grey);
   }
+}
+
+// Up to two lines of `s` in `font`, each at most `room` px: one if it fits;
+// else broken after its last '-' or space when both parts fit, else in
+// halves, else as much as fits on each (the rest is cut).
+static std::vector<ustr> two_lines(const ustr &s, Font font, int room) {
+  if (measure(font, s) <= room) return {s};
+  auto fits = [&](const ustr &t) { return measure(font, t) <= room; };
+  for (size_t i = s.size() - 1; i > 0; i--)
+    if ((s[i - 1] == U'-' || s[i - 1] == U' ') && fits(s.substr(0, i)) && fits(s.substr(i))) return {s.substr(0, i), s.substr(i)};
+  size_t half = (s.size() + 1) / 2;
+  if (fits(s.substr(0, half)) && fits(s.substr(half))) return {s.substr(0, half), s.substr(half)};
+  size_t a = s.size();
+  while (a > 1 && !fits(s.substr(0, a))) a--;
+  ustr rest = s.substr(a);
+  while (rest.size() > 1 && !fits(rest)) rest.pop_back();
+  return {s.substr(0, a), rest};
+}
+
+// The code is dark modules on a lit field (what phone cameras expect), the
+// field at the secondary grey so the diffuser's glow fills the dark modules
+// in as little as it can.
+void render_setup(Frame &f, const std::string &name, const std::string &pass, int cols) {
+  qr::Code code;
+  if (!qr::encode(qr::wifi_text(name, pass), code)) {
+    render_status(f, "setup", name, cols);
+    return;
+  }
+  f.w = cols == WIDE ? WIDE : 64;
+  const bool wide = f.w == WIDE;
+  // The lit field is one module wider than the code all round.
+  int side = code.n + 2, y0 = (int)fdiv(Frame::H - side, 2), x0 = wide ? (int)fdiv(64 - side, 2) : 0;
+  f.fill(x0, y0, side, side, C::grey);
+  for (int y = 0; y < code.n; y++)
+    for (int x = 0; x < code.n; x++)
+      if (code.dark(x, y)) f.set(x0 + 1 + x, y0 + 1 + y, RGB{0, 0, 0});
+  ustr n = U(name), pw = U(pass);
+  if (wide) {
+    // The second panel: the title, then the name and password in 5x7 when
+    // they fit it (small otherwise).
+    const int cx = 96, room = 62;
+    ctext(f, FONT_SMALL, U"SETUP WIFI", cx, 6, C::amber);
+    Font nf = measure(FONT_5X7, n) <= room ? FONT_5X7 : FONT_SMALL, pf = measure(FONT_5X7, pw) <= room ? FONT_5X7 : FONT_SMALL;
+    f.push_clip(65, 0, 127, 31);
+    ctext(f, nf, n, cx, 17, C::label);
+    ctext(f, pf, pw, cx, 27, C::grey);
+    f.pop_clip();
+    return;
+  }
+  // Beside the code: the name on up to two lines, then the password on up to two.
+  int x = side + 2, room = 64 - x;
+  std::vector<ustr> nl = two_lines(n, FONT_SMALL, room), pl = pass.empty() ? std::vector<ustr>() : two_lines(pw, FONT_SMALL, room);
+  for (size_t i = 0; i < nl.size(); i++) f.text(FONT_SMALL, nl[i], x, 6 + 6 * (int)i, C::label);
+  for (size_t i = 0; i < pl.size(); i++) f.text(FONT_SMALL, pl[i], x, 21 + 6 * (int)i, C::grey);
 }
 
 }  // namespace draw

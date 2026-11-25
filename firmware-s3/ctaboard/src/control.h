@@ -252,4 +252,61 @@ class PeekChooser {
   }
 };
 
+// The knob menu (spec §10, "Knob menu"): holding the knob down for
+// MENU_HOLD_MS without turning it opens the menu over the whole panel (and
+// closes it again). A turn moves along its five items (draw::MENU_*); a
+// press, on its release, acts on the chosen one. A restart or WiFi setup
+// asks first (confirm): a second press within MENU_CONFIRM_MS does it, a
+// turn or the wait cancels. Untouched for MENU_REST_MS, it closes. `busy`:
+// a setting (off, the unit) is on its way to the server; the knob waits.
+const double MENU_HOLD_MS = 2000;
+const double MENU_CONFIRM_MS = 4000;
+const double MENU_REST_MS = 15000;
+
+class Menu {
+ public:
+  bool open = false;
+  bool busy = false;  // a setting is being sent (until it lands)
+  bool sent = false;  // ... and its request has gone out
+  bool confirm = false;
+  int sel = 0, n = 5;
+  double last = 0, confirm_at = 0;
+
+  void start(double ms) {
+    open = true;
+    busy = sent = confirm = false;
+    sel = 0;
+    last = ms;
+  }
+  void close() { open = busy = sent = confirm = false; }
+  void turn(int clicks, double ms) {
+    if (!open || busy || !clicks) return;
+    last = ms;
+    if (confirm) confirm = false;  // a turn only cancels the question
+    else sel = (((sel + clicks) % n) + n) % n;
+  }
+  // The first press of an item that asks first. False: this is the second.
+  bool ask(double ms) {
+    last = ms;
+    if (confirm) return false;
+    confirm = true;
+    confirm_at = ms;
+    return true;
+  }
+  // Time passing: the question lapses, and the menu closes at rest.
+  void tick(double ms, bool held) {
+    if (!open || busy) return;
+    if (confirm && ms - confirm_at >= MENU_CONFIRM_MS) confirm = false;
+    if (!held && ms - last >= MENU_REST_MS) close();
+  }
+  std::optional<screen::FrameKey> frame_key(bool celsius) const {
+    screen::FrameKey k;
+    k.v[0] = -2;  // not a Screen
+    k.v[1] = sel;
+    k.v[2] = confirm;
+    k.v[3] = celsius;
+    return k;
+  }
+};
+
 }  // namespace control

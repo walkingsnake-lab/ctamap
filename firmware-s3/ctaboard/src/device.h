@@ -109,6 +109,7 @@ class WifiNet : public app::Net {
   bool sky(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
   bool logo(const std::string &id, std::vector<uint8_t> &out, std::string &err) override;
   bool select(const std::string &category, const std::string &variant, json::Value &out, std::string &err) override;
+  bool set(const std::string &key, const std::string &value, json::Value &out, std::string &err) override;
   bool rssi(int &out) override;
   bool firmware(const std::string &v, long long size, const app::ChunkFn &chunk, std::string &err) override;
   std::string mac() const;
@@ -208,6 +209,7 @@ class Knob : public app::Knob {
   bool begin();
   int clicks() override;
   bool pressed() override;  // the knob's push button, held now (read at most every KNOB_POLL_MS)
+  bool present() override { return on_; }
   void light(uint8_t r, uint8_t g, uint8_t b) override;  // the 5880's NeoPixel (seesaw pin 6)
 
  private:

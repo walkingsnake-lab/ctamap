@@ -165,6 +165,12 @@ encoder on the STEMMA QT port` at startup, and `[board] knob: <category>
 <variant>` after each choice. If clockwise goes the wrong way, set `KNOB_REVERSE 1` in
 `secrets.h`. Without a knob the board runs as before.
 
+**The menu** (design spec §10, "Knob menu"): hold the knob down for 2 seconds
+without turning it. Turn to choose SCREEN OFF, UNITS (°F / °C), WIFI SETUP,
+RESTART or EXIT; press to do it (WiFi setup and restart ask for a second
+press). Holding again, EXIT, or 15 seconds untouched closes it. The serial
+log says `[board] knob: menu`, then `[board] knob menu: <what>`.
+
 ### The light sensor (optional)
 
 An Adafruit VEML7700 (4162 flat, or 5378 right-angle) chained off the knob's
@@ -225,9 +231,10 @@ S3.
 3. **Label** the board with two QR codes: the setup WiFi text
    (`WIFI:T:WPA;S:…;P:…;;`, which phones join from the camera) and the owner
    link.
-4. **They plug it in:** with no WiFi saved, the panel shows `SETUP WIFI` and
-   the network name. They scan the first QR, the setup page opens (or go to
-   any web address), pick their network and enter its password. The board
+4. **They plug it in:** with no WiFi saved, the panel shows the setup
+   network as a QR code, with its name and password beside it. They scan the
+   label's first QR or the one on the panel (or join by hand), the setup page
+   opens (or go to any web address), pick their network and enter its password. The board
    restarts and joins it. A wrong password brings the setup network back
    within about a minute, with a message.
 5. **They scan the owner link** to control their board: that board only, no
@@ -237,7 +244,11 @@ The setup network also opens on its own after 10 minutes without joining any
 saved network (a new router or password), and gives up after 15 minutes
 with no phone on it to retry the saved networks (a router back after a power
 cut). Holding the knob (or UP) for 2 seconds while the board starts opens it
-on demand. Up to 8 networks are kept, the newest tried first.
+on demand; so does WIFI SETUP on the knob's menu, and a press of the knob
+while the panel says `NO WIFI` (it says `PRESS FOR SETUP`). Up to 8 networks
+are kept, the newest tried first. Whether a phone's camera reads the code on
+the panel through the diffuser hasn't been checked on hardware; the name and
+password beside it are the fallback.
 
 **A new owner** (gift, resale): Board tab → Give it away → **New owner…** on
 your control page, or the same button on the board's own owner link. It
@@ -339,7 +350,8 @@ then on.
 | `ctaboard/src/json.*` | Small JSON tree with Python dict semantics, so the renderer reads payloads exactly as `draw.py` did. |
 | `ctaboard/src/screen.h` | The screens as an enum (names only at the JSON boundary) and the redraw key. |
 | `ctaboard/src/player.*` | What to draw at each moment and when the next animation starts (`player.py`). |
-| `ctaboard/src/sched.h`, `control.h` | Network jobs, run when due one at a time on the worker; buttons vs. the phone (`control.py`); the knob's choosers (the old wheel, and the peek chooser: twist, press, hold and turn, rest; S3 only). |
+| `ctaboard/src/sched.h`, `control.h` | Network jobs, run when due one at a time on the worker; buttons vs. the phone (`control.py`); the knob's choosers (the old wheel, and the peek chooser: twist, press, hold and turn, rest; S3 only) and its menu (hold 2 s: screen off, units, WiFi setup, restart). |
+| `ctaboard/src/qr.h` | The QR encoder for the WiFi setup screen (versions 1-3, checked against the `qrcode` package in `tests/qr.test.js`). |
 | `ctaboard/src/app.*` | Main loop (`app.py`): connecting, scheduled jobs, buttons, redraws, OTA installs. The `sky` job fetches the skyline's cloud strip (`/board/sky/<id>`) while the clock screen shows; health reports `hk=skyline` so the server sends the clock screen to this build (and `bus`, so it gets bus rows: `ln` `BUS`, kept with `--` when nothing is predicted). |
 | `ctaboard/src/config.*` | Settings in flash: saving a setup build's `secrets.h`, reading them back in a generic build; the WiFi setup page and its rules. |
 | `ctaboard/src/ota.h` | OTA trial rules: keep, roll back, don't reinstall a rolled-back build. |

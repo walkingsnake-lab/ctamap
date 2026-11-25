@@ -77,6 +77,15 @@ class Net {
     err = "Unsupported";
     return false;
   }
+  // The knob menu changed a setting (/board/set): key `off`, or `unit` with
+  // value F or C. out is the update with the change in it.
+  virtual bool set(const std::string &key, const std::string &value, Value &out, std::string &err) {
+    (void)key;
+    (void)value;
+    (void)out;
+    err = "Unsupported";
+    return false;
+  }
   virtual bool rssi(int &out) { (void)out; return false; }
   // Streams build `v` (exactly `size` bytes) to chunk, in order.
   virtual bool firmware(const std::string &v, long long size, const ChunkFn &chunk, std::string &err) {
@@ -121,6 +130,7 @@ class Knob {
   virtual ~Knob() {}
   virtual int clicks() = 0;
   virtual bool pressed() { return false; }  // the knob's push button, held now
+  virtual bool present() { return true; }   // an encoder answered at startup
   // The knob's own light (the 5880's NeoPixel), 0-255 each; (0, 0, 0) is off. Called only when the color changes.
   virtual void light(uint8_t r, uint8_t g, uint8_t b) { (void)r; (void)g; (void)b; }
 };
@@ -209,7 +219,7 @@ const long long SKY_EVERY = 3000;       // the skyline's cloud strip, when the p
 // What this firmware draws beyond the original screens (health `hk`, contract):
 // the server sends the clock screen only to boards that report `skyline`,
 // and each other clock face (and the announce screen) only to those that also report it.
-const char *const CAPS = "skyline:seventies:analog:daynight:gradient:digits:daydate:words:announce:peek:bus";
+const char *const CAPS = "skyline:seventies:analog:daynight:gradient:digits:daydate:words:announce:peek:bus:menu";
 const int FAILS_BEFORE_RECONNECT = 3;
 const long long SETUP_AFTER_MS = 600000;  // no network joined this long: open the setup network
 const long long HEALTH_EVERY = 60000;  // ms between health snapshots sent with the version check
@@ -252,6 +262,7 @@ class Board {
   control::ScreenOverride override_;
   control::Chooser chooser;
   control::PeekChooser peek;
+  control::Menu menu;
   sched::Scheduler sched;
   sched::Job version_job, update_job, radar_job, logo_job, sky_job;
   Stats stats;
@@ -307,7 +318,8 @@ class Board {
   // A request on its way: work() runs on the worker (network calls only,
   // into this struct); land() then finishes it on the loop.
   struct Flight {
-    sched::Job *job = nullptr;  // null: the knob's select
+    sched::Job *job = nullptr;  // null: the knob's select, or its menu's set
+    bool menu = false;          // the knob menu's set (id: the key, variant: the value)
     long long started = 0;
     std::function<bool()> work;
     std::function<sched::Result(long long ended)> finish;  // after a good work()
@@ -327,7 +339,7 @@ class Board {
   // Screen-change transition: the last frame shown and what it showed (a
   // Screen, or one of these); a change of that slides (knob, buttons) or
   // fades (anything else) the new screen in over a copy of it.
-  static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3, SHOWN_PEEK = -4;
+  static const int SHOWN_NONE = -1, SHOWN_STATUS = -2, SHOWN_CHOOSER = -3, SHOWN_PEEK = -4, SHOWN_MENU = -5;
   static constexpr double SCREEN_SLIDE_QUICK_MS = 250;  // a slide that interrupts a running one
   enum Trans { NO_TRANS, SLIDE, FADE };
   // last_w_ / slide_w_: how wide those pixels are (draw::slide_frames and
@@ -345,6 +357,17 @@ class Board {
   int button_dir_ = 0;            // a button press waiting for its frame: -1 UP, +1 DOWN
   control::Debounce knob_press_;  // the knob's push button
   bool knob_held_ = false;
+  // The hold that opens and closes the knob menu: when the press began,
+  // whether the knob has turned since (then it's hold and turn), and whether
+  // the hold has acted (the release that follows does nothing).
+  long long knob_down_at_ = 0;
+  bool hold_turned_ = false, hold_fired_ = false;
+  bool menu_ok() const { return player.has_p && player.p["tu"].is_str(); }  // a server with /board/set
+  void menu_press(long long ms);
+  void queue_set(const std::string &key, const std::string &value);
+  void send_set();
+  std::string set_key_, set_value_;
+  void after_set(Flight &f, long long ended);
   // The knob's light: the hovered category's color while a chooser is open (KNOB_LIGHT of it), off otherwise.
   draw::RGB knob_rgb_{0, 0, 0};
   bool knob_lit_ = false;
@@ -374,7 +397,8 @@ class Board {
 
   void sync(double server_now, long long started, long long ended);
   void status(const std::string &kind, const std::string &detail = "");
-  void wait(long long ms_total);
+  // until_press: also ends, true, when the knob is pressed (NO WIFI's "press for setup").
+  bool wait(long long ms_total, bool until_press = false);
   void apply(Value &p, long long started, long long ms);  // moves p into the player
   bool draw_frame(long long ms, long long now);
   // Each job either skips (nothing to fetch) or launches a Flight.
