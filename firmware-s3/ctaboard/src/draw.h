@@ -131,6 +131,8 @@ RGB scale_color(RGB c, double k);
 RGB fade(RGB c, double alpha);
 // A knob category's color (contract "Peek": the chooser's icons; the knob's own light follows it).
 RGB peek_color(const json::Value &p, const std::string &cat);
+// The knob menu's items, in order (draw.js MENU.items).
+enum { MENU_OFF = 0, MENU_UNIT = 1, MENU_WIFI = 2, MENU_RESTART = 3, MENU_EXIT = 4, MENU_N = 5 };
 
 // ---- timing ----
 
@@ -289,6 +291,13 @@ struct RenderOpts {
   // Knob chooser (screen "chooser"): wheel position and commit (draw.js opts.chooser).
   std::optional<double> chooser_pos;
   bool chooser_commit = false;
+  // Knob menu (screen "menu"; draw.js opts.menu): the chosen item (MENU_*)
+  // and whether it's asking for a second press.
+  struct Menu {
+    int sel = 0;
+    bool confirm = false;
+  };
+  std::optional<Menu> menu;
   // Peek chooser (screen "peek"; draw.js opts.peek): the choice (ring index
   // k, variant vi), the bar's drop in rows (the screen behind dims with it),
   // the bar's glide from another choice (draw.js peek.glide: its k and vi,
@@ -469,6 +478,12 @@ std::optional<BaseballTexts> baseball_texts(const Value &p, double now);
 // and "nosetup").
 // cols: the chain's width; at 128 the screen is drawn across both panels,
 // with room for longer details (narrower frames show on each panel).
+// kind "nowifi" with detail "press": a third line, a press of the knob opens setup.
 void render_status(Frame &f, const std::string &kind, const std::string &detail, int cols = 64);
+// The WiFi setup screen: the board's own network as a QR code a phone's
+// camera joins (qr.h), with its name and password (empty: an open network)
+// beside it for typing. A name and password too long for a code that fits
+// the panel fall back to render_status's "setup".
+void render_setup(Frame &f, const std::string &name, const std::string &pass, int cols = 64);
 
 }  // namespace draw

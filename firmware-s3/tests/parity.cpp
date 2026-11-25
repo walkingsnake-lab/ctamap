@@ -123,6 +123,12 @@ int main(int argc, char **argv) {
           ro.chooser_pos = o["chooser"]["pos"].num(0);
           ro.chooser_commit = o["chooser"]["commit"].truthy();
         }
+        if (!o["menu"].is_null()) {
+          draw::RenderOpts::Menu m;
+          m.sel = (int)o["menu"]["sel"].num(0);
+          m.confirm = o["menu"]["confirm"].truthy();
+          ro.menu = m;
+        }
         if (!o["iconT"].is_null()) ro.icon_t = o["iconT"].num();
         if (!o["peek"].is_null()) {
           const Value &pk = o["peek"];
