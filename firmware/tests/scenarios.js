@@ -532,6 +532,16 @@ async function build() {
       [pk(0, 1), pk(2, 0), pk(2, 0, c), pk(1, 0, { glide: { k: 2, vi: 0, t: 80, axis: 'x' } })], frames, undefined, { s3only: true });
     add('peek dimmed', { ...p, bright: 40 }, [pk(0, 0), pk(2, 3), pk(2, 3, c)], frames, undefined, { s3only: true, clouds });
     add('peek no knob variants', { ...p, knob: { ring, at: 0 } }, [pk(1, 0), pk(2, 0), pk(2, 0, c)], frames, undefined, { s3only: true });
+    // The knob's bus variant (design spec §5, "Buses"): trains on the panel
+    // with the buses in pv.tr, and the other way round.
+    {
+      const busRow = (lbl, t) => ({ ln: 'BUS', lbl, t, s: t.map(() => 0), a: 0, k: 1 });
+      const buses = { tv: 'bus', stn: 'bus', header: 'BUSES', view: 'dest', halves: null, rows: [busRow('22 SB', [p.now + 340, p.now + 820]), busRow('147 SB', [p.now + 40]), busRow('96 WB', [])], wx: p.wx || null };
+      const trains = { tv: null, stn: p.stn || null, header: p.header || null, view: p.view || 'dest', halves: null, rows: p.rows, wx: p.wx || null };
+      const knob = { ...p.knob, vars: [['transit', 'ticker', 'bus'], ...vars.slice(1)] };
+      add('peek bus variant from trains', { ...p, knob, pv: { ...p.pv, tr: buses } }, [pk(0, 2, c), pk(0, 2), pk(0, 0, c), pk(0, 1, c)], frames, undefined, { s3only: true, clouds });
+      add('peek train rows from buses', { ...p, ...buses, knob: { ...knob, sel: [2, 0, 0, 0, 0] }, pv: { ...p.pv, tr: trains } }, [pk(0, 0, c), pk(0, 0), pk(0, 2, c), pk(0, 1, c)], frames, undefined, { s3only: true, clouds });
+    }
   }
   // Clock screen, skyline face (S3 only): every weather kind by day and night,
   // dusk, warnings, boats, lightning, rain and snow in motion, clouds drifting,
@@ -804,6 +814,39 @@ async function build() {
       const travel = 40 + 2 + 10 * (draw.messageLayout(long, 'roll', 128).lines.length - 1);
       add('wide announce credits roll', annW(long, 'roll'), at(0, 1500, 3000, 6000, travel * 150 - 1), undefined, undefined, s3);
     }
+  }
+  // Buses (design spec §5, "Buses"): the grey block, rows kept with "--"
+  // when nothing is predicted, and beside trains on two panels. S3 only.
+  {
+    const S3 = { s3only: true };
+    const bus = (lbl, t, extra = {}) => ({ ln: 'BUS', lbl, t, s: t.map(() => 0), a: 0, k: 1, ...extra });
+    const b = { ...base, now: NOW, header: 'BUSES', tv: 'bus', stn: 'bus', view: 'dest', rows: [bus('22 SB', [min(6), min(14)]), bus('147 SB', [NOW + 20, min(13)]), bus('96 WB', [])] };
+    add('bus rows, one with nothing coming', b, [{ screen: 'transit' }, { screen: 'transit', now: NOW + 75 }], undefined, undefined, S3);
+    add('bus rows weather strip, line colors, no header', { ...b, header: null, wx: WX, lnc: true }, [{ screen: 'transit' }], undefined, undefined, S3);
+    add('bus rows all quiet, dimmed', { ...b, bright: 40, rows: b.rows.map((r) => ({ ...r, t: [], s: [] })) }, [{ screen: 'transit' }], undefined, undefined, S3);
+    add('bus rows renamed, dividers', { ...b, headerDivider: true, wx: WX, rows: [bus('TO WORK', [min(6), min(14)]), bus('DOWNTOWN', [NOW + 20, min(13)])] }, [{ screen: 'transit' }], undefined, undefined, S3);
+    // The last bus leaves ("--" fades in after it), then one is predicted again.
+    const one = (t) => ({ header: 'BUSES', rows: [bus('22 SB', [min(6)]), bus('96 WB', t)] });
+    seq('anim bus: last one leaves, none, one predicted', [
+      { p: one([NOW + 20]), now: NOW, t: 0 },
+      ...ts(1000, 1500, 9).map((t) => ({ p: one([]), now: NOW + 60, t })),
+      ...ts(3000, 1500, 9).map((t) => ({ p: one([min(11)]), now: NOW + 90, t })),
+    ], S3);
+    // A kept row joins and leaves with the list (buses added and removed on the phone).
+    seq('anim bus: a row added, then all removed', [
+      { p: { header: 'BUSES', rows: [bus('22 SB', [min(6)])] }, now: NOW, t: 0 },
+      ...ts(1000, 1300, 6).map((t) => ({ p: one([]), now: NOW, t })),
+      ...ts(3000, 800, 5).map((t) => ({ p: { header: 'BUSES', rows: [] }, now: NOW, t })),
+    ], S3);
+    // Two panels: trains | buses. Up to three destinations, the split with
+    // its labels; more, two columns under the header.
+    const tr = (ln, lbl, t, h) => ({ ln, lbl, t, s: t.map(() => 0), a: 0, h });
+    const w = { ...base, now: NOW, cols: 128, header: 'MORSE', hclock: true };
+    const split = { ...w, view: 'split', halves: ['TRAINS', 'BUSES'], rows: [tr('RD', 'HOWARD', [NOW + 20, min(7), min(15)], 0), tr('RD', '95TH', [min(3), min(12)], 0), bus('22 SB', [min(6), min(14)], { h: 1 }), bus('147 SB', [], { h: 1 }), bus('DOWNTOWN', [min(9)], { h: 1 })] };
+    add('wide trains | buses split', split, [{ screen: 'transit' }, { screen: 'transit', now: NOW + 75 }], undefined, undefined, S3);
+    add('wide trains | buses split, no trains', { ...split, headerDivider: true, rows: split.rows.filter((r) => r.h) }, [{ screen: 'transit' }], undefined, undefined, S3);
+    const cols2 = { ...w, header: 'BELMONT', view: 'cols2', wx: null, rows: [tr('RD', 'HOWARD', [min(4), min(11)], 0), tr('RD', '95TH', [min(2), min(9)], 0), tr('BR', 'KIMBALL', [NOW + 20, min(8)], 0), tr('PR', 'LOOP', [min(3)], 0), ...split.rows.filter((r) => r.h)] };
+    add('wide trains | buses two columns', cols2, [{ screen: 'transit' }, { screen: 'transit', now: NOW + 75 }], undefined, undefined, S3);
   }
   // Chronological departure: slide, digits roll, next train slides in.
   {

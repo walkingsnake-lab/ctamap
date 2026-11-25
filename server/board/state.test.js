@@ -525,3 +525,29 @@ test('the control page\'s color swatches match DIGIT_COLORS (which includes ever
   assert.match(html, /id="analogAccent"[^>]*data-colors="amber coral pink violet blue cyan mint lime"/);
   assert.match(html, /id="digitColor"[^>]*data-colors="white amber coral pink violet blue cyan mint lime"/);
 });
+
+test('buses: the setting, the bus screen, and the knob\'s third transit variant', () => {
+  const { TRANSIT_SCREENS, knobOf } = require('./state');
+  const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-bus-')), log: { warn() {}, error() {} } });
+  assert.deepEqual(store.get('home').buses, []);
+  assert.deepEqual(TRANSIT_SCREENS, ['transit', 'ticker', 'bus']);
+  const bus = { rt: '22', dir: 'Southbound', stpid: '1836', stpnm: 'Clark & Morse' };
+  let b = store.update('home', { buses: [{ ...bus, label: 'to work' }] });
+  assert.deepEqual(b.buses, [{ ...bus, label: 'TO WORK' }]);
+  assert.throws(() => store.update('home', { buses: [bus, bus] }), ValidationError);
+  assert.throws(() => store.update('home', { buses: [{ rt: '22' }] }), ValidationError);
+  // The bus screen is one of transit's, and the knob's TRANSIT opens it again.
+  b = store.update('home', { screen: 'bus' });
+  assert.deepEqual([b.screen, b.transitScreen], ['bus', 'bus']);
+  store.update('home', { screen: 'weather' });
+  assert.equal(store.select('home', 'transit').screen, 'bus');
+  assert.equal(store.select('home', 'transit', 'ticker').screen, 'ticker');
+  assert.equal(store.select('home', 'transit', 'bus').screen, 'bus');
+  // The ring: buses only where the server says the board shows them.
+  assert.deepEqual(knobOf(store.get('home'), { peek: true }).vars[0], ['transit', 'ticker']);
+  const k = knobOf(store.get('home'), { peek: true, bus: true });
+  assert.deepEqual([k.at, k.vars[0], k.sel[0]], [0, ['transit', 'ticker', 'bus'], 2]);
+  // The last bus removed: back to the train rows.
+  b = store.update('home', { buses: [] });
+  assert.deepEqual([b.screen, b.transitScreen], ['transit', 'transit']);
+});

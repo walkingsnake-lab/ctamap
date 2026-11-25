@@ -697,3 +697,35 @@ test('wide: more destinations than two columns hold -> the soonest ones, still t
   assert.deepEqual([back.view, back.viewState.view, back.rows.length], ['byline', 'byline', 10]);
   assert.equal(format(arr, { ...cfg, busyView: 'chrono' }, { now: t0 }).view, 'chrono');
 });
+
+test('wide with buses: trains | buses, the split up to three destinations, else two columns', () => {
+  const t0 = 1_800_000_000;
+  const a = (ln, dest, dir, m, rn) => ({ ln, dest, known: true, dir, t: t0 + m * 60, s: 0, rn });
+  const bus = (lbl, t) => ({ ln: 'BUS', lbl, t, s: t.map(() => 0), a: 0, k: 1, h: 1 });
+  const busRows = [bus('22 SB', [t0 + 300]), bus('96 WB', [])];
+  const morse = [a('RD', 'Howard', 1, 2, '1'), a('RD', '95th', 5, 3, '2')];
+  const cfg = { ...wide('40100'), showWeather: true };
+  let r = format(morse, cfg, { now: t0, busRows });
+  assert.deepEqual([r.view, r.halves, r.viewState.view], ['split', ['TRAINS', 'BUSES'], 'bussplit']);
+  assert.deepEqual(r.bars, { showHeader: true, showWeather: false, hidden: ['weather'] });
+  assert.deepEqual(r.rows.map((x) => [x.ln, x.lbl, x.h]), [['RD', 'HOWARD', 0], ['RD', '95TH', 0], ['BUS', '22 SB', 1], ['BUS', '96 WB', 1]]);
+  assert.deepEqual(r.ticker.map((x) => x.ln), ['RD', 'RD']);
+  // No trains: the buses alone (the board's left half says so).
+  assert.deepEqual(format([], cfg, { now: t0, busRows }).rows.map((x) => x.ln), ['BUS', 'BUS']);
+  // The rows layout: two columns under the header, the weather strip kept.
+  r = format(morse, { ...cfg, wideLayout: 'rows' }, { now: t0, busRows });
+  assert.deepEqual([r.view, r.viewState.view, r.bars.showHeader, r.bars.showWeather, 'halves' in r], ['cols2', 'buscols', true, true, false]);
+  // Belmont at rush, six destinations: the four soonest on the left.
+  const rush = [a('BR', 'Kimball', 1, 1, '401'), a('RD', '95th', 5, 2, '801'), a('PR', 'Loop', 5, 3, '501'), a('RD', 'Howard', 1, 4, '802'), a('BR', 'Loop', 5, 5, '402'), a('PR', 'Linden', 1, 7, '502')];
+  r = format(rush, cfg, { now: t0, busRows });
+  assert.deepEqual([r.view, r.bars.showHeader, r.bars.showWeather], ['cols2', true, false]);
+  assert.deepEqual(r.rows.map((x) => `${x.ln} ${x.lbl} ${x.h}`), ['RD HOWARD 0', 'RD 95TH 0', 'BR KIMBALL 0', 'PR LOOP 0', 'BUS 22 SB 1', 'BUS 96 WB 1']);
+  assert.equal(Object.keys(r.viewState.soon).length, 4);
+  // Back to three destinations: two columns for the hold, then the split.
+  const held = format(morse, cfg, { now: t0 + 10, busRows, prevView: r.viewState });
+  assert.deepEqual([held.view, held.viewState], ['cols2', { view: 'buscols', fitSince: t0 + 10 }]);
+  assert.equal(format(morse, cfg, { now: t0 + 10 + WIDE_VIEW_HOLD, busRows, prevView: held.viewState }).view, 'split');
+  // No buses: the usual layouts.
+  assert.equal(format(morse, cfg, { now: t0, busRows: [] }).viewState.view, 'split');
+  assert.deepEqual(format(morse, cfg, { now: t0, busRows: [] }).halves, ['NORTHBOUND', 'SOUTHBOUND']);
+});

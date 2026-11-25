@@ -279,6 +279,14 @@
   <div class="grp" role="radiogroup" aria-labelledby="tShowsH" id="tShows">
     <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="transit"><img class="thumb" alt="" data-static="rows"><span class="grow">Rows<span class="s">One row per destination</span></span><span class="ck" data-icon="check"></span></button></div>
     <div class="c t" style="padding:0 4px 0 16px"><button class="pick" role="radio" data-v="ticker"><img class="thumb" alt="" data-static="ticker"><span class="grow">Ticker<span class="s">Station-sign style, two at a time</span></span><span class="ck" data-icon="check"></span></button></div>
+    <div class="c t" style="padding:0 4px 0 16px" id="tShowBus" hidden><button class="pick" role="radio" data-v="bus"><img class="thumb" alt="" data-static="bus"><span class="grow">Buses<span class="s">Your buses, next two each</span></span><span class="ck" data-icon="check"></span></button></div>
+  </div>
+
+  <div id="busGrp" hidden>
+    <p class="sh">Buses</p>
+    <div class="grp">
+      <a class="c" href="#buses" style="min-height:48px"><span>Buses</span><span class="v" id="busV"></span><span data-icon="chev"></span></a>
+    </div>
   </div>
 
   <p class="sh">Station</p>
@@ -314,6 +322,24 @@
       <select id="tickerSlide"><option value="800">Quick</option><option value="1200">Normal</option><option value="1600">Slower</option><option value="2000">Slow</option></select></label>
     <div class="c"><label for="tickerFill" style="white-space:nowrap">Row background</label><input type="range" id="tickerFill" min="25" max="80" step="5"><span class="pct" id="tickerFillV"></span></div>
   </div>
+</section>
+
+<!-- ===== Buses ===== -->
+<section class="view" data-view="buses" hidden>
+  <div class="nav"><a class="nb" href="#transit" data-icon="back">Transit</a><strong>Buses</strong><span></span></div>
+  <div class="prev" style="margin-top:10px"><img data-prev="bus" alt="The buses as the board shows them"></div>
+  <div class="grp" style="margin-top:14px" id="busShowGrp"><div class="c"><button class="act" id="busShow">Show on board</button></div></div>
+  <div class="grp" style="margin-top:14px" id="busList"></div>
+  <div id="busAdd">
+    <p class="sh">Add a bus</p>
+    <div class="grp">
+      <label class="c sel"><span>Route</span><span class="v"></span><span data-icon="chev"></span><select id="busRt"></select></label>
+      <label class="c sel" id="busDirRow" hidden><span>Direction</span><span class="v"></span><span data-icon="chev"></span><select id="busDir"></select></label>
+      <label class="c sel" id="busStopRow" hidden><span>Stop</span><span class="v"></span><span data-icon="chev"></span><select id="busStop"></select></label>
+      <div class="c"><button class="act" id="busAddBtn" disabled>Add</button></div>
+    </div>
+  </div>
+  <p class="ft" id="busFt" role="status"></p>
 </section>
 
 <!-- ===== Station ===== -->
@@ -720,7 +746,7 @@
   // Yellow and Pink take dark text; Green, Orange darker shades.
   const BADGE = { RD: ['#c60c30', '#fff'], BL: ['#0078ae', '#fff'], BR: ['#62361b', '#fff'], GR: ['#007a2e', '#fff'], OR: ['#c43a12', '#fff'], PR: ['#522398', '#fff'], PK: ['#e27ea6', '#1c1c1e'], YL: ['#f9e300', '#1c1c1e'] };
   const LINE_NAME = { RD: 'Red', BL: 'Blue', BR: 'Brown', GR: 'Green', OR: 'Orange', PR: 'Purple', PK: 'Pink', YL: 'Yellow' };
-  const SCREEN_NAME = { transit: 'Transit', ticker: 'Ticker', weather: 'Weather', clock: 'Clock', announce: 'Announce', auto: 'Cycle', baseball: 'Sports' };
+  const SCREEN_NAME = { transit: 'Transit', ticker: 'Ticker', bus: 'Buses', weather: 'Weather', clock: 'Clock', announce: 'Announce', auto: 'Cycle', baseball: 'Sports' };
   const CYCLE_NAME = { transit: 'Transit', ticker: 'Ticker', weather: 'Weather', clock: 'Clock', announce: 'Announce', baseball: 'Sports' };
   const WX_NAME = { now: 'Conditions', '5day': '5-day', hourly: 'Hourly', radar: 'Radar' };
   const FACE_NAME = { skyline: 'Skyline', seventies: 'Seventies', analog: 'Analog', daynight: 'Day/night', gradient: 'Gradient', digits: 'Big digits', daydate: 'Day & date', words: 'Words' };
@@ -760,6 +786,7 @@
     if (v !== 'home') window.scrollTo(0, 0);
     if (v === 'announce') loadDraw().then(renderAnnounce).catch((e) => toast(`Couldn't load the preview: ${e.message}`, true));
     if (v === 'status') loadHealth();
+    if (v === 'buses' && board) renderBuses();
     if (v === 'give') renderGive();
     if (board) renderScreens();
     $('boardGear').classList.toggle('open', desktop.matches && ['board', 'fleet', 'status', 'updates', 'builds', 'owner', 'give', 'logos'].includes(v));
@@ -768,7 +795,7 @@
   window.addEventListener('hashchange', showView);
   // Desktop: the right column always has a page: the chosen screen's (set in init).
   const desktop = matchMedia('(min-width: 900px)');
-  const pageOf = (sc) => (sc === 'auto' ? 'cycle' : sc === 'ticker' ? 'transit' : sc === 'baseball' ? 'sports' : sc);
+  const pageOf = (sc) => (sc === 'auto' ? 'cycle' : sc === 'ticker' || sc === 'bus' ? 'transit' : sc === 'baseball' ? 'sports' : sc);
 
   // ---- toast ----
   let toastTimer = null, toastAct = null;
@@ -872,7 +899,7 @@
     const k = document.documentElement.classList.contains('wide') && TILES[`w:${name}`] ? `w:${name}` : name;
     return TILES[k] ? `data:image/png;base64,${TILES[k]}` : '';
   };
-  const tileOf = (sc) => (sc === 'transit' ? (board.transitScreen === 'ticker' ? 'ticker' : 'rows') : sc === 'ticker' ? 'ticker'
+  const tileOf = (sc) => (sc === 'transit' ? (board.transitScreen === 'ticker' ? 'ticker' : board.transitScreen === 'bus' ? 'bus' : 'rows') : sc === 'ticker' ? 'ticker' : sc === 'bus' ? 'bus'
     : sc === 'weather' ? `wx-${WX_NAME[board.wxView] ? board.wxView : 'now'}` : sc === 'clock' ? `face-${FACE_NAME[board.clockFace] ? board.clockFace : 'skyline'}` : null);
   function thumbImg(sc, cls = 'thumb', alt = '') {
     if (sc === 'announce') {
@@ -904,6 +931,7 @@
   function refreshPages() {
     if (!board) return;
     for (const img of qa('img[data-prev]')) if (!img.closest('.view').hidden) swapImg(img, imgUrl(`scale=5&screen=${img.dataset.prev === 'transit' ? board.transitScreen || 'transit' : img.dataset.prev}`));
+    renderBusShow();
   }
 
   // ---- render ----
@@ -948,7 +976,7 @@
   const sportsOn = () => { const me = boards.find((x) => x.id === boardId); return !me || me.sports !== false; };
   const boardName = (b) => b.label || b.id;
   const subOf = (sc) => {
-    if (sc === 'transit') return board.transitScreen === 'ticker' ? 'Ticker' : 'Rows';
+    if (sc === 'transit') return board.transitScreen === 'ticker' ? 'Ticker' : board.transitScreen === 'bus' ? 'Buses' : 'Rows';
     if (sc === 'weather') return WX_NAME[board.wxView] || 'Conditions';
     if (sc === 'clock') return FACE_NAME[board.clockFace] || 'Skyline';
     if (sc === 'announce') return board.msg ? `“${board.msg.text.replace(/\n/g, ' ')}” · ${MSG_NAMES[board.msg.style]}` : 'No message yet';
@@ -963,6 +991,7 @@
     document.body.classList.toggle('nosports', !sports);
     renderHome();
     renderTransit();
+    renderBuses();
     renderStation();
     renderLines();
     renderWeather();
@@ -1033,7 +1062,7 @@
     const rows = ['transit', 'weather', ...(board.screen === 'baseball' && sportsOn() ? ['baseball'] : []), 'clock', 'announce', 'auto'];
     // Until the board confirms a switch, the check stays where it was and the
     // new row spins.
-    const cat = (sc) => (sc === 'ticker' ? 'transit' : sc);
+    const cat = (sc) => (sc === 'ticker' || sc === 'bus' ? 'transit' : sc);
     const target = switching && !switching.failed ? cat(switching.to) : null;
     const chosen = cat(switching ? switching.from : board.screen);
     const items = rows.map((sc) => {
@@ -1043,7 +1072,7 @@
       let sub = can ? subOf(sc) : 'Needs a board with an S3';
       let subCls = 's';
       if (off && target === sc && !on) sub = 'Queued · shows when the board is back';
-      else if (switching && switching.failed && sc === (switching.to === 'ticker' ? 'transit' : switching.to)) { sub = 'Not switched'; subCls = 's err'; }
+      else if (switching && switching.failed && sc === cat(switching.to)) { sub = 'Not switched'; subCls = 's err'; }
       else if (sc === 'transit' && on && p && p.stale) { sub += ' · times out of date'; subCls = 's warn'; }
       const pick = el('button', { class: 'pick', role: 'radio', 'aria-checked': String(on), disabled: !can || null, onclick: () => {
         // Desktop: the row's page opens on the right too.
@@ -1055,7 +1084,7 @@
       else if (on) pick.insertAdjacentHTML('beforeend', ICON.check);
       const gear = el('a', { class: 'nb end gear', href: '#' + (sc === 'auto' ? 'cycle' : sc === 'baseball' ? 'sports' : sc), 'aria-label': `${SCREEN_NAME[sc]} settings`, html: ICON.gear22 });
       // Desktop: mark the row whose page is open on the right.
-      const open = desktop.matches && (view() === pageOf(sc) || (sc === 'transit' && ['station', 'lines'].includes(view())));
+      const open = desktop.matches && (view() === pageOf(sc) || (sc === 'transit' && ['station', 'lines', 'buses'].includes(view())));
       if (open) gear.setAttribute('aria-current', 'page');
       return el('div', { class: 'c t' + (open ? ' open' : '') }, pick, gear);
     });
@@ -1151,6 +1180,11 @@
   // ---- Transit ----
   function renderTransit() {
     checked('tShows', board.transitScreen || 'transit');
+    // Buses: with a Bus Tracker key. The Buses view: a one-panel board with some set.
+    const nb = (board.buses || []).length;
+    $('busGrp').hidden = !busOn();
+    $('busV').textContent = nb ? String(nb) : 'None';
+    $('tShowBus').hidden = !(busOn() && nb && board.cols !== 128);
     const st = stations.find((s) => s.mapid === board.station.mapid);
     $('stationV').replaceChildren(st ? st.name : board.station.mapid, ...(st ? st.lines.map(badge) : []));
     // Two panels show the full name while the name is the station's own.
@@ -1181,7 +1215,7 @@
   $('tShows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
     const v = b.dataset.v;
-    if (board.screen === 'transit' || board.screen === 'ticker') switchTo(v);
+    if (['transit', 'ticker', 'bus'].includes(board.screen)) switchTo(v);
     else save({ transitScreen: v });
   });
   for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink', 'digitShadow']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
@@ -1220,6 +1254,107 @@
     }));
     $('stMore').textContent = q ? (hits.length > 40 ? `${hits.length - 40} more; type more of the name.` : hits.length ? '' : 'No station matches.') : 'Type to search every L station.';
   }
+  // ---- Buses: up to three, each a route, a direction and a stop ----
+  const MAX_BUSES = 3, BUS_LABEL_PX = 36;
+  const busOn = () => { const me = boards.find((x) => x.id === boardId); return !!(me && me.bus); };
+  const DIR_SHORT = { northbound: 'NB', southbound: 'SB', eastbound: 'EB', westbound: 'WB', north: 'NB', south: 'SB', east: 'EB', west: 'WB' };
+  const busAuto = (b) => `${b.rt} ${DIR_SHORT[String(b.dir).toLowerCase()] || String(b.dir).toUpperCase().slice(0, 2)}`.toUpperCase();
+  // The label as far as it fits beside two times (measured with draw.js when it's loaded).
+  const busFit = (v) => {
+    let t = v.toUpperCase().replace(/\s+/g, ' ').replace(/^ /, '');
+    if (!D) return t.slice(0, 9);
+    const w = (x) => { try { return D.measure('small', x.trimEnd()); } catch (e) { return Infinity; } };
+    while (t && w(t) > BUS_LABEL_PX) t = t.slice(0, -1);
+    return t;
+  };
+  const saveBuses = (list) => save({ buses: list });
+  function renderBusShow() {
+    const b = $('busShow'); if (!b || !board) return;
+    const can = busOn() && (board.buses || []).length && board.cols !== 128;
+    $('busShowGrp').hidden = !can;
+    const on = board.screen === 'bus';
+    b.disabled = on;
+    b.textContent = on ? 'On the board ✓' : 'Show on board';
+  }
+  function renderBuses() {
+    const list = board.buses || [];
+    const me = boards.find((x) => x.id === boardId);
+    // Rebuilt only when the list changed, so typing in a label isn't interrupted.
+    const gone = (pay && pay.busGone) || [];
+    const key = JSON.stringify([list, gone]);
+    if ($('busList').dataset.k !== key) {
+      $('busList').dataset.k = key;
+      $('busList').hidden = !list.length;
+      $('busList').replaceChildren(...list.map((b, i) => {
+        const input = el('input', { class: 'field caps', type: 'text', autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', enterkeyhint: 'done', 'aria-label': `Label for the ${b.rt} ${b.dir}`, placeholder: busAuto(b), value: b.label || '' });
+        const commit = () => {
+          const v = busFit(input.value).trim();
+          if (v === (b.label || '') || (!b.label && v === busAuto(b))) { input.value = b.label || ''; return; }
+          saveBuses(list.map((x, j) => (j === i ? { ...x, label: v } : x)));
+        };
+        input.addEventListener('input', () => { const v = busFit(input.value); if (v !== input.value) input.value = v; });
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+        input.addEventListener('blur', commit);
+        return el('div', { class: 'c', style: 'min-height:56px' },
+          el('span', { class: 'grow', style: 'display:flex;flex-direction:column;min-width:0' }, input, el('span', { class: gone.includes(b.stpid) ? 's err' : 's', style: 'margin:0', text: gone.includes(b.stpid) ? 'CTA no longer lists this stop. Remove it and add it again.' : `${b.rt} · ${b.dir} · ${b.stpnm || 'stop ' + b.stpid}` })),
+          el('button', { class: 'rc minus', 'aria-label': `Remove the ${b.rt} ${b.dir}`, text: '−', onclick: () => saveBuses(list.filter((_, j) => j !== i)) }));
+      }));
+    }
+    $('busAdd').hidden = list.length >= MAX_BUSES;
+    $('busFt').textContent = (list.length >= MAX_BUSES ? `Up to ${MAX_BUSES} buses. ` : '')
+      + (list.length ? 'Tap a label to rename it. ' : '')
+      + (board.cols === 128 ? 'On two panels the buses sit beside the trains. ' : '')
+      + (me && me.bus === 'fw' ? 'This board shows buses after its next update.' : '');
+    renderBusShow();
+    if (view() === 'buses' && !D) loadDraw().catch(() => {});
+    if (view() === 'buses' && !$('busRt').options.length) loadBusRoutes();
+  }
+  $('busShow').addEventListener('click', () => switchTo('bus'));
+  // The picker: route, then direction, then stop.
+  const fillSel = (id, items, first) => {
+    $(id).replaceChildren(el('option', { value: '', text: first }), ...items.map(([v, t]) => el('option', { value: v, text: t })));
+    selVal(id, '');
+  };
+  let busRoutesAt = 0;
+  async function loadBusRoutes() {
+    if (!busOn() || busRoutesAt) return;
+    busRoutesAt = 1;
+    try {
+      const r = await api('api/bus/routes');
+      fillSel('busRt', r.routes.map((x) => [x.rt, `${x.rt} ${x.name}`]), 'Choose');
+    } catch (e) { busRoutesAt = 0; toast(`Couldn't load the routes: ${e.message}`, true); }
+  }
+  $('busRt').addEventListener('change', async () => {
+    selVal('busRt', $('busRt').value);
+    $('busDirRow').hidden = $('busStopRow').hidden = true; $('busAddBtn').disabled = true;
+    const rt = $('busRt').value; if (!rt) return;
+    try {
+      const r = await api('api/bus/directions?rt=' + enc(rt));
+      if ($('busRt').value !== rt) return;
+      fillSel('busDir', r.directions.map((d) => [d, d]), 'Choose');
+      $('busDirRow').hidden = false;
+    } catch (e) { toast(`Couldn't load the directions: ${e.message}`, true); }
+  });
+  $('busDir').addEventListener('change', async () => {
+    selVal('busDir', $('busDir').value);
+    $('busStopRow').hidden = true; $('busAddBtn').disabled = true;
+    const rt = $('busRt').value, dir = $('busDir').value; if (!dir) return;
+    try {
+      const r = await api(`api/bus/stops?rt=${enc(rt)}&dir=${enc(dir)}`);
+      if ($('busRt').value !== rt || $('busDir').value !== dir) return;
+      fillSel('busStop', r.stops.map((x) => [x.stpid, x.name]), 'Choose');
+      $('busStopRow').hidden = false;
+    } catch (e) { toast(`Couldn't load the stops: ${e.message}`, true); }
+  });
+  $('busStop').addEventListener('change', () => { selVal('busStop', $('busStop').value); $('busAddBtn').disabled = !$('busStop').value; });
+  $('busAddBtn').addEventListener('click', async () => {
+    const bus = { rt: $('busRt').value, dir: $('busDir').value, stpid: $('busStop').value, stpnm: optText($('busStop')) };
+    if (!bus.stpid) return;
+    if (await saveBuses([...(board.buses || []), bus])) {
+      selVal('busRt', ''); $('busDirRow').hidden = $('busStopRow').hidden = true; $('busAddBtn').disabled = true;
+    }
+  });
+
   $('stQ').addEventListener('input', renderStationList);
   // The name must fit 42 px in the board's 3x5 font (measured with draw.js).
   function renderNameFit() {

@@ -232,7 +232,8 @@ function latchDue(prev, next, now) {
 // alerts: Set of line codes with an active service alert.
 // prevView: this board's last view state (see chooseView); the new one is
 // returned as viewState for the caller to keep.
-function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map(), prevView = null } = {}) {
+// busRows: a wide board's bus rows (bus.js busHalfRows, the right half).
+function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map(), prevView = null, busRows = null } = {}) {
   // Lines & destinations: lines turned off here, and (otherLines false)
   // lines that don't serve the station (cfg.lines: the station's lines).
   const off = new Set(cfg.hideLines || []);
@@ -267,6 +268,8 @@ function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map()
   const shownKeys = new Set(ordered.map((g) => g.key));
   if (cfg.cols === 128) {
     const shownWide = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
+    // With buses (their rows, laid out for the right half): trains | buses.
+    if (busRows && busRows.length) return { ...formatWideBus(ordered, cfg, now, alerts, prevView, busRows), ticker: tickerOf(shownWide, alerts, true) };
     return { ...formatWide(ordered, shownWide, cfg, now, alerts, alertWords, prevView, WIDE_VIEW_HOLD, ending), ticker: tickerOf(shownWide, alerts, true) };
   }
   const bars = cfg.autoFit === false
@@ -355,7 +358,7 @@ const HALVES = [[0, 61], [66, 127]];
 const SPLIT_ROWS = 3;
 // The halves' labels per axis: north and west on the left, as on a map;
 // inbound (toward the Loop) and departing to on the left.
-const SPLIT_LABELS = { ns: ['NORTHBOUND', 'SOUTHBOUND'], ew: ['WESTBOUND', 'EASTBOUND'], io: ['INBOUND', 'OUTBOUND'], end: ['DEPARTING TO', 'ARRIVING FROM'] };
+const SPLIT_LABELS = { ns: ['NORTHBOUND', 'SOUTHBOUND'], ew: ['WESTBOUND', 'EASTBOUND'], io: ['INBOUND', 'OUTBOUND'], end: ['DEPARTING TO', 'ARRIVING FROM'], bus: ['TRAINS', 'BUSES'] };
 const STATION_DIRS = require('./station-dirs.json');
 const LINE_NAMES = { RD: 'Red', BL: 'Blue', BR: 'Brown', GR: 'Green', OR: 'Orange', PR: 'Purple', PK: 'Pink', YL: 'Yellow' };
 const AXIS = { N: 'ns', S: 'ns', E: 'ew', W: 'ew' };
@@ -469,6 +472,33 @@ function formatWide(ordered, shown, cfg, now, alerts, alertWords = new Map(), pr
     if (held) return out(held, fitSince);
   }
   return out(pick, null);
+}
+
+// A wide board with buses (design spec §5, "Buses"): trains in the left
+// half, the buses in the right. Up to SPLIT_ROWS destinations: the split,
+// labelled TRAINS | BUSES over the station line (an empty left half says NO
+// TRAINS). More, or with the rows layout: two columns under the header, the
+// trains the soonest destinations that fit (soonest()). Back to the split
+// only once it has fit for `hold` s.
+function formatWideBus(ordered, cfg, now, alerts, prevView, busRows, hold = WIDE_VIEW_HOLD) {
+  const cols = () => {
+    const bars = fitBars(Math.max(ordered.length, busRows.length), cfg.showHeader, cfg.showWeather);
+    const pick = soonest(ordered, maxRows(bars.showHeader, bars.showWeather), prevView && prevView.soon);
+    return { view: 'cols2', kind: 'buscols', soon: pick.soon, rows: [...pick.groups.map((g) => halfRow(g, 0, now, alerts.has(g.ln))), ...busRows], bars };
+  };
+  const split = () => ({
+    view: 'split', kind: 'bussplit', soon: null, halves: SPLIT_LABELS.bus,
+    rows: [...ordered.map((g) => halfRow(g, 0, now, alerts.has(g.ln))), ...busRows],
+    bars: { showHeader: cfg.showHeader, showWeather: false, hidden: cfg.showWeather ? ['weather'] : [] },
+  });
+  const fits = cfg.wideLayout !== 'rows' && ordered.length <= SPLIT_ROWS && busRows.length <= SPLIT_ROWS;
+  const out = ({ kind, soon, ...r }, fitSince) => ({ ...r, viewState: { view: kind, fitSince, ...(soon ? { soon } : {}) } });
+  if (!fits) return out(cols(), null);
+  if (prevView && prevView.view === 'buscols') {
+    const fitSince = prevView.fitSince != null ? prevView.fitSince : now;
+    if (now - fitSince < hold) return out(cols(), fitSince);
+  }
+  return out(split(), null);
 }
 
 // formatWide's layouts, sparsest first: the split, destination rows, one

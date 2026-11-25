@@ -1,0 +1,14 @@
+{
+ "bustime-response": {
+  "directions": [
+   {
+    "id": "Northbound",
+    "name": "Northbound"
+   },
+   {
+    "id": "Southbound",
+    "name": "Southbound"
+   }
+  ]
+ }
+}

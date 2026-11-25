@@ -1,0 +1,14 @@
+{
+ "bustime-response": {
+  "error": [
+   {
+    "stpid": "14880",
+    "msg": "No service scheduled"
+   },
+   {
+    "stpid": "99999",
+    "msg": "No data found for parameter"
+   }
+  ]
+ }
+}

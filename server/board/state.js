@@ -11,12 +11,15 @@ const path = require('path');
 const { measure } = require('./fonts');
 const { HEADER_NAME_PX } = require('./station-names');
 const { messageLayout, cleanMessage, MSG_STYLES, MSG_MAX } = require('./render');
+const { cleanBuses, BusError } = require('./bus');
 
 const FILE_NAME = 'board-state.json';
 const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
-const SCREENS = ['auto', 'transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
+// 'bus': the transit screen showing the board's buses (design spec §5,
+// "Buses"); the board draws it as transit.
+const SCREENS = ['auto', 'transit', 'ticker', 'bus', 'weather', 'baseball', 'clock', 'announce'];
 // Announce screen (design spec §15): saved presets per board.
 const MAX_PRESETS = 8;
 // Clock screen faces (design spec §14, §16-20): the skyline, the seventies
@@ -48,18 +51,21 @@ const RAIN_SPEEDS = ['slow', 'normal', 'fast'];
 const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
 // The knob's ring (design spec §10, "Knob"): categories, each opening one
 // screen. TRANSIT opens the transit-family screen last chosen (transitScreen:
-// rows or ticker); CYCLE opens the auto screen (the rotation; to be rebuilt
+// rows, ticker or buses); CYCLE opens the auto screen (the rotation; to be rebuilt
 // as Cycle). CLOCK (the clock screen) and ANNOUNCE (the owner's message)
 // join on boards that can draw them (knobOf's `clock`, `announce`). Sports
 // is chosen on the phone only.
 const KNOB_RING = ['transit', 'weather', 'cycle'];
-const CATEGORY_OF = { auto: 'cycle', transit: 'transit', ticker: 'transit', weather: 'weather', clock: 'clock', announce: 'announce' };
+const CATEGORY_OF = { auto: 'cycle', transit: 'transit', ticker: 'transit', bus: 'transit', weather: 'weather', clock: 'clock', announce: 'announce' };
 const EXTRA_RING = ['clock', 'announce'];
 const knobScreen = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'cycle' ? 'auto' : cat);
 // Each category's variants, as the knob steps through them with a press
 // (peek chooser): transit's screens, the weather views, the clock faces the
 // board draws (`faces`).
-const variantsOf = (cat, faces) => (cat === 'transit' ? ['transit', 'ticker'] : cat === 'weather' ? WX_VIEWS
+// The transit family: train rows, the ticker, and (`bus`: a 64 board with
+// buses set that draws them) the buses.
+const TRANSIT_SCREENS = ['transit', 'ticker', 'bus'];
+const variantsOf = (cat, faces, bus = false) => (cat === 'transit' ? (bus ? TRANSIT_SCREENS : ['transit', 'ticker']) : cat === 'weather' ? WX_VIEWS
   : cat === 'clock' ? faces : []);
 const variantOf = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'weather' ? board.wxView || 'now'
   : cat === 'clock' ? board.clockFace || 'skyline' : null);
@@ -67,11 +73,11 @@ const variantOf = (board, cat) => (cat === 'transit' ? board.transitScreen || 't
 // `vars` and `sel`: each entry's variants and the one it opens on (index;
 // 0 for a variant the board can't draw).
 // Only peek-capable boards (`peek`) get vars and sel.
-const knobOf = (board, { clock = false, announce = false, peek = false, faces = ['skyline'] } = {}) => {
+const knobOf = (board, { clock = false, announce = false, peek = false, faces = ['skyline'], bus = false } = {}) => {
   const ring = ['transit', 'weather', ...(clock ? ['clock'] : []), ...(announce ? ['announce'] : []), 'cycle'];
   const at = Math.max(0, ring.indexOf(CATEGORY_OF[board.screen]));
   if (!peek) return { ring, at };
-  const vars = ring.map((c) => variantsOf(c, faces));
+  const vars = ring.map((c) => variantsOf(c, faces, bus));
   const sel = ring.map((c, i) => Math.max(0, vars[i].indexOf(variantOf(board, c))));
   return { ring, at, vars, sel };
 };
@@ -157,6 +163,10 @@ function defaultBoard(stations) {
     // The transit-family screen the knob's TRANSIT opens: the last of
     // transit and ticker chosen. Kept by the store, not set directly.
     transitScreen: 'transit',
+    // Buses (bus.js): up to three, each a route, a direction and a stop
+    // ({rt, dir, stpid, stpnm, label?}). On a 64 board they're the 'bus'
+    // screen; on two panels they sit beside the trains.
+    buses: [],
     bright: 'auto',
     // Auto brightness's night level, percent (full from sunrise to sunset). On
     // a board with a light sensor, its dark-room level (a bright room is full).
@@ -313,6 +323,12 @@ function validatePatch(patch, stations, cols) {
         }
         out.rows = [...val];
         break;
+      case 'buses':
+        try { out.buses = cleanBuses(val); } catch (e) {
+          if (e instanceof BusError) throw new ValidationError(e.message);
+          throw e;
+        }
+        break;
       case 'showHeader':
       case 'showWeather':
       case 'headerDivider':
@@ -388,7 +404,7 @@ function validatePatch(patch, stations, cols) {
         out.hideLines = LINE_CODES.filter((v) => val.includes(v));
         break;
       case 'transitScreen':
-        if (!AUTO_SCREENS.includes(val)) throw new ValidationError(`transitScreen must be one of ${AUTO_SCREENS.join(', ')}`);
+        if (!TRANSIT_SCREENS.includes(val)) throw new ValidationError(`transitScreen must be one of ${TRANSIT_SCREENS.join(', ')}`);
         out.transitScreen = val;
         break;
       case 'bbTeams':
@@ -618,7 +634,12 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       // A new message replays its intro on the board: its id changes.
       if (fields.msg) fields.msg.id = (board.v || 0) + 1;
       Object.assign(board, fields);
-      if (fields.screen === 'transit' || fields.screen === 'ticker') board.transitScreen = fields.screen;
+      if (TRANSIT_SCREENS.includes(fields.screen)) board.transitScreen = fields.screen;
+      // The last bus removed: the buses view has nothing to show.
+      if (fields.buses && !fields.buses.length) {
+        if (board.screen === 'bus') board.screen = 'transit';
+        if (board.transitScreen === 'bus') board.transitScreen = 'transit';
+      }
       board.v = (board.v || 0) + 1;
       state.boards[id] = board;
       save();
@@ -631,7 +652,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     // (bumps v).
     select(id, cat, v) {
       if (!KNOB_RING.includes(cat) && !EXTRA_RING.includes(cat)) throw new ValidationError(`s must be one of ${[...KNOB_RING, ...EXTRA_RING].join(', ')}`);
-      const vars = variantsOf(cat, CLOCK_FACES);
+      const vars = variantsOf(cat, CLOCK_FACES, true);
       if (v != null && !vars.includes(v)) throw new ValidationError(vars.length ? `v must be one of ${vars.join(', ')}` : `${cat} has no variants`);
       if (!Object.hasOwn(state.boards, id)) return null;
       const fields = { screen: knobScreen(state.boards[id], cat) };
@@ -686,4 +707,4 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
   };
 }
 
-module.exports = { createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS, DIGIT_SHADOWS, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };
+module.exports = { TRANSIT_SCREENS, createStore, validatePatch, defaultBoard, ValidationError, resolveDir, DEFAULT_BOARD_ID, MAX_BOARDS, SCREENS, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS, DIGIT_SHADOWS, KNOB_RING, knobOf, MAX_PRESETS, BASEBALL_LAYOUTS, SPEEDS, AUTO_SCREENS, AUTO_EVERY, WX_VISITS, ALERT_JUMPS, BB_TEAMS, BB_PRIORITIES, LINE_NAMES, RADAR_CLOCKS, CYCLE_SCREENS, LINE_CODES };

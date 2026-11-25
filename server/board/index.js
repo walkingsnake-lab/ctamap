@@ -5,6 +5,8 @@
 const crypto = require('crypto');
 const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACES, ANALOG_ACCENTS, DIGIT_COLORS, DIGIT_SHADOWS } = require('./state');
 const { createTracker } = require('./tracker');
+const { createBusTracker } = require('./bus-tracker');
+const { busRows, busHalfRows, HEADER: BUS_HEADER } = require('./bus');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
 const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toWeek, toDayHours, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
@@ -46,7 +48,7 @@ const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky',
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
 // answer 404 there.
-const SCOPED_OK = new Set(['', 'api/destinations', 'api/rain', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png', 'tiles.json']);
+const SCOPED_OK = new Set(['', 'api/bus/routes', 'api/bus/directions', 'api/bus/stops', 'api/destinations', 'api/rain', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png', 'tiles.json']);
 // Settings a per-board link may not change: the update channel (a buyer
 // stays on stable, or turns updates off).
 const SCOPED_FW = ['stable', 'off'];
@@ -69,7 +71,7 @@ function send(res, status, body) {
 // (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 const SECTIONS = {
-  transit: ['header', 'hidden', 'view', 'halves', 'rows', 'wx'],
+  transit: ['header', 'hidden', 'view', 'halves', 'rows', 'wx', 'tv'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
@@ -141,6 +143,7 @@ function createBoard({
   controlPath = process.env.BOARD_CONTROL_PATH || '',
   capture = require('./capture'),
   tracker = null,
+  busTracker = null, // Bus Tracker poller and picker lookups (bus-tracker.js); off without CTA_BUS_KEY
   weather = null,
   nws = null,
   nwsForecast = null,
@@ -194,6 +197,7 @@ function createBoard({
     }
   }
   if (!tracker) tracker = createTracker({ log }).start();
+  if (!busTracker) busTracker = createBusTracker({ log }).start();
   if (!weather) weather = createWeather({ log, cacheFile: path.join(path.dirname(store.file), 'board-weather.json') }).start();
   if (!nws) nws = createNws({ log }).start();
   if (!nwsForecast) nwsForecast = createNwsForecast({ log, cacheFile: path.join(path.dirname(store.file), 'board-nws-forecast.json') }).start();
@@ -228,7 +232,9 @@ function createBoard({
   // (ballgames and the NWS alert jump are retired).
   const cycleOf = (b, caps, sports) => (Array.isArray(b.cycle) ? b.cycle : ['transit', 'weather'])
     .filter((sc) => canDraw(sc, caps) && (sc !== 'baseball' || sports));
-  const resolveScreen = (b, cyc) => (b.screen === 'auto' ? cyc[0] || 'transit' : b.screen);
+  // 'bus' (the board's buses) is the transit screen to the board: its
+  // rows are the buses (update(), busView).
+  const resolveScreen = (b, cyc) => (b.screen === 'auto' ? cyc[0] || 'transit' : b.screen === 'bus' ? 'transit' : b.screen);
   const rotOf = (b, screen, cyc) => (b.screen === 'auto' && cyc.length > 1 && cyc.includes(screen)
     ? { screens: cyc, every: b.autoEvery || 60 } : null);
   // Speed settings (contract "anim"): ms, baseball rotation in s.
@@ -413,7 +419,7 @@ function createBoard({
   }
   // A wide-only face (WIDE_FACES: the word clock) counts only on a wide board.
   const wideNow = (id, q) => (typeof q.w === 'string' ? q.w === '128' : (store.get(id) || {}).cols === 128);
-  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) && (!WIDE_FACES.includes(f) || wideNow(id, q)), peek: capOk(id, q, 'peek') });
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) && (!WIDE_FACES.includes(f) || wideNow(id, q)), peek: capOk(id, q, 'peek'), bus: capOk(id, q, 'bus') });
 
   // The announce screen's message as the board draws it (draw.js
   // messageLayout: the lines for its style), or null when none is set.
@@ -439,7 +445,7 @@ function createBoard({
   function boardList() {
     return store.ids().map((id) => {
       const b = store.get(id);
-      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, sports: sportsOn(id), ...(b.cols === 128 ? { cols: 128 } : {}), ...(keys.mine(id) ? { mine: true } : {}), ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
+      return { id, label: b.label || '', station: b.station.name, mapid: b.station.mapid, screen: b.screen, fw: b.fw || 'stable', ...(keys.wipeOf(id) ? { wiping: true } : {}), seen: seenAt.get(id) ?? null, sports: sportsOn(id), ...(b.cols === 128 ? { cols: 128 } : {}), ...(busTracker.enabled ? { bus: capOk(id, {}, 'bus') ? 'on' : 'fw' } : {}), ...(keys.mine(id) ? { mine: true } : {}), ...(keys.linkOf(id) ? { link: keys.linkOf(id) } : {}) };
     });
   }
   // A removed board's live state (health, test alerts, chrono views).
@@ -524,11 +530,16 @@ function createBoard({
     const st = stationById.get(board.station.mapid);
     // Weather and warnings are nice-to-haves: a failure just leaves them off.
     const soft = (what, p) => p.catch((e) => { log.error(`[board] ${what}:`, e.message); return null; });
-    const [data, base, nwsAlerts, fc] = await Promise.all([
+    // Buses (design spec §5, "Buses"): for a board that has some, on firmware
+    // that draws them (`hk=...:bus`), with a Bus Tracker key set. A 64 board
+    // shows them as the 'bus' screen; two panels, beside the trains.
+    const buses = busTracker.enabled && caps.bus && Array.isArray(board.buses) && board.buses.length ? board.buses : null;
+    const [data, base, nwsAlerts, fc, busData] = await Promise.all([
       tracker.get(board.station.mapid),
       st ? soft('weather', weather.get(st.lat, st.lon)) : null,
       st ? soft('nws', nws.get(st.lat, st.lon)) : null,
       st ? soft('nws-forecast', nwsForecast.get(st.lat, st.lon)) : null,
+      buses ? soft('bus', busTracker.get(buses.map((b) => b.stpid))) : null,
     ]);
     const now = nowSecs();
     // WeatherAPI conditions with NWS's forecast fields (days, hours, hi/lo,
@@ -620,27 +631,46 @@ function createBoard({
     // Two panels have room for the full name (stations.json `wide`), unless
     // the phone set a name of its own.
     const stName = board.cols === 128 && st && st.wide && board.station.name === st.short ? st.wide : board.station.name;
-    const { view, viewState, rows, ticker, bars, halves } = format(data ? data.arrivals : [], cfg, { now, alerts: alertLines, alertWords, prevView: views.get(viewKey) });
+    const busPreds = busData ? busData.preds : [];
+    const { view, viewState, rows, ticker, bars, halves } = format(data ? data.arrivals : [], cfg, {
+      now, alerts: alertLines, alertWords, prevView: views.get(viewKey),
+      busRows: buses && board.cols === 128 ? busHalfRows(buses, busPreds, now, 1) : null,
+    });
     views.set(viewKey, viewState);
+    // The transit screen's own fields, as trains and (a 64 board) as buses:
+    // the chosen one goes in the payload, the other in pv.tr for the peek
+    // chooser. `stn` differs so the board starts the other's rows fresh.
+    const trainView = { tv: null, stn: board.station.mapid, header: bars.showHeader ? stName : null, view, halves: halves || null, rows, wx: bars.showWeather ? wx : null };
+    const busScreen = buses && board.cols !== 128
+      ? { tv: 'bus', stn: 'bus', header: board.showHeader ? BUS_HEADER : null, view: 'dest', halves: null, rows: busRows(buses, busPreds, now), wx }
+      : null;
+    const busView = !!busScreen && board.screen === 'bus';
+    const tv = busView ? busScreen : trainView;
+    // The buses view goes stale with Bus Tracker, not Train Tracker.
+    const src = busView ? busData : data;
     return {
       v: board.v,
       now,
       tzo: tzOffset(now),
-      stn: board.station.mapid, // the board starts transit and ticker fresh when it changes
+      stn: tv.stn, // the board starts transit and ticker fresh when it changes
+      // Buses on the transit screen (contract "Buses"); absent for trains.
+      ...(busView ? { tv: 'bus' } : {}),
+      // Stops of the board's buses that Bus Tracker no longer knows (for the phone page).
+      ...(busData && busData.gone.length ? { busGone: busData.gone } : {}),
       // Two chained panels (contract "Width"): absent on a 64-wide board.
       ...(board.cols === 128 ? { cols: 128 } : {}),
-      age: data ? Math.max(0, Math.round(now - data.fetchedAt)) : null,
-      stale: stale ? 1 : 0,
+      age: src ? Math.max(0, Math.round(now - src.fetchedAt)) : null,
+      stale: (busView ? !src || now - src.fetchedAt > STALE_S : stale) ? 1 : 0,
       screen,
       rot: rotOf(board, screen, cyc),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)) }),
+      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)), bus: !!busScreen }),
       bright: resolveBright(board, w, now),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),
       // Transit header and weather row as fitted to the destinations; the
       // ticker always shows its header (hiding it frees no room it can use).
-      header: bars.showHeader ? stName : null,
+      header: tv.header,
       // Divider lines under the top bar and over the bottom one, every view.
       headerDivider: board.headerDivider === true,
       tickerHeader: stName,
@@ -651,13 +681,13 @@ function createBoard({
       lnc: board.lineNames === 'line',
       // Third transit time one step dimmer than the second.
       ts: board.timeSteps === true,
-      hidden: bars.hidden,
-      view,
+      hidden: busView ? [] : bars.hidden,
+      view: tv.view,
       // Wide board, split view: the halves' direction labels (contract "Width").
-      ...(halves ? { halves } : {}),
-      rows,
+      ...(tv.halves ? { halves: tv.halves } : {}),
+      rows: tv.rows,
       ticker,
-      wx: bars.showWeather ? wx : null,
+      wx: tv.wx,
       warn,
       anim: animOf(board),
       tickerFill: board.tickerFill || 55,
@@ -692,7 +722,7 @@ function createBoard({
       msg: msgOf(board),
       // Peek chooser (caps.peek): what the other variants draw from, so the
       // board can draw any of them while the knob turns (contract "Peek").
-      ...(caps.peek ? { pv: { ...peekOf(board, w, wd, st, skyNow, now, caps), radar: allFrames } } : {}),
+      ...(caps.peek ? { pv: { ...peekOf(board, w, wd, st, skyNow, now, caps), radar: allFrames, ...(busScreen ? { tr: busView ? trainView : busScreen } : {}) } } : {}),
       // Baseball: on the maker's boards only (sportsOn); absent on the others.
       ...(sports ? {
         mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
@@ -1175,8 +1205,12 @@ function createBoard({
         if (!board) return send(res, 404, { err: 'unknown_board' });
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
-        const body = await update(board, id, false, preview);
-        const asked = SCREENS.includes(parsed.query.screen) && (parsed.query.screen !== 'baseball' || body.mlb) ? parsed.query.screen : null;
+        // screen=bus: the buses as the board would draw them (whatever its
+        // firmware); screen=transit on a board showing buses: its trains.
+        const want = String(parsed.query.screen || '');
+        const as = want === 'bus' || (want === 'transit' && board.screen === 'bus') ? { ...board, screen: want } : board;
+        const body = await update(as, id, false, preview, want === 'bus' ? { ...capsOf(id), bus: true } : capsOf(id));
+        const asked = want === 'bus' ? 'transit' : SCREENS.includes(want) && (want !== 'baseball' || body.mlb) ? want : null;
         const screen = asked || autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
@@ -1216,6 +1250,42 @@ function createBoard({
           log.error('[board] weather capture failed:', e.message);
           return send(res, 502, { err: 'upstream', detail: e.message });
         }
+      }
+
+      // The bus picker (design spec §5, "Buses"): every route, a route's
+      // directions, its stops that way. Cached a day (bus-tracker.js).
+      if (sub === 'api/bus/routes' || sub === 'api/bus/directions' || sub === 'api/bus/stops') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        if (!busTracker.enabled) return send(res, 503, { err: 'no_bus_key' });
+        const rt = String(parsed.query.rt || ''), dir = String(parsed.query.dir || '');
+        if (sub !== 'api/bus/routes' && !/^[A-Za-z0-9]{1,5}$/.test(rt)) return send(res, 400, { err: 'invalid', detail: 'rt must be a route' });
+        if (sub === 'api/bus/stops' && !/^[A-Za-z ]{1,24}$/.test(dir)) return send(res, 400, { err: 'invalid', detail: 'dir must be a direction' });
+        try {
+          if (sub === 'api/bus/routes') return send(res, 200, { routes: await busTracker.routes() });
+          if (sub === 'api/bus/directions') return send(res, 200, { directions: await busTracker.directions(rt) });
+          return send(res, 200, { stops: await busTracker.stops(rt, dir) });
+        } catch (e) {
+          log.error('[board] bus lookup failed:', e.message);
+          return send(res, 502, { err: 'upstream', detail: e.message });
+        }
+      }
+
+      // Raw Bus Tracker response for recording fixtures (owner only):
+      // fn=getpredictions&stpid=..., getroutes, getdirections&rt=, getstops&rt=&dir=.
+      if (sub === 'api/raw/bus') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const { fn, b: _b, ...params } = parsed.query;
+        void _b;
+        let up;
+        try {
+          up = await capture.rawBus(String(fn || ''), params);
+        } catch (e) {
+          log.error('[board] bus capture failed:', e.message);
+          return send(res, 502, { err: 'upstream', detail: e.message });
+        }
+        res.writeHead(up.status === 200 ? 200 : 502, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(up.body);
+        return;
       }
 
       // Raw Train Tracker response for recording fixtures.

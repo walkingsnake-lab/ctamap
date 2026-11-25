@@ -1,0 +1,30 @@
+{
+ "bustime-response": {
+  "routes": [
+   {
+    "rt": "22",
+    "rtnm": "Clark",
+    "rtclr": "#336633",
+    "rtdd": "22"
+   },
+   {
+    "rt": "96",
+    "rtnm": "Lunt",
+    "rtclr": "#ff00ff",
+    "rtdd": "96"
+   },
+   {
+    "rt": "147",
+    "rtnm": "Outer DuSable Lake Shore Express",
+    "rtclr": "#ffcc00",
+    "rtdd": "147"
+   },
+   {
+    "rt": "X49",
+    "rtnm": "Western Express",
+    "rtclr": "#00ccff",
+    "rtdd": "X49"
+   }
+  ]
+ }
+}

@@ -1644,3 +1644,50 @@ test('baseball at 128: the line score for every layout; the batting half amber; 
   let a = 128, b = -1; for (let y = 0; y < 32; y++) for (let x = 0; x < 128; x++) if (ng.get(x, y).some((v) => v)) { a = Math.min(a, x); b = Math.max(b, x); }
   assert.ok(Math.abs(a - (127 - b)) <= 1, `centered: ${a}..${b}`);
 });
+
+// ---- buses (design spec §5, "Buses") ----
+test('bus rows: the grey block, kept with "--" when nothing is predicted', () => {
+  const now = 1_800_000_000;
+  const bus = (lbl, t) => ({ ln: 'BUS', lbl, t, s: t.map(() => 0), a: 0, k: 1 });
+  const p = { now, tzo: -21600, screen: 'transit', bright: 100, header: 'BUSES', view: 'dest', rows: [bus('22 SB', [now + 300, now + 800]), bus('96 WB', []), { ln: 'RD', lbl: 'HOWARD', t: [], s: [], a: 0 }], wx: null, warn: null };
+  const v = draw.buildTransitView(p, now);
+  // The kept row stays; a train row with no times still leaves.
+  assert.deepEqual(v.rows.map((r) => r.lbl), ['22 SB', '96 WB']);
+  assert.deepEqual(v.rows[1].cells.map((c) => [c.text, c.right, c.color, c.t]), [['--', 63, '#555555', 0]]);
+  assert.deepEqual(v.rows[0].cells.map((c) => c.text), ['5', '14']);
+  const f = draw.render(p, { now });
+  assert.deepEqual([...f.get(0, v.rows[0].top)], [0x8a, 0x8a, 0x8a]);
+  assert.deepEqual([...f.get(63, v.rows[1].top + 2)], [0x55, 0x55, 0x55]);
+  // Its last bus gone (the payload is fresh): the row is still there.
+  const later = draw.buildTransitView({ ...p, now: now + 400, rows: [bus('22 SB', [now + 300])] }, now + 400);
+  assert.deepEqual(later.rows.map((r) => r.cells.map((c) => c.text)), [['--']]);
+});
+
+test('bus rows: "--" fades in after the last time fades out, and out before a new one', () => {
+  const now = 1_800_000_000;
+  const p = (t, at) => ({ now: at, tzo: -21600, screen: 'transit', bright: 100, header: 'BUSES', view: 'dest', rows: [{ ln: 'BUS', lbl: '96 WB', t, s: t.map(() => 0), a: 0, k: 1 }], wx: null, warn: null });
+  const anim = draw.createTransitAnimator();
+  const cells = (q, at, ms) => anim.step(q, at, ms).rows[0].cells.map((c) => [c.text, Math.round(c.alpha * 100)]);
+  assert.deepEqual(cells(p([now + 20], now), now, 0), [['DUE', 100]]);
+  assert.deepEqual(cells(p([], now + 60), now + 60, 1000), [['--', 0], ['DUE', 100]]);
+  assert.deepEqual(cells(p([], now + 60), now + 60, 1000 + draw.FADE_MS), [['--', 0]]);
+  assert.deepEqual(cells(p([], now + 60), now + 60, 1000 + 2 * draw.FADE_MS), [['--', 100]]);
+  assert.deepEqual(cells(p([now + 600], now + 90), now + 90, 5000), [['9', 0], ['--', 100]]);
+  assert.deepEqual(cells(p([now + 600], now + 90), now + 90, 5000 + 2 * draw.FADE_MS), [['9', 100]]);
+});
+
+test('peek: the bus variant draws pv.tr over the trains, and the train rows over the buses', () => {
+  const now = 1_800_000_000;
+  const trains = { tv: null, stn: '40100', header: 'MORSE', view: 'dest', halves: null, rows: [{ ln: 'RD', lbl: 'HOWARD', t: [now + 120], s: [0], a: 0 }], wx: null };
+  const buses = { tv: 'bus', stn: 'bus', header: 'BUSES', view: 'dest', halves: null, rows: [{ ln: 'BUS', lbl: '22 SB', t: [], s: [], a: 0, k: 1 }], wx: null };
+  const knob = { ring: ['transit', 'weather', 'cycle'], at: 0, vars: [['transit', 'ticker', 'bus'], [], []], sel: [0, 0, 0] };
+  const onTrains = { now, tzo: -21600, bright: 100, ...trains, ticker: [], knob, pv: { tr: buses } };
+  assert.equal(draw.peekView(onTrains, 0, 0).p, onTrains);
+  assert.deepEqual([draw.peekView(onTrains, 0, 2).screen, draw.peekView(onTrains, 0, 2).p.header, draw.peekView(onTrains, 0, 2).p.rows[0].lbl, draw.peekView(onTrains, 0, 2).p.stn], ['transit', 'BUSES', '22 SB', 'bus']);
+  assert.deepEqual([draw.peekView(onTrains, 0, 1).screen, draw.peekView(onTrains, 0, 1).p], ['ticker', onTrains]);
+  const onBuses = { ...onTrains, ...buses, pv: { tr: trains } };
+  assert.equal(draw.peekView(onBuses, 0, 2).p, onBuses);
+  assert.deepEqual([draw.peekView(onBuses, 0, 0).p.header, draw.peekView(onBuses, 0, 0).p.tv, draw.peekView(onBuses, 0, 0).p.rows[0].lbl], ['MORSE', null, 'HOWARD']);
+  // Without pv.tr (old payloads): what's on the panel.
+  assert.equal(draw.peekView({ ...onTrains, pv: {} }, 0, 2).p.header, 'MORSE');
+});
