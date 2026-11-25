@@ -42,8 +42,8 @@ const CHRONO_HOLD = 0;
 // destinations come and go; back to a sparser one only after it has fit
 // this long (s). The split and destination rows rank alike.
 const WIDE_VIEW_HOLD = 60;
-const WIDE_RANK = { split: 0, dest: 0, byline: 1, cols2: 2, chrono: 3 };
-const WIDE_VIEWS = ['split', 'dest', 'byline', 'cols2', 'chrono'];  // wideBuilders' order
+const WIDE_RANK = { split: 0, dest: 0, byline: 1, cols2: 2, chrono: 3, soonest: 3 };
+const WIDE_VIEWS = ['split', 'dest', 'byline', 'cols2', 'chrono'];  // wideBuilders' order (`soonest` takes chrono's place)
 // Chrono labels are fitted against the widest single time ("99m" or "DUE").
 const CHRONO_TIME_PX = Math.max(measure('small', '99m'), measure('small', 'DUE'));
 
@@ -103,6 +103,32 @@ function chooseView(destCount, max, prev, now, hold = CHRONO_HOLD) {
   if (!prev || prev.view !== 'chrono') return { view: 'dest', fitSince: null };
   const fitSince = prev.fitSince != null ? prev.fitSince : now;
   return now - fitSince >= hold ? { view: 'dest', fitSince: null } : { view: 'chrono', fitSince };
+}
+
+// Busy stations (design spec §5, "Busy stations"): more destinations than
+// rows. The rows are the destinations with the soonest next trains, in the
+// usual row order, each a normal row. A shown row keeps its place while its
+// next train is the same one, unless a hidden destination's next train is
+// more than SWAP_MARGIN sooner: predictions wobbling by a minute don't swap
+// rows back and forth. Once its train leaves it competes like the rest.
+// prev: the last pick's `soon` ({key: {rn, t}}: each shown row's next train),
+// or null. Returns the groups to show and the new `soon` (null when all fit).
+const SWAP_MARGIN = 60;
+const SAME_TRAIN_S = 90;  // without run numbers: the same train if its time moved less than this
+function soonest(ordered, max, prev) {
+  if (ordered.length <= max) return { groups: ordered, soon: null };
+  const held = (g) => {
+    const a = g.items[0], was = prev && prev[g.key];
+    return !!was && (a.rn != null && was.rn != null ? String(a.rn) === String(was.rn) : Math.abs(a.t - was.t) <= SAME_TRAIN_S);
+  };
+  // A held row counts as SWAP_MARGIN sooner, and wins a tie.
+  const ranked = ordered.map((g, i) => { const h = held(g); return { key: g.key, i, h, s: g.items[0].t - (h ? SWAP_MARGIN : 0) }; })
+    .sort((x, y) => x.s - y.s || y.h - x.h || x.i - y.i);
+  const keep = new Set(ranked.slice(0, max).map((x) => x.key));
+  const groups = ordered.filter((g) => keep.has(g.key));
+  const soon = {};
+  for (const g of groups) soon[g.key] = { rn: g.items[0].rn != null ? String(g.items[0].rn) : null, t: g.items[0].t };
+  return { groups, soon };
 }
 
 // Max transit rows by the header and weather toggles (design spec §5
@@ -247,7 +273,12 @@ function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map()
     ? { showHeader: cfg.showHeader, showWeather: cfg.showWeather, hidden: [] }
     : fitBars(ordered.length, cfg.showHeader, cfg.showWeather);
   const max = maxRows(bars.showHeader, bars.showWeather);
-  const viewState = chooseView(ordered.length, max, prevView, now);
+  // More destinations than rows: the soonest ones as rows (soonest()), or
+  // with cfg.busyView 'chrono' the old one-train-per-row list (no board is
+  // set to it; the parity scenarios keep the renderers' chrono view checked).
+  const legacy = cfg.busyView === 'chrono';
+  const pick = legacy ? { groups: ordered.slice(0, max), soon: null } : soonest(ordered, max, prevView && prevView.soon);
+  const viewState = legacy ? chooseView(ordered.length, max, prevView, now) : { view: 'dest', fitSince: null, ...(pick.soon ? { soon: pick.soon } : {}) };
   const shown = live.filter((a) => shownKeys.has(`${a.ln}:${a.dest}`));
 
   const chronoLabelPx = RIGHT_X - LABEL_GAP - CHRONO_TIME_PX - CHRONO_LABEL_X + 1;
@@ -263,7 +294,7 @@ function format(arrivals, cfg, { now, alerts = new Set(), alertWords = new Map()
       ...(alerted ? { al: alertLabel(a.dest.toUpperCase(), chronoAlertPx) } : {}),
       rn: a.rn != null ? String(a.rn) : undefined,
     };
-  }) : ordered.slice(0, max).map((g) => {
+  }) : pick.groups.map((g) => {
     const items = g.items.slice(0, MAX_TIMES);
     const t = items.map((a) => a.t);
     const labelPx = RIGHT_X - LABEL_GAP - worstTimesWidth(t, now) - LABEL_X + 1;
@@ -420,25 +451,30 @@ function wideRow(g, now, alerted, words = null) {
 
 function formatWide(ordered, shown, cfg, now, alerts, alertWords = new Map(), prevView = null, hold = WIDE_VIEW_HOLD, ending = []) {
   // Each layout, sparsest first; null where it doesn't fit (or apply).
-  const builders = wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending);
-  // Built lazily: the first that fits (the chronological list always does).
+  const builders = wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending, prevView && prevView.soon);
+  // Built lazily: the first that fits (the last always does).
   let pick = null;
   for (const b of builders) if ((pick = b())) break;
+  // A layout's name for the hold (`kind`: the soonest rows are sent as
+  // `cols2`), and what the next update needs from this one.
+  const state = (r, fitSince) => ({ view: r.kind || r.view, fitSince, ...(r.soon ? { soon: r.soon } : {}) });
+  const out = ({ kind, soon, ...r }, fitSince) => ({ ...r, viewState: state({ kind, soon, view: r.view }, fitSince) });
   // Back to a sparser layout only once it has fit for `hold` s: until then
   // the last one, while it still applies (else the sparser one at once).
   const rank = (v) => WIDE_RANK[v] || 0;
-  if (prevView && rank(prevView.view) > rank(pick.view)) {
+  if (prevView && rank(prevView.view) > rank(pick.kind || pick.view)) {
     const fitSince = prevView.fitSince != null ? prevView.fitSince : now;
-    const want = WIDE_VIEWS.indexOf(prevView.view);
+    const want = prevView.view === 'soonest' ? WIDE_VIEWS.indexOf('chrono') : WIDE_VIEWS.indexOf(prevView.view);
     const held = now - fitSince < hold && want >= 0 && builders[want]();
-    if (held) return { ...held, viewState: { view: held.view, fitSince } };
+    if (held) return out(held, fitSince);
   }
-  return { ...pick, viewState: { view: pick.view, fitSince: null } };
+  return out(pick, null);
 }
 
 // formatWide's layouts, sparsest first: the split, destination rows, one
-// row per line, two columns, the chronological list (always fits).
-function wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending = []) {
+// row per line, two columns, then two columns of the soonest destinations
+// (always fits; with cfg.busyView 'chrono', the old chronological list).
+function wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending = [], prevSoon = null) {
   const lines = [...new Set(ordered.map((g) => g.ln))];
   const mapid = cfg.station && cfg.station.mapid;
   const split = () => {
@@ -523,7 +559,19 @@ function wideBuilders(ordered, shown, cfg, now, alerts, alertWords, ending = [])
     });
     return { view: 'chrono', rows, bars };
   };
-  return [split, dest, byline, cols2, chrono];
+  // More destinations than two columns hold: the soonest ones (soonest()),
+  // drawn as cols2. Bars as the chronological list had them.
+  const soonest2 = () => {
+    const bars = fitBars(ordered.length, cfg.showHeader, cfg.showWeather);
+    const pick = soonest(ordered, 2 * maxRows(bars.showHeader, bars.showWeather), prevSoon);
+    const perCol = Math.ceil(pick.groups.length / 2);
+    return {
+      view: 'cols2', kind: 'soonest', soon: pick.soon,
+      rows: pick.groups.map((g, i) => halfRow(g, i < perCol ? 0 : 1, now, alerts.has(g.ln))),
+      bars,
+    };
+  };
+  return [split, dest, byline, cols2, cfg.busyView === 'chrono' ? chrono : soonest2];
 }
 
-module.exports = { halfRow, normalize, latchDue, splitTrue, splitAxis, terminalHere, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, WIDE_TICKER_ALERT_GAP, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD };
+module.exports = { soonest, SWAP_MARGIN, halfRow, normalize, latchDue, splitTrue, splitAxis, terminalHere, HALVES, SPLIT_LABELS, WIDE_TIMES, WIDE_TICKER_DEST_PX, WIDE_TICKER_ALERT_GAP, DUE_LATCH_MAX, SLIP_S, format, maxRows, fitBars, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD };

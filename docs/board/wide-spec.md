@@ -37,7 +37,7 @@ Mockups: `docs/board/mockups/w128/`, rendered by `scripts/mock-128-screens.js`, 
 - **Only where it's true:** every line at the station runs along the same axis there (`station-dirs.json`, from the track geometry: within 35° of north-south or of east-west; Red and Purple count as north-south everywhere off the Loop) and none ends there. 59 stations split north-south, 51 east-west.
 - **Inbound | outbound** where the compass doesn't give one but every line reaches the Loop (decided Nov 8, as a fallback only): diagonal stretches (Blue's Milwaukee Avenue, Orange southwest) and mixed axes (Sedgwick). 14 stations. Inbound (toward the Loop) on the left.
 - **Departing to | arriving from** at an end of the line (decided Nov 8): departures left, trains ending their runs there right, by where they came from. 12 stations, Howard included.
-- **Elsewhere** (the 8 Loop stations, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then the chronological list.
+- **Elsewhere** (the 8 Loop stations, more than 3 destinations in a half): full-width destination rows while they fit, then two columns, then two columns of the destinations with the soonest trains.
 
 ### Busy stations, replacing the chronological view (built)
 The chronological view is the weakest transit screen. For stations with 4–5 lines (Clark/Lake), three layouts were mocked:
@@ -45,7 +45,7 @@ The chronological view is the weakest transit screen. For stations with 4–5 li
 2. **Two columns of four under the header:** up to 8 destinations, short names, three times each.
 3. **Five rows, no header:** full names; only for five destinations or fewer.
 
-**Fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built (Nov 5):** rows → one row per line → two columns → chronological. One row per line keeps 3 times in a half and up to 5 across a whole row (full names there).
+**Fitting order:** destination rows (as many as fit) → one row per line (≤ 5 lines, ≤ 2 destinations each) → two columns (≤ 8) → chronological view as the last resort. Re-checked on every update, as now. **Built (Nov 5):** rows → one row per line → two columns → chronological. **Nov 23:** the last resort is now two columns of the destinations with the soonest trains (design spec §5, *Busy stations*); the chronological list is no longer sent. One row per line keeps 3 times in a half and up to 5 across a whole row (full names there).
 
 ### Key layout (retired Nov 8)
 Built Nov 5 (`trains to` / `minutes` on the top row, no station or clock); cut with the 64 key layout to keep one bar layout.

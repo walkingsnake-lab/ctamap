@@ -17,11 +17,13 @@ const quiet = { warn() {}, error() {} };
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(B, 'fixtures', 'tt-arrivals', name), 'utf8'));
 const WX = { icon: 'pcloudy_day', temp: 63, word: 'PT CLOUDY', hi: 69, lo: 51 };
 
+// busyView 'chrono': busy stations as the one-train-per-row list, which the
+// server no longer sends but the renderers still draw.
 function payloadFrom(name, header, cfg = {}) {
   const json = fixture(name);
   const now = parseCtaTime(json.ctatt.tmst);
   const showWeather = !!cfg.wx;
-  const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather }, { now, alerts: new Set(cfg.alerts || []) });
+  const r = format(normalize(json, { log: quiet }), { rows: [], showHeader: !!header, showWeather, busyView: 'chrono' }, { now, alerts: new Set(cfg.alerts || []) });
   return { v: 1, now, tzo: tzOffset(now), screen: 'transit', bright: cfg.bright != null ? cfg.bright : 100, header: r.bars.showHeader ? header : null, view: r.view, rows: r.rows, ticker: r.ticker, wx: r.bars.showWeather ? cfg.wx || null : null, warn: cfg.warn || null };
 }
 

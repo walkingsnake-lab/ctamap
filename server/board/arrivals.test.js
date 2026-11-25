@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { normalize, format, maxRows, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD, WIDE_TICKER_DEST_PX, WIDE_TICKER_ALERT_GAP } = require('./arrivals');
+const { normalize, format, soonest, SWAP_MARGIN, maxRows, chooseView, timeText, worstTimesWidth, widestTimesWidth, alertLabel, TICKER_DEST_PX, CHRONO_EXTRA, CHRONO_HOLD, WIDE_VIEW_HOLD, WIDE_TICKER_DEST_PX, WIDE_TICKER_ALERT_GAP } = require('./arrivals');
 const G = require('./glyphs');
 const { parseCtaTime } = require('./time');
 const { measure } = require('./fonts');
@@ -84,15 +84,81 @@ function clarkLakeRush() {
   return { arr, now };
 }
 
-test('more than 5 destinations -> one train per row, header kept, weather off', () => {
+test('more than 5 destinations -> the soonest ones as normal rows, header kept, weather off', () => {
   const { arr, now } = clarkLakeRush();
-  const { view, rows, bars } = format(arr, { ...base, showWeather: true }, { now });
+  const { view, rows, bars, viewState } = format(arr, { ...base, showWeather: true }, { now });
+  assert.equal(view, 'dest');
+  assert.deepEqual(bars, { showHeader: true, showWeather: false, hidden: ['weather'] });
+  assert.equal(rows.length, 4);
+  // Normal rows: up to three times, no run number.
+  assert.ok(rows.every((r) => r.t.length >= 1 && r.t.length <= 3 && !('rn' in r)));
+  assert.ok(rows.some((r) => r.t.length > 1));
+  // The rows are the four destinations with the soonest next trains...
+  const all = format(arr, { ...base, showHeader: false, autoFit: false, rows: [] }, { now });
+  const next = new Map();
+  for (const a of arr.filter((x) => !x.arr).sort((x, y) => x.t - y.t)) if (!next.has(`${a.ln}:${a.dest}`)) next.set(`${a.ln}:${a.dest}`, a.t);
+  const cut = [...next.values()].sort((x, y) => x - y)[3];
+  assert.ok(rows.every((r) => r.t[0] <= cut));
+  assert.equal(Object.keys(viewState.soon).length, 4);
+  // ...in the usual row order (line, direction, name), not by time.
+  const order = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
+  assert.ok(rows.every((r, i) => !i || order.indexOf(r.ln) >= order.indexOf(rows[i - 1].ln)));
+  void all;
+  // Header off: five rows.
+  assert.equal(format(arr, { ...base, showHeader: false, showWeather: true }, { now }).rows.length, 5);
+});
+
+test('busy station: a shown row keeps its place until its train leaves or a hidden one is clearly sooner', () => {
+  const now = 1_800_000_000;
+  const g = (key, t, rn) => ({ key, items: [{ t: now + t, rn }] });
+  const keys = (r) => r.groups.map((x) => x.key);
+  // Fits: everything, no state.
+  assert.deepEqual(soonest([g('a', 60, '1'), g('b', 120, '2')], 2, null), { groups: [g('a', 60, '1'), g('b', 120, '2')], soon: null });
+  // Three destinations, two rows: the two soonest, in the given order.
+  let r = soonest([g('a', 300, '1'), g('b', 120, '2'), g('c', 200, '3')], 2, null);
+  assert.deepEqual(keys(r), ['b', 'c']);
+  // A hidden one comes back a little sooner than a shown one: no swap.
+  r = soonest([g('a', 200 - SWAP_MARGIN, '1'), g('b', 120, '2'), g('c', 200, '3')], 2, r.soon);
+  assert.deepEqual(keys(r), ['b', 'c']);
+  // More than the margin sooner: it takes the later row.
+  const r2 = soonest([g('a', 200 - SWAP_MARGIN - 1, '1'), g('b', 120, '2'), g('c', 200, '3')], 2, r.soon);
+  assert.deepEqual(keys(r2), ['a', 'b']);
+  // b's train leaves (its next is another run, later than a's): a takes its row.
+  const r3 = soonest([g('a', 230, '1'), g('b', 600, '9'), g('c', 200, '3')], 2, r.soon);
+  assert.deepEqual(keys(r3), ['a', 'c']);
+  // Same run, predicted later (a delay): still its row while nothing is clearly sooner.
+  const r4 = soonest([g('a', 230, '1'), g('b', 250, '2'), g('c', 200, '3')], 2, r.soon);
+  assert.deepEqual(keys(r4), ['b', 'c']);
+  // No run numbers: the same train if its time barely moved.
+  const n = soonest([g('a', 300), g('b', 120), g('c', 200)], 2, null);
+  assert.deepEqual(keys(soonest([g('a', 180), g('b', 120), g('c', 220)], 2, n.soon)), ['b', 'c']);
+});
+
+test('busy station: rows only change when a train leaves, across updates', () => {
+  const t0 = 1_800_000_000;
+  const a = (ln, dest, dir, m, rn) => ({ ln, dest, known: true, dir, t: t0 + m * 60, s: 0, rn });
+  // Belmont at rush: six destinations.
+  const arr = [a('BR', 'Kimball', 1, 1, '401'), a('BR', 'Kimball', 1, 8, '403'), a('RD', '95th', 5, 2, '801'), a('PR', 'Loop', 5, 3, '501'),
+    a('RD', 'Howard', 1, 4, '802'), a('BR', 'Loop', 5, 5, '402'), a('PR', 'Linden', 1, 7, '502')];
+  const labels = (r) => r.rows.map((x) => `${x.ln} ${x.lbl}`);
+  let r = format(arr, base, { now: t0 });
+  assert.deepEqual(labels(r), ['RD HOWARD', 'RD 95TH', 'BR KIMBALL', 'PR LOOP']);
+  // 100 s on, the Kimball train has left; its next is at 8, behind Brown's Loop train.
+  r = format(arr, base, { now: t0 + 100, prevView: r.viewState });
+  assert.deepEqual(labels(r), ['RD HOWARD', 'RD 95TH', 'BR LOOP', 'PR LOOP']);
+  // The legacy list is still there for the renderers' tests.
+  assert.equal(format(arr, { ...base, busyView: 'chrono' }, { now: t0 }).view, 'chrono');
+});
+
+test('busyView chrono (legacy): one train per row, header kept, weather off', () => {
+  const { arr, now } = clarkLakeRush();
+  const { view, rows, bars } = format(arr, { ...base, showWeather: true, busyView: 'chrono' }, { now });
   assert.equal(view, 'chrono');
   assert.deepEqual(bars, { showHeader: true, showWeather: false, hidden: ['weather'] });
   assert.equal(rows.length, 4 + CHRONO_EXTRA);
   assert.ok(rows.every((r) => r.t.length === 1 && r.s.length === 1 && r.rn));
   assert.ok(mins({ t: rows.map((r) => r.t[0]) }, now).every((m, i, a) => !i || m >= a[i - 1]));
-  assert.equal(format(arr, { ...base, showHeader: false, showWeather: true }, { now }).rows.length, 5 + CHRONO_EXTRA);
+  assert.equal(format(arr, { ...base, showHeader: false, showWeather: true, busyView: 'chrono' }, { now }).rows.length, 5 + CHRONO_EXTRA);
 });
 
 test('fitBars: weather goes first, then the header; past 5 the header comes back', () => {
@@ -129,8 +195,10 @@ test('row cap follows the header and weather toggles', () => {
   assert.equal(view, 'dest');
   assert.equal(rows.length, 4);
   assert.deepEqual(bars.hidden, ['weather']);
-  // autoFit off: the plain cap (3 rows) and the chronological list.
-  assert.equal(run('belmont-2026-10-03-2316.json', { ...base, showWeather: true, autoFit: false }).view, 'chrono');
+  // autoFit off: the plain cap, so the three soonest of the four.
+  const plain = run('belmont-2026-10-03-2316.json', { ...base, showWeather: true, autoFit: false });
+  assert.deepEqual([plain.view, plain.rows.length], ['dest', 3]);
+  assert.equal(run('belmont-2026-10-03-2316.json', { ...base, showWeather: true, autoFit: false, busyView: 'chrono' }).view, 'chrono');
 });
 
 test('the destination filter runs before the overflow check', () => {
@@ -139,7 +207,7 @@ test('the destination filter runs before the overflow check', () => {
   assert.equal(rows.length, 3);
 });
 
-test('view follows the destination count: chrono on overflow, back as soon as rows fit', () => {
+test('chooseView (legacy list): chrono on overflow, back as soon as rows fit', () => {
   assert.equal(CHRONO_HOLD, 0);
   let st = chooseView(5, 4, null, 0);
   assert.equal(st.view, 'chrono');
@@ -230,7 +298,7 @@ test('alert labels: whole when the row has room, the cut never depends on the ti
   assert.equal(at([200, 300, 400]), at([30, 50 * 60, 90 * 60]));
   // Chronological rows have room for the whole name.
   const many = ['Howard', '95th', 'Kimball', 'Loop', 'Linden', 'Midway'].map((dest, i) => ({ ln: i < 2 ? 'RD' : 'BR', dest, known: true, dir: i, t: t0 + 60 * (i + 2), s: 0, rn: String(i) }));
-  const chrono = format(many, base, { now: t0, alerts: new Set(['BR']) });
+  const chrono = format(many, { ...base, busyView: 'chrono' }, { now: t0, alerts: new Set(['BR']) });
   assert.equal(chrono.view, 'chrono');
   assert.ok(chrono.rows.filter((r) => r.a).every((r) => r.al === r.lbl));
 });
@@ -604,4 +672,28 @@ test('wide: an end of the line is departing to | arriving from (trains ending th
   assert.deepEqual(g.rows.map((x) => `${x.h}:${x.lbl}`), ['0:63RD', '1:GREEN']);
   // No departures: no split (the no-trains screen), even with trains arriving.
   assert.notEqual(format([{ ln: 'GR', arr: 1, dest: null, dir: 1, t: now + 300, s: 0, rn: '2' }], wide('40020'), { now }).view, 'split');
+});
+
+test('wide: more destinations than two columns hold -> the soonest ones, still two columns', () => {
+  const t0 = 1_800_000_000;
+  const lines = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR'];
+  // 12 destinations, two per line; the later a line, the sooner its trains.
+  const arr = lines.flatMap((ln, i) => [1, 5].map((dir) => ({ ln, dest: `D${i}${dir}`, known: true, dir, t: t0 + 60 * (20 - 2 * i + (dir === 5 ? 1 : 0)), s: 0, rn: `${i}${dir}` })));
+  const cfg = { ...wide('40380'), wideLayout: 'rows' };
+  const r = format(arr, cfg, { now: t0 });
+  assert.equal(r.view, 'cols2');
+  assert.equal(r.viewState.view, 'soonest');
+  assert.equal(r.rows.length, 8);
+  assert.deepEqual(r.rows.map((x) => x.h), [0, 0, 0, 0, 1, 1, 1, 1]);
+  // The two lines with the latest trains (Red, Blue) are the ones left out.
+  assert.deepEqual([...new Set(r.rows.map((x) => x.ln))], ['BR', 'GR', 'OR', 'PR']);
+  assert.ok(r.rows.every((x) => !('rn' in x)));
+  assert.equal(Object.keys(r.viewState.soon).length, 8);
+  // Ten (five lines) fit one row per line again: held as the soonest layout for the hold first.
+  const ten = arr.slice(2);
+  const held = format(ten, cfg, { now: t0 + 10, prevView: r.viewState });
+  assert.deepEqual([held.view, held.viewState.view, held.rows.length], ['cols2', 'soonest', 8]);
+  const back = format(ten, cfg, { now: t0 + 10 + WIDE_VIEW_HOLD, prevView: held.viewState });
+  assert.deepEqual([back.view, back.viewState.view, back.rows.length], ['byline', 'byline', 10]);
+  assert.equal(format(arr, { ...cfg, busyView: 'chrono' }, { now: t0 }).view, 'chrono');
 });
