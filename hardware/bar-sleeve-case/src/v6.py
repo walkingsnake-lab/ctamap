@@ -22,7 +22,8 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   the heads sit in 1 mm counterbores and the bumpers' recesses are FOOT_IN inboard of them. The two V5 screws under
   the case are left out (UNDER_SCREWS); their holes stay.
 - **Panel, diffuser, knob**: p4's; the diffuser is the three-colour one (p4-diffuser3-*, a 2.8 stack; p4.CASE_DIFFUSER). The diffuser rides on the panel RIM_GAP behind the rim, which covers its border
-  without clamping it. The collar becomes a trim ring whose cap lies over the tower's top under the encoder's nut.
+  without clamping it. The collar becomes a trim ring (RING_R, a 0.8 cap) on the tower's top under the encoder's nut; the knob is
+  the P4's, wider (KNOB_R), so it hides the two M2.5 heads beside it.
 - **Wall hanging**: the cleat (cleat.py, with p4.py's settings of Nov 17: a 60 deg bevel for about 17 mm of hook, stops on
   the wall cleat outside the case cleat's ends, two wall screws) on two inserts in the back plate, one in each chassis
   half. The joint's screws on the back are countersunk flush; the case cleat lies over the upper two, so it comes off
@@ -87,8 +88,15 @@ UNDER_CB = 7.6                   # counterbore for a flanged head (6.9) at the t
 PAD_H = 0.24                     # contact pads under the planks, as tall as the 0.25 gap: the walnut bears along its length, not
                                  # only at the screws (0.2 left 0.05 of air, which no print holds; a high pad only bows a plank a hair)
 PAD_W = 4.0
-RING_CAP = 0.4                   # the trim ring reaches over the tower's top under the encoder's nut, which is what holds it
-RING_LIFT = 0.4                  # and its flange stands this far off the walnut: at 0 a plank printed 0.05 thick took the nut's clamp
+RING_LIFT = 0.4                  # the trim ring's flange stands this far off the walnut: at 0 a plank printed 0.05 thick took the nut's clamp
+RING_CAP = 0.8                   # the ring over the tower's top, under the encoder's nut, which is what holds it. At 0.4 (to Nov 24)
+                                 # the flange hung off a 0.4 annulus between the nut and the neck's edge and flexed; 0.8 is ~8x stiffer
+                                 # there. Not the flange's whole 1.2: the neck would stand only 0.4 above the walnut, a 0.4 fin in the
+                                 # chassis's back-down print (meshcheck: thin on 53 layers). The neck stands 0.8 now (was 1.2)
+RING_R = 22.0                    # the ring's radius (Nov 24, was 20.65 = the V5 collar's 17.5 x KNOB_SCALE): 2.5 mm round the knob,
+                                 # 5.1 mm to the back edge
+KNOB_R = 19.5                    # the knob's radius (Nov 24, was 17.7 = 15 x KNOB_SCALE): the M2.5 heads beside it end 17.55 out, so
+                                 # 17.7 hid them only from straight above. Its height stays the P4's (KNOB_SCALE); V5 and P5 keep 17.7
 WASHER_REC = (7.4, 0.3)          # a recess in each post's foot that holds its washer while the panel is lowered in
 
 # skin screws, lined up (the owner: the staggered ones "look awful"). Planks: a front and a back one at each end, the same
@@ -327,7 +335,7 @@ def pads(t):
     return out
 
 
-NECK_R = 9.5                     # the tower above the walnut: narrower, so the trim ring keeps 2.7 mm round the screw holes
+NECK_R = 9.5                     # the tower above the walnut, under the ring's cap: narrower, so the ring keeps 2.7 mm round the screw holes
 PIX_RELIEF = 1.5                 # a blind pocket in the top wall over the front of the encoder board, where V5's tray had an
                                  # open slot: the board's NeoPixel stands there (2.4 mm of headroom; 1.0 mm of wall left)
 
@@ -359,13 +367,29 @@ def trim_ring():
     """the V5 collar's flange, as a cap: it lies on the walnut round the tower and reaches over the tower's top, where
     the encoder's nut clamps it (drawn loose before: its screw holes are larger than the screw heads, as on V5, so the
     two screws beside the knob never held it). It covers the knob hole's clearance and both of its printing points."""
-    R = CO.FL_R * p4.KNOB_SCALE
+    R = RING_R
     fl = CO.cyl(R, RING_LIFT, CO.FL_T - CO.FL_CH) + CO.cyl(R, CO.FL_T - CO.FL_CH, CO.FL_T, R - CO.FL_CH)
     ring = fl - Manifold.extrude(tower_cs(NECK_R + 0.2).translate([0, -KY]), CO.FL_T - RING_CAP + 1).translate([0, 0, -1]) \
         - Manifold.cylinder(CO.FL_T + 2, CO.BUSH_R + 0.1, CO.BUSH_R + 0.1, 64).translate([0, 0, -1])
     if p4.TOP_SCREWS:
         ring = ring - p4.collar_top_screw_cuts()
     return ring.translate([0, KY, H])
+
+
+def knob():
+    """the P4's pebble knob (p4.knob_p4: its height, bore, shaft-tip stop and press travel) KNOB_R wide; the shoulder round
+    as the P4's, the flutes at the same spacing. Knob frame (knob.py): axis at the origin, z from the case top."""
+    import knob as KN
+    s = p4.KNOB_SCALE
+    saved = KN.PEB_R, KN.SHOULDER_R, KN.TOP_T, KN.FLUTES
+    try:
+        KN.PEB_R = KNOB_R
+        KN.SHOULDER_R = saved[1] * s
+        KN.TOP_T = (KN.TIP_Z + saved[2] - KN.SKIRT_Z) * s + KN.SKIRT_Z - KN.TIP_Z
+        KN.FLUTES = int(round(saved[3] * KNOB_R / saved[0] / 4)) * 4
+        return KN.knob(*KN.FITS[1], 2)
+    finally:
+        KN.PEB_R, KN.SHOULDER_R, KN.TOP_T, KN.FLUTES = saved
 
 
 def pixel():
@@ -511,7 +535,7 @@ def screws():
 def build():
     left, right, info = chassis()
     return dict(skin=skin(), chassis_left=left, chassis_right=right, info=info, panel=panel_v6(), diffuser=diffuser_v6(),
-                standoffs=standoffs(), screws=screws(), ring=trim_ring(), knob=p4.knob_in_case(),
+                standoffs=standoffs(), screws=screws(), ring=trim_ring(), knob=knob().translate([0, KY, H]),
                 encoder=p4.encoder_envelope(), s3=DR.s3_envelope(), sensor=DR.sensor_envelope())
 
 
@@ -607,6 +631,8 @@ if __name__ == '__main__':
         """back: the case's back on the bed, as every V5 part; top: turned over, the top face on the bed. frame: another
         part (in the case frame) whose placement on the bed this one shares: the second part of a two-material print."""
         def turn(q):
+            if bed == 'up':
+                return q                                                 # as modelled (the knob: skirt down)
             q = q.rotate([-90, 0, 0]) if bed in ('back', 'diag') else q.mirror([0, 0, 1])
             return q.rotate([0, 0, 45]) if bed == 'diag' else q          # a half is 281.8 long: on the 256 bed's diagonal, as V5's
         m, ref = turn(m), turn(frame if frame is not None else m)
@@ -622,7 +648,9 @@ if __name__ == '__main__':
     for k, m in P['skin'].items():
         print(save(m, f'{pre}skin-{k.replace("half_", "").replace("_", "-")}-walnut', 'diag' if SKIN == 'two' else 'back'))
     print(save(P['chassis_left'], f'{pre}chassis-left-black')); print(save(P['chassis_right'], f'{pre}chassis-right-black'))
-    print(save(P['ring'], f'{pre}trim-ring-translucent', 'top'))
+    print(save(P['ring'], f'{pre}trim-ring-black', 'top'))             # PETG-CF (Nov 24; was translucent PETG)
+    import knob as KN
+    print(save(KN.to_bed(knob()), f'{pre}knob-white', 'up'))
     # the status window: a translucent disc in the right half's pocket over the S3's LED, printed as that half's second part
     # (AMS), on the bed with it (left out of the V6 exports until Nov 19: the owner noticed)
     print(save(DR.status_window(), f'{pre}chassis-right-window-translucent', frame=P['chassis_right']))
@@ -633,7 +661,7 @@ if __name__ == '__main__':
     reused = [(f'p4-diffuser{"3" if tint else ""}-{s}-{c}', f'diffuser-{s}-{c}') for s in ('left', 'right')
               for c in (('gray', 'white', 'black') if tint else ('white', 'black'))]
     reused += [('p4-diffuser-bar', 'diffuser-bar-black-x2'), ('p4-cleat-case', 'cleat-case-black'),
-               ('p4-cleat-wall', 'cleat-wall-black'), ('p4-sensor-sled', 'sensor-sled-black'), ('p4-knob', 'knob-white'),
+               ('p4-cleat-wall', 'cleat-wall-black'), ('p4-sensor-sled', 'sensor-sled-black'),
                ('p4-boot-key', 'boot-key')]
     src = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'stl', 'p4')
     for a, b in reused:
