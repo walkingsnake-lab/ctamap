@@ -678,10 +678,13 @@ test('Rain nearby: off by default, then on a timer on any screen but weather; ho
   assert.equal((await rain({ hold: 'visit' })).status, 200);
   b = await get();
   assert.deepEqual([b.radar.visit, b.radar.held], [null, 'visit']);
+  // Held till the next visit: the frames stay (marked for visits), so they're on hand then.
+  assert.deepEqual([b.radar.frames, b.radar.vo], [state.frames, 1]);
   assert.equal((await rain({ hold: null })).status, 200);
   assert.deepEqual((await get()).radar.visit, { every: 240, for: 120 });
   await rain({ hold: 'rain' });
-  assert.equal((await get()).radar.held, 'rain');
+  b = await get();
+  assert.deepEqual([b.radar.held, b.radar.frames], ['rain', []]); // stopped until the rain passes: no frames
   state.on = false; // dry: the hold ends with the rain
   assert.equal((await get()).radar.held, undefined);
   state.on = true;

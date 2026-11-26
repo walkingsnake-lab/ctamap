@@ -630,7 +630,11 @@ function createBoard({
     const screen = resolveScreen(board, cyc);
     const held = holdOf(id, board, now, !!radarState.on);
     const visit = held ? null : visitOf(board);
-    if (!radarView && !(radarState.on && visit)) radarState = { ...radarState, frames: [], ft: [] };
+    // A visit held off until the next one ("Back to <screen> now", the knob)
+    // keeps the frames too, so they're on hand when it comes (the M4 drops
+    // frames a payload doesn't list and would fetch them all again).
+    const visitsOn = visit || (held === 'visit' && visitOf(board));
+    if (!radarView && !(radarState.on && visitsOn)) radarState = { ...radarState, frames: [], ft: [] };
     else if (!radarView) radarState = { ...radarState, vo: 1 };
     const viewKey = `${id}:${board.station.mapid}`;
     // Two panels have room for the full name (stations.json `wide`), unless
