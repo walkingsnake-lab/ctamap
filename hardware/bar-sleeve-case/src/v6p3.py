@@ -139,9 +139,17 @@ BOSS_Y = PB + STANDOFF_L + WASHER_T                         # the posts' feet: a
 FOOT_DY = BOSS_Y - WASHER_REC[1] - P3.FOOT_Y                # how far V5's post feet move back
 CENTRE_POSTS = [q for q in DR.INSERTS if q not in DR.CORNERS]
 UNDER_XY = [(sx * x, DR.BOT_Y) for sx in (-1, 1) for x in C.SCREW_XS]      # the two screws from below (V5's x +/-46)
-# louver ties (p4v55.py's scheme on the P3's rows, +/-79.75): solid round the centre posts, blind every ~24 mm
+# louver ties (p4v55.py's scheme): stretches of the rows left solid from the wall to the back plate, so the walls are not
+# flaps hinged at the louvers. TIES: solid round the two centre posts. BLIND: the slot still cut from the back face (the row
+# looks unbroken) but stopped drawer.TIE_BLIND short of the inside, which closes it to air. The P4 has one every ~24 mm over
+# its 227 mm rows; at that rate the P3 vented 61% of V5's area. Nov 26 (the owner: heat is not a strong concern, but
+# decent airflow for the worst case): one 8 mm blind stretch in the middle of each free span of the top rows (+/-48), none
+# added to the bottom rows, whose blind stretches over the two screw bosses (x +/-46, 13 mm) already sit there. 32 mm of
+# each band tied (V5: 6 top, 26 bottom; 66 / 71 before), 85% of V5's vent area (VENT_MIN in check()). The P3's rows are
+# 160 mm, its V5 walls never pressed in, and the lip now holds the sleeve's back edge.
 TIES = dict(top=[(-20.0, -4.0)], bottom=[(4.7, 20.7)])
-BLIND = dict(top=[(c - 5, c + 5) for c in (-68, -44, 20, 44, 68)], bottom=[(c - 5, c + 5) for c in (-68, -44, -20, 36, 60)])
+BLIND = dict(top=[(-52.0, -44.0), (44.0, 52.0)], bottom=[])
+VENT_MIN = 2100.0                # mm2: the louvers' open area, at its narrowest along each slot, summed (V5's: 2624)
 
 
 def ccw(pts):
@@ -511,6 +519,22 @@ def tilted(m, deg):
     return m.translate([0, 0, -zc]).rotate([0, deg, 0]).translate([0, 0, zc])
 
 
+def vent_area(t):
+    """the louvers' open area (mm2): for each of the six rows, the open cross-section of its slot at the narrowest of ten
+    depths from the back face to the band's inside (where a blind stretch closes it), summed"""
+    r = DR.LV_H / 2
+    zs = [ZIN1 - 2.5 - r - i * DR.LV_PITCH for i in range(DR.LV_ROWS)] + [ZIN0 + 2.5 + r + i * DR.LV_PITCH for i in range(DR.LV_ROWS)]
+    y_in, tot = DR.Y1 - DR.LV_DEPTH, 0.0
+    for zc in zs:
+        best = 1e9
+        for y in np.linspace(DR.Y1 - 0.3, y_in + 0.2, 10):
+            z = zc + (DR.Y1 - y)                                   # the slot rises LV_DEPTH going inward
+            b = box(-XIN, XIN, y - 0.05, y + 0.05, z - r - 0.6, z + r + 0.6)
+            best = min(best, (b - t).volume() / 0.1)
+        tot += best
+    return tot
+
+
 def check(P):
     """overlap volumes (mm3) that should be zero, and the ways in"""
     v = lambda a, b: round((a ^ b).volume(), 2)
@@ -560,6 +584,8 @@ def check(P):
     top = face + S3_EDGE_PARTS['receptacle'][4]
     tip = box(DR.S3_EDGE - 2.5, DR.S3_EDGE - 0.5, top + 0.7, top + 1.5, pz - 4.1, pz + 4.1)
     rows.append(("a plug's tip over the receptacle, not blocked by the port stop, mm3", round(tip.volume() - (tip ^ ch).volume(), 2)))
+    va = vent_area(ch)
+    rows.append((f'louver open area {va:.0f} mm2 (V5 {vent_area(v5):.0f}; at least {VENT_MIN:.0f})', 0.0 if va >= VENT_MIN else round(VENT_MIN - va, 1)))
     # the ways in
     loaded = ch + pan + so + dif + s3 + sen + P['sled']
     rows.append(('loaded chassis sliding into the sleeve from the back (0.3-70 mm out)', round(max(v(loaded.translate([0, q, 0]), sl) for q in (0.3, 0.5, 1, 2, 4, 8, 16, 24, 32, 40, 50, 60, 70)), 2)))
