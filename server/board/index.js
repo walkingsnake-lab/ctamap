@@ -43,7 +43,7 @@ const MAX_BODY = 8 * 1024;
 // Arrivals older than this are stale (red top edge, NO DATA when none are left).
 const STALE_S = 180;
 // Board endpoint names; the control path must not collide with them.
-const RESERVED = new Set(['ping', 'version', 'update', 'select', 'radar', 'sky', 'logo', 'firmware', 'firmware-upload', 'c']);
+const RESERVED = new Set(['ping', 'version', 'update', 'select', 'set', 'radar', 'sky', 'logo', 'firmware', 'firmware-upload', 'c']);
 // What a per-board control link (/board/c/<link>/) may reach: the control
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
@@ -419,7 +419,7 @@ function createBoard({
   }
   // A wide-only face (WIDE_FACES: the word clock) counts only on a wide board.
   const wideNow = (id, q) => (typeof q.w === 'string' ? q.w === '128' : (store.get(id) || {}).cols === 128);
-  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) && (!WIDE_FACES.includes(f) || wideNow(id, q)), peek: capOk(id, q, 'peek'), bus: capOk(id, q, 'bus') });
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) && (!WIDE_FACES.includes(f) || wideNow(id, q)), peek: capOk(id, q, 'peek'), bus: capOk(id, q, 'bus'), menu: capOk(id, q, 'menu') });
 
   // The announce screen's message as the board draws it (draw.js
   // messageLayout: the lines for its style), or null when none is set.
@@ -666,6 +666,8 @@ function createBoard({
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
       knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)), bus: !!busScreen }),
       bright: resolveBright(board, w, now),
+      // The knob menu's units icon (caps.menu): the unit the temperatures are in.
+      ...(caps.menu ? { tu: board.tempUnit === 'C' ? 'C' : 'F' } : {}),
       // Auto brightness on a board with a light sensor (contract: `ab`).
       ab: autoBrightOf(board),
       // Transit header and weather row as fitted to the destinations; the
@@ -819,6 +821,25 @@ function createBoard({
       if (!board) return send(res, 404, { err: 'unknown_board' });
       const cols = noteCols(id, parsed.query);
       const caps = capsOf(id, { ...parsed.query, w: String(cols) });  // this request's width, not the saved one
+      const body = forBoard(await update(store.get(id), id, false, { cols }, caps), caps);
+      return send(res, 200, caps.peek ? { ...body, for: body.screen } : sectionsFor(body, body.screen));
+    }
+
+    // The knob's menu (design spec §10, "Knob menu") changed a setting: the
+    // panel off (k=off), or the temperature unit (k=unit, v F or C). The
+    // same as the phone changing it (bumps v); answers like /board/select,
+    // with the update that has the change in it.
+    if (first === 'set' && rest.length === 0) {
+      if (method !== 'POST') return send(res, 405, { err: 'method' });
+      if (!authed(req, parsed.query.b)) return send(res, 401, { err: 'bad_token' });
+      const id = String(parsed.query.b || '');
+      const k = String(parsed.query.k || ''), val = String(parsed.query.v || '');
+      const fields = k === 'off' ? { bright: 'off' } : k === 'unit' && (val === 'F' || val === 'C') ? { tempUnit: val } : null;
+      if (!fields) return send(res, 400, { err: 'invalid', detail: 'k must be off, or unit with v F or C' });
+      if (!store.get(id)) return send(res, 404, { err: 'unknown_board' });
+      store.update(id, fields);
+      const cols = noteCols(id, parsed.query);
+      const caps = capsOf(id, { ...parsed.query, w: String(cols) });
       const body = forBoard(await update(store.get(id), id, false, { cols }, caps), caps);
       return send(res, 200, caps.peek ? { ...body, for: body.screen } : sectionsFor(body, body.screen));
     }

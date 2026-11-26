@@ -1217,6 +1217,36 @@ test('select: the knob sets a category and gets the new screen\'s update back', 
   await s.close();
 });
 
+test('set: the knob menu turns the panel off or switches the unit, and gets the update back', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }) });
+  const h = (method = 'POST') => ({ method, headers: { 'X-Board-Token': 'tok' } });
+  assert.equal((await s.req('/board/set?b=home&k=off', { method: 'POST' })).status, 401);
+  assert.equal((await s.req('/board/set?b=home&k=off', h('GET'))).status, 405);
+  assert.equal((await s.req('/board/set?b=nope&k=off', h())).status, 404);
+  for (const q of ['k=bright&v=50', 'k=unit', 'k=unit&v=K', 'k=screen&v=weather', '']) {
+    assert.equal((await s.req(`/board/set?b=home&${q}`, h())).status, 400, q);
+  }
+  // Only firmware with the menu is told the unit.
+  let b = (await s.req('/board/update?b=home', h('GET'))).body;
+  assert.ok(!('tu' in b));
+  b = (await s.req('/board/update?b=home&hk=peek:menu', h('GET'))).body;
+  assert.equal(b.tu, 'F');
+  const v = b.v;
+  b = (await s.req('/board/set?b=home&k=unit&v=C&hk=peek:menu', h())).body;
+  assert.deepEqual([b.tu, b.v, b.screen, b.for], ['C', v + 1, 'transit', 'transit']);
+  assert.equal(s.store.get('home').tempUnit, 'C');
+  b = (await s.req('/board/set?b=home&k=unit&v=F&hk=peek:menu', h())).body;
+  assert.equal(b.tu, 'F');
+  // Off is the phone's Off: brightness 0 and no auto brightness; a knob choice wakes it.
+  b = (await s.req('/board/set?b=home&k=off&hk=peek:menu', h())).body;
+  assert.deepEqual([b.bright, b.ab == null], [0, true]);
+  assert.equal(s.store.get('home').bright, 'off');
+  await s.req('/board/select?b=home&s=transit', h());
+  assert.equal(s.store.get('home').bright, 'auto');
+  await s.close();
+});
+
 test('a new board ID registers itself on its first update, as a copy of home', async () => {
   const s = await serve();
   const T = { headers: { 'X-Board-Token': 'tok' } };

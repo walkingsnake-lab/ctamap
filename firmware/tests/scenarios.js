@@ -471,6 +471,18 @@ async function build() {
     add('knob chooser dimmed', { ...p, bright: 40 }, [at(2), at(2, true)], undefined, undefined, { s3only: true });
     add('knob chooser no ring', { ...p, knob: null }, [at(0)], undefined, undefined, { s3only: true });
   }
+  // Knob menu (S3 only): each item chosen, both units, the two that ask
+  // first, dimmed, and on two panels.
+  {
+    const p = { now: NOW, tzo: tzOffset(NOW), bright: 100, tu: 'F' };
+    const m = (sel, confirm) => ({ screen: 'menu', menu: confirm ? { sel, confirm: true } : { sel } });
+    const all = [m(0), m(1), m(2), m(3), m(4), m(2, true), m(3, true), m(0, true), m(-1), m(7)];
+    add('knob menu', p, all, undefined, undefined, { s3only: true });
+    add('knob menu celsius', { ...p, tu: 'C' }, [m(1), m(3)], undefined, undefined, { s3only: true });
+    add('knob menu no unit', { ...p, tu: undefined }, [m(1)], undefined, undefined, { s3only: true });
+    add('knob menu dimmed', { ...p, bright: 40 }, [m(0), m(3, true)], undefined, undefined, { s3only: true });
+    add('knob menu wide', { ...p, cols: 128 }, all, undefined, undefined, { s3only: true });
+  }
   // Peek chooser (S3 only): every variant under the icon bar, slides both
   // ways, the bar's drop, the radar view and the radar while frames are
   // still landing, a skyline with its clouds, three entries, dimmed.

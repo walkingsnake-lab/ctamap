@@ -567,6 +567,13 @@ bool WifiNet::select(const std::string &category, const std::string &variant, js
                   true, out, err, true);
 }
 
+bool WifiNet::set(const std::string &key, const std::string &value, json::Value &out, std::string &err) {
+  // Keys and values are plain words (contract: /board/set).
+  std::string v = value.empty() ? "" : "&v=" + value;
+  return get_json("/board/set?b=" + s_.board_id + "&k=" + key + v + "&hk=" + app::CAPS + (s_.cols == 128 ? "&w=128" : ""),
+                  true, out, err, true);
+}
+
 // ---- OTA ----
 
 Ota::Ota(const std::string &running) : running_(running) { load(); }
@@ -805,7 +812,8 @@ void SetupPortal::run(const std::string &why) {
   std::string name = ssid();
   bool locked = config::setup_pass_ok(cfg_->setup_pass);
   Serial.printf("[setup] opening setup network %s (%s, %s)\n", name.c_str(), locked ? "WPA2" : "open", why.c_str());
-  panel_->show([&](draw::Frame &f) { draw::render_status(f, "setup", name, panel_->cols()); });
+  // The network as a QR code a phone's camera joins, its name and password beside it.
+  panel_->show([&](draw::Frame &f) { draw::render_setup(f, name, locked ? cfg_->setup_pass : std::string(), panel_->cols()); });
 
   WiFi.disconnect(true);
   WiFi.mode(WIFI_AP_STA);  // the station side scans while the network is up

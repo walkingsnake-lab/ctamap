@@ -128,7 +128,18 @@ void Board::connect(bool boot) {
       say("[board] first update failed: " + err);
       status("noserver");
     } else {
-      status(cr.result, cr.result == "portal" ? cr.detail : "");
+      // NO WIFI on a board with a knob: a press opens the setup network now,
+      // without waiting out SETUP_AFTER_MS (the screen says so).
+      bool press = cr.result == "nowifi" && setup && knob && knob->present();
+      status(cr.result, cr.result == "portal" ? cr.detail : press ? "press" : "");
+      trial_check(clock->ms());
+      if (wait(RETRY_WIFI_MS[std::min(round, 3)], press)) {
+        say("[setup] knob pressed; opening setup");
+        offline_since.reset();
+        setup->run("asked");
+      }
+      round++;
+      continue;
     }
     trial_check(clock->ms());
     wait(RETRY_WIFI_MS[std::min(round, 3)]);
@@ -136,13 +147,22 @@ void Board::connect(bool boot) {
   }
 }
 
-void Board::wait(long long ms_total) {
+bool Board::wait(long long ms_total, bool until_press) {
+  // until_press: the knob is read every 50 ms, and two readings down in a
+  // row are a press.
   long long end = clock->ms() + ms_total;
+  bool was_down = false;
   while (clock->ms() < end) {
     if (watchdog) watchdog->feed();
     trial_check(clock->ms());
-    clock->sleep_ms(std::min(1000LL, end - clock->ms()));
+    if (until_press) {
+      bool down = knob->pressed();
+      if (down && was_down) return true;
+      was_down = down;
+    }
+    clock->sleep_ms(std::min(until_press ? 50LL : 1000LL, end - clock->ms()));
   }
+  return false;
 }
 
 // ---- jobs ----
@@ -181,8 +201,10 @@ void Board::shown(int what, long long ms) {
     // transition into it. Out of it, nothing new: the fade into a choice
     // started as the chooser closed on it (start_fade) and runs on; a cancel
     // ends on the screen it opened on.
-    if (shown_ == SHOWN_PEEK && what != SHOWN_STATUS) {
-    } else if (what == SHOWN_STATUS || what == SHOWN_CHOOSER || what == SHOWN_PEEK) {
+    // The knob menu takes the panel at once, like a status screen; leaving
+    // it fades back to the screen.
+    if (shown_ == SHOWN_PEEK && what != SHOWN_STATUS && what != SHOWN_MENU) {
+    } else if (what == SHOWN_STATUS || what == SHOWN_CHOOSER || what == SHOWN_PEEK || what == SHOWN_MENU) {
       trans_ = NO_TRANS;
     } else {
       bool chained = transitioning(ms);
@@ -203,11 +225,21 @@ void Board::shown(int what, long long ms) {
 }
 
 bool Board::draw_frame(long long ms, long long n) {
-  int what = chooser.open ? SHOWN_CHOOSER : peek.open ? SHOWN_PEEK : (int)player.screen;
+  int what = menu.open ? SHOWN_MENU : chooser.open ? SHOWN_CHOOSER : peek.open ? SHOWN_PEEK : (int)player.screen;
   if (chooser.open) chooser_travel_ = chooser.target - chooser.start;
   player.wall_ms = (double)now_ms(ms);  // the skyline's animation clock
   display->show([&](draw::Frame &f) {
-    if (chooser.open) {
+    if (menu.open) {
+      draw::RenderOpts o;
+      o.screen = "menu";
+      draw::RenderOpts::Menu m;
+      m.sel = menu.sel;
+      m.confirm = menu.confirm;
+      o.menu = m;
+      o.apply_bright = !player.hw_bright;
+      o.bright = player.bright;
+      draw::render(player.p, f, o);
+    } else if (chooser.open) {
       draw::RenderOpts o;
       o.screen = "chooser";
       o.chooser_pos = chooser.pos((double)ms);
@@ -425,7 +457,8 @@ void Board::land(long long ended) {
       connect(false);
     }
   } else {
-    after_select(f, ended);
+    if (f.menu) after_set(f, ended);
+    else after_select(f, ended);
     flight_.reset();
   }
   led_update();
@@ -502,6 +535,13 @@ void Board::step() {
     ms = clock->ms();
   }
   if (peek.open && peek.closing && !peek.committing && (double)ms - peek.closed_at >= draw::PEEK_DOWN_MS) peek.open = false;
+  // The knob menu: its question lapses, it closes at rest, and a setting it
+  // changed goes out as soon as nothing else is in flight.
+  menu.tick((double)ms, knob_held_);
+  if (menu.open && menu.busy && !menu.sent && !flight_) {
+    send_set();
+    ms = clock->ms();
+  }
   knob_light();
 
   long long n = now(ms);
@@ -516,7 +556,7 @@ void Board::step() {
     sched.due_now(&update_job, (double)ms);
   }
   bool anim = player.busy((double)ms) || transitioning(ms);
-  if (!flight_ && !(peek.committing && !peek.sent)) {
+  if (!flight_ && !(peek.committing && !peek.sent) && !(menu.busy && !menu.sent)) {
     // While the chooser is open only overdue requests run, so the commit
     // goes out the moment the knob rests. (The peek chooser lets them run:
     // the radar frames it shows may still be on their way.)
@@ -543,10 +583,11 @@ void Board::step() {
   // screen can have changed.
   n = now(ms);
   player.wall_ms = (double)now_ms(ms);
-  std::optional<screen::FrameKey> key = chooser.open ? chooser.frame_key((double)ms)
-                                       : peek.open   ? std::nullopt  // live views: every frame
-                                                     : player.frame_key((double)ms, n);
-  if (transitioning(ms) || (chooser.open ? SHOWN_CHOOSER : peek.open ? SHOWN_PEEK : (int)player.screen) != shown_) key.reset();
+  std::optional<screen::FrameKey> key = menu.open      ? menu.frame_key(player.p["tu"].eq("C"))
+                                       : chooser.open ? chooser.frame_key((double)ms)
+                                       : peek.open    ? std::nullopt  // live views: every frame
+                                                      : player.frame_key((double)ms, n);
+  if (transitioning(ms) || (menu.open ? SHOWN_MENU : chooser.open ? SHOWN_CHOOSER : peek.open ? SHOWN_PEEK : (int)player.screen) != shown_) key.reset();
   if (last_draw_ < 0 || (!key ? ms - last_draw_ >= 33 : key != last_key_)) {
     if (draw_frame(ms, n)) {
       last_draw_ = ms;
@@ -718,20 +759,52 @@ void Board::do_buttons(long long ms) {
 
 void Board::do_knob(long long ms) {
   // Clicks are read even before the first payload so they don't pile up.
-  // While a choice is being sent they wait in the encoder, as they would
-  // behind a blocking request. The push button: a debounced press, and its
+  // While a choice (or a setting from the menu) is being sent they wait in
+  // the encoder, as they would behind a blocking request. The push button: a debounced press, and its
   // release.
   if (!knob) return;
   bool raw = knob->pressed();
   bool down = knob_press_.update(raw, (double)ms), up = false;
-  if (down) knob_held_ = true;
-  else if (knob_held_ && !raw) {
+  if (down) {
+    knob_held_ = true;
+    knob_down_at_ = ms;
+    hold_turned_ = hold_fired_ = false;
+  } else if (knob_held_ && !raw) {
     knob_held_ = false;
     up = true;
   }
-  if (chooser.committing || (peek.open && peek.committing)) return;
+  if (chooser.committing || (peek.open && peek.committing) || menu.busy) return;
   int c = knob->clicks();
   if (!player.has_p) return;
+  // The knob menu (spec §10, "Knob menu"). Held down MENU_HOLD_MS without a
+  // turn: it opens over whatever is up (a chooser the press opened just
+  // closes, nothing chosen), or closes if it's open. The release after that
+  // does nothing.
+  if (c && knob_held_) hold_turned_ = true;
+  if (hold_fired_) {
+    if (up) hold_fired_ = false;
+    return;
+  }
+  if (knob_held_ && !hold_turned_ && !menu.busy && ms - knob_down_at_ >= (long long)control::MENU_HOLD_MS && (menu.open || menu_ok())) {
+    hold_fired_ = true;
+    if (menu.open) {
+      menu.close();
+    } else {
+      chooser.close();
+      peek.open = false;
+      menu.start((double)ms);
+      say("[board] knob: menu");
+    }
+    last_draw_ = -1;
+    return;
+  }
+  if (menu.open) {
+    // A press acts on its release, so a hold can close the menu instead.
+    if (down) menu.last = (double)ms;
+    if (c) menu.turn(c, (double)ms);
+    if (up && !menu.busy) menu_press(ms);
+    return;
+  }
   const Value &k = player.p["knob"];
   int n = (int)k["ring"].size();
   if (n < 1) return;  // a server without the knob ring
@@ -885,6 +958,81 @@ void Board::draw_peek(draw::Frame &f, long long ms, long long n) {
   draw::peek_overlay(f, player.p, pk);
   if (!player.hw_bright)
     draw::apply_brightness(f, player.bright ? *player.bright : player.p["bright"].is_null() ? 100 : player.p["bright"].num());
+}
+
+// A press in the knob menu, on the chosen item.
+void Board::menu_press(long long ms) {
+  switch (menu.sel) {
+    case draw::MENU_OFF:
+      queue_set("off", "");
+      break;
+    case draw::MENU_UNIT:
+      queue_set("unit", player.p["tu"].eq("C") ? "F" : "C");
+      break;
+    case draw::MENU_EXIT:
+      menu.close();
+      break;
+    default:  // WiFi setup and restart ask first
+      if (menu.ask((double)ms)) break;
+      {
+        bool wifi = menu.sel == draw::MENU_WIFI;
+        menu.close();
+        if (wifi && setup) {
+          say("[setup] chosen on the knob menu; opening setup");
+          setup->run("asked");  // on the board: restarts when it's done
+        } else if (!wifi) {
+          say("[board] knob menu: restarting");
+          status("restarting");
+          if (ota) ota->restart();
+        }
+      }
+  }
+  last_draw_ = -1;
+}
+
+// A setting the menu changed (off, the unit): sent like the knob's select
+// (/board/set), as soon as no other request is in flight. The menu stays up,
+// and the knob waits, until the answer lands.
+void Board::queue_set(const std::string &key, const std::string &value) {
+  set_key_ = key;
+  set_value_ = value;
+  menu.busy = true;
+  menu.sent = false;
+}
+
+void Board::send_set() {
+  Flight f;
+  f.menu = true;
+  f.id = set_key_;
+  f.variant = set_value_;
+  menu.sent = true;
+  if (watchdog) watchdog->feed();
+  job_err_.clear();
+  f.work = [this] { return net->set(flight_->id, flight_->variant, flight_->v, flight_->err); };
+  launch(std::move(f));
+}
+
+void Board::after_set(Flight &f, long long ended) {
+  stats.fetches++;
+  menu.busy = menu.sent = false;
+  menu.last = (double)ended;
+  if (f.ok) {
+    say("[board] knob menu: " + f.id + (f.variant.empty() ? "" : " " + f.variant));
+    apply(f.v, f.started, ended);
+    reached_server = true;
+    fails = 0;
+    led_base = "ok";
+    update_job.due_at = (double)(ended + (long long)update_job.interval_ms);
+    if (f.id == "off") menu.close();  // the panel is dark now; a turn or press wakes it
+  } else {
+    std::string reason = f.err.empty() ? "Error" : f.err;
+    say("[board] set failed: " + reason);
+    stats.fails++;
+    last_error = "set:" + reason;
+    fails++;
+    led_base = "failing";
+  }
+  last_draw_ = -1;
 }
 
 void Board::start_fade(long long ms) {

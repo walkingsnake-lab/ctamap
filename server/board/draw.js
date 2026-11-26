@@ -1983,6 +1983,40 @@
       return f;
     }
 
+    // ---- knob menu (spec §10, "Knob menu") ----
+    // Holding the knob opens it over the whole panel: five 9x9 icons low on
+    // the panel (rows 19-27, MENU.pitch apart, centered), the chosen one lit
+    // with a 9x1 underline on row 30 and named above in 5x7; the rest at
+    // MENU.off of the label color. The units icon is the unit itself (the
+    // payload's `tu`). A restart or WiFi setup pressed once asks first: its
+    // name with a question mark, icon and underline red, until a second
+    // press. opts.menu: {sel, confirm}. No amber (amber means a live train).
+    const MENU = { items: ['off', 'unit', 'wifi', 'restart', 'exit'], names: ['SCREEN OFF', 'UNITS', 'WIFI SETUP', 'RESTART', 'EXIT'], top: 19, pitch: 12, widePitch: 16, off: 0.3 };
+    const MENU_ICONS = {
+      off: ['....#....', '..#.#.#..', '.#..#..#.', '#...#...#', '#...#...#', '#.......#', '.#.....#.', '..#...#..', '...###...'],
+      F: ['.#..#####', '#.#.#....', '.#..#....', '....#....', '....####.', '....#....', '....#....', '....#....', '....#....'],
+      C: ['.#...###.', '#.#.#...#', '.#..#....', '....#....', '....#....', '....#....', '....#....', '....#...#', '.....###.'],
+      // The ticker's tracked waves (TICKER_ICONS.live) at 9 px, with a corner dot.
+      wifi: ['.........', '###......', '...##....', '.....#...', '###...#..', '..##..#..', '...##..#.', '##..#..#.', '##..#..#.'],
+      restart: ['...###.#.', '..#...##.', '.#...###.', '#........', '#.......#', '#.......#', '.#.....#.', '..#...#..', '...###...'],
+      exit: ['.........', '.#.....#.', '..#...#..', '...#.#...', '....#....', '...#.#...', '..#...#..', '.#.....#.', '.........'],
+    };
+    function renderMenu(p, opts) {
+      const w = colsOf(p), f = newFrame(w), m = (opts && opts.menu) || {};
+      const n = MENU.items.length, sel = (((m.sel || 0) % n) + n) % n;
+      const sure = !!m.confirm && (MENU.items[sel] === 'wifi' || MENU.items[sel] === 'restart');
+      const on = sure ? C.red : C.label, off = scaleColor(C.label, MENU.off);
+      const pitch = w === WIDE ? MENU.widePitch : MENU.pitch;
+      const x0 = Math.floor((w - ((n - 1) * pitch + 9)) / 2);
+      ctext(f, '5x7', MENU.names[sel] + (sure ? '?' : ''), w / 2, 15, on);
+      MENU.items.forEach((item, i) => {
+        const rows = MENU_ICONS[item === 'unit' ? (p.tu === 'C' ? 'C' : 'F') : item], col = hex(i === sel ? on : off), x = x0 + i * pitch;
+        rows.forEach((row, j) => [...row].forEach((ch, k) => { if (ch === '#') f.set(x + k, MENU.top + j, col); }));
+        if (i === sel) f.fill(x, 30, 9, 1, on);
+      });
+      return f;
+    }
+
     // ---- peek chooser (spec §10, "Knob"; contract "Peek") ----
     // While the knob turns, the screen on the panel stays (live) and dims to
     // PEEK.dim under the icon bar on rows 21-31: one 7x7 icon per ring entry
@@ -3419,7 +3453,7 @@
     }
 
     function renderScreen(p, o, screen) {
-      return screen === 'peek' ? renderPeek(p, o) : screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
+      return screen === 'menu' ? renderMenu(p, o) : screen === 'peek' ? renderPeek(p, o) : screen === 'chooser' ? renderChooser(p, o) : screen === 'ticker' ? renderTicker(p, o) : screen === 'weather' ? renderWeather(p, o)
         : screen === 'baseball' ? renderBaseball(p, o) : screen === 'clock' ? renderClock(p, o)
         : screen === 'announce' ? renderAnnounce(p, o) : renderTransit(p, o);
     }
@@ -3464,7 +3498,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderPeek, peekOverlay, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderChooser, renderMenu, MENU, MENU_ICONS, renderPeek, peekOverlay, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };

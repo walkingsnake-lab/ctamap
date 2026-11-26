@@ -486,6 +486,13 @@ Nov 21: the grid drops to 2.2 (`p4.tint_grid()`: the grid less the white, rounde
 
 Nov 21, later: one gray layer less, 0.4 (strip B), for a brighter picture and a slightly lighter face when off. Stack 2.72 (0.12 deeper than the two-colour 2.6); the white is now at 0.40-0.52 in the slicer. The panel moves another 0.2 forward in V6. Then, after a test print, the white goes from 0.12 to 0.2 (more scatter): every layer 0.2, no height-range modifier; stack 2.8, the panel 0.08 back again.
 
+## V6 knob and trim ring (Nov 24)
+From the first V6 build: about 1 mm of each M2.5 head beside the knob showed, and the trim ring flexed.
+- **Knob 39 mm** (`v6.KNOB_R` 19.5, was 17.7), same height. The heads end 17.55 mm from the axis, so the 35.4 mm knob covered them only from straight above (0.15 mm); now by 1.95, which hides them down to about 45 deg. V6 builds its own `p4-v6-knob-white.stl`; `p4-knob.stl` (V5, and the P5's end-wall knob) is unchanged.
+- **Trim ring 44 mm** (`v6.RING_R` 22.0, was 41.3): 2.5 mm round the knob, 5.1 mm to the back edge.
+- **Ring cap 0.8** (`v6.RING_CAP`, was 0.4): the flange hung off a 0.4 annulus between the nut and the tower neck's edge; ~8x stiffer there. The neck stands 0.8 above the walnut (was 1.2); the stack under the nut is unchanged (0.6 tower roof + 0.8 cap over the relief, 1.4 as before), so the nut, the bushing's thread and the knob's 1 mm gap don't move. A solid 1.2 ring was tried: the neck would stand 0.4, a fin in the chassis's back-down print (meshcheck thin on 53 layers).
+- **Ring in PETG-CF** (`p4-v6-trim-ring-black.stl`, was translucent PETG): about 2-3x PETG's stiffness, and it holds the nut's clamp. Needs a hardened nozzle; black PLA is the fallback.
+
 ## V6: flush screws, lands, and a frame for the USB port (Nov 25)
 The first V6 build (birch skin, the no-insert chassis) showed three things at the walnut's screws, worst at the USB end.
 - **The screws never clamped.** "They go fully in but stop just short of really gripping the shell." No pad was at a screw (pads() leaves them clear of the inserts' mouths, and the end walls' rows are at +/-14 and +/-34 from mid height, the screws at +/-50), so every screw closed 0.1-0.25 mm of air by bending the wall, on threads cut in PETG.

@@ -105,6 +105,8 @@ struct Server : app::Net {
   std::string cloud = "p1";                       // the skyline's cloud strip id, "" for a clear sky
   std::string msg = "null";                       // the announce screen's message (payload `msg`), raw JSON
   int cols = 64;                                  // the board's width: 128 sends payload `cols`
+  std::string tu;                                 // the knob menu's unit (payload `tu`), "" for a server without /board/set
+  std::vector<std::string> sets;                  // what the knob menu set, as key:value
 
   bool deferred = false;  // on the SimWorker: requests take time without moving the loop's clock
   long long owed = 0;     // simulated time the deferred requests took
@@ -199,7 +201,7 @@ struct Server : app::Net {
            ",\"warn\":" + (tornado ? "{\"kind\":\"tor\",\"lvl\":\"warning\"}" : "null") +
            ",\"radar\":{\"on\":" + (radar_on ? "true" : "false") + ",\"visit\":" + visit + ",\"frames\":" + frames +
            ",\"ft\":" + ft + ",\"timeBox\":[40,0,24,22],\"split\":false},\"mlb\":{\"layout\":\"" + layout +
-           "\",\"games\":" + game_list + "}" + knob + skyline() + pv + ",\"msg\":" + msg + "}";
+           "\",\"games\":" + game_list + "}" + knob + skyline() + pv + (tu.empty() ? "" : ",\"tu\":\"" + tu + "\"") + ",\"msg\":" + msg + "}";
   }
 
   app::ConnectResult connect(const app::Networks &networks, const app::StatusFn &status) override {
@@ -253,6 +255,16 @@ struct Server : app::Net {
     if (cat == "weather" && !var.empty()) wx_view = var;
     if (cat == "clock" && !var.empty()) face = var;
     screen = cat == "sports" ? "baseball" : cat == "auto" || cat == "cycle" ? "transit" : cat == "transit" ? tscreen : cat;
+    v++;
+    out = parse(payload());
+    return true;
+  }
+
+  bool set(const std::string &key, const std::string &value, Value &out, std::string &err) override {
+    if (!call("set:" + key, err)) return false;
+    sets.push_back(key + ":" + value);
+    if (key == "off") bright = 0;
+    if (key == "unit") tu = value;
     v++;
     out = parse(payload());
     return true;
@@ -1854,6 +1866,208 @@ static void test_peek_turn_shows_the_view_press_steps_the_variant_rest_commits()
   CHECK(S(r->board) == "weather", "%s", S(r->board).c_str());
 }
 
+// ---- knob menu (spec §10, "Knob menu") ----
+
+static Rig *menu_rig() {
+  Rig *r = new Rig({"ok"}, false, false, 0, "", "", true);
+  r->server.peek = true;
+  r->server.tu = "F";
+  r->board->connect();
+  r->run_for(5000);
+  return r;
+}
+static const draw::RGB LABEL = draw::hexc(0xd8d8d8), RED = draw::hexc(0xff2020);
+
+// Hold the knob down past the menu's hold, then let go.
+static void hold(const std::unique_ptr<Rig> &r) {
+  r->knob.down = true;
+  r->run_for((long long)control::MENU_HOLD_MS + 100);
+  r->knob.down = false;
+  r->run_for(100);
+}
+
+static void test_menu_a_hold_opens_it_a_turn_moves_and_exit_closes() {
+  std::unique_ptr<Rig> r(menu_rig());
+  r->knob.down = true;
+  r->run_for((long long)control::MENU_HOLD_MS - 100);
+  CHECK(!r->board->menu.open, "not before the hold is up");
+  CHECK(r->board->peek.open, "the press opened the chooser, as ever");
+  r->run_for(200);
+  CHECK(r->board->menu.open && !r->board->peek.open, "the menu, in place of the chooser");
+  // SCREEN OFF chosen: its icon (x3-11) underlined on row 30, the rest dim.
+  CHECK(px(r, 3, 30) == LABEL && px(r, 11, 30) == LABEL && px(r, 15, 30) == draw::RGB{}, "the first item underlined");
+  CHECK(px(r, 7, 19) == LABEL, "its icon lit");
+  CHECK(px(r, 52, 20) == draw::scale_color(LABEL, 0.3), "the exit icon dim");
+  r->knob.down = false;
+  r->run_for(200);
+  CHECK(r->board->menu.open && r->board->menu.sel == 0, "letting go after the hold does nothing");
+  CHECK(r->server.sets.empty() && r->server.selects.empty(), "nothing sent");
+  r->knob.pending = 4;
+  r->run_for(100);
+  CHECK(r->board->menu.sel == 4 && px(r, 51, 30) == LABEL, "four clicks on: exit");
+  r->knob.pending = 1;
+  r->run_for(100);
+  CHECK(r->board->menu.sel == 0, "it wraps");
+  r->knob.pending = -1;
+  r->run_for(100);
+  press(r);
+  r->run_for(100);
+  CHECK(!r->board->menu.open, "a press on exit closes it");
+  CHECK(r->board->fading(r->clock.t), "back to the screen with the fade");
+  r->run_for(1500);
+  CHECK(!r->board->peek.open && r->server.selects.empty() && r->server.sets.empty(), "and chooses nothing");
+  CHECK(S(r->board) == "transit", "%s", S(r->board).c_str());
+}
+
+static void test_menu_units_writes_through_and_stays_open() {
+  std::unique_ptr<Rig> r(menu_rig());
+  hold(r);
+  r->knob.pending = 1;
+  r->run_for(100);
+  // The units icon is the unit: F has its top bar across x19-23, C doesn't reach x19.
+  CHECK(px(r, 19, 19) == LABEL, "F drawn");
+  press(r);
+  r->run_for(200);
+  CHECK(r->board->menu.busy, "on its way");
+  r->knob.pending = 2;  // the knob waits for the answer
+  r->run_for(LATENCY + 500);
+  CHECK(r->server.sets == std::vector<std::string>({"unit:C"}), "%zu", r->server.sets.size());
+  CHECK(r->board->menu.open && !r->board->menu.busy, "still open");
+  CHECK(r->board->player.p["tu"].eq("C") && px(r, 19, 19) == draw::RGB{}, "C drawn from the answer");
+  r->run_for(200);
+  CHECK(r->board->menu.sel == 3, "the clicks made meanwhile arrive after: %d", r->board->menu.sel);
+  r->knob.pending = -2;
+  r->run_for(100);
+  press(r);
+  r->run_for(LATENCY + 700);
+  CHECK(r->server.sets.size() == 2 && r->server.sets[1] == "unit:F", "and back");
+  // A failed request leaves the unit and the menu as they were.
+  r->run_for(4000);  // (clear of the update due about now, so the failure is the set's)
+  r->server.fail_next = 1;
+  press(r);
+  r->run_for(LATENCY + 700);
+  CHECK(r->server.sets.size() == 2 && r->board->menu.open && r->board->player.p["tu"].eq("F"), "nothing changed");
+  CHECK(r->board->last_error == "set:OSError", "%s", r->board->last_error.c_str());
+}
+
+static void test_menu_screen_off_turns_the_panel_off_and_closes() {
+  std::unique_ptr<Rig> r(menu_rig());
+  hold(r);
+  press(r);
+  r->run_for(LATENCY + 700);
+  CHECK(r->server.sets == std::vector<std::string>({"off:"}), "%zu", r->server.sets.size());
+  CHECK(!r->board->menu.open, "closed");
+  r->run_for(1000);
+  CHECK(max_in(r, 0, 31) == 0, "the panel is dark: %d", max_in(r, 0, 31));
+  // The first turn wakes it (the knob's select), as before.
+  for (int i = 0; i < 3 && r->server.selects.empty(); i++) {  // (a click during another request is dropped)
+    r->knob.pending = 1;
+    r->run_for(LATENCY + 500);
+  }
+  CHECK(r->server.selects.size() == 1, "%zu", r->server.selects.size());
+}
+
+static void test_menu_restart_and_wifi_setup_ask_first() {
+  std::unique_ptr<Rig> r(menu_rig());
+  SimOta o;
+  r->board->ota = &o;
+  SimSetup su;
+  su.server = &r->server;
+  su.clock = &r->clock;
+  r->board->setup = &su;
+  hold(r);
+  r->knob.pending = 3;
+  r->run_for(100);
+  press(r);
+  r->run_for(100);
+  CHECK(r->board->menu.confirm && o.restarts == 0, "one press only asks");
+  CHECK(px(r, 39, 30) == RED, "in red");
+  r->knob.pending = 1;
+  r->run_for(100);
+  CHECK(!r->board->menu.confirm && r->board->menu.sel == 3, "a turn cancels and stays put");
+  press(r);
+  r->run_for((long long)control::MENU_CONFIRM_MS + 200);
+  CHECK(!r->board->menu.confirm && r->board->menu.open && o.restarts == 0, "the question lapses");
+  press(r);
+  r->run_for(100);
+  press(r);
+  r->run_for(100);
+  CHECK(o.restarts == 1 && !r->board->menu.open, "the second press restarts: %d", o.restarts);
+  CHECK(!r->statuses.empty() && r->statuses.back() == "restarting", "%s", r->statuses.empty() ? "" : r->statuses.back().c_str());
+  r->run_for(500);
+  hold(r);
+  r->knob.pending = 2;
+  r->run_for(100);
+  press(r);
+  r->run_for(100);
+  CHECK(su.runs.empty() && r->board->menu.confirm, "WiFi setup asks too");
+  press(r);
+  r->run_for(100);
+  CHECK(su.runs == std::vector<std::string>({"asked"}), "%zu", su.runs.size());
+  CHECK(!r->board->menu.open, "");
+}
+
+static void test_menu_closes_at_rest_or_on_a_second_hold() {
+  std::unique_ptr<Rig> r(menu_rig());
+  hold(r);
+  CHECK(r->board->menu.open, "");
+  r->run_for((long long)control::MENU_REST_MS - 1000);
+  CHECK(r->board->menu.open, "not yet");
+  r->run_for(1200);
+  CHECK(!r->board->menu.open, "left alone, it closes");
+  hold(r);
+  CHECK(r->board->menu.open, "");
+  hold(r);
+  CHECK(!r->board->menu.open, "a second hold closes it");
+  r->run_for(1500);
+  CHECK(!r->board->peek.open && r->server.selects.empty() && r->server.sets.empty(), "nothing chosen");
+}
+
+static void test_menu_a_hold_with_a_turn_is_still_hold_and_turn() {
+  std::unique_ptr<Rig> r(menu_rig());
+  r->knob.pending = 1;  // weather
+  r->run_for(300);
+  r->knob.down = true;
+  r->run_for(500);
+  r->knob.pending = 1;
+  r->run_for(2500);
+  CHECK(!r->board->menu.open && r->board->peek.open, "the chooser, not the menu");
+  CHECK(r->board->peek.vi() == 1, "the variant stepped: %d", r->board->peek.vi());
+  r->knob.down = false;
+  r->run_for(100);
+}
+
+static void test_menu_needs_a_server_that_takes_settings() {
+  std::unique_ptr<Rig> r(peek_rig());  // no `tu` in its payloads
+  hold(r);
+  CHECK(!r->board->menu.open, "no menu");
+  CHECK(r->board->peek.open, "the press is the chooser's");
+}
+
+static void test_no_wifi_a_knob_press_opens_setup() {
+  std::vector<std::string> wifi(40, "nowifi");
+  Rig r(wifi, false, false, 0, "", "", true);
+  SimSetup su;
+  su.server = &r.server;
+  su.clock = &r.clock;
+  r.board->setup = &su;
+  r.knob.down = true;
+  r.board->connect();
+  CHECK(su.runs == std::vector<std::string>({"asked"}), "%zu", su.runs.size());
+  CHECK(su.at < 10000, "during the first wait, not after ten minutes: %lld", su.at);
+  CHECK(r.board->online, "");
+  // The screen says so (a third line, rows 22-26), only with the hint.
+  draw::Frame a, b;
+  draw::render_status(a, "nowifi", "press");
+  draw::render_status(b, "nowifi", "");
+  int lit_a = 0, lit_b = 0;
+  for (int x = 0; x < 64; x++) {
+    lit_a += a.get(x, 24).r > 0;
+    lit_b += b.get(x, 24).r > 0;
+  }
+  CHECK(lit_a > 0 && lit_b == 0, "%d %d", lit_a, lit_b);
+}
+
 // The knob's own light follows the hovered category while the chooser is
 // open (its peek color at a quarter), holds through the rest and the commit,
 // and goes out as the chooser closes; it's written only on a change.
@@ -2340,6 +2554,14 @@ int main() {
       T_(test_peek_prefetches_radar_frames_and_clouds),
       T_(test_peek_survives_a_long_burst_of_turns_and_presses),
       T_(test_peek_survives_its_variants_changing_under_it),
+      T_(test_menu_a_hold_opens_it_a_turn_moves_and_exit_closes),
+      T_(test_menu_units_writes_through_and_stays_open),
+      T_(test_menu_screen_off_turns_the_panel_off_and_closes),
+      T_(test_menu_restart_and_wifi_setup_ask_first),
+      T_(test_menu_closes_at_rest_or_on_a_second_hold),
+      T_(test_menu_a_hold_with_a_turn_is_still_hold_and_turn),
+      T_(test_menu_needs_a_server_that_takes_settings),
+      T_(test_no_wifi_a_knob_press_opens_setup),
       T_(test_radar_frame_size_by_id),
       T_(test_setup_opens_right_away_with_no_networks),
       T_(test_a_new_owner_wipe_forgets_wifi_once_per_stamp),
