@@ -189,10 +189,9 @@ CAP_SCREWS = ((KY, ZC + 50.0), (KY, ZC - 50.0))            # (y, z) on each end 
 # chassis numbers taken from the tray
 XIN = C.BORE_HX - DR.TRAY_CL - DR.TRAY_WT                 # inner half width (134.15)
 HZ = C.BORE_HZ - DR.TRAY_CL - DR.TRAY_WT                  # inner half height (70.15)
-RIN = C.BORE_R - DR.TRAY_CL - DR.TRAY_WT
 ZIN0, ZIN1 = ZC - HZ, ZC + HZ                              # bottom / top wall, inner faces
 ZO0, ZO1 = ZIN0 - DR.TRAY_WT, ZIN1 + DR.TRAY_WT            # outer faces
-YB0, YB1 = DR.Y0, DR.Y1                                    # back plate: inner, outer face (67, 69)
+YB1 = DR.Y1                                                # back plate: outer face (69)
 PB = p4.PANEL_BACK - p4.PANEL_THIN + RIM_GAP + p4.panel_extra()    # the panel housing's back in V6 (p4.CASE_DIFFUSER's stack)
 BOSS_Y = PB + STANDOFF_L + WASHER_T                        # the posts' feet: a standoff and its washer behind the panel
 
@@ -570,9 +569,8 @@ LEG_Y0, LEG_Y1 = 34.0, 64.0                               # the wall tongues: be
 LEG_SCREW_Y = (38.0, 47.0)                                # M3 x 8 countersunk through the right half's walls, heads under the planks
 LEG_ROOT_X = 10.0                                         # how far back into the left half the tongues are rooted
 ENC_KEEP = (21.5, 59.6)                                   # the top tongue's root stays right of x, or behind y: the encoder
-KNUCKLE_Z = (ZC + 21.0, ZC + 41.0)                        # back-plate knuckles: above the ribbon, below the top louvers
-KN_BLOCK, KN_HZ, KN_PIER = 9.0, 6.0, 4.0                  # the left half's block: reach past the joint, half height; the right's piers
-KN_Y0, KN_Y1 = 56.0, 64.0                                 # the right half's bridge over the block: its front face, the block's top
+KN_BLOCK = 9.0                                            # the knuckles' block (p4v55.knuckles): reach past the joint
+KN_Y0 = 56.0                                              # the right half's bridge over the block: its front face
 KN_CL = 0.2
 
 
