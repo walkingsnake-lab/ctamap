@@ -101,6 +101,12 @@ def configure_shell():
 # ---- tray ----
 LV_H, LV_PITCH, LV_DEPTH, LV_CH = 3.5, 5.0, 5.0, 1.5
 LV_ROWS = 3
+# The slots rise LV_DEPTH going inward (45 deg), both bands. In the top band that runs the top row into the top wall, where
+# it is cut 0.6 under the wall's face: about half the open area of the rows below it. TOP_FALL (v6p3.py) slopes the top band's
+# slots the other way, down going inward, mirroring the bottom band: the top row opens fully, every top slot's outer end is
+# higher than its inner end (warm air rises out), and the corner between the top wall and the back keeps 2.5 mm of PETG along
+# its length, as the bottom one does. The back face looks the same. Off: the V5 and P4 trays as printed.
+TOP_FALL = False
 LV_SPLIT = 6.0                                  # bar across the middle of the top louvers: full-width slots left the band flexible
 HOOK_RW = 20.3
 TIE_OPEN, TIE_GAP, TIE_BAR, TIE_LEN, TIE_EXIT = 14.0, 3.0, 2.0, 6.0, 3.0   # tie loop: tunnel width, depth, bar, length, end room
@@ -281,7 +287,7 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
         return prism_x(cs, -xin - 0.5, xin + 0.5) ^ prism_y(inner_ov, y_in - 1, Y0 + 1)   # overlaps the walls: no touching seams
     zb_rows = [zin0 + 2.5 + LV_H / 2 + i * LV_PITCH for i in range(LV_ROWS)]
     zt_rows = [zin1 - 2.5 - LV_H / 2 - i * LV_PITCH for i in range(LV_ROWS)][::-1]
-    t = t + band(zin0 - 0.5, zb_rows[-1] + LV_H / 2 + LV_DEPTH + 1.5) + band(zt_rows[0] - LV_H / 2 - 1.5, zin1 + 0.5)   # into the walls
+    t = t + band(zin0 - 0.5, zb_rows[-1] + LV_H / 2 + LV_DEPTH + 1.5) + band(zt_rows[0] - LV_H / 2 - 1.5 - (LV_DEPTH if TOP_FALL else 0.0), zin1 + 0.5)   # into the walls
     # bottom screw bosses (plate v3's, now standing on the tray's bottom wall)
     t = t + bottom_bosses(zin0)
     # panel posts at the four corner inserts
@@ -346,6 +352,8 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     for zc in zb_rows + zt_rows:
         segs = [(-x_lim, x_lim)]
         lo, hi = zc - r - 0.5, zc + LV_DEPTH + r + 0.5                      # the slot rises LV_DEPTH going inward
+        if zc > ZC and TOP_FALL:                                             # ... or falls
+            lo, hi = zc - LV_DEPTH - r - 0.5, zc + r + 0.5
         if s3 and any(lo < hz_ + P3.S3_POST_D / 2 + 3.7 and hi > hz_ - P3.S3_POST_D / 2 - 3.7 for hz_ in hzs):
             segs = minus(segs, *pad)
         if zc > ZC:                                                          # top rows: a bar in the middle
@@ -362,7 +370,8 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
             def slab(y, dz, xa=xa, xb=xb, zc=zc):
                 cs = CrossSection.square([xb - xa - 2 * r, 0.01], center=True).offset(r, JT, circular_segments=16).translate([(xa + xb) / 2, zc + dz])
                 return prism_y(cs, y, y + 0.01)
-            sl = Manifold.batch_hull([slab(Y1 + 0.5, -0.5), slab(y_in - 0.5, LV_DEPTH + 0.5)])
+            fall = -1 if (zc > ZC and TOP_FALL) else 1
+            sl = Manifold.batch_hull([slab(Y1 + 0.5, -0.5 * fall), slab(y_in - 0.5, (LV_DEPTH + 0.5) * fall)])
             # the top row's slot rises into the top wall near its inner end: stop it 0.6 under the wall (a slot roof
             # grazing the wall's face left a zero-thickness sheet, non-manifold in the STL)
             sl = sl ^ box(-HW, HW, Y0 - 20, D + 5, -5, zin1 - 0.6)
@@ -548,7 +557,8 @@ def hook_bottom():
 def louver_gaps(zc, r, encoder=True):
     """x ranges of a top louver row (centre zc, slot half height r) behind the sensor hooks: there the slot stops
     LV_BLIND short of the band's inner face (blind), so the hook's root stays whole and the back face looks as before"""
-    lo, hi = zc + LV_DEPTH + 0.5 - r, zc + LV_DEPTH + 0.5 + r          # the slot's inner end, where the hooks are
+    end = zc - LV_DEPTH - 0.5 if (zc > ZC and TOP_FALL) else zc + LV_DEPTH + 0.5
+    lo, hi = end - r, end + r                                           # the slot's inner end, where the hooks are
     out = []
     if SENSOR_MOUNT == 'sled' and not (hi < hook_bottom() or lo > _zw()):
         out += [(hx - hook_half() - 0.6, hx + hook_half() + 0.6) for hx in hook_xs()]

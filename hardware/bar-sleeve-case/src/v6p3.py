@@ -74,6 +74,7 @@ INS_D, INS_DEPTH, INS_RELIEF = 4.4, 5.0, 3.2   # heat-set insert M3 x D5 x L4: t
 FASTEN = os.environ.get('V6_FASTEN', 'insert')
 assert FASTEN in ('insert', 'tap'), FASTEN
 DR.WIN_T = 0.5                   # the status window 0.5 thick (v6.py)
+DR.TOP_FALL = True               # the top band's slots slope down going inward (drawer.TOP_FALL): its top row opens fully (Nov 26)
 PAD_W, PAD_RUN = 4.0, 8.0
 CSK_D = float(os.environ.get('V6_CSK_D', '6.4'))   # the countersink's mouth (to be set from the coupon, as the P4's)
 CSK_HEAD, CSK_HEAD_K = 6.0, 1.7  # DIN 7991 flat head
@@ -145,11 +146,13 @@ UNDER_XY = [(sx * x, DR.BOT_Y) for sx in (-1, 1) for x in C.SCREW_XS]      # the
 # its 227 mm rows; at that rate the P3 vented 61% of V5's area. Nov 26 (the owner: heat is not a strong concern, but
 # decent airflow for the worst case): one 8 mm blind stretch in the middle of each free span of the top rows (+/-48), none
 # added to the bottom rows, whose blind stretches over the two screw bosses (x +/-46, 13 mm) already sit there. 32 mm of
-# each band tied (V5: 6 top, 26 bottom; 66 / 71 before), 85% of V5's vent area (VENT_MIN in check()). The P3's rows are
-# 160 mm, its V5 walls never pressed in, and the lip now holds the sleeve's back edge.
+# each band tied (V5: 6 top, 26 bottom; 66 / 71 before), 85% of V5's vent area. The P3's rows are
+# 160 mm, its V5 walls never pressed in, and the lip now holds the sleeve's back edge. Then the top band's slots turned to
+# slope down going inward (drawer.TOP_FALL): its top row, cut short by the top wall before, opens fully, and slots behind
+# the encoder rails and the sensor's hooks no longer end in them: 2528 mm2, 97% of V5's.
 TIES = dict(top=[(-20.0, -4.0)], bottom=[(4.7, 20.7)])
 BLIND = dict(top=[(-52.0, -44.0), (44.0, 52.0)], bottom=[])
-VENT_MIN = 2100.0                # mm2: the louvers' open area, at its narrowest along each slot, summed (V5's: 2624)
+VENT_MIN = 2400.0                # mm2: the louvers' open area, at its narrowest along each slot, summed (V5's: 2618)
 
 
 def ccw(pts):
@@ -519,16 +522,17 @@ def tilted(m, deg):
     return m.translate([0, 0, -zc]).rotate([0, deg, 0]).translate([0, 0, zc])
 
 
-def vent_area(t):
+def vent_area(t, fall=None):
     """the louvers' open area (mm2): for each of the six rows, the open cross-section of its slot at the narrowest of ten
     depths from the back face to the band's inside (where a blind stretch closes it), summed"""
     r = DR.LV_H / 2
     zs = [ZIN1 - 2.5 - r - i * DR.LV_PITCH for i in range(DR.LV_ROWS)] + [ZIN0 + 2.5 + r + i * DR.LV_PITCH for i in range(DR.LV_ROWS)]
     y_in, tot = DR.Y1 - DR.LV_DEPTH, 0.0
+    fall = DR.TOP_FALL if fall is None else fall
     for zc in zs:
         best = 1e9
         for y in np.linspace(DR.Y1 - 0.3, y_in + 0.2, 10):
-            z = zc + (DR.Y1 - y)                                   # the slot rises LV_DEPTH going inward
+            z = zc + (DR.Y1 - y) * (-1 if (zc > ZC and fall) else 1)   # the slot rises (or falls) LV_DEPTH going inward
             b = box(-XIN, XIN, y - 0.05, y + 0.05, z - r - 0.6, z + r + 0.6)
             best = min(best, (b - t).volume() / 0.1)
         tot += best
@@ -541,7 +545,11 @@ def check(P):
     ch, sl, seat, ring = P['chassis'], P['sleeve'], P['seat'], P['ring']
     dif, pan, so, enc, s3, sen = P['diffuser'], P['panel'], P['standoffs'], P['encoder'], P['s3'], P['sensor']
     S = P['screws']
-    v5 = DR.tray()
+    saved, DR.TOP_FALL = DR.TOP_FALL, False
+    try:
+        v5 = DR.tray()                                             # V5's tray as printed
+    finally:
+        DR.TOP_FALL = saved
     rows = [(f'chassis on the bed: its back {ch.bounding_box()[4]:.3f}, the plate\'s outer face {DR.Y1:.3f}', round(abs(ch.bounding_box()[4] - DR.Y1) * 100, 2)),
             (f'sleeve on the bed: its back {sl.bounding_box()[4]:.3f}, D {D:.3f}', round(abs(sl.bounding_box()[4] - D) * 100, 2)),
             ('sleeve / chassis, seated (the lip on the seat)', v(sl, ch)),
@@ -585,7 +593,7 @@ def check(P):
     tip = box(DR.S3_EDGE - 2.5, DR.S3_EDGE - 0.5, top + 0.7, top + 1.5, pz - 4.1, pz + 4.1)
     rows.append(("a plug's tip over the receptacle, not blocked by the port stop, mm3", round(tip.volume() - (tip ^ ch).volume(), 2)))
     va = vent_area(ch)
-    rows.append((f'louver open area {va:.0f} mm2 (V5 {vent_area(v5):.0f}; at least {VENT_MIN:.0f})', 0.0 if va >= VENT_MIN else round(VENT_MIN - va, 1)))
+    rows.append((f'louver open area {va:.0f} mm2 (V5 {vent_area(v5, False):.0f}; at least {VENT_MIN:.0f})', 0.0 if va >= VENT_MIN else round(VENT_MIN - va, 1)))
     # the ways in
     loaded = ch + pan + so + dif + s3 + sen + P['sled']
     rows.append(('loaded chassis sliding into the sleeve from the back (0.3-70 mm out)', round(max(v(loaded.translate([0, q, 0]), sl) for q in (0.3, 0.5, 1, 2, 4, 8, 16, 24, 32, 40, 50, 60, 70)), 2)))
