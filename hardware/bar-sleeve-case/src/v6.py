@@ -61,6 +61,7 @@ import panel
 # ---------------------------------------------------------------- settings
 SEAM = W / 2 - 15.5              # |x| where the corner round starts (125.4): plank | end cap
 V_GROOVE = 0.5                   # chamfer a side at the skin's seams
+FRONT_CL = 0.3                   # the chassis's front edge stays this far behind the diffuser's flange, whatever RIM_GAP is
 RIM_GAP = float(os.environ.get('V6_RIM_GAP', '0.15'))   # the diffuser (and panel) sit this far behind the V5 position: the rim
                                  # covers the diffuser's border without pressing on it. 0.3 while the halves had 1 mm of
                                  # front-to-back float and were set against the diffuser by eye (Nov 21); 0.15 since the
@@ -125,11 +126,17 @@ PLANK_SCREWS = tuple((sx * XE, y) for sx in (-1, 1) for y in ((KY,) if SKIN == '
 # so each half's depth is the model's (RIM_GAP). A countersink lies on its side in the back-down print like every hole
 # here, but its roof is the cone's own 45 deg, so it needs no teardrop (the owner: the teardrops "didn't look good").
 FLUSH = SKIN == 'two'
-CSK_D, CSK_HEAD = 6.4, 6.0       # the countersink's mouth, and the head it is drawn for: the head ends 0.2 under the surface
-CSK_K = (CSK_D - SKIN_CL_D) / 2  # the cone's depth (1.5): 2.5 of the 4 mm wall is left under it
+CSK_D = float(os.environ.get('V6_CSK_D', '6.4'))   # the countersink's mouth
+CSK_HEAD, CSK_HEAD_K = 6.0, 1.7  # the head it is drawn for, DIN 7991: a 1.5 cone under a 0.2 rim, which ends level with the
+                                 # surface in a 6.4 mouth. ISO 10642 allows a head up to 6.72 across and 1.86 tall, which
+                                 # would stand up to 0.16 proud in it, and a hole printed on its side comes out small:
+                                 # measure the screws bought, try them in the coupon, and set the mouth from that (review, Nov 25)
+CSK_K = (CSK_D - SKIN_CL_D) / 2  # the cone's depth (1.5 at 6.4): 2.5 of the 4 mm wall is left under it
 LAND_ID, LAND_OD = 7.0, 12.0     # the land round each skin screw: clear of an insert's mouth (4.4) and what the iron raises
-LAND_H, LAND_H_END = PAD_H, 0.20 # as tall as the pads on the top and bottom walls; on the end walls 0.05 short of the
-                                 # 0.25 gap, because the legs slide down past them (the pads there are 0.15)
+LAND_H, LAND_H_END = PAD_H, PAD_H_END    # as tall as the pads beside them, so a wall rests on pads and land alike: 0.24 on
+                                 # the top and bottom walls, 0.15 on the end walls, where the legs slide down past them
+                                 # (0.20 was tried: 0.05 a side, and a half 0.1 off centre dragged its leg over a
+                                 # square-edged land for the whole slide: review, Nov 25)
 # The USB-C port's frame (Nov 25). The tray's right wall was one window from its front edge back past the port, 41 mm
 # tall (port and edge buttons), so a plug was guided only by the walnut's 4 mm: tilted, its tip rode past the port and
 # felt as if it were going in. The wall is now closed round the port: a window PORT_FRAME (y, z) for the plug's housing,
@@ -146,7 +153,7 @@ LAND_H, LAND_H_END = PAD_H, 0.20 # as tall as the pads on the top and bottom wal
 PORT_FRAME = (V.PORT_W + 0.6, V.PORT_H + 0.6)
 PORT_CH = 0.5
 BTN_CL = 0.5
-S3_EDGE_PARTS = dict(receptacle=(-4.47, 4.47, 0.0, 0.03, 3.2), down=(8.81, 11.76, 1.07, 1.0, 2.5), up=(18.59, 21.54, 0.94, 1.0, 2.5),
+S3_EDGE_PARTS = dict(receptacle=(-4.47, 4.47, 0.0, 0.0, 3.2), down=(8.81, 11.76, 1.07, 1.0, 2.5), up=(18.59, 21.54, 0.94, 1.0, 2.5),
                      reset=(28.37, 31.32, 0.44, 1.0, 2.5))      # (from, to) along the edge, past the edge, (from, to) above the face
 CAP_SCREWS = ((KY, ZC + 50.0), (KY, ZC - 50.0))            # (y, z) on each end face; z +/-50 clears the S3 and its window
 
@@ -298,9 +305,13 @@ def csk(a, b, o, axis, s):
 
 
 def flat_screw(a, b, o, axis, s, length=10.0):
-    """an M3 flat head seated in csk()'s countersink (same arguments), its top (CSK_D - CSK_HEAD) / 2 under the face"""
-    d, k = (CSK_D - CSK_HEAD) / 2, (CSK_HEAD - 3.0) / 2
-    m = Manifold.cylinder(k, 1.5, CSK_HEAD / 2 - 0.02, 32).translate([0, 0, -d - k]) + Manifold.cylinder(length - k, 1.5, 1.5, 24).translate([0, 0, -d - length])
+    """an M3 flat head (CSK_HEAD x CSK_HEAD_K: cone, then a rim) seated in csk()'s countersink (same arguments). Its
+    length is overall, as a flat head's is measured."""
+    d, k = (CSK_D - CSK_HEAD) / 2, (CSK_HEAD - 3.0) / 2        # how far down the cone's wide end sits; the cone's height
+    rim = CSK_HEAD_K - k
+    top = -d + rim                                             # the head's top against the face (0 = level)
+    m = Manifold.cylinder(k, 1.5, CSK_HEAD / 2 - 0.02, 32).translate([0, 0, -d - k]) + Manifold.cylinder(rim, CSK_HEAD / 2 - 0.02, CSK_HEAD / 2 - 0.02, 32).translate([0, 0, -d]) \
+        + Manifold.cylinder(length - k - rim, 1.5, 1.5, 24).translate([0, 0, top - length])
     if axis == 'z':
         return (m if s > 0 else m.mirror([0, 0, 1])).translate([a, b, o])
     return m.rotate([0, 90.0 * s, 0]).translate([o, a, b])
@@ -416,10 +427,16 @@ def port_frame():
     py, pz = DR.PORT_Y, DR.PORT_Z
     fy, fz = PORT_FRAME[0] / 2, PORT_FRAME[1] / 2
     back = py + 5.0                                            # the tray's window ended here; the buttons' slot still does
-    region = box(XIN, XIN + DR.TRAY_WT, DR.YF - 1, back + 0.01, pz - 7.5, DR.BTN_Z0 - BTN_CL)    # the old window, below the buttons' slot
-    window = box(XIN - 1, XIN + DR.TRAY_WT + 1, py - fy, py + fy, pz - fz, pz + fz)
+    wt, top = DR.TRAY_WT, DR.BTN_Z0 - BTN_CL
+    # in front of the port the wall is no taller than the window: the Down plunger, which reaches 0.67 into the wall's
+    # thickness, travels 23 mm along here as the S3 goes in, 1.7 over this edge. Only the web beside the window comes
+    # up to BTN_CL under it, behind a ramp
+    front = box(XIN, XIN + wt, DR.YF - 1, py - fy + 0.01, pz - 7.5, pz + fz)
+    frame = box(XIN, XIN + wt, py - fy, back + 0.01, pz - 7.5, top)
+    ramp = along_x([(py - fy - 2.0, pz + fz - 0.01), (py - fy + 0.01, pz + fz - 0.01), (py - fy + 0.01, top)], XIN, XIN + wt)
+    window = box(XIN - 1, XIN + wt + 1, py - fy, py + fy, pz - fz, pz + fz)
     channel = box(XIN - 1, XIN + PORT_CH, DR.YF - 2, py - fy + 0.01, pz - 5.2, pz + 5.2)   # a receptacle is 8.94 wide
-    return region - window, channel
+    return (front + frame + ramp) - window, channel
 
 
 NECK_R = 9.5                     # the tower above the walnut: narrower, so the trim ring keeps 2.7 mm round the screw holes
@@ -535,7 +552,7 @@ def chassis():
     t = (t + pf_add) - pf_cut
     # no crush ribs; the front edge clear of the diffuser's flange, which sits RIM_GAP further back
     t = t ^ C.prism_y(C.rr_cs(C.BORE_HX - DR.TRAY_CL, C.BORE_HZ - DR.TRAY_CL, C.BORE_R - DR.TRAY_CL), 0, D)
-    t = t - box(-400, 400, 0, DR.YF + 2 * RIM_GAP, -5, H + 5)
+    t = t - box(-400, 400, 0, DR.YF + RIM_GAP + FRONT_CL, -5, H + 5)   # (2 x RIM_GAP until the gap shrank: at 0.15 that left the flange 0.15 either way)
     adds = [boss_wall(x, y, sz) for sz in (1, -1) for x, y in PLANK_SCREWS] + [boss_end(y, z, sx) for sx in (-1, 1) for y, z in CAP_SCREWS]
     t = t - Manifold.batch_boolean([cyl_y(x, z, BOSS_Y - WASHER_REC[1] - 1, BOSS_Y, WASHER_REC[0], 48) for x, z in insert_xz()], ADD)   # washer recesses
     t = t + Manifold.batch_boolean(adds, ADD) + pads(t) + (lands() if FLUSH else Manifold())
@@ -644,6 +661,8 @@ def check(P):
             ('skin / chassis', v(sk, ch)),
             ('skin pieces, each other', round(sum((a ^ b).volume() for i, a in enumerate(P['skin'].values()) for b in list(P['skin'].values())[i + 1:]), 2)),
             ('chassis / panel', v(ch, P['panel'])), ('chassis / diffuser', v(ch, dif)), ('skin / diffuser', v(sk, dif)),
+            ('skin 0.1 further back / diffuser (the rim keeps at least that)', v(sk.translate([0, 0.1, 0]), dif)),
+            ('diffuser 0.25 further back / chassis (its flange has that behind it)', v(dif.translate([0, 0.25, 0]), ch)),
             ('chassis / standoffs', v(ch, P['standoffs'])), ('chassis / S3, beyond the V5 tray (its posts stand in the envelope)', round(v(ch, P['s3']) - v(p4.tray_p4(), P['s3']), 2)), ('chassis / sensor', v(ch, P['sensor'])),
             ('chassis / encoder', v(ch, P['encoder'])), ('ring / skin', v(P['ring'], sk)), ('ring / chassis', v(P['ring'], ch)), ('ring / encoder', v(P['ring'], P['encoder'])), ('chassis / pixel', v(ch, pixel())),
             ('standoffs / encoder, S3, sensor', v(P['standoffs'], P['encoder'] + P['s3'] + P['sensor'])),
