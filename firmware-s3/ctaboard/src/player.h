@@ -45,7 +45,8 @@ class Player {
   draw::SkylineFader sky_fade;  // the skyline on screen and the crossfade from the last
   double wall_ms = 0;    // epoch ms, set by the Board before drawing (the skyline's animation clock)
   double msg_start = 0;  // when the announce screen's message appeared (its intro plays from here)
-  long long visit_skip_until = 0;  // epoch s: no Rain nearby visit before then (the knob ended one)
+  long long visit_skip_until = 0;
+  bool overridden = false;  // UP/DOWN chose the screen: no visit to draw on it  // epoch s: no Rain nearby visit before then (the knob ended one)
 
   // ---- inputs ----
   void set_payload(const Value &payload, double ms) { set_payload(Value(payload), ms); }

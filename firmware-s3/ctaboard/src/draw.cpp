@@ -1936,9 +1936,9 @@ static void render_radar_wide(const Value &p, const Value &r, Frame &f, const Va
 }
 
 static void render_weather(const Value &p, Frame &f, std::optional<double> now, std::optional<int> idx_o,
-                           const Frames *frames, bool blink, bool peek = false) {
+                           const Frames *frames, bool blink, bool peek = false, bool visit = false) {
   const Value &r = p["radar"];
-  const Value &ids = r["frames"];
+  const Value &ids = r["vo"].truthy() && !visit ? Value::null_value() : r["frames"];
   int nids = (int)ids.size();
   auto on_hand = [&](int i) { return frames && frames->count(json::str(ids[i])) > 0; };
   int idx;
@@ -2012,14 +2012,15 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   };
   auto clear4 = [&](int x0, int y0, int x1, int y1) { clear(Box{x0, true, y0, x1, y1}); };
 
-  const int seg_w = 2, seg_gap = 1;
+  // The frame indicator: one 1x1 dot per frame, 2 px apart (draw.js; 2x2 before Nov 26, 2026).
+  const int seg_w = 1, seg_h = 1, seg_gap = 1;
   int ind_x = right - (nids * (seg_w + seg_gap) - seg_gap) + 1;
-  if (ids.truthy()) clear4(ind_x, top, right, top + 1);
+  if (ids.truthy()) clear4(ind_x, top, right, top + seg_h - 1);
 
   auto draw_indicator = [&]() {
     int x = ind_x;
     for (int i = 0; i < nids; i++) {
-      f.fill(x, top, seg_w, 2, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : C::indicator);
+      f.fill(x, top, seg_w, seg_h, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : C::indicator);
       x += seg_w + seg_gap;
     }
   };
@@ -2039,15 +2040,13 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   };
 
   if (r["showTime"].is_false() && !r["temp"].is_null()) {
+    // The temperature alone, its digits 2 rows below the dots as on two
+    // panels (no weather icon or gap since Nov 26, 2026: the radar shows the rain).
     ustr ts = vstr(r["temp"]) + U"°";
-    int icon = icon_index(r["icon"]);
-    int iw = icon >= 0 ? 10 : 0;
-    int x0 = right + 1 - (iw + measure(FONT_SMALL, ts));
-    if (icon >= 0) clear4(x0, top + 4, x0 + 7, top + 11);
-    clear(text_box(FONT_SMALL, ts, x0 + iw, top + 10));
+    int x0 = right + 1 - measure(FONT_SMALL, ts);
+    clear(text_box(FONT_SMALL, ts, x0, top + 7));
     draw_indicator();
-    if (icon >= 0) draw_icon(f, icon, x0, top + 4);
-    f.text(FONT_SMALL, ts, x0 + iw, top + 10, C::label);
+    f.text(FONT_SMALL, ts, x0, top + 7, C::label);
     if (ws) draw_warn_tag();
     return;
   }
@@ -2594,6 +2593,7 @@ static void render_chooser(const Value &p, Frame &f, double pos, bool commit) {
 
 static const int MENU_TOP = 19, MENU_PITCH = 12, MENU_WIDE_PITCH = 16;
 static const double MENU_DIM = 0.3;
+static const int MENU_BUMP = 2;  // px the underline overshoots at an end (draw.js MENU.bump)
 static const char *const MENU_NAMES[MENU_N] = {"SCREEN OFF", "UNITS", "WIFI SETUP", "RESTART", "EXIT"};
 static const char *const MENU_ICON_OFF[] = {"....#....", "..#.#.#..", ".#..#..#.", "#...#...#", "#...#...#", "#.......#", ".#.....#.", "..#...#..", "...###..."};
 static const char *const MENU_ICON_F[] = {".#..#####", "#.#.#....", ".#..#....", "....#....", "....####.", "....#....", "....#....", "....#....", "....#...."};
@@ -2602,7 +2602,7 @@ static const char *const MENU_ICON_WIFI[] = {".........", "###......", "...##...
 static const char *const MENU_ICON_RESTART[] = {"...###.#.", "..#...##.", ".#...###.", "#........", "#.......#", "#.......#", ".#.....#.", "..#...#..", "...###..."};
 static const char *const MENU_ICON_EXIT[] = {".........", ".#.....#.", "..#...#..", "...#.#...", "....#....", "...#.#...", "..#...#..", ".#.....#.", "........."};
 
-static void render_menu(const Value &p, Frame &f, int sel_in, bool confirm) {
+static void render_menu(const Value &p, Frame &f, int sel_in, bool confirm, const RenderOpts::Bump &bump) {
   int w = cols_of(p);
   if (w == WIDE) f.w = WIDE;
   int sel = (int)fmod_floor(sel_in, MENU_N);
@@ -2618,7 +2618,7 @@ static void render_menu(const Value &p, Frame &f, int sel_in, bool confirm) {
     for (int j = 0; j < 9; j++)
       for (int k = 0; k < 9; k++)
         if (icons[i][j][k] == '#') f.set(x + k, MENU_TOP + j, col);
-    if (i == sel) f.fill(x, 30, 9, 1, on);
+    if (i == sel) f.fill(x + knob_bump(bump, MENU_BUMP), 30, 9, 1, on);
   }
 }
 
@@ -2682,6 +2682,14 @@ static PeekGlide peek_glide(const RenderOpts::Peek &pk, int k, int vi) {
   return g;
 }
 static double peek_near(int i, double pos) { return std::max(0.0, 1 - std::fabs(i - pos)); }
+
+int knob_bump(const RenderOpts::Bump &b, int px) {
+  if (!b.on || !(b.t > 0) || b.t >= KNOB_BUMP_MS) return 0;
+  double k = b.t < KNOB_BUMP_RISE_MS ? b.t / KNOB_BUMP_RISE_MS : 1 - peek_ease((b.t - KNOB_BUMP_RISE_MS) / (KNOB_BUMP_MS - KNOB_BUMP_RISE_MS));
+  return (int)jsround(px * k) * (b.dir < 0 ? -1 : 1);
+}
+// px a bump carries the 64 bar's underline (x) and lit dot (y) (draw.js PEEK.bumpX, bumpY).
+static const int PEEK_BUMP_X = 2, PEEK_BUMP_Y = 1;
 
 int peek_drop(bool up, double t) {
   return (int)jsround((up ? 1 - peek_ease(t / PEEK_UP_MS) : peek_ease(t / PEEK_DOWN_MS)) * PEEK_BAND);
@@ -2764,8 +2772,8 @@ PeekView peek_view(const Value &p, int k, int vi) {
     return out;
   }
   if (cat == "weather") {
-    // The radar view: every kept frame (pv.radar), rain or not. The
-    // others: the radar loop only while rain is in the box (radar.on).
+    // The radar view: every kept frame (pv.radar), rain or not. The others
+    // never show the radar (they stay put while it rains).
     out.own = true;
     out.v = overlay(p);
     const Value &r = p["radar"], &all = pv["radar"];
@@ -2775,14 +2783,12 @@ PeekView peek_view(const Value &p, int k, int vi) {
     if (radar_view) {
       frames = all["frames"].truthy() ? all["frames"] : r["frames"].truthy() ? r["frames"] : frames;
       ft = all["ft"].truthy() ? all["ft"] : r["ft"].truthy() ? r["ft"] : ft;
-    } else if (r["on"].truthy()) {
-      if (r["frames"].truthy()) frames = r["frames"];
-      if (r["ft"].truthy()) ft = r["ft"];
     }
     Value &nr = member(out.v, "radar");
     nr = overlay(r);
     member(nr, "frames") = frames;
     member(nr, "ft") = ft;
+    member(nr, "vo") = Value();  // the chooser's own frames, never visit-only
     if (r["wx"].truthy()) {
       Value &wx = member(nr, "wx");
       wx = overlay(r["wx"]);
@@ -2856,7 +2862,7 @@ static ustr peek_cat_name(const std::string &cat) {
 // One category on the wide strip, its rows moved by dy, its words kept to
 // rows top..31 (draw.js drawPeekWideEntry: a clip doesn't nest). vglide
 // with vpos: the variants' glide position.
-static void draw_peek_wide_entry(Frame &f, const Value &p, int k, int vi, int dy, bool vglide, double vpos, int top) {
+static void draw_peek_wide_entry(Frame &f, const Value &p, int k, int vi, int dy, bool vglide, double vpos, int top, int bx = 0) {
   const Value &kn = p["knob"], &ring = kn["ring"];
   auto sh = [&](int y) { return y + dy; };
   std::string cat = ring[k].is_str() ? ring[k].s : "";
@@ -2898,7 +2904,7 @@ static void draw_peek_wide_entry(Frame &f, const Value &p, int k, int vi, int dy
       return lerp_color(PW_OFF, C::white, peek_near(i, vpos));
     };
     f.push_clip(PW_X0, top, PW_RIGHT, 31);
-    for (int i = 0; i < nv; i++) f.text(FONT_SMALL, words[i], xs[i] - shift, sh(29), color_of(i));
+    for (int i = 0; i < nv; i++) f.text(FONT_SMALL, words[i], xs[i] - shift + bx, sh(29), color_of(i));
     f.pop_clip();
   } else {
     f.text(FONT_SMALL, peek_cat_name(cat), PW_X0, sh(29), col);
@@ -2912,15 +2918,18 @@ static void draw_peek_bar_wide(Frame &f, const Value &p, int k, int vi, int drop
   PeekGlide g = peek_glide(pk, k, vi);
   bool gx = g.moving && !g.y;
   int top = PEEK_TOP + drop;
+  // A bump pulls the list on past its end (the way a glide scrolls it).
+  int by = pk.bump.on && !pk.bump.y ? -knob_bump(pk.bump, PEEK_BUMP_X) : 0, bx = pk.bump.on && pk.bump.y ? -knob_bump(pk.bump, PEEK_BUMP_X) : 0;
   if (gx) {
     int a = (int)std::floor(g.pos);
     f.push_clip(0, top, PW_DOT_X - 2, 31);
     for (int j = a; j <= a + 1; j++)
       if (j >= 0 && j < n)
-        draw_peek_wide_entry(f, p, j, j == k ? vi : (int)p["knob"]["sel"][j].num(0), drop + (int)jsround((j - g.pos) * PEEK_BAND), false, 0, top);
+        draw_peek_wide_entry(f, p, j, j == k ? vi : (int)p["knob"]["sel"][j].num(0), drop + (int)jsround((j - g.pos) * PEEK_BAND) + by, false, 0, top);
     f.pop_clip();
   } else {
-    draw_peek_wide_entry(f, p, k, vi, drop, g.moving, g.pos, top);
+    // (A bump moves it 2 rows at most: it stays on the band.)
+    draw_peek_wide_entry(f, p, k, vi, drop + by, g.moving, g.pos, top, bx);
   }
   for (int i = 0; i < n; i++) f.fill(PW_DOT_X, drop + 22 + i * 2, 1, 1, scale_color(peek_color(p, ring[i].is_str() ? ring[i].s : ""), 0.3));
   int ly = gx ? (int)jsround(22 + g.pos * 2) : 22 + k * 2;
@@ -2939,6 +2948,7 @@ static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop, con
   PeekGlide g = peek_glide(pk, k, vi);
   bool gx = g.moving && !g.y;
   double at = gx ? g.pos : k;
+  int bx = pk.bump.on && !pk.bump.y ? knob_bump(pk.bump, PEEK_BUMP_X) : 0, by = pk.bump.on && pk.bump.y ? knob_bump(pk.bump, PEEK_BUMP_Y) : 0;
   int x0 = (int)std::floor(f.w / 2.0 - (n * PEEK_PITCH - 5) / 2.0);
   auto cat_of = [&](int i) { return ring[i].is_str() ? ring[i].s : std::string(); };
   for (int i = 0; i < n; i++) {
@@ -2955,15 +2965,15 @@ static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop, con
   RGB col = peek_color(p, cat_of(k));
   if (gx) {
     int a = (int)std::floor(at), b = std::min(n - 1, a + 1);
-    f.fill((int)jsround(x0 + at * PEEK_PITCH), sh(31), 7, 1, lerp_color(peek_color(p, cat_of(a)), peek_color(p, cat_of(b)), at - a));
+    f.fill((int)jsround(x0 + at * PEEK_PITCH) + bx, sh(31), 7, 1, lerp_color(peek_color(p, cat_of(a)), peek_color(p, cat_of(b)), at - a));
     return;
   }
   int ix = x0 + k * PEEK_PITCH;
-  f.fill(ix, sh(31), 7, 1, col);
+  f.fill(ix + bx, sh(31), 7, 1, col);
   int nv = (int)kn["vars"][k].size();
   if (nv > 1 && nv <= PEEK_DOTS) {
     for (int j = 0; j < nv; j++) f.fill(ix + 8, sh(26 - (nv - 1) + j * 2), 1, 1, C::indicator);
-    if (vi >= 0 && vi < nv) f.fill(ix + 8, sh((int)jsround(26 - (nv - 1) + (g.moving ? g.pos : vi) * 2)), 1, 1, col);
+    if (vi >= 0 && vi < nv) f.fill(ix + 8, sh((int)jsround(26 - (nv - 1) + (g.moving ? g.pos : vi) * 2) + by), 1, 1, col);
   } else if (nv > PEEK_DOTS) {
     // More variants than the band holds: a window of PEEK_DOTS on rows
     // 22-30 that scrolls to keep the lit dot in the middle (at the ends it
@@ -2979,8 +2989,9 @@ static void draw_peek_bar(Frame &f, const Value &p, int k, int vi, int drop, con
       bool more = (rel < 0.5 && j > 0) || (rel > W - 1.5 && j < nv - 1);
       f.fill(ix + 8, sh((int)jsround(y0 + rel * 2)), 1, 1, more ? PEEK_MORE : C::indicator);
     }
-    if (vi >= 0 && vi < nv) f.fill(ix + 8, sh((int)jsround(y0 + (at - s) * 2)), 1, 1, col);
     f.pop_clip();
+    // The lit dot, past the window's clip so a bump can carry it a row out.
+    if (vi >= 0 && vi < nv) f.fill(ix + 8, sh((int)jsround(y0 + (at - s) * 2) + by), 1, 1, col);
   }
 }
 
@@ -4182,11 +4193,11 @@ static void render_clock(const Value &p, Frame &f, const RenderOpts &o) {
 }
 
 static void render_screen(const Value &p, Frame &f, const RenderOpts &o, const std::string &screen) {
-  if (screen == "menu") render_menu(p, f, o.menu ? o.menu->sel : 0, o.menu && o.menu->confirm);
+  if (screen == "menu") render_menu(p, f, o.menu ? o.menu->sel : 0, o.menu && o.menu->confirm, o.menu ? o.menu->bump : RenderOpts::Bump{});
   else if (screen == "peek") render_peek(p, f, o);
   else if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
-  else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink);
+  else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, false, o.visit);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
   else if (screen == "clock") render_clock(p, f, o);
   else if (screen == "announce") render_announce(p, f, o.t);

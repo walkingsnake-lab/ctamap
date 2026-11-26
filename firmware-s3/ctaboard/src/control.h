@@ -129,10 +129,41 @@ class Chooser {
   }
 };
 
+// The end of a knob list (Nov 26, 2026: the ring, the variants and the
+// menu stop at their ends rather than wrap, so a quick flick can't carry
+// the choice round to the other end unseen). A turn past an end bumps: the
+// marker overshoots and springs back (draw::knob_bump; KNOB_BUMP_MS and
+// _RISE_MS follow draw.js KNOB_BUMP). A bump that's still on its way out
+// isn't restarted by more clicks into the same end; a turn back off the end
+// cancels it (and one still waiting for its glide).
+const double KNOB_BUMP_MS = 240, KNOB_BUMP_RISE_MS = 70;
+
+struct Bump {
+  bool on = false, y = false;  // y: the peek's variants
+  int dir = 1;                 // +1 past the last, -1 past the first
+  double t0 = 0;
+  void push(bool axis_y, int d, double at, double ms) {
+    if (on && y == axis_y && dir == d && ms - t0 < KNOB_BUMP_RISE_MS) return;
+    on = true;
+    y = axis_y;
+    dir = d;
+    t0 = at;
+  }
+  bool active(double ms) const { return on && ms - t0 < KNOB_BUMP_MS; }
+};
+
+// Moves i by clicks within 0..n-1. Past an end: bumped (dir) is set.
+inline int clamp_step(int i, int clicks, int n, int &bumped) {
+  long long to = (long long)i + clicks;
+  bumped = to < 0 ? -1 : to > n - 1 ? 1 : 0;
+  return to < 0 ? 0 : to > n - 1 ? n - 1 : (int)to;
+}
+
 // The peek chooser (spec §10, "Knob"; boards whose payload carries
 // knob.vars): the icon bar over the screen on the panel, dimmed. Turning
-// steps through the ring (k); a press steps the category's variant; holding
-// the knob down while turning steps the variants either way. Each step
+// steps through the ring (k), stopping at its ends; a press steps the
+// category's variant (wrapping: it's "next"); holding the knob down while
+// turning steps the variants either way, stopping at the ends. Each step
 // glides the bar's selection there from wherever it is. PEEK_REST_MS after
 // the last click or release it's done: back on the starting view the bar
 // drops and the dim lifts (closing); otherwise the chosen view fades in
@@ -161,6 +192,7 @@ class PeekChooser {
   // variant; started at glide_t0.
   bool glide = false, glide_y = false;
   double glide_k = 0, glide_vi = 0, glide_t0 = 0;
+  Bump bump;
 
   int vi() const { return k < (int)sel.size() ? sel[k] : 0; }
 
@@ -174,6 +206,7 @@ class PeekChooser {
     start_vi = vi();
     open = true;
     closing = chose = committing = sent = holding = hold_turned = glide = false;
+    bump = Bump{};
     opened = last = ms;
   }
   // A payload landed while open: its knob.vars sizes. A different ring
@@ -190,20 +223,36 @@ class PeekChooser {
       if (sel[i] >= nv[i]) sel[i] = 0;
     if (start_vi >= nv[start_k]) start_vi = 0;
   }
-  // clicks: + clockwise. While held, they step the variant.
+  // clicks: + clockwise. While held, they step the variant. Past an end
+  // the choice stops and bumps; when it moved on the way there, the bump
+  // comes as its glide arrives.
   void turn(int clicks, double ms) {
     if (!open || closing || !clicks || n <= 0) return;
+    int b = 0;
     if (holding) {
       hold_turned = true;
       int m = nv[k];
       if (m < 2) return;
-      begin_glide(true, ms);
-      sel[k] = (((sel[k] + clicks) % m) + m) % m;
+      last = ms;
+      int to = clamp_step(sel[k], clicks, m, b);
+      bool moved = to != sel[k];
+      if (moved) {
+        begin_glide(true, ms);
+        sel[k] = to;
+      }
+      if (b) bump.push(true, b, moved ? ms + PEEK_GLIDE_Y_MS * 0.6 : ms, ms);
+      else if (moved) bump.on = false;  // off the end again: no bump to come
     } else {
-      begin_glide(false, ms);
-      k = (((k + clicks) % n) + n) % n;
+      last = ms;
+      int to = clamp_step(k, clicks, n, b);
+      bool moved = to != k;
+      if (moved) {
+        begin_glide(false, ms);
+        k = to;
+      }
+      if (b) bump.push(false, b, moved ? ms + PEEK_GLIDE_X_MS * 0.6 : ms, ms);
+      else if (moved) bump.on = false;  // off the end again: no bump to come
     }
-    last = ms;
   }
   void press(double ms) {
     if (!open || closing) return;
@@ -254,7 +303,8 @@ class PeekChooser {
 
 // The knob menu (spec §10, "Knob menu"): holding the knob down for
 // MENU_HOLD_MS without turning it opens the menu over the whole panel (and
-// closes it again). A turn moves along its five items (draw::MENU_*); a
+// closes it again). A turn moves along its five items (draw::MENU_*),
+// stopping at either end with a bump; a
 // press, on its release, acts on the chosen one. A restart or WiFi setup
 // asks first (confirm): a second press within MENU_CONFIRM_MS does it, a
 // turn or the wait cancels. Untouched for MENU_REST_MS, it closes. `busy`:
@@ -271,19 +321,28 @@ class Menu {
   bool confirm = false;
   int sel = 0, n = 5;
   double last = 0, confirm_at = 0;
+  Bump bump;
 
   void start(double ms) {
     open = true;
     busy = sent = confirm = false;
     sel = 0;
+    bump = Bump{};
     last = ms;
   }
   void close() { open = busy = sent = confirm = false; }
   void turn(int clicks, double ms) {
     if (!open || busy || !clicks) return;
     last = ms;
-    if (confirm) confirm = false;  // a turn only cancels the question
-    else sel = (((sel + clicks) % n) + n) % n;
+    if (confirm) {
+      confirm = false;  // a turn only cancels the question
+      return;
+    }
+    int b = 0;
+    int to = clamp_step(sel, clicks, n, b);
+    if (b) bump.push(false, b, ms, ms);
+    else if (to != sel) bump.on = false;  // off the end again
+    sel = to;
   }
   // The first press of an item that asks first. False: this is the second.
   bool ask(double ms) {
@@ -299,7 +358,9 @@ class Menu {
     if (confirm && ms - confirm_at >= MENU_CONFIRM_MS) confirm = false;
     if (!held && ms - last >= MENU_REST_MS) close();
   }
-  std::optional<screen::FrameKey> frame_key(bool celsius) const {
+  // Redraw key: none while a bump runs (every frame), else the still frame's state.
+  std::optional<screen::FrameKey> frame_key(bool celsius, double ms) const {
+    if (bump.active(ms)) return std::nullopt;
     screen::FrameKey k;
     k.v[0] = -2;  // not a Screen
     k.v[1] = sel;

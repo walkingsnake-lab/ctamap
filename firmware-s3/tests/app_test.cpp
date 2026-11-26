@@ -1906,10 +1906,18 @@ static void test_menu_a_hold_opens_it_a_turn_moves_and_exit_closes() {
   r->run_for(100);
   CHECK(r->board->menu.sel == 4 && px(r, 51, 30) == LABEL, "four clicks on: exit");
   r->knob.pending = 1;
-  r->run_for(100);
-  CHECK(r->board->menu.sel == 0, "it wraps");
+  r->run_for(60);
+  CHECK(r->board->menu.sel == 4 && r->board->menu.bump.on && r->board->menu.bump.dir == 1, "it stops at the last item and bumps");
+  CHECK(px(r, 60, 30) == LABEL && px(r, 51, 30) == draw::RGB{}, "the underline overshoots to the right");
+  r->run_for(300);
+  CHECK(px(r, 51, 30) == LABEL && px(r, 60, 30) == draw::RGB{}, "and springs back");
+  r->knob.pending = 1;  // into the end, then straight back: the bump is called off
+  r->run_for(20);
   r->knob.pending = -1;
-  r->run_for(100);
+  r->run_for(20);
+  CHECK(r->board->menu.sel == 3 && !r->board->menu.bump.on, "restart, no bump: %d", r->board->menu.sel);
+  r->knob.pending = 1;
+  r->run_for(400);
   press(r);
   r->run_for(100);
   CHECK(!r->board->menu.open, "a press on exit closes it");
@@ -2113,16 +2121,52 @@ static void test_peek_hold_and_turn_steps_variants_both_ways() {
   CHECK(px(r, 31, 31) == CLOCK_C, "clock's underline at x28");
   r->knob.down = true;
   r->run_for(100);
-  r->knob.pending = -1;  // held: back one face, wrapping to analog
+  r->knob.pending = -1;  // held: back from the first face, which stops there
   r->run_for(300);
-  CHECK(r->board->peek.vi() == 2, "analog: %d", r->board->peek.vi());
+  CHECK(r->board->peek.vi() == 0 && r->board->peek.bump.on && r->board->peek.bump.y && r->board->peek.bump.dir == -1, "skyline, bumped: %d", r->board->peek.vi());
+  r->knob.pending = 3;  // on past the last face (analog): stops there
+  r->run_for(300);
+  CHECK(r->board->peek.vi() == 2 && r->board->peek.bump.dir == 1, "analog: %d", r->board->peek.vi());
+  r->knob.pending = -1;  // and back one
+  r->run_for(300);
+  CHECK(r->board->peek.vi() == 1, "seventies: %d", r->board->peek.vi());
   r->run_for(1500);
   CHECK(r->server.selects.empty(), "no commit while held");
   r->knob.down = false;  // let go after turning: no extra step
   r->run_for(300);
-  CHECK(r->board->peek.vi() == 2, "%d", r->board->peek.vi());
+  CHECK(r->board->peek.vi() == 1, "%d", r->board->peek.vi());
   r->run_for(1500 + LATENCY);
-  CHECK(r->server.variants == std::vector<std::string>({"analog"}), "%zu", r->server.variants.size());
+  CHECK(r->server.variants == std::vector<std::string>({"seventies"}), "%zu", r->server.variants.size());
+}
+
+static void test_peek_ring_stops_at_its_ends() {
+  // Nov 26, 2026: the ring doesn't wrap, so a flick can't carry the choice
+  // round to the other end unseen. Past an end the underline bumps.
+  std::unique_ptr<Rig> r(peek_rig());
+  r->knob.pending = -1;  // back from TRANSIT, the first: opens it, stays
+  r->run_for(400);       // (the bar up)
+  CHECK(r->board->peek.open && r->board->peek.k == 0, "transit still: %d", r->board->peek.k);
+  r->knob.pending = -1;  // again
+  r->run_for(60);
+  CHECK(r->board->peek.k == 0 && r->board->peek.bump.on && !r->board->peek.bump.y && r->board->peek.bump.dir == -1, "bumped back");
+  // TRANSIT's underline (x4-10, row 31) carried left of its place.
+  draw::RGB red = draw::line_color("RD");
+  CHECK(px(r, 3, 31) == red && px(r, 10, 31) == draw::RGB{}, "the underline overshoots to the left");
+  r->run_for(300);
+  CHECK(px(r, 4, 31) == red && px(r, 10, 31) == red && px(r, 2, 31) == draw::RGB{}, "and springs back");
+  r->knob.pending = 9;  // a flick: on past CYCLE, the last
+  r->run_for(100);
+  CHECK(r->board->peek.k == 4, "cycle, not round the ring: %d", r->board->peek.k);
+  CHECK(r->board->peek.bump.dir == 1 && r->board->peek.bump.t0 > r->clock.t, "the bump waits for the glide to arrive");
+  r->knob.pending = -1;  // straight back off the end: the bump is called off
+  r->run_for(20);
+  CHECK(r->board->peek.k == 3 && !r->board->peek.bump.on, "announce, no bump: %d", r->board->peek.k);
+  r->knob.pending = 3;  // on past the end again
+  r->run_for(100);
+  CHECK(r->board->peek.k == 4 && r->board->peek.bump.on, "cycle, bumping");
+  r->knob.pending = 2;  // more clicks into the end while it waits: still cycle
+  r->run_for(1500 + LATENCY);
+  CHECK(r->server.selects == std::vector<std::string>({"cycle"}), "%s", r->server.selects.empty() ? "" : r->server.selects[0].c_str());
 }
 
 static void test_radar_frame_size_by_id() {
@@ -2153,7 +2197,7 @@ static void test_peek_survives_its_variants_changing_under_it() {
     r->run_for(400);
     r->knob.down = true;  // held: no commit, however long
     r->run_for(100);
-    r->knob.pending = -1;  // back one face, wrapping to analog (the third)
+    r->knob.pending = 2;  // on two faces to analog (the third)
     r->run_for(300);
     CHECK(r->board->peek.vi() == 2, "analog: %d", r->board->peek.vi());
     r->server.faces = {"skyline", "seventies"};
@@ -2550,6 +2594,7 @@ int main() {
       T_(test_knob_light_follows_the_chooser_and_goes_out_after),
       T_(test_peek_back_to_the_start_cancels),
       T_(test_peek_hold_and_turn_steps_variants_both_ways),
+      T_(test_peek_ring_stops_at_its_ends),
       T_(test_peek_press_on_a_live_screen_steps_its_variant),
       T_(test_peek_prefetches_radar_frames_and_clouds),
       T_(test_peek_survives_a_long_burst_of_turns_and_presses),

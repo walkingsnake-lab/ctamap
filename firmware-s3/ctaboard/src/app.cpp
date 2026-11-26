@@ -224,6 +224,18 @@ void Board::shown(int what, long long ms) {
   shown_ = what;
 }
 
+// A knob list's bump (control::Bump) as the renderer takes it; off once
+// it's done.
+static draw::RenderOpts::Bump bump_opts(const control::Bump &b, double ms) {
+  draw::RenderOpts::Bump o;
+  if (!b.active(ms)) return o;
+  o.on = true;
+  o.t = ms - b.t0;
+  o.dir = b.dir;
+  o.y = b.y;
+  return o;
+}
+
 bool Board::draw_frame(long long ms, long long n) {
   int what = menu.open ? SHOWN_MENU : chooser.open ? SHOWN_CHOOSER : peek.open ? SHOWN_PEEK : (int)player.screen;
   if (chooser.open) chooser_travel_ = chooser.target - chooser.start;
@@ -235,6 +247,7 @@ bool Board::draw_frame(long long ms, long long n) {
       draw::RenderOpts::Menu m;
       m.sel = menu.sel;
       m.confirm = menu.confirm;
+      m.bump = bump_opts(menu.bump, (double)ms);
       o.menu = m;
       o.apply_bright = !player.hw_bright;
       o.bright = player.bright;
@@ -549,6 +562,7 @@ void Board::step() {
     // Timed radar visits: follow the server's schedule unless a button
     // press is overriding it.
     player.set_screen(override_.resolve(player.auto_screen(n), player.p["v"].num()), (double)ms);
+    player.overridden = override_.screen.has_value();
   }
   if (fails == 0 && player.awaiting_drop(n)) {
     // A train is due to drop but the payload is older than that moment:
@@ -583,7 +597,7 @@ void Board::step() {
   // screen can have changed.
   n = now(ms);
   player.wall_ms = (double)now_ms(ms);
-  std::optional<screen::FrameKey> key = menu.open      ? menu.frame_key(player.p["tu"].eq("C"))
+  std::optional<screen::FrameKey> key = menu.open      ? menu.frame_key(player.p["tu"].eq("C"), (double)ms)
                                        : chooser.open ? chooser.frame_key((double)ms)
                                        : peek.open    ? std::nullopt  // live views: every frame
                                                       : player.frame_key((double)ms, n);
@@ -954,6 +968,7 @@ void Board::draw_peek(draw::Frame &f, long long ms, long long n) {
   } else {
     peek.glide = false;
   }
+  pk.bump = bump_opts(peek.bump, t);
   player.draw(f, (double)ms, n, false);
   draw::peek_overlay(f, player.p, pk);
   if (!player.hw_bright)

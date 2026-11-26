@@ -88,7 +88,7 @@ test('update: the board gets only the shown screen\'s sections; a button press a
   assert.equal(b.for, 'ticker');
   assert.ok('ticker' in b && 'tickerHeader' in b && !('rows' in b));
   b = await get('&s=weather');
-  assert.deepEqual(b.radar.frames, ['40100-1']);
+  assert.deepEqual(b.radar.frames, []); // raining, but conditions stay conditions
   assert.ok(!('rows' in b) && !('ticker' in b));
   b = await get('&s=bogus');
   assert.equal(b.for, 'transit');
@@ -623,7 +623,7 @@ test('radar: frames by ID behind the token; auto stays on transit even when it r
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const b = (await s.req(FULL)).body;
   assert.equal(b.screen, 'transit'); // no automatic switching unless radar visits are on
-  assert.deepEqual({ ...b.radar, temp: undefined, icon: undefined }, { ...state, visit: null, showTime: true, tempShadow: false, temp: undefined, icon: undefined });
+  assert.deepEqual({ ...b.radar, temp: undefined, icon: undefined }, { ...state, frames: [], ft: [], visit: null, showTime: true, tempShadow: false, temp: undefined, icon: undefined });
   assert.equal((await fetch(`${base}/board/radar/40100-202610041600?b=home`)).status, 401);
   const r = await fetch(`${base}/board/radar/40100-202610041600?b=home`, h);
   assert.equal(r.status, 200);
@@ -678,10 +678,13 @@ test('Rain nearby: off by default, then on a timer on any screen but weather; ho
   assert.equal((await rain({ hold: 'visit' })).status, 200);
   b = await get();
   assert.deepEqual([b.radar.visit, b.radar.held], [null, 'visit']);
+  // Held till the next visit: the frames stay (marked for visits), so they're on hand then.
+  assert.deepEqual([b.radar.frames, b.radar.vo], [state.frames, 1]);
   assert.equal((await rain({ hold: null })).status, 200);
   assert.deepEqual((await get()).radar.visit, { every: 240, for: 120 });
   await rain({ hold: 'rain' });
-  assert.equal((await get()).radar.held, 'rain');
+  b = await get();
+  assert.deepEqual([b.radar.held, b.radar.frames], ['rain', []]); // stopped until the rain passes: no frames
   state.on = false; // dry: the hold ends with the rain
   assert.equal((await get()).radar.held, undefined);
   state.on = true;
@@ -792,11 +795,29 @@ test('update: weather screen gets conditions always, radar frames only while rai
   assert.deepEqual(b.radar.ft, []);
   assert.deepEqual(b.radar.wx, screenWx);
   await s.close();
-  // Rain in the box: the loop's frames, and conditions still sent.
+  // Rain in the box: conditions stay conditions (Nov 26, 2026: no radar
+  // takeover), so no frames; the radar view gets them, and so do Rain
+  // nearby visits on another screen.
   s = await serve({ tracker: fakeTracker({ arrivals: [], fetchedAt: now }), weather: fakeWeather(w), radar: fakeRadar({ on: true, frames: ['x'], ft: [now], timeBox: [40, 0, 24, 22], split: false }) });
   b = (await s.req(FULL)).body;
-  assert.deepEqual(b.radar.frames, ['x']);
+  assert.deepEqual(b.radar.frames, []);
   assert.deepEqual(b.radar.wx, screenWx);
+  for (const wxView of ['5day', 'hourly']) {
+    s.store.update('home', { screen: 'weather', wxView });
+    assert.deepEqual((await s.req(FULL)).body.radar.frames, [], wxView);
+  }
+  s.store.update('home', { wxView: 'radar' });
+  b = (await s.req(FULL)).body;
+  assert.deepEqual([b.radar.frames, b.radar.vo], [['x'], undefined]);
+  // Visits: the frames ride along marked `vo` (for the visits only), so a
+  // Cycle's weather turn still draws its view; the radar view is unmarked.
+  s.store.update('home', { screen: 'transit', wxView: 'now', wxVisit: 'rain', radarEvery: 4 });
+  b = (await s.req(FULL)).body;
+  assert.deepEqual([b.radar.frames, !!b.radar.visit, b.radar.vo], [['x'], true, 1]);
+  s.store.update('home', { screen: 'auto', cycle: ['transit', 'weather'] });
+  assert.equal((await s.req(FULL)).body.radar.vo, 1);
+  s.store.update('home', { wxView: 'radar' });
+  assert.equal((await s.req(FULL)).body.radar.vo, undefined);
   await s.close();
 });
 
@@ -897,6 +918,7 @@ test('simulator test radar: a recorded storm or snowstorm loops at the board sta
     return { status: r.status, body: await r.json() };
   };
   assert.equal((await post({ radar: 'hail' })).status, 400);
+  s.store.update('home', { wxView: 'radar' }); // the loop shows on the radar view only
   const r = (await post({ radar: 'storm' })).body;
   assert.equal(r.radar, 'storm');
   let b = (await s.req(FULL)).body;

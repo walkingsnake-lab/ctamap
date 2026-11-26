@@ -1329,13 +1329,15 @@
     }
 
     // opts: now, idx (frame index into p.radar.frames; default the newest),
-    // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
+    // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar),
+    // visit (a Rain nearby visit is showing: frames marked `vo`, for the
+    // visits only, draw then and not on the weather screen's own view)
     // The weather screen: the radar loop while there are frames (rain in the
     // box), current conditions (or the 5-day layout) otherwise.
     function renderWeather(p, opts) {
       const o = opts || {};
       const r = p.radar || {};
-      const ids = r.frames || [];
+      const ids = r.vo && !o.visit ? [] : r.frames || [];
       // -1 when there are no frames yet (the clock then shows the current time).
       // Peek (opts.peek): the newest frame on hand, still; -1 with none yet.
       const newestOnHand = () => { for (let i = ids.length - 1; i >= 0; i--) if (o.frames && o.frames[ids[i]]) return i; return -1; };
@@ -1386,12 +1388,13 @@
       // The radar (shoreline included) can reach into the clock box; each
       // piece of the corner gets a 1px black margin so nothing touches it.
       const clear = (b) => { if (b[1] <= b[3]) f.fill(b[0] - 1, b[1] - 1, b[2] - b[0] + 3, b[3] - b[1] + 3, '#000000'); };
-      const segW = 2, segGap = 1;
+      // The frame indicator: one 1x1 dot per frame, 2 px apart (Nov 26, 2026; 2x2 before).
+      const segW = 1, segH = 1, segGap = 1;
       const indX = right - (ids.length * (segW + segGap) - segGap) + 1;
-      if (ids.length) clear([indX, top, right, top + 1]);
+      if (ids.length) clear([indX, top, right, top + segH - 1]);
       const drawIndicator = () => {
         let x = indX;
-        ids.forEach((id, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : C.indicator); x += segW + segGap; });
+        ids.forEach((id, i) => { f.fill(x, top, segW, segH, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : C.indicator); x += segW + segGap; });
       };
       const ws = p.warn ? warnStyle(p.warn) : null;
       const hideWarn = ws && ws.blinks && o.blink;
@@ -1407,18 +1410,16 @@
         }
       };
       if (r.showTime === false && r.temp != null) {
-        // Time off: current conditions (icon + temperature, as on the weather
-        // row) right-aligned under the indicator, and the warning tag (icon +
-        // WATCH/WARN) at the screen's bottom right on a black backing. With no
-        // weather data yet, the time shows instead.
+        // Time off: the temperature right-aligned right under the indicator,
+        // its digits starting 2 rows below the dots as on two panels (no
+        // weather icon or gap since Nov 26, 2026: the radar shows the rain), and the
+        // warning tag (icon + WATCH/WARN) at the screen's bottom right on a
+        // black backing. With no weather data yet, the time shows instead.
         const t = `${r.temp}°`;
-        const icon = r.icon && icons.ICONS[r.icon] ? r.icon : null;
-        const x0 = right + 1 - ((icon ? 10 : 0) + measure('small', t));
-        if (icon) clear([x0, top + 4, x0 + 7, top + 11]);
-        clear(textBox('small', t, x0 + (icon ? 10 : 0), top + 10));
+        const x0 = right + 1 - measure('small', t);
+        clear(textBox('small', t, x0, top + 7));
         drawIndicator();
-        if (icon) drawIcon(f, icon, x0, top + 4);
-        f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
+        f.text('small', t, x0, top + 7, C.label);
         if (ws) drawWarnTag();
         return f;
       }
@@ -1990,8 +1991,10 @@
     // MENU.off of the label color. The units icon is the unit itself (the
     // payload's `tu`). A restart or WiFi setup pressed once asks first: its
     // name with a question mark, icon and underline red, until a second
-    // press. opts.menu: {sel, confirm}. No amber (amber means a live train).
-    const MENU = { items: ['off', 'unit', 'wifi', 'restart', 'exit'], names: ['SCREEN OFF', 'UNITS', 'WIFI SETUP', 'RESTART', 'EXIT'], top: 19, pitch: 12, widePitch: 16, off: 0.3 };
+    // press. opts.menu: {sel, confirm, bump}; bump: a turn past either end
+    // (the list stops there), {t ms in, dir}: the underline overshoots and
+    // springs back (knobBump). No amber (amber means a live train).
+    const MENU = { items: ['off', 'unit', 'wifi', 'restart', 'exit'], names: ['SCREEN OFF', 'UNITS', 'WIFI SETUP', 'RESTART', 'EXIT'], top: 19, pitch: 12, widePitch: 16, off: 0.3, bump: 2 };
     const MENU_ICONS = {
       off: ['....#....', '..#.#.#..', '.#..#..#.', '#...#...#', '#...#...#', '#.......#', '.#.....#.', '..#...#..', '...###...'],
       F: ['.#..#####', '#.#.#....', '.#..#....', '....#....', '....####.', '....#....', '....#....', '....#....', '....#....'],
@@ -2012,7 +2015,7 @@
       MENU.items.forEach((item, i) => {
         const rows = MENU_ICONS[item === 'unit' ? (p.tu === 'C' ? 'C' : 'F') : item], col = hex(i === sel ? on : off), x = x0 + i * pitch;
         rows.forEach((row, j) => [...row].forEach((ch, k) => { if (ch === '#') f.set(x + k, MENU.top + j, col); }));
-        if (i === sel) f.fill(x, 30, 9, 1, on);
+        if (i === sel) f.fill(x + knobBump(m.bump, MENU.bump), 30, 9, 1, on);
       });
       return f;
     }
@@ -2028,9 +2031,12 @@
     // rows the bar has dropped (0 up, PEEK.band gone; the dim follows it, so
     // it comes in with the bar and lifts as it goes); glide: {k, vi, t, axis}
     // where the bar is gliding from (fractional indexes; t ms in; axis 'x'
-    // for a category, 'y' for a variant); under: the screen behind
-    // (p.screen by default); chosen: the chosen view alone, no bar, no dim.
-    const PEEK = { xMs: 270, yMs: 300, upMs: 240, downMs: 390, band: 11, top: 21, pitch: 12, dim: 0.25, dots: 5 };
+    // for a category, 'y' for a variant); bump: {t, dir, axis} a turn past
+    // the end of the ring or of the variants (knobBump: the underline or the
+    // lit dot overshoots and springs back; on the wide strip the list pulls
+    // past its end); under: the screen behind (p.screen by default); chosen:
+    // the chosen view alone, no bar, no dim.
+    const PEEK = { xMs: 270, yMs: 300, upMs: 240, downMs: 390, band: 11, top: 21, pitch: 12, dim: 0.25, dots: 5, bumpX: 2, bumpY: 1 };
     const PEEK_LOADED = '#6a6a6a';
     // An end dot of the 64 bar's variant window with more variants past it.
     const PEEK_MORE = '#1c1c1c';
@@ -2046,6 +2052,16 @@
     const peekColor = (p, cat) => (cat === 'transit' ? LINE.RD : PEEK_COLORS[cat] || C.label);
     // Ease-out cubic, 0..1.
     const peekEase = (k) => { const c = Math.max(0, Math.min(1, k)); return 1 - (1 - c) * (1 - c) * (1 - c); };
+    // A turn past the end of the knob's lists (they stop at their ends, Nov
+    // 26, 2026): {t ms in, dir +1 past the last, -1 past the first}. The
+    // marker goes out px in that direction over KNOB_BUMP.rise ms and eases
+    // back by KNOB_BUMP.ms. Signed whole pixels; 0 outside it.
+    const KNOB_BUMP = { ms: 240, rise: 70 };
+    function knobBump(b, px) {
+      if (!b || b.t == null || !(b.t > 0) || b.t >= KNOB_BUMP.ms) return 0;
+      const k = b.t < KNOB_BUMP.rise ? b.t / KNOB_BUMP.rise : 1 - peekEase((b.t - KNOB_BUMP.rise) / (KNOB_BUMP.ms - KNOB_BUMP.rise));
+      return Math.round(px * k) * (b.dir < 0 ? -1 : 1);
+    }
     // The cycle symbol (the phone's two arrows, anti-aliased): 16 levels of
     // cyan in a 20x20 box at x22, y6.
     const CYCLE_ART = ['0000028cffffc8206400', '00008effffffffe9f600', '001bffe844448efff800', '00bff810000009fffb00', '08ff600000006efffd00',
@@ -2076,11 +2092,11 @@
         return { p: q, screen: 'transit' };
       }
       if (cat === 'weather') {
-        // The radar view: every kept frame (pv.radar), rain or not. The
-        // others: the radar loop only while rain is in the box (radar.on).
+        // The radar view: every kept frame (pv.radar), rain or not. The others
+        // never show the radar (they stay put while it rains).
         const r = p.radar || {}, all = pv.radar || {};
-        const frames = v === 'radar' ? all.frames || r.frames || [] : r.on ? r.frames || [] : [];
-        const ft = v === 'radar' ? all.ft || r.ft || [] : r.on ? r.ft || [] : [];
+        const frames = v === 'radar' ? all.frames || r.frames || [] : [];
+        const ft = v === 'radar' ? all.ft || r.ft || [] : [];
         let wx = r.wx || null;
         if (wx) {
           wx = { ...wx };
@@ -2090,7 +2106,7 @@
           if (v === '5day' && pv.week) wx.week = pv.week;
           if (v === 'hourly' && pv.hours24) wx.hours24 = pv.hours24;
         }
-        return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
+        return { p: { ...p, radar: { ...r, frames, ft, wx, vo: undefined } }, screen: 'weather' };
       }
       if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, cdig: pv.cdig || null, cshd: pv.cshd || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
@@ -2135,7 +2151,7 @@
     // carries it). vpos: the variants' glide position (fractional), or null:
     // the strip's shift eases between words and the white passes from one
     // to the next.
-    function drawPeekWideEntry(f, p, k, vi, dy, vpos, top) {
+    function drawPeekWideEntry(f, p, k, vi, dy, vpos, top, bx = 0) {
       const kn = p.knob || {}, ring = kn.ring || [], cat = ring[k];
       const sh = (y) => y + dy;
       const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
@@ -2162,7 +2178,7 @@
         if (vpos != null) { const a = Math.floor(vpos); shift = Math.round(lerp(shiftOf(a), shiftOf(a + 1), vpos - a)); }
         const colorOf = (i) => (vpos == null ? (i === vi ? C.white : PEEK_WIDE.off) : lerpColor(PEEK_WIDE.off, C.white, peekNear(i, vpos)));
         f.withClip(PEEK_WIDE.x0, top, PEEK_WIDE.right, 31, () => {
-          words.forEach((w, i) => f.text('small', w, xs[i] - shift, sh(29), colorOf(i)));
+          words.forEach((w, i) => f.text('small', w, xs[i] - shift + bx, sh(29), colorOf(i)));
         });
       } else {
         f.text('small', PEEK_CATS[cat] || String(cat || '').toUpperCase(), PEEK_WIDE.x0, sh(29), col);
@@ -2171,16 +2187,19 @@
     // The wide strip. A category glide scrolls the strip up or down the band
     // like a list (the next category below, as the ring's dots run) while
     // the lit ring dot glides to its place.
-    function drawPeekBarWide(f, p, k, vi, drop, gl) {
+    function drawPeekBarWide(f, p, k, vi, drop, gl, bump) {
       const ring = (p.knob || {}).ring || [];
       const g = peekGlide(gl, k, vi), top = PEEK.top + drop;
+      // A bump pulls the list on past its end (the way a glide scrolls it).
+      const by = bump && bump.axis !== 'y' ? -knobBump(bump, PEEK.bumpX) : 0, bx = bump && bump.axis === 'y' ? -knobBump(bump, PEEK.bumpX) : 0;
       if (g && g.axis === 'x') {
         const a = Math.floor(g.pos);
         f.withClip(0, top, PEEK_WIDE.dotX - 2, 31, () => {
-          for (const j of [a, a + 1]) if (j >= 0 && j < ring.length) drawPeekWideEntry(f, p, j, j === k ? vi : ((p.knob.sel || [])[j] || 0), drop + Math.round((j - g.pos) * PEEK.band), null, top);
+          for (const j of [a, a + 1]) if (j >= 0 && j < ring.length) drawPeekWideEntry(f, p, j, j === k ? vi : ((p.knob.sel || [])[j] || 0), drop + Math.round((j - g.pos) * PEEK.band) + by, null, top);
         });
       } else {
-        drawPeekWideEntry(f, p, k, vi, drop, g ? g.pos : null, top);
+        // (A bump moves it 2 rows at most: it stays on the band.)
+        drawPeekWideEntry(f, p, k, vi, drop + by, g ? g.pos : null, top, bx);
       }
       ring.forEach((c, i) => f.fill(PEEK_WIDE.dotX, drop + 22 + i * 2, 1, 1, scaleColor(peekColor(p, c), 0.3)));
       const ly = g && g.axis === 'x' ? Math.round(22 + g.pos * 2) : 22 + k * 2;
@@ -2190,12 +2209,13 @@
     // each lighting as it passes (the variant dots come back beside the new
     // one once it's there); a variant glide slides the lit dot up or down
     // its column.
-    function drawPeekBar(f, p, k, vi, drop, gl) {
+    function drawPeekBar(f, p, k, vi, drop, gl, bump) {
       const kn = p.knob || {}, ring = kn.ring || [], n = ring.length;
       const sh = (y) => y + drop;
       f.fill(0, sh(PEEK.top), f.w, PEEK.band, '#000000');
-      if (f.w === WIDE) { drawPeekBarWide(f, p, k, vi, drop, gl); return; }
+      if (f.w === WIDE) { drawPeekBarWide(f, p, k, vi, drop, gl, bump); return; }
       const g = peekGlide(gl, k, vi), gx = g && g.axis === 'x', at = gx ? g.pos : k;
+      const bx = bump && bump.axis !== 'y' ? knobBump(bump, PEEK.bumpX) : 0, by = bump && bump.axis === 'y' ? knobBump(bump, PEEK.bumpY) : 0;
       const x0 = Math.floor(f.w / 2 - (n * PEEK.pitch - 5) / 2);
       ring.forEach((cat, i) => {
         const col = peekColor(p, cat), rows = PEEK_ICONS[cat];
@@ -2207,16 +2227,16 @@
       const col = peekColor(p, ring[k]);
       if (gx) {
         const a = Math.floor(at), b = Math.min(n - 1, a + 1);
-        f.fill(Math.round(x0 + at * PEEK.pitch), sh(31), 7, 1, lerpColor(peekColor(p, ring[a]), peekColor(p, ring[b]), at - a));
+        f.fill(Math.round(x0 + at * PEEK.pitch) + bx, sh(31), 7, 1, lerpColor(peekColor(p, ring[a]), peekColor(p, ring[b]), at - a));
         return;
       }
       const ix = x0 + k * PEEK.pitch;
-      f.fill(ix, sh(31), 7, 1, col);
+      f.fill(ix + bx, sh(31), 7, 1, col);
       const nv = ((kn.vars || [])[k] || []).length;
       if (nv > 1 && nv <= PEEK.dots) {
         const dotY = (j) => 26 - (nv - 1) + j * 2;
         for (let j = 0; j < nv; j++) f.fill(ix + 8, sh(dotY(j)), 1, 1, C.indicator);
-        if (vi >= 0 && vi < nv) f.fill(ix + 8, sh(Math.round(dotY(g ? g.pos : vi))), 1, 1, col);
+        if (vi >= 0 && vi < nv) f.fill(ix + 8, sh(Math.round(dotY(g ? g.pos : vi)) + by), 1, 1, col);
       } else if (nv > PEEK.dots) {
         // More variants than the band holds: a window of PEEK.dots on rows
         // 22-30 that scrolls to keep the lit dot in the middle (at the ends
@@ -2232,8 +2252,9 @@
             const more = (rel < 0.5 && j > 0) || (rel > W - 1.5 && j < nv - 1);
             f.fill(ix + 8, sh(Math.round(y0 + rel * 2)), 1, 1, more ? PEEK_MORE : C.indicator);
           }
-          if (vi >= 0 && vi < nv) f.fill(ix + 8, sh(Math.round(y0 + (at - s) * 2)), 1, 1, col);
         });
+        // The lit dot, past the window's clip so a bump can carry it a row out.
+        if (vi >= 0 && vi < nv) f.fill(ix + 8, sh(Math.round(y0 + (at - s) * 2) + by), 1, 1, col);
       }
     }
     // Rows the bar has dropped at t ms: rising (up) from gone to 0, or falling.
@@ -2245,7 +2266,7 @@
       const drop = Math.max(0, Math.min(PEEK.band, (pk && pk.drop) || 0));
       const dk = 1 - (1 - PEEK.dim) * (1 - drop / PEEK.band);
       if (dk < 1) for (let i = 0; i < f.px.length; i++) f.px[i] = Math.round(f.px[i] * dk);
-      if (drop < PEEK.band) drawPeekBar(f, p, pk.k || 0, pk.vi || 0, drop, pk.glide);
+      if (drop < PEEK.band) drawPeekBar(f, p, pk.k || 0, pk.vi || 0, drop, pk.glide, pk.bump);
       return f;
     }
     function renderPeek(p, opts) {
@@ -3499,7 +3520,7 @@
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, renderChooser, renderMenu, MENU, MENU_ICONS, renderPeek, peekOverlay, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
-      autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
+      autoScreen, visiting, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };
   }
@@ -3525,16 +3546,24 @@
   // knob ended one). Mirrored by the S3's Player::auto_screen(); the frozen
   // player.py visits only transit, ticker and baseball.
   const VISITED = ['transit', 'ticker', 'baseball', 'clock', 'announce'];
-  function autoScreen(p, now, skipUntil = 0) {
-    let screen = p.screen;
+  // The Cycle's turn alone (no visit).
+  function turnScreen(p, now) {
     const rot = p.rot;
-    if (rot && rot.screens && rot.screens.length > 1 && rot.every > 0 && rot.screens.includes(screen)) {
-      screen = rot.screens[Math.floor(Math.floor(now) / rot.every) % rot.screens.length];
+    if (rot && rot.screens && rot.screens.length > 1 && rot.every > 0 && rot.screens.includes(p.screen)) {
+      return rot.screens[Math.floor(Math.floor(now) / rot.every) % rot.screens.length];
     }
+    return p.screen;
+  }
+  // A Rain nearby visit is showing (the weather screen, where the turn is another).
+  function visiting(p, now, skipUntil = 0) {
+    return autoScreen(p, now, skipUntil) === 'weather' && turnScreen(p, now) !== 'weather';
+  }
+  function autoScreen(p, now, skipUntil = 0) {
+    const screen = turnScreen(p, now);
     const r = p.radar;
     if (!VISITED.includes(p.screen) || !r || !r.visit || !(r.visit.every > 0) || !(r.on || r.visit.always) || now < skipUntil) return screen;
     return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : screen;
   }
 
-  return { Frame, create, autoScreen, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE, HOLD_MAX, WIDE, colsOf, widenPx };
+  return { Frame, create, autoScreen, visiting, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE, HOLD_MAX, WIDE, colsOf, widenPx };
 });

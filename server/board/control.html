@@ -1458,7 +1458,7 @@
     pressed('radarCorner', board.radarTime === false ? 'temp' : 'time');
     const rf = board.radarFrame || 500;
     pressed('radarSpeed', rf >= 700 ? '700' : rf <= 300 ? '300' : '500');
-    $('wxViewFt').textContent = board.wxView === 'radar' ? 'The radar all the time: an empty map when it\'s dry.' : 'The radar loop takes over while rain is in the radar box.';
+    $('wxViewFt').textContent = board.wxView === 'radar' ? 'The radar all the time: an empty map when it\'s dry.' : 'Stays on this view while it rains. Pick Radar for the loop.';
     for (const v of qa('[data-rain-v]')) v.textContent = rainValue();
     pressed('tempUnit', board.tempUnit === 'C' ? 'C' : 'F');
     $('clockRoll').checked = board.clockRoll !== false;
@@ -1479,7 +1479,7 @@
     if (!$('radarEvery').value) { $('radarEvery').append(new Option(`${board.radarEvery} min`, board.radarEvery)); selVal('radarEvery', board.radarEvery); }
     if (!$('radarFor').value) { $('radarFor').append(new Option(`${board.radarFor} s`, board.radarFor)); selVal('radarFor', board.radarFor); }
     $('rainFt').textContent = wv === 'off' ? 'Off: the board stays on its screen when rain is near.'
-      : `Takes over any screen but Weather (which already shows the radar)${wv === 'always' ? ', rain or not' : ''}. On the board, the first knob turn ends a visit.`;
+      : `Takes over any screen but Weather${wv === 'always' ? ', rain or not' : ''}. On the board, the first knob turn ends a visit.`;
     const held = pay && pay.radar && pay.radar.held;
     $('rainHeld').hidden = held !== 'rain';
     $('rainHeldText').textContent = 'Stopped until the rain passes.';
