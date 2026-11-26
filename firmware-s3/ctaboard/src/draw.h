@@ -291,11 +291,21 @@ struct RenderOpts {
   // Knob chooser (screen "chooser"): wheel position and commit (draw.js opts.chooser).
   std::optional<double> chooser_pos;
   bool chooser_commit = false;
-  // Knob menu (screen "menu"; draw.js opts.menu): the chosen item (MENU_*)
-  // and whether it's asking for a second press.
+  // A turn past the end of the knob's lists (draw.js knobBump: opts
+  // menu.bump, peek.bump): ms in, +1 past the last or -1 past the first,
+  // and for the peek whether it's the variants (axis 'y').
+  struct Bump {
+    bool on = false;
+    double t = 0;
+    int dir = 1;
+    bool y = false;
+  };
+  // Knob menu (screen "menu"; draw.js opts.menu): the chosen item (MENU_*),
+  // whether it's asking for a second press, and a bump at either end.
   struct Menu {
     int sel = 0;
     bool confirm = false;
+    Bump bump;
   };
   std::optional<Menu> menu;
   // Peek chooser (screen "peek"; draw.js opts.peek): the choice (ring index
@@ -311,6 +321,7 @@ struct RenderOpts {
     double glide_k = 0, glide_vi = 0;  // fractional: a turn mid-glide carries on from where the bar is
     double glide_t = 0;
     bool glide_y = false;
+    Bump bump;
     bool chosen = false;
     std::string under;
     const Value *view = nullptr;
@@ -377,6 +388,10 @@ struct PeekView {
 PeekView peek_view(const Value &p, int k, int vi);
 std::string peek_screen(const Value &p, int k, int vi);  // just the screen, no copy
 int peek_drop(bool up, double t);  // rows the bar has dropped at t ms (rising: up)
+// The bump at the end of a knob list (draw.js KNOB_BUMP, knobBump): out
+// over the rise, eased back by KNOB_BUMP_MS. Signed whole pixels.
+const double KNOB_BUMP_MS = 240, KNOB_BUMP_RISE_MS = 70;
+int knob_bump(const RenderOpts::Bump &b, int px);
 // The bar over a frame of the screen behind (drawn and widened): the frame
 // dims as the bar rises (draw.js peekOverlay). Before brightness.
 void peek_overlay(Frame &f, const Value &p, const RenderOpts::Peek &pk);

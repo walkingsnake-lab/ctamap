@@ -321,16 +321,20 @@ test('peek chooser: the icon bar over the screen behind, dimmed; the chosen vari
   assert.equal(hex(f.get(5, 27)), LINE.RD, 'the icons have moved down 4 rows');
   assert.equal(hex(f.get(7, 31)), '#000000', 'the underline is off the panel');
 
-  // Raining: the radar, still, on the newest frame on hand; missing frames
-  // leave it empty with their indicator segments dark, the loaded ones lit.
-  const pr = { ...p, radar: { ...radar, on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now - 60] } };
+  // Raining: the radar view shows the radar, still, on the newest frame on
+  // hand; missing frames leave it empty with their indicator segments dark,
+  // the loaded ones lit. Conditions stay conditions (no takeover, Nov 26, 2026).
+  const pr = { ...p, radar: { ...radar, on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now - 60] },
+    knob: { ...p.knob, vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline', 'seventies', 'analog'], [], []] } };
   const seg = (fr) => [57, 60, 63].map((x) => hex(fr.get(x, 2)));
-  f = render(pr, { screen: 'peek', now, frames: {}, peek: { k: 1, vi: 0, chosen: true } });
+  f = render(pr, { screen: 'peek', now, frames: {}, peek: { k: 1, vi: 3, chosen: true } });
   assert.deepEqual(seg(f), [C.indicator, C.indicator, C.indicator], 'nothing on hand: empty radar, not the conditions layout');
   const bytes = new Uint8Array(2048).fill(2);
-  f = render(pr, { screen: 'peek', now, frames: { a: bytes, b: bytes }, peek: { k: 1, vi: 0, chosen: true } });
+  f = render(pr, { screen: 'peek', now, frames: { a: bytes, b: bytes }, peek: { k: 1, vi: 3, chosen: true } });
   assert.deepEqual(seg(f), ['#6a6a6a', C.amber, C.indicator]);
   assert.notEqual(hex(f.get(0, 10)), '#000000', 'the newest frame on hand is drawn');
+  f = render(pr, { screen: 'peek', now, frames: { a: bytes, b: bytes }, peek: { k: 1, vi: 0, chosen: true } });
+  assert.ok(rowsEqual(f, render({ ...p, radar: { ...radar, wx } }, { screen: 'weather', now }), 0, 20), 'conditions while it rains');
 
   // The radar view: every kept frame from pv.radar, dry or not; the other
   // views ignore frames while it's dry (radar.on false).

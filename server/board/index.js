@@ -569,14 +569,15 @@ function createBoard({
       try { radarState = { ...radarState, ...(await testRadar.want(test.radar, st, nowSecs(), { wide: board.cols === 128 })) }; }
       catch (e) { log.error('[board] test radar:', e.message); }
     }
-    // The radar screen is the weather screen: the radar loop only while rain
-    // is in the box (frames are sent only then), current conditions otherwise.
-    // The radar view (wxView 'radar') keeps its frames whatever the weather
-    // (an empty map when dry).
+    // The weather screen draws the view chosen (wxView): only the radar view
+    // draws the loop, and keeps its frames whatever the weather (an empty map
+    // when dry). Conditions, 5-day and hourly stay put while it rains (Nov 26,
+    // 2026: the loop no longer takes them over); frames ride along for them
+    // only while rain is in the box and Rain nearby visits are on, since a
+    // visit shows the radar (see `visit` below).
     const radarView = board.wxView === 'radar';
     // Every kept frame, rain or not, for the peek chooser's radar view.
     const allFrames = { frames: radarState.frames, ft: radarState.ft };
-    if (!radarView && !radarState.on) radarState = { ...radarState, frames: [], ft: [] };
     // The 5-day layout (wxView) draws when wx carries the days.
     const days = board.wxView === '5day' && wd ? toDays(wd) : null;
     const hours = board.wxView === 'hourly' && wd ? toHours(wd) : null;
@@ -627,6 +628,8 @@ function createBoard({
     const cyc = cycleOf(board, caps, sports);
     const screen = resolveScreen(board, cyc);
     const held = holdOf(id, board, now, !!radarState.on);
+    const visit = held ? null : visitOf(board);
+    if (!radarView && !(radarState.on && visit)) radarState = { ...radarState, frames: [], ft: [] };
     const viewKey = `${id}:${board.station.mapid}`;
     // Two panels have room for the full name (stations.json `wide`), unless
     // the phone set a name of its own.
@@ -694,7 +697,7 @@ function createBoard({
       anim: animOf(board),
       tickerFill: board.tickerFill || 55,
       radar: {
-        ...radarState, visit: held ? null : visitOf(board), ...(held ? { held } : {}), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: wd ? toWx(wd).temp : null, icon: wd ? toWx(wd).icon : null,
+        ...radarState, visit, ...(held ? { held } : {}), showTime: board.radarTime !== false, tempShadow: board.tempShadow === true, temp: wd ? toWx(wd).temp : null, icon: wd ? toWx(wd).icon : null,
         // Radar clock: the current time instead of the frame's; conditions under it.
         ...(board.radarClock && board.radarClock !== 'frame' ? { clock: board.radarClock } : {}),
         ...(board.radarCond === true ? { cond: true } : {}),

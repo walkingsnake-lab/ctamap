@@ -51,6 +51,17 @@ static draw::Rolls rolls_of(const Value &v) {
   return out;
 }
 
+// opts menu.bump / peek.bump (draw.js knobBump): {t, dir, axis}.
+static draw::RenderOpts::Bump bump_of(const Value &v) {
+  draw::RenderOpts::Bump b;
+  if (v.is_null() || v["t"].is_null()) return b;
+  b.on = true;
+  b.t = v["t"].num(0);
+  b.dir = v["dir"].num(1) < 0 ? -1 : 1;
+  b.y = v["axis"].eq("y");
+  return b;
+}
+
 static std::string diff(const std::string &name, const std::string &want_b64, const Frame &f, size_t limit = 6) {
   std::vector<uint8_t> want = b64(want_b64);
   std::vector<std::string> bad;
@@ -127,6 +138,7 @@ int main(int argc, char **argv) {
           draw::RenderOpts::Menu m;
           m.sel = (int)o["menu"]["sel"].num(0);
           m.confirm = o["menu"]["confirm"].truthy();
+          m.bump = bump_of(o["menu"]["bump"]);
           ro.menu = m;
         }
         if (!o["iconT"].is_null()) ro.icon_t = o["iconT"].num();
@@ -144,6 +156,7 @@ int main(int argc, char **argv) {
             k.glide_t = gl["t"].num(0);
             k.glide_y = gl["axis"].eq("y");
           }
+          k.bump = bump_of(pk["bump"]);
           k.chosen = pk["chosen"].truthy();
           if (pk["under"].is_str()) k.under = pk["under"].s;
           ro.peek = k;

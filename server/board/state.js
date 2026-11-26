@@ -98,9 +98,8 @@ const LINE_NAMES = ['white', 'line'];
 // where that's true at the station, or full-width destination rows.
 const WIDE_LAYOUTS = ['split', 'rows'];
 const RADAR_CLOCKS = ['frame', 'now', 'age', 'none']; // the radar corner: frame time, current time, how long ago the frame is, or nothing
-// The weather screen's view: conditions, 5-day, or hourly (the radar loop
-// takes over while rain is in the box), or the radar, always (an empty map
-// when dry).
+// The weather screen's view: conditions, 5-day, or hourly (each stays put
+// while it rains), or the radar, always (an empty map when dry).
 const WX_VIEWS = ['now', '5day', 'hourly', 'radar'];
 const TEMP_UNITS = ['F', 'C'];  // temperatures on every weather display
 // Retired settings, dropped from saved state on load: per-layout animated
