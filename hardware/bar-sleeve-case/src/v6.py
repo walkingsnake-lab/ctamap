@@ -163,15 +163,15 @@ PORT_FRAME = (V.PORT_W + 0.6, V.PORT_H + 0.6)
 # them reach parts soldered beside the mounting holes (distance from the hole's axis, height above the component face):
 #   post 1 (hole 7.62, 15.875)  the tall capacitor: its base 2.64 away up to 1.0, its can 2.91 away up to 5.64 (a 6 mm
 #                               post overlaps it); the USB-C receptacle 3.16 away, 3.2 tall (0.16 clear)
-#   post 3 (48.26, 35.56)       a chip 2.84 away, 1.1 tall (overlaps by 0.16)
-#   post 4 (48.26, 15.875)      a chip 3.13 away, 1.1 tall (0.13 clear);   post 2 (7.62, 35.56): nothing within 3.49
+#   post 3 (48.26, 35.56)       a chip 2.81 away, 1.1 tall (overlaps by 0.19)
+#   post 4 (48.26, 15.875)      a chip 3.10 away, 1.1 tall (0.10 clear);   post 2 (7.62, 35.56): nothing within 3.49
 # so a post could rest on a part instead of on the board (the owner: "explains why the board never sat quite right").
 # Here every tip is necked to S3_TIP_D for S3_TIP_L, and post 1 has a flat toward the capacitor and one toward the
-# receptacle: 0.4 or more to every part. The V5 trays (drawer.py) still have the plain posts.
+# receptacle: 0.39 or more to every part (the capacitor's base is closest). The V5 trays (drawer.py) still have the plain posts.
 S3_TIP_D, S3_TIP_L = 4.8, 1.6
 S3_FLATS = {0: ((48.0, 2.2, 6.2), (-95.3, 2.7, 3.7))}        # post index: (direction in the board's frame, deg: 0 = away from the
                                                              # USB edge, 90 = up the edge; the flat's distance from the axis; its length)
-S3_NEAR = ((0, 45.0, 2.64, 0.0, 1.0), (0, 50.9, 2.91, 1.0, 5.64), (0, -95.3, 3.16, 0.0, 3.2), (2, -90.0, 2.84, 0.0, 1.1), (3, 90.0, 3.13, 0.0, 1.1))
+S3_NEAR = ((0, 45.0, 2.64, 0.0, 1.0), (0, 50.9, 2.91, 1.0, 5.64), (0, -95.3, 3.16, 0.0, 3.2), (2, -93.0, 2.81, 0.0, 1.1), (3, 86.5, 3.10, 0.0, 1.1))
                                                              # (post, direction, distance, from, to above the face): the parts' nearest points
 PORT_CH = 0.5
 BTN_CL = 0.5
@@ -741,7 +741,7 @@ def check(P):
             ('chassis / panel', v(ch, P['panel'])), ('chassis / diffuser', v(ch, dif)), ('skin / diffuser', v(sk, dif)),
             ('skin 0.1 further back / diffuser (the rim keeps at least that)', v(sk.translate([0, 0.1, 0]), dif)),
             ('diffuser 0.25 further back / chassis (its flange has that behind it)', v(dif.translate([0, 0.25, 0]), ch)),
-            ('chassis / standoffs', v(ch, P['standoffs'])), ('chassis / S3, beyond the V5 tray (its posts stand in the envelope)', round(v(ch, P['s3']) - v(p4.tray_p4(), P['s3']), 2)), ('chassis / sensor', v(ch, P['sensor'])),
+            ('chassis / standoffs', v(ch, P['standoffs'])), ('chassis / S3, beyond the V5 tray less the post relief (its posts stand in the envelope)', round(v(ch, P['s3']) - v(p4.tray_p4() - s3_post_relief(), P['s3']), 2)), ('chassis / sensor', v(ch, P['sensor'])),
             ('chassis / encoder', v(ch, P['encoder'])), ('ring / skin', v(P['ring'], sk)), ('ring / chassis', v(P['ring'], ch)), ('ring / encoder', v(P['ring'], P['encoder'])), ('chassis / pixel', v(ch, pixel())),
             ('standoffs / encoder, S3, sensor', v(P['standoffs'], P['encoder'] + P['s3'] + P['sensor'])),
             ('skin, knob and bottom screws / panel, diffuser, S3, sensor, encoder, ring', v(P['screws']['skin'] + P['screws']['under'] + P['screws']['knob'], P['panel'] + dif + P['s3'] + P['sensor'] + P['encoder'] + P['ring']))]
@@ -760,12 +760,18 @@ def check(P):
     rows.append(('the S3\'s receptacle (0.5 proud) and button plungers, 0.4 clear, seated and swept in from the front / chassis', v(Manifold.batch_boolean(edge, ADD), ch)))
     # a plug fully in: its metal shell (8.4 x 2.6) from outside the case to 6.2 past the receptacle's mouth
     rows.append(('a seated USB-C plug\'s metal shell / chassis and skin', v(box(DR.S3_EDGE - 6.2, HW + 5, py - 1.3, py + 1.3, pz - 4.2, pz + 4.2), ch + sk)))
-    # the parts beside the S3's posts (S3_NEAR, from Adafruit's model): a 0.3 mm rod at each one's nearest point, over its height
-    near = []
+    # the parts beside the S3's posts (S3_NEAR, from Adafruit's model): the chassis's distance from each one's nearest
+    # point, over its height, must be 0.3 or more (a distance, not an overlap volume: a thin rod's volume let 0.1 pass)
+    gap = 9.0
     for post, deg, dist, y0, y1 in S3_NEAR:
         hx, hz = DR.S3_HOLES[post]; ux, uz = s3_dir(deg)
-        near.append(cyl_y(hx + dist * ux, hz + dist * uz, face + y0 + 0.02, face + y1, 0.6, 24))
-    rows.append(('the parts beside the S3\'s posts, 0.3 clear at their nearest points / chassis', v(Manifold.batch_boolean(near, ADD), ch)))
+        gap = min(gap, cyl_y(hx + dist * ux, hz + dist * uz, face + y0 + 0.02, face + y1, 0.02, 8).min_gap(ch, 2.0) - 0.01)
+    rows.append((f'the parts beside the S3\'s posts, nearest {gap:.2f} / chassis (0.3 or more)', 0.0 if gap >= 0.3 else round(0.35 - gap, 2)))
+    # the port stop is there: a plug's tip lifted 0.7 to 1.5 over the receptacle, 0.5 to 2.5 in past its mouth, meets solid
+    # chassis all the way across (what is not chassis there is a way in over the socket)
+    top = face + S3_EDGE_PARTS['receptacle'][4]
+    tip = box(DR.S3_EDGE - 2.5, DR.S3_EDGE - 0.5, top + 0.7, top + 1.5, pz - 4.1, pz + 4.1)
+    rows.append(('a plug\'s tip over the receptacle, not blocked by the port stop, mm3', round(tip.volume() - (tip ^ ch).volume(), 2)))
     plank_top_z = max(m.bounding_box()[5] for k, m in P['skin'].items() if k in ('plank_top', 'half_top'))
     rows.append(('ring flange above the top plank, mm, less 0.3 (should be >= 0)', round(P['ring'].bounding_box()[2] - plank_top_z - 0.3, 2) * -1 if P['ring'].bounding_box()[2] - plank_top_z < 0.3 else 0.0))
     import cleat as CLT, p4v55 as T
