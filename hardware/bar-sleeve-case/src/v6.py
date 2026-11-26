@@ -175,6 +175,13 @@ S3_NEAR = ((0, 45.0, 2.64, 0.0, 1.0), (0, 50.9, 2.91, 1.0, 5.64), (0, -95.3, 3.1
                                                              # (post, direction, distance, from, to above the face): the parts' nearest points
 PORT_CH = 0.5
 BTN_CL = 0.5
+# The port's stop (Nov 25). The frame keeps a tip from passing in front of the board, but behind the port a tilted tip
+# could still ride over the receptacle's top and go 1-2 mm in. The window cannot be made tight enough to prevent that:
+# a plug's housing has to pass it and reach 0.5 mm from the board. So a block stands over the receptacle, PORT_STOP[0]
+# above its top, its face level with the receptacle's mouth (inboard of where any housing ends), PORT_STOP[1] deep and
+# PORT_STOP[2] either side of the port's centre, carried on a 45 deg corbel from the wall behind the window. A tip
+# 2.4 thick or more cannot enter the gap; it lands on the face and slides down into the port.
+PORT_STOP = (0.6, 3.0, 5.5)
 S3_EDGE_PARTS = dict(receptacle=(-4.47, 4.47, 0.0, 0.0, 3.2), down=(8.81, 11.76, 1.07, 1.0, 2.5), up=(18.59, 21.54, 0.94, 1.0, 2.5),
                      reset=(28.37, 31.32, 0.44, 1.0, 2.5))      # (from, to) along the edge, past the edge, (from, to) above the face
 CAP_SCREWS = ((KY, ZC + 50.0), (KY, ZC - 50.0))            # (y, z) on each end face; z +/-50 clears the S3 and its window
@@ -480,6 +487,20 @@ def s3_post_relief():
     return Manifold.batch_boolean(out, ADD)
 
 
+def port_stop():
+    """the block over the USB-C receptacle (see PORT_STOP), added to the right wall's inner face"""
+    gap, depth, half = PORT_STOP
+    py, pz = DR.PORT_Y, DR.PORT_Z
+    top = DR.PCB_Y0 + 1.6 + S3_EDGE_PARTS['receptacle'][4]     # the receptacle's top, toward the back
+    back = py + PORT_FRAME[0] / 2                              # the window's back edge: the wall is whole behind it
+    x1 = DR.S3_EDGE                                            # the receptacle's mouth
+    x0 = x1 - depth
+    # one outline in (x, y): the block over the receptacle, then out to the wall at the window's back edge and back
+    # down the corbel's 45 deg to the block's inner face
+    xw = XIN + 0.01
+    return along_z([(x0, top + gap), (x1, top + gap), (x1, back), (xw, back), (xw, back + (xw - x0)), (x0, back)], pz - half, pz + half)
+
+
 NECK_R = 9.5                     # the tower above the walnut, under the ring's cap: narrower, so the ring keeps 2.7 mm round the screw holes
 PIX_RELIEF = 1.5                 # a blind pocket in the top wall over the front of the encoder board, where V5's tray had an
                                  # open slot: the board's NeoPixel stands there (2.4 mm of headroom; 1.0 mm of wall left)
@@ -606,7 +627,7 @@ def chassis():
     finally:
         DR.FASTEN, DR.INSERT_D, DR.INSERT_L = saved
     pf_add, pf_cut = port_frame()
-    t = (t + pf_add) - pf_cut - s3_post_relief()
+    t = (t + pf_add + port_stop()) - pf_cut - s3_post_relief()
     # no crush ribs; the front edge clear of the diffuser's flange, which sits RIM_GAP further back
     t = t ^ C.prism_y(C.rr_cs(C.BORE_HX - DR.TRAY_CL, C.BORE_HZ - DR.TRAY_CL, C.BORE_R - DR.TRAY_CL), 0, D)
     t = t - box(-400, 400, 0, DR.YF + RIM_GAP + FRONT_CL, -5, H + 5)   # (2 x RIM_GAP until the gap shrank: at 0.15 that left the flange 0.15 either way)
@@ -737,6 +758,8 @@ def check(P):
     edge = [box(DR.S3_EDGE - 0.5, DR.S3_EDGE + max(past, 0.5 if name == 'receptacle' else 0.0) + 0.4, DR.YF, face + y1 + 0.4, pz + z0 - 0.4, pz + z1 + 0.4)
             for name, (z0, z1, past, y0, y1) in S3_EDGE_PARTS.items()]
     rows.append(('the S3\'s receptacle (0.5 proud) and button plungers, 0.4 clear, seated and swept in from the front / chassis', v(Manifold.batch_boolean(edge, ADD), ch)))
+    # a plug fully in: its metal shell (8.4 x 2.6) from outside the case to 6.2 past the receptacle's mouth
+    rows.append(('a seated USB-C plug\'s metal shell / chassis and skin', v(box(DR.S3_EDGE - 6.2, HW + 5, py - 1.3, py + 1.3, pz - 4.2, pz + 4.2), ch + sk)))
     # the parts beside the S3's posts (S3_NEAR, from Adafruit's model): a 0.3 mm rod at each one's nearest point, over its height
     near = []
     for post, deg, dist, y0, y1 in S3_NEAR:
