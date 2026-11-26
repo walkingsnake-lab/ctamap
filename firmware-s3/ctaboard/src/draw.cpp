@@ -2040,12 +2040,13 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   };
 
   if (r["showTime"].is_false() && !r["temp"].is_null()) {
-    // The temperature alone (no weather icon since Nov 26, 2026: the radar shows the rain).
+    // The temperature alone, its digits 2 rows below the dots as on two
+    // panels (no weather icon or gap since Nov 26, 2026: the radar shows the rain).
     ustr ts = vstr(r["temp"]) + U"°";
     int x0 = right + 1 - measure(FONT_SMALL, ts);
-    clear(text_box(FONT_SMALL, ts, x0, top + 10));
+    clear(text_box(FONT_SMALL, ts, x0, top + 7));
     draw_indicator();
-    f.text(FONT_SMALL, ts, x0, top + 10, C::label);
+    f.text(FONT_SMALL, ts, x0, top + 7, C::label);
     if (ws) draw_warn_tag();
     return;
   }

@@ -1046,10 +1046,11 @@ test('radar time off: the temperature under the indicator, no icon; WATCH/WARN t
   assert.equal(count(f, draw.C.radarAmpm, 0, 0, 63, 31), 0);       // no AM/PM
   assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0);       // no frame time
   assert.equal(hex(f.get(63, 2)), draw.C.amber);                   // indicator unchanged
-  assert.ok(count(f, draw.C.label, 40, 8, 63, 12) > 8);            // 63° in label white, rows 8-12
+  assert.ok(count(f, draw.C.label, 40, 4, 63, 8) > 8);             // 63° in label white, rows 4-8: 2 rows under the dots
+  assert.equal(count(f, draw.C.label, 40, 9, 63, 21), 0);
   let maxX = 0; for (let y = 0; y < 32; y++) for (let x = 40; x < 64; x++) if (hex(f.get(x, y)) === draw.C.label) maxX = Math.max(maxX, x);
   assert.equal(maxX, 63);                                          // right-aligned to the edge
-  const iconPx = (fr) => { let n = 0; for (let y = 6; y < 14; y++) for (let x = 40; x < 56; x++) { const c = hex(fr.get(x, y)); if (c !== '#000000' && c !== draw.C.label) n++; } return n; };
+  const iconPx = (fr) => { let n = 0; for (let y = 3; y < 14; y++) for (let x = 40; x < 56; x++) { const c = hex(fr.get(x, y)); if (c !== '#000000' && c !== draw.C.label) n++; } return n; };
   assert.equal(iconPx(f), 0, 'no weather icon (Nov 26, 2026): the radar shows the rain');
   assert.deepEqual(f.px, off(null, { icon: null }).px);            // the icon field changes nothing
   // Tags: bottom right (rows 27-31), colored by level; a tornado warning blinks.

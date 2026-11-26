@@ -1410,15 +1410,16 @@
         }
       };
       if (r.showTime === false && r.temp != null) {
-        // Time off: the temperature right-aligned under the indicator (no
-        // weather icon since Nov 26, 2026: the radar shows the rain), and the
+        // Time off: the temperature right-aligned right under the indicator,
+        // its digits starting 2 rows below the dots as on two panels (no
+        // weather icon or gap since Nov 26, 2026: the radar shows the rain), and the
         // warning tag (icon + WATCH/WARN) at the screen's bottom right on a
         // black backing. With no weather data yet, the time shows instead.
         const t = `${r.temp}°`;
         const x0 = right + 1 - measure('small', t);
-        clear(textBox('small', t, x0, top + 10));
+        clear(textBox('small', t, x0, top + 7));
         drawIndicator();
-        f.text('small', t, x0, top + 10, C.label);
+        f.text('small', t, x0, top + 7, C.label);
         if (ws) drawWarnTag();
         return f;
       }
