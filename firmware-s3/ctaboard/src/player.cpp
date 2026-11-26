@@ -324,6 +324,8 @@ void Player::draw(draw::Frame &frame, double ms, long long now, bool bright_here
   }
   if (screen == Screen::Weather) {
     o.screen = "weather";
+    // Frames for the visits only (radar.vo) draw only while one is showing.
+    o.visit = !overridden && visiting(now);
     o.idx = radar_idx(ms);
     o.frames = &radar_frames;
     o.blink = blink_on(ms);

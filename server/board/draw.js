@@ -1329,13 +1329,15 @@
     }
 
     // opts: now, idx (frame index into p.radar.frames; default the newest),
-    // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar)
+    // frames ({id: Uint8Array(2048)}; missing frames draw as empty radar),
+    // visit (a Rain nearby visit is showing: frames marked `vo`, for the
+    // visits only, draw then and not on the weather screen's own view)
     // The weather screen: the radar loop while there are frames (rain in the
     // box), current conditions (or the 5-day layout) otherwise.
     function renderWeather(p, opts) {
       const o = opts || {};
       const r = p.radar || {};
-      const ids = r.frames || [];
+      const ids = r.vo && !o.visit ? [] : r.frames || [];
       // -1 when there are no frames yet (the clock then shows the current time).
       // Peek (opts.peek): the newest frame on hand, still; -1 with none yet.
       const newestOnHand = () => { for (let i = ids.length - 1; i >= 0; i--) if (o.frames && o.frames[ids[i]]) return i; return -1; };
@@ -1386,12 +1388,13 @@
       // The radar (shoreline included) can reach into the clock box; each
       // piece of the corner gets a 1px black margin so nothing touches it.
       const clear = (b) => { if (b[1] <= b[3]) f.fill(b[0] - 1, b[1] - 1, b[2] - b[0] + 3, b[3] - b[1] + 3, '#000000'); };
-      const segW = 2, segGap = 1;
+      // The frame indicator: one 1x1 dot per frame, 2 px apart (Nov 26, 2026; 2x2 before).
+      const segW = 1, segH = 1, segGap = 1;
       const indX = right - (ids.length * (segW + segGap) - segGap) + 1;
-      if (ids.length) clear([indX, top, right, top + 1]);
+      if (ids.length) clear([indX, top, right, top + segH - 1]);
       const drawIndicator = () => {
         let x = indX;
-        ids.forEach((id, i) => { f.fill(x, top, segW, 2, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : C.indicator); x += segW + segGap; });
+        ids.forEach((id, i) => { f.fill(x, top, segW, segH, i === idx ? C.amber : o.peek && o.frames && o.frames[id] ? PEEK_LOADED : C.indicator); x += segW + segGap; });
       };
       const ws = p.warn ? warnStyle(p.warn) : null;
       const hideWarn = ws && ws.blinks && o.blink;
@@ -1407,18 +1410,15 @@
         }
       };
       if (r.showTime === false && r.temp != null) {
-        // Time off: current conditions (icon + temperature, as on the weather
-        // row) right-aligned under the indicator, and the warning tag (icon +
-        // WATCH/WARN) at the screen's bottom right on a black backing. With no
-        // weather data yet, the time shows instead.
+        // Time off: the temperature right-aligned under the indicator (no
+        // weather icon since Nov 26, 2026: the radar shows the rain), and the
+        // warning tag (icon + WATCH/WARN) at the screen's bottom right on a
+        // black backing. With no weather data yet, the time shows instead.
         const t = `${r.temp}°`;
-        const icon = r.icon && icons.ICONS[r.icon] ? r.icon : null;
-        const x0 = right + 1 - ((icon ? 10 : 0) + measure('small', t));
-        if (icon) clear([x0, top + 4, x0 + 7, top + 11]);
-        clear(textBox('small', t, x0 + (icon ? 10 : 0), top + 10));
+        const x0 = right + 1 - measure('small', t);
+        clear(textBox('small', t, x0, top + 10));
         drawIndicator();
-        if (icon) drawIcon(f, icon, x0, top + 4);
-        f.text('small', t, x0 + (icon ? 10 : 0), top + 10, C.label);
+        f.text('small', t, x0, top + 10, C.label);
         if (ws) drawWarnTag();
         return f;
       }
@@ -2105,7 +2105,7 @@
           if (v === '5day' && pv.week) wx.week = pv.week;
           if (v === 'hourly' && pv.hours24) wx.hours24 = pv.hours24;
         }
-        return { p: { ...p, radar: { ...r, frames, ft, wx } }, screen: 'weather' };
+        return { p: { ...p, radar: { ...r, frames, ft, wx, vo: undefined } }, screen: 'weather' };
       }
       if (cat === 'clock') return { p: { ...p, cface: v || 'skyline', skyline: pv.skyline || null, cwx: pv.cwx || null, dn: pv.dn || null, cacc: pv.cacc || null, cdig: pv.cdig || null, cshd: pv.cshd || null, ginv: !!pv.ginv, steady: !!pv.steady }, screen: 'clock' };
       if (cat === 'announce') return { p, screen: 'announce' };
@@ -3519,7 +3519,7 @@
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
       renderBaseball, renderChooser, renderMenu, MENU, MENU_ICONS, renderPeek, peekOverlay, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
-      autoScreen, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
+      autoScreen, visiting, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };
   }
@@ -3545,16 +3545,24 @@
   // knob ended one). Mirrored by the S3's Player::auto_screen(); the frozen
   // player.py visits only transit, ticker and baseball.
   const VISITED = ['transit', 'ticker', 'baseball', 'clock', 'announce'];
-  function autoScreen(p, now, skipUntil = 0) {
-    let screen = p.screen;
+  // The Cycle's turn alone (no visit).
+  function turnScreen(p, now) {
     const rot = p.rot;
-    if (rot && rot.screens && rot.screens.length > 1 && rot.every > 0 && rot.screens.includes(screen)) {
-      screen = rot.screens[Math.floor(Math.floor(now) / rot.every) % rot.screens.length];
+    if (rot && rot.screens && rot.screens.length > 1 && rot.every > 0 && rot.screens.includes(p.screen)) {
+      return rot.screens[Math.floor(Math.floor(now) / rot.every) % rot.screens.length];
     }
+    return p.screen;
+  }
+  // A Rain nearby visit is showing (the weather screen, where the turn is another).
+  function visiting(p, now, skipUntil = 0) {
+    return autoScreen(p, now, skipUntil) === 'weather' && turnScreen(p, now) !== 'weather';
+  }
+  function autoScreen(p, now, skipUntil = 0) {
+    const screen = turnScreen(p, now);
     const r = p.radar;
     if (!VISITED.includes(p.screen) || !r || !r.visit || !(r.visit.every > 0) || !(r.on || r.visit.always) || now < skipUntil) return screen;
     return Math.floor(now) % r.visit.every < r.visit.for ? 'weather' : screen;
   }
 
-  return { Frame, create, autoScreen, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE, HOLD_MAX, WIDE, colsOf, widenPx };
+  return { Frame, create, autoScreen, visiting, timing, minutesUntil, timeText, chronoText, maxRows, rowTops, liveRows, slotKey, easeInOut, DROP_GRACE, HOLD_MAX, WIDE, colsOf, widenPx };
 });

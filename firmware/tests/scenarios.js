@@ -168,8 +168,10 @@ async function build() {
     const t = radar.timeOf(key.split('-')[1]);
     const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
     const p = { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => t - (5 - i) * 300), timeBox: loc.timeBox, split: loc.split } };
-    add(`radar ${key}`, p, [{ screen: 'weather', idx: 5 }, { screen: 'weather', idx: 0 }, { screen: 'weather', idx: 3 }], Object.fromEntries(ids.map((id) => [id, bytes])));
-    add(`radar ${key} temperature`, { ...p, radar: { ...p.radar, showTime: false, temp: 63, icon: 'sun' } }, [{ screen: 'weather', idx: 5 }], Object.fromEntries(ids.map((id) => [id, bytes])));
+    // S3 only since Nov 26, 2026 (1x1 indicator dots, no icon with the time
+    // off); the frozen M4 keeps the 2x2 dots and the icon.
+    add(`radar ${key}`, p, [{ screen: 'weather', idx: 5 }, { screen: 'weather', idx: 0 }, { screen: 'weather', idx: 3 }], Object.fromEntries(ids.map((id) => [id, bytes])), undefined, { s3only: true });
+    add(`radar ${key} temperature`, { ...p, radar: { ...p.radar, showTime: false, temp: 63, icon: 'sun' } }, [{ screen: 'weather', idx: 5 }], Object.fromEntries(ids.map((id) => [id, bytes])), undefined, { s3only: true });
   }
   // Clock rolls (opts.nums: {name: {from, p}}): per-digit when the shape
   // holds, the whole clock when its width changes. Names the renderer
@@ -189,9 +191,10 @@ async function build() {
     const rp = (extra) => ({ now: rt, tzo: tzOffset(rt), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { on: true, frames: ids, ft: ids.map((_, i) => rt - (2 - i) * 360), timeBox: loc.timeBox, split: loc.split, clock: 'now', ...extra } });
     const fr = Object.fromEntries(ids.map((id) => [id, bytes]));
     const radarNums = nums({ 'rad.clock': '12:59', 'rad.temp': '9°' });
-    add('rolls radar current time', rp(), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
-    add('rolls radar current time + conditions', rp({ cond: true, temp: 63 }), nums({ 'rad.clock': '3:59' }).map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
-    add('rolls radar frame time stays put', rp({ clock: 'frame' }), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr);
+    // (S3 only since the 1x1 indicator dots, Nov 26, 2026.)
+    add('rolls radar current time', rp(), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr, undefined, { s3only: true });
+    add('rolls radar current time + conditions', rp({ cond: true, temp: 63 }), nums({ 'rad.clock': '3:59' }).map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr, undefined, { s3only: true });
+    add('rolls radar frame time stays put', rp({ clock: 'frame' }), radarNums.map((n) => ({ screen: 'weather', idx: 2, nums: n })), fr, undefined, { s3only: true });
     // S3 only: the big clocks and current-conditions numbers roll too.
     const s3 = { s3only: true };
     add('rolls big overnight clock', nt, nums({ 'big.clock': '11:15' }).map((n) => ({ screen: 'transit', nums: n })), undefined, undefined, s3);
@@ -277,28 +280,31 @@ async function build() {
     }
   }
 
-  // Radar time off: icon + temperature, WATCH/WARN tag bottom right (tornado warning blinks).
+  // Radar time off: the temperature (icon on the M4), WATCH/WARN tag bottom right (tornado warning blinks).
   for (const [timeBox, split] of [[radar.FULL_TIME_BOX, false], [radar.SPLIT_TIME_BOX, true]]) {
     const t = 1791140000;
     const ids = ['a', 'b', 'c'];
     const frames = Object.fromEntries(ids.map((id) => [id, new Uint8Array(2048).fill(3)]));
+    // S3 only since Nov 26, 2026 (1x1 indicator dots, no icon with the
+    // time off); the frozen M4 keeps the old corner.
+    const add3 = (name, p, renders, fr) => add(name, p, renders, fr, undefined, { s3only: true });
     const r = { on: true, frames: ids, ft: ids.map((_, i) => t - (2 - i) * 300), timeBox, split, showTime: false, temp: split ? -12 : 63, icon: split ? 'snow' : 'pcloudy_day' };
     for (const warn of [{ kind: 'tor', lvl: 'warning' }, { kind: 'tor', lvl: 'watch' }, { kind: 'svr', lvl: 'warning' }]) {
-      add(`radar time off split=${split} ${warn.kind} ${warn.lvl}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: r }, [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 0, blink: true }], frames);
+      add3(`radar time off split=${split} ${warn.kind} ${warn.lvl}`, { now: t, tzo: tzOffset(t), bright: 100, warn, radar: r }, [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 0, blink: true }], frames);
     }
-    add(`radar time off split=${split} no temp, no icon`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, temp: null } }, [{ screen: 'weather', idx: 2 }], frames);
-    add(`radar time on split=${split} tornado warning blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true } }, [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, blink: true }], frames);
+    add3(`radar time off split=${split} no temp, no icon`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, temp: null } }, [{ screen: 'weather', idx: 2 }], frames);
+    add3(`radar time on split=${split} tornado warning blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true } }, [{ screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, blink: true }], frames);
     // Current-time clock and the conditions layout (-12: the widest temperature;
     // t + 3600 is 12:13 PM, the widest time).
-    add(`radar clock now + conditions split=${split} svr warning`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { ...r, showTime: true, clock: 'now', cond: true } }, [{ screen: 'weather', idx: 0, now: t + 3600 }, { screen: 'weather', idx: 2 }], frames);
-    add(`radar frame clock + conditions split=${split} tornado blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true, cond: true } }, [{ screen: 'weather', idx: 1 }, { screen: 'weather', idx: 1, blink: true }], frames);
+    add3(`radar clock now + conditions split=${split} svr warning`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'warning' }, radar: { ...r, showTime: true, clock: 'now', cond: true } }, [{ screen: 'weather', idx: 0, now: t + 3600 }, { screen: 'weather', idx: 2 }], frames);
+    add3(`radar frame clock + conditions split=${split} tornado blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true, cond: true } }, [{ screen: 'weather', idx: 1 }, { screen: 'weather', idx: 1, blink: true }], frames);
     // Frame age ("3m") and no corner at all, with and without a warning tag.
-    add(`radar clock age split=${split} svr watch`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'watch' }, radar: { ...r, showTime: true, clock: 'age' } }, [{ screen: 'weather', idx: 0 }, { screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, now: t + 3000 }], frames);
-    add(`radar clock age split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'age' } }, [{ screen: 'weather', idx: 1 }], frames);
-    add(`radar clock none split=${split} tornado blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true, clock: 'none' } }, [{ screen: 'weather', idx: 1 }, { screen: 'weather', idx: 1, blink: true }], frames);
-    add(`radar clock none split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'none' } }, [{ screen: 'weather', idx: 1 }], frames);
-    add(`radar brightness 60 split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, rb: 60 } }, [{ screen: 'weather', idx: 1 }], Object.fromEntries(ids.map((id, i) => [id, Uint8Array.from({ length: 2048 }, (_, k) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10][(k + i) % 11])])));
-    add(`radar conditions without temp split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'now', cond: true, temp: null } }, [{ screen: 'weather', idx: 1 }], frames);
+    add3(`radar clock age split=${split} svr watch`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'svr', lvl: 'watch' }, radar: { ...r, showTime: true, clock: 'age' } }, [{ screen: 'weather', idx: 0 }, { screen: 'weather', idx: 2 }, { screen: 'weather', idx: 2, now: t + 3000 }], frames);
+    add3(`radar clock age split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'age' } }, [{ screen: 'weather', idx: 1 }], frames);
+    add3(`radar clock none split=${split} tornado blink`, { now: t, tzo: tzOffset(t), bright: 100, warn: { kind: 'tor', lvl: 'warning' }, radar: { ...r, showTime: true, clock: 'none' } }, [{ screen: 'weather', idx: 1 }, { screen: 'weather', idx: 1, blink: true }], frames);
+    add3(`radar clock none split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'none' } }, [{ screen: 'weather', idx: 1 }], frames);
+    add3(`radar brightness 60 split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, rb: 60 } }, [{ screen: 'weather', idx: 1 }], Object.fromEntries(ids.map((id, i) => [id, Uint8Array.from({ length: 2048 }, (_, k) => [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10][(k + i) % 11])])));
+    add3(`radar conditions without temp split=${split}`, { now: t, tzo: tzOffset(t), bright: 100, warn: null, radar: { ...r, showTime: true, clock: 'now', cond: true, temp: null } }, [{ screen: 'weather', idx: 1 }], frames);
   }
   // Weather row: tornado warning tag blinks.
   {
@@ -552,6 +558,10 @@ async function build() {
     const c = { chosen: true };
     add('peek radar none on hand', rain, [pk(1, 0, c), pk(1, 3, c)], {}, undefined, { s3only: true });
     add('peek radar two on hand', rain, [pk(1, 3, c), pk(1, 0, c), pk(1, 1, c)], { a: rbytes, b: rbytes }, undefined, { s3only: true });
+    // Frames for Rain nearby visits only (radar.vo): the weather screen keeps
+    // its own view, the visit draws the loop; the chooser's radar view too.
+    const vo = { ...rain, radar: { ...rain.radar, vo: 1 } };
+    add('weather visit-only frames', vo, [{ screen: 'weather', now: t }, { screen: 'weather', now: t, visit: true }, pk(1, 3, c), pk(1, 0, c)], { a: rbytes, b: rbytes, c: rbytes }, undefined, { s3only: true });
     add('peek skyline strip not fetched', p, [pk(2, 0, c)], undefined, undefined, { s3only: true });
     add('peek three entries, red at a blue line station', { ...p, knob: { ring: ['transit', 'weather', 'cycle'], at: 0, vars: [vars[0], vars[1], []], sel: [0, 0, 0], ln: 'BL' } },
       [pk(0, 1), pk(2, 0), pk(2, 0, c), pk(1, 0, { glide: { k: 2, vi: 0, t: 80, axis: 'x' } })], frames, undefined, { s3only: true });

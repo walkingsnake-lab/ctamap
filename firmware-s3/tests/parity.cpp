@@ -113,6 +113,7 @@ int main(int argc, char **argv) {
         if (!o["screen"].is_null()) ro.screen = screen.c_str();
         if (!o["now"].is_null()) ro.now = o["now"].num();
         ro.blink = o["blink"].truthy();
+        ro.visit = o["visit"].truthy();
         ro.page = (int)o["page"].num(0);
         ro.slide = o["slide"].num(0);
         if (!o["idx"].is_null()) ro.idx = (int)o["idx"].num();

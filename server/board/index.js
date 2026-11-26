@@ -26,7 +26,7 @@ const { sunPos, sunTime, subsolar } = require('./sun');
 const { stripBytes } = require('./clouds');
 const fs = require('fs');
 const path = require('path');
-const { render, assets, autoScreen, messageLayout } = require('./render');
+const { render, assets, autoScreen, visiting, messageLayout } = require('./render');
 
 const SIM_HTML = fs.readFileSync(path.join(__dirname, 'sim.html'));
 const CONTROL_HTML = fs.readFileSync(path.join(__dirname, 'control.html'));
@@ -574,7 +574,8 @@ function createBoard({
     // when dry). Conditions, 5-day and hourly stay put while it rains (Nov 26,
     // 2026: the loop no longer takes them over); frames ride along for them
     // only while rain is in the box and Rain nearby visits are on, since a
-    // visit shows the radar (see `visit` below).
+    // visit shows the radar (see `visit` below); then `vo` says they're for
+    // the visits only, so the weather screen's own view still stays put.
     const radarView = board.wxView === 'radar';
     // Every kept frame, rain or not, for the peek chooser's radar view.
     const allFrames = { frames: radarState.frames, ft: radarState.ft };
@@ -630,6 +631,7 @@ function createBoard({
     const held = holdOf(id, board, now, !!radarState.on);
     const visit = held ? null : visitOf(board);
     if (!radarView && !(radarState.on && visit)) radarState = { ...radarState, frames: [], ft: [] };
+    else if (!radarView) radarState = { ...radarState, vo: 1 };
     const viewKey = `${id}:${board.station.mapid}`;
     // Two panels have room for the full name (stations.json `wide`), unless
     // the phone set a name of its own.
@@ -1242,6 +1244,7 @@ function createBoard({
         const scale = Math.min(16, Math.max(1, parseInt(parsed.query.scale, 10) || 8));
         const frame = render(body, {
           screen,
+          visit: !asked && visiting(body, body.now),
           page: Math.max(0, parseInt(parsed.query.page, 10) || 0),
           blink: parsed.query.blink === '1',
           frames,

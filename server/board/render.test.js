@@ -326,7 +326,7 @@ test('peek chooser: the icon bar over the screen behind, dimmed; the chosen vari
   // the loaded ones lit. Conditions stay conditions (no takeover, Nov 26, 2026).
   const pr = { ...p, radar: { ...radar, on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now - 60] },
     knob: { ...p.knob, vars: [['transit', 'ticker'], ['now', '5day', 'hourly', 'radar'], ['skyline', 'seventies', 'analog'], [], []] } };
-  const seg = (fr) => [57, 60, 63].map((x) => hex(fr.get(x, 2)));
+  const seg = (fr) => [59, 61, 63].map((x) => hex(fr.get(x, 2))); // 1x1 dots, 2 px apart
   f = render(pr, { screen: 'peek', now, frames: {}, peek: { k: 1, vi: 3, chosen: true } });
   assert.deepEqual(seg(f), [C.indicator, C.indicator, C.indicator], 'nothing on hand: empty radar, not the conditions layout');
   const bytes = new Uint8Array(2048).fill(2);
@@ -344,7 +344,7 @@ test('peek chooser: the icon bar over the screen behind, dimmed; the chosen vari
   const empty = new Uint8Array(2048);
   empty[3 * 64 + 5] = 6;
   f = render(pd, { screen: 'peek', now, frames: { a: empty, b: empty }, peek: { k: 1, vi: 3, chosen: true } });
-  assert.deepEqual([60, 63].map((x) => hex(f.get(x, 2))), ['#6a6a6a', C.amber], 'the radar loop, still on the newest');
+  assert.deepEqual([61, 63].map((x) => hex(f.get(x, 2))), ['#6a6a6a', C.amber], 'the radar loop, still on the newest');
   assert.notEqual(hex(f.get(5, 3)), '#000000', 'the shoreline');
   f = render(pd, { screen: 'peek', now, frames: { a: empty, b: empty }, peek: { k: 1, vi: 0, chosen: true } });
   assert.ok(rowsEqual(f, render({ ...p, radar: { ...radar, wx } }, { screen: 'weather', now }), 0, 20), 'conditions while dry');

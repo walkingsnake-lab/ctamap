@@ -1911,6 +1911,13 @@ static void test_menu_a_hold_opens_it_a_turn_moves_and_exit_closes() {
   CHECK(px(r, 60, 30) == LABEL && px(r, 51, 30) == draw::RGB{}, "the underline overshoots to the right");
   r->run_for(300);
   CHECK(px(r, 51, 30) == LABEL && px(r, 60, 30) == draw::RGB{}, "and springs back");
+  r->knob.pending = 1;  // into the end, then straight back: the bump is called off
+  r->run_for(20);
+  r->knob.pending = -1;
+  r->run_for(20);
+  CHECK(r->board->menu.sel == 3 && !r->board->menu.bump.on, "restart, no bump: %d", r->board->menu.sel);
+  r->knob.pending = 1;
+  r->run_for(400);
   press(r);
   r->run_for(100);
   CHECK(!r->board->menu.open, "a press on exit closes it");
@@ -2151,6 +2158,12 @@ static void test_peek_ring_stops_at_its_ends() {
   r->run_for(100);
   CHECK(r->board->peek.k == 4, "cycle, not round the ring: %d", r->board->peek.k);
   CHECK(r->board->peek.bump.dir == 1 && r->board->peek.bump.t0 > r->clock.t, "the bump waits for the glide to arrive");
+  r->knob.pending = -1;  // straight back off the end: the bump is called off
+  r->run_for(20);
+  CHECK(r->board->peek.k == 3 && !r->board->peek.bump.on, "announce, no bump: %d", r->board->peek.k);
+  r->knob.pending = 3;  // on past the end again
+  r->run_for(100);
+  CHECK(r->board->peek.k == 4 && r->board->peek.bump.on, "cycle, bumping");
   r->knob.pending = 2;  // more clicks into the end while it waits: still cycle
   r->run_for(1500 + LATENCY);
   CHECK(r->server.selects == std::vector<std::string>({"cycle"}), "%s", r->server.selects.empty() ? "" : r->server.selects[0].c_str());

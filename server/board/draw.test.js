@@ -404,10 +404,10 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   assert.equal(hex(f.get(1, 0)), draw.RADAR[5]);
   assert.equal(hex(f.get(2, 0)), draw.RADAR[8]);
   assert.equal(hex(f.get(20, 16)), '#ffffff');
-  // Stack is top-aligned (rows 2-19): indicator on rows 2-3, current (last)
-  // segment amber at the right edge.
-  assert.equal(hex(f.get(62, 2)), draw.C.amber);
-  assert.equal(hex(f.get(56, 2)), draw.C.indicator);
+  // Stack is top-aligned (rows 2-19): the indicator's 1x1 dots on row 2,
+  // 2 px apart, the current (last) one amber at the right edge.
+  assert.deepEqual([59, 60, 61, 62, 63].map((x) => hex(f.get(x, 2))), [draw.C.indicator, '#000000', draw.C.indicator, '#000000', draw.C.amber]);
+  for (let x = 58; x < 64; x++) assert.equal(hex(f.get(x, 3)), '#000000', 'one row tall');
   assert.ok(count(f, draw.C.radarTime, 40, 6, 63, 12) > 20, 'clock "4:00" on rows 6-12');
   assert.ok(count(f, draw.C.radarAmpm, 40, 15, 63, 19) > 5, 'PM on rows 15-19');
   assert.ok(count(f, draw.C.warnSevere, 40, 15, 63, 19) > 3, 'bolt left of PM');
@@ -422,7 +422,7 @@ test('radar: palette, marker, frame indicator, clock and AM/PM, warning icon', (
   // A frame not fetched yet draws as empty radar with the stack.
   const empty = draw.render(p, { screen: 'weather', frames: {}, idx: 0 });
   assert.equal(count(empty, draw.RADAR[1], 0, 0, 39, 31), 0);
-  assert.equal(hex(empty.get(56, 2)), draw.C.amber);
+  assert.equal(hex(empty.get(59, 2)), draw.C.amber); // the first dot
 });
 
 test('radar with no frames yet draws the clock at the current time (no crash)', () => {
@@ -737,6 +737,27 @@ test('only the soonest train of a destination reads DUE; a bunched second shows 
   assert.deepEqual(Object.values(draw.transitTexts(chrono, NOW)), ['DUE', '2m', 'DUE']); // a different destination can be DUE too
 });
 
+test('visiting: a Rain nearby visit, not the Cycle\'s own weather turn; visit-only frames draw only then', () => {
+  const { visiting } = require('./draw');
+  const base = 1_800_000_000 - (1_800_000_000 % 240);
+  const visit = { every: 240, for: 60 };
+  const p = { screen: 'transit', rot: { screens: ['transit', 'weather'], every: 120 }, radar: { on: true, visit } };
+  assert.equal(visiting(p, base + 10), true); // a visit over the transit turn
+  assert.equal(visiting(p, base + 100), false); // transit, no visit
+  assert.equal(visiting(p, base + 130), false); // the Cycle's weather turn
+  assert.equal(visiting({ ...p, rot: null }, base + 10, base + 240), false); // the knob ended it
+  // A weather screen with frames marked vo: its own view (conditions) unless a visit is showing.
+  const t = base;
+  const wx = { icon: 'sun', temp: 54, word: 'SUNNY', hi: 61, lo: 47, feels: 51, wind: 'NW 12', pop: 0 };
+  const q = { now: t, bright: 100, warn: null, radar: { on: true, vo: 1, frames: ['a'], ft: [t], timeBox: [40, 0, 24, 22], split: false, wx } };
+  const frames = { a: new Uint8Array(2048).fill(2) };
+  const own = draw.render(q, { screen: 'weather', now: t, frames }), dry = draw.render({ ...q, radar: { ...q.radar, vo: undefined, frames: [], ft: [] } }, { screen: 'weather', now: t, frames });
+  assert.deepEqual([...own.px], [...dry.px]);
+  const v = draw.render(q, { screen: 'weather', now: t, frames, visit: true }), loop = draw.render({ ...q, radar: { ...q.radar, vo: undefined } }, { screen: 'weather', now: t, frames });
+  assert.deepEqual([...v.px], [...loop.px]);
+  assert.notDeepEqual([...v.px], [...own.px]);
+});
+
 test('autoScreen: radar visits on a timer, only while it rains on the auto screen', () => {
   const { autoScreen } = require('./draw');
   const p = (over = {}, radar = {}) => ({ screen: 'transit', radar: { on: true, visit: { every: 240, for: 60 }, ...radar }, ...over });
@@ -1016,7 +1037,7 @@ test('radar clock now: the current time in white; conditions under the clock', (
   assert.equal(count(tor(true), draw.C.warnTornado, 0, 0, 63, 31), 0, 'blinks');
 });
 
-test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at the bottom right', () => {
+test('radar time off: the temperature under the indicator, no icon; WATCH/WARN tag at the bottom right', () => {
   const now = Date.UTC(2026, 9, 4, 16, 46) / 1000;
   const radar = { on: true, frames: ['a', 'b', 'c'], ft: [now - 600, now - 300, now], timeBox: [40, 0, 24, 22], split: false, temp: 63, icon: 'sun' };
   const base = { now, bright: 100, warn: null };
@@ -1024,13 +1045,13 @@ test('radar time off: icon + temperature under the indicator; WATCH/WARN tag at 
   const f = off(null);
   assert.equal(count(f, draw.C.radarAmpm, 0, 0, 63, 31), 0);       // no AM/PM
   assert.equal(count(f, draw.C.radarTime, 0, 0, 63, 31), 0);       // no frame time
-  assert.equal(hex(f.get(62, 2)), draw.C.amber);                   // indicator unchanged
+  assert.equal(hex(f.get(63, 2)), draw.C.amber);                   // indicator unchanged
   assert.ok(count(f, draw.C.label, 40, 8, 63, 12) > 8);            // 63° in label white, rows 8-12
   let maxX = 0; for (let y = 0; y < 32; y++) for (let x = 40; x < 64; x++) if (hex(f.get(x, y)) === draw.C.label) maxX = Math.max(maxX, x);
   assert.equal(maxX, 63);                                          // right-aligned to the edge
   const iconPx = (fr) => { let n = 0; for (let y = 6; y < 14; y++) for (let x = 40; x < 56; x++) { const c = hex(fr.get(x, y)); if (c !== '#000000' && c !== draw.C.label) n++; } return n; };
-  assert.ok(iconPx(f) > 10, 'weather icon left of the temperature');
-  assert.equal(iconPx(off(null, { icon: null })), 0);              // no icon: temperature only
+  assert.equal(iconPx(f), 0, 'no weather icon (Nov 26, 2026): the radar shows the rain');
+  assert.deepEqual(f.px, off(null, { icon: null }).px);            // the icon field changes nothing
   // Tags: bottom right (rows 27-31), colored by level; a tornado warning blinks.
   const tag = (fr, c) => count(fr, c, 30, 27, 63, 31);
   assert.ok(tag(off({ kind: 'tor', lvl: 'watch' }), draw.C.watch) > 20);         // WATCH always yellow

@@ -134,7 +134,8 @@ class Chooser {
 // the choice round to the other end unseen). A turn past an end bumps: the
 // marker overshoots and springs back (draw::knob_bump; KNOB_BUMP_MS and
 // _RISE_MS follow draw.js KNOB_BUMP). A bump that's still on its way out
-// isn't restarted by more clicks into the same end.
+// isn't restarted by more clicks into the same end; a turn back off the end
+// cancels it (and one still waiting for its glide).
 const double KNOB_BUMP_MS = 240, KNOB_BUMP_RISE_MS = 70;
 
 struct Bump {
@@ -240,6 +241,7 @@ class PeekChooser {
         sel[k] = to;
       }
       if (b) bump.push(true, b, moved ? ms + PEEK_GLIDE_Y_MS * 0.6 : ms, ms);
+      else if (moved) bump.on = false;  // off the end again: no bump to come
     } else {
       last = ms;
       int to = clamp_step(k, clicks, n, b);
@@ -249,6 +251,7 @@ class PeekChooser {
         k = to;
       }
       if (b) bump.push(false, b, moved ? ms + PEEK_GLIDE_X_MS * 0.6 : ms, ms);
+      else if (moved) bump.on = false;  // off the end again: no bump to come
     }
   }
   void press(double ms) {
@@ -336,8 +339,10 @@ class Menu {
       return;
     }
     int b = 0;
-    sel = clamp_step(sel, clicks, n, b);
+    int to = clamp_step(sel, clicks, n, b);
     if (b) bump.push(false, b, ms, ms);
+    else if (to != sel) bump.on = false;  // off the end again
+    sel = to;
   }
   // The first press of an item that asks first. False: this is the second.
   bool ask(double ms) {

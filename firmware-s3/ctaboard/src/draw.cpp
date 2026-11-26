@@ -1936,9 +1936,9 @@ static void render_radar_wide(const Value &p, const Value &r, Frame &f, const Va
 }
 
 static void render_weather(const Value &p, Frame &f, std::optional<double> now, std::optional<int> idx_o,
-                           const Frames *frames, bool blink, bool peek = false) {
+                           const Frames *frames, bool blink, bool peek = false, bool visit = false) {
   const Value &r = p["radar"];
-  const Value &ids = r["frames"];
+  const Value &ids = r["vo"].truthy() && !visit ? Value::null_value() : r["frames"];
   int nids = (int)ids.size();
   auto on_hand = [&](int i) { return frames && frames->count(json::str(ids[i])) > 0; };
   int idx;
@@ -2012,14 +2012,15 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   };
   auto clear4 = [&](int x0, int y0, int x1, int y1) { clear(Box{x0, true, y0, x1, y1}); };
 
-  const int seg_w = 2, seg_gap = 1;
+  // The frame indicator: one 1x1 dot per frame, 2 px apart (draw.js; 2x2 before Nov 26, 2026).
+  const int seg_w = 1, seg_h = 1, seg_gap = 1;
   int ind_x = right - (nids * (seg_w + seg_gap) - seg_gap) + 1;
-  if (ids.truthy()) clear4(ind_x, top, right, top + 1);
+  if (ids.truthy()) clear4(ind_x, top, right, top + seg_h - 1);
 
   auto draw_indicator = [&]() {
     int x = ind_x;
     for (int i = 0; i < nids; i++) {
-      f.fill(x, top, seg_w, 2, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : C::indicator);
+      f.fill(x, top, seg_w, seg_h, i == idx ? C::amber : peek && on_hand(i) ? PEEK_LOADED : C::indicator);
       x += seg_w + seg_gap;
     }
   };
@@ -2039,15 +2040,12 @@ static void render_weather(const Value &p, Frame &f, std::optional<double> now, 
   };
 
   if (r["showTime"].is_false() && !r["temp"].is_null()) {
+    // The temperature alone (no weather icon since Nov 26, 2026: the radar shows the rain).
     ustr ts = vstr(r["temp"]) + U"°";
-    int icon = icon_index(r["icon"]);
-    int iw = icon >= 0 ? 10 : 0;
-    int x0 = right + 1 - (iw + measure(FONT_SMALL, ts));
-    if (icon >= 0) clear4(x0, top + 4, x0 + 7, top + 11);
-    clear(text_box(FONT_SMALL, ts, x0 + iw, top + 10));
+    int x0 = right + 1 - measure(FONT_SMALL, ts);
+    clear(text_box(FONT_SMALL, ts, x0, top + 10));
     draw_indicator();
-    if (icon >= 0) draw_icon(f, icon, x0, top + 4);
-    f.text(FONT_SMALL, ts, x0 + iw, top + 10, C::label);
+    f.text(FONT_SMALL, ts, x0, top + 10, C::label);
     if (ws) draw_warn_tag();
     return;
   }
@@ -2789,6 +2787,7 @@ PeekView peek_view(const Value &p, int k, int vi) {
     nr = overlay(r);
     member(nr, "frames") = frames;
     member(nr, "ft") = ft;
+    member(nr, "vo") = Value();  // the chooser's own frames, never visit-only
     if (r["wx"].truthy()) {
       Value &wx = member(nr, "wx");
       wx = overlay(r["wx"]);
@@ -4197,7 +4196,7 @@ static void render_screen(const Value &p, Frame &f, const RenderOpts &o, const s
   else if (screen == "peek") render_peek(p, f, o);
   else if (screen == "chooser") render_chooser(p, f, o.chooser_pos.value_or(0), o.chooser_commit);
   else if (screen == "ticker") render_ticker(p, f, o.now, o.page, o.slide);
-  else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink);
+  else if (screen == "weather") render_weather(p, f, o.now, o.idx, o.frames, o.blink, false, o.visit);
   else if (screen == "baseball") render_baseball(p, f, o.now, o.game, o.rolls, o.logos);
   else if (screen == "clock") render_clock(p, f, o);
   else if (screen == "announce") render_announce(p, f, o.t);

@@ -275,6 +275,9 @@ struct RenderOpts {
   const char *screen = nullptr;  // null: the payload's
   std::optional<double> now;
   bool blink = false;
+  // A Rain nearby visit is showing (draw.js opts.visit): radar frames marked
+  // `vo` (for the visits only) draw then, not on the weather screen's own view.
+  bool visit = false;
   const View *view = nullptr;
   int page = 0;
   double slide = 0;

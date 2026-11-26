@@ -562,6 +562,7 @@ void Board::step() {
     // Timed radar visits: follow the server's schedule unless a button
     // press is overriding it.
     player.set_screen(override_.resolve(player.auto_screen(n), player.p["v"].num()), (double)ms);
+    player.overridden = override_.screen.has_value();
   }
   if (fails == 0 && player.awaiting_drop(n)) {
     // A train is due to drop but the payload is older than that moment:

@@ -804,10 +804,17 @@ test('update: weather screen gets conditions always, radar frames only while rai
     assert.deepEqual((await s.req(FULL)).body.radar.frames, [], wxView);
   }
   s.store.update('home', { wxView: 'radar' });
-  assert.deepEqual((await s.req(FULL)).body.radar.frames, ['x']);
+  b = (await s.req(FULL)).body;
+  assert.deepEqual([b.radar.frames, b.radar.vo], [['x'], undefined]);
+  // Visits: the frames ride along marked `vo` (for the visits only), so a
+  // Cycle's weather turn still draws its view; the radar view is unmarked.
   s.store.update('home', { screen: 'transit', wxView: 'now', wxVisit: 'rain', radarEvery: 4 });
   b = (await s.req(FULL)).body;
-  assert.deepEqual([b.radar.frames, !!b.radar.visit], [['x'], true]);
+  assert.deepEqual([b.radar.frames, !!b.radar.visit, b.radar.vo], [['x'], true, 1]);
+  s.store.update('home', { screen: 'auto', cycle: ['transit', 'weather'] });
+  assert.equal((await s.req(FULL)).body.radar.vo, 1);
+  s.store.update('home', { wxView: 'radar' });
+  assert.equal((await s.req(FULL)).body.radar.vo, undefined);
   await s.close();
 });
 
