@@ -159,6 +159,20 @@ LAND_H, LAND_H_END = PAD_H, PAD_H_END    # as tall as the pads beside them, so a
 # The wall's inner face is 0.4 past the edge, so only the plungers enter it. PORT_CH: a channel in the new wall's inner
 # face in front of the port all the same, so a receptacle soldered 0.5 proud of the edge still goes in with 0.4 to spare.
 PORT_FRAME = (V.PORT_W + 0.6, V.PORT_H + 0.6)
+# The S3's posts (Nov 25). The tray's four posts are 6 mm across (plate3.S3_POST_D), and on Adafruit's model three of
+# them reach parts soldered beside the mounting holes (distance from the hole's axis, height above the component face):
+#   post 1 (hole 7.62, 15.875)  the tall capacitor: its base 2.64 away up to 1.0, its can 2.91 away up to 5.64 (a 6 mm
+#                               post overlaps it); the USB-C receptacle 3.16 away, 3.2 tall (0.16 clear)
+#   post 3 (48.26, 35.56)       a chip 2.84 away, 1.1 tall (overlaps by 0.16)
+#   post 4 (48.26, 15.875)      a chip 3.13 away, 1.1 tall (0.13 clear);   post 2 (7.62, 35.56): nothing within 3.49
+# so a post could rest on a part instead of on the board (the owner: "explains why the board never sat quite right").
+# Here every tip is necked to S3_TIP_D for S3_TIP_L, and post 1 has a flat toward the capacitor and one toward the
+# receptacle: 0.4 or more to every part. The V5 trays (drawer.py) still have the plain posts.
+S3_TIP_D, S3_TIP_L = 4.8, 1.6
+S3_FLATS = {0: ((48.0, 2.2, 6.2), (-95.3, 2.7, 3.7))}        # post index: (direction in the board's frame, deg: 0 = away from the
+                                                             # USB edge, 90 = up the edge; the flat's distance from the axis; its length)
+S3_NEAR = ((0, 45.0, 2.64, 0.0, 1.0), (0, 50.9, 2.91, 1.0, 5.64), (0, -95.3, 3.16, 0.0, 3.2), (2, -90.0, 2.84, 0.0, 1.1), (3, 90.0, 3.13, 0.0, 1.1))
+                                                             # (post, direction, distance, from, to above the face): the parts' nearest points
 PORT_CH = 0.5
 BTN_CL = 0.5
 S3_EDGE_PARTS = dict(receptacle=(-4.47, 4.47, 0.0, 0.0, 3.2), down=(8.81, 11.76, 1.07, 1.0, 2.5), up=(18.59, 21.54, 0.94, 1.0, 2.5),
@@ -447,6 +461,25 @@ def port_frame():
     return (front + frame + ramp) - window, channel
 
 
+def s3_dir(deg):
+    """a direction in the board's frame (0 = away from the USB edge, 90 = up that edge) as (x, z) in the case's"""
+    return -math.cos(math.radians(deg)), math.sin(math.radians(deg))
+
+
+def s3_post_relief():
+    """what comes off the S3's posts at their tips (see S3_TIP_D): a neck on all four, two flats on the first"""
+    yc = DR.PCB_Y0 + 1.6                                       # the posts' tips: the board's component face
+    r = DR.P3.S3_POST_D / 2 + 0.2
+    out = []
+    for i, (hx, hz) in enumerate(DR.S3_HOLES):
+        out.append(cyl_y(hx, hz, yc - 0.01, yc + S3_TIP_L, 2 * r, 48) - cyl_y(hx, hz, yc - 1, yc + S3_TIP_L + 1, S3_TIP_D, 48))
+        for deg, f, length in S3_FLATS.get(i, ()):
+            ux, uz = s3_dir(deg); vx, vz = -uz, ux
+            quad = [(hx + f * ux + 4 * s * vx + e * ux, hz + f * uz + 4 * s * vz + e * uz) for s, e in ((-1, 0), (1, 0), (1, 4), (-1, 4))]
+            out.append(along_y(quad, yc - 0.01, yc + length) ^ cyl_y(hx, hz, yc - 1, yc + length + 1, 2 * r, 48))
+    return Manifold.batch_boolean(out, ADD)
+
+
 NECK_R = 9.5                     # the tower above the walnut, under the ring's cap: narrower, so the ring keeps 2.7 mm round the screw holes
 PIX_RELIEF = 1.5                 # a blind pocket in the top wall over the front of the encoder board, where V5's tray had an
                                  # open slot: the board's NeoPixel stands there (2.4 mm of headroom; 1.0 mm of wall left)
@@ -573,7 +606,7 @@ def chassis():
     finally:
         DR.FASTEN, DR.INSERT_D, DR.INSERT_L = saved
     pf_add, pf_cut = port_frame()
-    t = (t + pf_add) - pf_cut
+    t = (t + pf_add) - pf_cut - s3_post_relief()
     # no crush ribs; the front edge clear of the diffuser's flange, which sits RIM_GAP further back
     t = t ^ C.prism_y(C.rr_cs(C.BORE_HX - DR.TRAY_CL, C.BORE_HZ - DR.TRAY_CL, C.BORE_R - DR.TRAY_CL), 0, D)
     t = t - box(-400, 400, 0, DR.YF + RIM_GAP + FRONT_CL, -5, H + 5)   # (2 x RIM_GAP until the gap shrank: at 0.15 that left the flange 0.15 either way)
@@ -704,6 +737,12 @@ def check(P):
     edge = [box(DR.S3_EDGE - 0.5, DR.S3_EDGE + max(past, 0.5 if name == 'receptacle' else 0.0) + 0.4, DR.YF, face + y1 + 0.4, pz + z0 - 0.4, pz + z1 + 0.4)
             for name, (z0, z1, past, y0, y1) in S3_EDGE_PARTS.items()]
     rows.append(('the S3\'s receptacle (0.5 proud) and button plungers, 0.4 clear, seated and swept in from the front / chassis', v(Manifold.batch_boolean(edge, ADD), ch)))
+    # the parts beside the S3's posts (S3_NEAR, from Adafruit's model): a 0.3 mm rod at each one's nearest point, over its height
+    near = []
+    for post, deg, dist, y0, y1 in S3_NEAR:
+        hx, hz = DR.S3_HOLES[post]; ux, uz = s3_dir(deg)
+        near.append(cyl_y(hx + dist * ux, hz + dist * uz, face + y0 + 0.02, face + y1, 0.6, 24))
+    rows.append(('the parts beside the S3\'s posts, 0.3 clear at their nearest points / chassis', v(Manifold.batch_boolean(near, ADD), ch)))
     plank_top_z = max(m.bounding_box()[5] for k, m in P['skin'].items() if k in ('plank_top', 'half_top'))
     rows.append(('ring flange above the top plank, mm, less 0.3 (should be >= 0)', round(P['ring'].bounding_box()[2] - plank_top_z - 0.3, 2) * -1 if P['ring'].bounding_box()[2] - plank_top_z < 0.3 else 0.0))
     import cleat as CLT, p4v55 as T
