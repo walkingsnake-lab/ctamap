@@ -130,7 +130,7 @@ if 'back' in WHICH:
     cam = ortho((1, 0, 0), (1500, 1000), 42.0, target=np.array([x0, 63.0, H - 3.5]))
     a = sc.render(cam, ground=False, crease=0.0)
     annotate(a, cam, [('walnut, 4 mm', (x0, 52, H - 2), (-60, -70), 'mb'),
-                      (f'rebate {M.REB_T:g} deep: 2.8 of walnut left', (x0, 67, H - 2.0), (90, -70), 'lb'),
+                      (f'rebate {M.REB_T:g} deep: {M.WALL - M.REB_T:g} of walnut left', (x0, 67, H - 2.0), (90, -70), 'lb'),
                       ('45 deg seat: the walnut stops here', (x0, M.SEAT_Y - M.REB_T / 2, M.ZO1 + 0.25 + M.REB_T / 2 + 0.25), (220, -150), 'lb'),
                       ('lip on the back plate\'s edge', (x0, 64.8, M.ZO1 + 0.7), (230, 40), 'lm'),
                       ('chassis wall 2.5', (x0, 50, M.ZO1 - 1.2), (-60, 110), 'mt'),
