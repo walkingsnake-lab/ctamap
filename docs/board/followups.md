@@ -12,7 +12,6 @@ Noted in the Oct 5, 2026 review of the board code, left for a later pass. Checke
 - `autoFit: false` in `arrivals.js` `format()` is only used by a test.
 - `real-40100-*.png` and `real-40450-*.png` in the repo root aren't referenced.
 - CTA calls use `http://` (the API key travels unencrypted); `lapi.transitchicago.com` supports HTTPS. The map's calls do the same.
-- `fly.toml` sets both `memory = '1gb'` and `memory_mb = 256`. The radar design assumes 256 MB; check `fly scale show` and keep one.
 
 ## Docs drift
 
