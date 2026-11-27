@@ -149,9 +149,9 @@ if 'back' in WHICH:
 if 'knob' in WHICH:
     ps = parts(clip=box(-200, 200, KY + 5.75, KY + 6.25, -50, 300))
     sc = R.Scene(ps)
-    cam = ortho((0, -1, 0), (1700, 900), 28.0, target=np.array([0, KY, H - 2.0]))
+    cam = ortho((0, -1, 0), (2000, 1000), 22.0, target=np.array([0, KY, H - 2.0]))
     a = sc.render(cam, ground=False, crease=0.0)
-    annotate(a, cam, [('knob seat (PETG): disc in the walnut hole, key in the chassis', (-17, KY + 6, H - 2.0), (-80, -150), 'rb'),
+    annotate(a, cam, [('knob seat (PETG)', (-17, KY + 6, H - 2.0), (-80, -150), 'rb'),
                       ('M2.5 x 8 into a boss on the rail', (-15, KY + 6, M.ZIN1 - 1), (-160, 120), 'rt'),
                       ('rail and lip: the board rests here as it goes in', (-13.4, KY + 6, SN.EB_BOT - 0.8), (-120, 220), 'rt'),
                       ('encoder clamped up to the deck by its nut', (6, KY + 6, SN.EB_TOP + 2.5), (160, 170), 'lt'),

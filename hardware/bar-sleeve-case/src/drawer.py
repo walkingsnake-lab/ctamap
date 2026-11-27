@@ -331,7 +331,7 @@ def tray(top_bar=None, bottom_gap=0.0, ribbon_hooks=None, hook_lip=1.5, tie_x0=N
     # TIE_EXIT free at each end so the strap can turn out over the bundle
     tx0, tx1 = (hooks[0][0] + 2.5 + 1.0 if tie_x0 is None else tie_x0), S3_EDGE - 63.8 - 1.0
     tx = (tx0 + tx1) / 2
-    band_lo = zt_rows[0] - LV_H / 2 - 1.5
+    band_lo = zt_rows[0] - LV_H / 2 - 1.5 - (LV_DEPTH if TOP_FALL else 0.0)   # the top band's lower edge inside
     tz = (RZ + HOOK_RW / 2 + band_lo) / 2
     assert band_lo - (RZ + HOOK_RW / 2) >= TIE_LEN + 2 * TIE_EXIT and tx1 - tx0 >= TIE_OPEN + 4, 'no room for the tie loop'
     t = t + rrect_z(tx - TIE_OPEN / 2 - 2.0, tx + TIE_OPEN / 2 + 2.0, Y0 - TIE_GAP - TIE_BAR, Y0 + 0.01, 0.9, tz - TIE_LEN / 2, tz + TIE_LEN / 2)
@@ -557,8 +557,12 @@ def hook_bottom():
 def louver_gaps(zc, r, encoder=True):
     """x ranges of a top louver row (centre zc, slot half height r) behind the sensor hooks: there the slot stops
     LV_BLIND short of the band's inner face (blind), so the hook's root stays whole and the back face looks as before"""
-    end = zc - LV_DEPTH - 0.5 if (zc > ZC and TOP_FALL) else zc + LV_DEPTH + 0.5
-    lo, hi = end - r, end + r                                           # the slot's inner end, where the hooks are
+    if zc > ZC and TOP_FALL:                                            # the slot's inner end, where the hooks are: falling,
+        end = zc - LV_DEPTH - 0.5                                       # it is up to 1 higher where the hooks overlap it
+        lo, hi = end - r, end + 1.0 + r
+    else:
+        end = zc + LV_DEPTH + 0.5
+        lo, hi = end - r, end + r
     out = []
     if SENSOR_MOUNT == 'sled' and not (hi < hook_bottom() or lo > _zw()):
         out += [(hx - hook_half() - 0.6, hx + hook_half() + 0.6) for hx in hook_xs()]
