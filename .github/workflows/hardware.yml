@@ -50,11 +50,21 @@ jobs:
         run: timeout -k 5 600 python3 v6p3.py "$RUNNER_TEMP/p3v6"
 
       - name: Mesh check (P3 V6 parts)
-        run: timeout -k 5 300 python3 meshcheck.py "$RUNNER_TEMP"/p3v6/p3-v6-sleeve-walnut.stl "$RUNNER_TEMP"/p3v6/p3-v6-chassis-black.stl "$RUNNER_TEMP"/p3v6/p3-v6-encoder-collar-translucent.stl "$RUNNER_TEMP"/p3v6/p3-v6-sensor-sled-black.stl
+        run: timeout -k 5 300 python3 meshcheck.py "$RUNNER_TEMP"/p3v6/p3-v6-sleeve-walnut.stl "$RUNNER_TEMP"/p3v6/p3-v6-chassis-black.stl "$RUNNER_TEMP"/p3v6/p3-v6-encoder-collar-translucent.stl "$RUNNER_TEMP"/p3v6/p3-v6-sensor-sled-black.stl "$RUNNER_TEMP"/p3v6/p3-v6-cleat-case-black.stl "$RUNNER_TEMP"/p3v6/p3-v6-cleat-wall-black.stl
 
       - name: Committed P3 V6 print set (stl/p3-v6) matches the code
         run: |
           diff -rq "$RUNNER_TEMP/p3v6" ../stl/p3-v6 || { echo "::error::stl/p3-v6 is out of date: rebuild with python3 v6p3.py ../stl/p3-v6"; exit 1; }
+
+      - name: 128 P3 V6 build and v6p3x2 checks
+        run: timeout -k 5 900 python3 v6p3x2.py "$RUNNER_TEMP/p3x2v6"
+
+      - name: Mesh check (128 P3 V6 parts)
+        run: timeout -k 5 600 python3 meshcheck.py "$RUNNER_TEMP"/p3x2v6/p3x2-v6-sleeve-A-walnut.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-sleeve-B-walnut.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-chassis-A-black.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-chassis-B-black.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-seam-key-*.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-cleat-*.stl
+
+      - name: Committed 128 P3 V6 print set (stl/p3x2-v6) matches the code
+        run: |
+          diff -rq "$RUNNER_TEMP/p3x2v6" ../stl/p3x2-v6 || { echo "::error::stl/p3x2-v6 is out of date: rebuild with python3 v6p3x2.py ../stl/p3x2-v6"; exit 1; }
 
       - name: V5 P3 trays unchanged (drawer.py; TOP_FALL is off outside v6p3.py)
         run: |
