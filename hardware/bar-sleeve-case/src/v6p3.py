@@ -17,7 +17,7 @@ inside is the P4 V6's:
     A **lip** round the edge of the chassis's back plate sits on the seat: the back edge of all four walls, the stretch
     furthest from the hood and free on V5, rests on PETG 4 mm from its end, and the seat is the depth stop. The lip is
     the plate's edge grown outward, so it prints on the bed with the plate; nothing of the chassis stands behind the
-    plate (its 4 mm inside the rim, the cleat and everything inside are V5's);
+    plate (its 4 mm inside the rim, the cleat's bosses and everything inside are V5's);
   - two black M3 x 10 flat heads from below in round countersinks (V6's), into inserts in V5's bottom bosses. The
     countersinks are drawn UNDER_BIAS in front of the screws and as much deeper: tightened, each head pulls the sleeve
     back onto the seat (a draw-bore) and ends flush; the seat, not the screws, sets the depth and the rim gap is the model's. A land round each screw
@@ -32,8 +32,11 @@ inside is the P4 V6's:
   39 mm knob to hide its screws; it is in git history (PR #557, commits up to df03719). What V6 adds here: two
   **ledges** under the board's side edges behind its QT sockets, LEDGE_GAP under it, ramped at the front: a knob press
   that moves the encoder down that far lands in the chassis, not only in the walnut.
-- **Diffuser, sensor sled, cleats, Boot key**: V5's (stl/, stl/v5-drawer), reused. The diffuser rides on the panel
-  RIM_GAP behind the rim, as on the P4.
+- **Diffuser, sensor sled, Boot key**: V5's (stl/), reused. The diffuser rides on the panel RIM_GAP behind the rim, as on
+  the P4.
+- **Underneath**: marks.py's two label recesses, as on the V5 shell and the P4 (label_cuts()).
+- **Cleats** (Nov 27): the P4 V6's design: a 60 deg bevel, a stop outside each end of the case cleat, pockets, three
+  wall screws; and a channel for the USB-C cable in the wall cleat's wall face (cleats()). V5's cleats do not fit these.
 
 Assembly in V5's order (the panel's top edge passes where the encoder's board hangs, so the panel goes in first):
 1. On the bench: standoffs into the panel's inserts, the diffuser snapped on, the ribbon and power leads on the panel.
@@ -230,7 +233,69 @@ def sleeve():
         V.SCREW_XS, V.KNOB_X = saved
     cuts = [rebate()]
     cuts += [csk_under(x, y) for x, y in UNDER_XY]
+    if LABELS:
+        cuts.append(label_cuts())
     return sh - Manifold.batch_boolean(cuts, ADD)
+
+
+LABELS = True                      # v6p3x2.py turns this off: the 128 puts its own under half B, off the seam
+
+
+def label_cuts():
+    """the two label recesses underneath (marks.py: the regulatory label 1 x 2 5/8 in and the setup sticker 1/2 x 1 3/4 in,
+    0.5 deep), as on the V5 shell and the P4: centred, in front of the screws from below"""
+    import marks as MK
+    bad = MK.check(MK.layout()[0])
+    assert not bad, bad
+    return MK.cuts()
+
+
+# The cleats (Nov 27): the P4 V6's design (p4.py, Nov 17) with what the 128's independent review of its wall hanging found
+# (v6p3x2.py). A 60 deg bevel (about 17 mm of lift to unhook; V5's 45 deg: 10), a stop on the wall cleat outside each end
+# of the case cleat (pushing the USB-C plug in at the right end pushes the bar along the cleat; pulling it, the other
+# way), pockets in its wall face, a flat counterbore wide enough for a flanged head. The wall cleat is 171 long (the
+# stops end 0.4 short of the Boot hole), past the knob (x 65), so a knob press cannot rock the bar on its end. Three wall
+# screws, +/-65 and the centre (a stud), 20 mm above its bottom edge (the middle of the wall face gave the anchors poor
+# leverage). Drywall: self-drilling or molly anchors, not small plastic cones.
+CLEAT_BEVEL = 60.0
+CLEAT_STOPS = (0.8, 9.7, 5.0)      # clearance each side, length, lead-in
+CLEAT_POCKETS = (8.0, 4.0)         # depth (of 12), rib
+WALL_CLEAT_XS = (-65.0, 0.0, 65.0)
+WALL_SCREW_Z = 50.0
+# The USB-C cable: from a right-angle plug at the right end (the port's long side is vertical: the usual kind turns the
+# cable back toward the wall) it runs behind the bar (12 mm between the back plate and the wall, 8 behind the walnut's
+# rim) and into a channel in the wall cleat's wall face, under the screws and through the pockets' ribs, the cleat's full
+# length, with slots down through its floor where the cable can drop (or it runs on out of the left end). Laid in before
+# the cleat is screwed to the wall; the wall closes it.
+CABLE_CH = (5.0, 6.5, 6.5)         # the channel: its floor this far above the cleat's bottom edge, its height, its depth from the wall
+CABLE_D = 5.5                      # the thickest cable it is checked for
+CABLE_EXITS = (-45.0, -20.0, 20.0, 45.0)     # x of the slots down through the floor (7 wide)
+
+
+def cleats():
+    """(case cleat, wall cleat, cleat module)"""
+    import cleat as CLT
+    CLT.BEVEL_DEG, CLT.WALL_STOPS, CLT.WALL_POCKETS, CLT.CBORE_D = CLEAT_BEVEL, CLEAT_STOPS, CLEAT_POCKETS, 7.4
+    CLT.wall_screws = lambda xs=None: [(x, WALL_SCREW_Z) for x in (WALL_CLEAT_XS if xs is None else xs)]
+    assert WALL_SCREW_Z + CLT.WS_D / 2 + 1.5 <= CLT.ZB - CLT.drop(), 'the wall screws come out through the bevel'
+    hw = DR.CLEAT_HW + CLEAT_STOPS[0] + CLEAT_STOPS[1]
+    assert hw <= DR.S3_BOOT[0] - 2.4 - 0.3, 'the wall cleat reaches the Boot hole'
+    wc = CLT.wall_cleat(hw=hw, xs=list(WALL_CLEAT_XS))
+    z0, zh, dp = CABLE_CH
+    za = CLT.ZW0 + z0
+    assert za + zh + 3.0 <= WALL_SCREW_Z - CLT.WS_D / 2, 'the cable channel reaches the wall screws'
+    cut = [box(-hw - 1, hw + 1, CLT.YW - dp, CLT.YW + 1, za, za + zh)]
+    cut += [box(x - 3.5, x + 3.5, CLT.YW - dp, CLT.YW + 1, CLT.ZW0 - 1, za + 0.01) for x in CABLE_EXITS]
+    return CLT.case_cleat(), wc - Manifold.batch_boolean(cut, ADD), CLT
+
+
+def cable(exit_x):
+    """a CABLE_D cable from the right end behind the bar, along the channel and down the slot at exit_x"""
+    import cleat as CLT
+    z0, zh, dp = CABLE_CH
+    y, z = CLT.YW - CABLE_D / 2 - 0.3, CLT.ZW0 + z0 + zh / 2
+    run = Manifold.cylinder(HW + 4.0 - exit_x, CABLE_D / 2, CABLE_D / 2, 24).rotate([0, 90, 0]).translate([exit_x, y, z])
+    return run + cyl_z(exit_x, y, -5.0, z, CABLE_D, 24)
 
 
 # ---------------------------------------------------------------- the chassis
@@ -586,15 +651,23 @@ def check(P):
     rows.append((f'lip on the end walls\' flats {eg:.2f} off the seat (0.1 or more: the seat bears top and bottom)', 0.0 if eg >= 0.1 else round(0.1 - eg + 0.05, 2)))
     under_sh = Manifold.batch_boolean([cyl_z(x, y, -1, WALL + 1, 3.0, 32) for x, y in UNDER_XY], ADD)
     rows.append(('screws from below, sleeve 0.15 short of its seat / walnut (the shank clears it)', v(under_sh, sl.translate([0, -0.15, 0]))))
-    # the cleat (V5's, on the back plate inside the chassis's back walls)
-    import cleat as CLT
-    cc, wc = CLT.case_cleat(), CLT.wall_cleat()
+    # the cleats (cleats(): the P4 V6's design, on V5's bosses on the back plate)
+    cc, wc, CLT = cleats()
     rows.append(('case cleat / chassis and back screws', v(cc, ch + S['back'])))
-    hung = [ch, sl, cc]
+    hung = [ch, sl, cc, S['back']]
     seated = lambda dx=0.0, dy=0.0, dz=0.0: round(sum(v(m.translate([dx, dy, dz]), wc) for m in hung), 2)
     hk = CLT.hook()
-    rows.append(('wall cleat / chassis, sleeve, case cleat, hung', seated()))
+    rows.append(('wall cleat / chassis, sleeve, case cleat, back screws, hung', seated()))
     rows.append((f'lifted straight off the wall cleat (0.5 to {hk + 6:.0f} mm; hook {hk:.1f})', max(seated(dz=q) for q in np.arange(0.5, hk + 6.01, 0.5))))
+    rows.append(('hung, 0.5 either way along the wall cleat: free', max(seated(dx=-0.5), seated(dx=0.5))))
+    rows.append(('hung, 1.5 either way along the wall cleat: on a stop (> 0 both ways)', 0.0 if min(seated(dx=-1.5), seated(dx=1.5)) > 1.0 else 1.0))
+    wb = wc.bounding_box()
+    rows.append((f'wall cleat {wb[3] - wb[0]:.0f} long, between the louver bands (z {wb[2]:.1f} to {wb[5]:.1f}; {DR.CLEAT_ZBOT:.1f} to {DR.CLEAT_ZTOP:.1f} free), short of the Boot hole',
+                 0.0 if wb[2] >= DR.CLEAT_ZBOT and wb[5] <= DR.CLEAT_ZTOP and wb[3] <= DR.S3_BOOT[0] - 2.4 and wb[3] - wb[0] <= 250 else 1.0))
+    bh = S['back'].bounding_box()[4]
+    rows.append((f'back screw heads at or under the back plate\'s face ({bh - DR.Y1:+.2f})', 0.0 if bh <= DR.Y1 + 0.001 else round(bh - DR.Y1, 2)))
+    worst = max(round((cable(x) ^ (wc + cc + ch + sl + S['back'])).volume(), 2) for x in CABLE_EXITS)
+    rows.append((f'a {CABLE_D} mm cable from the right end, behind the bar, along the wall cleat\'s channel and down each slot / cleats, chassis, walnut', worst))
     return rows
 
 
@@ -620,16 +693,17 @@ if __name__ == '__main__':
     print(save(DR.status_window(), f'{pre}chassis-window-translucent', frame=P['chassis']))
     t = CO.export(CO.collar(), f'{out}/{pre}encoder-collar-translucent.stl')      # V5's collar for the 4 mm wall; translucent PETG (100% infill) so the NeoPixel lights it
     print(f'{pre}encoder-collar-translucent: {np.round(t.extents, 1).tolist()}, watertight {t.is_watertight}')
-    import cleat as CLT
     for m, name in ((DR.sled(), 'sensor-sled-black'),):
         me = m.to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.merge_vertices()
         t.apply_translation(-t.bounds[0]); t.export(f'{out}/{pre}{name}.stl'); print(f'{pre}{name}: {np.round(t.extents, 1).tolist()}')
-    # reused unchanged: V5's knob, diffuser, cleats and Boot key (the cleats are drawer.py's: the back plate and
-    # its bosses are V5's)
+    cc, wc, CLT = cleats()
+    for m, name, rot in ((cc, 'cleat-case-black', -90), (wc, 'cleat-wall-black', 90)):   # case cleat wall face down; wall cleat front face down
+        me = m.rotate([rot, 0, 0]).to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.merge_vertices()
+        t.apply_translation(-t.bounds[0]); t.export(f'{out}/{pre}{name}.stl'); print(f'{pre}{name}: {np.round(t.extents, 1).tolist()}')
+    # reused unchanged: V5's knob, diffuser and Boot key
     here = os.path.dirname(os.path.abspath(__file__))
     reused = [('bar-knob', 'knob-white'), ('bar-diffuser-white-face', 'diffuser-face-white'),
-              ('bar-diffuser-white-grid-black', 'diffuser-grid-black'), ('v5-drawer/bar-cleat-case', 'cleat-case-black'),
-              ('v5-drawer/bar-cleat-wall', 'cleat-wall-black'), ('bar-boot-key', 'boot-key')]
+              ('bar-diffuser-white-grid-black', 'diffuser-grid-black'), ('bar-boot-key', 'boot-key')]
     for a, b in reused:
         shutil.copyfile(os.path.join(here, '..', 'stl', a + '.stl'), os.path.join(out, pre + b + '.stl'))
     print('reused:', ', '.join(pre + b for _, b in reused))
