@@ -7,7 +7,7 @@ import trimesh
 from manifold3d import Manifold, Mesh
 import rend as R
 import v6p3 as M
-from v6p3 import box, cyl_z, DR, H, D, ZC, HW, KY, CO, SN
+from v6p3 import box, cyl_z, DR, H, D, ZC, HW, KY, KX, CO, SN
 import knob as KN
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else '.'
@@ -28,12 +28,13 @@ here = os.path.dirname(os.path.abspath(__file__))
 t = trimesh.load(os.path.join(here, '..', 'stl', 'p4-v6', 'p4-v6-knob-white.stl'))
 KNOB = Manifold(Mesh(vert_properties=np.asarray(t.vertices, np.float32), tri_verts=np.asarray(t.faces, np.uint32)))
 b = KNOB.bounding_box()
-KNOB = KNOB.translate([-(b[0] + b[3]) / 2, KY - (b[1] + b[4]) / 2, H + KN.SKIRT_Z - b[2]])
+KNOB = KNOB.translate([KX - (b[0] + b[3]) / 2, KY - (b[1] + b[4]) / 2, H + KN.SKIRT_Z - b[2]])
 ENC = dict(board=box(-12.7, 12.7, KY - 12.7, KY + 12.7, SN.EB_BOT, SN.EB_TOP),
            body=Manifold.cube([12.0, 12.0, H - 1.4 - SN.EB_TOP], True).rotate([0, 0, 45]).translate([0, KY, (H - 1.4 + SN.EB_TOP) / 2]),
            shaft=cyl_z(0, KY, H - 1.4, H + 6.0, 7.0) + cyl_z(0, KY, H + 6.0, H + KN.TIP_Z, 6.0),
            nut=Manifold.cylinder(2.2, 11.0 / math.sqrt(3), 11.0 / math.sqrt(3), 6).translate([0, KY, H + CO.FL_T]) - cyl_z(0, KY, H, H + 9, 7.0),
            plug=M.plug())
+ENC = {k: M.at_knob(m) for k, m in ENC.items()}             # drawn at x 0, the plug on the right: put in place
 
 
 def parts(sleeve=True, chassis=True, inside=True, knob=True, screws=True, clip=None, enc_dz=0.0):
@@ -117,9 +118,9 @@ if 'apart' in WHICH:
     im = sc.render(cam, ground=False)
     annotate(im, cam, [('sleeve: slides on from the front, over everything', (-80, -150 + 20, H), (-60, -90), 'mb'),
                        ('chassis (V6): panel on standoffs, diffuser on the panel', (-90, 40, M.ZO1), (-120, 150), 'rt'),
-                       ('encoder: lowered in from above after the sleeve', (12, KY, SN.EB_TOP + 30), (180, -30), 'lm'),
-                       ('knob seat (PETG): fills the walnut hole, two screws into the chassis', (19, KY, H + 60), (160, 10), 'lm'),
-                       ('the P4 V6 ring and knob', (0, KY, H + 130 + 8), (170, -40), 'lm')])
+                       ('encoder: lowered in from above after the sleeve', (KX + 12, KY, SN.EB_TOP + 30), (180, -30), 'lm'),
+                       ('knob seat (PETG): fills the walnut hole, two screws into the chassis', (KX + 19, KY, H + 60), (160, 10), 'lm'),
+                       ('the P4 V6 ring and knob', (KX, KY, H + 130 + 8), (170, -40), 'lm')])
     save(R.titled(im, 'How it goes together',
                   'Chassis loaded on the bench (front-loading, as the P4); sleeve slid on and two screws from below; then the encoder, its seat, ring, nut and knob from above.'), 'p3v6-2-apart.png')
 
@@ -149,14 +150,14 @@ if 'back' in WHICH:
 if 'knob' in WHICH:
     ps = parts(clip=box(-200, 200, KY + 5.75, KY + 6.25, -50, 300))
     sc = R.Scene(ps)
-    cam = ortho((0, -1, 0), (2000, 1000), 22.0, target=np.array([0, KY, H - 2.0]))
+    cam = ortho((0, -1, 0), (2000, 1000), 22.0, target=np.array([KX, KY, H - 2.0]))
     a = sc.render(cam, ground=False, crease=0.0)
-    annotate(a, cam, [('knob seat (PETG)', (-17, KY + 6, H - 2.0), (-80, -150), 'rb'),
-                      ('M2.5 x 8 into a boss on the rail', (-15, KY + 6, M.ZIN1 - 1), (-160, 120), 'rt'),
-                      ('rail and lip: the board rests here as it goes in', (-13.4, KY + 6, SN.EB_BOT - 0.8), (-120, 220), 'rt'),
-                      ('encoder clamped up to the deck by its nut', (6, KY + 6, SN.EB_TOP + 2.5), (160, 170), 'lt'),
-                      ('ring on the seat, 0.4 off the walnut', (20.5, KY + 6, H + 0.8), (150, -110), 'lb'),
-                      ('walnut hole 37.5', (19.0, KY + 6, H - 1.0), (300, -40), 'lm')], fs=22)
+    annotate(a, cam, [('knob seat (PETG)', (KX - 17, KY + 6, H - 2.0), (-80, -150), 'rb'),
+                      ('M2.5 x 8 into a boss on the rail', (KX - 15, KY + 6, M.ZIN1 - 1), (-160, 120), 'rt'),
+                      ('rail and lip: the board rests here as it goes in', (KX - 13.4, KY + 6, SN.EB_BOT - 0.8), (-120, 220), 'rt'),
+                      ('encoder clamped up to the deck by its nut', (KX + 6, KY + 6, SN.EB_TOP + 2.5), (160, 170), 'lt'),
+                      ('ring on the seat, 0.4 off the walnut', (KX + 20.5, KY + 6, H + 0.8), (150, -110), 'lb'),
+                      ('walnut hole 37.5', (KX + 19.0, KY + 6, H - 1.0), (300, -40), 'lm')], fs=22)
     save(R.titled(a, 'The knob: section through the seat screws',
                   'Knob presses go through the deck and the two screws into the chassis, as on the P4. The knob hides the screw heads.'), 'p3v6-4-knob.png')
 
@@ -164,13 +165,13 @@ if 'encoder' in WHICH:
     ps = parts(sleeve=True, inside=True, knob=False, screws=False)
     enc = [R.Part('enc', M.tilted(M.encoder(), M.TILT[0]).translate([0, 0, 14.0]), 'pcb')]
     sc = R.Scene(ps + enc)
-    cam = persp((-0.35, -1.0, 1.25), size=(1300, 1000), dist=330, target=np.array([0, KY, H - 4]), yfov=0.5)
+    cam = persp((-0.35, -1.0, 1.25), size=(1300, 1000), dist=330, target=np.array([KX, KY, H - 4]), yfov=0.5)
     a = sc.render(cam, ground=False)
     sc = R.Scene(parts(sleeve=False, inside=False, knob=False, screws=False))
-    cam = persp((-0.35, -0.8, 1.3), size=(1300, 1000), dist=260, target=np.array([0, KY + 4, M.ZIN1]), yfov=0.5)
+    cam = persp((-0.35, -0.8, 1.3), size=(1300, 1000), dist=260, target=np.array([KX, KY + 4, M.ZIN1]), yfov=0.5)
     b = sc.render(cam, ground=False)
-    annotate(b, cam, [('opening for the board, a notch for its plug', (17.0, KY, M.ZO1), (120, -120), 'lb'),
-                      ('rails with lips under the board\'s edges', (-13.5, KY - 8, M.ZIN1 - 1.0), (-120, 120), 'rt'),
-                      ('boss for a seat screw', (-15, KY + 6, M.ZO1), (-150, -110), 'rb')], fs=22)
+    annotate(b, cam, [('opening for the board, a notch for its plug', (KX + M.PLUG_SIDE * 17.0, KY, M.ZO1), (60, -230), 'lb'),
+                      ('rails with lips under the board\'s edges', (KX - 13.5, KY - 8, M.ZIN1 - 1.0), (-120, 120), 'rt'),
+                      ('boss for a seat screw', (KX + 15, KY + 6, M.ZO1), (200, -60), 'lb')], fs=22)
     save(R.titled(R.row([a, b]), 'The encoder goes in from above',
                   f'Plug side first, tilted {M.TILT[0]:.0f} deg, levelled over the last {M.TILT[1]:.0f} mm onto the lips. Right: the chassis top round the opening.'), 'p3v6-5-encoder.png')
