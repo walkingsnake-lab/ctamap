@@ -46,6 +46,24 @@ jobs:
         run: |
           diff -rq "$RUNNER_TEMP/v6" ../stl/p4-v6 || { echo "::error::stl/p4-v6 is out of date: rebuild with python3 v6.py ../stl/p4-v6"; exit 1; }
 
+      - name: P3 V6 build and v6p3.check()
+        run: timeout -k 5 600 python3 v6p3.py "$RUNNER_TEMP/p3v6"
+
+      - name: Mesh check (P3 V6 parts)
+        run: timeout -k 5 300 python3 meshcheck.py "$RUNNER_TEMP"/p3v6/p3-v6-sleeve-walnut.stl "$RUNNER_TEMP"/p3v6/p3-v6-chassis-black.stl "$RUNNER_TEMP"/p3v6/p3-v6-encoder-collar-translucent.stl "$RUNNER_TEMP"/p3v6/p3-v6-sensor-sled-black.stl
+
+      - name: Committed P3 V6 print set (stl/p3-v6) matches the code
+        run: |
+          diff -rq "$RUNNER_TEMP/p3v6" ../stl/p3-v6 || { echo "::error::stl/p3-v6 is out of date: rebuild with python3 v6p3.py ../stl/p3-v6"; exit 1; }
+
+      - name: V5 P3 trays unchanged (drawer.py; TOP_FALL is off outside v6p3.py)
+        run: |
+          mkdir -p "$RUNNER_TEMP/v5/stl"
+          timeout -k 5 300 python3 drawer.py "$RUNNER_TEMP/v5/stl" > /dev/null
+          for f in bar-drawer-tray.stl bar-drawer-tray-inserts.stl bar-drawer-tray-window.stl; do
+            cmp "$RUNNER_TEMP/v5/stl/$f" ../stl/v5-drawer/$f || { echo "::error::$f no longer matches drawer.py"; exit 1; }
+          done
+
       - name: Committed P4 diffuser, knob and cleat STLs match the code
         # p4.py writes every P4 file; the ones the V6 build prints must be what the code makes today
         run: |
