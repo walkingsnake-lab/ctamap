@@ -51,7 +51,7 @@ panel is a later cleanup, once both are printed.
 """
 import math, os, sys
 os.environ.setdefault('PANEL', 'p3')
-if os.environ['PANEL'] != 'p3':
+if os.environ['PANEL'] not in ('p3', 'p3x2'):          # p3x2: v6p3x2.py borrows the sleeve for the 128 (its walnut stage)
     raise SystemExit('v6p3.py is the P3 build (PANEL=p3)')
 os.environ.setdefault('CASE_WALL', '4.0')       # the P4 V6 skin's wall (V5's P3 sleeve: 3.5); the bore is unchanged
 import numpy as np

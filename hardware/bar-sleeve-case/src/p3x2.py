@@ -127,7 +127,7 @@ JP_Y0, JP_Y1 = Y_FACE + 2.0, DR.Y1 - 2.0        # plate span along the depth: be
 JP_Y1_BOT = C.SCREW_Y - 4.5                     # the bottom plate stops short of the screws from below (counterbore r 3.2 at SCREW_Y)
 JP_CL_Y = 0.15                  # rebate longer than the plate at each end (the ends line the fronts up)
 JP_EC = 0.4                     # lead chamfer on the plate's four edges (the mating faces stay flat)
-assert WALL - JP_T - JP_CL >= 3.5, WALL
+assert WALL - JP_T - JP_CL >= 3.5 or os.environ.get('P3X2_NO_PLATES'), WALL   # v6p3x2.py: no plates
 # JOINT=tenon rebuilds the Nov 6 joint (loose PETG tenons in pockets) for comparison: its shell halves, tenon and seam
 # coupons go out under *-tenon-* names beside the plate joint's files (p3x2.py <outdir> --tenon-set writes only those).
 # The hollowed faces and the V-groove are on both.
@@ -150,7 +150,7 @@ RIB_W, RIB_CREST, RIB_LEAD, RIB_N = 1.4, 0.6, 2.0, 3   # rib base and crest widt
                                                       # 0.6 mm line printed flat), ramp length at each end, ribs per tenon
 END_CH = 0.4                    # lead-in chamfer on the tenon's x ends
 
-assert SLOT >= 1.8 and SKIN >= 1.3, (SLOT, SKIN)
+assert (SLOT >= 1.8 and SKIN >= 1.3) or os.environ.get('P3X2_NO_PLATES'), (SLOT, SKIN)
 
 
 def outer_inset(i):
