@@ -65,6 +65,8 @@ def parts(sleeve=True, chassis=True, inside=True, knob=True, screws=True, clip=N
         add('joint', P['jscrews'], 'screw', 'chassis')
         if chassis:
             add('back', P['back'], 'screw', 'chassis')
+            add('strap', P['strap'], 'new', 'chassis')
+            add('strap_screws', P['strap_screws'], 'screw', 'chassis')
     return out
 
 
@@ -104,17 +106,17 @@ sc = R.Scene(parts(), ground=-0.3)
 a = sc.render(persp((-0.6, -1.3, 0.45)))
 b = sc.render(persp((0.7, 1.25, 0.5)), flip=True)
 save(R.titled(R.stack([a, b]), '128 P3 V6: closed',
-              f'{2 * P["sleeve_b"].bounding_box()[3]:.0f} x {H:.1f} x {D:.0f}. Two walnut halves, no glue: a {M.SEAM_GAP:g} line with a 0.5 x 45 deg V at the panel seam. Knob 45 mm from the right end.'), 'p3x2v6-1-closed.png')
+              f'{2 * P["sleeve_b"].bounding_box()[3]:.0f} x {H:.1f} x {D:.0f}. Two walnut halves, butted, their seam keys glued: a 0.5 x 45 deg V each side at the panel seam. Knob 45 mm from the right end.'), 'p3x2v6-1-closed.png')
 
 off = dict(chassis=(0, 170, 0), sleeve_a=(-40, -60, 0), sleeve_b=(40, -60, 0), panel=(0, 40, 0), collar=(0, -60, 60), knob=(0, -60, 110), enc=(0, -60, -10), screws=(0, 0, -50))
 sc = R.Scene(moved(parts(tongue_new=True), off))
 cam = persp((-0.75, 1.0, 0.85), size=(1900, 1300), dist=1250, target=CENTRE + np.array([0, 60, 15]))
 im = sc.render(cam, ground=False)
-annotate(im, cam, [('walnut halves A and B: each seats on its own chassis half, two flat heads from below', (-120, -60, H), (-40, -150), 'mb'),
+annotate(im, cam, [('walnut halves A and B, glued into one sleeve by their seam keys', (-120, -60, H), (-40, -150), 'mb'),
                    ('panel pair: splice plates on the inner inserts (orange), standoffs', (-60, 70, ZC + 40), (-260, -40), 'rm'),
                    ('chassis A + B, joined first: A\'s tongues (orange) inside B\'s walls, four screws', (10, 170 + 40, S.ZO1), (60, -170), 'lb')], fs=24)
 save(R.titled(im, 'How it goes together',
-              'The P3 V6\'s order with both halves at once: walnut face down, panel pair in, encoder into its collar (B), then the joined chassis; four screws from below.'), 'p3x2v6-2-apart.png')
+              'The P3 V6\'s order with both halves at once: walnut face down, panel pair in, encoder into its collar (B), then the joined chassis (strap on its back); four screws from below.'), 'p3x2v6-2-apart.png')
 
 # the joint: from above with the walnut off, and a section across the seam through a tongue screw
 y0 = M.TONGUE_YS[0]
@@ -127,12 +129,12 @@ ps = parts(knob=False, clip=box(-30, 30, y0 - 0.25, y0 + 0.25, -50, 300))
 sc2 = R.Scene(ps)
 cam2 = ortho((0, -1, 0), (1300, 1000), 30.0, target=np.array([0, y0, H - 9]))
 c = sc2.render(cam2, ground=False, crease=0.0)
-annotate(c, cam2, [(f'walnut seam {M.SEAM_GAP:g} with a 0.5 x 45 deg V each side', (0, y0, H - 0.3), (-120, -110), 'rb'),
+annotate(c, cam2, [('walnut seam: butted, a 0.5 x 45 deg V each side', (0, y0, H - 0.3), (-120, -110), 'rb'),
                    ('chassis seam 0.3: A\'s tongue spans it under the walnut seam', (0, y0, S.ZIN1 - 3), (140, 150), 'lt'),
-                   ('seam key (loose PETG, orange) in both halves\' rebates', (-30, y0, H - 4.0 - 0.7), (-40, 120), 'lt'),
+                   ('seam key (PLA, glued, orange) in both halves\' rebates', (-30, y0, H - 4.0 - 0.7), (-40, 120), 'lt'),
                    ('insert in the tongue', (M.CH_GAP / 2 + M.TONGUE_SCREWS[0][0], y0, S.ZIN1 - 4), (170, 60), 'lm')], fs=22)
-save(R.titled(R.row([a, c]), 'The joint: tongues in the chassis, a plain line in the walnut',
-              f'Left: from above, walnut off. Right: section {y0:g} mm back, through a tongue screw. The walnut carries no load across the seam.'), 'p3x2v6-3-joint.png')
+save(R.titled(R.row([a, c]), 'The joint: tongues in the chassis, glued keys in the walnut',
+              f'Left: from above, walnut off. Right: section {y0:g} mm back, through a tongue screw. The chassis carries the load; the keys hold the walnut flush.'), 'p3x2v6-3-joint.png')
 
 # the diffuser seam, from the front
 sc = R.Scene(parts(chassis=False, knob=False, screws=False, clip=box(-14, 14, -50, 200, ZC - 12, ZC + 12)))

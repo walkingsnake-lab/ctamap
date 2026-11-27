@@ -1,58 +1,69 @@
-"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 1 (Nov 26, 2026). Units mm.
+"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 3 (Nov 27, 2026). Units mm.
 
-    python3 v6p3x2.py ../stl/p3x2-v6      # the print set (p3x2-v6-*.stl, reused parts included) and the checks
+    python3 v6p3x2.py ../stl/p3x2-v6      # the print set (p3x2-v6-*.stl, reused parts and coupons included) and the checks
 
-What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0), with no glue anywhere.
+What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0).
 - **Walnut**: the P3 V6 sleeve drawn round the 128's bore (404 x 105.3) at the same 4 mm wall (412 x 113.3 x 69), with its
-  rebate and seat, cut at x = 0 into two halves (each 206 wide: the X2D takes one whole). Each half is a U open at the
-  seam, seated on its own chassis half's lip and drawn back onto it by its own two flat heads from below (V5 pair's
-  x +/-50, +/-142). Not glued: the halves meet with SEAM_GAP between them and Jake's Nov 6 0.5 x 45 deg V-groove each side.
-  The joint carries nothing: the V5 pair split there under twist because its walnut was the structure; here the chassis is.
-- **Seam location**: each half is placed sideways by its countersinks (the nearest 50 mm from the seam), not by its far
-  end: the lip is relieved (END_RELIEF) on the outer end's flats AND corners, so a half printed small does not pull its
-  seam edge open by its whole 206 mm of scale.
+  rebate and seat, cut at x = 0 into two halves (each 206 wide: the X2D takes one whole), then made one sleeve again by
+  two glued seam keys (owner, Nov 27: no glue and no threads in walnut were never hard rules; what matters is how it
+  looks, without piling on screws).
+  - The seam: butted, p3x2's 0.5 x 45 deg V-groove each side and hollowed faces (0.3 off except a 2 mm land along the
+    edges you see). The faces stay dry: no glue in the line.
+  - **Seam keys**: p3x2's joint plates, 96 x 1.2, PLA (it bonds to the wood PLA; PETG does not as well), one in a rebate
+    across the seam inside the top wall and one inside the bottom, 0.1 under the bore. Glued to both halves with slow
+    (30 minute) two-part epoxy, on the joined chassis as the jig. Not CA: it grabs in seconds and its fumes can bloom
+    white on dark filament.
+  - **One locator**: the sleeve seats on the chassis's lip all round and is drawn back by four flat heads from below
+    (x +/-50, +/-142). Only half B's inner countersink is round; the other three are slots along x (SLOTS), because one
+    412 mm sleeve cannot be pinned at four cones once walnut and PETG shrink differently. The lip stays relieved
+    (END_RELIEF) round both outer ends' flats and corners.
 - **Chassis**: two P3 V6 chassis, one per panel, cut at x = 0 (CH_GAP between them). B (right) is the single P3 V6
   chassis (S3, USB-C frame and stop, encoder slot, rails and ledges, sensor, status window, Boot). A (left) is the same
   tray with none of that, its posts at panel A's un-turned inserts (the P3 pair's data chain: B turned 180 deg).
-  The joint (the P4 V6's tongues, on this chassis): A's top and bottom walls run on TONGUE mm inside B's as solid lap
-  tongues, two M3 x 10 flat heads each through B's wall into inserts in the tongue, flush under the walnut. Four screws,
-  hidden in use. Two plates 100 mm apart, each stiff in its own plane, fix all six directions between the halves (twist
-  about the bar's axis is shear in the tongues' plane). No back-plate tie: a lap there floats 2 mm off A's bed.
+  - **Tongues**: A's top and bottom walls run on TONGUE mm inside B's as solid lap tongues, two M3 x 10 flat heads each
+    (staggered) through B's wall into inserts in the tongue, flush under the walnut.
+  - **Back strap**: a flat PETG plate across the seam on the back plates, in the 4 mm inside the rim, two M3 x 10 flat
+    heads into each half (inserts set from the back, into bosses). The tongues alone were weak against bending in plan
+    (review, Nov 27); the strap is the tie at the back. The wall cleat is notched for it (wall_cleat_v6).
+  - Every screw is the builds' black M3 x 10 flat head (DIN 7991) into an M3 x D5 x L4 insert.
 - **Panels**: one splice plate (p3x2.py's) on each pair of inner corner inserts holds the rows level across the seam, under
   the inner standoffs, so those two posts' feet sit SPLICE_T further back.
 - **Diffuser**: the P3 pair's two halves (p3x2.diffuser_halves), split joint only: each half ends in its own full-height
   grid wall at the seam (JOINT_WALL, a normal rib), so the seam cell is closed on both sides (owner, Nov 26). The rim and
   seat are the single P3 V6's (45 deg, v5 rim), not the 128 V5's 55 deg / 1.5: that was for a diffuser held by the rim,
   which pushed through under a thumb; in V6 it sits on the screwed-down panel RIM_GAP behind the rim, and the 55 deg seat
-  is a 900 mm2 overhang in the back-down print.
-- **Seam keys** (review, Nov 27: nothing else aligns the halves' free ends at the seam): p3x2's joint plates, unglued. A flat
-  black PETG key 100 x 1.2 in a rebate across the seam inside the top wall and one inside the bottom, 0.1 under the bore:
-  the chassis, sliding in under them, holds them there. They keep the two open ends' top and bottom walls flush.
-- The diffuser halves must be printed from this set (BEV 0.6): the V5 pair's (BEV 0.2) meet the 45 deg rim.
+  is a 900 mm2 overhang in the back-down print. Print the halves from this set (BEV 0.6): the V5 pair's (BEV 0.2) meet
+  the 45 deg rim.
 - Knob 45 mm from the right end (x +161), sensor 40 inboard; V5's 30 mm knob and translucent collar, as the P3 V6.
 
-Assembly (the P3 V6's order, both halves at once):
-1. Bench: splice plates on the inner inserts, standoffs into all twelve inserts (the inner four through the plates),
-   diffuser halves snapped on; the two chassis halves joined back-down on a flat surface (the tongues' four inserts set
-   first, 0.2 under the face; four screws).
-2. Both walnut halves face down, butted at the seam, the two seam keys in their rebates (a strip of tape holds each until
-   the chassis is in): the panel pair in from the back onto the rims, a washer per standoff.
-3. Half B: collar in its hole, encoder up into it, nut on, QT cable in.
-4. The joined chassis down into both halves, its posts onto the standoffs: twelve M3 x 8 from the back, then the four flat
-   heads from below (each half's seam closes as its pair goes home), then the knob.
+Glue-up (once; try it on the seam coupon first: coupons/coupon-p3x2-v6-seam-*):
+1. Join the chassis halves back-down on a flat surface: the tongues' and strap's eight inserts first (0.2 under the
+   face), four tongue screws, the strap and its four.
+2. Packing tape on the chassis's top and bottom walls across the seam (epoxy does not hold on it).
+3. Slide both walnut halves on from the front and start all four screws from below, loose. Push A against B (or against
+   a shim, up to 0.3, if a line looks better than the plain V: the coupon shows), then snug B's inner screw first.
+4. Scuff the keys and their rebates, a thin coat of epoxy on each key, and in through the open front into its rebate
+   (the panels are not in yet); press it home, wipe what squeezes out, tape or a spring clamp until it cures. A bead left
+   to harden inside the bore keeps the chassis from sliding in.
+5. Cured: screws out, sleeve off the chassis, tape off.
+Assembly after that is the single P3 V6's: panel pair (splice plates, twelve standoffs, diffusers) into the sleeve and a
+washer on each standoff; collar and encoder into half B; the joined chassis in from the back; twelve M3 x 8 from the
+back, four flat heads from below (B's inner one first), then the knob. Service: the sleeve comes off in one piece.
 """
 import json, math, os, subprocess, sys
 STAGE = 'chassis' if '--chassis' in sys.argv else 'skin'
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.environ['CASE_WALL'] = '4.0'
-SEAM_GAP = float(os.environ.get('V6P3X2_SEAM', '0.26'))   # between the walnut halves as drawn (0.25 welded badly at the V's steps). Each half is centred on its two
-                                 # countersinks (x 50 and 142: centroid 96), so a walnut print s small opens the seam by ~192 s
-                                 # (0.2 %: +0.38) and nothing closes it: drawn small. The tolerance rows check 0 to 0.3 % shrink
-                                 # with both halves 0.1 toward the seam (the heads' fit in their cones): never shut
-SEAM_SHIFT = 0.1
+# The walnut is one sleeve once its seam keys are glued (Nov 27), so it cannot be pinned at four cones: wood PLA and PETG
+# shrink differently over the 284 mm between the outer screws. One round countersink locates it along the bar, half B's
+# inner one (x +50: B has the knob, the sensor and the USB-C opening); the other three are slots along x, (toward -x,
+# toward +x) of room each, sized for a walnut print 0 to SHRINK_MAX small and a seam shimmed 0 to SHIM_MAX at glue-up.
+# All four still draw the sleeve back onto its seat (the bias is along y).
+LOCATOR_X = 50.0
+SLOTS = {-142: (-0.60, 0.35), -50: (-0.35, 0.35), 142: (-0.05, 0.30)}   # a small print's holes sit toward the locator: the slots reach away from it
+SHRINK_MAX, SHIM_MAX = 0.003, 0.3
 CH_GAP = 0.3                       # between the chassis halves
 PANEL_CX = 96.0
-M_CX = PANEL_CX                    # each walnut half's centre of location: the midpoint of its two screws (50, 142)
 SPLICE_T = 2.0                     # p3x2's splice plate
 
 if STAGE == 'skin':
@@ -72,12 +83,27 @@ if STAGE == 'skin':
     PX.JP_L = 96.0                  # 48 into each half (100 put the ends' edges on the countersinks' x, 50: a bad weld)
     PX.JP_Y1 = DR.Y1 - 5.0          # the keys' rebates end 3 mm in front of the back rebate's seat (p3x2's ran to 63)
 
+    _csk_round = S.csk_under
+
+    def csk_under(x, y):
+        """v6p3.csk_under, or its slot along x for the three screws in SLOTS (cone and hole each hulled over the slot)"""
+        if round(x) not in SLOTS:
+            return _csk_round(x, y)
+        e, bb = 0.02, S.UNDER_BIAS
+        cone = lambda dx: (Manifold.cylinder(S.CSK_K + e, S.CSK_D / 2 + e, S.SKIN_CL_D / 2, 64).translate([0, 0, bb - e])
+                           + Manifold.cylinder(bb + e, S.CSK_D / 2 + e, S.CSK_D / 2 + e, 64).translate([0, 0, -e])).translate([x + dx, y - bb, 0])
+        hole = lambda dx: C.cyl_z(x + dx, y, -1, C.WALL + 1, S.SKIN_CL_D, 48)
+        lo, hi = SLOTS[round(x)]
+        return Manifold.batch_hull([cone(lo), cone(hi)]) + Manifold.batch_hull([hole(lo), hole(hi)])
+    S.csk_under = csk_under
+
     def halves():
-        sh = S.sleeve() - Manifold.batch_boolean(PX.rebate_cuts(), ADD)   # the seam keys' rebates, top and bottom
-        g = SEAM_GAP / 2
-        groove = PX.v_groove(sh)   # 0.5 x 45 deg about x = 0; the bore is plain there, so it moves with each face
-        a = (sh - groove.translate([-g, 0, 0])) ^ box(-C.HW - 1, -g, -50, C.D + 1, -1, C.H + 1)
-        b = (sh - groove.translate([g, 0, 0])) ^ box(g, C.HW + 1, -50, C.D + 1, -1, C.H + 1)
+        """the sleeve cut at x = 0, butted: p3x2's V-groove (0.5 x 45 deg a side) and hollowed seam faces (0.3 off except a
+        2 mm land along the edges you see, so two not-quite-flat faces close where it shows), and the keys' rebates"""
+        sh = S.sleeve()
+        s_ = sh - PX.v_groove(sh) - PX.hollow_cuts(sh) - Manifold.batch_boolean(PX.rebate_cuts(), ADD)
+        a = s_ ^ box(-C.HW - 1, 0.0, -50, C.D + 1, -1, C.H + 1)
+        b = s_ ^ box(0.0, C.HW + 1, -50, C.D + 1, -1, C.H + 1)
         big = lambda m: max(m.decompose(), key=lambda q: q.volume())
         return big(a), big(b)
 
@@ -125,8 +151,12 @@ if STAGE == 'skin':
                 t.apply_translation(-lo); t.export(f'{out}/p3x2-v6-diffuser-{side}-{col}.stl')
             print(f'p3x2-v6-diffuser-{side}', np.round(k.extents, 1).tolist())
         for top, n in ((True, 'top'), (False, 'bottom')):
-            t = PX.tm(PX.joint_plate(top, PX.JP_L)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-seam-key-{n}-black.stl')
+            t = PX.tm(PX.joint_plate(top, PX.JP_L)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-seam-key-{n}-pla.stl')
             print(f'p3x2-v6-seam-key-{n}', np.round(t.extents, 2).tolist())
+        os.makedirs(f'{out}/coupons', exist_ok=True)                 # the seam coupon: both halves' top wall, 60 wide, and a 56 mm key
+        for m, n in zip(PX.coupon(a, b), ('A', 'B')):
+            t = PX.tm(m, down); t.apply_translation(-t.bounds[0]); t.export(f'{out}/coupons/coupon-p3x2-v6-seam-{n}-walnut.stl')
+        t = PX.tm(PX.joint_plate(True, 56.0)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/coupons/coupon-p3x2-v6-seam-key-pla.stl')
         sp = [PX.tm(PX.splice_plate(PX.SPLICE_HOLE)) for _ in range(2)]
         PX.layout([sp], gap=6.0)
         trimesh.util.concatenate(sp).export(f'{out}/p3x2-v6-splice-plates-black.stl')
@@ -297,6 +327,56 @@ def insert_bodies():
     return Manifold.batch_boolean(out, ADD)
 
 
+# the back strap (Nov 27): a flat PETG plate across the seam on the back plates' outer faces, in the 4 mm inside the rim,
+# two M3 x 10 flat heads into each half (inserts set from the back into bosses inside the plate). It ties the halves at
+# the back, 20-30 mm behind the tongues' screws: the couple against bending in plan that the tongues alone lacked
+STRAP_HX, STRAP_HZ, STRAP_T = 19.0, 13.0, 3.0
+STRAP_Z = 49.5                     # its centre: between the case cleats' inner ends (|x| 21), above the inner posts (z to 32).
+                                   # The wall cleat lies on the back plate from z 30 to 74: it gets a notch (wall_cleat_v6)
+STRAP_XZ = [(sx * 10.0, dz) for sx in (-1, 1) for dz in (-7.0, 7.0)]      # (x, z about ZC)
+STRAP_BOSS = (9.0, 6.5)            # the bosses: diameter, height off the plate's inner face (the screw's tip ends 7 in)
+
+
+def strap_bosses():
+    """(adds, cuts) for both halves' back plates"""
+    adds = [cyl_y(x, STRAP_Z + z, DR.Y0 - STRAP_BOSS[1], DR.Y0 + 0.01, STRAP_BOSS[0], 48) for x, z in STRAP_XZ]
+    cuts = [cyl_y(x, STRAP_Z + z, DR.Y1 - INS_DEPTH - INS_RECESS, DR.Y1 + 0.01, INS_D, 32) for x, z in STRAP_XZ]
+    cuts += [cyl_y(x, STRAP_Z + z, DR.Y0 - STRAP_BOSS[1] - 1, DR.Y1, INS_RELIEF, 32) for x, z in STRAP_XZ]
+    return Manifold.batch_boolean(adds, ADD), Manifold.batch_boolean(cuts, ADD)
+
+
+def strap():
+    from manifold3d import CrossSection, JoinType
+    cs = CrossSection.square([2 * STRAP_HX - 6, 2 * STRAP_HZ - 6], center=True).offset(3.0, JoinType.Round, circular_segments=32)
+    m = Manifold.extrude(cs, STRAP_T).rotate([-90, 0, 0]).mirror([0, 0, 1]).translate([0, DR.Y1, STRAP_Z])
+    yo = DR.Y1 + STRAP_T
+    cuts = []
+    for x, z in STRAP_XZ:
+        cuts.append(cyl_y(x, STRAP_Z + z, DR.Y1 - 1, yo + 1, S.SKIN_CL_D, 32))
+        cuts.append(Manifold.cylinder(S.CSK_K + 0.01, S.SKIN_CL_D / 2, S.CSK_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([x, yo - S.CSK_K, STRAP_Z + z]))
+    return m - Manifold.batch_boolean(cuts, ADD)
+
+
+def strap_screws():
+    yo = DR.Y1 + STRAP_T
+    return Manifold.batch_boolean([Manifold.cylinder(CSK_HEAD_K, 1.5, 3.0 - 0.02, 32).rotate([-90, 0, 0]).translate([x, yo - CSK_HEAD_K, STRAP_Z + z])
+                                   + cyl_y(x, STRAP_Z + z, yo - 10.0, yo, 3.0, 24) for x, z in STRAP_XZ], ADD)
+
+
+def strap_inserts():
+    return Manifold.batch_boolean([cyl_y(x, STRAP_Z + z, DR.Y1 - INS_RECESS - 4.0, DR.Y1 - INS_RECESS, 4.4, 32) for x, z in STRAP_XZ], ADD)
+
+
+def wall_cleat_v6():
+    """p3x2's 220 mm wall cleat with a notch for the back strap: cut right through between the case cleats' inner ends
+    (they start at |x| 21), from 0.5 under the strap to the top, so the strap passes as the case is lifted off and
+    nothing bridges in the print. A bar 6 mm tall joins the two sides along the bottom: still one piece to level.
+    Its middle screw moves out of the notch: four wall screws, at +/-35 and +/-95"""
+    import cleat as CLT
+    wc = CLT.wall_cleat(hw=110.0, xs=[-95.0, -35.0, 35.0, 95.0])
+    return wc - box(-STRAP_HX - 1.5, STRAP_HX + 1.5, DR.Y1 - 1, DR.Y1 + 50, STRAP_Z - STRAP_HZ - 0.5, H + 50)
+
+
 def turn(m):
     """B's (turned) frame to A's un-turned panel: 180 deg about the case's depth axis through the panel's centre"""
     return m.rotate([0, 180, 0]).translate([0, 0, 2 * ZC])
@@ -338,8 +418,10 @@ def build(fr):
     a, b = big(a), big(b)
     j_add, j_cut_a, j_cut_b, ys = joint()
     pre_b = b
-    a = big((a + j_add) - j_cut_a)
-    b = big(b - j_cut_b)
+    sb_add, sb_cut = strap_bosses()
+    boss_hit = (sb_add ^ (a + b + j_add)).volume() - sum(math.pi * (STRAP_BOSS[0] / 2) ** 2 * 0.01 for _ in STRAP_XZ)
+    a = big((a + j_add + (sb_add ^ box(-400, 0, -50, 200, -50, 200))) - j_cut_a - sb_cut)
+    b = big((b + (sb_add ^ box(0, 400, -50, 200, -50, 200))) - j_cut_b - sb_cut)
     B = lambda m: m.translate([PANEL_CX, 0, 0])
     A = lambda m: turn(m).translate([-PANEL_CX, 0, 0])
     sa, sb = load(f'{fr}/sleeve-A.stl'), load(f'{fr}/sleeve-B.stl')
@@ -351,7 +433,7 @@ def build(fr):
              encoder=B(S.encoder()), collar=B(S.collar()), plain_collar=B(S.plain_collar()),
              s3=B(DR.s3_envelope()), sensor=B(DR.sensor_envelope() + DR.sensor_plugs()), sled=B(DR.sled()),
              back=back_screws_side('A').translate([-PANEL_CX, 0, 0]) + B(back_screws_side('B')),
-             jscrews=joint_screws())
+             jscrews=joint_screws(), strap=strap(), strap_screws=strap_screws(), strap_bosses=sb_add, boss_hit=boss_hit)
     u = S.screws()['under']                                    # the two from below, per half
     P['under'] = u.translate([-PANEL_CX, 0, 0]) + B(u)
     return P
@@ -372,17 +454,24 @@ def check(P, sk):
     for n, s_, c_ in (('A', sa, ca), ('B', sb, cb)):
         rows.append((f'sleeve {n} / chassis, seated', v(s_, ch)))
         rows.append((f'chassis {n} 0.1 further forward / sleeve {n} (its lip meets the seat: > 0)', 0.0 if v(c_.translate([0, -0.1, 0]), s_) > 0.2 else 1.0))
-    sg = sa.min_gap(sb, 2.0)
-    rows.append((f'walnut seam {sg:.2f} as drawn', 0.0 if sg >= 0.1 else 1.0))
-    def half_as_printed(m, cx, shrink, shift):
-        return m.translate([-cx, 0, 0]).scale([1 - shrink, 1, 1]).translate([cx + shift, 0, 0])
-    worst, at02 = 9.0, None
-    for shrink in (0.0, 0.001, 0.002, 0.003):
-        g_ = half_as_printed(sa, -M_CX, shrink, SEAM_SHIFT).min_gap(half_as_printed(sb, M_CX, shrink, -SEAM_SHIFT), 2.0)
-        worst = min(worst, g_)
-        if shrink == 0.002:
-            at02 = half_as_printed(sa, -M_CX, shrink, 0).min_gap(half_as_printed(sb, M_CX, shrink, 0), 2.0)
-    rows.append((f'walnut seam, 0-0.3 % shrink with both halves {SEAM_SHIFT} toward it: nearest {worst:.2f} (never shut); at 0.2 % centred: {at02:.2f}', 0.0 if worst > 0.0 else 1.0))
+    rows.append(('walnut halves, butted at the seam', v(sa, sb)))
+    under_sh = Manifold.batch_boolean([cyl_z(sx * x, DR.BOT_Y, -1, S.WALL + 1, 3.0, 32) for sx in (-1, 1) for x in (50.0, 142.0)], ADD)
+    worst = 0.0
+    for shrink in (0.0, SHRINK_MAX):
+        for shim in (0.0, SHIM_MAX):                                # B about its locator; A about its seam face, against B's less the shim
+            b_ = sb.translate([-LOCATOR_X, 0, 0]).scale([1 - shrink, 1, 1]).translate([LOCATOR_X, 0, 0])
+            a_ = sa.scale([1 - shrink, 1, 1]).translate([LOCATOR_X * shrink - shim, 0, 0])
+            worst = max(worst, v(under_sh, a_ + b_))
+    rows.append((f'screws from below / walnut printed 0 to {SHRINK_MAX * 100:g} % small, seam shimmed 0 to {SHIM_MAX}: the slots take it', worst))
+    st, ss, si = P['strap'], P['strap_screws'], strap_inserts()
+    rows.append(('strap bosses / chassis (before they were added), panels, standoffs, splice plates, S3, sensor, sled, encoder',
+                 round(P['boss_hit'] + (P['strap_bosses'] ^ (pan + so + spl + s3 + sen + sled + enc)).volume(), 2)))
+    rows.append(('back strap / chassis, walnut, back screws', v(st, ch + sl + P['back'])))
+    rows.append((f'back strap inside the rim (its face {D - DR.Y1 - STRAP_T:.1f} under the back edge)', 0.0 if DR.Y1 + STRAP_T <= D - 0.5 else 1.0))
+    rows.append(('strap screws / strap, chassis outside the inserts', v(ss - si, st + ch)))
+    rows.append(('strap inserts / chassis (their holes)', v(si, ch)))
+    eng = (ss ^ si).volume() / (math.pi * 1.5 ** 2) / 4
+    rows.append((f'strap screws: {eng:.2f} mm in each insert (3.5 or more)', 0.0 if eng >= 3.5 else round(3.5 - eng, 2)))
     keys = P['keys']
     rows.append(('seam keys / chassis', v(keys, ch)))
     rows.append(('seam keys / walnut (in their rebates)', v(keys, sl)))
@@ -449,23 +538,29 @@ if __name__ == '__main__':
         print(f'{name}: {np.round(t.extents, 1).tolist()}, {m.volume() / 1000:.1f} cm3, {len(t.split(only_watertight=False))} body')
     save(P['chassis_a'], 'p3x2-v6-chassis-A-black')
     save(P['chassis_b'], 'p3x2-v6-chassis-B-black')
+    me = P['strap'].rotate([90, 0, 0]).to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.merge_vertices()
+    t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-back-strap-black.stl'); print('back strap', np.round(t.extents, 1).tolist())
+    reg = box(-30, 30, -50, 200, S.ZO1 - 14.0, H + 5)                # the seam coupon's chassis: both top walls, the tongue and its two screws
+    save(P['chassis_a'] ^ reg, 'coupons/coupon-p3x2-v6-seam-chassis-A-black')
+    save(P['chassis_b'] ^ reg, 'coupons/coupon-p3x2-v6-seam-chassis-B-black')
     save(DR.status_window().translate([PANEL_CX, 0, 0]), 'p3x2-v6-chassis-B-window-translucent', frame=P['chassis_b'])
     t = CO.export(CO.collar(), f'{out}/p3x2-v6-encoder-collar-translucent.stl'); print('collar', np.round(t.extents, 1).tolist())
     me = DR.sled().to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-sensor-sled-black.stl')
     import shutil, cleat as CLT
-    wc = CLT.wall_cleat(hw=110.0, xs=[-95.0, 0.0, 95.0])         # p3x2's 220 mm wall cleat: catches both case cleats
+    wc = wall_cleat_v6()                                         # one 220 mm wall cleat: catches both case cleats
     me = wc.rotate([-90, 0, 0]).to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-cleat-wall-black.stl')
     for a, b in (('bar-knob', 'knob-white'), ('v5-drawer/bar-cleat-case', 'cleat-case-black-x2'), ('bar-boot-key', 'boot-key')):
         shutil.copyfile(os.path.join(HERE, '..', 'stl', a + '.stl'), os.path.join(out, f'p3x2-v6-{b}.stl'))
     # hung on the wall: both case cleats on the one wall cleat
     cc = CLT.case_cleat()
-    hung = [P['chassis_a'], P['chassis_b'], P['sleeve_a'], P['sleeve_b'], cc.translate([-PANEL_CX, 0, 0]), cc.translate([PANEL_CX, 0, 0])]
+    hung = [P['strap'], P['strap_screws'], P['chassis_a'], P['chassis_b'], P['sleeve_a'], P['sleeve_b'], cc.translate([-PANEL_CX, 0, 0]), cc.translate([PANEL_CX, 0, 0])]
     seated = lambda dz=0.0: round(sum((m.translate([0, 0, dz]) ^ wc).volume() for m in hung), 2)
     rows = check(P, sk)
+    rows.append(('case cleats / back strap and its screws', round(sum((cc.translate([s_ * PANEL_CX, 0, 0]) ^ (P['strap'] + P['strap_screws'])).volume() for s_ in (-1, 1)), 2)))
     rows.append(('case cleats / chassis and back screws', round(sum(((cc.translate([s * PANEL_CX, 0, 0])) ^ (P['chassis_a'] + P['chassis_b'] + P['back'])).volume() for s in (-1, 1)), 2)))
     rows.append(('wall cleat / everything hung', seated()))
     rows.append((f'lifted straight off the wall cleat (0.5 to {CLT.hook() + 6:.0f})', max(seated(q) for q in np.arange(0.5, CLT.hook() + 6.01, 0.5))))
-    print(dict(case=[round(2 * sk['hw'], 1), round(sk['h'], 1), sk['d']], knob_x=sk['kx'], sensor_x=sk['sensor_x'], seam=SEAM_GAP,
+    print(dict(case=[round(2 * sk['hw'], 1), round(sk['h'], 1), sk['d']], knob_x=sk['kx'], sensor_x=sk['sensor_x'], 
                tongue_y=(round(LEG_Y0, 2), round(LEG_Y1, 2)), joint_screws_y=[round(y, 1) for y in P['ys']]))
     hits = 0
     for name, val in rows:
