@@ -263,7 +263,8 @@ test('clouds: drawn from the strip once it is on hand, gliding 1 px every 4 s, b
   const c0 = later(t0), c1 = later(t0 + 4000), half = later(t0 + 2000);
   let between = 0;
   for (let x = 0; x < 20; x++) {
-    if (SKY.role[2 * 64 + x] || SKY.role[2 * 64 + x + 1]) continue;
+    const mast = (X) => SKY.ants.some(([ax, t, roof]) => ax === X && 2 >= t && 2 < roof);
+    if (SKY.role[2 * 64 + x] || SKY.role[2 * 64 + x + 1] || mast(x) || mast(x + 1)) continue;
     assert.equal(px(c1, x, 2), px(c0, x + 1, 2));
     const [a, b, h] = [c0.get(x, 2), c0.get(x + 1, 2), half.get(x, 2)];
     for (let k = 0; k < 3; k++) assert.ok(h[k] >= Math.min(a[k], b[k]) && h[k] <= Math.max(a[k], b[k]), `x ${x}: ${h} between ${a} and ${b}`);

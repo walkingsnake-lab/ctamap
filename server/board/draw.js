@@ -2300,7 +2300,7 @@
         .forEach(([x, w, h]) => rect(x + O, w, top(h), 1));
       for (const [x, w, h, r] of cfg.extra) if (r === 1) rect(x, w, top(h), 1);
       for (const [x, w, h, r] of cfg.extra) if (r === 2) rect(x, w, top(h), 2);
-      rect(1 + O, 1, top(9), 2); rect(2 + O, 4, top(15), 2); rect(6 + O, 2, top(13), 2); rect(8 + O, 2, top(9), 2);   // Willis, setbacks down to the right
+      rect(1 + O, 3, top(21), 2); rect(4 + O, 2, top(17), 2); rect(6 + O, 2, top(13), 2); rect(8 + O, 2, top(9), 2);  // Willis: a staircase down to the right
       rect(11 + O, 4, top(17), 2);                                                                                     // Aon
       rect(15 + O, 5, top(21), 2);                                                                                     // St. Regis
       rect(23 + O, 5, top(10), 2); rect(24 + O, 4, top(13), 2); rect(24 + O, 3, top(16), 2);                           // Trump
@@ -2309,13 +2309,14 @@
         for (let y = t; y <= SHORE; y++) { const w = steps[Math.min(2, Math.floor((y - t) * 3 / (SHORE - t + 1)))]; for (let i = 53 + O - w / 2; i < 53 + O + w / 2; i++) role[y * W + i] = 2; } }
       const isB = (x, y) => x >= 0 && x < W && y >= 0 && y <= SHORE && role[y * W + x] !== 0;
       // Antennas [x, top row, roof row, beacon]: Willis's two, Hancock's twin with beacons.
-      const ants = [[2 + O, top(18), top(15), 0], [4 + O, top(17), top(15), 0], [51 + O, top(22), top(17), 1], [54 + O, top(22), top(17), 1],
+      const ants = [[1 + O, top(25), top(21), 0], [3 + O, top(24), top(21), 0], [51 + O, top(22), top(17), 1], [54 + O, top(22), top(17), 1],
         ...cfg.ants.map(([x, t, roof, bc]) => [x, top(t), top(roof), bc])];
       // Window slots: even columns, odd rows, under another building pixel,
-      // clear of the pier (x 19-44, rows 19 and below) and the wheel.
+      // clear of the pier (x 19-44, rows 19 and below) and the wheel, and
+      // none on the shore row (no lights sitting on the water).
       // [x, y, threshold 0-999, bright]
       const wins = [];
-      for (let y = 1; y <= SHORE; y++) for (let x = 0; x < W; x++) {
+      for (let y = 1; y < SHORE; y++) for (let x = 0; x < W; x++) {
         const r = role[y * W + x];
         if (!r || (r === 1 && x < 38 + O) || (x >= 19 + O && x <= 44 + O && y >= SHORE - 6)) continue;
         const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
@@ -2323,12 +2324,13 @@
         wins.push([x, y, ih(x, y, 5) % 1000, ih(x, y, 9) % 10 < 3]);
       }
       // Stars: the first 14 (wide: 28) hash positions in the top 14 rows that miss the
-      // buildings, the moon's spot, the Hancock antennas and the wheel. [x, y, bright, twinkles, phase 0-999, period ms]
+      // buildings, the moon's spot, the Hancock antennas and the wheel, and
+      // touch no other star (not even corner to corner). [x, y, bright, twinkles, phase 0-999, period ms]
       const stars = [];
       for (let i = 0; stars.length < cfg.stars && i < cfg.stars * 1000 / 14; i++) {
         const x = ih(i, 1, 3) % W, y = ih(i, 2, 3) % 14;
         const dx = x + 0.5 - CX, dy = y + 0.5 - CY;
-        if (isB(x, y) || (x > 35 + O && x < 49 + O && y < 11) || (x >= 50 + O && x <= 55 + O && y < 10) || dx * dx + dy * dy < 90.25 || stars.some((s) => s[0] === x && s[1] === y)) continue;
+        if (isB(x, y) || (x > 35 + O && x < 49 + O && y < 11) || (x >= 50 + O && x <= 55 + O && y < 10) || dx * dx + dy * dy < 90.25 || stars.some((s) => Math.abs(s[0] - x) <= 1 && Math.abs(s[1] - y) <= 1)) continue;
         stars.push([x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 === 1, ih(i, 5, 3) % 1000, [4000, 6000, 12000][stars.length % 3]]);
       }
       // Wheel: hard-edged shapes, a pixel on when at least half covered (6x6
@@ -2368,12 +2370,12 @@
       extra: [
         // Left: the South Loop.
         [0, 5, 6, 1], [5, 4, 8, 1], [10, 3, 5, 1], [13, 5, 7, 1], [18, 4, 9, 1], [22, 3, 6, 1], [25, 4, 8, 1], [29, 3, 6, 1],
-        [2, 3, 11, 2], [7, 3, 16, 2], [14, 3, 13, 2], [20, 4, 10, 2], [26, 3, 12, 2],
+        [2, 3, 11, 2], [6, 5, 16, 2], [14, 3, 13, 2], [20, 4, 10, 2], [26, 3, 12, 2],
         // Right: more towers to the edge.
         [96, 4, 8, 1], [100, 5, 10, 1], [105, 4, 7, 1], [109, 5, 9, 1], [114, 4, 8, 1], [118, 5, 10, 1], [123, 5, 8, 1],
-        [97, 3, 13, 2], [102, 4, 15, 2], [107, 3, 11, 2], [111, 4, 16, 2], [116, 3, 12, 2], [120, 4, 14, 2], [125, 3, 12, 2],
+        [97, 3, 13, 2], [102, 4, 15, 2], [107, 3, 11, 2], [110, 5, 16, 2], [116, 3, 12, 2], [120, 4, 14, 2], [125, 3, 12, 2],
       ],
-      ants: [[8, 19, 16, 0], [112, 19, 16, 0]],  // [x, top rows, roof rows, beacon]
+      ants: [],  // [x, top rows, roof rows, beacon]
     });
     // Integer hash (32-bit, wraps the same in JS and C++).
     function ih(a, b, c) {
