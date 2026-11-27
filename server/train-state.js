@@ -499,6 +499,16 @@ function processTrains(rawTrains, geo) {
 /** For diagnostics / testing: expose the state map size. */
 function stateSize() { return trainStateMap.size; }
 
+/**
+ * Forget every train. Called when the poll goes idle (nobody is watching the
+ * map): after a long gap the old positions, hold counts and retiring trains
+ * would be judged against trains that have long since moved on.
+ */
+function resetTrains() {
+  trainStateMap.clear();
+  retiringTrainsMap.clear();
+}
+
 /** Returns a serializable snapshot of all current per-train state for /api/debug/trains. */
 function getDebugState() {
   return {
@@ -508,4 +518,4 @@ function getDebugState() {
   };
 }
 
-module.exports = { processTrains, stateSize, getDebugState };
+module.exports = { processTrains, stateSize, getDebugState, resetTrains };

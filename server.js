@@ -13,14 +13,22 @@ const CTA_BASE   = 'http://lapi.transitchicago.com/api/1.0/ttpositions.aspx';
 const CTA_FOLLOW = 'http://lapi.transitchicago.com/api/1.0/ttfollow.aspx';
 const ROUTES = ['red', 'blue', 'brn', 'G', 'org', 'P', 'pink', 'Y'];
 
-// How often the server re-fetches CTA data and broadcasts to SSE clients (ms).
-// CTA updates every ~60-120s; 20s is a balanced poll that stays responsive
-// without burning the 100K daily transaction limit.
+// How often the server re-fetches CTA data and broadcasts to SSE clients (ms),
+// while someone is watching the map (see "Background polling loop").
+// CTA updates every ~60-120s; 30s stays responsive without burning the
+// 100K daily transaction limit, which the LED boards share.
 const POLL_INTERVAL = 30000;
+// How long the poll keeps going after the last sign of a viewer (ms), so a
+// reload or a quick return finds the trains' state still warm.
+const IDLE_MS = 120000;
+// A CTA request that hasn't answered by now is dropped (ms): polls never
+// overlap, so one that hung would stall the loop.
+const CTA_TIMEOUT_MS = 15000;
 
 // ---- Server-side train processing ----
 const geoState   = require('./server/geo-state');
-const { processTrains, getDebugState } = require('./server/train-state');
+const { processTrains, getDebugState, resetTrains } = require('./server/train-state');
+const { createWatchPoller } = require('./server/watch-poll');
 const metrics    = require('./server/metrics');
 
 // Initialize geometry synchronously at startup — GeoJSON is 116 KB, fast read.
@@ -58,20 +66,24 @@ fs.readFile(path.join(__dirname, 'data', 'cta-lines.geojson'), (err, buf) => {
 const sseClients = new Set();
 
 // ---- Processed train payload (latest) ----
+// null until the first poll, and again whenever the poll is idle.
 let processedPayload = null; // { trains, serverTime }
 
 // ---- CTA API fetch helpers ----
 
 function fetchJSON(fetchUrl) {
   return new Promise((resolve, reject) => {
-    http.get(fetchUrl, (res) => {
+    const req = http.get(fetchUrl, (res) => {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         try { resolve(JSON.parse(chunks.join(''))); }
         catch (e) { reject(new Error('Invalid JSON from CTA API')); }
       });
-    }).on('error', reject);
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(CTA_TIMEOUT_MS, () => req.destroy(new Error('CTA API timed out')));
   });
 }
 
@@ -104,6 +116,13 @@ async function fetchAllTrains() {
 }
 
 // ---- Background polling loop ----
+//
+// Runs only while someone is watching the map: it starts when a viewer opens
+// the stream (or asks for /api/trains), and stops IDLE_MS after the last one
+// has gone. Around the clock it cost 23,040 CTA calls a day with nobody
+// looking, out of the 100,000 the boards share. The cost is a rougher first
+// minute or two after opening the map: the per-train state (direction,
+// holds) is rebuilt from scratch.
 
 async function pollAndBroadcast() {
   const t0 = Date.now();
@@ -131,9 +150,27 @@ async function pollAndBroadcast() {
   }
 }
 
-// Kick off immediately then repeat
-pollAndBroadcast();
-setInterval(pollAndBroadcast, POLL_INTERVAL);
+const trainPoll = createWatchPoller({
+  poll: pollAndBroadcast,
+  viewers: () => sseClients.size,
+  interval: POLL_INTERVAL,
+  idleMs: IDLE_MS,
+  // Nobody is watching: drop what would be stale by the time they are back
+  // (old positions, holds counted in polls, trains retiring at a terminal).
+  onIdle() {
+    processedPayload = null;
+    resetTrains();
+    metrics.recordPoll([], 0, 0);
+    console.log(`[poll] no viewers for ${IDLE_MS / 1000}s: polling stopped`);
+  },
+});
+
+// A viewer is here: starts the poll if it was idle. The promise resolves once
+// there is a poll's worth of trains (at once if the poll was already running).
+function watchTrains() {
+  if (!trainPoll.active()) console.log('[poll] viewer arrived: polling started');
+  return trainPoll.watch();
+}
 
 // ---- SSE helpers ----
 
@@ -226,6 +263,7 @@ const server = http.createServer(async (req, res) => {
     const client = { res };
     sseClients.add(client);
     metrics.updateSseClients(1);
+    watchTrains(); // if the poll was idle, its first result goes out by broadcast
 
     // Heartbeat every 15s to keep connection alive through proxies / load balancers
     const heartbeat = setInterval(() => {
@@ -237,21 +275,25 @@ const server = http.createServer(async (req, res) => {
       clearInterval(heartbeat);
       sseClients.delete(client);
       metrics.updateSseClients(-1);
+      trainPoll.seen(); // the idle wait counts from here
     });
 
     return;
   }
 
   // ---- Health check ----
+  // Fly routes traffic by this, the boards' included, so it answers for the
+  // process and not for the map's poll (idle when nobody is watching, and a
+  // CTA outage must not take the boards' server out of service).
   if (parsed.pathname === '/health') {
-    const ready = processedPayload !== null;
     const body = JSON.stringify({
-      ok: ready,
-      trains: ready ? processedPayload.trains.length : 0,
+      ok: true,
+      polling: trainPoll.active(),
+      trains: processedPayload ? processedPayload.trains.length : 0,
       clients: sseClients.size,
       uptime: Math.floor(process.uptime()),
     });
-    res.writeHead(ready ? 200 : 503, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
     res.end(body);
     return;
   }
@@ -280,6 +322,7 @@ const server = http.createServer(async (req, res) => {
 
   // ---- Raw train positions (REST fallback / debug) ----
   if (parsed.pathname === '/api/trains') {
+    await watchTrains(); // counts as a viewer, and waits for an idle poll's first result
     if (!processedPayload) {
       res.writeHead(503, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Train data not ready yet' }));
