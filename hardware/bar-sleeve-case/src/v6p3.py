@@ -1,4 +1,4 @@
-"""V6 for the single P3 (Waveshare P3 64x32, 192 x 96), draft 1 (Nov 26, 2026). Units mm.
+"""V6 for the single P3 (Waveshare P3 64x32, 192 x 96), draft 3 (Nov 27, 2026). Units mm.
 
     python3 v6p3.py ../stl/p3-v6        # the print set (p3-v6-*.stl, the reused parts included) and the checks
     V6_FASTEN=tap python3 v6p3.py ...   # no heat-set inserts: every screw that would meet one cuts a printed pilot
