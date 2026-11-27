@@ -28,10 +28,13 @@ What it is, in terms of the parts it is built from (every proven fit is kept):
   the P4's, wider (KNOB_R), so it hides the two M2.5 heads beside it.
 - **Wall hanging**: the cleat (cleat.py, with p4.py's settings of Nov 17: a 60 deg bevel for about 17 mm of hook, stops on
   the wall cleat outside the case cleat's ends, two wall screws) on two inserts in the back plate, one in each chassis
-  half. The joint's screws on the back are countersunk flush; the case cleat lies over the upper two, so it comes off
+  half, two M3 x 10 button heads (the case cleat's counterbores are flat: a countersunk head would not seat). The
+  joint's screws on the back are countersunk flush; the case cleat lies over the upper two, so it comes off
   before the halves are parted.
 - **Build order**: ALL inserts in while the halves are apart (the knuckles' from under their bridges, the tongues'
-  flush: 0.15 mm to the other half, whose wall covers them once joined; skin, cleat). NONE in the six panel posts:
+  flush: 0.15 mm to the other half, whose wall covers them once joined; skin, cleat). Shave flush the ring of plastic
+  each insert pushes up round its mouth: the other half slides over the tongues' with 0.15 to spare, and the case
+  cleat sits on the cleat's (the skin inserts' rings are inside the lands' 7 mm openings). NONE in the six panel posts:
   their 4.5 mm holes are clearance for the M3 x 8, and an insert there would take the panel's float away. Halves
   joined, seven countersunk screws. S3, sensor sled and its outside screw, encoder up into the tower with its nut on
   finger-tight (loose, it can drop onto the top-centre standoff), cables. A washer in each post's recess; the chassis
@@ -167,12 +170,16 @@ PORT_FRAME = (V.PORT_W + 0.6, V.PORT_H + 0.6)
 #   post 4 (48.26, 15.875)      a chip 3.10 away, 1.1 tall (0.10 clear);   post 2 (7.62, 35.56): nothing within 3.49
 # so a post could rest on a part instead of on the board (the owner: "explains why the board never sat quite right").
 # Here every tip is necked to S3_TIP_D for S3_TIP_L, and post 1 has a flat toward the capacitor and one toward the
-# receptacle: 0.39 or more to every part (the capacitor's base is closest). The V5 trays (drawer.py) still have the plain posts.
+# receptacle: 0.39 or more to every part (the post-3 chip 0.395, the capacitor's base 0.397). The V5 trays (drawer.py) still have the plain posts.
 S3_TIP_D, S3_TIP_L = 4.8, 1.6
 S3_FLATS = {0: ((48.0, 2.2, 6.2), (-95.3, 2.7, 3.7))}        # post index: (direction in the board's frame, deg: 0 = away from the
                                                              # USB edge, 90 = up the edge; the flat's distance from the axis; its length)
-S3_NEAR = ((0, 45.0, 2.64, 0.0, 1.0), (0, 50.9, 2.91, 1.0, 5.64), (0, -95.3, 3.16, 0.0, 3.2), (2, -93.0, 2.81, 0.0, 1.1), (3, 86.5, 3.10, 0.0, 1.1))
-                                                             # (post, direction, distance, from, to above the face): the parts' nearest points
+S3_NEAR = ((0, 45.0, 2.64, 0.0, 1.0), (0, 27.7, 2.77, 0.9, 1.0), (0, 37.4, 2.67, 0.7, 0.8), (0, 50.9, 2.91, 1.0, 5.64),
+           (0, -95.3, 3.16, 0.0, 3.2), (2, -90.0, 2.81, 0.0, 1.1), (3, 90.0, 3.10, 0.0, 1.1))
+                                                             # (post, direction, distance, from, to above the face): the parts' nearest points.
+                                                             # The capacitor's base is chamfered: its nearest point to the chassis moves round the
+                                                             # chamfer's top edge as the flat turns (27.7 deg with the flat at 48, 37.4 at 60), so
+                                                             # three points on it; one at 45 alone let a flat at 60 (0.27 real) pass.
 PORT_CH = 0.5
 BTN_CL = 0.5
 # The port's stop (Nov 25). The frame keeps a tip from passing in front of the board, but behind the port a tilted tip
@@ -670,7 +677,7 @@ def standoffs():
 
 
 def screws():
-    """every screw seated, one manifold per group. skin: black M3 x 10 button heads (top and ends). under: the same under
+    """every screw seated, one manifold per group. skin: black M3 x 10 flat heads, flush (button heads in the four-piece skin). under: the same under
     the bottom plank, and the four M3 x 10 countersunk of the tongues, flush under the planks. back: six M3 x 8 button
     heads into the standoffs, and the knuckles' three M3 x 10 countersunk, flush."""
     import p4v55 as T
@@ -739,7 +746,7 @@ def check(P):
             ('chassis / panel', v(ch, P['panel'])), ('chassis / diffuser', v(ch, dif)), ('skin / diffuser', v(sk, dif)),
             ('skin 0.1 further back / diffuser (the rim keeps at least that)', v(sk.translate([0, 0.1, 0]), dif)),
             ('diffuser 0.25 further back / chassis (its flange has that behind it)', v(dif.translate([0, 0.25, 0]), ch)),
-            ('chassis / standoffs', v(ch, P['standoffs'])), ('chassis / S3, beyond the V5 tray less the post relief (its posts stand in the envelope)', round(v(ch, P['s3']) - v(p4.tray_p4() - s3_post_relief(), P['s3']), 2)), ('chassis / sensor', v(ch, P['sensor'])),
+            ('chassis / standoffs', v(ch, P['standoffs'])), ('chassis / S3, beyond the V5 tray less the post relief (its posts stand in the envelope)', v(ch - (p4.tray_p4() - s3_post_relief()), P['s3'])), ('chassis / sensor', v(ch, P['sensor'])),
             ('chassis / encoder', v(ch, P['encoder'])), ('ring / skin', v(P['ring'], sk)), ('ring / chassis', v(P['ring'], ch)), ('ring / encoder', v(P['ring'], P['encoder'])), ('chassis / pixel', v(ch, pixel())),
             ('standoffs / encoder, S3, sensor', v(P['standoffs'], P['encoder'] + P['s3'] + P['sensor'])),
             ('skin, knob and bottom screws / panel, diffuser, S3, sensor, encoder, ring', v(P['screws']['skin'] + P['screws']['under'] + P['screws']['knob'], P['panel'] + dif + P['s3'] + P['sensor'] + P['encoder'] + P['ring']))]
