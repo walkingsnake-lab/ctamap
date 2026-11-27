@@ -65,8 +65,7 @@ def parts(sleeve=True, chassis=True, inside=True, knob=True, screws=True, clip=N
         add('joint', P['jscrews'], 'screw', 'chassis')
         if chassis:
             add('back', P['back'], 'screw', 'chassis')
-            add('strap', P['strap'], 'new', 'chassis')
-            add('strap_screws', P['strap_screws'], 'screw', 'chassis')
+            add('kn_screws', P['kn_screws'], 'screw', 'chassis')
     return out
 
 
@@ -116,7 +115,7 @@ annotate(im, cam, [('walnut halves A and B, glued into one sleeve by their seam 
                    ('panel pair: splice plates on the inner inserts (orange), standoffs', (-60, 70, ZC + 40), (-260, -40), 'rm'),
                    ('chassis A + B, joined first: A\'s tongues (orange) inside B\'s walls, four screws', (10, 170 + 40, S.ZO1), (60, -170), 'lb')], fs=24)
 save(R.titled(im, 'How it goes together',
-              'The P3 V6\'s order with both halves at once: walnut face down, panel pair in, encoder into its collar (B), then the joined chassis (strap on its back); four screws from below.'), 'p3x2v6-2-apart.png')
+              'The P3 V6\'s order with both halves at once: walnut face down, panel pair in, encoder into its collar (B), then the joined chassis; four screws from below.'), 'p3x2v6-2-apart.png')
 
 # the joint: from above with the walnut off, and a section across the seam through a tongue screw
 y0 = M.TONGUE_YS[0]
@@ -135,6 +134,22 @@ annotate(c, cam2, [('walnut seam: butted, a 0.5 x 45 deg V each side', (0, y0, H
                    ('insert in the tongue', (M.CH_GAP / 2 + M.TONGUE_SCREWS[0][0], y0, S.ZIN1 - 4), (170, 60), 'lm')], fs=22)
 save(R.titled(R.row([a, c]), 'The joint: tongues in the chassis, glued keys in the walnut',
               f'Left: from above, walnut off. Right: section {y0:g} mm back, through a tongue screw. The chassis carries the load; the keys hold the walnut flush.'), 'p3x2v6-3-joint.png')
+
+# the knuckles: the back, walnut off, and a section through one
+zk = M.KNUCKLES[0][0]
+sc = R.Scene(parts(sleeve=False, knob=False, inside=False, tongue_new=True, clip=box(-45, 45, -50, 200, -50, 300)))
+cam = persp((0.25, 1.0, 0.1), size=(1100, 1000), dist=260, target=np.array([0, D - 4, ZC]), yfov=0.5)
+a = sc.render(cam, ground=False, flip=True)
+annotate(a, cam, [('A\'s block in B\'s notch, one flat head, flush', (M.KN_SCREW_X, DR.Y1, zk), (140, 120), 'lt'),
+                  ('the seam between the back plates', (0, DR.Y1, ZC), (-140, -60), 'rb')], fs=22)
+ps = parts(sleeve=False, knob=False, inside=False, clip=box(-30, 30, -50, 200, zk - 0.25, zk + 0.25))
+sc2 = R.Scene(ps)
+cam2 = ortho((0, 0, 1), (1300, 1000), 42.0, target=np.array([2, DR.Y1 - 6, zk]), up=(0, 1, 0))
+c = sc2.render(cam2, ground=False, crease=0.0)
+annotate(c, cam2, [('A\'s block: on the print bed with the plate', (-4, DR.Y1 - 2, zk), (-120, 150), 'rt'),
+                   ('B\'s bridge over it, the insert in its underside', (M.KN_SCREW_X + 3.5, M.KN_ROOF - 2.5, zk), (120, -150), 'lb')], fs=22)
+save(R.titled(R.row([a, c]), 'The knuckles: the P4 V6\'s back joint',
+              'Left: the back at the seam, walnut off. Right: section through the lower knuckle, seen from above (the back of the case at the top).'), 'p3x2v6-5-knuckles.png')
 
 # the diffuser seam, from the front
 sc = R.Scene(parts(chassis=False, knob=False, screws=False, clip=box(-14, 14, -50, 200, ZC - 12, ZC + 12)))

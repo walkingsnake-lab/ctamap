@@ -1,4 +1,4 @@
-"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 3 (Nov 27, 2026). Units mm.
+"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 4 (Nov 27, 2026). Units mm.
 
     python3 v6p3x2.py ../stl/p3x2-v6      # the print set (p3x2-v6-*.stl, reused parts and coupons included) and the checks
 
@@ -22,9 +22,10 @@ What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0).
   tray with none of that, its posts at panel A's un-turned inserts (the P3 pair's data chain: B turned 180 deg).
   - **Tongues**: A's top and bottom walls run on TONGUE mm inside B's as solid lap tongues, two M3 x 10 flat heads each
     (staggered) through B's wall into inserts in the tongue, flush under the walnut.
-  - **Back strap**: a flat PETG plate across the seam on the back plates, in the 4 mm inside the rim, two M3 x 10 flat
-    heads into each half (inserts set from the back, into bosses). The tongues alone were weak against bending in plan
-    (review, Nov 27); the strap is the tie at the back. The wall cleat is notched for it (wall_cleat_v6).
+  - **Knuckles**: the P4 V6's, two of them: blocks on A's back plate reach 9 mm past the seam into notches in B's, under
+    bridges inside B; one M3 x 10 flat head from the back through each block into an insert in its bridge, flush. The
+    tongues alone were weak against bending in plan (review, Nov 27); the knuckles are the tie at the back. Nothing
+    stands outside the back plates, so the cleats are V5's.
   - Every screw is the builds' black M3 x 10 flat head (DIN 7991) into an M3 x D5 x L4 insert.
 - **Panels**: one splice plate (p3x2.py's) on each pair of inner corner inserts holds the rows level across the seam, under
   the inner standoffs, so those two posts' feet sit SPLICE_T further back.
@@ -37,8 +38,9 @@ What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0).
 - Knob 45 mm from the right end (x +161), sensor 40 inboard; V5's 30 mm knob and translucent collar, as the P3 V6.
 
 Glue-up (once; try it on the seam coupon first: coupons/coupon-p3x2-v6-seam-*):
-1. Join the chassis halves back-down on a flat surface: the tongues' and strap's eight inserts first (0.2 under the
-   face), four tongue screws, the strap and its four.
+1. Join the chassis halves back-down on a flat surface: six inserts first (four in the tongues, 0.2 under the face;
+   two in B's knuckle bridges, pressed in from the back through the notches), slide A's tongues and blocks into B
+   along the bar, then four tongue screws and two knuckle screws.
 2. Packing tape on the chassis's top and bottom walls across the seam (epoxy does not hold on it).
 3. Slide both walnut halves on from the front and start all four screws from below, loose. Push A against B (or against
    a shim, up to 0.3, if a line looks better than the plain V: the coupon shows), then snug B's inner screw first.
@@ -327,54 +329,50 @@ def insert_bodies():
     return Manifold.batch_boolean(out, ADD)
 
 
-# the back strap (Nov 27): a flat PETG plate across the seam on the back plates' outer faces, in the 4 mm inside the rim,
-# two M3 x 10 flat heads into each half (inserts set from the back into bosses inside the plate). It ties the halves at
-# the back, 20-30 mm behind the tongues' screws: the couple against bending in plan that the tongues alone lacked
-STRAP_HX, STRAP_HZ, STRAP_T = 19.0, 13.0, 3.0
-STRAP_Z = 49.5                     # its centre: between the case cleats' inner ends (|x| 21), above the inner posts (z to 32).
-                                   # The wall cleat lies on the back plate from z 30 to 74: it gets a notch (wall_cleat_v6)
-STRAP_XZ = [(sx * 10.0, dz) for sx in (-1, 1) for dz in (-7.0, 7.0)]      # (x, z about ZC)
-STRAP_BOSS = (9.0, 6.5)            # the bosses: diameter, height off the plate's inner face (the screw's tip ends 7 in)
+# The knuckles on the back plate (Nov 27: the P4 V6's, p4v55.knuckles, on this chassis; they replace a strap screwed on
+# outside). A's plate carries blocks that reach KN_BLOCK past the seam, on the print bed; B's plate is notched for each
+# and bridges over it between two piers. One M3 x 10 flat head from the back through each block into an insert pressed
+# into the bridge's underside (through the notch, before the halves are joined), its head flush. They tie the halves at
+# the back, 15-30 mm behind the tongues' screws: the couple against bending in plan the tongues alone lacked.
+# (z, block half height, pier). Two, not the P4's three: the P3's back is 96 tall, and between the inner posts (to z 32.2
+# and from 81) and the ribbons crossing the seam at mid height (z ~49 to 69, in front of the bridges) there is room for two
+KNUCKLES = ((40.5, 4.5, 2.5), (72.7, 4.5, 2.5))
+KN_BLOCK, KN_CL, KN_GAP = 9.0, 0.2, 0.5      # reach past the seam; clearance round a block; block to bridge (v6.KN_GAP)
+KN_Y1 = DR.Y1 - 4.0                          # the blocks' inner face: 4 mm blocks (the 2 mm plate and 2 more)
+KN_ROOF = KN_Y1 - KN_GAP                     # the bridges' underside
+KN_Y0 = KN_ROOF - INS_DEPTH                  # ... and their front face: the insert's hole runs through
+KN_SCREW_X = KN_BLOCK / 2 + 0.3
 
 
-def strap_bosses():
-    """(adds, cuts) for both halves' back plates"""
-    adds = [cyl_y(x, STRAP_Z + z, DR.Y0 - STRAP_BOSS[1], DR.Y0 + 0.01, STRAP_BOSS[0], 48) for x, z in STRAP_XZ]
-    cuts = [cyl_y(x, STRAP_Z + z, DR.Y1 - INS_DEPTH - INS_RECESS, DR.Y1 + 0.01, INS_D, 32) for x, z in STRAP_XZ]
-    cuts += [cyl_y(x, STRAP_Z + z, DR.Y0 - STRAP_BOSS[1] - 1, DR.Y1, INS_RELIEF, 32) for x, z in STRAP_XZ]
-    return Manifold.batch_boolean(adds, ADD), Manifold.batch_boolean(cuts, ADD)
+def knuckles():
+    """(A adds, A cuts, B adds, B cuts), case frame: p4v55.knuckles() with inserts, about the seam at x = 0"""
+    la, lc, ra, rc = [], [], [], []
+    xs, lh, g = KN_SCREW_X, DR.BRIDGE_LH, CH_GAP / 2
+    for zc, hz, pier in KNUCKLES:
+        la.append(box(-8.0, KN_BLOCK, KN_Y1, DR.Y1, zc - hz, zc + hz))
+        lc.append(cyl_y(xs, zc, KN_Y1 - 1, DR.Y1 + 1, S.SKIN_CL_D, 32))
+        lc.append(Manifold.cylinder(S.CSK_K + 0.01, S.SKIN_CL_D / 2, S.CSK_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([xs, DR.Y1 - S.CSK_K, zc]))
+        z0, z1 = zc - hz - KN_CL, zc + hz + KN_CL
+        cav = box(-0.01, KN_BLOCK + KN_CL, KN_ROOF, DR.Y1 + 0.01, z0, z1)
+        ra.append(box(g, KN_BLOCK + KN_CL + 2.0, KN_Y0, DR.Y0 + 0.01, z0 - pier, z1 + pier) - cav)
+        rc.append(cav)
+        r = INS_D / 2
+        rc.append(cyl_y(xs, zc, KN_Y0 - 1, KN_ROOF - INS_DEPTH + 0.01, INS_RELIEF, 32))       # room for the screw's tip
+        rc.append(cyl_y(xs, zc, KN_ROOF - INS_DEPTH, KN_ROOF - 2 * lh + 0.01, INS_D, 32))     # the insert
+        rc.append(box(xs - r, xs + r, KN_ROOF - lh, KN_ROOF + 0.01, z0 - 0.01, z1 + 0.01))    # layer 1: strands pier to pier
+        rc.append(box(xs - r, xs + r, KN_ROOF - 2 * lh, KN_ROOF - lh + 0.01, zc - r, zc + r)) # layer 2: across them
+    u = lambda l: Manifold.batch_boolean(l, ADD)
+    return u(la), u(lc), u(ra), u(rc)
 
 
-def strap():
-    from manifold3d import CrossSection, JoinType
-    cs = CrossSection.square([2 * STRAP_HX - 6, 2 * STRAP_HZ - 6], center=True).offset(3.0, JoinType.Round, circular_segments=32)
-    m = Manifold.extrude(cs, STRAP_T).rotate([-90, 0, 0]).mirror([0, 0, 1]).translate([0, DR.Y1, STRAP_Z])
-    yo = DR.Y1 + STRAP_T
-    cuts = []
-    for x, z in STRAP_XZ:
-        cuts.append(cyl_y(x, STRAP_Z + z, DR.Y1 - 1, yo + 1, S.SKIN_CL_D, 32))
-        cuts.append(Manifold.cylinder(S.CSK_K + 0.01, S.SKIN_CL_D / 2, S.CSK_D / 2 + 0.01, 48).rotate([-90, 0, 0]).translate([x, yo - S.CSK_K, STRAP_Z + z]))
-    return m - Manifold.batch_boolean(cuts, ADD)
+def knuckle_screws():
+    return Manifold.batch_boolean([Manifold.cylinder(CSK_HEAD_K, 1.5, 3.0 - 0.02, 32).rotate([-90, 0, 0]).translate([KN_SCREW_X, DR.Y1 - CSK_HEAD_K, zc])
+                                   + cyl_y(KN_SCREW_X, zc, DR.Y1 - 10.0, DR.Y1, 3.0, 24) for zc, _, _ in KNUCKLES], ADD)
 
 
-def strap_screws():
-    yo = DR.Y1 + STRAP_T
-    return Manifold.batch_boolean([Manifold.cylinder(CSK_HEAD_K, 1.5, 3.0 - 0.02, 32).rotate([-90, 0, 0]).translate([x, yo - CSK_HEAD_K, STRAP_Z + z])
-                                   + cyl_y(x, STRAP_Z + z, yo - 10.0, yo, 3.0, 24) for x, z in STRAP_XZ], ADD)
-
-
-def strap_inserts():
-    return Manifold.batch_boolean([cyl_y(x, STRAP_Z + z, DR.Y1 - INS_RECESS - 4.0, DR.Y1 - INS_RECESS, 4.4, 32) for x, z in STRAP_XZ], ADD)
-
-
-def wall_cleat_v6():
-    """p3x2's 220 mm wall cleat with a notch for the back strap: cut right through between the case cleats' inner ends
-    (they start at |x| 21), from 0.5 under the strap to the top, so the strap passes as the case is lifted off and
-    nothing bridges in the print. A bar 6 mm tall joins the two sides along the bottom: still one piece to level.
-    Its middle screw moves out of the notch: four wall screws, at +/-35 and +/-95"""
-    import cleat as CLT
-    wc = CLT.wall_cleat(hw=110.0, xs=[-95.0, -35.0, 35.0, 95.0])
-    return wc - box(-STRAP_HX - 1.5, STRAP_HX + 1.5, DR.Y1 - 1, DR.Y1 + 50, STRAP_Z - STRAP_HZ - 0.5, H + 50)
+def knuckle_inserts():
+    """as set: INS_RECESS above the bridge's underside, 4 long"""
+    return Manifold.batch_boolean([cyl_y(KN_SCREW_X, zc, KN_ROOF - INS_RECESS - 4.0, KN_ROOF - INS_RECESS, 4.4, 32) for zc, _, _ in KNUCKLES], ADD)
 
 
 def turn(m):
@@ -418,10 +416,11 @@ def build(fr):
     a, b = big(a), big(b)
     j_add, j_cut_a, j_cut_b, ys = joint()
     pre_b = b
-    sb_add, sb_cut = strap_bosses()
-    boss_hit = (sb_add ^ (a + b + j_add)).volume() - sum(math.pi * (STRAP_BOSS[0] / 2) ** 2 * 0.01 for _ in STRAP_XZ)
-    a = big((a + j_add + (sb_add ^ box(-400, 0, -50, 200, -50, 200))) - j_cut_a - sb_cut)
-    b = big((b + (sb_add ^ box(0, 400, -50, 200, -50, 200))) - j_cut_b - sb_cut)
+    kl_add, kl_cut, kr_add, kr_cut = knuckles()
+    inside_plate = box(-400, 400, -50, DR.Y0 - 0.02, -50, 200)        # what the knuckles add in front of the back plates
+    kn_hit = ((kl_add ^ inside_plate) ^ a).volume() + ((kr_add ^ inside_plate) ^ (b + j_add)).volume()
+    a = big((a + j_add + kl_add) - j_cut_a - kl_cut)
+    b = big(((b - kr_cut) + kr_add) - j_cut_b - kr_cut)
     B = lambda m: m.translate([PANEL_CX, 0, 0])
     A = lambda m: turn(m).translate([-PANEL_CX, 0, 0])
     sa, sb = load(f'{fr}/sleeve-A.stl'), load(f'{fr}/sleeve-B.stl')
@@ -433,7 +432,7 @@ def build(fr):
              encoder=B(S.encoder()), collar=B(S.collar()), plain_collar=B(S.plain_collar()),
              s3=B(DR.s3_envelope()), sensor=B(DR.sensor_envelope() + DR.sensor_plugs()), sled=B(DR.sled()),
              back=back_screws_side('A').translate([-PANEL_CX, 0, 0]) + B(back_screws_side('B')),
-             jscrews=joint_screws(), strap=strap(), strap_screws=strap_screws(), strap_bosses=sb_add, boss_hit=boss_hit)
+             jscrews=joint_screws(), kn_screws=knuckle_screws(), kn_adds=(kl_add + kr_add) ^ inside_plate, kn_hit=kn_hit)
     u = S.screws()['under']                                    # the two from below, per half
     P['under'] = u.translate([-PANEL_CX, 0, 0]) + B(u)
     return P
@@ -463,15 +462,17 @@ def check(P, sk):
             a_ = sa.scale([1 - shrink, 1, 1]).translate([LOCATOR_X * shrink - shim, 0, 0])
             worst = max(worst, v(under_sh, a_ + b_))
     rows.append((f'screws from below / walnut printed 0 to {SHRINK_MAX * 100:g} % small, seam shimmed 0 to {SHIM_MAX}: the slots take it', worst))
-    st, ss, si = P['strap'], P['strap_screws'], strap_inserts()
-    rows.append(('strap bosses / chassis (before they were added), panels, standoffs, splice plates, S3, sensor, sled, encoder',
-                 round(P['boss_hit'] + (P['strap_bosses'] ^ (pan + so + spl + s3 + sen + sled + enc)).volume(), 2)))
-    rows.append(('back strap / chassis, walnut, back screws', v(st, ch + sl + P['back'])))
-    rows.append((f'back strap inside the rim (its face {D - DR.Y1 - STRAP_T:.1f} under the back edge)', 0.0 if DR.Y1 + STRAP_T <= D - 0.5 else 1.0))
-    rows.append(('strap screws / strap, chassis outside the inserts', v(ss - si, st + ch)))
-    rows.append(('strap inserts / chassis (their holes)', v(si, ch)))
-    eng = (ss ^ si).volume() / (math.pi * 1.5 ** 2) / 4
-    rows.append((f'strap screws: {eng:.2f} mm in each insert (3.5 or more)', 0.0 if eng >= 3.5 else round(3.5 - eng, 2)))
+    ks, ki, kn = P['kn_screws'], knuckle_inserts(), P['kn_adds']
+    rows.append(('knuckles (inside the back plates) / chassis before they were added, panels, standoffs, splice plates, S3, sensor, sled, encoder',
+                 round(P['kn_hit'] + (kn ^ (pan + so + spl + s3 + sen + sled + enc)).volume(), 2)))
+    rows.append(('knuckle screws (DIN 7991 heads) / chassis outside the inserts, back screws', v(ks - ki, ch + P['back'])))
+    rows.append(('knuckle inserts, set 0.2 in / chassis (their holes)', v(ki, ch)))
+    eng = (ks ^ ki).volume() / (math.pi * 1.5 ** 2) / len(KNUCKLES)
+    rows.append((f'knuckle screws: {eng:.2f} mm in each insert (3.5 or more)', 0.0 if eng >= 3.5 else round(3.5 - eng, 2)))
+    bk = ca.bounding_box()[4]
+    rows.append((f'knuckle blocks on the bed with the plate (A\'s back {bk:.3f})', round(abs(bk - DR.Y1) * 100, 2)))
+    rows.append(('chassis A slid out along the bar (0.5-30 mm) / chassis B: tongues and knuckles go together that way',
+                 round(max(v(ca.translate([-q, 0, 0]), cb) for q in (0.5, 1, 2, 4, 6, 8, 10, 14, 18, 24, 30)), 2)))
     keys = P['keys']
     rows.append(('seam keys / chassis', v(keys, ch)))
     rows.append(('seam keys / walnut (in their rebates)', v(keys, sl)))
@@ -538,8 +539,6 @@ if __name__ == '__main__':
         print(f'{name}: {np.round(t.extents, 1).tolist()}, {m.volume() / 1000:.1f} cm3, {len(t.split(only_watertight=False))} body')
     save(P['chassis_a'], 'p3x2-v6-chassis-A-black')
     save(P['chassis_b'], 'p3x2-v6-chassis-B-black')
-    me = P['strap'].rotate([90, 0, 0]).to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.merge_vertices()
-    t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-back-strap-black.stl'); print('back strap', np.round(t.extents, 1).tolist())
     reg = box(-30, 30, -50, 200, S.ZO1 - 14.0, H + 5)                # the seam coupon's chassis: both top walls, the tongue and its two screws
     save(P['chassis_a'] ^ reg, 'coupons/coupon-p3x2-v6-seam-chassis-A-black')
     save(P['chassis_b'] ^ reg, 'coupons/coupon-p3x2-v6-seam-chassis-B-black')
@@ -547,16 +546,15 @@ if __name__ == '__main__':
     t = CO.export(CO.collar(), f'{out}/p3x2-v6-encoder-collar-translucent.stl'); print('collar', np.round(t.extents, 1).tolist())
     me = DR.sled().to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-sensor-sled-black.stl')
     import shutil, cleat as CLT
-    wc = wall_cleat_v6()                                         # one 220 mm wall cleat: catches both case cleats
+    wc = CLT.wall_cleat(hw=110.0, xs=[-95.0, 0.0, 95.0])         # p3x2's 220 mm wall cleat: catches both case cleats
     me = wc.rotate([-90, 0, 0]).to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-cleat-wall-black.stl')
     for a, b in (('bar-knob', 'knob-white'), ('v5-drawer/bar-cleat-case', 'cleat-case-black-x2'), ('bar-boot-key', 'boot-key')):
         shutil.copyfile(os.path.join(HERE, '..', 'stl', a + '.stl'), os.path.join(out, f'p3x2-v6-{b}.stl'))
     # hung on the wall: both case cleats on the one wall cleat
     cc = CLT.case_cleat()
-    hung = [P['strap'], P['strap_screws'], P['chassis_a'], P['chassis_b'], P['sleeve_a'], P['sleeve_b'], cc.translate([-PANEL_CX, 0, 0]), cc.translate([PANEL_CX, 0, 0])]
+    hung = [P['kn_screws'], P['chassis_a'], P['chassis_b'], P['sleeve_a'], P['sleeve_b'], cc.translate([-PANEL_CX, 0, 0]), cc.translate([PANEL_CX, 0, 0])]
     seated = lambda dz=0.0: round(sum((m.translate([0, 0, dz]) ^ wc).volume() for m in hung), 2)
     rows = check(P, sk)
-    rows.append(('case cleats / back strap and its screws', round(sum((cc.translate([s_ * PANEL_CX, 0, 0]) ^ (P['strap'] + P['strap_screws'])).volume() for s_ in (-1, 1)), 2)))
     rows.append(('case cleats / chassis and back screws', round(sum(((cc.translate([s * PANEL_CX, 0, 0])) ^ (P['chassis_a'] + P['chassis_b'] + P['back'])).volume() for s in (-1, 1)), 2)))
     rows.append(('wall cleat / everything hung', seated()))
     rows.append((f'lifted straight off the wall cleat (0.5 to {CLT.hook() + 6:.0f})', max(seated(q) for q in np.arange(0.5, CLT.hook() + 6.01, 0.5))))
