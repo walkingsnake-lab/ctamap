@@ -140,8 +140,11 @@ TS_HEAD_D, TS_HEAD_K = 4.7, 1.6
 TS_BOSS_OUT, TS_BOSS_HY = 2.8, 3.2
 LIP_W, LIP_T, LIP_DROP = 1.2, 1.2, 0.3   # lips under the board's side edges: this far under it, this thick, this far below its
                                  # seat (the nut lifts it off them). Clear of its QT sockets (x 7.7-12.7 at y +/-3)
-PIX_RELIEF, PIX_HX = 1.5, 3.0    # a pocket in the key's underside over the encoder's NeoPixel (v6.py's 1.5; the pixel is not
-                                 # measured): 2.4 mm of headroom over the board
+PIX = (1.5, -11.0, -8.4, 0.9)    # the encoder's NeoPixel: half width, its front and back edges from the board's centre (y), its
+                                 # height. Measured Nov 26 from Adafruit's photo of the 5880 (mounting holes 20.32 apart for scale):
+                                 # 3.0 x 2.6, centred on the board, between the front holes. Its height is still assumed
+PIX_RELIEF, PIX_HX = 1.5, 3.0    # a pocket in the key's underside over it (v6.py's 1.5 deep: 2.4 mm of headroom over the board),
+PIX_Y = (-12.6, -9.0)            # 1.5 clear of it either side and 1.6 in front; behind -9.0 the body's pocket (9.8 round) is over it
 SKIRT_ROWS = ()                  # end-wall pad rows (v6.py's: 14, 34): none, see PAD_H
 
 # chassis numbers taken from the tray
@@ -447,7 +450,7 @@ def knob_seat():
             cyl_z(0, KY, ZIN1 - 1, H + 1, 2 * CO.BUSH_R, 64),
             cyl_z(0, KY, H + CO.DECK_BOT - 0.1, H + 1, 2 * CO.RELIEF_R, 64)]          # through: the ring's underside goes on
     cuts += [cyl_z(x, y, ZIN1 - 1, H + 1, TS_CLEAR, 32) for x, y in TS_XY]
-    cuts.append(box(-PIX_HX, PIX_HX, KY - 12.6, KY - 9.0, ZIN1 - 1, ZIN1 + PIX_RELIEF))   # over the board's NeoPixel (v6.PIX_RELIEF): closed at the
+    cuts.append(box(-PIX_HX, PIX_HX, KY + PIX_Y[0], KY + PIX_Y[1], ZIN1 - 1, ZIN1 + PIX_RELIEF))   # over the board's NeoPixel (v6.PIX_RELIEF): closed at the
                                                     # front, so its light has no way out round the key under the ring
     # a 0.4 lead-in round the key's foot, so it finds the opening
     o = WALL_OPEN - SPIG_CL
@@ -514,8 +517,9 @@ def encoder(dz=0.0):
 
 
 def pixel():
-    """the encoder's NeoPixel (v6.pixel): 2 mm square, 0.9 tall, on the board at the front, as the build notes place it"""
-    return box(-1.0, 1.0, KY - 11.6, KY - 9.6, SN.EB_TOP, SN.EB_TOP + 0.9)
+    """the encoder's NeoPixel (PIX): at the board's front edge, between its front mounting holes"""
+    hx, y0, y1, h = PIX
+    return box(-hx, hx, KY + y0, KY + y1, SN.EB_TOP, SN.EB_TOP + h)
 
 
 def plug():
@@ -609,7 +613,8 @@ def check(P):
             ('ring / knob seat', v(ring, seat)),
             ('standoffs / encoder, S3, sensor', v(so, enc + s3 + sen)),
             ('encoder / panel, S3, sensor, sled', v(enc, pan + s3 + sen + P['sled'])),
-            ('the NeoPixel 1.0 taller than drawn / knob seat (the relief leaves 2.4 over the board)', v(box(-1.0, 1.0, KY - 11.6, KY - 9.6, SN.EB_TOP, SN.EB_TOP + 1.9), seat))]
+            ('the NeoPixel 1.0 taller than drawn, 0.5 bigger round / knob seat (the relief: 2.4 over the board)',
+             v(box(-PIX[0] - 0.5, PIX[0] + 0.5, KY + PIX[1] - 0.5, KY + PIX[2] + 0.5, SN.EB_TOP, SN.EB_TOP + PIX[3] + 1.0), seat))]
     # screws
     rows.append(('screws from below / sleeve and chassis (a 3.0 shank in 3.4 holes and the insert)', v(S['under'], ch + sl)))
     core = Manifold.batch_boolean([cyl_z(x, y, H - TS_LEN, H, 1.9, 24) for x, y in TS_XY], ADD)
