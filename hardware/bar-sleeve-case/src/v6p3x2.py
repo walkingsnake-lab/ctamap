@@ -1,4 +1,4 @@
-"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 7 (Nov 27, 2026). Units mm.
+"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 8 (Nov 27, 2026). Units mm.
 
     python3 v6p3x2.py ../stl/p3x2-v6      # the print set (p3x2-v6-*.stl, reused parts and coupons included) and the checks
 
@@ -17,6 +17,8 @@ What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0).
     (x +/-50, +/-142). Only half B's inner countersink is round; the other three are slots along x (SLOTS), because one
     412 mm sleeve cannot be pinned at four cones once walnut and PETG shrink differently. The lip stays relieved
     (END_RELIEF) round both outer ends' flats and corners.
+  - **Labels**: marks.py's two recesses under half B (setup sticker 1/2 x 1 3/4 in, regulatory label 1 x 2 5/8 in, 0.5
+    deep), as on the V5 shells and the P4: label_cuts().
 - **Chassis**: two P3 V6 chassis, one per panel, cut at x = 0 (CH_GAP between them). B (right) is the single P3 V6
   chassis (S3, USB-C frame and stop, encoder slot, rails and ledges, sensor, status window, Boot). A (left) is the same
   tray with none of that, its posts at panel A's un-turned inserts (the P3 pair's data chain: B turned 180 deg).
@@ -69,6 +71,7 @@ os.environ['CASE_WALL'] = '4.0'
 LOCATOR_X = 50.0
 SLOTS = {-142: (-0.60, 0.35), -50: (-0.35, 0.35), 142: (-0.05, 0.30)}   # a small print's holes sit toward the locator: the slots reach away from it
 SHRINK_MAX, SHIM_MAX = 0.003, 0.3
+LABEL_CX = 110.0                   # the label recesses' centre along the bar (p3x2's: 96, on panel B's centre)
 CH_GAP = 0.3                       # between the chassis halves
 PANEL_CX = 96.0
 SPLICE_T = 1.6                     # the splice plates (p3x2's are 2.0): at 2.0 the inner posts' back-screw heads stood 0.2 proud of
@@ -106,6 +109,21 @@ if STAGE == 'skin':
         return Manifold.batch_hull([cone(lo), cone(hi)]) + Manifold.batch_hull([hole(lo), hole(hi)])
     S.csk_under = csk_under
 
+    def label_cuts():
+        """the two label recesses under the bar (marks.py: the setup sticker and the regulatory label, 0.5 deep), as on the
+        V5 shells and the P4: under half B, in front of the screws from below, LABEL_CX along the bar so they clear the
+        bottom seam key's rebate (to x 48) and the wall keeps its 4 mm less the recess everywhere"""
+        import marks as MK
+        MK.CX = LABEL_CX
+        items = MK.layout()[0]
+        bad = MK.check(items)
+        assert not bad, bad
+        cut = MK.cuts()
+        keep = Manifold.batch_boolean(PX.rebate_cuts() + [csk_under(x, y) for x, y in S.UNDER_XY], ADD)
+        gap = cut.min_gap(keep, 5.0)
+        assert gap >= 1.5, f'label recesses {gap:.2f} from the key rebate or the screws from below'
+        return cut
+
     def halves():
         """the sleeve cut at x = 0, butted: p3x2's V-groove (0.5 x 45 deg a side) and hollowed seam faces (0.3 off except a
         2 mm land along the edges you see, so two not-quite-flat faces close where it shows), and the keys' rebates"""
@@ -113,6 +131,7 @@ if STAGE == 'skin':
         s_ = sh - PX.v_groove(sh) - PX.hollow_cuts(sh) - Manifold.batch_boolean(PX.rebate_cuts(), ADD)
         a = s_ ^ box(-C.HW - 1, 0.0, -50, C.D + 1, -1, C.H + 1)
         b = s_ ^ box(0.0, C.HW + 1, -50, C.D + 1, -1, C.H + 1)
+        b = b - label_cuts()
         big = lambda m: max(m.decompose(), key=lambda q: q.volume())
         return big(a), big(b)
 
@@ -169,6 +188,9 @@ if STAGE == 'skin':
         sp = [PX.tm(PX.splice_plate(PX.SPLICE_HOLE)) for _ in range(2)]
         PX.layout([sp], gap=6.0)
         trimesh.util.concatenate(sp).export(f'{out}/p3x2-v6-splice-plates-black.stl')
+        if os.environ.get('V6P3X2_PREVIEW'):                        # the underside as marks.py draws it (render_v6p3x2.py's 8th image)
+            import marks as MK
+            MK.preview(a + b, os.environ['V6P3X2_PREVIEW'], px=0.12, stickers=True, title='128 P3 V6, underneath (front edge at the top)')
         json.dump(dict(hw=C.HW, h=C.H, d=C.D, zc=C.ZC, yf=DR.YF, y1=DR.Y1, kx=S.KX, sensor_x=S.V.SENSOR_X,
                        under=[list(q) for q in S.UNDER_XY], seam_walls=seam_walls(h), joint_wall=PX.JOINT_WALL,
                        split=True), open(f'{fr}/skin.json', 'w'), indent=1)
