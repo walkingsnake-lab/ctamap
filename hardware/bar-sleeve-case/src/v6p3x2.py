@@ -1,4 +1,4 @@
-"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 6 (Nov 27, 2026). Units mm.
+"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 7 (Nov 27, 2026). Units mm.
 
     python3 v6p3x2.py ../stl/p3x2-v6      # the print set (p3x2-v6-*.stl, reused parts and coupons included) and the checks
 
@@ -28,6 +28,9 @@ What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0).
     stands outside the back plates.
 - **Cleats**: the P4 V6's design (60 deg bevel, pockets in the wall cleat, a stop against sliding along it), the wall
   cleat 300 mm long with three screws: see cleats(). Wall anchors: self-drilling or molly, not small plastic cones.
+- **USB-C cable**: a right-angle plug (the port's long side is vertical: the usual kind turns the cable back toward the
+  wall), then behind the bar and along a channel in the wall cleat's wall face, down through a slot in its floor (four to
+  choose from). Lay it in before the cleat goes on the wall; leave ~30 mm of slack at the plug for the 17 mm lift.
   - Every screw is the builds' black M3 x 10 flat head (DIN 7991) into an M3 x D5 x L4 insert.
 - **Panels**: one splice plate (p3x2.py's, 1.6 thick here) on each pair of inner corner inserts holds the rows level across the seam, under
   the inner standoffs, so those two posts' feet sit SPLICE_T further back.
@@ -393,6 +396,15 @@ CLEAT_BEVEL = 60.0
 CLEAT_STOP = (0.8, 5.0)            # clearance to each case cleat's inner end, lead-in
 CLEAT_POCKETS = (8.0, 4.0)         # depth (of 12), rib
 WALL_CLEAT_HW, WALL_CLEAT_XS = 150.0, (-135.0, 0.0, 135.0)
+# The USB-C cable (Nov 27): from a right-angle plug at the right end it turns back to the wall, runs behind the bar (12 mm
+# between the back plate and the wall, 8 behind the walnut's rim) and into a channel in the wall cleat's wall face: under
+# the screws, through the pockets' ribs, the cleat's full length, with slots down through its floor where the cable can
+# drop (or it runs on out of the left end). Laid in before the cleat is screwed to the wall; the wall closes it. Hooks
+# under the cleat's bottom edge were drawn first: the walnut's bottom rim sweeps that space as the bar is lifted on and
+# off, and they could not print without supports. The channel is a groove in the face that prints upward.
+CABLE_CH = (5.0, 6.5, 6.5)         # the channel: its floor this far above the cleat's bottom edge, its height, its depth from the wall
+CABLE_D = 5.5                      # the thickest cable it is checked for
+CABLE_EXITS = (-110.0, -25.0, 25.0, 110.0)   # x of the slots down through the floor (7 wide)
 WALL_SCREW_Z = 50.0                # the wall screws' height (cleat.py's default: 42.2, the middle of the wall face): 20 mm above the bottom edge
 
 
@@ -410,7 +422,21 @@ def cleats():
     blk = CLT.prism_x(v, -xe, xe)
     w = Manifold.extrude(CLT.poly([(0, 0), (lead, 0), (0, -lead)]), 3 * CLT.T).rotate([90, 0, 0]).translate([0, CLT.YW + CLT.T, ztop + 0.01])
     blk = blk - w.translate([-xe, 0, 0]).mirror([1, 0, 0]) - w.translate([-xe, 0, 0])   # its faces lean away from the cleats toward the top
-    return CLT.case_cleat(), wc + blk, CLT
+    z0, zh, dp = CABLE_CH
+    za = CLT.ZW0 + z0
+    assert za + zh + 3.0 <= WALL_SCREW_Z - CLT.WS_D / 2, 'the cable channel reaches the wall screws'
+    cut = [box(-WALL_CLEAT_HW - 1, WALL_CLEAT_HW + 1, CLT.YW - dp, CLT.YW + 1, za, za + zh)]
+    cut += [box(x - 3.5, x + 3.5, CLT.YW - dp, CLT.YW + 1, CLT.ZW0 - 1, za + 0.01) for x in CABLE_EXITS]
+    return CLT.case_cleat(), (wc + blk) - Manifold.batch_boolean(cut, ADD), CLT
+
+
+def cable(exit_x):
+    """a CABLE_D cable from the right end behind the bar, along the channel and down the slot at exit_x"""
+    import cleat as CLT
+    z0, zh, dp = CABLE_CH
+    y, z = CLT.YW - CABLE_D / 2 - 0.3, CLT.ZW0 + z0 + zh / 2
+    run = Manifold.cylinder(PANEL_CX + BORE_HX + 4.0 - exit_x, CABLE_D / 2, CABLE_D / 2, 24).rotate([0, 90, 0]).translate([exit_x, y, z])
+    return run + cyl_z(exit_x, y, -5.0, z, CABLE_D, 24)
 
 
 def turn(m):
@@ -598,6 +624,8 @@ if __name__ == '__main__':
     seated = lambda dz=0.0, dx=0.0: round(sum((m.translate([dx, 0, dz]) ^ wc).volume() for m in hung), 2)
     rows = check(P, sk)
     rows.append(('case cleats / chassis, back and knuckle screws', round((ccs ^ (P['chassis_a'] + P['chassis_b'] + P['back'] + P['kn_screws'])).volume(), 2)))
+    worst = max(round((cable(x) ^ (wc + ccs + P['chassis_a'] + P['chassis_b'] + P['sleeve_a'] + P['sleeve_b'] + P['back'])).volume(), 2) for x in CABLE_EXITS)
+    rows.append((f'a {CABLE_D} mm cable from the right end, behind the bar, along the wall cleat\'s channel and down each slot / cleats, chassis, walnut', worst))
     rows.append((f'hung, 0.5 either way along the wall cleat: free', max(seated(dx=-0.5), seated(dx=0.5))))
     rows.append((f'hung, 1.5 either way along the wall cleat: on the stop (> 0 both ways)', 0.0 if min(seated(dx=-1.5), seated(dx=1.5)) > 1.0 else 1.0))
     wb = wc.bounding_box()

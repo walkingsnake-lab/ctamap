@@ -164,6 +164,18 @@ annotate(a, cam, [('wall cleat, 300 mm (orange here; prints black): 60 deg bevel
 save(R.titled(a, 'The cleats: the P4 V6\'s design',
               f'Lift {CLT.hook():.0f} mm to unhook (V5: 10). The stop keeps the bar from sliding along the wall cleat when a USB-C plug is pushed in.'), 'p3x2v6-6-cleats.png')
 
+# the cable: the wall cleat from the wall side, the cable in its channel
+R.MATS.update(cable=('plain', (0.85, 0.85, 0.82), 0.10, 40, 0.0))
+ps = parts(knob=True, inside=False) + [R.Part('cc', cc.translate([-M.PANEL_CX, 0, 0]) + cc.translate([M.PANEL_CX, 0, 0]), 'petg'),
+                                        R.Part('wc', wc, 'new'), R.Part('cable', M.cable(25.0), 'cable')]
+sc = R.Scene(ps)
+cam = persp((0.5, 1.3, 0.35), size=(1800, 1000), dist=820, target=CENTRE + np.array([20, 10, -10]))
+a = sc.render(cam, ground=False, flip=True)
+annotate(a, cam, [('from a right-angle plug in the right end', (M.PANEL_CX + 108, CLT.YW - 3, CLT.ZW0 + 8), (40, -200), 'mb'),
+                  ('along the channel in the wall cleat\'s wall face (the wall closes it)', (90, CLT.YW, CLT.ZW0 + 8), (-40, -230), 'mb'),
+                  ('down a slot in its floor: four to choose from', (25, CLT.YW, 12), (-160, 120), 'rt')], fs=22)
+save(R.titled(a, 'The USB-C cable', 'Seen from the wall side (cable drawn pale, wall cleat orange). Behind the bar, into the wall cleat, down and out under the bar.'), 'p3x2v6-7-cable.png')
+
 # the diffuser seam, from the front
 sc = R.Scene(parts(chassis=False, knob=False, screws=False, clip=box(-14, 14, -50, 200, ZC - 12, ZC + 12)))
 cam = ortho((0, -1, 0), (1200, 1000), 42.0, target=np.array([0, 10, ZC]))
