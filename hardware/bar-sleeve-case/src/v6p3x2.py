@@ -1,4 +1,4 @@
-"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 5 (Nov 27, 2026). Units mm.
+"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 6 (Nov 27, 2026). Units mm.
 
     python3 v6p3x2.py ../stl/p3x2-v6      # the print set (p3x2-v6-*.stl, reused parts and coupons included) and the checks
 
@@ -26,9 +26,10 @@ What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0).
     bridges inside B; one M3 x 10 flat head from the back through each block into an insert in its bridge, flush. The
     tongues alone were weak against bending in plan (review, Nov 27); the knuckles are the tie at the back. Nothing
     stands outside the back plates.
-- **Cleats**: the P4 V6's design (60 deg bevel, pockets in the wall cleat, a stop against sliding along it): see cleats().
+- **Cleats**: the P4 V6's design (60 deg bevel, pockets in the wall cleat, a stop against sliding along it), the wall
+  cleat 300 mm long with three screws: see cleats(). Wall anchors: self-drilling or molly, not small plastic cones.
   - Every screw is the builds' black M3 x 10 flat head (DIN 7991) into an M3 x D5 x L4 insert.
-- **Panels**: one splice plate (p3x2.py's) on each pair of inner corner inserts holds the rows level across the seam, under
+- **Panels**: one splice plate (p3x2.py's, 1.6 thick here) on each pair of inner corner inserts holds the rows level across the seam, under
   the inner standoffs, so those two posts' feet sit SPLICE_T further back.
 - **Diffuser**: the P3 pair's two halves (p3x2.diffuser_halves), split joint only: each half ends in its own full-height
   grid wall at the seam (JOINT_WALL, a normal rib), so the seam cell is closed on both sides (owner, Nov 26). The rim and
@@ -67,7 +68,8 @@ SLOTS = {-142: (-0.60, 0.35), -50: (-0.35, 0.35), 142: (-0.05, 0.30)}   # a smal
 SHRINK_MAX, SHIM_MAX = 0.003, 0.3
 CH_GAP = 0.3                       # between the chassis halves
 PANEL_CX = 96.0
-SPLICE_T = 2.0                     # p3x2's splice plate
+SPLICE_T = 1.6                     # the splice plates (p3x2's are 2.0): at 2.0 the inner posts' back-screw heads stood 0.2 proud of
+                                   # the back plate, under the wall cleat's face (review, Nov 27); at 1.6 they end 0.2 inside it
 
 if STAGE == 'skin':
     os.environ['PANEL'] = 'p3x2'
@@ -83,6 +85,7 @@ if STAGE == 'skin':
     import case as C
     import drawer as DR
 
+    PX.SPLICE_T = SPLICE_T
     PX.JP_L = 96.0                  # 48 into each half (100 put the ends' edges on the countersinks' x, 50: a bad weld)
     PX.JP_Y1 = DR.Y1 - 5.0          # the keys' rebates end 3 mm in front of the back rebate's seat (p3x2's ran to 63)
 
@@ -379,18 +382,26 @@ def knuckle_inserts():
 # The cleats (Nov 27): the P4 V6's (p4.py, Nov 17) on this back. A 60 deg bevel (about 17 mm of lift to unhook, V5's 45
 # deg: 10), pockets in the wall cleat's wall face, a flat counterbore wide enough for a flanged head, two wall screws.
 # The stop: the P4's wall cleat has one outside each end of its single case cleat. Here the two case cleats (x 21 to 171
-# each side) run past the 220 mm wall cleat's ends, so the stop is one block between their inner ends: plugging in the
-# USB-C at the right end pushes the bar along the cleat, and the left case cleat's inner end lands on it.
+# each side) run past the wall cleat's ends, so the stop is one block between their inner ends: plugging in the USB-C at
+# the right end pushes the bar toward -x and the right case cleat's inner end lands on it; pulling the plug, the left one's.
+# Review, Nov 27 (independent, of the 220 mm cleat with screws at +/-95, z 42): the mechanism is right and safe (about 1 kg
+# hung), but the cleat ended 51 mm short of the knob, so a firm press there (about 2.2 x the weight) rocked the bar on the
+# cleat's end; its screws sat 12 mm above its bottom edge, poor leverage for the anchors; and 0.5 at the stop was tight
+# for hanging blind. So: 300 mm long (rocks at about 13.6 x the weight; it prints on the bed's diagonal, as the P4's
+# walnut halves do), screws at +/-135 and one at the centre for a stud, at z WALL_SCREW_Z, and 0.8 at the stop.
 CLEAT_BEVEL = 60.0
-CLEAT_STOP = (0.5, 5.0)            # clearance to each case cleat's inner end, lead-in
+CLEAT_STOP = (0.8, 5.0)            # clearance to each case cleat's inner end, lead-in
 CLEAT_POCKETS = (8.0, 4.0)         # depth (of 12), rib
-WALL_CLEAT_HW, WALL_CLEAT_XS = 110.0, (-95.0, 95.0)
+WALL_CLEAT_HW, WALL_CLEAT_XS = 150.0, (-135.0, 0.0, 135.0)
+WALL_SCREW_Z = 50.0                # the wall screws' height (cleat.py's default: 42.2, the middle of the wall face): 20 mm above the bottom edge
 
 
 def cleats():
     """(case cleat in its panel's frame, wall cleat in the case frame)"""
     import cleat as CLT
     CLT.BEVEL_DEG, CLT.WALL_STOPS, CLT.WALL_POCKETS, CLT.CBORE_D = CLEAT_BEVEL, None, CLEAT_POCKETS, 7.4
+    CLT.wall_screws = lambda xs=None: [(x, WALL_SCREW_Z) for x in (WALL_CLEAT_XS if xs is None else xs)]
+    assert WALL_SCREW_Z + CLT.WS_D / 2 + 1.5 <= CLT.ZB - CLT.drop(), 'the wall screws come out through the bevel'
     wc = CLT.wall_cleat(hw=WALL_CLEAT_HW, xs=list(WALL_CLEAT_XS))
     cl, lead = CLEAT_STOP
     xe = PANEL_CX - DR.CLEAT_HW - cl                                  # the stop's faces, +/- this
@@ -576,19 +587,25 @@ if __name__ == '__main__':
     cc, wc, CLT = cleats()
     for m, n, rot in ((cc, 'cleat-case-black-x2', -90), (wc, 'cleat-wall-black', 90)):     # case cleat wall face down; wall cleat front face down
         me = m.rotate([rot, 0, 0]).to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.merge_vertices()
+        if n.startswith('cleat-wall'):                             # 300 long: turned 45 deg on the plate, as it has to print
+            t.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 4, [0, 0, 1]))
         t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-{n}.stl'); print(n, np.round(t.extents, 1).tolist())
     for a, b in (('bar-knob', 'knob-white'), ('bar-boot-key', 'boot-key')):
         shutil.copyfile(os.path.join(HERE, '..', 'stl', a + '.stl'), os.path.join(out, f'p3x2-v6-{b}.stl'))
     # hung on the wall: both case cleats on the one wall cleat
     ccs = cc.translate([-PANEL_CX, 0, 0]) + cc.translate([PANEL_CX, 0, 0])
-    hung = [P['kn_screws'], P['chassis_a'], P['chassis_b'], P['sleeve_a'], P['sleeve_b'], ccs]
+    hung = [P['kn_screws'], P['back'], P['chassis_a'], P['chassis_b'], P['sleeve_a'], P['sleeve_b'], ccs]
     seated = lambda dz=0.0, dx=0.0: round(sum((m.translate([dx, 0, dz]) ^ wc).volume() for m in hung), 2)
     rows = check(P, sk)
     rows.append(('case cleats / chassis, back and knuckle screws', round((ccs ^ (P['chassis_a'] + P['chassis_b'] + P['back'] + P['kn_screws'])).volume(), 2)))
-    rows.append((f'hung, 0.3 either way along the wall cleat: free', max(seated(dx=-0.3), seated(dx=0.3))))
+    rows.append((f'hung, 0.5 either way along the wall cleat: free', max(seated(dx=-0.5), seated(dx=0.5))))
     rows.append((f'hung, 1.5 either way along the wall cleat: on the stop (> 0 both ways)', 0.0 if min(seated(dx=-1.5), seated(dx=1.5)) > 1.0 else 1.0))
     wb = wc.bounding_box()
-    rows.append((f'wall cleat {wb[3] - wb[0]:.0f} long, on the back between the louver bands (z {wb[2]:.1f} to {wb[5]:.1f}; {DR.CLEAT_ZBOT:.1f} to {DR.CLEAT_ZTOP:.1f} free)', 0.0 if wb[2] >= DR.CLEAT_ZBOT and wb[5] <= DR.CLEAT_ZTOP and wb[3] - wb[0] <= 250 else 1.0))
+    rows.append((f'wall cleat {wb[3] - wb[0]:.0f} long, on the back between the louver bands (z {wb[2]:.1f} to {wb[5]:.1f}; {DR.CLEAT_ZBOT:.1f} to {DR.CLEAT_ZTOP:.1f} free)', 0.0 if wb[2] >= DR.CLEAT_ZBOT and wb[5] <= DR.CLEAT_ZTOP else 1.0))
+    diag = ((wb[3] - wb[0]) + (wb[5] - wb[2])) / math.sqrt(2)
+    rows.append((f'wall cleat on the bed\'s diagonal: needs a {diag:.0f} mm square (250 or less)', 0.0 if diag <= 250 else round(diag - 250, 1)))
+    bh = max(P['back'].bounding_box()[4], P['kn_screws'].bounding_box()[4])
+    rows.append((f'back and knuckle screw heads at or under the back plate\'s face ({bh - DR.Y1:+.2f})', 0.0 if bh <= DR.Y1 + 0.001 else round(bh - DR.Y1, 2)))
     rows.append(('wall cleat / everything hung', seated()))
     rows.append((f'lifted straight off the wall cleat (0.5 to {CLT.hook() + 6:.0f})', max(seated(q) for q in np.arange(0.5, CLT.hook() + 6.01, 0.5))))
     print(dict(case=[round(2 * sk['hw'], 1), round(sk['h'], 1), sk['d']], knob_x=sk['kx'], sensor_x=sk['sensor_x'], 

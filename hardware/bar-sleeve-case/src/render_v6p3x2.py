@@ -156,9 +156,9 @@ cc, wc, CLT = M.cleats()
 ps = parts(knob=True, inside=False) + [R.Part('cc', cc.translate([-M.PANEL_CX, 0, 0]) + cc.translate([M.PANEL_CX, 0, 0]), 'petg'),
                                         R.Part('wc', wc.translate([0, 45, -18]), 'new')]
 sc = R.Scene(ps)
-cam = persp((0.45, 1.3, 0.55), size=(1800, 1000), dist=900, target=CENTRE + np.array([0, 30, 0]))
+cam = persp((0.45, 1.3, 0.55), size=(1800, 1000), dist=980, target=CENTRE + np.array([0, 30, 0]))
 a = sc.render(cam, ground=False, flip=True)
-annotate(a, cam, [('wall cleat (orange here; prints black): 60 deg bevel, pockets in its wall face', (-70, DR.Y1 + 45 + 12, 40), (-60, 150), 'mt'),
+annotate(a, cam, [('wall cleat, 300 mm (orange here; prints black): 60 deg bevel, pockets, three wall screws', (-70, DR.Y1 + 45 + 12, 40), (-60, 150), 'mt'),
                   ('the stop, between the case cleats\' inner ends', (0, DR.Y1 + 45 + 8, CLT.ZB - 18 - 4), (120, -170), 'lb'),
                   ('two case cleats, one per chassis half', (M.PANEL_CX, DR.Y1 + 10, CLT.ZB + 8), (120, -120), 'lb')], fs=22)
 save(R.titled(a, 'The cleats: the P4 V6\'s design',
