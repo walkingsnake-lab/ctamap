@@ -2,7 +2,7 @@
 
 Adafruit Matrix Portal driving a 64x32 HUB75 RGB matrix. Decisions from the design sessions of Oct 2–4, 2026. All mocks used made-up train times unless noted.
 
-A wider board (two panels, 128x32) is planned but not built: [`wide-spec.md`](wide-spec.md).
+A wider board (two panels, 128x32) is built (Nov 5, 2026; not yet checked on hardware): [`wide-spec.md`](wide-spec.md).
 
 ---
 
@@ -11,7 +11,7 @@ A wider board (two panels, 128x32) is planned but not built: [`wide-spec.md`](wi
 | Item | Notes |
 |---|---|
 | Panel | 64x32, 4mm pitch, HUB75. Black acrylic diffuser recommended. |
-| Controller | **Decided: Matrix Portal M4** (starter kit, purchased Oct 3, 2026; includes panel, diffuser, 5V 2.4A supply). 192 KB RAM, WiFi via ESP32 co-processor over SPI: keep JSON payloads small, use PCF fonts, fetch only between animations. |
+| Controller | **Decided: Matrix Portal M4** (starter kit, purchased Oct 3, 2026; includes panel, diffuser, 5V 2.4A supply). 192 KB RAM, WiFi via ESP32 co-processor over SPI: keep JSON payloads small, use PCF fonts, fetch only between animations. **Since superseded:** the current controller is the Matrix Portal S3 (C++ firmware in `firmware-s3/`); the M4's firmware is frozen. Neither uses PCF fonts: the glyphs are generated (`assets.h` on the S3, `assets.py` on the M4). |
 | Input | **Phone/web control** (primary, see §10) plus, on the S3, a **knob** (Adafruit 5880 rotary encoder on STEMMA QT; see §10, *Knob*) to switch screens. The built-in UP/DOWN buttons still work where the case leaves them reachable. |
 | Power | Kit supply is 5V 2.4A; panel can draw ~4A all-white. See §9. |
 
@@ -56,7 +56,7 @@ On the M4, a small cooperative scheduler lines up network requests with animatio
 |---|---|---|
 | Settings version check (`/board/version`) | ~every 10 s | a few bytes |
 | Combined update (only the shown screen's sections; contract "Sections") | ~every 30 s, or right away when the version changes or a button changes the screen | ~0.5–0.75 KB |
-| Radar frame (only while radar is showing) | one new frame every 5 min | ~2 KB |
+| Radar frame (only while radar is showing) | one new frame every 6 min | ~2 KB |
 
 - The board **counts down locally** from the arrival timestamps, so minutes tick over on time between fetches; fetches only refresh predictions.
 
@@ -68,7 +68,7 @@ On the M4, a small cooperative scheduler lines up network requests with animatio
 | CTA alerts | every 2–5 min |
 | NWS warnings/watches | every 1–2 min |
 | Weather | every 10–15 min |
-| MRMS radar | every 5 min |
+| MRMS radar | a pass every 20 s, only for locations a board asked about in the last 2 min; one new frame per 6-minute slot |
 
 ~2,900 Train Tracker calls/day per station at 30 s, well under CTA's daily limit; multiple boards share the cache.
 
@@ -102,7 +102,7 @@ One custom **board font** (BDF), built from bitmap fonts in `hzeller/rpi-rgb-led
 - **Digits are tabular** in every font (one shared cell width), so a rolling digit never shifts its neighbors. Spaces are 2px (small) and 3px (5x7).
 - The **alert circle** is two glyphs drawn at the same origin: a red disc with the "!" pixels left blank, and a white "!". Fonts are one color per glyph.
 - **Coverage** (Tom Thumb and 5x7): printable ASCII, Latin-1 (accented letters, `°`, `£`, `¿`, …), and the punctuation phones substitute (curly quotes, en and em dashes, `…`, `•`, `€`). Tom Thumb lacks curly quotes and dashes, so its quotes are copies of the straight ones and its dashes are 4px and 5px bars. X11 5x7 fits most accented capitals into the 7-row cell by dropping the accent (É draws as E; Ä and Å keep theirs); the lowercase keep theirs. The frozen M4 has ASCII only.
-- Codepoints for custom glyphs are in `server/board/glyphs.js`. The fonts are built by `scripts/build-fonts.js` into `server/board/fonts/` (BDF); the board build converts them to PCF.
+- Codepoints for custom glyphs are in `server/board/glyphs.js`. The fonts are built by `scripts/build-fonts.js` into `server/board/fonts/` (BDF); the S3's copy is generated from them by `scripts/build-firmware-assets.js` (`firmware-s3/ctaboard/src/assets.h`), and the frozen M4 keeps its `assets.py`.
 - X11 **9x15 Bold** for the large overnight clock, with a custom **2x2 square-dot colon** centered on the 10px digit height (the stock X11 colon is drawn for text and drops a pixel below the digits).
 - **VCR** (8x11, `vcr`): digits, colon and space only, for the clock screen's seventies face (§16). Redrawn after **VCR OSD Neue** by Elli Sho (dafont, 100% free; the author asks for credit, given in the control page's footer): 2px strokes, one-pixel cut corners, slashed zero. Tabular 8px digits with a 2px gap; the colon is 2x2 dots on digit rows 2-3 and 7-8.
 
@@ -288,9 +288,9 @@ Server-side short-name map so labels fit (~6–7 characters next to a two-digit 
 - **Shoreline** is painted on the lake's edge pixels (inside the water), so rain never covers it.
 - **Colors** (fills at 65%; the two greens at 70% of that, since light rain covers most of a loop and green reads brightest on the panel; the phone's radar brightness scales all precip): rain `#1f8f1f`, `#2ee02e`, `#ffe000`, `#ff8c00`, `#ff1a1a`; snow `#4f86ff`, `#a9c9ff`, `#ffffff`; marker white; frame indicator `#3a3a3a`, current frame amber.
 - **Location marker:** white dot. The pixels around it keep their rain or snow (the earlier ring of 4 cleared pixels was dropped).
-- **Time:** X11 5x7 (dimmed `#7a7a7a`, AM/PM `#555555`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (one 1x1 dot per frame, 2 px apart, current frame amber; 2x2 segments before Nov 26, 2026, which the frozen M4 keeps), AM/PM in Tom Thumb below. **The time is optional** (per-board `radarTime`, on by default): off replaces it with the **temperature** (Tom Thumb, label white `#d8d8d8`) right-aligned right under the frame indicator, its digits 2 rows below the dots as on two panels (Nov 26, 2026: no weather icon, the radar shows the rain; the frozen M4 keeps the icon and the old spacing). The warning tag then moves to the **bottom right of the screen**: icon + `WATCH` or `WARN` on a black backing (WATCH runs past the time box onto the radar; to revisit). 
+- **Time:** X11 5x7 (dimmed `#7a7a7a`, AM/PM `#8f8f8f`), right-aligned in empty water, steady colon (frame timestamp). **Frame indicator above it** (one 1x1 dot per frame, 2 px apart, current frame amber; 2x2 segments before Nov 26, 2026, which the frozen M4 keeps), AM/PM in Tom Thumb below. **The time is optional** (per-board `radarTime`, on by default): off replaces it with the **temperature** (Tom Thumb, label white `#d8d8d8`) right-aligned right under the frame indicator, its digits 2 rows below the dots as on two panels (Nov 26, 2026: no weather icon, the radar shows the rain; the frozen M4 keeps the icon and the old spacing). The warning tag then moves to the **bottom right of the screen**: icon + `WATCH` or `WARN` on a black backing (WATCH runs past the time box onto the radar; to revisit). 
 - **Warning colors (every screen):** watches yellow, severe thunderstorm warnings orange, tornado warnings red and **blinking** (1 s on, 1 s off) on the weather strip and the radar. If the location has no usable water area, fall back to **split layout** (radar left, clock right).
-- **Warnings:** the small inline **bolt** (3x5, orange, severe) or **funnel** (4x5, red, tornado) sits **to the left of AM/PM** with a 2px gap, on the same 5px line. It never overlaps the clock or the frame indicator; the clock stack (indicator + clock + AM/PM line) occupies ~rows 2–18, which is the height the water-area check must reserve. Steady, no blinking. No polygons, no scrolling text.
+- **Warnings:** the small inline **bolt** (3x5, orange, severe) or **funnel** (4x5, red, tornado) sits **to the left of AM/PM** with a 2px gap, on the same 5px line. It never overlaps the clock or the frame indicator; the clock stack (indicator + clock + AM/PM line) occupies ~rows 2–18, which is the height the water-area check must reserve. Steady, except a tornado warning, which blinks as on the weather strip (§2). No polygons, no scrolling text.
 
 ---
 
@@ -481,11 +481,11 @@ Separate board location independent of the station · Cubs/Sox scores (16x16 log
 
 ---
 
-## 14. Clock screen: skyline face (designed, not built)
+## 14. Clock screen: skyline face
 
-Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: the skyline seen from the lake across Navy Pier, with the Centennial Wheel front and center, drawn for the current weather and time of day. Mockups: [`mockups/weather/lake/`](mockups/weather/lake/sheet.png) (`sheet.png` has every state, `night-motion.png` the animation), made by `node scripts/mock-weather-lake.js`. The mock is the pixel reference for the scene; where it differs from this section (text at the top, Auto text mode, reflections, the fixed sunset spot), this section wins. Drawn by `draw.js` `renderSkyline` (clouds still to come).
+Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: the skyline seen from the lake across Navy Pier, with the Centennial Wheel front and center, drawn for the current weather and time of day. Mockups: [`mockups/weather/lake/`](mockups/weather/lake/sheet.png) (`sheet.png` has every state, `night-motion.png` the animation), made by `node scripts/mock-weather-lake.js`. The mock is the pixel reference for the scene; where it differs from this section (text at the top, Auto text mode, reflections, the fixed sunset spot), this section wins. Drawn by `draw.js` `renderSkyline`.
 
-**Clock screen.** A new screen, `clock`, added beside Transit, Ticker, Weather and Baseball (no v2 screen framework needed). Its look is a per-board **clock face** option (`clockFace` on the phone): `skyline` first; analog, split-flap and nixie join as they're built. The knob ring gets CLOCK, which opens the chosen face. It's chosen directly, from the phone or the knob, or takes a turn in the Cycle (§10). The skyline face still shows the weather (state and temperature); it just lives under Clock rather than Weather.
+**Clock screen.** A new screen, `clock`, added beside Transit, Ticker, Weather and Baseball (no v2 screen framework needed). Its look is a per-board **clock face** option (`clockFace` on the phone): `skyline` was the first; the faces built since are in §16–§20 and wide-spec. The knob ring gets CLOCK, which opens the chosen face. It's chosen directly, from the phone or the knob, or takes a turn in the Cycle (§10). The skyline face still shows the weather (state and temperature); it just lives under Clock rather than Weather.
 
 **S3 only.** Rendering features go only into `firmware-s3/` (the M4 is frozen), so the scenarios are tagged `s3only`. The phone page doesn't offer Clock for a board whose health reports M4 hardware, and the server never sends `clock` to one (it falls back to Transit), since the frozen M4 doesn't know the screen.
 
@@ -745,4 +745,4 @@ Built Nov 5, 2026, S3 only, from the round 4–8 clock mockups (`scripts/mock-cl
 - **Big digits** (`digits`): the time alone, centered, rows 7-23, `#e6e6e6`. The minute changes at once (no roll; changed Nov 14). The colon pulses: a second at full color, a second at 60% of it. Phone: Shadow (per board, on by default) adds a 1 px drop shadow down and right in the digit color's partner, a deeper, cooler neighbor so it reads as depth rather than a fringe: white/slate, amber/rust, coral/wine, pink/plum, violet/indigo, blue/midnight, cyan/navy, mint/teal, lime/forest (chosen Nov 14 over free digit and shadow pickers, own-shade shadows and a colored colon). Phone: Blinking colon (per board, on by default) keeps it full when off.
 - **Day & date** (`daydate`): the weekday in full (Tom Thumb, grey), the time in 13-row digits with AM/PM small and dim beside it, and the date (`NOV 4`, 5x7, grey), each line centered.
 - Day & date rolls at the minute like the other clocks, and stops rolling with Board → Display → Animate clock digits off.
-- **Not built:** the 128-wide versions (wide-spec), the dark red night color from the round 4 mockups.
+- **Not built:** the dark red night color from the round 4 mockups. (The 128-wide versions are built: wide-spec.)

@@ -7,9 +7,9 @@
 //   auto   (baseball takes over transit): from 30 min before first pitch
 //          until 15 min after the final.
 //   forced (the board is set to Baseball): today's games all day from
-//          midnight, finals until 3 AM the next morning (Chicago time). Polled every 15 s while any game
-// is live or about to start, every 5 min otherwise. Keeps the last good
-// response on failure.
+//          midnight, finals until 3 AM the next morning (Chicago time).
+// Polled every 15 s while any game is live or about to start, every 5 min
+// otherwise. Keeps the last good response on failure.
 
 const { fetchJson } = require('./location-poller');
 const { team } = require('./teams');

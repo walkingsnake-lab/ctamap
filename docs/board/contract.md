@@ -226,7 +226,6 @@ Drawn on rows 27–31 (Tom Thumb, baseline 32, `#555555`, no divider): `temp` + 
 |---|---|
 | `icon` | `sun` `moon` `pcloudy_day` `pcloudy_night` `cloudy` `rain` `ice` `snow` `storm` `tsnow` `fog` (`tsnow`, thundersnow, is newer: boards whose assets lack it draw the word without an icon, as for any unknown name) |
 | `temp` | Current temperature, integer: °F, or °C with the board's `tempUnit` `C`. The board draws it with the small `°` glyph (U+00B0). |
-| `icon` | Current weather icon name (same set as `wx.icon`), or `null` before the first weather fetch. |
 | `word` | Condition word, uppercase, fitted. |
 | `hi`, `lo` | Daily high/low in the board's unit. |
 
@@ -261,11 +260,11 @@ From WeatherAPI.com (`server/board/weather.js`; fixture `fixtures/weatherapi/`):
 | `cond` | `true` (absent = off), with the time on: a compact corner. The clock line holds the time and a one-letter `A`/`P` (Tom Thumb, dark gray `#666666`, 1px after the time, bottom-aligned: rows 8–12); the temperature (`temp`, the same dark gray, no icon) is right-aligned under it on rows 15–19; the warning tag moves to the bottom right as with `showTime: false`. From 10:00 to 12:59 the clock line is 26px and starts at x38, 2px left of the 24px time box (its black margin then covers 2 more columns of radar, or the split divider on rows 5–13). With no `temp`, only the clock line. From the board's `radarCond`. |
 | `rb` | Precipitation brightness, percent (absent = 100): scales the precip colors (values 1–5, 8–10; not the shoreline or marker) of the radar palette. From the board's `radarBright`. |
 | `temp` | Current temperature (board unit, rounded) from WeatherAPI, or `null` before the first weather fetch. Sent whatever the weather strip setting. |
+| `icon` | Current weather icon name (same set as `wx.icon`), or `null` before the first weather fetch. |
 | `ft` | Frame timestamps (epoch), parallel to `frames`; used for the radar time. |
 | `timeBox` | `[x, y, w, h]`: box the board draws the time stack into (frame indicator, time, AM/PM + warning icon), right-aligned. The server does not clear it (the shoreline can run into it); the board clears a 1px black margin around each piece it draws there (indicator, time, AM/PM, warning icon, or the temperature, with the weather icon on the M4), so nothing touches them. |
 | `vo` | `1` when the frames ride along only for Rain nearby visits (the weather view is Conditions, 5-day or Hourly; Nov 26, 2026). The S3 then draws the loop only during a visit, and the weather screen keeps its view; absent on the Radar view. Firmware that ignores it (the M4) draws the loop whenever frames are present. |
 | `split` | `true` when the location has no usable water area; the time box is then the right-side panel. Per station, from `server/board/locations/<mapid>.json`: **full width** (`split: false`, marker at 32,16, clock box `[40, 0, 24, 22]` over Lake Michigan) when the area the widest clock stack draws on (cols 41–62, rows 2–19) is all water; otherwise **split** (radar in cols 0–38, marker at 19,16; the board draws a gray `#333333` line on col 39; clock box `[40, 0, 24, 32]`, leaving a 1px gap before the widest clock). 114 of 144 stations are full width. The board draws the clock stack **top-aligned**: indicator row 2 (1x1 dots 2 px apart on the S3 since Nov 26, 2026; rows 2–3, 2x2, on the M4), clock rows 6–12, AM/PM rows 15–19, right-aligned to column 63. |
-
 | `wx` | Weather screen conditions, sent whenever there's weather data (even with the weather strip off): the top-level `wx` fields plus `feels` (apparent temperature in the board unit, rounded), `wind` (`"NW 12"`: 8-point compass the wind blows from + mph, rounded; `"CALM"` under 1 mph; just the speed without a direction), and `pop` (highest hourly precipitation probability % over the next 6 hours, starting with the current hour). Each of the three is `null` when WeatherAPI didn't send it. `rl` is `1` while the conditions screen shows its RAIN line (absent otherwise): from `pop` 20 % up, then until it drops below 10 % (a buffer, so a chance hovering near one value doesn't move the readout between three and four lines; `rainLine()` in `weather.js`, kept per board and station in memory, so a restart or a new station starts with the line off until 20 %). Omitted before the first weather fetch. With the board's `tempUnit` `C`, every temperature in it (and `days`, `hours`) is °C and `wx.c` is `1`: the board converts back to °F (`t * 9 // 5 + 32`, integers) only to pick `TEMP_STOPS` colors. Wind stays mph. |
 | `wx.hours` | Only with the board's `wxView` `hourly` (absent otherwise, or without hourly data): four columns `{h, icon, t}` for the hours 2, 4, 6 and 8 after the current hour: `h` the Chicago hour as `3P`, `12A`; `icon` from that NWS hour's icon (night variants; WeatherAPI's hourly condition and `is_day` without NWS data); `t` in the board unit, rounded. The weather screen draws the hourly layout instead of conditions. |
 | `wx.rain` | Retired (the rain bars were cut, Nov 2026): never sent. Older firmware ignores its absence; the frozen M4 still draws it if present. |
@@ -664,7 +663,7 @@ After a failure, Train Tracker, NWS, and WeatherAPI retry in 30 s, doubling with
 | NWS alerts | 90 s per location | `User-Agent` header required. |
 | NWS forecasts | 15 min per location (grid lookup once) | Only while a board polled in the last 5 min; last good data kept. |
 | WeatherAPI | 10 min per grid cell | Only while a board polled in the last 5 min; last good data kept. |
-| MRMS base reflectivity on AWS | 5 min per location | Always runs, since it decides `radar.on`. NWS's map service stands in when AWS fails (see **Radar**). |
+| MRMS base reflectivity on AWS | a pass every 20 s; one new frame per 6-minute slot | Only for locations a board asked about in the last 2 min. NWS's map service stands in when AWS fails (see **Radar**). |
 
 ---
 
