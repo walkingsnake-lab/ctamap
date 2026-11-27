@@ -3102,14 +3102,13 @@ static std::vector<std::pair<int, int>> cover(int CX, F test) {
   return out;
 }
 
-// The wide panorama's extra buildings [x, width, rows, role] and antennas
-// [x, top rows, roof rows, beacon] (draw.js SKYW).
+// The wide panorama's extra buildings [x, width, rows, role] (draw.js SKYW;
+// no antennas of its own).
 static const int WIDE_EXTRA[][4] = {
     {0, 5, 6, 1}, {5, 4, 8, 1}, {10, 3, 5, 1}, {13, 5, 7, 1}, {18, 4, 9, 1}, {22, 3, 6, 1}, {25, 4, 8, 1}, {29, 3, 6, 1},
-    {2, 3, 11, 2}, {7, 3, 16, 2}, {14, 3, 13, 2}, {20, 4, 10, 2}, {26, 3, 12, 2},
+    {2, 3, 11, 2}, {6, 5, 16, 2}, {14, 3, 13, 2}, {20, 4, 10, 2}, {26, 3, 12, 2},
     {96, 4, 8, 1}, {100, 5, 10, 1}, {105, 4, 7, 1}, {109, 5, 9, 1}, {114, 4, 8, 1}, {118, 5, 10, 1}, {123, 5, 8, 1},
-    {97, 3, 13, 2}, {102, 4, 15, 2}, {107, 3, 11, 2}, {111, 4, 16, 2}, {116, 3, 12, 2}, {120, 4, 14, 2}, {125, 3, 12, 2}};
-static const int WIDE_ANTS[][4] = {{8, 19, 16, 0}, {112, 19, 16, 0}};
+    {97, 3, 13, 2}, {102, 4, 15, 2}, {107, 3, 11, 2}, {110, 5, 16, 2}, {116, 3, 12, 2}, {120, 4, 14, 2}, {125, 3, 12, 2}};
 
 static void build(Geometry &g, bool wide) {
   g.W = wide ? 128 : 64;
@@ -3124,7 +3123,7 @@ static void build(Geometry &g, bool wide) {
     for (const auto &e : WIDE_EXTRA) if (e[3] == 1) rect(g, e[0], e[1], top(e[2]), 1);
     for (const auto &e : WIDE_EXTRA) if (e[3] == 2) rect(g, e[0], e[1], top(e[2]), 2);
   }
-  rect(g, 1 + O, 1, top(9), 2); rect(g, 2 + O, 4, top(15), 2); rect(g, 6 + O, 2, top(13), 2); rect(g, 8 + O, 2, top(9), 2);  // Willis
+  rect(g, 1 + O, 3, top(21), 2); rect(g, 4 + O, 2, top(17), 2); rect(g, 6 + O, 2, top(13), 2); rect(g, 8 + O, 2, top(9), 2);  // Willis
   rect(g, 11 + O, 4, top(17), 2);                                                                                             // Aon
   rect(g, 15 + O, 5, top(21), 2);                                                                                             // St. Regis
   rect(g, 23 + O, 5, top(10), 2); rect(g, 24 + O, 4, top(13), 2); rect(g, 24 + O, 3, top(16), 2);                             // Trump
@@ -3136,10 +3135,8 @@ static void build(Geometry &g, bool wide) {
       for (int i = 53 + O - w / 2; i < 53 + O + w / 2; i++) g.role[y * W + i] = 2;
     }
   }
-  g.ants = {{2 + O, top(18), top(15), false}, {4 + O, top(17), top(15), false}, {51 + O, top(22), top(17), true}, {54 + O, top(22), top(17), true}};
-  if (wide)
-    for (const auto &a : WIDE_ANTS) g.ants.push_back({a[0], top(a[1]), top(a[2]), a[3] != 0});
-  for (int y = 1; y <= SHORE; y++)
+  g.ants = {{1 + O, top(25), top(21), false}, {3 + O, top(24), top(21), false}, {51 + O, top(22), top(17), true}, {54 + O, top(22), top(17), true}};
+  for (int y = 1; y < SHORE; y++)  // none on the shore row
     for (int x = 0; x < W; x++) {
       int r = g.role[y * W + x];
       if (!r || (r == 1 && x < 38 + O) || (x >= 19 + O && x <= 44 + O && y >= SHORE - 6)) continue;
@@ -3154,7 +3151,7 @@ static void build(Geometry &g, bool wide) {
     int x = (int)(ih(i, 1, 3) % W), y = (int)(ih(i, 2, 3) % 14);
     double dx = x + 0.5 - CX, dy = y + 0.5 - CY;
     bool dup = false;
-    for (const Star &st : g.stars) dup = dup || (st.x == x && st.y == y);
+    for (const Star &st : g.stars) dup = dup || (std::abs(st.x - x) <= 1 && std::abs(st.y - y) <= 1);  // no touching stars
     if (g.isB(x, y) || (x > 35 + O && x < 49 + O && y < 11) || (x >= 50 + O && x <= 55 + O && y < 10) || dx * dx + dy * dy < 90.25 || dup) continue;  // not between the Hancock antennas
     g.stars.push_back({x, y, ih(i, 3, 3) % 10 < 3, ih(i, 4, 3) % 2 == 1, ih(i, 5, 3) % 1000, pers[g.stars.size() % 3]});
   }

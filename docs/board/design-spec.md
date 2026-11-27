@@ -492,13 +492,13 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 ### View
 - The viewer is on the lake on Navy Pier's axis (41.8917, -87.590), facing west. Each landmark's x is its real bearing at 1.3 px per degree (pier axis = x 32). Heights are real angular heights at 2.4 rows per degree, about 1.8× vertical exaggeration.
 - Rows 0–25 are sky and city (the shore is row 25); rows 26–31 are the lake. Row 26 is a row of open water between the skyline and the text (rows 27–31), so the two never touch.
-- Left to right: Willis (far left and small, since it's 4 km away), Aon, St. Regis (the closest supertall, so it looks tallest, as in photos from the lake), Trump, Lake Point Tower (directly behind the wheel; its top shows 2 rows above the rim, rows 9–10, a short black block that frames the wheel), Hancock. Background mass fills the gaps: the Loop on the left, Streeterville on the right. Only Willis and Hancock are drawn to be recognized; the rest are plain slabs, to keep the focal points few.
-- **Willis** is seen from the southeast, so its setbacks step down to the right (floors 66 / 108 / 90 / 66, 1 / 4 / 2 / 2 px wide). From due south only one setback shows, and it reads as a generic tower.
+- Left to right: Willis (far left; drawn tall for legibility rather than to scale), Aon, St. Regis (the closest supertall, so it looks tallest, as in photos from the lake), Trump, Lake Point Tower (directly behind the wheel; its top shows 2 rows above the rim, rows 9–10, a short black block that frames the wheel), Hancock. Background mass fills the gaps: the Loop on the left, Streeterville on the right. Only Willis and Hancock are drawn to be recognized; the rest are plain slabs, to keep the focal points few.
+- **Willis** is a staircase stepping down to the right, not to scale: 21 / 17 / 13 / 9 rows, 3 / 2 / 2 / 2 px wide, with twin antennas (4 and 3 rows) on its top step (decided Nov 27; the realistic 4 km version, 15 rows, didn't read).
 - **Hancock** has symmetric 4-6-8 px steps around x 53 and twin antennas of equal height, at full height (the text no longer sits above them).
 
 ### Buildings and lights
 - Every building, background included, and every antenna mast is unlit (black) day and night. By day they're a silhouette against the sky; at night only the windows draw the city.
-- **Night windows:** 45% of window slots (even columns, odd rows) are lit, 30% of those bright amber `#ffb050`, the rest `#8a5c20`, from a fixed seed so the pattern never changes. Background mass gets windows only right of the wheel. No windows around the pier (x 19–44, rows 19 and below) or behind the wheel, so the pier's string lights are the only amber there.
+- **Night windows:** 45% of window slots (even columns, odd rows) are lit, 30% of those bright amber `#ffb050`, the rest `#8a5c20`, from a fixed seed so the pattern never changes. Background mass gets windows only right of the wheel. No windows around the pier (x 19–44, rows 19 and below) or behind the wheel, so the pier's string lights are the only amber there, and none on the shore row (25), so no light sits right on the water.
 - **Hancock beacons:** red, night only, pulsing together: a smooth 4 s cosine between dark red `#401010` and bright red `#ff2020`, never off. Not a hard blink, since a red 1 s blink means a tornado warning (§2).
 
 ### Centennial Wheel and Navy Pier
@@ -512,7 +512,7 @@ Designed Oct 17, 2026; revised for the S3 Oct 31, 2026. An ambient clock face: t
 - **Sun (day):** a 7 px soft-edged disc `#ffd040` at x 38–44, rows 2–8.
 - **Sun (sunset):** drawn behind the city, low on the skyline, at the day's sunset bearing. Real bearings run from about 238° (December) to 302° (June), which at the skyline's 1.3 px per degree would put the sun off the panel at both ends, so the sun has its own scale: x = 32 + (bearing − 270) × 0.8, which spans x 6–58 over the year. Left of the wheel in winter, right in summer.
 - **Moon:** the day sun's spot and size, `#a89c70` (kept dimmer than the text), at its real phase, with soft edges. Shown all night whenever at least 3% is lit; it ignores moonrise and moonset (a deliberate simplification).
-- **Stars:** 14, about half twinkling (4, 6 or 12 s cycles). They stay off the buildings and the moon, out from between the Hancock antennas (a star there blurred what they were), and at least 3.5 px clear of the wheel's rim (a star beside the rim read as part of the wheel). Bright ones are a soft `#a8aebc`, not white; dim ones `#5a6070`.
+- **Stars:** 14, about half twinkling (4, 6 or 12 s cycles). They stay off the buildings and the moon, out from between the Hancock antennas (a star there blurred what they were), at least 3.5 px clear of the wheel's rim (a star beside the rim read as part of the wheel), and never touching another star, corner to corner included. Bright ones are a soft `#a8aebc`, not white; dim ones `#5a6070`.
 
 ### Water
 - A two-color gradient with faint ripple dashes drifting sideways, alternate rows in opposite directions, 1 px every 1.5 s.
