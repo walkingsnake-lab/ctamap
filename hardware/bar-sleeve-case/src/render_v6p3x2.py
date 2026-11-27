@@ -151,6 +151,19 @@ annotate(c, cam2, [('A\'s block: on the print bed with the plate', (-4, DR.Y1 - 
 save(R.titled(R.row([a, c]), 'The knuckles: the P4 V6\'s back joint',
               'Left: the back at the seam, walnut off. Right: section through the lower knuckle, seen from above (the back of the case at the top).'), 'p3x2v6-5-knuckles.png')
 
+# the cleats: the back with both case cleats on, the wall cleat pulled away
+cc, wc, CLT = M.cleats()
+ps = parts(knob=True, inside=False) + [R.Part('cc', cc.translate([-M.PANEL_CX, 0, 0]) + cc.translate([M.PANEL_CX, 0, 0]), 'petg'),
+                                        R.Part('wc', wc.translate([0, 45, -18]), 'new')]
+sc = R.Scene(ps)
+cam = persp((0.45, 1.3, 0.55), size=(1800, 1000), dist=900, target=CENTRE + np.array([0, 30, 0]))
+a = sc.render(cam, ground=False, flip=True)
+annotate(a, cam, [('wall cleat (orange here; prints black): 60 deg bevel, pockets in its wall face', (-70, DR.Y1 + 45 + 12, 40), (-60, 150), 'mt'),
+                  ('the stop, between the case cleats\' inner ends', (0, DR.Y1 + 45 + 8, CLT.ZB - 18 - 4), (120, -170), 'lb'),
+                  ('two case cleats, one per chassis half', (M.PANEL_CX, DR.Y1 + 10, CLT.ZB + 8), (120, -120), 'lb')], fs=22)
+save(R.titled(a, 'The cleats: the P4 V6\'s design',
+              f'Lift {CLT.hook():.0f} mm to unhook (V5: 10). The stop keeps the bar from sliding along the wall cleat when a USB-C plug is pushed in.'), 'p3x2v6-6-cleats.png')
+
 # the diffuser seam, from the front
 sc = R.Scene(parts(chassis=False, knob=False, screws=False, clip=box(-14, 14, -50, 200, ZC - 12, ZC + 12)))
 cam = ortho((0, -1, 0), (1200, 1000), 42.0, target=np.array([0, 10, ZC]))

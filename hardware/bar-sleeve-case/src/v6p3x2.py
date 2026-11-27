@@ -1,4 +1,4 @@
-"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 4 (Nov 27, 2026). Units mm.
+"""V6 for the 128 x 32 P3 bar (two Waveshare P3 64x32 side by side, 384 x 96), draft 5 (Nov 27, 2026). Units mm.
 
     python3 v6p3x2.py ../stl/p3x2-v6      # the print set (p3x2-v6-*.stl, reused parts and coupons included) and the checks
 
@@ -25,7 +25,8 @@ What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0).
   - **Knuckles**: the P4 V6's, two of them: blocks on A's back plate reach 9 mm past the seam into notches in B's, under
     bridges inside B; one M3 x 10 flat head from the back through each block into an insert in its bridge, flush. The
     tongues alone were weak against bending in plan (review, Nov 27); the knuckles are the tie at the back. Nothing
-    stands outside the back plates, so the cleats are V5's.
+    stands outside the back plates.
+- **Cleats**: the P4 V6's design (60 deg bevel, pockets in the wall cleat, a stop against sliding along it): see cleats().
   - Every screw is the builds' black M3 x 10 flat head (DIN 7991) into an M3 x D5 x L4 insert.
 - **Panels**: one splice plate (p3x2.py's) on each pair of inner corner inserts holds the rows level across the seam, under
   the inner standoffs, so those two posts' feet sit SPLICE_T further back.
@@ -375,6 +376,32 @@ def knuckle_inserts():
     return Manifold.batch_boolean([cyl_y(KN_SCREW_X, zc, KN_ROOF - INS_RECESS - 4.0, KN_ROOF - INS_RECESS, 4.4, 32) for zc, _, _ in KNUCKLES], ADD)
 
 
+# The cleats (Nov 27): the P4 V6's (p4.py, Nov 17) on this back. A 60 deg bevel (about 17 mm of lift to unhook, V5's 45
+# deg: 10), pockets in the wall cleat's wall face, a flat counterbore wide enough for a flanged head, two wall screws.
+# The stop: the P4's wall cleat has one outside each end of its single case cleat. Here the two case cleats (x 21 to 171
+# each side) run past the 220 mm wall cleat's ends, so the stop is one block between their inner ends: plugging in the
+# USB-C at the right end pushes the bar along the cleat, and the left case cleat's inner end lands on it.
+CLEAT_BEVEL = 60.0
+CLEAT_STOP = (0.5, 5.0)            # clearance to each case cleat's inner end, lead-in
+CLEAT_POCKETS = (8.0, 4.0)         # depth (of 12), rib
+WALL_CLEAT_HW, WALL_CLEAT_XS = 110.0, (-95.0, 95.0)
+
+
+def cleats():
+    """(case cleat in its panel's frame, wall cleat in the case frame)"""
+    import cleat as CLT
+    CLT.BEVEL_DEG, CLT.WALL_STOPS, CLT.WALL_POCKETS, CLT.CBORE_D = CLEAT_BEVEL, None, CLEAT_POCKETS, 7.4
+    wc = CLT.wall_cleat(hw=WALL_CLEAT_HW, xs=list(WALL_CLEAT_XS))
+    cl, lead = CLEAT_STOP
+    xe = PANEL_CX - DR.CLEAT_HW - cl                                  # the stop's faces, +/- this
+    ztop = CLT.ZB - CLT.tip_z()
+    v = CLT.poly([(CLT.YW, CLT.ZB - CLT.drop() - 0.01), (DR.Y1 + CLT.TIP - 0.01, ztop), (CLT.YW, ztop)])   # the V above the bevel
+    blk = CLT.prism_x(v, -xe, xe)
+    w = Manifold.extrude(CLT.poly([(0, 0), (lead, 0), (0, -lead)]), 3 * CLT.T).rotate([90, 0, 0]).translate([0, CLT.YW + CLT.T, ztop + 0.01])
+    blk = blk - w.translate([-xe, 0, 0]).mirror([1, 0, 0]) - w.translate([-xe, 0, 0])   # its faces lean away from the cleats toward the top
+    return CLT.case_cleat(), wc + blk, CLT
+
+
 def turn(m):
     """B's (turned) frame to A's un-turned panel: 180 deg about the case's depth axis through the panel's centre"""
     return m.rotate([0, 180, 0]).translate([0, 0, 2 * ZC])
@@ -545,17 +572,23 @@ if __name__ == '__main__':
     save(DR.status_window().translate([PANEL_CX, 0, 0]), 'p3x2-v6-chassis-B-window-translucent', frame=P['chassis_b'])
     t = CO.export(CO.collar(), f'{out}/p3x2-v6-encoder-collar-translucent.stl'); print('collar', np.round(t.extents, 1).tolist())
     me = DR.sled().to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-sensor-sled-black.stl')
-    import shutil, cleat as CLT
-    wc = CLT.wall_cleat(hw=110.0, xs=[-95.0, 0.0, 95.0])         # p3x2's 220 mm wall cleat: catches both case cleats
-    me = wc.rotate([-90, 0, 0]).to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-cleat-wall-black.stl')
-    for a, b in (('bar-knob', 'knob-white'), ('v5-drawer/bar-cleat-case', 'cleat-case-black-x2'), ('bar-boot-key', 'boot-key')):
+    import shutil
+    cc, wc, CLT = cleats()
+    for m, n, rot in ((cc, 'cleat-case-black-x2', -90), (wc, 'cleat-wall-black', 90)):     # case cleat wall face down; wall cleat front face down
+        me = m.rotate([rot, 0, 0]).to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.merge_vertices()
+        t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-{n}.stl'); print(n, np.round(t.extents, 1).tolist())
+    for a, b in (('bar-knob', 'knob-white'), ('bar-boot-key', 'boot-key')):
         shutil.copyfile(os.path.join(HERE, '..', 'stl', a + '.stl'), os.path.join(out, f'p3x2-v6-{b}.stl'))
     # hung on the wall: both case cleats on the one wall cleat
-    cc = CLT.case_cleat()
-    hung = [P['kn_screws'], P['chassis_a'], P['chassis_b'], P['sleeve_a'], P['sleeve_b'], cc.translate([-PANEL_CX, 0, 0]), cc.translate([PANEL_CX, 0, 0])]
-    seated = lambda dz=0.0: round(sum((m.translate([0, 0, dz]) ^ wc).volume() for m in hung), 2)
+    ccs = cc.translate([-PANEL_CX, 0, 0]) + cc.translate([PANEL_CX, 0, 0])
+    hung = [P['kn_screws'], P['chassis_a'], P['chassis_b'], P['sleeve_a'], P['sleeve_b'], ccs]
+    seated = lambda dz=0.0, dx=0.0: round(sum((m.translate([dx, 0, dz]) ^ wc).volume() for m in hung), 2)
     rows = check(P, sk)
-    rows.append(('case cleats / chassis and back screws', round(sum(((cc.translate([s * PANEL_CX, 0, 0])) ^ (P['chassis_a'] + P['chassis_b'] + P['back'])).volume() for s in (-1, 1)), 2)))
+    rows.append(('case cleats / chassis, back and knuckle screws', round((ccs ^ (P['chassis_a'] + P['chassis_b'] + P['back'] + P['kn_screws'])).volume(), 2)))
+    rows.append((f'hung, 0.3 either way along the wall cleat: free', max(seated(dx=-0.3), seated(dx=0.3))))
+    rows.append((f'hung, 1.5 either way along the wall cleat: on the stop (> 0 both ways)', 0.0 if min(seated(dx=-1.5), seated(dx=1.5)) > 1.0 else 1.0))
+    wb = wc.bounding_box()
+    rows.append((f'wall cleat {wb[3] - wb[0]:.0f} long, on the back between the louver bands (z {wb[2]:.1f} to {wb[5]:.1f}; {DR.CLEAT_ZBOT:.1f} to {DR.CLEAT_ZTOP:.1f} free)', 0.0 if wb[2] >= DR.CLEAT_ZBOT and wb[5] <= DR.CLEAT_ZTOP and wb[3] - wb[0] <= 250 else 1.0))
     rows.append(('wall cleat / everything hung', seated()))
     rows.append((f'lifted straight off the wall cleat (0.5 to {CLT.hook() + 6:.0f})', max(seated(q) for q in np.arange(0.5, CLT.hook() + 6.01, 0.5))))
     print(dict(case=[round(2 * sk['hw'], 1), round(sk['h'], 1), sk['d']], knob_x=sk['kx'], sensor_x=sk['sensor_x'], 

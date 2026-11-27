@@ -60,7 +60,7 @@ jobs:
         run: timeout -k 5 900 python3 v6p3x2.py "$RUNNER_TEMP/p3x2v6"
 
       - name: Mesh check (128 P3 V6 parts)
-        run: timeout -k 5 600 python3 meshcheck.py "$RUNNER_TEMP"/p3x2v6/p3x2-v6-sleeve-A-walnut.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-sleeve-B-walnut.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-chassis-A-black.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-chassis-B-black.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-seam-key-*.stl
+        run: timeout -k 5 600 python3 meshcheck.py "$RUNNER_TEMP"/p3x2v6/p3x2-v6-sleeve-A-walnut.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-sleeve-B-walnut.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-chassis-A-black.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-chassis-B-black.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-seam-key-*.stl "$RUNNER_TEMP"/p3x2v6/p3x2-v6-cleat-*.stl
 
       - name: Committed 128 P3 V6 print set (stl/p3x2-v6) matches the code
         run: |
