@@ -42,6 +42,7 @@ def parts(sleeve=True, chassis=True, inside=True, knob=True, screws=True, clip=N
     if sleeve:
         add('sleeve_a', P['sleeve_a'], 'walnut', 'sleeve_a', seed=1)
         add('sleeve_b', P['sleeve_b'], 'walnut', 'sleeve_b', seed=2)
+        add('keys', P['keys'], 'new', 'sleeve_b')
     if chassis:
         if tongue_new:
             add('chassis_a', P['chassis_a'] - P['joint_add'], 'petg', 'chassis')
@@ -120,7 +121,7 @@ y0 = M.TONGUE_YS[0]
 sc = R.Scene(parts(sleeve=False, knob=False, inside=True, tongue_new=True, clip=box(-45, 45, -50, 200, -50, 300)))
 cam = persp((0.15, 0.55, 1.0), size=(1200, 1000), dist=230, target=np.array([0, 45, H - 8]), yfov=0.5)
 a = sc.render(cam, ground=False)
-annotate(a, cam, [('B\'s wall: two M3 x 10 flat heads, flush (the walnut covers them)', (M.CH_GAP / 2 + M.TONGUE_SX, M.TONGUE_YS[1], S.ZO1), (60, -170), 'lb'),
+annotate(a, cam, [('B\'s wall: two M3 x 10 flat heads (staggered), flush (the walnut covers them)', (M.CH_GAP / 2 + M.TONGUE_SCREWS[1][0], M.TONGUE_SCREWS[1][1], S.ZO1), (60, -170), 'lb'),
                   ('A\'s tongue (orange) under B\'s wall', (8, 31, S.ZIN1 - 3), (-150, 170), 'rt')], fs=22)
 ps = parts(knob=False, clip=box(-30, 30, y0 - 0.25, y0 + 0.25, -50, 300))
 sc2 = R.Scene(ps)
@@ -128,7 +129,8 @@ cam2 = ortho((0, -1, 0), (1300, 1000), 30.0, target=np.array([0, y0, H - 9]))
 c = sc2.render(cam2, ground=False, crease=0.0)
 annotate(c, cam2, [(f'walnut seam {M.SEAM_GAP:g} with a 0.5 x 45 deg V each side', (0, y0, H - 0.3), (-120, -110), 'rb'),
                    ('chassis seam 0.3: A\'s tongue spans it under the walnut seam', (0, y0, S.ZIN1 - 3), (140, 150), 'lt'),
-                   ('insert in the tongue', (M.CH_GAP / 2 + M.TONGUE_SX, y0, S.ZIN1 - 4), (170, 60), 'lm')], fs=22)
+                   ('seam key (loose PETG, orange) in both halves\' rebates', (-30, y0, H - 4.0 - 0.7), (-40, 120), 'lt'),
+                   ('insert in the tongue', (M.CH_GAP / 2 + M.TONGUE_SCREWS[0][0], y0, S.ZIN1 - 4), (170, 60), 'lm')], fs=22)
 save(R.titled(R.row([a, c]), 'The joint: tongues in the chassis, a plain line in the walnut',
               f'Left: from above, walnut off. Right: section {y0:g} mm back, through a tongue screw. The walnut carries no load across the seam.'), 'p3x2v6-3-joint.png')
 

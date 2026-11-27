@@ -25,12 +25,18 @@ What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0), 
   seat are the single P3 V6's (45 deg, v5 rim), not the 128 V5's 55 deg / 1.5: that was for a diffuser held by the rim,
   which pushed through under a thumb; in V6 it sits on the screwed-down panel RIM_GAP behind the rim, and the 55 deg seat
   is a 900 mm2 overhang in the back-down print.
+- **Seam keys** (review, Nov 27: nothing else aligns the halves' free ends at the seam): p3x2's joint plates, unglued. A flat
+  black PETG key 100 x 1.2 in a rebate across the seam inside the top wall and one inside the bottom, 0.1 under the bore:
+  the chassis, sliding in under them, holds them there. They keep the two open ends' top and bottom walls flush.
+- The diffuser halves must be printed from this set (BEV 0.6): the V5 pair's (BEV 0.2) meet the 45 deg rim.
 - Knob 45 mm from the right end (x +161), sensor 40 inboard; V5's 30 mm knob and translucent collar, as the P3 V6.
 
 Assembly (the P3 V6's order, both halves at once):
 1. Bench: splice plates on the inner inserts, standoffs into all twelve inserts (the inner four through the plates),
-   diffuser halves snapped on; the two chassis halves joined (the tongues' four inserts set first; four screws).
-2. Both walnut halves face down, butted at the seam: the panel pair in from the back onto the rims, a washer per standoff.
+   diffuser halves snapped on; the two chassis halves joined back-down on a flat surface (the tongues' four inserts set
+   first, 0.2 under the face; four screws).
+2. Both walnut halves face down, butted at the seam, the two seam keys in their rebates (a strip of tape holds each until
+   the chassis is in): the panel pair in from the back onto the rims, a washer per standoff.
 3. Half B: collar in its hole, encoder up into it, nut on, QT cable in.
 4. The joined chassis down into both halves, its posts onto the standoffs: twelve M3 x 8 from the back, then the four flat
    heads from below (each half's seam closes as its pair goes home), then the knob.
@@ -39,9 +45,14 @@ import json, math, os, subprocess, sys
 STAGE = 'chassis' if '--chassis' in sys.argv else 'skin'
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.environ['CASE_WALL'] = '4.0'
-SEAM_GAP = float(os.environ.get('V6P3X2_SEAM', '0.4'))   # between the walnut halves as drawn: 0 to ~0.8 as printed and placed
+SEAM_GAP = float(os.environ.get('V6P3X2_SEAM', '0.26'))   # between the walnut halves as drawn (0.25 welded badly at the V's steps). Each half is centred on its two
+                                 # countersinks (x 50 and 142: centroid 96), so a walnut print s small opens the seam by ~192 s
+                                 # (0.2 %: +0.38) and nothing closes it: drawn small. The tolerance rows check 0 to 0.3 % shrink
+                                 # with both halves 0.1 toward the seam (the heads' fit in their cones): never shut
+SEAM_SHIFT = 0.1
 CH_GAP = 0.3                       # between the chassis halves
 PANEL_CX = 96.0
+M_CX = PANEL_CX                    # each walnut half's centre of location: the midpoint of its two screws (50, 142)
 SPLICE_T = 2.0                     # p3x2's splice plate
 
 if STAGE == 'skin':
@@ -58,8 +69,11 @@ if STAGE == 'skin':
     import case as C
     import drawer as DR
 
+    PX.JP_L = 96.0                  # 48 into each half (100 put the ends' edges on the countersinks' x, 50: a bad weld)
+    PX.JP_Y1 = DR.Y1 - 5.0          # the keys' rebates end 3 mm in front of the back rebate's seat (p3x2's ran to 63)
+
     def halves():
-        sh = S.sleeve()
+        sh = S.sleeve() - Manifold.batch_boolean(PX.rebate_cuts(), ADD)   # the seam keys' rebates, top and bottom
         g = SEAM_GAP / 2
         groove = PX.v_groove(sh)   # 0.5 x 45 deg about x = 0; the bore is plain there, so it moves with each face
         a = (sh - groove.translate([-g, 0, 0])) ^ box(-C.HW - 1, -g, -50, C.D + 1, -1, C.H + 1)
@@ -96,6 +110,7 @@ if STAGE == 'skin':
         dif, h = diffusers()
         for n, m in (('sleeve-A', a), ('sleeve-B', b), ('diffuser-A', dif[('A', 'white')] + dif[('A', 'black')]),
                      ('diffuser-B', dif[('B', 'white')] + dif[('B', 'black')]),
+                     ('keys', PX.joint_plate(True, PX.JP_L) + PX.joint_plate(False, PX.JP_L)),
                      ('splice-top', PX.splice_in_case(True).translate([0, S.RIM_GAP, 0])),
                      ('splice-bot', PX.splice_in_case(False).translate([0, S.RIM_GAP, 0]))):
             PX.tm(m).export(f'{fr}/{n}.stl')
@@ -109,6 +124,9 @@ if STAGE == 'skin':
             for col, t in (('white', w), ('black', k)):
                 t.apply_translation(-lo); t.export(f'{out}/p3x2-v6-diffuser-{side}-{col}.stl')
             print(f'p3x2-v6-diffuser-{side}', np.round(k.extents, 1).tolist())
+        for top, n in ((True, 'top'), (False, 'bottom')):
+            t = PX.tm(PX.joint_plate(top, PX.JP_L)); t.apply_translation(-t.bounds[0]); t.export(f'{out}/p3x2-v6-seam-key-{n}-black.stl')
+            print(f'p3x2-v6-seam-key-{n}', np.round(t.extents, 2).tolist())
         sp = [PX.tm(PX.splice_plate(PX.SPLICE_HOLE)) for _ in range(2)]
         PX.layout([sp], gap=6.0)
         trimesh.util.concatenate(sp).export(f'{out}/p3x2-v6-splice-plates-black.stl')
@@ -137,8 +155,11 @@ A_TIES = dict(top=[(min(x for x, z in A_CENTRE if z > 0) - 8.0, min(x for x, z i
 
 # the joint (v6.tongue_legs' numbers)
 TONGUE, TONGUE_T, TONGUE_CL = 16.0, 7.5, 0.15   # into B; thick (inner face 4 mm above the splice plates and inner posts); clear
-TONGUE_SX = 8.0                    # the screws this far into B (B's pad strip there is left off)
-TONGUE_YS = (33.5, 43.5)           # ... and at these depths (inside the 45 deg back edge)
+TONGUE_SCREWS = ((12.0, 33.5), (4.5, 47.0))   # (x into B, y) of each tongue's two screws: staggered in x and y (review, Nov 27:
+                                 # both at one x left a 10 mm couple against bending in plan), inside the 45 deg back edge
+TONGUE_YS = tuple(y for _, y in TONGUE_SCREWS)
+INS_RECESS = 0.2                   # the inserts set this far under the tongue's face: one left proud cannot hold the joint open
+CSK_HEAD_K = 1.5                   # DIN 7991 M3: 6.0 head, 90 deg
 TONGUE_ROOT = 10.0                 # how far back into A the tongues are rooted
 SEAM_PAD_FREE = 14.0               # B has no pad strip within this of the seam (the joint screws' heads)
 LEG_Y0, LEG_Y1 = None, None        # set below: behind the panel, in front of the louver band
@@ -207,8 +228,8 @@ def chassis_half(side):
 def straight_end(t, sx):
     """the seam end made straight: the single P3's tray turns its corner from |x| 94.5 (panel frame), 1.35 mm before the
     seam (96), which dipped the walls, the lip and the back plate by up to 0.08 outside and more inside. Everything past
-    STRAIGHT_X toward the seam is replaced by the cross-section at STRAIGHT_X (walls, back plate, lip: no post, louver or
-    pad reaches it), run on past the cut"""
+    STRAIGHT_X toward the seam is replaced by a 1 mm slab inboard of it (walls, back plate, lip; no louver or pad reaches
+    it, but B's top inner post foot grazes it: a 1.4 mm2 ridge along the back plate's inside, harmless), run on past the cut"""
     xs = sx * STRAIGHT_X
     c = xs - sx * 1.0                                          # a 1 mm slab inboard of xs, stretched outward about its inner face:
     slab = t ^ (box(c, xs, -50, 200, -50, 200) if sx > 0 else box(xs, c, -50, 200, -50, 200))   # its face there is
@@ -230,9 +251,10 @@ def joint():
     LEG_Y1 = DR.Y1 - DR.LV_DEPTH - 1.5 - 0.5
     x0, x1 = -g - TONGUE_ROOT, g + TONGUE
     adds, cut_a, cut_b = [], [], []
-    xm = g + TONGUE_SX
     ys = TONGUE_YS
-    assert ys[0] - INS_D / 2 - 1.5 >= LEG_Y0 and ys[1] + INS_D / 2 + 1.5 <= LEG_Y1 - (xm + INS_D / 2 + g), ys
+    for sx_, y in TONGUE_SCREWS:
+        xm = g + sx_
+        assert y - INS_D / 2 - 1.5 >= LEG_Y0 and y + INS_D / 2 + 1.5 <= LEG_Y1 - (xm + INS_D / 2 + g), (sx_, y)
     for sz in (1, -1):
         zw = S.ZIN1 if sz > 0 else S.ZIN0                       # the wall's inner face
         za, zb = zw - sz * cl, zw - sz * (cl + TONGUE_T)       # the tongue's outer and inner face
@@ -240,7 +262,8 @@ def joint():
         adds.append(along_z(lap, *sorted((za, zb))))
         adds.append(along_z([(x0, LEG_Y0), (-g, LEG_Y0), (-g, DR.Y1 - DR.LV_DEPTH + 0.5), (x0, DR.Y1 - DR.LV_DEPTH + 0.5)], *sorted((zw + sz * 0.01, zb))))
         # the root, in A, runs back into the louver band (solid there): it stands on it in the print
-        for y in ys:
+        for sx_, y in TONGUE_SCREWS:
+            xm = g + sx_
             cut_a.append(cyl_z(xm, y, *sorted((za - sz * INS_DEPTH, za + sz * 0.01)), INS_D, 32))
             cut_a.append(cyl_z(xm, y, *sorted((zb - sz * 1.0, za + sz * 0.01)), INS_RELIEF, 32))
             zo = zw + sz * DR.TRAY_WT
@@ -251,10 +274,27 @@ def joint():
     return u(adds), u(cut_a), u(cut_b), ys
 
 
-def joint_screws(ys):
+def joint_screws(ys=None):
+    """the four M3 x 10 flat heads (DIN 7991), seated flush in B's countersinks"""
     g = CH_GAP / 2
-    xm = g + TONGUE_SX
-    return Manifold.batch_boolean([cyl_z(xm, y, S.ZO1 - 10.0, S.ZO1, 3.0, 24) + cyl_z(xm, y, S.ZO0, S.ZO0 + 10.0, 3.0, 24) for y in ys], ADD)
+    out = []
+    for sx_, y in TONGUE_SCREWS:
+        xm = g + sx_
+        for zo, sz in ((S.ZO1, 1), (S.ZO0, -1)):
+            m = Manifold.cylinder(CSK_HEAD_K, 1.5, 3.0 - 0.02, 32).translate([0, 0, -CSK_HEAD_K]) + Manifold.cylinder(10.0, 1.5, 1.5, 24).translate([0, 0, -10.0])
+            out.append((m if sz > 0 else m.mirror([0, 0, 1])).translate([xm, y, zo]))
+    return Manifold.batch_boolean(out, ADD)
+
+
+def insert_bodies():
+    """the four inserts as set (INS_RECESS under the tongue's outer face, 4 long, 5.0 round)"""
+    g = CH_GAP / 2
+    out = []
+    for sx_, y in TONGUE_SCREWS:
+        for zw, sz in ((S.ZIN1, 1), (S.ZIN0, -1)):
+            za = zw - sz * TONGUE_CL
+            out.append(cyl_z(g + sx_, y, *sorted((za - sz * INS_RECESS, za - sz * (INS_RECESS + 4.0))), 4.4, 32))
+    return Manifold.batch_boolean(out, ADD)
 
 
 def turn(m):
@@ -306,12 +346,12 @@ def build(fr):
     P = dict(chassis_a=a, chassis_b=b, sleeve_a=sa, sleeve_b=sb, joint_add=j_add, joint_in_b=(j_add ^ pre_b).volume(), ys=ys,
              panel=A(S.panel_p3()) + B(S.panel_p3()),
              diffuser=load(f'{fr}/diffuser-A.stl') + load(f'{fr}/diffuser-B.stl'),
-             splice=load(f'{fr}/splice-top.stl') + load(f'{fr}/splice-bot.stl'),
+             splice=load(f'{fr}/splice-top.stl') + load(f'{fr}/splice-bot.stl'), keys=load(f'{fr}/keys.stl'),
              standoffs=standoffs_side('A').translate([-PANEL_CX, 0, 0]) + B(standoffs_side('B')),
              encoder=B(S.encoder()), collar=B(S.collar()), plain_collar=B(S.plain_collar()),
              s3=B(DR.s3_envelope()), sensor=B(DR.sensor_envelope() + DR.sensor_plugs()), sled=B(DR.sled()),
              back=back_screws_side('A').translate([-PANEL_CX, 0, 0]) + B(back_screws_side('B')),
-             jscrews=joint_screws(ys))
+             jscrews=joint_screws())
     u = S.screws()['under']                                    # the two from below, per half
     P['under'] = u.translate([-PANEL_CX, 0, 0]) + B(u)
     return P
@@ -333,23 +373,45 @@ def check(P, sk):
         rows.append((f'sleeve {n} / chassis, seated', v(s_, ch)))
         rows.append((f'chassis {n} 0.1 further forward / sleeve {n} (its lip meets the seat: > 0)', 0.0 if v(c_.translate([0, -0.1, 0]), s_) > 0.2 else 1.0))
     sg = sa.min_gap(sb, 2.0)
-    rows.append((f'walnut seam {sg:.2f} (drawn {SEAM_GAP})', 0.0 if abs(sg - SEAM_GAP) < 0.02 else 1.0))
+    rows.append((f'walnut seam {sg:.2f} as drawn', 0.0 if sg >= 0.1 else 1.0))
+    def half_as_printed(m, cx, shrink, shift):
+        return m.translate([-cx, 0, 0]).scale([1 - shrink, 1, 1]).translate([cx + shift, 0, 0])
+    worst, at02 = 9.0, None
+    for shrink in (0.0, 0.001, 0.002, 0.003):
+        g_ = half_as_printed(sa, -M_CX, shrink, SEAM_SHIFT).min_gap(half_as_printed(sb, M_CX, shrink, -SEAM_SHIFT), 2.0)
+        worst = min(worst, g_)
+        if shrink == 0.002:
+            at02 = half_as_printed(sa, -M_CX, shrink, 0).min_gap(half_as_printed(sb, M_CX, shrink, 0), 2.0)
+    rows.append((f'walnut seam, 0-0.3 % shrink with both halves {SEAM_SHIFT} toward it: nearest {worst:.2f} (never shut); at 0.2 % centred: {at02:.2f}', 0.0 if worst > 0.0 else 1.0))
+    keys = P['keys']
+    rows.append(('seam keys / chassis', v(keys, ch)))
+    rows.append(('seam keys / walnut (in their rebates)', v(keys, sl)))
+    rows.append((f'seam keys: each half holds them ({v(keys, sa.translate([0, 0, 0.3])) > 0} / {v(keys, sb.translate([0, 0, 0.3])) > 0}: a 0.3 step at the seam hits)', 0.0 if v(keys, sa.translate([0, 0, 0.3])) > 0 and v(keys, sb.translate([0, 0, 0.3])) > 0 else 1.0))
     cg = ca.min_gap(cb, 2.0)
     rows.append((f'chassis A / B, joined: nearest {cg:.2f} (0.1 or more)', 0.0 if cg >= 0.1 else round(0.15 - cg, 2)))
     rows.append(('the joint\'s tongues and lap / chassis B before its cuts (they sit in clear space)', round(P['joint_in_b'], 2)))
-    rows.append(('joint screws / chassis (holes open, inserts excepted)', v(P['jscrews'], cb)))
-    rows.append(('joint screws / sleeve, panels, S3, sensor', v(P['jscrews'], sl + pan + s3 + sen)))
+    js, ins = P['jscrews'], insert_bodies()
+    rows.append(('joint screws (DIN 7991 heads) / chassis B (holes and countersinks open)', v(js, cb)))
+    rows.append(('joint screws / chassis A, outside the inserts (insert holes and reliefs open)', v(js - ins.translate([0, 0, 0]), ca)))
+    rows.append(('inserts, set 0.2 under / chassis A, B (their holes)', v(ins, ca + cb)))
+    rows.append(('joint screws / walnut, panels, splice plates, S3, sensor', v(js, sl + pan + spl + s3 + sen)))
+    eng = (js ^ ins).volume() / (math.pi * 1.5 ** 2) / 4                 # mm of thread per screw inside its insert
+    rows.append((f'joint screws: {eng:.2f} mm in each insert (3.5 or more of its 4)', 0.0 if eng >= 3.5 else round(3.5 - eng, 2)))
+    tip = min(abs(S.ZO1 - 10.0 - (S.ZIN1 - TONGUE_CL - TONGUE_T)), abs(S.ZO0 + 10.0 - (S.ZIN0 + TONGUE_CL + TONGUE_T)))
+    rows.append((f'joint screws\' tips {tip:.2f} inside the tongue\'s inner face', 0.0 if S.ZO1 - 10.0 > S.ZIN1 - TONGUE_CL - TONGUE_T else 1.0))
     rows += [('chassis / panels', v(ch, pan)), ('chassis / diffusers', v(ch, dif)), ('sleeve / diffusers', v(sl, dif)),
              ('sleeve 0.1 further back / diffusers (the rim keeps at least that)', v(sl.translate([0, 0.1, 0]), dif)),
              ('diffusers 0.25 further back / chassis', v(dif.translate([0, 0.25, 0]), ch)),
              ('chassis / standoffs', v(ch, so)), ('chassis / splice plates', v(ch, spl)),
-             ('splice plates / standoffs', v(spl, so)), ('splice plates / panels\' housings, beyond the inserts', 0.0),
+             ('splice plates / standoffs', v(spl, so)), ('splice plates / panels', v(spl, pan)),
              ('chassis / sensor and plugs', v(ch, sen)), ('chassis / sled', v(ch, sled)),
              ('chassis / encoder and its plug, seated', v(ch, enc)),
              ('collar, less its crush ribs / sleeve, chassis, encoder', v(P['plain_collar'], sl + ch + enc)),
              ('encoder / panels, S3, sensor, sled, splice plates', v(enc, pan + s3 + sen + sled + spl)),
              ('screws from below / sleeve and chassis', v(P['under'], ch + sl)),
-             ('back screws / chassis (holes open)', 0.0),
+             ('back screws / chassis (holes open; the posts\' bridge layers at both seat depths aside)',
+              v(P['back'], ch - Manifold.batch_boolean([box(-400, 400, sd - 0.01, sd + 0.03, -5, H + 5) for sd in
+                                                         (S.BOSS_Y - S.WASHER_REC[1] + P3.SO_FLOOR, S.BOSS_Y + SPLICE_T - S.WASHER_REC[1] + P3.SO_FLOOR)], ADD))),
              ('back screws / panels, S3, sensor, encoder', v(P['back'], pan + s3 + sen + enc))]
     # the ways in: the panel pair (spliced) into both halves, then the joined chassis past the hung encoder
     steps = (0.3, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 40, 50, 60, 70)
