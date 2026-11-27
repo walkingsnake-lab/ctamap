@@ -22,25 +22,27 @@ inside is the P4 V6's:
     countersinks are drawn UNDER_BIAS in front of the screws and as much deeper: tightened, each head pulls the sleeve
     back onto the seat (a draw-bore) and ends flush; the seat, not the screws, sets the depth and the rim gap is the model's. A land round each screw
     (V6's lands()) so the walnut is clamped onto PETG;
-  - the knob hole SEAT_HOLE across (V5's: 24), so the encoder goes in from above after the sleeve is on (below).
+  - V5's knob hole (24, teardrop), for V5's collar.
 - **Knob** toward the right end (KX, 45 mm from it, as on the V5 double-wide; V6P3_KNOB_X moves it), the light sensor
   40 mm toward the centre (p3x2.py's grouping). The encoder's QT cable from the sensor goes into its left socket.
-- **Knob seat** (black PETG): what v6.tower() is on the P4, as its own part. It fills the walnut's hole, rests on the
-  chassis's top wall round a square opening and keys into it, and carries V5's collar pocket and deck. Two M2.5 x 8
-  (V5's knob screws) through it into bosses on the chassis's encoder rails hold it down; the knob hides their heads.
-  Knob presses go through the deck and the screws into the chassis, as on the P4.
-- **Encoder**: the P4's way in reversed. Before the sleeve goes on, its QT cable (150 mm or more) is plugged in at the S3 (or
-  the sensor; a 200 mm cable in practice) and its free end taped to the left rail under the opening, to be drawn out
-  through the walnut's hole afterwards. The sleeve on, the encoder (its QT cable plugged in) is lowered through the
-  walnut's hole and the chassis's opening, plug side first and a little tilted, onto two lips under the rails, which
-  hold it 0.3 below its seat; then the knob seat over the bushing, the two screws, the ring, the nut (it pulls the body
-  up into the pocket), the knob.
-- **Trim ring, knob**: the P4 V6's 44 mm ring and 39 mm knob (same nut, bushing and knob stack). The ring here lies
-  flat on the knob seat (no neck to reach over), raised RING_LIFT over the walnut round it.
+- **Knob, collar, encoder: V5's** (Nov 26: the P3's knob is meant to be smaller than the P4's). V5's 30 mm knob
+  (stl/bar-knob.stl) on V5's 35 mm collar (collar.py, built for the 4 mm wall), the encoder clamped up into the collar
+  by its nut before the chassis goes in, and V5's open slot and rails in the chassis's top wall, which slide past it.
+  Draft 1's PETG knob seat (the encoder dropped in from above, P4-style, through a 37.5 mm hole) needed the P4's
+  39 mm knob to hide its screws; it is in git history (PR #557, commits up to df03719). What V6 adds here: two
+  **ledges** under the board's side edges behind its QT sockets, LEDGE_GAP under it, ramped at the front: a knob press
+  that moves the encoder down that far lands in the chassis, not only in the walnut.
 - **Diffuser, sensor sled, cleats, Boot key**: V5's (stl/, stl/v5-drawer), reused. The diffuser rides on the panel
   RIM_GAP behind the rim, as on the P4.
 
-Service: the knob, nut, ring, knob seat and encoder come out from above before the sleeve can slide off. Print the
+Assembly in V5's order (the panel's top edge passes where the encoder's board hangs, so the panel goes in first):
+1. On the bench: standoffs into the panel's inserts, the diffuser snapped on, the ribbon and power leads on the panel.
+2. Sleeve on its hood: panel in from the back, standoffs up, forward onto the rim; a washer on each standoff's end.
+3. Sleeve top down: the collar in its hole, the encoder up into it from inside, nut on (V5: README "Encoder"); its QT
+   cable plugged in and routed down.
+4. Chassis (S3, sensor, sled on it; the cables to the S3 plugged in) slides in from the back, its posts onto the
+   standoffs; six M3 x 8 from the back through the post tubes, the two flat heads from below; then the knob.
+Service: the reverse; the chassis comes out with the encoder left in the sleeve. Print the
 sleeve with a brim: back-down, its footprint is now the 2.5 mm ring behind the rebate.
 
 The V6 constants and functions below are copies of v6.py's (named where they come from). v6.py imports p4.py, which
@@ -71,6 +73,7 @@ from case import box, cyl_y, cyl_z, prism_y, rr_cs, ADD, ZC, H, D, WALL, HW, KY,
 DR.configure_shell()
 V.BACKDOWN = True
 DR.ENC_X = KX
+CO.TIP_BACK = False              # the collar's teardrop to the front, as the back-down sleeve's hole (drawer.py)
 DR.SLED_SCREW = (V.SENSOR_X + 8.0, DR.SLED_SCREW[1])     # the sled's front screw 8 mm from the chip toward the knob (p3x2.py)
 PLUG_SIDE = -1                   # the encoder's QT cable in its left socket, toward the sensor (S3 -> sensor -> encoder): the
                                  # notch, the plug and the way in are drawn on the right and mirrored when this is -1
@@ -107,8 +110,7 @@ S3_EDGE_PARTS = dict(receptacle=(-4.47, 4.47, 0.0, 0.0, 3.2), down=(8.81, 11.76,
 S3_TIP_D, S3_TIP_L = 4.8, 1.6
 S3_FLATS = {0: ((48.0, 2.2, 6.2), (-95.3, 2.7, 3.7))}
 S3_NEAR = ((0, 45.0, 2.64, 0.0, 1.0), (0, 50.9, 2.91, 1.0, 5.64), (0, -95.3, 3.16, 0.0, 3.2), (2, -93.0, 2.81, 0.0, 1.1), (3, 86.5, 3.10, 0.0, 1.1))
-RING_R, RING_LIFT = 22.0, 0.4    # the trim ring (v6.RING_R), its rim raised this far off the walnut
-KNOB_R = 19.5                    # the P4 V6 knob (reused as is): its radius, for the checks
+KNOB_R = 15.0                    # V5's P3 knob (stl/bar-knob.stl, 30), for the renders
 
 # the P3's own
 PAD_H = 0.15                     # contact pads, top and bottom walls: 0.10 of air in the 0.25 gap. The P4's are 0.24 (0.01 of
@@ -132,34 +134,13 @@ END_RELIEF = 0.2                 # on the end walls' flats the lip's face is thi
                                  # seat bears on the top and bottom walls and the corners, so a sleeve printed small across its
                                  # 212 mm width sets the depth by half as much as one small across its 105 mm height
 UNDER_BIAS = 0.15                # the countersinks underneath are drawn this far in front of their screws (see above)
-SEAT_HOLE = 37.5                 # the walnut's knob hole. The encoder board is 25.4 square (corners 17.96 from its centre); its QT
-                                 # plug stands out to 18.94 (x 12.7-18.7, y +/-3) and the cable bends down past that. Tilted
-                                 # 20 deg, plug side first, until its board is 8 mm over its seat, then levelled, it passes a 37
-                                 # (check()); 39 would pass it level. The ring (44) covers its flat's corners by 1.4
-SEAT_CL = 0.45                   # the knob seat in the walnut's hole, a side (the chassis locates it; the walnut never bears on it):
-                                 # more than the depth the sleeve can sit off its seat (0.2 touched, Fable review)
-SEAT_TRUNC = SEAT_HOLE / 2 + 0.6 # the hole's teardrop toward the front (the print's up), cut flat 0.6 past the circle: a 14.3 mm
-                                 # bridge in the 4 mm wall, under the ring, whose sag stays clear of the knob seat (review, Nov 26)
-TILT = (20.0, 8.0)               # the way in for check(): tilted this much (deg) until the board is this far over its seat (mm)
-PASS = 12.7 + DR.RAIL_CL         # the opening in the chassis's top wall: the board's outline and the rails' clearance (13.15)
-NOTCH = (21.0, 3.5)              # and a notch on the right for its QT plug and the cable's bend: out to x, +/- y about KY
-GABLE = 6.0                      # the opening's front edge (the print's up) runs forward this far at 45 deg from each corner before
-                                 # its flat: a 15 mm bridge instead of 27, its sag 6 mm in front of the knob seat's key (review, Nov 26)
-WALL_OPEN = 0.3                  # the top wall's opening is this much larger than the rails' faces (no face shared with them)
-SPIG_CL = 0.15                   # the knob seat's key in the wall's opening, a side
-TS_XY = ((-15.0, KY + 6.0), (15.0, KY + 6.0))   # the two M2.5 x 8 holding the knob seat: outboard of the rails (as the P4's,
-                                 # x 15), 6 behind the knob's axis to clear the plug's notch. Heads end 18.5 out: the knob hides them
-TS_CLEAR, TS_HEAD = 2.9, 5.2     # their hole through the knob seat; the ring's hole round each head (p4.TS_FLANGE)
-TS_PILOT, TS_LEAD, TS_LEN = DR.SLED_PILOT, 0.6, 8.0
-TS_HEAD_D, TS_HEAD_K = 4.7, 1.6
-TS_BOSS_OUT, TS_BOSS_HY = 2.8, 3.2
-LIP_W, LIP_T, LIP_DROP = 1.2, 1.2, 0.3   # lips under the board's side edges: this far under it, this thick, this far below its
-                                 # seat (the nut lifts it off them). Clear of its QT sockets (x 7.7-12.7 at y +/-3)
+LEDGE_GAP = 0.2                  # the ledges: this far under the encoder board, as hung from its collar ...
+LEDGE_W, LEDGE_T = 1.2, 1.2      # ... this far in under its side edges, this thick ...
+LEDGE_Y0 = 3.5                   # ... from this far behind the board's centre (its QT sockets and the plug, at +/-3, pass over
+                                 # the ledges' line as the chassis slides in: only behind them can a ledge stand) back to the band
 PIX = (1.5, -11.0, -8.4, 0.9)    # the encoder's NeoPixel: half width, its front and back edges from the board's centre (y), its
                                  # height. Measured Nov 26 from Adafruit's photo of the 5880 (mounting holes 20.32 apart for scale):
                                  # 3.0 x 2.6, centred on the board, between the front holes. Its height is still assumed
-PIX_RELIEF, PIX_HX = 1.5, 3.0    # a pocket in the key's underside over it (v6.py's 1.5 deep: 2.4 mm of headroom over the board),
-PIX_Y = (-12.6, -9.0)            # 1.5 clear of it either side and 1.6 in front; behind -9.0 the body's pocket (9.8 round) is over it
 SKIRT_ROWS = ()                  # end-wall pad rows (v6.py's: 14, 34): none, see PAD_H
 
 # chassis numbers taken from the tray
@@ -215,30 +196,12 @@ def bore_band(r_out, r_in, y0, y1):
         prism_y(rr_cs(BORE_HX + r_in, BORE_HZ + r_in, BORE_R + r_in), y0 - 1, y1 + 1)
 
 
-def passage_cs(o=0.0):
-    """the chassis's opening for the encoder (x, y), grown by o: the board's square and the plug's notch"""
-    sq = CrossSection.square([2 * (PASS + o), 2 * (PASS + o)], center=True).translate([0, KY])
-    nt = CrossSection.square([NOTCH[0] - PASS + 1.0 + o, 2 * (NOTCH[1] + o)]).translate([PASS - 1.0, KY - NOTCH[1] - o])
-    return sq + nt
-
-
-def gable_cs(o):
-    """the opening's front edge, for the print: GABLE forward at 45 deg from the corners of the square grown by o, then flat.
-    The knob seat's key fills it (grown by WALL_OPEN - SPIG_CL), so it still locates the key forward"""
-    a, y0 = PASS + o, KY - PASS - o
-    return ccw([(-a, y0 + 0.5), (-a, y0), (-a + GABLE, y0 - GABLE), (a - GABLE, y0 - GABLE), (a, y0), (a, y0 + 0.5)])
-
-
 # ---------------------------------------------------------------- the sleeve
 def rr_odd(r):
     """the bore's outline offset by r, its corners on a segment count of their own: a hull between two of these crosses the
     chassis's walls (rr_cs, C.SEG) away from their vertices, where a shared vertex line left near-duplicate points in the STL"""
     rr = max(BORE_R + r, 0.3)
     return CrossSection.square([2 * (BORE_HX + r - rr), 2 * (BORE_HZ + r - rr)], center=True).offset(rr, JoinType.Round, circular_segments=C.SEG + 13).translate([0, ZC])
-
-
-def seat_hole_cs():
-    return V.teardrop_cs(SEAT_HOLE / 2, KX, KY, trunc=SEAT_TRUNC, seg=128)
 
 
 def csk_under(x, y):
@@ -259,13 +222,13 @@ def rebate():
 
 
 def sleeve():
-    saved = V.SCREW_XS, V.KNOB_TOP
-    V.SCREW_XS, V.KNOB_TOP = (), False                  # V5's slotted holes underneath and its 24 mm hole: replaced below
+    saved = V.SCREW_XS, V.KNOB_X
+    V.SCREW_XS, V.KNOB_X = (), KX                       # V5's slotted holes underneath: replaced below; its knob hole at KX
     try:
         sh = V.shell2()
     finally:
-        V.SCREW_XS, V.KNOB_TOP = saved
-    cuts = [rebate(), Manifold.extrude(seat_hole_cs(), WALL + 2).translate([0, 0, H - WALL - 1])]
+        V.SCREW_XS, V.KNOB_X = saved
+    cuts = [rebate()]
     cuts += [csk_under(x, y) for x, y in UNDER_XY]
     return sh - Manifold.batch_boolean(cuts, ADD)
 
@@ -321,9 +284,7 @@ def base_tray():
     saved = DR.FASTEN, DR.INSERT_D, DR.INSERT_L
     DR.FASTEN, DR.INSERT_D, DR.INSERT_L = FASTEN, INS_D, INS_DEPTH            # the cleat's and the bottom screws' bosses
     try:
-        rails = [(KX + sx * (PASS - 0.6), KX + sx * (PASS + DR.RAIL_W + 0.6)) for sx in (-1, 1)]
-        blind = dict(top=BLIND['top'] + [tuple(sorted(r)) for r in rails], bottom=BLIND['bottom'])   # the rails run into the band
-        t = DR.tray(post_dy={c: FOOT_DY for c in DR.CORNERS}, ties=TIES, blind=blind, boss_blind=True, encoder=False)
+        t = DR.tray(post_dy={c: FOOT_DY for c in DR.CORNERS}, ties=TIES, blind=BLIND, boss_blind=True)   # V5's slot and rails at ENC_X
     finally:
         DR.FASTEN, DR.INSERT_D, DR.INSERT_L = saved
     with DR._foot(FOOT_DY):
@@ -337,35 +298,24 @@ def base_tray():
     return (t + Manifold.batch_boolean(adds, ADD)) - Manifold.batch_boolean(cuts, ADD)
 
 
-def rails_lips_bosses():
-    """(adds, cuts) round the encoder. Rails beside the board's side edges (drawer.enc_rails' place and clearance) with a lip
-    under each edge, LIP_DROP below the board's seat: they guide it down and hold it until the nut lifts it off them. The
-    knob seat's two screw bosses on the rails' outsides (p4.tray_top_bosses). The opening in the top wall, a notch for the
-    QT plug through the right rail, and room round the board's sockets."""
+def ledges():
+    """the two ledges (knob at x 0, the plug on the right: at_knob() puts them in place): under each side edge of the encoder
+    board, LEDGE_GAP below it, joined up to drawer.enc_rails' rail beside it, from LEDGE_Y0 behind the board's centre back into
+    the louver band. Their front ends ramp 45 deg down toward the front, so a board hanging low rides up onto them"""
     hw, (by0, by1), (bz0, bz1) = DR.enc_board()
-    top = bz0 - LIP_DROP
-    ya, yb = by0 + 1.0, DR.Y1 - DR.LV_DEPTH + 0.5                  # drawer.enc_rails' run: on into the louver band (blind there)
-    adds, cuts = [], []
-    for sx in (-1, 1):
-        xi, xo = sx * PASS, sx * (PASS + DR.RAIL_W)
-        adds.append(along_y([(xi - sx * LIP_W, top - LIP_T), (xo, top - LIP_T), (xo, ZIN1 + 0.5), (xi, ZIN1 + 0.5), (xi, top),
-                             (xi - sx * LIP_W, top)], ya, yb))
-        a, b = sorted((sx * 7.2, sx * (PASS + 0.3)))               # the board's sockets (x 7.69-12.64, y +/-3) and their pins
-        cuts.append(box(a, b, KY - 3.5, KY + 3.5, top - LIP_T - 1, top + 0.3))
-    zw, zo = ZIN1, ZO1
+    top = bz0 - LEDGE_GAP
     rail_lo = bz1 - DR.RAIL_LAP
-    for x, y in TS_XY:
-        sx = 1 if x > 0 else -1
-        x0, x1 = sorted((sx * PASS, x + sx * TS_BOSS_OUT))
-        boss = box(x0, x1, y - TS_BOSS_HY, y + TS_BOSS_HY, rail_lo, zw + 0.5)
-        gus = (box(x0, x1, y + TS_BOSS_HY - 0.01, y + TS_BOSS_HY, rail_lo, zw + 0.5)              # its back end 45 deg (the bed side)
-               + box(x0, x1, y + TS_BOSS_HY, y + TS_BOSS_HY + (zw - rail_lo), zw, zw + 0.5)).hull()
-        adds += [boss, gus]
-        cuts.append(cyl_z(x, y, rail_lo - 1, zo + 1, TS_PILOT, 24))
-        cuts.append(Manifold.cylinder(TS_LEAD + 0.01, TS_PILOT / 2, TS_PILOT / 2 + TS_LEAD + 0.01, 24).translate([x, y, zo - TS_LEAD]))
-    cuts.append(box(PASS - 1.0, NOTCH[0], KY - NOTCH[1], KY + NOTCH[1], top - LIP_T - 2, zw + 0.3))   # the plug's way down
-    cuts.append(Manifold.extrude(passage_cs(WALL_OPEN) + gable_cs(WALL_OPEN), zo - zw + 1.01).translate([0, 0, zw - 0.01]))   # the opening
-    return Manifold.batch_boolean(adds, ADD), Manifold.batch_boolean(cuts, ADD)
+    ya, yb = KY + LEDGE_Y0, DR.Y1 - DR.LV_DEPTH + 0.5
+    out = []
+    for sx in (-1, 1):
+        xi, xo = sx * (hw + DR.RAIL_CL), sx * (hw + DR.RAIL_CL + DR.RAIL_W)
+        e = sx * 0.3                                               # the web 0.3 inside the rail's faces: no face shared with it
+        prof = [(xi - sx * LEDGE_W, top - LEDGE_T), (xo - e, top - LEDGE_T), (xo - e, rail_lo + 0.5), (xi + e, rail_lo + 0.5), (xi + e, top), (xi - sx * LEDGE_W, top)]
+        m = along_y(prof, ya, yb)
+        a, b = sorted((xi - sx * (LEDGE_W + 1), xo + sx))
+        ramp = along_x([(ya - 0.01, top - LEDGE_T - 0.01), (ya + LEDGE_T + 0.01, top + 0.01), (ya - 0.01, top + 0.01)], a, b)
+        out.append(m - ramp)
+    return Manifold.batch_boolean(out, ADD)
 
 
 def pads(t):
@@ -402,7 +352,7 @@ def pads(t):
                 if j > i and edges[j] - edges[i] >= PAD_RUN:
                     strips.append(box(a, b, edges[i], edges[j], z - PAD_W / 2, z + PAD_W / 2))
                 i = max(j, i + 1)
-    keep_off = [cyl_z(KX, KY, -5, H + 5, SEAT_HOLE + 2.0, 64)] + [cyl_z(x, y, -5, H + 5, LAND_OD + 1.0, 48) for x, y in UNDER_XY]
+    keep_off = [cyl_z(KX, KY, -5, H + 5, 2 * CO.FL_R + 2.0, 64)] + [cyl_z(x, y, -5, H + 5, LAND_OD + 1.0, 48) for x, y in UNDER_XY]
     return (band ^ Manifold.batch_boolean(strips, ADD)) - Manifold.batch_boolean(keep_off, ADD)
 
 
@@ -445,48 +395,26 @@ def chassis():
     # no crush ribs; the front edge clear of the diffuser's flange, which sits RIM_GAP further back
     t = t ^ prism_y(rr_cs(BORE_HX - DR.TRAY_CL, BORE_HZ - DR.TRAY_CL, BORE_R - DR.TRAY_CL), 0, D)
     t = t - box(-400, 400, 0, DR.YF + RIM_GAP + FRONT_CL, -5, H + 5)
-    # the encoder (V5's slot in the top wall and its rails are not built: encoder=False): rails, lips, bosses, the opening
-    ra, rc = rails_lips_bosses()
-    t = (t + at_knob(ra)) - at_knob(rc)
+    t = t + at_knob(ledges())                                   # under the encoder board (V5's slot and rails are the tray's)
     t = t - Manifold.batch_boolean([cyl_y(x, ZC + z, BOSS_Y - WASHER_REC[1] - 1, BOSS_Y, WASHER_REC[0], 48) for x, z in DR.INSERTS], ADD)
     t = t + back_lip()
     t = t + pads(t) + lands()
     return max(t.decompose(), key=lambda m: m.volume())
 
 
-# ---------------------------------------------------------------- the knob seat and ring
-def knob_seat():
-    """the encoder's seat (case frame): a disc in the walnut's hole from the chassis's top face to the case top, a key in the
-    chassis's opening below it, V5's collar pocket and deck (collar.py), the two screws' holes. Prints top face down."""
-    disc = Manifold.extrude(CrossSection.circle(SEAT_HOLE / 2 - SEAT_CL, 160).translate([0, KY]), H - ZO1).translate([0, 0, ZO1])
-    key = Manifold.extrude((passage_cs(WALL_OPEN - SPIG_CL) + gable_cs(WALL_OPEN - SPIG_CL)) ^ CrossSection.circle(SEAT_HOLE / 2 - SEAT_CL - 0.3, 160).translate([0, KY]), ZO1 - ZIN1 + 0.01).translate([0, 0, ZIN1])
-    s = disc + key                         # the key's notch and corners stop 0.3 inside the disc: it comes down through the walnut
-    cuts = [cyl_z(0, KY, ZIN1 - 1, H + CO.DECK_BOT, 2 * CO.POCKET_R, 96),
-            cyl_z(0, KY, ZIN1 - 1, H + 1, 2 * CO.BUSH_R, 64),
-            cyl_z(0, KY, H + CO.DECK_BOT - 0.1, H + 1, 2 * CO.RELIEF_R, 64)]          # through: the ring's underside goes on
-    cuts += [cyl_z(x, y, ZIN1 - 1, H + 1, TS_CLEAR, 32) for x, y in TS_XY]
-    cuts.append(box(-PIX_HX, PIX_HX, KY + PIX_Y[0], KY + PIX_Y[1], ZIN1 - 1, ZIN1 + PIX_RELIEF))   # over the board's NeoPixel (v6.PIX_RELIEF): closed at the
-                                                    # front, so its light has no way out round the key under the ring
-    # a 0.4 lead-in round the key's foot, so it finds the opening
-    o = WALL_OPEN - SPIG_CL
-    ko = lambda g: passage_cs(g) + gable_cs(g)
-    lead = Manifold.extrude(ko(o + 0.01), 0.4).translate([0, 0, ZIN1 - 0.01]) - \
-        Manifold.batch_hull([Manifold.extrude(ko(o - 0.4), 0.01).translate([0, 0, ZIN1 - 0.02]),
-                             Manifold.extrude(ko(o), 0.01).translate([0, 0, ZIN1 + 0.4])])
-    return at_knob(s - Manifold.batch_boolean(cuts, ADD) - lead)
+# ---------------------------------------------------------------- the collar
+def collar():
+    """V5's encoder collar (collar.py, for this wall), in place"""
+    return at_knob(CO.collar().translate([0, KY, H]))
 
 
-def trim_ring():
-    """the P4 V6's ring (RING_R, the collar's flange profile) lying flat on the knob seat: 1.6 thick there (the nut clamps it,
-    as the P4's cap and the seat's deck clamp together: 3.0 over the encoder's body, V5's collar deck), raised RING_LIFT
-    over the walnut outside the seat"""
-    R = RING_R
-    fl = CO.cyl(R, 0, CO.FL_T - CO.FL_CH) + CO.cyl(R, CO.FL_T - CO.FL_CH, CO.FL_T, R - CO.FL_CH)
-    lift = CO.cyl(R + 1, -1, RING_LIFT) - CO.cyl(SEAT_HOLE / 2 - SEAT_CL - 0.2, -2, RING_LIFT + 1)
-    ring = fl - lift - Manifold.cylinder(CO.FL_T + 2, CO.BUSH_R + 0.1, CO.BUSH_R + 0.1, 64).translate([0, 0, -1])
-    ring = ring - CO.cyl(CO.RELIEF_R, -1, 0.2)                                      # the relief, carried on from the seat's deck
-    ring = ring - Manifold.batch_boolean([Manifold.cylinder(CO.FL_T + 2, TS_HEAD / 2, TS_HEAD / 2, 48).translate([x, y - KY, -1]) for x, y in TS_XY], ADD)
-    return at_knob(ring.translate([0, KY, H]))
+def plain_collar():
+    """the collar without its crush ribs, for the checks"""
+    saved, CO.RIB_R = CO.RIB_R, None
+    try:
+        return collar()
+    finally:
+        CO.RIB_R = saved
 
 
 # ---------------------------------------------------------------- what goes inside (checks, renders)
@@ -545,35 +473,26 @@ def plug():
 
 
 def screws():
-    """seated: the two from below (flat heads, in their countersinks, pulled UNDER_BIAS back against the seat), the knob
-    seat's two M2.5 x 8, six M3 x 8 flanged into the standoffs from the back"""
-    under, knob, back = [], [], []
+    """seated: the two from below (flat heads, in their countersinks, pulled UNDER_BIAS back against the seat), six M3 x 8
+    flanged into the standoffs from the back"""
+    under, back = [], []
     k = (CSK_HEAD - 3.0) / 2                                  # the head's cone; a CSK_HEAD_K - k rim under it, level with the face
     rim = CSK_HEAD_K - k                                      # in a CSK_D mouth (DIN 7991 in 6.4)
     for x, y in UNDER_XY:
         m = Manifold.cylinder(rim, CSK_HEAD / 2 - 0.02, CSK_HEAD / 2 - 0.02, 32) + Manifold.cylinder(k, CSK_HEAD / 2 - 0.02, 1.5, 32).translate([0, 0, rim]) \
             + Manifold.cylinder(10.0 - CSK_HEAD_K, 1.5, 1.5, 24).translate([0, 0, CSK_HEAD_K])
         under.append(m.translate([x, y, 0.0]))                # on the screw's axis, UNDER_BIAS off the cone's, which is sunk as much: flush
-    for x, y in TS_XY:
-        x = KX + x
-        knob.append(cyl_z(x, y, H, H + TS_HEAD_K, TS_HEAD_D, 48) + cyl_z(x, y, H - TS_LEN, H + 0.01, 2.5, 32))
     seat = BOSS_Y - WASHER_REC[1] + P3.SO_FLOOR
     for x, z in DR.INSERTS:
         back.append(cyl_y(x, ZC + z, seat - 8.0, seat, 3.0, 24) + cyl_y(x, ZC + z, seat, seat + 1.65, 6.9, 32))
     u = lambda l: Manifold.batch_boolean(l, ADD)
-    return dict(under=u(under), knob=u(knob), back=u(back))
+    return dict(under=u(under), back=u(back))
 
 
 def build():
-    return dict(sleeve=sleeve(), chassis=chassis(), seat=knob_seat(), ring=trim_ring(), panel=panel_p3(),
+    return dict(sleeve=sleeve(), chassis=chassis(), collar=collar(), panel=panel_p3(),
                 diffuser=diffuser_in_case(), standoffs=standoffs(), encoder=encoder(), s3=DR.s3_envelope(),
                 sensor=DR.sensor_envelope() + DR.sensor_plugs(), sled=DR.sled(), screws=screws())
-
-
-def tilted(m, deg):
-    """m turned deg about the y axis through the board's centre, its plug's side down"""
-    zc = (SN.EB_TOP + SN.EB_BOT) / 2
-    return m.translate([-KX, 0, -zc]).rotate([0, PLUG_SIDE * deg, 0]).translate([KX, 0, zc])
 
 
 def vent_area(t, fall=None):
@@ -606,7 +525,7 @@ def vent_area(t, fall=None):
 def check(P):
     """overlap volumes (mm3) that should be zero, and the ways in"""
     v = lambda a, b: round((a ^ b).volume(), 2)
-    ch, sl, seat, ring = P['chassis'], P['sleeve'], P['seat'], P['ring']
+    ch, sl, col = P['chassis'], P['sleeve'], P['collar']
     dif, pan, so, enc, s3, sen = P['diffuser'], P['panel'], P['standoffs'], P['encoder'], P['s3'], P['sensor']
     S = P['screws']
     saved, DR.TOP_FALL = DR.TOP_FALL, False
@@ -625,19 +544,13 @@ def check(P):
             ('chassis / S3, beyond the V5 tray less the post relief (its posts stand in the envelope)', round(v(ch, s3) - v(v5 - s3_post_relief(), s3), 2)),
             ('chassis / sensor and its plugs', v(ch, sen)), ('chassis / sensor sled', v(ch, P['sled'])),
             ('chassis / encoder and its QT plug, seated', v(ch, enc)),
-            ('knob seat / chassis', v(seat, ch)), ('knob seat / sleeve', v(seat, sl)), ('knob seat / encoder', v(seat, enc)),
-            ('ring / sleeve', v(ring, sl)), ('ring / chassis', v(ring, ch)), ('ring / encoder (the bushing)', v(ring, enc)),
-            ('ring / knob seat', v(ring, seat)),
+            ('collar, less its crush ribs (V5: 0.15 into the walnut, meant) / sleeve, chassis, encoder', v(plain_collar(), sl + ch + enc)),
             ('standoffs / encoder, S3, sensor', v(so, enc + s3 + sen)),
             ('encoder / panel, S3, sensor, sled', v(enc, pan + s3 + sen + P['sled'])),
-            ('the NeoPixel 1.0 taller than drawn, 0.5 bigger round / knob seat (the relief: 2.4 over the board)',
-             v(at_knob(box(-PIX[0] - 0.5, PIX[0] + 0.5, KY + PIX[1] - 0.5, KY + PIX[2] + 0.5, SN.EB_TOP, SN.EB_TOP + PIX[3] + 1.0)), seat))]
+            ('the NeoPixel 1.0 taller than drawn, 0.5 bigger round / chassis, collar',
+             v(at_knob(box(-PIX[0] - 0.5, PIX[0] + 0.5, KY + PIX[1] - 0.5, KY + PIX[2] + 0.5, SN.EB_TOP, SN.EB_TOP + PIX[3] + 1.0)), ch + col))]
     # screws
     rows.append(('screws from below / sleeve and chassis (a 3.0 shank in 3.4 holes and the insert)', v(S['under'], ch + sl)))
-    core = at_knob(Manifold.batch_boolean([cyl_z(x, y, H - TS_LEN, H, 1.9, 24) for x, y in TS_XY], ADD))
-    rows.append(('knob seat screws: core (1.9) / chassis, seat (pilots and holes open)', v(core, ch + seat)))
-    rows.append(('knob seat screws / seat (2.9 holes)', v(S['knob'], seat)))
-    rows.append(('knob seat screws / encoder, plug, panel, sensor', v(S['knob'], enc + pan + sen)))
     rows.append(('back screws / chassis (holes open)', v(S['back'], ch - box(-400, 400, BOSS_Y - WASHER_REC[1] + P3.SO_FLOOR - 0.01, BOSS_Y - WASHER_REC[1] + P3.SO_FLOOR + 0.03, -5, H + 5))))
     rows.append(('back screws / panel, S3, sensor, encoder', v(S['back'], pan + s3 + sen + enc)))
     # USB-C (v6.check)
@@ -660,33 +573,19 @@ def check(P):
     va = vent_area(ch)
     rows.append((f'louver open area {va:.0f} mm2 (V5 {vent_area(v5, False):.0f}; at least {VENT_MIN:.0f})', 0.0 if va >= VENT_MIN else round(VENT_MIN - va, 1)))
     # the ways in
-    loaded = ch + pan + so + dif + s3 + sen + P['sled']
-    rows.append(('loaded chassis sliding into the sleeve from the back (0.3-70 mm out)', round(max(v(loaded.translate([0, q, 0]), sl) for q in (0.3, 0.5, 1, 2, 4, 8, 16, 24, 32, 40, 50, 60, 70)), 2)))
-    rows.append(('panel with its standoffs and washers going into the chassis from the front (1-40 mm out)', round(max(v((pan + so).translate([0, -q, 0]), ch) for q in (1, 2, 4, 8, 16, 24, 32, 40)), 2)))
-    rest = sl + ch + pan + so + s3 + sen + P['sled']
-    straight = max(v(enc.translate([0, 0, q - LIP_DROP]), rest) for q in (0.05, 1, 2, 4, 8, 12, 16, 24, 32, 40))
-    rows.append((f'encoder lowered straight in, plug and cable on, onto the lips (info: {straight} mm3, the cable\'s bend; it goes in tilted)', 0.0))
-    d0, q0 = TILT
-    path = [(d0, q) for q in (40, 30, 24, 20, 16, 12, 10)] + [(d0 * q / q0, q) for q in np.linspace(q0, 0, 13)]
-    worst = max(v(tilted(enc, d).translate([0, 0, q - LIP_DROP]), rest) for d, q in path)
-    rows.append((f'encoder lowered in tilted {d0:.0f} deg, plug side first, levelled over the last {q0:.0f} mm onto the lips', worst))
-    rows.append(('encoder resting on the lips / chassis', v(enc.translate([0, 0, -LIP_DROP]), ch)))
-    rows.append(('encoder 0.1 lower than the lips / chassis (they hold it: > 0)', 0.0 if v(enc.translate([0, 0, -LIP_DROP - 0.1]), ch) > 0.05 else 1.0))
-    rows.append(('knob seat lowered on over the bushing (0.3-30 mm up) / sleeve, chassis, encoder on its lips',
-                 round(max(v(seat.translate([0, 0, q]), sl + ch + enc.translate([0, 0, -LIP_DROP])) for q in (0.3, 0.5, 1, 2, 4, 8, 16, 30)), 2)))
-    w = min(abs(x) - TS_PILOT / 2 - PASS for x, _ in TS_XY)
-    rows.append((f'knob seat screws: PETG between each pilot and the board\'s opening {w:.2f} (0.5 or more; the P4\'s 0.65)', 0.0 if w >= 0.5 else round(0.5 - w, 2)))
-    hd = max(math.hypot(x, y - KY) + TS_HEAD_D / 2 for x, y in TS_XY)
-    rows.append((f'knob seat screw heads end {hd:.2f} from the axis; the knob {KNOB_R} (hidden from above: >= 0.5 short)', 0.0 if hd <= KNOB_R - 0.5 else round(hd - KNOB_R + 0.5, 2)))
-    rg = ring.min_gap(sl, 1.0)
-    rows.append((f'ring over the walnut {rg:.2f} (0.3 or more)', 0.0 if rg >= 0.3 else round(0.3 - rg, 2)))
+    steps = (0.3, 0.5, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32, 40, 50, 60, 70)
+    front = pan + so + dif                                         # V5's order: the panel first (its top edge passes where the
+    rows.append(('panel, standoffs and washers, diffuser into the sleeve first (0.3-70 mm out)',   # encoder's board hangs), ...
+                 round(max(v(front.translate([0, q, 0]), sl) for q in steps), 2)))
+    cha = ch + s3 + sen + P['sled']                                # ... then the encoder into its collar, then the chassis
+    rows.append(('chassis (S3, sensor, sled) sliding in past the encoder in its collar and the seated panel (0.3-70 mm out)',
+                 round(max(v(cha.translate([0, q, 0]), sl + col + enc + front) for q in steps), 2)))
+    rows.append(('the panel slid in after the encoder would hit its board (> 0: hence the order)', 0.0 if max(v(front.translate([0, q, 0]), enc) for q in (4, 8, 16)) > 1 else 1.0))
+    rows.append((f'encoder {LEDGE_GAP + 0.1:.1f} lower (a knob press) / chassis: the ledges take it (> 0)', 0.0 if v(enc.translate([0, 0, -LEDGE_GAP - 0.1]), ch) > 0.05 else 1.0))
     eg = (ch ^ end_flats(-0.5)).min_gap(sl, 1.0)
     rows.append((f'lip on the end walls\' flats {eg:.2f} off the seat (0.1 or more: the seat bears top and bottom)', 0.0 if eg >= 0.1 else round(0.1 - eg + 0.05, 2)))
     under_sh = Manifold.batch_boolean([cyl_z(x, y, -1, WALL + 1, 3.0, 32) for x, y in UNDER_XY], ADD)
     rows.append(('screws from below, sleeve 0.15 short of its seat / walnut (the shank clears it)', v(under_sh, sl.translate([0, -0.15, 0]))))
-    rows.append(('knob seat, sleeve 0.3 short of its seat / walnut', v(seat, sl.translate([0, -0.3, 0]))))
-    cover = math.hypot(math.sqrt(2) * SEAT_HOLE / 2 - SEAT_TRUNC, SEAT_TRUNC)      # the teardrop's flat's corners
-    rows.append((f'the ring covers the walnut hole (its corners {cover:.2f} from the axis, the ring {RING_R}; 1.0 or more)', 0.0 if RING_R - cover >= 1.0 else round(1.0 - RING_R + cover, 2)))
     # the cleat (V5's, on the back plate inside the chassis's back walls)
     import cleat as CLT
     cc, wc = CLT.case_cleat(), CLT.wall_cleat()
@@ -719,24 +618,23 @@ if __name__ == '__main__':
     print(save(P['sleeve'], f'{pre}sleeve-walnut'))
     print(save(P['chassis'], f'{pre}chassis-black'))
     print(save(DR.status_window(), f'{pre}chassis-window-translucent', frame=P['chassis']))
-    print(save(P['seat'], f'{pre}knob-seat-black', 'top'))
-    print(save(P['ring'], f'{pre}trim-ring-black', 'top'))
+    t = CO.export(CO.collar(), f'{out}/{pre}encoder-collar-walnut.stl')      # V5's collar for the 4 mm wall, as drawer.py prints it
+    print(f'{pre}encoder-collar-walnut: {np.round(t.extents, 1).tolist()}, watertight {t.is_watertight}')
     import cleat as CLT
     for m, name in ((DR.sled(), 'sensor-sled-black'),):
         me = m.to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.merge_vertices()
         t.apply_translation(-t.bounds[0]); t.export(f'{out}/{pre}{name}.stl'); print(f'{pre}{name}: {np.round(t.extents, 1).tolist()}')
-    # reused unchanged: the P4 V6's knob, V5's diffuser, cleats and Boot key (the cleats are drawer.py's: the back plate and
+    # reused unchanged: V5's knob, diffuser, cleats and Boot key (the cleats are drawer.py's: the back plate and
     # its bosses are V5's)
     here = os.path.dirname(os.path.abspath(__file__))
-    reused = [('p4-v6/p4-v6-knob-white', 'knob-white'), ('bar-diffuser-white-face', 'diffuser-face-white'),
+    reused = [('bar-knob', 'knob-white'), ('bar-diffuser-white-face', 'diffuser-face-white'),
               ('bar-diffuser-white-grid-black', 'diffuser-grid-black'), ('v5-drawer/bar-cleat-case', 'cleat-case-black'),
               ('v5-drawer/bar-cleat-wall', 'cleat-wall-black'), ('bar-boot-key', 'boot-key')]
     for a, b in reused:
         shutil.copyfile(os.path.join(here, '..', 'stl', a + '.stl'), os.path.join(out, pre + b + '.stl'))
     print('reused:', ', '.join(pre + b for _, b in reused))
-    print(dict(case=[round(2 * HW, 1), round(H, 1), D], wall=WALL, rim_gap=RIM_GAP, rebate=(REB_T, round(D - SEAT_Y, 2)), seat_hole=SEAT_HOLE,
-               post_seat_from_back=round(DR.Y1 - (BOSS_Y - WASHER_REC[1] + P3.SO_FLOOR), 2),
-               under_thread_mm=round(10.0 - ZO0, 2), knob_screw_thread_mm=round(TS_LEN - (H - ZO1), 2)))
+    print(dict(case=[round(2 * HW, 1), round(H, 1), D], wall=WALL, rim_gap=RIM_GAP, rebate=(REB_T, round(D - SEAT_Y, 2)), knob_x=KX, sensor_x=V.SENSOR_X,
+               post_seat_from_back=round(DR.Y1 - (BOSS_Y - WASHER_REC[1] + P3.SO_FLOOR), 2), under_thread_mm=round(10.0 - ZO0, 2)))
     hits = 0
     for name, val in check(P):
         print(f'  {"ok  " if val < 0.05 else "HIT "} {name}: {val}')

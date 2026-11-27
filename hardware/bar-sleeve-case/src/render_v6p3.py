@@ -25,16 +25,13 @@ R.MATS.update(
 
 P = M.build()
 here = os.path.dirname(os.path.abspath(__file__))
-t = trimesh.load(os.path.join(here, '..', 'stl', 'p4-v6', 'p4-v6-knob-white.stl'))
+t = trimesh.load(os.path.join(here, '..', 'stl', 'bar-knob.stl'))           # V5's 30 mm P3 knob
 KNOB = Manifold(Mesh(vert_properties=np.asarray(t.vertices, np.float32), tri_verts=np.asarray(t.faces, np.uint32)))
 b = KNOB.bounding_box()
 KNOB = KNOB.translate([KX - (b[0] + b[3]) / 2, KY - (b[1] + b[4]) / 2, H + KN.SKIRT_Z - b[2]])
-ENC = dict(board=box(-12.7, 12.7, KY - 12.7, KY + 12.7, SN.EB_BOT, SN.EB_TOP),
-           body=Manifold.cube([12.0, 12.0, H - 1.4 - SN.EB_TOP], True).rotate([0, 0, 45]).translate([0, KY, (H - 1.4 + SN.EB_TOP) / 2]),
-           shaft=cyl_z(0, KY, H - 1.4, H + 6.0, 7.0) + cyl_z(0, KY, H + 6.0, H + KN.TIP_Z, 6.0),
-           nut=Manifold.cylinder(2.2, 11.0 / math.sqrt(3), 11.0 / math.sqrt(3), 6).translate([0, KY, H + CO.FL_T]) - cyl_z(0, KY, H, H + 9, 7.0),
-           plug=M.plug())
-ENC = {k: M.at_knob(m) for k, m in ENC.items()}             # drawn at x 0, the plug on the right: put in place
+ENC = dict(shaft=cyl_z(0, KY, H + 6.0, H + KN.TIP_Z, 6.0),
+           nut=Manifold.cylinder(2.2, 11.0 / math.sqrt(3), 11.0 / math.sqrt(3), 6).translate([0, KY, H + CO.FL_T]) - cyl_z(0, KY, H, H + 9, 7.0))
+ENC = {k: M.at_knob(m) for k, m in ENC.items()}             # drawn at x 0: put in place
 
 
 def parts(sleeve=True, chassis=True, inside=True, knob=True, screws=True, clip=None, enc_dz=0.0):
@@ -51,20 +48,18 @@ def parts(sleeve=True, chassis=True, inside=True, knob=True, screws=True, clip=N
     if chassis:
         add('chassis', P['chassis'], 'petg', 'chassis')
     if inside:
-        add('panel', P['panel'], 'panel', 'chassis')
-        add('standoffs', P['standoffs'], 'brass', 'chassis')
+        add('panel', P['panel'], 'panel', 'panel')
+        add('standoffs', P['standoffs'], 'brass', 'panel')
         add('s3', P['s3'], 'pcb', 'chassis')
-        add('diffuser', P['diffuser'], 'diffuser', 'chassis')
+        add('diffuser', P['diffuser'], 'diffuser', 'panel')
     if knob:
-        for k, mat in (('board', 'pcb'), ('body', 'steel'), ('shaft', 'steel'), ('plug', 'rubber')):
-            add('enc_' + k, ENC[k].translate([0, 0, enc_dz]), mat, 'enc')
-        add('nut', ENC['nut'], 'steel', 'ring')
-        add('seat', P['seat'], 'seat', 'seat')
-        add('ring', P['ring'], 'black', 'ring')
+        add('encoder', P['encoder'].translate([0, 0, enc_dz]), 'pcb', 'enc')
+        add('enc_shaft', ENC['shaft'].translate([0, 0, enc_dz]), 'steel', 'enc')
+        add('nut', ENC['nut'], 'steel', 'nut')
+        add('collar', P['collar'], 'walnut', 'collar', seed=2)
         add('knob', KNOB, 'knob', 'knob')
     if screws:
         add('under', P['screws']['under'], 'screw', 'sleeve')
-        add('knob_screws', P['screws']['knob'], 'screw', 'seat')
         if chassis:
             add('back', P['screws']['back'], 'screw', 'chassis')
     return out
@@ -109,20 +104,19 @@ if 'closed' in WHICH:
     a = sc.render(persp((-0.75, -1.3, 0.5)))
     b = sc.render(persp((0.85, 1.25, 0.55)), flip=True)
     save(R.titled(R.row([a, b]), 'P3 V6: closed',
-                  f'{2 * HW:.0f} x {H:.1f} x {D:.0f}: the V5 sleeve at the P4 skin\'s 4 mm wall. No screws you can see; the P4 V6 ring and knob.'), 'p3v6-1-closed.png')
+                  f'{2 * HW:.0f} x {H:.1f} x {D:.0f}: the V5 sleeve at the P4 skin\'s 4 mm wall. No screws you can see; V5\'s 30 mm knob on its walnut collar.'), 'p3v6-1-closed.png')
 
 if 'apart' in WHICH:
-    off = dict(sleeve=(0, -150, 0), seat=(0, 0, 60), ring=(0, 0, 95), knob=(0, 0, 130), enc=(0, 0, 30))
+    off = dict(chassis=(0, 150, 0), collar=(0, 0, 60), nut=(0, 0, 85), knob=(0, 0, 115), enc=(0, 0, -30))
     sc = R.Scene(moved(parts(), off))
-    cam = persp((-0.8, -1.1, 0.75), size=(1800, 1300), dist=1000, target=CENTRE + np.array([0, -60, 25]))
+    cam = persp((-0.9, 1.0, 0.8), size=(1800, 1300), dist=1000, target=CENTRE + np.array([0, 70, 25]))
     im = sc.render(cam, ground=False)
-    annotate(im, cam, [('sleeve: slides on from the front, over everything', (-80, -150 + 20, H), (-60, -90), 'mb'),
-                       ('chassis (V6): panel on standoffs, diffuser on the panel', (-90, 40, M.ZO1), (-120, 150), 'rt'),
-                       ('encoder: lowered in from above after the sleeve', (KX + 12, KY, SN.EB_TOP + 30), (180, -30), 'lm'),
-                       ('knob seat (PETG): fills the walnut hole, two screws into the chassis', (KX + 19, KY, H + 60), (160, 10), 'lm'),
-                       ('the P4 V6 ring and knob', (KX, KY, H + 130 + 8), (170, -40), 'lm')])
+    annotate(im, cam, [('sleeve, with the panel (on its standoffs) and diffuser in it first', (-80, 30, H), (-60, -120), 'mb'),
+                       ('chassis (S3, sensor): slides in from the back last', (-90, 150 + 40, M.ZO1), (-120, 150), 'rt'),
+                       ('encoder: up into the collar from inside, before the chassis', (KX + 12, KY, SN.EB_TOP - 30), (180, 40), 'lm'),
+                       ('V5\'s walnut collar, nut and 30 mm knob', (KX + 17, KY, H + 60), (160, -20), 'lm')])
     save(R.titled(im, 'How it goes together',
-                  'Chassis loaded on the bench (front-loading, as the P4); sleeve slid on and two screws from below; then the encoder, its seat, ring, nut and knob from above.'), 'p3v6-2-apart.png')
+                  'V5\'s order: panel into the sleeve, then the encoder into its collar (its board hangs where the panel slides), then the chassis; two screws from below.'), 'p3v6-2-apart.png')
 
 if 'back' in WHICH:
     x0 = -60.0
@@ -148,30 +142,23 @@ if 'back' in WHICH:
                   'Left: section 60 mm left of centre, top wall. Right: through a screw from below. The walnut\'s free back edge now rests on the chassis.'), 'p3v6-3-back.png')
 
 if 'knob' in WHICH:
-    ps = parts(clip=box(-200, 200, KY + 5.75, KY + 6.25, -50, 300))
+    ps = parts(clip=box(-200, 200, KY + 7.75, KY + 8.25, -50, 300))
     sc = R.Scene(ps)
     cam = ortho((0, -1, 0), (2000, 1000), 22.0, target=np.array([KX, KY, H - 2.0]))
     a = sc.render(cam, ground=False, crease=0.0)
-    annotate(a, cam, [('knob seat (PETG)', (KX - 17, KY + 6, H - 2.0), (-80, -150), 'rb'),
-                      ('M2.5 x 8 into a boss on the rail', (KX - 15, KY + 6, M.ZIN1 - 1), (-160, 120), 'rt'),
-                      ('rail and lip: the board rests here as it goes in', (KX - 13.4, KY + 6, SN.EB_BOT - 0.8), (-120, 220), 'rt'),
-                      ('encoder clamped up to the deck by its nut', (KX + 6, KY + 6, SN.EB_TOP + 2.5), (160, 170), 'lt'),
-                      ('ring on the seat, 0.4 off the walnut', (KX + 20.5, KY + 6, H + 0.8), (150, -110), 'lb'),
-                      ('walnut hole 37.5', (KX + 19.0, KY + 6, H - 1.0), (300, -40), 'lm')], fs=22)
-    save(R.titled(a, 'The knob: section through the seat screws',
-                  'Knob presses go through the deck and the two screws into the chassis, as on the P4. The knob hides the screw heads.'), 'p3v6-4-knob.png')
+    annotate(a, cam, [('V5 collar (walnut), crush ribs in the walnut hole', (KX - 16, KY + 8, H + 1.0), (-80, -150), 'rb'),
+                      ('encoder clamped up to the collar by its nut', (KX + 6, KY + 8, SN.EB_TOP + 2.5), (160, 170), 'lt'),
+                      (f'ledge {M.LEDGE_GAP:g} under the board: a knob press lands on the chassis', (KX - 12.4, KY + 8, SN.EB_BOT - M.LEDGE_GAP - 0.6), (-140, 200), 'rt'),
+                      ('30 mm knob', (KX + 15, KY + 8, H + 8), (160, -100), 'lb')], fs=22)
+    save(R.titled(a, 'The knob: section 8 mm behind its centre',
+                  'V5\'s collar and knob in the 4 mm walnut; ledges on V5\'s encoder rails catch the board under a knob press.'), 'p3v6-4-knob.png')
 
 if 'encoder' in WHICH:
-    ps = parts(sleeve=True, inside=True, knob=False, screws=False)
-    enc = [R.Part('enc', M.tilted(M.encoder(), M.TILT[0]).translate([0, 0, 14.0]), 'pcb')]
-    sc = R.Scene(ps + enc)
-    cam = persp((-0.35, -1.0, 1.25), size=(1300, 1000), dist=330, target=np.array([KX, KY, H - 4]), yfov=0.5)
-    a = sc.render(cam, ground=False)
+    sc = R.Scene(parts(chassis=False, inside=False, knob=True, screws=False) + [R.Part('pan', P['panel'] + P['diffuser'], 'panel')])
+    cam = persp((-0.35, 0.9, -1.2), size=(1300, 1000), dist=300, target=np.array([KX, KY + 8, H - 6]), yfov=0.5)
+    a = sc.render(cam, ground=False, flip=True)
+    annotate(a, cam, [('encoder in its collar, QT cable down', (KX + 10, KY + 4, SN.EB_BOT), (120, -160), 'lb'),
+                      ('panel already seated', (KX - 40, 10, M.ZO1 + 30), (-80, 150), 'rt')], fs=22)
     sc = R.Scene(parts(sleeve=False, inside=False, knob=False, screws=False))
-    cam = persp((-0.35, -0.8, 1.3), size=(1300, 1000), dist=260, target=np.array([KX, KY + 4, M.ZIN1]), yfov=0.5)
-    b = sc.render(cam, ground=False)
-    annotate(b, cam, [('opening for the board, a notch for its plug', (KX + M.PLUG_SIDE * 17.0, KY, M.ZO1), (60, -230), 'lb'),
-                      ('rails with lips under the board\'s edges', (KX - 13.5, KY - 8, M.ZIN1 - 1.0), (-120, 120), 'rt'),
-                      ('boss for a seat screw', (KX + 15, KY + 6, M.ZO1), (200, -60), 'lb')], fs=22)
-    save(R.titled(R.row([a, b]), 'The encoder goes in from above',
-                  f'Plug side first, tilted {M.TILT[0]:.0f} deg, levelled over the last {M.TILT[1]:.0f} mm onto the lips. Right: the chassis top round the opening.'), 'p3v6-5-encoder.png')
+    save(R.titled(a, 'The encoder: hung from its collar',
+                  'Sleeve top down: the encoder up into its collar after the panel, as V5. The chassis\'s ledges catch it (the knob section).'), 'p3v6-5-encoder.png')
