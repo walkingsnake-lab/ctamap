@@ -618,8 +618,8 @@ if __name__ == '__main__':
     print(save(P['sleeve'], f'{pre}sleeve-walnut'))
     print(save(P['chassis'], f'{pre}chassis-black'))
     print(save(DR.status_window(), f'{pre}chassis-window-translucent', frame=P['chassis']))
-    t = CO.export(CO.collar(), f'{out}/{pre}encoder-collar-walnut.stl')      # V5's collar for the 4 mm wall, as drawer.py prints it
-    print(f'{pre}encoder-collar-walnut: {np.round(t.extents, 1).tolist()}, watertight {t.is_watertight}')
+    t = CO.export(CO.collar(), f'{out}/{pre}encoder-collar-translucent.stl')      # V5's collar for the 4 mm wall; translucent PETG (100% infill) so the NeoPixel lights it
+    print(f'{pre}encoder-collar-translucent: {np.round(t.extents, 1).tolist()}, watertight {t.is_watertight}')
     import cleat as CLT
     for m, name in ((DR.sled(), 'sensor-sled-black'),):
         me = m.to_mesh(); t = trimesh.Trimesh(np.asarray(me.vert_properties)[:, :3], np.asarray(me.tri_verts)); t.merge_vertices()

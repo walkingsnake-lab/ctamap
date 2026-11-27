@@ -56,7 +56,7 @@ def parts(sleeve=True, chassis=True, inside=True, knob=True, screws=True, clip=N
         add('encoder', P['encoder'].translate([0, 0, enc_dz]), 'pcb', 'enc')
         add('enc_shaft', ENC['shaft'].translate([0, 0, enc_dz]), 'steel', 'enc')
         add('nut', ENC['nut'], 'steel', 'nut')
-        add('collar', P['collar'], 'walnut', 'collar', seed=2)
+        add('collar', P['collar'], 'ring', 'collar')
         add('knob', KNOB, 'knob', 'knob')
     if screws:
         add('under', P['screws']['under'], 'screw', 'sleeve')
@@ -104,7 +104,7 @@ if 'closed' in WHICH:
     a = sc.render(persp((-0.75, -1.3, 0.5)))
     b = sc.render(persp((0.85, 1.25, 0.55)), flip=True)
     save(R.titled(R.row([a, b]), 'P3 V6: closed',
-                  f'{2 * HW:.0f} x {H:.1f} x {D:.0f}: the V5 sleeve at the P4 skin\'s 4 mm wall. No screws you can see; V5\'s 30 mm knob on its walnut collar.'), 'p3v6-1-closed.png')
+                  f'{2 * HW:.0f} x {H:.1f} x {D:.0f}: the V5 sleeve at the P4 skin\'s 4 mm wall. No screws you can see; V5\'s 30 mm knob on its translucent collar (the NeoPixel lights it).'), 'p3v6-1-closed.png')
 
 if 'apart' in WHICH:
     off = dict(chassis=(0, 150, 0), collar=(0, 0, 60), nut=(0, 0, 85), knob=(0, 0, 115), enc=(0, 0, -30))
@@ -114,7 +114,7 @@ if 'apart' in WHICH:
     annotate(im, cam, [('sleeve, with the panel (on its standoffs) and diffuser in it first', (-80, 30, H), (-60, -120), 'mb'),
                        ('chassis (S3, sensor): slides in from the back last', (-90, 150 + 40, M.ZO1), (-120, 150), 'rt'),
                        ('encoder: up into the collar from inside, before the chassis', (KX + 12, KY, SN.EB_TOP - 30), (180, 40), 'lm'),
-                       ('V5\'s walnut collar, nut and 30 mm knob', (KX + 17, KY, H + 60), (160, -20), 'lm')])
+                       ('V5\'s collar (translucent PETG), nut and 30 mm knob', (KX + 17, KY, H + 60), (160, -20), 'lm')])
     save(R.titled(im, 'How it goes together',
                   'V5\'s order: panel into the sleeve, then the encoder into its collar (its board hangs where the panel slides), then the chassis; two screws from below.'), 'p3v6-2-apart.png')
 
@@ -146,7 +146,7 @@ if 'knob' in WHICH:
     sc = R.Scene(ps)
     cam = ortho((0, -1, 0), (2000, 1000), 22.0, target=np.array([KX, KY, H - 2.0]))
     a = sc.render(cam, ground=False, crease=0.0)
-    annotate(a, cam, [('V5 collar (walnut), crush ribs in the walnut hole', (KX - 16, KY + 8, H + 1.0), (-80, -150), 'rb'),
+    annotate(a, cam, [('V5 collar (translucent PETG), crush ribs in the walnut hole', (KX - 16, KY + 8, H + 1.0), (-80, -150), 'rb'),
                       ('encoder clamped up to the collar by its nut', (KX + 6, KY + 8, SN.EB_TOP + 2.5), (160, 170), 'lt'),
                       (f'ledge {M.LEDGE_GAP:g} under the board: a knob press lands on the chassis', (KX - 12.4, KY + 8, SN.EB_BOT - M.LEDGE_GAP - 0.6), (-140, 200), 'rt'),
                       ('30 mm knob', (KX + 15, KY + 8, H + 8), (160, -100), 'lb')], fs=22)
