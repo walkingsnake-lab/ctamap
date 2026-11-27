@@ -92,6 +92,7 @@ if STAGE == 'skin':
     import drawer as DR
 
     PX.SPLICE_T = SPLICE_T
+    S.LABELS = False                # the single's centred label recesses would cross the seam: label_cuts() below
     PX.JP_L = 96.0                  # 48 into each half (100 put the ends' edges on the countersinks' x, 50: a bad weld)
     PX.JP_Y1 = DR.Y1 - 5.0          # the keys' rebates end 3 mm in front of the back rebate's seat (p3x2's ran to 63)
 
