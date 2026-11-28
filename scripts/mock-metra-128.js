@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 // Metra on a 128x32 board (two 64x32 chained): first-pass layouts. Not in
-// draw.js. Made-up times and train numbers; the line colors are placeholders
-// (boosted for the panel), to be replaced from Metra's GTFS routes.txt.
+// draw.js. Made-up times and train numbers; line colors from Metra's GTFS routes.txt.
 //   node scripts/mock-metra-128.js   -> docs/board/mockups/metra/*.png
 
 const fs = require('fs');
@@ -17,7 +16,8 @@ const W = 128, H = 32;
 const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
 const scale = (c, k) => '#' + hex(c).map((v) => Math.round(v * k).toString(16).padStart(2, '0')).join('');
 
-const LINE = { UPN: '#1f9a4a', UPNW: '#ffd400', UPW: '#f08ab0', RD: '#c60c30' };
+// Metra's own route colors (GTFS routes.txt, read Nov 27); the 'L' Red Line.
+const LINE = { UPN: '#008000', UPNW: '#ffe600', UPW: '#fe8d81', RD: '#c60c30' };
 const NAME = { UPN: 'UP-N', UPNW: 'UP-NW', UPW: 'UP-W' };
 const C = {
   label: '#d8d8d8', white: '#ffffff', amber: '#ffb000', dim: '#664600', grey: '#808080', dark: '#555555',
@@ -299,6 +299,65 @@ const ROUND3 = [
   ['r3-k5', 'K5  CTA (dim) ROWS TICKER METRA', strip(UNDER, [{ group: 'CTA' }, 'ROWS', 'TICKER', 'METRA'], 3)],
 ];
 
+// ================= Round 4 (Nov 27): 'L' BUS METRA TICKER, and a mixed ticker =================
+// Transit's variants become 'L' (train rows), BUS (buses as their own screen,
+// on both sizes), METRA (the station screen), TICKER (the platform-sign list,
+// which can now take buses and Metra too, by time).
+const STRIP4 = ["'L'", 'BUS', 'METRA', 'TICKER'];
+// The wide ticker row, as drawTickerItemWide draws it, with the band color
+// passed in (draw.js's line table has no Metra or bus-band colors to look up).
+// it: { col, d (destination, 5x7), min, sch, tag (small text before the name) }
+const TICKER_TIME_RIGHT = 116;
+const TICON = {
+  live: { x: 121, y: 3, rows: ['###...', '...#..', '##..#.', '..#..#', '#..#.#', '.#.#.#'] },
+  sch: { x: 122, y: 4, rows: ['.###.', '#.#.#', '#.###', '#...#', '.###.'] },
+};
+function tickRow(f, it, idx, top) {
+  const base = top + 9;
+  f.fill(0, top, 5, 12, C.index);
+  f.fill(5, top, W - 5, 12, scale(it.col, 0.55));
+  f.text('small', String(idx), 1, base, C.label);
+  let x = 7;
+  if (it.tag) x = f.text('small', it.tag, x, base, C.white) + 2;
+  f.text('5x7', it.d, x, base, C.white);
+  if (it.min === 'Due') rtext(f, '5x7', 'Due', TICKER_TIME_RIGHT, base, C.white);
+  else {
+    const mw = measure('5x7', String.fromCodePoint(G.MIN));
+    f.text('5x7', String.fromCodePoint(G.MIN), TICKER_TIME_RIGHT - mw + 1, base, C.white);
+    rtext(f, '5x7', String(it.min), TICKER_TIME_RIGHT - mw - 2, base, C.white);
+  }
+  const ic = TICON[it.sch ? 'sch' : 'live'];
+  ic.rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch === '#') f.fill(ic.x + i, top + ic.y + j, 1, 1, C.white); }));
+}
+function mixedTicker(items, page, tagMetra) {
+  const f = new Frame(W, H);
+  f.text('small', 'MORSE', 0, 6, C.grey);
+  rtext(f, 'small', CLOCK, W - 1, 6, C.grey);
+  items.slice(page * 2, page * 2 + 2).forEach((it, i) => tickRow(f, { ...it, tag: tagMetra ? it.tag : undefined }, page * 2 + i + 1, 7 + i * 13));
+  return f;
+}
+const BUSC = '#8a8a8a';
+const MIXED = [
+  { col: LINE.RD, d: 'Howard', min: 'Due' },
+  { col: LINE.RD, d: '95th/Dan Ryan', min: 3 },
+  { col: BUSC, d: '22 SB', min: 6 },
+  { col: LINE.UPN, d: 'Kenosha', min: 9, tag: 'UP-N' },
+  { col: LINE.UPN, d: 'Chicago', min: 13, tag: 'UP-N' },
+  { col: BUSC, d: '147 SB', min: 15, sch: true },
+];
+// The 'L' Green Line beside UP-N: the band alone can't tell 'L' from Metra.
+const CLASH = [{ col: '#009b3a', d: 'Harlem/Lake', min: 4 }, { col: LINE.UPN, d: 'Kenosha', min: 9, tag: 'UP-N' }];
+
+const ROUND4 = [
+  ['r4-strip-l', "K6  'L' chosen", strip(UNDER, STRIP4, 0)],
+  ['r4-strip-ticker', 'K6  TICKER chosen', strip(UNDER, STRIP4, 3)],
+  ['r4-ticker-p1', 'M  Mixed ticker, page 1', mixedTicker(MIXED, 0, true)],
+  ['r4-ticker-p2', 'M  Page 2: a bus', mixedTicker(MIXED, 1, true)],
+  ['r4-ticker-p3', 'M  Page 3: Metra, line named', mixedTicker(MIXED, 2, true)],
+  ['r4-ticker-clash', 'M1  Color only: Green Line vs UP-N', mixedTicker(CLASH, 0, false)],
+  ['r4-ticker-tag', 'M2  Line name on Metra rows', mixedTicker(CLASH, 0, true)],
+];
+
 const q5 = (v) => v & 0xf8;
 fs.mkdirSync(OUT, { recursive: true });
 function write(mocks, name) {
@@ -323,5 +382,6 @@ function write(mocks, name) {
 write(MOCKS, 'sheet.png');
 write(ROUND2, 'sheet-r2.png');
 write(ROUND3, 'sheet-r3.png');
+write(ROUND4, 'sheet-r4.png');
 console.log('wrote docs/board/mockups/metra/*.png');
-module.exports = { MOCKS, ROUND2, ROUND3 };
+module.exports = { MOCKS, ROUND2, ROUND3, ROUND4 };
