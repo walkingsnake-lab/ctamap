@@ -1,0 +1,4 @@
+(fp_lib_table
+  (lib (name "jlc")(type "KiCad")(uri "${KIPRJMOD}/jlc.pretty")(options "")(descr "JLCPCB / EasyEDA footprints used on this board"))
+  (lib (name "TestPoint")(type "KiCad")(uri "${KICAD7_FOOTPRINT_DIR}/TestPoint.pretty")(options "")(descr ""))
+)

@@ -1,0 +1,16 @@
+# made while building the board; not kept
+__pycache__/
+src/tools/
+board/gerbers/
+board/schsvg/
+board/*.dsn
+board/*.ses
+board/*.log
+board/*.net
+board/*.svg
+board/*.kicad_prl
+board/pos-kicad.csv
+board/fp-info-cache
+board/*-backups/
+case/*.stl
+board/jlc.3dshapes/
