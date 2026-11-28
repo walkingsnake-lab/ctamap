@@ -127,7 +127,37 @@ test('parseSchedule refuses a schedule missing a file or a column', () => {
   assert.throws(() => m.parseSchedule(bad), /trips.txt has no service_id/);
 });
 
+test('a weekday-only line finds Monday\'s trains from Friday evening, with their day', () => {
+  // Heritage Corridor runs weekdays only: nothing at Lemont all weekend.
+  const r = m.departures(model, 'LEMONT', at('2026-12-04T20:00:00'), { perDir: 1 });
+  assert.deepStrictEqual(r.in.map((d) => [d.date, d.at]), [['20261207', at('2026-12-07T06:05:00')]]);
+  assert.strictEqual(r.out.length, 1);
+  assert.strictEqual(r.out[0].date, '20261207');
+  // Today's trains carry today's date; a train after midnight, its service day's.
+  const late = m.departures(model, 'ROGERPK', at('2026-11-27T23:48:00'));
+  assert.deepStrictEqual(late.in.map((d) => d.date), ['20261127', '20261128', '20261128']);
+});
+
+test('routes: one line at a station on several', () => {
+  const r = m.departures(model, 'OTC', at('2026-11-27T17:42:00'), { routes: ['UP-N'] });
+  assert.deepStrictEqual(r.out.map((d) => d.route), ['UP-N', 'UP-N', 'UP-N']);
+  assert.strictEqual(r.out[0].trip, 'UP-N_UN363_V2_AA');
+});
+
+test('daysLeft: until the published schedule runs out', () => {
+  assert.strictEqual(m.daysLeft(model, at('2026-11-27T17:42:00')), 34);
+  assert.strictEqual(m.daysLeft(model, at('2026-12-31T23:00:00')), 0);
+  assert.strictEqual(m.daysLeft(model, at('2027-01-02T08:00:00')), -2);
+});
+
 // ---- the poller ----
+
+// The fixture with a zip comment added: a different file, the same schedule.
+function withComment(zip, text) {
+  const z = Buffer.from(zip), c = Buffer.from(text);
+  z.writeUInt16LE(c.length, z.length - 2);
+  return Buffer.concat([z, c]);
+}
 
 function fakeSource({ published = PUBLISHED, zip = ZIP } = {}) {
   const calls = [];
@@ -150,6 +180,7 @@ test('poller: downloads once, then only when published.txt changes', async () =>
   await s.refresh();
   assert.deepStrictEqual(src.calls, ['published.txt', 'schedule.zip', 'published.txt']);
   src.published = '11/28/26 03:00:00 AM America/Chicago';
+  src.zip = withComment(ZIP, 'new');
   await s.refresh();
   assert.strictEqual(s.get().published, '11/28/26 03:00:00 AM America/Chicago');
   assert.strictEqual(src.calls.filter((c) => c === 'schedule.zip').length, 2);
@@ -175,7 +206,52 @@ test('poller: keeps the last good schedule through failures, and backs off', asy
   await s.refresh();
   assert.strictEqual(s.get(), good);
   t += 600;
-  src.zip = ZIP;
+  src.zip = withComment(ZIP, 'new');
   await s.refresh();
   assert.strictEqual(s.get().published, 'new');
 });
+
+test('poller: a new stamp on the same zip is retried, then accepted', async () => {
+  const logs = [];
+  const src = fakeSource();
+  const s = m.createMetraSchedule({ fetch: src.fetch, log: { ...quiet, warn: (x) => logs.push(x) }, sameZipTries: 3 });
+  await s.refresh();
+  const first = s.get();
+  src.published = 'stamp first';
+  await s.refresh();
+  await s.refresh();
+  assert.strictEqual(s.get(), first);
+  assert.strictEqual(logs.filter((x) => /zip is unchanged/.test(x)).length, 2);
+  await s.refresh();
+  assert.strictEqual(s.get().published, 'stamp first');
+});
+
+test('poller: pass() checks on schedule, and retries failures on the backoff', async () => {
+  let t = 1000;
+  const src = fakeSource();
+  const s = m.createMetraSchedule({ fetch: src.fetch, log: quiet, now: () => t, check: 300 });
+  await s.pass();                                      // never checked: checks now
+  assert.strictEqual(src.calls.length, 2);
+  t += 100; await s.pass();                            // before `check`: nothing
+  assert.strictEqual(src.calls.length, 2);
+  t += 200; await s.pass();                            // at `check`: published.txt only
+  assert.deepStrictEqual(src.calls.slice(2), ['published.txt']);
+  src.fail = 'published.txt';
+  t += 300; await s.pass();                            // fails
+  const n = src.calls.length;
+  t += 29; await s.pass();                             // backoff 30 s: not yet
+  assert.strictEqual(src.calls.length, n);
+  t += 1; src.fail = null; await s.pass();             // retried at 30 s, not after `check`
+  assert.strictEqual(src.calls.length, n + 1);
+});
+
+test('poller: warns once when the schedule is about to run out', async () => {
+  const logs = [];
+  const src = fakeSource();
+  let t = at('2026-12-28T12:00:00');
+  const s = m.createMetraSchedule({ fetch: src.fetch, log: { ...quiet, warn: (x) => logs.push(x) }, now: () => t });
+  await s.refresh();
+  t += 600; await s.refresh();
+  assert.deepStrictEqual(logs, ['[board] Metra schedule runs out 20261231 (3 days)']);
+});
+

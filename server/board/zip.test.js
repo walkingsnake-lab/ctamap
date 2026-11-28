@@ -62,6 +62,14 @@ test('a comment after the end record is skipped', () => {
   assert.strictEqual(readZip(Buffer.concat([z, comment])).get('a.txt').toString(), 'x');
 });
 
+test('an end-record signature inside the comment is not taken for the real one', () => {
+  const z = makeZip([{ name: 'a.txt', data: Buffer.from('x') }]);
+  const fake = Buffer.alloc(22); fake.writeUInt32LE(0x06054b50, 0);
+  const comment = Buffer.concat([fake, Buffer.from('tail')]);
+  z.writeUInt16LE(comment.length, z.length - 2);
+  assert.strictEqual(readZip(Buffer.concat([z, comment])).get('a.txt').toString(), 'x');
+});
+
 test('refuses what it can\'t read safely', () => {
   const data = Buffer.from('x'.repeat(1000));
   assert.throws(() => readZip(Buffer.from('not a zip at all, not even close')), /no end of central directory/);
@@ -74,6 +82,10 @@ test('refuses what it can\'t read safely', () => {
   const y = makeZip([{ name: 'a.txt', data }]);
   y.writeUInt16LE(12, y.length - 22 - 46 - 5 + 10); // the central directory's method
   assert.throws(() => readZip(y), /method 12/);
+  assert.throws(() => readZip(fs.readFileSync(METRA), { maxTotal: 1000000 }), /total over/);
+  const disk = makeZip([{ name: 'a.txt', data }]);
+  disk.writeUInt16LE(1, disk.length - 22 + 4);
+  assert.throws(() => readZip(disk), /multi-disk/);
   const cut = fs.readFileSync(METRA).subarray(0, 200000);
   assert.throws(() => readZip(cut));
 });
