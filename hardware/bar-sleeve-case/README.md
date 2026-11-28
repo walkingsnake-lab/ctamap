@@ -10,7 +10,12 @@ What may come after this case's bought boards, V7 (one custom board; designed an
 
 ## Fixed decisions
 - Slanted hood (12 mm lip at the top, 3 mm at the bottom; the P4 scales it to 16 / 4): non-negotiable.
-- Shell in Bambu PLA Wood (walnut), printed back-down without supports, front lapped flat afterwards. The screen rim is part of
+- Shell material: **Bambu PLA Matte** for the boards to be sold, starting with the V6 pilot (decided Nov 27, 2026; nothing
+  has been printed in it yet). Every build so far is Bambu PLA Wood (walnut; one P4 V6 in birch), and this sheet, the V6 notes
+  and the part and STL names still say walnut: read that as the sleeve. The wood-only steps (lapping the front flat, oil or
+  wax) and the fits measured on wood PLA are not settled for PLA Matte: print the V6 coupons in it before a full sleeve.
+  Why: [DESIGN-HISTORY.md](DESIGN-HISTORY.md), the last section.
+- Shell printed back-down without supports (the wood PLA builds: front lapped flat afterwards). The screen rim is part of
   the shell. Openings print open (knob hole, USB-C, the two screw holes underneath, the Ø2 light-sensor pinhole).
 - No grilles in the shell: the tray's back has two louver bands (intake along the bottom, exhaust along the top), slots
   rising 45° inward so nothing inside shows from eye level.
