@@ -17,8 +17,10 @@ What it is: the single P3 V6 (v6p3.py) twice, joined at the panel seam (x = 0).
     (x +/-50, +/-142). Only half B's inner countersink is round; the other three are slots along x (SLOTS), because one
     412 mm sleeve cannot be pinned at four cones once walnut and PETG shrink differently. The lip stays relieved
     (END_RELIEF) round both outer ends' flats and corners.
-  - **Labels**: marks.py's two recesses under half B (setup sticker 1/2 x 1 3/4 in, regulatory label 1 x 2 5/8 in, 0.5
-    deep), as on the V5 shells and the P4: label_cuts().
+  - **Labels**: marks.py's two recesses (setup sticker 1/2 x 1 3/4 in, regulatory label 1 x 2 5/8 in, 0.5 deep), one
+    per half, flanking the seam LABEL_IN either side on one row centred front to back (owner, Nov 27): the regulatory
+    label under half B, the setup sticker under half A. They lie over the bottom seam key: label_layout(), label_cuts().
+  - **Bumpers**: at x +/-FEET_X (p3x2's: +/-180), so the one-piece desk plinth (plinth_v6.py, PLINTH=p3x2) reaches all four.
 - **Chassis**: two P3 V6 chassis, one per panel, cut at x = 0 (CH_GAP between them). B (right) is the single P3 V6
   chassis (S3, USB-C frame and stop, encoder slot, rails and ledges, sensor, status window, Boot). A (left) is the same
   tray with none of that, its posts at panel A's un-turned inserts (the P3 pair's data chain: B turned 180 deg).
@@ -71,7 +73,13 @@ os.environ['CASE_WALL'] = '4.0'
 LOCATOR_X = 50.0
 SLOTS = {-142: (-0.60, 0.35), -50: (-0.35, 0.35), 142: (-0.05, 0.30)}   # a small print's holes sit toward the locator: the slots reach away from it
 SHRINK_MAX, SHIM_MAX = 0.003, 0.3
-LABEL_CX = 110.0                   # the label recesses' centre along the bar (p3x2's: 96, on panel B's centre)
+FEET_X = 127.0                     # the bumpers (p3x2's: +/-180), inboard so one 274 mm plinth (plinth_v6.py) reaches all four:
+                                   # 4.9 mm from the outer countersinks' slots
+LABEL_IN = 12.0                    # the label recesses, one per half (regulatory on B, setup on A), their inner edges this far
+                                   # from the seam (owner, Nov 27: close to it; before: both under half B about x 110, clear of
+                                   # the key). They lie over the bottom seam key: LABEL_WALL of walnut is left between a
+                                   # recess and the key's rebate, and the glued key backs it
+LABEL_WALL = 2.0                   # at least this much walnut under a label recess
 CH_GAP = 0.3                       # between the chassis halves
 PANEL_CX = 96.0
 SPLICE_T = 1.6                     # the splice plates (p3x2's are 2.0): at 2.0 the inner posts' back-screw heads stood 0.2 proud of
@@ -110,29 +118,57 @@ if STAGE == 'skin':
         return Manifold.batch_hull([cone(lo), cone(hi)]) + Manifold.batch_hull([hole(lo), hole(hi)])
     S.csk_under = csk_under
 
+    def label_layout():
+        """marks.layout()'s two results for this bar: the regulatory label under half B and the setup sticker under half A,
+        flanking the seam (inner edges LABEL_IN from it), on one row centred front to back on the bottom face. Installed
+        as marks.layout below, so marks.cuts() and marks.preview() draw these"""
+        import marks as MK
+        (sw, sh), (rw, rh) = MK.SETUP, MK.REG
+        cl, r = MK.REC_CL, MK.REC_R + MK.REC_CL
+        y0 = (S.V.front_y(0) + C.D) / 2 - rh / 2 - cl
+        ys = y0 + (rh - sh) / 2
+        xr, xs = LABEL_IN, -LABEL_IN - sw - 2 * cl
+        items = [('regulatory label', MK._rrect(xr, xr + rw + 2 * cl, y0, y0 + rh + 2 * cl, r), MK.REC_DEPTH, True),
+                 ('setup sticker', MK._rrect(xs, xs + sw + 2 * cl, ys, ys + sh + 2 * cl, r), MK.REC_DEPTH, True)]
+        return items, [('reg', xr + cl, y0 + cl, rw, rh), ('setup', xs + cl, ys + cl, sw, sh)]
+
+    def feet():
+        return [(math.copysign(FEET_X, fx), fy) for fx, fy in S.V.FEET]
+
+    def underside():
+        """nearest gaps on the bottom face, for the check: bumper recesses to label recesses and to the countersinks (slots
+        included); label recesses to the countersinks, the seam and the bottom face's front edge"""
+        fr = C.FOOT_D / 2
+        bs = [(n, cs.bounds()) for n, cs, *_ in label_layout()[0]]
+        slot = lambda x: SLOTS.get(round(x), (0.0, 0.0))
+        gl = [math.hypot(max(b[0] - fx, fx - b[2], 0.0), max(b[1] - fy, fy - b[3], 0.0)) - fr for fx, fy in feet() for _, b in bs]
+        gs = [math.hypot(max(x + slot(x)[0] - fx, fx - x - slot(x)[1], 0.0), y - fy) - fr - S.CSK_D / 2 for fx, fy in feet() for x, y in S.UNDER_XY]
+        gc = [math.hypot(max(b[0] - x - slot(x)[1], x + slot(x)[0] - b[2], 0.0), max(b[1] - y, y - b[3], 0.0)) - S.CSK_D / 2 for _, b in bs for x, y in S.UNDER_XY]
+        return dict(feet=feet(), labels=[[n] + [round(q, 2) for q in b] for n, b in bs], key_hx=PX.JP_L / 2,
+                    foot_label=round(min(gl), 2), foot_csk=round(min(gs), 2), label_csk=round(min(gc), 2),
+                    label_seam=round(min(min(abs(b[0]), abs(b[2])) for _, b in bs), 2),
+                    label_front=round(min(b[1] for _, b in bs) - S.V.front_y(0), 2))
+
     def label_cuts():
         """the two label recesses under the bar (marks.py: the setup sticker and the regulatory label, 0.5 deep), as on the
-        V5 shells and the P4: under half B, in front of the screws from below, LABEL_CX along the bar so they clear the
-        bottom seam key's rebate (to x 48) and the wall keeps its 4 mm less the recess everywhere"""
+        V5 shells and the P4, placed by label_layout()"""
         import marks as MK
-        MK.CX = LABEL_CX
-        items = MK.layout()[0]
-        bad = MK.check(items)
-        assert not bad, bad
-        cut = MK.cuts()
-        keep = Manifold.batch_boolean(PX.rebate_cuts() + [csk_under(x, y) for x, y in S.UNDER_XY], ADD)
-        gap = cut.min_gap(keep, 5.0)
-        assert gap >= 1.5, f'label recesses {gap:.2f} from the key rebate or the screws from below'
-        return cut
+        MK.layout = label_layout
+        return MK.cuts()
 
     def halves():
         """the sleeve cut at x = 0, butted: p3x2's V-groove (0.5 x 45 deg a side) and hollowed seam faces (0.3 off except a
-        2 mm land along the edges you see, so two not-quite-flat faces close where it shows), and the keys' rebates"""
-        sh = S.sleeve()
-        s_ = sh - PX.v_groove(sh) - PX.hollow_cuts(sh) - Manifold.batch_boolean(PX.rebate_cuts(), ADD)
+        2 mm land along the edges you see, so two not-quite-flat faces close where it shows), and the keys' rebates. Bumper
+        recesses at +/-FEET_X; one label recess under each half"""
+        saved = S.V.FEET
+        S.V.FEET = feet()
+        try:
+            sh = S.sleeve()
+        finally:
+            S.V.FEET = saved
+        s_ = sh - PX.v_groove(sh) - PX.hollow_cuts(sh) - Manifold.batch_boolean(PX.rebate_cuts(), ADD) - label_cuts()
         a = s_ ^ box(-C.HW - 1, 0.0, -50, C.D + 1, -1, C.H + 1)
         b = s_ ^ box(0.0, C.HW + 1, -50, C.D + 1, -1, C.H + 1)
-        b = b - label_cuts()
         big = lambda m: max(m.decompose(), key=lambda q: q.volume())
         return big(a), big(b)
 
@@ -194,7 +230,7 @@ if STAGE == 'skin':
             MK.preview(a + b, os.environ['V6P3X2_PREVIEW'], px=0.12, stickers=True, title='128 P3 V6, underneath (front edge at the top)')
         json.dump(dict(hw=C.HW, h=C.H, d=C.D, zc=C.ZC, yf=DR.YF, y1=DR.Y1, kx=S.KX, sensor_x=S.V.SENSOR_X,
                        under=[list(q) for q in S.UNDER_XY], seam_walls=seam_walls(h), joint_wall=PX.JOINT_WALL,
-                       split=True), open(f'{fr}/skin.json', 'w'), indent=1)
+                       split=True, underside=underside()), open(f'{fr}/skin.json', 'w'), indent=1)
         print('diffuser seam walls (solid fraction, A / B):', seam_walls(h))
         env = dict(os.environ); env.pop('PANEL', None); env.pop('KNOB_X', None)
         sys.exit(subprocess.run([sys.executable, __file__, out, '--chassis'], env=env).returncode)
@@ -541,6 +577,23 @@ def check(P, sk):
         rows.append((f'sleeve {n} / chassis, seated', v(s_, ch)))
         rows.append((f'chassis {n} 0.1 further forward / sleeve {n} (its lip meets the seat: > 0)', 0.0 if v(c_.translate([0, -0.1, 0]), s_) > 0.2 else 1.0))
     rows.append(('walnut halves, butted at the seam', v(sa, sb)))
+    u = sk['underside']
+    rows.append((f'bumper recesses at x +/-{abs(u["feet"][0][0]):g}: {u["foot_label"]} from a label recess (1.0 or more), {u["foot_csk"]} from a countersink or its slot (2.0 or more)',
+                 0.0 if u['foot_label'] >= 1.0 and u['foot_csk'] >= 2.0 else 1.0))
+    rows.append((f'label recesses, one per half: {u["label_seam"]} from the seam (5 or more: clear of its groove and land), {u["label_front"]} behind the bottom face\'s front edge (1.5 or more), {u["label_csk"]} from a countersink (2.0 or more)',
+                 0.0 if u['label_seam'] >= 5.0 and u['label_front'] >= 1.5 and u['label_csk'] >= 2.0 else 1.0))
+    thin = None
+    for q in u['labels']:                                              # walnut left under each recess, over the seam key and beside it
+        for x0, x1 in ((max(q[1], -u['key_hx']) + 1, min(q[3], u['key_hx']) - 1), (max(q[1], u['key_hx']) + 1, q[3] - 1), (q[1] + 1, min(q[3], -u['key_hx']) - 1)):
+            if x1 - x0 < 2:
+                continue
+            t = (box(x0, x1, q[2] + 2, q[4] - 2, -1, 3.2) ^ sl).volume() / ((x1 - x0) * (q[4] - q[2] - 4))
+            thin = t if thin is None else min(thin, t)
+    rows.append((f'walnut left under the label recesses: {thin:.2f} at its thinnest, over the seam key ({LABEL_WALL} or more)', 0.0 if thin >= LABEL_WALL - 0.01 else 1.0))
+    lab = [box(q[1] + 2, q[3] - 2, q[2] + 2, q[4] - 2, 0.05, 0.3) for q in u['labels']]
+    rows.append(('label recesses are cut (a 0.3 slab in each, clear of walnut)', v(Manifold.batch_boolean(lab, ADD), sl)))
+    ft = [cyl_z(fx, fy, 0.05, 1.3, 12.7, 32) for fx, fy in u['feet']]
+    rows.append(('bumper recesses are cut (a 12.7 peg in each, clear of walnut)', v(Manifold.batch_boolean(ft, ADD), sl)))
     under_sh = Manifold.batch_boolean([cyl_z(sx * x, DR.BOT_Y, -1, S.WALL + 1, 3.0, 32) for sx in (-1, 1) for x in (50.0, 142.0)], ADD)
     worst = 0.0
     for shrink in (0.0, SHRINK_MAX):
