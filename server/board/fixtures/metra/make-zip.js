@@ -44,11 +44,17 @@ function makeZip(entries, { descriptor = true, comment = '' } = {}) {
   return Buffer.concat([...locals, cd, end, c]);
 }
 
-// The made-up schedule (schedule/*.txt) as a schedule.zip.
+// The made-up schedule (schedule/*.txt) as a schedule.zip. opts.through
+// ("YYYYMMDD"): its calendar runs to then instead of Dec 31, 2026, for tests
+// that run on today's date.
 const DIR = path.join(__dirname, 'schedule');
-function scheduleZip(opts) {
+function scheduleZip({ through = null, ...opts } = {}) {
   const names = fs.readdirSync(DIR).filter((n) => n.endsWith('.txt')).sort();
-  return makeZip(names.map((name) => ({ name, data: fs.readFileSync(path.join(DIR, name)) })), opts);
+  return makeZip(names.map((name) => {
+    let data = fs.readFileSync(path.join(DIR, name));
+    if (through && name === 'calendar.txt') data = Buffer.from(data.toString('utf8').replace(/20261231/g, through));
+    return { name, data };
+  }), opts);
 }
 
 module.exports = { makeZip, scheduleZip };

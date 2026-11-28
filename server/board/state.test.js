@@ -530,7 +530,8 @@ test('buses: the setting, the bus screen, and the knob\'s third transit variant'
   const { TRANSIT_SCREENS, knobOf } = require('./state');
   const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-bus-')), log: { warn() {}, error() {} } });
   assert.deepEqual(store.get('home').buses, []);
-  assert.deepEqual(TRANSIT_SCREENS, ['transit', 'ticker', 'bus']);
+  // The knob's order: 'L' BUS METRA TICKER (design spec §5, "On the knob").
+  assert.deepEqual(TRANSIT_SCREENS, ['transit', 'bus', 'metra', 'ticker']);
   const bus = { rt: '22', dir: 'Southbound', stpid: '1836', stpnm: 'Clark & Morse' };
   let b = store.update('home', { buses: [{ ...bus, label: 'to work' }] });
   assert.deepEqual(b.buses, [{ ...bus, label: 'TO WORK' }]);
@@ -546,8 +547,33 @@ test('buses: the setting, the bus screen, and the knob\'s third transit variant'
   // The ring: buses only where the server says the board shows them.
   assert.deepEqual(knobOf(store.get('home'), { peek: true }).vars[0], ['transit', 'ticker']);
   const k = knobOf(store.get('home'), { peek: true, bus: true });
-  assert.deepEqual([k.at, k.vars[0], k.sel[0]], [0, ['transit', 'ticker', 'bus'], 2]);
+  assert.deepEqual([k.at, k.vars[0], k.sel[0]], [0, ['transit', 'bus', 'ticker'], 1]);
   // The last bus removed: back to the train rows.
   b = store.update('home', { buses: [] });
   assert.deepEqual([b.screen, b.transitScreen], ['transit', 'transit']);
+});
+
+test('metra: the setting, the metra screen, and its place among the transit variants', () => {
+  const { knobOf } = require('./state');
+  const store = createStore({ dir: fs.mkdtempSync(path.join(os.tmpdir(), 'board-metra-')), log: { warn() {}, error() {} } });
+  assert.equal(store.get('home').metra, null);
+  let b = store.update('home', { metra: { stop: 'ROGERPK' } });
+  assert.deepEqual(b.metra, { stop: 'ROGERPK', dir: 'auto', to: null });
+  b = store.update('home', { metra: { stop: 'OTC', dir: 'out', to: 'ROGERPK' } });
+  assert.deepEqual(b.metra, { stop: 'OTC', dir: 'out', to: 'ROGERPK' });
+  for (const bad of [{ stop: 'rogers park' }, { stop: 'X' }, { stop: 'OTC', dir: 'north' }, { stop: 'OTC', to: 'OTC' }, ['OTC'], 'OTC']) {
+    assert.throws(() => store.update('home', { metra: bad }), ValidationError, JSON.stringify(bad));
+  }
+  b = store.update('home', { screen: 'metra' });
+  assert.deepEqual([b.screen, b.transitScreen], ['metra', 'metra']);
+  store.update('home', { screen: 'weather' });
+  assert.equal(store.select('home', 'transit').screen, 'metra');
+  // The ring: Metra only where the server says the board draws it, after
+  // the buses and before the ticker.
+  assert.deepEqual(knobOf(store.get('home'), { peek: true }).vars[0], ['transit', 'ticker']);
+  const k = knobOf(store.get('home'), { peek: true, bus: true, metra: true });
+  assert.deepEqual([k.vars[0], k.sel[0]], [['transit', 'bus', 'metra', 'ticker'], 2]);
+  // Metra removed: back to the train rows.
+  b = store.update('home', { metra: null });
+  assert.deepEqual([b.metra, b.screen, b.transitScreen], [null, 'transit', 'transit']);
 });

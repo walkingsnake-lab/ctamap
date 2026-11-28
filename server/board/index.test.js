@@ -2223,7 +2223,7 @@ test('buses: the bus screen is the transit screen with the bus rows, for firmwar
   assert.deepEqual((await s.req('/board/update?b=home&hk=bus&s=ticker', h)).body.ticker.map((x) => x.d), ['Howard', '95th']);
   // The knob: buses are transit's third variant, and the one it's on; the
   // train rows ride in pv.tr for the chooser.
-  assert.deepEqual([b.knob.at, b.knob.vars[0], b.knob.sel[0]], [0, ['transit', 'ticker', 'bus'], 2]);
+  assert.deepEqual([b.knob.at, b.knob.vars[0], b.knob.sel[0]], [0, ['transit', 'bus', 'ticker'], 1]);
   assert.deepEqual([b.pv.tr.tv, b.pv.tr.stn, b.pv.tr.header, b.pv.tr.rows.map((r) => r.lbl)], [null, '40100', 'MORSE', ['HOWARD', '95TH']]);
   // Chosen from the knob: back to the trains, the buses now in pv.tr; then to the buses again.
   b = (await s.req('/board/select?b=home&s=transit&v=transit&hk=peek:bus', { method: 'POST', ...h })).body;
@@ -2303,5 +2303,90 @@ test('buses: the setting is checked; the picker lists routes, directions and sto
   assert.equal((await s.req(`${api}/stops?rt=22&dir=${encodeURIComponent('S;')}`)).status, 400);
   assert.deepEqual([(await s.req(`${api}/stops?rt=22&dir=Sideways`)).status, (await s.req(`${api}/stops?rt=22&dir=Sideways`)).body.err], [502, 'upstream']);
   assert.equal((await s.req(`${api}/routes`, { method: 'POST' })).status, 405);
+  await s.close();
+});
+
+// ---- Metra (design spec §5, "Metra"; contract "Metra") ----
+
+function fakeMetra({ model = 'made-up' } = {}) {
+  const { readZip } = require('./zip');
+  const S = require('./metra-schedule');
+  const { scheduleZip } = require('./fixtures/metra/make-zip');
+  // The made-up schedule, its calendar stretched so the test runs on any date.
+  const m = model === 'made-up' ? S.parseSchedule(readZip(scheduleZip({ through: '20991231' }), { only: S.FILES }), { published: 'test' }) : model;
+  return { started: 0, start() { this.started++; return this; }, get: () => m };
+}
+
+test('metra: the metra screen is the transit screen with the metra object, for firmware that draws it', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const metraSchedule = fakeMetra();
+  const s = await serve({ tracker: trainsAt(now), metraSchedule });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
+  assert.equal((await post({ metra: { stop: 'MAIN' }, screen: 'metra' })).status, 200);
+  // Firmware without the `metra` capability: the trains, as before, and
+  // the schedule isn't fetched for it.
+  let b = (await s.req('/board/update?b=home', h)).body;
+  assert.deepEqual(['tv' in b, 'metra' in b, b.rows.map((r) => r.lbl), metraSchedule.started], [false, false, ['HOWARD', '95TH'], 0]);
+  // With it: Metra, one direction on a 64.
+  b = (await s.req('/board/update?b=home&hk=metra', h)).body;
+  assert.deepEqual([b.screen, b.tv, b.stn, b.metra.mode, b.metra.rt, b.stale, b.age, b.rows], ['transit', 'metra', 'metra', 'one', 'nokey', 0, null, []]);
+  assert.ok(['INBOUND', 'OUTBOUND'].includes(b.metra.label));
+  assert.ok(b.metra.rows.length > 0 && b.metra.rows.every((r) => r.s === 1 && r.ln === 'NL'));
+  assert.deepEqual(b.metra.stn, { name: 'MAIN ST', lines: [{ n: 'NL', c: '#008000' }] });
+  // Fixed to inbound.
+  await post({ metra: { stop: 'MAIN', dir: 'in' } });
+  assert.equal((await s.req('/board/update?b=home&hk=metra', h)).body.metra.label, 'INBOUND');
+  // Two panels: inbound | outbound.
+  b = (await s.req('/board/update?b=home&hk=metra&w=128', h)).body;
+  assert.deepEqual([b.metra.mode, b.metra.halves], ['station', ['INBOUND', 'OUTBOUND']]);
+  // Sent with the transit sections only.
+  assert.equal('metra' in (await s.req('/board/update?b=home&hk=metra&s=weather', h)).body, false);
+  await s.close();
+});
+
+test('metra: the knob\'s variant, and the peek chooser\'s other views', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: trainsAt(now), busTracker: fakeBus(now), metraSchedule: fakeMetra() });
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  const post = (body) => s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify(body) });
+  await post({ buses: BUSES, metra: { stop: 'MAIN' } });
+  // On the trains: Metra is a variant, its object in pv.mt, the buses in pv.tr.
+  let b = (await s.req('/board/update?b=home&hk=peek:bus:metra', h)).body;
+  assert.deepEqual([b.knob.vars[0], b.knob.sel[0], 'tv' in b, b.pv.tr.tv, b.pv.mt.mode], [['transit', 'bus', 'metra', 'ticker'], 0, false, 'bus', 'one']);
+  // Chosen from the knob: Metra on screen, the trains in pv.tr and the buses in pv.trb.
+  b = (await s.req('/board/select?b=home&s=transit&v=metra&hk=peek:bus:metra', { method: 'POST', ...h })).body;
+  assert.deepEqual([b.tv, b.knob.sel[0], b.pv.tr.tv, b.pv.tr.header, b.pv.trb.tv, 'mt' in b.pv], ['metra', 2, null, 'MORSE', 'bus', false]);
+  // Without the capability there's no Metra variant, and its screen shows the trains.
+  b = (await s.req('/board/update?b=home&hk=peek:bus', h)).body;
+  assert.deepEqual([b.knob.vars[0], 'tv' in b, 'mt' in b.pv], [['transit', 'bus', 'ticker'], false, false]);
+  // Metra removed: back to the trains.
+  await post({ metra: null });
+  assert.equal(s.store.get('home').screen, 'transit');
+  await s.close();
+});
+
+test('metra: no schedule yet, or one that has run out, says NO DATA; the picker lists the lines', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const h = { headers: { 'X-Board-Token': 'tok' } };
+  let s = await serve({ tracker: trainsAt(now), metraSchedule: fakeMetra({ model: null }) });
+  await s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify({ metra: { stop: 'MAIN' }, screen: 'metra' }) });
+  let b = (await s.req('/board/update?b=home&hk=metra', h)).body;
+  assert.deepEqual([b.tv, b.metra.exp, b.metra.rows], ['metra', 1, []]);
+  assert.deepEqual([(await s.req('/board/secret123/api/metra/stops')).status], [503]);
+  await s.close();
+  s = await serve({ tracker: trainsAt(now), metraSchedule: fakeMetra() });
+  b = (await s.req('/board/secret123/api/metra/stops')).body;
+  assert.deepEqual(b.lines.map((l) => [l.rt, l.stops.map((x) => x.id)]), [['NL', ['DT', 'MAIN', 'OAK', 'FAR']], ['WL', ['DT', 'WKA', 'WKB']]]);
+  assert.equal(b.lines[0].color, '#008000');
+  await s.close();
+});
+
+test('metra: the simulator previews it with hk before any firmware reports the capability', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: trainsAt(now), metraSchedule: fakeMetra() });
+  await s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify({ metra: { stop: 'MAIN' }, screen: 'metra' }) });
+  assert.equal('tv' in (await s.req('/board/secret123/api/update?b=home')).body, false);
+  assert.equal((await s.req('/board/secret123/api/update?b=home&hk=metra')).body.tv, 'metra');
   await s.close();
 });
