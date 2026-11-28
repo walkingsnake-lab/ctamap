@@ -1,0 +1,421 @@
+#!/usr/bin/env node
+'use strict';
+// Metra on a 128x32 board (two 64x32 chained): first-pass layouts. Not in
+// draw.js. Made-up times and train numbers; line colors from Metra's GTFS routes.txt.
+//   node scripts/mock-metra-128.js   -> docs/board/mockups/metra/*.png
+
+const fs = require('fs');
+const path = require('path');
+const { Frame } = require('../server/board/raster');
+const { packFonts } = require('../server/board/fonts');
+const G = require('../server/board/glyphs');
+
+const OUT = path.join(__dirname, '..', 'docs', 'board', 'mockups', 'metra');
+const F = packFonts();
+const W = 128, H = 32;
+const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+const scale = (c, k) => '#' + hex(c).map((v) => Math.round(v * k).toString(16).padStart(2, '0')).join('');
+
+// Metra's own route colors (GTFS routes.txt, read Nov 27); the 'L' Red Line.
+const LINE = { UPN: '#008000', UPNW: '#ffe600', UPW: '#fe8d81', RD: '#c60c30' };
+const NAME = { UPN: 'UP-N', UPNW: 'UP-NW', UPW: 'UP-W' };
+const C = {
+  label: '#d8d8d8', white: '#ffffff', amber: '#ffb000', dim: '#664600', grey: '#808080', dark: '#555555',
+  sched: '#6a6a6a', schedDim: '#2e2e2e', late: '#ff2020', index: '#2d2d2d',
+};
+const CLOCK = '5:42';
+
+const measure = (font, s) => { let w = 0; for (const ch of s) { const g = F[font][ch.codePointAt(0)]; if (g) w += g[0]; } return w > 0 ? w - 1 : 0; };
+const rtext = (f, font, s, x1, base, col) => { f.text(font, s, x1 - measure(font, s) + 1, base, col); return x1 - measure(font, s); };
+
+// Countdown color: amber for the next live train, dim after it; grey for a
+// train Metra isn't tracking yet (the board's schedule-based convention).
+const cdCol = (r, first) => (r.sched ? (first ? C.sched : C.schedDim) : first ? C.amber : C.dim);
+// Expected departure: red when late, grey when schedule-only.
+const timeCol = (r) => (r.late ? C.late : r.sched ? C.sched : C.label);
+const status = (r) => (r.late ? [`${r.late} LATE`, C.late] : r.sched ? ['SCHED', C.schedDim] : ['ON TIME', C.dark]);
+
+function header(f, station, { line } = {}) {
+  let x = f.text('small', station, 0, 6, C.grey);
+  if (line) f.text('small', NAME[line], x + 3, 6, LINE[line]);
+  rtext(f, 'small', CLOCK, W - 1, 6, C.grey);
+}
+
+// ---- A / E. Departures: one train per row across both panels ----
+// time | destination | train number or line | status | countdown
+function departures(station, rows, { line, mid = 'num' } = {}) {
+  const f = new Frame(W, H);
+  header(f, station, { line });
+  rows.slice(0, 4).forEach((r, i) => {
+    const top = 8 + i * 6, base = top + 5;
+    if (mid === 'num') {
+      f.fill(0, top, 3, 5, LINE[r.ln]);
+      rtext(f, 'small', r.at, 23, base, timeCol(r));
+      f.text('small', r.to, 27, base, C.label);
+      f.text('small', `#${r.no}`, 64, base, C.dark);
+    } else { // several lines: the line's name in its color stands in for the block
+      f.text('small', NAME[r.ln], 0, base, LINE[r.ln]);
+      rtext(f, 'small', r.at, 40, base, timeCol(r));
+      f.text('small', r.to, 44, base, C.label);
+    }
+    const [s, sc] = status(r);
+    rtext(f, 'small', s, 109, base, sc);
+    rtext(f, 'small', r.in, W - 1, base, cdCol(r, i === 0));
+  });
+  return f;
+}
+
+const HALVES = [[0, 61], [65, 127]];
+
+// ---- B. Inbound | outbound: time, destination, countdown; station line ----
+function split(station, line, sides) {
+  const f = new Frame(W, H);
+  sides.forEach(({ label, rows }, s) => {
+    const [x0, x1] = HALVES[s];
+    f.text('small', label, x0, 5, C.grey);
+    rows.slice(0, 3).forEach((r, i) => {
+      const base = 8 + i * 6 + 5;
+      const x = f.text('small', r.at, x0, base, timeCol(r));
+      f.text('small', r.to, Math.max(x + 2, x0 + 18), base, C.label);
+      if (r.min < 60) rtext(f, 'small', r.in, x1, base, cdCol(r, i === 0));
+    });
+  });
+  const x = f.text('small', station, 0, 32, C.dark);
+  f.text('small', NAME[line], x + 3, 32, scale(LINE[line], 0.7));
+  rtext(f, 'small', CLOCK, W - 1, 32, C.dark);
+  return f;
+}
+
+// ---- C. Beside the 'L': CTA rows left, one Metra row per direction right ----
+function beside(station, cta, metra) {
+  const f = new Frame(W, H);
+  f.text('small', 'CTA', 0, 5, C.grey);
+  f.text('small', 'METRA', 65, 5, C.grey);
+  cta.forEach((r, i) => {
+    const top = [10, 18][i];
+    f.fill(0, top, 3, 5, LINE[r.ln]);
+    f.text('small', r.to, 5, top + 5, C.label);
+    let x = 61;
+    for (let k = r.t.length - 1; k >= 0; k--) x = rtext(f, 'small', r.t[k], x, top + 5, k === 0 ? C.amber : C.dim) - 3;
+  });
+  metra.forEach((r, i) => {
+    const top = [10, 18][i];
+    f.fill(65, top, 3, 5, LINE[r.ln]);
+    f.text('small', r.to, 70, top + 5, C.label);
+    const x = rtext(f, 'small', r.in, W - 1, top + 5, cdCol(r, true));
+    rtext(f, 'small', r.at, x - 3, top + 5, r.late ? C.late : C.dark);
+  });
+  f.text('small', station, 0, 32, C.dark);
+  rtext(f, 'small', CLOCK, W - 1, 32, C.dark);
+  return f;
+}
+
+// ---- D. Next train big: one station, both directions ----
+function hero(sides) {
+  const f = new Frame(W, H);
+  sides.forEach(({ label, r, then }, s) => {
+    const [x0, x1] = HALVES[s];
+    f.text('small', label, x0, 5, C.grey);
+    const col = r.sched ? C.sched : C.amber;
+    const end = f.text('clock', r.min, x0, 23, col);
+    f.text('small', 'MIN', end + 1, 23, col);
+    rtext(f, '5x7', r.at, x1, 15, r.late ? C.late : C.label);
+    const [st, sc] = status(r);
+    rtext(f, 'small', st, x1, 23, sc === C.schedDim ? C.dark : sc);
+    const x = f.text('small', 'THEN', x0, 31, C.dark);
+    f.text('small', then.join('  '), x + 3, 31, C.dim);
+  });
+  return f;
+}
+
+// ---- F. Ticker bands, after the 'L' ticker: 5x7 on the line color ----
+function ticker(station, line, rows) {
+  const f = new Frame(W, H);
+  header(f, station);
+  rows.slice(0, 2).forEach((r, i) => {
+    const top = 7 + i * 13, base = top + 10;
+    f.fill(0, top, 5, 12, C.index);
+    f.text('small', String(i + 1), 1, top + 9, C.grey);
+    f.fill(5, top, W - 5, 12, scale(LINE[line], 0.55));
+    let x = f.text('5x7', r.at, 7, base, C.white);
+    x = f.text('5x7', r.to5, x + 4, base, C.white);
+    if (r.late) f.text('small', `${r.late} LATE`, x + 3, base, C.white);
+    x = rtext(f, '5x7', String.fromCodePoint(G.MIN), W - 2, base, C.white);
+    rtext(f, '5x7', r.min, x - 2, base, C.white);
+  });
+  return f;
+}
+
+// ---- data: Rogers Park (UP-N), 5:42 PM; `at` is the expected departure ----
+const T = (ln, no, at, to, min, extra = {}) => ({ ln, no, at, to, to5: to[0] + to.slice(1).toLowerCase(), min: String(min), in: min >= 60 ? `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}` : `${min}m`, ...extra });
+const RP = [
+  T('UPN', 339, '5:51', 'KENOSHA', 9),
+  T('UPN', 360, '5:55', 'CHICAGO', 13, { late: 8 }),
+  T('UPN', 341, '6:10', 'WAUKEGAN', 28),
+  T('UPN', 362, '6:21', 'CHICAGO', 39, { sched: true }),
+  T('UPN', 343, '6:40', 'KENOSHA', 58, { sched: true }),
+  T('UPN', 364, '6:51', 'CHICAGO', 69, { sched: true }),
+];
+const bare = (r) => ({ ...r, in: r.min >= 60 ? r.in : r.min });
+const IN = RP.filter((r) => r.no % 2 === 0), OUTB = RP.filter((r) => r.no % 2 === 1);
+const OTC = [
+  T('UPNW', 643, '5:45', 'HARVARD', 3),
+  T('UPW', 57, '5:48', 'ELBURN', 6),
+  T('UPN', 339, '5:50', 'KENOSHA', 8),
+  T('UPNW', 645, '5:54', 'CRYSTAL LK', 12, { late: 14 }),
+];
+
+const MOCKS = [
+  ['a-departures', 'A  Departures: one train per row', departures('ROGERS PARK', RP, { line: 'UPN' })],
+  ['b-split', 'B  Inbound | outbound', split('ROGERS PARK', 'UPN', [{ label: 'INBOUND', rows: IN.map(bare) }, { label: 'OUTBOUND', rows: OUTB.map(bare) }])],
+  ['c-beside', "C  Beside the 'L': Morse + Rogers Park", beside('MORSE', [{ ln: 'RD', to: 'HOWARD', t: ['DUE', '7', '15'] }, { ln: 'RD', to: '95TH', t: ['3', '12', '22'] }], [{ ...bare(IN[0]), to: 'INBOUND' }, { ...bare(OUTB[0]), to: 'OUTBOUND' }])],
+  ['d-hero', 'D  Next train big', hero([{ label: 'INBOUND', r: IN[0], then: ['6:21', '6:51'] }, { label: 'OUTBOUND', r: OUTB[0], then: ['6:10', '6:40'] }])],
+  ['e-terminal', 'E  Downtown terminal: three lines', departures('OGILVIE', OTC, { mid: 'line' })],
+  ['f-ticker', 'F  Ticker bands (5x7)', ticker('ROGERS PARK', 'UPN', RP)],
+];
+
+// ================= Round 2 (Nov 27): a station screen and a terminus screen =================
+// Rules, after the owner's review of round 1's B and E:
+//  - Numbers are never stepped down. Every row is a different train, so there
+//    is no "later time" to dim: a live train counts down in full amber, and a
+//    train that hasn't started its run (schedule only) in the board's
+//    schedule grey, one level on every row. Departure times are label white.
+//  - Blank means on time. Late starts at six minutes behind schedule (Metra's
+//    own measure); from there the expected time is red, and full-width rows
+//    add +N after the name. Under six minutes the expected time stays white.
+//    One late color: orange, and orange-then-red by severity, were drawn and
+//    not chosen.
+//  - A canceled train keeps its row, greyed out: grey time, CANCELED in grey,
+//    no countdown. Late and canceled never share a color.
+//  - No countdown past 59 minutes in a half (1h23 on full-width rows), so
+//    tomorrow's first trains need no special overnight screen.
+const cd2 = (r) => (r.live ? C.amber : C.sched);
+const lateCol = () => C.late;
+const cancelCol = () => C.sched;
+const t2col = (r) => (r.cancel ? cancelCol() : r.late ? lateCol() : C.label);
+const R = (ln, at, to, min, extra = {}) => ({ ln, at, to, min, ...extra });
+const hm = (min) => (min >= 60 ? `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}` : `${min}m`);
+
+// Station: inbound | outbound, one train per row. opts.blocks for a station on
+// more than one line.
+function station(name, lines, sides, { blocks = false, clock = '5:42' } = {}) {
+  const f = new Frame(W, H);
+  sides.forEach(({ label, rows }, s) => {
+    const [x0, x1] = HALVES[s];
+    f.text('small', label, x0, 5, C.grey);
+    const tx = x0 + (blocks ? 5 : 0);
+    const nx = tx + Math.max(...rows.map((r) => measure('small', r.at))) + (blocks ? 3 : 4);
+    rows.slice(0, 3).forEach((r, i) => {
+      const top = 8 + i * 6, base = top + 5;
+      if (blocks) f.fill(x0, top, 3, 5, LINE[r.ln]);
+      f.text('small', r.at, tx, base, t2col(r));
+      if (r.cancel) return void f.text('small', 'CANCELED', nx, base, cancelCol());
+      f.text('small', r.to, nx, base, C.label);
+      if (r.min < 60) rtext(f, 'small', String(r.min), x1, base, cd2(r));
+    });
+  });
+  let x = f.text('small', name, 0, 32, C.dark);
+  for (const ln of lines) x = f.text('small', NAME[ln], x + 3, 32, scale(LINE[ln], 0.7));
+  rtext(f, 'small', clock, W - 1, 32, C.dark);
+  return f;
+}
+
+// Terminus (every train leaves the same way: downtown, or the end of a line):
+// full-width rows. opts.home lists only the trains that stop at one station,
+// with the time each gets there.
+function terminus(name, rows, { home, clock = '5:42' } = {}) {
+  const f = new Frame(W, H);
+  const hx = f.text('small', name, 0, 6, C.grey);
+  if (home) f.text('small', `TO ${home}`, hx + 3, 6, C.dark);
+  rtext(f, 'small', clock, W - 1, 6, C.grey);
+  rows.slice(0, 4).forEach((r, i) => {
+    const top = 8 + i * 6, base = top + 5;
+    let nx;
+    if (home) { f.fill(0, top, 3, 5, LINE[r.ln]); rtext(f, 'small', r.at, 23, base, t2col(r)); nx = 27; }
+    else { f.text('small', NAME[r.ln], 0, base, LINE[r.ln]); rtext(f, 'small', r.at, 40, base, t2col(r)); nx = 44; }
+    if (r.cancel) return void f.text('small', 'CANCELED', nx, base, cancelCol());
+    const end = f.text('small', r.to, nx, base, C.label);
+    if (home) { const x = f.text('small', 'ARR', 70, base, C.dark); f.text('small', r.arr, x + 2, base, r.late ? lateCol() : C.label); }
+    else if (r.late) f.text('small', `+${r.late}`, end + 2, base, lateCol());
+    rtext(f, 'small', hm(r.min), W - 1, base, cd2(r));
+  });
+  return f;
+}
+
+const RP_IN = [R('UPN', '5:55', 'CHICAGO', 13, { late: 8, live: true }), R('UPN', '6:21', 'CHICAGO', 39), R('UPN', '6:51', 'CHICAGO', 69)];
+const RP_OUT = [R('UPN', '5:51', 'KENOSHA', 9, { live: true }), R('UPN', '6:10', 'WAUKEGAN', 28, { live: true }), R('UPN', '6:40', 'KENOSHA', 58)];
+const RP_OUT_X = [R('UPN', '5:51', '', 9, { cancel: true }), RP_OUT[1], RP_OUT[2]];
+const CLY_IN = [R('UPNW', '5:46', 'CHICAGO', 4, { live: true }), R('UPN', '6:07', 'CHICAGO', 25, { late: 8, live: true }), R('UPNW', '6:16', 'CHICAGO', 34, { live: true })];
+const CLY_OUT = [R('UPN', '5:44', 'KENOSHA', 2, { live: true }), R('UPNW', '5:53', 'HARVARD', 11, { live: true }), R('UPN', '6:01', 'WAUKEGAN', 19)];
+const NIGHT_IN = [R('UPN', '12:20', 'CHICAGO', 32), R('UPN', '5:32', 'CHICAGO', 344), R('UPN', '6:02', 'CHICAGO', 374)];
+const NIGHT_OUT = [R('UPN', '11:55', '', 7, { cancel: true }), R('UPN', '12:35', 'KENOSHA', 47), R('UPN', '1:35', 'WAUKEGAN', 107)];
+const OTC2 = [
+  R('UPNW', '5:45', 'HARVARD', 3, { live: true }), R('UPW', '5:48', 'ELBURN', 6, { live: true }),
+  R('UPN', '5:50', '', 8, { cancel: true }), R('UPNW', '5:54', 'CRYSTAL LAKE', 12, { late: 14, live: true }),
+];
+const OTC_HOME = [
+  R('UPN', '5:50', 'KENOSHA', 8, { live: true, arr: '6:07' }), R('UPN', '6:11', 'WINNETKA', 29, { late: 6, live: true, arr: '6:28' }),
+  R('UPN', '6:35', 'WAUKEGAN', 53, { arr: '6:52' }), R('UPN', '7:05', 'KENOSHA', 83, { arr: '7:22' }),
+];
+const BOTH = (i, o) => [{ label: 'INBOUND', rows: i }, { label: 'OUTBOUND', rows: o }];
+
+const ROUND2 = [
+  ['r2-station', 'S1  Station: Rogers Park', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT))],
+  ['r2-station-lines', 'S3  Station on two lines: Clybourn', station('CLYBOURN', ['UPN', 'UPNW'], BOTH(CLY_IN, CLY_OUT), { blocks: true })],
+  ['r2-station-night', 'S4  11:48 PM: canceled, tomorrow', station('ROGERS PARK', ['UPN'], BOTH(NIGHT_IN, NIGHT_OUT), { clock: '11:48' })],
+  ['r2-station-states', 'S5  Late and canceled together', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT_X))],
+  ['r2-terminus', 'T1  Terminus: Ogilvie, every line', terminus('OGILVIE', OTC2)],
+  ['r2-terminus-home', 'T2  Terminus with a home stop', terminus('OGILVIE', OTC_HOME, { home: 'ROGERS PARK' })],
+];
+
+// ================= Round 3 (Nov 27): Metra on the knob (Transit variant) =================
+// The 128 variant strip (wide-spec §9) with Metra as Transit's third variant,
+// drawn the way drawPeekWideEntry does: the screen the board was on stays
+// behind at 25%, black band on rows 21-31, the Transit icon at x2 in Red Line
+// red with its underline, the variants as words from x14 (5 px apart; the
+// chosen one white, the rest #4a4a4a), the ring's dots on column 126.
+const D = require('../server/board/render');
+const RING_COLS = ['#c60c30', '#ffd040', '#f0e2c8', '#40e090', '#3fd0e8'];
+function strip(under, words, chosen) {
+  const f = new Frame(W, H);
+  for (let y = 0; y < 21; y++) for (let x = 0; x < W; x++) f.set(x, y, under.get(x, y).map((v) => Math.round(v * 0.25)));
+  D.PEEK_ICONS.transit.forEach((r, j) => [...r].forEach((ch, x) => { if (ch === '#') f.fill(2 + x, 23 + j, 1, 1, RING_COLS[0]); }));
+  f.fill(2, 31, 7, 1, RING_COLS[0]);
+  let x = 14;
+  words.forEach((w, i) => {
+    if (w.group) { x = f.text('small', w.group, x, 29, '#555555') + 2; return; }
+    x = f.text('small', w, x, 29, i === chosen ? C.white : '#4a4a4a') - 1 + 5;
+  });
+  if (x - 5 > 123) console.warn('strip too wide:', words, x - 5);
+  RING_COLS.forEach((c, i) => f.fill(126, 22 + i * 2, 1, 1, i === 0 ? c : scale(c, 0.3)));
+  return f;
+}
+const UNDER = station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT));
+const ROUND3 = [
+  ['r3-k1', 'K1  As built + METRA (reference)', strip(UNDER, ['ROWS', 'TICKER', 'METRA'], 2)],
+  ['r3-k2', 'K2  CTA  TICKER  METRA', strip(UNDER, ['CTA', 'TICKER', 'METRA'], 2)],
+  ['r3-k3', 'K3  CTA  CTA TICKER  METRA', strip(UNDER, ['CTA', 'CTA TICKER', 'METRA'], 2)],
+  ['r3-k4', 'K4  CTA ROWS  CTA TICKER  METRA', strip(UNDER, ['CTA ROWS', 'CTA TICKER', 'METRA'], 2)],
+  ['r3-k5', 'K5  CTA (dim) ROWS TICKER METRA', strip(UNDER, [{ group: 'CTA' }, 'ROWS', 'TICKER', 'METRA'], 3)],
+];
+
+// ================= Round 4 (Nov 27): 'L' BUS METRA TICKER, and a mixed ticker =================
+// Transit's variants become 'L' (train rows), BUS (buses as their own screen,
+// on both sizes), METRA (the station screen), TICKER (the platform-sign list,
+// which can now take buses and Metra too, by time).
+const STRIP4 = ["'L'", 'BUS', 'METRA', 'TICKER'];
+// The wide ticker row, as drawTickerItemWide draws it, with the band color
+// passed in (draw.js's line table has no Metra or bus-band colors to look up).
+// it: { col, d (destination, 5x7), min, sch, tag (small text before the name) }
+const TICKER_TIME_RIGHT = 116;
+const TICON = {
+  live: { x: 121, y: 3, rows: ['###...', '...#..', '##..#.', '..#..#', '#..#.#', '.#.#.#'] },
+  sch: { x: 122, y: 4, rows: ['.###.', '#.#.#', '#.###', '#...#', '.###.'] },
+};
+function tickRow(f, it, idx, top) {
+  const base = top + 9;
+  f.fill(0, top, 5, 12, C.index);
+  f.fill(5, top, W - 5, 12, scale(it.col, 0.55));
+  f.text('small', String(idx), 1, base, C.label);
+  let x = 7;
+  if (it.tag) x = f.text('small', it.tag, x, base, C.white) + 2;
+  f.text('5x7', it.d, x, base, C.white);
+  if (it.min === 'Due') rtext(f, '5x7', 'Due', TICKER_TIME_RIGHT, base, C.white);
+  else {
+    const mw = measure('5x7', String.fromCodePoint(G.MIN));
+    f.text('5x7', String.fromCodePoint(G.MIN), TICKER_TIME_RIGHT - mw + 1, base, C.white);
+    rtext(f, '5x7', String(it.min), TICKER_TIME_RIGHT - mw - 2, base, C.white);
+  }
+  const ic = TICON[it.sch ? 'sch' : 'live'];
+  ic.rows.forEach((r, j) => [...r].forEach((ch, i) => { if (ch === '#') f.fill(ic.x + i, top + ic.y + j, 1, 1, C.white); }));
+}
+function mixedTicker(items, page, tagMetra) {
+  const f = new Frame(W, H);
+  f.text('small', 'MORSE', 0, 6, C.grey);
+  rtext(f, 'small', CLOCK, W - 1, 6, C.grey);
+  items.slice(page * 2, page * 2 + 2).forEach((it, i) => tickRow(f, { ...it, tag: tagMetra ? it.tag : undefined }, page * 2 + i + 1, 7 + i * 13));
+  return f;
+}
+const BUSC = '#8a8a8a';
+const MIXED = [
+  { col: LINE.RD, d: 'Howard', min: 'Due' },
+  { col: LINE.RD, d: '95th/Dan Ryan', min: 3 },
+  { col: BUSC, d: '22 SB', min: 6 },
+  { col: LINE.UPN, d: 'Kenosha', min: 9, tag: 'UP-N' },
+  { col: LINE.UPN, d: 'Chicago', min: 13, tag: 'UP-N' },
+  { col: BUSC, d: '147 SB', min: 15, sch: true },
+];
+// The 'L' Green Line beside UP-N: the band alone can't tell 'L' from Metra.
+const CLASH = [{ col: '#009b3a', d: 'Harlem/Lake', min: 4 }, { col: LINE.UPN, d: 'Kenosha', min: 9, tag: 'UP-N' }];
+
+const ROUND4 = [
+  ['r4-strip-l', "K6  'L' chosen", strip(UNDER, STRIP4, 0)],
+  ['r4-strip-ticker', 'K6  TICKER chosen', strip(UNDER, STRIP4, 3)],
+  ['r4-ticker-p1', 'M  Mixed ticker, page 1', mixedTicker(MIXED, 0, true)],
+  ['r4-ticker-p2', 'M  Page 2: a bus', mixedTicker(MIXED, 1, true)],
+  ['r4-ticker-p3', 'M  Page 3: Metra, line named', mixedTicker(MIXED, 2, true)],
+  ['r4-ticker-clash', 'M1  Color only: Green Line vs UP-N', mixedTicker(CLASH, 0, false)],
+  ['r4-ticker-tag', 'M2  Line name on Metra rows', mixedTicker(CLASH, 0, true)],
+];
+
+// ================= Round 5 (Nov 27): brighter partners for the dark Metra lines =================
+// Heritage Corridor (#550e0c) and SouthWest (#0042a8) as Metra publishes them
+// are too dark at 70% for the station line, and dim as a block or band.
+// Each frame: the station line (the name at 70%), two rows with blocks (the
+// candidate beside its nearest neighbor on the board), and a ticker band at
+// 55% with its line name. Monitors show these brighter than the panel, which
+// also pushes browns toward red and mid-blues toward cyan.
+function swatch(code, col, place, neighbor, dest) {
+  const f = new Frame(W, H);
+  const x = f.text('small', place, 0, 6, C.dark);
+  f.text('small', code, x + 3, 6, scale(col, 0.7));
+  rtext(f, 'small', col.toUpperCase(), W - 1, 6, C.dark);
+  [[col, `${code} candidate`], [neighbor.col, neighbor.name]].forEach(([c, name], i) => {
+    const top = 9 + i * 6;
+    f.fill(0, top, 3, 5, c);
+    f.text('small', name, 5, top + 5, C.label);
+  });
+  tickRow(f, { col, d: dest, tag: code, min: 9 }, 1, 20);
+  return f;
+}
+const RI = { col: '#e02400', name: 'RI (METRA)' }, CTARD = { col: LINE.RD, name: "'L' RED" };
+const CTABL = { col: '#00a1de', name: "'L' BLUE" }, NCS = { col: '#9785bc', name: 'NCS (METRA)' };
+const ROUND5 = [
+  ['r5-hc-0', 'HC as published #550E0C', swatch('HC', '#550e0c', 'LEMONT', RI, 'Joliet')],
+  ['r5-hc-a', 'HC A  brick #8B2A1A', swatch('HC', '#8b2a1a', 'LEMONT', RI, 'Joliet')],
+  ['r5-hc-b', 'HC B  rust #A0461E', swatch('HC', '#a0461e', 'LEMONT', CTARD, 'Joliet')],
+  ['r5-hc-c', 'HC C  terracotta #B4643C', swatch('HC', '#b4643c', 'LEMONT', RI, 'Joliet')],
+  ['r5-sws-0', 'SWS as published #0042A8', swatch('SWS', '#0042a8', 'ORLAND PK', CTABL, 'Manhattan')],
+  ['r5-sws-a', 'SWS A  #2A64D8', swatch('SWS', '#2a64d8', 'ORLAND PK', CTABL, 'Manhattan')],
+  ['r5-sws-b', 'SWS B  #3F7AF0', swatch('SWS', '#3f7af0', 'ORLAND PK', CTABL, 'Manhattan')],
+  ['r5-sws-c', 'SWS C  periwinkle #5A6EF0', swatch('SWS', '#5a6ef0', 'ORLAND PK', NCS, 'Manhattan')],
+];
+
+const q5 = (v) => v & 0xf8;
+fs.mkdirSync(OUT, { recursive: true });
+function write(mocks, name) {
+  for (const [id, , fr] of mocks) {
+    const q = new Frame(W, H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) q.set(x, y, fr.get(x, y).map(q5));
+    fs.writeFileSync(path.join(OUT, `${id}.png`), q.toPNG(10));
+  }
+  const GAP = 4, TH = 8;
+  const sheet = new Frame(W + 2 * GAP, mocks.length * (TH + H + GAP) + GAP);
+  mocks.forEach(([, label, fr], i) => {
+    const ox = GAP, oy = GAP + i * (TH + H + GAP);
+    sheet.text('small', label.toUpperCase(), ox, oy + 5, '#808080');
+    // Unlit LEDs a step above the page, so each panel's edge shows.
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = fr.get(x, y).map(q5);
+      sheet.set(ox + x, oy + TH + y, p[0] || p[1] || p[2] ? p : [5, 5, 5]);
+    }
+  });
+  fs.writeFileSync(path.join(OUT, name), sheet.toPNG(8, [0, 0, 0]));
+}
+write(MOCKS, 'sheet.png');
+write(ROUND2, 'sheet-r2.png');
+write(ROUND3, 'sheet-r3.png');
+write(ROUND4, 'sheet-r4.png');
+write(ROUND5, 'sheet-r5.png');
+console.log('wrote docs/board/mockups/metra/*.png');
+module.exports = { MOCKS, ROUND2, ROUND3, ROUND4, ROUND5 };
