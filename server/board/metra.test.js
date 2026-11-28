@@ -81,9 +81,65 @@ test('metra: no schedule, a stop it lacks, or one that has run out: exp, no rows
   assert.equal(metraView(model, { stop: 'MAIN' }, at('2027-01-05T10:00:00')).exp, 1);
 });
 
-test('metra: the picker lists each line\'s stops in order outbound', () => {
-  assert.deepEqual(stopsByLine(model).map((l) => [l.rt, l.stops.map((s) => s.id)]), [['NL', ['DT', 'MAIN', 'OAK', 'FAR']], ['WL', ['DT', 'WKA', 'WKB']]]);
+test('metra: the picker lists every stop of each line, in order outbound, branches after', () => {
+  assert.deepEqual(stopsByLine(model).map((l) => [l.rt, l.stops.map((s) => s.id)]), [['BL', ['LS', 'BA', 'BB', 'BC']], ['NL', ['DT', 'MAIN', 'OAK', 'FAR']], ['WL', ['DT', 'WKA', 'WKB']]]);
+  // A branch's stops follow the main line's, marked with the branch's end;
+  // an express (B3 skips BA) adds nothing.
+  assert.deepEqual(stopsByLine(model)[0].stops.slice(2), [{ id: 'BB', name: 'Branch B End' }, { id: 'BC', name: 'Branch C End', br: 'Branch C End' }]);
   assert.deepEqual(stopsByLine(null), []);
+});
+
+test('metra: a home stop limits only a terminus; a through station ignores it', () => {
+  const v = metraView(model, { stop: 'MAIN', to: 'OAK' }, MON_5PM, { cols: 128 });
+  assert.deepEqual([v.mode, 'home' in v, v.rows.filter((r) => r.h === 0).length], ['station', false, 4]);
+  assert.ok(v.rows.every((r) => r.arr === undefined));
+});
+
+test('metra: the terminus header fits the station, TO and the home stop before the clock', () => {
+  const stops = new Map(model.stops);
+  stops.set('DT', { ...stops.get('DT'), name: 'Chicago Downtown Terminal Station' });
+  stops.set('OAK', { ...stops.get('OAK'), name: 'Oak Avenue Northbrook Junction' });
+  const big = { ...model, stops };
+  const w = (v) => measure('small', v.stn.name) + (v.home ? 3 + measure('small', 'TO ' + v.home) : 0);
+  let v = metraView(big, { stop: 'DT' }, MON_5PM, { cols: 128 });
+  assert.ok(w(v) <= 108 && v.stn.name.endsWith(CUT), v.stn.name);
+  v = metraView(big, { stop: 'DT', to: 'OAK' }, MON_5PM, { cols: 128 });
+  assert.ok(w(v) <= 108, `${v.stn.name} TO ${v.home}: ${w(v)} px`);
+  assert.ok(measure('small', v.home) >= 40 - measure('small', 'TO ') - 3);
+});
+
+// Where draw.js puts each row's name and right column, for every three-row
+// window the board shows as trains leave (the spare moves up).
+function overlaps(v, now, x0, x1, rows) {
+  const ct = (t) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(t * 1000)).replace(/\s?[AP]M$/i, '');
+  const bad = [];
+  for (let w = 0; w + 3 <= Math.max(3, rows.length); w++) {
+    const win = rows.slice(w, w + 3);
+    if (!win.length) continue;
+    const nx = x0 + (v.blk ? 5 : 0) + Math.max(...win.map((r) => measure('small', ct(r.t)))) + 4;
+    for (const r of win) {
+      const end = nx + measure('small', r.d) - 1;
+      for (const right of r.dy ? [r.dy, 'DUE', '59'] : ['DUE', '59']) {
+        if (x1 - measure('small', right) + 1 - end - 1 < 2) bad.push(`${r.d} ${right} (window ${w})`);
+      }
+    }
+  }
+  return bad;
+}
+
+test('metra: names leave room for the right column in every window, the spare included', () => {
+  for (const when of ['2026-11-30T05:00:00', '2026-11-30T09:30:00', '2026-11-30T17:00:00', '2026-11-30T23:30:00', '2026-12-05T10:00:00']) {
+    const now = at(when);
+    for (const stop of ['MAIN', 'OAK', 'WKA', 'BA']) {
+      for (const dir of ['in', 'out']) {
+        const v = metraView(model, { stop, dir }, now);
+        assert.deepEqual(overlaps(v, now, 0, 63, v.rows), [], `64 ${stop} ${dir} ${when}`);
+      }
+      const v = metraView(model, { stop }, now, { cols: 128 });
+      if (v.mode !== 'station') continue;
+      for (const h of [0, 1]) assert.deepEqual(overlaps(v, now, ...[[0, 61], [66, 127]][h], v.rows.filter((r) => r.h === h)), [], `128 ${stop} ${when}`);
+    }
+  }
 });
 
 // ---- drawn (draw.js renderMetra) ----

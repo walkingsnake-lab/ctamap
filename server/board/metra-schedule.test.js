@@ -38,9 +38,9 @@ test('gtfsSeconds: times past midnight count on', () => {
 test('routes, stops and trips, with Metra\'s stray spaces trimmed', () => {
   assert.deepStrictEqual(model.routes.get('NL'), { id: 'NL', short: 'NL', long: 'North Line', color: '#008000' });
   assert.strictEqual(model.routes.get('WL').color, '#550e0c');
-  assert.strictEqual(model.stops.size, 6);
+  assert.strictEqual(model.stops.size, 10);
   assert.deepStrictEqual(model.stops.get('MAIN'), { id: 'MAIN', name: 'Main St', lat: 41.95, lon: -87.66 });
-  assert.strictEqual(model.trips.length, 13);
+  assert.strictEqual(model.trips.length, 16);
   assert.strictEqual(model.published, '11/14/26 02:20:03 AM America/Chicago');
   assert.strictEqual(model.through, '20261231');
 });

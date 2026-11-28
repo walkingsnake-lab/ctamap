@@ -12,3 +12,6 @@ NL, SU, N301, Downtown, , , 1
 NL, SU, N302, Far End, , , 0
 WL, WD, W1, Downtown, , , 1
 WL, WD, W2, Weekday B, , , 0
+BL, WK, B1, Branch B End, , , 0
+BL, WK, B2, Branch C End, , , 0
+BL, WK, B3, Branch B End, , , 0

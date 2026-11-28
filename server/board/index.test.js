@@ -2377,8 +2377,8 @@ test('metra: no schedule yet, or one that has run out, says NO DATA; the picker 
   await s.close();
   s = await serve({ tracker: trainsAt(now), metraSchedule: fakeMetra() });
   b = (await s.req('/board/secret123/api/metra/stops')).body;
-  assert.deepEqual(b.lines.map((l) => [l.rt, l.stops.map((x) => x.id)]), [['NL', ['DT', 'MAIN', 'OAK', 'FAR']], ['WL', ['DT', 'WKA', 'WKB']]]);
-  assert.equal(b.lines[0].color, '#008000');
+  assert.deepEqual(b.lines.map((l) => [l.rt, l.stops.map((x) => x.id)]), [['BL', ['LS', 'BA', 'BB', 'BC']], ['NL', ['DT', 'MAIN', 'OAK', 'FAR']], ['WL', ['DT', 'WKA', 'WKB']]]);
+  assert.deepEqual([b.lines[1].color, b.through], ['#008000', '20991231']);
   await s.close();
 });
 
@@ -2388,5 +2388,16 @@ test('metra: the simulator previews it with hk before any firmware reports the c
   await s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify({ metra: { stop: 'MAIN' }, screen: 'metra' }) });
   assert.equal('tv' in (await s.req('/board/secret123/api/update?b=home')).body, false);
   assert.equal((await s.req('/board/secret123/api/update?b=home&hk=metra')).body.tv, 'metra');
+  await s.close();
+});
+
+test('metra: sim.png draws the Metra screen on request, whatever the firmware', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const s = await serve({ tracker: trainsAt(now), metraSchedule: fakeMetra() });
+  await s.req('/board/secret123/api/state?b=home', { method: 'POST', body: JSON.stringify({ metra: { stop: 'MAIN' } }) });
+  const png = async (q) => Buffer.from(await (await fetch(`http://127.0.0.1:${s.port}/board/secret123/sim.png?b=home&scale=1${q}`)).arrayBuffer());
+  const [trains, metra] = [await png('&screen=transit'), await png('&screen=metra')];
+  assert.equal(trains.subarray(0, 4).toString('latin1'), '\x89PNG');
+  assert.notDeepEqual(trains, metra);
   await s.close();
 });

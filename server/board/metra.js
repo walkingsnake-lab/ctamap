@@ -24,6 +24,8 @@ const TERM_ROWS = 4;       // full-width terminus rows
 const NAME_GAP = 4;        // px between the time column and the names
 const RIGHT_GAP = 2;       // px between a name and the countdown or day
 const BLOCK = 5;           // a line block (3 px) and its gap
+const TERM_RIGHT = 19;     // a terminus row's countdown at its widest (11h59)
+const HOME_MIN = 40;       // the terminus header's home stop name, at least
 const DAY_AFTER = 12 * 3600; // a departure further than this shows its day (design spec §5)
 
 // Lines too dark on the panel as Metra publishes them (decided Nov 28; to
@@ -32,11 +34,14 @@ const COLOR_FIX = { HC: '#b4643c', SWS: '#3f7af0' };
 // Destinations as the station screen and the 64 show them (27 px and less is
 // the aim; anything longer is cut with the two-dot glyph). Downtown
 // terminals are all CHICAGO: inbound is inbound.
+// Only shortenings a rider reads at a glance (PK, LK, ST); other long names
+// are cut with the two-dot glyph (MANHAT‥), as decided Nov 28.
 const SHORT = {
   'Chicago OTC': 'CHICAGO', 'Chicago Union Station': 'CHICAGO', 'Millennium Station': 'CHICAGO', 'LaSalle Street': 'CHICAGO',
-  'South Chicago (93rd)': 'S CHICAGO', 'Orland Park 179th': 'ORLAND PK', 'Blue Island-Vermont': 'BLUE ISLAND',
-  'Tinley-80th': 'TINLEY', 'Fairview Ave.': 'FAIRVIEW', 'University Park': 'UNIV PARK', 'Highland Park': 'HIGHLAND PK',
-  'Franklin Park': 'FRANKLIN PK',
+  'South Chicago (93rd)': 'S CHGO', 'Orland Park 179th': 'ORLAND', 'Blue Island-Vermont': 'BLUE ISL', 'Blue Island': 'BLUE ISL',
+  'Tinley-80th': 'TINLEY', 'Fairview Ave.': 'FAIRVIEW', 'University Park': 'UNIV PK', 'Highland Park': 'HIGHLAND PK',
+  'Franklin Park': 'FRANKLIN PK', 'National St': 'NATL ST', 'Des Plaines': 'DES PLNS', 'Lake Forest': 'LK FOREST',
+  'Crystal Lake': 'CRYSTAL LK',
 };
 // Destinations on the wide terminus rows, which have room for more.
 const LONG = {
@@ -125,7 +130,9 @@ function metraView(model, setting, now, { cols = 64, rt = 'nokey' } = {}) {
   const info = infoOf(model, setting.stop);
   const lines = info.lines.map((rt) => lineOf(model, rt));
   const block = info.lines.length > 1;
-  const home = setting.to && setting.to !== setting.stop && model.stops.get(setting.to) ? setting.to : null;
+  // The home stop limits a terminus's rows only (design spec §5, T2); at a
+  // through station it would empty one direction for good.
+  const home = info.terminus && setting.to && setting.to !== setting.stop && model.stops.get(setting.to) ? setting.to : null;
   // Station line: the name, then each line's name (3 px apart), and on two
   // panels the clock (17 px with its gap at the right).
   const lineW = lines.reduce((a, l) => a + 3 + measure('small', l.n), 0);
@@ -139,10 +146,21 @@ function metraView(model, setting, now, { cols = 64, rt = 'nokey' } = {}) {
     const list = info.leaves.in ? deps.in : deps.out;
     const rows = list.map((dep) => {
       if (home) return rowOf(model, dep, now, fit(longDest(dep.headsign), 70 - 4 - 27), { arr: dep.arr });
-      // Name from x 44 to the countdown (1h23 or a day, 15 px) less 3 px.
-      return rowOf(model, dep, now, fit(longDest(dep.headsign), 127 - 44 - 15 - 3 + 1));
+      // Name from x 44 to the countdown (11h59 or a day, 19 px) less 3 px.
+      return rowOf(model, dep, now, fit(longDest(dep.headsign), 127 - 44 - TERM_RIGHT - 3 + 1));
     });
-    return { ...base, mode: 'terminus', stn, home: home ? fit(model.stops.get(home).name, 60) : null, rows };
+    // The header: the station, then `TO <home>`, then the clock (17 px and
+    // its gap). The terminus draws no line names there; the home stop gets
+    // at least HOME_MIN px.
+    const room = WIDE - 20;
+    let name = fit(stop.name, room), homeName = null;
+    if (home) {
+      const to = 3 + measure('small', 'TO ') + 1;   // the gap after the name, `TO `, and its letter gap
+      const full = up(model.stops.get(home).name);
+      name = fit(stop.name, Math.max(room - to - measure('small', full), room - to - HOME_MIN));
+      homeName = fit(full, room - measure('small', name) - to);
+    }
+    return { ...base, mode: 'terminus', stn: { name, lines }, home: homeName, rows };
   }
 
   const deps = departures(model, setting.stop, now, { perDir: SEND, to: home });
@@ -150,7 +168,8 @@ function metraView(model, setting, now, { cols = 64, rt = 'nokey' } = {}) {
     // One panel: one direction (the only one at a terminus).
     const dir = info.terminus ? (info.leaves.in ? 'in' : 'out') : dirOf(setting.dir, now);
     const list = deps[dir];
-    const room = nameRoom(list.slice(0, ROWS), now, 0, W64 - 1, block);
+    // Fitted for every row sent, so the spare doesn't overlap when it moves up.
+    const room = nameRoom(list, now, 0, W64 - 1, block);
     const rows = list.map((dep) => (home
       ? rowOf(model, dep, now, '', { arr: dep.arr })
       : rowOf(model, dep, now, fit(shortDest(dep.headsign), room))));
@@ -161,31 +180,55 @@ function metraView(model, setting, now, { cols = 64, rt = 'nokey' } = {}) {
   [['in', 0], ['out', 1]].forEach(([dir, h]) => {
     const list = deps[dir];
     const [x0, x1] = HALVES[h];
-    const room = nameRoom(list.slice(0, ROWS), now, x0, x1, block);
+    const room = nameRoom(list, now, x0, x1, block);
     for (const dep of list) rows.push(rowOf(model, dep, now, fit(shortDest(dep.headsign), room), { h }));
   });
   return { ...base, mode: 'station', halves: ['INBOUND', 'OUTBOUND'], blk: block ? 1 : 0, stn, rows };
 }
 
-// The picker (control page): every line with its stops in order outbound,
-// from the schedule.
+// The picker (control page): every line with each stop it serves, in order
+// outbound: the line's longest trip, then each branch's stops (`br`: the
+// branch's far end) in the order its trips run, so no station is left out.
 function stopsByLine(model) {
   if (!model) return [];
+  // Each trip's stops in order, outbound (an inbound trip read backwards).
+  const seqOf = new Map();
+  for (const [stop, list] of model.byStop) {
+    for (const [ti, , , s] of list) {
+      if (!seqOf.has(ti)) seqOf.set(ti, []);
+      seqOf.get(ti).push([s, stop]);
+    }
+  }
+  const tripsOf = new Map();
+  for (const [ti, seq] of seqOf) {
+    const trip = model.trips[ti];
+    seq.sort((a, b) => a[0] - b[0]);
+    const stops = seq.map(([, stop]) => stop);
+    if (trip.inbound) stops.reverse();
+    if (!tripsOf.has(trip.route)) tripsOf.set(trip.route, []);
+    tripsOf.get(trip.route).push(stops);
+  }
+  const nameOf = (id) => (model.stops.get(id) || {}).name || id;
   const out = [];
   for (const [rt, route] of [...model.routes].sort((a, b) => a[0].localeCompare(b[0]))) {
-    // The longest outbound trip of the line gives the stops in order.
-    let best = null;
-    for (let ti = 0; ti < model.trips.length; ti++) {
-      const trip = model.trips[ti];
-      if (trip.route !== rt || trip.inbound) continue;
-      if (best == null || trip.lastSeq > model.trips[best].lastSeq) best = ti;
+    const trips = tripsOf.get(rt) || [];
+    const seen = new Set(), stops = [];
+    for (;;) {
+      // The trip with the most stops not listed yet (the longest, first).
+      let best = null, bestNew = 0;
+      for (const t of trips) {
+        const n = t.reduce((a, id) => a + (seen.has(id) ? 0 : 1), 0);
+        if (n > bestNew) { best = t; bestNew = n; }
+      }
+      if (!best) break;
+      const br = stops.length ? nameOf(best[best.length - 1]) : null;
+      for (const id of best) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        stops.push(br ? { id, name: nameOf(id), br } : { id, name: nameOf(id) });
+      }
     }
-    const seq = [];
-    if (best != null) {
-      for (const [stop, list] of model.byStop) for (const [ti, , , s] of list) if (ti === best) seq.push([s, stop]);
-      seq.sort((a, b) => a[0] - b[0]);
-    }
-    out.push({ rt, name: route.long || rt, color: colorOf(model, rt), stops: seq.map(([, id]) => ({ id, name: (model.stops.get(id) || {}).name || id })) });
+    out.push({ rt, name: route.long || rt, color: colorOf(model, rt), stops });
   }
   return out;
 }

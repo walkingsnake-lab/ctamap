@@ -683,7 +683,7 @@ function createBoard({
     let metra = null;
     if (metraOn) {
       try { metra = metraView(metraModel(), board.metra, now, { cols: board.cols === 128 ? 128 : 64, rt: 'nokey' }); }
-      catch (e) { log.error('[board] metra:', e.message); }
+      catch (e) { log.error('[board] metra:', e.message); metra = { rt: 'nokey', rows: [], mode: board.cols === 128 ? 'station' : 'one', exp: 1, stn: { name: '', lines: [] } }; }
     }
     // The peek chooser's other transit variants (contract "Peek"): `tr`, the
     // trains or the buses, whichever the payload isn't (with Metra on
@@ -1288,12 +1288,14 @@ function createBoard({
         if (!board) return send(res, 404, { err: 'unknown_board' });
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
-        // screen=bus: the buses as the board would draw them (whatever its
-        // firmware); screen=transit on a board showing buses: its trains.
+        // screen=bus or metra: the buses or Metra as the board would draw
+        // them (whatever its firmware); screen=transit on a board showing
+        // either: its trains.
         const want = String(parsed.query.screen || '');
-        const as = want === 'bus' || (want === 'transit' && board.screen === 'bus') ? { ...board, screen: want } : board;
-        const body = await update(as, id, false, preview, want === 'bus' ? { ...capsOf(id), bus: true } : capsOf(id));
-        const asked = want === 'bus' ? 'transit' : SCREENS.includes(want) && (want !== 'baseball' || body.mlb) ? want : null;
+        const other = want === 'bus' || want === 'metra';
+        const as = other || (want === 'transit' && (board.screen === 'bus' || board.screen === 'metra')) ? { ...board, screen: want } : board;
+        const body = await update(as, id, false, preview, other ? { ...capsOf(id), [want]: true } : capsOf(id));
+        const asked = other ? 'transit' : SCREENS.includes(want) && (want !== 'baseball' || body.mlb) ? want : null;
         const screen = asked || autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
