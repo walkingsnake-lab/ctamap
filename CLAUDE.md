@@ -18,6 +18,8 @@ Open `http://localhost:3000` in a browser.
 ### Server (`server.js`)
 Plain Node.js HTTP server (no framework). Proxies CTA Transit Tracker API calls and serves static files.
 
+The map polls CTA **only while someone is watching** (`server/watch-poll.js`): the loop starts when a viewer opens the stream or asks for `/api/trains`, and stops 2 minutes after the last one has gone, dropping the per-train state. The boards share the CTA key's daily limit, and the map is the optional part: around the clock its poll cost 23,040 calls a day. `/health` answers for the process, not for the map's poll (Fly routes the boards' traffic by it).
+
 API endpoints:
 - `GET /api/trains` — all train positions across all lines (parallel fetches via `Promise.allSettled`)
 - `GET /api/train/<rn>` — ETA data for a specific run number (for live tracking)
@@ -63,7 +65,7 @@ Scripts are bundled via `build.js` (esbuild) into `dist/bundle.min.js`. Run `npm
 
 **Phantom jumps** — Known CTA API glitches where a train teleports between specific stations. `config.js` `PHANTOM_JUMPS` lists ~20 per-line patterns. `trains.js` checks each update and holds/snaps position instead of animating the jump.
 
-**Animation loop** — Every 20 seconds: fetch positions → update train objects → D3 transition over 2500ms. If a position change exceeds 3.9km it snaps instead of animates.
+**Animation loop** — Every 30 seconds while someone is watching: fetch positions → update train objects → D3 transition over 2500ms. If a position change exceeds 3.9km it snaps instead of animates.
 
 **Terminal retirement** — Trains fade out when within 5.5km of their terminus and have been sitting there for >120 seconds.
 
@@ -74,7 +76,7 @@ Scripts are bundled via `build.js` (esbuild) into `dist/bundle.min.js`. Run `npm
 - Variable names: `rn` = run number, `rt` = route code, `lon`/`lat`, `legend` = line code
 - Train state lives in plain JS objects; D3 selections reference them via `.datum()`
 - CSS classes for state: `.selected`, `.dimmed`, `.exiting`, `.retiring`, `.pr-express-active`
-- No TypeScript; the only build step is the esbuild bundle (`build.js`). The map has no test suite (manual testing only); board code under `server/board/` is tested, see below.
+- No TypeScript; the only build step is the esbuild bundle (`build.js`). The map has no test suite (manual testing only) apart from `server/watch-poll.test.js`; board code under `server/board/` is tested, see below.
 
 ## Branching
 
@@ -104,7 +106,7 @@ The server fetches and formats everything for a 64x32 LED matrix board (or 128x3
 - The Fly VM has **256 MB**, shared with the map. Radar processing must stay small: decode only what's needed, crop early, and don't hold full source images between cycles.
 
 ### Tests
-- Every board formatting rule gets a test using Node's built-in `node:test` (no test framework dependency). `npm test` runs every `server/board/**/*.test.js`.
+- Every board formatting rule gets a test using Node's built-in `node:test` (no test framework dependency). `npm test` runs every `server/board/**/*.test.js` (and `server/*.test.js`, the firmware suites).
 - Tests run against **recorded fixtures** in `server/board/fixtures/` (real responses from Train Tracker, CTA alerts, NWS, WeatherAPI, MRMS frames). Tests never hit live APIs and never need API keys.
 - When you hit a new real-world case (unknown destination, short-turn, multi-line alert, storm), save the raw response as a fixture and add a test.
 
