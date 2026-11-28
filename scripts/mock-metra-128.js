@@ -358,6 +358,39 @@ const ROUND4 = [
   ['r4-ticker-tag', 'M2  Line name on Metra rows', mixedTicker(CLASH, 0, true)],
 ];
 
+// ================= Round 5 (Nov 27): brighter partners for the dark Metra lines =================
+// Heritage Corridor (#550e0c) and SouthWest (#0042a8) as Metra publishes them
+// are too dark at 70% for the station line, and dim as a block or band.
+// Each frame: the station line (the name at 70%), two rows with blocks (the
+// candidate beside its nearest neighbor on the board), and a ticker band at
+// 55% with its line name. Monitors show these brighter than the panel, which
+// also pushes browns toward red and mid-blues toward cyan.
+function swatch(code, col, place, neighbor, dest) {
+  const f = new Frame(W, H);
+  const x = f.text('small', place, 0, 6, C.dark);
+  f.text('small', code, x + 3, 6, scale(col, 0.7));
+  rtext(f, 'small', col.toUpperCase(), W - 1, 6, C.dark);
+  [[col, `${code} candidate`], [neighbor.col, neighbor.name]].forEach(([c, name], i) => {
+    const top = 9 + i * 6;
+    f.fill(0, top, 3, 5, c);
+    f.text('small', name, 5, top + 5, C.label);
+  });
+  tickRow(f, { col, d: dest, tag: code, min: 9 }, 1, 20);
+  return f;
+}
+const RI = { col: '#e02400', name: 'RI (METRA)' }, CTARD = { col: LINE.RD, name: "'L' RED" };
+const CTABL = { col: '#00a1de', name: "'L' BLUE" }, NCS = { col: '#9785bc', name: 'NCS (METRA)' };
+const ROUND5 = [
+  ['r5-hc-0', 'HC as published #550E0C', swatch('HC', '#550e0c', 'LEMONT', RI, 'Joliet')],
+  ['r5-hc-a', 'HC A  brick #8B2A1A', swatch('HC', '#8b2a1a', 'LEMONT', RI, 'Joliet')],
+  ['r5-hc-b', 'HC B  rust #A0461E', swatch('HC', '#a0461e', 'LEMONT', CTARD, 'Joliet')],
+  ['r5-hc-c', 'HC C  terracotta #B4643C', swatch('HC', '#b4643c', 'LEMONT', RI, 'Joliet')],
+  ['r5-sws-0', 'SWS as published #0042A8', swatch('SWS', '#0042a8', 'ORLAND PK', CTABL, 'Manhattan')],
+  ['r5-sws-a', 'SWS A  #2A64D8', swatch('SWS', '#2a64d8', 'ORLAND PK', CTABL, 'Manhattan')],
+  ['r5-sws-b', 'SWS B  #3F7AF0', swatch('SWS', '#3f7af0', 'ORLAND PK', CTABL, 'Manhattan')],
+  ['r5-sws-c', 'SWS C  periwinkle #5A6EF0', swatch('SWS', '#5a6ef0', 'ORLAND PK', NCS, 'Manhattan')],
+];
+
 const q5 = (v) => v & 0xf8;
 fs.mkdirSync(OUT, { recursive: true });
 function write(mocks, name) {
@@ -383,5 +416,6 @@ write(MOCKS, 'sheet.png');
 write(ROUND2, 'sheet-r2.png');
 write(ROUND3, 'sheet-r3.png');
 write(ROUND4, 'sheet-r4.png');
+write(ROUND5, 'sheet-r5.png');
 console.log('wrote docs/board/mockups/metra/*.png');
-module.exports = { MOCKS, ROUND2, ROUND3, ROUND4 };
+module.exports = { MOCKS, ROUND2, ROUND3, ROUND4, ROUND5 };
