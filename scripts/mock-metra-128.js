@@ -180,23 +180,23 @@ const MOCKS = [
 //    is no "later time" to dim: a live train counts down in full amber, and a
 //    train that hasn't started its run (schedule only) in the board's
 //    schedule grey, one level on every row. Departure times are label white.
-//  - Blank means on time. A late train's expected time is orange (the warning
-//    orange); full-width rows add +N after the name. opts.alt: late in red.
-//  - A canceled train keeps its row: red time, CANCELED in red, no countdown.
-//    opts.alt: white, so red means late only.
+//  - Blank means on time. A late train's expected time is red; full-width
+//    rows add +N after the name.
+//  - A canceled train keeps its row, greyed out: grey time, CANCELED in grey,
+//    no countdown. Late and canceled never share a color. (Also drawn and not
+//    chosen: late orange with canceled red; late red with canceled white.)
 //  - No countdown past 59 minutes in a half (1h23 on full-width rows), so
 //    tomorrow's first trains need no special overnight screen.
-const ORANGE = '#ff8c00';
 const cd2 = (r) => (r.live ? C.amber : C.sched);
-const lateCol = (alt) => (alt ? C.late : ORANGE);
-const cancelCol = (alt) => (alt ? C.label : C.late);
-const t2col = (r, alt) => (r.cancel ? cancelCol(alt) : r.late ? lateCol(alt) : C.label);
+const lateCol = () => C.late;
+const cancelCol = () => C.sched;
+const t2col = (r) => (r.cancel ? cancelCol() : r.late ? lateCol() : C.label);
 const R = (ln, at, to, min, extra = {}) => ({ ln, at, to, min, ...extra });
 const hm = (min) => (min >= 60 ? `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}` : `${min}m`);
 
 // Station: inbound | outbound, one train per row. opts.blocks for a station on
 // more than one line.
-function station(name, lines, sides, { blocks = false, alt = false, clock = '5:42' } = {}) {
+function station(name, lines, sides, { blocks = false, clock = '5:42' } = {}) {
   const f = new Frame(W, H);
   sides.forEach(({ label, rows }, s) => {
     const [x0, x1] = HALVES[s];
@@ -206,8 +206,8 @@ function station(name, lines, sides, { blocks = false, alt = false, clock = '5:4
     rows.slice(0, 3).forEach((r, i) => {
       const top = 8 + i * 6, base = top + 5;
       if (blocks) f.fill(x0, top, 3, 5, LINE[r.ln]);
-      f.text('small', r.at, tx, base, t2col(r, alt));
-      if (r.cancel) return void f.text('small', 'CANCELED', nx, base, cancelCol(alt));
+      f.text('small', r.at, tx, base, t2col(r));
+      if (r.cancel) return void f.text('small', 'CANCELED', nx, base, cancelCol());
       f.text('small', r.to, nx, base, C.label);
       if (r.min < 60) rtext(f, 'small', String(r.min), x1, base, cd2(r));
     });
@@ -221,7 +221,7 @@ function station(name, lines, sides, { blocks = false, alt = false, clock = '5:4
 // Terminus (every train leaves the same way: downtown, or the end of a line):
 // full-width rows. opts.home lists only the trains that stop at one station,
 // with the time each gets there.
-function terminus(name, rows, { home, alt = false, clock = '5:42' } = {}) {
+function terminus(name, rows, { home, clock = '5:42' } = {}) {
   const f = new Frame(W, H);
   const hx = f.text('small', name, 0, 6, C.grey);
   if (home) f.text('small', `TO ${home}`, hx + 3, 6, C.dark);
@@ -229,12 +229,12 @@ function terminus(name, rows, { home, alt = false, clock = '5:42' } = {}) {
   rows.slice(0, 4).forEach((r, i) => {
     const top = 8 + i * 6, base = top + 5;
     let nx;
-    if (home) { f.fill(0, top, 3, 5, LINE[r.ln]); rtext(f, 'small', r.at, 23, base, t2col(r, alt)); nx = 27; }
-    else { f.text('small', NAME[r.ln], 0, base, LINE[r.ln]); rtext(f, 'small', r.at, 40, base, t2col(r, alt)); nx = 44; }
-    if (r.cancel) return void f.text('small', 'CANCELED', nx, base, cancelCol(alt));
+    if (home) { f.fill(0, top, 3, 5, LINE[r.ln]); rtext(f, 'small', r.at, 23, base, t2col(r)); nx = 27; }
+    else { f.text('small', NAME[r.ln], 0, base, LINE[r.ln]); rtext(f, 'small', r.at, 40, base, t2col(r)); nx = 44; }
+    if (r.cancel) return void f.text('small', 'CANCELED', nx, base, cancelCol());
     const end = f.text('small', r.to, nx, base, C.label);
-    if (home) { const x = f.text('small', 'ARR', 70, base, C.dark); f.text('small', r.arr, x + 2, base, r.late ? lateCol(alt) : C.label); }
-    else if (r.late) f.text('small', `+${r.late}`, end + 2, base, lateCol(alt));
+    if (home) { const x = f.text('small', 'ARR', 70, base, C.dark); f.text('small', r.arr, x + 2, base, r.late ? lateCol() : C.label); }
+    else if (r.late) f.text('small', `+${r.late}`, end + 2, base, lateCol());
     rtext(f, 'small', hm(r.min), W - 1, base, cd2(r));
   });
   return f;
@@ -261,8 +261,7 @@ const ROUND2 = [
   ['r2-station', 'S1  Station: Rogers Park', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT))],
   ['r2-station-lines', 'S3  Station on two lines: Clybourn', station('CLYBOURN', ['UPN', 'UPNW'], BOTH(CLY_IN, CLY_OUT), { blocks: true })],
   ['r2-station-night', 'S4  11:48 PM: canceled, tomorrow', station('ROGERS PARK', ['UPN'], BOTH(NIGHT_IN, NIGHT_OUT), { clock: '11:48' })],
-  ['r2-colors-a', 'X1  Late orange, canceled red', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT_X))],
-  ['r2-colors-b', 'X2  Late red, canceled white', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT_X), { alt: true })],
+  ['r2-station-states', 'S5  Late and canceled together', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT_X))],
   ['r2-terminus', 'T1  Terminus: Ogilvie, every line', terminus('OGILVIE', OTC2)],
   ['r2-terminus-home', 'T2  Terminus with a home stop', terminus('OGILVIE', OTC_HOME, { home: 'ROGERS PARK' })],
 ];
