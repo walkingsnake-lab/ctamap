@@ -46,3 +46,7 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
   - `schedule-2026-10-03-alds-final.json`: ALDS Game 1, White Sox 3 at Guardians 0, final (postseason `leagueRecord` 1-0 / 0-1). **Not a byte-for-byte recording**: the cloud session couldn't reach the API directly, so it was assembled from a fetched copy of the game object (field names and values as returned; the date wrapper and a trimmed `defense` block filled in). Replace with a capture from `api/raw/mlb` when convenient.
 
 Never record a URL with `key=` in it here.
+
+- `metra/` — Metra's static GTFS schedule (`metra-schedule.js`), downloaded from the cloud session on Nov 27, 2026, unchanged. Public, no key.
+  - `schedule-2026-11-14.zip`: `schedules.metrarail.com/gtfs/schedule.zip`, published Nov 14, 2026, 2:20 AM. 11 lines, 241 stations, 3,371 trips; covers through Dec 31, 2026 (Thanksgiving on the weekend schedule; one-off Saturday Nov 14 and Sunday Nov 22). Written with data descriptors (no sizes in the local headers). Headers and values carry stray spaces.
+  - `published-2026-11-27.txt`: `schedules.metrarail.com/gtfs/published.txt` the same day: the schedule's publish time, no trailing newline.
