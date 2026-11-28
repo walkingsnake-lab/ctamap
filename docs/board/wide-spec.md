@@ -64,6 +64,12 @@ After the CTA's platform signs:
 - **Status icon** at the right edge, on the text's baseline: three waves (6 × 6) for a live train, the 5 × 5 clock for a schedule-based one (`isSch`) (Nov 8; they were 7 × 7).
 - Pages of two, as now.
 
+### Metra, buses and the ticker (decided Nov 27, 2026; not built)
+Design spec §5 *Metra*, *Buses*, *On the knob* and §6 hold the detail; mockups in `docs/board/mockups/metra/`.
+- **Metra station screen:** inbound | outbound halves, one train per row (time, destination, countdown), the station line at the bottom; a **terminus screen** of full-width rows where every train leaves the same way.
+- **Buses get their own screen** on two panels, replacing `TRAINS | BUSES` beside the trains (which cost a split station its halves and a busy station its destinations); up to six buses, layout not yet mocked.
+- **Ticker:** options to include buses and Metra by time, Metra rows with the line name before the destination (`UP-N Kenosha`), and *One row per destination* with more pages when they don't fit.
+
 ### Warnings on the weather strip (first pass; built)
 Spelled out: glyph, `TORNADO WARNING` and `UNTIL 7:45 PM` in a dimmer red, the temperature at left. The end comes from the NWS alert (`warn.until`, wide boards only); when it doesn't all fit, `SEVERE` goes first, then `UNTIL`, then the time. Blinking as now.
 
@@ -146,7 +152,7 @@ The interaction stays as at 64 (twist = category, press = next variant, hold and
 
 - **Variant strip** on rows 21–31 (black band): the chosen category's 7 × 7 icon at x2 (rows 23–29) in its color with the underline on row 31, then **all its variants as words** in Tom Thumb on baseline 29 from x14: the chosen one white, the rest `#4a4a4a`. The strip shows what a press will do.
 - **Spacing:** 5 px between words, closer when a category needs it to stay within columns 14–123.
-- **Names:** Transit `ROWS TICKER`; Weather `NOW 7-DAY HOURLY RADAR`; Clock `SKY 70S DIAL MAP GRAD BIG DATE WORDS` (short names). Eight clock faces don't fit columns 14–123 even 3 px apart, so the strip keeps 5 px gaps and shifts left by whole words until the chosen one shows whole (built Nov 5).
+- **Names:** Transit `ROWS TICKER` (becoming `'L' BUS METRA TICKER`, decided Nov 27, not built: BUS and METRA only on boards with them set); Weather `NOW 7-DAY HOURLY RADAR`; Clock `SKY 70S DIAL MAP GRAD BIG DATE WORDS` (short names). Eight clock faces don't fit columns 14–123 even 3 px apart, so the strip keeps 5 px gaps and shifts left by whole words until the chosen one shows whole (built Nov 5).
 - **Categories without variants** (Announce, Cycle): the category's name in its color takes the strip.
 - **Ring position:** five 1-px dots in a column at x126 (rows 22–30, 2 px apart), each in its category's color, the chosen one full and the rest at 30 %.
 - Twisting scrolls the strip up or down the band, like a list, while the lit ring dot glides; pressing passes the white along the words as the strip shifts (Nov 8; before, the views slid behind the bar).
