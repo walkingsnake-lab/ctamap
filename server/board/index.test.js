@@ -944,6 +944,59 @@ test('simulator test radar: a recorded storm or snowstorm loops at the board sta
   await s.close();
 });
 
+test('demo arrivals: made-up trains take Train Tracker\'s place for two hours, from the maker\'s page only', async () => {
+  const now = Math.floor(Date.now() / 1000);
+  const real = normalize(morseJson, { log: quiet });
+  const shift = now - Math.min(...real.map((a) => a.t)) + 120;
+  const tracker = fakeTracker({ arrivals: real.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now - 500 });
+  const s = await serve({ tracker });
+  const post = (base, body) => fetch(`http://127.0.0.1:${s.port}${base}api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  // Train Tracker's data here is old: the real payload is stale.
+  assert.equal((await s.req(FULL)).body.stale, 1);
+  let r = await post('/board/secret123/', { arrivals: 'loop' });
+  assert.equal(r.status, 200);
+  let t = await r.json();
+  assert.equal(t.arrivals, 'loop');
+  assert.ok(t.left > 7190 && t.left <= 7200);
+  // The board's update: fresh trains both ways, three times a row, and the
+  // station isn't asked of Train Tracker while they run.
+  const asked = tracker.asked.length;
+  const b = (await s.req(FULL)).body;
+  assert.equal(tracker.asked.length, asked);
+  assert.deepEqual([b.stale, b.age], [0, 0]);
+  assert.deepEqual(b.rows.map((x) => [x.ln, x.lbl]), [['RD', 'HOWARD'], ['RD', '95TH']]);
+  assert.ok(b.rows.every((x) => x.t.length === 3 && x.t.every((at) => at >= b.now - 30 && at <= b.now + 1500)));
+  assert.ok(b.ticker.length > 0);
+  // The board's own endpoint carries them too, and the next update lists the same trains.
+  const own = (await s.req('/board/update?b=home', { headers: { 'X-Board-Token': 'tok' } })).body;
+  assert.deepEqual(own.rows.map((x) => x.t), b.rows.map((x) => x.t));
+  // Other tests ride along and keep the two hours.
+  t = await (await post('/board/secret123/', { arrivals: 'loop', lines: ['RD'] })).json();
+  assert.deepEqual([t.arrivals, t.lines], ['loop', ['RD']]);
+  assert.ok(t.left > 7190);
+  assert.ok((await s.req(FULL)).body.rows.every((x) => x.a === 1));
+  assert.equal((await post('/board/secret123/', { arrivals: 'hold' })).status, 400);
+  // A control link (someone else's board) can't start them and isn't shown the field,
+  // but its own tests still work (and replace the maker's).
+  const key = (await s.req('/board/secret123/api/boards/key?b=home', { method: 'POST' })).body;
+  const link = `/board/c/${key.link}/`;
+  assert.ok(!('arrivals' in (await s.req(`${link}api/test`)).body));
+  r = await post(link, { arrivals: 'loop' });
+  assert.equal(r.status, 400);
+  assert.match((await r.json()).detail, /control link/);
+  assert.equal((await s.req('/board/secret123/api/test?b=home')).body.arrivals, 'loop');
+  t = await (await post(link, { lines: ['RD'] })).json();
+  assert.ok(!('arrivals' in t) && t.left <= 600);
+  assert.equal((await s.req('/board/secret123/api/test?b=home')).body.arrivals, null);
+  // Cleared: Train Tracker's trains are back.
+  await post('/board/secret123/', { arrivals: 'loop' });
+  await post('/board/secret123/', {});
+  const c = (await s.req(FULL)).body;
+  assert.equal(c.stale, 1);
+  assert.ok(tracker.asked.length > asked);
+  await s.close();
+});
+
 test('simulator test alerts: fake line alerts and a weather warning, merged into updates, then expire', async () => {
   const now = Math.floor(Date.now() / 1000);
   const arrivals = normalize(morseJson, { log: quiet });
@@ -951,7 +1004,7 @@ test('simulator test alerts: fake line alerts and a weather warning, merged into
   const s = await serve({ tracker: fakeTracker({ arrivals: arrivals.map((a) => ({ ...a, t: a.t + shift })), fetchedAt: now }) });
   const h = { headers: { 'X-Board-Token': 'tok' } };
   const post = (body) => fetch(`http://127.0.0.1:${s.port}/board/secret123/api/test?b=home`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, weather: null, left: 0 });
+  assert.deepEqual((await s.req('/board/secret123/api/test?b=home')).body, { lines: [], warn: null, game: null, radar: null, weather: null, arrivals: null, left: 0 });
   let r = await post({ lines: ['RD'], warn: { kind: 'tor', lvl: 'warning' } });
   assert.equal(r.status, 200);
   const t = await r.json();

@@ -97,6 +97,11 @@
       <option value="twilight">Sky: twilight</option>
       <option value="night">Sky: night</option>
     </select>
+    <!-- Demo trains (the maker's page only; shown when api/test lists `arrivals`). -->
+    <select id="testArr" aria-label="Demo trains" hidden>
+      <option value="">Real trains</option>
+      <option value="loop">Demo trains (2 hours)</option>
+    </select>
     <button class="chip" id="testClear">Clear</button>
     <span id="testLeft"></span>
   </div>
@@ -449,6 +454,8 @@
     $('testRadar').value = test.radar || '';
     $('testWx').value = (test.weather && test.weather.kind) || '';
     $('testTod').value = (test.weather && test.weather.tod) || '';
+    $('testArr').hidden = !('arrivals' in test);
+    $('testArr').value = test.arrivals || '';
     $('testLeft').textContent = test.left > 0 ? `clears in ${Math.ceil(test.left / 60)} min` : '';
   }
   async function setTest(next) {
@@ -472,6 +479,7 @@
   const setWx = (k, v) => { const wx = { kind: null, tod: null, ...test.weather, [k]: v || null }; setTest({ ...test, weather: wx.kind || wx.tod ? wx : null }); };
   $('testWx').addEventListener('change', (e) => setWx('kind', e.target.value));
   $('testTod').addEventListener('change', (e) => setWx('tod', e.target.value));
+  $('testArr').addEventListener('change', (e) => setTest({ ...test, arrivals: e.target.value || null }));
   $('testClear').addEventListener('click', () => setTest({ lines: [], warn: null, game: null, radar: null, weather: null }));
   const pollTest = () => fetch('api/test?b=' + encodeURIComponent(board), { cache: 'no-store' }).then((r) => r.json()).then((t) => { test = t; renderTest(); }).catch(() => {});
   pollTest();
