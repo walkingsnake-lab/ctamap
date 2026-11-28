@@ -268,6 +268,37 @@ const ROUND2 = [
   ['r2-terminus-home', 'T2  Terminus with a home stop', terminus('OGILVIE', OTC_HOME, { home: 'ROGERS PARK' })],
 ];
 
+// ================= Round 3 (Nov 27): Metra on the knob (Transit variant) =================
+// The 128 variant strip (wide-spec §9) with Metra as Transit's third variant,
+// drawn the way drawPeekWideEntry does: the screen the board was on stays
+// behind at 25%, black band on rows 21-31, the Transit icon at x2 in Red Line
+// red with its underline, the variants as words from x14 (5 px apart; the
+// chosen one white, the rest #4a4a4a), the ring's dots on column 126.
+const D = require('../server/board/render');
+const RING_COLS = ['#c60c30', '#ffd040', '#f0e2c8', '#40e090', '#3fd0e8'];
+function strip(under, words, chosen) {
+  const f = new Frame(W, H);
+  for (let y = 0; y < 21; y++) for (let x = 0; x < W; x++) f.set(x, y, under.get(x, y).map((v) => Math.round(v * 0.25)));
+  D.PEEK_ICONS.transit.forEach((r, j) => [...r].forEach((ch, x) => { if (ch === '#') f.fill(2 + x, 23 + j, 1, 1, RING_COLS[0]); }));
+  f.fill(2, 31, 7, 1, RING_COLS[0]);
+  let x = 14;
+  words.forEach((w, i) => {
+    if (w.group) { x = f.text('small', w.group, x, 29, '#555555') + 2; return; }
+    x = f.text('small', w, x, 29, i === chosen ? C.white : '#4a4a4a') - 1 + 5;
+  });
+  if (x - 5 > 123) console.warn('strip too wide:', words, x - 5);
+  RING_COLS.forEach((c, i) => f.fill(126, 22 + i * 2, 1, 1, i === 0 ? c : scale(c, 0.3)));
+  return f;
+}
+const UNDER = station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT));
+const ROUND3 = [
+  ['r3-k1', 'K1  As built + METRA (reference)', strip(UNDER, ['ROWS', 'TICKER', 'METRA'], 2)],
+  ['r3-k2', 'K2  CTA  TICKER  METRA', strip(UNDER, ['CTA', 'TICKER', 'METRA'], 2)],
+  ['r3-k3', 'K3  CTA  CTA TICKER  METRA', strip(UNDER, ['CTA', 'CTA TICKER', 'METRA'], 2)],
+  ['r3-k4', 'K4  CTA ROWS  CTA TICKER  METRA', strip(UNDER, ['CTA ROWS', 'CTA TICKER', 'METRA'], 2)],
+  ['r3-k5', 'K5  CTA (dim) ROWS TICKER METRA', strip(UNDER, [{ group: 'CTA' }, 'ROWS', 'TICKER', 'METRA'], 3)],
+];
+
 const q5 = (v) => v & 0xf8;
 fs.mkdirSync(OUT, { recursive: true });
 function write(mocks, name) {
@@ -291,5 +322,6 @@ function write(mocks, name) {
 }
 write(MOCKS, 'sheet.png');
 write(ROUND2, 'sheet-r2.png');
+write(ROUND3, 'sheet-r3.png');
 console.log('wrote docs/board/mockups/metra/*.png');
-module.exports = { MOCKS, ROUND2 };
+module.exports = { MOCKS, ROUND2, ROUND3 };
