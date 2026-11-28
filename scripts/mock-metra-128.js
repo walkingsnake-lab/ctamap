@@ -176,37 +176,37 @@ const MOCKS = [
 
 // ================= Round 2 (Nov 27): a station screen and a terminus screen =================
 // Changes from round 1's B and E:
-//  - The time column never greys out. On Metra most trains on screen haven't
-//    started their runs, so "not tracked yet" is the normal case: only the
-//    countdown carries it (amber/dim when the train is live, grey before).
+//  - Numbers are never dimmed. Every row is a different train, so there is no
+//    "later time" to step down: times are label white and every countdown is
+//    full amber. (opts.white: a train that hasn't started its run counts down
+//    in white, so amber still means a live train.)
 //  - Blank means on time. A late train's expected time is red; where there's
 //    room (full-width rows) a red +N follows the name.
 //  - Canceled trains keep their row: red time, CANCELED, no countdown.
 //  - No countdown past 59 minutes in a half (1h23 on full-width rows), so
 //    tomorrow's first trains need no special overnight screen.
-const cd2 = (r, first) => (r.live ? (first ? C.amber : C.dim) : first ? C.sched : C.schedDim);
+const cd2 = (r, white) => (white && !r.live ? C.label : C.amber);
 const t2col = (r) => (r.late || r.cancel ? C.late : C.label);
 const R = (ln, at, to, min, extra = {}) => ({ ln, at, to, min, ...extra });
 const hm = (min) => (min >= 60 ? `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}` : `${min}m`);
 
 // Station: inbound | outbound, one train per row. opts.blocks for a station on
 // more than one line; opts.arr shows the arrival downtown on the inbound half.
-function station(name, lines, sides, { blocks = false, arr = false, clock = '5:42' } = {}) {
+function station(name, lines, sides, { blocks = false, arr = false, white = false, clock = '5:42' } = {}) {
   const f = new Frame(W, H);
   sides.forEach(({ label, rows }, s) => {
     const [x0, x1] = HALVES[s];
     f.text('small', label, x0, 5, C.grey);
     const tx = x0 + (blocks ? 5 : 0);
     const nx = tx + Math.max(...rows.map((r) => measure('small', r.at))) + (blocks ? 3 : 4);
-    const first = rows.findIndex((r) => !r.cancel);
     rows.slice(0, 3).forEach((r, i) => {
       const top = 8 + i * 6, base = top + 5;
       if (blocks) f.fill(x0, top, 3, 5, LINE[r.ln]);
       f.text('small', r.at, tx, base, t2col(r));
       if (r.cancel) return void f.text('small', 'CANCELED', nx, base, C.late);
-      if (arr && r.arr) { const x = f.text('small', 'ARR', nx, base, C.dark); f.text('small', r.arr, x + 2, base, C.grey); }
+      if (arr && r.arr) { const x = f.text('small', 'ARR', nx, base, C.dark); f.text('small', r.arr, x + 2, base, C.label); }
       else f.text('small', r.to, nx, base, C.label);
-      if (r.min < 60) rtext(f, 'small', String(r.min), x1, base, cd2(r, i === first));
+      if (r.min < 60) rtext(f, 'small', String(r.min), x1, base, cd2(r, white));
     });
   });
   let x = f.text('small', name, 0, 32, C.dark);
@@ -223,7 +223,6 @@ function terminus(name, rows, { home, clock = '5:42' } = {}) {
   let hx = f.text('small', name, 0, 6, C.grey);
   if (home) f.text('small', `TO ${home}`, hx + 3, 6, C.dark);
   rtext(f, 'small', clock, W - 1, 6, C.grey);
-  const first = rows.findIndex((r) => !r.cancel);
   rows.slice(0, 4).forEach((r, i) => {
     const top = 8 + i * 6, base = top + 5;
     let nx;
@@ -231,9 +230,9 @@ function terminus(name, rows, { home, clock = '5:42' } = {}) {
     else { f.text('small', NAME[r.ln], 0, base, LINE[r.ln]); rtext(f, 'small', r.at, 40, base, t2col(r)); nx = 44; }
     if (r.cancel) return void f.text('small', 'CANCELED', nx, base, C.late);
     const end = f.text('small', r.to, nx, base, C.label);
-    if (home) { const x = f.text('small', 'ARR', 70, base, C.dark); f.text('small', r.arr, x + 2, base, r.late ? C.late : C.grey); }
+    if (home) { const x = f.text('small', 'ARR', 70, base, C.dark); f.text('small', r.arr, x + 2, base, r.late ? C.late : C.label); }
     else if (r.late) f.text('small', `+${r.late}`, end + 2, base, C.late);
-    rtext(f, 'small', hm(r.min), W - 1, base, cd2(r, i === first));
+    rtext(f, 'small', hm(r.min), W - 1, base, cd2(r, false));
   });
   return f;
 }
@@ -256,6 +255,7 @@ const BOTH = (i, o) => [{ label: 'INBOUND', rows: i }, { label: 'OUTBOUND', rows
 
 const ROUND2 = [
   ['r2-station', 'S1  Station: Rogers Park', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT))],
+  ['r2-station-white', 'S1b  Not running yet: white', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT), { white: true })],
   ['r2-station-arr', 'S2  Inbound: arrival downtown', station('ROGERS PARK', ['UPN'], BOTH(RP_IN, RP_OUT), { arr: true })],
   ['r2-station-lines', 'S3  Station on two lines: Clybourn', station('CLYBOURN', ['UPN', 'UPNW'], BOTH(CLY_IN, CLY_OUT), { blocks: true })],
   ['r2-station-night', 'S4  11:48 PM: canceled, tomorrow', station('ROGERS PARK', ['UPN'], BOTH(NIGHT_IN, NIGHT_OUT), { clock: '11:48' })],
