@@ -47,6 +47,7 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
 
 Never record a URL with `key=` in it here.
 
-- `metra/` — Metra's static GTFS schedule (`metra-schedule.js`), downloaded from the cloud session on Nov 27, 2026, unchanged. Public, no key.
-  - `schedule-2026-11-14.zip`: `schedules.metrarail.com/gtfs/schedule.zip`, published Nov 14, 2026, 2:20 AM. 11 lines, 241 stations, 3,371 trips; covers through Dec 31, 2026 (Thanksgiving on the weekend schedule; one-off Saturday Nov 14 and Sunday Nov 22). Written with data descriptors (no sizes in the local headers). Headers and values carry stray spaces.
-  - `published-2026-11-27.txt`: `schedules.metrarail.com/gtfs/published.txt` the same day: the schedule's publish time, no trailing newline.
+- `metra/` — Metra's static GTFS schedule (`metra-schedule.js`). **Made up, not recorded:** Metra's own schedule is kept out of the repo (its license; see design spec §5 *Metra*). Written to match the format of Metra's `schedules.metrarail.com/gtfs/schedule.zip` as downloaded Nov 27, 2026.
+  - `schedule/*.txt`: three lines (NL; WL running weekdays only; BL with a branch and an express, for the stop picker), ten stops, 16 trips. Metra's quirks kept: a space after every comma in headers and values, CRLF line ends in `stop_times.txt`, times past 24:00, a Thanksgiving calendar exception. Cases: a train ending mid-line, an express, a no-pickup and a no-drop-off stop, an outbound train whose headsign says "Chicago", a train after midnight, the fall-back Sunday.
+  - `make-zip.js`: zips `schedule/` the way Metra's file is written (deflated, with data descriptors: no sizes in the local headers), plus small ZIPs for `zip.test.js`.
+  - `published.txt`: in the format of Metra's `published.txt`, no trailing newline.

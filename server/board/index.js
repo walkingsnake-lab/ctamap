@@ -7,6 +7,8 @@ const { createStore, ValidationError, resolveDir, knobOf, CLOCK_FACES, WIDE_FACE
 const { createTracker } = require('./tracker');
 const { createBusTracker } = require('./bus-tracker');
 const { busRows, busHalfRows, HEADER: BUS_HEADER } = require('./bus');
+const { createMetraSchedule } = require('./metra-schedule');
+const { metraView, stopsByLine } = require('./metra');
 const { format } = require('./arrivals');
 const { stationDestinations } = require('./destinations');
 const { createWeather, inUnit, toWx, toScreenWx, rainLine, toDays, toHours, toWeek, toDayHours, testWeather, TEST_WX, autoBright, NIGHT_BRIGHT } = require('./weather');
@@ -49,7 +51,7 @@ const RESERVED = new Set(['ping', 'version', 'update', 'select', 'set', 'radar',
 // page and simulator for its own board. Owner-only endpoints (the board
 // list's add/delete/copy, keys, firmware builds, logo uploads, raw captures)
 // answer 404 there.
-const SCOPED_OK = new Set(['', 'api/bus/routes', 'api/bus/directions', 'api/bus/stops', 'api/destinations', 'api/rain', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png', 'tiles.json']);
+const SCOPED_OK = new Set(['', 'api/metra/stops', 'api/bus/routes', 'api/bus/directions', 'api/bus/stops', 'api/destinations', 'api/rain', 'api/boards', 'api/boards/link', 'api/boards/transfer', 'api/health', 'api/state', 'api/update', 'api/stations', 'api/test', 'sim', 'draw.js', 'sim-assets.json', 'sim.png', 'tiles.json']);
 // Settings a per-board link may not change: the update channel (a buyer
 // stays on stable, or turns updates off).
 const SCOPED_FW = ['stable', 'off'];
@@ -72,7 +74,7 @@ function send(res, status, body) {
 // (api/update) stays whole.
 const SCREENS = ['transit', 'ticker', 'weather', 'baseball', 'clock', 'announce'];
 const SECTIONS = {
-  transit: ['header', 'hidden', 'view', 'halves', 'rows', 'wx', 'tv'],
+  transit: ['header', 'hidden', 'view', 'halves', 'rows', 'wx', 'tv', 'metra'],
   ticker: ['ticker', 'tickerHeader', 'tickerFill'],
   baseball: ['mlb'],
   weather: [],
@@ -145,6 +147,7 @@ function createBoard({
   capture = require('./capture'),
   tracker = null,
   busTracker = null, // Bus Tracker poller and picker lookups (bus-tracker.js); off without CTA_BUS_KEY
+  metraSchedule = null, // Metra's static schedule (metra-schedule.js); started the first time a board needs it
   weather = null,
   nws = null,
   nwsForecast = null,
@@ -198,6 +201,10 @@ function createBoard({
     }
   }
   if (!tracker) tracker = createTracker({ log }).start();
+  // Metra's schedule downloads only once a board has a Metra station (and
+  // the picker asks), so a server without Metra boards never fetches it.
+  if (!metraSchedule) metraSchedule = createMetraSchedule({ log });
+  const metraModel = () => { metraSchedule.start(); return metraSchedule.get(); };
   if (!busTracker) busTracker = createBusTracker({ log }).start();
   if (!weather) weather = createWeather({ log, cacheFile: path.join(path.dirname(store.file), 'board-weather.json') }).start();
   if (!nws) nws = createNws({ log }).start();
@@ -233,9 +240,10 @@ function createBoard({
   // (ballgames and the NWS alert jump are retired).
   const cycleOf = (b, caps, sports) => (Array.isArray(b.cycle) ? b.cycle : ['transit', 'weather'])
     .filter((sc) => canDraw(sc, caps) && (sc !== 'baseball' || sports));
-  // 'bus' (the board's buses) is the transit screen to the board: its
-  // rows are the buses (update(), busView).
-  const resolveScreen = (b, cyc) => (b.screen === 'auto' ? cyc[0] || 'transit' : b.screen === 'bus' ? 'transit' : b.screen);
+  // 'bus' (the board's buses) and 'metra' (its Metra station) are the
+  // transit screen to the board: its rows are the buses (update(), busView)
+  // or the `metra` object (metraOn).
+  const resolveScreen = (b, cyc) => (b.screen === 'auto' ? cyc[0] || 'transit' : b.screen === 'bus' || b.screen === 'metra' ? 'transit' : b.screen);
   const rotOf = (b, screen, cyc) => (b.screen === 'auto' && cyc.length > 1 && cyc.includes(screen)
     ? { screens: cyc, every: b.autoEvery || 60 } : null);
   // Speed settings (contract "anim"): ms, baseball rotation in s.
@@ -427,7 +435,7 @@ function createBoard({
   }
   // A wide-only face (WIDE_FACES: the word clock) counts only on a wide board.
   const wideNow = (id, q) => (typeof q.w === 'string' ? q.w === '128' : (store.get(id) || {}).cols === 128);
-  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) && (!WIDE_FACES.includes(f) || wideNow(id, q)), peek: capOk(id, q, 'peek'), bus: capOk(id, q, 'bus'), menu: capOk(id, q, 'menu') });
+  const capsOf = (id, q = {}) => ({ clock: clockOk(id, q), announce: announceOk(id, q), face: (f) => capOk(id, q, f) && (!WIDE_FACES.includes(f) || wideNow(id, q)), peek: capOk(id, q, 'peek'), bus: capOk(id, q, 'bus'), metra: capOk(id, q, 'metra'), menu: capOk(id, q, 'menu') });
 
   // The announce screen's message as the board draws it (draw.js
   // messageLayout: the lines for its style), or null when none is set.
@@ -667,7 +675,30 @@ function createBoard({
       ? { tv: 'bus', stn: 'bus', header: board.showHeader ? BUS_HEADER : null, view: 'dest', halves: null, rows: busRows(buses, busPreds, now), wx }
       : null;
     const busView = !!busScreen && board.screen === 'bus';
-    const tv = busView ? busScreen : trainView;
+    // Metra (design spec §5, "Metra"): for a board with a Metra station, on
+    // firmware that draws it (`hk=...:metra`). Realtime isn't built, so
+    // every train is schedule-only ('nokey').
+    const metraOk = !!(caps.metra && board.metra && board.metra.stop);
+    const metraOn = metraOk && board.screen === 'metra';
+    let metra = null;
+    if (metraOn) {
+      try { metra = metraView(metraModel(), board.metra, now, { cols: board.cols === 128 ? 128 : 64, rt: 'nokey' }); }
+      catch (e) { log.error('[board] metra:', e.message); metra = { rt: 'nokey', rows: [], mode: board.cols === 128 ? 'station' : 'one', exp: 1, stn: { name: '', lines: [] } }; }
+    }
+    // The peek chooser's other transit variants (contract "Peek"): `tr`, the
+    // trains or the buses, whichever the payload isn't (with Metra on
+    // screen, the trains); `trb`, the buses while Metra is on screen; `mt`,
+    // the Metra object while it isn't.
+    let peekTransit = {};
+    if (caps.peek) {
+      if (metraOn) peekTransit = { tr: trainView, ...(busScreen ? { trb: busScreen } : {}) };
+      else if (busScreen) peekTransit = { tr: busView ? trainView : busScreen };
+      if (metraOk && !metraOn) {
+        try { peekTransit.mt = metraView(metraModel(), board.metra, now, { cols: board.cols === 128 ? 128 : 64, rt: 'nokey' }); }
+        catch (e) { log.error('[board] metra:', e.message); }
+      }
+    }
+    const tv = metraOn ? { tv: 'metra', stn: 'metra', header: null, view: 'dest', halves: null, rows: [], wx: null } : busView ? busScreen : trainView;
     // The buses view goes stale with Bus Tracker, not Train Tracker.
     const src = busView ? busData : data;
     return {
@@ -675,18 +706,20 @@ function createBoard({
       now,
       tzo: tzOffset(now),
       stn: tv.stn, // the board starts transit and ticker fresh when it changes
-      // Buses on the transit screen (contract "Buses"); absent for trains.
-      ...(busView ? { tv: 'bus' } : {}),
+      // Buses or Metra on the transit screen (contract "Buses", "Metra");
+      // absent for trains.
+      ...(metraOn ? { tv: 'metra', metra } : busView ? { tv: 'bus' } : {}),
       // Stops of the board's buses that Bus Tracker no longer knows (for the phone page).
       ...(busData && busData.gone.length ? { busGone: busData.gone } : {}),
       // Two chained panels (contract "Width"): absent on a 64-wide board.
       ...(board.cols === 128 ? { cols: 128 } : {}),
-      age: src ? Math.max(0, Math.round(now - src.fetchedAt)) : null,
-      stale: (busView ? !src || now - src.fetchedAt > STALE_S : stale) ? 1 : 0,
+      // Metra's own staleness is in `metra.rt`; its schedule never goes stale.
+      age: metraOn ? null : src ? Math.max(0, Math.round(now - src.fetchedAt)) : null,
+      stale: metraOn ? 0 : (busView ? !src || now - src.fetchedAt > STALE_S : stale) ? 1 : 0,
       screen,
       rot: rotOf(board, screen, cyc),
       // The knob's ring and where the chosen screen sits on it (S3 chooser).
-      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)), bus: !!busScreen }),
+      knob: knobOf(board, { clock: caps.clock, announce: caps.announce, peek: caps.peek, faces: CLOCK_FACES.filter((f) => f === 'skyline' || caps.face(f)), bus: !!busScreen, metra: metraOk }),
       bright: resolveBright(board, w, now),
       // The knob menu's units icon (caps.menu): the unit the temperatures are in.
       ...(caps.menu ? { tu: board.tempUnit === 'C' ? 'C' : 'F' } : {}),
@@ -746,7 +779,7 @@ function createBoard({
       msg: msgOf(board),
       // Peek chooser (caps.peek): what the other variants draw from, so the
       // board can draw any of them while the knob turns (contract "Peek").
-      ...(caps.peek ? { pv: { ...peekOf(board, w, wd, st, skyNow, now, caps), radar: allFrames, ...(busScreen ? { tr: busView ? trainView : busScreen } : {}) } } : {}),
+      ...(caps.peek ? { pv: { ...peekOf(board, w, wd, st, skyNow, now, caps), radar: allFrames, ...peekTransit } } : {}),
       // Baseball: on the maker's boards only (sportsOn); absent on the others.
       ...(sports ? {
         mlb: board.baseballLayout === 'logos' || board.baseballLayout === 'bands'
@@ -1085,7 +1118,9 @@ function createBoard({
         if (!board) return send(res, 404, { err: 'unknown_board' });
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
-        return send(res, 200, await update(board, id, false, preview));
+        // `hk` previews a capability the board's firmware doesn't report yet
+        // (sim?hk=metra).
+        return send(res, 200, await update(board, id, false, preview, capsOf(id, { hk: parsed.query.hk })));
       }
 
       // Cloud strip for the simulator.
@@ -1253,12 +1288,14 @@ function createBoard({
         if (!board) return send(res, 404, { err: 'unknown_board' });
         const preview = previewOf(parsed.query);
         if (preview.err) return send(res, 400, { err: 'invalid', detail: preview.err });
-        // screen=bus: the buses as the board would draw them (whatever its
-        // firmware); screen=transit on a board showing buses: its trains.
+        // screen=bus or metra: the buses or Metra as the board would draw
+        // them (whatever its firmware); screen=transit on a board showing
+        // either: its trains.
         const want = String(parsed.query.screen || '');
-        const as = want === 'bus' || (want === 'transit' && board.screen === 'bus') ? { ...board, screen: want } : board;
-        const body = await update(as, id, false, preview, want === 'bus' ? { ...capsOf(id), bus: true } : capsOf(id));
-        const asked = want === 'bus' ? 'transit' : SCREENS.includes(want) && (want !== 'baseball' || body.mlb) ? want : null;
+        const other = want === 'bus' || want === 'metra';
+        const as = other || (want === 'transit' && (board.screen === 'bus' || board.screen === 'metra')) ? { ...board, screen: want } : board;
+        const body = await update(as, id, false, preview, other ? { ...capsOf(id), [want]: true } : capsOf(id));
+        const asked = other ? 'transit' : SCREENS.includes(want) && (want !== 'baseball' || body.mlb) ? want : null;
         const screen = asked || autoScreen(body, body.now);
         const radarMapid = preview.mapid || board.station.mapid;
         const frames = {};
@@ -1301,6 +1338,15 @@ function createBoard({
         }
       }
 
+      // The Metra picker (design spec §5, "Metra"): every line with its
+      // stops in order outbound, from the schedule (which this first ask
+      // starts downloading).
+      if (sub === 'api/metra/stops') {
+        if (method !== 'GET') return send(res, 405, { err: 'method' });
+        const model = metraModel();
+        if (!model) return send(res, 503, { err: 'no_schedule', detail: "Metra's schedule hasn't downloaded yet" });
+        return send(res, 200, { lines: stopsByLine(model), through: model.through });
+      }
       // The bus picker (design spec §5, "Buses"): every route, a route's
       // directions, its stops that way. Cached a day (bus-tracker.js).
       if (sub === 'api/bus/routes' || sub === 'api/bus/directions' || sub === 'api/bus/stops') {

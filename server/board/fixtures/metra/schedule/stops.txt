@@ -1,0 +1,11 @@
+stop_id, stop_name, stop_desc, stop_lat, stop_lon, zone_id, stop_url, wheelchair_boarding
+DT, Downtown, , 41.8800, -87.6400, 1, , 1
+MAIN, Main St, , 41.9500, -87.6600, 2, , 1
+OAK, Oak Ave, , 42.0000, -87.6700, 2, , 1
+FAR, Far End, , 42.1000, -87.7000, 4, , 1
+WKA, Weekday A, , 41.8000, -87.8000, 2, , 1
+WKB, Weekday B, , 41.7500, -87.9000, 3, , 0
+LS, LaSalle Test, , 41.8750, -87.6320, 1, , 1
+BA, Branch A, , 41.7000, -87.6600, 2, , 1
+BB, Branch B End, , 41.6000, -87.6800, 3, , 1
+BC, Branch C End, , 41.6500, -87.7500, 3, , 1

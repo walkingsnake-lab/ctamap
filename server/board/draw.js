@@ -712,6 +712,7 @@
     function renderTransit(p, opts) {
       const o = opts || {};
       const now = o.now != null ? o.now : p.now;
+      if (p.tv === 'metra') return renderMetra(p, now);
       let view = o.view;
       if (!view) {
         view = buildTransitView(p, now);
@@ -720,6 +721,126 @@
       const f = newFrame(colsOf(p) === WIDE ? WIDE : 64);
       drawTransitView(f, view, !!o.blink);
       drawStale(f, p);
+      return f;
+    }
+
+    // ---- Metra (design spec §5, "Metra"; contract "Metra") ----
+    // The server lays the screen out (`p.metra`: mode, rows with their
+    // fitted destinations, the station line); the board counts down from
+    // each row's departure time `t`. One train per row: the time (white; red
+    // when 6+ minutes late, grey when canceled), the destination (or
+    // CANCELED, grey), and on the right the countdown: minutes rounded down
+    // (`DUE` under one), amber for a tracked train and schedule grey
+    // otherwise, only under an hour in a half; or, for a train more than 12
+    // hours off, its day (`dy`, grey). No realtime ('nokey'): all grey, no
+    // late or canceled marks; 'stale': the same plus the red line on row 0,
+    // canceled rows kept. No trains: the owl screen, `NO DATA` when the
+    // schedule has run out (`exp`).
+    const METRA_DAY_S = 12 * 3600;
+    const METRA_ROWS = 3, METRA_TERM_ROWS = 4;
+    const metraTops = (n) => Array.from({ length: n }, (_, i) => 8 + i * 6);
+    // The right column's text and color, or null (nothing). full: the
+    // terminus's full-width rows (`12m`, `1h23`) rather than a half's bare
+    // minutes under an hour.
+    function metraRight(m, r, now, full) {
+      if (r.x) return null;
+      const dt = r.t - now;
+      if (dt > METRA_DAY_S) return r.dy ? [r.dy, C.sch] : null;
+      const col = m.rt === 'live' && !r.s ? C.amber : C.sch;
+      if (dt < 60) return ['DUE', col];
+      const min = Math.floor(dt / 60);
+      if (full) return [min >= 60 ? `${Math.floor(min / 60)}h${String(min % 60).padStart(2, '0')}` : `${min}m`, col];
+      return min < 60 ? [String(min), col] : null;
+    }
+    const metraLate = (m, r) => m.rt === 'live' && !r.x && r.late >= 6;
+    const metraTimeCol = (m, r) => (r.x ? C.sch : metraLate(m, r) ? C.red : C.label);
+    // Rows still to come (a canceled one stays until its time), soonest first.
+    const metraShown = (rows, now) => rows.filter((r) => r.t >= now).sort((a, b) => a.t - b.t);
+
+    // One column of rows (a half, or a 64 panel): block, time, destination,
+    // countdown, from x0 to x1.
+    function drawMetraColumn(f, m, rows, now, x0, x1) {
+      const tx = x0 + (m.blk ? 5 : 0);
+      const tw = Math.max(0, ...rows.map((r) => measure('small', clockText(r.t))));
+      const nx = tx + tw + 4;
+      rows.forEach((r, i) => {
+        const base = metraTops(METRA_ROWS)[i] + 5;
+        if (m.blk) f.fill(x0, base - 5, 3, 5, r.c || C.grey);
+        f.text('small', clockText(r.t), tx, base, metraTimeCol(m, r));
+        if (r.x) { f.text('small', 'CANCELED', nx, base, C.sch); return; }
+        if (r.arr != null) {
+          const ax = f.text('small', 'ARR', nx, base, C.dimHead) + 2;
+          f.text('small', clockText(r.arr), ax, base, metraLate(m, r) ? C.red : C.label);
+        } else f.text('small', r.d || '', nx, base, C.label);
+        const right = metraRight(m, r, now, false);
+        if (right) rtext(f, 'small', right[0], x1, base, right[1]);
+      });
+    }
+
+    // The station line: the name, each line's name in its color at 70%, and
+    // (clock) the clock at the right, all on baseline 32.
+    function drawMetraStation(f, m, now, clock) {
+      const stn = m.stn || {};
+      let x = f.text('small', stn.name || '', 0, 32, C.dimHead);
+      for (const l of stn.lines || []) x = f.text('small', l.n, x + 2, 32, scaleColor(l.c, 0.7));
+      if (clock) rtext(f, 'small', clockText(now), f.w - 1, 32, C.dimHead);
+    }
+
+    function renderMetra(p, now) {
+      const m = p.metra || {};
+      const wide = colsOf(p) === WIDE;
+      const f = newFrame(wide ? WIDE : 64);
+      const rows = metraShown(m.rows || [], now);
+      if (m.exp || !rows.length) {
+        drawOvernight(f, { stale: m.exp ? 1 : 0, wx: null }, now);
+      } else if (m.mode === 'terminus') {
+        // Full width: the station and clock on top (with the home stop, `TO`
+        // it), then up to four rows. Without a home stop: the line's name in
+        // its color, the time right-aligned to x40, the destination from
+        // x44 with a red +N when late, the countdown at the right edge.
+        // With one: a line block, the time to x23, the destination from x27,
+        // ARR and the arrival time from x70.
+        const hx = f.text('small', (m.stn || {}).name || '', 0, 6, C.head);
+        if (m.home) f.text('small', `TO ${m.home}`, hx + 2, 6, C.dimHead);
+        rtext(f, 'small', clockText(now), f.w - 1, 6, C.head);
+        rows.slice(0, METRA_TERM_ROWS).forEach((r, i) => {
+          const base = metraTops(METRA_TERM_ROWS)[i] + 5;
+          let nx;
+          if (m.home) {
+            f.fill(0, base - 5, 3, 5, r.c || C.grey);
+            rtext(f, 'small', clockText(r.t), 23, base, metraTimeCol(m, r));
+            nx = 27;
+          } else {
+            f.text('small', r.ln || '', 0, base, r.c || C.grey);
+            rtext(f, 'small', clockText(r.t), 40, base, metraTimeCol(m, r));
+            nx = 44;
+          }
+          if (r.x) { f.text('small', 'CANCELED', nx, base, C.sch); return; }
+          const end = f.text('small', r.d || '', nx, base, C.label);
+          if (m.home && r.arr != null) {
+            const ax = f.text('small', 'ARR', 70, base, C.dimHead) + 2;
+            f.text('small', clockText(r.arr), ax, base, metraLate(m, r) ? C.red : C.label);
+          } else if (metraLate(m, r)) f.text('small', `+${r.late}`, end + 1, base, C.red);
+          const right = metraRight(m, r, now, true);
+          if (right) rtext(f, 'small', right[0], f.w - 1, base, right[1]);
+        });
+      } else if (m.mode === 'station' && wide) {
+        // Inbound | outbound halves, three trains each; a half with none says so.
+        HALVES.forEach(([x0, x1], h) => {
+          f.text('small', (m.halves || [])[h] || '', x0, 6, C.head);
+          const half = rows.filter((r) => (r.h ? 1 : 0) === h).slice(0, METRA_ROWS);
+          if (!half.length) f.text('small', 'NO TRAINS', x0 + Math.floor((x1 - x0 + 1 - measure('small', 'NO TRAINS')) / 2), 19, C.noTrains);
+          drawMetraColumn(f, m, half, now, x0, x1);
+        });
+        drawMetraStation(f, m, now, true);
+      } else {
+        // One panel, one direction: its label and the clock on top.
+        f.text('small', m.label || '', 0, 6, C.head);
+        rtext(f, 'small', clockText(now), f.w - 1, 6, C.head);
+        drawMetraColumn(f, m, rows.slice(0, METRA_ROWS), now, 0, f.w - 1);
+        drawMetraStation(f, m, now, false);
+      }
+      if (m.rt === 'stale') f.fill(0, 0, f.w, 1, C.red);
       return f;
     }
 
@@ -2083,11 +2204,21 @@
       const kn = p.knob || {}, cat = (kn.ring || [])[k], v = ((kn.vars || [])[k] || [])[vi], pv = p.pv || {};
       if (cat === 'transit') {
         if (v === 'ticker') return { p, screen: 'ticker' };
-        // Trains and buses are both the transit screen: the payload carries
-        // the one that's chosen (`tv`: 'bus' for buses), pv.tr the other.
-        const other = pv.tr && (v === 'bus') !== (p.tv === 'bus') ? pv.tr : null;
+        // Trains, buses and Metra are all the transit screen: the payload
+        // carries the one that's chosen (`tv`: 'bus', 'metra', or none for
+        // trains), pv the others (tr: trains or buses, whichever isn't on
+        // screen; with Metra on screen, the trains, and trb the buses; mt:
+        // the Metra object).
+        const want = v === 'bus' ? 'bus' : v === 'metra' ? 'metra' : null;
+        const shown = p.tv === 'bus' || p.tv === 'metra' ? p.tv : null;
+        if (want === shown) return { p, screen: 'transit' };
+        if (want === 'metra') {
+          if (!pv.mt) return { p, screen: 'transit' };
+          return { p: { ...p, tv: 'metra', stn: 'metra', metra: pv.mt, header: null, view: 'dest', halves: null, rows: [], wx: null }, screen: 'transit' };
+        }
+        const other = shown === 'metra' && want === 'bus' ? pv.trb : pv.tr;
         if (!other) return { p, screen: 'transit' };
-        const q = { ...p };
+        const q = { ...p, metra: undefined };
         for (const key of PEEK_TR) q[key] = other[key] === undefined ? null : other[key];
         return { p: q, screen: 'transit' };
       }
@@ -3521,7 +3652,7 @@
 
     return {
       Frame, LINE, C, BB, RADAR, radarColors, radarLoopIdx, radarOnHand, measure, clockText, rowTops, timeText, chronoText, maxRows, render, renderTransit, renderTicker, renderWeather,
-      renderBaseball, renderChooser, renderMenu, MENU, MENU_ICONS, renderPeek, peekOverlay, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
+      renderBaseball, renderMetra, renderChooser, renderMenu, MENU, MENU_ICONS, renderPeek, peekOverlay, peekView, PEEK, PEEK_ICONS, PEEK_COLORS, peekDrop, renderSkyline, SKYW, renderSeventies, renderAnalog, renderDayNight, renderGradient, gradientColor, GR, localDate, sinD, S70, AN, DN, renderAnnounce, messageLayout, cleanMessage, messageIntroMs, messageTick, MSG_STYLES, MSG_MAX, SKY, SKY_FADE_MS, createSkylineFader, boatAt, strikeLevel, baseballTexts, pickGame, scoreColor, embossText, SCORE_HOLD_S, SCORE_FADE_S, LG,
       autoScreen, visiting, transitTexts, tickerPages, applyBrightness, buildTransitView, createTransitAnimator,
       ROLL_MS, FADE_MS, MOVE_MS, BLINK_MS: 1000, timing, createNumRoller, SCREEN_SLIDE_MS, SLIDE_GAP, slideOffset, slideFrames, SCREEN_FADE_OUT_MS, SCREEN_FADE_IN_MS, SCREEN_FADE_MS, fadeFrames,
     };

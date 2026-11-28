@@ -18,8 +18,9 @@ const DEFAULT_BOARD_ID = 'home';
 const DEFAULT_MAPID = '40100'; // Morse
 
 // 'bus': the transit screen showing the board's buses (design spec §5,
-// "Buses"); the board draws it as transit.
-const SCREENS = ['auto', 'transit', 'ticker', 'bus', 'weather', 'baseball', 'clock', 'announce'];
+// "Buses"); 'metra': showing the board's Metra station (§5, "Metra"). The
+// board draws both as transit.
+const SCREENS = ['auto', 'transit', 'ticker', 'bus', 'metra', 'weather', 'baseball', 'clock', 'announce'];
 // Announce screen (design spec §15): saved presets per board.
 const MAX_PRESETS = 8;
 // Clock screen faces (design spec §14, §16-20): the skyline, the seventies
@@ -56,28 +57,31 @@ const BASEBALL_LAYOUTS = ['classic', 'logos', 'bands'];
 // join on boards that can draw them (knobOf's `clock`, `announce`). Sports
 // is chosen on the phone only.
 const KNOB_RING = ['transit', 'weather', 'cycle'];
-const CATEGORY_OF = { auto: 'cycle', transit: 'transit', ticker: 'transit', bus: 'transit', weather: 'weather', clock: 'clock', announce: 'announce' };
+const CATEGORY_OF = { auto: 'cycle', transit: 'transit', ticker: 'transit', bus: 'transit', metra: 'transit', weather: 'weather', clock: 'clock', announce: 'announce' };
 const EXTRA_RING = ['clock', 'announce'];
 const knobScreen = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'cycle' ? 'auto' : cat);
 // Each category's variants, as the knob steps through them with a press
 // (peek chooser): transit's screens, the weather views, the clock faces the
 // board draws (`faces`).
-// The transit family: train rows, the ticker, and (`bus`: a 64 board with
-// buses set that draws them) the buses.
-const TRANSIT_SCREENS = ['transit', 'ticker', 'bus'];
-const variantsOf = (cat, faces, bus = false) => (cat === 'transit' ? (bus ? TRANSIT_SCREENS : ['transit', 'ticker']) : cat === 'weather' ? WX_VIEWS
-  : cat === 'clock' ? faces : []);
+// The transit family, in the knob's order ('L' BUS METRA TICKER, design
+// spec §5 "On the knob"): train rows, the buses (`bus`: a 64 board with
+// buses set that draws them), the Metra station (`metra`: a board with one
+// set that draws it), the ticker.
+const TRANSIT_SCREENS = ['transit', 'bus', 'metra', 'ticker'];
+const variantsOf = (cat, faces, bus = false, metra = false) => (cat === 'transit'
+  ? TRANSIT_SCREENS.filter((v) => (v !== 'bus' || bus) && (v !== 'metra' || metra))
+  : cat === 'weather' ? WX_VIEWS : cat === 'clock' ? faces : []);
 const variantOf = (board, cat) => (cat === 'transit' ? board.transitScreen || 'transit' : cat === 'weather' ? board.wxView || 'now'
   : cat === 'clock' ? board.clockFace || 'skyline' : null);
 // The ring and where the board's chosen screen sits on it (payload `knob`).
 // `vars` and `sel`: each entry's variants and the one it opens on (index;
 // 0 for a variant the board can't draw).
 // Only peek-capable boards (`peek`) get vars and sel.
-const knobOf = (board, { clock = false, announce = false, peek = false, faces = ['skyline'], bus = false } = {}) => {
+const knobOf = (board, { clock = false, announce = false, peek = false, faces = ['skyline'], bus = false, metra = false } = {}) => {
   const ring = ['transit', 'weather', ...(clock ? ['clock'] : []), ...(announce ? ['announce'] : []), 'cycle'];
   const at = Math.max(0, ring.indexOf(CATEGORY_OF[board.screen]));
   if (!peek) return { ring, at };
-  const vars = ring.map((c) => variantsOf(c, faces, bus));
+  const vars = ring.map((c) => variantsOf(c, faces, bus, metra));
   const sel = ring.map((c, i) => Math.max(0, vars[i].indexOf(variantOf(board, c))));
   return { ring, at, vars, sel };
 };
@@ -166,6 +170,10 @@ function defaultBoard(stations) {
     // ({rt, dir, stpid, stpnm, label?}). On a 64 board they're the 'bus'
     // screen; on two panels they sit beside the trains.
     buses: [],
+    // Metra (metra.js; design spec §5, "Metra"): a station ({stop, dir, to}:
+    // GTFS stop id; on a 64 board which way, 'auto' by the clock, 'in' or
+    // 'out'; an optional home stop for a terminus), or null.
+    metra: null,
     bright: 'auto',
     // Auto brightness's night level, percent (full from sunrise to sunset). On
     // a board with a light sensor, its dark-room level (a bright room is full).
@@ -292,6 +300,24 @@ function validMessage(m, where, cols) {
 // Validate a partial update and return the fields to apply. Throws
 // ValidationError with a short message on anything unexpected. `cols`: the
 // board's width (128 or absent), for the messages.
+// A board's Metra setting: null (none), or {stop, dir, to}. Stop ids as
+// Metra's GTFS writes them (ROGERPK, 103RD-BEV); whether the stop exists is
+// checked against the schedule when it's drawn (metra.js), since the
+// schedule may not have downloaded yet.
+const METRA_STOP = /^[A-Z0-9][A-Z0-9-]{1,15}$/;
+const METRA_DIRS = ['auto', 'in', 'out'];
+function cleanMetra(val) {
+  if (val == null) return null;
+  if (typeof val !== 'object' || Array.isArray(val)) throw new ValidationError('metra must be null or {stop, dir?, to?}');
+  const stop = String(val.stop || '');
+  if (!METRA_STOP.test(stop)) throw new ValidationError('metra.stop must be a Metra stop id');
+  const dir = val.dir == null ? 'auto' : val.dir;
+  if (!METRA_DIRS.includes(dir)) throw new ValidationError(`metra.dir must be one of ${METRA_DIRS.join(', ')}`);
+  const to = val.to == null || val.to === '' ? null : String(val.to);
+  if (to != null && (!METRA_STOP.test(to) || to === stop)) throw new ValidationError('metra.to must be another Metra stop id');
+  return { stop, dir, to };
+}
+
 function validatePatch(patch, stations, cols) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new ValidationError('body must be an object');
   const out = {};
@@ -321,6 +347,9 @@ function validatePatch(patch, stations, cols) {
           throw new ValidationError(`rows must be up to ${MAX_ROWS} strings like "RD:Howard"`);
         }
         out.rows = [...val];
+        break;
+      case 'metra':
+        out.metra = cleanMetra(val);
         break;
       case 'buses':
         try { out.buses = cleanBuses(val); } catch (e) {
@@ -634,10 +663,15 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
       if (fields.msg) fields.msg.id = (board.v || 0) + 1;
       Object.assign(board, fields);
       if (TRANSIT_SCREENS.includes(fields.screen)) board.transitScreen = fields.screen;
-      // The last bus removed: the buses view has nothing to show.
+      // The last bus removed: the buses view has nothing to show. Likewise
+      // Metra.
       if (fields.buses && !fields.buses.length) {
         if (board.screen === 'bus') board.screen = 'transit';
         if (board.transitScreen === 'bus') board.transitScreen = 'transit';
+      }
+      if ('metra' in fields && !fields.metra) {
+        if (board.screen === 'metra') board.screen = 'transit';
+        if (board.transitScreen === 'metra') board.transitScreen = 'transit';
       }
       board.v = (board.v || 0) + 1;
       state.boards[id] = board;
@@ -651,7 +685,7 @@ function createStore({ dir = resolveDir(), stations = loadStations(), log = cons
     // (bumps v).
     select(id, cat, v) {
       if (!KNOB_RING.includes(cat) && !EXTRA_RING.includes(cat)) throw new ValidationError(`s must be one of ${[...KNOB_RING, ...EXTRA_RING].join(', ')}`);
-      const vars = variantsOf(cat, CLOCK_FACES, true);
+      const vars = variantsOf(cat, CLOCK_FACES, true, true);
       if (v != null && !vars.includes(v)) throw new ValidationError(vars.length ? `v must be one of ${vars.join(', ')}` : `${cat} has no variants`);
       if (!Object.hasOwn(state.boards, id)) return null;
       const fields = { screen: knobScreen(state.boards[id], cat) };

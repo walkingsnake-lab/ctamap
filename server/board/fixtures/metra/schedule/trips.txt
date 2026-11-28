@@ -1,0 +1,17 @@
+route_id, service_id, trip_id, trip_headsign, block_id, shape_id, direction_id
+NL, WK, N101, Far End, , , 0
+NL, WK, N102, Downtown, , , 1
+NL, WK, N103, Far End, , , 0
+NL, WK, N104, Downtown, , , 1
+NL, WK, N105, Main St, , , 0
+NL, WK, N106, Downtown, , , 1
+NL, WK, N107, Chicago South, , , 0
+NL, SA, N201, Downtown, , , 1
+NL, SA, N202, Far End, , , 0
+NL, SU, N301, Downtown, , , 1
+NL, SU, N302, Far End, , , 0
+WL, WD, W1, Downtown, , , 1
+WL, WD, W2, Weekday B, , , 0
+BL, WK, B1, Branch B End, , , 0
+BL, WK, B2, Branch C End, , , 0
+BL, WK, B3, Branch B End, , , 0

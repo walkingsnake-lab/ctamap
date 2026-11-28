@@ -264,6 +264,8 @@
   const previewing = () => changed().length > 0;
   const query = () => {
     const q = new URLSearchParams({ b: board });
+    const hk = new URLSearchParams(location.search).get('hk');  // sim?hk=metra: preview a capability
+    if (hk) q.set('hk', hk);
     for (const k of changed()) q.set(QNAME[k], k === 'mapid' || k === 'logoLayout' ? prev[k] : prev[k] ? '1' : '0');
     return q;
   };

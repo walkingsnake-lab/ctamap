@@ -795,7 +795,7 @@
   window.addEventListener('hashchange', showView);
   // Desktop: the right column always has a page: the chosen screen's (set in init).
   const desktop = matchMedia('(min-width: 900px)');
-  const pageOf = (sc) => (sc === 'auto' ? 'cycle' : sc === 'ticker' || sc === 'bus' ? 'transit' : sc === 'baseball' ? 'sports' : sc);
+  const pageOf = (sc) => (sc === 'auto' ? 'cycle' : sc === 'ticker' || sc === 'bus' || sc === 'metra' ? 'transit' : sc === 'baseball' ? 'sports' : sc);
 
   // ---- toast ----
   let toastTimer = null, toastAct = null;
@@ -976,7 +976,7 @@
   const sportsOn = () => { const me = boards.find((x) => x.id === boardId); return !me || me.sports !== false; };
   const boardName = (b) => b.label || b.id;
   const subOf = (sc) => {
-    if (sc === 'transit') return board.transitScreen === 'ticker' ? 'Ticker' : board.transitScreen === 'bus' ? 'Buses' : 'Rows';
+    if (sc === 'transit') return board.transitScreen === 'ticker' ? 'Ticker' : board.transitScreen === 'bus' ? 'Buses' : board.transitScreen === 'metra' ? 'Metra' : 'Rows';
     if (sc === 'weather') return WX_NAME[board.wxView] || 'Conditions';
     if (sc === 'clock') return FACE_NAME[board.clockFace] || 'Skyline';
     if (sc === 'announce') return board.msg ? `“${board.msg.text.replace(/\n/g, ' ')}” · ${MSG_NAMES[board.msg.style]}` : 'No message yet';
@@ -1062,7 +1062,7 @@
     const rows = ['transit', 'weather', ...(board.screen === 'baseball' && sportsOn() ? ['baseball'] : []), 'clock', 'announce', 'auto'];
     // Until the board confirms a switch, the check stays where it was and the
     // new row spins.
-    const cat = (sc) => (sc === 'ticker' || sc === 'bus' ? 'transit' : sc);
+    const cat = (sc) => (sc === 'ticker' || sc === 'bus' || sc === 'metra' ? 'transit' : sc);
     const target = switching && !switching.failed ? cat(switching.to) : null;
     const chosen = cat(switching ? switching.from : board.screen);
     const items = rows.map((sc) => {
@@ -1215,7 +1215,7 @@
   $('tShows').addEventListener('click', (e) => {
     const b = e.target.closest('[data-v]'); if (!b) return;
     const v = b.dataset.v;
-    if (['transit', 'ticker', 'bus'].includes(board.screen)) switchTo(v);
+    if (['transit', 'ticker', 'bus', 'metra'].includes(board.screen)) switchTo(v);
     else save({ transitScreen: v });
   });
   for (const k of ['showHeader', 'headerClock', 'showWeather', 'headerDivider', 'timeSteps', 'tempShadow', 'wxTop', 'showTemp', 'boats', 'twinkle', 'gradInvert', 'colonBlink', 'digitShadow']) $(k).addEventListener('change', (e) => save({ [k]: e.target.checked }));
