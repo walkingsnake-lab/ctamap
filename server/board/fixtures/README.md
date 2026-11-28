@@ -46,3 +46,8 @@ Raw upstream responses, saved unchanged. Tests run against these; they never hit
   - `schedule-2026-10-03-alds-final.json`: ALDS Game 1, White Sox 3 at Guardians 0, final (postseason `leagueRecord` 1-0 / 0-1). **Not a byte-for-byte recording**: the cloud session couldn't reach the API directly, so it was assembled from a fetched copy of the game object (field names and values as returned; the date wrapper and a trimmed `defense` block filled in). Replace with a capture from `api/raw/mlb` when convenient.
 
 Never record a URL with `key=` in it here.
+
+- `metra/` — Metra's static GTFS schedule (`metra-schedule.js`). **Made up, not recorded:** Metra's own schedule is kept out of the repo (its license; see design spec §5 *Metra*). Written to match the format of Metra's `schedules.metrarail.com/gtfs/schedule.zip` as downloaded Nov 27, 2026.
+  - `schedule/*.txt`: two lines (NL, and WL running weekdays only), six stops, 13 trips. Metra's quirks kept: a space after every comma in headers and values, CRLF line ends in `stop_times.txt`, times past 24:00, a Thanksgiving calendar exception. Cases: a train ending mid-line, an express, a no-pickup and a no-drop-off stop, an outbound train whose headsign says "Chicago", a train after midnight, the fall-back Sunday.
+  - `make-zip.js`: zips `schedule/` the way Metra's file is written (deflated, with data descriptors: no sizes in the local headers), plus small ZIPs for `zip.test.js`.
+  - `published.txt`: in the format of Metra's `published.txt`, no trailing newline.
