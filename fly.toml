@@ -29,7 +29,6 @@ primary_region = 'ord'
   path = "/metrics"
 
 [[vm]]
-  memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 256
