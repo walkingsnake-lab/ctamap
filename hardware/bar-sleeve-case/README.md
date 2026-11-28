@@ -5,6 +5,9 @@ bolted to the panel's four corner inserts. Built for the Waveshare P3 64x32 (thi
 [Other panels](#other-panels). Why things are the way they are: [DESIGN-HISTORY.md](DESIGN-HISTORY.md). The v4 build (flat
 back plate) is archived in [ARCHIVE-v4.md](ARCHIVE-v4.md).
 
+What may come after this case's bought boards, V7 (one custom board; designed and quoted, not built), is in
+[../v7-board](../v7-board/README.md).
+
 ## Fixed decisions
 - Slanted hood (12 mm lip at the top, 3 mm at the bottom; the P4 scales it to 16 / 4): non-negotiable.
 - Shell in Bambu PLA Wood (walnut), printed back-down without supports, front lapped flat afterwards. The screen rim is part of
