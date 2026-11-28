@@ -129,4 +129,4 @@ function stationDestinations(st) {
   return out;
 }
 
-module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, LINE_ENDS, originOf, lineCode, shortDest, fullDest, resolveDest, endsHere, stationDestinations };
+module.exports = { RT_TO_LN, LINE_ORDER, SHORT_DEST, PASS_THROUGH, DEST_MAPID, LINE_DESTS, LINE_ENDS, HOWARD_LAT, originOf, lineCode, shortDest, fullDest, resolveDest, endsHere, stationDestinations };

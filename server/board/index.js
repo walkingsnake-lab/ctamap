@@ -15,6 +15,7 @@ const { createNws, pickWarn, warnUntil } = require('./nws');
 const { createNwsForecast, withForecast } = require('./nws-forecast');
 const { createRadar, packFrame } = require('./radar');
 const { createTestRadar } = require('./test-radar');
+const { demoArrivals } = require('./demo-arrivals');
 const { createMlb, prioritize } = require('./mlb');
 const { createLogos } = require('./mlb-logos');
 const { createKeys } = require('./keys');
@@ -264,8 +265,13 @@ function createBoard({
   // and/or a fake NWS warning, merged into this board's updates (so the real
   // board shows them too) until they expire. Memory only.
   const TEST_S = 600;
+  // Demo arrivals (demo-arrivals.js; the maker's page only): made-up trains
+  // on fixed headways in place of Train Tracker's, for photos and video. A
+  // test that has them runs this long instead, so a shoot isn't cut off.
+  const DEMO_S = 7200;
+  const DEMO_ARRIVALS = ['loop'];
   const LINES = ['RD', 'BL', 'BR', 'GR', 'OR', 'PR', 'PK', 'YL'];
-  const tests = new Map(); // board id -> { lines, warn, until }
+  const tests = new Map(); // board id -> { lines, warn, game, radar, weather, arrivals, until }
   function activeTest(id, now) {
     const t = tests.get(id);
     if (t && t.until > now) return t;
@@ -316,7 +322,9 @@ function createBoard({
     const kind = wb && wb.kind != null ? wb.kind : null, tod = wb && wb.tod != null ? wb.tod : null;
     if (kind != null && !Object.keys(TEST_WX).includes(kind)) throw new ValidationError(`weather.kind must be one of ${Object.keys(TEST_WX).join(', ')}`);
     if (tod != null && !Object.keys(TEST_TOD).includes(tod)) throw new ValidationError(`weather.tod must be one of ${Object.keys(TEST_TOD).join(', ')}`);
-    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, weather: kind || tod ? { kind, tod } : null };
+    const arr = body.arrivals == null ? null : body.arrivals;
+    if (arr != null && !DEMO_ARRIVALS.includes(arr)) throw new ValidationError(`arrivals must be one of ${DEMO_ARRIVALS.join(', ')}`);
+    return { lines: [...new Set(lines)], warn: warn && { kind: warn.kind, lvl: warn.lvl }, game, radar: rad, weather: kind || tod ? { kind, tod } : null, arrivals: arr };
   }
 
   // `preview` (simulator only): {mapid, showHeader, showWeather} shown
@@ -534,14 +542,20 @@ function createBoard({
     // that draws them (`hk=...:bus`), with a Bus Tracker key set. A 64 board
     // shows them as the 'bus' screen; two panels, beside the trains.
     const buses = busTracker.enabled && caps.bus && Array.isArray(board.buses) && board.buses.length ? board.buses : null;
-    const [data, base, nwsAlerts, fc, busData] = await Promise.all([
-      tracker.get(board.station.mapid),
+    // The simulator's tests for this board (they expire on their own). Read
+    // once, before the fetches: demo arrivals take Train Tracker's place, so
+    // the station isn't asked for (and isn't polled) while they run.
+    const test = activeTest(id, nowSecs());
+    const demo = !!(test && test.arrivals && st);
+    const [live, base, nwsAlerts, fc, busData] = await Promise.all([
+      demo ? null : tracker.get(board.station.mapid),
       st ? soft('weather', weather.get(st.lat, st.lon)) : null,
       st ? soft('nws', nws.get(st.lat, st.lon)) : null,
       st ? soft('nws-forecast', nwsForecast.get(st.lat, st.lon)) : null,
       buses ? soft('bus', busTracker.get(buses.map((b) => b.stpid))) : null,
     ]);
     const now = nowSecs();
+    const data = demo ? { arrivals: demoArrivals(st, now), fetchedAt: now } : live;
     // WeatherAPI conditions with NWS's forecast fields (days, hours, hi/lo,
     // rain chance) laid over them.
     let w = base;
@@ -549,7 +563,6 @@ function createBoard({
     // Test weather from the simulator (expires with the test alerts): the
     // current conditions forced to one state and/or the sky at a test time
     // of day, on every weather display.
-    const test = activeTest(id, now);
     const tw = test && test.weather && st ? test.weather : null;
     const skyNow = tw && tw.tod ? testSkyNow(tw.tod, st, now) : now;
     if (tw) w = testWeather(tw.kind, w, now, tw.tod || !w ? sunPos(skyNow, st.lat, st.lon).el > -0.83 : w.isDay);
@@ -1178,13 +1191,18 @@ function createBoard({
             if (e instanceof ValidationError) return send(res, 400, { err: 'invalid', detail: e.message });
             throw e;
           }
-          if (t.lines.length || t.warn || t.game || t.radar || t.weather) tests.set(id, { ...t, until: now + TEST_S });
+          // Demo arrivals are the maker's tool: a control link can't start them.
+          if (scope && t.arrivals) return send(res, 400, { err: 'invalid', detail: 'arrivals is not available on a control link' });
+          if (t.lines.length || t.warn || t.game || t.radar || t.weather || t.arrivals) tests.set(id, { ...t, until: now + (t.arrivals ? DEMO_S : TEST_S) });
           else tests.delete(id);
         } else if (method !== 'GET') {
           return send(res, 405, { err: 'method' });
         }
         const t = activeTest(id, now);
-        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, weather: t.weather || null, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, weather: null, left: 0 });
+        // `arrivals` only on the maker's page: the simulator shows its
+        // control when the field is there.
+        const own = scope ? {} : { arrivals: (t && t.arrivals) || null };
+        return send(res, 200, t ? { lines: t.lines, warn: t.warn, game: t.game || null, radar: t.radar || null, weather: t.weather || null, ...own, left: t.until - now } : { lines: [], warn: null, game: null, radar: null, weather: null, ...own, left: 0 });
       }
 
       // Station list for the simulator's picker.
