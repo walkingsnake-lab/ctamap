@@ -30,5 +30,47 @@
   "B": 1.0
  },
  "joint_wall": 0.6,
- "split": true
+ "split": true,
+ "underside": {
+  "feet": [
+   [
+    -127.0,
+    22.0
+   ],
+   [
+    -127.0,
+    58.0
+   ],
+   [
+    127.0,
+    22.0
+   ],
+   [
+    127.0,
+    58.0
+   ]
+  ],
+  "labels": [
+   [
+    "regulatory label",
+    12.0,
+    25.9,
+    79.48,
+    52.1
+   ],
+   [
+    "setup sticker",
+    -57.25,
+    32.25,
+    -12.0,
+    45.75
+   ]
+  ],
+  "key_hx": 48.0,
+  "foot_label": 41.08,
+  "foot_csk": 4.9,
+  "label_csk": 3.9,
+  "label_seam": 12.0,
+  "label_front": 16.9
+ }
 }
