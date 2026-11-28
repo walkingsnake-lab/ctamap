@@ -66,6 +66,12 @@ jobs:
         run: |
           diff -rq "$RUNNER_TEMP/p3x2v6" ../stl/p3x2-v6 || { echo "::error::stl/p3x2-v6 is out of date: rebuild with python3 v6p3x2.py ../stl/p3x2-v6"; exit 1; }
 
+      - name: Desk plinths (plinth_v6.py) build, check, and match stl/plinth
+        run: |
+          timeout -k 5 300 python3 plinth_v6.py "$RUNNER_TEMP/plinth"
+          PLINTH=p3x2 timeout -k 5 300 python3 plinth_v6.py "$RUNNER_TEMP/plinth" 12 "$RUNNER_TEMP/p3x2v6/frames"
+          diff -rq "$RUNNER_TEMP/plinth" ../stl/plinth || { echo "::error::stl/plinth is out of date: rebuild with plinth_v6.py (see its docstring)"; exit 1; }
+
       - name: V5 P3 trays unchanged (drawer.py; TOP_FALL is off outside v6p3.py)
         run: |
           mkdir -p "$RUNNER_TEMP/v5/stl"
